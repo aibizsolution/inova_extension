@@ -1,0 +1,46 @@
+{
+  "maxLinesPerSourceFile": 320,
+  "requiredFiles": [
+    "manifest.json",
+    "package.json",
+    "popup/index.html",
+    "popup/index.css",
+    "popup/index.js",
+    "shared/constants.js",
+    "shared/session.js",
+    "shared/storage.js",
+    "content/dom.js",
+    "content/panel.js",
+    "content/main.js",
+    "content/panel.css",
+    "README.md",
+    "docs/feature-spec.md",
+    "scripts/verify-docs.js",
+    "scripts/verify-contracts.js"
+  ],
+  "manifestPopup": "popup/index.html",
+  "manifestContentScripts": [
+    "shared/constants.js",
+    "shared/session.js",
+    "shared/storage.js",
+    "content/dom.js",
+    "content/panel.js",
+    "content/main.js"
+  ],
+  "manifestContentCss": [
+    "content/panel.css"
+  ],
+  "requiredStorageKeys": [
+    "settings",
+    "pausedSessions",
+    "uiPreferences"
+  ],
+  "requiredDocKeywords": [
+    "팝업 On/Off",
+    "질문 자동 모으기",
+    "우측 슬라이드 패널",
+    "대화 안에서 찾기",
+    "shared",
+    "pausedSessions"
+  ]
+}

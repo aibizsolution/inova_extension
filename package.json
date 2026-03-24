@@ -1,0 +1,10 @@
+{
+  "name": "inova-session-bookmarks",
+  "version": "0.2.1",
+  "private": true,
+  "scripts": {
+    "verify": "node scripts/verify-contracts.js && node scripts/verify-docs.js",
+    "verify:contracts": "node scripts/verify-contracts.js",
+    "verify:docs": "node scripts/verify-docs.js"
+  }
+}

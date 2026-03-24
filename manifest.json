@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "i-Nova 더하기",
+  "version": "0.2.1",
+  "description": "i-Nova 대화 화면에 질문 모아보기와 찾기 기능을 더하는 크롬 확장입니다.",
+  "permissions": [
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://inova.incross.com/*"
+  ],
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_title": "i-Nova 더하기",
+    "default_popup": "popup/index.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://inova.incross.com/*"
+      ],
+      "js": [
+        "shared/constants.js",
+        "shared/session.js",
+        "shared/storage.js",
+        "content/dom.js",
+        "content/panel.js",
+        "content/main.js"
+      ],
+      "css": [
+        "content/panel.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
