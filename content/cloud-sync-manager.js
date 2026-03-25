@@ -6,6 +6,7 @@
   function create(state, hooks) {
     let inflight = false;
     let timerId = 0;
+    let scheduledForceRemoteProbe = false;
 
     return {
       handleStorageChange,
@@ -31,12 +32,17 @@
       }
     }
 
-    function scheduleSync(delay = 700) {
+    function scheduleSync(delay = 700, forceRemoteProbe = false) {
       global.clearTimeout(timerId);
-      timerId = global.setTimeout(() => syncNow().catch(logSyncError), delay);
+      scheduledForceRemoteProbe = scheduledForceRemoteProbe || Boolean(forceRemoteProbe);
+      timerId = global.setTimeout(() => {
+        const forceProbe = scheduledForceRemoteProbe;
+        scheduledForceRemoteProbe = false;
+        syncNow(forceProbe).catch(logSyncError);
+      }, delay);
     }
 
-    async function syncNow() {
+    async function syncNow(forceRemoteProbe = false) {
       if (inflight) {
         return;
       }
@@ -52,12 +58,18 @@
         const promptLibrary = namespace.promptLibrary.mergePromptLibrary(storageState.promptLibrary);
         let cloudSync = namespace.cloudSync.mergeCloudSyncState(storageState.cloudSync);
 
-        if (shouldProbeRemote(promptLibrary, cloudSync, providerIdentity)) {
-          const remoteState = await sendRuntimeMessage("inova-sync:peek-prompt-library", { providerIdentity });
+        if (shouldProbeRemote(promptLibrary, cloudSync, providerIdentity, forceRemoteProbe)) {
+          const remoteState = await sendRuntimeMessage("inova-sync:peek-prompt-library", {
+            force: forceRemoteProbe,
+            providerIdentity,
+          });
           cloudSync = await namespace.storage.recordPromptLibraryRemoteState(remoteState, providerIdentity);
 
           if (shouldHydrateLocal(promptLibrary, cloudSync, remoteState)) {
-            const remote = await sendRuntimeMessage("inova-sync:load-prompt-library", { providerIdentity });
+            const remote = await sendRuntimeMessage("inova-sync:load-prompt-library", {
+              force: forceRemoteProbe,
+              providerIdentity,
+            });
             if (shouldHydrateFromLoadedLibrary(promptLibrary, cloudSync, remote)) {
               await namespace.storage.hydratePromptLibraryFromCloud(
                 remote.promptLibrary,
@@ -88,7 +100,7 @@
       }
     }
 
-    function shouldProbeRemote(localLibrary, cloudSync, providerIdentity) {
+    function shouldProbeRemote(localLibrary, cloudSync, providerIdentity, forceRemoteProbe = false) {
       if (!providerIdentity.available) {
         return false;
       }
@@ -102,6 +114,9 @@
         providerIdentity.providerUserKey &&
         providerIdentity.providerUserKey === namespace.session.normalizeText(remoteState.providerUserKey || "");
       const checkedAt = Date.parse(String(remoteState.checkedAt || ""));
+      if (forceRemoteProbe) {
+        return true;
+      }
       if (sameUser && Number.isFinite(checkedAt) && Date.now() - checkedAt < REMOTE_PROBE_COOLDOWN_MS) {
         return false;
       }
@@ -124,7 +139,7 @@
       }
 
       if (!cloudSync.lastSyncedAt) {
-        return false;
+        return remoteItemCount !== localLibrary.items.length;
       }
 
       const remoteSyncedAt = String(remoteState.lastSyncedAt || "");
@@ -141,12 +156,8 @@
       }
 
       const remoteLibrary = namespace.promptLibrary.mergePromptLibrary(remote.promptLibrary);
-      if (!remoteLibrary.items.length) {
-        return false;
-      }
-
       if (!localLibrary.items.length) {
-        return true;
+        return remoteLibrary.items.length > 0;
       }
 
       const remoteSyncedAt = String(remote.syncedAt || "");

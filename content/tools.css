@@ -64,7 +64,7 @@
 .inova-tool-button--compact { padding: 6px 10px; font-size: 11px; }
 .inova-tool-button:disabled { opacity: 0.56; cursor: wait; }
 .inova-tool-button[aria-disabled="true"] { pointer-events: none; }
-.inova-store-sort, .inova-store-item__metrics, .inova-store-publication { display: flex; flex-wrap: wrap; gap: 6px; }
+.inova-store-sort, .inova-store-item__eyebrow, .inova-store-item__metrics, .inova-store-publication { display: flex; flex-wrap: wrap; gap: 6px; }
 .inova-store-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .inova-scope-toggle { display: flex; gap: 6px; }
 .inova-scope-toggle__button {
@@ -104,11 +104,15 @@
 .inova-help-chip:focus-visible { outline: 0; box-shadow: 0 0 0 3px rgba(15, 124, 137, 0.12); }
 .inova-prompt-field > span { font-weight: 700; line-height: 1.2; }
 .inova-prompt-list, .inova-store-list { overflow-y: auto; padding: 8px 14px 14px; }
+.inova-store-list { flex: 1; min-height: 0; }
+.inova-store-list { display: flex; flex-direction: column; gap: 10px; }
+.inova-store-list__footer { padding: 0 14px 14px; display: flex; justify-content: center; }
 .inova-prompt-list:empty { display: none; }
 .inova-prompt-item {
   position: relative; display: flex; flex-direction: column; gap: 10px; padding: 12px 12px 10px; margin-bottom: 8px;
   border: 1px solid rgba(98, 127, 145, 0.16); border-radius: 16px; background: rgba(255, 255, 255, 0.92);
 }
+.inova-store-item { gap: 10px; padding: 13px 14px 12px; margin-bottom: 0; }
 .inova-prompt-item.is-drag-source { opacity: 0.52; }
 .inova-prompt-item.is-drop-before::before, .inova-prompt-item.is-drop-after::after {
   content: ""; position: absolute; left: 12px; right: 12px; height: 3px; border-radius: 999px; background: #0f7c89;
@@ -129,14 +133,29 @@
   color: rgba(16, 33, 43, 0.8); font-size: 13px; line-height: 1.55; white-space: pre-wrap;
 }
 .inova-prompt-item__menu { padding-top: 2px; }
-.inova-store-item__badge, .inova-store-publication .inova-store-item__badge {
-  display: inline-flex; align-items: center; justify-content: center; padding: 4px 8px; border-radius: 999px;
-  background: rgba(15, 124, 137, 0.1); color: #0f5f77; font-size: 11px; font-weight: 700;
+.inova-store-item__header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: start; }
+.inova-store-item__main, .inova-store-item__footer { display: flex; flex-direction: column; gap: 8px; }
+.inova-store-item__main { min-width: 0; }
+.inova-store-item__side { display: flex; align-items: flex-start; justify-content: flex-end; flex: 0 0 auto; }
+.inova-store-item__chip, .inova-store-publication .inova-store-item__badge {
+  display: inline-flex; align-items: center; justify-content: center; padding: 3px 8px; border-radius: 999px;
+  background: rgba(15, 124, 137, 0.1); color: #0f5f77; font-size: 11px; font-weight: 700; white-space: nowrap;
 }
-.inova-store-item__owner, .inova-store-item__metrics, .inova-store-publication {
+.inova-store-item__chip.is-muted { background: rgba(98, 127, 145, 0.1); color: rgba(16, 33, 43, 0.64); }
+.inova-store-item__title {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.inova-store-item__submeta, .inova-store-item__summary, .inova-store-item__metrics, .inova-store-publication {
   font-size: 12px; color: rgba(16, 33, 43, 0.66);
 }
+.inova-store-item__submeta { display: flex; flex-wrap: wrap; gap: 8px; }
+.inova-store-item__summary {
+  margin: 0; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
 .inova-store-item__metrics { gap: 10px; }
+.inova-store-item__footer { gap: 10px; }
+.inova-store-item .inova-prompt-item__actions { gap: 8px; }
+.inova-store-item .inova-prompt-item__actions .inova-tool-button { padding-inline: 10px; }
 .inova-store-item.is-expanded .inova-prompt-item__content { -webkit-line-clamp: unset; }
 .inova-tool-section--store .inova-bookmark-empty { margin: 4px 14px 12px; padding: 12px 13px; }
 .inova-tool-section--prompts .inova-bookmark-empty { margin: 4px 14px 12px; padding: 12px 13px; }
@@ -148,4 +167,6 @@
   .inova-tool-toolbar__row { flex-direction: column; align-items: stretch; }
   .inova-tool-actions--toolbar { justify-content: flex-start; }
   .inova-store-controls { grid-template-columns: 1fr; }
+  .inova-store-item__header { grid-template-columns: 1fr; }
+  .inova-store-item__side { justify-content: flex-start; }
 }

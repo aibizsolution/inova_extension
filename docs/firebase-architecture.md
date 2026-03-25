@@ -30,7 +30,11 @@
 - `prompt_backups`
   - 가져오기/내보내기/복원용 백업 스냅샷 메타
 - `prompt_store_entries`
-  - 여러 사용자가 공유하는 공개 프롬프트 메타와 본문
+  - 여러 사용자가 공유하는 공개 프롬프트의 원본 메타
+- `prompt_store_entry_details`
+  - 스토어 항목 상세 본문
+- `prompt_store_feed_pages`
+  - 스토어 리스트 전용 page 문서. 한 문서 안에 여러 항목 메타를 묶어 담는다.
 - `prompt_store_entries/{entryId}/likes`
   - 사용자별 좋아요 토글 기록
 - `prompt_store_entries/{entryId}/imports`
@@ -61,7 +65,7 @@
 - `loadInovaPromptLibrary`
   - 현재 i-Nova 사용자 기준 원격 백업 문서를 읽는다.
 - `listPromptStoreEntries`
-  - 프롬프트 스토어 목록을 카테고리/정렬 기준으로 읽는다.
+  - 프롬프트 스토어 목록을 카테고리/정렬 기준 page 문서로 읽는다.
 - `publishPromptToStore`
   - 로컬 요청을 스토어에 공개 등록한다.
 - `unpublishPromptFromStore`
@@ -79,6 +83,7 @@
 
 - 프롬프트 백업 문서: `prompt_libraries/inova__{providerUserKey}`
 - 프롬프트 스토어 문서: `prompt_store_entries/inova__{providerUserKey}__{promptId}`
+- 프롬프트 스토어 리스트 page 문서: `prompt_store_feed_pages/{sortBy}__{categoryId}__{pageNumber}`
 - i-Nova 계정 매핑 메타: `integration_inova_accounts/{providerUserKey}`
 
 ## 설계 금지 사항

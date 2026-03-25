@@ -29,25 +29,5 @@
       syncInovaPromptLibraryUrl:
         "https://asia-northeast3-browser-extension-main.cloudfunctions.net/syncInovaPromptLibrary",
     },
-    webApp: {
-      appId: "1:1027279095019:web:755f1f1a02cbae0d262aae",
-      authDomain: "browser-extension-main.firebaseapp.com",
-      apiKey: "AIzaSyBIB5UZy3iyivrnhKfcPKQtJiUS9V2jzeg",
-      displayName: "browser-extension-chrome",
-      messagingSenderId: "1027279095019",
-      projectId: "browser-extension-main",
-      projectNumber: "1027279095019",
-      storageBucket: "browser-extension-main.firebasestorage.app",
-    },
-    getWebConfig() {
-      return {
-        apiKey: this.webApp.apiKey,
-        appId: this.webApp.appId,
-        authDomain: this.webApp.authDomain,
-        messagingSenderId: this.webApp.messagingSenderId,
-        projectId: this.webApp.projectId,
-        storageBucket: this.webApp.storageBucket,
-      };
-    },
   };
 })(globalThis);

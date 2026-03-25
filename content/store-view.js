@@ -3,6 +3,13 @@
 
   function render(state) {
     const globalFeedback = state.feedback?.entryId ? null : state.feedback;
+    const metaText = state.loading
+      ? "불러오는 중"
+      : state.query
+        ? `검색 결과 ${state.totalCount}개`
+        : state.totalCount > state.loadedCount
+          ? `총 ${state.totalCount}개 · ${state.loadedCount}개 표시`
+          : `총 ${state.totalCount}개`;
     const itemsHtml = state.items.length
       ? state.items.map((item) => renderItem(item, state)).join("")
       : state.loading
@@ -22,7 +29,7 @@
             placeholder="스토어에서 프롬프트 찾기"
           />
         <div class="inova-tool-toolbar__row">
-          <div class="inova-tool-meta">${state.loading ? "불러오는 중" : `총 ${state.totalCount}개`}</div>
+          <div class="inova-tool-meta">${metaText}</div>
           <div class="inova-tool-actions inova-tool-actions--toolbar">
             <button type="button" class="inova-tool-button" data-store-action="refresh" ${renderDisabled(state.loading)}>${state.loading ? "새로고침 중..." : "새로고침"}</button>
           </div>
@@ -35,11 +42,13 @@
             ${renderSort("latest", "최신순", state.sortBy)}
             ${renderSort("likes", "좋아요순", state.sortBy)}
             ${renderSort("imports", "가져오기순", state.sortBy)}
+            ${renderSort("views", "조회수순", state.sortBy)}
           </div>
         </div>
         ${renderFeedback(globalFeedback)}
         ${state.error ? `<p class="inova-inline-feedback is-error">${escapeHtml(state.error)}</p>` : ""}
-        <div class="inova-store-list">${itemsHtml}</div>
+        <div class="inova-store-list" data-store-list="true" data-store-has-more="${state.hasMore}" data-store-loading="${state.loading}">${itemsHtml}</div>
+        ${state.loading && state.items.length ? '<div class="inova-store-list__footer">더 불러오는 중...</div>' : ""}
       </section>
     `;
   }
@@ -91,23 +100,36 @@
   }
 
   function renderItem(item, state) {
-    const expandable = Boolean(String(item?.content || "").trim());
+    const expandable = Boolean(item?.hasDetail || String(item?.content || item?.summary || "").trim());
     const expanded = expandable && state.expandedEntryId === item.entryId;
+    const detailPending = expanded && state.detailPendingEntryId === item.entryId && !item.content;
     const owned = item.owner.providerUserKey && item.owner.providerUserKey === state.providerUserKey;
+    const systemOwned = item.owner.kind === "system";
     const itemFeedback = state.feedback?.entryId === item.entryId ? state.feedback : null;
     const deleteConfirm = state.deleteConfirmEntryId === item.entryId;
     const importing = state.actionPending?.type === "import" && state.actionPending.entryId === item.entryId;
     const liking = state.actionPending?.type === "like" && state.actionPending.entryId === item.entryId;
     const unpublishing = state.actionPending?.type === "unpublish" && state.actionPending.entryId === item.entryId;
+    const ownerLabel = systemOwned
+      ? "시스템 에이전트 스타터"
+      : item.owner.maskedEmail
+        ? `${item.owner.displayName} · ${item.owner.maskedEmail}`
+        : item.owner.displayName;
     return `
       <article class="inova-prompt-item inova-store-item ${expanded ? "is-expanded" : ""}">
-        <div class="inova-prompt-item__head">
-          <div class="inova-prompt-item__title-row">
-            <span class="inova-store-item__badge">${escapeHtml(item.categoryLabel)}</span>
-            <strong class="inova-prompt-item__title">${escapeHtml(item.title)}</strong>
+        <div class="inova-store-item__header">
+          <div class="inova-store-item__main">
+            <div class="inova-store-item__eyebrow">
+              <span class="inova-store-item__chip">${escapeHtml(getCompactCategoryLabel(item.categoryId, item.categoryLabel))}</span>
+              ${systemOwned ? '<span class="inova-store-item__chip is-muted">시스템</span>' : ""}
+            </div>
+            <strong class="inova-prompt-item__title inova-store-item__title">${escapeHtml(item.title)}</strong>
+            <div class="inova-store-item__submeta">
+              <span>${escapeHtml(ownerLabel)}</span>
+              <span>${formatDate(item.publishedAt)}</span>
+            </div>
           </div>
-          <div class="inova-prompt-item__meta">
-            <span class="inova-prompt-item__date">${formatDate(item.publishedAt)}</span>
+          <div class="inova-store-item__side">
             ${expandable
               ? `<button type="button" class="inova-tool-button inova-tool-button--compact" data-store-action="toggle-expand" data-store-entry-id="${item.entryId}">
                   ${expanded ? "닫기" : "보기"}
@@ -115,31 +137,32 @@
               : ""}
           </div>
         </div>
-        <div class="inova-store-item__owner">${escapeHtml(item.owner.displayName)}${item.owner.maskedEmail ? ` · ${escapeHtml(item.owner.maskedEmail)}` : ""}</div>
-        ${expanded ? `<p class="inova-prompt-item__content">${escapeHtml(item.content)}</p>` : ""}
-        <div class="inova-store-item__metrics">
-          <span>조회 ${item.metrics.viewCount}</span>
-          <span>가져오기 ${item.metrics.importCount}</span>
-          <span>좋아요 ${item.metrics.likeCount}</span>
-        </div>
-        <div class="inova-prompt-item__actions">
-          <button
-            type="button"
-            class="inova-tool-button is-primary"
-            data-store-action="import"
-            data-store-entry-id="${item.entryId}"
-            ${renderDisabled(importing || liking || unpublishing)}
-          >${importing ? "가져오는 중..." : "내 요청으로 가져오기"}</button>
-          ${owned
-            ? `<button type="button" class="inova-tool-button" data-store-action="request-unpublish" data-store-entry-id="${item.entryId}" ${renderDisabled(importing || liking || unpublishing)}>${deleteConfirm ? "닫기" : "스토어 삭제"}</button>`
-            : ""}
-          <button
-            type="button"
-            class="inova-tool-button ${item.viewer.liked ? "is-primary" : ""}"
-            data-store-action="toggle-like"
-            data-store-entry-id="${item.entryId}"
-            ${renderDisabled(importing || liking || unpublishing)}
-          >${liking ? "처리 중..." : item.viewer.liked ? "좋아요 취소" : "좋아요"}</button>
+        ${expanded ? renderExpandedContent(item, detailPending) : ""}
+        <div class="inova-store-item__footer">
+          <div class="inova-store-item__metrics">
+            <span>조회 ${item.metrics.viewCount}</span>
+            <span>가져오기 ${item.metrics.importCount}</span>
+            <span>좋아요 ${item.metrics.likeCount}</span>
+          </div>
+          <div class="inova-prompt-item__actions">
+            <button
+              type="button"
+              class="inova-tool-button is-primary"
+              data-store-action="import"
+              data-store-entry-id="${item.entryId}"
+              ${renderDisabled(importing || liking || unpublishing)}
+            >${importing ? "가져오는 중..." : "가져오기"}</button>
+            ${expanded && owned
+              ? `<button type="button" class="inova-tool-button" data-store-action="request-unpublish" data-store-entry-id="${item.entryId}" ${renderDisabled(importing || liking || unpublishing)}>${deleteConfirm ? "닫기" : "스토어 삭제"}</button>`
+              : ""}
+            ${expanded ? `<button
+              type="button"
+              class="inova-tool-button ${item.viewer.liked ? "is-primary" : ""}"
+              data-store-action="toggle-like"
+              data-store-entry-id="${item.entryId}"
+              ${renderDisabled(importing || liking || unpublishing)}
+            >${liking ? "처리 중..." : item.viewer.liked ? "좋아요 취소" : "좋아요"}</button>` : ""}
+          </div>
         </div>
         ${itemFeedback ? renderFeedback(itemFeedback) : ""}
         ${deleteConfirm ? renderDeleteConfirm(item.entryId, item.title, unpublishing) : ""}
@@ -173,6 +196,26 @@
       return "";
     }
     return new Intl.DateTimeFormat("ko-KR", { month: "numeric", day: "numeric" }).format(time);
+  }
+
+  function renderExpandedContent(item, detailPending) {
+    if (detailPending) {
+      return '<p class="inova-store-item__summary">프롬프트를 불러오는 중이에요.</p>';
+    }
+    return `<p class="inova-prompt-item__content">${escapeHtml(item.content || "")}</p>`;
+  }
+
+  function getCompactCategoryLabel(categoryId, fallbackLabel) {
+    const overrides = {
+      "business-product": "비즈니스",
+      "developer-experience": "개발 경험",
+      "language-specialists": "프레임워크",
+      "meta-orchestration": "오케스트레이션",
+      "quality-security": "품질/보안",
+      "research-analysis": "리서치",
+      "specialized-domains": "도메인",
+    };
+    return overrides[categoryId] || fallbackLabel || "기타";
   }
 
   function escapeHtml(text) {

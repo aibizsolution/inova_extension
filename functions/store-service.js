@@ -1,7 +1,12 @@
-const VIEW_WINDOW_MS = 1000 * 60 * 60 * 12;
-const DEFAULT_LIMIT = 60;
-const MAX_LIMIT = 120;
+const DEFAULT_LIMIT = 500;
+const MAX_LIMIT = 200;
 const SUMMARY_LENGTH = 140;
+const DETAIL_COLLECTION = "prompt_store_entry_details";
+const FEED_COLLECTION = "prompt_store_feed_pages";
+const FEED_PAGE_SIZE = 500;
+const SUMMARY_COLLECTION = "prompt_store_meta";
+const SUMMARY_DOC_ID = "summary";
+const PUBLIC_FEED_SORTS = ["latest", "likes", "imports", "views"];
 
 function registerStoreHandlers(deps) {
   const {
@@ -26,12 +31,29 @@ function registerStoreHandlers(deps) {
       const filter = normalizeListFilter(request.body);
       logEvent("store.list.start", { categoryId: filter.categoryId, providerUserKey: owner.providerUserKey, sortBy: filter.sortBy });
 
-      const entries = await fetchPromptStoreEntries(filter, owner.providerUserKey);
-      const withViewer = await attachViewerState(entries, owner.providerUserKey);
-      const items = withViewer.slice(0, filter.limit);
+      const entries = filter.ownerOnly || filter.query
+        ? await fetchPromptStoreEntries(filter, owner.providerUserKey)
+        : await fetchPromptStoreFeedItems(filter);
+      const items = await attachViewerState(entries.items, owner.providerUserKey);
+      const categoryMeta = filter.ownerOnly
+        ? await buildOwnerCategoryMeta(owner.providerUserKey)
+        : await loadStoreSummary();
+      const availableCategories = buildAvailableCategories(categoryMeta.categoryCounts, filter.categoryId);
+      const totalCount = filter.categoryId === "all"
+        ? Number(categoryMeta.totalCount) || items.length
+        : Math.max(0, Number(categoryMeta.categoryCounts?.[filter.categoryId]) || 0);
+      const hasMore = filter.query ? Boolean(entries.hasMore) : totalCount > items.length;
 
       logEvent("store.list.success", { count: items.length, providerUserKey: owner.providerUserKey, sortBy: filter.sortBy });
-      response.json({ ok: true, data: { items } });
+      response.json({
+        ok: true,
+        data: {
+          availableCategories,
+          hasMore,
+          items,
+          totalCount,
+        },
+      });
     } catch (error) {
       logEvent("store.list.error", { error: normalizeText(error?.message), status: Number(error?.status) || 500 });
       sendError(response, error);
@@ -49,20 +71,36 @@ function registerStoreHandlers(deps) {
       }
 
       const now = new Date().toISOString();
-      const ref = db.collection("prompt_store_entries").doc();
-      const entryId = ref.id;
-      const entry = buildEntry({
-        entryId,
-        owner,
-        prompt,
-        categoryId,
-        metrics: normalizeMetrics(),
-        publishedAt: now,
-        updatedAt: now,
-      });
+      const entry = await db.runTransaction(async (transaction) => {
+        const ref = db.collection("prompt_store_entries").doc();
+        const detailRef = getStoreDetailRef(ref.id);
+        const entryId = ref.id;
+        const summaryRef = getStoreSummaryRef();
+        const summarySnapshot = await transaction.get(summaryRef);
+        const summary = normalizeStoreSummary(summarySnapshot.data());
+        const nextEntry = buildEntry({
+          entryId,
+          owner,
+          prompt,
+          categoryId,
+          metrics: normalizeMetrics(),
+          publishedAt: now,
+          updatedAt: now,
+        });
+        const detailEntry = buildDetailEntry({
+          content: prompt.content,
+          entryId,
+          owner,
+          updatedAt: now,
+        });
 
-      await ref.set(entry, { merge: false });
-      logEvent("store.publish.success", { entryId, providerUserKey: owner.providerUserKey });
+        transaction.set(ref, nextEntry, { merge: false });
+        transaction.set(detailRef, detailEntry, { merge: false });
+        transaction.set(summaryRef, buildStoreSummaryPatch(incrementCategoryCount(summary, categoryId, 1), now), { merge: true });
+        return nextEntry;
+      });
+      await rebuildStoreSummaryAndFeeds();
+      logEvent("store.publish.success", { entryId: entry.entryId, providerUserKey: owner.providerUserKey });
       response.json({ ok: true, data: { entry: attachViewerFlags(entry, { imported: false, liked: false, viewed: false }) } });
     } catch (error) {
       logEvent("store.publish.error", { error: normalizeText(error?.message), status: Number(error?.status) || 500 });
@@ -78,26 +116,43 @@ function registerStoreHandlers(deps) {
       if (!entryId) {
         throw createHttpError(400, "스토어에서 내릴 항목을 찾지 못했어요.");
       }
-      const ref = db.collection("prompt_store_entries").doc(entryId);
-      const snapshot = await ref.get();
-      if (!snapshot.exists) {
-        response.json({ ok: true, data: { entryId, removed: true } });
-        return;
-      }
+      await db.runTransaction(async (transaction) => {
+        const ref = db.collection("prompt_store_entries").doc(entryId);
+        const detailRef = getStoreDetailRef(entryId);
+        const summaryRef = getStoreSummaryRef();
+        const snapshot = await transaction.get(ref);
+        if (!snapshot.exists) {
+          return;
+        }
 
-      const data = snapshot.data() || {};
-      if (normalizeText(data.owner?.providerUserKey) !== owner.providerUserKey) {
-        throw createHttpError(403, "본인이 등록한 요청만 내릴 수 있어요.");
-      }
+        const data = snapshot.data() || {};
+        if (normalizeText(data.owner?.kind) === "system") {
+          throw createHttpError(403, "시스템 프롬프트는 삭제할 수 없어요.");
+        }
+        if (normalizeText(data.owner?.providerUserKey) !== owner.providerUserKey) {
+          throw createHttpError(403, "본인이 등록한 요청만 내릴 수 있어요.");
+        }
+        if (normalizeText(data.status) !== "published") {
+          return;
+        }
 
-      await ref.set(
-        {
-          status: "removed",
-          removedAt: new Date().toISOString(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
+        const summarySnapshot = await transaction.get(summaryRef);
+        const summary = normalizeStoreSummary(summarySnapshot.data());
+        const nextSummary = incrementCategoryCount(summary, normalizePublishCategoryId(data.categoryId), -1);
+        transaction.set(
+          ref,
+          {
+            hasDetail: false,
+            status: "removed",
+            removedAt: new Date().toISOString(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
+        transaction.delete(detailRef);
+        transaction.set(summaryRef, buildStoreSummaryPatch(nextSummary, new Date().toISOString()), { merge: true });
+      });
+      await rebuildStoreSummaryAndFeeds();
       logEvent("store.unpublish.success", { entryId, providerUserKey: owner.providerUserKey });
       response.json({ ok: true, data: { entryId, removed: true } });
     } catch (error) {
@@ -117,6 +172,7 @@ function registerStoreHandlers(deps) {
 
       const result = await db.runTransaction(async (transaction) => {
         const entryRef = db.collection("prompt_store_entries").doc(entryId);
+        const detailRef = getStoreDetailRef(entryId);
         const importRef = entryRef.collection("imports").doc(owner.providerUserKey);
         const entrySnapshot = await transaction.get(entryRef);
         if (!entrySnapshot.exists || normalizeText(entrySnapshot.data()?.status) !== "published") {
@@ -124,6 +180,8 @@ function registerStoreHandlers(deps) {
         }
 
         const entry = entrySnapshot.data();
+        const detailSnapshot = await transaction.get(detailRef);
+        const content = normalizePromptContent(detailSnapshot.data()?.content || entry.content);
         const importSnapshot = await transaction.get(importRef);
         const metrics = normalizeMetrics(entry.metrics);
         metrics.importCount += 1;
@@ -133,9 +191,10 @@ function registerStoreHandlers(deps) {
           providerUserKey: owner.providerUserKey,
         });
         transaction.set(entryRef, buildMetricsPatch(metrics), { merge: true });
-        return attachViewerFlags({ ...entry, metrics, updatedAt: entry.updatedAt }, { imported: true, liked: false, viewed: false });
+        return attachViewerFlags({ ...entry, content, metrics, updatedAt: entry.updatedAt }, { imported: true, liked: false, viewed: false });
       });
 
+      await rebuildStoreSummaryAndFeeds();
       logEvent("store.import.success", { entryId, providerUserKey: owner.providerUserKey });
       response.json({ ok: true, data: { entry: result } });
     } catch (error) {
@@ -182,6 +241,7 @@ function registerStoreHandlers(deps) {
         };
       });
 
+      await rebuildStoreSummaryAndFeeds();
       logEvent("store.like.success", { entryId, liked: result.liked, providerUserKey: owner.providerUserKey });
       response.json({ ok: true, data: result });
     } catch (error) {
@@ -201,29 +261,32 @@ function registerStoreHandlers(deps) {
 
       const result = await db.runTransaction(async (transaction) => {
         const entryRef = db.collection("prompt_store_entries").doc(entryId);
+        const detailRef = getStoreDetailRef(entryId);
+        const likeRef = entryRef.collection("likes").doc(owner.providerUserKey);
+        const importRef = entryRef.collection("imports").doc(owner.providerUserKey);
         const viewRef = entryRef.collection("views").doc(owner.providerUserKey);
         const entrySnapshot = await transaction.get(entryRef);
         if (!entrySnapshot.exists || normalizeText(entrySnapshot.data()?.status) !== "published") {
           throw createHttpError(404, "스토어 요청을 찾지 못했어요.");
         }
 
-        const viewSnapshot = await transaction.get(viewRef);
         const entry = entrySnapshot.data();
+        const detailSnapshot = await transaction.get(detailRef);
+        const likeSnapshot = await transaction.get(likeRef);
+        const importSnapshot = await transaction.get(importRef);
+        const content = normalizePromptContent(detailSnapshot.data()?.content || entry.content);
         const metrics = normalizeMetrics(entry.metrics);
-        const viewedAt = Date.parse(normalizeText(viewSnapshot.data()?.viewedAt));
-        const shouldCount = !Number.isFinite(viewedAt) || Date.now() - viewedAt > VIEW_WINDOW_MS;
-        if (shouldCount) {
-          metrics.viewCount += 1;
-          transaction.set(viewRef, {
-            providerUserKey: owner.providerUserKey,
-            viewedAt: new Date().toISOString(),
-          });
-          transaction.set(entryRef, buildMetricsPatch(metrics), { merge: true });
-        }
+        metrics.viewCount += 1;
+        transaction.set(viewRef, {
+          providerUserKey: owner.providerUserKey,
+          viewedAt: new Date().toISOString(),
+        });
+        transaction.set(entryRef, buildMetricsPatch(metrics), { merge: true });
 
-        return attachViewerFlags({ ...entry, metrics, updatedAt: entry.updatedAt }, { imported: false, liked: false, viewed: true });
+        return attachViewerFlags({ ...entry, content, metrics, updatedAt: entry.updatedAt }, { imported: Boolean(importSnapshot.exists), liked: Boolean(likeSnapshot.exists), viewed: true });
       });
 
+      await rebuildStoreSummaryAndFeeds();
       logEvent("store.view.success", { entryId, providerUserKey: owner.providerUserKey });
       response.json({ ok: true, data: { entry: result } });
     } catch (error) {
@@ -253,16 +316,50 @@ function registerStoreHandlers(deps) {
   }
 
   async function fetchPromptStoreEntries(filter, providerUserKey) {
-    const snapshot = await buildListQuery(filter, providerUserKey).limit(filter.limit).get();
+    const snapshot = await buildListQuery(filter, providerUserKey)
+      .select("categoryId", "categoryLabel", "entryId", "hasDetail", "metrics", "owner", "publishedAt", "score", "summary", "title", "updatedAt")
+      .limit(filter.limit + 1)
+      .get();
     const entries = snapshot.docs.map((doc) => ({ entryId: doc.id, ...(doc.data() || {}) }));
+    const hasMore = entries.length > filter.limit;
+    const visibleEntries = hasMore ? entries.slice(0, filter.limit) : entries;
     if (!filter.query) {
-      return entries;
+      return { hasMore, items: visibleEntries };
     }
 
     const queryText = filter.query.toLowerCase();
-    return entries.filter((entry) =>
-      `${entry.title || ""} ${entry.content || ""} ${entry.summary || ""} ${entry.owner?.displayName || ""}`.toLowerCase().includes(queryText)
-    );
+    return {
+      hasMore,
+      items: visibleEntries.filter((entry) =>
+        `${entry.title || ""} ${entry.summary || ""} ${entry.owner?.displayName || ""}`.toLowerCase().includes(queryText)
+      ),
+    };
+  }
+
+  async function fetchPromptStoreFeedItems(filter) {
+    const items = [];
+    let repaired = false;
+    for (let pageNumber = 0; items.length < filter.limit; pageNumber += 1) {
+      let snapshot = await getFeedPageRef(filter.sortBy, filter.categoryId, pageNumber).get();
+      if (!snapshot.exists && pageNumber === 0 && !repaired) {
+        repaired = true;
+        await rebuildStoreSummaryAndFeeds();
+        snapshot = await getFeedPageRef(filter.sortBy, filter.categoryId, pageNumber).get();
+      }
+      if (!snapshot.exists) {
+        break;
+      }
+
+      const pageItems = Array.isArray(snapshot.data()?.items) ? snapshot.data().items : [];
+      if (!pageItems.length) {
+        break;
+      }
+      items.push(...pageItems);
+      if (pageItems.length < FEED_PAGE_SIZE) {
+        break;
+      }
+    }
+    return { hasMore: false, items: items.slice(0, filter.limit).map(normalizeEntry) };
   }
 
   function buildListQuery(filter, providerUserKey) {
@@ -276,39 +373,119 @@ function registerStoreHandlers(deps) {
     return query.orderBy("publishedAt", "desc");
   }
 
+  async function loadStoreSummary() {
+    const snapshot = await getStoreSummaryRef().get();
+    const summary = normalizeStoreSummary(snapshot.data());
+    if (!shouldRepairSummary(summary)) {
+      return summary;
+    }
+
+    const probe = await db.collection("prompt_store_entries").where("status", "==", "published").limit(1).select("categoryId").get();
+    if (probe.empty) {
+      return summary;
+    }
+
+    return rebuildStoreSummaryAndFeeds();
+  }
+
+  async function rebuildStoreSummaryAndFeeds() {
+    const snapshot = await db.collection("prompt_store_entries")
+      .where("status", "==", "published")
+      .select("categoryId", "categoryLabel", "entryId", "hasDetail", "metrics", "owner", "publishedAt", "title", "updatedAt")
+      .get();
+    const entries = snapshot.docs.map((doc) => normalizeEntry({ entryId: doc.id, ...(doc.data() || {}) }));
+    const summary = buildSummaryFromEntries(entries);
+    const updatedAt = new Date().toISOString();
+    const writes = [];
+    const seenFeedIds = new Set();
+
+    writes.push({ ref: getStoreSummaryRef(), type: "set", data: buildStoreSummaryPatch(summary, updatedAt) });
+    for (const sortBy of PUBLIC_FEED_SORTS) {
+      for (const categoryId of ["all", ...Object.keys(summary.categoryCounts)]) {
+        const feedEntries = buildFeedEntries(entries, sortBy, categoryId);
+        if (!feedEntries.length) continue;
+        for (let pageNumber = 0; pageNumber * FEED_PAGE_SIZE < feedEntries.length; pageNumber += 1) {
+          const ref = getFeedPageRef(sortBy, categoryId, pageNumber);
+          seenFeedIds.add(ref.id);
+          writes.push({
+            ref,
+            type: "set",
+            data: {
+              categoryId,
+              itemCount: feedEntries.length,
+              items: feedEntries.slice(pageNumber * FEED_PAGE_SIZE, (pageNumber + 1) * FEED_PAGE_SIZE),
+              pageNumber,
+              sortBy,
+              updatedAt,
+            },
+          });
+        }
+      }
+    }
+
+    const existing = await db.collection(FEED_COLLECTION).get();
+    for (const doc of existing.docs) {
+      if (!seenFeedIds.has(doc.id)) writes.push({ ref: doc.ref, type: "delete" });
+    }
+    await commitBatchedWrites(writes);
+    return summary;
+  }
+
+  async function buildOwnerCategoryMeta(providerUserKey) {
+    if (!providerUserKey) {
+      return normalizeStoreSummary();
+    }
+
+    const snapshot = await db
+      .collection("prompt_store_entries")
+      .where("status", "==", "published")
+      .where("owner.providerUserKey", "==", providerUserKey)
+      .select("categoryId")
+      .get();
+
+    const categoryCounts = {};
+    for (const doc of snapshot.docs) {
+      const categoryId = normalizePublishCategoryId(doc.data()?.categoryId);
+      categoryCounts[categoryId] = Math.max(0, Number(categoryCounts[categoryId]) || 0) + 1;
+    }
+
+    return {
+      categoryCounts,
+      totalCount: snapshot.size,
+      updatedAt: "",
+    };
+  }
+
+  function buildAvailableCategories(categoryCounts, activeCategoryId) {
+    const activeId = normalizeFilterCategoryId(activeCategoryId);
+    const available = [{ id: "all", label: "전체" }];
+    for (const category of deps.STORE_CATEGORIES) {
+      if (category.id === "all") {
+        continue;
+      }
+      const count = Number(categoryCounts?.[category.id]) || 0;
+      if (count > 0 || category.id === activeId) {
+        available.push({ id: category.id, label: category.label });
+      }
+    }
+    return available;
+  }
+
   async function attachViewerState(entries, providerUserKey) {
     const normalized = entries.map(normalizeEntry);
-    const refs = [];
-    for (const entry of normalized) {
-      const entryRef = db.collection("prompt_store_entries").doc(entry.entryId);
-      refs.push(entryRef.collection("likes").doc(providerUserKey));
-      refs.push(entryRef.collection("imports").doc(providerUserKey));
-    }
-
-    const snapshots = refs.length ? await db.getAll(...refs) : [];
-    const viewerMap = new Map();
-    for (let index = 0; index < normalized.length; index += 1) {
-      const likeSnapshot = snapshots[index * 2];
-      const importSnapshot = snapshots[index * 2 + 1];
-      viewerMap.set(normalized[index].entryId, {
-        imported: Boolean(importSnapshot?.exists),
-        liked: Boolean(likeSnapshot?.exists),
-        viewed: false,
-      });
-    }
-
-    return normalized.map((entry) => attachViewerFlags(entry, viewerMap.get(entry.entryId)));
+    return normalized.map((entry) => attachViewerFlags(entry, providerUserKey ? { imported: false, liked: false, viewed: false } : null));
   }
 
   function buildEntry({ entryId, owner, prompt, categoryId, metrics, publishedAt, updatedAt }) {
     return {
       categoryId,
       categoryLabel: getCategoryLabel(categoryId),
-      content: prompt.content,
       entryId,
+      hasDetail: true,
       metrics,
       owner: {
         displayName: owner.displayName || "익명",
+        kind: normalizeText(owner.kind) || "user",
         maskedEmail: maskEmail(owner.email),
         providerUserKey: owner.providerUserKey,
       },
@@ -317,6 +494,18 @@ function registerStoreHandlers(deps) {
       status: "published",
       summary: buildSummary(prompt.content),
       title: prompt.title,
+      updatedAt,
+    };
+  }
+
+  function buildDetailEntry({ content, entryId, owner, updatedAt }) {
+    return {
+      content: normalizePromptContent(content),
+      entryId,
+      owner: {
+        kind: normalizeText(owner.kind) || "user",
+        providerUserKey: owner.providerUserKey,
+      },
       updatedAt,
     };
   }
@@ -348,9 +537,11 @@ function registerStoreHandlers(deps) {
       categoryLabel: normalizeText(entry.categoryLabel) || getCategoryLabel(categoryId),
       content: normalizePromptContent(entry.content),
       entryId: normalizeText(entry.entryId),
+      hasDetail: Boolean(entry.hasDetail || entry.content),
       metrics,
       owner: {
         displayName: normalizeText(entry.owner?.displayName) || "익명",
+        kind: normalizeText(entry.owner?.kind) || "user",
         maskedEmail: normalizeText(entry.owner?.maskedEmail),
         providerUserKey: normalizeText(entry.owner?.providerUserKey),
       },
@@ -377,6 +568,119 @@ function registerStoreHandlers(deps) {
       likeCount: Math.max(0, Number(metrics?.likeCount) || 0),
       viewCount: Math.max(0, Number(metrics?.viewCount) || 0),
     };
+  }
+
+  function normalizeStoreSummary(summary) {
+    const categoryCounts = {};
+    for (const category of deps.STORE_CATEGORIES) {
+      if (category.id === "all") {
+        continue;
+      }
+      const count = Math.max(0, Number(summary?.categories?.[category.id]) || 0);
+      if (count > 0) {
+        categoryCounts[category.id] = count;
+      }
+    }
+
+    return {
+      categoryCounts,
+      totalCount: Math.max(0, Number(summary?.totalPublished) || 0),
+      updatedAt: normalizeText(summary?.updatedAt),
+    };
+  }
+
+  function buildSummaryFromEntries(entries) {
+    const categoryCounts = {};
+    for (const entry of entries) {
+      const categoryId = normalizePublishCategoryId(entry?.categoryId);
+      categoryCounts[categoryId] = Math.max(0, Number(categoryCounts[categoryId]) || 0) + 1;
+    }
+    return { categoryCounts, totalCount: entries.length, updatedAt: "" };
+  }
+
+  function shouldRepairSummary(summary) {
+    const categoryTotal = Object.values(summary.categoryCounts || {}).reduce((sum, count) => sum + Math.max(0, Number(count) || 0), 0);
+    return summary.totalCount !== categoryTotal || (summary.totalCount === 0 && categoryTotal === 0);
+  }
+
+  async function rebuildStoreSummary() {
+    const snapshot = await db.collection("prompt_store_entries").where("status", "==", "published").select("categoryId").get();
+    const summary = buildSummaryFromEntries(snapshot.docs.map((doc) => ({ categoryId: doc.data()?.categoryId })));
+    summary.updatedAt = new Date().toISOString();
+    await getStoreSummaryRef().set(buildStoreSummaryPatch(summary, summary.updatedAt), { merge: true });
+    return summary;
+  }
+
+
+  function incrementCategoryCount(summary, categoryId, delta) {
+    const next = normalizeStoreSummary(summary);
+    const normalizedCategoryId = normalizePublishCategoryId(categoryId);
+    const nextCount = Math.max(0, (Number(next.categoryCounts[normalizedCategoryId]) || 0) + Number(delta || 0));
+    if (nextCount > 0) {
+      next.categoryCounts[normalizedCategoryId] = nextCount;
+    } else {
+      delete next.categoryCounts[normalizedCategoryId];
+    }
+    next.totalCount = Math.max(0, Number(next.totalCount) + Number(delta || 0));
+    return next;
+  }
+
+  function buildStoreSummaryPatch(summary, updatedAt) {
+    return {
+      categories: summary.categoryCounts,
+      totalPublished: Math.max(0, Number(summary.totalCount) || 0),
+      updatedAt: normalizeText(updatedAt) || new Date().toISOString(),
+    };
+  }
+
+  function getStoreSummaryRef() {
+    return db.collection(SUMMARY_COLLECTION).doc(SUMMARY_DOC_ID);
+  }
+
+  function getStoreDetailRef(entryId) {
+    return db.collection(DETAIL_COLLECTION).doc(entryId);
+  }
+
+  function getFeedPageRef(sortBy, categoryId, pageNumber) {
+    return db.collection(FEED_COLLECTION).doc(buildFeedPageId(sortBy, categoryId, pageNumber));
+  }
+
+  function buildFeedPageId(sortBy, categoryId, pageNumber) {
+    return `${sortBy}__${categoryId}__${String(pageNumber).padStart(4, "0")}`;
+  }
+
+  function buildFeedEntries(entries, sortBy, categoryId) {
+    return sortEntries(
+      (categoryId === "all" ? entries : entries.filter((entry) => normalizePublishCategoryId(entry.categoryId) === categoryId)).map(buildFeedItem),
+      sortBy
+    );
+  }
+
+  function buildFeedItem(entry) {
+    const normalized = normalizeEntry(entry);
+    return {
+      categoryId: normalized.categoryId,
+      categoryLabel: normalized.categoryLabel,
+      entryId: normalized.entryId,
+      hasDetail: true,
+      metrics: normalized.metrics,
+      owner: normalized.owner,
+      publishedAt: normalized.publishedAt,
+      title: normalized.title,
+      updatedAt: normalized.updatedAt,
+    };
+  }
+
+  async function commitBatchedWrites(writes) {
+    if (!writes.length) return;
+    for (let index = 0; index < writes.length; index += 400) {
+      const batch = db.batch();
+      for (const write of writes.slice(index, index + 400)) {
+        if (write.type === "delete") batch.delete(write.ref);
+        else batch.set(write.ref, write.data, { merge: true });
+      }
+      await batch.commit();
+    }
   }
 
   function normalizeListFilter(input) {

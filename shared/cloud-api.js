@@ -24,7 +24,7 @@
       functions.listPromptStoreEntriesUrl,
       {
         categoryId: filter?.categoryId || "all",
-        limit: filter?.limit || 60,
+        limit: filter?.limit || 24,
         ownerOnly: Boolean(filter?.ownerOnly),
         owner: providerIdentity,
         query: filter?.query || "",
@@ -32,7 +32,7 @@
       },
       accessToken
     );
-    return payload?.data || { items: [] };
+    return payload?.data || { availableCategories: [], hasMore: false, items: [], totalCount: 0 };
   }
 
   async function loadInovaPromptLibrary(providerIdentity, accessToken) {

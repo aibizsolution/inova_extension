@@ -37,11 +37,11 @@ async function handleMessage(message, sender) {
   }
 
   if (message.type === "inova-sync:load-prompt-library") {
-    return loadPromptLibrary(message.providerIdentity);
+    return loadPromptLibrary(message.providerIdentity, message.force);
   }
 
   if (message.type === "inova-sync:peek-prompt-library") {
-    return peekPromptLibrary(message.providerIdentity);
+    return peekPromptLibrary(message.providerIdentity, message.force);
   }
 
   if (message.type === "inova-store:list") {
@@ -157,11 +157,11 @@ async function syncPromptLibrary(syncDocument) {
   }
 }
 
-async function loadPromptLibrary(providerIdentity) {
+async function loadPromptLibrary(providerIdentity, force = false) {
   const providerUserKey = namespace.session.normalizeText(providerIdentity?.providerUserKey);
   cleanupRecentLoads();
 
-  if (providerUserKey) {
+  if (!force && providerUserKey) {
     const recent = recentLoadResults.get(providerUserKey);
     if (recent && recent.expiresAt > Date.now()) {
       return recent.result;
@@ -197,11 +197,11 @@ async function loadPromptLibrary(providerIdentity) {
   }
 }
 
-async function peekPromptLibrary(providerIdentity) {
+async function peekPromptLibrary(providerIdentity, force = false) {
   const providerUserKey = namespace.session.normalizeText(providerIdentity?.providerUserKey);
   cleanupRecentPeeks();
 
-  if (providerUserKey) {
+  if (!force && providerUserKey) {
     const recent = recentPeekResults.get(providerUserKey);
     if (recent && recent.expiresAt > Date.now()) {
       return recent.result;

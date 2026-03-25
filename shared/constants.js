@@ -71,6 +71,16 @@
       { id: "translation", label: "번역" },
       { id: "marketing", label: "마케팅" },
       { id: "code", label: "코딩" },
+      { id: "core-dev", label: "코어 개발" },
+      { id: "language-specialists", label: "언어/프레임워크" },
+      { id: "infrastructure", label: "인프라" },
+      { id: "quality-security", label: "품질/보안" },
+      { id: "data-ai", label: "데이터/AI" },
+      { id: "developer-experience", label: "개발 경험" },
+      { id: "specialized-domains", label: "전문 도메인" },
+      { id: "business-product", label: "비즈니스/프로덕트" },
+      { id: "meta-orchestration", label: "오케스트레이션" },
+      { id: "research-analysis", label: "리서치/분석" },
       { id: "other", label: "기타" }
     ],
     limits: {

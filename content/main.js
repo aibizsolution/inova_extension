@@ -27,6 +27,7 @@
     feedbackTimer: 0,
     bookmarks: [],
     store: {
+      availableCategories: [],
       categoryId: "all",
       error: "",
       expandedEntryId: "",
@@ -34,12 +35,16 @@
       feedbackTimer: 0,
       actionPending: null,
       deleteConfirmEntryId: "",
+      hasMore: false,
       identityPending: false,
       items: [],
+      limit: 500,
       loaded: false,
       loading: false,
+      searchTimer: 0,
       scope: "all",
       sortBy: "latest",
+      totalCount: 0,
     },
     observer: null,
     surfacePollTimer: 0,
@@ -98,7 +103,7 @@
     chrome.storage.onChanged?.addListener(routeSync.handleStorageChange);
     chrome.storage.onChanged?.addListener(cloudSyncManager.handleStorageChange);
     await routeSync.syncRouteState(true);
-    cloudSyncManager.scheduleSync(1800);
+    cloudSyncManager.scheduleSync(1800, true);
     if (state.activeTool === "store") storeManager.ensureLoaded();
     [450, 1200].forEach((delay) => global.setTimeout(routeSync.scheduleRefresh, delay));
   }
@@ -110,7 +115,7 @@
     const storeState = storeManager.buildViewState();
     const bookmarkCount = state.bookmarks.length;
     const promptCount = state.promptLibrary.items.length;
-    const storeCount = state.store.items.length;
+    const storeCount = Math.max(0, Number(state.store.totalCount) || state.store.items.length);
 
     namespace.contentPanel.renderPanel({
       activeTool: state.activeTool,
@@ -163,7 +168,12 @@
   }
 
   function updateQuery(toolId, value) {
-    state.queries[normalizeToolId(toolId)] = value || "";
+    const normalizedToolId = normalizeToolId(toolId);
+    state.queries[normalizedToolId] = value || "";
+    if (normalizedToolId === "store") {
+      storeManager.handleQueryChange(state.queries.store);
+      return;
+    }
     render();
   }
 
@@ -228,7 +238,7 @@
       state.preferredOpen = state.open;
       writePanelOpenPreference(state.open);
     }
-    if (state.open) cloudSyncManager.scheduleSync(220);
+    if (state.open) cloudSyncManager.scheduleSync(220, true);
     if (state.open && state.activeTool === "store") storeManager.ensureLoaded();
     render();
   }
@@ -259,12 +269,7 @@
     } catch {}
   }
 
-  function normalizeToolId(toolId) {
-    if (toolId === "prompts" || toolId === "store") {
-      return toolId;
-    }
-    return "bookmarks";
-  }
+  function normalizeToolId(toolId) { return toolId === "prompts" || toolId === "store" ? toolId : "bookmarks"; }
 
   function handleEscape() {
     return promptManager.consumeEscape();
@@ -297,12 +302,12 @@
 
   function handleVisibilityChange() {
     if (document.visibilityState !== "visible") return;
-    cloudSyncManager.scheduleSync(320);
+    cloudSyncManager.scheduleSync(320, true);
     render();
   }
 
   function handleWindowFocus() {
-    cloudSyncManager.scheduleSync(320);
+    cloudSyncManager.scheduleSync(320, true);
     render();
   }
 

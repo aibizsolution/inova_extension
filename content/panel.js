@@ -3,9 +3,10 @@
 
   function ensurePanel(callbacks) {
     let host = document.getElementById("inova-bookmark-host");
-    if (host) return host;
+    if (host) { host.__callbacks = callbacks; return host; }
     host = document.createElement("div");
     host.id = "inova-bookmark-host";
+    host.__callbacks = callbacks;
     host.innerHTML = buildMarkup();
     document.body.appendChild(host);
 
@@ -16,6 +17,7 @@
     installHandleInteractions(host, handle, callbacks);
     close.addEventListener("click", () => callbacks.onToggle(false));
     host.addEventListener("click", (event) => handleRootClick(event, host, callbacks));
+    host.addEventListener("scroll", (event) => handleStoreScroll(event, host, callbacks), true);
     host.addEventListener("pointerdown", (event) => handlePromptPointerDown(event, host));
     host.addEventListener("pointermove", (event) => handlePromptPointerMove(event, host));
     host.addEventListener("pointerup", (event) => handlePromptPointerEnd(event, host, callbacks));
@@ -36,6 +38,7 @@
     const host = document.getElementById("inova-bookmark-host");
     if (!host) return;
     const root = host.querySelector("#inova-bookmark-root");
+    const previousStoreScrollTop = state.activeTool === "store" ? host.querySelector(".inova-store-list")?.scrollTop || host.__storeScrollTop || 0 : 0;
     root.hidden = !state.visible;
     root.dataset.open = String(state.open);
     document.body.classList.toggle("inova-bookmark-panel-open", Boolean(state.visible && state.open));
@@ -45,12 +48,12 @@
     host.querySelector("#inova-tool-title").textContent = state.toolTitle;
     host.querySelector("#inova-tool-total").textContent = String(state.toolCount);
     host.querySelector(".handle-count").textContent = String(state.handleCount);
-    host.querySelector("#inova-tool-content").innerHTML =
-      state.activeTool === "prompts"
-        ? namespace.promptView.render(state.promptTool)
-        : state.activeTool === "store"
-          ? namespace.storeView.render(state.storeTool)
+    host.querySelector("#inova-tool-content").innerHTML = state.activeTool === "prompts"
+      ? namespace.promptView.render(state.promptTool)
+      : state.activeTool === "store"
+        ? namespace.storeView.render(state.storeTool)
         : namespace.bookmarkView.renderTool(state.bookmarksTool);
+    if (state.activeTool === "store") syncStoreList(host, host.__callbacks, previousStoreScrollTop);
 
     namespace.bookmarkView.setActive(state.bookmarksTool.activeId);
   }
@@ -158,14 +161,9 @@
 
   function handleRootChange(event, callbacks) {
     const storeField = event.target.closest("[data-store-field]");
-    if (storeField) return void callbacks.onStoreAction?.(
-      "set-category",
-      { categoryId: storeField.value || "all" }
-    );
+    if (storeField) return void callbacks.onStoreAction?.("set-category", { categoryId: storeField.value || "all" });
     const promptSelect = event.target.closest("[data-prompt-select]");
-    if (promptSelect?.dataset.promptSelect === "publish-category") {
-      callbacks.onPromptAction?.("set-publish-category", { categoryId: promptSelect.value || "" });
-    }
+    if (promptSelect?.dataset.promptSelect === "publish-category") callbacks.onPromptAction?.("set-publish-category", { categoryId: promptSelect.value || "" });
   }
 
   function handlePromptPointerDown(event, host) {
@@ -232,6 +230,14 @@
     callbacks.onJumpBookmark?.(item.dataset.bookmarkId);
   }
 
+  function handleStoreScroll(event, host, callbacks) {
+    const list = event.target instanceof HTMLElement ? event.target.closest(".inova-store-list") : null;
+    if (!(list instanceof HTMLElement)) return;
+    host.__storeScrollTop = list.scrollTop;
+    if (list.dataset.storeHasMore !== "true" || list.dataset.storeLoading === "true" || list.scrollHeight - list.clientHeight - list.scrollTop > 72) return;
+    callbacks.onStoreAction?.("load-more");
+  }
+
   function installHandleInteractions(host, handle, callbacks) {
     const dragState = { dragging: false, moved: false, pointerId: -1, startRatio: 0, startY: 0 };
     handle.addEventListener("click", (event) => {
@@ -259,9 +265,7 @@
       if (Math.abs(deltaY) > 6) dragState.moved = true;
       applyHandleRatio(host, clampRatio(dragState.startRatio + deltaY / getHandleTrackHeight(handle.offsetHeight)));
     });
-    ["pointerup", "pointercancel"].forEach((type) =>
-      handle.addEventListener(type, (event) => finishHandleDrag(event, host, handle, callbacks, dragState))
-    );
+    ["pointerup", "pointercancel"].forEach((type) => handle.addEventListener(type, (event) => finishHandleDrag(event, host, handle, callbacks, dragState)));
   }
 
   function finishHandleDrag(event, host, handle, callbacks, dragState) {
@@ -275,34 +279,27 @@
 
   function getHandleTrackHeight(handleHeight) {
     const viewportHeight = global.innerHeight || document.documentElement.clientHeight || 0;
-    const safeTop = viewportHeight <= 760 ? 72 : 96;
-    const safeBottom = viewportHeight <= 760 ? 18 : 24;
-    return Math.max(1, viewportHeight - safeTop - safeBottom - handleHeight);
+    return Math.max(1, viewportHeight - (viewportHeight <= 760 ? 90 : 120) - handleHeight);
   }
   function applyHandleRatio(host, value) { host.style.setProperty("--handle-ratio", String(clampRatio(value))); }
   function readHandleRatio(host) { const ratio = Number.parseFloat(host.style.getPropertyValue("--handle-ratio")); return clampRatio(Number.isFinite(ratio) ? ratio : 0.4); }
   function clampRatio(value) { return Math.min(1, Math.max(0, Number(value) || 0)); }
-
-  function getDropPlacement(item, clientY) {
-    const rect = item.getBoundingClientRect();
-    return clientY > rect.top + rect.height / 2 ? "after" : "before";
-  }
-
-  function setPromptDropIndicator(host, targetItem, placement) {
-    clearPromptDropIndicators(host);
-    targetItem.classList.add(placement === "after" ? "is-drop-after" : "is-drop-before");
-  }
-
-  function clearPromptDropIndicators(host) {
-    host.querySelectorAll(".inova-prompt-item.is-drop-before, .inova-prompt-item.is-drop-after").forEach((item) => item.classList.remove("is-drop-before", "is-drop-after"));
-  }
-
+  function getDropPlacement(item, clientY) { const rect = item.getBoundingClientRect(); return clientY > rect.top + rect.height / 2 ? "after" : "before"; }
+  function setPromptDropIndicator(host, targetItem, placement) { clearPromptDropIndicators(host); targetItem.classList.add(placement === "after" ? "is-drop-after" : "is-drop-before"); }
+  function clearPromptDropIndicators(host) { host.querySelectorAll(".inova-prompt-item.is-drop-before, .inova-prompt-item.is-drop-after").forEach((item) => item.classList.remove("is-drop-before", "is-drop-after")); }
   function clearPromptDragState(host) {
     clearPromptDropIndicators(host);
     host.__promptDrag?.handle?.classList.remove("is-dragging");
     host.querySelectorAll(".inova-prompt-item.is-drag-source").forEach((item) => item.classList.remove("is-drag-source"));
     delete host.__promptDrag;
     delete host.dataset.dragPointerId;
+  }
+  function syncStoreList(host, callbacks, scrollTop) {
+    const list = host.querySelector(".inova-store-list");
+    if (!(list instanceof HTMLElement)) return;
+    if (scrollTop > 0) list.scrollTop = scrollTop;
+    host.__storeScrollTop = list.scrollTop;
+    if (callbacks?.onStoreAction && list.dataset.storeHasMore === "true" && list.dataset.storeLoading !== "true" && list.scrollHeight <= list.clientHeight + 24) global.setTimeout(() => callbacks.onStoreAction("load-more"), 0);
   }
   function escapeHtml(text) { return String(text || "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;"); }
 

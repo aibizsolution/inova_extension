@@ -28,8 +28,10 @@
       categoryId,
       categoryLabel: namespace.session.normalizeText(entry?.categoryLabel || getCategoryLabel(categoryId)),
       content: normalizePromptContent(entry?.content || ""),
+      hasDetail: Boolean(entry?.hasDetail || entry?.content),
       owner: {
         displayName: namespace.session.normalizeText(entry?.owner?.displayName || "익명"),
+        kind: namespace.session.normalizeText(entry?.owner?.kind || "user") || "user",
         maskedEmail: namespace.session.normalizeText(entry?.owner?.maskedEmail || ""),
         providerUserKey: namespace.session.normalizeText(entry?.owner?.providerUserKey || ""),
       },
@@ -45,7 +47,11 @@
   }
 
   function normalizeStoreEntries(entries) {
-    return Array.isArray(entries) ? entries.map(normalizeStoreEntry).filter((entry) => entry.entryId && entry.title && entry.content) : [];
+    return Array.isArray(entries)
+      ? entries
+        .map(normalizeStoreEntry)
+        .filter((entry) => entry.entryId && entry.title && (entry.summary || entry.content || entry.hasDetail))
+      : [];
   }
 
   function filterEntries(entries, query, categoryId) {
@@ -58,7 +64,7 @@
       if (!normalizedQuery) {
         return true;
       }
-      return `${entry.title} ${entry.content} ${entry.summary} ${entry.owner.displayName}`.toLowerCase().includes(normalizedQuery);
+      return `${entry.title} ${entry.summary} ${entry.content} ${entry.owner.displayName}`.toLowerCase().includes(normalizedQuery);
     });
   }
 
