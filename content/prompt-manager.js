@@ -189,7 +189,9 @@
         state.promptPendingInsert = null;
         resetPublishState();
         state.activeTool = "prompts";
-        await hooks.persistActiveTool("prompts");
+        state.uiPreferences.activeTool = "prompts";
+        state.uiPreferences.activePromptTab = "library";
+        await hooks.persistActiveTool("prompts", "library");
         setFeedback("");
       } catch (error) {
         setFeedback(getActionErrorMessage(error, "가져오기 파일을 읽지 못했어요."), "error");

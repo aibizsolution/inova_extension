@@ -21,6 +21,7 @@
         state.settings = storageState.settings || { ...namespace.constants.defaults.settings };
         state.pausedSessions = storageState.pausedSessions || {};
         state.uiPreferences = namespace.storage.mergeUiPreferences(storageState.uiPreferences);
+        state.uiPreferences.activePromptTab = normalizePromptTab(state.uiPreferences.activeTool === "store" ? "store" : state.uiPreferences.activePromptTab);
         state.activeTool = hooks.normalizeToolId(state.uiPreferences.activeTool || state.activeTool);
         state.promptLibrary = namespace.promptLibrary.mergePromptLibrary(storageState.promptLibrary);
         if (state.sessionId) {
@@ -28,7 +29,7 @@
         }
         state.bookmarks = readLiveBookmarks();
         state.lastError = "";
-        if (state.activeTool === "store") hooks.ensureStoreLoaded?.();
+        if (isStoreTabActive()) hooks.ensureStoreLoaded?.();
       } catch (error) {
         state.lastError = error instanceof Error ? error.message : String(error);
         console.error("[i-Nova Bookmarks] refresh state failed", error);
@@ -126,8 +127,9 @@
       if (changes.pausedSessions) state.pausedSessions = changes.pausedSessions.newValue || {};
       if (changes.uiPreferences) {
         state.uiPreferences = namespace.storage.mergeUiPreferences(changes.uiPreferences.newValue);
+        state.uiPreferences.activePromptTab = normalizePromptTab(state.uiPreferences.activeTool === "store" ? "store" : state.uiPreferences.activePromptTab);
         state.activeTool = hooks.normalizeToolId(state.uiPreferences.activeTool || state.activeTool);
-        if (state.activeTool === "store") hooks.ensureStoreLoaded?.();
+        if (isStoreTabActive()) hooks.ensureStoreLoaded?.();
       }
       if (changes.promptLibrary) state.promptLibrary = namespace.promptLibrary.mergePromptLibrary(changes.promptLibrary.newValue);
       scheduleRefresh();
@@ -135,6 +137,14 @@
 
     function isPaused() {
       return Boolean(state.pausedSessions[state.sessionId]);
+    }
+
+    function isStoreTabActive() {
+      return state.activeTool === "prompts" && state.uiPreferences.activePromptTab === "store";
+    }
+
+    function normalizePromptTab(value) {
+      return value === "store" ? "store" : "library";
     }
 
     function disconnectObserver() {

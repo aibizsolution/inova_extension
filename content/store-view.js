@@ -2,6 +2,14 @@
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
 
   function render(state) {
+    return `
+      <section class="inova-tool-section inova-tool-section--store">
+        ${renderBody(state)}
+      </section>
+    `;
+  }
+
+  function renderBody(state) {
     const globalFeedback = state.feedback?.entryId ? null : state.feedback;
     const metaText = state.loading
       ? "불러오는 중"
@@ -19,37 +27,35 @@
       : `<div class="inova-bookmark-empty">${escapeHtml(state.emptyText)}</div>`;
 
     return `
-      <section class="inova-tool-section inova-tool-section--store">
-        <div class="inova-tool-toolbar is-stacked">
-          <input
-            class="inova-tool-search"
-            type="search"
-            value="${escapeHtml(state.query)}"
-            data-search-tool="store"
-            placeholder="스토어에서 프롬프트 찾기"
-          />
+      <div class="inova-tool-toolbar is-stacked">
+        <input
+          class="inova-tool-search"
+          type="search"
+          value="${escapeHtml(state.query)}"
+          data-search-tool="store"
+          placeholder="스토어에서 프롬프트 찾기"
+        />
         <div class="inova-tool-toolbar__row">
           <div class="inova-tool-meta">${metaText}</div>
           <div class="inova-tool-actions inova-tool-actions--toolbar">
             <button type="button" class="inova-tool-button" data-store-action="refresh" ${renderDisabled(state.loading)}>${state.loading ? "새로고침 중..." : "새로고침"}</button>
           </div>
-          </div>
-          <div class="inova-store-controls">
-            ${renderScopeToggle(state.ownerScope)}
-            ${renderCategorySelect(state.categories, state.categoryId)}
-          </div>
-          <div class="inova-store-sort">
-            ${renderSort("latest", "최신순", state.sortBy)}
-            ${renderSort("likes", "좋아요순", state.sortBy)}
-            ${renderSort("imports", "가져오기순", state.sortBy)}
-            ${renderSort("views", "조회수순", state.sortBy)}
-          </div>
         </div>
-        ${renderFeedback(globalFeedback)}
-        ${state.error ? `<p class="inova-inline-feedback is-error">${escapeHtml(state.error)}</p>` : ""}
-        <div class="inova-store-list" data-store-list="true" data-store-has-more="${state.hasMore}" data-store-loading="${state.loading}">${itemsHtml}</div>
-        ${state.loading && state.items.length ? '<div class="inova-store-list__footer">더 불러오는 중...</div>' : ""}
-      </section>
+        <div class="inova-store-controls">
+          ${renderScopeToggle(state.ownerScope)}
+          ${renderCategorySelect(state.categories, state.categoryId)}
+        </div>
+        <div class="inova-store-sort">
+          ${renderSort("latest", "최신순", state.sortBy)}
+          ${renderSort("likes", "좋아요순", state.sortBy)}
+          ${renderSort("imports", "가져오기순", state.sortBy)}
+          ${renderSort("views", "조회수순", state.sortBy)}
+        </div>
+      </div>
+      ${renderFeedback(globalFeedback)}
+      ${state.error ? `<p class="inova-inline-feedback is-error">${escapeHtml(state.error)}</p>` : ""}
+      <div class="inova-store-list" data-store-list="true" data-store-has-more="${state.hasMore}" data-store-loading="${state.loading}">${itemsHtml}</div>
+      ${state.loading && state.items.length ? '<div class="inova-store-list__footer">더 불러오는 중...</div>' : ""}
     `;
   }
 
@@ -140,9 +146,9 @@
         ${expanded ? renderExpandedContent(item, detailPending) : ""}
         <div class="inova-store-item__footer">
           <div class="inova-store-item__metrics">
-            <span>조회 ${item.metrics.viewCount}</span>
-            <span>가져오기 ${item.metrics.importCount}</span>
-            <span>좋아요 ${item.metrics.likeCount}</span>
+            ${renderMetric("views", "조회수", item.metrics.viewCount)}
+            ${renderMetric("imports", "가져오기 수", item.metrics.importCount)}
+            ${renderMetric("likes", "좋아요 수", item.metrics.likeCount)}
           </div>
           <div class="inova-prompt-item__actions">
             <button
@@ -205,6 +211,16 @@
     return `<p class="inova-prompt-item__content">${escapeHtml(item.content || "")}</p>`;
   }
 
+  function renderMetric(icon, label, value) {
+    return `
+      <span class="inova-store-metric" title="${escapeHtml(label)}">
+        <span class="inova-store-metric__icon" data-icon="${icon}" aria-hidden="true"></span>
+        <span class="inova-sr-only">${escapeHtml(label)} </span>
+        <span>${Number(value) || 0}</span>
+      </span>
+    `;
+  }
+
   function getCompactCategoryLabel(categoryId, fallbackLabel) {
     const overrides = {
       "business-product": "비즈니스",
@@ -232,5 +248,6 @@
 
   namespace.storeView = {
     render,
+    renderBody,
   };
 })(globalThis);

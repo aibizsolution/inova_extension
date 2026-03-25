@@ -11,6 +11,7 @@
     queries: { bookmarks: "", prompts: "", store: "" },
     settings: { ...namespace.constants.defaults.settings },
     pausedSessions: {},
+    releaseInfo: namespace.releaseInfo.mergeReleaseInfo(),
     uiPreferences: namespace.storage.mergeUiPreferences(),
     promptLibrary: namespace.promptLibrary.mergePromptLibrary(),
     promptEditor: { open: false, mode: "create", id: "", title: "", content: "", error: "" },
@@ -64,12 +65,9 @@
     persistActiveTool,
     render,
   });
-  const storeManager = namespace.storeManager.create(state, {
-    render,
-  });
-  const cloudSyncManager = namespace.cloudSyncManager.create(state, {
-    render,
-  });
+  const storeManager = namespace.storeManager.create(state, { render });
+  const releaseManager = namespace.releaseManager.create(state, { render });
+  const cloudSyncManager = namespace.cloudSyncManager.create(state, { render });
   const routeSync = namespace.routeSync.create(state, {
     ensureStoreLoaded: () => storeManager.ensureLoaded(),
     normalizeToolId,
@@ -89,6 +87,8 @@
       onMovePrompt: movePromptItem,
       onPromptAction: promptManager.handleAction,
       onPromptDraftChange: promptManager.updateDraft,
+      onSelectPromptTab: selectPromptTab,
+      onReleaseAction: releaseManager.handleAction,
       onStoreAction: storeManager.handleAction,
       onEscape: handleEscape,
       onSearch: updateQuery,
@@ -102,20 +102,26 @@
     document.addEventListener("visibilitychange", handleVisibilityChange, { passive: true });
     chrome.storage.onChanged?.addListener(routeSync.handleStorageChange);
     chrome.storage.onChanged?.addListener(cloudSyncManager.handleStorageChange);
+    chrome.storage.onChanged?.addListener(releaseManager.handleStorageChange);
     await routeSync.syncRouteState(true);
     cloudSyncManager.scheduleSync(1800, true);
-    if (state.activeTool === "store") storeManager.ensureLoaded();
+    if (isStoreTabActive()) storeManager.ensureLoaded();
+    if (state.open || state.activeTool === "release") releaseManager.ensureChecked(false, state.activeTool === "release");
     [450, 1200].forEach((delay) => global.setTimeout(routeSync.scheduleRefresh, delay));
   }
 
   function render() {
     const visible = state.settings.enabled && isToolSurface() && !isPaused();
+    const activePromptTab = getActivePromptTab();
     const bookmarkItems = getFilteredBookmarks();
     const promptItems = getFilteredPrompts();
     const storeState = storeManager.buildViewState();
+    const releaseState = releaseManager.buildViewState();
     const bookmarkCount = state.bookmarks.length;
     const promptCount = state.promptLibrary.items.length;
+    const releaseCount = releaseState.updateAvailable ? 1 : 0;
     const storeCount = Math.max(0, Number(state.store.totalCount) || state.store.items.length);
+    const promptToolCount = activePromptTab === "store" ? storeCount : promptCount;
 
     namespace.contentPanel.renderPanel({
       activeTool: state.activeTool,
@@ -126,51 +132,39 @@
         metaText: state.queries.bookmarks ? `검색 결과 ${bookmarkItems.length}개` : buildBookmarkStatusText(),
         query: state.queries.bookmarks,
       },
-      handleCount: state.activeTool === "prompts" ? promptCount : state.activeTool === "store" ? storeCount : bookmarkCount || promptCount || storeCount,
+      handleCount: state.activeTool === "prompts" ? promptToolCount : state.activeTool === "release" ? releaseCount : bookmarkCount || promptCount || releaseCount,
+      releaseTool: releaseState,
       handleRatio: namespace.storage.getHandleRatio(state.uiPreferences, global.innerWidth),
       open: state.open,
-      promptTool: promptManager.buildViewState(promptItems),
-      storeTool: storeState,
-      toolCount: state.activeTool === "prompts" ? promptCount : state.activeTool === "store" ? storeState.totalCount : bookmarkCount,
-      toolTitle: state.activeTool === "prompts" ? "자주 쓰는 요청" : state.activeTool === "store" ? "프롬프트 스토어" : "질문 모아보기",
+      promptTool: {
+        activeTab: activePromptTab,
+        prompt: promptManager.buildViewState(promptItems),
+        store: storeState,
+        tabs: [
+          { id: "library", label: "내 요청", count: promptCount },
+          { id: "store", label: "스토어", count: storeCount },
+        ],
+      },
+      toolCount: state.activeTool === "prompts" ? promptToolCount : state.activeTool === "release" ? releaseCount : bookmarkCount,
+      toolTitle: state.activeTool === "prompts" ? "프롬프트" : state.activeTool === "release" ? "릴리스 안내" : "대화 탐색",
       tools: [
-        { id: "bookmarks", label: "질문", count: bookmarkCount },
-        { id: "prompts", label: "요청", count: promptCount },
-        { id: "store", label: "스토어", count: storeCount },
+        { id: "bookmarks", label: "대화", count: bookmarkCount },
+        { id: "prompts", label: "프롬프트", count: promptCount },
+        { id: "release", label: "릴리스", count: releaseCount },
       ],
       visible,
     });
   }
 
-  function buildBookmarkEmptyText() {
-    if (state.queries.bookmarks) return "검색 결과가 없어요. 다른 표현으로 다시 찾아보세요.";
-    if (!state.settings.autoBookmark) return "팝업에서 질문 자동 모으기를 켜면 질문 탭을 사용할 수 있어요.";
-    if (state.awaitingRouteMessages) return "이 대화의 질문을 불러오는 중이에요.";
-    return "아직 질문이 없어요.";
-  }
-
-  function buildBookmarkStatusText() {
-    if (state.lastError) return "표시에 문제가 있어요. 새로고침 후 다시 시도해 주세요.";
-    if (!state.settings.autoBookmark) return "질문 자동 모으기가 꺼져 있어요.";
-    if (state.awaitingRouteMessages) return "질문을 불러오는 중";
-    if (!state.bookmarks.length) return "아직 질문이 없어요";
-    return "";
-  }
-
-  function getFilteredBookmarks() {
-    const query = namespace.session.normalizeText(state.queries.bookmarks).toLowerCase();
-    return query ? state.bookmarks.filter((bookmark) => bookmark.normalizedText.includes(query)) : state.bookmarks;
-  }
-
-  function getFilteredPrompts() {
-    const query = namespace.session.normalizeText(state.queries.prompts).toLowerCase();
-    return query ? state.promptLibrary.items.filter((item) => `${item.title} ${item.content}`.toLowerCase().includes(query)) : state.promptLibrary.items;
-  }
+  function buildBookmarkEmptyText() { return state.queries.bookmarks ? "검색 결과가 없어요. 다른 표현으로 다시 찾아보세요." : !state.settings.autoBookmark ? "팝업에서 대화 자동 모으기를 켜면 대화 탭을 사용할 수 있어요." : state.awaitingRouteMessages ? "이 대화의 흐름을 불러오는 중이에요." : "아직 대화가 없어요."; }
+  function buildBookmarkStatusText() { return state.lastError ? "표시에 문제가 있어요. 새로고침 후 다시 시도해 주세요." : !state.settings.autoBookmark ? "대화 자동 모으기가 꺼져 있어요." : state.awaitingRouteMessages ? "대화를 불러오는 중" : !state.bookmarks.length ? "아직 대화가 없어요" : ""; }
+  function getFilteredBookmarks() { const query = namespace.session.normalizeText(state.queries.bookmarks).toLowerCase(); return query ? state.bookmarks.filter((bookmark) => bookmark.normalizedText.includes(query)) : state.bookmarks; }
+  function getFilteredPrompts() { const query = namespace.session.normalizeText(state.queries.prompts).toLowerCase(); return query ? state.promptLibrary.items.filter((item) => `${item.title} ${item.content}`.toLowerCase().includes(query)) : state.promptLibrary.items; }
 
   function updateQuery(toolId, value) {
-    const normalizedToolId = normalizeToolId(toolId);
-    state.queries[normalizedToolId] = value || "";
-    if (normalizedToolId === "store") {
+    const queryKey = toolId === "store" ? "store" : normalizeToolId(toolId);
+    state.queries[queryKey] = value || "";
+    if (toolId === "store") {
       storeManager.handleQueryChange(state.queries.store);
       return;
     }
@@ -178,15 +172,30 @@
   }
 
   async function selectTool(toolId) {
+    if (toolId === "store") return void selectPromptTab("store");
     state.activeTool = normalizeToolId(toolId);
-    if (state.activeTool === "store") storeManager.ensureLoaded(true);
+    state.uiPreferences = namespace.storage.mergeUiPreferences(state.uiPreferences, { activeTool: state.activeTool });
+    if (state.activeTool === "prompts" && getActivePromptTab() === "store") storeManager.ensureLoaded(true);
+    if (state.activeTool === "release") releaseManager.ensureChecked(false, true);
     render();
     await persistActiveTool(state.activeTool);
   }
 
-  async function persistActiveTool(nextTool = state.activeTool) {
+  async function selectPromptTab(promptTabId) {
+    const nextPromptTab = normalizePromptTab(promptTabId);
+    state.activeTool = "prompts";
+    state.uiPreferences = namespace.storage.mergeUiPreferences(state.uiPreferences, { activePromptTab: nextPromptTab, activeTool: "prompts" });
+    if (nextPromptTab === "store") storeManager.ensureLoaded(true);
+    render();
+    await persistActiveTool("prompts", nextPromptTab);
+  }
+
+  async function persistActiveTool(nextTool = state.activeTool, nextPromptTab = getActivePromptTab()) {
     try {
-      state.uiPreferences = await namespace.storage.updateUiPreferences({ activeTool: normalizeToolId(nextTool) });
+      state.uiPreferences = await namespace.storage.updateUiPreferences({
+        activePromptTab: normalizePromptTab(nextPromptTab),
+        activeTool: normalizeToolId(nextTool),
+      });
     } catch (error) {
       console.error("[i-Nova Bookmarks] active tool save failed", error);
     }
@@ -239,7 +248,8 @@
       writePanelOpenPreference(state.open);
     }
     if (state.open) cloudSyncManager.scheduleSync(220, true);
-    if (state.open && state.activeTool === "store") storeManager.ensureLoaded();
+    if (state.open && isStoreTabActive()) storeManager.ensureLoaded();
+    if (state.open) releaseManager.ensureChecked(false, state.activeTool === "release");
     render();
   }
 
@@ -269,16 +279,10 @@
     } catch {}
   }
 
-  function normalizeToolId(toolId) { return toolId === "prompts" || toolId === "store" ? toolId : "bookmarks"; }
+  function normalizeToolId(toolId) { return toolId === "release" || toolId === "prompts" ? toolId : toolId === "store" ? "prompts" : "bookmarks"; }
 
-  function handleEscape() {
-    return promptManager.consumeEscape();
-  }
-
-  function isToolSurface() {
-    const conversation = namespace.contentDom.getConversationState();
-    return conversation.hasComposer;
-  }
+  function handleEscape() { return state.activeTool === "prompts" && getActivePromptTab() === "library" && promptManager.consumeEscape(); }
+  function isToolSurface() { return namespace.contentDom.getConversationState().hasComposer; }
 
   function installSurfaceWatchers() {
     state.surfaceSignature = getSurfaceSignature();
@@ -290,7 +294,7 @@
       const hasComposer = nextSignature.startsWith("true|");
       state.surfaceSignature = nextSignature;
       if (!hadComposer && hasComposer && state.preferredOpen) state.open = true;
-      if (!hadComposer && hasComposer && state.activeTool === "store") storeManager.ensureLoaded(true);
+      if (!hadComposer && hasComposer && isStoreTabActive()) storeManager.ensureLoaded(true);
       render();
     }, 600);
   }
@@ -300,16 +304,13 @@
     return `${conversation.hasComposer}|${conversation.hasChatLog}|${conversation.articleCount}|${conversation.userCount}`;
   }
 
-  function handleVisibilityChange() {
-    if (document.visibilityState !== "visible") return;
-    cloudSyncManager.scheduleSync(320, true);
-    render();
-  }
+  function handleVisibilityChange() { if (document.visibilityState !== "visible") return; cloudSyncManager.scheduleSync(320, true); if (state.open) releaseManager.ensureChecked(); render(); }
+  function handleWindowFocus() { cloudSyncManager.scheduleSync(320, true); if (state.open) releaseManager.ensureChecked(); render(); }
 
-  function handleWindowFocus() {
-    cloudSyncManager.scheduleSync(320, true);
-    render();
+  function getActivePromptTab() {
+    return state.uiPreferences.activeTool === "store" ? "store" : normalizePromptTab(state.uiPreferences.activePromptTab);
   }
-
+  function isStoreTabActive() { return state.activeTool === "prompts" && getActivePromptTab() === "store"; }
+  function normalizePromptTab(promptTabId) { return promptTabId === "store" ? "store" : "library"; }
   async function publishPrompt(promptId, categoryId, title) { return storeManager.publishPrompt(promptId, categoryId, title); }
 })(globalThis);

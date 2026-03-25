@@ -60,10 +60,21 @@
     return namespace.cloudSync.mergeCloudSyncState(current.cloudSync);
   }
 
+  async function getReleaseInfo() {
+    const current = await getState();
+    return namespace.releaseInfo.mergeReleaseInfo(current.releaseInfo);
+  }
+
   async function setCloudSyncState(nextCloudSync) {
     const cloudSync = namespace.cloudSync.mergeCloudSyncState(nextCloudSync);
     await setLocal({ cloudSync });
     return cloudSync;
+  }
+
+  async function setReleaseInfo(nextReleaseInfo) {
+    const releaseInfo = namespace.releaseInfo.mergeReleaseInfo(nextReleaseInfo);
+    await setLocal({ releaseInfo });
+    return releaseInfo;
   }
 
   async function markPromptLibrarySynced(providerIdentity, syncedAt) {
@@ -216,6 +227,7 @@
     getCloudSyncState,
     getHandleRatio,
     getPromptLibrary,
+    getReleaseInfo,
     getState,
     getViewportBucket,
     hydratePromptLibraryFromCloud,
@@ -234,6 +246,7 @@
     setLocal,
     setPromptSyncError,
     setPromptLibrary,
+    setReleaseInfo,
     setSessionPaused,
     updateUiPreferences,
     updateSettings,

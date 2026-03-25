@@ -9,11 +9,9 @@
     host.__callbacks = callbacks;
     host.innerHTML = buildMarkup();
     document.body.appendChild(host);
-
     const handle = host.querySelector("#inova-bookmark-handle");
     const close = host.querySelector("#inova-tool-close");
     const fileInput = host.querySelector("#inova-prompt-import-file");
-
     installHandleInteractions(host, handle, callbacks);
     close.addEventListener("click", () => callbacks.onToggle(false));
     host.addEventListener("click", (event) => handleRootClick(event, host, callbacks));
@@ -25,12 +23,7 @@
     host.addEventListener("input", (event) => handleRootInput(event, callbacks));
     host.addEventListener("change", (event) => handleRootChange(event, callbacks));
     host.addEventListener("keydown", (event) => handleRootKeydown(event, callbacks));
-    fileInput.addEventListener("change", () => {
-      const [file] = Array.from(fileInput.files || []);
-      if (file) callbacks.onImportFile?.(file);
-      fileInput.value = "";
-    });
-
+    fileInput.addEventListener("change", () => { const [file] = Array.from(fileInput.files || []); if (file) callbacks.onImportFile?.(file); fileInput.value = ""; });
     return host;
   }
 
@@ -38,23 +31,19 @@
     const host = document.getElementById("inova-bookmark-host");
     if (!host) return;
     const root = host.querySelector("#inova-bookmark-root");
-    const previousStoreScrollTop = state.activeTool === "store" ? host.querySelector(".inova-store-list")?.scrollTop || host.__storeScrollTop || 0 : 0;
+    const previousStoreScrollTop = state.activeTool === "prompts" && state.promptTool?.activeTab === "store"
+      ? host.querySelector(".inova-store-list")?.scrollTop || host.__storeScrollTop || 0
+      : 0;
     root.hidden = !state.visible;
     root.dataset.open = String(state.open);
     document.body.classList.toggle("inova-bookmark-panel-open", Boolean(state.visible && state.open));
     applyHandleRatio(host, state.handleRatio);
-
     host.querySelector("#inova-tool-rail").innerHTML = renderToolRail(state.tools, state.activeTool);
     host.querySelector("#inova-tool-title").textContent = state.toolTitle;
     host.querySelector("#inova-tool-total").textContent = String(state.toolCount);
     host.querySelector(".handle-count").textContent = String(state.handleCount);
-    host.querySelector("#inova-tool-content").innerHTML = state.activeTool === "prompts"
-      ? namespace.promptView.render(state.promptTool)
-      : state.activeTool === "store"
-        ? namespace.storeView.render(state.storeTool)
-        : namespace.bookmarkView.renderTool(state.bookmarksTool);
-    if (state.activeTool === "store") syncStoreList(host, host.__callbacks, previousStoreScrollTop);
-
+    host.querySelector("#inova-tool-content").innerHTML = renderToolContent(state);
+    if (state.activeTool === "prompts" && state.promptTool?.activeTab === "store") syncStoreList(host, host.__callbacks, previousStoreScrollTop);
     namespace.bookmarkView.setActive(state.bookmarksTool.activeId);
   }
 
@@ -85,28 +74,36 @@
     `;
   }
 
+  function renderToolContent(state) {
+    try {
+      return state.activeTool === "prompts"
+        ? namespace.promptHubView.render(state.promptTool)
+        : state.activeTool === "release"
+            ? namespace.releaseView?.render
+              ? namespace.releaseView.render(state.releaseTool)
+              : '<section class="inova-tool-section"><div class="inova-bookmark-empty">릴리스 화면을 불러오지 못했어요. 확장프로그램을 다시 로드해 주세요.</div></section>'
+            : namespace.bookmarkView.renderTool(state.bookmarksTool);
+    } catch (error) {
+      console.error("[i-Nova Bookmarks] tool render failed", error);
+      return '<section class="inova-tool-section"><div class="inova-bookmark-empty">화면을 불러오지 못했어요. 확장프로그램을 다시 로드해 주세요.</div></section>';
+    }
+  }
+
   function renderToolRail(tools, activeTool) {
-    return tools
-      .map(
-        (tool) => `
-          <button
-            type="button"
-            class="inova-tool-rail__button ${tool.id === activeTool ? "is-active" : ""}"
-            data-tool-id="${tool.id}"
-            aria-pressed="${tool.id === activeTool}"
-          >
-            <span class="inova-tool-rail__label">${escapeHtml(tool.label)}</span>
-            <span class="inova-tool-rail__count">${tool.count}</span>
-          </button>
-        `
-      )
-      .join("");
+    return tools.map((tool) => `
+      <button type="button" class="inova-tool-rail__button ${tool.id === activeTool ? "is-active" : ""}" data-tool-id="${tool.id}" aria-pressed="${tool.id === activeTool}">
+        <span class="inova-tool-rail__label">${escapeHtml(tool.label)}</span>
+        <span class="inova-tool-rail__count">${tool.count}</span>
+      </button>
+    `).join("");
   }
 
   function handleRootClick(event, host, callbacks) {
     if (!event.target.closest('[data-prompt-menu], [data-prompt-action="toggle-menu"]')) callbacks.onPromptAction?.("dismiss-menu");
     const toolButton = event.target.closest("[data-tool-id]");
     if (toolButton) return void callbacks.onSelectTool?.(toolButton.dataset.toolId);
+    const promptTabButton = event.target.closest("[data-prompt-tab-id]");
+    if (promptTabButton) return void callbacks.onSelectPromptTab?.(promptTabButton.dataset.promptTabId);
     const copyButton = event.target.closest("[data-copy-bookmark-id]");
     if (copyButton) {
       callbacks.onCopyBookmark?.(copyButton.dataset.copyBookmarkId).then((copied) => {
@@ -137,6 +134,8 @@
         sortBy: storeAction.dataset.storeSort || "",
       });
     }
+    const releaseAction = event.target.closest("[data-release-action]");
+    if (releaseAction) return void callbacks.onReleaseAction?.(releaseAction.dataset.releaseAction, { version: releaseAction.dataset.releaseVersion || "" });
     const importMode = event.target.closest("[data-import-mode]");
     if (importMode) {
       callbacks.onPromptAction?.("set-import-mode", {

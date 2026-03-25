@@ -41,6 +41,18 @@
 #inova-tool-close { padding: 6px 11px; font-size: 11px; }
 .inova-tool-toolbar { padding: 12px 14px 10px; display: flex; align-items: center; gap: 8px; }
 .inova-tool-toolbar.is-stacked { align-items: stretch; flex-direction: column; }
+.inova-tool-subtabs {
+  display: flex; gap: 8px; padding: 12px 14px 0; border-bottom: 1px solid rgba(52, 81, 100, 0.08);
+}
+.inova-tool-subtab {
+  display: inline-flex; align-items: center; gap: 6px; padding: 9px 12px 10px; border: 0; border-bottom: 2px solid transparent;
+  background: transparent; color: rgba(16, 33, 43, 0.68); font-size: 12px; font-weight: 800; cursor: pointer;
+}
+.inova-tool-subtab.is-active { color: #0f5f77; border-bottom-color: #0f7c89; }
+.inova-tool-subtab__count {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+  background: rgba(15, 124, 137, 0.1); color: inherit; font-size: 11px; font-weight: 800;
+}
 .inova-tool-toolbar__row, .inova-prompt-item__head, .inova-prompt-item__actions, .inova-prompt-item__meta, .inova-prompt-item__menu, .inova-prompt-item__title-row {
   display: flex; align-items: center; gap: 8px;
 }
@@ -152,13 +164,49 @@
 .inova-store-item__summary {
   margin: 0; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
-.inova-store-item__metrics { gap: 10px; }
+.inova-store-item__metrics { gap: 12px; }
 .inova-store-item__footer { gap: 10px; }
 .inova-store-item .inova-prompt-item__actions { gap: 8px; }
 .inova-store-item .inova-prompt-item__actions .inova-tool-button { padding-inline: 10px; }
 .inova-store-item.is-expanded .inova-prompt-item__content { -webkit-line-clamp: unset; }
+.inova-store-metric {
+  display: inline-flex; align-items: center; gap: 5px; color: rgba(16, 33, 43, 0.72); font-variant-numeric: tabular-nums;
+}
+.inova-store-metric__icon {
+  display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; color: #5b7a88; font-size: 12px; line-height: 1;
+}
+.inova-store-metric__icon[data-icon="views"]::before { content: "◔"; }
+.inova-store-metric__icon[data-icon="imports"]::before { content: "↓"; }
+.inova-store-metric__icon[data-icon="likes"]::before { content: "♥"; font-size: 11px; }
+.inova-sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
 .inova-tool-section--store .inova-bookmark-empty { margin: 4px 14px 12px; padding: 12px 13px; }
 .inova-tool-section--prompts .inova-bookmark-empty { margin: 4px 14px 12px; padding: 12px 13px; }
+.inova-tool-section--release .inova-tool-toolbar { justify-content: space-between; }
+.inova-release-stack { display: flex; flex-direction: column; gap: 10px; padding: 4px 14px 14px; overflow-y: auto; }
+.inova-release-card {
+  display: flex; flex-direction: column; gap: 8px; padding: 12px 13px; border: 1px solid rgba(98, 127, 145, 0.16);
+  border-radius: 16px; background: rgba(255, 255, 255, 0.92);
+}
+.inova-release-card.is-highlight { border-color: rgba(15, 124, 137, 0.24); background: rgba(242, 251, 252, 0.96); }
+.inova-release-card.is-muted { background: rgba(248, 251, 255, 0.9); }
+.inova-release-card p, .inova-release-card strong { margin: 0; }
+.inova-release-card p, .inova-release-card__meta, .inova-release-card__empty, .inova-release-history__item span {
+  font-size: 12px; line-height: 1.5; color: rgba(16, 33, 43, 0.68);
+}
+.inova-release-card__notice {
+  padding: 10px 11px; border-radius: 12px; background: rgba(255, 249, 239, 0.94); border: 1px solid rgba(173, 125, 51, 0.18);
+  color: #865d1e !important;
+}
+.inova-release-card__head, .inova-release-card__meta-row, .inova-release-history__item {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.inova-release-card__meta-row { flex-wrap: wrap; }
+.inova-release-history { display: flex; flex-direction: column; gap: 8px; }
+.inova-release-history__item div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.inova-release-steps { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+.inova-release-steps li { font-size: 12px; line-height: 1.5; color: rgba(16, 33, 43, 0.78); }
 .inova-prompt-editor__actions { margin-top: 2px; }
 @media (max-width: 520px) {
   #inova-bookmark-host { --panel-width: min(92vw, 372px); }

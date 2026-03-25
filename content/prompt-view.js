@@ -2,6 +2,14 @@
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
 
   function render(state) {
+    return `
+      <section class="inova-tool-section inova-tool-section--prompts">
+        ${renderBody(state)}
+      </section>
+    `;
+  }
+
+  function renderBody(state) {
     const showEmptyState = !state.items.length && !state.editor?.open && !state.importReview;
     const hasInlineFeedback = state.feedback?.promptId && state.items.some((item) => item.id === state.feedback.promptId);
     const itemsHtml = state.items.length
@@ -11,34 +19,27 @@
         : "";
 
     return `
-      <section class="inova-tool-section inova-tool-section--prompts">
-        <div class="inova-tool-toolbar is-stacked">
-          <input
-            class="inova-tool-search"
-            type="search"
-            value="${escapeHtml(state.query)}"
-            data-search-tool="prompts"
-            placeholder="자주 쓰는 요청 찾기"
-          />
-          <div class="inova-tool-toolbar__row">
-            <div class="inova-tool-meta">총 ${state.totalCount}개</div>
-            <div class="inova-tool-actions inova-tool-actions--toolbar">
-              <button type="button" class="inova-tool-button is-primary" data-prompt-action="create">추가</button>
-              <button type="button" class="inova-tool-button" data-prompt-action="import">가져오기</button>
-              <button
-                type="button"
-                class="inova-tool-button"
-                data-prompt-action="export"
-                ${state.totalCount ? "" : "disabled"}
-              >내보내기</button>
-            </div>
+      <div class="inova-tool-toolbar is-stacked">
+        <input
+          class="inova-tool-search"
+          type="search"
+          value="${escapeHtml(state.query)}"
+          data-search-tool="prompts"
+          placeholder="내 요청 찾기"
+        />
+        <div class="inova-tool-toolbar__row">
+          <div class="inova-tool-meta">총 ${state.totalCount}개</div>
+          <div class="inova-tool-actions inova-tool-actions--toolbar">
+            <button type="button" class="inova-tool-button is-primary" data-prompt-action="create">추가</button>
+            <button type="button" class="inova-tool-button" data-prompt-action="import">가져오기</button>
+            <button type="button" class="inova-tool-button" data-prompt-action="export" ${state.totalCount ? "" : "disabled"}>내보내기</button>
+          </div>
         </div>
-        </div>
-        ${hasInlineFeedback ? "" : renderFeedback(state.feedback)}
-        ${renderImportReview(state.importReview)}
-        ${renderEditor(state.editor)}
-        <div class="inova-prompt-list">${itemsHtml}</div>
-      </section>
+      </div>
+      ${hasInlineFeedback ? "" : renderFeedback(state.feedback)}
+      ${renderImportReview(state.importReview)}
+      ${renderEditor(state.editor)}
+      <div class="inova-prompt-list">${itemsHtml}</div>
     `;
   }
 
@@ -286,5 +287,6 @@
 
   namespace.promptView = {
     render,
+    renderBody,
   };
 })(globalThis);

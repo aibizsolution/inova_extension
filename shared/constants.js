@@ -8,6 +8,7 @@
       uiPreferences: "uiPreferences",
       promptLibrary: "promptLibrary",
       cloudSync: "cloudSync",
+      releaseInfo: "releaseInfo",
     },
     defaults: {
       settings: {
@@ -44,8 +45,17 @@
           version: 1,
         },
       },
+      releaseInfo: {
+        version: 1,
+        checkedAt: "",
+        historyCheckedAt: "",
+        error: "",
+        latest: null,
+        history: [],
+      },
       uiPreferences: {
         activeTool: "bookmarks",
+        activePromptTab: "library",
         handleRatios: {
           wide: 0.38,
           compact: 0.46,
@@ -85,6 +95,7 @@
     ],
     limits: {
       queryPreviewLength: 120,
+      releaseCheckIntervalMs: 21600000,
     },
   };
 })(globalThis);

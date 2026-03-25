@@ -2,3 +2,8 @@ node_modules/
 .DS_Store
 Thumbs.db
 firebase-debug.log
+.firebase/
+releases/
+hosting/extension/downloads/
+hosting/extension/releases/history.json
+hosting/extension/releases/latest.json

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "i-Nova 더하기",
-  "version": "0.2.1",
+  "version": "0.3.1",
   "description": "i-Nova 대화 화면에 질문 모아보기와 찾기 기능을 더하는 크롬 확장입니다.",
   "permissions": [
     "storage",
@@ -10,7 +10,8 @@
   ],
   "host_permissions": [
     "https://inova.incross.com/*",
-    "https://asia-northeast3-browser-extension-main.cloudfunctions.net/*"
+    "https://asia-northeast3-browser-extension-main.cloudfunctions.net/*",
+    "https://browser-extension-main.web.app/*"
   ],
   "background": {
     "service_worker": "background/service-worker.js"
@@ -39,6 +40,7 @@
         "shared/session.js",
         "shared/prompt-library.js",
         "shared/prompt-store.js",
+        "shared/release-info.js",
         "shared/firebase-config.js",
         "shared/provider-identity.js",
         "shared/cloud-sync.js",
@@ -49,10 +51,13 @@
         "content/bookmark-view.js",
         "content/prompt-view.js",
         "content/store-view.js",
+        "content/prompt-hub-view.js",
+        "content/release-view.js",
         "content/cloud-sync-manager.js",
         "content/route-sync.js",
         "content/prompt-manager.js",
         "content/store-manager.js",
+        "content/release-manager.js",
         "content/panel.js",
         "content/main.js"
       ],

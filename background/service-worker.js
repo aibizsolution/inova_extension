@@ -1,26 +1,23 @@
-importScripts(
-  "../shared/constants.js",
-  "../shared/session.js",
-  "../shared/firebase-config.js",
-  "../shared/inova-auth.js",
-  "../shared/cloud-api.js"
-);
+importScripts("../shared/constants.js", "../shared/session.js", "../shared/firebase-config.js", "../shared/inova-auth.js", "../shared/cloud-api.js");
 
 const namespace = globalThis.InovaBookmarks || {};
 const INOVA_ORIGIN = "https://inova.incross.com";
 const RECENT_LOAD_TTL_MS = 10000;
 const RECENT_PEEK_TTL_MS = 10000;
+const RECENT_RELEASE_TTL_MS = 60000;
 const RECENT_SYNC_TTL_MS = 30000;
 const activeLoads = new Map();
 const activePeeks = new Map();
 const recentLoadResults = new Map();
 const recentPeekResults = new Map();
+const activeReleaseRequests = new Map();
+const recentReleaseResults = new Map();
 const activeSyncs = new Map();
 const recentSyncResults = new Map();
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const type = String(message?.type || "");
-  if (!type.startsWith("inova-sync:") && !type.startsWith("inova-store:")) {
+  if (!type.startsWith("inova-sync:") && !type.startsWith("inova-store:") && !type.startsWith("inova-release:")) {
     return false;
   }
 
@@ -32,7 +29,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 async function handleMessage(message, sender) {
-  if (!String(sender?.url || "").startsWith(INOVA_ORIGIN)) {
+  if (!String(sender?.url || "").startsWith(INOVA_ORIGIN) && message.type !== "inova-release:open-url") {
     throw new Error("i-Nova 화면에서만 클라우드 동기화를 실행할 수 있어요.");
   }
 
@@ -66,6 +63,18 @@ async function handleMessage(message, sender) {
 
   if (message.type === "inova-store:view") {
     return recordPromptStoreView(message.entryId, message.providerIdentity);
+  }
+
+  if (message.type === "inova-release:latest") {
+    return fetchReleaseJson("latest");
+  }
+
+  if (message.type === "inova-release:history") {
+    return fetchReleaseJson("history");
+  }
+
+  if (message.type === "inova-release:open-url") {
+    return openReleaseUrl(message.url);
   }
 
   if (message.type === "inova-sync:sync-prompt-library") {
@@ -237,6 +246,42 @@ async function peekPromptLibrary(providerIdentity, force = false) {
   }
 }
 
+async function fetchReleaseJson(kind) {
+  cleanupRecentReleases();
+  const releaseKey = kind === "history" ? "history" : "latest";
+  const recent = recentReleaseResults.get(releaseKey);
+  if (recent && recent.expiresAt > Date.now()) return recent.result;
+  if (activeReleaseRequests.has(releaseKey)) return activeReleaseRequests.get(releaseKey);
+
+  const url = releaseKey === "history"
+    ? namespace.firebaseConfig.hosting.releaseHistoryUrl
+    : namespace.firebaseConfig.hosting.latestReleaseUrl;
+  const run = (async () => {
+    const response = await fetch(url, { cache: "no-store", method: "GET" });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload) throw new Error("릴리스 정보를 불러오지 못했어요.");
+    recentReleaseResults.set(releaseKey, {
+      expiresAt: Date.now() + RECENT_RELEASE_TTL_MS,
+      result: payload,
+    });
+    return payload;
+  })();
+
+  activeReleaseRequests.set(releaseKey, run);
+  try {
+    return await run;
+  } finally {
+    activeReleaseRequests.delete(releaseKey);
+  }
+}
+
+async function openReleaseUrl(url) {
+  const nextUrl = namespace.session.normalizeText(url);
+  if (!nextUrl) throw new Error("열 링크가 없어요.");
+  await chrome.tabs.create({ url: nextUrl });
+  return { opened: true };
+}
+
 function cleanupRecentLoads() {
   const now = Date.now();
   for (const [providerUserKey, entry] of recentLoadResults.entries()) {
@@ -261,5 +306,12 @@ function cleanupRecentSyncs() {
     if (!entry || entry.expiresAt <= now) {
       recentSyncResults.delete(revision);
     }
+  }
+}
+
+function cleanupRecentReleases() {
+  const now = Date.now();
+  for (const [key, entry] of recentReleaseResults.entries()) {
+    if (!entry || entry.expiresAt <= now) recentReleaseResults.delete(key);
   }
 }

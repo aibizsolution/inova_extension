@@ -29,5 +29,10 @@
       syncInovaPromptLibraryUrl:
         "https://asia-northeast3-browser-extension-main.cloudfunctions.net/syncInovaPromptLibrary",
     },
+    hosting: {
+      baseUrl: "https://browser-extension-main.web.app/extension",
+      latestReleaseUrl: "https://browser-extension-main.web.app/extension/releases/latest.json",
+      releaseHistoryUrl: "https://browser-extension-main.web.app/extension/releases/history.json",
+    },
   };
 })(globalThis);

@@ -1,8 +1,11 @@
 {
   "name": "inova-session-bookmarks",
-  "version": "0.2.1",
+  "version": "0.3.1",
   "private": true,
   "scripts": {
+    "release:build": "node scripts/build-release-package.js",
+    "release:deploy": "firebase deploy --only hosting",
+    "version:bump": "node scripts/bump-version.js",
     "check:cloud-sync": "node scripts/check-cloud-sync.js",
     "check:function-logs": "node scripts/check-function-logs.js",
     "rebuild:store-feeds": "node scripts/rebuild-store-feeds.js",
