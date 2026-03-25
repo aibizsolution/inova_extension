@@ -126,8 +126,7 @@
   background: linear-gradient(180deg, rgba(247, 252, 255, 0.95), rgba(255, 255, 255, 0.8));
 }
 #inova-bookmark-title-row,
-#inova-bookmark-meta,
-.bookmark-topline {
+#inova-bookmark-meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -194,7 +193,7 @@
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 12px 12px 14px;
+  padding: 4px 14px 14px;
   scrollbar-gutter: stable;
 }
 .inova-bookmark-empty {
@@ -210,40 +209,27 @@
 .inova-bookmark-item {
   position: relative;
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 12px;
   width: 100%;
   max-width: 100%;
-  padding: 12px;
-  margin-bottom: 8px;
-  border: 1px solid rgba(98, 127, 145, 0.16);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.92);
-  color: inherit;
-  cursor: pointer;
-  transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
-}
-.bookmark-jump {
-  display: block;
-  width: 100%;
-  padding: 0;
+  padding: 14px 8px;
+  margin-bottom: 0;
   border: 0;
+  border-bottom: 1px solid rgba(98, 127, 145, 0.14);
+  border-radius: 0;
   background: transparent;
   color: inherit;
-  text-align: left;
   cursor: pointer;
+  transition: background 140ms ease, box-shadow 140ms ease;
 }
+.inova-bookmark-item:last-child { border-bottom: 0; }
+.bookmark-jump { display: flex; align-items: flex-start; gap: 10px; flex: 1 1 auto; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
 .inova-bookmark-item:hover {
-  transform: translateY(-1px);
-  border-color: rgba(15, 124, 137, 0.22);
-  box-shadow: 0 8px 24px rgba(16, 33, 43, 0.08);
+  background: rgba(247, 251, 253, 0.94);
 }
-.inova-bookmark-item:focus-visible {
-  outline: 0;
-  border-color: rgba(15, 124, 137, 0.36);
-  box-shadow: 0 0 0 3px rgba(15, 124, 137, 0.14);
-}
-.inova-bookmark-item.is-active { border-color: rgba(15, 124, 137, 0.42); background: linear-gradient(180deg, rgba(240, 251, 252, 1), rgba(255, 255, 255, 0.96)); box-shadow: 0 0 0 1px rgba(15, 124, 137, 0.1), 0 10px 24px rgba(15, 124, 137, 0.1); }
+.inova-bookmark-item:focus-visible { outline: 0; background: rgba(240, 251, 252, 0.96); box-shadow: inset 0 0 0 1px rgba(15, 124, 137, 0.24); border-radius: 12px; }
+.inova-bookmark-item.is-active { background: linear-gradient(180deg, rgba(240, 251, 252, 1), rgba(255, 255, 255, 0.96)); box-shadow: inset 3px 0 0 #0f7c89; border-radius: 12px; }
 .bookmark-index,
 .inova-bookmark-badge {
   display: inline-flex;
@@ -257,17 +243,19 @@
   color: #0f5f77;
   font-weight: 700;
   font-size: 11px;
+  flex: 0 0 auto;
 }
 .bookmark-copy {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   padding: 0;
-  border: 1px solid rgba(98, 127, 145, 0.18);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.96);
+  margin-left: auto;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
   color: rgba(16, 33, 43, 0.72);
   font-size: 11px;
   font-weight: 700;
@@ -278,10 +266,7 @@
   height: 14px;
 }
 .bookmark-copy-icon svg { display: block; width: 100%; height: 100%; }
-.bookmark-copy:hover {
-  border-color: rgba(15, 124, 137, 0.24);
-  color: #0f5f77;
-}
+.bookmark-copy:hover { border-color: rgba(15, 124, 137, 0.2); background: rgba(240, 251, 252, 0.92); color: #0f5f77; }
 .bookmark-copy.is-copied {
   border-color: rgba(15, 124, 137, 0.28);
   background: rgba(240, 251, 252, 1);
@@ -297,9 +282,9 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
   max-width: 100%;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
-  line-height: 1.52;
+  line-height: 1.56;
   letter-spacing: -0.01em;
   overflow-wrap: anywhere;
   word-break: keep-all;

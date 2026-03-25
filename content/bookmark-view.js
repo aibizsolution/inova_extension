@@ -32,19 +32,17 @@
         title="${escapeHtml(bookmark.text)}"
         aria-label="${bookmark.order}번 질문으로 이동"
       >
-        <span class="bookmark-topline">
-          <span class="bookmark-index">${bookmark.order}</span>
-          <button
-            class="bookmark-copy"
-            type="button"
-            data-copy-bookmark-id="${bookmark.id}"
-            aria-label="${bookmark.order}번 질문 복사"
-            title="질문 복사"
-          >${renderCopyIcon()}</button>
-        </span>
         <button class="bookmark-jump" type="button" data-bookmark-id="${bookmark.id}" tabindex="-1" aria-hidden="true">
+          <span class="bookmark-index">${bookmark.order}</span>
           <span class="bookmark-text">${renderQuestionText(bookmark.text, query)}</span>
         </button>
+        <button
+          class="bookmark-copy"
+          type="button"
+          data-copy-bookmark-id="${bookmark.id}"
+          aria-label="${bookmark.order}번 질문 복사"
+          title="질문 복사"
+        >${renderCopyIcon()}</button>
       </article>
     `;
   }
