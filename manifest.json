@@ -5,11 +5,16 @@
   "description": "i-Nova 대화 화면에 질문 모아보기와 찾기 기능을 더하는 크롬 확장입니다.",
   "permissions": [
     "storage",
-    "tabs"
+    "tabs",
+    "cookies"
   ],
   "host_permissions": [
-    "https://inova.incross.com/*"
+    "https://inova.incross.com/*",
+    "https://asia-northeast3-browser-extension-main.cloudfunctions.net/*"
   ],
+  "background": {
+    "service_worker": "background/service-worker.js"
+  },
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
@@ -32,13 +37,28 @@
       "js": [
         "shared/constants.js",
         "shared/session.js",
+        "shared/prompt-library.js",
+        "shared/prompt-store.js",
+        "shared/firebase-config.js",
+        "shared/provider-identity.js",
+        "shared/cloud-sync.js",
         "shared/storage.js",
         "content/dom.js",
+        "content/composer.js",
+        "content/files.js",
+        "content/bookmark-view.js",
+        "content/prompt-view.js",
+        "content/store-view.js",
+        "content/cloud-sync-manager.js",
+        "content/route-sync.js",
+        "content/prompt-manager.js",
+        "content/store-manager.js",
         "content/panel.js",
         "content/main.js"
       ],
       "css": [
-        "content/panel.css"
+        "content/panel.css",
+        "content/tools.css"
       ],
       "run_at": "document_idle"
     }

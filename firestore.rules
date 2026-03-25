@@ -1,0 +1,11 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Secure by default. Open access rules must not be added
+    // until auth and collection boundaries are finalized.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

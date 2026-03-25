@@ -55,6 +55,118 @@
     return nextUiPreferences;
   }
 
+  async function getCloudSyncState() {
+    const current = await getState();
+    return namespace.cloudSync.mergeCloudSyncState(current.cloudSync);
+  }
+
+  async function setCloudSyncState(nextCloudSync) {
+    const cloudSync = namespace.cloudSync.mergeCloudSyncState(nextCloudSync);
+    await setLocal({ cloudSync });
+    return cloudSync;
+  }
+
+  async function markPromptLibrarySynced(providerIdentity, syncedAt) {
+    const current = await getCloudSyncState();
+    const cloudSync = namespace.cloudSync.markPromptLibrarySynced(current, providerIdentity, syncedAt);
+    await setLocal({ cloudSync });
+    return cloudSync;
+  }
+
+  async function setPromptSyncError(errorMessage, providerIdentity) {
+    const current = await getCloudSyncState();
+    const cloudSync = namespace.cloudSync.setPromptSyncError(current, errorMessage, providerIdentity);
+    await setLocal({ cloudSync });
+    return cloudSync;
+  }
+
+  async function recordPromptLibraryRemoteState(remoteState, providerIdentity) {
+    const current = await getCloudSyncState();
+    const cloudSync = namespace.cloudSync.recordPromptLibraryRemoteState(current, remoteState, providerIdentity);
+    await setLocal({ cloudSync });
+    return cloudSync;
+  }
+
+  async function getPromptLibrary() {
+    const current = await getState();
+    return namespace.promptLibrary.mergePromptLibrary(current.promptLibrary);
+  }
+
+  async function setPromptLibrary(nextPromptLibrary) {
+    const { promptLibrary } = await persistPromptLibrary(nextPromptLibrary, "set-prompt-library");
+    return promptLibrary;
+  }
+
+  async function savePromptItem(itemInput) {
+    const current = await getPromptLibrary();
+    const reason = current.items.some((item) => item.id === itemInput?.id) ? "update-prompt" : "create-prompt";
+    const nextPromptLibrary = namespace.promptLibrary.upsertPromptItem(current, itemInput);
+    const result = await persistPromptLibrary(nextPromptLibrary, reason);
+    return result.promptLibrary;
+  }
+
+  async function removePromptItem(promptId) {
+    const current = await getPromptLibrary();
+    const nextPromptLibrary = namespace.promptLibrary.removePromptItem(current, promptId);
+    const result = await persistPromptLibrary(nextPromptLibrary, "delete-prompt");
+    return result.promptLibrary;
+  }
+
+  async function importPromptLibrary(payload, mode) {
+    const current = await getPromptLibrary();
+    const result = namespace.promptLibrary.applyImport(current, payload, mode);
+    const syncResult = await persistPromptLibrary(
+      result.library,
+      mode === "replace" ? "replace-import" : mode === "merge" ? "merge-import" : "add-import"
+    );
+    return {
+      ...result,
+      cloudSync: syncResult.cloudSync,
+      library: syncResult.promptLibrary,
+    };
+  }
+
+  async function movePromptItem(dragPromptId, targetPromptId, placement) {
+    const current = await getPromptLibrary();
+    const promptLibrary = namespace.promptLibrary.movePromptItem(current, dragPromptId, targetPromptId, placement);
+    const result = await persistPromptLibrary(promptLibrary, "reorder-prompts");
+    return result.promptLibrary;
+  }
+
+  async function importStorePrompt(storeEntry) {
+    const current = await getPromptLibrary();
+    const promptLibrary = namespace.promptLibrary.importStoreEntry(current, storeEntry);
+    const result = await persistPromptLibrary(promptLibrary, "import-store-prompt");
+    return result.promptLibrary;
+  }
+
+  async function markPromptPublished(promptId, publication) {
+    const current = await getPromptLibrary();
+    const promptLibrary = namespace.promptLibrary.markPromptPublished(current, promptId, publication);
+    await setLocal({ promptLibrary });
+    return promptLibrary;
+  }
+
+  async function clearPromptPublication(promptId) {
+    const current = await getPromptLibrary();
+    const promptLibrary = namespace.promptLibrary.clearPromptPublication(current, promptId);
+    await setLocal({ promptLibrary });
+    return promptLibrary;
+  }
+
+  async function buildPromptSyncDocument() {
+    const [promptLibrary, cloudSync] = await Promise.all([getPromptLibrary(), getCloudSyncState()]);
+    return namespace.cloudSync.buildPromptSyncDocument(promptLibrary, cloudSync);
+  }
+
+  async function hydratePromptLibraryFromCloud(nextPromptLibrary, providerIdentity, syncedAt) {
+    const promptLibrary = namespace.promptLibrary.mergePromptLibrary(nextPromptLibrary);
+    const currentCloudSync = await getCloudSyncState();
+    const cloudSync = namespace.cloudSync.markPromptLibrarySynced(currentCloudSync, providerIdentity, syncedAt);
+    await setLocal({ cloudSync, promptLibrary });
+    return { cloudSync, promptLibrary };
+  }
+
   function mergeUiPreferences(...preferenceSets) {
     return preferenceSets.reduce(
       (merged, nextPreferences) => ({
@@ -90,13 +202,38 @@
     return normalizeHandleRatio(ratios[bucket], bucket);
   }
 
+  async function persistPromptLibrary(nextPromptLibrary, reason) {
+    const promptLibrary = namespace.promptLibrary.mergePromptLibrary(nextPromptLibrary);
+    const currentCloudSync = await getCloudSyncState();
+    const providerIdentity = namespace.providerIdentity.getCurrent();
+    const cloudSync = namespace.cloudSync.queuePromptLibrarySync(currentCloudSync, reason, providerIdentity);
+    await setLocal({ cloudSync, promptLibrary });
+    return { cloudSync, promptLibrary };
+  }
+
   namespace.storage = {
+    buildPromptSyncDocument,
+    getCloudSyncState,
     getHandleRatio,
+    getPromptLibrary,
     getState,
     getViewportBucket,
+    hydratePromptLibraryFromCloud,
+    importStorePrompt,
+    importPromptLibrary,
+    markPromptLibrarySynced,
+    markPromptPublished,
     mergeUiPreferences,
+    movePromptItem,
     normalizeHandleRatio,
+    recordPromptLibraryRemoteState,
+    clearPromptPublication,
+    removePromptItem,
+    savePromptItem,
+    setCloudSyncState,
     setLocal,
+    setPromptSyncError,
+    setPromptLibrary,
     setSessionPaused,
     updateUiPreferences,
     updateSettings,

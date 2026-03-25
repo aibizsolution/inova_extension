@@ -6,6 +6,8 @@
       settings: "settings",
       pausedSessions: "pausedSessions",
       uiPreferences: "uiPreferences",
+      promptLibrary: "promptLibrary",
+      cloudSync: "cloudSync",
     },
     defaults: {
       settings: {
@@ -13,7 +15,37 @@
         autoBookmark: true,
       },
       pausedSessions: {},
+      promptLibrary: {
+        version: 1,
+        items: [],
+      },
+      cloudSync: {
+        version: 1,
+        status: "idle",
+        providerIdentity: {
+          provider: "inova",
+          available: false,
+          providerUserKey: "",
+          email: "",
+          displayName: "",
+          numericUserId: null,
+        },
+        pending: null,
+        lastSyncedAt: "",
+        lastError: "",
+        remote: {
+          checkedAt: "",
+          found: false,
+          itemCount: 0,
+          lastRevision: "",
+          lastSyncedAt: "",
+          providerUserKey: "",
+          updatedAt: "",
+          version: 1,
+        },
+      },
       uiPreferences: {
+        activeTool: "bookmarks",
         handleRatios: {
           wide: 0.38,
           compact: 0.46,
@@ -27,8 +59,20 @@
       chatScroller: "main.chat-history__content, .chat-history__content, .chat-history",
       mainHeading: "h1",
       messageItem: "article",
-      composer: '[role="textbox"]',
+      composer:
+        'textarea.chat-input__textarea, textarea[placeholder*="무엇이든 입력하고 대화하세요"], textarea, [role="textbox"], [contenteditable="true"]',
     },
+    storeCategories: [
+      { id: "all", label: "전체" },
+      { id: "document", label: "문서 작성" },
+      { id: "summary", label: "요약/정리" },
+      { id: "analysis", label: "분석/리서치" },
+      { id: "meeting", label: "회의/업무" },
+      { id: "translation", label: "번역" },
+      { id: "marketing", label: "마케팅" },
+      { id: "code", label: "코딩" },
+      { id: "other", label: "기타" }
+    ],
     limits: {
       queryPreviewLength: 120,
     },

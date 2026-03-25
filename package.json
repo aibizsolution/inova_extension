@@ -3,6 +3,8 @@
   "version": "0.2.1",
   "private": true,
   "scripts": {
+    "check:cloud-sync": "node scripts/check-cloud-sync.js",
+    "check:function-logs": "node scripts/check-function-logs.js",
     "verify": "node scripts/verify-contracts.js && node scripts/verify-docs.js",
     "verify:contracts": "node scripts/verify-contracts.js",
     "verify:docs": "node scripts/verify-docs.js"

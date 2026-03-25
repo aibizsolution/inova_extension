@@ -20,7 +20,7 @@
   }
 
   function normalizeText(text) {
-    return (text || "")
+    return String(text ?? "")
       .replace(/\s+/g, " ")
       .replace(/\u00a0/g, " ")
       .trim();

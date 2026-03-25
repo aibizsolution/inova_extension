@@ -77,7 +77,7 @@ if (errors.length) {
 console.log("구조 계약 검증 통과");
 
 function listSourceFiles(baseDir) {
-  const queue = ["content", "shared", "popup", "scripts"];
+  const queue = ["background", "content", "shared", "popup", "scripts"];
   const output = [];
 
   while (queue.length) {

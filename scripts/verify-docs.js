@@ -13,8 +13,12 @@ const requiredFiles = [
   path.join("docs", "feature-spec.md"),
   "popup/index.html",
   "popup/index.js",
+  "shared/prompt-library.js",
   "content/main.js",
+  "content/files.js",
+  "content/prompt-manager.js",
   "content/panel.css",
+  "content/tools.css",
 ];
 
 const keywordGroups = [
@@ -35,6 +39,14 @@ const keywordGroups = [
     patterns: [/대화\s*안에서\s*찾기/, /이\s*대화에서\s*질문\s*찾기/, /검색\s*패널/],
   },
   {
+    name: "자주 쓰는 요청",
+    patterns: [/자주\s*쓰는\s*요청/, /요청\s*보관함/, /입력창에\s*바로\s*넣/],
+  },
+  {
+    name: "요청 가져오기/내보내기",
+    patterns: [/가져오기/, /내보내기/, /완전\s*교체|병합|추가/],
+  },
+  {
     name: "모듈 구조",
     patterns: [/shared/i, /pausedSessions/, /settings/],
   },
@@ -48,6 +60,7 @@ const codeChecks = [
       /"shared\/constants\.js"/,
       /"content\/main\.js"/,
       /"content\/panel\.css"/,
+      /"content\/tools\.css"/,
       /"matches"\s*:\s*\[\s*"https:\/\/inova\.incross\.com\/\*"\s*\]/s,
     ],
   },
@@ -58,8 +71,15 @@ const codeChecks = [
   {
     file: "content/main.js",
     patterns: [
+      /promptManager/,
+      /renderPanel/,
+    ],
+  },
+  {
+    file: "content/route-sync.js",
+    patterns: [
       /collectUserMessages/,
-      /render\(/,
+      /syncRouteState/,
     ],
   },
   {
@@ -88,7 +108,24 @@ const codeChecks = [
     patterns: [
       /chrome\.storage\.local/,
       /pausedSessions/,
+      /promptLibrary/,
       /updateSettings/,
+    ],
+  },
+  {
+    file: "shared/prompt-library.js",
+    patterns: [
+      /parseImportText/,
+      /buildExportPayload/,
+      /applyImport/,
+    ],
+  },
+  {
+    file: "content/prompt-manager.js",
+    patterns: [
+      /handleImportFile/,
+      /applyPromptText/,
+      /downloadJson/,
     ],
   },
 ];
