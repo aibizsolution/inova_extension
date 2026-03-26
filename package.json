@@ -1,6 +1,6 @@
 {
   "name": "inova-session-bookmarks",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "private": true,
   "scripts": {
     "hooks:install": "node scripts/install-git-hooks.js",
@@ -19,6 +19,7 @@
     "verify": "node scripts/verify-contracts.js && node scripts/verify-docs.js",
     "verify:contracts": "node scripts/verify-contracts.js",
     "verify:docs": "node scripts/verify-docs.js",
-    "verify:readme-guard": "node scripts/verify-readme-update.js --staged"
+    "verify:readme-guard": "node scripts/verify-readme-update.js --staged",
+    "verify:release-guard": "node scripts/verify-release-metadata.js --staged"
   }
 }

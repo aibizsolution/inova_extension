@@ -5,6 +5,11 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawnSync } = require("child_process");
+const {
+  findReleaseEntry,
+  readReleaseCatalog,
+  validateReleaseEntry,
+} = require("./release-metadata");
 
 const root = path.resolve(__dirname, "..");
 const packageJson = readJson("package.json");
@@ -26,7 +31,15 @@ const hostingReleaseDir = path.join(hostingRoot, "releases");
 const hostingBaseUrl = "https://browser-extension-main.web.app/extension";
 const publishedAt = new Date().toISOString();
 const runtimeItems = ["manifest.json", "background", "content", "icons", "popup", "shared", "README.md"];
-const notes = getReleaseNotes();
+const releaseCatalog = readReleaseCatalog(root);
+const releaseEntry = findReleaseEntry(releaseCatalog, version);
+const releaseErrors = validateReleaseEntry(releaseEntry, version);
+if (releaseErrors.length) {
+  throw new Error([
+    `현재 버전 ${version} 의 릴리스 메타가 비어 있거나 초안 상태예요.`,
+    ...releaseErrors.map((error) => `- ${error}`),
+  ].join("\n"));
+}
 
 for (const item of runtimeItems) {
   fs.cpSync(path.join(root, item), path.join(stagingDir, item), { force: true, recursive: true });
@@ -42,20 +55,19 @@ fs.copyFileSync(zipPath, hostingZipPath);
 
 const sizeBytes = fs.statSync(zipPath).size;
 const sha256 = crypto.createHash("sha256").update(fs.readFileSync(zipPath)).digest("hex");
-const release = {
+const release = buildPublishedRelease({
   version,
+  releaseEntry,
   publishedAt,
   fileName: `${bundleName}.zip`,
   downloadUrl: `${hostingBaseUrl}/downloads/${bundleName}.zip`,
-  notes,
   sha256,
   sizeBytes,
-  minSupportedVersion: version,
-};
+});
 
 const latestPath = path.join(hostingReleaseDir, "latest.json");
 const historyPath = path.join(hostingReleaseDir, "history.json");
-const history = readJsonSafe(historyPath)?.releases || [];
+const history = normalizePublishedReleaseList(readJsonSafe(historyPath)?.releases || [], releaseCatalog);
 const nextHistory = [release, ...history.filter((item) => String(item?.version || "") !== version)];
 writeJson(latestPath, {
   product: buildProductMeta(),
@@ -95,13 +107,6 @@ function compressDirectory(sourceDir, destinationPath) {
   }
 }
 
-function getReleaseNotes() {
-  const flagIndex = process.argv.findIndex((item) => item === "--notes");
-  if (flagIndex >= 0 && process.argv[flagIndex + 1]) return String(process.argv[flagIndex + 1]).trim();
-  const result = spawnSync("git", ["log", "-1", "--pretty=%s"], { cwd: root, encoding: "utf8", stdio: "pipe" });
-  return String(result.stdout || "").trim() || "수동 배포본";
-}
-
 function writeJson(targetPath, payload) {
   fs.writeFileSync(targetPath, `${JSON.stringify(payload, null, 2)}\n`);
 }
@@ -117,4 +122,60 @@ function readJsonSafe(targetPath) {
 
 function escapePowerShell(targetPath) {
   return String(targetPath).replace(/'/g, "''");
+}
+
+function buildPublishedRelease({ version, releaseEntry, publishedAt, fileName, downloadUrl, sha256, sizeBytes }) {
+  return {
+    version,
+    level: normalizeText(releaseEntry.level || "patch"),
+    headline: normalizeText(releaseEntry.headline),
+    summary: normalizeText(releaseEntry.summary),
+    changes: normalizeChanges(releaseEntry.changes),
+    publishedAt,
+    fileName,
+    downloadUrl,
+    notes: normalizeText(releaseEntry.headline || releaseEntry.summary || "수동 배포본"),
+    sha256,
+    sizeBytes,
+    minSupportedVersion: version,
+  };
+}
+
+function normalizePublishedReleaseList(releases, releaseCatalog) {
+  return (Array.isArray(releases) ? releases : []).map((release) => normalizePublishedRelease(release, releaseCatalog)).filter(Boolean);
+}
+
+function normalizePublishedRelease(release, releaseCatalog) {
+  const version = normalizeText(release?.version);
+  if (!version) return null;
+  const metadata = findReleaseEntry(releaseCatalog, version) || {};
+  const headline = normalizeText(metadata.headline || release?.headline || release?.notes);
+  const summary = normalizeText(metadata.summary || release?.summary || release?.notes);
+  return {
+    version,
+    level: normalizeText(metadata.level || release?.level || "patch"),
+    headline,
+    summary,
+    changes: normalizeChanges((Array.isArray(metadata.changes) && metadata.changes.length ? metadata.changes : release?.changes)),
+    publishedAt: normalizeText(release?.publishedAt),
+    fileName: normalizeText(release?.fileName),
+    downloadUrl: normalizeText(release?.downloadUrl),
+    notes: normalizeText(release?.notes || headline || summary),
+    sha256: normalizeText(release?.sha256),
+    sizeBytes: Math.max(0, Number(release?.sizeBytes) || 0),
+    minSupportedVersion: normalizeText(release?.minSupportedVersion || version),
+  };
+}
+
+function normalizeChanges(changes) {
+  return (Array.isArray(changes) ? changes : [])
+    .map((item) => ({
+      type: normalizeText(item?.type),
+      text: normalizeText(item?.text),
+    }))
+    .filter((item) => item.type && item.text);
+}
+
+function normalizeText(value) {
+  return String(value || "").trim();
 }

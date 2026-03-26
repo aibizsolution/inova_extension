@@ -6,7 +6,8 @@ functions/.env.*
 Thumbs.db
 firebase-debug.log
 .firebase/
-releases/
+releases/*
+!releases/release-notes.json
 hosting/extension/downloads/
 hosting/extension/releases/history.json
 hosting/extension/releases/latest.json

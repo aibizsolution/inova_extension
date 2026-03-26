@@ -25,6 +25,7 @@
         lastReviewedAt: "",
         open: false,
         pending: false,
+        placeholderConfirmation: false,
         requestId: 0,
         result: null,
         reviewedText: "",

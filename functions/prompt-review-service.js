@@ -189,6 +189,8 @@ function registerPromptReviewHandlers(deps) {
       "goal은 사용자가 원하는 결과와 성공 기준입니다.",
       "constraints는 길이, 금지사항, 톤, 포함/제외 요소입니다.",
       "output은 표, 보고서, 메일, 리스트 같은 결과물 형식입니다.",
+      "summary에는 점수보다 먼저 확인해야 할 핵심 부족점 1~2개를 짧게 적으세요.",
+      "checks.feedback에는 왜 점수가 깎였는지와 무엇을 보완하면 좋은지 같이 적으세요.",
       "세부 정보가 비어 있으면 없는 사실을 지어내지 말고 [대상 독자], [분량], [금지 사항] 같은 짧은 placeholder를 사용하세요.",
       "quickImprovements에는 바로 적용 가능한 문장만 1~4개 작성하세요.",
       "refinedPrompt는 장황한 설명 없이 실제 입력창에 바로 넣을 수 있는 프롬프트 본문만 반환하세요.",

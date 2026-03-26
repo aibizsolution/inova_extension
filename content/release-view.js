@@ -12,7 +12,7 @@
         </div>
         <div class="inova-release-stack">
           ${renderStatusCard(state)}
-          ${state.updateAvailable ? renderUpdateCard(state.latest) : ""}
+          ${state.latest ? renderLatestCard(state) : ""}
           ${renderGuideCard()}
           ${renderHistoryCard(state)}
         </div>
@@ -47,6 +47,15 @@
         </article>
       `;
     }
+    if (state.latestVersion && compareVersions(state.currentVersion, state.latestVersion) > 0) {
+      return `
+        <article class="inova-release-card is-muted">
+          <strong>현재 설치 버전이 배포본보다 앞서 있어요.</strong>
+          <p>현재 ${escapeHtml(state.currentVersion)} / 배포 기준 ${escapeHtml(state.latestVersion)}</p>
+          <span class="inova-release-card__meta">로컬 검증용 또는 배포 전 버전일 수 있어요.</span>
+        </article>
+      `;
+    }
     return `
       <article class="inova-release-card is-muted">
         <strong>최신 버전을 사용 중입니다.</strong>
@@ -56,20 +65,27 @@
     `;
   }
 
-  function renderUpdateCard(latest) {
+  function renderLatestCard(state) {
+    const latest = state.latest;
+    const summary = latest.summary || latest.notes || "새 버전이 배포되었습니다.";
     return `
       <article class="inova-release-card">
         <div class="inova-release-card__head">
-          <strong>${escapeHtml(latest.version)} 배포본</strong>
-          <span class="inova-store-item__chip">신규</span>
+          <strong>${escapeHtml(latest.version)} 릴리스</strong>
+          <div class="inova-release-card__badges">
+            <span class="inova-store-item__chip">${escapeHtml(formatReleaseLevel(latest.level))}</span>
+            ${state.updateAvailable ? '<span class="inova-store-item__chip">신규</span>' : '<span class="inova-store-item__chip is-muted">현재 기준</span>'}
+          </div>
         </div>
-        <p>${escapeHtml(latest.notes || "새 버전이 배포되었습니다.")}</p>
+        <strong class="inova-release-card__headline">${escapeHtml(latest.headline || latest.notes || "최신 릴리스")}</strong>
+        <p>${escapeHtml(summary)}</p>
+        ${renderChangeList(latest.changes)}
         <div class="inova-release-card__meta-row">
           <span>${escapeHtml(formatDateTime(latest.publishedAt))}</span>
           <span>${escapeHtml(formatBytes(latest.sizeBytes))}</span>
         </div>
         <div class="inova-tool-actions">
-          <button type="button" class="inova-tool-button is-primary" data-release-action="download-latest">ZIP 받기</button>
+          <button type="button" class="inova-tool-button ${state.updateAvailable ? "is-primary" : ""}" data-release-action="download-latest">ZIP 받기</button>
         </div>
       </article>
     `;
@@ -105,7 +121,7 @@
   }
 
   function renderHistoryCard(state) {
-    const items = state.history.slice(0, 5);
+    const items = state.history.filter((item) => item.version !== state.latest?.version).slice(0, 5);
     return `
       <article class="inova-release-card">
         <div class="inova-release-card__head">
@@ -113,17 +129,45 @@
           <span class="inova-release-card__meta">${state.historyLoading ? "불러오는 중" : `${items.length}개`}</span>
         </div>
         ${items.length
-          ? `<div class="inova-release-history">${items.map((item) => `
-              <div class="inova-release-history__item">
-                <div>
-                  <strong>${escapeHtml(item.version)}</strong>
-                  <span>${escapeHtml(formatDateTime(item.publishedAt))}</span>
-                </div>
-                <button type="button" class="inova-tool-button inova-tool-button--compact" data-release-action="download-version" data-release-version="${escapeHtml(item.version)}">받기</button>
-              </div>
-            `).join("")}</div>`
+          ? `<div class="inova-release-history">${items.map((item) => renderHistoryItem(item)).join("")}</div>`
           : `<p class="inova-release-card__empty">${state.historyLoading ? "이전 버전을 불러오는 중이에요." : "이전 버전 목록은 확인 후 표시됩니다."}</p>`}
       </article>
+    `;
+  }
+
+  function renderHistoryItem(item) {
+    const summary = item.summary || item.notes || "이 버전의 변경 요약이 아직 없습니다.";
+    return `
+      <div class="inova-release-history__item">
+        <div class="inova-release-history__main">
+          <div class="inova-release-history__head">
+            <strong>${escapeHtml(item.version)}</strong>
+            <div class="inova-release-card__badges">
+              <span class="inova-store-item__chip is-muted">${escapeHtml(formatReleaseLevel(item.level))}</span>
+              <span>${escapeHtml(formatDateTime(item.publishedAt))}</span>
+            </div>
+          </div>
+          <strong class="inova-release-card__headline">${escapeHtml(item.headline || item.notes || `${item.version} 릴리스`)}</strong>
+          <p>${escapeHtml(summary)}</p>
+          ${renderChangeList(item.changes)}
+        </div>
+        <button type="button" class="inova-tool-button inova-tool-button--compact" data-release-action="download-version" data-release-version="${escapeHtml(item.version)}">받기</button>
+      </div>
+    `;
+  }
+
+  function renderChangeList(changes) {
+    const items = Array.isArray(changes) ? changes.filter((item) => item?.text) : [];
+    if (!items.length) return "";
+    return `
+      <ul class="inova-release-card__changes">
+        ${items.slice(0, 3).map((item) => `
+          <li>
+            <span class="inova-release-card__change-type">${escapeHtml(formatChangeType(item.type))}</span>
+            <span>${escapeHtml(item.text)}</span>
+          </li>
+        `).join("")}
+      </ul>
     `;
   }
 
@@ -142,6 +186,31 @@
 
   function renderDisabled(disabled) {
     return disabled ? 'disabled aria-disabled="true"' : "";
+  }
+
+  function compareVersions(left, right) {
+    const leftParts = String(left || "").split(".").map((part) => Number.parseInt(part, 10) || 0);
+    const rightParts = String(right || "").split(".").map((part) => Number.parseInt(part, 10) || 0);
+    const maxLength = Math.max(leftParts.length, rightParts.length);
+    for (let index = 0; index < maxLength; index += 1) {
+      const delta = (leftParts[index] || 0) - (rightParts[index] || 0);
+      if (delta !== 0) return delta;
+    }
+    return 0;
+  }
+
+  function formatReleaseLevel(level) {
+    if (level === "major") return "메이저";
+    if (level === "minor") return "마이너";
+    return "패치";
+  }
+
+  function formatChangeType(type) {
+    if (type === "added") return "추가";
+    if (type === "fixed") return "수정";
+    if (type === "removed") return "제거";
+    if (type === "ops") return "운영";
+    return "변경";
   }
 
   function escapeHtml(text) {

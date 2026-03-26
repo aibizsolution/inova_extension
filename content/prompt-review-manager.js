@@ -30,6 +30,7 @@
       const reviewedText = namespace.session.normalizeText(state.promptReview.reviewedText);
       const result = normalizeResult(state.promptReview.result);
       const stale = Boolean(result && reviewedText && reviewedText !== currentText);
+      const requiresPlaceholderConfirm = Boolean(result?.placeholderTokens?.length);
       return {
         available: composerState.available,
         canApply: Boolean(result?.refinedPrompt && !state.promptReview.pending && !stale),
@@ -38,7 +39,9 @@
         lastReviewedAt: state.promptReview.lastReviewedAt,
         open: Boolean(state.promptReview.open && composerState.available),
         pending: Boolean(state.promptReview.pending),
+        placeholderConfirmation: Boolean(state.promptReview.placeholderConfirmation && requiresPlaceholderConfirm && !stale),
         result,
+        requiresPlaceholderConfirm,
         stale,
         textLength: currentText.length,
       };
@@ -77,6 +80,7 @@
           lastReviewedAt: "",
           open: true,
           pending: false,
+          placeholderConfirmation: false,
           requestId: 0,
           result: null,
           reviewedText: "",
@@ -88,6 +92,7 @@
           lastReviewedAt: "",
           open: true,
           pending: false,
+          placeholderConfirmation: false,
           requestId: 0,
           result: null,
           reviewedText: "",
@@ -100,6 +105,7 @@
           lastReviewedAt: "",
           open: true,
           pending: false,
+          placeholderConfirmation: false,
           requestId: 0,
           result: null,
           reviewedText: "",
@@ -114,6 +120,7 @@
         lastReviewedAt: "",
         open: true,
         pending: true,
+        placeholderConfirmation: false,
         requestId,
         result: null,
         reviewedText: "",
@@ -128,6 +135,7 @@
           lastReviewedAt: new Date().toISOString(),
           open: true,
           pending: false,
+          placeholderConfirmation: false,
           requestId,
           result,
           reviewedText: prompt,
@@ -140,6 +148,7 @@
           error: getErrorMessage(error),
           open: true,
           pending: false,
+          placeholderConfirmation: false,
           requestId: 0,
           result: null,
           reviewedText: "",
@@ -155,6 +164,12 @@
       if (viewState.stale) {
         return void updateState({ error: "입력창 내용이 바뀌어서 이전 보완안을 바로 반영할 수 없어요. 다시 평가해 주세요." });
       }
+      if (viewState.requiresPlaceholderConfirm && !viewState.placeholderConfirmation) {
+        return void updateState({
+          error: "",
+          placeholderConfirmation: true,
+        });
+      }
 
       const refinedPrompt = String(viewState.result?.refinedPrompt || "").trim();
       if (!refinedPrompt) {
@@ -163,7 +178,7 @@
       if (!namespace.composer.applyPromptText(refinedPrompt, "replace")) {
         return void updateState({ error: "입력창에 보완 프롬프트를 반영하지 못했어요." });
       }
-      updateState({ error: "" });
+      updateState({ error: "", placeholderConfirmation: false });
     }
 
     function dismissReview() {
@@ -172,6 +187,7 @@
         error: "",
         open: false,
         pending: false,
+        placeholderConfirmation: false,
         requestId: 0,
       });
     }
@@ -200,10 +216,14 @@
   function normalizeResult(result) {
     if (!result || typeof result !== "object") return null;
     const verdict = normalizeEnum(result.verdict, ["ready", "revise", "insufficient"], "revise");
+    const checks = normalizeChecks(result.checks);
+    const refinedPrompt = String(result.refinedPrompt || "").trim();
     return {
-      checks: normalizeChecks(result.checks),
+      checks,
+      placeholderTokens: detectPlaceholderTokens(refinedPrompt),
+      priorityIssues: buildPriorityIssues(checks),
       quickImprovements: Array.isArray(result.quickImprovements) ? result.quickImprovements.filter(Boolean).map(String) : [],
-      refinedPrompt: String(result.refinedPrompt || "").trim(),
+      refinedPrompt,
       summary: String(result.summary || "").trim(),
       totalScoreLabel: `${Math.max(0, Math.min(100, Number(result.totalScore) || 0))}점`,
       verdict,
@@ -237,6 +257,34 @@
   function normalizeEnum(value, allowed, fallback) {
     const normalized = namespace.session.normalizeText(value).toLowerCase();
     return allowed.includes(normalized) ? normalized : fallback;
+  }
+
+  function buildPriorityIssues(checks) {
+    const severityRank = {
+      missing: 0,
+      partial: 1,
+      good: 2,
+    };
+    return (Array.isArray(checks) ? checks : [])
+      .filter((check) => check.status !== "good")
+      .sort((left, right) => (severityRank[left.status] ?? 9) - (severityRank[right.status] ?? 9))
+      .map((check) => ({
+        feedback: check.feedback,
+        label: check.label,
+        status: check.status,
+        statusLabel: check.statusLabel,
+      }));
+  }
+
+  function detectPlaceholderTokens(text) {
+    const matches = String(text || "").matchAll(/\[([^\[\]\n]{1,40})\]/g);
+    const tokens = [];
+    for (const match of matches) {
+      const token = String(match?.[1] || "").trim();
+      if (!token || !/[A-Za-z가-힣]/.test(token)) continue;
+      tokens.push(`[${token}]`);
+    }
+    return Array.from(new Set(tokens)).slice(0, 6);
   }
 
   function getErrorMessage(error) {

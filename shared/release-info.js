@@ -26,6 +26,10 @@
     if (!version) return null;
     return {
       version,
+      level: normalizeText(release?.level || "patch"),
+      headline: normalizeText(release?.headline),
+      summary: normalizeText(release?.summary),
+      changes: Array.isArray(release?.changes) ? release.changes.map(normalizeChange).filter(Boolean) : [],
       publishedAt: normalizeText(release?.publishedAt),
       fileName: normalizeText(release?.fileName),
       downloadUrl: normalizeText(release?.downloadUrl),
@@ -63,6 +67,13 @@
 
   function normalizeText(value) {
     return String(value || "").trim();
+  }
+
+  function normalizeChange(change) {
+    const type = normalizeText(change?.type);
+    const text = normalizeText(change?.text);
+    if (!type || !text) return null;
+    return { type, text };
   }
 
   namespace.releaseInfo = {
