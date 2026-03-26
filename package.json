@@ -3,6 +3,7 @@
   "version": "0.3.4",
   "private": true,
   "scripts": {
+    "prepare": "node scripts/install-git-hooks.js",
     "hooks:install": "node scripts/install-git-hooks.js",
     "release:build": "node scripts/build-release-package.js",
     "release:deploy": "firebase deploy --only hosting",
@@ -17,6 +18,7 @@
     "seed:store:all": "npm run seed:system-store && npm run seed:business-store",
     "seed:store:all:dry": "npm run seed:system-store:dry && npm run seed:business-store:dry",
     "verify": "node scripts/verify-contracts.js && node scripts/verify-docs.js",
+    "verify:branch-guard": "node scripts/verify-branch-workflow.js --pre-commit",
     "verify:contracts": "node scripts/verify-contracts.js",
     "verify:docs": "node scripts/verify-docs.js",
     "verify:readme-guard": "node scripts/verify-readme-update.js --staged",

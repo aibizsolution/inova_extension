@@ -154,13 +154,32 @@ npm run verify:release-guard
 
 같은 시점에 feature 변경인데 버전 상승, `releases/release-notes.json`, 현재 버전용 릴리스 메타가 빠져 있어도 `pre-push`에서 함께 막습니다.
 
+같은 가드를 더 이른 시점에 잡기 위해 `pre-commit`도 같이 적용합니다. 커밋 전에 `main` 직접 commit, staged 기준 `README`, `릴리스 메타` 누락을 먼저 막습니다.
+
 훅을 이 저장소에 연결하려면 한 번만 다음을 실행합니다.
 
 ```bash
 npm run hooks:install
 ```
 
-이후 `background/`, `content/`, `functions/`, `popup/`, `shared/`, `manifest.json` 같은 기능 관련 파일이 바뀌면 `README.md`도 함께 수정해야 push가 통과합니다.
+`npm install`을 실행해도 `prepare` 스크립트로 훅 연결을 자동 시도합니다.
+
+이후 `background/`, `content/`, `functions/`, `popup/`, `shared/`, `manifest.json` 같은 기능 관련 파일이 바뀌면 `README.md`도 함께 수정해야 commit/push가 통과합니다.
+
+## 브랜치 작업 규칙
+
+- 기본 작업 브랜치는 `codex/<task-name>` 형식을 권장합니다.
+- `main`에서는 직접 commit 하지 않고, 작업 브랜치에서 commit 한 뒤 PR로 머지합니다.
+- 로컬 훅은 `main` 직접 commit 과 `main` 직접 push 를 모두 막습니다.
+- 정말 긴급한 예외만 `INOVA_ALLOW_MAIN_BRANCH=1`로 한 번 우회할 수 있게 두었습니다.
+- PR은 필수지만 사람 승인 자체를 요구하지 않는 운영을 기본값으로 둡니다. 권한 있는 사용자는 자동 체크만 통과하면 머지할 수 있습니다.
+
+## 협업 가드레일
+
+- 로컬에서는 `pre-commit`, `pre-push`가 같은 규칙을 단계별로 검사합니다.
+- 원격에서는 [`.github/workflows/repo-guardrails.yml`](/C:/Users/parkyoungtack/Documents/code/inova_extension/.github/workflows/repo-guardrails.yml)이 `verify`, README 가드, 릴리스 메타 가드, `release:build`를 다시 검사합니다.
+- PR 화면에는 [`.github/pull_request_template.md`](/C:/Users/parkyoungtack/Documents/code/inova_extension/.github/pull_request_template.md) 체크리스트가 자동으로 들어갑니다.
+- GitHub branch protection에서는 `main` direct push 금지와 `Repo Guardrails / verify` 체크 통과를 필수로 두고, 사람 승인 수는 0으로 두는 것을 기본값으로 권장합니다.
 
 ## 버전 운영 규칙
 

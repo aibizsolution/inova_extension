@@ -1,0 +1,48 @@
+name: Repo Guardrails
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify Contracts And Docs
+        run: npm run verify
+
+      - name: Verify README Guard On PR Range
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch origin "${{ github.base_ref }}" --depth=1
+          node scripts/verify-readme-update.js --range "origin/${{ github.base_ref }}..HEAD"
+
+      - name: Verify Release Guard On PR Range
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch origin "${{ github.base_ref }}" --depth=1
+          node scripts/verify-release-metadata.js --range "origin/${{ github.base_ref }}..HEAD"
+
+      - name: Verify README Guard On Push Range
+        if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
+        run: node scripts/verify-readme-update.js --range "${{ github.event.before }}..HEAD"
+
+      - name: Verify Release Guard On Push Range
+        if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
+        run: node scripts/verify-release-metadata.js --range "${{ github.event.before }}..HEAD"
+
+      - name: Build Release Metadata
+        run: npm run release:build

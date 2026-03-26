@@ -15,6 +15,7 @@
   - `summary`
   - `changes[]`
 - `headline`, `summary`, `changes[].text`에 `TODO`가 남아 있으면 `pre-push`와 `release:build`가 실패합니다.
+- 로컬 훅이 빠졌더라도 GitHub Actions `Repo Guardrails`가 같은 규칙을 다시 검사합니다.
 
 ## 권장 순서
 

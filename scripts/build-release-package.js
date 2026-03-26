@@ -93,6 +93,21 @@ function buildProductMeta() {
 
 function compressDirectory(sourceDir, destinationPath) {
   fs.rmSync(destinationPath, { force: true });
+  if (process.platform === "win32") {
+    return compressDirectoryOnWindows(sourceDir, destinationPath);
+  }
+
+  const result = spawnSync("zip", ["-qr", destinationPath, "."], {
+    cwd: sourceDir,
+    encoding: "utf8",
+    stdio: "pipe",
+  });
+  if (result.status !== 0) {
+    throw new Error(result.stderr || result.stdout || "ZIP 생성에 실패했어요.");
+  }
+}
+
+function compressDirectoryOnWindows(sourceDir, destinationPath) {
   const command = [
     "Add-Type -AssemblyName System.IO.Compression.FileSystem",
     `[System.IO.Compression.ZipFile]::CreateFromDirectory('${escapePowerShell(sourceDir)}', '${escapePowerShell(destinationPath)}', [System.IO.Compression.CompressionLevel]::Optimal, $true)`,
