@@ -10,10 +10,13 @@ const contract = JSON.parse(
 const requiredFiles = [
   "manifest.json",
   "README.md",
+  path.join(".githooks", "pre-push"),
   path.join("docs", "feature-spec.md"),
   "popup/index.html",
   "popup/index.js",
+  path.join("scripts", "install-git-hooks.js"),
   "shared/prompt-library.js",
+  path.join("scripts", "verify-readme-update.js"),
   "content/main.js",
   "content/files.js",
   "content/prompt-manager.js",
@@ -49,6 +52,13 @@ const keywordGroups = [
   {
     name: "모듈 구조",
     patterns: [/shared/i, /pausedSessions/, /settings/],
+  },
+];
+
+const readmeOnlyKeywordGroups = [
+  {
+    name: "Git 훅 가드",
+    patterns: [/pre-push/i, /README\.md/, /hooks:install|verify:readme-guard/],
   },
 ];
 
@@ -174,6 +184,15 @@ function main() {
     }
   }
 
+  const readmeText = readText(path.join(root, "README.md"), errors);
+  if (readmeText) {
+    for (const group of readmeOnlyKeywordGroups) {
+      if (!group.patterns.some((pattern) => pattern.test(readmeText))) {
+        errors.push(`README.md에 핵심 운영 키워드가 부족합니다: ${group.name}`);
+      }
+    }
+  }
+
   for (const check of codeChecks) {
     const text = readText(path.join(root, check.file), errors);
     if (!text) continue;
@@ -185,9 +204,8 @@ function main() {
   }
 
   for (const keyword of contract.requiredDocKeywords) {
-    const readme = readText(path.join(root, "README.md"), errors);
     const spec = readText(path.join(root, "docs", "feature-spec.md"), errors);
-    if (!readme.includes(keyword) && !spec.includes(keyword)) {
+    if (!readmeText.includes(keyword) && !spec.includes(keyword)) {
       errors.push(`문서에 계약 키워드가 없습니다: ${keyword}`);
     }
   }

@@ -1,6 +1,7 @@
 (function initCloudApi(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const { functions } = namespace.firebaseConfig;
+  const REQUEST_TIMEOUT_MS = 25000;
 
   async function peekInovaPromptLibrary(providerIdentity, accessToken) {
     const payload = await postJson(
@@ -127,14 +128,30 @@
   }
 
   async function postJson(url, body, accessToken) {
-    const response = await global.fetch(url, {
-      body: JSON.stringify(body || {}),
-      headers: {
-        "Authorization": `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      method: "POST",
-    });
+    const controller = typeof AbortController === "function" ? new AbortController() : null;
+    const timeoutId = controller ? global.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS) : 0;
+    let response;
+
+    try {
+      response = await global.fetch(url, {
+        body: JSON.stringify(body || {}),
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+        signal: controller?.signal,
+      });
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        throw new Error("클라우드 응답이 늦어지고 있어요. 잠시 후 다시 시도해 주세요.");
+      }
+      throw error;
+    } finally {
+      if (timeoutId) {
+        global.clearTimeout(timeoutId);
+      }
+    }
 
     const payload = await response.json().catch(() => null);
     if (!response.ok || !payload?.ok) {

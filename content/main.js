@@ -26,7 +26,7 @@
     promptPublishTitle: "",
     promptPublishError: "",
     promptFeedback: null,
-    promptReview: { error: "", lastReviewedAt: "", open: false, pending: false, result: null, reviewedText: "" },
+    promptReview: { ...namespace.constants.defaults.promptReview },
     feedbackTimer: 0,
     bookmarks: [],
     store: {

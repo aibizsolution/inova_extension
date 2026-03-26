@@ -28,15 +28,18 @@
       const composerState = namespace.composer.getComposerState();
       const currentText = namespace.session.normalizeText(composerState.text);
       const reviewedText = namespace.session.normalizeText(state.promptReview.reviewedText);
+      const result = normalizeResult(state.promptReview.result);
+      const stale = Boolean(result && reviewedText && reviewedText !== currentText);
       return {
         available: composerState.available,
+        canApply: Boolean(result?.refinedPrompt && !state.promptReview.pending && !stale),
         error: state.promptReview.error,
         hasText: Boolean(currentText),
         lastReviewedAt: state.promptReview.lastReviewedAt,
         open: Boolean(state.promptReview.open && composerState.available),
         pending: Boolean(state.promptReview.pending),
-        result: normalizeResult(state.promptReview.result),
-        stale: Boolean(state.promptReview.result && reviewedText && reviewedText !== currentText),
+        result,
+        stale,
         textLength: currentText.length,
       };
     }
@@ -57,7 +60,7 @@
     function activateReview() {
       hooks.showPromptTab?.("review");
       const viewState = buildViewState();
-      if ((viewState.result && !viewState.stale) || viewState.error) {
+      if (viewState.result && !viewState.stale && !viewState.error) {
         updateState({ open: true });
         return;
       }
@@ -69,36 +72,91 @@
       const composerState = namespace.composer.getComposerState();
       const prompt = String(composerState.text || "").trim();
       if (!composerState.available) {
-        return void updateState({ error: "현재 화면에서 대화 입력창을 찾지 못했어요.", open: true, result: null });
+        return void updateState({
+          error: "현재 화면에서 대화 입력창을 찾지 못했어요.",
+          lastReviewedAt: "",
+          open: true,
+          pending: false,
+          requestId: 0,
+          result: null,
+          reviewedText: "",
+        });
       }
       if (!namespace.session.normalizeText(prompt)) {
-        return void updateState({ error: "입력창에 프롬프트를 먼저 적어 주세요.", open: true, result: null });
+        return void updateState({
+          error: "입력창에 프롬프트를 먼저 적어 주세요.",
+          lastReviewedAt: "",
+          open: true,
+          pending: false,
+          requestId: 0,
+          result: null,
+          reviewedText: "",
+        });
+      }
+      const providerIdentity = namespace.providerIdentity.getCurrent();
+      if (!providerIdentity?.available) {
+        return void updateState({
+          error: "i-Nova 사용자 정보를 확인하지 못했어요. 다시 로그인한 뒤 시도해 주세요.",
+          lastReviewedAt: "",
+          open: true,
+          pending: false,
+          requestId: 0,
+          result: null,
+          reviewedText: "",
+        });
       }
 
+      const requestId = (Number(state.promptReview.requestId) || 0) + 1;
+      const sessionId = state.sessionId;
       hooks.showPromptTab?.("review");
-      updateState({ error: "", open: true, pending: true });
+      updateState({
+        error: "",
+        lastReviewedAt: "",
+        open: true,
+        pending: true,
+        requestId,
+        result: null,
+        reviewedText: "",
+      });
       try {
-        const providerIdentity = namespace.providerIdentity.getCurrent();
         const result = await sendRuntimeMessage("inova-review:prompt", { prompt, providerIdentity });
+        if (!isActiveReviewRequest(requestId, sessionId)) {
+          return;
+        }
         updateState({
           error: "",
           lastReviewedAt: new Date().toISOString(),
           open: true,
           pending: false,
+          requestId,
           result,
           reviewedText: prompt,
         });
       } catch (error) {
+        if (!isActiveReviewRequest(requestId, sessionId)) {
+          return;
+        }
         updateState({
           error: getErrorMessage(error),
           open: true,
           pending: false,
+          requestId: 0,
+          result: null,
+          reviewedText: "",
         });
       }
     }
 
     function applyReviewedPrompt() {
-      const refinedPrompt = String(state.promptReview.result?.refinedPrompt || "").trim();
+      const viewState = buildViewState();
+      if (viewState.pending) {
+        return void updateState({ error: "프롬프트 검토가 끝난 뒤 다시 반영해 주세요." });
+      }
+      if (viewState.stale) {
+        return void updateState({ error: "입력창 내용이 바뀌어서 이전 보완안을 바로 반영할 수 없어요. 다시 평가해 주세요." });
+      }
+
+      const refinedPrompt = String(viewState.result?.refinedPrompt || "").trim();
       if (!refinedPrompt) {
         return void updateState({ error: "반영할 보완 프롬프트가 없어요." });
       }
@@ -112,6 +170,9 @@
       hooks.showPromptTab?.("library");
       updateState({
         error: "",
+        open: false,
+        pending: false,
+        requestId: 0,
       });
     }
 
@@ -129,6 +190,10 @@
         throw new Error(namespace.session.normalizeText(response?.error || "") || "프롬프트 평가를 처리하지 못했어요.");
       }
       return response.data;
+    }
+
+    function isActiveReviewRequest(requestId, sessionId) {
+      return requestId === (Number(state.promptReview.requestId) || 0) && sessionId === state.sessionId;
     }
   }
 

@@ -65,6 +65,7 @@
       state.open = namespace.contentDom.getConversationState().hasComposer ? state.preferredOpen : false;
       state.activeId = "";
       state.bookmarks = [];
+      state.promptReview = { ...namespace.constants.defaults.promptReview };
       state.lastError = "";
       state.routeBaselineSignature = nextSessionId ? previousSignature : "";
       state.awaitingRouteMessages = Boolean(nextSessionId);

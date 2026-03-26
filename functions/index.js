@@ -60,9 +60,11 @@ const storeHandlers = registerStoreHandlers({
   verifyInovaIdentity,
 });
 const promptReviewHandlers = registerPromptReviewHandlers({
+  admin,
   CORS_ORIGINS,
   REGION,
   createHttpError,
+  db,
   logEvent,
   normalizeIdentity,
   normalizeText,

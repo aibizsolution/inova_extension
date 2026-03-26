@@ -3,6 +3,10 @@
 
   function render(review) {
     const result = review.result;
+    const applyLabel = review.stale ? "다시 평가 후 반영" : "입력창에 반영";
+    const applyButton = result
+      ? `<button type="button" class="inova-tool-button is-primary" data-prompt-action="apply-reviewed-prompt"${review.canApply ? "" : ' disabled aria-disabled="true"'}>${applyLabel}</button>`
+      : "";
     const notices = [
       review.error ? `<p class="inova-inline-feedback is-error">${escapeHtml(review.error)}</p>` : "",
       review.stale ? '<p class="inova-inline-feedback is-warning">입력창 내용이 바뀌었어요. 다시 평가하면 현재 문장 기준으로 보완안을 새로 만들어요.</p>' : "",
@@ -22,7 +26,7 @@
           ${result ? renderResult(result) : ""}
         </div>
         <div class="inova-tool-actions inova-prompt-review__actions">
-          ${result ? '<button type="button" class="inova-tool-button is-primary" data-prompt-action="apply-reviewed-prompt">입력창에 반영</button>' : ""}
+          ${applyButton}
           <button type="button" class="inova-tool-button" data-prompt-action="review-composer">다시 평가</button>
         </div>
       </section>

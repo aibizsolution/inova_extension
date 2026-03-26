@@ -20,6 +20,15 @@
         version: 1,
         items: [],
       },
+      promptReview: {
+        error: "",
+        lastReviewedAt: "",
+        open: false,
+        pending: false,
+        requestId: 0,
+        result: null,
+        reviewedText: "",
+      },
       cloudSync: {
         version: 1,
         status: "idle",

@@ -2,6 +2,8 @@ const OpenAI = require("openai");
 
 const DEFAULT_MODEL = "gpt-5.4-mini";
 const MAX_PROMPT_LENGTH = 12000;
+const PROMPT_REVIEW_RATE_LIMIT_WINDOW_MS = 60000;
+const PROMPT_REVIEW_RATE_LIMIT_MAX_REQUESTS = 6;
 const REVIEW_DIMENSIONS = [
   { id: "context", label: "맥락" },
   { id: "goal", label: "목표" },
@@ -51,9 +53,11 @@ const REVIEW_SCHEMA = {
 
 function registerPromptReviewHandlers(deps) {
   const {
+    admin,
     CORS_ORIGINS,
     REGION,
     createHttpError,
+    db,
     logEvent,
     normalizeIdentity,
     normalizeText,
@@ -74,6 +78,7 @@ function registerPromptReviewHandlers(deps) {
       if (prompt.length > MAX_PROMPT_LENGTH) {
         throw createHttpError(400, `프롬프트는 ${MAX_PROMPT_LENGTH.toLocaleString("ko-KR")}자 이하로 입력해 주세요.`);
       }
+      await enforceReviewRateLimit(owner.providerUserKey);
 
       logEvent("prompt.review.start", {
         model: getModel(),
@@ -127,10 +132,11 @@ function registerPromptReviewHandlers(deps) {
   }
 
   async function reviewPrompt(prompt) {
+    const sanitizedPrompt = sanitizePromptForModel(prompt);
     const response = await getClient().responses.create({
       input: [
         { role: "developer", content: buildSystemPrompt() },
-        { role: "user", content: `<original_prompt>\n${prompt}\n</original_prompt>` },
+        { role: "user", content: `<original_prompt>\n${sanitizedPrompt || prompt}\n</original_prompt>` },
       ],
       max_output_tokens: 1800,
       model: getModel(),
@@ -144,6 +150,33 @@ function registerPromptReviewHandlers(deps) {
       },
     });
     return normalizeReviewResult(parseReviewPayload(response.output_text), prompt);
+  }
+
+  async function enforceReviewRateLimit(providerUserKey) {
+    const limitRef = db.collection("ops_prompt_review_usage").doc(providerUserKey);
+    const now = Date.now();
+    await db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(limitRef);
+      const data = snapshot.data() || {};
+      const requestCount = Math.max(0, Number(data.requestCount) || 0);
+      const windowStartedAt = Math.max(0, Number(data.windowStartedAt) || 0);
+      const withinWindow = windowStartedAt && now - windowStartedAt < PROMPT_REVIEW_RATE_LIMIT_WINDOW_MS;
+
+      if (withinWindow && requestCount >= PROMPT_REVIEW_RATE_LIMIT_MAX_REQUESTS) {
+        throw createHttpError(429, `프롬프트 검토는 ${Math.floor(PROMPT_REVIEW_RATE_LIMIT_WINDOW_MS / 1000)}초에 ${PROMPT_REVIEW_RATE_LIMIT_MAX_REQUESTS}회까지만 요청할 수 있어요. 잠시 후 다시 시도해 주세요.`);
+      }
+
+      transaction.set(
+        limitRef,
+        {
+          providerUserKey,
+          requestCount: withinWindow ? requestCount + 1 : 1,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          windowStartedAt: withinWindow ? windowStartedAt : now,
+        },
+        { merge: true }
+      );
+    });
   }
 
   function buildSystemPrompt() {
@@ -223,6 +256,15 @@ function normalizePromptText(value) {
   return String(value ?? "")
     .replace(/\r\n/g, "\n")
     .trim();
+}
+
+function sanitizePromptForModel(prompt) {
+  return normalizePromptText(prompt)
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[이메일]")
+    .replace(/\bBearer\s+[A-Za-z0-9._-]{16,}\b/gi, "Bearer [비밀값]")
+    .replace(/\b[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, "[인증 토큰]")
+    .replace(/\b(?:sk-[A-Za-z0-9]{20,}|AIza[0-9A-Za-z\\-_]{20,})\b/g, "[API 키]")
+    .replace(/\b(access[_-]?token|refresh[_-]?token|api[_-]?key|secret|password)\b\s*[:=]\s*([^\s"'`]+)/gi, "$1=[비밀값]");
 }
 
 function createHttpError(status, message) {
