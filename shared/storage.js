@@ -104,7 +104,12 @@
   }
 
   async function setPromptLibrary(nextPromptLibrary) {
-    const { promptLibrary } = await persistPromptLibrary(nextPromptLibrary, "set-prompt-library");
+    const promptLibraryState = namespace.promptLibrary.mergePromptLibrary(nextPromptLibrary);
+    const { promptLibrary } = await persistPromptLibrary(
+      promptLibraryState,
+      "set-prompt-library",
+      namespace.cloudSync.createReplaceLibraryOperation(promptLibraryState)
+    );
     return promptLibrary;
   }
 
@@ -112,14 +117,24 @@
     const current = await getPromptLibrary();
     const reason = current.items.some((item) => item.id === itemInput?.id) ? "update-prompt" : "create-prompt";
     const nextPromptLibrary = namespace.promptLibrary.upsertPromptItem(current, itemInput);
-    const result = await persistPromptLibrary(nextPromptLibrary, reason);
+    const nextIndex = current.items.findIndex((item) => item.id === itemInput?.id);
+    const nextPromptId = nextPromptLibrary.items[Math.max(0, nextIndex)]?.id || nextPromptLibrary.items[0]?.id;
+    const result = await persistPromptLibrary(
+      nextPromptLibrary,
+      reason,
+      namespace.cloudSync.createUpsertPromptOperation(nextPromptLibrary, nextPromptId, nextIndex === -1)
+    );
     return result.promptLibrary;
   }
 
   async function removePromptItem(promptId) {
     const current = await getPromptLibrary();
     const nextPromptLibrary = namespace.promptLibrary.removePromptItem(current, promptId);
-    const result = await persistPromptLibrary(nextPromptLibrary, "delete-prompt");
+    const result = await persistPromptLibrary(
+      nextPromptLibrary,
+      "delete-prompt",
+      namespace.cloudSync.createDeletePromptOperation(nextPromptLibrary, promptId)
+    );
     return result.promptLibrary;
   }
 
@@ -128,7 +143,8 @@
     const result = namespace.promptLibrary.applyImport(current, payload, mode);
     const syncResult = await persistPromptLibrary(
       result.library,
-      mode === "replace" ? "replace-import" : mode === "merge" ? "merge-import" : "add-import"
+      mode === "replace" ? "replace-import" : mode === "merge" ? "merge-import" : "add-import",
+      namespace.cloudSync.createReplaceLibraryOperation(result.library)
     );
     return {
       ...result,
@@ -140,14 +156,22 @@
   async function movePromptItem(dragPromptId, targetPromptId, placement) {
     const current = await getPromptLibrary();
     const promptLibrary = namespace.promptLibrary.movePromptItem(current, dragPromptId, targetPromptId, placement);
-    const result = await persistPromptLibrary(promptLibrary, "reorder-prompts");
+    const result = await persistPromptLibrary(
+      promptLibrary,
+      "reorder-prompts",
+      namespace.cloudSync.createReorderPromptOperation(promptLibrary)
+    );
     return result.promptLibrary;
   }
 
   async function importStorePrompt(storeEntry) {
     const current = await getPromptLibrary();
     const promptLibrary = namespace.promptLibrary.importStoreEntry(current, storeEntry);
-    const result = await persistPromptLibrary(promptLibrary, "import-store-prompt");
+    const result = await persistPromptLibrary(
+      promptLibrary,
+      "import-store-prompt",
+      namespace.cloudSync.createUpsertPromptOperation(promptLibrary, promptLibrary.items[0]?.id, true)
+    );
     return result.promptLibrary;
   }
 
@@ -213,11 +237,17 @@
     return normalizeHandleRatio(ratios[bucket], bucket);
   }
 
-  async function persistPromptLibrary(nextPromptLibrary, reason) {
+  async function persistPromptLibrary(nextPromptLibrary, reason, operation) {
     const promptLibrary = namespace.promptLibrary.mergePromptLibrary(nextPromptLibrary);
     const currentCloudSync = await getCloudSyncState();
     const providerIdentity = namespace.providerIdentity.getCurrent();
-    const cloudSync = namespace.cloudSync.queuePromptLibrarySync(currentCloudSync, reason, providerIdentity);
+    const cloudSync = namespace.cloudSync.queuePromptLibrarySyncOperation(
+      currentCloudSync,
+      reason,
+      providerIdentity,
+      promptLibrary,
+      operation
+    );
     await setLocal({ cloudSync, promptLibrary });
     return { cloudSync, promptLibrary };
   }

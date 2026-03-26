@@ -85,13 +85,12 @@ button {
 .hero__foot {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 8px;
   margin-top: 12px;
 }
 .pill,
-.sync,
-.session-chip {
+.sync {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -110,15 +109,6 @@ button {
 .sync {
   background: rgba(15, 157, 88, 0.1);
   color: var(--good);
-}
-.session-chip {
-  max-width: 196px;
-  justify-content: flex-start;
-  color: var(--muted);
-  background: rgba(248, 251, 255, 0.96);
-  border: 1px solid rgba(160, 177, 206, 0.18);
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .controls {
   overflow: hidden;

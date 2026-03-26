@@ -22,14 +22,13 @@ function cachePopupRefs() {
     "sitePill",
     "syncStatus",
     "enabledToggle",
-    "autoBookmarkToggle",
     "pauseToggle",
     "enabledToggleLabel",
-    "autoBookmarkToggleLabel",
     "pauseToggleLabel",
     "tabLabel",
     "sessionLabel",
     "refreshButton",
+    "pauseControl",
   ]) {
     popupRefs[id] = document.getElementById(id);
   }
@@ -37,7 +36,6 @@ function cachePopupRefs() {
 
 function bindPopupEvents() {
   popupRefs.enabledToggle.addEventListener("click", () => toggleSetting("enabled"));
-  popupRefs.autoBookmarkToggle.addEventListener("click", () => toggleSetting("autoBookmark"));
   popupRefs.pauseToggle.addEventListener("click", togglePause);
   popupRefs.refreshButton.addEventListener("click", refreshPopup);
 }
@@ -94,18 +92,19 @@ async function getActiveTab() {
 
 function renderPopup() {
   const isEnabled = Boolean(popupState.settings.enabled);
-  const isAutoBookmark = Boolean(popupState.settings.autoBookmark);
   const isPaused = Boolean(popupState.pausedSessions[popupState.currentSessionId]);
+  const showPauseControl = isEnabled && isInovaTab() && Boolean(popupState.currentSessionId);
+  // autoBookmark는 기본 동작으로 유지하고 popup에서는 별도 토글을 숨깁니다.
 
   updateSwitch(popupRefs.enabledToggle, popupRefs.enabledToggleLabel, isEnabled);
-  updateSwitch(popupRefs.autoBookmarkToggle, popupRefs.autoBookmarkToggleLabel, isAutoBookmark);
   updateSwitch(popupRefs.pauseToggle, popupRefs.pauseToggleLabel, isPaused);
 
-  popupRefs.sitePill.textContent = isInovaTab() ? "i-Nova" : "다른 사이트";
+  popupRefs.sitePill.textContent = isInovaTab() ? "i-Nova" : "지원 안 됨";
   popupRefs.tabLabel.textContent = formatTabLabel();
   popupRefs.sessionLabel.textContent = popupState.currentSessionId
     ? popupRoot.session.formatSessionLabel(popupState.currentSessionId)
     : "대화 화면을 열어 주세요";
+  popupRefs.pauseControl.hidden = !showPauseControl;
   popupRefs.pauseToggle.disabled = !popupState.currentSessionId;
 }
 

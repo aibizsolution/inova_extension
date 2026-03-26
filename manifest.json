@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "i-Nova 더하기",
+  "name": "아이노바 실험실",
   "version": "0.3.1",
-  "description": "i-Nova 대화 화면에 질문 모아보기와 찾기 기능을 더하는 크롬 확장입니다.",
+  "description": "i-Nova 대화 화면에 패널과 프롬프트 도구를 더하는 크롬 확장입니다.",
   "permissions": [
     "storage",
     "tabs",
@@ -23,7 +23,7 @@
     "128": "icons/icon-128.png"
   },
   "action": {
-    "default_title": "i-Nova 더하기",
+    "default_title": "아이노바 실험실",
     "default_popup": "popup/index.html",
     "default_icon": {
       "16": "icons/icon-16.png",

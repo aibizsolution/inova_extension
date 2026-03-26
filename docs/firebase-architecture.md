@@ -25,8 +25,10 @@
   - 브라우저/디바이스 단위 등록 정보와 동기화 메타
 - `prompt_libraries`
   - 사용자 프롬프트 라이브러리 단위 메타
-- `prompt_libraries/{libraryId}/items`
-  - 실제 프롬프트 항목
+- `prompt_library_orders`
+  - 사용자 프롬프트 순서 정보
+- `prompt_library_chunks`
+  - 사용자 프롬프트 상세 항목 chunk 문서
 - `prompt_backups`
   - 가져오기/내보내기/복원용 백업 스냅샷 메타
 - `prompt_store_entries`
@@ -59,6 +61,8 @@
 - 서비스워커는 i-Nova `accessToken` 쿠키를 우선 사용하고, 없을 때만 `/api/auth/refresh`를 보조적으로 사용한다.
 - Firebase Functions는 받은 access token으로 `GET /api/users/{providerUserKey}/settings`를 다시 호출해 현재 사용자를 검증한다.
 - 검증이 끝난 뒤에만 Firestore에 프롬프트 백업을 쓴다.
+- 원격 백업은 단일 라이브러리 문서 전체를 다시 쓰지 않고 `meta + order + chunk` 구조로 저장한다.
+- 단건 수정은 해당 prompt item이 속한 chunk와 order 문서만 갱신하고, 대량 가져오기/교체 때만 전체 snapshot 재구성을 허용한다.
 
 ## 현재 사용 중인 함수
 
@@ -82,6 +86,8 @@
 ## 현재 문서 키 규칙
 
 - 프롬프트 백업 문서: `prompt_libraries/inova__{providerUserKey}`
+- 프롬프트 백업 순서 문서: `prompt_library_orders/inova__{providerUserKey}`
+- 프롬프트 백업 chunk 문서: `prompt_library_chunks/inova__{providerUserKey}__{bucketId}`
 - 프롬프트 스토어 문서: `prompt_store_entries/inova__{providerUserKey}__{promptId}`
 - 프롬프트 스토어 리스트 page 문서: `prompt_store_feed_pages/{sortBy}__{categoryId}__{pageNumber}`
 - i-Nova 계정 매핑 메타: `integration_inova_accounts/{providerUserKey}`

@@ -26,12 +26,14 @@
     );
   }
 
-  function queuePromptLibrarySync(currentState, reason, providerIdentity) {
+  function queuePromptLibrarySyncOperation(currentState, reason, providerIdentity, promptLibrary, operation) {
     const identity = normalizeProviderIdentity(providerIdentity);
+    const nextOperation = normalizePendingOperation(operation) || createReplaceLibraryOperation(promptLibrary);
     return mergeCloudSyncState(currentState, {
       status: identity.available ? "queued" : "blocked",
       providerIdentity: identity,
       pending: {
+        operation: currentState?.pending?.operation ? createReplaceLibraryOperation(promptLibrary) : nextOperation,
         queuedAt: new Date().toISOString(),
         reason: normalizeReason(reason),
         revision: createSyncRevision(),
@@ -73,7 +75,7 @@
     const library = namespace.promptLibrary.mergePromptLibrary(promptLibrary);
     const syncState = mergeCloudSyncState(currentState);
     return {
-      schemaVersion: 1,
+      schemaVersion: 2,
       projectId: namespace.firebaseConfig.project.projectId,
       region: namespace.firebaseConfig.project.region,
       provider: syncState.providerIdentity.provider,
@@ -84,12 +86,8 @@
         numericUserId: syncState.providerIdentity.numericUserId,
         providerUserKey: syncState.providerIdentity.providerUserKey,
       },
-      promptLibrary: {
-        itemCount: library.items.length,
-        items: library.items.map(clonePromptItem),
-        updatedAt: getLatestUpdatedAt(library.items),
-        version: library.version,
-      },
+      promptLibrary: buildPromptLibraryMeta(library),
+      operation: normalizePendingOperation(syncState.pending?.operation) || createReplaceLibraryOperation(library),
       sync: {
         exportedAt: new Date().toISOString(),
         lastError: syncState.lastError,
@@ -147,7 +145,102 @@
     return {
       ...(currentPending || {}),
       ...(nextPending || {}),
+      operation: normalizePendingOperation(nextPending?.operation) || normalizePendingOperation(currentPending?.operation),
     };
+  }
+
+  function createReplaceLibraryOperation(promptLibrary) {
+    const library = namespace.promptLibrary.mergePromptLibrary(promptLibrary);
+    return {
+      type: "replace-library",
+      orderedIds: getPromptOrderIds(library),
+      promptLibrary: {
+        itemCount: library.items.length,
+        items: library.items.map(clonePromptItem),
+        updatedAt: getLatestUpdatedAt(library.items),
+        version: library.version,
+      },
+    };
+  }
+
+  function createUpsertPromptOperation(promptLibrary, promptId) {
+    const library = namespace.promptLibrary.mergePromptLibrary(promptLibrary);
+    const item = library.items.find((entry) => entry.id === promptId);
+    if (!item) return createReplaceLibraryOperation(library);
+    return {
+      type: "upsert-item",
+      item: clonePromptItem(item),
+      orderedIds: getPromptOrderIds(library),
+    };
+  }
+
+  function createDeletePromptOperation(promptLibrary, promptId) {
+    const library = namespace.promptLibrary.mergePromptLibrary(promptLibrary);
+    return {
+      type: "delete-item",
+      promptId: namespace.session.normalizeText(promptId),
+      orderedIds: getPromptOrderIds(library),
+    };
+  }
+
+  function createReorderPromptOperation(promptLibrary) {
+    const library = namespace.promptLibrary.mergePromptLibrary(promptLibrary);
+    return {
+      type: "reorder-library",
+      orderedIds: getPromptOrderIds(library),
+    };
+  }
+
+  function buildPromptLibraryMeta(library) {
+    return {
+      itemCount: library.items.length,
+      updatedAt: getLatestUpdatedAt(library.items),
+      version: library.version,
+    };
+  }
+
+  function normalizePendingOperation(operation) {
+    const type = namespace.session.normalizeText(operation?.type);
+    if (type === "replace-library") {
+      const library = namespace.promptLibrary.mergePromptLibrary(operation?.promptLibrary);
+      return {
+        type,
+        orderedIds: getPromptOrderIds(library),
+        promptLibrary: {
+          itemCount: library.items.length,
+          items: library.items.map(clonePromptItem),
+          updatedAt: getLatestUpdatedAt(library.items),
+          version: library.version,
+        },
+      };
+    }
+    if (type === "upsert-item") {
+      const item = clonePromptItem(operation?.item);
+      return item
+        ? {
+            type,
+            item,
+            orderedIds: normalizeOrderedIds(operation?.orderedIds),
+          }
+        : null;
+    }
+    if (type === "delete-item") {
+      const promptId = namespace.session.normalizeText(operation?.promptId);
+      return promptId
+        ? {
+            type,
+            promptId,
+            orderedIds: normalizeOrderedIds(operation?.orderedIds),
+          }
+        : null;
+    }
+    if (type === "reorder-library") {
+      return {
+        type,
+        orderedIds: normalizeOrderedIds(operation?.orderedIds),
+      };
+    }
+    return null;
   }
 
   function normalizeReason(reason) {
@@ -171,6 +264,9 @@
   }
 
   function clonePromptItem(item) {
+    if (!item?.id || !namespace.session.normalizeText(item?.title || "") || !namespace.session.normalizeText(item?.content || "")) {
+      return null;
+    }
     return {
       content: item.content,
       createdAt: item.createdAt,
@@ -180,12 +276,32 @@
     };
   }
 
+  function getPromptOrderIds(library) {
+    return library.items.map((item) => item.id);
+  }
+
+  function normalizeOrderedIds(orderedIds) {
+    const seen = new Set();
+    const nextIds = [];
+    for (const orderedId of orderedIds || []) {
+      const promptId = namespace.session.normalizeText(orderedId);
+      if (!promptId || seen.has(promptId)) continue;
+      seen.add(promptId);
+      nextIds.push(promptId);
+    }
+    return nextIds;
+  }
+
   namespace.cloudSync = {
     buildPromptSyncDocument,
+    createDeletePromptOperation,
+    createReorderPromptOperation,
+    createReplaceLibraryOperation,
+    createUpsertPromptOperation,
     hasPendingPromptSync,
     markPromptLibrarySynced,
     mergeCloudSyncState,
-    queuePromptLibrarySync,
+    queuePromptLibrarySyncOperation,
     recordPromptLibraryRemoteState,
     setPromptSyncError,
   };
