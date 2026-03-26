@@ -25,6 +25,7 @@
     promptPublishTitle: "",
     promptPublishError: "",
     promptFeedback: null,
+    promptReview: { error: "", lastReviewedAt: "", open: false, pending: false, result: null, reviewedText: "" },
     feedbackTimer: 0,
     bookmarks: [],
     store: {
@@ -60,22 +61,13 @@
     awaitingRouteMessages: false,
     lastError: "",
   };
-  const promptManager = namespace.promptManager.create(state, {
-    publishPrompt,
-    persistActiveTool,
-    render,
-  });
+  const promptManager = namespace.promptManager.create(state, { publishPrompt, persistActiveTool, render });
+  const promptReviewManager = namespace.promptReviewManager.create(state, { render, showPromptTab });
   const storeManager = namespace.storeManager.create(state, { render });
   const releaseManager = namespace.releaseManager.create(state, { render });
   const cloudSyncManager = namespace.cloudSyncManager.create(state, { render });
-  const routeSync = namespace.routeSync.create(state, {
-    ensureStoreLoaded: () => storeManager.ensureLoaded(),
-    normalizeToolId,
-    render,
-  });
-
+  const routeSync = namespace.routeSync.create(state, { ensureStoreLoaded: () => storeManager.ensureLoaded(), normalizeToolId, render });
   bootstrapContent().catch((error) => console.error("[i-Nova Bookmarks] bootstrap failed", error));
-
   async function bootstrapContent() {
     state.preferredOpen = readPanelOpenPreference();
     state.open = state.preferredOpen;
@@ -85,7 +77,7 @@
       onImportFile: promptManager.handleImportFile,
       onJumpBookmark: jumpToBookmark,
       onMovePrompt: movePromptItem,
-      onPromptAction: promptManager.handleAction,
+      onPromptAction: handlePromptAction,
       onPromptDraftChange: promptManager.updateDraft,
       onSelectPromptTab: selectPromptTab,
       onReleaseAction: releaseManager.handleAction,
@@ -94,6 +86,10 @@
       onSearch: updateQuery,
       onSelectTool: selectTool,
       onToggle: togglePanel,
+    });
+    namespace.composerReviewFloat?.ensure?.({
+      buildState: buildPromptReviewFloatState,
+      onAction: promptReviewManager.handleAction,
     });
     routeSync.installRouteWatchers();
     installSurfaceWatchers();
@@ -109,12 +105,13 @@
     if (state.open || state.activeTool === "release") releaseManager.ensureChecked(false, state.activeTool === "release");
     [450, 1200].forEach((delay) => global.setTimeout(routeSync.scheduleRefresh, delay));
   }
-
   function render() {
     const visible = state.settings.enabled && isToolSurface() && !isPaused();
-    const activePromptTab = getActivePromptTab();
     const bookmarkItems = getFilteredBookmarks();
     const promptItems = getFilteredPrompts();
+    const promptState = promptManager.buildViewState(promptItems);
+    const reviewState = promptReviewManager.buildViewState();
+    const activePromptTab = getActivePromptTab(reviewState.open);
     const storeState = storeManager.buildViewState();
     const releaseState = releaseManager.buildViewState();
     const bookmarkCount = state.bookmarks.length;
@@ -122,7 +119,6 @@
     const releaseCount = releaseState.updateAvailable ? 1 : 0;
     const storeCount = Math.max(0, Number(state.store.totalCount) || state.store.items.length);
     const promptToolCount = activePromptTab === "store" ? storeCount : promptCount;
-
     namespace.contentPanel.renderPanel({
       activeTool: state.activeTool,
       bookmarksTool: {
@@ -138,12 +134,12 @@
       open: state.open,
       promptTool: {
         activeTab: activePromptTab,
-        prompt: promptManager.buildViewState(promptItems),
+        prompt: promptState,
+        review: reviewState,
         store: storeState,
-        tabs: [
-          { id: "library", label: "내 요청", count: promptCount },
-          { id: "store", label: "스토어", count: storeCount },
-        ],
+        tabs: reviewState.open
+          ? [{ id: "library", label: "내 요청", count: promptCount }, { id: "store", label: "스토어", count: storeCount }, { id: "review", label: "검토", count: null }]
+          : [{ id: "library", label: "내 요청", count: promptCount }, { id: "store", label: "스토어", count: storeCount }],
       },
       toolCount: state.activeTool === "prompts" ? promptToolCount : state.activeTool === "release" ? releaseCount : bookmarkCount,
       toolTitle: state.activeTool === "prompts" ? "프롬프트" : state.activeTool === "release" ? "릴리스 안내" : "대화 탐색",
@@ -154,13 +150,12 @@
       ],
       visible,
     });
+    namespace.composerReviewFloat?.render?.(buildPromptReviewFloatState(visible));
   }
-
   function buildBookmarkEmptyText() { return state.queries.bookmarks ? "검색 결과가 없어요. 다른 표현으로 다시 찾아보세요." : !state.settings.autoBookmark ? "팝업에서 대화 자동 모으기를 켜면 대화 탭을 사용할 수 있어요." : state.awaitingRouteMessages ? "이 대화의 흐름을 불러오는 중이에요." : "아직 대화가 없어요."; }
   function buildBookmarkStatusText() { return state.lastError ? "표시에 문제가 있어요. 새로고침 후 다시 시도해 주세요." : !state.settings.autoBookmark ? "대화 자동 모으기가 꺼져 있어요." : state.awaitingRouteMessages ? "대화를 불러오는 중" : !state.bookmarks.length ? "아직 대화가 없어요" : ""; }
   function getFilteredBookmarks() { const query = namespace.session.normalizeText(state.queries.bookmarks).toLowerCase(); return query ? state.bookmarks.filter((bookmark) => bookmark.normalizedText.includes(query)) : state.bookmarks; }
   function getFilteredPrompts() { const query = namespace.session.normalizeText(state.queries.prompts).toLowerCase(); return query ? state.promptLibrary.items.filter((item) => `${item.title} ${item.content}`.toLowerCase().includes(query)) : state.promptLibrary.items; }
-
   function updateQuery(toolId, value) {
     const queryKey = toolId === "store" ? "store" : normalizeToolId(toolId);
     state.queries[queryKey] = value || "";
@@ -170,7 +165,6 @@
     }
     render();
   }
-
   async function selectTool(toolId) {
     if (toolId === "store") return void selectPromptTab("store");
     state.activeTool = normalizeToolId(toolId);
@@ -180,7 +174,6 @@
     render();
     await persistActiveTool(state.activeTool);
   }
-
   async function selectPromptTab(promptTabId) {
     const nextPromptTab = normalizePromptTab(promptTabId);
     state.activeTool = "prompts";
@@ -189,7 +182,6 @@
     render();
     await persistActiveTool("prompts", nextPromptTab);
   }
-
   async function persistActiveTool(nextTool = state.activeTool, nextPromptTab = getActivePromptTab()) {
     try {
       state.uiPreferences = await namespace.storage.updateUiPreferences({
@@ -200,7 +192,6 @@
       console.error("[i-Nova Bookmarks] active tool save failed", error);
     }
   }
-
   async function copyBookmarkText(bookmarkId) {
     const bookmark = state.bookmarks.find((entry) => entry.id === bookmarkId);
     if (!bookmark?.text) return false;
@@ -212,7 +203,6 @@
       return false;
     }
   }
-
   async function updateHandlePosition(nextRatio) {
     const bucket = namespace.storage.getViewportBucket(global.innerWidth);
     const handleRatio = namespace.storage.normalizeHandleRatio(nextRatio, bucket);
@@ -230,7 +220,6 @@
       console.error("[i-Nova Bookmarks] handle position save failed", error);
     }
   }
-
   async function movePromptItem(dragPromptId, targetPromptId, placement) {
     if (!dragPromptId || !targetPromptId || dragPromptId === targetPromptId) return;
     try {
@@ -240,7 +229,12 @@
       console.error("[i-Nova Bookmarks] prompt move failed", error);
     }
   }
-
+  function handlePromptAction(action, detail = {}) {
+    if (action === "review-composer" || action === "apply-reviewed-prompt" || action === "dismiss-review") {
+      return promptReviewManager.handleAction(action, detail);
+    }
+    return promptManager.handleAction(action, detail);
+  }
   function togglePanel(nextOpen, persist = true) {
     state.open = typeof nextOpen === "boolean" ? nextOpen : !state.open;
     if (persist) {
@@ -252,18 +246,15 @@
     if (state.open) releaseManager.ensureChecked(false, state.activeTool === "release");
     render();
   }
-
   function jumpToBookmark(bookmarkId) {
     state.activeId = bookmarkId;
     namespace.contentPanel.setActiveBookmark(bookmarkId);
     namespace.contentPanel.focusBookmark(bookmarkId);
     namespace.contentDom.scrollToMessage(bookmarkId, { block: "start", behavior: "smooth" });
   }
-
   function isPaused() {
     return Boolean(state.sessionId && state.pausedSessions[state.sessionId]);
   }
-
   function readPanelOpenPreference() {
     try {
       const saved = global.sessionStorage?.getItem(PANEL_OPEN_KEY);
@@ -272,18 +263,28 @@
       return false;
     }
   }
-
   function writePanelOpenPreference(open) {
     try {
       global.sessionStorage?.setItem(PANEL_OPEN_KEY, String(Boolean(open)));
     } catch {}
   }
-
   function normalizeToolId(toolId) { return toolId === "release" || toolId === "prompts" ? toolId : toolId === "store" ? "prompts" : "bookmarks"; }
-
-  function handleEscape() { return state.activeTool === "prompts" && getActivePromptTab() === "library" && promptManager.consumeEscape(); }
+  function showPromptTab(promptTabId) {
+    state.open = true;
+    state.activeTool = "prompts";
+    state.uiPreferences = namespace.storage.mergeUiPreferences(state.uiPreferences, {
+      activePromptTab: normalizePromptTab(promptTabId),
+      activeTool: "prompts",
+    });
+  }
+  function handleEscape() { return promptReviewManager.consumeEscape() || (state.activeTool === "prompts" && getActivePromptTab() === "library" && promptManager.consumeEscape()); }
   function isToolSurface() { return namespace.contentDom.getConversationState().hasComposer; }
-
+  function buildPromptReviewFloatState(visible = state.settings.enabled && isToolSurface() && !isPaused()) {
+    return {
+      ...promptReviewManager.buildViewState(),
+      visible,
+    };
+  }
   function installSurfaceWatchers() {
     state.surfaceSignature = getSurfaceSignature();
     if (state.surfacePollTimer) global.clearInterval(state.surfacePollTimer);
@@ -298,19 +299,14 @@
       render();
     }, 600);
   }
-
   function getSurfaceSignature() {
     const conversation = namespace.contentDom.getConversationState();
     return `${conversation.hasComposer}|${conversation.hasChatLog}|${conversation.articleCount}|${conversation.userCount}`;
   }
-
   function handleVisibilityChange() { if (document.visibilityState !== "visible") return; cloudSyncManager.scheduleSync(320, true); if (state.open) releaseManager.ensureChecked(); render(); }
   function handleWindowFocus() { cloudSyncManager.scheduleSync(320, true); if (state.open) releaseManager.ensureChecked(); render(); }
-
-  function getActivePromptTab() {
-    return state.uiPreferences.activeTool === "store" ? "store" : normalizePromptTab(state.uiPreferences.activePromptTab);
-  }
+  function getActivePromptTab(reviewOpen = state.promptReview.open) { const tab = state.uiPreferences.activeTool === "store" ? "store" : normalizePromptTab(state.uiPreferences.activePromptTab); return tab === "review" && !reviewOpen ? "library" : tab; }
   function isStoreTabActive() { return state.activeTool === "prompts" && getActivePromptTab() === "store"; }
-  function normalizePromptTab(promptTabId) { return promptTabId === "store" ? "store" : "library"; }
+  function normalizePromptTab(promptTabId) { return promptTabId === "store" || promptTabId === "review" ? promptTabId : "library"; }
   async function publishPrompt(promptId, categoryId, title) { return storeManager.publishPrompt(promptId, categoryId, title); }
 })(globalThis);

@@ -1,5 +1,6 @@
 const admin = require("firebase-admin");
 const { onRequest } = require("firebase-functions/v2/https");
+const { registerPromptReviewHandlers } = require("./prompt-review-service");
 const { registerStoreHandlers } = require("./store-service");
 
 if (!admin.apps.length) {
@@ -58,12 +59,24 @@ const storeHandlers = registerStoreHandlers({
   sendError,
   verifyInovaIdentity,
 });
+const promptReviewHandlers = registerPromptReviewHandlers({
+  CORS_ORIGINS,
+  REGION,
+  createHttpError,
+  logEvent,
+  normalizeIdentity,
+  normalizeText,
+  onRequest,
+  sendError,
+  verifyInovaIdentity,
+});
 exports.listPromptStoreEntries = storeHandlers.listPromptStoreEntries;
 exports.publishPromptToStore = storeHandlers.publishPromptToStore;
 exports.unpublishPromptFromStore = storeHandlers.unpublishPromptFromStore;
 exports.importPromptStoreEntry = storeHandlers.importPromptStoreEntry;
 exports.togglePromptStoreLike = storeHandlers.togglePromptStoreLike;
 exports.recordPromptStoreView = storeHandlers.recordPromptStoreView;
+exports.reviewInovaPrompt = promptReviewHandlers.reviewInovaPrompt;
 
 exports.loadInovaPromptLibrary = onRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
   try {

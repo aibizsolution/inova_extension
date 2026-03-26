@@ -35,6 +35,18 @@
     return payload?.data || { availableCategories: [], hasMore: false, items: [], totalCount: 0 };
   }
 
+  async function reviewInovaPrompt(prompt, providerIdentity, accessToken) {
+    const payload = await postJson(
+      functions.reviewInovaPromptUrl,
+      {
+        owner: providerIdentity,
+        prompt,
+      },
+      accessToken
+    );
+    return payload?.data || {};
+  }
+
   async function loadInovaPromptLibrary(providerIdentity, accessToken) {
     const payload = await postJson(functions.loadInovaPromptLibraryUrl, {
       providerIdentity: {
@@ -139,6 +151,7 @@
     peekInovaPromptLibrary,
     publishPromptToStore,
     recordPromptStoreView,
+    reviewInovaPrompt,
     syncInovaPromptLibrary,
     togglePromptStoreLike,
     unpublishPromptFromStore,

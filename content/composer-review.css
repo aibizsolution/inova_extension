@@ -1,0 +1,65 @@
+#inova-composer-review-host {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  pointer-events: none;
+}
+
+#inova-composer-review-root {
+  position: fixed;
+  width: 0;
+  height: 0;
+}
+
+.inova-composer-review__button {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 98px;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid rgba(15, 124, 137, 0.22);
+  border-radius: 999px;
+  background: rgba(240, 250, 252, 0.96);
+  box-shadow: 0 10px 22px rgba(16, 33, 43, 0.1);
+  color: #0f5f77;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.inova-composer-review__button:hover {
+  background: rgba(233, 247, 249, 0.98);
+}
+
+.inova-composer-review__button:disabled {
+  opacity: 0.54;
+  cursor: default;
+}
+
+.inova-composer-review__button.is-pending::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  margin-right: 6px;
+  border: 2px solid rgba(15, 95, 119, 0.18);
+  border-top-color: #0f5f77;
+  border-radius: 999px;
+  animation: inova-composer-review-spin 0.8s linear infinite;
+}
+
+#inova-composer-review-root[data-compact="true"] .inova-composer-review__button {
+  min-width: 56px;
+  padding-inline: 12px;
+}
+
+@keyframes inova-composer-review-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

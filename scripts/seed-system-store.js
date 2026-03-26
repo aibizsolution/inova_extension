@@ -4,13 +4,12 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const admin = require("../functions/node_modules/firebase-admin");
+const { rebuildStoreFeeds } = require("./rebuild-store-feeds");
 const titleOverrides = require("./system-store-title-overrides.json");
 
 const PROJECT_ID = "browser-extension-main";
 const COLLECTION = "prompt_store_entries";
 const DETAIL_COLLECTION = "prompt_store_entry_details";
-const SUMMARY_COLLECTION = "prompt_store_meta";
-const SUMMARY_DOC_ID = "summary";
 const CATALOG_PATH = path.join(os.homedir(), ".codex", "skills", "subagent-orchestrator", "references", "full-catalog.md");
 const SOURCE_URL = "https://github.com/VoltAgent/awesome-codex-subagents";
 const SYSTEM_OWNER_KEY = "system:subagent-orchestrator-catalog";
@@ -79,7 +78,7 @@ async function main() {
 
   if (!dryRun) {
     await batch.commit();
-    await rebuildStoreSummary(db, now);
+    await rebuildStoreFeeds();
   }
 
   console.log(`[seed-system-store] ${dryRun ? "dry-run" : "seeded"} ${catalog.roles.length} entries`);
@@ -238,24 +237,6 @@ function getResponseShape(style) {
 
 function buildSummary(content) {
   return String(content || "").replace(/\s+/g, " ").trim().slice(0, 140);
-}
-
-async function rebuildStoreSummary(db, timestamp) {
-  const snapshot = await db.collection(COLLECTION).where("status", "==", "published").select("categoryId").get();
-  const categories = {};
-  for (const doc of snapshot.docs) {
-    const categoryId = String(doc.data()?.categoryId || "other").trim() || "other";
-    categories[categoryId] = Math.max(0, Number(categories[categoryId]) || 0) + 1;
-  }
-
-  await db.collection(SUMMARY_COLLECTION).doc(SUMMARY_DOC_ID).set(
-    {
-      categories,
-      totalPublished: snapshot.size,
-      updatedAt: timestamp,
-    },
-    { merge: true }
-  );
 }
 
 function humanizeRoleName(roleName) {

@@ -17,14 +17,12 @@ const recentSyncResults = new Map();
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const type = String(message?.type || "");
-  if (!type.startsWith("inova-sync:") && !type.startsWith("inova-store:") && !type.startsWith("inova-release:")) {
+  if (!type.startsWith("inova-sync:") && !type.startsWith("inova-store:") && !type.startsWith("inova-release:") && !type.startsWith("inova-review:")) {
     return false;
   }
-
   handleMessage(message, sender)
     .then((data) => sendResponse({ ok: true, data }))
     .catch((error) => sendResponse({ error: error instanceof Error ? error.message : String(error), ok: false }));
-
   return true;
 });
 
@@ -32,55 +30,45 @@ async function handleMessage(message, sender) {
   if (!String(sender?.url || "").startsWith(INOVA_ORIGIN) && message.type !== "inova-release:open-url") {
     throw new Error("i-Nova 화면에서만 클라우드 동기화를 실행할 수 있어요.");
   }
-
   if (message.type === "inova-sync:load-prompt-library") {
     return loadPromptLibrary(message.providerIdentity, message.force);
   }
-
   if (message.type === "inova-sync:peek-prompt-library") {
     return peekPromptLibrary(message.providerIdentity, message.force);
   }
-
   if (message.type === "inova-store:list") {
     return listPromptStoreEntries(message.filter, message.providerIdentity);
   }
-
   if (message.type === "inova-store:publish") {
     return publishPromptToStore(message.prompt, message.categoryId, message.providerIdentity);
   }
-
   if (message.type === "inova-store:unpublish") {
     return unpublishPromptFromStore(message.entryId, message.providerIdentity);
   }
-
   if (message.type === "inova-store:import") {
     return importPromptStoreEntry(message.entryId, message.providerIdentity);
   }
-
   if (message.type === "inova-store:toggle-like") {
     return togglePromptStoreLike(message.entryId, message.providerIdentity);
   }
-
   if (message.type === "inova-store:view") {
     return recordPromptStoreView(message.entryId, message.providerIdentity);
   }
-
+  if (message.type === "inova-review:prompt") {
+    return reviewPromptDraft(message.prompt, message.providerIdentity);
+  }
   if (message.type === "inova-release:latest") {
     return fetchReleaseJson("latest");
   }
-
   if (message.type === "inova-release:history") {
     return fetchReleaseJson("history");
   }
-
   if (message.type === "inova-release:open-url") {
     return openReleaseUrl(message.url);
   }
-
   if (message.type === "inova-sync:sync-prompt-library") {
     return syncPromptLibrary(message.syncDocument);
   }
-
   throw new Error("지원하지 않는 동기화 요청이에요.");
 }
 
@@ -92,7 +80,6 @@ async function getInovaAccessToken() {
   if (cookie?.value) {
     return cookie.value;
   }
-
   return namespace.inovaAuth.getAccessToken(true);
 }
 
@@ -124,6 +111,11 @@ async function togglePromptStoreLike(entryId, providerIdentity) {
 async function recordPromptStoreView(entryId, providerIdentity) {
   const accessToken = await getInovaAccessToken();
   return namespace.cloudApi.recordPromptStoreView(entryId, providerIdentity, accessToken);
+}
+
+async function reviewPromptDraft(prompt, providerIdentity) {
+  const accessToken = await getInovaAccessToken();
+  return namespace.cloudApi.reviewInovaPrompt(prompt, providerIdentity, accessToken);
 }
 
 async function syncPromptLibrary(syncDocument) {

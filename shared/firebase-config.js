@@ -16,6 +16,8 @@
         "https://asia-northeast3-browser-extension-main.cloudfunctions.net/listPromptStoreEntries",
       peekInovaPromptLibraryUrl:
         "https://asia-northeast3-browser-extension-main.cloudfunctions.net/peekInovaPromptLibrary",
+      reviewInovaPromptUrl:
+        "https://asia-northeast3-browser-extension-main.cloudfunctions.net/reviewInovaPrompt",
       publishPromptToStoreUrl:
         "https://asia-northeast3-browser-extension-main.cloudfunctions.net/publishPromptToStore",
       unpublishPromptFromStoreUrl:

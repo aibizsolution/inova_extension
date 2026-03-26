@@ -9,12 +9,18 @@ const SUMMARY_DOC_ID = "summary";
 const PAGE_SIZE = 500;
 const SORTS = ["latest", "likes", "imports", "views"];
 
-main().catch((error) => {
-  console.error("[rebuild-store-feeds] failed", error);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error("[rebuild-store-feeds] failed", error);
+    process.exit(1);
+  });
+}
 
 async function main() {
+  await rebuildStoreFeeds();
+}
+
+async function rebuildStoreFeeds() {
   if (!admin.apps.length) admin.initializeApp({ projectId: PROJECT_ID });
   const db = admin.firestore();
   const snapshot = await db.collection("prompt_store_entries")
@@ -48,6 +54,10 @@ async function main() {
   }
   console.log(`[rebuild-store-feeds] rebuilt ${entries.length} entries into ${seen.size} feed pages`);
 }
+
+module.exports = {
+  rebuildStoreFeeds,
+};
 
 function normalizeEntry(entry) {
   return {
