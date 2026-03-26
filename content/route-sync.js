@@ -20,7 +20,7 @@
         const storageState = await namespace.storage.getState();
         state.settings = storageState.settings || { ...namespace.constants.defaults.settings };
         state.pausedSessions = storageState.pausedSessions || {};
-        state.uiPreferences = namespace.storage.mergeUiPreferences(storageState.uiPreferences);
+        state.uiPreferences = applyUiPreferenceLock(namespace.storage.mergeUiPreferences(storageState.uiPreferences));
         state.uiPreferences.activePromptTab = normalizePromptTab(state.uiPreferences.activeTool === "store" ? "store" : state.uiPreferences.activePromptTab);
         state.activeTool = hooks.normalizeToolId(state.uiPreferences.activeTool || state.activeTool);
         state.promptLibrary = namespace.promptLibrary.mergePromptLibrary(storageState.promptLibrary);
@@ -126,7 +126,7 @@
       if (changes.settings) state.settings = { ...namespace.constants.defaults.settings, ...(changes.settings.newValue || {}) };
       if (changes.pausedSessions) state.pausedSessions = changes.pausedSessions.newValue || {};
       if (changes.uiPreferences) {
-        state.uiPreferences = namespace.storage.mergeUiPreferences(changes.uiPreferences.newValue);
+        state.uiPreferences = applyUiPreferenceLock(namespace.storage.mergeUiPreferences(changes.uiPreferences.newValue));
         state.uiPreferences.activePromptTab = normalizePromptTab(state.uiPreferences.activeTool === "store" ? "store" : state.uiPreferences.activePromptTab);
         state.activeTool = hooks.normalizeToolId(state.uiPreferences.activeTool || state.activeTool);
         if (isStoreTabActive()) hooks.ensureStoreLoaded?.();
@@ -144,7 +144,23 @@
     }
 
     function normalizePromptTab(value) {
-      return value === "store" ? "store" : "library";
+      return value === "store" || value === "review" ? value : "library";
+    }
+
+    function applyUiPreferenceLock(uiPreferences) {
+      const lock = state.uiPreferenceLock;
+      if (!lock) {
+        return uiPreferences;
+      }
+      if ((Number(lock.until) || 0) <= Date.now()) {
+        state.uiPreferenceLock = null;
+        return uiPreferences;
+      }
+      return {
+        ...uiPreferences,
+        activePromptTab: normalizePromptTab(lock.activePromptTab),
+        activeTool: hooks.normalizeToolId(lock.activeTool || uiPreferences.activeTool),
+      };
     }
 
     function disconnectObserver() {

@@ -1,6 +1,7 @@
 (function initContentMain(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const PANEL_OPEN_KEY = "inova-plus.panel-open";
+  const UI_PREFERENCE_LOCK_MS = 1500;
   const state = {
     sessionId: "",
     sessionTitle: "",
@@ -59,6 +60,7 @@
     routeBaselineSignature: "",
     routeWaitStartedAt: 0,
     awaitingRouteMessages: false,
+    uiPreferenceLock: null,
     lastError: "",
   };
   const promptManager = namespace.promptManager.create(state, { publishPrompt, persistActiveTool, render });
@@ -169,6 +171,7 @@
     if (toolId === "store") return void selectPromptTab("store");
     state.activeTool = normalizeToolId(toolId);
     state.uiPreferences = namespace.storage.mergeUiPreferences(state.uiPreferences, { activeTool: state.activeTool });
+    lockUiPreferenceSelection(state.activeTool, getActivePromptTab());
     if (state.activeTool === "prompts" && getActivePromptTab() === "store") storeManager.ensureLoaded(true);
     if (state.activeTool === "release") releaseManager.ensureChecked(false, true);
     render();
@@ -178,6 +181,7 @@
     const nextPromptTab = normalizePromptTab(promptTabId);
     state.activeTool = "prompts";
     state.uiPreferences = namespace.storage.mergeUiPreferences(state.uiPreferences, { activePromptTab: nextPromptTab, activeTool: "prompts" });
+    lockUiPreferenceSelection("prompts", nextPromptTab);
     if (nextPromptTab === "store") storeManager.ensureLoaded(true);
     render();
     await persistActiveTool("prompts", nextPromptTab);
@@ -270,12 +274,24 @@
   }
   function normalizeToolId(toolId) { return toolId === "release" || toolId === "prompts" ? toolId : toolId === "store" ? "prompts" : "bookmarks"; }
   function showPromptTab(promptTabId) {
+    const nextPromptTab = normalizePromptTab(promptTabId);
     state.open = true;
     state.activeTool = "prompts";
     state.uiPreferences = namespace.storage.mergeUiPreferences(state.uiPreferences, {
-      activePromptTab: normalizePromptTab(promptTabId),
+      activePromptTab: nextPromptTab,
       activeTool: "prompts",
     });
+    lockUiPreferenceSelection("prompts", nextPromptTab);
+    persistActiveTool("prompts", nextPromptTab).catch((error) => {
+      console.error("[i-Nova Bookmarks] prompt tab save failed", error);
+    });
+  }
+  function lockUiPreferenceSelection(activeTool, activePromptTab) {
+    state.uiPreferenceLock = {
+      activePromptTab: normalizePromptTab(activePromptTab),
+      activeTool: normalizeToolId(activeTool),
+      until: Date.now() + UI_PREFERENCE_LOCK_MS,
+    };
   }
   function handleEscape() { return promptReviewManager.consumeEscape() || (state.activeTool === "prompts" && getActivePromptTab() === "library" && promptManager.consumeEscape()); }
   function isToolSurface() { return namespace.contentDom.getConversationState().hasComposer; }

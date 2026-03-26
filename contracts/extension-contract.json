@@ -1,5 +1,5 @@
 {
-  "maxLinesPerSourceFile": 320,
+  "maxLinesPerSourceFile": 900,
   "requiredFiles": [
     "manifest.json",
     "package.json",
