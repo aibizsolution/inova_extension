@@ -8,11 +8,17 @@
 - 작업 중 새 운영 기준이 굳어지면 필요 시 이 문서를 스스로 갱신한다.
 - 저장소 상태에 따라 필요하다고 판단되면 관련 변경을 커밋 단위까지 정리할 수 있다.
 
+## 저장소 시작 규칙
+- 새 클론이나 새 작업 환경에서는 가능하면 초기에 `npm install` 또는 `npm run hooks:install`로 로컬 Git 훅 연결 상태를 맞춘다.
+- commit 전에는 `pre-commit`, push 전에는 `pre-push`, 원격에서는 GitHub Actions 가드레일이 다시 돈다는 전제를 두고 작업한다.
+- 이 저장소는 사람 승인보다 자동 체크를 우선한다. PR은 기본이지만 권한 있는 사용자가 체크 통과 후 바로 머지할 수 있는 운영을 기준으로 본다.
+
 ## 릴리스 운영 원칙
 - feature 변경을 push할 때는 `README.md`, `package.json`, `manifest.json`, `releases/release-notes.json`을 함께 맞춘다.
 - 버전 상승은 `npm run version:bump -- <patch|minor|major>`를 기본으로 하고, 수동 수정으로 버전 파일만 따로 어긋나게 두지 않는다.
 - 새 버전 엔트리의 `headline`, `summary`, `changes`에 `TODO`가 남아 있으면 push나 배포를 진행하지 않는다.
 - Hosting 릴리스 메타(`latest.json`, `history.json`)는 `releases/release-notes.json` 기준으로 생성한다.
+- GitHub Actions `Repo Guardrails` 워크플로가 실패하면 로컬에서 통과했더라도 바로 병합 가능 상태라고 가정하지 않는다.
 - 기능 관련 소스나 설정을 바꾸면 `README.md`도 같은 작업 안에서 함께 갱신한다.
 - `pre-push` README 가드가 막히면 우회보다 `README.md` 누락 여부부터 먼저 확인한다.
 
