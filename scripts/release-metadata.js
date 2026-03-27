@@ -84,14 +84,16 @@ function buildDraftReleaseEntry(version, level) {
   return {
     version: String(version || "").trim(),
     level: normalizeReleaseLevel(level),
-    headline: `TODO: ${version} 릴리스 제목`,
-    summary: "TODO: 사용자 관점 변경 요약",
-    changes: [
-      {
-        type: "changed",
-        text: "TODO: 이번 버전의 핵심 변경을 적어 주세요.",
-      },
-    ],
+    public: {
+      headline: `TODO: ${version} 릴리스 제목`,
+      summary: "TODO: 사용자 관점 변경 요약",
+      changes: [
+        {
+          type: "changed",
+          text: "TODO: 이번 버전의 핵심 변경을 적어 주세요.",
+        },
+      ],
+    },
   };
 }
 
@@ -111,15 +113,16 @@ function validateReleaseEntry(entry, version) {
     errors.push(`level은 ${RELEASE_LEVELS.join(", ")} 중 하나여야 합니다.`);
   }
 
-  if (isDraftText(entry.headline)) {
+  const publicEntry = getPublicReleaseSection(entry);
+  if (isDraftText(publicEntry.headline)) {
     errors.push("headline이 비었거나 TODO 상태입니다.");
   }
 
-  if (isDraftText(entry.summary)) {
+  if (isDraftText(publicEntry.summary)) {
     errors.push("summary가 비었거나 TODO 상태입니다.");
   }
 
-  const changes = Array.isArray(entry.changes) ? entry.changes : [];
+  const changes = Array.isArray(publicEntry.changes) ? publicEntry.changes : [];
   if (!changes.length) {
     errors.push("changes 항목이 1개 이상 필요합니다.");
   }
@@ -135,7 +138,28 @@ function validateReleaseEntry(entry, version) {
     }
   });
 
+  const internalChanges = Array.isArray(entry?.internal?.changes) ? entry.internal.changes : [];
+  internalChanges.forEach((item, index) => {
+    const type = String(item?.type || "").trim();
+    const text = String(item?.text || "").trim();
+    if (!RELEASE_CHANGE_TYPES.includes(type)) {
+      errors.push(`internal.changes[${index}].type 은 ${RELEASE_CHANGE_TYPES.join(", ")} 중 하나여야 합니다.`);
+    }
+    if (isDraftText(text)) {
+      errors.push(`internal.changes[${index}].text 가 비었거나 TODO 상태입니다.`);
+    }
+  });
+
   return errors;
+}
+
+function getPublicReleaseSection(entry) {
+  const source = entry?.public && typeof entry.public === "object" ? entry.public : entry;
+  return {
+    headline: String(source?.headline || "").trim(),
+    summary: String(source?.summary || "").trim(),
+    changes: Array.isArray(source?.changes) ? source.changes.slice() : [],
+  };
 }
 
 function normalizeReleaseLevel(level) {
@@ -161,6 +185,7 @@ module.exports = {
   buildDraftReleaseEntry,
   compareVersions,
   findReleaseEntry,
+  getPublicReleaseSection,
   getReleaseNotesPath,
   inferReleaseLevel,
   readReleaseCatalog,
