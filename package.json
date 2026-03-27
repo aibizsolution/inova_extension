@@ -5,8 +5,11 @@
   "scripts": {
     "prepare": "node scripts/install-git-hooks.js",
     "hooks:install": "node scripts/install-git-hooks.js",
+    "deploy:hosting": "npm run release:build && firebase deploy --only hosting",
+    "deploy:functions": "firebase deploy --only functions",
+    "deploy:all": "npm run release:build && firebase deploy --only hosting,functions",
     "release:build": "node scripts/build-release-package.js",
-    "release:deploy": "firebase deploy --only hosting",
+    "release:deploy": "npm run deploy:hosting",
     "version:bump": "node scripts/bump-version.js",
     "check:cloud-sync": "node scripts/check-cloud-sync.js",
     "check:function-logs": "node scripts/check-function-logs.js",

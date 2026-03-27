@@ -193,6 +193,21 @@ npm run hooks:install
 - 새 버전 초안이 생기면 `releases/release-notes.json`에서 `headline`, `summary`, `changes`를 실제 내용으로 채워야 push와 배포가 통과합니다.
 - `release:build`는 현재 버전의 릴리스 메타를 읽어 `hosting/extension/releases/latest.json`과 `history.json`에 그대로 반영합니다.
 
+## 배포 기본값
+
+- 일반적으로 `배포해줘`는 `hosting` 배포를 뜻합니다. 즉 확장 ZIP, `latest.json`, `history.json` 같은 릴리스 파일만 배포합니다.
+- `함수 배포해줘` 또는 `backend/functions 배포해줘`라고 명시했을 때만 Firebase Functions를 배포합니다.
+- `전체 배포해줘`, `hosting + functions 배포해줘`처럼 분명히 말한 경우에만 둘 다 배포합니다.
+- 안전 기본값은 `hosting-only`입니다. 함수는 실수로 함께 배포하지 않는 쪽을 우선합니다.
+
+배포 명령은 다음처럼 나뉩니다.
+
+```bash
+npm run deploy:hosting
+npm run deploy:functions
+npm run deploy:all
+```
+
 실제 브라우저 동기화 점검은 다음 문서를 봅니다.
 
 - [docs/e2e-browser-workflow.md](C:/Users/parkyoungtack/Documents/code/inova_extension/docs/e2e-browser-workflow.md)
