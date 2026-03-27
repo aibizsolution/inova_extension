@@ -328,6 +328,49 @@
   line-height: 1.4;
   color: rgba(16, 33, 43, 0.84);
 }
+.inova-release-details {
+  border: 1px solid rgba(98, 127, 145, 0.12);
+  border-radius: 14px;
+  background: rgba(248, 251, 255, 0.78);
+}
+.inova-release-details summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 11px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f5f77;
+}
+.inova-release-details summary::-webkit-details-marker { display: none; }
+.inova-release-details summary::after {
+  content: "열기";
+  color: rgba(16, 33, 43, 0.62);
+  font-size: 11px;
+  font-weight: 700;
+}
+.inova-release-details[open] summary::after { content: "접기"; }
+.inova-release-details__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 11px 11px;
+}
+.inova-release-details__body p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(16, 33, 43, 0.72);
+}
+.inova-release-details__hint {
+  padding: 8px 9px;
+  border-radius: 10px;
+  background: rgba(242, 251, 252, 0.9);
+  color: #0f5f77 !important;
+}
 .inova-release-card__changes {
   margin: 0;
   padding-left: 18px;

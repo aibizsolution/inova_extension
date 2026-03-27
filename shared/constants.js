@@ -58,7 +58,9 @@
       releaseInfo: {
         version: 1,
         checkedAt: "",
+        checkedForVersion: "",
         historyCheckedAt: "",
+        historyCheckedForVersion: "",
         error: "",
         latest: null,
         history: [],

@@ -9,37 +9,59 @@
       try {
         const currentVersion = getCurrentVersion();
         const releaseInfo = namespace.releaseInfo.mergeReleaseInfo(state.releaseInfo);
+        const checkedForCurrentVersion = releaseInfo.checkedForVersion === currentVersion;
+        const historyCheckedForCurrentVersion = releaseInfo.historyCheckedForVersion === currentVersion;
+        const currentAheadOfLatest = Boolean(
+          releaseInfo.latest?.version
+          && checkedForCurrentVersion
+          && namespace.releaseInfo.compareVersions(currentVersion, releaseInfo.latest.version) > 0
+        );
         return {
           checking: Boolean(releaseInfo.checking),
           currentVersion,
+          currentAheadOfLatest,
           error: releaseInfo.error,
           history: Array.isArray(releaseInfo.history) ? releaseInfo.history : [],
+          historyRefreshPending: Boolean(releaseInfo.history.length) && !historyCheckedForCurrentVersion,
           historyLoading: Boolean(releaseInfo.historyLoading),
           lastCheckedAt: releaseInfo.checkedAt,
           latest: releaseInfo.latest,
           latestVersion: releaseInfo.latest?.version || "",
-          updateAvailable: namespace.releaseInfo.isUpdateAvailable(currentVersion, releaseInfo.latest?.version),
+          updateAvailable: checkedForCurrentVersion && namespace.releaseInfo.isUpdateAvailable(currentVersion, releaseInfo.latest?.version),
+          versionRefreshPending: Boolean(releaseInfo.latest) && !checkedForCurrentVersion,
         };
       } catch (error) {
         if (!isInvalidatedContextError(error)) console.error("[i-Nova Bookmarks] release view state failed", error);
         return {
           checking: false,
           currentVersion: "알 수 없음",
+          currentAheadOfLatest: false,
           error: "",
           history: [],
+          historyRefreshPending: false,
           historyLoading: false,
           lastCheckedAt: "",
           latest: null,
           latestVersion: "",
           updateAvailable: false,
+          versionRefreshPending: false,
         };
       }
     }
 
     async function ensureChecked(force = false, includeHistory = false) {
       const current = namespace.releaseInfo.mergeReleaseInfo(state.releaseInfo);
-      const needsLatest = force || !current.latest || !namespace.releaseInfo.isFresh(current, CHECK_INTERVAL_MS);
-      const needsHistory = includeHistory && (force || !current.history.length || !namespace.releaseInfo.isHistoryFresh(current, CHECK_INTERVAL_MS));
+      const currentVersion = getCurrentVersion();
+      const needsLatest = force
+        || !current.latest
+        || current.checkedForVersion !== currentVersion
+        || !namespace.releaseInfo.isFresh(current, CHECK_INTERVAL_MS);
+      const needsHistory = includeHistory && (
+        force
+        || !current.history.length
+        || current.historyCheckedForVersion !== currentVersion
+        || !namespace.releaseInfo.isHistoryFresh(current, CHECK_INTERVAL_MS)
+      );
       if (!needsLatest && !needsHistory) return;
 
       state.releaseInfo = namespace.releaseInfo.mergeReleaseInfo(state.releaseInfo, {
@@ -50,15 +72,18 @@
       hooks.render();
 
       try {
+        const checkedAt = new Date().toISOString();
         const [latestPayload, historyPayload] = await Promise.all([
           needsLatest ? sendRuntimeMessage("inova-release:latest") : Promise.resolve(null),
           needsHistory ? sendRuntimeMessage("inova-release:history") : Promise.resolve(null),
         ]);
         const next = namespace.releaseInfo.mergeReleaseInfo(state.releaseInfo, {
-          checkedAt: needsLatest ? new Date().toISOString() : current.checkedAt,
+          checkedAt: needsLatest ? checkedAt : current.checkedAt,
+          checkedForVersion: needsLatest ? currentVersion : current.checkedForVersion,
           error: "",
           history: historyPayload?.releases || current.history,
-          historyCheckedAt: needsHistory ? new Date().toISOString() : current.historyCheckedAt,
+          historyCheckedAt: needsHistory ? checkedAt : current.historyCheckedAt,
+          historyCheckedForVersion: needsHistory ? currentVersion : current.historyCheckedForVersion,
           latest: latestPayload?.release || current.latest,
         });
         delete next.checking;

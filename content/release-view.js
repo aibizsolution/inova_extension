@@ -12,7 +12,7 @@
         </div>
         <div class="inova-release-stack">
           ${renderStatusCard(state)}
-          ${state.latest ? renderLatestCard(state) : ""}
+          ${state.latest && !state.versionRefreshPending ? renderLatestCard(state) : ""}
           ${renderGuideCard()}
           ${renderHistoryCard(state)}
         </div>
@@ -24,43 +24,44 @@
     if (state.error) {
       return `
         <article class="inova-release-card is-muted">
-          <strong>업데이트 서버에 지금 연결되지 않아요.</strong>
-          <p>나중에 다시 확인해 주세요.</p>
+          <strong>릴리스 정보를 확인하지 못했어요.</strong>
+          <p>잠시 후 다시 확인해 주세요.</p>
           <span class="inova-release-card__meta">현재 설치 버전 ${escapeHtml(state.currentVersion)}</span>
         </article>
       `;
     }
-    if (state.checking && !state.latest) {
+    if (state.versionRefreshPending || (state.checking && !state.latest)) {
       return `
         <article class="inova-release-card is-muted">
-          <strong>버전 정보를 확인하는 중이에요.</strong>
-          <p>현재 설치 버전 ${escapeHtml(state.currentVersion)}</p>
+          <strong>업데이트 정보를 새로 확인하고 있어요.</strong>
+          <p>${state.versionRefreshPending ? `설치한 ${escapeHtml(state.currentVersion)} 버전에 맞춰 다시 불러오는 중입니다.` : "잠시만 기다려 주세요."}</p>
+          ${renderCheckedMeta(state.lastCheckedAt)}
         </article>
       `;
     }
     if (state.updateAvailable) {
       return `
         <article class="inova-release-card is-highlight">
-          <strong>새 버전이 있어요.</strong>
-          <p>현재 ${escapeHtml(state.currentVersion)} / 최신 ${escapeHtml(state.latestVersion)}</p>
-          <span class="inova-release-card__meta">${escapeHtml(formatDateTime(state.lastCheckedAt))}</span>
+          <strong>${escapeHtml(state.latestVersion)} 버전이 준비되어 있어요.</strong>
+          <p>지금은 ${escapeHtml(state.currentVersion)} 버전을 사용 중입니다.</p>
+          ${renderCheckedMeta(state.lastCheckedAt)}
         </article>
       `;
     }
-    if (state.latestVersion && compareVersions(state.currentVersion, state.latestVersion) > 0) {
+    if (state.currentAheadOfLatest) {
       return `
         <article class="inova-release-card is-muted">
-          <strong>현재 설치 버전이 배포본보다 앞서 있어요.</strong>
-          <p>현재 ${escapeHtml(state.currentVersion)} / 배포 기준 ${escapeHtml(state.latestVersion)}</p>
-          <span class="inova-release-card__meta">로컬 검증용 또는 배포 전 버전일 수 있어요.</span>
+          <strong>테스트 중인 새 버전으로 보입니다.</strong>
+          <p>지금 설치된 버전은 ${escapeHtml(state.currentVersion)} 입니다.</p>
+          <span class="inova-release-card__meta">배포 안내 기준은 ${escapeHtml(state.latestVersion)} 입니다. 로컬 테스트 중이면 정상이에요.</span>
         </article>
       `;
     }
     return `
       <article class="inova-release-card is-muted">
-        <strong>최신 버전을 사용 중입니다.</strong>
-        <p>현재 ${escapeHtml(state.currentVersion)} / 최신 ${escapeHtml(state.latestVersion || state.currentVersion)}</p>
-        <span class="inova-release-card__meta">${escapeHtml(formatDateTime(state.lastCheckedAt))}</span>
+        <strong>최신 버전을 사용 중이에요.</strong>
+        <p>현재 설치 버전 ${escapeHtml(state.currentVersion)}</p>
+        ${renderCheckedMeta(state.lastCheckedAt)}
       </article>
     `;
   }
@@ -68,26 +69,32 @@
   function renderLatestCard(state) {
     const latest = state.latest;
     const summary = latest.summary || latest.notes || "새 버전이 배포되었습니다.";
-    const latestLinkNotice = latest.downloadUrl && latest.versionDownloadUrl && latest.downloadUrl !== latest.versionDownloadUrl
-      ? `<p class="inova-release-card__empty">이 버튼은 고정 최신 링크로 연결되어 항상 최신 ZIP을 내려받습니다.</p>`
-      : "";
+    const changeList = renderChangeList(latest.changes);
+    const details = renderReleaseDetails(
+      "변경 내용 보기",
+      [
+        latest.downloadUrl && latest.versionDownloadUrl && latest.downloadUrl !== latest.versionDownloadUrl
+          ? `<p class="inova-release-details__hint">\`ZIP 받기\` 버튼은 항상 최신 파일을 내려받습니다.</p>`
+          : "",
+        changeList,
+      ].filter(Boolean).join("")
+    );
     return `
       <article class="inova-release-card">
         <div class="inova-release-card__head">
-          <strong>${escapeHtml(latest.version)} 릴리스</strong>
+          <strong>${escapeHtml(state.updateAvailable ? "새 버전 안내" : "현재 배포 안내")}</strong>
           <div class="inova-release-card__badges">
             <span class="inova-store-item__chip">${escapeHtml(formatReleaseLevel(latest.level))}</span>
             ${state.updateAvailable ? '<span class="inova-store-item__chip">신규</span>' : '<span class="inova-store-item__chip is-muted">현재 기준</span>'}
           </div>
         </div>
-        <strong class="inova-release-card__headline">${escapeHtml(latest.headline || latest.notes || "최신 릴리스")}</strong>
+        <strong class="inova-release-card__headline">${escapeHtml(latest.version)} · ${escapeHtml(latest.headline || latest.notes || "최신 릴리스")}</strong>
         <p>${escapeHtml(summary)}</p>
-        ${renderChangeList(latest.changes)}
         <div class="inova-release-card__meta-row">
           <span>${escapeHtml(formatDateTime(latest.publishedAt))}</span>
           <span>${escapeHtml(formatBytes(latest.sizeBytes))}</span>
         </div>
-        ${latestLinkNotice}
+        ${details}
         <div class="inova-tool-actions">
           <button type="button" class="inova-tool-button ${state.updateAvailable ? "is-primary" : ""}" data-release-action="download-latest">ZIP 받기</button>
         </div>
@@ -100,47 +107,54 @@
       <article class="inova-release-card">
         <strong>설치·업데이트 방법</strong>
         <p class="inova-release-card__notice">설치나 업데이트를 진행하기 전에 Chrome 확장 프로그램 페이지에서 개발자 모드를 먼저 켜 주세요. 개발자 모드가 꺼져 있으면 설치와 새로고침 버튼이 보이지 않을 수 있어요.</p>
-        <div class="inova-release-guide">
-          <strong>처음 설치하는 경우</strong>
-          <ol class="inova-release-steps">
-            <li>ZIP 받기를 눌러 파일을 내려받고, 원하는 폴더에 압축을 풉니다.</li>
-            <li>Chrome 주소창에 chrome://extensions 를 입력해 확장 프로그램 페이지를 엽니다.</li>
-            <li>오른쪽 위 개발자 모드를 켭니다.</li>
-            <li>압축해제된 확장 프로그램을 로드합니다를 눌러 방금 압축을 푼 폴더를 선택합니다.</li>
-            <li>설치가 끝나면 i-Nova 탭으로 돌아가 페이지를 새로고침합니다.</li>
-          </ol>
-        </div>
-        <div class="inova-release-guide">
-          <strong>이미 설치되어 있는 경우</strong>
-          <ol class="inova-release-steps">
-            <li>새 ZIP을 내려받고 압축을 풉니다.</li>
-            <li>기존 확장 폴더를 새 파일로 바꾸거나, 새 폴더로 교체합니다.</li>
-            <li>chrome://extensions 에서 이 확장의 새로고침 버튼을 누릅니다.</li>
-            <li>i-Nova 탭도 새로고침하면 최신 화면이 반영됩니다.</li>
-          </ol>
-        </div>
+        ${renderReleaseDetails(
+          "처음 설치 보기",
+          `
+            <ol class="inova-release-steps">
+              <li>ZIP 받기를 눌러 파일을 내려받고, 원하는 폴더에 압축을 풉니다.</li>
+              <li>Chrome 주소창에 chrome://extensions 를 입력해 확장 프로그램 페이지를 엽니다.</li>
+              <li>오른쪽 위 개발자 모드를 켭니다.</li>
+              <li>압축해제된 확장 프로그램을 로드합니다를 눌러 방금 압축을 푼 폴더를 선택합니다.</li>
+              <li>설치가 끝나면 i-Nova 탭으로 돌아가 페이지를 새로고침합니다.</li>
+            </ol>
+          `
+        )}
+        ${renderReleaseDetails(
+          "업데이트 방법 보기",
+          `
+            <ol class="inova-release-steps">
+              <li>새 ZIP을 내려받고 압축을 풉니다.</li>
+              <li>기존 확장 폴더를 새 파일로 바꾸거나, 새 폴더로 교체합니다.</li>
+              <li>chrome://extensions 에서 이 확장의 새로고침 버튼을 누릅니다.</li>
+              <li>i-Nova 탭도 새로고침하면 최신 화면이 반영됩니다.</li>
+            </ol>
+          `
+        )}
         <p class="inova-release-card__empty">자동 업데이트는 지원하지 않습니다. 문제가 생기면 이전 버전 ZIP을 다시 받아 같은 방법으로 되돌릴 수 있어요.</p>
       </article>
     `;
   }
 
   function renderHistoryCard(state) {
-    const items = state.history.filter((item) => item.version !== state.latest?.version).slice(0, 5);
+    const items = state.historyRefreshPending
+      ? []
+      : state.history.filter((item) => item.version !== state.latest?.version).slice(0, 5);
     return `
       <article class="inova-release-card">
         <div class="inova-release-card__head">
           <strong>이전 버전</strong>
-          <span class="inova-release-card__meta">${state.historyLoading ? "불러오는 중" : `${items.length}개`}</span>
+          <span class="inova-release-card__meta">${state.historyLoading || state.historyRefreshPending ? "불러오는 중" : `${items.length}개`}</span>
         </div>
         ${items.length
           ? `<div class="inova-release-history">${items.map((item) => renderHistoryItem(item)).join("")}</div>`
-          : `<p class="inova-release-card__empty">${state.historyLoading ? "이전 버전을 불러오는 중이에요." : "이전 버전 목록은 확인 후 표시됩니다."}</p>`}
+          : `<p class="inova-release-card__empty">${state.historyLoading || state.historyRefreshPending ? "현재 버전에 맞는 이전 버전 목록을 불러오는 중이에요." : "이전 버전 목록은 확인 후 표시됩니다."}</p>`}
       </article>
     `;
   }
 
   function renderHistoryItem(item) {
     const summary = item.summary || item.notes || "이 버전의 변경 요약이 아직 없습니다.";
+    const details = renderReleaseDetails("변경 내용 보기", renderChangeList(item.changes));
     return `
       <div class="inova-release-history__item">
         <div class="inova-release-history__main">
@@ -153,7 +167,7 @@
           </div>
           <strong class="inova-release-card__headline">${escapeHtml(item.headline || item.notes || `${item.version} 릴리스`)}</strong>
           <p>${escapeHtml(summary)}</p>
-          ${renderChangeList(item.changes)}
+          ${details}
         </div>
         <button type="button" class="inova-tool-button inova-tool-button--compact" data-release-action="download-version" data-release-version="${escapeHtml(item.version)}">받기</button>
       </div>
@@ -175,32 +189,31 @@
     `;
   }
 
-  function formatDateTime(value) {
+  function renderReleaseDetails(label, content) {
+    const body = String(content || "").trim();
+    if (!body) return "";
+    return `
+      <details class="inova-release-details">
+        <summary>${escapeHtml(label)}</summary>
+        <div class="inova-release-details__body">${body}</div>
+      </details>
+    `;
+  }
+
+  function renderCheckedMeta(value) {
+    const label = formatCheckedAt(value);
+    return label ? `<span class="inova-release-card__meta">${escapeHtml(label)}</span>` : "";
+  }
+
+  function formatCheckedAt(value) {
+    const formatted = formatDateTime(value, "");
+    return formatted ? `최근 확인 ${formatted}` : "";
+  }
+
+  function formatDateTime(value, fallback = "아직 확인 전") {
     const time = Date.parse(value || "");
-    if (!time) return "아직 확인 전";
-    return new Intl.DateTimeFormat("ko-KR", { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" }).format(time);
-  }
-
-  function formatBytes(sizeBytes) {
-    const size = Math.max(0, Number(sizeBytes) || 0);
-    if (!size) return "크기 정보 없음";
-    if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))}KB`;
-    return `${(size / (1024 * 1024)).toFixed(1)}MB`;
-  }
-
-  function renderDisabled(disabled) {
-    return disabled ? 'disabled aria-disabled="true"' : "";
-  }
-
-  function compareVersions(left, right) {
-    const leftParts = String(left || "").split(".").map((part) => Number.parseInt(part, 10) || 0);
-    const rightParts = String(right || "").split(".").map((part) => Number.parseInt(part, 10) || 0);
-    const maxLength = Math.max(leftParts.length, rightParts.length);
-    for (let index = 0; index < maxLength; index += 1) {
-      const delta = (leftParts[index] || 0) - (rightParts[index] || 0);
-      if (delta !== 0) return delta;
-    }
-    return 0;
+    if (!time) return fallback;
+    return new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric", hour: "numeric", minute: "2-digit" }).format(time);
   }
 
   function formatReleaseLevel(level) {
@@ -215,6 +228,17 @@
     if (type === "removed") return "제거";
     if (type === "ops") return "운영";
     return "변경";
+  }
+
+  function formatBytes(sizeBytes) {
+    const size = Math.max(0, Number(sizeBytes) || 0);
+    if (!size) return "크기 정보 없음";
+    if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))}KB`;
+    return `${(size / (1024 * 1024)).toFixed(1)}MB`;
+  }
+
+  function renderDisabled(disabled) {
+    return disabled ? 'disabled aria-disabled="true"' : "";
   }
 
   function escapeHtml(text) {
