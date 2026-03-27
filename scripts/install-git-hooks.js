@@ -5,7 +5,7 @@ const fs = require("fs");
 const path = require("path");
 
 const root = path.resolve(__dirname, "..");
-const requiredHooks = ["pre-commit", "pre-push"];
+const requiredHooks = ["pre-commit", "pre-push", "post-checkout", "post-merge"];
 
 function main() {
   const missingHooks = requiredHooks.filter((hookName) => !fs.existsSync(path.join(root, ".githooks", hookName)));
@@ -24,7 +24,7 @@ function main() {
     process.exit(1);
   }
 
-  console.log("이 저장소의 Git hooksPath를 .githooks 로 설정했습니다. pre-commit, pre-push 훅이 함께 적용됩니다.");
+  console.log("이 저장소의 Git hooksPath를 .githooks 로 설정했습니다. pre/post 훅이 함께 적용됩니다.");
 }
 
 main();
