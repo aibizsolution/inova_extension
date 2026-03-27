@@ -33,6 +33,7 @@
       publishedAt: normalizeText(release?.publishedAt),
       fileName: normalizeText(release?.fileName),
       downloadUrl: normalizeText(release?.downloadUrl),
+      versionDownloadUrl: normalizeText(release?.versionDownloadUrl),
       notes: normalizeText(release?.notes),
       sha256: normalizeText(release?.sha256),
       sizeBytes: Math.max(0, Number(release?.sizeBytes) || 0),

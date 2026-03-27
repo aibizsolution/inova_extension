@@ -24,6 +24,7 @@
 - `deploy:functions`는 Firebase Functions만 배포합니다.
 - `deploy:all`은 Hosting과 Functions를 함께 배포합니다.
 - 기본 해석은 `배포 = hosting-only` 입니다. 함수 배포는 반드시 명시 요청이 있을 때만 진행하는 것을 원칙으로 합니다.
+- Hosting 배포에는 항상 고정 최신 링크 `https://browser-extension-main.web.app/extension/downloads/latest.zip` 갱신이 포함됩니다.
 
 ## 권장 순서
 
@@ -53,6 +54,7 @@ npm run deploy:functions
 
 - `releases/inova-extension-<version>-<date>.zip`
 - `releases/release-notes.json`
+- `hosting/extension/downloads/latest.zip`
 - `hosting/extension/releases/latest.json`
 - `hosting/extension/releases/history.json`
 - `hosting/extension/downloads/<zip>`
@@ -60,6 +62,7 @@ npm run deploy:functions
 ## 운영 원칙
 
 - ZIP은 덮어쓰지 않고 버전별로 누적합니다.
+- 고정 최신 링크 `downloads/latest.zip`은 매 배포 때 최신 ZIP으로 교체합니다.
 - `latest.json`만 최신 버전을 가리키게 바꿉니다.
 - `latest.json`, `history.json`에는 버전 번호뿐 아니라 `level`, `headline`, `summary`, `changes`를 함께 넣습니다.
 - 릴리스 패널은 위 메타를 그대로 읽어 버전별 업데이트 내용을 보여줍니다.
