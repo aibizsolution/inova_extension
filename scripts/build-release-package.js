@@ -7,6 +7,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 const {
   findReleaseEntry,
+  getPublicReleaseSection,
   readReleaseCatalog,
   validateReleaseEntry,
 } = require("./release-metadata");
@@ -157,17 +158,18 @@ function escapePowerShell(targetPath) {
 }
 
 function buildPublishedRelease({ version, releaseEntry, publishedAt, fileName, downloadUrl, versionDownloadUrl, sha256, sizeBytes }) {
+  const publicEntry = getPublicReleaseSection(releaseEntry);
   return {
     version,
     level: normalizeText(releaseEntry.level || "patch"),
-    headline: normalizeText(releaseEntry.headline),
-    summary: normalizeText(releaseEntry.summary),
-    changes: normalizeChanges(releaseEntry.changes),
+    headline: normalizeText(publicEntry.headline),
+    summary: normalizeText(publicEntry.summary),
+    changes: normalizeChanges(publicEntry.changes),
     publishedAt,
     fileName,
     downloadUrl,
     versionDownloadUrl: normalizeText(versionDownloadUrl || downloadUrl),
-    notes: normalizeText(releaseEntry.headline || releaseEntry.summary || "수동 배포본"),
+    notes: normalizeText(publicEntry.headline || publicEntry.summary || "수동 배포본"),
     sha256,
     sizeBytes,
     minSupportedVersion: version,
@@ -182,14 +184,15 @@ function normalizePublishedRelease(release, releaseCatalog) {
   const version = normalizeText(release?.version);
   if (!version) return null;
   const metadata = findReleaseEntry(releaseCatalog, version) || {};
-  const headline = normalizeText(metadata.headline || release?.headline || release?.notes);
-  const summary = normalizeText(metadata.summary || release?.summary || release?.notes);
+  const publicEntry = getPublicReleaseSection(metadata);
+  const headline = normalizeText(publicEntry.headline || release?.headline || release?.notes);
+  const summary = normalizeText(publicEntry.summary || release?.summary || release?.notes);
   return {
     version,
     level: normalizeText(metadata.level || release?.level || "patch"),
     headline,
     summary,
-    changes: normalizeChanges((Array.isArray(metadata.changes) && metadata.changes.length ? metadata.changes : release?.changes)),
+    changes: normalizeChanges((Array.isArray(publicEntry.changes) && publicEntry.changes.length ? publicEntry.changes : release?.changes)),
     publishedAt: normalizeText(release?.publishedAt),
     fileName: normalizeText(release?.fileName),
     downloadUrl: normalizeText(release?.downloadUrl),

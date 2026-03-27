@@ -11,10 +11,12 @@
 - 모든 feature 변경은 `package.json`, `manifest.json`, `releases/release-notes.json`을 함께 업데이트해야 합니다.
 - `releases/release-notes.json`의 현재 버전 엔트리에는 다음이 반드시 있어야 합니다.
   - `level`
-  - `headline`
-  - `summary`
-  - `changes[]`
-- `headline`, `summary`, `changes[].text`에 `TODO`가 남아 있으면 `pre-push`와 `release:build`가 실패합니다.
+  - `public.headline`
+  - `public.summary`
+  - `public.changes[]`
+- `public.headline`, `public.summary`, `public.changes[].text`에 `TODO`가 남아 있으면 `pre-push`와 `release:build`가 실패합니다.
+- `internal.changes[]`는 선택 사항이며, 내부 운영/배포/구조 변경 기록용입니다.
+- 릴리스 패널과 Hosting `latest.json`, `history.json`에는 `public` 정보만 반영합니다.
 - 로컬 훅이 빠졌더라도 GitHub Actions `Repo Guardrails`가 같은 규칙을 다시 검사합니다.
 - PR 머지 후 GitHub 원격 브랜치는 자동 삭제되고, 로컬 `codex/*` 브랜치는 `main` 기준으로 이미 머지된 경우 훅이 자동 정리합니다.
 
@@ -31,6 +33,8 @@
 1. 기능 변경을 마칩니다.
 2. `npm run version:bump -- <patch|minor|major>`로 버전을 올립니다.
 3. `releases/release-notes.json`에서 새 버전의 제목, 요약, 변경 항목을 채웁니다.
+   - 사용자 패널에 보여줄 내용은 `public`에 적습니다.
+   - 내부 운영 메모가 필요하면 `internal`에 적습니다.
 4. `README.md`에 사용자 관점 변경을 반영합니다.
 5. `npm run verify`, `npm run verify:readme-guard`, `npm run verify:release-guard`를 확인합니다.
 6. `npm run release:build`로 배포 ZIP과 Hosting용 릴리스 메타를 생성합니다.
@@ -65,5 +69,5 @@ npm run deploy:functions
 - 고정 최신 링크 `downloads/latest.zip`은 매 배포 때 최신 ZIP으로 교체합니다.
 - `latest.json`만 최신 버전을 가리키게 바꿉니다.
 - `latest.json`, `history.json`에는 버전 번호뿐 아니라 `level`, `headline`, `summary`, `changes`를 함께 넣습니다.
-- 릴리스 패널은 위 메타를 그대로 읽어 버전별 업데이트 내용을 보여줍니다.
+- 릴리스 패널은 위 메타 중 사용자용 `public` 정보만 읽어 버전별 업데이트 내용을 보여줍니다.
 - 문제 발생 시 이전 ZIP을 다시 받아 같은 방식으로 롤백할 수 있습니다.

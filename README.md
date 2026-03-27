@@ -41,6 +41,7 @@
 - `릴리스 안내`
   - 패널 안에서 현재 설치 버전과 최신 배포본 여부를 확인할 수 있습니다.
   - 최신 릴리스와 이전 버전은 핵심 제목과 짧은 요약만 먼저 보여주고, 자세한 변경 내역은 `변경 내용 보기`에서 펼쳐 확인합니다.
+  - 릴리스 패널에는 사용자가 체감하는 변경만 보여주고, 내부 운영 변경은 별도 릴리스 메타 기록으로만 관리합니다.
   - 새 버전이 있으면 ZIP 다운로드 링크와 수동 업데이트 방법을 함께 안내합니다.
   - 설치와 업데이트 절차도 접힌 안내로 제공해 필요할 때만 펼쳐 볼 수 있습니다.
   - 최신 버전은 고정 링크 `https://browser-extension-main.web.app/extension/downloads/latest.zip` 로도 항상 받을 수 있습니다.
@@ -192,7 +193,8 @@ npm run hooks:install
 - `minor`: 새 사용자 기능, 새 워크플로, 눈에 띄는 기능 확장
 - `major`: 기존 사용 흐름을 깨거나 마이그레이션/재설치 판단이 필요한 변화
 - `npm run version:bump -- <patch|minor|major>`를 실행하면 `package.json`, `manifest.json`, `releases/release-notes.json` 초안이 같이 갱신됩니다.
-- 새 버전 초안이 생기면 `releases/release-notes.json`에서 `headline`, `summary`, `changes`를 실제 내용으로 채워야 push와 배포가 통과합니다.
+- 새 버전 초안이 생기면 `releases/release-notes.json`의 `public.headline`, `public.summary`, `public.changes`를 실제 사용자 관점 내용으로 채워야 push와 배포가 통과합니다.
+- 내부 운영 메모가 필요하면 `internal.changes`에 따로 적고, 릴리스 패널에는 노출하지 않습니다.
 - `release:build`는 현재 버전의 릴리스 메타를 읽어 `hosting/extension/releases/latest.json`과 `history.json`에 그대로 반영합니다.
 - `release:build`는 고정 최신 링크용 `hosting/extension/downloads/latest.zip`도 함께 갱신합니다.
 
