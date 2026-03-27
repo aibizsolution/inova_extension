@@ -12,6 +12,7 @@
 - 새 클론이나 새 작업 환경에서는 가능하면 초기에 `npm install` 또는 `npm run hooks:install`로 로컬 Git 훅 연결 상태를 맞춘다.
 - commit 전에는 `pre-commit`, push 전에는 `pre-push`, 원격에서는 GitHub Actions 가드레일이 다시 돈다는 전제를 두고 작업한다.
 - 이 저장소는 사람 승인보다 자동 체크를 우선한다. PR은 기본이지만 권한 있는 사용자가 체크 통과 후 바로 머지할 수 있는 운영을 기준으로 본다.
+- 로컬 훅에는 `post-checkout`, `post-merge`도 포함되며, `main` 기준으로 이미 머지된 `codex/*` 브랜치를 자동 정리한다.
 
 ## 릴리스 운영 원칙
 - feature 변경을 push할 때는 `README.md`, `package.json`, `manifest.json`, `releases/release-notes.json`을 함께 맞춘다.

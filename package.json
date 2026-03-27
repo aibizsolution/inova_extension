@@ -10,6 +10,7 @@
     "version:bump": "node scripts/bump-version.js",
     "check:cloud-sync": "node scripts/check-cloud-sync.js",
     "check:function-logs": "node scripts/check-function-logs.js",
+    "cleanup:branches": "node scripts/cleanup-local-branches.js",
     "rebuild:store-feeds": "node scripts/rebuild-store-feeds.js",
     "seed:business-store": "node scripts/seed-business-store.js",
     "seed:business-store:dry": "node scripts/seed-business-store.js --dry-run",

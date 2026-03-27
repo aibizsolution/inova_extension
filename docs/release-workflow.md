@@ -16,6 +16,7 @@
   - `changes[]`
 - `headline`, `summary`, `changes[].text`에 `TODO`가 남아 있으면 `pre-push`와 `release:build`가 실패합니다.
 - 로컬 훅이 빠졌더라도 GitHub Actions `Repo Guardrails`가 같은 규칙을 다시 검사합니다.
+- PR 머지 후 GitHub 원격 브랜치는 자동 삭제되고, 로컬 `codex/*` 브랜치는 `main` 기준으로 이미 머지된 경우 훅이 자동 정리합니다.
 
 ## 권장 순서
 

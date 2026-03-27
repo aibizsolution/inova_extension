@@ -173,6 +173,9 @@ npm run hooks:install
 - 로컬 훅은 `main` 직접 commit 과 `main` 직접 push 를 모두 막습니다.
 - 정말 긴급한 예외만 `INOVA_ALLOW_MAIN_BRANCH=1`로 한 번 우회할 수 있게 두었습니다.
 - PR은 필수지만 사람 승인 자체를 요구하지 않는 운영을 기본값으로 둡니다. 권한 있는 사용자는 자동 체크만 통과하면 머지할 수 있습니다.
+- GitHub 원격 브랜치는 PR 머지 후 자동 삭제되도록 켜 두었습니다.
+- 로컬에서는 `post-checkout`, `post-merge` 훅이 `main` 기준으로 이미 머지된 `codex/*` 브랜치만 자동 정리합니다.
+- 로컬 자동 정리를 잠깐 끄고 싶으면 `INOVA_SKIP_BRANCH_CLEANUP=1`을 사용할 수 있습니다.
 
 ## 협업 가드레일
 
