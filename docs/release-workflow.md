@@ -18,6 +18,13 @@
 - 로컬 훅이 빠졌더라도 GitHub Actions `Repo Guardrails`가 같은 규칙을 다시 검사합니다.
 - PR 머지 후 GitHub 원격 브랜치는 자동 삭제되고, 로컬 `codex/*` 브랜치는 `main` 기준으로 이미 머지된 경우 훅이 자동 정리합니다.
 
+## 배포 범위 규칙
+
+- `release:deploy`와 `deploy:hosting`은 Hosting만 배포합니다.
+- `deploy:functions`는 Firebase Functions만 배포합니다.
+- `deploy:all`은 Hosting과 Functions를 함께 배포합니다.
+- 기본 해석은 `배포 = hosting-only` 입니다. 함수 배포는 반드시 명시 요청이 있을 때만 진행하는 것을 원칙으로 합니다.
+
 ## 권장 순서
 
 1. 기능 변경을 마칩니다.
@@ -26,9 +33,10 @@
 4. `README.md`에 사용자 관점 변경을 반영합니다.
 5. `npm run verify`, `npm run verify:readme-guard`, `npm run verify:release-guard`를 확인합니다.
 6. `npm run release:build`로 배포 ZIP과 Hosting용 릴리스 메타를 생성합니다.
-7. `npm run release:deploy`로 Hosting에 반영합니다.
-8. Chrome 신규 설치/기존 설치를 각각 확인합니다.
-9. 팀에 `새 ZIP`, `변경 요약`, `Reload 필요 여부`를 공지합니다.
+7. 기본 릴리스는 `npm run release:deploy` 또는 `npm run deploy:hosting`으로 Hosting에 반영합니다.
+8. Functions 변경이 있을 때만 `npm run deploy:functions`를 따로 실행하거나, 필요 시 `npm run deploy:all`을 사용합니다.
+9. Chrome 신규 설치/기존 설치를 각각 확인합니다.
+10. 팀에 `새 ZIP`, `변경 요약`, `Reload 필요 여부`를 공지합니다.
 
 ## 명령
 
@@ -38,6 +46,7 @@ npm run verify:readme-guard
 npm run verify:release-guard
 npm run release:build
 npm run release:deploy
+npm run deploy:functions
 ```
 
 ## 생성 결과
