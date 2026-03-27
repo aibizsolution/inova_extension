@@ -68,6 +68,9 @@
   function renderLatestCard(state) {
     const latest = state.latest;
     const summary = latest.summary || latest.notes || "새 버전이 배포되었습니다.";
+    const latestLinkNotice = latest.downloadUrl && latest.versionDownloadUrl && latest.downloadUrl !== latest.versionDownloadUrl
+      ? `<p class="inova-release-card__empty">이 버튼은 고정 최신 링크로 연결되어 항상 최신 ZIP을 내려받습니다.</p>`
+      : "";
     return `
       <article class="inova-release-card">
         <div class="inova-release-card__head">
@@ -84,6 +87,7 @@
           <span>${escapeHtml(formatDateTime(latest.publishedAt))}</span>
           <span>${escapeHtml(formatBytes(latest.sizeBytes))}</span>
         </div>
+        ${latestLinkNotice}
         <div class="inova-tool-actions">
           <button type="button" class="inova-tool-button ${state.updateAvailable ? "is-primary" : ""}" data-release-action="download-latest">ZIP 받기</button>
         </div>

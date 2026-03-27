@@ -33,7 +33,16 @@
         ]
       },
       {
-        "source": "**/*.zip",
+        "source": "**/latest.zip",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "**/inova-extension-*.zip",
         "headers": [
           {
             "key": "Cache-Control",

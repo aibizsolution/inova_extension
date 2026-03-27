@@ -29,6 +29,7 @@ const hostingRoot = path.join(root, "hosting", "extension");
 const hostingDownloadDir = path.join(hostingRoot, "downloads");
 const hostingReleaseDir = path.join(hostingRoot, "releases");
 const hostingBaseUrl = "https://browser-extension-main.web.app/extension";
+const latestDownloadFileName = "latest.zip";
 const publishedAt = new Date().toISOString();
 const runtimeItems = ["manifest.json", "background", "content", "icons", "popup", "shared", "README.md"];
 const releaseCatalog = readReleaseCatalog(root);
@@ -51,16 +52,31 @@ fs.rmSync(stagingDir, { force: true, recursive: true });
 fs.mkdirSync(hostingDownloadDir, { recursive: true });
 fs.mkdirSync(hostingReleaseDir, { recursive: true });
 const hostingZipPath = path.join(hostingDownloadDir, `${bundleName}.zip`);
+const hostingLatestZipPath = path.join(hostingDownloadDir, latestDownloadFileName);
 fs.copyFileSync(zipPath, hostingZipPath);
+fs.copyFileSync(zipPath, hostingLatestZipPath);
 
 const sizeBytes = fs.statSync(zipPath).size;
 const sha256 = crypto.createHash("sha256").update(fs.readFileSync(zipPath)).digest("hex");
-const release = buildPublishedRelease({
+const versionedDownloadUrl = `${hostingBaseUrl}/downloads/${bundleName}.zip`;
+const latestDownloadUrl = `${hostingBaseUrl}/downloads/${latestDownloadFileName}`;
+const latestRelease = buildPublishedRelease({
   version,
   releaseEntry,
   publishedAt,
   fileName: `${bundleName}.zip`,
-  downloadUrl: `${hostingBaseUrl}/downloads/${bundleName}.zip`,
+  downloadUrl: latestDownloadUrl,
+  versionDownloadUrl: versionedDownloadUrl,
+  sha256,
+  sizeBytes,
+});
+const historyRelease = buildPublishedRelease({
+  version,
+  releaseEntry,
+  publishedAt,
+  fileName: `${bundleName}.zip`,
+  downloadUrl: versionedDownloadUrl,
+  versionDownloadUrl: versionedDownloadUrl,
   sha256,
   sizeBytes,
 });
@@ -68,10 +84,10 @@ const release = buildPublishedRelease({
 const latestPath = path.join(hostingReleaseDir, "latest.json");
 const historyPath = path.join(hostingReleaseDir, "history.json");
 const history = normalizePublishedReleaseList(readJsonSafe(historyPath)?.releases || [], releaseCatalog);
-const nextHistory = [release, ...history.filter((item) => String(item?.version || "") !== version)];
+const nextHistory = [historyRelease, ...history.filter((item) => String(item?.version || "") !== version)];
 writeJson(latestPath, {
   product: buildProductMeta(),
-  release,
+  release: latestRelease,
 });
 writeJson(historyPath, {
   product: buildProductMeta(),
@@ -80,6 +96,7 @@ writeJson(historyPath, {
 
 console.log(`[release-build] version=${version}`);
 console.log(`[release-build] zip=${zipPath}`);
+console.log(`[release-build] latest-zip=${hostingLatestZipPath}`);
 console.log(`[release-build] latest=${latestPath}`);
 console.log(`[release-build] history=${historyPath}`);
 
@@ -139,7 +156,7 @@ function escapePowerShell(targetPath) {
   return String(targetPath).replace(/'/g, "''");
 }
 
-function buildPublishedRelease({ version, releaseEntry, publishedAt, fileName, downloadUrl, sha256, sizeBytes }) {
+function buildPublishedRelease({ version, releaseEntry, publishedAt, fileName, downloadUrl, versionDownloadUrl, sha256, sizeBytes }) {
   return {
     version,
     level: normalizeText(releaseEntry.level || "patch"),
@@ -149,6 +166,7 @@ function buildPublishedRelease({ version, releaseEntry, publishedAt, fileName, d
     publishedAt,
     fileName,
     downloadUrl,
+    versionDownloadUrl: normalizeText(versionDownloadUrl || downloadUrl),
     notes: normalizeText(releaseEntry.headline || releaseEntry.summary || "수동 배포본"),
     sha256,
     sizeBytes,
@@ -175,6 +193,7 @@ function normalizePublishedRelease(release, releaseCatalog) {
     publishedAt: normalizeText(release?.publishedAt),
     fileName: normalizeText(release?.fileName),
     downloadUrl: normalizeText(release?.downloadUrl),
+    versionDownloadUrl: normalizeText(release?.versionDownloadUrl || release?.downloadUrl),
     notes: normalizeText(release?.notes || headline || summary),
     sha256: normalizeText(release?.sha256),
     sizeBytes: Math.max(0, Number(release?.sizeBytes) || 0),

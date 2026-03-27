@@ -42,6 +42,7 @@
   - 패널 안에서 현재 설치 버전과 최신 배포본 여부를 확인할 수 있습니다.
   - 최신 릴리스에는 버전 단계(`패치/마이너/메이저`), 핵심 제목, 변경 요약, 주요 변경 항목이 함께 표시됩니다.
   - 새 버전이 있으면 ZIP 다운로드 링크와 수동 업데이트 방법을 함께 안내합니다.
+  - 최신 버전은 고정 링크 `https://browser-extension-main.web.app/extension/downloads/latest.zip` 로도 항상 받을 수 있습니다.
   - 이전 버전도 버전별 변경 요약과 함께 ZIP 링크로 롤백할 수 있습니다.
   - 이 확장은 `i-Nova 상용 기능 적용 전 실험 기능을 빠르게 검증하기 위한 도구`이며, 제작/운영은 `AI비즈솔루션팀`입니다.
 
@@ -192,6 +193,7 @@ npm run hooks:install
 - `npm run version:bump -- <patch|minor|major>`를 실행하면 `package.json`, `manifest.json`, `releases/release-notes.json` 초안이 같이 갱신됩니다.
 - 새 버전 초안이 생기면 `releases/release-notes.json`에서 `headline`, `summary`, `changes`를 실제 내용으로 채워야 push와 배포가 통과합니다.
 - `release:build`는 현재 버전의 릴리스 메타를 읽어 `hosting/extension/releases/latest.json`과 `history.json`에 그대로 반영합니다.
+- `release:build`는 고정 최신 링크용 `hosting/extension/downloads/latest.zip`도 함께 갱신합니다.
 
 ## 배포 기본값
 
