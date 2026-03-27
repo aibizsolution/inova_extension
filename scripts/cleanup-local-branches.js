@@ -18,7 +18,7 @@ function main() {
     return;
   }
 
-  const mergedBranches = readGitLines(["branch", "--merged", "--format=%(refname:short)"]);
+  const mergedBranches = readGitLines(["branch", "--format=%(refname:short)", "--merged"]);
   const cleanupTargets = mergedBranches.filter((branchName) => CODEx_BRANCH_PATTERN.test(branchName) && branchName !== currentBranch);
   if (!cleanupTargets.length) {
     console.log("정리할 로컬 작업 브랜치가 없습니다.");
