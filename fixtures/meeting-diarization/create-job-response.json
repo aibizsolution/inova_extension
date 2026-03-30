@@ -1,0 +1,20 @@
+{
+  "job": {
+    "jobId": "meeting-job-fixture-1",
+    "sessionId": "meeting-session-fixture-1",
+    "status": "queued",
+    "createdAt": "2026-03-30T08:29:05.000Z",
+    "updatedAt": "2026-03-30T08:29:05.000Z",
+    "queuedAt": "2026-03-30T08:29:05.000Z",
+    "source": {
+      "captureMode": "mixed-audio",
+      "mimeType": "audio/webm;codecs=opus",
+      "sizeBytes": 18432000,
+      "durationMs": 1740000,
+      "uploadStatus": "uploaded",
+      "storageObject": "tmp/meetings/meeting-job-fixture-1.webm",
+      "expiresAt": "2026-03-30T09:29:05.000Z"
+    },
+    "artifacts": []
+  }
+}

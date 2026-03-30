@@ -1,3 +1,5 @@
+const path = require("path");
+
 const NOW = "2026-03-30T09:00:00.000Z";
 const PROVIDER_IDENTITY = {
   provider: "inova",
@@ -134,6 +136,11 @@ const RELEASE_HISTORY = [
   },
 ];
 
+const MEETING_CREATE_REQUEST = readFixtureJson("create-job-request.json");
+const MEETING_CREATE_RESPONSE = readFixtureJson("create-job-response.json");
+const MEETING_JOB_PROCESSING = readFixtureJson("job-status-processing.json");
+const MEETING_JOB_SUCCEEDED = readFixtureJson("job-status-succeeded.json");
+
 function createHarnessState() {
   const promptLibrary = {
     found: true,
@@ -149,6 +156,12 @@ function createHarnessState() {
   };
 
   return {
+    meetingArtifact: buildMeetingArtifact(MEETING_JOB_SUCCEEDED),
+    meetingCreateRequest: cloneValue(MEETING_CREATE_REQUEST),
+    meetingCreateResponse: cloneValue(MEETING_CREATE_RESPONSE),
+    meetingJobProcessing: cloneValue(MEETING_JOB_PROCESSING),
+    meetingJobSucceeded: cloneValue(MEETING_JOB_SUCCEEDED),
+    meetingPollCount: 0,
     providerIdentity: cloneValue(PROVIDER_IDENTITY),
     promptLibrary,
     promptLibraryRemote: {
@@ -170,8 +183,23 @@ function createHarnessState() {
   };
 }
 
+function buildMeetingArtifact(succeededPayload) {
+  const artifact = cloneValue(succeededPayload?.job?.artifacts?.[0] || {});
+  return {
+    artifact: {
+      ...artifact,
+      text: cloneValue(succeededPayload?.job?.transcript?.text || ""),
+      segments: cloneValue(succeededPayload?.job?.transcript?.segments || []),
+    },
+  };
+}
+
 function buildLibraryId(providerUserKey) {
   return `inova__${String(providerUserKey || "").trim()}`;
+}
+
+function readFixtureJson(fileName) {
+  return require(path.join(__dirname, "..", "meeting-diarization", fileName));
 }
 
 function cloneValue(value) {
@@ -179,6 +207,10 @@ function cloneValue(value) {
 }
 
 module.exports = {
+  MEETING_CREATE_REQUEST,
+  MEETING_CREATE_RESPONSE,
+  MEETING_JOB_PROCESSING,
+  MEETING_JOB_SUCCEEDED,
   NOW,
   PROVIDER_IDENTITY,
   RELEASE_HISTORY,

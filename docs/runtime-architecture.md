@@ -117,6 +117,7 @@
 - `npm run verify:harness`
 - `npm run verify:smoke`
 - `npm run verify:popup`
+- `npm run verify:meeting-contract`
 - `npm run verify:cloud`
 - `npm run verify:service-worker`
 - `npm run verify:harness-page`
@@ -131,11 +132,12 @@
 - 로컬 브라우저 하네스: `http://127.0.0.1:4173/fixtures/content-harness.html?sid=fixture-session`
 - 로컬 팝업 하네스: `http://127.0.0.1:4173/fixtures/popup-harness.html`
 - 로컬 클라우드 하네스: `http://127.0.0.1:4174`
+- 회의 전사 기반 계약: `docs/meeting-diarization-foundation.md`, `fixtures/meeting-diarization/`
 
 ## 6. 하네스 관점의 현재 한계
 
 - 핵심 UI 흐름은 여전히 실사이트 의존성이 남아 있지만, 로컬 팝업 하네스와 로컬 브라우저 하네스로 popup/content-script 부팅과 주요 토글 상태 전이까지는 먼저 확인할 수 있다.
-- 현재 smoke path는 DOM 수집 계층, popup 상태 전이, 로컬 클라우드 계약 검증, background service worker 라우팅 검증, 로컬 브라우저 하네스까지 포함한다.
+- 현재 smoke path는 DOM 수집 계층, popup 상태 전이, 회의 기능용 session/job/artifact 계약, 로컬 클라우드 계약 검증, background service worker 라우팅 검증, 로컬 브라우저 하네스까지 포함한다.
 - Firebase emulator는 아직 없지만, fake backend 서버로 Cloud Functions payload 계약과 Hosting release JSON을 로컬에서 재현할 수 있다.
 - 장기적으로는 content/background/functions 경계를 각각 재현할 수 있는 fixture와 smoke path를 늘려야 한다.
 
@@ -144,4 +146,5 @@
 - 새 기능은 먼저 어떤 실행 경계에 들어가는지 이 문서 기준으로 결정한다.
 - 실사이트나 실클라우드가 없어도 검증 가능한 최소 fixture를 가능하면 먼저 만든다.
 - 기능별 smoke path는 작은 단위로 추가하고 `npm run verify`에 연결한다.
+- 회의 전사/화자분리처럼 경계가 많은 기능은 구현 전용 문서보다 `session -> job -> artifact` fixture와 polling contract를 먼저 고정한다.
 - 배포 산출물 디렉터리는 읽기 참고만 하고, 수정 기준은 항상 정본 소스 디렉터리로 제한한다.

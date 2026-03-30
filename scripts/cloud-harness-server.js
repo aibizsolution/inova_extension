@@ -106,6 +106,29 @@ async function handleRequest(request, response, state) {
     });
   }
 
+  if (requestUrl.pathname === "/createInovaMeetingJob") {
+    return void sendJson(response, 200, {
+      ok: true,
+      data: cloneValue(state.meetingCreateResponse),
+    });
+  }
+
+  if (requestUrl.pathname === "/getInovaMeetingJob") {
+    state.meetingPollCount = Number(state.meetingPollCount || 0) + 1;
+    const nextPayload = state.meetingPollCount >= 2 ? state.meetingJobSucceeded : state.meetingJobProcessing;
+    return void sendJson(response, 200, {
+      ok: true,
+      data: cloneValue(nextPayload),
+    });
+  }
+
+  if (requestUrl.pathname === "/getInovaMeetingArtifact") {
+    return void sendJson(response, 200, {
+      ok: true,
+      data: cloneValue(state.meetingArtifact),
+    });
+  }
+
   if (requestUrl.pathname === "/publishPromptToStore") {
     const owner = normalizeOwner(body.owner);
     const prompt = normalizePrompt(body.prompt);

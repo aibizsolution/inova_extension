@@ -6,16 +6,22 @@ const path = require("path");
 const root = path.resolve(__dirname, "..");
 const requiredFiles = [
   path.join("docs", "runtime-architecture.md"),
+  path.join("docs", "meeting-diarization-foundation.md"),
   path.join("fixtures", "inova-chat-session.html"),
   path.join("fixtures", "content-harness.html"),
   path.join("fixtures", "content-harness-mock.js"),
   path.join("fixtures", "popup-harness.html"),
   path.join("fixtures", "popup-harness-mock.js"),
+  path.join("fixtures", "meeting-diarization", "create-job-request.json"),
+  path.join("fixtures", "meeting-diarization", "create-job-response.json"),
+  path.join("fixtures", "meeting-diarization", "job-status-processing.json"),
+  path.join("fixtures", "meeting-diarization", "job-status-succeeded.json"),
   path.join("fixtures", "cloud-harness", "fixtures.js"),
   path.join("scripts", "cloud-harness-server.js"),
   path.join("scripts", "run-cloud-harness-server.js"),
   path.join("scripts", "verify-content-smoke.js"),
   path.join("scripts", "verify-popup-harness.js"),
+  path.join("scripts", "verify-meeting-contract.js"),
   path.join("scripts", "verify-cloud-api-contract.js"),
   path.join("scripts", "verify-service-worker-harness.js"),
   path.join("scripts", "run-harness-server.js"),
@@ -45,6 +51,16 @@ const harnessFixtureKeywords = [
   "Local Content Harness",
   'aria-label="채팅 기록"',
   "content-harness-mock.js",
+];
+
+const meetingFoundationKeywords = [
+  "single-file-first",
+  "temporary upload",
+  "Cloud Run Job",
+  "inova-meeting:create-job",
+  "session",
+  "job",
+  "artifact",
 ];
 
 function main() {
@@ -83,6 +99,16 @@ function main() {
     for (const keyword of harnessFixtureKeywords) {
       if (!text.includes(keyword)) {
         errors.push(`로컬 하네스 fixture에 핵심 표식이 없습니다: ${keyword}`);
+      }
+    }
+  }
+
+  const meetingFoundationPath = path.join(root, "docs", "meeting-diarization-foundation.md");
+  if (fs.existsSync(meetingFoundationPath)) {
+    const text = fs.readFileSync(meetingFoundationPath, "utf8");
+    for (const keyword of meetingFoundationKeywords) {
+      if (!text.includes(keyword)) {
+        errors.push(`회의 기반 계약 문서에 핵심 키워드가 없습니다: ${keyword}`);
       }
     }
   }
