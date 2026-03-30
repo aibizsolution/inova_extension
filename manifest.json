@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "아이노바 실험실",
-  "version": "0.3.9",
+  "version": "0.3.10",
   "description": "i-Nova 대화 화면에 패널과 프롬프트 도구를 더하는 크롬 확장입니다.",
   "permissions": [
     "storage",
@@ -38,6 +38,8 @@
       "js": [
         "shared/constants.js",
         "shared/session.js",
+        "shared/meeting-state.js",
+        "shared/meeting-bridge.js",
         "shared/prompt-library.js",
         "shared/prompt-store.js",
         "shared/release-info.js",

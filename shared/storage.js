@@ -65,6 +65,11 @@
     return namespace.releaseInfo.mergeReleaseInfo(current.releaseInfo);
   }
 
+  async function getMeetingState() {
+    const current = await getState();
+    return namespace.meetingState.mergeMeetingState(current.meetingState);
+  }
+
   async function setCloudSyncState(nextCloudSync) {
     const cloudSync = namespace.cloudSync.mergeCloudSyncState(nextCloudSync);
     await setLocal({ cloudSync });
@@ -75,6 +80,12 @@
     const releaseInfo = namespace.releaseInfo.mergeReleaseInfo(nextReleaseInfo);
     await setLocal({ releaseInfo });
     return releaseInfo;
+  }
+
+  async function setMeetingState(nextMeetingState) {
+    const meetingState = namespace.meetingState.mergeMeetingState(nextMeetingState);
+    await setLocal({ meetingState });
+    return meetingState;
   }
 
   async function markPromptLibrarySynced(providerIdentity, syncedAt) {
@@ -256,6 +267,7 @@
     buildPromptSyncDocument,
     getCloudSyncState,
     getHandleRatio,
+    getMeetingState,
     getPromptLibrary,
     getReleaseInfo,
     getState,
@@ -274,6 +286,7 @@
     savePromptItem,
     setCloudSyncState,
     setLocal,
+    setMeetingState,
     setPromptSyncError,
     setPromptLibrary,
     setReleaseInfo,

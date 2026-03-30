@@ -15,6 +15,7 @@
 
 - 오디오 파일 준비/업로드 상태와 job 상태 표시만 맡는다.
 - 실제 원격 업로드와 polling은 background 메시지로 위임한다.
+- 브라우저 로컬 상태는 `shared/meeting-state.js` 와 `chrome.storage.local.meetingState`를 기준으로 쌓는다.
 
 ### Background Service Worker
 
@@ -23,6 +24,7 @@
 - `inova-meeting:get-artifact`
 
 위 세 메시지를 받아 access token을 붙여 Functions 또는 worker 게이트웨이로 전달한다.
+브라우저 내부에서는 `shared/meeting-bridge.js` 가 이 runtime message 래퍼 역할을 맡는다.
 
 ### Functions / Worker
 

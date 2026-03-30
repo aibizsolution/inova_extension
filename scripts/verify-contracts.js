@@ -40,6 +40,16 @@ if (fs.existsSync(manifestPath)) {
   }
 }
 
+const popupPath = path.join(root, "popup", "index.html");
+if (fs.existsSync(popupPath)) {
+  const popupHtml = fs.readFileSync(popupPath, "utf8");
+  for (const file of contract.popupScripts || []) {
+    if (!popupHtml.includes(file)) {
+      errors.push(`popup script 누락: ${file}`);
+    }
+  }
+}
+
 for (const file of listSourceFiles(root)) {
   const lineCount = countLines(path.join(root, file));
   if (lineCount > contract.maxLinesPerSourceFile) {

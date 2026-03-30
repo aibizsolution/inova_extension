@@ -9,6 +9,7 @@
       promptLibrary: "promptLibrary",
       cloudSync: "cloudSync",
       releaseInfo: "releaseInfo",
+      meetingState: "meetingState",
     },
     defaults: {
       settings: {
@@ -64,6 +65,43 @@
         error: "",
         latest: null,
         history: [],
+      },
+      meetingState: {
+        version: 1,
+        session: {
+          sessionId: "",
+          title: "",
+          startedAt: "",
+          endedAt: "",
+          language: "ko",
+        },
+        capture: {
+          captureMode: "",
+          mimeType: "",
+          channelCount: 0,
+          durationMs: 0,
+          sizeBytes: 0,
+          status: "idle",
+        },
+        job: {
+          jobId: "",
+          status: "idle",
+          updatedAt: "",
+          progress: {
+            phase: "",
+            percent: 0,
+          },
+          artifactId: "",
+          error: "",
+          sourceAudioDeleted: false,
+        },
+        transcript: {
+          artifactId: "",
+          text: "",
+          segments: [],
+          speakerCount: 0,
+          loadedAt: "",
+        },
       },
       uiPreferences: {
         activeTool: "bookmarks",

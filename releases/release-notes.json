@@ -2,6 +2,32 @@
   "schemaVersion": 1,
   "versions": [
     {
+      "version": "0.3.10",
+      "level": "patch",
+      "public": {
+        "headline": "회의 기능 브라우저 준비 경로 추가",
+        "summary": "이번 배포는 회의 전사 기능을 붙이기 전 단계로, 브라우저 쪽 상태 저장과 요청 브리지 경로를 먼저 정리한 준비성 업데이트입니다.",
+        "changes": [
+          {
+            "type": "changed",
+            "text": "사용자 화면 변화는 거의 없지만, 회의 기능을 더 안전하게 붙일 수 있도록 브라우저 상태와 내부 요청 경로를 먼저 다듬었습니다."
+          }
+        ]
+      },
+      "internal": {
+        "changes": [
+          {
+            "type": "added",
+            "text": "shared/meeting-state.js와 shared/meeting-bridge.js를 추가해 meetingState 로컬 상태 정규화와 runtime message wrapper를 분리했습니다."
+          },
+          {
+            "type": "changed",
+            "text": "manifest.json, popup/index.html, verify-contracts.js를 업데이트해 새 meeting shared 모듈이 content/popup 런타임과 구조 검증에 함께 연결되도록 정리했습니다."
+          }
+        ]
+      }
+    },
+    {
       "version": "0.3.9",
       "level": "patch",
       "public": {

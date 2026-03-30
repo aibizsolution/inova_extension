@@ -10,6 +10,8 @@
     "shared/cloud-api.js",
     "shared/constants.js",
     "shared/inova-auth.js",
+    "shared/meeting-bridge.js",
+    "shared/meeting-state.js",
     "shared/prompt-library.js",
     "shared/prompt-store.js",
     "shared/session.js",
@@ -31,12 +33,15 @@
     "README.md",
     "docs/feature-spec.md",
     "scripts/verify-docs.js",
-    "scripts/verify-contracts.js"
+    "scripts/verify-contracts.js",
+    "scripts/verify-meeting-state.js"
   ],
   "manifestPopup": "popup/index.html",
   "manifestContentScripts": [
     "shared/constants.js",
     "shared/session.js",
+    "shared/meeting-state.js",
+    "shared/meeting-bridge.js",
     "shared/prompt-library.js",
     "shared/prompt-store.js",
     "shared/storage.js",
@@ -52,6 +57,14 @@
     "content/panel.js",
     "content/main.js"
   ],
+  "popupScripts": [
+    "../shared/constants.js",
+    "../shared/session.js",
+    "../shared/meeting-state.js",
+    "../shared/meeting-bridge.js",
+    "../shared/storage.js",
+    "index.js"
+  ],
   "manifestContentCss": [
     "content/panel.css",
     "content/tools.css"
@@ -61,7 +74,8 @@
     "pausedSessions",
     "uiPreferences",
     "promptLibrary",
-    "cloudSync"
+    "cloudSync",
+    "meetingState"
   ],
   "requiredDocKeywords": [
     "팝업 On/Off",
