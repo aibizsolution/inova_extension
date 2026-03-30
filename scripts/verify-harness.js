@@ -10,8 +10,12 @@ const requiredFiles = [
   path.join("fixtures", "inova-chat-session.html"),
   path.join("fixtures", "content-harness.html"),
   path.join("fixtures", "content-harness-mock.js"),
+  path.join("fixtures", "meeting-page-harness-mock.js"),
   path.join("fixtures", "popup-harness.html"),
   path.join("fixtures", "popup-harness-mock.js"),
+  path.join("meeting", "index.html"),
+  path.join("meeting", "index.css"),
+  path.join("meeting", "index.js"),
   path.join("fixtures", "meeting-diarization", "create-job-request.json"),
   path.join("fixtures", "meeting-diarization", "create-job-response.json"),
   path.join("fixtures", "meeting-diarization", "job-status-processing.json"),
@@ -28,6 +32,7 @@ const requiredFiles = [
   path.join("scripts", "verify-popup-harness.js"),
   path.join("scripts", "verify-meeting-contract.js"),
   path.join("scripts", "verify-meeting-manager.js"),
+  path.join("scripts", "verify-meeting-page.js"),
   path.join("scripts", "verify-meeting-service.js"),
   path.join("scripts", "verify-meeting-state.js"),
   path.join("scripts", "verify-cloud-api-contract.js"),
@@ -39,6 +44,7 @@ const requiredFiles = [
 
 const architectureKeywords = [
   "Popup",
+  "Meeting Extension Page",
   "Content Script",
   "Background Service Worker",
   "Offscreen Document",

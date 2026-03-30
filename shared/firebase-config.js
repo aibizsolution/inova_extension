@@ -6,6 +6,7 @@
     createInovaMeetingJobUrl: "createInovaMeetingJob",
     getInovaMeetingArtifactUrl: "getInovaMeetingArtifact",
     getInovaMeetingJobUrl: "getInovaMeetingJob",
+    listInovaMeetingResultsUrl: "listInovaMeetingResults",
     loadInovaPromptLibraryUrl: "loadInovaPromptLibrary",
     listPromptStoreEntriesUrl: "listPromptStoreEntries",
     peekInovaPromptLibraryUrl: "peekInovaPromptLibrary",

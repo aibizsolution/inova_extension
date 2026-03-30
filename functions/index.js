@@ -98,6 +98,7 @@ exports.reviewInovaPrompt = promptReviewHandlers.reviewInovaPrompt;
 exports.createInovaMeetingJob = meetingHandlers.createInovaMeetingJob;
 exports.getInovaMeetingJob = meetingHandlers.getInovaMeetingJob;
 exports.getInovaMeetingArtifact = meetingHandlers.getInovaMeetingArtifact;
+exports.listInovaMeetingResults = meetingHandlers.listInovaMeetingResults;
 
 exports.loadInovaPromptLibrary = onRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
   try {

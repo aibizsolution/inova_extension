@@ -85,6 +85,7 @@
       onHandlePositionChange: updateHandlePosition,
       onImportFile: promptManager.handleImportFile,
       onJumpBookmark: jumpToBookmark,
+      onMeetingAction: handleMeetingAction,
       onMovePrompt: movePromptItem,
       onPromptAction: handlePromptAction,
       onPromptDraftChange: promptManager.updateDraft,
@@ -269,6 +270,27 @@
     }
     return promptManager.handleAction(action, detail);
   }
+  async function handleMeetingAction(action, detail = {}) {
+    if (!state.sessionId) {
+      return;
+    }
+    const meetingState = namespace.meetingState.mergeMeetingState(state.meetingState);
+    const input = {
+      artifactId: namespace.session.normalizeText(detail.artifactId || meetingState.transcript.artifactId || meetingState.job.artifactId),
+      jobId: namespace.session.normalizeText(detail.jobId || meetingState.job.jobId),
+      sessionId: state.sessionId,
+      title: state.sessionTitle || namespace.session.formatSessionLabel(state.sessionId),
+    };
+    try {
+      if (action === "open-record" && input.jobId) {
+        await namespace.meetingBridge.openMeetingResult(input);
+        return;
+      }
+      await namespace.meetingBridge.openMeetingWorkspace(input);
+    } catch (error) {
+      console.error("[i-Nova Bookmarks] meeting page open failed", error);
+    }
+  }
   function togglePanel(nextOpen, persist = true) {
     state.open = typeof nextOpen === "boolean" ? nextOpen : !state.open;
     if (persist) {
@@ -365,6 +387,7 @@
       meetingState,
       sessionTitle ? { session: { title: sessionTitle } } : null
     );
+    const records = namespace.meetingState.normalizeRecords(normalized.records);
     const hasTranscript = Boolean(namespace.session.normalizeText(normalized.transcript.text))
       || (Array.isArray(normalized.transcript.segments) && normalized.transcript.segments.length > 0);
     const hasActivity = normalized.capture.status !== "idle"
@@ -372,8 +395,8 @@
       || hasTranscript;
     return {
       ...normalized,
-      count: Array.isArray(normalized.transcript.segments) && normalized.transcript.segments.length
-        ? normalized.transcript.segments.length
+      count: records.length
+        ? records.length
         : hasActivity
             ? 1
             : 0,

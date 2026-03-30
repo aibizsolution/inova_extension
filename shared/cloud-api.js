@@ -183,6 +183,19 @@
     return payload?.data || {};
   }
 
+  async function listInovaMeetingResults(input, providerIdentity, accessToken) {
+    const payload = await postJson(
+      functions.listInovaMeetingResultsUrl,
+      {
+        limit: Number(input?.limit) || 8,
+        owner: toProviderIdentityPayload(providerIdentity),
+        sessionId: input?.sessionId || "",
+      },
+      accessToken
+    );
+    return payload?.data || { items: [], session: {} };
+  }
+
   async function syncInovaPromptLibrary(syncDocument, accessToken) {
     const payload = await postJson(functions.syncInovaPromptLibraryUrl, syncDocument, accessToken);
     return payload?.data || {};
@@ -227,6 +240,7 @@
     createInovaMeetingJob,
     getInovaMeetingArtifact,
     getInovaMeetingJob,
+    listInovaMeetingResults,
     importPromptStoreEntry,
     listPromptStoreEntries,
     loadInovaPromptLibrary,

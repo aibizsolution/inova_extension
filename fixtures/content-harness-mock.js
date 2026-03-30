@@ -208,6 +208,20 @@
         speakerCount: 2,
         loadedAt: now,
       },
+      records: [
+        {
+          artifactId: "meeting-artifact-transcript-1",
+          createdAt: "2026-03-30T08:31:10.000Z",
+          error: "",
+          jobId: "meeting-job-fixture-1",
+          previewText: "신규 프로모션 일정을 이번 주 안에 확정합시다.",
+          sessionId: "fixture-session",
+          speakerCount: 2,
+          status: "succeeded",
+          title: "신규 프로모션 회의",
+          updatedAt: now,
+        },
+      ],
     },
     meetingStateBySession: {
       "fixture-session": {
@@ -260,6 +274,20 @@
           speakerCount: 2,
           loadedAt: now,
         },
+        records: [
+          {
+            artifactId: "meeting-artifact-transcript-1",
+            createdAt: "2026-03-30T08:31:10.000Z",
+            error: "",
+            jobId: "meeting-job-fixture-1",
+            previewText: "신규 프로모션 일정을 이번 주 안에 확정합시다.",
+            sessionId: "fixture-session",
+            speakerCount: 2,
+            status: "succeeded",
+            title: "신규 프로모션 회의",
+            updatedAt: now,
+          },
+        ],
       },
     },
   };
@@ -603,6 +631,27 @@
         }
       }
       return { ok: true, data: { opened: Boolean(url) } };
+    }
+
+    if (type === "inova-meeting:open-workspace" || type === "inova-meeting:open-result") {
+      const sessionId = String(message?.input?.sessionId || "fixture-session").trim();
+      const jobId = String(message?.input?.jobId || "").trim();
+      const artifactId = String(message?.input?.artifactId || "").trim();
+      const url = `chrome-extension://fixture/meeting/index.html?sessionId=${encodeURIComponent(sessionId)}${jobId ? `&jobId=${encodeURIComponent(jobId)}` : ""}${artifactId ? `&artifactId=${encodeURIComponent(artifactId)}` : ""}`;
+      openedUrls.push(url);
+      return { ok: true, data: { opened: true, url } };
+    }
+
+    if (type === "inova-meeting:list-results") {
+      const sessionId = String(message?.input?.sessionId || "fixture-session").trim();
+      const meetingState = cloneValue(storageState.meetingStateBySession?.[sessionId] || storageState.meetingState || {});
+      return {
+        ok: true,
+        data: {
+          items: Array.isArray(meetingState.records) ? meetingState.records : [],
+          session: cloneValue(meetingState.session || { sessionId }),
+        },
+      };
     }
 
     return {

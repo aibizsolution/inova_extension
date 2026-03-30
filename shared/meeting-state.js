@@ -23,6 +23,7 @@
       },
       job: {
         artifactId: "",
+        createdAt: "",
         error: "",
         jobId: "",
         progress: {
@@ -56,6 +57,7 @@
       },
       job: {
         artifactId: "",
+        createdAt: "",
         error: "",
         jobId: "",
         progress: {
@@ -89,12 +91,26 @@
         sizeBytes: normalizeCount(capture?.sizeBytes, currentState?.capture?.sizeBytes),
         status: "captured",
       },
+      job: {
+        artifactId: "",
+        createdAt: "",
+        error: "",
+        jobId: "",
+        progress: {
+          percent: 0,
+          phase: "",
+        },
+        sourceAudioDeleted: false,
+        status: "idle",
+        updatedAt: "",
+      },
       session: {
         endedAt: normalizeText(meeting?.endedAt) || normalizeText(currentState?.session?.endedAt),
         startedAt: normalizeText(meeting?.startedAt) || normalizeText(currentState?.session?.startedAt),
         sessionId: normalizeText(meeting?.sessionId) || normalizeText(currentState?.session?.sessionId),
         title: normalizeText(meeting?.title) || normalizeText(currentState?.session?.title),
       },
+      transcript: cloneValue(defaults.transcript),
     });
   }
 
@@ -117,7 +133,7 @@
   function applyMeetingJobCreated(currentState, payload) {
     const nextJob = payload?.job || {};
     const transcript = nextJob?.transcript || {};
-    return mergeMeetingState(currentState, {
+    return syncMeetingRecord(mergeMeetingState(currentState, {
       capture: {
         captureMode: normalizeText(nextJob?.source?.captureMode) || normalizeText(currentState?.capture?.captureMode),
         durationMs: normalizeCount(nextJob?.source?.durationMs) || normalizeCount(currentState?.capture?.durationMs),
@@ -127,6 +143,7 @@
       },
       job: {
         artifactId: normalizeText(nextJob?.artifacts?.[0]?.artifactId || transcript?.artifactId),
+        createdAt: normalizeText(nextJob?.createdAt),
         error: normalizeText(nextJob?.error),
         jobId: normalizeText(nextJob?.jobId),
         progress: {
@@ -147,15 +164,16 @@
         speakerCount: Math.max(0, Number(nextJob?.transcription?.speakerCount) || 0),
         text: normalizeTextBlock(transcript?.text),
       },
-    });
+    }));
   }
 
   function applyMeetingJobSnapshot(currentState, payload) {
     const nextJob = payload?.job || {};
     const transcript = nextJob?.transcript || {};
-    return mergeMeetingState(currentState, {
+    return syncMeetingRecord(mergeMeetingState(currentState, {
       job: {
         artifactId: normalizeText(nextJob?.artifacts?.[0]?.artifactId || transcript?.artifactId || currentState?.job?.artifactId),
+        createdAt: normalizeText(nextJob?.createdAt) || normalizeText(currentState?.job?.createdAt),
         error: normalizeText(nextJob?.error),
         jobId: normalizeText(nextJob?.jobId) || normalizeText(currentState?.job?.jobId),
         progress: {
@@ -176,12 +194,12 @@
         speakerCount: Math.max(0, Number(nextJob?.transcription?.speakerCount) || 0),
         text: normalizeTextBlock(transcript?.text),
       },
-    });
+    }));
   }
 
   function applyMeetingArtifact(currentState, payload) {
     const artifact = payload?.artifact || {};
-    return mergeMeetingState(currentState, {
+    return syncMeetingRecord(mergeMeetingState(currentState, {
       job: {
         artifactId: normalizeText(artifact?.artifactId) || normalizeText(currentState?.job?.artifactId),
       },
@@ -192,7 +210,7 @@
         speakerCount: countSpeakers(artifact?.segments),
         text: normalizeTextBlock(artifact?.text),
       },
-    });
+    }));
   }
 
   function buildMeetingJobLookup(meetingState) {
@@ -243,6 +261,10 @@
 
   function mergeOneMeetingState(baseState, nextState) {
     const next = nextState && typeof nextState === "object" ? nextState : {};
+    const nextCapture = next.capture && typeof next.capture === "object" ? next.capture : null;
+    const nextJob = next.job && typeof next.job === "object" ? next.job : null;
+    const nextJobProgress = nextJob?.progress && typeof nextJob.progress === "object" ? nextJob.progress : null;
+    const nextTranscript = next.transcript && typeof next.transcript === "object" ? next.transcript : null;
     return {
       ...baseState,
       ...next,
@@ -256,40 +278,140 @@
       capture: {
         ...baseState.capture,
         ...(next.capture || {}),
-        captureMode: normalizeText(next.capture?.captureMode) || normalizeText(baseState.capture.captureMode),
+        captureMode: hasOwn(nextCapture, "captureMode")
+          ? normalizeText(nextCapture.captureMode)
+          : normalizeText(baseState.capture.captureMode),
         channelCount: normalizeCount(next.capture?.channelCount, baseState.capture.channelCount),
         durationMs: normalizeCount(next.capture?.durationMs, baseState.capture.durationMs),
-        error: normalizeText(next.capture?.error) || normalizeText(baseState.capture.error),
-        mimeType: normalizeText(next.capture?.mimeType) || normalizeText(baseState.capture.mimeType),
+        error: hasOwn(nextCapture, "error")
+          ? normalizeText(nextCapture.error)
+          : normalizeText(baseState.capture.error),
+        mimeType: hasOwn(nextCapture, "mimeType")
+          ? normalizeText(nextCapture.mimeType)
+          : normalizeText(baseState.capture.mimeType),
         sizeBytes: normalizeCount(next.capture?.sizeBytes, baseState.capture.sizeBytes),
-        status: normalizeText(next.capture?.status) || normalizeText(baseState.capture.status) || defaults.capture.status,
+        status: hasOwn(nextCapture, "status")
+          ? normalizeText(nextCapture.status) || defaults.capture.status
+          : normalizeText(baseState.capture.status) || defaults.capture.status,
       },
       job: {
         ...baseState.job,
         ...(next.job || {}),
-        artifactId: normalizeText(next.job?.artifactId) || normalizeText(baseState.job.artifactId),
-        error: normalizeText(next.job?.error) || normalizeText(baseState.job.error),
-        jobId: normalizeText(next.job?.jobId) || normalizeText(baseState.job.jobId),
+        artifactId: hasOwn(nextJob, "artifactId")
+          ? normalizeText(nextJob.artifactId)
+          : normalizeText(baseState.job.artifactId),
+        createdAt: hasOwn(nextJob, "createdAt")
+          ? normalizeText(nextJob.createdAt)
+          : normalizeText(baseState.job.createdAt),
+        error: hasOwn(nextJob, "error")
+          ? normalizeText(nextJob.error)
+          : normalizeText(baseState.job.error),
+        jobId: hasOwn(nextJob, "jobId")
+          ? normalizeText(nextJob.jobId)
+          : normalizeText(baseState.job.jobId),
         progress: {
           ...baseState.job.progress,
           ...((next.job || {}).progress || {}),
           percent: normalizePercent(next.job?.progress?.percent, baseState.job.progress.percent),
-          phase: normalizeText(next.job?.progress?.phase) || normalizeText(baseState.job.progress.phase),
+          phase: hasOwn(nextJobProgress, "phase")
+            ? normalizeText(nextJobProgress.phase)
+            : normalizeText(baseState.job.progress.phase),
         },
         sourceAudioDeleted: Boolean(next.job?.sourceAudioDeleted ?? baseState.job.sourceAudioDeleted),
-        status: normalizeText(next.job?.status) || normalizeText(baseState.job.status) || defaults.job.status,
-        updatedAt: normalizeText(next.job?.updatedAt) || normalizeText(baseState.job.updatedAt),
+        status: hasOwn(nextJob, "status")
+          ? normalizeText(nextJob.status) || defaults.job.status
+          : normalizeText(baseState.job.status) || defaults.job.status,
+        updatedAt: hasOwn(nextJob, "updatedAt")
+          ? normalizeText(nextJob.updatedAt)
+          : normalizeText(baseState.job.updatedAt),
       },
       transcript: {
         ...baseState.transcript,
         ...(next.transcript || {}),
-        artifactId: normalizeText(next.transcript?.artifactId) || normalizeText(baseState.transcript.artifactId),
-        loadedAt: normalizeText(next.transcript?.loadedAt) || normalizeText(baseState.transcript.loadedAt),
+        artifactId: hasOwn(nextTranscript, "artifactId")
+          ? normalizeText(nextTranscript.artifactId)
+          : normalizeText(baseState.transcript.artifactId),
+        loadedAt: hasOwn(nextTranscript, "loadedAt")
+          ? normalizeText(nextTranscript.loadedAt)
+          : normalizeText(baseState.transcript.loadedAt),
         segments: next.transcript?.segments ? normalizeSegments(next.transcript.segments) : cloneValue(baseState.transcript.segments),
         speakerCount: normalizeCount(next.transcript?.speakerCount, baseState.transcript.speakerCount),
         text: next.transcript?.text !== undefined ? normalizeTextBlock(next.transcript.text) : normalizeTextBlock(baseState.transcript.text),
       },
+      records: next.records ? normalizeRecords(next.records) : cloneValue(baseState.records || defaults.records),
     };
+  }
+
+  function syncMeetingRecord(meetingState) {
+    const normalized = mergeMeetingState(meetingState);
+    if (!normalizeText(normalized.job.jobId)) {
+      return normalized;
+    }
+    const nextRecords = upsertMeetingRecord(normalized.records, createMeetingRecord(normalized));
+    return mergeMeetingState(normalized, { records: nextRecords });
+  }
+
+  function createMeetingRecord(meetingState) {
+    const normalized = mergeMeetingState(meetingState);
+    const transcriptText = normalizeTextBlock(normalized.transcript.text);
+    return {
+      artifactId: normalizeText(normalized.transcript.artifactId || normalized.job.artifactId),
+      createdAt: normalizeText(normalized.job.createdAt || normalized.job.updatedAt || normalized.transcript.loadedAt),
+      error: normalizeText(normalized.job.error),
+      jobId: normalizeText(normalized.job.jobId),
+      previewText: transcriptText ? transcriptText.slice(0, 180) : "",
+      sessionId: normalizeText(normalized.session.sessionId),
+      speakerCount: normalizeCount(normalized.transcript.speakerCount || countSpeakers(normalized.transcript.segments)),
+      status: normalizeText(normalized.job.status) || defaults.job.status,
+      title: normalizeText(normalized.session.title) || normalizeText(normalized.session.sessionId),
+      updatedAt: normalizeText(normalized.job.updatedAt || normalized.transcript.loadedAt || normalized.job.createdAt),
+    };
+  }
+
+  function upsertMeetingRecord(records, nextRecord) {
+    const normalizedRecord = normalizeRecord(nextRecord);
+    if (!normalizedRecord.jobId) {
+      return normalizeRecords(records);
+    }
+    const next = normalizeRecords(records).filter((record) => record.jobId !== normalizedRecord.jobId);
+    next.push(normalizedRecord);
+    next.sort(compareMeetingRecords);
+    return next;
+  }
+
+  function normalizeRecords(records) {
+    return (Array.isArray(records) ? records : [])
+      .map(normalizeRecord)
+      .filter((record) => record.jobId);
+  }
+
+  function normalizeRecord(record) {
+    const nextRecord = record && typeof record === "object" ? record : {};
+    return {
+      artifactId: normalizeText(nextRecord.artifactId),
+      createdAt: normalizeText(nextRecord.createdAt),
+      error: normalizeText(nextRecord.error),
+      jobId: normalizeText(nextRecord.jobId),
+      previewText: normalizeTextBlock(nextRecord.previewText),
+      sessionId: normalizeText(nextRecord.sessionId),
+      speakerCount: normalizeCount(nextRecord.speakerCount),
+      status: normalizeText(nextRecord.status) || defaults.job.status,
+      title: normalizeText(nextRecord.title),
+      updatedAt: normalizeText(nextRecord.updatedAt),
+    };
+  }
+
+  function compareMeetingRecords(left, right) {
+    return toRecordTime(right.updatedAt || right.createdAt) - toRecordTime(left.updatedAt || left.createdAt);
+  }
+
+  function toRecordTime(value) {
+    const parsed = Date.parse(value || "");
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  function hasOwn(value, key) {
+    return Boolean(value) && Object.prototype.hasOwnProperty.call(value, key);
   }
 
   function normalizeSegments(segments) {
@@ -345,6 +467,7 @@
     buildMeetingJobLookup,
     createDraftMeetingState,
     mergeMeetingState,
+    normalizeRecords,
     shouldPollMeetingJob,
   };
 })(globalThis);

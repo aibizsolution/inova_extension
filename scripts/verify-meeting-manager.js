@@ -68,6 +68,47 @@ async function main() {
       runtime: {
         async sendMessage(message) {
           sentMessages.push(cloneValue(message));
+          if (message.type === "inova-meeting:list-results") {
+            const sessionId = String(message?.input?.sessionId || "").trim();
+            if (sessionId !== activeSessionId) {
+              return {
+                ok: true,
+                data: {
+                  items: [],
+                  session: {
+                    sessionId,
+                    title: "",
+                  },
+                },
+              };
+            }
+            return {
+              ok: true,
+              data: {
+                items: [
+                  {
+                    artifactId: succeededResponse.job.transcript.artifactId,
+                    createdAt: succeededResponse.job.createdAt,
+                    error: "",
+                    jobId: succeededResponse.job.jobId,
+                    previewText: "신규 프로모션 일정을 이번 주 안에 확정합시다.",
+                    sessionId: activeSessionId,
+                    speakerCount: 2,
+                    status: "succeeded",
+                    title: "주간 스탠드업",
+                    updatedAt: succeededResponse.job.updatedAt,
+                  },
+                ],
+                session: {
+                  endedAt: "2026-03-30T08:31:00.000Z",
+                  language: "ko",
+                  sessionId: activeSessionId,
+                  startedAt: "2026-03-30T08:20:00.000Z",
+                  title: "주간 스탠드업",
+                },
+              },
+            };
+          }
           if (message.type === "inova-meeting:get-job") {
             const payload = cloneValue(succeededResponse);
             payload.job.transcript = {
@@ -194,14 +235,19 @@ async function main() {
   assert.equal(storageState.meetingStateBySession[activeSessionId].transcript.segments.length, 2);
   assert.deepEqual(
     sentMessages.map((message) => message.type),
-    ["inova-meeting:get-job", "inova-meeting:get-artifact"]
+    ["inova-meeting:get-job", "inova-meeting:get-artifact", "inova-meeting:list-results"]
   );
   assert(renderCount > 0, "Meeting manager should request a re-render");
+  assert.equal(storageState.meetingState.records.length, 1);
+  assert.equal(storageState.meetingStateBySession[activeSessionId].records.length, 1);
 
   sentMessages.length = 0;
   state.sessionId = "other-session";
   await manager.refreshState();
-  assert.equal(sentMessages.length, 0);
+  assert.deepEqual(
+    sentMessages.map((message) => message.type),
+    ["inova-meeting:list-results"]
+  );
 
   console.log("[verify-meeting-manager] Meeting manager passed");
 }

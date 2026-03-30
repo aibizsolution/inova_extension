@@ -6,6 +6,9 @@
     "popup/index.html",
     "popup/index.css",
     "popup/index.js",
+    "meeting/index.html",
+    "meeting/index.css",
+    "meeting/index.js",
     "offscreen/meeting-recorder.html",
     "offscreen/meeting-recorder.js",
     "background/service-worker.js",
@@ -39,6 +42,7 @@
     "scripts/verify-docs.js",
     "scripts/verify-contracts.js",
     "scripts/verify-meeting-manager.js",
+    "scripts/verify-meeting-page.js",
     "scripts/verify-meeting-state.js",
     "scripts/verify-offscreen-recorder.js"
   ],

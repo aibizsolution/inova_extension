@@ -87,6 +87,7 @@
         },
         job: {
           jobId: "",
+          createdAt: "",
           status: "idle",
           updatedAt: "",
           progress: {
@@ -104,6 +105,7 @@
           speakerCount: 0,
           loadedAt: "",
         },
+        records: [],
       },
       meetingStateBySession: {},
       uiPreferences: {

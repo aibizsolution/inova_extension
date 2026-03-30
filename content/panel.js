@@ -129,6 +129,13 @@
         promptId: promptAction.dataset.promptId || "",
       });
     }
+    const meetingAction = event.target.closest("[data-meeting-action]");
+    if (meetingAction) {
+      return void callbacks.onMeetingAction?.(meetingAction.dataset.meetingAction, {
+        artifactId: meetingAction.dataset.meetingArtifactId || "",
+        jobId: meetingAction.dataset.meetingJobId || "",
+      });
+    }
     const storeAction = event.target.closest("[data-store-action]");
     if (storeAction) {
       return void callbacks.onStoreAction?.(storeAction.dataset.storeAction, {

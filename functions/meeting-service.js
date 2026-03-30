@@ -7,6 +7,7 @@ const JOB_COLLECTION = "integration_inova_meeting_jobs";
 const ARTIFACT_COLLECTION = "integration_inova_meeting_artifacts";
 const SESSION_COLLECTION = "integration_inova_meeting_sessions";
 const TEMP_UPLOAD_TTL_MS = 60 * 60 * 1000;
+const MAX_SESSION_RECENT_RESULTS = 12;
 
 function registerMeetingHandlers(deps) {
   const {
@@ -74,38 +75,53 @@ function registerMeetingHandlers(deps) {
 
       await uploadTemporarySource(bucket, tempStorageObject, audioBuffer, sourceSnapshot, owner, meeting, jobId);
       await Promise.all([
-        sessionRef.set(buildSessionDocument(meeting, owner, jobId, createdAt), { merge: true }),
+        upsertSessionJobSummary(sessionRef, meeting, owner, queuedJob),
         jobRef.set(queuedJob),
       ]);
 
       const processingAt = new Date().toISOString();
-      await jobRef.set(
-        {
-          progress: {
-            percent: 42,
-            phase: "transcribing",
-          },
-          status: "processing",
-          transcription: {
-            language: meeting.language,
-            speakerLabels: options.speakerLabels,
-          },
-          updatedAt: processingAt,
+      const processingPatch = {
+        progress: {
+          percent: 42,
+          phase: "transcribing",
         },
-        { merge: true }
-      );
+        status: "processing",
+        transcription: {
+          language: meeting.language,
+          speakerLabels: options.speakerLabels,
+        },
+        updatedAt: processingAt,
+      };
+      await Promise.all([
+        jobRef.set(processingPatch, { merge: true }),
+        upsertSessionJobSummary(
+          sessionRef,
+          meeting,
+          owner,
+          {
+            ...queuedJob,
+            ...processingPatch,
+          }
+        ),
+      ]);
 
       try {
         const transcript = await transcribeMeetingAudio(audioBuffer, meeting, options, source);
         const completedAt = new Date().toISOString();
         const artifact = buildTranscriptArtifact(artifactId, jobId, meeting.sessionId, owner, transcript, completedAt);
 
-        await artifactRef.set(artifact);
         const deletedAt = await deleteTemporarySource(bucket, tempStorageObject);
-        await jobRef.set(
-          buildSucceededJobPatch(artifact, meeting, options, sourceSnapshot, transcript, completedAt, deletedAt),
-          { merge: true }
-        );
+        const succeededPatch = buildSucceededJobPatch(artifact, meeting, options, sourceSnapshot, transcript, completedAt, deletedAt);
+        const succeededJob = {
+          ...queuedJob,
+          ...processingPatch,
+          ...succeededPatch,
+        };
+        await Promise.all([
+          artifactRef.set(artifact),
+          jobRef.set(succeededPatch, { merge: true }),
+          upsertSessionJobSummary(sessionRef, meeting, owner, succeededJob, artifact),
+        ]);
 
         logEvent("meeting.create.success", {
           artifactId,
@@ -123,26 +139,36 @@ function registerMeetingHandlers(deps) {
         });
       } catch (error) {
         const deletedAt = await deleteTemporarySource(bucket, tempStorageObject);
-        await jobRef.set(
-          {
-            cleanup: {
-              deletedAt,
-              sourceAudioDeleted: Boolean(deletedAt),
-            },
-            error: normalizeText(error?.message) || "회의 전사를 처리하지 못했어요.",
-            progress: {
-              percent: 100,
-              phase: "failed",
-            },
-            source: {
-              ...sourceSnapshot,
-              uploadStatus: deletedAt ? "deleted" : sourceSnapshot.uploadStatus,
-            },
-            status: "failed",
-            updatedAt: new Date().toISOString(),
+        const failedPatch = {
+          cleanup: {
+            deletedAt,
+            sourceAudioDeleted: Boolean(deletedAt),
           },
-          { merge: true }
-        );
+          error: normalizeText(error?.message) || "회의 전사를 처리하지 못했어요.",
+          progress: {
+            percent: 100,
+            phase: "failed",
+          },
+          source: {
+            ...sourceSnapshot,
+            uploadStatus: deletedAt ? "deleted" : sourceSnapshot.uploadStatus,
+          },
+          status: "failed",
+          updatedAt: new Date().toISOString(),
+        };
+        await Promise.all([
+          jobRef.set(failedPatch, { merge: true }),
+          upsertSessionJobSummary(
+            sessionRef,
+            meeting,
+            owner,
+            {
+              ...queuedJob,
+              ...processingPatch,
+              ...failedPatch,
+            }
+          ),
+        ]);
         throw error;
       }
     } catch (error) {
@@ -241,10 +267,71 @@ function registerMeetingHandlers(deps) {
     }
   });
 
+  const listInovaMeetingResults = onRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
+    try {
+      assertMethod(request);
+      const owner = await verifyRequestIdentity(request);
+      const input = normalizeMeetingListRequest(request.body);
+
+      if (!input.sessionId) {
+        throw createHttpError(400, "회의 세션 ID가 없어요.");
+      }
+
+      const sessionRef = db.collection(SESSION_COLLECTION).doc(buildSessionDocId(owner.providerUserKey, input.sessionId));
+      const snapshot = await sessionRef.get();
+      if (!snapshot.exists) {
+        response.json({
+          ok: true,
+          data: {
+            items: [],
+            session: normalizeMeetingSession({
+              owner,
+              sessionId: input.sessionId,
+            }),
+          },
+        });
+        return;
+      }
+
+      const session = normalizeMeetingSession(snapshot.data());
+      assertSessionOwnership(session, owner, createHttpError);
+      let items = Array.isArray(session.recentJobs) ? session.recentJobs.slice(0, input.limit) : [];
+
+      if (!items.length && session.lastJobId) {
+        const jobSnapshot = await db.collection(JOB_COLLECTION).doc(session.lastJobId).get();
+        if (jobSnapshot.exists) {
+          const job = normalizeMeetingJob(jobSnapshot.data());
+          assertJobOwnership(job, owner, createHttpError);
+          items = [buildMeetingResultSummary(job)];
+        }
+      }
+
+      logEvent("meeting.list-results.success", {
+        itemCount: items.length,
+        providerUserKey: owner.providerUserKey,
+        sessionId: session.sessionId || input.sessionId,
+      });
+      response.json({
+        ok: true,
+        data: {
+          items,
+          session,
+        },
+      });
+    } catch (error) {
+      logEvent("meeting.list-results.error", {
+        error: normalizeText(error?.message),
+        status: Number(error?.status) || 500,
+      });
+      sendError(response, error);
+    }
+  });
+
   return {
     createInovaMeetingJob,
     getInovaMeetingArtifact,
     getInovaMeetingJob,
+    listInovaMeetingResults,
   };
 
   function assertMethod(request) {
@@ -387,6 +474,13 @@ function normalizeMeetingArtifactLookup(input) {
   };
 }
 
+function normalizeMeetingListRequest(input) {
+  return {
+    limit: Math.max(1, Math.min(MAX_SESSION_RECENT_RESULTS, Number(input?.limit) || 8)),
+    sessionId: normalizeText(input?.sessionId),
+  };
+}
+
 function buildQueuedJob(jobId, meeting, owner, options, source, createdAt) {
   return {
     artifacts: [],
@@ -466,6 +560,7 @@ function buildTranscriptArtifact(artifactId, jobId, sessionId, owner, transcript
 function buildSessionDocument(meeting, owner, jobId, updatedAt) {
   return {
     endedAt: meeting.endedAt,
+    recentJobs: [],
     language: meeting.language,
     owner: owner ? { ...owner } : {},
     sessionId: meeting.sessionId,
@@ -563,6 +658,17 @@ function normalizeMeetingJob(input) {
     createdAt: normalizeText(job.createdAt),
     error: normalizeText(job.error),
     jobId: normalizeText(job.jobId),
+    meeting: {
+      endedAt: normalizeText(job.meeting?.endedAt),
+      language: normalizeText(job.meeting?.language),
+      startedAt: normalizeText(job.meeting?.startedAt),
+      title: normalizeText(job.meeting?.title),
+    },
+    options: {
+      redaction: normalizeText(job.options?.redaction),
+      speakerLabels: Boolean(job.options?.speakerLabels),
+      summary: Boolean(job.options?.summary),
+    },
     owner: job.owner && typeof job.owner === "object" ? { ...job.owner } : {},
     progress: {
       percent: Math.max(0, Math.min(100, Number(job.progress?.percent) || 0)),
@@ -621,6 +727,129 @@ function normalizeArtifactSummary(input) {
   };
 }
 
+function normalizeMeetingSession(input) {
+  const session = input && typeof input === "object" ? input : {};
+  return {
+    endedAt: normalizeText(session.endedAt),
+    language: normalizeText(session.language) || "ko",
+    lastJobId: normalizeText(session.lastJobId),
+    owner: session.owner && typeof session.owner === "object" ? { ...session.owner } : {},
+    recentJobs: Array.isArray(session.recentJobs) ? session.recentJobs.map(normalizeMeetingResultSummary) : [],
+    sessionId: normalizeText(session.sessionId),
+    startedAt: normalizeText(session.startedAt),
+    title: normalizeText(session.title),
+    updatedAt: normalizeText(session.updatedAt),
+  };
+}
+
+function normalizeMeetingResultSummary(input) {
+  const item = input && typeof input === "object" ? input : {};
+  return {
+    artifactId: normalizeText(item.artifactId),
+    captureMode: normalizeText(item.captureMode),
+    createdAt: normalizeText(item.createdAt),
+    durationMs: Math.max(0, Number(item.durationMs) || 0),
+    error: normalizeText(item.error),
+    excerpt: normalizeText(item.excerpt),
+    jobId: normalizeText(item.jobId),
+    sessionId: normalizeText(item.sessionId),
+    speakerCount: Math.max(0, Number(item.speakerCount) || 0),
+    status: normalizeText(item.status),
+    title: normalizeText(item.title),
+    transcriptAvailable: Boolean(item.transcriptAvailable),
+    updatedAt: normalizeText(item.updatedAt),
+  };
+}
+
+function buildMeetingResultSummary(jobInput, artifactInput) {
+  const job = normalizeMeetingJob(jobInput);
+  const artifact = artifactInput ? normalizeMeetingArtifact(artifactInput) : null;
+  const transcriptText = normalizeText(artifact?.text || job.transcript?.text);
+  return normalizeMeetingResultSummary({
+    artifactId: normalizeText(artifact?.artifactId || job.transcript?.artifactId || job.artifacts?.[0]?.artifactId),
+    captureMode: job.source.captureMode,
+    createdAt: job.createdAt || job.queuedAt,
+    durationMs: job.source.durationMs,
+    error: job.error,
+    excerpt: buildTranscriptExcerpt(transcriptText),
+    jobId: job.jobId,
+    sessionId: job.sessionId,
+    speakerCount: Math.max(0, Number(artifact ? countTranscriptSpeakers(artifact.segments) : job.transcription.speakerCount) || 0),
+    status: job.status,
+    title: job.meeting.title,
+    transcriptAvailable: Boolean(transcriptText || normalizeText(artifact?.artifactId || job.transcript?.artifactId)),
+    updatedAt: job.updatedAt || job.createdAt || job.queuedAt,
+  });
+}
+
+function mergeRecentJobs(currentItems, nextItem) {
+  const map = new Map();
+  for (const item of Array.isArray(currentItems) ? currentItems : []) {
+    const normalized = normalizeMeetingResultSummary(item);
+    if (normalized.jobId) {
+      map.set(normalized.jobId, normalized);
+    }
+  }
+  const normalizedNext = normalizeMeetingResultSummary(nextItem);
+  if (normalizedNext.jobId) {
+    map.set(normalizedNext.jobId, normalizedNext);
+  }
+  return Array.from(map.values())
+    .sort(compareMeetingResults)
+    .slice(0, MAX_SESSION_RECENT_RESULTS);
+}
+
+function compareMeetingResults(left, right) {
+  return toTimestamp(right.updatedAt || right.createdAt) - toTimestamp(left.updatedAt || left.createdAt);
+}
+
+function toTimestamp(value) {
+  const normalized = normalizeText(value);
+  if (!normalized) {
+    return 0;
+  }
+  const parsed = Date.parse(normalized);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function buildTranscriptExcerpt(text) {
+  const normalized = normalizeText(text).replace(/\s+/g, " ");
+  if (!normalized) {
+    return "";
+  }
+  return normalized.length > 140 ? `${normalized.slice(0, 137)}...` : normalized;
+}
+
+function countTranscriptSpeakers(segments) {
+  return new Set(
+    (Array.isArray(segments) ? segments : [])
+      .map((segment) => normalizeText(segment?.speakerLabel))
+      .filter(Boolean)
+  ).size;
+}
+
+async function upsertSessionJobSummary(sessionRef, meeting, owner, jobInput, artifactInput) {
+  const snapshot = await sessionRef.get();
+  const currentSession = snapshot.exists ? normalizeMeetingSession(snapshot.data()) : normalizeMeetingSession({
+    owner,
+    sessionId: meeting.sessionId,
+  });
+  const job = normalizeMeetingJob(jobInput);
+  const recentJobs = mergeRecentJobs(currentSession.recentJobs, buildMeetingResultSummary(job, artifactInput));
+  await sessionRef.set(
+    {
+      ...buildSessionDocument(
+        meeting,
+        owner,
+        job.jobId || currentSession.lastJobId,
+        job.updatedAt || new Date().toISOString()
+      ),
+      recentJobs,
+    },
+    { merge: true }
+  );
+}
+
 function normalizeTranscriptSegment(input) {
   const segment = input && typeof input === "object" ? input : {};
   const startMs = Math.max(0, Number(segment.startMs) || 0);
@@ -636,6 +865,12 @@ function normalizeTranscriptSegment(input) {
 function assertJobOwnership(job, owner, createHttpError) {
   if (normalizeText(job.owner?.providerUserKey) !== normalizeText(owner?.providerUserKey)) {
     throw createHttpError(403, "현재 사용자에게 허용되지 않은 회의 job이에요.");
+  }
+}
+
+function assertSessionOwnership(session, owner, createHttpError) {
+  if (normalizeText(session.owner?.providerUserKey) !== normalizeText(owner?.providerUserKey)) {
+    throw createHttpError(403, "현재 사용자에게 허용되지 않은 회의 세션이에요.");
   }
 }
 

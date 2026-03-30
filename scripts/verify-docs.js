@@ -14,6 +14,8 @@ const requiredFiles = [
   path.join("docs", "feature-spec.md"),
   "popup/index.html",
   "popup/index.js",
+  path.join("meeting", "index.html"),
+  path.join("meeting", "index.js"),
   path.join("scripts", "install-git-hooks.js"),
   "shared/prompt-library.js",
   path.join("scripts", "verify-readme-update.js"),
@@ -83,6 +85,14 @@ const codeChecks = [
     patterns: [
       /promptManager/,
       /renderPanel/,
+    ],
+  },
+  {
+    file: "meeting/index.js",
+    patterns: [
+      /meetingBridge\.startMeetingCapture/,
+      /meetingBridge\.createMeetingJob/,
+      /recordList/,
     ],
   },
   {

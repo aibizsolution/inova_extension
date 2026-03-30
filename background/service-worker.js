@@ -85,6 +85,15 @@ async function handleMessage(message, sender) {
   if (message.type === "inova-meeting:get-artifact") {
     return getMeetingArtifact(message.input, message.providerIdentity);
   }
+  if (message.type === "inova-meeting:list-results") {
+    return listMeetingResults(message.input, message.providerIdentity);
+  }
+  if (message.type === "inova-meeting:open-workspace") {
+    return openMeetingWorkspace(message.input, sender);
+  }
+  if (message.type === "inova-meeting:open-result") {
+    return openMeetingResult(message.input, sender);
+  }
   if (message.type === "inova-meeting:recorder-failed") {
     return handleMeetingRecorderFailed(message.payload);
   }
@@ -266,6 +275,11 @@ async function getMeetingArtifact(input, providerIdentity) {
   return namespace.cloudApi.getInovaMeetingArtifact(input, providerIdentity, accessToken);
 }
 
+async function listMeetingResults(input, providerIdentity) {
+  const accessToken = await getInovaAccessToken();
+  return namespace.cloudApi.listInovaMeetingResults(input, providerIdentity, accessToken);
+}
+
 async function handleMeetingRecorderFailed(payload) {
   const sessionId = namespace.session.normalizeText(payload?.meeting?.sessionId);
   await closeOffscreenRecorderDocument().catch(() => {});
@@ -434,6 +448,45 @@ async function openReleaseUrl(url) {
   return { opened: true };
 }
 
+async function openMeetingWorkspace(input, sender) {
+  const pageUrl = buildMeetingPageUrl(input, sender);
+  await chrome.tabs.create({ url: pageUrl });
+  return { opened: true, url: pageUrl };
+}
+
+async function openMeetingResult(input, sender) {
+  const pageUrl = buildMeetingPageUrl(input, sender);
+  await chrome.tabs.create({ url: pageUrl });
+  return { opened: true, url: pageUrl };
+}
+
+function buildMeetingPageUrl(input, sender) {
+  const sessionId = namespace.session.normalizeText(input?.sessionId);
+  const title = namespace.session.normalizeText(input?.title)
+    || namespace.session.normalizeText(sender?.tab?.title)
+    || namespace.session.formatSessionLabel(sessionId);
+  const tabId = Number(input?.tabId) > 0 ? Number(input.tabId) : Number(sender?.tab?.id) > 0 ? Number(sender.tab.id) : 0;
+  const pageUrl = new URL(chrome.runtime.getURL("meeting/index.html"));
+  if (sessionId) {
+    pageUrl.searchParams.set("sessionId", sessionId);
+  }
+  if (title) {
+    pageUrl.searchParams.set("title", title);
+  }
+  if (tabId > 0) {
+    pageUrl.searchParams.set("tabId", String(tabId));
+  }
+  const jobId = namespace.session.normalizeText(input?.jobId);
+  const artifactId = namespace.session.normalizeText(input?.artifactId);
+  if (jobId) {
+    pageUrl.searchParams.set("jobId", jobId);
+  }
+  if (artifactId) {
+    pageUrl.searchParams.set("artifactId", artifactId);
+  }
+  return pageUrl.toString();
+}
+
 async function ensureOffscreenRecorderDocument() {
   const contexts = await listRuntimeContexts();
   const hasRecorder = contexts.some((entry) =>
@@ -508,11 +561,8 @@ function isInternalMeetingRecorderMessage(message, sender) {
 }
 
 function isExtensionMeetingControlMessage(message, sender) {
-  const type = String(message?.type || "");
-  if (!["inova-meeting:create-job", "inova-meeting:start-capture", "inova-meeting:stop-capture"].includes(type)) {
-    return false;
-  }
-  return String(sender?.url || "").startsWith("chrome-extension://");
+  return String(message?.type || "").startsWith("inova-meeting:")
+    && String(sender?.url || "").startsWith("chrome-extension://");
 }
 
 function isAllowedSender(message, sender) {

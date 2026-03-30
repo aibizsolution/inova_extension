@@ -133,6 +133,12 @@
     chromeObject.runtime = chromeObject.runtime || {
       async sendMessage(message) {
         state.runtimeMessages.push(cloneValue(message));
+        if (message?.type === "inova-meeting:open-workspace") {
+          return { ok: true, data: { opened: true, url: `chrome-extension://fixture/meeting/index.html?sessionId=${encodeURIComponent(message?.input?.sessionId || "")}` } };
+        }
+        if (message?.type === "inova-meeting:open-result") {
+          return { ok: true, data: { opened: true, url: `chrome-extension://fixture/meeting/index.html?jobId=${encodeURIComponent(message?.input?.jobId || "")}` } };
+        }
         if (message?.type === "inova-meeting:start-capture") {
           return buildMeetingCaptureStartResponse(message?.input);
         }

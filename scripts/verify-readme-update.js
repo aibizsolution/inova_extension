@@ -11,6 +11,7 @@ const FEATURE_PATH_PATTERNS = [
   /^background\//,
   /^content\//,
   /^functions\//,
+  /^meeting\//,
   /^popup\//,
   /^shared\//,
   /^contracts\//,

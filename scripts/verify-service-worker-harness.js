@@ -21,10 +21,25 @@ async function main() {
     assert.equal(typeof runtime.listener, "function", "Service worker should register a runtime message listener");
 
     const validSender = {
+      tab: {
+        id: 91,
+        title: "신규 프로모션 회의",
+      },
       url: "https://inova.incross.com/chat?sid=fixture-session",
     };
     const popupSender = {
+      tab: {
+        id: 81,
+        title: "주간 스탠드업",
+      },
       url: "chrome-extension://fixture/popup/index.html",
+    };
+    const meetingPageSender = {
+      tab: {
+        id: 81,
+        title: "주간 스탠드업",
+      },
+      url: "chrome-extension://fixture/meeting/index.html?sessionId=fixture-session",
     };
 
     const storeResponse = await sendMessage(
@@ -126,6 +141,21 @@ async function main() {
     );
     assert.equal(meetingArtifact.ok, true);
     assert.equal(meetingArtifact.data.artifact.segments.length > 0, true);
+
+    const meetingPageJob = await sendMessage(
+      runtime.listener,
+      {
+        type: "inova-meeting:get-job",
+        input: {
+          jobId: meetingCreate.data.job.jobId,
+          sessionId: meetingCreate.data.job.sessionId,
+        },
+        providerIdentity: cloneValue(PROVIDER_IDENTITY),
+      },
+      meetingPageSender
+    );
+    assert.equal(meetingPageJob.ok, true);
+    assert.equal(meetingPageJob.data.job.jobId, meetingCreate.data.job.jobId);
 
     const captureStart = await sendMessage(
       runtime.listener,
@@ -252,6 +282,40 @@ async function main() {
     assert.equal(runtime.tabsOpened.length, 1);
     assert.equal(runtime.tabsOpened[0].url, "https://example.com/inova-extension-0.3.8.zip");
 
+    const openMeetingWorkspace = await sendMessage(
+      runtime.listener,
+      {
+        type: "inova-meeting:open-workspace",
+        input: {
+          sessionId: "fixture-session",
+          title: "신규 프로모션 회의",
+        },
+      },
+      validSender
+    );
+    assert.equal(openMeetingWorkspace.ok, true);
+    assert.equal(runtime.tabsOpened.length, 2);
+    assert(runtime.tabsOpened[1].url.includes("meeting/index.html"));
+    assert(runtime.tabsOpened[1].url.includes("sessionId=fixture-session"));
+    assert(runtime.tabsOpened[1].url.includes("tabId=91"));
+
+    const openMeetingResult = await sendMessage(
+      runtime.listener,
+      {
+        type: "inova-meeting:open-result",
+        input: {
+          artifactId: meetingSucceeded.data.job.transcript.artifactId,
+          jobId: meetingCreate.data.job.jobId,
+          sessionId: "fixture-session",
+        },
+      },
+      validSender
+    );
+    assert.equal(openMeetingResult.ok, true);
+    assert.equal(runtime.tabsOpened.length, 3);
+    assert(runtime.tabsOpened[2].url.includes(`jobId=${meetingCreate.data.job.jobId}`));
+    assert(runtime.tabsOpened[2].url.includes(`artifactId=${meetingSucceeded.data.job.transcript.artifactId}`));
+
     const invalidSender = await sendMessage(
       runtime.listener,
       {
@@ -278,7 +342,7 @@ async function main() {
     assert.equal(storeRequests.length, 1);
     assert.equal(peekRequests.length, 1, "Peek should be served from service worker cache on the second request");
     assert.equal(meetingCreateRequests.length, 2);
-    assert.equal(meetingJobRequests.length, 3);
+    assert.equal(meetingJobRequests.length, 4);
     assert.equal(meetingArtifactRequests.length, 1);
     assert.equal(latestRequests.length, 1, "Latest release should be served from service worker cache on the second request");
     assert.equal(storeRequests[0].authorization, `Bearer ${accessToken}`);
@@ -331,6 +395,9 @@ function createServiceWorkerRuntime(baseUrl, hostingBaseUrl) {
         },
       },
       runtime: {
+        getURL(relativePath) {
+          return `chrome-extension://fixture/${String(relativePath || "").replace(/^\/+/, "")}`;
+        },
         onMessage: {
           addListener(listener) {
             messageListener = listener;

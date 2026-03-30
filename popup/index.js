@@ -42,8 +42,7 @@ function cachePopupRefs() {
     "meetingBadge",
     "meetingSummary",
     "meetingHint",
-    "meetingStartButton",
-    "meetingStopButton",
+    "meetingOpenButton",
   ]) {
     popupRefs[id] = document.getElementById(id);
   }
@@ -53,8 +52,7 @@ function bindPopupEvents() {
   popupRefs.enabledToggle.addEventListener("click", () => toggleSetting("enabled"));
   popupRefs.pauseToggle.addEventListener("click", togglePause);
   popupRefs.refreshButton.addEventListener("click", refreshPopup);
-  popupRefs.meetingStartButton.addEventListener("click", handlePrimaryMeetingAction);
-  popupRefs.meetingStopButton.addEventListener("click", stopMeetingCapture);
+  popupRefs.meetingOpenButton.addEventListener("click", openMeetingWorkspace);
 }
 
 function listenPopupStorage() {
@@ -176,11 +174,8 @@ function renderMeetingCard() {
   popupRefs.meetingBadge.dataset.status = view.badgeStatus;
   popupRefs.meetingSummary.textContent = view.summary;
   popupRefs.meetingHint.textContent = view.hint;
-  popupRefs.meetingStartButton.textContent = view.startLabel;
-  popupRefs.meetingStartButton.hidden = !view.showStartAction;
-  popupRefs.meetingStopButton.hidden = !view.showStopAction;
-  popupRefs.meetingStartButton.disabled = Boolean(view.startDisabled);
-  popupRefs.meetingStopButton.disabled = Boolean(view.stopDisabled);
+  popupRefs.meetingOpenButton.textContent = view.openLabel;
+  popupRefs.meetingOpenButton.disabled = Boolean(view.openDisabled);
 }
 
 function buildMeetingViewModel() {
@@ -196,14 +191,11 @@ function buildMeetingViewModel() {
     return {
       badgeLabel: "대기",
       badgeStatus: "idle",
-      showStartAction: false,
-      showStopAction: false,
-      startLabel: "탭 녹음 시작",
-      startDisabled: true,
-      stopDisabled: true,
+      openDisabled: true,
+      openLabel: "회의 페이지 열기",
       title: "현재 대화 회의 상태",
       summary: "i-Nova 대화를 열면 현재 회의 상태를 여기서 확인할 수 있어요.",
-      hint: "브라우저 meetingState를 기준으로 현재 대화 준비 상태를 먼저 보여줍니다.",
+      hint: "녹음과 전사 관리는 전용 회의 페이지에서만 처리합니다.",
     };
   }
 
@@ -211,11 +203,8 @@ function buildMeetingViewModel() {
     return {
       badgeLabel: "대기",
       badgeStatus: "idle",
-      showStartAction: false,
-      showStopAction: false,
-      startLabel: "탭 녹음 시작",
-      startDisabled: true,
-      stopDisabled: true,
+      openDisabled: true,
+      openLabel: "회의 페이지 열기",
       title: "현재 대화 회의 상태",
       summary: "대화 화면을 열면 현재 회의 작업 상태를 바로 확인할 수 있어요.",
       hint: "지금은 현재 탭에서 session id를 읽지 못했어요.",
@@ -226,14 +215,11 @@ function buildMeetingViewModel() {
     return {
       badgeLabel: "녹음 중",
       badgeStatus: "recording",
-      showStartAction: false,
-      showStopAction: true,
-      startLabel: "탭 녹음 시작",
-      startDisabled: true,
-      stopDisabled: false,
+      openDisabled: false,
+      openLabel: "회의 페이지 열기",
       title: meetingLabel,
-      summary: "현재 탭 오디오를 회의 녹음으로 수집하고 있어요.",
-      hint: "팝업을 닫아도 오프스크린 녹음은 계속 유지됩니다.",
+      summary: "현재 탭 오디오를 녹음 중입니다.",
+      hint: "녹음 종료와 전사 접수는 회의 페이지에서 이어서 진행합니다.",
     };
   }
 
@@ -241,14 +227,11 @@ function buildMeetingViewModel() {
     return {
       badgeLabel: "녹음 완료",
       badgeStatus: "captured",
-      showStartAction: true,
-      showStopAction: false,
-      startLabel: "전사 시작",
-      startDisabled: false,
-      stopDisabled: true,
+      openDisabled: false,
+      openLabel: "회의 페이지 열기",
       title: meetingLabel,
-      summary: "탭 오디오 녹음을 저장했습니다.",
-      hint: `${buildCapturedHint(meetingState.capture)} · 전사 시작 버튼으로 다음 단계로 넘길 수 있어요.`,
+      summary: "녹음이 저장되었습니다.",
+      hint: `${buildCapturedHint(meetingState.capture)} · 회의 페이지에서 전사를 시작할 수 있어요.`,
     };
   }
 
@@ -256,11 +239,8 @@ function buildMeetingViewModel() {
     return {
       badgeLabel: "오류",
       badgeStatus: "failed",
-      showStartAction: true,
-      showStopAction: false,
-      startLabel: "탭 녹음 시작",
-      startDisabled: false,
-      stopDisabled: true,
+      openDisabled: false,
+      openLabel: "회의 페이지 열기",
       title: meetingLabel,
       summary: "회의 녹음을 시작하거나 마무리하는 중 문제가 생겼어요.",
       hint: popupRoot.session.normalizeText(meetingState.capture.error) || "다시 시도해 주세요.",
@@ -271,14 +251,11 @@ function buildMeetingViewModel() {
     return {
       badgeLabel: "대기",
       badgeStatus: "queued",
-      showStartAction: false,
-      showStopAction: false,
-      startLabel: "탭 녹음 시작",
-      startDisabled: true,
-      stopDisabled: true,
+      openDisabled: false,
+      openLabel: "결과 확인하기",
       title: meetingLabel,
       summary: "회의 전사 작업이 접수되어 순서를 기다리고 있어요.",
-      hint: "업로드 이후 job 상태가 바뀌면 여기서 바로 반영됩니다.",
+      hint: "상세 상태와 결과 리스트는 회의 페이지에서 확인합니다.",
     };
   }
 
@@ -288,11 +265,8 @@ function buildMeetingViewModel() {
     return {
       badgeLabel: "진행 중",
       badgeStatus: "processing",
-      showStartAction: false,
-      showStopAction: false,
-      startLabel: "탭 녹음 시작",
-      startDisabled: true,
-      stopDisabled: true,
+      openDisabled: false,
+      openLabel: "결과 확인하기",
       title: meetingLabel,
       summary: "회의 전사를 처리하고 있어요.",
       hint: phase ? `${phase}${percent > 0 ? ` · ${percent}%` : ""}` : percent > 0 ? `${percent}%` : "상태를 확인하는 중입니다.",
@@ -304,16 +278,13 @@ function buildMeetingViewModel() {
     return {
       badgeLabel: "완료",
       badgeStatus: "succeeded",
-      showStartAction: true,
-      showStopAction: false,
-      startLabel: "새 녹음 시작",
-      startDisabled: false,
-      stopDisabled: true,
+      openDisabled: false,
+      openLabel: "결과 확인하기",
       title: meetingLabel,
       summary: speakerCount > 0
         ? `${speakerCount}명 화자 기준으로 전사 결과가 준비됐어요.`
         : "전사 결과가 준비됐어요.",
-      hint: formatMeetingLoadedAt(meetingState.transcript.loadedAt) || "artifact를 읽을 준비가 됐어요.",
+      hint: `${formatMeetingLoadedAt(meetingState.transcript.loadedAt) || "artifact를 읽을 준비가 됐어요."} 회의 페이지에서 다시 열 수 있어요.`,
     };
   }
 
@@ -321,11 +292,8 @@ function buildMeetingViewModel() {
     return {
       badgeLabel: "오류",
       badgeStatus: "failed",
-      showStartAction: true,
-      showStopAction: false,
-      startLabel: "탭 녹음 시작",
-      startDisabled: false,
-      stopDisabled: true,
+      openDisabled: false,
+      openLabel: "회의 페이지 열기",
       title: meetingLabel,
       summary: "회의 처리 중 문제가 생겨 다시 확인이 필요해요.",
       hint: popupRoot.session.normalizeText(meetingState.job.error) || "job 상태와 업로드 경로를 다시 확인해 주세요.",
@@ -336,37 +304,23 @@ function buildMeetingViewModel() {
     return {
       badgeLabel: formatMeetingBadgeLabel(jobStatus),
       badgeStatus: normalizeMeetingBadgeStatus(jobStatus),
-      showStartAction: true,
-      showStopAction: false,
-      startLabel: "탭 녹음 시작",
-      startDisabled: false,
-      stopDisabled: true,
+      openDisabled: false,
+      openLabel: "회의 페이지 열기",
       title: "다른 대화 회의 상태",
       summary: `${meetingLabel} 기준 회의 작업 상태가 남아 있어요.`,
-      hint: "지금은 마지막으로 반영된 meetingState를 먼저 보여주고 있습니다.",
+      hint: "회의 페이지를 열면 현재 대화 기준 결과와 이전 결과 리스트를 함께 볼 수 있습니다.",
     };
   }
 
   return {
     badgeLabel: "대기",
     badgeStatus: "idle",
-    showStartAction: true,
-    showStopAction: false,
-    startLabel: "탭 녹음 시작",
-    startDisabled: false,
-    stopDisabled: true,
+    openDisabled: false,
+    openLabel: "회의 페이지 열기",
     title: "현재 대화 회의 상태",
     summary: "현재 대화에 연결된 회의 작업이 아직 없어요.",
-    hint: "녹음과 전사 흐름이 붙으면 여기에 진행 상태가 보입니다.",
+    hint: "새 회의는 전용 페이지에서 시작하고, 결과도 거기서 다시 확인합니다.",
   };
-}
-
-async function handlePrimaryMeetingAction() {
-  const meetingState = popupRoot.meetingState.mergeMeetingState(await syncMeetingStateForCurrentSession());
-  if (isCapturedMeetingReadyForJob(meetingState)) {
-    return queueMeetingJob(meetingState);
-  }
-  return startMeetingCapture();
 }
 
 function formatMeetingPhase(phase) {
@@ -442,76 +396,27 @@ function formatSize(sizeBytes) {
   return `${Math.max(1, Math.round(sizeBytes / 1024))}KB`;
 }
 
-async function startMeetingCapture() {
-  if (!popupState.currentSessionId || !popupState.activeTab.id) {
-    setPopupStatus("대화 없음");
+async function openMeetingWorkspace() {
+  if (!isInovaTab() || !popupState.currentSessionId || !popupState.activeTab.id) {
+    setPopupStatus("대화 화면을 열어 주세요");
     return;
   }
   try {
-    setPopupStatus("녹음 시작 중");
-    await popupRoot.meetingBridge.startMeetingCapture({
-      captureMode: "tab-audio",
+    setPopupStatus("회의 페이지 여는 중");
+    const meetingState = popupRoot.meetingState.mergeMeetingState(await syncMeetingStateForCurrentSession());
+    const input = {
+      artifactId: popupRoot.session.normalizeText(meetingState.transcript.artifactId || meetingState.job.artifactId),
+      jobId: popupRoot.session.normalizeText(meetingState.job.jobId),
       sessionId: popupState.currentSessionId,
       tabId: popupState.activeTab.id,
-      title: popupState.activeTab.title || popupRoot.session.formatSessionLabel(popupState.currentSessionId),
-    });
-    await syncMeetingStateForCurrentSession();
-    renderPopup();
-    setPopupStatus("녹음 중");
+      title: meetingState.session.title || popupState.activeTab.title || popupRoot.session.formatSessionLabel(popupState.currentSessionId),
+    };
+    await popupRoot.meetingBridge.openMeetingWorkspace(input);
+    setPopupStatus("회의 페이지 열림");
   } catch (error) {
-    setPopupStatus(error instanceof Error ? error.message : "녹음을 시작하지 못했어요.");
+    setPopupStatus(error instanceof Error ? error.message : "회의 페이지를 열지 못했어요.");
   }
 }
-
-async function stopMeetingCapture() {
-  try {
-    setPopupStatus("녹음 저장 중");
-    await popupRoot.meetingBridge.stopMeetingCapture({
-      sessionId: popupState.currentSessionId,
-    });
-    await syncMeetingStateForCurrentSession();
-    renderPopup();
-    setPopupStatus("녹음 저장됨");
-  } catch (error) {
-    setPopupStatus(error instanceof Error ? error.message : "녹음을 마무리하지 못했어요.");
-  }
-}
-
-async function queueMeetingJob(currentMeetingState) {
-  if (!popupState.currentSessionId) {
-    setPopupStatus("대화 없음");
-    return;
-  }
-  if (!popupState.providerIdentity.available) {
-    setPopupStatus("로그인 확인 필요");
-    return;
-  }
-
-  const input = buildMeetingCreateInput(currentMeetingState);
-  if (!(Number(input.source.durationMs) > 0) || !(Number(input.source.sizeBytes) > 0)) {
-    setPopupStatus("녹음 없음");
-    return;
-  }
-
-    try {
-      setPopupStatus("전사 접수 중");
-      const payload = await popupRoot.meetingBridge.createMeetingJob(input, popupState.providerIdentity);
-      const nextMeetingState = popupRoot.meetingState.applyMeetingJobCreated(currentMeetingState, payload);
-      popupState.meetingState = await popupRoot.storage.setMeetingState(popupState.currentSessionId, nextMeetingState);
-      renderPopup();
-      if (nextMeetingState.job.status === "succeeded") {
-        setPopupStatus("전사 완료");
-      } else if (nextMeetingState.job.status === "processing") {
-        setPopupStatus("전사 처리 중");
-      } else if (nextMeetingState.job.status === "failed") {
-        setPopupStatus(nextMeetingState.job.error || "전사 실패");
-      } else {
-        setPopupStatus("전사 대기");
-      }
-    } catch (error) {
-      setPopupStatus(error instanceof Error ? error.message : "전사 작업을 접수하지 못했어요.");
-    }
-  }
 
 async function toggleSetting(key) {
   const next = await popupRoot.storage.updateSettings({
@@ -540,34 +445,6 @@ async function togglePause() {
 
 function setPopupStatus(text) {
   popupRefs.syncStatus.textContent = text;
-}
-
-function isCapturedMeetingReadyForJob(meetingState) {
-  const normalized = popupRoot.meetingState.mergeMeetingState(meetingState);
-  return normalized.capture.status === "captured" && normalized.job.status === "idle";
-}
-
-function buildMeetingCreateInput(meetingState) {
-  const normalized = popupRoot.meetingState.mergeMeetingState(meetingState, {
-    session: {
-      language: popupRoot.session.normalizeText(meetingState?.session?.language) || "ko",
-      sessionId: popupState.currentSessionId,
-      title: popupRoot.session.normalizeText(meetingState?.session?.title)
-        || popupState.activeTab.title
-        || popupRoot.session.formatSessionLabel(popupState.currentSessionId),
-    },
-  });
-  return popupRoot.meetingState.buildMeetingJobCreateInput(normalized, {
-    meeting: {
-      endedAt: normalized.session.endedAt || new Date().toISOString(),
-      startedAt: normalized.session.startedAt || "",
-    },
-    options: {
-      redaction: "none",
-      speakerLabels: true,
-      summary: false,
-    },
-  });
 }
 
 function normalizeProviderIdentity(identity) {

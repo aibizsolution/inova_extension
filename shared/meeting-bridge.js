@@ -34,6 +34,25 @@
     });
   }
 
+  async function listMeetingResults(input, providerIdentity) {
+    return sendRuntimeMessage("inova-meeting:list-results", {
+      input,
+      providerIdentity,
+    });
+  }
+
+  async function openMeetingWorkspace(input) {
+    return sendRuntimeMessage("inova-meeting:open-workspace", {
+      input,
+    });
+  }
+
+  async function openMeetingResult(input) {
+    return sendRuntimeMessage("inova-meeting:open-result", {
+      input,
+    });
+  }
+
   async function sendRuntimeMessage(type, payload) {
     const response = await global.chrome.runtime.sendMessage({
       type,
@@ -49,6 +68,9 @@
     createMeetingJob,
     getMeetingArtifact,
     getMeetingJob,
+    listMeetingResults,
+    openMeetingResult,
+    openMeetingWorkspace,
     startMeetingCapture,
     stopMeetingCapture,
   };

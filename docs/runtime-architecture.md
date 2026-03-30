@@ -28,14 +28,20 @@
 ### Popup
 
 - 위치: `popup/index.html`, `popup/index.js`
-- 역할: 확장 On/Off, 현재 탭 상태 표시, 세션 단위 일시 중지, `meetingState` 상태 카드 표시, 녹음 완료 후 전사 접수
-- 특징: 짧은 상태 확인과 토글만 맡고, 실제 UI 본체는 맡지 않는다. 회의 기능에서는 `captured -> create-job` 경계까지 팝업 카드에서 이어 붙인다.
+- 역할: 확장 On/Off, 현재 탭 상태 표시, 세션 단위 일시 중지, `meetingState` 상태 카드 표시, 전용 회의 페이지 진입
+- 특징: 짧은 상태 확인과 토글만 맡고, 실제 회의 제어는 맡지 않는다. 회의 기능에서는 현재 상태를 요약해 보여주고 `meeting/index.html`로 보내는 게이트웨이만 담당한다.
+
+### Meeting Extension Page
+
+- 위치: `meeting/index.html`, `meeting/index.js`
+- 역할: 현재 대화 기준 탭 오디오 녹음 시작/종료, 전사 접수, 결과 리스트, 선택한 결과의 transcript/segment 상세 렌더링
+- 특징: 회의 제어와 상세 보기를 팝업/패널에서 분리해 새 탭 페이지에 모아 둔다. `meetingStateBySession`을 정본으로 읽고, 필요한 원격 조회는 background에 다시 위임한다.
 
 ### Content Script
 
 - 위치: `content/`, `shared/`, `manifest.json`
 - 역할: `inova.incross.com` 안에 실험실 패널을 삽입하고, 질문 탐색/회의록/프롬프트/스토어/릴리스 UI와 회의 job polling 흐름을 조립한다.
-- 특징: 현재 대화 DOM을 읽고, 로컬 상태를 붙이고, 필요한 클라우드 호출은 background에 메시지로 위임한다. 회의 기능은 브라우저 쪽에서 `meetingStateBySession` 저장, `meetingBridge` 호출, `content/meeting-manager.js` polling 루프, `content/meeting-view.js` 결과 렌더링까지 분리해 둔다.
+- 특징: 현재 대화 DOM을 읽고, 로컬 상태를 붙이고, 필요한 클라우드 호출은 background에 메시지로 위임한다. 회의 기능은 브라우저 쪽에서 `meetingStateBySession` 저장, `meetingBridge` 호출, `content/meeting-manager.js` polling 루프, `content/meeting-view.js` 게이트웨이/결과 리스트 렌더링까지 분리해 둔다.
 
 ### Background Service Worker
 
@@ -88,22 +94,28 @@
 2. background가 Functions 또는 Hosting으로 요청을 보낸다.
 3. 응답은 다시 content script 상태에 머지된다.
 
-### E. 회의 캡처 시작/종료
+### E. 회의 페이지 진입
 
-1. popup이 현재 탭과 세션 정보를 기준으로 `inova-meeting:start-capture`, `inova-meeting:stop-capture`를 보낸다.
+1. popup은 현재 탭과 세션 정보를 기준으로 `inova-meeting:open-workspace`만 background로 보내고, content 패널은 같은 세션의 결과 리스트 항목에서 `inova-meeting:open-result`까지 함께 보낸다.
+2. background가 `chrome.tabs.create()`로 `meeting/index.html` 새 탭 URL을 만든다.
+3. 회의 페이지는 query로 받은 `sessionId`, `tabId`, `jobId`, `artifactId`를 기준으로 상태를 부팅한다.
+
+### F. 회의 캡처 시작/종료
+
+1. meeting page가 현재 탭과 세션 정보를 기준으로 `inova-meeting:start-capture`, `inova-meeting:stop-capture`를 보낸다.
 2. background가 `chrome.tabCapture.getMediaStreamId()`와 offscreen document 생명주기를 관리한다.
 3. offscreen document가 `getUserMedia`와 `MediaRecorder`로 탭 오디오를 캡처한다.
 4. 결과 메타는 `meetingStateBySession`에 저장되고, 임시 source audio는 offscreen 문서에 유지된다.
 5. 전사 접수에 성공하면 offscreen 문서는 inline payload를 service worker 경계로 보내고 닫힌다.
 
-### F. 팝업 전사 접수
+### G. 회의 페이지 전사 접수
 
-1. popup이 `meetingStateBySession`의 captured source 메타와 `cloudSync.providerIdentity`를 읽는다.
-2. popup이 `inova-meeting:create-job`을 background로 보낸다.
+1. meeting page가 `meetingStateBySession`의 captured source 메타와 `cloudSync.providerIdentity`를 읽는다.
+2. meeting page가 `inova-meeting:create-job`을 background로 보낸다.
 3. background는 offscreen 문서가 살아 있으면 inline source payload를 합쳐 Functions gateway로 전달하고, 없으면 일반 gateway 요청으로 폴백한다.
 4. Functions는 임시 source object 업로드, OpenAI diarization, transcript artifact 저장, source cleanup을 수행한다.
-5. 응답 job snapshot은 다시 `meetingStateBySession`에 저장되고, 이후 polling은 content의 `meeting-manager`가 이어받는다.
-6. content 패널의 `회의` 도구는 같은 세션의 capture/job/transcript 상태를 읽어 diarized transcript를 바로 보여 준다.
+5. 응답 job snapshot은 다시 `meetingStateBySession`에 저장되고, 이후 polling은 content의 `meeting-manager`와 meeting page가 함께 이어받는다.
+6. content 패널의 `회의` 도구는 같은 세션의 게이트웨이와 결과 리스트만 보여 주고, 상세 transcript는 meeting page가 렌더링한다.
 
 ## 4. 책임 경계 요약
 
@@ -144,6 +156,7 @@
 - `npm run verify:popup`
 - `npm run verify:meeting-contract`
 - `npm run verify:meeting-manager`
+- `npm run verify:meeting-page`
 - `npm run verify:meeting-service`
 - `npm run verify:meeting-state`
 - `npm run verify:cloud`
@@ -167,7 +180,7 @@
 ## 6. 하네스 관점의 현재 한계
 
 - 핵심 UI 흐름은 여전히 실사이트 의존성이 남아 있지만, 로컬 팝업 하네스와 로컬 브라우저 하네스로 popup/content-script 부팅과 주요 토글 상태 전이까지는 먼저 확인할 수 있다.
-- 현재 smoke path는 DOM 수집 계층, popup 상태 전이, 회의 기능용 session/job/artifact 계약, 브라우저 meetingState 상태 전이, Functions diarization/snapshot 정규화, content 패널 회의 transcript 렌더링, 로컬 클라우드 계약 검증, background service worker 라우팅 검증, 오프스크린 레코더 하네스, 로컬 브라우저 하네스까지 포함한다.
+- 현재 smoke path는 DOM 수집 계층, popup 상태 전이, 회의 기능용 session/job/artifact 계약, 브라우저 meetingState 상태 전이, 전용 meeting page 상태 전이, Functions diarization/snapshot 정규화, content 패널 회의 리스트 렌더링, 로컬 클라우드 계약 검증, background service worker 라우팅 검증, 오프스크린 레코더 하네스, 로컬 브라우저 하네스까지 포함한다.
 - Firebase emulator는 아직 없지만, fake backend 서버로 Cloud Functions payload 계약과 Hosting release JSON을 로컬에서 재현할 수 있다.
 - 장기적으로는 content/background/functions 경계를 각각 재현할 수 있는 fixture와 smoke path를 늘려야 한다.
 

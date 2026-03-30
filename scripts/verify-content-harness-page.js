@@ -70,12 +70,17 @@ async function main() {
 
   click(window, getToolButton(window, "meeting"));
   await waitFor(
-    () => (window.document.getElementById("inova-tool-content")?.textContent || "").includes("회의록이 준비되었습니다."),
-    "Meeting view should render fixture meeting transcript metadata"
+    () => (window.document.getElementById("inova-tool-content")?.textContent || "").includes("결과 리스트"),
+    "Meeting view should render the meeting gateway and result list"
   );
   const meetingText = window.document.getElementById("inova-tool-content")?.textContent || "";
-  assert(meetingText.includes("화자 1"), "Meeting view should render diarized transcript text");
-  assert(meetingText.includes("원본 오디오 정리 완료"), "Meeting view should render source audio cleanup state");
+  assert(meetingText.includes("새 탭에서 보기"), "Meeting view should render result list actions");
+  assert(meetingText.includes("회의 페이지"), "Meeting view should route users to the dedicated meeting page");
+  click(window, window.document.querySelector('[data-meeting-action="open-record"]'));
+  await waitFor(
+    () => window.__INOVA_HARNESS__.openedUrls.some((url) => url.includes("meeting/index.html")),
+    "Meeting result action should open the dedicated meeting page"
+  );
 
   click(window, getToolButton(window, "release"));
   await waitFor(
