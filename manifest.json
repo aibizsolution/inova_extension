@@ -1,12 +1,14 @@
 {
   "manifest_version": 3,
   "name": "아이노바 실험실",
-  "version": "0.3.13",
+  "version": "0.3.14",
   "description": "i-Nova 대화 화면에 패널과 프롬프트 도구를 더하는 크롬 확장입니다.",
   "permissions": [
     "storage",
     "tabs",
-    "cookies"
+    "cookies",
+    "offscreen",
+    "tabCapture"
   ],
   "host_permissions": [
     "https://inova.incross.com/*",

@@ -2,9 +2,11 @@
   const changeListeners = [];
   const state = {
     activeTab: {
+      id: 91,
       title: "i-Nova Fixture Session",
       url: "https://inova.incross.com/chat?sid=fixture-session",
     },
+    runtimeMessages: [],
     storage: {
       meetingStateBySession: {
         "fixture-session": {
@@ -50,36 +52,23 @@
     state,
     setActiveTab(nextTab) {
       state.activeTab = {
+        id: Number(nextTab?.id) || 0,
         title: String(nextTab?.title || ""),
         url: String(nextTab?.url || ""),
       };
     },
     setMeetingState(nextMeetingState) {
-      const previousValue = cloneValue(state.storage.meetingState);
-      const previousMap = cloneValue(state.storage.meetingStateBySession);
-      state.storage.meetingState = cloneValue(nextMeetingState || {});
       const nextSessionId = String(nextMeetingState?.session?.sessionId || "").trim();
-      state.storage.meetingStateBySession = nextSessionId
+      const nextMeetingStateBySession = nextSessionId
         ? {
             ...(state.storage.meetingStateBySession || {}),
             [nextSessionId]: cloneValue(nextMeetingState || {}),
           }
         : { ...(state.storage.meetingStateBySession || {}) };
-      changeListeners.forEach((listener) =>
-        listener(
-          {
-            meetingState: {
-              oldValue: previousValue,
-              newValue: cloneValue(state.storage.meetingState),
-            },
-            meetingStateBySession: {
-              oldValue: previousMap,
-              newValue: cloneValue(state.storage.meetingStateBySession),
-            },
-          },
-          "local"
-        )
-      );
+      commitStorageState({
+        meetingState: cloneValue(nextMeetingState || {}),
+        meetingStateBySession: nextMeetingStateBySession,
+      });
     },
   };
 
@@ -131,6 +120,132 @@
         return [cloneValue(state.activeTab)];
       },
     };
+    chromeObject.runtime = chromeObject.runtime || {
+      async sendMessage(message) {
+        state.runtimeMessages.push(cloneValue(message));
+        if (message?.type === "inova-meeting:start-capture") {
+          return buildMeetingCaptureStartResponse(message?.input);
+        }
+        if (message?.type === "inova-meeting:stop-capture") {
+          return buildMeetingCaptureStopResponse(message?.input);
+        }
+        return { ok: false, error: "Unexpected popup harness message" };
+      },
+    };
+  }
+
+  function buildMeetingCaptureStartResponse(input) {
+    const sessionId = normalizeText(input?.sessionId);
+    const response = {
+      capture: {
+        captureMode: normalizeText(input?.captureMode) || "tab-audio",
+        mimeType: "audio/webm;codecs=opus",
+        status: "recording",
+      },
+      meeting: {
+        sessionId: sessionId,
+        title: normalizeText(input?.title) || state.activeTab.title,
+      },
+    };
+    const nextMeetingState = applyMeetingStateTransform(
+      sessionId,
+      response,
+      "applyMeetingCaptureStarted",
+      {
+        capture: response.capture,
+        session: response.meeting,
+      }
+    );
+    setMeetingStateForSession(sessionId, nextMeetingState);
+    return {
+      data: response,
+      ok: true,
+    };
+  }
+
+  function buildMeetingCaptureStopResponse(input) {
+    const sessionId = normalizeText(input?.sessionId);
+    const currentMeetingState = getMeetingStateForSession(sessionId);
+    const response = {
+      capture: {
+        captureMode: normalizeText(currentMeetingState?.capture?.captureMode) || "tab-audio",
+        durationMs: 65000,
+        mimeType: normalizeText(currentMeetingState?.capture?.mimeType) || "audio/webm;codecs=opus",
+        sizeBytes: 1048576,
+        status: "captured",
+      },
+      meeting: {
+        sessionId: sessionId,
+        title: normalizeText(currentMeetingState?.session?.title) || state.activeTab.title,
+      },
+    };
+    const nextMeetingState = applyMeetingStateTransform(
+      sessionId,
+      response,
+      "applyMeetingCaptureFinished",
+      {
+        capture: response.capture,
+        session: response.meeting,
+      }
+    );
+    setMeetingStateForSession(sessionId, nextMeetingState);
+    return {
+      data: response,
+      ok: true,
+    };
+  }
+
+  function applyMeetingStateTransform(sessionId, payload, methodName, fallbackState) {
+    const namespace = global.InovaBookmarks || {};
+    const currentMeetingState = getMeetingStateForSession(sessionId);
+    const transform = namespace.meetingState && namespace.meetingState[methodName];
+    if (typeof transform === "function") {
+      return transform(currentMeetingState, payload);
+    }
+    const mergeMeetingState = namespace.meetingState?.mergeMeetingState;
+    if (typeof mergeMeetingState === "function") {
+      return mergeMeetingState(currentMeetingState, fallbackState);
+    }
+    return cloneValue(fallbackState);
+  }
+
+  function getMeetingStateForSession(sessionId) {
+    const normalizedSessionId = normalizeText(sessionId);
+    if (!normalizedSessionId) {
+      return cloneValue(state.storage.meetingState);
+    }
+    return cloneValue(state.storage.meetingStateBySession?.[normalizedSessionId] || {});
+  }
+
+  function setMeetingStateForSession(sessionId, nextMeetingState) {
+    const normalizedSessionId = normalizeText(sessionId);
+    const nextMeetingStateBySession = {
+      ...(state.storage.meetingStateBySession || {}),
+    };
+    if (normalizedSessionId) {
+      nextMeetingStateBySession[normalizedSessionId] = cloneValue(nextMeetingState || {});
+    }
+    commitStorageState({
+      meetingState: cloneValue(nextMeetingState || {}),
+      meetingStateBySession: nextMeetingStateBySession,
+    });
+  }
+
+  function commitStorageState(partial) {
+    const changes = {};
+    for (const [key, value] of Object.entries(partial || {})) {
+      const previousValue = cloneValue(state.storage[key]);
+      state.storage[key] = cloneValue(value);
+      changes[key] = {
+        oldValue: previousValue,
+        newValue: cloneValue(state.storage[key]),
+      };
+    }
+    emitStorageChanges(changes);
+  }
+
+  function emitStorageChanges(changes) {
+    changeListeners.forEach((listener) => listener(changes, "local"));
   }
 
   function mergeObjects(defaults, values) {
@@ -156,5 +271,9 @@
 
   function cloneValue(value) {
     return value == null ? value : JSON.parse(JSON.stringify(value));
+  }
+
+  function normalizeText(value) {
+    return String(value || "").trim();
   }
 })(globalThis);

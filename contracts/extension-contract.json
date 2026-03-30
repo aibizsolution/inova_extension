@@ -6,6 +6,8 @@
     "popup/index.html",
     "popup/index.css",
     "popup/index.js",
+    "offscreen/meeting-recorder.html",
+    "offscreen/meeting-recorder.js",
     "background/service-worker.js",
     "shared/cloud-api.js",
     "shared/constants.js",
@@ -36,7 +38,8 @@
     "scripts/verify-docs.js",
     "scripts/verify-contracts.js",
     "scripts/verify-meeting-manager.js",
-    "scripts/verify-meeting-state.js"
+    "scripts/verify-meeting-state.js",
+    "scripts/verify-offscreen-recorder.js"
   ],
   "manifestPopup": "popup/index.html",
   "manifestContentScripts": [
@@ -80,6 +83,13 @@
     "cloudSync",
     "meetingState",
     "meetingStateBySession"
+  ],
+  "requiredPermissions": [
+    "storage",
+    "tabs",
+    "cookies",
+    "offscreen",
+    "tabCapture"
   ],
   "requiredDocKeywords": [
     "팝업 On/Off",

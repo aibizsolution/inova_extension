@@ -42,6 +42,8 @@ async function main() {
   assert.equal(window.document.getElementById("meetingBadge")?.textContent, "진행 중");
   assert(window.document.getElementById("meetingTitle")?.textContent.includes("주간 스탠드업"));
   assert(window.document.getElementById("meetingHint")?.textContent.includes("42%"));
+  assert.equal(window.document.getElementById("meetingStartButton")?.hidden, true);
+  assert.equal(window.document.getElementById("meetingStopButton")?.hidden, true);
   assert.equal(window.document.getElementById("pauseControl")?.hidden, false);
   assert.equal(window.document.getElementById("enabledToggle")?.getAttribute("aria-checked"), "true");
 
@@ -58,6 +60,49 @@ async function main() {
     "Popup harness should update enabled state"
   );
   assert.equal(window.document.getElementById("pauseControl")?.hidden, true);
+
+  click(window, window.document.getElementById("enabledToggle"));
+  await waitFor(
+    () => window.document.getElementById("enabledToggle")?.getAttribute("aria-checked") === "true",
+    "Popup harness should restore enabled state"
+  );
+
+  window.__INOVA_POPUP_HARNESS__.setMeetingState({
+    session: {
+      sessionId: "fixture-session",
+      title: "주간 스탠드업",
+    },
+  });
+  await waitFor(
+    () => window.document.getElementById("meetingStartButton")?.hidden === false,
+    "Popup harness should show the start capture action for idle sessions"
+  );
+  assert.equal(window.document.getElementById("meetingBadge")?.textContent, "대기");
+
+  click(window, window.document.getElementById("meetingStartButton"));
+  await waitFor(
+    () => window.document.getElementById("meetingBadge")?.textContent === "녹음 중",
+    "Popup harness should switch to recording state after capture starts"
+  );
+  assert.equal(window.document.getElementById("meetingStopButton")?.hidden, false);
+  assert.equal(window.document.getElementById("syncStatus")?.textContent, "녹음 중");
+  assert.equal(
+    window.__INOVA_POPUP_HARNESS__.state.storage.meetingStateBySession["fixture-session"]?.capture?.status,
+    "recording"
+  );
+
+  click(window, window.document.getElementById("meetingStopButton"));
+  await waitFor(
+    () => window.document.getElementById("meetingBadge")?.textContent === "녹음 완료",
+    "Popup harness should switch to captured state after capture stops"
+  );
+  assert.equal(window.document.getElementById("meetingStartButton")?.hidden, false);
+  assert(window.document.getElementById("meetingHint")?.textContent.includes("1분 05초"));
+  assert(window.document.getElementById("meetingHint")?.textContent.includes("1.0MB"));
+  assert.equal(
+    window.__INOVA_POPUP_HARNESS__.state.storage.meetingStateBySession["fixture-session"]?.capture?.status,
+    "captured"
+  );
 
   window.__INOVA_POPUP_HARNESS__.setMeetingState({
     session: {
@@ -80,8 +125,13 @@ async function main() {
   );
   assert(window.document.getElementById("meetingSummary")?.textContent.includes("2명 화자"));
   assert(window.__INOVA_POPUP_HARNESS__.state.storage.meetingStateBySession["fixture-session"]);
+  assert.deepEqual(
+    window.__INOVA_POPUP_HARNESS__.state.runtimeMessages.map((message) => message.type),
+    ["inova-meeting:start-capture", "inova-meeting:stop-capture"]
+  );
 
   window.__INOVA_POPUP_HARNESS__.setActiveTab({
+    id: 0,
     title: "Example",
     url: "https://example.com",
   });

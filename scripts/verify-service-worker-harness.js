@@ -124,6 +124,68 @@ async function main() {
     assert.equal(meetingArtifact.ok, true);
     assert.equal(meetingArtifact.data.artifact.segments.length > 0, true);
 
+    const popupSender = {
+      url: "chrome-extension://fixture/popup/index.html",
+    };
+    const captureStart = await sendMessage(
+      runtime.listener,
+      {
+        type: "inova-meeting:start-capture",
+        input: {
+          captureMode: "tab-audio",
+          sessionId: "fixture-session",
+          tabId: 81,
+          title: "주간 스탠드업",
+        },
+      },
+      popupSender
+    );
+    assert.equal(captureStart.ok, true);
+    assert.equal(captureStart.data.capture.status, "recording");
+    assert.equal(runtime.streamIdRequests.length, 1);
+    assert.equal(runtime.streamIdRequests[0].targetTabId, 81);
+    assert.equal(runtime.offscreen.createdCount, 1);
+    assert.equal(runtime.storageState.meetingStateBySession["fixture-session"].capture.status, "recording");
+
+    const captureStop = await sendMessage(
+      runtime.listener,
+      {
+        type: "inova-meeting:stop-capture",
+        input: {
+          sessionId: "fixture-session",
+        },
+      },
+      popupSender
+    );
+    assert.equal(captureStop.ok, true);
+    assert.equal(captureStop.data.capture.status, "captured");
+    assert.equal(runtime.offscreen.closedCount, 1);
+    assert.equal(runtime.storageState.meetingStateBySession["fixture-session"].capture.status, "captured");
+
+    const recorderFailure = await sendMessage(
+      runtime.listener,
+      {
+        type: "inova-meeting:recorder-failed",
+        payload: {
+          capture: {
+            captureMode: "tab-audio",
+            error: "오디오 권한이 차단됐어요.",
+          },
+          error: "오디오 권한이 차단됐어요.",
+          meeting: {
+            sessionId: "fixture-session",
+            title: "주간 스탠드업",
+          },
+        },
+      },
+      {
+        url: "chrome-extension://fixture/offscreen/meeting-recorder.html",
+      }
+    );
+    assert.equal(recorderFailure.ok, true);
+    assert.equal(recorderFailure.data.handled, true);
+    assert.equal(runtime.storageState.meetingStateBySession["fixture-session"].capture.status, "error");
+
     const latestFirst = await sendMessage(
       runtime.listener,
       {
@@ -187,6 +249,10 @@ async function main() {
     assert.equal(latestRequests.length, 1, "Latest release should be served from service worker cache on the second request");
     assert.equal(storeRequests[0].authorization, `Bearer ${accessToken}`);
     assert.equal(meetingCreateRequests[0].authorization, `Bearer ${accessToken}`);
+    assert.deepEqual(
+      runtime.runtimeMessages.map((message) => message.type),
+      ["inova-meeting:start-capture", "inova-meeting:stop-capture"]
+    );
 
     console.log("[verify-service-worker-harness] Service worker routing passed");
   } finally {
@@ -198,6 +264,15 @@ function createServiceWorkerRuntime(baseUrl, hostingBaseUrl) {
   let messageListener = null;
   const tabsOpened = [];
   const cookieReads = [];
+  const runtimeMessages = [];
+  const streamIdRequests = [];
+  let storageState = {};
+  let captureState = null;
+  const offscreen = {
+    closedCount: 0,
+    createdCount: 0,
+    documentOpen: false,
+  };
   const context = {
     AbortController,
     URL,
@@ -205,6 +280,7 @@ function createServiceWorkerRuntime(baseUrl, hostingBaseUrl) {
     console,
     fetch,
     setTimeout,
+    structuredClone: cloneValue,
     __INOVA_FIREBASE_CONFIG_OVERRIDE__: {
       functions: {
         baseUrl,
@@ -225,6 +301,103 @@ function createServiceWorkerRuntime(baseUrl, hostingBaseUrl) {
           addListener(listener) {
             messageListener = listener;
           },
+        },
+        async getContexts() {
+          return offscreen.documentOpen
+            ? [
+                {
+                  contextType: "OFFSCREEN_DOCUMENT",
+                  documentUrl: "chrome-extension://fixture/offscreen/meeting-recorder.html",
+                },
+              ]
+            : [];
+        },
+        async sendMessage(message) {
+          runtimeMessages.push(cloneValue(message));
+          if (message?.target !== "offscreen") {
+            throw new Error(`Unexpected runtime target: ${message?.type}`);
+          }
+          if (message.type === "inova-meeting:start-capture") {
+            captureState = {
+              captureMode: cloneValue(message.data.captureMode),
+              mimeType: "audio/webm;codecs=opus",
+              sessionId: cloneValue(message.data.sessionId),
+              title: cloneValue(message.data.title),
+            };
+            return {
+              capture: {
+                captureMode: captureState.captureMode,
+                mimeType: captureState.mimeType,
+                status: "recording",
+              },
+              meeting: {
+                sessionId: captureState.sessionId,
+                title: captureState.title,
+              },
+            };
+          }
+          if (message.type === "inova-meeting:stop-capture") {
+            const stoppedSessionId = cloneValue(message.data.sessionId || captureState?.sessionId || "");
+            const stoppedTitle = cloneValue(captureState?.title || "");
+            captureState = null;
+            return {
+              capture: {
+                captureMode: "tab-audio",
+                durationMs: 65000,
+                mimeType: "audio/webm;codecs=opus",
+                sizeBytes: 1048576,
+                status: "captured",
+              },
+              meeting: {
+                sessionId: stoppedSessionId,
+                title: stoppedTitle,
+              },
+            };
+          }
+          throw new Error(`Unexpected offscreen message: ${message.type}`);
+        },
+      },
+      storage: {
+        local: {
+          async get(keys) {
+            if (keys && typeof keys === "object" && !Array.isArray(keys)) {
+              return mergeDefaults(keys, storageState);
+            }
+            if (Array.isArray(keys)) {
+              return keys.reduce((result, key) => {
+                result[key] = cloneValue(storageState[key]);
+                return result;
+              }, {});
+            }
+            if (typeof keys === "string") {
+              return { [keys]: cloneValue(storageState[keys]) };
+            }
+            return cloneValue(storageState);
+          },
+          async set(partial) {
+            storageState = {
+              ...storageState,
+              ...cloneValue(partial || {}),
+            };
+          },
+        },
+      },
+      offscreen: {
+        async closeDocument() {
+          if (offscreen.documentOpen) {
+            offscreen.closedCount += 1;
+            offscreen.documentOpen = false;
+          }
+        },
+        async createDocument() {
+          offscreen.createdCount += 1;
+          offscreen.documentOpen = true;
+        },
+      },
+      tabCapture: {
+        async getMediaStreamId(details) {
+          streamIdRequests.push(cloneValue(details));
+          return `stream-${Number(details?.targetTabId) || 0}`;
         },
       },
       tabs: {
@@ -250,6 +423,17 @@ function createServiceWorkerRuntime(baseUrl, hostingBaseUrl) {
     },
     tabsOpened,
     cookieReads,
+    offscreen,
+    runtimeMessages,
+    storageState: new Proxy(
+      {},
+      {
+        get(_target, key) {
+          return storageState[key];
+        },
+      }
+    ),
+    streamIdRequests,
   };
 }
 
@@ -283,6 +467,24 @@ function runScript(filePath, context, label) {
 
 function cloneValue(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
+function mergeDefaults(defaults, values) {
+  const result = {};
+  for (const [key, defaultValue] of Object.entries(defaults || {})) {
+    const nextValue = values == null ? undefined : values[key];
+    if (defaultValue && typeof defaultValue === "object" && !Array.isArray(defaultValue)) {
+      result[key] = mergeDefaults(defaultValue, nextValue || {});
+      continue;
+    }
+    result[key] = nextValue !== undefined ? cloneValue(nextValue) : cloneValue(defaultValue);
+  }
+  for (const [key, value] of Object.entries(values || {})) {
+    if (!(key in result)) {
+      result[key] = cloneValue(value);
+    }
+  }
+  return result;
 }
 
 main().catch((error) => {

@@ -38,6 +38,12 @@ if (fs.existsSync(manifestPath)) {
       errors.push(`manifest content css 누락: ${file}`);
     }
   }
+
+  for (const permission of contract.requiredPermissions || []) {
+    if (!(manifest.permissions || []).includes(permission)) {
+      errors.push(`manifest permission 누락: ${permission}`);
+    }
+  }
 }
 
 const popupPath = path.join(root, "popup", "index.html");
@@ -87,7 +93,7 @@ if (errors.length) {
 console.log("구조 계약 검증 통과");
 
 function listSourceFiles(baseDir) {
-  const queue = ["background", "content", "shared", "popup", "scripts"];
+  const queue = ["background", "content", "shared", "popup", "offscreen", "scripts"];
   const output = [];
 
   while (queue.length) {

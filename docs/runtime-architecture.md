@@ -40,8 +40,14 @@
 ### Background Service Worker
 
 - 위치: `background/service-worker.js`
-- 역할: i-Nova access token 확보, Firebase Functions 호출, 릴리스 메타 fetch, 동기화 중복 완화
-- 특징: 클라우드 경계의 브로커다. content script가 직접 장기 원격 상태를 다루지 않게 막아 준다. 회의 기능도 `inova-meeting:*` 메시지로 이 경계를 먼저 통과한다.
+- 역할: i-Nova access token 확보, Firebase Functions 호출, 릴리스 메타 fetch, 동기화 중복 완화, 탭 오디오 캡처 stream id 발급
+- 특징: 클라우드 경계의 브로커다. content script가 직접 장기 원격 상태를 다루지 않게 막아 준다. 회의 기능은 `inova-meeting:*` 메시지로 이 경계를 먼저 통과하고, 녹음 시작/종료는 offscreen document를 생성해 넘긴다.
+
+### Offscreen Document
+
+- 위치: `offscreen/meeting-recorder.html`, `offscreen/meeting-recorder.js`
+- 역할: service worker가 넘긴 `streamId`로 탭 오디오 `MediaRecorder`를 부팅하고, 종료 시 캡처 메타를 브라우저 상태로 되돌린다.
+- 특징: 실제 오디오 캡처는 popup이나 content script가 아니라 이 격리된 문서에서만 맡는다. 실패 시에는 `inova-meeting:recorder-failed` 메시지로 service worker에 되돌린다.
 
 ### Firebase Functions
 
@@ -82,6 +88,13 @@
 2. background가 Functions 또는 Hosting으로 요청을 보낸다.
 3. 응답은 다시 content script 상태에 머지된다.
 
+### E. 회의 캡처 시작/종료
+
+1. popup이 현재 탭과 세션 정보를 기준으로 `inova-meeting:start-capture`, `inova-meeting:stop-capture`를 보낸다.
+2. background가 `chrome.tabCapture.getMediaStreamId()`와 offscreen document 생명주기를 관리한다.
+3. offscreen document가 `getUserMedia`와 `MediaRecorder`로 탭 오디오를 캡처한다.
+4. 결과 메타는 `meetingStateBySession`에 저장되고, 다음 단계 업로드/job 생성의 입력으로 이어진다.
+
 ## 4. 책임 경계 요약
 
 ### Content Script가 해도 되는 일
@@ -97,6 +110,8 @@
 - 외부 네트워크 호출
 - 중복 요청 완화
 - 릴리스 메타 fetch
+- offscreen recorder 생성/정리
+- tab capture stream id 발급
 
 ### Functions가 맡아야 하는 일
 
@@ -122,6 +137,7 @@
 - `npm run verify:meeting-state`
 - `npm run verify:cloud`
 - `npm run verify:service-worker`
+- `npm run verify:offscreen`
 - `npm run verify:harness-page`
 - `npm run harness:serve`
 - `npm run harness:serve:cloud`
@@ -134,12 +150,13 @@
 - 로컬 브라우저 하네스: `http://127.0.0.1:4173/fixtures/content-harness.html?sid=fixture-session`
 - 로컬 팝업 하네스: `http://127.0.0.1:4173/fixtures/popup-harness.html`
 - 로컬 클라우드 하네스: `http://127.0.0.1:4174`
+- 오프스크린 레코더 하네스: `npm run verify:offscreen`
 - 회의 전사 기반 계약: `docs/meeting-diarization-foundation.md`, `fixtures/meeting-diarization/`
 
 ## 6. 하네스 관점의 현재 한계
 
 - 핵심 UI 흐름은 여전히 실사이트 의존성이 남아 있지만, 로컬 팝업 하네스와 로컬 브라우저 하네스로 popup/content-script 부팅과 주요 토글 상태 전이까지는 먼저 확인할 수 있다.
-- 현재 smoke path는 DOM 수집 계층, popup 상태 전이, 회의 기능용 session/job/artifact 계약, 브라우저 meetingState 상태 전이, 로컬 클라우드 계약 검증, background service worker 라우팅 검증, 로컬 브라우저 하네스까지 포함한다.
+- 현재 smoke path는 DOM 수집 계층, popup 상태 전이, 회의 기능용 session/job/artifact 계약, 브라우저 meetingState 상태 전이, 로컬 클라우드 계약 검증, background service worker 라우팅 검증, 오프스크린 레코더 하네스, 로컬 브라우저 하네스까지 포함한다.
 - Firebase emulator는 아직 없지만, fake backend 서버로 Cloud Functions payload 계약과 Hosting release JSON을 로컬에서 재현할 수 있다.
 - 장기적으로는 content/background/functions 경계를 각각 재현할 수 있는 fixture와 smoke path를 늘려야 한다.
 

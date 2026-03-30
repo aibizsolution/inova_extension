@@ -78,6 +78,7 @@
         },
         capture: {
           captureMode: "",
+          error: "",
           mimeType: "",
           channelCount: 0,
           durationMs: 0,

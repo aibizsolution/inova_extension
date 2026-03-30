@@ -1,4 +1,12 @@
-importScripts("../shared/constants.js", "../shared/session.js", "../shared/firebase-config.js", "../shared/inova-auth.js", "../shared/cloud-api.js");
+importScripts(
+  "../shared/constants.js",
+  "../shared/session.js",
+  "../shared/meeting-state.js",
+  "../shared/storage.js",
+  "../shared/firebase-config.js",
+  "../shared/inova-auth.js",
+  "../shared/cloud-api.js"
+);
 
 const namespace = globalThis.InovaBookmarks || {};
 const INOVA_ORIGIN = "https://inova.incross.com";
@@ -6,6 +14,7 @@ const RECENT_LOAD_TTL_MS = 10000;
 const RECENT_PEEK_TTL_MS = 10000;
 const RECENT_RELEASE_TTL_MS = 60000;
 const RECENT_SYNC_TTL_MS = 30000;
+const OFFSCREEN_RECORDER_URL = "offscreen/meeting-recorder.html";
 const activeLoads = new Map();
 const activePeeks = new Map();
 const recentLoadResults = new Map();
@@ -14,9 +23,13 @@ const activeReleaseRequests = new Map();
 const recentReleaseResults = new Map();
 const activeSyncs = new Map();
 const recentSyncResults = new Map();
+let activeOffscreenCreation = null;
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const type = String(message?.type || "");
+  if (message?.target === "offscreen") {
+    return false;
+  }
   if (!type.startsWith("inova-sync:") && !type.startsWith("inova-store:") && !type.startsWith("inova-release:") && !type.startsWith("inova-review:") && !type.startsWith("inova-meeting:")) {
     return false;
   }
@@ -27,7 +40,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 async function handleMessage(message, sender) {
-  if (!String(sender?.url || "").startsWith(INOVA_ORIGIN) && message.type !== "inova-release:open-url") {
+  if (!isAllowedSender(message, sender)) {
     throw new Error("i-Nova 화면에서만 클라우드 동기화를 실행할 수 있어요.");
   }
   if (message.type === "inova-sync:load-prompt-library") {
@@ -60,11 +73,20 @@ async function handleMessage(message, sender) {
   if (message.type === "inova-meeting:create-job") {
     return createMeetingJob(message.input, message.providerIdentity);
   }
+  if (message.type === "inova-meeting:start-capture") {
+    return startMeetingCapture(message.input);
+  }
+  if (message.type === "inova-meeting:stop-capture") {
+    return stopMeetingCapture(message.input);
+  }
   if (message.type === "inova-meeting:get-job") {
     return getMeetingJob(message.input, message.providerIdentity);
   }
   if (message.type === "inova-meeting:get-artifact") {
     return getMeetingArtifact(message.input, message.providerIdentity);
+  }
+  if (message.type === "inova-meeting:recorder-failed") {
+    return handleMeetingRecorderFailed(message.payload);
   }
   if (message.type === "inova-release:latest") {
     return fetchReleaseJson("latest");
@@ -127,6 +149,58 @@ async function reviewPromptDraft(prompt, providerIdentity) {
   return namespace.cloudApi.reviewInovaPrompt(prompt, providerIdentity, accessToken);
 }
 
+async function startMeetingCapture(input) {
+  const captureInput = normalizeMeetingCaptureInput(input);
+  await ensureOffscreenRecorderDocument();
+  try {
+    const streamId = await chrome.tabCapture.getMediaStreamId({
+      targetTabId: captureInput.tabId,
+    });
+    const response = ensureMeetingCaptureResponse(
+      await chrome.runtime.sendMessage({
+        data: {
+          ...captureInput,
+          streamId,
+        },
+        target: "offscreen",
+        type: "inova-meeting:start-capture",
+      }),
+      "녹음을 시작하지 못했어요."
+    );
+    const currentMeetingState = await namespace.storage.getMeetingState(captureInput.sessionId);
+    const nextMeetingState = namespace.meetingState.applyMeetingCaptureStarted(currentMeetingState, response);
+    await namespace.storage.setMeetingState(captureInput.sessionId, nextMeetingState);
+    return response;
+  } catch (error) {
+    await closeOffscreenRecorderDocument().catch(() => {});
+    throw error;
+  }
+}
+
+async function stopMeetingCapture(input) {
+  try {
+    const response = ensureMeetingCaptureResponse(
+      await chrome.runtime.sendMessage({
+        data: {
+          sessionId: namespace.session.normalizeText(input?.sessionId),
+        },
+        target: "offscreen",
+        type: "inova-meeting:stop-capture",
+      }),
+      "녹음을 마무리하지 못했어요."
+    );
+    const sessionId = namespace.session.normalizeText(response?.meeting?.sessionId);
+    if (sessionId) {
+      const currentMeetingState = await namespace.storage.getMeetingState(sessionId);
+      const nextMeetingState = namespace.meetingState.applyMeetingCaptureFinished(currentMeetingState, response);
+      await namespace.storage.setMeetingState(sessionId, nextMeetingState);
+    }
+    return response;
+  } finally {
+    await closeOffscreenRecorderDocument().catch(() => {});
+  }
+}
+
 async function createMeetingJob(input, providerIdentity) {
   const accessToken = await getInovaAccessToken();
   return namespace.cloudApi.createInovaMeetingJob(input, providerIdentity, accessToken);
@@ -140,6 +214,18 @@ async function getMeetingJob(input, providerIdentity) {
 async function getMeetingArtifact(input, providerIdentity) {
   const accessToken = await getInovaAccessToken();
   return namespace.cloudApi.getInovaMeetingArtifact(input, providerIdentity, accessToken);
+}
+
+async function handleMeetingRecorderFailed(payload) {
+  const sessionId = namespace.session.normalizeText(payload?.meeting?.sessionId);
+  await closeOffscreenRecorderDocument().catch(() => {});
+  if (!sessionId) {
+    return { handled: false };
+  }
+  const currentMeetingState = await namespace.storage.getMeetingState(sessionId);
+  const nextMeetingState = namespace.meetingState.applyMeetingCaptureFailed(currentMeetingState, payload);
+  await namespace.storage.setMeetingState(sessionId, nextMeetingState);
+  return { handled: true };
 }
 
 async function syncPromptLibrary(syncDocument) {
@@ -296,6 +382,102 @@ async function openReleaseUrl(url) {
   if (!nextUrl) throw new Error("열 링크가 없어요.");
   await chrome.tabs.create({ url: nextUrl });
   return { opened: true };
+}
+
+async function ensureOffscreenRecorderDocument() {
+  const contexts = await listRuntimeContexts();
+  const hasRecorder = contexts.some((entry) =>
+    entry?.contextType === "OFFSCREEN_DOCUMENT"
+    && String(entry?.documentUrl || "").includes(OFFSCREEN_RECORDER_URL)
+  );
+  if (hasRecorder) {
+    return;
+  }
+  if (activeOffscreenCreation) {
+    await activeOffscreenCreation;
+    return;
+  }
+  activeOffscreenCreation = chrome.offscreen.createDocument({
+    justification: "Record tab audio for i-Nova meeting capture",
+    reasons: ["USER_MEDIA"],
+    url: OFFSCREEN_RECORDER_URL,
+  });
+  try {
+    await activeOffscreenCreation;
+  } finally {
+    activeOffscreenCreation = null;
+  }
+}
+
+async function closeOffscreenRecorderDocument() {
+  if (typeof chrome.offscreen?.closeDocument !== "function") {
+    return;
+  }
+  const contexts = await listRuntimeContexts();
+  const hasRecorder = contexts.some((entry) =>
+    entry?.contextType === "OFFSCREEN_DOCUMENT"
+    && String(entry?.documentUrl || "").includes(OFFSCREEN_RECORDER_URL)
+  );
+  if (hasRecorder) {
+    await chrome.offscreen.closeDocument();
+  }
+}
+
+async function listRuntimeContexts() {
+  if (typeof chrome.runtime.getContexts !== "function") {
+    return [];
+  }
+  return chrome.runtime.getContexts({});
+}
+
+function normalizeMeetingCaptureInput(input) {
+  const tabId = Number(input?.tabId);
+  const sessionId = namespace.session.normalizeText(input?.sessionId);
+  const title = namespace.session.normalizeText(input?.title) || namespace.session.formatSessionLabel(sessionId);
+  const captureMode = namespace.session.normalizeText(input?.captureMode) || "tab-audio";
+  if (!Number.isInteger(tabId) || tabId <= 0) {
+    throw new Error("현재 탭을 찾지 못해서 녹음을 시작할 수 없어요.");
+  }
+  if (!sessionId) {
+    throw new Error("현재 대화 session id를 찾지 못했어요.");
+  }
+  if (captureMode !== "tab-audio") {
+    throw new Error("지금 단계에서는 tab-audio 녹음만 지원해요.");
+  }
+  return {
+    captureMode,
+    sessionId,
+    tabId,
+    title,
+  };
+}
+
+function isInternalMeetingRecorderMessage(message, sender) {
+  return String(message?.type || "").startsWith("inova-meeting:recorder-")
+    && String(sender?.url || "").startsWith("chrome-extension://");
+}
+
+function isExtensionMeetingControlMessage(message, sender) {
+  const type = String(message?.type || "");
+  if (type !== "inova-meeting:start-capture" && type !== "inova-meeting:stop-capture") {
+    return false;
+  }
+  return String(sender?.url || "").startsWith("chrome-extension://");
+}
+
+function isAllowedSender(message, sender) {
+  return String(sender?.url || "").startsWith(INOVA_ORIGIN)
+    || message.type === "inova-release:open-url"
+    || isInternalMeetingRecorderMessage(message, sender)
+    || isExtensionMeetingControlMessage(message, sender);
+}
+
+function ensureMeetingCaptureResponse(response, fallbackMessage) {
+  const errorMessage = namespace.session.normalizeText(response?.error || response?.capture?.error);
+  if (namespace.session.normalizeText(response?.capture?.status) === "error" || errorMessage) {
+    throw new Error(errorMessage || fallbackMessage);
+  }
+  return response;
 }
 
 function cleanupRecentLoads() {

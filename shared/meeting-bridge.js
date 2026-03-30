@@ -8,6 +8,18 @@
     });
   }
 
+  async function startMeetingCapture(input) {
+    return sendRuntimeMessage("inova-meeting:start-capture", {
+      input,
+    });
+  }
+
+  async function stopMeetingCapture(input) {
+    return sendRuntimeMessage("inova-meeting:stop-capture", {
+      input,
+    });
+  }
+
   async function getMeetingJob(input, providerIdentity) {
     return sendRuntimeMessage("inova-meeting:get-job", {
       input,
@@ -37,5 +49,7 @@
     createMeetingJob,
     getMeetingArtifact,
     getMeetingJob,
+    startMeetingCapture,
+    stopMeetingCapture,
   };
 })(globalThis);

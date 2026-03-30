@@ -14,6 +14,7 @@
     return mergeMeetingState({
       capture: {
         captureMode: normalizeText(input?.source?.captureMode),
+        error: "",
         channelCount: normalizeCount(input?.source?.channelCount),
         durationMs: normalizeCount(input?.source?.durationMs),
         mimeType: normalizeText(input?.source?.mimeType),
@@ -40,6 +41,72 @@
         title: normalizeText(input?.meeting?.title),
       },
       transcript: cloneValue(defaults.transcript),
+    });
+  }
+
+  function applyMeetingCaptureStarted(currentState, payload) {
+    const capture = payload?.capture || {};
+    const meeting = payload?.meeting || {};
+    return mergeMeetingState(currentState, {
+      capture: {
+        captureMode: normalizeText(capture?.captureMode),
+        error: "",
+        mimeType: normalizeText(capture?.mimeType),
+        status: "recording",
+      },
+      job: {
+        artifactId: "",
+        error: "",
+        jobId: "",
+        progress: {
+          percent: 0,
+          phase: "",
+        },
+        sourceAudioDeleted: false,
+        status: "idle",
+        updatedAt: "",
+      },
+      session: {
+        sessionId: normalizeText(meeting?.sessionId) || normalizeText(currentState?.session?.sessionId),
+        title: normalizeText(meeting?.title) || normalizeText(currentState?.session?.title),
+      },
+      transcript: cloneValue(defaults.transcript),
+    });
+  }
+
+  function applyMeetingCaptureFinished(currentState, payload) {
+    const capture = payload?.capture || {};
+    const meeting = payload?.meeting || {};
+    return mergeMeetingState(currentState, {
+      capture: {
+        captureMode: normalizeText(capture?.captureMode) || normalizeText(currentState?.capture?.captureMode),
+        channelCount: normalizeCount(capture?.channelCount, currentState?.capture?.channelCount),
+        durationMs: normalizeCount(capture?.durationMs, currentState?.capture?.durationMs),
+        error: "",
+        mimeType: normalizeText(capture?.mimeType) || normalizeText(currentState?.capture?.mimeType),
+        sizeBytes: normalizeCount(capture?.sizeBytes, currentState?.capture?.sizeBytes),
+        status: "captured",
+      },
+      session: {
+        sessionId: normalizeText(meeting?.sessionId) || normalizeText(currentState?.session?.sessionId),
+        title: normalizeText(meeting?.title) || normalizeText(currentState?.session?.title),
+      },
+    });
+  }
+
+  function applyMeetingCaptureFailed(currentState, payload) {
+    const capture = payload?.capture || {};
+    const meeting = payload?.meeting || {};
+    return mergeMeetingState(currentState, {
+      capture: {
+        captureMode: normalizeText(capture?.captureMode) || normalizeText(currentState?.capture?.captureMode),
+        error: normalizeText(payload?.error || capture?.error),
+        status: "error",
+      },
+      session: {
+        sessionId: normalizeText(meeting?.sessionId) || normalizeText(currentState?.session?.sessionId),
+        title: normalizeText(meeting?.title) || normalizeText(currentState?.session?.title),
+      },
     });
   }
 
@@ -156,6 +223,7 @@
         captureMode: normalizeText(next.capture?.captureMode) || normalizeText(baseState.capture.captureMode),
         channelCount: normalizeCount(next.capture?.channelCount, baseState.capture.channelCount),
         durationMs: normalizeCount(next.capture?.durationMs, baseState.capture.durationMs),
+        error: normalizeText(next.capture?.error) || normalizeText(baseState.capture.error),
         mimeType: normalizeText(next.capture?.mimeType) || normalizeText(baseState.capture.mimeType),
         sizeBytes: normalizeCount(next.capture?.sizeBytes, baseState.capture.sizeBytes),
         status: normalizeText(next.capture?.status) || normalizeText(baseState.capture.status) || defaults.capture.status,
@@ -230,6 +298,9 @@
   }
 
   namespace.meetingState = {
+    applyMeetingCaptureFailed,
+    applyMeetingCaptureFinished,
+    applyMeetingCaptureStarted,
     applyMeetingArtifact,
     applyMeetingJobCreated,
     applyMeetingJobSnapshot,

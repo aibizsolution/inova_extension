@@ -17,6 +17,8 @@ const requiredFiles = [
   path.join("fixtures", "meeting-diarization", "job-status-processing.json"),
   path.join("fixtures", "meeting-diarization", "job-status-succeeded.json"),
   path.join("fixtures", "cloud-harness", "fixtures.js"),
+  path.join("offscreen", "meeting-recorder.html"),
+  path.join("offscreen", "meeting-recorder.js"),
   path.join("content", "meeting-manager.js"),
   path.join("shared", "meeting-bridge.js"),
   path.join("shared", "meeting-state.js"),
@@ -29,6 +31,7 @@ const requiredFiles = [
   path.join("scripts", "verify-meeting-state.js"),
   path.join("scripts", "verify-cloud-api-contract.js"),
   path.join("scripts", "verify-service-worker-harness.js"),
+  path.join("scripts", "verify-offscreen-recorder.js"),
   path.join("scripts", "run-harness-server.js"),
   path.join("scripts", "verify-content-harness-page.js"),
 ];
@@ -37,6 +40,7 @@ const architectureKeywords = [
   "Popup",
   "Content Script",
   "Background Service Worker",
+  "Offscreen Document",
   "Firebase Functions",
   "Firestore / Hosting",
   "권위 있는 소스",
@@ -44,6 +48,7 @@ const architectureKeywords = [
   "로컬 브라우저 하네스",
   "로컬 팝업 하네스",
   "로컬 클라우드 하네스",
+  "오프스크린 레코더 하네스",
 ];
 
 const fixtureKeywords = [
