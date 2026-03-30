@@ -1,0 +1,138 @@
+# 런타임 아키텍처 맵
+
+이 문서는 `i-Nova 더하기`를 사람이든 에이전트든 빠르게 이해할 수 있게, 현재 저장소의 실제 실행 경계와 검증 표면을 한곳에 모아 둔 런타임 지도다.
+
+## 1. 권위 있는 소스
+
+다음 경로만 현재 동작의 정본으로 본다.
+
+- `manifest.json`
+- `popup/`
+- `content/`
+- `background/`
+- `shared/`
+- `functions/`
+- `docs/`
+- `firebase.json`
+- `firestore.rules`
+
+다음 경로는 배포 산출물 또는 파생 결과이므로 수정 기준으로 쓰지 않는다.
+
+- `releases/_staging/`
+- `hosting/extension/downloads/`
+- `hosting/extension/releases/latest.json`
+- `hosting/extension/releases/history.json`
+
+## 2. 실행 표면
+
+### Popup
+
+- 위치: `popup/index.html`, `popup/index.js`
+- 역할: 확장 On/Off, 현재 탭 상태 표시, 세션 단위 일시 중지
+- 특징: 짧은 상태 확인과 토글만 맡고, 실제 UI 본체나 네트워크 동기화는 맡지 않는다.
+
+### Content Script
+
+- 위치: `content/`, `shared/`, `manifest.json`
+- 역할: `inova.incross.com` 안에 실험실 패널을 삽입하고, 질문 탐색/프롬프트/스토어/릴리스 UI를 렌더링한다.
+- 특징: 현재 대화 DOM을 읽고, 로컬 상태를 붙이고, 필요한 클라우드 호출은 background에 메시지로 위임한다.
+
+### Background Service Worker
+
+- 위치: `background/service-worker.js`
+- 역할: i-Nova access token 확보, Firebase Functions 호출, 릴리스 메타 fetch, 동기화 중복 완화
+- 특징: 클라우드 경계의 브로커다. content script가 직접 장기 원격 상태를 다루지 않게 막아 준다.
+
+### Firebase Functions
+
+- 위치: `functions/index.js`, `functions/prompt-review-service.js`, `functions/store-service.js`
+- 역할: i-Nova 사용자 검증 뒤 prompt review, prompt store, prompt library sync API를 제공한다.
+- 특징: 현재 원격 백업과 공개 스토어의 진입점이다.
+
+### Firestore / Hosting
+
+- 위치: `firebase.json`, `firestore.rules`, `hosting/`
+- 역할: Firestore는 백업/스토어 메타 저장소, Hosting은 릴리스 JSON/ZIP 배포면
+- 특징: 현재 Firestore 규칙은 기본 `deny all`이며, 실제 접근은 Functions를 경유하는 흐름이 중심이다.
+
+## 3. 주요 데이터 흐름
+
+### A. 질문 탐색
+
+1. content script가 대화 DOM에서 사용자 질문을 수집한다.
+2. 세션 키는 URL의 `sid`로 정규화한다.
+3. 패널에서 검색/이동은 현재 페이지 DOM을 기준으로 처리한다.
+
+### B. 로컬 프롬프트 보관함
+
+1. 사용자가 패널에서 프롬프트를 추가/수정/삭제한다.
+2. `shared/storage.js`가 `chrome.storage.local`에 저장한다.
+3. 같은 시점에 `cloudSync` 메타를 큐잉한다.
+
+### C. 원격 백업
+
+1. content script가 sync 상태를 만들고 background에 메시지를 보낸다.
+2. background가 access token을 준비한다.
+3. Functions가 i-Nova 사용자 검증 뒤 Firestore에 반영한다.
+4. 확인용 운영 점검은 `scripts/check-cloud-sync.js`, `scripts/check-function-logs.js`로 한다.
+
+### D. 프롬프트 스토어 / 평가 / 릴리스
+
+1. content script가 사용자의 액션을 수집한다.
+2. background가 Functions 또는 Hosting으로 요청을 보낸다.
+3. 응답은 다시 content script 상태에 머지된다.
+
+## 4. 책임 경계 요약
+
+### Content Script가 해도 되는 일
+
+- DOM 읽기
+- 패널 렌더링
+- 로컬 상태와 UI 선호도 저장
+- background에 요청 위임
+
+### Background가 맡아야 하는 일
+
+- access token 읽기
+- 외부 네트워크 호출
+- 중복 요청 완화
+- 릴리스 메타 fetch
+
+### Functions가 맡아야 하는 일
+
+- provider identity 검증
+- 공개 스토어 읽기/쓰기
+- 원격 백업 읽기/쓰기
+- 서버 기준 감사 로그와 오류 응답 형식
+
+## 5. 현재 검증 표면
+
+### 정적/구조 검증
+
+- `npm run verify:contracts`
+- `npm run verify:docs`
+
+### 하네스 검증
+
+- `npm run verify:harness`
+- `npm run verify:smoke`
+
+### 운영/런타임 점검
+
+- `npm run check:cloud-sync -- --userKey <providerUserKey>`
+- `npm run check:function-logs -- --since 10`
+- 실제 브라우저 확인: `docs/e2e-browser-workflow.md`
+
+## 6. 하네스 관점의 현재 한계
+
+- 핵심 UI 흐름은 여전히 실사이트 의존성이 크다.
+- 현재 smoke path는 DOM 수집 계층 중심의 최소 검증부터 시작한다.
+- Firebase emulator나 fake backend 경로는 아직 없다.
+- 장기적으로는 content/background/functions 경계를 각각 재현할 수 있는 fixture와 smoke path를 늘려야 한다.
+
+## 7. 다음 확장 원칙
+
+- 새 기능은 먼저 어떤 실행 경계에 들어가는지 이 문서 기준으로 결정한다.
+- 실사이트나 실클라우드가 없어도 검증 가능한 최소 fixture를 가능하면 먼저 만든다.
+- 기능별 smoke path는 작은 단위로 추가하고 `npm run verify`에 연결한다.
+- 배포 산출물 디렉터리는 읽기 참고만 하고, 수정 기준은 항상 정본 소스 디렉터리로 제한한다.

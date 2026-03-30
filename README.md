@@ -90,6 +90,12 @@
 - `releases/`
   - 버전별 배포 ZIP과 `release-notes.json` 릴리스 카탈로그
 
+## 런타임 구조 문서
+
+- 실제 실행 경계와 데이터 흐름은 [docs/runtime-architecture.md](C:/Users/parkyoungtack/Documents/code/inova_extension/docs/runtime-architecture.md)를 기준으로 봅니다.
+- 에이전트나 사람이 저장소를 처음 읽을 때는 `README.md` 다음으로 위 문서를 먼저 보면 `popup -> content -> background -> functions -> Firestore/Hosting` 경계를 빠르게 잡을 수 있습니다.
+- `releases/_staging`, `hosting/extension/downloads`, `hosting/extension/releases/latest.json`, `hosting/extension/releases/history.json`은 배포 산출물이며 수정 기준이 아닙니다.
+
 ## 동작 방식
 
 - 확장프로그램은 `manifest V3`로 구성되어 있습니다.
@@ -138,6 +144,15 @@
 ```bash
 npm run verify
 ```
+
+하네스 문서와 로컬 smoke 경로만 빠르게 확인하려면 다음을 실행합니다.
+
+```bash
+npm run verify:harness
+npm run verify:smoke
+```
+
+`verify:smoke`는 `fixtures/inova-chat-session.html`을 기준으로 질문 수집 DOM 경로가 현재 selectors와 세션 정규화 규칙에 맞게 동작하는지 확인합니다.
 
 README 가드만 미리 확인하려면 다음을 실행합니다.
 
@@ -215,5 +230,6 @@ npm run deploy:all
 
 실제 브라우저 동기화 점검은 다음 문서를 봅니다.
 
+- [docs/runtime-architecture.md](C:/Users/parkyoungtack/Documents/code/inova_extension/docs/runtime-architecture.md)
 - [docs/e2e-browser-workflow.md](C:/Users/parkyoungtack/Documents/code/inova_extension/docs/e2e-browser-workflow.md)
 - [docs/release-workflow.md](C:/Users/parkyoungtack/Documents/code/inova_extension/docs/release-workflow.md)

@@ -21,11 +21,16 @@
     "seed:system-store:dry": "node scripts/seed-system-store.js --dry-run",
     "seed:store:all": "npm run seed:system-store && npm run seed:business-store",
     "seed:store:all:dry": "npm run seed:system-store:dry && npm run seed:business-store:dry",
-    "verify": "node scripts/verify-contracts.js && node scripts/verify-docs.js",
+    "verify": "node scripts/verify-contracts.js && node scripts/verify-docs.js && node scripts/verify-harness.js && node scripts/verify-content-smoke.js",
     "verify:branch-guard": "node scripts/verify-branch-workflow.js --pre-commit",
     "verify:contracts": "node scripts/verify-contracts.js",
+    "verify:smoke": "node scripts/verify-content-smoke.js",
+    "verify:harness": "node scripts/verify-harness.js",
     "verify:docs": "node scripts/verify-docs.js",
     "verify:readme-guard": "node scripts/verify-readme-update.js --staged",
     "verify:release-guard": "node scripts/verify-release-metadata.js --staged"
+  },
+  "devDependencies": {
+    "jsdom": "^26.1.0"
   }
 }
