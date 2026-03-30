@@ -41,13 +41,13 @@
 
 - 위치: `background/service-worker.js`
 - 역할: i-Nova access token 확보, Firebase Functions 호출, 릴리스 메타 fetch, 동기화 중복 완화
-- 특징: 클라우드 경계의 브로커다. content script가 직접 장기 원격 상태를 다루지 않게 막아 준다.
+- 특징: 클라우드 경계의 브로커다. content script가 직접 장기 원격 상태를 다루지 않게 막아 준다. 회의 기능도 `inova-meeting:*` 메시지로 이 경계를 먼저 통과한다.
 
 ### Firebase Functions
 
-- 위치: `functions/index.js`, `functions/prompt-review-service.js`, `functions/store-service.js`
-- 역할: i-Nova 사용자 검증 뒤 prompt review, prompt store, prompt library sync API를 제공한다.
-- 특징: 현재 원격 백업과 공개 스토어의 진입점이다.
+- 위치: `functions/index.js`, `functions/prompt-review-service.js`, `functions/store-service.js`, `functions/meeting-service.js`
+- 역할: i-Nova 사용자 검증 뒤 prompt review, prompt store, prompt library sync API와 회의 기능 gateway endpoint를 제공한다.
+- 특징: 현재 원격 백업과 공개 스토어의 진입점이며, 회의 기능은 아직 worker 미연결 상태의 gateway 스캐폴딩만 열어 둔 상태다.
 
 ### Firestore / Hosting
 

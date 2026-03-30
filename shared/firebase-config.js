@@ -3,6 +3,9 @@
   const DEFAULT_FUNCTIONS_BASE_URL = "https://asia-northeast3-browser-extension-main.cloudfunctions.net";
   const DEFAULT_HOSTING_BASE_URL = "https://browser-extension-main.web.app/extension";
   const FUNCTION_ENDPOINTS = {
+    createInovaMeetingJobUrl: "createInovaMeetingJob",
+    getInovaMeetingArtifactUrl: "getInovaMeetingArtifact",
+    getInovaMeetingJobUrl: "getInovaMeetingJob",
     loadInovaPromptLibraryUrl: "loadInovaPromptLibrary",
     listPromptStoreEntriesUrl: "listPromptStoreEntries",
     peekInovaPromptLibraryUrl: "peekInovaPromptLibrary",

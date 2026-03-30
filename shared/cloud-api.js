@@ -3,17 +3,21 @@
   const { functions } = namespace.firebaseConfig;
   const REQUEST_TIMEOUT_MS = 25000;
 
+  function toProviderIdentityPayload(providerIdentity) {
+    return {
+      displayName: providerIdentity?.displayName || "",
+      email: providerIdentity?.email || "",
+      numericUserId: providerIdentity?.numericUserId ?? null,
+      provider: providerIdentity?.provider || "inova",
+      providerUserKey: providerIdentity?.providerUserKey || "",
+    };
+  }
+
   async function peekInovaPromptLibrary(providerIdentity, accessToken) {
     const payload = await postJson(
       functions.peekInovaPromptLibraryUrl,
       {
-        providerIdentity: {
-          displayName: providerIdentity?.displayName || "",
-          email: providerIdentity?.email || "",
-          numericUserId: providerIdentity?.numericUserId ?? null,
-          provider: providerIdentity?.provider || "inova",
-          providerUserKey: providerIdentity?.providerUserKey || "",
-        },
+        providerIdentity: toProviderIdentityPayload(providerIdentity),
       },
       accessToken
     );
@@ -50,13 +54,7 @@
 
   async function loadInovaPromptLibrary(providerIdentity, accessToken) {
     const payload = await postJson(functions.loadInovaPromptLibraryUrl, {
-      providerIdentity: {
-        displayName: providerIdentity?.displayName || "",
-        email: providerIdentity?.email || "",
-        numericUserId: providerIdentity?.numericUserId ?? null,
-        provider: providerIdentity?.provider || "inova",
-        providerUserKey: providerIdentity?.providerUserKey || "",
-      },
+      providerIdentity: toProviderIdentityPayload(providerIdentity),
     }, accessToken);
     return payload?.data || { found: false };
   }
@@ -122,6 +120,62 @@
     return payload?.data || {};
   }
 
+  async function createInovaMeetingJob(input, providerIdentity, accessToken) {
+    const payload = await postJson(
+      functions.createInovaMeetingJobUrl,
+      {
+        meeting: {
+          endedAt: input?.meeting?.endedAt || "",
+          language: input?.meeting?.language || "",
+          sessionId: input?.meeting?.sessionId || "",
+          startedAt: input?.meeting?.startedAt || "",
+          title: input?.meeting?.title || "",
+        },
+        options: {
+          redaction: input?.options?.redaction || "",
+          speakerLabels: Boolean(input?.options?.speakerLabels),
+          summary: Boolean(input?.options?.summary),
+        },
+        owner: toProviderIdentityPayload(providerIdentity),
+        source: {
+          captureMode: input?.source?.captureMode || "",
+          channelCount: Number(input?.source?.channelCount) || 0,
+          durationMs: Number(input?.source?.durationMs) || 0,
+          mimeType: input?.source?.mimeType || "",
+          sizeBytes: Number(input?.source?.sizeBytes) || 0,
+        },
+      },
+      accessToken
+    );
+    return payload?.data || {};
+  }
+
+  async function getInovaMeetingJob(input, providerIdentity, accessToken) {
+    const payload = await postJson(
+      functions.getInovaMeetingJobUrl,
+      {
+        jobId: input?.jobId || "",
+        owner: toProviderIdentityPayload(providerIdentity),
+        sessionId: input?.sessionId || "",
+      },
+      accessToken
+    );
+    return payload?.data || {};
+  }
+
+  async function getInovaMeetingArtifact(input, providerIdentity, accessToken) {
+    const payload = await postJson(
+      functions.getInovaMeetingArtifactUrl,
+      {
+        artifactId: input?.artifactId || "",
+        jobId: input?.jobId || "",
+        owner: toProviderIdentityPayload(providerIdentity),
+      },
+      accessToken
+    );
+    return payload?.data || {};
+  }
+
   async function syncInovaPromptLibrary(syncDocument, accessToken) {
     const payload = await postJson(functions.syncInovaPromptLibraryUrl, syncDocument, accessToken);
     return payload?.data || {};
@@ -162,6 +216,9 @@
   }
 
   namespace.cloudApi = {
+    createInovaMeetingJob,
+    getInovaMeetingArtifact,
+    getInovaMeetingJob,
     importPromptStoreEntry,
     listPromptStoreEntries,
     loadInovaPromptLibrary,

@@ -56,10 +56,10 @@
 ## 모듈 구조
 
 - `background/`
-  - `service-worker.js`: 외부 네트워크 호출과 클라우드 백업 중계
+  - `service-worker.js`: 외부 네트워크 호출과 클라우드 백업, 회의 기능 gateway 중계
 - `shared/`
   - `constants.js`: 저장 키, 셀렉터, 제한값 계약
-  - `cloud-api.js`: Firebase Functions 호출 래퍼
+  - `cloud-api.js`: Firebase Functions 호출 래퍼와 회의 기능 gateway 요청 래퍼
   - `cloud-sync.js`: 동기화 상태/문서 정규화
   - `firebase-config.js`: Firebase 프로젝트와 함수 엔드포인트 설정
   - `inova-auth.js`: i-Nova access token 갱신 보조
@@ -105,6 +105,7 @@
 - `content/prompt-review-manager.js`는 현재 입력창 프롬프트를 평가하고 보완 프롬프트를 다시 주입합니다.
 - `content/store-manager.js`는 `프롬프트 스토어` 목록 조회, 등록, 삭제, 좋아요, 가져오기 흐름을 관리합니다.
 - `background/service-worker.js`는 i-Nova access token과 Firebase Functions를 연결해 원격 백업 호출을 처리합니다.
+- 회의 전사/화자분리 기능은 아직 UI에 노출하지 않았지만, `shared/cloud-api.js -> background/service-worker.js -> functions/*` 경계의 gateway 스캐폴딩은 먼저 연결해 두었습니다.
 - 질문 목록 자체는 `chrome.storage.local`에 저장하지 않고, 현재 대화 화면을 기준으로 바로 렌더링합니다.
 - 요청 보관함은 `chrome.storage.local.promptLibrary`에 저장합니다.
 - 원격 백업 대기 상태는 `chrome.storage.local.cloudSync`에 저장합니다.

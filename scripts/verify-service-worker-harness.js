@@ -5,7 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
 const { createCloudHarnessServer } = require("./cloud-harness-server");
-const { PROVIDER_IDENTITY } = require("../fixtures/cloud-harness/fixtures");
+const { MEETING_CREATE_REQUEST, PROVIDER_IDENTITY } = require("../fixtures/cloud-harness/fixtures");
 
 const root = path.resolve(__dirname, "..");
 const backgroundRoot = path.join(root, "background");
@@ -67,6 +67,63 @@ async function main() {
     assert.equal(reviewResponse.ok, true);
     assert.equal(reviewResponse.data.verdict, "revise");
 
+    const meetingCreate = await sendMessage(
+      runtime.listener,
+      {
+        type: "inova-meeting:create-job",
+        input: cloneValue(MEETING_CREATE_REQUEST),
+        providerIdentity: cloneValue(PROVIDER_IDENTITY),
+      },
+      validSender
+    );
+    assert.equal(meetingCreate.ok, true);
+    assert.equal(meetingCreate.data.job.status, "queued");
+
+    const meetingProcessing = await sendMessage(
+      runtime.listener,
+      {
+        type: "inova-meeting:get-job",
+        input: {
+          jobId: meetingCreate.data.job.jobId,
+          sessionId: meetingCreate.data.job.sessionId,
+        },
+        providerIdentity: cloneValue(PROVIDER_IDENTITY),
+      },
+      validSender
+    );
+    assert.equal(meetingProcessing.ok, true);
+    assert.equal(meetingProcessing.data.job.status, "processing");
+
+    const meetingSucceeded = await sendMessage(
+      runtime.listener,
+      {
+        type: "inova-meeting:get-job",
+        input: {
+          jobId: meetingCreate.data.job.jobId,
+          sessionId: meetingCreate.data.job.sessionId,
+        },
+        providerIdentity: cloneValue(PROVIDER_IDENTITY),
+      },
+      validSender
+    );
+    assert.equal(meetingSucceeded.ok, true);
+    assert.equal(meetingSucceeded.data.job.status, "succeeded");
+
+    const meetingArtifact = await sendMessage(
+      runtime.listener,
+      {
+        type: "inova-meeting:get-artifact",
+        input: {
+          artifactId: meetingSucceeded.data.job.transcript.artifactId,
+          jobId: meetingCreate.data.job.jobId,
+        },
+        providerIdentity: cloneValue(PROVIDER_IDENTITY),
+      },
+      validSender
+    );
+    assert.equal(meetingArtifact.ok, true);
+    assert.equal(meetingArtifact.data.artifact.segments.length > 0, true);
+
     const latestFirst = await sendMessage(
       runtime.listener,
       {
@@ -118,11 +175,18 @@ async function main() {
 
     const storeRequests = harness.state.requests.filter((request) => request.path === "/listPromptStoreEntries");
     const peekRequests = harness.state.requests.filter((request) => request.path === "/peekInovaPromptLibrary");
+    const meetingCreateRequests = harness.state.requests.filter((request) => request.path === "/createInovaMeetingJob");
+    const meetingJobRequests = harness.state.requests.filter((request) => request.path === "/getInovaMeetingJob");
+    const meetingArtifactRequests = harness.state.requests.filter((request) => request.path === "/getInovaMeetingArtifact");
     const latestRequests = harness.state.requests.filter((request) => request.path === "/extension/releases/latest.json");
     assert.equal(storeRequests.length, 1);
     assert.equal(peekRequests.length, 1, "Peek should be served from service worker cache on the second request");
+    assert.equal(meetingCreateRequests.length, 1);
+    assert.equal(meetingJobRequests.length, 2);
+    assert.equal(meetingArtifactRequests.length, 1);
     assert.equal(latestRequests.length, 1, "Latest release should be served from service worker cache on the second request");
     assert.equal(storeRequests[0].authorization, `Bearer ${accessToken}`);
+    assert.equal(meetingCreateRequests[0].authorization, `Bearer ${accessToken}`);
 
     console.log("[verify-service-worker-harness] Service worker routing passed");
   } finally {

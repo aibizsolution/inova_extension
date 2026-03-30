@@ -1,5 +1,6 @@
 const admin = require("firebase-admin");
 const { onRequest } = require("firebase-functions/v2/https");
+const { registerMeetingHandlers } = require("./meeting-service");
 const { registerPromptReviewHandlers } = require("./prompt-review-service");
 const { registerStoreHandlers } = require("./store-service");
 
@@ -72,6 +73,17 @@ const promptReviewHandlers = registerPromptReviewHandlers({
   sendError,
   verifyInovaIdentity,
 });
+const meetingHandlers = registerMeetingHandlers({
+  CORS_ORIGINS,
+  REGION,
+  createHttpError,
+  logEvent,
+  normalizeIdentity,
+  normalizeText,
+  onRequest,
+  sendError,
+  verifyInovaIdentity,
+});
 exports.listPromptStoreEntries = storeHandlers.listPromptStoreEntries;
 exports.publishPromptToStore = storeHandlers.publishPromptToStore;
 exports.unpublishPromptFromStore = storeHandlers.unpublishPromptFromStore;
@@ -79,6 +91,9 @@ exports.importPromptStoreEntry = storeHandlers.importPromptStoreEntry;
 exports.togglePromptStoreLike = storeHandlers.togglePromptStoreLike;
 exports.recordPromptStoreView = storeHandlers.recordPromptStoreView;
 exports.reviewInovaPrompt = promptReviewHandlers.reviewInovaPrompt;
+exports.createInovaMeetingJob = meetingHandlers.createInovaMeetingJob;
+exports.getInovaMeetingJob = meetingHandlers.getInovaMeetingJob;
+exports.getInovaMeetingArtifact = meetingHandlers.getInovaMeetingArtifact;
 
 exports.loadInovaPromptLibrary = onRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
   try {

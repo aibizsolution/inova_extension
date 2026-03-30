@@ -5,7 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
 const { createCloudHarnessServer } = require("./cloud-harness-server");
-const { PROVIDER_IDENTITY } = require("../fixtures/cloud-harness/fixtures");
+const { MEETING_CREATE_REQUEST, PROVIDER_IDENTITY } = require("../fixtures/cloud-harness/fixtures");
 
 const root = path.resolve(__dirname, "..");
 const accessToken = "fixture-access-token";
@@ -42,6 +42,45 @@ async function main() {
     const review = await namespace.cloudApi.reviewInovaPrompt("Review this prompt.", providerIdentity, accessToken);
     assert.equal(review.verdict, "revise");
     assert(review.refinedPrompt.includes("executive"), "Review fixture should return the refined prompt");
+
+    const meetingJob = await namespace.cloudApi.createInovaMeetingJob(
+      cloneValue(MEETING_CREATE_REQUEST),
+      providerIdentity,
+      accessToken
+    );
+    assert.equal(meetingJob.job.status, "queued");
+    assert.equal(meetingJob.job.sessionId, MEETING_CREATE_REQUEST.meeting.sessionId);
+
+    const meetingProcessing = await namespace.cloudApi.getInovaMeetingJob(
+      {
+        jobId: meetingJob.job.jobId,
+        sessionId: meetingJob.job.sessionId,
+      },
+      providerIdentity,
+      accessToken
+    );
+    assert.equal(meetingProcessing.job.status, "processing");
+
+    const meetingSucceeded = await namespace.cloudApi.getInovaMeetingJob(
+      {
+        jobId: meetingJob.job.jobId,
+        sessionId: meetingJob.job.sessionId,
+      },
+      providerIdentity,
+      accessToken
+    );
+    assert.equal(meetingSucceeded.job.status, "succeeded");
+
+    const meetingArtifact = await namespace.cloudApi.getInovaMeetingArtifact(
+      {
+        artifactId: meetingSucceeded.job.transcript.artifactId,
+        jobId: meetingJob.job.jobId,
+      },
+      providerIdentity,
+      accessToken
+    );
+    assert.equal(meetingArtifact.artifact.artifactId, meetingSucceeded.job.transcript.artifactId);
+    assert.equal(meetingArtifact.artifact.segments.length > 0, true);
 
     const publish = await namespace.cloudApi.publishPromptToStore(
       { title: "Local publish", content: "Create a concise executive summary." },

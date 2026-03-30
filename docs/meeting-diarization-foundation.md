@@ -31,6 +31,7 @@
 - `getInovaMeetingArtifact`
 
 Functions는 i-Nova 사용자 검증, meeting `session` 등록, `job` 등록, worker enqueue만 맡는다. 실제 전사/화자분리와 source audio 정리는 worker가 맡는다.
+현재 저장소에는 위 세 endpoint의 `gateway scaffold`만 먼저 들어가 있고, 실제 worker 연결은 아직 구현하지 않았다.
 
 ## 3. 최소 데이터 모델
 

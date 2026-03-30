@@ -17,7 +17,7 @@ const recentSyncResults = new Map();
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const type = String(message?.type || "");
-  if (!type.startsWith("inova-sync:") && !type.startsWith("inova-store:") && !type.startsWith("inova-release:") && !type.startsWith("inova-review:")) {
+  if (!type.startsWith("inova-sync:") && !type.startsWith("inova-store:") && !type.startsWith("inova-release:") && !type.startsWith("inova-review:") && !type.startsWith("inova-meeting:")) {
     return false;
   }
   handleMessage(message, sender)
@@ -56,6 +56,15 @@ async function handleMessage(message, sender) {
   }
   if (message.type === "inova-review:prompt") {
     return reviewPromptDraft(message.prompt, message.providerIdentity);
+  }
+  if (message.type === "inova-meeting:create-job") {
+    return createMeetingJob(message.input, message.providerIdentity);
+  }
+  if (message.type === "inova-meeting:get-job") {
+    return getMeetingJob(message.input, message.providerIdentity);
+  }
+  if (message.type === "inova-meeting:get-artifact") {
+    return getMeetingArtifact(message.input, message.providerIdentity);
   }
   if (message.type === "inova-release:latest") {
     return fetchReleaseJson("latest");
@@ -116,6 +125,21 @@ async function recordPromptStoreView(entryId, providerIdentity) {
 async function reviewPromptDraft(prompt, providerIdentity) {
   const accessToken = await getInovaAccessToken();
   return namespace.cloudApi.reviewInovaPrompt(prompt, providerIdentity, accessToken);
+}
+
+async function createMeetingJob(input, providerIdentity) {
+  const accessToken = await getInovaAccessToken();
+  return namespace.cloudApi.createInovaMeetingJob(input, providerIdentity, accessToken);
+}
+
+async function getMeetingJob(input, providerIdentity) {
+  const accessToken = await getInovaAccessToken();
+  return namespace.cloudApi.getInovaMeetingJob(input, providerIdentity, accessToken);
+}
+
+async function getMeetingArtifact(input, providerIdentity) {
+  const accessToken = await getInovaAccessToken();
+  return namespace.cloudApi.getInovaMeetingArtifact(input, providerIdentity, accessToken);
 }
 
 async function syncPromptLibrary(syncDocument) {
