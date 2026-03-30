@@ -57,7 +57,6 @@
       },
     },
   ];
-
   const storageState = {
     settings: {
       enabled: true,
@@ -158,6 +157,110 @@
           minSupportedVersion: "0.3.7",
         },
       ],
+    },
+    meetingState: {
+      version: 1,
+      session: {
+        sessionId: "fixture-session",
+        title: "신규 프로모션 회의",
+        startedAt: "2026-03-30T08:20:00.000Z",
+        endedAt: "2026-03-30T08:31:00.000Z",
+        language: "ko",
+      },
+      capture: {
+        captureMode: "tab-audio",
+        error: "",
+        mimeType: "audio/webm",
+        channelCount: 1,
+        durationMs: 660000,
+        sizeBytes: 7340032,
+        status: "uploaded",
+      },
+      job: {
+        jobId: "meeting-job-fixture-1",
+        status: "succeeded",
+        updatedAt: now,
+        progress: {
+          phase: "completed",
+          percent: 100,
+        },
+        artifactId: "meeting-artifact-transcript-1",
+        error: "",
+        sourceAudioDeleted: true,
+      },
+      transcript: {
+        artifactId: "meeting-artifact-transcript-1",
+        text: "SPEAKER_00: 신규 프로모션 일정을 이번 주 안에 확정합시다.\nSPEAKER_01: 예산과 랜딩 문구는 오늘 초안으로 정리하겠습니다.",
+        segments: [
+          {
+            startMs: 0,
+            endMs: 5300,
+            speakerLabel: "SPEAKER_00",
+            text: "신규 프로모션 일정을 이번 주 안에 확정합시다.",
+          },
+          {
+            startMs: 5400,
+            endMs: 10400,
+            speakerLabel: "SPEAKER_01",
+            text: "예산과 랜딩 문구는 오늘 초안으로 정리하겠습니다.",
+          },
+        ],
+        speakerCount: 2,
+        loadedAt: now,
+      },
+    },
+    meetingStateBySession: {
+      "fixture-session": {
+        version: 1,
+        session: {
+          sessionId: "fixture-session",
+          title: "신규 프로모션 회의",
+          startedAt: "2026-03-30T08:20:00.000Z",
+          endedAt: "2026-03-30T08:31:00.000Z",
+          language: "ko",
+        },
+        capture: {
+          captureMode: "tab-audio",
+          error: "",
+          mimeType: "audio/webm",
+          channelCount: 1,
+          durationMs: 660000,
+          sizeBytes: 7340032,
+          status: "uploaded",
+        },
+        job: {
+          jobId: "meeting-job-fixture-1",
+          status: "succeeded",
+          updatedAt: now,
+          progress: {
+            phase: "completed",
+            percent: 100,
+          },
+          artifactId: "meeting-artifact-transcript-1",
+          error: "",
+          sourceAudioDeleted: true,
+        },
+        transcript: {
+          artifactId: "meeting-artifact-transcript-1",
+          text: "SPEAKER_00: 신규 프로모션 일정을 이번 주 안에 확정합시다.\nSPEAKER_01: 예산과 랜딩 문구는 오늘 초안으로 정리하겠습니다.",
+          segments: [
+            {
+              startMs: 0,
+              endMs: 5300,
+              speakerLabel: "SPEAKER_00",
+              text: "신규 프로모션 일정을 이번 주 안에 확정합시다.",
+            },
+            {
+              startMs: 5400,
+              endMs: 10400,
+              speakerLabel: "SPEAKER_01",
+              text: "예산과 랜딩 문구는 오늘 초안으로 정리하겠습니다.",
+            },
+          ],
+          speakerCount: 2,
+          loadedAt: now,
+        },
+      },
     },
   };
 

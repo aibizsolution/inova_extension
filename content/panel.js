@@ -78,6 +78,10 @@
     try {
       return state.activeTool === "prompts"
         ? namespace.promptHubView.render(state.promptTool)
+        : state.activeTool === "meeting"
+            ? namespace.meetingView?.render
+              ? namespace.meetingView.render(state.meetingTool)
+              : '<section class="inova-tool-section"><div class="inova-bookmark-empty">회의 화면을 불러오지 못했어요. 확장프로그램을 다시 로드해 주세요.</div></section>'
         : state.activeTool === "release"
             ? namespace.releaseView?.render
               ? namespace.releaseView.render(state.releaseTool)

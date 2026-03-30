@@ -52,7 +52,8 @@ function buildStagedSnapshot() {
     packageJson: readJsonFromIndex(PACKAGE_PATH) || readJsonFromFile(PACKAGE_PATH),
     manifestJson: readJsonFromIndex(MANIFEST_PATH) || readJsonFromFile(MANIFEST_PATH),
     releaseCatalog: readReleaseCatalogFromIndex() || readReleaseCatalog(root),
-    baseVersions: [readVersionFromRef("HEAD", PACKAGE_PATH), readVersionFromRef("HEAD", MANIFEST_PATH)].filter(Boolean),
+    baseManifestVersion: readVersionFromRef("HEAD", MANIFEST_PATH),
+    basePackageVersion: readVersionFromRef("HEAD", PACKAGE_PATH),
   });
 }
 
@@ -67,7 +68,8 @@ function buildRangeSnapshot(range) {
     packageJson: readJsonFromRef(targetRef, PACKAGE_PATH) || readJsonFromFile(PACKAGE_PATH),
     manifestJson: readJsonFromRef(targetRef, MANIFEST_PATH) || readJsonFromFile(MANIFEST_PATH),
     releaseCatalog: readReleaseCatalogFromRef(targetRef) || readReleaseCatalog(root),
-    baseVersions: [readVersionFromRef(baseRef, PACKAGE_PATH), readVersionFromRef(baseRef, MANIFEST_PATH)].filter(Boolean),
+    baseManifestVersion: readVersionFromRef(baseRef, MANIFEST_PATH),
+    basePackageVersion: readVersionFromRef(baseRef, PACKAGE_PATH),
   });
 }
 
@@ -89,27 +91,36 @@ function buildPushSnapshots(stdin, remoteName) {
         packageJson: readJsonFromRef(localSha, PACKAGE_PATH) || readJsonFromFile(PACKAGE_PATH),
         manifestJson: readJsonFromRef(localSha, MANIFEST_PATH) || readJsonFromFile(MANIFEST_PATH),
         releaseCatalog: readReleaseCatalogFromRef(localSha) || readReleaseCatalog(root),
-        baseVersions: baseSha ? [readVersionFromRef(baseSha, PACKAGE_PATH), readVersionFromRef(baseSha, MANIFEST_PATH)].filter(Boolean) : [],
+        baseManifestVersion: baseSha ? readVersionFromRef(baseSha, MANIFEST_PATH) : "",
+        basePackageVersion: baseSha ? readVersionFromRef(baseSha, PACKAGE_PATH) : "",
       });
     });
 }
 
 function createSnapshot(label, changedFiles, payload) {
   const uniqueFiles = Array.from(new Set((changedFiles || []).filter(Boolean)));
+  const currentVersion = String(payload.packageJson?.version || "").trim();
+  const manifestVersion = String(payload.manifestJson?.version || "").trim();
+  const basePackageVersion = String(payload.basePackageVersion || "").trim();
+  const baseManifestVersion = String(payload.baseManifestVersion || "").trim();
+  const packageVersionChanged = uniqueFiles.includes(PACKAGE_PATH) && currentVersion !== basePackageVersion;
+  const manifestVersionChanged = uniqueFiles.includes(MANIFEST_PATH) && manifestVersion !== baseManifestVersion;
+  const releaseNotesChanged = uniqueFiles.includes(RELEASE_NOTES_PATH);
   return {
     label,
     changedFiles: uniqueFiles,
     featureFiles: uniqueFiles.filter(isFeatureFacingFile),
     releaseMetadataFiles: uniqueFiles.filter(isReleaseMetadataFile),
+    releasePreparation: releaseNotesChanged || packageVersionChanged || manifestVersionChanged,
     packageJson: payload.packageJson || {},
     manifestJson: payload.manifestJson || {},
     releaseCatalog: payload.releaseCatalog || readReleaseCatalog(root),
-    baseVersions: Array.isArray(payload.baseVersions) ? payload.baseVersions.filter(Boolean) : [],
+    baseVersions: [basePackageVersion, baseManifestVersion].filter(Boolean),
   };
 }
 
 function validateSnapshot(snapshot) {
-  if (!snapshot.releaseMetadataFiles.length) {
+  if (!snapshot.releasePreparation) {
     return;
   }
 

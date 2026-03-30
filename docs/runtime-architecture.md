@@ -34,8 +34,8 @@
 ### Content Script
 
 - 위치: `content/`, `shared/`, `manifest.json`
-- 역할: `inova.incross.com` 안에 실험실 패널을 삽입하고, 질문 탐색/프롬프트/스토어/릴리스 UI와 회의 job polling 흐름을 조립한다.
-- 특징: 현재 대화 DOM을 읽고, 로컬 상태를 붙이고, 필요한 클라우드 호출은 background에 메시지로 위임한다. 회의 기능은 브라우저 쪽에서 `meetingStateBySession` 저장, `meetingBridge` 호출, `content/meeting-manager.js` polling 루프를 먼저 분리해 둔다.
+- 역할: `inova.incross.com` 안에 실험실 패널을 삽입하고, 질문 탐색/회의록/프롬프트/스토어/릴리스 UI와 회의 job polling 흐름을 조립한다.
+- 특징: 현재 대화 DOM을 읽고, 로컬 상태를 붙이고, 필요한 클라우드 호출은 background에 메시지로 위임한다. 회의 기능은 브라우저 쪽에서 `meetingStateBySession` 저장, `meetingBridge` 호출, `content/meeting-manager.js` polling 루프, `content/meeting-view.js` 결과 렌더링까지 분리해 둔다.
 
 ### Background Service Worker
 
@@ -101,6 +101,7 @@
 2. popup이 `inova-meeting:create-job`을 background로 보낸다.
 3. background가 access token을 붙여 Functions gateway를 호출한다.
 4. 응답 job snapshot은 다시 `meetingStateBySession`에 저장되고, 이후 polling은 content의 `meeting-manager`가 이어받는다.
+5. content 패널의 `회의` 도구는 같은 세션의 capture/job/transcript 상태를 읽어 diarized transcript를 바로 보여 준다.
 
 ## 4. 책임 경계 요약
 
@@ -163,7 +164,7 @@
 ## 6. 하네스 관점의 현재 한계
 
 - 핵심 UI 흐름은 여전히 실사이트 의존성이 남아 있지만, 로컬 팝업 하네스와 로컬 브라우저 하네스로 popup/content-script 부팅과 주요 토글 상태 전이까지는 먼저 확인할 수 있다.
-- 현재 smoke path는 DOM 수집 계층, popup 상태 전이, 회의 기능용 session/job/artifact 계약, 브라우저 meetingState 상태 전이, 로컬 클라우드 계약 검증, background service worker 라우팅 검증, 오프스크린 레코더 하네스, 로컬 브라우저 하네스까지 포함한다.
+- 현재 smoke path는 DOM 수집 계층, popup 상태 전이, 회의 기능용 session/job/artifact 계약, 브라우저 meetingState 상태 전이, content 패널 회의 transcript 렌더링, 로컬 클라우드 계약 검증, background service worker 라우팅 검증, 오프스크린 레코더 하네스, 로컬 브라우저 하네스까지 포함한다.
 - Firebase emulator는 아직 없지만, fake backend 서버로 Cloud Functions payload 계약과 Hosting release JSON을 로컬에서 재현할 수 있다.
 - 장기적으로는 content/background/functions 경계를 각각 재현할 수 있는 fixture와 smoke path를 늘려야 한다.
 

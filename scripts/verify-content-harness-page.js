@@ -49,7 +49,7 @@ async function main() {
   );
 
   const toolButtons = Array.from(window.document.querySelectorAll("#inova-tool-rail [data-tool-id]"));
-  assert.equal(toolButtons.length, 3);
+  assert.equal(toolButtons.length, 4);
 
   const bookmarkItems = Array.from(window.document.querySelectorAll(".inova-bookmark-item"));
   assert.equal(bookmarkItems.length, 3);
@@ -67,6 +67,15 @@ async function main() {
     "Store view should load against fake runtime responses"
   );
   assert(window.document.querySelector(".inova-store-item"), "Store view should load against fake runtime responses");
+
+  click(window, getToolButton(window, "meeting"));
+  await waitFor(
+    () => (window.document.getElementById("inova-tool-content")?.textContent || "").includes("회의록이 준비되었습니다."),
+    "Meeting view should render fixture meeting transcript metadata"
+  );
+  const meetingText = window.document.getElementById("inova-tool-content")?.textContent || "";
+  assert(meetingText.includes("화자 1"), "Meeting view should render diarized transcript text");
+  assert(meetingText.includes("원본 오디오 정리 완료"), "Meeting view should render source audio cleanup state");
 
   click(window, getToolButton(window, "release"));
   await waitFor(

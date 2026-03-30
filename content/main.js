@@ -124,12 +124,23 @@
     const reviewState = promptReviewManager.buildViewState();
     const activePromptTab = getActivePromptTab(reviewState.open);
     const storeState = storeManager.buildViewState();
+    const meetingTool = buildMeetingToolState(state.meetingState, state.sessionTitle);
     const releaseState = releaseManager.buildViewState();
     const bookmarkCount = state.bookmarks.length;
     const promptCount = state.promptLibrary.items.length;
+    const meetingCount = meetingTool.count;
     const releaseCount = releaseState.updateAvailable ? 1 : 0;
     const storeCount = Math.max(0, Number(state.store.totalCount) || state.store.items.length);
     const promptToolCount = activePromptTab === "store" ? storeCount : promptCount;
+    const toolCounts = {
+      bookmarks: bookmarkCount,
+      meeting: meetingCount,
+      prompts: promptToolCount,
+      release: releaseCount,
+    };
+    const activeToolCount = Object.prototype.hasOwnProperty.call(toolCounts, state.activeTool)
+      ? toolCounts[state.activeTool]
+      : 0;
     namespace.contentPanel.renderPanel({
       activeTool: state.activeTool,
       bookmarksTool: {
@@ -139,7 +150,10 @@
         metaText: state.queries.bookmarks ? `검색 결과 ${bookmarkItems.length}개` : buildBookmarkStatusText(),
         query: state.queries.bookmarks,
       },
-      handleCount: state.activeTool === "prompts" ? promptToolCount : state.activeTool === "release" ? releaseCount : bookmarkCount || promptCount || releaseCount,
+      handleCount: state.activeTool === "bookmarks"
+        ? bookmarkCount || promptCount || meetingCount || releaseCount
+        : activeToolCount,
+      meetingTool,
       releaseTool: releaseState,
       handleRatio: namespace.storage.getHandleRatio(state.uiPreferences, global.innerWidth),
       open: state.open,
@@ -152,10 +166,17 @@
           ? [{ id: "library", label: "내 요청", count: promptCount }, { id: "store", label: "스토어", count: storeCount }, { id: "review", label: "검토", count: null }]
           : [{ id: "library", label: "내 요청", count: promptCount }, { id: "store", label: "스토어", count: storeCount }],
       },
-      toolCount: state.activeTool === "prompts" ? promptToolCount : state.activeTool === "release" ? releaseCount : bookmarkCount,
-      toolTitle: state.activeTool === "prompts" ? "프롬프트" : state.activeTool === "release" ? "릴리스 안내" : "대화 탐색",
+      toolCount: activeToolCount,
+      toolTitle: state.activeTool === "prompts"
+        ? "프롬프트"
+        : state.activeTool === "meeting"
+            ? "회의록"
+            : state.activeTool === "release"
+                ? "릴리스 안내"
+                : "대화 탐색",
       tools: [
         { id: "bookmarks", label: "대화", count: bookmarkCount },
+        { id: "meeting", label: "회의", count: meetingCount },
         { id: "prompts", label: "프롬프트", count: promptCount },
         { id: "release", label: "릴리스", count: releaseCount },
       ],
@@ -281,7 +302,13 @@
       global.sessionStorage?.setItem(PANEL_OPEN_KEY, String(Boolean(open)));
     } catch {}
   }
-  function normalizeToolId(toolId) { return toolId === "release" || toolId === "prompts" ? toolId : toolId === "store" ? "prompts" : "bookmarks"; }
+  function normalizeToolId(toolId) {
+    return toolId === "release" || toolId === "prompts" || toolId === "meeting"
+      ? toolId
+      : toolId === "store"
+          ? "prompts"
+          : "bookmarks";
+  }
   function showPromptTab(promptTabId) {
     const nextPromptTab = normalizePromptTab(promptTabId);
     state.open = true;
@@ -333,5 +360,24 @@
   function getActivePromptTab(reviewOpen = state.promptReview.open) { const tab = state.uiPreferences.activeTool === "store" ? "store" : normalizePromptTab(state.uiPreferences.activePromptTab); return tab === "review" && !reviewOpen ? "library" : tab; }
   function isStoreTabActive() { return state.activeTool === "prompts" && getActivePromptTab() === "store"; }
   function normalizePromptTab(promptTabId) { return promptTabId === "store" || promptTabId === "review" ? promptTabId : "library"; }
+  function buildMeetingToolState(meetingState, sessionTitle) {
+    const normalized = namespace.meetingState.mergeMeetingState(
+      meetingState,
+      sessionTitle ? { session: { title: sessionTitle } } : null
+    );
+    const hasTranscript = Boolean(namespace.session.normalizeText(normalized.transcript.text))
+      || (Array.isArray(normalized.transcript.segments) && normalized.transcript.segments.length > 0);
+    const hasActivity = normalized.capture.status !== "idle"
+      || normalized.job.status !== "idle"
+      || hasTranscript;
+    return {
+      ...normalized,
+      count: Array.isArray(normalized.transcript.segments) && normalized.transcript.segments.length
+        ? normalized.transcript.segments.length
+        : hasActivity
+            ? 1
+            : 0,
+    };
+  }
   async function publishPrompt(promptId, categoryId, title) { return storeManager.publishPrompt(promptId, categoryId, title); }
 })(globalThis);

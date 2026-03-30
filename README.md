@@ -1,6 +1,6 @@
 # i-Nova 더하기
 
-`i-Nova 더하기`는 `inova.incross.com` 대화 화면에 편의 기능을 덧붙이는 크롬 확장프로그램입니다. 현재 MVP는 `실험실 패널` 구조로, 현재 대화의 `질문 모아보기`, 사용자가 직접 저장하는 `자주 쓰는 요청`, 여러 사용자가 공유하는 `프롬프트 스토어`, 그리고 수동 배포용 `릴리스 안내`를 한 패널 안에서 바로 씁니다.
+`i-Nova 더하기`는 `inova.incross.com` 대화 화면에 편의 기능을 덧붙이는 크롬 확장프로그램입니다. 현재 MVP는 `실험실 패널` 구조로, 현재 대화의 `질문 모아보기`, 세션별 `회의록 상태/전사 결과`, 사용자가 직접 저장하는 `자주 쓰는 요청`, 여러 사용자가 공유하는 `프롬프트 스토어`, 그리고 수동 배포용 `릴리스 안내`를 한 패널 안에서 바로 씁니다.
 
 ## 핵심 기능
 
@@ -13,10 +13,13 @@
   - 질문 목록은 현재 대화 화면을 기준으로 실시간으로 갱신됩니다.
 - `우측 슬라이드 패널`
   - 채팅 화면 오른쪽에 붙는 `실험실 패널`을 제공합니다.
-  - 왼쪽의 세로 도구 레일에서 `질문`, `요청`, `스토어`, `릴리스`를 바로 전환할 수 있습니다.
+  - 왼쪽의 세로 도구 레일에서 `대화`, `회의`, `프롬프트`, `릴리스`를 바로 전환할 수 있습니다.
   - 기본은 닫힌 상태이며, 켜져 있을 때만 핸들과 패널이 보입니다.
   - 사용자가 마지막으로 열어 둔 상태를 같은 탭에서 기억합니다.
   - 닫힌 상태의 `실험실` 핸들은 위아래로 옮길 수 있고, 위치는 사이트 기준으로 기억합니다.
+- `회의록 패널`
+  - 팝업에서 시작한 현재 대화 기준 탭 오디오 녹음 상태를 content 패널 안에서도 바로 확인할 수 있습니다.
+  - 전사 접수 뒤에는 같은 세션의 `queued -> processing -> succeeded` 상태와 diarized transcript를 `회의` 도구에서 이어서 봅니다.
 - `대화 안에서 찾기`
   - 지금 보고 있는 대화 안에서만 질문을 검색합니다.
   - 결과를 클릭하면 해당 질문 위치로 이동하고, 좁은 화면에서는 패널을 잠시 접어 원문을 보기 쉽게 합니다.
@@ -81,6 +84,7 @@
   - `composer-review-float.js`: 입력창 우측 상단 평가 버튼과 팝오버 렌더링
   - `cloud-sync-manager.js`: 프롬프트 보관함 원격 백업 흐름 조정
   - `meeting-manager.js`: 현재 세션 기준 회의 job polling과 artifact 반영
+  - `meeting-view.js`: 회의 상태 카드와 전사 결과 렌더링
   - `prompt-review-manager.js`: 현재 입력 프롬프트 평가 호출과 상태 관리
   - `prompt-view.js`: 요청 탭 렌더링
   - `prompt-manager.js`: 요청 CRUD, 가져오기/내보내기, 입력창 주입
@@ -114,7 +118,7 @@
 - `background/service-worker.js`는 i-Nova access token과 Firebase Functions를 연결해 원격 백업 호출을 처리하고, 회의 녹음에서는 `tabCapture -> offscreen recorder -> meetingStateBySession` 브로커 역할도 맡습니다.
 - `offscreen/meeting-recorder.js`는 popup이 직접 접근하지 못하는 오디오 캡처를 대신 수행하고, 성공/실패 결과를 service worker에 되돌립니다.
 - 팝업에서 `전사 시작`을 누르면 브라우저에 저장된 `cloudSync.providerIdentity`를 재사용해 `createInovaMeetingJob` gateway를 호출하고, 이후 `queued -> processing -> succeeded` 상태는 기존 `content/meeting-manager.js` polling 루프로 이어집니다.
-- 회의 업로드/전사 결과 UI는 아직 본격 노출하지 않았지만, `shared/cloud-api.js -> background/service-worker.js -> functions/*` 경계의 gateway 스캐폴딩은 먼저 연결해 두었습니다.
+- 회의 업로드/전사 결과는 `회의` 도구에서 현재 세션 기준으로 바로 보이고, `shared/cloud-api.js -> background/service-worker.js -> functions/*` 경계의 gateway를 통해 상태가 이어집니다.
 - 브라우저 쪽에서는 `shared/meeting-bridge.js` 와 `shared/meeting-state.js` 로 회의 녹음 start/stop, 회의 job 생성, polling, artifact 반영, local `meetingState` 저장 기준을 먼저 맞춰 두었습니다.
 - 질문 목록 자체는 `chrome.storage.local`에 저장하지 않고, 현재 대화 화면을 기준으로 바로 렌더링합니다.
 - 요청 보관함은 `chrome.storage.local.promptLibrary`에 저장합니다.
@@ -132,12 +136,12 @@
 
 1. 툴바 확장 아이콘을 눌러 `i-Nova에서 사용`과 `질문 자동 모으기` 상태를 확인합니다.
 2. 필요하면 `이 대화에서 일시 중지`를 켭니다.
-3. i-Nova 채팅에서 질문을 보내면 `질문` 도구에 자동으로 반영됩니다.
-4. 오른쪽 슬라이드 패널의 세로 레일에서 `질문`, `요청`, `스토어`, `릴리스`를 전환합니다.
-5. `질문` 도구에서는 검색하거나 항목을 클릭해 해당 질문으로 이동합니다.
-6. `요청` 도구에서는 자주 쓰는 요청을 추가하거나 선택해 현재 입력창에 바로 넣습니다.
-7. 대화 입력창 우측 상단의 평가 버튼으로 현재 프롬프트를 참고용으로 평가하고, 필요하면 보완 프롬프트를 다시 반영합니다.
-8. `스토어` 도구에서는 공유 프롬프트를 찾아 좋아요를 누르거나 내 요청으로 가져옵니다.
+3. i-Nova 채팅에서 질문을 보내면 `대화` 도구에 자동으로 반영됩니다.
+4. 오른쪽 슬라이드 패널의 세로 레일에서 `대화`, `회의`, `프롬프트`, `릴리스`를 전환합니다.
+5. `대화` 도구에서는 검색하거나 항목을 클릭해 해당 질문으로 이동합니다.
+6. `회의` 도구에서는 현재 대화 기준 녹음 상태와 전사 결과를 확인합니다.
+7. `프롬프트` 도구에서는 자주 쓰는 요청을 추가하거나 선택해 현재 입력창에 바로 넣고, `스토어` 서브탭에서 공유 프롬프트를 찾아 좋아요를 누르거나 내 요청으로 가져옵니다.
+8. 대화 입력창 우측 상단의 평가 버튼으로 현재 프롬프트를 참고용으로 평가하고, 필요하면 보완 프롬프트를 다시 반영합니다.
 9. `릴리스` 도구에서는 현재 버전, 최신 버전, 업데이트 ZIP, 이전 버전 롤백 링크를 확인합니다.
 10. 필요하면 요청 묶음을 JSON으로 내보내거나, 다른 사용자의 요청 묶음을 가져옵니다.
 
@@ -188,7 +192,7 @@ npm run verify:harness-page
 
 `verify:offscreen`은 `offscreen/meeting-recorder.js`를 독립 하네스에서 부팅해 `getUserMedia -> MediaRecorder -> recorder-failed` 루프가 탭 오디오 fixture 기준으로 정상 동작하는지 확인합니다.
 
-`verify:harness-page`는 로컬 브라우저 하네스 fixture와 fake runtime 응답으로 실제 content-script 패널이 부팅되고, `프롬프트`/`스토어`/`릴리스` 탭이 최소 수준으로 렌더링되는지 확인합니다.
+`verify:harness-page`는 로컬 브라우저 하네스 fixture와 fake runtime 응답으로 실제 content-script 패널이 부팅되고, `회의`/`프롬프트`/`스토어`/`릴리스` 탭이 최소 수준으로 렌더링되는지 확인합니다.
 
 브라우저에서 직접 로컬 하네스를 열어 보고 싶으면 다음을 실행합니다.
 

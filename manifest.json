@@ -55,6 +55,7 @@
         "content/composer-review-float.js",
         "content/prompt-review-view.js",
         "content/bookmark-view.js",
+        "content/meeting-view.js",
         "content/prompt-view.js",
         "content/store-view.js",
         "content/prompt-hub-view.js",
