@@ -150,12 +150,15 @@ npm run verify
 ```bash
 npm run verify:harness
 npm run verify:smoke
+npm run verify:popup
 npm run verify:cloud
 npm run verify:service-worker
 npm run verify:harness-page
 ```
 
 `verify:smoke`는 `fixtures/inova-chat-session.html`을 기준으로 질문 수집 DOM 경로가 현재 selectors와 세션 정규화 규칙에 맞게 동작하는지 확인합니다.
+
+`verify:popup`은 로컬 popup harness fixture에서 `popup/index.js`를 부팅해 현재 탭 식별, 세션 표시, `i-Nova에서 사용`, `이 대화에서 일시 중지` 토글 흐름이 기본 상태 전이와 함께 맞는지 확인합니다.
 
 `verify:cloud`는 로컬 fixture-backed HTTP 서버를 잠깐 띄워 `shared/cloud-api.js`가 Cloud Functions/Hosting payload 계약을 production URL 대신 로컬 URL override로 정상 처리하는지 확인합니다.
 
@@ -171,6 +174,8 @@ npm run harness:serve:cloud
 ```
 
 기본 주소는 `http://127.0.0.1:4173/fixtures/content-harness.html?sid=fixture-session` 입니다.
+
+로컬 팝업 하네스 주소는 `http://127.0.0.1:4173/fixtures/popup-harness.html` 입니다.
 
 로컬 클라우드 하네스 기본 주소는 `http://127.0.0.1:4174` 이고, Functions base URL과 Hosting release JSON을 fixture로 제공합니다.
 

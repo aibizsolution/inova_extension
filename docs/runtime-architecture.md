@@ -116,6 +116,7 @@
 
 - `npm run verify:harness`
 - `npm run verify:smoke`
+- `npm run verify:popup`
 - `npm run verify:cloud`
 - `npm run verify:service-worker`
 - `npm run verify:harness-page`
@@ -128,12 +129,13 @@
 - `npm run check:function-logs -- --since 10`
 - 실제 브라우저 확인: `docs/e2e-browser-workflow.md`
 - 로컬 브라우저 하네스: `http://127.0.0.1:4173/fixtures/content-harness.html?sid=fixture-session`
+- 로컬 팝업 하네스: `http://127.0.0.1:4173/fixtures/popup-harness.html`
 - 로컬 클라우드 하네스: `http://127.0.0.1:4174`
 
 ## 6. 하네스 관점의 현재 한계
 
-- 핵심 UI 흐름은 여전히 실사이트 의존성이 남아 있지만, 로컬 브라우저 하네스로 content-script 패널 부팅과 탭 전환까지는 먼저 확인할 수 있다.
-- 현재 smoke path는 DOM 수집 계층, 로컬 클라우드 계약 검증, background service worker 라우팅 검증, 로컬 브라우저 하네스까지 포함한다.
+- 핵심 UI 흐름은 여전히 실사이트 의존성이 남아 있지만, 로컬 팝업 하네스와 로컬 브라우저 하네스로 popup/content-script 부팅과 주요 토글 상태 전이까지는 먼저 확인할 수 있다.
+- 현재 smoke path는 DOM 수집 계층, popup 상태 전이, 로컬 클라우드 계약 검증, background service worker 라우팅 검증, 로컬 브라우저 하네스까지 포함한다.
 - Firebase emulator는 아직 없지만, fake backend 서버로 Cloud Functions payload 계약과 Hosting release JSON을 로컬에서 재현할 수 있다.
 - 장기적으로는 content/background/functions 경계를 각각 재현할 수 있는 fixture와 smoke path를 늘려야 한다.
 

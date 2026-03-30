@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>i-Nova Popup Harness</title>
+    <link rel="stylesheet" href="../popup/index.css" />
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: #eef3f8;
+        color: #13202b;
+        font-family: "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+      }
+
+      .popup-harness-banner {
+        display: grid;
+        gap: 6px;
+        padding: 16px 18px;
+        border-bottom: 1px solid rgba(19, 32, 43, 0.08);
+        background: rgba(255, 255, 255, 0.94);
+      }
+
+      .popup-harness-banner strong {
+        font-size: 14px;
+      }
+
+      .popup-harness-banner p {
+        margin: 0;
+        font-size: 13px;
+        color: rgba(19, 32, 43, 0.72);
+      }
+
+      .popup-harness-stage {
+        display: flex;
+        justify-content: center;
+        padding: 28px 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="popup-harness-banner">
+      <strong>Local Popup Harness</strong>
+      <p>This page runs the popup UI against fake chrome tabs and fake local storage.</p>
+      <p>Use refresh to swap the active tab state and verify the popup flow without Chrome extension reloads.</p>
+    </div>
+
+    <div class="popup-harness-stage">
+      <main class="shell">
+        <header class="card hero">
+          <div class="hero__top">
+            <div class="hero__copy">
+              <p class="eyebrow">i-Nova</p>
+              <h1>아이노바 실험실</h1>
+              <p class="subtitle">현재 대화에서 질문 정리와 자주 쓰는 요청을 바로 엽니다.</p>
+            </div>
+            <div class="hero__actions">
+              <span id="sitePill" class="pill">현재 사이트</span>
+              <button id="refreshButton" class="refresh" type="button">새로고침</button>
+            </div>
+          </div>
+          <div class="hero__foot">
+            <span id="syncStatus" class="sync">읽는 중</span>
+          </div>
+        </header>
+
+        <section class="card controls" aria-label="확장 설정">
+          <div class="control">
+            <div class="control__copy">
+              <span class="control__title">이 사이트에서 사용</span>
+              <span class="control__desc">i-Nova 대화 화면에서 우측 패널과 프롬프트 도구를 켭니다.</span>
+            </div>
+            <button id="enabledToggle" class="switch" type="button" role="switch" aria-checked="true">
+              <span class="switch__track"><span class="switch__thumb"></span></span>
+              <span id="enabledToggleLabel" class="switch__label">켜짐</span>
+            </button>
+          </div>
+
+          <div id="pauseControl" class="control" hidden>
+            <div class="control__copy">
+              <span class="control__title">이 대화만 잠시 끄기</span>
+              <span class="control__desc">현재 대화에서만 우측 패널과 자동 수집을 잠시 멈춥니다.</span>
+            </div>
+            <button id="pauseToggle" class="switch" type="button" role="switch" aria-checked="false">
+              <span class="switch__track"><span class="switch__thumb"></span></span>
+              <span id="pauseToggleLabel" class="switch__label">꺼짐</span>
+            </button>
+          </div>
+        </section>
+
+        <section class="card notes">
+          <div class="notes__row">
+            <span class="notes__title">현재 사이트</span>
+            <span id="tabLabel" class="notes__value">확인 중</span>
+          </div>
+          <div class="notes__row">
+            <span class="notes__title">현재 대화</span>
+            <span id="sessionLabel" class="notes__value">대화 화면을 열어 주세요</span>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./popup-harness-mock.js"></script>
+    <script src="../shared/constants.js"></script>
+    <script src="../shared/session.js"></script>
+    <script src="../shared/storage.js"></script>
+    <script src="../popup/index.js"></script>
+  </body>
+</html>
