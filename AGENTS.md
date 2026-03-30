@@ -14,6 +14,13 @@
 - 이 저장소는 사람 승인보다 자동 체크를 우선한다. PR은 기본이지만 권한 있는 사용자가 체크 통과 후 바로 머지할 수 있는 운영을 기준으로 본다.
 - 로컬 훅에는 `post-checkout`, `post-merge`도 포함되며, `main` 기준으로 이미 머지된 `codex/*` 브랜치를 자동 정리한다.
 
+## 하네스 우선 원칙
+- 새 기능이나 구조 변경에 들어가기 전에는 가능하면 먼저 `npm run verify`로 현재 baseline을 확인한다.
+- 전체 `verify`가 과하면 변경 경계에 맞는 최소 하네스부터 확인한다. 기본 선택지는 `verify:popup`, `verify:smoke`, `verify:cloud`, `verify:service-worker`, `verify:harness-page`다.
+- `popup`, `content`, `background`, `shared cloud API` 경계를 바꾸면 관련 fixture 또는 harness를 먼저 추가하거나 기존 하네스를 함께 갱신하고, 가능하면 `npm run verify` 체인에 연결한다.
+- 로컬 재현은 `popup harness -> content harness -> cloud harness -> 실제 Chrome E2E` 순서로 점진적으로 넓힌다.
+- 실사이트나 실클라우드 검증이 필요해도, 먼저 로컬 하네스에서 재현 가능한 최소 실패 경로를 확보한 뒤 실제 브라우저 점검으로 넘어간다.
+
 ## 릴리스 운영 원칙
 - feature 변경을 push할 때는 `README.md`, `package.json`, `manifest.json`, `releases/release-notes.json`을 함께 맞춘다.
 - 버전 상승은 `npm run version:bump -- <patch|minor|major>`를 기본으로 하고, 수동 수정으로 버전 파일만 따로 어긋나게 두지 않는다.
