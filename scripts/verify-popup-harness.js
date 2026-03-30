@@ -97,11 +97,23 @@ async function main() {
     "Popup harness should switch to captured state after capture stops"
   );
   assert.equal(window.document.getElementById("meetingStartButton")?.hidden, false);
+  assert.equal(window.document.getElementById("meetingStartButton")?.textContent, "전사 시작");
   assert(window.document.getElementById("meetingHint")?.textContent.includes("1분 05초"));
   assert(window.document.getElementById("meetingHint")?.textContent.includes("1.0MB"));
   assert.equal(
     window.__INOVA_POPUP_HARNESS__.state.storage.meetingStateBySession["fixture-session"]?.capture?.status,
     "captured"
+  );
+
+  click(window, window.document.getElementById("meetingStartButton"));
+  await waitFor(
+    () => window.document.getElementById("meetingBadge")?.textContent === "대기",
+    "Popup harness should switch to queued state after create-job"
+  );
+  assert(window.document.getElementById("meetingSummary")?.textContent.includes("접수"));
+  assert.equal(
+    window.__INOVA_POPUP_HARNESS__.state.storage.meetingStateBySession["fixture-session"]?.job?.status,
+    "queued"
   );
 
   window.__INOVA_POPUP_HARNESS__.setMeetingState({
@@ -127,7 +139,7 @@ async function main() {
   assert(window.__INOVA_POPUP_HARNESS__.state.storage.meetingStateBySession["fixture-session"]);
   assert.deepEqual(
     window.__INOVA_POPUP_HARNESS__.state.runtimeMessages.map((message) => message.type),
-    ["inova-meeting:start-capture", "inova-meeting:stop-capture"]
+    ["inova-meeting:start-capture", "inova-meeting:stop-capture", "inova-meeting:create-job"]
   );
 
   window.__INOVA_POPUP_HARNESS__.setActiveTab({

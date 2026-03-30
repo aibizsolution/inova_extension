@@ -8,6 +8,16 @@
     },
     runtimeMessages: [],
     storage: {
+      cloudSync: {
+        providerIdentity: {
+          available: true,
+          displayName: "Harness User",
+          email: "fixture@example.com",
+          numericUserId: 1001,
+          provider: "inova",
+          providerUserKey: "fixture-user",
+        },
+      },
       meetingStateBySession: {
         "fixture-session": {
           session: {
@@ -129,6 +139,9 @@
         if (message?.type === "inova-meeting:stop-capture") {
           return buildMeetingCaptureStopResponse(message?.input);
         }
+        if (message?.type === "inova-meeting:create-job") {
+          return buildMeetingCreateResponse(message?.input, message?.providerIdentity);
+        }
         return { ok: false, error: "Unexpected popup harness message" };
       },
     };
@@ -143,6 +156,7 @@
         status: "recording",
       },
       meeting: {
+        startedAt: "2026-03-30T08:00:00.000Z",
         sessionId: sessionId,
         title: normalizeText(input?.title) || state.activeTab.title,
       },
@@ -169,13 +183,16 @@
     const response = {
       capture: {
         captureMode: normalizeText(currentMeetingState?.capture?.captureMode) || "tab-audio",
+        channelCount: 1,
         durationMs: 65000,
         mimeType: normalizeText(currentMeetingState?.capture?.mimeType) || "audio/webm;codecs=opus",
         sizeBytes: 1048576,
         status: "captured",
       },
       meeting: {
+        endedAt: "2026-03-30T08:01:05.000Z",
         sessionId: sessionId,
+        startedAt: normalizeText(currentMeetingState?.session?.startedAt) || "2026-03-30T08:00:00.000Z",
         title: normalizeText(currentMeetingState?.session?.title) || state.activeTab.title,
       },
     };
@@ -191,6 +208,39 @@
     setMeetingStateForSession(sessionId, nextMeetingState);
     return {
       data: response,
+      ok: true,
+    };
+  }
+
+  function buildMeetingCreateResponse(input, providerIdentity) {
+    if (!normalizeText(providerIdentity?.providerUserKey)) {
+      return {
+        error: "현재 i-Nova 사용자 정보를 아직 확인하지 못했어요.",
+        ok: false,
+      };
+    }
+    const sessionId = normalizeText(input?.meeting?.sessionId);
+    return {
+      data: {
+        job: {
+          artifacts: [],
+          createdAt: "2026-03-30T08:01:08.000Z",
+          jobId: "job_fixture_capture_01",
+          queuedAt: "2026-03-30T08:01:08.000Z",
+          sessionId,
+          source: {
+            captureMode: normalizeText(input?.source?.captureMode) || "tab-audio",
+            durationMs: Number(input?.source?.durationMs) || 65000,
+            expiresAt: "2026-03-30T09:01:08.000Z",
+            mimeType: normalizeText(input?.source?.mimeType) || "audio/webm;codecs=opus",
+            sizeBytes: Number(input?.source?.sizeBytes) || 1048576,
+            storageObject: "tmp/meetings/job_fixture_capture_01.webm",
+            uploadStatus: "uploaded",
+          },
+          status: "queued",
+          updatedAt: "2026-03-30T08:01:08.000Z",
+        },
+      },
       ok: true,
     };
   }

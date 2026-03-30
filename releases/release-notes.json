@@ -2,6 +2,32 @@
   "schemaVersion": 1,
   "versions": [
     {
+      "version": "0.3.15",
+      "level": "patch",
+      "public": {
+        "headline": "팝업에서 전사 접수까지 바로 연결",
+        "summary": "이번 배포는 탭 녹음을 마친 뒤, 같은 팝업 카드에서 바로 회의 전사 작업을 접수할 수 있게 한 준비성 업데이트입니다.",
+        "changes": [
+          {
+            "type": "changed",
+            "text": "현재 대화의 회의 카드에서 녹음 완료 후 `전사 시작`을 눌러 queued 상태까지 바로 넘기고, 이후 처리 상태는 기존 회의 polling 흐름으로 이어지도록 정리했습니다."
+          }
+        ]
+      },
+      "internal": {
+        "changes": [
+          {
+            "type": "changed",
+            "text": "popup/index.js와 shared/meeting-state.js를 확장해 captured meetingState에서 create-job payload를 만들고, cloudSync.providerIdentity를 재사용해 popup에서 meeting job을 접수하도록 연결했습니다."
+          },
+          {
+            "type": "changed",
+            "text": "popup harness, meeting-state verify, service worker harness를 업데이트해 `captured -> create-job -> queued` 상태 전이와 popup sender 허용 경로를 로컬 검증에 포함했습니다."
+          }
+        ]
+      }
+    },
+    {
       "version": "0.3.14",
       "level": "patch",
       "public": {

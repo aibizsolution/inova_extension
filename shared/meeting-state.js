@@ -67,6 +67,8 @@
         updatedAt: "",
       },
       session: {
+        endedAt: "",
+        startedAt: normalizeText(meeting?.startedAt) || normalizeText(currentState?.session?.startedAt),
         sessionId: normalizeText(meeting?.sessionId) || normalizeText(currentState?.session?.sessionId),
         title: normalizeText(meeting?.title) || normalizeText(currentState?.session?.title),
       },
@@ -80,7 +82,7 @@
     return mergeMeetingState(currentState, {
       capture: {
         captureMode: normalizeText(capture?.captureMode) || normalizeText(currentState?.capture?.captureMode),
-        channelCount: normalizeCount(capture?.channelCount, currentState?.capture?.channelCount),
+        channelCount: normalizeCount(capture?.channelCount, currentState?.capture?.channelCount || 1),
         durationMs: normalizeCount(capture?.durationMs, currentState?.capture?.durationMs),
         error: "",
         mimeType: normalizeText(capture?.mimeType) || normalizeText(currentState?.capture?.mimeType),
@@ -88,6 +90,8 @@
         status: "captured",
       },
       session: {
+        endedAt: normalizeText(meeting?.endedAt) || normalizeText(currentState?.session?.endedAt),
+        startedAt: normalizeText(meeting?.startedAt) || normalizeText(currentState?.session?.startedAt),
         sessionId: normalizeText(meeting?.sessionId) || normalizeText(currentState?.session?.sessionId),
         title: normalizeText(meeting?.title) || normalizeText(currentState?.session?.title),
       },
@@ -200,6 +204,31 @@
     };
   }
 
+  function buildMeetingJobCreateInput(meetingState, overrides) {
+    const normalized = mergeMeetingState(meetingState, overrides);
+    return {
+      meeting: {
+        endedAt: normalizeText(normalized.session.endedAt),
+        language: normalizeText(normalized.session.language) || defaults.session.language,
+        sessionId: normalizeText(normalized.session.sessionId),
+        startedAt: normalizeText(normalized.session.startedAt),
+        title: normalizeText(normalized.session.title),
+      },
+      options: {
+        redaction: normalizeText(overrides?.options?.redaction) || "none",
+        speakerLabels: overrides?.options?.speakerLabels !== false,
+        summary: Boolean(overrides?.options?.summary),
+      },
+      source: {
+        captureMode: normalizeText(normalized.capture.captureMode),
+        channelCount: normalizeCount(normalized.capture.channelCount, 1),
+        durationMs: normalizeCount(normalized.capture.durationMs),
+        mimeType: normalizeText(normalized.capture.mimeType),
+        sizeBytes: normalizeCount(normalized.capture.sizeBytes),
+      },
+    };
+  }
+
   function shouldPollMeetingJob(meetingState) {
     const normalized = mergeMeetingState(meetingState);
     return Boolean(normalized.job.jobId && ACTIVE_JOB_STATUSES.has(normalized.job.status));
@@ -304,6 +333,7 @@
     applyMeetingArtifact,
     applyMeetingJobCreated,
     applyMeetingJobSnapshot,
+    buildMeetingJobCreateInput,
     buildMeetingArtifactLookup,
     buildMeetingJobLookup,
     createDraftMeetingState,

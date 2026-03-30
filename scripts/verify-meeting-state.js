@@ -84,6 +84,16 @@ async function main() {
   assert.equal(draft.session.sessionId, createRequest.meeting.sessionId);
   assert.equal(draft.capture.status, "captured");
   assert.equal(draft.capture.captureMode, createRequest.source.captureMode);
+  const createInput = namespace.meetingState.buildMeetingJobCreateInput(draft, {
+    options: {
+      redaction: "none",
+      speakerLabels: true,
+      summary: false,
+    },
+  });
+  assert.equal(createInput.meeting.sessionId, createRequest.meeting.sessionId);
+  assert.equal(createInput.source.sizeBytes, createRequest.source.sizeBytes);
+  assert.equal(createInput.options.speakerLabels, true);
 
   const storedDraft = await namespace.storage.setMeetingState(draft);
   assert.equal(storedDraft.session.sessionId, createRequest.meeting.sessionId);

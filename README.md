@@ -7,7 +7,7 @@
 - `팝업 On/Off`
   - 확장프로그램 팝업에서 `i-Nova에서 사용`을 켜고 끌 수 있습니다.
   - 현재 대화만 따로 `일시 중지`할 수도 있습니다.
-  - 회의 기능이 붙는 동안에는 팝업에서 현재 대화 기준 `meetingState` 상태를 함께 보고, 탭 오디오 녹음을 시작하거나 마칠 수 있습니다.
+  - 회의 기능이 붙는 동안에는 팝업에서 현재 대화 기준 `meetingState` 상태를 함께 보고, 탭 오디오 녹음을 시작하거나 마친 뒤 바로 전사 작업을 접수할 수 있습니다.
 - `질문 자동 모으기`
   - 현재 대화에 보이는 사용자 질문을 자동으로 모아 보여줍니다.
   - 질문 목록은 현재 대화 화면을 기준으로 실시간으로 갱신됩니다.
@@ -74,7 +74,7 @@
   - `session.js`: `sid`, 질문 정규화, 메시지 ID 생성
   - `storage.js`: `settings`, `pausedSessions`, `uiPreferences`, `promptLibrary`, `cloudSync`, `meetingState`, `meetingStateBySession` 읽기/쓰기
 - `popup/`
-  - 팝업 설정 UI, 현재 대화 상태, 회의 상태 카드, 탭 녹음 start/stop 버튼 표시
+  - 팝업 설정 UI, 현재 대화 상태, 회의 상태 카드, 탭 녹음 start/stop과 전사 접수 버튼 표시
 - `content/`
   - `dom.js`: 질문 DOM 수집
   - `bookmark-view.js`: 질문 탭 렌더링과 포커스 이동
@@ -105,7 +105,7 @@
 ## 동작 방식
 
 - 확장프로그램은 `manifest V3`로 구성되어 있습니다.
-- `popup/index.js`는 `settings.enabled`, `settings.autoBookmark`, `pausedSessions`, `meetingState`를 읽어 현재 대화와 회의 상태 카드를 함께 갱신하고, 현재 세션 기준 탭 오디오 녹음을 시작하거나 마칠 수 있게 합니다.
+- `popup/index.js`는 `settings.enabled`, `settings.autoBookmark`, `pausedSessions`, `meetingState`, `cloudSync.providerIdentity`를 읽어 현재 대화와 회의 상태 카드를 함께 갱신하고, 현재 세션 기준 탭 오디오 녹음과 전사 접수를 이어서 처리하게 합니다.
 - `content/main.js`는 현재 URL의 `sid`를 기준으로 대화를 나누고, `.chat-message--user`를 실시간으로 수집합니다.
 - `content/prompt-manager.js`는 `promptLibrary`를 관리하고, 선택한 요청을 현재 대화 입력창에 주입합니다.
 - `content/prompt-review-manager.js`는 현재 입력창 프롬프트를 평가하고 보완 프롬프트를 다시 주입합니다.
@@ -113,6 +113,7 @@
 - `content/meeting-manager.js`는 현재 세션과 `meetingState`가 맞을 때만 회의 job 상태를 polling하고, 완료 후 artifact를 세션별 로컬 storage에 반영합니다.
 - `background/service-worker.js`는 i-Nova access token과 Firebase Functions를 연결해 원격 백업 호출을 처리하고, 회의 녹음에서는 `tabCapture -> offscreen recorder -> meetingStateBySession` 브로커 역할도 맡습니다.
 - `offscreen/meeting-recorder.js`는 popup이 직접 접근하지 못하는 오디오 캡처를 대신 수행하고, 성공/실패 결과를 service worker에 되돌립니다.
+- 팝업에서 `전사 시작`을 누르면 브라우저에 저장된 `cloudSync.providerIdentity`를 재사용해 `createInovaMeetingJob` gateway를 호출하고, 이후 `queued -> processing -> succeeded` 상태는 기존 `content/meeting-manager.js` polling 루프로 이어집니다.
 - 회의 업로드/전사 결과 UI는 아직 본격 노출하지 않았지만, `shared/cloud-api.js -> background/service-worker.js -> functions/*` 경계의 gateway 스캐폴딩은 먼저 연결해 두었습니다.
 - 브라우저 쪽에서는 `shared/meeting-bridge.js` 와 `shared/meeting-state.js` 로 회의 녹음 start/stop, 회의 job 생성, polling, artifact 반영, local `meetingState` 저장 기준을 먼저 맞춰 두었습니다.
 - 질문 목록 자체는 `chrome.storage.local`에 저장하지 않고, 현재 대화 화면을 기준으로 바로 렌더링합니다.
@@ -173,7 +174,7 @@ npm run verify:harness-page
 
 `verify:smoke`는 `fixtures/inova-chat-session.html`을 기준으로 질문 수집 DOM 경로가 현재 selectors와 세션 정규화 규칙에 맞게 동작하는지 확인합니다.
 
-`verify:popup`은 로컬 popup harness fixture에서 `popup/index.js`를 부팅해 현재 탭 식별, 세션 표시, `i-Nova에서 사용`, `이 대화에서 일시 중지` 토글, `meetingState` 상태 카드 반영, 탭 녹음 start/stop UI 전이가 기본 상태 전이와 함께 맞는지 확인합니다.
+`verify:popup`은 로컬 popup harness fixture에서 `popup/index.js`를 부팅해 현재 탭 식별, 세션 표시, `i-Nova에서 사용`, `이 대화에서 일시 중지` 토글, `meetingState` 상태 카드 반영, 탭 녹음 start/stop, `전사 시작 -> queued` UI 전이가 기본 상태 전이와 함께 맞는지 확인합니다.
 
 `verify:meeting-contract`는 아직 구현 전인 회의 전사/화자분리 기능의 최소 정본을 확인합니다. `docs/meeting-diarization-foundation.md` 와 `fixtures/meeting-diarization/*.json`, 로컬 클라우드 하네스 meeting route가 서로 어긋나지 않는지 검사합니다.
 

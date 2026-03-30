@@ -459,7 +459,7 @@ function isInternalMeetingRecorderMessage(message, sender) {
 
 function isExtensionMeetingControlMessage(message, sender) {
   const type = String(message?.type || "");
-  if (type !== "inova-meeting:start-capture" && type !== "inova-meeting:stop-capture") {
+  if (!["inova-meeting:create-job", "inova-meeting:start-capture", "inova-meeting:stop-capture"].includes(type)) {
     return false;
   }
   return String(sender?.url || "").startsWith("chrome-extension://");

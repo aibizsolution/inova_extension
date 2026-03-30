@@ -23,6 +23,9 @@ async function main() {
     const validSender = {
       url: "https://inova.incross.com/chat?sid=fixture-session",
     };
+    const popupSender = {
+      url: "chrome-extension://fixture/popup/index.html",
+    };
 
     const storeResponse = await sendMessage(
       runtime.listener,
@@ -74,7 +77,7 @@ async function main() {
         input: cloneValue(MEETING_CREATE_REQUEST),
         providerIdentity: cloneValue(PROVIDER_IDENTITY),
       },
-      validSender
+      popupSender
     );
     assert.equal(meetingCreate.ok, true);
     assert.equal(meetingCreate.data.job.status, "queued");
@@ -124,9 +127,6 @@ async function main() {
     assert.equal(meetingArtifact.ok, true);
     assert.equal(meetingArtifact.data.artifact.segments.length > 0, true);
 
-    const popupSender = {
-      url: "chrome-extension://fixture/popup/index.html",
-    };
     const captureStart = await sendMessage(
       runtime.listener,
       {

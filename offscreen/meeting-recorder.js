@@ -92,10 +92,12 @@
     return {
       capture: {
         captureMode,
+        channelCount: 1,
         mimeType: mimeType || mediaRecorder.mimeType || "audio/webm",
         status: "recording",
       },
       meeting: {
+        startedAt: new Date(recorderState.startedAt).toISOString(),
         sessionId,
         title,
       },
@@ -112,6 +114,7 @@
     const title = recorderState.title;
     const durationMs = Math.max(0, Date.now() - recorderState.startedAt);
     const mimeType = recorderState.mediaRecorder.mimeType || "audio/webm";
+    const startedAt = recorderState.startedAt > 0 ? new Date(recorderState.startedAt).toISOString() : "";
 
     return new Promise((resolve, reject) => {
       const mediaRecorder = recorderState.mediaRecorder;
@@ -122,12 +125,15 @@
           resolve({
             capture: {
               captureMode,
+              channelCount: 1,
               durationMs,
               mimeType,
               sizeBytes: blob.size,
               status: "captured",
             },
             meeting: {
+              endedAt: new Date().toISOString(),
+              startedAt,
               sessionId,
               title,
             },

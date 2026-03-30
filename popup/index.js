@@ -1,6 +1,14 @@
 const popupRoot = globalThis.InovaBookmarks;
 const popupState = {
   settings: { ...popupRoot.constants.defaults.settings },
+  providerIdentity: {
+    available: false,
+    displayName: "",
+    email: "",
+    numericUserId: null,
+    provider: "inova",
+    providerUserKey: "",
+  },
   pausedSessions: {},
   activeTab: { id: 0, url: "", title: "" },
   currentSessionId: "",
@@ -45,7 +53,7 @@ function bindPopupEvents() {
   popupRefs.enabledToggle.addEventListener("click", () => toggleSetting("enabled"));
   popupRefs.pauseToggle.addEventListener("click", togglePause);
   popupRefs.refreshButton.addEventListener("click", refreshPopup);
-  popupRefs.meetingStartButton.addEventListener("click", startMeetingCapture);
+  popupRefs.meetingStartButton.addEventListener("click", handlePrimaryMeetingAction);
   popupRefs.meetingStopButton.addEventListener("click", stopMeetingCapture);
 }
 
@@ -70,6 +78,10 @@ function listenPopupStorage() {
       popupState.pausedSessions = changes.pausedSessions.newValue || {};
     }
 
+    if (changes.cloudSync) {
+      popupState.providerIdentity = normalizeProviderIdentity(changes.cloudSync.newValue?.providerIdentity);
+    }
+
     if (changes.meetingStateBySession || changes.meetingState) {
       syncMeetingStateForCurrentSession().then(renderPopup);
       return;
@@ -87,6 +99,7 @@ async function refreshPopup() {
   ]);
 
   popupState.settings = storage.settings || { ...popupRoot.constants.defaults.settings };
+  popupState.providerIdentity = normalizeProviderIdentity(storage.cloudSync?.providerIdentity);
   popupState.pausedSessions = storage.pausedSessions || {};
   popupState.activeTab = activeTab;
   popupState.currentSessionId = popupRoot.session.getSessionId(activeTab.url);
@@ -163,6 +176,7 @@ function renderMeetingCard() {
   popupRefs.meetingBadge.dataset.status = view.badgeStatus;
   popupRefs.meetingSummary.textContent = view.summary;
   popupRefs.meetingHint.textContent = view.hint;
+  popupRefs.meetingStartButton.textContent = view.startLabel;
   popupRefs.meetingStartButton.hidden = !view.showStartAction;
   popupRefs.meetingStopButton.hidden = !view.showStopAction;
   popupRefs.meetingStartButton.disabled = Boolean(view.startDisabled);
@@ -184,6 +198,7 @@ function buildMeetingViewModel() {
       badgeStatus: "idle",
       showStartAction: false,
       showStopAction: false,
+      startLabel: "탭 녹음 시작",
       startDisabled: true,
       stopDisabled: true,
       title: "현재 대화 회의 상태",
@@ -198,6 +213,7 @@ function buildMeetingViewModel() {
       badgeStatus: "idle",
       showStartAction: false,
       showStopAction: false,
+      startLabel: "탭 녹음 시작",
       startDisabled: true,
       stopDisabled: true,
       title: "현재 대화 회의 상태",
@@ -212,6 +228,7 @@ function buildMeetingViewModel() {
       badgeStatus: "recording",
       showStartAction: false,
       showStopAction: true,
+      startLabel: "탭 녹음 시작",
       startDisabled: true,
       stopDisabled: false,
       title: meetingLabel,
@@ -226,11 +243,12 @@ function buildMeetingViewModel() {
       badgeStatus: "captured",
       showStartAction: true,
       showStopAction: false,
+      startLabel: "전사 시작",
       startDisabled: false,
       stopDisabled: true,
       title: meetingLabel,
       summary: "탭 오디오 녹음을 저장했습니다.",
-      hint: buildCapturedHint(meetingState.capture),
+      hint: `${buildCapturedHint(meetingState.capture)} · 전사 시작 버튼으로 다음 단계로 넘길 수 있어요.`,
     };
   }
 
@@ -240,6 +258,7 @@ function buildMeetingViewModel() {
       badgeStatus: "failed",
       showStartAction: true,
       showStopAction: false,
+      startLabel: "탭 녹음 시작",
       startDisabled: false,
       stopDisabled: true,
       title: meetingLabel,
@@ -254,6 +273,7 @@ function buildMeetingViewModel() {
       badgeStatus: "queued",
       showStartAction: false,
       showStopAction: false,
+      startLabel: "탭 녹음 시작",
       startDisabled: true,
       stopDisabled: true,
       title: meetingLabel,
@@ -270,6 +290,7 @@ function buildMeetingViewModel() {
       badgeStatus: "processing",
       showStartAction: false,
       showStopAction: false,
+      startLabel: "탭 녹음 시작",
       startDisabled: true,
       stopDisabled: true,
       title: meetingLabel,
@@ -285,6 +306,7 @@ function buildMeetingViewModel() {
       badgeStatus: "succeeded",
       showStartAction: true,
       showStopAction: false,
+      startLabel: "새 녹음 시작",
       startDisabled: false,
       stopDisabled: true,
       title: meetingLabel,
@@ -301,6 +323,7 @@ function buildMeetingViewModel() {
       badgeStatus: "failed",
       showStartAction: true,
       showStopAction: false,
+      startLabel: "탭 녹음 시작",
       startDisabled: false,
       stopDisabled: true,
       title: meetingLabel,
@@ -315,6 +338,7 @@ function buildMeetingViewModel() {
       badgeStatus: normalizeMeetingBadgeStatus(jobStatus),
       showStartAction: true,
       showStopAction: false,
+      startLabel: "탭 녹음 시작",
       startDisabled: false,
       stopDisabled: true,
       title: "다른 대화 회의 상태",
@@ -328,12 +352,21 @@ function buildMeetingViewModel() {
     badgeStatus: "idle",
     showStartAction: true,
     showStopAction: false,
+    startLabel: "탭 녹음 시작",
     startDisabled: false,
     stopDisabled: true,
     title: "현재 대화 회의 상태",
     summary: "현재 대화에 연결된 회의 작업이 아직 없어요.",
     hint: "녹음과 전사 흐름이 붙으면 여기에 진행 상태가 보입니다.",
   };
+}
+
+async function handlePrimaryMeetingAction() {
+  const meetingState = popupRoot.meetingState.mergeMeetingState(await syncMeetingStateForCurrentSession());
+  if (isCapturedMeetingReadyForJob(meetingState)) {
+    return queueMeetingJob(meetingState);
+  }
+  return startMeetingCapture();
 }
 
 function formatMeetingPhase(phase) {
@@ -444,6 +477,34 @@ async function stopMeetingCapture() {
   }
 }
 
+async function queueMeetingJob(currentMeetingState) {
+  if (!popupState.currentSessionId) {
+    setPopupStatus("대화 없음");
+    return;
+  }
+  if (!popupState.providerIdentity.available) {
+    setPopupStatus("로그인 확인 필요");
+    return;
+  }
+
+  const input = buildMeetingCreateInput(currentMeetingState);
+  if (!(Number(input.source.durationMs) > 0) || !(Number(input.source.sizeBytes) > 0)) {
+    setPopupStatus("녹음 없음");
+    return;
+  }
+
+  try {
+    setPopupStatus("전사 접수 중");
+    const payload = await popupRoot.meetingBridge.createMeetingJob(input, popupState.providerIdentity);
+    const nextMeetingState = popupRoot.meetingState.applyMeetingJobCreated(currentMeetingState, payload);
+    popupState.meetingState = await popupRoot.storage.setMeetingState(popupState.currentSessionId, nextMeetingState);
+    renderPopup();
+    setPopupStatus("전사 대기");
+  } catch (error) {
+    setPopupStatus(error instanceof Error ? error.message : "전사 작업을 접수하지 못했어요.");
+  }
+}
+
 async function toggleSetting(key) {
   const next = await popupRoot.storage.updateSettings({
     [key]: !popupState.settings[key],
@@ -471,4 +532,44 @@ async function togglePause() {
 
 function setPopupStatus(text) {
   popupRefs.syncStatus.textContent = text;
+}
+
+function isCapturedMeetingReadyForJob(meetingState) {
+  const normalized = popupRoot.meetingState.mergeMeetingState(meetingState);
+  return normalized.capture.status === "captured" && normalized.job.status === "idle";
+}
+
+function buildMeetingCreateInput(meetingState) {
+  const normalized = popupRoot.meetingState.mergeMeetingState(meetingState, {
+    session: {
+      language: popupRoot.session.normalizeText(meetingState?.session?.language) || "ko",
+      sessionId: popupState.currentSessionId,
+      title: popupRoot.session.normalizeText(meetingState?.session?.title)
+        || popupState.activeTab.title
+        || popupRoot.session.formatSessionLabel(popupState.currentSessionId),
+    },
+  });
+  return popupRoot.meetingState.buildMeetingJobCreateInput(normalized, {
+    meeting: {
+      endedAt: normalized.session.endedAt || new Date().toISOString(),
+      startedAt: normalized.session.startedAt || "",
+    },
+    options: {
+      redaction: "none",
+      speakerLabels: true,
+      summary: false,
+    },
+  });
+}
+
+function normalizeProviderIdentity(identity) {
+  const providerUserKey = popupRoot.session.normalizeText(identity?.providerUserKey);
+  return {
+    available: Boolean(identity?.available) && Boolean(providerUserKey),
+    displayName: popupRoot.session.normalizeText(identity?.displayName),
+    email: popupRoot.session.normalizeText(identity?.email).toLowerCase(),
+    numericUserId: Number.isFinite(Number(identity?.numericUserId)) ? Number(identity.numericUserId) : null,
+    provider: popupRoot.session.normalizeText(identity?.provider) || "inova",
+    providerUserKey,
+  };
 }

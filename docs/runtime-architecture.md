@@ -28,8 +28,8 @@
 ### Popup
 
 - 위치: `popup/index.html`, `popup/index.js`
-- 역할: 확장 On/Off, 현재 탭 상태 표시, 세션 단위 일시 중지, `meetingState` 상태 카드 표시
-- 특징: 짧은 상태 확인과 토글만 맡고, 실제 UI 본체나 네트워크 동기화는 맡지 않는다.
+- 역할: 확장 On/Off, 현재 탭 상태 표시, 세션 단위 일시 중지, `meetingState` 상태 카드 표시, 녹음 완료 후 전사 접수
+- 특징: 짧은 상태 확인과 토글만 맡고, 실제 UI 본체는 맡지 않는다. 회의 기능에서는 `captured -> create-job` 경계까지 팝업 카드에서 이어 붙인다.
 
 ### Content Script
 
@@ -94,6 +94,13 @@
 2. background가 `chrome.tabCapture.getMediaStreamId()`와 offscreen document 생명주기를 관리한다.
 3. offscreen document가 `getUserMedia`와 `MediaRecorder`로 탭 오디오를 캡처한다.
 4. 결과 메타는 `meetingStateBySession`에 저장되고, 다음 단계 업로드/job 생성의 입력으로 이어진다.
+
+### F. 팝업 전사 접수
+
+1. popup이 `meetingStateBySession`의 captured source 메타와 `cloudSync.providerIdentity`를 읽는다.
+2. popup이 `inova-meeting:create-job`을 background로 보낸다.
+3. background가 access token을 붙여 Functions gateway를 호출한다.
+4. 응답 job snapshot은 다시 `meetingStateBySession`에 저장되고, 이후 polling은 content의 `meeting-manager`가 이어받는다.
 
 ## 4. 책임 경계 요약
 
