@@ -36,13 +36,13 @@ function main() {
       ? [buildRangeSnapshot(args[1])]
       : buildPushSnapshots(fs.readFileSync(0, "utf8"), args[0] || "origin");
 
-  const featureSnapshots = snapshots.filter((snapshot) => snapshot.featureFiles.length > 0);
-  if (!featureSnapshots.length) {
+  const relevantSnapshots = snapshots.filter((snapshot) => snapshot.featureFiles.length > 0 || snapshot.releaseMetadataFiles.length > 0);
+  if (!relevantSnapshots.length) {
     console.log("릴리스 메타 가드 통과");
     return;
   }
 
-  featureSnapshots.forEach(validateSnapshot);
+  relevantSnapshots.forEach(validateSnapshot);
   console.log("릴리스 메타 가드 통과");
 }
 
@@ -100,6 +100,7 @@ function createSnapshot(label, changedFiles, payload) {
     label,
     changedFiles: uniqueFiles,
     featureFiles: uniqueFiles.filter(isFeatureFacingFile),
+    releaseMetadataFiles: uniqueFiles.filter(isReleaseMetadataFile),
     packageJson: payload.packageJson || {},
     manifestJson: payload.manifestJson || {},
     releaseCatalog: payload.releaseCatalog || readReleaseCatalog(root),
@@ -108,6 +109,10 @@ function createSnapshot(label, changedFiles, payload) {
 }
 
 function validateSnapshot(snapshot) {
+  if (!snapshot.releaseMetadataFiles.length) {
+    return;
+  }
+
   const currentVersion = String(snapshot.packageJson.version || "").trim();
   const manifestVersion = String(snapshot.manifestJson.version || "").trim();
 
@@ -116,21 +121,18 @@ function validateSnapshot(snapshot) {
   }
 
   const requiredMetadataFiles = [PACKAGE_PATH, MANIFEST_PATH, RELEASE_NOTES_PATH];
-  const missingMetadataFiles = requiredMetadataFiles.filter((filePath) => !snapshot.changedFiles.includes(filePath));
+  const missingMetadataFiles = requiredMetadataFiles.filter((filePath) => !snapshot.releaseMetadataFiles.includes(filePath));
   if (missingMetadataFiles.length) {
     fail([
-      `[${snapshot.label}] feature 변경이 감지되었지만 버전/릴리스 메타 파일이 함께 바뀌지 않았어요.`,
+      `[${snapshot.label}] 릴리스 준비 파일이 일부만 바뀌었어요. 버전과 릴리스 메타는 항상 같이 움직여야 합니다.`,
       "다음 파일을 같이 업데이트해 주세요.",
       ...missingMetadataFiles.map((filePath) => `- ${filePath}`),
-      "",
-      "감지한 feature 변경 파일:",
-      ...snapshot.featureFiles.map((filePath) => `- ${filePath}`),
     ].join("\n"));
   }
 
   snapshot.baseVersions.forEach((baseVersion) => {
     if (baseVersion && compareVersions(currentVersion, baseVersion) <= 0) {
-      fail(`[${snapshot.label}] 현재 버전 ${currentVersion} 이(가) 기준 버전 ${baseVersion} 보다 높지 않아요. feature 변경에는 버전 상승이 필요합니다.`);
+      fail(`[${snapshot.label}] 현재 버전 ${currentVersion} 이(가) 기준 버전 ${baseVersion} 보다 높지 않아요. 릴리스 준비 시에는 버전 상승이 필요합니다.`);
     }
   });
 
@@ -256,6 +258,10 @@ function readGitLines(args, options = {}) {
 
 function isFeatureFacingFile(filePath) {
   return FEATURE_PATH_PATTERNS.some((pattern) => pattern.test(filePath));
+}
+
+function isReleaseMetadataFile(filePath) {
+  return [PACKAGE_PATH, MANIFEST_PATH, RELEASE_NOTES_PATH].includes(String(filePath || "").trim());
 }
 
 function toGitPath(filePath) {

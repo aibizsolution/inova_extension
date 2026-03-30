@@ -221,9 +221,9 @@ npm run verify:release-guard
 
 이 저장소는 기능 관련 파일이 바뀌었는데 `README.md`가 같이 수정되지 않으면 `pre-push`에서 push를 막습니다.
 
-같은 시점에 feature 변경인데 버전 상승, `releases/release-notes.json`, 현재 버전용 릴리스 메타가 빠져 있어도 `pre-push`에서 함께 막습니다.
+릴리스 준비 파일인 `package.json`, `manifest.json`, `releases/release-notes.json` 중 일부만 바뀌면 `pre-push`에서 함께 막습니다.
 
-같은 가드를 더 이른 시점에 잡기 위해 `pre-commit`도 같이 적용합니다. 커밋 전에 `main` 직접 commit, staged 기준 `README`, `릴리스 메타` 누락을 먼저 막습니다.
+같은 가드를 더 이른 시점에 잡기 위해 `pre-commit`도 같이 적용합니다. 커밋 전에 `main` 직접 commit, staged 기준 `README`, `릴리스 준비 파일 불일치`를 먼저 막습니다.
 
 훅을 이 저장소에 연결하려면 한 번만 다음을 실행합니다.
 
@@ -234,6 +234,8 @@ npm run hooks:install
 `npm install`을 실행해도 `prepare` 스크립트로 훅 연결을 자동 시도합니다.
 
 이후 `background/`, `content/`, `functions/`, `popup/`, `shared/`, `manifest.json` 같은 기능 관련 파일이 바뀌면 `README.md`도 함께 수정해야 commit/push가 통과합니다.
+
+버전 상승과 `releases/release-notes.json` 갱신은 모든 feature commit마다 필요한 것이 아니라, 실제 배포나 릴리스 준비를 시작할 때만 맞추면 됩니다.
 
 ## 브랜치 작업 규칙
 
@@ -249,7 +251,7 @@ npm run hooks:install
 ## 협업 가드레일
 
 - 로컬에서는 `pre-commit`, `pre-push`가 같은 규칙을 단계별로 검사합니다.
-- 원격에서는 [`.github/workflows/repo-guardrails.yml`](/C:/Users/parkyoungtack/Documents/code/inova_extension/.github/workflows/repo-guardrails.yml)이 `verify`, README 가드, 릴리스 메타 가드, `release:build`를 다시 검사합니다.
+- 원격에서는 [`.github/workflows/repo-guardrails.yml`](/C:/Users/parkyoungtack/Documents/code/inova_extension/.github/workflows/repo-guardrails.yml)이 `verify`, README 가드, 릴리스 메타 가드를 다시 검사하고, 릴리스 준비 파일이 바뀐 경우에만 `release:build`를 추가로 확인합니다.
 - PR 화면에는 [`.github/pull_request_template.md`](/C:/Users/parkyoungtack/Documents/code/inova_extension/.github/pull_request_template.md) 체크리스트가 자동으로 들어갑니다.
 - GitHub branch protection에서는 `main` direct push 금지와 `Repo Guardrails / verify` 체크 통과를 필수로 두고, 사람 승인 수는 0으로 두는 것을 기본값으로 권장합니다.
 
@@ -258,10 +260,11 @@ npm run hooks:install
 - `patch`: 버그 수정, 작은 UX/신뢰성 보강, 운영/배포 보완
 - `minor`: 새 사용자 기능, 새 워크플로, 눈에 띄는 기능 확장
 - `major`: 기존 사용 흐름을 깨거나 마이그레이션/재설치 판단이 필요한 변화
-- `npm run version:bump -- <patch|minor|major>`를 실행하면 `package.json`, `manifest.json`, `releases/release-notes.json` 초안이 같이 갱신됩니다.
+- `npm run version:bump -- <patch|minor|major>`를 실행하면 `package.json`, `manifest.json`, `releases/release-notes.json` 초안이 같이 갱신됩니다. 이 단계는 일반 개발 커밋이 아니라 배포/릴리스 준비 시점에만 실행하는 것을 기본값으로 둡니다.
 - 새 버전 초안이 생기면 `releases/release-notes.json`의 `public.headline`, `public.summary`, `public.changes`를 실제 사용자 관점 내용으로 채워야 push와 배포가 통과합니다.
 - 내부 운영 메모가 필요하면 `internal.changes`에 따로 적고, 릴리스 패널에는 노출하지 않습니다.
 - `release:build`는 현재 버전의 릴리스 메타를 읽어 `hosting/extension/releases/latest.json`과 `history.json`에 그대로 반영합니다.
+- `release:build`와 `deploy:hosting`은 마지막 배포 버전보다 더 높은 새 버전이 준비되지 않았으면 실패합니다.
 - `release:build`는 고정 최신 링크용 `hosting/extension/downloads/latest.zip`도 함께 갱신합니다.
 
 ## 배포 기본값

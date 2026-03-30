@@ -22,9 +22,9 @@
 - 실사이트나 실클라우드 검증이 필요해도, 먼저 로컬 하네스에서 재현 가능한 최소 실패 경로를 확보한 뒤 실제 브라우저 점검으로 넘어간다.
 
 ## 릴리스 운영 원칙
-- feature 변경을 push할 때는 `README.md`, `package.json`, `manifest.json`, `releases/release-notes.json`을 함께 맞춘다.
-- 버전 상승은 `npm run version:bump -- <patch|minor|major>`를 기본으로 하고, 수동 수정으로 버전 파일만 따로 어긋나게 두지 않는다.
-- 새 버전 엔트리의 `public.headline`, `public.summary`, `public.changes`에 `TODO`가 남아 있으면 push나 배포를 진행하지 않는다.
+- feature 변경을 커밋하거나 push할 때는 기본적으로 `README.md`를 함께 맞춘다. `package.json`, `manifest.json`, `releases/release-notes.json`은 실제 배포나 릴리스 준비를 시작할 때만 함께 맞춘다.
+- 버전 상승은 `npm run version:bump -- <patch|minor|major>`를 기본으로 하고, 수동 수정으로 버전 파일만 따로 어긋나게 두지 않는다. 다만 이 단계는 일반 개발 커밋마다 하지 않고, 배포 전 준비 단계에서만 수행한다.
+- 새 버전 엔트리의 `public.headline`, `public.summary`, `public.changes`에 `TODO`가 남아 있으면 배포를 진행하지 않는다.
 - 릴리스 패널에는 사용자 관점 변경만 보여주고, 내부 운영/배포 메모는 `internal.changes`로 따로 남긴다.
 - Hosting 릴리스 메타(`latest.json`, `history.json`)는 `releases/release-notes.json` 기준으로 생성한다.
 - 이 저장소에서 일반적인 `배포`는 `hosting-only`를 뜻한다. 함수 배포는 사용자가 `functions`, `backend`, `전체 배포`를 명시했을 때만 진행한다.
