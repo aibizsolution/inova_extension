@@ -162,6 +162,7 @@ function createHarnessState() {
       version: 1,
     },
     reviewResult: cloneValue(REVIEW_RESULT),
+    requests: [],
     storeEntries: cloneValue(STORE_ENTRIES),
     releaseLatest: cloneValue(RELEASE_LATEST),
     releaseHistory: cloneValue(RELEASE_HISTORY),

@@ -14,6 +14,7 @@ const requiredFiles = [
   path.join("scripts", "run-cloud-harness-server.js"),
   path.join("scripts", "verify-content-smoke.js"),
   path.join("scripts", "verify-cloud-api-contract.js"),
+  path.join("scripts", "verify-service-worker-harness.js"),
   path.join("scripts", "run-harness-server.js"),
   path.join("scripts", "verify-content-harness-page.js"),
 ];

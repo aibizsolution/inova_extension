@@ -54,6 +54,12 @@ function createCloudHarnessServer(options = {}) {
 
 async function handleRequest(request, response, state) {
   const requestUrl = new URL(request.url || "/", `http://${request.headers.host || `${DEFAULT_HOST}:${DEFAULT_PORT}`}`);
+  state.requests.push({
+    authorization: normalizeText(request.headers.authorization),
+    method: request.method,
+    path: requestUrl.pathname,
+    recordedAt: new Date().toISOString(),
+  });
   if (request.method === "GET" && requestUrl.pathname === "/extension/releases/latest.json") {
     return void sendJson(response, 200, state.releaseLatest);
   }

@@ -117,6 +117,7 @@
 - `npm run verify:harness`
 - `npm run verify:smoke`
 - `npm run verify:cloud`
+- `npm run verify:service-worker`
 - `npm run verify:harness-page`
 - `npm run harness:serve`
 - `npm run harness:serve:cloud`
@@ -132,7 +133,7 @@
 ## 6. 하네스 관점의 현재 한계
 
 - 핵심 UI 흐름은 여전히 실사이트 의존성이 남아 있지만, 로컬 브라우저 하네스로 content-script 패널 부팅과 탭 전환까지는 먼저 확인할 수 있다.
-- 현재 smoke path는 DOM 수집 계층, 로컬 브라우저 하네스, 로컬 클라우드 계약 검증까지 포함한다.
+- 현재 smoke path는 DOM 수집 계층, 로컬 클라우드 계약 검증, background service worker 라우팅 검증, 로컬 브라우저 하네스까지 포함한다.
 - Firebase emulator는 아직 없지만, fake backend 서버로 Cloud Functions payload 계약과 Hosting release JSON을 로컬에서 재현할 수 있다.
 - 장기적으로는 content/background/functions 경계를 각각 재현할 수 있는 fixture와 smoke path를 늘려야 한다.
 

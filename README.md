@@ -151,12 +151,15 @@ npm run verify
 npm run verify:harness
 npm run verify:smoke
 npm run verify:cloud
+npm run verify:service-worker
 npm run verify:harness-page
 ```
 
 `verify:smoke`는 `fixtures/inova-chat-session.html`을 기준으로 질문 수집 DOM 경로가 현재 selectors와 세션 정규화 규칙에 맞게 동작하는지 확인합니다.
 
 `verify:cloud`는 로컬 fixture-backed HTTP 서버를 잠깐 띄워 `shared/cloud-api.js`가 Cloud Functions/Hosting payload 계약을 production URL 대신 로컬 URL override로 정상 처리하는지 확인합니다.
+
+`verify:service-worker`는 `background/service-worker.js`를 로컬 harness에서 불러와 `runtime message -> cookie/token -> cloud/release route -> tabs.create` 흐름이 최소 수준으로 맞게 라우팅되는지 확인합니다.
 
 `verify:harness-page`는 로컬 브라우저 하네스 fixture와 fake runtime 응답으로 실제 content-script 패널이 부팅되고, `프롬프트`/`스토어`/`릴리스` 탭이 최소 수준으로 렌더링되는지 확인합니다.
 
