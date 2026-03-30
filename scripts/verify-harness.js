@@ -9,7 +9,11 @@ const requiredFiles = [
   path.join("fixtures", "inova-chat-session.html"),
   path.join("fixtures", "content-harness.html"),
   path.join("fixtures", "content-harness-mock.js"),
+  path.join("fixtures", "cloud-harness", "fixtures.js"),
+  path.join("scripts", "cloud-harness-server.js"),
+  path.join("scripts", "run-cloud-harness-server.js"),
   path.join("scripts", "verify-content-smoke.js"),
+  path.join("scripts", "verify-cloud-api-contract.js"),
   path.join("scripts", "run-harness-server.js"),
   path.join("scripts", "verify-content-harness-page.js"),
 ];
@@ -23,6 +27,7 @@ const architectureKeywords = [
   "권위 있는 소스",
   "검증 표면",
   "로컬 브라우저 하네스",
+  "로컬 클라우드 하네스",
 ];
 
 const fixtureKeywords = [

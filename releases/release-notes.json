@@ -2,6 +2,32 @@
   "schemaVersion": 1,
   "versions": [
     {
+      "version": "0.3.8",
+      "level": "patch",
+      "public": {
+        "headline": "작은 안정화 업데이트",
+        "summary": "이번 배포는 내부 안정화와 다음 기능 준비가 중심이라 화면에서 크게 달라지는 부분은 없습니다.",
+        "changes": [
+          {
+            "type": "changed",
+            "text": "사용자 화면 변화보다 내부 점검 경로와 안정화 작업을 우선 반영한 준비성 업데이트입니다."
+          }
+        ]
+      },
+      "internal": {
+        "changes": [
+          {
+            "type": "added",
+            "text": "shared/cloud-api.js 계약을 로컬 fixture-backed HTTP 서버로 검증하는 cloud harness와 verify:cloud 경로를 추가했습니다."
+          },
+          {
+            "type": "changed",
+            "text": "shared/firebase-config.js가 하네스 전용 base URL override를 지원하도록 바꿔 production URL을 건드리지 않고 로컬 backend 경로를 붙일 수 있게 했습니다."
+          }
+        ]
+      }
+    },
+    {
       "version": "0.3.7",
       "level": "patch",
       "public": {
