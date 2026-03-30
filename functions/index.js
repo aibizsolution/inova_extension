@@ -9,7 +9,7 @@ if (!admin.apps.length) {
 }
 
 const db = admin.firestore();
-const bucket = admin.storage().bucket();
+const bucket = resolveStorageBucket(admin);
 const REGION = "asia-northeast3";
 const CORS_ORIGINS = ["https://inova.incross.com"];
 const STORE_CATEGORIES = [
@@ -218,6 +218,41 @@ exports.peekInovaPromptLibrary = onRequest({ cors: CORS_ORIGINS, region: REGION 
     sendError(response, error);
   }
 });
+
+function resolveStorageBucket(adminSdk) {
+  const bucketName = resolveStorageBucketName();
+  return bucketName ? adminSdk.storage().bucket(bucketName) : null;
+}
+
+function resolveStorageBucketName() {
+  const explicitBucket = String(process.env.STORAGE_BUCKET_URL || "").trim();
+  if (explicitBucket) {
+    return explicitBucket;
+  }
+
+  const firebaseConfig = parseFirebaseConfig(process.env.FIREBASE_CONFIG);
+  const configBucket = String(firebaseConfig?.storageBucket || "").trim();
+  if (configBucket) {
+    return configBucket;
+  }
+
+  const projectId = String(process.env.GCLOUD_PROJECT || process.env.PROJECT_ID || "").trim();
+  if (projectId) {
+    return `${projectId}.appspot.com`;
+  }
+  return "";
+}
+
+function parseFirebaseConfig(rawValue) {
+  if (!rawValue) {
+    return null;
+  }
+  try {
+    return JSON.parse(rawValue);
+  } catch {
+    return null;
+  }
+}
 
 exports.syncInovaPromptLibrary = onRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
   try {

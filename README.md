@@ -118,6 +118,7 @@
 - `background/service-worker.js`는 i-Nova access token과 Firebase Functions를 연결해 원격 백업 호출을 처리하고, 회의 녹음에서는 `tabCapture -> offscreen recorder -> meetingStateBySession` 브로커 역할도 맡습니다.
 - `offscreen/meeting-recorder.js`는 popup이 직접 접근하지 못하는 오디오 캡처를 대신 수행하고, 녹음 종료 뒤에는 임시 원본 오디오를 offscreen 문서에 붙잡아 둔 채 `전사 시작` 요청 때 inline payload를 만들어 service worker 경계에 넘깁니다.
 - 팝업에서 `전사 시작`을 누르면 브라우저에 저장된 `cloudSync.providerIdentity`를 재사용해 `createInovaMeetingJob` gateway를 호출하고, Functions는 임시 source object 업로드 -> OpenAI diarization -> source cleanup -> Firestore `job/artifact` 저장까지 처리합니다. 이후 `queued -> processing -> succeeded` 상태는 기존 `content/meeting-manager.js` polling 루프로 이어집니다.
+- Functions가 source audio를 임시 bucket object로 저장할 때는 Firebase 설정의 기본 storage bucket을 우선 쓰고, 배포/분석 환경에 bucket 정보가 없으면 `STORAGE_BUCKET_URL` 또는 `GCLOUD_PROJECT.appspot.com`으로 안전하게 해석합니다.
 - 회의 업로드/전사 결과는 `회의` 도구에서 현재 세션 기준으로 바로 보이고, `shared/cloud-api.js -> background/service-worker.js -> functions/*` 경계의 gateway를 통해 상태가 이어집니다.
 - 브라우저 쪽에서는 `shared/meeting-bridge.js` 와 `shared/meeting-state.js` 로 회의 녹음 start/stop, 회의 job 생성, polling, artifact 반영, local `meetingState` 저장 기준을 먼저 맞춰 두었습니다.
 - 질문 목록 자체는 `chrome.storage.local`에 저장하지 않고, 현재 대화 화면을 기준으로 바로 렌더링합니다.
