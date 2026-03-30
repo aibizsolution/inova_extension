@@ -159,8 +159,42 @@ async function main() {
     );
     assert.equal(captureStop.ok, true);
     assert.equal(captureStop.data.capture.status, "captured");
-    assert.equal(runtime.offscreen.closedCount, 1);
+    assert.equal(runtime.offscreen.closedCount, 0);
     assert.equal(runtime.storageState.meetingStateBySession["fixture-session"].capture.status, "captured");
+
+    const uploadedMeetingCreate = await sendMessage(
+      runtime.listener,
+      {
+        type: "inova-meeting:create-job",
+        input: {
+          meeting: {
+            endedAt: "2026-03-30T08:31:00.000Z",
+            language: "ko",
+            sessionId: "fixture-session",
+            startedAt: "2026-03-30T08:20:00.000Z",
+            title: "주간 스탠드업",
+          },
+          options: {
+            redaction: "none",
+            speakerLabels: true,
+            summary: false,
+          },
+          source: {
+            captureMode: "tab-audio",
+            channelCount: 1,
+            durationMs: 65000,
+            mimeType: "audio/webm;codecs=opus",
+            sizeBytes: 1048576,
+          },
+        },
+        providerIdentity: cloneValue(PROVIDER_IDENTITY),
+      },
+      popupSender
+    );
+    assert.equal(uploadedMeetingCreate.ok, true);
+    assert.equal(uploadedMeetingCreate.data.job.status, "succeeded");
+    assert.equal(uploadedMeetingCreate.data.job.sessionId, "fixture-session");
+    assert.equal(runtime.offscreen.closedCount, 1);
 
     const recorderFailure = await sendMessage(
       runtime.listener,
@@ -243,15 +277,15 @@ async function main() {
     const latestRequests = harness.state.requests.filter((request) => request.path === "/extension/releases/latest.json");
     assert.equal(storeRequests.length, 1);
     assert.equal(peekRequests.length, 1, "Peek should be served from service worker cache on the second request");
-    assert.equal(meetingCreateRequests.length, 1);
-    assert.equal(meetingJobRequests.length, 2);
+    assert.equal(meetingCreateRequests.length, 2);
+    assert.equal(meetingJobRequests.length, 3);
     assert.equal(meetingArtifactRequests.length, 1);
     assert.equal(latestRequests.length, 1, "Latest release should be served from service worker cache on the second request");
     assert.equal(storeRequests[0].authorization, `Bearer ${accessToken}`);
     assert.equal(meetingCreateRequests[0].authorization, `Bearer ${accessToken}`);
     assert.deepEqual(
       runtime.runtimeMessages.map((message) => message.type),
-      ["inova-meeting:start-capture", "inova-meeting:stop-capture"]
+      ["inova-meeting:start-capture", "inova-meeting:stop-capture", "inova-meeting:create-job"]
     );
 
     console.log("[verify-service-worker-harness] Service worker routing passed");
@@ -339,7 +373,15 @@ function createServiceWorkerRuntime(baseUrl, hostingBaseUrl) {
           if (message.type === "inova-meeting:stop-capture") {
             const stoppedSessionId = cloneValue(message.data.sessionId || captureState?.sessionId || "");
             const stoppedTitle = cloneValue(captureState?.title || "");
-            captureState = null;
+            captureState = {
+              captureMode: "tab-audio",
+              durationMs: 65000,
+              mimeType: "audio/webm;codecs=opus",
+              sessionId: stoppedSessionId,
+              sizeBytes: 1048576,
+              status: "captured",
+              title: stoppedTitle,
+            };
             return {
               capture: {
                 captureMode: "tab-audio",
@@ -353,6 +395,28 @@ function createServiceWorkerRuntime(baseUrl, hostingBaseUrl) {
                 title: stoppedTitle,
               },
             };
+          }
+          if (message.type === "inova-meeting:create-job") {
+            if (!captureState || captureState.status !== "captured") {
+              throw new Error("업로드할 녹음 source가 아직 준비되지 않았어요.");
+            }
+            const response = await fetch(message.data.url, {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${message.data.accessToken}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                ...(message.data.requestBody || {}),
+                source: {
+                  ...(message.data.requestBody?.source || {}),
+                  inlineAudioBase64: "Zml4dHVyZS1hdWRpby1wYXlsb2Fk",
+                },
+              }),
+            });
+            const payload = await response.json();
+            captureState = null;
+            return payload.data;
           }
           throw new Error(`Unexpected offscreen message: ${message.type}`);
         },

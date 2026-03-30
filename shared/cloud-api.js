@@ -120,31 +120,38 @@
     return payload?.data || {};
   }
 
+  function buildCreateInovaMeetingJobRequest(input, providerIdentity) {
+    return {
+      meeting: {
+        endedAt: input?.meeting?.endedAt || "",
+        language: input?.meeting?.language || "",
+        sessionId: input?.meeting?.sessionId || "",
+        startedAt: input?.meeting?.startedAt || "",
+        title: input?.meeting?.title || "",
+      },
+      options: {
+        redaction: input?.options?.redaction || "",
+        speakerLabels: Boolean(input?.options?.speakerLabels),
+        summary: Boolean(input?.options?.summary),
+      },
+      owner: toProviderIdentityPayload(providerIdentity),
+      source: {
+        captureMode: input?.source?.captureMode || "",
+        channelCount: Number(input?.source?.channelCount) || 0,
+        durationMs: Number(input?.source?.durationMs) || 0,
+        fileName: input?.source?.fileName || "",
+        inlineAudioBase64: input?.source?.inlineAudioBase64 || "",
+        mimeType: input?.source?.mimeType || "",
+        sizeBytes: Number(input?.source?.sizeBytes) || 0,
+        storageObject: input?.source?.storageObject || "",
+      },
+    };
+  }
+
   async function createInovaMeetingJob(input, providerIdentity, accessToken) {
     const payload = await postJson(
       functions.createInovaMeetingJobUrl,
-      {
-        meeting: {
-          endedAt: input?.meeting?.endedAt || "",
-          language: input?.meeting?.language || "",
-          sessionId: input?.meeting?.sessionId || "",
-          startedAt: input?.meeting?.startedAt || "",
-          title: input?.meeting?.title || "",
-        },
-        options: {
-          redaction: input?.options?.redaction || "",
-          speakerLabels: Boolean(input?.options?.speakerLabels),
-          summary: Boolean(input?.options?.summary),
-        },
-        owner: toProviderIdentityPayload(providerIdentity),
-        source: {
-          captureMode: input?.source?.captureMode || "",
-          channelCount: Number(input?.source?.channelCount) || 0,
-          durationMs: Number(input?.source?.durationMs) || 0,
-          mimeType: input?.source?.mimeType || "",
-          sizeBytes: Number(input?.source?.sizeBytes) || 0,
-        },
-      },
+      buildCreateInovaMeetingJobRequest(input, providerIdentity),
       accessToken
     );
     return payload?.data || {};
@@ -216,6 +223,7 @@
   }
 
   namespace.cloudApi = {
+    buildCreateInovaMeetingJobRequest,
     createInovaMeetingJob,
     getInovaMeetingArtifact,
     getInovaMeetingJob,

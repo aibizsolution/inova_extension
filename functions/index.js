@@ -9,6 +9,7 @@ if (!admin.apps.length) {
 }
 
 const db = admin.firestore();
+const bucket = admin.storage().bucket();
 const REGION = "asia-northeast3";
 const CORS_ORIGINS = ["https://inova.incross.com"];
 const STORE_CATEGORIES = [
@@ -74,9 +75,12 @@ const promptReviewHandlers = registerPromptReviewHandlers({
   verifyInovaIdentity,
 });
 const meetingHandlers = registerMeetingHandlers({
+  admin,
+  bucket,
   CORS_ORIGINS,
   REGION,
   createHttpError,
+  db,
   logEvent,
   normalizeIdentity,
   normalizeText,

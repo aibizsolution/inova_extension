@@ -46,14 +46,14 @@
 ### Offscreen Document
 
 - 위치: `offscreen/meeting-recorder.html`, `offscreen/meeting-recorder.js`
-- 역할: service worker가 넘긴 `streamId`로 탭 오디오 `MediaRecorder`를 부팅하고, 종료 시 캡처 메타를 브라우저 상태로 되돌린다.
+- 역할: service worker가 넘긴 `streamId`로 탭 오디오 `MediaRecorder`를 부팅하고, 종료 시 캡처 메타를 브라우저 상태로 되돌린다. 전사 직전에는 메모리에 붙잡아 둔 source audio를 inline payload로 바꿔 gateway 요청에 실어 준다.
 - 특징: 실제 오디오 캡처는 popup이나 content script가 아니라 이 격리된 문서에서만 맡는다. 실패 시에는 `inova-meeting:recorder-failed` 메시지로 service worker에 되돌린다.
 
 ### Firebase Functions
 
 - 위치: `functions/index.js`, `functions/prompt-review-service.js`, `functions/store-service.js`, `functions/meeting-service.js`
 - 역할: i-Nova 사용자 검증 뒤 prompt review, prompt store, prompt library sync API와 회의 기능 gateway endpoint를 제공한다.
-- 특징: 현재 원격 백업과 공개 스토어의 진입점이며, 회의 기능은 아직 worker 미연결 상태의 gateway 스캐폴딩만 열어 둔 상태다.
+- 특징: 현재 원격 백업과 공개 스토어의 진입점이며, 회의 기능은 임시 source audio 업로드, OpenAI diarization 호출, `integration_inova_meeting_*` Firestore 기록, source cleanup까지 Functions 안에서 한 번에 처리하는 MVP 경로를 포함한다.
 
 ### Firestore / Hosting
 
@@ -93,15 +93,17 @@
 1. popup이 현재 탭과 세션 정보를 기준으로 `inova-meeting:start-capture`, `inova-meeting:stop-capture`를 보낸다.
 2. background가 `chrome.tabCapture.getMediaStreamId()`와 offscreen document 생명주기를 관리한다.
 3. offscreen document가 `getUserMedia`와 `MediaRecorder`로 탭 오디오를 캡처한다.
-4. 결과 메타는 `meetingStateBySession`에 저장되고, 다음 단계 업로드/job 생성의 입력으로 이어진다.
+4. 결과 메타는 `meetingStateBySession`에 저장되고, 임시 source audio는 offscreen 문서에 유지된다.
+5. 전사 접수에 성공하면 offscreen 문서는 inline payload를 service worker 경계로 보내고 닫힌다.
 
 ### F. 팝업 전사 접수
 
 1. popup이 `meetingStateBySession`의 captured source 메타와 `cloudSync.providerIdentity`를 읽는다.
 2. popup이 `inova-meeting:create-job`을 background로 보낸다.
-3. background가 access token을 붙여 Functions gateway를 호출한다.
-4. 응답 job snapshot은 다시 `meetingStateBySession`에 저장되고, 이후 polling은 content의 `meeting-manager`가 이어받는다.
-5. content 패널의 `회의` 도구는 같은 세션의 capture/job/transcript 상태를 읽어 diarized transcript를 바로 보여 준다.
+3. background는 offscreen 문서가 살아 있으면 inline source payload를 합쳐 Functions gateway로 전달하고, 없으면 일반 gateway 요청으로 폴백한다.
+4. Functions는 임시 source object 업로드, OpenAI diarization, transcript artifact 저장, source cleanup을 수행한다.
+5. 응답 job snapshot은 다시 `meetingStateBySession`에 저장되고, 이후 polling은 content의 `meeting-manager`가 이어받는다.
+6. content 패널의 `회의` 도구는 같은 세션의 capture/job/transcript 상태를 읽어 diarized transcript를 바로 보여 준다.
 
 ## 4. 책임 경계 요약
 
@@ -142,6 +144,7 @@
 - `npm run verify:popup`
 - `npm run verify:meeting-contract`
 - `npm run verify:meeting-manager`
+- `npm run verify:meeting-service`
 - `npm run verify:meeting-state`
 - `npm run verify:cloud`
 - `npm run verify:service-worker`
@@ -164,7 +167,7 @@
 ## 6. 하네스 관점의 현재 한계
 
 - 핵심 UI 흐름은 여전히 실사이트 의존성이 남아 있지만, 로컬 팝업 하네스와 로컬 브라우저 하네스로 popup/content-script 부팅과 주요 토글 상태 전이까지는 먼저 확인할 수 있다.
-- 현재 smoke path는 DOM 수집 계층, popup 상태 전이, 회의 기능용 session/job/artifact 계약, 브라우저 meetingState 상태 전이, content 패널 회의 transcript 렌더링, 로컬 클라우드 계약 검증, background service worker 라우팅 검증, 오프스크린 레코더 하네스, 로컬 브라우저 하네스까지 포함한다.
+- 현재 smoke path는 DOM 수집 계층, popup 상태 전이, 회의 기능용 session/job/artifact 계약, 브라우저 meetingState 상태 전이, Functions diarization/snapshot 정규화, content 패널 회의 transcript 렌더링, 로컬 클라우드 계약 검증, background service worker 라우팅 검증, 오프스크린 레코더 하네스, 로컬 브라우저 하네스까지 포함한다.
 - Firebase emulator는 아직 없지만, fake backend 서버로 Cloud Functions payload 계약과 Hosting release JSON을 로컬에서 재현할 수 있다.
 - 장기적으로는 content/background/functions 경계를 각각 재현할 수 있는 fixture와 smoke path를 늘려야 한다.
 

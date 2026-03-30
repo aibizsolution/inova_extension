@@ -116,6 +116,7 @@
 
   function applyMeetingJobCreated(currentState, payload) {
     const nextJob = payload?.job || {};
+    const transcript = nextJob?.transcript || {};
     return mergeMeetingState(currentState, {
       capture: {
         captureMode: normalizeText(nextJob?.source?.captureMode) || normalizeText(currentState?.capture?.captureMode),
@@ -125,21 +126,27 @@
         status: "uploaded",
       },
       job: {
-        artifactId: "",
-        error: "",
+        artifactId: normalizeText(nextJob?.artifacts?.[0]?.artifactId || transcript?.artifactId),
+        error: normalizeText(nextJob?.error),
         jobId: normalizeText(nextJob?.jobId),
         progress: {
-          percent: 0,
-          phase: "queued",
+          percent: normalizePercent(nextJob?.progress?.percent),
+          phase: normalizeText(nextJob?.progress?.phase) || "queued",
         },
-        sourceAudioDeleted: false,
+        sourceAudioDeleted: Boolean(nextJob?.cleanup?.sourceAudioDeleted),
         status: normalizeText(nextJob?.status) || "queued",
         updatedAt: normalizeText(nextJob?.updatedAt || nextJob?.createdAt),
       },
       session: {
         sessionId: normalizeText(nextJob?.sessionId) || normalizeText(currentState?.session?.sessionId),
       },
-      transcript: cloneValue(defaults.transcript),
+      transcript: {
+        artifactId: normalizeText(transcript?.artifactId || nextJob?.artifacts?.[0]?.artifactId),
+        loadedAt: normalizeText(nextJob?.updatedAt || nextJob?.createdAt),
+        segments: normalizeSegments(transcript?.segments),
+        speakerCount: Math.max(0, Number(nextJob?.transcription?.speakerCount) || 0),
+        text: normalizeTextBlock(transcript?.text),
+      },
     });
   }
 

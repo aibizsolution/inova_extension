@@ -493,17 +493,25 @@ async function queueMeetingJob(currentMeetingState) {
     return;
   }
 
-  try {
-    setPopupStatus("전사 접수 중");
-    const payload = await popupRoot.meetingBridge.createMeetingJob(input, popupState.providerIdentity);
-    const nextMeetingState = popupRoot.meetingState.applyMeetingJobCreated(currentMeetingState, payload);
-    popupState.meetingState = await popupRoot.storage.setMeetingState(popupState.currentSessionId, nextMeetingState);
-    renderPopup();
-    setPopupStatus("전사 대기");
-  } catch (error) {
-    setPopupStatus(error instanceof Error ? error.message : "전사 작업을 접수하지 못했어요.");
+    try {
+      setPopupStatus("전사 접수 중");
+      const payload = await popupRoot.meetingBridge.createMeetingJob(input, popupState.providerIdentity);
+      const nextMeetingState = popupRoot.meetingState.applyMeetingJobCreated(currentMeetingState, payload);
+      popupState.meetingState = await popupRoot.storage.setMeetingState(popupState.currentSessionId, nextMeetingState);
+      renderPopup();
+      if (nextMeetingState.job.status === "succeeded") {
+        setPopupStatus("전사 완료");
+      } else if (nextMeetingState.job.status === "processing") {
+        setPopupStatus("전사 처리 중");
+      } else if (nextMeetingState.job.status === "failed") {
+        setPopupStatus(nextMeetingState.job.error || "전사 실패");
+      } else {
+        setPopupStatus("전사 대기");
+      }
+    } catch (error) {
+      setPopupStatus(error instanceof Error ? error.message : "전사 작업을 접수하지 못했어요.");
+    }
   }
-}
 
 async function toggleSetting(key) {
   const next = await popupRoot.storage.updateSettings({

@@ -28,6 +28,7 @@ const requiredFiles = [
   path.join("scripts", "verify-popup-harness.js"),
   path.join("scripts", "verify-meeting-contract.js"),
   path.join("scripts", "verify-meeting-manager.js"),
+  path.join("scripts", "verify-meeting-service.js"),
   path.join("scripts", "verify-meeting-state.js"),
   path.join("scripts", "verify-cloud-api-contract.js"),
   path.join("scripts", "verify-service-worker-harness.js"),

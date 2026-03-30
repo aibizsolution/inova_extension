@@ -8,6 +8,7 @@
 - 원본 오디오는 `temporary upload`만 허용하고, 처리 후 즉시 삭제를 기본값으로 둔다.
 - 장시간 처리 자체는 `Cloud Run Job` 같은 장기 실행 worker가 맡고, Functions는 사용자 검증과 job 등록, 상태 조회 게이트웨이 역할에 집중한다.
 - 회의 데이터는 기존 `prompt-library`, `prompt-store`와 섞지 않고 별도 도메인으로 둔다.
+- 현재 MVP는 위 장기 worker 방향으로 가기 전 단계로, Functions 안에서 `temporary upload -> OpenAI diarization -> source cleanup -> Firestore snapshot 저장`을 한 번에 처리하는 fallback 경로를 먼저 둔다.
 
 ## 2. 최소 실행 경계
 
@@ -34,8 +35,7 @@
 - `getInovaMeetingJob`
 - `getInovaMeetingArtifact`
 
-Functions는 i-Nova 사용자 검증, meeting `session` 등록, `job` 등록, worker enqueue만 맡는다. 실제 전사/화자분리와 source audio 정리는 worker가 맡는다.
-현재 저장소에는 위 세 endpoint의 `gateway scaffold`만 먼저 들어가 있고, 실제 worker 연결은 아직 구현하지 않았다.
+Functions는 i-Nova 사용자 검증, meeting `session` 등록, `job` 등록, 상태 조회를 맡는다. 현재 MVP에서는 `createInovaMeetingJob` 안에서 임시 source object 업로드, OpenAI diarization, artifact 저장, source cleanup까지 바로 처리하고, 이후 장기 worker로 옮길 수 있게 `session -> job -> artifact` 경계는 그대로 유지한다.
 
 ## 3. 최소 데이터 모델
 
@@ -86,6 +86,7 @@ Functions는 i-Nova 사용자 검증, meeting `session` 등록, `job` 등록, wo
 
 - `source audio`는 사용자 재생 라이브러리처럼 장기 보관하지 않는다.
 - worker가 성공 또는 최종 실패를 기록한 뒤 `cleanup.sourceAudioDeleted=true`를 남긴다.
+- 현재 MVP에서는 Functions가 diarization 직후 source object를 지우고 `cleanup.sourceAudioDeleted=true`를 남긴다.
 - transcript artifact가 남더라도 원본 source audio는 남기지 않는다.
 
 ## 6. 로컬 fixture 범위

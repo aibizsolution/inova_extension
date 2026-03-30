@@ -178,32 +178,82 @@ async function startMeetingCapture(input) {
 }
 
 async function stopMeetingCapture(input) {
-  try {
-    const response = ensureMeetingCaptureResponse(
-      await chrome.runtime.sendMessage({
-        data: {
-          sessionId: namespace.session.normalizeText(input?.sessionId),
-        },
-        target: "offscreen",
-        type: "inova-meeting:stop-capture",
-      }),
-      "녹음을 마무리하지 못했어요."
-    );
-    const sessionId = namespace.session.normalizeText(response?.meeting?.sessionId);
-    if (sessionId) {
-      const currentMeetingState = await namespace.storage.getMeetingState(sessionId);
-      const nextMeetingState = namespace.meetingState.applyMeetingCaptureFinished(currentMeetingState, response);
-      await namespace.storage.setMeetingState(sessionId, nextMeetingState);
-    }
-    return response;
-  } finally {
-    await closeOffscreenRecorderDocument().catch(() => {});
+  const response = ensureMeetingCaptureResponse(
+    await chrome.runtime.sendMessage({
+      data: {
+        sessionId: namespace.session.normalizeText(input?.sessionId),
+      },
+      target: "offscreen",
+      type: "inova-meeting:stop-capture",
+    }),
+    "녹음을 마무리하지 못했어요."
+  );
+  const sessionId = namespace.session.normalizeText(response?.meeting?.sessionId);
+  if (sessionId) {
+    const currentMeetingState = await namespace.storage.getMeetingState(sessionId);
+    const nextMeetingState = namespace.meetingState.applyMeetingCaptureFinished(currentMeetingState, response);
+    await namespace.storage.setMeetingState(sessionId, nextMeetingState);
   }
+  return response;
 }
 
 async function createMeetingJob(input, providerIdentity) {
   const accessToken = await getInovaAccessToken();
+  const requestBody = namespace.cloudApi.buildCreateInovaMeetingJobRequest(input, providerIdentity);
+  const offscreenResponse = await tryCreateMeetingJobFromOffscreen(requestBody, accessToken);
+  if (offscreenResponse) {
+    return tryRefreshMeetingJobSnapshot(offscreenResponse, providerIdentity, accessToken);
+  }
   return namespace.cloudApi.createInovaMeetingJob(input, providerIdentity, accessToken);
+}
+
+async function tryCreateMeetingJobFromOffscreen(requestBody, accessToken) {
+  const contexts = await listRuntimeContexts();
+  const hasRecorder = contexts.some((entry) =>
+    entry?.contextType === "OFFSCREEN_DOCUMENT"
+    && String(entry?.documentUrl || "").includes(OFFSCREEN_RECORDER_URL)
+  );
+  if (!hasRecorder) {
+    return null;
+  }
+
+  const response = ensureMeetingJobResponse(
+    await chrome.runtime.sendMessage({
+      data: {
+        accessToken,
+        requestBody,
+        url: namespace.firebaseConfig.functions.createInovaMeetingJobUrl,
+      },
+      target: "offscreen",
+      type: "inova-meeting:create-job",
+    }),
+    "전사 작업을 접수하지 못했어요."
+  );
+  await closeOffscreenRecorderDocument().catch(() => {});
+  return response;
+}
+
+async function tryRefreshMeetingJobSnapshot(payload, providerIdentity, accessToken) {
+  const jobId = namespace.session.normalizeText(payload?.job?.jobId);
+  const sessionId = namespace.session.normalizeText(payload?.job?.sessionId);
+  if (!jobId) {
+    return payload;
+  }
+
+  try {
+    const latestPayload = await namespace.cloudApi.getInovaMeetingJob(
+      {
+        jobId,
+        sessionId,
+      },
+      providerIdentity,
+      accessToken
+    );
+    if (namespace.session.normalizeText(latestPayload?.job?.jobId)) {
+      return latestPayload;
+    }
+  } catch {}
+  return payload;
 }
 
 async function getMeetingJob(input, providerIdentity) {
@@ -476,6 +526,17 @@ function ensureMeetingCaptureResponse(response, fallbackMessage) {
   const errorMessage = namespace.session.normalizeText(response?.error || response?.capture?.error);
   if (namespace.session.normalizeText(response?.capture?.status) === "error" || errorMessage) {
     throw new Error(errorMessage || fallbackMessage);
+  }
+  return response;
+}
+
+function ensureMeetingJobResponse(response, fallbackMessage) {
+  const errorMessage = namespace.session.normalizeText(response?.error || response?.job?.error);
+  if (errorMessage) {
+    throw new Error(errorMessage || fallbackMessage);
+  }
+  if (!namespace.session.normalizeText(response?.job?.jobId)) {
+    throw new Error(fallbackMessage);
   }
   return response;
 }

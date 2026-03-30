@@ -107,9 +107,19 @@ async function handleRequest(request, response, state) {
   }
 
   if (requestUrl.pathname === "/createInovaMeetingJob") {
+    const payload = cloneValue(state.meetingCreateResponse);
+    payload.job.sessionId = normalizeText(body.meeting?.sessionId) || payload.job.sessionId;
+    payload.job.source = {
+      ...payload.job.source,
+      captureMode: normalizeText(body.source?.captureMode) || payload.job.source.captureMode,
+      durationMs: Math.max(0, Number(body.source?.durationMs) || payload.job.source.durationMs || 0),
+      mimeType: normalizeText(body.source?.mimeType) || payload.job.source.mimeType,
+      sizeBytes: Math.max(0, Number(body.source?.sizeBytes) || payload.job.source.sizeBytes || 0),
+      storageObject: normalizeText(body.source?.storageObject) || payload.job.source.storageObject,
+    };
     return void sendJson(response, 200, {
       ok: true,
-      data: cloneValue(state.meetingCreateResponse),
+      data: payload,
     });
   }
 
@@ -118,14 +128,14 @@ async function handleRequest(request, response, state) {
     const nextPayload = state.meetingPollCount >= 2 ? state.meetingJobSucceeded : state.meetingJobProcessing;
     return void sendJson(response, 200, {
       ok: true,
-      data: cloneValue(nextPayload),
+      data: alignMeetingJobPayload(nextPayload, body),
     });
   }
 
   if (requestUrl.pathname === "/getInovaMeetingArtifact") {
     return void sendJson(response, 200, {
       ok: true,
-      data: cloneValue(state.meetingArtifact),
+      data: alignMeetingArtifactPayload(state.meetingArtifact, body),
     });
   }
 
@@ -319,6 +329,44 @@ function updateEntry(state, entryId, mapper) {
   }
   state.storeEntries[index] = mapper(cloneValue(state.storeEntries[index]));
   return cloneValue(state.storeEntries[index]);
+}
+
+function alignMeetingJobPayload(payload, body) {
+  const nextPayload = cloneValue(payload);
+  const requestedJobId = normalizeText(body?.jobId);
+  const requestedSessionId = normalizeText(body?.sessionId);
+  if (requestedJobId) {
+    nextPayload.job.jobId = requestedJobId;
+    if (Array.isArray(nextPayload.job.artifacts)) {
+      nextPayload.job.artifacts = nextPayload.job.artifacts.map((artifact) => ({
+        ...artifact,
+        jobId: requestedJobId,
+      }));
+    }
+  }
+  if (requestedSessionId) {
+    nextPayload.job.sessionId = requestedSessionId;
+  }
+  if (requestedJobId && nextPayload.job.transcript) {
+    nextPayload.job.transcript = {
+      ...nextPayload.job.transcript,
+      jobId: requestedJobId,
+    };
+  }
+  return nextPayload;
+}
+
+function alignMeetingArtifactPayload(payload, body) {
+  const nextPayload = cloneValue(payload);
+  const requestedArtifactId = normalizeText(body?.artifactId);
+  const requestedJobId = normalizeText(body?.jobId);
+  if (requestedArtifactId) {
+    nextPayload.artifact.artifactId = requestedArtifactId;
+  }
+  if (requestedJobId) {
+    nextPayload.artifact.jobId = requestedJobId;
+  }
+  return nextPayload;
 }
 
 function compareEntries(left, right, sortBy) {
