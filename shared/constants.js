@@ -10,6 +10,7 @@
       cloudSync: "cloudSync",
       releaseInfo: "releaseInfo",
       meetingState: "meetingState",
+      meetingStateBySession: "meetingStateBySession",
     },
     defaults: {
       settings: {
@@ -103,6 +104,7 @@
           loadedAt: "",
         },
       },
+      meetingStateBySession: {},
       uiPreferences: {
         activeTool: "bookmarks",
         activePromptTab: "library",

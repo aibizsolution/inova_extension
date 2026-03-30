@@ -15,7 +15,7 @@
 
 - 오디오 파일 준비/업로드 상태와 job 상태 표시만 맡는다.
 - 실제 원격 업로드와 polling은 background 메시지로 위임한다.
-- 브라우저 로컬 상태는 `shared/meeting-state.js` 와 `chrome.storage.local.meetingState`를 기준으로 쌓는다.
+- 브라우저 로컬 상태는 `shared/meeting-state.js` 와 `chrome.storage.local.meetingStateBySession`을 정본으로 두고, `meetingState`는 마지막 반영본 호환 키로만 유지한다.
 - popup은 같은 `meetingState`를 읽어 현재 대화 기준 회의 상태 카드를 먼저 보여 주고, 이후 capture/upload action을 이 카드에 이어 붙이는 방향을 기준으로 둔다.
 - content는 `content/meeting-manager.js`로 현재 세션 기준 meeting job만 polling하고, 완료 후 artifact를 읽어 같은 `meetingState`에 반영한다.
 

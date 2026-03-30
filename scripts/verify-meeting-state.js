@@ -78,6 +78,7 @@ async function main() {
 
   const namespace = context.InovaBookmarks;
   assert(namespace.constants.storageKeys.meetingState === "meetingState");
+  assert(namespace.constants.storageKeys.meetingStateBySession === "meetingStateBySession");
 
   const draft = namespace.meetingState.createDraftMeetingState(createRequest);
   assert.equal(draft.session.sessionId, createRequest.meeting.sessionId);
@@ -86,7 +87,14 @@ async function main() {
 
   const storedDraft = await namespace.storage.setMeetingState(draft);
   assert.equal(storedDraft.session.sessionId, createRequest.meeting.sessionId);
-  assert.equal((await namespace.storage.getMeetingState()).capture.sizeBytes, createRequest.source.sizeBytes);
+  assert.equal(
+    (await namespace.storage.getMeetingState(createRequest.meeting.sessionId)).capture.sizeBytes,
+    createRequest.source.sizeBytes
+  );
+  assert.equal(
+    (await namespace.storage.getMeetingStateBySession())[createRequest.meeting.sessionId].session.sessionId,
+    createRequest.meeting.sessionId
+  );
 
   const created = await namespace.meetingBridge.createMeetingJob(createRequest, providerIdentity);
   assert.equal(created.job.status, "queued");
@@ -122,7 +130,7 @@ async function main() {
   assert(finalState.transcript.text.includes("SPEAKER_00"));
 
   await namespace.storage.setMeetingState(finalState);
-  const restoredState = await namespace.storage.getMeetingState();
+  const restoredState = await namespace.storage.getMeetingState(createRequest.meeting.sessionId);
   assert.equal(restoredState.job.status, "succeeded");
   assert.equal(restoredState.transcript.segments.length, 2);
 

@@ -2,6 +2,32 @@
   "schemaVersion": 1,
   "versions": [
     {
+      "version": "0.3.13",
+      "level": "patch",
+      "public": {
+        "headline": "회의 상태를 대화별로 분리",
+        "summary": "이번 배포는 회의 상태를 현재 대화별로 따로 유지하도록 바꿔, 여러 대화나 탭을 오갈 때 상태가 덜 섞이게 만드는 준비성 업데이트입니다.",
+        "changes": [
+          {
+            "type": "changed",
+            "text": "사용자 화면은 크게 달라지지 않지만, 회의 상태와 전사 결과가 대화별로 더 안정적으로 이어지도록 내부 저장 구조를 세션 기준으로 정리했습니다."
+          }
+        ]
+      },
+      "internal": {
+        "changes": [
+          {
+            "type": "changed",
+            "text": "shared/storage.js와 popup/index.js, content/meeting-manager.js가 session-scoped meetingStateBySession을 정본으로 읽고 쓰도록 정리했습니다."
+          },
+          {
+            "type": "changed",
+            "text": "meeting-state, popup, meeting-manager verify와 popup harness mock을 함께 업데이트해 세션별 storage change 경로를 하네스에서 재현하도록 바꿨습니다."
+          }
+        ]
+      }
+    },
+    {
       "version": "0.3.12",
       "level": "patch",
       "public": {
@@ -22,7 +48,7 @@
           },
           {
             "type": "changed",
-            "text": "route-sync 훅, manifest content script 목록, verify-meeting-manager.js를 함께 업데이트해 meeting manager가 세션 전환과 하네스 검증 안에서 같이 동작하도록 정리했습니다."
+            "text": "route-sync 훅, session-scoped meetingStateBySession 저장, manifest content script 목록, verify-meeting-manager.js를 함께 업데이트해 meeting manager가 세션 전환과 하네스 검증 안에서 같이 동작하도록 정리했습니다."
           }
         ]
       }

@@ -14,19 +14,15 @@
     };
 
     function handleRouteStateChange() {
-      if (!isCurrentSessionMeeting()) {
-        global.clearTimeout(timerId);
-        return;
-      }
-      scheduleSync(220);
+      syncCurrentSessionMeetingState().catch(logRefreshError);
     }
 
     function handleStorageChange(changes, areaName) {
-      if (areaName !== "local" || !changes.meetingState) {
+      if (areaName !== "local" || (!changes.meetingStateBySession && !changes.meetingState)) {
         return;
       }
 
-      state.meetingState = namespace.meetingState.mergeMeetingState(changes.meetingState.newValue);
+      state.meetingState = readMeetingStateFromChanges(changes);
       if (isCurrentSessionMeeting() && namespace.meetingState.shouldPollMeetingJob(state.meetingState)) {
         scheduleSync(420);
       }
@@ -41,7 +37,7 @@
     }
 
     async function refreshState() {
-      state.meetingState = await namespace.storage.getMeetingState();
+      state.meetingState = await namespace.storage.getMeetingState(state.sessionId);
       if (!isCurrentSessionMeeting()) {
         hooks.render?.();
         return state.meetingState;
@@ -62,7 +58,7 @@
             providerIdentity
           );
           nextMeetingState = namespace.meetingState.applyMeetingJobSnapshot(nextMeetingState, jobPayload);
-          nextMeetingState = await namespace.storage.setMeetingState(nextMeetingState);
+          nextMeetingState = await namespace.storage.setMeetingState(state.sessionId, nextMeetingState);
         }
 
         if (shouldLoadArtifact(nextMeetingState)) {
@@ -71,7 +67,7 @@
             providerIdentity
           );
           nextMeetingState = namespace.meetingState.applyMeetingArtifact(nextMeetingState, artifactPayload);
-          nextMeetingState = await namespace.storage.setMeetingState(nextMeetingState);
+          nextMeetingState = await namespace.storage.setMeetingState(state.sessionId, nextMeetingState);
         }
 
         state.meetingState = nextMeetingState;
@@ -89,6 +85,27 @@
       const currentSessionId = namespace.session.normalizeText(state.sessionId);
       const meetingSessionId = namespace.session.normalizeText(state.meetingState?.session?.sessionId);
       return Boolean(currentSessionId && meetingSessionId && currentSessionId === meetingSessionId);
+    }
+
+    async function syncCurrentSessionMeetingState() {
+      state.meetingState = await namespace.storage.getMeetingState(state.sessionId);
+      if (!isCurrentSessionMeeting()) {
+        global.clearTimeout(timerId);
+        hooks.render?.();
+        return;
+      }
+      scheduleSync(220);
+    }
+
+    function readMeetingStateFromChanges(changes) {
+      const currentSessionId = namespace.session.normalizeText(state.sessionId);
+      if (currentSessionId && changes.meetingStateBySession?.newValue) {
+        return namespace.meetingState.mergeMeetingState(changes.meetingStateBySession.newValue[currentSessionId]);
+      }
+      if (changes.meetingState?.newValue) {
+        return namespace.meetingState.mergeMeetingState(changes.meetingState.newValue);
+      }
+      return namespace.meetingState.mergeMeetingState();
     }
 
     function shouldLoadArtifact(meetingState) {

@@ -35,7 +35,7 @@
 
 - 위치: `content/`, `shared/`, `manifest.json`
 - 역할: `inova.incross.com` 안에 실험실 패널을 삽입하고, 질문 탐색/프롬프트/스토어/릴리스 UI와 회의 job polling 흐름을 조립한다.
-- 특징: 현재 대화 DOM을 읽고, 로컬 상태를 붙이고, 필요한 클라우드 호출은 background에 메시지로 위임한다. 회의 기능은 브라우저 쪽에서 `meetingState` 저장, `meetingBridge` 호출, `content/meeting-manager.js` polling 루프를 먼저 분리해 둔다.
+- 특징: 현재 대화 DOM을 읽고, 로컬 상태를 붙이고, 필요한 클라우드 호출은 background에 메시지로 위임한다. 회의 기능은 브라우저 쪽에서 `meetingStateBySession` 저장, `meetingBridge` 호출, `content/meeting-manager.js` polling 루프를 먼저 분리해 둔다.
 
 ### Background Service Worker
 

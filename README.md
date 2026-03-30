@@ -70,7 +70,7 @@
   - `prompt-store.js`: 스토어 카테고리, 엔트리 정규화, 정렬 규칙
   - `provider-identity.js`: 현재 i-Nova 사용자 식별 정보 정규화
   - `session.js`: `sid`, 질문 정규화, 메시지 ID 생성
-  - `storage.js`: `settings`, `pausedSessions`, `uiPreferences`, `promptLibrary`, `cloudSync`, `meetingState` 읽기/쓰기
+  - `storage.js`: `settings`, `pausedSessions`, `uiPreferences`, `promptLibrary`, `cloudSync`, `meetingState`, `meetingStateBySession` 읽기/쓰기
 - `popup/`
   - 팝업 설정 UI, 현재 대화 상태, 회의 상태 카드 표시
 - `content/`
@@ -108,14 +108,14 @@
 - `content/prompt-manager.js`는 `promptLibrary`를 관리하고, 선택한 요청을 현재 대화 입력창에 주입합니다.
 - `content/prompt-review-manager.js`는 현재 입력창 프롬프트를 평가하고 보완 프롬프트를 다시 주입합니다.
 - `content/store-manager.js`는 `프롬프트 스토어` 목록 조회, 등록, 삭제, 좋아요, 가져오기 흐름을 관리합니다.
-- `content/meeting-manager.js`는 현재 세션과 `meetingState`가 맞을 때만 회의 job 상태를 polling하고, 완료 후 artifact를 로컬 storage에 반영합니다.
+- `content/meeting-manager.js`는 현재 세션과 `meetingState`가 맞을 때만 회의 job 상태를 polling하고, 완료 후 artifact를 세션별 로컬 storage에 반영합니다.
 - `background/service-worker.js`는 i-Nova access token과 Firebase Functions를 연결해 원격 백업 호출을 처리합니다.
 - 회의 전사/화자분리 기능은 아직 UI에 노출하지 않았지만, `shared/cloud-api.js -> background/service-worker.js -> functions/*` 경계의 gateway 스캐폴딩은 먼저 연결해 두었습니다.
 - 브라우저 쪽에서는 `shared/meeting-bridge.js` 와 `shared/meeting-state.js` 로 회의 job 생성, polling, artifact 반영, local `meetingState` 저장 기준을 먼저 맞춰 두었습니다.
 - 질문 목록 자체는 `chrome.storage.local`에 저장하지 않고, 현재 대화 화면을 기준으로 바로 렌더링합니다.
 - 요청 보관함은 `chrome.storage.local.promptLibrary`에 저장합니다.
 - 원격 백업 대기 상태는 `chrome.storage.local.cloudSync`에 저장합니다.
-- 회의 기능 브라우저 상태는 `chrome.storage.local.meetingState`를 기준으로 유지합니다.
+- 회의 기능 브라우저 상태는 세션별 `chrome.storage.local.meetingStateBySession`을 정본으로 두고, `meetingState`는 마지막 반영본 호환 키로 함께 유지합니다.
 
 ## 설치 방법
 
@@ -173,7 +173,7 @@ npm run verify:harness-page
 
 `verify:meeting-contract`는 아직 구현 전인 회의 전사/화자분리 기능의 최소 정본을 확인합니다. `docs/meeting-diarization-foundation.md` 와 `fixtures/meeting-diarization/*.json`, 로컬 클라우드 하네스 meeting route가 서로 어긋나지 않는지 검사합니다.
 
-`verify:meeting-manager`는 `content/meeting-manager.js`가 현재 세션 기준 active meeting job을 polling하고, succeeded 이후 artifact를 읽어 `chrome.storage.local.meetingState`에 반영하는 최소 루프를 확인합니다.
+`verify:meeting-manager`는 `content/meeting-manager.js`가 현재 세션 기준 active meeting job을 polling하고, succeeded 이후 artifact를 읽어 `chrome.storage.local.meetingStateBySession`에 반영하는 최소 루프를 확인합니다.
 
 `verify:meeting-state`는 브라우저 쪽 `shared/meeting-state.js`, `shared/meeting-bridge.js`, `shared/storage.js`가 fixture meeting job 흐름과 로컬 storage 상태 전이 기준으로 맞는지 확인합니다.
 

@@ -66,8 +66,9 @@ function listenPopupStorage() {
       popupState.pausedSessions = changes.pausedSessions.newValue || {};
     }
 
-    if (changes.meetingState) {
-      popupState.meetingState = popupRoot.meetingState.mergeMeetingState(changes.meetingState.newValue);
+    if (changes.meetingStateBySession || changes.meetingState) {
+      syncMeetingStateForCurrentSession().then(renderPopup);
+      return;
     }
 
     renderPopup();
@@ -83,12 +84,17 @@ async function refreshPopup() {
 
   popupState.settings = storage.settings || { ...popupRoot.constants.defaults.settings };
   popupState.pausedSessions = storage.pausedSessions || {};
-  popupState.meetingState = popupRoot.meetingState.mergeMeetingState(storage.meetingState);
   popupState.activeTab = activeTab;
   popupState.currentSessionId = popupRoot.session.getSessionId(activeTab.url);
+  await syncMeetingStateForCurrentSession();
 
   renderPopup();
   setPopupStatus("적용됨");
+}
+
+async function syncMeetingStateForCurrentSession() {
+  popupState.meetingState = await popupRoot.storage.getMeetingState(popupState.currentSessionId);
+  return popupState.meetingState;
 }
 
 async function getActiveTab() {

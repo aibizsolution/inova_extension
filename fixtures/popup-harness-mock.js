@@ -6,6 +6,22 @@
       url: "https://inova.incross.com/chat?sid=fixture-session",
     },
     storage: {
+      meetingStateBySession: {
+        "fixture-session": {
+          session: {
+            sessionId: "fixture-session",
+            title: "주간 스탠드업",
+          },
+          job: {
+            jobId: "job_fixture_01",
+            progress: {
+              percent: 42,
+              phase: "transcribing",
+            },
+            status: "processing",
+          },
+        },
+      },
       meetingState: {
         session: {
           sessionId: "fixture-session",
@@ -40,13 +56,25 @@
     },
     setMeetingState(nextMeetingState) {
       const previousValue = cloneValue(state.storage.meetingState);
+      const previousMap = cloneValue(state.storage.meetingStateBySession);
       state.storage.meetingState = cloneValue(nextMeetingState || {});
+      const nextSessionId = String(nextMeetingState?.session?.sessionId || "").trim();
+      state.storage.meetingStateBySession = nextSessionId
+        ? {
+            ...(state.storage.meetingStateBySession || {}),
+            [nextSessionId]: cloneValue(nextMeetingState || {}),
+          }
+        : { ...(state.storage.meetingStateBySession || {}) };
       changeListeners.forEach((listener) =>
         listener(
           {
             meetingState: {
               oldValue: previousValue,
               newValue: cloneValue(state.storage.meetingState),
+            },
+            meetingStateBySession: {
+              oldValue: previousMap,
+              newValue: cloneValue(state.storage.meetingStateBySession),
             },
           },
           "local"

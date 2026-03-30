@@ -79,6 +79,7 @@ async function main() {
     "Popup harness should reflect meetingState storage updates"
   );
   assert(window.document.getElementById("meetingSummary")?.textContent.includes("2명 화자"));
+  assert(window.__INOVA_POPUP_HARNESS__.state.storage.meetingStateBySession["fixture-session"]);
 
   window.__INOVA_POPUP_HARNESS__.setActiveTab({
     title: "Example",

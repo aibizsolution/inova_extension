@@ -17,6 +17,29 @@ async function main() {
   let nextTimerId = 1;
   let renderCount = 0;
   let storageState = {
+    meetingStateBySession: {
+      [activeSessionId]: {
+        capture: {
+          captureMode: "mixed-audio",
+          durationMs: 480000,
+          mimeType: "audio/webm",
+          sizeBytes: 4200000,
+          status: "uploaded",
+        },
+        job: {
+          jobId: processingResponse.job.jobId,
+          progress: {
+            percent: 24,
+            phase: "transcribing",
+          },
+          status: "processing",
+        },
+        session: {
+          sessionId: activeSessionId,
+          title: "주간 스탠드업",
+        },
+      },
+    },
     meetingState: {
       capture: {
         captureMode: "mixed-audio",
@@ -148,6 +171,10 @@ async function main() {
 
   manager.handleStorageChange(
     {
+      meetingStateBySession: {
+        oldValue: {},
+        newValue: cloneValue(storageState.meetingStateBySession),
+      },
       meetingState: {
         oldValue: namespace.meetingState.mergeMeetingState(),
         newValue: cloneValue(storageState.meetingState),
@@ -162,7 +189,9 @@ async function main() {
   assert.equal(state.meetingState.job.status, "succeeded");
   assert.equal(state.meetingState.transcript.segments.length, 2);
   assert.equal(storageState.meetingState.job.status, "succeeded");
+  assert.equal(storageState.meetingStateBySession[activeSessionId].job.status, "succeeded");
   assert.equal(storageState.meetingState.transcript.segments.length, 2);
+  assert.equal(storageState.meetingStateBySession[activeSessionId].transcript.segments.length, 2);
   assert.deepEqual(
     sentMessages.map((message) => message.type),
     ["inova-meeting:get-job", "inova-meeting:get-artifact"]

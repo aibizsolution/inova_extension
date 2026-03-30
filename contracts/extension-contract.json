@@ -78,7 +78,8 @@
     "uiPreferences",
     "promptLibrary",
     "cloudSync",
-    "meetingState"
+    "meetingState",
+    "meetingStateBySession"
   ],
   "requiredDocKeywords": [
     "팝업 On/Off",
