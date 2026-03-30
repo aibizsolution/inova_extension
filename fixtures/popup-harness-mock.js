@@ -6,6 +6,20 @@
       url: "https://inova.incross.com/chat?sid=fixture-session",
     },
     storage: {
+      meetingState: {
+        session: {
+          sessionId: "fixture-session",
+          title: "주간 스탠드업",
+        },
+        job: {
+          jobId: "job_fixture_01",
+          progress: {
+            percent: 42,
+            phase: "transcribing",
+          },
+          status: "processing",
+        },
+      },
       pausedSessions: {},
       settings: {
         autoBookmark: true,
@@ -23,6 +37,21 @@
         title: String(nextTab?.title || ""),
         url: String(nextTab?.url || ""),
       };
+    },
+    setMeetingState(nextMeetingState) {
+      const previousValue = cloneValue(state.storage.meetingState);
+      state.storage.meetingState = cloneValue(nextMeetingState || {});
+      changeListeners.forEach((listener) =>
+        listener(
+          {
+            meetingState: {
+              oldValue: previousValue,
+              newValue: cloneValue(state.storage.meetingState),
+            },
+          },
+          "local"
+        )
+      );
     },
   };
 

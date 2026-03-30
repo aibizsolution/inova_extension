@@ -28,7 +28,7 @@
 ### Popup
 
 - 위치: `popup/index.html`, `popup/index.js`
-- 역할: 확장 On/Off, 현재 탭 상태 표시, 세션 단위 일시 중지
+- 역할: 확장 On/Off, 현재 탭 상태 표시, 세션 단위 일시 중지, `meetingState` 상태 카드 표시
 - 특징: 짧은 상태 확인과 토글만 맡고, 실제 UI 본체나 네트워크 동기화는 맡지 않는다.
 
 ### Content Script

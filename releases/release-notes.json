@@ -2,6 +2,32 @@
   "schemaVersion": 1,
   "versions": [
     {
+      "version": "0.3.11",
+      "level": "patch",
+      "public": {
+        "headline": "팝업에서 회의 상태 미리 보기 추가",
+        "summary": "이번 배포는 회의 기능을 본격적으로 붙이기 전 단계로, 팝업에서 현재 대화 기준 회의 상태를 먼저 확인할 수 있게 한 준비성 업데이트입니다.",
+        "changes": [
+          {
+            "type": "changed",
+            "text": "사용자 화면에서는 팝업에서 현재 대화 기준 회의 처리 상태를 먼저 볼 수 있게 되어, 이후 녹음과 전사 흐름이 붙어도 상태 확인 경로가 바로 이어집니다."
+          }
+        ]
+      },
+      "internal": {
+        "changes": [
+          {
+            "type": "added",
+            "text": "popup/index.js와 popup/index.html, popup/index.css에 meetingState 상태 카드를 추가해 processing/succeeded/failed 상태를 로컬 storage 기준으로 렌더링하도록 정리했습니다."
+          },
+          {
+            "type": "changed",
+            "text": "popup harness fixture와 verify-popup-harness.js를 확장해 meetingState storage change가 팝업 UI에 자동 반영되는지 함께 검증하도록 업데이트했습니다."
+          }
+        ]
+      }
+    },
+    {
       "version": "0.3.10",
       "level": "patch",
       "public": {

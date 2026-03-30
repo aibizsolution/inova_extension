@@ -7,6 +7,7 @@
 - `팝업 On/Off`
   - 확장프로그램 팝업에서 `i-Nova에서 사용`을 켜고 끌 수 있습니다.
   - 현재 대화만 따로 `일시 중지`할 수도 있습니다.
+  - 회의 기능이 붙는 동안에는 팝업에서 현재 대화 기준 `meetingState` 상태도 함께 확인할 수 있습니다.
 - `질문 자동 모으기`
   - 현재 대화에 보이는 사용자 질문을 자동으로 모아 보여줍니다.
   - 질문 목록은 현재 대화 화면을 기준으로 실시간으로 갱신됩니다.
@@ -71,7 +72,7 @@
   - `session.js`: `sid`, 질문 정규화, 메시지 ID 생성
   - `storage.js`: `settings`, `pausedSessions`, `uiPreferences`, `promptLibrary`, `cloudSync`, `meetingState` 읽기/쓰기
 - `popup/`
-  - 팝업 설정 UI와 현재 대화 상태 표시
+  - 팝업 설정 UI, 현재 대화 상태, 회의 상태 카드 표시
 - `content/`
   - `dom.js`: 질문 DOM 수집
   - `bookmark-view.js`: 질문 탭 렌더링과 포커스 이동
@@ -101,7 +102,7 @@
 ## 동작 방식
 
 - 확장프로그램은 `manifest V3`로 구성되어 있습니다.
-- `popup/index.js`는 `settings.enabled`, `settings.autoBookmark`, `pausedSessions`를 저장하고 읽습니다.
+- `popup/index.js`는 `settings.enabled`, `settings.autoBookmark`, `pausedSessions`, `meetingState`를 읽어 현재 대화와 회의 상태 카드를 함께 갱신합니다.
 - `content/main.js`는 현재 URL의 `sid`를 기준으로 대화를 나누고, `.chat-message--user`를 실시간으로 수집합니다.
 - `content/prompt-manager.js`는 `promptLibrary`를 관리하고, 선택한 요청을 현재 대화 입력창에 주입합니다.
 - `content/prompt-review-manager.js`는 현재 입력창 프롬프트를 평가하고 보완 프롬프트를 다시 주입합니다.
@@ -165,7 +166,7 @@ npm run verify:harness-page
 
 `verify:smoke`는 `fixtures/inova-chat-session.html`을 기준으로 질문 수집 DOM 경로가 현재 selectors와 세션 정규화 규칙에 맞게 동작하는지 확인합니다.
 
-`verify:popup`은 로컬 popup harness fixture에서 `popup/index.js`를 부팅해 현재 탭 식별, 세션 표시, `i-Nova에서 사용`, `이 대화에서 일시 중지` 토글 흐름이 기본 상태 전이와 함께 맞는지 확인합니다.
+`verify:popup`은 로컬 popup harness fixture에서 `popup/index.js`를 부팅해 현재 탭 식별, 세션 표시, `i-Nova에서 사용`, `이 대화에서 일시 중지` 토글, `meetingState` 상태 카드 반영 흐름이 기본 상태 전이와 함께 맞는지 확인합니다.
 
 `verify:meeting-contract`는 아직 구현 전인 회의 전사/화자분리 기능의 최소 정본을 확인합니다. `docs/meeting-diarization-foundation.md` 와 `fixtures/meeting-diarization/*.json`, 로컬 클라우드 하네스 meeting route가 서로 어긋나지 않는지 검사합니다.
 

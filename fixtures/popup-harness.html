@@ -89,6 +89,18 @@
           </div>
         </section>
 
+        <section class="card meeting" aria-label="회의 상태">
+          <div class="meeting__header">
+            <div class="meeting__copy">
+              <p class="meeting__eyebrow">Meeting</p>
+              <h2 id="meetingTitle" class="meeting__title">현재 대화 회의 상태</h2>
+            </div>
+            <span id="meetingBadge" class="meeting__badge" data-status="idle">대기</span>
+          </div>
+          <p id="meetingSummary" class="meeting__summary">현재 대화에 연결된 회의 작업이 아직 없어요.</p>
+          <p id="meetingHint" class="meeting__hint">녹음과 전사 흐름이 붙으면 여기에 진행 상태가 보입니다.</p>
+        </section>
+
         <section class="card notes">
           <div class="notes__row">
             <span class="notes__title">현재 사이트</span>
@@ -105,6 +117,8 @@
     <script src="./popup-harness-mock.js"></script>
     <script src="../shared/constants.js"></script>
     <script src="../shared/session.js"></script>
+    <script src="../shared/meeting-state.js"></script>
+    <script src="../shared/meeting-bridge.js"></script>
     <script src="../shared/storage.js"></script>
     <script src="../popup/index.js"></script>
   </body>

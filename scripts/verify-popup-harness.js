@@ -24,6 +24,8 @@ async function main() {
   runScript(path.join(root, "fixtures", "popup-harness-mock.js"), context, "fixtures/popup-harness-mock.js");
   runScript(path.join(root, "shared", "constants.js"), context, "shared/constants.js");
   runScript(path.join(root, "shared", "session.js"), context, "shared/session.js");
+  runScript(path.join(root, "shared", "meeting-state.js"), context, "shared/meeting-state.js");
+  runScript(path.join(root, "shared", "meeting-bridge.js"), context, "shared/meeting-bridge.js");
   runScript(path.join(root, "shared", "storage.js"), context, "shared/storage.js");
   runScript(path.join(root, "popup", "index.js"), context, "popup/index.js");
 
@@ -37,6 +39,9 @@ async function main() {
   assert.equal(window.document.getElementById("sitePill")?.textContent, "i-Nova");
   assert(window.document.getElementById("tabLabel")?.textContent.includes("inova.incross.com"));
   assert(window.document.getElementById("sessionLabel")?.textContent.includes("대화 "));
+  assert.equal(window.document.getElementById("meetingBadge")?.textContent, "진행 중");
+  assert(window.document.getElementById("meetingTitle")?.textContent.includes("주간 스탠드업"));
+  assert(window.document.getElementById("meetingHint")?.textContent.includes("42%"));
   assert.equal(window.document.getElementById("pauseControl")?.hidden, false);
   assert.equal(window.document.getElementById("enabledToggle")?.getAttribute("aria-checked"), "true");
 
@@ -53,6 +58,27 @@ async function main() {
     "Popup harness should update enabled state"
   );
   assert.equal(window.document.getElementById("pauseControl")?.hidden, true);
+
+  window.__INOVA_POPUP_HARNESS__.setMeetingState({
+    session: {
+      sessionId: "fixture-session",
+      title: "주간 스탠드업",
+    },
+    job: {
+      jobId: "job_fixture_01",
+      status: "succeeded",
+    },
+    transcript: {
+      loadedAt: "2026-03-30T10:30:00.000Z",
+      speakerCount: 2,
+      text: "SPEAKER_00: 안녕하세요",
+    },
+  });
+  await waitFor(
+    () => window.document.getElementById("meetingBadge")?.textContent === "완료",
+    "Popup harness should reflect meetingState storage updates"
+  );
+  assert(window.document.getElementById("meetingSummary")?.textContent.includes("2명 화자"));
 
   window.__INOVA_POPUP_HARNESS__.setActiveTab({
     title: "Example",
