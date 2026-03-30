@@ -7,7 +7,11 @@ const root = path.resolve(__dirname, "..");
 const requiredFiles = [
   path.join("docs", "runtime-architecture.md"),
   path.join("fixtures", "inova-chat-session.html"),
+  path.join("fixtures", "content-harness.html"),
+  path.join("fixtures", "content-harness-mock.js"),
   path.join("scripts", "verify-content-smoke.js"),
+  path.join("scripts", "run-harness-server.js"),
+  path.join("scripts", "verify-content-harness-page.js"),
 ];
 
 const architectureKeywords = [
@@ -18,12 +22,19 @@ const architectureKeywords = [
   "Firestore / Hosting",
   "권위 있는 소스",
   "검증 표면",
+  "로컬 브라우저 하네스",
 ];
 
 const fixtureKeywords = [
   'aria-label="채팅 기록"',
   "chat-message--user",
   "chat-input__textarea",
+];
+
+const harnessFixtureKeywords = [
+  "Local Content Harness",
+  'aria-label="채팅 기록"',
+  "content-harness-mock.js",
 ];
 
 function main() {
@@ -52,6 +63,16 @@ function main() {
     for (const keyword of fixtureKeywords) {
       if (!text.includes(keyword)) {
         errors.push(`fixture에 핵심 표식이 없습니다: ${keyword}`);
+      }
+    }
+  }
+
+  const harnessFixturePath = path.join(root, "fixtures", "content-harness.html");
+  if (fs.existsSync(harnessFixturePath)) {
+    const text = fs.readFileSync(harnessFixturePath, "utf8");
+    for (const keyword of harnessFixtureKeywords) {
+      if (!text.includes(keyword)) {
+        errors.push(`로컬 하네스 fixture에 핵심 표식이 없습니다: ${keyword}`);
       }
     }
   }

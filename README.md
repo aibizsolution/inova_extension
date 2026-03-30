@@ -150,9 +150,20 @@ npm run verify
 ```bash
 npm run verify:harness
 npm run verify:smoke
+npm run verify:harness-page
 ```
 
 `verify:smoke`는 `fixtures/inova-chat-session.html`을 기준으로 질문 수집 DOM 경로가 현재 selectors와 세션 정규화 규칙에 맞게 동작하는지 확인합니다.
+
+`verify:harness-page`는 로컬 브라우저 하네스 fixture와 fake runtime 응답으로 실제 content-script 패널이 부팅되고, `프롬프트`/`스토어`/`릴리스` 탭이 최소 수준으로 렌더링되는지 확인합니다.
+
+브라우저에서 직접 로컬 하네스를 열어 보고 싶으면 다음을 실행합니다.
+
+```bash
+npm run harness:serve
+```
+
+기본 주소는 `http://127.0.0.1:4173/fixtures/content-harness.html?sid=fixture-session` 입니다.
 
 README 가드만 미리 확인하려면 다음을 실행합니다.
 

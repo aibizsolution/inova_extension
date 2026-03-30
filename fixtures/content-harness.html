@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>i-Nova Content Harness</title>
+    <link rel="stylesheet" href="../content/panel.css" />
+    <link rel="stylesheet" href="../content/tools.css" />
+    <link rel="stylesheet" href="../content/composer-review.css" />
+    <style>
+      body {
+        margin: 0;
+        background: #f4f7fb;
+        color: #13202b;
+        font-family: "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+      }
+
+      .inova-harness-banner {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        display: grid;
+        gap: 6px;
+        padding: 14px 18px;
+        border-bottom: 1px solid rgba(19, 32, 43, 0.08);
+        background: rgba(255, 255, 255, 0.94);
+        backdrop-filter: blur(10px);
+      }
+
+      .inova-harness-banner strong {
+        font-size: 14px;
+      }
+
+      .inova-harness-banner p {
+        margin: 0;
+        font-size: 13px;
+        color: rgba(19, 32, 43, 0.72);
+      }
+
+      .inova-harness-main {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 28px 24px 96px;
+      }
+
+      .chat-history__content {
+        display: grid;
+        gap: 16px;
+      }
+
+      .chat-thread {
+        display: grid;
+        gap: 14px;
+        padding: 18px;
+        border: 1px solid rgba(19, 32, 43, 0.08);
+        border-radius: 18px;
+        background: #ffffff;
+        box-shadow: 0 14px 40px rgba(19, 32, 43, 0.06);
+      }
+
+      .chat-message {
+        max-width: 78%;
+        padding: 14px 16px;
+        border-radius: 16px;
+        line-height: 1.55;
+        white-space: pre-wrap;
+      }
+
+      .chat-message--assistant {
+        justify-self: start;
+        background: #eef3f8;
+      }
+
+      .chat-message--user {
+        justify-self: end;
+        background: #dff4ea;
+      }
+
+      .chat-input {
+        position: sticky;
+        bottom: 20px;
+        margin-top: 16px;
+        padding: 16px;
+        border: 1px solid rgba(19, 32, 43, 0.08);
+        border-radius: 18px;
+        background: #ffffff;
+        box-shadow: 0 18px 42px rgba(19, 32, 43, 0.08);
+      }
+
+      .chat-input__textarea {
+        width: 100%;
+        min-height: 120px;
+        resize: vertical;
+        border: 1px solid rgba(19, 32, 43, 0.14);
+        border-radius: 14px;
+        padding: 14px;
+        font: inherit;
+        box-sizing: border-box;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="inova-harness-banner">
+      <strong>Local Content Harness</strong>
+      <p>This page runs the real content-script UI against fixture DOM, fake extension storage, and fake background responses.</p>
+      <p>Open the panel on the right, switch tabs, and use it for local UI checks before touching the live site.</p>
+    </div>
+
+    <main class="inova-harness-main">
+      <section class="chat-history__content">
+        <h1>신규 프로모션 회의</h1>
+
+        <section class="chat-thread" aria-label="채팅 기록">
+          <article class="chat-message chat-message--assistant">
+            <div class="chat-message__text">안녕하세요. 오늘 안건을 정리해 볼게요.</div>
+          </article>
+
+          <article class="chat-message chat-message--user">
+            <div class="chat-message__text">이번 분기 런칭 일정 다시 정리해 주세요.</div>
+          </article>
+
+          <article class="chat-message chat-message--user">
+            <div class="chat-message__text">오프라인 행사 예산은 얼마까지 가능한가요?</div>
+          </article>
+
+          <article class="chat-message chat-message--assistant">
+            <div class="chat-message__text">현재 예산 초안을 먼저 확인해 보겠습니다.</div>
+          </article>
+
+          <article class="chat-message chat-message--user">
+            <div class="chat-message__text">다음 주까지 필요한 액션 아이템만 추려 주세요.</div>
+          </article>
+        </section>
+
+        <form class="chat-input">
+          <textarea class="chat-input__textarea" placeholder="무엇이든 입력하고 대화하세요">신규 프로모션 회의 내용을 요약하고 다음 액션을 정리해 주세요.</textarea>
+        </form>
+      </section>
+    </main>
+
+    <script src="./content-harness-mock.js"></script>
+    <script src="../shared/constants.js"></script>
+    <script src="../shared/session.js"></script>
+    <script src="../shared/prompt-library.js"></script>
+    <script src="../shared/prompt-store.js"></script>
+    <script src="../shared/release-info.js"></script>
+    <script src="../shared/firebase-config.js"></script>
+    <script src="../shared/provider-identity.js"></script>
+    <script src="../shared/cloud-sync.js"></script>
+    <script src="../shared/storage.js"></script>
+    <script src="../content/dom.js"></script>
+    <script src="../content/composer.js"></script>
+    <script src="../content/files.js"></script>
+    <script src="../content/composer-review-float.js"></script>
+    <script src="../content/prompt-review-view.js"></script>
+    <script src="../content/bookmark-view.js"></script>
+    <script src="../content/prompt-view.js"></script>
+    <script src="../content/store-view.js"></script>
+    <script src="../content/prompt-hub-view.js"></script>
+    <script src="../content/release-view.js"></script>
+    <script src="../content/prompt-review-manager.js"></script>
+    <script src="../content/cloud-sync-manager.js"></script>
+    <script src="../content/route-sync.js"></script>
+    <script src="../content/prompt-manager.js"></script>
+    <script src="../content/store-manager.js"></script>
+    <script src="../content/release-manager.js"></script>
+    <script src="../content/panel.js"></script>
+    <script src="../content/main.js"></script>
+  </body>
+</html>
