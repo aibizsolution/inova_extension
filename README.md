@@ -78,6 +78,7 @@
   - `bookmark-view.js`: 질문 탭 렌더링과 포커스 이동
   - `composer-review-float.js`: 입력창 우측 상단 평가 버튼과 팝오버 렌더링
   - `cloud-sync-manager.js`: 프롬프트 보관함 원격 백업 흐름 조정
+  - `meeting-manager.js`: 현재 세션 기준 회의 job polling과 artifact 반영
   - `prompt-review-manager.js`: 현재 입력 프롬프트 평가 호출과 상태 관리
   - `prompt-view.js`: 요청 탭 렌더링
   - `prompt-manager.js`: 요청 CRUD, 가져오기/내보내기, 입력창 주입
@@ -107,6 +108,7 @@
 - `content/prompt-manager.js`는 `promptLibrary`를 관리하고, 선택한 요청을 현재 대화 입력창에 주입합니다.
 - `content/prompt-review-manager.js`는 현재 입력창 프롬프트를 평가하고 보완 프롬프트를 다시 주입합니다.
 - `content/store-manager.js`는 `프롬프트 스토어` 목록 조회, 등록, 삭제, 좋아요, 가져오기 흐름을 관리합니다.
+- `content/meeting-manager.js`는 현재 세션과 `meetingState`가 맞을 때만 회의 job 상태를 polling하고, 완료 후 artifact를 로컬 storage에 반영합니다.
 - `background/service-worker.js`는 i-Nova access token과 Firebase Functions를 연결해 원격 백업 호출을 처리합니다.
 - 회의 전사/화자분리 기능은 아직 UI에 노출하지 않았지만, `shared/cloud-api.js -> background/service-worker.js -> functions/*` 경계의 gateway 스캐폴딩은 먼저 연결해 두었습니다.
 - 브라우저 쪽에서는 `shared/meeting-bridge.js` 와 `shared/meeting-state.js` 로 회의 job 생성, polling, artifact 반영, local `meetingState` 저장 기준을 먼저 맞춰 두었습니다.
@@ -158,6 +160,7 @@ npm run verify:harness
 npm run verify:smoke
 npm run verify:popup
 npm run verify:meeting-contract
+npm run verify:meeting-manager
 npm run verify:meeting-state
 npm run verify:cloud
 npm run verify:service-worker
@@ -169,6 +172,8 @@ npm run verify:harness-page
 `verify:popup`은 로컬 popup harness fixture에서 `popup/index.js`를 부팅해 현재 탭 식별, 세션 표시, `i-Nova에서 사용`, `이 대화에서 일시 중지` 토글, `meetingState` 상태 카드 반영 흐름이 기본 상태 전이와 함께 맞는지 확인합니다.
 
 `verify:meeting-contract`는 아직 구현 전인 회의 전사/화자분리 기능의 최소 정본을 확인합니다. `docs/meeting-diarization-foundation.md` 와 `fixtures/meeting-diarization/*.json`, 로컬 클라우드 하네스 meeting route가 서로 어긋나지 않는지 검사합니다.
+
+`verify:meeting-manager`는 `content/meeting-manager.js`가 현재 세션 기준 active meeting job을 polling하고, succeeded 이후 artifact를 읽어 `chrome.storage.local.meetingState`에 반영하는 최소 루프를 확인합니다.
 
 `verify:meeting-state`는 브라우저 쪽 `shared/meeting-state.js`, `shared/meeting-bridge.js`, `shared/storage.js`가 fixture meeting job 흐름과 로컬 storage 상태 전이 기준으로 맞는지 확인합니다.
 

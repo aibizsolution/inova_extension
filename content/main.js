@@ -12,6 +12,7 @@
     queries: { bookmarks: "", prompts: "", store: "" },
     settings: { ...namespace.constants.defaults.settings },
     pausedSessions: {},
+    meetingState: namespace.meetingState.mergeMeetingState(),
     releaseInfo: namespace.releaseInfo.mergeReleaseInfo(),
     uiPreferences: namespace.storage.mergeUiPreferences(),
     promptLibrary: namespace.promptLibrary.mergePromptLibrary(),
@@ -68,7 +69,13 @@
   const storeManager = namespace.storeManager.create(state, { render });
   const releaseManager = namespace.releaseManager.create(state, { render });
   const cloudSyncManager = namespace.cloudSyncManager.create(state, { render });
-  const routeSync = namespace.routeSync.create(state, { ensureStoreLoaded: () => storeManager.ensureLoaded(), normalizeToolId, render });
+  const meetingManager = namespace.meetingManager.create(state, { render });
+  const routeSync = namespace.routeSync.create(state, {
+    ensureStoreLoaded: () => storeManager.ensureLoaded(),
+    normalizeToolId,
+    onRouteStateChanged: meetingManager.handleRouteStateChange,
+    render,
+  });
   bootstrapContent().catch((error) => console.error("[i-Nova Bookmarks] bootstrap failed", error));
   async function bootstrapContent() {
     state.preferredOpen = readPanelOpenPreference();
@@ -100,8 +107,10 @@
     document.addEventListener("visibilitychange", handleVisibilityChange, { passive: true });
     chrome.storage.onChanged?.addListener(routeSync.handleStorageChange);
     chrome.storage.onChanged?.addListener(cloudSyncManager.handleStorageChange);
+    chrome.storage.onChanged?.addListener(meetingManager.handleStorageChange);
     chrome.storage.onChanged?.addListener(releaseManager.handleStorageChange);
     await routeSync.syncRouteState(true);
+    meetingManager.scheduleSync(260);
     cloudSyncManager.scheduleSync(1800, true);
     if (isStoreTabActive()) storeManager.ensureLoaded();
     if (state.open || state.activeTool === "release") releaseManager.ensureChecked(false, state.activeTool === "release");
@@ -319,8 +328,8 @@
     const conversation = namespace.contentDom.getConversationState();
     return `${conversation.hasComposer}|${conversation.hasChatLog}|${conversation.articleCount}|${conversation.userCount}`;
   }
-  function handleVisibilityChange() { if (document.visibilityState !== "visible") return; cloudSyncManager.scheduleSync(320, true); if (state.open) releaseManager.ensureChecked(); render(); }
-  function handleWindowFocus() { cloudSyncManager.scheduleSync(320, true); if (state.open) releaseManager.ensureChecked(); render(); }
+  function handleVisibilityChange() { if (document.visibilityState !== "visible") return; cloudSyncManager.scheduleSync(320, true); meetingManager.scheduleSync(320); if (state.open) releaseManager.ensureChecked(); render(); }
+  function handleWindowFocus() { cloudSyncManager.scheduleSync(320, true); meetingManager.scheduleSync(320); if (state.open) releaseManager.ensureChecked(); render(); }
   function getActivePromptTab(reviewOpen = state.promptReview.open) { const tab = state.uiPreferences.activeTool === "store" ? "store" : normalizePromptTab(state.uiPreferences.activePromptTab); return tab === "review" && !reviewOpen ? "library" : tab; }
   function isStoreTabActive() { return state.activeTool === "prompts" && getActivePromptTab() === "store"; }
   function normalizePromptTab(promptTabId) { return promptTabId === "store" || promptTabId === "review" ? promptTabId : "library"; }
