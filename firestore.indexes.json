@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "integration_inova_meetings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "owner.providerUserKey", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "prompt_store_entries",
       "queryScope": "COLLECTION",
       "fields": [

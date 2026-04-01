@@ -1,9 +1,8 @@
 const popupRoot = globalThis.InovaBookmarks;
+const LOCAL_MEETING_WORKSPACE_URL = "http://127.0.0.1:5000/meeting/index.html";
+
 const popupState = {
   settings: { ...popupRoot.constants.defaults.settings },
-  pausedSessions: {},
-  activeTab: { url: "", title: "" },
-  currentSessionId: "",
 };
 
 const popupRefs = {};
@@ -19,25 +18,17 @@ async function bootstrapPopup() {
 
 function cachePopupRefs() {
   for (const id of [
-    "sitePill",
-    "syncStatus",
-    "enabledToggle",
-    "pauseToggle",
-    "enabledToggleLabel",
-    "pauseToggleLabel",
-    "tabLabel",
-    "sessionLabel",
-    "refreshButton",
-    "pauseControl",
+    "workspaceTargetProductionButton",
+    "workspaceTargetLocalButton",
+    "workspaceTargetHint",
   ]) {
     popupRefs[id] = document.getElementById(id);
   }
 }
 
 function bindPopupEvents() {
-  popupRefs.enabledToggle.addEventListener("click", () => toggleSetting("enabled"));
-  popupRefs.pauseToggle.addEventListener("click", togglePause);
-  popupRefs.refreshButton.addEventListener("click", refreshPopup);
+  popupRefs.workspaceTargetProductionButton.addEventListener("click", () => setMeetingWorkspaceTarget("production"));
+  popupRefs.workspaceTargetLocalButton.addEventListener("click", () => setMeetingWorkspaceTarget("local"));
 }
 
 function listenPopupStorage() {
@@ -46,120 +37,48 @@ function listenPopupStorage() {
   }
 
   chrome.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName !== "local") {
+    if (areaName !== "local" || !changes.settings) {
       return;
     }
 
-    if (changes.settings) {
-      popupState.settings = {
-        ...popupRoot.constants.defaults.settings,
-        ...(changes.settings.newValue || {}),
-      };
-    }
-
-    if (changes.pausedSessions) {
-      popupState.pausedSessions = changes.pausedSessions.newValue || {};
-    }
-
+    popupState.settings = {
+      ...popupRoot.constants.defaults.settings,
+      ...(changes.settings.newValue || {}),
+    };
     renderPopup();
   });
 }
 
 async function refreshPopup() {
-  setPopupStatus("읽는 중");
-  const [storage, activeTab] = await Promise.all([
-    popupRoot.storage.getState(),
-    getActiveTab(),
-  ]);
-
-  popupState.settings = storage.settings || { ...popupRoot.constants.defaults.settings };
-  popupState.pausedSessions = storage.pausedSessions || {};
-  popupState.activeTab = activeTab;
-  popupState.currentSessionId = popupRoot.session.getSessionId(activeTab.url);
-
+  const storage = await popupRoot.storage.getState();
+  popupState.settings = {
+    ...popupRoot.constants.defaults.settings,
+    ...(storage.settings || {}),
+  };
   renderPopup();
-  setPopupStatus("적용됨");
-}
-
-async function getActiveTab() {
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    return { title: tab?.title || "", url: tab?.url || "" };
-  } catch {
-    return { title: "", url: "" };
-  }
 }
 
 function renderPopup() {
-  const isEnabled = Boolean(popupState.settings.enabled);
-  const isPaused = Boolean(popupState.pausedSessions[popupState.currentSessionId]);
-  const showPauseControl = isEnabled && isInovaTab() && Boolean(popupState.currentSessionId);
-  // autoBookmark는 기본 동작으로 유지하고 popup에서는 별도 토글을 숨깁니다.
-
-  updateSwitch(popupRefs.enabledToggle, popupRefs.enabledToggleLabel, isEnabled);
-  updateSwitch(popupRefs.pauseToggle, popupRefs.pauseToggleLabel, isPaused);
-
-  popupRefs.sitePill.textContent = isInovaTab() ? "i-Nova" : "지원 안 됨";
-  popupRefs.tabLabel.textContent = formatTabLabel();
-  popupRefs.sessionLabel.textContent = popupState.currentSessionId
-    ? popupRoot.session.formatSessionLabel(popupState.currentSessionId)
-    : "대화 화면을 열어 주세요";
-  popupRefs.pauseControl.hidden = !showPauseControl;
-  popupRefs.pauseToggle.disabled = !popupState.currentSessionId;
+  const target = normalizeMeetingWorkspaceTarget(popupState.settings.meetingWorkspaceTarget);
+  popupRefs.workspaceTargetProductionButton.dataset.selected = String(target === "production");
+  popupRefs.workspaceTargetLocalButton.dataset.selected = String(target === "local");
+  popupRefs.workspaceTargetProductionButton.setAttribute("aria-pressed", String(target === "production"));
+  popupRefs.workspaceTargetLocalButton.setAttribute("aria-pressed", String(target === "local"));
+  popupRefs.workspaceTargetHint.textContent = target === "local"
+    ? "로컬 호스팅을 사용합니다. 패널에서 회의를 열면 http://127.0.0.1:5000/meeting/index.html로 연결됩니다."
+    : "상용 호스팅을 사용합니다. 패널에서 회의를 열면 배포된 hosted 작업실로 연결됩니다.";
 }
 
-function updateSwitch(button, label, on) {
-  button.dataset.on = String(on);
-  button.setAttribute("aria-checked", String(on));
-  label.textContent = on ? "켜짐" : "꺼짐";
-}
-
-function formatTabLabel() {
-  if (!popupState.activeTab.url) {
-    return "현재 사이트";
-  }
-
-  try {
-    const url = new URL(popupState.activeTab.url);
-    return url.hostname === "inova.incross.com" ? "inova.incross.com" : `${url.hostname} (지원 안 됨)`;
-  } catch {
-    return popupState.activeTab.title || "현재 사이트";
-  }
-}
-
-function isInovaTab() {
-  try {
-    return new URL(popupState.activeTab.url).hostname === "inova.incross.com";
-  } catch {
-    return false;
-  }
-}
-
-async function toggleSetting(key) {
-  const next = await popupRoot.storage.updateSettings({
-    [key]: !popupState.settings[key],
+async function setMeetingWorkspaceTarget(target) {
+  const normalizedTarget = normalizeMeetingWorkspaceTarget(target);
+  const nextSettings = await popupRoot.storage.updateSettings({
+    meetingWorkspaceTarget: normalizedTarget,
+    meetingWorkspaceUrlOverride: normalizedTarget === "local" ? LOCAL_MEETING_WORKSPACE_URL : "",
   });
-
-  popupState.settings = next;
+  popupState.settings = nextSettings;
   renderPopup();
-  setPopupStatus("적용됨");
 }
 
-async function togglePause() {
-  if (!popupState.currentSessionId) {
-    setPopupStatus("대화 없음");
-    return;
-  }
-
-  const nextPaused = !popupState.pausedSessions[popupState.currentSessionId];
-  popupState.pausedSessions = await popupRoot.storage.setSessionPaused(
-    popupState.currentSessionId,
-    nextPaused
-  );
-  renderPopup();
-  setPopupStatus("적용됨");
-}
-
-function setPopupStatus(text) {
-  popupRefs.syncStatus.textContent = text;
+function normalizeMeetingWorkspaceTarget(value) {
+  return String(value || "").trim().toLowerCase() === "local" ? "local" : "production";
 }

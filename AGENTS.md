@@ -14,13 +14,23 @@
 - 이 저장소는 사람 승인보다 자동 체크를 우선한다. PR은 기본이지만 권한 있는 사용자가 체크 통과 후 바로 머지할 수 있는 운영을 기준으로 본다.
 - 로컬 훅에는 `post-checkout`, `post-merge`도 포함되며, `main` 기준으로 이미 머지된 `codex/*` 브랜치를 자동 정리한다.
 
+## 경량 검증 우선 원칙
+- 기본 확인은 `npm run verify`로 문서/계약 검증만 먼저 본다.
+- 새 작업의 기준 검증으로 별도 시뮬레이션 레이어를 요구하지 않는다.
+- UI 체감, 세션 복원, 실제 opener 흐름, 배포 경계 문제는 실제 Chrome 확인을 우선한다.
+- 로컬 재현은 `실제 Chrome -> 필요 시 로컬 Hosting/브라우저 로그` 순서로 가져간다.
+
 ## 릴리스 운영 원칙
-- feature 변경을 push할 때는 `README.md`, `package.json`, `manifest.json`, `releases/release-notes.json`을 함께 맞춘다.
-- 버전 상승은 `npm run version:bump -- <patch|minor|major>`를 기본으로 하고, 수동 수정으로 버전 파일만 따로 어긋나게 두지 않는다.
-- 새 버전 엔트리의 `public.headline`, `public.summary`, `public.changes`에 `TODO`가 남아 있으면 push나 배포를 진행하지 않는다.
+- feature 변경을 커밋하거나 push할 때는 기본적으로 `README.md`를 함께 맞춘다. `package.json`, `manifest.json`, `releases/release-notes.json`은 실제 배포나 릴리스 준비를 시작할 때만 함께 맞춘다.
+- 버전 상승은 `npm run version:bump -- <patch|minor|major>`를 기본으로 하고, 수동 수정으로 버전 파일만 따로 어긋나게 두지 않는다. 다만 이 단계는 일반 개발 커밋마다 하지 않고, 배포 전 준비 단계에서만 수행한다.
+- 새 버전 엔트리의 `public.headline`, `public.summary`, `public.changes`에 `TODO`가 남아 있으면 배포를 진행하지 않는다.
 - 릴리스 패널에는 사용자 관점 변경만 보여주고, 내부 운영/배포 메모는 `internal.changes`로 따로 남긴다.
 - Hosting 릴리스 메타(`latest.json`, `history.json`)는 `releases/release-notes.json` 기준으로 생성한다.
 - 이 저장소에서 일반적인 `배포`는 `hosting-only`를 뜻한다. 함수 배포는 사용자가 `functions`, `backend`, `전체 배포`를 명시했을 때만 진행한다.
+- 함수 배포가 여러 개 필요하면 함수별 반복 배포보다 변경한 함수만 `firebase deploy --only "functions:a,functions:b"`처럼 한 명령에 묶어 한 번에 배포하는 것을 기본으로 한다.
+- 함수 배포가 1개만 필요할 때는 `firebase deploy --only functions:<name>` 형태의 개별 배포를 사용한다.
+- PowerShell에서는 여러 함수명을 쉼표로 묶은 `--only` 값을 따옴표로 감싸서 전달한다.
+- 변경한 함수만 묶어 지정하는 방식이 어렵거나 CLI 필터 문제가 반복되면 `firebase deploy --only functions` 전체 함수 배포를 차선책으로 사용한다.
 - GitHub Actions `Repo Guardrails` 워크플로가 실패하면 로컬에서 통과했더라도 바로 병합 가능 상태라고 가정하지 않는다.
 - 기능 관련 소스나 설정을 바꾸면 `README.md`도 같은 작업 안에서 함께 갱신한다.
 - `pre-push` README 가드가 막히면 우회보다 `README.md` 누락 여부부터 먼저 확인한다.

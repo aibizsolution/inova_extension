@@ -6,6 +6,7 @@ const os = require("os");
 const path = require("path");
 const { spawnSync } = require("child_process");
 const {
+  compareVersions,
   findReleaseEntry,
   getPublicReleaseSection,
   readReleaseCatalog,
@@ -84,6 +85,13 @@ const historyRelease = buildPublishedRelease({
 
 const latestPath = path.join(hostingReleaseDir, "latest.json");
 const historyPath = path.join(hostingReleaseDir, "history.json");
+const latestPublishedVersion = normalizeText(readJsonSafe(latestPath)?.release?.version);
+if (latestPublishedVersion && compareVersions(version, latestPublishedVersion) <= 0) {
+  throw new Error([
+    `현재 버전 ${version} 은(는) 마지막 배포 버전 ${latestPublishedVersion} 보다 높지 않아요.`,
+    "배포 전에 `npm run version:bump -- <patch|minor|major>`로 새 버전을 먼저 준비해 주세요.",
+  ].join("\n"));
+}
 const history = normalizePublishedReleaseList(readJsonSafe(historyPath)?.releases || [], releaseCatalog);
 const nextHistory = [historyRelease, ...history.filter((item) => String(item?.version || "") !== version)];
 writeJson(latestPath, {

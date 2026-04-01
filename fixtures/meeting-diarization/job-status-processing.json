@@ -1,0 +1,18 @@
+{
+  "job": {
+    "jobId": "meeting-job-fixture-1",
+    "meetingId": "meeting-fixture-1",
+    "sessionId": "meeting-session-fixture-1",
+    "status": "processing",
+    "updatedAt": "2026-03-30T08:30:20.000Z",
+    "progress": {
+      "phase": "transcribing",
+      "percent": 52
+    },
+    "transcription": {
+      "language": "ko",
+      "speakerLabels": true
+    },
+    "artifacts": []
+  }
+}

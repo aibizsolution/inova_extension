@@ -1,0 +1,207 @@
+(function initMeetingView(global) {
+  const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+
+  function render(state) {
+    const normalized = normalizeState(state);
+    const listMarkup = normalized.items.length
+      ? normalized.items.map((item) => renderMeetingItem(item, normalized.pending)).join("")
+      : renderEmptyState(normalized);
+    const workspacePending = normalized.pending.active && normalized.pending.action === "open-workspace";
+    const workspaceButtonLabel = workspacePending ? "작업실 여는 중..." : "새 회의하기";
+    const progressNotice = normalized.pending.active
+      ? `<article class="inova-release-card inova-release-card__notice is-info">
+          <strong>새 탭을 여는 중입니다.</strong>
+          <p>${escapeHtml(buildPendingMessage(normalized.pending))}</p>
+        </article>`
+      : "";
+    const feedbackNotice = normalized.feedback.text
+      ? `<div class="inova-release-card inova-release-card__notice${normalized.feedback.tone === "error" ? "" : " is-info"}">${escapeHtml(normalized.feedback.text)}</div>`
+      : "";
+
+    return `
+      <section class="inova-tool-section inova-tool-section--meeting">
+        <div class="inova-tool-toolbar">
+          <div class="inova-tool-toolbar__row">
+            <div class="inova-tool-toolbar__stack">
+              <strong class="inova-tool-toolbar__title">회의 허브</strong>
+              <div class="inova-tool-meta inova-tool-meta--muted">${escapeHtml(normalized.subtitleText)}</div>
+            </div>
+          </div>
+          <button
+            type="button"
+            class="inova-bookmark-action${workspacePending ? " is-pending" : ""}"
+            data-meeting-action="open-workspace"
+            ${normalized.pending.active ? "disabled" : ""}
+            aria-busy="${workspacePending}"
+          >
+            ${escapeHtml(workspaceButtonLabel)}
+          </button>
+        </div>
+        <div class="inova-meeting-stack">
+          ${progressNotice}
+          ${feedbackNotice}
+          ${normalized.error ? `<div class="inova-release-card inova-release-card__notice">${escapeHtml(normalized.error)}</div>` : ""}
+          <article class="inova-release-card">
+            <div class="inova-release-card__head">
+              <strong>회의록 목록</strong>
+              <div class="inova-release-card__badges">${renderChip(`${normalized.items.length}건`, true)}</div>
+            </div>
+            <p>최근 회의록을 바로 보고, 항목을 누르면 hosted 웹 작업실에서 결과 상세를 이어서 봅니다.</p>
+          </article>
+          <div class="inova-meeting-record-list">
+            ${listMarkup}
+          </div>
+        </div>
+      </section>
+    `;
+  }
+
+  function normalizeState(state) {
+    const items = Array.isArray(state?.items) ? state.items.map(normalizeItem).filter((item) => item.meetingId) : [];
+    const checkedAtText = formatDateTime(state?.checkedAt, "");
+    return {
+      error: normalizeText(state?.error),
+      feedback: normalizeFeedback(state?.feedback),
+      hasCheckedAt: Boolean(checkedAtText),
+      items,
+      pending: normalizePending(state?.pending),
+      subtitleText: checkedAtText ? `최근 갱신 ${checkedAtText}` : "저장된 회의록을 이곳에서 다시 엽니다.",
+    };
+  }
+
+  function normalizeItem(item) {
+    const nextItem = item && typeof item === "object" ? item : {};
+    return {
+      excerpt: normalizeText(nextItem.excerpt || nextItem.previewText),
+      latestArtifactId: normalizeText(nextItem.latestArtifactId || nextItem.artifactId),
+      latestJobId: normalizeText(nextItem.latestJobId || nextItem.jobId),
+      meetingId: normalizeText(nextItem.meetingId || nextItem.sessionId),
+      status: normalizeText(nextItem.status) || "idle",
+      title: normalizeText(nextItem.title) || "이름 없는 회의",
+      updatedAt: normalizeText(nextItem.updatedAt || nextItem.createdAt),
+    };
+  }
+
+  function renderMeetingItem(item, pending) {
+    const meta = [
+      formatDateTime(item.updatedAt, ""),
+      formatStatusLabel(item.status),
+    ].filter(Boolean).join(" · ");
+    const isPending = pending.active
+      && pending.action === "open-result"
+      && pending.meetingId === item.meetingId
+      && (!pending.jobId || pending.jobId === item.latestJobId);
+    return `
+      <button
+        type="button"
+        class="inova-meeting-record inova-meeting-record--button${isPending ? " is-pending" : ""}"
+        data-meeting-action="open-result"
+        data-meeting-id="${escapeHtml(item.meetingId)}"
+        data-meeting-job-id="${escapeHtml(item.latestJobId)}"
+        data-meeting-artifact-id="${escapeHtml(item.latestArtifactId)}"
+        data-meeting-title="${escapeHtml(item.title)}"
+        ${pending.active ? "disabled" : ""}
+        aria-busy="${isPending}"
+      >
+        <div class="inova-meeting-record__head">
+          <div>
+            <strong>${escapeHtml(item.title)}</strong>
+            ${meta ? `<div class="inova-tool-meta">${escapeHtml(meta)}</div>` : ""}
+          </div>
+          ${renderChip(isPending ? "여는 중" : formatStatusLabel(item.status), false)}
+        </div>
+        <p>${escapeHtml(isPending ? "새 탭 작업실을 여는 중입니다." : item.excerpt || "새 탭 결과 페이지에서 회의록을 확인할 수 있습니다.")}</p>
+      </button>
+    `;
+  }
+
+  function renderEmptyState(state) {
+    if (!state.hasCheckedAt && !state.error) {
+      return `
+        <article class="inova-release-card">
+          <p>회의 목록을 읽는 중입니다. 잠시만 기다려 주세요.</p>
+        </article>
+      `;
+    }
+    return `
+      <article class="inova-release-card">
+        <p>아직 저장된 회의록이 없습니다. 상단의 새 회의하기로 hosted 작업실을 열어 주세요.</p>
+      </article>
+    `;
+  }
+
+  function renderChip(text, muted) {
+    const value = normalizeText(text);
+    if (!value) {
+      return "";
+    }
+    return `<span class="inova-store-item__chip${muted ? " is-muted" : ""}">${escapeHtml(value)}</span>`;
+  }
+
+  function normalizePending(pending) {
+    const action = normalizeText(pending?.action);
+    return {
+      action,
+      active: Boolean(action),
+      jobId: normalizeText(pending?.jobId),
+      meetingId: normalizeText(pending?.meetingId),
+      title: normalizeText(pending?.title),
+    };
+  }
+
+  function normalizeFeedback(feedback) {
+    const text = normalizeText(feedback?.text);
+    return {
+      text,
+      tone: normalizeText(feedback?.tone) || "info",
+    };
+  }
+
+  function buildPendingMessage(pending) {
+    if (pending.action === "open-result") {
+      return pending.title
+        ? `${pending.title} 결과 화면을 준비하고 있습니다.`
+        : "결과 화면을 준비하고 있습니다.";
+    }
+    return "새 작업실을 준비하고 있습니다.";
+  }
+
+  function formatStatusLabel(status) {
+    const normalized = normalizeText(status);
+    if (normalized === "queued") return "대기";
+    if (normalized === "processing") return "진행 중";
+    if (normalized === "succeeded") return "완료";
+    if (normalized === "failed") return "오류";
+    return normalized || "준비";
+  }
+
+  function formatDateTime(value, fallback = "아직 없음") {
+    const time = Date.parse(value || "");
+    if (!time) {
+      return fallback;
+    }
+    return new Intl.DateTimeFormat("ko-KR", {
+      month: "long",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(time);
+  }
+
+  function normalizeText(value) {
+    return String(value || "").trim();
+  }
+
+  function escapeHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  namespace.meetingView = {
+    render,
+  };
+})(globalThis);

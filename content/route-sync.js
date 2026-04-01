@@ -51,12 +51,22 @@
       resetRouteState(nextSessionId, namespace.contentDom.getUserMessageSignature());
       hooks.render();
       if (!nextSessionId) {
+        hooks.onRouteStateChanged?.({
+          force,
+          sessionChanged,
+          sessionId: state.sessionId,
+        });
         return;
       }
 
       state.observer = namespace.contentDom.observeMessages(scheduleRefresh);
       scheduleRouteRetryTimers();
       await refreshState();
+      hooks.onRouteStateChanged?.({
+        force,
+        sessionChanged,
+        sessionId: state.sessionId,
+      });
     }
 
     function resetRouteState(nextSessionId, previousSignature) {

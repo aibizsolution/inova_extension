@@ -1,21 +1,46 @@
 # i-Nova 더하기
 
-`i-Nova 더하기`는 `inova.incross.com` 대화 화면에 편의 기능을 덧붙이는 크롬 확장프로그램입니다. 현재 MVP는 `실험실 패널` 구조로, 현재 대화의 `질문 모아보기`, 사용자가 직접 저장하는 `자주 쓰는 요청`, 여러 사용자가 공유하는 `프롬프트 스토어`, 그리고 수동 배포용 `릴리스 안내`를 한 패널 안에서 바로 씁니다.
+`i-Nova 더하기`는 `inova.incross.com` 대화 화면에 편의 기능을 덧붙이는 크롬 확장프로그램입니다. 현재 MVP는 `실험실 패널 + hosted 회의 작업실` 구조로, 현재 대화의 `질문 모아보기`, DB 기반 `회의 허브`, 사용자가 직접 저장하는 `자주 쓰는 요청`, 여러 사용자가 공유하는 `프롬프트 스토어`, 그리고 수동 배포용 `릴리스 안내`를 한 패널 안에서 바로 씁니다.
 
 ## 핵심 기능
 
-- `팝업 On/Off`
-  - 확장프로그램 팝업에서 `i-Nova에서 사용`을 켜고 끌 수 있습니다.
-  - 현재 대화만 따로 `일시 중지`할 수도 있습니다.
+- `팝업 작업실 연결 설정`
+  - 확장프로그램 팝업에서는 회의 작업실이 `상용 호스팅`과 `로컬 호스팅` 중 어디를 바라볼지 선택합니다.
+  - 팝업은 설정만 담당하고, 실제 `새 회의하기`와 결과 확인은 패널에서 이어집니다.
+  - 선택한 값은 `settings.meetingWorkspaceTarget`에 저장되어 패널의 회의 진입에도 그대로 적용됩니다.
 - `질문 자동 모으기`
   - 현재 대화에 보이는 사용자 질문을 자동으로 모아 보여줍니다.
   - 질문 목록은 현재 대화 화면을 기준으로 실시간으로 갱신됩니다.
 - `우측 슬라이드 패널`
   - 채팅 화면 오른쪽에 붙는 `실험실 패널`을 제공합니다.
-  - 왼쪽의 세로 도구 레일에서 `질문`, `요청`, `스토어`, `릴리스`를 바로 전환할 수 있습니다.
+  - 왼쪽의 세로 도구 레일에서 `대화`, `회의`, `프롬프트`, `릴리스`를 바로 전환할 수 있습니다.
   - 기본은 닫힌 상태이며, 켜져 있을 때만 핸들과 패널이 보입니다.
   - 사용자가 마지막으로 열어 둔 상태를 같은 탭에서 기억합니다.
   - 닫힌 상태의 `실험실` 핸들은 위아래로 옮길 수 있고, 위치는 사이트 기준으로 기억합니다.
+- `회의록 패널`
+  - `회의` 도구는 DB에서 읽어 온 최신 회의록 목록과 `새 회의하기` CTA만 제공합니다.
+  - 패널 목록의 항목을 누르면 해당 회의 결과를 전용 새 탭 작업실에서 다시 확인합니다.
+- `회의 페이지`
+  - Firebase Hosting에 올린 전용 회의 작업실에서 `회의 식별`, `현재 녹음`, `회의 공용 메모`, `처리 이력/업로드 큐`, `선택 결과 검토`를 한 화면에서 처리합니다.
+  - 팝업에서 `로컬 호스팅`을 고르면 패널의 `새 회의하기`가 `http://127.0.0.1:5000/meeting/index.html` 기준으로 열리고, 화면 안의 디버그 로그 패널에서 세션 복원과 HTTP 요청 로그를 바로 확인할 수 있습니다.
+  - 로컬 작업실에서는 `파일 불러오기`로 실제 오디오 샘플을 바로 전사 테스트할 수 있고, 현재 서버 전사 경로 기준으로 `25MB 이하` 파일만 바로 처리합니다.
+  - 임시 Storage 업로드가 실패해도 `25MB 이하` 파일은 inline 전사 경로로 바로 이어가도록 유지합니다.
+  - 녹음은 `녹음 시작 -> 일시중지/재개 -> 종료하고 전사` 흐름으로 동작하고, 종료된 녹음본은 원격 처리 완료 전까지 브라우저 로컬 큐에 보관합니다.
+  - 한 기록은 기본 `90분`까지 이어지고, 제한 시간에 도달하면 현재 기록을 자동 전사로 넘긴 뒤 다음 개별 기록 녹음을 바로 이어갑니다.
+- 전사가 끝나면 회의록 형식의 자동 정리본과 `발화 구간`, `화자별` AI 정리 화면을 같은 상세 화면에서 함께 보여주고, 회의의 내용 구조는 AI가 자동 판단합니다.
+- 사용자는 회의 정리 탭에서 `기본 회의록`, `간결 브리프`, `실행 중심` 같은 `표현 방식`만 골라 다시 정리할 수 있습니다.
+- 회의 정리의 `열린 쟁점`, `후속 질문`, `의존성`처럼 배열로 내려오는 항목은 객체형 응답이 섞여도 읽을 수 있는 문장으로 정규화해 표시합니다.
+- `상태` 탭에서는 현재 기록을 `기록 선택 -> 발화 구간 -> 회의 정리 -> 화자 이름 -> 화자별 정리 -> 검토 마무리` 순서의 단계 흐름으로 보여주고, 완료 단계는 조용하게 처리한 채 현재 확인이 필요한 단계만 더 또렷하게 보여줍니다.
+  - 회의 정리가 완료되면 AI가 만든 `meetingMeta.title`을 해당 기록 제목으로 바로 반영하고, 이후 다시 정리해도 최신 AI 제목으로 덮어씁니다.
+- 발화 구간 탭에서는 자동 화자 라벨을 실제 이름/역할로 바꿔 저장할 수 있고, 시간대가 포함된 전체 전사를 바로 복사하거나 저장한 화자명으로 회의 정리를 다시 생성할 수 있습니다. `화자별` 탭에서는 각 화자가 주로 말한 내용을 AI가 화자 기준으로 따로 정리해 보여줍니다.
+  - 회의는 현재 대화 세션과 분리된 `meetingId` 기준으로 관리하고, 같은 회의의 처리 이력만 페이지 안에 남깁니다.
+- 좌측 `기록 큐` 카드는 긴 본문 미리보기보다 `AI 판단`, `표현 방식`, `화자 수` 같은 칩 중심으로 보여줘서 어떤 기록을 다시 열어야 하는지 빠르게 구분할 수 있게 유지합니다.
+- 작업실에서는 작업실 이름과 공용 메모를 저장할 수 있고, 우측 `기록 검토` 패널에서 개별 기록 이름 수정과 삭제를 함께 처리합니다. 삭제를 실행하면 연결된 job/artifact와 남아 있는 임시 source object까지 함께 정리합니다.
+  - 패널에서 회의를 열면 확장이 짧은 수명의 launch grant를 즉시 hosted workspace session으로 교환한 뒤, `#ws`가 붙은 최종 hosted 작업실 URL을 새 탭으로 엽니다.
+  - 작업실에서는 사용자가 직접 `녹음 시작`을 눌러 웹앱에서 바로 마이크 녹음을 시작하고, 표준 `getUserMedia + MediaRecorder` 경로로 녹음합니다.
+  - 녹음을 마치면 `종료하고 전사`가 즉시 로컬 저장과 업로드 큐 등록을 끝내고, 원격 처리 중이어도 바로 다음 녹음을 시작할 수 있습니다.
+  - 오프라인이거나 업로드가 실패하면 같은 녹음본은 로컬 큐에 남아 있다가 온라인 복귀 시 자동 재시도하고, 필요하면 `지금 업로드`, `보류`, `삭제`를 직접 고를 수 있습니다.
+  - 패널에서 한 번 연 작업실은 clean URL 뒤의 workspace hash 토큰으로 같은 탭/브라우저에서 다시 이어지고, hash 없이 `?meetingId=`만 직접 열면 접근을 막고 패널에서 다시 열도록 안내합니다.
 - `대화 안에서 찾기`
   - 지금 보고 있는 대화 안에서만 질문을 검색합니다.
   - 결과를 클릭하면 해당 질문 위치로 이동하고, 좁은 화면에서는 패널을 잠시 접어 원문을 보기 쉽게 합니다.
@@ -56,25 +81,40 @@
 ## 모듈 구조
 
 - `background/`
-  - `service-worker.js`: 외부 네트워크 호출과 클라우드 백업 중계
+  - `service-worker.js`: 외부 네트워크 호출과 클라우드 백업, 회의 허브/launch grant gateway 중계
+- `hosting/meeting/`
+  - `index.html`, `index.css`: 회의 작업실 레이아웃과 실용형 UI 스타일
+  - `index.js`: hosted 회의 작업실 부팅, launch token 교환, 세션 복원, 녹음/업로드 큐/상세 액션 orchestration
+  - `shared.js`: 공통 상태/포맷터/네트워크 헬퍼
+  - `storage.js`: IndexedDB 기반 로컬 업로드 큐와 fallback storage
+  - `notes.js`: 회의록 schema 정규화와 mode별 표시 포맷터
+  - `render.js`: 이력/상세/회의록 섹션 렌더링
+- `offscreen/`
+  - `meeting-recorder.js`: 확장 내부 legacy 캡처 경로 호환용 오디오 recorder
 - `shared/`
   - `constants.js`: 저장 키, 셀렉터, 제한값 계약
-  - `cloud-api.js`: Firebase Functions 호출 래퍼
+  - `cloud-api.js`: Firebase Functions 호출 래퍼와 회의 기능 gateway 요청 래퍼
   - `cloud-sync.js`: 동기화 상태/문서 정규화
   - `firebase-config.js`: Firebase 프로젝트와 함수 엔드포인트 설정
   - `inova-auth.js`: i-Nova access token 갱신 보조
+  - `meeting-bridge.js`: 브라우저 쪽 회의 runtime message 래퍼
+  - `meeting-state.js`: 회의 `meeting/job/transcript` 로컬 상태 정규화와 legacy session fallback
   - `prompt-library.js`: 요청 보관함 정규화, 가져오기/내보내기 규칙
   - `prompt-store.js`: 스토어 카테고리, 엔트리 정규화, 정렬 규칙
   - `provider-identity.js`: 현재 i-Nova 사용자 식별 정보 정규화
   - `session.js`: `sid`, 질문 정규화, 메시지 ID 생성
-  - `storage.js`: `settings`, `pausedSessions`, `uiPreferences`, `promptLibrary`, `cloudSync` 읽기/쓰기
+  - `storage.js`: `settings`, `pausedSessions`, `uiPreferences`, `promptLibrary`, `cloudSync`, `meetingHub`, `meetingState`, `meetingStateByMeetingId` 읽기/쓰기
 - `popup/`
-  - 팝업 설정 UI와 현재 대화 상태 표시
+  - 팝업 설정 UI와 hosted 회의 작업실 연결 대상 선택
+- `meeting/`
+  - `index.js`: 확장 내부 legacy 회의 페이지 자산
 - `content/`
   - `dom.js`: 질문 DOM 수집
   - `bookmark-view.js`: 질문 탭 렌더링과 포커스 이동
   - `composer-review-float.js`: 입력창 우측 상단 평가 버튼과 팝오버 렌더링
   - `cloud-sync-manager.js`: 프롬프트 보관함 원격 백업 흐름 조정
+  - `meeting-manager.js`: 회의 허브 목록 fetch/cache/refresh 조정
+  - `meeting-view.js`: 회의 허브 리스트와 `새 회의하기` CTA 렌더링
   - `prompt-review-manager.js`: 현재 입력 프롬프트 평가 호출과 상태 관리
   - `prompt-view.js`: 요청 탭 렌더링
   - `prompt-manager.js`: 요청 CRUD, 가져오기/내보내기, 입력창 주입
@@ -90,38 +130,61 @@
 - `releases/`
   - 버전별 배포 ZIP과 `release-notes.json` 릴리스 카탈로그
 
+## 런타임 구조 문서
+
+- 실제 실행 경계와 데이터 흐름은 [docs/runtime-architecture.md](C:/Users/parkyoungtack/Documents/code/inova_extension/docs/runtime-architecture.md)를 기준으로 봅니다.
+- 에이전트나 사람이 저장소를 처음 읽을 때는 `README.md` 다음으로 위 문서를 먼저 보면 `popup -> hosted meeting -> content -> background -> functions -> Firestore/Hosting` 경계를 빠르게 잡을 수 있습니다.
+- `releases/_staging`, `hosting/extension/downloads`, `hosting/extension/releases/latest.json`, `hosting/extension/releases/history.json`은 배포 산출물이며 수정 기준이 아닙니다.
+
 ## 동작 방식
 
 - 확장프로그램은 `manifest V3`로 구성되어 있습니다.
-- `popup/index.js`는 `settings.enabled`, `settings.autoBookmark`, `pausedSessions`를 저장하고 읽습니다.
+- `popup/index.js`는 `settings.meetingWorkspaceTarget`을 읽고, hosted 회의 작업실 연결 대상을 `상용 호스팅 / 로컬 호스팅` 중 하나로 저장합니다.
+- `hosting/meeting/index.js`는 `launch` 또는 clean URL의 `meetingId`, `jobId`, workspace hash 토큰을 기준으로 hosted 세션을 부팅하고, `getUserMedia + MediaRecorder`로 마이크 녹음을 처리합니다.
+- hosted 회의 작업실은 `공용 메모 저장 -> 녹음 종료와 동시에 로컬 큐 적재 -> 온라인이면 즉시 job 생성 -> 원격 처리와 별개로 다음 녹음 허용` 흐름으로 동작합니다.
 - `content/main.js`는 현재 URL의 `sid`를 기준으로 대화를 나누고, `.chat-message--user`를 실시간으로 수집합니다.
 - `content/prompt-manager.js`는 `promptLibrary`를 관리하고, 선택한 요청을 현재 대화 입력창에 주입합니다.
 - `content/prompt-review-manager.js`는 현재 입력창 프롬프트를 평가하고 보완 프롬프트를 다시 주입합니다.
 - `content/store-manager.js`는 `프롬프트 스토어` 목록 조회, 등록, 삭제, 좋아요, 가져오기 흐름을 관리합니다.
-- `background/service-worker.js`는 i-Nova access token과 Firebase Functions를 연결해 원격 백업 호출을 처리합니다.
+- `content/meeting-manager.js`는 owner 기준 최신 회의 목록을 읽어 `meetingHub` 캐시를 갱신하고, 패널/포커스 복귀 시 허브를 새로고칩니다.
+- `background/service-worker.js`는 i-Nova access token과 Firebase Functions를 연결해 원격 백업 호출을 처리하고, 회의 기능에서는 launch grant 발급과 session 교환까지 끝낸 최종 hosted 작업실 URL 생성, 허브 조회 라우팅을 맡습니다.
+- `functions/meeting-launch-service.js`는 launch grant와 hosted workspace session을 만들고, hosted 작업실은 전달받은 `meetingSessionToken`으로 회의 API를 호출합니다.
+- hosted 회의 작업실은 `종료하고 전사` 시점에 방금 녹음한 마이크 오디오를 먼저 임시 Storage source object로 올린 뒤 `createInovaMeetingJob`에는 storage 경로만 보내고, Functions는 source download -> OpenAI diarization -> 회의록 모드 분류 -> mode별 회의록 정리 생성 -> source cleanup -> Firestore `meeting/job/artifact` 저장까지 처리합니다.
+- 회의 정리와 모드 분류 기본 모델은 `gpt-5.4-mini`를 사용하고, 필요하면 `OPENAI_MEETING_SUMMARY_MODEL` 또는 `OPENAI_SUMMARY_MODEL`로 override할 수 있습니다.
+- Functions는 같은 `requestId` 재전송을 idempotent하게 재사용하고, `sharedMemoSnapshot`과 notes mode 메타데이터를 함께 저장합니다.
+- Functions가 source audio를 임시 bucket object로 저장할 때는 Firebase 설정의 기본 storage bucket을 우선 쓰고, 배포/분석 환경에 bucket 정보가 없으면 `STORAGE_BUCKET_URL` 또는 `GCLOUD_PROJECT.appspot.com`으로 안전하게 해석합니다.
+- 회의 업로드/전사 결과는 패널의 `회의` 도구에서 허브 리스트로 보이고, 상세는 hosted `meeting/index.html` 새 탭 작업실에서 다시 확인합니다. 상태 자체는 `shared/cloud-api.js -> background/service-worker.js -> functions/*` 경계의 gateway와 hosted `meetingSessionToken`으로 이어집니다.
+- 브라우저 쪽에서는 `shared/meeting-bridge.js` 와 `shared/meeting-state.js` 로 회의 녹음 start/stop, 회의 job 생성, artifact 반영, local `meetingState` 저장 기준을 먼저 맞춰 두었습니다.
 - 질문 목록 자체는 `chrome.storage.local`에 저장하지 않고, 현재 대화 화면을 기준으로 바로 렌더링합니다.
 - 요청 보관함은 `chrome.storage.local.promptLibrary`에 저장합니다.
 - 원격 백업 대기 상태는 `chrome.storage.local.cloudSync`에 저장합니다.
+- 회의 기능 브라우저 상태는 `chrome.storage.local.meetingStateByMeetingId`를 정본으로 두고, `meetingStateBySession`은 legacy fallback으로만 함께 유지합니다.
 
 ## 설치 방법
 
 1. Chrome에서 `확장 프로그램` 페이지를 엽니다.
 2. `압축해제된 확장 프로그램 로드`를 선택합니다.
 3. 이 폴더를 선택합니다.
-4. `i-Nova`에 접속한 뒤 팝업에서 기능을 켭니다.
+4. `i-Nova`에 접속한 뒤 필요하면 팝업에서 `상용 호스팅 / 로컬 호스팅`을 고릅니다.
 
 ## 사용 방법
 
-1. 툴바 확장 아이콘을 눌러 `i-Nova에서 사용`과 `질문 자동 모으기` 상태를 확인합니다.
-2. 필요하면 `이 대화에서 일시 중지`를 켭니다.
-3. i-Nova 채팅에서 질문을 보내면 `질문` 도구에 자동으로 반영됩니다.
-4. 오른쪽 슬라이드 패널의 세로 레일에서 `질문`, `요청`, `스토어`, `릴리스`를 전환합니다.
-5. `질문` 도구에서는 검색하거나 항목을 클릭해 해당 질문으로 이동합니다.
-6. `요청` 도구에서는 자주 쓰는 요청을 추가하거나 선택해 현재 입력창에 바로 넣습니다.
-7. 대화 입력창 우측 상단의 평가 버튼으로 현재 프롬프트를 참고용으로 평가하고, 필요하면 보완 프롬프트를 다시 반영합니다.
-8. `스토어` 도구에서는 공유 프롬프트를 찾아 좋아요를 누르거나 내 요청으로 가져옵니다.
-9. `릴리스` 도구에서는 현재 버전, 최신 버전, 업데이트 ZIP, 이전 버전 롤백 링크를 확인합니다.
-10. 필요하면 요청 묶음을 JSON으로 내보내거나, 다른 사용자의 요청 묶음을 가져옵니다.
+1. 툴바 확장 아이콘을 눌러 `상용 호스팅` 또는 `로컬 호스팅`을 고릅니다.
+2. i-Nova 채팅에서 질문을 보내면 `대화` 도구에 자동으로 반영됩니다.
+3. 오른쪽 슬라이드 패널의 세로 레일에서 `대화`, `회의`, `프롬프트`, `릴리스`를 전환합니다.
+4. `대화` 도구에서는 검색하거나 항목을 클릭해 해당 질문으로 이동합니다.
+5. `회의` 도구에서는 DB 기반 회의 허브 목록과 `새 회의하기` 버튼을 확인하고, 항목을 눌러 hosted 새 탭 작업실 상세 페이지를 엽니다.
+6. hosted 회의 작업실에서는 작업실 이름과 공용 메모를 먼저 정리한 뒤 녹음을 시작하고, 필요하면 일시중지/재개하거나 녹음을 버리고 다시 시작할 수 있습니다.
+7. 로컬 작업실에서는 `파일 불러오기`로 실제 녹음 파일을 직접 넣어 전사 테스트할 수 있습니다.
+8. `종료하고 전사`를 누르면 녹음본이 먼저 로컬 큐에 저장되고, 원격 처리 중이어도 바로 다음 녹음을 시작할 수 있습니다.
+9. 녹음이 `90분`에 도달하면 현재 기록은 자동으로 전사 큐에 들어가고, 작업실은 다음 개별 기록 녹음을 이어갑니다.
+10. 저장된 결과를 선택하면 우측 `기록 검토` 패널에서 이름을 수정하거나 삭제하고, 자동 정리와 발화 구간 기준 전사, 화자별 AI 정리를 함께 확인할 수 있습니다.
+11. 필요하면 발화 구간 탭에서 화자명을 저장하고, 시간대 포함 전사를 전체 복사하거나 같은 전사를 기준으로 회의 정리를 다시 생성할 수 있습니다.
+12. 회의 정리의 표현만 바꾸고 싶을 때는 회의 정리 탭에서 `표현 방식`을 고른 뒤 `...로 다시 정리` 버튼을 눌러 같은 전사로 회의록을 다시 생성할 수 있습니다. 회의 종류 판단은 계속 AI가 맡습니다.
+12. `프롬프트` 도구에서는 자주 쓰는 요청을 추가하거나 선택해 현재 입력창에 바로 넣고, `스토어` 서브탭에서 공유 프롬프트를 찾아 좋아요를 누르거나 내 요청으로 가져옵니다.
+13. 대화 입력창 우측 상단의 평가 버튼으로 현재 프롬프트를 참고용으로 평가하고, 필요하면 보완 프롬프트를 다시 반영합니다.
+14. `릴리스` 도구에서는 현재 버전, 최신 버전, 업데이트 ZIP, 이전 버전 롤백 링크를 확인합니다.
+15. 필요하면 요청 묶음을 JSON으로 내보내거나, 다른 사용자의 요청 묶음을 가져옵니다.
 
 ## 비목표
 
@@ -137,6 +200,32 @@
 
 ```bash
 npm run verify
+```
+
+이 저장소의 기본 개발 루프는 실제 브라우저 확인을 우선합니다.
+
+- 기본 자동 검증: `npm run verify`
+- 세부 확인이 필요하면 `npm run verify:contracts`, `npm run verify:docs`
+- UI/세션/opener 문제는 실제 Chrome에서 직접 확인
+
+회의 작업실 UI를 배포 없이 실제 브라우저에서 먼저 보고 싶으면 `로컬 Hosting + 상용 Functions` 조합을 씁니다.
+
+```bash
+npm run emulator:hosting
+```
+
+기본 로컬 주소는 `http://127.0.0.1:5000/meeting/index.html` 입니다. 확장프로그램은 그대로 Chrome에서 실행하고, 팝업에서 `상용 호스팅 / 로컬 호스팅`을 전환해 확인합니다. 로컬 호스팅을 고르면 회의 API 호출은 그대로 상용 Functions를 사용하고, 화면 안의 디버그 로그 패널에서 세션 복원과 HTTP 요청 흐름을 바로 볼 수 있습니다.
+
+로컬에서 자동 분할 녹음을 빨리 시험하고 싶으면 URL에 `recordLimitSeconds`를 붙이면 됩니다.
+
+```text
+http://127.0.0.1:5000/meeting/index.html?...&recordLimitSeconds=30#ws=...
+```
+
+또는 DevTools 콘솔에서 아래처럼 로컬 기본값을 저장할 수 있습니다.
+
+```js
+localStorage.setItem("__INOVA_MEETING_RECORD_LIMIT_SECONDS__", "30");
 ```
 
 README 가드만 미리 확인하려면 다음을 실행합니다.
@@ -155,9 +244,9 @@ npm run verify:release-guard
 
 이 저장소는 기능 관련 파일이 바뀌었는데 `README.md`가 같이 수정되지 않으면 `pre-push`에서 push를 막습니다.
 
-같은 시점에 feature 변경인데 버전 상승, `releases/release-notes.json`, 현재 버전용 릴리스 메타가 빠져 있어도 `pre-push`에서 함께 막습니다.
+릴리스 준비 파일인 `package.json`, `manifest.json`, `releases/release-notes.json` 중 일부만 바뀌면 `pre-push`에서 함께 막습니다.
 
-같은 가드를 더 이른 시점에 잡기 위해 `pre-commit`도 같이 적용합니다. 커밋 전에 `main` 직접 commit, staged 기준 `README`, `릴리스 메타` 누락을 먼저 막습니다.
+같은 가드를 더 이른 시점에 잡기 위해 `pre-commit`도 같이 적용합니다. 커밋 전에 `main` 직접 commit, staged 기준 `README`, `릴리스 준비 파일 불일치`를 먼저 막습니다.
 
 훅을 이 저장소에 연결하려면 한 번만 다음을 실행합니다.
 
@@ -168,6 +257,8 @@ npm run hooks:install
 `npm install`을 실행해도 `prepare` 스크립트로 훅 연결을 자동 시도합니다.
 
 이후 `background/`, `content/`, `functions/`, `popup/`, `shared/`, `manifest.json` 같은 기능 관련 파일이 바뀌면 `README.md`도 함께 수정해야 commit/push가 통과합니다.
+
+버전 상승과 `releases/release-notes.json` 갱신은 모든 feature commit마다 필요한 것이 아니라, 실제 배포나 릴리스 준비를 시작할 때만 맞추면 됩니다.
 
 ## 브랜치 작업 규칙
 
@@ -183,7 +274,7 @@ npm run hooks:install
 ## 협업 가드레일
 
 - 로컬에서는 `pre-commit`, `pre-push`가 같은 규칙을 단계별로 검사합니다.
-- 원격에서는 [`.github/workflows/repo-guardrails.yml`](/C:/Users/parkyoungtack/Documents/code/inova_extension/.github/workflows/repo-guardrails.yml)이 `verify`, README 가드, 릴리스 메타 가드, `release:build`를 다시 검사합니다.
+- 원격에서는 [`.github/workflows/repo-guardrails.yml`](/C:/Users/parkyoungtack/Documents/code/inova_extension/.github/workflows/repo-guardrails.yml)이 `verify`, README 가드, 릴리스 메타 가드를 다시 검사하고, 릴리스 준비 파일이 바뀐 경우에만 `release:build`를 추가로 확인합니다.
 - PR 화면에는 [`.github/pull_request_template.md`](/C:/Users/parkyoungtack/Documents/code/inova_extension/.github/pull_request_template.md) 체크리스트가 자동으로 들어갑니다.
 - GitHub branch protection에서는 `main` direct push 금지와 `Repo Guardrails / verify` 체크 통과를 필수로 두고, 사람 승인 수는 0으로 두는 것을 기본값으로 권장합니다.
 
@@ -192,10 +283,11 @@ npm run hooks:install
 - `patch`: 버그 수정, 작은 UX/신뢰성 보강, 운영/배포 보완
 - `minor`: 새 사용자 기능, 새 워크플로, 눈에 띄는 기능 확장
 - `major`: 기존 사용 흐름을 깨거나 마이그레이션/재설치 판단이 필요한 변화
-- `npm run version:bump -- <patch|minor|major>`를 실행하면 `package.json`, `manifest.json`, `releases/release-notes.json` 초안이 같이 갱신됩니다.
+- `npm run version:bump -- <patch|minor|major>`를 실행하면 `package.json`, `manifest.json`, `releases/release-notes.json` 초안이 같이 갱신됩니다. 이 단계는 일반 개발 커밋이 아니라 배포/릴리스 준비 시점에만 실행하는 것을 기본값으로 둡니다.
 - 새 버전 초안이 생기면 `releases/release-notes.json`의 `public.headline`, `public.summary`, `public.changes`를 실제 사용자 관점 내용으로 채워야 push와 배포가 통과합니다.
 - 내부 운영 메모가 필요하면 `internal.changes`에 따로 적고, 릴리스 패널에는 노출하지 않습니다.
 - `release:build`는 현재 버전의 릴리스 메타를 읽어 `hosting/extension/releases/latest.json`과 `history.json`에 그대로 반영합니다.
+- `release:build`와 `deploy:hosting`은 마지막 배포 버전보다 더 높은 새 버전이 준비되지 않았으면 실패합니다.
 - `release:build`는 고정 최신 링크용 `hosting/extension/downloads/latest.zip`도 함께 갱신합니다.
 
 ## 배포 기본값
@@ -215,5 +307,6 @@ npm run deploy:all
 
 실제 브라우저 동기화 점검은 다음 문서를 봅니다.
 
+- [docs/runtime-architecture.md](C:/Users/parkyoungtack/Documents/code/inova_extension/docs/runtime-architecture.md)
 - [docs/e2e-browser-workflow.md](C:/Users/parkyoungtack/Documents/code/inova_extension/docs/e2e-browser-workflow.md)
 - [docs/release-workflow.md](C:/Users/parkyoungtack/Documents/code/inova_extension/docs/release-workflow.md)

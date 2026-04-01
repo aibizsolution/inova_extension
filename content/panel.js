@@ -78,6 +78,10 @@
     try {
       return state.activeTool === "prompts"
         ? namespace.promptHubView.render(state.promptTool)
+        : state.activeTool === "meeting"
+            ? namespace.meetingView?.render
+              ? namespace.meetingView.render(state.meetingTool)
+              : '<section class="inova-tool-section"><div class="inova-bookmark-empty">회의 화면을 불러오지 못했어요. 확장프로그램을 다시 로드해 주세요.</div></section>'
         : state.activeTool === "release"
             ? namespace.releaseView?.render
               ? namespace.releaseView.render(state.releaseTool)
@@ -123,6 +127,15 @@
         categoryId: promptAction.dataset.categoryId || "",
         insertMode: promptAction.dataset.insertMode || "",
         promptId: promptAction.dataset.promptId || "",
+      });
+    }
+    const meetingAction = event.target.closest("[data-meeting-action]");
+    if (meetingAction) {
+      return void callbacks.onMeetingAction?.(meetingAction.dataset.meetingAction, {
+        artifactId: meetingAction.dataset.meetingArtifactId || "",
+        jobId: meetingAction.dataset.meetingJobId || "",
+        meetingId: meetingAction.dataset.meetingId || "",
+        title: meetingAction.dataset.meetingTitle || "",
       });
     }
     const storeAction = event.target.closest("[data-store-action]");

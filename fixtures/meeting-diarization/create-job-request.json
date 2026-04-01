@@ -1,0 +1,30 @@
+{
+  "owner": {
+    "provider": "inova",
+    "providerUserKey": "fixture-user",
+    "email": "fixture@example.com",
+    "displayName": "Fixture User",
+    "numericUserId": 1001
+  },
+  "meeting": {
+    "meetingId": "meeting-fixture-1",
+    "sessionId": "meeting-session-fixture-1",
+    "sourceTabId": 91,
+    "title": "신규 프로모션 회의",
+    "startedAt": "2026-03-30T08:00:00.000Z",
+    "endedAt": "2026-03-30T08:29:00.000Z",
+    "language": "ko"
+  },
+  "source": {
+    "captureMode": "mixed-audio",
+    "mimeType": "audio/webm;codecs=opus",
+    "sizeBytes": 18432000,
+    "durationMs": 1740000,
+    "channelCount": 1
+  },
+  "options": {
+    "speakerLabels": true,
+    "summary": false,
+    "redaction": "none"
+  }
+}

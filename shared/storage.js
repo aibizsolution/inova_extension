@@ -65,6 +65,45 @@
     return namespace.releaseInfo.mergeReleaseInfo(current.releaseInfo);
   }
 
+  async function getMeetingHub() {
+    const current = await getState();
+    const nextHub = current.meetingHub && typeof current.meetingHub === "object"
+      ? current.meetingHub
+      : defaults.meetingHub;
+    return {
+      ...cloneValue(defaults.meetingHub),
+      ...cloneValue(nextHub),
+      items: Array.isArray(nextHub?.items) ? cloneValue(nextHub.items) : [],
+    };
+  }
+
+  async function getMeetingState(meetingId) {
+    const current = await getState();
+    const normalizedMeetingId = namespace.session.normalizeText(meetingId);
+    const meetingStateByMeetingId = mergeMeetingStateByMeetingId(
+      current.meetingStateByMeetingId,
+      current.meetingState,
+      current.meetingStateBySession
+    );
+    if (normalizedMeetingId) {
+      return namespace.meetingState.mergeMeetingState(meetingStateByMeetingId[normalizedMeetingId]);
+    }
+    return namespace.meetingState.mergeMeetingState(current.meetingState);
+  }
+
+  async function getMeetingStateBySession() {
+    return getMeetingStateByMeetingId();
+  }
+
+  async function getMeetingStateByMeetingId() {
+    const current = await getState();
+    return mergeMeetingStateByMeetingId(
+      current.meetingStateByMeetingId,
+      current.meetingState,
+      current.meetingStateBySession
+    );
+  }
+
   async function setCloudSyncState(nextCloudSync) {
     const cloudSync = namespace.cloudSync.mergeCloudSyncState(nextCloudSync);
     await setLocal({ cloudSync });
@@ -75,6 +114,108 @@
     const releaseInfo = namespace.releaseInfo.mergeReleaseInfo(nextReleaseInfo);
     await setLocal({ releaseInfo });
     return releaseInfo;
+  }
+
+  async function setMeetingHub(nextMeetingHub) {
+    const meetingHub = {
+      ...cloneValue(defaults.meetingHub),
+      ...(nextMeetingHub && typeof nextMeetingHub === "object" ? cloneValue(nextMeetingHub) : {}),
+      items: Array.isArray(nextMeetingHub?.items) ? cloneValue(nextMeetingHub.items) : [],
+    };
+    await setLocal({ meetingHub });
+    return meetingHub;
+  }
+
+  async function setMeetingState(meetingIdOrNextMeetingState, maybeNextMeetingState) {
+    const current = await getState();
+    const nextMeetingState = typeof meetingIdOrNextMeetingState === "string"
+      ? maybeNextMeetingState
+      : meetingIdOrNextMeetingState;
+    const meetingState = namespace.meetingState.mergeMeetingState(nextMeetingState);
+    const meetingId = namespace.session.normalizeText(
+      typeof meetingIdOrNextMeetingState === "string"
+        ? meetingIdOrNextMeetingState
+        : meetingState.meeting?.meetingId || meetingState.session?.sessionId
+    );
+
+    if (!meetingId) {
+      await setLocal({ meetingState });
+      return meetingState;
+    }
+
+    const meetingStateByMeetingId = mergeMeetingStateByMeetingId(
+      current.meetingStateByMeetingId,
+      current.meetingState,
+      current.meetingStateBySession
+    );
+    const persistedMeetingState = namespace.meetingState.mergeMeetingState(
+      meetingStateByMeetingId[meetingId],
+      meetingState,
+      { meeting: { meetingId } }
+    );
+    const nextMeetingStateByMeetingId = {
+      ...meetingStateByMeetingId,
+      [meetingId]: persistedMeetingState,
+    };
+    const nextLocalPatch = {
+      meetingState: persistedMeetingState,
+      meetingStateByMeetingId: nextMeetingStateByMeetingId,
+    };
+    const legacySessionId = namespace.session.normalizeText(persistedMeetingState.session?.sessionId);
+    if (legacySessionId) {
+      nextLocalPatch.meetingStateBySession = {
+        ...(current.meetingStateBySession || {}),
+        [legacySessionId]: persistedMeetingState,
+      };
+    }
+
+    await setLocal(nextLocalPatch);
+    return persistedMeetingState;
+  }
+
+  function mergeMeetingStateByMeetingId(rawMeetingStateByMeetingId, legacyMeetingState, rawMeetingStateBySession) {
+    const next = {};
+
+    for (const [meetingId, meetingState] of Object.entries(rawMeetingStateByMeetingId || {})) {
+      const normalizedMeetingId = namespace.session.normalizeText(meetingId);
+      if (!normalizedMeetingId) {
+        continue;
+      }
+      next[normalizedMeetingId] = namespace.meetingState.mergeMeetingState(meetingState, {
+        meeting: { meetingId: normalizedMeetingId },
+      });
+    }
+
+    const normalizedLegacyMeetingState = namespace.meetingState.mergeMeetingState(legacyMeetingState);
+    const legacyMeetingId = namespace.session.normalizeText(
+      normalizedLegacyMeetingState.meeting?.meetingId || normalizedLegacyMeetingState.session?.sessionId
+    );
+    if (legacyMeetingId) {
+      next[legacyMeetingId] = namespace.meetingState.mergeMeetingState(
+        next[legacyMeetingId],
+        normalizedLegacyMeetingState,
+        { meeting: { meetingId: legacyMeetingId } }
+      );
+    }
+
+    for (const [sessionId, meetingState] of Object.entries(rawMeetingStateBySession || {})) {
+      const normalizedMeetingState = namespace.meetingState.mergeMeetingState(meetingState, {
+        session: { sessionId: namespace.session.normalizeText(sessionId) },
+      });
+      const meetingId = namespace.session.normalizeText(
+        normalizedMeetingState.meeting?.meetingId || normalizedMeetingState.session?.sessionId
+      );
+      if (!meetingId) {
+        continue;
+      }
+      next[meetingId] = namespace.meetingState.mergeMeetingState(
+        next[meetingId],
+        normalizedMeetingState,
+        { meeting: { meetingId } }
+      );
+    }
+
+    return next;
   }
 
   async function markPromptLibrarySynced(providerIdentity, syncedAt) {
@@ -256,6 +397,10 @@
     buildPromptSyncDocument,
     getCloudSyncState,
     getHandleRatio,
+    getMeetingHub,
+    getMeetingState,
+    getMeetingStateByMeetingId,
+    getMeetingStateBySession,
     getPromptLibrary,
     getReleaseInfo,
     getState,
@@ -274,6 +419,8 @@
     savePromptItem,
     setCloudSyncState,
     setLocal,
+    setMeetingHub,
+    setMeetingState,
     setPromptSyncError,
     setPromptLibrary,
     setReleaseInfo,
@@ -281,4 +428,8 @@
     updateUiPreferences,
     updateSettings,
   };
+
+  function cloneValue(value) {
+    return value == null ? value : JSON.parse(JSON.stringify(value));
+  }
 })(globalThis);

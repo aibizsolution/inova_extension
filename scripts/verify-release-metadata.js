@@ -36,13 +36,13 @@ function main() {
       ? [buildRangeSnapshot(args[1])]
       : buildPushSnapshots(fs.readFileSync(0, "utf8"), args[0] || "origin");
 
-  const featureSnapshots = snapshots.filter((snapshot) => snapshot.featureFiles.length > 0);
-  if (!featureSnapshots.length) {
+  const relevantSnapshots = snapshots.filter((snapshot) => snapshot.featureFiles.length > 0 || snapshot.releaseMetadataFiles.length > 0);
+  if (!relevantSnapshots.length) {
     console.log("릴리스 메타 가드 통과");
     return;
   }
 
-  featureSnapshots.forEach(validateSnapshot);
+  relevantSnapshots.forEach(validateSnapshot);
   console.log("릴리스 메타 가드 통과");
 }
 
@@ -52,7 +52,8 @@ function buildStagedSnapshot() {
     packageJson: readJsonFromIndex(PACKAGE_PATH) || readJsonFromFile(PACKAGE_PATH),
     manifestJson: readJsonFromIndex(MANIFEST_PATH) || readJsonFromFile(MANIFEST_PATH),
     releaseCatalog: readReleaseCatalogFromIndex() || readReleaseCatalog(root),
-    baseVersions: [readVersionFromRef("HEAD", PACKAGE_PATH), readVersionFromRef("HEAD", MANIFEST_PATH)].filter(Boolean),
+    baseManifestVersion: readVersionFromRef("HEAD", MANIFEST_PATH),
+    basePackageVersion: readVersionFromRef("HEAD", PACKAGE_PATH),
   });
 }
 
@@ -67,7 +68,8 @@ function buildRangeSnapshot(range) {
     packageJson: readJsonFromRef(targetRef, PACKAGE_PATH) || readJsonFromFile(PACKAGE_PATH),
     manifestJson: readJsonFromRef(targetRef, MANIFEST_PATH) || readJsonFromFile(MANIFEST_PATH),
     releaseCatalog: readReleaseCatalogFromRef(targetRef) || readReleaseCatalog(root),
-    baseVersions: [readVersionFromRef(baseRef, PACKAGE_PATH), readVersionFromRef(baseRef, MANIFEST_PATH)].filter(Boolean),
+    baseManifestVersion: readVersionFromRef(baseRef, MANIFEST_PATH),
+    basePackageVersion: readVersionFromRef(baseRef, PACKAGE_PATH),
   });
 }
 
@@ -89,25 +91,39 @@ function buildPushSnapshots(stdin, remoteName) {
         packageJson: readJsonFromRef(localSha, PACKAGE_PATH) || readJsonFromFile(PACKAGE_PATH),
         manifestJson: readJsonFromRef(localSha, MANIFEST_PATH) || readJsonFromFile(MANIFEST_PATH),
         releaseCatalog: readReleaseCatalogFromRef(localSha) || readReleaseCatalog(root),
-        baseVersions: baseSha ? [readVersionFromRef(baseSha, PACKAGE_PATH), readVersionFromRef(baseSha, MANIFEST_PATH)].filter(Boolean) : [],
+        baseManifestVersion: baseSha ? readVersionFromRef(baseSha, MANIFEST_PATH) : "",
+        basePackageVersion: baseSha ? readVersionFromRef(baseSha, PACKAGE_PATH) : "",
       });
     });
 }
 
 function createSnapshot(label, changedFiles, payload) {
   const uniqueFiles = Array.from(new Set((changedFiles || []).filter(Boolean)));
+  const currentVersion = String(payload.packageJson?.version || "").trim();
+  const manifestVersion = String(payload.manifestJson?.version || "").trim();
+  const basePackageVersion = String(payload.basePackageVersion || "").trim();
+  const baseManifestVersion = String(payload.baseManifestVersion || "").trim();
+  const packageVersionChanged = uniqueFiles.includes(PACKAGE_PATH) && currentVersion !== basePackageVersion;
+  const manifestVersionChanged = uniqueFiles.includes(MANIFEST_PATH) && manifestVersion !== baseManifestVersion;
+  const releaseNotesChanged = uniqueFiles.includes(RELEASE_NOTES_PATH);
   return {
     label,
     changedFiles: uniqueFiles,
     featureFiles: uniqueFiles.filter(isFeatureFacingFile),
+    releaseMetadataFiles: uniqueFiles.filter(isReleaseMetadataFile),
+    releasePreparation: releaseNotesChanged || packageVersionChanged || manifestVersionChanged,
     packageJson: payload.packageJson || {},
     manifestJson: payload.manifestJson || {},
     releaseCatalog: payload.releaseCatalog || readReleaseCatalog(root),
-    baseVersions: Array.isArray(payload.baseVersions) ? payload.baseVersions.filter(Boolean) : [],
+    baseVersions: [basePackageVersion, baseManifestVersion].filter(Boolean),
   };
 }
 
 function validateSnapshot(snapshot) {
+  if (!snapshot.releasePreparation) {
+    return;
+  }
+
   const currentVersion = String(snapshot.packageJson.version || "").trim();
   const manifestVersion = String(snapshot.manifestJson.version || "").trim();
 
@@ -116,21 +132,18 @@ function validateSnapshot(snapshot) {
   }
 
   const requiredMetadataFiles = [PACKAGE_PATH, MANIFEST_PATH, RELEASE_NOTES_PATH];
-  const missingMetadataFiles = requiredMetadataFiles.filter((filePath) => !snapshot.changedFiles.includes(filePath));
+  const missingMetadataFiles = requiredMetadataFiles.filter((filePath) => !snapshot.releaseMetadataFiles.includes(filePath));
   if (missingMetadataFiles.length) {
     fail([
-      `[${snapshot.label}] feature 변경이 감지되었지만 버전/릴리스 메타 파일이 함께 바뀌지 않았어요.`,
+      `[${snapshot.label}] 릴리스 준비 파일이 일부만 바뀌었어요. 버전과 릴리스 메타는 항상 같이 움직여야 합니다.`,
       "다음 파일을 같이 업데이트해 주세요.",
       ...missingMetadataFiles.map((filePath) => `- ${filePath}`),
-      "",
-      "감지한 feature 변경 파일:",
-      ...snapshot.featureFiles.map((filePath) => `- ${filePath}`),
     ].join("\n"));
   }
 
   snapshot.baseVersions.forEach((baseVersion) => {
     if (baseVersion && compareVersions(currentVersion, baseVersion) <= 0) {
-      fail(`[${snapshot.label}] 현재 버전 ${currentVersion} 이(가) 기준 버전 ${baseVersion} 보다 높지 않아요. feature 변경에는 버전 상승이 필요합니다.`);
+      fail(`[${snapshot.label}] 현재 버전 ${currentVersion} 이(가) 기준 버전 ${baseVersion} 보다 높지 않아요. 릴리스 준비 시에는 버전 상승이 필요합니다.`);
     }
   });
 
@@ -256,6 +269,10 @@ function readGitLines(args, options = {}) {
 
 function isFeatureFacingFile(filePath) {
   return FEATURE_PATH_PATTERNS.some((pattern) => pattern.test(filePath));
+}
+
+function isReleaseMetadataFile(filePath) {
+  return [PACKAGE_PATH, MANIFEST_PATH, RELEASE_NOTES_PATH].includes(String(filePath || "").trim());
 }
 
 function toGitPath(filePath) {

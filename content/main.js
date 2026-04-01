@@ -1,5 +1,6 @@
 (function initContentMain(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const MEETING_DEBUG_PREFIX = "[Inova Meeting Content]";
   const PANEL_OPEN_KEY = "inova-plus.panel-open";
   const UI_PREFERENCE_LOCK_MS = 1500;
   const state = {
@@ -12,6 +13,12 @@
     queries: { bookmarks: "", prompts: "", store: "" },
     settings: { ...namespace.constants.defaults.settings },
     pausedSessions: {},
+    meetingHub: { ...namespace.constants.defaults.meetingHub },
+    meetingUi: {
+      feedback: null,
+      feedbackTimer: 0,
+      pending: { action: "", jobId: "", meetingId: "", startedAt: 0, title: "" },
+    },
     releaseInfo: namespace.releaseInfo.mergeReleaseInfo(),
     uiPreferences: namespace.storage.mergeUiPreferences(),
     promptLibrary: namespace.promptLibrary.mergePromptLibrary(),
@@ -68,7 +75,13 @@
   const storeManager = namespace.storeManager.create(state, { render });
   const releaseManager = namespace.releaseManager.create(state, { render });
   const cloudSyncManager = namespace.cloudSyncManager.create(state, { render });
-  const routeSync = namespace.routeSync.create(state, { ensureStoreLoaded: () => storeManager.ensureLoaded(), normalizeToolId, render });
+  const meetingManager = namespace.meetingManager.create(state, { render });
+  const routeSync = namespace.routeSync.create(state, {
+    ensureStoreLoaded: () => storeManager.ensureLoaded(),
+    normalizeToolId,
+    onRouteStateChanged: meetingManager.handleRouteStateChange,
+    render,
+  });
   bootstrapContent().catch((error) => console.error("[i-Nova Bookmarks] bootstrap failed", error));
   async function bootstrapContent() {
     state.preferredOpen = readPanelOpenPreference();
@@ -78,6 +91,7 @@
       onHandlePositionChange: updateHandlePosition,
       onImportFile: promptManager.handleImportFile,
       onJumpBookmark: jumpToBookmark,
+      onMeetingAction: handleMeetingAction,
       onMovePrompt: movePromptItem,
       onPromptAction: handlePromptAction,
       onPromptDraftChange: promptManager.updateDraft,
@@ -100,8 +114,10 @@
     document.addEventListener("visibilitychange", handleVisibilityChange, { passive: true });
     chrome.storage.onChanged?.addListener(routeSync.handleStorageChange);
     chrome.storage.onChanged?.addListener(cloudSyncManager.handleStorageChange);
+    chrome.storage.onChanged?.addListener(meetingManager.handleStorageChange);
     chrome.storage.onChanged?.addListener(releaseManager.handleStorageChange);
     await routeSync.syncRouteState(true);
+    meetingManager.scheduleSync(260);
     cloudSyncManager.scheduleSync(1800, true);
     if (isStoreTabActive()) storeManager.ensureLoaded();
     if (state.open || state.activeTool === "release") releaseManager.ensureChecked(false, state.activeTool === "release");
@@ -115,12 +131,23 @@
     const reviewState = promptReviewManager.buildViewState();
     const activePromptTab = getActivePromptTab(reviewState.open);
     const storeState = storeManager.buildViewState();
+    const meetingTool = buildMeetingToolState(state.meetingHub);
     const releaseState = releaseManager.buildViewState();
     const bookmarkCount = state.bookmarks.length;
     const promptCount = state.promptLibrary.items.length;
+    const meetingCount = meetingTool.count;
     const releaseCount = releaseState.updateAvailable ? 1 : 0;
     const storeCount = Math.max(0, Number(state.store.totalCount) || state.store.items.length);
     const promptToolCount = activePromptTab === "store" ? storeCount : promptCount;
+    const toolCounts = {
+      bookmarks: bookmarkCount,
+      meeting: meetingCount,
+      prompts: promptToolCount,
+      release: releaseCount,
+    };
+    const activeToolCount = Object.prototype.hasOwnProperty.call(toolCounts, state.activeTool)
+      ? toolCounts[state.activeTool]
+      : 0;
     namespace.contentPanel.renderPanel({
       activeTool: state.activeTool,
       bookmarksTool: {
@@ -130,7 +157,10 @@
         metaText: state.queries.bookmarks ? `검색 결과 ${bookmarkItems.length}개` : buildBookmarkStatusText(),
         query: state.queries.bookmarks,
       },
-      handleCount: state.activeTool === "prompts" ? promptToolCount : state.activeTool === "release" ? releaseCount : bookmarkCount || promptCount || releaseCount,
+      handleCount: state.activeTool === "bookmarks"
+        ? bookmarkCount || promptCount || meetingCount || releaseCount
+        : activeToolCount,
+      meetingTool,
       releaseTool: releaseState,
       handleRatio: namespace.storage.getHandleRatio(state.uiPreferences, global.innerWidth),
       open: state.open,
@@ -143,10 +173,17 @@
           ? [{ id: "library", label: "내 요청", count: promptCount }, { id: "store", label: "스토어", count: storeCount }, { id: "review", label: "검토", count: null }]
           : [{ id: "library", label: "내 요청", count: promptCount }, { id: "store", label: "스토어", count: storeCount }],
       },
-      toolCount: state.activeTool === "prompts" ? promptToolCount : state.activeTool === "release" ? releaseCount : bookmarkCount,
-      toolTitle: state.activeTool === "prompts" ? "프롬프트" : state.activeTool === "release" ? "릴리스 안내" : "대화 탐색",
+      toolCount: activeToolCount,
+      toolTitle: state.activeTool === "prompts"
+        ? "프롬프트"
+        : state.activeTool === "meeting"
+            ? "회의록"
+            : state.activeTool === "release"
+                ? "릴리스 안내"
+                : "대화 탐색",
       tools: [
         { id: "bookmarks", label: "대화", count: bookmarkCount },
+        { id: "meeting", label: "회의", count: meetingCount },
         { id: "prompts", label: "프롬프트", count: promptCount },
         { id: "release", label: "릴리스", count: releaseCount },
       ],
@@ -173,6 +210,7 @@
     state.uiPreferences = namespace.storage.mergeUiPreferences(state.uiPreferences, { activeTool: state.activeTool });
     lockUiPreferenceSelection(state.activeTool, getActivePromptTab());
     if (state.activeTool === "prompts" && getActivePromptTab() === "store") storeManager.ensureLoaded(true);
+    if (state.activeTool === "meeting") meetingManager.scheduleSync(120);
     if (state.activeTool === "release") releaseManager.ensureChecked(false, true);
     render();
     await persistActiveTool(state.activeTool);
@@ -239,6 +277,109 @@
     }
     return promptManager.handleAction(action, detail);
   }
+  async function handleMeetingAction(action, detail = {}) {
+    if (namespace.session.normalizeText(state.meetingUi.pending.action)) {
+      return;
+    }
+    const providerIdentity = namespace.providerIdentity.getCurrent();
+    const input = {
+      jobId: namespace.session.normalizeText(detail.jobId),
+      meetingId: namespace.session.normalizeText(detail.meetingId),
+      title: namespace.session.normalizeText(detail.title || state.sessionTitle),
+    };
+    const pendingAction = action === "open-result" ? "open-result" : "open-workspace";
+    setMeetingPending({
+      action: pendingAction,
+      jobId: input.jobId,
+      meetingId: input.meetingId,
+      startedAt: Date.now(),
+      title: input.title,
+    });
+    logMeetingAction("click", {
+      action,
+      jobId: input.jobId,
+      meetingId: input.meetingId,
+      providerUserKey: namespace.session.normalizeText(providerIdentity?.providerUserKey),
+      title: input.title,
+    });
+    try {
+      if (action === "open-result" && (input.meetingId || input.jobId)) {
+        const result = await namespace.meetingBridge.openMeetingResult(input, providerIdentity);
+        logMeetingAction("success", {
+          action,
+          jobId: input.jobId,
+          meetingId: input.meetingId,
+          opened: Boolean(result?.opened),
+          url: namespace.session.normalizeText(result?.url),
+        });
+        setMeetingFeedback("결과 탭을 열었습니다.", "info", 1800);
+        return;
+      }
+      const result = await namespace.meetingBridge.openMeetingWorkspace(input, providerIdentity);
+      logMeetingAction("success", {
+        action: "open-workspace",
+        jobId: input.jobId,
+        meetingId: input.meetingId,
+        opened: Boolean(result?.opened),
+        url: namespace.session.normalizeText(result?.url),
+      });
+      setMeetingFeedback("작업실 탭을 열었습니다.", "info", 1800);
+    } catch (error) {
+      logMeetingAction("error", {
+        action,
+        error: error instanceof Error ? error.message : String(error || ""),
+        jobId: input.jobId,
+        meetingId: input.meetingId,
+      });
+      console.error("[i-Nova Bookmarks] meeting page open failed", error);
+      setMeetingFeedback(error instanceof Error ? error.message : "작업실을 열지 못했어요. 다시 시도해 주세요.", "error", 3600);
+    } finally {
+      clearMeetingPending();
+    }
+  }
+  function setMeetingPending(pending) {
+    state.meetingUi.pending = {
+      action: namespace.session.normalizeText(pending?.action),
+      jobId: namespace.session.normalizeText(pending?.jobId),
+      meetingId: namespace.session.normalizeText(pending?.meetingId),
+      startedAt: Math.max(0, Number(pending?.startedAt) || Date.now()),
+      title: namespace.session.normalizeText(pending?.title),
+    };
+    render();
+  }
+  function clearMeetingPending() {
+    state.meetingUi.pending = { action: "", jobId: "", meetingId: "", startedAt: 0, title: "" };
+    render();
+  }
+  function setMeetingFeedback(text, tone = "info", timeoutMs = 2200) {
+    global.clearTimeout(state.meetingUi.feedbackTimer);
+    const nextText = namespace.session.normalizeText(text);
+    state.meetingUi.feedback = nextText
+      ? {
+          text: nextText,
+          tone: namespace.session.normalizeText(tone) || "info",
+        }
+      : null;
+    render();
+    if (!nextText || timeoutMs <= 0) {
+      state.meetingUi.feedbackTimer = 0;
+      return;
+    }
+    state.meetingUi.feedbackTimer = global.setTimeout(() => {
+      state.meetingUi.feedback = null;
+      state.meetingUi.feedbackTimer = 0;
+      render();
+    }, timeoutMs);
+  }
+  function logMeetingAction(event, payload) {
+    try {
+      console.info(MEETING_DEBUG_PREFIX, event, payload || {});
+      const url = namespace.session.normalizeText(payload?.url);
+      if (url) {
+        console.info(MEETING_DEBUG_PREFIX, `${event}.url`, url);
+      }
+    } catch {}
+  }
   function togglePanel(nextOpen, persist = true) {
     state.open = typeof nextOpen === "boolean" ? nextOpen : !state.open;
     if (persist) {
@@ -246,6 +387,7 @@
       writePanelOpenPreference(state.open);
     }
     if (state.open) cloudSyncManager.scheduleSync(220, true);
+    if (state.open) meetingManager.scheduleSync(220);
     if (state.open && isStoreTabActive()) storeManager.ensureLoaded();
     if (state.open) releaseManager.ensureChecked(false, state.activeTool === "release");
     render();
@@ -272,7 +414,13 @@
       global.sessionStorage?.setItem(PANEL_OPEN_KEY, String(Boolean(open)));
     } catch {}
   }
-  function normalizeToolId(toolId) { return toolId === "release" || toolId === "prompts" ? toolId : toolId === "store" ? "prompts" : "bookmarks"; }
+  function normalizeToolId(toolId) {
+    return toolId === "release" || toolId === "prompts" || toolId === "meeting"
+      ? toolId
+      : toolId === "store"
+          ? "prompts"
+          : "bookmarks";
+  }
   function showPromptTab(promptTabId) {
     const nextPromptTab = normalizePromptTab(promptTabId);
     state.open = true;
@@ -319,10 +467,19 @@
     const conversation = namespace.contentDom.getConversationState();
     return `${conversation.hasComposer}|${conversation.hasChatLog}|${conversation.articleCount}|${conversation.userCount}`;
   }
-  function handleVisibilityChange() { if (document.visibilityState !== "visible") return; cloudSyncManager.scheduleSync(320, true); if (state.open) releaseManager.ensureChecked(); render(); }
-  function handleWindowFocus() { cloudSyncManager.scheduleSync(320, true); if (state.open) releaseManager.ensureChecked(); render(); }
+  function handleVisibilityChange() { if (document.visibilityState !== "visible") return; cloudSyncManager.scheduleSync(320, true); meetingManager.scheduleSync(320); if (state.open) releaseManager.ensureChecked(); render(); }
+  function handleWindowFocus() { cloudSyncManager.scheduleSync(320, true); meetingManager.scheduleSync(320); if (state.open) releaseManager.ensureChecked(); render(); }
   function getActivePromptTab(reviewOpen = state.promptReview.open) { const tab = state.uiPreferences.activeTool === "store" ? "store" : normalizePromptTab(state.uiPreferences.activePromptTab); return tab === "review" && !reviewOpen ? "library" : tab; }
   function isStoreTabActive() { return state.activeTool === "prompts" && getActivePromptTab() === "store"; }
   function normalizePromptTab(promptTabId) { return promptTabId === "store" || promptTabId === "review" ? promptTabId : "library"; }
+  function buildMeetingToolState(meetingHub) {
+    const normalized = namespace.meetingManager.mergeMeetingHub(meetingHub);
+    return {
+      ...normalized,
+      count: Array.isArray(normalized.items) ? normalized.items.length : 0,
+      feedback: state.meetingUi.feedback,
+      pending: state.meetingUi.pending,
+    };
+  }
   async function publishPrompt(promptId, categoryId, title) { return storeManager.publishPrompt(promptId, categoryId, title); }
 })(globalThis);

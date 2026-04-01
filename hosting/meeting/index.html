@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>i-Nova 회의 작업실</title>
+    <link rel="stylesheet" href="index.css" />
+    <script src="shared.js" defer></script>
+    <script src="notes.js" defer></script>
+    <script src="storage.js" defer></script>
+    <script src="render.js" defer></script>
+    <script src="index.js" defer></script>
+  </head>
+  <body>
+    <main id="meetingShell" class="meeting-shell">
+      <section id="blockedState" class="blocked-state" hidden>
+        <div class="blocked-state__card">
+          <p id="blockedEyebrow" class="blocked-state__eyebrow">회의 작업실</p>
+          <h1 id="blockedTitle" class="blocked-state__title">이 작업실은 패널에서 다시 열어야 합니다</h1>
+          <p id="blockedMessage" class="blocked-state__body">직접 주소를 붙여 넣어 열면 회의 세션을 확인할 수 없습니다. i-Nova 패널의 회의 허브에서 다시 열어 주세요.</p>
+        </div>
+      </section>
+
+      <section id="workspace" class="workspace" hidden>
+        <header class="workspace-header">
+          <div class="workspace-header__mast">
+            <div class="workspace-header__identity">
+              <p class="workspace-header__eyebrow">작업실</p>
+              <div class="workspace-header__title-row">
+                <h1 id="pageTitle" class="workspace-header__title">i-Nova 회의 작업실</h1>
+                <span id="workspaceBadge" class="status-pill" data-status="idle">대기</span>
+                <span id="offlineQueueBadge" class="chip chip--accent">로컬 보관 0건</span>
+              </div>
+              <p id="pageSummary" class="workspace-header__summary" hidden></p>
+            </div>
+
+            <div class="workspace-header__toolbar">
+              <div class="segment-cluster segment-cluster--toolbar">
+                <button id="refreshButton" class="ghost-button" type="button">새로고침</button>
+                <details class="menu-popover">
+                  <summary id="meetingMenuButton" class="ghost-button" role="button">더보기</summary>
+                  <div class="menu-popover__panel">
+                    <button id="deleteMeetingButton" class="danger-button danger-button--block" type="button">작업실 삭제</button>
+                  </div>
+                </details>
+              </div>
+            </div>
+          </div>
+
+          <div class="workspace-header__editor">
+            <div class="workspace-header__editor-row">
+              <div class="input-group workspace-header__field">
+                <div class="input-group__controls input-group__controls--compact input-group__controls--field-group">
+                  <input id="meetingTitleInput" class="meeting-input" type="text" placeholder="예: 신규 프로모션 킥오프" />
+                  <button id="saveMeetingTitleButton" class="secondary-button" type="button">이름 저장</button>
+                </div>
+              </div>
+              <span id="meetingStatusChip" class="chip" hidden>작업실 준비</span>
+            </div>
+          </div>
+        </header>
+
+        <section class="workspace-layout">
+          <aside class="workspace-rail">
+            <article class="panel-card panel-card--control">
+              <div class="panel-card__head">
+                <div>
+                  <p class="panel-card__eyebrow">새 기록</p>
+                </div>
+                <span id="currentBadge" class="status-pill status-pill--soft" data-status="idle">대기</span>
+              </div>
+              <p id="currentSummary" class="panel-card__summary">종료하면 자동 전사를 시작합니다.</p>
+              <div class="capture-meter">
+                <span class="capture-meter__label">녹음 시간</span>
+                <strong id="currentTimer" class="capture-meter__value">00:00</strong>
+              </div>
+              <span id="currentHint" class="hint-text" hidden></span>
+              <div id="currentNotice" class="notice-box" hidden></div>
+              <div class="action-row action-row--stacked">
+                <div class="segment-cluster segment-cluster--buttons">
+                  <button id="startButton" class="primary-button" type="button">녹음 시작</button>
+                  <button id="importAudioButton" class="secondary-button" type="button" hidden>파일 불러오기</button>
+                  <button id="pauseButton" class="secondary-button" type="button" hidden>일시중지</button>
+                  <button id="resumeButton" class="secondary-button" type="button" hidden>이어서 녹음</button>
+                  <button id="stopButton" class="warn-button" type="button" hidden>종료하고 전사</button>
+                  <button id="discardButton" class="ghost-button ghost-button--soft" type="button" hidden>녹음 버리기</button>
+                </div>
+              </div>
+              <input id="importAudioInput" type="file" accept="audio/*,.m4a,.mp3,.wav,.webm,.ogg,.aac" hidden />
+            </article>
+
+            <article class="panel-card panel-card--memo">
+              <div class="panel-card__head">
+                <div>
+                  <p class="panel-card__eyebrow">현재 기록 메모</p>
+                </div>
+                <span class="tooltip-chip tooltip-chip--icon" title="이 메모는 지금 녹음하거나 곧 만들 기록에만 붙습니다. 녹음이 끝나면 그 기록의 정리와 함께 사용됩니다." aria-label="현재 기록 메모 도움말">?</span>
+              </div>
+              <label class="input-group input-group--textarea" for="sharedMemoInput">
+                <textarea id="sharedMemoInput" class="meeting-textarea" rows="8" placeholder="예: 이번 회의는 런칭 일정 조정과 담당자 확정이 핵심입니다."></textarea>
+              </label>
+              <div class="inline-action-row">
+                <div class="segment-cluster segment-cluster--buttons">
+                  <button id="saveSharedMemoButton" class="secondary-button" type="button">메모 저장</button>
+                  <button id="clearSharedMemoButton" class="ghost-button ghost-button--soft" type="button">비우기</button>
+                </div>
+              </div>
+              <div id="sharedMemoNotice" class="subtle-text" hidden></div>
+            </article>
+          </aside>
+
+          <section class="workspace-column workspace-column--queue">
+            <article class="panel-card panel-card--queue">
+              <div class="panel-card__head">
+                <div>
+                  <p class="panel-card__eyebrow">기록 큐</p>
+                </div>
+                <span id="recordCountBadge" class="chip chip--muted">0건</span>
+              </div>
+              <div id="recordList" class="record-list" aria-live="polite"></div>
+            </article>
+          </section>
+
+          <section class="workspace-column workspace-column--detail">
+            <article class="panel-card panel-card--detail">
+              <div class="panel-card__head">
+                <div>
+                  <p class="panel-card__eyebrow">기록 검토</p>
+                  <h2 id="detailTitle" class="panel-card__title">기록을 선택해 주세요</h2>
+                </div>
+                <span id="detailBadge" class="status-pill status-pill--soft" data-status="idle">대기</span>
+              </div>
+              <p id="detailSummary" class="panel-card__summary" hidden></p>
+
+              <div id="recordTitleGroup" class="input-group" hidden>
+                <div class="input-group__controls input-group__controls--compact input-group__controls--field-group">
+                  <input id="recordTitleInput" class="meeting-input" type="text" placeholder="기록 이름" />
+                  <button id="saveRecordTitleButton" class="secondary-button" type="button">이름 저장</button>
+                  <button id="downloadRecordButton" class="ghost-button" type="button" hidden>다운로드</button>
+                  <button id="deleteRecordButton" class="danger-button" type="button">삭제</button>
+                </div>
+              </div>
+
+              <div id="detailMeta" class="detail-meta"></div>
+            </article>
+
+            <article class="panel-card panel-card--review">
+              <div class="review-tabs" role="tablist" aria-label="결과 검토 탭">
+                <button id="reviewTabSummary" class="review-tab is-active" type="button" data-review-tab="summary" role="tab" aria-selected="true">상태</button>
+                <button id="reviewTabMemo" class="review-tab" type="button" data-review-tab="memo" role="tab" aria-selected="false">메모</button>
+                <button id="reviewTabNotes" class="review-tab" type="button" data-review-tab="notes" role="tab" aria-selected="false">회의 정리</button>
+                <button id="reviewTabSegments" class="review-tab" type="button" data-review-tab="segments" role="tab" aria-selected="false"><span class="review-tab__label">발화 구간</span><span id="reviewTabSegmentsCount" class="review-tab__count" hidden>0</span></button>
+                <button id="reviewTabSpeakers" class="review-tab" type="button" data-review-tab="speakers" role="tab" aria-selected="false">화자별</button>
+              </div>
+
+              <section id="reviewPanelSummary" class="review-panel" role="tabpanel">
+                <div class="panel-card__head panel-card__head--section">
+                  <div>
+                    <p class="panel-card__eyebrow">검토 흐름</p>
+                    <h2 class="panel-card__title">현재 기록 단계</h2>
+                  </div>
+                  <span id="summaryStatusPill" class="status-pill status-pill--soft" data-status="idle">대기</span>
+                </div>
+                <div id="summaryStatusGrid" class="summary-status-grid" hidden></div>
+                <div id="detailNotice" class="notice-box">왼쪽에서 기록을 선택해 주세요.</div>
+                <div id="summaryActionCard" class="summary-action-card" hidden></div>
+              </section>
+
+              <section id="reviewPanelMemo" class="review-panel" hidden role="tabpanel">
+                <div id="detailMemoText" class="memo-panel-box"></div>
+              </section>
+
+              <section id="meetingNotesCard" class="review-panel review-panel--notes" hidden role="tabpanel">
+                <div class="panel-card__head panel-card__head--section">
+                  <div>
+                    <p class="panel-card__eyebrow">회의 정리</p>
+                    <h2 class="panel-card__title">회의 정리</h2>
+                  </div>
+                  <span id="notesSummaryMeta" class="chip chip--muted">AI 판단 대기</span>
+                </div>
+                <div class="notes-toolbar">
+                  <label class="input-group input-group--compact" for="notesStyleSelect">
+                    <span class="input-group__label">표현 방식</span>
+                    <div class="input-group__controls input-group__controls--compact input-group__controls--field-group">
+                      <select id="notesStyleSelect" class="meeting-select">
+                        <option value="default">기본 회의록</option>
+                        <option value="brief">간결 브리프</option>
+                        <option value="action">실행 중심</option>
+                      </select>
+                      <button id="regenerateNotesButton" class="secondary-button" type="button">현재 표현 방식으로 다시 정리</button>
+                    </div>
+                  </label>
+                </div>
+                <div id="meetingNotesOverview" class="notes-overview" hidden></div>
+                <div id="meetingNotesSections" class="notes-sections"></div>
+              </section>
+
+              <section id="reviewPanelSegments" class="review-panel" hidden role="tabpanel">
+                <div class="panel-card__head panel-card__head--section">
+                  <div>
+                    <p class="panel-card__eyebrow">전사 원문</p>
+                    <h2 class="panel-card__title">발화 구간</h2>
+                  </div>
+                  <button id="copySegmentsButton" class="secondary-button" type="button">전체 복사</button>
+                </div>
+                <div id="speakerEditor" class="speaker-editor" hidden>
+                  <div class="panel-card__head panel-card__head--section">
+                    <div>
+                      <p class="panel-card__eyebrow">화자 이름</p>
+                      <h2 class="panel-card__title">발화 이름 수정</h2>
+                    </div>
+                  </div>
+                  <div id="speakerAliasList" class="speaker-alias-list"></div>
+                  <div class="speaker-editor__actions">
+                    <button id="saveSpeakerAliasesButton" class="secondary-button" type="button">화자명 저장</button>
+                    <button id="saveSpeakerAliasesAndRegenerateButton" class="ghost-button" type="button">저장 후 다시 정리</button>
+                  </div>
+                </div>
+                <div id="segmentList" class="segment-list" hidden></div>
+              </section>
+
+              <section id="reviewPanelSpeakers" class="review-panel" hidden role="tabpanel">
+                <div class="panel-card__head panel-card__head--section">
+                  <div>
+                    <p class="panel-card__eyebrow">화자별 정리</p>
+                    <h2 class="panel-card__title">화자별로 말한 내용</h2>
+                  </div>
+                </div>
+                <div id="speakerDigestList" class="speaker-digest-list" hidden></div>
+              </section>
+            </article>
+          </section>
+        </section>
+      </section>
+
+      <section id="debugPanel" class="debug-panel" hidden>
+        <article class="panel-card panel-card--debug">
+          <div class="panel-card__head">
+            <div>
+              <p class="panel-card__eyebrow">로컬 디버그</p>
+              <h2 class="panel-card__title">작업실 로그</h2>
+            </div>
+            <span id="debugStatus" class="chip chip--muted">로그 0건</span>
+          </div>
+          <div class="debug-summary">
+            <p id="debugCounters" class="debug-summary__line">Functions 요청 0건 · 응답 0건 · 오류 로그 0건 · 기타 로그 0건</p>
+            <p id="debugEndpointSummary" class="debug-summary__line debug-summary__line--muted">아직 함수 호출이 없습니다.</p>
+          </div>
+          <div class="inline-action-row">
+            <div class="segment-cluster segment-cluster--buttons">
+              <button id="copyDebugButton" class="secondary-button" type="button">로그 복사</button>
+              <button id="clearDebugButton" class="ghost-button ghost-button--soft" type="button">로그 비우기</button>
+            </div>
+          </div>
+          <pre id="debugLog" class="debug-log">아직 로그가 없습니다.</pre>
+        </article>
+      </section>
+
+      <section id="confirmOverlay" class="confirm-overlay" hidden>
+        <div id="confirmDialog" class="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirmDialogTitle" aria-describedby="confirmDialogBody">
+          <p id="confirmDialogEyebrow" class="confirm-dialog__eyebrow">확인</p>
+          <h2 id="confirmDialogTitle" class="confirm-dialog__title">이 작업을 진행할까요?</h2>
+          <p id="confirmDialogBody" class="confirm-dialog__body"></p>
+          <div class="confirm-dialog__actions">
+            <button id="confirmDialogCancel" class="ghost-button" type="button">취소</button>
+            <button id="confirmDialogConfirm" class="danger-button" type="button">삭제</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

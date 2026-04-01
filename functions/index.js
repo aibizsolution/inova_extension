@@ -1,5 +1,7 @@
 const admin = require("firebase-admin");
 const { onRequest } = require("firebase-functions/v2/https");
+const { registerMeetingLaunchHandlers } = require("./meeting-launch-service");
+const { registerMeetingHandlers } = require("./meeting-service");
 const { registerPromptReviewHandlers } = require("./prompt-review-service");
 const { registerStoreHandlers } = require("./store-service");
 
@@ -8,8 +10,18 @@ if (!admin.apps.length) {
 }
 
 const db = admin.firestore();
+const bucket = resolveStorageBucket(admin);
 const REGION = "asia-northeast3";
-const CORS_ORIGINS = ["https://inova.incross.com"];
+const INOVA_ORIGIN = "https://inova.incross.com";
+const HOSTING_ORIGIN = "https://browser-extension-main.web.app";
+const LOCAL_HOSTING_ORIGINS = [
+  "http://127.0.0.1:5000",
+  "http://localhost:5000",
+  "http://127.0.0.1:4173",
+  "http://localhost:4173",
+];
+const HOSTED_MEETING_PAGE_URL = `${HOSTING_ORIGIN}/meeting/index.html`;
+const CORS_ORIGINS = [INOVA_ORIGIN, HOSTING_ORIGIN, ...LOCAL_HOSTING_ORIGINS];
 const STORE_CATEGORIES = [
   { id: "document", label: "문서 작성" },
   { id: "summary", label: "요약/정리" },
@@ -72,6 +84,34 @@ const promptReviewHandlers = registerPromptReviewHandlers({
   sendError,
   verifyInovaIdentity,
 });
+const meetingLaunchHandlers = registerMeetingLaunchHandlers({
+  CORS_ORIGINS,
+  REGION,
+  createHttpError,
+  db,
+  hostedMeetingPageUrl: HOSTED_MEETING_PAGE_URL,
+  logEvent,
+  normalizeIdentity,
+  normalizeText,
+  onRequest,
+  sendError,
+  verifyInovaIdentity,
+});
+const meetingHandlers = registerMeetingHandlers({
+  admin,
+  bucket,
+  CORS_ORIGINS,
+  REGION,
+  authorizeMeetingRequest: meetingLaunchHandlers.authorizeMeetingRequest,
+  createHttpError,
+  db,
+  logEvent,
+  normalizeIdentity,
+  normalizeText,
+  onRequest,
+  sendError,
+  verifyInovaIdentity,
+});
 exports.listPromptStoreEntries = storeHandlers.listPromptStoreEntries;
 exports.publishPromptToStore = storeHandlers.publishPromptToStore;
 exports.unpublishPromptFromStore = storeHandlers.unpublishPromptFromStore;
@@ -79,6 +119,19 @@ exports.importPromptStoreEntry = storeHandlers.importPromptStoreEntry;
 exports.togglePromptStoreLike = storeHandlers.togglePromptStoreLike;
 exports.recordPromptStoreView = storeHandlers.recordPromptStoreView;
 exports.reviewInovaPrompt = promptReviewHandlers.reviewInovaPrompt;
+exports.createInovaMeetingJob = meetingHandlers.createInovaMeetingJob;
+exports.deleteInovaMeeting = meetingHandlers.deleteInovaMeeting;
+exports.deleteInovaMeetingResult = meetingHandlers.deleteInovaMeetingResult;
+exports.exchangeInovaMeetingLaunch = meetingLaunchHandlers.exchangeInovaMeetingLaunch;
+exports.getInovaMeetingJob = meetingHandlers.getInovaMeetingJob;
+exports.getInovaMeetingArtifact = meetingHandlers.getInovaMeetingArtifact;
+exports.issueInovaMeetingLaunch = meetingLaunchHandlers.issueInovaMeetingLaunch;
+exports.listInovaMeetings = meetingHandlers.listInovaMeetings;
+exports.listInovaMeetingResults = meetingHandlers.listInovaMeetingResults;
+exports.regenerateInovaMeetingNotes = meetingHandlers.regenerateInovaMeetingNotes;
+exports.uploadInovaMeetingSource = meetingHandlers.uploadInovaMeetingSource;
+exports.updateInovaMeeting = meetingHandlers.updateInovaMeeting;
+exports.updateInovaMeetingResult = meetingHandlers.updateInovaMeetingResult;
 
 exports.loadInovaPromptLibrary = onRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
   try {
@@ -199,6 +252,41 @@ exports.peekInovaPromptLibrary = onRequest({ cors: CORS_ORIGINS, region: REGION 
     sendError(response, error);
   }
 });
+
+function resolveStorageBucket(adminSdk) {
+  const bucketName = resolveStorageBucketName();
+  return bucketName ? adminSdk.storage().bucket(bucketName) : null;
+}
+
+function resolveStorageBucketName() {
+  const explicitBucket = String(process.env.STORAGE_BUCKET_URL || "").trim();
+  if (explicitBucket) {
+    return explicitBucket;
+  }
+
+  const firebaseConfig = parseFirebaseConfig(process.env.FIREBASE_CONFIG);
+  const configBucket = String(firebaseConfig?.storageBucket || "").trim();
+  if (configBucket) {
+    return configBucket;
+  }
+
+  const projectId = String(process.env.GCLOUD_PROJECT || process.env.PROJECT_ID || "").trim();
+  if (projectId) {
+    return `${projectId}.appspot.com`;
+  }
+  return "";
+}
+
+function parseFirebaseConfig(rawValue) {
+  if (!rawValue) {
+    return null;
+  }
+  try {
+    return JSON.parse(rawValue);
+  } catch {
+    return null;
+  }
+}
 
 exports.syncInovaPromptLibrary = onRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
   try {

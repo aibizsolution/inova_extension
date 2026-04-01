@@ -6,10 +6,20 @@
     "popup/index.html",
     "popup/index.css",
     "popup/index.js",
+    "meeting/index.html",
+    "meeting/index.css",
+    "meeting/index.js",
+    "hosting/meeting/index.html",
+    "hosting/meeting/index.css",
+    "hosting/meeting/index.js",
+    "offscreen/meeting-recorder.html",
+    "offscreen/meeting-recorder.js",
     "background/service-worker.js",
     "shared/cloud-api.js",
     "shared/constants.js",
     "shared/inova-auth.js",
+    "shared/meeting-bridge.js",
+    "shared/meeting-state.js",
     "shared/prompt-library.js",
     "shared/prompt-store.js",
     "shared/session.js",
@@ -19,6 +29,8 @@
     "content/composer.js",
     "content/dom.js",
     "content/files.js",
+    "content/meeting-manager.js",
+    "content/meeting-view.js",
     "content/panel.js",
     "content/prompt-manager.js",
     "content/prompt-view.js",
@@ -31,19 +43,25 @@
     "README.md",
     "docs/feature-spec.md",
     "scripts/verify-docs.js",
-    "scripts/verify-contracts.js"
+    "scripts/verify-contracts.js",
+    "scripts/verify-meeting-manager.js",
+    "scripts/verify-meeting-state.js"
   ],
   "manifestPopup": "popup/index.html",
   "manifestContentScripts": [
     "shared/constants.js",
     "shared/session.js",
+    "shared/meeting-state.js",
+    "shared/meeting-bridge.js",
     "shared/prompt-library.js",
     "shared/prompt-store.js",
     "shared/storage.js",
     "content/bookmark-view.js",
+    "content/meeting-view.js",
     "content/composer.js",
     "content/dom.js",
     "content/files.js",
+    "content/meeting-manager.js",
     "content/prompt-manager.js",
     "content/prompt-view.js",
     "content/store-manager.js",
@@ -51,6 +69,11 @@
     "content/route-sync.js",
     "content/panel.js",
     "content/main.js"
+  ],
+  "popupScripts": [
+    "../shared/constants.js",
+    "../shared/storage.js",
+    "index.js"
   ],
   "manifestContentCss": [
     "content/panel.css",
@@ -61,10 +84,21 @@
     "pausedSessions",
     "uiPreferences",
     "promptLibrary",
-    "cloudSync"
+    "cloudSync",
+    "meetingState",
+    "meetingStateBySession"
+  ],
+  "requiredPermissions": [
+    "storage",
+    "activeTab",
+    "tabs",
+    "cookies",
+    "desktopCapture",
+    "offscreen",
+    "tabCapture"
   ],
   "requiredDocKeywords": [
-    "팝업 On/Off",
+    "팝업 작업실 연결 설정",
     "질문 자동 모으기",
     "우측 슬라이드 패널",
     "대화 안에서 찾기",
@@ -72,6 +106,6 @@
     "요청 가져오기/내보내기",
     "프롬프트 스토어",
     "shared",
-    "pausedSessions"
+    "meetingWorkspaceTarget"
   ]
 }

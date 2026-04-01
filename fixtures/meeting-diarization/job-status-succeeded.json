@@ -1,0 +1,49 @@
+{
+  "job": {
+    "jobId": "meeting-job-fixture-1",
+    "meetingId": "meeting-fixture-1",
+    "sessionId": "meeting-session-fixture-1",
+    "status": "succeeded",
+    "updatedAt": "2026-03-30T08:31:45.000Z",
+    "progress": {
+      "phase": "completed",
+      "percent": 100
+    },
+    "transcription": {
+      "language": "ko",
+      "speakerLabels": true,
+      "speakerCount": 2
+    },
+    "artifacts": [
+      {
+        "artifactId": "meeting-artifact-transcript-1",
+        "jobId": "meeting-job-fixture-1",
+        "kind": "transcript",
+        "format": "diarized_json",
+        "createdAt": "2026-03-30T08:31:45.000Z"
+      }
+    ],
+    "transcript": {
+      "artifactId": "meeting-artifact-transcript-1",
+      "text": "SPEAKER_00: 신규 프로모션 일정을 이번 주 안에 확정합시다. SPEAKER_01: 예산과 랜딩 문구는 오늘 초안으로 정리하겠습니다.",
+      "segments": [
+        {
+          "speakerLabel": "SPEAKER_00",
+          "startMs": 0,
+          "endMs": 5300,
+          "text": "신규 프로모션 일정을 이번 주 안에 확정합시다."
+        },
+        {
+          "speakerLabel": "SPEAKER_01",
+          "startMs": 5400,
+          "endMs": 10400,
+          "text": "예산과 랜딩 문구는 오늘 초안으로 정리하겠습니다."
+        }
+      ]
+    },
+    "cleanup": {
+      "sourceAudioDeleted": true,
+      "deletedAt": "2026-03-30T08:31:50.000Z"
+    }
+  }
+}

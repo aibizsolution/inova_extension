@@ -3,17 +3,21 @@
   const { functions } = namespace.firebaseConfig;
   const REQUEST_TIMEOUT_MS = 25000;
 
+  function toProviderIdentityPayload(providerIdentity) {
+    return {
+      displayName: providerIdentity?.displayName || "",
+      email: providerIdentity?.email || "",
+      numericUserId: providerIdentity?.numericUserId ?? null,
+      provider: providerIdentity?.provider || "inova",
+      providerUserKey: providerIdentity?.providerUserKey || "",
+    };
+  }
+
   async function peekInovaPromptLibrary(providerIdentity, accessToken) {
     const payload = await postJson(
       functions.peekInovaPromptLibraryUrl,
       {
-        providerIdentity: {
-          displayName: providerIdentity?.displayName || "",
-          email: providerIdentity?.email || "",
-          numericUserId: providerIdentity?.numericUserId ?? null,
-          provider: providerIdentity?.provider || "inova",
-          providerUserKey: providerIdentity?.providerUserKey || "",
-        },
+        providerIdentity: toProviderIdentityPayload(providerIdentity),
       },
       accessToken
     );
@@ -50,13 +54,7 @@
 
   async function loadInovaPromptLibrary(providerIdentity, accessToken) {
     const payload = await postJson(functions.loadInovaPromptLibraryUrl, {
-      providerIdentity: {
-        displayName: providerIdentity?.displayName || "",
-        email: providerIdentity?.email || "",
-        numericUserId: providerIdentity?.numericUserId ?? null,
-        provider: providerIdentity?.provider || "inova",
-        providerUserKey: providerIdentity?.providerUserKey || "",
-      },
+      providerIdentity: toProviderIdentityPayload(providerIdentity),
     }, accessToken);
     return payload?.data || { found: false };
   }
@@ -122,23 +120,140 @@
     return payload?.data || {};
   }
 
+  function buildCreateInovaMeetingJobRequest(input, providerIdentity) {
+    return {
+      meeting: {
+        endedAt: input?.meeting?.endedAt || "",
+        language: input?.meeting?.language || "",
+        meetingId: input?.meeting?.meetingId || "",
+        sessionId: input?.meeting?.sessionId || "",
+        sourceTabId: Number(input?.meeting?.sourceTabId) || 0,
+        startedAt: input?.meeting?.startedAt || "",
+        title: input?.meeting?.title || "",
+      },
+      options: {
+        redaction: input?.options?.redaction || "",
+        speakerLabels: Boolean(input?.options?.speakerLabels),
+        summary: Boolean(input?.options?.summary),
+      },
+      owner: toProviderIdentityPayload(providerIdentity),
+      source: {
+        captureMode: input?.source?.captureMode || "",
+        channelCount: Number(input?.source?.channelCount) || 0,
+        durationMs: Number(input?.source?.durationMs) || 0,
+        fileName: input?.source?.fileName || "",
+        inlineAudioBase64: input?.source?.inlineAudioBase64 || "",
+        mimeType: input?.source?.mimeType || "",
+        sizeBytes: Number(input?.source?.sizeBytes) || 0,
+        storageObject: input?.source?.storageObject || "",
+      },
+    };
+  }
+
+  async function createInovaMeetingJob(input, providerIdentity, accessToken) {
+    const payload = await postJson(
+      functions.createInovaMeetingJobUrl,
+      buildCreateInovaMeetingJobRequest(input, providerIdentity),
+      accessToken
+    );
+    return payload?.data || {};
+  }
+
+  async function getInovaMeetingJob(input, providerIdentity, accessToken) {
+    const payload = await postJson(
+      functions.getInovaMeetingJobUrl,
+      {
+        meetingId: input?.meetingId || "",
+        jobId: input?.jobId || "",
+        owner: toProviderIdentityPayload(providerIdentity),
+        sessionId: input?.sessionId || "",
+      },
+      accessToken
+    );
+    return payload?.data || {};
+  }
+
+  async function getInovaMeetingArtifact(input, providerIdentity, accessToken) {
+    const payload = await postJson(
+      functions.getInovaMeetingArtifactUrl,
+      {
+        artifactId: input?.artifactId || "",
+        jobId: input?.jobId || "",
+        meetingId: input?.meetingId || "",
+        owner: toProviderIdentityPayload(providerIdentity),
+      },
+      accessToken
+    );
+    return payload?.data || {};
+  }
+
+  async function listInovaMeetings(input, providerIdentity, accessToken) {
+    const payload = await postJson(
+      functions.listInovaMeetingsUrl,
+      {
+        cursor: input?.cursor || "",
+        limit: Number(input?.limit) || 24,
+        owner: toProviderIdentityPayload(providerIdentity),
+      },
+      accessToken
+    );
+    return payload?.data || { items: [], nextCursor: "" };
+  }
+
+  async function listInovaMeetingResults(input, providerIdentity, accessToken) {
+    const payload = await postJson(
+      functions.listInovaMeetingResultsUrl,
+      {
+        limit: Number(input?.limit) || 8,
+        meetingId: input?.meetingId || "",
+        owner: toProviderIdentityPayload(providerIdentity),
+        sessionId: input?.sessionId || "",
+      },
+      accessToken
+    );
+    return payload?.data || { items: [], session: {} };
+  }
+
+  async function issueInovaMeetingLaunch(input, providerIdentity, accessToken) {
+    const payload = await postJson(
+      functions.issueInovaMeetingLaunchUrl,
+      {
+        jobId: input?.jobId || "",
+        meetingId: input?.meetingId || "",
+        mode: input?.mode || "create",
+        owner: toProviderIdentityPayload(providerIdentity),
+        suggestedTitle: input?.suggestedTitle || input?.title || "",
+      },
+      accessToken
+    );
+    return payload?.data || {};
+  }
+
+  async function exchangeInovaMeetingLaunch(input) {
+    const payload = await postJson(
+      functions.exchangeInovaMeetingLaunchUrl,
+      {
+        launchToken: input?.launchToken || "",
+      }
+    );
+    return payload?.data || {};
+  }
+
   async function syncInovaPromptLibrary(syncDocument, accessToken) {
     const payload = await postJson(functions.syncInovaPromptLibraryUrl, syncDocument, accessToken);
     return payload?.data || {};
   }
 
-  async function postJson(url, body, accessToken) {
+  async function postJson(url, body, auth) {
     const controller = typeof AbortController === "function" ? new AbortController() : null;
     const timeoutId = controller ? global.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS) : 0;
     let response;
+    const headers = buildAuthHeaders(auth);
 
     try {
       response = await global.fetch(url, {
         body: JSON.stringify(body || {}),
-        headers: {
-          "Authorization": `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
+        headers,
         method: "POST",
         signal: controller?.signal,
       });
@@ -161,7 +276,43 @@
     return payload;
   }
 
+  function buildAuthHeaders(auth) {
+    const normalized = normalizeAuth(auth);
+    const headers = {
+      "Content-Type": "application/json",
+    };
+    if (normalized.accessToken) {
+      headers.Authorization = `Bearer ${normalized.accessToken}`;
+      return headers;
+    }
+    if (normalized.meetingSessionToken) {
+      headers.Authorization = `MeetingSession ${normalized.meetingSessionToken}`;
+    }
+    return headers;
+  }
+
+  function normalizeAuth(auth) {
+    if (typeof auth === "string") {
+      return {
+        accessToken: auth,
+        meetingSessionToken: "",
+      };
+    }
+    return {
+      accessToken: auth?.accessToken || "",
+      meetingSessionToken: auth?.meetingSessionToken || "",
+    };
+  }
+
   namespace.cloudApi = {
+    buildCreateInovaMeetingJobRequest,
+    createInovaMeetingJob,
+    exchangeInovaMeetingLaunch,
+    getInovaMeetingArtifact,
+    getInovaMeetingJob,
+    issueInovaMeetingLaunch,
+    listInovaMeetings,
+    listInovaMeetingResults,
     importPromptStoreEntry,
     listPromptStoreEntries,
     loadInovaPromptLibrary,
