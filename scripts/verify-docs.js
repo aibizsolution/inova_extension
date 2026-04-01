@@ -28,8 +28,8 @@ const requiredFiles = [
 
 const keywordGroups = [
   {
-    name: "팝업 On/Off",
-    patterns: [/팝업\s*On\/Off/i, /i-Nova에서\s*사용/i, /일시\s*중지/i],
+    name: "팝업 작업실 연결 설정",
+    patterns: [/팝업\s*작업실\s*연결\s*설정/i, /상용\s*호스팅/i, /로컬\s*호스팅/i],
   },
   {
     name: "질문 자동 모으기",
@@ -53,7 +53,7 @@ const keywordGroups = [
   },
   {
     name: "모듈 구조",
-    patterns: [/shared/i, /pausedSessions/, /settings/],
+    patterns: [/shared/i, /meetingWorkspaceTarget/, /settings/],
   },
 ];
 
@@ -78,7 +78,7 @@ const codeChecks = [
   },
   {
     file: "popup/index.js",
-    patterns: [/enabled/, /autoBookmark/, /pausedSessions/, /setSessionPaused/],
+    patterns: [/meetingWorkspaceTarget/, /meetingWorkspaceUrlOverride/, /updateSettings/, /workspaceTargetHint/],
   },
   {
     file: "content/main.js",

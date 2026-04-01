@@ -6,60 +6,29 @@ const path = require("path");
 const vm = require("vm");
 
 const root = path.resolve(__dirname, "..");
-const fixtureRoot = path.join(root, "fixtures", "meeting-diarization");
 
 async function main() {
-  const processingResponse = readJson("job-status-processing.json");
-  const succeededResponse = readJson("job-status-succeeded.json");
-  const activeSessionId = processingResponse.job.sessionId;
   const sentMessages = [];
   const scheduledTasks = [];
+  const consoleErrors = [];
   let nextTimerId = 1;
   let renderCount = 0;
   let storageState = {
-    meetingStateBySession: {
-      [activeSessionId]: {
-        capture: {
-          captureMode: "mixed-audio",
-          durationMs: 480000,
-          mimeType: "audio/webm",
-          sizeBytes: 4200000,
-          status: "uploaded",
-        },
-        job: {
-          jobId: processingResponse.job.jobId,
-          progress: {
-            percent: 24,
-            phase: "transcribing",
-          },
-          status: "processing",
-        },
-        session: {
-          sessionId: activeSessionId,
-          title: "주간 스탠드업",
-        },
+    cloudSync: {
+      providerIdentity: {
+        available: true,
+        displayName: "Fixture User",
+        email: "fixture@example.com",
+        numericUserId: 1001,
+        provider: "inova",
+        providerUserKey: "fixture-user",
       },
     },
-    meetingState: {
-      capture: {
-        captureMode: "mixed-audio",
-        durationMs: 480000,
-        mimeType: "audio/webm",
-        sizeBytes: 4200000,
-        status: "uploaded",
-      },
-      job: {
-        jobId: processingResponse.job.jobId,
-        progress: {
-          percent: 24,
-          phase: "transcribing",
-        },
-        status: "processing",
-      },
-      session: {
-        sessionId: activeSessionId,
-        title: "주간 스탠드업",
-      },
+    meetingHub: {
+      version: 1,
+      checkedAt: "",
+      error: "",
+      items: [],
     },
   };
 
@@ -68,69 +37,23 @@ async function main() {
       runtime: {
         async sendMessage(message) {
           sentMessages.push(cloneValue(message));
-          if (message.type === "inova-meeting:list-results") {
-            const sessionId = String(message?.input?.sessionId || "").trim();
-            if (sessionId !== activeSessionId) {
-              return {
-                ok: true,
-                data: {
-                  items: [],
-                  session: {
-                    sessionId,
-                    title: "",
-                  },
-                },
-              };
-            }
+          if (message.type === "inova-meeting:list-meetings") {
             return {
               ok: true,
               data: {
                 items: [
                   {
-                    artifactId: succeededResponse.job.transcript.artifactId,
-                    createdAt: succeededResponse.job.createdAt,
-                    error: "",
-                    jobId: succeededResponse.job.jobId,
-                    previewText: "신규 프로모션 일정을 이번 주 안에 확정합시다.",
-                    sessionId: activeSessionId,
-                    speakerCount: 2,
-                    status: "succeeded",
+                    meetingId: "meeting-fixture-2",
                     title: "주간 스탠드업",
-                    updatedAt: succeededResponse.job.updatedAt,
+                    status: "succeeded",
+                    latestJobId: "meeting-job-fixture-2",
+                    latestArtifactId: "meeting-artifact-fixture-2",
+                    excerpt: "이번 주 프로모션 일정과 예산 초안을 정리했습니다.",
+                    createdAt: "2026-03-30T08:20:00.000Z",
+                    updatedAt: "2026-03-30T08:31:00.000Z",
                   },
                 ],
-                session: {
-                  endedAt: "2026-03-30T08:31:00.000Z",
-                  language: "ko",
-                  sessionId: activeSessionId,
-                  startedAt: "2026-03-30T08:20:00.000Z",
-                  title: "주간 스탠드업",
-                },
-              },
-            };
-          }
-          if (message.type === "inova-meeting:get-job") {
-            const payload = cloneValue(succeededResponse);
-            payload.job.transcript = {
-              artifactId: payload.job.transcript.artifactId,
-              segments: [],
-              text: "",
-            };
-            payload.job.transcription = {
-              speakerCount: 0,
-            };
-            return { ok: true, data: payload };
-          }
-          if (message.type === "inova-meeting:get-artifact") {
-            return {
-              ok: true,
-              data: {
-                artifact: {
-                  artifactId: succeededResponse.job.transcript.artifactId,
-                  jobId: succeededResponse.job.jobId,
-                  segments: cloneValue(succeededResponse.job.transcript.segments),
-                  text: succeededResponse.job.transcript.text,
-                },
+                nextCursor: "",
               },
             };
           }
@@ -154,16 +77,22 @@ async function main() {
         },
       },
     },
-    console,
+    console: {
+      ...console,
+      error(...args) {
+        consoleErrors.push(args);
+        console.error(...args);
+      },
+    },
     globalThis: null,
     localStorage: {
       getItem(key) {
         if (key === "auth") {
           return JSON.stringify({
             userInfo: {
-              email: "ytgoon@example.com",
-              id: 101,
-              name: "YT",
+              email: "fixture@example.com",
+              id: 1001,
+              name: "Fixture User",
               userKey: "fixture-user",
             },
           });
@@ -171,21 +100,16 @@ async function main() {
         return null;
       },
     },
-    location: {
-      href: `https://inova.incross.com/chat?sid=${activeSessionId}`,
-      pathname: "/chat",
-      search: `?sid=${activeSessionId}`,
-    },
-    setTimeout(callback, delay) {
-      const task = { callback, cleared: false, delay, id: nextTimerId += 1 };
-      scheduledTasks.push(task);
-      return task.id;
-    },
     clearTimeout(timerId) {
       const task = scheduledTasks.find((entry) => entry.id === timerId);
       if (task) {
         task.cleared = true;
       }
+    },
+    setTimeout(callback, delay) {
+      const task = { callback, cleared: false, delay, id: nextTimerId += 1 };
+      scheduledTasks.push(task);
+      return task.id;
     },
     structuredClone: cloneValue,
   });
@@ -201,8 +125,7 @@ async function main() {
 
   const namespace = context.InovaBookmarks;
   const state = {
-    meetingState: namespace.meetingState.mergeMeetingState(),
-    sessionId: activeSessionId,
+    meetingHub: namespace.meetingManager.mergeMeetingHub(),
   };
   const manager = namespace.meetingManager.create(state, {
     render() {
@@ -212,41 +135,70 @@ async function main() {
 
   manager.handleStorageChange(
     {
-      meetingStateBySession: {
+      cloudSync: {
         oldValue: {},
-        newValue: cloneValue(storageState.meetingStateBySession),
-      },
-      meetingState: {
-        oldValue: namespace.meetingState.mergeMeetingState(),
-        newValue: cloneValue(storageState.meetingState),
+        newValue: cloneValue(storageState.cloudSync),
       },
     },
     "local"
   );
-  assert(scheduledTasks.some((task) => !task.cleared), "Meeting manager should schedule a poll for active jobs");
+  assert(scheduledTasks.some((task) => !task.cleared), "Meeting manager should schedule a hub refresh");
 
   await runLatestTask(scheduledTasks);
 
-  assert.equal(state.meetingState.job.status, "succeeded");
-  assert.equal(state.meetingState.transcript.segments.length, 2);
-  assert.equal(storageState.meetingState.job.status, "succeeded");
-  assert.equal(storageState.meetingStateBySession[activeSessionId].job.status, "succeeded");
-  assert.equal(storageState.meetingState.transcript.segments.length, 2);
-  assert.equal(storageState.meetingStateBySession[activeSessionId].transcript.segments.length, 2);
+  assert.equal(state.meetingHub.items.length, 1);
+  assert.equal(state.meetingHub.items[0].meetingId, "meeting-fixture-2");
+  assert.equal(storageState.meetingHub.items.length, 1);
+  assert.equal(storageState.meetingHub.items[0].title, "주간 스탠드업");
+  assert(renderCount > 0, "Meeting manager should request a re-render after refresh");
   assert.deepEqual(
     sentMessages.map((message) => message.type),
-    ["inova-meeting:get-job", "inova-meeting:get-artifact", "inova-meeting:list-results"]
+    ["inova-meeting:list-meetings"]
   );
-  assert(renderCount > 0, "Meeting manager should request a re-render");
-  assert.equal(storageState.meetingState.records.length, 1);
-  assert.equal(storageState.meetingStateBySession[activeSessionId].records.length, 1);
 
-  sentMessages.length = 0;
-  state.sessionId = "other-session";
+  manager.handleStorageChange(
+    {
+      meetingHub: {
+        oldValue: cloneValue(storageState.meetingHub),
+        newValue: {
+          version: 1,
+          checkedAt: "2026-03-30T09:00:00.000Z",
+          error: "",
+          items: [
+            {
+              meetingId: "meeting-fixture-3",
+              title: "런칭 체크인",
+              status: "processing",
+              latestJobId: "meeting-job-fixture-3",
+              latestArtifactId: "",
+              excerpt: "랜딩 문구와 일정 조율을 진행 중입니다.",
+              createdAt: "2026-03-30T09:00:00.000Z",
+              updatedAt: "2026-03-30T09:10:00.000Z",
+            },
+          ],
+        },
+      },
+    },
+    "local"
+  );
+
+  assert.equal(state.meetingHub.items.length, 1);
+  assert.equal(state.meetingHub.items[0].meetingId, "meeting-fixture-3");
+
+  context.chrome.runtime.sendMessage = async function invalidatedSendMessage() {
+    throw new Error("Extension context invalidated.");
+  };
+
   await manager.refreshState();
-  assert.deepEqual(
-    sentMessages.map((message) => message.type),
-    ["inova-meeting:list-results"]
+
+  assert.equal(
+    state.meetingHub.error,
+    "확장프로그램이 갱신됐어요. 페이지를 새로고침해 주세요."
+  );
+  assert.equal(
+    consoleErrors.length,
+    0,
+    "Meeting manager should suppress invalidated context console errors"
   );
 
   console.log("[verify-meeting-manager] Meeting manager passed");
@@ -257,22 +209,11 @@ function loadScript(relativePath, context) {
   new vm.Script(source, { filename: relativePath }).runInContext(context);
 }
 
-function readJson(fileName) {
-  return JSON.parse(fs.readFileSync(path.join(fixtureRoot, fileName), "utf8"));
-}
-
 async function runLatestTask(tasks) {
   const task = [...tasks].reverse().find((entry) => !entry.cleared);
   assert(task, "Expected a scheduled task");
-  task.cleared = true;
   task.callback();
-  await flushAsyncWork();
-}
-
-async function flushAsyncWork() {
-  for (let index = 0; index < 2; index += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  }
+  await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 function mergeDefaults(defaults, values) {

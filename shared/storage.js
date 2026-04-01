@@ -65,19 +65,43 @@
     return namespace.releaseInfo.mergeReleaseInfo(current.releaseInfo);
   }
 
-  async function getMeetingState(sessionId) {
+  async function getMeetingHub() {
     const current = await getState();
-    const normalizedSessionId = namespace.session.normalizeText(sessionId);
-    const meetingStateBySession = mergeMeetingStateBySession(current.meetingStateBySession, current.meetingState);
-    if (normalizedSessionId) {
-      return namespace.meetingState.mergeMeetingState(meetingStateBySession[normalizedSessionId]);
+    const nextHub = current.meetingHub && typeof current.meetingHub === "object"
+      ? current.meetingHub
+      : defaults.meetingHub;
+    return {
+      ...cloneValue(defaults.meetingHub),
+      ...cloneValue(nextHub),
+      items: Array.isArray(nextHub?.items) ? cloneValue(nextHub.items) : [],
+    };
+  }
+
+  async function getMeetingState(meetingId) {
+    const current = await getState();
+    const normalizedMeetingId = namespace.session.normalizeText(meetingId);
+    const meetingStateByMeetingId = mergeMeetingStateByMeetingId(
+      current.meetingStateByMeetingId,
+      current.meetingState,
+      current.meetingStateBySession
+    );
+    if (normalizedMeetingId) {
+      return namespace.meetingState.mergeMeetingState(meetingStateByMeetingId[normalizedMeetingId]);
     }
     return namespace.meetingState.mergeMeetingState(current.meetingState);
   }
 
   async function getMeetingStateBySession() {
+    return getMeetingStateByMeetingId();
+  }
+
+  async function getMeetingStateByMeetingId() {
     const current = await getState();
-    return mergeMeetingStateBySession(current.meetingStateBySession, current.meetingState);
+    return mergeMeetingStateByMeetingId(
+      current.meetingStateByMeetingId,
+      current.meetingState,
+      current.meetingStateBySession
+    );
   }
 
   async function setCloudSyncState(nextCloudSync) {
@@ -92,61 +116,102 @@
     return releaseInfo;
   }
 
-  async function setMeetingState(sessionIdOrNextMeetingState, maybeNextMeetingState) {
+  async function setMeetingHub(nextMeetingHub) {
+    const meetingHub = {
+      ...cloneValue(defaults.meetingHub),
+      ...(nextMeetingHub && typeof nextMeetingHub === "object" ? cloneValue(nextMeetingHub) : {}),
+      items: Array.isArray(nextMeetingHub?.items) ? cloneValue(nextMeetingHub.items) : [],
+    };
+    await setLocal({ meetingHub });
+    return meetingHub;
+  }
+
+  async function setMeetingState(meetingIdOrNextMeetingState, maybeNextMeetingState) {
     const current = await getState();
-    const nextMeetingState = typeof sessionIdOrNextMeetingState === "string"
+    const nextMeetingState = typeof meetingIdOrNextMeetingState === "string"
       ? maybeNextMeetingState
-      : sessionIdOrNextMeetingState;
+      : meetingIdOrNextMeetingState;
     const meetingState = namespace.meetingState.mergeMeetingState(nextMeetingState);
-    const sessionId = namespace.session.normalizeText(
-      typeof sessionIdOrNextMeetingState === "string"
-        ? sessionIdOrNextMeetingState
-        : meetingState.session.sessionId
+    const meetingId = namespace.session.normalizeText(
+      typeof meetingIdOrNextMeetingState === "string"
+        ? meetingIdOrNextMeetingState
+        : meetingState.meeting?.meetingId || meetingState.session?.sessionId
     );
 
-    if (!sessionId) {
+    if (!meetingId) {
       await setLocal({ meetingState });
       return meetingState;
     }
 
-    const meetingStateBySession = mergeMeetingStateBySession(current.meetingStateBySession, current.meetingState);
-    const persistedMeetingState = namespace.meetingState.mergeMeetingState(
-      meetingStateBySession[sessionId],
-      meetingState,
-      { session: { sessionId } }
+    const meetingStateByMeetingId = mergeMeetingStateByMeetingId(
+      current.meetingStateByMeetingId,
+      current.meetingState,
+      current.meetingStateBySession
     );
-    const nextMeetingStateBySession = {
-      ...meetingStateBySession,
-      [sessionId]: persistedMeetingState,
+    const persistedMeetingState = namespace.meetingState.mergeMeetingState(
+      meetingStateByMeetingId[meetingId],
+      meetingState,
+      { meeting: { meetingId } }
+    );
+    const nextMeetingStateByMeetingId = {
+      ...meetingStateByMeetingId,
+      [meetingId]: persistedMeetingState,
     };
-
-    await setLocal({
+    const nextLocalPatch = {
       meetingState: persistedMeetingState,
-      meetingStateBySession: nextMeetingStateBySession,
-    });
+      meetingStateByMeetingId: nextMeetingStateByMeetingId,
+    };
+    const legacySessionId = namespace.session.normalizeText(persistedMeetingState.session?.sessionId);
+    if (legacySessionId) {
+      nextLocalPatch.meetingStateBySession = {
+        ...(current.meetingStateBySession || {}),
+        [legacySessionId]: persistedMeetingState,
+      };
+    }
+
+    await setLocal(nextLocalPatch);
     return persistedMeetingState;
   }
 
-  function mergeMeetingStateBySession(rawMeetingStateBySession, legacyMeetingState) {
+  function mergeMeetingStateByMeetingId(rawMeetingStateByMeetingId, legacyMeetingState, rawMeetingStateBySession) {
     const next = {};
 
-    for (const [sessionId, meetingState] of Object.entries(rawMeetingStateBySession || {})) {
-      const normalizedSessionId = namespace.session.normalizeText(sessionId);
-      if (!normalizedSessionId) {
+    for (const [meetingId, meetingState] of Object.entries(rawMeetingStateByMeetingId || {})) {
+      const normalizedMeetingId = namespace.session.normalizeText(meetingId);
+      if (!normalizedMeetingId) {
         continue;
       }
-      next[normalizedSessionId] = namespace.meetingState.mergeMeetingState(meetingState, {
-        session: { sessionId: normalizedSessionId },
+      next[normalizedMeetingId] = namespace.meetingState.mergeMeetingState(meetingState, {
+        meeting: { meetingId: normalizedMeetingId },
       });
     }
 
     const normalizedLegacyMeetingState = namespace.meetingState.mergeMeetingState(legacyMeetingState);
-    const legacySessionId = namespace.session.normalizeText(normalizedLegacyMeetingState.session.sessionId);
-    if (legacySessionId) {
-      next[legacySessionId] = namespace.meetingState.mergeMeetingState(
-        next[legacySessionId],
+    const legacyMeetingId = namespace.session.normalizeText(
+      normalizedLegacyMeetingState.meeting?.meetingId || normalizedLegacyMeetingState.session?.sessionId
+    );
+    if (legacyMeetingId) {
+      next[legacyMeetingId] = namespace.meetingState.mergeMeetingState(
+        next[legacyMeetingId],
         normalizedLegacyMeetingState,
-        { session: { sessionId: legacySessionId } }
+        { meeting: { meetingId: legacyMeetingId } }
+      );
+    }
+
+    for (const [sessionId, meetingState] of Object.entries(rawMeetingStateBySession || {})) {
+      const normalizedMeetingState = namespace.meetingState.mergeMeetingState(meetingState, {
+        session: { sessionId: namespace.session.normalizeText(sessionId) },
+      });
+      const meetingId = namespace.session.normalizeText(
+        normalizedMeetingState.meeting?.meetingId || normalizedMeetingState.session?.sessionId
+      );
+      if (!meetingId) {
+        continue;
+      }
+      next[meetingId] = namespace.meetingState.mergeMeetingState(
+        next[meetingId],
+        normalizedMeetingState,
+        { meeting: { meetingId } }
       );
     }
 
@@ -332,7 +397,9 @@
     buildPromptSyncDocument,
     getCloudSyncState,
     getHandleRatio,
+    getMeetingHub,
     getMeetingState,
+    getMeetingStateByMeetingId,
     getMeetingStateBySession,
     getPromptLibrary,
     getReleaseInfo,
@@ -352,6 +419,7 @@
     savePromptItem,
     setCloudSyncState,
     setLocal,
+    setMeetingHub,
     setMeetingState,
     setPromptSyncError,
     setPromptLibrary,
@@ -360,4 +428,8 @@
     updateUiPreferences,
     updateSettings,
   };
+
+  function cloneValue(value) {
+    return value == null ? value : JSON.parse(JSON.stringify(value));
+  }
 })(globalThis);

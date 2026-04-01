@@ -14,12 +14,11 @@
 - 이 저장소는 사람 승인보다 자동 체크를 우선한다. PR은 기본이지만 권한 있는 사용자가 체크 통과 후 바로 머지할 수 있는 운영을 기준으로 본다.
 - 로컬 훅에는 `post-checkout`, `post-merge`도 포함되며, `main` 기준으로 이미 머지된 `codex/*` 브랜치를 자동 정리한다.
 
-## 하네스 우선 원칙
-- 새 기능이나 구조 변경에 들어가기 전에는 가능하면 먼저 `npm run verify`로 현재 baseline을 확인한다.
-- 전체 `verify`가 과하면 변경 경계에 맞는 최소 하네스부터 확인한다. 기본 선택지는 `verify:popup`, `verify:smoke`, `verify:cloud`, `verify:service-worker`, `verify:harness-page`다.
-- `popup`, `content`, `background`, `shared cloud API` 경계를 바꾸면 관련 fixture 또는 harness를 먼저 추가하거나 기존 하네스를 함께 갱신하고, 가능하면 `npm run verify` 체인에 연결한다.
-- 로컬 재현은 `popup harness -> content harness -> cloud harness -> 실제 Chrome E2E` 순서로 점진적으로 넓힌다.
-- 실사이트나 실클라우드 검증이 필요해도, 먼저 로컬 하네스에서 재현 가능한 최소 실패 경로를 확보한 뒤 실제 브라우저 점검으로 넘어간다.
+## 경량 검증 우선 원칙
+- 기본 확인은 `npm run verify`로 문서/계약 검증만 먼저 본다.
+- 새 작업의 기준 검증으로 별도 시뮬레이션 레이어를 요구하지 않는다.
+- UI 체감, 세션 복원, 실제 opener 흐름, 배포 경계 문제는 실제 Chrome 확인을 우선한다.
+- 로컬 재현은 `실제 Chrome -> 필요 시 로컬 Hosting/브라우저 로그` 순서로 가져간다.
 
 ## 릴리스 운영 원칙
 - feature 변경을 커밋하거나 push할 때는 기본적으로 `README.md`를 함께 맞춘다. `package.json`, `manifest.json`, `releases/release-notes.json`은 실제 배포나 릴리스 준비를 시작할 때만 함께 맞춘다.
@@ -28,6 +27,10 @@
 - 릴리스 패널에는 사용자 관점 변경만 보여주고, 내부 운영/배포 메모는 `internal.changes`로 따로 남긴다.
 - Hosting 릴리스 메타(`latest.json`, `history.json`)는 `releases/release-notes.json` 기준으로 생성한다.
 - 이 저장소에서 일반적인 `배포`는 `hosting-only`를 뜻한다. 함수 배포는 사용자가 `functions`, `backend`, `전체 배포`를 명시했을 때만 진행한다.
+- 함수 배포가 여러 개 필요하면 함수별 반복 배포보다 변경한 함수만 `firebase deploy --only "functions:a,functions:b"`처럼 한 명령에 묶어 한 번에 배포하는 것을 기본으로 한다.
+- 함수 배포가 1개만 필요할 때는 `firebase deploy --only functions:<name>` 형태의 개별 배포를 사용한다.
+- PowerShell에서는 여러 함수명을 쉼표로 묶은 `--only` 값을 따옴표로 감싸서 전달한다.
+- 변경한 함수만 묶어 지정하는 방식이 어렵거나 CLI 필터 문제가 반복되면 `firebase deploy --only functions` 전체 함수 배포를 차선책으로 사용한다.
 - GitHub Actions `Repo Guardrails` 워크플로가 실패하면 로컬에서 통과했더라도 바로 병합 가능 상태라고 가정하지 않는다.
 - 기능 관련 소스나 설정을 바꾸면 `README.md`도 같은 작업 안에서 함께 갱신한다.
 - `pre-push` README 가드가 막히면 우회보다 `README.md` 누락 여부부터 먼저 확인한다.

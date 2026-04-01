@@ -2,11 +2,20 @@
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const DEFAULT_FUNCTIONS_BASE_URL = "https://asia-northeast3-browser-extension-main.cloudfunctions.net";
   const DEFAULT_HOSTING_BASE_URL = "https://browser-extension-main.web.app/extension";
+  const DEFAULT_HOSTING_ORIGIN = "https://browser-extension-main.web.app";
   const FUNCTION_ENDPOINTS = {
     createInovaMeetingJobUrl: "createInovaMeetingJob",
+    deleteInovaMeetingUrl: "deleteInovaMeeting",
+    deleteInovaMeetingResultUrl: "deleteInovaMeetingResult",
+    exchangeInovaMeetingLaunchUrl: "exchangeInovaMeetingLaunch",
     getInovaMeetingArtifactUrl: "getInovaMeetingArtifact",
     getInovaMeetingJobUrl: "getInovaMeetingJob",
+    issueInovaMeetingLaunchUrl: "issueInovaMeetingLaunch",
+    listInovaMeetingsUrl: "listInovaMeetings",
     listInovaMeetingResultsUrl: "listInovaMeetingResults",
+    uploadInovaMeetingSourceUrl: "uploadInovaMeetingSource",
+    updateInovaMeetingUrl: "updateInovaMeeting",
+    updateInovaMeetingResultUrl: "updateInovaMeetingResult",
     loadInovaPromptLibraryUrl: "loadInovaPromptLibrary",
     listPromptStoreEntriesUrl: "listPromptStoreEntries",
     peekInovaPromptLibraryUrl: "peekInovaPromptLibrary",
@@ -30,7 +39,7 @@
       region: "asia-northeast3",
     },
     functions: buildFunctionsConfig(DEFAULT_FUNCTIONS_BASE_URL),
-    hosting: buildHostingConfig(DEFAULT_HOSTING_BASE_URL),
+    hosting: buildHostingConfig(DEFAULT_HOSTING_BASE_URL, DEFAULT_HOSTING_ORIGIN),
   }, global.__INOVA_FIREBASE_CONFIG_OVERRIDE__);
 
   function mergeConfig(baseConfig, overrideConfig) {
@@ -41,7 +50,7 @@
         ...(override.project || {}),
       },
       functions: buildFunctionsConfig(baseConfig.functions.baseUrl, override.functions || {}),
-      hosting: buildHostingConfig(baseConfig.hosting.baseUrl, override.hosting || {}),
+      hosting: buildHostingConfig(baseConfig.hosting.baseUrl, baseConfig.hosting.originUrl, override.hosting || {}),
     };
   }
 
@@ -58,11 +67,14 @@
     );
   }
 
-  function buildHostingConfig(defaultBaseUrl, overrideConfig = {}) {
+  function buildHostingConfig(defaultBaseUrl, defaultOriginUrl, overrideConfig = {}) {
     const baseUrl = normalizeBaseUrl(overrideConfig.baseUrl || defaultBaseUrl);
+    const originUrl = normalizeOriginUrl(overrideConfig.originUrl || defaultOriginUrl || baseUrl);
     return buildUrlConfig(
       {
         baseUrl,
+        meetingWorkspaceUrl: joinUrl(originUrl, "meeting/index.html"),
+        originUrl,
       },
       HOSTING_ENDPOINTS,
       baseUrl,
@@ -92,5 +104,14 @@
 
   function normalizeBaseUrl(value) {
     return String(value || "").replace(/\/+$/, "");
+  }
+
+  function normalizeOriginUrl(value) {
+    const normalized = normalizeBaseUrl(value);
+    try {
+      return new URL(normalized).origin;
+    } catch {
+      return normalized;
+    }
   }
 })(globalThis);

@@ -3,228 +3,131 @@
 
   function render(state) {
     const normalized = normalizeState(state);
+    const listMarkup = normalized.items.length
+      ? normalized.items.map((item) => renderMeetingItem(item, normalized.pending)).join("")
+      : renderEmptyState(normalized);
+    const workspacePending = normalized.pending.active && normalized.pending.action === "open-workspace";
+    const workspaceButtonLabel = workspacePending ? "작업실 여는 중..." : "새 회의하기";
+    const progressNotice = normalized.pending.active
+      ? `<article class="inova-release-card inova-release-card__notice is-info">
+          <strong>새 탭을 여는 중입니다.</strong>
+          <p>${escapeHtml(buildPendingMessage(normalized.pending))}</p>
+        </article>`
+      : "";
+    const feedbackNotice = normalized.feedback.text
+      ? `<div class="inova-release-card inova-release-card__notice${normalized.feedback.tone === "error" ? "" : " is-info"}">${escapeHtml(normalized.feedback.text)}</div>`
+      : "";
+
     return `
       <section class="inova-tool-section inova-tool-section--meeting">
-        <div class="inova-tool-toolbar is-stacked">
+        <div class="inova-tool-toolbar">
           <div class="inova-tool-toolbar__row">
-            <div class="inova-tool-meta">${escapeHtml(normalized.metaText)}</div>
-            ${normalized.lastUpdatedText ? `<div class="inova-tool-meta">${escapeHtml(normalized.lastUpdatedText)}</div>` : ""}
+            <div class="inova-tool-toolbar__stack">
+              <strong class="inova-tool-toolbar__title">회의 허브</strong>
+              <div class="inova-tool-meta inova-tool-meta--muted">${escapeHtml(normalized.subtitleText)}</div>
+            </div>
           </div>
-          <div class="inova-inline-feedback">패널은 회의 페이지 진입과 결과 리스트만 제공합니다. 녹음과 상세 결과는 새 탭에서 봅니다.</div>
+          <button
+            type="button"
+            class="inova-bookmark-action${workspacePending ? " is-pending" : ""}"
+            data-meeting-action="open-workspace"
+            ${normalized.pending.active ? "disabled" : ""}
+            aria-busy="${workspacePending}"
+          >
+            ${escapeHtml(workspaceButtonLabel)}
+          </button>
         </div>
         <div class="inova-meeting-stack">
-          ${renderGatewayCard(normalized)}
-          ${renderResultListCard(normalized)}
+          ${progressNotice}
+          ${feedbackNotice}
+          ${normalized.error ? `<div class="inova-release-card inova-release-card__notice">${escapeHtml(normalized.error)}</div>` : ""}
+          <article class="inova-release-card">
+            <div class="inova-release-card__head">
+              <strong>회의록 목록</strong>
+              <div class="inova-release-card__badges">${renderChip(`${normalized.items.length}건`, true)}</div>
+            </div>
+            <p>최근 회의록을 바로 보고, 항목을 누르면 hosted 웹 작업실에서 결과 상세를 이어서 봅니다.</p>
+          </article>
+          <div class="inova-meeting-record-list">
+            ${listMarkup}
+          </div>
         </div>
       </section>
     `;
   }
 
   function normalizeState(state) {
-    const session = state?.session && typeof state.session === "object" ? state.session : {};
-    const capture = state?.capture && typeof state.capture === "object" ? state.capture : {};
-    const job = state?.job && typeof state.job === "object" ? state.job : {};
-    const transcript = state?.transcript && typeof state.transcript === "object" ? state.transcript : {};
-    const records = namespace.meetingState.normalizeRecords(state?.records);
+    const items = Array.isArray(state?.items) ? state.items.map(normalizeItem).filter((item) => item.meetingId) : [];
+    const checkedAtText = formatDateTime(state?.checkedAt, "");
     return {
-      capture: {
-        durationMs: Math.max(0, Number(capture.durationMs) || 0),
-        error: normalizeText(capture.error),
-        sizeBytes: Math.max(0, Number(capture.sizeBytes) || 0),
-        status: normalizeText(capture.status) || "idle",
-      },
-      job: {
-        artifactId: normalizeText(job.artifactId),
-        error: normalizeText(job.error),
-        jobId: normalizeText(job.jobId),
-        progress: {
-          percent: clampPercent(job.progress?.percent),
-          phase: normalizeText(job.progress?.phase),
-        },
-        status: normalizeText(job.status) || "idle",
-        updatedAt: normalizeText(job.updatedAt),
-      },
-      lastUpdatedText: buildLastUpdatedText(job.updatedAt || transcript.loadedAt || session.endedAt || session.startedAt),
-      metaText: buildMetaText(session),
-      records,
-      session: {
-        sessionId: normalizeText(session.sessionId),
-        title: normalizeText(session.title),
-      },
+      error: normalizeText(state?.error),
+      feedback: normalizeFeedback(state?.feedback),
+      hasCheckedAt: Boolean(checkedAtText),
+      items,
+      pending: normalizePending(state?.pending),
+      subtitleText: checkedAtText ? `최근 갱신 ${checkedAtText}` : "저장된 회의록을 이곳에서 다시 엽니다.",
     };
   }
 
-  function renderGatewayCard(state) {
-    const status = resolveStatus(state);
-    const openAction = `
+  function normalizeItem(item) {
+    const nextItem = item && typeof item === "object" ? item : {};
+    return {
+      excerpt: normalizeText(nextItem.excerpt || nextItem.previewText),
+      latestArtifactId: normalizeText(nextItem.latestArtifactId || nextItem.artifactId),
+      latestJobId: normalizeText(nextItem.latestJobId || nextItem.jobId),
+      meetingId: normalizeText(nextItem.meetingId || nextItem.sessionId),
+      status: normalizeText(nextItem.status) || "idle",
+      title: normalizeText(nextItem.title) || "이름 없는 회의",
+      updatedAt: normalizeText(nextItem.updatedAt || nextItem.createdAt),
+    };
+  }
+
+  function renderMeetingItem(item, pending) {
+    const meta = [
+      formatDateTime(item.updatedAt, ""),
+      formatStatusLabel(item.status),
+    ].filter(Boolean).join(" · ");
+    const isPending = pending.active
+      && pending.action === "open-result"
+      && pending.meetingId === item.meetingId
+      && (!pending.jobId || pending.jobId === item.latestJobId);
+    return `
       <button
         type="button"
-        class="inova-bookmark-action"
-        data-meeting-action="open-workspace"
+        class="inova-meeting-record inova-meeting-record--button${isPending ? " is-pending" : ""}"
+        data-meeting-action="open-result"
+        data-meeting-id="${escapeHtml(item.meetingId)}"
+        data-meeting-job-id="${escapeHtml(item.latestJobId)}"
+        data-meeting-artifact-id="${escapeHtml(item.latestArtifactId)}"
+        data-meeting-title="${escapeHtml(item.title)}"
+        ${pending.active ? "disabled" : ""}
+        aria-busy="${isPending}"
       >
-        ${escapeHtml(status.buttonLabel)}
+        <div class="inova-meeting-record__head">
+          <div>
+            <strong>${escapeHtml(item.title)}</strong>
+            ${meta ? `<div class="inova-tool-meta">${escapeHtml(meta)}</div>` : ""}
+          </div>
+          ${renderChip(isPending ? "여는 중" : formatStatusLabel(item.status), false)}
+        </div>
+        <p>${escapeHtml(isPending ? "새 탭 작업실을 여는 중입니다." : item.excerpt || "새 탭 결과 페이지에서 회의록을 확인할 수 있습니다.")}</p>
       </button>
-    `;
-    return `
-      <article class="inova-release-card${status.tone === "highlight" ? " is-highlight" : " is-muted"}">
-        <div class="inova-release-card__head">
-          <strong>${escapeHtml(status.title)}</strong>
-          <div class="inova-release-card__badges">${renderChip(status.badge, status.tone !== "highlight")}</div>
-        </div>
-        <p>${escapeHtml(status.description)}</p>
-        <div class="inova-meeting-gateway">
-          ${openAction}
-          <div class="inova-tool-meta">${escapeHtml(status.hint)}</div>
-        </div>
-      </article>
     `;
   }
 
-  function renderResultListCard(state) {
-    if (!state.records.length) {
+  function renderEmptyState(state) {
+    if (!state.hasCheckedAt && !state.error) {
       return `
         <article class="inova-release-card">
-          <div class="inova-release-card__head">
-            <strong>결과 리스트</strong>
-            <div class="inova-release-card__badges">${renderChip("0건", true)}</div>
-          </div>
-          <p>아직 저장된 회의 결과가 없습니다. 새 회의를 열어 녹음과 전사를 시작해 주세요.</p>
+          <p>회의 목록을 읽는 중입니다. 잠시만 기다려 주세요.</p>
         </article>
       `;
     }
-
     return `
       <article class="inova-release-card">
-        <div class="inova-release-card__head">
-          <strong>결과 리스트</strong>
-          <div class="inova-release-card__badges">${renderChip(`${state.records.length}건`, true)}</div>
-        </div>
-        <div class="inova-meeting-record-list">
-          ${state.records.map((record) => renderRecordItem(record)).join("")}
-        </div>
+        <p>아직 저장된 회의록이 없습니다. 상단의 새 회의하기로 hosted 작업실을 열어 주세요.</p>
       </article>
     `;
-  }
-
-  function renderRecordItem(record) {
-    const metaItems = [
-      formatDateTime(record.updatedAt || record.createdAt, ""),
-      record.speakerCount > 0 ? `화자 ${record.speakerCount}명` : "",
-      record.jobId ? `job ${record.jobId}` : "",
-    ].filter(Boolean);
-    return `
-      <article class="inova-meeting-record">
-        <div class="inova-meeting-record__head">
-          <div>
-            <strong>${escapeHtml(record.title || record.sessionId || "회의 결과")}</strong>
-            ${metaItems.length ? `<div class="inova-tool-meta">${escapeHtml(metaItems.join(" · "))}</div>` : ""}
-          </div>
-          ${renderChip(formatStatusLabel(record.status), false)}
-        </div>
-        <p>${escapeHtml(record.previewText || record.error || "상세 결과는 새 탭에서 확인합니다.")}</p>
-        <button
-          type="button"
-          class="inova-bookmark-action inova-bookmark-action--secondary"
-          data-meeting-action="open-record"
-          data-meeting-job-id="${escapeHtml(record.jobId)}"
-          data-meeting-artifact-id="${escapeHtml(record.artifactId)}"
-        >
-          새 탭에서 보기
-        </button>
-      </article>
-    `;
-  }
-
-  function resolveStatus(state) {
-    if (state.job.status === "failed") {
-      return {
-        badge: "오류",
-        buttonLabel: "회의 페이지 열기",
-        description: state.job.error || "회의 처리 중 오류가 발생했습니다.",
-        hint: "회의 페이지에서 다시 시작하거나 오류 내용을 확인할 수 있습니다.",
-        title: "회의 작업에 문제가 있습니다.",
-        tone: "muted",
-      };
-    }
-    if (state.capture.status === "recording") {
-      return {
-        badge: "녹음 중",
-        buttonLabel: "회의 페이지 열기",
-        description: "현재 탭 오디오를 녹음 중입니다.",
-        hint: "녹음 종료와 전사 접수는 전용 회의 페이지에서 진행합니다.",
-        title: "회의가 진행 중입니다.",
-        tone: "highlight",
-      };
-    }
-    if (state.capture.status === "captured" && state.job.status === "idle") {
-      return {
-        badge: "녹음 완료",
-        buttonLabel: "회의 페이지 열기",
-        description: "녹음은 저장되었고 아직 전사를 시작하지 않았습니다.",
-        hint: buildCapturedHint(state.capture),
-        title: "다음 단계가 준비되었습니다.",
-        tone: "highlight",
-      };
-    }
-    if (state.job.status === "queued" || state.job.status === "processing") {
-      return {
-        badge: state.job.status === "queued" ? "대기" : buildProgressBadge(state.job.progress),
-        buttonLabel: "결과 확인하기",
-        description: state.job.status === "queued" ? "전사 작업이 접수되었습니다." : "회의 전사를 처리 중입니다.",
-        hint: state.job.status === "processing" ? formatPhase(state.job.progress.phase) : "결과 리스트와 상세는 새 탭에서 확인합니다.",
-        title: "회의 결과를 준비 중입니다.",
-        tone: "highlight",
-      };
-    }
-    if (state.job.status === "succeeded") {
-      return {
-        badge: "완료",
-        buttonLabel: "결과 확인하기",
-        description: "회의 전사 결과가 준비되었습니다.",
-        hint: "결과 리스트에서 항목을 눌러 새 탭으로 다시 볼 수 있습니다.",
-        title: "회의록이 준비되었습니다.",
-        tone: "highlight",
-      };
-    }
-    return {
-      badge: "대기",
-      buttonLabel: "새 회의 열기",
-      description: "새 회의는 전용 회의 페이지에서 시작합니다.",
-      hint: "패널에서는 결과 리스트만 빠르게 확인합니다.",
-      title: "아직 회의 작업이 없습니다.",
-      tone: "muted",
-    };
-  }
-
-  function buildMetaText(session) {
-    const sessionId = normalizeText(session?.sessionId);
-    const title = normalizeText(session?.title);
-    if (title && sessionId) {
-      return `${title} · ${sessionId}`;
-    }
-    if (title) {
-      return title;
-    }
-    if (sessionId) {
-      return `세션 ${sessionId}`;
-    }
-    return "현재 대화 기준";
-  }
-
-  function buildLastUpdatedText(value) {
-    const formatted = formatDateTime(value, "");
-    return formatted ? `최근 갱신 ${formatted}` : "";
-  }
-
-  function buildCapturedHint(capture) {
-    const parts = [];
-    if (capture.durationMs) {
-      parts.push(formatDuration(capture.durationMs));
-    }
-    if (capture.sizeBytes) {
-      parts.push(formatBytes(capture.sizeBytes));
-    }
-    return parts.length ? `${parts.join(" · ")} 녹음을 회의 페이지에서 전사로 넘길 수 있습니다.` : "회의 페이지에서 전사를 시작할 수 있습니다.";
   }
 
   function renderChip(text, muted) {
@@ -235,23 +138,32 @@
     return `<span class="inova-store-item__chip${muted ? " is-muted" : ""}">${escapeHtml(value)}</span>`;
   }
 
-  function buildProgressBadge(progress, fallback = "진행 중") {
-    const percent = clampPercent(progress?.percent);
-    return percent ? `${percent}%` : fallback;
+  function normalizePending(pending) {
+    const action = normalizeText(pending?.action);
+    return {
+      action,
+      active: Boolean(action),
+      jobId: normalizeText(pending?.jobId),
+      meetingId: normalizeText(pending?.meetingId),
+      title: normalizeText(pending?.title),
+    };
   }
 
-  function clampPercent(value) {
-    return Math.max(0, Math.min(100, Number(value) || 0));
+  function normalizeFeedback(feedback) {
+    const text = normalizeText(feedback?.text);
+    return {
+      text,
+      tone: normalizeText(feedback?.tone) || "info",
+    };
   }
 
-  function formatPhase(value) {
-    const phase = normalizeText(value);
-    if (phase === "queued") return "대기";
-    if (phase === "upload") return "업로드";
-    if (phase === "transcribe") return "전사";
-    if (phase === "diarize") return "화자 분리";
-    if (phase === "finalize") return "정리";
-    return phase || "처리";
+  function buildPendingMessage(pending) {
+    if (pending.action === "open-result") {
+      return pending.title
+        ? `${pending.title} 결과 화면을 준비하고 있습니다.`
+        : "결과 화면을 준비하고 있습니다.";
+    }
+    return "새 작업실을 준비하고 있습니다.";
   }
 
   function formatStatusLabel(status) {
@@ -260,7 +172,7 @@
     if (normalized === "processing") return "진행 중";
     if (normalized === "succeeded") return "완료";
     if (normalized === "failed") return "오류";
-    return normalized || "대기";
+    return normalized || "준비";
   }
 
   function formatDateTime(value, fallback = "아직 없음") {
@@ -274,24 +186,6 @@
       hour: "numeric",
       minute: "2-digit",
     }).format(time);
-  }
-
-  function formatDuration(durationMs) {
-    const totalSeconds = Math.max(0, Math.round((Number(durationMs) || 0) / 1000));
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return minutes ? `${minutes}분 ${seconds.toString().padStart(2, "0")}초` : `${seconds}초`;
-  }
-
-  function formatBytes(sizeBytes) {
-    const size = Math.max(0, Number(sizeBytes) || 0);
-    if (size >= 1024 * 1024) {
-      return `${(size / (1024 * 1024)).toFixed(1)}MB`;
-    }
-    if (size >= 1024) {
-      return `${Math.round(size / 1024)}KB`;
-    }
-    return `${size}B`;
   }
 
   function normalizeText(value) {

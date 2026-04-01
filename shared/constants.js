@@ -9,13 +9,17 @@
       promptLibrary: "promptLibrary",
       cloudSync: "cloudSync",
       releaseInfo: "releaseInfo",
+      meetingHub: "meetingHub",
       meetingState: "meetingState",
+      meetingStateByMeetingId: "meetingStateByMeetingId",
       meetingStateBySession: "meetingStateBySession",
     },
     defaults: {
       settings: {
         enabled: true,
         autoBookmark: true,
+        meetingWorkspaceTarget: "production",
+        meetingWorkspaceUrlOverride: "",
       },
       pausedSessions: {},
       promptLibrary: {
@@ -67,8 +71,21 @@
         latest: null,
         history: [],
       },
+      meetingHub: {
+        version: 1,
+        checkedAt: "",
+        error: "",
+        items: [],
+      },
       meetingState: {
         version: 1,
+        meeting: {
+          meetingId: "",
+          title: "",
+          createdAt: "",
+          updatedAt: "",
+          sourceTabId: 0,
+        },
         session: {
           sessionId: "",
           title: "",
@@ -107,6 +124,7 @@
         },
         records: [],
       },
+      meetingStateByMeetingId: {},
       meetingStateBySession: {},
       uiPreferences: {
         activeTool: "bookmarks",

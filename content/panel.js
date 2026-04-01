@@ -134,6 +134,8 @@
       return void callbacks.onMeetingAction?.(meetingAction.dataset.meetingAction, {
         artifactId: meetingAction.dataset.meetingArtifactId || "",
         jobId: meetingAction.dataset.meetingJobId || "",
+        meetingId: meetingAction.dataset.meetingId || "",
+        title: meetingAction.dataset.meetingTitle || "",
       });
     }
     const storeAction = event.target.closest("[data-store-action]");

@@ -1,4 +1,6 @@
 (function initMeetingRecorder(global) {
+  const INLINE_AUDIO_LIMIT_BYTES = 25 * 1024 * 1024;
+  const TARGET_AUDIO_BITS_PER_SECOND = 30000;
   const recorderState = {
     audioContext: null,
     chunks: [],
@@ -8,7 +10,8 @@
     capturedStartedAt: "",
     mediaRecorder: null,
     mediaStream: null,
-    sessionId: "",
+    meetingId: "",
+    sourceTabId: 0,
     startedAt: 0,
     title: "",
   };
@@ -29,7 +32,7 @@
             status: "error",
           },
           meeting: {
-            sessionId: normalizeText(message?.data?.sessionId),
+            meetingId: normalizeText(message?.data?.meetingId || message?.data?.sessionId),
             title: normalizeText(message?.data?.title),
           },
         });
@@ -55,18 +58,18 @@
       throw new Error("이미 다른 회의 녹음이 진행 중이에요.");
     }
 
-    const sessionId = normalizeText(input?.sessionId);
+    const meetingId = normalizeText(input?.meetingId || input?.sessionId);
     const title = normalizeText(input?.title);
     const captureMode = normalizeText(input?.captureMode) || "tab-audio";
     const streamId = normalizeText(input?.streamId);
-    if (!sessionId || !streamId) {
+    if (!meetingId || !streamId) {
       throw new Error("녹음 시작에 필요한 정보가 부족해요.");
     }
 
     const mediaStream = await navigator.mediaDevices.getUserMedia({
       audio: {
         mandatory: {
-          chromeMediaSource: "tab",
+          chromeMediaSource: captureMode === "desktop-audio" ? "desktop" : "tab",
           chromeMediaSourceId: streamId,
         },
       },
@@ -78,14 +81,18 @@
     source.connect(audioContext.destination);
 
     const mimeType = pickRecorderMimeType();
-    const mediaRecorder = mimeType ? new MediaRecorder(mediaStream, { mimeType }) : new MediaRecorder(mediaStream);
+    const recorderOptions = mimeType
+      ? { audioBitsPerSecond: TARGET_AUDIO_BITS_PER_SECOND, mimeType }
+      : { audioBitsPerSecond: TARGET_AUDIO_BITS_PER_SECOND };
+    const mediaRecorder = new MediaRecorder(mediaStream, recorderOptions);
 
     clearCapturedSource();
     recorderState.audioContext = audioContext;
     recorderState.chunks = [];
     recorderState.mediaRecorder = mediaRecorder;
     recorderState.mediaStream = mediaStream;
-    recorderState.sessionId = sessionId;
+    recorderState.meetingId = meetingId;
+    recorderState.sourceTabId = Number(input?.sourceTabId) || 0;
     recorderState.startedAt = Date.now();
     recorderState.title = title;
 
@@ -105,8 +112,9 @@
         status: "recording",
       },
       meeting: {
+        meetingId,
+        sourceTabId: recorderState.sourceTabId,
         startedAt: new Date(recorderState.startedAt).toISOString(),
-        sessionId,
         title,
       },
     };
@@ -118,7 +126,7 @@
     }
 
     const captureMode = normalizeText(input?.captureMode) || "tab-audio";
-    const sessionId = recorderState.sessionId;
+    const meetingId = recorderState.meetingId;
     const title = recorderState.title;
     const durationMs = Math.max(0, Date.now() - recorderState.startedAt);
     const mimeType = recorderState.mediaRecorder.mimeType || "audio/webm";
@@ -152,8 +160,9 @@
             },
             meeting: {
               endedAt: recorderState.capturedEndedAt,
+              meetingId,
+              sourceTabId: recorderState.sourceTabId,
               startedAt,
-              sessionId,
               title,
             },
           });
@@ -179,16 +188,16 @@
     const requestUrl = normalizeText(input?.url);
     const accessToken = normalizeText(input?.accessToken);
     const requestBody = cloneValue(input?.requestBody) || {};
-    const sessionId = normalizeText(requestBody?.meeting?.sessionId || recorderState.sessionId);
+    const meetingId = normalizeText(requestBody?.meeting?.meetingId || recorderState.meetingId);
 
     if (!requestUrl || !accessToken) {
       throw new Error("회의 업로드 요청 정보가 부족해요.");
     }
-    if (!sessionId || sessionId !== recorderState.sessionId) {
-      throw new Error("현재 저장된 녹음과 다른 세션으로 업로드할 수 없어요.");
+    if (!meetingId || meetingId !== recorderState.meetingId) {
+      throw new Error("현재 저장된 녹음과 다른 회의로 업로드할 수 없어요.");
     }
-    if (recorderState.capturedBlob.size > 20 * 1024 * 1024) {
-      throw new Error("현재 임시 업로드 경로는 20MB 이하 녹음만 지원해요.");
+    if (recorderState.capturedBlob.size > INLINE_AUDIO_LIMIT_BYTES) {
+      throw new Error("현재 임시 업로드 경로는 25MB 이하 녹음만 지원해요.");
     }
 
     const source = requestBody.source && typeof requestBody.source === "object" ? requestBody.source : {};
@@ -197,7 +206,7 @@
       captureMode: normalizeText(source.captureMode) || recorderState.capturedCapture.captureMode,
       channelCount: Number(source.channelCount) || recorderState.capturedCapture.channelCount,
       durationMs: Number(source.durationMs) || recorderState.capturedCapture.durationMs,
-      fileName: normalizeText(source.fileName) || buildMeetingSourceFileName(sessionId, recorderState.capturedCapture.mimeType),
+      fileName: normalizeText(source.fileName) || buildMeetingSourceFileName(meetingId, recorderState.capturedCapture.mimeType),
       inlineAudioBase64: await blobToBase64(recorderState.capturedBlob),
       mimeType: normalizeText(source.mimeType) || recorderState.capturedCapture.mimeType,
       sizeBytes: Number(source.sizeBytes) || recorderState.capturedBlob.size,
@@ -205,8 +214,8 @@
     requestBody.meeting = {
       ...(requestBody.meeting || {}),
       endedAt: normalizeText(requestBody?.meeting?.endedAt) || recorderState.capturedEndedAt,
+      meetingId,
       startedAt: normalizeText(requestBody?.meeting?.startedAt) || recorderState.capturedStartedAt,
-      sessionId,
       title: normalizeText(requestBody?.meeting?.title) || recorderState.title,
     };
 
@@ -228,7 +237,7 @@
   }
 
   async function notifyRecorderFailure(error, input) {
-    const sessionId = normalizeText(input?.sessionId) || recorderState.sessionId;
+    const meetingId = normalizeText(input?.meetingId || input?.sessionId) || recorderState.meetingId;
     const title = normalizeText(input?.title) || recorderState.title;
     try {
       await chrome.runtime.sendMessage({
@@ -239,7 +248,7 @@
           },
           error: error instanceof Error ? error.message : String(error),
           meeting: {
-            sessionId,
+            meetingId,
             title,
           },
         },
@@ -270,7 +279,8 @@
   function cleanupRecorderState() {
     cleanupActiveRecorder();
     clearCapturedSource();
-    recorderState.sessionId = "";
+    recorderState.meetingId = "";
+    recorderState.sourceTabId = 0;
     recorderState.startedAt = 0;
     recorderState.title = "";
   }
@@ -284,9 +294,9 @@
     return "";
   }
 
-  function buildMeetingSourceFileName(sessionId, mimeType) {
+  function buildMeetingSourceFileName(meetingId, mimeType) {
     const extension = String(mimeType || "").includes("webm") ? "webm" : "bin";
-    return `${normalizeText(sessionId) || "meeting-source"}.${extension}`;
+    return `${normalizeText(meetingId) || "meeting-source"}.${extension}`;
   }
 
   function blobToBase64(blob) {

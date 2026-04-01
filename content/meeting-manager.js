@@ -1,5 +1,6 @@
 (function initMeetingManager(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const defaults = namespace.constants.defaults.meetingHub;
   const ACTIVE_POLL_DELAY_MS = 1800;
 
   function create(state, hooks) {
@@ -14,19 +15,21 @@
     };
 
     function handleRouteStateChange() {
-      syncCurrentSessionMeetingState().catch(logRefreshError);
+      hooks.render?.();
     }
 
     function handleStorageChange(changes, areaName) {
-      if (areaName !== "local" || (!changes.meetingStateBySession && !changes.meetingState)) {
+      if (areaName !== "local") {
         return;
       }
-
-      state.meetingState = readMeetingStateFromChanges(changes);
-      if (isCurrentSessionMeeting() && namespace.meetingState.shouldPollMeetingJob(state.meetingState)) {
-        scheduleSync(420);
+      if (changes.meetingHub) {
+        state.meetingHub = mergeMeetingHub(changes.meetingHub.newValue);
+        hooks.render?.();
+        return;
       }
-      hooks.render?.();
+      if (changes.cloudSync) {
+        scheduleSync(240);
+      }
     }
 
     function scheduleSync(delay = ACTIVE_POLL_DELAY_MS) {
@@ -37,134 +40,71 @@
     }
 
     async function refreshState() {
-      state.meetingState = await namespace.storage.getMeetingState(state.sessionId);
-      if (!hasSessionContext()) {
-        hooks.render?.();
-        return state.meetingState;
-      }
-
+      state.meetingHub = await namespace.storage.getMeetingHub();
       const providerIdentity = namespace.providerIdentity.getCurrent();
       if (!providerIdentity.available || inflight) {
-        return state.meetingState;
+        hooks.render?.();
+        return state.meetingHub;
       }
 
       inflight = true;
       try {
-        let nextMeetingState = namespace.meetingState.mergeMeetingState(state.meetingState);
-
-        if (isCurrentSessionMeeting(nextMeetingState) && namespace.meetingState.shouldPollMeetingJob(nextMeetingState)) {
-          const jobPayload = await namespace.meetingBridge.getMeetingJob(
-            namespace.meetingState.buildMeetingJobLookup(nextMeetingState),
-            providerIdentity
-          );
-          nextMeetingState = namespace.meetingState.applyMeetingJobSnapshot(nextMeetingState, jobPayload);
-          nextMeetingState = await namespace.storage.setMeetingState(state.sessionId, nextMeetingState);
-        }
-
-        if (shouldLoadArtifact(nextMeetingState)) {
-          const artifactPayload = await namespace.meetingBridge.getMeetingArtifact(
-            namespace.meetingState.buildMeetingArtifactLookup(nextMeetingState),
-            providerIdentity
-          );
-          nextMeetingState = namespace.meetingState.applyMeetingArtifact(nextMeetingState, artifactPayload);
-          nextMeetingState = await namespace.storage.setMeetingState(state.sessionId, nextMeetingState);
-        }
-
-        nextMeetingState = await refreshMeetingRecords(nextMeetingState, providerIdentity);
-
-        state.meetingState = nextMeetingState;
-        if (isCurrentSessionMeeting(nextMeetingState) && namespace.meetingState.shouldPollMeetingJob(nextMeetingState)) {
-          scheduleSync();
-        }
+        const listPayload = await namespace.meetingBridge.listMeetings(
+          {
+            limit: 24,
+          },
+          providerIdentity
+        );
+        state.meetingHub = await namespace.storage.setMeetingHub({
+          checkedAt: new Date().toISOString(),
+          error: "",
+          items: Array.isArray(listPayload?.items) ? listPayload.items : [],
+          version: Math.max(1, Number(state.meetingHub?.version) || 1),
+        });
         hooks.render?.();
-        return nextMeetingState;
+        return state.meetingHub;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "회의 목록을 불러오지 못했어요.";
+        logRefreshError(error);
+        state.meetingHub = await namespace.storage.setMeetingHub({
+          checkedAt: new Date().toISOString(),
+          error: message,
+          items: Array.isArray(state.meetingHub?.items) ? state.meetingHub.items : [],
+          version: Math.max(1, Number(state.meetingHub?.version) || 1),
+        });
+        hooks.render?.();
+        return state.meetingHub;
       } finally {
         inflight = false;
       }
     }
 
-    function hasSessionContext() {
-      return Boolean(namespace.session.normalizeText(state.sessionId));
-    }
-
-    function isCurrentSessionMeeting(meetingState = state.meetingState) {
-      const currentSessionId = namespace.session.normalizeText(state.sessionId);
-      const meetingSessionId = namespace.session.normalizeText(meetingState?.session?.sessionId);
-      return Boolean(currentSessionId && meetingSessionId && currentSessionId === meetingSessionId);
-    }
-
-    async function syncCurrentSessionMeetingState() {
-      state.meetingState = await namespace.storage.getMeetingState(state.sessionId);
-      if (!hasSessionContext()) {
-        global.clearTimeout(timerId);
+    function logRefreshError(error) {
+      if (isInvalidatedContextError(error)) {
         hooks.render?.();
         return;
       }
-      scheduleSync(220);
-    }
-
-    function readMeetingStateFromChanges(changes) {
-      const currentSessionId = namespace.session.normalizeText(state.sessionId);
-      if (currentSessionId && changes.meetingStateBySession?.newValue) {
-        return namespace.meetingState.mergeMeetingState(changes.meetingStateBySession.newValue[currentSessionId]);
-      }
-      if (changes.meetingState?.newValue) {
-        return namespace.meetingState.mergeMeetingState(changes.meetingState.newValue);
-      }
-      return namespace.meetingState.mergeMeetingState();
-    }
-
-    async function refreshMeetingRecords(meetingState, providerIdentity) {
-      const listPayload = await namespace.meetingBridge.listMeetingResults(
-        {
-          limit: 12,
-          sessionId: state.sessionId,
-        },
-        providerIdentity
-      );
-      const sessionPayload = listPayload?.session && typeof listPayload.session === "object" ? listPayload.session : {};
-      return namespace.storage.setMeetingState(
-        state.sessionId,
-        namespace.meetingState.mergeMeetingState(meetingState, {
-          records: Array.isArray(listPayload?.items) ? listPayload.items : [],
-          session: {
-            endedAt: namespace.session.normalizeText(sessionPayload.endedAt) || namespace.session.normalizeText(meetingState?.session?.endedAt),
-            language: namespace.session.normalizeText(sessionPayload.language) || namespace.session.normalizeText(meetingState?.session?.language),
-            sessionId: namespace.session.normalizeText(sessionPayload.sessionId) || namespace.session.normalizeText(state.sessionId),
-            startedAt: namespace.session.normalizeText(sessionPayload.startedAt) || namespace.session.normalizeText(meetingState?.session?.startedAt),
-            title: namespace.session.normalizeText(sessionPayload.title)
-              || namespace.session.normalizeText(state.sessionTitle)
-              || namespace.session.normalizeText(meetingState?.session?.title),
-          },
-        })
-      );
-    }
-
-    function shouldLoadArtifact(meetingState) {
-      const normalized = namespace.meetingState.mergeMeetingState(meetingState);
-      if (normalized.job.status !== "succeeded") {
-        return false;
-      }
-
-      const artifactId = namespace.session.normalizeText(
-        normalized.transcript.artifactId || normalized.job.artifactId
-      );
-      if (!artifactId) {
-        return false;
-      }
-
-      const hasTranscriptText = Boolean(namespace.session.normalizeText(normalized.transcript.text));
-      const hasSegments = Array.isArray(normalized.transcript.segments) && normalized.transcript.segments.length > 0;
-      return !(hasTranscriptText || hasSegments);
-    }
-
-    function logRefreshError(error) {
-      console.error("[i-Nova Bookmarks] meeting refresh failed", error);
+      console.error("[i-Nova Bookmarks] meeting hub refresh failed", error);
       hooks.render?.();
     }
+
+    function isInvalidatedContextError(error) {
+      const message = namespace.session.normalizeText(error instanceof Error ? error.message : String(error || ""));
+      return message.includes("Extension context invalidated")
+        || message.includes("확장프로그램이 갱신됐어요.");
+    }
+  }
+
+  function mergeMeetingHub(nextHub) {
+    return {
+      ...defaults,
+      ...(nextHub && typeof nextHub === "object" ? nextHub : {}),
+      items: Array.isArray(nextHub?.items) ? nextHub.items : [],
+    };
   }
 
   namespace.meetingManager = {
     create,
+    mergeMeetingHub,
   };
 })(globalThis);

@@ -1,6 +1,7 @@
 {
   "job": {
     "jobId": "meeting-job-fixture-1",
+    "meetingId": "meeting-fixture-1",
     "sessionId": "meeting-session-fixture-1",
     "status": "succeeded",
     "updatedAt": "2026-03-30T08:31:45.000Z",

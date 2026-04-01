@@ -2,6 +2,66 @@
   "schemaVersion": 1,
   "versions": [
     {
+      "version": "0.3.17",
+      "level": "patch",
+      "public": {
+        "headline": "회의록 중복 생성 방지",
+        "summary": "이번 배포는 hosted 회의 작업실에서 같은 녹음을 여러 번 눌러도 회의록이 중복 생성되지 않도록 막고, 진행 상태를 더 분명하게 보여 주는 업데이트입니다.",
+        "changes": [
+          {
+            "type": "changed",
+            "text": "`회의록 만들기`를 누르면 버튼이 바로 `접수 중...`으로 바뀌고, 같은 카드 안에서 진행 알림을 보여 줘서 사용자가 요청이 들어갔는지 바로 확인할 수 있습니다."
+          },
+          {
+            "type": "changed",
+            "text": "같은 녹음을 다시 전송해도 서버가 기존 job을 재사용하도록 보강해, 빠른 연속 클릭이나 재전송으로 같은 회의록이 여러 개 생기는 문제를 줄였습니다."
+          }
+        ]
+      },
+      "internal": {
+        "changes": [
+          {
+            "type": "changed",
+            "text": "hosting/meeting/index.js에 create job busy 잠금, requestId 전달, 즉시 보이는 notice 카드, queued placeholder 반영을 추가했습니다."
+          },
+          {
+            "type": "changed",
+            "text": "functions/meeting-service.js가 requestId 기반 stable job/artifact ID와 기존 job 재사용 경로를 지원하도록 보강했고, meeting page/service verify에 중복 클릭 방지 시나리오를 추가했습니다."
+          }
+        ]
+      }
+    },
+    {
+      "version": "0.3.16",
+      "level": "patch",
+      "public": {
+        "headline": "회의 작업실 관리 기능 정리",
+        "summary": "이번 배포는 hosted 회의 작업실에서 제목 수정, 삭제, 녹음 제어가 자연스럽게 이어지도록 정리한 업데이트입니다.",
+        "changes": [
+          {
+            "type": "changed",
+            "text": "회의 제목과 개별 회의록 제목을 작업실에서 바로 수정할 수 있고, 개별 회의록 삭제와 회의 전체 삭제도 같은 화면에서 처리할 수 있게 정리했습니다."
+          },
+          {
+            "type": "changed",
+            "text": "녹음을 시작한 뒤 바로 종료만 강제하지 않고, 일시중지, 이어서 녹음, 녹음 버리기까지 지원해 실제 회의 진행 흐름에 맞게 다듬었습니다."
+          }
+        ]
+      },
+      "internal": {
+        "changes": [
+          {
+            "type": "changed",
+            "text": "hosting/meeting 작업실 UI와 상태 렌더링을 손봐 회의/회의록 제목 저장, 삭제, pause/resume/discard 액션을 한 흐름으로 연결했습니다."
+          },
+          {
+            "type": "changed",
+            "text": "functions/meeting-service.js와 hosted meeting 로컬 검증 흐름을 함께 업데이트해 제목 동기화, 회의록 삭제, 회의 삭제, 녹음 제어 시나리오를 로컬 검증에 포함했습니다."
+          }
+        ]
+      }
+    },
+    {
       "version": "0.3.15",
       "level": "patch",
       "public": {
@@ -22,7 +82,7 @@
           },
           {
             "type": "changed",
-            "text": "popup harness, meeting-state verify, service worker harness를 업데이트해 `captured -> create-job -> queued` 상태 전이와 popup sender 허용 경로를 로컬 검증에 포함했습니다."
+            "text": "popup, meeting-state verify, service worker 로컬 검증 흐름을 업데이트해 `captured -> create-job -> queued` 상태 전이와 popup sender 허용 경로를 로컬 검증에 포함했습니다."
           }
         ]
       }
@@ -48,7 +108,7 @@
           },
           {
             "type": "changed",
-            "text": "popup harness, service worker harness, offscreen recorder verify를 확장해 팝업 start/stop, offscreen 생명주기, recorder-failed 경로를 로컬 검증 루프에 포함했습니다."
+            "text": "popup, service worker 로컬 검증 흐름과 offscreen recorder verify를 확장해 팝업 start/stop, offscreen 생명주기, recorder-failed 경로를 로컬 검증 루프에 포함했습니다."
           }
         ]
       }
@@ -74,7 +134,7 @@
           },
           {
             "type": "changed",
-            "text": "meeting-state, popup, meeting-manager verify와 popup harness mock을 함께 업데이트해 세션별 storage change 경로를 하네스에서 재현하도록 바꿨습니다."
+            "text": "meeting-state, popup, meeting-manager verify와 popup 로컬 mock을 함께 업데이트해 세션별 storage change 경로를 로컬 검증에서 재현하도록 바꿨습니다."
           }
         ]
       }
@@ -126,7 +186,7 @@
           },
           {
             "type": "changed",
-            "text": "popup harness fixture와 verify-popup-harness.js를 확장해 meetingState storage change가 팝업 UI에 자동 반영되는지 함께 검증하도록 업데이트했습니다."
+            "text": "popup fixture와 verify-popup 흐름을 확장해 meetingState storage change가 팝업 UI에 자동 반영되는지 함께 검증하도록 업데이트했습니다."
           }
         ]
       }
@@ -178,7 +238,7 @@
           },
           {
             "type": "added",
-            "text": "로컬 cloud harness와 verify 스크립트가 회의 job 생성, 상태 polling, artifact 조회 계약까지 함께 검증하도록 확장했습니다."
+            "text": "로컬 cloud fixture와 verify 스크립트가 회의 job 생성, 상태 polling, artifact 조회 계약까지 함께 검증하도록 확장했습니다."
           }
         ]
       }
@@ -200,7 +260,7 @@
         "changes": [
           {
             "type": "added",
-            "text": "shared/cloud-api.js 계약을 로컬 fixture-backed HTTP 서버로 검증하는 cloud harness와 verify:cloud 경로를 추가했습니다."
+            "text": "shared/cloud-api.js 계약을 로컬 fixture-backed HTTP 서버로 검증하는 cloud verify 경로를 추가했습니다."
           },
           {
             "type": "changed",

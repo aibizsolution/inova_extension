@@ -3,11 +3,13 @@
     "provider": "inova",
     "providerUserKey": "fixture-user",
     "email": "fixture@example.com",
-    "displayName": "Harness User",
+    "displayName": "Fixture User",
     "numericUserId": 1001
   },
   "meeting": {
+    "meetingId": "meeting-fixture-1",
     "sessionId": "meeting-session-fixture-1",
+    "sourceTabId": 91,
     "title": "신규 프로모션 회의",
     "startedAt": "2026-03-30T08:00:00.000Z",
     "endedAt": "2026-03-30T08:29:00.000Z",

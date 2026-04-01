@@ -58,6 +58,8 @@
   display: flex; align-items: center; gap: 8px;
 }
 .inova-tool-toolbar__row, .inova-prompt-item__head { justify-content: space-between; }
+.inova-tool-toolbar__stack { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.inova-tool-toolbar__title { margin: 0; font-size: 15px; line-height: 1.3; color: rgba(16, 33, 43, 0.88); }
 .inova-prompt-item__meta, .inova-prompt-item__menu { gap: 6px; }
 .inova-tool-search, .inova-tool-select, .inova-prompt-field input, .inova-prompt-field textarea {
   width: 100%; border: 1px solid rgba(98, 127, 145, 0.2); border-radius: 12px; background: rgba(255, 255, 255, 0.98);
@@ -67,6 +69,7 @@
   border-color: rgba(15, 124, 137, 0.5); box-shadow: 0 0 0 3px rgba(15, 124, 137, 0.12);
 }
 .inova-tool-meta { font-size: 12px; font-weight: 600; color: #0f5f77; }
+.inova-tool-meta--muted { color: rgba(16, 33, 43, 0.62); }
 .inova-tool-actions, .inova-import-review__summary, .inova-import-review__modes { display: flex; flex-wrap: wrap; gap: 6px; }
 .inova-tool-actions--toolbar { justify-content: flex-end; }
 .inova-tool-button, .inova-tool-pill { padding: 7px 11px; }
@@ -296,14 +299,19 @@
 }
 .inova-tool-section--store .inova-bookmark-empty { margin: 4px 14px 12px; padding: 12px 13px; }
 .inova-tool-section--prompts .inova-bookmark-empty { margin: 4px 14px 12px; padding: 12px 13px; }
-.inova-tool-section--meeting .inova-tool-toolbar { justify-content: space-between; }
+.inova-tool-section--meeting .inova-tool-toolbar { align-items: flex-start; justify-content: space-between; gap: 12px; }
+.inova-tool-section--meeting .inova-tool-toolbar__row { flex: 1 1 auto; min-width: 0; justify-content: flex-start; }
 .inova-tool-section--release .inova-tool-toolbar { justify-content: space-between; }
 .inova-meeting-stack { display: flex; flex-direction: column; gap: 10px; padding: 4px 14px 14px; overflow-y: auto; }
 .inova-meeting-gateway { display: flex; flex-direction: column; gap: 10px; }
 .inova-bookmark-action {
   min-height: 38px; padding: 0 13px; border: 1px solid rgba(19, 73, 181, 0.12); border-radius: 12px;
   background: linear-gradient(135deg, rgba(27, 96, 232, 0.96), rgba(15, 124, 137, 0.92)); color: #fff;
-  font-size: 12px; font-weight: 700; cursor: pointer;
+  font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; flex: 0 0 auto;
+}
+.inova-bookmark-action.is-pending {
+  border-color: rgba(15, 124, 137, 0.2);
+  background: linear-gradient(135deg, rgba(32, 86, 216, 0.9), rgba(15, 124, 137, 0.86));
 }
 .inova-bookmark-action--secondary {
   background: rgba(247, 252, 255, 0.9); color: rgba(16, 33, 43, 0.84); border-color: rgba(98, 127, 145, 0.16);
@@ -313,6 +321,15 @@
 .inova-meeting-record {
   display: flex; flex-direction: column; gap: 8px; padding: 10px 11px; border-radius: 12px;
   border: 1px solid rgba(98, 127, 145, 0.12); background: rgba(247, 252, 255, 0.88);
+}
+.inova-meeting-record--button {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+.inova-meeting-record--button.is-pending {
+  border-color: rgba(27, 96, 232, 0.22);
+  background: rgba(236, 244, 255, 0.94);
 }
 .inova-meeting-record__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .inova-meeting-record__head strong { font-size: 12px; color: rgba(16, 33, 43, 0.84); }
@@ -331,6 +348,15 @@
 .inova-release-card__notice {
   padding: 10px 11px; border-radius: 12px; background: rgba(255, 249, 239, 0.94); border: 1px solid rgba(173, 125, 51, 0.18);
   color: #865d1e !important;
+}
+.inova-release-card__notice.is-info {
+  background: rgba(235, 244, 255, 0.96);
+  border-color: rgba(27, 96, 232, 0.18);
+  color: #1f5cba !important;
+}
+.inova-release-card__notice strong {
+  display: block;
+  margin-bottom: 2px;
 }
 .inova-release-card__head, .inova-release-card__meta-row, .inova-release-history__item {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
@@ -435,6 +461,8 @@
   #inova-tool-rail { width: 58px; padding: 10px 0; }
   .inova-tool-rail__label { font-size: 11px; }
   .inova-tool-toolbar__row { flex-direction: column; align-items: stretch; }
+  .inova-tool-section--meeting .inova-tool-toolbar { flex-direction: column; align-items: stretch; }
+  .inova-tool-section--meeting .inova-bookmark-action { width: 100%; }
   .inova-tool-actions--toolbar { justify-content: flex-start; }
   .inova-store-controls { grid-template-columns: 1fr; }
   .inova-store-item__header { grid-template-columns: 1fr; }
