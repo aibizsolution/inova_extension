@@ -604,29 +604,39 @@ async function buildHostedMeetingSessionUrl(input) {
 
 async function resolveMeetingWorkspacePageUrl() {
   const storageState = await namespace.storage.getState();
-  const workspaceTarget = normalizeMeetingWorkspaceTarget(storageState?.settings?.meetingWorkspaceTarget);
-  if (workspaceTarget === "local") {
-    logMeetingDebug("workspace.target", {
-      target: workspaceTarget,
-      url: LOCAL_MEETING_WORKSPACE_URL,
-    });
-    return LOCAL_MEETING_WORKSPACE_URL;
-  }
-  const overrideUrl = normalizeMeetingWorkspaceOverrideUrl(storageState?.settings?.meetingWorkspaceUrlOverride);
-  if (overrideUrl) {
-    logMeetingDebug("workspace.override.legacy", { url: overrideUrl });
-    return overrideUrl;
-  }
-  const hostedUrl = namespace.firebaseConfig?.hosting?.meetingWorkspaceUrl;
-  logMeetingDebug("workspace.target", {
-    target: workspaceTarget,
-    url: hostedUrl,
-  });
-  return hostedUrl;
+  const normalizedSettings = await reconcileMeetingWorkspaceSettings(storageState?.settings);
+  const workspaceTarget = normalizeMeetingWorkspaceTarget(normalizedSettings.meetingWorkspaceTarget);
+  const url = workspaceTarget === "local"
+    ? normalizeLocalMeetingWorkspaceUrl(normalizedSettings.meetingWorkspaceUrlOverride)
+    : namespace.firebaseConfig?.hosting?.meetingWorkspaceUrl;
+  logMeetingDebug("workspace.target", { target: workspaceTarget, url });
+  return url;
 }
-
 function normalizeMeetingWorkspaceTarget(value) {
   return namespace.session.normalizeText(value).toLowerCase() === "local" ? "local" : "production";
+}
+
+async function reconcileMeetingWorkspaceSettings(settings) {
+  const currentTarget = normalizeMeetingWorkspaceTarget(settings?.meetingWorkspaceTarget);
+  const currentOverride = normalizeMeetingWorkspaceOverrideUrl(settings?.meetingWorkspaceUrlOverride);
+  const nextOverride = currentTarget === "local" ? normalizeLocalMeetingWorkspaceUrl(currentOverride) : "";
+  if (
+    currentTarget === namespace.session.normalizeText(settings?.meetingWorkspaceTarget)
+    && nextOverride === currentOverride
+  ) {
+    return { meetingWorkspaceTarget: currentTarget, meetingWorkspaceUrlOverride: nextOverride };
+  }
+  try {
+    await namespace.storage.updateSettings({
+      meetingWorkspaceTarget: currentTarget,
+      meetingWorkspaceUrlOverride: nextOverride,
+    });
+  } catch (error) {
+    logMeetingDebug("workspace.settings.reconcile.error", {
+      error: error instanceof Error ? error.message : String(error || ""),
+    });
+  }
+  return { meetingWorkspaceTarget: currentTarget, meetingWorkspaceUrlOverride: nextOverride };
 }
 
 function normalizeMeetingWorkspaceOverrideUrl(value) {
@@ -651,6 +661,27 @@ function normalizeMeetingWorkspaceOverrideUrl(value) {
     logMeetingDebug("workspace.override.invalid", { value: normalized });
     return "";
   }
+}
+
+function normalizeLocalMeetingWorkspaceUrl(value) {
+  const normalized = normalizeMeetingWorkspaceOverrideUrl(value);
+  if (!normalized) {
+    return LOCAL_MEETING_WORKSPACE_URL;
+  }
+  try {
+    const url = new URL(normalized);
+    if (isLoopbackHostname(url.hostname)) {
+      url.port = "5000";
+      url.pathname = "/meeting/index.html";
+      url.search = ""; url.hash = "";
+      return url.toString();
+    }
+  } catch {}
+  return LOCAL_MEETING_WORKSPACE_URL;
+}
+
+function isLoopbackHostname(value) {
+  return ["127.0.0.1", "localhost"].includes(namespace.session.normalizeText(value).toLowerCase());
 }
 
 function logMeetingDebug(event, payload) {

@@ -4,6 +4,10 @@ const assert = require("assert");
 const { registerMeetingLaunchHandlers } = require("../functions/meeting-launch-service");
 const { registerMeetingHandlers } = require("../functions/meeting-service");
 
+const JOB_COLLECTION = "integration_inova_meeting_jobs";
+const MEETING_COLLECTION = "integration_inova_meetings";
+const WORKSPACE_SESSION_COLLECTION = "integration_inova_meeting_workspace_sessions";
+
 async function main() {
   const state = createMemoryState();
   const owner = {
@@ -19,6 +23,63 @@ async function main() {
     ...deps,
     authorizeMeetingRequest: launchHandlers.authorizeMeetingRequest,
   });
+
+  const issuedLaunch = await invokeHandler(launchHandlers.issueInovaMeetingLaunch, {
+    body: {
+      meetingId: "meeting-auth-1",
+      mode: "create",
+      owner,
+      suggestedTitle: "인증 테스트 회의",
+    },
+    method: "POST",
+  });
+  assert.equal(issuedLaunch.statusCode, 200);
+  const exchangedLaunch = await invokeHandler(launchHandlers.exchangeInovaMeetingLaunch, {
+    body: {
+      launchToken: issuedLaunch.jsonBody.data.launchToken,
+    },
+    method: "POST",
+  });
+  assert.equal(exchangedLaunch.statusCode, 200);
+  const meetingSessionToken = exchangedLaunch.jsonBody.data.meetingSessionToken;
+  const workspaceAuth = await invokeHandler(launchHandlers.issueInovaMeetingWorkspaceAuth, {
+    body: {},
+    headers: {
+      authorization: `MeetingSession ${meetingSessionToken}`,
+    },
+    method: "POST",
+  });
+  assert.equal(workspaceAuth.statusCode, 200);
+  assert.equal(workspaceAuth.jsonBody.data.meetingDocumentId, "fixture-user__meeting-auth-1");
+  assert.equal(workspaceAuth.jsonBody.data.meetingId, "meeting-auth-1");
+  assert.equal(workspaceAuth.jsonBody.data.workspaceSessionId.length > 0, true);
+  assert.equal(workspaceAuth.jsonBody.data.firebaseCustomToken, "custom-token:inova-workspace__fixture-user");
+  assert.equal(state.customTokens.length, 1);
+  assert.equal(state.customTokens[0].claims.scope, "meeting-workspace");
+  assert.equal(state.customTokens[0].claims.providerUserKey, owner.providerUserKey);
+  assert.equal(state.customTokens[0].claims.meetingId, "meeting-auth-1");
+  assert.equal(typeof state.customTokens[0].claims.workspaceExpMs, "number");
+
+  const missingWorkspaceAuth = await invokeHandler(launchHandlers.issueInovaMeetingWorkspaceAuth, {
+    body: {},
+    headers: {},
+    method: "POST",
+  });
+  assert.equal(missingWorkspaceAuth.statusCode, 401);
+
+  const expiredWorkspaceSessionId = String(meetingSessionToken).split(".")[0];
+  state.collections.get(WORKSPACE_SESSION_COLLECTION).set(expiredWorkspaceSessionId, {
+    ...state.collections.get(WORKSPACE_SESSION_COLLECTION).get(expiredWorkspaceSessionId),
+    expiresAt: "2026-03-01T00:00:00.000Z",
+  });
+  const expiredWorkspaceAuth = await invokeHandler(launchHandlers.issueInovaMeetingWorkspaceAuth, {
+    body: {},
+    headers: {
+      authorization: `MeetingSession ${meetingSessionToken}`,
+    },
+    method: "POST",
+  });
+  assert.equal(expiredWorkspaceAuth.statusCode, 410);
 
   const audioPayload = Buffer.from("fixture-audio-payload").toString("base64");
   const created = await invokeHandler(handlers.createInovaMeetingJob, {
@@ -85,6 +146,7 @@ async function main() {
   assert.equal(duplicate.statusCode, 200);
   assert.equal(duplicate.jsonBody.data.reused, true);
   assert.equal(duplicate.jsonBody.data.job.jobId, jobId);
+  await invokeJobWriteTrigger(handlers, state, jobId);
 
   const storedJob = await invokeHandler(handlers.getInovaMeetingJob, {
     body: { jobId, owner },
@@ -146,6 +208,43 @@ async function main() {
   assert.equal(updatedMeeting.statusCode, 200);
   assert.equal(updatedMeeting.jsonBody.data.meeting.sharedMemo, "업데이트된 공용 메모");
   assert.equal(updatedMeeting.jsonBody.data.meeting.title, "주간 스탠드업 v2");
+
+  const blankMeeting = await invokeHandler(handlers.updateInovaMeeting, {
+    body: {
+      meetingId: "meeting-empty-1",
+      owner,
+      title: "외부 미팅",
+    },
+    method: "POST",
+  });
+  assert.equal(blankMeeting.statusCode, 200);
+  const blankMeetingListed = await invokeHandler(handlers.listInovaMeetingResults, {
+    body: { meetingId: "meeting-empty-1", owner },
+    method: "POST",
+  });
+  assert.equal(blankMeetingListed.statusCode, 200);
+  assert.equal(blankMeetingListed.jsonBody.data.meeting.title, "외부 미팅");
+  assert.equal(blankMeetingListed.jsonBody.data.meeting.owner.providerUserKey, owner.providerUserKey);
+
+  const meetingCollection = state.collections.get(MEETING_COLLECTION) || new Map();
+  state.collections.set(MEETING_COLLECTION, meetingCollection);
+  meetingCollection.set("fixture-user__meeting-orphaned-1", {
+    createdAt: "2026-03-30T11:00:00.000Z",
+    meetingId: "meeting-orphaned-1",
+    recentJobs: [],
+    title: "owner 누락 회의",
+    updatedAt: "2026-03-30T11:00:00.000Z",
+  });
+  const orphanMeetingListed = await invokeHandler(handlers.listInovaMeetingResults, {
+    body: { meetingId: "meeting-orphaned-1", owner },
+    method: "POST",
+  });
+  assert.equal(orphanMeetingListed.statusCode, 200);
+  assert.equal(orphanMeetingListed.jsonBody.data.meeting.owner.providerUserKey, owner.providerUserKey);
+  assert.equal(
+    state.collections.get(MEETING_COLLECTION).get("fixture-user__meeting-orphaned-1").owner.providerUserKey,
+    owner.providerUserKey
+  );
 
   const regenerated = await invokeHandler(handlers.regenerateInovaMeetingNotes, {
     body: {
@@ -284,12 +383,104 @@ async function main() {
     method: "POST",
   });
   assert.equal(bucketless.statusCode, 200);
+  await invokeJobWriteTrigger(bucketlessHandlers, bucketlessState, bucketless.jsonBody.data.job.jobId);
   const bucketlessStoredJob = await invokeHandler(bucketlessHandlers.getInovaMeetingJob, {
     body: { jobId: bucketless.jsonBody.data.job.jobId, owner },
     method: "POST",
   });
   assert.equal(bucketlessStoredJob.jsonBody.data.job.source.uploadStatus, "inline-only");
   assert.equal(bucketlessStoredJob.jsonBody.data.job.cleanup.sourceAudioDeleted, false);
+
+  const chunkedPartA = await invokeHandler(handlers.uploadInovaMeetingSource, {
+    headers: { "content-type": "audio/wav" },
+    method: "POST",
+    query: {
+      captureMode: "microphone",
+      channelCount: "1",
+      durationMs: "120000",
+      endMs: "61000",
+      fileName: "chunked-part-a.wav",
+      meetingId: "meeting-chunked-1",
+      overlapMs: "1500",
+      parentRequestId: "capture-chunked-1",
+      partCount: "2",
+      partIndex: "0",
+      requestId: "capture-chunked-1-part-0000",
+      sizeBytes: "24",
+      startMs: "0",
+    },
+    rawBody: Buffer.from("chunk-part-a"),
+  });
+  const chunkedPartB = await invokeHandler(handlers.uploadInovaMeetingSource, {
+    headers: { "content-type": "audio/wav" },
+    method: "POST",
+    query: {
+      captureMode: "microphone",
+      channelCount: "1",
+      durationMs: "120000",
+      endMs: "120000",
+      fileName: "chunked-part-b.wav",
+      meetingId: "meeting-chunked-1",
+      overlapMs: "1500",
+      parentRequestId: "capture-chunked-1",
+      partCount: "2",
+      partIndex: "1",
+      requestId: "capture-chunked-1-part-0001",
+      sizeBytes: "24",
+      startMs: "58500",
+    },
+    rawBody: Buffer.from("chunk-part-b"),
+  });
+  assert.equal(chunkedPartA.statusCode, 200);
+  assert.equal(chunkedPartB.statusCode, 200);
+
+  const chunkedCreated = await invokeHandler(handlers.createInovaMeetingJob, {
+    body: {
+      meeting: {
+        endedAt: "2026-03-30T10:31:00.000Z",
+        language: "ko",
+        meetingId: "meeting-chunked-1",
+        startedAt: "2026-03-30T10:20:00.000Z",
+        title: "대용량 파일 회의",
+      },
+      options: { redaction: "none", speakerLabels: true, summary: true },
+      owner,
+      source: {
+        captureMode: "microphone",
+        channelCount: 1,
+        durationMs: 120000,
+        fileName: "chunked-source.wav",
+        mimeType: "audio/wav",
+        mode: "chunked",
+        originalSizeBytes: 30 * 1024 * 1024,
+        parts: [
+          { ...chunkedPartA.jsonBody.data, mimeType: "audio/wav" },
+          { ...chunkedPartB.jsonBody.data, mimeType: "audio/wav" },
+        ],
+        requestId: "capture-chunked-1",
+        sizeBytes: 30 * 1024 * 1024,
+      },
+      context: {
+        sharedMemoSnapshot: "큰 파일도 단일 결과로 정리해야 합니다.",
+      },
+    },
+    method: "POST",
+  });
+  assert.equal(chunkedCreated.statusCode, 200);
+  assert.equal(chunkedCreated.jsonBody.data.job.source.mode, "chunked");
+  assert.equal(chunkedCreated.jsonBody.data.job.source.parts.length, 2);
+  await invokeJobWriteTrigger(handlers, state, chunkedCreated.jsonBody.data.job.jobId);
+  const chunkedStoredJob = await invokeHandler(handlers.getInovaMeetingJob, {
+    body: { jobId: chunkedCreated.jsonBody.data.job.jobId, owner },
+    method: "POST",
+  });
+  assert.equal(chunkedStoredJob.statusCode, 200);
+  assert.equal(chunkedStoredJob.jsonBody.data.job.status, "succeeded");
+  assert.equal(chunkedStoredJob.jsonBody.data.job.source.mode, "chunked");
+  assert.equal(chunkedStoredJob.jsonBody.data.job.source.parts.length, 2);
+  assert.equal(chunkedStoredJob.jsonBody.data.job.transcript.segments.length, 4);
+  assert.equal(chunkedStoredJob.jsonBody.data.job.transcription.speakerCount, 2);
+  assert.equal(state.openaiRequests.length, 3);
 
   console.log("[verify-meeting-service] Meeting service flow passed");
 }
@@ -299,6 +490,13 @@ function createDeps(state, overrides = {}) {
     CORS_ORIGINS: ["https://inova.incross.com"],
     REGION: "asia-northeast3",
     bucket: Object.prototype.hasOwnProperty.call(overrides, "bucket") ? overrides.bucket : createBucket(state),
+    async createFirebaseCustomToken(uid, claims) {
+      state.customTokens.push({
+        claims: cloneValue(claims),
+        uid: String(uid || ""),
+      });
+      return `custom-token:${String(uid || "")}`;
+    },
     createHttpError(status, message) {
       const error = new Error(message);
       error.status = status;
@@ -363,6 +561,23 @@ function createDeps(state, overrides = {}) {
             async create(request) {
               const firstSystemMessage = Array.isArray(request.messages) ? String(request.messages[0]?.content || "") : "";
               const userPrompt = Array.isArray(request.messages) ? String(request.messages[1]?.content || "") : "";
+              if (firstSystemMessage.includes("회의 전사 화자 정합기")) {
+                state.openaiSummaryRequests.push({ kind: "speaker-reconcile", model: request.model || "", prompt: userPrompt, systemPrompt: firstSystemMessage });
+                return {
+                  choices: [
+                    {
+                      message: {
+                        content: JSON.stringify({
+                          mappings: [
+                            { confidence: 0.96, localSpeaker: "SPEAKER_00", target: "SPEAKER_00" },
+                            { confidence: 0.94, localSpeaker: "SPEAKER_01", target: "SPEAKER_01" },
+                          ],
+                        }),
+                      },
+                    },
+                  ],
+                };
+              }
               if (firstSystemMessage.includes("회의 전사 분류기")) {
                 state.openaiSummaryRequests.push({ kind: "classifier", model: request.model || "", prompt: userPrompt, systemPrompt: firstSystemMessage });
                 const mode = userPrompt.includes("인터뷰") ? "interview" : "planning";
@@ -569,6 +784,7 @@ function createBucket(state) {
 function createMemoryState() {
   return {
     collections: new Map(),
+    customTokens: [],
     events: [],
     nextId: 1,
     openaiRequests: [],
@@ -581,6 +797,27 @@ async function invokeHandler(handler, request) {
   const response = createResponse();
   await handler(request, response);
   return response;
+}
+
+async function invokeJobWriteTrigger(handlers, state, jobId, beforeValue) {
+  const collection = state.collections.get(JOB_COLLECTION) || new Map();
+  const afterValue = cloneValue(collection.get(jobId));
+  await handlers.processQueuedMeetingJobWrite({
+    data: {
+      after: {
+        data() {
+          return cloneValue(afterValue);
+        },
+        exists: Boolean(afterValue),
+      },
+      before: {
+        data() {
+          return cloneValue(beforeValue);
+        },
+        exists: Boolean(beforeValue),
+      },
+    },
+  });
 }
 
 function createResponse() {

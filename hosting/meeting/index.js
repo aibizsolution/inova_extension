@@ -1,11 +1,14 @@
 (function initHostedMeetingWorkspace(global) {
   const ns = global.__INOVA_HOSTED_MEETING__;
-  const { ACTIVE_POLL_DELAY_MS, AUTO_RETRY_PENDING_STATUSES, DEFAULT_CREATE_JOB_TIMEOUT_MS, DEFAULT_INLINE_AUDIO_LIMIT_BYTES, DEFAULT_SOURCE_UPLOAD_TIMEOUT_MS, SESSION_STORAGE_KEY, buildRemoteSelectionId, buildWorkspaceHash, buildWorkspaceSessionStorageKey, clearDebugEntries, formatDateTime, formatDebugEntry, getDebugEntries, isDebugPanelEnabled, isLikelyNetworkError, isLocalWorkspaceOrigin, isOnline, loadPersistedWorkspaceSession, logDebug, normalizeSpeakerAliases, normalizeText, normalizeTextBlock, parseParams, pickRecorderMimeType, postJson, resolveConfig, resolveRecordingProfile, safeLocalStorageRemove, safeLocalStorageSet, safeSessionStorageSet, stopTracks, subscribeDebugEntries } = ns.shared;
+  const { AUTO_RETRY_PENDING_STATUSES, DEFAULT_CREATE_JOB_TIMEOUT_MS, DEFAULT_INLINE_AUDIO_LIMIT_BYTES, DEFAULT_SOURCE_CHUNK_DURATION_MS, DEFAULT_SOURCE_CHUNK_OVERLAP_MS, DEFAULT_SOURCE_MAX_BYTES, DEFAULT_SOURCE_MAX_DURATION_MS, DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS, DEFAULT_SOURCE_TARGET_PART_BYTES, DEFAULT_SOURCE_UPLOAD_TIMEOUT_MS, SESSION_STORAGE_KEY, buildRemoteSelectionId, buildWorkspaceHash, buildWorkspaceSessionStorageKey, clearDebugEntries, formatDateTime, formatDebugEntry, getDebugEntries, isDebugPanelEnabled, isLikelyNetworkError, isLocalWorkspaceOrigin, isOnline, loadPersistedWorkspaceSession, logDebug, normalizeSpeakerAliases, normalizeText, normalizeTextBlock, parseParams, pickRecorderMimeType, postJson, resolveConfig, resolveRecordingProfile, safeLocalStorageGet, safeLocalStorageRemove, safeLocalStorageSet, safeSessionStorageSet, stopTracks, subscribeDebugEntries } = ns.shared;
+  const { clearWorkspaceAuthCache, ensureWorkspaceAuth, getCollections, subscribeDocument } = ns.firebase;
+  const { prepareAudioSourceChunks } = ns.audioChunker;
   const { blobToBase64, createPendingUploadStore, normalizePendingUpload } = ns.storage;
   const { buildDetailView, buildLocalPendingJob, buildPendingNotice, buildPendingSummary, buildSegmentCopyText, chooseSelectedRecordId, findHistoryEntry, findRemoteForPending, normalizeArtifact, normalizeJob, normalizeRecord, renderWorkspace } = ns.render;
 
   const CONFIG = resolveConfig(global.__INOVA_HOSTED_MEETING_CONFIG__);
-  const COMPLETED_WORKSPACE_BACKGROUND_REFRESH_TTL_MS = 5 * 60 * 1000;
+  const FIRESTORE_COLLECTIONS = getCollections();
+  const DEBUG_PANEL_COLLAPSED_STORAGE_KEY = "__INOVA_MEETING_DEBUG_PANEL_COLLAPSED__";
   const refs = {};
   const state = createInitialState();
 
@@ -57,10 +60,10 @@
       currentDetailSelectionId: "",
       currentJob: null,
       currentLocalRecord: null,
+      debugPanelCollapsed: readDebugPanelCollapsed(),
       isLocalWorkspace: isLocalWorkspaceOrigin(global),
       loading: false,
       loadingReason: "",
-      lastRefreshAt: 0,
       meetingTitleDraft: "",
       media: createEmptyMediaState(),
       meeting: { meetingId: "", pendingLocalCount: 0, sharedMemo: "", title: "", updatedAt: "" },
@@ -76,17 +79,34 @@
       recordingProfile,
       records: [],
       reviewTab: "notes",
+      realtime: {
+        artifactDocId: "",
+        artifactListenerVersion: 0,
+        jobDocId: "",
+        jobListenerVersion: 0,
+        meetingDocId: "",
+        meetingListenerVersion: 0,
+        unsubscribeArtifact: null,
+        unsubscribeJob: null,
+        unsubscribeMeeting: null,
+        workspaceAuthExpiresAt: "",
+        workspaceSessionId: "",
+      },
+      runtimeChunkCache: Object.create(null),
       selectedRecordId: "",
       session: { expiresAt: "", meetingId: "", meetingSessionToken: "", mode: "create", sharedMemo: "", title: "" },
       speakerAliasDraftRecordId: "",
       speakerAliasDrafts: Object.create(null),
-      syncTimer: 0,
       unsubscribeDebug: null,
     };
   }
 
+  function readDebugPanelCollapsed() {
+    return normalizeText(safeLocalStorageGet(global, DEBUG_PANEL_COLLAPSED_STORAGE_KEY)) === "1";
+  }
+
   function cacheRefs() {
-    for (const id of ["meetingShell", "blockedMessage", "blockedEyebrow", "blockedTitle", "blockedState", "workspace", "pageTitle", "pageSummary", "workspaceBadge", "offlineQueueBadge", "refreshButton", "meetingTitleInput", "saveMeetingTitleButton", "deleteMeetingButton", "meetingStatusChip", "currentBadge", "currentSummary", "currentHint", "currentNotice", "currentTimer", "startButton", "importAudioButton", "importAudioInput", "pauseButton", "resumeButton", "stopButton", "discardButton", "sharedMemoInput", "saveSharedMemoButton", "clearSharedMemoButton", "sharedMemoNotice", "recordCountBadge", "recordList", "detailTitle", "detailBadge", "detailSummary", "recordTitleGroup", "recordTitleInput", "saveRecordTitleButton", "downloadRecordButton", "deleteRecordButton", "detailMeta", "speakerEditor", "speakerAliasList", "saveSpeakerAliasesButton", "saveSpeakerAliasesAndRegenerateButton", "copySegmentsButton", "detailMemoText", "reviewTabSummary", "reviewTabMemo", "reviewTabNotes", "reviewTabSegments", "reviewTabSegmentsCount", "reviewTabSpeakers", "reviewPanelSummary", "summaryStatusPill", "summaryStatusGrid", "summaryActionCard", "reviewPanelMemo", "meetingNotesCard", "reviewPanelSegments", "reviewPanelSpeakers", "speakerDigestList", "notesSummaryMeta", "notesStyleSelect", "regenerateNotesButton", "meetingNotesOverview", "meetingNotesSections", "detailNotice", "segmentList", "debugPanel", "debugStatus", "debugCounters", "debugEndpointSummary", "debugLog", "copyDebugButton", "clearDebugButton", "confirmOverlay", "confirmDialog", "confirmDialogEyebrow", "confirmDialogTitle", "confirmDialogBody", "confirmDialogCancel", "confirmDialogConfirm"]) {
+    for (const id of ["meetingShell", "blockedMessage", "blockedEyebrow", "blockedTitle", "blockedState", "workspace", "pageTitle", "pageSummary", "workspaceBadge", "offlineQueueBadge", "refreshButton", "meetingTitleInput", "saveMeetingTitleButton", "deleteMeetingButton", "meetingStatusChip", "currentBadge", "currentSummary", "currentHint", "currentNotice", "currentTimer", "startButton", "importAudioButton", "importAudioInput", "pauseButton", "resumeButton", "stopButton", "discardButton", "sharedMemoInput", "saveSharedMemoButton", "clearSharedMemoButton", "sharedMemoNotice", "recordCountBadge", "recordList", "detailTitle", "detailBadge", "detailSummary", "recordTitleGroup", "recordTitleInput", "saveRecordTitleButton", "downloadRecordButton", "deleteRecordButton", "detailMeta", "speakerEditor", "speakerAliasList", "saveSpeakerAliasesButton", "saveSpeakerAliasesAndRegenerateButton", "copySegmentsButton", "detailMemoText", "reviewTabSummary", "reviewTabMemo", "reviewTabNotes", "reviewTabSegments", "reviewTabSegmentsCount", "reviewTabSpeakers", "reviewPanelSummary", "summaryStatusPill", "summaryStatusGrid", "summaryActionCard", "reviewPanelMemo", "meetingNotesCard", "reviewPanelSegments", "reviewPanelSpeakers", "speakerDigestList", "notesSummaryMeta", "notesStyleSelect", "regenerateNotesButton", "meetingNotesOverview", "meetingNotesSections", "detailNotice", "segmentList", "debugPanel", "debugPanelBody", "debugStatus", "debugCounters", "debugEndpointSummary", "debugLog", "copyDebugButton", "clearDebugButton", "toggleDebugPanelButton", "confirmOverlay", "confirmDialog", "confirmDialogEyebrow", "confirmDialogTitle", "confirmDialogBody", "confirmDialogCancel", "confirmDialogConfirm"]) {
       refs[id] = global.document.getElementById(id);
     }
   }
@@ -148,6 +168,9 @@
     if (refs.clearDebugButton) {
       refs.clearDebugButton.addEventListener("click", clearDebugLogPanel);
     }
+    if (refs.toggleDebugPanelButton) {
+      refs.toggleDebugPanelButton.addEventListener("click", toggleDebugPanelCollapsed);
+    }
     refs.confirmDialogCancel?.addEventListener("click", () => resolveConfirmation(false));
     refs.confirmDialogConfirm?.addEventListener("click", () => resolveConfirmation(true));
     refs.confirmOverlay?.addEventListener("click", (event) => {
@@ -162,9 +185,18 @@
       }
     });
     global.addEventListener("focus", handleBackgroundRefresh, { passive: true });
-    global.document.addEventListener("visibilitychange", () => !global.document.hidden && handleBackgroundRefresh(), { passive: true });
+    global.document.addEventListener("visibilitychange", () => {
+      if (global.document.hidden) {
+        logDebug("workspace.refresh.skipped", {
+          reason: "document-hidden",
+        });
+        return;
+      }
+      handleBackgroundRefresh();
+    }, { passive: true });
     global.addEventListener("online", handleOnline, { passive: true });
     global.addEventListener("offline", handleOffline, { passive: true });
+    global.addEventListener("beforeunload", disposeWorkspaceRealtime, { passive: true });
   }
 
   async function bootstrap() {
@@ -306,35 +338,37 @@
       applyRender();
     }
     try {
-      const previousMeetingTitle = normalizeText(state.meeting.title || state.session.title);
       logDebug("workspace.refresh.start", {
         hydrateSelection: Boolean(hydrateSelection),
         meetingId: state.session.meetingId,
         reason,
       });
       await loadPendingUploads();
-      const listPayload = await postJson(global, CONFIG.listResultsUrl, { limit: 12, meetingId: state.session.meetingId }, state.session.meetingSessionToken);
-      state.records = Array.isArray(listPayload?.items) ? listPayload.items.map(normalizeRecord).filter((record) => record.jobId) : [];
-      state.meeting = { meetingId: normalizeText(listPayload?.meeting?.meetingId) || state.session.meetingId, pendingLocalCount: state.pendingUploads.length, sharedMemo: normalizeTextBlock(listPayload?.meeting?.sharedMemo), title: normalizeText(listPayload?.meeting?.title || refs.meetingTitleInput.value || state.session.title || "새 작업실"), updatedAt: normalizeText(listPayload?.meeting?.updatedAt) };
-      state.session.title = state.meeting.title;
-      if (global.document.activeElement !== refs.meetingTitleInput && normalizeText(state.meetingTitleDraft) === previousMeetingTitle) {
-        state.meetingTitleDraft = state.meeting.title;
+      const shouldReconnect = Boolean(
+        normalizeText(reason) === "boot"
+        || normalizeText(reason) === "manual"
+        || !state.realtime.unsubscribeMeeting
+      );
+      await connectWorkspaceRealtime({
+        forceReconnect: shouldReconnect,
+        hydrateSelection: Boolean(hydrateSelection),
+        reason,
+      });
+      if (!shouldReconnect) {
+        await syncWorkspaceLocalState(Boolean(hydrateSelection), reason);
       }
-      await syncPendingUploadsWithRemote();
-      if (!state.selectedRecordId || hydrateSelection || !findHistoryEntry(state, state.selectedRecordId)) state.selectedRecordId = chooseSelectedRecordId(state);
-      await hydrateSelectedDetail(Boolean(hydrateSelection));
-      persistWorkspaceSession();
-      state.lastRefreshAt = Date.now();
       clearTransientRefreshNotice();
       applyRender();
-      schedulePollIfNeeded();
       logDebug("workspace.refresh.success", {
         meetingId: state.meeting.meetingId,
         pendingLocalCount: state.pendingUploads.length,
         reason,
         resultCount: state.records.length,
       });
-      return listPayload;
+      return {
+        items: state.records,
+        meeting: state.meeting,
+      };
     } catch (error) {
       const message = error instanceof Error ? error.message : "기록 정보를 읽지 못했어요.";
       logDebug("workspace.refresh.error", {
@@ -349,14 +383,10 @@
       if (shouldSuppressRefreshError(error, message, reason)) {
         clearTransientRefreshNotice();
         applyRender();
-        schedulePollIfNeeded();
         return null;
       }
       setNotice(message, "error");
       applyRender();
-      if (normalizeText(reason) === "poll") {
-        schedulePollIfNeeded();
-      }
       return null;
     } finally {
       state.loading = false;
@@ -366,7 +396,14 @@
   }
 
   async function loadPendingUploads() {
-    state.pendingUploads = state.session.meetingId ? (await state.queueStore.listByMeeting(state.session.meetingId)).map(normalizePendingUpload).map((item) => item.status === "uploading" ? { ...item, status: "upload_queued", lastError: item.lastError || "페이지를 다시 열어 업로드를 이어갑니다." } : item).sort(ns.storage.comparePendingUploads) : [];
+    state.pendingUploads = state.session.meetingId
+      ? (await state.queueStore.listByMeeting(state.session.meetingId))
+        .map(normalizePendingUpload)
+        .map((item) => ["uploading", "uploading_chunks", "preparing_chunks"].includes(item.status)
+          ? { ...item, status: "upload_queued", lastError: item.lastError || "페이지를 다시 열어 업로드를 이어갑니다." }
+          : item)
+        .sort(ns.storage.comparePendingUploads)
+      : [];
     state.meeting.pendingLocalCount = state.pendingUploads.length;
   }
 
@@ -385,6 +422,7 @@
           updatedAt: normalizeText(matched.updatedAt || pending.updatedAt),
         });
         await state.queueStore.put(nextPending);
+        delete state.runtimeChunkCache[normalizeText(pending.requestId)];
         if (state.selectedRecordId === ns.shared.buildLocalSelectionId(pending.requestId)) state.selectedRecordId = buildRemoteSelectionId(matched.jobId);
         nextItems.push(nextPending);
       } else {
@@ -398,56 +436,412 @@
     state.meeting.pendingLocalCount = state.pendingUploads.length;
   }
 
+  async function connectWorkspaceRealtime(options = {}) {
+    const forceReconnect = Boolean(options.forceReconnect);
+    if (!state.session.meetingSessionToken || !state.session.meetingId) {
+      throw new Error("회의 작업실 세션이 없어요. 패널에서 다시 열어 주세요.");
+    }
+    const authPayload = await ensureWorkspaceAuth(state.session.meetingSessionToken, {
+      forceRefresh: forceReconnect,
+    });
+    const nextMeetingDocId = normalizeText(authPayload?.meetingDocumentId);
+    if (!nextMeetingDocId) {
+      throw new Error("회의 작업실 Firestore 문서를 확인하지 못했어요.");
+    }
+
+    state.realtime.meetingDocId = nextMeetingDocId;
+    state.realtime.workspaceAuthExpiresAt = normalizeText(authPayload?.expiresAt);
+    state.realtime.workspaceSessionId = normalizeText(authPayload?.workspaceSessionId);
+
+    if (!forceReconnect && typeof state.realtime.unsubscribeMeeting === "function") {
+      return authPayload;
+    }
+
+    disconnectMeetingListener({ clearDetail: true });
+    const listenerVersion = state.realtime.meetingListenerVersion + 1;
+    state.realtime.meetingListenerVersion = listenerVersion;
+
+    await new Promise((resolve, reject) => {
+      let settled = false;
+      const finishResolve = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      const finishReject = (error) => {
+        if (settled) return;
+        settled = true;
+        reject(error);
+      };
+      state.realtime.unsubscribeMeeting = subscribeDocument(FIRESTORE_COLLECTIONS.meetings, nextMeetingDocId, {
+        error: (error) => {
+          if (listenerVersion !== state.realtime.meetingListenerVersion) return;
+          const normalizedError = normalizeRealtimeError(error);
+          handleRealtimeListenerError(normalizedError, "meeting");
+          finishReject(normalizedError);
+        },
+        next: (snapshot) => {
+          void handleMeetingSnapshot(snapshot, {
+            hydrateSelection: Boolean(options.hydrateSelection),
+            listenerVersion,
+            reason: options.reason,
+          })
+            .then(finishResolve)
+            .catch((error) => {
+              const normalizedError = normalizeRealtimeError(error);
+              handleRealtimeListenerError(normalizedError, "meeting");
+              finishReject(normalizedError);
+            });
+        },
+      });
+    });
+
+    return authPayload;
+  }
+
+  async function handleMeetingSnapshot(snapshot, options = {}) {
+    if (options.listenerVersion !== state.realtime.meetingListenerVersion) {
+      return;
+    }
+    const previousMeetingTitle = normalizeText(state.meeting.title || state.session.title);
+    const meetingPayload = snapshot?.exists ? snapshot.data() : null;
+    state.records = Array.isArray(meetingPayload?.recentJobs)
+      ? meetingPayload.recentJobs.map(normalizeRecord).filter((record) => record.jobId)
+      : [];
+    state.meeting = {
+      meetingId: normalizeText(meetingPayload?.meetingId) || state.session.meetingId,
+      pendingLocalCount: state.pendingUploads.length,
+      sharedMemo: normalizeTextBlock(meetingPayload?.sharedMemo || state.session.sharedMemo),
+      title: normalizeText(meetingPayload?.title || refs.meetingTitleInput.value || state.session.title || "새 작업실"),
+      updatedAt: normalizeText(meetingPayload?.updatedAt),
+    };
+    state.session.title = state.meeting.title;
+    if (
+      global.document.activeElement !== refs.meetingTitleInput
+      && normalizeText(state.meetingTitleDraft) === previousMeetingTitle
+    ) {
+      state.meetingTitleDraft = state.meeting.title;
+    }
+    await syncWorkspaceLocalState(Boolean(options.hydrateSelection), options.reason || "snapshot");
+    logDebug("workspace.snapshot.meeting", {
+      exists: Boolean(snapshot?.exists),
+      hydrateSelection: Boolean(options.hydrateSelection),
+      meetingId: state.meeting.meetingId,
+      reason: options.reason,
+      resultCount: state.records.length,
+    });
+  }
+
+  async function syncWorkspaceLocalState(hydrateSelection, reason) {
+    await syncPendingUploadsWithRemote();
+    if (!state.selectedRecordId || hydrateSelection || !findHistoryEntry(state, state.selectedRecordId)) {
+      state.selectedRecordId = chooseSelectedRecordId(state);
+    }
+    await hydrateSelectedDetail(Boolean(hydrateSelection));
+    persistWorkspaceSession();
+    applyRender();
+    logDebug("workspace.sync.state", {
+      meetingId: state.meeting.meetingId,
+      pendingLocalCount: state.pendingUploads.length,
+      reason,
+      resultCount: state.records.length,
+      selectedRecordId: state.selectedRecordId,
+    });
+  }
+
   async function hydrateSelectedDetail(forceRefresh) {
     const entry = findHistoryEntry(state, state.selectedRecordId);
     if (!entry) {
-      state.currentArtifact = null;
-      state.currentDetailSelectionId = "";
-      state.currentJob = null;
-      state.currentLocalRecord = null;
+      resetSelectedDetailState();
       syncSpeakerAliasDrafts(true);
       return;
     }
-    if (!forceRefresh && canReuseSelectedDetail(entry)) {
-      state.currentLocalRecord = entry.pending || null;
-      syncSpeakerAliasDrafts(false);
-      return;
-    }
-    state.currentArtifact = null;
-    state.currentDetailSelectionId = entry.id;
-    state.currentJob = null;
-    state.currentLocalRecord = null;
     state.currentLocalRecord = entry.pending || null;
+    const selectionChanged = normalizeText(state.currentDetailSelectionId) !== normalizeText(entry.id);
+    state.currentDetailSelectionId = entry.id;
     if (!entry.remote?.jobId) {
+      disconnectJobListener();
+      disconnectArtifactListener();
+      state.currentArtifact = null;
       state.currentJob = buildLocalPendingJob(entry.pending);
       syncSpeakerAliasDrafts(true);
       return;
     }
-    const jobPayload = await postJson(global, CONFIG.getJobUrl, { jobId: entry.remote.jobId, meetingId: state.session.meetingId }, state.session.meetingSessionToken);
-    state.currentJob = normalizeJob(jobPayload?.job, state.meeting.title);
-    const artifactId = normalizeText(state.currentJob?.artifactId || jobPayload?.job?.transcript?.artifactId || entry.remote.artifactId);
-    if (!artifactId) {
-      syncSpeakerAliasDrafts(true);
+
+    const shouldReconnect = Boolean(
+      forceRefresh
+      || selectionChanged
+      || normalizeText(state.realtime.jobDocId) !== normalizeText(entry.remote.jobId)
+      || typeof state.realtime.unsubscribeJob !== "function"
+    );
+    if (!shouldReconnect) {
+      await ensureArtifactRealtimeSubscription(entry, {
+        forceReconnect: false,
+        forceResetAliases: false,
+      });
+      syncSpeakerAliasDrafts(false);
       return;
     }
-    const artifactPayload = await postJson(global, CONFIG.getArtifactUrl, { artifactId, jobId: entry.remote.jobId, meetingId: state.session.meetingId }, state.session.meetingSessionToken);
-    state.currentArtifact = normalizeArtifact(artifactPayload?.artifact);
-    state.notesStyleSelection = normalizeText(state.currentArtifact?.notesStyleSelected || state.currentJob?.notesStyleSelected || state.notesStyleSelection);
-    syncSpeakerAliasDrafts(true);
+
+    disconnectJobListener();
+    disconnectArtifactListener();
+    state.currentArtifact = null;
+    state.currentJob = normalizeJob({
+      createdAt: entry.remote.createdAt,
+      error: entry.remote.error,
+      jobId: entry.remote.jobId,
+      notesGeneratedAt: entry.remote.notesGeneratedAt,
+      notesModeConfidence: entry.remote.notesModeConfidence,
+      notesModeDetected: entry.remote.notesModeDetected,
+      notesModeSelected: entry.remote.notesModeSelected,
+      notesStyleSelected: entry.remote.notesStyleSelected,
+      source: {
+        durationMs: entry.remote.durationMs,
+        requestId: entry.remote.requestId,
+      },
+      status: entry.remote.status,
+      title: entry.remote.title,
+      updatedAt: entry.remote.updatedAt,
+    }, state.meeting.title);
+    await subscribeSelectedJobRealtime(entry, {
+      forceResetAliases: true,
+    });
   }
 
-  function canReuseSelectedDetail(entry) {
-    if (!entry || entry.id !== state.currentDetailSelectionId) return false;
-    if (!entry.remote?.jobId) {
-      return Boolean(state.currentJob && normalizeText(state.currentJob.requestId) === normalizeText(entry.pending?.requestId));
+  async function subscribeSelectedJobRealtime(entry, options = {}) {
+    const jobId = normalizeText(entry?.remote?.jobId);
+    if (!jobId) {
+      return;
     }
-    const remoteStatus = normalizeText(entry.remote.status);
-    if (!["succeeded", "failed"].includes(remoteStatus)) return false;
-    if (!state.currentJob || normalizeText(state.currentJob.jobId) !== normalizeText(entry.remote.jobId)) return false;
-    if (normalizeText(state.currentJob.updatedAt) !== normalizeText(entry.remote.updatedAt)) return false;
-    const expectedArtifactId = normalizeText(state.currentJob?.artifactId || entry.remote.artifactId);
-    if (!expectedArtifactId) return true;
-    return Boolean(state.currentArtifact && normalizeText(state.currentArtifact.artifactId) === expectedArtifactId);
+    const listenerVersion = state.realtime.jobListenerVersion + 1;
+    state.realtime.jobDocId = jobId;
+    state.realtime.jobListenerVersion = listenerVersion;
+
+    await new Promise((resolve, reject) => {
+      let settled = false;
+      const finishResolve = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      const finishReject = (error) => {
+        if (settled) return;
+        settled = true;
+        reject(error);
+      };
+      state.realtime.unsubscribeJob = subscribeDocument(FIRESTORE_COLLECTIONS.jobs, jobId, {
+        error: (error) => {
+          if (listenerVersion !== state.realtime.jobListenerVersion) return;
+          const normalizedError = normalizeRealtimeError(error);
+          handleRealtimeListenerError(normalizedError, "job");
+          finishReject(normalizedError);
+        },
+        next: (snapshot) => {
+          void handleJobSnapshot(snapshot, entry, {
+            forceResetAliases: Boolean(options.forceResetAliases),
+            listenerVersion,
+          })
+            .then(finishResolve)
+            .catch((error) => {
+              const normalizedError = normalizeRealtimeError(error);
+              handleRealtimeListenerError(normalizedError, "job");
+              finishReject(normalizedError);
+            });
+        },
+      });
+    });
+  }
+
+  async function handleJobSnapshot(snapshot, entry, options = {}) {
+    if (options.listenerVersion !== state.realtime.jobListenerVersion) {
+      return;
+    }
+    if (!snapshot?.exists) {
+      await ensureArtifactRealtimeSubscription(entry, {
+        forceReconnect: true,
+        forceResetAliases: Boolean(options.forceResetAliases),
+      });
+      syncSpeakerAliasDrafts(Boolean(options.forceResetAliases));
+      applyRender();
+      return;
+    }
+    state.currentJob = normalizeJob(snapshot.data(), state.meeting.title);
+    state.notesStyleSelection = normalizeText(
+      state.currentArtifact?.notesStyleSelected
+      || state.currentJob?.notesStyleSelected
+      || state.notesStyleSelection
+    );
+    await ensureArtifactRealtimeSubscription(entry, {
+      forceReconnect: false,
+      forceResetAliases: Boolean(options.forceResetAliases),
+    });
+    syncSpeakerAliasDrafts(Boolean(options.forceResetAliases));
+    applyRender();
+    logDebug("workspace.snapshot.job", {
+      artifactId: normalizeText(state.currentJob?.artifactId),
+      jobId: normalizeText(state.currentJob?.jobId),
+      status: normalizeText(state.currentJob?.status),
+      updatedAt: normalizeText(state.currentJob?.updatedAt),
+    });
+  }
+
+  async function ensureArtifactRealtimeSubscription(entry, options = {}) {
+    const artifactId = normalizeText(state.currentJob?.artifactId || entry?.remote?.artifactId);
+    if (!artifactId) {
+      disconnectArtifactListener();
+      state.currentArtifact = null;
+      return;
+    }
+    const shouldReconnect = Boolean(
+      options.forceReconnect
+      || normalizeText(state.realtime.artifactDocId) !== artifactId
+      || typeof state.realtime.unsubscribeArtifact !== "function"
+    );
+    if (!shouldReconnect) {
+      return;
+    }
+
+    disconnectArtifactListener();
+    state.currentArtifact = null;
+    state.realtime.artifactDocId = artifactId;
+    const listenerVersion = state.realtime.artifactListenerVersion + 1;
+    state.realtime.artifactListenerVersion = listenerVersion;
+
+    await new Promise((resolve, reject) => {
+      let settled = false;
+      const finishResolve = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      const finishReject = (error) => {
+        if (settled) return;
+        settled = true;
+        reject(error);
+      };
+      state.realtime.unsubscribeArtifact = subscribeDocument(FIRESTORE_COLLECTIONS.artifacts, artifactId, {
+        error: (error) => {
+          if (listenerVersion !== state.realtime.artifactListenerVersion) return;
+          const normalizedError = normalizeRealtimeError(error);
+          handleRealtimeListenerError(normalizedError, "artifact");
+          finishReject(normalizedError);
+        },
+        next: (snapshot) => {
+          void handleArtifactSnapshot(snapshot, {
+            forceResetAliases: Boolean(options.forceResetAliases),
+            listenerVersion,
+          })
+            .then(finishResolve)
+            .catch((error) => {
+              const normalizedError = normalizeRealtimeError(error);
+              handleRealtimeListenerError(normalizedError, "artifact");
+              finishReject(normalizedError);
+            });
+        },
+      });
+    });
+  }
+
+  async function handleArtifactSnapshot(snapshot, options = {}) {
+    if (options.listenerVersion !== state.realtime.artifactListenerVersion) {
+      return;
+    }
+    state.currentArtifact = snapshot?.exists ? normalizeArtifact(snapshot.data()) : null;
+    state.notesStyleSelection = normalizeText(
+      state.currentArtifact?.notesStyleSelected
+      || state.currentJob?.notesStyleSelected
+      || state.notesStyleSelection
+    );
+    syncSpeakerAliasDrafts(Boolean(options.forceResetAliases));
+    applyRender();
+    logDebug("workspace.snapshot.artifact", {
+      artifactId: normalizeText(state.currentArtifact?.artifactId || state.realtime.artifactDocId),
+      exists: Boolean(snapshot?.exists),
+      segmentCount: Array.isArray(state.currentArtifact?.segments) ? state.currentArtifact.segments.length : 0,
+    });
+  }
+
+  function resetSelectedDetailState() {
+    disconnectJobListener();
+    disconnectArtifactListener();
+    state.currentArtifact = null;
+    state.currentDetailSelectionId = "";
+    state.currentJob = null;
+    state.currentLocalRecord = null;
+  }
+
+  function disconnectMeetingListener(options = {}) {
+    if (typeof state.realtime.unsubscribeMeeting === "function") {
+      state.realtime.unsubscribeMeeting();
+    }
+    state.realtime.meetingDocId = "";
+    state.realtime.unsubscribeMeeting = null;
+    if (options.clearDetail) {
+      disconnectJobListener();
+      disconnectArtifactListener();
+    }
+  }
+
+  function disconnectJobListener() {
+    if (typeof state.realtime.unsubscribeJob === "function") {
+      state.realtime.unsubscribeJob();
+    }
+    state.realtime.jobDocId = "";
+    state.realtime.unsubscribeJob = null;
+  }
+
+  function disconnectArtifactListener() {
+    if (typeof state.realtime.unsubscribeArtifact === "function") {
+      state.realtime.unsubscribeArtifact();
+    }
+    state.realtime.artifactDocId = "";
+    state.realtime.unsubscribeArtifact = null;
+  }
+
+  function disposeWorkspaceRealtime(options = {}) {
+    disconnectMeetingListener({ clearDetail: true });
+    if (options.clearAuthCache) {
+      clearWorkspaceAuthCache();
+    }
+  }
+
+  function normalizeRealtimeError(error) {
+    if (error instanceof Error) {
+      return error;
+    }
+    const normalized = new Error(normalizeText(error?.message) || "실시간 작업실 연결을 복구하지 못했어요.");
+    normalized.code = normalizeText(error?.code);
+    return normalized;
+  }
+
+  function isRealtimePermissionError(error) {
+    const code = normalizeText(error?.code).toLowerCase();
+    const message = normalizeText(error?.message).toLowerCase();
+    return code === "permission-denied"
+      || code === "unauthenticated"
+      || message.includes("permission-denied")
+      || message.includes("missing or insufficient permissions");
+  }
+
+  function handleRealtimeListenerError(error, scope) {
+    if (isRealtimePermissionError(error)) {
+      clearWorkspaceSession();
+      renderBlocked("회의 작업실 세션이 만료되었거나 읽기 권한을 확인하지 못했어요. 패널에서 다시 열어 주세요.", {
+        eyebrow: "작업실 세션 종료",
+        title: "실시간 작업실 연결이 종료되었습니다",
+      });
+      return;
+    }
+    if (isLikelyNetworkError(global, error)) {
+      setNotice("실시간 연결이 잠시 끊겼습니다. 연결이 돌아오면 자동으로 다시 붙습니다.", "highlight");
+      applyRender();
+      return;
+    }
+    setNotice(
+      error instanceof Error ? error.message : `${scope} 실시간 연결을 유지하지 못했어요.`,
+      "error"
+    );
+    applyRender();
   }
 
   function openImportAudioPicker() {
@@ -484,8 +878,8 @@
       applyRender();
       return;
     }
-    if (sizeBytes > DEFAULT_INLINE_AUDIO_LIMIT_BYTES) {
-      setNotice(`현재 서버 전사는 ${Math.floor(DEFAULT_INLINE_AUDIO_LIMIT_BYTES / (1024 * 1024))}MB 이하 파일만 바로 처리할 수 있습니다.`, "warning");
+    if (sizeBytes > DEFAULT_SOURCE_MAX_BYTES) {
+      setNotice(`현재 회의 원본은 ${Math.floor(DEFAULT_SOURCE_MAX_BYTES / (1024 * 1024))}MB 이하까지만 지원합니다.`, "warning");
       applyRender();
       return;
     }
@@ -504,6 +898,11 @@
       applyRender();
       return;
     }
+    if (durationMs > DEFAULT_SOURCE_MAX_DURATION_MS) {
+      setNotice("현재 회의 원본은 최대 2시간까지만 지원합니다.", "warning");
+      applyRender();
+      return;
+    }
     const endedAt = new Date().toISOString();
     const startedAt = new Date(Date.now() - durationMs).toISOString();
     const pending = normalizePendingUpload({
@@ -519,11 +918,16 @@
       meetingId: state.session.meetingId,
       meetingTitleSnapshot: buildImportedRecordTitle(file, endedAt),
       mimeType: normalizeText(file.type) || "audio/mp4",
+      originalSizeBytes: sizeBytes,
+      parts: [],
+      preparedPartCount: 0,
       requestId: ns.shared.generateCaptureRequestId(global),
       sharedMemoSnapshot: normalizeTextBlock(refs.sharedMemoInput.value || state.recordMemoDraft || state.recordMemoSaved),
       sizeBytes,
+      sourceMode: inferSourceMode(sizeBytes, durationMs),
       startedAt,
       status: "local_saved",
+      uploadedPartCount: 0,
       updatedAt: endedAt,
     });
     logDebug("workspace.import.selected", {
@@ -644,8 +1048,16 @@
     global.clearInterval(state.media.chunkTimer);
     const stopContext = state.media.stopContext || { autoLimit: false, continueRecording: false };
     const blob = new global.Blob(state.media.chunks, { type: normalizeText(state.media.recorder?.mimeType || state.capture.mimeType) || "audio/webm" });
+    if (Number(blob.size) > DEFAULT_SOURCE_MAX_BYTES) {
+      cleanupMedia();
+      resetCaptureState();
+      resolveRecorderStop();
+      setNotice(`현재 회의 원본은 ${Math.floor(DEFAULT_SOURCE_MAX_BYTES / (1024 * 1024))}MB 이하까지만 지원합니다.`, "error");
+      applyRender();
+      return;
+    }
     const endedAt = new Date().toISOString();
-    const pending = normalizePendingUpload({ blob, captureMode: "microphone", channelCount: state.capture.channelCount, createdAt: endedAt, durationMs: state.capture.durationMs, endedAt, hold: false, jobId: "", lastError: "", meetingId: state.session.meetingId, meetingTitleSnapshot: buildRecordTitle(endedAt), mimeType: blob.type, requestId: state.capture.requestId || ns.shared.generateCaptureRequestId(global), sharedMemoSnapshot: normalizeTextBlock(refs.sharedMemoInput.value || state.recordMemoDraft || state.recordMemoSaved), sizeBytes: blob.size, startedAt: state.capture.startedAt, status: "local_saved", updatedAt: endedAt });
+    const pending = normalizePendingUpload({ blob, captureMode: "microphone", channelCount: state.capture.channelCount, createdAt: endedAt, durationMs: state.capture.durationMs, endedAt, hold: false, jobId: "", lastError: "", meetingId: state.session.meetingId, meetingTitleSnapshot: buildRecordTitle(endedAt), mimeType: blob.type, originalSizeBytes: blob.size, parts: [], preparedPartCount: 0, requestId: state.capture.requestId || ns.shared.generateCaptureRequestId(global), sharedMemoSnapshot: normalizeTextBlock(refs.sharedMemoInput.value || state.recordMemoDraft || state.recordMemoSaved), sizeBytes: blob.size, sourceMode: inferSourceMode(blob.size, state.capture.durationMs), startedAt: state.capture.startedAt, status: "local_saved", uploadedPartCount: 0, updatedAt: endedAt });
     await upsertPendingUpload(pending);
     state.recordMemoDraft = "";
     state.recordMemoSaved = "";
@@ -674,18 +1086,63 @@
     if (!pending || pending.hold || state.busy.queue[requestId]) return;
     if (!isOnline(global)) { await upsertPendingUpload({ ...pending, lastError: "인터넷이 돌아오면 자동으로 업로드합니다.", status: "upload_queued" }); return applyRender(); }
     state.busy.queue[requestId] = true;
-    await upsertPendingUpload({ ...pending, lastError: "", status: "uploading" });
+    await upsertPendingUpload({ ...pending, lastError: "", status: shouldUseChunkedSource(pending) ? "preparing_chunks" : "uploading" });
     applyRender();
     try {
       let latest = state.pendingUploads.find((item) => item.requestId === normalizeText(requestId));
-      const sourceSizeBytes = Math.max(0, Number(latest?.sizeBytes) || Number(latest?.blob?.size) || 0);
-      if (sourceSizeBytes > DEFAULT_INLINE_AUDIO_LIMIT_BYTES) {
-        throw new Error(`현재 서버 전사는 ${Math.floor(DEFAULT_INLINE_AUDIO_LIMIT_BYTES / (1024 * 1024))}MB 이하 원본만 바로 처리할 수 있습니다.`);
+      const sourceSizeBytes = Math.max(0, Number(latest?.originalSizeBytes) || Number(latest?.sizeBytes) || Number(latest?.blob?.size) || 0);
+      if (sourceSizeBytes > DEFAULT_SOURCE_MAX_BYTES) {
+        throw new Error(`현재 회의 원본은 ${Math.floor(DEFAULT_SOURCE_MAX_BYTES / (1024 * 1024))}MB 이하까지만 지원해요.`);
       }
-      if (!normalizeText(latest?.storageObject)) {
+      if (Math.max(0, Number(latest?.durationMs) || 0) > DEFAULT_SOURCE_MAX_DURATION_MS) {
+        throw new Error("현재 회의 원본은 최대 2시간까지만 지원해요.");
+      }
+      if (shouldUseChunkedSource(latest)) {
         latest = await upsertPendingUpload({
           ...latest,
           lastError: "",
+          sourceMode: "chunked",
+          status: "preparing_chunks",
+        });
+        const prepared = await getOrPrepareChunkedSource(latest);
+        latest = await upsertPendingUpload({
+          ...latest,
+          lastError: "",
+          mimeType: prepared.mimeType,
+          originalSizeBytes: sourceSizeBytes,
+          parts: prepared.parts,
+          preparedPartCount: prepared.parts.length,
+          sourceMode: "chunked",
+          status: "uploading_chunks",
+          uploadedPartCount: prepared.parts.filter((part) => normalizeText(part.storageObject)).length,
+        });
+        for (const preparedPart of prepared.parts) {
+          const currentPending = state.pendingUploads.find((item) => item.requestId === normalizeText(requestId));
+          const currentPart = (currentPending?.parts || []).find((part) => Number(part.index) === Number(preparedPart.index));
+          if (normalizeText(currentPart?.storageObject)) {
+            continue;
+          }
+          const uploaded = await uploadPendingSource(currentPending || latest, {
+            blob: preparedPart.blob,
+            endMs: preparedPart.endMs,
+            fileName: buildChunkPartFileName(currentPending || latest, preparedPart.index),
+            mimeType: prepared.mimeType,
+            overlapMs: preparedPart.overlapMs,
+            parentRequestId: normalizeText((currentPending || latest)?.requestId),
+            partCount: prepared.parts.length,
+            partIndex: preparedPart.index,
+            requestId: preparedPart.requestId,
+            sizeBytes: preparedPart.sizeBytes,
+            startMs: preparedPart.startMs,
+          });
+          latest = await updatePendingChunkUploadState(normalizeText((currentPending || latest)?.requestId), preparedPart.index, uploaded);
+        }
+      } else if (!normalizeText(latest?.storageObject)) {
+        latest = await upsertPendingUpload({
+          ...latest,
+          lastError: "",
+          originalSizeBytes: sourceSizeBytes,
+          sourceMode: "single",
           status: "uploading",
         });
         try {
@@ -693,7 +1150,9 @@
           latest = await upsertPendingUpload({
             ...latest,
             lastError: "",
+            originalSizeBytes: sourceSizeBytes,
             sizeBytes: Math.max(sourceSizeBytes, Number(uploaded?.sizeBytes) || 0),
+            sourceMode: "single",
             status: "uploading",
             storageObject: normalizeText(uploaded?.storageObject),
           });
@@ -706,6 +1165,8 @@
           latest = await upsertPendingUpload({
             ...latest,
             lastError: "",
+            originalSizeBytes: sourceSizeBytes,
+            sourceMode: "single",
             status: "uploading",
             storageObject: "",
           });
@@ -733,9 +1194,8 @@
           });
         }
       }
-      if (state.selectedRecordId === ns.shared.buildLocalSelectionId(requestId) && createdJob?.jobId) state.selectedRecordId = buildRemoteSelectionId(createdJob.jobId);
       setNotice("자동 전사를 접수했습니다. 결과를 계속 확인하는 중입니다.", "highlight");
-      await refreshWorkspace(false, "workflow");
+      await syncWorkspaceLocalState(false, "workflow");
     } catch (error) {
       const latest = state.pendingUploads.find((item) => item.requestId === normalizeText(requestId));
       if (latest) await upsertPendingUpload({ ...latest, lastError: error instanceof Error ? error.message : "업로드를 이어가지 못했어요.", status: isLikelyNetworkError(global, error) ? "upload_queued" : "failed" });
@@ -756,10 +1216,23 @@
       durationMs: item.durationMs,
       fileName,
       mimeType: item.mimeType,
+      mode: normalizeText(item.sourceMode) || (Array.isArray(item.parts) && item.parts.length ? "chunked" : "single"),
+      originalSizeBytes: Math.max(0, Number(item.originalSizeBytes) || Number(item.sizeBytes) || Number(item.blob?.size) || 0),
       requestId: item.requestId,
-      sizeBytes: item.sizeBytes,
+      sizeBytes: Math.max(0, Number(item.originalSizeBytes) || Number(item.sizeBytes) || Number(item.blob?.size) || 0),
     };
-    if (normalizeText(item.storageObject)) {
+    if (Array.isArray(item.parts) && item.parts.length) {
+      source.parts = item.parts.map((part) => ({
+        endMs: Math.max(0, Number(part.endMs) || 0),
+        index: Math.max(0, Number(part.index) || 0),
+        mimeType: "audio/wav",
+        overlapMs: Math.max(0, Number(part.overlapMs) || 0),
+        requestId: normalizeText(part.requestId),
+        sizeBytes: Math.max(0, Number(part.sizeBytes) || 0),
+        startMs: Math.max(0, Number(part.startMs) || 0),
+        storageObject: normalizeText(part.storageObject),
+      }));
+    } else if (normalizeText(item.storageObject)) {
       source.storageObject = normalizeText(item.storageObject);
     } else {
       source.inlineAudioBase64 = await blobToBase64(item.blob);
@@ -772,39 +1245,49 @@
     };
   }
 
-  async function uploadPendingSource(item) {
-    const requestId = normalizeText(item?.requestId);
+  async function uploadPendingSource(item, override = {}) {
+    const requestId = normalizeText(override.requestId || item?.requestId);
     if (!requestId) {
       throw new Error("업로드 requestId가 비어 있어요.");
     }
-    const blob = item?.blob instanceof global.Blob ? item.blob : null;
+    const blob = override.blob instanceof global.Blob ? override.blob : (item?.blob instanceof global.Blob ? item.blob : null);
     if (!blob || Number(blob.size) <= 0) {
       throw new Error("업로드할 오디오 원본이 비어 있어요.");
     }
-    const extension = inferAudioExtension(normalizeText(item.mimeType || blob.type));
+    const mimeType = normalizeText(override.mimeType || item.mimeType || blob.type) || "application/octet-stream";
+    const extension = inferAudioExtension(mimeType);
     const url = new URL(CONFIG.uploadSourceUrl);
     url.searchParams.set("captureMode", normalizeText(item.captureMode) || "microphone");
     url.searchParams.set("channelCount", String(Math.max(1, Number(item.channelCount) || 1)));
-    url.searchParams.set("durationMs", String(Math.max(0, Number(item.durationMs) || 0)));
-    url.searchParams.set("fileName", `${state.session.meetingId || "meeting"}-${requestId}.${extension}`);
+    url.searchParams.set("durationMs", String(Math.max(0, Number(override.durationMs) || Number(item.durationMs) || 0)));
+    url.searchParams.set("fileName", normalizeText(override.fileName) || `${state.session.meetingId || "meeting"}-${requestId}.${extension}`);
     url.searchParams.set("meetingId", normalizeText(state.session.meetingId));
+    if (normalizeText(override.parentRequestId)) url.searchParams.set("parentRequestId", normalizeText(override.parentRequestId));
+    if (Number.isFinite(Number(override.partCount)) && Number(override.partCount) > 0) url.searchParams.set("partCount", String(Math.max(0, Number(override.partCount) || 0)));
+    if (Number.isFinite(Number(override.partIndex)) && Number(override.partIndex) >= 0) url.searchParams.set("partIndex", String(Math.max(0, Number(override.partIndex) || 0)));
     url.searchParams.set("requestId", requestId);
-    url.searchParams.set("sizeBytes", String(Math.max(0, Number(item.sizeBytes) || Number(blob.size) || 0)));
+    if (Number.isFinite(Number(override.startMs)) && Number(override.startMs) >= 0) url.searchParams.set("startMs", String(Math.max(0, Number(override.startMs) || 0)));
+    if (Number.isFinite(Number(override.endMs)) && Number(override.endMs) >= 0) url.searchParams.set("endMs", String(Math.max(0, Number(override.endMs) || 0)));
+    if (Number.isFinite(Number(override.overlapMs)) && Number(override.overlapMs) >= 0) url.searchParams.set("overlapMs", String(Math.max(0, Number(override.overlapMs) || 0)));
+    url.searchParams.set("sizeBytes", String(Math.max(0, Number(override.sizeBytes) || Number(item.sizeBytes) || Number(blob.size) || 0)));
 
     const controller = typeof AbortController === "function" ? new AbortController() : null;
     const timeoutMs = Math.max(1000, DEFAULT_SOURCE_UPLOAD_TIMEOUT_MS);
     const timeoutId = controller ? global.setTimeout(() => controller.abort(), timeoutMs) : 0;
     const token = normalizeText(state.session.meetingSessionToken);
     const headers = {
-      "Content-Type": normalizeText(item.mimeType || blob.type) || "application/octet-stream",
+      "Content-Type": mimeType,
     };
     if (token) {
       headers.Authorization = `MeetingSession ${token}`;
     }
     logDebug("workspace.source-upload.request", {
       hasMeetingSessionToken: Boolean(token),
+      parentRequestId: normalizeText(override.parentRequestId),
+      partCount: Math.max(0, Number(override.partCount) || 0),
+      partIndex: Math.max(0, Number(override.partIndex) || 0),
       requestId,
-      sizeBytes: Math.max(0, Number(item.sizeBytes) || Number(blob.size) || 0),
+      sizeBytes: Math.max(0, Number(override.sizeBytes) || Number(item.sizeBytes) || Number(blob.size) || 0),
       timeoutMs,
       url: url.toString(),
     });
@@ -848,6 +1331,127 @@
     }
   }
 
+  function inferSourceMode(sizeBytes, durationMs) {
+    return requiresChunkedSource(sizeBytes, durationMs) ? "chunked" : "single";
+  }
+
+  function requiresChunkedSource(sizeBytes, durationMs) {
+    return Math.max(0, Number(sizeBytes) || 0) > DEFAULT_SOURCE_TARGET_PART_BYTES
+      || Math.max(0, Number(durationMs) || 0) > DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS;
+  }
+
+  function shouldUseChunkedSource(item) {
+    const pending = normalizePendingUpload(item);
+    return normalizeText(pending.sourceMode) === "chunked"
+      || requiresChunkedSource(
+        Number(pending.originalSizeBytes) || Number(pending.sizeBytes) || Number(pending.blob?.size) || 0,
+        Number(pending.durationMs) || 0
+      );
+  }
+
+  async function getOrPrepareChunkedSource(item) {
+    const pending = normalizePendingUpload(item);
+    const cacheKey = normalizeText(pending.requestId);
+    const cached = state.runtimeChunkCache[cacheKey];
+    if (cached && Math.max(0, Number(cached.originalSizeBytes) || 0) === Math.max(0, Number(pending.originalSizeBytes) || Number(pending.sizeBytes) || 0)) {
+      const mergedCachedParts = cached.parts.map((part) => {
+        const persisted = (pending.parts || []).find((entry) => Number(entry.index) === Number(part.index)) || {};
+        return {
+          ...part,
+          storageObject: normalizeText(persisted.storageObject) || normalizeText(part.storageObject),
+          uploadStatus: normalizeText(persisted.uploadStatus) || normalizeText(part.uploadStatus),
+        };
+      });
+      state.runtimeChunkCache[cacheKey] = {
+        ...cached,
+        parts: mergedCachedParts,
+      };
+      return state.runtimeChunkCache[cacheKey];
+    }
+    const blob = pending.blob instanceof global.Blob ? pending.blob : null;
+    if (!blob || Number(blob.size) <= 0) {
+      throw new Error("분할 준비할 오디오 원본이 비어 있어요.");
+    }
+    const prepared = await prepareAudioSourceChunks(blob, {
+      chunkDurationMs: DEFAULT_SOURCE_CHUNK_DURATION_MS,
+      durationMs: pending.durationMs,
+      maxBytes: DEFAULT_SOURCE_MAX_BYTES,
+      maxDurationMs: DEFAULT_SOURCE_MAX_DURATION_MS,
+      overlapMs: DEFAULT_SOURCE_CHUNK_OVERLAP_MS,
+    });
+    const previousParts = Array.isArray(pending.parts) ? pending.parts : [];
+    const normalizedParts = prepared.parts.map((part, index) => {
+      const previous = previousParts.find((entry) => Number(entry.index) === index) || {};
+      return {
+        blob: part.blob,
+        endMs: Math.max(0, Number(part.endMs) || 0),
+        index,
+        overlapMs: Math.max(0, Number(part.overlapMs) || 0),
+        requestId: normalizeText(previous.requestId) || buildPendingPartRequestId(pending.requestId, index),
+        sizeBytes: Math.max(0, Number(part.sizeBytes) || Number(part.blob?.size) || 0),
+        startMs: Math.max(0, Number(part.startMs) || 0),
+        storageObject: normalizeText(previous.storageObject),
+        uploadStatus: normalizeText(previous.uploadStatus) || (normalizeText(previous.storageObject) ? "uploaded" : ""),
+      };
+    });
+    const preparedSource = {
+      mimeType: prepared.mimeType,
+      originalSizeBytes: Math.max(0, Number(pending.originalSizeBytes) || Number(pending.sizeBytes) || Number(blob.size) || 0),
+      parts: normalizedParts,
+    };
+    state.runtimeChunkCache[cacheKey] = preparedSource;
+    return preparedSource;
+  }
+
+  async function updatePendingChunkUploadState(requestId, partIndex, uploaded) {
+    const current = state.pendingUploads.find((item) => item.requestId === normalizeText(requestId));
+    if (!current) {
+      throw new Error("업로드 상태를 갱신할 기록을 찾지 못했어요.");
+    }
+    const nextParts = (Array.isArray(current.parts) ? current.parts : []).map((part) => (
+      Number(part.index) === Number(partIndex)
+        ? {
+            ...part,
+            sizeBytes: Math.max(0, Number(uploaded?.sizeBytes) || Number(part.sizeBytes) || 0),
+            storageObject: normalizeText(uploaded?.storageObject),
+            uploadStatus: normalizeText(uploaded?.uploadStatus) || "uploaded",
+          }
+        : part
+    ));
+    const nextPending = await upsertPendingUpload({
+      ...current,
+      lastError: "",
+      parts: nextParts,
+      preparedPartCount: nextParts.length,
+      status: "uploading_chunks",
+      uploadedPartCount: nextParts.filter((part) => normalizeText(part.storageObject)).length,
+      updatedAt: new Date().toISOString(),
+    });
+    if (state.runtimeChunkCache[normalizeText(requestId)]) {
+      state.runtimeChunkCache[normalizeText(requestId)] = {
+        ...state.runtimeChunkCache[normalizeText(requestId)],
+        parts: state.runtimeChunkCache[normalizeText(requestId)].parts.map((part) => (
+          Number(part.index) === Number(partIndex)
+            ? {
+                ...part,
+                storageObject: normalizeText(uploaded?.storageObject),
+                uploadStatus: normalizeText(uploaded?.uploadStatus) || "uploaded",
+              }
+            : part
+        )),
+      };
+    }
+    return nextPending;
+  }
+
+  function buildPendingPartRequestId(requestId, partIndex) {
+    return `${normalizeText(requestId) || "meeting-source"}-part-${String(Math.max(0, Number(partIndex) || 0)).padStart(4, "0")}`;
+  }
+
+  function buildChunkPartFileName(item, partIndex) {
+    return `${state.session.meetingId || "meeting"}-${normalizeText(item?.requestId) || "source"}-part-${String(Math.max(0, Number(partIndex) || 0)).padStart(4, "0")}.wav`;
+  }
+
   async function saveMeetingTitle() { return saveMeetingPatch({ title: normalizeText(state.meetingTitleDraft || refs.meetingTitleInput.value) }, "작업실 이름을 저장했습니다.", "작업실 이름을 먼저 입력해 주세요."); }
   async function saveSharedMemo() {
     updateRecordMemoDraft(refs.sharedMemoInput.value);
@@ -883,7 +1487,7 @@
         state.meetingTitleDraft = state.meeting.title;
       }
       setNotice(successMessage, "highlight");
-      await refreshWorkspace(false, "workflow");
+      await syncWorkspaceLocalState(false, "workflow");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "작업실 정보를 저장하지 못했어요.", "error");
       applyRender();
@@ -945,9 +1549,10 @@
     try {
       await postJson(global, CONFIG.deleteMeetingResultUrl, { jobId: entry.remote.jobId, meetingId: state.session.meetingId }, state.session.meetingSessionToken);
       if (entry.pending?.requestId) await deletePendingUpload(entry.pending.requestId);
+      state.records = state.records.filter((record) => normalizeText(record.jobId) !== normalizeText(entry.remote.jobId));
       state.selectedRecordId = "";
       setNotice("선택한 기록을 삭제했습니다.", "highlight");
-      await refreshWorkspace(true, "workflow");
+      await syncWorkspaceLocalState(true, "workflow");
     } finally {
       state.busy.deleteRecord = false;
       applyRender();
@@ -992,7 +1597,7 @@
       state.notesStyleSelection = normalizeText(state.currentArtifact?.notesStyleSelected || state.currentJob?.notesStyleSelected || state.notesStyleSelection);
       state.reviewTab = "notes";
       setNotice("표현 방식을 반영해 회의 정리를 다시 만들었습니다.", "highlight");
-      await refreshWorkspace(false, "workflow");
+      await syncWorkspaceLocalState(false, "workflow");
     } finally {
       state.busy.regenerateNotes = false;
       applyRender();
@@ -1164,7 +1769,7 @@
       } else {
         setNotice("화자명을 저장했습니다.", "highlight");
       }
-      await refreshWorkspace(true, "workflow");
+      await syncWorkspaceLocalState(true, "workflow");
     } finally {
       state.busy.regenerateNotes = false;
       state.busy.saveSpeakerAliases = false;
@@ -1191,7 +1796,7 @@
         }
       }
       setNotice("기록 이름을 저장했습니다.", "highlight");
-      await refreshWorkspace(true, "workflow");
+      await syncWorkspaceLocalState(true, "workflow");
     } finally {
       state.busy.saveRecordTitle = false;
       applyRender();
@@ -1217,6 +1822,7 @@
   }
 
   async function deletePendingUpload(requestId) {
+    delete state.runtimeChunkCache[normalizeText(requestId)];
     await state.queueStore.delete(requestId);
     state.pendingUploads = state.pendingUploads.filter((item) => item.requestId !== normalizeText(requestId));
     if (state.selectedRecordId === ns.shared.buildLocalSelectionId(requestId)) state.selectedRecordId = chooseSelectedRecordId(state);
@@ -1249,6 +1855,7 @@
     }
     refs.debugPanel.hidden = !enabled;
     if (!enabled) return;
+    syncDebugPanelCollapsedUi({ persist: false });
     renderDebugEntries(getDebugEntries());
     state.unsubscribeDebug = subscribeDebugEntries(renderDebugEntries);
     logDebug("workspace.debug.enabled", {
@@ -1256,13 +1863,32 @@
     });
   }
 
+  function toggleDebugPanelCollapsed() {
+    state.debugPanelCollapsed = !state.debugPanelCollapsed;
+    syncDebugPanelCollapsedUi({ persist: true });
+  }
+
+  function syncDebugPanelCollapsedUi(options = {}) {
+    const persist = options.persist !== false;
+    if (refs.debugPanelBody) {
+      refs.debugPanelBody.hidden = Boolean(state.debugPanelCollapsed);
+    }
+    if (refs.toggleDebugPanelButton) {
+      refs.toggleDebugPanelButton.textContent = state.debugPanelCollapsed ? "로그 펼치기" : "로그 접기";
+      refs.toggleDebugPanelButton.setAttribute("aria-expanded", String(!state.debugPanelCollapsed));
+    }
+    if (persist) {
+      safeLocalStorageSet(global, DEBUG_PANEL_COLLAPSED_STORAGE_KEY, state.debugPanelCollapsed ? "1" : "0");
+    }
+  }
+
   function renderDebugEntries(entries) {
     if (!refs.debugPanel || refs.debugPanel.hidden) return;
     const normalizedEntries = Array.isArray(entries) ? entries : [];
     const summary = summarizeDebugEntries(normalizedEntries);
-    refs.debugStatus.textContent = `로그 ${summary.totalLogs}건 · 함수 호출 ${summary.functionCalls}건`;
+    refs.debugStatus.textContent = `로그 ${summary.totalLogs}건 · 함수 ${summary.functionCalls}건 · 스냅샷 ${summary.firestoreListenerEvents}건`;
     if (refs.debugCounters) {
-      refs.debugCounters.textContent = `Functions 요청 ${summary.functionCalls}건 · 응답 ${summary.functionResponses}건 · 오류 로그 ${summary.functionErrorLogs}건 · 기타 로그 ${summary.otherLogs}건`;
+      refs.debugCounters.textContent = `Functions 요청 ${summary.functionCalls}건 · 응답 ${summary.functionResponses}건 · Firestore 인증 ${summary.firestoreAuthEvents}건 · 리스너 갱신 ${summary.firestoreListenerEvents}건 · 오류 로그 ${summary.totalErrors}건 · 기타 로그 ${summary.otherLogs}건`;
     }
     if (refs.debugEndpointSummary) {
       refs.debugEndpointSummary.textContent = summary.endpointSummary;
@@ -1275,9 +1901,13 @@
 
   function summarizeDebugEntries(entries) {
     const endpointCounts = new Map();
+    const listenerCounts = new Map();
     let functionCalls = 0;
     let functionResponses = 0;
     let functionErrorLogs = 0;
+    let firestoreAuthEvents = 0;
+    let firestoreErrorLogs = 0;
+    let firestoreListenerEvents = 0;
 
     for (const entry of entries) {
       const classification = classifyDebugEntry(entry);
@@ -1295,23 +1925,63 @@
       }
       if (classification.type === "function-error") {
         functionErrorLogs += 1;
+        continue;
+      }
+      if (classification.type === "firestore-auth") {
+        firestoreAuthEvents += 1;
+        continue;
+      }
+      if (classification.type === "firestore-listener") {
+        firestoreListenerEvents += 1;
+        if (classification.endpoint) {
+          listenerCounts.set(
+            classification.endpoint,
+            (listenerCounts.get(classification.endpoint) || 0) + 1
+          );
+        }
+        continue;
+      }
+      if (classification.type === "firestore-error") {
+        firestoreErrorLogs += 1;
       }
     }
 
-    const endpointSummary = endpointCounts.size
+    const functionSummary = endpointCounts.size
       ? Array.from(endpointCounts.entries())
         .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0], "ko-KR"))
-        .slice(0, 5)
+        .slice(0, 3)
         .map(([endpoint, count]) => `${endpoint} ${count}회`)
         .join(" · ")
-      : "아직 함수 호출이 없습니다.";
+      : "";
+    const listenerSummary = listenerCounts.size
+      ? Array.from(listenerCounts.entries())
+        .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0], "ko-KR"))
+        .slice(0, 3)
+        .map(([endpoint, count]) => `${endpoint} ${count}건`)
+        .join(" · ")
+      : "";
+    const endpointSummary = [functionSummary, listenerSummary].filter(Boolean).join(" · ")
+      || "아직 함수/Firestore 연결 로그가 없습니다.";
 
     return {
       endpointSummary,
+      firestoreAuthEvents,
+      firestoreErrorLogs,
+      firestoreListenerEvents,
       functionCalls,
       functionErrorLogs,
       functionResponses,
-      otherLogs: Math.max(0, entries.length - functionCalls - functionResponses - functionErrorLogs),
+      otherLogs: Math.max(
+        0,
+        entries.length
+          - functionCalls
+          - functionResponses
+          - functionErrorLogs
+          - firestoreAuthEvents
+          - firestoreListenerEvents
+          - firestoreErrorLogs
+      ),
+      totalErrors: functionErrorLogs + firestoreErrorLogs,
       totalLogs: entries.length,
     };
   }
@@ -1340,6 +2010,28 @@
       return {
         endpoint: extractFunctionEndpointLabel(url, event),
         type: "function-error",
+      };
+    }
+    if (event === "firestore.auth.start" || event === "firestore.auth.success") {
+      return {
+        endpoint: "workspace-auth",
+        type: "firestore-auth",
+      };
+    }
+    if (event === "firestore.auth.error" || event === "firestore.listener.error") {
+      return {
+        endpoint: normalizeText(entry?.payload?.collection) || "firestore",
+        type: "firestore-error",
+      };
+    }
+    if (
+      event === "firestore.listener.attach"
+      || event === "firestore.listener.detach"
+      || event === "firestore.listener.snapshot"
+    ) {
+      return {
+        endpoint: normalizeText(entry?.payload?.collection) || "firestore-doc",
+        type: "firestore-listener",
       };
     }
     return {
@@ -1481,7 +2173,7 @@
     }, 2600);
   }
   function persistWorkspaceSession() { const entry = findHistoryEntry(state, state.selectedRecordId); const payload = { expiresAt: state.session.expiresAt, jobId: normalizeText(entry?.remote?.jobId || entry?.pending?.jobId), meetingId: state.session.meetingId, meetingSessionToken: state.session.meetingSessionToken, mode: state.mode, sharedMemo: normalizeTextBlock(state.recordMemoDraft || state.recordMemoSaved), title: normalizeText(state.meeting.title || state.session.title) }; safeSessionStorageSet(global, SESSION_STORAGE_KEY, JSON.stringify(payload)); if (payload.meetingId) safeLocalStorageSet(global, buildWorkspaceSessionStorageKey(payload.meetingId), JSON.stringify(payload)); replaceCleanUrl(); }
-  function clearWorkspaceSession() { try { global.sessionStorage.removeItem(SESSION_STORAGE_KEY); } catch {} if (state.session.meetingId) safeLocalStorageRemove(global, buildWorkspaceSessionStorageKey(state.session.meetingId)); }
+  function clearWorkspaceSession() { try { global.sessionStorage.removeItem(SESSION_STORAGE_KEY); } catch {} if (state.session.meetingId) safeLocalStorageRemove(global, buildWorkspaceSessionStorageKey(state.session.meetingId)); disposeWorkspaceRealtime({ clearAuthCache: true }); }
   function replaceCleanUrl() { const nextUrl = new URL(global.location.href); nextUrl.search = ""; nextUrl.hash = ""; if (state.session.meetingId) nextUrl.searchParams.set("meetingId", state.session.meetingId); const entry = findHistoryEntry(state, state.selectedRecordId); const jobId = normalizeText(entry?.remote?.jobId || entry?.pending?.jobId); if (jobId) nextUrl.searchParams.set("jobId", jobId); if (state.session.meetingSessionToken) nextUrl.hash = buildWorkspaceHash(state.session.meetingSessionToken); global.history.replaceState({}, "", nextUrl.toString()); state.params = parseParams(nextUrl.toString()); }
   function renderBlocked(message, options = {}) {
     logDebug("workspace.blocked", { message, tone: options?.tone, title: options?.title });
@@ -1544,16 +2236,6 @@
     if (refs.confirmDialogBody) refs.confirmDialogBody.textContent = state.confirmation.body || "";
     if (refs.confirmDialogConfirm) refs.confirmDialogConfirm.textContent = state.confirmation.confirmLabel || "확인";
   }
-  function hasActiveProcessingEntries() {
-    return ns.render.buildHistoryEntries(state).some((entry) => ["queued", "processing", "remote_queued", "remote_processing", "uploading"].includes(entry.status));
-  }
-  function needsSelectedDetailHydration() {
-    const entry = findHistoryEntry(state, state.selectedRecordId);
-    if (!entry?.remote?.jobId) return false;
-    const artifactId = normalizeText(state.currentJob?.artifactId || entry.remote.artifactId);
-    if (!state.currentJob) return true;
-    return Boolean(artifactId && !state.currentArtifact);
-  }
   function hasWorkspaceData() {
     return Boolean(state.records.length || state.pendingUploads.length || state.currentJob || state.currentArtifact || state.selectedRecordId);
   }
@@ -1573,36 +2255,13 @@
   }
   function shouldSuppressRefreshError(error, message, reason) {
     const normalizedReason = normalizeText(reason);
-    if (!["poll", "background", "workflow"].includes(normalizedReason)) return false;
+    if (!["background", "workflow"].includes(normalizedReason)) return false;
     if (!hasWorkspaceData()) return false;
     return isSlowResponseMessage(message) || isLikelyNetworkError(global, error);
   }
-  function hasOpenQueueEntries() {
-    return state.pendingUploads.some((item) => normalizeText(item.status) !== "succeeded");
-  }
-  function shouldRunBackgroundRefresh() {
-    if (state.blocked || state.loading) return false;
-    if (hasActiveProcessingEntries() || needsSelectedDetailHydration() || hasOpenQueueEntries()) {
-      return true;
-    }
-    const ageMs = Math.max(0, Date.now() - Number(state.lastRefreshAt || 0));
-    if (!state.lastRefreshAt || ageMs >= COMPLETED_WORKSPACE_BACKGROUND_REFRESH_TTL_MS) {
-      return true;
-    }
-    logDebug("workspace.refresh.skipped", {
-      ageMs,
-      reason: "background-ttl",
-      ttlMs: COMPLETED_WORKSPACE_BACKGROUND_REFRESH_TTL_MS,
-    });
-    return false;
-  }
   function handleBackgroundRefresh() {
-    if (!shouldRunBackgroundRefresh()) return;
+    if (state.blocked || state.loading || global.document.hidden) return;
+    if (typeof state.realtime.unsubscribeMeeting === "function") return;
     void refreshWorkspace(false, "background");
-  }
-  function schedulePollIfNeeded() {
-    global.clearTimeout(state.syncTimer);
-    if (!hasActiveProcessingEntries() && !needsSelectedDetailHydration()) return;
-    state.syncTimer = global.setTimeout(() => refreshWorkspace(false, "poll"), ACTIVE_POLL_DELAY_MS);
   }
 })(globalThis);

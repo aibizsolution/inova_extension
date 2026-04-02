@@ -10,6 +10,7 @@ function registerMeetingLaunchHandlers(deps) {
   const {
     CORS_ORIGINS,
     REGION,
+    createFirebaseCustomToken,
     createHttpError,
     db,
     hostedMeetingPageUrl,
@@ -138,10 +139,78 @@ function registerMeetingLaunchHandlers(deps) {
     }
   });
 
+  const issueInovaMeetingWorkspaceAuth = onRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
+    try {
+      assertMethod(request, createHttpError);
+      if (typeof createFirebaseCustomToken !== "function") {
+        throw createHttpError(500, "작업실 Firebase 인증을 준비하지 못했어요.");
+      }
+      const access = await authorizeMeetingRequest(request, null, {
+        allowAccessToken: false,
+        allowWorkspaceSession: true,
+      });
+      const workspaceSession = access.workspaceSession;
+      const owner = access.owner;
+      const meetingId = normalizeText(workspaceSession?.meeting?.meetingId);
+      const workspaceSessionId = normalizeText(workspaceSession?.workspaceSessionId);
+      const expiresAt = normalizeText(workspaceSession?.expiresAt);
+      if (!meetingId || !workspaceSessionId || !owner?.providerUserKey) {
+        throw createHttpError(400, "작업실 Firebase 인증에 필요한 세션 정보가 비어 있어요.");
+      }
+
+      const workspaceExpMs = Date.parse(expiresAt);
+      if (!(workspaceExpMs > Date.now())) {
+        throw createHttpError(401, "회의 작업실 세션이 만료되었어요. 패널에서 다시 열어 주세요.");
+      }
+
+      const firebaseUid = buildWorkspaceFirebaseUid(owner.providerUserKey);
+      const meetingDocumentId = buildMeetingDocId(owner.providerUserKey, meetingId);
+      const meetingRef = db.collection(MEETING_COLLECTION).doc(meetingDocumentId);
+      const meetingSnapshot = await meetingRef.get();
+      if (meetingSnapshot.exists && !normalizeText(meetingSnapshot.data()?.owner?.providerUserKey)) {
+        await meetingRef.set({
+          owner: { ...owner },
+        }, { merge: true });
+      }
+      const firebaseCustomToken = await createFirebaseCustomToken(firebaseUid, {
+        meetingId,
+        providerUserKey: owner.providerUserKey,
+        scope: "meeting-workspace",
+        workspaceExpMs,
+        workspaceSessionId,
+      });
+
+      logEvent?.("meeting.workspace-auth.issue.success", {
+        meetingDocumentId,
+        meetingId,
+        providerUserKey: owner.providerUserKey,
+        workspaceSessionId,
+      });
+
+      response.json({
+        ok: true,
+        data: {
+          expiresAt,
+          firebaseCustomToken,
+          meetingDocumentId,
+          meetingId,
+          workspaceSessionId,
+        },
+      });
+    } catch (error) {
+      logEvent?.("meeting.workspace-auth.issue.error", {
+        error: normalizeText(error?.message),
+        status: Number(error?.status) || 500,
+      });
+      sendError(response, error);
+    }
+  });
+
   return {
     authorizeMeetingRequest,
     exchangeInovaMeetingLaunch,
     issueInovaMeetingLaunch,
+    issueInovaMeetingWorkspaceAuth,
   };
 
   async function authorizeMeetingRequest(request, ownerHint, options = {}) {
@@ -200,7 +269,8 @@ function registerMeetingLaunchHandlers(deps) {
   }
 
   async function loadMeetingSummary(owner, meetingId) {
-    const snapshot = await db.collection(MEETING_COLLECTION).doc(buildMeetingDocId(owner.providerUserKey, meetingId)).get();
+    const meetingRef = db.collection(MEETING_COLLECTION).doc(buildMeetingDocId(owner.providerUserKey, meetingId));
+    const snapshot = await meetingRef.get();
     if (!snapshot.exists) {
       return null;
     }
@@ -208,6 +278,11 @@ function registerMeetingLaunchHandlers(deps) {
     const storedOwnerKey = normalizeText(meeting?.owner?.providerUserKey);
     if (storedOwnerKey && storedOwnerKey !== owner.providerUserKey) {
       throw createHttpError(403, "다른 사용자의 회의 기록에는 접근할 수 없어요.");
+    }
+    if (!storedOwnerKey) {
+      await meetingRef.set({
+        owner: { ...owner },
+      }, { merge: true });
     }
     if (normalizeText(meeting.deletedAt)) {
       return null;
@@ -333,6 +408,10 @@ function assertNotExpired(expiresAt, message) {
 
 function buildMeetingDocId(providerUserKey, meetingId) {
   return `${normalizeString(providerUserKey)}__${normalizeString(meetingId)}`;
+}
+
+function buildWorkspaceFirebaseUid(providerUserKey) {
+  return `inova-workspace__${normalizeString(providerUserKey).replace(/[^A-Za-z0-9._-]/g, "_")}`;
 }
 
 module.exports = {

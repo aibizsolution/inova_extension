@@ -51,10 +51,11 @@ function listenPopupStorage() {
 
 async function refreshPopup() {
   const storage = await popupRoot.storage.getState();
-  popupState.settings = {
+  const nextSettings = await reconcileMeetingWorkspaceSettings({
     ...popupRoot.constants.defaults.settings,
     ...(storage.settings || {}),
-  };
+  });
+  popupState.settings = nextSettings;
   renderPopup();
 }
 
@@ -81,4 +82,43 @@ async function setMeetingWorkspaceTarget(target) {
 
 function normalizeMeetingWorkspaceTarget(value) {
   return String(value || "").trim().toLowerCase() === "local" ? "local" : "production";
+}
+
+async function reconcileMeetingWorkspaceSettings(settings) {
+  const currentTarget = normalizeMeetingWorkspaceTarget(settings?.meetingWorkspaceTarget);
+  const currentOverride = normalizeMeetingWorkspaceOverrideUrl(settings?.meetingWorkspaceUrlOverride);
+  const nextSettings = {
+    ...popupRoot.constants.defaults.settings,
+    ...(settings || {}),
+    meetingWorkspaceTarget: currentTarget,
+    meetingWorkspaceUrlOverride: currentTarget === "local" ? currentOverride : "",
+  };
+  if (
+    nextSettings.meetingWorkspaceTarget !== settings?.meetingWorkspaceTarget
+    || nextSettings.meetingWorkspaceUrlOverride !== settings?.meetingWorkspaceUrlOverride
+  ) {
+    return popupRoot.storage.updateSettings({
+      meetingWorkspaceTarget: nextSettings.meetingWorkspaceTarget,
+      meetingWorkspaceUrlOverride: nextSettings.meetingWorkspaceUrlOverride,
+    });
+  }
+  return nextSettings;
+}
+
+function normalizeMeetingWorkspaceOverrideUrl(value) {
+  const normalized = String(value || "").trim();
+  if (!normalized) {
+    return LOCAL_MEETING_WORKSPACE_URL;
+  }
+  try {
+    const url = new URL(normalized);
+    if (url.hostname === "127.0.0.1" || url.hostname === "localhost") {
+      url.port = "5000";
+      url.pathname = "/meeting/index.html";
+      url.search = "";
+      url.hash = "";
+      return url.toString();
+    }
+  } catch {}
+  return LOCAL_MEETING_WORKSPACE_URL;
 }

@@ -76,6 +76,17 @@
 
   function buildLocalPendingJob(pending) {
     if (!pending) return null;
+    const totalPrepared = Math.max(0, Number(pending.preparedPartCount) || 0);
+    const totalUploaded = Math.max(0, Number(pending.uploadedPartCount) || 0);
+    const progressPercent = pending.status === "preparing_chunks"
+      ? 18
+      : pending.status === "uploading_chunks"
+        ? Math.min(58, totalPrepared > 0 ? Math.round((totalUploaded / totalPrepared) * 58) : 36)
+        : pending.status === "uploading"
+          ? 35
+          : pending.status === "remote_processing"
+            ? 70
+            : 0;
     return {
       artifactId: "",
       createdAt: normalizeText(pending.createdAt),
@@ -88,7 +99,7 @@
       notesModeDetected: "",
       notesModeSelected: "",
       notesStyleSelected: "",
-      progress: { percent: pending.status === "uploading" ? 35 : pending.status === "remote_processing" ? 70 : 0, phase: normalizeText(pending.status) },
+      progress: { percent: progressPercent, phase: normalizeText(pending.status) },
       requestId: normalizeText(pending.requestId),
       resultTitle: normalizeText(pending.meetingTitleSnapshot),
       sharedMemoSnapshot: ns.shared.normalizeTextBlock(pending.sharedMemoSnapshot),
@@ -151,7 +162,9 @@
   function buildPendingSummary(pending) {
     if (!pending) return "";
     if (pending.status === "local_saved") return "로컬 저장 완료. 곧 업로드를 시작합니다.";
+    if (pending.status === "preparing_chunks") return "큰 오디오를 전사용 chunk로 준비하는 중입니다.";
     if (pending.status === "upload_queued") return pending.lastError || "온라인 복구 후 자동 업로드합니다.";
+    if (pending.status === "uploading_chunks") return `분할 업로드 중입니다. ${Math.max(0, Number(pending.uploadedPartCount) || 0)}/${Math.max(0, Number(pending.preparedPartCount) || 0)}개 업로드했습니다.`;
     if (pending.status === "uploading") return "오디오 업로드 중입니다.";
     if (pending.status === "remote_queued") return "원격 처리 대기열에 접수했습니다.";
     if (pending.status === "remote_processing") return "전사와 회의 정리를 진행 중입니다.";
@@ -164,7 +177,9 @@
   function buildPendingNotice(pending) {
     if (!pending) return "";
     if (pending.status === "local_saved") return "브라우저에 저장했고 바로 업로드를 시도합니다.";
+    if (pending.status === "preparing_chunks") return "큰 오디오를 분할해 업로드 가능한 형태로 준비하고 있습니다.";
     if (pending.status === "upload_queued") return pending.lastError || "온라인 상태를 기다리는 중입니다.";
+    if (pending.status === "uploading_chunks") return "분할 업로드와 큐 등록을 이어가는 중입니다.";
     if (pending.status === "uploading") return "파일 업로드 중입니다.";
     if (pending.status === "remote_queued") return "처리 대기 중입니다.";
     if (pending.status === "remote_processing") return "전사와 정리 중입니다.";
@@ -341,7 +356,7 @@
     const normalizedStatus = normalizeText(detailView.badgeStatus);
     const recordSelected = normalizedStatus !== "idle";
     const isFailed = normalizedStatus === "failed";
-    const isBusy = ["queued", "processing", "uploading", "remote_queued", "remote_processing"].includes(normalizedStatus);
+    const isBusy = ["queued", "processing", "uploading", "uploading_chunks", "preparing_chunks", "remote_queued", "remote_processing"].includes(normalizedStatus);
     const speakerCount = Math.max(0, Number(options.speakerCount) || 0);
     const segmentCount = Math.max(0, Number(options.segmentCount) || 0);
     const speakerAliasCount = Math.max(0, Number(options.speakerAliasCount) || 0);

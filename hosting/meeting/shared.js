@@ -5,14 +5,33 @@
   const LOCAL_STORAGE_KEY_PREFIX = "inova-hosted-meeting-session::";
   const WORKSPACE_HASH_PARAM = "ws";
   const DEBUG_PREFIX = "[Inova Hosted Meeting]";
-  const ACTIVE_POLL_DELAY_MS = 1800;
   const DEFAULT_CREATE_JOB_TIMEOUT_MS = 9 * 60 * 1000;
   const DEFAULT_INLINE_AUDIO_LIMIT_BYTES = 25 * 1024 * 1024;
+  const DEFAULT_SOURCE_TARGET_PART_BYTES = 20 * 1024 * 1024;
+  const DEFAULT_SOURCE_MAX_BYTES = 200 * 1024 * 1024;
+  const DEFAULT_SOURCE_MAX_DURATION_MS = 2 * 60 * 60 * 1000;
+  const DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS = 20 * 60 * 1000;
+  const DEFAULT_SOURCE_CHUNK_DURATION_MS = 9 * 60 * 1000;
+  const DEFAULT_SOURCE_CHUNK_OVERLAP_MS = 1500;
+  const DEFAULT_SOURCE_CHUNK_SAMPLE_RATE = 16000;
   const DEFAULT_MAX_RECORDING_DURATION_MS = 90 * 60 * 1000;
   const DEFAULT_NOTES_MODE = "general";
   const DEFAULT_NOTES_STYLE = "default";
   const DEFAULT_RECORDING_AUDIO_BITS_PER_SECOND = 30000;
   const DEFAULT_SOURCE_UPLOAD_TIMEOUT_MS = 3 * 60 * 1000;
+  const FIREBASE_WEB_CONFIG = {
+    apiKey: "AIzaSyDnVS7MmQs7wWjVPihr1MNmcALxJ0a1qPM",
+    appId: "1:1027279095019:web:755f1f1a02cbae0d262aae",
+    authDomain: "browser-extension-main.firebaseapp.com",
+    messagingSenderId: "1027279095019",
+    projectId: "browser-extension-main",
+    storageBucket: "browser-extension-main.firebasestorage.app",
+  };
+  const FIRESTORE_COLLECTIONS = {
+    artifacts: "integration_inova_meeting_artifacts",
+    jobs: "integration_inova_meeting_jobs",
+    meetings: "integration_inova_meetings",
+  };
   const MAX_PREVIEW_TEXT_LENGTH = 180;
   const MAX_DEBUG_LOG_ENTRIES = 120;
   const TERMINAL_REMOTE_STATUSES = new Set(["succeeded", "failed"]);
@@ -53,7 +72,7 @@
   function isLocalWorkspaceOrigin(globalObject) {
     try {
       const origin = new URL(String(globalObject?.location?.href || "")).origin;
-      return ["http://127.0.0.1:5000", "http://localhost:5000", "http://127.0.0.1:4173", "http://localhost:4173"].includes(origin);
+      return ["http://127.0.0.1:5000", "http://localhost:5000"].includes(origin);
     } catch {
       return false;
     }
@@ -134,9 +153,18 @@
       deleteMeetingResultUrl: joinUrl(functionsBaseUrl, "deleteInovaMeetingResult"),
       deleteMeetingUrl: joinUrl(functionsBaseUrl, "deleteInovaMeeting"),
       exchangeLaunchUrl: joinUrl(functionsBaseUrl, "exchangeInovaMeetingLaunch"),
+      firestoreCollections: {
+        ...FIRESTORE_COLLECTIONS,
+        ...(normalizedOverride.firestoreCollections || {}),
+      },
+      firebaseWebConfig: {
+        ...FIREBASE_WEB_CONFIG,
+        ...(normalizedOverride.firebaseWebConfig || {}),
+      },
       functionsBaseUrl,
       getArtifactUrl: joinUrl(functionsBaseUrl, "getInovaMeetingArtifact"),
       getJobUrl: joinUrl(functionsBaseUrl, "getInovaMeetingJob"),
+      issueWorkspaceAuthUrl: joinUrl(functionsBaseUrl, "issueInovaMeetingWorkspaceAuth"),
       listResultsUrl: joinUrl(functionsBaseUrl, "listInovaMeetingResults"),
       regenerateNotesUrl: joinUrl(functionsBaseUrl, "regenerateInovaMeetingNotes"),
       uploadSourceUrl: joinUrl(functionsBaseUrl, "uploadInovaMeetingSource"),
@@ -366,7 +394,7 @@
 
   function normalizeStatus(status) {
     const normalized = normalizeText(status);
-    if (["local_saved", "upload_queued", "uploading", "remote_queued", "on_hold"].includes(normalized)) return "queued";
+    if (["local_saved", "upload_queued", "uploading", "uploading_chunks", "preparing_chunks", "remote_queued", "on_hold"].includes(normalized)) return "queued";
     if (normalized === "remote_processing") return "processing";
     if (["recording", "paused", "queued", "processing", "succeeded", "failed"].includes(normalized)) return normalized;
     return "idle";
@@ -383,6 +411,8 @@
     if (normalized === "local_saved") return "로컬 저장";
     if (normalized === "upload_queued") return "업로드 대기";
     if (normalized === "uploading") return "업로드 중";
+    if (normalized === "preparing_chunks") return "분할 준비";
+    if (normalized === "uploading_chunks") return "분할 업로드";
     if (normalized === "on_hold") return "보류";
     return "대기";
   }
@@ -413,9 +443,14 @@
   function formatPhase(phase) {
     const normalized = normalizeText(phase);
     if (normalized === "uploading" || normalized === "upload_queued") return "업로드 준비";
+    if (normalized === "preparing_chunks") return "분할 준비 중";
+    if (normalized === "uploading_chunks") return "분할 업로드 중";
     if (normalized === "remote_queued" || normalized === "queued") return "원격 대기";
     if (normalized === "remote_processing" || normalized === "processing") return "원격 처리";
     if (normalized === "transcribing") return "전사 중";
+    if (normalized === "transcribing_chunks") return "분할 전사 중";
+    if (normalized === "reconciling_speakers") return "화자 정합 중";
+    if (normalized === "generating_notes") return "회의 정리 중";
     if (normalized === "diarizing") return "화자 구분 중";
     if (normalized === "finalizing") return "회의록 정리 중";
     return normalized;
@@ -658,7 +693,6 @@
   };
 
   ns.shared = {
-    ACTIVE_POLL_DELAY_MS,
     AUTO_RETRY_PENDING_STATUSES,
     DEBUG_PREFIX,
     DEFAULT_NOTES_MODE,
@@ -667,6 +701,13 @@
     DEFAULT_INLINE_AUDIO_LIMIT_BYTES,
     DEFAULT_MAX_RECORDING_DURATION_MS,
     DEFAULT_RECORDING_AUDIO_BITS_PER_SECOND,
+    DEFAULT_SOURCE_CHUNK_DURATION_MS,
+    DEFAULT_SOURCE_CHUNK_OVERLAP_MS,
+    DEFAULT_SOURCE_CHUNK_SAMPLE_RATE,
+    DEFAULT_SOURCE_MAX_BYTES,
+    DEFAULT_SOURCE_MAX_DURATION_MS,
+    DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS,
+    DEFAULT_SOURCE_TARGET_PART_BYTES,
     DEFAULT_SOURCE_UPLOAD_TIMEOUT_MS,
     LOCAL_STORAGE_KEY_PREFIX,
     MAX_PREVIEW_TEXT_LENGTH,

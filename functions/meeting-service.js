@@ -3,8 +3,13 @@ const OpenAI = require("openai");
 
 const ALLOWED_CAPTURE_MODES = new Set(["tab-audio", "microphone", "mixed-audio"]);
 const DEFAULT_INLINE_AUDIO_LIMIT_BYTES = 25 * 1024 * 1024;
+const DEFAULT_SOURCE_TARGET_PART_BYTES = 20 * 1024 * 1024;
+const DEFAULT_SOURCE_MAX_BYTES = 200 * 1024 * 1024;
+const DEFAULT_SOURCE_MAX_DURATION_MS = 2 * 60 * 60 * 1000;
+const DEFAULT_SOURCE_PART_OVERLAP_MS = 1500;
 const DEFAULT_MODEL = "gpt-4o-transcribe-diarize";
 const DEFAULT_SUMMARY_MODEL = "gpt-5.4-mini";
+const DEFAULT_SPEAKER_RECONCILE_MODEL = "gpt-5.4-mini";
 const JOB_COLLECTION = "integration_inova_meeting_jobs";
 const ARTIFACT_COLLECTION = "integration_inova_meeting_artifacts";
 const MEETING_COLLECTION = "integration_inova_meetings";
@@ -40,8 +45,8 @@ function registerMeetingHandlers(deps) {
   let client = null;
 
   const createInovaMeetingJob = onRequest({ cors: CORS_ORIGINS, region: REGION, timeoutSeconds: 540 }, async (request, response) => {
-    let usesStorageSource = false;
-    let tempStorageObject = "";
+    let cleanupStorageObjects = [];
+    let jobQueued = false;
     try {
       assertMethod(request);
       const meeting = normalizeMeetingRequest(request.body?.meeting);
@@ -50,8 +55,6 @@ function registerMeetingHandlers(deps) {
       const context = normalizeMeetingContext(request.body?.context);
       const access = await verifyRequestIdentity(request);
       const owner = access.owner;
-      usesStorageSource = Boolean(normalizeText(source.storageObject));
-      tempStorageObject = normalizeText(source.storageObject);
 
       if (!meeting.meetingId) {
         throw createHttpError(400, "회의 ID가 없어요.");
@@ -66,17 +69,14 @@ function registerMeetingHandlers(deps) {
       if (!(source.sizeBytes > 0) || !(source.durationMs > 0)) {
         throw createHttpError(400, "녹음 source 길이나 크기가 올바르지 않아요.");
       }
+      assertMeetingSourceWithinSupportedLimits(source, createHttpError);
 
       const requestId = normalizeText(source.requestId);
       const jobId = requestId
         ? buildStableMeetingEntityId("meeting-job", owner.providerUserKey, meeting.meetingId, requestId)
         : db.collection(JOB_COLLECTION).doc().id;
-      const artifactId = requestId
-        ? buildStableMeetingEntityId("meeting-artifact", owner.providerUserKey, meeting.meetingId, requestId)
-        : db.collection(ARTIFACT_COLLECTION).doc().id;
       const createdAt = new Date().toISOString();
       const jobRef = db.collection(JOB_COLLECTION).doc(jobId);
-      const artifactRef = db.collection(ARTIFACT_COLLECTION).doc(artifactId);
       if (requestId) {
         const existingSnapshot = await jobRef.get();
         if (existingSnapshot.exists) {
@@ -101,177 +101,44 @@ function registerMeetingHandlers(deps) {
           }
         }
       }
-      const audioBuffer = await loadSourceAudioBuffer(source);
-      if (!audioBuffer.length) {
-        throw createHttpError(400, "회의 원본 오디오가 비어 있어요.");
-      }
-      if (audioBuffer.length > getInlineAudioLimitBytes()) {
-        throw createHttpError(
-          413,
-          usesStorageSource
-            ? `현재 서버 전사 경로는 ${Math.floor(getInlineAudioLimitBytes() / (1024 * 1024))}MB 이하 원본만 바로 처리해요. 더 큰 파일 분할 전사는 아직 준비 중입니다.`
-            : `현재 inline 업로드 경로는 ${Math.floor(getInlineAudioLimitBytes() / (1024 * 1024))}MB 이하 녹음만 지원해요.`
-        );
-      }
-      tempStorageObject = normalizeText(source.storageObject)
-        || buildTempStorageObjectPath(owner.providerUserKey, meeting.meetingId, jobId, source.fileName);
-      const expiresAt = new Date(Date.now() + TEMP_UPLOAD_TTL_MS).toISOString();
-      const sourceSnapshot = {
-        captureMode: source.captureMode,
-        channelCount: source.channelCount,
-        durationMs: source.durationMs,
-        expiresAt,
-        fileName: source.fileName,
-        mimeType: source.mimeType,
-        requestId,
-        sizeBytes: source.sizeBytes,
-        storageObject: usesStorageSource ? tempStorageObject : "",
-        uploadStatus: usesStorageSource ? "uploaded" : "inline-only",
-      };
+
+      const meetingRef = db.collection(MEETING_COLLECTION).doc(buildMeetingDocId(owner.providerUserKey, meeting.meetingId));
+      const sessionRef = meeting.sessionId
+        ? db.collection(SESSION_COLLECTION).doc(buildSessionDocId(owner.providerUserKey, meeting.sessionId))
+        : null;
+      const sourcePreparation = await ensureQueuedMeetingSourceReady(source, owner, meeting, jobId, createHttpError);
+      const sourceSnapshot = sourcePreparation.source;
+      cleanupStorageObjects = sourcePreparation.cleanupStorageObjects;
       const effectiveMeeting = {
         ...meeting,
         sharedMemo: context.sharedMemoSnapshot,
       };
       const queuedJob = buildQueuedJob(jobId, effectiveMeeting, owner, options, sourceSnapshot, context, createdAt);
-      const meetingRef = db.collection(MEETING_COLLECTION).doc(buildMeetingDocId(owner.providerUserKey, meeting.meetingId));
-      const sessionRef = meeting.sessionId
-        ? db.collection(SESSION_COLLECTION).doc(buildSessionDocId(owner.providerUserKey, meeting.sessionId))
-        : null;
-
-      const uploadedSource = usesStorageSource
-        ? {
-            storageObject: tempStorageObject,
-            uploadStatus: "uploaded",
-          }
-        : await uploadTemporarySource(bucket, tempStorageObject, audioBuffer, sourceSnapshot, owner, meeting, jobId);
-      sourceSnapshot.storageObject = normalizeText(uploadedSource?.storageObject);
-      sourceSnapshot.uploadStatus = normalizeText(uploadedSource?.uploadStatus) || sourceSnapshot.uploadStatus;
       await Promise.all([
         upsertMeetingJobSummary(meetingRef, effectiveMeeting, owner, queuedJob),
         sessionRef ? upsertLegacySessionJobSummary(sessionRef, effectiveMeeting, owner, queuedJob) : Promise.resolve(),
         jobRef.set(queuedJob),
       ]);
+      jobQueued = true;
 
-      const processingAt = new Date().toISOString();
-      const processingPatch = {
-        progress: {
-          percent: 42,
-          phase: "transcribing",
+      logEvent("meeting.create.queued", {
+        captureMode: source.captureMode,
+        chunked: sourceSnapshot.mode === "chunked",
+        jobId,
+        meetingId: meeting.meetingId,
+        partCount: Array.isArray(sourceSnapshot.parts) ? sourceSnapshot.parts.length : 0,
+        providerUserKey: owner.providerUserKey,
+      });
+      response.json({
+        ok: true,
+        data: {
+          job: queuedJob,
+          reused: false,
         },
-        status: "processing",
-        transcription: {
-          language: meeting.language,
-          speakerLabels: options.speakerLabels,
-        },
-        updatedAt: processingAt,
-      };
-      await Promise.all([
-        jobRef.set(processingPatch, { merge: true }),
-        upsertMeetingJobSummary(
-          meetingRef,
-          effectiveMeeting,
-          owner,
-          {
-            ...queuedJob,
-            ...processingPatch,
-          }
-        ),
-        sessionRef
-          ? upsertLegacySessionJobSummary(
-              sessionRef,
-              effectiveMeeting,
-              owner,
-              {
-                ...queuedJob,
-                ...processingPatch,
-              }
-            )
-          : Promise.resolve(),
-      ]);
-
-      try {
-        const transcript = await transcribeMeetingAudio(audioBuffer, meeting, options, source);
-        const meetingNotes = await maybeGenerateMeetingNotes(transcript, effectiveMeeting, options, context, logEvent, owner, jobId);
-        const completedAt = new Date().toISOString();
-        const artifact = buildTranscriptArtifact(artifactId, jobId, effectiveMeeting, owner, transcript, meetingNotes, completedAt);
-        const deletedAt = await deleteTemporarySource(bucket, tempStorageObject);
-        const succeededPatch = buildSucceededJobPatch(artifact, effectiveMeeting, options, sourceSnapshot, context, transcript, meetingNotes, completedAt, deletedAt);
-        const succeededJob = {
-          ...queuedJob,
-          ...processingPatch,
-          ...succeededPatch,
-        };
-        await Promise.all([
-          artifactRef.set(artifact),
-          jobRef.set(succeededPatch, { merge: true }),
-          upsertMeetingJobSummary(meetingRef, effectiveMeeting, owner, succeededJob, artifact),
-          sessionRef ? upsertLegacySessionJobSummary(sessionRef, effectiveMeeting, owner, succeededJob, artifact) : Promise.resolve(),
-        ]);
-
-        logEvent("meeting.create.success", {
-          artifactId,
-          captureMode: source.captureMode,
-          jobId,
-          meetingId: meeting.meetingId,
-          providerUserKey: owner.providerUserKey,
-          speakerCount: transcript.speakerCount,
-        });
-        response.json({
-          ok: true,
-          data: {
-            job: queuedJob,
-            reused: false,
-          },
-        });
-      } catch (error) {
-        const deletedAt = await deleteTemporarySource(bucket, tempStorageObject);
-        const failedPatch = {
-          cleanup: {
-            deletedAt,
-            sourceAudioDeleted: Boolean(deletedAt),
-          },
-          error: normalizeText(error?.message) || "회의 전사를 처리하지 못했어요.",
-          progress: {
-            percent: 100,
-            phase: "failed",
-          },
-          source: {
-            ...sourceSnapshot,
-            uploadStatus: deletedAt ? "deleted" : sourceSnapshot.uploadStatus,
-          },
-          status: "failed",
-          updatedAt: new Date().toISOString(),
-        };
-        await Promise.all([
-          jobRef.set(failedPatch, { merge: true }),
-          upsertMeetingJobSummary(
-            meetingRef,
-            effectiveMeeting,
-            owner,
-            {
-              ...queuedJob,
-              ...processingPatch,
-              ...failedPatch,
-            }
-          ),
-          sessionRef
-            ? upsertLegacySessionJobSummary(
-                sessionRef,
-                effectiveMeeting,
-                owner,
-                {
-                  ...queuedJob,
-                  ...processingPatch,
-                  ...failedPatch,
-                }
-              )
-            : Promise.resolve(),
-        ]);
-        throw error;
-      }
+      });
     } catch (error) {
-      if (usesStorageSource && tempStorageObject) {
-        await deleteTemporarySource(bucket, tempStorageObject);
+      if (!jobQueued) {
+        await deleteTemporarySourceGroup(bucket, cleanupStorageObjects);
       }
       logEvent("meeting.create.error", {
         error: normalizeText(error?.message),
@@ -303,6 +170,9 @@ function registerMeetingHandlers(deps) {
 
       assertWorkspaceMeetingAccess(access, input.meetingId, createHttpError);
       await assertMeetingIsActive(owner, input.meetingId, createHttpError);
+      if (!bucket) {
+        throw createHttpError(500, "회의 임시 오디오를 저장할 bucket이 설정되지 않았어요.");
+      }
 
       const audioBuffer = Buffer.isBuffer(request.rawBody)
         ? request.rawBody
@@ -311,8 +181,16 @@ function registerMeetingHandlers(deps) {
         throw createHttpError(400, "업로드한 오디오가 비어 있어요.");
       }
 
-      const jobId = buildStableMeetingEntityId("meeting-job", owner.providerUserKey, input.meetingId, input.requestId);
-      const storageObject = buildTempStorageObjectPath(owner.providerUserKey, input.meetingId, jobId, input.fileName);
+      const parentRequestId = normalizeText(input.parentRequestId || input.requestId);
+      const jobId = buildStableMeetingEntityId("meeting-job", owner.providerUserKey, input.meetingId, parentRequestId);
+      const storageObject = buildTempStorageObjectPath(
+        owner.providerUserKey,
+        input.meetingId,
+        jobId,
+        input.partCount > 0
+          ? `part-${String(input.partIndex).padStart(4, "0")}-${input.fileName}`
+          : input.fileName
+      );
       const uploaded = await uploadTemporarySource(
         bucket,
         storageObject,
@@ -330,6 +208,8 @@ function registerMeetingHandlers(deps) {
         bytes: audioBuffer.length,
         jobId,
         meetingId: input.meetingId,
+        partCount: input.partCount,
+        partIndex: input.partIndex,
         providerUserKey: owner.providerUserKey,
         requestId: input.requestId,
         storageObject: normalizeText(uploaded?.storageObject),
@@ -337,9 +217,15 @@ function registerMeetingHandlers(deps) {
       response.json({
         ok: true,
         data: {
+          endMs: input.endMs,
           jobId,
+          overlapMs: input.overlapMs,
+          parentRequestId,
+          partCount: input.partCount,
+          partIndex: input.partIndex,
           requestId: input.requestId,
           sizeBytes: audioBuffer.length,
+          startMs: input.startMs,
           storageObject: normalizeText(uploaded?.storageObject),
           uploadStatus: normalizeText(uploaded?.uploadStatus) || "uploaded",
           uploadedAt: new Date().toISOString(),
@@ -353,6 +239,130 @@ function registerMeetingHandlers(deps) {
       sendError(response, error);
     }
   });
+
+  const processQueuedMeetingJobWrite = async (event) => {
+    const beforeSnapshot = event?.data?.before || null;
+    const afterSnapshot = event?.data?.after || null;
+    if (!afterSnapshot?.exists) {
+      return;
+    }
+    const previousJob = beforeSnapshot?.exists ? normalizeMeetingJob(beforeSnapshot.data()) : null;
+    const queuedJob = normalizeMeetingJob(afterSnapshot.data());
+    if (!queuedJob.jobId || queuedJob.deletedAt) {
+      return;
+    }
+    if (normalizeText(queuedJob.status) !== "queued" || normalizeText(previousJob?.status) === "queued") {
+      return;
+    }
+
+    const owner = queuedJob.owner && typeof queuedJob.owner === "object" ? { ...queuedJob.owner } : {};
+    const meeting = normalizeMeetingRequest(queuedJob.meeting);
+    const options = normalizeMeetingOptions(queuedJob.options);
+    const context = normalizeMeetingContext(queuedJob.context);
+    const source = normalizeMeetingSource(queuedJob.source);
+    const artifactId = getMeetingArtifactId(queuedJob.jobId, owner.providerUserKey, meeting.meetingId, source.requestId, db);
+    const artifactRef = db.collection(ARTIFACT_COLLECTION).doc(artifactId);
+    const jobRef = db.collection(JOB_COLLECTION).doc(queuedJob.jobId);
+    const meetingRef = db.collection(MEETING_COLLECTION).doc(buildMeetingDocId(owner.providerUserKey, meeting.meetingId));
+    const sessionRef = meeting.sessionId
+      ? db.collection(SESSION_COLLECTION).doc(buildSessionDocId(owner.providerUserKey, meeting.sessionId))
+      : null;
+    let currentJob = queuedJob;
+
+    const persistPatch = async (patch, artifact) => {
+      currentJob = mergeMeetingJobPatch(currentJob, patch);
+      await Promise.all([
+        jobRef.set(patch, { merge: true }),
+        upsertMeetingJobSummary(meetingRef, meeting, owner, currentJob, artifact),
+        sessionRef ? upsertLegacySessionJobSummary(sessionRef, meeting, owner, currentJob, artifact) : Promise.resolve(),
+      ]);
+    };
+
+    try {
+      await persistPatch({
+        progress: {
+          percent: 8,
+          phase: source.mode === "chunked" ? "transcribing_chunks" : "transcribing",
+        },
+        status: "processing",
+        transcription: {
+          language: meeting.language,
+          speakerLabels: options.speakerLabels,
+        },
+        updatedAt: new Date().toISOString(),
+      });
+
+      const transcript = await transcribeQueuedMeetingSource(
+        source,
+        meeting,
+        options,
+        owner,
+        queuedJob.jobId,
+        async (progressPatch) => persistPatch(progressPatch)
+      );
+      await persistPatch({
+        progress: {
+          percent: 86,
+          phase: "generating_notes",
+        },
+        updatedAt: new Date().toISOString(),
+      });
+      const meetingNotes = await maybeGenerateMeetingNotes(transcript, meeting, options, context, logEvent, owner, queuedJob.jobId);
+      const completedAt = new Date().toISOString();
+      const artifact = buildTranscriptArtifact(artifactId, queuedJob.jobId, meeting, owner, transcript, meetingNotes, completedAt);
+      const deletion = await deleteTemporarySourceGroup(bucket, collectMeetingSourceStorageObjects(source));
+      const succeededPatch = buildSucceededJobPatch(
+        artifact,
+        meeting,
+        options,
+        markMeetingSourceDeleted(source, deletion.deletedStorageObjects),
+        context,
+        transcript,
+        meetingNotes,
+        completedAt,
+        deletion.deletedAt
+      );
+      currentJob = mergeMeetingJobPatch(currentJob, succeededPatch);
+      await Promise.all([
+        artifactRef.set(artifact),
+        jobRef.set(succeededPatch, { merge: true }),
+        upsertMeetingJobSummary(meetingRef, meeting, owner, currentJob, artifact),
+        sessionRef ? upsertLegacySessionJobSummary(sessionRef, meeting, owner, currentJob, artifact) : Promise.resolve(),
+      ]);
+
+      logEvent("meeting.process.success", {
+        artifactId,
+        chunked: source.mode === "chunked",
+        jobId: queuedJob.jobId,
+        meetingId: meeting.meetingId,
+        providerUserKey: owner.providerUserKey,
+        speakerCount: transcript.speakerCount,
+      });
+    } catch (error) {
+      const deletion = await deleteTemporarySourceGroup(bucket, collectMeetingSourceStorageObjects(source));
+      const failedPatch = {
+        cleanup: {
+          deletedAt: deletion.deletedAt,
+          sourceAudioDeleted: Boolean(deletion.deletedAt),
+        },
+        error: normalizeText(error?.message) || "회의 전사를 처리하지 못했어요.",
+        progress: {
+          percent: 100,
+          phase: "failed",
+        },
+        source: markMeetingSourceDeleted(source, deletion.deletedStorageObjects),
+        status: "failed",
+        updatedAt: new Date().toISOString(),
+      };
+      await persistPatch(failedPatch);
+      logEvent("meeting.process.error", {
+        error: normalizeText(error?.message),
+        jobId: queuedJob.jobId,
+        meetingId: meeting.meetingId,
+        providerUserKey: owner.providerUserKey,
+      });
+    }
+  };
 
   const getInovaMeetingJob = onRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
     try {
@@ -607,7 +617,10 @@ function registerMeetingHandlers(deps) {
       const updatedAt = new Date().toISOString();
       await meetingRef.set({
         createdAt: currentMeeting.createdAt || updatedAt,
+        meetingId: currentMeeting.meetingId || input.meetingId,
+        owner: normalizeText(currentMeeting.owner?.providerUserKey) ? currentMeeting.owner : owner,
         recentJobs,
+        sessionId: currentMeeting.sessionId,
         sharedMemo: nextSharedMemo,
         title: nextTitle,
         updatedAt,
@@ -626,7 +639,10 @@ function registerMeetingHandlers(deps) {
             : item
         ));
         await sessionRef.set({
+          language: currentSession.language || currentMeeting.language || "ko",
+          owner: normalizeText(currentSession.owner?.providerUserKey) ? currentSession.owner : owner,
           recentJobs: sessionRecentJobs,
+          sessionId: currentSession.sessionId || currentMeeting.sessionId,
           sharedMemo: nextSharedMemo,
           title: nextTitle,
           updatedAt,
@@ -910,10 +926,10 @@ function registerMeetingHandlers(deps) {
 
       const deletedAt = new Date().toISOString();
       const artifactIds = collectMeetingArtifactIds(job);
-      const storageObject = normalizeText(job.source?.storageObject);
+      const storageObjects = collectMeetingSourceStorageObjects(job.source);
 
-      if (storageObject) {
-        await deleteTemporarySource(bucket, storageObject);
+      if (storageObjects.length) {
+        await deleteTemporarySourceGroup(bucket, storageObjects);
       }
       await Promise.all(
         artifactIds.map((artifactId) => deleteDocumentIfExists(db.collection(ARTIFACT_COLLECTION).doc(artifactId)))
@@ -927,7 +943,7 @@ function registerMeetingHandlers(deps) {
         jobId: input.jobId,
         meetingId: input.meetingId,
         providerUserKey: owner.providerUserKey,
-        storageObjectDeleted: Boolean(storageObject),
+        storageObjectDeleted: Boolean(storageObjects.length),
       });
       response.json({
         ok: true,
@@ -936,7 +952,7 @@ function registerMeetingHandlers(deps) {
           deletedAt,
           deletedJobId: input.jobId,
           meeting,
-          storageObjectDeleted: Boolean(storageObject),
+          storageObjectDeleted: Boolean(storageObjects.length),
         },
       });
     } catch (error) {
@@ -965,7 +981,18 @@ function registerMeetingHandlers(deps) {
       if (!snapshot.exists) {
         throw createHttpError(404, "삭제할 회의를 찾지 못했어요.");
       }
-      const meeting = normalizeMeetingSummary(snapshot.data());
+      let meeting = normalizeMeetingSummary(snapshot.data());
+      if (!normalizeText(meeting.owner?.providerUserKey)) {
+        await meetingRef.set({
+          meetingId: meeting.meetingId || meetingId,
+          owner,
+        }, { merge: true });
+        meeting = normalizeMeetingSummary({
+          ...meeting,
+          meetingId: meeting.meetingId || meetingId,
+          owner,
+        });
+      }
       assertMeetingOwnership(meeting, owner, createHttpError);
       if (meeting.deletedAt) {
         throw createHttpError(404, "이미 삭제된 회의예요.");
@@ -977,11 +1004,7 @@ function registerMeetingHandlers(deps) {
 
       const deletedAt = new Date().toISOString();
       const artifactIds = Array.from(new Set(jobs.flatMap((job) => collectMeetingArtifactIds(job))));
-      const storageObjects = Array.from(new Set(
-        jobs
-          .map((job) => normalizeText(job.source?.storageObject))
-          .filter(Boolean)
-      ));
+      const storageObjects = Array.from(new Set(jobs.flatMap((job) => collectMeetingSourceStorageObjects(job.source))));
 
       await Promise.all(storageObjects.map((storageObject) => deleteTemporarySource(bucket, storageObject)));
       await Promise.all(artifactIds.map((artifactId) => deleteDocumentIfExists(db.collection(ARTIFACT_COLLECTION).doc(artifactId))));
@@ -1027,6 +1050,7 @@ function registerMeetingHandlers(deps) {
     getInovaMeetingJob,
     listInovaMeetings,
     listInovaMeetingResults,
+    processQueuedMeetingJobWrite,
     regenerateInovaMeetingNotes,
     uploadInovaMeetingSource,
     updateInovaMeeting,
@@ -1127,6 +1151,196 @@ function registerMeetingHandlers(deps) {
     }
   }
 
+  async function deleteTemporarySourceGroup(targetBucket, storageObjects) {
+    const deletedStorageObjects = [];
+    for (const storageObject of Array.from(new Set((storageObjects || []).map((value) => normalizeText(value)).filter(Boolean)))) {
+      const deletedAt = await deleteTemporarySource(targetBucket, storageObject);
+      if (deletedAt) {
+        deletedStorageObjects.push(storageObject);
+      }
+    }
+    return {
+      deletedAt: deletedStorageObjects.length ? new Date().toISOString() : "",
+      deletedStorageObjects,
+    };
+  }
+
+  function assertMeetingSourceWithinSupportedLimits(source, errorFactory) {
+    if (source.sizeBytes > getMeetingSourceMaxBytes()) {
+      throw errorFactory(
+        413,
+        `현재 회의 원본은 ${Math.floor(getMeetingSourceMaxBytes() / (1024 * 1024))}MB 이하까지만 지원해요.`
+      );
+    }
+    if (source.durationMs > getMeetingSourceMaxDurationMs()) {
+      throw errorFactory(413, "현재 회의 원본은 최대 2시간까지만 지원해요.");
+    }
+  }
+
+  async function ensureQueuedMeetingSourceReady(source, owner, meeting, jobId, errorFactory) {
+    const expiresAt = new Date(Date.now() + TEMP_UPLOAD_TTL_MS).toISOString();
+    const baseSource = {
+      captureMode: source.captureMode,
+      channelCount: source.channelCount,
+      durationMs: source.durationMs,
+      expiresAt,
+      fileName: source.fileName,
+      inlineAudioBase64: "",
+      mimeType: source.mimeType,
+      mode: normalizeMeetingSourceMode(source.mode || (source.parts.length ? "chunked" : "single")),
+      originalSizeBytes: Math.max(source.originalSizeBytes || source.sizeBytes, source.sizeBytes),
+      parts: [],
+      requestId: normalizeText(source.requestId),
+      sizeBytes: source.sizeBytes,
+      storageObject: "",
+      uploadStatus: "uploaded",
+    };
+    if (baseSource.mode === "chunked") {
+      if (!source.parts.length) {
+        throw errorFactory(400, "분할 업로드 part 정보가 없어요.");
+      }
+      const normalizedParts = source.parts
+        .map((part, index) => normalizeMeetingSourcePart(part, index, source.requestId))
+        .sort((left, right) => left.index - right.index || left.startMs - right.startMs);
+      for (const part of normalizedParts) {
+        if (!part.storageObject) {
+          throw errorFactory(400, "분할 업로드가 아직 끝나지 않았어요.");
+        }
+        if (!(part.sizeBytes > 0) || part.sizeBytes > getMeetingSourceTargetPartBytes()) {
+          throw errorFactory(400, "분할 업로드 part 크기가 올바르지 않아요.");
+        }
+      }
+      return {
+        cleanupStorageObjects: [],
+        source: {
+          ...baseSource,
+          parts: normalizedParts.map((part) => ({
+            endMs: part.endMs,
+            index: part.index,
+            mimeType: part.mimeType,
+            overlapMs: part.overlapMs || DEFAULT_SOURCE_PART_OVERLAP_MS,
+            requestId: part.requestId,
+            sizeBytes: part.sizeBytes,
+            startMs: part.startMs,
+            storageObject: part.storageObject,
+          })),
+        },
+      };
+    }
+
+    if (normalizeText(source.storageObject)) {
+      return {
+        cleanupStorageObjects: [],
+        source: {
+          ...baseSource,
+          storageObject: normalizeText(source.storageObject),
+        },
+      };
+    }
+
+    if (source.inlineAudioBase64) {
+      const audioBuffer = await loadSourceAudioBuffer(source);
+      if (!audioBuffer.length) {
+        throw errorFactory(400, "회의 원본 오디오가 비어 있어요.");
+      }
+      if (audioBuffer.length > getInlineAudioLimitBytes()) {
+        throw errorFactory(
+          413,
+          `현재 inline 업로드 경로는 ${Math.floor(getInlineAudioLimitBytes() / (1024 * 1024))}MB 이하 녹음만 지원해요.`
+        );
+      }
+      if (!bucket) {
+        return {
+          cleanupStorageObjects: [],
+          source: {
+            ...baseSource,
+            inlineAudioBase64: source.inlineAudioBase64,
+            uploadStatus: "inline-only",
+          },
+        };
+      }
+      const storageObject = buildTempStorageObjectPath(owner.providerUserKey, meeting.meetingId, jobId, source.fileName);
+      const uploadedSource = await uploadTemporarySource(bucket, storageObject, audioBuffer, baseSource, owner, meeting, jobId);
+      if (!normalizeText(uploadedSource?.storageObject)) {
+        throw errorFactory(500, "임시 오디오 업로드를 준비하지 못했어요.");
+      }
+      return {
+        cleanupStorageObjects: [storageObject],
+        source: {
+          ...baseSource,
+          storageObject,
+          uploadStatus: normalizeText(uploadedSource?.uploadStatus) || "uploaded",
+        },
+      };
+    }
+
+    throw errorFactory(400, "회의 원본 오디오가 없어요.");
+  }
+
+  function collectMeetingSourceStorageObjects(source) {
+    return Array.from(new Set([
+      normalizeText(source?.storageObject),
+      ...(Array.isArray(source?.parts) ? source.parts.map((part) => normalizeText(part?.storageObject)) : []),
+    ].filter(Boolean)));
+  }
+
+  function markMeetingSourceDeleted(source, deletedStorageObjects) {
+    const deletedSet = new Set((deletedStorageObjects || []).map((value) => normalizeText(value)).filter(Boolean));
+    const nextSource = normalizeMeetingSource(source);
+    const hasDeletedSingle = nextSource.storageObject && deletedSet.has(nextSource.storageObject);
+    return {
+      ...nextSource,
+      parts: nextSource.parts.map((part) => ({
+        ...part,
+        uploadStatus: deletedSet.has(part.storageObject) ? "deleted" : "uploaded",
+      })),
+      storageObject: nextSource.storageObject,
+      uploadStatus: hasDeletedSingle || nextSource.parts.some((part) => deletedSet.has(part.storageObject)) ? "deleted" : nextSource.uploadStatus,
+    };
+  }
+
+  function mergeMeetingJobPatch(jobInput, patchInput) {
+    const job = normalizeMeetingJob(jobInput);
+    const patch = patchInput && typeof patchInput === "object" ? patchInput : {};
+    return normalizeMeetingJob({
+      ...job,
+      ...patch,
+      cleanup: {
+        ...job.cleanup,
+        ...(patch.cleanup || {}),
+      },
+      context: {
+        ...job.context,
+        ...(patch.context || {}),
+      },
+      meeting: {
+        ...job.meeting,
+        ...(patch.meeting || {}),
+      },
+      progress: {
+        ...job.progress,
+        ...(patch.progress || {}),
+      },
+      source: patch.source ? normalizeMeetingSource({ ...job.source, ...patch.source }) : job.source,
+      transcript: patch.transcript
+        ? {
+            ...job.transcript,
+            ...(patch.transcript || {}),
+          }
+        : job.transcript,
+      transcription: {
+        ...job.transcription,
+        ...(patch.transcription || {}),
+      },
+    });
+  }
+
+  function getMeetingArtifactId(jobId, providerUserKey, meetingId, requestId, targetDb) {
+    return normalizeText(requestId)
+      ? buildStableMeetingEntityId("meeting-artifact", providerUserKey, meetingId, requestId)
+      : targetDb.collection(ARTIFACT_COLLECTION).doc().id;
+  }
+
   async function deleteDocumentIfExists(ref) {
     if (!ref) {
       return false;
@@ -1214,7 +1428,18 @@ function registerMeetingHandlers(deps) {
       if (!snapshot.exists) {
         return null;
       }
-      const meeting = normalizeMeetingSummary(snapshot.data());
+      let meeting = normalizeMeetingSummary(snapshot.data());
+      if (!normalizeText(meeting.owner?.providerUserKey)) {
+        await meetingRef.set({
+          meetingId: meeting.meetingId || meetingId,
+          owner,
+        }, { merge: true });
+        meeting = normalizeMeetingSummary({
+          ...meeting,
+          meetingId: meeting.meetingId || meetingId,
+          owner,
+        });
+      }
       assertMeetingOwnership(meeting, owner, createHttpError);
       if (meeting.deletedAt) {
         return null;
@@ -1230,7 +1455,18 @@ function registerMeetingHandlers(deps) {
     if (!snapshot.exists) {
       return null;
     }
-    const legacySession = normalizeMeetingSession(snapshot.data());
+    let legacySession = normalizeMeetingSession(snapshot.data());
+    if (!normalizeText(legacySession.owner?.providerUserKey)) {
+      await sessionRef.set({
+        owner,
+        sessionId: legacySession.sessionId || input.sessionId,
+      }, { merge: true });
+      legacySession = normalizeMeetingSession({
+        ...legacySession,
+        owner,
+        sessionId: legacySession.sessionId || input.sessionId,
+      });
+    }
     assertSessionOwnership(legacySession, owner, createHttpError);
     if (legacySession.deletedAt) {
       return null;
@@ -1375,6 +1611,12 @@ function registerMeetingHandlers(deps) {
       || getMeetingSummaryModel();
   }
 
+  function getMeetingSpeakerReconcileModel() {
+    return normalizeText(process.env.OPENAI_MEETING_SPEAKER_RECONCILE_MODEL)
+      || getMeetingSummaryModel()
+      || DEFAULT_SPEAKER_RECONCILE_MODEL;
+  }
+
   async function transcribeMeetingAudio(audioBuffer, meeting, options, source) {
     const file = await OpenAI.toFile(audioBuffer, source.fileName, {
       type: source.mimeType || "audio/webm",
@@ -1390,6 +1632,261 @@ function registerMeetingHandlers(deps) {
     }
     const response = await getClient().audio.transcriptions.create(request);
     return normalizeTranscriptionResponse(response, source.durationMs);
+  }
+
+  async function transcribeQueuedMeetingSource(source, meeting, options, owner, jobId, onProgress) {
+    const normalizedSource = normalizeMeetingSource(source);
+    if (normalizedSource.mode !== "chunked" || !normalizedSource.parts.length) {
+      const audioBuffer = await loadSourceAudioBuffer(normalizedSource);
+      if (!audioBuffer.length) {
+        throw createHttpError(400, "회의 원본 오디오가 비어 있어요.");
+      }
+      return transcribeMeetingAudio(audioBuffer, meeting, options, normalizedSource);
+    }
+
+    const orderedParts = normalizedSource.parts
+      .map((part, index) => normalizeMeetingSourcePart(part, index, normalizedSource.requestId))
+      .sort((left, right) => left.index - right.index || left.startMs - right.startMs);
+    let mergedSegments = [];
+    let nextGlobalSpeakerIndex = 0;
+
+    for (const [index, part] of orderedParts.entries()) {
+      if (typeof onProgress === "function") {
+        await onProgress({
+          progress: {
+            percent: Math.max(8, Math.min(74, Math.round(8 + ((index + 1) / orderedParts.length) * 58))),
+            phase: "transcribing_chunks",
+          },
+          updatedAt: new Date().toISOString(),
+        });
+      }
+      const audioBuffer = await loadMeetingSourcePartAudioBuffer(part);
+      const transcript = await transcribeMeetingAudio(
+        audioBuffer,
+        meeting,
+        options,
+        {
+          captureMode: normalizedSource.captureMode,
+          durationMs: Math.max(1, part.endMs - part.startMs),
+          fileName: buildMeetingPartFileName(normalizedSource.fileName, part.index),
+          mimeType: part.mimeType || normalizedSource.mimeType,
+          storageObject: part.storageObject,
+        }
+      );
+      let adjustedSegments = offsetTranscriptSegments(transcript.segments, part.startMs);
+      if (options.speakerLabels) {
+        if (!mergedSegments.length) {
+          const firstChunkLabels = collectTranscriptSpeakerLabels({ segments: adjustedSegments });
+          nextGlobalSpeakerIndex = firstChunkLabels.length;
+        } else if (adjustedSegments.length) {
+          if (typeof onProgress === "function") {
+            await onProgress({
+              progress: {
+                percent: Math.max(16, Math.min(80, Math.round(16 + ((index + 1) / orderedParts.length) * 60))),
+                phase: "reconciling_speakers",
+              },
+              updatedAt: new Date().toISOString(),
+            });
+          }
+          const reconciliation = await reconcileChunkSpeakerLabels(mergedSegments, adjustedSegments, nextGlobalSpeakerIndex);
+          adjustedSegments = applySpeakerLabelMapping(adjustedSegments, reconciliation.mapping);
+          nextGlobalSpeakerIndex = reconciliation.nextGlobalSpeakerIndex;
+        }
+      }
+      mergedSegments = mergeTranscriptSegments(mergedSegments, adjustedSegments, part.overlapMs || DEFAULT_SOURCE_PART_OVERLAP_MS);
+    }
+
+    return {
+      segments: mergedSegments,
+      speakerCount: countTranscriptSpeakers(mergedSegments),
+      text: buildTranscriptText(mergedSegments),
+    };
+  }
+
+  async function loadMeetingSourcePartAudioBuffer(part) {
+    if (!bucket || !normalizeText(part?.storageObject)) {
+      throw createHttpError(400, "분할 업로드 오디오 원본을 찾지 못했어요.");
+    }
+    const [buffer] = await bucket.file(part.storageObject).download();
+    return buffer;
+  }
+
+  async function reconcileChunkSpeakerLabels(existingSegments, currentSegments, nextGlobalSpeakerIndex) {
+    const existingTail = Array.isArray(existingSegments) ? existingSegments.slice(-20) : [];
+    const currentHead = Array.isArray(currentSegments) ? currentSegments.slice(0, 20) : [];
+    const existingLabels = Array.from(collectTranscriptSpeakerLabels({ segments: existingTail }));
+    const currentLabels = Array.from(collectTranscriptSpeakerLabels({ segments: currentHead }));
+    const mapping = {};
+    let nextIndex = Math.max(0, Number(nextGlobalSpeakerIndex) || 0);
+    if (!currentLabels.length) {
+      return { mapping, nextGlobalSpeakerIndex: nextIndex };
+    }
+    if (!existingLabels.length) {
+      for (const label of currentLabels) {
+        mapping[label] = allocateGlobalSpeakerLabel(nextIndex);
+        nextIndex += 1;
+      }
+      return { mapping, nextGlobalSpeakerIndex: nextIndex };
+    }
+
+    let suggestedMappings = [];
+    try {
+      const completion = await getClient().chat.completions.create({
+        messages: [
+          {
+            role: "system",
+            content: [
+              "너는 회의 전사 화자 정합기다.",
+              "이전 chunk의 글로벌 화자 라벨과 현재 chunk의 로컬 화자 라벨을 비교해 같은 사람만 매핑한다.",
+              "확신이 부족하면 target을 NEW로 돌리고 confidence를 낮게 준다.",
+              "반드시 JSON만 반환한다.",
+              "스키마는 {\"mappings\":[{\"localSpeaker\":\"SPEAKER_00\",\"target\":\"SPEAKER_01|NEW\",\"confidence\":0~1,\"reason\":\"짧은 근거\"}]} 이다.",
+            ].join(" "),
+          },
+          {
+            role: "user",
+            content: buildSpeakerReconcilePrompt(existingTail, currentHead, existingLabels, currentLabels),
+          },
+        ],
+        model: getMeetingSpeakerReconcileModel(),
+        response_format: { type: "json_object" },
+        temperature: 0,
+      });
+      suggestedMappings = normalizeSpeakerReconcileMappings(
+        safeParseJson(normalizeCompletionContent(completion?.choices?.[0]?.message?.content))?.mappings
+      );
+    } catch {
+      suggestedMappings = [];
+    }
+
+    const usedTargets = new Set();
+    for (const suggestion of suggestedMappings.sort((left, right) => right.confidence - left.confidence)) {
+      const localSpeaker = normalizeText(suggestion.localSpeaker);
+      const target = normalizeText(suggestion.target);
+      if (!currentLabels.includes(localSpeaker)) continue;
+      if (mapping[localSpeaker]) continue;
+      if (target === "NEW" || suggestion.confidence < 0.65 || !existingLabels.includes(target) || usedTargets.has(target)) {
+        continue;
+      }
+      mapping[localSpeaker] = target;
+      usedTargets.add(target);
+    }
+    for (const localSpeaker of currentLabels) {
+      if (mapping[localSpeaker]) continue;
+      mapping[localSpeaker] = allocateGlobalSpeakerLabel(nextIndex);
+      nextIndex += 1;
+    }
+    return {
+      mapping,
+      nextGlobalSpeakerIndex: nextIndex,
+    };
+  }
+
+  function buildSpeakerReconcilePrompt(existingSegments, currentSegments, existingLabels, currentLabels) {
+    return [
+      `기존 글로벌 화자: ${existingLabels.join(", ") || "없음"}`,
+      `현재 chunk 로컬 화자: ${currentLabels.join(", ") || "없음"}`,
+      "기존 chunk 말미 전사:",
+      buildSpeakerReconcileTranscript(existingSegments),
+      "현재 chunk 초반 전사:",
+      buildSpeakerReconcileTranscript(currentSegments),
+    ].join("\n\n");
+  }
+
+  function buildSpeakerReconcileTranscript(segments) {
+    return (Array.isArray(segments) ? segments : [])
+      .map((segment) => `${normalizeText(segment.speakerLabel)} [${segment.startMs}-${segment.endMs}]: ${normalizeText(segment.text)}`)
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  function normalizeSpeakerReconcileMappings(input) {
+    return (Array.isArray(input) ? input : []).map((item) => ({
+      confidence: normalizeConfidence(item?.confidence),
+      localSpeaker: normalizeText(item?.localSpeaker),
+      target: normalizeText(item?.target).toUpperCase() === "NEW" ? "NEW" : normalizeText(item?.target),
+    }));
+  }
+
+  function offsetTranscriptSegments(segments, offsetMs) {
+    return (Array.isArray(segments) ? segments : [])
+      .map((segment) => ({
+        ...segment,
+        endMs: Math.max(0, Number(segment.endMs) + Math.max(0, Number(offsetMs) || 0)),
+        startMs: Math.max(0, Number(segment.startMs) + Math.max(0, Number(offsetMs) || 0)),
+      }))
+      .filter((segment) => normalizeText(segment.text));
+  }
+
+  function applySpeakerLabelMapping(segments, mapping) {
+    const nextMapping = mapping && typeof mapping === "object" ? mapping : {};
+    return (Array.isArray(segments) ? segments : []).map((segment) => ({
+      ...segment,
+      speakerLabel: normalizeText(nextMapping[normalizeText(segment.speakerLabel)]) || normalizeText(segment.speakerLabel),
+    }));
+  }
+
+  function mergeTranscriptSegments(existingSegments, nextSegments, overlapMs) {
+    const merged = Array.isArray(existingSegments) ? existingSegments.slice() : [];
+    const overlapStartMs = merged.length
+      ? Math.max(0, Number(merged[merged.length - 1]?.endMs) - Math.max(0, Number(overlapMs) || 0))
+      : 0;
+    for (const segment of Array.isArray(nextSegments) ? nextSegments : []) {
+      if (isDuplicateTranscriptSegment(merged, segment, overlapStartMs)) {
+        continue;
+      }
+      merged.push({
+        endMs: Math.max(Number(segment.startMs) + 1, Number(segment.endMs) || 0),
+        speakerLabel: normalizeText(segment.speakerLabel) || "SPEAKER_00",
+        startMs: Math.max(0, Number(segment.startMs) || 0),
+        text: normalizeText(segment.text),
+      });
+    }
+    return merged;
+  }
+
+  function isDuplicateTranscriptSegment(existingSegments, segment, overlapStartMs) {
+    const text = normalizeSegmentComparisonText(segment?.text);
+    if (!text) {
+      return true;
+    }
+    if (Number(segment?.startMs) < overlapStartMs) {
+      const tail = (Array.isArray(existingSegments) ? existingSegments.slice(-6) : []);
+      for (const previous of tail) {
+        const previousText = normalizeSegmentComparisonText(previous?.text);
+        if (!previousText) continue;
+        if (previousText === text) {
+          return true;
+        }
+        if (previousText.includes(text) || text.includes(previousText)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  function normalizeSegmentComparisonText(value) {
+    return normalizeText(value).replace(/\s+/g, " ").toLowerCase();
+  }
+
+  function buildTranscriptText(segments) {
+    return (Array.isArray(segments) ? segments : [])
+      .map((segment) => `${normalizeText(segment.speakerLabel) || "SPEAKER_00"}: ${normalizeText(segment.text)}`)
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  function allocateGlobalSpeakerLabel(index) {
+    return `SPEAKER_${String(Math.max(0, Number(index) || 0)).padStart(2, "0")}`;
+  }
+
+  function buildMeetingPartFileName(fileName, partIndex) {
+    const normalizedFileName = normalizeText(fileName) || "meeting-source.wav";
+    const extensionMatch = normalizedFileName.match(/(\.[^.]+)$/);
+    const extension = extensionMatch?.[1] || ".wav";
+    const baseName = extensionMatch ? normalizedFileName.slice(0, -extension.length) : normalizedFileName;
+    return `${baseName}-part-${String(Math.max(0, Number(partIndex) || 0)).padStart(3, "0")}${extension}`;
   }
 
   async function maybeGenerateMeetingNotes(transcript, meeting, options, context, logEvent, owner, jobId) {
@@ -1606,6 +2103,7 @@ function normalizeMeetingOptions(input) {
 
 function normalizeMeetingSource(input) {
   const captureMode = normalizeText(input?.captureMode);
+  const normalizedRequestId = normalizeText(input?.requestId);
   return {
     captureMode: ALLOWED_CAPTURE_MODES.has(captureMode) ? captureMode : "",
     channelCount: Math.max(0, Number(input?.channelCount) || 0),
@@ -1613,9 +2111,13 @@ function normalizeMeetingSource(input) {
     fileName: normalizeText(input?.fileName) || buildDefaultFileName(input?.mimeType),
     inlineAudioBase64: normalizeText(input?.inlineAudioBase64),
     mimeType: normalizeText(input?.mimeType),
-    requestId: normalizeText(input?.requestId),
+    mode: normalizeMeetingSourceMode(input?.mode),
+    originalSizeBytes: Math.max(0, Number(input?.originalSizeBytes) || Number(input?.sizeBytes) || 0),
+    parts: normalizeMeetingSourceParts(input?.parts, normalizedRequestId),
+    requestId: normalizedRequestId,
     sizeBytes: Math.max(0, Number(input?.sizeBytes) || 0),
     storageObject: normalizeText(input?.storageObject),
+    uploadStatus: normalizeText(input?.uploadStatus) || "",
   };
 }
 
@@ -1630,8 +2132,43 @@ function normalizeMeetingSourceUploadRequest(request) {
     fileName: normalizeText(query.fileName) || buildDefaultFileName(headerMimeType || query.mimeType),
     meetingId: normalizeText(query.meetingId),
     mimeType: headerMimeType || normalizeText(query.mimeType),
+    overlapMs: Math.max(0, Number(query.overlapMs) || 0),
+    parentRequestId: normalizeText(query.parentRequestId || query.requestId),
+    partCount: Math.max(0, Number(query.partCount) || 0),
+    partIndex: Math.max(0, Number(query.partIndex) || 0),
     requestId: normalizeText(query.requestId),
+    startMs: Math.max(0, Number(query.startMs) || 0),
+    endMs: Math.max(0, Number(query.endMs) || 0),
     sizeBytes: Math.max(0, Number(query.sizeBytes) || 0),
+  };
+}
+
+function normalizeMeetingSourceMode(value) {
+  const normalized = normalizeText(value);
+  return normalized === "chunked" ? "chunked" : "single";
+}
+
+function normalizeMeetingSourceParts(parts, fallbackRequestId) {
+  return (Array.isArray(parts) ? parts : [])
+    .map((part, index) => normalizeMeetingSourcePart(part, index, fallbackRequestId))
+    .filter((part) => part.requestId);
+}
+
+function normalizeMeetingSourcePart(input, index, fallbackRequestId) {
+  const part = input && typeof input === "object" ? input : {};
+  const requestId = normalizeText(part.requestId) || `${normalizeText(fallbackRequestId) || "meeting-source"}-part-${index}`;
+  const startMs = Math.max(0, Number(part.startMs) || 0);
+  const endMs = Math.max(startMs, Number(part.endMs) || startMs);
+  return {
+    endMs,
+    index: Math.max(0, Number(part.index) || index),
+    mimeType: normalizeText(part.mimeType) || "audio/wav",
+    overlapMs: Math.max(0, Number(part.overlapMs) || 0),
+    requestId,
+    sizeBytes: Math.max(0, Number(part.sizeBytes) || 0),
+    startMs,
+    storageObject: normalizeText(part.storageObject),
+    uploadStatus: normalizeText(part.uploadStatus) || (normalizeText(part.storageObject) ? "uploaded" : ""),
   };
 }
 
@@ -2459,18 +2996,7 @@ function normalizeMeetingJob(input) {
     queuedAt: normalizeText(job.queuedAt),
     sessionId: normalizeText(job.sessionId || job.meeting?.sessionId),
     speakerAliases: normalizeSpeakerAliases(job.speakerAliases),
-    source: {
-      captureMode: normalizeText(job.source?.captureMode),
-      channelCount: Math.max(0, Number(job.source?.channelCount) || 0),
-      durationMs: Math.max(0, Number(job.source?.durationMs) || 0),
-      expiresAt: normalizeText(job.source?.expiresAt),
-      fileName: normalizeText(job.source?.fileName),
-      mimeType: normalizeText(job.source?.mimeType),
-      requestId: normalizeText(job.source?.requestId),
-      sizeBytes: Math.max(0, Number(job.source?.sizeBytes) || 0),
-      storageObject: normalizeText(job.source?.storageObject),
-      uploadStatus: normalizeText(job.source?.uploadStatus),
-    },
+    source: normalizeMeetingSource(job.source),
     status: normalizeText(job.status),
     title: normalizeText(job.title || job.meeting?.title),
     transcript: {
@@ -2744,13 +3270,15 @@ function assertJobOwnership(job, owner, createHttpError) {
 }
 
 function assertMeetingOwnership(meeting, owner, createHttpError) {
-  if (normalizeText(meeting.owner?.providerUserKey) !== normalizeText(owner?.providerUserKey)) {
+  const storedOwnerKey = normalizeText(meeting.owner?.providerUserKey);
+  if (storedOwnerKey && storedOwnerKey !== normalizeText(owner?.providerUserKey)) {
     throw createHttpError(403, "현재 사용자에게 허용되지 않은 회의예요.");
   }
 }
 
 function assertSessionOwnership(session, owner, createHttpError) {
-  if (normalizeText(session.owner?.providerUserKey) !== normalizeText(owner?.providerUserKey)) {
+  const storedOwnerKey = normalizeText(session.owner?.providerUserKey);
+  if (storedOwnerKey && storedOwnerKey !== normalizeText(owner?.providerUserKey)) {
     throw createHttpError(403, "현재 사용자에게 허용되지 않은 회의 세션이에요.");
   }
 }
@@ -2896,8 +3424,28 @@ function hasOwn(input, key) {
   return Boolean(input && typeof input === "object" && Object.prototype.hasOwnProperty.call(input, key));
 }
 
+function safeParseJson(value) {
+  try {
+    return JSON.parse(String(value || ""));
+  } catch {
+    return null;
+  }
+}
+
 function getInlineAudioLimitBytes() {
   return Math.max(1024, Number(process.env.OPENAI_MEETING_INLINE_AUDIO_LIMIT_BYTES) || DEFAULT_INLINE_AUDIO_LIMIT_BYTES);
+}
+
+function getMeetingSourceTargetPartBytes() {
+  return Math.max(1024, Number(process.env.OPENAI_MEETING_SOURCE_TARGET_PART_BYTES) || DEFAULT_SOURCE_TARGET_PART_BYTES);
+}
+
+function getMeetingSourceMaxBytes() {
+  return Math.max(getInlineAudioLimitBytes(), Number(process.env.OPENAI_MEETING_SOURCE_MAX_BYTES) || DEFAULT_SOURCE_MAX_BYTES);
+}
+
+function getMeetingSourceMaxDurationMs() {
+  return Math.max(30 * 1000, Number(process.env.OPENAI_MEETING_SOURCE_MAX_DURATION_MS) || DEFAULT_SOURCE_MAX_DURATION_MS);
 }
 
 function normalizeText(value) {

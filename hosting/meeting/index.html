@@ -6,7 +6,12 @@
     <title>i-Nova 회의 작업실</title>
     <link rel="stylesheet" href="index.css" />
     <script src="shared.js" defer></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js" defer></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js" defer></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js" defer></script>
+    <script src="firebase-client.js" defer></script>
     <script src="notes.js" defer></script>
+    <script src="audio-chunker.js" defer></script>
     <script src="storage.js" defer></script>
     <script src="render.js" defer></script>
     <script src="index.js" defer></script>
@@ -240,19 +245,24 @@
               <p class="panel-card__eyebrow">로컬 디버그</p>
               <h2 class="panel-card__title">작업실 로그</h2>
             </div>
-            <span id="debugStatus" class="chip chip--muted">로그 0건</span>
-          </div>
-          <div class="debug-summary">
-            <p id="debugCounters" class="debug-summary__line">Functions 요청 0건 · 응답 0건 · 오류 로그 0건 · 기타 로그 0건</p>
-            <p id="debugEndpointSummary" class="debug-summary__line debug-summary__line--muted">아직 함수 호출이 없습니다.</p>
+            <div class="panel-card__inline-meta">
+              <span id="debugStatus" class="chip chip--muted">로그 0건</span>
+            </div>
           </div>
           <div class="inline-action-row">
             <div class="segment-cluster segment-cluster--buttons">
               <button id="copyDebugButton" class="secondary-button" type="button">로그 복사</button>
               <button id="clearDebugButton" class="ghost-button ghost-button--soft" type="button">로그 비우기</button>
+              <button id="toggleDebugPanelButton" class="ghost-button ghost-button--soft" type="button" aria-expanded="true">로그 접기</button>
             </div>
           </div>
-          <pre id="debugLog" class="debug-log">아직 로그가 없습니다.</pre>
+          <div id="debugPanelBody" class="debug-panel__body">
+            <div class="debug-summary">
+              <p id="debugCounters" class="debug-summary__line">Functions 요청 0건 · 응답 0건 · Firestore 인증 0건 · 리스너 갱신 0건 · 오류 로그 0건 · 기타 로그 0건</p>
+              <p id="debugEndpointSummary" class="debug-summary__line debug-summary__line--muted">아직 함수/Firestore 연결 로그가 없습니다.</p>
+            </div>
+            <pre id="debugLog" class="debug-log">아직 로그가 없습니다.</pre>
+          </div>
         </article>
       </section>
 

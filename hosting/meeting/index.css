@@ -1485,6 +1485,10 @@ select:disabled {
   margin-bottom: 12px;
 }
 
+.debug-panel__body[hidden] {
+  display: none;
+}
+
 .debug-summary {
   display: grid;
   gap: 4px;

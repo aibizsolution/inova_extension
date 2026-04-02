@@ -22,9 +22,9 @@
   - 패널 목록의 항목을 누르면 해당 회의 결과를 전용 새 탭 작업실에서 다시 확인합니다.
 - `회의 페이지`
   - Firebase Hosting에 올린 전용 회의 작업실에서 `회의 식별`, `현재 녹음`, `회의 공용 메모`, `처리 이력/업로드 큐`, `선택 결과 검토`를 한 화면에서 처리합니다.
-  - 팝업에서 `로컬 호스팅`을 고르면 패널의 `새 회의하기`가 `http://127.0.0.1:5000/meeting/index.html` 기준으로 열리고, 화면 안의 디버그 로그 패널에서 세션 복원과 HTTP 요청 로그를 바로 확인할 수 있습니다.
-  - 로컬 작업실에서는 `파일 불러오기`로 실제 오디오 샘플을 바로 전사 테스트할 수 있고, 현재 서버 전사 경로 기준으로 `25MB 이하` 파일만 바로 처리합니다.
-  - 임시 Storage 업로드가 실패해도 `25MB 이하` 파일은 inline 전사 경로로 바로 이어가도록 유지합니다.
+  - 팝업에서 `로컬 호스팅`을 고르면 패널의 `새 회의하기`가 `http://127.0.0.1:5000/meeting/index.html` 기준으로 열리고, 화면 안의 디버그 로그 패널에서 세션 복원, Functions 요청, Firestore auth/listener 로그를 바로 확인할 수 있습니다. 필요하면 로그 패널 본문을 접어 두고 작업을 이어갈 수 있습니다.
+  - 로컬 작업실에서는 `파일 불러오기`로 실제 오디오 샘플을 바로 전사 테스트할 수 있고, `25MB 초과` 또는 `약 20분 초과` 원본도 브라우저에서 `16kHz mono wav chunk`로 나눈 뒤 한 기록 결과로 이어 처리합니다.
+  - hosted 회의 작업실은 기본적으로 `최대 200MB 또는 2시간` 원본까지 지원하고, 큰 오디오나 긴 녹음은 `약 9분 / 1.5초 overlap` 기준 chunk 업로드 후 서버에서 단일 회의 결과로 병합합니다.
   - 녹음은 `녹음 시작 -> 일시중지/재개 -> 종료하고 전사` 흐름으로 동작하고, 종료된 녹음본은 원격 처리 완료 전까지 브라우저 로컬 큐에 보관합니다.
   - 한 기록은 기본 `90분`까지 이어지고, 제한 시간에 도달하면 현재 기록을 자동 전사로 넘긴 뒤 다음 개별 기록 녹음을 바로 이어갑니다.
 - 전사가 끝나면 회의록 형식의 자동 정리본과 `발화 구간`, `화자별` AI 정리 화면을 같은 상세 화면에서 함께 보여주고, 회의의 내용 구조는 AI가 자동 판단합니다.
@@ -40,6 +40,7 @@
   - 작업실에서는 사용자가 직접 `녹음 시작`을 눌러 웹앱에서 바로 마이크 녹음을 시작하고, 표준 `getUserMedia + MediaRecorder` 경로로 녹음합니다.
   - 녹음을 마치면 `종료하고 전사`가 즉시 로컬 저장과 업로드 큐 등록을 끝내고, 원격 처리 중이어도 바로 다음 녹음을 시작할 수 있습니다.
   - 오프라인이거나 업로드가 실패하면 같은 녹음본은 로컬 큐에 남아 있다가 온라인 복귀 시 자동 재시도하고, 필요하면 `지금 업로드`, `보류`, `삭제`를 직접 고를 수 있습니다.
+  - 원격 처리 중 상태 갱신은 작업실이 `MeetingSession -> issueInovaMeetingWorkspaceAuth -> Firebase Auth`를 거친 뒤 Firestore `meeting/job/artifact` 문서를 직접 구독해 반영합니다. Functions는 업로드/삭제/재정리 같은 명령만 맡고, 탭 복귀 시에는 끊긴 listener만 다시 연결합니다.
   - 패널에서 한 번 연 작업실은 clean URL 뒤의 workspace hash 토큰으로 같은 탭/브라우저에서 다시 이어지고, hash 없이 `?meetingId=`만 직접 열면 접근을 막고 패널에서 다시 열도록 안내합니다.
 - `대화 안에서 찾기`
   - 지금 보고 있는 대화 안에서만 질문을 검색합니다.
@@ -85,6 +86,7 @@
 - `hosting/meeting/`
   - `index.html`, `index.css`: 회의 작업실 레이아웃과 실용형 UI 스타일
   - `index.js`: hosted 회의 작업실 부팅, launch token 교환, 세션 복원, 녹음/업로드 큐/상세 액션 orchestration
+  - `firebase-client.js`: `MeetingSession`을 Firebase custom token으로 교환하고 Firestore 문서 구독을 연결하는 hosted helper
   - `shared.js`: 공통 상태/포맷터/네트워크 헬퍼
   - `storage.js`: IndexedDB 기반 로컬 업로드 큐와 fallback storage
   - `notes.js`: 회의록 schema 정규화와 mode별 표시 포맷터
@@ -148,12 +150,14 @@
 - `content/store-manager.js`는 `프롬프트 스토어` 목록 조회, 등록, 삭제, 좋아요, 가져오기 흐름을 관리합니다.
 - `content/meeting-manager.js`는 owner 기준 최신 회의 목록을 읽어 `meetingHub` 캐시를 갱신하고, 패널/포커스 복귀 시 허브를 새로고칩니다.
 - `background/service-worker.js`는 i-Nova access token과 Firebase Functions를 연결해 원격 백업 호출을 처리하고, 회의 기능에서는 launch grant 발급과 session 교환까지 끝낸 최종 hosted 작업실 URL 생성, 허브 조회 라우팅을 맡습니다.
-- `functions/meeting-launch-service.js`는 launch grant와 hosted workspace session을 만들고, hosted 작업실은 전달받은 `meetingSessionToken`으로 회의 API를 호출합니다.
-- hosted 회의 작업실은 `종료하고 전사` 시점에 방금 녹음한 마이크 오디오를 먼저 임시 Storage source object로 올린 뒤 `createInovaMeetingJob`에는 storage 경로만 보내고, Functions는 source download -> OpenAI diarization -> 회의록 모드 분류 -> mode별 회의록 정리 생성 -> source cleanup -> Firestore `meeting/job/artifact` 저장까지 처리합니다.
+- `functions/meeting-launch-service.js`는 launch grant, hosted workspace session, Firestore 읽기용 Firebase custom token 발급을 맡깁니다.
+- `processQueuedInovaMeetingJob` Firestore background worker는 긴 회의 chunk 병합과 회의 정리 단계 때문에 `1GiB` 메모리와 `540초` timeout으로 운영합니다.
+- hosted 회의 작업실은 `종료하고 전사` 또는 `파일 불러오기` 시점에 원본을 먼저 업로드 가능한 source로 준비한 뒤 `createInovaMeetingJob`에는 queue 생성만 맡기고, Functions background 처리기는 source download -> OpenAI diarization -> chunk 병합/화자 정합 -> 회의록 모드 분류 -> mode별 회의록 정리 생성 -> source cleanup -> Firestore `meeting/job/artifact` 저장까지 처리합니다.
 - 회의 정리와 모드 분류 기본 모델은 `gpt-5.4-mini`를 사용하고, 필요하면 `OPENAI_MEETING_SUMMARY_MODEL` 또는 `OPENAI_SUMMARY_MODEL`로 override할 수 있습니다.
 - Functions는 같은 `requestId` 재전송을 idempotent하게 재사용하고, `sharedMemoSnapshot`과 notes mode 메타데이터를 함께 저장합니다.
-- Functions가 source audio를 임시 bucket object로 저장할 때는 Firebase 설정의 기본 storage bucket을 우선 쓰고, 배포/분석 환경에 bucket 정보가 없으면 `STORAGE_BUCKET_URL` 또는 `GCLOUD_PROJECT.appspot.com`으로 안전하게 해석합니다.
-- 회의 업로드/전사 결과는 패널의 `회의` 도구에서 허브 리스트로 보이고, 상세는 hosted `meeting/index.html` 새 탭 작업실에서 다시 확인합니다. 상태 자체는 `shared/cloud-api.js -> background/service-worker.js -> functions/*` 경계의 gateway와 hosted `meetingSessionToken`으로 이어집니다.
+- Functions가 source audio를 임시 bucket object로 저장할 때는 Firebase 설정의 기본 storage bucket을 우선 쓰고, 기본 bucket이 없는 프로젝트에서는 `STORAGE_BUCKET_URL`로 실제 존재하는 bucket을 명시해야 합니다. 현재 프로젝트는 chunk 업로드용으로 `gcf-v2-uploads-1027279095019.asia-northeast3.cloudfunctions.appspot.com`을 사용합니다.
+- 회의 작업실 Firestore 구독용 Firebase custom token은 기본적으로 `1027279095019-compute@developer.gserviceaccount.com`으로 서명하고, 다른 계정을 써야 하면 `FIREBASE_AUTH_SIGNING_SERVICE_ACCOUNT`로 override할 수 있습니다.
+- 회의 업로드/전사 결과는 패널의 `회의` 도구에서 허브 리스트로 보이고, 상세는 hosted `meeting/index.html` 새 탭 작업실에서 다시 확인합니다. 상세 상태는 작업실이 `meetingSessionToken`으로 `issueInovaMeetingWorkspaceAuth`를 한 번 호출한 뒤 Firebase Auth에 로그인하고 Firestore `meeting/job/artifact` 문서를 직접 구독해 반영합니다.
 - 브라우저 쪽에서는 `shared/meeting-bridge.js` 와 `shared/meeting-state.js` 로 회의 녹음 start/stop, 회의 job 생성, artifact 반영, local `meetingState` 저장 기준을 먼저 맞춰 두었습니다.
 - 질문 목록 자체는 `chrome.storage.local`에 저장하지 않고, 현재 대화 화면을 기준으로 바로 렌더링합니다.
 - 요청 보관함은 `chrome.storage.local.promptLibrary`에 저장합니다.
@@ -175,7 +179,7 @@
 4. `대화` 도구에서는 검색하거나 항목을 클릭해 해당 질문으로 이동합니다.
 5. `회의` 도구에서는 DB 기반 회의 허브 목록과 `새 회의하기` 버튼을 확인하고, 항목을 눌러 hosted 새 탭 작업실 상세 페이지를 엽니다.
 6. hosted 회의 작업실에서는 작업실 이름과 공용 메모를 먼저 정리한 뒤 녹음을 시작하고, 필요하면 일시중지/재개하거나 녹음을 버리고 다시 시작할 수 있습니다.
-7. 로컬 작업실에서는 `파일 불러오기`로 실제 녹음 파일을 직접 넣어 전사 테스트할 수 있습니다.
+7. 로컬 작업실에서는 `파일 불러오기`로 실제 녹음 파일을 직접 넣어 전사 테스트할 수 있고, 큰 파일이나 긴 녹음은 자동으로 chunk 준비/업로드를 거칩니다.
 8. `종료하고 전사`를 누르면 녹음본이 먼저 로컬 큐에 저장되고, 원격 처리 중이어도 바로 다음 녹음을 시작할 수 있습니다.
 9. 녹음이 `90분`에 도달하면 현재 기록은 자동으로 전사 큐에 들어가고, 작업실은 다음 개별 기록 녹음을 이어갑니다.
 10. 저장된 결과를 선택하면 우측 `기록 검토` 패널에서 이름을 수정하거나 삭제하고, 자동 정리와 발화 구간 기준 전사, 화자별 AI 정리를 함께 확인할 수 있습니다.
@@ -214,7 +218,7 @@ npm run verify
 npm run emulator:hosting
 ```
 
-기본 로컬 주소는 `http://127.0.0.1:5000/meeting/index.html` 입니다. 확장프로그램은 그대로 Chrome에서 실행하고, 팝업에서 `상용 호스팅 / 로컬 호스팅`을 전환해 확인합니다. 로컬 호스팅을 고르면 회의 API 호출은 그대로 상용 Functions를 사용하고, 화면 안의 디버그 로그 패널에서 세션 복원과 HTTP 요청 흐름을 바로 볼 수 있습니다.
+기본 로컬 주소는 `http://127.0.0.1:5000/meeting/index.html` 입니다. 확장프로그램은 그대로 Chrome에서 실행하고, 팝업에서 `상용 호스팅 / 로컬 호스팅`을 전환해 확인합니다. 로컬 호스팅을 고르면 회의 명령 호출은 그대로 상용 Functions를 사용하고, 화면 안의 디버그 로그 패널에서 세션 복원, Firebase Auth bootstrap, Firestore listener 흐름을 바로 볼 수 있습니다.
 
 로컬에서 자동 분할 녹음을 빨리 시험하고 싶으면 URL에 `recordLimitSeconds`를 붙이면 됩니다.
 

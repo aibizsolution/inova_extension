@@ -11,6 +11,7 @@
     getInovaMeetingArtifactUrl: "getInovaMeetingArtifact",
     getInovaMeetingJobUrl: "getInovaMeetingJob",
     issueInovaMeetingLaunchUrl: "issueInovaMeetingLaunch",
+    issueInovaMeetingWorkspaceAuthUrl: "issueInovaMeetingWorkspaceAuth",
     listInovaMeetingsUrl: "listInovaMeetings",
     listInovaMeetingResultsUrl: "listInovaMeetingResults",
     uploadInovaMeetingSourceUrl: "uploadInovaMeetingSource",
@@ -40,6 +41,7 @@
     },
     functions: buildFunctionsConfig(DEFAULT_FUNCTIONS_BASE_URL),
     hosting: buildHostingConfig(DEFAULT_HOSTING_BASE_URL, DEFAULT_HOSTING_ORIGIN),
+    web: buildWebConfig(),
   }, global.__INOVA_FIREBASE_CONFIG_OVERRIDE__);
 
   function mergeConfig(baseConfig, overrideConfig) {
@@ -51,6 +53,7 @@
       },
       functions: buildFunctionsConfig(baseConfig.functions.baseUrl, override.functions || {}),
       hosting: buildHostingConfig(baseConfig.hosting.baseUrl, baseConfig.hosting.originUrl, override.hosting || {}),
+      web: buildWebConfig(override.web || {}),
     };
   }
 
@@ -80,6 +83,18 @@
       baseUrl,
       overrideConfig
     );
+  }
+
+  function buildWebConfig(overrideConfig = {}) {
+    return {
+      apiKey: "AIzaSyDnVS7MmQs7wWjVPihr1MNmcALxJ0a1qPM",
+      appId: "1:1027279095019:web:755f1f1a02cbae0d262aae",
+      authDomain: "browser-extension-main.firebaseapp.com",
+      messagingSenderId: "1027279095019",
+      projectId: "browser-extension-main",
+      storageBucket: "browser-extension-main.firebasestorage.app",
+      ...(overrideConfig || {}),
+    };
   }
 
   function buildUrlConfig(baseConfig, endpointMap, baseUrl, overrideConfig) {

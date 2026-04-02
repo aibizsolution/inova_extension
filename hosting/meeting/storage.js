@@ -61,13 +61,31 @@
       return "on_hold";
     }
     const normalized = normalizeText(status);
-    return ["local_saved", "upload_queued", "uploading", "remote_queued", "remote_processing", "succeeded", "failed", "on_hold"].includes(normalized)
+    return ["local_saved", "preparing_chunks", "upload_queued", "uploading", "uploading_chunks", "remote_queued", "remote_processing", "succeeded", "failed", "on_hold"].includes(normalized)
       ? normalized
       : "local_saved";
   }
 
+  function normalizePendingPart(input, index) {
+    const part = input && typeof input === "object" ? input : {};
+    const startMs = Math.max(0, Number(part.startMs) || 0);
+    const endMs = Math.max(startMs, Number(part.endMs) || startMs);
+    return {
+      endMs,
+      index: Math.max(0, Number(part.index) || index),
+      overlapMs: Math.max(0, Number(part.overlapMs) || 0),
+      requestId: normalizeText(part.requestId),
+      sizeBytes: Math.max(0, Number(part.sizeBytes) || 0),
+      startMs,
+      storageObject: normalizeText(part.storageObject),
+      uploadStatus: normalizeText(part.uploadStatus) || (normalizeText(part.storageObject) ? "uploaded" : ""),
+    };
+  }
+
   function normalizePendingUpload(input) {
     const item = input && typeof input === "object" ? input : {};
+    const parts = (Array.isArray(item.parts) ? item.parts : []).map(normalizePendingPart).sort((left, right) => left.index - right.index || left.startMs - right.startMs);
+    const uploadedPartCount = parts.filter((part) => normalizeText(part.storageObject)).length;
     return {
       blob: item.blob instanceof global.Blob ? item.blob : new global.Blob([], { type: normalizeText(item.mimeType) || "audio/webm" }),
       captureMode: normalizeText(item.captureMode) || "microphone",
@@ -81,12 +99,17 @@
       meetingId: normalizeText(item.meetingId),
       meetingTitleSnapshot: normalizeText(item.meetingTitleSnapshot),
       mimeType: normalizeText(item.mimeType) || normalizeText(item.blob?.type) || "audio/webm",
+      originalSizeBytes: Math.max(0, Number(item.originalSizeBytes) || Number(item.sizeBytes) || Number(item.blob?.size) || 0),
+      parts,
+      preparedPartCount: Math.max(0, Number(item.preparedPartCount) || parts.length),
       requestId: normalizeText(item.requestId),
       sharedMemoSnapshot: normalizeTextBlock(item.sharedMemoSnapshot),
       sizeBytes: Math.max(0, Number(item.sizeBytes) || Number(item.blob?.size) || 0),
+      sourceMode: normalizeText(item.sourceMode) || (parts.length ? "chunked" : "single"),
       startedAt: normalizeText(item.startedAt),
       storageObject: normalizeText(item.storageObject),
       status: normalizePendingStatus(item.status, Boolean(item.hold)),
+      uploadedPartCount: Math.max(0, Number(item.uploadedPartCount) || uploadedPartCount),
       updatedAt: normalizeText(item.updatedAt) || new Date().toISOString(),
     };
   }

@@ -1,12 +1,18 @@
 const admin = require("firebase-admin");
 const { onRequest } = require("firebase-functions/v2/https");
+const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { registerMeetingLaunchHandlers } = require("./meeting-launch-service");
 const { registerMeetingHandlers } = require("./meeting-service");
 const { registerPromptReviewHandlers } = require("./prompt-review-service");
 const { registerStoreHandlers } = require("./store-service");
 
+const FIREBASE_AUTH_SIGNING_SERVICE_ACCOUNT = process.env.FIREBASE_AUTH_SIGNING_SERVICE_ACCOUNT
+  || "1027279095019-compute@developer.gserviceaccount.com";
+
 if (!admin.apps.length) {
-  admin.initializeApp();
+  admin.initializeApp({
+    serviceAccountId: FIREBASE_AUTH_SIGNING_SERVICE_ACCOUNT,
+  });
 }
 
 const db = admin.firestore();
@@ -17,8 +23,6 @@ const HOSTING_ORIGIN = "https://browser-extension-main.web.app";
 const LOCAL_HOSTING_ORIGINS = [
   "http://127.0.0.1:5000",
   "http://localhost:5000",
-  "http://127.0.0.1:4173",
-  "http://localhost:4173",
 ];
 const HOSTED_MEETING_PAGE_URL = `${HOSTING_ORIGIN}/meeting/index.html`;
 const CORS_ORIGINS = [INOVA_ORIGIN, HOSTING_ORIGIN, ...LOCAL_HOSTING_ORIGINS];
@@ -87,6 +91,7 @@ const promptReviewHandlers = registerPromptReviewHandlers({
 const meetingLaunchHandlers = registerMeetingLaunchHandlers({
   CORS_ORIGINS,
   REGION,
+  createFirebaseCustomToken: (uid, claims) => admin.auth().createCustomToken(uid, claims),
   createHttpError,
   db,
   hostedMeetingPageUrl: HOSTED_MEETING_PAGE_URL,
@@ -120,9 +125,19 @@ exports.togglePromptStoreLike = storeHandlers.togglePromptStoreLike;
 exports.recordPromptStoreView = storeHandlers.recordPromptStoreView;
 exports.reviewInovaPrompt = promptReviewHandlers.reviewInovaPrompt;
 exports.createInovaMeetingJob = meetingHandlers.createInovaMeetingJob;
+exports.processQueuedInovaMeetingJob = onDocumentWritten(
+  {
+    document: "integration_inova_meeting_jobs/{jobId}",
+    memory: "1GiB",
+    region: REGION,
+    timeoutSeconds: 540,
+  },
+  meetingHandlers.processQueuedMeetingJobWrite
+);
 exports.deleteInovaMeeting = meetingHandlers.deleteInovaMeeting;
 exports.deleteInovaMeetingResult = meetingHandlers.deleteInovaMeetingResult;
 exports.exchangeInovaMeetingLaunch = meetingLaunchHandlers.exchangeInovaMeetingLaunch;
+exports.issueInovaMeetingWorkspaceAuth = meetingLaunchHandlers.issueInovaMeetingWorkspaceAuth;
 exports.getInovaMeetingJob = meetingHandlers.getInovaMeetingJob;
 exports.getInovaMeetingArtifact = meetingHandlers.getInovaMeetingArtifact;
 exports.issueInovaMeetingLaunch = meetingLaunchHandlers.issueInovaMeetingLaunch;
@@ -259,22 +274,24 @@ function resolveStorageBucket(adminSdk) {
 }
 
 function resolveStorageBucketName() {
-  const explicitBucket = String(process.env.STORAGE_BUCKET_URL || "").trim();
+  const explicitBucket = normalizeStorageBucketName(process.env.STORAGE_BUCKET_URL);
   if (explicitBucket) {
     return explicitBucket;
   }
 
   const firebaseConfig = parseFirebaseConfig(process.env.FIREBASE_CONFIG);
-  const configBucket = String(firebaseConfig?.storageBucket || "").trim();
+  const configBucket = normalizeStorageBucketName(firebaseConfig?.storageBucket);
   if (configBucket) {
     return configBucket;
   }
-
-  const projectId = String(process.env.GCLOUD_PROJECT || process.env.PROJECT_ID || "").trim();
-  if (projectId) {
-    return `${projectId}.appspot.com`;
-  }
   return "";
+}
+
+function normalizeStorageBucketName(value) {
+  return String(value || "")
+    .replace(/^gs:\/\//i, "")
+    .replace(/\/+$/, "")
+    .trim();
 }
 
 function parseFirebaseConfig(rawValue) {

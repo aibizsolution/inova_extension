@@ -2,8 +2,36 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Secure by default. Open access rules must not be added
-    // until auth and collection boundaries are finalized.
+    function isWorkspaceSessionActive() {
+      return request.auth != null
+        && request.auth.token.scope == "meeting-workspace"
+        && request.time.toMillis() < request.auth.token.workspaceExpMs;
+    }
+
+    function matchesMeetingWorkspace(resourceData) {
+      return isWorkspaceSessionActive()
+        && resourceData.owner.providerUserKey == request.auth.token.providerUserKey
+        && resourceData.meetingId == request.auth.token.meetingId;
+    }
+
+    match /integration_inova_meetings/{docId} {
+      allow get: if matchesMeetingWorkspace(resource.data);
+      allow list: if false;
+      allow write: if false;
+    }
+
+    match /integration_inova_meeting_jobs/{jobId} {
+      allow get: if matchesMeetingWorkspace(resource.data);
+      allow list: if false;
+      allow write: if false;
+    }
+
+    match /integration_inova_meeting_artifacts/{artifactId} {
+      allow get: if matchesMeetingWorkspace(resource.data);
+      allow list: if false;
+      allow write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
