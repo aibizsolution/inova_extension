@@ -60,6 +60,23 @@ async function main() {
   assert.equal(state.customTokens[0].claims.meetingId, "meeting-auth-1");
   assert.equal(typeof state.customTokens[0].claims.workspaceExpMs, "number");
 
+  const panelAuth = await invokeHandler(launchHandlers.issueInovaMeetingPanelAuth, {
+    body: {
+      owner,
+    },
+    headers: {
+      authorization: "Bearer fixture-token",
+    },
+    method: "POST",
+  });
+  assert.equal(panelAuth.statusCode, 200);
+  assert.equal(panelAuth.jsonBody.data.providerUserKey, owner.providerUserKey);
+  assert.equal(panelAuth.jsonBody.data.firebaseCustomToken, "custom-token:inova-panel__fixture-user");
+  assert.equal(state.customTokens.length, 2);
+  assert.equal(state.customTokens[1].claims.scope, "meeting-panel");
+  assert.equal(state.customTokens[1].claims.providerUserKey, owner.providerUserKey);
+  assert.equal(typeof state.customTokens[1].claims.panelExpMs, "number");
+
   const missingWorkspaceAuth = await invokeHandler(launchHandlers.issueInovaMeetingWorkspaceAuth, {
     body: {},
     headers: {},

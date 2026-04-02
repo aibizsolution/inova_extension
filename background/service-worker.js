@@ -1,12 +1,10 @@
-importScripts(
-  "../shared/constants.js",
-  "../shared/session.js",
-  "../shared/meeting-state.js",
-  "../shared/storage.js",
-  "../shared/firebase-config.js",
-  "../shared/inova-auth.js",
-  "../shared/cloud-api.js"
-);
+importScripts("../shared/constants.js");
+importScripts("../shared/session.js");
+importScripts("../shared/meeting-state.js");
+importScripts("../shared/storage.js");
+importScripts("../shared/firebase-config.js");
+importScripts("../shared/inova-auth.js");
+importScripts("../shared/cloud-api.js");
 
 const namespace = globalThis.InovaBookmarks || {};
 const INOVA_ORIGIN = "https://inova.incross.com";
@@ -92,6 +90,9 @@ async function handleMessage(message, sender) {
   }
   if (message.type === "inova-meeting:list-results") {
     return listMeetingResults(message.input, message.providerIdentity);
+  }
+  if (message.type === "inova-meeting:issue-panel-auth") {
+    return issueMeetingPanelAuth(message.providerIdentity);
   }
   if (message.type === "inova-meeting:open-workspace") {
     return openMeetingWorkspace(message.input, message.providerIdentity, sender);
@@ -292,6 +293,11 @@ async function listMeetings(input, providerIdentity) {
 async function listMeetingResults(input, providerIdentity) {
   const accessToken = await getInovaAccessToken();
   return namespace.cloudApi.listInovaMeetingResults(input, providerIdentity, accessToken);
+}
+
+async function issueMeetingPanelAuth(providerIdentity) {
+  const accessToken = await getInovaAccessToken();
+  return namespace.cloudApi.issueInovaMeetingPanelAuth(providerIdentity, accessToken);
 }
 
 async function handleMeetingRecorderFailed(payload) {
@@ -588,56 +594,42 @@ async function exchangeMeetingLaunch(launch) {
 }
 
 async function buildHostedMeetingSessionUrl(input) {
-  const baseUrl = await resolveMeetingWorkspacePageUrl();
-  const url = new URL(baseUrl);
-  if (namespace.session.normalizeText(input?.meetingId)) {
-    url.searchParams.set("meetingId", namespace.session.normalizeText(input.meetingId));
-  }
-  if (namespace.session.normalizeText(input?.jobId)) {
-    url.searchParams.set("jobId", namespace.session.normalizeText(input.jobId));
-  }
-  if (namespace.session.normalizeText(input?.workspaceToken)) {
-    url.hash = `ws=${encodeURIComponent(namespace.session.normalizeText(input.workspaceToken))}`;
-  }
+  const normalizedSettings = await reconcileMeetingWorkspaceSettings((await namespace.storage.getState())?.settings);
+  const url = new URL(await resolveMeetingWorkspacePageUrl());
+  if (normalizeMeetingDebugConsoleEnabled(normalizedSettings.meetingDebugConsoleEnabled)) url.searchParams.set("debug", "1");
+  const meetingId = namespace.session.normalizeText(input?.meetingId);
+  const jobId = namespace.session.normalizeText(input?.jobId);
+  const workspaceToken = namespace.session.normalizeText(input?.workspaceToken);
+  if (meetingId) url.searchParams.set("meetingId", meetingId);
+  if (jobId) url.searchParams.set("jobId", jobId);
+  if (workspaceToken) url.hash = `ws=${encodeURIComponent(workspaceToken)}`;
   return url.toString();
 }
 
 async function resolveMeetingWorkspacePageUrl() {
-  const storageState = await namespace.storage.getState();
-  const normalizedSettings = await reconcileMeetingWorkspaceSettings(storageState?.settings);
+  const normalizedSettings = await reconcileMeetingWorkspaceSettings((await namespace.storage.getState())?.settings);
   const workspaceTarget = normalizeMeetingWorkspaceTarget(normalizedSettings.meetingWorkspaceTarget);
-  const url = workspaceTarget === "local"
-    ? normalizeLocalMeetingWorkspaceUrl(normalizedSettings.meetingWorkspaceUrlOverride)
-    : namespace.firebaseConfig?.hosting?.meetingWorkspaceUrl;
+  const url = workspaceTarget === "local" ? normalizeLocalMeetingWorkspaceUrl(normalizedSettings.meetingWorkspaceUrlOverride) : namespace.firebaseConfig?.hosting?.meetingWorkspaceUrl;
   logMeetingDebug("workspace.target", { target: workspaceTarget, url });
   return url;
 }
-function normalizeMeetingWorkspaceTarget(value) {
-  return namespace.session.normalizeText(value).toLowerCase() === "local" ? "local" : "production";
-}
+function normalizeMeetingWorkspaceTarget(value) { return namespace.session.normalizeText(value).toLowerCase() === "local" ? "local" : "production"; }
 
 async function reconcileMeetingWorkspaceSettings(settings) {
   const currentTarget = normalizeMeetingWorkspaceTarget(settings?.meetingWorkspaceTarget);
+  const currentDebugEnabled = normalizeMeetingDebugConsoleEnabled(settings?.meetingDebugConsoleEnabled);
   const currentOverride = normalizeMeetingWorkspaceOverrideUrl(settings?.meetingWorkspaceUrlOverride);
-  const nextOverride = currentTarget === "local" ? normalizeLocalMeetingWorkspaceUrl(currentOverride) : "";
-  if (
-    currentTarget === namespace.session.normalizeText(settings?.meetingWorkspaceTarget)
-    && nextOverride === currentOverride
-  ) {
-    return { meetingWorkspaceTarget: currentTarget, meetingWorkspaceUrlOverride: nextOverride };
-  }
+  const nextSettings = { meetingDebugConsoleEnabled: currentDebugEnabled, meetingWorkspaceTarget: currentTarget, meetingWorkspaceUrlOverride: currentTarget === "local" ? normalizeLocalMeetingWorkspaceUrl(currentOverride) : "" };
+  if (currentTarget === namespace.session.normalizeText(settings?.meetingWorkspaceTarget) && currentDebugEnabled === settings?.meetingDebugConsoleEnabled && nextSettings.meetingWorkspaceUrlOverride === currentOverride) return nextSettings;
   try {
-    await namespace.storage.updateSettings({
-      meetingWorkspaceTarget: currentTarget,
-      meetingWorkspaceUrlOverride: nextOverride,
-    });
+    await namespace.storage.updateSettings(nextSettings);
   } catch (error) {
-    logMeetingDebug("workspace.settings.reconcile.error", {
-      error: error instanceof Error ? error.message : String(error || ""),
-    });
+    logMeetingDebug("workspace.settings.reconcile.error", { error: error instanceof Error ? error.message : String(error || "") });
   }
-  return { meetingWorkspaceTarget: currentTarget, meetingWorkspaceUrlOverride: nextOverride };
+  return nextSettings;
 }
+
+function normalizeMeetingDebugConsoleEnabled(value) { if (typeof value === "boolean") return value; const normalized = namespace.session.normalizeText(value).toLowerCase(); return normalized === "1" || normalized === "true" || normalized === "on" || normalized === "yes"; }
 
 function normalizeMeetingWorkspaceOverrideUrl(value) {
   const normalized = namespace.session.normalizeText(value);

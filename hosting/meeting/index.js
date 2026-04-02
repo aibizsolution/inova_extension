@@ -106,7 +106,7 @@
   }
 
   function cacheRefs() {
-    for (const id of ["meetingShell", "blockedMessage", "blockedEyebrow", "blockedTitle", "blockedState", "workspace", "pageTitle", "pageSummary", "workspaceBadge", "offlineQueueBadge", "refreshButton", "meetingTitleInput", "saveMeetingTitleButton", "deleteMeetingButton", "meetingStatusChip", "currentBadge", "currentSummary", "currentHint", "currentNotice", "currentTimer", "startButton", "importAudioButton", "importAudioInput", "pauseButton", "resumeButton", "stopButton", "discardButton", "sharedMemoInput", "saveSharedMemoButton", "clearSharedMemoButton", "sharedMemoNotice", "recordCountBadge", "recordList", "detailTitle", "detailBadge", "detailSummary", "recordTitleGroup", "recordTitleInput", "saveRecordTitleButton", "downloadRecordButton", "deleteRecordButton", "detailMeta", "speakerEditor", "speakerAliasList", "saveSpeakerAliasesButton", "saveSpeakerAliasesAndRegenerateButton", "copySegmentsButton", "detailMemoText", "reviewTabSummary", "reviewTabMemo", "reviewTabNotes", "reviewTabSegments", "reviewTabSegmentsCount", "reviewTabSpeakers", "reviewPanelSummary", "summaryStatusPill", "summaryStatusGrid", "summaryActionCard", "reviewPanelMemo", "meetingNotesCard", "reviewPanelSegments", "reviewPanelSpeakers", "speakerDigestList", "notesSummaryMeta", "notesStyleSelect", "regenerateNotesButton", "meetingNotesOverview", "meetingNotesSections", "detailNotice", "segmentList", "debugPanel", "debugPanelBody", "debugStatus", "debugCounters", "debugEndpointSummary", "debugLog", "copyDebugButton", "clearDebugButton", "toggleDebugPanelButton", "confirmOverlay", "confirmDialog", "confirmDialogEyebrow", "confirmDialogTitle", "confirmDialogBody", "confirmDialogCancel", "confirmDialogConfirm"]) {
+    for (const id of ["meetingShell", "blockedMessage", "blockedEyebrow", "blockedTitle", "blockedState", "workspace", "pageTitle", "pageSummary", "workspaceBadge", "offlineQueueBadge", "refreshButton", "meetingTitleInput", "saveMeetingTitleButton", "deleteMeetingButton", "meetingStatusChip", "currentBadge", "currentSummary", "currentHint", "currentNotice", "currentTimer", "startButton", "importAudioButton", "importAudioInput", "pauseButton", "resumeButton", "stopButton", "discardButton", "sharedMemoInput", "saveSharedMemoButton", "clearSharedMemoButton", "sharedMemoNotice", "recordCountBadge", "recordList", "detailTitle", "detailBadge", "detailSummary", "recordTitleGroup", "recordTitleInput", "saveRecordTitleButton", "downloadRecordButton", "deleteRecordButton", "detailMeta", "speakerEditor", "speakerAliasList", "saveSpeakerAliasesButton", "saveSpeakerAliasesAndRegenerateButton", "copySegmentsButton", "detailMemoText", "reviewTabSummary", "reviewTabMemo", "reviewTabNotes", "reviewTabSegments", "reviewTabSegmentsCount", "reviewTabSpeakers", "reviewPanelSummary", "summaryStatusPill", "summaryStatusGrid", "summaryActionCard", "reviewPanelMemo", "meetingNotesCard", "reviewPanelSegments", "reviewPanelSpeakers", "speakerDigestList", "notesSummaryMeta", "notesStyleSelect", "regenerateNotesButton", "meetingNotesOverview", "meetingNotesSections", "detailNotice", "segmentList", "debugPanel", "debugPanelCard", "debugPanelBody", "debugStatus", "debugLog", "debugFabButton", "debugFabBadge", "copyDebugButton", "copyDebugErrorsButton", "clearDebugButton", "toggleDebugPanelButton", "confirmOverlay", "confirmDialog", "confirmDialogEyebrow", "confirmDialogTitle", "confirmDialogBody", "confirmDialogCancel", "confirmDialogConfirm"]) {
       refs[id] = global.document.getElementById(id);
     }
   }
@@ -165,11 +165,17 @@
     if (refs.copyDebugButton) {
       refs.copyDebugButton.addEventListener("click", copyDebugLog);
     }
+    if (refs.copyDebugErrorsButton) {
+      refs.copyDebugErrorsButton.addEventListener("click", copyDebugErrors);
+    }
     if (refs.clearDebugButton) {
       refs.clearDebugButton.addEventListener("click", clearDebugLogPanel);
     }
     if (refs.toggleDebugPanelButton) {
       refs.toggleDebugPanelButton.addEventListener("click", toggleDebugPanelCollapsed);
+    }
+    if (refs.debugFabButton) {
+      refs.debugFabButton.addEventListener("click", toggleDebugPanelCollapsed);
     }
     refs.confirmDialogCancel?.addEventListener("click", () => resolveConfirmation(false));
     refs.confirmDialogConfirm?.addEventListener("click", () => resolveConfirmation(true));
@@ -1870,11 +1876,17 @@
 
   function syncDebugPanelCollapsedUi(options = {}) {
     const persist = options.persist !== false;
+    if (refs.debugPanelCard) {
+      refs.debugPanelCard.hidden = Boolean(state.debugPanelCollapsed);
+    }
     if (refs.debugPanelBody) {
       refs.debugPanelBody.hidden = Boolean(state.debugPanelCollapsed);
     }
+    if (refs.debugFabButton) {
+      refs.debugFabButton.hidden = !state.debugPanelCollapsed;
+    }
     if (refs.toggleDebugPanelButton) {
-      refs.toggleDebugPanelButton.textContent = state.debugPanelCollapsed ? "로그 펼치기" : "로그 접기";
+      refs.toggleDebugPanelButton.textContent = "접기";
       refs.toggleDebugPanelButton.setAttribute("aria-expanded", String(!state.debugPanelCollapsed));
     }
     if (persist) {
@@ -1886,17 +1898,43 @@
     if (!refs.debugPanel || refs.debugPanel.hidden) return;
     const normalizedEntries = Array.isArray(entries) ? entries : [];
     const summary = summarizeDebugEntries(normalizedEntries);
-    refs.debugStatus.textContent = `로그 ${summary.totalLogs}건 · 함수 ${summary.functionCalls}건 · 스냅샷 ${summary.firestoreListenerEvents}건`;
-    if (refs.debugCounters) {
-      refs.debugCounters.textContent = `Functions 요청 ${summary.functionCalls}건 · 응답 ${summary.functionResponses}건 · Firestore 인증 ${summary.firestoreAuthEvents}건 · 리스너 갱신 ${summary.firestoreListenerEvents}건 · 오류 로그 ${summary.totalErrors}건 · 기타 로그 ${summary.otherLogs}건`;
-    }
-    if (refs.debugEndpointSummary) {
-      refs.debugEndpointSummary.textContent = summary.endpointSummary;
-    }
-    refs.debugLog.textContent = normalizedEntries.length
+    const nextText = normalizedEntries.length
       ? normalizedEntries.map((entry) => formatDebugEntry(entry)).join("\n\n")
       : "아직 로그가 없습니다.";
-    refs.debugLog.scrollTop = refs.debugLog.scrollHeight;
+    if (refs.debugStatus) {
+      refs.debugStatus.textContent = `로그 ${summary.totalLogs}건 · 함수 ${summary.functionCalls}건 · 스냅샷 ${summary.firestoreListenerEvents}건 · 오류 ${summary.totalErrors}건`;
+    }
+    if (refs.debugFabBadge) {
+      refs.debugFabBadge.hidden = summary.totalErrors < 1;
+    }
+    syncDebugLogViewport(refs.debugLog, nextText);
+  }
+
+  function readDebugLogViewport(element) {
+    if (!(element instanceof global.HTMLElement)) {
+      return null;
+    }
+    const maxScrollTop = Math.max(0, element.scrollHeight - element.clientHeight);
+    return {
+      scrollTop: Math.max(0, Number(element.scrollTop) || 0),
+      stickToBottom: maxScrollTop - element.scrollTop <= 28,
+    };
+  }
+
+  function syncDebugLogViewport(element, text) {
+    if (!(element instanceof global.HTMLElement)) {
+      return;
+    }
+    const previousViewport = readDebugLogViewport(element);
+    if (element.textContent !== text) {
+      element.textContent = text;
+    }
+    const maxScrollTop = Math.max(0, element.scrollHeight - element.clientHeight);
+    if (!previousViewport || previousViewport.stickToBottom) {
+      element.scrollTop = maxScrollTop;
+      return;
+    }
+    element.scrollTop = Math.min(previousViewport.scrollTop, maxScrollTop);
   }
 
   function summarizeDebugEntries(entries) {
@@ -2074,6 +2112,31 @@
     applyRender();
   }
 
+  async function copyDebugErrors() {
+    const entries = getDebugEntries();
+    const errorEntries = entries.filter((entry) => {
+      const classification = classifyDebugEntry(entry);
+      return classification.type === "function-error" || classification.type === "firestore-error";
+    });
+    const text = normalizeText(errorEntries.map((entry) => formatDebugEntry(entry)).join("\n\n"));
+    if (!text) {
+      setNotice("복사할 오류 로그가 없습니다.", "highlight");
+      applyRender();
+      return;
+    }
+    try {
+      if (typeof global.navigator?.clipboard?.writeText === "function") {
+        await global.navigator.clipboard.writeText(text);
+        setNotice("오류 로그를 복사했습니다.", "highlight");
+      } else {
+        throw new Error("Clipboard API unavailable");
+      }
+    } catch {
+      setNotice("클립보드 권한이 없어 오류 로그 복사를 완료하지 못했어요.", "error");
+    }
+    applyRender();
+  }
+
   async function copySegmentsText() {
     const entry = findHistoryEntry(state, state.selectedRecordId);
     const detailView = buildDetailView(state, entry);
@@ -2174,7 +2237,7 @@
   }
   function persistWorkspaceSession() { const entry = findHistoryEntry(state, state.selectedRecordId); const payload = { expiresAt: state.session.expiresAt, jobId: normalizeText(entry?.remote?.jobId || entry?.pending?.jobId), meetingId: state.session.meetingId, meetingSessionToken: state.session.meetingSessionToken, mode: state.mode, sharedMemo: normalizeTextBlock(state.recordMemoDraft || state.recordMemoSaved), title: normalizeText(state.meeting.title || state.session.title) }; safeSessionStorageSet(global, SESSION_STORAGE_KEY, JSON.stringify(payload)); if (payload.meetingId) safeLocalStorageSet(global, buildWorkspaceSessionStorageKey(payload.meetingId), JSON.stringify(payload)); replaceCleanUrl(); }
   function clearWorkspaceSession() { try { global.sessionStorage.removeItem(SESSION_STORAGE_KEY); } catch {} if (state.session.meetingId) safeLocalStorageRemove(global, buildWorkspaceSessionStorageKey(state.session.meetingId)); disposeWorkspaceRealtime({ clearAuthCache: true }); }
-  function replaceCleanUrl() { const nextUrl = new URL(global.location.href); nextUrl.search = ""; nextUrl.hash = ""; if (state.session.meetingId) nextUrl.searchParams.set("meetingId", state.session.meetingId); const entry = findHistoryEntry(state, state.selectedRecordId); const jobId = normalizeText(entry?.remote?.jobId || entry?.pending?.jobId); if (jobId) nextUrl.searchParams.set("jobId", jobId); if (state.session.meetingSessionToken) nextUrl.hash = buildWorkspaceHash(state.session.meetingSessionToken); global.history.replaceState({}, "", nextUrl.toString()); state.params = parseParams(nextUrl.toString()); }
+  function replaceCleanUrl() { const currentUrl = new URL(global.location.href); const preserveDebug = currentUrl.searchParams.get("debug") === "1"; const nextUrl = new URL(global.location.href); nextUrl.search = ""; nextUrl.hash = ""; if (preserveDebug) nextUrl.searchParams.set("debug", "1"); if (state.session.meetingId) nextUrl.searchParams.set("meetingId", state.session.meetingId); const entry = findHistoryEntry(state, state.selectedRecordId); const jobId = normalizeText(entry?.remote?.jobId || entry?.pending?.jobId); if (jobId) nextUrl.searchParams.set("jobId", jobId); if (state.session.meetingSessionToken) nextUrl.hash = buildWorkspaceHash(state.session.meetingSessionToken); global.history.replaceState({}, "", nextUrl.toString()); state.params = parseParams(nextUrl.toString()); }
   function renderBlocked(message, options = {}) {
     logDebug("workspace.blocked", { message, tone: options?.tone, title: options?.title });
     state.blocked = true;

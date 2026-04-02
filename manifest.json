@@ -42,6 +42,7 @@
       "js": [
         "shared/constants.js",
         "shared/session.js",
+        "shared/meeting-debug.js",
         "shared/meeting-state.js",
         "shared/meeting-bridge.js",
         "shared/prompt-library.js",

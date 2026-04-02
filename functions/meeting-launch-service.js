@@ -4,6 +4,7 @@ const LAUNCH_COLLECTION = "integration_inova_meeting_launches";
 const WORKSPACE_SESSION_COLLECTION = "integration_inova_meeting_workspace_sessions";
 const MEETING_COLLECTION = "integration_inova_meetings";
 const DEFAULT_LAUNCH_TTL_MS = 10 * 60 * 1000;
+const DEFAULT_PANEL_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const DEFAULT_WORKSPACE_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 
 function registerMeetingLaunchHandlers(deps) {
@@ -206,10 +207,51 @@ function registerMeetingLaunchHandlers(deps) {
     }
   });
 
+  const issueInovaMeetingPanelAuth = onRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
+    try {
+      assertMethod(request, createHttpError);
+      if (typeof createFirebaseCustomToken !== "function") {
+        throw createHttpError(500, "패널 Firebase 인증을 준비하지 못했어요.");
+      }
+      const owner = await verifyBearerOwner(request, request.body?.owner || request.body?.providerIdentity);
+      if (!owner?.providerUserKey) {
+        throw createHttpError(400, "패널 Firebase 인증에 필요한 사용자 정보가 비어 있어요.");
+      }
+
+      const expiresAt = new Date(Date.now() + DEFAULT_PANEL_SESSION_TTL_MS).toISOString();
+      const panelExpMs = Date.parse(expiresAt);
+      const firebaseCustomToken = await createFirebaseCustomToken(buildPanelFirebaseUid(owner.providerUserKey), {
+        panelExpMs,
+        providerUserKey: owner.providerUserKey,
+        scope: "meeting-panel",
+      });
+
+      logEvent?.("meeting.panel-auth.issue.success", {
+        providerUserKey: owner.providerUserKey,
+      });
+
+      response.json({
+        ok: true,
+        data: {
+          expiresAt,
+          firebaseCustomToken,
+          providerUserKey: owner.providerUserKey,
+        },
+      });
+    } catch (error) {
+      logEvent?.("meeting.panel-auth.issue.error", {
+        error: normalizeText(error?.message),
+        status: Number(error?.status) || 500,
+      });
+      sendError(response, error);
+    }
+  });
+
   return {
     authorizeMeetingRequest,
     exchangeInovaMeetingLaunch,
     issueInovaMeetingLaunch,
+    issueInovaMeetingPanelAuth,
     issueInovaMeetingWorkspaceAuth,
   };
 
@@ -412,6 +454,10 @@ function buildMeetingDocId(providerUserKey, meetingId) {
 
 function buildWorkspaceFirebaseUid(providerUserKey) {
   return `inova-workspace__${normalizeString(providerUserKey).replace(/[^A-Za-z0-9._-]/g, "_")}`;
+}
+
+function buildPanelFirebaseUid(providerUserKey) {
+  return `inova-panel__${normalizeString(providerUserKey).replace(/[^A-Za-z0-9._-]/g, "_")}`;
 }
 
 module.exports = {

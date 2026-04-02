@@ -73,6 +73,11 @@
       if (action === "set-import-mode") return void setImportMode(detail.importMode);
     }
     function openEditor(item = null) {
+      logDebug("prompt.editor.open", {
+        mode: item ? "edit" : "create",
+        promptId: namespace.session.normalizeText(item?.id),
+        scope: "prompt",
+      });
       state.promptEditor = { ...createPromptEditor(item), open: true };
       state.promptImportReview = null;
       state.promptMenuId = "";
@@ -94,6 +99,11 @@
       }
 
       const wasEdit = state.promptEditor.mode === "edit";
+      logDebug("prompt.save.start", {
+        mode: wasEdit ? "edit" : "create",
+        promptId: namespace.session.normalizeText(state.promptEditor.id),
+        scope: "prompt",
+      });
       state.promptActionPending = { type: "save-editor" };
       hooks.render();
       try {
@@ -103,8 +113,18 @@
         state.promptDeleteConfirmId = "";
         resetPublishState();
         setFeedback(wasEdit ? "요청을 수정했어요." : "요청을 추가했어요.");
+        logDebug("prompt.save.success", {
+          mode: wasEdit ? "edit" : "create",
+          promptCount: Array.isArray(state.promptLibrary.items) ? state.promptLibrary.items.length : 0,
+          scope: "prompt",
+        });
       } catch (error) {
         setFeedback(getActionErrorMessage(error, "요청을 저장하지 못했어요."), "error");
+        logDebug("prompt.save.error", {
+          error: error instanceof Error ? error.message : String(error || ""),
+          mode: wasEdit ? "edit" : "create",
+          scope: "prompt",
+        });
         reportActionError("save prompt failed", error);
       } finally {
         state.promptActionPending = null;
@@ -138,6 +158,10 @@
       const prompt = getPromptById(promptId);
       if (!prompt) { state.promptDeleteConfirmId = ""; hooks.render(); return; }
       state.promptActionPending = { type: "delete", promptId };
+      logDebug("prompt.delete.start", {
+        promptId,
+        scope: "prompt",
+      });
       hooks.render();
       try {
         state.promptLibrary = await namespace.storage.removePromptItem(promptId);
@@ -146,8 +170,18 @@
         resetPublishState();
         if (state.promptEditor.id === promptId) state.promptEditor = createPromptEditor();
         setFeedback("요청을 삭제했어요.");
+        logDebug("prompt.delete.success", {
+          promptId,
+          promptCount: Array.isArray(state.promptLibrary.items) ? state.promptLibrary.items.length : 0,
+          scope: "prompt",
+        });
       } catch (error) {
         setFeedback(getActionErrorMessage(error, "요청을 삭제하지 못했어요."), "error");
+        logDebug("prompt.delete.error", {
+          error: error instanceof Error ? error.message : String(error || ""),
+          promptId,
+          scope: "prompt",
+        });
         reportActionError("delete prompt failed", error);
       } finally {
         state.promptActionPending = null;
@@ -162,10 +196,19 @@
       state.promptDeleteConfirmId = "";
       if (!composerState.available) {
         setFeedback("대화 입력창을 찾지 못했어요.", "error", promptId);
+        logDebug("prompt.use.error", {
+          error: "대화 입력창을 찾지 못했어요.",
+          promptId,
+          scope: "prompt",
+        });
         hooks.render();
         return;
       }
 
+      logDebug("prompt.use.start", {
+        promptId,
+        scope: "prompt",
+      });
       if (namespace.session.normalizeText(composerState.text)) { state.promptPendingInsert = { promptId }; hooks.render(); return; }
       applyInsert("replace", promptId);
     }
@@ -176,9 +219,18 @@
       const success = namespace.composer.applyPromptText(prompt.content, mode);
       state.promptPendingInsert = null;
       setFeedback(success ? `"${prompt.title}" 요청을 입력창에 넣었어요.` : "입력창에 넣지 못했어요.", success ? "info" : "error", promptId);
+      logDebug(success ? "prompt.use.success" : "prompt.use.error", {
+        mode,
+        promptId,
+        scope: "prompt",
+      });
       hooks.render();
     }
     async function handleImportFile(file) {
+      logDebug("prompt.import.start", {
+        fileName: namespace.session.normalizeText(file?.name),
+        scope: "prompt",
+      });
       try {
         const text = await namespace.contentFiles.readTextFile(file);
         const payload = namespace.promptLibrary.parseImportText(text);
@@ -193,8 +245,17 @@
         state.uiPreferences.activePromptTab = "library";
         await hooks.persistActiveTool("prompts", "library");
         setFeedback("");
+        logDebug("prompt.import.success", {
+          fileName: namespace.session.normalizeText(file?.name),
+          scope: "prompt",
+        });
       } catch (error) {
         setFeedback(getActionErrorMessage(error, "가져오기 파일을 읽지 못했어요."), "error");
+        logDebug("prompt.import.error", {
+          error: error instanceof Error ? error.message : String(error || ""),
+          fileName: namespace.session.normalizeText(file?.name),
+          scope: "prompt",
+        });
         reportActionError("import file failed", error);
       }
       hooks.render();
@@ -206,6 +267,10 @@
         state.promptImportReview = { ...state.promptImportReview, confirmReplace: true }; hooks.render(); return;
       }
 
+      logDebug("prompt.import.apply.start", {
+        mode: namespace.session.normalizeText(state.promptImportReview.mode),
+        scope: "prompt",
+      });
       try {
         const result = await namespace.storage.importPromptLibrary(state.promptImportReview.payload, state.promptImportReview.mode);
         state.promptLibrary = result.library;
@@ -213,8 +278,18 @@
         setFeedback(
           `가져오기 완료: 추가 ${result.summary.added}개, 업데이트 ${result.summary.updated}개, 건너뜀 ${result.summary.skipped}개`
         );
+        logDebug("prompt.import.apply.success", {
+          added: Number(result?.summary?.added) || 0,
+          scope: "prompt",
+          skipped: Number(result?.summary?.skipped) || 0,
+          updated: Number(result?.summary?.updated) || 0,
+        });
       } catch (error) {
         setFeedback(getActionErrorMessage(error, "요청 가져오기를 적용하지 못했어요."), "error");
+        logDebug("prompt.import.apply.error", {
+          error: error instanceof Error ? error.message : String(error || ""),
+          scope: "prompt",
+        });
         reportActionError("apply import failed", error);
       }
       hooks.render();
@@ -224,6 +299,10 @@
       if (!state.promptLibrary.items.length) return;
       namespace.contentFiles.downloadJson(buildExportFilename(), namespace.promptLibrary.buildExportPayload(state.promptLibrary));
       setFeedback("요청 보관함을 JSON 파일로 내보냈어요.");
+      logDebug("prompt.export.success", {
+        promptCount: Array.isArray(state.promptLibrary.items) ? state.promptLibrary.items.length : 0,
+        scope: "prompt",
+      });
       hooks.render();
     }
     function buildExportFilename() { return `inova-prompts-${new Date().toISOString().slice(0, 10)}.json`; }
@@ -231,6 +310,10 @@
     function openPublish(promptId) {
       const prompt = getPromptById(promptId);
       if (!prompt) return;
+      logDebug("prompt.publish.open", {
+        promptId,
+        scope: "prompt",
+      });
       state.promptMenuId = "";
       state.promptDeleteConfirmId = "";
       state.promptPublishPromptId = promptId;
@@ -263,6 +346,12 @@
         return;
       }
       state.promptActionPending = { type: "publish", promptId };
+      logDebug("prompt.publish.start", {
+        categoryId: namespace.session.normalizeText(state.promptPublishCategoryId),
+        promptId,
+        scope: "prompt",
+        title: publishTitle,
+      });
       hooks.render();
       try {
         const published = await hooks.publishPrompt?.(promptId, state.promptPublishCategoryId, publishTitle);
@@ -271,7 +360,22 @@
           state.promptPublishTitle = "";
           state.promptPublishError = "";
           setFeedback("스토어에 복사본으로 등록했어요.", "info", promptId);
+          logDebug("prompt.publish.success", {
+            categoryId: namespace.session.normalizeText(state.promptPublishCategoryId),
+            promptId,
+            scope: "prompt",
+            title: publishTitle,
+          });
         }
+      } catch (error) {
+        setFeedback(getActionErrorMessage(error, "스토어에 등록하지 못했어요."), "error", promptId);
+        logDebug("prompt.publish.error", {
+          error: error instanceof Error ? error.message : String(error || ""),
+          promptId,
+          scope: "prompt",
+          title: publishTitle,
+        });
+        reportActionError("publish prompt failed", error);
       } finally {
         state.promptActionPending = null;
       }
@@ -308,6 +412,9 @@
         return;
       }
       console.error(`[i-Nova Bookmarks] ${action}`, error);
+    }
+    function logDebug(event, payload) {
+      namespace.panelDebug?.log?.(event, payload || {});
     }
   }
   namespace.promptManager = {

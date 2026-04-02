@@ -11,6 +11,7 @@
     getInovaMeetingArtifactUrl: "getInovaMeetingArtifact",
     getInovaMeetingJobUrl: "getInovaMeetingJob",
     issueInovaMeetingLaunchUrl: "issueInovaMeetingLaunch",
+    issueInovaMeetingPanelAuthUrl: "issueInovaMeetingPanelAuth",
     issueInovaMeetingWorkspaceAuthUrl: "issueInovaMeetingWorkspaceAuth",
     listInovaMeetingsUrl: "listInovaMeetings",
     listInovaMeetingResultsUrl: "listInovaMeetingResults",
@@ -76,6 +77,7 @@
     return buildUrlConfig(
       {
         baseUrl,
+        meetingPanelBridgeUrl: joinUrl(originUrl, "meeting/panel-bridge.html"),
         meetingWorkspaceUrl: joinUrl(originUrl, "meeting/index.html"),
         originUrl,
       },

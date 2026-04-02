@@ -18,6 +18,7 @@
       settings: {
         enabled: true,
         autoBookmark: true,
+        meetingDebugConsoleEnabled: false,
         meetingWorkspaceTarget: "production",
         meetingWorkspaceUrlOverride: "",
       },

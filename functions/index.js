@@ -138,6 +138,7 @@ exports.deleteInovaMeeting = meetingHandlers.deleteInovaMeeting;
 exports.deleteInovaMeetingResult = meetingHandlers.deleteInovaMeetingResult;
 exports.exchangeInovaMeetingLaunch = meetingLaunchHandlers.exchangeInovaMeetingLaunch;
 exports.issueInovaMeetingWorkspaceAuth = meetingLaunchHandlers.issueInovaMeetingWorkspaceAuth;
+exports.issueInovaMeetingPanelAuth = meetingLaunchHandlers.issueInovaMeetingPanelAuth;
 exports.getInovaMeetingJob = meetingHandlers.getInovaMeetingJob;
 exports.getInovaMeetingArtifact = meetingHandlers.getInovaMeetingArtifact;
 exports.issueInovaMeetingLaunch = meetingLaunchHandlers.issueInovaMeetingLaunch;

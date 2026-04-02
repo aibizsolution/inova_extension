@@ -31,6 +31,7 @@
     const host = document.getElementById("inova-bookmark-host");
     if (!host) return;
     const root = host.querySelector("#inova-bookmark-root");
+    const debugLayer = host.querySelector("#inova-meeting-debug-layer");
     const previousStoreScrollTop = state.activeTool === "prompts" && state.promptTool?.activeTab === "store"
       ? host.querySelector(".inova-store-list")?.scrollTop || host.__storeScrollTop || 0
       : 0;
@@ -43,6 +44,9 @@
     host.querySelector("#inova-tool-total").textContent = String(state.toolCount);
     host.querySelector(".handle-count").textContent = String(state.handleCount);
     host.querySelector("#inova-tool-content").innerHTML = renderToolContent(state);
+    namespace.panelDebug?.captureViewport?.("panel-overlay", debugLayer?.querySelector(".inova-meeting-debug-console__log"));
+    debugLayer.innerHTML = renderMeetingDebugLayer(state);
+    namespace.panelDebug?.restoreViewport?.("panel-overlay", debugLayer?.querySelector(".inova-meeting-debug-console__log"));
     if (state.activeTool === "prompts" && state.promptTool?.activeTab === "store") syncStoreList(host, host.__callbacks, previousStoreScrollTop);
     namespace.bookmarkView.setActive(state.bookmarksTool.activeId);
   }
@@ -71,7 +75,15 @@
           <input id="inova-prompt-import-file" type="file" accept="application/json,.json" hidden />
         </div>
       </div>
+      <div id="inova-meeting-debug-layer"></div>
     `;
+  }
+
+  function renderMeetingDebugLayer(state) {
+    if (!namespace.meetingView?.renderDebugConsole) {
+      return "";
+    }
+    return namespace.meetingView.renderDebugConsole(state.panelDebug);
   }
 
   function renderToolContent(state) {

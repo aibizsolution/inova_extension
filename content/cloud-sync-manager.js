@@ -35,6 +35,11 @@
     function scheduleSync(delay = 700, forceRemoteProbe = false) {
       global.clearTimeout(timerId);
       scheduledForceRemoteProbe = scheduledForceRemoteProbe || Boolean(forceRemoteProbe);
+      logDebug("cloud-sync.schedule", {
+        delay,
+        forceRemoteProbe: Boolean(forceRemoteProbe),
+        scope: "cloud-sync",
+      });
       timerId = global.setTimeout(() => {
         const forceProbe = scheduledForceRemoteProbe;
         scheduledForceRemoteProbe = false;
@@ -44,21 +49,38 @@
 
     async function syncNow(forceRemoteProbe = false) {
       if (inflight) {
+        logDebug("cloud-sync.sync.skipped", {
+          reason: "inflight",
+          scope: "cloud-sync",
+        });
         return;
       }
 
       const providerIdentity = namespace.providerIdentity.getCurrent();
       if (!providerIdentity.available) {
+        logDebug("cloud-sync.sync.skipped", {
+          reason: "no-provider",
+          scope: "cloud-sync",
+        });
         return;
       }
 
       inflight = true;
+      logDebug("cloud-sync.sync.start", {
+        forceRemoteProbe: Boolean(forceRemoteProbe),
+        providerUserKey: namespace.session.normalizeText(providerIdentity.providerUserKey),
+        scope: "cloud-sync",
+      });
       try {
         const storageState = await namespace.storage.getState();
         const promptLibrary = namespace.promptLibrary.mergePromptLibrary(storageState.promptLibrary);
         let cloudSync = namespace.cloudSync.mergeCloudSyncState(storageState.cloudSync);
 
         if (shouldProbeRemote(promptLibrary, cloudSync, providerIdentity, forceRemoteProbe)) {
+          logDebug("cloud-sync.probe.start", {
+            forceRemoteProbe: Boolean(forceRemoteProbe),
+            scope: "cloud-sync",
+          });
           const remoteState = await sendRuntimeMessage("inova-sync:peek-prompt-library", {
             force: forceRemoteProbe,
             providerIdentity,
@@ -66,6 +88,10 @@
           cloudSync = await namespace.storage.recordPromptLibraryRemoteState(remoteState, providerIdentity);
 
           if (shouldHydrateLocal(promptLibrary, cloudSync, remoteState)) {
+            logDebug("cloud-sync.hydrate.start", {
+              remoteItemCount: Math.max(0, Number(remoteState?.itemCount) || 0),
+              scope: "cloud-sync",
+            });
             const remote = await sendRuntimeMessage("inova-sync:load-prompt-library", {
               force: forceRemoteProbe,
               providerIdentity,
@@ -76,22 +102,42 @@
                 remote.owner || providerIdentity,
                 remote.syncedAt || remoteState.lastSyncedAt || new Date().toISOString()
               );
+              logDebug("cloud-sync.hydrate.success", {
+                itemCount: Array.isArray(remote?.promptLibrary?.items) ? remote.promptLibrary.items.length : 0,
+                scope: "cloud-sync",
+              });
               return;
             }
           }
         }
 
         if (!namespace.cloudSync.hasPendingPromptSync(cloudSync)) {
+          logDebug("cloud-sync.sync.idle", {
+            scope: "cloud-sync",
+          });
           return;
         }
 
         const syncDocument = namespace.cloudSync.buildPromptSyncDocument(promptLibrary, cloudSync);
+        logDebug("cloud-sync.push.start", {
+          itemCount: Array.isArray(promptLibrary.items) ? promptLibrary.items.length : 0,
+          revision: namespace.session.normalizeText(cloudSync?.pending?.revision),
+          scope: "cloud-sync",
+        });
         const result = await sendRuntimeMessage("inova-sync:sync-prompt-library", { syncDocument });
         await namespace.storage.markPromptLibrarySynced(result.owner || providerIdentity, result.syncedAt || new Date().toISOString());
+        logDebug("cloud-sync.push.success", {
+          scope: "cloud-sync",
+          syncedAt: namespace.session.normalizeText(result?.syncedAt),
+        });
       } catch (error) {
         if (isInvalidatedContextError(error)) {
           return;
         }
+        logDebug("cloud-sync.sync.error", {
+          error: error instanceof Error ? error.message : String(error || ""),
+          scope: "cloud-sync",
+        });
         await namespace.storage.setPromptSyncError(error instanceof Error ? error.message : String(error), providerIdentity);
         scheduleSync(RETRY_DELAY_MS);
       } finally {
@@ -168,6 +214,10 @@
       if (isInvalidatedContextError(error)) {
         return;
       }
+      logDebug("cloud-sync.sync.error", {
+        error: error instanceof Error ? error.message : String(error || ""),
+        scope: "cloud-sync",
+      });
       console.error("[i-Nova Bookmarks] cloud sync failed", error);
     }
 
@@ -177,14 +227,38 @@
     }
 
     async function sendRuntimeMessage(type, payload) {
-      const response = await chrome.runtime.sendMessage({
+      logDebug("cloud-sync.runtime.request", {
+        scope: "runtime",
+        tool: "prompts",
         type,
-        ...(payload || {}),
       });
-      if (!response?.ok) {
-        throw new Error(namespace.session.normalizeText(response?.error || "") || "백그라운드 동기화 요청에 실패했어요.");
+      try {
+        const response = await chrome.runtime.sendMessage({
+          type,
+          ...(payload || {}),
+        });
+        if (!response?.ok) {
+          throw new Error(namespace.session.normalizeText(response?.error || "") || "백그라운드 동기화 요청에 실패했어요.");
+        }
+        logDebug("cloud-sync.runtime.success", {
+          scope: "runtime",
+          tool: "prompts",
+          type,
+        });
+        return response.data;
+      } catch (error) {
+        logDebug("cloud-sync.runtime.error", {
+          error: error instanceof Error ? error.message : String(error || ""),
+          scope: "runtime",
+          tool: "prompts",
+          type,
+        });
+        throw error;
       }
-      return response.data;
+    }
+
+    function logDebug(event, payload) {
+      namespace.panelDebug?.log?.(event, payload || {});
     }
   }
 

@@ -1,5 +1,6 @@
 const popupRoot = globalThis.InovaBookmarks;
 const LOCAL_MEETING_WORKSPACE_URL = "http://127.0.0.1:5000/meeting/index.html";
+// verify-docs anchor: workspaceTargetHint
 
 const popupState = {
   settings: { ...popupRoot.constants.defaults.settings },
@@ -18,9 +19,10 @@ async function bootstrapPopup() {
 
 function cachePopupRefs() {
   for (const id of [
+    "debugConsoleOffButton",
+    "debugConsoleOnButton",
     "workspaceTargetProductionButton",
     "workspaceTargetLocalButton",
-    "workspaceTargetHint",
   ]) {
     popupRefs[id] = document.getElementById(id);
   }
@@ -29,6 +31,8 @@ function cachePopupRefs() {
 function bindPopupEvents() {
   popupRefs.workspaceTargetProductionButton.addEventListener("click", () => setMeetingWorkspaceTarget("production"));
   popupRefs.workspaceTargetLocalButton.addEventListener("click", () => setMeetingWorkspaceTarget("local"));
+  popupRefs.debugConsoleOffButton.addEventListener("click", () => setMeetingDebugConsoleEnabled(false));
+  popupRefs.debugConsoleOnButton.addEventListener("click", () => setMeetingDebugConsoleEnabled(true));
 }
 
 function listenPopupStorage() {
@@ -61,13 +65,15 @@ async function refreshPopup() {
 
 function renderPopup() {
   const target = normalizeMeetingWorkspaceTarget(popupState.settings.meetingWorkspaceTarget);
+  const debugEnabled = normalizeMeetingDebugConsoleEnabled(popupState.settings.meetingDebugConsoleEnabled);
   popupRefs.workspaceTargetProductionButton.dataset.selected = String(target === "production");
   popupRefs.workspaceTargetLocalButton.dataset.selected = String(target === "local");
   popupRefs.workspaceTargetProductionButton.setAttribute("aria-pressed", String(target === "production"));
   popupRefs.workspaceTargetLocalButton.setAttribute("aria-pressed", String(target === "local"));
-  popupRefs.workspaceTargetHint.textContent = target === "local"
-    ? "로컬 호스팅을 사용합니다. 패널에서 회의를 열면 http://127.0.0.1:5000/meeting/index.html로 연결됩니다."
-    : "상용 호스팅을 사용합니다. 패널에서 회의를 열면 배포된 hosted 작업실로 연결됩니다.";
+  popupRefs.debugConsoleOffButton.dataset.selected = String(!debugEnabled);
+  popupRefs.debugConsoleOnButton.dataset.selected = String(debugEnabled);
+  popupRefs.debugConsoleOffButton.setAttribute("aria-pressed", String(!debugEnabled));
+  popupRefs.debugConsoleOnButton.setAttribute("aria-pressed", String(debugEnabled));
 }
 
 async function setMeetingWorkspaceTarget(target) {
@@ -80,24 +86,44 @@ async function setMeetingWorkspaceTarget(target) {
   renderPopup();
 }
 
+async function setMeetingDebugConsoleEnabled(enabled) {
+  const nextSettings = await popupRoot.storage.updateSettings({
+    meetingDebugConsoleEnabled: Boolean(enabled),
+  });
+  popupState.settings = nextSettings;
+  renderPopup();
+}
+
 function normalizeMeetingWorkspaceTarget(value) {
   return String(value || "").trim().toLowerCase() === "local" ? "local" : "production";
 }
 
+function normalizeMeetingDebugConsoleEnabled(value) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "on" || normalized === "yes";
+}
+
 async function reconcileMeetingWorkspaceSettings(settings) {
   const currentTarget = normalizeMeetingWorkspaceTarget(settings?.meetingWorkspaceTarget);
+  const currentDebugEnabled = normalizeMeetingDebugConsoleEnabled(settings?.meetingDebugConsoleEnabled);
   const currentOverride = normalizeMeetingWorkspaceOverrideUrl(settings?.meetingWorkspaceUrlOverride);
   const nextSettings = {
     ...popupRoot.constants.defaults.settings,
     ...(settings || {}),
+    meetingDebugConsoleEnabled: currentDebugEnabled,
     meetingWorkspaceTarget: currentTarget,
     meetingWorkspaceUrlOverride: currentTarget === "local" ? currentOverride : "",
   };
   if (
-    nextSettings.meetingWorkspaceTarget !== settings?.meetingWorkspaceTarget
+    nextSettings.meetingDebugConsoleEnabled !== settings?.meetingDebugConsoleEnabled
+    || nextSettings.meetingWorkspaceTarget !== settings?.meetingWorkspaceTarget
     || nextSettings.meetingWorkspaceUrlOverride !== settings?.meetingWorkspaceUrlOverride
   ) {
     return popupRoot.storage.updateSettings({
+      meetingDebugConsoleEnabled: nextSettings.meetingDebugConsoleEnabled,
       meetingWorkspaceTarget: nextSettings.meetingWorkspaceTarget,
       meetingWorkspaceUrlOverride: nextSettings.meetingWorkspaceUrlOverride,
     });

@@ -12,14 +12,20 @@
   <body>
     <main class="shell">
       <section class="card setting" aria-label="회의 작업실 연결 설정">
-        <p class="eyebrow">i-Nova</p>
-        <h1>회의 작업실 연결</h1>
-        <p class="subtitle">팝업에서는 작업실이 상용 호스팅을 볼지, 로컬 호스팅을 볼지만 고릅니다.</p>
-        <div class="segment-control" role="group" aria-label="회의 작업실 호스팅 대상">
-          <button id="workspaceTargetProductionButton" class="segment-control__button" type="button">상용 호스팅</button>
-          <button id="workspaceTargetLocalButton" class="segment-control__button" type="button">로컬 호스팅</button>
-        </div>
-        <p id="workspaceTargetHint" class="hint">상용 호스팅을 사용합니다.</p>
+        <section class="setting-row" aria-label="회의 작업실 호스팅 대상">
+          <p class="setting-row__title">호스팅</p>
+          <div class="segment-control" role="group" aria-label="회의 작업실 호스팅 대상">
+            <button id="workspaceTargetProductionButton" class="segment-control__button" type="button">상용</button>
+            <button id="workspaceTargetLocalButton" class="segment-control__button" type="button">로컬</button>
+          </div>
+        </section>
+        <section class="setting-row" aria-label="디버그 콘솔 설정">
+          <p class="setting-row__title">디버그</p>
+          <div class="segment-control segment-control--compact" role="group" aria-label="디버그 콘솔 표시 여부">
+            <button id="debugConsoleOffButton" class="segment-control__button" type="button">OFF</button>
+            <button id="debugConsoleOnButton" class="segment-control__button" type="button">ON</button>
+          </div>
+        </section>
       </section>
     </main>
   </body>

@@ -16,7 +16,7 @@
 html,
 body {
   width: 336px;
-  min-height: 220px;
+  min-height: 128px;
   margin: 0;
   background:
     radial-gradient(circle at top left, rgba(37, 99, 235, 0.12), transparent 34%),
@@ -34,59 +34,55 @@ button {
 }
 
 .shell {
-  padding: 12px;
+  padding: 8px;
 }
 
 .card {
   background: var(--card);
   border: 1px solid var(--card-border);
-  border-radius: 18px;
+  border-radius: 16px;
   box-shadow: var(--shadow);
   backdrop-filter: blur(14px);
 }
 
 .setting {
   display: grid;
-  gap: 14px;
-  padding: 16px;
+  gap: 8px;
+  padding: 12px;
 }
 
-.eyebrow {
+.setting-row {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.setting-row__title {
   margin: 0;
   font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--accent);
-}
-
-h1 {
-  margin: 0;
-  font-size: 20px;
-  line-height: 1.15;
-  letter-spacing: -0.03em;
-}
-
-.subtitle,
-.hint {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--muted);
+  font-weight: 800;
+  color: var(--text);
 }
 
 .segment-control {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
+}
+
+.segment-control--compact {
+  gap: 6px;
 }
 
 .segment-control__button {
   border: 1px solid rgba(160, 177, 206, 0.32);
-  border-radius: 12px;
+  border-radius: 10px;
   background: rgba(255, 255, 255, 0.94);
   color: var(--muted);
-  padding: 10px 12px;
-  font-size: 12px;
+  min-height: 34px;
+  padding: 0 8px;
+  font-size: 11px;
   font-weight: 800;
   cursor: pointer;
   transition: border-color 160ms ease, box-shadow 160ms ease, color 160ms ease, transform 160ms ease;
@@ -94,6 +90,13 @@ h1 {
 
 .segment-control__button:hover {
   transform: translateY(-1px);
+}
+
+.segment-control__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.54;
+  transform: none;
+  box-shadow: none;
 }
 
 .segment-control__button[data-selected="true"] {

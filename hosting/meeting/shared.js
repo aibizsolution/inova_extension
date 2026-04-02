@@ -39,6 +39,7 @@
   const debugListeners = new Set();
   const debugEntries = [];
   let debugSequence = 0;
+  let debugEnabled = false;
 
   function normalizeText(value) {
     return String(value || "").trim();
@@ -81,16 +82,9 @@
   function isDebugPanelEnabled(globalObject) {
     try {
       const current = new URL(String(globalObject?.location?.href || ""));
-      return isLocalWorkspaceOrigin(globalObject)
-        || current.searchParams.get("debug") === "1"
-        || normalizeText(globalObject?.localStorage?.getItem("__INOVA_MEETING_DEBUG__")) === "1";
+      return normalizeText(current.searchParams.get("debug")) === "1";
     } catch {
-      try {
-        return isLocalWorkspaceOrigin(globalObject)
-          || normalizeText(globalObject?.localStorage?.getItem("__INOVA_MEETING_DEBUG__")) === "1";
-      } catch {
-        return false;
-      }
+      return false;
     }
   }
 
@@ -669,6 +663,9 @@
   }
 
   function logDebug(event, payload) {
+    if (!debugEnabled) {
+      return null;
+    }
     const entry = {
       event: normalizeText(event),
       id: ++debugSequence,
@@ -683,7 +680,10 @@
       global.console?.info?.(DEBUG_PREFIX, entry.event, entry.payload || {});
     } catch {}
     notifyDebugListeners();
+    return entry;
   }
+
+  debugEnabled = isDebugPanelEnabled(global);
 
   global.__INOVA_HOSTED_MEETING_DEBUG__ = {
     clear: clearDebugEntries,

@@ -229,6 +229,17 @@
     return payload?.data || {};
   }
 
+  async function issueInovaMeetingPanelAuth(providerIdentity, accessToken) {
+    const payload = await postJson(
+      functions.issueInovaMeetingPanelAuthUrl,
+      {
+        owner: toProviderIdentityPayload(providerIdentity),
+      },
+      accessToken
+    );
+    return payload?.data || {};
+  }
+
   async function exchangeInovaMeetingLaunch(input) {
     const payload = await postJson(
       functions.exchangeInovaMeetingLaunchUrl,
@@ -311,6 +322,7 @@
     getInovaMeetingArtifact,
     getInovaMeetingJob,
     issueInovaMeetingLaunch,
+    issueInovaMeetingPanelAuth,
     listInovaMeetings,
     listInovaMeetingResults,
     importPromptStoreEntry,

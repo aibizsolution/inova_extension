@@ -16,6 +16,10 @@
     }
 
     async function refreshState() {
+      logDebug("route.refresh.start", {
+        scope: "route",
+        sessionId: state.sessionId,
+      });
       try {
         const storageState = await namespace.storage.getState();
         state.settings = storageState.settings || { ...namespace.constants.defaults.settings };
@@ -30,19 +34,42 @@
         state.bookmarks = readLiveBookmarks();
         state.lastError = "";
         if (isStoreTabActive()) hooks.ensureStoreLoaded?.();
+        logDebug("route.refresh.success", {
+          activeTool: state.activeTool,
+          bookmarkCount: state.bookmarks.length,
+          scope: "route",
+          sessionId: state.sessionId,
+        });
       } catch (error) {
         state.lastError = error instanceof Error ? error.message : String(error);
+        logDebug("route.refresh.error", {
+          error: state.lastError,
+          scope: "route",
+          sessionId: state.sessionId,
+        });
         console.error("[i-Nova Bookmarks] refresh state failed", error);
       }
 
       hooks.render();
     }
 
-    async function syncRouteState(force = false) {
+    async function syncRouteState(force = false, reason = "manual") {
       const nextSessionId = namespace.session.getSessionId();
       const sessionChanged = nextSessionId !== state.sessionId;
       state.lastRouteKey = getRouteKey();
+      logDebug("route.sync.start", {
+        force: Boolean(force),
+        reason,
+        scope: "route",
+        sessionChanged,
+        sessionId: nextSessionId,
+      });
       if (!force && !sessionChanged) {
+        logDebug("route.sync.skipped", {
+          reason,
+          scope: "route",
+          sessionId: nextSessionId,
+        });
         return;
       }
 
@@ -51,6 +78,11 @@
       resetRouteState(nextSessionId, namespace.contentDom.getUserMessageSignature());
       hooks.render();
       if (!nextSessionId) {
+        logDebug("route.sync.empty", {
+          force: Boolean(force),
+          reason,
+          scope: "route",
+        });
         hooks.onRouteStateChanged?.({
           force,
           sessionChanged,
@@ -62,6 +94,13 @@
       state.observer = namespace.contentDom.observeMessages(scheduleRefresh);
       scheduleRouteRetryTimers();
       await refreshState();
+      logDebug("route.sync.success", {
+        force: Boolean(force),
+        reason,
+        scope: "route",
+        sessionChanged,
+        sessionId: state.sessionId,
+      });
       hooks.onRouteStateChanged?.({
         force,
         sessionChanged,
@@ -187,8 +226,8 @@
       state.lastRouteKey = getRouteKey();
       wrapHistoryMethod("pushState");
       wrapHistoryMethod("replaceState");
-      global.addEventListener("popstate", scheduleRouteSync);
-      global.addEventListener("visibilitychange", () => document.visibilityState === "visible" && scheduleRouteSync());
+      global.addEventListener("popstate", () => scheduleRouteSync("popstate"));
+      global.addEventListener("visibilitychange", () => document.visibilityState === "visible" && scheduleRouteSync("visibility"));
       document.addEventListener("click", handleDocumentClick, true);
       startRoutePolling();
       state.routeWatchInstalled = true;
@@ -198,7 +237,7 @@
       const original = history[methodName];
       history[methodName] = function wrappedHistoryState(...args) {
         const result = original.apply(this, args);
-        scheduleRouteSync();
+        scheduleRouteSync(`history.${methodName}`);
         return result;
       };
     }
@@ -209,8 +248,8 @@
         return;
       }
 
-      global.setTimeout(scheduleRouteSync, 80);
-      global.setTimeout(scheduleRouteSync, 350);
+      global.setTimeout(() => scheduleRouteSync("click.80"), 80);
+      global.setTimeout(() => scheduleRouteSync("click.350"), 350);
     }
 
     function startRoutePolling() {
@@ -225,12 +264,12 @@
         }
 
         state.lastRouteKey = nextRouteKey;
-        scheduleRouteSync();
+        scheduleRouteSync("poll");
       }, 400);
     }
 
-    function scheduleRouteSync() {
-      global.setTimeout(() => syncRouteState().catch((error) => console.error("[i-Nova Bookmarks] route sync failed", error)), 0);
+    function scheduleRouteSync(reason = "scheduled") {
+      global.setTimeout(() => syncRouteState(false, reason).catch((error) => console.error("[i-Nova Bookmarks] route sync failed", error)), 0);
     }
 
     function getRouteKey() {
@@ -238,7 +277,15 @@
     }
 
     function logRefreshError(error) {
+      logDebug("route.schedule.error", {
+        error: error instanceof Error ? error.message : String(error || ""),
+        scope: "route",
+      });
       console.error("[i-Nova Bookmarks] refresh failed", error);
+    }
+
+    function logDebug(event, payload) {
+      namespace.panelDebug?.log?.(event, payload || {});
     }
   }
 

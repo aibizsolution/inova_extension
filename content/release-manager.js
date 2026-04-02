@@ -62,8 +62,23 @@
         || current.historyCheckedForVersion !== currentVersion
         || !namespace.releaseInfo.isHistoryFresh(current, CHECK_INTERVAL_MS)
       );
-      if (!needsLatest && !needsHistory) return;
+      if (!needsLatest && !needsHistory) {
+        logDebug("release.check.skipped", {
+          currentVersion,
+          includeHistory: Boolean(includeHistory),
+          scope: "release",
+        });
+        return;
+      }
 
+      logDebug("release.check.start", {
+        currentVersion,
+        force: Boolean(force),
+        includeHistory: Boolean(includeHistory),
+        needsHistory,
+        needsLatest,
+        scope: "release",
+      });
       state.releaseInfo = namespace.releaseInfo.mergeReleaseInfo(state.releaseInfo, {
         checking: needsLatest,
         error: "",
@@ -90,8 +105,17 @@
         delete next.historyLoading;
         state.releaseInfo = namespace.releaseInfo.mergeReleaseInfo(next);
         await namespace.storage.setReleaseInfo(next);
+        logDebug("release.check.success", {
+          historyCount: Array.isArray(next.history) ? next.history.length : 0,
+          latestVersion: namespace.session.normalizeText(next.latest?.version),
+          scope: "release",
+        });
       } catch (error) {
         if (isInvalidatedContextError(error)) return;
+        logDebug("release.check.error", {
+          error: error instanceof Error ? error.message : "릴리스 정보를 확인하지 못했어요.",
+          scope: "release",
+        });
         state.releaseInfo = namespace.releaseInfo.mergeReleaseInfo(state.releaseInfo, {
           error: error instanceof Error ? error.message : "릴리스 정보를 확인하지 못했어요.",
         });
@@ -123,10 +147,23 @@
 
     async function openDownload(url) {
       if (!namespace.session.normalizeText(url)) return;
+      logDebug("release.download.start", {
+        scope: "release",
+        url,
+      });
       try {
         await sendRuntimeMessage("inova-release:open-url", { url });
+        logDebug("release.download.success", {
+          scope: "release",
+          url,
+        });
       } catch (error) {
         if (isInvalidatedContextError(error)) return;
+        logDebug("release.download.error", {
+          error: error instanceof Error ? error.message : String(error || ""),
+          scope: "release",
+          url,
+        });
         throw error;
       }
     }
@@ -146,9 +183,33 @@
     }
 
     async function sendRuntimeMessage(type, payload) {
-      const response = await chrome.runtime.sendMessage({ type, ...(payload || {}) });
-      if (!response?.ok) throw new Error(namespace.session.normalizeText(response?.error) || "릴리스 요청을 처리하지 못했어요.");
-      return response.data;
+      logDebug("release.runtime.request", {
+        scope: "runtime",
+        tool: "release",
+        type,
+      });
+      try {
+        const response = await chrome.runtime.sendMessage({ type, ...(payload || {}) });
+        if (!response?.ok) throw new Error(namespace.session.normalizeText(response?.error) || "릴리스 요청을 처리하지 못했어요.");
+        logDebug("release.runtime.success", {
+          scope: "runtime",
+          tool: "release",
+          type,
+        });
+        return response.data;
+      } catch (error) {
+        logDebug("release.runtime.error", {
+          error: error instanceof Error ? error.message : String(error || ""),
+          scope: "runtime",
+          tool: "release",
+          type,
+        });
+        throw error;
+      }
+    }
+
+    function logDebug(event, payload) {
+      namespace.panelDebug?.log?.(event, payload || {});
     }
   }
 

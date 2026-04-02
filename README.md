@@ -8,6 +8,7 @@
   - 확장프로그램 팝업에서는 회의 작업실이 `상용 호스팅`과 `로컬 호스팅` 중 어디를 바라볼지 선택합니다.
   - 팝업은 설정만 담당하고, 실제 `새 회의하기`와 결과 확인은 패널에서 이어집니다.
   - 선택한 값은 `settings.meetingWorkspaceTarget`에 저장되어 패널의 회의 진입에도 그대로 적용됩니다.
+- `디버그`는 별도 ON/OFF로 저장되고, ON이면 패널 전역과 작업실에 로그 패널과 로그 수집을 켭니다.
 - `질문 자동 모으기`
   - 현재 대화에 보이는 사용자 질문을 자동으로 모아 보여줍니다.
   - 질문 목록은 현재 대화 화면을 기준으로 실시간으로 갱신됩니다.
@@ -18,11 +19,13 @@
   - 사용자가 마지막으로 열어 둔 상태를 같은 탭에서 기억합니다.
   - 닫힌 상태의 `실험실` 핸들은 위아래로 옮길 수 있고, 위치는 사이트 기준으로 기억합니다.
 - `회의록 패널`
-  - `회의` 도구는 DB에서 읽어 온 최신 회의록 목록과 `새 회의하기` CTA만 제공합니다.
+  - `회의` 도구는 Firestore 회의 문서를 실시간으로 구독해 최신 회의록 목록과 `새 회의하기` CTA를 제공합니다.
   - 패널 목록의 항목을 누르면 해당 회의 결과를 전용 새 탭 작업실에서 다시 확인합니다.
 - `회의 페이지`
   - Firebase Hosting에 올린 전용 회의 작업실에서 `회의 식별`, `현재 녹음`, `회의 공용 메모`, `처리 이력/업로드 큐`, `선택 결과 검토`를 한 화면에서 처리합니다.
-  - 팝업에서 `로컬 호스팅`을 고르면 패널의 `새 회의하기`가 `http://127.0.0.1:5000/meeting/index.html` 기준으로 열리고, 화면 안의 디버그 로그 패널에서 세션 복원, Functions 요청, Firestore auth/listener 로그를 바로 확인할 수 있습니다. 필요하면 로그 패널 본문을 접어 두고 작업을 이어갈 수 있습니다.
+- 팝업에서 `디버그 ON`을 켜면 패널과 작업실이 `debug=1` 기준으로 로그 패널을 열고, 화면 안에서 세션 복원, Functions 요청, Firestore auth/listener 로그를 바로 확인할 수 있습니다.
+- 패널 디버그는 회의 탭 전용이 아니라 현재 브라우저 탭 세션 기준 전역 버퍼로 유지되고, `대화/회의/프롬프트/릴리스` 흐름 로그를 함께 모읍니다.
+- 작업실과 패널의 디버그 콘솔은 팝업의 `디버그`가 ON일 때만 표시되고, OFF일 때는 로그도 수집하지 않습니다.
   - 로컬 작업실에서는 `파일 불러오기`로 실제 오디오 샘플을 바로 전사 테스트할 수 있고, `25MB 초과` 또는 `약 20분 초과` 원본도 브라우저에서 `16kHz mono wav chunk`로 나눈 뒤 한 기록 결과로 이어 처리합니다.
   - hosted 회의 작업실은 기본적으로 `최대 200MB 또는 2시간` 원본까지 지원하고, 큰 오디오나 긴 녹음은 `약 9분 / 1.5초 overlap` 기준 chunk 업로드 후 서버에서 단일 회의 결과로 병합합니다.
   - 녹음은 `녹음 시작 -> 일시중지/재개 -> 종료하고 전사` 흐름으로 동작하고, 종료된 녹음본은 원격 처리 완료 전까지 브라우저 로컬 큐에 보관합니다.
@@ -87,6 +90,7 @@
   - `index.html`, `index.css`: 회의 작업실 레이아웃과 실용형 UI 스타일
   - `index.js`: hosted 회의 작업실 부팅, launch token 교환, 세션 복원, 녹음/업로드 큐/상세 액션 orchestration
   - `firebase-client.js`: `MeetingSession`을 Firebase custom token으로 교환하고 Firestore 문서 구독을 연결하는 hosted helper
+  - `panel-bridge.html`, `panel-bridge.js`: 패널 content script 대신 Firestore query를 수행하는 숨겨진 hosted bridge
   - `shared.js`: 공통 상태/포맷터/네트워크 헬퍼
   - `storage.js`: IndexedDB 기반 로컬 업로드 큐와 fallback storage
   - `notes.js`: 회의록 schema 정규화와 mode별 표시 포맷터
@@ -100,6 +104,7 @@
   - `firebase-config.js`: Firebase 프로젝트와 함수 엔드포인트 설정
   - `inova-auth.js`: i-Nova access token 갱신 보조
   - `meeting-bridge.js`: 브라우저 쪽 회의 runtime message 래퍼
+- `meeting-debug.js`: 패널/작업실 공용 디버그 로그 버퍼와 복사 helper
   - `meeting-state.js`: 회의 `meeting/job/transcript` 로컬 상태 정규화와 legacy session fallback
   - `prompt-library.js`: 요청 보관함 정규화, 가져오기/내보내기 규칙
   - `prompt-store.js`: 스토어 카테고리, 엔트리 정규화, 정렬 규칙
@@ -115,8 +120,8 @@
   - `bookmark-view.js`: 질문 탭 렌더링과 포커스 이동
   - `composer-review-float.js`: 입력창 우측 상단 평가 버튼과 팝오버 렌더링
   - `cloud-sync-manager.js`: 프롬프트 보관함 원격 백업 흐름 조정
-  - `meeting-manager.js`: 회의 허브 목록 fetch/cache/refresh 조정
-  - `meeting-view.js`: 회의 허브 리스트와 `새 회의하기` CTA 렌더링
+  - `meeting-manager.js`: 패널 회의 허브 Firestore realtime 구독, fallback refresh, local cache 조정
+- `meeting-view.js`: 회의 허브 리스트와 `새 회의하기` CTA, 패널 공용 디버그 콘솔 렌더링
   - `prompt-review-manager.js`: 현재 입력 프롬프트 평가 호출과 상태 관리
   - `prompt-view.js`: 요청 탭 렌더링
   - `prompt-manager.js`: 요청 CRUD, 가져오기/내보내기, 입력창 주입
@@ -148,7 +153,7 @@
 - `content/prompt-manager.js`는 `promptLibrary`를 관리하고, 선택한 요청을 현재 대화 입력창에 주입합니다.
 - `content/prompt-review-manager.js`는 현재 입력창 프롬프트를 평가하고 보완 프롬프트를 다시 주입합니다.
 - `content/store-manager.js`는 `프롬프트 스토어` 목록 조회, 등록, 삭제, 좋아요, 가져오기 흐름을 관리합니다.
-- `content/meeting-manager.js`는 owner 기준 최신 회의 목록을 읽어 `meetingHub` 캐시를 갱신하고, 패널/포커스 복귀 시 허브를 새로고칩니다.
+- `content/meeting-manager.js`는 패널에서 `issueInovaMeetingPanelAuth -> hosted panel bridge -> Firestore meeting query` 경로로 owner 기준 최신 회의 목록을 실시간 구독하고, 실패 시에만 `listInovaMeetings` fallback으로 `meetingHub` 캐시를 갱신합니다.
 - `background/service-worker.js`는 i-Nova access token과 Firebase Functions를 연결해 원격 백업 호출을 처리하고, 회의 기능에서는 launch grant 발급과 session 교환까지 끝낸 최종 hosted 작업실 URL 생성, 허브 조회 라우팅을 맡습니다.
 - `functions/meeting-launch-service.js`는 launch grant, hosted workspace session, Firestore 읽기용 Firebase custom token 발급을 맡깁니다.
 - `processQueuedInovaMeetingJob` Firestore background worker는 긴 회의 chunk 병합과 회의 정리 단계 때문에 `1GiB` 메모리와 `540초` timeout으로 운영합니다.
@@ -157,7 +162,7 @@
 - Functions는 같은 `requestId` 재전송을 idempotent하게 재사용하고, `sharedMemoSnapshot`과 notes mode 메타데이터를 함께 저장합니다.
 - Functions가 source audio를 임시 bucket object로 저장할 때는 Firebase 설정의 기본 storage bucket을 우선 쓰고, 기본 bucket이 없는 프로젝트에서는 `STORAGE_BUCKET_URL`로 실제 존재하는 bucket을 명시해야 합니다. 현재 프로젝트는 chunk 업로드용으로 `gcf-v2-uploads-1027279095019.asia-northeast3.cloudfunctions.appspot.com`을 사용합니다.
 - 회의 작업실 Firestore 구독용 Firebase custom token은 기본적으로 `1027279095019-compute@developer.gserviceaccount.com`으로 서명하고, 다른 계정을 써야 하면 `FIREBASE_AUTH_SIGNING_SERVICE_ACCOUNT`로 override할 수 있습니다.
-- 회의 업로드/전사 결과는 패널의 `회의` 도구에서 허브 리스트로 보이고, 상세는 hosted `meeting/index.html` 새 탭 작업실에서 다시 확인합니다. 상세 상태는 작업실이 `meetingSessionToken`으로 `issueInovaMeetingWorkspaceAuth`를 한 번 호출한 뒤 Firebase Auth에 로그인하고 Firestore `meeting/job/artifact` 문서를 직접 구독해 반영합니다.
+- 회의 업로드/전사 결과는 패널의 `회의` 도구에서 Firestore 구독 기반 허브 리스트로 보이고, 상세는 hosted `meeting/index.html` 새 탭 작업실에서 다시 확인합니다. 패널은 `issueInovaMeetingPanelAuth`로 발급한 Firebase custom token을 hidden hosted bridge에 넘겨 meeting 목록 query를 맡기고, 상세 상태는 작업실이 `meetingSessionToken`으로 `issueInovaMeetingWorkspaceAuth`를 한 번 호출한 뒤 Firebase Auth에 로그인하고 Firestore `meeting/job/artifact` 문서를 직접 구독해 반영합니다.
 - 브라우저 쪽에서는 `shared/meeting-bridge.js` 와 `shared/meeting-state.js` 로 회의 녹음 start/stop, 회의 job 생성, artifact 반영, local `meetingState` 저장 기준을 먼저 맞춰 두었습니다.
 - 질문 목록 자체는 `chrome.storage.local`에 저장하지 않고, 현재 대화 화면을 기준으로 바로 렌더링합니다.
 - 요청 보관함은 `chrome.storage.local.promptLibrary`에 저장합니다.
@@ -218,7 +223,7 @@ npm run verify
 npm run emulator:hosting
 ```
 
-기본 로컬 주소는 `http://127.0.0.1:5000/meeting/index.html` 입니다. 확장프로그램은 그대로 Chrome에서 실행하고, 팝업에서 `상용 호스팅 / 로컬 호스팅`을 전환해 확인합니다. 로컬 호스팅을 고르면 회의 명령 호출은 그대로 상용 Functions를 사용하고, 화면 안의 디버그 로그 패널에서 세션 복원, Firebase Auth bootstrap, Firestore listener 흐름을 바로 볼 수 있습니다.
+기본 로컬 주소는 `http://127.0.0.1:5000/meeting/index.html` 입니다. 확장프로그램은 그대로 Chrome에서 실행하고, 팝업에서 `상용 / 로컬`과 `디버그 OFF / ON`을 전환해 확인합니다. 디버그를 켜면 패널/작업실에서 세션 복원, 함수 호출, Firestore listener 흐름을 화면 안에서 바로 볼 수 있습니다.
 
 로컬에서 자동 분할 녹음을 빨리 시험하고 싶으면 URL에 `recordLimitSeconds`를 붙이면 됩니다.
 

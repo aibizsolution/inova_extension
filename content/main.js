@@ -1,7 +1,7 @@
 (function initContentMain(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const MEETING_DEBUG_PREFIX = "[Inova Meeting Content]";
   const PANEL_OPEN_KEY = "inova-plus.panel-open";
+  const MEETING_DEBUG_COLLAPSED_KEY = "__INOVA_MEETING_PANEL_DEBUG_COLLAPSED__";
   const UI_PREFERENCE_LOCK_MS = 1500;
   const state = {
     sessionId: "",
@@ -18,6 +18,9 @@
       feedback: null,
       feedbackTimer: 0,
       pending: { action: "", jobId: "", meetingId: "", startedAt: 0, title: "" },
+    },
+    panelDebugUi: {
+      collapsed: readMeetingDebugCollapsed(),
     },
     releaseInfo: namespace.releaseInfo.mergeReleaseInfo(),
     uiPreferences: namespace.storage.mergeUiPreferences(),
@@ -116,6 +119,9 @@
     chrome.storage.onChanged?.addListener(cloudSyncManager.handleStorageChange);
     chrome.storage.onChanged?.addListener(meetingManager.handleStorageChange);
     chrome.storage.onChanged?.addListener(releaseManager.handleStorageChange);
+    namespace.panelDebug?.subscribe?.(() => {
+      render();
+    });
     await routeSync.syncRouteState(true);
     meetingManager.scheduleSync(260);
     cloudSyncManager.scheduleSync(1800, true);
@@ -124,6 +130,7 @@
     [450, 1200].forEach((delay) => global.setTimeout(routeSync.scheduleRefresh, delay));
   }
   function render() {
+    syncMeetingDebugEnabled();
     const visible = state.settings.enabled && isToolSurface() && !isPaused();
     const bookmarkItems = getFilteredBookmarks();
     const promptItems = getFilteredPrompts();
@@ -132,6 +139,7 @@
     const activePromptTab = getActivePromptTab(reviewState.open);
     const storeState = storeManager.buildViewState();
     const meetingTool = buildMeetingToolState(state.meetingHub);
+    const panelDebug = buildMeetingDebugState();
     const releaseState = releaseManager.buildViewState();
     const bookmarkCount = state.bookmarks.length;
     const promptCount = state.promptLibrary.items.length;
@@ -164,6 +172,7 @@
       releaseTool: releaseState,
       handleRatio: namespace.storage.getHandleRatio(state.uiPreferences, global.innerWidth),
       open: state.open,
+      panelDebug,
       promptTool: {
         activeTab: activePromptTab,
         prompt: promptState,
@@ -210,7 +219,7 @@
     state.uiPreferences = namespace.storage.mergeUiPreferences(state.uiPreferences, { activeTool: state.activeTool });
     lockUiPreferenceSelection(state.activeTool, getActivePromptTab());
     if (state.activeTool === "prompts" && getActivePromptTab() === "store") storeManager.ensureLoaded(true);
-    if (state.activeTool === "meeting") meetingManager.scheduleSync(120);
+    meetingManager.scheduleSync(state.activeTool === "meeting" ? 120 : 0);
     if (state.activeTool === "release") releaseManager.ensureChecked(false, true);
     render();
     await persistActiveTool(state.activeTool);
@@ -220,6 +229,7 @@
     state.activeTool = "prompts";
     state.uiPreferences = namespace.storage.mergeUiPreferences(state.uiPreferences, { activePromptTab: nextPromptTab, activeTool: "prompts" });
     lockUiPreferenceSelection("prompts", nextPromptTab);
+    meetingManager.scheduleSync(0);
     if (nextPromptTab === "store") storeManager.ensureLoaded(true);
     render();
     await persistActiveTool("prompts", nextPromptTab);
@@ -278,6 +288,23 @@
     return promptManager.handleAction(action, detail);
   }
   async function handleMeetingAction(action, detail = {}) {
+    if (action === "debug-toggle") {
+      toggleMeetingDebugCollapsed();
+      return;
+    }
+    if (action === "debug-copy") {
+      await copyMeetingDebugEntries(false);
+      return;
+    }
+    if (action === "debug-copy-errors") {
+      await copyMeetingDebugEntries(true);
+      return;
+    }
+    if (action === "debug-clear") {
+      namespace.panelDebug?.clearEntries?.();
+      setMeetingFeedback("로그를 비웠습니다.", "info", 1600);
+      return;
+    }
     if (namespace.session.normalizeText(state.meetingUi.pending.action)) {
       return;
     }
@@ -331,7 +358,9 @@
         jobId: input.jobId,
         meetingId: input.meetingId,
       });
-      console.error("[i-Nova Bookmarks] meeting page open failed", error);
+      if (namespace.panelDebug?.isEnabled?.()) {
+        console.error("[i-Nova Bookmarks] meeting page open failed", error);
+      }
       setMeetingFeedback(error instanceof Error ? error.message : "작업실을 열지 못했어요. 다시 시도해 주세요.", "error", 3600);
     } finally {
       clearMeetingPending();
@@ -371,14 +400,73 @@
       render();
     }, timeoutMs);
   }
-  function logMeetingAction(event, payload) {
+  function syncMeetingDebugEnabled() {
+    namespace.panelDebug?.setEnabled?.(shouldEnableMeetingDebug());
+  }
+  function shouldEnableMeetingDebug() {
+    return Boolean(
+      namespace.panelDebug?.isLocalDebugEnabled?.(state.settings)
+      && state.settings.enabled
+      && isToolSurface()
+      && !isPaused()
+      && document.visibilityState === "visible"
+    );
+  }
+  function buildMeetingDebugState() {
+    const enabled = shouldEnableMeetingDebug();
+    const entries = enabled ? (namespace.panelDebug?.getEntries?.() || []) : [];
+    const summary = enabled
+      ? (namespace.panelDebug?.summarizeEntries?.(entries) || {})
+      : {};
+    return {
+      collapsed: Boolean(state.panelDebugUi.collapsed),
+      enabled,
+      entriesText: enabled
+        ? (namespace.panelDebug?.buildCopyText?.(entries) || "아직 로그가 없습니다.")
+        : "",
+      hasErrors: Number(summary.errorCount || 0) > 0,
+      statusText: enabled
+        ? buildMeetingDebugStatusText(summary, entries.length)
+        : "로그 0건 · 함수 0건 · 스냅샷 0건 · 오류 0건",
+    };
+  }
+
+  function buildMeetingDebugStatusText(summary, totalLogs) {
+    const functionCalls = Math.max(0, Number(summary?.functionCalls) || 0);
+    const snapshotCount = Math.max(0, Number(summary?.snapshotCount) || 0);
+    const errorCount = Math.max(0, Number(summary?.errorCount) || 0);
+    return `로그 ${Math.max(0, Number(totalLogs) || 0)}건 · 함수 ${functionCalls}건 · 스냅샷 ${snapshotCount}건 · 오류 ${errorCount}건`;
+  }
+  function toggleMeetingDebugCollapsed() {
+    state.panelDebugUi.collapsed = !state.panelDebugUi.collapsed;
+    writeMeetingDebugCollapsed(state.panelDebugUi.collapsed);
+    render();
+  }
+  async function copyMeetingDebugEntries(errorsOnly) {
+    const entries = namespace.panelDebug?.getEntries?.() || [];
+    const text = errorsOnly
+      ? namespace.panelDebug?.buildErrorCopyText?.(entries)
+      : namespace.panelDebug?.buildCopyText?.(entries);
+    if (!namespace.session.normalizeText(text)) {
+      setMeetingFeedback(errorsOnly ? "복사할 오류 로그가 없습니다." : "복사할 로그가 없습니다.", "info", 1600);
+      return;
+    }
     try {
-      console.info(MEETING_DEBUG_PREFIX, event, payload || {});
-      const url = namespace.session.normalizeText(payload?.url);
-      if (url) {
-        console.info(MEETING_DEBUG_PREFIX, `${event}.url`, url);
-      }
-    } catch {}
+      await global.navigator.clipboard.writeText(text);
+      setMeetingFeedback(errorsOnly ? "오류 로그를 복사했습니다." : "로그를 복사했습니다.", "info", 1800);
+    } catch (error) {
+      setMeetingFeedback("클립보드에 로그를 복사하지 못했습니다.", "error", 2200);
+      namespace.panelDebug?.log?.("panel.debug.copy.error", {
+        error: error instanceof Error ? error.message : String(error || ""),
+        errorsOnly: Boolean(errorsOnly),
+      });
+    }
+  }
+  function logMeetingAction(event, payload) {
+    namespace.panelDebug?.log?.(`panel.action.${namespace.session.normalizeText(event)}`, payload || {});
+  }
+  function logPanelDebug(event, payload) {
+    namespace.panelDebug?.log?.(event, payload || {});
   }
   function togglePanel(nextOpen, persist = true) {
     state.open = typeof nextOpen === "boolean" ? nextOpen : !state.open;
@@ -387,9 +475,14 @@
       writePanelOpenPreference(state.open);
     }
     if (state.open) cloudSyncManager.scheduleSync(220, true);
-    if (state.open) meetingManager.scheduleSync(220);
+    meetingManager.scheduleSync(state.open ? 220 : 0);
     if (state.open && isStoreTabActive()) storeManager.ensureLoaded();
     if (state.open) releaseManager.ensureChecked(false, state.activeTool === "release");
+    logPanelDebug("panel.ui.toggle", {
+      open: state.open,
+      scope: "panel-ui",
+      tool: "panel",
+    });
     render();
   }
   function jumpToBookmark(bookmarkId) {
@@ -408,6 +501,18 @@
     } catch {
       return false;
     }
+  }
+  function readMeetingDebugCollapsed() {
+    try {
+      return global.localStorage?.getItem(MEETING_DEBUG_COLLAPSED_KEY) !== "0";
+    } catch {
+      return true;
+    }
+  }
+  function writeMeetingDebugCollapsed(collapsed) {
+    try {
+      global.localStorage?.setItem(MEETING_DEBUG_COLLAPSED_KEY, collapsed ? "1" : "0");
+    } catch {}
   }
   function writePanelOpenPreference(open) {
     try {
@@ -460,6 +565,12 @@
       state.surfaceSignature = nextSignature;
       if (!hadComposer && hasComposer && state.preferredOpen) state.open = true;
       if (!hadComposer && hasComposer && isStoreTabActive()) storeManager.ensureLoaded(true);
+      logPanelDebug("panel.ui.surface.changed", {
+        hadComposer,
+        hasComposer,
+        scope: "panel-ui",
+        tool: "panel",
+      });
       render();
     }, 600);
   }
@@ -467,8 +578,35 @@
     const conversation = namespace.contentDom.getConversationState();
     return `${conversation.hasComposer}|${conversation.hasChatLog}|${conversation.articleCount}|${conversation.userCount}`;
   }
-  function handleVisibilityChange() { if (document.visibilityState !== "visible") return; cloudSyncManager.scheduleSync(320, true); meetingManager.scheduleSync(320); if (state.open) releaseManager.ensureChecked(); render(); }
-  function handleWindowFocus() { cloudSyncManager.scheduleSync(320, true); meetingManager.scheduleSync(320); if (state.open) releaseManager.ensureChecked(); render(); }
+  function handleVisibilityChange() {
+    if (document.visibilityState !== "visible") {
+      meetingManager.scheduleSync(0);
+      logPanelDebug("panel.ui.visibility.hidden", {
+        scope: "panel-ui",
+        tool: "panel",
+      });
+      render();
+      return;
+    }
+    cloudSyncManager.scheduleSync(320, true);
+    meetingManager.scheduleSync(320);
+    if (state.open) releaseManager.ensureChecked();
+    logPanelDebug("panel.ui.visibility.visible", {
+      scope: "panel-ui",
+      tool: "panel",
+    });
+    render();
+  }
+  function handleWindowFocus() {
+    cloudSyncManager.scheduleSync(320, true);
+    meetingManager.scheduleSync(320);
+    if (state.open) releaseManager.ensureChecked();
+    logPanelDebug("panel.ui.focus", {
+      scope: "panel-ui",
+      tool: "panel",
+    });
+    render();
+  }
   function getActivePromptTab(reviewOpen = state.promptReview.open) { const tab = state.uiPreferences.activeTool === "store" ? "store" : normalizePromptTab(state.uiPreferences.activePromptTab); return tab === "review" && !reviewOpen ? "library" : tab; }
   function isStoreTabActive() { return state.activeTool === "prompts" && getActivePromptTab() === "store"; }
   function normalizePromptTab(promptTabId) { return promptTabId === "store" || promptTabId === "review" ? promptTabId : "library"; }

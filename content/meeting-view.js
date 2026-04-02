@@ -46,7 +46,6 @@
               <strong>회의록 목록</strong>
               <div class="inova-release-card__badges">${renderChip(`${normalized.items.length}건`, true)}</div>
             </div>
-            <p>최근 회의록을 바로 보고, 항목을 누르면 hosted 웹 작업실에서 결과 상세를 이어서 봅니다.</p>
           </article>
           <div class="inova-meeting-record-list">
             ${listMarkup}
@@ -59,13 +58,17 @@
   function normalizeState(state) {
     const items = Array.isArray(state?.items) ? state.items.map(normalizeItem).filter((item) => item.meetingId) : [];
     const checkedAtText = formatDateTime(state?.checkedAt, "");
+    const source = normalizeText(state?.source);
     return {
+      debug: normalizeDebugState(state?.debug),
       error: normalizeText(state?.error),
       feedback: normalizeFeedback(state?.feedback),
       hasCheckedAt: Boolean(checkedAtText),
       items,
       pending: normalizePending(state?.pending),
-      subtitleText: checkedAtText ? `최근 갱신 ${checkedAtText}` : "저장된 회의록을 이곳에서 다시 엽니다.",
+      subtitleText: checkedAtText
+        ? `최근 갱신 ${checkedAtText}${source === "fallback" ? " · fallback" : ""}`
+        : "저장된 회의록을 이곳에서 다시 엽니다.",
     };
   }
 
@@ -79,6 +82,17 @@
       status: normalizeText(nextItem.status) || "idle",
       title: normalizeText(nextItem.title) || "이름 없는 회의",
       updatedAt: normalizeText(nextItem.updatedAt || nextItem.createdAt),
+    };
+  }
+
+  function normalizeDebugState(debug) {
+    const enabled = Boolean(debug?.enabled);
+    return {
+      collapsed: enabled ? Boolean(debug?.collapsed) : true,
+      enabled,
+      hasErrors: Boolean(debug?.hasErrors),
+      statusText: normalizeText(debug?.statusText) || "로그 0건",
+      text: normalizeText(debug?.entriesText) || "아직 로그가 없습니다.",
     };
   }
 
@@ -112,6 +126,37 @@
         </div>
         <p>${escapeHtml(isPending ? "새 탭 작업실을 여는 중입니다." : item.excerpt || "새 탭 결과 페이지에서 회의록을 확인할 수 있습니다.")}</p>
       </button>
+    `;
+  }
+
+  function renderDebugConsole(debug) {
+    const normalizedDebug = normalizeDebugState(debug);
+    if (!normalizedDebug.enabled) {
+      return "";
+    }
+    if (normalizedDebug.collapsed) {
+      return `
+        <div class="inova-meeting-debug-fab-wrap">
+          <button type="button" class="inova-meeting-debug-fab" data-meeting-action="debug-toggle" aria-label="디버그 콘솔 열기">
+            <span class="inova-meeting-debug-fab__icon" aria-hidden="true"></span>
+            ${normalizedDebug.hasErrors ? '<span class="inova-meeting-debug-fab__badge" aria-hidden="true"></span>' : ""}
+          </button>
+        </div>
+      `;
+    }
+    return `
+      <aside class="inova-meeting-debug-console" aria-label="디버그 콘솔">
+        <div class="inova-meeting-debug-console__toolbar">
+          <div class="inova-meeting-debug-console__segment">
+            <button type="button" class="inova-meeting-debug-console__button" data-meeting-action="debug-copy">복사</button>
+            <button type="button" class="inova-meeting-debug-console__button" data-meeting-action="debug-copy-errors">오류</button>
+            <button type="button" class="inova-meeting-debug-console__button" data-meeting-action="debug-clear">비우기</button>
+            <button type="button" class="inova-meeting-debug-console__button" data-meeting-action="debug-toggle">접기</button>
+          </div>
+          <span class="inova-meeting-debug-console__status">${escapeHtml(normalizedDebug.statusText)}</span>
+        </div>
+        <pre class="inova-meeting-debug-console__log">${escapeHtml(normalizedDebug.text)}</pre>
+      </aside>
     `;
   }
 
@@ -203,5 +248,6 @@
 
   namespace.meetingView = {
     render,
+    renderDebugConsole,
   };
 })(globalThis);

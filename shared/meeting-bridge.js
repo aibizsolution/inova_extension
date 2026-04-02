@@ -1,6 +1,5 @@
 (function initMeetingBridge(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const DEBUG_PREFIX = "[Inova Meeting Bridge]";
 
   async function createMeetingJob(input, providerIdentity) {
     return sendRuntimeMessage("inova-meeting:create-job", {
@@ -45,6 +44,12 @@
   async function listMeetings(input, providerIdentity) {
     return sendRuntimeMessage("inova-meeting:list-meetings", {
       input,
+      providerIdentity,
+    });
+  }
+
+  async function issuePanelAuth(providerIdentity) {
+    return sendRuntimeMessage("inova-meeting:issue-panel-auth", {
       providerIdentity,
     });
   }
@@ -101,19 +106,18 @@
   }
 
   function logDebug(event, payload) {
-    try {
-      global.console?.info?.(DEBUG_PREFIX, event, payload || {});
-      const url = namespace.session.normalizeText(payload?.url);
-      if (url) {
-        global.console?.info?.(DEBUG_PREFIX, `${event}.url`, url);
-      }
-    } catch {}
+    namespace.panelDebug?.log?.(`bridge.${event}`, {
+      scope: "runtime",
+      tool: "meeting",
+      ...(payload || {}),
+    });
   }
 
   namespace.meetingBridge = {
     createMeetingJob,
     getMeetingArtifact,
     getMeetingJob,
+    issuePanelAuth,
     listMeetings,
     listMeetingResults,
     openMeetingResult,
