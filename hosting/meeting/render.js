@@ -3,6 +3,24 @@
   const { DEFAULT_NOTES_MODE, DEFAULT_NOTES_STYLE, TERMINAL_REMOTE_STATUSES, cleanPreviewText, countSpeakers, escapeHtml, formatBytes, formatDateTime, formatDuration, formatNotesModeLabel, formatNotesStyleLabel, formatPhase, formatSegmentRange, formatSpeakerLabel, formatStatusLabel, normalizeMeetingNotesMode, normalizeMeetingNotesStyle, normalizeSpeakerAliases, normalizeStatus, normalizeText, normalizeTextBlock, resolveSpeakerDisplayName } = ns.shared;
   const { comparePendingUploads, normalizePendingUpload } = ns.storage;
   const { formatActionItem, formatDecisionItem, formatMemoItem, formatRiskItem, formatTopicItem, hasMeetingNotes, normalizeMeetingNotes, normalizeTextArray } = ns.notes;
+  const DEFAULT_CHUNK_PROGRESS_ACTIVE_COUNT = 2;
+  const STALLED_PROCESSING_THRESHOLD_MS = 10 * 60 * 1000;
+
+  function getProgressUpdatedAt(job, pending) {
+    return normalizeText(job?.updatedAt || pending?.updatedAt);
+  }
+
+  function getProcessingHealth(job, pending) {
+    const updatedAt = getProgressUpdatedAt(job, pending);
+    const updatedAtMs = updatedAt ? ns.shared.toTimestamp(updatedAt) : 0;
+    const ageMs = updatedAtMs > 0 ? Math.max(0, Date.now() - updatedAtMs) : 0;
+    return {
+      ageMs,
+      isStalled: ageMs >= STALLED_PROCESSING_THRESHOLD_MS,
+      updatedAt,
+      updatedAtLabel: updatedAt ? formatDateTime(updatedAt, "") : "",
+    };
+  }
 
   function normalizeRecord(record) {
     const nextRecord = record && typeof record === "object" ? record : {};
@@ -41,7 +59,18 @@
       notesModeDetected: normalizeMeetingNotesMode(job.notesModeDetected),
       notesModeSelected: normalizeMeetingNotesMode(job.notesModeSelected),
       notesStyleSelected: normalizeMeetingNotesStyle(job.notesStyleSelected),
-      progress: { percent: Math.max(0, Math.min(100, Number(job?.progress?.percent) || 0)), phase: normalizeText(job?.progress?.phase) },
+      progress: {
+        currentPart: Math.max(0, Number(job?.progress?.currentPart) || 0),
+        parallelParts: Math.max(0, Number(job?.progress?.parallelParts) || 0),
+        percent: Math.max(0, Math.min(100, Number(job?.progress?.percent) || 0)),
+        phase: normalizeText(job?.progress?.phase),
+        totalParts: Math.max(0, Number(job?.progress?.totalParts) || 0),
+      },
+      retry: {
+        count: Math.max(0, Number(job?.retry?.count) || 0),
+        lastError: normalizeText(job?.retry?.lastError),
+        lastRetriedAt: normalizeText(job?.retry?.lastRetriedAt),
+      },
       requestId: normalizeText(job?.source?.requestId),
       resultTitle: normalizeText(job.resultTitle || job.title),
       sharedMemoSnapshot: ns.shared.normalizeTextBlock(job?.context?.sharedMemoSnapshot || job?.meeting?.sharedMemo),
@@ -113,8 +142,12 @@
 
   function findRemoteForPending(state, pending) {
     if (!pending) return null;
+    const pendingStatus = normalizeText(pending.status);
     const requestId = normalizeText(pending.requestId);
     const jobId = normalizeText(pending.jobId);
+    if (!jobId && ["local_saved", "preparing_chunks", "uploading", "uploading_chunks", "upload_queued"].includes(pendingStatus)) {
+      return null;
+    }
     if (requestId) {
       const byRequestId = state.records.find((record) => normalizeText(record.requestId) === requestId);
       if (byRequestId) return byRequestId;
@@ -128,6 +161,11 @@
 
   function buildHistoryEntries(state) {
     const consumedRemoteJobs = new Set();
+    const supersededRemoteJobs = new Set(
+      (Array.isArray(state.pendingUploads) ? state.pendingUploads : []).flatMap((pending) =>
+        Array.isArray(pending?.supersededJobIds) ? pending.supersededJobIds : []
+      ).map((jobId) => normalizeText(jobId)).filter(Boolean)
+    );
     const entries = [];
     for (const pending of state.pendingUploads) {
       const remote = findRemoteForPending(state, pending);
@@ -140,6 +178,7 @@
     }
     for (const remote of state.records) {
       if (remote.jobId && consumedRemoteJobs.has(remote.jobId)) continue;
+      if (remote.jobId && supersededRemoteJobs.has(remote.jobId)) continue;
       entries.push({ createdAt: remote.createdAt, durationMs: remote.durationMs, id: ns.shared.buildRemoteSelectionId(remote.jobId), pending: null, remote, status: remote.status, updatedAt: remote.updatedAt });
     }
     return entries.sort((left, right) => ns.shared.toTimestamp(right.updatedAt || right.createdAt) - ns.shared.toTimestamp(left.updatedAt || left.createdAt));
@@ -150,49 +189,257 @@
   }
 
   function chooseSelectedRecordId(state) {
-    if (normalizeText(state.params.jobId) && state.records.some((record) => record.jobId === state.params.jobId)) {
-      return ns.shared.buildRemoteSelectionId(state.params.jobId);
+    const historyEntries = buildHistoryEntries(state);
+    if (normalizeText(state.params.jobId)) {
+      const requestedId = ns.shared.buildRemoteSelectionId(state.params.jobId);
+      if (historyEntries.some((entry) => entry.id === requestedId)) return requestedId;
     }
     if (normalizeText(state.selectedRecordId) && findHistoryEntry(state, state.selectedRecordId)) {
       return state.selectedRecordId;
     }
-    return normalizeText(buildHistoryEntries(state)[0]?.id);
+    return normalizeText(historyEntries[0]?.id);
   }
 
   function buildPendingSummary(pending) {
     if (!pending) return "";
+    const processingHealth = getProcessingHealth(null, pending);
     if (pending.status === "local_saved") return "로컬 저장 완료. 곧 업로드를 시작합니다.";
     if (pending.status === "preparing_chunks") return "큰 오디오를 전사용 chunk로 준비하는 중입니다.";
     if (pending.status === "upload_queued") return pending.lastError || "온라인 복구 후 자동 업로드합니다.";
     if (pending.status === "uploading_chunks") return `분할 업로드 중입니다. ${Math.max(0, Number(pending.uploadedPartCount) || 0)}/${Math.max(0, Number(pending.preparedPartCount) || 0)}개 업로드했습니다.`;
     if (pending.status === "uploading") return "오디오 업로드 중입니다.";
     if (pending.status === "remote_queued") return "원격 처리 대기열에 접수했습니다.";
+    if (pending.status === "remote_processing" && processingHealth.isStalled) {
+      return `정체 의심 상태입니다. 마지막 갱신 ${processingHealth.updatedAtLabel || "-"}`;
+    }
     if (pending.status === "remote_processing") return "전사와 회의 정리를 진행 중입니다.";
     if (pending.status === "succeeded") return "업로드와 정리가 끝났고 로컬 사본을 보관 중입니다.";
     if (pending.status === "on_hold") return "사용자가 다시 시작할 때까지 보류합니다.";
-    if (pending.status === "failed") return pending.lastError || "업로드 또는 처리에 실패했습니다.";
+    if (pending.status === "failed") return pending.lastError || "처리에 실패했습니다. 다시 처리하면 브라우저에 남은 원본으로 재시작합니다.";
     return pending.lastError || "";
   }
 
   function buildPendingNotice(pending) {
     if (!pending) return "";
+    const processingHealth = getProcessingHealth(null, pending);
     if (pending.status === "local_saved") return "브라우저에 저장했고 바로 업로드를 시도합니다.";
     if (pending.status === "preparing_chunks") return "큰 오디오를 분할해 업로드 가능한 형태로 준비하고 있습니다.";
     if (pending.status === "upload_queued") return pending.lastError || "온라인 상태를 기다리는 중입니다.";
     if (pending.status === "uploading_chunks") return "분할 업로드와 큐 등록을 이어가는 중입니다.";
     if (pending.status === "uploading") return "파일 업로드 중입니다.";
     if (pending.status === "remote_queued") return "처리 대기 중입니다.";
+    if (pending.status === "remote_processing" && processingHealth.isStalled) {
+      return `마지막 갱신 ${processingHealth.updatedAtLabel || "-"} 이후 10분 넘게 멈췄습니다. 다시 처리로 재시작해 주세요.`;
+    }
     if (pending.status === "remote_processing") return "전사와 정리 중입니다.";
     if (pending.status === "succeeded") return "브라우저에 로컬 녹음 사본을 계속 보관 중입니다.";
     if (pending.status === "on_hold") return "수동 재개 전까지 멈춰 둡니다.";
-    if (pending.status === "failed") return pending.lastError || "문제가 있어 수동 재시도가 필요합니다.";
+    if (pending.status === "failed") return pending.lastError || "문제가 있어 브라우저에 보관한 원본으로 다시 처리해야 합니다.";
     return "";
   }
 
   function buildProcessingNotice(job, pending) {
+    const currentPart = Math.max(0, Number(job?.progress?.currentPart) || 0);
     const percent = Math.round(Number(job?.progress?.percent) || 0);
     const phase = formatPhase(job?.progress?.phase || pending?.status);
-    return [phase || "결과를 준비하는 중입니다.", percent > 0 ? `${percent}%` : "", pending ? "이 녹음과 별개로 다음 녹음을 바로 시작할 수 있습니다." : ""].filter(Boolean).join(" · ");
+    const totalParts = Math.max(0, Number(job?.progress?.totalParts) || 0);
+    const retryCount = Math.max(0, Number(job?.retry?.count) || 0);
+    const processingHealth = getProcessingHealth(job, pending);
+    if (processingHealth.isStalled) {
+      return [
+        "정체 의심",
+        currentPart > 0 && totalParts > 0 ? `${currentPart}/${totalParts}` : "",
+        percent > 0 ? `${percent}%` : "",
+        retryCount > 0 ? `자동 재시도 ${retryCount}회` : "",
+        processingHealth.updatedAtLabel ? `마지막 갱신 ${processingHealth.updatedAtLabel}` : "",
+        "10분 넘게 새 갱신이 없습니다. 다시 처리로 재시작해 주세요.",
+      ].filter(Boolean).join(" · ");
+    }
+    return [
+      phase || "결과를 준비하는 중입니다.",
+      currentPart > 0 && totalParts > 0 ? `${currentPart}/${totalParts}` : "",
+      percent > 0 ? `${percent}%` : "",
+      retryCount > 0 ? `자동 재시도 ${retryCount}회` : "",
+      processingHealth.updatedAtLabel ? `마지막 갱신 ${processingHealth.updatedAtLabel}` : "",
+      pending ? "이 녹음과 별개로 다음 녹음을 바로 시작할 수 있습니다." : "",
+    ].filter(Boolean).join(" · ");
+  }
+
+  function buildChunkProgressModel(job, pending) {
+    const pendingStatus = normalizeText(pending?.status);
+    const totalPendingParts = Math.max(
+      0,
+      Number(pending?.preparedPartCount) || (Array.isArray(pending?.parts) ? pending.parts.length : 0)
+    );
+    const uploadedPendingParts = Math.max(0, Number(pending?.uploadedPartCount) || 0);
+    const jobStatus = normalizeText(job?.status);
+    const progressPhase = normalizeText(job?.progress?.phase);
+    const totalJobParts = Math.max(0, Number(job?.progress?.totalParts) || 0);
+    const currentJobPart = Math.max(0, Number(job?.progress?.currentPart) || 0);
+    const maxParallelParts = Math.max(1, totalJobParts || totalPendingParts || 1);
+    const rawParallelParts = Number(job?.progress?.parallelParts);
+    const configuredParallelParts = Number.isFinite(rawParallelParts) && rawParallelParts >= 0
+      ? Math.max(0, Math.min(maxParallelParts, rawParallelParts))
+      : Math.max(1, Math.min(maxParallelParts, DEFAULT_CHUNK_PROGRESS_ACTIVE_COUNT));
+    const overallPercent = Math.max(0, Math.min(100, Number(job?.progress?.percent) || 0));
+    const buildStages = (prepareTone, uploadTone, processTone) => ([
+      { label: "분할", tone: prepareTone },
+      { label: "업로드", tone: uploadTone },
+      { label: "처리", tone: processTone },
+    ]);
+
+    if (pendingStatus === "preparing_chunks") {
+      return {
+        activeCount: 0,
+        activeIndex: -1,
+        doneCount: 0,
+        percent: 0,
+        stages: buildStages("current", "pending", "pending"),
+        summary: "브라우저에서 청크를 준비하는 중",
+        title: "청크 분할 준비",
+        totalCount: totalPendingParts,
+      };
+    }
+
+    if (pendingStatus === "uploading_chunks" && totalPendingParts > 1) {
+      return {
+        activeCount: uploadedPendingParts < totalPendingParts ? 1 : 0,
+        activeIndex: uploadedPendingParts < totalPendingParts ? uploadedPendingParts : -1,
+        doneCount: Math.min(uploadedPendingParts, totalPendingParts),
+        percent: totalPendingParts > 0 ? Math.round((uploadedPendingParts / totalPendingParts) * 100) : 0,
+        stages: buildStages("done", "current", "pending"),
+        summary: `${Math.min(uploadedPendingParts, totalPendingParts)}/${totalPendingParts}개 업로드 완료`,
+        title: "청크 업로드 진행",
+        totalCount: totalPendingParts,
+      };
+    }
+
+    if (["remote_queued", "remote_processing"].includes(pendingStatus) && totalPendingParts > 1 && totalJobParts <= 0) {
+      return {
+        activeCount: 0,
+        activeIndex: -1,
+        doneCount: totalPendingParts,
+        percent: 100,
+        stages: buildStages("done", "done", pendingStatus === "remote_processing" ? "current" : "pending"),
+        summary: `${totalPendingParts}/${totalPendingParts}개 업로드 완료 · 처리 대기 중`,
+        title: "청크 업로드 완료",
+        totalCount: totalPendingParts,
+      };
+    }
+
+    if (["queued", "processing", "failed"].includes(jobStatus) && totalJobParts > 1) {
+      const allPendingPartsUploaded = totalPendingParts > 0 && uploadedPendingParts >= totalPendingParts;
+      const doneCount = Math.min(currentJobPart, totalJobParts);
+      const remainingCount = Math.max(0, totalJobParts - doneCount);
+      const isChunkTranscribing = progressPhase === "transcribing_chunks";
+      const processingHealth = getProcessingHealth(job, pending);
+      const activeCount = isChunkTranscribing && !processingHealth.isStalled
+        ? Math.min(configuredParallelParts, remainingCount)
+        : 0;
+      const activeIndex = activeCount > 0 ? doneCount : -1;
+      const summaryParts = [];
+      if (allPendingPartsUploaded) {
+        summaryParts.push(`${totalPendingParts}/${totalPendingParts}개 업로드 완료`);
+      }
+      summaryParts.push(`${doneCount}/${totalJobParts}개 전사 완료`);
+      if (jobStatus === "failed") {
+        summaryParts.push("중단됨");
+      } else if (processingHealth.isStalled) {
+        summaryParts.push("10분 이상 갱신 없음");
+      } else if (isChunkTranscribing) {
+        summaryParts.push(activeCount > 1 ? `병렬 ${activeCount}개 처리 중` : "처리 중");
+      } else if (jobStatus === "queued" || progressPhase === "queued") {
+        summaryParts.push("처리 대기 중");
+      } else if (doneCount >= totalJobParts) {
+        summaryParts.push("전사 완료");
+      }
+      if (processingHealth.updatedAtLabel) {
+        summaryParts.push(`마지막 갱신 ${processingHealth.updatedAtLabel}`);
+      }
+      return {
+        activeCount,
+        activeIndex,
+        doneCount,
+        isStalled: processingHealth.isStalled,
+        percent: totalJobParts > 0 ? Math.round((doneCount / totalJobParts) * 100) : overallPercent,
+        stages: buildStages(
+          "done",
+          "done",
+          jobStatus === "failed"
+            ? "failed"
+            : processingHealth.isStalled
+              ? "warning"
+              : doneCount >= totalJobParts && !isChunkTranscribing
+                ? "done"
+                : isChunkTranscribing || jobStatus === "queued" || progressPhase === "queued"
+                  ? "current"
+                  : "done"
+        ),
+        summary: summaryParts.join(" · "),
+        title: jobStatus === "failed"
+          ? "청크 전사 중단"
+          : processingHealth.isStalled
+            ? "청크 전사 정체 의심"
+          : isChunkTranscribing
+            ? "청크 전사 진행"
+            : jobStatus === "queued" || progressPhase === "queued"
+              ? "청크 전사 대기"
+              : "청크 전사 완료",
+        totalCount: totalJobParts,
+      };
+    }
+
+    return null;
+  }
+
+  function renderChunkProgress(model) {
+    if (!model) return "";
+    const totalCount = Math.max(0, Number(model.totalCount) || 0);
+    const doneCount = Math.max(0, Math.min(totalCount, Number(model.doneCount) || 0));
+    const activeIndex = Math.max(-1, Math.min(totalCount - 1, Number(model.activeIndex)));
+    const activeCount = Math.max(
+      0,
+      Math.min(totalCount - Math.max(0, activeIndex), Number(model.activeCount) || (activeIndex >= 0 ? 1 : 0))
+    );
+    const percent = Math.max(0, Math.min(100, Number(model.percent) || 0));
+    const segments = Array.from({ length: totalCount }, (_, index) => {
+      const tone = index < doneCount
+        ? "done"
+        : activeIndex >= 0 && index >= activeIndex && index < activeIndex + activeCount
+          ? "current"
+          : "pending";
+      return `<span class="chunk-progress__segment" data-tone="${tone}" title="청크 ${index + 1}/${totalCount}"></span>`;
+    }).join("");
+    const stages = Array.isArray(model.stages)
+      ? model.stages.map((stage) => `
+          <span class="chunk-progress__stage" data-tone="${escapeHtml(normalizeText(stage.tone) || "pending")}">
+            ${escapeHtml(normalizeText(stage.label) || "")}
+          </span>
+        `).join("")
+      : "";
+    return `
+      <div class="chunk-progress">
+        <div class="chunk-progress__head">
+          <strong class="chunk-progress__title">${escapeHtml(normalizeText(model.title) || "청크 진행")}</strong>
+          ${normalizeText(model.summary) ? `<span class="chunk-progress__meta">${escapeHtml(model.summary)}</span>` : ""}
+        </div>
+        ${stages ? `<div class="chunk-progress__stages">${stages}</div>` : ""}
+        ${totalCount > 1 ? `<div class="chunk-progress__bar" aria-hidden="true"><span style="width:${percent}%"></span></div>` : ""}
+        ${totalCount > 1 ? `<div class="chunk-progress__segments" aria-hidden="true">${segments}</div>` : ""}
+      </div>
+    `;
+  }
+
+  function buildSummaryActionCardHtml(detailView, summaryActionMessage) {
+    const chunkProgressHtml = renderChunkProgress(detailView?.chunkProgress);
+    const showMessage = !chunkProgressHtml && normalizeText(summaryActionMessage);
+    if (!showMessage && !chunkProgressHtml) return "";
+    return [
+      showMessage
+        ? `<div class="summary-action-card__message">${escapeHtml(summaryActionMessage)}</div>`
+        : "",
+      chunkProgressHtml,
+    ].filter(Boolean).join("");
   }
 
   function buildNotesSummaryMeta(meta, selectedStyle) {
@@ -471,10 +718,14 @@
   }
 
   function buildStatusActionMessage(detailView, options = {}) {
+    const normalizedStatus = normalizeText(detailView.badgeStatus);
     if (!normalizeText(detailView.recordTitle) && detailView.badgeStatus === "idle") {
       return "";
     }
-    if (detailView.badgeStatus === "failed") {
+    if (["queued", "processing"].includes(normalizedStatus)) {
+      return "";
+    }
+    if (normalizedStatus === "failed") {
       return "오류가 있어 다시 시도하거나 삭제 후 새로 만들 수 있습니다.";
     }
     if (!options.hasSegmentContent) {
@@ -497,13 +748,17 @@
     return `<button type="button" class="mini-button${toneClass}" data-local-action="${escapeHtml(action)}" data-request-id="${escapeHtml(requestId)}">${escapeHtml(label)}</button>`;
   }
 
-  function buildPendingActions(pending) {
+  function buildPendingActions(pending, remote) {
     if (!pending) return "";
     const buttons = [];
-    if (pending.status === "on_hold") {
+    const processingHealth = getProcessingHealth(remote, pending);
+    if (pending.status === "remote_processing" && processingHealth.isStalled) {
+      buttons.push(renderLocalActionButton("restart", pending.requestId, "다시 처리", "accent"));
+    } else if (pending.status === "on_hold") {
       buttons.push(renderLocalActionButton("resume", pending.requestId, "업로드 재개", "accent"));
     } else if (["local_saved", "upload_queued", "failed"].includes(pending.status)) {
-      buttons.push(renderLocalActionButton("retry", pending.requestId, "지금 업로드", "accent"), renderLocalActionButton("hold", pending.requestId, "보류", ""));
+      const retryLabel = pending.status === "failed" ? "다시 처리" : "지금 업로드";
+      buttons.push(renderLocalActionButton("retry", pending.requestId, retryLabel, "accent"), renderLocalActionButton("hold", pending.requestId, "보류", ""));
     }
     return buttons.length ? `<div class="record-item__actions">${buttons.join("")}</div>` : "";
   }
@@ -607,19 +862,21 @@
 
   function buildDetailView(state, activeEntry) {
     if (!activeEntry) {
-      return { badgeLabel: "대기", badgeStatus: "idle", meta: [], meetingNotes: null, notesMeta: null, notice: "왼쪽에서 기록을 선택해 주세요.", noticeTone: "", recordMemo: "", recordTitle: "", segments: [], showRecordActions: false, showSpeakerEditor: false, speakerAliases: {}, speakerCount: 0, speakerSummaryEntries: [], speakerEditorItems: [], summary: "", title: "기록을 선택해 주세요", transcriptText: "" };
+      return { badgeLabel: "대기", badgeStatus: "idle", chunkProgress: null, meta: [], meetingNotes: null, notesMeta: null, notice: "왼쪽에서 기록을 선택해 주세요.", noticeTone: "", recordMemo: "", recordTitle: "", segments: [], showRecordActions: false, showSpeakerEditor: false, speakerAliases: {}, speakerCount: 0, speakerSummaryEntries: [], speakerEditorItems: [], summary: "", title: "기록을 선택해 주세요", transcriptText: "" };
     }
     const pending = activeEntry.pending;
     const remote = activeEntry.remote;
     const detailTitle = normalizeText(state.currentJob?.title || remote?.title || pending?.meetingTitleSnapshot || state.meeting.title || "새 기록");
     const detailMeta = [];
     const remoteStatus = normalizeText(state.currentJob?.status || remote?.status);
+    const processingHealth = getProcessingHealth(state.currentJob || remote, pending);
     const canManageRemoteRecord = Boolean(remote?.jobId) && !["queued", "processing"].includes(remoteStatus);
     const showRecordActions = Boolean((pending?.requestId && !remote?.jobId) || canManageRemoteRecord);
     const detailMemo = normalizeTextBlock(state.currentJob?.sharedMemoSnapshot || pending?.sharedMemoSnapshot);
+    const pendingChunkProgress = buildChunkProgressModel(null, pending);
 
     if (!remote?.jobId && pending) {
-      return { badgeLabel: formatStatusLabel(pending.status), badgeStatus: normalizeStatus(pending.status), meta: detailMeta, meetingNotes: null, notesMeta: null, notice: buildPendingNotice(pending), noticeTone: pending.status === "failed" ? "error" : "highlight", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions, showSpeakerEditor: false, speakerAliases: {}, speakerCount: 0, speakerSummaryEntries: [], speakerEditorItems: [], summary: buildPendingSummary(pending), title: detailTitle, transcriptText: "" };
+      return { badgeLabel: formatStatusLabel(pending.status), badgeStatus: normalizeStatus(pending.status), chunkProgress: pendingChunkProgress, meta: detailMeta, meetingNotes: null, notesMeta: null, notice: buildPendingNotice(pending), noticeTone: pending.status === "failed" ? "error" : "highlight", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions, showSpeakerEditor: false, speakerAliases: {}, speakerCount: 0, speakerSummaryEntries: [], speakerEditorItems: [], summary: buildPendingSummary(pending), title: detailTitle, transcriptText: "" };
     }
 
     const normalizedJob = state.currentJob || normalizeJob(remote, detailTitle);
@@ -649,12 +906,13 @@
       selected: normalizeMeetingNotesMode(normalizedArtifact?.notesModeSelected || normalizedJob?.notesModeSelected) || meetingNotes.mode,
       styleSelected: normalizeMeetingNotesStyle(normalizedArtifact?.notesStyleSelected || normalizedJob?.notesStyleSelected) || DEFAULT_NOTES_STYLE,
     };
+    const remoteChunkProgress = buildChunkProgressModel(normalizedJob, pending);
 
     if (normalizeText(normalizedJob?.status) === "failed") {
-      return { badgeLabel: "오류", badgeStatus: "failed", meta: detailMeta, meetingNotes: null, notesMeta, notice: normalizeText(normalizedJob?.error || pending?.lastError) || "회의 처리 중 오류가 발생했습니다.", noticeTone: "error", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions, showSpeakerEditor: false, speakerAliases, speakerCount, speakerSummaryEntries: [], speakerEditorItems: [], summary: "", title: detailTitle, transcriptText: "" };
+      return { badgeLabel: "오류", badgeStatus: "failed", chunkProgress: remoteChunkProgress, meta: detailMeta, meetingNotes: null, notesMeta, notice: normalizeText(normalizedJob?.error || pending?.lastError) || "회의 처리 중 오류가 발생했습니다.", noticeTone: "error", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions, showSpeakerEditor: false, speakerAliases, speakerCount, speakerSummaryEntries: [], speakerEditorItems: [], summary: "", title: detailTitle, transcriptText: "" };
     }
     if (["queued", "processing"].includes(normalizeText(normalizedJob?.status))) {
-      return { badgeLabel: formatStatusLabel(normalizedJob.status), badgeStatus: normalizeStatus(normalizedJob.status), meta: detailMeta, meetingNotes: null, notesMeta, notice: buildProcessingNotice(normalizedJob, pending), noticeTone: "highlight", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions: false, showSpeakerEditor: false, speakerAliases, speakerCount, speakerSummaryEntries: [], speakerEditorItems: [], summary: "", title: detailTitle, transcriptText: "" };
+      return { badgeLabel: processingHealth.isStalled ? "정체 의심" : formatStatusLabel(normalizedJob.status), badgeStatus: normalizeStatus(normalizedJob.status), chunkProgress: remoteChunkProgress, meta: detailMeta, meetingNotes: null, notesMeta, notice: buildProcessingNotice(normalizedJob, pending), noticeTone: processingHealth.isStalled ? "warning" : "highlight", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions: false, showSpeakerEditor: false, speakerAliases, speakerCount, speakerSummaryEntries: [], speakerEditorItems: [], summary: "", title: detailTitle, transcriptText: "" };
     }
     let completionNotice = state.notice.text || "회의 정리가 준비됐습니다.";
     let completionTone = state.notice.tone || "highlight";
@@ -665,7 +923,7 @@
       completionNotice = "전사는 준비됐지만 회의 정리로 묶을 내용은 충분하지 않았습니다.";
       completionTone = "warning";
     }
-    return { badgeLabel: "완료", badgeStatus: "succeeded", meta: detailMeta, meetingNotes, notesMeta, notice: completionNotice, noticeTone: completionTone, recordMemo: detailMemo, recordTitle: detailTitle, segments, showRecordActions, showSpeakerEditor, speakerAliases, speakerCount, speakerSummaryEntries, speakerEditorItems, summary: "", title: detailTitle, transcriptText };
+    return { badgeLabel: "완료", badgeStatus: "succeeded", chunkProgress: null, meta: detailMeta, meetingNotes, notesMeta, notice: completionNotice, noticeTone: completionTone, recordMemo: detailMemo, recordTitle: detailTitle, segments, showRecordActions, showSpeakerEditor, speakerAliases, speakerCount, speakerSummaryEntries, speakerEditorItems, summary: "", title: detailTitle, transcriptText };
   }
 
   function renderSegment(segment, speakerAliases) {
@@ -758,7 +1016,7 @@
         ${chips.length ? `<div class="record-item__chips">${chips.map((chip) => `<span class="chip${chip.tone === "accent" ? " chip--accent" : ""}">${escapeHtml(chip.label)}</span>`).join("")}</div>` : ""}
         ${pendingNotice ? `<div class="record-item__local">${escapeHtml(pendingNotice)}</div>` : ""}
       </button>
-      ${buildPendingActions(entry.pending)}
+      ${buildPendingActions(entry.pending, entry.remote)}
     `;
   }
 
@@ -992,10 +1250,20 @@
       hasSegmentContent,
       hasSpeakerSummaryValue: hasSpeakerDigestValue,
       speakerCount: visibleSpeakerCount,
+      updatedAt: formatDateTime(
+        normalizeText(state.currentJob?.updatedAt || activeEntry?.remote?.updatedAt || activeEntry?.pending?.updatedAt),
+        ""
+      ),
     });
-    refs.summaryActionCard.hidden = !summaryActionMessage;
-    refs.summaryActionCard.textContent = summaryActionMessage;
-    const showSummaryNotice = Boolean(detailView.notice) && (detailView.badgeStatus !== "succeeded" || ["error", "warning"].includes(detailView.noticeTone));
+    const summaryActionHtml = buildSummaryActionCardHtml(detailView, summaryActionMessage);
+    refs.summaryActionCard.hidden = !summaryActionHtml;
+    refs.summaryActionCard.innerHTML = summaryActionHtml;
+    const suppressProgressNotice = Boolean(detailView.chunkProgress)
+      && !detailView.chunkProgress?.isStalled
+      && ["queued", "processing", "uploading", "uploading_chunks", "preparing_chunks", "remote_queued", "remote_processing"].includes(normalizeText(detailView.badgeStatus));
+    const showSummaryNotice = !suppressProgressNotice
+      && Boolean(detailView.notice)
+      && (detailView.badgeStatus !== "succeeded" || ["error", "warning"].includes(detailView.noticeTone));
     refs.detailNotice.hidden = !showSummaryNotice;
     refs.detailNotice.textContent = detailView.notice;
     refs.detailNotice.dataset.tone = showSummaryNotice ? detailView.noticeTone : "";

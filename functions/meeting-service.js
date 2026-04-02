@@ -7,10 +7,15 @@ const DEFAULT_SOURCE_TARGET_PART_BYTES = 20 * 1024 * 1024;
 const DEFAULT_SOURCE_MAX_BYTES = 200 * 1024 * 1024;
 const DEFAULT_SOURCE_MAX_DURATION_MS = 2 * 60 * 60 * 1000;
 const DEFAULT_SOURCE_PART_OVERLAP_MS = 1500;
+const DEFAULT_CHUNK_TRANSCRIPTION_CONCURRENCY = 2;
+const DEFAULT_CHUNK_TRANSCRIPTION_MAX_CONCURRENCY = 5;
+const DEFAULT_MEETING_PROCESS_RETRY_LIMIT = 2;
 const DEFAULT_MODEL = "gpt-4o-transcribe-diarize";
 const DEFAULT_SUMMARY_MODEL = "gpt-5.4-mini";
 const DEFAULT_SPEAKER_RECONCILE_MODEL = "gpt-5.4-mini";
 const JOB_COLLECTION = "integration_inova_meeting_jobs";
+const JOB_FINALIZER_COLLECTION = "integration_inova_meeting_job_finalizers";
+const JOB_PART_COLLECTION = "integration_inova_meeting_job_parts";
 const ARTIFACT_COLLECTION = "integration_inova_meeting_artifacts";
 const MEETING_COLLECTION = "integration_inova_meetings";
 const SESSION_COLLECTION = "integration_inova_meeting_sessions";
@@ -23,6 +28,7 @@ const MAX_SPEAKER_ALIAS_LENGTH = 80;
 const NOTES_SCHEMA_VERSION = 2;
 const DEFAULT_NOTES_MODE = "general";
 const DEFAULT_NOTES_STYLE = "default";
+const RETRYABLE_MEETING_PROCESS_STATUSES = new Set([408, 409, 429, 500, 502, 503, 504]);
 const SUPPORTED_NOTES_MODES = new Set(["general", "interview", "review", "planning"]);
 const SUPPORTED_NOTES_STYLES = new Set(["default", "brief", "action"]);
 
@@ -77,6 +83,10 @@ function registerMeetingHandlers(deps) {
         : db.collection(JOB_COLLECTION).doc().id;
       const createdAt = new Date().toISOString();
       const jobRef = db.collection(JOB_COLLECTION).doc(jobId);
+      const meetingRef = db.collection(MEETING_COLLECTION).doc(buildMeetingDocId(owner.providerUserKey, meeting.meetingId));
+      const sessionRef = meeting.sessionId
+        ? db.collection(SESSION_COLLECTION).doc(buildSessionDocId(owner.providerUserKey, meeting.sessionId))
+        : null;
       if (requestId) {
         const existingSnapshot = await jobRef.get();
         if (existingSnapshot.exists) {
@@ -84,16 +94,49 @@ function registerMeetingHandlers(deps) {
           if (!existingJob.deletedAt && normalizeText(existingJob.status) !== "failed") {
             assertJobOwnership(existingJob, owner, createHttpError);
             await assertMeetingIsActive(owner, existingJob.meetingId || meeting.meetingId, createHttpError);
+            const sourcePreparation = await ensureQueuedMeetingSourceReady(source, owner, meeting, jobId, createHttpError);
+            const mergedSource = mergeQueuedMeetingSource(existingJob.source, sourcePreparation.source);
+            let nextJob = existingJob;
+            if (hasMeaningfulMeetingSourceUpdate(existingJob.source, mergedSource)) {
+              nextJob = await persistMeetingJobPatch(
+                jobRef,
+                meetingRef,
+                sessionRef,
+                meeting,
+                owner,
+                existingJob,
+                {
+                  source: mergedSource,
+                  updatedAt: new Date().toISOString(),
+                }
+              );
+              if (mergedSource.mode === "chunked" && normalizeText(nextJob.status) === "processing") {
+                await upsertQueuedMeetingJobParts(nextJob);
+                const synchronized = await synchronizeChunkedMeetingJobProgress(
+                  jobRef,
+                  meetingRef,
+                  sessionRef,
+                  meeting,
+                  owner,
+                  nextJob,
+                  options
+                );
+                nextJob = synchronized.currentJob;
+                if (synchronized.isFullyTranscribed) {
+                  await maybeQueueMeetingJobFinalizer(nextJob);
+                }
+              }
+            }
             logEvent("meeting.create.deduped", {
-              jobId: existingJob.jobId,
-              meetingId: existingJob.meetingId || meeting.meetingId,
+              jobId: nextJob.jobId,
+              meetingId: nextJob.meetingId || meeting.meetingId,
               providerUserKey: owner.providerUserKey,
               requestId,
             });
             response.json({
               ok: true,
               data: {
-                job: existingJob,
+                job: nextJob,
                 reused: true,
               },
             });
@@ -102,10 +145,6 @@ function registerMeetingHandlers(deps) {
         }
       }
 
-      const meetingRef = db.collection(MEETING_COLLECTION).doc(buildMeetingDocId(owner.providerUserKey, meeting.meetingId));
-      const sessionRef = meeting.sessionId
-        ? db.collection(SESSION_COLLECTION).doc(buildSessionDocId(owner.providerUserKey, meeting.sessionId))
-        : null;
       const sourcePreparation = await ensureQueuedMeetingSourceReady(source, owner, meeting, jobId, createHttpError);
       const sourceSnapshot = sourcePreparation.source;
       cleanupStorageObjects = sourcePreparation.cleanupStorageObjects;
@@ -281,8 +320,11 @@ function registerMeetingHandlers(deps) {
     try {
       await persistPatch({
         progress: {
+          currentPart: source.mode === "chunked" ? 0 : 1,
+          parallelParts: 0,
           percent: 8,
           phase: source.mode === "chunked" ? "transcribing_chunks" : "transcribing",
+          totalParts: source.mode === "chunked" ? Math.max(0, Array.isArray(source.parts) ? source.parts.length : 0) : 1,
         },
         status: "processing",
         transcription: {
@@ -291,6 +333,40 @@ function registerMeetingHandlers(deps) {
         },
         updatedAt: new Date().toISOString(),
       });
+
+      if (source.mode === "chunked" && Array.isArray(source.parts) && source.parts.length) {
+        const refreshedJobSnapshot = await jobRef.get();
+        if (refreshedJobSnapshot.exists) {
+          currentJob = normalizeMeetingJob(refreshedJobSnapshot.data());
+        }
+        const partDocs = await upsertQueuedMeetingJobParts(currentJob);
+        const synchronized = await synchronizeChunkedMeetingJobProgress(
+          jobRef,
+          meetingRef,
+          sessionRef,
+          meeting,
+          owner,
+          currentJob,
+          options,
+          {
+            progress: {
+              phase: "transcribing_chunks",
+            },
+          }
+        );
+        currentJob = synchronized.currentJob;
+        if (synchronized.isFullyTranscribed) {
+          await maybeQueueMeetingJobFinalizer(currentJob);
+        }
+        logEvent("meeting.process.chunk-dispatched", {
+          jobId: queuedJob.jobId,
+          meetingId: meeting.meetingId,
+          parallelParts: getMeetingChunkTranscriptionConcurrency(partDocs.length),
+          partCount: partDocs.length,
+          providerUserKey: owner.providerUserKey,
+        });
+        return;
+      }
 
       const transcript = await transcribeQueuedMeetingSource(
         source,
@@ -320,7 +396,8 @@ function registerMeetingHandlers(deps) {
         transcript,
         meetingNotes,
         completedAt,
-        deletion.deletedAt
+        deletion.deletedAt,
+        currentJob.retry
       );
       currentJob = mergeMeetingJobPatch(currentJob, succeededPatch);
       await Promise.all([
@@ -339,16 +416,55 @@ function registerMeetingHandlers(deps) {
         speakerCount: transcript.speakerCount,
       });
     } catch (error) {
+      const errorMessage = formatMeetingProcessErrorMessage(error);
+      const nextRetryCount = Math.max(0, Number(currentJob.retry?.count) || 0) + 1;
+      const retryLimit = getMeetingProcessRetryLimit();
+      if (isRetryableMeetingProcessError(error) && nextRetryCount <= retryLimit) {
+        const retriedAt = new Date().toISOString();
+        await persistPatch({
+          error: "",
+          progress: {
+            currentPart: 0,
+            parallelParts: 0,
+            percent: 0,
+            phase: "queued",
+            totalParts: source.mode === "chunked" ? Math.max(0, Array.isArray(source.parts) ? source.parts.length : 0) : 1,
+          },
+          queuedAt: retriedAt,
+          retry: {
+            count: nextRetryCount,
+            lastError: errorMessage,
+            lastRetriedAt: retriedAt,
+          },
+          status: "queued",
+          updatedAt: retriedAt,
+        });
+        logEvent("meeting.process.retry.queued", {
+          error: normalizeText(error?.message),
+          jobId: queuedJob.jobId,
+          meetingId: meeting.meetingId,
+          providerUserKey: owner.providerUserKey,
+          retryCount: nextRetryCount,
+          retryLimit,
+        });
+        return;
+      }
       const deletion = await deleteTemporarySourceGroup(bucket, collectMeetingSourceStorageObjects(source));
       const failedPatch = {
         cleanup: {
           deletedAt: deletion.deletedAt,
           sourceAudioDeleted: Boolean(deletion.deletedAt),
         },
-        error: normalizeText(error?.message) || "회의 전사를 처리하지 못했어요.",
+        error: errorMessage,
         progress: {
+          parallelParts: 0,
           percent: 100,
           phase: "failed",
+        },
+        retry: {
+          count: Math.max(0, Number(currentJob.retry?.count) || 0),
+          lastError: errorMessage,
+          lastRetriedAt: normalizeText(currentJob.retry?.lastRetriedAt),
         },
         source: markMeetingSourceDeleted(source, deletion.deletedStorageObjects),
         status: "failed",
@@ -358,6 +474,429 @@ function registerMeetingHandlers(deps) {
       logEvent("meeting.process.error", {
         error: normalizeText(error?.message),
         jobId: queuedJob.jobId,
+        meetingId: meeting.meetingId,
+        providerUserKey: owner.providerUserKey,
+      });
+    }
+  };
+
+  const processQueuedMeetingJobPartWrite = async (event) => {
+    const beforeSnapshot = event?.data?.before || null;
+    const afterSnapshot = event?.data?.after || null;
+    if (!afterSnapshot?.exists) {
+      return;
+    }
+    const previousPart = beforeSnapshot?.exists ? normalizeMeetingJobPart(beforeSnapshot.data()) : null;
+    const queuedPart = normalizeMeetingJobPart(afterSnapshot.data());
+    if (!queuedPart.jobId || normalizeText(queuedPart.status) !== "queued" || normalizeText(previousPart?.status) === "queued") {
+      return;
+    }
+
+    const jobRef = db.collection(JOB_COLLECTION).doc(queuedPart.jobId);
+    const partRef = db.collection(JOB_PART_COLLECTION).doc(afterSnapshot.id);
+    const jobSnapshot = await jobRef.get();
+    if (!jobSnapshot.exists) {
+      await partRef.set({
+        error: "상위 회의 job을 찾지 못했어요.",
+        status: "failed",
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+      return;
+    }
+
+    let currentJob = normalizeMeetingJob(jobSnapshot.data());
+    if (!currentJob.jobId || currentJob.deletedAt) {
+      return;
+    }
+    const owner = currentJob.owner && typeof currentJob.owner === "object" ? { ...currentJob.owner } : {};
+    const meeting = normalizeMeetingRequest(currentJob.meeting);
+    const options = normalizeMeetingOptions(currentJob.options);
+    const meetingRef = db.collection(MEETING_COLLECTION).doc(buildMeetingDocId(owner.providerUserKey, meeting.meetingId));
+    const sessionRef = meeting.sessionId
+      ? db.collection(SESSION_COLLECTION).doc(buildSessionDocId(owner.providerUserKey, meeting.sessionId))
+      : null;
+
+    const persistJobPatch = async (patch, artifact) => {
+      currentJob = await persistMeetingJobPatch(
+        jobRef,
+        meetingRef,
+        sessionRef,
+        meeting,
+        owner,
+        currentJob,
+        patch,
+        artifact
+      );
+      return currentJob;
+    };
+
+    try {
+      const startedAt = new Date().toISOString();
+      await partRef.set({
+        error: "",
+        status: "processing",
+        updatedAt: startedAt,
+      }, { merge: true });
+      const synchronizedStart = await synchronizeChunkedMeetingJobProgress(
+        jobRef,
+        meetingRef,
+        sessionRef,
+        meeting,
+        owner,
+        currentJob,
+        options
+      );
+      currentJob = synchronizedStart.currentJob;
+
+      const audioBuffer = await loadMeetingSourcePartAudioBuffer(queuedPart.part);
+      const transcript = await transcribeMeetingAudio(
+        audioBuffer,
+        meeting,
+        options,
+        {
+          captureMode: currentJob.source.captureMode,
+          durationMs: Math.max(1, queuedPart.part.endMs - queuedPart.part.startMs),
+          fileName: buildMeetingPartFileName(currentJob.source.fileName, queuedPart.index),
+          mimeType: queuedPart.part.mimeType || currentJob.source.mimeType,
+          storageObject: queuedPart.part.storageObject,
+        }
+      );
+      const transcriptStorageObject = buildChunkTranscriptStorageObjectPath(
+        owner.providerUserKey,
+        meeting.meetingId,
+        queuedPart.jobId,
+        queuedPart.index
+      );
+      const transcriptMeta = await saveMeetingChunkTranscript(
+        bucket,
+        transcriptStorageObject,
+        transcript,
+        owner,
+        meeting,
+        queuedPart.jobId,
+        queuedPart.index
+      );
+      const completedAt = new Date().toISOString();
+      await partRef.set({
+        error: "",
+        status: "succeeded",
+        transcript: transcriptMeta,
+        updatedAt: completedAt,
+      }, { merge: true });
+      const synchronized = await synchronizeChunkedMeetingJobProgress(
+        jobRef,
+        meetingRef,
+        sessionRef,
+        meeting,
+        owner,
+        currentJob,
+        options
+      );
+      currentJob = synchronized.currentJob;
+      if (!synchronized.isFullyTranscribed) {
+        await promoteWaitingMeetingJobParts(currentJob, synchronized.partDocs);
+      }
+      if (synchronized.isFullyTranscribed) {
+        await maybeQueueMeetingJobFinalizer(currentJob);
+      }
+      logEvent("meeting.process.part.success", {
+        jobId: queuedPart.jobId,
+        meetingId: meeting.meetingId,
+        partIndex: queuedPart.index,
+        providerUserKey: owner.providerUserKey,
+      });
+    } catch (error) {
+      const errorMessage = formatMeetingProcessErrorMessage(error);
+      const nextRetryCount = Math.max(0, Number(queuedPart.retry?.count) || 0) + 1;
+      const retryLimit = getMeetingProcessRetryLimit();
+      if (isRetryableMeetingProcessError(error) && nextRetryCount <= retryLimit) {
+        const retriedAt = new Date().toISOString();
+        await partRef.set({
+          error: "",
+          queuedAt: retriedAt,
+          retry: {
+            count: nextRetryCount,
+            lastError: errorMessage,
+            lastRetriedAt: retriedAt,
+          },
+          status: "queued",
+          updatedAt: retriedAt,
+        }, { merge: true });
+        const synchronized = await synchronizeChunkedMeetingJobProgress(
+          jobRef,
+          meetingRef,
+          sessionRef,
+          meeting,
+          owner,
+          currentJob,
+          options
+        );
+        currentJob = synchronized.currentJob;
+        logEvent("meeting.process.part.retry.queued", {
+          error: normalizeText(error?.message),
+          jobId: queuedPart.jobId,
+          meetingId: meeting.meetingId,
+          partIndex: queuedPart.index,
+          providerUserKey: owner.providerUserKey,
+          retryCount: nextRetryCount,
+          retryLimit,
+        });
+        return;
+      }
+
+      await partRef.set({
+        error: errorMessage,
+        retry: {
+          count: Math.max(0, Number(queuedPart.retry?.count) || 0),
+          lastError: errorMessage,
+          lastRetriedAt: normalizeText(queuedPart.retry?.lastRetriedAt),
+        },
+        status: "failed",
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+      const synchronized = await synchronizeChunkedMeetingJobProgress(
+        jobRef,
+        meetingRef,
+        sessionRef,
+        meeting,
+        owner,
+        currentJob,
+        options,
+        {
+          error: errorMessage,
+          progress: {
+            parallelParts: 0,
+            percent: 100,
+            phase: "failed",
+          },
+          retry: {
+            count: Math.max(0, Number(currentJob.retry?.count) || 0),
+            lastError: errorMessage,
+            lastRetriedAt: normalizeText(currentJob.retry?.lastRetriedAt),
+          },
+          status: "failed",
+        }
+      );
+      currentJob = synchronized.currentJob;
+      logEvent("meeting.process.part.error", {
+        error: normalizeText(error?.message),
+        jobId: queuedPart.jobId,
+        meetingId: meeting.meetingId,
+        partIndex: queuedPart.index,
+        providerUserKey: owner.providerUserKey,
+      });
+    }
+  };
+
+  const finalizeChunkedMeetingJobWrite = async (event) => {
+    const beforeSnapshot = event?.data?.before || null;
+    const afterSnapshot = event?.data?.after || null;
+    if (!afterSnapshot?.exists) {
+      return;
+    }
+    const previousFinalizer = beforeSnapshot?.exists ? normalizeMeetingJobFinalizer(beforeSnapshot.data()) : null;
+    const queuedFinalizer = normalizeMeetingJobFinalizer(afterSnapshot.data());
+    if (!queuedFinalizer.jobId || normalizeText(queuedFinalizer.status) !== "queued" || normalizeText(previousFinalizer?.status) === "queued") {
+      return;
+    }
+
+    const finalizerRef = db.collection(JOB_FINALIZER_COLLECTION).doc(afterSnapshot.id);
+    const jobRef = db.collection(JOB_COLLECTION).doc(queuedFinalizer.jobId);
+    const jobSnapshot = await jobRef.get();
+    if (!jobSnapshot.exists) {
+      await finalizerRef.set({
+        error: "상위 회의 job을 찾지 못했어요.",
+        status: "failed",
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+      return;
+    }
+
+    let currentJob = normalizeMeetingJob(jobSnapshot.data());
+    if (!currentJob.jobId || currentJob.deletedAt) {
+      return;
+    }
+    const owner = currentJob.owner && typeof currentJob.owner === "object" ? { ...currentJob.owner } : {};
+    const meeting = normalizeMeetingRequest(currentJob.meeting);
+    const options = normalizeMeetingOptions(currentJob.options);
+    const context = normalizeMeetingContext(currentJob.context);
+    const source = normalizeMeetingSource(currentJob.source);
+    const artifactId = getMeetingArtifactId(currentJob.jobId, owner.providerUserKey, meeting.meetingId, source.requestId, db);
+    const artifactRef = db.collection(ARTIFACT_COLLECTION).doc(artifactId);
+    const meetingRef = db.collection(MEETING_COLLECTION).doc(buildMeetingDocId(owner.providerUserKey, meeting.meetingId));
+    const sessionRef = meeting.sessionId
+      ? db.collection(SESSION_COLLECTION).doc(buildSessionDocId(owner.providerUserKey, meeting.sessionId))
+      : null;
+
+    const persistJobPatch = async (patch, artifact) => {
+      currentJob = await persistMeetingJobPatch(
+        jobRef,
+        meetingRef,
+        sessionRef,
+        meeting,
+        owner,
+        currentJob,
+        patch,
+        artifact
+      );
+      return currentJob;
+    };
+
+    try {
+      const startedAt = new Date().toISOString();
+      await finalizerRef.set({
+        error: "",
+        status: "processing",
+        updatedAt: startedAt,
+      }, { merge: true });
+      await persistJobPatch({
+        progress: {
+          currentPart: Math.max(0, Number(currentJob.progress?.currentPart) || 0),
+          parallelParts: 0,
+          percent: 80,
+          phase: "assembling_transcript",
+          totalParts: Math.max(0, Number(currentJob.progress?.totalParts) || (Array.isArray(source.parts) ? source.parts.length : 0)),
+        },
+        updatedAt: startedAt,
+      });
+
+      const partDocs = await loadMeetingJobPartDocs(currentJob.jobId);
+      if (!partDocs.length || partDocs.some((part) => part.status !== "succeeded" || !normalizeText(part.transcript?.storageObject))) {
+        throw createHttpError(409, "청크 전사 결과가 아직 모두 준비되지 않았어요.");
+      }
+      const chunkTranscripts = [];
+      for (const partDoc of partDocs) {
+        chunkTranscripts.push({
+          part: partDoc.part,
+          transcript: await loadMeetingChunkTranscript(bucket, partDoc.transcript.storageObject),
+        });
+      }
+      const transcript = await mergeChunkTranscripts(chunkTranscripts, options, async (progressPatch) => {
+        await persistJobPatch(progressPatch);
+      });
+      await persistJobPatch({
+        progress: {
+          currentPart: partDocs.length,
+          parallelParts: 0,
+          percent: 86,
+          phase: "generating_notes",
+          totalParts: partDocs.length,
+        },
+        updatedAt: new Date().toISOString(),
+      });
+      const meetingNotes = await maybeGenerateMeetingNotes(transcript, meeting, options, context, logEvent, owner, currentJob.jobId);
+      const completedAt = new Date().toISOString();
+      const artifact = buildTranscriptArtifact(artifactId, currentJob.jobId, meeting, owner, transcript, meetingNotes, completedAt);
+      const deletion = await deleteTemporarySourceGroup(
+        bucket,
+        [
+          ...collectMeetingSourceStorageObjects(source),
+          ...collectMeetingChunkTranscriptStorageObjects(partDocs),
+        ]
+      );
+      const succeededPatch = buildSucceededJobPatch(
+        artifact,
+        meeting,
+        options,
+        markMeetingSourceDeleted(source, deletion.deletedStorageObjects),
+        context,
+        transcript,
+        meetingNotes,
+        completedAt,
+        deletion.deletedAt,
+        currentJob.retry
+      );
+      currentJob = mergeMeetingJobPatch(currentJob, succeededPatch);
+      await Promise.all([
+        artifactRef.set(artifact),
+        jobRef.set(succeededPatch, { merge: true }),
+        upsertMeetingJobSummary(meetingRef, meeting, owner, currentJob, artifact),
+        sessionRef ? upsertLegacySessionJobSummary(sessionRef, meeting, owner, currentJob, artifact) : Promise.resolve(),
+        deleteDocumentIfExists(finalizerRef),
+        ...partDocs.map((partDoc) => deleteDocumentIfExists(db.collection(JOB_PART_COLLECTION).doc(partDoc.docId))),
+      ]);
+      logEvent("meeting.process.success", {
+        artifactId,
+        chunked: true,
+        jobId: currentJob.jobId,
+        meetingId: meeting.meetingId,
+        providerUserKey: owner.providerUserKey,
+        speakerCount: transcript.speakerCount,
+      });
+    } catch (error) {
+      const errorMessage = formatMeetingProcessErrorMessage(error);
+      const nextRetryCount = Math.max(0, Number(queuedFinalizer.retry?.count) || 0) + 1;
+      const retryLimit = getMeetingProcessRetryLimit();
+      if (isRetryableMeetingProcessError(error) && nextRetryCount <= retryLimit) {
+        const retriedAt = new Date().toISOString();
+        await finalizerRef.set({
+          error: "",
+          queuedAt: retriedAt,
+          retry: {
+            count: nextRetryCount,
+            lastError: errorMessage,
+            lastRetriedAt: retriedAt,
+          },
+          status: "queued",
+          updatedAt: retriedAt,
+        }, { merge: true });
+        await persistJobPatch({
+          error: "",
+          progress: {
+            currentPart: Math.max(0, Number(currentJob.progress?.currentPart) || 0),
+            parallelParts: 0,
+            percent: Math.max(80, Number(currentJob.progress?.percent) || 80),
+            phase: "assembling_transcript",
+            totalParts: Math.max(0, Number(currentJob.progress?.totalParts) || (Array.isArray(source.parts) ? source.parts.length : 0)),
+          },
+          retry: {
+            count: nextRetryCount,
+            lastError: errorMessage,
+            lastRetriedAt: retriedAt,
+          },
+          updatedAt: retriedAt,
+        });
+        logEvent("meeting.process.finalize.retry.queued", {
+          error: normalizeText(error?.message),
+          jobId: currentJob.jobId,
+          meetingId: meeting.meetingId,
+          providerUserKey: owner.providerUserKey,
+          retryCount: nextRetryCount,
+          retryLimit,
+        });
+        return;
+      }
+
+      await finalizerRef.set({
+        error: errorMessage,
+        retry: {
+          count: Math.max(0, Number(queuedFinalizer.retry?.count) || 0),
+          lastError: errorMessage,
+          lastRetriedAt: normalizeText(queuedFinalizer.retry?.lastRetriedAt),
+        },
+        status: "failed",
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+      await persistJobPatch({
+        error: errorMessage,
+        progress: {
+          currentPart: Math.max(0, Number(currentJob.progress?.currentPart) || 0),
+          parallelParts: 0,
+          percent: 100,
+          phase: "failed",
+          totalParts: Math.max(0, Number(currentJob.progress?.totalParts) || (Array.isArray(source.parts) ? source.parts.length : 0)),
+        },
+        retry: {
+          count: Math.max(0, Number(currentJob.retry?.count) || 0),
+          lastError: errorMessage,
+          lastRetriedAt: normalizeText(currentJob.retry?.lastRetriedAt),
+        },
+        status: "failed",
+        updatedAt: new Date().toISOString(),
+      });
+      logEvent("meeting.process.error", {
+        error: normalizeText(error?.message),
+        jobId: currentJob.jobId,
         meetingId: meeting.meetingId,
         providerUserKey: owner.providerUserKey,
       });
@@ -926,7 +1465,11 @@ function registerMeetingHandlers(deps) {
 
       const deletedAt = new Date().toISOString();
       const artifactIds = collectMeetingArtifactIds(job);
-      const storageObjects = collectMeetingSourceStorageObjects(job.source);
+      const partDocs = await loadMeetingJobPartDocs(job.jobId);
+      const storageObjects = [
+        ...collectMeetingSourceStorageObjects(job.source),
+        ...collectMeetingChunkTranscriptStorageObjects(partDocs),
+      ];
 
       if (storageObjects.length) {
         await deleteTemporarySourceGroup(bucket, storageObjects);
@@ -934,7 +1477,11 @@ function registerMeetingHandlers(deps) {
       await Promise.all(
         artifactIds.map((artifactId) => deleteDocumentIfExists(db.collection(ARTIFACT_COLLECTION).doc(artifactId)))
       );
-      await deleteDocumentIfExists(jobRef);
+      await Promise.all([
+        deleteDocumentIfExists(jobRef),
+        deleteDocumentIfExists(db.collection(JOB_FINALIZER_COLLECTION).doc(job.jobId)),
+        ...partDocs.map((partDoc) => deleteDocumentIfExists(db.collection(JOB_PART_COLLECTION).doc(partDoc.docId))),
+      ]);
 
       const meeting = await removeMeetingResultFromSummaries(owner, job, deletedAt);
 
@@ -1046,11 +1593,13 @@ function registerMeetingHandlers(deps) {
     createInovaMeetingJob,
     deleteInovaMeeting,
     deleteInovaMeetingResult,
+    finalizeChunkedMeetingJobWrite,
     getInovaMeetingArtifact,
     getInovaMeetingJob,
     listInovaMeetings,
     listInovaMeetingResults,
     processQueuedMeetingJobWrite,
+    processQueuedMeetingJobPartWrite,
     regenerateInovaMeetingNotes,
     uploadInovaMeetingSource,
     updateInovaMeeting,
@@ -1203,13 +1752,11 @@ function registerMeetingHandlers(deps) {
         .map((part, index) => normalizeMeetingSourcePart(part, index, source.requestId))
         .sort((left, right) => left.index - right.index || left.startMs - right.startMs);
       for (const part of normalizedParts) {
-        if (!part.storageObject) {
-          throw errorFactory(400, "분할 업로드가 아직 끝나지 않았어요.");
-        }
         if (!(part.sizeBytes > 0) || part.sizeBytes > getMeetingSourceTargetPartBytes()) {
           throw errorFactory(400, "분할 업로드 part 크기가 올바르지 않아요.");
         }
       }
+      const uploadedPartCount = normalizedParts.filter((part) => normalizeText(part.storageObject)).length;
       return {
         cleanupStorageObjects: [],
         source: {
@@ -1223,7 +1770,13 @@ function registerMeetingHandlers(deps) {
             sizeBytes: part.sizeBytes,
             startMs: part.startMs,
             storageObject: part.storageObject,
+            uploadStatus: part.uploadStatus || (part.storageObject ? "uploaded" : "pending_upload"),
           })),
+          uploadStatus: uploadedPartCount >= normalizedParts.length
+            ? "uploaded"
+            : uploadedPartCount > 0
+              ? "partial"
+              : "pending_upload",
         },
       };
     }
@@ -1333,6 +1886,78 @@ function registerMeetingHandlers(deps) {
         ...(patch.transcription || {}),
       },
     });
+  }
+
+  function mergeQueuedMeetingSource(existingSourceInput, incomingSourceInput) {
+    const existingSource = normalizeMeetingSource(existingSourceInput);
+    const incomingSource = normalizeMeetingSource(incomingSourceInput);
+    const mergedStorageObject = normalizeText(incomingSource.storageObject) || normalizeText(existingSource.storageObject);
+    if (incomingSource.mode !== "chunked") {
+      return normalizeMeetingSource({
+        ...existingSource,
+        ...incomingSource,
+        inlineAudioBase64: "",
+        requestId: incomingSource.requestId || existingSource.requestId,
+        storageObject: mergedStorageObject,
+        uploadStatus: normalizeText(incomingSource.uploadStatus)
+          || normalizeText(existingSource.uploadStatus)
+          || (mergedStorageObject ? "uploaded" : ""),
+      });
+    }
+
+    const existingByIndex = new Map(
+      (Array.isArray(existingSource.parts) ? existingSource.parts : []).map((part) => [Number(part.index), part])
+    );
+    const mergedParts = (Array.isArray(incomingSource.parts) && incomingSource.parts.length
+      ? incomingSource.parts
+      : existingSource.parts
+    )
+      .map((part, index) => {
+        const existingPart = existingByIndex.get(Number(part.index) || index);
+        const storageObject = normalizeText(part.storageObject) || normalizeText(existingPart?.storageObject);
+        return normalizeMeetingSourcePart({
+          ...(existingPart || {}),
+          ...part,
+          requestId: normalizeText(part.requestId) || normalizeText(existingPart?.requestId),
+          sizeBytes: Math.max(0, Number(part.sizeBytes) || Number(existingPart?.sizeBytes) || 0),
+          storageObject,
+          uploadStatus: normalizeText(part.uploadStatus)
+            || normalizeText(existingPart?.uploadStatus)
+            || (storageObject ? "uploaded" : "pending_upload"),
+        }, index, incomingSource.requestId || existingSource.requestId);
+      })
+      .sort((left, right) => left.index - right.index || left.startMs - right.startMs);
+    const uploadedPartCount = mergedParts.filter((part) => normalizeText(part.storageObject)).length;
+    return normalizeMeetingSource({
+      ...existingSource,
+      ...incomingSource,
+      inlineAudioBase64: "",
+      originalSizeBytes: Math.max(
+        Number(existingSource.originalSizeBytes) || 0,
+        Number(incomingSource.originalSizeBytes) || 0,
+        Number(existingSource.sizeBytes) || 0,
+        Number(incomingSource.sizeBytes) || 0
+      ),
+      parts: mergedParts,
+      requestId: incomingSource.requestId || existingSource.requestId,
+      storageObject: mergedStorageObject,
+      uploadStatus: mergedParts.length
+        ? (uploadedPartCount >= mergedParts.length ? "uploaded" : uploadedPartCount > 0 ? "partial" : "pending_upload")
+        : normalizeText(incomingSource.uploadStatus)
+          || normalizeText(existingSource.uploadStatus)
+          || (mergedStorageObject ? "uploaded" : ""),
+      sizeBytes: Math.max(
+        Number(existingSource.sizeBytes) || 0,
+        Number(incomingSource.sizeBytes) || 0,
+        Number(existingSource.originalSizeBytes) || 0,
+        Number(incomingSource.originalSizeBytes) || 0
+      ),
+    });
+  }
+
+  function hasMeaningfulMeetingSourceUpdate(existingSourceInput, nextSourceInput) {
+    return JSON.stringify(normalizeMeetingSource(existingSourceInput))
+      !== JSON.stringify(normalizeMeetingSource(nextSourceInput));
   }
 
   function getMeetingArtifactId(jobId, providerUserKey, meetingId, requestId, targetDb) {
@@ -1634,6 +2259,116 @@ function registerMeetingHandlers(deps) {
     return normalizeTranscriptionResponse(response, source.durationMs);
   }
 
+  function getMeetingChunkTranscriptionConcurrency(totalParts) {
+    const normalizedTotalParts = Math.max(1, Number(totalParts) || 1);
+    const requested = Number.parseInt(
+      normalizeText(process.env.OPENAI_MEETING_CHUNK_TRANSCRIPTION_CONCURRENCY),
+      10
+    );
+    if (Number.isFinite(requested) && requested > 0) {
+      return Math.max(1, Math.min(normalizedTotalParts, requested));
+    }
+    if (normalizedTotalParts <= DEFAULT_CHUNK_TRANSCRIPTION_CONCURRENCY) {
+      return normalizedTotalParts;
+    }
+    const adaptive = Math.max(
+      DEFAULT_CHUNK_TRANSCRIPTION_CONCURRENCY,
+      Math.ceil(normalizedTotalParts / 2)
+    );
+    return Math.max(
+      1,
+      Math.min(
+        normalizedTotalParts,
+        DEFAULT_CHUNK_TRANSCRIPTION_MAX_CONCURRENCY,
+        adaptive
+      )
+    );
+  }
+
+  function getMeetingProcessRetryLimit() {
+    const requested = Number.parseInt(
+      normalizeText(process.env.OPENAI_MEETING_PROCESS_RETRY_LIMIT),
+      10
+    );
+    const resolved = Number.isFinite(requested) && requested >= 0
+      ? requested
+      : DEFAULT_MEETING_PROCESS_RETRY_LIMIT;
+    return Math.max(0, Math.min(5, resolved));
+  }
+
+  function extractMeetingProcessErrorStatus(error) {
+    const candidates = [error?.status, error?.statusCode, error?.cause?.status];
+    for (const candidate of candidates) {
+      const parsed = Number.parseInt(String(candidate || ""), 10);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return parsed;
+      }
+    }
+    const messageStatus = normalizeText(error?.message).match(/\b(408|409|429|500|502|503|504)\b/);
+    return messageStatus ? Number.parseInt(messageStatus[1], 10) : 0;
+  }
+
+  function extractMeetingProcessRequestId(error) {
+    const message = normalizeText(error?.message);
+    const match = message.match(/\b(req_[a-zA-Z0-9]+)\b/);
+    return match?.[1] || normalizeText(error?.request_id || error?.requestId);
+  }
+
+  function isRetryableMeetingProcessError(error) {
+    const status = extractMeetingProcessErrorStatus(error);
+    if (RETRYABLE_MEETING_PROCESS_STATUSES.has(status)) {
+      return true;
+    }
+    const message = normalizeText(error?.message).toLowerCase();
+    if (!message) {
+      return false;
+    }
+    return [
+      "server had an error processing your request",
+      "temporarily unavailable",
+      "timed out",
+      "timeout",
+      "rate limit",
+      "overloaded",
+      "socket hang up",
+      "connection error",
+    ].some((token) => message.includes(token));
+  }
+
+  function formatMeetingProcessErrorMessage(error) {
+    const rawMessage = normalizeText(error?.message) || "회의 전사를 처리하지 못했어요.";
+    const status = extractMeetingProcessErrorStatus(error);
+    const requestId = extractMeetingProcessRequestId(error);
+    const requestSuffix = requestId ? ` 요청 ID: ${requestId}` : "";
+    if (status === 429 || rawMessage.toLowerCase().includes("rate limit")) {
+      return `전사 API 요청이 잠시 몰려 있어 처리에 실패했어요. 잠시 후 다시 시도해 주세요.${requestSuffix}`.trim();
+    }
+    if (RETRYABLE_MEETING_PROCESS_STATUSES.has(status) || rawMessage.toLowerCase().includes("server had an error processing your request")) {
+      return `전사 API에서 일시적인 서버 오류가 발생했어요. 다시 시도해 주세요.${requestSuffix}`.trim();
+    }
+    return rawMessage;
+  }
+
+  async function mapWithConcurrency(items, concurrency, worker) {
+    const normalizedItems = Array.isArray(items) ? items : [];
+    if (!normalizedItems.length) {
+      return [];
+    }
+    const limit = Math.max(1, Math.min(normalizedItems.length, Number(concurrency) || 1));
+    const results = new Array(normalizedItems.length);
+    let cursor = 0;
+    await Promise.all(
+      Array.from({ length: limit }, async () => {
+        while (cursor < normalizedItems.length) {
+          const currentIndex = cursor;
+          cursor += 1;
+          results[currentIndex] = await worker(normalizedItems[currentIndex], currentIndex);
+        }
+      })
+    );
+    return results;
+  }
+
   async function transcribeQueuedMeetingSource(source, meeting, options, owner, jobId, onProgress) {
     const normalizedSource = normalizeMeetingSource(source);
     if (normalizedSource.mode !== "chunked" || !normalizedSource.parts.length) {
@@ -1647,32 +2382,63 @@ function registerMeetingHandlers(deps) {
     const orderedParts = normalizedSource.parts
       .map((part, index) => normalizeMeetingSourcePart(part, index, normalizedSource.requestId))
       .sort((left, right) => left.index - right.index || left.startMs - right.startMs);
+    const totalParts = orderedParts.length;
+    const transcribeProgressEndPercent = options.speakerLabels ? 64 : 80;
+    let completedTranscriptionCount = 0;
+    const chunkTranscripts = await mapWithConcurrency(
+      orderedParts,
+      getMeetingChunkTranscriptionConcurrency(totalParts),
+      async (part) => {
+        const audioBuffer = await loadMeetingSourcePartAudioBuffer(part);
+        const transcript = await transcribeMeetingAudio(
+          audioBuffer,
+          meeting,
+          options,
+          {
+            captureMode: normalizedSource.captureMode,
+            durationMs: Math.max(1, part.endMs - part.startMs),
+            fileName: buildMeetingPartFileName(normalizedSource.fileName, part.index),
+            mimeType: part.mimeType || normalizedSource.mimeType,
+            storageObject: part.storageObject,
+          }
+        );
+        completedTranscriptionCount += 1;
+        if (typeof onProgress === "function") {
+          await onProgress({
+            progress: {
+              currentPart: completedTranscriptionCount,
+              percent: Math.max(
+                8,
+                Math.min(
+                  transcribeProgressEndPercent,
+                  Math.round(8 + (completedTranscriptionCount / totalParts) * (transcribeProgressEndPercent - 8))
+                )
+              ),
+              phase: "transcribing_chunks",
+              totalParts,
+            },
+            updatedAt: new Date().toISOString(),
+          });
+        }
+        return { part, transcript };
+      }
+    );
+    return mergeChunkTranscripts(chunkTranscripts, options, onProgress);
+  }
+
+  async function mergeChunkTranscripts(chunkTranscriptsInput, options, onProgress) {
+    const chunkTranscripts = Array.isArray(chunkTranscriptsInput) ? chunkTranscriptsInput : [];
     let mergedSegments = [];
     let nextGlobalSpeakerIndex = 0;
-
-    for (const [index, part] of orderedParts.entries()) {
-      if (typeof onProgress === "function") {
-        await onProgress({
-          progress: {
-            percent: Math.max(8, Math.min(74, Math.round(8 + ((index + 1) / orderedParts.length) * 58))),
-            phase: "transcribing_chunks",
-          },
-          updatedAt: new Date().toISOString(),
-        });
+    const totalParts = Math.max(1, chunkTranscripts.length);
+    const reconcileProgressStartPercent = options.speakerLabels ? 64 : 80;
+    const reconcileProgressEndPercent = 80;
+    for (const [index, chunk] of chunkTranscripts.entries()) {
+      const part = chunk?.part;
+      const transcript = chunk?.transcript;
+      if (!part || !transcript) {
+        continue;
       }
-      const audioBuffer = await loadMeetingSourcePartAudioBuffer(part);
-      const transcript = await transcribeMeetingAudio(
-        audioBuffer,
-        meeting,
-        options,
-        {
-          captureMode: normalizedSource.captureMode,
-          durationMs: Math.max(1, part.endMs - part.startMs),
-          fileName: buildMeetingPartFileName(normalizedSource.fileName, part.index),
-          mimeType: part.mimeType || normalizedSource.mimeType,
-          storageObject: part.storageObject,
-        }
-      );
       let adjustedSegments = offsetTranscriptSegments(transcript.segments, part.startMs);
       if (options.speakerLabels) {
         if (!mergedSegments.length) {
@@ -1682,8 +2448,20 @@ function registerMeetingHandlers(deps) {
           if (typeof onProgress === "function") {
             await onProgress({
               progress: {
-                percent: Math.max(16, Math.min(80, Math.round(16 + ((index + 1) / orderedParts.length) * 60))),
+                currentPart: index + 1,
+                parallelParts: 0,
+                percent: Math.max(
+                  reconcileProgressStartPercent,
+                  Math.min(
+                    reconcileProgressEndPercent,
+                    Math.round(
+                      reconcileProgressStartPercent
+                      + ((index + 1) / totalParts) * (reconcileProgressEndPercent - reconcileProgressStartPercent)
+                    )
+                  )
+                ),
                 phase: "reconciling_speakers",
+                totalParts,
               },
               updatedAt: new Date().toISOString(),
             });
@@ -1864,6 +2642,255 @@ function registerMeetingHandlers(deps) {
       }
     }
     return false;
+  }
+
+  async function persistMeetingJobPatch(jobRef, meetingRef, sessionRef, meeting, owner, currentJobInput, patch, artifactInput) {
+    const nextJob = mergeMeetingJobPatch(currentJobInput, patch);
+    await Promise.all([
+      jobRef.set(patch, { merge: true }),
+      upsertMeetingJobSummary(meetingRef, meeting, owner, nextJob, artifactInput),
+      sessionRef ? upsertLegacySessionJobSummary(sessionRef, meeting, owner, nextJob, artifactInput) : Promise.resolve(),
+    ]);
+    return nextJob;
+  }
+
+  async function loadMeetingJobPartDocs(jobId) {
+    const snapshot = await db.collection(JOB_PART_COLLECTION).where("jobId", "==", normalizeText(jobId)).get();
+    return snapshot.docs
+      .map((doc) => ({ ...normalizeMeetingJobPart(doc.data()), docId: doc.id }))
+      .sort((left, right) => left.index - right.index || left.part.startMs - right.part.startMs);
+  }
+
+  async function upsertQueuedMeetingJobParts(job) {
+    const normalizedJob = normalizeMeetingJob(job);
+    const existingParts = await loadMeetingJobPartDocs(normalizedJob.jobId);
+    const existingByIndex = new Map(existingParts.map((part) => [Number(part.index), part]));
+    const concurrency = getMeetingChunkTranscriptionConcurrency(
+      Array.isArray(normalizedJob.source.parts) ? normalizedJob.source.parts.length : 0
+    );
+    let activeSlotCount = existingParts.filter((part) => ["processing", "queued"].includes(normalizeText(part.status))).length;
+    const batch = db.batch();
+    const queuedAt = new Date().toISOString();
+    const expectedIndexes = new Set();
+    for (const sourcePart of normalizedJob.source.parts) {
+      const index = Math.max(0, Number(sourcePart.index) || 0);
+      expectedIndexes.add(index);
+      const partRef = db.collection(JOB_PART_COLLECTION).doc(buildMeetingJobPartId(normalizedJob.jobId, index));
+      const existingPart = existingByIndex.get(index);
+      const existingStatus = normalizeText(existingPart?.status);
+      const existingTranscriptStorageObject = normalizeText(existingPart?.transcript?.storageObject);
+      const isSameSource = normalizeText(existingPart?.jobId) === normalizedJob.jobId
+        && Number(existingPart?.index) === index
+        && normalizeText(existingPart?.part?.storageObject) === normalizeText(sourcePart?.storageObject);
+      const canReuseTranscript = isSameSource
+        && existingTranscriptStorageObject
+        && existingStatus === "succeeded";
+      let nextStatus = "pending_upload";
+      if (canReuseTranscript) {
+        nextStatus = "succeeded";
+      } else if (isSameSource && ["processing", "queued"].includes(existingStatus)) {
+        nextStatus = existingStatus;
+      } else if (isSameSource && existingStatus === "failed") {
+        nextStatus = "failed";
+      } else if (normalizeText(sourcePart?.storageObject)) {
+        if (activeSlotCount < concurrency) {
+          nextStatus = "queued";
+          activeSlotCount += 1;
+        } else {
+          nextStatus = "waiting";
+        }
+      }
+      const queuedPart = buildQueuedMeetingJobPart(
+        normalizedJob,
+        sourcePart,
+        queuedAt,
+        existingPart,
+        nextStatus
+      );
+      batch.set(partRef, queuedPart);
+    }
+    for (const existingPart of existingParts) {
+      if (!expectedIndexes.has(Number(existingPart.index))) {
+        batch.delete(db.collection(JOB_PART_COLLECTION).doc(existingPart.docId));
+      }
+    }
+    await batch.commit();
+    return loadMeetingJobPartDocs(normalizedJob.jobId);
+  }
+
+  async function promoteWaitingMeetingJobParts(job, existingPartDocsInput) {
+    const normalizedJob = normalizeMeetingJob(job);
+    if (!normalizedJob.jobId) {
+      return [];
+    }
+    const existingPartDocs = Array.isArray(existingPartDocsInput) && existingPartDocsInput.length
+      ? existingPartDocsInput
+      : await loadMeetingJobPartDocs(normalizedJob.jobId);
+    const totalParts = existingPartDocs.length
+      || Math.max(0, Array.isArray(normalizedJob.source.parts) ? normalizedJob.source.parts.length : 0);
+    const concurrency = getMeetingChunkTranscriptionConcurrency(totalParts);
+    const processingCount = existingPartDocs.filter((part) => part.status === "processing").length;
+    const queuedCount = existingPartDocs.filter((part) => part.status === "queued").length;
+    const availableSlots = Math.max(0, concurrency - processingCount - queuedCount);
+    if (availableSlots <= 0) {
+      return existingPartDocs;
+    }
+    const waitingParts = existingPartDocs
+      .filter((part) => part.status === "waiting")
+      .sort((left, right) => left.index - right.index || left.part.startMs - right.part.startMs)
+      .slice(0, availableSlots);
+    if (!waitingParts.length) {
+      return existingPartDocs;
+    }
+    const batch = db.batch();
+    const queuedAt = new Date().toISOString();
+    for (const waitingPart of waitingParts) {
+      batch.set(
+        db.collection(JOB_PART_COLLECTION).doc(waitingPart.docId),
+        {
+          error: "",
+          queuedAt,
+          status: "queued",
+          updatedAt: queuedAt,
+        },
+        { merge: true }
+      );
+    }
+    await batch.commit();
+    return loadMeetingJobPartDocs(normalizedJob.jobId);
+  }
+
+  async function synchronizeChunkedMeetingJobProgress(jobRef, meetingRef, sessionRef, meeting, owner, currentJobInput, options, overridePatch) {
+    const currentJob = normalizeMeetingJob(currentJobInput);
+    const partDocs = await loadMeetingJobPartDocs(currentJob.jobId);
+    const totalParts = Math.max(
+      0,
+      partDocs.length || Number(currentJob.progress?.totalParts) || (Array.isArray(currentJob.source?.parts) ? currentJob.source.parts.length : 0)
+    );
+    const processingCount = partDocs.filter((part) => part.status === "processing").length;
+    const succeededCount = partDocs.filter((part) => part.status === "succeeded").length;
+    const failedCount = partDocs.filter((part) => part.status === "failed").length;
+    const queuedCount = partDocs.filter((part) => part.status === "queued").length;
+    const transcribeProgressEndPercent = options.speakerLabels ? 64 : 80;
+    const isFullyTranscribed = totalParts > 0 && succeededCount >= totalParts;
+    const defaultPatch = {
+      progress: {
+        currentPart: succeededCount,
+        parallelParts: processingCount,
+        percent: isFullyTranscribed
+          ? 80
+          : Math.max(
+              8,
+              Math.min(
+                transcribeProgressEndPercent,
+                Math.round(8 + ((totalParts > 0 ? succeededCount / totalParts : 0) * (transcribeProgressEndPercent - 8)))
+              )
+            ),
+        phase: failedCount > 0
+          ? "failed"
+          : isFullyTranscribed
+            ? "assembling_transcript"
+            : "transcribing_chunks",
+        totalParts,
+      },
+      updatedAt: new Date().toISOString(),
+    };
+    const patch = {
+      ...defaultPatch,
+      ...(overridePatch || {}),
+      progress: {
+        ...defaultPatch.progress,
+        ...((overridePatch && overridePatch.progress) || {}),
+      },
+    };
+    const nextJob = await persistMeetingJobPatch(
+      jobRef,
+      meetingRef,
+      sessionRef,
+      meeting,
+      owner,
+      currentJob,
+      patch
+    );
+    return {
+      currentJob: nextJob,
+      failedCount,
+      isFullyTranscribed,
+      partDocs,
+      processingCount,
+      queuedCount,
+      succeededCount,
+      totalParts,
+    };
+  }
+
+  async function maybeQueueMeetingJobFinalizer(job, existingFinalizerInput) {
+    const normalizedJob = normalizeMeetingJob(job);
+    const finalizerRef = db.collection(JOB_FINALIZER_COLLECTION).doc(normalizedJob.jobId);
+    return db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(finalizerRef);
+      const currentFinalizer = snapshot.exists
+        ? normalizeMeetingJobFinalizer(snapshot.data())
+        : normalizeMeetingJobFinalizer(existingFinalizerInput);
+      if (["queued", "processing", "succeeded"].includes(currentFinalizer.status)) {
+        return false;
+      }
+      const queuedAt = new Date().toISOString();
+      transaction.set(finalizerRef, buildQueuedMeetingJobFinalizer(normalizedJob, queuedAt, currentFinalizer));
+      return true;
+    });
+  }
+
+  function collectMeetingChunkTranscriptStorageObjects(partDocs) {
+    return Array.from(new Set(
+      (Array.isArray(partDocs) ? partDocs : [])
+        .map((part) => normalizeText(part?.transcript?.storageObject))
+        .filter(Boolean)
+    ));
+  }
+
+  async function saveMeetingChunkTranscript(targetBucket, storageObject, transcript, owner, meeting, jobId, partIndex) {
+    if (!targetBucket || !storageObject) {
+      throw createHttpError(500, "청크 전사 결과를 저장할 bucket이 설정되지 않았어요.");
+    }
+    const payload = Buffer.from(JSON.stringify({
+      segments: Array.isArray(transcript?.segments) ? transcript.segments : [],
+      speakerCount: Math.max(0, Number(transcript?.speakerCount) || 0),
+      text: normalizeText(transcript?.text),
+    }), "utf8");
+    await targetBucket.file(storageObject).save(payload, {
+      contentType: "application/json; charset=utf-8",
+      metadata: {
+        metadata: {
+          jobId,
+          meetingId: meeting.meetingId,
+          partIndex: String(Math.max(0, Number(partIndex) || 0)),
+          providerUserKey: owner.providerUserKey,
+        },
+      },
+      resumable: false,
+    });
+    return {
+      segmentCount: Array.isArray(transcript?.segments) ? transcript.segments.length : 0,
+      speakerCount: Math.max(0, Number(transcript?.speakerCount) || 0),
+      storageObject,
+      textLength: normalizeText(transcript?.text).length,
+    };
+  }
+
+  async function loadMeetingChunkTranscript(targetBucket, storageObject) {
+    if (!targetBucket || !storageObject) {
+      throw createHttpError(400, "청크 전사 결과 storageObject가 없어요.");
+    }
+    const [buffer] = await targetBucket.file(storageObject).download();
+    const parsed = JSON.parse(Buffer.from(buffer).toString("utf8"));
+    const segments = Array.isArray(parsed?.segments) ? parsed.segments.map(normalizeTranscriptSegment) : [];
+    const text = normalizeText(parsed?.text);
+    return {
+      segments,
+      speakerCount: Math.max(0, Number(parsed?.speakerCount) || countTranscriptSpeakers(segments)),
+      text,
+    };
   }
 
   function normalizeSegmentComparisonText(value) {
@@ -2169,6 +3196,122 @@ function normalizeMeetingSourcePart(input, index, fallbackRequestId) {
     startMs,
     storageObject: normalizeText(part.storageObject),
     uploadStatus: normalizeText(part.uploadStatus) || (normalizeText(part.storageObject) ? "uploaded" : ""),
+  };
+}
+
+function normalizeMeetingJobPart(input) {
+  const part = input && typeof input === "object" ? input : {};
+  const jobId = normalizeText(part.jobId);
+  const normalizedPart = normalizeMeetingSourcePart(part.part, Number(part.index) || 0, part.requestId || jobId);
+  return {
+    error: normalizeText(part.error),
+    index: normalizedPart.index,
+    jobId,
+    meetingId: normalizeText(part.meetingId),
+    owner: part.owner && typeof part.owner === "object" ? { ...part.owner } : {},
+    part: normalizedPart,
+    queuedAt: normalizeText(part.queuedAt),
+    retry: {
+      count: Math.max(0, Number(part.retry?.count) || 0),
+      lastError: normalizeText(part.retry?.lastError),
+      lastRetriedAt: normalizeText(part.retry?.lastRetriedAt),
+    },
+    status: normalizeText(part.status),
+    transcript: {
+      segmentCount: Math.max(0, Number(part.transcript?.segmentCount) || 0),
+      speakerCount: Math.max(0, Number(part.transcript?.speakerCount) || 0),
+      storageObject: normalizeText(part.transcript?.storageObject),
+      textLength: Math.max(0, Number(part.transcript?.textLength) || 0),
+    },
+    updatedAt: normalizeText(part.updatedAt),
+  };
+}
+
+function buildQueuedMeetingJobPart(job, partInput, queuedAt, existingPartInput, nextStatusInput) {
+  const normalizedJob = normalizeMeetingJob(job);
+  const normalizedPart = normalizeMeetingSourcePart(
+    partInput,
+    Number(partInput?.index) || 0,
+    normalizedJob.source?.requestId || normalizedJob.jobId
+  );
+  const existingPart = normalizeMeetingJobPart(existingPartInput);
+  const existingStatus = normalizeText(existingPart.status);
+  const normalizedNextStatus = normalizeText(nextStatusInput) || "pending_upload";
+  const isSameSource = normalizeText(existingPart.jobId) === normalizedJob.jobId
+    && Number(existingPart.index) === Number(normalizedPart.index)
+    && normalizeText(existingPart.part?.storageObject) === normalizeText(normalizedPart.storageObject);
+  const canReuseTranscript = isSameSource
+    && normalizeText(existingPart.transcript?.storageObject)
+    && existingStatus === "succeeded";
+  const shouldPreserveExistingState = isSameSource
+    && ["failed", "processing", "queued"].includes(existingStatus)
+    && existingStatus === normalizedNextStatus;
+  const shouldPreserveRetry = canReuseTranscript || shouldPreserveExistingState;
+  return {
+    error: shouldPreserveExistingState ? normalizeText(existingPart.error) : "",
+    index: normalizedPart.index,
+    jobId: normalizedJob.jobId,
+    meetingId: normalizedJob.meetingId,
+    owner: normalizedJob.owner && typeof normalizedJob.owner === "object" ? { ...normalizedJob.owner } : {},
+    part: normalizedPart,
+    queuedAt: shouldPreserveExistingState ? normalizeText(existingPart.queuedAt || queuedAt) : queuedAt,
+    retry: {
+      count: shouldPreserveRetry ? Math.max(0, Number(existingPart.retry?.count) || 0) : 0,
+      lastError: shouldPreserveExistingState ? normalizeText(existingPart.retry?.lastError) : "",
+      lastRetriedAt: shouldPreserveRetry ? normalizeText(existingPart.retry?.lastRetriedAt) : "",
+    },
+    status: canReuseTranscript ? "succeeded" : normalizedNextStatus,
+    transcript: canReuseTranscript || shouldPreserveExistingState
+      ? {
+          segmentCount: Math.max(0, Number(existingPart.transcript?.segmentCount) || 0),
+          speakerCount: Math.max(0, Number(existingPart.transcript?.speakerCount) || 0),
+          storageObject: normalizeText(existingPart.transcript?.storageObject),
+          textLength: Math.max(0, Number(existingPart.transcript?.textLength) || 0),
+        }
+      : {
+          segmentCount: 0,
+          speakerCount: 0,
+          storageObject: "",
+          textLength: 0,
+        },
+    updatedAt: canReuseTranscript || shouldPreserveExistingState ? normalizeText(existingPart.updatedAt || queuedAt) : queuedAt,
+  };
+}
+
+function normalizeMeetingJobFinalizer(input) {
+  const finalizer = input && typeof input === "object" ? input : {};
+  return {
+    error: normalizeText(finalizer.error),
+    jobId: normalizeText(finalizer.jobId),
+    meetingId: normalizeText(finalizer.meetingId),
+    owner: finalizer.owner && typeof finalizer.owner === "object" ? { ...finalizer.owner } : {},
+    queuedAt: normalizeText(finalizer.queuedAt),
+    retry: {
+      count: Math.max(0, Number(finalizer.retry?.count) || 0),
+      lastError: normalizeText(finalizer.retry?.lastError),
+      lastRetriedAt: normalizeText(finalizer.retry?.lastRetriedAt),
+    },
+    status: normalizeText(finalizer.status),
+    updatedAt: normalizeText(finalizer.updatedAt),
+  };
+}
+
+function buildQueuedMeetingJobFinalizer(job, queuedAt, existingFinalizerInput) {
+  const normalizedJob = normalizeMeetingJob(job);
+  const existingFinalizer = normalizeMeetingJobFinalizer(existingFinalizerInput);
+  return {
+    error: "",
+    jobId: normalizedJob.jobId,
+    meetingId: normalizedJob.meetingId,
+    owner: normalizedJob.owner && typeof normalizedJob.owner === "object" ? { ...normalizedJob.owner } : {},
+    queuedAt,
+    retry: {
+      count: Math.max(0, Number(existingFinalizer.retry?.count) || 0),
+      lastError: "",
+      lastRetriedAt: normalizeText(existingFinalizer.retry?.lastRetriedAt),
+    },
+    status: "queued",
+    updatedAt: queuedAt,
   };
 }
 
@@ -2695,8 +3838,16 @@ function buildQueuedJob(jobId, meeting, owner, options, source, context, created
     options,
     owner: owner ? { ...owner } : {},
     progress: {
+      currentPart: 0,
+      parallelParts: 0,
       percent: 0,
       phase: "queued",
+      totalParts: Math.max(0, Array.isArray(source?.parts) ? source.parts.length : 0) || 1,
+    },
+    retry: {
+      count: 0,
+      lastError: "",
+      lastRetriedAt: "",
     },
     queuedAt: createdAt,
     sessionId: meeting.sessionId,
@@ -2711,7 +3862,7 @@ function buildQueuedJob(jobId, meeting, owner, options, source, context, created
   };
 }
 
-function buildSucceededJobPatch(artifact, meeting, options, source, context, transcript, meetingNotes, completedAt, deletedAt) {
+function buildSucceededJobPatch(artifact, meeting, options, source, context, transcript, meetingNotes, completedAt, deletedAt, retryInput) {
   const speakerAliases = normalizeSpeakerAliases(transcript?.speakerAliases);
   const resultTitle = resolveMeetingResultTitle(meetingNotes, meeting.title);
   return {
@@ -2729,8 +3880,16 @@ function buildSucceededJobPatch(artifact, meeting, options, source, context, tra
       sourceAudioDeleted: Boolean(deletedAt),
     },
     progress: {
+      currentPart: Math.max(1, Array.isArray(source?.parts) && source.parts.length ? source.parts.length : 1),
+      parallelParts: 0,
       percent: 100,
       phase: "completed",
+      totalParts: Math.max(1, Array.isArray(source?.parts) && source.parts.length ? source.parts.length : 1),
+    },
+    retry: {
+      count: Math.max(0, Number(retryInput?.count) || 0),
+      lastError: "",
+      lastRetriedAt: normalizeText(retryInput?.lastRetriedAt),
     },
     source: {
       ...source,
@@ -2875,6 +4034,17 @@ function buildTempStorageObjectPath(providerUserKey, meetingId, jobId, fileName)
   ].join("/");
 }
 
+function buildChunkTranscriptStorageObjectPath(providerUserKey, meetingId, jobId, partIndex) {
+  return [
+    "tmp",
+    "meetings",
+    normalizeText(providerUserKey) || "unknown-user",
+    normalizeText(meetingId) || "unknown-meeting",
+    "chunk-transcripts",
+    `${normalizeText(jobId) || "meeting-job"}-part-${String(Math.max(0, Number(partIndex) || 0)).padStart(4, "0")}.json`,
+  ].join("/");
+}
+
 function buildStableMeetingEntityId(prefix, providerUserKey, meetingId, requestId) {
   const digest = crypto
     .createHash("sha256")
@@ -2887,6 +4057,10 @@ function buildStableMeetingEntityId(prefix, providerUserKey, meetingId, requestI
     .digest("hex")
     .slice(0, 32);
   return `${normalizeText(prefix) || "meeting-entity"}-${digest}`;
+}
+
+function buildMeetingJobPartId(jobId, index) {
+  return `${normalizeText(jobId)}__${String(Math.max(0, Number(index) || 0)).padStart(4, "0")}`;
 }
 
 function buildDefaultFileName(mimeType) {
@@ -2990,8 +4164,16 @@ function normalizeMeetingJob(input) {
     },
     owner: job.owner && typeof job.owner === "object" ? { ...job.owner } : {},
     progress: {
+      currentPart: Math.max(0, Number(job.progress?.currentPart) || 0),
+      parallelParts: Math.max(0, Number(job.progress?.parallelParts) || 0),
       percent: Math.max(0, Math.min(100, Number(job.progress?.percent) || 0)),
       phase: normalizeText(job.progress?.phase),
+      totalParts: Math.max(0, Number(job.progress?.totalParts) || 0),
+    },
+    retry: {
+      count: Math.max(0, Number(job.retry?.count) || 0),
+      lastError: normalizeText(job.retry?.lastError),
+      lastRetriedAt: normalizeText(job.retry?.lastRetriedAt),
     },
     queuedAt: normalizeText(job.queuedAt),
     sessionId: normalizeText(job.sessionId || job.meeting?.sessionId),

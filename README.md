@@ -18,16 +18,43 @@
   - 기본은 닫힌 상태이며, 켜져 있을 때만 핸들과 패널이 보입니다.
   - 사용자가 마지막으로 열어 둔 상태를 같은 탭에서 기억합니다.
   - 닫힌 상태의 `실험실` 핸들은 위아래로 옮길 수 있고, 위치는 사이트 기준으로 기억합니다.
+  - 패널 상태가 다시 그려져도 검색창과 주요 입력 필드의 포커스/커서 위치를 최대한 유지합니다.
 - `회의록 패널`
   - `회의` 도구는 Firestore 회의 문서를 실시간으로 구독해 최신 회의록 목록과 `새 회의하기` CTA를 제공합니다.
+  - 패널용 hidden bridge는 Firestore persistence와 탭 세션 Firebase auth를 함께 써서, 같은 탭 새로고침에서는 캐시 우선 표시와 auth 재사용을 우선합니다.
+  - Firestore 첫 snapshot이 늦게 오면, 빈 목록 상태에서만 요청형 회의 목록 1회를 워밍업으로 먼저 보여주고 이후 실시간 snapshot으로 정본을 맞춥니다. 이 워밍업 응답은 background에서 짧게 재사용해 연속 새로고침 비용을 줄입니다.
   - 패널 목록의 항목을 누르면 해당 회의 결과를 전용 새 탭 작업실에서 다시 확인합니다.
 - `회의 페이지`
   - Firebase Hosting에 올린 전용 회의 작업실에서 `회의 식별`, `현재 녹음`, `회의 공용 메모`, `처리 이력/업로드 큐`, `선택 결과 검토`를 한 화면에서 처리합니다.
 - 팝업에서 `디버그 ON`을 켜면 패널과 작업실이 `debug=1` 기준으로 로그 패널을 열고, 화면 안에서 세션 복원, Functions 요청, Firestore auth/listener 로그를 바로 확인할 수 있습니다.
 - 패널 디버그는 회의 탭 전용이 아니라 현재 브라우저 탭 세션 기준 전역 버퍼로 유지되고, `대화/회의/프롬프트/릴리스` 흐름 로그를 함께 모읍니다.
-- 작업실과 패널의 디버그 콘솔은 팝업의 `디버그`가 ON일 때만 표시되고, OFF일 때는 로그도 수집하지 않습니다.
+  - 작업실과 패널의 디버그 콘솔은 팝업의 `디버그`가 ON일 때만 표시되고, OFF일 때는 로그도 수집하지 않습니다.
+  - hosted 작업실은 blocked 상태로 멈추더라도, `debug=1`이면 bootstrap/session 실패 같은 초기 로그를 디버그 콘솔에서 바로 확인할 수 있게 유지합니다.
+  - 디버그 로그는 화면 안 패널/작업실 콘솔에만 모아 보여주고, panel/workspace/service worker가 같은 내용을 DevTools 브라우저 콘솔에 다시 미러링하지 않습니다.
+  - hosted 작업실과 prompt/meeting hosted bridge는 Firestore SDK DevTools 경고 로그도 `silent`로 낮추고, Firebase SDK보다 먼저 `enableMultiTabIndexedDbPersistence()` deprecation 경고 같은 반복 persistence 안내를 숨겨 브라우저 콘솔에는 꼭 필요한 런타임 오류만 남깁니다.
+  - 상태 바의 `함수` 카운트는 실제 Firebase Functions 요청만 세고, `읽기` 카운트는 스토어 `보기` 같은 backend read 요청만 따로 셉니다.
+  - 디버그 로그 `복사`, `오류`, `비우기` 피드백은 회의 허브 본문 카드가 아니라 디버그 콘솔 안에서만 표시됩니다.
+  - 디버그 버퍼는 같은 `bridge.detach`, `surface.changed`, `route.refresh`, 클릭 probe/visibility 기반 `route.sync skipped` 같은 반복 노이즈를 그대로 누적하지 않고 줄여서 보여줍니다.
+  - 프롬프트 bridge가 이미 끊긴 상태에서는 같은 `prompt.panel.bridge.detach`를 반복해서 다시 찍지 않습니다.
+  - 디버그 상태 바에서 `오류 n건`은 별도 경고 톤으로 강조해, 이상 징후가 있을 때 바로 눈에 띄게 표시합니다.
+  - hosted 작업실 디버그 상태 바도 패널과 같은 `로그/함수/읽기/스냅샷/오류` 개별 배지 구조와 공통 요약 카운트를 사용합니다.
+  - hosted `meeting/shared.js`도 패널과 같은 디버그 복사/오류 필터/요약 helper 계약을 함께 내보내서, blocked/bootstrap 실패 화면에서도 디버그 패널이 먼저 살아 있도록 유지합니다.
+  - hosted 작업실 디버그 콘솔은 카드 폭, 패딩, 로그 타이포도 패널 디버그 콘솔과 같은 치수 기준으로 맞춥니다.
   - 로컬 작업실에서는 `파일 불러오기`로 실제 오디오 샘플을 바로 전사 테스트할 수 있고, `25MB 초과` 또는 `약 20분 초과` 원본도 브라우저에서 `16kHz mono wav chunk`로 나눈 뒤 한 기록 결과로 이어 처리합니다.
-  - hosted 회의 작업실은 기본적으로 `최대 200MB 또는 2시간` 원본까지 지원하고, 큰 오디오나 긴 녹음은 `약 9분 / 1.5초 overlap` 기준 chunk 업로드 후 서버에서 단일 회의 결과로 병합합니다.
+- hosted 회의 작업실은 기본적으로 `최대 200MB 또는 2시간` 원본까지 지원하고, 큰 오디오나 긴 녹음은 `약 9분 / 1.5초 overlap` 기준 chunk 업로드 후 서버에서 단일 회의 결과로 병합합니다.
+- chunk 전사는 parent job이 직접 끝까지 돌지 않고, `청크 part 문서 -> chunk worker 함수 1개당 청크 1개 처리 -> chunk transcript JSON 임시 저장 -> finalizer 함수가 최종 병합/화자 정합/회의 정리` 순서로 나눠 처리합니다.
+- chunk 모드에서는 모든 part 업로드가 끝날 때까지 기다리지 않고, 첫 chunk가 올라오는 즉시 parent job을 만들고 이후 올라오는 chunk를 같은 job에 계속 반영해 전사를 앞당깁니다.
+- chunk worker는 job 1건 기준으로 청크 수에 따라 기본 `1~5개` 슬롯만 동시에 `queued`로 승격해 병렬 처리하고, 끝난 자리에 다음 chunk를 올리는 방식으로 긴 회의에서도 `540초` 단일 invocation 한도를 피합니다.
+- `OPENAI_MEETING_CHUNK_TRANSCRIPTION_CONCURRENCY`를 주면 adaptive 대신 job별 고정 병렬 수로 핀할 수 있고, 값을 주지 않으면 청크 수가 많을수록 기본 병렬 수가 자동으로 올라갑니다.
+- 긴 회의 처리 중 상태 안내는 단계 카드와 청크 진행판 위주로 보여주고, 같은 내용을 반복하는 별도 파란 배너는 processing 상태에서 겹치지 않게 숨깁니다.
+- 작업실 상세 카드 아래에는 chunk 업로드/전사 진행을 별도 진행바와 chunk 칸 목록으로 보여주고, 전사 중에는 실제 병렬 worker 수만큼 파란 칸을 함께 표시해 로그 없이도 진행 상태를 바로 확인할 수 있게 유지합니다.
+- 실패한 기록을 `다시 처리`로 재시작한 직후에는, 새 업로드/분할 준비가 끝나기 전까지 예전 stalled remote job 상태를 상세 카드에 다시 섞어 보여주지 않고 현재 로컬 재시작 상태를 우선 표시합니다.
+- 전사/정리 중 OpenAI `429/5xx` 같은 일시 오류가 나면 회의 job을 바로 `failed`로 끝내지 않고, 제한 횟수 안에서 자동으로 다시 `queued`에 태워 재시도합니다.
+- 작업실 진행 안내에는 자동 재시도가 발생한 경우 `자동 재시도 n회`를 함께 표시해, 멈춘 것인지 다시 도는 중인지 바로 구분할 수 있게 유지합니다.
+- 전사 진행 중 `updatedAt`이 `10분` 넘게 멈추면 파란 진행 상태를 계속 유지하지 않고 `정체 의심`으로 표시하며, 기록 큐에서 바로 `다시 처리`를 눌러 브라우저 원본으로 재시작할 수 있게 유지합니다.
+- 원격 처리까지 갔다가 `failed`로 끝난 기록은 임시 원본이 이미 정리됐을 수 있으므로, 작업실에서는 `지금 업로드` 대신 `다시 처리`로 안내하고 브라우저에 남아 있던 원본을 다시 업로드해 같은 기록 처리 흐름을 재시작합니다.
+- `다시 처리`나 stalled job `재시작`은 예전 `requestId`를 재사용하지 않고 새 `requestId`로 큐를 다시 만들어, 기존 stalled/failed job과 dedupe되지 않게 유지합니다.
+  - 이때 기록 큐에서는 예전 stalled/failed 원격 job을 새 시도가 대체한 것으로 보고, 같은 제목이 두 줄로 겹쳐 보이지 않게 이전 시도 항목을 숨깁니다.
   - 녹음은 `녹음 시작 -> 일시중지/재개 -> 종료하고 전사` 흐름으로 동작하고, 종료된 녹음본은 원격 처리 완료 전까지 브라우저 로컬 큐에 보관합니다.
   - 한 기록은 기본 `90분`까지 이어지고, 제한 시간에 도달하면 현재 기록을 자동 전사로 넘긴 뒤 다음 개별 기록 녹음을 바로 이어갑니다.
 - 전사가 끝나면 회의록 형식의 자동 정리본과 `발화 구간`, `화자별` AI 정리 화면을 같은 상세 화면에서 함께 보여주고, 회의의 내용 구조는 AI가 자동 판단합니다.
@@ -43,13 +70,16 @@
   - 작업실에서는 사용자가 직접 `녹음 시작`을 눌러 웹앱에서 바로 마이크 녹음을 시작하고, 표준 `getUserMedia + MediaRecorder` 경로로 녹음합니다.
   - 녹음을 마치면 `종료하고 전사`가 즉시 로컬 저장과 업로드 큐 등록을 끝내고, 원격 처리 중이어도 바로 다음 녹음을 시작할 수 있습니다.
   - 오프라인이거나 업로드가 실패하면 같은 녹음본은 로컬 큐에 남아 있다가 온라인 복귀 시 자동 재시도하고, 필요하면 `지금 업로드`, `보류`, `삭제`를 직접 고를 수 있습니다.
-  - 원격 처리 중 상태 갱신은 작업실이 `MeetingSession -> issueInovaMeetingWorkspaceAuth -> Firebase Auth`를 거친 뒤 Firestore `meeting/job/artifact` 문서를 직접 구독해 반영합니다. Functions는 업로드/삭제/재정리 같은 명령만 맡고, 탭 복귀 시에는 끊긴 listener만 다시 연결합니다.
-  - 패널에서 한 번 연 작업실은 clean URL 뒤의 workspace hash 토큰으로 같은 탭/브라우저에서 다시 이어지고, hash 없이 `?meetingId=`만 직접 열면 접근을 막고 패널에서 다시 열도록 안내합니다.
+- 원격 처리 중 상태 갱신은 작업실이 `MeetingSession -> issueInovaMeetingWorkspaceAuth -> Firebase Auth`를 거친 뒤 Firestore `meeting/job/artifact` 문서를 직접 구독해 반영합니다. Functions는 업로드/삭제/재정리 같은 명령만 맡고, 탭 복귀 시에는 끊긴 listener만 다시 연결합니다.
+- `새 회의하기`처럼 아직 회의 문서가 비어 있는 첫 진입도, 작업실 세션 토큰이 가리키는 해당 meeting 문서 ID에 한해 Firestore listener를 먼저 붙일 수 있게 유지합니다.
+- hosted 작업실은 boot 시 로컬 세션/보관 큐만 준비되면 빈 작업실 shell을 먼저 렌더하고, 첫 Firestore snapshot은 짧게만 기다린 뒤 늦으면 뒤에서 이어 받아 체감 로딩을 줄입니다.
+- 패널에서 한 번 연 작업실은 clean URL 뒤의 workspace hash 토큰으로 같은 탭/브라우저에서 다시 이어지고, hash 없이 `?meetingId=`만 직접 열면 접근을 막고 패널에서 다시 열도록 안내합니다.
 - `대화 안에서 찾기`
   - 지금 보고 있는 대화 안에서만 질문을 검색합니다.
   - 결과를 클릭하면 해당 질문 위치로 이동하고, 좁은 화면에서는 패널을 잠시 접어 원문을 보기 쉽게 합니다.
 - `자주 쓰는 요청 보관함`
   - 사용자가 직접 요청을 추가, 수정, 삭제할 수 있습니다.
+  - 좌측 도구 레일에서 `프롬프트`를 누르면 기본으로 `내 요청` 탭부터 엽니다.
   - 요청을 선택하면 현재 대화 입력창에 바로 주입할 수 있습니다.
   - 입력창에 내용이 이미 있으면 `덮어쓰기` 또는 `이어붙이기`를 고를 수 있습니다.
   - 대화 입력창 우측 상단의 평가 버튼으로 현재 프롬프트를 바로 점검할 수 있습니다.
@@ -60,13 +90,19 @@
   - 평가 뒤 입력창 내용이 바뀌면 이전 보완안은 바로 반영되지 않고, 다시 평가를 요구합니다.
 - `요청 가져오기/내보내기`
   - 자주 쓰는 요청 보관함을 JSON으로 내보낼 수 있습니다.
-  - 다른 사용자의 요청 묶음을 가져올 때 `추가`, `병합`, `완전 교체` 중 하나를 선택할 수 있습니다.
+  - 요청 묶음을 가져오면 `id`가 같아도 `제목 + 내용`이 다르면 새 항목으로 추가하고, `제목 + 내용`이 같은 항목만 자동으로 건너뜁니다.
 - `프롬프트 스토어`
   - 사용자는 본인 요청을 카테고리를 골라 스토어에 등록하거나 삭제할 수 있습니다.
   - 다른 사용자가 등록한 요청을 찾아 `내 요청으로 가져오기` 할 수 있습니다.
   - `전체`와 `내 등록` 범위를 전환해 내가 올린 항목만 따로 볼 수 있습니다.
   - 각 항목에는 등록자, 조회수, 가져오기 수, 좋아요 수가 함께 표시됩니다.
   - `좋아요`와 `가져오기` 같은 사용자 반응을 통해 어떤 요청이 인기 있는지 볼 수 있습니다.
+  - 공개 `전체` 스토어는 Firestore `latest` feed 앞쪽 문서를 필요할 때만 최대 `1000`건까지 실시간 구독해 두고, 검색/카테고리/정렬은 그 로컬 집합 안에서 엑셀 필터처럼 다시 계산합니다.
+  - 그래서 `전체` 범위에서는 검색어 입력, 카테고리 변경, `최신순/좋아요순/가져오기순/조회수순` 전환이 새 목록 요청을 다시 만들지 않습니다.
+  - `전체` 범위의 자동 `scheduled` 갱신은 함수 read로 다시 불러오지 않고, realtime bridge 재연결만 시도합니다.
+  - 검색 입력은 한글 IME 조합 중에는 패널 재렌더를 미뤄 조합이 깨지지 않게 유지하고, 실제 필터 적용은 `Enter` 또는 검색창 clear 동작 때만 반영합니다.
+  - `내 등록` 범위와 좋아요/가져오기/삭제 같은 쓰기 액션은 계속 요청형으로 유지하고, 상세 `보기` 본문은 prompt panel bridge가 Firestore `prompt_store_entry_details`를 직접 읽어옵니다.
+  - `좋아요/가져오기/조회수` 반응은 항목 메트릭만 갱신하고 latest feed 재생성은 하지 않아, 실시간 범위를 줄이는 대신 쓰기 비용을 아낍니다.
 - `릴리스 안내`
   - 패널 안에서 현재 설치 버전과 최신 배포본 여부를 확인할 수 있습니다.
   - 최신 릴리스와 이전 버전은 핵심 제목과 짧은 요약만 먼저 보여주고, 자세한 변경 내역은 `변경 내용 보기`에서 펼쳐 확인합니다.
@@ -79,13 +115,18 @@
 
 - `클라우드 백업 기반`
   - 프롬프트 보관함 변경은 `cloudSync` 메타와 함께 로컬에 큐잉됩니다.
+  - 프롬프트 보관함 정본은 계속 `chrome.storage.local.promptLibrary`에 두고, 원격 실시간은 `integration_inova_accounts/{providerUserKey}.promptLibraryMeta` 1개 문서만 구독합니다.
+  - 원격 `lastRevision` 또는 `lastSyncedAt`가 더 최신이고 로컬 pending sync가 없을 때만 전체 보관함 hydrate를 다시 요청합니다.
+  - prompt/store hosted bridge와 hosted meeting workspace listener는 Firestore offline persistence를 켜 두어, 같은 브라우저에서 새로고침해도 캐시된 최신 snapshot을 먼저 보여주고 이어서 서버와 동기화합니다.
   - 원격 백업 호출은 페이지 스크립트가 아니라 확장프로그램 백그라운드 서비스워커가 맡습니다.
   - i-Nova access token은 현재 사용자 검증에만 쓰고, 저장 키는 `providerUserKey` 기준으로 유지합니다.
 
 ## 모듈 구조
 
 - `background/`
-  - `service-worker.js`: 외부 네트워크 호출과 클라우드 백업, 회의 허브/launch grant gateway 중계
+  - `service-worker.js`: 외부 네트워크 호출과 클라우드 백업, prompt/store panel auth, 회의 허브/launch grant gateway 중계
+- `hosting/extension/`
+  - `prompt-panel-bridge.html`, `prompt-panel-bridge.js`: 패널 content script 대신 프롬프트 메타 문서와 스토어 최신 feed page 문서를 구독하는 숨겨진 hosted bridge
 - `hosting/meeting/`
   - `index.html`, `index.css`: 회의 작업실 레이아웃과 실용형 UI 스타일
   - `index.js`: hosted 회의 작업실 부팅, launch token 교환, 세션 복원, 녹음/업로드 큐/상세 액션 orchestration
@@ -110,7 +151,7 @@
   - `prompt-store.js`: 스토어 카테고리, 엔트리 정규화, 정렬 규칙
   - `provider-identity.js`: 현재 i-Nova 사용자 식별 정보 정규화
   - `session.js`: `sid`, 질문 정규화, 메시지 ID 생성
-  - `storage.js`: `settings`, `pausedSessions`, `uiPreferences`, `promptLibrary`, `cloudSync`, `meetingHub`, `meetingState`, `meetingStateByMeetingId` 읽기/쓰기
+  - `storage.js`: `settings`, `pausedSessions`, `uiPreferences`, `promptLibrary`, `cloudSync`, `meetingState`, `meetingStateByMeetingId` 읽기/쓰기와 legacy `meetingHub` 호환 헬퍼
 - `popup/`
   - 팝업 설정 UI와 hosted 회의 작업실 연결 대상 선택
 - `meeting/`
@@ -120,6 +161,7 @@
   - `bookmark-view.js`: 질문 탭 렌더링과 포커스 이동
   - `composer-review-float.js`: 입력창 우측 상단 평가 버튼과 팝오버 렌더링
   - `cloud-sync-manager.js`: 프롬프트 보관함 원격 백업 흐름 조정
+  - `prompt-realtime-manager.js`: prompt/store용 hosted bridge 연결, Firebase custom token auth, 최신 snapshot fallback 조정
   - `meeting-manager.js`: 패널 회의 허브 Firestore realtime 구독, fallback refresh, local cache 조정
 - `meeting-view.js`: 회의 허브 리스트와 `새 회의하기` CTA, 패널 공용 디버그 콘솔 렌더링
   - `prompt-review-manager.js`: 현재 입력 프롬프트 평가 호출과 상태 관리
@@ -151,13 +193,17 @@
 - hosted 회의 작업실은 `공용 메모 저장 -> 녹음 종료와 동시에 로컬 큐 적재 -> 온라인이면 즉시 job 생성 -> 원격 처리와 별개로 다음 녹음 허용` 흐름으로 동작합니다.
 - `content/main.js`는 현재 URL의 `sid`를 기준으로 대화를 나누고, `.chat-message--user`를 실시간으로 수집합니다.
 - `content/prompt-manager.js`는 `promptLibrary`를 관리하고, 선택한 요청을 현재 대화 입력창에 주입합니다.
+- `content/prompt-realtime-manager.js`는 `issueInovaPromptPanelAuth -> hosted prompt panel bridge -> Firestore account/feed doc` 경로로 프롬프트 원격 메타와 스토어 공개 최신 feed 앞쪽 페이지를 실시간 구독하고, 스토어 상세 본문도 같은 bridge로 직접 읽어옵니다. bridge HTML/JS는 캐시 버스트 URL과 no-cache 헤더를 함께 써서 hosting-only 배포 직후에도 예전 스크립트가 오래 남지 않게 합니다. 실패 시 기존 요청형 경로로 되돌립니다.
 - `content/prompt-review-manager.js`는 현재 입력창 프롬프트를 평가하고 보완 프롬프트를 다시 주입합니다.
-- `content/store-manager.js`는 `프롬프트 스토어` 목록 조회, 등록, 삭제, 좋아요, 가져오기 흐름을 관리합니다.
-- `content/meeting-manager.js`는 패널에서 `issueInovaMeetingPanelAuth -> hosted panel bridge -> Firestore meeting query` 경로로 owner 기준 최신 회의 목록을 실시간 구독하고, 실패 시에만 `listInovaMeetings` fallback으로 `meetingHub` 캐시를 갱신합니다.
-- `background/service-worker.js`는 i-Nova access token과 Firebase Functions를 연결해 원격 백업 호출을 처리하고, 회의 기능에서는 launch grant 발급과 session 교환까지 끝낸 최종 hosted 작업실 URL 생성, 허브 조회 라우팅을 맡습니다.
+- `content/store-manager.js`는 `프롬프트 스토어` 목록 조회, 등록, 삭제, 좋아요, 가져오기 흐름을 관리하고, 공개 최신 feed snapshot이 오면 목록에 바로 반영합니다. 상세 `보기`는 Firestore detail doc를 직접 읽습니다.
+- `content/store-manager.js`는 `전체 스토어 + realtime 활성`일 때 publish/unpublish 뒤에 강제 `inova-store:list` 재요청을 하지 않고 snapshot 반영을 기다립니다. `내 등록`이나 realtime fallback 상태만 request-response 재조회를 유지합니다.
+- `content/store-manager.js`는 `전체 스토어 + realtime 예상 상태`에서는 탭 진입, route refresh, `전체/내 등록` 전환 중 `전체` 복귀 때도 먼저 `inova-store:list`를 치지 않고 Firestore snapshot을 기다립니다. `내 등록`만 요청형 로드를 유지합니다.
+- `content/main.js`와 `content/prompt-realtime-manager.js`는 스토어 최신 목록 bridge가 잠깐 끊겨도 이미 화면에 목록이 있으면 그대로 유지하고, 첫 목록이 아직 없을 때만 `fallback` read를 허용합니다. 디버그의 `panel.ui.surface.changed`도 실제 표면 유무가 바뀌는 경우만 남겨 노이즈를 줄입니다.
+- `content/meeting-manager.js`는 패널에서 `issueInovaMeetingPanelAuth -> hosted panel bridge -> Firestore meeting query` 경로로 owner 기준 최신 회의 목록을 실시간 구독하고, 브리지나 인증이 실패할 때만 `listInovaMeetings` fallback으로 현재 메모리 허브 상태를 갱신합니다.
+- `background/service-worker.js`는 i-Nova access token과 Firebase Functions를 연결해 원격 백업 호출과 prompt/store panel auth 발급을 처리하고, 회의 기능에서는 launch grant 발급과 session 교환까지 끝낸 최종 hosted 작업실 URL 생성, 허브 조회 라우팅을 맡습니다.
 - `functions/meeting-launch-service.js`는 launch grant, hosted workspace session, Firestore 읽기용 Firebase custom token 발급을 맡깁니다.
-- `processQueuedInovaMeetingJob` Firestore background worker는 긴 회의 chunk 병합과 회의 정리 단계 때문에 `1GiB` 메모리와 `540초` timeout으로 운영합니다.
-- hosted 회의 작업실은 `종료하고 전사` 또는 `파일 불러오기` 시점에 원본을 먼저 업로드 가능한 source로 준비한 뒤 `createInovaMeetingJob`에는 queue 생성만 맡기고, Functions background 처리기는 source download -> OpenAI diarization -> chunk 병합/화자 정합 -> 회의록 모드 분류 -> mode별 회의록 정리 생성 -> source cleanup -> Firestore `meeting/job/artifact` 저장까지 처리합니다.
+- `processQueuedInovaMeetingJob`, `processQueuedInovaMeetingJobPart`, `finalizeChunkedInovaMeetingJob` Firestore background worker는 모두 `1GiB` 메모리와 `540초` timeout으로 운영하되, 긴 회의는 `parent job queue -> chunk worker들 -> finalizer`로 역할을 나눠 단일 함수가 모든 chunk를 붙잡지 않게 유지합니다.
+- hosted 회의 작업실은 `종료하고 전사` 또는 `파일 불러오기` 시점에 원본을 먼저 업로드 가능한 source로 준비한 뒤 `createInovaMeetingJob`으로 parent job을 일찍 만들고, chunk 업로드가 이어지는 동안 같은 job source를 계속 보강합니다. Functions background 처리기는 `source download -> chunk worker 전사 -> chunk transcript 임시 저장 -> finalizer 병합/화자 정합 -> 회의록 모드 분류 -> mode별 회의록 정리 생성 -> source/chunk cleanup -> Firestore meeting/job/artifact 저장`까지 처리합니다.
 - 회의 정리와 모드 분류 기본 모델은 `gpt-5.4-mini`를 사용하고, 필요하면 `OPENAI_MEETING_SUMMARY_MODEL` 또는 `OPENAI_SUMMARY_MODEL`로 override할 수 있습니다.
 - Functions는 같은 `requestId` 재전송을 idempotent하게 재사용하고, `sharedMemoSnapshot`과 notes mode 메타데이터를 함께 저장합니다.
 - Functions가 source audio를 임시 bucket object로 저장할 때는 Firebase 설정의 기본 storage bucket을 우선 쓰고, 기본 bucket이 없는 프로젝트에서는 `STORAGE_BUCKET_URL`로 실제 존재하는 bucket을 명시해야 합니다. 현재 프로젝트는 chunk 업로드용으로 `gcf-v2-uploads-1027279095019.asia-northeast3.cloudfunctions.appspot.com`을 사용합니다.
@@ -167,6 +213,9 @@
 - 질문 목록 자체는 `chrome.storage.local`에 저장하지 않고, 현재 대화 화면을 기준으로 바로 렌더링합니다.
 - 요청 보관함은 `chrome.storage.local.promptLibrary`에 저장합니다.
 - 원격 백업 대기 상태는 `chrome.storage.local.cloudSync`에 저장합니다.
+- 프롬프트 원격 실시간은 `integration_inova_accounts`의 `promptLibraryMeta`만 구독하고, 실제 보관함 본문은 필요할 때만 `loadInovaPromptLibrary`로 다시 가져옵니다.
+- 스토어 원격 실시간은 `prompt_store_meta/summary`와 `prompt_store_feed_pages/latest__{category}__0000`만 구독하고, 검색/인기 정렬은 로컬 집합에서 다시 계산합니다. 상세 본문은 `prompt_store_entry_details/{entryId}`를 direct read하고, `내 등록`과 쓰기 액션만 request-response 흐름을 사용합니다.
+- 회의 허브 목록은 더 이상 `chrome.storage.local.meetingHub`를 정본 캐시로 쓰지 않고, hosted panel bridge의 Firestore persistence와 메모리 상태를 우선합니다.
 - 회의 기능 브라우저 상태는 `chrome.storage.local.meetingStateByMeetingId`를 정본으로 두고, `meetingStateBySession`은 legacy fallback으로만 함께 유지합니다.
 
 ## 설치 방법

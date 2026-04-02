@@ -1,6 +1,6 @@
 (function initHostedMeetingWorkspace(global) {
   const ns = global.__INOVA_HOSTED_MEETING__;
-  const { AUTO_RETRY_PENDING_STATUSES, DEFAULT_CREATE_JOB_TIMEOUT_MS, DEFAULT_INLINE_AUDIO_LIMIT_BYTES, DEFAULT_SOURCE_CHUNK_DURATION_MS, DEFAULT_SOURCE_CHUNK_OVERLAP_MS, DEFAULT_SOURCE_MAX_BYTES, DEFAULT_SOURCE_MAX_DURATION_MS, DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS, DEFAULT_SOURCE_TARGET_PART_BYTES, DEFAULT_SOURCE_UPLOAD_TIMEOUT_MS, SESSION_STORAGE_KEY, buildRemoteSelectionId, buildWorkspaceHash, buildWorkspaceSessionStorageKey, clearDebugEntries, formatDateTime, formatDebugEntry, getDebugEntries, isDebugPanelEnabled, isLikelyNetworkError, isLocalWorkspaceOrigin, isOnline, loadPersistedWorkspaceSession, logDebug, normalizeSpeakerAliases, normalizeText, normalizeTextBlock, parseParams, pickRecorderMimeType, postJson, resolveConfig, resolveRecordingProfile, safeLocalStorageGet, safeLocalStorageRemove, safeLocalStorageSet, safeSessionStorageSet, stopTracks, subscribeDebugEntries } = ns.shared;
+  const { AUTO_RETRY_PENDING_STATUSES, DEFAULT_CREATE_JOB_TIMEOUT_MS, DEFAULT_INLINE_AUDIO_LIMIT_BYTES, DEFAULT_SOURCE_CHUNK_DURATION_MS, DEFAULT_SOURCE_CHUNK_OVERLAP_MS, DEFAULT_SOURCE_MAX_BYTES, DEFAULT_SOURCE_MAX_DURATION_MS, DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS, DEFAULT_SOURCE_TARGET_PART_BYTES, DEFAULT_SOURCE_UPLOAD_TIMEOUT_MS, SESSION_STORAGE_KEY, buildCopyText, buildErrorCopyText, buildRemoteSelectionId, buildWorkspaceHash, buildWorkspaceSessionStorageKey, clearDebugEntries, formatDateTime, getDebugEntries, isDebugPanelEnabled, isLikelyNetworkError, isLocalWorkspaceOrigin, isOnline, loadPersistedWorkspaceSession, logDebug, normalizeSpeakerAliases, normalizeText, normalizeTextBlock, parseParams, pickRecorderMimeType, postJson, resolveConfig, resolveRecordingProfile, safeLocalStorageGet, safeLocalStorageRemove, safeLocalStorageSet, safeSessionStorageSet, setEnabled: setDebugEnabled, stopTracks, subscribeDebugEntries, summarizeEntries } = ns.shared;
   const { clearWorkspaceAuthCache, ensureWorkspaceAuth, getCollections, subscribeDocument } = ns.firebase;
   const { prepareAudioSourceChunks } = ns.audioChunker;
   const { blobToBase64, createPendingUploadStore, normalizePendingUpload } = ns.storage;
@@ -9,6 +9,8 @@
   const CONFIG = resolveConfig(global.__INOVA_HOSTED_MEETING_CONFIG__);
   const FIRESTORE_COLLECTIONS = getCollections();
   const DEBUG_PANEL_COLLAPSED_STORAGE_KEY = "__INOVA_MEETING_DEBUG_PANEL_COLLAPSED__";
+  const SUPERSEDED_REMOTE_JOBS_STORAGE_KEY_PREFIX = "__INOVA_MEETING_SUPERSEDED_REMOTE_JOBS__";
+  const BOOT_INITIAL_SNAPSHOT_WAIT_MS = 450;
   const refs = {};
   const state = createInitialState();
 
@@ -97,6 +99,7 @@
       session: { expiresAt: "", meetingId: "", meetingSessionToken: "", mode: "create", sharedMemo: "", title: "" },
       speakerAliasDraftRecordId: "",
       speakerAliasDrafts: Object.create(null),
+      supersededRemoteJobIds: [],
       unsubscribeDebug: null,
     };
   }
@@ -333,6 +336,42 @@
     state.session = { expiresAt: normalizeText(parsed?.expiresAt), meetingId: normalizeText(parsed?.meetingId), meetingSessionToken: normalizeText(parsed?.meetingSessionToken), mode: state.mode, sharedMemo: normalizeTextBlock(parsed?.sharedMemo), title: normalizeText(parsed?.title) };
     state.meeting = { meetingId: state.session.meetingId, pendingLocalCount: 0, sharedMemo: state.session.sharedMemo, title: state.session.title, updatedAt: "" };
     state.selectedRecordId = normalizeText(state.params.jobId || parsed?.jobId) ? buildRemoteSelectionId(state.params.jobId || parsed?.jobId) : "";
+    state.supersededRemoteJobIds = loadSupersededRemoteJobIds(state.session.meetingId);
+  }
+
+  function collectSupersededRemoteJobIds() {
+    return Array.from(new Set(
+      (Array.isArray(state.pendingUploads) ? state.pendingUploads : [])
+        .flatMap((pending) => Array.isArray(pending?.supersededJobIds) ? pending.supersededJobIds : [pending?.supersededJobId])
+        .map((jobId) => normalizeText(jobId))
+        .filter(Boolean)
+    ));
+  }
+
+  function loadSupersededRemoteJobIds(meetingId) {
+    const normalizedMeetingId = normalizeText(meetingId);
+    const rawEntries = [];
+    if (normalizedMeetingId) {
+      rawEntries.push(safeLocalStorageGet(global, buildWorkspaceSessionStorageKey(normalizedMeetingId)));
+    }
+    try {
+      rawEntries.push(global.sessionStorage?.getItem?.(SESSION_STORAGE_KEY) || "");
+    } catch {}
+    for (const rawEntry of rawEntries) {
+      if (!normalizeText(rawEntry)) continue;
+      try {
+        const parsed = JSON.parse(rawEntry);
+        if (normalizedMeetingId && normalizeText(parsed?.meetingId) && normalizeText(parsed.meetingId) !== normalizedMeetingId) {
+          continue;
+        }
+        return Array.from(new Set(
+          (Array.isArray(parsed?.supersededRemoteJobIds) ? parsed.supersededRemoteJobIds : [])
+            .map((jobId) => normalizeText(jobId))
+            .filter(Boolean)
+        ));
+      } catch {}
+    }
+    return [];
   }
 
   async function refreshWorkspace(hydrateSelection, reason) {
@@ -350,6 +389,10 @@
         reason,
       });
       await loadPendingUploads();
+      if (state.loadingReason === "boot") {
+        // Show the workspace shell as soon as local state is ready.
+        applyRender();
+      }
       const shouldReconnect = Boolean(
         normalizeText(reason) === "boot"
         || normalizeText(reason) === "manual"
@@ -432,8 +475,33 @@
         if (state.selectedRecordId === ns.shared.buildLocalSelectionId(pending.requestId)) state.selectedRecordId = buildRemoteSelectionId(matched.jobId);
         nextItems.push(nextPending);
       } else {
-        const nextPending = normalizePendingUpload({ ...pending, jobId: normalizeText(matched.jobId || pending.jobId), lastError: normalizeText(matched.error || pending.lastError), status: matched.status === "processing" ? "remote_processing" : matched.status === "queued" ? "remote_queued" : matched.status === "failed" ? (pending.hold ? "on_hold" : "failed") : pending.status, updatedAt: normalizeText(matched.updatedAt || pending.updatedAt) });
+        const shouldResetRemoteSource = matched.status === "failed";
+        const nextPending = normalizePendingUpload({
+          ...pending,
+          jobId: normalizeText(matched.jobId || pending.jobId),
+          lastError: normalizeText(matched.error || pending.lastError),
+          parts: shouldResetRemoteSource
+            ? (Array.isArray(pending.parts) ? pending.parts : []).map((part) => ({
+                ...part,
+                storageObject: "",
+                uploadStatus: "",
+              }))
+            : pending.parts,
+          status: matched.status === "processing" ? "remote_processing" : matched.status === "queued" ? "remote_queued" : matched.status === "failed" ? (pending.hold ? "on_hold" : "failed") : pending.status,
+          storageObject: shouldResetRemoteSource ? "" : pending.storageObject,
+          updatedAt: normalizeText(matched.updatedAt || pending.updatedAt),
+        });
         await state.queueStore.put(nextPending);
+        if (shouldResetRemoteSource && state.runtimeChunkCache[normalizeText(pending.requestId)]) {
+          state.runtimeChunkCache[normalizeText(pending.requestId)] = {
+            ...state.runtimeChunkCache[normalizeText(pending.requestId)],
+            parts: (state.runtimeChunkCache[normalizeText(pending.requestId)].parts || []).map((part) => ({
+              ...part,
+              storageObject: "",
+              uploadStatus: "",
+            })),
+          };
+        }
         if (state.selectedRecordId === ns.shared.buildLocalSelectionId(pending.requestId) && nextPending.jobId) state.selectedRecordId = buildRemoteSelectionId(nextPending.jobId);
         nextItems.push(nextPending);
       }
@@ -444,6 +512,15 @@
 
   async function connectWorkspaceRealtime(options = {}) {
     const forceReconnect = Boolean(options.forceReconnect);
+    const shouldDeferInitialSnapshot = (
+      normalizeText(options.reason) === "boot"
+      && !normalizeText(state.params.jobId)
+      && state.pendingUploads.length < 1
+      && state.records.length < 1
+      && !state.currentJob
+      && !state.currentArtifact
+      && !normalizeText(state.selectedRecordId)
+    );
     if (!state.session.meetingSessionToken || !state.session.meetingId) {
       throw new Error("회의 작업실 세션이 없어요. 패널에서 다시 열어 주세요.");
     }
@@ -467,40 +544,60 @@
     const listenerVersion = state.realtime.meetingListenerVersion + 1;
     state.realtime.meetingListenerVersion = listenerVersion;
 
-    await new Promise((resolve, reject) => {
-      let settled = false;
-      const finishResolve = () => {
-        if (settled) return;
-        settled = true;
-        resolve();
-      };
-      const finishReject = (error) => {
-        if (settled) return;
-        settled = true;
-        reject(error);
-      };
-      state.realtime.unsubscribeMeeting = subscribeDocument(FIRESTORE_COLLECTIONS.meetings, nextMeetingDocId, {
-        error: (error) => {
-          if (listenerVersion !== state.realtime.meetingListenerVersion) return;
-          const normalizedError = normalizeRealtimeError(error);
-          handleRealtimeListenerError(normalizedError, "meeting");
-          finishReject(normalizedError);
-        },
-        next: (snapshot) => {
-          void handleMeetingSnapshot(snapshot, {
-            hydrateSelection: Boolean(options.hydrateSelection),
-            listenerVersion,
-            reason: options.reason,
-          })
-            .then(finishResolve)
-            .catch((error) => {
-              const normalizedError = normalizeRealtimeError(error);
-              handleRealtimeListenerError(normalizedError, "meeting");
-              finishReject(normalizedError);
-            });
-        },
+    const initialSnapshotResult = await Promise.race([
+      new Promise((resolve) => {
+        let settled = false;
+        const finishResolve = () => {
+          if (settled) return;
+          settled = true;
+          resolve({ ok: true });
+        };
+        const finishReject = (error) => {
+          if (settled) return;
+          settled = true;
+          resolve({ error, ok: false });
+        };
+        state.realtime.unsubscribeMeeting = subscribeDocument(FIRESTORE_COLLECTIONS.meetings, nextMeetingDocId, {
+          error: (error) => {
+            if (listenerVersion !== state.realtime.meetingListenerVersion) return;
+            const normalizedError = normalizeRealtimeError(error);
+            handleRealtimeListenerError(normalizedError, "meeting");
+            finishReject(normalizedError);
+          },
+          next: (snapshot) => {
+            void handleMeetingSnapshot(snapshot, {
+              hydrateSelection: Boolean(options.hydrateSelection),
+              listenerVersion,
+              reason: options.reason,
+            })
+              .then(finishResolve)
+              .catch((error) => {
+                const normalizedError = normalizeRealtimeError(error);
+                handleRealtimeListenerError(normalizedError, "meeting");
+                finishReject(normalizedError);
+              });
+          },
+        });
+      }),
+      ...(shouldDeferInitialSnapshot
+        ? [
+            new Promise((resolve) => {
+              global.setTimeout(() => resolve({ deferred: true, ok: true }), BOOT_INITIAL_SNAPSHOT_WAIT_MS);
+            }),
+          ]
+        : []),
+    ]);
+
+    if (!initialSnapshotResult?.ok) {
+      throw initialSnapshotResult.error;
+    }
+    if (initialSnapshotResult?.deferred) {
+      await syncWorkspaceLocalState(Boolean(options.hydrateSelection), options.reason || "boot-deferred");
+      logDebug("workspace.refresh.deferred-snapshot", {
+        meetingId: state.session.meetingId,
+        waitMs: BOOT_INITIAL_SNAPSHOT_WAIT_MS,
       });
-    });
+    }
 
     return authPayload;
   }
@@ -575,10 +672,10 @@
     }
 
     const shouldReconnect = Boolean(
-      forceRefresh
-      || selectionChanged
+      selectionChanged
       || normalizeText(state.realtime.jobDocId) !== normalizeText(entry.remote.jobId)
       || typeof state.realtime.unsubscribeJob !== "function"
+      || (forceRefresh && !state.currentJob)
     );
     if (!shouldReconnect) {
       await ensureArtifactRealtimeSubscription(entry, {
@@ -1087,15 +1184,63 @@
     void attemptPendingUpload(pending.requestId);
   }
 
-  async function attemptPendingUpload(requestId) {
-    const pending = state.pendingUploads.find((item) => item.requestId === normalizeText(requestId));
-    if (!pending || pending.hold || state.busy.queue[requestId]) return;
+  async function attemptPendingUpload(requestId, options = {}) {
+    const forceRestart = Boolean(options?.forceRestart);
+    const normalizedRequestId = normalizeText(requestId);
+    const pending = state.pendingUploads.find((item) => item.requestId === normalizedRequestId);
+    if (!pending || pending.hold || state.busy.queue[normalizedRequestId]) return;
     if (!isOnline(global)) { await upsertPendingUpload({ ...pending, lastError: "인터넷이 돌아오면 자동으로 업로드합니다.", status: "upload_queued" }); return applyRender(); }
-    state.busy.queue[requestId] = true;
-    await upsertPendingUpload({ ...pending, lastError: "", status: shouldUseChunkedSource(pending) ? "preparing_chunks" : "uploading" });
+    state.busy.queue[normalizedRequestId] = true;
+    const shouldResetSource = pending.status === "failed" || forceRestart;
+    let activeRequestId = normalizedRequestId;
+    const previousRemoteJobId = normalizeText(pending.jobId);
+    const previousRemoteSelectionId = previousRemoteJobId ? buildRemoteSelectionId(previousRemoteJobId) : "";
+    const retryRequestId = shouldResetSource ? ns.shared.generateCaptureRequestId(global) : normalizedRequestId;
+    const retryBase = shouldResetSource
+      ? {
+          ...pending,
+          jobId: "",
+          lastError: "",
+          parts: (Array.isArray(pending.parts) ? pending.parts : []).map((part, index) => ({
+            ...part,
+            requestId: buildPendingPartRequestId(retryRequestId, index),
+            storageObject: "",
+            uploadStatus: "",
+          })),
+          requestId: retryRequestId,
+          storageObject: "",
+          supersededJobIds: Array.from(new Set([
+            ...(Array.isArray(pending.supersededJobIds) ? pending.supersededJobIds : []),
+            previousRemoteJobId,
+          ].map((jobId) => normalizeText(jobId)).filter(Boolean))),
+          uploadedPartCount: 0,
+        }
+      : pending;
+    if (shouldResetSource) {
+      delete state.runtimeChunkCache[normalizedRequestId];
+      await state.queueStore.delete(normalizedRequestId);
+      state.pendingUploads = state.pendingUploads.filter((item) => item.requestId !== normalizedRequestId);
+      if (
+        state.selectedRecordId === ns.shared.buildLocalSelectionId(normalizedRequestId)
+        || (previousRemoteSelectionId && state.selectedRecordId === previousRemoteSelectionId)
+      ) {
+        state.selectedRecordId = ns.shared.buildLocalSelectionId(retryRequestId);
+      }
+      if (state.params.jobId === previousRemoteJobId) {
+        state.params = { ...state.params, jobId: "" };
+      }
+      delete state.busy.queue[normalizedRequestId];
+      state.busy.queue[retryRequestId] = true;
+      activeRequestId = retryRequestId;
+      setNotice(forceRestart
+        ? "멈춘 처리 상태를 정리하고 브라우저 원본으로 다시 시작합니다."
+        : "실패한 임시 원본은 다시 올린 뒤 처리를 재시작합니다.", "highlight");
+    }
+    await upsertPendingUpload({ ...retryBase, lastError: "", status: shouldUseChunkedSource(retryBase) ? "preparing_chunks" : "uploading" });
+    persistWorkspaceSession();
     applyRender();
     try {
-      let latest = state.pendingUploads.find((item) => item.requestId === normalizeText(requestId));
+      let latest = state.pendingUploads.find((item) => item.requestId === activeRequestId);
       const sourceSizeBytes = Math.max(0, Number(latest?.originalSizeBytes) || Number(latest?.sizeBytes) || Number(latest?.blob?.size) || 0);
       if (sourceSizeBytes > DEFAULT_SOURCE_MAX_BYTES) {
         throw new Error(`현재 회의 원본은 ${Math.floor(DEFAULT_SOURCE_MAX_BYTES / (1024 * 1024))}MB 이하까지만 지원해요.`);
@@ -1122,8 +1267,9 @@
           status: "uploading_chunks",
           uploadedPartCount: prepared.parts.filter((part) => normalizeText(part.storageObject)).length,
         });
+        let refreshedRemoteJob = false;
         for (const preparedPart of prepared.parts) {
-          const currentPending = state.pendingUploads.find((item) => item.requestId === normalizeText(requestId));
+          const currentPending = state.pendingUploads.find((item) => item.requestId === activeRequestId);
           const currentPart = (currentPending?.parts || []).find((part) => Number(part.index) === Number(preparedPart.index));
           if (normalizeText(currentPart?.storageObject)) {
             continue;
@@ -1142,6 +1288,22 @@
             startMs: preparedPart.startMs,
           });
           latest = await updatePendingChunkUploadState(normalizeText((currentPending || latest)?.requestId), preparedPart.index, uploaded);
+          const shouldAnnounceChunkStart = !normalizeText(currentPending?.jobId) && !normalizeText(latest?.jobId);
+          latest = (await createOrRefreshRemoteJob(latest, {
+            noticeText: shouldAnnounceChunkStart
+              ? "첫 청크를 올려 자동 전사를 바로 시작했습니다. 남은 청크를 이어서 업로드합니다."
+              : "",
+            syncWorkspace: shouldAnnounceChunkStart,
+          })).pending;
+          refreshedRemoteJob = true;
+        }
+        if (!refreshedRemoteJob) {
+          latest = (await createOrRefreshRemoteJob(latest, {
+            noticeText: "자동 전사를 이어서 확인합니다.",
+            syncWorkspace: true,
+          })).pending;
+        } else {
+          await syncWorkspaceLocalState(false, "workflow");
         }
       } else if (!normalizeText(latest?.storageObject)) {
         latest = await upsertPendingUpload({
@@ -1165,7 +1327,7 @@
         } catch (uploadError) {
           logDebug("workspace.source-upload.fallback-inline", {
             error: uploadError,
-            requestId,
+            requestId: activeRequestId,
             sizeBytes: sourceSizeBytes,
           });
           latest = await upsertPendingUpload({
@@ -1180,35 +1342,20 @@
           applyRender();
         }
       }
-      const created = await postJson(global, CONFIG.createJobUrl, await buildCreateJobPayload(latest), state.session.meetingSessionToken, {
-        timeoutMs: DEFAULT_CREATE_JOB_TIMEOUT_MS,
-      });
-      const createdJob = normalizeJob(created?.job, latest.meetingTitleSnapshot);
-      await upsertPendingUpload({ ...latest, jobId: normalizeText(createdJob?.jobId), lastError: "", status: normalizeText(createdJob?.status) === "processing" ? "remote_processing" : "remote_queued" });
-      if (createdJob?.jobId && latest.meetingTitleSnapshot && latest.meetingTitleSnapshot !== getWorkspaceTitleOrFallback()) {
-        try {
-          await postJson(global, CONFIG.updateMeetingResultUrl, {
-            jobId: createdJob.jobId,
-            meetingId: state.session.meetingId,
-            title: latest.meetingTitleSnapshot,
-          }, state.session.meetingSessionToken);
-        } catch (renameError) {
-          logDebug("workspace.record.rename.after-create.error", {
-            error: renameError,
-            jobId: createdJob.jobId,
-            recordTitle: latest.meetingTitleSnapshot,
-          });
-        }
+      if (normalizeText(latest?.sourceMode) !== "chunked") {
+        latest = (await createOrRefreshRemoteJob(latest, {
+          noticeText: "자동 전사를 접수했습니다. 결과를 계속 확인하는 중입니다.",
+          syncWorkspace: true,
+        })).pending;
       }
-      setNotice("자동 전사를 접수했습니다. 결과를 계속 확인하는 중입니다.", "highlight");
-      await syncWorkspaceLocalState(false, "workflow");
     } catch (error) {
-      const latest = state.pendingUploads.find((item) => item.requestId === normalizeText(requestId));
+      const latest = state.pendingUploads.find((item) => item.requestId === activeRequestId);
       if (latest) await upsertPendingUpload({ ...latest, lastError: error instanceof Error ? error.message : "업로드를 이어가지 못했어요.", status: isLikelyNetworkError(global, error) ? "upload_queued" : "failed" });
       setNotice(error instanceof Error ? error.message : "업로드를 이어가지 못했어요.", "error");
       applyRender();
     } finally {
-      delete state.busy.queue[requestId];
+      delete state.busy.queue[activeRequestId];
+      delete state.busy.queue[normalizedRequestId];
       applyRender();
     }
   }
@@ -1226,6 +1373,7 @@
       originalSizeBytes: Math.max(0, Number(item.originalSizeBytes) || Number(item.sizeBytes) || Number(item.blob?.size) || 0),
       requestId: item.requestId,
       sizeBytes: Math.max(0, Number(item.originalSizeBytes) || Number(item.sizeBytes) || Number(item.blob?.size) || 0),
+      uploadStatus: normalizeText(item.uploadStatus),
     };
     if (Array.isArray(item.parts) && item.parts.length) {
       source.parts = item.parts.map((part) => ({
@@ -1237,6 +1385,7 @@
         sizeBytes: Math.max(0, Number(part.sizeBytes) || 0),
         startMs: Math.max(0, Number(part.startMs) || 0),
         storageObject: normalizeText(part.storageObject),
+        uploadStatus: normalizeText(part.uploadStatus),
       }));
     } else if (normalizeText(item.storageObject)) {
       source.storageObject = normalizeText(item.storageObject);
@@ -1249,6 +1398,52 @@
       source,
       context: { sharedMemoSnapshot: item.sharedMemoSnapshot },
     };
+  }
+
+  async function createOrRefreshRemoteJob(item, options = {}) {
+    const previousJobId = normalizeText(item?.jobId);
+    const created = await postJson(global, CONFIG.createJobUrl, await buildCreateJobPayload(item), state.session.meetingSessionToken, {
+      timeoutMs: DEFAULT_CREATE_JOB_TIMEOUT_MS,
+    });
+    const createdJob = normalizeJob(created?.job, item.meetingTitleSnapshot);
+    const allChunksUploaded = normalizeText(item?.sourceMode) !== "chunked"
+      || Math.max(0, Number(item?.uploadedPartCount) || 0) >= Math.max(0, Number(item?.preparedPartCount) || 0);
+    const nextPending = await upsertPendingUpload({
+      ...item,
+      jobId: normalizeText(createdJob?.jobId),
+      lastError: "",
+      status: allChunksUploaded
+        ? (normalizeText(createdJob?.status) === "processing" ? "remote_processing" : "remote_queued")
+        : "uploading_chunks",
+    });
+    if (
+      createdJob?.jobId
+      && (!previousJobId || previousJobId !== normalizeText(createdJob.jobId))
+      && item.meetingTitleSnapshot
+      && item.meetingTitleSnapshot !== getWorkspaceTitleOrFallback()
+    ) {
+      try {
+        await postJson(global, CONFIG.updateMeetingResultUrl, {
+          jobId: createdJob.jobId,
+          meetingId: state.session.meetingId,
+          title: item.meetingTitleSnapshot,
+        }, state.session.meetingSessionToken);
+      } catch (renameError) {
+        logDebug("workspace.record.rename.after-create.error", {
+          error: renameError,
+          jobId: createdJob.jobId,
+          recordTitle: item.meetingTitleSnapshot,
+        });
+      }
+    }
+    if (normalizeText(options?.noticeText)) {
+      setNotice(normalizeText(options.noticeText), "highlight");
+      applyRender();
+    }
+    if (options?.syncWorkspace) {
+      await syncWorkspaceLocalState(false, "workflow");
+    }
+    return { createdJob, pending: nextPending };
   }
 
   async function uploadPendingSource(item, override = {}) {
@@ -1813,6 +2008,7 @@
     const pending = state.pendingUploads.find((item) => item.requestId === normalizeText(requestId));
     if (!pending) return;
     if (normalizeText(action) === "retry") return attemptPendingUpload(requestId);
+    if (normalizeText(action) === "restart") return attemptPendingUpload(requestId, { forceRestart: true });
     if (normalizeText(action) === "hold") return upsertPendingUpload({ ...pending, hold: true, status: "on_hold", lastError: pending.lastError || "업로드를 잠시 멈췄습니다." }).then(applyRender);
     if (normalizeText(action) === "resume") { await upsertPendingUpload({ ...pending, hold: false, status: "upload_queued", lastError: "" }); return retryPendingUploads(); }
     if (normalizeText(action) === "delete") {
@@ -1856,6 +2052,7 @@
   function setupDebugPanel() {
     if (!refs.debugPanel) return;
     const enabled = isDebugPanelEnabled(global);
+    setDebugEnabled(enabled);
     if (refs.meetingShell) {
       refs.meetingShell.dataset.debugPanel = String(enabled);
     }
@@ -1897,17 +2094,39 @@
   function renderDebugEntries(entries) {
     if (!refs.debugPanel || refs.debugPanel.hidden) return;
     const normalizedEntries = Array.isArray(entries) ? entries : [];
-    const summary = summarizeDebugEntries(normalizedEntries);
-    const nextText = normalizedEntries.length
-      ? normalizedEntries.map((entry) => formatDebugEntry(entry)).join("\n\n")
-      : "아직 로그가 없습니다.";
+    const summary = summarizeEntries(normalizedEntries);
+    const nextText = normalizeText(buildCopyText(normalizedEntries)) || "아직 로그가 없습니다.";
     if (refs.debugStatus) {
-      refs.debugStatus.textContent = `로그 ${summary.totalLogs}건 · 함수 ${summary.functionCalls}건 · 스냅샷 ${summary.firestoreListenerEvents}건 · 오류 ${summary.totalErrors}건`;
+      refs.debugStatus.innerHTML = buildDebugStatusMarkup(summary);
+      refs.debugStatus.setAttribute("aria-label", buildDebugStatusText(summary));
     }
     if (refs.debugFabBadge) {
-      refs.debugFabBadge.hidden = summary.totalErrors < 1;
+      refs.debugFabBadge.hidden = Math.max(0, Number(summary?.errorCount) || 0) < 1;
     }
     syncDebugLogViewport(refs.debugLog, nextText);
+  }
+
+  function buildDebugStatusMarkup(summary) {
+    return [
+      renderDebugStatusItem("로그", summary?.totalLogs),
+      renderDebugStatusItem("함수", summary?.functionCalls),
+      renderDebugStatusItem("읽기", summary?.readCount),
+      renderDebugStatusItem("스냅샷", summary?.snapshotCount),
+      renderDebugStatusItem("오류", summary?.errorCount, (Number(summary?.errorCount) || 0) > 0),
+    ].join("");
+  }
+
+  function buildDebugStatusText(summary) {
+    const totalLogs = Math.max(0, Number(summary?.totalLogs) || 0);
+    const functionCalls = Math.max(0, Number(summary?.functionCalls) || 0);
+    const readCount = Math.max(0, Number(summary?.readCount) || 0);
+    const snapshotCount = Math.max(0, Number(summary?.snapshotCount) || 0);
+    const errorCount = Math.max(0, Number(summary?.errorCount) || 0);
+    return `로그 ${totalLogs}건 · 함수 ${functionCalls}건 · 읽기 ${readCount}건 · 스냅샷 ${snapshotCount}건 · 오류 ${errorCount}건`;
+  }
+
+  function renderDebugStatusItem(label, count, isError = false) {
+    return `<span class="inova-meeting-debug-console__status-item${isError ? " is-error" : ""}">${label} ${Math.max(0, Number(count) || 0)}건</span>`;
   }
 
   function readDebugLogViewport(element) {
@@ -1937,167 +2156,13 @@
     element.scrollTop = Math.min(previousViewport.scrollTop, maxScrollTop);
   }
 
-  function summarizeDebugEntries(entries) {
-    const endpointCounts = new Map();
-    const listenerCounts = new Map();
-    let functionCalls = 0;
-    let functionResponses = 0;
-    let functionErrorLogs = 0;
-    let firestoreAuthEvents = 0;
-    let firestoreErrorLogs = 0;
-    let firestoreListenerEvents = 0;
-
-    for (const entry of entries) {
-      const classification = classifyDebugEntry(entry);
-      if (classification.type === "function-request") {
-        functionCalls += 1;
-        endpointCounts.set(
-          classification.endpoint,
-          (endpointCounts.get(classification.endpoint) || 0) + 1
-        );
-        continue;
-      }
-      if (classification.type === "function-response") {
-        functionResponses += 1;
-        continue;
-      }
-      if (classification.type === "function-error") {
-        functionErrorLogs += 1;
-        continue;
-      }
-      if (classification.type === "firestore-auth") {
-        firestoreAuthEvents += 1;
-        continue;
-      }
-      if (classification.type === "firestore-listener") {
-        firestoreListenerEvents += 1;
-        if (classification.endpoint) {
-          listenerCounts.set(
-            classification.endpoint,
-            (listenerCounts.get(classification.endpoint) || 0) + 1
-          );
-        }
-        continue;
-      }
-      if (classification.type === "firestore-error") {
-        firestoreErrorLogs += 1;
-      }
-    }
-
-    const functionSummary = endpointCounts.size
-      ? Array.from(endpointCounts.entries())
-        .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0], "ko-KR"))
-        .slice(0, 3)
-        .map(([endpoint, count]) => `${endpoint} ${count}회`)
-        .join(" · ")
-      : "";
-    const listenerSummary = listenerCounts.size
-      ? Array.from(listenerCounts.entries())
-        .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0], "ko-KR"))
-        .slice(0, 3)
-        .map(([endpoint, count]) => `${endpoint} ${count}건`)
-        .join(" · ")
-      : "";
-    const endpointSummary = [functionSummary, listenerSummary].filter(Boolean).join(" · ")
-      || "아직 함수/Firestore 연결 로그가 없습니다.";
-
-    return {
-      endpointSummary,
-      firestoreAuthEvents,
-      firestoreErrorLogs,
-      firestoreListenerEvents,
-      functionCalls,
-      functionErrorLogs,
-      functionResponses,
-      otherLogs: Math.max(
-        0,
-        entries.length
-          - functionCalls
-          - functionResponses
-          - functionErrorLogs
-          - firestoreAuthEvents
-          - firestoreListenerEvents
-          - firestoreErrorLogs
-      ),
-      totalErrors: functionErrorLogs + firestoreErrorLogs,
-      totalLogs: entries.length,
-    };
-  }
-
-  function classifyDebugEntry(entry) {
-    const event = normalizeText(entry?.event);
-    const url = normalizeText(entry?.payload?.url);
-    if (event === "http.request" || event === "workspace.source-upload.request") {
-      return {
-        endpoint: extractFunctionEndpointLabel(url, event),
-        type: "function-request",
-      };
-    }
-    if (event === "http.response" || event === "workspace.source-upload.response") {
-      return {
-        endpoint: extractFunctionEndpointLabel(url, event),
-        type: "function-response",
-      };
-    }
-    if (
-      event === "http.error"
-      || event === "http.timeout"
-      || event === "workspace.source-upload.error"
-      || event === "workspace.source-upload.timeout"
-    ) {
-      return {
-        endpoint: extractFunctionEndpointLabel(url, event),
-        type: "function-error",
-      };
-    }
-    if (event === "firestore.auth.start" || event === "firestore.auth.success") {
-      return {
-        endpoint: "workspace-auth",
-        type: "firestore-auth",
-      };
-    }
-    if (event === "firestore.auth.error" || event === "firestore.listener.error") {
-      return {
-        endpoint: normalizeText(entry?.payload?.collection) || "firestore",
-        type: "firestore-error",
-      };
-    }
-    if (
-      event === "firestore.listener.attach"
-      || event === "firestore.listener.detach"
-      || event === "firestore.listener.snapshot"
-    ) {
-      return {
-        endpoint: normalizeText(entry?.payload?.collection) || "firestore-doc",
-        type: "firestore-listener",
-      };
-    }
-    return {
-      endpoint: "",
-      type: "local-log",
-    };
-  }
-
-  function extractFunctionEndpointLabel(url, event) {
-    const normalizedUrl = normalizeText(url);
-    if (!normalizedUrl) {
-      return normalizeText(event) || "unknown";
-    }
-    try {
-      const parsed = new URL(normalizedUrl);
-      return normalizeText(parsed.pathname.split("/").filter(Boolean).pop()) || normalizeText(event) || "unknown";
-    } catch {
-      return normalizeText(event) || "unknown";
-    }
-  }
-
   function clearDebugLogPanel() {
     clearDebugEntries();
     logDebug("workspace.debug.cleared", {});
   }
 
   async function copyDebugLog() {
-    const text = normalizeText(refs.debugLog?.textContent);
+    const text = normalizeText(buildCopyText(getDebugEntries()));
     if (!text) return;
     try {
       if (typeof global.navigator?.clipboard?.writeText === "function") {
@@ -2113,12 +2178,7 @@
   }
 
   async function copyDebugErrors() {
-    const entries = getDebugEntries();
-    const errorEntries = entries.filter((entry) => {
-      const classification = classifyDebugEntry(entry);
-      return classification.type === "function-error" || classification.type === "firestore-error";
-    });
-    const text = normalizeText(errorEntries.map((entry) => formatDebugEntry(entry)).join("\n\n"));
+    const text = normalizeText(buildErrorCopyText(getDebugEntries()));
     if (!text) {
       setNotice("복사할 오류 로그가 없습니다.", "highlight");
       applyRender();
@@ -2235,7 +2295,7 @@
       }
     }, 2600);
   }
-  function persistWorkspaceSession() { const entry = findHistoryEntry(state, state.selectedRecordId); const payload = { expiresAt: state.session.expiresAt, jobId: normalizeText(entry?.remote?.jobId || entry?.pending?.jobId), meetingId: state.session.meetingId, meetingSessionToken: state.session.meetingSessionToken, mode: state.mode, sharedMemo: normalizeTextBlock(state.recordMemoDraft || state.recordMemoSaved), title: normalizeText(state.meeting.title || state.session.title) }; safeSessionStorageSet(global, SESSION_STORAGE_KEY, JSON.stringify(payload)); if (payload.meetingId) safeLocalStorageSet(global, buildWorkspaceSessionStorageKey(payload.meetingId), JSON.stringify(payload)); replaceCleanUrl(); }
+  function persistWorkspaceSession() { const entry = findHistoryEntry(state, state.selectedRecordId); const payload = { expiresAt: state.session.expiresAt, jobId: normalizeText(entry?.remote?.jobId || entry?.pending?.jobId), meetingId: state.session.meetingId, meetingSessionToken: state.session.meetingSessionToken, mode: state.mode, sharedMemo: normalizeTextBlock(state.recordMemoDraft || state.recordMemoSaved), supersededRemoteJobIds: collectSupersededRemoteJobIds(), title: normalizeText(state.meeting.title || state.session.title) }; state.supersededRemoteJobIds = payload.supersededRemoteJobIds; safeSessionStorageSet(global, SESSION_STORAGE_KEY, JSON.stringify(payload)); if (payload.meetingId) safeLocalStorageSet(global, buildWorkspaceSessionStorageKey(payload.meetingId), JSON.stringify(payload)); replaceCleanUrl(); }
   function clearWorkspaceSession() { try { global.sessionStorage.removeItem(SESSION_STORAGE_KEY); } catch {} if (state.session.meetingId) safeLocalStorageRemove(global, buildWorkspaceSessionStorageKey(state.session.meetingId)); disposeWorkspaceRealtime({ clearAuthCache: true }); }
   function replaceCleanUrl() { const currentUrl = new URL(global.location.href); const preserveDebug = currentUrl.searchParams.get("debug") === "1"; const nextUrl = new URL(global.location.href); nextUrl.search = ""; nextUrl.hash = ""; if (preserveDebug) nextUrl.searchParams.set("debug", "1"); if (state.session.meetingId) nextUrl.searchParams.set("meetingId", state.session.meetingId); const entry = findHistoryEntry(state, state.selectedRecordId); const jobId = normalizeText(entry?.remote?.jobId || entry?.pending?.jobId); if (jobId) nextUrl.searchParams.set("jobId", jobId); if (state.session.meetingSessionToken) nextUrl.hash = buildWorkspaceHash(state.session.meetingSessionToken); global.history.replaceState({}, "", nextUrl.toString()); state.params = parseParams(nextUrl.toString()); }
   function renderBlocked(message, options = {}) {
