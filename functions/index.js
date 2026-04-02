@@ -57,6 +57,7 @@ const MAX_PROMPT_ITEMS = 1000;
 const MAX_TITLE_LENGTH = 120;
 const MAX_CONTENT_LENGTH = 12000;
 const PROMPT_LIBRARY_BUCKET_COUNT = 24;
+const DEFAULT_PROMPT_PANEL_SESSION_TTL_MS = 60 * 60 * 1000;
 const storeHandlers = registerStoreHandlers({
   admin,
   CORS_ORIGINS,
@@ -134,11 +135,65 @@ exports.processQueuedInovaMeetingJob = onDocumentWritten(
   },
   meetingHandlers.processQueuedMeetingJobWrite
 );
+exports.processQueuedInovaMeetingJobPart = onDocumentWritten(
+  {
+    document: "integration_inova_meeting_job_parts/{partId}",
+    memory: "1GiB",
+    region: REGION,
+    timeoutSeconds: 540,
+  },
+  meetingHandlers.processQueuedMeetingJobPartWrite
+);
+exports.finalizeChunkedInovaMeetingJob = onDocumentWritten(
+  {
+    document: "integration_inova_meeting_job_finalizers/{jobId}",
+    memory: "1GiB",
+    region: REGION,
+    timeoutSeconds: 540,
+  },
+  meetingHandlers.finalizeChunkedMeetingJobWrite
+);
 exports.deleteInovaMeeting = meetingHandlers.deleteInovaMeeting;
 exports.deleteInovaMeetingResult = meetingHandlers.deleteInovaMeetingResult;
 exports.exchangeInovaMeetingLaunch = meetingLaunchHandlers.exchangeInovaMeetingLaunch;
 exports.issueInovaMeetingWorkspaceAuth = meetingLaunchHandlers.issueInovaMeetingWorkspaceAuth;
 exports.issueInovaMeetingPanelAuth = meetingLaunchHandlers.issueInovaMeetingPanelAuth;
+exports.issueInovaPromptPanelAuth = onRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
+  try {
+    assertMethod(request, "POST");
+    const providerIdentity = normalizeIdentity(request.body?.providerIdentity || request.body?.owner);
+    const owner = await verifyInovaIdentity(providerIdentity, request);
+    const expiresAt = new Date(Date.now() + DEFAULT_PROMPT_PANEL_SESSION_TTL_MS).toISOString();
+    const promptPanelExpMs = Date.parse(expiresAt);
+    const promptLibraryId = buildPromptLibraryId(owner.providerUserKey);
+    const firebaseCustomToken = await admin.auth().createCustomToken(buildPromptPanelFirebaseUid(owner.providerUserKey), {
+      promptLibraryId,
+      promptPanelExpMs,
+      providerUserKey: owner.providerUserKey,
+      scope: "prompt-panel",
+    });
+
+    logEvent("prompt.panel-auth.issue.success", {
+      promptLibraryId,
+      providerUserKey: owner.providerUserKey,
+    });
+    response.json({
+      ok: true,
+      data: {
+        expiresAt,
+        firebaseCustomToken,
+        promptLibraryId,
+        providerUserKey: owner.providerUserKey,
+      },
+    });
+  } catch (error) {
+    logEvent("prompt.panel-auth.issue.error", {
+      error: normalizeText(error?.message),
+      status: Number(error?.status) || 500,
+    });
+    sendError(response, error);
+  }
+});
 exports.getInovaMeetingJob = meetingHandlers.getInovaMeetingJob;
 exports.getInovaMeetingArtifact = meetingHandlers.getInovaMeetingArtifact;
 exports.issueInovaMeetingLaunch = meetingLaunchHandlers.issueInovaMeetingLaunch;
@@ -587,6 +642,10 @@ function buildPromptLibraryMeta(promptLibrary, revision, syncedAt, bucketIds) {
 
 function buildPromptLibraryId(providerUserKey) {
   return `inova__${providerUserKey}`;
+}
+
+function buildPromptPanelFirebaseUid(providerUserKey) {
+  return `prompt-panel__${providerUserKey}`;
 }
 
 async function loadPersistedPromptLibrary(libraryId, snapshot) {

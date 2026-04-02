@@ -6,7 +6,7 @@ const FEED_COLLECTION = "prompt_store_feed_pages";
 const FEED_PAGE_SIZE = 500;
 const SUMMARY_COLLECTION = "prompt_store_meta";
 const SUMMARY_DOC_ID = "summary";
-const PUBLIC_FEED_SORTS = ["latest", "likes", "imports", "views"];
+const PUBLIC_FEED_SORTS = ["latest"];
 
 function registerStoreHandlers(deps) {
   const {
@@ -31,9 +31,11 @@ function registerStoreHandlers(deps) {
       const filter = normalizeListFilter(request.body);
       logEvent("store.list.start", { categoryId: filter.categoryId, providerUserKey: owner.providerUserKey, sortBy: filter.sortBy });
 
-      const entries = filter.ownerOnly || filter.query
+      const entries = shouldUsePrebuiltFeed(filter)
+        ? await fetchPromptStoreFeedItems(filter)
+        : filter.ownerOnly || filter.query
         ? await fetchPromptStoreEntries(filter, owner.providerUserKey)
-        : await fetchPromptStoreFeedItems(filter);
+        : await fetchPromptStoreEntries(filter, owner.providerUserKey);
       const items = await attachViewerState(entries.items, owner.providerUserKey);
       const categoryMeta = filter.ownerOnly
         ? await buildOwnerCategoryMeta(owner.providerUserKey)
@@ -194,7 +196,6 @@ function registerStoreHandlers(deps) {
         return attachViewerFlags({ ...entry, content, metrics, updatedAt: entry.updatedAt }, { imported: true, liked: false, viewed: false });
       });
 
-      await rebuildStoreSummaryAndFeeds();
       logEvent("store.import.success", { entryId, providerUserKey: owner.providerUserKey });
       response.json({ ok: true, data: { entry: result } });
     } catch (error) {
@@ -241,7 +242,6 @@ function registerStoreHandlers(deps) {
         };
       });
 
-      await rebuildStoreSummaryAndFeeds();
       logEvent("store.like.success", { entryId, liked: result.liked, providerUserKey: owner.providerUserKey });
       response.json({ ok: true, data: result });
     } catch (error) {
@@ -286,7 +286,6 @@ function registerStoreHandlers(deps) {
         return attachViewerFlags({ ...entry, content, metrics, updatedAt: entry.updatedAt }, { imported: Boolean(importSnapshot.exists), liked: Boolean(likeSnapshot.exists), viewed: true });
       });
 
-      await rebuildStoreSummaryAndFeeds();
       logEvent("store.view.success", { entryId, providerUserKey: owner.providerUserKey });
       response.json({ ok: true, data: { entry: result } });
     } catch (error) {
@@ -691,6 +690,10 @@ function registerStoreHandlers(deps) {
       query: normalizeText(input?.query).toLowerCase(),
       sortBy: normalizeSort(input?.sortBy),
     };
+  }
+
+  function shouldUsePrebuiltFeed(filter) {
+    return !filter?.ownerOnly && !filter?.query && normalizeSort(filter?.sortBy) === "latest";
   }
 
   function normalizeSort(sortBy) {

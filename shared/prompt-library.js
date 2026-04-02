@@ -147,10 +147,22 @@
     let insertOffset = 0;
 
     for (const item of incomingItems) {
-      const matchIndex = indexes.byId.get(item.id) ?? indexes.byFingerprint.get(getPromptFingerprint(item));
+      const itemFingerprint = getPromptFingerprint(item);
+      const matchIndexById = indexes.byId.get(item.id);
+      const matchIndexByFingerprint = indexes.byFingerprint.get(itemFingerprint);
+      const matchIndex = matchIndexById ?? matchIndexByFingerprint;
       if (mode === "add") {
-        if (matchIndex != null) summary.skipped += 1;
-        else insertIncoming(nextItems, indexes, item, insertOffset++, summary);
+        if (matchIndexByFingerprint != null) {
+          summary.skipped += 1;
+        } else {
+          insertIncoming(
+            nextItems,
+            indexes,
+            matchIndexById != null ? clonePromptItemWithNewId(item) : item,
+            insertOffset++,
+            summary
+          );
+        }
         continue;
       }
       if (mode === "merge") {
@@ -228,6 +240,13 @@
       updatedAt: item.updatedAt,
       importedFrom: normalizeImportedFrom(item.importedFrom),
       storePublication: normalizeStorePublication(item.storePublication),
+    };
+  }
+
+  function clonePromptItemWithNewId(item) {
+    return {
+      ...clonePromptItem(item),
+      id: createPromptId(),
     };
   }
 

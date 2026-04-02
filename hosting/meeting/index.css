@@ -1009,6 +1009,75 @@ select:disabled {
   line-height: 1.65;
 }
 
+.summary-action-card__message + .chunk-progress {
+  margin-top: 12px;
+}
+
+.chunk-progress {
+  display: grid;
+  gap: 10px;
+}
+
+.chunk-progress__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: baseline;
+}
+
+.chunk-progress__title {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.chunk-progress__meta {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.chunk-progress__bar {
+  position: relative;
+  overflow: hidden;
+  height: 8px;
+  border-radius: 999px;
+  background: #e6edf9;
+}
+
+.chunk-progress__bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2f6df6 0%, #58b587 100%);
+}
+
+.chunk-progress__segments {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18px, 1fr));
+  gap: 6px;
+}
+
+.chunk-progress__segment {
+  display: block;
+  min-width: 0;
+  height: 12px;
+  border: 1px solid #d7e1f5;
+  border-radius: 999px;
+  background: #f3f6fb;
+}
+
+.chunk-progress__segment[data-tone="done"] {
+  border-color: #b8dec8;
+  background: var(--success);
+}
+
+.chunk-progress__segment[data-tone="current"] {
+  border-color: #c4dafc;
+  background: var(--accent);
+}
+
 .record-list {
   display: grid;
   gap: 8px;
@@ -1490,6 +1559,9 @@ select:disabled {
 
 .panel-card--debug {
   pointer-events: auto;
+  width: 100%;
+  padding: 16px;
+  border-radius: 26px;
   background: #0f1726;
   border-color: #202d3c;
   box-shadow: 0 20px 48px rgba(5, 10, 18, 0.34);
@@ -1563,6 +1635,41 @@ select:disabled {
   margin-bottom: 10px;
 }
 
+.panel-card--debug .inova-meeting-debug-console__status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 34px;
+  padding: 4px 6px;
+  gap: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #f5f7fb;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  flex-wrap: wrap;
+}
+
+.panel-card--debug .inova-meeting-debug-console__status-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #f5f7fb;
+}
+
+.panel-card--debug .inova-meeting-debug-console__status-item.is-error {
+  border-color: rgba(241, 108, 135, 0.24);
+  background: rgba(96, 25, 42, 0.72);
+  color: #ffb7c4;
+}
+
 .debug-panel__body[hidden] {
   display: none;
 }
@@ -1572,14 +1679,14 @@ select:disabled {
   min-height: 200px;
   max-height: min(42vh, 360px);
   overflow: auto;
-  padding: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  padding: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 14px;
-  background: rgba(5, 10, 18, 0.92);
+  background: rgba(4, 8, 17, 0.9);
   color: #f5f7fb;
   font-family: "Cascadia Code", "Consolas", "D2Coding", monospace;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 11px;
+  line-height: 1.55;
   white-space: pre-wrap;
   word-break: break-word;
   scrollbar-width: thin;
@@ -1777,5 +1884,9 @@ select:disabled {
   .debug-log {
     min-height: 160px;
     max-height: 34vh;
+  }
+
+  .panel-card--debug .inova-meeting-debug-console__status {
+    justify-content: flex-start;
   }
 }

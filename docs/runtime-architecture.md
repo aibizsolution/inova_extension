@@ -48,13 +48,13 @@
 
 - 위치: `content/`, `shared/`, `manifest.json`
 - 역할: `inova.incross.com` 안에 실험실 패널을 삽입하고, 질문 탐색/회의록/프롬프트/스토어/릴리스 UI와 회의 허브 진입 흐름을 조립한다.
-- 특징: 현재 대화 DOM을 읽고, 로컬 상태를 붙이고, 필요한 클라우드 호출은 background에 메시지로 위임한다. 회의 기능은 브라우저 쪽에서 `meetingHub` 캐시와 `meetingStateByMeetingId` 상태를 붙이고, `content/meeting-manager.js`가 `issueInovaMeetingPanelAuth -> hosted panel bridge -> Firestore meeting query` 경로의 실시간 허브 구독과 fallback refresh를 맡는다. 패널 디버그는 회의 전용이 아니라 현재 브라우저 탭 세션 기준 전역 버퍼를 쓰고, `content/panel.js`와 `content/meeting-view.js`가 패널 바깥 오버레이 콘솔을 렌더링한다.
+- 특징: 현재 대화 DOM을 읽고, 로컬 상태를 붙이고, 필요한 클라우드 호출은 background에 메시지로 위임한다. 회의 기능은 브라우저 쪽에서 `meetingStateByMeetingId` 상태를 붙이고, `content/meeting-manager.js`가 `issueInovaMeetingPanelAuth -> hosted panel bridge -> Firestore meeting query` 경로의 실시간 허브 구독과 fallback refresh를 맡는다. 회의 허브 목록은 별도 `chrome.storage.local` 캐시 대신 hosted bridge의 Firestore persistence와 현재 메모리 상태를 우선한다. 프롬프트/스토어 쪽은 `content/prompt-realtime-manager.js`가 `issueInovaPromptPanelAuth -> hosted prompt panel bridge -> Firestore account/feed doc` 경로를 관리하되, `integration_inova_accounts.promptLibraryMeta` 1개 문서와 `prompt_store_meta/summary`, `prompt_store_feed_pages/latest__{category}__0000`만 구독한다. 패널 디버그는 회의 전용이 아니라 현재 브라우저 탭 세션 기준 전역 버퍼를 쓰고, `content/panel.js`와 `content/meeting-view.js`가 패널 바깥 오버레이 콘솔을 렌더링한다.
 
 ### Background Service Worker
 
 - 위치: `background/service-worker.js`
-- 역할: i-Nova access token 확보, Firebase Functions 호출, 릴리스 메타 fetch, 동기화 중복 완화, hosted 회의 launch grant 발급, 작업실 URL 타깃 분기
-- 특징: 클라우드 경계의 브로커다. content script가 직접 장기 원격 상태를 다루지 않게 막아 준다. 회의 기능은 `inova-meeting:*` 메시지로 이 경계를 먼저 통과하고, 패널에서 열린 작업실은 popup 설정의 호스팅 타깃을 따라간다.
+- 역할: i-Nova access token 확보, Firebase Functions 호출, 릴리스 메타 fetch, 동기화 중복 완화, prompt/store panel auth 발급, hosted 회의 launch grant 발급, 작업실 URL 타깃 분기
+- 특징: 클라우드 경계의 브로커다. content script가 직접 장기 원격 상태를 다루지 않게 막아 준다. 회의 기능은 `inova-meeting:*` 메시지로, 프롬프트 실시간은 `inova-prompt:*` 메시지로 이 경계를 먼저 통과한다. 패널에서 열린 작업실은 popup 설정의 호스팅 타깃을 따라간다.
 
 ### Offscreen Document (Legacy)
 
@@ -66,13 +66,13 @@
 
 - 위치: `functions/index.js`, `functions/prompt-review-service.js`, `functions/store-service.js`, `functions/meeting-service.js`, `functions/meeting-launch-service.js`
 - 역할: i-Nova 사용자 검증 뒤 prompt review, prompt store, prompt library sync API와 회의 기능 gateway endpoint를 제공한다.
-- 특징: 현재 원격 백업과 공개 스토어의 진입점이며, 회의 기능은 launch grant 발급, hosted session 교환, 임시 source audio 업로드, OpenAI diarization 호출, `integration_inova_meeting_*` Firestore 기록, source cleanup까지 Functions 안에서 처리한다.
+- 특징: 현재 원격 백업과 공개 스토어의 진입점이며, 프롬프트 패널용 `issueInovaPromptPanelAuth`가 Firebase custom token을 발급한다. prompt store는 `latest` 공개 feed page만 미리 써 두고, 검색/인기 정렬/상세는 요청 시 직접 query한다. 회의 기능은 launch grant 발급, hosted session 교환, 임시 source audio 업로드, OpenAI diarization 호출, `integration_inova_meeting_*` Firestore 기록, source cleanup까지 Functions 안에서 처리한다.
 
 ### Firestore / Hosting
 
 - 위치: `firebase.json`, `firestore.rules`, `hosting/`
 - 역할: Firestore는 백업/스토어 메타 저장소, Hosting은 릴리스 JSON/ZIP 배포면
-- 특징: Firestore 규칙은 기본 `deny all`을 유지하되, hosted 회의 작업실이 세션 범위의 Firebase custom token으로 `integration_inova_meetings`, `integration_inova_meeting_jobs`, `integration_inova_meeting_artifacts` 문서를 읽기 전용으로 구독할 수 있는 예외만 연다.
+- 특징: Firestore 규칙은 기본 `deny all`을 유지하되, hosted 회의 작업실이 세션 범위의 Firebase custom token으로 `integration_inova_meetings`, `integration_inova_meeting_jobs`, `integration_inova_meeting_artifacts` 문서를 읽기 전용으로 구독할 수 있는 예외와, prompt panel 세션이 자기 `integration_inova_accounts` 문서, `prompt_store_meta/summary`, `prompt_store_feed_pages/latest__all__0000`, `prompt_store_feed_pages/latest__all__0001`, `prompt_store_entry_details/{entryId}`를 읽을 수 있는 예외만 연다. bridge는 page 0을 먼저 붙이고, 공개 수가 많을 때만 page 1을 추가로 붙인다. prompt bridge 자산은 cache-busting query와 no-cache 헤더를 함께 써서 hosting-only 배포 직후에도 새 스크립트가 바로 반영되게 한다. `prompt_libraries`, chunk/order 문서는 Firestore direct read를 계속 열지 않는다.
 
 ## 3. 주요 데이터 흐름
 
@@ -88,36 +88,46 @@
 2. `shared/storage.js`가 `chrome.storage.local`에 저장한다.
 3. 같은 시점에 `cloudSync` 메타를 큐잉한다.
 
-### C. 원격 백업
+### C. 프롬프트 원격 메타 실시간
+
+1. 패널의 `프롬프트` 도구가 열리면 `content/prompt-realtime-manager.js`가 `inova-prompt:issue-panel-auth`를 background에 보낸다.
+2. background는 `issueInovaPromptPanelAuth`를 호출해 prompt panel 범위 Firebase custom token을 받는다.
+3. hidden hosted `prompt-panel-bridge.html`이 Firebase Auth에 로그인하고 Firestore offline persistence를 먼저 켠 뒤 `integration_inova_accounts/{providerUserKey}` 문서를 구독한다.
+4. bridge는 `promptLibraryMeta.lastRevision`, `lastSyncedAt`, `itemCount`만 panel로 돌려준다.
+5. content script는 local pending sync가 없고 원격 revision이 더 최신일 때만 `loadInovaPromptLibrary`를 다시 호출해 전체 보관함을 hydrate한다.
+
+### D. 원격 백업
 
 1. content script가 sync 상태를 만들고 background에 메시지를 보낸다.
 2. background가 access token을 준비한다.
 3. Functions가 i-Nova 사용자 검증 뒤 Firestore에 반영한다.
 4. 확인용 운영 점검은 `scripts/check-cloud-sync.js`, `scripts/check-function-logs.js`로 한다.
 
-### D. 프롬프트 스토어 / 평가 / 릴리스
+### E. 프롬프트 스토어 / 평가 / 릴리스
 
 1. content script가 사용자의 액션을 수집한다.
 2. background가 Functions 또는 Hosting으로 요청을 보낸다.
 3. 응답은 다시 content script 상태에 머지된다.
+4. 예외적으로 공개 `전체` 스토어는 hidden hosted prompt bridge가 Firestore local cache를 유지한 채 `prompt_store_meta/summary`와 `prompt_store_feed_pages/latest__all__0000`, `latest__all__0001`를 실시간 구독해 최대 `1000`건 로컬 집합을 유지한다.
+5. 검색, 카테고리, `최신/좋아요/가져오기/조회수` 정렬은 이 로컬 집합 안에서 다시 계산하고, 상세 `보기` 본문은 같은 bridge가 `prompt_store_entry_details/{entryId}`를 direct read한다. `내 등록`과 쓰기 액션만 request-response 흐름을 사용한다.
 
-### E. 회의 작업실 진입
+### F. 회의 작업실 진입
 
 1. popup은 `settings.meetingWorkspaceTarget`을 저장하고, content 패널은 `새 회의하기` 또는 결과 리스트 항목에서 `inova-meeting:open-workspace` / `inova-meeting:open-result`를 background로 보낸다.
 2. background가 i-Nova access token으로 `issueInovaMeetingLaunch`를 호출해 launch grant를 만든다.
 3. background가 이어서 `exchangeInovaMeetingLaunch`를 호출해 `meetingSessionToken`을 받은 뒤, popup 설정의 호스팅 타깃에 맞는 최종 작업실 URL을 만든다.
 4. background가 `chrome.tabs.create()`로 최종 hosted `meeting/index.html?meetingId=...#ws=...` URL 또는 로컬 `http://127.0.0.1:5000/meeting/index.html?...#ws=...` URL을 연다.
-5. hosted 회의 작업실은 URL hash 또는 storage에 있는 `meetingSessionToken`으로 부팅하고, `issueInovaMeetingWorkspaceAuth`로 Firebase custom token을 받아 Firebase Auth에 로그인한다.
+5. hosted 회의 작업실은 URL hash 또는 storage에 있는 `meetingSessionToken`으로 부팅하고, `issueInovaMeetingWorkspaceAuth`로 Firebase custom token을 받아 Firebase Auth에 로그인한다. 이때 Firestore offline persistence를 먼저 켠다.
 6. hosted 회의 작업실은 `meeting` 문서 구독을 붙이고, 선택된 기록에 따라 `job`, `artifact` 문서를 추가 구독한다. hash 없는 clean URL만 직접 열면 hosted 세션이 없으므로 접근을 막고 패널에서 다시 열도록 안내한다.
 
-### F. hosted 회의 녹음 시작/종료
+### G. hosted 회의 녹음 시작/종료
 
 1. hosted 회의 작업실에서 사용자가 직접 `녹음 시작`을 누른다.
 2. 브라우저가 처음 한 번 마이크 권한을 확인하면, 사용자는 권한을 허용한다.
 3. hosted 회의 작업실이 `getUserMedia`와 `MediaRecorder`로 마이크 오디오를 녹음한다.
 4. 녹음이 끝나면 원본 blob과 캡처 메타를 같은 탭 메모리에 유지하고, 같은 회의의 새 런 생성 준비 상태로 둔다.
 
-### G. hosted 회의 전사 접수
+### H. hosted 회의 전사 접수
 
 1. hosted 회의 작업실이 방금 녹음한 blob을 inline payload로 바꾸거나 chunk 업로드 가능한 source로 준비한다.
 2. hosted 회의 작업실이 `meetingSessionToken`으로 `createInovaMeetingJob` 또는 `uploadInovaMeetingSource`를 직접 호출한다.

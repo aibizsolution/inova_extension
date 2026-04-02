@@ -443,6 +443,7 @@
     if (normalized === "remote_processing" || normalized === "processing") return "원격 처리";
     if (normalized === "transcribing") return "전사 중";
     if (normalized === "transcribing_chunks") return "분할 전사 중";
+    if (normalized === "assembling_transcript") return "청크 병합 중";
     if (normalized === "reconciling_speakers") return "화자 정합 중";
     if (normalized === "generating_notes") return "회의 정리 중";
     if (normalized === "diarizing") return "화자 구분 중";
@@ -630,6 +631,11 @@
     notifyDebugListeners();
   }
 
+  function setEnabled(nextEnabled) {
+    debugEnabled = Boolean(nextEnabled);
+    return debugEnabled;
+  }
+
   function formatDebugEntry(entry) {
     const timestamp = normalizeText(entry?.timestamp);
     const event = normalizeText(entry?.event);
@@ -642,6 +648,74 @@
           ? ""
           : JSON.stringify(payload, null, 2);
     return `${timestamp} ${event}${payloadText ? `\n${payloadText}` : ""}`.trim();
+  }
+
+  function hasDebugErrorPayload(payload) {
+    const error = payload?.error;
+    if (error == null) {
+      return false;
+    }
+    if (typeof error === "string") {
+      return Boolean(normalizeText(error));
+    }
+    if (typeof error === "object") {
+      return Object.keys(error).length > 0;
+    }
+    return Boolean(error);
+  }
+
+  function isErrorDebugEntry(entry) {
+    const event = normalizeText(entry?.event).toLowerCase();
+    const tone = normalizeText(entry?.payload?.tone).toLowerCase();
+    return event.includes("error")
+      || event.includes("failed")
+      || event.includes("timeout")
+      || tone === "error"
+      || hasDebugErrorPayload(entry?.payload);
+  }
+
+  function getErrorDebugEntries(entries = getDebugEntries()) {
+    return (Array.isArray(entries) ? entries : []).filter((entry) => isErrorDebugEntry(entry));
+  }
+
+  function buildCopyText(entries = getDebugEntries()) {
+    return (Array.isArray(entries) ? entries : []).map((entry) => formatDebugEntry(entry)).join("\n\n").trim();
+  }
+
+  function buildErrorCopyText(entries = getDebugEntries()) {
+    return getErrorDebugEntries(entries).map((entry) => formatDebugEntry(entry)).join("\n\n").trim();
+  }
+
+  function summarizeEntries(entries = getDebugEntries()) {
+    const normalizedEntries = Array.isArray(entries) ? entries : [];
+    let functionCalls = 0;
+    let readCount = 0;
+    let snapshotCount = 0;
+    let errorCount = 0;
+    for (const entry of normalizedEntries) {
+      const event = normalizeText(entry?.event);
+      const backend = normalizeText(entry?.payload?.backend).toLowerCase();
+      const operation = normalizeText(entry?.payload?.operation).toLowerCase();
+      if (event.endsWith(".request") && backend === "firebase-function") {
+        functionCalls += 1;
+      }
+      if (event.endsWith(".request") && operation === "read") {
+        readCount += 1;
+      }
+      if (event.includes("firestore") && event.endsWith(".snapshot")) {
+        snapshotCount += 1;
+      }
+      if (isErrorDebugEntry(entry)) {
+        errorCount += 1;
+      }
+    }
+    return {
+      errorCount,
+      functionCalls,
+      readCount,
+      snapshotCount,
+      totalLogs: normalizedEntries.length,
+    };
   }
 
   function notifyDebugListeners() {
@@ -676,9 +750,6 @@
     while (debugEntries.length > MAX_DEBUG_LOG_ENTRIES) {
       debugEntries.shift();
     }
-    try {
-      global.console?.info?.(DEBUG_PREFIX, entry.event, entry.payload || {});
-    } catch {}
     notifyDebugListeners();
     return entry;
   }
@@ -715,6 +786,8 @@
     TERMINAL_REMOTE_STATUSES,
     WORKSPACE_HASH_PARAM,
     buildHeaders,
+    buildCopyText,
+    buildErrorCopyText,
     buildRemoteSelectionId: (jobId) => normalizeText(jobId) ? `job:${normalizeText(jobId)}` : "",
     buildLocalSelectionId: (requestId) => normalizeText(requestId) ? `local:${normalizeText(requestId)}` : "",
     buildWorkspaceHash,
@@ -765,8 +838,10 @@
     safeParse,
     safeSessionStorageGet,
     safeSessionStorageSet,
+    setEnabled,
     stopTracks,
     subscribeDebugEntries,
+    summarizeEntries,
     toTimestamp,
   };
 })(globalThis);

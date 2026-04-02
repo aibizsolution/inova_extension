@@ -90,7 +90,9 @@
     return {
       collapsed: enabled ? Boolean(debug?.collapsed) : true,
       enabled,
+      feedback: normalizeFeedback(debug?.feedback),
       hasErrors: Boolean(debug?.hasErrors),
+      statusSummary: normalizeDebugSummary(debug?.statusSummary),
       statusText: normalizeText(debug?.statusText) || "로그 0건",
       text: normalizeText(debug?.entriesText) || "아직 로그가 없습니다.",
     };
@@ -153,8 +155,11 @@
             <button type="button" class="inova-meeting-debug-console__button" data-meeting-action="debug-clear">비우기</button>
             <button type="button" class="inova-meeting-debug-console__button" data-meeting-action="debug-toggle">접기</button>
           </div>
-          <span class="inova-meeting-debug-console__status">${escapeHtml(normalizedDebug.statusText)}</span>
+          ${renderDebugStatus(normalizedDebug)}
         </div>
+        ${normalizedDebug.feedback.text
+          ? `<div class="inova-meeting-debug-console__feedback${normalizedDebug.feedback.tone === "error" ? " is-error" : ""}">${escapeHtml(normalizedDebug.feedback.text)}</div>`
+          : ""}
         <pre class="inova-meeting-debug-console__log">${escapeHtml(normalizedDebug.text)}</pre>
       </aside>
     `;
@@ -200,6 +205,37 @@
       text,
       tone: normalizeText(feedback?.tone) || "info",
     };
+  }
+
+  function normalizeDebugSummary(summary) {
+    const next = summary && typeof summary === "object" ? summary : {};
+    return {
+      errorCount: Math.max(0, Number(next.errorCount) || 0),
+      functionCalls: Math.max(0, Number(next.functionCalls) || 0),
+      readCount: Math.max(0, Number(next.readCount) || 0),
+      snapshotCount: Math.max(0, Number(next.snapshotCount) || 0),
+      totalLogs: Math.max(0, Number(next.totalLogs) || 0),
+    };
+  }
+
+  function renderDebugStatus(debug) {
+    const summary = normalizeDebugSummary(debug?.statusSummary);
+    const items = [
+      renderDebugStatusItem("로그", summary.totalLogs),
+      renderDebugStatusItem("함수", summary.functionCalls),
+      renderDebugStatusItem("읽기", summary.readCount),
+      renderDebugStatusItem("스냅샷", summary.snapshotCount),
+      renderDebugStatusItem("오류", summary.errorCount, summary.errorCount > 0),
+    ];
+    return `
+      <span class="inova-meeting-debug-console__status" aria-label="${escapeHtml(normalizeText(debug?.statusText) || "디버그 로그 요약")}">
+        ${items.join("")}
+      </span>
+    `;
+  }
+
+  function renderDebugStatusItem(label, count, isError = false) {
+    return `<span class="inova-meeting-debug-console__status-item${isError ? " is-error" : ""}">${escapeHtml(label)} ${Math.max(0, Number(count) || 0)}건</span>`;
   }
 
   function buildPendingMessage(pending) {

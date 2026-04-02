@@ -240,6 +240,17 @@
     return payload?.data || {};
   }
 
+  async function issueInovaPromptPanelAuth(providerIdentity, accessToken) {
+    const payload = await postJson(
+      functions.issueInovaPromptPanelAuthUrl,
+      {
+        owner: toProviderIdentityPayload(providerIdentity),
+      },
+      accessToken
+    );
+    return payload?.data || {};
+  }
+
   async function exchangeInovaMeetingLaunch(input) {
     const payload = await postJson(
       functions.exchangeInovaMeetingLaunchUrl,
@@ -323,6 +334,7 @@
     getInovaMeetingJob,
     issueInovaMeetingLaunch,
     issueInovaMeetingPanelAuth,
+    issueInovaPromptPanelAuth,
     listInovaMeetings,
     listInovaMeetingResults,
     importPromptStoreEntry,

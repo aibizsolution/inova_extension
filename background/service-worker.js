@@ -5,6 +5,8 @@ importScripts("../shared/storage.js");
 importScripts("../shared/firebase-config.js");
 importScripts("../shared/inova-auth.js");
 importScripts("../shared/cloud-api.js");
+importScripts("meeting-list-cache.js");
+importScripts("panel-auth-cache.js");
 
 const namespace = globalThis.InovaBookmarks || {};
 const INOVA_ORIGIN = "https://inova.incross.com";
@@ -13,7 +15,6 @@ const RECENT_PEEK_TTL_MS = 10000;
 const RECENT_RELEASE_TTL_MS = 60000;
 const RECENT_SYNC_TTL_MS = 30000;
 const OFFSCREEN_RECORDER_URL = "offscreen/meeting-recorder.html";
-const MEETING_DEBUG_PREFIX = "[Inova Meeting SW]";
 const LOCAL_MEETING_WORKSPACE_URL = "http://127.0.0.1:5000/meeting/index.html";
 const activeLoads = new Map();
 const activePeeks = new Map();
@@ -24,13 +25,15 @@ const recentReleaseResults = new Map();
 const activeSyncs = new Map();
 const recentSyncResults = new Map();
 let activeOffscreenCreation = null;
+const meetingListCache = namespace.meetingListCache?.create?.(getInovaAccessToken);
+const panelAuthCache = namespace.panelAuthCache?.create?.(getInovaAccessToken);
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const type = String(message?.type || "");
   if (message?.target === "offscreen") {
     return false;
   }
-  if (!type.startsWith("inova-sync:") && !type.startsWith("inova-store:") && !type.startsWith("inova-release:") && !type.startsWith("inova-review:") && !type.startsWith("inova-meeting:")) {
+  if (!type.startsWith("inova-sync:") && !type.startsWith("inova-store:") && !type.startsWith("inova-release:") && !type.startsWith("inova-review:") && !type.startsWith("inova-meeting:") && !type.startsWith("inova-prompt:")) {
     return false;
   }
   handleMessage(message, sender)
@@ -86,13 +89,16 @@ async function handleMessage(message, sender) {
     return getMeetingArtifact(message.input, message.providerIdentity);
   }
   if (message.type === "inova-meeting:list-meetings") {
-    return listMeetings(message.input, message.providerIdentity);
+    return meetingListCache.listMeetings(message.input, message.providerIdentity);
   }
   if (message.type === "inova-meeting:list-results") {
     return listMeetingResults(message.input, message.providerIdentity);
   }
   if (message.type === "inova-meeting:issue-panel-auth") {
-    return issueMeetingPanelAuth(message.providerIdentity);
+    return panelAuthCache.issueMeetingPanelAuth(message.providerIdentity);
+  }
+  if (message.type === "inova-prompt:issue-panel-auth") {
+    return panelAuthCache.issuePromptPanelAuth(message.providerIdentity);
   }
   if (message.type === "inova-meeting:open-workspace") {
     return openMeetingWorkspace(message.input, message.providerIdentity, sender);
@@ -293,11 +299,6 @@ async function listMeetings(input, providerIdentity) {
 async function listMeetingResults(input, providerIdentity) {
   const accessToken = await getInovaAccessToken();
   return namespace.cloudApi.listInovaMeetingResults(input, providerIdentity, accessToken);
-}
-
-async function issueMeetingPanelAuth(providerIdentity) {
-  const accessToken = await getInovaAccessToken();
-  return namespace.cloudApi.issueInovaMeetingPanelAuth(providerIdentity, accessToken);
 }
 
 async function handleMeetingRecorderFailed(payload) {
@@ -677,9 +678,7 @@ function isLoopbackHostname(value) {
 }
 
 function logMeetingDebug(event, payload) {
-  try {
-    console.info(MEETING_DEBUG_PREFIX, event, payload || {});
-  } catch {}
+  return;
 }
 
 async function resolveMeetingProviderIdentity(providerIdentity) {

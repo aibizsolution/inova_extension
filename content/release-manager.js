@@ -183,7 +183,10 @@
     }
 
     async function sendRuntimeMessage(type, payload) {
+      const metadata = classifyReleaseRuntimeMetadata(type);
       logDebug("release.runtime.request", {
+        backend: metadata.backend,
+        operation: metadata.operation,
         scope: "runtime",
         tool: "release",
         type,
@@ -192,6 +195,8 @@
         const response = await chrome.runtime.sendMessage({ type, ...(payload || {}) });
         if (!response?.ok) throw new Error(namespace.session.normalizeText(response?.error) || "릴리스 요청을 처리하지 못했어요.");
         logDebug("release.runtime.success", {
+          backend: metadata.backend,
+          operation: metadata.operation,
           scope: "runtime",
           tool: "release",
           type,
@@ -199,7 +204,9 @@
         return response.data;
       } catch (error) {
         logDebug("release.runtime.error", {
+          backend: metadata.backend,
           error: error instanceof Error ? error.message : String(error || ""),
+          operation: metadata.operation,
           scope: "runtime",
           tool: "release",
           type,
@@ -210,6 +217,26 @@
 
     function logDebug(event, payload) {
       namespace.panelDebug?.log?.(event, payload || {});
+    }
+
+    function classifyReleaseRuntimeMetadata(type) {
+      const normalized = namespace.session.normalizeText(type);
+      if (normalized === "inova-release:latest" || normalized === "inova-release:history") {
+        return {
+          backend: "hosting",
+          operation: "read",
+        };
+      }
+      if (normalized === "inova-release:open-url") {
+        return {
+          backend: "browser",
+          operation: "open",
+        };
+      }
+      return {
+        backend: "",
+        operation: "",
+      };
     }
   }
 

@@ -20,7 +20,10 @@
     host.addEventListener("pointermove", (event) => handlePromptPointerMove(event, host));
     host.addEventListener("pointerup", (event) => handlePromptPointerEnd(event, host, callbacks));
     host.addEventListener("pointercancel", (event) => handlePromptPointerEnd(event, host, callbacks));
-    host.addEventListener("input", (event) => handleRootInput(event, callbacks));
+    host.addEventListener("compositionstart", (event) => handleRootCompositionStart(event, host));
+    host.addEventListener("compositionend", (event) => handleRootCompositionEnd(event, host, callbacks));
+    host.addEventListener("search", (event) => handleRootSearch(event, callbacks), true);
+    host.addEventListener("input", (event) => handleRootInput(event, host, callbacks));
     host.addEventListener("change", (event) => handleRootChange(event, callbacks));
     host.addEventListener("keydown", (event) => handleRootKeydown(event, callbacks));
     fileInput.addEventListener("change", () => { const [file] = Array.from(fileInput.files || []); if (file) callbacks.onImportFile?.(file); fileInput.value = ""; });
@@ -30,8 +33,13 @@
   function renderPanel(state) {
     const host = document.getElementById("inova-bookmark-host");
     if (!host) return;
+    if (host.__searchComposition?.active) {
+      host.__deferredPanelState = state;
+      return;
+    }
     const root = host.querySelector("#inova-bookmark-root");
     const debugLayer = host.querySelector("#inova-meeting-debug-layer");
+    const focusedControl = captureFocusedControl(root);
     const previousStoreScrollTop = state.activeTool === "prompts" && state.promptTool?.activeTab === "store"
       ? host.querySelector(".inova-store-list")?.scrollTop || host.__storeScrollTop || 0
       : 0;
@@ -49,6 +57,7 @@
     namespace.panelDebug?.restoreViewport?.("panel-overlay", debugLayer?.querySelector(".inova-meeting-debug-console__log"));
     if (state.activeTool === "prompts" && state.promptTool?.activeTab === "store") syncStoreList(host, host.__callbacks, previousStoreScrollTop);
     namespace.bookmarkView.setActive(state.bookmarksTool.activeId);
+    restoreFocusedControl(root, focusedControl);
   }
 
   function buildMarkup() {
@@ -169,9 +178,36 @@
     }
   }
 
-  function handleRootInput(event, callbacks) {
+  function handleRootCompositionStart(event, host) {
+    const search = event.target.closest?.("[data-search-tool]");
+    if (!(search instanceof HTMLElement)) return;
+    host.__searchComposition = {
+      active: true,
+      toolId: search.dataset.searchTool || "",
+    };
+  }
+
+  function handleRootCompositionEnd(event, host) {
+    const search = event.target.closest?.("[data-search-tool]");
+    if (!(search instanceof HTMLElement)) return;
+    host.__searchComposition = {
+      active: false,
+      toolId: search.dataset.searchTool || "",
+    };
+    const deferredState = host.__deferredPanelState;
+    delete host.__deferredPanelState;
+    if (deferredState) {
+      global.setTimeout(() => renderPanel(deferredState), 0);
+    }
+  }
+
+  function handleRootInput(event, host, callbacks) {
     const search = event.target.closest("[data-search-tool]");
-    if (search) return void callbacks.onSearch?.(search.dataset.searchTool, search.value);
+    if (search) {
+      return void callbacks.onSearch?.(search.dataset.searchTool, search.value, {
+        composing: Boolean(event.isComposing || host.__searchComposition?.active),
+      });
+    }
     const field = event.target.closest("[data-prompt-field]");
     if (field) callbacks.onPromptDraftChange?.(field.dataset.promptField, field.value);
     const publishField = event.target.closest("[data-prompt-publish-field]");
@@ -188,6 +224,12 @@
     if (storeField) return void callbacks.onStoreAction?.("set-category", { categoryId: storeField.value || "all" });
     const promptSelect = event.target.closest("[data-prompt-select]");
     if (promptSelect?.dataset.promptSelect === "publish-category") callbacks.onPromptAction?.("set-publish-category", { categoryId: promptSelect.value || "" });
+  }
+
+  function handleRootSearch(event, callbacks) {
+    const search = event.target.closest?.("[data-search-tool]");
+    if (!(search instanceof HTMLElement)) return;
+    callbacks.onSearchSubmit?.(search.dataset.searchTool, search.value);
   }
 
   function handlePromptPointerDown(event, host) {
@@ -324,6 +366,63 @@
     if (scrollTop > 0) list.scrollTop = scrollTop;
     host.__storeScrollTop = list.scrollTop;
     if (callbacks?.onStoreAction && list.dataset.storeHasMore === "true" && list.dataset.storeLoading !== "true" && list.scrollHeight <= list.clientHeight + 24) global.setTimeout(() => callbacks.onStoreAction("load-more"), 0);
+  }
+  function captureFocusedControl(root) {
+    if (!(root instanceof HTMLElement)) return null;
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement) || !root.contains(active)) return null;
+    const tagName = String(active.tagName || "").toLowerCase();
+    if (!["input", "textarea", "select"].includes(tagName)) return null;
+    const selector = buildFocusSelector(active);
+    if (!selector) return null;
+    return {
+      end: typeof active.selectionEnd === "number" ? active.selectionEnd : null,
+      scrollLeft: typeof active.scrollLeft === "number" ? active.scrollLeft : 0,
+      scrollTop: typeof active.scrollTop === "number" ? active.scrollTop : 0,
+      selector,
+      start: typeof active.selectionStart === "number" ? active.selectionStart : null,
+      value: "value" in active ? String(active.value || "") : "",
+    };
+  }
+  function restoreFocusedControl(root, snapshot) {
+    if (!(root instanceof HTMLElement) || !snapshot?.selector) return;
+    const next = root.querySelector(snapshot.selector);
+    if (!(next instanceof HTMLElement)) return;
+    next.focus({ preventScroll: true });
+    if ("value" in next && typeof snapshot.value === "string" && String(next.value || "") !== snapshot.value) {
+      next.value = snapshot.value;
+    }
+    if (typeof next.setSelectionRange === "function" && snapshot.start != null) {
+      const valueLength = String(next.value || "").length;
+      const start = Math.max(0, Math.min(valueLength, Number(snapshot.start) || 0));
+      const end = Math.max(start, Math.min(valueLength, Number(snapshot.end) || start));
+      next.setSelectionRange(start, end);
+    }
+    if (typeof next.scrollLeft === "number") next.scrollLeft = Number(snapshot.scrollLeft) || 0;
+    if (typeof next.scrollTop === "number") next.scrollTop = Number(snapshot.scrollTop) || 0;
+  }
+  function buildFocusSelector(element) {
+    if (!(element instanceof HTMLElement)) return "";
+    const searchTool = element.dataset.searchTool;
+    if (searchTool) return `[data-search-tool="${escapeSelector(searchTool)}"]`;
+    const storeField = element.dataset.storeField;
+    if (storeField) return `[data-store-field="${escapeSelector(storeField)}"]`;
+    const promptField = element.dataset.promptField;
+    if (promptField) return `[data-prompt-field="${escapeSelector(promptField)}"]`;
+    const promptPublishField = element.dataset.promptPublishField;
+    if (promptPublishField) {
+      const promptId = element.dataset.promptId || "";
+      return `[data-prompt-publish-field="${escapeSelector(promptPublishField)}"][data-prompt-id="${escapeSelector(promptId)}"]`;
+    }
+    if (element.id) return `#${escapeSelector(element.id)}`;
+    return "";
+  }
+  function escapeSelector(value) {
+    const text = String(value || "");
+    if (global.CSS?.escape) {
+      return global.CSS.escape(text);
+    }
+    return text.replace(/["\\]/g, "\\$&");
   }
   function escapeHtml(text) { return String(text || "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;"); }
 

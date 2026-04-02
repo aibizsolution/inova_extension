@@ -14,10 +14,28 @@ service cloud.firestore {
         && resourceData.meetingId == request.auth.token.meetingId;
     }
 
+    function matchesMeetingWorkspaceDoc(docId) {
+      return isWorkspaceSessionActive()
+        && docId == request.auth.token.providerUserKey + "__" + request.auth.token.meetingId
+        && (
+          resource == null
+          || (
+            resource.data.owner.providerUserKey == request.auth.token.providerUserKey
+            && resource.data.meetingId == request.auth.token.meetingId
+          )
+        );
+    }
+
     function isPanelSessionActive() {
       return request.auth != null
         && request.auth.token.scope == "meeting-panel"
         && request.time.toMillis() < request.auth.token.panelExpMs;
+    }
+
+    function isPromptPanelSessionActive() {
+      return request.auth != null
+        && request.auth.token.scope == "prompt-panel"
+        && request.time.toMillis() < request.auth.token.promptPanelExpMs;
     }
 
     function matchesMeetingPanel(resourceData) {
@@ -26,7 +44,7 @@ service cloud.firestore {
     }
 
     match /integration_inova_meetings/{docId} {
-      allow get: if matchesMeetingWorkspace(resource.data) || matchesMeetingPanel(resource.data);
+      allow get: if matchesMeetingWorkspaceDoc(docId) || (resource != null && matchesMeetingPanel(resource.data));
       allow list: if matchesMeetingPanel(resource.data);
       allow write: if false;
     }
@@ -39,6 +57,34 @@ service cloud.firestore {
 
     match /integration_inova_meeting_artifacts/{artifactId} {
       allow get: if matchesMeetingWorkspace(resource.data);
+      allow list: if false;
+      allow write: if false;
+    }
+
+    match /integration_inova_accounts/{providerUserKey} {
+      allow get: if isPromptPanelSessionActive()
+        && request.auth.token.providerUserKey == providerUserKey;
+      allow list: if false;
+      allow write: if false;
+    }
+
+    match /prompt_store_meta/{docId} {
+      allow get: if isPromptPanelSessionActive() && docId == "summary";
+      allow list: if false;
+      allow write: if false;
+    }
+
+    match /prompt_store_feed_pages/{docId} {
+      allow get: if isPromptPanelSessionActive()
+        && docId.matches('^latest__all__000[0-1]$');
+      allow list: if false;
+      allow write: if false;
+    }
+
+    match /prompt_store_entry_details/{entryId} {
+      allow get: if isPromptPanelSessionActive()
+        && exists(/databases/$(database)/documents/prompt_store_entries/$(entryId))
+        && get(/databases/$(database)/documents/prompt_store_entries/$(entryId)).data.status == "published";
       allow list: if false;
       allow write: if false;
     }

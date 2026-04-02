@@ -1,18 +1,19 @@
 (function initStoreManager(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const PAGE_SIZE = 500;
-  const SEARCH_LIMIT = 500;
+  const LOCAL_CACHE_LIMIT = 1000;
   function create(state, hooks) {
     const viewedEntryIds = new Set();
     let identityRetryTimer = 0;
     let loadSequence = 0;
-    return { buildViewState, ensureLoaded, handleQueryChange, publishPrompt, unpublishPrompt, handleAction };
+    return { applyLatestRealtimeSnapshot, buildViewState, ensureLoaded, handleQueryChange, submitQuery, publishPrompt, unpublishPrompt, handleAction };
     function buildViewState() {
-      const filtered = namespace.promptStore.filterEntries(state.store.items, state.queries.store, state.store.categoryId);
+      const appliedQuery = getAppliedQuery();
+      const categoryFiltered = namespace.promptStore.filterEntries(state.store.items, "", state.store.categoryId);
+      const filtered = namespace.promptStore.filterEntries(categoryFiltered, appliedQuery, state.store.categoryId);
       const items = namespace.promptStore.sortEntries(filtered, state.store.sortBy);
       const providerUserKey = namespace.providerIdentity.getCurrent().providerUserKey;
-      const totalCount = hasActiveQuery() ? items.length : Math.max(0, Number(state.store.totalCount) || state.store.items.length);
-      const emptyText = state.queries.store ? "검색 결과가 없어요. 다른 표현으로 다시 찾아보세요." : state.store.scope === "mine" ? "내가 등록한 프롬프트가 아직 없어요." : "스토어에 등록된 프롬프트가 아직 없어요.";
+      const totalCount = hasActiveQuery() ? items.length : categoryFiltered.length;
+      const emptyText = hasActiveQuery() ? "검색 결과가 없어요. 다른 표현으로 다시 찾아보세요." : state.store.scope === "mine" ? "내가 등록한 프롬프트가 아직 없어요." : "스토어에 등록된 프롬프트가 아직 없어요.";
       return {
         categories: getAvailableCategories(),
         categoryId: state.store.categoryId,
@@ -23,25 +24,54 @@
         error: state.store.error,
         expandedEntryId: state.store.expandedEntryId,
         feedback: state.store.feedback,
-        hasMore: Boolean(state.store.hasMore) && !hasActiveQuery(),
+        hasMore: false,
         identityPending: Boolean(state.store.identityPending),
         items,
-        loadedCount: state.store.items.length,
+        loadedCount: categoryFiltered.length,
         loaded: state.store.loaded,
         loading: state.store.loading,
         ownerScope: state.store.scope,
         providerUserKey,
+        queryActive: hasActiveQuery(),
+        queryDirty: isQueryDirty(),
         query: state.queries.store,
         sortBy: state.store.sortBy,
         totalCount,
       };
     }
 
-    async function ensureLoaded(force = false) {
+    async function ensureLoaded(force = false, reason = "scheduled") {
       if (state.store.loading && !force) return;
       if (!force && state.store.loaded) return;
+      if (shouldDeferToRealtimeStoreLatest(reason)) {
+        state.store.loading = !state.store.loaded;
+        state.store.identityPending = false;
+        state.store.error = "";
+        if (typeof hooks.refreshStoreLatestRealtime === "function") {
+          hooks.refreshStoreLatestRealtime(reason);
+        }
+        hooks.render();
+        return;
+      }
+      if (shouldSkipScheduledAllStoreRead(force, reason)) {
+        state.store.loaded = true;
+        state.store.loading = false;
+        state.store.identityPending = false;
+        state.store.error = "";
+        hooks.render();
+        return;
+      }
+      if (shouldUseRealtimeStoreLatest() && reason !== "fallback") {
+        state.store.loading = true;
+        state.store.identityPending = false;
+        state.store.error = "";
+        hooks.render();
+        if (force && typeof hooks.refreshStoreLatestRealtime === "function") {
+          hooks.refreshStoreLatestRealtime(reason);
+        }
+        return;
+      }
       const sequence = ++loadSequence;
-      const limit = getRequestLimit();
       let reloadAll = false;
       state.store.loading = true;
       state.store.error = "";
@@ -58,14 +88,14 @@
         state.store.identityPending = false;
         const data = await sendRuntimeMessage("inova-store:list", {
           filter: {
-            categoryId: state.store.categoryId,
-            limit,
+            categoryId: "all",
+            limit: LOCAL_CACHE_LIMIT,
             ownerOnly: state.store.scope === "mine",
-            query: state.queries.store,
-            sortBy: state.store.sortBy,
+            query: "",
+            sortBy: "latest",
           },
           providerIdentity,
-        });
+        }, { reason });
         if (sequence !== loadSequence) return;
         state.store.items = namespace.promptStore.normalizeStoreEntries(data.items);
         state.store.availableCategories = normalizeAvailableCategories(data.availableCategories, state.store.categoryId);
@@ -75,7 +105,7 @@
           state.store.loaded = false;
           reloadAll = true;
         }
-        state.store.hasMore = Boolean(data.hasMore) && !hasActiveQuery();
+        state.store.hasMore = false;
         state.store.loaded = true;
       } catch (error) {
         if (sequence !== loadSequence) return;
@@ -85,21 +115,30 @@
         if (sequence !== loadSequence) return;
         state.store.loading = false;
         hooks.render();
-        if (reloadAll) global.setTimeout(() => ensureLoaded(true), 0);
+        if (reloadAll) global.setTimeout(() => ensureLoaded(true, "reload-all"), 0);
       }
     }
 
-    function handleQueryChange() {
+    function handleQueryChange(_value, options = {}) {
       global.clearTimeout(state.store.searchTimer);
-      state.store.limit = PAGE_SIZE;
-      state.store.hasMore = false;
-      hooks.render();
-      if (!hasActiveQuery()) {
-        state.store.searchTimer = global.setTimeout(() => ensureLoaded(true), 0);
+      if (options?.composing) {
         return;
       }
-      if (!shouldRemoteSearch()) return;
-      state.store.searchTimer = global.setTimeout(() => ensureLoaded(true), 320);
+    }
+
+    function submitQuery(value) {
+      global.clearTimeout(state.store.searchTimer);
+      state.queries.store = namespace.session.normalizeText(value);
+      state.store.limit = LOCAL_CACHE_LIMIT;
+      state.store.hasMore = false;
+      state.store.deleteConfirmEntryId = "";
+      state.store.detailPendingEntryId = "";
+      state.store.expandedEntryId = "";
+      state.store.appliedQuery = state.queries.store;
+      hooks.render();
+      if (!state.store.loaded) {
+        ensureLoaded().catch(() => {});
+      }
     }
 
     async function publishPrompt(promptId, categoryId, storeTitle) {
@@ -115,7 +154,9 @@
           },
           providerIdentity,
         });
-        await ensureLoaded(true);
+        if (shouldReloadAfterMutation()) {
+          await ensureLoaded(true, "publish");
+        }
         setFeedback("스토어에 별도 복사본으로 등록했어요.");
         hooks.render();
         return true;
@@ -138,7 +179,9 @@
         });
         state.store.deleteConfirmEntryId = "";
         state.store.expandedEntryId = state.store.expandedEntryId === entryId ? "" : state.store.expandedEntryId;
-        await ensureLoaded(true);
+        if (shouldReloadAfterMutation()) {
+          await ensureLoaded(true, "unpublish");
+        }
         setFeedback("스토어에서 내렸어요.");
         hooks.render();
         return true;
@@ -152,7 +195,7 @@
     }
 
     async function handleAction(action, detail = {}) {
-      if (action === "refresh") return void ensureLoaded(true);
+      if (action === "refresh") return void ensureLoaded(true, "manual-refresh");
       if (action === "load-more") return void loadMore();
       if (action === "set-category") return void setCategory(detail.categoryId);
       if (action === "set-scope") return void setScope(detail.scope);
@@ -165,14 +208,51 @@
       if (action === "unpublish") return void unpublishEntry(detail.entryId);
     }
 
-    async function setCategory(categoryId) { await updateFilters(() => { state.store.categoryId = namespace.promptStore.getCategories().some((category) => category.id === categoryId) ? categoryId : "all"; }); }
+    async function setCategory(categoryId) {
+      const nextCategoryId = namespace.promptStore.getCategories().some((category) => category.id === categoryId) ? categoryId : "all";
+      if (state.store.categoryId === nextCategoryId) {
+        return;
+      }
+      applyLocalFilters(() => {
+        state.store.categoryId = nextCategoryId;
+      });
+    }
     async function setScope(scope) { await updateFilters(() => { state.store.scope = scope === "mine" ? "mine" : "all"; }); }
-    async function setSort(sortBy) { await updateFilters(() => { state.store.sortBy = ["latest", "likes", "imports", "views"].includes(sortBy) ? sortBy : "latest"; }); }
+    async function setSort(sortBy) {
+      const nextSort = ["latest", "likes", "imports", "views"].includes(sortBy) ? sortBy : "latest";
+      if (state.store.sortBy === nextSort) {
+        return;
+      }
+      applyLocalFilters(() => {
+        state.store.sortBy = nextSort;
+      });
+    }
 
     async function loadMore() {
-      if (state.store.loading || !state.store.hasMore || hasActiveQuery()) return;
-      state.store.limit += PAGE_SIZE;
-      await ensureLoaded(true);
+      return;
+    }
+
+    function applyLatestRealtimeSnapshot(payload) {
+      const summary = payload?.summary && typeof payload.summary === "object" ? payload.summary : {};
+      const totalPublished = Math.max(0, Number(summary.totalPublished) || 0);
+      const categoryCounts = summary.categories && typeof summary.categories === "object" ? summary.categories : {};
+      const realtimeItems = namespace.promptStore.normalizeStoreEntries(payload?.items);
+      const previousItems = Array.isArray(state.store.items) ? state.store.items : [];
+      const previousById = new Map(previousItems.map((item) => [item.entryId, item]));
+      state.store.items = realtimeItems.map((item) => mergeNormalizedEntry(previousById.get(item.entryId), item));
+      state.store.availableCategories = normalizeAvailableCategories(
+        Object.keys(categoryCounts).map((categoryId) => ({ id: categoryId })),
+        state.store.categoryId
+      );
+      state.store.totalCount = state.store.categoryId === "all"
+        ? totalPublished
+        : Math.max(0, Number(categoryCounts[state.store.categoryId]) || 0);
+      state.store.hasMore = false;
+      state.store.identityPending = false;
+      state.store.error = "";
+      state.store.loaded = true;
+      state.store.loading = false;
+      hooks.render();
     }
 
     async function toggleExpand(entryId) {
@@ -180,26 +260,26 @@
       state.store.expandedEntryId = state.store.expandedEntryId === entryId ? "" : entryId;
       state.store.detailPendingEntryId = state.store.expandedEntryId ? entryId : "";
       hooks.render();
-      if (!state.store.expandedEntryId || viewedEntryIds.has(entryId)) return;
-
-      viewedEntryIds.add(entryId);
-      if (previousEntry) mergeEntry({ ...previousEntry, metrics: { ...previousEntry.metrics, viewCount: previousEntry.metrics.viewCount + 1 } }, { viewed: true });
-      hooks.render();
+      if (!state.store.expandedEntryId) return;
+      if (viewedEntryIds.has(entryId) && namespace.session.normalizeText(previousEntry?.content)) return;
       try {
-        const providerIdentity = namespace.providerIdentity.getCurrent();
-        const result = await sendRuntimeMessage("inova-store:view", { entryId, providerIdentity });
-        if (result.entry) {
-          const nextEntry = previousEntry && Number(result.entry?.metrics?.viewCount) < previousEntry.metrics.viewCount + 1
-            ? { ...result.entry, metrics: { ...result.entry.metrics, viewCount: previousEntry.metrics.viewCount + 1 } }
-            : result.entry;
-          state.store.detailPendingEntryId = "";
-          mergeEntry(nextEntry, { viewed: true });
-          hooks.render();
-        }
-      } catch {
-        viewedEntryIds.delete(entryId);
+        const detail = typeof hooks.loadStoreDetail === "function"
+          ? await hooks.loadStoreDetail(entryId)
+          : null;
         state.store.detailPendingEntryId = "";
-        if (previousEntry) mergeEntry(previousEntry);
+        if (previousEntry && namespace.session.normalizeText(detail?.content)) {
+          viewedEntryIds.add(entryId);
+          mergeEntry({
+            ...previousEntry,
+            content: detail.content,
+            hasDetail: true,
+            updatedAt: namespace.session.normalizeText(detail.updatedAt) || previousEntry.updatedAt,
+          });
+        }
+        hooks.render();
+      } catch {
+        state.store.detailPendingEntryId = "";
+        setFeedback("상세 내용을 다시 불러와 주세요.", "error", entryId);
         hooks.render();
       }
     }
@@ -254,12 +334,36 @@
     }
     function mergeEntry(entry, viewerPatch = null) {
       const normalized = namespace.promptStore.normalizeStoreEntry(entry);
-      const previous = state.store.items.find((item) => item.entryId === normalized.entryId);
+      const previousIndex = state.store.items.findIndex((item) => item.entryId === normalized.entryId);
+      const previous = previousIndex >= 0 ? state.store.items[previousIndex] : null;
       const nextItems = state.store.items.filter((item) => item.entryId !== normalized.entryId);
-      const merged = previous ? { ...previous, ...normalized, metrics: normalized.metrics, owner: normalized.owner, viewer: { ...previous.viewer, ...normalized.viewer, ...(viewerPatch || {}) } } : normalized;
-      nextItems.unshift(merged);
+      const merged = mergeNormalizedEntry(previous, normalized, viewerPatch);
+      if (previousIndex >= 0 && previousIndex <= nextItems.length) {
+        nextItems.splice(previousIndex, 0, merged);
+      } else {
+        nextItems.unshift(merged);
+      }
       state.store.items = nextItems;
       state.store.loaded = true;
+    }
+
+    function mergeNormalizedEntry(previous, normalized, viewerPatch = null) {
+      if (!previous) {
+        return {
+          ...normalized,
+          viewer: { ...normalized.viewer, ...(viewerPatch || {}) },
+        };
+      }
+      return {
+        ...previous,
+        ...normalized,
+        content: namespace.session.normalizeText(normalized.content) ? normalized.content : previous.content,
+        hasDetail: Boolean(normalized.hasDetail || previous.hasDetail || normalized.content || previous.content),
+        owner: normalized.owner,
+        metrics: normalized.metrics,
+        summary: namespace.session.normalizeText(normalized.summary) ? normalized.summary : previous.summary,
+        viewer: { ...previous.viewer, ...normalized.viewer, ...(viewerPatch || {}) },
+      };
     }
 
     function setFeedback(message, tone = "info", entryId = "") {
@@ -273,23 +377,36 @@
     }
     function scheduleIdentityRetry() {
       global.clearTimeout(identityRetryTimer);
-      identityRetryTimer = global.setTimeout(() => ensureLoaded(true), 900);
+      identityRetryTimer = global.setTimeout(() => ensureLoaded(true, "identity-retry"), 900);
     }
     async function updateFilters(apply) {
+      const previousScope = state.store.scope;
       state.store.deleteConfirmEntryId = "";
       state.store.detailPendingEntryId = "";
       state.store.expandedEntryId = "";
       apply();
       resetWindow();
+      if (state.store.scope === "all" && previousScope !== "all" && shouldUseRealtimeStoreLatest()) {
+        state.store.loaded = false;
+      }
       hooks.render();
-      await ensureLoaded(true);
+      if (state.store.scope !== "all") {
+        await ensureLoaded(true);
+        return;
+      }
+      await ensureLoaded(false);
     }
-    function getRequestLimit() {
-      return shouldRemoteSearch() ? SEARCH_LIMIT : Math.max(PAGE_SIZE, Number(state.store.limit) || PAGE_SIZE);
+    function hasActiveQuery() { return Boolean(getAppliedQuery()); }
+    function getAppliedQuery() { return namespace.session.normalizeText(state.store.appliedQuery); }
+    function getNormalizedInputQuery() { return namespace.session.normalizeText(state.queries.store); }
+    function isQueryDirty() { return getNormalizedInputQuery() !== getAppliedQuery(); }
+    function getAvailableCategories() {
+      const itemCategories = Array.isArray(state.store.items)
+        ? Array.from(new Set(state.store.items.map((item) => namespace.session.normalizeText(item?.categoryId).toLowerCase()).filter(Boolean)))
+          .map((categoryId) => ({ id: categoryId }))
+        : [];
+      return normalizeAvailableCategories(itemCategories.length ? itemCategories : state.store.availableCategories, state.store.categoryId);
     }
-    function hasActiveQuery() { return Boolean(namespace.session.normalizeText(state.queries.store)); }
-    function shouldRemoteSearch() { return namespace.session.normalizeText(state.queries.store).length >= 2; }
-    function getAvailableCategories() { return normalizeAvailableCategories(state.store.availableCategories, state.store.categoryId); }
     function normalizeAvailableCategories(categories, activeCategoryId) {
       const allCategories = namespace.promptStore.getCategories();
       const available = Array.isArray(categories) ? categories : [];
@@ -299,13 +416,100 @@
       const active = allCategories.find((category) => category.id === namespace.session.normalizeText(activeCategoryId).toLowerCase());
       return [{ id: "all", label: "전체" }, ...visible, ...(active && active.id !== "all" && !visible.some((category) => category.id === active.id) ? [active] : [])];
     }
-    function resetWindow() { state.store.limit = PAGE_SIZE; state.store.hasMore = false; }
-    async function sendRuntimeMessage(type, payload) {
-      const response = await chrome.runtime.sendMessage({ type, ...(payload || {}) });
-      if (!response?.ok) {
-        throw new Error(namespace.session.normalizeText(response?.error || "") || "스토어 요청을 처리하지 못했어요.");
+    function resetWindow() { state.store.limit = LOCAL_CACHE_LIMIT; state.store.hasMore = false; }
+    function applyLocalFilters(apply) {
+      state.store.deleteConfirmEntryId = "";
+      state.store.detailPendingEntryId = "";
+      state.store.expandedEntryId = "";
+      apply();
+      state.store.hasMore = false;
+      hooks.render();
+      if (!state.store.loaded) {
+        global.clearTimeout(state.store.searchTimer);
+        state.store.searchTimer = global.setTimeout(() => ensureLoaded(), 0);
       }
-      return response.data;
+    }
+
+    function shouldReloadAfterMutation() {
+      if (typeof hooks.shouldReloadAfterMutation === "function") {
+        return Boolean(hooks.shouldReloadAfterMutation());
+      }
+      return true;
+    }
+
+    function shouldSkipScheduledAllStoreRead(force, reason) {
+      if (force || reason !== "scheduled" || state.store.scope !== "all") {
+        return false;
+      }
+      return Boolean(
+        Array.isArray(state.store.items) && state.store.items.length
+        || Math.max(0, Number(state.store.totalCount) || 0) > 0
+      );
+    }
+
+    function shouldDeferToRealtimeStoreLatest(reason) {
+      if (state.store.scope !== "all") {
+        return false;
+      }
+      return reason === "scheduled";
+    }
+
+    function shouldUseRealtimeStoreLatest() {
+      return Boolean(
+        state.store.scope === "all"
+        && typeof hooks.shouldUseStoreLatestRealtime === "function"
+        && hooks.shouldUseStoreLatestRealtime()
+      );
+    }
+
+    async function sendRuntimeMessage(type, payload, options = {}) {
+      const operation = classifyStoreRuntimeOperation(type);
+      const backend = "firebase-function";
+      const reason = namespace.session.normalizeText(options?.reason);
+      namespace.panelDebug?.log?.("store.runtime.request", {
+        backend,
+        operation,
+        reason,
+        scope: "runtime",
+        tool: "prompts",
+        type,
+      });
+      try {
+        const response = await chrome.runtime.sendMessage({ type, ...(payload || {}) });
+        if (!response?.ok) {
+          throw new Error(namespace.session.normalizeText(response?.error || "") || "스토어 요청을 처리하지 못했어요.");
+        }
+        namespace.panelDebug?.log?.("store.runtime.success", {
+          backend,
+          operation,
+          reason,
+          scope: "runtime",
+          tool: "prompts",
+          type,
+        });
+        return response.data;
+      } catch (error) {
+        namespace.panelDebug?.log?.("store.runtime.error", {
+          backend,
+          error: error instanceof Error ? error.message : String(error || ""),
+          operation,
+          reason,
+          scope: "runtime",
+          tool: "prompts",
+          type,
+        });
+        throw error;
+      }
+    }
+    function classifyStoreRuntimeOperation(type) {
+      const normalized = namespace.session.normalizeText(type);
+      if (normalized === "inova-store:list" || normalized === "inova-store:view") {
+        return "read";
+      }
+      if (normalized === "inova-store:publish" || normalized === "inova-store:unpublish" || normalized === "inova-store:import" || normalized === "inova-store:toggle-like") {
+        return "write";
+      }
+      return "";
     }
   }
 

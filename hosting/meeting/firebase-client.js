@@ -8,6 +8,7 @@
   const { isExpired, logDebug, normalizeText, postJson, resolveConfig } = shared;
   const CONFIG = resolveConfig(global.__INOVA_HOSTED_MEETING_CONFIG__);
   const APP_NAME = "inova-hosted-meeting";
+  const FIRESTORE_PERSISTENCE_OPTIONS = { synchronizeTabs: true };
   let authState = {
     expiresAt: "",
     meetingDocumentId: "",
@@ -17,13 +18,55 @@
     workspaceSessionId: "",
   };
   let services = null;
+  let firestoreReadyPromise = null;
 
   function getFirebaseGlobal() {
     const firebase = global.firebase;
     if (!firebase?.initializeApp || !firebase?.auth || !firebase?.firestore) {
       throw new Error("Firebase Web SDK를 불러오지 못했어요.");
     }
+    configureFirestoreLogging(firebase);
     return firebase;
+  }
+
+  function configureFirestoreLogging(firebase) {
+    try {
+      const setLogLevel = firebase?.firestore?.setLogLevel;
+      if (typeof setLogLevel === "function") {
+        setLogLevel("silent");
+      }
+    } catch {}
+  }
+
+  async function runWithSuppressedFirestorePersistenceWarning(task) {
+    if (typeof task !== "function") {
+      return null;
+    }
+    const consoleRef = global.console;
+    const originalWarn = typeof consoleRef?.warn === "function" ? consoleRef.warn : null;
+    if (!originalWarn) {
+      return task();
+    }
+    consoleRef.warn = function patchedFirestoreWarn(...args) {
+      if (shouldSuppressFirestorePersistenceWarning(args)) {
+        return;
+      }
+      return originalWarn.apply(this, args);
+    };
+    try {
+      return await task();
+    } finally {
+      consoleRef.warn = originalWarn;
+    }
+  }
+
+  function shouldSuppressFirestorePersistenceWarning(args) {
+    const text = args
+      .map((value) => normalizeText(typeof value === "string" ? value : value?.message || value))
+      .join(" ");
+    return text.includes("enableMultiTabIndexedDbPersistence()")
+      || text.includes("enableIndexedDbPersistence()")
+      || text.includes("FirestoreSettings.cache");
   }
 
   function getServices() {
@@ -39,6 +82,33 @@
       firestore: firebase.firestore(app),
     };
     return services;
+  }
+
+  async function ensureFirestoreReady() {
+    const nextServices = getServices();
+    if (firestoreReadyPromise) {
+      return firestoreReadyPromise;
+    }
+    firestoreReadyPromise = (async () => {
+      if (typeof nextServices.firestore?.enablePersistence === "function") {
+        try {
+          await runWithSuppressedFirestorePersistenceWarning(() =>
+            nextServices.firestore.enablePersistence(FIRESTORE_PERSISTENCE_OPTIONS)
+          );
+        } catch (error) {
+          const code = normalizeText(error?.code);
+          if (code !== "failed-precondition" && code !== "unimplemented") {
+            throw error;
+          }
+          logDebug("firestore.persistence.unavailable", {
+            code,
+            message: normalizeText(error?.message),
+          });
+        }
+      }
+      return nextServices;
+    })();
+    return firestoreReadyPromise;
   }
 
   async function ensureWorkspaceAuth(meetingSessionToken, options = {}) {
@@ -80,7 +150,7 @@
         hasMeetingSessionToken: true,
       });
       const payload = await postJson(global, CONFIG.issueWorkspaceAuthUrl, {}, normalizedToken);
-      const { auth } = getServices();
+      const { auth } = await ensureFirestoreReady();
       const firebase = getFirebaseGlobal();
       await auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
       await auth.signInWithCustomToken(normalizeText(payload?.firebaseCustomToken));

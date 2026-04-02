@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Inova Meeting Panel Bridge</title>
+    <title>Inova Prompt Panel Bridge</title>
     <script>
       (function suppressFirestoreDeprecationWarnings() {
         const originalWarn = typeof window.console?.warn === "function"
@@ -30,7 +30,14 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
-    <script defer src="panel-bridge.js"></script>
+    <script>
+      (function loadPromptPanelBridgeScript() {
+        const script = document.createElement("script");
+        script.defer = true;
+        script.src = `prompt-panel-bridge.js${window.location.search || ""}`;
+        document.head.appendChild(script);
+      })();
+    </script>
   </head>
   <body></body>
 </html>

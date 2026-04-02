@@ -9,6 +9,7 @@
     let scheduledForceRemoteProbe = false;
 
     return {
+      handleRealtimeRemoteState,
       handleStorageChange,
       scheduleSync,
     };
@@ -45,6 +46,31 @@
         scheduledForceRemoteProbe = false;
         syncNow(forceProbe).catch(logSyncError);
       }, delay);
+    }
+
+    async function handleRealtimeRemoteState(remoteStateInput) {
+      const providerIdentity = namespace.providerIdentity.getCurrent();
+      if (!providerIdentity.available) {
+        return;
+      }
+
+      try {
+        const storageState = await namespace.storage.getState();
+        const promptLibrary = namespace.promptLibrary.mergePromptLibrary(storageState.promptLibrary);
+        const cloudSync = namespace.cloudSync.mergeCloudSyncState(storageState.cloudSync);
+        const remoteState = normalizeRealtimeRemoteState(remoteStateInput, providerIdentity);
+        await applyRemoteState(promptLibrary, cloudSync, providerIdentity, remoteState, false, "realtime");
+      } catch (error) {
+        if (isInvalidatedContextError(error)) {
+          return;
+        }
+        logDebug("cloud-sync.realtime.error", {
+          error: error instanceof Error ? error.message : String(error || ""),
+          scope: "cloud-sync",
+        });
+      } finally {
+        hooks.render?.();
+      }
     }
 
     async function syncNow(forceRemoteProbe = false) {
@@ -85,29 +111,17 @@
             force: forceRemoteProbe,
             providerIdentity,
           });
-          cloudSync = await namespace.storage.recordPromptLibraryRemoteState(remoteState, providerIdentity);
-
-          if (shouldHydrateLocal(promptLibrary, cloudSync, remoteState)) {
-            logDebug("cloud-sync.hydrate.start", {
-              remoteItemCount: Math.max(0, Number(remoteState?.itemCount) || 0),
-              scope: "cloud-sync",
-            });
-            const remote = await sendRuntimeMessage("inova-sync:load-prompt-library", {
-              force: forceRemoteProbe,
-              providerIdentity,
-            });
-            if (shouldHydrateFromLoadedLibrary(promptLibrary, cloudSync, remote)) {
-              await namespace.storage.hydratePromptLibraryFromCloud(
-                remote.promptLibrary,
-                remote.owner || providerIdentity,
-                remote.syncedAt || remoteState.lastSyncedAt || new Date().toISOString()
-              );
-              logDebug("cloud-sync.hydrate.success", {
-                itemCount: Array.isArray(remote?.promptLibrary?.items) ? remote.promptLibrary.items.length : 0,
-                scope: "cloud-sync",
-              });
-              return;
-            }
+          const remoteResult = await applyRemoteState(
+            promptLibrary,
+            cloudSync,
+            providerIdentity,
+            remoteState,
+            forceRemoteProbe,
+            "probe"
+          );
+          cloudSync = remoteResult.cloudSync;
+          if (remoteResult.hydrated) {
+            return;
           }
         }
 
@@ -210,6 +224,74 @@
       return Boolean(remoteSyncedAt && remoteSyncedAt > cloudSync.lastSyncedAt);
     }
 
+    async function applyRemoteState(promptLibrary, cloudSync, providerIdentity, remoteState, forceRemoteProbe, source = "probe") {
+      const normalizedRemoteState = normalizeRealtimeRemoteState(remoteState, providerIdentity);
+      const nextCloudSync = await namespace.storage.recordPromptLibraryRemoteState(normalizedRemoteState, providerIdentity);
+      logDebug(`cloud-sync.remote.${source}`, {
+        found: Boolean(normalizedRemoteState?.found),
+        itemCount: Math.max(0, Number(normalizedRemoteState?.itemCount) || 0),
+        lastRevision: namespace.session.normalizeText(normalizedRemoteState?.lastRevision),
+        scope: "cloud-sync",
+      });
+
+      if (!shouldHydrateLocal(promptLibrary, nextCloudSync, normalizedRemoteState)) {
+        return {
+          cloudSync: nextCloudSync,
+          hydrated: false,
+        };
+      }
+
+      logDebug("cloud-sync.hydrate.start", {
+        remoteItemCount: Math.max(0, Number(normalizedRemoteState?.itemCount) || 0),
+        scope: "cloud-sync",
+        source,
+      });
+      const remote = await sendRuntimeMessage("inova-sync:load-prompt-library", {
+        force: forceRemoteProbe,
+        providerIdentity,
+      });
+      if (shouldHydrateFromLoadedLibrary(promptLibrary, nextCloudSync, remote)) {
+        await namespace.storage.hydratePromptLibraryFromCloud(
+          remote.promptLibrary,
+          remote.owner || providerIdentity,
+          remote.syncedAt || normalizedRemoteState.lastSyncedAt || new Date().toISOString()
+        );
+        logDebug("cloud-sync.hydrate.success", {
+          itemCount: Array.isArray(remote?.promptLibrary?.items) ? remote.promptLibrary.items.length : 0,
+          scope: "cloud-sync",
+          source,
+        });
+        return {
+          cloudSync: nextCloudSync,
+          hydrated: true,
+        };
+      }
+
+      return {
+        cloudSync: nextCloudSync,
+        hydrated: false,
+      };
+    }
+
+    function normalizeRealtimeRemoteState(remoteState, providerIdentity) {
+      const normalizedProviderUserKey = namespace.session.normalizeText(
+        remoteState?.providerUserKey || providerIdentity?.providerUserKey || ""
+      );
+      const lastRevision = namespace.session.normalizeText(remoteState?.lastRevision || "");
+      const lastSyncedAt = namespace.session.normalizeText(remoteState?.lastSyncedAt || "");
+      const itemCount = Math.max(0, Number(remoteState?.itemCount) || 0);
+      return {
+        checkedAt: namespace.session.normalizeText(remoteState?.checkedAt || "") || new Date().toISOString(),
+        found: Boolean(remoteState?.found || lastRevision || lastSyncedAt || itemCount),
+        itemCount,
+        lastRevision,
+        lastSyncedAt,
+        providerUserKey: normalizedProviderUserKey,
+        updatedAt: namespace.session.normalizeText(remoteState?.updatedAt || ""),
+        version: Math.max(1, Number(remoteState?.version) || 1),
+      };
+    }
+
     function logSyncError(error) {
       if (isInvalidatedContextError(error)) {
         return;
@@ -227,7 +309,11 @@
     }
 
     async function sendRuntimeMessage(type, payload) {
+      const operation = classifyCloudSyncRuntimeOperation(type);
+      const backend = "firebase-function";
       logDebug("cloud-sync.runtime.request", {
+        backend,
+        operation,
         scope: "runtime",
         tool: "prompts",
         type,
@@ -241,6 +327,8 @@
           throw new Error(namespace.session.normalizeText(response?.error || "") || "백그라운드 동기화 요청에 실패했어요.");
         }
         logDebug("cloud-sync.runtime.success", {
+          backend,
+          operation,
           scope: "runtime",
           tool: "prompts",
           type,
@@ -248,7 +336,9 @@
         return response.data;
       } catch (error) {
         logDebug("cloud-sync.runtime.error", {
+          backend,
           error: error instanceof Error ? error.message : String(error || ""),
+          operation,
           scope: "runtime",
           tool: "prompts",
           type,
@@ -259,6 +349,16 @@
 
     function logDebug(event, payload) {
       namespace.panelDebug?.log?.(event, payload || {});
+    }
+    function classifyCloudSyncRuntimeOperation(type) {
+      const normalized = namespace.session.normalizeText(type);
+      if (normalized === "inova-sync:peek-prompt-library" || normalized === "inova-sync:load-prompt-library") {
+        return "read";
+      }
+      if (normalized === "inova-sync:sync-prompt-library") {
+        return "write";
+      }
+      return "";
     }
   }
 

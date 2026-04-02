@@ -26,9 +26,15 @@ async function main() {
     },
     meetingHub: {
       version: 1,
-      checkedAt: "",
+      checkedAt: "2026-03-30T07:00:00.000Z",
       error: "",
-      items: [],
+      items: [
+        {
+          meetingId: "meeting-stale-cache",
+          title: "stale cache",
+          updatedAt: "2026-03-30T07:00:00.000Z",
+        },
+      ],
     },
   };
 
@@ -84,7 +90,20 @@ async function main() {
         console.error(...args);
       },
     },
+    document: {
+      body: {
+        appendChild() {},
+      },
+      createElement() {
+        throw new Error("Bridge iframe unavailable in fixture");
+      },
+      getElementById() {
+        return null;
+      },
+      hidden: false,
+    },
     globalThis: null,
+    HTMLIFrameElement: function HTMLIFrameElement() {},
     localStorage: {
       getItem(key) {
         if (key === "auth") {
@@ -125,7 +144,9 @@ async function main() {
 
   const namespace = context.InovaBookmarks;
   const state = {
+    activeTool: "meeting",
     meetingHub: namespace.meetingManager.mergeMeetingHub(),
+    open: true,
   };
   const manager = namespace.meetingManager.create(state, {
     render() {
@@ -149,7 +170,7 @@ async function main() {
   assert.equal(state.meetingHub.items.length, 1);
   assert.equal(state.meetingHub.items[0].meetingId, "meeting-fixture-2");
   assert.equal(storageState.meetingHub.items.length, 1);
-  assert.equal(storageState.meetingHub.items[0].title, "주간 스탠드업");
+  assert.equal(storageState.meetingHub.items[0].meetingId, "meeting-stale-cache");
   assert(renderCount > 0, "Meeting manager should request a re-render after refresh");
   assert.deepEqual(
     sentMessages.map((message) => message.type),
@@ -183,16 +204,27 @@ async function main() {
   );
 
   assert.equal(state.meetingHub.items.length, 1);
-  assert.equal(state.meetingHub.items[0].meetingId, "meeting-fixture-3");
+  assert.equal(state.meetingHub.items[0].meetingId, "meeting-fixture-2");
 
   context.chrome.runtime.sendMessage = async function invalidatedSendMessage() {
     throw new Error("Extension context invalidated.");
   };
 
-  await manager.refreshState();
+  const invalidatedState = {
+    activeTool: "meeting",
+    meetingHub: namespace.meetingManager.mergeMeetingHub(),
+    open: true,
+  };
+  const invalidatedManager = namespace.meetingManager.create(invalidatedState, {
+    render() {
+      renderCount += 1;
+    },
+  });
+
+  await invalidatedManager.refreshState();
 
   assert.equal(
-    state.meetingHub.error,
+    invalidatedState.meetingHub.error,
     "확장프로그램이 갱신됐어요. 페이지를 새로고침해 주세요."
   );
   assert.equal(
@@ -212,7 +244,7 @@ function loadScript(relativePath, context) {
 async function runLatestTask(tasks) {
   const task = [...tasks].reverse().find((entry) => !entry.cleared);
   assert(task, "Expected a scheduled task");
-  task.callback();
+  await Promise.resolve(task.callback());
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
 

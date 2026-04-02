@@ -13,7 +13,9 @@
     const globalFeedback = state.feedback?.entryId ? null : state.feedback;
     const metaText = state.loading
       ? "불러오는 중"
-      : state.query
+      : state.queryDirty
+        ? "엔터를 눌러 검색"
+      : state.queryActive
         ? `검색 결과 ${state.totalCount}개`
         : state.totalCount > state.loadedCount
           ? `총 ${state.totalCount}개 · ${state.loadedCount}개 표시`
@@ -208,7 +210,11 @@
     if (detailPending) {
       return '<p class="inova-store-item__summary">프롬프트를 불러오는 중이에요.</p>';
     }
-    return `<p class="inova-prompt-item__content">${escapeHtml(item.content || "")}</p>`;
+    const detailText = String(item.content || item.summary || "").trim();
+    if (!detailText) {
+      return '<p class="inova-store-item__summary">상세 내용을 다시 불러와 주세요.</p>';
+    }
+    return `<p class="inova-prompt-item__content">${escapeHtmlWithLineBreaks(detailText)}</p>`;
   }
 
   function renderMetric(icon, label, value) {
@@ -240,6 +246,10 @@
       .replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;");
+  }
+
+  function escapeHtmlWithLineBreaks(text) {
+    return escapeHtml(text).replace(/\r?\n/g, "<br />");
   }
 
   function renderDisabled(disabled) {

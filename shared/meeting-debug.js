@@ -1,10 +1,17 @@
 (function initMeetingDebug(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const DEBUG_PREFIX = "[Inova Meeting Debug]";
   const MAX_DEBUG_ENTRIES = 120;
   const VIEWPORT_BOTTOM_THRESHOLD_PX = 28;
+  const NOISY_EVENT_WINDOWS_MS = {
+    "route.refresh.start": 5000,
+    "route.refresh.success": 5000,
+    "panel.bridge.detach": 1200,
+    "panel.ui.surface.changed": 800,
+    "prompt.panel.bridge.detach": 1200,
+  };
   const debugEntries = [];
   const debugListeners = new Set();
+  const noisyEventState = new Map();
   const viewportStates = new Map();
   let debugEnabled = false;
   let debugSequence = 0;
@@ -99,6 +106,7 @@
 
   function clearEntries() {
     debugEntries.length = 0;
+    noisyEventState.clear();
     notifyListeners();
   }
 
@@ -286,15 +294,31 @@
       timestamp: new Date().toISOString(),
       tool: inferTool(normalizedEvent, payloadParts.tool, inferScope(normalizedEvent, payloadParts.scope)),
     };
+    if (shouldSkipNoisyEntry(entry)) {
+      return null;
+    }
     debugEntries.push(entry);
     while (debugEntries.length > MAX_DEBUG_ENTRIES) {
       debugEntries.shift();
     }
-    try {
-      global.console?.info?.(DEBUG_PREFIX, entry.event, entry.payload || {});
-    } catch {}
     notifyListeners();
     return entry;
+  }
+
+  function shouldSkipNoisyEntry(entry) {
+    const windowMs = NOISY_EVENT_WINDOWS_MS[normalizeText(entry?.event)] || 0;
+    if (!windowMs) {
+      return false;
+    }
+    const eventKey = normalizeText(entry?.event);
+    const signature = JSON.stringify(entry?.payload || {});
+    const previous = noisyEventState.get(eventKey);
+    const now = Date.now();
+    noisyEventState.set(eventKey, {
+      signature,
+      time: now,
+    });
+    return Boolean(previous && previous.signature === signature && now - previous.time <= windowMs);
   }
 
   function isErrorEntry(entry) {
@@ -322,17 +346,20 @@
   function summarizeEntries(entries = getEntries()) {
     const normalizedEntries = Array.isArray(entries) ? entries : [];
     let functionCalls = 0;
+    let readCount = 0;
     let snapshotCount = 0;
     let errorCount = 0;
     for (const entry of normalizedEntries) {
       const event = normalizeText(entry?.event);
       const scope = normalizeText(entry?.scope);
-      if (
-        (scope === "runtime" && event.endsWith(".request"))
-        || event === "http.request"
-        || event === "workspace.source-upload.request"
-      ) {
+      const isRequestEvent = event.endsWith(".request");
+      const backend = normalizeText(entry?.payload?.backend).toLowerCase();
+      const operation = normalizeText(entry?.payload?.operation).toLowerCase();
+      if (isRequestEvent && backend === "firebase-function") {
         functionCalls += 1;
+      }
+      if (isRequestEvent && operation === "read") {
+        readCount += 1;
       }
       if (scope === "firestore" && event.endsWith(".snapshot")) {
         snapshotCount += 1;
@@ -344,6 +371,7 @@
     return {
       errorCount,
       functionCalls,
+      readCount,
       snapshotCount,
       totalLogs: normalizedEntries.length,
     };

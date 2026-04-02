@@ -6,6 +6,29 @@
     <title>i-Nova 회의 작업실</title>
     <link rel="stylesheet" href="index.css" />
     <script src="shared.js" defer></script>
+    <script>
+      (function suppressFirestoreDeprecationWarnings() {
+        const originalWarn = typeof window.console?.warn === "function"
+          ? window.console.warn
+          : null;
+        if (!originalWarn) {
+          return;
+        }
+        window.console.warn = function patchedFirestoreWarn(...args) {
+          const text = args
+            .map((value) => typeof value === "string" ? value : value?.message || "")
+            .join(" ");
+          if (
+            text.includes("enableMultiTabIndexedDbPersistence()")
+            || text.includes("enableIndexedDbPersistence()")
+            || text.includes("FirestoreSettings.cache")
+          ) {
+            return;
+          }
+          return originalWarn.apply(this, args);
+        };
+      })();
+    </script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js" defer></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js" defer></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js" defer></script>
@@ -251,8 +274,12 @@
               <button id="clearDebugButton" class="ghost-button ghost-button--soft" type="button">비우기</button>
               <button id="toggleDebugPanelButton" class="ghost-button ghost-button--soft" type="button" aria-expanded="true">접기</button>
             </div>
-            <div class="panel-card__inline-meta">
-              <span id="debugStatus" class="chip chip--muted">로그 0건 · 함수 0건 · 스냅샷 0건 · 오류 0건</span>
+            <div id="debugStatus" class="inova-meeting-debug-console__status" aria-live="polite" aria-label="디버그 로그 요약">
+              <span class="inova-meeting-debug-console__status-item">로그 0건</span>
+              <span class="inova-meeting-debug-console__status-item">함수 0건</span>
+              <span class="inova-meeting-debug-console__status-item">읽기 0건</span>
+              <span class="inova-meeting-debug-console__status-item">스냅샷 0건</span>
+              <span class="inova-meeting-debug-console__status-item">오류 0건</span>
             </div>
           </div>
           <div id="debugPanelBody" class="debug-panel__body">

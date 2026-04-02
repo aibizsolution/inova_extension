@@ -234,7 +234,9 @@
       try {
         const text = await namespace.contentFiles.readTextFile(file);
         const payload = namespace.promptLibrary.parseImportText(text);
-        state.promptImportReview = { confirmReplace: false, fileName: file.name, libraryName: payload.libraryName, mode: "merge", payload };
+        const result = await namespace.storage.importPromptLibrary(payload, "add");
+        state.promptLibrary = result.library;
+        state.promptImportReview = null;
         state.promptEditor = createPromptEditor();
         state.promptMenuId = "";
         state.promptDeleteConfirmId = "";
@@ -244,9 +246,13 @@
         state.uiPreferences.activeTool = "prompts";
         state.uiPreferences.activePromptTab = "library";
         await hooks.persistActiveTool("prompts", "library");
-        setFeedback("");
+        setFeedback(
+          `가져오기 완료: 추가 ${result.summary.added}개, 건너뜀 ${result.summary.skipped}개`
+        );
         logDebug("prompt.import.success", {
+          added: Number(result?.summary?.added) || 0,
           fileName: namespace.session.normalizeText(file?.name),
+          skipped: Number(result?.summary?.skipped) || 0,
           scope: "prompt",
         });
       } catch (error) {

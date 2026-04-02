@@ -21,7 +21,10 @@
     },
     panelDebugUi: {
       collapsed: readMeetingDebugCollapsed(),
+      feedback: null,
+      feedbackTimer: 0,
     },
+    cloudSync: namespace.cloudSync.mergeCloudSyncState(),
     releaseInfo: namespace.releaseInfo.mergeReleaseInfo(),
     uiPreferences: namespace.storage.mergeUiPreferences(),
     promptLibrary: namespace.promptLibrary.mergePromptLibrary(),
@@ -51,9 +54,10 @@
       hasMore: false,
       identityPending: false,
       items: [],
-      limit: 500,
+      limit: 1000,
       loaded: false,
       loading: false,
+      appliedQuery: "",
       searchTimer: 0,
       scope: "all",
       sortBy: "latest",
@@ -75,9 +79,49 @@
   };
   const promptManager = namespace.promptManager.create(state, { publishPrompt, persistActiveTool, render });
   const promptReviewManager = namespace.promptReviewManager.create(state, { render, showPromptTab });
-  const storeManager = namespace.storeManager.create(state, { render });
+  let promptRealtimeManager = null;
+    const storeManager = namespace.storeManager.create(state, {
+      loadStoreDetail: (entryId) => promptRealtimeManager?.loadStoreDetail?.(entryId),
+      refreshStoreLatestRealtime: (reason) => {
+        promptRealtimeManager?.scheduleSync?.(reason === "manual-refresh" ? 0 : 80);
+      },
+      shouldReloadAfterMutation: () => {
+        const storeTabActive = state.activeTool === "prompts" && getActivePromptTab() === "store";
+        if (!storeTabActive) {
+        return false;
+      }
+        if (state.store.scope !== "all") {
+          return true;
+        }
+        return !promptRealtimeManager?.isStoreLatestRealtimeActive?.();
+      },
+      shouldUseStoreLatestRealtime: () => Boolean(promptRealtimeManager?.shouldUseStoreLatestRealtime?.()),
+      render,
+    });
   const releaseManager = namespace.releaseManager.create(state, { render });
   const cloudSyncManager = namespace.cloudSyncManager.create(state, { render });
+  promptRealtimeManager = namespace.promptRealtimeManager.create(state, {
+    getActivePromptTab,
+    isToolSurface,
+    onPromptLibraryFallback: () => {},
+    onPromptLibraryMeta: (remoteState) => cloudSyncManager.handleRealtimeRemoteState(remoteState),
+    onStoreLatestFallback: () => {
+      const hasRenderableStoreData = Boolean(
+        state.store.loaded
+        || (Array.isArray(state.store.items) && state.store.items.length)
+        || Number(state.store.totalCount || 0) > 0
+      );
+      if (hasRenderableStoreData) {
+        render();
+        return;
+      }
+      storeManager.ensureLoaded(true, "fallback").catch((error) => {
+        console.error("[i-Nova Bookmarks] store fallback refresh failed", error);
+      });
+    },
+    onStoreLatestSnapshot: (payload) => storeManager.applyLatestRealtimeSnapshot(payload),
+    render,
+  });
   const meetingManager = namespace.meetingManager.create(state, { render });
   const routeSync = namespace.routeSync.create(state, {
     ensureStoreLoaded: () => storeManager.ensureLoaded(),
@@ -100,9 +144,10 @@
       onPromptDraftChange: promptManager.updateDraft,
       onSelectPromptTab: selectPromptTab,
       onReleaseAction: releaseManager.handleAction,
-      onStoreAction: storeManager.handleAction,
+      onStoreAction: handleStoreAction,
       onEscape: handleEscape,
       onSearch: updateQuery,
+      onSearchSubmit: submitQuery,
       onSelectTool: selectTool,
       onToggle: togglePanel,
     });
@@ -124,7 +169,10 @@
     });
     await routeSync.syncRouteState(true);
     meetingManager.scheduleSync(260);
-    cloudSyncManager.scheduleSync(1800, true);
+    promptRealtimeManager.scheduleSync(260);
+    if (shouldRunPromptCloudSync()) {
+      cloudSyncManager.scheduleSync(1800);
+    }
     if (isStoreTabActive()) storeManager.ensureLoaded();
     if (state.open || state.activeTool === "release") releaseManager.ensureChecked(false, state.activeTool === "release");
     [450, 1200].forEach((delay) => global.setTimeout(routeSync.scheduleRefresh, delay));
@@ -204,11 +252,20 @@
   function buildBookmarkStatusText() { return state.lastError ? "표시에 문제가 있어요. 새로고침 후 다시 시도해 주세요." : !state.settings.autoBookmark ? "대화 자동 모으기가 꺼져 있어요." : state.awaitingRouteMessages ? "대화를 불러오는 중" : !state.bookmarks.length ? "아직 대화가 없어요" : ""; }
   function getFilteredBookmarks() { const query = namespace.session.normalizeText(state.queries.bookmarks).toLowerCase(); return query ? state.bookmarks.filter((bookmark) => bookmark.normalizedText.includes(query)) : state.bookmarks; }
   function getFilteredPrompts() { const query = namespace.session.normalizeText(state.queries.prompts).toLowerCase(); return query ? state.promptLibrary.items.filter((item) => `${item.title} ${item.content}`.toLowerCase().includes(query)) : state.promptLibrary.items; }
-  function updateQuery(toolId, value) {
+  function updateQuery(toolId, value, options = {}) {
     const queryKey = toolId === "store" ? "store" : normalizeToolId(toolId);
     state.queries[queryKey] = value || "";
     if (toolId === "store") {
-      storeManager.handleQueryChange(state.queries.store);
+      storeManager.handleQueryChange(state.queries.store, options);
+      return;
+    }
+    render();
+  }
+  function submitQuery(toolId, value) {
+    const queryKey = toolId === "store" ? "store" : normalizeToolId(toolId);
+    state.queries[queryKey] = value || "";
+    if (toolId === "store") {
+      storeManager.submitQuery(state.queries.store);
       return;
     }
     render();
@@ -216,13 +273,18 @@
   async function selectTool(toolId) {
     if (toolId === "store") return void selectPromptTab("store");
     state.activeTool = normalizeToolId(toolId);
-    state.uiPreferences = namespace.storage.mergeUiPreferences(state.uiPreferences, { activeTool: state.activeTool });
-    lockUiPreferenceSelection(state.activeTool, getActivePromptTab());
-    if (state.activeTool === "prompts" && getActivePromptTab() === "store") storeManager.ensureLoaded(true);
+    const nextPromptTab = state.activeTool === "prompts" ? "library" : getActivePromptTab();
+    state.uiPreferences = namespace.storage.mergeUiPreferences(state.uiPreferences, {
+      activePromptTab: nextPromptTab,
+      activeTool: state.activeTool,
+    });
+    lockUiPreferenceSelection(state.activeTool, nextPromptTab);
+    if (state.activeTool === "prompts" && nextPromptTab === "store") storeManager.ensureLoaded();
     meetingManager.scheduleSync(state.activeTool === "meeting" ? 120 : 0);
+    promptRealtimeManager.scheduleSync(120);
     if (state.activeTool === "release") releaseManager.ensureChecked(false, true);
     render();
-    await persistActiveTool(state.activeTool);
+    await persistActiveTool(state.activeTool, nextPromptTab);
   }
   async function selectPromptTab(promptTabId) {
     const nextPromptTab = normalizePromptTab(promptTabId);
@@ -230,7 +292,8 @@
     state.uiPreferences = namespace.storage.mergeUiPreferences(state.uiPreferences, { activePromptTab: nextPromptTab, activeTool: "prompts" });
     lockUiPreferenceSelection("prompts", nextPromptTab);
     meetingManager.scheduleSync(0);
-    if (nextPromptTab === "store") storeManager.ensureLoaded(true);
+    promptRealtimeManager.scheduleSync(120);
+    if (nextPromptTab === "store") storeManager.ensureLoaded();
     render();
     await persistActiveTool("prompts", nextPromptTab);
   }
@@ -241,6 +304,9 @@
         activeTool: normalizeToolId(nextTool),
       });
     } catch (error) {
+      if (isExtensionContextInvalidatedError(error)) {
+        return;
+      }
       console.error("[i-Nova Bookmarks] active tool save failed", error);
     }
   }
@@ -302,7 +368,7 @@
     }
     if (action === "debug-clear") {
       namespace.panelDebug?.clearEntries?.();
-      setMeetingFeedback("로그를 비웠습니다.", "info", 1600);
+      setPanelDebugFeedback("디버그 로그를 비웠습니다.", "info", 1600);
       return;
     }
     if (namespace.session.normalizeText(state.meetingUi.pending.action)) {
@@ -418,24 +484,35 @@
     const summary = enabled
       ? (namespace.panelDebug?.summarizeEntries?.(entries) || {})
       : {};
+    const statusSummary = {
+      errorCount: Math.max(0, Number(summary?.errorCount) || 0),
+      functionCalls: Math.max(0, Number(summary?.functionCalls) || 0),
+      readCount: Math.max(0, Number(summary?.readCount) || 0),
+      snapshotCount: Math.max(0, Number(summary?.snapshotCount) || 0),
+      totalLogs: Math.max(0, Number(entries.length) || 0),
+    };
     return {
       collapsed: Boolean(state.panelDebugUi.collapsed),
       enabled,
       entriesText: enabled
         ? (namespace.panelDebug?.buildCopyText?.(entries) || "아직 로그가 없습니다.")
         : "",
-      hasErrors: Number(summary.errorCount || 0) > 0,
+      feedback: normalizePanelDebugFeedback(state.panelDebugUi.feedback),
+      hasErrors: statusSummary.errorCount > 0,
+      statusSummary,
       statusText: enabled
-        ? buildMeetingDebugStatusText(summary, entries.length)
-        : "로그 0건 · 함수 0건 · 스냅샷 0건 · 오류 0건",
+        ? buildMeetingDebugStatusText(statusSummary)
+        : "로그 0건 · 함수 0건 · 읽기 0건 · 스냅샷 0건 · 오류 0건",
     };
   }
 
-  function buildMeetingDebugStatusText(summary, totalLogs) {
+  function buildMeetingDebugStatusText(summary) {
+    const totalLogs = Math.max(0, Number(summary?.totalLogs) || 0);
     const functionCalls = Math.max(0, Number(summary?.functionCalls) || 0);
+    const readCount = Math.max(0, Number(summary?.readCount) || 0);
     const snapshotCount = Math.max(0, Number(summary?.snapshotCount) || 0);
     const errorCount = Math.max(0, Number(summary?.errorCount) || 0);
-    return `로그 ${Math.max(0, Number(totalLogs) || 0)}건 · 함수 ${functionCalls}건 · 스냅샷 ${snapshotCount}건 · 오류 ${errorCount}건`;
+    return `로그 ${totalLogs}건 · 함수 ${functionCalls}건 · 읽기 ${readCount}건 · 스냅샷 ${snapshotCount}건 · 오류 ${errorCount}건`;
   }
   function toggleMeetingDebugCollapsed() {
     state.panelDebugUi.collapsed = !state.panelDebugUi.collapsed;
@@ -448,19 +525,50 @@
       ? namespace.panelDebug?.buildErrorCopyText?.(entries)
       : namespace.panelDebug?.buildCopyText?.(entries);
     if (!namespace.session.normalizeText(text)) {
-      setMeetingFeedback(errorsOnly ? "복사할 오류 로그가 없습니다." : "복사할 로그가 없습니다.", "info", 1600);
+      setPanelDebugFeedback(errorsOnly ? "복사할 디버그 오류 로그가 없습니다." : "복사할 디버그 로그가 없습니다.", "info", 1600);
       return;
     }
     try {
       await global.navigator.clipboard.writeText(text);
-      setMeetingFeedback(errorsOnly ? "오류 로그를 복사했습니다." : "로그를 복사했습니다.", "info", 1800);
+      setPanelDebugFeedback(errorsOnly ? "디버그 오류 로그를 복사했습니다." : "디버그 로그를 복사했습니다.", "info", 1800);
     } catch (error) {
-      setMeetingFeedback("클립보드에 로그를 복사하지 못했습니다.", "error", 2200);
+      setPanelDebugFeedback("클립보드에 디버그 로그를 복사하지 못했습니다.", "error", 2200);
       namespace.panelDebug?.log?.("panel.debug.copy.error", {
         error: error instanceof Error ? error.message : String(error || ""),
         errorsOnly: Boolean(errorsOnly),
       });
     }
+  }
+  function setPanelDebugFeedback(text, tone = "info", timeoutMs = 1800) {
+    global.clearTimeout(state.panelDebugUi.feedbackTimer);
+    const nextText = namespace.session.normalizeText(text);
+    state.panelDebugUi.feedback = nextText
+      ? {
+          text: nextText,
+          tone: namespace.session.normalizeText(tone) || "info",
+        }
+      : null;
+    render();
+    if (!nextText || timeoutMs <= 0) {
+      state.panelDebugUi.feedbackTimer = 0;
+      return;
+    }
+    state.panelDebugUi.feedbackTimer = global.setTimeout(() => {
+      state.panelDebugUi.feedback = null;
+      state.panelDebugUi.feedbackTimer = 0;
+      render();
+    }, timeoutMs);
+  }
+  function normalizePanelDebugFeedback(feedback) {
+    const text = namespace.session.normalizeText(feedback?.text);
+    return {
+      text,
+      tone: namespace.session.normalizeText(feedback?.tone) || "info",
+    };
+  }
+  function isExtensionContextInvalidatedError(error) {
+    const message = namespace.session.normalizeText(error instanceof Error ? error.message : String(error || "")).toLowerCase();
+    return message.includes("extension context invalidated");
   }
   function logMeetingAction(event, payload) {
     namespace.panelDebug?.log?.(`panel.action.${namespace.session.normalizeText(event)}`, payload || {});
@@ -474,8 +582,9 @@
       state.preferredOpen = state.open;
       writePanelOpenPreference(state.open);
     }
-    if (state.open) cloudSyncManager.scheduleSync(220, true);
+    if (shouldRunPromptCloudSync()) cloudSyncManager.scheduleSync(220);
     meetingManager.scheduleSync(state.open ? 220 : 0);
+    promptRealtimeManager.scheduleSync(state.open ? 220 : 0);
     if (state.open && isStoreTabActive()) storeManager.ensureLoaded();
     if (state.open) releaseManager.ensureChecked(false, state.activeTool === "release");
     logPanelDebug("panel.ui.toggle", {
@@ -560,17 +669,25 @@
     state.surfacePollTimer = global.setInterval(() => {
       const nextSignature = getSurfaceSignature();
       if (nextSignature === state.surfaceSignature) return;
-      const hadComposer = state.surfaceSignature.startsWith("true|");
-      const hasComposer = nextSignature.startsWith("true|");
+      const previousSurface = parseSurfaceSignature(state.surfaceSignature);
+      const nextSurface = parseSurfaceSignature(nextSignature);
+      const hadComposer = previousSurface.hasComposer;
+      const hasComposer = nextSurface.hasComposer;
       state.surfaceSignature = nextSignature;
       if (!hadComposer && hasComposer && state.preferredOpen) state.open = true;
-      if (!hadComposer && hasComposer && isStoreTabActive()) storeManager.ensureLoaded(true);
-      logPanelDebug("panel.ui.surface.changed", {
-        hadComposer,
-        hasComposer,
-        scope: "panel-ui",
-        tool: "panel",
-      });
+      if (!hadComposer && hasComposer && isStoreTabActive()) storeManager.ensureLoaded();
+      meetingManager.scheduleSync(hasComposer ? 120 : 0);
+      promptRealtimeManager.scheduleSync(120);
+      if (previousSurface.hasComposer !== nextSurface.hasComposer || previousSurface.hasChatLog !== nextSurface.hasChatLog) {
+        logPanelDebug("panel.ui.surface.changed", {
+          hadChatLog: previousSurface.hasChatLog,
+          hadComposer,
+          hasChatLog: nextSurface.hasChatLog,
+          hasComposer,
+          scope: "panel-ui",
+          tool: "panel",
+        });
+      }
       render();
     }, 600);
   }
@@ -578,9 +695,17 @@
     const conversation = namespace.contentDom.getConversationState();
     return `${conversation.hasComposer}|${conversation.hasChatLog}|${conversation.articleCount}|${conversation.userCount}`;
   }
+  function parseSurfaceSignature(signature) {
+    const [hasComposer, hasChatLog] = String(signature || "").split("|");
+    return {
+      hasChatLog: hasChatLog === "true",
+      hasComposer: hasComposer === "true",
+    };
+  }
   function handleVisibilityChange() {
     if (document.visibilityState !== "visible") {
       meetingManager.scheduleSync(0);
+      promptRealtimeManager.scheduleSync(0);
       logPanelDebug("panel.ui.visibility.hidden", {
         scope: "panel-ui",
         tool: "panel",
@@ -588,8 +713,11 @@
       render();
       return;
     }
-    cloudSyncManager.scheduleSync(320, true);
+    if (shouldRunPromptCloudSync()) {
+      cloudSyncManager.scheduleSync(320);
+    }
     meetingManager.scheduleSync(320);
+    promptRealtimeManager.scheduleSync(320);
     if (state.open) releaseManager.ensureChecked();
     logPanelDebug("panel.ui.visibility.visible", {
       scope: "panel-ui",
@@ -598,8 +726,11 @@
     render();
   }
   function handleWindowFocus() {
-    cloudSyncManager.scheduleSync(320, true);
+    if (shouldRunPromptCloudSync()) {
+      cloudSyncManager.scheduleSync(320);
+    }
     meetingManager.scheduleSync(320);
+    promptRealtimeManager.scheduleSync(320);
     if (state.open) releaseManager.ensureChecked();
     logPanelDebug("panel.ui.focus", {
       scope: "panel-ui",
@@ -609,6 +740,18 @@
   }
   function getActivePromptTab(reviewOpen = state.promptReview.open) { const tab = state.uiPreferences.activeTool === "store" ? "store" : normalizePromptTab(state.uiPreferences.activePromptTab); return tab === "review" && !reviewOpen ? "library" : tab; }
   function isStoreTabActive() { return state.activeTool === "prompts" && getActivePromptTab() === "store"; }
+  function isPromptLibraryTabActive() { return state.activeTool === "prompts" && getActivePromptTab() === "library"; }
+  function shouldRunPromptCloudSync() {
+    return Boolean(
+      namespace.cloudSync.hasPendingPromptSync(state.cloudSync)
+      || (
+        state.open
+        && isPromptLibraryTabActive()
+        && isToolSurface()
+        && document.visibilityState === "visible"
+      )
+    );
+  }
   function normalizePromptTab(promptTabId) { return promptTabId === "store" || promptTabId === "review" ? promptTabId : "library"; }
   function buildMeetingToolState(meetingHub) {
     const normalized = namespace.meetingManager.mergeMeetingHub(meetingHub);
@@ -619,5 +762,14 @@
       pending: state.meetingUi.pending,
     };
   }
-  async function publishPrompt(promptId, categoryId, title) { return storeManager.publishPrompt(promptId, categoryId, title); }
+  async function handleStoreAction(action, detail = {}) {
+    const result = storeManager.handleAction(action, detail);
+    promptRealtimeManager.scheduleSync(80);
+    return result;
+  }
+  async function publishPrompt(promptId, categoryId, title) {
+    const result = await storeManager.publishPrompt(promptId, categoryId, title);
+    promptRealtimeManager.scheduleSync(80);
+    return result;
+  }
 })(globalThis);

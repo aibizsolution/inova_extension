@@ -86,6 +86,11 @@
     const item = input && typeof input === "object" ? input : {};
     const parts = (Array.isArray(item.parts) ? item.parts : []).map(normalizePendingPart).sort((left, right) => left.index - right.index || left.startMs - right.startMs);
     const uploadedPartCount = parts.filter((part) => normalizeText(part.storageObject)).length;
+    const supersededJobIds = Array.from(new Set(
+      (Array.isArray(item.supersededJobIds) ? item.supersededJobIds : [item.supersededJobId])
+        .map((jobId) => normalizeText(jobId))
+        .filter(Boolean)
+    ));
     return {
       blob: item.blob instanceof global.Blob ? item.blob : new global.Blob([], { type: normalizeText(item.mimeType) || "audio/webm" }),
       captureMode: normalizeText(item.captureMode) || "microphone",
@@ -109,6 +114,7 @@
       startedAt: normalizeText(item.startedAt),
       storageObject: normalizeText(item.storageObject),
       status: normalizePendingStatus(item.status, Boolean(item.hold)),
+      supersededJobIds,
       uploadedPartCount: Math.max(0, Number(item.uploadedPartCount) || uploadedPartCount),
       updatedAt: normalizeText(item.updatedAt) || new Date().toISOString(),
     };

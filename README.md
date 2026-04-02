@@ -23,6 +23,7 @@
   - `회의` 도구는 Firestore 회의 문서를 실시간으로 구독해 최신 회의록 목록과 `새 회의하기` CTA를 제공합니다.
   - 패널용 hidden bridge는 Firestore persistence와 탭 세션 Firebase auth를 함께 써서, 같은 탭 새로고침에서는 캐시 우선 표시와 auth 재사용을 우선합니다.
   - Firestore 첫 snapshot이 늦게 오면, 빈 목록 상태에서만 요청형 회의 목록 1회를 워밍업으로 먼저 보여주고 이후 실시간 snapshot으로 정본을 맞춥니다. 이 워밍업 응답은 background에서 짧게 재사용해 연속 새로고침 비용을 줄입니다.
+  - 회의 허브 목록과 hosted 작업실 진입에 쓰는 panel/session auth도 background의 짧은 TTL 캐시를 함께 써서, 같은 탭 재진입이나 새로고침에서 같은 토큰/목록을 불필요하게 다시 만들지 않게 유지합니다.
   - 패널 목록의 항목을 누르면 해당 회의 결과를 전용 새 탭 작업실에서 다시 확인합니다.
 - `회의 페이지`
   - Firebase Hosting에 올린 전용 회의 작업실에서 `회의 식별`, `현재 녹음`, `회의 공용 메모`, `처리 이력/업로드 큐`, `선택 결과 검토`를 한 화면에서 처리합니다.
@@ -103,6 +104,7 @@
   - 검색 입력은 한글 IME 조합 중에는 패널 재렌더를 미뤄 조합이 깨지지 않게 유지하고, 실제 필터 적용은 `Enter` 또는 검색창 clear 동작 때만 반영합니다.
   - `내 등록` 범위와 좋아요/가져오기/삭제 같은 쓰기 액션은 계속 요청형으로 유지하고, 상세 `보기` 본문은 prompt panel bridge가 Firestore `prompt_store_entry_details`를 직접 읽어옵니다.
   - `좋아요/가져오기/조회수` 반응은 항목 메트릭만 갱신하고 latest feed 재생성은 하지 않아, 실시간 범위를 줄이는 대신 쓰기 비용을 아낍니다.
+  - prompt/store용 hosted bridge auth는 background cache를 통해 같은 패널 탭 안에서 짧게 재사용하고, bridge가 잠깐 끊겨도 기존 목록과 상세를 최대한 유지한 채 재연결을 우선 시도합니다.
 - `릴리스 안내`
   - 패널 안에서 현재 설치 버전과 최신 배포본 여부를 확인할 수 있습니다.
   - 최신 릴리스와 이전 버전은 핵심 제목과 짧은 요약만 먼저 보여주고, 자세한 변경 내역은 `변경 내용 보기`에서 펼쳐 확인합니다.
@@ -125,8 +127,10 @@
 
 - `background/`
   - `service-worker.js`: 외부 네트워크 호출과 클라우드 백업, prompt/store panel auth, 회의 허브/launch grant gateway 중계
+  - `meeting-list-cache.js`, `panel-auth-cache.js`: 회의 허브 fallback 응답과 prompt/meeting panel auth를 짧게 재사용하는 메모리 캐시
 - `hosting/extension/`
   - `prompt-panel-bridge.html`, `prompt-panel-bridge.js`: 패널 content script 대신 프롬프트 메타 문서와 스토어 최신 feed page 문서를 구독하는 숨겨진 hosted bridge
+  - `releases/`, `downloads/`: 릴리스 패널이 읽는 최신/히스토리 메타와 버전별 ZIP 다운로드 자산
 - `hosting/meeting/`
   - `index.html`, `index.css`: 회의 작업실 레이아웃과 실용형 UI 스타일
   - `index.js`: hosted 회의 작업실 부팅, launch token 교환, 세션 복원, 녹음/업로드 큐/상세 액션 orchestration

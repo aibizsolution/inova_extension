@@ -85,7 +85,7 @@
 - 원격 백업 대기 상태와 마지막 동기화 메타는 `cloudSync`에 저장합니다.
 - 스토어 목록과 반응 상태는 기본적으로 메모리에서만 관리하고, 원격 지표는 필요할 때만 Functions를 통해 읽고 씁니다.
 - 회의 기능 브라우저 상태는 `meetingStateByMeetingId`를 정본으로 사용하고, `meetingStateBySession`은 legacy fallback으로만 유지합니다.
-- 패널 목록 캐시는 `meetingHub`에 저장하고, 같은 회의 안의 결과 리스트는 서버 summary 기준으로 읽습니다.
+- 회의 허브 목록은 `chrome.storage.local.meetingHub`에 별도 저장하지 않고, hosted bridge의 Firestore persistence와 현재 메모리 상태를 우선합니다.
 
 ## 6. 질문 모으기 규칙
 

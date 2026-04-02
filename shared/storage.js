@@ -6,14 +6,28 @@
     if (!global.chrome?.storage?.local) {
       return structuredClone(keys);
     }
-    return global.chrome.storage.local.get(keys);
+    try {
+      return global.chrome.storage.local.get(keys);
+    } catch (error) {
+      if (isExtensionContextInvalidatedError(error)) {
+        return structuredClone(keys);
+      }
+      throw error;
+    }
   }
 
   async function setLocal(partial) {
     if (!global.chrome?.storage?.local) {
       return;
     }
-    await global.chrome.storage.local.set(partial);
+    try {
+      await global.chrome.storage.local.set(partial);
+    } catch (error) {
+      if (isExtensionContextInvalidatedError(error)) {
+        return;
+      }
+      throw error;
+    }
   }
 
   async function getState() {
@@ -428,6 +442,13 @@
     updateUiPreferences,
     updateSettings,
   };
+
+  function isExtensionContextInvalidatedError(error) {
+    const message = namespace.session?.normalizeText
+      ? namespace.session.normalizeText(error instanceof Error ? error.message : String(error || ""))
+      : String(error || "").trim();
+    return message.toLowerCase().includes("extension context invalidated");
+  }
 
   function cloneValue(value) {
     return value == null ? value : JSON.parse(JSON.stringify(value));

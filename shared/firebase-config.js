@@ -3,6 +3,7 @@
   const DEFAULT_FUNCTIONS_BASE_URL = "https://asia-northeast3-browser-extension-main.cloudfunctions.net";
   const DEFAULT_HOSTING_BASE_URL = "https://browser-extension-main.web.app/extension";
   const DEFAULT_HOSTING_ORIGIN = "https://browser-extension-main.web.app";
+  const PROMPT_PANEL_BRIDGE_CACHE_TOKEN = "20260402-1";
   const FUNCTION_ENDPOINTS = {
     createInovaMeetingJobUrl: "createInovaMeetingJob",
     deleteInovaMeetingUrl: "deleteInovaMeeting",
@@ -12,6 +13,7 @@
     getInovaMeetingJobUrl: "getInovaMeetingJob",
     issueInovaMeetingLaunchUrl: "issueInovaMeetingLaunch",
     issueInovaMeetingPanelAuthUrl: "issueInovaMeetingPanelAuth",
+    issueInovaPromptPanelAuthUrl: "issueInovaPromptPanelAuth",
     issueInovaMeetingWorkspaceAuthUrl: "issueInovaMeetingWorkspaceAuth",
     listInovaMeetingsUrl: "listInovaMeetings",
     listInovaMeetingResultsUrl: "listInovaMeetingResults",
@@ -74,11 +76,17 @@
   function buildHostingConfig(defaultBaseUrl, defaultOriginUrl, overrideConfig = {}) {
     const baseUrl = normalizeBaseUrl(overrideConfig.baseUrl || defaultBaseUrl);
     const originUrl = normalizeOriginUrl(overrideConfig.originUrl || defaultOriginUrl || baseUrl);
+    const promptPanelBridgeAssetVersion = normalizeText(
+      overrideConfig.promptPanelBridgeAssetVersion
+      || [readRuntimeManifestVersion(), PROMPT_PANEL_BRIDGE_CACHE_TOKEN].filter(Boolean).join("-")
+    );
     return buildUrlConfig(
       {
         baseUrl,
         meetingPanelBridgeUrl: joinUrl(originUrl, "meeting/panel-bridge.html"),
         meetingWorkspaceUrl: joinUrl(originUrl, "meeting/index.html"),
+        promptPanelBridgeAssetVersion,
+        promptPanelBridgeUrl: appendQueryParam(joinUrl(baseUrl, "prompt-panel-bridge.html"), "v", promptPanelBridgeAssetVersion),
         originUrl,
       },
       HOSTING_ENDPOINTS,
@@ -119,6 +127,10 @@
     return `${normalizeBaseUrl(baseUrl)}/${String(pathName || "").replace(/^\/+/, "")}`;
   }
 
+  function normalizeText(value) {
+    return String(value || "").trim();
+  }
+
   function normalizeBaseUrl(value) {
     return String(value || "").replace(/\/+$/, "");
   }
@@ -130,5 +142,24 @@
     } catch {
       return normalized;
     }
+  }
+
+  function readRuntimeManifestVersion() {
+    try {
+      return normalizeText(global.chrome?.runtime?.getManifest?.()?.version);
+    } catch {
+      return "";
+    }
+  }
+
+  function appendQueryParam(url, key, value) {
+    const normalizedUrl = String(url || "");
+    const normalizedKey = String(key || "").trim();
+    const normalizedValue = String(value || "").trim();
+    if (!normalizedUrl || !normalizedKey || !normalizedValue) {
+      return normalizedUrl;
+    }
+    const separator = normalizedUrl.includes("?") ? "&" : "?";
+    return `${normalizedUrl}${separator}${encodeURIComponent(normalizedKey)}=${encodeURIComponent(normalizedValue)}`;
   }
 })(globalThis);

@@ -10,6 +10,8 @@
 
   function create(state, hooks) {
     let authState = { expiresAt: "", firebaseCustomToken: "", providerUserKey: "" };
+    let authPromise = null;
+    let authPromiseKey = "";
     let bridgeFrame = null;
     let bridgePort = null;
     let bridgePortPromise = null;
@@ -22,6 +24,7 @@
     let bridgeAttached = false;
     let fallbackInflight = false;
     let fallbackCooldownUntil = 0;
+    let lastSnapshotRequestId = 0;
     let timerId = 0;
 
     return {
@@ -40,10 +43,6 @@
       if (areaName !== "local") {
         return;
       }
-      if (changes.meetingHub) {
-        state.meetingHub = mergeMeetingHub(changes.meetingHub.newValue);
-        hooks.render?.();
-      }
       if (changes.settings || changes.cloudSync) {
         scheduleSync(240);
       }
@@ -57,8 +56,6 @@
     }
 
     async function refreshState(reason = "manual") {
-      state.meetingHub = await namespace.storage.getMeetingHub();
-
       const providerIdentity = namespace.providerIdentity.getCurrent();
       if (!shouldUseRealtime(providerIdentity)) {
         disconnectRealtime(reason);
@@ -130,21 +127,33 @@
       ) {
         return authState;
       }
+      if (authPromise && authPromiseKey === providerUserKey) {
+        return authPromise;
+      }
 
       namespace.panelDebug?.log?.("panel.auth.start", {
         providerUserKey,
       });
-      const nextAuth = await namespace.meetingBridge.issuePanelAuth(providerIdentity);
-      authState = {
-        expiresAt: namespace.session.normalizeText(nextAuth?.expiresAt),
-        firebaseCustomToken: namespace.session.normalizeText(nextAuth?.firebaseCustomToken),
-        providerUserKey: namespace.session.normalizeText(nextAuth?.providerUserKey),
-      };
-      namespace.panelDebug?.log?.("panel.auth.success", {
-        expiresAt: authState.expiresAt,
-        providerUserKey: authState.providerUserKey,
-      });
-      return authState;
+      authPromiseKey = providerUserKey;
+      authPromise = (async () => {
+        const nextAuth = await namespace.meetingBridge.issuePanelAuth(providerIdentity);
+        authState = {
+          expiresAt: namespace.session.normalizeText(nextAuth?.expiresAt),
+          firebaseCustomToken: namespace.session.normalizeText(nextAuth?.firebaseCustomToken),
+          providerUserKey: namespace.session.normalizeText(nextAuth?.providerUserKey),
+        };
+        namespace.panelDebug?.log?.("panel.auth.success", {
+          expiresAt: authState.expiresAt,
+          providerUserKey: authState.providerUserKey,
+        });
+        return authState;
+      })();
+      try {
+        return await authPromise;
+      } finally {
+        authPromise = null;
+        authPromiseKey = "";
+      }
     }
 
     async function ensureBridgePort() {
@@ -260,6 +269,7 @@
         bridgeConnecting = false;
         bridgeConnected = true;
         namespace.panelDebug?.log?.("panel.bridge.connected", payload);
+        warmRefresh(namespace.providerIdentity.getCurrent(), currentRequestId).catch(logRefreshError);
         return;
       }
       if (type === "disconnected") {
@@ -283,6 +293,7 @@
     }
 
     async function handleSnapshotPayload(payload) {
+      lastSnapshotRequestId = Math.max(lastSnapshotRequestId, Number(payload.requestId) || currentRequestId);
       const items = normalizeRealtimeItems(payload.items);
       bridgeAttached = true;
       bridgeConnecting = false;
@@ -293,7 +304,8 @@
         hasPendingWrites: Boolean(payload.hasPendingWrites),
         source: payload.fromCache ? "cache" : "server",
       });
-      state.meetingHub = await namespace.storage.setMeetingHub({
+      state.meetingHub = mergeMeetingHub({
+        ...state.meetingHub,
         checkedAt: namespace.session.normalizeText(payload.checkedAt) || new Date().toISOString(),
         error: "",
         items,
@@ -336,7 +348,8 @@
           providerIdentity
         );
         const items = normalizeRealtimeItems(listPayload?.items);
-        state.meetingHub = await namespace.storage.setMeetingHub({
+        state.meetingHub = mergeMeetingHub({
+          ...state.meetingHub,
           checkedAt: new Date().toISOString(),
           error: error instanceof Error ? error.message : namespace.session.normalizeText(error),
           items,
@@ -353,7 +366,8 @@
         namespace.panelDebug?.log?.("panel.fallback.refresh.error", {
           error: message,
         });
-        state.meetingHub = await namespace.storage.setMeetingHub({
+        state.meetingHub = mergeMeetingHub({
+          ...state.meetingHub,
           checkedAt: new Date().toISOString(),
           error: message,
           items: Array.isArray(state.meetingHub?.items) ? state.meetingHub.items : [],
@@ -380,9 +394,42 @@
       bridgeConnecting = false;
       bridgeConnected = false;
       bridgeConnectionKey = "";
+      lastSnapshotRequestId = 0;
       namespace.panelDebug?.log?.("panel.bridge.detach", {
         reason,
       });
+    }
+
+    async function warmRefresh(providerIdentity, requestId) {
+      if (!providerIdentity?.available || requestId !== currentRequestId || lastSnapshotRequestId >= requestId || fallbackInflight || !isMeetingHubPendingInitialLoad(state.meetingHub)) {
+        return;
+      }
+      namespace.panelDebug?.log?.("panel.warm.refresh.request", {
+        requestId,
+      });
+      const listPayload = await namespace.meetingBridge.listMeetings(
+        {
+          limit: BRIDGE_QUERY_LIMIT,
+        },
+        providerIdentity
+      );
+      if (requestId !== currentRequestId || lastSnapshotRequestId >= requestId || !isMeetingHubPendingInitialLoad(state.meetingHub)) {
+        return;
+      }
+      const items = normalizeRealtimeItems(listPayload?.items);
+      state.meetingHub = mergeMeetingHub({
+        ...state.meetingHub,
+        checkedAt: new Date().toISOString(),
+        error: "",
+        items,
+        source: "runtime",
+        version: Math.max(1, Number(state.meetingHub?.version) || 1),
+      });
+      namespace.panelDebug?.log?.("panel.warm.refresh.success", {
+        count: items.length,
+        requestId,
+      });
+      hooks.render?.();
     }
 
     function logRefreshError(error) {
@@ -422,6 +469,15 @@
       items: Array.isArray(nextHub?.items) ? nextHub.items : [],
       source: namespace.session.normalizeText(nextHub?.source),
     };
+  }
+
+  function isMeetingHubPendingInitialLoad(meetingHub) {
+    const hub = meetingHub && typeof meetingHub === "object" ? meetingHub : null;
+    return !Boolean(
+      Array.isArray(hub?.items) && hub.items.length
+      || namespace.session.normalizeText(hub?.checkedAt)
+      || namespace.session.normalizeText(hub?.error)
+    );
   }
 
   namespace.meetingManager = {

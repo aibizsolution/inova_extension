@@ -65,6 +65,7 @@
         "content/release-view.js",
         "content/prompt-review-manager.js",
         "content/cloud-sync-manager.js",
+        "content/prompt-realtime-manager.js",
         "content/meeting-manager.js",
         "content/route-sync.js",
         "content/prompt-manager.js",

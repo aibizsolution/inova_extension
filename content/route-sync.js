@@ -24,6 +24,7 @@
         const storageState = await namespace.storage.getState();
         state.settings = storageState.settings || { ...namespace.constants.defaults.settings };
         state.pausedSessions = storageState.pausedSessions || {};
+        state.cloudSync = namespace.cloudSync.mergeCloudSyncState(storageState.cloudSync);
         state.uiPreferences = applyUiPreferenceLock(namespace.storage.mergeUiPreferences(storageState.uiPreferences));
         state.uiPreferences.activePromptTab = normalizePromptTab(state.uiPreferences.activeTool === "store" ? "store" : state.uiPreferences.activePromptTab);
         state.activeTool = hooks.normalizeToolId(state.uiPreferences.activeTool || state.activeTool);
@@ -56,20 +57,25 @@
     async function syncRouteState(force = false, reason = "manual") {
       const nextSessionId = namespace.session.getSessionId();
       const sessionChanged = nextSessionId !== state.sessionId;
+      const quietClickProbe = shouldSkipSyncDebugLog(force, reason, sessionChanged);
       state.lastRouteKey = getRouteKey();
-      logDebug("route.sync.start", {
-        force: Boolean(force),
-        reason,
-        scope: "route",
-        sessionChanged,
-        sessionId: nextSessionId,
-      });
-      if (!force && !sessionChanged) {
-        logDebug("route.sync.skipped", {
+      if (!quietClickProbe) {
+        logDebug("route.sync.start", {
+          force: Boolean(force),
           reason,
           scope: "route",
+          sessionChanged,
           sessionId: nextSessionId,
         });
+      }
+      if (!force && !sessionChanged) {
+        if (!quietClickProbe) {
+          logDebug("route.sync.skipped", {
+            reason,
+            scope: "route",
+            sessionId: nextSessionId,
+          });
+        }
         return;
       }
 
@@ -175,6 +181,7 @@
 
       if (changes.settings) state.settings = { ...namespace.constants.defaults.settings, ...(changes.settings.newValue || {}) };
       if (changes.pausedSessions) state.pausedSessions = changes.pausedSessions.newValue || {};
+      if (changes.cloudSync) state.cloudSync = namespace.cloudSync.mergeCloudSyncState(changes.cloudSync.newValue);
       if (changes.uiPreferences) {
         state.uiPreferences = applyUiPreferenceLock(namespace.storage.mergeUiPreferences(changes.uiPreferences.newValue));
         state.uiPreferences.activePromptTab = normalizePromptTab(state.uiPreferences.activeTool === "store" ? "store" : state.uiPreferences.activePromptTab);
@@ -270,6 +277,17 @@
 
     function scheduleRouteSync(reason = "scheduled") {
       global.setTimeout(() => syncRouteState(false, reason).catch((error) => console.error("[i-Nova Bookmarks] route sync failed", error)), 0);
+    }
+
+    function shouldSkipSyncDebugLog(force, reason, sessionChanged) {
+      return !force && !sessionChanged && isQuietSyncReason(reason);
+    }
+
+    function isQuietSyncReason(reason) {
+      const normalized = String(reason || "").trim();
+      return normalized === "click.80"
+        || normalized === "click.350"
+        || normalized === "visibility";
     }
 
     function getRouteKey() {
