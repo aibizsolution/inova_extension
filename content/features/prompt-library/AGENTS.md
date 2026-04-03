@@ -15,6 +15,7 @@
 - `content/prompt-hub-state.js` - prompt 탭 상태를 묶는 prompt tool shell
 - `content/prompt-hub-panel.js` - prompt/store 상호작용을 묶는 prompt tool shell
 - `content/prompt-hub-controller.js` - prompt 탭 전이와 액션 라우팅을 묶는 prompt tool shell
+- `content/prompt-hub-runtime.js` - prompt manager/runtime wiring을 묶는 prompt tool shell
 - `content/prompt-hub-view.js` - `prompt-library` 단독 view가 아니라 prompt tool shell
 
 ## 관련 functions 경로

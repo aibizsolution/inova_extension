@@ -23,6 +23,7 @@ const requiredFiles = [
   "content/prompt-hub-state.js",
   "content/prompt-hub-panel.js",
   "content/prompt-hub-controller.js",
+  "content/prompt-hub-runtime.js",
   "content/features/prompt-library/files.js",
   "content/features/prompt-library/prompt-manager.js",
   "content/panel.css",

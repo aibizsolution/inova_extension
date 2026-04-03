@@ -87,70 +87,23 @@
     isToolSurface,
     visibilityState: document.visibilityState,
   });
-  let promptHubController = null;
-  const promptManager = namespace.promptManager.create(state, {
-    publishPrompt: (...args) => promptHubController.publishPrompt(...args),
-    persistActiveTool,
-    render,
-  });
-  const promptReviewManager = namespace.promptReviewManager.create(state, {
-    render,
-    showPromptTab: (...args) => promptHubController.showPromptTab(...args),
-  });
-  let promptRealtimeManager = null;
-    const storeManager = namespace.storeManager.create(state, {
-      loadStoreDetail: (entryId) => promptRealtimeManager?.loadStoreDetail?.(entryId),
-      refreshStoreLatestRealtime: (reason) => {
-        promptRealtimeManager?.scheduleSync?.(reason === "manual-refresh" ? 0 : 80);
-      },
-      shouldReloadAfterMutation: () => {
-        const storeTabActive = state.activeTool === "prompts" && getActivePromptTab() === "store";
-        if (!storeTabActive) {
-        return false;
-      }
-        if (state.store.scope !== "all") {
-          return true;
-        }
-        return !promptRealtimeManager?.isStoreLatestRealtimeActive?.();
-      },
-      shouldUseStoreLatestRealtime: () => Boolean(promptRealtimeManager?.shouldUseStoreLatestRealtime?.()),
-      render,
-    });
   const releaseManager = namespace.releaseManager.create(state, { render });
   const cloudSyncManager = namespace.cloudSyncManager.create(state, { render });
-  promptRealtimeManager = namespace.promptRealtimeManager.create(state, {
+  const {
+    promptHubController,
+    promptManager,
+    promptRealtimeManager,
+    promptReviewManager,
+    storeManager,
+  } = namespace.promptHubRuntime.create(state, {
+    cloudSyncManager,
     getActivePromptTab,
     isToolSurface,
-    onPromptLibraryFallback: () => {},
-    onPromptLibraryMeta: (remoteState) => cloudSyncManager.handleRealtimeRemoteState(remoteState),
-    onStoreLatestFallback: () => {
-      const hasRenderableStoreData = Boolean(
-        state.store.loaded
-        || (Array.isArray(state.store.items) && state.store.items.length)
-        || Number(state.store.totalCount || 0) > 0
-      );
-      if (hasRenderableStoreData) {
-        render();
-        return;
-      }
-      storeManager.ensureLoaded(true, "fallback").catch((error) => {
-        console.error("[i-Nova Bookmarks] store fallback refresh failed", error);
-      });
-    },
-    onStoreLatestSnapshot: (payload) => storeManager.applyLatestRealtimeSnapshot(payload),
-    render,
-  });
-  promptHubController = namespace.promptHubController.create(state, {
-    getActivePromptTab,
     lockUiPreferenceSelection,
     normalizePromptTab,
     onSelectPromptTab: () => meetingManager.scheduleSync(0),
     persistActiveTool,
-    promptManager,
-    promptRealtimeManager,
-    promptReviewManager,
     render,
-    storeManager,
   });
   const meetingManager = namespace.meetingManager.create(state, { render });
   const routeSync = namespace.routeSync.create(state, {
