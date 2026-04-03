@@ -97,6 +97,13 @@
         workspaceAuthExpiresAt: "",
         workspaceSessionId: "",
       },
+      sessionRestore: {
+        degradedReason: "",
+        hasBlockingIssue: false,
+        hasWarningIssue: false,
+        issueCodes: [],
+        source: "",
+      },
       runtimeChunkCache: Object.create(null),
       selectedRecordId: "",
       session: { expiresAt: "", meetingId: "", meetingSessionToken: "", mode: "create", sharedMemo: "", title: "" },
@@ -231,6 +238,45 @@
     await bootWorkspace();
   }
 
+  function hasSessionRestoreBlockingIssue(issueCodes) {
+    const normalizedCodes = Array.isArray(issueCodes) ? issueCodes : [];
+    return normalizedCodes.some((code) => ["storage-invalid-payload", "storage-parse-failed", "storage-read-failed"].includes(normalizeText(code)));
+  }
+
+  function hasSessionRestoreWarningIssue(issueCodes) {
+    const normalizedCodes = Array.isArray(issueCodes) ? issueCodes : [];
+    return normalizedCodes.some((code) => ["storage-invalid-payload", "storage-parse-failed", "storage-read-failed", "storage-write-failed"].includes(normalizeText(code)));
+  }
+
+  function buildMissingSessionBlockedOptions() {
+    if (!state.sessionRestore.hasBlockingIssue) {
+      return {
+        message: "직접 주소를 붙여 넣어 열면 회의 세션을 확인할 수 없습니다. i-Nova 패널의 회의 허브에서 다시 열어 주세요.",
+      };
+    }
+    return {
+      eyebrow: "세션 복원 실패",
+      message: `${state.sessionRestore.degradedReason || "브라우저 저장소에서 작업실 세션을 다시 읽지 못했어요."} i-Nova 패널의 회의 허브에서 작업실을 다시 열어 새 세션을 받아 주세요.`,
+      title: "저장된 작업실 세션을 다시 읽지 못했습니다",
+      tone: "warning",
+    };
+  }
+
+  function buildSessionRestoreDegradedNotice() {
+    const reason = normalizeText(state.sessionRestore.degradedReason) || "브라우저 저장소에 작업실 세션을 다시 저장하거나 읽는 중 문제가 있었습니다.";
+    return `${reason} 현재 작업실은 계속 사용할 수 있지만, 다음 새로고침이나 재진입에서 세션 복원이 제한될 수 있습니다.`;
+  }
+
+  function surfaceSessionRestoreNotice() {
+    if (!state.sessionRestore.hasWarningIssue || !state.session.meetingSessionToken || !state.session.meetingId) {
+      return;
+    }
+    setNotice(buildSessionRestoreDegradedNotice(), "warning", {
+      code: "session-restore-degraded",
+      sticky: true,
+    });
+  }
+
   async function bootWorkspace() {
     try {
       logDebug("workspace.boot.start", {
@@ -249,8 +295,10 @@
         mode: state.mode,
       });
       if (!state.session.meetingSessionToken || !state.session.meetingId) {
-        return renderBlocked("직접 주소를 붙여 넣어 열면 회의 세션을 확인할 수 없습니다. i-Nova 패널의 회의 허브에서 다시 열어 주세요.");
+        const blockedState = buildMissingSessionBlockedOptions();
+        return renderBlocked(blockedState.message, blockedState);
       }
+      surfaceSessionRestoreNotice();
       state.meetingTitleDraft = normalizeText(state.meeting.title || state.session.title);
       refs.meetingTitleInput.value = state.meetingTitleDraft;
       state.recordMemoSaved = normalizeTextBlock(state.session.sharedMemo);
@@ -337,10 +385,18 @@
     const restored = loadPersistedWorkspaceSession(global, normalizeText(state.params.meetingId), state.params.workspaceToken, state.params.jobId);
     const restoreIssues = Array.isArray(restored?.issues) ? restored.issues : [];
     const degradedReason = normalizeText(restored?.degradedReason);
+    const issueCodes = restoreIssues.map((issue) => normalizeText(issue?.code)).filter(Boolean);
+    state.sessionRestore = {
+      degradedReason,
+      hasBlockingIssue: hasSessionRestoreBlockingIssue(issueCodes),
+      hasWarningIssue: hasSessionRestoreWarningIssue(issueCodes),
+      issueCodes,
+      source: normalizeText(restored?.source),
+    };
     logDebug("workspace.session.restore", {
       degradedReason,
       hasRestoredPayload: Boolean(restored?.payload),
-      issueCodes: restoreIssues.map((issue) => normalizeText(issue?.code)).filter(Boolean),
+      issueCodes,
       issueCount: restoreIssues.length,
       meetingId: state.params.meetingId,
       source: restored?.source || "",
