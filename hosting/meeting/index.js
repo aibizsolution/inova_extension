@@ -2517,7 +2517,7 @@
         noticeText: shouldStartRemoteJob
           ? "첫 청크를 올려 자동 전사를 바로 시작했습니다. 남은 청크를 이어서 업로드합니다."
           : "",
-        transitionKind: shouldStartRemoteJob ? "start" : "publish",
+        transitionKind: shouldStartRemoteJob ? "chunk-start" : "publish",
         transitionAction: shouldStartRemoteJob ? "chunk-start" : "chunk-publish",
       };
     }
@@ -2583,7 +2583,7 @@
       const bootstrapPart = findMissingPreparedParts(nextPending)[0];
       if (bootstrapPart) {
         nextPending = await uploadPreparedPart(nextPending, bootstrapPart);
-        const bootstrapResult = await startPendingUploadRemoteJob(nextPending, {
+        const bootstrapResult = await startChunkedPendingUploadRemoteJob(nextPending, {
           context: buildAttemptQueueContext(activeRequestId, "chunk-remote-job-start"),
           noticeText: "첫 청크를 올려 자동 전사를 바로 시작했습니다. 남은 청크를 이어서 업로드합니다.",
           syncWorkspace: false,
@@ -2605,8 +2605,8 @@
     });
     if (remoteReconcileRequest) {
       const reconcileResult = await (
-        remoteReconcileRequest.transitionKind === "start"
-          ? startPendingUploadRemoteJob(nextPending, {
+        remoteReconcileRequest.transitionKind === "chunk-start"
+          ? startChunkedPendingUploadRemoteJob(nextPending, {
             context: buildAttemptQueueContext(activeRequestId, remoteReconcileRequest.contextPhase),
             noticeText: remoteReconcileRequest.noticeText,
             syncWorkspace: false,
@@ -2676,7 +2676,7 @@
         applyRender();
       }
     }
-    return (await startPendingUploadRemoteJob(nextPending, {
+    return (await startSinglePendingUploadRemoteJob(nextPending, {
       allowInlineSource,
       context: buildAttemptQueueContext(activeRequestId, "single-remote-job-start"),
       inlineSourceError,
@@ -2816,7 +2816,7 @@
     return normalizeJob(created?.job, item.meetingTitleSnapshot);
   }
 
-  async function startPendingUploadRemoteJob(item, options = {}) {
+  async function commitStartedPendingUploadRemoteJob(item, createdJob, options = {}) {
     const previousJobId = normalizeText(item?.jobId);
     const transitionAction = normalizeText(options?.transitionAction);
     if (!["single-start", "chunk-start"].includes(transitionAction)) {
@@ -2825,10 +2825,6 @@
     const queueContext = normalizePendingUploadQueueContext({
       requestId: item?.requestId,
       ...(options?.context || {}),
-    });
-    const createdJob = await requestPendingUploadRemoteState(item, {
-      allowInlineSource: Boolean(options?.allowInlineSource),
-      inlineSourceError: normalizeText(options?.inlineSourceError),
     });
     const allChunksUploaded = normalizeText(item?.sourceMode) !== "chunked"
       || Math.max(0, Number(item?.uploadedPartCount) || 0) >= Math.max(0, Number(item?.preparedPartCount) || 0);
@@ -2894,6 +2890,36 @@
       pending: nextPending,
       resolution,
     };
+  }
+
+  async function startSinglePendingUploadRemoteJob(item, options = {}) {
+    const transitionAction = normalizeText(options?.transitionAction);
+    if (transitionAction !== "single-start") {
+      throw new Error("single source 원격 시작 action이 없어 업로드 결과를 안전하게 확정할 수 없어요.");
+    }
+    if (normalizeText(item?.sourceMode) === "chunked") {
+      throw new Error("chunked source는 single 원격 시작 경로로 보낼 수 없어요.");
+    }
+    const createdJob = await requestPendingUploadRemoteState(item, {
+      allowInlineSource: Boolean(options?.allowInlineSource),
+      inlineSourceError: normalizeText(options?.inlineSourceError),
+    });
+    return commitStartedPendingUploadRemoteJob(item, createdJob, options);
+  }
+
+  async function startChunkedPendingUploadRemoteJob(item, options = {}) {
+    const transitionAction = normalizeText(options?.transitionAction);
+    if (transitionAction !== "chunk-start") {
+      throw new Error("chunk source 원격 시작 action이 없어 업로드 결과를 안전하게 확정할 수 없어요.");
+    }
+    if (normalizeText(item?.sourceMode) !== "chunked") {
+      throw new Error("chunk 원격 시작은 chunked source에서만 실행할 수 있어요.");
+    }
+    if (Math.max(0, Number(item?.uploadedPartCount) || 0) < 1) {
+      throw new Error("올라간 청크 없이 원격 chunk 작업을 시작할 수 없어요.");
+    }
+    const createdJob = await requestPendingUploadRemoteState(item);
+    return commitStartedPendingUploadRemoteJob(item, createdJob, options);
   }
 
   async function publishPendingUploadRemoteChunks(item, options = {}) {
