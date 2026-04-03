@@ -188,7 +188,13 @@ function registerMeetingHandlers(deps) {
     }
   });
 
-  const uploadInovaMeetingSource = onRequest({ cors: CORS_ORIGINS, region: REGION, timeoutSeconds: 540 }, async (request, response) => {
+  const uploadInovaMeetingSource = onRequest({
+    concurrency: 1,
+    cors: CORS_ORIGINS,
+    memory: "1GiB",
+    region: REGION,
+    timeoutSeconds: 120,
+  }, async (request, response) => {
     try {
       assertMethod(request);
       const input = normalizeMeetingSourceUploadRequest(request);
