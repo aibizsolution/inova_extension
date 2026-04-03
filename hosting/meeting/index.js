@@ -916,7 +916,13 @@
     try {
       const loadedItems = await runPendingUploadQueueOperation(
         () => state.queueStore.listByMeeting(state.session.meetingId),
-        { scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.load }
+        {
+          context: {
+            phase: "load-pending-uploads",
+            reason: "workspace-load",
+          },
+          scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.load,
+        }
       );
       applyLoadedPendingUploads(loadedItems);
     } catch (error) {
@@ -947,7 +953,15 @@
         });
         await runPendingUploadQueueOperation(
           () => state.queueStore.put(nextPending),
-          { scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.persist }
+          {
+            context: {
+              phase: "remote-sync-succeeded",
+              previousRequestId: pending.requestId,
+              reason: "remote-sync",
+              requestId: nextPending.requestId,
+            },
+            scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.persist,
+          }
         );
         delete state.runtimeChunkCache[normalizeText(pending.requestId)];
         if (state.selectedRecordId === ns.shared.buildLocalSelectionId(pending.requestId)) state.selectedRecordId = buildRemoteSelectionId(matched.jobId);
@@ -971,7 +985,16 @@
         });
         await runPendingUploadQueueOperation(
           () => state.queueStore.put(nextPending),
-          { scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.persist }
+          {
+            context: {
+              phase: shouldResetRemoteSource ? "remote-sync-reset" : "remote-sync-update",
+              previousRequestId: pending.requestId,
+              reason: "remote-sync",
+              requestId: nextPending.requestId,
+              shouldResetSource: shouldResetRemoteSource,
+            },
+            scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.persist,
+          }
         );
         if (shouldResetRemoteSource && state.runtimeChunkCache[normalizeText(pending.requestId)]) {
           state.runtimeChunkCache[normalizeText(pending.requestId)] = {
@@ -1543,7 +1566,12 @@
       mimeType: pending.mimeType,
       sizeBytes,
     });
-    await upsertPendingUpload(pending);
+    await upsertPendingUpload(pending, {
+      context: {
+        phase: "import-save",
+        reason: "import-upload",
+      },
+    });
     state.recordMemoDraft = "";
     state.recordMemoSaved = "";
     state.session.sharedMemo = "";
@@ -1665,7 +1693,12 @@
     }
     const endedAt = new Date().toISOString();
     const pending = normalizePendingUpload({ blob, captureMode: "microphone", channelCount: state.capture.channelCount, createdAt: endedAt, durationMs: state.capture.durationMs, endedAt, hold: false, jobId: "", lastError: "", meetingId: state.session.meetingId, meetingTitleSnapshot: buildRecordTitle(endedAt), mimeType: blob.type, originalSizeBytes: blob.size, parts: [], preparedPartCount: 0, requestId: state.capture.requestId || ns.shared.generateCaptureRequestId(global), sharedMemoSnapshot: normalizeTextBlock(refs.sharedMemoInput.value || state.recordMemoDraft || state.recordMemoSaved), sizeBytes: blob.size, sourceMode: inferSourceMode(blob.size, state.capture.durationMs), startedAt: state.capture.startedAt, status: "local_saved", uploadedPartCount: 0, updatedAt: endedAt });
-    await upsertPendingUpload(pending);
+    await upsertPendingUpload(pending, {
+      context: {
+        phase: stopContext.continueRecording ? "capture-save-continue" : "capture-save",
+        reason: stopContext.continueRecording ? "capture-continue" : "capture-upload",
+      },
+    });
     state.recordMemoDraft = "";
     state.recordMemoSaved = "";
     state.session.sharedMemo = "";
@@ -1776,7 +1809,19 @@
     const normalizedRequestId = normalizeText(requestId);
     const pending = state.pendingUploads.find((item) => item.requestId === normalizedRequestId);
     if (!pending || pending.hold || state.busy.queue[normalizedRequestId]) return;
-    if (!isOnline(global)) { await upsertPendingUpload({ ...pending, lastError: "인터넷이 돌아오면 자동으로 업로드합니다.", status: "upload_queued" }); return applyRender(); }
+    if (!isOnline(global)) {
+      await upsertPendingUpload(
+        { ...pending, lastError: "인터넷이 돌아오면 자동으로 업로드합니다.", status: "upload_queued" },
+        {
+          context: {
+            phase: "offline-queued",
+            reason: normalizeText(options?.reason) || "offline-queued",
+            requestId: normalizedRequestId,
+          },
+        }
+      );
+      return applyRender();
+    }
     state.busy.queue[normalizedRequestId] = true;
     const attemptPlan = buildPendingUploadAttemptPlan(pending, options);
     const buildAttemptQueueContext = (requestIdValue, phase) => buildPendingUploadTransitionQueueContext(attemptPlan, requestIdValue, phase);
@@ -2574,7 +2619,12 @@
       }
       if (entry.pending?.requestId) {
         const nextPending = { ...entry.pending, meetingTitleSnapshot: nextTitle };
-        await upsertPendingUpload(nextPending);
+        await upsertPendingUpload(nextPending, {
+          context: {
+            phase: "record-title",
+            reason: "record-title",
+          },
+        });
         if (!entry.remote?.jobId) {
           state.currentJob = buildLocalPendingJob(nextPending);
         }
