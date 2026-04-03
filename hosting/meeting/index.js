@@ -1490,11 +1490,11 @@
   }
 
   async function syncPendingUploadsWithRemote() {
-    const nextItems = [];
-    for (const pending of state.pendingUploads) {
+    const pendingItems = Array.isArray(state.pendingUploads) ? [...state.pendingUploads] : [];
+    for (const pending of pendingItems) {
       const matched = findRemoteForPending(state, pending);
-      if (!matched) nextItems.push(pending);
-      else if (matched.status === "succeeded") {
+      if (!matched) continue;
+      if (matched.status === "succeeded") {
         const nextPending = normalizePendingUpload({
           ...pending,
           hold: false,
@@ -1503,66 +1503,57 @@
           status: "succeeded",
           updatedAt: normalizeText(matched.updatedAt || pending.updatedAt),
         });
-        await runPendingUploadQueueOperation(
-          () => state.queueStore.put(nextPending),
-          {
-            context: {
-              phase: "remote-sync-succeeded",
-              previousRequestId: pending.requestId,
-              reason: "remote-sync",
-              requestId: nextPending.requestId,
-            },
-            scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.persist,
-          }
-        );
+        await upsertPendingUpload(nextPending, {
+          preserveUpdatedAt: true,
+          context: {
+            phase: "remote-sync-succeeded",
+            previousRequestId: pending.requestId,
+            reason: "remote-sync",
+            requestId: nextPending.requestId,
+          },
+        });
         delete state.runtimeChunkCache[normalizeText(pending.requestId)];
         if (state.selectedRecordId === ns.shared.buildLocalSelectionId(pending.requestId)) state.selectedRecordId = buildRemoteSelectionId(matched.jobId);
-        nextItems.push(nextPending);
-      } else {
-        const shouldResetRemoteSource = matched.status === "failed";
-        const nextPending = normalizePendingUpload({
-          ...pending,
-          jobId: normalizeText(matched.jobId || pending.jobId),
-          lastError: normalizeText(matched.error || pending.lastError),
-          parts: shouldResetRemoteSource
-            ? (Array.isArray(pending.parts) ? pending.parts : []).map((part) => ({
-                ...part,
-                storageObject: "",
-                uploadStatus: "",
-              }))
-            : pending.parts,
-          status: matched.status === "processing" ? "remote_processing" : matched.status === "queued" ? "remote_queued" : matched.status === "failed" ? (pending.hold ? "on_hold" : "failed") : pending.status,
-          storageObject: shouldResetRemoteSource ? "" : pending.storageObject,
-          updatedAt: normalizeText(matched.updatedAt || pending.updatedAt),
-        });
-        await runPendingUploadQueueOperation(
-          () => state.queueStore.put(nextPending),
-          {
-            context: {
-              phase: shouldResetRemoteSource ? "remote-sync-reset" : "remote-sync-update",
-              previousRequestId: pending.requestId,
-              reason: "remote-sync",
-              requestId: nextPending.requestId,
-              shouldResetSource: shouldResetRemoteSource,
-            },
-            scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.persist,
-          }
-        );
-        if (shouldResetRemoteSource && state.runtimeChunkCache[normalizeText(pending.requestId)]) {
-          state.runtimeChunkCache[normalizeText(pending.requestId)] = {
-            ...state.runtimeChunkCache[normalizeText(pending.requestId)],
-            parts: (state.runtimeChunkCache[normalizeText(pending.requestId)].parts || []).map((part) => ({
+        continue;
+      }
+      const shouldResetRemoteSource = matched.status === "failed";
+      const nextPending = normalizePendingUpload({
+        ...pending,
+        jobId: normalizeText(matched.jobId || pending.jobId),
+        lastError: normalizeText(matched.error || pending.lastError),
+        parts: shouldResetRemoteSource
+          ? (Array.isArray(pending.parts) ? pending.parts : []).map((part) => ({
               ...part,
               storageObject: "",
               uploadStatus: "",
-            })),
-          };
-        }
-        if (state.selectedRecordId === ns.shared.buildLocalSelectionId(pending.requestId) && nextPending.jobId) state.selectedRecordId = buildRemoteSelectionId(nextPending.jobId);
-        nextItems.push(nextPending);
+            }))
+          : pending.parts,
+        status: matched.status === "processing" ? "remote_processing" : matched.status === "queued" ? "remote_queued" : matched.status === "failed" ? (pending.hold ? "on_hold" : "failed") : pending.status,
+        storageObject: shouldResetRemoteSource ? "" : pending.storageObject,
+        updatedAt: normalizeText(matched.updatedAt || pending.updatedAt),
+      });
+      await upsertPendingUpload(nextPending, {
+        preserveUpdatedAt: true,
+        context: {
+          phase: shouldResetRemoteSource ? "remote-sync-reset" : "remote-sync-update",
+          previousRequestId: pending.requestId,
+          reason: "remote-sync",
+          requestId: nextPending.requestId,
+          shouldResetSource: shouldResetRemoteSource,
+        },
+      });
+      if (shouldResetRemoteSource && state.runtimeChunkCache[normalizeText(pending.requestId)]) {
+        state.runtimeChunkCache[normalizeText(pending.requestId)] = {
+          ...state.runtimeChunkCache[normalizeText(pending.requestId)],
+          parts: (state.runtimeChunkCache[normalizeText(pending.requestId)].parts || []).map((part) => ({
+            ...part,
+            storageObject: "",
+            uploadStatus: "",
+          })),
+        };
       }
+      if (state.selectedRecordId === ns.shared.buildLocalSelectionId(pending.requestId) && nextPending.jobId) state.selectedRecordId = buildRemoteSelectionId(nextPending.jobId);
     }
-    state.pendingUploads = nextItems.sort(ns.storage.comparePendingUploads);
     state.meeting.pendingLocalCount = state.pendingUploads.length;
   }
 
@@ -3456,7 +3447,10 @@
   function handleOffline() { setNotice("인터넷이 끊겨도 종료된 녹음은 브라우저에 보관합니다. 연결이 돌아오면 이어서 업로드합니다.", "highlight"); applyRender(); }
 
   async function upsertPendingUpload(item, options = {}) {
-    const normalized = normalizePendingUpload({ ...item, updatedAt: new Date().toISOString() });
+    const updatedAt = options?.preserveUpdatedAt
+      ? normalizeText(item?.updatedAt) || new Date().toISOString()
+      : new Date().toISOString();
+    const normalized = normalizePendingUpload({ ...item, updatedAt });
     try {
       await runPendingUploadQueueOperation(
         () => state.queueStore.put(normalized),
