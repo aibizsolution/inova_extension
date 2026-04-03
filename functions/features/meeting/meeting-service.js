@@ -243,6 +243,12 @@ function registerMeetingHandlers(deps) {
       if (!normalizeText(uploaded?.storageObject)) {
         throw createHttpError(500, "임시 오디오 업로드를 준비하지 못했어요.");
       }
+      const syncedJob = await persistUploadedMeetingSourceToExistingJob(
+        jobId,
+        owner,
+        input,
+        normalizeText(uploaded?.storageObject)
+      );
 
       logEvent("meeting.source-upload.success", {
         bytes: audioBuffer.length,
@@ -252,6 +258,7 @@ function registerMeetingHandlers(deps) {
         partIndex: input.partIndex,
         providerUserKey: owner.providerUserKey,
         requestId: input.requestId,
+        syncedJobSource: Boolean(syncedJob),
         storageObject: normalizeText(uploaded?.storageObject),
       });
       response.json({
@@ -1717,6 +1724,156 @@ function registerMeetingHandlers(deps) {
       deletedAt: deletedStorageObjects.length ? new Date().toISOString() : "",
       deletedStorageObjects,
     };
+  }
+
+  async function persistUploadedMeetingSourceToExistingJob(jobId, owner, uploadInput, storageObject) {
+    const normalizedJobId = normalizeText(jobId);
+    const normalizedStorageObject = normalizeText(storageObject);
+    if (!normalizedJobId || !normalizedStorageObject) {
+      return null;
+    }
+    const jobRef = db.collection(JOB_COLLECTION).doc(normalizedJobId);
+    const uploadedAt = new Date().toISOString();
+    let nextJob = null;
+    let didWrite = false;
+    await db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(jobRef);
+      if (!snapshot.exists) {
+        return;
+      }
+      const currentJob = normalizeMeetingJob(snapshot.data());
+      if (!currentJob.jobId || currentJob.deletedAt) {
+        return;
+      }
+      if (normalizeText(currentJob.owner?.providerUserKey) !== normalizeText(owner?.providerUserKey)) {
+        return;
+      }
+      if (normalizeText(currentJob.meetingId) !== normalizeText(uploadInput?.meetingId)) {
+        return;
+      }
+      const nextSource = buildUploadedMeetingSourcePatch(currentJob.source, uploadInput, normalizedStorageObject);
+      if (!hasMeaningfulMeetingSourceUpdate(currentJob.source, nextSource)) {
+        nextJob = currentJob;
+        return;
+      }
+      nextJob = mergeMeetingJobPatch(currentJob, {
+        source: nextSource,
+        updatedAt: uploadedAt,
+      });
+      didWrite = true;
+      transaction.set(jobRef, {
+        source: nextSource,
+        updatedAt: uploadedAt,
+      }, { merge: true });
+    });
+    if (!nextJob || !didWrite) {
+      return nextJob;
+    }
+    const meeting = normalizeMeetingRequest(nextJob.meeting);
+    const meetingRef = db.collection(MEETING_COLLECTION).doc(buildMeetingDocId(owner.providerUserKey, meeting.meetingId));
+    const sessionId = normalizeText(nextJob.sessionId || meeting.sessionId);
+    const sessionRef = sessionId
+      ? db.collection(SESSION_COLLECTION).doc(buildSessionDocId(owner.providerUserKey, sessionId))
+      : null;
+    await Promise.all([
+      upsertMeetingJobSummary(meetingRef, meeting, owner, nextJob),
+      sessionRef ? upsertLegacySessionJobSummary(sessionRef, meeting, owner, nextJob) : Promise.resolve(),
+    ]);
+    return nextJob;
+  }
+
+  function buildUploadedMeetingSourcePatch(sourceInput, uploadInput, storageObject) {
+    const currentSource = normalizeMeetingSource(sourceInput);
+    const normalizedStorageObject = normalizeText(storageObject);
+    const normalizedParentRequestId = normalizeText(
+      uploadInput?.parentRequestId || uploadInput?.requestId || currentSource.requestId
+    );
+    const normalizedCaptureMode = normalizeText(uploadInput?.captureMode) || currentSource.captureMode;
+    const normalizedMimeType = normalizeText(uploadInput?.mimeType) || currentSource.mimeType;
+    const normalizedFileName = normalizeText(uploadInput?.fileName) || currentSource.fileName;
+    const normalizedDurationMs = Math.max(0, Number(uploadInput?.durationMs) || currentSource.durationMs || 0);
+    const normalizedChannelCount = Math.max(0, Number(uploadInput?.channelCount) || currentSource.channelCount || 0);
+    const normalizedOriginalSizeBytes = Math.max(
+      0,
+      Number(currentSource.originalSizeBytes) || 0,
+      Number(currentSource.sizeBytes) || 0,
+      Number(uploadInput?.sizeBytes) || 0
+    );
+    const targetPartCount = Math.max(
+      0,
+      Number(uploadInput?.partCount) || 0,
+      Array.isArray(currentSource.parts) ? currentSource.parts.length : 0,
+      Math.max(0, Number(uploadInput?.partIndex) || 0) + 1
+    );
+
+    if (targetPartCount > 0 || currentSource.mode === "chunked") {
+      const existingPartsByIndex = new Map(
+        (Array.isArray(currentSource.parts) ? currentSource.parts : []).map((part) => [Number(part.index), part])
+      );
+      const nextParts = [];
+      for (let index = 0; index < targetPartCount; index += 1) {
+        const existingPart = existingPartsByIndex.get(index);
+        const isTargetPart = index === Math.max(0, Number(uploadInput?.partIndex) || 0);
+        const nextPartInput = isTargetPart
+          ? {
+              ...(existingPart || {}),
+              endMs: Math.max(0, Number(uploadInput?.endMs) || Number(existingPart?.endMs) || 0),
+              index,
+              mimeType: normalizedMimeType || normalizeText(existingPart?.mimeType),
+              overlapMs: Math.max(0, Number(uploadInput?.overlapMs) || Number(existingPart?.overlapMs) || 0),
+              requestId: normalizeText(uploadInput?.requestId) || normalizeText(existingPart?.requestId),
+              sizeBytes: Math.max(0, Number(uploadInput?.sizeBytes) || Number(existingPart?.sizeBytes) || 0),
+              startMs: Math.max(0, Number(uploadInput?.startMs) || Number(existingPart?.startMs) || 0),
+              storageObject: normalizedStorageObject,
+              uploadStatus: "uploaded",
+            }
+          : {
+              ...(existingPart || {}),
+              index,
+              mimeType: normalizeText(existingPart?.mimeType) || normalizedMimeType,
+              requestId: normalizeText(existingPart?.requestId),
+              uploadStatus: normalizeText(existingPart?.uploadStatus) || "pending_upload",
+            };
+        nextParts.push(normalizeMeetingSourcePart(nextPartInput, index, normalizedParentRequestId));
+      }
+      const uploadedPartCount = nextParts.filter((part) => normalizeText(part.storageObject)).length;
+      return normalizeMeetingSource({
+        ...currentSource,
+        captureMode: normalizedCaptureMode,
+        channelCount: normalizedChannelCount,
+        durationMs: Math.max(currentSource.durationMs, normalizedDurationMs),
+        fileName: normalizedFileName || currentSource.fileName,
+        inlineAudioBase64: "",
+        mimeType: normalizedMimeType || currentSource.mimeType,
+        mode: "chunked",
+        originalSizeBytes: normalizedOriginalSizeBytes,
+        parts: nextParts,
+        requestId: normalizedParentRequestId || currentSource.requestId,
+        sizeBytes: Math.max(currentSource.sizeBytes, normalizedOriginalSizeBytes),
+        storageObject: "",
+        uploadStatus: uploadedPartCount >= nextParts.length
+          ? "uploaded"
+          : uploadedPartCount > 0
+            ? "partial"
+            : "pending_upload",
+      });
+    }
+
+    return normalizeMeetingSource({
+      ...currentSource,
+      captureMode: normalizedCaptureMode,
+      channelCount: normalizedChannelCount,
+      durationMs: Math.max(currentSource.durationMs, normalizedDurationMs),
+      fileName: normalizedFileName || currentSource.fileName,
+      inlineAudioBase64: "",
+      mimeType: normalizedMimeType || currentSource.mimeType,
+      mode: "single",
+      originalSizeBytes: normalizedOriginalSizeBytes,
+      requestId: normalizedParentRequestId || currentSource.requestId,
+      sizeBytes: Math.max(currentSource.sizeBytes, normalizedOriginalSizeBytes),
+      storageObject: normalizedStorageObject,
+      uploadStatus: "uploaded",
+    });
   }
 
   function assertMeetingSourceWithinSupportedLimits(source, errorFactory) {

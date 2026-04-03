@@ -57,6 +57,7 @@
 - hosted 회의 작업실은 기본적으로 `최대 200MB 또는 2시간` 원본까지 지원하고, 큰 오디오나 긴 녹음은 `약 9분 / 1.5초 overlap` 기준 chunk 업로드 후 서버에서 단일 회의 결과로 병합합니다.
 - chunk 전사는 parent job이 직접 끝까지 돌지 않고, `청크 part 문서 -> chunk worker 함수 1개당 청크 1개 처리 -> chunk transcript JSON 임시 저장 -> finalizer 함수가 최종 병합/화자 정합/회의 정리` 순서로 나눠 처리합니다.
 - chunk 모드에서는 모든 part 업로드가 끝날 때까지 기다리지 않고, 첫 chunk가 올라오는 즉시 parent job을 만들고 이후 올라오는 chunk를 같은 job에 계속 반영해 전사를 앞당깁니다.
+- 각 chunk 업로드 HTTP 성공은 응답만 돌려주고 끝나지 않고, 이미 존재하는 parent job이 있으면 해당 part의 `storageObject/uploadStatus`를 Firestore job source에도 즉시 반영합니다. 그래서 뒤따르는 deduped `createInovaMeetingJob` 호출이 stale source snapshot을 보내더라도, 이미 올라간 chunk가 다시 `pending_upload`로 밀리는 race를 줄입니다.
 - chunk worker는 job 1건 기준으로 업로드가 끝난 chunk를 즉시 `queued`로 승격해 곧바로 전사를 시작합니다. 그래서 1개가 올라오면 1개가 바로 돌고, 20개가 모두 올라온 상태면 20개도 같은 job 안에서 동시에 worker 대상으로 열릴 수 있습니다.
 - `processQueuedInovaMeetingJobPart`는 배포 시 `maxInstanceCount: 20`과 별도로 `concurrency: 1`로 운영해, 한 chunk worker 인스턴스가 여러 청크 요청을 동시에 떠안지 않게 유지합니다. 즉 11개 청크면 인스턴스당 1개 요청 기준으로 최대 11개 worker가 퍼져서 처리되고, 한 프로세스가 11개를 함께 전사하지 않습니다.
 - `OPENAI_MEETING_CHUNK_TRANSCRIPTION_CONCURRENCY`를 주면 이 기본 동작 대신 job별 고정 병렬 수로 명시적으로 핀할 수 있습니다. 값을 주지 않으면 hosted 회의실의 chunk worker queue는 업로드된 chunk 수만큼 즉시 열리고, 단일 invocation 안에서 직접 chunk를 묶어 전사하는 fallback 경로만 별도 adaptive concurrency를 유지합니다.
