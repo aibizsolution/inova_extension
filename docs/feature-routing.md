@@ -34,7 +34,7 @@
 | --- | --- |
 | 기능 목적 | 내 요청 보관함 CRUD, 가져오기/내보내기, 클라우드 백업 동기화 |
 | 요청 cue | 자주 쓰는 요청, 내 요청, import/export, prompt library, cloud sync |
-| 먼저 볼 파일 | `content/prompt-manager.js`, `content/prompt-view.js`, `shared/prompt-library.js`, `content/cloud-sync-manager.js` |
+| 먼저 볼 파일 | `content/features/prompt-library/prompt-manager.js`, `content/features/prompt-library/prompt-view.js`, `shared/prompt-library.js`, `content/features/prompt-library/cloud-sync-manager.js` |
 | 관련 프론트 경로 | `content/main.js`, `content/prompt-hub-view.js` |
 | 관련 functions 경로 | `functions/features/prompt-library/register.js` |
 | feature-owned shared | `shared/prompt-library.js`, `shared/cloud-sync.js`, `shared/provider-identity.js` |
@@ -50,7 +50,7 @@
 | --- | --- |
 | 기능 목적 | 스토어 목록, 상세 보기, 좋아요, 가져오기, 등록/삭제 |
 | 요청 cue | 스토어, 공개 프롬프트, 좋아요, 조회수, 가져오기, publish/unpublish |
-| 먼저 볼 파일 | `content/store-manager.js`, `content/store-view.js`, `content/prompt-realtime-manager.js`, `shared/prompt-store.js` |
+| 먼저 볼 파일 | `content/features/prompt-store/store-manager.js`, `content/features/prompt-store/store-view.js`, `content/features/prompt-store/prompt-realtime-manager.js`, `shared/prompt-store.js` |
 | 관련 프론트 경로 | `content/prompt-hub-view.js`, `content/main.js` |
 | 관련 functions 경로 | `functions/features/prompt-store/store-service.js` |
 | feature-owned shared | `shared/prompt-store.js`, `shared/provider-identity.js` |
@@ -66,7 +66,7 @@
 | --- | --- |
 | 기능 목적 | 현재 입력 프롬프트 평가, 보완안 생성, 평가 UI |
 | 요청 cue | 프롬프트 평가, 검토 버튼, refined prompt, review score |
-| 먼저 볼 파일 | `content/prompt-review-manager.js`, `content/prompt-review-view.js`, `content/composer-review-float.js` |
+| 먼저 볼 파일 | `content/features/prompt-review/prompt-review-manager.js`, `content/features/prompt-review/prompt-review-view.js`, `content/features/prompt-review/composer-review-float.js` |
 | 관련 프론트 경로 | `content/main.js`, `content/composer.js` |
 | 관련 functions 경로 | `functions/features/prompt-review/prompt-review-service.js` |
 | feature-owned shared | `shared/provider-identity.js` |

@@ -171,16 +171,16 @@
 - `content/`
   - `dom.js`: 질문 DOM 수집
   - `bookmark-view.js`: 질문 탭 렌더링과 포커스 이동
-  - `composer-review-float.js`: 입력창 우측 상단 평가 버튼과 팝오버 렌더링
-  - `cloud-sync-manager.js`: 프롬프트 보관함 원격 백업 흐름 조정
-  - `prompt-realtime-manager.js`: prompt/store용 hosted bridge 연결, Firebase custom token auth, 최신 snapshot fallback 조정
+  - `features/prompt-review/composer-review-float.js`: 입력창 우측 상단 평가 버튼과 팝오버 렌더링
+  - `features/prompt-library/cloud-sync-manager.js`: 프롬프트 보관함 원격 백업 흐름 조정
+  - `features/prompt-store/prompt-realtime-manager.js`: prompt/store용 hosted bridge 연결, Firebase custom token auth, 최신 snapshot fallback 조정
   - `meeting-manager.js`: 패널 회의 허브 Firestore realtime 구독, fallback refresh, local cache 조정
 - `meeting-view.js`: 회의 허브 리스트와 `새 회의하기` CTA, 패널 공용 디버그 콘솔 렌더링
-  - `prompt-review-manager.js`: 현재 입력 프롬프트 평가 호출과 상태 관리
-  - `prompt-view.js`: 요청 탭 렌더링
-  - `prompt-manager.js`: 요청 CRUD, 가져오기/내보내기, 입력창 주입
-  - `store-view.js`: 프롬프트 스토어 탭 렌더링
-  - `store-manager.js`: 스토어 목록, 좋아요, 가져오기, 등록/삭제 흐름
+  - `features/prompt-review/prompt-review-manager.js`: 현재 입력 프롬프트 평가 호출과 상태 관리
+  - `features/prompt-library/prompt-view.js`: 요청 탭 렌더링
+  - `features/prompt-library/prompt-manager.js`: 요청 CRUD, 가져오기/내보내기, 입력창 주입
+  - `features/prompt-store/store-view.js`: 프롬프트 스토어 탭 렌더링
+  - `features/prompt-store/store-manager.js`: 스토어 목록, 좋아요, 가져오기, 등록/삭제 흐름
   - `route-sync.js`: 대화 전환 감시와 실시간 질문 동기화
   - `panel.js`: 우측 슬라이드 패널 셸과 도구 레일
   - `main.js`: 패널 상태와 각 모듈 조립
@@ -204,13 +204,13 @@
 - `hosting/meeting/index.js`는 `launch` 또는 clean URL의 `meetingId`, `jobId`, workspace hash 토큰을 기준으로 hosted 세션을 부팅하고, `getUserMedia + MediaRecorder`로 마이크 녹음을 처리합니다.
 - hosted 회의 작업실은 `공용 메모 저장 -> 녹음 종료와 동시에 로컬 큐 적재 -> 온라인이면 즉시 job 생성 -> 원격 처리와 별개로 다음 녹음 허용` 흐름으로 동작합니다.
 - `content/main.js`는 현재 URL의 `sid`를 기준으로 대화를 나누고, `.chat-message--user`를 실시간으로 수집합니다.
-- `content/prompt-manager.js`는 `promptLibrary`를 관리하고, 선택한 요청을 현재 대화 입력창에 주입합니다.
-- `content/prompt-realtime-manager.js`는 `issueInovaPromptPanelAuth -> hosted prompt panel bridge -> Firestore account/feed doc` 경로로 프롬프트 원격 메타와 스토어 공개 최신 feed 앞쪽 페이지를 실시간 구독하고, 스토어 상세 본문도 같은 bridge로 직접 읽어옵니다. bridge HTML/JS는 캐시 버스트 URL과 no-cache 헤더를 함께 써서 hosting-only 배포 직후에도 예전 스크립트가 오래 남지 않게 합니다. 실패 시 기존 요청형 경로로 되돌립니다.
-- `content/prompt-review-manager.js`는 현재 입력창 프롬프트를 평가하고 보완 프롬프트를 다시 주입합니다.
-- `content/store-manager.js`는 `프롬프트 스토어` 목록 조회, 등록, 삭제, 좋아요, 가져오기 흐름을 관리하고, 공개 최신 feed snapshot이 오면 목록에 바로 반영합니다. 상세 `보기`는 Firestore detail doc를 직접 읽습니다.
-- `content/store-manager.js`는 `전체 스토어 + realtime 활성`일 때 publish/unpublish 뒤에 강제 `inova-store:list` 재요청을 하지 않고 snapshot 반영을 기다립니다. `내 등록`이나 realtime fallback 상태만 request-response 재조회를 유지합니다.
-- `content/store-manager.js`는 `전체 스토어 + realtime 예상 상태`에서는 탭 진입, route refresh, `전체/내 등록` 전환 중 `전체` 복귀 때도 먼저 `inova-store:list`를 치지 않고 Firestore snapshot을 기다립니다. `내 등록`만 요청형 로드를 유지합니다.
-- `content/main.js`와 `content/prompt-realtime-manager.js`는 스토어 최신 목록 bridge가 잠깐 끊겨도 이미 화면에 목록이 있으면 그대로 유지하고, 첫 목록이 아직 없을 때만 `fallback` read를 허용합니다. 디버그의 `panel.ui.surface.changed`도 실제 표면 유무가 바뀌는 경우만 남겨 노이즈를 줄입니다.
+- `content/features/prompt-library/prompt-manager.js`는 `promptLibrary`를 관리하고, 선택한 요청을 현재 대화 입력창에 주입합니다.
+- `content/features/prompt-store/prompt-realtime-manager.js`는 `issueInovaPromptPanelAuth -> hosted prompt panel bridge -> Firestore account/feed doc` 경로로 프롬프트 원격 메타와 스토어 공개 최신 feed 앞쪽 페이지를 실시간 구독하고, 스토어 상세 본문도 같은 bridge로 직접 읽어옵니다. bridge HTML/JS는 캐시 버스트 URL과 no-cache 헤더를 함께 써서 hosting-only 배포 직후에도 예전 스크립트가 오래 남지 않게 합니다. 실패 시 기존 요청형 경로로 되돌립니다.
+- `content/features/prompt-review/prompt-review-manager.js`는 현재 입력창 프롬프트를 평가하고 보완 프롬프트를 다시 주입합니다.
+- `content/features/prompt-store/store-manager.js`는 `프롬프트 스토어` 목록 조회, 등록, 삭제, 좋아요, 가져오기 흐름을 관리하고, 공개 최신 feed snapshot이 오면 목록에 바로 반영합니다. 상세 `보기`는 Firestore detail doc를 직접 읽습니다.
+- `content/features/prompt-store/store-manager.js`는 `전체 스토어 + realtime 활성`일 때 publish/unpublish 뒤에 강제 `inova-store:list` 재요청을 하지 않고 snapshot 반영을 기다립니다. `내 등록`이나 realtime fallback 상태만 request-response 재조회를 유지합니다.
+- `content/features/prompt-store/store-manager.js`는 `전체 스토어 + realtime 예상 상태`에서는 탭 진입, route refresh, `전체/내 등록` 전환 중 `전체` 복귀 때도 먼저 `inova-store:list`를 치지 않고 Firestore snapshot을 기다립니다. `내 등록`만 요청형 로드를 유지합니다.
+- `content/main.js`와 `content/features/prompt-store/prompt-realtime-manager.js`는 스토어 최신 목록 bridge가 잠깐 끊겨도 이미 화면에 목록이 있으면 그대로 유지하고, 첫 목록이 아직 없을 때만 `fallback` read를 허용합니다. 디버그의 `panel.ui.surface.changed`도 실제 표면 유무가 바뀌는 경우만 남겨 노이즈를 줄입니다.
 - `content/meeting-manager.js`는 패널에서 `issueInovaMeetingPanelAuth -> hosted panel bridge -> Firestore meeting query` 경로로 owner 기준 최신 회의 목록을 실시간 구독하고, 브리지나 인증이 실패할 때만 `listInovaMeetings` fallback으로 현재 메모리 허브 상태를 갱신합니다.
 - `background/service-worker.js`는 i-Nova access token과 Firebase Functions를 연결해 원격 백업 호출과 prompt/store panel auth 발급을 처리하고, 회의 기능에서는 launch grant 발급과 session 교환까지 끝낸 최종 hosted 작업실 URL 생성, 허브 조회 라우팅을 맡습니다.
 - `functions/features/meeting/meeting-launch-service.js`는 launch grant, hosted workspace session, Firestore 읽기용 Firebase custom token 발급을 맡깁니다.

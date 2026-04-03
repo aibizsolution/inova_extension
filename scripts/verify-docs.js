@@ -21,7 +21,7 @@ const requiredFiles = [
   path.join("scripts", "verify-readme-update.js"),
   "content/main.js",
   "content/files.js",
-  "content/prompt-manager.js",
+  "content/features/prompt-library/prompt-manager.js",
   "content/panel.css",
   "content/tools.css",
 ];
@@ -141,7 +141,7 @@ const codeChecks = [
     ],
   },
   {
-    file: "content/prompt-manager.js",
+    file: "content/features/prompt-library/prompt-manager.js",
     patterns: [
       /handleImportFile/,
       /applyPromptText/,

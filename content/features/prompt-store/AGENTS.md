@@ -4,9 +4,9 @@
 - 스토어 목록, 상세 보기, 좋아요, 가져오기, 등록/삭제와 realtime feed를 다룬다.
 
 ## 먼저 볼 파일
-- `content/store-manager.js`
-- `content/store-view.js`
-- `content/prompt-realtime-manager.js`
+- `content/features/prompt-store/store-manager.js`
+- `content/features/prompt-store/store-view.js`
+- `content/features/prompt-store/prompt-realtime-manager.js`
 - `shared/prompt-store.js`
 
 ## 관련 프론트 경로

@@ -4,9 +4,9 @@
 - 현재 입력 프롬프트 평가, 보완안 생성, 평가 UI를 다룬다.
 
 ## 먼저 볼 파일
-- `content/prompt-review-manager.js`
-- `content/prompt-review-view.js`
-- `content/composer-review-float.js`
+- `content/features/prompt-review/prompt-review-manager.js`
+- `content/features/prompt-review/prompt-review-view.js`
+- `content/features/prompt-review/composer-review-float.js`
 
 ## 관련 프론트 경로
 - `content/main.js`
