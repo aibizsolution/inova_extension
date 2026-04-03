@@ -282,6 +282,7 @@ npm run verify
 - `prompt-store`: `전체` 목록, 상세 보기 1건, `좋아요` 또는 `내 요청으로 가져오기` 1회, 탭 이동 후 복귀 시 목록 유지
 - `prompt-review`: 평가 버튼 노출, 평가 결과 1회, 보완 프롬프트 반영 1회
 - 이번 최소 smoke 제외 범위: `import/export`, `cloud sync`, 공개 스토어 `등록/삭제`
+- feature 문서의 `최소 검증`도 위 prompt smoke 범위를 기준으로 맞춘다.
 
 회의 작업실 UI를 배포 없이 실제 브라우저에서 먼저 보고 싶으면 `로컬 Hosting + 상용 Functions` 조합을 씁니다.
 

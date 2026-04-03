@@ -40,7 +40,7 @@
 | feature-owned shared | `shared/prompt-library.js`, `shared/cloud-sync.js`, `shared/provider-identity.js` |
 | 관련 데이터 경계 | `prompt_libraries`, `prompt_library_orders`, `prompt_library_chunks`, `integration_inova_accounts.promptLibraryMeta` |
 | 보통 건드리지 말 범위 | meeting, prompt-store, prompt-review, release |
-| 최소 검증 | 프롬프트 탭의 `내 요청`, import/export, 백업 동기화 흐름 확인 |
+| 최소 검증 | 프롬프트 탭의 `내 요청` 렌더링, 항목 1건 저장/수정, 입력창 주입 1회 |
 | 언제 다시 물을지 | 스토어 공개 항목 문제인지, 평가 버튼 문제인지, 로컬 보관함 문제인지 모호할 때 |
 | 언제 범위를 확장할지 | 로컬 보관함만으로 해결되지 않고 panel auth나 platform cache가 얽힐 때만 platform/shell로 확장 |
 
@@ -56,7 +56,7 @@
 | feature-owned shared | `shared/prompt-store.js`, `shared/provider-identity.js` |
 | 관련 데이터 경계 | `prompt_store_entries`, `prompt_store_entry_details`, `prompt_store_feed_pages`, `prompt_store_meta`, 하위 likes/imports/views |
 | 보통 건드리지 말 범위 | meeting, prompt-library, release |
-| 최소 검증 | 스토어 탭 목록, 상세 보기, 좋아요/가져오기/등록/삭제 |
+| 최소 검증 | 스토어 탭 `전체` 목록, 상세 보기 1건, 좋아요 또는 가져오기 1회, 탭 복귀 시 목록 유지 |
 | 언제 다시 물을지 | 내 요청 보관함 문제인지 스토어 공개 흐름 문제인지 섞여 있을 때 |
 | 언제 범위를 확장할지 | realtime bridge, panel auth cache, background read 경로가 원인일 때만 platform/shell로 확장 |
 
