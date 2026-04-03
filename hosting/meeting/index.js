@@ -1659,34 +1659,35 @@
           uploadedPartCount: 0,
         }
       : pending;
+    const nextUploadStatus = shouldUseChunkedSource(retryBase) ? "preparing_chunks" : "uploading";
     try {
+      let latest = await upsertPendingUpload({ ...retryBase, lastError: "", status: nextUploadStatus });
       if (shouldResetSource) {
-        delete state.runtimeChunkCache[normalizedRequestId];
+        delete state.busy.queue[normalizedRequestId];
+        state.busy.queue[retryRequestId] = true;
+        activeRequestId = latest.requestId;
         await runPendingUploadQueueOperation(
           () => state.queueStore.delete(normalizedRequestId),
           { scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.cleanup }
         );
+        delete state.runtimeChunkCache[normalizedRequestId];
         state.pendingUploads = state.pendingUploads.filter((item) => item.requestId !== normalizedRequestId);
         if (
           state.selectedRecordId === ns.shared.buildLocalSelectionId(normalizedRequestId)
           || (previousRemoteSelectionId && state.selectedRecordId === previousRemoteSelectionId)
         ) {
-          state.selectedRecordId = ns.shared.buildLocalSelectionId(retryRequestId);
+          state.selectedRecordId = ns.shared.buildLocalSelectionId(activeRequestId);
         }
         if (state.params.jobId === previousRemoteJobId) {
           state.params = { ...state.params, jobId: "" };
         }
-        delete state.busy.queue[normalizedRequestId];
-        state.busy.queue[retryRequestId] = true;
-        activeRequestId = retryRequestId;
         setNotice(forceRestart
           ? "멈춘 처리 상태를 정리하고 브라우저 원본으로 다시 시작합니다."
           : "실패한 임시 원본은 다시 올린 뒤 처리를 재시작합니다.", "highlight");
       }
-      await upsertPendingUpload({ ...retryBase, lastError: "", status: shouldUseChunkedSource(retryBase) ? "preparing_chunks" : "uploading" });
       persistWorkspaceSession();
       applyRender();
-      let latest = state.pendingUploads.find((item) => item.requestId === activeRequestId);
+      latest = state.pendingUploads.find((item) => item.requestId === activeRequestId) || latest;
       const sourceSizeBytes = Math.max(0, Number(latest?.originalSizeBytes) || Number(latest?.sizeBytes) || Number(latest?.blob?.size) || 0);
       if (sourceSizeBytes > DEFAULT_SOURCE_MAX_BYTES) {
         throw new Error(`현재 회의 원본은 ${Math.floor(DEFAULT_SOURCE_MAX_BYTES / (1024 * 1024))}MB 이하까지만 지원해요.`);
