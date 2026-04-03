@@ -601,6 +601,39 @@
     };
   }
 
+  function persistWorkspaceSessionPayload(globalObject, payload) {
+    const nextPayload = payload && typeof payload === "object" ? payload : {};
+    const meetingId = normalizeText(nextPayload.meetingId);
+    const serialized = JSON.stringify(nextPayload);
+    const issues = [];
+    const sessionWriteIssue = writeStorageValueDetailed(
+      globalObject,
+      "session-storage",
+      SESSION_STORAGE_KEY,
+      serialized,
+      "session-storage"
+    );
+    if (sessionWriteIssue) {
+      issues.push(sessionWriteIssue);
+    }
+    if (meetingId) {
+      const localWriteIssue = writeStorageValueDetailed(
+        globalObject,
+        "local-storage",
+        buildWorkspaceSessionStorageKey(meetingId),
+        serialized,
+        "local-storage"
+      );
+      if (localWriteIssue) {
+        issues.push(localWriteIssue);
+      }
+    }
+    return {
+      degradedReason: summarizeWorkspaceSessionIssues(issues),
+      issues,
+    };
+  }
+
   function toTimestamp(value) {
     const normalized = normalizeText(value);
     if (!normalized) {
@@ -1053,6 +1086,7 @@
     pickRecorderMimeType,
     parseParams,
     postJson,
+    persistWorkspaceSessionPayload,
     readHashParam,
     resolveRecordingProfile,
     resolveConfig,

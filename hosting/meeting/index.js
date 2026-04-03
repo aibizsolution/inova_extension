@@ -1,6 +1,6 @@
 (function initHostedMeetingWorkspace(global) {
   const ns = global.__INOVA_HOSTED_MEETING__;
-  const { AUTO_RETRY_PENDING_STATUSES, DEFAULT_CREATE_JOB_TIMEOUT_MS, DEFAULT_INLINE_AUDIO_LIMIT_BYTES, DEFAULT_SOURCE_CHUNK_DURATION_MS, DEFAULT_SOURCE_CHUNK_OVERLAP_MS, DEFAULT_SOURCE_MAX_BYTES, DEFAULT_SOURCE_MAX_DURATION_MS, DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS, DEFAULT_SOURCE_TARGET_PART_BYTES, DEFAULT_SOURCE_UPLOAD_TIMEOUT_MS, SESSION_STORAGE_KEY, buildCopyText, buildErrorCopyText, buildRemoteSelectionId, buildWorkspaceHash, buildWorkspaceSessionStorageKey, clearDebugEntries, formatDateTime, getDebugEntries, isDebugPanelEnabled, isLikelyNetworkError, isLocalWorkspaceOrigin, isOnline, loadPersistedWorkspaceSession, logDebug, normalizeSpeakerAliases, normalizeText, normalizeTextBlock, parseParams, pickRecorderMimeType, postJson, resolveConfig, resolveRecordingProfile, safeLocalStorageGet, safeLocalStorageRemove, safeLocalStorageSet, safeSessionStorageSet, setEnabled: setDebugEnabled, stopTracks, subscribeDebugEntries, summarizeEntries } = ns.shared;
+  const { AUTO_RETRY_PENDING_STATUSES, DEFAULT_CREATE_JOB_TIMEOUT_MS, DEFAULT_INLINE_AUDIO_LIMIT_BYTES, DEFAULT_SOURCE_CHUNK_DURATION_MS, DEFAULT_SOURCE_CHUNK_OVERLAP_MS, DEFAULT_SOURCE_MAX_BYTES, DEFAULT_SOURCE_MAX_DURATION_MS, DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS, DEFAULT_SOURCE_TARGET_PART_BYTES, DEFAULT_SOURCE_UPLOAD_TIMEOUT_MS, SESSION_STORAGE_KEY, buildCopyText, buildErrorCopyText, buildRemoteSelectionId, buildWorkspaceHash, buildWorkspaceSessionStorageKey, clearDebugEntries, formatDateTime, getDebugEntries, isDebugPanelEnabled, isLikelyNetworkError, isLocalWorkspaceOrigin, isOnline, loadPersistedWorkspaceSession, logDebug, normalizeSpeakerAliases, normalizeText, normalizeTextBlock, parseParams, pickRecorderMimeType, persistWorkspaceSessionPayload, postJson, resolveConfig, resolveRecordingProfile, safeLocalStorageGet, safeLocalStorageRemove, safeLocalStorageSet, setEnabled: setDebugEnabled, stopTracks, subscribeDebugEntries, summarizeEntries } = ns.shared;
   const { clearWorkspaceAuthCache, ensureWorkspaceAuth, getCollections, subscribeDocument } = ns.firebase;
   const { prepareAudioSourceChunks } = ns.audioChunker;
   const { blobToBase64, createPendingUploadStore, normalizePendingUpload } = ns.storage;
@@ -103,6 +103,10 @@
         hasWarningIssue: false,
         issueCodes: [],
         source: "",
+      },
+      sessionPersist: {
+        degradedReason: "",
+        issueCodes: [],
       },
       runtimeChunkCache: Object.create(null),
       selectedRecordId: "",
@@ -267,12 +271,54 @@
     return `${reason} 현재 작업실은 계속 사용할 수 있지만, 다음 새로고침이나 재진입에서 세션 복원이 제한될 수 있습니다.`;
   }
 
+  function buildSessionPersistDegradedNotice(reason) {
+    const normalizedReason = normalizeText(reason) || "브라우저 저장소에 작업실 세션을 저장하지 못했어요.";
+    return `${normalizedReason} 현재 탭에서는 작업을 계속할 수 있지만, 다음 새로고침이나 재진입에서는 최신 작업실 상태가 복원되지 않을 수 있습니다.`;
+  }
+
   function surfaceSessionRestoreNotice() {
     if (!state.sessionRestore.hasWarningIssue || !state.session.meetingSessionToken || !state.session.meetingId) {
       return;
     }
     setNotice(buildSessionRestoreDegradedNotice(), "warning", {
       code: "session-restore-degraded",
+      sticky: true,
+    });
+  }
+
+  function applyPersistWorkspaceSessionResult(result) {
+    const issues = Array.isArray(result?.issues) ? result.issues : [];
+    const degradedReason = normalizeText(result?.degradedReason);
+    const issueCodes = issues.map((issue) => normalizeText(issue?.code)).filter(Boolean);
+    const previousReason = normalizeText(state.sessionPersist.degradedReason);
+    const previousSignature = [previousReason, ...(Array.isArray(state.sessionPersist.issueCodes) ? state.sessionPersist.issueCodes : [])]
+      .filter(Boolean)
+      .join("|");
+    const nextSignature = [degradedReason, ...issueCodes].filter(Boolean).join("|");
+    state.sessionPersist = {
+      degradedReason,
+      issueCodes,
+    };
+    if (!degradedReason) {
+      if (previousSignature) {
+        logDebug("workspace.session.persist.recovered", {
+          meetingId: state.session.meetingId,
+        });
+      }
+      clearResolvedSessionPersistNotice();
+      return;
+    }
+    if (previousSignature === nextSignature) {
+      return;
+    }
+    logDebug("workspace.session.persist.degraded", {
+      degradedReason,
+      issueCodes,
+      issues,
+      meetingId: state.session.meetingId,
+    });
+    setNotice(buildSessionPersistDegradedNotice(degradedReason), "warning", {
+      code: "session-persist-degraded",
       sticky: true,
     });
   }
@@ -2380,7 +2426,22 @@
   function setDebugNotice(text, tone, options = {}) {
     setScopedNotice("debugNotice", "debugNoticeTimer", text, tone, options);
   }
-  function persistWorkspaceSession() { const entry = findHistoryEntry(state, state.selectedRecordId); const payload = { expiresAt: state.session.expiresAt, jobId: normalizeText(entry?.remote?.jobId || entry?.pending?.jobId), meetingId: state.session.meetingId, meetingSessionToken: state.session.meetingSessionToken, mode: state.mode, sharedMemo: normalizeTextBlock(state.recordMemoDraft || state.recordMemoSaved), supersededRemoteJobIds: collectSupersededRemoteJobIds(), title: normalizeText(state.meeting.title || state.session.title) }; state.supersededRemoteJobIds = payload.supersededRemoteJobIds; safeSessionStorageSet(global, SESSION_STORAGE_KEY, JSON.stringify(payload)); if (payload.meetingId) safeLocalStorageSet(global, buildWorkspaceSessionStorageKey(payload.meetingId), JSON.stringify(payload)); replaceCleanUrl(); }
+  function persistWorkspaceSession() {
+    const entry = findHistoryEntry(state, state.selectedRecordId);
+    const payload = {
+      expiresAt: state.session.expiresAt,
+      jobId: normalizeText(entry?.remote?.jobId || entry?.pending?.jobId),
+      meetingId: state.session.meetingId,
+      meetingSessionToken: state.session.meetingSessionToken,
+      mode: state.mode,
+      sharedMemo: normalizeTextBlock(state.recordMemoDraft || state.recordMemoSaved),
+      supersededRemoteJobIds: collectSupersededRemoteJobIds(),
+      title: normalizeText(state.meeting.title || state.session.title),
+    };
+    state.supersededRemoteJobIds = payload.supersededRemoteJobIds;
+    applyPersistWorkspaceSessionResult(persistWorkspaceSessionPayload(global, payload));
+    replaceCleanUrl();
+  }
   function clearWorkspaceSession() { try { global.sessionStorage.removeItem(SESSION_STORAGE_KEY); } catch {} if (state.session.meetingId) safeLocalStorageRemove(global, buildWorkspaceSessionStorageKey(state.session.meetingId)); disposeWorkspaceRealtime({ clearAuthCache: true }); }
   function replaceCleanUrl() { const currentUrl = new URL(global.location.href); const preserveDebug = currentUrl.searchParams.get("debug") === "1"; const nextUrl = new URL(global.location.href); nextUrl.search = ""; nextUrl.hash = ""; if (preserveDebug) nextUrl.searchParams.set("debug", "1"); if (state.session.meetingId) nextUrl.searchParams.set("meetingId", state.session.meetingId); const entry = findHistoryEntry(state, state.selectedRecordId); const jobId = normalizeText(entry?.remote?.jobId || entry?.pending?.jobId); if (jobId) nextUrl.searchParams.set("jobId", jobId); if (state.session.meetingSessionToken) nextUrl.hash = buildWorkspaceHash(state.session.meetingSessionToken); global.history.replaceState({}, "", nextUrl.toString()); state.params = parseParams(nextUrl.toString()); }
   function renderBlocked(message, options = {}) {
@@ -2454,6 +2515,11 @@
   }
   function clearResolvedRefreshNotice() {
     if (normalizeText(state.notice.code) !== "refresh-degraded") return;
+    setNotice("", "", { code: "" });
+  }
+
+  function clearResolvedSessionPersistNotice() {
+    if (normalizeText(state.notice.code) !== "session-persist-degraded") return;
     setNotice("", "", { code: "" });
   }
 
