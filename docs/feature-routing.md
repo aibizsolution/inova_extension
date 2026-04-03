@@ -8,7 +8,7 @@
 - cue가 두 feature 이상에 걸리면 저장소 전체 탐색 대신 짧게 `이 기능이 맞나요?`를 확인한다.
 - 읽기 순서는 `feature-local -> feature-owned shared -> platform/shell -> 인접 feature`다.
 - `popup`, `background/service-worker.js`, `content/main.js`, `content/panel.js`, `functions/index.js`, `manifest.json`, `shared/*`는 platform/shell이다.
-- prompt 계열의 공용 탭 셸인 `content/prompt-hub-view.js`, `content/prompt-hub-state.js`는 단일 feature 소유가 아니라 prompt tool shell로 취급한다.
+- prompt 계열의 공용 탭 셸인 `content/prompt-hub-view.js`, `content/prompt-hub-state.js`, `content/prompt-hub-panel.js`는 단일 feature 소유가 아니라 prompt tool shell로 취급한다.
 - 두 번째 primary feature를 읽어야 하거나 `content + functions + hosting` 3축을 함께 수정해야 하면 먼저 커밋 또는 다음 세션 분리를 제안한다.
 
 ## Feature Map
@@ -36,7 +36,7 @@
 | 기능 목적 | 내 요청 보관함 CRUD, 가져오기/내보내기, 클라우드 백업 동기화 |
 | 요청 cue | 자주 쓰는 요청, 내 요청, import/export, prompt library, cloud sync |
 | 먼저 볼 파일 | `content/features/prompt-library/prompt-manager.js`, `content/features/prompt-library/prompt-view.js`, `content/features/prompt-library/files.js`, `shared/prompt-library.js`, `content/features/prompt-library/cloud-sync-manager.js` |
-| 관련 프론트 경로 | `content/main.js`, `content/prompt-hub-view.js` (prompt tool shell), `content/prompt-hub-state.js` (prompt tool shell) |
+| 관련 프론트 경로 | `content/main.js`, `content/prompt-hub-view.js` (prompt tool shell), `content/prompt-hub-state.js` (prompt tool shell), `content/prompt-hub-panel.js` (prompt tool shell) |
 | 관련 functions 경로 | `functions/features/prompt-library/register.js` |
 | feature-owned shared | `shared/prompt-library.js`, `shared/cloud-sync.js`, `shared/provider-identity.js` |
 | 관련 데이터 경계 | `prompt_libraries`, `prompt_library_orders`, `prompt_library_chunks`, `integration_inova_accounts.promptLibraryMeta` |
@@ -52,7 +52,7 @@
 | 기능 목적 | 스토어 목록, 상세 보기, 좋아요, 가져오기, 등록/삭제 |
 | 요청 cue | 스토어, 공개 프롬프트, 좋아요, 조회수, 가져오기, publish/unpublish |
 | 먼저 볼 파일 | `content/features/prompt-store/store-manager.js`, `content/features/prompt-store/store-view.js`, `content/features/prompt-store/prompt-realtime-manager.js`, `shared/prompt-store.js` |
-| 관련 프론트 경로 | `content/prompt-hub-view.js` (prompt tool shell), `content/prompt-hub-state.js` (prompt tool shell), `content/main.js` |
+| 관련 프론트 경로 | `content/prompt-hub-view.js` (prompt tool shell), `content/prompt-hub-state.js` (prompt tool shell), `content/prompt-hub-panel.js` (prompt tool shell), `content/main.js` |
 | 관련 functions 경로 | `functions/features/prompt-store/store-service.js` |
 | feature-owned shared | `shared/prompt-store.js`, `shared/provider-identity.js` |
 | 관련 데이터 경계 | `prompt_store_entries`, `prompt_store_entry_details`, `prompt_store_feed_pages`, `prompt_store_meta`, 하위 likes/imports/views |
@@ -68,7 +68,7 @@
 | 기능 목적 | 현재 입력 프롬프트 평가, 보완안 생성, 평가 UI |
 | 요청 cue | 프롬프트 평가, 검토 버튼, refined prompt, review score |
 | 먼저 볼 파일 | `content/features/prompt-review/prompt-review-manager.js`, `content/features/prompt-review/prompt-review-view.js`, `content/features/prompt-review/composer-review-float.js` |
-| 관련 프론트 경로 | `content/main.js`, `content/composer.js`, `content/prompt-hub-view.js` (prompt tool shell), `content/prompt-hub-state.js` (prompt tool shell) |
+| 관련 프론트 경로 | `content/main.js`, `content/composer.js`, `content/prompt-hub-view.js` (prompt tool shell), `content/prompt-hub-state.js` (prompt tool shell), `content/prompt-hub-panel.js` (prompt tool shell) |
 | 관련 functions 경로 | `functions/features/prompt-review/prompt-review-service.js` |
 | feature-owned shared | `shared/provider-identity.js` |
 | 관련 데이터 경계 | 원격 저장소 없음, Functions `reviewInovaPrompt` 호출과 rate-limit 기록 |

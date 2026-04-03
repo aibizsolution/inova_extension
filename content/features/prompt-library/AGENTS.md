@@ -13,6 +13,7 @@
 ## 관련 프론트 경로
 - `content/main.js`
 - `content/prompt-hub-state.js` - prompt 탭 상태를 묶는 prompt tool shell
+- `content/prompt-hub-panel.js` - prompt/store 상호작용을 묶는 prompt tool shell
 - `content/prompt-hub-view.js` - `prompt-library` 단독 view가 아니라 prompt tool shell
 
 ## 관련 functions 경로
