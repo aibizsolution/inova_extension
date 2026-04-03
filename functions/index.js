@@ -95,6 +95,7 @@ exports.syncInovaPromptLibrary = promptLibraryHandlers.syncInovaPromptLibrary;
 exports.createInovaMeetingJob = meetingHandlers.createInovaMeetingJob;
 exports.processQueuedInovaMeetingJob = onDocumentWritten(
   {
+    concurrency: 1,
     document: "integration_inova_meeting_jobs/{jobId}",
     memory: "1GiB",
     region: REGION,
@@ -114,6 +115,7 @@ exports.processQueuedInovaMeetingJobPart = onDocumentWritten(
 );
 exports.finalizeChunkedInovaMeetingJob = onDocumentWritten(
   {
+    concurrency: 1,
     document: "integration_inova_meeting_job_finalizers/{jobId}",
     memory: "1GiB",
     region: REGION,
