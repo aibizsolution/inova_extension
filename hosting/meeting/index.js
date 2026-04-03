@@ -28,6 +28,11 @@
     [DEGRADED_NOTICE_CODES.pendingUploadPersist]: Object.freeze({ priority: 20 }),
     [DEGRADED_NOTICE_CODES.pendingUploadCleanup]: Object.freeze({ priority: 10 }),
   });
+  const PENDING_UPLOAD_QUEUE_OPERATION_SCOPES = Object.freeze({
+    cleanup: "cleanup",
+    load: "load",
+    persist: "persist",
+  });
   const refs = {};
   const state = createInitialState();
 
@@ -324,6 +329,31 @@
     return `${normalizedReason} 삭제했거나 비운 임시 녹음이 다음 새로고침 뒤 다시 보일 수 있습니다.`;
   }
 
+  function buildPendingUploadQueueOperationFailureMessage(scope, diagnostics, error) {
+    const normalizedScope = normalizeText(scope);
+    const fallbackReason = normalizeText(diagnostics?.degradedReason) || (error instanceof Error ? error.message : "");
+    if (normalizedScope === PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.persist) {
+      return buildPendingUploadPersistDegradedNotice(fallbackReason);
+    }
+    if (normalizedScope === PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.cleanup) {
+      return buildPendingUploadCleanupDegradedNotice(fallbackReason);
+    }
+    return buildPendingUploadStorageDegradedNotice(fallbackReason);
+  }
+
+  function buildPendingUploadQueueOperationError(scope, diagnostics, error) {
+    const message = buildPendingUploadQueueOperationFailureMessage(scope, diagnostics, error);
+    if (!normalizeText(message)) {
+      return error instanceof Error ? error : new Error("브라우저 로컬 보관 큐 작업을 완료하지 못했어요.");
+    }
+    const nextError = new Error(message);
+    if (error instanceof Error) {
+      nextError.stack = error.stack;
+      nextError.cause = error;
+    }
+    return nextError;
+  }
+
   function buildNoticeState(text, tone, options = {}) {
     const nextText = normalizeText(text);
     const nextTone = normalizeText(tone);
@@ -501,20 +531,35 @@
     const operation = normalizeText(diagnostics?.operation);
     if (operation === "put") {
       applyPendingUploadPersistDiagnostics(diagnostics);
-      return;
+      return diagnostics;
     }
     if (operation === "delete" || operation === "clearMeeting") {
       applyPendingUploadCleanupDiagnostics(diagnostics);
-      return;
+      return diagnostics;
     }
     applyPendingUploadStorageDiagnostics(diagnostics);
+    return diagnostics;
   }
 
-  async function runPendingUploadQueueOperation(action) {
+  async function runPendingUploadQueueOperation(action, options = {}) {
+    const scope = normalizeText(options?.scope) || PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.load;
     try {
-      return await action();
-    } finally {
+      const result = await action();
       consumePendingUploadQueueDiagnostics();
+      return result;
+    } catch (error) {
+      const diagnostics = consumePendingUploadQueueDiagnostics();
+      const issueCodes = Array.isArray(diagnostics?.issues)
+        ? diagnostics.issues.map((issue) => normalizeText(issue?.code)).filter(Boolean)
+        : [];
+      logDebug("workspace.pending-uploads.operation.error", {
+        degradedReason: normalizeText(diagnostics?.degradedReason),
+        error,
+        issueCodes,
+        operation: normalizeText(diagnostics?.operation),
+        scope,
+      });
+      throw buildPendingUploadQueueOperationError(scope, diagnostics, error);
     }
   }
 
@@ -777,7 +822,10 @@
 
   async function loadPendingUploads() {
     const loadedItems = state.session.meetingId
-      ? await runPendingUploadQueueOperation(() => state.queueStore.listByMeeting(state.session.meetingId))
+      ? await runPendingUploadQueueOperation(
+          () => state.queueStore.listByMeeting(state.session.meetingId),
+          { scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.load }
+        )
       : [];
     state.pendingUploads = loadedItems
       .map(normalizePendingUpload)
@@ -802,7 +850,10 @@
           status: "succeeded",
           updatedAt: normalizeText(matched.updatedAt || pending.updatedAt),
         });
-        await runPendingUploadQueueOperation(() => state.queueStore.put(nextPending));
+        await runPendingUploadQueueOperation(
+          () => state.queueStore.put(nextPending),
+          { scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.persist }
+        );
         delete state.runtimeChunkCache[normalizeText(pending.requestId)];
         if (state.selectedRecordId === ns.shared.buildLocalSelectionId(pending.requestId)) state.selectedRecordId = buildRemoteSelectionId(matched.jobId);
         nextItems.push(nextPending);
@@ -823,7 +874,10 @@
           storageObject: shouldResetRemoteSource ? "" : pending.storageObject,
           updatedAt: normalizeText(matched.updatedAt || pending.updatedAt),
         });
-        await runPendingUploadQueueOperation(() => state.queueStore.put(nextPending));
+        await runPendingUploadQueueOperation(
+          () => state.queueStore.put(nextPending),
+          { scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.persist }
+        );
         if (shouldResetRemoteSource && state.runtimeChunkCache[normalizeText(pending.requestId)]) {
           state.runtimeChunkCache[normalizeText(pending.requestId)] = {
             ...state.runtimeChunkCache[normalizeText(pending.requestId)],
@@ -1571,7 +1625,10 @@
       : pending;
     if (shouldResetSource) {
       delete state.runtimeChunkCache[normalizedRequestId];
-      await runPendingUploadQueueOperation(() => state.queueStore.delete(normalizedRequestId));
+      await runPendingUploadQueueOperation(
+        () => state.queueStore.delete(normalizedRequestId),
+        { scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.cleanup }
+      );
       state.pendingUploads = state.pendingUploads.filter((item) => item.requestId !== normalizedRequestId);
       if (
         state.selectedRecordId === ns.shared.buildLocalSelectionId(normalizedRequestId)
@@ -2126,7 +2183,10 @@
     applyRender();
     try {
       await postJson(global, CONFIG.deleteMeetingUrl, { meetingId: state.session.meetingId }, state.session.meetingSessionToken);
-      await runPendingUploadQueueOperation(() => state.queueStore.clearMeeting(state.session.meetingId));
+      await runPendingUploadQueueOperation(
+        () => state.queueStore.clearMeeting(state.session.meetingId),
+        { scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.cleanup }
+      );
       clearWorkspaceSession();
       renderBlocked("이 탭은 여기까지입니다. 필요할 때 i-Nova 패널에서 새 작업실을 열어 주세요.", {
         eyebrow: "작업실 삭제 완료",
@@ -2378,7 +2438,10 @@
 
   async function deletePendingUpload(requestId) {
     delete state.runtimeChunkCache[normalizeText(requestId)];
-    await runPendingUploadQueueOperation(() => state.queueStore.delete(requestId));
+    await runPendingUploadQueueOperation(
+      () => state.queueStore.delete(requestId),
+      { scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.cleanup }
+    );
     state.pendingUploads = state.pendingUploads.filter((item) => item.requestId !== normalizeText(requestId));
     if (state.selectedRecordId === ns.shared.buildLocalSelectionId(requestId)) state.selectedRecordId = chooseSelectedRecordId(state);
     persistWorkspaceSession();
@@ -2547,7 +2610,10 @@
 
   async function upsertPendingUpload(item) {
     const normalized = normalizePendingUpload({ ...item, updatedAt: new Date().toISOString() });
-    await runPendingUploadQueueOperation(() => state.queueStore.put(normalized));
+    await runPendingUploadQueueOperation(
+      () => state.queueStore.put(normalized),
+      { scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.persist }
+    );
     state.pendingUploads = [normalized, ...state.pendingUploads.filter((current) => current.requestId !== normalized.requestId)].sort(ns.storage.comparePendingUploads);
     state.meeting.pendingLocalCount = state.pendingUploads.length;
     return normalized;
