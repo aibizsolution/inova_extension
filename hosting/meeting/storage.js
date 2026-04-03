@@ -25,8 +25,11 @@
   function summarizePendingUploadStorageIssues(issues) {
     const normalizedIssues = Array.isArray(issues) ? issues : [];
     const issue = normalizedIssues.find((entry) => [
+      "indexeddb-delete-failed",
       "indexeddb-open-failed",
+      "indexeddb-read-failed",
       "indexeddb-unavailable",
+      "indexeddb-write-failed",
       "local-storage-invalid-payload",
       "local-storage-parse-failed",
       "local-storage-read-failed",
@@ -41,6 +44,15 @@
     }
     if (code === "indexeddb-open-failed") {
       return "브라우저 로컬 보관 큐의 IndexedDB를 열지 못했어요.";
+    }
+    if (code === "indexeddb-read-failed") {
+      return "브라우저 로컬 보관 큐의 IndexedDB 데이터를 읽지 못했어요.";
+    }
+    if (code === "indexeddb-write-failed") {
+      return "브라우저 로컬 보관 큐의 IndexedDB 데이터를 저장하지 못했어요.";
+    }
+    if (code === "indexeddb-delete-failed") {
+      return "브라우저 로컬 보관 큐의 IndexedDB 데이터를 정리하지 못했어요.";
     }
     if (code === "local-storage-read-failed") {
       return "브라우저 로컬 보관 큐를 읽지 못했어요.";
@@ -71,6 +83,19 @@
       return;
     }
     issues.push(issue);
+  }
+
+  async function runPendingUploadStorageRequest(request, issues, failureCode) {
+    try {
+      return await runIdbRequest(request);
+    } catch (error) {
+      recordPendingUploadStorageIssue(issues, buildPendingUploadStorageIssue(failureCode, {
+        errorName: normalizeText(error?.name),
+        message: error instanceof Error ? error.message : String(error || ""),
+        storage: "indexeddb",
+      }));
+      throw error;
+    }
   }
 
   function readLocalStorageValueDetailed(target, key) {
@@ -328,7 +353,11 @@
           const normalized = normalizePendingUpload(item);
           const db = await openDb(issues);
           if (db) {
-            await runIdbRequest(db.transaction(PENDING_UPLOAD_STORE_NAME, "readwrite").objectStore(PENDING_UPLOAD_STORE_NAME).put(await serializePendingUpload(normalized, false)));
+            await runPendingUploadStorageRequest(
+              db.transaction(PENDING_UPLOAD_STORE_NAME, "readwrite").objectStore(PENDING_UPLOAD_STORE_NAME).put(await serializePendingUpload(normalized, false)),
+              issues,
+              "indexeddb-write-failed"
+            );
             return;
           }
           const items = await readLocalItems(issues);
@@ -349,16 +378,25 @@
 
     async function runWithDiagnostics(operation, action) {
       const issues = [];
-      const result = await action(issues);
-      setDiagnostics(operation, issues);
-      return result;
+      try {
+        const result = await action(issues);
+        setDiagnostics(operation, issues);
+        return result;
+      } catch (error) {
+        setDiagnostics(operation, issues);
+        throw error;
+      }
     }
 
     async function listByMeetingInternal(meetingId, issues) {
       const normalizedMeetingId = normalizeText(meetingId);
       const db = await openDb(issues);
       if (db) {
-        const items = await runIdbRequest(db.transaction(PENDING_UPLOAD_STORE_NAME, "readonly").objectStore(PENDING_UPLOAD_STORE_NAME).getAll());
+        const items = await runPendingUploadStorageRequest(
+          db.transaction(PENDING_UPLOAD_STORE_NAME, "readonly").objectStore(PENDING_UPLOAD_STORE_NAME).getAll(),
+          issues,
+          "indexeddb-read-failed"
+        );
         return Promise.all((Array.isArray(items) ? items : []).filter((item) => normalizeText(item.meetingId) === normalizedMeetingId).map(deserializePendingUpload));
       }
       const localItems = await readLocalItems(issues);
@@ -370,7 +408,11 @@
       if (!normalizedRequestId) return;
       const db = await openDb(issues);
       if (db) {
-        await runIdbRequest(db.transaction(PENDING_UPLOAD_STORE_NAME, "readwrite").objectStore(PENDING_UPLOAD_STORE_NAME).delete(normalizedRequestId));
+        await runPendingUploadStorageRequest(
+          db.transaction(PENDING_UPLOAD_STORE_NAME, "readwrite").objectStore(PENDING_UPLOAD_STORE_NAME).delete(normalizedRequestId),
+          issues,
+          "indexeddb-delete-failed"
+        );
         return;
       }
       const items = await readLocalItems(issues);
