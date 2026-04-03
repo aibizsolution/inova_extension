@@ -57,8 +57,8 @@
 - hosted 회의 작업실은 기본적으로 `최대 200MB 또는 2시간` 원본까지 지원하고, 큰 오디오나 긴 녹음은 `약 9분 / 1.5초 overlap` 기준 chunk 업로드 후 서버에서 단일 회의 결과로 병합합니다.
 - chunk 전사는 parent job이 직접 끝까지 돌지 않고, `청크 part 문서 -> chunk worker 함수 1개당 청크 1개 처리 -> chunk transcript JSON 임시 저장 -> finalizer 함수가 최종 병합/화자 정합/회의 정리` 순서로 나눠 처리합니다.
 - chunk 모드에서는 모든 part 업로드가 끝날 때까지 기다리지 않고, 첫 chunk가 올라오는 즉시 parent job을 만들고 이후 올라오는 chunk를 같은 job에 계속 반영해 전사를 앞당깁니다.
-- chunk worker는 job 1건 기준으로 청크 수에 따라 기본 `1~5개` 슬롯만 동시에 `queued`로 승격해 병렬 처리하고, 끝난 자리에 다음 chunk를 올리는 방식으로 긴 회의에서도 `540초` 단일 invocation 한도를 피합니다.
-- `OPENAI_MEETING_CHUNK_TRANSCRIPTION_CONCURRENCY`를 주면 adaptive 대신 job별 고정 병렬 수로 핀할 수 있고, 값을 주지 않으면 청크 수가 많을수록 기본 병렬 수가 자동으로 올라갑니다.
+- chunk worker는 job 1건 기준으로 업로드가 끝난 chunk를 즉시 `queued`로 승격해 곧바로 전사를 시작합니다. 그래서 1개가 올라오면 1개가 바로 돌고, 20개가 모두 올라온 상태면 20개도 같은 job 안에서 동시에 worker 대상으로 열릴 수 있습니다.
+- `OPENAI_MEETING_CHUNK_TRANSCRIPTION_CONCURRENCY`를 주면 이 기본 동작 대신 job별 고정 병렬 수로 명시적으로 핀할 수 있습니다. 값을 주지 않으면 hosted 회의실의 chunk worker queue는 업로드된 chunk 수만큼 즉시 열리고, 단일 invocation 안에서 직접 chunk를 묶어 전사하는 fallback 경로만 별도 adaptive concurrency를 유지합니다.
 - 긴 회의 처리 중 상태 안내는 단계 카드와 청크 진행판 위주로 보여주고, 같은 내용을 반복하는 별도 파란 배너는 processing 상태에서 겹치지 않게 숨깁니다.
 - 작업실 상세 카드 아래에는 chunk 업로드/전사 진행을 별도 진행바와 chunk 칸 목록으로 보여주고, 전사 중에는 실제 병렬 worker 수만큼 파란 칸을 함께 표시해 로그 없이도 진행 상태를 바로 확인할 수 있게 유지합니다.
 - 실패한 기록을 `다시 처리`로 재시작한 직후에는, 새 업로드/분할 준비가 끝나기 전까지 예전 stalled remote job 상태를 상세 카드에 다시 섞어 보여주지 않고 현재 로컬 재시작 상태를 우선 표시합니다.

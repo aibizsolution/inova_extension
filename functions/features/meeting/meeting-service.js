@@ -7,8 +7,8 @@ const DEFAULT_SOURCE_TARGET_PART_BYTES = 20 * 1024 * 1024;
 const DEFAULT_SOURCE_MAX_BYTES = 200 * 1024 * 1024;
 const DEFAULT_SOURCE_MAX_DURATION_MS = 2 * 60 * 60 * 1000;
 const DEFAULT_SOURCE_PART_OVERLAP_MS = 1500;
-const DEFAULT_CHUNK_TRANSCRIPTION_CONCURRENCY = 2;
-const DEFAULT_CHUNK_TRANSCRIPTION_MAX_CONCURRENCY = 5;
+const DEFAULT_IN_PROCESS_CHUNK_TRANSCRIPTION_CONCURRENCY = 2;
+const DEFAULT_IN_PROCESS_CHUNK_TRANSCRIPTION_MAX_CONCURRENCY = 5;
 const DEFAULT_MEETING_PROCESS_RETRY_LIMIT = 2;
 const DEFAULT_MODEL = "gpt-4o-transcribe-diarize";
 const DEFAULT_SUMMARY_MODEL = "gpt-5.4-mini";
@@ -362,7 +362,7 @@ function registerMeetingHandlers(deps) {
         logEvent("meeting.process.chunk-dispatched", {
           jobId: queuedJob.jobId,
           meetingId: meeting.meetingId,
-          parallelParts: getMeetingChunkTranscriptionConcurrency(partDocs.length),
+          parallelParts: getMeetingChunkWorkerQueueConcurrency(partDocs.length),
           partCount: partDocs.length,
           providerUserKey: owner.providerUserKey,
         });
@@ -2264,6 +2264,18 @@ function registerMeetingHandlers(deps) {
     return normalizeTranscriptionResponse(response, source.durationMs);
   }
 
+  function getMeetingChunkWorkerQueueConcurrency(totalParts) {
+    const normalizedTotalParts = Math.max(1, Number(totalParts) || 1);
+    const requested = Number.parseInt(
+      normalizeText(process.env.OPENAI_MEETING_CHUNK_TRANSCRIPTION_CONCURRENCY),
+      10
+    );
+    if (Number.isFinite(requested) && requested > 0) {
+      return Math.max(1, Math.min(normalizedTotalParts, requested));
+    }
+    return normalizedTotalParts;
+  }
+
   function getMeetingChunkTranscriptionConcurrency(totalParts) {
     const normalizedTotalParts = Math.max(1, Number(totalParts) || 1);
     const requested = Number.parseInt(
@@ -2273,18 +2285,18 @@ function registerMeetingHandlers(deps) {
     if (Number.isFinite(requested) && requested > 0) {
       return Math.max(1, Math.min(normalizedTotalParts, requested));
     }
-    if (normalizedTotalParts <= DEFAULT_CHUNK_TRANSCRIPTION_CONCURRENCY) {
+    if (normalizedTotalParts <= DEFAULT_IN_PROCESS_CHUNK_TRANSCRIPTION_CONCURRENCY) {
       return normalizedTotalParts;
     }
     const adaptive = Math.max(
-      DEFAULT_CHUNK_TRANSCRIPTION_CONCURRENCY,
+      DEFAULT_IN_PROCESS_CHUNK_TRANSCRIPTION_CONCURRENCY,
       Math.ceil(normalizedTotalParts / 2)
     );
     return Math.max(
       1,
       Math.min(
         normalizedTotalParts,
-        DEFAULT_CHUNK_TRANSCRIPTION_MAX_CONCURRENCY,
+        DEFAULT_IN_PROCESS_CHUNK_TRANSCRIPTION_MAX_CONCURRENCY,
         adaptive
       )
     );
@@ -2670,7 +2682,7 @@ function registerMeetingHandlers(deps) {
     const normalizedJob = normalizeMeetingJob(job);
     const existingParts = await loadMeetingJobPartDocs(normalizedJob.jobId);
     const existingByIndex = new Map(existingParts.map((part) => [Number(part.index), part]));
-    const concurrency = getMeetingChunkTranscriptionConcurrency(
+    const concurrency = getMeetingChunkWorkerQueueConcurrency(
       Array.isArray(normalizedJob.source.parts) ? normalizedJob.source.parts.length : 0
     );
     let activeSlotCount = existingParts.filter((part) => ["processing", "queued"].includes(normalizeText(part.status))).length;
@@ -2733,7 +2745,7 @@ function registerMeetingHandlers(deps) {
       : await loadMeetingJobPartDocs(normalizedJob.jobId);
     const totalParts = existingPartDocs.length
       || Math.max(0, Array.isArray(normalizedJob.source.parts) ? normalizedJob.source.parts.length : 0);
-    const concurrency = getMeetingChunkTranscriptionConcurrency(totalParts);
+    const concurrency = getMeetingChunkWorkerQueueConcurrency(totalParts);
     const processingCount = existingPartDocs.filter((part) => part.status === "processing").length;
     const queuedCount = existingPartDocs.filter((part) => part.status === "queued").length;
     const availableSlots = Math.max(0, concurrency - processingCount - queuedCount);
