@@ -1699,10 +1699,9 @@
           storageObject: pending.storageObject,
           updatedAt: nextUpdatedAt,
         }),
-        nextSelectedRecordId: nextJobId ? buildRemoteSelectionId(nextJobId) : "",
         outcome: "active",
         resolution: "reconciled",
-        resetChunkCache: "",
+        resyncCacheAction: "",
       };
     }
 
@@ -1817,10 +1816,9 @@
           status: "succeeded",
           updatedAt: nextUpdatedAt,
         }),
-        nextSelectedRecordId: nextJobId ? buildRemoteSelectionId(nextJobId) : "",
         outcome: "succeeded",
         resolution: "reconcile-completed",
-        resetChunkCache: "clear",
+        resyncCacheAction: "clear",
       };
     }
 
@@ -1840,10 +1838,9 @@
           storageObject: "",
           updatedAt: nextUpdatedAt,
         }),
-        nextSelectedRecordId: nextJobId ? buildRemoteSelectionId(nextJobId) : "",
         outcome: "failed",
         resolution: "reconcile-remote-failed",
-        resetChunkCache: "reset-parts",
+        resyncCacheAction: "reset-parts",
       };
     }
 
@@ -1944,16 +1941,16 @@
         previousRequestId: pending.requestId,
         reason: "chunk-resync",
         requestId: transition.nextPending.requestId,
-        shouldResetSource: transition.resetChunkCache === "reset-parts",
+        shouldResetSource: transition.resyncCacheAction === "reset-parts",
       },
     });
     const normalizedRequestId = normalizeText(pending?.requestId);
     if (!normalizedRequestId) {
       return nextPending;
     }
-    if (transition.resetChunkCache === "clear") {
+    if (transition.resyncCacheAction === "clear") {
       delete state.runtimeChunkCache[normalizedRequestId];
-    } else if (transition.resetChunkCache === "reset-parts" && state.runtimeChunkCache[normalizedRequestId]) {
+    } else if (transition.resyncCacheAction === "reset-parts" && state.runtimeChunkCache[normalizedRequestId]) {
       state.runtimeChunkCache[normalizedRequestId] = {
         ...state.runtimeChunkCache[normalizedRequestId],
         parts: (state.runtimeChunkCache[normalizedRequestId].parts || []).map((part) => ({
