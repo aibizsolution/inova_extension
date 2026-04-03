@@ -443,28 +443,28 @@
       snapshotCount: Math.max(0, Number(summary?.snapshotCount) || 0),
       totalLogs: Math.max(0, Number(entries.length) || 0),
     };
-    return {
+    return namespace.meetingDebugConsole?.buildState?.({
       collapsed: Boolean(state.panelDebugUi.collapsed),
       enabled,
-      entriesText: enabled
+      feedback: normalizePanelDebugFeedback(state.panelDebugUi.feedback),
+      hasErrors: statusSummary.errorCount > 0,
+      statusSummary,
+      text: enabled
         ? (namespace.panelDebug?.buildCopyText?.(entries) || "아직 로그가 없습니다.")
         : "",
+    }) || {
+      collapsed: Boolean(state.panelDebugUi.collapsed),
+      enabled,
       feedback: normalizePanelDebugFeedback(state.panelDebugUi.feedback),
       hasErrors: statusSummary.errorCount > 0,
       statusSummary,
       statusText: enabled
-        ? buildMeetingDebugStatusText(statusSummary)
+        ? `로그 ${statusSummary.totalLogs}건 · 함수 ${statusSummary.functionCalls}건 · 읽기 ${statusSummary.readCount}건 · 스냅샷 ${statusSummary.snapshotCount}건 · 오류 ${statusSummary.errorCount}건`
         : "로그 0건 · 함수 0건 · 읽기 0건 · 스냅샷 0건 · 오류 0건",
+      text: enabled
+        ? (namespace.panelDebug?.buildCopyText?.(entries) || "아직 로그가 없습니다.")
+        : "",
     };
-  }
-
-  function buildMeetingDebugStatusText(summary) {
-    const totalLogs = Math.max(0, Number(summary?.totalLogs) || 0);
-    const functionCalls = Math.max(0, Number(summary?.functionCalls) || 0);
-    const readCount = Math.max(0, Number(summary?.readCount) || 0);
-    const snapshotCount = Math.max(0, Number(summary?.snapshotCount) || 0);
-    const errorCount = Math.max(0, Number(summary?.errorCount) || 0);
-    return `로그 ${totalLogs}건 · 함수 ${functionCalls}건 · 읽기 ${readCount}건 · 스냅샷 ${snapshotCount}건 · 오류 ${errorCount}건`;
   }
   function toggleMeetingDebugCollapsed() {
     state.panelDebugUi.collapsed = !state.panelDebugUi.collapsed;

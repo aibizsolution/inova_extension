@@ -5,6 +5,7 @@
   const { prepareAudioSourceChunks } = ns.audioChunker;
   const { blobToBase64, createPendingUploadStore, normalizePendingUpload } = ns.storage;
   const { buildDetailView, buildLocalPendingJob, buildPendingNotice, buildPendingSummary, buildSegmentCopyText, chooseSelectedRecordId, findHistoryEntry, findRemoteForPending, normalizeArtifact, normalizeJob, normalizeRecord, renderWorkspace } = ns.render;
+  const debugConsole = ns.debugConsole;
 
   const CONFIG = resolveConfig(global.__INOVA_HOSTED_MEETING_CONFIG__);
   const FIRESTORE_COLLECTIONS = getCollections();
@@ -111,7 +112,7 @@
   }
 
   function cacheRefs() {
-    for (const id of ["meetingShell", "blockedMessage", "blockedEyebrow", "blockedTitle", "blockedState", "workspace", "pageTitle", "pageSummary", "workspaceBadge", "offlineQueueBadge", "refreshButton", "meetingTitleInput", "saveMeetingTitleButton", "deleteMeetingButton", "meetingStatusChip", "currentBadge", "currentSummary", "currentHint", "currentNotice", "currentTimer", "startButton", "importAudioButton", "importAudioInput", "pauseButton", "resumeButton", "stopButton", "discardButton", "sharedMemoInput", "saveSharedMemoButton", "clearSharedMemoButton", "sharedMemoNotice", "recordCountBadge", "recordList", "detailTitle", "detailBadge", "detailSummary", "recordTitleGroup", "recordTitleInput", "saveRecordTitleButton", "downloadRecordButton", "deleteRecordButton", "detailMeta", "speakerEditor", "speakerAliasList", "saveSpeakerAliasesButton", "saveSpeakerAliasesAndRegenerateButton", "copySegmentsButton", "detailMemoText", "reviewTabSummary", "reviewTabMemo", "reviewTabNotes", "reviewTabSegments", "reviewTabSegmentsCount", "reviewTabSpeakers", "reviewPanelSummary", "summaryStatusPill", "summaryStatusGrid", "summaryActionCard", "reviewPanelMemo", "meetingNotesCard", "reviewPanelSegments", "reviewPanelSpeakers", "speakerDigestList", "notesSummaryMeta", "notesStyleSelect", "regenerateNotesButton", "meetingNotesOverview", "meetingNotesSections", "detailNotice", "segmentList", "debugPanel", "debugPanelCard", "debugPanelBody", "debugStatus", "debugNotice", "debugLog", "debugFabButton", "debugFabBadge", "copyDebugButton", "copyDebugErrorsButton", "clearDebugButton", "toggleDebugPanelButton", "confirmOverlay", "confirmDialog", "confirmDialogEyebrow", "confirmDialogTitle", "confirmDialogBody", "confirmDialogCancel", "confirmDialogConfirm"]) {
+    for (const id of ["meetingShell", "blockedMessage", "blockedEyebrow", "blockedTitle", "blockedState", "workspace", "pageTitle", "pageSummary", "workspaceBadge", "offlineQueueBadge", "refreshButton", "meetingTitleInput", "saveMeetingTitleButton", "deleteMeetingButton", "meetingStatusChip", "currentBadge", "currentSummary", "currentHint", "currentNotice", "currentTimer", "startButton", "importAudioButton", "importAudioInput", "pauseButton", "resumeButton", "stopButton", "discardButton", "sharedMemoInput", "saveSharedMemoButton", "clearSharedMemoButton", "sharedMemoNotice", "recordCountBadge", "recordList", "detailTitle", "detailBadge", "detailSummary", "recordTitleGroup", "recordTitleInput", "saveRecordTitleButton", "downloadRecordButton", "deleteRecordButton", "detailMeta", "speakerEditor", "speakerAliasList", "saveSpeakerAliasesButton", "saveSpeakerAliasesAndRegenerateButton", "copySegmentsButton", "detailMemoText", "reviewTabSummary", "reviewTabMemo", "reviewTabNotes", "reviewTabSegments", "reviewTabSegmentsCount", "reviewTabSpeakers", "reviewPanelSummary", "summaryStatusPill", "summaryStatusGrid", "summaryActionCard", "reviewPanelMemo", "meetingNotesCard", "reviewPanelSegments", "reviewPanelSpeakers", "speakerDigestList", "notesSummaryMeta", "notesStyleSelect", "regenerateNotesButton", "meetingNotesOverview", "meetingNotesSections", "detailNotice", "segmentList", "debugPanel", "confirmOverlay", "confirmDialog", "confirmDialogEyebrow", "confirmDialogTitle", "confirmDialogBody", "confirmDialogCancel", "confirmDialogConfirm"]) {
       refs[id] = global.document.getElementById(id);
     }
   }
@@ -167,21 +168,7 @@
     refs.saveSpeakerAliasesAndRegenerateButton?.addEventListener("click", () => saveSpeakerAliases({ regenerateAfterSave: true }));
     refs.copySegmentsButton?.addEventListener("click", copySegmentsText);
     refs.regenerateNotesButton.addEventListener("click", regenerateNotes);
-    if (refs.copyDebugButton) {
-      refs.copyDebugButton.addEventListener("click", copyDebugLog);
-    }
-    if (refs.copyDebugErrorsButton) {
-      refs.copyDebugErrorsButton.addEventListener("click", copyDebugErrors);
-    }
-    if (refs.clearDebugButton) {
-      refs.clearDebugButton.addEventListener("click", clearDebugLogPanel);
-    }
-    if (refs.toggleDebugPanelButton) {
-      refs.toggleDebugPanelButton.addEventListener("click", toggleDebugPanelCollapsed);
-    }
-    if (refs.debugFabButton) {
-      refs.debugFabButton.addEventListener("click", toggleDebugPanelCollapsed);
-    }
+    refs.debugPanel?.addEventListener("click", handleDebugPanelClick);
     refs.confirmDialogCancel?.addEventListener("click", () => resolveConfirmation(false));
     refs.confirmDialogConfirm?.addEventListener("click", () => resolveConfirmation(true));
     refs.confirmOverlay?.addEventListener("click", (event) => {
@@ -208,6 +195,28 @@
     global.addEventListener("online", handleOnline, { passive: true });
     global.addEventListener("offline", handleOffline, { passive: true });
     global.addEventListener("beforeunload", disposeWorkspaceRealtime, { passive: true });
+  }
+
+  function handleDebugPanelClick(event) {
+    const action = normalizeText(event.target?.closest?.("[data-debug-action]")?.dataset?.debugAction);
+    if (!action) {
+      return;
+    }
+    if (action === "copy") {
+      void copyDebugLog();
+      return;
+    }
+    if (action === "copy-errors") {
+      void copyDebugErrors();
+      return;
+    }
+    if (action === "clear") {
+      clearDebugLogPanel();
+      return;
+    }
+    if (action === "toggle") {
+      toggleDebugPanelCollapsed();
+    }
   }
 
   async function bootstrap() {
@@ -2079,11 +2088,13 @@
     if (refs.meetingShell) {
       refs.meetingShell.dataset.debugPanel = String(enabled);
     }
+    state.unsubscribeDebug?.();
+    state.unsubscribeDebug = null;
     refs.debugPanel.hidden = !enabled;
+    renderDebugPanel(getDebugEntries());
     if (!enabled) return;
     syncDebugPanelCollapsedUi({ persist: false });
-    renderDebugEntries(getDebugEntries());
-    state.unsubscribeDebug = subscribeDebugEntries(renderDebugEntries);
+    state.unsubscribeDebug = subscribeDebugEntries((entries) => renderDebugPanel(entries));
     logDebug("workspace.debug.enabled", {
       href: global.location.href,
     });
@@ -2096,94 +2107,47 @@
 
   function syncDebugPanelCollapsedUi(options = {}) {
     const persist = options.persist !== false;
-    if (refs.debugPanelCard) {
-      refs.debugPanelCard.hidden = Boolean(state.debugPanelCollapsed);
-    }
-    if (refs.debugPanelBody) {
-      refs.debugPanelBody.hidden = Boolean(state.debugPanelCollapsed);
-    }
-    if (refs.debugFabButton) {
-      refs.debugFabButton.hidden = !state.debugPanelCollapsed;
-    }
-    if (refs.toggleDebugPanelButton) {
-      refs.toggleDebugPanelButton.textContent = "접기";
-      refs.toggleDebugPanelButton.setAttribute("aria-expanded", String(!state.debugPanelCollapsed));
-    }
     if (persist) {
       safeLocalStorageSet(global, DEBUG_PANEL_COLLAPSED_STORAGE_KEY, state.debugPanelCollapsed ? "1" : "0");
     }
+    renderDebugPanel(getDebugEntries());
   }
 
-  function renderDebugEntries(entries) {
-    if (!refs.debugPanel || refs.debugPanel.hidden) return;
+  function buildDebugPanelState(entries = getDebugEntries()) {
     const normalizedEntries = Array.isArray(entries) ? entries : [];
     const summary = summarizeEntries(normalizedEntries);
-    const nextText = normalizeText(buildCopyText(normalizedEntries)) || "아직 로그가 없습니다.";
-    if (refs.debugStatus) {
-      refs.debugStatus.innerHTML = buildDebugStatusMarkup(summary);
-      refs.debugStatus.setAttribute("aria-label", buildDebugStatusText(summary));
-    }
-    if (refs.debugFabBadge) {
-      refs.debugFabBadge.hidden = Math.max(0, Number(summary?.errorCount) || 0) < 1;
-    }
-    syncDebugLogViewport(refs.debugLog, nextText);
-  }
-
-  function renderDebugNotice() {
-    if (!refs.debugNotice) return;
-    refs.debugNotice.hidden = !state.debugNotice.text;
-    refs.debugNotice.textContent = state.debugNotice.text;
-    refs.debugNotice.classList.toggle("is-error", state.debugNotice.tone === "error");
-  }
-
-  function buildDebugStatusMarkup(summary) {
-    return [
-      renderDebugStatusItem("로그", summary?.totalLogs),
-      renderDebugStatusItem("함수", summary?.functionCalls),
-      renderDebugStatusItem("읽기", summary?.readCount),
-      renderDebugStatusItem("스냅샷", summary?.snapshotCount),
-      renderDebugStatusItem("오류", summary?.errorCount, (Number(summary?.errorCount) || 0) > 0),
-    ].join("");
-  }
-
-  function buildDebugStatusText(summary) {
-    const totalLogs = Math.max(0, Number(summary?.totalLogs) || 0);
-    const functionCalls = Math.max(0, Number(summary?.functionCalls) || 0);
-    const readCount = Math.max(0, Number(summary?.readCount) || 0);
-    const snapshotCount = Math.max(0, Number(summary?.snapshotCount) || 0);
-    const errorCount = Math.max(0, Number(summary?.errorCount) || 0);
-    return `로그 ${totalLogs}건 · 함수 ${functionCalls}건 · 읽기 ${readCount}건 · 스냅샷 ${snapshotCount}건 · 오류 ${errorCount}건`;
-  }
-
-  function renderDebugStatusItem(label, count, isError = false) {
-    return `<span class="inova-meeting-debug-console__status-item${isError ? " is-error" : ""}">${label} ${Math.max(0, Number(count) || 0)}건</span>`;
-  }
-
-  function readDebugLogViewport(element) {
-    if (!(element instanceof global.HTMLElement)) {
-      return null;
-    }
-    const maxScrollTop = Math.max(0, element.scrollHeight - element.clientHeight);
-    return {
-      scrollTop: Math.max(0, Number(element.scrollTop) || 0),
-      stickToBottom: maxScrollTop - element.scrollTop <= 28,
+    return debugConsole?.buildState?.({
+      collapsed: state.debugPanelCollapsed,
+      enabled: Boolean(refs.debugPanel && !refs.debugPanel.hidden),
+      feedback: state.debugNotice,
+      statusSummary: summary,
+      text: buildCopyText(normalizedEntries),
+    }) || {
+      collapsed: state.debugPanelCollapsed,
+      enabled: Boolean(refs.debugPanel && !refs.debugPanel.hidden),
+      feedback: state.debugNotice,
+      hasErrors: Math.max(0, Number(summary?.errorCount) || 0) > 0,
+      statusSummary: summary,
+      statusText: "",
+      text: normalizeText(buildCopyText(normalizedEntries)) || "아직 로그가 없습니다.",
     };
   }
 
-  function syncDebugLogViewport(element, text) {
-    if (!(element instanceof global.HTMLElement)) {
+  function renderDebugPanel(entries = getDebugEntries()) {
+    if (!refs.debugPanel) {
       return;
     }
-    const previousViewport = readDebugLogViewport(element);
-    if (element.textContent !== text) {
-      element.textContent = text;
-    }
-    const maxScrollTop = Math.max(0, element.scrollHeight - element.clientHeight);
-    if (!previousViewport || previousViewport.stickToBottom) {
-      element.scrollTop = maxScrollTop;
+    if (refs.debugPanel.hidden) {
+      refs.debugPanel.innerHTML = "";
       return;
     }
-    element.scrollTop = Math.min(previousViewport.scrollTop, maxScrollTop);
+    const previousViewport = debugConsole?.captureLogViewport?.(refs.debugPanel.querySelector("#debugLog")) || null;
+    refs.debugPanel.innerHTML = debugConsole?.renderWorkspace?.(buildDebugPanelState(entries)) || "";
+    const nextLog = refs.debugPanel.querySelector("#debugLog");
+    if (!nextLog) {
+      return;
+    }
+    debugConsole?.restoreLogViewport?.(nextLog, previousViewport);
   }
 
   function clearDebugLogPanel() {
@@ -2367,13 +2331,13 @@
       if (refs.blockedEyebrow) refs.blockedEyebrow.textContent = state.blockedEyebrow || "회의 작업실";
       if (refs.blockedTitle) refs.blockedTitle.textContent = state.blockedTitle || "이 작업실은 패널에서 다시 열어야 합니다";
       refs.blockedMessage.textContent = state.blockedMessage || refs.blockedMessage.textContent;
-      renderDebugNotice();
+      renderDebugPanel();
       return;
     }
     refs.blockedState.hidden = true;
     refs.workspace.hidden = false;
     renderWorkspace(state, refs);
-    renderDebugNotice();
+    renderDebugPanel();
     if (speakerInputFocusState?.speakerLabel && refs.speakerAliasList) {
       const speakerInput = Array.from(refs.speakerAliasList.querySelectorAll("input[data-speaker-label]"))
         .find((element) => normalizeText(element.dataset.speakerLabel) === speakerInputFocusState.speakerLabel);

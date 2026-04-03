@@ -142,6 +142,7 @@
   - `releases/`, `downloads/`: 릴리스 패널이 읽는 최신/히스토리 메타와 버전별 ZIP 다운로드 자산
 - `hosting/meeting/`
   - `index.html`, `index.css`: 회의 작업실 레이아웃과 실용형 UI 스타일
+  - `debug-console.js`: 패널/작업실이 함께 쓰는 debug console render contract와 viewport helper
   - `index.js`: hosted 회의 작업실 부팅, launch token 교환, 세션 복원, 녹음/업로드 큐/상세 액션 orchestration
   - `firebase-client.js`: `MeetingSession`을 Firebase custom token으로 교환하고 Firestore 문서 구독을 연결하는 hosted helper
   - `panel-bridge.html`, `panel-bridge.js`: 패널 content script 대신 Firestore query를 수행하는 숨겨진 hosted bridge
@@ -158,7 +159,7 @@
   - `firebase-config.js`: Firebase 프로젝트와 함수 엔드포인트 설정
   - `inova-auth.js`: i-Nova access token 갱신 보조
   - `meeting-bridge.js`: 브라우저 쪽 회의 runtime message 래퍼
-- `meeting-debug.js`: 패널/작업실 공용 디버그 로그 버퍼와 복사 helper
+  - `meeting-debug.js`: 확장 패널 디버그 로그 버퍼와 복사 helper
   - `meeting-state.js`: 회의 `meeting/job/transcript` 로컬 상태 정규화와 legacy session fallback
   - `prompt-library.js`: 요청 보관함 정규화, 가져오기/내보내기 규칙
   - `prompt-store.js`: 스토어 카테고리, 엔트리 정규화, 정렬 규칙

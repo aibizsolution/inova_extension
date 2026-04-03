@@ -60,7 +60,6 @@
     const checkedAtText = formatDateTime(state?.checkedAt, "");
     const source = normalizeText(state?.source);
     return {
-      debug: normalizeDebugState(state?.debug),
       error: normalizeText(state?.error),
       feedback: normalizeFeedback(state?.feedback),
       hasCheckedAt: Boolean(checkedAtText),
@@ -82,19 +81,6 @@
       status: normalizeText(nextItem.status) || "idle",
       title: normalizeText(nextItem.title) || "이름 없는 회의",
       updatedAt: normalizeText(nextItem.updatedAt || nextItem.createdAt),
-    };
-  }
-
-  function normalizeDebugState(debug) {
-    const enabled = Boolean(debug?.enabled);
-    return {
-      collapsed: enabled ? Boolean(debug?.collapsed) : true,
-      enabled,
-      feedback: normalizeFeedback(debug?.feedback),
-      hasErrors: Boolean(debug?.hasErrors),
-      statusSummary: normalizeDebugSummary(debug?.statusSummary),
-      statusText: normalizeText(debug?.statusText) || "로그 0건",
-      text: normalizeText(debug?.entriesText) || "아직 로그가 없습니다.",
     };
   }
 
@@ -132,37 +118,7 @@
   }
 
   function renderDebugConsole(debug) {
-    const normalizedDebug = normalizeDebugState(debug);
-    if (!normalizedDebug.enabled) {
-      return "";
-    }
-    if (normalizedDebug.collapsed) {
-      return `
-        <div class="inova-meeting-debug-fab-wrap">
-          <button type="button" class="inova-meeting-debug-fab" data-meeting-action="debug-toggle" aria-label="디버그 콘솔 열기">
-            <span class="inova-meeting-debug-fab__icon" aria-hidden="true"></span>
-            ${normalizedDebug.hasErrors ? '<span class="inova-meeting-debug-fab__badge" aria-hidden="true"></span>' : ""}
-          </button>
-        </div>
-      `;
-    }
-    return `
-      <aside class="inova-meeting-debug-console" aria-label="디버그 콘솔">
-        <div class="inova-meeting-debug-console__toolbar">
-          <div class="inova-meeting-debug-console__segment">
-            <button type="button" class="inova-meeting-debug-console__button" data-meeting-action="debug-copy">복사</button>
-            <button type="button" class="inova-meeting-debug-console__button" data-meeting-action="debug-copy-errors">오류</button>
-            <button type="button" class="inova-meeting-debug-console__button" data-meeting-action="debug-clear">비우기</button>
-            <button type="button" class="inova-meeting-debug-console__button" data-meeting-action="debug-toggle">접기</button>
-          </div>
-          ${renderDebugStatus(normalizedDebug)}
-        </div>
-        ${normalizedDebug.feedback.text
-          ? `<div class="inova-meeting-debug-console__feedback${normalizedDebug.feedback.tone === "error" ? " is-error" : ""}">${escapeHtml(normalizedDebug.feedback.text)}</div>`
-          : ""}
-        <pre class="inova-meeting-debug-console__log">${escapeHtml(normalizedDebug.text)}</pre>
-      </aside>
-    `;
+    return namespace.meetingDebugConsole?.renderPanel?.(debug) || "";
   }
 
   function renderEmptyState(state) {
@@ -205,37 +161,6 @@
       text,
       tone: normalizeText(feedback?.tone) || "info",
     };
-  }
-
-  function normalizeDebugSummary(summary) {
-    const next = summary && typeof summary === "object" ? summary : {};
-    return {
-      errorCount: Math.max(0, Number(next.errorCount) || 0),
-      functionCalls: Math.max(0, Number(next.functionCalls) || 0),
-      readCount: Math.max(0, Number(next.readCount) || 0),
-      snapshotCount: Math.max(0, Number(next.snapshotCount) || 0),
-      totalLogs: Math.max(0, Number(next.totalLogs) || 0),
-    };
-  }
-
-  function renderDebugStatus(debug) {
-    const summary = normalizeDebugSummary(debug?.statusSummary);
-    const items = [
-      renderDebugStatusItem("로그", summary.totalLogs),
-      renderDebugStatusItem("함수", summary.functionCalls),
-      renderDebugStatusItem("읽기", summary.readCount),
-      renderDebugStatusItem("스냅샷", summary.snapshotCount),
-      renderDebugStatusItem("오류", summary.errorCount, summary.errorCount > 0),
-    ];
-    return `
-      <span class="inova-meeting-debug-console__status" aria-label="${escapeHtml(normalizeText(debug?.statusText) || "디버그 로그 요약")}">
-        ${items.join("")}
-      </span>
-    `;
-  }
-
-  function renderDebugStatusItem(label, count, isError = false) {
-    return `<span class="inova-meeting-debug-console__status-item${isError ? " is-error" : ""}">${escapeHtml(label)} ${Math.max(0, Number(count) || 0)}건</span>`;
   }
 
   function buildPendingMessage(pending) {

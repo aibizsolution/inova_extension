@@ -6,6 +6,7 @@
     <title>i-Nova 회의 작업실</title>
     <link rel="stylesheet" href="index.css" />
     <script src="shared.js" defer></script>
+    <script src="debug-console.js" defer></script>
     <script>
       (function suppressFirestoreDeprecationWarnings() {
         const originalWarn = typeof window.console?.warn === "function"
@@ -261,33 +262,7 @@
         </section>
       </section>
 
-      <section id="debugPanel" class="debug-panel" hidden>
-        <button id="debugFabButton" class="debug-panel__fab inova-meeting-debug-fab" type="button" aria-label="디버그 콘솔 열기" hidden>
-          <span class="debug-panel__fab-icon inova-meeting-debug-fab__icon" aria-hidden="true"></span>
-          <span id="debugFabBadge" class="debug-panel__fab-badge inova-meeting-debug-fab__badge" hidden></span>
-        </button>
-        <article id="debugPanelCard" class="panel-card panel-card--debug">
-          <div class="debug-panel__toolbar">
-            <div class="segment-cluster segment-cluster--buttons inova-meeting-debug-console__segment">
-              <button id="copyDebugButton" class="secondary-button inova-meeting-debug-console__button" type="button">복사</button>
-              <button id="copyDebugErrorsButton" class="secondary-button inova-meeting-debug-console__button" type="button">오류</button>
-              <button id="clearDebugButton" class="ghost-button ghost-button--soft inova-meeting-debug-console__button" type="button">비우기</button>
-              <button id="toggleDebugPanelButton" class="ghost-button ghost-button--soft inova-meeting-debug-console__button" type="button" aria-expanded="true">접기</button>
-            </div>
-            <div id="debugStatus" class="inova-meeting-debug-console__status" aria-live="polite" aria-label="디버그 로그 요약">
-              <span class="inova-meeting-debug-console__status-item">로그 0건</span>
-              <span class="inova-meeting-debug-console__status-item">함수 0건</span>
-              <span class="inova-meeting-debug-console__status-item">읽기 0건</span>
-              <span class="inova-meeting-debug-console__status-item">스냅샷 0건</span>
-              <span class="inova-meeting-debug-console__status-item">오류 0건</span>
-            </div>
-          </div>
-          <div id="debugNotice" class="debug-panel__notice inova-meeting-debug-console__feedback" hidden aria-live="polite"></div>
-          <div id="debugPanelBody" class="debug-panel__body">
-            <pre id="debugLog" class="debug-log inova-meeting-debug-console__log">아직 로그가 없습니다.</pre>
-          </div>
-        </article>
-      </section>
+      <section id="debugPanel" class="debug-panel" hidden></section>
 
       <section id="confirmOverlay" class="confirm-overlay" hidden>
         <div id="confirmDialog" class="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirmDialogTitle" aria-describedby="confirmDialogBody">
