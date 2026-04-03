@@ -2717,12 +2717,10 @@
     };
   }
 
-  function buildChunkRemoteResyncRequest(pending, options = {}) {
+  function buildChunkRemoteResyncRequest(pending) {
     const jobId = normalizeText(pending?.jobId);
-    const backlogUploadCount = Math.max(0, Number(options?.backlogUploadCount) || 0);
-    const bootstrappedRemoteThisAttempt = Boolean(options?.bootstrappedRemoteThisAttempt);
 
-    if (jobId && !bootstrappedRemoteThisAttempt && backlogUploadCount === 0) {
+    if (jobId) {
       return {
         contextPhase: "chunk-remote-job-resync",
         transitionAction: "chunk-resync",
@@ -2778,11 +2776,12 @@
     };
 
     let remoteStateChangedThisAttempt = false;
-    let backlogUploadCount = 0;
+    let uploadedChunkCountThisAttempt = 0;
     if (!normalizeText(nextPending?.jobId)) {
       const bootstrapPart = findMissingPreparedParts(nextPending)[0];
       if (bootstrapPart) {
         nextPending = await uploadPreparedPart(nextPending, bootstrapPart);
+        uploadedChunkCountThisAttempt += 1;
         const bootstrapResult = await startChunkedPendingUploadRemoteJob(nextPending, {
           context: buildAttemptQueueContext(activeRequestId, "chunk-remote-job-start"),
           noticeText: "첫 청크를 올려 자동 전사를 바로 시작했습니다. 남은 청크를 이어서 업로드합니다.",
@@ -2796,7 +2795,7 @@
 
     for (const preparedPart of findMissingPreparedParts(nextPending)) {
       nextPending = await uploadPreparedPart(nextPending, preparedPart);
-      backlogUploadCount += 1;
+      uploadedChunkCountThisAttempt += 1;
     }
 
     const remoteStartRequest = buildChunkRemoteStartRequest(nextPending);
@@ -2821,11 +2820,11 @@
         remoteStateChangedThisAttempt = remoteStateChangedThisAttempt
           || (!publishResult.degraded && normalizeText(publishResult.resolution) !== "reconciled");
       } else {
-        const remoteResyncRequest = buildChunkRemoteResyncRequest(nextPending, {
-          backlogUploadCount,
-          bootstrappedRemoteThisAttempt: remoteStateChangedThisAttempt,
-        });
-        if (remoteResyncRequest) {
+        const shouldResyncRemoteState = normalizeText(nextPending?.jobId)
+          && uploadedChunkCountThisAttempt === 0
+          && !remoteStateChangedThisAttempt;
+        if (shouldResyncRemoteState) {
+          const remoteResyncRequest = buildChunkRemoteResyncRequest(nextPending);
           const reconcileResult = await reconcileChunkedPendingUploadRemoteState(nextPending, {
             context: buildAttemptQueueContext(activeRequestId, remoteResyncRequest.contextPhase),
             transitionAction: remoteResyncRequest.transitionAction,
