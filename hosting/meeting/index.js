@@ -329,14 +329,50 @@
     return `${normalizedReason} 삭제했거나 비운 임시 녹음이 다음 새로고침 뒤 다시 보일 수 있습니다.`;
   }
 
-  function buildPendingUploadQueueOperationFailureMessage(scope, diagnostics, error) {
+  function buildPendingUploadPersistPhaseDegradedNotice(context = {}, reason) {
+    const normalizedContext = normalizePendingUploadQueueContext(context);
+    const normalizedReason = normalizeText(reason);
+    if (normalizedContext.phase === "transition-start") {
+      return `${normalizedReason || "재시작할 로컬 원본 상태를 브라우저에 보관하지 못했어요."} 현재 탭에서는 이전 원본을 유지하지만, 다시 시작 준비 상태가 다음 새로고침 뒤 다시 보이지 않을 수 있습니다.`;
+    }
+    if (["chunk-prepare", "chunk-uploading", "single-uploading", "single-uploaded", "single-inline-fallback"].includes(normalizedContext.phase)) {
+      return `${normalizedReason || "업로드 진행 상태를 브라우저에 보관하지 못했어요."} 지금 탭에서는 처리를 이어가지만, 다음 새로고침 뒤에는 진행 상태가 일부 뒤로 보일 수 있습니다.`;
+    }
+    if (normalizedContext.phase === "failure-state") {
+      return `${normalizedReason || "업로드 실패 상태를 브라우저에 보관하지 못했어요."} 다음 새로고침 뒤에는 방금 실패 이유가 다시 보이지 않을 수 있습니다.`;
+    }
+    if (normalizedContext.phase === "manual-hold") {
+      return `${normalizedReason || "보류 상태를 브라우저에 보관하지 못했어요."} 다음 새로고침 뒤에는 방금 멈춘 업로드가 다시 대기 상태로 보일 수 있습니다.`;
+    }
+    if (normalizedContext.phase === "manual-resume-state") {
+      return `${normalizedReason || "재개 상태를 브라우저에 보관하지 못했어요."} 다음 새로고침 뒤에는 방금 다시 시작한 업로드가 이전 상태로 보일 수 있습니다.`;
+    }
+    return buildPendingUploadPersistDegradedNotice(normalizedReason);
+  }
+
+  function buildPendingUploadCleanupPhaseDegradedNotice(context = {}, reason) {
+    const normalizedContext = normalizePendingUploadQueueContext(context);
+    const normalizedReason = normalizeText(reason);
+    if (normalizedContext.phase === "manual-delete") {
+      return `${normalizedReason || "로컬 기록을 브라우저 보관함에서 정리하지 못했어요."} 방금 지운 로컬 기록이 다음 새로고침 뒤 다시 보일 수 있습니다.`;
+    }
+    if (normalizedContext.phase === "record-delete") {
+      return `${normalizedReason || "선택한 기록의 로컬 원본을 정리하지 못했어요."} 기록 삭제 후에도 브라우저 원본이 다음 새로고침 뒤 다시 보일 수 있습니다.`;
+    }
+    if (normalizedContext.phase === "workspace-delete") {
+      return `${normalizedReason || "작업실에 남은 로컬 원본을 정리하지 못했어요."} 작업실 삭제 후에도 일부 브라우저 원본이 다음 새로고침 뒤 다시 보일 수 있습니다.`;
+    }
+    return buildPendingUploadCleanupDegradedNotice(normalizedReason);
+  }
+
+  function buildPendingUploadQueueOperationFailureMessage(scope, diagnostics, error, context = {}) {
     const normalizedScope = normalizeText(scope);
     const fallbackReason = normalizeText(diagnostics?.degradedReason) || (error instanceof Error ? error.message : "");
     if (normalizedScope === PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.persist) {
-      return buildPendingUploadPersistDegradedNotice(fallbackReason);
+      return buildPendingUploadPersistPhaseDegradedNotice(context, fallbackReason);
     }
     if (normalizedScope === PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.cleanup) {
-      return buildPendingUploadCleanupDegradedNotice(fallbackReason);
+      return buildPendingUploadCleanupPhaseDegradedNotice(context, fallbackReason);
     }
     return buildPendingUploadStorageDegradedNotice(fallbackReason);
   }
@@ -358,7 +394,7 @@
   }
 
   function buildPendingUploadQueueOperationError(scope, diagnostics, error, context = {}) {
-    const message = buildPendingUploadQueueOperationFailureMessage(scope, diagnostics, error);
+    const message = buildPendingUploadQueueOperationFailureMessage(scope, diagnostics, error, context);
     if (!normalizeText(message)) {
       return error instanceof Error ? error : new Error("브라우저 로컬 보관 큐 작업을 완료하지 못했어요.");
     }
@@ -2280,7 +2316,14 @@
     applyRender();
     try {
       await postJson(global, CONFIG.deleteMeetingResultUrl, { jobId: entry.remote.jobId, meetingId: state.session.meetingId }, state.session.meetingSessionToken);
-      if (entry.pending?.requestId) await deletePendingUpload(entry.pending.requestId);
+      if (entry.pending?.requestId) {
+        await deletePendingUpload(entry.pending.requestId, {
+          context: {
+            phase: "record-delete",
+            reason: "record-delete",
+          },
+        });
+      }
       state.records = state.records.filter((record) => normalizeText(record.jobId) !== normalizeText(entry.remote.jobId));
       state.selectedRecordId = "";
       setNotice("선택한 기록을 삭제했습니다.", "highlight");
@@ -2306,7 +2349,13 @@
       await postJson(global, CONFIG.deleteMeetingUrl, { meetingId: state.session.meetingId }, state.session.meetingSessionToken);
       await runPendingUploadQueueOperation(
         () => state.queueStore.clearMeeting(state.session.meetingId),
-        { scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.cleanup }
+        {
+          context: {
+            phase: "workspace-delete",
+            reason: "workspace-delete",
+          },
+          scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.cleanup,
+        }
       );
       clearWorkspaceSession();
       renderBlocked("이 탭은 여기까지입니다. 필요할 때 i-Nova 패널에서 새 작업실을 열어 주세요.", {
@@ -2544,8 +2593,19 @@
       if (!pending) return;
       if (normalizeText(action) === "retry") return attemptPendingUpload(requestId, { reason: "manual-retry" });
       if (normalizeText(action) === "restart") return attemptPendingUpload(requestId, { forceRestart: true, reason: "manual-restart" });
-      if (normalizeText(action) === "hold") return upsertPendingUpload({ ...pending, hold: true, status: "on_hold", lastError: pending.lastError || "업로드를 잠시 멈췄습니다." }).then(applyRender);
-      if (normalizeText(action) === "resume") { await upsertPendingUpload({ ...pending, hold: false, status: "upload_queued", lastError: "" }); return retryPendingUploads("manual-resume"); }
+      if (normalizeText(action) === "hold") {
+        return upsertPendingUpload(
+          { ...pending, hold: true, status: "on_hold", lastError: pending.lastError || "업로드를 잠시 멈췄습니다." },
+          { context: { phase: "manual-hold", reason: "manual-hold" } }
+        ).then(applyRender);
+      }
+      if (normalizeText(action) === "resume") {
+        await upsertPendingUpload(
+          { ...pending, hold: false, status: "upload_queued", lastError: "" },
+          { context: { phase: "manual-resume-state", reason: "manual-resume" } }
+        );
+        return retryPendingUploads("manual-resume");
+      }
       if (normalizeText(action) === "delete") {
         if (!await requestConfirmation({
           body: "아직 원격 처리 전이면 복구할 수 없습니다.",
@@ -2554,7 +2614,12 @@
           title: "이 로컬 기록을 삭제할까요?",
           tone: "danger",
         })) return;
-        return deletePendingUpload(requestId);
+        return deletePendingUpload(requestId, {
+          context: {
+            phase: "manual-delete",
+            reason: "manual-delete",
+          },
+        });
       }
     } catch (error) {
       showPendingUploadQueueOperationError(error, "로컬 업로드 큐 작업을 이어가지 못했어요.");
