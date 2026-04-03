@@ -341,13 +341,31 @@
     return buildPendingUploadStorageDegradedNotice(fallbackReason);
   }
 
-  function buildPendingUploadQueueOperationError(scope, diagnostics, error) {
+  function normalizePendingUploadQueueContext(context = {}) {
+    const nextContext = {};
+    const requestId = normalizeText(context?.requestId);
+    const previousRequestId = normalizeText(context?.previousRequestId);
+    const reason = normalizeText(context?.reason);
+    const phase = normalizeText(context?.phase);
+    if (requestId) nextContext.requestId = requestId;
+    if (previousRequestId) nextContext.previousRequestId = previousRequestId;
+    if (reason) nextContext.reason = reason;
+    if (phase) nextContext.phase = phase;
+    if (Object.prototype.hasOwnProperty.call(context || {}, "shouldResetSource")) {
+      nextContext.shouldResetSource = Boolean(context.shouldResetSource);
+    }
+    return nextContext;
+  }
+
+  function buildPendingUploadQueueOperationError(scope, diagnostics, error, context = {}) {
     const message = buildPendingUploadQueueOperationFailureMessage(scope, diagnostics, error);
     if (!normalizeText(message)) {
       return error instanceof Error ? error : new Error("브라우저 로컬 보관 큐 작업을 완료하지 못했어요.");
     }
+    const normalizedContext = normalizePendingUploadQueueContext(context);
     const nextError = new Error(message);
     nextError.pendingUploadQueueDegradedReason = normalizeText(diagnostics?.degradedReason);
+    nextError.pendingUploadQueueContext = normalizedContext;
     nextError.pendingUploadQueueNoticeShown = false;
     nextError.pendingUploadQueueOperation = normalizeText(diagnostics?.operation);
     nextError.pendingUploadQueueOperationError = true;
@@ -505,67 +523,74 @@
     });
   }
 
-  function applyPendingUploadStorageDiagnostics(result) {
+  function applyPendingUploadStorageDiagnostics(result, context = {}) {
+    const normalizedContext = normalizePendingUploadQueueContext(context);
     applyDegradedDiagnostics("pendingUploadStorage", result, {
       buildNotice: (degradedReason) => buildPendingUploadStorageDegradedNotice(degradedReason),
       degradedEvent: "workspace.pending-uploads.storage.degraded",
       getLogDetails: (normalized) => ({
         operation: normalized.operation,
+        ...normalizedContext,
       }),
       noticeCode: DEGRADED_NOTICE_CODES.pendingUploads,
       recoveredEvent: "workspace.pending-uploads.storage.recovered",
     });
   }
 
-  function applyPendingUploadPersistDiagnostics(result) {
+  function applyPendingUploadPersistDiagnostics(result, context = {}) {
+    const normalizedContext = normalizePendingUploadQueueContext(context);
     applyDegradedDiagnostics("pendingUploadPersist", result, {
       buildNotice: (degradedReason) => buildPendingUploadPersistDegradedNotice(degradedReason),
       degradedEvent: "workspace.pending-uploads.persist.degraded",
       getLogDetails: (normalized) => ({
         operation: normalized.operation,
+        ...normalizedContext,
       }),
       noticeCode: DEGRADED_NOTICE_CODES.pendingUploadPersist,
       recoveredEvent: "workspace.pending-uploads.persist.recovered",
     });
   }
 
-  function applyPendingUploadCleanupDiagnostics(result) {
+  function applyPendingUploadCleanupDiagnostics(result, context = {}) {
+    const normalizedContext = normalizePendingUploadQueueContext(context);
     applyDegradedDiagnostics("pendingUploadCleanup", result, {
       buildNotice: (degradedReason) => buildPendingUploadCleanupDegradedNotice(degradedReason),
       degradedEvent: "workspace.pending-uploads.cleanup.degraded",
       getLogDetails: (normalized) => ({
         operation: normalized.operation,
+        ...normalizedContext,
       }),
       noticeCode: DEGRADED_NOTICE_CODES.pendingUploadCleanup,
       recoveredEvent: "workspace.pending-uploads.cleanup.recovered",
     });
   }
 
-  function consumePendingUploadQueueDiagnostics() {
+  function consumePendingUploadQueueDiagnostics(context = {}) {
     const diagnostics = typeof state.queueStore.consumeDiagnostics === "function"
       ? state.queueStore.consumeDiagnostics()
       : null;
     const operation = normalizeText(diagnostics?.operation);
     if (operation === "put") {
-      applyPendingUploadPersistDiagnostics(diagnostics);
+      applyPendingUploadPersistDiagnostics(diagnostics, context);
       return diagnostics;
     }
     if (operation === "delete" || operation === "clearMeeting") {
-      applyPendingUploadCleanupDiagnostics(diagnostics);
+      applyPendingUploadCleanupDiagnostics(diagnostics, context);
       return diagnostics;
     }
-    applyPendingUploadStorageDiagnostics(diagnostics);
+    applyPendingUploadStorageDiagnostics(diagnostics, context);
     return diagnostics;
   }
 
   async function runPendingUploadQueueOperation(action, options = {}) {
     const scope = normalizeText(options?.scope) || PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.load;
+    const context = normalizePendingUploadQueueContext(options?.context);
     try {
       const result = await action();
-      consumePendingUploadQueueDiagnostics();
+      consumePendingUploadQueueDiagnostics(context);
       return result;
     } catch (error) {
-      const diagnostics = consumePendingUploadQueueDiagnostics();
+      const diagnostics = consumePendingUploadQueueDiagnostics(context);
       const issueCodes = Array.isArray(diagnostics?.issues)
         ? diagnostics.issues.map((issue) => normalizeText(issue?.code)).filter(Boolean)
         : [];
@@ -575,8 +600,9 @@
         issueCodes,
         operation: normalizeText(diagnostics?.operation),
         scope,
+        ...context,
       });
-      throw buildPendingUploadQueueOperationError(scope, diagnostics, error);
+      throw buildPendingUploadQueueOperationError(scope, diagnostics, error, context);
     }
   }
 
@@ -1685,11 +1711,12 @@
 
   function announcePendingUploadAttempt(plan, activeRequestId) {
     logDebug("workspace.pending-upload.transition", {
-      nextRequestId: normalizeText(activeRequestId || plan?.retryRequestId || plan?.normalizedRequestId),
-      nextStatus: normalizeText(plan?.nextUploadStatus),
-      previousRemoteJobId: normalizeText(plan?.previousRemoteJobId),
+      phase: "transition",
       previousRequestId: normalizeText(plan?.normalizedRequestId),
+      previousRemoteJobId: normalizeText(plan?.previousRemoteJobId),
       reason: normalizeText(plan?.reason),
+      requestId: normalizeText(activeRequestId || plan?.retryRequestId || plan?.normalizedRequestId),
+      status: normalizeText(plan?.nextUploadStatus),
       shouldResetSource: Boolean(plan?.shouldResetSource),
       supersededJobIds: Array.isArray(plan?.retryBase?.supersededJobIds) ? plan.retryBase.supersededJobIds : [],
       supersededRequestIds: Array.isArray(plan?.retryBase?.supersededRequestIds) ? plan.retryBase.supersededRequestIds : [],
@@ -1699,6 +1726,16 @@
     }
   }
 
+  function buildPendingUploadTransitionQueueContext(plan, requestId, phase) {
+    return normalizePendingUploadQueueContext({
+      phase,
+      previousRequestId: normalizeText(plan?.normalizedRequestId),
+      reason: normalizeText(plan?.reason),
+      requestId: normalizeText(requestId || plan?.retryRequestId || plan?.normalizedRequestId),
+      shouldResetSource: Boolean(plan?.shouldResetSource),
+    });
+  }
+
   async function attemptPendingUpload(requestId, options = {}) {
     const normalizedRequestId = normalizeText(requestId);
     const pending = state.pendingUploads.find((item) => item.requestId === normalizedRequestId);
@@ -1706,9 +1743,13 @@
     if (!isOnline(global)) { await upsertPendingUpload({ ...pending, lastError: "인터넷이 돌아오면 자동으로 업로드합니다.", status: "upload_queued" }); return applyRender(); }
     state.busy.queue[normalizedRequestId] = true;
     const attemptPlan = buildPendingUploadAttemptPlan(pending, options);
+    const buildAttemptQueueContext = (requestIdValue, phase) => buildPendingUploadTransitionQueueContext(attemptPlan, requestIdValue, phase);
     let activeRequestId = normalizedRequestId;
     try {
-      let latest = await upsertPendingUpload({ ...attemptPlan.retryBase, lastError: "", status: attemptPlan.nextUploadStatus });
+      let latest = await upsertPendingUpload(
+        { ...attemptPlan.retryBase, lastError: "", status: attemptPlan.nextUploadStatus },
+        { context: buildAttemptQueueContext(attemptPlan.retryBase.requestId, "transition-start") }
+      );
       if (attemptPlan.shouldResetSource) {
         delete state.busy.queue[normalizedRequestId];
         state.busy.queue[attemptPlan.retryRequestId] = true;
@@ -1741,7 +1782,7 @@
           lastError: "",
           sourceMode: "chunked",
           status: "preparing_chunks",
-        });
+        }, { context: buildAttemptQueueContext(activeRequestId, "chunk-prepare") });
         const prepared = await getOrPrepareChunkedSource(latest);
         latest = await upsertPendingUpload({
           ...latest,
@@ -1753,7 +1794,7 @@
           sourceMode: "chunked",
           status: "uploading_chunks",
           uploadedPartCount: prepared.parts.filter((part) => normalizeText(part.storageObject)).length,
-        });
+        }, { context: buildAttemptQueueContext(activeRequestId, "chunk-uploading") });
         let refreshedRemoteJob = false;
         for (const preparedPart of prepared.parts) {
           const currentPending = state.pendingUploads.find((item) => item.requestId === activeRequestId);
@@ -1799,7 +1840,7 @@
           originalSizeBytes: sourceSizeBytes,
           sourceMode: "single",
           status: "uploading",
-        });
+        }, { context: buildAttemptQueueContext(activeRequestId, "single-uploading") });
         try {
           const uploaded = await uploadPendingSource(latest);
           latest = await upsertPendingUpload({
@@ -1810,7 +1851,7 @@
             sourceMode: "single",
             status: "uploading",
             storageObject: normalizeText(uploaded?.storageObject),
-          });
+          }, { context: buildAttemptQueueContext(activeRequestId, "single-uploaded") });
         } catch (uploadError) {
           logDebug("workspace.source-upload.fallback-inline", {
             error: uploadError,
@@ -1824,7 +1865,7 @@
             sourceMode: "single",
             status: "uploading",
             storageObject: "",
-          });
+          }, { context: buildAttemptQueueContext(activeRequestId, "single-inline-fallback") });
           setNotice("임시 오디오 업로드가 실패해도 현재 파일은 바로 전사 경로로 이어갑니다.", "highlight");
           applyRender();
         }
@@ -1837,7 +1878,10 @@
       }
     } catch (error) {
       const latest = state.pendingUploads.find((item) => item.requestId === activeRequestId);
-      if (latest) await upsertPendingUpload({ ...latest, lastError: error instanceof Error ? error.message : "업로드를 이어가지 못했어요.", status: isLikelyNetworkError(global, error) ? "upload_queued" : "failed" });
+      if (latest) await upsertPendingUpload(
+        { ...latest, lastError: error instanceof Error ? error.message : "업로드를 이어가지 못했어요.", status: isLikelyNetworkError(global, error) ? "upload_queued" : "failed" },
+        { context: buildAttemptQueueContext(activeRequestId, "failure-state") }
+      );
       setNotice(error instanceof Error ? error.message : "업로드를 이어가지 못했어요.", "error");
       applyRender();
     } finally {
@@ -2517,12 +2561,18 @@
     }
   }
 
-  async function deletePendingUpload(requestId) {
+  async function deletePendingUpload(requestId, options = {}) {
     delete state.runtimeChunkCache[normalizeText(requestId)];
     try {
       await runPendingUploadQueueOperation(
         () => state.queueStore.delete(requestId),
-        { scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.cleanup }
+        {
+          context: normalizePendingUploadQueueContext({
+            requestId,
+            ...(options?.context || {}),
+          }),
+          scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.cleanup,
+        }
       );
     } catch (error) {
       showPendingUploadQueueOperationError(error, "브라우저에 보관한 녹음을 정리하지 못했어요.");
@@ -2694,12 +2744,18 @@
   function handleOnline() { setNotice("인터넷 연결이 돌아왔습니다. 보관한 녹음을 다시 확인합니다.", "highlight"); retryPendingUploads("online-retry"); applyRender(); }
   function handleOffline() { setNotice("인터넷이 끊겨도 종료된 녹음은 브라우저에 보관합니다. 연결이 돌아오면 이어서 업로드합니다.", "highlight"); applyRender(); }
 
-  async function upsertPendingUpload(item) {
+  async function upsertPendingUpload(item, options = {}) {
     const normalized = normalizePendingUpload({ ...item, updatedAt: new Date().toISOString() });
     try {
       await runPendingUploadQueueOperation(
         () => state.queueStore.put(normalized),
-        { scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.persist }
+        {
+          context: normalizePendingUploadQueueContext({
+            requestId: normalized.requestId,
+            ...(options?.context || {}),
+          }),
+          scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.persist,
+        }
       );
     } catch (error) {
       showPendingUploadQueueOperationError(error, "브라우저 로컬 보관 큐를 저장하지 못했어요.");
