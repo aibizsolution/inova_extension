@@ -5,6 +5,7 @@
   const LOCAL_STORAGE_KEY_PREFIX = "inova-hosted-meeting-session::";
   const WORKSPACE_HASH_PARAM = "ws";
   const DEBUG_PREFIX = "[Inova Hosted Meeting]";
+  const DEBUG_FAULTS_SESSION_STORAGE_KEY = "inova-hosted-meeting-debug-faults";
   const DEFAULT_CREATE_JOB_TIMEOUT_MS = 9 * 60 * 1000;
   const DEFAULT_INLINE_AUDIO_LIMIT_BYTES = 25 * 1024 * 1024;
   const DEFAULT_SOURCE_TARGET_PART_BYTES = 20 * 1024 * 1024;
@@ -38,7 +39,7 @@
   const AUTO_RETRY_PENDING_STATUSES = new Set(["local_saved", "upload_queued"]);
   const debugListeners = new Set();
   const debugEntries = [];
-  const debugFaults = Object.create(null);
+  const debugFaults = readDebugFaultRegistry();
   let debugSequence = 0;
   let debugEnabled = false;
 
@@ -64,6 +65,49 @@
 
   function normalizeBaseUrl(value) {
     return String(value || "").replace(/\/+$/, "");
+  }
+
+  function readDebugFaultRegistry() {
+    try {
+      if (!global?.sessionStorage || typeof global.sessionStorage.getItem !== "function") {
+        return Object.create(null);
+      }
+      const raw = normalizeText(global.sessionStorage.getItem(DEBUG_FAULTS_SESSION_STORAGE_KEY));
+      if (!raw) return Object.create(null);
+      const parsed = JSON.parse(raw);
+      const nextRegistry = Object.create(null);
+      for (const [name, count] of Object.entries(parsed || {})) {
+        const normalizedName = normalizeText(name);
+        if (!normalizedName) continue;
+        const normalizedCount = Number(count);
+        if (normalizedCount === -1) {
+          nextRegistry[normalizedName] = -1;
+          continue;
+        }
+        if (Number.isFinite(normalizedCount) && normalizedCount > 0) {
+          nextRegistry[normalizedName] = Math.floor(normalizedCount);
+        }
+      }
+      return nextRegistry;
+    } catch {
+      return Object.create(null);
+    }
+  }
+
+  function persistDebugFaultRegistry() {
+    try {
+      if (!global?.sessionStorage || typeof global.sessionStorage.setItem !== "function") {
+        return;
+      }
+      const snapshot = {};
+      for (const [name, count] of Object.entries(debugFaults)) {
+        const normalizedName = normalizeText(name);
+        if (!normalizedName) continue;
+        if (count === -1) snapshot[normalizedName] = -1;
+        else if (Number.isFinite(count) && count > 0) snapshot[normalizedName] = Math.floor(count);
+      }
+      global.sessionStorage.setItem(DEBUG_FAULTS_SESSION_STORAGE_KEY, JSON.stringify(snapshot));
+    } catch {}
   }
 
   function parsePositiveInteger(value) {
@@ -1076,14 +1120,17 @@
     if (!normalizedName) return getDebugFaults();
     if (count === false || count === 0) {
       delete debugFaults[normalizedName];
+      persistDebugFaultRegistry();
       return getDebugFaults();
     }
     if (count === true) {
       debugFaults[normalizedName] = -1;
+      persistDebugFaultRegistry();
       return getDebugFaults();
     }
     const normalizedCount = Math.max(1, Math.floor(Number(count) || 0)) || 1;
     debugFaults[normalizedName] = normalizedCount;
+    persistDebugFaultRegistry();
     return getDebugFaults();
   }
 
@@ -1093,9 +1140,11 @@
       for (const key of Object.keys(debugFaults)) {
         delete debugFaults[key];
       }
+      persistDebugFaultRegistry();
       return getDebugFaults();
     }
     delete debugFaults[normalizedName];
+    persistDebugFaultRegistry();
     return getDebugFaults();
   }
 
@@ -1107,9 +1156,11 @@
     if (!Number.isFinite(current) || current <= 0) return false;
     if (current === 1) {
       delete debugFaults[normalizedName];
+      persistDebugFaultRegistry();
       return true;
     }
     debugFaults[normalizedName] = current - 1;
+    persistDebugFaultRegistry();
     return true;
   }
 

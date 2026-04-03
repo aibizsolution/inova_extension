@@ -872,9 +872,142 @@
     };
   }
 
+  function ensureDebugLocalQueueSandboxActive() {
+    if (!state.debugLocalQueueSandbox) {
+      throw new Error("로컬 queue sandbox에서만 사용할 수 있는 debug helper입니다.");
+    }
+  }
+
+  async function clearDebugLocalQueueSandboxPendingUploads() {
+    ensureDebugLocalQueueSandboxActive();
+    const clearedCount = state.pendingUploads.length;
+    await runPendingUploadQueueOperation(
+      () => state.queueStore.clearMeeting(state.session.meetingId),
+      {
+        context: {
+          phase: "sandbox-clear",
+          reason: "sandbox-clear",
+        },
+        scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.cleanup,
+      }
+    );
+    delete state.runtimeChunkCache;
+    state.runtimeChunkCache = Object.create(null);
+    applyLoadedPendingUploads([]);
+    state.selectedRecordId = "";
+    applyRender();
+    return {
+      clearedCount,
+      meetingId: state.session.meetingId,
+    };
+  }
+
+  async function seedDebugLocalQueueSandboxPendingUpload(options = {}) {
+    ensureDebugLocalQueueSandboxActive();
+    const timestamp = new Date().toISOString();
+    const requestId = normalizeText(options?.requestId) || ns.shared.generateCaptureRequestId(global);
+    const sizeBytes = Math.max(1, Number(options?.sizeBytes) || 16);
+    const durationMs = Math.max(1000, Number(options?.durationMs) || 1500);
+    const pending = normalizePendingUpload({
+      blob: new global.Blob(["debug-local-queue"], { type: normalizeText(options?.mimeType) || "audio/webm" }),
+      captureMode: "microphone",
+      channelCount: 1,
+      createdAt: timestamp,
+      durationMs,
+      endedAt: timestamp,
+      hold: Boolean(options?.hold),
+      jobId: "",
+      lastError: normalizeText(options?.lastError),
+      meetingId: state.session.meetingId,
+      meetingTitleSnapshot: normalizeText(options?.title) || "sandbox pending record",
+      mimeType: normalizeText(options?.mimeType) || "audio/webm",
+      originalSizeBytes: sizeBytes,
+      parts: [],
+      preparedPartCount: 0,
+      requestId,
+      sharedMemoSnapshot: normalizeTextBlock(options?.sharedMemo),
+      sizeBytes,
+      sourceMode: normalizeText(options?.sourceMode) || "single",
+      startedAt: normalizeText(options?.startedAt) || new Date(Date.now() - durationMs).toISOString(),
+      status: normalizeText(options?.status) || "local_saved",
+      uploadedPartCount: 0,
+      updatedAt: timestamp,
+    });
+    const saved = await upsertPendingUpload(pending, {
+      context: {
+        phase: "sandbox-seed",
+        reason: "sandbox-seed",
+      },
+    });
+    state.selectedRecordId = ns.shared.buildLocalSelectionId(saved.requestId);
+    applyRender();
+    return buildPendingUploadSnapshotItem(saved);
+  }
+
+  async function runDebugLocalQueueSandboxAction(action, options = {}) {
+    ensureDebugLocalQueueSandboxActive();
+    const normalizedAction = normalizeText(action);
+    const requestId = normalizeText(options?.requestId) || normalizeText(state.pendingUploads[0]?.requestId);
+    if (!requestId) {
+      throw new Error("로컬 queue sandbox action을 실행할 pending requestId가 없습니다.");
+    }
+    const pending = state.pendingUploads.find((item) => item.requestId === requestId);
+    if (!pending) {
+      throw new Error(`pending requestId를 찾지 못했습니다: ${requestId}`);
+    }
+    if (normalizedAction === "hold") {
+      await upsertPendingUpload(
+        { ...pending, hold: true, status: "on_hold", lastError: pending.lastError || "업로드를 잠시 멈췄습니다." },
+        { context: { phase: "manual-hold", reason: "manual-hold" } }
+      );
+      applyRender();
+      return buildPendingUploadSnapshotItem(
+        state.pendingUploads.find((item) => item.requestId === requestId) || pending
+      );
+    }
+    if (normalizedAction === "resume") {
+      await upsertPendingUpload(
+        { ...pending, hold: false, status: "upload_queued", lastError: "" },
+        { context: { phase: "manual-resume-state", reason: "manual-resume" } }
+      );
+      applyRender();
+      return buildPendingUploadSnapshotItem(
+        state.pendingUploads.find((item) => item.requestId === requestId) || pending
+      );
+    }
+    if (normalizedAction === "rename") {
+      const recordId = ns.shared.buildLocalSelectionId(requestId);
+      const nextTitle = normalizeText(options?.title) || "sandbox renamed record";
+      await saveRecordTitleForEntry(recordId, nextTitle);
+      return {
+        requestId,
+        title: nextTitle,
+      };
+    }
+    if (normalizedAction === "delete") {
+      await deletePendingUpload(requestId, {
+        context: {
+          phase: "manual-delete",
+          reason: "manual-delete",
+        },
+      });
+      return {
+        deleted: true,
+        requestId,
+      };
+    }
+    throw new Error(`알 수 없는 로컬 queue sandbox action: ${normalizedAction || "(empty)"}`);
+  }
+
   function syncWorkspaceDebugApi() {
     const debugApi = global.__INOVA_HOSTED_MEETING_DEBUG__ = global.__INOVA_HOSTED_MEETING_DEBUG__ || {};
     debugApi.queueState = buildPendingUploadQueueStateSnapshot;
+    debugApi.queueSandbox = {
+      active: () => Boolean(state.debugLocalQueueSandbox),
+      clear: clearDebugLocalQueueSandboxPendingUploads,
+      runAction: runDebugLocalQueueSandboxAction,
+      seedPending: seedDebugLocalQueueSandboxPendingUpload,
+    };
     debugApi.queueValidation = {
       check: validatePendingUploadQueueScenario,
     };

@@ -25,6 +25,23 @@ __INOVA_HOSTED_MEETING_DEBUG__.queueState()
 __INOVA_HOSTED_MEETING_DEBUG__.queueValidation.check("queue-load-indexeddb-read")
 ```
 
+sandbox에서 로컬 pending 항목을 빠르게 만들고 비우려면 아래 helper를 함께 쓴다.
+
+```js
+await __INOVA_HOSTED_MEETING_DEBUG__.queueSandbox.clear();
+await __INOVA_HOSTED_MEETING_DEBUG__.queueSandbox.seedPending();
+await __INOVA_HOSTED_MEETING_DEBUG__.queueSandbox.runAction("hold");
+```
+
+## 최근 검증 기록
+
+- 2026-04-03 Chrome localhost sandbox (`http://127.0.0.1:5000/meeting/index.html?debug=1&debugQueueSandbox=1`)에서 아래 시나리오를 재현 확인했다.
+- 통과:
+  - `queue-load-indexeddb-read`
+  - `queue-persist-indexeddb-write`
+  - `queue-cleanup-indexeddb-delete`
+- 각 시나리오는 `__INOVA_HOSTED_MEETING_DEBUG__.queueValidation.check(...)`가 `passed: true`를 반환하는지까지 함께 확인했다.
+
 ## 자주 쓰는 시나리오
 
 ### 1. queue load degraded
@@ -46,13 +63,15 @@ location.reload();
 
 ```js
 __INOVA_HOSTED_MEETING_DEBUG__.queueFaults.arm("queue-persist-indexeddb-write");
+await __INOVA_HOSTED_MEETING_DEBUG__.queueSandbox.clear();
+await __INOVA_HOSTED_MEETING_DEBUG__.queueSandbox.seedPending();
 ```
 
 그 다음 아래 중 하나를 1회 실행한다.
 
-- 로컬 pending 기록 이름 변경
-- 로컬 pending 기록 `보류`
-- 로컬 pending 기록 `재개`
+- `await __INOVA_HOSTED_MEETING_DEBUG__.queueSandbox.runAction("rename", { title: "sandbox renamed" })`
+- `await __INOVA_HOSTED_MEETING_DEBUG__.queueSandbox.runAction("hold")`
+- `await __INOVA_HOSTED_MEETING_DEBUG__.queueSandbox.runAction("resume")`
 
 기대 결과:
 
@@ -70,7 +89,7 @@ __INOVA_HOSTED_MEETING_DEBUG__.queueFaults.arm("queue-cleanup-indexeddb-delete")
 
 그 다음 아래 중 하나를 1회 실행한다.
 
-- 로컬 pending 기록 삭제
+- `await __INOVA_HOSTED_MEETING_DEBUG__.queueSandbox.runAction("delete")`
 - 작업실 전체 삭제
 
 기대 결과:
@@ -100,5 +119,6 @@ __INOVA_HOSTED_MEETING_DEBUG__.clearFault();
 
 - `queueFaults.arm(...)`은 기본적으로 다음 1회만 실패를 주입한다.
 - `debugQueueSandbox=1` localhost 모드에서는 panel/session 없이도 queue load/persist/cleanup 검증을 반복할 수 있고, 원격 refresh/retry는 일부러 건너뛴다.
+- sandbox에서 브라우저 queue를 바로 만들려면 `queueSandbox.seedPending()`, 초기화하려면 `queueSandbox.clear()`, 상태 변경은 `queueSandbox.runAction(...)`을 쓴다.
 - 낮은 레벨 fault key가 필요하면 `__INOVA_HOSTED_MEETING__.storage.DEBUG_FAULTS`와 `__INOVA_HOSTED_MEETING_DEBUG__.setFault(name, count)`를 직접 사용할 수 있다.
 - 이 문서의 목표는 `M3 hosted fallback / storage / queue degraded hardening`의 실제 Chrome 수동 검증 속도를 올리는 것이다.

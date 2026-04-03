@@ -33,15 +33,16 @@
 | --- | --- | ---: | ---: | --- |
 | M1 | feature-first boundary / docs baseline | 15 | 100 | feature-first 문서, 라우팅 기준, AGENTS 경계가 기준선으로 정착 |
 | M2 | meeting render-contract / surface alignment | 25 | 75 | panel/hosted meeting 공통 render contract 정리와 수동 UI 확인 종료 |
-| M3 | hosted fallback / storage / queue degraded hardening | 20 | 75 | hosted session/storage/queue degraded surfacing 정리와 수동 failure 확인 종료 |
+| M3 | hosted fallback / storage / queue degraded hardening | 20 | 100 | hosted session/storage/queue degraded surfacing 정리와 수동 failure 확인 종료 |
 | M4 | prompt feature boundary cleanup | 20 | 0 | prompt 계열 shell/feature 경계 정리와 관련 문서 갱신 종료 |
 | M5 | release + shared/platform fallback alignment | 10 | 50 | release와 shared/platform fallback 기준을 silent fallback 없이 맞춤 |
 | M6 | manual browser validation + closeout docs | 10 | 0 | 실제 Chrome 검증과 마감 문서 정리 종료 |
 
 ### 현재 기준선
 
-- 시작 기준선: `54%`
-- 계산 근거: `M1 100 / M2 75 / M3 75 / M4 0 / M5 50 / M6 0`
+- 현재 공식 진행률: `59%`
+- 계산 근거: `M1 100 / M2 75 / M3 100 / M4 0 / M5 50 / M6 0`
+- `M3`는 2026-04-03 localhost Chrome queue sandbox에서 `queue-load-indexeddb-read`, `queue-persist-indexeddb-write`, `queue-cleanup-indexeddb-delete` 통과로 완료 처리했다.
 - 현재 active track: `meeting`
 
 ## 한 턴에 1~3개 안전 단위를 묶을 수 있는 조건
@@ -79,7 +80,7 @@
 `진행률` 형식은 아래로 고정한다.
 
 ```text
-진행률: 54% (repo-wide roadmap 기준, M1 100 / M2 75 / M3 75 / M4 0 / M5 50 / M6 0)
+진행률: 59% (repo-wide roadmap 기준, M1 100 / M2 75 / M3 100 / M4 0 / M5 50 / M6 0)
 ```
 
 - milestone state가 바뀐 턴에는 같은 커밋 안에서 이 문서의 표도 함께 갱신한다.
@@ -89,4 +90,4 @@
 
 - 새 세션이나 새 작업자가 들어오면 이 문서와 `docs/feature-routing.md`를 먼저 본다.
 - 현재 active track이 `meeting`이라도, 진행률은 전체 로드맵 기준으로만 읽는다.
-- 실제 Chrome 수동 검증이 남아 있는 milestone은 `75` 이상에서 멈춘 상태로 본다.
+- 실제 Chrome 수동 검증이 남아 있는 milestone은 `75` 이상에서 멈춘 상태로 본다. 현재 이 기준으로 남아 있는 큰 축은 `M2`, `M6`다.
