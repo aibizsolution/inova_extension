@@ -196,6 +196,7 @@ function registerMeetingHandlers(deps) {
   const uploadInovaMeetingSource = onRequest({
     concurrency: 1,
     cors: CORS_ORIGINS,
+    maxInstances: 40,
     memory: "1GiB",
     region: REGION,
     timeoutSeconds: 120,
