@@ -1491,38 +1491,28 @@
     }
   }
 
-  function buildPendingUploadRemoteTransition(pending, remoteState, options = {}) {
-    const action = normalizeText(options?.action) || "sync";
+  function buildPendingUploadRemoteMutationTransition(pending, remoteState, options = {}) {
+    const action = normalizeText(options?.action);
+    if (!["single-start", "chunk-start", "chunk-publish"].includes(action)) {
+      throw new Error("원격 mutation action이 없어 업로드 결과를 안전하게 확정할 수 없어요.");
+    }
     const awaitingMoreUploads = Boolean(options?.awaitingMoreUploads);
     const remoteStatus = normalizeText(remoteState?.status);
     const nextJobId = normalizeText(remoteState?.jobId || pending?.jobId);
     const nextUpdatedAt = normalizeText(remoteState?.updatedAt || pending?.updatedAt);
     const nextError = normalizeText(remoteState?.error || pending?.lastError);
-    const mutatesRemoteInput = ["single-start", "chunk-start", "chunk-publish"].includes(action);
     const uploadedPartCount = Math.max(0, Number(pending?.uploadedPartCount) || 0);
-    const publishedPartCount = normalizeText(pending?.sourceMode) === "chunked"
-      ? Math.min(uploadedPartCount, Math.max(0, Number(pending?.publishedPartCount) || 0))
-      : 0;
-    const nextPublishedPartCount = normalizeText(pending?.sourceMode) === "chunked"
-      ? ((mutatesRemoteInput || (remoteStatus === "succeeded" && !awaitingMoreUploads))
-        ? uploadedPartCount
-        : publishedPartCount)
-      : 0;
 
     if (!remoteStatus) {
       return {
-        errorMessage: mutatesRemoteInput
-          ? "원격 작업 생성 응답에 상태가 없어 업로드 결과를 확정할 수 없어요."
-          : "원격 작업 상태가 비어 있어 브라우저 보관 큐를 그대로 유지합니다.",
+        errorMessage: "원격 작업 생성 응답에 상태가 없어 업로드 결과를 확정할 수 없어요.",
         remoteStatus,
       };
     }
 
     if (!nextJobId) {
       return {
-        errorMessage: mutatesRemoteInput
-          ? `원격 작업 생성 응답 상태(${remoteStatus})에 jobId가 없어 업로드 결과를 확정할 수 없어요.`
-          : `원격 작업 상태(${remoteStatus})에 jobId가 없어 브라우저 보관 큐를 그대로 유지합니다.`,
+        errorMessage: `원격 작업 생성 응답 상태(${remoteStatus})에 jobId가 없어 업로드 결과를 확정할 수 없어요.`,
         remoteStatus,
       };
     }
@@ -1532,8 +1522,8 @@
         nextPending: normalizePendingUpload({
           ...pending,
           jobId: nextJobId,
-          lastError: mutatesRemoteInput ? "" : nextError,
-          publishedPartCount: nextPublishedPartCount,
+          lastError: "",
+          publishedPartCount: normalizeText(pending?.sourceMode) === "chunked" ? uploadedPartCount : 0,
           status: awaitingMoreUploads
             ? "uploading_chunks"
             : remoteStatus === "processing"
@@ -1544,9 +1534,7 @@
         }),
         nextSelectedRecordId: nextJobId ? buildRemoteSelectionId(nextJobId) : "",
         outcome: "active",
-        resolution: mutatesRemoteInput
-          ? (action === "chunk-publish" ? "published" : "started")
-          : "reconciled",
+        resolution: action === "chunk-publish" ? "published" : "started",
         resetChunkCache: "",
       };
     }
@@ -1576,12 +1564,94 @@
     }
 
     if (remoteStatus === "failed") {
-      if (mutatesRemoteInput) {
+      return {
+        errorMessage: nextError || "원격 작업이 시작 직후 실패해 업로드를 이어갈 수 없어요.",
+        remoteStatus,
+      };
+    }
+
+    return {
+      errorMessage: `원격 작업 생성 응답 상태(${remoteStatus})를 이해하지 못해 업로드 결과를 확정할 수 없어요.`,
+      remoteStatus,
+    };
+  }
+
+  function buildPendingUploadRemoteReconcileTransition(pending, remoteState, options = {}) {
+    const action = normalizeText(options?.action) || "sync";
+    if (!["sync", "chunk-resync"].includes(action)) {
+      throw new Error("원격 reconcile action이 없어 브라우저 보관 상태를 안전하게 유지할 수 없어요.");
+    }
+    const awaitingMoreUploads = Boolean(options?.awaitingMoreUploads);
+    const remoteStatus = normalizeText(remoteState?.status);
+    const nextJobId = normalizeText(remoteState?.jobId || pending?.jobId);
+    const nextUpdatedAt = normalizeText(remoteState?.updatedAt || pending?.updatedAt);
+    const nextError = normalizeText(remoteState?.error || pending?.lastError);
+    const uploadedPartCount = Math.max(0, Number(pending?.uploadedPartCount) || 0);
+    const publishedPartCount = normalizeText(pending?.sourceMode) === "chunked"
+      ? Math.min(uploadedPartCount, Math.max(0, Number(pending?.publishedPartCount) || 0))
+      : 0;
+
+    if (!remoteStatus) {
+      return {
+        errorMessage: "원격 작업 상태가 비어 있어 브라우저 보관 큐를 그대로 유지합니다.",
+        remoteStatus,
+      };
+    }
+
+    if (!nextJobId) {
+      return {
+        errorMessage: `원격 작업 상태(${remoteStatus})에 jobId가 없어 브라우저 보관 큐를 그대로 유지합니다.`,
+        remoteStatus,
+      };
+    }
+
+    if (remoteStatus === "processing" || remoteStatus === "queued") {
+      return {
+        nextPending: normalizePendingUpload({
+          ...pending,
+          jobId: nextJobId,
+          lastError: nextError,
+          publishedPartCount,
+          status: awaitingMoreUploads
+            ? "uploading_chunks"
+            : remoteStatus === "processing"
+              ? "remote_processing"
+              : "remote_queued",
+          storageObject: pending.storageObject,
+          updatedAt: nextUpdatedAt,
+        }),
+        nextSelectedRecordId: nextJobId ? buildRemoteSelectionId(nextJobId) : "",
+        outcome: "active",
+        resolution: "reconciled",
+        resetChunkCache: "",
+      };
+    }
+
+    if (remoteStatus === "succeeded") {
+      if (awaitingMoreUploads) {
         return {
-          errorMessage: nextError || "원격 작업이 시작 직후 실패해 업로드를 이어갈 수 없어요.",
+          errorMessage: "남은 chunk 업로드가 끝나기 전에 원격 작업이 완료 상태로 응답해 브라우저 보관 상태를 안전하게 정리할 수 없어요.",
           remoteStatus,
         };
       }
+      return {
+        nextPending: normalizePendingUpload({
+          ...pending,
+          hold: false,
+          jobId: nextJobId,
+          lastError: "",
+          publishedPartCount: normalizeText(pending?.sourceMode) === "chunked" ? uploadedPartCount : 0,
+          status: "succeeded",
+          updatedAt: nextUpdatedAt,
+        }),
+        nextSelectedRecordId: nextJobId ? buildRemoteSelectionId(nextJobId) : "",
+        outcome: "succeeded",
+        resolution: "completed",
+        resetChunkCache: "clear",
+      };
+    }
+
+    if (remoteStatus === "failed") {
       return {
         nextPending: normalizePendingUpload({
           ...pending,
@@ -1605,9 +1675,7 @@
     }
 
     return {
-      errorMessage: mutatesRemoteInput
-        ? `원격 작업 생성 응답 상태(${remoteStatus})를 이해하지 못해 업로드 결과를 확정할 수 없어요.`
-        : `원격 작업 상태(${remoteStatus})를 이해하지 못해 브라우저 보관 큐를 그대로 유지합니다.`,
+      errorMessage: `원격 작업 상태(${remoteStatus})를 이해하지 못해 브라우저 보관 큐를 그대로 유지합니다.`,
       remoteStatus,
     };
   }
@@ -1647,7 +1715,7 @@
   }
 
   async function applyPendingUploadRemoteSnapshotState(pending, remoteState) {
-    const transition = buildPendingUploadRemoteTransition(pending, remoteState, {
+    const transition = buildPendingUploadRemoteReconcileTransition(pending, remoteState, {
       action: "sync",
     });
     if (!transition?.nextPending) {
@@ -2828,7 +2896,7 @@
     });
     const allChunksUploaded = normalizeText(item?.sourceMode) !== "chunked"
       || Math.max(0, Number(item?.uploadedPartCount) || 0) >= Math.max(0, Number(item?.preparedPartCount) || 0);
-    const transition = buildPendingUploadRemoteTransition(item, createdJob, {
+    const transition = buildPendingUploadRemoteMutationTransition(item, createdJob, {
       action: transitionAction,
       awaitingMoreUploads: !allChunksUploaded,
     });
@@ -2945,7 +3013,7 @@
     });
     const createdJob = await requestPendingUploadRemoteState(item);
     const allChunksUploaded = Math.max(0, Number(item?.uploadedPartCount) || 0) >= Math.max(0, Number(item?.preparedPartCount) || 0);
-    const transition = buildPendingUploadRemoteTransition(item, createdJob, {
+    const transition = buildPendingUploadRemoteMutationTransition(item, createdJob, {
       action: transitionAction,
       awaitingMoreUploads: !allChunksUploaded,
     });
@@ -3009,7 +3077,7 @@
       return { createdJob: null, degraded: true, pending: item, resolution: "" };
     }
     const allChunksUploaded = Math.max(0, Number(item?.uploadedPartCount) || 0) >= Math.max(0, Number(item?.preparedPartCount) || 0);
-    const transition = buildPendingUploadRemoteTransition(item, createdJob, {
+    const transition = buildPendingUploadRemoteReconcileTransition(item, createdJob, {
       action: transitionAction,
       awaitingMoreUploads: !allChunksUploaded,
     });
