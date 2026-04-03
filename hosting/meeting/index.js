@@ -2854,7 +2854,7 @@
     }
   }
 
-  async function buildCreateJobPayload(item, options = {}) {
+  async function buildPendingUploadRemoteMutationPayload(item, options = {}) {
     const extension = inferAudioExtension(normalizeText(item.mimeType || item.blob?.type));
     const fileName = `${state.session.meetingId || "meeting"}-${item.requestId}.${extension}`;
     const source = {
@@ -2900,14 +2900,74 @@
     };
   }
 
-  async function requestPendingUploadRemoteState(item, options = {}) {
-    const created = await postJson(global, CONFIG.createJobUrl, await buildCreateJobPayload(item, {
+  function buildChunkedPendingUploadRemoteReconcilePayload(item) {
+    if (normalizeText(item?.sourceMode) !== "chunked") {
+      throw new Error("chunked source만 원격 상태 재조정 요청으로 다시 확인할 수 있어요.");
+    }
+    if (!normalizeText(item?.jobId)) {
+      throw new Error("기존 원격 작업 없이 chunk 상태 재조정을 요청할 수 없어요.");
+    }
+    if (!Array.isArray(item?.parts) || item.parts.length < 1) {
+      throw new Error("chunk source 정보가 없어 원격 상태 재조정을 안전하게 요청할 수 없어요.");
+    }
+    const extension = inferAudioExtension(normalizeText(item.mimeType || item.blob?.type));
+    const fileName = `${state.session.meetingId || "meeting"}-${item.requestId}.${extension}`;
+    return {
+      meeting: {
+        endedAt: item.endedAt,
+        language: "ko",
+        meetingId: state.session.meetingId,
+        sharedMemo: item.sharedMemoSnapshot,
+        startedAt: item.startedAt,
+        title: getWorkspaceTitleOrFallback(),
+      },
+      options: { redaction: "none", speakerLabels: true, summary: true },
+      source: {
+        captureMode: item.captureMode,
+        channelCount: item.channelCount,
+        durationMs: item.durationMs,
+        fileName,
+        mimeType: item.mimeType,
+        mode: "chunked",
+        originalSizeBytes: Math.max(0, Number(item.originalSizeBytes) || Number(item.sizeBytes) || Number(item.blob?.size) || 0),
+        parts: item.parts.map((part) => ({
+          endMs: Math.max(0, Number(part.endMs) || 0),
+          index: Math.max(0, Number(part.index) || 0),
+          mimeType: "audio/wav",
+          overlapMs: Math.max(0, Number(part.overlapMs) || 0),
+          requestId: normalizeText(part.requestId),
+          sizeBytes: Math.max(0, Number(part.sizeBytes) || 0),
+          startMs: Math.max(0, Number(part.startMs) || 0),
+          storageObject: normalizeText(part.storageObject),
+          uploadStatus: normalizeText(part.uploadStatus),
+        })),
+        requestId: item.requestId,
+        sizeBytes: Math.max(0, Number(item.originalSizeBytes) || Number(item.sizeBytes) || Number(item.blob?.size) || 0),
+        uploadStatus: normalizeText(item.uploadStatus),
+      },
+      context: { sharedMemoSnapshot: item.sharedMemoSnapshot },
+    };
+  }
+
+  async function requestPendingUploadRemoteMutationState(item, options = {}) {
+    const response = await postJson(global, CONFIG.createJobUrl, await buildPendingUploadRemoteMutationPayload(item, {
       allowInlineSource: Boolean(options?.allowInlineSource),
       inlineSourceError: normalizeText(options?.inlineSourceError),
     }), state.session.meetingSessionToken, {
       timeoutMs: DEFAULT_CREATE_JOB_TIMEOUT_MS,
     });
-    return normalizeJob(created?.job, item.meetingTitleSnapshot);
+    return normalizeJob(response?.job, item.meetingTitleSnapshot);
+  }
+
+  async function requestChunkedPendingUploadRemoteReconcileState(item) {
+    const response = await postJson(
+      global,
+      CONFIG.createJobUrl,
+      buildChunkedPendingUploadRemoteReconcilePayload(item),
+      state.session.meetingSessionToken,
+      { timeoutMs: DEFAULT_CREATE_JOB_TIMEOUT_MS }
+    );
+    return normalizeJob(response?.job, item.meetingTitleSnapshot);
   }
 
   async function commitPendingUploadRemoteStartTransition(item, createdJob, options = {}) {
@@ -2985,7 +3045,7 @@
     if (normalizeText(item?.sourceMode) === "chunked") {
       throw new Error("chunked source는 single 원격 시작 경로로 보낼 수 없어요.");
     }
-    const createdJob = await requestPendingUploadRemoteState(item, {
+    const createdJob = await requestPendingUploadRemoteMutationState(item, {
       allowInlineSource: Boolean(options?.allowInlineSource),
       inlineSourceError: normalizeText(options?.inlineSourceError),
     });
@@ -3011,7 +3071,7 @@
     if (Math.max(0, Number(item?.uploadedPartCount) || 0) < 1) {
       throw new Error("올라간 청크 없이 원격 chunk 작업을 시작할 수 없어요.");
     }
-    const createdJob = await requestPendingUploadRemoteState(item);
+    const createdJob = await requestPendingUploadRemoteMutationState(item);
     const result = await commitPendingUploadRemoteStartTransition(item, createdJob, options);
     if (normalizeText(options?.noticeText)) {
       setNotice(normalizeText(options.noticeText), "highlight");
@@ -3035,7 +3095,7 @@
       requestId: item?.requestId,
       ...(options?.context || {}),
     });
-    const createdJob = await requestPendingUploadRemoteState(item);
+    const createdJob = await requestPendingUploadRemoteMutationState(item);
     const allChunksUploaded = Math.max(0, Number(item?.uploadedPartCount) || 0) >= Math.max(0, Number(item?.preparedPartCount) || 0);
     const transition = buildPendingUploadRemoteMutationTransition(item, createdJob, {
       action: transitionAction,
@@ -3081,9 +3141,9 @@
       requestId: item?.requestId,
       ...(options?.context || {}),
     });
-    let createdJob = null;
+    let remoteState = null;
     try {
-      createdJob = await requestPendingUploadRemoteState(item);
+      remoteState = await requestChunkedPendingUploadRemoteReconcileState(item);
     } catch (error) {
       const degradedMessage = error instanceof Error
         ? `${error.message} 브라우저 보관 상태는 그대로 두고 다음 동기화에서 원격 상태를 다시 확인합니다.`
@@ -3099,7 +3159,7 @@
       return { createdJob: null, degraded: true, pending: item, resolution: "" };
     }
     const allChunksUploaded = Math.max(0, Number(item?.uploadedPartCount) || 0) >= Math.max(0, Number(item?.preparedPartCount) || 0);
-    const transition = buildPendingUploadRemoteReconcileTransition(item, createdJob, {
+    const transition = buildPendingUploadRemoteReconcileTransition(item, remoteState, {
       action: transitionAction,
       awaitingMoreUploads: !allChunksUploaded,
     });
@@ -3108,13 +3168,13 @@
       logDebug("workspace.pending-upload.remote-reconcile.degraded", {
         action: transitionAction,
         error: transitionErrorMessage,
-        jobId: normalizeText(createdJob?.jobId || item?.jobId),
+        jobId: normalizeText(remoteState?.jobId || item?.jobId),
         remoteStatus: normalizeText(transition?.remoteStatus),
         requestId: normalizeText(item?.requestId),
       });
       setNotice(transitionErrorMessage, "warning");
       applyRender();
-      return { createdJob, degraded: true, pending: item, resolution: "" };
+      return { createdJob: remoteState, degraded: true, pending: item, resolution: "" };
     }
     const nextPending = await commitPendingUploadRemoteReconcileTransition(item, transition, {
       queueContext,
@@ -3124,14 +3184,14 @@
       action: transitionAction,
       jobId: normalizeText(nextPending?.jobId),
       publishedPartCount: Math.max(0, Number(nextPending?.publishedPartCount) || 0),
-      remoteStatus: normalizeText(createdJob?.status),
+      remoteStatus: normalizeText(remoteState?.status),
       requestId: normalizeText(nextPending?.requestId),
       resolution,
       status: normalizeText(nextPending?.status),
       uploadedPartCount: Math.max(0, Number(nextPending?.uploadedPartCount) || 0),
     });
     return {
-      createdJob,
+      createdJob: remoteState,
       degraded: false,
       pending: nextPending,
       resolution,
