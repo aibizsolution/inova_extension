@@ -3235,18 +3235,18 @@
       requestId: item?.requestId,
       ...(options?.context || {}),
     });
-    const createdJob = await requestPendingUploadRemoteMutationState(item);
+    const remoteJob = await requestPendingUploadRemoteMutationState(item);
     const allChunksUploaded = Math.max(0, Number(item?.uploadedPartCount) || 0) >= Math.max(0, Number(item?.preparedPartCount) || 0);
-    const transition = buildPendingUploadRemotePublishTransition(item, createdJob, {
+    const transition = buildPendingUploadRemotePublishTransition(item, remoteJob, {
       action: transitionAction,
       awaitingMoreUploads: !allChunksUploaded,
     });
     if (!transition?.nextPending) {
       const transitionErrorMessage = normalizeText(transition?.errorMessage) || "원격 작업 상태를 확인하지 못해 추가 청크 반영을 이어갈 수 없어요.";
-      logDebug("workspace.pending-upload.remote-create.invalid-status", {
+      logDebug("workspace.pending-upload.chunk-publish.invalid-status", {
         action: transitionAction,
         error: transitionErrorMessage,
-        jobId: normalizeText(createdJob?.jobId || item?.jobId),
+        jobId: normalizeText(remoteJob?.jobId || item?.jobId),
         remoteStatus: normalizeText(transition?.remoteStatus),
         requestId: normalizeText(item?.requestId),
       });
@@ -3256,18 +3256,18 @@
       queueContext,
     });
     const resolution = normalizeText(transition?.resolution);
-    logDebug("workspace.pending-upload.remote-transition.applied", {
+    logDebug("workspace.pending-upload.chunk-publish.applied", {
       action: transitionAction,
       jobId: normalizeText(nextPending?.jobId),
       publishedPartCount: Math.max(0, Number(nextPending?.publishedPartCount) || 0),
-      remoteStatus: normalizeText(createdJob?.status),
+      remoteStatus: normalizeText(remoteJob?.status),
       requestId: normalizeText(nextPending?.requestId),
       resolution,
       status: normalizeText(nextPending?.status),
       uploadedPartCount: Math.max(0, Number(nextPending?.uploadedPartCount) || 0),
     });
     return {
-      createdJob,
+      remoteJob,
       degraded: false,
       pending: nextPending,
       resolution,
@@ -3290,7 +3290,7 @@
       const degradedMessage = error instanceof Error
         ? `${error.message} 브라우저 보관 상태는 그대로 두고 다음 동기화에서 원격 상태를 다시 확인합니다.`
         : "원격 작업 상태를 다시 확인하지 못해 브라우저 보관 상태를 그대로 유지합니다.";
-      logDebug("workspace.pending-upload.remote-reconcile.degraded", {
+      logDebug("workspace.pending-upload.chunk-resync.degraded", {
         action: transitionAction,
         error,
         jobId: normalizeText(item?.jobId),
@@ -3298,7 +3298,7 @@
       });
       setNotice(degradedMessage, "warning");
       applyRender();
-      return { createdJob: null, degraded: true, pending: item, resolution: "" };
+      return { degraded: true, pending: item, remoteState: null, resolution: "" };
     }
     const allChunksUploaded = Math.max(0, Number(item?.uploadedPartCount) || 0) >= Math.max(0, Number(item?.preparedPartCount) || 0);
     const transition = buildPendingUploadRemoteReconcileTransition(item, remoteState, {
@@ -3307,7 +3307,7 @@
     });
     if (!transition?.nextPending) {
       const transitionErrorMessage = normalizeText(transition?.errorMessage) || "원격 작업 상태를 다시 확인하지 못해 브라우저 보관 상태를 그대로 유지합니다.";
-      logDebug("workspace.pending-upload.remote-reconcile.degraded", {
+      logDebug("workspace.pending-upload.chunk-resync.degraded", {
         action: transitionAction,
         error: transitionErrorMessage,
         jobId: normalizeText(remoteState?.jobId || item?.jobId),
@@ -3316,13 +3316,13 @@
       });
       setNotice(transitionErrorMessage, "warning");
       applyRender();
-      return { createdJob: remoteState, degraded: true, pending: item, resolution: "" };
+      return { degraded: true, pending: item, remoteState, resolution: "" };
     }
     const nextPending = await commitPendingUploadRemoteReconcileTransition(item, transition, {
       queueContext,
     });
     const resolution = normalizeText(transition?.resolution);
-    logDebug("workspace.pending-upload.remote-transition.applied", {
+    logDebug("workspace.pending-upload.chunk-resync.applied", {
       action: transitionAction,
       jobId: normalizeText(nextPending?.jobId),
       publishedPartCount: Math.max(0, Number(nextPending?.publishedPartCount) || 0),
@@ -3333,9 +3333,9 @@
       uploadedPartCount: Math.max(0, Number(nextPending?.uploadedPartCount) || 0),
     });
     return {
-      createdJob: remoteState,
       degraded: false,
       pending: nextPending,
+      remoteState,
       resolution,
     };
   }
