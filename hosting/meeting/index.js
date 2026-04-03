@@ -2517,7 +2517,7 @@
         noticeText: shouldStartRemoteJob
           ? "첫 청크를 올려 자동 전사를 바로 시작했습니다. 남은 청크를 이어서 업로드합니다."
           : "",
-        transitionKind: "mutation",
+        transitionKind: shouldStartRemoteJob ? "start" : "publish",
         transitionAction: shouldStartRemoteJob ? "chunk-start" : "chunk-publish",
       };
     }
@@ -2583,7 +2583,7 @@
       const bootstrapPart = findMissingPreparedParts(nextPending)[0];
       if (bootstrapPart) {
         nextPending = await uploadPreparedPart(nextPending, bootstrapPart);
-        const bootstrapResult = await applyPendingUploadRemoteMutation(nextPending, {
+        const bootstrapResult = await startPendingUploadRemoteJob(nextPending, {
           context: buildAttemptQueueContext(activeRequestId, "chunk-remote-job-start"),
           noticeText: "첫 청크를 올려 자동 전사를 바로 시작했습니다. 남은 청크를 이어서 업로드합니다.",
           syncWorkspace: false,
@@ -2605,13 +2605,18 @@
     });
     if (remoteReconcileRequest) {
       const reconcileResult = await (
-        remoteReconcileRequest.transitionKind === "mutation"
-          ? applyPendingUploadRemoteMutation(nextPending, {
+        remoteReconcileRequest.transitionKind === "start"
+          ? startPendingUploadRemoteJob(nextPending, {
             context: buildAttemptQueueContext(activeRequestId, remoteReconcileRequest.contextPhase),
             noticeText: remoteReconcileRequest.noticeText,
             syncWorkspace: false,
             transitionAction: remoteReconcileRequest.transitionAction,
           })
+          : remoteReconcileRequest.transitionKind === "publish"
+            ? publishPendingUploadRemoteChunks(nextPending, {
+              context: buildAttemptQueueContext(activeRequestId, remoteReconcileRequest.contextPhase),
+              transitionAction: remoteReconcileRequest.transitionAction,
+            })
           : reconcileChunkedPendingUploadRemoteState(nextPending, {
             context: buildAttemptQueueContext(activeRequestId, remoteReconcileRequest.contextPhase),
             transitionAction: remoteReconcileRequest.transitionAction,
@@ -2671,7 +2676,7 @@
         applyRender();
       }
     }
-    return (await applyPendingUploadRemoteMutation(nextPending, {
+    return (await startPendingUploadRemoteJob(nextPending, {
       allowInlineSource,
       context: buildAttemptQueueContext(activeRequestId, "single-remote-job-start"),
       inlineSourceError,
@@ -2811,11 +2816,11 @@
     return normalizeJob(created?.job, item.meetingTitleSnapshot);
   }
 
-  async function applyPendingUploadRemoteMutation(item, options = {}) {
+  async function startPendingUploadRemoteJob(item, options = {}) {
     const previousJobId = normalizeText(item?.jobId);
     const transitionAction = normalizeText(options?.transitionAction);
-    if (!["single-start", "chunk-start", "chunk-publish"].includes(transitionAction)) {
-      throw new Error("원격 mutation action이 없어 업로드 결과를 안전하게 확정할 수 없어요.");
+    if (!["single-start", "chunk-start"].includes(transitionAction)) {
+      throw new Error("원격 시작 action이 없어 업로드 결과를 안전하게 확정할 수 없어요.");
     }
     const queueContext = normalizePendingUploadQueueContext({
       requestId: item?.requestId,
@@ -2883,6 +2888,57 @@
     if (options?.syncWorkspace) {
       await syncWorkspaceLocalState(false, "workflow");
     }
+    return {
+      createdJob,
+      degraded: false,
+      pending: nextPending,
+      resolution,
+    };
+  }
+
+  async function publishPendingUploadRemoteChunks(item, options = {}) {
+    const transitionAction = normalizeText(options?.transitionAction);
+    if (transitionAction !== "chunk-publish") {
+      throw new Error("원격 chunk publish action이 없어 추가 청크 반영 결과를 안전하게 확정할 수 없어요.");
+    }
+    if (!normalizeText(item?.jobId)) {
+      throw new Error("기존 원격 작업 없이 추가 청크 publish를 이어갈 수 없어요.");
+    }
+    const queueContext = normalizePendingUploadQueueContext({
+      requestId: item?.requestId,
+      ...(options?.context || {}),
+    });
+    const createdJob = await requestPendingUploadRemoteState(item);
+    const allChunksUploaded = Math.max(0, Number(item?.uploadedPartCount) || 0) >= Math.max(0, Number(item?.preparedPartCount) || 0);
+    const transition = buildPendingUploadRemoteTransition(item, createdJob, {
+      action: transitionAction,
+      awaitingMoreUploads: !allChunksUploaded,
+    });
+    if (!transition?.nextPending) {
+      const transitionErrorMessage = normalizeText(transition?.errorMessage) || "원격 작업 상태를 확인하지 못해 추가 청크 반영을 이어갈 수 없어요.";
+      logDebug("workspace.pending-upload.remote-create.invalid-status", {
+        action: transitionAction,
+        error: transitionErrorMessage,
+        jobId: normalizeText(createdJob?.jobId || item?.jobId),
+        remoteStatus: normalizeText(transition?.remoteStatus),
+        requestId: normalizeText(item?.requestId),
+      });
+      throw new Error(transitionErrorMessage);
+    }
+    const nextPending = await commitPendingUploadRemoteTransition(item, transition, {
+      queueContext,
+    });
+    const resolution = normalizeText(transition?.resolution);
+    logDebug("workspace.pending-upload.remote-transition.applied", {
+      action: transitionAction,
+      jobId: normalizeText(nextPending?.jobId),
+      publishedPartCount: Math.max(0, Number(nextPending?.publishedPartCount) || 0),
+      remoteStatus: normalizeText(createdJob?.status),
+      requestId: normalizeText(nextPending?.requestId),
+      resolution,
+      status: normalizeText(nextPending?.status),
+      uploadedPartCount: Math.max(0, Number(nextPending?.uploadedPartCount) || 0),
+    });
     return {
       createdJob,
       degraded: false,
