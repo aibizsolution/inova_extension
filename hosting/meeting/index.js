@@ -335,12 +335,25 @@
 
   function restoreWorkspaceSession() {
     const restored = loadPersistedWorkspaceSession(global, normalizeText(state.params.meetingId), state.params.workspaceToken, state.params.jobId);
+    const restoreIssues = Array.isArray(restored?.issues) ? restored.issues : [];
+    const degradedReason = normalizeText(restored?.degradedReason);
     logDebug("workspace.session.restore", {
+      degradedReason,
       hasRestoredPayload: Boolean(restored?.payload),
+      issueCodes: restoreIssues.map((issue) => normalizeText(issue?.code)).filter(Boolean),
+      issueCount: restoreIssues.length,
       meetingId: state.params.meetingId,
       source: restored?.source || "",
       workspaceToken: Boolean(state.params.workspaceToken),
     });
+    if (degradedReason) {
+      logDebug("workspace.session.restore.degraded", {
+        degradedReason,
+        issues: restoreIssues,
+        meetingId: state.params.meetingId,
+        source: restored?.source || "",
+      });
+    }
     if (!restored?.payload) return;
     const parsed = restored.payload;
     state.mode = normalizeText(parsed?.mode) === "detail" ? "detail" : "create";
