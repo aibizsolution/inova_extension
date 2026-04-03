@@ -50,7 +50,7 @@
   - 디버그 상태 바에서 `오류 n건`은 별도 경고 톤으로 강조해, 이상 징후가 있을 때 바로 눈에 띄게 표시합니다.
   - hosted 작업실 디버그 상태 바도 패널과 같은 `로그/함수/읽기/스냅샷/오류` 개별 배지 구조와 공통 요약 카운트를 사용합니다.
   - hosted `meeting/shared.js`도 패널과 같은 디버그 복사/오류 필터/요약 helper 계약을 함께 내보내서, blocked/bootstrap 실패 화면에서도 디버그 패널이 먼저 살아 있도록 유지합니다.
-  - hosted 작업실 세션/큐 degraded 경고는 `저장값 없음`, `session/local storage 접근 실패`, `파싱 실패`, `저장 실패`, `삭제 실패`, `stale refresh`를 같은 결과로 뭉개지 않고, 명시적 code/priority registry와 공통 diagnostics consumer를 기준으로 우선순위가 있는 scoped warning UI와 디버그 로그에서 구분해 보여줍니다. 로컬 업로드 큐 read 실패는 작업실 shell 전체를 바로 막지 않고 degraded 상태로 계속 진행하고, failed/stalled 기록 재시작 도중에도 새 retry 항목 저장이 확인되기 전에는 기존 로컬 항목을 지우지 않도록 같은 cleanup 경계에서 정리합니다.
+  - hosted 작업실 세션/큐 degraded 경고는 `저장값 없음`, `session/local storage 접근 실패`, `파싱 실패`, `저장 실패`, `삭제 실패`, `stale refresh`를 같은 결과로 뭉개지 않고, 명시적 code/priority registry와 공통 diagnostics consumer를 기준으로 우선순위가 있는 scoped warning UI와 디버그 로그에서 구분해 보여줍니다. 로컬 업로드 큐 read 실패는 작업실 shell 전체를 바로 막지 않고 degraded 상태로 계속 진행하고, failed/stalled 기록 재시작은 새 retry 항목 `put` 안에서 이전 requestId를 함께 supersede해 old/new 중복 항목이 남지 않도록 정리합니다.
   - hosted 작업실 디버그 콘솔은 카드 폭, 패딩, 로그 타이포도 패널 디버그 콘솔과 같은 치수 기준으로 맞춥니다.
   - 로컬 작업실에서는 `파일 불러오기`로 실제 오디오 샘플을 바로 전사 테스트할 수 있고, `25MB 초과` 또는 `약 20분 초과` 원본도 브라우저에서 `16kHz mono wav chunk`로 나눈 뒤 한 기록 결과로 이어 처리합니다.
 - hosted 회의 작업실은 기본적으로 `최대 200MB 또는 2시간` 원본까지 지원하고, 큰 오디오나 긴 녹음은 `약 9분 / 1.5초 overlap` 기준 chunk 업로드 후 서버에서 단일 회의 결과로 병합합니다.
@@ -145,11 +145,11 @@
 - `hosting/meeting/`
   - `index.html`, `index.css`: 회의 작업실 레이아웃과 실용형 UI 스타일
   - `debug-console.js`: 패널/작업실이 함께 쓰는 debug console render contract와 viewport helper
-  - `index.js`: hosted 회의 작업실 부팅, launch token 교환, 세션 복원, 녹음/업로드 큐/상세 액션 orchestration과 queue diagnostics consume/error wrapper, queue-backed action error notice 처리, retry reset/upload cleanup 경계 유지
+  - `index.js`: hosted 회의 작업실 부팅, launch token 교환, 세션 복원, 녹음/업로드 큐/상세 액션 orchestration과 queue diagnostics consume/error wrapper, queue-backed action error notice 처리, retry reset/upload cleanup 경계와 superseded local request 정리
   - `firebase-client.js`: `MeetingSession`을 Firebase custom token으로 교환하고 Firestore 문서 구독을 연결하는 hosted helper
   - `panel-bridge.html`, `panel-bridge.js`: 패널 content script 대신 Firestore query를 수행하는 숨겨진 hosted bridge
   - `shared.js`: 공통 상태/포맷터/네트워크 헬퍼와 hosted session restore storage 진단 helper
-  - `storage.js`: IndexedDB 기반 로컬 업로드 큐, fallback storage, operation-scoped queue read/write/delete diagnostics helper와 IndexedDB transaction failure 진단
+  - `storage.js`: IndexedDB 기반 로컬 업로드 큐, fallback storage, operation-scoped queue read/write/delete diagnostics helper, IndexedDB transaction failure 진단, superseded retry request collapse helper
   - `notes.js`: 회의록 schema 정규화와 mode별 표시 포맷터
   - `render.js`: 이력/상세/회의록 섹션 렌더링
 - `offscreen/`

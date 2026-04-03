@@ -3,7 +3,7 @@
   const { AUTO_RETRY_PENDING_STATUSES, DEFAULT_CREATE_JOB_TIMEOUT_MS, DEFAULT_INLINE_AUDIO_LIMIT_BYTES, DEFAULT_SOURCE_CHUNK_DURATION_MS, DEFAULT_SOURCE_CHUNK_OVERLAP_MS, DEFAULT_SOURCE_MAX_BYTES, DEFAULT_SOURCE_MAX_DURATION_MS, DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS, DEFAULT_SOURCE_TARGET_PART_BYTES, DEFAULT_SOURCE_UPLOAD_TIMEOUT_MS, buildCopyText, buildErrorCopyText, buildRemoteSelectionId, buildWorkspaceHash, buildWorkspaceSessionStorageKey, clearDebugEntries, clearPersistedWorkspaceSession, formatDateTime, getDebugEntries, isDebugPanelEnabled, isLikelyNetworkError, isLocalWorkspaceOrigin, isOnline, loadPersistedWorkspaceSession, logDebug, normalizeSpeakerAliases, normalizeText, normalizeTextBlock, parseParams, pickRecorderMimeType, persistWorkspaceSessionPayload, postJson, resolveConfig, resolveRecordingProfile, safeLocalStorageGet, safeLocalStorageSet, setEnabled: setDebugEnabled, stopTracks, subscribeDebugEntries, summarizeEntries } = ns.shared;
   const { clearWorkspaceAuthCache, ensureWorkspaceAuth, getCollections, subscribeDocument } = ns.firebase;
   const { prepareAudioSourceChunks } = ns.audioChunker;
-  const { blobToBase64, createPendingUploadStore, normalizePendingUpload } = ns.storage;
+  const { blobToBase64, collapseSupersededPendingUploads, createPendingUploadStore, normalizePendingUpload } = ns.storage;
   const { buildDetailView, buildLocalPendingJob, buildPendingNotice, buildPendingSummary, buildSegmentCopyText, chooseSelectedRecordId, findHistoryEntry, findRemoteForPending, normalizeArtifact, normalizeJob, normalizeRecord, renderWorkspace } = ns.render;
   const debugConsole = ns.debugConsole;
 
@@ -838,8 +838,7 @@
   }
 
   function applyLoadedPendingUploads(items) {
-    state.pendingUploads = (Array.isArray(items) ? items : [])
-      .map(normalizePendingUpload)
+    state.pendingUploads = collapseSupersededPendingUploads(items)
       .map((item) => ["uploading", "uploading_chunks", "preparing_chunks"].includes(item.status)
         ? { ...item, status: "upload_queued", lastError: item.lastError || "페이지를 다시 열어 업로드를 이어갑니다." }
         : item)
@@ -1656,6 +1655,10 @@
             ...(Array.isArray(pending.supersededJobIds) ? pending.supersededJobIds : []),
             previousRemoteJobId,
           ].map((jobId) => normalizeText(jobId)).filter(Boolean))),
+          supersededRequestIds: Array.from(new Set([
+            ...(Array.isArray(pending.supersededRequestIds) ? pending.supersededRequestIds : []),
+            normalizedRequestId,
+          ].map((value) => normalizeText(value)).filter((value) => Boolean(value) && value !== retryRequestId))),
           uploadedPartCount: 0,
         }
       : pending;
@@ -1666,12 +1669,7 @@
         delete state.busy.queue[normalizedRequestId];
         state.busy.queue[retryRequestId] = true;
         activeRequestId = latest.requestId;
-        await runPendingUploadQueueOperation(
-          () => state.queueStore.delete(normalizedRequestId),
-          { scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.cleanup }
-        );
         delete state.runtimeChunkCache[normalizedRequestId];
-        state.pendingUploads = state.pendingUploads.filter((item) => item.requestId !== normalizedRequestId);
         if (
           state.selectedRecordId === ns.shared.buildLocalSelectionId(normalizedRequestId)
           || (previousRemoteSelectionId && state.selectedRecordId === previousRemoteSelectionId)
@@ -2665,7 +2663,10 @@
       showPendingUploadQueueOperationError(error, "브라우저 로컬 보관 큐를 저장하지 못했어요.");
       throw error;
     }
-    state.pendingUploads = [normalized, ...state.pendingUploads.filter((current) => current.requestId !== normalized.requestId)].sort(ns.storage.comparePendingUploads);
+    state.pendingUploads = collapseSupersededPendingUploads([
+      normalized,
+      ...state.pendingUploads.filter((current) => current.requestId !== normalized.requestId),
+    ]).sort(ns.storage.comparePendingUploads);
     state.meeting.pendingLocalCount = state.pendingUploads.length;
     return normalized;
   }

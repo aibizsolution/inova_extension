@@ -262,6 +262,12 @@
         .map((jobId) => normalizeText(jobId))
         .filter(Boolean)
     ));
+    const requestId = normalizeText(item.requestId);
+    const supersededRequestIds = Array.from(new Set(
+      (Array.isArray(item.supersededRequestIds) ? item.supersededRequestIds : [item.supersededRequestId])
+        .map((value) => normalizeText(value))
+        .filter((value) => Boolean(value) && value !== requestId)
+    ));
     return {
       blob: item.blob instanceof global.Blob ? item.blob : new global.Blob([], { type: normalizeText(item.mimeType) || "audio/webm" }),
       captureMode: normalizeText(item.captureMode) || "microphone",
@@ -278,7 +284,7 @@
       originalSizeBytes: Math.max(0, Number(item.originalSizeBytes) || Number(item.sizeBytes) || Number(item.blob?.size) || 0),
       parts,
       preparedPartCount: Math.max(0, Number(item.preparedPartCount) || parts.length),
-      requestId: normalizeText(item.requestId),
+      requestId,
       sharedMemoSnapshot: normalizeTextBlock(item.sharedMemoSnapshot),
       sizeBytes: Math.max(0, Number(item.sizeBytes) || Number(item.blob?.size) || 0),
       sourceMode: normalizeText(item.sourceMode) || (parts.length ? "chunked" : "single"),
@@ -286,9 +292,20 @@
       storageObject: normalizeText(item.storageObject),
       status: normalizePendingStatus(item.status, Boolean(item.hold)),
       supersededJobIds,
+      supersededRequestIds,
       uploadedPartCount: Math.max(0, Number(item.uploadedPartCount) || uploadedPartCount),
       updatedAt: normalizeText(item.updatedAt) || new Date().toISOString(),
     };
+  }
+
+  function collapseSupersededPendingUploads(items) {
+    const normalizedItems = (Array.isArray(items) ? items : []).map(normalizePendingUpload);
+    const supersededRequestIds = new Set(
+      normalizedItems.flatMap((item) => Array.isArray(item?.supersededRequestIds) ? item.supersededRequestIds : [])
+        .map((requestId) => normalizeText(requestId))
+        .filter(Boolean)
+    );
+    return normalizedItems.filter((item) => !supersededRequestIds.has(normalizeText(item?.requestId)));
   }
 
   function comparePendingUploads(left, right) {
@@ -351,18 +368,32 @@
       async put(item) {
         await runWithDiagnostics(PENDING_UPLOAD_DIAGNOSTIC_OPERATIONS.put, async (issues) => {
           const normalized = normalizePendingUpload(item);
+          const supersededRequestIds = (Array.isArray(normalized.supersededRequestIds) ? normalized.supersededRequestIds : [])
+            .map((requestId) => normalizeText(requestId))
+            .filter(Boolean);
           const db = await openDb(issues);
           if (db) {
-            await runPendingUploadStorageRequest(
-              db.transaction(PENDING_UPLOAD_STORE_NAME, "readwrite").objectStore(PENDING_UPLOAD_STORE_NAME).put(await serializePendingUpload(normalized, false)),
-              issues,
-              "indexeddb-write-failed"
-            );
+            const store = db.transaction(PENDING_UPLOAD_STORE_NAME, "readwrite").objectStore(PENDING_UPLOAD_STORE_NAME);
+            await Promise.all([
+              runPendingUploadStorageRequest(
+                store.put(await serializePendingUpload(normalized, false)),
+                issues,
+                "indexeddb-write-failed"
+              ),
+              ...supersededRequestIds.map((requestId) => runPendingUploadStorageRequest(
+                store.delete(requestId),
+                issues,
+                "indexeddb-delete-failed"
+              )),
+            ]);
             return;
           }
           const items = await readLocalItems(issues);
           const serialized = await serializePendingUpload(normalized, true);
-          await writeLocalItems([serialized, ...items.filter((current) => normalizeText(current.requestId) !== normalized.requestId)], issues);
+          await writeLocalItems([serialized, ...items.filter((current) => {
+            const currentRequestId = normalizeText(current.requestId);
+            return currentRequestId !== normalized.requestId && !supersededRequestIds.includes(currentRequestId);
+          })], issues);
         });
       },
       consumeDiagnostics() {
@@ -484,6 +515,7 @@
 
   ns.storage = {
     blobToBase64,
+    collapseSupersededPendingUploads,
     comparePendingUploads,
     createPendingUploadStore,
     normalizePendingUpload,
