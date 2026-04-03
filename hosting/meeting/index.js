@@ -1612,10 +1612,17 @@
     };
   }
 
-  function applyPendingUploadRemoteTransitionEffects(pending, transition) {
+  async function commitPendingUploadRemoteTransition(pending, transition, options = {}) {
+    if (!transition?.nextPending) {
+      return null;
+    }
+    const nextPending = await upsertPendingUpload(transition.nextPending, {
+      preserveUpdatedAt: Boolean(options?.preserveUpdatedAt),
+      context: options?.queueContext,
+    });
     const normalizedRequestId = normalizeText(pending?.requestId);
-    if (!normalizedRequestId || !transition || typeof transition !== "object") {
-      return;
+    if (!normalizedRequestId) {
+      return nextPending;
     }
     if (transition.resetChunkCache === "clear") {
       delete state.runtimeChunkCache[normalizedRequestId];
@@ -1630,11 +1637,13 @@
       };
     }
     if (
-      transition.nextSelectedRecordId
+      options?.applySelectedRecordTransition
+      && transition.nextSelectedRecordId
       && state.selectedRecordId === ns.shared.buildLocalSelectionId(normalizedRequestId)
     ) {
       state.selectedRecordId = transition.nextSelectedRecordId;
     }
+    return nextPending;
   }
 
   async function syncPendingUploadsWithRemote() {
@@ -1656,9 +1665,10 @@
         applyRender();
         continue;
       }
-      await upsertPendingUpload(transition.nextPending, {
+      await commitPendingUploadRemoteTransition(pending, transition, {
+        applySelectedRecordTransition: true,
         preserveUpdatedAt: true,
-        context: {
+        queueContext: {
           phase: transition.outcome === "succeeded"
             ? "remote-sync-succeeded"
             : transition.outcome === "failed"
@@ -1670,7 +1680,6 @@
           shouldResetSource: transition.resetChunkCache === "reset-parts",
         },
       });
-      applyPendingUploadRemoteTransitionEffects(pending, transition);
     }
     state.meeting.pendingLocalCount = state.pendingUploads.length;
   }
@@ -2841,14 +2850,17 @@
       applyRender();
       return { createdJob, degraded: true, pending: item };
     }
-    const nextPending = await upsertPendingUpload(transition.nextPending, { context: queueContext });
+    const nextPending = await commitPendingUploadRemoteTransition(item, transition, {
+      queueContext,
+    });
+    const resolution = normalizeText(transition?.resolution);
     logDebug("workspace.pending-upload.remote-transition.applied", {
       action: transitionAction,
       jobId: normalizeText(nextPending?.jobId),
       publishedPartCount: Math.max(0, Number(nextPending?.publishedPartCount) || 0),
       remoteStatus: normalizeText(createdJob?.status),
       requestId: normalizeText(nextPending?.requestId),
-      resolution: normalizeText(transition?.resolution),
+      resolution,
       status: normalizeText(nextPending?.status),
       uploadedPartCount: Math.max(0, Number(nextPending?.uploadedPartCount) || 0),
     });
@@ -2872,18 +2884,18 @@
         });
       }
     }
-    if (normalizeText(options?.noticeText)) {
+    if (normalizeText(options?.noticeText) && resolution !== "reconciled") {
       setNotice(normalizeText(options.noticeText), "highlight");
       applyRender();
     }
-    if (options?.syncWorkspace) {
+    if (options?.syncWorkspace && resolution !== "reconciled") {
       await syncWorkspaceLocalState(false, "workflow");
     }
     return {
       createdJob,
       degraded: false,
       pending: nextPending,
-      resolution: normalizeText(transition?.resolution),
+      resolution,
     };
   }
 
