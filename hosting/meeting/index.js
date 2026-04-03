@@ -12,13 +12,21 @@
   const DEBUG_PANEL_COLLAPSED_STORAGE_KEY = "__INOVA_MEETING_DEBUG_PANEL_COLLAPSED__";
   const SUPERSEDED_REMOTE_JOBS_STORAGE_KEY_PREFIX = "__INOVA_MEETING_SUPERSEDED_REMOTE_JOBS__";
   const BOOT_INITIAL_SNAPSHOT_WAIT_MS = 450;
-  const DEGRADED_NOTICE_PRIORITIES = Object.freeze({
-    "refresh-degraded": 60,
-    "session-restore-degraded": 50,
-    "session-persist-degraded": 40,
-    "pending-uploads-degraded": 30,
-    "pending-upload-persist-degraded": 20,
-    "pending-upload-cleanup-degraded": 10,
+  const DEGRADED_NOTICE_CODES = Object.freeze({
+    pendingUploadCleanup: "pending-upload-cleanup-degraded",
+    pendingUploadPersist: "pending-upload-persist-degraded",
+    pendingUploads: "pending-uploads-degraded",
+    refresh: "refresh-degraded",
+    sessionPersist: "session-persist-degraded",
+    sessionRestore: "session-restore-degraded",
+  });
+  const DEGRADED_NOTICE_SPECS = Object.freeze({
+    [DEGRADED_NOTICE_CODES.refresh]: Object.freeze({ priority: 60 }),
+    [DEGRADED_NOTICE_CODES.sessionRestore]: Object.freeze({ priority: 50 }),
+    [DEGRADED_NOTICE_CODES.sessionPersist]: Object.freeze({ priority: 40 }),
+    [DEGRADED_NOTICE_CODES.pendingUploads]: Object.freeze({ priority: 30 }),
+    [DEGRADED_NOTICE_CODES.pendingUploadPersist]: Object.freeze({ priority: 20 }),
+    [DEGRADED_NOTICE_CODES.pendingUploadCleanup]: Object.freeze({ priority: 10 }),
   });
   const refs = {};
   const state = createInitialState();
@@ -329,14 +337,19 @@
 
   function isDegradedNoticeCode(code) {
     const normalizedCode = normalizeText(code);
-    return Boolean(normalizedCode) && Object.prototype.hasOwnProperty.call(DEGRADED_NOTICE_PRIORITIES, normalizedCode);
+    return Boolean(normalizedCode) && Object.prototype.hasOwnProperty.call(DEGRADED_NOTICE_SPECS, normalizedCode);
+  }
+
+  function getDegradedNoticePriority(code) {
+    const normalizedCode = normalizeText(code);
+    return Number(DEGRADED_NOTICE_SPECS[normalizedCode]?.priority) || 0;
   }
 
   function getHighestPriorityDegradedNotice() {
     const degradedEntries = Object.values(state.degradedNotices || {})
       .filter((entry) => normalizeText(entry?.text) && isDegradedNoticeCode(entry?.code))
       .sort((left, right) => {
-        const priorityGap = (DEGRADED_NOTICE_PRIORITIES[normalizeText(right?.code)] || 0) - (DEGRADED_NOTICE_PRIORITIES[normalizeText(left?.code)] || 0);
+        const priorityGap = getDegradedNoticePriority(right?.code) - getDegradedNoticePriority(left?.code);
         if (priorityGap !== 0) return priorityGap;
         return normalizeText(left?.code).localeCompare(normalizeText(right?.code));
       });
@@ -384,7 +397,7 @@
     if (!state.sessionRestore.hasWarningIssue || !state.session.meetingSessionToken || !state.session.meetingId) {
       return;
     }
-    setDegradedNotice("session-restore-degraded", buildSessionRestoreDegradedNotice(), "warning");
+    setDegradedNotice(DEGRADED_NOTICE_CODES.sessionRestore, buildSessionRestoreDegradedNotice(), "warning");
   }
 
   function applyPersistWorkspaceSessionResult(result) {
@@ -406,7 +419,7 @@
           meetingId: state.session.meetingId,
         });
       }
-      clearDegradedNotice("session-persist-degraded");
+      clearDegradedNotice(DEGRADED_NOTICE_CODES.sessionPersist);
       return;
     }
     if (previousSignature === nextSignature) {
@@ -418,7 +431,7 @@
       issues,
       meetingId: state.session.meetingId,
     });
-    setDegradedNotice("session-persist-degraded", buildSessionPersistDegradedNotice(degradedReason), "warning");
+    setDegradedNotice(DEGRADED_NOTICE_CODES.sessionPersist, buildSessionPersistDegradedNotice(degradedReason), "warning");
   }
 
   function applyPendingUploadStorageDiagnostics(result) {
@@ -440,7 +453,7 @@
           meetingId: state.session.meetingId,
         });
       }
-      clearDegradedNotice("pending-uploads-degraded");
+      clearDegradedNotice(DEGRADED_NOTICE_CODES.pendingUploads);
       return;
     }
     if (previousSignature === nextSignature) {
@@ -453,7 +466,7 @@
       meetingId: state.session.meetingId,
       operation: normalizeText(result?.operation),
     });
-    setDegradedNotice("pending-uploads-degraded", buildPendingUploadStorageDegradedNotice(degradedReason), "warning");
+    setDegradedNotice(DEGRADED_NOTICE_CODES.pendingUploads, buildPendingUploadStorageDegradedNotice(degradedReason), "warning");
   }
 
   function applyPendingUploadPersistDiagnostics(result) {
@@ -475,7 +488,7 @@
           meetingId: state.session.meetingId,
         });
       }
-      clearDegradedNotice("pending-upload-persist-degraded");
+      clearDegradedNotice(DEGRADED_NOTICE_CODES.pendingUploadPersist);
       return;
     }
     if (previousSignature === nextSignature) {
@@ -488,7 +501,7 @@
       meetingId: state.session.meetingId,
       operation: normalizeText(result?.operation),
     });
-    setDegradedNotice("pending-upload-persist-degraded", buildPendingUploadPersistDegradedNotice(degradedReason), "warning");
+    setDegradedNotice(DEGRADED_NOTICE_CODES.pendingUploadPersist, buildPendingUploadPersistDegradedNotice(degradedReason), "warning");
   }
 
   function applyPendingUploadCleanupDiagnostics(result) {
@@ -510,7 +523,7 @@
           meetingId: state.session.meetingId,
         });
       }
-      clearDegradedNotice("pending-upload-cleanup-degraded");
+      clearDegradedNotice(DEGRADED_NOTICE_CODES.pendingUploadCleanup);
       return;
     }
     if (previousSignature === nextSignature) {
@@ -523,7 +536,7 @@
       meetingId: state.session.meetingId,
       operation: normalizeText(result?.operation),
     });
-    setDegradedNotice("pending-upload-cleanup-degraded", buildPendingUploadCleanupDegradedNotice(degradedReason), "warning");
+    setDegradedNotice(DEGRADED_NOTICE_CODES.pendingUploadCleanup, buildPendingUploadCleanupDegradedNotice(degradedReason), "warning");
   }
 
   function consumePendingUploadQueueDiagnostics() {
@@ -781,7 +794,7 @@
           message,
           reason,
         });
-        setDegradedNotice("refresh-degraded", buildRefreshDegradedNotice(message, reason), "warning");
+        setDegradedNotice(DEGRADED_NOTICE_CODES.refresh, buildRefreshDegradedNotice(message, reason), "warning");
         applyRender();
         return {
           degraded: true,
@@ -2757,7 +2770,7 @@
     return normalizeText(message).includes("회의 작업실 응답이 늦어지고 있어요");
   }
   function clearResolvedRefreshNotice() {
-    clearDegradedNotice("refresh-degraded");
+    clearDegradedNotice(DEGRADED_NOTICE_CODES.refresh);
   }
 
   function buildRefreshDegradedNotice(message, reason) {
