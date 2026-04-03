@@ -2775,7 +2775,8 @@
       );
     };
 
-    let remoteStateChangedThisAttempt = false;
+    let mutationChangedRemoteStateThisAttempt = false;
+    let terminalRemoteStateObservedThisAttempt = false;
     let uploadedChunkCountThisAttempt = 0;
     if (!normalizeText(nextPending?.jobId)) {
       const bootstrapPart = findMissingPreparedParts(nextPending)[0];
@@ -2789,7 +2790,8 @@
           transitionAction: "chunk-start",
         });
         nextPending = bootstrapResult.pending;
-        remoteStateChangedThisAttempt = !bootstrapResult.degraded && normalizeText(bootstrapResult.resolution) !== "reconciled";
+        mutationChangedRemoteStateThisAttempt = !bootstrapResult.degraded
+          && normalizeText(bootstrapResult.resolution) !== "reconciled";
       }
     }
 
@@ -2807,7 +2809,7 @@
         transitionAction: remoteStartRequest.transitionAction,
       });
       nextPending = mutationResult.pending;
-      remoteStateChangedThisAttempt = remoteStateChangedThisAttempt
+      mutationChangedRemoteStateThisAttempt = mutationChangedRemoteStateThisAttempt
         || (!mutationResult.degraded && normalizeText(mutationResult.resolution) !== "reconciled");
     } else {
       const remotePublishRequest = buildChunkRemotePublishRequest(nextPending);
@@ -2817,12 +2819,12 @@
           transitionAction: remotePublishRequest.transitionAction,
         });
         nextPending = publishResult.pending;
-        remoteStateChangedThisAttempt = remoteStateChangedThisAttempt
+        mutationChangedRemoteStateThisAttempt = mutationChangedRemoteStateThisAttempt
           || (!publishResult.degraded && normalizeText(publishResult.resolution) !== "reconciled");
       } else {
         const shouldResyncRemoteState = normalizeText(nextPending?.jobId)
           && uploadedChunkCountThisAttempt === 0
-          && !remoteStateChangedThisAttempt;
+          && !mutationChangedRemoteStateThisAttempt;
         if (shouldResyncRemoteState) {
           const remoteResyncRequest = buildChunkRemoteResyncRequest(nextPending);
           const reconcileResult = await reconcileChunkedPendingUploadRemoteState(nextPending, {
@@ -2830,14 +2832,16 @@
             transitionAction: remoteResyncRequest.transitionAction,
           });
           nextPending = reconcileResult.pending;
-          remoteStateChangedThisAttempt = remoteStateChangedThisAttempt
-            || (!reconcileResult.degraded && normalizeText(reconcileResult.resolution) !== "reconciled");
+          terminalRemoteStateObservedThisAttempt = !reconcileResult.degraded
+            && ["completed", "remote-failed"].includes(normalizeText(reconcileResult.resolution));
         }
       }
     }
 
-    if (remoteStateChangedThisAttempt) {
-      await syncWorkspaceLocalState(false, "workflow");
+    if (mutationChangedRemoteStateThisAttempt) {
+      await syncWorkspaceLocalState(false, "workflow-chunk-mutation");
+    } else if (terminalRemoteStateObservedThisAttempt) {
+      await syncWorkspaceLocalState(false, "workflow-chunk-reconcile");
     }
     return nextPending;
   }
