@@ -5,6 +5,12 @@
   const PENDING_UPLOAD_LOCAL_STORAGE_KEY = "inova-hosted-meeting-pending-uploads";
   const PENDING_UPLOAD_DB_NAME = "inova-hosted-meeting-workspace";
   const PENDING_UPLOAD_STORE_NAME = "pending-uploads";
+  const PENDING_UPLOAD_DIAGNOSTIC_OPERATIONS = Object.freeze({
+    clearMeeting: "clearMeeting",
+    delete: "delete",
+    listByMeeting: "listByMeeting",
+    put: "put",
+  });
 
   function buildPendingUploadStorageIssue(code, options = {}) {
     return {
@@ -49,6 +55,22 @@
       return "브라우저 로컬 보관 큐 형식이 올바르지 않아요.";
     }
     return "";
+  }
+
+  function createPendingUploadStorageDiagnostics(operation, issues = []) {
+    const normalizedIssues = Array.isArray(issues) ? issues.filter(Boolean) : [];
+    return {
+      degradedReason: summarizePendingUploadStorageIssues(normalizedIssues),
+      issues: normalizedIssues,
+      operation: normalizeText(operation),
+    };
+  }
+
+  function recordPendingUploadStorageIssue(issues, issue) {
+    if (!Array.isArray(issues) || !issue) {
+      return;
+    }
+    issues.push(issue);
   }
 
   function readLocalStorageValueDetailed(target, key) {
@@ -279,61 +301,57 @@
     let dbPromise = null;
     let fallbackToLocalStorage = false;
     let indexedDbFallbackIssue = null;
-    let lastDiagnostics = createStorageDiagnostics("");
+    let lastDiagnostics = createPendingUploadStorageDiagnostics("");
 
     return {
       async clearMeeting(meetingId) {
         const normalizedMeetingId = normalizeText(meetingId);
-        const issues = [];
-        const items = await listByMeetingInternal(normalizedMeetingId, issues);
-        for (const item of items) {
-          await deletePendingUploadInternal(item.requestId, issues);
-        }
-        setDiagnostics("clearMeeting", issues);
+        await runWithDiagnostics(PENDING_UPLOAD_DIAGNOSTIC_OPERATIONS.clearMeeting, async (issues) => {
+          const items = await listByMeetingInternal(normalizedMeetingId, issues);
+          for (const item of items) {
+            await deletePendingUploadInternal(item.requestId, issues);
+          }
+        });
       },
       async delete(requestId) {
-        const issues = [];
-        await deletePendingUploadInternal(requestId, issues);
-        setDiagnostics("delete", issues);
+        await runWithDiagnostics(PENDING_UPLOAD_DIAGNOSTIC_OPERATIONS.delete, async (issues) => {
+          await deletePendingUploadInternal(requestId, issues);
+        });
       },
       async listByMeeting(meetingId) {
-        const issues = [];
-        const localItems = await listByMeetingInternal(meetingId, issues);
-        setDiagnostics("listByMeeting", issues);
-        return localItems;
+        return runWithDiagnostics(PENDING_UPLOAD_DIAGNOSTIC_OPERATIONS.listByMeeting, async (issues) => {
+          return listByMeetingInternal(meetingId, issues);
+        });
       },
       async put(item) {
-        const normalized = normalizePendingUpload(item);
-        const issues = [];
-        const db = await openDb(issues);
-        if (db) {
-          await runIdbRequest(db.transaction(PENDING_UPLOAD_STORE_NAME, "readwrite").objectStore(PENDING_UPLOAD_STORE_NAME).put(await serializePendingUpload(normalized, false)));
-          setDiagnostics("put", issues);
-          return;
-        }
-        const items = await readLocalItems(issues);
-        const serialized = await serializePendingUpload(normalized, true);
-        await writeLocalItems([serialized, ...items.filter((current) => normalizeText(current.requestId) !== normalized.requestId)], issues);
-        setDiagnostics("put", issues);
+        await runWithDiagnostics(PENDING_UPLOAD_DIAGNOSTIC_OPERATIONS.put, async (issues) => {
+          const normalized = normalizePendingUpload(item);
+          const db = await openDb(issues);
+          if (db) {
+            await runIdbRequest(db.transaction(PENDING_UPLOAD_STORE_NAME, "readwrite").objectStore(PENDING_UPLOAD_STORE_NAME).put(await serializePendingUpload(normalized, false)));
+            return;
+          }
+          const items = await readLocalItems(issues);
+          const serialized = await serializePendingUpload(normalized, true);
+          await writeLocalItems([serialized, ...items.filter((current) => normalizeText(current.requestId) !== normalized.requestId)], issues);
+        });
       },
       consumeDiagnostics() {
         const nextDiagnostics = lastDiagnostics;
-        lastDiagnostics = createStorageDiagnostics("");
+        lastDiagnostics = createPendingUploadStorageDiagnostics("");
         return nextDiagnostics;
       },
     };
 
-    function createStorageDiagnostics(operation, issues = []) {
-      const normalizedIssues = Array.isArray(issues) ? issues : [];
-      return {
-        degradedReason: summarizePendingUploadStorageIssues(normalizedIssues),
-        issues: normalizedIssues,
-        operation: normalizeText(operation),
-      };
+    function setDiagnostics(operation, issues) {
+      lastDiagnostics = createPendingUploadStorageDiagnostics(operation, issues);
     }
 
-    function setDiagnostics(operation, issues) {
-      lastDiagnostics = createStorageDiagnostics(operation, issues);
+    async function runWithDiagnostics(operation, action) {
+      const issues = [];
+      const result = await action(issues);
+      setDiagnostics(operation, issues);
+      return result;
     }
 
     async function listByMeetingInternal(meetingId, issues) {
@@ -364,7 +382,7 @@
       const nextIssues = Array.isArray(issues) ? issues : [];
       if (fallbackToLocalStorage) {
         if (indexedDbFallbackIssue) {
-          nextIssues.push(indexedDbFallbackIssue);
+          recordPendingUploadStorageIssue(nextIssues, indexedDbFallbackIssue);
         }
         return null;
       }
@@ -373,7 +391,7 @@
         indexedDbFallbackIssue = buildPendingUploadStorageIssue("indexeddb-unavailable", {
           storage: "indexeddb",
         });
-        nextIssues.push(indexedDbFallbackIssue);
+        recordPendingUploadStorageIssue(nextIssues, indexedDbFallbackIssue);
         return null;
       }
       if (!dbPromise) {
@@ -398,7 +416,7 @@
           message: error instanceof Error ? error.message : String(error || ""),
           storage: "indexeddb",
         });
-        nextIssues.push(indexedDbFallbackIssue);
+        recordPendingUploadStorageIssue(nextIssues, indexedDbFallbackIssue);
         return null;
       }
     }
@@ -406,25 +424,19 @@
     async function readLocalItems(issues) {
       const nextIssues = Array.isArray(issues) ? issues : [];
       const storageEntry = readLocalStorageValueDetailed(target, PENDING_UPLOAD_LOCAL_STORAGE_KEY);
-      if (storageEntry.issue) {
-        nextIssues.push(storageEntry.issue);
-      }
+      recordPendingUploadStorageIssue(nextIssues, storageEntry.issue);
       if (!normalizeText(storageEntry.value)) {
         return [];
       }
       const parsedEntry = parsePendingUploadItemsDetailed(storageEntry.value, PENDING_UPLOAD_LOCAL_STORAGE_KEY);
-      if (parsedEntry.issue) {
-        nextIssues.push(parsedEntry.issue);
-      }
+      recordPendingUploadStorageIssue(nextIssues, parsedEntry.issue);
       return Array.isArray(parsedEntry.items) ? parsedEntry.items : [];
     }
 
     async function writeLocalItems(items, issues) {
       const nextIssues = Array.isArray(issues) ? issues : [];
       const issue = writeLocalStorageValueDetailed(target, PENDING_UPLOAD_LOCAL_STORAGE_KEY, JSON.stringify(items || []));
-      if (issue) {
-        nextIssues.push(issue);
-      }
+      recordPendingUploadStorageIssue(nextIssues, issue);
     }
   }
 

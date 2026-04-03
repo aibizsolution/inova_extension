@@ -148,7 +148,7 @@
   - `firebase-client.js`: `MeetingSession`을 Firebase custom token으로 교환하고 Firestore 문서 구독을 연결하는 hosted helper
   - `panel-bridge.html`, `panel-bridge.js`: 패널 content script 대신 Firestore query를 수행하는 숨겨진 hosted bridge
   - `shared.js`: 공통 상태/포맷터/네트워크 헬퍼와 hosted session restore storage 진단 helper
-  - `storage.js`: IndexedDB 기반 로컬 업로드 큐, fallback storage, queue read/write/delete diagnostics helper
+  - `storage.js`: IndexedDB 기반 로컬 업로드 큐, fallback storage, operation-scoped queue read/write/delete diagnostics helper
   - `notes.js`: 회의록 schema 정규화와 mode별 표시 포맷터
   - `render.js`: 이력/상세/회의록 섹션 렌더링
 - `offscreen/`
