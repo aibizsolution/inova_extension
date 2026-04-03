@@ -1489,70 +1489,122 @@
     }
   }
 
+  function buildPendingUploadRemoteSyncTransition(pending, matched) {
+    const remoteStatus = normalizeText(matched?.status);
+    const nextJobId = normalizeText(matched?.jobId || pending?.jobId);
+    const nextUpdatedAt = normalizeText(matched?.updatedAt || pending?.updatedAt);
+    const nextError = normalizeText(matched?.error || pending?.lastError);
+    if (remoteStatus === "succeeded") {
+      return {
+        nextPending: normalizePendingUpload({
+          ...pending,
+          hold: false,
+          jobId: nextJobId,
+          lastError: "",
+          status: "succeeded",
+          updatedAt: nextUpdatedAt,
+        }),
+        nextSelectedRecordId: nextJobId ? buildRemoteSelectionId(nextJobId) : "",
+        phase: "remote-sync-succeeded",
+        resetChunkCache: "clear",
+      };
+    }
+    if (remoteStatus === "processing" || remoteStatus === "queued") {
+      return {
+        nextPending: normalizePendingUpload({
+          ...pending,
+          jobId: nextJobId,
+          lastError: nextError,
+          status: remoteStatus === "processing" ? "remote_processing" : "remote_queued",
+          storageObject: pending.storageObject,
+          updatedAt: nextUpdatedAt,
+        }),
+        nextSelectedRecordId: nextJobId ? buildRemoteSelectionId(nextJobId) : "",
+        phase: "remote-sync-update",
+        resetChunkCache: "",
+      };
+    }
+    if (remoteStatus === "failed") {
+      return {
+        nextPending: normalizePendingUpload({
+          ...pending,
+          jobId: nextJobId,
+          lastError: nextError,
+          parts: (Array.isArray(pending?.parts) ? pending.parts : []).map((part) => ({
+            ...part,
+            storageObject: "",
+            uploadStatus: "",
+          })),
+          status: pending?.hold ? "on_hold" : "failed",
+          storageObject: "",
+          updatedAt: nextUpdatedAt,
+        }),
+        nextSelectedRecordId: nextJobId ? buildRemoteSelectionId(nextJobId) : "",
+        phase: "remote-sync-reset",
+        resetChunkCache: "reset-parts",
+      };
+    }
+    return {
+      errorMessage: remoteStatus
+        ? `원격 작업 상태(${remoteStatus})를 이해하지 못해 브라우저 보관 큐를 그대로 유지합니다.`
+        : "원격 작업 상태가 비어 있어 브라우저 보관 큐를 그대로 유지합니다.",
+      remoteStatus,
+    };
+  }
+
+  function applyPendingUploadRemoteSyncEffects(pending, transition) {
+    const normalizedRequestId = normalizeText(pending?.requestId);
+    if (!normalizedRequestId || !transition || typeof transition !== "object") {
+      return;
+    }
+    if (transition.resetChunkCache === "clear") {
+      delete state.runtimeChunkCache[normalizedRequestId];
+    } else if (transition.resetChunkCache === "reset-parts" && state.runtimeChunkCache[normalizedRequestId]) {
+      state.runtimeChunkCache[normalizedRequestId] = {
+        ...state.runtimeChunkCache[normalizedRequestId],
+        parts: (state.runtimeChunkCache[normalizedRequestId].parts || []).map((part) => ({
+          ...part,
+          storageObject: "",
+          uploadStatus: "",
+        })),
+      };
+    }
+    if (
+      transition.nextSelectedRecordId
+      && state.selectedRecordId === ns.shared.buildLocalSelectionId(normalizedRequestId)
+    ) {
+      state.selectedRecordId = transition.nextSelectedRecordId;
+    }
+  }
+
   async function syncPendingUploadsWithRemote() {
     const pendingItems = Array.isArray(state.pendingUploads) ? [...state.pendingUploads] : [];
     for (const pending of pendingItems) {
       const matched = findRemoteForPending(state, pending);
       if (!matched) continue;
-      if (matched.status === "succeeded") {
-        const nextPending = normalizePendingUpload({
-          ...pending,
-          hold: false,
-          jobId: normalizeText(matched.jobId || pending.jobId),
-          lastError: "",
-          status: "succeeded",
-          updatedAt: normalizeText(matched.updatedAt || pending.updatedAt),
+      const transition = buildPendingUploadRemoteSyncTransition(pending, matched);
+      if (!transition?.nextPending) {
+        logDebug("workspace.pending-uploads.remote-sync.unknown-status", {
+          error: transition?.errorMessage,
+          jobId: normalizeText(matched?.jobId),
+          remoteStatus: normalizeText(transition?.remoteStatus),
+          requestId: normalizeText(pending?.requestId),
         });
-        await upsertPendingUpload(nextPending, {
-          preserveUpdatedAt: true,
-          context: {
-            phase: "remote-sync-succeeded",
-            previousRequestId: pending.requestId,
-            reason: "remote-sync",
-            requestId: nextPending.requestId,
-          },
-        });
-        delete state.runtimeChunkCache[normalizeText(pending.requestId)];
-        if (state.selectedRecordId === ns.shared.buildLocalSelectionId(pending.requestId)) state.selectedRecordId = buildRemoteSelectionId(matched.jobId);
+        setNotice(normalizeText(transition?.errorMessage) || "원격 작업 상태를 이해하지 못해 브라우저 보관 큐를 그대로 유지합니다.", "warning");
+        applyRender();
         continue;
       }
-      const shouldResetRemoteSource = matched.status === "failed";
-      const nextPending = normalizePendingUpload({
-        ...pending,
-        jobId: normalizeText(matched.jobId || pending.jobId),
-        lastError: normalizeText(matched.error || pending.lastError),
-        parts: shouldResetRemoteSource
-          ? (Array.isArray(pending.parts) ? pending.parts : []).map((part) => ({
-              ...part,
-              storageObject: "",
-              uploadStatus: "",
-            }))
-          : pending.parts,
-        status: matched.status === "processing" ? "remote_processing" : matched.status === "queued" ? "remote_queued" : matched.status === "failed" ? (pending.hold ? "on_hold" : "failed") : pending.status,
-        storageObject: shouldResetRemoteSource ? "" : pending.storageObject,
-        updatedAt: normalizeText(matched.updatedAt || pending.updatedAt),
-      });
-      await upsertPendingUpload(nextPending, {
+      await upsertPendingUpload(transition.nextPending, {
         preserveUpdatedAt: true,
         context: {
-          phase: shouldResetRemoteSource ? "remote-sync-reset" : "remote-sync-update",
+          phase: transition.phase,
           previousRequestId: pending.requestId,
           reason: "remote-sync",
-          requestId: nextPending.requestId,
-          shouldResetSource: shouldResetRemoteSource,
+          requestId: transition.nextPending.requestId,
+          shouldResetSource: transition.resetChunkCache === "reset-parts",
         },
       });
-      if (shouldResetRemoteSource && state.runtimeChunkCache[normalizeText(pending.requestId)]) {
-        state.runtimeChunkCache[normalizeText(pending.requestId)] = {
-          ...state.runtimeChunkCache[normalizeText(pending.requestId)],
-          parts: (state.runtimeChunkCache[normalizeText(pending.requestId)].parts || []).map((part) => ({
-            ...part,
-            storageObject: "",
-            uploadStatus: "",
-          })),
-        };
-      }
-      if (state.selectedRecordId === ns.shared.buildLocalSelectionId(pending.requestId) && nextPending.jobId) state.selectedRecordId = buildRemoteSelectionId(nextPending.jobId);
+      applyPendingUploadRemoteSyncEffects(pending, transition);
     }
     state.meeting.pendingLocalCount = state.pendingUploads.length;
   }
