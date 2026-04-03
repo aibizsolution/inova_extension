@@ -820,20 +820,37 @@
     }
   }
 
-  async function loadPendingUploads() {
-    const loadedItems = state.session.meetingId
-      ? await runPendingUploadQueueOperation(
-          () => state.queueStore.listByMeeting(state.session.meetingId),
-          { scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.load }
-        )
-      : [];
-    state.pendingUploads = loadedItems
+  function applyLoadedPendingUploads(items) {
+    state.pendingUploads = (Array.isArray(items) ? items : [])
       .map(normalizePendingUpload)
       .map((item) => ["uploading", "uploading_chunks", "preparing_chunks"].includes(item.status)
         ? { ...item, status: "upload_queued", lastError: item.lastError || "페이지를 다시 열어 업로드를 이어갑니다." }
         : item)
       .sort(ns.storage.comparePendingUploads);
     state.meeting.pendingLocalCount = state.pendingUploads.length;
+  }
+
+  async function loadPendingUploads() {
+    if (!state.session.meetingId) {
+      applyLoadedPendingUploads([]);
+      return;
+    }
+    try {
+      const loadedItems = await runPendingUploadQueueOperation(
+        () => state.queueStore.listByMeeting(state.session.meetingId),
+        { scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.load }
+      );
+      applyLoadedPendingUploads(loadedItems);
+    } catch (error) {
+      logDebug("workspace.pending-uploads.load.degraded", {
+        degradedReason: normalizeText(state.pendingUploadStorage.degradedReason),
+        error,
+        issueCodes: Array.isArray(state.pendingUploadStorage.issueCodes) ? state.pendingUploadStorage.issueCodes : [],
+        meetingId: state.session.meetingId,
+        retainedPendingLocalCount: state.pendingUploads.length,
+      });
+      state.meeting.pendingLocalCount = state.pendingUploads.length;
+    }
   }
 
   async function syncPendingUploadsWithRemote() {
