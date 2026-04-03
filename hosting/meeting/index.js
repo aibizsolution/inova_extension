@@ -1544,6 +1544,9 @@
         }),
         nextSelectedRecordId: nextJobId ? buildRemoteSelectionId(nextJobId) : "",
         outcome: "active",
+        resolution: mutatesRemoteInput
+          ? (action === "chunk-publish" ? "published" : "started")
+          : "reconciled",
         resetChunkCache: "",
       };
     }
@@ -1567,6 +1570,7 @@
         }),
         nextSelectedRecordId: nextJobId ? buildRemoteSelectionId(nextJobId) : "",
         outcome: "succeeded",
+        resolution: "completed",
         resetChunkCache: "clear",
       };
     }
@@ -1595,6 +1599,7 @@
         }),
         nextSelectedRecordId: nextJobId ? buildRemoteSelectionId(nextJobId) : "",
         outcome: "failed",
+        resolution: "remote-failed",
         resetChunkCache: "reset-parts",
       };
     }
@@ -2566,7 +2571,7 @@
           transitionAction: "chunk-start",
         });
         nextPending = bootstrapResult.pending;
-        remoteStateChangedThisAttempt = !bootstrapResult.degraded;
+        remoteStateChangedThisAttempt = !bootstrapResult.degraded && normalizeText(bootstrapResult.resolution) !== "reconciled";
       }
     }
 
@@ -2587,7 +2592,8 @@
         transitionAction: remoteReconcileRequest.transitionAction,
       });
       nextPending = reconcileResult.pending;
-      remoteStateChangedThisAttempt = remoteStateChangedThisAttempt || !reconcileResult.degraded;
+      remoteStateChangedThisAttempt = remoteStateChangedThisAttempt
+        || (!reconcileResult.degraded && normalizeText(reconcileResult.resolution) !== "reconciled");
     }
 
     if (remoteStateChangedThisAttempt) {
@@ -2836,6 +2842,16 @@
       return { createdJob, degraded: true, pending: item };
     }
     const nextPending = await upsertPendingUpload(transition.nextPending, { context: queueContext });
+    logDebug("workspace.pending-upload.remote-transition.applied", {
+      action: transitionAction,
+      jobId: normalizeText(nextPending?.jobId),
+      publishedPartCount: Math.max(0, Number(nextPending?.publishedPartCount) || 0),
+      remoteStatus: normalizeText(createdJob?.status),
+      requestId: normalizeText(nextPending?.requestId),
+      resolution: normalizeText(transition?.resolution),
+      status: normalizeText(nextPending?.status),
+      uploadedPartCount: Math.max(0, Number(nextPending?.uploadedPartCount) || 0),
+    });
     if (
       createdJob?.jobId
       && (!previousJobId || previousJobId !== normalizeText(createdJob.jobId))
@@ -2863,7 +2879,12 @@
     if (options?.syncWorkspace) {
       await syncWorkspaceLocalState(false, "workflow");
     }
-    return { createdJob, degraded: false, pending: nextPending };
+    return {
+      createdJob,
+      degraded: false,
+      pending: nextPending,
+      resolution: normalizeText(transition?.resolution),
+    };
   }
 
   async function uploadPendingSource(item, override = {}) {
