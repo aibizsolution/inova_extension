@@ -237,6 +237,7 @@
 - Functions는 같은 `requestId` 재전송을 idempotent하게 재사용하고, `sharedMemoSnapshot`과 notes mode 메타데이터를 함께 저장합니다.
 - Functions가 source audio를 임시 bucket object로 저장할 때는 Firebase 설정의 기본 storage bucket을 우선 쓰고, 기본 bucket이 없는 프로젝트에서는 `STORAGE_BUCKET_URL`로 실제 존재하는 bucket을 명시해야 합니다. 현재 프로젝트는 chunk 업로드용으로 `gcf-v2-uploads-1027279095019.asia-northeast3.cloudfunctions.appspot.com`을 사용합니다.
 - 회의 작업실 Firestore 구독용 Firebase custom token은 기본적으로 `1027279095019-compute@developer.gserviceaccount.com`으로 서명하고, 다른 계정을 써야 하면 `FIREBASE_AUTH_SIGNING_SERVICE_ACCOUNT`로 override할 수 있습니다.
+- 함수 최적화나 병목 확인이 필요할 때는 `npm run check:function-runtime -- --since 1440 --filter meeting`처럼 실행하면, 현재 배포된 모든 함수의 `memory / timeout / concurrency / maxInstances`와 최근 request latency 요약을 한 번에 볼 수 있습니다. 특정 함수만 보고 싶으면 `--functions processQueuedInovaMeetingJob,processQueuedInovaMeetingJobPart`처럼 export 이름을 직접 넘기면 됩니다.
 - 회의 업로드/전사 결과는 패널의 `회의` 도구에서 Firestore 구독 기반 허브 리스트로 보이고, 상세는 hosted `meeting/index.html` 새 탭 작업실에서 다시 확인합니다. 패널은 `issueInovaMeetingPanelAuth`로 발급한 Firebase custom token을 hidden hosted bridge에 넘겨 meeting 목록 query를 맡기고, 상세 상태는 작업실이 `meetingSessionToken`으로 `issueInovaMeetingWorkspaceAuth`를 한 번 호출한 뒤 Firebase Auth에 로그인하고 Firestore `meeting/job/artifact` 문서를 직접 구독해 반영합니다.
 - 브라우저 쪽에서는 `shared/meeting-bridge.js` 와 `shared/meeting-state.js` 로 회의 녹음 start/stop, 회의 job 생성, artifact 반영, local `meetingState` 저장 기준을 먼저 맞춰 두었습니다.
 - 질문 목록 자체는 `chrome.storage.local`에 저장하지 않고, 현재 대화 화면을 기준으로 바로 렌더링합니다.
