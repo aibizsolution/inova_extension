@@ -1765,12 +1765,12 @@
     };
   }
 
-  async function commitPendingUploadRemoteMutationTransition(pending, transition, queueContext) {
+  async function commitPendingUploadRemoteMutationTransition(pending, transition, options = {}) {
     if (!transition?.nextPending) {
       return null;
     }
     const nextPending = await upsertPendingUpload(transition.nextPending, {
-      context: queueContext,
+      context: options?.queueContext,
     });
     const normalizedRequestId = normalizeText(pending?.requestId);
     if (!normalizedRequestId) {
@@ -1787,6 +1787,13 @@
           uploadStatus: "",
         })),
       };
+    }
+    if (
+      options?.applySelectedRecordTransition
+      && transition.nextSelectedRecordId
+      && state.selectedRecordId === ns.shared.buildLocalSelectionId(normalizedRequestId)
+    ) {
+      state.selectedRecordId = transition.nextSelectedRecordId;
     }
     return nextPending;
   }
@@ -3082,7 +3089,10 @@
       });
       throw new Error(transitionErrorMessage);
     }
-    const nextPending = await commitPendingUploadRemoteMutationTransition(item, transition, queueContext);
+    const nextPending = await commitPendingUploadRemoteMutationTransition(item, transition, {
+      applySelectedRecordTransition: true,
+      queueContext,
+    });
     const resolution = normalizeText(transition?.resolution);
     logDebug("workspace.pending-upload.remote-transition.applied", {
       action: transitionAction,
@@ -3197,7 +3207,9 @@
       });
       throw new Error(transitionErrorMessage);
     }
-    const nextPending = await commitPendingUploadRemoteMutationTransition(item, transition, queueContext);
+    const nextPending = await commitPendingUploadRemoteMutationTransition(item, transition, {
+      queueContext,
+    });
     const resolution = normalizeText(transition?.resolution);
     logDebug("workspace.pending-upload.remote-transition.applied", {
       action: transitionAction,
