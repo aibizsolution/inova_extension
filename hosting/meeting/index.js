@@ -15,7 +15,9 @@
   const BOOT_INITIAL_SNAPSHOT_WAIT_MS = 450;
   const DEGRADED_NOTICE_CODES = Object.freeze({
     pendingUploadCleanup: "pending-upload-cleanup-degraded",
+    pendingUploadChunkResyncPersist: "pending-upload-chunk-resync-persist-degraded",
     pendingUploadPersist: "pending-upload-persist-degraded",
+    pendingUploadRemoteSyncPersist: "pending-upload-remote-sync-persist-degraded",
     pendingUploads: "pending-uploads-degraded",
     refresh: "refresh-degraded",
     sessionPersist: "session-persist-degraded",
@@ -26,6 +28,8 @@
     [DEGRADED_NOTICE_CODES.sessionRestore]: Object.freeze({ priority: 50 }),
     [DEGRADED_NOTICE_CODES.sessionPersist]: Object.freeze({ priority: 40 }),
     [DEGRADED_NOTICE_CODES.pendingUploads]: Object.freeze({ priority: 30 }),
+    [DEGRADED_NOTICE_CODES.pendingUploadRemoteSyncPersist]: Object.freeze({ priority: 22 }),
+    [DEGRADED_NOTICE_CODES.pendingUploadChunkResyncPersist]: Object.freeze({ priority: 21 }),
     [DEGRADED_NOTICE_CODES.pendingUploadPersist]: Object.freeze({ priority: 20 }),
     [DEGRADED_NOTICE_CODES.pendingUploadCleanup]: Object.freeze({ priority: 10 }),
   });
@@ -110,6 +114,14 @@
         issueCodes: [],
       },
       pendingUploadPersist: {
+        degradedReason: "",
+        issueCodes: [],
+      },
+      pendingUploadRemoteSyncPersist: {
+        degradedReason: "",
+        issueCodes: [],
+      },
+      pendingUploadChunkResyncPersist: {
         degradedReason: "",
         issueCodes: [],
       },
@@ -640,6 +652,34 @@
 
   function applyPendingUploadPersistDiagnostics(result, context = {}) {
     const normalizedContext = normalizePendingUploadQueueContext(context);
+    const isRemoteSyncPersistPhase = ["remote-sync-succeeded", "remote-sync-update", "remote-sync-reset"].includes(normalizedContext.phase);
+    const isChunkResyncPersistPhase = ["chunk-resync-succeeded", "chunk-resync-update", "chunk-resync-reset"].includes(normalizedContext.phase);
+    if (isRemoteSyncPersistPhase) {
+      applyDegradedDiagnostics("pendingUploadRemoteSyncPersist", result, {
+        buildNotice: (degradedReason) => buildPendingUploadPersistPhaseDegradedNotice(normalizedContext, degradedReason),
+        degradedEvent: "workspace.pending-uploads.remote-sync.persist.degraded",
+        getLogDetails: (normalized) => ({
+          operation: normalized.operation,
+          ...normalizedContext,
+        }),
+        noticeCode: DEGRADED_NOTICE_CODES.pendingUploadRemoteSyncPersist,
+        recoveredEvent: "workspace.pending-uploads.remote-sync.persist.recovered",
+      });
+      return;
+    }
+    if (isChunkResyncPersistPhase) {
+      applyDegradedDiagnostics("pendingUploadChunkResyncPersist", result, {
+        buildNotice: (degradedReason) => buildPendingUploadPersistPhaseDegradedNotice(normalizedContext, degradedReason),
+        degradedEvent: "workspace.pending-uploads.chunk-resync.persist.degraded",
+        getLogDetails: (normalized) => ({
+          operation: normalized.operation,
+          ...normalizedContext,
+        }),
+        noticeCode: DEGRADED_NOTICE_CODES.pendingUploadChunkResyncPersist,
+        recoveredEvent: "workspace.pending-uploads.chunk-resync.persist.recovered",
+      });
+      return;
+    }
     applyDegradedDiagnostics("pendingUploadPersist", result, {
       buildNotice: (degradedReason) => buildPendingUploadPersistDegradedNotice(degradedReason),
       degradedEvent: "workspace.pending-uploads.persist.degraded",
@@ -734,8 +774,10 @@
       degradedNotices: buildDegradedNoticeRegistrySnapshot(),
       diagnostics: {
         cleanup: cloneDegradedDiagnosticsSnapshot(state.pendingUploadCleanup),
+        chunkResyncPersist: cloneDegradedDiagnosticsSnapshot(state.pendingUploadChunkResyncPersist),
         load: cloneDegradedDiagnosticsSnapshot(state.pendingUploadStorage),
         persist: cloneDegradedDiagnosticsSnapshot(state.pendingUploadPersist),
+        remoteSyncPersist: cloneDegradedDiagnosticsSnapshot(state.pendingUploadRemoteSyncPersist),
       },
       meetingId: normalizeText(state.session.meetingId),
       notice: cloneNoticeSnapshot(state.notice),
