@@ -1646,44 +1646,53 @@
     return nextPending;
   }
 
+  async function applyPendingUploadRemoteSnapshotState(pending, remoteState) {
+    const transition = buildPendingUploadRemoteTransition(pending, remoteState, {
+      action: "sync",
+    });
+    if (!transition?.nextPending) {
+      logDebug("workspace.pending-uploads.remote-sync.unknown-status", {
+        error: transition?.errorMessage,
+        jobId: normalizeText(remoteState?.jobId),
+        remoteStatus: normalizeText(transition?.remoteStatus),
+        requestId: normalizeText(pending?.requestId),
+      });
+      setNotice(normalizeText(transition?.errorMessage) || "원격 작업 상태를 이해하지 못해 브라우저 보관 상태를 그대로 유지합니다.", "warning");
+      applyRender();
+      return { degraded: true, pending, resolution: "" };
+    }
+    const nextPending = await commitPendingUploadRemoteTransition(pending, transition, {
+      applySelectedRecordTransition: true,
+      preserveUpdatedAt: true,
+      queueContext: {
+        phase: transition.outcome === "succeeded"
+          ? "remote-sync-succeeded"
+          : transition.outcome === "failed"
+            ? "remote-sync-reset"
+            : "remote-sync-update",
+        previousRequestId: pending.requestId,
+        reason: "remote-sync",
+        requestId: transition.nextPending.requestId,
+        shouldResetSource: transition.resetChunkCache === "reset-parts",
+      },
+    });
+    return {
+      degraded: false,
+      outcome: normalizeText(transition?.outcome),
+      pending: nextPending,
+      resolution: normalizeText(transition?.resolution),
+    };
+  }
+
   async function syncPendingUploadsWithRemote() {
     const pendingItems = Array.isArray(state.pendingUploads) ? [...state.pendingUploads] : [];
     for (const pending of pendingItems) {
       const matched = findRemoteForPending(state, pending);
       if (!matched) continue;
-      const transition = buildPendingUploadRemoteTransition(pending, matched, {
-        action: "sync",
-      });
-      if (!transition?.nextPending) {
-        logDebug("workspace.pending-uploads.remote-sync.unknown-status", {
-          error: transition?.errorMessage,
-          jobId: normalizeText(matched?.jobId),
-          remoteStatus: normalizeText(transition?.remoteStatus),
-          requestId: normalizeText(pending?.requestId),
-        });
-        setNotice(normalizeText(transition?.errorMessage) || "원격 작업 상태를 이해하지 못해 브라우저 보관 큐를 그대로 유지합니다.", "warning");
-        applyRender();
-        continue;
-      }
-      await commitPendingUploadRemoteTransition(pending, transition, {
-        applySelectedRecordTransition: true,
-        preserveUpdatedAt: true,
-        queueContext: {
-          phase: transition.outcome === "succeeded"
-            ? "remote-sync-succeeded"
-            : transition.outcome === "failed"
-              ? "remote-sync-reset"
-              : "remote-sync-update",
-          previousRequestId: pending.requestId,
-          reason: "remote-sync",
-          requestId: transition.nextPending.requestId,
-          shouldResetSource: transition.resetChunkCache === "reset-parts",
-        },
-      });
+      await applyPendingUploadRemoteSnapshotState(pending, matched);
     }
     state.meeting.pendingLocalCount = state.pendingUploads.length;
   }
-
   async function connectWorkspaceRealtime(options = {}) {
     const forceReconnect = Boolean(options.forceReconnect);
     const shouldDeferInitialSnapshot = (
@@ -2603,7 +2612,7 @@
             syncWorkspace: false,
             transitionAction: remoteReconcileRequest.transitionAction,
           })
-          : reconcilePendingUploadRemoteState(nextPending, {
+          : reconcileChunkedPendingUploadRemoteState(nextPending, {
             context: buildAttemptQueueContext(activeRequestId, remoteReconcileRequest.contextPhase),
             transitionAction: remoteReconcileRequest.transitionAction,
           })
@@ -2882,10 +2891,10 @@
     };
   }
 
-  async function reconcilePendingUploadRemoteState(item, options = {}) {
+  async function reconcileChunkedPendingUploadRemoteState(item, options = {}) {
     const transitionAction = normalizeText(options?.transitionAction);
-    if (!["chunk-resync", "sync"].includes(transitionAction)) {
-      throw new Error("원격 reconcile action이 없어 브라우저 보관 상태를 안전하게 유지할 수 없어요.");
+    if (transitionAction !== "chunk-resync") {
+      throw new Error("원격 chunk resync action이 없어 브라우저 보관 상태를 안전하게 유지할 수 없어요.");
     }
     const queueContext = normalizePendingUploadQueueContext({
       requestId: item?.requestId,
@@ -2908,8 +2917,7 @@
       applyRender();
       return { createdJob: null, degraded: true, pending: item, resolution: "" };
     }
-    const allChunksUploaded = normalizeText(item?.sourceMode) !== "chunked"
-      || Math.max(0, Number(item?.uploadedPartCount) || 0) >= Math.max(0, Number(item?.preparedPartCount) || 0);
+    const allChunksUploaded = Math.max(0, Number(item?.uploadedPartCount) || 0) >= Math.max(0, Number(item?.preparedPartCount) || 0);
     const transition = buildPendingUploadRemoteTransition(item, createdJob, {
       action: transitionAction,
       awaitingMoreUploads: !allChunksUploaded,
