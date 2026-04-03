@@ -38,6 +38,7 @@
   const AUTO_RETRY_PENDING_STATUSES = new Set(["local_saved", "upload_queued"]);
   const debugListeners = new Set();
   const debugEntries = [];
+  const debugFaults = Object.create(null);
   let debugSequence = 0;
   let debugEnabled = false;
 
@@ -1060,13 +1061,69 @@
     return entry;
   }
 
+  function getDebugFaults() {
+    const snapshot = {};
+    for (const [name, count] of Object.entries(debugFaults)) {
+      if (!normalizeText(name)) continue;
+      if (count === -1) snapshot[name] = "always";
+      else if (Number.isFinite(count) && count > 0) snapshot[name] = count;
+    }
+    return snapshot;
+  }
+
+  function setDebugFault(name, count = true) {
+    const normalizedName = normalizeText(name);
+    if (!normalizedName) return getDebugFaults();
+    if (count === false || count === 0) {
+      delete debugFaults[normalizedName];
+      return getDebugFaults();
+    }
+    if (count === true) {
+      debugFaults[normalizedName] = -1;
+      return getDebugFaults();
+    }
+    const normalizedCount = Math.max(1, Math.floor(Number(count) || 0)) || 1;
+    debugFaults[normalizedName] = normalizedCount;
+    return getDebugFaults();
+  }
+
+  function clearDebugFault(name) {
+    const normalizedName = normalizeText(name);
+    if (!normalizedName) {
+      for (const key of Object.keys(debugFaults)) {
+        delete debugFaults[key];
+      }
+      return getDebugFaults();
+    }
+    delete debugFaults[normalizedName];
+    return getDebugFaults();
+  }
+
+  function consumeDebugFault(name) {
+    const normalizedName = normalizeText(name);
+    if (!normalizedName) return false;
+    const current = Number(debugFaults[normalizedName]);
+    if (current === -1) return true;
+    if (!Number.isFinite(current) || current <= 0) return false;
+    if (current === 1) {
+      delete debugFaults[normalizedName];
+      return true;
+    }
+    debugFaults[normalizedName] = current - 1;
+    return true;
+  }
+
   debugEnabled = isDebugPanelEnabled(global);
 
   global.__INOVA_HOSTED_MEETING_DEBUG__ = {
     clear: clearDebugEntries,
+    clearFault: clearDebugFault,
+    consumeFault: consumeDebugFault,
     entries: getDebugEntries,
+    faults: getDebugFaults,
     format: formatDebugEntry,
     log: logDebug,
+    setFault: setDebugFault,
   };
 
   ns.shared = {
@@ -1114,6 +1171,8 @@
     formatDebugEntry,
     cleanPreviewText,
     clearDebugEntries,
+    clearDebugFault,
+    consumeDebugFault,
     countSpeakers,
     generateCaptureRequestId,
     getDebugEntries,
@@ -1145,6 +1204,7 @@
     safeParse,
     safeSessionStorageGet,
     safeSessionStorageSet,
+    setDebugFault,
     setEnabled,
     stopTracks,
     subscribeDebugEntries,

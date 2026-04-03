@@ -1,6 +1,6 @@
 (function initHostedMeetingStorage(global) {
   const ns = global.__INOVA_HOSTED_MEETING__ = global.__INOVA_HOSTED_MEETING__ || {};
-  const { normalizeText, normalizeTextBlock, safeLocalStorageSet } = ns.shared;
+  const { consumeDebugFault, normalizeText, normalizeTextBlock, safeLocalStorageSet } = ns.shared;
 
   const PENDING_UPLOAD_LOCAL_STORAGE_KEY = "inova-hosted-meeting-pending-uploads";
   const PENDING_UPLOAD_DB_NAME = "inova-hosted-meeting-workspace";
@@ -10,6 +10,16 @@
     delete: "delete",
     listByMeeting: "listByMeeting",
     put: "put",
+  });
+  const PENDING_UPLOAD_DEBUG_FAULTS = Object.freeze({
+    indexedDbDelete: "pending-uploads:indexeddb-delete-failed",
+    indexedDbOpen: "pending-uploads:indexeddb-open-failed",
+    indexedDbRead: "pending-uploads:indexeddb-read-failed",
+    indexedDbWrite: "pending-uploads:indexeddb-write-failed",
+    localStorageInvalidPayload: "pending-uploads:local-storage-invalid-payload",
+    localStorageParse: "pending-uploads:local-storage-parse-failed",
+    localStorageRead: "pending-uploads:local-storage-read-failed",
+    localStorageWrite: "pending-uploads:local-storage-write-failed",
   });
 
   function buildPendingUploadStorageIssue(code, options = {}) {
@@ -85,6 +95,38 @@
     issues.push(issue);
   }
 
+  function consumePendingUploadStorageDebugFault(name) {
+    return typeof consumeDebugFault === "function" && consumeDebugFault(name);
+  }
+
+  function buildPendingUploadStorageDebugFaultError(message) {
+    const error = new Error(normalizeText(message) || "pending upload storage debug fault injected");
+    error.name = "InjectedDebugFault";
+    return error;
+  }
+
+  function getPendingUploadStorageDebugFaultName(failureCode) {
+    const normalizedFailureCode = normalizeText(failureCode);
+    if (normalizedFailureCode === "indexeddb-read-failed") return PENDING_UPLOAD_DEBUG_FAULTS.indexedDbRead;
+    if (normalizedFailureCode === "indexeddb-write-failed") return PENDING_UPLOAD_DEBUG_FAULTS.indexedDbWrite;
+    if (normalizedFailureCode === "indexeddb-delete-failed") return PENDING_UPLOAD_DEBUG_FAULTS.indexedDbDelete;
+    return "";
+  }
+
+  async function runPendingUploadStoreRequest(store, method, args, issues, failureCode) {
+    const debugFaultName = getPendingUploadStorageDebugFaultName(failureCode);
+    if (consumePendingUploadStorageDebugFault(debugFaultName)) {
+      const error = buildPendingUploadStorageDebugFaultError(`${failureCode} debug fault injected`);
+      recordPendingUploadStorageIssue(issues, buildPendingUploadStorageIssue(failureCode, {
+        errorName: normalizeText(error.name),
+        message: error.message,
+        storage: "indexeddb",
+      }));
+      throw error;
+    }
+    return runPendingUploadStorageRequest(store[method](...(Array.isArray(args) ? args : [])), issues, failureCode);
+  }
+
   async function runPendingUploadStorageRequest(request, issues, failureCode) {
     try {
       return await runIdbRequest(request);
@@ -100,6 +142,17 @@
 
   function readLocalStorageValueDetailed(target, key) {
     const normalizedKey = normalizeText(key);
+    if (consumePendingUploadStorageDebugFault(PENDING_UPLOAD_DEBUG_FAULTS.localStorageRead)) {
+      return {
+        issue: buildPendingUploadStorageIssue("local-storage-read-failed", {
+          errorName: "InjectedDebugFault",
+          key: normalizedKey,
+          message: "local-storage-read-failed debug fault injected",
+          storage: "local-storage",
+        }),
+        value: "",
+      };
+    }
     try {
       if (!target?.localStorage || typeof target.localStorage.getItem !== "function") {
         throw new Error("local-storage unavailable");
@@ -132,6 +185,27 @@
     if (!normalized) {
       return { items: [] };
     }
+    if (consumePendingUploadStorageDebugFault(PENDING_UPLOAD_DEBUG_FAULTS.localStorageInvalidPayload)) {
+      return {
+        issue: buildPendingUploadStorageIssue("local-storage-invalid-payload", {
+          key,
+          message: "local-storage-invalid-payload debug fault injected",
+          storage: "local-storage",
+        }),
+        items: [],
+      };
+    }
+    if (consumePendingUploadStorageDebugFault(PENDING_UPLOAD_DEBUG_FAULTS.localStorageParse)) {
+      return {
+        issue: buildPendingUploadStorageIssue("local-storage-parse-failed", {
+          errorName: "InjectedDebugFault",
+          key,
+          message: "local-storage-parse-failed debug fault injected",
+          storage: "local-storage",
+        }),
+        items: [],
+      };
+    }
     try {
       const parsed = JSON.parse(normalized);
       if (!Array.isArray(parsed)) {
@@ -161,6 +235,14 @@
 
   function writeLocalStorageValueDetailed(target, key, value) {
     const normalizedKey = normalizeText(key);
+    if (consumePendingUploadStorageDebugFault(PENDING_UPLOAD_DEBUG_FAULTS.localStorageWrite)) {
+      return buildPendingUploadStorageIssue("local-storage-write-failed", {
+        errorName: "InjectedDebugFault",
+        key: normalizedKey,
+        message: "local-storage-write-failed debug fault injected",
+        storage: "local-storage",
+      });
+    }
     try {
       if (!target?.localStorage || typeof target.localStorage.setItem !== "function") {
         throw new Error("local-storage unavailable");
@@ -375,13 +457,17 @@
           if (db) {
             const store = db.transaction(PENDING_UPLOAD_STORE_NAME, "readwrite").objectStore(PENDING_UPLOAD_STORE_NAME);
             await Promise.all([
-              runPendingUploadStorageRequest(
-                store.put(await serializePendingUpload(normalized, false)),
+              runPendingUploadStoreRequest(
+                store,
+                "put",
+                [await serializePendingUpload(normalized, false)],
                 issues,
                 "indexeddb-write-failed"
               ),
-              ...supersededRequestIds.map((requestId) => runPendingUploadStorageRequest(
-                store.delete(requestId),
+              ...supersededRequestIds.map((requestId) => runPendingUploadStoreRequest(
+                store,
+                "delete",
+                [requestId],
                 issues,
                 "indexeddb-delete-failed"
               )),
@@ -423,8 +509,10 @@
       const normalizedMeetingId = normalizeText(meetingId);
       const db = await openDb(issues);
       if (db) {
-        const items = await runPendingUploadStorageRequest(
-          db.transaction(PENDING_UPLOAD_STORE_NAME, "readonly").objectStore(PENDING_UPLOAD_STORE_NAME).getAll(),
+        const items = await runPendingUploadStoreRequest(
+          db.transaction(PENDING_UPLOAD_STORE_NAME, "readonly").objectStore(PENDING_UPLOAD_STORE_NAME),
+          "getAll",
+          [],
           issues,
           "indexeddb-read-failed"
         );
@@ -439,8 +527,10 @@
       if (!normalizedRequestId) return;
       const db = await openDb(issues);
       if (db) {
-        await runPendingUploadStorageRequest(
-          db.transaction(PENDING_UPLOAD_STORE_NAME, "readwrite").objectStore(PENDING_UPLOAD_STORE_NAME).delete(normalizedRequestId),
+        await runPendingUploadStoreRequest(
+          db.transaction(PENDING_UPLOAD_STORE_NAME, "readwrite").objectStore(PENDING_UPLOAD_STORE_NAME),
+          "delete",
+          [normalizedRequestId],
           issues,
           "indexeddb-delete-failed"
         );
@@ -469,6 +559,10 @@
       }
       if (!dbPromise) {
         dbPromise = new Promise((resolve, reject) => {
+          if (consumePendingUploadStorageDebugFault(PENDING_UPLOAD_DEBUG_FAULTS.indexedDbOpen)) {
+            reject(buildPendingUploadStorageDebugFaultError("indexeddb-open-failed debug fault injected"));
+            return;
+          }
           const request = target.indexedDB.open(PENDING_UPLOAD_DB_NAME, 1);
           request.onupgradeneeded = () => {
             const db = request.result;
@@ -514,6 +608,7 @@
   }
 
   ns.storage = {
+    DEBUG_FAULTS: PENDING_UPLOAD_DEBUG_FAULTS,
     blobToBase64,
     collapseSupersededPendingUploads,
     comparePendingUploads,
