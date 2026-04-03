@@ -63,7 +63,7 @@
       currentDetailSelectionId: "",
       currentJob: null,
       currentLocalRecord: null,
-      debugNotice: { sticky: false, text: "", tone: "" },
+      debugNotice: { code: "", sticky: false, text: "", tone: "" },
       debugNoticeTimer: 0,
       debugPanelCollapsed: readDebugPanelCollapsed(),
       isLocalWorkspace: isLocalWorkspaceOrigin(global),
@@ -73,7 +73,7 @@
       media: createEmptyMediaState(),
       meeting: { meetingId: "", pendingLocalCount: 0, sharedMemo: "", title: "", updatedAt: "" },
       mode: "create",
-      notice: { sticky: false, text: "", tone: "" },
+      notice: { code: "", sticky: false, text: "", tone: "" },
       noticeTimer: 0,
       params: parseParams(global.location.href),
       pendingUploads: [],
@@ -417,7 +417,7 @@
       if (!shouldReconnect) {
         await syncWorkspaceLocalState(Boolean(hydrateSelection), reason);
       }
-      clearTransientRefreshNotice();
+      clearResolvedRefreshNotice();
       applyRender();
       logDebug("workspace.refresh.success", {
         meetingId: state.meeting.meetingId,
@@ -440,10 +440,23 @@
         clearWorkspaceSession();
         return renderBlocked(message);
       }
-      if (shouldSuppressRefreshError(error, message, reason)) {
-        clearTransientRefreshNotice();
+      if (shouldDegradeRefreshError(error, message, reason)) {
+        logDebug("workspace.refresh.degraded", {
+          error,
+          hasWorkspaceData: hasWorkspaceData(),
+          message,
+          reason,
+        });
+        setNotice(buildRefreshDegradedNotice(message, reason), "warning", {
+          code: "refresh-degraded",
+          sticky: true,
+        });
         applyRender();
-        return null;
+        return {
+          degraded: true,
+          items: state.records,
+          meeting: state.meeting,
+        };
       }
       setNotice(message, "error");
       applyRender();
@@ -2277,15 +2290,16 @@
     global.clearTimeout(state[timerKey]);
     const nextText = normalizeText(text);
     const nextTone = normalizeText(tone);
+    const nextCode = normalizeText(options?.code);
     const sticky = Boolean(options?.sticky || nextTone === "error");
-    state[key] = { sticky, text: nextText, tone: nextTone };
+    state[key] = { code: nextCode, sticky, text: nextText, tone: nextTone };
     if (!nextText || sticky) {
       state[timerKey] = 0;
       return;
     }
     state[timerKey] = global.setTimeout(() => {
-      if (state[key].text === nextText && state[key].tone === nextTone) {
-        state[key] = { sticky: false, text: "", tone: "" };
+      if (state[key].text === nextText && state[key].tone === nextTone && normalizeText(state[key].code) === nextCode) {
+        state[key] = { code: "", sticky: false, text: "", tone: "" };
         state[timerKey] = 0;
         applyRender();
       }
@@ -2369,18 +2383,23 @@
   function isSlowResponseMessage(message) {
     return normalizeText(message).includes("회의 작업실 응답이 늦어지고 있어요");
   }
-  function clearTransientRefreshNotice() {
-    if (!state.notice.text) return;
-    if (!state.notice.sticky) {
-      setNotice("", "");
-      return;
-    }
-    if (state.notice.tone !== "error") return;
-    if (isSlowResponseMessage(state.notice.text) || isLikelyNetworkError(global, state.notice.text)) {
-      setNotice("", "");
-    }
+  function clearResolvedRefreshNotice() {
+    if (normalizeText(state.notice.code) !== "refresh-degraded") return;
+    setNotice("", "", { code: "" });
   }
-  function shouldSuppressRefreshError(error, message, reason) {
+
+  function buildRefreshDegradedNotice(message, reason) {
+    const normalizedMessage = normalizeText(message) || "작업실 최신 상태를 다시 읽지 못했어요.";
+    const normalizedReason = normalizeText(reason);
+    const surfaceLabel = normalizedReason === "background"
+      ? "백그라운드 동기화"
+      : normalizedReason === "workflow"
+        ? "작업 후 동기화"
+        : "작업실 동기화";
+    return `${surfaceLabel}에 실패해 이전 작업실 데이터를 그대로 보여주고 있습니다. 최신 기록이나 상태는 아직 반영되지 않았을 수 있습니다. 원인: ${normalizedMessage}`;
+  }
+
+  function shouldDegradeRefreshError(error, message, reason) {
     const normalizedReason = normalizeText(reason);
     if (!["background", "workflow"].includes(normalizedReason)) return false;
     if (!hasWorkspaceData()) return false;

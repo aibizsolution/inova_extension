@@ -179,6 +179,7 @@
   - `features/prompt-store/prompt-realtime-manager.js`: prompt/store용 hosted bridge 연결, Firebase custom token auth, 최신 snapshot fallback 조정
   - `meeting-manager.js`: 패널 회의 허브 Firestore realtime 구독, fallback refresh, local cache 조정
 - `meeting-view.js`: 회의 허브 리스트와 `새 회의하기` CTA, 패널 공용 디버그 콘솔 렌더링
+  - `release-manager.js`, `release-view.js`: 릴리스 확인 실패 시 cached data 여부를 구분해 degraded 상태를 명시적으로 표시
   - `features/prompt-review/prompt-review-manager.js`: 현재 입력 프롬프트 평가 호출과 상태 관리
   - `features/prompt-library/prompt-view.js`: 요청 탭 렌더링
   - `features/prompt-library/prompt-manager.js`: 요청 CRUD, 가져오기/내보내기, 입력창 주입

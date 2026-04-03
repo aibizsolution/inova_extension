@@ -20,6 +20,7 @@
           checking: Boolean(releaseInfo.checking),
           currentVersion,
           currentAheadOfLatest,
+          degraded: false,
           error: releaseInfo.error,
           history: Array.isArray(releaseInfo.history) ? releaseInfo.history : [],
           historyRefreshPending: Boolean(releaseInfo.history.length) && !historyCheckedForCurrentVersion,
@@ -31,12 +32,18 @@
           versionRefreshPending: Boolean(releaseInfo.latest) && !checkedForCurrentVersion,
         };
       } catch (error) {
+        const message = isInvalidatedContextError(error)
+          ? "확장프로그램이 갱신되어 릴리스 화면 상태를 다시 계산해야 합니다."
+          : error instanceof Error
+            ? error.message
+            : "릴리스 화면 상태를 계산하지 못했어요.";
         if (!isInvalidatedContextError(error)) console.error("[i-Nova Bookmarks] release view state failed", error);
         return {
           checking: false,
           currentVersion: "알 수 없음",
           currentAheadOfLatest: false,
-          error: "",
+          degraded: true,
+          error: message,
           history: [],
           historyRefreshPending: false,
           historyLoading: false,
@@ -118,6 +125,11 @@
         });
         state.releaseInfo = namespace.releaseInfo.mergeReleaseInfo(state.releaseInfo, {
           error: error instanceof Error ? error.message : "릴리스 정보를 확인하지 못했어요.",
+        });
+        logDebug("release.check.degraded", {
+          historyCount: Array.isArray(current.history) ? current.history.length : 0,
+          latestVersion: namespace.session.normalizeText(current.latest?.version),
+          scope: "release",
         });
       } finally {
         state.releaseInfo = namespace.releaseInfo.mergeReleaseInfo(state.releaseInfo, {

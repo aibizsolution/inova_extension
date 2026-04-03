@@ -22,11 +22,22 @@
 
   function renderStatusCard(state) {
     if (state.error) {
+      const hasCachedData = Boolean(
+        state.latest
+        || (Array.isArray(state.history) && state.history.length)
+        || state.lastCheckedAt
+      );
       return `
         <article class="inova-release-card is-muted">
-          <strong>릴리스 정보를 확인하지 못했어요.</strong>
-          <p>잠시 후 다시 확인해 주세요.</p>
+          <strong>${hasCachedData ? "릴리스 정보를 제한적으로 표시 중이에요." : "릴리스 정보를 확인하지 못했어요."}</strong>
+          <p>${hasCachedData
+            ? "최근 확인이 실패해 이전에 확인한 배포 정보만 보여주고 있습니다. 최신 버전 여부는 아직 확정되지 않았어요."
+            : state.degraded
+              ? "릴리스 화면 상태 계산에 실패해 최신 버전 여부를 아직 판단할 수 없습니다."
+              : "잠시 후 다시 확인해 주세요."}</p>
           <span class="inova-release-card__meta">현재 설치 버전 ${escapeHtml(state.currentVersion)}</span>
+          <p class="inova-release-card__empty">오류: ${escapeHtml(state.error)}</p>
+          ${renderCheckedMeta(state.lastCheckedAt)}
         </article>
       `;
     }
