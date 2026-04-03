@@ -394,6 +394,9 @@
     if (["chunk-remote-job-start", "chunk-remote-job-refresh", "chunk-remote-job-resync", "single-remote-job-start"].includes(normalizedContext.phase)) {
       return `${normalizedReason || "원격 전사 작업 연결 상태를 브라우저에 보관하지 못했어요."} 지금 탭에서는 결과를 계속 확인하지만, 다음 새로고침 뒤에는 원격 작업 연결 상태가 잠시 비어 보일 수 있습니다.`;
     }
+    if (["chunk-resync-succeeded", "chunk-resync-update", "chunk-resync-reset"].includes(normalizedContext.phase)) {
+      return `${normalizedReason || "chunk 후속 원격 상태 재확인 결과를 브라우저 로컬 큐에 반영하지 못했어요."} 다음 새로고침 뒤에는 방금 다시 확인한 원격 처리 상태가 잠시 이전 값으로 보일 수 있습니다.`;
+    }
     if (["remote-sync-succeeded", "remote-sync-update", "remote-sync-reset"].includes(normalizedContext.phase)) {
       return `${normalizedReason || "원격 동기화 결과를 브라우저 로컬 큐에 반영하지 못했어요."} 다음 새로고침 뒤에는 최신 원격 처리 상태가 잠시 이전 값으로 보일 수 있습니다.`;
     }
@@ -1926,12 +1929,23 @@
     return nextPending;
   }
 
-  async function commitChunkedPendingUploadRemoteResyncTransition(pending, transition, queueContext) {
+  async function commitChunkedPendingUploadRemoteResyncTransition(pending, transition) {
     if (!transition?.nextPending) {
       return null;
     }
+    const phase = transition.outcome === "succeeded"
+      ? "chunk-resync-succeeded"
+      : transition.outcome === "failed"
+        ? "chunk-resync-reset"
+        : "chunk-resync-update";
     const nextPending = await upsertPendingUpload(transition.nextPending, {
-      context: queueContext,
+      context: {
+        phase,
+        previousRequestId: pending.requestId,
+        reason: "chunk-resync",
+        requestId: transition.nextPending.requestId,
+        shouldResetSource: transition.resetChunkCache === "reset-parts",
+      },
     });
     const normalizedRequestId = normalizeText(pending?.requestId);
     if (!normalizedRequestId) {
@@ -3410,10 +3424,6 @@
     if (transitionAction !== "chunk-resync") {
       throw new Error("원격 chunk resync action이 없어 브라우저 보관 상태를 안전하게 유지할 수 없어요.");
     }
-    const queueContext = normalizePendingUploadQueueContext({
-      requestId: item?.requestId,
-      ...(options?.context || {}),
-    });
     let remoteState = null;
     try {
       remoteState = await requestChunkedPendingUploadRemoteReconcileState(item);
@@ -3448,7 +3458,7 @@
       applyRender();
       return { degraded: true, pending: item, remoteState, resolution: "" };
     }
-    const nextPending = await commitChunkedPendingUploadRemoteResyncTransition(item, transition, queueContext);
+    const nextPending = await commitChunkedPendingUploadRemoteResyncTransition(item, transition);
     const resolution = normalizeText(transition?.resolution);
     logDebug("workspace.pending-upload.chunk-resync.applied", {
       action: transitionAction,
