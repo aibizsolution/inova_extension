@@ -10,6 +10,7 @@
   const CONFIG = resolveConfig(global.__INOVA_HOSTED_MEETING_CONFIG__);
   const FIRESTORE_COLLECTIONS = getCollections();
   const DEBUG_PANEL_COLLAPSED_STORAGE_KEY = "__INOVA_MEETING_DEBUG_PANEL_COLLAPSED__";
+  const DEBUG_LOCAL_QUEUE_SANDBOX_PARAM = "debugQueueSandbox";
   const SUPERSEDED_REMOTE_JOBS_STORAGE_KEY_PREFIX = "__INOVA_MEETING_SUPERSEDED_REMOTE_JOBS__";
   const BOOT_INITIAL_SNAPSHOT_WAIT_MS = 450;
   const DEGRADED_NOTICE_CODES = Object.freeze({
@@ -88,6 +89,7 @@
       currentDetailSelectionId: "",
       currentJob: null,
       currentLocalRecord: null,
+      debugLocalQueueSandbox: false,
       debugNotice: createEmptyNotice(),
       debugNoticeTimer: 0,
       degradedNotices: Object.create(null),
@@ -308,6 +310,44 @@
   function buildSessionRestoreDegradedNotice() {
     const reason = normalizeText(state.sessionRestore.degradedReason) || "브라우저 저장소에 작업실 세션을 다시 저장하거나 읽는 중 문제가 있었습니다.";
     return `${reason} 현재 작업실은 계속 사용할 수 있지만, 다음 새로고침이나 재진입에서 세션 복원이 제한될 수 있습니다.`;
+  }
+
+  function isDebugLocalQueueSandboxRequested() {
+    if (!state.isLocalWorkspace || !isDebugPanelEnabled(global)) {
+      return false;
+    }
+    try {
+      const currentUrl = new URL(global.location.href);
+      return normalizeText(currentUrl.searchParams.get(DEBUG_LOCAL_QUEUE_SANDBOX_PARAM)) === "1";
+    } catch {
+      return false;
+    }
+  }
+
+  function activateDebugLocalQueueSandbox() {
+    const meetingId = normalizeText(state.params.meetingId) || "debug-local-queue";
+    state.debugLocalQueueSandbox = true;
+    state.mode = "create";
+    state.session = {
+      expiresAt: "",
+      meetingId,
+      meetingSessionToken: "__debug-local-queue__",
+      mode: "create",
+      sharedMemo: "",
+      title: "로컬 queue sandbox",
+    };
+    state.meeting = {
+      meetingId,
+      pendingLocalCount: 0,
+      sharedMemo: "",
+      title: state.session.title,
+      updatedAt: "",
+    };
+    state.selectedRecordId = "";
+    logDebug("workspace.debug.local-queue-sandbox", {
+      meetingId,
+      requested: true,
+    });
   }
 
   function buildSessionPersistDegradedNotice(reason) {
@@ -686,6 +726,7 @@
         tone: normalizeText(state.blockedTone),
         value: Boolean(state.blocked),
       },
+      debugLocalQueueSandbox: Boolean(state.debugLocalQueueSandbox),
       degradedNotices: buildDegradedNoticeRegistrySnapshot(),
       diagnostics: {
         cleanup: cloneDegradedDiagnosticsSnapshot(state.pendingUploadCleanup),
@@ -898,6 +939,11 @@
         mode: state.mode,
       });
       if (!state.session.meetingSessionToken || !state.session.meetingId) {
+        if (isDebugLocalQueueSandboxRequested()) {
+          activateDebugLocalQueueSandbox();
+        }
+      }
+      if (!state.session.meetingSessionToken || !state.session.meetingId) {
         const blockedState = buildMissingSessionBlockedOptions();
         return renderBlocked(blockedState.message, blockedState);
       }
@@ -908,6 +954,11 @@
       state.recordMemoDraft = state.recordMemoSaved;
       refs.sharedMemoInput.value = state.recordMemoDraft;
       await loadPendingUploads();
+      if (state.debugLocalQueueSandbox) {
+        setNotice("로컬 queue sandbox를 켰습니다. import/hold/delete/reload로 queue degraded 흐름만 확인합니다.", "highlight");
+        applyRender();
+        return;
+      }
       await refreshWorkspace(true, "boot");
       retryPendingUploads("boot-retry");
     } catch (error) {
@@ -1059,6 +1110,17 @@
 
   async function refreshWorkspace(hydrateSelection, reason) {
     if (state.blocked || state.loading) return null;
+    if (state.debugLocalQueueSandbox) {
+      logDebug("workspace.refresh.skipped", {
+        reason: "local-queue-sandbox",
+        requestedReason: normalizeText(reason),
+      });
+      if (normalizeText(reason) === "manual") {
+        setNotice("로컬 queue sandbox에서는 원격 새로고침을 건너뜁니다.", "highlight");
+        applyRender();
+      }
+      return null;
+    }
     state.loading = true;
     state.loadingReason = normalizeText(reason);
     if (state.loadingReason === "manual") {
@@ -1818,9 +1880,16 @@
     refs.sharedMemoNotice.textContent = "";
     state.reviewTab = "summary";
     state.selectedRecordId = ns.shared.buildLocalSelectionId(pending.requestId);
-    setNotice("파일을 불러왔고 자동 전사를 시작했습니다.", "highlight");
+    setNotice(
+      state.debugLocalQueueSandbox
+        ? "파일을 불러왔습니다. 로컬 queue sandbox에서는 원격 전사를 건너뛰고 브라우저 queue 상태만 확인합니다."
+        : "파일을 불러왔고 자동 전사를 시작했습니다.",
+      "highlight"
+    );
     applyRender();
-    void attemptPendingUpload(pending.requestId, { reason: "import-upload" });
+    if (!state.debugLocalQueueSandbox) {
+      void attemptPendingUpload(pending.requestId, { reason: "import-upload" });
+    }
   }
 
   async function measureAudioDuration(file) {
@@ -1953,10 +2022,17 @@
       applyRender();
       void startCapture({ continuedFromLimit: true });
     } else {
-      setNotice("녹음을 브라우저에 저장했고 자동 전사를 시작했습니다. 지금 바로 다음 녹음을 시작할 수 있습니다.", "highlight");
+      setNotice(
+        state.debugLocalQueueSandbox
+          ? "녹음을 브라우저 queue에 저장했습니다. 로컬 queue sandbox에서는 원격 전사를 건너뜁니다."
+          : "녹음을 브라우저에 저장했고 자동 전사를 시작했습니다. 지금 바로 다음 녹음을 시작할 수 있습니다.",
+        "highlight"
+      );
       applyRender();
     }
-    void attemptPendingUpload(pending.requestId, { reason: "capture-upload" });
+    if (!state.debugLocalQueueSandbox) {
+      void attemptPendingUpload(pending.requestId, { reason: "capture-upload" });
+    }
   }
 
   function resolvePendingUploadAttemptReason(pending, options = {}) {
@@ -2896,6 +2972,11 @@
     try {
       const pending = state.pendingUploads.find((item) => item.requestId === normalizeText(requestId));
       if (!pending) return;
+      if (state.debugLocalQueueSandbox && ["retry", "restart"].includes(normalizeText(action))) {
+        setNotice("로컬 queue sandbox에서는 retry/restart 대신 hold, title 변경, delete로 queue 상태를 확인합니다.", "warning");
+        applyRender();
+        return;
+      }
       if (normalizeText(action) === "retry") return attemptPendingUpload(requestId, { reason: "manual-retry" });
       if (normalizeText(action) === "restart") return attemptPendingUpload(requestId, { forceRestart: true, reason: "manual-restart" });
       if (normalizeText(action) === "hold") {
@@ -3106,6 +3187,13 @@
   }
 
   function retryPendingUploads(reason = "auto-retry") {
+    if (state.debugLocalQueueSandbox) {
+      logDebug("workspace.pending-upload.retry.skipped", {
+        reason: normalizeText(reason),
+        sandbox: "local-queue",
+      });
+      return;
+    }
     for (const pending of state.pendingUploads) {
       if (!pending.hold && AUTO_RETRY_PENDING_STATUSES.has(pending.status)) attemptPendingUpload(pending.requestId, { reason });
     }

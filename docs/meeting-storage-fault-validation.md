@@ -4,6 +4,7 @@
 
 ## 준비
 
+- 로컬만 빠르게 돌릴 때는 `npm run emulator:hosting` 후 `http://127.0.0.1:5000/meeting/index.html?debug=1&debugQueueSandbox=1`를 Chrome에서 연다.
 - 팝업에서 `디버그 ON`을 켜고 hosted 회의 작업실을 연다.
 - 작업실 URL에 `debug=1`이 포함돼 디버그 콘솔이 보이는지 확인한다.
 - 브라우저 DevTools 콘솔에서 아래 helper가 보이는지 확인한다.
@@ -98,5 +99,6 @@ __INOVA_HOSTED_MEETING_DEBUG__.clearFault();
 ## 메모
 
 - `queueFaults.arm(...)`은 기본적으로 다음 1회만 실패를 주입한다.
+- `debugQueueSandbox=1` localhost 모드에서는 panel/session 없이도 queue load/persist/cleanup 검증을 반복할 수 있고, 원격 refresh/retry는 일부러 건너뛴다.
 - 낮은 레벨 fault key가 필요하면 `__INOVA_HOSTED_MEETING__.storage.DEBUG_FAULTS`와 `__INOVA_HOSTED_MEETING_DEBUG__.setFault(name, count)`를 직접 사용할 수 있다.
 - 이 문서의 목표는 `M3 hosted fallback / storage / queue degraded hardening`의 실제 Chrome 수동 검증 속도를 올리는 것이다.
