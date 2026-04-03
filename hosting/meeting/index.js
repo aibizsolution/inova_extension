@@ -3845,7 +3845,7 @@
   async function deleteMeeting() {
     if (!state.session.meetingId) return;
     if (!await requestConfirmation({
-      body: "작업실에 연결된 기록, 산출물, 남아 있는 임시 원본까지 함께 정리합니다. 처리 중인 기록이 있으면 삭제할 수 없습니다.",
+      body: "작업실에 연결된 기록, 산출물, 남아 있는 임시 원본까지 함께 정리합니다. 처리 중인 기록이 있어도 지금 즉시 삭제 요청을 우선 반영하고, 남은 정리는 backend cleanup 경계에서 이어서 마칩니다.",
       confirmLabel: "작업실 삭제",
       eyebrow: "작업실 삭제",
       title: "이 작업실 전체를 삭제할까요?",

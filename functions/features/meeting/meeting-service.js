@@ -413,7 +413,11 @@ function registerMeetingHandlers(deps) {
         deletion.deletedAt,
         currentJob.retry
       );
-      currentJob = mergeMeetingJobPatch(currentJob, succeededPatch);
+      const storedJob = await loadStoredMeetingJob(jobRef);
+      if (!storedJob?.jobId || storedJob.deletedAt) {
+        return;
+      }
+      currentJob = mergeMeetingJobPatch(storedJob, succeededPatch);
       await Promise.all([
         artifactRef.set(artifact),
         jobRef.set(succeededPatch, { merge: true }),
@@ -820,7 +824,15 @@ function registerMeetingHandlers(deps) {
         deletion.deletedAt,
         currentJob.retry
       );
-      currentJob = mergeMeetingJobPatch(currentJob, succeededPatch);
+      const storedJob = await loadStoredMeetingJob(jobRef);
+      if (!storedJob?.jobId || storedJob.deletedAt) {
+        await Promise.all([
+          deleteDocumentIfExists(finalizerRef),
+          ...partDocs.map((partDoc) => deleteDocumentIfExists(db.collection(JOB_PART_COLLECTION).doc(partDoc.docId))),
+        ]);
+        return;
+      }
+      currentJob = mergeMeetingJobPatch(storedJob, succeededPatch);
       await Promise.all([
         artifactRef.set(artifact),
         jobRef.set(succeededPatch, { merge: true }),
@@ -1477,47 +1489,27 @@ function registerMeetingHandlers(deps) {
       if (job.meetingId !== input.meetingId) {
         throw createHttpError(404, "현재 회의와 맞지 않는 결과예요.");
       }
-      if (job.status === "queued" || job.status === "processing") {
-        throw createHttpError(409, "처리 중인 회의 결과는 아직 삭제할 수 없어요.");
-      }
 
       const deletedAt = new Date().toISOString();
-      const artifactIds = collectMeetingArtifactIds(job);
-      const partDocs = await loadMeetingJobPartDocs(job.jobId);
-      const storageObjects = [
-        ...collectMeetingSourceStorageObjects(job.source),
-        ...collectMeetingChunkTranscriptStorageObjects(partDocs),
-      ];
-
-      if (storageObjects.length) {
-        await deleteTemporarySourceGroup(bucket, storageObjects);
-      }
-      await Promise.all(
-        artifactIds.map((artifactId) => deleteDocumentIfExists(db.collection(ARTIFACT_COLLECTION).doc(artifactId)))
-      );
-      await Promise.all([
-        deleteDocumentIfExists(jobRef),
-        deleteDocumentIfExists(db.collection(JOB_FINALIZER_COLLECTION).doc(job.jobId)),
-        ...partDocs.map((partDoc) => deleteDocumentIfExists(db.collection(JOB_PART_COLLECTION).doc(partDoc.docId))),
-      ]);
+      const deletion = await deleteMeetingJobRuntimeArtifacts(job, deletedAt);
 
       const meeting = await removeMeetingResultFromSummaries(owner, job, deletedAt);
 
       logEvent("meeting.result.delete.success", {
-        artifactCount: artifactIds.length,
+        artifactCount: deletion.artifactIds.length,
         jobId: input.jobId,
         meetingId: input.meetingId,
         providerUserKey: owner.providerUserKey,
-        storageObjectDeleted: Boolean(storageObjects.length),
+        storageObjectDeleted: Boolean(deletion.deletedStorageObjects.length),
       });
       response.json({
         ok: true,
         data: {
-          artifactCount: artifactIds.length,
+          artifactCount: deletion.artifactIds.length,
           deletedAt,
           deletedJobId: input.jobId,
           meeting,
-          storageObjectDeleted: Boolean(storageObjects.length),
+          storageObjectDeleted: Boolean(deletion.deletedStorageObjects.length),
         },
       });
     } catch (error) {
@@ -1563,23 +1555,27 @@ function registerMeetingHandlers(deps) {
         throw createHttpError(404, "이미 삭제된 회의예요.");
       }
       const jobs = await loadOwnedMeetingJobs(owner, meeting.meetingId);
-      if (jobs.some((job) => job.status === "queued" || job.status === "processing")) {
-        throw createHttpError(409, "처리 중인 기록이 있어 지금은 작업실 삭제를 할 수 없어요.");
-      }
-
       const deletedAt = new Date().toISOString();
-      const artifactIds = Array.from(new Set(jobs.flatMap((job) => collectMeetingArtifactIds(job))));
-      const storageObjects = Array.from(new Set(jobs.flatMap((job) => collectMeetingSourceStorageObjects(job.source))));
-
-      await Promise.all(storageObjects.map((storageObject) => deleteTemporarySource(bucket, storageObject)));
-      await Promise.all(artifactIds.map((artifactId) => deleteDocumentIfExists(db.collection(ARTIFACT_COLLECTION).doc(artifactId))));
-      await Promise.all(jobs.map((job) => deleteDocumentIfExists(db.collection(JOB_COLLECTION).doc(job.jobId))));
+      const deletions = [];
+      for (const job of jobs) {
+        deletions.push(await deleteMeetingJobRuntimeArtifacts(job, deletedAt));
+      }
+      const artifactIds = Array.from(new Set(deletions.flatMap((item) => item.artifactIds)));
+      const storageObjects = Array.from(new Set(deletions.flatMap((item) => item.deletedStorageObjects)));
 
       if (meeting.sessionId) {
         const sessionRef = db.collection(SESSION_COLLECTION).doc(buildSessionDocId(owner.providerUserKey, meeting.sessionId));
-        await deleteDocumentIfExists(sessionRef);
+        await sessionRef.set({
+          deletedAt,
+          recentJobs: [],
+          updatedAt: deletedAt,
+        }, { merge: true });
       }
-      await deleteDocumentIfExists(meetingRef);
+      await meetingRef.set({
+        deletedAt,
+        recentJobs: [],
+        updatedAt: deletedAt,
+      }, { merge: true });
 
       logEvent("meeting.delete.success", {
         artifactCount: artifactIds.length,
@@ -2825,13 +2821,68 @@ function registerMeetingHandlers(deps) {
   }
 
   async function persistMeetingJobPatch(jobRef, meetingRef, sessionRef, meeting, owner, currentJobInput, patch, artifactInput) {
-    const nextJob = mergeMeetingJobPatch(currentJobInput, patch);
+    const storedJob = await loadStoredMeetingJob(jobRef);
+    if (!storedJob?.jobId || storedJob.deletedAt) {
+      return storedJob || normalizeMeetingJob(currentJobInput);
+    }
+    const nextJob = mergeMeetingJobPatch(storedJob, patch);
     await Promise.all([
       jobRef.set(patch, { merge: true }),
       upsertMeetingJobSummary(meetingRef, meeting, owner, nextJob, artifactInput),
       sessionRef ? upsertLegacySessionJobSummary(sessionRef, meeting, owner, nextJob, artifactInput) : Promise.resolve(),
     ]);
     return nextJob;
+  }
+
+  async function loadStoredMeetingJob(jobRef) {
+    if (!jobRef || typeof jobRef.get !== "function") {
+      return null;
+    }
+    const snapshot = await jobRef.get();
+    if (!snapshot.exists) {
+      return null;
+    }
+    return normalizeMeetingJob(snapshot.data());
+  }
+
+  async function deleteMeetingJobRuntimeArtifacts(jobInput, deletedAt) {
+    const job = normalizeMeetingJob(jobInput);
+    const jobRef = db.collection(JOB_COLLECTION).doc(job.jobId);
+    const artifactIds = Array.from(new Set(collectMeetingArtifactIds(job)));
+    const partDocs = await loadMeetingJobPartDocs(job.jobId);
+    const storageObjects = Array.from(new Set([
+      ...collectMeetingSourceStorageObjects(job.source),
+      ...collectMeetingChunkTranscriptStorageObjects(partDocs),
+    ]));
+    const deletion = await deleteTemporarySourceGroup(bucket, storageObjects);
+    await Promise.all([
+      ...artifactIds.map((artifactId) => deleteDocumentIfExists(db.collection(ARTIFACT_COLLECTION).doc(artifactId))),
+      deleteDocumentIfExists(db.collection(JOB_FINALIZER_COLLECTION).doc(job.jobId)),
+      ...partDocs.map((partDoc) => deleteDocumentIfExists(db.collection(JOB_PART_COLLECTION).doc(partDoc.docId))),
+    ]);
+    await jobRef.set({
+      cleanup: {
+        deletedAt: deletion.deletedAt,
+        sourceAudioDeleted: Boolean(deletion.deletedStorageObjects.length),
+      },
+      deletedAt,
+      error: "",
+      progress: {
+        currentPart: Math.max(0, Number(job.progress?.currentPart) || 0),
+        parallelParts: 0,
+        percent: 100,
+        phase: "deleted",
+        totalParts: Math.max(0, Number(job.progress?.totalParts) || (Array.isArray(job.source?.parts) ? job.source.parts.length : 0)),
+      },
+      source: markMeetingSourceDeleted(job.source, deletion.deletedStorageObjects),
+      status: "deleted",
+      updatedAt: deletedAt,
+    }, { merge: true });
+    return {
+      artifactIds,
+      deletedStorageObjects: deletion.deletedStorageObjects,
+      partCount: partDocs.length,
+    };
   }
 
   async function loadMeetingJobPartDocs(jobId) {
@@ -3006,7 +3057,15 @@ function registerMeetingHandlers(deps) {
 
   async function maybeQueueMeetingJobFinalizer(job, existingFinalizerInput) {
     const normalizedJob = normalizeMeetingJob(job);
-    const finalizerRef = db.collection(JOB_FINALIZER_COLLECTION).doc(normalizedJob.jobId);
+    if (!normalizedJob.jobId || normalizedJob.deletedAt) {
+      return false;
+    }
+    const jobRef = db.collection(JOB_COLLECTION).doc(normalizedJob.jobId);
+    const storedJob = await loadStoredMeetingJob(jobRef);
+    if (!storedJob?.jobId || storedJob.deletedAt) {
+      return false;
+    }
+    const finalizerRef = db.collection(JOB_FINALIZER_COLLECTION).doc(storedJob.jobId);
     return db.runTransaction(async (transaction) => {
       const snapshot = await transaction.get(finalizerRef);
       const currentFinalizer = snapshot.exists
@@ -3016,7 +3075,7 @@ function registerMeetingHandlers(deps) {
         return false;
       }
       const queuedAt = new Date().toISOString();
-      transaction.set(finalizerRef, buildQueuedMeetingJobFinalizer(normalizedJob, queuedAt, currentFinalizer));
+      transaction.set(finalizerRef, buildQueuedMeetingJobFinalizer(storedJob, queuedAt, currentFinalizer));
       return true;
     });
   }
@@ -4607,23 +4666,36 @@ function countTranscriptSpeakers(segments) {
 }
 
 async function upsertMeetingJobSummary(meetingRef, meeting, owner, jobInput, artifactInput) {
+  const job = normalizeMeetingJob(jobInput);
+  if (!job.jobId || job.deletedAt) {
+    return;
+  }
   const snapshot = await meetingRef.get();
   const currentMeeting = snapshot.exists ? normalizeMeetingSummary(snapshot.data()) : normalizeMeetingSummary({
     meetingId: meeting.meetingId,
     owner,
   });
-  const jobSummary = buildMeetingResultSummary(jobInput, artifactInput);
+  if (currentMeeting.deletedAt) {
+    return;
+  }
+  const jobSummary = buildMeetingResultSummary(job, artifactInput);
   const nextDocument = buildMeetingSummaryDocument(meeting, owner, jobSummary, currentMeeting);
   await meetingRef.set(nextDocument, { merge: true });
 }
 
 async function upsertLegacySessionJobSummary(sessionRef, meeting, owner, jobInput, artifactInput) {
+  const job = normalizeMeetingJob(jobInput);
+  if (!job.jobId || job.deletedAt) {
+    return;
+  }
   const snapshot = await sessionRef.get();
   const currentSession = snapshot.exists ? normalizeMeetingSession(snapshot.data()) : normalizeMeetingSession({
     owner,
     sessionId: meeting.sessionId,
   });
-  const job = normalizeMeetingJob(jobInput);
+  if (currentSession.deletedAt) {
+    return;
+  }
   const recentJobs = mergeRecentJobs(currentSession.recentJobs, buildMeetingResultSummary(job, artifactInput));
   await sessionRef.set(
     {
