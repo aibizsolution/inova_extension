@@ -609,7 +609,7 @@
       refs.sharedMemoInput.value = state.recordMemoDraft;
       await loadPendingUploads();
       await refreshWorkspace(true, "boot");
-      retryPendingUploads();
+      retryPendingUploads("boot-retry");
     } catch (error) {
       logDebug("workspace.boot.error", { error });
       renderBlocked(error instanceof Error ? error.message : "회의 작업실을 열지 못했어요. 패널에서 다시 시도해 주세요.");
@@ -1492,7 +1492,7 @@
     state.selectedRecordId = ns.shared.buildLocalSelectionId(pending.requestId);
     setNotice("파일을 불러왔고 자동 전사를 시작했습니다.", "highlight");
     applyRender();
-    void attemptPendingUpload(pending.requestId);
+    void attemptPendingUpload(pending.requestId, { reason: "import-upload" });
   }
 
   async function measureAudioDuration(file) {
@@ -1623,20 +1623,23 @@
       setNotice("녹음을 브라우저에 저장했고 자동 전사를 시작했습니다. 지금 바로 다음 녹음을 시작할 수 있습니다.", "highlight");
       applyRender();
     }
-    void attemptPendingUpload(pending.requestId);
+    void attemptPendingUpload(pending.requestId, { reason: "capture-upload" });
   }
 
-  async function attemptPendingUpload(requestId, options = {}) {
+  function resolvePendingUploadAttemptReason(pending, options = {}) {
+    const explicitReason = normalizeText(options?.reason);
+    if (explicitReason) return explicitReason;
+    if (Boolean(options?.forceRestart)) return "manual-restart";
+    if (normalizeText(pending?.status) === "failed") return "failed-retry";
+    return "retry";
+  }
+
+  function buildPendingUploadAttemptPlan(pending, options = {}) {
     const forceRestart = Boolean(options?.forceRestart);
-    const normalizedRequestId = normalizeText(requestId);
-    const pending = state.pendingUploads.find((item) => item.requestId === normalizedRequestId);
-    if (!pending || pending.hold || state.busy.queue[normalizedRequestId]) return;
-    if (!isOnline(global)) { await upsertPendingUpload({ ...pending, lastError: "인터넷이 돌아오면 자동으로 업로드합니다.", status: "upload_queued" }); return applyRender(); }
-    state.busy.queue[normalizedRequestId] = true;
-    const shouldResetSource = pending.status === "failed" || forceRestart;
-    let activeRequestId = normalizedRequestId;
-    const previousRemoteJobId = normalizeText(pending.jobId);
+    const normalizedRequestId = normalizeText(pending?.requestId);
+    const previousRemoteJobId = normalizeText(pending?.jobId);
     const previousRemoteSelectionId = previousRemoteJobId ? buildRemoteSelectionId(previousRemoteJobId) : "";
+    const shouldResetSource = normalizeText(pending?.status) === "failed" || forceRestart;
     const retryRequestId = shouldResetSource ? ns.shared.generateCaptureRequestId(global) : normalizedRequestId;
     const retryBase = shouldResetSource
       ? {
@@ -1662,27 +1665,66 @@
           uploadedPartCount: 0,
         }
       : pending;
-    const nextUploadStatus = shouldUseChunkedSource(retryBase) ? "preparing_chunks" : "uploading";
+    return {
+      forceRestart,
+      nextUploadStatus: shouldUseChunkedSource(retryBase) ? "preparing_chunks" : "uploading",
+      normalizedRequestId,
+      noticeText: shouldResetSource
+        ? (forceRestart
+          ? "멈춘 처리 상태를 정리하고 브라우저 원본으로 다시 시작합니다."
+          : "실패한 임시 원본은 다시 올린 뒤 처리를 재시작합니다.")
+        : "",
+      previousRemoteJobId,
+      previousRemoteSelectionId,
+      reason: resolvePendingUploadAttemptReason(pending, options),
+      retryBase,
+      retryRequestId,
+      shouldResetSource,
+    };
+  }
+
+  function announcePendingUploadAttempt(plan, activeRequestId) {
+    logDebug("workspace.pending-upload.transition", {
+      nextRequestId: normalizeText(activeRequestId || plan?.retryRequestId || plan?.normalizedRequestId),
+      nextStatus: normalizeText(plan?.nextUploadStatus),
+      previousRemoteJobId: normalizeText(plan?.previousRemoteJobId),
+      previousRequestId: normalizeText(plan?.normalizedRequestId),
+      reason: normalizeText(plan?.reason),
+      shouldResetSource: Boolean(plan?.shouldResetSource),
+      supersededJobIds: Array.isArray(plan?.retryBase?.supersededJobIds) ? plan.retryBase.supersededJobIds : [],
+      supersededRequestIds: Array.isArray(plan?.retryBase?.supersededRequestIds) ? plan.retryBase.supersededRequestIds : [],
+    });
+    if (normalizeText(plan?.noticeText)) {
+      setNotice(plan.noticeText, "highlight");
+    }
+  }
+
+  async function attemptPendingUpload(requestId, options = {}) {
+    const normalizedRequestId = normalizeText(requestId);
+    const pending = state.pendingUploads.find((item) => item.requestId === normalizedRequestId);
+    if (!pending || pending.hold || state.busy.queue[normalizedRequestId]) return;
+    if (!isOnline(global)) { await upsertPendingUpload({ ...pending, lastError: "인터넷이 돌아오면 자동으로 업로드합니다.", status: "upload_queued" }); return applyRender(); }
+    state.busy.queue[normalizedRequestId] = true;
+    const attemptPlan = buildPendingUploadAttemptPlan(pending, options);
+    let activeRequestId = normalizedRequestId;
     try {
-      let latest = await upsertPendingUpload({ ...retryBase, lastError: "", status: nextUploadStatus });
-      if (shouldResetSource) {
+      let latest = await upsertPendingUpload({ ...attemptPlan.retryBase, lastError: "", status: attemptPlan.nextUploadStatus });
+      if (attemptPlan.shouldResetSource) {
         delete state.busy.queue[normalizedRequestId];
-        state.busy.queue[retryRequestId] = true;
+        state.busy.queue[attemptPlan.retryRequestId] = true;
         activeRequestId = latest.requestId;
         delete state.runtimeChunkCache[normalizedRequestId];
         if (
           state.selectedRecordId === ns.shared.buildLocalSelectionId(normalizedRequestId)
-          || (previousRemoteSelectionId && state.selectedRecordId === previousRemoteSelectionId)
+          || (attemptPlan.previousRemoteSelectionId && state.selectedRecordId === attemptPlan.previousRemoteSelectionId)
         ) {
           state.selectedRecordId = ns.shared.buildLocalSelectionId(activeRequestId);
         }
-        if (state.params.jobId === previousRemoteJobId) {
+        if (state.params.jobId === attemptPlan.previousRemoteJobId) {
           state.params = { ...state.params, jobId: "" };
         }
-        setNotice(forceRestart
-          ? "멈춘 처리 상태를 정리하고 브라우저 원본으로 다시 시작합니다."
-          : "실패한 임시 원본은 다시 올린 뒤 처리를 재시작합니다.", "highlight");
       }
+      announcePendingUploadAttempt(attemptPlan, activeRequestId);
       persistWorkspaceSession();
       applyRender();
       latest = state.pendingUploads.find((item) => item.requestId === activeRequestId) || latest;
@@ -2456,10 +2498,10 @@
     try {
       const pending = state.pendingUploads.find((item) => item.requestId === normalizeText(requestId));
       if (!pending) return;
-      if (normalizeText(action) === "retry") return attemptPendingUpload(requestId);
-      if (normalizeText(action) === "restart") return attemptPendingUpload(requestId, { forceRestart: true });
+      if (normalizeText(action) === "retry") return attemptPendingUpload(requestId, { reason: "manual-retry" });
+      if (normalizeText(action) === "restart") return attemptPendingUpload(requestId, { forceRestart: true, reason: "manual-restart" });
       if (normalizeText(action) === "hold") return upsertPendingUpload({ ...pending, hold: true, status: "on_hold", lastError: pending.lastError || "업로드를 잠시 멈췄습니다." }).then(applyRender);
-      if (normalizeText(action) === "resume") { await upsertPendingUpload({ ...pending, hold: false, status: "upload_queued", lastError: "" }); return retryPendingUploads(); }
+      if (normalizeText(action) === "resume") { await upsertPendingUpload({ ...pending, hold: false, status: "upload_queued", lastError: "" }); return retryPendingUploads("manual-resume"); }
       if (normalizeText(action) === "delete") {
         if (!await requestConfirmation({
           body: "아직 원격 처리 전이면 복구할 수 없습니다.",
@@ -2643,13 +2685,13 @@
     applyRender();
   }
 
-  function retryPendingUploads() {
+  function retryPendingUploads(reason = "auto-retry") {
     for (const pending of state.pendingUploads) {
-      if (!pending.hold && AUTO_RETRY_PENDING_STATUSES.has(pending.status)) attemptPendingUpload(pending.requestId);
+      if (!pending.hold && AUTO_RETRY_PENDING_STATUSES.has(pending.status)) attemptPendingUpload(pending.requestId, { reason });
     }
   }
 
-  function handleOnline() { setNotice("인터넷 연결이 돌아왔습니다. 보관한 녹음을 다시 확인합니다.", "highlight"); retryPendingUploads(); applyRender(); }
+  function handleOnline() { setNotice("인터넷 연결이 돌아왔습니다. 보관한 녹음을 다시 확인합니다.", "highlight"); retryPendingUploads("online-retry"); applyRender(); }
   function handleOffline() { setNotice("인터넷이 끊겨도 종료된 녹음은 브라우저에 보관합니다. 연결이 돌아오면 이어서 업로드합니다.", "highlight"); applyRender(); }
 
   async function upsertPendingUpload(item) {
