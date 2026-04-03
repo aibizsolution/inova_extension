@@ -195,7 +195,6 @@
     }
 
     async function handleAction(action, detail = {}) {
-      if (action === "refresh") return void ensureLoaded(true, "manual-refresh");
       if (action === "load-more") return void loadMore();
       if (action === "set-category") return void setCategory(detail.categoryId);
       if (action === "set-scope") return void setScope(detail.scope);

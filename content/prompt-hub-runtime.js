@@ -26,7 +26,7 @@
     const storeManager = namespace.storeManager.create(state, {
       loadStoreDetail: (entryId) => promptRealtimeManager?.loadStoreDetail?.(entryId),
       refreshStoreLatestRealtime: (reason) => {
-        promptRealtimeManager?.scheduleSync?.(reason === "manual-refresh" ? 0 : 80);
+        promptRealtimeManager?.scheduleSync?.(80);
       },
       shouldReloadAfterMutation: () => {
         const storeTabActive = state.activeTool === "prompts" && getActivePromptTab() === "store";

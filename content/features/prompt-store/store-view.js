@@ -39,9 +39,6 @@
         />
         <div class="inova-tool-toolbar__row">
           <div class="inova-tool-meta">${metaText}</div>
-          <div class="inova-tool-actions inova-tool-actions--toolbar">
-            <button type="button" class="inova-tool-button" data-store-action="refresh" ${renderDisabled(state.loading)}>${state.loading ? "새로고침 중..." : "새로고침"}</button>
-          </div>
         </div>
         <div class="inova-store-controls">
           ${renderScopeToggle(state.ownerScope)}
