@@ -31,10 +31,12 @@
       error: normalizeText(nextRecord.error),
       jobId: normalizeText(nextRecord.jobId),
       meetingId: normalizeText(nextRecord.meetingId),
+      notesDegradedReason: normalizeText(nextRecord.notesDegradedReason),
       notesGeneratedAt: normalizeText(nextRecord.notesGeneratedAt),
       notesModeConfidence: Math.max(0, Math.min(1, Number(nextRecord.notesModeConfidence) || 0)),
       notesModeDetected: normalizeMeetingNotesMode(nextRecord.notesModeDetected),
       notesModeSelected: normalizeMeetingNotesMode(nextRecord.notesModeSelected),
+      notesStatus: normalizeText(nextRecord.notesStatus),
       notesStyleSelected: normalizeMeetingNotesStyle(nextRecord.notesStyleSelected),
       previewText: cleanPreviewText(nextRecord.previewText),
       requestId: normalizeText(nextRecord.requestId),
@@ -54,10 +56,12 @@
       error: normalizeText(job.error),
       jobId: normalizeText(job.jobId),
       meetingNotes: normalizeMeetingNotes(job.meetingNotes, job.notesModeSelected),
+      notesDegradedReason: normalizeText(job.notesDegradedReason),
       notesGeneratedAt: normalizeText(job.notesGeneratedAt),
       notesModeConfidence: Math.max(0, Math.min(1, Number(job.notesModeConfidence) || 0)),
       notesModeDetected: normalizeMeetingNotesMode(job.notesModeDetected),
       notesModeSelected: normalizeMeetingNotesMode(job.notesModeSelected),
+      notesStatus: normalizeText(job.notesStatus),
       notesStyleSelected: normalizeMeetingNotesStyle(job.notesStyleSelected),
       progress: {
         currentPart: Math.max(0, Number(job?.progress?.currentPart) || 0),
@@ -91,10 +95,12 @@
     return {
       artifactId: normalizeText(artifact.artifactId),
       notes: normalizeMeetingNotes(artifact.notes, artifact.notesModeSelected),
+      notesDegradedReason: normalizeText(artifact.notesDegradedReason),
       notesGeneratedAt: normalizeText(artifact.notesGeneratedAt),
       notesModeConfidence: Math.max(0, Math.min(1, Number(artifact.notesModeConfidence) || 0)),
       notesModeDetected: normalizeMeetingNotesMode(artifact.notesModeDetected),
       notesModeSelected: normalizeMeetingNotesMode(artifact.notesModeSelected),
+      notesStatus: normalizeText(artifact.notesStatus),
       notesStyleSelected: normalizeMeetingNotesStyle(artifact.notesStyleSelected),
       speakerAliases: normalizeSpeakerAliases(artifact.speakerAliases),
       segments,
@@ -445,7 +451,16 @@
   function buildNotesSummaryMeta(meta, selectedStyle) {
     const appliedMode = normalizeMeetingNotesMode(meta?.selected || meta?.detected) || DEFAULT_NOTES_MODE;
     const appliedStyle = normalizeMeetingNotesStyle(selectedStyle || meta?.styleSelected) || DEFAULT_NOTES_STYLE;
-    return `AI 판단 ${formatNotesModeLabel(appliedMode)} · 표현 ${formatNotesStyleLabel(appliedStyle)}`;
+    const confidenceText = meta?.confidence > 0 ? `신뢰도 ${Math.round(meta.confidence * 100)}%` : "";
+    const traceText = meta?.sourceTraceCount > 0 ? `근거 ${meta.sourceTraceCount}개` : "";
+    const degradedText = normalizeText(meta?.degradedReason) ? `품질 주의: ${normalizeText(meta.degradedReason)}` : "";
+    return [
+      `AI 판단 ${formatNotesModeLabel(appliedMode)}`,
+      `표현 ${formatNotesStyleLabel(appliedStyle)}`,
+      confidenceText,
+      traceText,
+      degradedText,
+    ].filter(Boolean).join(" · ");
   }
 
   function compareSpeakerLabelOrder(left, right) {
@@ -929,9 +944,12 @@
     const showSpeakerEditor = Boolean(remote?.jobId) && hasSegmentsValue;
     const notesMeta = {
       confidence: Number(normalizedArtifact?.notesModeConfidence || normalizedJob?.notesModeConfidence) || 0,
+      degradedReason: normalizeText(normalizedArtifact?.notesDegradedReason || normalizedJob?.notesDegradedReason),
       detected: normalizeMeetingNotesMode(normalizedArtifact?.notesModeDetected || normalizedJob?.notesModeDetected) || meetingNotes.mode,
       generatedAt: normalizeText(normalizedArtifact?.notesGeneratedAt || normalizedJob?.notesGeneratedAt),
       selected: normalizeMeetingNotesMode(normalizedArtifact?.notesModeSelected || normalizedJob?.notesModeSelected) || meetingNotes.mode,
+      sourceTraceCount: Array.isArray(meetingNotes?.sourceTrace) ? meetingNotes.sourceTrace.length : 0,
+      status: normalizeText(normalizedArtifact?.notesStatus || normalizedJob?.notesStatus),
       styleSelected: normalizeMeetingNotesStyle(normalizedArtifact?.notesStyleSelected || normalizedJob?.notesStyleSelected) || DEFAULT_NOTES_STYLE,
     };
     const remoteChunkProgress = buildChunkProgressModel(normalizedJob, pending);

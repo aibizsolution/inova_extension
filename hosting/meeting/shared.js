@@ -796,6 +796,7 @@
     if (normalized === "transcribing_chunks") return "분할 전사 중";
     if (normalized === "assembling_transcript") return "청크 병합 중";
     if (normalized === "reconciling_speakers") return "화자 정합 중";
+    if (normalized === "consolidating_speakers") return "전체 화자 통합 중";
     if (normalized === "generating_notes") return "회의 정리 중";
     if (normalized === "diarizing") return "화자 구분 중";
     if (normalized === "finalizing") return "회의록 정리 중";
