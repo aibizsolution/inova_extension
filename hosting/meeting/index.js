@@ -77,6 +77,10 @@
       noticeTimer: 0,
       params: parseParams(global.location.href),
       pendingUploads: [],
+      pendingUploadStorage: {
+        degradedReason: "",
+        issueCodes: [],
+      },
       notesStyleSelection: "",
       queueStore: createPendingUploadStore(global),
       recordMemoDraft: "",
@@ -276,6 +280,11 @@
     return `${normalizedReason} 현재 탭에서는 작업을 계속할 수 있지만, 다음 새로고침이나 재진입에서는 최신 작업실 상태가 복원되지 않을 수 있습니다.`;
   }
 
+  function buildPendingUploadStorageDegradedNotice(reason) {
+    const normalizedReason = normalizeText(reason) || "브라우저 로컬 보관 큐를 완전하게 읽지 못했어요.";
+    return `${normalizedReason} 일부 임시 녹음이나 업로드 대기 상태가 화면에 아직 반영되지 않았을 수 있습니다.`;
+  }
+
   function surfaceSessionRestoreNotice() {
     if (!state.sessionRestore.hasWarningIssue || !state.session.meetingSessionToken || !state.session.meetingId) {
       return;
@@ -319,6 +328,44 @@
     });
     setNotice(buildSessionPersistDegradedNotice(degradedReason), "warning", {
       code: "session-persist-degraded",
+      sticky: true,
+    });
+  }
+
+  function applyPendingUploadStorageDiagnostics(result) {
+    const issues = Array.isArray(result?.issues) ? result.issues : [];
+    const degradedReason = normalizeText(result?.degradedReason);
+    const issueCodes = issues.map((issue) => normalizeText(issue?.code)).filter(Boolean);
+    const previousReason = normalizeText(state.pendingUploadStorage.degradedReason);
+    const previousSignature = [previousReason, ...(Array.isArray(state.pendingUploadStorage.issueCodes) ? state.pendingUploadStorage.issueCodes : [])]
+      .filter(Boolean)
+      .join("|");
+    const nextSignature = [degradedReason, ...issueCodes].filter(Boolean).join("|");
+    state.pendingUploadStorage = {
+      degradedReason,
+      issueCodes,
+    };
+    if (!degradedReason) {
+      if (previousSignature) {
+        logDebug("workspace.pending-uploads.storage.recovered", {
+          meetingId: state.session.meetingId,
+        });
+      }
+      clearResolvedPendingUploadStorageNotice();
+      return;
+    }
+    if (previousSignature === nextSignature) {
+      return;
+    }
+    logDebug("workspace.pending-uploads.storage.degraded", {
+      degradedReason,
+      issueCodes,
+      issues,
+      meetingId: state.session.meetingId,
+      operation: normalizeText(result?.operation),
+    });
+    setNotice(buildPendingUploadStorageDegradedNotice(degradedReason), "warning", {
+      code: "pending-uploads-degraded",
       sticky: true,
     });
   }
@@ -584,14 +631,20 @@
   }
 
   async function loadPendingUploads() {
-    state.pendingUploads = state.session.meetingId
-      ? (await state.queueStore.listByMeeting(state.session.meetingId))
-        .map(normalizePendingUpload)
-        .map((item) => ["uploading", "uploading_chunks", "preparing_chunks"].includes(item.status)
-          ? { ...item, status: "upload_queued", lastError: item.lastError || "페이지를 다시 열어 업로드를 이어갑니다." }
-          : item)
-        .sort(ns.storage.comparePendingUploads)
+    const loadedItems = state.session.meetingId
+      ? await state.queueStore.listByMeeting(state.session.meetingId)
       : [];
+    applyPendingUploadStorageDiagnostics(
+      typeof state.queueStore.consumeDiagnostics === "function"
+        ? state.queueStore.consumeDiagnostics()
+        : null
+    );
+    state.pendingUploads = loadedItems
+      .map(normalizePendingUpload)
+      .map((item) => ["uploading", "uploading_chunks", "preparing_chunks"].includes(item.status)
+        ? { ...item, status: "upload_queued", lastError: item.lastError || "페이지를 다시 열어 업로드를 이어갑니다." }
+        : item)
+      .sort(ns.storage.comparePendingUploads);
     state.meeting.pendingLocalCount = state.pendingUploads.length;
   }
 
@@ -2532,6 +2585,11 @@
 
   function clearResolvedSessionPersistNotice() {
     if (normalizeText(state.notice.code) !== "session-persist-degraded") return;
+    setNotice("", "", { code: "" });
+  }
+
+  function clearResolvedPendingUploadStorageNotice() {
+    if (normalizeText(state.notice.code) !== "pending-uploads-degraded") return;
     setNotice("", "", { code: "" });
   }
 

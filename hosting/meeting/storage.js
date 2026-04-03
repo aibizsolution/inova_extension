@@ -1,10 +1,112 @@
 (function initHostedMeetingStorage(global) {
   const ns = global.__INOVA_HOSTED_MEETING__ = global.__INOVA_HOSTED_MEETING__ || {};
-  const { normalizeText, normalizeTextBlock, safeLocalStorageGet, safeLocalStorageSet, safeParse } = ns.shared;
+  const { normalizeText, normalizeTextBlock, safeLocalStorageSet } = ns.shared;
 
   const PENDING_UPLOAD_LOCAL_STORAGE_KEY = "inova-hosted-meeting-pending-uploads";
   const PENDING_UPLOAD_DB_NAME = "inova-hosted-meeting-workspace";
   const PENDING_UPLOAD_STORE_NAME = "pending-uploads";
+
+  function buildPendingUploadStorageIssue(code, options = {}) {
+    return {
+      code: normalizeText(code),
+      errorName: normalizeText(options.errorName),
+      key: normalizeText(options.key),
+      message: normalizeText(options.message),
+      storage: normalizeText(options.storage),
+    };
+  }
+
+  function summarizePendingUploadStorageIssues(issues) {
+    const normalizedIssues = Array.isArray(issues) ? issues : [];
+    const issue = normalizedIssues.find((entry) => [
+      "indexeddb-open-failed",
+      "indexeddb-unavailable",
+      "local-storage-invalid-payload",
+      "local-storage-parse-failed",
+      "local-storage-read-failed",
+    ].includes(normalizeText(entry?.code)));
+    if (!issue) {
+      return "";
+    }
+    const code = normalizeText(issue.code);
+    if (code === "indexeddb-unavailable") {
+      return "브라우저 로컬 보관 큐에서 IndexedDB를 사용할 수 없어요.";
+    }
+    if (code === "indexeddb-open-failed") {
+      return "브라우저 로컬 보관 큐의 IndexedDB를 열지 못했어요.";
+    }
+    if (code === "local-storage-read-failed") {
+      return "브라우저 로컬 보관 큐를 읽지 못했어요.";
+    }
+    if (code === "local-storage-parse-failed") {
+      return "브라우저 로컬 보관 큐를 해석하지 못했어요.";
+    }
+    if (code === "local-storage-invalid-payload") {
+      return "브라우저 로컬 보관 큐 형식이 올바르지 않아요.";
+    }
+    return "";
+  }
+
+  function readLocalStorageValueDetailed(target, key) {
+    const normalizedKey = normalizeText(key);
+    try {
+      if (!target?.localStorage || typeof target.localStorage.getItem !== "function") {
+        throw new Error("local-storage unavailable");
+      }
+      const value = target.localStorage.getItem(normalizedKey) || "";
+      return {
+        issue: normalizeText(value)
+          ? null
+          : buildPendingUploadStorageIssue("local-storage-empty", {
+              key: normalizedKey,
+              storage: "local-storage",
+            }),
+        value,
+      };
+    } catch (error) {
+      return {
+        issue: buildPendingUploadStorageIssue("local-storage-read-failed", {
+          errorName: normalizeText(error?.name),
+          key: normalizedKey,
+          message: error instanceof Error ? error.message : String(error || ""),
+          storage: "local-storage",
+        }),
+        value: "",
+      };
+    }
+  }
+
+  function parsePendingUploadItemsDetailed(value, key) {
+    const normalized = normalizeText(value);
+    if (!normalized) {
+      return { items: [] };
+    }
+    try {
+      const parsed = JSON.parse(normalized);
+      if (!Array.isArray(parsed)) {
+        return {
+          issue: buildPendingUploadStorageIssue("local-storage-invalid-payload", {
+            key,
+            storage: "local-storage",
+          }),
+          items: [],
+        };
+      }
+      return {
+        items: parsed,
+      };
+    } catch (error) {
+      return {
+        issue: buildPendingUploadStorageIssue("local-storage-parse-failed", {
+          errorName: normalizeText(error?.name),
+          key,
+          message: error instanceof Error ? error.message : String(error || ""),
+          storage: "local-storage",
+        }),
+        items: [],
+      };
+    }
+  }
 
   async function blobToBase64(blob) {
     if (blob && typeof blob.arrayBuffer === "function") {
@@ -154,6 +256,8 @@
   function createPendingUploadStore(target) {
     let dbPromise = null;
     let fallbackToLocalStorage = false;
+    let indexedDbFallbackIssue = null;
+    let lastDiagnostics = createStorageDiagnostics("");
 
     return {
       async clearMeeting(meetingId) {
@@ -173,12 +277,15 @@
       },
       async listByMeeting(meetingId) {
         const normalizedMeetingId = normalizeText(meetingId);
-        const db = await openDb();
+        const issues = [];
+        const db = await openDb(issues);
         if (db) {
           const items = await runIdbRequest(db.transaction(PENDING_UPLOAD_STORE_NAME, "readonly").objectStore(PENDING_UPLOAD_STORE_NAME).getAll());
+          setDiagnostics("listByMeeting", issues);
           return Promise.all((Array.isArray(items) ? items : []).filter((item) => normalizeText(item.meetingId) === normalizedMeetingId).map(deserializePendingUpload));
         }
-        const localItems = await readLocalItems();
+        const localItems = await readLocalItems(issues);
+        setDiagnostics("listByMeeting", issues);
         return Promise.all(localItems.filter((item) => normalizeText(item.meetingId) === normalizedMeetingId).map(deserializePendingUpload));
       },
       async put(item) {
@@ -192,10 +299,40 @@
         const serialized = await serializePendingUpload(normalized, true);
         await writeLocalItems([serialized, ...items.filter((current) => normalizeText(current.requestId) !== normalized.requestId)]);
       },
+      consumeDiagnostics() {
+        const nextDiagnostics = lastDiagnostics;
+        lastDiagnostics = createStorageDiagnostics("");
+        return nextDiagnostics;
+      },
     };
 
-    async function openDb() {
-      if (fallbackToLocalStorage || typeof target.indexedDB?.open !== "function") {
+    function createStorageDiagnostics(operation, issues = []) {
+      const normalizedIssues = Array.isArray(issues) ? issues : [];
+      return {
+        degradedReason: summarizePendingUploadStorageIssues(normalizedIssues),
+        issues: normalizedIssues,
+        operation: normalizeText(operation),
+      };
+    }
+
+    function setDiagnostics(operation, issues) {
+      lastDiagnostics = createStorageDiagnostics(operation, issues);
+    }
+
+    async function openDb(issues) {
+      const nextIssues = Array.isArray(issues) ? issues : [];
+      if (fallbackToLocalStorage) {
+        if (indexedDbFallbackIssue) {
+          nextIssues.push(indexedDbFallbackIssue);
+        }
+        return null;
+      }
+      if (typeof target.indexedDB?.open !== "function") {
+        fallbackToLocalStorage = true;
+        indexedDbFallbackIssue = buildPendingUploadStorageIssue("indexeddb-unavailable", {
+          storage: "indexeddb",
+        });
+        nextIssues.push(indexedDbFallbackIssue);
         return null;
       }
       if (!dbPromise) {
@@ -209,17 +346,36 @@
           };
           request.onsuccess = () => resolve(request.result);
           request.onerror = () => reject(request.error || new Error("IndexedDB를 열지 못했어요."));
-        }).catch(() => {
-          fallbackToLocalStorage = true;
-          return null;
         });
       }
-      return dbPromise;
+      try {
+        return await dbPromise;
+      } catch (error) {
+        fallbackToLocalStorage = true;
+        indexedDbFallbackIssue = buildPendingUploadStorageIssue("indexeddb-open-failed", {
+          errorName: normalizeText(error?.name),
+          message: error instanceof Error ? error.message : String(error || ""),
+          storage: "indexeddb",
+        });
+        nextIssues.push(indexedDbFallbackIssue);
+        return null;
+      }
     }
 
-    async function readLocalItems() {
-      const parsed = safeParse(safeLocalStorageGet(target, PENDING_UPLOAD_LOCAL_STORAGE_KEY));
-      return Array.isArray(parsed) ? parsed : [];
+    async function readLocalItems(issues) {
+      const nextIssues = Array.isArray(issues) ? issues : [];
+      const storageEntry = readLocalStorageValueDetailed(target, PENDING_UPLOAD_LOCAL_STORAGE_KEY);
+      if (storageEntry.issue) {
+        nextIssues.push(storageEntry.issue);
+      }
+      if (!normalizeText(storageEntry.value)) {
+        return [];
+      }
+      const parsedEntry = parsePendingUploadItemsDetailed(storageEntry.value, PENDING_UPLOAD_LOCAL_STORAGE_KEY);
+      if (parsedEntry.issue) {
+        nextIssues.push(parsedEntry.issue);
+      }
+      return Array.isArray(parsedEntry.items) ? parsedEntry.items : [];
     }
 
     async function writeLocalItems(items) {
