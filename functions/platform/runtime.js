@@ -1,6 +1,7 @@
 const admin = require("firebase-admin");
 const { onRequest } = require("firebase-functions/v2/https");
 const { onDocumentWritten } = require("firebase-functions/v2/firestore");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 
 const FIREBASE_AUTH_SIGNING_SERVICE_ACCOUNT = process.env.FIREBASE_AUTH_SIGNING_SERVICE_ACCOUNT
   || "1027279095019-compute@developer.gserviceaccount.com";
@@ -69,6 +70,7 @@ module.exports = {
   normalizeText,
   onDocumentWritten,
   onRequest,
+  onSchedule,
   REGION,
   sendError,
   STORE_CATEGORIES,

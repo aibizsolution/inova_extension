@@ -20,6 +20,7 @@ const {
   normalizeText,
   onDocumentWritten,
   onRequest,
+  onSchedule,
   REGION,
   sendError,
   STORE_CATEGORIES,
@@ -122,6 +123,27 @@ exports.finalizeChunkedInovaMeetingJob = onDocumentWritten(
     timeoutSeconds: 540,
   },
   meetingHandlers.finalizeChunkedMeetingJobWrite
+);
+exports.processQueuedInovaMeetingDeletion = onDocumentWritten(
+  {
+    concurrency: 1,
+    document: "integration_inova_meeting_deletions/{taskId}",
+    memory: "1GiB",
+    region: REGION,
+    timeoutSeconds: 540,
+  },
+  meetingHandlers.processMeetingDeletionWrite
+);
+exports.sweepQueuedInovaMeetingDeletions = onSchedule(
+  {
+    concurrency: 1,
+    memory: "512MiB",
+    region: REGION,
+    schedule: "every 60 minutes",
+    timeoutSeconds: 540,
+    timeZone: "Asia/Seoul",
+  },
+  meetingHandlers.sweepQueuedMeetingDeletions
 );
 exports.deleteInovaMeeting = meetingHandlers.deleteInovaMeeting;
 exports.deleteInovaMeetingResult = meetingHandlers.deleteInovaMeetingResult;

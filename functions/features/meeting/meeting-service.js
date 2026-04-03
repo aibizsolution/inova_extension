@@ -16,10 +16,13 @@ const DEFAULT_SPEAKER_RECONCILE_MODEL = "gpt-5.4-mini";
 const JOB_COLLECTION = "integration_inova_meeting_jobs";
 const JOB_FINALIZER_COLLECTION = "integration_inova_meeting_job_finalizers";
 const JOB_PART_COLLECTION = "integration_inova_meeting_job_parts";
+const DELETION_COLLECTION = "integration_inova_meeting_deletions";
 const ARTIFACT_COLLECTION = "integration_inova_meeting_artifacts";
 const MEETING_COLLECTION = "integration_inova_meetings";
 const SESSION_COLLECTION = "integration_inova_meeting_sessions";
 const TEMP_UPLOAD_TTL_MS = 60 * 60 * 1000;
+const DELETION_RETRY_DELAY_MS = 60 * 60 * 1000;
+const DELETION_PROCESSING_STALE_MS = 15 * 60 * 1000;
 const MAX_MEETING_RECENT_RESULTS = 12;
 const MAX_MEETING_LIST_LIMIT = 24;
 const MAX_SUMMARY_TRANSCRIPT_CHARS = 12000;
@@ -32,6 +35,8 @@ const RETRYABLE_MEETING_PROCESS_STATUSES = new Set([408, 409, 429, 500, 502, 503
 const SUPPORTED_NOTES_MODES = new Set(["general", "interview", "review", "planning"]);
 const SUPPORTED_NOTES_STYLES = new Set(["default", "brief", "action"]);
 const SUPPORTED_NOTES_STATUSES = new Set(["pending", "disabled", "skipped", "degraded", "succeeded"]);
+const SUPPORTED_DELETION_SCOPES = new Set(["meeting", "result"]);
+const SUPPORTED_DELETION_STATUSES = new Set(["queued", "processing", "retry"]);
 
 function registerMeetingHandlers(deps) {
   const {
@@ -1481,35 +1486,38 @@ function registerMeetingHandlers(deps) {
         throw createHttpError(404, "삭제할 회의 결과를 찾지 못했어요.");
       }
       const job = normalizeMeetingJob(jobSnapshot.data());
-      if (job.deletedAt) {
-        throw createHttpError(404, "이미 삭제된 회의 결과예요.");
-      }
       assertJobOwnership(job, owner, createHttpError);
-      await assertMeetingIsActive(owner, job.meetingId, createHttpError);
       if (job.meetingId !== input.meetingId) {
         throw createHttpError(404, "현재 회의와 맞지 않는 결과예요.");
       }
 
       const deletedAt = new Date().toISOString();
-      const deletion = await deleteMeetingJobRuntimeArtifacts(job, deletedAt);
-
+      const deletedJob = await softDeleteMeetingJob(job, deletedAt);
       const meeting = await removeMeetingResultFromSummaries(owner, job, deletedAt);
+      const deletionTask = await enqueueMeetingDeletionTask({
+        deletedAt,
+        jobId: job.jobId,
+        meetingId: job.meetingId,
+        owner,
+        scope: "result",
+        sessionId: job.sessionId,
+      });
 
       logEvent("meeting.result.delete.success", {
-        artifactCount: deletion.artifactIds.length,
         jobId: input.jobId,
         meetingId: input.meetingId,
         providerUserKey: owner.providerUserKey,
-        storageObjectDeleted: Boolean(deletion.deletedStorageObjects.length),
+        queueTaskId: deletionTask.taskId,
       });
       response.json({
         ok: true,
         data: {
-          artifactCount: deletion.artifactIds.length,
+          cleanupQueued: true,
           deletedAt,
+          deletedJob,
           deletedJobId: input.jobId,
           meeting,
-          storageObjectDeleted: Boolean(deletion.deletedStorageObjects.length),
+          queueTaskId: deletionTask.taskId,
         },
       });
     } catch (error) {
@@ -1541,27 +1549,21 @@ function registerMeetingHandlers(deps) {
       let meeting = normalizeMeetingSummary(snapshot.data());
       if (!normalizeText(meeting.owner?.providerUserKey)) {
         await meetingRef.set({
-          meetingId: meeting.meetingId || meetingId,
+          meetingId: meeting.meetingId || input.meetingId,
           owner,
         }, { merge: true });
         meeting = normalizeMeetingSummary({
           ...meeting,
-          meetingId: meeting.meetingId || meetingId,
+          meetingId: meeting.meetingId || input.meetingId,
           owner,
         });
       }
       assertMeetingOwnership(meeting, owner, createHttpError);
-      if (meeting.deletedAt) {
-        throw createHttpError(404, "이미 삭제된 회의예요.");
-      }
       const jobs = await loadOwnedMeetingJobs(owner, meeting.meetingId);
       const deletedAt = new Date().toISOString();
-      const deletions = [];
       for (const job of jobs) {
-        deletions.push(await deleteMeetingJobRuntimeArtifacts(job, deletedAt));
+        await softDeleteMeetingJob(job, deletedAt);
       }
-      const artifactIds = Array.from(new Set(deletions.flatMap((item) => item.artifactIds)));
-      const storageObjects = Array.from(new Set(deletions.flatMap((item) => item.deletedStorageObjects)));
 
       if (meeting.sessionId) {
         const sessionRef = db.collection(SESSION_COLLECTION).doc(buildSessionDocId(owner.providerUserKey, meeting.sessionId));
@@ -1576,22 +1578,29 @@ function registerMeetingHandlers(deps) {
         recentJobs: [],
         updatedAt: deletedAt,
       }, { merge: true });
+      const deletionTask = await enqueueMeetingDeletionTask({
+        deletedAt,
+        jobIds: jobs.map((job) => job.jobId),
+        meetingId: input.meetingId,
+        owner,
+        scope: "meeting",
+        sessionId: meeting.sessionId,
+      });
 
       logEvent("meeting.delete.success", {
-        artifactCount: artifactIds.length,
         jobCount: jobs.length,
         meetingId: input.meetingId,
         providerUserKey: owner.providerUserKey,
-        storageObjectCount: storageObjects.length,
+        queueTaskId: deletionTask.taskId,
       });
       response.json({
         ok: true,
         data: {
-          artifactCount: artifactIds.length,
+          cleanupQueued: true,
           deletedAt,
           jobCount: jobs.length,
           meetingId: input.meetingId,
-          storageObjectCount: storageObjects.length,
+          queueTaskId: deletionTask.taskId,
         },
       });
     } catch (error) {
@@ -1603,6 +1612,46 @@ function registerMeetingHandlers(deps) {
     }
   });
 
+  const processMeetingDeletionWrite = async (event) => {
+    const beforeSnapshot = event?.data?.before || null;
+    const afterSnapshot = event?.data?.after || null;
+    if (!afterSnapshot?.exists) {
+      return;
+    }
+    const previousTask = beforeSnapshot?.exists ? normalizeMeetingDeletionTask(beforeSnapshot.data()) : null;
+    const queuedTask = normalizeMeetingDeletionTask(afterSnapshot.data());
+    if (!queuedTask.taskId) {
+      return;
+    }
+    if (!shouldProcessMeetingDeletionTask(queuedTask, previousTask)) {
+      return;
+    }
+    await processMeetingDeletionTask(afterSnapshot.ref, "firestore");
+  };
+
+  const sweepQueuedMeetingDeletions = async () => {
+    const snapshot = await db.collection(DELETION_COLLECTION).get();
+    const tasks = (Array.isArray(snapshot?.docs) ? snapshot.docs : [])
+      .map((doc) => ({
+        docId: doc.id,
+        ref: doc.ref,
+        task: normalizeMeetingDeletionTask(doc.data()),
+      }))
+      .filter((entry) => entry.task.taskId)
+      .filter((entry) => isMeetingDeletionRetryDue(entry.task));
+    let processedCount = 0;
+    for (const entry of tasks) {
+      const processed = await processMeetingDeletionTask(entry.ref, "schedule");
+      if (processed) {
+        processedCount += 1;
+      }
+    }
+    logEvent("meeting.deletion.sweep.success", {
+      processedCount,
+      queuedCount: tasks.length,
+    });
+  };
+
   return {
     createInovaMeetingJob,
     deleteInovaMeeting,
@@ -1612,9 +1661,11 @@ function registerMeetingHandlers(deps) {
     getInovaMeetingJob,
     listInovaMeetings,
     listInovaMeetingResults,
+    processMeetingDeletionWrite,
     processQueuedMeetingJobWrite,
     processQueuedMeetingJobPartWrite,
     regenerateInovaMeetingNotes,
+    sweepQueuedMeetingDeletions,
     uploadInovaMeetingSource,
     updateInovaMeeting,
     updateInovaMeetingResult,
@@ -2367,6 +2418,281 @@ function registerMeetingHandlers(deps) {
     return nextMeeting;
   }
 
+  async function softDeleteMeetingJob(jobInput, deletedAt) {
+    const job = normalizeMeetingJob(jobInput);
+    if (!job.jobId) {
+      return null;
+    }
+    const nextDeletedAt = normalizeText(deletedAt) || new Date().toISOString();
+    const totalParts = Math.max(
+      0,
+      Number(job.progress?.totalParts) || (Array.isArray(job.source?.parts) ? job.source.parts.length : 0)
+    );
+    const patch = {
+      deletedAt: nextDeletedAt,
+      error: "",
+      progress: {
+        currentPart: Math.max(0, Number(job.progress?.currentPart) || 0),
+        parallelParts: 0,
+        percent: 100,
+        phase: "deleted",
+        totalParts,
+      },
+      status: "deleted",
+      updatedAt: nextDeletedAt,
+    };
+    await db.collection(JOB_COLLECTION).doc(job.jobId).set(patch, { merge: true });
+    return normalizeMeetingJob({
+      ...job,
+      ...patch,
+    });
+  }
+
+  async function enqueueMeetingDeletionTask(input) {
+    const baseTask = normalizeMeetingDeletionTask({
+      ...input,
+      owner: normalizeIdentity(input?.owner),
+      requestedAt: new Date().toISOString(),
+      status: "queued",
+      taskId: buildMeetingDeletionTaskId(input),
+    });
+    const taskRef = db.collection(DELETION_COLLECTION).doc(baseTask.taskId);
+    await db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(taskRef);
+      const existingTask = snapshot.exists ? normalizeMeetingDeletionTask(snapshot.data()) : null;
+      transaction.set(taskRef, buildQueuedMeetingDeletionTask(baseTask, existingTask), { merge: true });
+    });
+    const snapshot = await taskRef.get();
+    return snapshot.exists ? normalizeMeetingDeletionTask(snapshot.data()) : baseTask;
+  }
+
+  async function processMeetingDeletionTask(taskRef, triggerSource) {
+    const claimedTask = await claimMeetingDeletionTask(taskRef);
+    if (!claimedTask?.taskId) {
+      return false;
+    }
+    try {
+      const deletion = claimedTask.scope === "meeting"
+        ? await processQueuedMeetingDeletion(claimedTask)
+        : await processQueuedMeetingResultDeletion(claimedTask);
+      const completed = await isMeetingDeletionTaskComplete(claimedTask);
+      if (completed) {
+        await deleteDocumentIfExists(taskRef);
+      } else {
+        const nextRetryAt = new Date(Date.now() + DELETION_RETRY_DELAY_MS).toISOString();
+        await taskRef.set({
+          lastError: "",
+          nextRetryAt,
+          status: "retry",
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
+      }
+      logEvent("meeting.deletion.process.success", {
+        artifactCount: deletion.artifactCount,
+        completed,
+        jobCount: deletion.jobCount,
+        scope: claimedTask.scope,
+        storageObjectCount: deletion.storageObjectCount,
+        taskId: claimedTask.taskId,
+        triggerSource,
+      });
+      return true;
+    } catch (error) {
+      const retryAt = new Date(Date.now() + DELETION_RETRY_DELAY_MS).toISOString();
+      const updatedAt = new Date().toISOString();
+      await taskRef.set({
+        lastError: normalizeText(error?.message),
+        nextRetryAt: retryAt,
+        status: "retry",
+        updatedAt,
+      }, { merge: true });
+      logEvent("meeting.deletion.process.error", {
+        error: normalizeText(error?.message),
+        nextRetryAt: retryAt,
+        scope: claimedTask.scope,
+        taskId: claimedTask.taskId,
+        triggerSource,
+      });
+      return false;
+    }
+  }
+
+  async function claimMeetingDeletionTask(taskRef) {
+    return db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(taskRef);
+      if (!snapshot.exists) {
+        return null;
+      }
+      const currentTask = normalizeMeetingDeletionTask(snapshot.data());
+      if (!currentTask.taskId || !isMeetingDeletionRetryDue(currentTask)) {
+        return null;
+      }
+      const updatedAt = new Date().toISOString();
+      const nextTask = normalizeMeetingDeletionTask({
+        ...currentTask,
+        attemptCount: Math.max(0, Number(currentTask.attemptCount) || 0) + 1,
+        lastError: "",
+        nextRetryAt: "",
+        startedAt: updatedAt,
+        status: "processing",
+        updatedAt,
+      });
+      transaction.set(taskRef, {
+        attemptCount: nextTask.attemptCount,
+        lastError: "",
+        nextRetryAt: "",
+        startedAt: updatedAt,
+        status: "processing",
+        updatedAt,
+      }, { merge: true });
+      return nextTask;
+    });
+  }
+
+  async function processQueuedMeetingDeletion(task) {
+    const owner = normalizeIdentity(task.owner);
+    const jobs = await loadMeetingDeletionJobs(task);
+    const deletions = [];
+    for (const job of jobs) {
+      deletions.push(await deleteMeetingJobRuntimeArtifacts(job, task.deletedAt));
+    }
+    return {
+      artifactCount: Array.from(new Set(deletions.flatMap((item) => item.artifactIds))).length,
+      jobCount: jobs.length,
+      storageObjectCount: Array.from(new Set(deletions.flatMap((item) => item.deletedStorageObjects))).length,
+      taskId: task.taskId,
+      meetingId: task.meetingId,
+      owner,
+    };
+  }
+
+  async function processQueuedMeetingResultDeletion(task) {
+    const jobRef = db.collection(JOB_COLLECTION).doc(task.jobId);
+    const storedJob = await loadStoredMeetingJob(jobRef);
+    const fallbackJob = normalizeMeetingJob({
+      deletedAt: task.deletedAt,
+      jobId: task.jobId,
+      meetingId: task.meetingId,
+      owner: task.owner,
+      sessionId: task.sessionId,
+      status: "deleted",
+    });
+    const deletion = await deleteMeetingJobRuntimeArtifacts(storedJob || fallbackJob, task.deletedAt);
+    return {
+      artifactCount: deletion.artifactIds.length,
+      jobCount: task.jobId ? 1 : 0,
+      storageObjectCount: deletion.deletedStorageObjects.length,
+      taskId: task.taskId,
+      meetingId: task.meetingId,
+    };
+  }
+
+  async function loadMeetingDeletionJobs(task) {
+    const owner = normalizeIdentity(task.owner);
+    const explicitJobIds = Array.from(new Set(
+      (Array.isArray(task.jobIds) ? task.jobIds : [])
+        .map((jobId) => normalizeText(jobId))
+        .filter(Boolean)
+    ));
+    if (explicitJobIds.length) {
+      const jobs = [];
+      for (const jobId of explicitJobIds) {
+        const snapshot = await db.collection(JOB_COLLECTION).doc(jobId).get();
+        if (snapshot.exists) {
+          jobs.push(normalizeMeetingJob(snapshot.data()));
+          continue;
+        }
+        jobs.push(normalizeMeetingJob({
+          deletedAt: task.deletedAt,
+          jobId,
+          meetingId: task.meetingId,
+          owner,
+          sessionId: task.sessionId,
+          status: "deleted",
+        }));
+      }
+      return jobs;
+    }
+    return loadOwnedMeetingJobs(owner, task.meetingId);
+  }
+
+  async function isMeetingDeletionTaskComplete(task) {
+    const owner = normalizeIdentity(task.owner);
+    if (task.scope === "result") {
+      return isMeetingJobDeletionComplete(
+        normalizeMeetingJob({
+          deletedAt: task.deletedAt,
+          jobId: task.jobId,
+          meetingId: task.meetingId,
+          owner,
+          sessionId: task.sessionId,
+          status: "deleted",
+        })
+      );
+    }
+    const jobs = await loadMeetingDeletionJobs(task);
+    for (const job of jobs) {
+      const completed = await isMeetingJobDeletionComplete(job);
+      if (!completed) {
+        return false;
+      }
+    }
+    if (task.meetingId) {
+      const meetingSnapshot = await db.collection(MEETING_COLLECTION).doc(buildMeetingDocId(owner.providerUserKey, task.meetingId)).get();
+      if (meetingSnapshot.exists && !normalizeMeetingSummary(meetingSnapshot.data()).deletedAt) {
+        return false;
+      }
+    }
+    if (task.sessionId) {
+      const sessionSnapshot = await db.collection(SESSION_COLLECTION).doc(buildSessionDocId(owner.providerUserKey, task.sessionId)).get();
+      if (sessionSnapshot.exists && !normalizeMeetingSession(sessionSnapshot.data()).deletedAt) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  async function isMeetingJobDeletionComplete(jobInput) {
+    const job = normalizeMeetingJob(jobInput);
+    if (!job.jobId) {
+      return true;
+    }
+    const jobRef = db.collection(JOB_COLLECTION).doc(job.jobId);
+    const storedJob = await loadStoredMeetingJob(jobRef);
+    if (storedJob?.jobId && !storedJob.deletedAt) {
+      return false;
+    }
+    if (storedJob?.jobId && !isMeetingSourceFullyDeleted(storedJob.source)) {
+      return false;
+    }
+    const finalizerSnapshot = await db.collection(JOB_FINALIZER_COLLECTION).doc(job.jobId).get();
+    if (finalizerSnapshot.exists) {
+      return false;
+    }
+    const partDocs = await loadMeetingJobPartDocs(job.jobId);
+    if (partDocs.length) {
+      return false;
+    }
+    const artifactIds = Array.from(new Set(collectMeetingArtifactIds(storedJob || job)));
+    for (const artifactId of artifactIds) {
+      const artifactSnapshot = await db.collection(ARTIFACT_COLLECTION).doc(artifactId).get();
+      if (artifactSnapshot.exists) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function isMeetingSourceFullyDeleted(sourceInput) {
+    const source = normalizeMeetingSource(sourceInput);
+    if (!source.mode || source.mode === "single") {
+      return !normalizeText(source.storageObject) || normalizeText(source.uploadStatus) === "deleted";
+    }
+    return source.parts.every((part) => (
+      !normalizeText(part.storageObject) || normalizeText(part.uploadStatus) === "deleted"
+    ));
+  }
+
   function getClient() {
     if (client) {
       return client;
@@ -2883,6 +3209,73 @@ function registerMeetingHandlers(deps) {
       deletedStorageObjects: deletion.deletedStorageObjects,
       partCount: partDocs.length,
     };
+  }
+
+  function shouldProcessMeetingDeletionTask(task, previousTask) {
+    const normalizedTask = normalizeMeetingDeletionTask(task);
+    const normalizedPreviousTask = normalizeMeetingDeletionTask(previousTask);
+    if (!normalizedTask.taskId) {
+      return false;
+    }
+    if (normalizedTask.status === "queued") {
+      return normalizedPreviousTask.status !== "queued";
+    }
+    if (normalizedTask.status === "retry") {
+      return isMeetingDeletionRetryDue(normalizedTask)
+        && (
+          normalizedPreviousTask.status !== "retry"
+          || normalizeText(normalizedPreviousTask.nextRetryAt) !== normalizeText(normalizedTask.nextRetryAt)
+        );
+    }
+    return false;
+  }
+
+  function isMeetingDeletionRetryDue(taskInput) {
+    const task = normalizeMeetingDeletionTask(taskInput);
+    if (!task.taskId) {
+      return false;
+    }
+    if (task.status === "queued") {
+      return true;
+    }
+    if (task.status === "retry") {
+      const nextRetryAtMs = Date.parse(task.nextRetryAt);
+      return !Number.isFinite(nextRetryAtMs) || nextRetryAtMs <= Date.now();
+    }
+    if (task.status === "processing") {
+      const startedAtMs = Date.parse(task.startedAt || task.updatedAt);
+      return Number.isFinite(startedAtMs) && (Date.now() - startedAtMs) >= DELETION_PROCESSING_STALE_MS;
+    }
+    return false;
+  }
+
+  function buildQueuedMeetingDeletionTask(taskInput, existingTaskInput) {
+    const task = normalizeMeetingDeletionTask(taskInput);
+    const existingTask = normalizeMeetingDeletionTask(existingTaskInput);
+    const keepProcessing = existingTask.status === "processing" && !isMeetingDeletionRetryDue(existingTask);
+    const updatedAt = normalizeText(task.requestedAt) || new Date().toISOString();
+    const mergedJobIds = Array.from(new Set([
+      ...existingTask.jobIds,
+      ...task.jobIds,
+      normalizeText(task.jobId),
+    ].filter(Boolean)));
+    return normalizeMeetingDeletionTask({
+      ...existingTask,
+      deletedAt: task.deletedAt || existingTask.deletedAt || updatedAt,
+      jobId: task.jobId || existingTask.jobId,
+      jobIds: mergedJobIds,
+      lastError: keepProcessing ? existingTask.lastError : "",
+      meetingId: task.meetingId || existingTask.meetingId,
+      nextRetryAt: keepProcessing ? existingTask.nextRetryAt : "",
+      owner: task.owner?.providerUserKey ? task.owner : existingTask.owner,
+      requestedAt: existingTask.requestedAt || updatedAt,
+      scope: task.scope || existingTask.scope,
+      sessionId: task.sessionId || existingTask.sessionId,
+      startedAt: keepProcessing ? existingTask.startedAt : "",
+      status: keepProcessing ? "processing" : "queued",
+      taskId: task.taskId || existingTask.taskId,
+      updatedAt,
+    });
   }
 
   async function loadMeetingJobPartDocs(jobId) {
@@ -4064,6 +4457,51 @@ function normalizeMeetingNotesRegenerateRequest(input) {
     notesMode: normalizeMeetingNotesMode(input?.notesMode),
     notesStyle: normalizeMeetingNotesStyle(input?.notesStyle) || DEFAULT_NOTES_STYLE,
     sharedMemo: normalizeTextBlock(input?.sharedMemo).slice(0, MAX_SHARED_MEMO_CHARS),
+  };
+}
+
+function buildMeetingDeletionTaskId(input) {
+  const scope = normalizeText(input?.scope).toLowerCase();
+  if (scope === "result") {
+    return `meeting-result-delete__${normalizeText(input?.jobId)}`;
+  }
+  return `meeting-delete__${normalizeText(input?.owner?.providerUserKey)}__${normalizeText(input?.meetingId)}`;
+}
+
+function normalizeMeetingDeletionTask(input) {
+  const task = input && typeof input === "object" ? input : {};
+  const scope = normalizeText(task.scope).toLowerCase();
+  const status = normalizeText(task.status).toLowerCase();
+  return {
+    attemptCount: Math.max(0, Number(task.attemptCount) || 0),
+    deletedAt: normalizeText(task.deletedAt),
+    jobId: normalizeText(task.jobId),
+    jobIds: Array.from(new Set(
+      (Array.isArray(task.jobIds) ? task.jobIds : [])
+        .map((jobId) => normalizeText(jobId))
+        .filter(Boolean)
+    )),
+    lastError: normalizeText(task.lastError),
+    meetingId: normalizeText(task.meetingId),
+    nextRetryAt: normalizeText(task.nextRetryAt),
+    owner: normalizeMeetingTaskOwner(task.owner),
+    requestedAt: normalizeText(task.requestedAt),
+    scope: SUPPORTED_DELETION_SCOPES.has(scope) ? scope : "",
+    sessionId: normalizeText(task.sessionId),
+    startedAt: normalizeText(task.startedAt),
+    status: SUPPORTED_DELETION_STATUSES.has(status) ? status : "",
+    taskId: normalizeText(task.taskId),
+    updatedAt: normalizeText(task.updatedAt),
+  };
+}
+
+function normalizeMeetingTaskOwner(input) {
+  return {
+    displayName: normalizeText(input?.displayName),
+    email: normalizeText(input?.email).toLowerCase(),
+    numericUserId: Number.isFinite(Number(input?.numericUserId)) ? Number(input.numericUserId) : null,
+    provider: normalizeText(input?.provider) || "inova",
+    providerUserKey: normalizeText(input?.providerUserKey),
   };
 }
 
