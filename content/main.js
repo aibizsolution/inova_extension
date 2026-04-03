@@ -165,19 +165,22 @@
     const visible = state.settings.enabled && isToolSurface() && !isPaused();
     const bookmarkItems = getFilteredBookmarks();
     const promptItems = getFilteredPrompts();
-    const promptState = promptManager.buildViewState(promptItems);
-    const reviewState = promptReviewManager.buildViewState();
-    const activePromptTab = getActivePromptTab(reviewState.open);
-    const storeState = storeManager.buildViewState();
+    const promptRenderState = promptHubState.buildPromptRenderState({
+      promptItems,
+      promptManager,
+      promptReviewManager,
+      state,
+      storeManager,
+    });
     const meetingTool = buildMeetingToolState(state.meetingHub);
     const panelDebug = buildMeetingDebugState();
     const releaseState = releaseManager.buildViewState();
     const bookmarkCount = state.bookmarks.length;
-    const promptCount = state.promptLibrary.items.length;
+    const promptCount = promptRenderState.promptCount;
     const meetingCount = meetingTool.count;
     const releaseCount = releaseState.updateAvailable ? 1 : 0;
-    const storeCount = Math.max(0, Number(state.store.totalCount) || state.store.items.length);
-    const promptToolCount = promptHubState.getPromptToolCount(activePromptTab, promptCount, storeCount);
+    const storeCount = promptRenderState.storeCount;
+    const promptToolCount = promptRenderState.promptToolCount;
     const toolCounts = {
       bookmarks: bookmarkCount,
       meeting: meetingCount,
@@ -204,14 +207,7 @@
       handleRatio: namespace.storage.getHandleRatio(state.uiPreferences, global.innerWidth),
       open: state.open,
       panelDebug,
-      promptTool: promptHubState.buildPromptToolState({
-        activePromptTab,
-        promptCount,
-        promptState,
-        reviewState,
-        storeCount,
-        storeState,
-      }),
+      promptTool: promptRenderState.promptTool,
       toolCount: activeToolCount,
       toolTitle: state.activeTool === "prompts"
         ? "프롬프트"

@@ -182,7 +182,7 @@
   - `features/prompt-library/prompt-view.js`: 요청 탭 렌더링
   - `features/prompt-library/prompt-manager.js`: 요청 CRUD, 가져오기/내보내기, 입력창 주입
   - `features/prompt-store/store-view.js`: 프롬프트 스토어 탭 렌더링
-  - `prompt-hub-state.js`: prompt 탭 선택, count, cloud sync 조건을 묶는 prompt tool shell state helper
+  - `prompt-hub-state.js`: prompt 탭 선택, count, render snapshot, cloud sync 조건을 묶는 prompt tool shell state helper
   - `prompt-hub-panel.js`: prompt/store 탭 클릭, 입력, drag, scroll 위임을 묶는 prompt tool shell panel helper
   - `prompt-hub-controller.js`: prompt 탭 전이, 액션 라우팅, store 후속 sync를 묶는 prompt tool shell controller
   - `prompt-hub-runtime.js`: prompt manager/review/store/realtime/controller 조립을 묶는 prompt tool shell runtime helper

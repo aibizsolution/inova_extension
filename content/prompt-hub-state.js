@@ -71,7 +71,40 @@
     };
   }
 
+  function buildPromptRenderState(options = {}) {
+    const promptItems = Array.isArray(options.promptItems) ? options.promptItems : [];
+    const promptManager = options.promptManager;
+    const promptReviewManager = options.promptReviewManager;
+    const storeManager = options.storeManager;
+    const promptState = promptManager.buildViewState(promptItems);
+    const reviewState = promptReviewManager.buildViewState();
+    const activePromptTab = getActivePromptTab(options.state, reviewState.open);
+    const storeState = storeManager.buildViewState();
+    const promptCount = Array.isArray(options.state?.promptLibrary?.items) ? options.state.promptLibrary.items.length : 0;
+    const storeItems = Array.isArray(options.state?.store?.items) ? options.state.store.items : [];
+    const storeCount = Math.max(0, Number(options.state?.store?.totalCount) || storeItems.length);
+
+    return {
+      activePromptTab,
+      promptCount,
+      promptState,
+      promptTool: buildPromptToolState({
+        activePromptTab,
+        promptCount,
+        promptState,
+        reviewState,
+        storeCount,
+        storeState,
+      }),
+      promptToolCount: getPromptToolCount(activePromptTab, promptCount, storeCount),
+      reviewState,
+      storeCount,
+      storeState,
+    };
+  }
+
   namespace.promptHubState = {
+    buildPromptRenderState,
     buildPromptToolState,
     getActivePromptTab,
     getPromptToolCount,
