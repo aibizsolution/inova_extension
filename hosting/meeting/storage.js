@@ -455,6 +455,9 @@
     const item = input && typeof input === "object" ? input : {};
     const parts = (Array.isArray(item.parts) ? item.parts : []).map(normalizePendingPart).sort((left, right) => left.index - right.index || left.startMs - right.startMs);
     const uploadedPartCount = parts.filter((part) => normalizeText(part.storageObject)).length;
+    const publishedPartCount = parts.length
+      ? Math.min(uploadedPartCount, Math.max(0, Number(item.publishedPartCount) || 0))
+      : 0;
     const supersededJobIds = Array.from(new Set(
       (Array.isArray(item.supersededJobIds) ? item.supersededJobIds : [item.supersededJobId])
         .map((jobId) => normalizeText(jobId))
@@ -481,6 +484,7 @@
       mimeType: normalizeText(item.mimeType) || normalizeText(item.blob?.type) || "audio/webm",
       originalSizeBytes: Math.max(0, Number(item.originalSizeBytes) || Number(item.sizeBytes) || Number(item.blob?.size) || 0),
       parts,
+      publishedPartCount,
       preparedPartCount: Math.max(0, Number(item.preparedPartCount) || parts.length),
       requestId,
       sharedMemoSnapshot: normalizeTextBlock(item.sharedMemoSnapshot),

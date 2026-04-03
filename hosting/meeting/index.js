@@ -693,6 +693,7 @@
     return {
       hold: Boolean(item?.hold),
       jobId: normalizeText(item?.jobId),
+      publishedPartCount: Math.max(0, Number(item?.publishedPartCount) || 0),
       preparedPartCount: Math.max(0, Number(item?.preparedPartCount) || 0),
       requestId: normalizeText(item?.requestId),
       sourceMode: normalizeText(item?.sourceMode),
@@ -1038,6 +1039,7 @@
       mimeType: normalizeText(options?.mimeType) || "audio/webm",
       originalSizeBytes: sizeBytes,
       parts: [],
+      publishedPartCount: 0,
       preparedPartCount: 0,
       requestId,
       sharedMemoSnapshot: normalizeTextBlock(options?.sharedMemo),
@@ -1496,6 +1498,15 @@
     const nextJobId = normalizeText(remoteState?.jobId || pending?.jobId);
     const nextUpdatedAt = normalizeText(remoteState?.updatedAt || pending?.updatedAt);
     const nextError = normalizeText(remoteState?.error || pending?.lastError);
+    const uploadedPartCount = Math.max(0, Number(pending?.uploadedPartCount) || 0);
+    const publishedPartCount = normalizeText(pending?.sourceMode) === "chunked"
+      ? Math.min(uploadedPartCount, Math.max(0, Number(pending?.publishedPartCount) || 0))
+      : 0;
+    const nextPublishedPartCount = normalizeText(pending?.sourceMode) === "chunked"
+      ? ((mode === "create" || (remoteStatus === "succeeded" && !awaitingMoreUploads))
+        ? uploadedPartCount
+        : publishedPartCount)
+      : 0;
 
     if (!remoteStatus) {
       return {
@@ -1521,6 +1532,7 @@
           ...pending,
           jobId: nextJobId,
           lastError: mode === "create" ? "" : nextError,
+          publishedPartCount: nextPublishedPartCount,
           status: awaitingMoreUploads
             ? "uploading_chunks"
             : remoteStatus === "processing"
@@ -1548,6 +1560,7 @@
           hold: false,
           jobId: nextJobId,
           lastError: "",
+          publishedPartCount: normalizeText(pending?.sourceMode) === "chunked" ? uploadedPartCount : 0,
           status: "succeeded",
           updatedAt: nextUpdatedAt,
         }),
@@ -1574,6 +1587,7 @@
             storageObject: "",
             uploadStatus: "",
           })),
+          publishedPartCount: 0,
           status: pending?.hold ? "on_hold" : "failed",
           storageObject: "",
           updatedAt: nextUpdatedAt,
@@ -2191,6 +2205,7 @@
       mimeType: normalizeText(file.type) || "audio/mp4",
       originalSizeBytes: sizeBytes,
       parts: [],
+      publishedPartCount: 0,
       preparedPartCount: 0,
       requestId: ns.shared.generateCaptureRequestId(global),
       sharedMemoSnapshot: normalizeTextBlock(refs.sharedMemoInput.value || state.recordMemoDraft || state.recordMemoSaved),
@@ -2340,7 +2355,7 @@
       return;
     }
     const endedAt = new Date().toISOString();
-    const pending = normalizePendingUpload({ blob, captureMode: "microphone", channelCount: state.capture.channelCount, createdAt: endedAt, durationMs: state.capture.durationMs, endedAt, hold: false, jobId: "", lastError: "", meetingId: state.session.meetingId, meetingTitleSnapshot: buildRecordTitle(endedAt), mimeType: blob.type, originalSizeBytes: blob.size, parts: [], preparedPartCount: 0, requestId: state.capture.requestId || ns.shared.generateCaptureRequestId(global), sharedMemoSnapshot: normalizeTextBlock(refs.sharedMemoInput.value || state.recordMemoDraft || state.recordMemoSaved), sizeBytes: blob.size, sourceMode: inferSourceMode(blob.size, state.capture.durationMs), startedAt: state.capture.startedAt, status: "local_saved", uploadedPartCount: 0, updatedAt: endedAt });
+    const pending = normalizePendingUpload({ blob, captureMode: "microphone", channelCount: state.capture.channelCount, createdAt: endedAt, durationMs: state.capture.durationMs, endedAt, hold: false, jobId: "", lastError: "", meetingId: state.session.meetingId, meetingTitleSnapshot: buildRecordTitle(endedAt), mimeType: blob.type, originalSizeBytes: blob.size, parts: [], publishedPartCount: 0, preparedPartCount: 0, requestId: state.capture.requestId || ns.shared.generateCaptureRequestId(global), sharedMemoSnapshot: normalizeTextBlock(refs.sharedMemoInput.value || state.recordMemoDraft || state.recordMemoSaved), sizeBytes: blob.size, sourceMode: inferSourceMode(blob.size, state.capture.durationMs), startedAt: state.capture.startedAt, status: "local_saved", uploadedPartCount: 0, updatedAt: endedAt });
     await upsertPendingUpload(pending, {
       context: {
         phase: stopContext.continueRecording ? "capture-save-continue" : "capture-save",
@@ -2412,6 +2427,7 @@
             ...(Array.isArray(pending.supersededRequestIds) ? pending.supersededRequestIds : []),
             normalizedRequestId,
           ].map((value) => normalizeText(value)).filter((value) => Boolean(value) && value !== retryRequestId))),
+          publishedPartCount: 0,
           uploadedPartCount: 0,
         }
       : pending;
@@ -2480,7 +2496,8 @@
       uploadedPartCount: prepared.parts.filter((part) => normalizeText(part.storageObject)).length,
     }, { context: buildAttemptQueueContext(activeRequestId, "chunk-uploading") });
 
-    let publishedRemoteJobThisAttempt = false;
+    let publishedRemoteStateThisAttempt = false;
+    let uploadedNewChunkThisAttempt = false;
     for (const preparedPart of prepared.parts) {
       const currentPending = state.pendingUploads.find((item) => item.requestId === activeRequestId) || nextPending;
       const currentPart = (currentPending?.parts || []).find((part) => Number(part.index) === Number(preparedPart.index));
@@ -2506,26 +2523,43 @@
         uploaded,
         { context: buildAttemptQueueContext(activeRequestId, "chunk-part-uploaded") }
       );
-      const shouldAnnounceChunkStart = !normalizeText(currentPending?.jobId) && !normalizeText(nextPending?.jobId);
+      uploadedNewChunkThisAttempt = true;
+      const shouldStartRemoteJob = !normalizeText(nextPending?.jobId)
+        && Math.max(0, Number(nextPending?.uploadedPartCount) || 0) > Math.max(0, Number(nextPending?.publishedPartCount) || 0);
+      if (!shouldStartRemoteJob) {
+        continue;
+      }
       nextPending = (await createOrRefreshRemoteJob(nextPending, {
-        context: buildAttemptQueueContext(activeRequestId, shouldAnnounceChunkStart ? "chunk-remote-job-start" : "chunk-remote-job-refresh"),
-        noticeText: shouldAnnounceChunkStart
+        context: buildAttemptQueueContext(activeRequestId, "chunk-remote-job-start"),
+        noticeText: "첫 청크를 올려 자동 전사를 바로 시작했습니다. 남은 청크를 이어서 업로드합니다.",
+        syncWorkspace: false,
+      })).pending;
+      publishedRemoteStateThisAttempt = true;
+    }
+
+    const hasPublishedGap = Math.max(0, Number(nextPending?.uploadedPartCount) || 0) > Math.max(0, Number(nextPending?.publishedPartCount) || 0);
+    if (hasPublishedGap) {
+      const shouldStartRemoteJob = !normalizeText(nextPending?.jobId);
+      nextPending = (await createOrRefreshRemoteJob(nextPending, {
+        context: buildAttemptQueueContext(activeRequestId, shouldStartRemoteJob ? "chunk-remote-job-start" : "chunk-remote-job-refresh"),
+        noticeText: shouldStartRemoteJob
           ? "첫 청크를 올려 자동 전사를 바로 시작했습니다. 남은 청크를 이어서 업로드합니다."
           : "",
-        syncWorkspace: shouldAnnounceChunkStart,
+        syncWorkspace: false,
       })).pending;
-      publishedRemoteJobThisAttempt = true;
-    }
-
-    if (!publishedRemoteJobThisAttempt) {
-      return (await createOrRefreshRemoteJob(nextPending, {
+      publishedRemoteStateThisAttempt = true;
+    } else if (!publishedRemoteStateThisAttempt && normalizeText(nextPending?.jobId)) {
+      nextPending = (await createOrRefreshRemoteJob(nextPending, {
         context: buildAttemptQueueContext(activeRequestId, "chunk-remote-job-resync"),
-        noticeText: "자동 전사를 이어서 확인합니다.",
-        syncWorkspace: true,
+        noticeText: uploadedNewChunkThisAttempt ? "" : "자동 전사를 이어서 확인합니다.",
+        syncWorkspace: false,
       })).pending;
+      publishedRemoteStateThisAttempt = true;
     }
 
-    await syncWorkspaceLocalState(false, "workflow");
+    if (publishedRemoteStateThisAttempt) {
+      await syncWorkspaceLocalState(false, "workflow");
+    }
     return nextPending;
   }
 
