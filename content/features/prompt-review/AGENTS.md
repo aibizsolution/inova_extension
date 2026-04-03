@@ -13,6 +13,7 @@
 - `content/composer.js`
 - `content/prompt-hub-state.js` - review 탭 포함 여부를 조정하는 prompt tool shell
 - `content/prompt-hub-panel.js` - review 탭 선택과 prompt shell 상호작용을 묶는 prompt tool shell
+- `content/prompt-hub-controller.js` - review 관련 action routing과 prompt 탭 전이를 묶는 prompt tool shell
 - `content/prompt-hub-view.js` - review body를 감싸는 prompt tool shell
 
 ## 관련 functions 경로

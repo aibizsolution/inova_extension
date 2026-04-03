@@ -73,6 +73,7 @@
         "content/release-manager.js",
         "content/prompt-hub-state.js",
         "content/prompt-hub-panel.js",
+        "content/prompt-hub-controller.js",
         "content/panel.js",
         "content/main.js"
       ],

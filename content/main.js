@@ -87,8 +87,16 @@
     isToolSurface,
     visibilityState: document.visibilityState,
   });
-  const promptManager = namespace.promptManager.create(state, { publishPrompt, persistActiveTool, render });
-  const promptReviewManager = namespace.promptReviewManager.create(state, { render, showPromptTab });
+  let promptHubController = null;
+  const promptManager = namespace.promptManager.create(state, {
+    publishPrompt: (...args) => promptHubController.publishPrompt(...args),
+    persistActiveTool,
+    render,
+  });
+  const promptReviewManager = namespace.promptReviewManager.create(state, {
+    render,
+    showPromptTab: (...args) => promptHubController.showPromptTab(...args),
+  });
   let promptRealtimeManager = null;
     const storeManager = namespace.storeManager.create(state, {
       loadStoreDetail: (entryId) => promptRealtimeManager?.loadStoreDetail?.(entryId),
@@ -132,6 +140,18 @@
     onStoreLatestSnapshot: (payload) => storeManager.applyLatestRealtimeSnapshot(payload),
     render,
   });
+  promptHubController = namespace.promptHubController.create(state, {
+    getActivePromptTab,
+    lockUiPreferenceSelection,
+    normalizePromptTab,
+    onSelectPromptTab: () => meetingManager.scheduleSync(0),
+    persistActiveTool,
+    promptManager,
+    promptRealtimeManager,
+    promptReviewManager,
+    render,
+    storeManager,
+  });
   const meetingManager = namespace.meetingManager.create(state, { render });
   const routeSync = namespace.routeSync.create(state, {
     ensureStoreLoaded: () => storeManager.ensureLoaded(),
@@ -149,13 +169,13 @@
       onImportFile: promptManager.handleImportFile,
       onJumpBookmark: jumpToBookmark,
       onMeetingAction: handleMeetingAction,
-      onMovePrompt: movePromptItem,
-      onPromptAction: handlePromptAction,
+      onMovePrompt: promptHubController.movePromptItem,
+      onPromptAction: promptHubController.handlePromptAction,
       onPromptDraftChange: promptManager.updateDraft,
-      onSelectPromptTab: selectPromptTab,
+      onSelectPromptTab: promptHubController.selectPromptTab,
       onReleaseAction: releaseManager.handleAction,
-      onStoreAction: handleStoreAction,
-      onEscape: handleEscape,
+      onStoreAction: promptHubController.handleStoreAction,
+      onEscape: promptHubController.handleEscape,
       onSearch: updateQuery,
       onSearchSubmit: submitQuery,
       onSelectTool: selectTool,
@@ -280,7 +300,7 @@
     render();
   }
   async function selectTool(toolId) {
-    if (toolId === "store") return void selectPromptTab("store");
+    if (toolId === "store") return void promptHubController.selectPromptTab("store");
     state.activeTool = normalizeToolId(toolId);
     const nextPromptTab = state.activeTool === "prompts" ? "library" : getActivePromptTab();
     state.uiPreferences = namespace.storage.mergeUiPreferences(state.uiPreferences, {
@@ -294,17 +314,6 @@
     if (state.activeTool === "release") releaseManager.ensureChecked(false, true);
     render();
     await persistActiveTool(state.activeTool, nextPromptTab);
-  }
-  async function selectPromptTab(promptTabId) {
-    const nextPromptTab = normalizePromptTab(promptTabId);
-    state.activeTool = "prompts";
-    state.uiPreferences = namespace.storage.mergeUiPreferences(state.uiPreferences, { activePromptTab: nextPromptTab, activeTool: "prompts" });
-    lockUiPreferenceSelection("prompts", nextPromptTab);
-    meetingManager.scheduleSync(0);
-    promptRealtimeManager.scheduleSync(120);
-    if (nextPromptTab === "store") storeManager.ensureLoaded();
-    render();
-    await persistActiveTool("prompts", nextPromptTab);
   }
   async function persistActiveTool(nextTool = state.activeTool, nextPromptTab = getActivePromptTab()) {
     try {
@@ -346,21 +355,6 @@
     } catch (error) {
       console.error("[i-Nova Bookmarks] handle position save failed", error);
     }
-  }
-  async function movePromptItem(dragPromptId, targetPromptId, placement) {
-    if (!dragPromptId || !targetPromptId || dragPromptId === targetPromptId) return;
-    try {
-      state.promptLibrary = await namespace.storage.movePromptItem(dragPromptId, targetPromptId, placement);
-      render();
-    } catch (error) {
-      console.error("[i-Nova Bookmarks] prompt move failed", error);
-    }
-  }
-  function handlePromptAction(action, detail = {}) {
-    if (action === "review-composer" || action === "apply-reviewed-prompt" || action === "dismiss-review") {
-      return promptReviewManager.handleAction(action, detail);
-    }
-    return promptManager.handleAction(action, detail);
   }
   async function handleMeetingAction(action, detail = {}) {
     if (action === "debug-toggle") {
@@ -644,19 +638,6 @@
           ? "prompts"
           : "bookmarks";
   }
-  function showPromptTab(promptTabId) {
-    const nextPromptTab = normalizePromptTab(promptTabId);
-    state.open = true;
-    state.activeTool = "prompts";
-    state.uiPreferences = namespace.storage.mergeUiPreferences(state.uiPreferences, {
-      activePromptTab: nextPromptTab,
-      activeTool: "prompts",
-    });
-    lockUiPreferenceSelection("prompts", nextPromptTab);
-    persistActiveTool("prompts", nextPromptTab).catch((error) => {
-      console.error("[i-Nova Bookmarks] prompt tab save failed", error);
-    });
-  }
   function lockUiPreferenceSelection(activeTool, activePromptTab) {
     state.uiPreferenceLock = {
       activePromptTab: normalizePromptTab(activePromptTab),
@@ -664,7 +645,6 @@
       until: Date.now() + UI_PREFERENCE_LOCK_MS,
     };
   }
-  function handleEscape() { return promptReviewManager.consumeEscape() || (state.activeTool === "prompts" && getActivePromptTab() === "library" && promptManager.consumeEscape()); }
   function isToolSurface() { return namespace.contentDom.getConversationState().hasComposer; }
   function buildPromptReviewFloatState(visible = state.settings.enabled && isToolSurface() && !isPaused()) {
     return {
@@ -755,15 +735,5 @@
       feedback: state.meetingUi.feedback,
       pending: state.meetingUi.pending,
     };
-  }
-  async function handleStoreAction(action, detail = {}) {
-    const result = storeManager.handleAction(action, detail);
-    promptRealtimeManager.scheduleSync(80);
-    return result;
-  }
-  async function publishPrompt(promptId, categoryId, title) {
-    const result = await storeManager.publishPrompt(promptId, categoryId, title);
-    promptRealtimeManager.scheduleSync(80);
-    return result;
   }
 })(globalThis);
