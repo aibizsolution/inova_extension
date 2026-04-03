@@ -2686,12 +2686,10 @@
     });
   }
 
-  function buildChunkRemoteReconcileRequest(pending, options = {}) {
+  function buildChunkRemoteMutationRequest(pending, options = {}) {
     const uploadedPartCount = Math.max(0, Number(pending?.uploadedPartCount) || 0);
     const publishedPartCount = Math.max(0, Number(pending?.publishedPartCount) || 0);
     const jobId = normalizeText(pending?.jobId);
-    const backlogUploadCount = Math.max(0, Number(options?.backlogUploadCount) || 0);
-    const bootstrappedRemoteThisAttempt = Boolean(options?.bootstrappedRemoteThisAttempt);
 
     if (uploadedPartCount <= 0) {
       return null;
@@ -2707,10 +2705,17 @@
         transitionAction: shouldStartRemoteJob ? "chunk-start" : "chunk-publish",
       };
     }
+    return null;
+  }
+
+  function buildChunkRemoteResyncRequest(pending, options = {}) {
+    const jobId = normalizeText(pending?.jobId);
+    const backlogUploadCount = Math.max(0, Number(options?.backlogUploadCount) || 0);
+    const bootstrappedRemoteThisAttempt = Boolean(options?.bootstrappedRemoteThisAttempt);
+
     if (jobId && !bootstrappedRemoteThisAttempt && backlogUploadCount === 0) {
       return {
         contextPhase: "chunk-remote-job-resync",
-        transitionKind: "reconcile",
         transitionAction: "chunk-resync",
       };
     }
@@ -2785,32 +2790,41 @@
       backlogUploadCount += 1;
     }
 
-    const remoteReconcileRequest = buildChunkRemoteReconcileRequest(nextPending, {
+    const remoteMutationRequest = buildChunkRemoteMutationRequest(nextPending, {
       backlogUploadCount,
       bootstrappedRemoteThisAttempt: remoteStateChangedThisAttempt,
     });
-    if (remoteReconcileRequest) {
-      const reconcileResult = await (
-        remoteReconcileRequest.transitionKind === "chunk-start"
+    if (remoteMutationRequest) {
+      const mutationResult = await (
+        remoteMutationRequest.transitionAction === "chunk-start"
           ? startChunkedPendingUploadRemoteJob(nextPending, {
-            context: buildAttemptQueueContext(activeRequestId, remoteReconcileRequest.contextPhase),
-            noticeText: remoteReconcileRequest.noticeText,
+            context: buildAttemptQueueContext(activeRequestId, remoteMutationRequest.contextPhase),
+            noticeText: remoteMutationRequest.noticeText,
             syncWorkspace: false,
-            transitionAction: remoteReconcileRequest.transitionAction,
+            transitionAction: remoteMutationRequest.transitionAction,
           })
-          : remoteReconcileRequest.transitionKind === "publish"
-            ? publishPendingUploadRemoteChunks(nextPending, {
-              context: buildAttemptQueueContext(activeRequestId, remoteReconcileRequest.contextPhase),
-              transitionAction: remoteReconcileRequest.transitionAction,
-            })
-          : reconcileChunkedPendingUploadRemoteState(nextPending, {
-            context: buildAttemptQueueContext(activeRequestId, remoteReconcileRequest.contextPhase),
-            transitionAction: remoteReconcileRequest.transitionAction,
+          : publishPendingUploadRemoteChunks(nextPending, {
+            context: buildAttemptQueueContext(activeRequestId, remoteMutationRequest.contextPhase),
+            transitionAction: remoteMutationRequest.transitionAction,
           })
       );
-      nextPending = reconcileResult.pending;
+      nextPending = mutationResult.pending;
       remoteStateChangedThisAttempt = remoteStateChangedThisAttempt
-        || (!reconcileResult.degraded && normalizeText(reconcileResult.resolution) !== "reconciled");
+        || (!mutationResult.degraded && normalizeText(mutationResult.resolution) !== "reconciled");
+    } else {
+      const remoteResyncRequest = buildChunkRemoteResyncRequest(nextPending, {
+        backlogUploadCount,
+        bootstrappedRemoteThisAttempt: remoteStateChangedThisAttempt,
+      });
+      if (remoteResyncRequest) {
+        const reconcileResult = await reconcileChunkedPendingUploadRemoteState(nextPending, {
+          context: buildAttemptQueueContext(activeRequestId, remoteResyncRequest.contextPhase),
+          transitionAction: remoteResyncRequest.transitionAction,
+        });
+        nextPending = reconcileResult.pending;
+        remoteStateChangedThisAttempt = remoteStateChangedThisAttempt
+          || (!reconcileResult.degraded && normalizeText(reconcileResult.resolution) !== "reconciled");
+      }
     }
 
     if (remoteStateChangedThisAttempt) {
