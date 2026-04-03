@@ -393,6 +393,55 @@
     syncNoticeFromDegradedRegistry();
   }
 
+  function normalizeDegradedDiagnosticsResult(result) {
+    const issues = Array.isArray(result?.issues) ? result.issues : [];
+    return {
+      degradedReason: normalizeText(result?.degradedReason),
+      issueCodes: issues.map((issue) => normalizeText(issue?.code)).filter(Boolean),
+      issues,
+      operation: normalizeText(result?.operation),
+    };
+  }
+
+  function buildDegradedDiagnosticsSignature(entry) {
+    return [
+      normalizeText(entry?.degradedReason),
+      ...(Array.isArray(entry?.issueCodes) ? entry.issueCodes : []),
+    ]
+      .filter(Boolean)
+      .join("|");
+  }
+
+  function applyDegradedDiagnostics(stateKey, result, options) {
+    const normalized = normalizeDegradedDiagnosticsResult(result);
+    const previousSignature = buildDegradedDiagnosticsSignature(state[stateKey]);
+    const nextSignature = buildDegradedDiagnosticsSignature(normalized);
+    state[stateKey] = {
+      degradedReason: normalized.degradedReason,
+      issueCodes: normalized.issueCodes,
+    };
+    if (!normalized.degradedReason) {
+      if (previousSignature) {
+        logDebug(options.recoveredEvent, {
+          meetingId: state.session.meetingId,
+        });
+      }
+      clearDegradedNotice(options.noticeCode);
+      return;
+    }
+    if (previousSignature === nextSignature) {
+      return;
+    }
+    logDebug(options.degradedEvent, {
+      degradedReason: normalized.degradedReason,
+      issueCodes: normalized.issueCodes,
+      issues: normalized.issues,
+      meetingId: state.session.meetingId,
+      ...(typeof options.getLogDetails === "function" ? options.getLogDetails(normalized) : {}),
+    });
+    setDegradedNotice(options.noticeCode, options.buildNotice(normalized.degradedReason, normalized), "warning");
+  }
+
   function surfaceSessionRestoreNotice() {
     if (!state.sessionRestore.hasWarningIssue || !state.session.meetingSessionToken || !state.session.meetingId) {
       return;
@@ -401,142 +450,48 @@
   }
 
   function applyPersistWorkspaceSessionResult(result) {
-    const issues = Array.isArray(result?.issues) ? result.issues : [];
-    const degradedReason = normalizeText(result?.degradedReason);
-    const issueCodes = issues.map((issue) => normalizeText(issue?.code)).filter(Boolean);
-    const previousReason = normalizeText(state.sessionPersist.degradedReason);
-    const previousSignature = [previousReason, ...(Array.isArray(state.sessionPersist.issueCodes) ? state.sessionPersist.issueCodes : [])]
-      .filter(Boolean)
-      .join("|");
-    const nextSignature = [degradedReason, ...issueCodes].filter(Boolean).join("|");
-    state.sessionPersist = {
-      degradedReason,
-      issueCodes,
-    };
-    if (!degradedReason) {
-      if (previousSignature) {
-        logDebug("workspace.session.persist.recovered", {
-          meetingId: state.session.meetingId,
-        });
-      }
-      clearDegradedNotice(DEGRADED_NOTICE_CODES.sessionPersist);
-      return;
-    }
-    if (previousSignature === nextSignature) {
-      return;
-    }
-    logDebug("workspace.session.persist.degraded", {
-      degradedReason,
-      issueCodes,
-      issues,
-      meetingId: state.session.meetingId,
+    applyDegradedDiagnostics("sessionPersist", result, {
+      buildNotice: (degradedReason) => buildSessionPersistDegradedNotice(degradedReason),
+      degradedEvent: "workspace.session.persist.degraded",
+      noticeCode: DEGRADED_NOTICE_CODES.sessionPersist,
+      recoveredEvent: "workspace.session.persist.recovered",
     });
-    setDegradedNotice(DEGRADED_NOTICE_CODES.sessionPersist, buildSessionPersistDegradedNotice(degradedReason), "warning");
   }
 
   function applyPendingUploadStorageDiagnostics(result) {
-    const issues = Array.isArray(result?.issues) ? result.issues : [];
-    const degradedReason = normalizeText(result?.degradedReason);
-    const issueCodes = issues.map((issue) => normalizeText(issue?.code)).filter(Boolean);
-    const previousReason = normalizeText(state.pendingUploadStorage.degradedReason);
-    const previousSignature = [previousReason, ...(Array.isArray(state.pendingUploadStorage.issueCodes) ? state.pendingUploadStorage.issueCodes : [])]
-      .filter(Boolean)
-      .join("|");
-    const nextSignature = [degradedReason, ...issueCodes].filter(Boolean).join("|");
-    state.pendingUploadStorage = {
-      degradedReason,
-      issueCodes,
-    };
-    if (!degradedReason) {
-      if (previousSignature) {
-        logDebug("workspace.pending-uploads.storage.recovered", {
-          meetingId: state.session.meetingId,
-        });
-      }
-      clearDegradedNotice(DEGRADED_NOTICE_CODES.pendingUploads);
-      return;
-    }
-    if (previousSignature === nextSignature) {
-      return;
-    }
-    logDebug("workspace.pending-uploads.storage.degraded", {
-      degradedReason,
-      issueCodes,
-      issues,
-      meetingId: state.session.meetingId,
-      operation: normalizeText(result?.operation),
+    applyDegradedDiagnostics("pendingUploadStorage", result, {
+      buildNotice: (degradedReason) => buildPendingUploadStorageDegradedNotice(degradedReason),
+      degradedEvent: "workspace.pending-uploads.storage.degraded",
+      getLogDetails: (normalized) => ({
+        operation: normalized.operation,
+      }),
+      noticeCode: DEGRADED_NOTICE_CODES.pendingUploads,
+      recoveredEvent: "workspace.pending-uploads.storage.recovered",
     });
-    setDegradedNotice(DEGRADED_NOTICE_CODES.pendingUploads, buildPendingUploadStorageDegradedNotice(degradedReason), "warning");
   }
 
   function applyPendingUploadPersistDiagnostics(result) {
-    const issues = Array.isArray(result?.issues) ? result.issues : [];
-    const degradedReason = normalizeText(result?.degradedReason);
-    const issueCodes = issues.map((issue) => normalizeText(issue?.code)).filter(Boolean);
-    const previousReason = normalizeText(state.pendingUploadPersist.degradedReason);
-    const previousSignature = [previousReason, ...(Array.isArray(state.pendingUploadPersist.issueCodes) ? state.pendingUploadPersist.issueCodes : [])]
-      .filter(Boolean)
-      .join("|");
-    const nextSignature = [degradedReason, ...issueCodes].filter(Boolean).join("|");
-    state.pendingUploadPersist = {
-      degradedReason,
-      issueCodes,
-    };
-    if (!degradedReason) {
-      if (previousSignature) {
-        logDebug("workspace.pending-uploads.persist.recovered", {
-          meetingId: state.session.meetingId,
-        });
-      }
-      clearDegradedNotice(DEGRADED_NOTICE_CODES.pendingUploadPersist);
-      return;
-    }
-    if (previousSignature === nextSignature) {
-      return;
-    }
-    logDebug("workspace.pending-uploads.persist.degraded", {
-      degradedReason,
-      issueCodes,
-      issues,
-      meetingId: state.session.meetingId,
-      operation: normalizeText(result?.operation),
+    applyDegradedDiagnostics("pendingUploadPersist", result, {
+      buildNotice: (degradedReason) => buildPendingUploadPersistDegradedNotice(degradedReason),
+      degradedEvent: "workspace.pending-uploads.persist.degraded",
+      getLogDetails: (normalized) => ({
+        operation: normalized.operation,
+      }),
+      noticeCode: DEGRADED_NOTICE_CODES.pendingUploadPersist,
+      recoveredEvent: "workspace.pending-uploads.persist.recovered",
     });
-    setDegradedNotice(DEGRADED_NOTICE_CODES.pendingUploadPersist, buildPendingUploadPersistDegradedNotice(degradedReason), "warning");
   }
 
   function applyPendingUploadCleanupDiagnostics(result) {
-    const issues = Array.isArray(result?.issues) ? result.issues : [];
-    const degradedReason = normalizeText(result?.degradedReason);
-    const issueCodes = issues.map((issue) => normalizeText(issue?.code)).filter(Boolean);
-    const previousReason = normalizeText(state.pendingUploadCleanup.degradedReason);
-    const previousSignature = [previousReason, ...(Array.isArray(state.pendingUploadCleanup.issueCodes) ? state.pendingUploadCleanup.issueCodes : [])]
-      .filter(Boolean)
-      .join("|");
-    const nextSignature = [degradedReason, ...issueCodes].filter(Boolean).join("|");
-    state.pendingUploadCleanup = {
-      degradedReason,
-      issueCodes,
-    };
-    if (!degradedReason) {
-      if (previousSignature) {
-        logDebug("workspace.pending-uploads.cleanup.recovered", {
-          meetingId: state.session.meetingId,
-        });
-      }
-      clearDegradedNotice(DEGRADED_NOTICE_CODES.pendingUploadCleanup);
-      return;
-    }
-    if (previousSignature === nextSignature) {
-      return;
-    }
-    logDebug("workspace.pending-uploads.cleanup.degraded", {
-      degradedReason,
-      issueCodes,
-      issues,
-      meetingId: state.session.meetingId,
-      operation: normalizeText(result?.operation),
+    applyDegradedDiagnostics("pendingUploadCleanup", result, {
+      buildNotice: (degradedReason) => buildPendingUploadCleanupDegradedNotice(degradedReason),
+      degradedEvent: "workspace.pending-uploads.cleanup.degraded",
+      getLogDetails: (normalized) => ({
+        operation: normalized.operation,
+      }),
+      noticeCode: DEGRADED_NOTICE_CODES.pendingUploadCleanup,
+      recoveredEvent: "workspace.pending-uploads.cleanup.recovered",
     });
-    setDegradedNotice(DEGRADED_NOTICE_CODES.pendingUploadCleanup, buildPendingUploadCleanupDegradedNotice(degradedReason), "warning");
   }
 
   function consumePendingUploadQueueDiagnostics() {
