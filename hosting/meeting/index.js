@@ -1491,10 +1491,10 @@
     }
   }
 
-  function buildPendingUploadRemoteMutationTransition(pending, remoteState, options = {}) {
+  function buildPendingUploadRemoteStartTransition(pending, remoteState, options = {}) {
     const action = normalizeText(options?.action);
-    if (!["single-start", "chunk-start", "chunk-publish"].includes(action)) {
-      throw new Error("원격 mutation action이 없어 업로드 결과를 안전하게 확정할 수 없어요.");
+    if (!["single-start", "chunk-start"].includes(action)) {
+      throw new Error("원격 start action이 없어 업로드 결과를 안전하게 확정할 수 없어요.");
     }
     const awaitingMoreUploads = Boolean(options?.awaitingMoreUploads);
     const remoteStatus = normalizeText(remoteState?.status);
@@ -1505,14 +1505,14 @@
 
     if (!remoteStatus) {
       return {
-        errorMessage: "원격 작업 생성 응답에 상태가 없어 업로드 결과를 확정할 수 없어요.",
+        errorMessage: "원격 작업 시작 응답에 상태가 없어 업로드 결과를 확정할 수 없어요.",
         remoteStatus,
       };
     }
 
     if (!nextJobId) {
       return {
-        errorMessage: `원격 작업 생성 응답 상태(${remoteStatus})에 jobId가 없어 업로드 결과를 확정할 수 없어요.`,
+        errorMessage: `원격 작업 시작 응답 상태(${remoteStatus})에 jobId가 없어 업로드 결과를 확정할 수 없어요.`,
         remoteStatus,
       };
     }
@@ -1534,7 +1534,7 @@
         }),
         nextSelectedRecordId: nextJobId ? buildRemoteSelectionId(nextJobId) : "",
         outcome: "active",
-        resolution: action === "chunk-publish" ? "published" : "started",
+        resolution: "started",
         resetChunkCache: "",
       };
     }
@@ -1571,7 +1571,92 @@
     }
 
     return {
-      errorMessage: `원격 작업 생성 응답 상태(${remoteStatus})를 이해하지 못해 업로드 결과를 확정할 수 없어요.`,
+      errorMessage: `원격 작업 시작 응답 상태(${remoteStatus})를 이해하지 못해 업로드 결과를 확정할 수 없어요.`,
+      remoteStatus,
+    };
+  }
+
+  function buildPendingUploadRemotePublishTransition(pending, remoteState, options = {}) {
+    const action = normalizeText(options?.action);
+    if (action !== "chunk-publish") {
+      throw new Error("원격 publish action이 없어 추가 chunk 반영 결과를 안전하게 확정할 수 없어요.");
+    }
+    const awaitingMoreUploads = Boolean(options?.awaitingMoreUploads);
+    const remoteStatus = normalizeText(remoteState?.status);
+    const nextJobId = normalizeText(remoteState?.jobId || pending?.jobId);
+    const nextUpdatedAt = normalizeText(remoteState?.updatedAt || pending?.updatedAt);
+    const nextError = normalizeText(remoteState?.error || pending?.lastError);
+    const uploadedPartCount = Math.max(0, Number(pending?.uploadedPartCount) || 0);
+
+    if (!remoteStatus) {
+      return {
+        errorMessage: "추가 chunk 반영 응답에 상태가 없어 결과를 확정할 수 없어요.",
+        remoteStatus,
+      };
+    }
+
+    if (!nextJobId) {
+      return {
+        errorMessage: `추가 chunk 반영 응답 상태(${remoteStatus})에 jobId가 없어 결과를 확정할 수 없어요.`,
+        remoteStatus,
+      };
+    }
+
+    if (remoteStatus === "processing" || remoteStatus === "queued") {
+      return {
+        nextPending: normalizePendingUpload({
+          ...pending,
+          jobId: nextJobId,
+          lastError: "",
+          publishedPartCount: uploadedPartCount,
+          status: awaitingMoreUploads
+            ? "uploading_chunks"
+            : remoteStatus === "processing"
+              ? "remote_processing"
+              : "remote_queued",
+          storageObject: pending.storageObject,
+          updatedAt: nextUpdatedAt,
+        }),
+        nextSelectedRecordId: nextJobId ? buildRemoteSelectionId(nextJobId) : "",
+        outcome: "active",
+        resolution: "published",
+        resetChunkCache: "",
+      };
+    }
+
+    if (remoteStatus === "succeeded") {
+      if (awaitingMoreUploads) {
+        return {
+          errorMessage: "남은 chunk 업로드가 끝나기 전에 추가 chunk 반영 응답이 완료 상태로 와 결과를 확정할 수 없어요.",
+          remoteStatus,
+        };
+      }
+      return {
+        nextPending: normalizePendingUpload({
+          ...pending,
+          hold: false,
+          jobId: nextJobId,
+          lastError: "",
+          publishedPartCount: uploadedPartCount,
+          status: "succeeded",
+          updatedAt: nextUpdatedAt,
+        }),
+        nextSelectedRecordId: nextJobId ? buildRemoteSelectionId(nextJobId) : "",
+        outcome: "succeeded",
+        resolution: "completed",
+        resetChunkCache: "clear",
+      };
+    }
+
+    if (remoteStatus === "failed") {
+      return {
+        errorMessage: nextError || "원격 작업이 추가 chunk 반영 직후 실패해 업로드를 이어갈 수 없어요.",
+        remoteStatus,
+      };
+    }
+
+    return {
+      errorMessage: `추가 chunk 반영 응답 상태(${remoteStatus})를 이해하지 못해 결과를 확정할 수 없어요.`,
       remoteStatus,
     };
   }
@@ -2982,7 +3067,7 @@
     });
     const allChunksUploaded = normalizeText(item?.sourceMode) !== "chunked"
       || Math.max(0, Number(item?.uploadedPartCount) || 0) >= Math.max(0, Number(item?.preparedPartCount) || 0);
-    const transition = buildPendingUploadRemoteMutationTransition(item, createdJob, {
+    const transition = buildPendingUploadRemoteStartTransition(item, createdJob, {
       action: transitionAction,
       awaitingMoreUploads: !allChunksUploaded,
     });
@@ -3097,7 +3182,7 @@
     });
     const createdJob = await requestPendingUploadRemoteMutationState(item);
     const allChunksUploaded = Math.max(0, Number(item?.uploadedPartCount) || 0) >= Math.max(0, Number(item?.preparedPartCount) || 0);
-    const transition = buildPendingUploadRemoteMutationTransition(item, createdJob, {
+    const transition = buildPendingUploadRemotePublishTransition(item, createdJob, {
       action: transitionAction,
       awaitingMoreUploads: !allChunksUploaded,
     });
