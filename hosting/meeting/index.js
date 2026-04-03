@@ -2477,6 +2477,36 @@
     });
   }
 
+  function buildChunkRemoteReconcileRequest(pending, options = {}) {
+    const uploadedPartCount = Math.max(0, Number(pending?.uploadedPartCount) || 0);
+    const publishedPartCount = Math.max(0, Number(pending?.publishedPartCount) || 0);
+    const jobId = normalizeText(pending?.jobId);
+    const backlogUploadCount = Math.max(0, Number(options?.backlogUploadCount) || 0);
+    const bootstrappedRemoteThisAttempt = Boolean(options?.bootstrappedRemoteThisAttempt);
+
+    if (uploadedPartCount <= 0) {
+      return null;
+    }
+    if (uploadedPartCount > publishedPartCount) {
+      const shouldStartRemoteJob = !jobId;
+      return {
+        contextPhase: shouldStartRemoteJob ? "chunk-remote-job-start" : "chunk-remote-job-refresh",
+        noticeText: shouldStartRemoteJob
+          ? "첫 청크를 올려 자동 전사를 바로 시작했습니다. 남은 청크를 이어서 업로드합니다."
+          : "",
+        transitionAction: shouldStartRemoteJob ? "chunk-start" : "chunk-publish",
+      };
+    }
+    if (jobId && !bootstrappedRemoteThisAttempt && backlogUploadCount === 0) {
+      return {
+        contextPhase: "chunk-remote-job-resync",
+        noticeText: "자동 전사를 이어서 확인합니다.",
+        transitionAction: "chunk-resync",
+      };
+    }
+    return null;
+  }
+
   async function continueChunkedPendingUploadAttempt(latest, buildAttemptQueueContext, activeRequestId, sourceSizeBytes) {
     let nextPending = await upsertPendingUpload({
       ...latest,
@@ -2523,51 +2553,42 @@
       );
     };
 
-    let publishedRemoteStateThisAttempt = false;
-    let uploadedNewChunkThisAttempt = false;
+    let remoteStateChangedThisAttempt = false;
+    let backlogUploadCount = 0;
     if (!normalizeText(nextPending?.jobId)) {
       const bootstrapPart = findMissingPreparedParts(nextPending)[0];
       if (bootstrapPart) {
         nextPending = await uploadPreparedPart(nextPending, bootstrapPart);
-        uploadedNewChunkThisAttempt = true;
         nextPending = (await createOrRefreshRemoteJob(nextPending, {
           context: buildAttemptQueueContext(activeRequestId, "chunk-remote-job-start"),
           noticeText: "첫 청크를 올려 자동 전사를 바로 시작했습니다. 남은 청크를 이어서 업로드합니다.",
           syncWorkspace: false,
           transitionAction: "chunk-start",
         })).pending;
-        publishedRemoteStateThisAttempt = true;
+        remoteStateChangedThisAttempt = true;
       }
     }
 
     for (const preparedPart of findMissingPreparedParts(nextPending)) {
       nextPending = await uploadPreparedPart(nextPending, preparedPart);
-      uploadedNewChunkThisAttempt = true;
+      backlogUploadCount += 1;
     }
 
-    const hasPublishedGap = Math.max(0, Number(nextPending?.uploadedPartCount) || 0) > Math.max(0, Number(nextPending?.publishedPartCount) || 0);
-    if (hasPublishedGap) {
-      const shouldStartRemoteJob = !normalizeText(nextPending?.jobId);
+    const remoteReconcileRequest = buildChunkRemoteReconcileRequest(nextPending, {
+      backlogUploadCount,
+      bootstrappedRemoteThisAttempt: remoteStateChangedThisAttempt,
+    });
+    if (remoteReconcileRequest) {
       nextPending = (await createOrRefreshRemoteJob(nextPending, {
-        context: buildAttemptQueueContext(activeRequestId, shouldStartRemoteJob ? "chunk-remote-job-start" : "chunk-remote-job-refresh"),
-        noticeText: shouldStartRemoteJob
-          ? "첫 청크를 올려 자동 전사를 바로 시작했습니다. 남은 청크를 이어서 업로드합니다."
-          : "",
+        context: buildAttemptQueueContext(activeRequestId, remoteReconcileRequest.contextPhase),
+        noticeText: remoteReconcileRequest.noticeText,
         syncWorkspace: false,
-        transitionAction: shouldStartRemoteJob ? "chunk-start" : "chunk-publish",
+        transitionAction: remoteReconcileRequest.transitionAction,
       })).pending;
-      publishedRemoteStateThisAttempt = true;
-    } else if (!uploadedNewChunkThisAttempt && normalizeText(nextPending?.jobId)) {
-      nextPending = (await createOrRefreshRemoteJob(nextPending, {
-        context: buildAttemptQueueContext(activeRequestId, "chunk-remote-job-resync"),
-        noticeText: "자동 전사를 이어서 확인합니다.",
-        syncWorkspace: false,
-        transitionAction: "chunk-resync",
-      })).pending;
-      publishedRemoteStateThisAttempt = true;
+      remoteStateChangedThisAttempt = true;
     }
 
-    if (publishedRemoteStateThisAttempt) {
+    if (remoteStateChangedThisAttempt) {
       await syncWorkspaceLocalState(false, "workflow");
     }
     return nextPending;
