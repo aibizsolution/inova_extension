@@ -872,6 +872,120 @@
     };
   }
 
+  function buildHostedDebugConsoleButtonsSnapshot(panelElement) {
+    const buttons = panelElement?.querySelectorAll?.("[data-debug-action]");
+    return Array.from(buttons || []).map((button) => ({
+      action: normalizeText(button?.dataset?.debugAction),
+      disabled: Boolean(button?.disabled),
+      id: normalizeText(button?.id),
+      label: normalizeText(button?.textContent),
+    }));
+  }
+
+  function buildHostedDebugConsoleStateSnapshot(entries = getDebugEntries()) {
+    const normalizedEntries = Array.isArray(entries) ? entries : [];
+    const panelElement = refs.debugPanel;
+    const stateSnapshot = buildDebugPanelState(normalizedEntries);
+    const buttons = buildHostedDebugConsoleButtonsSnapshot(panelElement);
+    const statusElement = panelElement?.querySelector?.("#debugStatus");
+    const noticeElement = panelElement?.querySelector?.("#debugNotice");
+    const logElement = panelElement?.querySelector?.("#debugLog");
+    return {
+      buttons,
+      collapsed: Boolean(stateSnapshot?.collapsed),
+      enabled: Boolean(stateSnapshot?.enabled),
+      entryCount: normalizedEntries.length,
+      feedback: {
+        text: normalizeText(stateSnapshot?.feedback?.text),
+        tone: normalizeText(stateSnapshot?.feedback?.tone) || "info",
+      },
+      hasErrors: Boolean(stateSnapshot?.hasErrors),
+      hasFabBadge: Boolean(panelElement?.querySelector?.("#debugFabBadge")),
+      hasFabButton: Boolean(panelElement?.querySelector?.("#debugFabButton")),
+      hasLog: Boolean(logElement),
+      hasSegmentCluster: Boolean(panelElement?.querySelector?.(".segment-cluster")),
+      hasToolbar: Boolean(panelElement?.querySelector?.(".debug-panel__toolbar")),
+      logText: normalizeText(logElement?.textContent || stateSnapshot?.text),
+      noticeText: normalizeText(noticeElement?.textContent || stateSnapshot?.feedback?.text),
+      rendered: Boolean(panelElement && panelElement.innerHTML),
+      statusText: normalizeText(statusElement?.textContent || stateSnapshot?.statusText),
+    };
+  }
+
+  function buildHostedDebugConsoleValidationChecks(snapshot) {
+    const checks = [
+      {
+        label: "hosted debug console이 활성화됨",
+        passed: Boolean(snapshot?.enabled),
+        actual: snapshot?.enabled ? "enabled" : "disabled",
+      },
+      {
+        label: "debug console markup이 렌더됨",
+        passed: Boolean(snapshot?.rendered),
+        actual: snapshot?.rendered ? "rendered" : "empty",
+      },
+    ];
+    const actions = Array.isArray(snapshot?.buttons)
+      ? snapshot.buttons.map((button) => normalizeText(button?.action)).filter(Boolean)
+      : [];
+    if (snapshot?.collapsed) {
+      checks.push(
+        {
+          label: "collapsed 상태에서는 fab toggle이 보임",
+          passed: Boolean(snapshot?.hasFabButton) && actions.includes("toggle"),
+          actual: actions.join(","),
+        },
+        {
+          label: "오류가 있으면 fab badge가 보임",
+          passed: !snapshot?.hasErrors || Boolean(snapshot?.hasFabBadge),
+          actual: snapshot?.hasFabBadge ? "badge" : "no-badge",
+        }
+      );
+      return checks;
+    }
+    const requiredActions = ["copy", "copy-errors", "clear", "toggle"];
+    checks.push(
+      {
+        label: "expanded 상태에서는 toolbar가 보임",
+        passed: Boolean(snapshot?.hasToolbar),
+        actual: snapshot?.hasToolbar ? "toolbar" : "missing",
+      },
+      {
+        label: "segment-cluster 구조가 유지됨",
+        passed: Boolean(snapshot?.hasSegmentCluster),
+        actual: snapshot?.hasSegmentCluster ? "segment-cluster" : "missing",
+      },
+      {
+        label: "expanded 버튼 4종이 모두 렌더됨",
+        passed: requiredActions.every((action) => actions.includes(action)),
+        actual: actions.join(","),
+      },
+      {
+        label: "status text가 비어 있지 않음",
+        passed: Boolean(normalizeText(snapshot?.statusText)),
+        actual: normalizeText(snapshot?.statusText),
+      },
+      {
+        label: "log text가 비어 있지 않음",
+        passed: Boolean(normalizeText(snapshot?.logText)),
+        actual: normalizeText(snapshot?.logText).slice(0, 120),
+      }
+    );
+    return checks;
+  }
+
+  function validateHostedDebugConsoleWorkspace(options = {}) {
+    const snapshot = buildHostedDebugConsoleStateSnapshot(options?.entries);
+    const checks = buildHostedDebugConsoleValidationChecks(snapshot);
+    return {
+      checks,
+      collapsed: Boolean(snapshot?.collapsed),
+      entryCount: Math.max(0, Number(snapshot?.entryCount) || 0),
+      passed: checks.every((check) => Boolean(check?.passed)),
+      snapshot,
+    };
+  }
+
   function ensureDebugLocalQueueSandboxActive() {
     if (!state.debugLocalQueueSandbox) {
       throw new Error("로컬 queue sandbox에서만 사용할 수 있는 debug helper입니다.");
@@ -1001,6 +1115,10 @@
 
   function syncWorkspaceDebugApi() {
     const debugApi = global.__INOVA_HOSTED_MEETING_DEBUG__ = global.__INOVA_HOSTED_MEETING_DEBUG__ || {};
+    debugApi.debugConsoleState = buildHostedDebugConsoleStateSnapshot;
+    debugApi.debugConsoleValidation = {
+      checkWorkspace: validateHostedDebugConsoleWorkspace,
+    };
     debugApi.queueState = buildPendingUploadQueueStateSnapshot;
     debugApi.queueSandbox = {
       active: () => Boolean(state.debugLocalQueueSandbox),
