@@ -510,6 +510,14 @@
     applyPendingUploadStorageDiagnostics(diagnostics);
   }
 
+  async function runPendingUploadQueueOperation(action) {
+    try {
+      return await action();
+    } finally {
+      consumePendingUploadQueueDiagnostics();
+    }
+  }
+
   async function bootWorkspace() {
     try {
       logDebug("workspace.boot.start", {
@@ -769,9 +777,8 @@
 
   async function loadPendingUploads() {
     const loadedItems = state.session.meetingId
-      ? await state.queueStore.listByMeeting(state.session.meetingId)
+      ? await runPendingUploadQueueOperation(() => state.queueStore.listByMeeting(state.session.meetingId))
       : [];
-    consumePendingUploadQueueDiagnostics();
     state.pendingUploads = loadedItems
       .map(normalizePendingUpload)
       .map((item) => ["uploading", "uploading_chunks", "preparing_chunks"].includes(item.status)
@@ -795,7 +802,7 @@
           status: "succeeded",
           updatedAt: normalizeText(matched.updatedAt || pending.updatedAt),
         });
-        await state.queueStore.put(nextPending);
+        await runPendingUploadQueueOperation(() => state.queueStore.put(nextPending));
         delete state.runtimeChunkCache[normalizeText(pending.requestId)];
         if (state.selectedRecordId === ns.shared.buildLocalSelectionId(pending.requestId)) state.selectedRecordId = buildRemoteSelectionId(matched.jobId);
         nextItems.push(nextPending);
@@ -816,7 +823,7 @@
           storageObject: shouldResetRemoteSource ? "" : pending.storageObject,
           updatedAt: normalizeText(matched.updatedAt || pending.updatedAt),
         });
-        await state.queueStore.put(nextPending);
+        await runPendingUploadQueueOperation(() => state.queueStore.put(nextPending));
         if (shouldResetRemoteSource && state.runtimeChunkCache[normalizeText(pending.requestId)]) {
           state.runtimeChunkCache[normalizeText(pending.requestId)] = {
             ...state.runtimeChunkCache[normalizeText(pending.requestId)],
@@ -1564,8 +1571,7 @@
       : pending;
     if (shouldResetSource) {
       delete state.runtimeChunkCache[normalizedRequestId];
-      await state.queueStore.delete(normalizedRequestId);
-      consumePendingUploadQueueDiagnostics();
+      await runPendingUploadQueueOperation(() => state.queueStore.delete(normalizedRequestId));
       state.pendingUploads = state.pendingUploads.filter((item) => item.requestId !== normalizedRequestId);
       if (
         state.selectedRecordId === ns.shared.buildLocalSelectionId(normalizedRequestId)
@@ -2120,8 +2126,7 @@
     applyRender();
     try {
       await postJson(global, CONFIG.deleteMeetingUrl, { meetingId: state.session.meetingId }, state.session.meetingSessionToken);
-      await state.queueStore.clearMeeting(state.session.meetingId);
-      consumePendingUploadQueueDiagnostics();
+      await runPendingUploadQueueOperation(() => state.queueStore.clearMeeting(state.session.meetingId));
       clearWorkspaceSession();
       renderBlocked("이 탭은 여기까지입니다. 필요할 때 i-Nova 패널에서 새 작업실을 열어 주세요.", {
         eyebrow: "작업실 삭제 완료",
@@ -2373,8 +2378,7 @@
 
   async function deletePendingUpload(requestId) {
     delete state.runtimeChunkCache[normalizeText(requestId)];
-    await state.queueStore.delete(requestId);
-    consumePendingUploadQueueDiagnostics();
+    await runPendingUploadQueueOperation(() => state.queueStore.delete(requestId));
     state.pendingUploads = state.pendingUploads.filter((item) => item.requestId !== normalizeText(requestId));
     if (state.selectedRecordId === ns.shared.buildLocalSelectionId(requestId)) state.selectedRecordId = chooseSelectedRecordId(state);
     persistWorkspaceSession();
@@ -2543,8 +2547,7 @@
 
   async function upsertPendingUpload(item) {
     const normalized = normalizePendingUpload({ ...item, updatedAt: new Date().toISOString() });
-    await state.queueStore.put(normalized);
-    consumePendingUploadQueueDiagnostics();
+    await runPendingUploadQueueOperation(() => state.queueStore.put(normalized));
     state.pendingUploads = [normalized, ...state.pendingUploads.filter((current) => current.requestId !== normalized.requestId)].sort(ns.storage.comparePendingUploads);
     state.meeting.pendingLocalCount = state.pendingUploads.length;
     return normalized;
