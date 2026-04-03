@@ -1661,11 +1661,96 @@
     };
   }
 
-  function buildPendingUploadRemoteReconcileTransition(pending, remoteState, options = {}) {
-    const action = normalizeText(options?.action) || "sync";
-    if (!["sync", "chunk-resync"].includes(action)) {
-      throw new Error("원격 reconcile action이 없어 브라우저 보관 상태를 안전하게 유지할 수 없어요.");
+  function buildPendingUploadRemoteSnapshotTransition(pending, remoteState) {
+    const remoteStatus = normalizeText(remoteState?.status);
+    const nextJobId = normalizeText(remoteState?.jobId || pending?.jobId);
+    const nextUpdatedAt = normalizeText(remoteState?.updatedAt || pending?.updatedAt);
+    const nextError = normalizeText(remoteState?.error || pending?.lastError);
+    const uploadedPartCount = Math.max(0, Number(pending?.uploadedPartCount) || 0);
+    const publishedPartCount = normalizeText(pending?.sourceMode) === "chunked"
+      ? Math.min(uploadedPartCount, Math.max(0, Number(pending?.publishedPartCount) || 0))
+      : 0;
+
+    if (!remoteStatus) {
+      return {
+        errorMessage: "원격 작업 상태가 비어 있어 브라우저 보관 큐를 그대로 유지합니다.",
+        remoteStatus,
+      };
     }
+
+    if (!nextJobId) {
+      return {
+        errorMessage: `원격 작업 상태(${remoteStatus})에 jobId가 없어 브라우저 보관 큐를 그대로 유지합니다.`,
+        remoteStatus,
+      };
+    }
+
+    if (remoteStatus === "processing" || remoteStatus === "queued") {
+      return {
+        nextPending: normalizePendingUpload({
+          ...pending,
+          jobId: nextJobId,
+          lastError: nextError,
+          publishedPartCount,
+          status: remoteStatus === "processing" ? "remote_processing" : "remote_queued",
+          storageObject: pending.storageObject,
+          updatedAt: nextUpdatedAt,
+        }),
+        nextSelectedRecordId: nextJobId ? buildRemoteSelectionId(nextJobId) : "",
+        outcome: "active",
+        resolution: "reconciled",
+        resetChunkCache: "",
+      };
+    }
+
+    if (remoteStatus === "succeeded") {
+      return {
+        nextPending: normalizePendingUpload({
+          ...pending,
+          hold: false,
+          jobId: nextJobId,
+          lastError: "",
+          publishedPartCount: normalizeText(pending?.sourceMode) === "chunked" ? uploadedPartCount : 0,
+          status: "succeeded",
+          updatedAt: nextUpdatedAt,
+        }),
+        nextSelectedRecordId: nextJobId ? buildRemoteSelectionId(nextJobId) : "",
+        outcome: "succeeded",
+        resolution: "completed",
+        resetChunkCache: "clear",
+      };
+    }
+
+    if (remoteStatus === "failed") {
+      return {
+        nextPending: normalizePendingUpload({
+          ...pending,
+          jobId: nextJobId,
+          lastError: nextError,
+          parts: (Array.isArray(pending?.parts) ? pending.parts : []).map((part) => ({
+            ...part,
+            storageObject: "",
+            uploadStatus: "",
+          })),
+          publishedPartCount: 0,
+          status: pending?.hold ? "on_hold" : "failed",
+          storageObject: "",
+          updatedAt: nextUpdatedAt,
+        }),
+        nextSelectedRecordId: nextJobId ? buildRemoteSelectionId(nextJobId) : "",
+        outcome: "failed",
+        resolution: "remote-failed",
+        resetChunkCache: "reset-parts",
+      };
+    }
+
+    return {
+      errorMessage: `원격 작업 상태(${remoteStatus})를 이해하지 못해 브라우저 보관 큐를 그대로 유지합니다.`,
+      remoteStatus,
+    };
+  }
+
+  function buildChunkedPendingUploadRemoteResyncTransition(pending, remoteState, options = {}) {
     const awaitingMoreUploads = Boolean(options?.awaitingMoreUploads);
     const remoteStatus = normalizeText(remoteState?.status);
     const nextJobId = normalizeText(remoteState?.jobId || pending?.jobId);
@@ -1731,7 +1816,7 @@
         }),
         nextSelectedRecordId: nextJobId ? buildRemoteSelectionId(nextJobId) : "",
         outcome: "succeeded",
-        resolution: "completed",
+        resolution: "reconcile-completed",
         resetChunkCache: "clear",
       };
     }
@@ -1754,7 +1839,7 @@
         }),
         nextSelectedRecordId: nextJobId ? buildRemoteSelectionId(nextJobId) : "",
         outcome: "failed",
-        resolution: "remote-failed",
+        resolution: "reconcile-remote-failed",
         resetChunkCache: "reset-parts",
       };
     }
@@ -1833,9 +1918,7 @@
   }
 
   async function applyPendingUploadRemoteSnapshotState(pending, remoteState) {
-    const transition = buildPendingUploadRemoteReconcileTransition(pending, remoteState, {
-      action: "sync",
-    });
+    const transition = buildPendingUploadRemoteSnapshotTransition(pending, remoteState);
     if (!transition?.nextPending) {
       logDebug("workspace.pending-uploads.remote-sync.unknown-status", {
         error: transition?.errorMessage,
@@ -2833,7 +2916,7 @@
           });
           nextPending = reconcileResult.pending;
           terminalRemoteStateObservedThisAttempt = !reconcileResult.degraded
-            && ["completed", "remote-failed"].includes(normalizeText(reconcileResult.resolution));
+            && ["reconcile-completed", "reconcile-remote-failed"].includes(normalizeText(reconcileResult.resolution));
         }
       }
     }
@@ -3328,8 +3411,7 @@
       return { degraded: true, pending: item, remoteState: null, resolution: "" };
     }
     const allChunksUploaded = Math.max(0, Number(item?.uploadedPartCount) || 0) >= Math.max(0, Number(item?.preparedPartCount) || 0);
-    const transition = buildPendingUploadRemoteReconcileTransition(item, remoteState, {
-      action: transitionAction,
+    const transition = buildChunkedPendingUploadRemoteResyncTransition(item, remoteState, {
       awaitingMoreUploads: !allChunksUploaded,
     });
     if (!transition?.nextPending) {
