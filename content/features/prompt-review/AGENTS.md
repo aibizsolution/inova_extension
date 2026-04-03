@@ -11,6 +11,7 @@
 ## 관련 프론트 경로
 - `content/main.js`
 - `content/composer.js`
+- `content/prompt-hub-state.js` - review 탭 포함 여부를 조정하는 prompt tool shell
 - `content/prompt-hub-view.js` - review body를 감싸는 prompt tool shell
 
 ## 관련 functions 경로

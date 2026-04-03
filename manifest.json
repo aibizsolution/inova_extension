@@ -71,6 +71,7 @@
         "content/features/prompt-library/prompt-manager.js",
         "content/features/prompt-store/store-manager.js",
         "content/release-manager.js",
+        "content/prompt-hub-state.js",
         "content/panel.js",
         "content/main.js"
       ],

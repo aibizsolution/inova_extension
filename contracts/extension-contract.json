@@ -36,6 +36,7 @@
     "content/features/prompt-library/prompt-view.js",
     "content/features/prompt-store/store-manager.js",
     "content/features/prompt-store/store-view.js",
+    "content/prompt-hub-state.js",
     "content/route-sync.js",
     "content/tools.css",
     "content/main.js",
@@ -66,6 +67,7 @@
     "content/features/prompt-library/prompt-view.js",
     "content/features/prompt-store/store-manager.js",
     "content/features/prompt-store/store-view.js",
+    "content/prompt-hub-state.js",
     "content/route-sync.js",
     "content/panel.js",
     "content/main.js"

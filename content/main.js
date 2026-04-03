@@ -77,6 +77,16 @@
     uiPreferenceLock: null,
     lastError: "",
   };
+  const promptHubState = namespace.promptHubState;
+  const normalizePromptTab = (promptTabId) => promptHubState.normalizePromptTab(promptTabId);
+  const getActivePromptTab = (reviewOpen = state.promptReview.open) => promptHubState.getActivePromptTab(state, reviewOpen);
+  const isStoreTabActive = () => promptHubState.isStoreTabActive(state);
+  const isPromptLibraryTabActive = () => promptHubState.isPromptLibraryTabActive(state);
+  const shouldRunPromptCloudSync = () => promptHubState.shouldRunPromptCloudSync(state, {
+    hasPendingPromptSync: (cloudSyncState) => namespace.cloudSync.hasPendingPromptSync(cloudSyncState),
+    isToolSurface,
+    visibilityState: document.visibilityState,
+  });
   const promptManager = namespace.promptManager.create(state, { publishPrompt, persistActiveTool, render });
   const promptReviewManager = namespace.promptReviewManager.create(state, { render, showPromptTab });
   let promptRealtimeManager = null;
@@ -194,7 +204,7 @@
     const meetingCount = meetingTool.count;
     const releaseCount = releaseState.updateAvailable ? 1 : 0;
     const storeCount = Math.max(0, Number(state.store.totalCount) || state.store.items.length);
-    const promptToolCount = activePromptTab === "store" ? storeCount : promptCount;
+    const promptToolCount = promptHubState.getPromptToolCount(activePromptTab, promptCount, storeCount);
     const toolCounts = {
       bookmarks: bookmarkCount,
       meeting: meetingCount,
@@ -221,15 +231,14 @@
       handleRatio: namespace.storage.getHandleRatio(state.uiPreferences, global.innerWidth),
       open: state.open,
       panelDebug,
-      promptTool: {
-        activeTab: activePromptTab,
-        prompt: promptState,
-        review: reviewState,
-        store: storeState,
-        tabs: reviewState.open
-          ? [{ id: "library", label: "내 요청", count: promptCount }, { id: "store", label: "스토어", count: storeCount }, { id: "review", label: "검토", count: null }]
-          : [{ id: "library", label: "내 요청", count: promptCount }, { id: "store", label: "스토어", count: storeCount }],
-      },
+      promptTool: promptHubState.buildPromptToolState({
+        activePromptTab,
+        promptCount,
+        promptState,
+        reviewState,
+        storeCount,
+        storeState,
+      }),
       toolCount: activeToolCount,
       toolTitle: state.activeTool === "prompts"
         ? "프롬프트"
@@ -738,21 +747,6 @@
     });
     render();
   }
-  function getActivePromptTab(reviewOpen = state.promptReview.open) { const tab = state.uiPreferences.activeTool === "store" ? "store" : normalizePromptTab(state.uiPreferences.activePromptTab); return tab === "review" && !reviewOpen ? "library" : tab; }
-  function isStoreTabActive() { return state.activeTool === "prompts" && getActivePromptTab() === "store"; }
-  function isPromptLibraryTabActive() { return state.activeTool === "prompts" && getActivePromptTab() === "library"; }
-  function shouldRunPromptCloudSync() {
-    return Boolean(
-      namespace.cloudSync.hasPendingPromptSync(state.cloudSync)
-      || (
-        state.open
-        && isPromptLibraryTabActive()
-        && isToolSurface()
-        && document.visibilityState === "visible"
-      )
-    );
-  }
-  function normalizePromptTab(promptTabId) { return promptTabId === "store" || promptTabId === "review" ? promptTabId : "library"; }
   function buildMeetingToolState(meetingHub) {
     const normalized = namespace.meetingManager.mergeMeetingHub(meetingHub);
     return {
