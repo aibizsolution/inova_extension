@@ -81,6 +81,10 @@
         degradedReason: "",
         issueCodes: [],
       },
+      pendingUploadPersist: {
+        degradedReason: "",
+        issueCodes: [],
+      },
       notesStyleSelection: "",
       queueStore: createPendingUploadStore(global),
       recordMemoDraft: "",
@@ -285,6 +289,11 @@
     return `${normalizedReason} 일부 임시 녹음이나 업로드 대기 상태가 화면에 아직 반영되지 않았을 수 있습니다.`;
   }
 
+  function buildPendingUploadPersistDegradedNotice(reason) {
+    const normalizedReason = normalizeText(reason) || "브라우저 로컬 보관 큐를 저장하지 못했어요.";
+    return `${normalizedReason} 현재 탭에서는 계속 진행하지만, 다음 새로고침 뒤에는 방금 바뀐 임시 녹음 상태가 다시 복원되지 않을 수 있습니다.`;
+  }
+
   function surfaceSessionRestoreNotice() {
     if (!state.sessionRestore.hasWarningIssue || !state.session.meetingSessionToken || !state.session.meetingId) {
       return;
@@ -368,6 +377,56 @@
       code: "pending-uploads-degraded",
       sticky: true,
     });
+  }
+
+  function applyPendingUploadPersistDiagnostics(result) {
+    const issues = Array.isArray(result?.issues) ? result.issues : [];
+    const degradedReason = normalizeText(result?.degradedReason);
+    const issueCodes = issues.map((issue) => normalizeText(issue?.code)).filter(Boolean);
+    const previousReason = normalizeText(state.pendingUploadPersist.degradedReason);
+    const previousSignature = [previousReason, ...(Array.isArray(state.pendingUploadPersist.issueCodes) ? state.pendingUploadPersist.issueCodes : [])]
+      .filter(Boolean)
+      .join("|");
+    const nextSignature = [degradedReason, ...issueCodes].filter(Boolean).join("|");
+    state.pendingUploadPersist = {
+      degradedReason,
+      issueCodes,
+    };
+    if (!degradedReason) {
+      if (previousSignature) {
+        logDebug("workspace.pending-uploads.persist.recovered", {
+          meetingId: state.session.meetingId,
+        });
+      }
+      clearResolvedPendingUploadPersistNotice();
+      return;
+    }
+    if (previousSignature === nextSignature) {
+      return;
+    }
+    logDebug("workspace.pending-uploads.persist.degraded", {
+      degradedReason,
+      issueCodes,
+      issues,
+      meetingId: state.session.meetingId,
+      operation: normalizeText(result?.operation),
+    });
+    setNotice(buildPendingUploadPersistDegradedNotice(degradedReason), "warning", {
+      code: "pending-upload-persist-degraded",
+      sticky: true,
+    });
+  }
+
+  function consumePendingUploadQueueDiagnostics() {
+    const diagnostics = typeof state.queueStore.consumeDiagnostics === "function"
+      ? state.queueStore.consumeDiagnostics()
+      : null;
+    const operation = normalizeText(diagnostics?.operation);
+    if (operation === "put") {
+      applyPendingUploadPersistDiagnostics(diagnostics);
+      return;
+    }
+    applyPendingUploadStorageDiagnostics(diagnostics);
   }
 
   async function bootWorkspace() {
@@ -634,11 +693,7 @@
     const loadedItems = state.session.meetingId
       ? await state.queueStore.listByMeeting(state.session.meetingId)
       : [];
-    applyPendingUploadStorageDiagnostics(
-      typeof state.queueStore.consumeDiagnostics === "function"
-        ? state.queueStore.consumeDiagnostics()
-        : null
-    );
+    consumePendingUploadQueueDiagnostics();
     state.pendingUploads = loadedItems
       .map(normalizePendingUpload)
       .map((item) => ["uploading", "uploading_chunks", "preparing_chunks"].includes(item.status)
@@ -2405,7 +2460,14 @@
   function handleOnline() { setNotice("인터넷 연결이 돌아왔습니다. 보관한 녹음을 다시 확인합니다.", "highlight"); retryPendingUploads(); applyRender(); }
   function handleOffline() { setNotice("인터넷이 끊겨도 종료된 녹음은 브라우저에 보관합니다. 연결이 돌아오면 이어서 업로드합니다.", "highlight"); applyRender(); }
 
-  async function upsertPendingUpload(item) { const normalized = normalizePendingUpload({ ...item, updatedAt: new Date().toISOString() }); await state.queueStore.put(normalized); state.pendingUploads = [normalized, ...state.pendingUploads.filter((current) => current.requestId !== normalized.requestId)].sort(ns.storage.comparePendingUploads); state.meeting.pendingLocalCount = state.pendingUploads.length; return normalized; }
+  async function upsertPendingUpload(item) {
+    const normalized = normalizePendingUpload({ ...item, updatedAt: new Date().toISOString() });
+    await state.queueStore.put(normalized);
+    consumePendingUploadQueueDiagnostics();
+    state.pendingUploads = [normalized, ...state.pendingUploads.filter((current) => current.requestId !== normalized.requestId)].sort(ns.storage.comparePendingUploads);
+    state.meeting.pendingLocalCount = state.pendingUploads.length;
+    return normalized;
+  }
   function updateRecordingDuration() {
     if (state.capture.status !== "recording") return;
     state.capture.durationMs = Math.max(0, (Number(state.media.accumulatedDurationMs) || 0) + (Date.now() - state.media.resumeStartedAtMs));
@@ -2590,6 +2652,11 @@
 
   function clearResolvedPendingUploadStorageNotice() {
     if (normalizeText(state.notice.code) !== "pending-uploads-degraded") return;
+    setNotice("", "", { code: "" });
+  }
+
+  function clearResolvedPendingUploadPersistNotice() {
+    if (normalizeText(state.notice.code) !== "pending-upload-persist-degraded") return;
     setNotice("", "", { code: "" });
   }
 

@@ -24,6 +24,7 @@
       "local-storage-invalid-payload",
       "local-storage-parse-failed",
       "local-storage-read-failed",
+      "local-storage-write-failed",
     ].includes(normalizeText(entry?.code)));
     if (!issue) {
       return "";
@@ -37,6 +38,9 @@
     }
     if (code === "local-storage-read-failed") {
       return "브라우저 로컬 보관 큐를 읽지 못했어요.";
+    }
+    if (code === "local-storage-write-failed") {
+      return "브라우저 로컬 보관 큐를 저장하지 못했어요.";
     }
     if (code === "local-storage-parse-failed") {
       return "브라우저 로컬 보관 큐를 해석하지 못했어요.";
@@ -105,6 +109,24 @@
         }),
         items: [],
       };
+    }
+  }
+
+  function writeLocalStorageValueDetailed(target, key, value) {
+    const normalizedKey = normalizeText(key);
+    try {
+      if (!target?.localStorage || typeof target.localStorage.setItem !== "function") {
+        throw new Error("local-storage unavailable");
+      }
+      target.localStorage.setItem(normalizedKey, value);
+      return null;
+    } catch (error) {
+      return buildPendingUploadStorageIssue("local-storage-write-failed", {
+        errorName: normalizeText(error?.name),
+        key: normalizedKey,
+        message: error instanceof Error ? error.message : String(error || ""),
+        storage: "local-storage",
+      });
     }
   }
 
@@ -290,14 +312,17 @@
       },
       async put(item) {
         const normalized = normalizePendingUpload(item);
-        const db = await openDb();
+        const issues = [];
+        const db = await openDb(issues);
         if (db) {
           await runIdbRequest(db.transaction(PENDING_UPLOAD_STORE_NAME, "readwrite").objectStore(PENDING_UPLOAD_STORE_NAME).put(await serializePendingUpload(normalized, false)));
+          setDiagnostics("put", issues);
           return;
         }
-        const items = await readLocalItems();
+        const items = await readLocalItems(issues);
         const serialized = await serializePendingUpload(normalized, true);
-        await writeLocalItems([serialized, ...items.filter((current) => normalizeText(current.requestId) !== normalized.requestId)]);
+        await writeLocalItems([serialized, ...items.filter((current) => normalizeText(current.requestId) !== normalized.requestId)], issues);
+        setDiagnostics("put", issues);
       },
       consumeDiagnostics() {
         const nextDiagnostics = lastDiagnostics;
@@ -378,8 +403,12 @@
       return Array.isArray(parsedEntry.items) ? parsedEntry.items : [];
     }
 
-    async function writeLocalItems(items) {
-      ns.shared.safeLocalStorageSet(target, PENDING_UPLOAD_LOCAL_STORAGE_KEY, JSON.stringify(items || []));
+    async function writeLocalItems(items, issues) {
+      const nextIssues = Array.isArray(issues) ? issues : [];
+      const issue = writeLocalStorageValueDetailed(target, PENDING_UPLOAD_LOCAL_STORAGE_KEY, JSON.stringify(items || []));
+      if (issue) {
+        nextIssues.push(issue);
+      }
     }
   }
 
