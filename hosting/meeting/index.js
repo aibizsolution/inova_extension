@@ -2816,7 +2816,7 @@
     return normalizeJob(created?.job, item.meetingTitleSnapshot);
   }
 
-  async function commitStartedPendingUploadRemoteJob(item, createdJob, options = {}) {
+  async function commitPendingUploadRemoteStartTransition(item, createdJob, options = {}) {
     const previousJobId = normalizeText(item?.jobId);
     const transitionAction = normalizeText(options?.transitionAction);
     if (!["single-start", "chunk-start"].includes(transitionAction)) {
@@ -2877,13 +2877,6 @@
         });
       }
     }
-    if (normalizeText(options?.noticeText)) {
-      setNotice(normalizeText(options.noticeText), "highlight");
-      applyRender();
-    }
-    if (options?.syncWorkspace) {
-      await syncWorkspaceLocalState(false, "workflow");
-    }
     return {
       createdJob,
       degraded: false,
@@ -2904,7 +2897,15 @@
       allowInlineSource: Boolean(options?.allowInlineSource),
       inlineSourceError: normalizeText(options?.inlineSourceError),
     });
-    return commitStartedPendingUploadRemoteJob(item, createdJob, options);
+    const result = await commitPendingUploadRemoteStartTransition(item, createdJob, options);
+    if (normalizeText(options?.noticeText)) {
+      setNotice(normalizeText(options.noticeText), "highlight");
+      applyRender();
+    }
+    if (options?.syncWorkspace) {
+      await syncWorkspaceLocalState(false, "workflow");
+    }
+    return result;
   }
 
   async function startChunkedPendingUploadRemoteJob(item, options = {}) {
@@ -2919,7 +2920,15 @@
       throw new Error("올라간 청크 없이 원격 chunk 작업을 시작할 수 없어요.");
     }
     const createdJob = await requestPendingUploadRemoteState(item);
-    return commitStartedPendingUploadRemoteJob(item, createdJob, options);
+    const result = await commitPendingUploadRemoteStartTransition(item, createdJob, options);
+    if (normalizeText(options?.noticeText)) {
+      setNotice(normalizeText(options.noticeText), "highlight");
+      applyRender();
+    }
+    if (options?.syncWorkspace) {
+      await syncWorkspaceLocalState(false, "workflow");
+    }
+    return result;
   }
 
   async function publishPendingUploadRemoteChunks(item, options = {}) {
