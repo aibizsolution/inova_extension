@@ -1492,25 +1492,26 @@
   }
 
   function buildPendingUploadRemoteTransition(pending, remoteState, options = {}) {
-    const mode = normalizeText(options?.mode) || "sync";
+    const action = normalizeText(options?.action) || "sync";
     const awaitingMoreUploads = Boolean(options?.awaitingMoreUploads);
     const remoteStatus = normalizeText(remoteState?.status);
     const nextJobId = normalizeText(remoteState?.jobId || pending?.jobId);
     const nextUpdatedAt = normalizeText(remoteState?.updatedAt || pending?.updatedAt);
     const nextError = normalizeText(remoteState?.error || pending?.lastError);
+    const mutatesRemoteInput = ["single-start", "chunk-start", "chunk-publish"].includes(action);
     const uploadedPartCount = Math.max(0, Number(pending?.uploadedPartCount) || 0);
     const publishedPartCount = normalizeText(pending?.sourceMode) === "chunked"
       ? Math.min(uploadedPartCount, Math.max(0, Number(pending?.publishedPartCount) || 0))
       : 0;
     const nextPublishedPartCount = normalizeText(pending?.sourceMode) === "chunked"
-      ? ((mode === "create" || (remoteStatus === "succeeded" && !awaitingMoreUploads))
+      ? ((mutatesRemoteInput || (remoteStatus === "succeeded" && !awaitingMoreUploads))
         ? uploadedPartCount
         : publishedPartCount)
       : 0;
 
     if (!remoteStatus) {
       return {
-        errorMessage: mode === "create"
+        errorMessage: mutatesRemoteInput
           ? "원격 작업 생성 응답에 상태가 없어 업로드 결과를 확정할 수 없어요."
           : "원격 작업 상태가 비어 있어 브라우저 보관 큐를 그대로 유지합니다.",
         remoteStatus,
@@ -1519,7 +1520,7 @@
 
     if (!nextJobId) {
       return {
-        errorMessage: mode === "create"
+        errorMessage: mutatesRemoteInput
           ? `원격 작업 생성 응답 상태(${remoteStatus})에 jobId가 없어 업로드 결과를 확정할 수 없어요.`
           : `원격 작업 상태(${remoteStatus})에 jobId가 없어 브라우저 보관 큐를 그대로 유지합니다.`,
         remoteStatus,
@@ -1531,7 +1532,7 @@
         nextPending: normalizePendingUpload({
           ...pending,
           jobId: nextJobId,
-          lastError: mode === "create" ? "" : nextError,
+          lastError: mutatesRemoteInput ? "" : nextError,
           publishedPartCount: nextPublishedPartCount,
           status: awaitingMoreUploads
             ? "uploading_chunks"
@@ -1571,7 +1572,7 @@
     }
 
     if (remoteStatus === "failed") {
-      if (mode === "create") {
+      if (mutatesRemoteInput) {
         return {
           errorMessage: nextError || "원격 작업이 시작 직후 실패해 업로드를 이어갈 수 없어요.",
           remoteStatus,
@@ -1599,7 +1600,7 @@
     }
 
     return {
-      errorMessage: mode === "create"
+      errorMessage: mutatesRemoteInput
         ? `원격 작업 생성 응답 상태(${remoteStatus})를 이해하지 못해 업로드 결과를 확정할 수 없어요.`
         : `원격 작업 상태(${remoteStatus})를 이해하지 못해 브라우저 보관 큐를 그대로 유지합니다.`,
       remoteStatus,
@@ -1637,7 +1638,7 @@
       const matched = findRemoteForPending(state, pending);
       if (!matched) continue;
       const transition = buildPendingUploadRemoteTransition(pending, matched, {
-        mode: "sync",
+        action: "sync",
       });
       if (!transition?.nextPending) {
         logDebug("workspace.pending-uploads.remote-sync.unknown-status", {
@@ -2533,6 +2534,7 @@
         context: buildAttemptQueueContext(activeRequestId, "chunk-remote-job-start"),
         noticeText: "첫 청크를 올려 자동 전사를 바로 시작했습니다. 남은 청크를 이어서 업로드합니다.",
         syncWorkspace: false,
+        transitionAction: "chunk-start",
       })).pending;
       publishedRemoteStateThisAttempt = true;
     }
@@ -2546,6 +2548,7 @@
           ? "첫 청크를 올려 자동 전사를 바로 시작했습니다. 남은 청크를 이어서 업로드합니다."
           : "",
         syncWorkspace: false,
+        transitionAction: shouldStartRemoteJob ? "chunk-start" : "chunk-publish",
       })).pending;
       publishedRemoteStateThisAttempt = true;
     } else if (!publishedRemoteStateThisAttempt && normalizeText(nextPending?.jobId)) {
@@ -2553,6 +2556,7 @@
         context: buildAttemptQueueContext(activeRequestId, "chunk-remote-job-resync"),
         noticeText: uploadedNewChunkThisAttempt ? "" : "자동 전사를 이어서 확인합니다.",
         syncWorkspace: false,
+        transitionAction: "chunk-resync",
       })).pending;
       publishedRemoteStateThisAttempt = true;
     }
@@ -2614,6 +2618,7 @@
         ? "브라우저 원본으로 전사를 접수했습니다. 현재 탭을 닫기 전까지 결과를 계속 확인합니다."
         : "자동 전사를 접수했습니다. 결과를 계속 확인하는 중입니다.",
       syncWorkspace: true,
+      transitionAction: "single-start",
     })).pending;
   }
 
@@ -2737,6 +2742,10 @@
 
   async function createOrRefreshRemoteJob(item, options = {}) {
     const previousJobId = normalizeText(item?.jobId);
+    const transitionAction = normalizeText(options?.transitionAction);
+    if (!transitionAction) {
+      throw new Error("원격 작업 전이 action이 없어 업로드 결과를 안전하게 확정할 수 없어요.");
+    }
     const queueContext = normalizePendingUploadQueueContext({
       requestId: item?.requestId,
       ...(options?.context || {}),
@@ -2751,11 +2760,12 @@
     const allChunksUploaded = normalizeText(item?.sourceMode) !== "chunked"
       || Math.max(0, Number(item?.uploadedPartCount) || 0) >= Math.max(0, Number(item?.preparedPartCount) || 0);
     const transition = buildPendingUploadRemoteTransition(item, createdJob, {
+      action: transitionAction,
       awaitingMoreUploads: !allChunksUploaded,
-      mode: "create",
     });
     if (!transition?.nextPending) {
       logDebug("workspace.pending-upload.remote-create.invalid-status", {
+        action: transitionAction,
         error: transition?.errorMessage,
         jobId: normalizeText(createdJob?.jobId),
         remoteStatus: normalizeText(transition?.remoteStatus),
