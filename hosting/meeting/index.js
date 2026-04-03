@@ -2559,13 +2559,14 @@
       const bootstrapPart = findMissingPreparedParts(nextPending)[0];
       if (bootstrapPart) {
         nextPending = await uploadPreparedPart(nextPending, bootstrapPart);
-        nextPending = (await createOrRefreshRemoteJob(nextPending, {
+        const bootstrapResult = await createOrRefreshRemoteJob(nextPending, {
           context: buildAttemptQueueContext(activeRequestId, "chunk-remote-job-start"),
           noticeText: "첫 청크를 올려 자동 전사를 바로 시작했습니다. 남은 청크를 이어서 업로드합니다.",
           syncWorkspace: false,
           transitionAction: "chunk-start",
-        })).pending;
-        remoteStateChangedThisAttempt = true;
+        });
+        nextPending = bootstrapResult.pending;
+        remoteStateChangedThisAttempt = !bootstrapResult.degraded;
       }
     }
 
@@ -2579,13 +2580,14 @@
       bootstrappedRemoteThisAttempt: remoteStateChangedThisAttempt,
     });
     if (remoteReconcileRequest) {
-      nextPending = (await createOrRefreshRemoteJob(nextPending, {
+      const reconcileResult = await createOrRefreshRemoteJob(nextPending, {
         context: buildAttemptQueueContext(activeRequestId, remoteReconcileRequest.contextPhase),
         noticeText: remoteReconcileRequest.noticeText,
         syncWorkspace: false,
         transitionAction: remoteReconcileRequest.transitionAction,
-      })).pending;
-      remoteStateChangedThisAttempt = true;
+      });
+      nextPending = reconcileResult.pending;
+      remoteStateChangedThisAttempt = remoteStateChangedThisAttempt || !reconcileResult.degraded;
     }
 
     if (remoteStateChangedThisAttempt) {
@@ -2773,17 +2775,37 @@
     if (!transitionAction) {
       throw new Error("원격 작업 전이 action이 없어 업로드 결과를 안전하게 확정할 수 없어요.");
     }
+    const mutatesRemoteInput = ["single-start", "chunk-start", "chunk-publish"].includes(transitionAction);
     const queueContext = normalizePendingUploadQueueContext({
       requestId: item?.requestId,
       ...(options?.context || {}),
     });
-    const created = await postJson(global, CONFIG.createJobUrl, await buildCreateJobPayload(item, {
-      allowInlineSource: Boolean(options?.allowInlineSource),
-      inlineSourceError: normalizeText(options?.inlineSourceError),
-    }), state.session.meetingSessionToken, {
-      timeoutMs: DEFAULT_CREATE_JOB_TIMEOUT_MS,
-    });
-    const createdJob = normalizeJob(created?.job, item.meetingTitleSnapshot);
+    let createdJob = null;
+    try {
+      const created = await postJson(global, CONFIG.createJobUrl, await buildCreateJobPayload(item, {
+        allowInlineSource: Boolean(options?.allowInlineSource),
+        inlineSourceError: normalizeText(options?.inlineSourceError),
+      }), state.session.meetingSessionToken, {
+        timeoutMs: DEFAULT_CREATE_JOB_TIMEOUT_MS,
+      });
+      createdJob = normalizeJob(created?.job, item.meetingTitleSnapshot);
+    } catch (error) {
+      if (mutatesRemoteInput) {
+        throw error;
+      }
+      const degradedMessage = error instanceof Error
+        ? `${error.message} 브라우저 보관 큐는 그대로 두고 다음 동기화에서 원격 상태를 다시 확인합니다.`
+        : "원격 작업 상태를 다시 확인하지 못해 브라우저 보관 큐를 그대로 유지합니다.";
+      logDebug("workspace.pending-upload.remote-reconcile.degraded", {
+        action: transitionAction,
+        error,
+        jobId: normalizeText(item?.jobId),
+        requestId: normalizeText(item?.requestId),
+      });
+      setNotice(degradedMessage, "warning");
+      applyRender();
+      return { createdJob: null, degraded: true, pending: item };
+    }
     const allChunksUploaded = normalizeText(item?.sourceMode) !== "chunked"
       || Math.max(0, Number(item?.uploadedPartCount) || 0) >= Math.max(0, Number(item?.preparedPartCount) || 0);
     const transition = buildPendingUploadRemoteTransition(item, createdJob, {
@@ -2791,14 +2813,27 @@
       awaitingMoreUploads: !allChunksUploaded,
     });
     if (!transition?.nextPending) {
-      logDebug("workspace.pending-upload.remote-create.invalid-status", {
+      const transitionErrorMessage = normalizeText(transition?.errorMessage) || "원격 작업 상태를 확인하지 못해 업로드를 이어갈 수 없어요.";
+      if (mutatesRemoteInput) {
+        logDebug("workspace.pending-upload.remote-create.invalid-status", {
+          action: transitionAction,
+          error: transitionErrorMessage,
+          jobId: normalizeText(createdJob?.jobId),
+          remoteStatus: normalizeText(transition?.remoteStatus),
+          requestId: normalizeText(item?.requestId),
+        });
+        throw new Error(transitionErrorMessage);
+      }
+      logDebug("workspace.pending-upload.remote-reconcile.degraded", {
         action: transitionAction,
-        error: transition?.errorMessage,
-        jobId: normalizeText(createdJob?.jobId),
+        error: transitionErrorMessage,
+        jobId: normalizeText(createdJob?.jobId || item?.jobId),
         remoteStatus: normalizeText(transition?.remoteStatus),
         requestId: normalizeText(item?.requestId),
       });
-      throw new Error(normalizeText(transition?.errorMessage) || "원격 작업 상태를 확인하지 못해 업로드를 이어갈 수 없어요.");
+      setNotice(transitionErrorMessage, "warning");
+      applyRender();
+      return { createdJob, degraded: true, pending: item };
     }
     const nextPending = await upsertPendingUpload(transition.nextPending, { context: queueContext });
     if (
@@ -2828,7 +2863,7 @@
     if (options?.syncWorkspace) {
       await syncWorkspaceLocalState(false, "workflow");
     }
-    return { createdJob, pending: nextPending };
+    return { createdJob, degraded: false, pending: nextPending };
   }
 
   async function uploadPendingSource(item, override = {}) {
