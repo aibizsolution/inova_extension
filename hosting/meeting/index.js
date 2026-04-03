@@ -2497,46 +2497,52 @@
       uploadedPartCount: prepared.parts.filter((part) => normalizeText(part.storageObject)).length,
     }, { context: buildAttemptQueueContext(activeRequestId, "chunk-uploading") });
 
-    let publishedRemoteStateThisAttempt = false;
-    let uploadedNewChunkThisAttempt = false;
-    for (const preparedPart of prepared.parts) {
-      const currentPending = state.pendingUploads.find((item) => item.requestId === activeRequestId) || nextPending;
-      const currentPart = (currentPending?.parts || []).find((part) => Number(part.index) === Number(preparedPart.index));
-      if (normalizeText(currentPart?.storageObject)) {
-        continue;
-      }
-      const uploaded = await uploadPendingSource(currentPending, {
+    const findMissingPreparedParts = (pendingState) => prepared.parts.filter((preparedPart) => {
+      const currentPart = (pendingState?.parts || []).find((part) => Number(part.index) === Number(preparedPart.index));
+      return !normalizeText(currentPart?.storageObject);
+    });
+    const uploadPreparedPart = async (pendingState, preparedPart) => {
+      const uploaded = await uploadPendingSource(pendingState, {
         blob: preparedPart.blob,
         endMs: preparedPart.endMs,
-        fileName: buildChunkPartFileName(currentPending, preparedPart.index),
+        fileName: buildChunkPartFileName(pendingState, preparedPart.index),
         mimeType: prepared.mimeType,
         overlapMs: preparedPart.overlapMs,
-        parentRequestId: normalizeText(currentPending?.requestId),
+        parentRequestId: normalizeText(pendingState?.requestId),
         partCount: prepared.parts.length,
         partIndex: preparedPart.index,
         requestId: preparedPart.requestId,
         sizeBytes: preparedPart.sizeBytes,
         startMs: preparedPart.startMs,
       });
-      nextPending = await updatePendingChunkUploadState(
-        normalizeText(currentPending?.requestId),
+      return updatePendingChunkUploadState(
+        normalizeText(pendingState?.requestId),
         preparedPart.index,
         uploaded,
         { context: buildAttemptQueueContext(activeRequestId, "chunk-part-uploaded") }
       );
-      uploadedNewChunkThisAttempt = true;
-      const shouldStartRemoteJob = !normalizeText(nextPending?.jobId)
-        && Math.max(0, Number(nextPending?.uploadedPartCount) || 0) > Math.max(0, Number(nextPending?.publishedPartCount) || 0);
-      if (!shouldStartRemoteJob) {
-        continue;
+    };
+
+    let publishedRemoteStateThisAttempt = false;
+    let uploadedNewChunkThisAttempt = false;
+    if (!normalizeText(nextPending?.jobId)) {
+      const bootstrapPart = findMissingPreparedParts(nextPending)[0];
+      if (bootstrapPart) {
+        nextPending = await uploadPreparedPart(nextPending, bootstrapPart);
+        uploadedNewChunkThisAttempt = true;
+        nextPending = (await createOrRefreshRemoteJob(nextPending, {
+          context: buildAttemptQueueContext(activeRequestId, "chunk-remote-job-start"),
+          noticeText: "첫 청크를 올려 자동 전사를 바로 시작했습니다. 남은 청크를 이어서 업로드합니다.",
+          syncWorkspace: false,
+          transitionAction: "chunk-start",
+        })).pending;
+        publishedRemoteStateThisAttempt = true;
       }
-      nextPending = (await createOrRefreshRemoteJob(nextPending, {
-        context: buildAttemptQueueContext(activeRequestId, "chunk-remote-job-start"),
-        noticeText: "첫 청크를 올려 자동 전사를 바로 시작했습니다. 남은 청크를 이어서 업로드합니다.",
-        syncWorkspace: false,
-        transitionAction: "chunk-start",
-      })).pending;
-      publishedRemoteStateThisAttempt = true;
+    }
+
+    for (const preparedPart of findMissingPreparedParts(nextPending)) {
+      nextPending = await uploadPreparedPart(nextPending, preparedPart);
+      uploadedNewChunkThisAttempt = true;
     }
 
     const hasPublishedGap = Math.max(0, Number(nextPending?.uploadedPartCount) || 0) > Math.max(0, Number(nextPending?.publishedPartCount) || 0);
@@ -2551,10 +2557,10 @@
         transitionAction: shouldStartRemoteJob ? "chunk-start" : "chunk-publish",
       })).pending;
       publishedRemoteStateThisAttempt = true;
-    } else if (!publishedRemoteStateThisAttempt && normalizeText(nextPending?.jobId)) {
+    } else if (!uploadedNewChunkThisAttempt && normalizeText(nextPending?.jobId)) {
       nextPending = (await createOrRefreshRemoteJob(nextPending, {
         context: buildAttemptQueueContext(activeRequestId, "chunk-remote-job-resync"),
-        noticeText: uploadedNewChunkThisAttempt ? "" : "자동 전사를 이어서 확인합니다.",
+        noticeText: "자동 전사를 이어서 확인합니다.",
         syncWorkspace: false,
         transitionAction: "chunk-resync",
       })).pending;
