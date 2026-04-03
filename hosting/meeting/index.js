@@ -272,6 +272,7 @@
     cacheRefs();
     bindEvents();
     setupDebugPanel();
+    syncWorkspaceDebugApi();
     logDebug("workspace.recording.profile", state.recordingProfile);
     logDebug("workspace.bootstrap", {
       href: global.location.href,
@@ -620,6 +621,89 @@
       noticeCode: DEGRADED_NOTICE_CODES.pendingUploadCleanup,
       recoveredEvent: "workspace.pending-uploads.cleanup.recovered",
     });
+  }
+
+  function cloneNoticeSnapshot(notice) {
+    return {
+      code: normalizeText(notice?.code),
+      sticky: Boolean(notice?.sticky),
+      text: normalizeText(notice?.text),
+      tone: normalizeText(notice?.tone),
+    };
+  }
+
+  function cloneDegradedDiagnosticsSnapshot(entry) {
+    return {
+      degradedReason: normalizeText(entry?.degradedReason),
+      issueCodes: (Array.isArray(entry?.issueCodes) ? entry.issueCodes : []).map((code) => normalizeText(code)).filter(Boolean),
+    };
+  }
+
+  function buildDegradedNoticeRegistrySnapshot() {
+    const snapshot = {};
+    for (const [code, notice] of Object.entries(state.degradedNotices || {})) {
+      const normalizedCode = normalizeText(code);
+      if (!normalizedCode) continue;
+      snapshot[normalizedCode] = cloneNoticeSnapshot(notice);
+    }
+    return snapshot;
+  }
+
+  function buildPendingUploadSnapshotItem(item) {
+    return {
+      hold: Boolean(item?.hold),
+      jobId: normalizeText(item?.jobId),
+      preparedPartCount: Math.max(0, Number(item?.preparedPartCount) || 0),
+      requestId: normalizeText(item?.requestId),
+      sourceMode: normalizeText(item?.sourceMode),
+      status: normalizeText(item?.status),
+      supersededRequestIds: (Array.isArray(item?.supersededRequestIds) ? item.supersededRequestIds : []).map((requestId) => normalizeText(requestId)).filter(Boolean),
+      updatedAt: normalizeText(item?.updatedAt),
+      uploadedPartCount: Math.max(0, Number(item?.uploadedPartCount) || 0),
+    };
+  }
+
+  function buildRecentPendingUploadEventSnapshot(limit = 12) {
+    const normalizedLimit = Math.max(1, Math.min(50, Number(limit) || 12));
+    return getDebugEntries()
+      .filter((entry) => {
+        const event = normalizeText(entry?.event);
+        return event.startsWith("workspace.pending-upload") || event.startsWith("workspace.pending-uploads");
+      })
+      .slice(-normalizedLimit)
+      .map((entry) => ({
+        event: normalizeText(entry?.event),
+        payload: entry?.payload && typeof entry.payload === "object" ? { ...entry.payload } : entry?.payload ?? null,
+        timestamp: normalizeText(entry?.timestamp),
+      }));
+  }
+
+  function buildPendingUploadQueueStateSnapshot(options = {}) {
+    return {
+      activeDegradedNotice: cloneNoticeSnapshot(getHighestPriorityDegradedNotice()),
+      blocked: {
+        message: normalizeText(state.blockedMessage),
+        tone: normalizeText(state.blockedTone),
+        value: Boolean(state.blocked),
+      },
+      degradedNotices: buildDegradedNoticeRegistrySnapshot(),
+      diagnostics: {
+        cleanup: cloneDegradedDiagnosticsSnapshot(state.pendingUploadCleanup),
+        load: cloneDegradedDiagnosticsSnapshot(state.pendingUploadStorage),
+        persist: cloneDegradedDiagnosticsSnapshot(state.pendingUploadPersist),
+      },
+      meetingId: normalizeText(state.session.meetingId),
+      notice: cloneNoticeSnapshot(state.notice),
+      pendingLocalCount: Math.max(0, Number(state.meeting?.pendingLocalCount) || 0),
+      pendingUploads: state.pendingUploads.map(buildPendingUploadSnapshotItem),
+      recentQueueEvents: buildRecentPendingUploadEventSnapshot(options.limit),
+      selectedRecordId: normalizeText(state.selectedRecordId),
+    };
+  }
+
+  function syncWorkspaceDebugApi() {
+    const debugApi = global.__INOVA_HOSTED_MEETING_DEBUG__ = global.__INOVA_HOSTED_MEETING_DEBUG__ || {};
+    debugApi.queueState = buildPendingUploadQueueStateSnapshot;
   }
 
   function consumePendingUploadQueueDiagnostics(context = {}) {

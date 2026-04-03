@@ -12,6 +12,12 @@
 __INOVA_HOSTED_MEETING_DEBUG__.queueFaults.scenarios()
 ```
 
+현재 작업실 notice와 degraded 상태를 한 번에 보려면 아래 helper를 함께 쓴다.
+
+```js
+__INOVA_HOSTED_MEETING_DEBUG__.queueState()
+```
+
 ## 자주 쓰는 시나리오
 
 ### 1. queue load degraded
@@ -26,6 +32,7 @@ location.reload();
 - 작업실 shell은 blocked로 끝나지 않고 계속 열린다.
 - warning notice에 로컬 업로드 대기 기록을 완전하게 읽지 못했다는 의미가 드러난다.
 - 디버그 로그에 `workspace.pending-uploads.load.degraded`가 남는다.
+- `queueState()`의 `diagnostics.load.degradedReason`, `degradedNotices`, `recentQueueEvents`에 같은 흐름이 잡힌다.
 
 ### 2. queue persist degraded
 
@@ -44,6 +51,7 @@ __INOVA_HOSTED_MEETING_DEBUG__.queueFaults.arm("queue-persist-indexeddb-write");
 - 사용자 action은 일반 error notice를 한 번 본다.
 - degraded warning과 디버그 로그에 `requestId/reason/phase` 문맥이 같이 남는다.
 - 다음 새로고침 뒤 최신 로컬 queue 상태가 복원되지 않을 수 있다는 의미가 notice 문구에 드러난다.
+- `queueState()`의 `diagnostics.persist.issueCodes`, `notice`, `recentQueueEvents`에서 같은 request 흐름을 다시 확인할 수 있다.
 
 ### 3. queue cleanup degraded
 
@@ -61,6 +69,7 @@ __INOVA_HOSTED_MEETING_DEBUG__.queueFaults.arm("queue-cleanup-indexeddb-delete")
 - 사용자 action은 일반 error notice를 한 번 본다.
 - degraded warning과 디버그 로그에 cleanup 문맥이 남는다.
 - 다음 새로고침 뒤 지운 로컬 기록이 다시 보일 수 있다는 의미가 notice 문구에 드러난다.
+- `queueState()`의 `diagnostics.cleanup.issueCodes`, `pendingUploads`, `recentQueueEvents`로 stale 항목 잔존 여부를 함께 본다.
 
 ## 정리
 
