@@ -1,6 +1,6 @@
 (function initHostedMeetingWorkspace(global) {
   const ns = global.__INOVA_HOSTED_MEETING__;
-  const { AUTO_RETRY_PENDING_STATUSES, DEFAULT_CREATE_JOB_TIMEOUT_MS, DEFAULT_INLINE_AUDIO_LIMIT_BYTES, DEFAULT_SOURCE_CHUNK_DURATION_MS, DEFAULT_SOURCE_CHUNK_OVERLAP_MS, DEFAULT_SOURCE_MAX_BYTES, DEFAULT_SOURCE_MAX_DURATION_MS, DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS, DEFAULT_SOURCE_TARGET_PART_BYTES, DEFAULT_SOURCE_UPLOAD_TIMEOUT_MS, SESSION_STORAGE_KEY, buildCopyText, buildErrorCopyText, buildRemoteSelectionId, buildWorkspaceHash, buildWorkspaceSessionStorageKey, clearDebugEntries, formatDateTime, getDebugEntries, isDebugPanelEnabled, isLikelyNetworkError, isLocalWorkspaceOrigin, isOnline, loadPersistedWorkspaceSession, logDebug, normalizeSpeakerAliases, normalizeText, normalizeTextBlock, parseParams, pickRecorderMimeType, persistWorkspaceSessionPayload, postJson, resolveConfig, resolveRecordingProfile, safeLocalStorageGet, safeLocalStorageRemove, safeLocalStorageSet, setEnabled: setDebugEnabled, stopTracks, subscribeDebugEntries, summarizeEntries } = ns.shared;
+  const { AUTO_RETRY_PENDING_STATUSES, DEFAULT_CREATE_JOB_TIMEOUT_MS, DEFAULT_INLINE_AUDIO_LIMIT_BYTES, DEFAULT_SOURCE_CHUNK_DURATION_MS, DEFAULT_SOURCE_CHUNK_OVERLAP_MS, DEFAULT_SOURCE_MAX_BYTES, DEFAULT_SOURCE_MAX_DURATION_MS, DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS, DEFAULT_SOURCE_TARGET_PART_BYTES, DEFAULT_SOURCE_UPLOAD_TIMEOUT_MS, buildCopyText, buildErrorCopyText, buildRemoteSelectionId, buildWorkspaceHash, buildWorkspaceSessionStorageKey, clearDebugEntries, clearPersistedWorkspaceSession, formatDateTime, getDebugEntries, isDebugPanelEnabled, isLikelyNetworkError, isLocalWorkspaceOrigin, isOnline, loadPersistedWorkspaceSession, logDebug, normalizeSpeakerAliases, normalizeText, normalizeTextBlock, parseParams, pickRecorderMimeType, persistWorkspaceSessionPayload, postJson, resolveConfig, resolveRecordingProfile, safeLocalStorageGet, safeLocalStorageSet, setEnabled: setDebugEnabled, stopTracks, subscribeDebugEntries, summarizeEntries } = ns.shared;
   const { clearWorkspaceAuthCache, ensureWorkspaceAuth, getCollections, subscribeDocument } = ns.firebase;
   const { prepareAudioSourceChunks } = ns.audioChunker;
   const { blobToBase64, createPendingUploadStore, normalizePendingUpload } = ns.storage;
@@ -2442,7 +2442,19 @@
     applyPersistWorkspaceSessionResult(persistWorkspaceSessionPayload(global, payload));
     replaceCleanUrl();
   }
-  function clearWorkspaceSession() { try { global.sessionStorage.removeItem(SESSION_STORAGE_KEY); } catch {} if (state.session.meetingId) safeLocalStorageRemove(global, buildWorkspaceSessionStorageKey(state.session.meetingId)); disposeWorkspaceRealtime({ clearAuthCache: true }); }
+  function clearWorkspaceSession() {
+    const cleared = clearPersistedWorkspaceSession(global, state.session.meetingId);
+    const degradedReason = normalizeText(cleared?.degradedReason);
+    const issues = Array.isArray(cleared?.issues) ? cleared.issues : [];
+    if (degradedReason) {
+      logDebug("workspace.session.clear.degraded", {
+        degradedReason,
+        issues,
+        meetingId: state.session.meetingId,
+      });
+    }
+    disposeWorkspaceRealtime({ clearAuthCache: true });
+  }
   function replaceCleanUrl() { const currentUrl = new URL(global.location.href); const preserveDebug = currentUrl.searchParams.get("debug") === "1"; const nextUrl = new URL(global.location.href); nextUrl.search = ""; nextUrl.hash = ""; if (preserveDebug) nextUrl.searchParams.set("debug", "1"); if (state.session.meetingId) nextUrl.searchParams.set("meetingId", state.session.meetingId); const entry = findHistoryEntry(state, state.selectedRecordId); const jobId = normalizeText(entry?.remote?.jobId || entry?.pending?.jobId); if (jobId) nextUrl.searchParams.set("jobId", jobId); if (state.session.meetingSessionToken) nextUrl.hash = buildWorkspaceHash(state.session.meetingSessionToken); global.history.replaceState({}, "", nextUrl.toString()); state.params = parseParams(nextUrl.toString()); }
   function renderBlocked(message, options = {}) {
     logDebug("workspace.blocked", { message, tone: options?.tone, title: options?.title });

@@ -333,6 +333,30 @@
     }
   }
 
+  function removeStorageValueDetailed(globalObject, storage, key, source) {
+    const normalizedKey = normalizeText(key);
+    const normalizedStorage = normalizeText(storage);
+    const normalizedSource = normalizeText(source);
+    try {
+      const target = normalizedStorage === "session-storage"
+        ? globalObject?.sessionStorage
+        : globalObject?.localStorage;
+      if (!target || typeof target.removeItem !== "function") {
+        throw new Error(`${normalizedStorage || "storage"} unavailable`);
+      }
+      target.removeItem(normalizedKey);
+      return null;
+    } catch (error) {
+      return buildStorageAccessIssue("storage-remove-failed", {
+        errorName: normalizeText(error?.name),
+        key: normalizedKey,
+        message: error instanceof Error ? error.message : String(error || ""),
+        source: normalizedSource,
+        storage: normalizedStorage,
+      });
+    }
+  }
+
   function parseStoredValueDetailed(value, key, source, storage) {
     const normalized = normalizeText(value);
     if (!normalized) {
@@ -366,7 +390,7 @@
 
   function summarizeWorkspaceSessionIssues(issues) {
     const normalizedIssues = Array.isArray(issues) ? issues : [];
-    const issue = normalizedIssues.find((entry) => ["storage-read-failed", "storage-write-failed", "storage-parse-failed", "storage-invalid-payload"].includes(normalizeText(entry?.code)));
+    const issue = normalizedIssues.find((entry) => ["storage-read-failed", "storage-write-failed", "storage-remove-failed", "storage-parse-failed", "storage-invalid-payload"].includes(normalizeText(entry?.code)));
     if (!issue) {
       return "";
     }
@@ -380,6 +404,9 @@
     }
     if (normalizeText(issue.code) === "storage-write-failed") {
       return `${storageLabel}를 저장하지 못했어요.`;
+    }
+    if (normalizeText(issue.code) === "storage-remove-failed") {
+      return `${storageLabel}를 정리하지 못했어요.`;
     }
     if (normalizeText(issue.code) === "storage-parse-failed") {
       return `${storageLabel}에 저장된 작업실 세션을 해석하지 못했어요.`;
@@ -466,13 +493,32 @@
   }
 
   function clearPersistedWorkspaceSession(globalObject, meetingId) {
-    try {
-      globalObject.sessionStorage.removeItem(SESSION_STORAGE_KEY);
-    } catch {}
+    const issues = [];
+    const sessionRemoveIssue = removeStorageValueDetailed(
+      globalObject,
+      "session-storage",
+      SESSION_STORAGE_KEY,
+      "session-storage"
+    );
+    if (sessionRemoveIssue) {
+      issues.push(sessionRemoveIssue);
+    }
     const normalizedMeetingId = normalizeText(meetingId);
     if (normalizedMeetingId) {
-      safeLocalStorageRemove(globalObject, buildWorkspaceSessionStorageKey(normalizedMeetingId));
+      const localRemoveIssue = removeStorageValueDetailed(
+        globalObject,
+        "local-storage",
+        buildWorkspaceSessionStorageKey(normalizedMeetingId),
+        "local-storage"
+      );
+      if (localRemoveIssue) {
+        issues.push(localRemoveIssue);
+      }
     }
+    return {
+      degradedReason: summarizeWorkspaceSessionIssues(issues),
+      issues,
+    };
   }
 
   function loadPersistedWorkspaceSession(globalObject, requestedMeetingId, workspaceToken, requestedJobId) {
@@ -563,7 +609,10 @@
             storage: candidate.storage,
           }));
         }
-        clearPersistedWorkspaceSession(globalObject, meetingId);
+        const cleared = clearPersistedWorkspaceSession(globalObject, meetingId);
+        if (Array.isArray(cleared?.issues) && cleared.issues.length) {
+          issues.push(...cleared.issues);
+        }
         continue;
       }
       const sessionWriteIssue = writeStorageValueDetailed(
