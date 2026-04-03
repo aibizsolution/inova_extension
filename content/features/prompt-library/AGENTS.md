@@ -11,8 +11,8 @@
 - `content/features/prompt-library/cloud-sync-manager.js`
 
 ## 관련 프론트 경로
-- `content/prompt-hub-view.js`
 - `content/main.js`
+- `content/prompt-hub-view.js` - `prompt-library` 단독 view가 아니라 prompt tool shell
 
 ## 관련 functions 경로
 - `functions/features/prompt-library/register.js`
@@ -38,4 +38,4 @@
 - 스토어 공개 흐름 문제인지, 검토 버튼 문제인지, 로컬 보관함 문제인지 구분이 모호할 때만 확인한다.
 
 ## 언제 범위를 확장할지
-- feature-local과 owned-shared만으로 해결되지 않고 panel auth 또는 background cache가 얽힐 때만 platform/shell로 넓힌다.
+- feature-local과 owned-shared만으로 해결되지 않고 prompt tool shell, panel auth, background cache가 얽힐 때만 platform/shell로 넓힌다.

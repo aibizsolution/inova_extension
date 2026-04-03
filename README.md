@@ -7,6 +7,7 @@
 - 이 저장소에서는 새 요청이 오면 먼저 [docs/feature-routing.md](docs/feature-routing.md)에서 primary feature를 고르고, 해당 feature `AGENTS.md`와 먼저 볼 파일만 읽고 시작합니다.
 - 실행 표면과 런타임 경계가 필요할 때만 [docs/runtime-architecture.md](docs/runtime-architecture.md)를 봅니다.
 - `popup`, `background/service-worker.js`, `content/main.js`, `content/panel.js`, `functions/index.js`, `manifest.json`, `shared/*`는 platform/shell로 취급하고, feature 범위만으로 해결되지 않을 때만 읽습니다.
+- `content/prompt-hub-view.js`는 `내 요청/스토어/검토` body를 바꾸는 prompt tool shell이므로, 단일 prompt feature 소유 파일로 보지 않습니다.
 - cue가 두 feature 이상에 걸리면 저장소 전체를 넓게 읽는 대신 짧게 `이 기능이 맞나요?`를 먼저 확인합니다.
 - feature 작업 중 두 번째 primary feature를 읽어야 하거나 `content + functions + hosting` 3축이 동시에 필요해지면, 먼저 커밋 또는 다음 세션 분리를 제안합니다.
 
@@ -181,6 +182,7 @@
   - `features/prompt-library/prompt-view.js`: 요청 탭 렌더링
   - `features/prompt-library/prompt-manager.js`: 요청 CRUD, 가져오기/내보내기, 입력창 주입
   - `features/prompt-store/store-view.js`: 프롬프트 스토어 탭 렌더링
+  - `prompt-hub-view.js`: `내 요청/스토어/검토` body를 묶는 prompt tool shell
   - `features/prompt-store/store-manager.js`: 스토어 목록, 좋아요, 가져오기, 등록/삭제 흐름
   - `route-sync.js`: 대화 전환 감시와 실시간 질문 동기화
   - `panel.js`: 우측 슬라이드 패널 셸과 도구 레일

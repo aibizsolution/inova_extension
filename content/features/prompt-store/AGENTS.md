@@ -10,8 +10,8 @@
 - `shared/prompt-store.js`
 
 ## 관련 프론트 경로
-- `content/prompt-hub-view.js`
 - `content/main.js`
+- `content/prompt-hub-view.js` - `prompt-store` 단독 view가 아니라 prompt tool shell
 
 ## 관련 functions 경로
 - `functions/features/prompt-store/store-service.js`
@@ -38,4 +38,4 @@
 - 내 요청 보관함 문제인지 공개 스토어 문제인지 섞여 있을 때만 확인한다.
 
 ## 언제 범위를 확장할지
-- realtime bridge, panel auth cache, background read 경로가 원인일 때만 platform/shell로 넓힌다.
+- realtime bridge, prompt tool shell, panel auth cache, background read 경로가 원인일 때만 platform/shell로 넓힌다.

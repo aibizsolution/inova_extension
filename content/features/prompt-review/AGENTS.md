@@ -11,6 +11,7 @@
 ## 관련 프론트 경로
 - `content/main.js`
 - `content/composer.js`
+- `content/prompt-hub-view.js` - review body를 감싸는 prompt tool shell
 
 ## 관련 functions 경로
 - `functions/features/prompt-review/prompt-review-service.js`
@@ -33,4 +34,4 @@
 - 평가 UX 문제인지, 입력창 주입 문제인지, 보관함/스토어 문제인지 모호할 때만 확인한다.
 
 ## 언제 범위를 확장할지
-- 입력창 주입이나 panel shell 상태와 충돌할 때만 platform/shell로 넓힌다.
+- 입력창 주입, prompt tool shell, panel shell 상태와 충돌할 때만 platform/shell로 넓힌다.
