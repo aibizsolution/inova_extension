@@ -328,12 +328,17 @@ function registerMeetingHandlers(deps) {
     let currentJob = queuedJob;
 
     const persistPatch = async (patch, artifact) => {
-      currentJob = mergeMeetingJobPatch(currentJob, patch);
-      await Promise.all([
-        jobRef.set(patch, { merge: true }),
-        upsertMeetingJobSummary(meetingRef, meeting, owner, currentJob, artifact),
-        sessionRef ? upsertLegacySessionJobSummary(sessionRef, meeting, owner, currentJob, artifact) : Promise.resolve(),
-      ]);
+      currentJob = await persistMeetingJobPatch(
+        jobRef,
+        meetingRef,
+        sessionRef,
+        meeting,
+        owner,
+        currentJob,
+        patch,
+        artifact
+      );
+      return currentJob;
     };
 
     try {
@@ -519,11 +524,7 @@ function registerMeetingHandlers(deps) {
     const partRef = db.collection(JOB_PART_COLLECTION).doc(afterSnapshot.id);
     const jobSnapshot = await jobRef.get();
     if (!jobSnapshot.exists) {
-      await partRef.set({
-        error: "상위 회의 job을 찾지 못했어요.",
-        status: "failed",
-        updatedAt: new Date().toISOString(),
-      }, { merge: true });
+      await deleteDocumentIfExists(partRef);
       return;
     }
 
@@ -727,11 +728,7 @@ function registerMeetingHandlers(deps) {
     const jobRef = db.collection(JOB_COLLECTION).doc(queuedFinalizer.jobId);
     const jobSnapshot = await jobRef.get();
     if (!jobSnapshot.exists) {
-      await finalizerRef.set({
-        error: "상위 회의 job을 찾지 못했어요.",
-        status: "failed",
-        updatedAt: new Date().toISOString(),
-      }, { merge: true });
+      await deleteDocumentIfExists(finalizerRef);
       return;
     }
 
@@ -2477,6 +2474,7 @@ function registerMeetingHandlers(deps) {
         : await processQueuedMeetingResultDeletion(claimedTask);
       const completed = await isMeetingDeletionTaskComplete(claimedTask);
       if (completed) {
+        await hardDeleteMeetingDeletionTombstones(claimedTask);
         await deleteDocumentIfExists(taskRef);
       } else {
         const nextRetryAt = new Date(Date.now() + DELETION_RETRY_DELAY_MS).toISOString();
@@ -2650,6 +2648,23 @@ function registerMeetingHandlers(deps) {
       }
     }
     return true;
+  }
+
+  async function hardDeleteMeetingDeletionTombstones(task) {
+    const owner = normalizeIdentity(task.owner);
+    const jobs = await loadMeetingDeletionJobs(task);
+    await Promise.all(
+      jobs
+        .map((job) => normalizeText(job.jobId))
+        .filter(Boolean)
+        .map((jobId) => deleteDocumentIfExists(db.collection(JOB_COLLECTION).doc(jobId)))
+    );
+    if (task.scope === "meeting" && task.meetingId) {
+      await deleteDocumentIfExists(db.collection(MEETING_COLLECTION).doc(buildMeetingDocId(owner.providerUserKey, task.meetingId)));
+      if (task.sessionId) {
+        await deleteDocumentIfExists(db.collection(SESSION_COLLECTION).doc(buildSessionDocId(owner.providerUserKey, task.sessionId)));
+      }
+    }
   }
 
   async function isMeetingJobDeletionComplete(jobInput) {
