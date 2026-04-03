@@ -411,6 +411,8 @@ npm run deploy:functions
 npm run deploy:all
 ```
 
+- Firebase Functions 런타임 기준은 `firebase.json`의 `nodejs22`이고, `functions/package.json`의 SDK 기준선은 `firebase-functions 7.x`와 로컬 `Node >=22`입니다.
+
 실제 브라우저 동기화 점검은 다음 문서를 봅니다.
 
 - [docs/runtime-architecture.md](C:/Users/parkyoungtack/Documents/code/inova_extension/docs/runtime-architecture.md)
