@@ -1,0 +1,42 @@
+# meeting feature
+
+## 기능 목적
+- 회의 허브, hosted 작업실, 녹음, 전사, 결과 검토를 다룬다.
+
+## 먼저 볼 파일
+- `content/meeting-manager.js`
+- `content/meeting-view.js`
+- `hosting/meeting/index.js`
+- `popup/index.js`
+
+## 관련 프론트 경로
+- `background/service-worker.js`
+- `hosting/meeting/*`
+- `meeting/index.js`
+
+## 관련 functions 경로
+- `functions/features/meeting/meeting-launch-service.js`
+- `functions/features/meeting/meeting-service.js`
+
+## 관련 데이터 경계
+- `integration_inova_meetings`
+- `integration_inova_meeting_jobs`
+- `integration_inova_meeting_job_parts`
+- `integration_inova_meeting_job_finalizers`
+- `integration_inova_meeting_artifacts`
+- launch/session 컬렉션
+
+## 보통 건드리지 말아야 할 범위
+- prompt-library
+- prompt-store
+- prompt-review
+- release
+
+## 최소 검증 방법
+- 팝업 target 설정, 회의 탭 목록, hosted meeting 진입, 결과 조회를 확인한다.
+
+## 언제 사용자에게 다시 물을지
+- 패널 회의 허브 문제인지 hosted 작업실 문제인지, auth 문제인지 전사 backend 문제인지 모호할 때만 확인한다.
+
+## 언제 범위를 확장할지
+- feature-local과 owned-shared만으로 해결되지 않고 launch/session 발급 또는 panel cache가 얽힐 때만 platform/shell로 넓힌다.

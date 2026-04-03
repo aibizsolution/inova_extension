@@ -1,88 +1,30 @@
-# inova_extension 작업 메모
+# inova_extension 작업 규칙
 
-이 문서는 이 저장소에서 반복 적용할 운영 원칙만 기록한다.
+이 문서는 이 저장소에서 계속 반복해서 적용할 전역 운영 규칙만 다룬다. feature 상세 규칙은 각 feature 하위 `AGENTS.md`와 `docs/feature-routing.md`로 분산한다.
 
-## 문서 유지 원칙
-- 반복해서 다시 설명하게 되는 저장소 운영 결정은 이 문서에 계속 누적해 관리한다.
-- 일회성 작업 로그보다 다음 작업에서도 바로 도움이 되는 기준과 원칙만 남긴다.
-- 작업 중 새 운영 기준이 굳어지면 필요 시 이 문서를 스스로 갱신한다.
-- 저장소 상태에 따라 필요하다고 판단되면 관련 변경을 커밋 단위까지 정리할 수 있다.
+## 시작 순서
+- 작업 시작 시 `cwd`, Git 상태, 셸 환경을 먼저 확인한다.
+- 기본 최소 읽기 세트는 루트 `AGENTS.md`, `README.md`, `package.json`, `manifest.json`, `docs/feature-routing.md`, 그리고 요청과 일치하는 feature `AGENTS.md` 1개다.
+- `content/`, `functions/`, `hosting/meeting/`, `shared/`를 처음부터 넓게 읽지 않는다.
 
-## 저장소 시작 규칙
-- 새 클론이나 새 작업 환경에서는 가능하면 초기에 `npm install` 또는 `npm run hooks:install`로 로컬 Git 훅 연결 상태를 맞춘다.
-- commit 전에는 `pre-commit`, push 전에는 `pre-push`, 원격에서는 GitHub Actions 가드레일이 다시 돈다는 전제를 두고 작업한다.
-- 이 저장소는 사람 승인보다 자동 체크를 우선한다. PR은 기본이지만 권한 있는 사용자가 체크 통과 후 바로 머지할 수 있는 운영을 기준으로 본다.
-- 로컬 훅에는 `post-checkout`, `post-merge`도 포함되며, `main` 기준으로 이미 머지된 `codex/*` 브랜치를 자동 정리한다.
+## Feature-First 규칙
+- 새 요청이 오면 먼저 primary feature를 고른다. 기본 feature는 `conversation`, `prompt-library`, `prompt-store`, `prompt-review`, `meeting`, `release`다.
+- cue가 2개 이상 섞이면 전체 탐색 대신 짧게 `이 기능이 맞나요?`라고 확인한 뒤 해당 feature부터 읽는다.
+- 읽기 범위는 `feature-local -> feature-owned shared -> platform/shell -> 인접 feature` 순서로만 확장한다.
+- `popup`, `background/service-worker.js`, `content/main.js`, `content/panel.js`, `functions/index.js`, `manifest.json`, `shared/*`는 platform/shell로 취급하고 필요할 때만 본다.
 
-## 경량 검증 우선 원칙
-- 기본 확인은 `npm run verify`로 문서/계약 검증만 먼저 본다.
-- 새 작업의 기준 검증으로 별도 시뮬레이션 레이어를 요구하지 않는다.
-- UI 체감, 세션 복원, 실제 opener 흐름, 배포 경계 문제는 실제 Chrome 확인을 우선한다.
-- 로컬 재현은 `실제 Chrome -> 필요 시 로컬 Hosting/브라우저 로그` 순서로 가져간다.
+## 문서와 구조
+- feature 진입점과 데이터 경계는 항상 `docs/feature-routing.md`를 먼저 기준으로 삼는다.
+- 기능 상세 규칙은 루트 문서에 다시 길게 적지 말고 feature 하위 `AGENTS.md`에 추가한다.
+- 기능 관련 소스나 설정을 바꾸면 `README.md`도 같은 작업 안에서 함께 맞춘다.
 
-## 릴리스 운영 원칙
-- feature 변경을 커밋하거나 push할 때는 기본적으로 `README.md`를 함께 맞춘다. `package.json`, `manifest.json`, `releases/release-notes.json`은 실제 배포나 릴리스 준비를 시작할 때만 함께 맞춘다.
-- 버전 상승은 `npm run version:bump -- <patch|minor|major>`를 기본으로 하고, 수동 수정으로 버전 파일만 따로 어긋나게 두지 않는다. 다만 이 단계는 일반 개발 커밋마다 하지 않고, 배포 전 준비 단계에서만 수행한다.
-- 새 버전 엔트리의 `public.headline`, `public.summary`, `public.changes`에 `TODO`가 남아 있으면 배포를 진행하지 않는다.
-- 릴리스 패널에는 사용자 관점 변경만 보여주고, 내부 운영/배포 메모는 `internal.changes`로 따로 남긴다.
-- Hosting 릴리스 메타(`latest.json`, `history.json`)는 `releases/release-notes.json` 기준으로 생성한다.
-- 이 저장소에서 일반적인 `배포`는 `hosting-only`를 뜻한다. 함수 배포는 사용자가 `functions`, `backend`, `전체 배포`를 명시했을 때만 진행한다.
-- 함수 배포가 여러 개 필요하면 함수별 반복 배포보다 변경한 함수만 `firebase deploy --only "functions:a,functions:b"`처럼 한 명령에 묶어 한 번에 배포하는 것을 기본으로 한다.
-- 함수 배포가 1개만 필요할 때는 `firebase deploy --only functions:<name>` 형태의 개별 배포를 사용한다.
-- PowerShell에서는 여러 함수명을 쉼표로 묶은 `--only` 값을 따옴표로 감싸서 전달한다.
-- 변경한 함수만 묶어 지정하는 방식이 어렵거나 CLI 필터 문제가 반복되면 `firebase deploy --only functions` 전체 함수 배포를 차선책으로 사용한다.
-- GitHub Actions `Repo Guardrails` 워크플로가 실패하면 로컬에서 통과했더라도 바로 병합 가능 상태라고 가정하지 않는다.
-- 기능 관련 소스나 설정을 바꾸면 `README.md`도 같은 작업 안에서 함께 갱신한다.
-- `pre-push` README 가드가 막히면 우회보다 `README.md` 누락 여부부터 먼저 확인한다.
+## Subagent 규칙
+- 저장소 전반 read-only 탐색, 후보 파일 수집, 테스트 실행은 서브에이전트를 우선 검토한다.
+- primary feature 분류, 범위 확장 판단, 위험한 diff 리뷰, 최종 판단과 결과 통합은 메인 에이전트가 맡는다.
+- 서브에이전트 결과가 약하거나 서로 어긋나면 메인 에이전트가 해당 범위만 다시 읽고 결론을 정한다.
 
-## Firebase 운영 원칙
-- 이 저장소의 Firebase는 단일 기능 전용이 아니라 브라우저 확장 공통 플랫폼으로 사용한다.
-- 현재 기준 Firebase 프로젝트 표시 이름은 `browser-extension`이고 프로젝트 ID는 `browser-extension-main`이다.
-- Firestore 기본 리전은 `asia-northeast3`(Seoul)로 유지한다.
-- Firebase 호출 전략은 `local-first`를 기본으로 한다.
-- 평소 사용 흐름은 로컬 저장소만으로 끝나게 하고, 원격 호출은 백업/복구/명시적 동기화처럼 꼭 필요한 경우로 제한한다.
-- 자동 클라우드 load는 로컬 프롬프트가 비어 있는 초기 복구 상황에서만 시도하고, 로컬 데이터가 있으면 원격 조회를 생략하는 방향을 우선한다.
-- 새 기능을 붙일 때는 하나의 공용 데이터 덩어리로 섞지 말고 도메인/기능 경계별로 컬렉션과 책임을 분리한다.
-- 공통 식별자나 최소 메타데이터만 공유하고, 기능별 데이터 스키마와 보안 규칙은 분리 설계한다.
-- i-Nova 관련 데이터도 공통 플랫폼 안의 한 integration으로 다루고, 다른 서비스용 데이터와 직접 섞지 않는다.
-- 공통 플랫폼을 쓰더라도 `account`, `prompt-library`, `backup-sync`, `integrations/*`, `ops-internal`처럼 도메인별 경계를 나눠 설계한다.
-- `prompt-store`는 `prompt-library` 백업과 섞지 않고 별도 컬렉션/서브컬렉션으로 유지한다.
-- `prompt-store` 공개 탐색은 항목 문서를 직접 페이지네이션하지 않고, 리스트 전용 page 문서와 detail 문서를 분리하는 방향을 우선한다.
-- `prompt-store` 항목은 로컬 `prompt-library` 항목의 링크가 아니라 독립 복사본으로 다룬다.
-- 스토어 등록 후 로컬 프롬프트를 수정해도 스토어 항목은 바뀌지 않게 유지하고, 스토어에서 가져오기는 동일 내용이어도 새 프롬프트 생성 흐름을 허용한다.
-- 시스템 기본 프롬프트는 서브에이전트 역할 카탈로그 기준으로 별도 시드하고, 일반 사용자 소유 항목과 같은 컬렉션을 쓰더라도 `owner.kind=system`으로 구분한다.
-- 시스템 시드 프롬프트는 사용자가 삭제할 수 없게 유지한다.
-- 수동 배포용 릴리스 파일은 Firebase Hosting의 정적 JSON(`latest.json`, `history.json`)과 버전별 ZIP으로 관리하고, `latest.json`만 최신 버전을 가리키게 유지한다.
-- 릴리스 안내 UI는 강한 모달 알림보다 조용한 상태 카드와 수동 다운로드/롤백 안내를 우선한다.
-- Firebase Web API key를 실제로 쓰지 않으면 저장소에 남기지 않는다.
-- Firebase Web API key가 노출되면 panic보다 `미사용 여부 확인 -> 코드 제거 -> 키 폐기` 순서로 대응한다.
-- 사용자 기본 키는 raw email보다 안정적인 내부 식별자를 우선하고, 이메일은 보조 프로필 값으로만 다룬다.
-- i-Nova access token은 현재 사용자 검증에만 쓰고, 저장 키나 영구 식별자로 직접 사용하지 않는다.
-- i-Nova 연동이 필요한 외부 네트워크 호출은 페이지 스크립트보다 확장프로그램 백그라운드 서비스워커 경로를 우선한다. 페이지 CSP 영향이 크기 때문이다.
-
-## Firebase CLI 원칙
-- Firebase CLI는 저장소 로컬 설치보다 PC 전역 설치를 기본으로 사용한다.
-- 이 PC의 전역 Firebase CLI 기본 계정은 `ytgoon@gmail.com`을 기준으로 사용한다.
-- 다른 Firebase 계정이 필요한 예외 저장소만 별도 로컬 설치 또는 별도 인증 흐름으로 분리한다.
-- Firebase 관리 작업은 가능하면 브라우저 수동 조작보다 CLI를 우선한다.
-
-## 로컬 서버 운영 규칙
-- 사용자가 로컬 서버 실행을 요청하면 먼저 같은 포트나 같은 명령으로 이미 떠 있는 프로세스가 있는지 확인하고, 중복 실행을 피한다.
-- 기본 실행 방식은 백그라운드 실행과 로그 파일 저장으로 두고, 사용자가 명시적으로 원할 때만 foreground 로그 노출 방식으로 전환한다.
-- 백그라운드 실행 시에는 로그 파일 경로, PID, 접속 URL을 함께 바로 알려 준다.
-- 사용자가 서버 중지를 요청하면 관련 프로세스만 종료하고, 종료 뒤에는 해당 포트의 `LISTEN` 해제 여부까지 다시 확인한다.
-
-## 실제 브라우저 E2E 원칙
-- 실제 UI/동기화 검증은 가능하면 사용자가 보는 Chrome 확장프로그램 기준으로 확인한다.
-- 확장 리로드 후 `inova.incross.com`에서 `실험실` 패널 노출, 프롬프트 조작, 입력창 주입까지 한 흐름으로 확인한다.
-- 원격 백업은 Firestore 콘솔을 매번 수동으로 보지 말고 `npm run check:cloud-sync -- --userKey <providerUserKey>`로 먼저 확인한다.
-- 함수 호출 수는 `npm run check:function-logs -- --since <minutes>`로 먼저 요약해서 본다.
-- 원격 백업 정상 기준은 `조작 직후 1회 갱신`과 `idle 상태 추가 갱신 없음`이다.
-
-## 저장소 탐색과 서브에이전트 원칙
-- 저장소 전반 탐색, read-only 코드 읽기, 후보 파일 수집, 구조 파악처럼 값이 크고 독립적인 탐색은 저렴하고 빠른 서브에이전트를 우선 검토한다.
-- 메인 에이전트는 서브에이전트가 모은 결과를 통합해 우선순위를 정하고, 최종 판단과 설명을 책임진다.
-- 서브에이전트 결과가 서로 어긋나거나, 근거가 빈약하거나, 중요한 아키텍처 판단과 직접 연결되면 메인 에이전트가 해당 파일과 코드 경로를 직접 다시 읽는다.
-- 배포, 데이터 손상 가능 수정, 보안 규칙, 권한, 과금 영향, 큰 구조 변경, 최종 diff 리뷰처럼 리스크가 큰 판단은 메인 에이전트 직접 검토를 기본으로 한다.
-- 단일 파일의 짧은 수정이나 공유 맥락이 강한 연속 디버깅은 서브에이전트 비용보다 직접 처리 이점이 크면 메인 에이전트가 바로 진행한다.
-- 탐색 결과를 지침으로 남길 가치가 있으면 일회성 설명으로 끝내지 말고 `AGENTS.md`, `README.md`, 관련 설계 문서에 운영 규칙 형태로 반영한다.
+## 검증과 세션 분리
+- 기본 검증은 `npm run verify`부터 수행한다.
+- UI 체감과 opener, 세션 복원, 배포 경계는 실제 Chrome 확인을 우선한다.
+- 두 번째 primary feature를 읽어야 하거나 `content + functions + hosting` 3축에 동시에 손대려는 순간, 먼저 커밋 경계 또는 다음 세션 분리를 제안한다.
+- 검증을 못 했으면 성공처럼 말하지 말고 미실행 항목과 이유를 남긴다.

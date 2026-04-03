@@ -64,7 +64,7 @@
 
 ### Firebase Functions
 
-- 위치: `functions/index.js`, `functions/prompt-review-service.js`, `functions/store-service.js`, `functions/meeting-service.js`, `functions/meeting-launch-service.js`
+- 위치: `functions/index.js`, `functions/features/prompt-library/register.js`, `functions/features/prompt-review/prompt-review-service.js`, `functions/features/prompt-store/store-service.js`, `functions/features/meeting/meeting-service.js`, `functions/features/meeting/meeting-launch-service.js`
 - 역할: i-Nova 사용자 검증 뒤 prompt review, prompt store, prompt library sync API와 회의 기능 gateway endpoint를 제공한다.
 - 특징: 현재 원격 백업과 공개 스토어의 진입점이며, 프롬프트 패널용 `issueInovaPromptPanelAuth`가 Firebase custom token을 발급한다. prompt store는 `latest` 공개 feed page만 미리 써 두고, 검색/인기 정렬/상세는 요청 시 직접 query한다. 회의 기능은 launch grant 발급, hosted session 교환, 임시 source audio 업로드, OpenAI diarization 호출, `integration_inova_meeting_*` Firestore 기록, source cleanup까지 Functions 안에서 처리한다.
 

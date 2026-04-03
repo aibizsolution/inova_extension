@@ -2,6 +2,14 @@
 
 `i-Nova 더하기`는 `inova.incross.com` 대화 화면에 편의 기능을 덧붙이는 크롬 확장프로그램입니다. 현재 MVP는 `실험실 패널 + hosted 회의 작업실` 구조로, 현재 대화의 `질문 모아보기`, DB 기반 `회의 허브`, 사용자가 직접 저장하는 `자주 쓰는 요청`, 여러 사용자가 공유하는 `프롬프트 스토어`, 그리고 수동 배포용 `릴리스 안내`를 한 패널 안에서 바로 씁니다.
 
+## Feature-first 작업 시작
+
+- 이 저장소에서는 새 요청이 오면 먼저 [docs/feature-routing.md](docs/feature-routing.md)에서 primary feature를 고르고, 해당 feature `AGENTS.md`와 먼저 볼 파일만 읽고 시작합니다.
+- 실행 표면과 런타임 경계가 필요할 때만 [docs/runtime-architecture.md](docs/runtime-architecture.md)를 봅니다.
+- `popup`, `background/service-worker.js`, `content/main.js`, `content/panel.js`, `functions/index.js`, `manifest.json`, `shared/*`는 platform/shell로 취급하고, feature 범위만으로 해결되지 않을 때만 읽습니다.
+- cue가 두 feature 이상에 걸리면 저장소 전체를 넓게 읽는 대신 짧게 `이 기능이 맞나요?`를 먼저 확인합니다.
+- feature 작업 중 두 번째 primary feature를 읽어야 하거나 `content + functions + hosting` 3축이 동시에 필요해지면, 먼저 커밋 또는 다음 세션 분리를 제안합니다.
+
 ## 핵심 기능
 
 - `팝업 작업실 연결 설정`
@@ -205,7 +213,7 @@
 - `content/main.js`와 `content/prompt-realtime-manager.js`는 스토어 최신 목록 bridge가 잠깐 끊겨도 이미 화면에 목록이 있으면 그대로 유지하고, 첫 목록이 아직 없을 때만 `fallback` read를 허용합니다. 디버그의 `panel.ui.surface.changed`도 실제 표면 유무가 바뀌는 경우만 남겨 노이즈를 줄입니다.
 - `content/meeting-manager.js`는 패널에서 `issueInovaMeetingPanelAuth -> hosted panel bridge -> Firestore meeting query` 경로로 owner 기준 최신 회의 목록을 실시간 구독하고, 브리지나 인증이 실패할 때만 `listInovaMeetings` fallback으로 현재 메모리 허브 상태를 갱신합니다.
 - `background/service-worker.js`는 i-Nova access token과 Firebase Functions를 연결해 원격 백업 호출과 prompt/store panel auth 발급을 처리하고, 회의 기능에서는 launch grant 발급과 session 교환까지 끝낸 최종 hosted 작업실 URL 생성, 허브 조회 라우팅을 맡습니다.
-- `functions/meeting-launch-service.js`는 launch grant, hosted workspace session, Firestore 읽기용 Firebase custom token 발급을 맡깁니다.
+- `functions/features/meeting/meeting-launch-service.js`는 launch grant, hosted workspace session, Firestore 읽기용 Firebase custom token 발급을 맡깁니다.
 - `processQueuedInovaMeetingJob`, `processQueuedInovaMeetingJobPart`, `finalizeChunkedInovaMeetingJob` Firestore background worker는 모두 `1GiB` 메모리와 `540초` timeout으로 운영하되, 긴 회의는 `parent job queue -> chunk worker들 -> finalizer`로 역할을 나눠 단일 함수가 모든 chunk를 붙잡지 않게 유지합니다.
 - hosted 회의 작업실은 `종료하고 전사` 또는 `파일 불러오기` 시점에 원본을 먼저 업로드 가능한 source로 준비한 뒤 `createInovaMeetingJob`으로 parent job을 일찍 만들고, chunk 업로드가 이어지는 동안 같은 job source를 계속 보강합니다. Functions background 처리기는 `source download -> chunk worker 전사 -> chunk transcript 임시 저장 -> finalizer 병합/화자 정합 -> 회의록 모드 분류 -> mode별 회의록 정리 생성 -> source/chunk cleanup -> Firestore meeting/job/artifact 저장`까지 처리합니다.
 - 회의 정리와 모드 분류 기본 모델은 `gpt-5.4-mini`를 사용하고, 필요하면 `OPENAI_MEETING_SUMMARY_MODEL` 또는 `OPENAI_SUMMARY_MODEL`로 override할 수 있습니다.
