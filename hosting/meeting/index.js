@@ -2576,47 +2576,55 @@
         } else {
           await syncWorkspaceLocalState(false, "workflow");
         }
-      } else if (!normalizeText(latest?.storageObject)) {
-        latest = await upsertPendingUpload({
-          ...latest,
-          lastError: "",
-          originalSizeBytes: sourceSizeBytes,
-          sourceMode: "single",
-          status: "uploading",
-        }, { context: buildAttemptQueueContext(activeRequestId, "single-uploading") });
-        try {
-          const uploaded = await uploadPendingSource(latest);
-          latest = await upsertPendingUpload({
-            ...latest,
-            lastError: "",
-            originalSizeBytes: sourceSizeBytes,
-            sizeBytes: Math.max(sourceSizeBytes, Number(uploaded?.sizeBytes) || 0),
-            sourceMode: "single",
-            status: "uploading",
-            storageObject: normalizeText(uploaded?.storageObject),
-          }, { context: buildAttemptQueueContext(activeRequestId, "single-uploaded") });
-        } catch (uploadError) {
-          logDebug("workspace.source-upload.fallback-inline", {
-            error: uploadError,
-            requestId: activeRequestId,
-            sizeBytes: sourceSizeBytes,
-          });
+      } else {
+        let allowInlineSource = false;
+        let inlineSourceError = "";
+        if (!normalizeText(latest?.storageObject)) {
           latest = await upsertPendingUpload({
             ...latest,
             lastError: "",
             originalSizeBytes: sourceSizeBytes,
             sourceMode: "single",
             status: "uploading",
-            storageObject: "",
-          }, { context: buildAttemptQueueContext(activeRequestId, "single-inline-fallback") });
-          setNotice("임시 오디오 업로드가 실패해도 현재 파일은 바로 전사 경로로 이어갑니다.", "highlight");
-          applyRender();
+          }, { context: buildAttemptQueueContext(activeRequestId, "single-uploading") });
+          try {
+            const uploaded = await uploadPendingSource(latest);
+            latest = await upsertPendingUpload({
+              ...latest,
+              lastError: "",
+              originalSizeBytes: sourceSizeBytes,
+              sizeBytes: Math.max(sourceSizeBytes, Number(uploaded?.sizeBytes) || 0),
+              sourceMode: "single",
+              status: "uploading",
+              storageObject: normalizeText(uploaded?.storageObject),
+            }, { context: buildAttemptQueueContext(activeRequestId, "single-uploaded") });
+          } catch (uploadError) {
+            logDebug("workspace.source-upload.fallback-inline", {
+              error: uploadError,
+              requestId: activeRequestId,
+              sizeBytes: sourceSizeBytes,
+            });
+            latest = await upsertPendingUpload({
+              ...latest,
+              lastError: "",
+              originalSizeBytes: sourceSizeBytes,
+              sourceMode: "single",
+              status: "uploading",
+              storageObject: "",
+            }, { context: buildAttemptQueueContext(activeRequestId, "single-inline-fallback") });
+            allowInlineSource = true;
+            inlineSourceError = "브라우저 임시 오디오 업로드가 실패해 현재 탭의 원본으로만 전사를 이어갑니다.";
+            setNotice("브라우저 임시 오디오 업로드가 실패했습니다. 현재 탭의 원본으로만 전사를 이어가며, 다음 새로고침 뒤에는 다시 업로드 대기로 돌아올 수 있습니다.", "warning");
+            applyRender();
+          }
         }
-      }
-      if (normalizeText(latest?.sourceMode) !== "chunked") {
         latest = (await createOrRefreshRemoteJob(latest, {
+          allowInlineSource,
           context: buildAttemptQueueContext(activeRequestId, "single-remote-job-start"),
-          noticeText: "자동 전사를 접수했습니다. 결과를 계속 확인하는 중입니다.",
+          inlineSourceError,
+          noticeText: allowInlineSource
+            ? "브라우저 원본으로 전사를 접수했습니다. 현재 탭을 닫기 전까지 결과를 계속 확인합니다."
+            : "자동 전사를 접수했습니다. 결과를 계속 확인하는 중입니다.",
           syncWorkspace: true,
         })).pending;
       }
@@ -2635,7 +2643,7 @@
     }
   }
 
-  async function buildCreateJobPayload(item) {
+  async function buildCreateJobPayload(item, options = {}) {
     const extension = inferAudioExtension(normalizeText(item.mimeType || item.blob?.type));
     const fileName = `${state.session.meetingId || "meeting"}-${item.requestId}.${extension}`;
     const source = {
@@ -2665,6 +2673,12 @@
     } else if (normalizeText(item.storageObject)) {
       source.storageObject = normalizeText(item.storageObject);
     } else {
+      if (!options?.allowInlineSource) {
+        throw new Error(
+          normalizeText(options?.inlineSourceError)
+          || "브라우저 임시 오디오 업로드가 완료되지 않아 원격 작업을 만들 수 없어요."
+        );
+      }
       source.inlineAudioBase64 = await blobToBase64(item.blob);
     }
     return {
@@ -2681,7 +2695,10 @@
       requestId: item?.requestId,
       ...(options?.context || {}),
     });
-    const created = await postJson(global, CONFIG.createJobUrl, await buildCreateJobPayload(item), state.session.meetingSessionToken, {
+    const created = await postJson(global, CONFIG.createJobUrl, await buildCreateJobPayload(item, {
+      allowInlineSource: Boolean(options?.allowInlineSource),
+      inlineSourceError: normalizeText(options?.inlineSourceError),
+    }), state.session.meetingSessionToken, {
       timeoutMs: DEFAULT_CREATE_JOB_TIMEOUT_MS,
     });
     const createdJob = normalizeJob(created?.job, item.meetingTitleSnapshot);

@@ -146,7 +146,7 @@
 - `hosting/meeting/`
   - `index.html`, `index.css`: 회의 작업실 레이아웃과 실용형 UI 스타일
   - `debug-console.js`: 패널/작업실이 함께 쓰는 debug console render contract와 viewport helper
-  - `index.js`: hosted 회의 작업실 부팅, launch token 교환, 세션 복원, 녹음/업로드 큐/상세 액션 orchestration과 queue diagnostics consume/error wrapper, queue-backed action error notice 처리, retry reset/upload cleanup 경계와 superseded local request 정리, retry/restart transition helper, remote create/sync가 같은 pending 전이 계약을 쓰도록 맞춘 reconciliation, 이해하지 못한 remote status나 불완전한 create 응답을 silent fallback 대신 warning/error로 surface하는 전이 규칙
+  - `index.js`: hosted 회의 작업실 부팅, launch token 교환, 세션 복원, 녹음/업로드 큐/상세 액션 orchestration과 queue diagnostics consume/error wrapper, queue-backed action error notice 처리, retry reset/upload cleanup 경계와 superseded local request 정리, retry/restart transition helper, remote create/sync가 같은 pending 전이 계약을 쓰도록 맞춘 reconciliation, 이해하지 못한 remote status나 불완전한 create 응답을 silent fallback 대신 warning/error로 surface하는 전이 규칙, single upload 실패 뒤 inline 전사 경로도 암묵적 기본값이 아니라 명시적으로 허용할 때만 사용
   - `firebase-client.js`: `MeetingSession`을 Firebase custom token으로 교환하고 Firestore 문서 구독을 연결하는 hosted helper
   - `panel-bridge.html`, `panel-bridge.js`: 패널 content script 대신 Firestore query를 수행하는 숨겨진 hosted bridge
   - `shared.js`: 공통 상태/포맷터/네트워크 헬퍼와 hosted session restore storage 진단 helper
