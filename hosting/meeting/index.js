@@ -3062,26 +3062,44 @@
     return normalizeJob(response?.job, item.meetingTitleSnapshot);
   }
 
-  async function commitPendingUploadRemoteStartTransition(item, createdJob, options = {}) {
-    const previousJobId = normalizeText(item?.jobId);
-    const transitionAction = normalizeText(options?.transitionAction);
-    if (!["single-start", "chunk-start"].includes(transitionAction)) {
-      throw new Error("원격 시작 action이 없어 업로드 결과를 안전하게 확정할 수 없어요.");
+  async function renameCreatedMeetingResultAfterStart(previousJobId, createdJob, item, logKey) {
+    if (
+      !createdJob?.jobId
+      || (previousJobId && previousJobId === normalizeText(createdJob.jobId))
+      || !item?.meetingTitleSnapshot
+      || item.meetingTitleSnapshot === getWorkspaceTitleOrFallback()
+    ) {
+      return;
     }
+    try {
+      await postJson(global, CONFIG.updateMeetingResultUrl, {
+        jobId: createdJob.jobId,
+        meetingId: state.session.meetingId,
+        title: item.meetingTitleSnapshot,
+      }, state.session.meetingSessionToken);
+    } catch (renameError) {
+      logDebug(logKey, {
+        error: renameError,
+        jobId: createdJob.jobId,
+        recordTitle: item.meetingTitleSnapshot,
+      });
+    }
+  }
+
+  async function commitSinglePendingUploadRemoteStart(item, createdJob, options = {}) {
+    const previousJobId = normalizeText(item?.jobId);
     const queueContext = normalizePendingUploadQueueContext({
       requestId: item?.requestId,
       ...(options?.context || {}),
     });
-    const allChunksUploaded = normalizeText(item?.sourceMode) !== "chunked"
-      || Math.max(0, Number(item?.uploadedPartCount) || 0) >= Math.max(0, Number(item?.preparedPartCount) || 0);
     const transition = buildPendingUploadRemoteStartTransition(item, createdJob, {
-      action: transitionAction,
-      awaitingMoreUploads: !allChunksUploaded,
+      action: "single-start",
+      awaitingMoreUploads: false,
     });
     if (!transition?.nextPending) {
-      const transitionErrorMessage = normalizeText(transition?.errorMessage) || "원격 작업 상태를 확인하지 못해 업로드를 이어갈 수 없어요.";
-      logDebug("workspace.pending-upload.remote-create.invalid-status", {
-        action: transitionAction,
+      const transitionErrorMessage = normalizeText(transition?.errorMessage) || "원격 single 작업 상태를 확인하지 못해 업로드를 이어갈 수 없어요.";
+      logDebug("workspace.pending-upload.single-start.invalid-status", {
+        action: "single-start",
         error: transitionErrorMessage,
         jobId: normalizeText(createdJob?.jobId),
         remoteStatus: normalizeText(transition?.remoteStatus),
@@ -3094,8 +3112,8 @@
       queueContext,
     });
     const resolution = normalizeText(transition?.resolution);
-    logDebug("workspace.pending-upload.remote-transition.applied", {
-      action: transitionAction,
+    logDebug("workspace.pending-upload.single-start.applied", {
+      action: "single-start",
       jobId: normalizeText(nextPending?.jobId),
       publishedPartCount: Math.max(0, Number(nextPending?.publishedPartCount) || 0),
       remoteStatus: normalizeText(createdJob?.status),
@@ -3104,26 +3122,53 @@
       status: normalizeText(nextPending?.status),
       uploadedPartCount: Math.max(0, Number(nextPending?.uploadedPartCount) || 0),
     });
-    if (
-      createdJob?.jobId
-      && (!previousJobId || previousJobId !== normalizeText(createdJob.jobId))
-      && item.meetingTitleSnapshot
-      && item.meetingTitleSnapshot !== getWorkspaceTitleOrFallback()
-    ) {
-      try {
-        await postJson(global, CONFIG.updateMeetingResultUrl, {
-          jobId: createdJob.jobId,
-          meetingId: state.session.meetingId,
-          title: item.meetingTitleSnapshot,
-        }, state.session.meetingSessionToken);
-      } catch (renameError) {
-        logDebug("workspace.record.rename.after-create.error", {
-          error: renameError,
-          jobId: createdJob.jobId,
-          recordTitle: item.meetingTitleSnapshot,
-        });
-      }
+    await renameCreatedMeetingResultAfterStart(previousJobId, createdJob, item, "workspace.record.rename.after-single-start.error");
+    return {
+      createdJob,
+      degraded: false,
+      pending: nextPending,
+      resolution,
+    };
+  }
+
+  async function commitChunkedPendingUploadRemoteStart(item, createdJob, options = {}) {
+    const previousJobId = normalizeText(item?.jobId);
+    const queueContext = normalizePendingUploadQueueContext({
+      requestId: item?.requestId,
+      ...(options?.context || {}),
+    });
+    const allChunksUploaded = Math.max(0, Number(item?.uploadedPartCount) || 0) >= Math.max(0, Number(item?.preparedPartCount) || 0);
+    const transition = buildPendingUploadRemoteStartTransition(item, createdJob, {
+      action: "chunk-start",
+      awaitingMoreUploads: !allChunksUploaded,
+    });
+    if (!transition?.nextPending) {
+      const transitionErrorMessage = normalizeText(transition?.errorMessage) || "원격 chunk 시작 상태를 확인하지 못해 업로드를 이어갈 수 없어요.";
+      logDebug("workspace.pending-upload.chunk-start.invalid-status", {
+        action: "chunk-start",
+        error: transitionErrorMessage,
+        jobId: normalizeText(createdJob?.jobId),
+        remoteStatus: normalizeText(transition?.remoteStatus),
+        requestId: normalizeText(item?.requestId),
+      });
+      throw new Error(transitionErrorMessage);
     }
+    const nextPending = await commitPendingUploadRemoteMutationTransition(item, transition, {
+      applySelectedRecordTransition: true,
+      queueContext,
+    });
+    const resolution = normalizeText(transition?.resolution);
+    logDebug("workspace.pending-upload.chunk-start.applied", {
+      action: "chunk-start",
+      jobId: normalizeText(nextPending?.jobId),
+      publishedPartCount: Math.max(0, Number(nextPending?.publishedPartCount) || 0),
+      remoteStatus: normalizeText(createdJob?.status),
+      requestId: normalizeText(nextPending?.requestId),
+      resolution,
+      status: normalizeText(nextPending?.status),
+      uploadedPartCount: Math.max(0, Number(nextPending?.uploadedPartCount) || 0),
+    });
+    await renameCreatedMeetingResultAfterStart(previousJobId, createdJob, item, "workspace.record.rename.after-chunk-start.error");
     return {
       createdJob,
       degraded: false,
@@ -3144,7 +3189,7 @@
       allowInlineSource: Boolean(options?.allowInlineSource),
       inlineSourceError: normalizeText(options?.inlineSourceError),
     });
-    const result = await commitPendingUploadRemoteStartTransition(item, createdJob, options);
+    const result = await commitSinglePendingUploadRemoteStart(item, createdJob, options);
     if (normalizeText(options?.noticeText)) {
       setNotice(normalizeText(options.noticeText), "highlight");
       applyRender();
@@ -3167,7 +3212,7 @@
       throw new Error("올라간 청크 없이 원격 chunk 작업을 시작할 수 없어요.");
     }
     const createdJob = await requestPendingUploadRemoteMutationState(item);
-    const result = await commitPendingUploadRemoteStartTransition(item, createdJob, options);
+    const result = await commitChunkedPendingUploadRemoteStart(item, createdJob, options);
     if (normalizeText(options?.noticeText)) {
       setNotice(normalizeText(options.noticeText), "highlight");
       applyRender();
