@@ -1,6 +1,6 @@
 (function initHostedMeetingRender(global) {
   const ns = global.__INOVA_HOSTED_MEETING__ = global.__INOVA_HOSTED_MEETING__ || {};
-  const { DEFAULT_NOTES_MODE, DEFAULT_NOTES_STYLE, TERMINAL_REMOTE_STATUSES, cleanPreviewText, countSpeakers, escapeHtml, formatBytes, formatDateTime, formatDuration, formatNotesModeLabel, formatNotesStyleLabel, formatPhase, formatSegmentRange, formatSpeakerLabel, formatStatusLabel, normalizeMeetingNotesMode, normalizeMeetingNotesStyle, normalizeSpeakerAliases, normalizeStatus, normalizeText, normalizeTextBlock, resolveSpeakerDisplayName } = ns.shared;
+  const { DEFAULT_NOTES_MODE, DEFAULT_NOTES_STYLE, TERMINAL_REMOTE_STATUSES, cleanPreviewText, escapeHtml, formatBytes, formatDateTime, formatDuration, formatNotesModeLabel, formatNotesStyleLabel, formatPhase, formatSegmentRange, formatStatusLabel, normalizeMeetingNotesMode, normalizeMeetingNotesStyle, normalizeStatus, normalizeText, normalizeTextBlock } = ns.shared;
   const { comparePendingUploads, normalizePendingUpload } = ns.storage;
   const { formatActionItem, formatDecisionItem, formatMemoItem, formatRiskItem, formatTopicItem, hasMeetingNotes, normalizeMeetingNotes, normalizeTextArray } = ns.notes;
   const DEFAULT_CHUNK_PROGRESS_ACTIVE_COUNT = 2;
@@ -40,7 +40,6 @@
       notesStyleSelected: normalizeMeetingNotesStyle(nextRecord.notesStyleSelected),
       previewText: cleanPreviewText(nextRecord.previewText),
       requestId: normalizeText(nextRecord.requestId),
-      speakerCount: Math.max(0, Number(nextRecord.speakerCount) || 0),
       status: normalizeText(nextRecord.status) || "idle",
       title: normalizeText(nextRecord.resultTitle || nextRecord.title || nextRecord.meetingTitle),
       updatedAt: normalizeText(nextRecord.updatedAt),
@@ -79,8 +78,6 @@
       resultTitle: normalizeText(job.resultTitle || job.title),
       sharedMemoSnapshot: ns.shared.normalizeTextBlock(job?.context?.sharedMemoSnapshot || job?.meeting?.sharedMemo),
       sizeBytes: Math.max(0, Number(job?.source?.sizeBytes) || 0),
-      speakerAliases: normalizeSpeakerAliases(job?.speakerAliases),
-      speakerCount: Math.max(0, Number(job?.transcription?.speakerCount) || 0),
       status: normalizeText(job.status) || "idle",
       title: normalizeText(job.resultTitle || job.title || job?.meeting?.title) || normalizeText(fallbackTitle),
       updatedAt: normalizeText(job.updatedAt),
@@ -90,7 +87,7 @@
   function normalizeArtifact(artifact) {
     if (!artifact || typeof artifact !== "object") return null;
     const segments = Array.isArray(artifact.segments)
-      ? artifact.segments.map((segment) => ({ endMs: Math.max(0, Number(segment.endMs) || 0), speakerLabel: normalizeText(segment.speakerLabel), startMs: Math.max(0, Number(segment.startMs) || 0), text: normalizeText(segment.text) })).filter((segment) => segment.text)
+      ? artifact.segments.map((segment) => ({ endMs: Math.max(0, Number(segment.endMs) || 0), startMs: Math.max(0, Number(segment.startMs) || 0), text: normalizeText(segment.text) })).filter((segment) => segment.text)
       : [];
     return {
       artifactId: normalizeText(artifact.artifactId),
@@ -102,9 +99,7 @@
       notesModeSelected: normalizeMeetingNotesMode(artifact.notesModeSelected),
       notesStatus: normalizeText(artifact.notesStatus),
       notesStyleSelected: normalizeMeetingNotesStyle(artifact.notesStyleSelected),
-      speakerAliases: normalizeSpeakerAliases(artifact.speakerAliases),
       segments,
-      speakerCount: countSpeakers(segments),
       text: ns.shared.normalizeTextBlock(artifact.text),
     };
   }
@@ -139,7 +134,6 @@
       resultTitle: normalizeText(pending.meetingTitleSnapshot),
       sharedMemoSnapshot: ns.shared.normalizeTextBlock(pending.sharedMemoSnapshot),
       sizeBytes: Math.max(0, Number(pending.sizeBytes) || 0),
-      speakerCount: 0,
       status: normalizeText(pending.status),
       title: normalizeText(pending.meetingTitleSnapshot),
       updatedAt: normalizeText(pending.updatedAt),
@@ -463,99 +457,25 @@
     ].filter(Boolean).join(" · ");
   }
 
-  function compareSpeakerLabelOrder(left, right) {
-    const leftLabel = normalizeText(left);
-    const rightLabel = normalizeText(right);
-    const leftMatch = leftLabel.match(/^SPEAKER_(\d+)$/i);
-    const rightMatch = rightLabel.match(/^SPEAKER_(\d+)$/i);
-    if (leftMatch && rightMatch) {
-      return Number.parseInt(leftMatch[1], 10) - Number.parseInt(rightMatch[1], 10);
-    }
-    if (leftMatch) return -1;
-    if (rightMatch) return 1;
-    return leftLabel.localeCompare(rightLabel, "ko");
-  }
-
-  function listSpeakerLabels(segments) {
-    return Array.from(
-      new Set(
-        (Array.isArray(segments) ? segments : [])
-          .map((segment) => normalizeText(segment?.speakerLabel))
-          .filter(Boolean)
-      )
-    ).sort(compareSpeakerLabelOrder);
-  }
-
-  function buildSpeakerEditorItems(segments, savedSpeakerAliases, draftSpeakerAliases) {
-    return listSpeakerLabels(segments).map((speakerLabel) => ({
-      alias: normalizeText(draftSpeakerAliases?.[speakerLabel] || ""),
-      defaultLabel: formatSpeakerLabel(speakerLabel),
-      displayLabel: resolveSpeakerDisplayName(speakerLabel, savedSpeakerAliases),
-      speakerLabel,
-    }));
-  }
-
-  function buildSpeakerSummaryEntries(speakerSummaries, segments, speakerAliases) {
-    const segmentMetaMap = new Map();
-    for (const segment of Array.isArray(segments) ? segments : []) {
-      const speakerLabel = normalizeText(segment?.speakerLabel);
-      const text = normalizeText(segment?.text);
-      if (!speakerLabel || !text) continue;
-      const startMs = Math.max(0, Number(segment?.startMs) || 0);
-      const endMs = Math.max(startMs, Number(segment?.endMs) || startMs);
-      if (!segmentMetaMap.has(speakerLabel)) {
-        segmentMetaMap.set(speakerLabel, { firstStartMs: startMs, segmentCount: 0, totalDurationMs: 0 });
-      }
-      const entry = segmentMetaMap.get(speakerLabel);
-      entry.firstStartMs = Math.min(entry.firstStartMs, startMs);
-      entry.segmentCount += 1;
-      entry.totalDurationMs += Math.max(0, endMs - startMs);
-    }
-    return (Array.isArray(speakerSummaries) ? speakerSummaries : [])
-      .map((item) => {
-        const speakerLabel = normalizeText(item?.speakerLabel);
-        if (!speakerLabel) return null;
-        const meta = segmentMetaMap.get(speakerLabel);
-        return {
-          displayLabel: resolveSpeakerDisplayName(speakerLabel, speakerAliases) || formatSpeakerLabel(speakerLabel) || "화자",
-          keyPoints: normalizeTextArray(item?.keyPoints),
-          metaText: [
-            meta?.segmentCount > 0 ? `발화 ${meta.segmentCount}개` : "",
-            meta?.totalDurationMs > 0 ? formatDuration(meta.totalDurationMs) : "",
-          ].filter(Boolean).join(" · "),
-          sortStartMs: Number(meta?.firstStartMs) || Number.MAX_SAFE_INTEGER,
-          speakerLabel,
-          summary: normalizeText(item?.summary),
-        };
-      })
-      .filter(Boolean)
-      .sort((left, right) => {
-        if (left.sortStartMs !== right.sortStartMs) {
-          return left.sortStartMs - right.sortStartMs;
-        }
-        return compareSpeakerLabelOrder(left.speakerLabel, right.speakerLabel);
-      });
-  }
-
-  function buildTranscriptTextForDisplay(segments, fallbackText, speakerAliases) {
-    const lines = (Array.isArray(segments) ? segments : [])
-      .map((segment) => {
-        const text = normalizeText(segment?.text);
-        if (!text) return "";
-        return `${resolveSpeakerDisplayName(segment?.speakerLabel, speakerAliases)}: ${text}`;
-      })
-      .filter(Boolean);
-    return normalizeTextBlock(lines.join("\n") || fallbackText);
-  }
-
-  function buildSegmentCopyText(segments, fallbackText, speakerAliases) {
+  function buildTranscriptTextForDisplay(segments, fallbackText) {
     const lines = (Array.isArray(segments) ? segments : [])
       .map((segment) => {
         const text = normalizeText(segment?.text);
         if (!text) return "";
         const range = normalizeText(formatSegmentRange(segment?.startMs, segment?.endMs));
-        const speaker = resolveSpeakerDisplayName(segment?.speakerLabel, speakerAliases);
-        return `${range ? `[${range}] ` : ""}${speaker}: ${text}`;
+        return range ? `[${range}] ${text}` : text;
+      })
+      .filter(Boolean);
+    return normalizeTextBlock(lines.join("\n") || fallbackText);
+  }
+
+  function buildSegmentCopyText(segments, fallbackText) {
+    const lines = (Array.isArray(segments) ? segments : [])
+      .map((segment) => {
+        const text = normalizeText(segment?.text);
+        if (!text) return "";
+        const range = normalizeText(formatSegmentRange(segment?.startMs, segment?.endMs));
+        return `${range ? `[${range}] ` : ""}${text}`;
       })
       .filter(Boolean);
     return normalizeTextBlock(lines.join("\n") || fallbackText);
@@ -647,11 +567,7 @@
     const recordSelected = normalizedStatus !== "idle";
     const isFailed = normalizedStatus === "failed";
     const isBusy = ["queued", "processing", "uploading", "uploading_chunks", "preparing_chunks", "remote_queued", "remote_processing"].includes(normalizedStatus);
-    const speakerCount = Math.max(0, Number(options.speakerCount) || 0);
     const segmentCount = Math.max(0, Number(options.segmentCount) || 0);
-    const speakerAliasCount = Math.max(0, Number(options.speakerAliasCount) || 0);
-    const speakerSummaryCount = Math.max(0, Number(options.speakerSummaryCount) || 0);
-    const recordTitle = normalizeText(detailView.recordTitle || detailView.title);
     const steps = [];
     const facts = [];
     const pushStep = (title, state, detail, stateLabelOverride = "") => {
@@ -673,7 +589,7 @@
     if (isFailed) {
       pushStep("발화 구간", "failed", "오류로 중단되었습니다.");
     } else if (options.hasSegmentContent) {
-      pushStep("발화 구간", "done", [speakerCount > 0 ? `화자 ${speakerCount}명` : "", segmentCount > 0 ? `구간 ${segmentCount}개` : "전사 준비 완료"].filter(Boolean).join(" · "));
+      pushStep("발화 구간", "done", segmentCount > 0 ? `구간 ${segmentCount}개 확인 가능` : "전사 텍스트 준비 완료");
     } else if (isBusy) {
       pushStep("발화 구간", "current", "전사 결과를 준비하는 중입니다.");
     } else if (recordSelected) {
@@ -687,29 +603,9 @@
     } else if (options.hasNotesValue) {
       pushStep("회의 정리", "done", [options.notesModeLabel, options.generatedAt].filter(Boolean).join(" · ") || "회의 정리가 준비됐습니다.");
     } else if (options.hasSegmentContent) {
-      pushStep("회의 정리", "warning", "다시 정리하면 생성됩니다.", "재정리");
+      pushStep("회의 정리", isBusy ? "current" : "warning", isBusy ? "전사를 바탕으로 회의 정리를 만드는 중입니다." : "같은 전사로 다시 정리할 수 있습니다.", isBusy ? "진행" : "재정리");
     } else {
       pushStep("회의 정리", isBusy ? "current" : "pending", "전사 확보 후 생성됩니다.");
-    }
-
-    if (speakerCount <= 0) {
-      pushStep("화자 이름", options.hasSegmentContent ? "pending" : "pending", "화자 인식 후 이름을 반영합니다.");
-    } else if (speakerAliasCount >= speakerCount) {
-      pushStep("화자 이름", "done", `${speakerAliasCount}/${speakerCount}명 반영`);
-    } else if (speakerAliasCount > 0) {
-      pushStep("화자 이름", "current", `${speakerAliasCount}/${speakerCount}명 반영`, "입력");
-    } else {
-      pushStep("화자 이름", "current", `${speakerCount}명 이름 지정 가능`, "입력");
-    }
-
-    if (isFailed) {
-      pushStep("화자별 정리", "failed", "오류 해결 후 다시 생성합니다.");
-    } else if (options.hasSpeakerSummaryValue) {
-      pushStep("화자별 정리", "done", `${speakerSummaryCount || speakerCount || 0}명 요약 준비`);
-    } else if (options.hasNotesValue) {
-      pushStep("화자별 정리", "warning", "다시 정리하면 생성됩니다.", "재정리");
-    } else {
-      pushStep("화자별 정리", "pending", "회의 정리 후 채워집니다.");
     }
 
     if (isFailed) {
@@ -723,10 +619,11 @@
     }
 
     if (recordSelected && !["idle", "succeeded"].includes(normalizedStatus)) pushFact("현재 상태", detailView.badgeLabel);
-    if (speakerCount > 0) pushFact("화자", `${speakerCount}명`);
     if (segmentCount > 0) pushFact("발화", `${segmentCount}개`);
     pushFact("AI 판단", options.notesModeLabel);
     pushFact("표현 방식", options.notesStyleLabel);
+    pushFact("근거", options.sourceTraceCount > 0 ? `${options.sourceTraceCount}건` : "");
+    pushFact("품질 주의", options.degradedReason);
     pushFact("마지막 정리", options.generatedAt);
 
     const focusIndex = steps.findIndex((step) => step.state !== "done");
@@ -775,13 +672,7 @@
       return detailView.notice;
     }
     if (!options.hasNotesValue) {
-      return "회의 정리를 한 번 다시 돌리면 됩니다.";
-    }
-    if (!options.hasSpeakerSummaryValue) {
-      return "화자별 정리는 다시 정리 후 채워집니다.";
-    }
-    if (detailView.showSpeakerEditor && options.speakerCount > Object.keys(detailView.speakerAliases || {}).length) {
-      return "화자명을 저장한 뒤 다시 정리하면 결과가 더 자연스럽습니다.";
+      return "전사를 기준으로 회의 정리를 다시 만들 수 있습니다.";
     }
     return "";
   }
@@ -905,7 +796,7 @@
 
   function buildDetailView(state, activeEntry) {
     if (!activeEntry) {
-      return { badgeLabel: "대기", badgeStatus: "idle", chunkProgress: null, meta: [], meetingNotes: null, notesMeta: null, notice: "왼쪽에서 기록을 선택해 주세요.", noticeTone: "", recordMemo: "", recordTitle: "", segments: [], showRecordActions: false, showSpeakerEditor: false, speakerAliases: {}, speakerCount: 0, speakerSummaryEntries: [], speakerEditorItems: [], summary: "", title: "기록을 선택해 주세요", transcriptText: "" };
+      return { badgeLabel: "대기", badgeStatus: "idle", chunkProgress: null, meta: [], meetingNotes: null, notesMeta: null, notice: "왼쪽에서 기록을 선택해 주세요.", noticeTone: "", recordMemo: "", recordTitle: "", segments: [], showRecordActions: false, summary: "", title: "기록을 선택해 주세요", transcriptText: "" };
     }
     const pending = activeEntry.pending;
     const remote = activeEntry.remote;
@@ -919,29 +810,17 @@
     const pendingChunkProgress = buildChunkProgressModel(null, pending);
 
     if (!remote?.jobId && pending) {
-      return { badgeLabel: formatStatusLabel(pending.status), badgeStatus: normalizeStatus(pending.status), chunkProgress: pendingChunkProgress, meta: detailMeta, meetingNotes: null, notesMeta: null, notice: buildPendingNotice(pending), noticeTone: pending.status === "failed" ? "error" : "highlight", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions, showSpeakerEditor: false, speakerAliases: {}, speakerCount: 0, speakerSummaryEntries: [], speakerEditorItems: [], summary: buildPendingSummary(pending), title: detailTitle, transcriptText: "" };
+      return { badgeLabel: formatStatusLabel(pending.status), badgeStatus: normalizeStatus(pending.status), chunkProgress: pendingChunkProgress, meta: detailMeta, meetingNotes: null, notesMeta: null, notice: buildPendingNotice(pending), noticeTone: pending.status === "failed" ? "error" : "highlight", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions, summary: buildPendingSummary(pending), title: detailTitle, transcriptText: "" };
     }
 
     const normalizedJob = state.currentJob || normalizeJob(remote, detailTitle);
     const normalizedArtifact = state.currentArtifact;
-    const speakerCount = Math.max(0, Number(
-      normalizedArtifact?.speakerCount
-      || normalizedJob?.speakerCount
-      || remote?.speakerCount
-    ) || 0);
-    const speakerAliases = normalizeSpeakerAliases({
-      ...(normalizedArtifact?.speakerAliases || {}),
-      ...(normalizedJob?.speakerAliases || {}),
-    });
     const meetingNotes = normalizeMeetingNotes(normalizedArtifact?.notes || normalizedJob?.meetingNotes, normalizedArtifact?.notesModeSelected || normalizedJob?.notesModeSelected);
     const segments = Array.isArray(normalizedArtifact?.segments) ? normalizedArtifact.segments : [];
-    const transcriptText = buildTranscriptTextForDisplay(segments, normalizedArtifact?.text, speakerAliases);
-    const speakerSummaryEntries = buildSpeakerSummaryEntries(meetingNotes?.speakerSummaries, segments, speakerAliases);
-    const speakerEditorItems = buildSpeakerEditorItems(segments, speakerAliases, state.speakerAliasDrafts);
+    const transcriptText = buildTranscriptTextForDisplay(segments, normalizedArtifact?.text);
     const hasNotesValue = hasMeetingNotes(meetingNotes);
     const hasTranscriptValue = Boolean(transcriptText);
     const hasSegmentsValue = segments.length > 0;
-    const showSpeakerEditor = Boolean(remote?.jobId) && hasSegmentsValue;
     const notesMeta = {
       confidence: Number(normalizedArtifact?.notesModeConfidence || normalizedJob?.notesModeConfidence) || 0,
       degradedReason: normalizeText(normalizedArtifact?.notesDegradedReason || normalizedJob?.notesDegradedReason),
@@ -955,10 +834,10 @@
     const remoteChunkProgress = buildChunkProgressModel(normalizedJob, pending);
 
     if (normalizeText(normalizedJob?.status) === "failed") {
-      return { badgeLabel: "오류", badgeStatus: "failed", chunkProgress: remoteChunkProgress, meta: detailMeta, meetingNotes: null, notesMeta, notice: normalizeText(normalizedJob?.error || pending?.lastError) || "회의 처리 중 오류가 발생했습니다.", noticeTone: "error", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions, showSpeakerEditor: false, speakerAliases, speakerCount, speakerSummaryEntries: [], speakerEditorItems: [], summary: "", title: detailTitle, transcriptText: "" };
+      return { badgeLabel: "오류", badgeStatus: "failed", chunkProgress: remoteChunkProgress, meta: detailMeta, meetingNotes: null, notesMeta, notice: normalizeText(normalizedJob?.error || pending?.lastError) || "회의 처리 중 오류가 발생했습니다.", noticeTone: "error", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions, summary: "", title: detailTitle, transcriptText: "" };
     }
     if (["queued", "processing"].includes(normalizeText(normalizedJob?.status))) {
-      return { badgeLabel: processingHealth.isStalled ? "정체 의심" : formatStatusLabel(normalizedJob.status), badgeStatus: normalizeStatus(normalizedJob.status), chunkProgress: remoteChunkProgress, meta: detailMeta, meetingNotes: null, notesMeta, notice: buildProcessingNotice(normalizedJob, pending), noticeTone: processingHealth.isStalled ? "warning" : "highlight", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions: false, showSpeakerEditor: false, speakerAliases, speakerCount, speakerSummaryEntries: [], speakerEditorItems: [], summary: "", title: detailTitle, transcriptText: "" };
+      return { badgeLabel: processingHealth.isStalled ? "정체 의심" : formatStatusLabel(normalizedJob.status), badgeStatus: normalizeStatus(normalizedJob.status), chunkProgress: remoteChunkProgress, meta: detailMeta, meetingNotes: null, notesMeta, notice: buildProcessingNotice(normalizedJob, pending), noticeTone: processingHealth.isStalled ? "warning" : "highlight", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions: false, summary: "", title: detailTitle, transcriptText: "" };
     }
     let completionNotice = state.notice.text || "회의 정리가 준비됐습니다.";
     let completionTone = state.notice.tone || "highlight";
@@ -969,72 +848,15 @@
       completionNotice = "전사는 준비됐지만 회의 정리로 묶을 내용은 충분하지 않았습니다.";
       completionTone = "warning";
     }
-    return { badgeLabel: "완료", badgeStatus: "succeeded", chunkProgress: null, meta: detailMeta, meetingNotes, notesMeta, notice: completionNotice, noticeTone: completionTone, recordMemo: detailMemo, recordTitle: detailTitle, segments, showRecordActions, showSpeakerEditor, speakerAliases, speakerCount, speakerSummaryEntries, speakerEditorItems, summary: "", title: detailTitle, transcriptText };
+    return { badgeLabel: "완료", badgeStatus: "succeeded", chunkProgress: null, meta: detailMeta, meetingNotes, notesMeta, notice: completionNotice, noticeTone: completionTone, recordMemo: detailMemo, recordTitle: detailTitle, segments, showRecordActions, summary: "", title: detailTitle, transcriptText };
   }
 
-  function renderSegment(segment, speakerAliases) {
-    return `<article class="segment-item"><div class="segment-item__head"><span class="segment-item__speaker">${escapeHtml(resolveSpeakerDisplayName(segment.speakerLabel, speakerAliases))}</span><span>${escapeHtml(formatSegmentRange(segment.startMs, segment.endMs))}</span></div><p>${escapeHtml(segment.text)}</p></article>`;
+  function renderSegment(segment) {
+    return `<article class="segment-item"><div class="segment-item__head"><span>${escapeHtml(formatSegmentRange(segment.startMs, segment.endMs))}</span></div><p>${escapeHtml(segment.text)}</p></article>`;
   }
 
   function renderTranscriptFallback(transcriptText) {
     return `<div class="transcript-box">${escapeHtml(transcriptText)}</div>`;
-  }
-
-  function renderSpeakerSummaryEntry(entry) {
-    return `
-      <article class="speaker-digest-card">
-        <div class="speaker-digest-card__head">
-          <div>
-            <strong class="speaker-digest-card__name">${escapeHtml(entry.displayLabel)}</strong>
-            ${entry.metaText ? `<div class="speaker-digest-card__meta">${escapeHtml(entry.metaText)}</div>` : ""}
-          </div>
-        </div>
-        ${entry.summary ? `<div class="speaker-digest-summary">${escapeHtml(entry.summary)}</div>` : ""}
-        ${entry.keyPoints.length ? `<ul class="speaker-digest-items">${entry.keyPoints.map((item) => `<li class="speaker-digest-item"><p class="speaker-digest-item__text">${escapeHtml(item)}</p></li>`).join("")}</ul>` : ""}
-      </article>
-    `;
-  }
-
-  function renderSpeakerEditorItem(item) {
-    return `
-      <label class="speaker-alias-card" for="speaker-alias-${escapeHtml(item.speakerLabel)}">
-        <span class="speaker-alias-card__meta">
-          <span class="speaker-alias-card__chip">${escapeHtml(item.defaultLabel)}</span>
-          <span class="speaker-alias-card__current">${escapeHtml(item.displayLabel)}</span>
-        </span>
-        <input
-          id="speaker-alias-${escapeHtml(item.speakerLabel)}"
-          class="meeting-input speaker-alias-card__input"
-          type="text"
-          maxlength="80"
-          data-speaker-label="${escapeHtml(item.speakerLabel)}"
-          placeholder="${escapeHtml(item.defaultLabel)}"
-          value="${escapeHtml(item.alias)}"
-        />
-      </label>
-    `;
-  }
-
-  function buildSpeakerEditorRenderKey(detailView, state) {
-    return [
-      normalizeText(state.selectedRecordId),
-      detailView.showSpeakerEditor ? "show" : "hidden",
-      ...(Array.isArray(detailView.speakerEditorItems)
-        ? detailView.speakerEditorItems.map((item) => [item.speakerLabel, item.defaultLabel, item.displayLabel].join("::"))
-        : []),
-    ].join("||");
-  }
-
-  function buildDraftSpeakerAliases(detailView, state) {
-    const allowedLabels = new Set((Array.isArray(detailView.speakerEditorItems) ? detailView.speakerEditorItems : []).map((item) => item.speakerLabel));
-    return normalizeSpeakerAliases(state.speakerAliasDrafts, allowedLabels);
-  }
-
-  function areSpeakerAliasesEqual(left, right) {
-    const leftKeys = Object.keys(left || {}).sort(compareSpeakerLabelOrder);
-    const rightKeys = Object.keys(right || {}).sort(compareSpeakerLabelOrder);
-    if (leftKeys.length !== rightKeys.length) return false;
-    return leftKeys.every((key, index) => key === rightKeys[index] && normalizeText(left[key]) === normalizeText(right[key]));
   }
 
   function renderHistoryEntry(entry, selectedRecordId) {
@@ -1045,10 +867,8 @@
     const chips = [];
     const notesMode = normalizeMeetingNotesMode(entry.remote?.notesModeSelected || entry.remote?.notesModeDetected);
     const notesStyle = normalizeMeetingNotesStyle(entry.remote?.notesStyleSelected);
-    const speakerCount = Math.max(0, Number(entry.remote?.speakerCount) || 0);
     if (notesMode) chips.push({ label: `AI 판단 ${formatNotesModeLabel(notesMode)}`, tone: "accent" });
     if (notesStyle) chips.push({ label: `표현 ${formatNotesStyleLabel(notesStyle)}`, tone: "muted" });
-    if (speakerCount > 0) chips.push({ label: `화자 ${speakerCount}명`, tone: "muted" });
     if (!chips.length && pendingSummary) chips.push({ label: pendingSummary, tone: "muted" });
     return `
       <button type="button" class="record-item${entry.id === selectedRecordId ? " is-active" : ""}" data-record-id="${escapeHtml(entry.id)}">
@@ -1105,12 +925,11 @@
     const hasTranscriptValue = Boolean(normalizeText(detailView.transcriptText));
     const hasSegmentsValue = Array.isArray(detailView.segments) && detailView.segments.length > 0;
     const hasSegmentContent = hasSegmentsValue || hasTranscriptValue;
-    const hasSpeakerSummaryTab = hasNotesValue;
     let nextTab = normalizeText(state.reviewTab) || "notes";
     if (nextTab === "transcript") {
       nextTab = "segments";
     }
-    if (!["summary", "memo", "notes", "segments", "speakers"].includes(nextTab)) {
+    if (!["summary", "memo", "notes", "segments"].includes(nextTab)) {
       nextTab = "notes";
     }
     if (!detailView.showRecordActions && !hasMemoValue && !hasSegmentContent && !hasNotesValue) {
@@ -1125,9 +944,6 @@
     if (nextTab === "segments" && !hasSegmentContent) {
       return hasNotesValue ? "notes" : hasMemoValue ? "memo" : "summary";
     }
-    if (nextTab === "speakers" && !hasSpeakerSummaryTab) {
-      return hasNotesValue ? "notes" : hasSegmentContent ? "segments" : hasMemoValue ? "memo" : "summary";
-    }
     return nextTab;
   }
 
@@ -1136,7 +952,6 @@
       memo: refs.reviewTabMemo,
       notes: refs.reviewTabNotes,
       segments: refs.reviewTabSegments,
-      speakers: refs.reviewTabSpeakers,
       summary: refs.reviewTabSummary,
     };
     for (const [tabName, element] of Object.entries(tabMap)) {
@@ -1167,8 +982,6 @@
     const savedRecordTitle = normalizeText(detailView.recordTitle);
     const draftRecordTitle = normalizeText(global.document.activeElement === refs.recordTitleInput ? refs.recordTitleInput.value : savedRecordTitle || refs.recordTitleInput?.value);
     const recordTitleDirty = Boolean(draftRecordTitle && draftRecordTitle !== savedRecordTitle);
-    const draftSpeakerAliases = buildDraftSpeakerAliases(detailView, state);
-    const speakerAliasDirty = !areSpeakerAliasesEqual(detailView.speakerAliases, draftSpeakerAliases);
     const currentTimerText = formatCaptureTimer(state.capture.durationMs);
 
     refs.pageTitle.hidden = true;
@@ -1236,52 +1049,32 @@
     refs.deleteRecordButton.disabled = !canDeleteSelectedRecord || state.busy.deleteRecord;
     refs.detailMeta.hidden = !detailView.meta.length;
     refs.detailMeta.innerHTML = detailView.meta.map((item) => `<span>${escapeHtml(item)}</span>`).join("");
-    refs.speakerEditor.hidden = !detailView.showSpeakerEditor;
-    const speakerEditorRenderKey = buildSpeakerEditorRenderKey(detailView, state);
-    if (!detailView.showSpeakerEditor) {
-      refs.speakerAliasList.innerHTML = "";
-      refs.speakerAliasList.dataset.renderKey = "";
-    } else if (refs.speakerAliasList.dataset.renderKey !== speakerEditorRenderKey) {
-      refs.speakerAliasList.innerHTML = detailView.speakerEditorItems.map(renderSpeakerEditorItem).join("");
-      refs.speakerAliasList.dataset.renderKey = speakerEditorRenderKey;
-    }
-    refs.saveSpeakerAliasesButton.disabled = !detailView.showSpeakerEditor || state.busy.saveSpeakerAliases || !speakerAliasDirty;
-    refs.saveSpeakerAliasesButton.textContent = state.busy.saveSpeakerAliases ? "저장 중" : speakerAliasDirty ? "화자명 저장" : "저장됨";
-    refs.saveSpeakerAliasesAndRegenerateButton.disabled = !detailView.showSpeakerEditor || state.busy.saveSpeakerAliases || state.busy.regenerateNotes || !speakerAliasDirty;
-    refs.saveSpeakerAliasesAndRegenerateButton.textContent = state.busy.regenerateNotes ? "정리 중" : "저장 후 다시 정리";
 
     const hasNotesValue = renderMeetingNotes(refs, detailView, state);
     const hasMemoValue = Boolean(normalizeText(detailView.recordMemo));
     const hasTranscriptValue = Boolean(normalizeText(detailView.transcriptText));
     const hasSegmentsValue = Array.isArray(detailView.segments) && detailView.segments.length > 0;
     const hasSegmentContent = hasSegmentsValue || hasTranscriptValue;
-    const hasSpeakerSummaryTab = hasNotesValue;
-    const hasSpeakerDigestValue = Array.isArray(detailView.speakerSummaryEntries) && detailView.speakerSummaryEntries.length > 0;
     const activeReviewTab = resolveReviewTab(state, detailView, hasNotesValue);
     state.reviewTab = activeReviewTab;
     refs.reviewTabSummary.hidden = false;
     refs.reviewTabMemo.hidden = !hasMemoValue;
     refs.reviewTabNotes.hidden = !hasNotesValue;
     refs.reviewTabSegments.hidden = !hasSegmentContent;
-    refs.reviewTabSpeakers.hidden = !hasSpeakerSummaryTab;
-    const visibleSpeakerCount = Math.max(0, Number(detailView.speakerCount) || 0);
-    refs.reviewTabSegmentsCount.hidden = visibleSpeakerCount <= 0;
-    refs.reviewTabSegmentsCount.textContent = visibleSpeakerCount > 0 ? `${visibleSpeakerCount}` : "";
+    refs.reviewTabSegmentsCount.hidden = !hasSegmentsValue;
+    refs.reviewTabSegmentsCount.textContent = hasSegmentsValue ? `${detailView.segments.length}` : "";
     refs.copySegmentsButton.hidden = !hasSegmentContent;
     refs.copySegmentsButton.disabled = !hasSegmentContent;
     applyReviewTabState(refs, activeReviewTab);
-    const speakerAliasCount = Object.values(detailView.speakerAliases || {}).filter((value) => normalizeText(value)).length;
     const summaryFlow = buildStatusFlow(detailView, {
       generatedAt: detailView.notesMeta?.generatedAt ? formatDateTime(detailView.notesMeta.generatedAt, "") : "",
       hasNotesValue,
       hasSegmentContent,
-      hasSpeakerSummaryValue: hasSpeakerDigestValue,
       notesModeLabel: hasNotesValue ? formatNotesModeLabel(detailView.notesMeta?.selected || detailView.meetingNotes?.mode) : "",
       notesStyleLabel: hasNotesValue ? formatNotesStyleLabel(detailView.notesMeta?.styleSelected) : "",
       segmentCount: hasSegmentsValue ? detailView.segments.length : 0,
-      speakerAliasCount,
-      speakerCount: visibleSpeakerCount,
-      speakerSummaryCount: hasSpeakerDigestValue ? detailView.speakerSummaryEntries.length : 0,
+      sourceTraceCount: Number(detailView.notesMeta?.sourceTraceCount) || 0,
+      degradedReason: normalizeText(detailView.notesMeta?.degradedReason),
     });
     const showSummaryStatusPill = Boolean(detailView.badgeLabel) && !["idle", "succeeded"].includes(normalizeText(detailView.badgeStatus));
     refs.summaryStatusPill.hidden = !showSummaryStatusPill;
@@ -1294,8 +1087,6 @@
     const summaryActionMessage = buildStatusActionMessage(detailView, {
       hasNotesValue,
       hasSegmentContent,
-      hasSpeakerSummaryValue: hasSpeakerDigestValue,
-      speakerCount: visibleSpeakerCount,
       updatedAt: formatDateTime(
         normalizeText(state.currentJob?.updatedAt || activeEntry?.remote?.updatedAt || activeEntry?.pending?.updatedAt),
         ""
@@ -1317,18 +1108,13 @@
     refs.reviewPanelMemo.hidden = activeReviewTab !== "memo" || !hasMemoValue;
     refs.meetingNotesCard.hidden = activeReviewTab !== "notes" || !hasNotesValue;
     refs.reviewPanelSegments.hidden = activeReviewTab !== "segments" || !hasSegmentContent;
-    refs.reviewPanelSpeakers.hidden = activeReviewTab !== "speakers" || !hasSpeakerSummaryTab;
     refs.detailMemoText.textContent = detailView.recordMemo;
     refs.segmentList.hidden = !hasSegmentContent;
     refs.segmentList.innerHTML = !hasSegmentContent
       ? ""
       : hasSegmentsValue
-        ? detailView.segments.map((segment) => renderSegment(segment, detailView.speakerAliases)).join("")
+        ? detailView.segments.map((segment) => renderSegment(segment)).join("")
         : renderTranscriptFallback(detailView.transcriptText);
-    refs.speakerDigestList.hidden = activeReviewTab !== "speakers" || !hasSpeakerSummaryTab;
-    refs.speakerDigestList.innerHTML = hasSpeakerDigestValue
-      ? detailView.speakerSummaryEntries.map(renderSpeakerSummaryEntry).join("")
-      : `<div class="notice-box">이 기록에는 아직 화자별 정리가 없습니다. 회의 정리에서 다시 정리하면 생성됩니다.</div>`;
     return { activeEntry, historyEntries };
   }
 

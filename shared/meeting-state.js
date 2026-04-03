@@ -206,7 +206,6 @@
         artifactId: normalizeText(transcript?.artifactId || nextJob?.artifacts?.[0]?.artifactId),
         loadedAt: normalizeText(nextJob?.updatedAt || nextJob?.createdAt),
         segments: normalizeSegments(transcript?.segments),
-        speakerCount: Math.max(0, Number(nextJob?.transcription?.speakerCount) || 0),
         text: normalizeTextBlock(transcript?.text),
       },
     }));
@@ -239,7 +238,6 @@
         artifactId: normalizeText(transcript?.artifactId || nextJob?.artifacts?.[0]?.artifactId),
         loadedAt: normalizeText(nextJob?.updatedAt),
         segments: normalizeSegments(transcript?.segments),
-        speakerCount: Math.max(0, Number(nextJob?.transcription?.speakerCount) || 0),
         text: normalizeTextBlock(transcript?.text),
       },
     }));
@@ -260,7 +258,6 @@
         artifactId: normalizeText(artifact?.artifactId),
         loadedAt: new Date().toISOString(),
         segments: normalizeSegments(artifact?.segments),
-        speakerCount: countSpeakers(artifact?.segments),
         text: normalizeTextBlock(artifact?.text),
       },
     }));
@@ -298,7 +295,6 @@
       },
       options: {
         redaction: normalizeText(overrides?.options?.redaction) || "none",
-        speakerLabels: overrides?.options?.speakerLabels !== false,
         summary: Boolean(overrides?.options?.summary),
       },
       source: {
@@ -419,7 +415,6 @@
         segments: hasOwn(next, "transcript") && Array.isArray(next.transcript?.segments)
           ? normalizeSegments(next.transcript.segments)
           : cloneValue(base.transcript.segments),
-        speakerCount: normalizeCount(next.transcript?.speakerCount, base.transcript.speakerCount),
         text: hasOwn(nextTranscript, "text")
           ? normalizeTextBlock(nextTranscript.text)
           : normalizeTextBlock(base.transcript.text),
@@ -460,7 +455,6 @@
       meetingId: normalizeText(normalized.meeting.meetingId),
       previewText: transcriptText ? transcriptText.slice(0, 180) : "",
       sessionId: normalizeText(normalized.session.sessionId),
-      speakerCount: normalizeCount(normalized.transcript.speakerCount || countSpeakers(normalized.transcript.segments)),
       status: normalizeText(normalized.job.status) || defaults.job.status,
       title: normalizeText(normalized.meeting.title || normalized.session.title || normalized.meeting.meetingId),
       updatedAt: normalizeText(normalized.job.updatedAt || normalized.transcript.loadedAt || normalized.job.createdAt),
@@ -494,7 +488,6 @@
       meetingId: normalizeText(nextRecord.meetingId || nextRecord.sessionId),
       previewText: normalizeTextBlock(nextRecord.previewText || nextRecord.excerpt),
       sessionId: normalizeText(nextRecord.sessionId),
-      speakerCount: normalizeCount(nextRecord.speakerCount),
       status: normalizeText(nextRecord.status) || defaults.job.status,
       title: normalizeText(nextRecord.title),
       updatedAt: normalizeText(nextRecord.updatedAt),
@@ -518,15 +511,10 @@
     return (Array.isArray(segments) ? segments : [])
       .map((segment) => ({
         endMs: normalizeCount(segment?.endMs),
-        speakerLabel: normalizeText(segment?.speakerLabel),
         startMs: normalizeCount(segment?.startMs),
         text: normalizeTextBlock(segment?.text),
       }))
-      .filter((segment) => segment.speakerLabel && segment.text && segment.endMs > segment.startMs);
-  }
-
-  function countSpeakers(segments) {
-    return Array.from(new Set(normalizeSegments(segments).map((segment) => segment.speakerLabel))).length;
+      .filter((segment) => segment.text && segment.endMs > segment.startMs);
   }
 
   function normalizeCount(value, fallback = 0) {

@@ -133,7 +133,6 @@
       },
       options: {
         redaction: input?.options?.redaction || "",
-        speakerLabels: Boolean(input?.options?.speakerLabels),
         summary: Boolean(input?.options?.summary),
       },
       owner: toProviderIdentityPayload(providerIdentity),

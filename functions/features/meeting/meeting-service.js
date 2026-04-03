@@ -10,9 +10,8 @@ const DEFAULT_SOURCE_PART_OVERLAP_MS = 1500;
 const DEFAULT_IN_PROCESS_CHUNK_TRANSCRIPTION_CONCURRENCY = 2;
 const DEFAULT_IN_PROCESS_CHUNK_TRANSCRIPTION_MAX_CONCURRENCY = 5;
 const DEFAULT_MEETING_PROCESS_RETRY_LIMIT = 2;
-const DEFAULT_MODEL = "gpt-4o-transcribe-diarize";
+const DEFAULT_MODEL = "gpt-4o-transcribe";
 const DEFAULT_SUMMARY_MODEL = "gpt-5.4-mini";
-const DEFAULT_SPEAKER_RECONCILE_MODEL = "gpt-5.4-mini";
 const JOB_COLLECTION = "integration_inova_meeting_jobs";
 const JOB_FINALIZER_COLLECTION = "integration_inova_meeting_job_finalizers";
 const JOB_PART_COLLECTION = "integration_inova_meeting_job_parts";
@@ -28,12 +27,7 @@ const MAX_MEETING_LIST_LIMIT = 24;
 const MAX_SUMMARY_TRANSCRIPT_CHARS = 12000;
 const MAX_MEETING_NOTES_SECTION_CHARS = 9000;
 const MAX_MEETING_NOTES_SECTION_COUNT = 8;
-const MAX_SPEAKER_PROFILE_SEGMENTS = 6;
-const MAX_SPEAKER_PROFILE_TEXT_CHARS = 480;
-const MIN_SPEAKER_MATCH_CONFIDENCE = 0.6;
-const MIN_SPEAKER_CONSOLIDATE_CONFIDENCE = 0.72;
 const MAX_SHARED_MEMO_CHARS = 12000;
-const MAX_SPEAKER_ALIAS_LENGTH = 80;
 const NOTES_SCHEMA_VERSION = 2;
 const DEFAULT_NOTES_MODE = "general";
 const DEFAULT_NOTES_STYLE = "default";
@@ -360,7 +354,6 @@ function registerMeetingHandlers(deps) {
         status: "processing",
         transcription: {
           language: meeting.language,
-          speakerLabels: options.speakerLabels,
         },
         updatedAt: new Date().toISOString(),
       });
@@ -448,7 +441,6 @@ function registerMeetingHandlers(deps) {
         jobId: queuedJob.jobId,
         meetingId: meeting.meetingId,
         providerUserKey: owner.providerUserKey,
-        speakerCount: transcript.speakerCount,
       });
     } catch (error) {
       const errorMessage = formatMeetingProcessErrorMessage(error);
@@ -856,7 +848,6 @@ function registerMeetingHandlers(deps) {
         jobId: currentJob.jobId,
         meetingId: meeting.meetingId,
         providerUserKey: owner.providerUserKey,
-        speakerCount: transcript.speakerCount,
       });
     } catch (error) {
       const errorMessage = formatMeetingProcessErrorMessage(error);
@@ -1272,7 +1263,7 @@ function registerMeetingHandlers(deps) {
       if (!input.meetingId || !input.jobId) {
         throw createHttpError(400, "회의 결과를 수정할 ID가 비어 있어요.");
       }
-      if (!input.title && !input.speakerAliasesProvided) {
+      if (!input.title) {
         throw createHttpError(400, "수정할 회의 결과 내용이 비어 있어요.");
       }
       assertWorkspaceMeetingAccess(access, input.meetingId, createHttpError);
@@ -1292,29 +1283,15 @@ function registerMeetingHandlers(deps) {
         throw createHttpError(404, "현재 회의와 맞지 않는 결과예요.");
       }
 
-      let nextSpeakerAliases = job.speakerAliases;
-      if (input.speakerAliasesProvided) {
-        const transcriptSource = await loadMeetingTranscriptForNotes(job, db, createHttpError);
-        const allowedSpeakerLabels = collectTranscriptSpeakerLabels(transcriptSource.transcript);
-        nextSpeakerAliases = normalizeSpeakerAliases(input.speakerAliases, allowedSpeakerLabels);
-        if (transcriptSource.artifactRef) {
-          await transcriptSource.artifactRef.set({
-            speakerAliases: nextSpeakerAliases,
-          }, { merge: true });
-        }
-      }
-
-      const updatedAt = new Date().toISOString();
-      const jobPatch = {
-        updatedAt,
-      };
+      const updatedAt = input.title ? new Date().toISOString() : normalizeText(job.updatedAt);
+      const jobPatch = {};
       if (input.title) {
         jobPatch.title = input.title;
+        jobPatch.updatedAt = updatedAt;
       }
-      if (input.speakerAliasesProvided) {
-        jobPatch.speakerAliases = nextSpeakerAliases;
+      if (Object.keys(jobPatch).length) {
+        await jobRef.set(jobPatch, { merge: true });
       }
-      await jobRef.set(jobPatch, { merge: true });
 
       if (input.title) {
         await updateMeetingSummaryRecordTitle(owner, job, input.title, updatedAt);
@@ -1331,7 +1308,7 @@ function registerMeetingHandlers(deps) {
           job: normalizeMeetingJob({
             ...job,
             ...jobPatch,
-            updatedAt,
+            updatedAt: normalizeText(jobPatch.updatedAt || job.updatedAt),
           }),
         },
       });
@@ -1374,13 +1351,6 @@ function registerMeetingHandlers(deps) {
       const transcriptSource = await loadMeetingTranscriptForNotes(job, db, createHttpError);
       const artifactRef = transcriptSource.artifactRef;
       const artifact = transcriptSource.artifact;
-      const speakerAliases = normalizeSpeakerAliases(
-        {
-          ...(artifact?.speakerAliases || {}),
-          ...(job.speakerAliases || {}),
-        },
-        collectTranscriptSpeakerLabels(transcriptSource.transcript)
-      );
       const meetingRecord = await loadMeetingSummaryRecord(owner, { meetingId: job.meetingId }, createHttpError);
       const effectiveMeeting = {
         ...job.meeting,
@@ -1391,10 +1361,13 @@ function registerMeetingHandlers(deps) {
       const context = {
         sharedMemoSnapshot: normalizeText(effectiveMeeting.sharedMemo),
       };
-      const meetingNotes = await generateMeetingNotesBundle({
-        ...transcriptSource.transcript,
-        speakerAliases,
-      }, effectiveMeeting, context, input.notesMode, input.notesStyle);
+      const meetingNotes = await generateMeetingNotesBundle(
+        transcriptSource.transcript,
+        effectiveMeeting,
+        context,
+        input.notesMode,
+        input.notesStyle
+      );
       const updatedAt = new Date().toISOString();
       const resultTitle = resolveMeetingResultTitle(meetingNotes, job.title || effectiveMeeting.title);
       const jobPatch = {
@@ -1413,7 +1386,6 @@ function registerMeetingHandlers(deps) {
         notesStatus: meetingNotes.notesStatus,
         notesStyleSelected: meetingNotes.notesStyleSelected,
         notesSchemaVersion: meetingNotes.notesSchemaVersion,
-        speakerAliases,
         title: resultTitle,
         updatedAt,
       };
@@ -1427,7 +1399,6 @@ function registerMeetingHandlers(deps) {
         notesStatus: meetingNotes.notesStatus,
         notesStyleSelected: meetingNotes.notesStyleSelected,
         notesSchemaVersion: meetingNotes.notesSchemaVersion,
-        speakerAliases,
       };
       const nextJob = normalizeMeetingJob({
         ...job,
@@ -2748,12 +2719,6 @@ function registerMeetingHandlers(deps) {
       || getMeetingSummaryModel();
   }
 
-  function getMeetingSpeakerReconcileModel() {
-    return normalizeText(process.env.OPENAI_MEETING_SPEAKER_RECONCILE_MODEL)
-      || getMeetingSummaryModel()
-      || DEFAULT_SPEAKER_RECONCILE_MODEL;
-  }
-
   async function transcribeMeetingAudio(audioBuffer, meeting, options, source) {
     const file = await OpenAI.toFile(audioBuffer, source.fileName, {
       type: source.mimeType || "audio/webm",
@@ -2762,11 +2727,8 @@ function registerMeetingHandlers(deps) {
       file,
       language: meeting.language,
       model: getMeetingModel(),
-      response_format: options.speakerLabels ? "diarized_json" : "json",
+      response_format: "json",
     };
-    if (options.speakerLabels && source.durationMs > 30000) {
-      request.chunking_strategy = "auto";
-    }
     const response = await getClient().audio.transcriptions.create(request);
     return normalizeTranscriptionResponse(response, source.durationMs);
   }
@@ -2907,7 +2869,7 @@ function registerMeetingHandlers(deps) {
       .map((part, index) => normalizeMeetingSourcePart(part, index, normalizedSource.requestId))
       .sort((left, right) => left.index - right.index || left.startMs - right.startMs);
     const totalParts = orderedParts.length;
-    const transcribeProgressEndPercent = options.speakerLabels ? 64 : 80;
+    const transcribeProgressEndPercent = 80;
     let completedTranscriptionCount = 0;
     const chunkTranscripts = await mapWithConcurrency(
       orderedParts,
@@ -2953,10 +2915,9 @@ function registerMeetingHandlers(deps) {
   async function mergeChunkTranscripts(chunkTranscriptsInput, options, onProgress) {
     const chunkTranscripts = Array.isArray(chunkTranscriptsInput) ? chunkTranscriptsInput : [];
     let mergedSegments = [];
-    let nextGlobalSpeakerIndex = 0;
     const totalParts = Math.max(1, chunkTranscripts.length);
-    const reconcileProgressStartPercent = options.speakerLabels ? 64 : 80;
-    const reconcileProgressEndPercent = 80;
+    const mergeProgressStartPercent = 80;
+    const mergeProgressEndPercent = 88;
     for (const [index, chunk] of chunkTranscripts.entries()) {
       const part = chunk?.part;
       const transcript = chunk?.transcript;
@@ -2964,64 +2925,32 @@ function registerMeetingHandlers(deps) {
         continue;
       }
       let adjustedSegments = offsetTranscriptSegments(transcript.segments, part.startMs);
-      if (options.speakerLabels) {
-        if (!mergedSegments.length) {
-          const firstChunkLabels = collectTranscriptSpeakerLabels({ segments: adjustedSegments });
-          nextGlobalSpeakerIndex = firstChunkLabels.length;
-        } else if (adjustedSegments.length) {
-          if (typeof onProgress === "function") {
-            await onProgress({
-              progress: {
-                currentPart: index + 1,
-                parallelParts: 0,
-                percent: Math.max(
-                  reconcileProgressStartPercent,
-                  Math.min(
-                    reconcileProgressEndPercent,
-                    Math.round(
-                      reconcileProgressStartPercent
-                      + ((index + 1) / totalParts) * (reconcileProgressEndPercent - reconcileProgressStartPercent)
-                    )
-                  )
-                ),
-                phase: "reconciling_speakers",
-                totalParts,
-              },
-              updatedAt: new Date().toISOString(),
-            });
-          }
-          const reconciliation = await reconcileChunkSpeakerLabels(
-            mergedSegments,
-            adjustedSegments,
-            nextGlobalSpeakerIndex,
-            part.overlapMs || DEFAULT_SOURCE_PART_OVERLAP_MS
-          );
-          adjustedSegments = applySpeakerLabelMapping(adjustedSegments, reconciliation.mapping);
-          nextGlobalSpeakerIndex = reconciliation.nextGlobalSpeakerIndex;
-        }
-      }
-      mergedSegments = mergeTranscriptSegments(mergedSegments, adjustedSegments, part.overlapMs || DEFAULT_SOURCE_PART_OVERLAP_MS);
-    }
-
-    if (options.speakerLabels && mergedSegments.length > 1) {
-      if (typeof onProgress === "function") {
+      if (mergedSegments.length && adjustedSegments.length && typeof onProgress === "function") {
         await onProgress({
           progress: {
-            currentPart: totalParts,
+            currentPart: index + 1,
             parallelParts: 0,
-            percent: 86,
-            phase: "consolidating_speakers",
+            percent: Math.max(
+              mergeProgressStartPercent,
+              Math.min(
+                mergeProgressEndPercent,
+                Math.round(
+                  mergeProgressStartPercent
+                  + ((index + 1) / totalParts) * (mergeProgressEndPercent - mergeProgressStartPercent)
+                )
+              )
+            ),
+            phase: "assembling_transcript",
             totalParts,
           },
           updatedAt: new Date().toISOString(),
         });
       }
-      mergedSegments = await consolidateTranscriptSpeakerLabels(mergedSegments);
+      mergedSegments = mergeTranscriptSegments(mergedSegments, adjustedSegments, part.overlapMs || DEFAULT_SOURCE_PART_OVERLAP_MS);
     }
 
     return {
       segments: mergedSegments,
-      speakerCount: countTranscriptSpeakers(mergedSegments),
       text: buildTranscriptText(mergedSegments),
     };
   }
@@ -3034,335 +2963,6 @@ function registerMeetingHandlers(deps) {
     return buffer;
   }
 
-  async function reconcileChunkSpeakerLabels(existingSegments, currentSegments, nextGlobalSpeakerIndex, overlapMs) {
-    const mapping = buildOverlapSpeakerLabelMapping(existingSegments, currentSegments, overlapMs);
-    let nextIndex = Math.max(0, Number(nextGlobalSpeakerIndex) || 0);
-    const existingProfiles = buildTranscriptSpeakerProfiles(existingSegments, { preferRecent: true });
-    const currentProfiles = buildTranscriptSpeakerProfiles(currentSegments, { preferRecent: false });
-    const existingLabels = existingProfiles.map((profile) => profile.speakerLabel);
-    const currentLabels = currentProfiles.map((profile) => profile.speakerLabel);
-    if (!currentLabels.length) {
-      return { mapping, nextGlobalSpeakerIndex: nextIndex };
-    }
-    if (!existingLabels.length) {
-      for (const label of currentLabels) {
-        mapping[label] = allocateGlobalSpeakerLabel(nextIndex);
-        nextIndex += 1;
-      }
-      return { mapping, nextGlobalSpeakerIndex: nextIndex };
-    }
-
-    const anchoredLabels = new Set(Object.keys(mapping));
-    const usedTargets = new Set(Object.values(mapping).filter(Boolean));
-    const unresolvedCurrentProfiles = currentProfiles.filter((profile) => !anchoredLabels.has(profile.speakerLabel));
-    const candidateExistingProfiles = existingProfiles.filter((profile) => !usedTargets.has(profile.speakerLabel));
-    if (!unresolvedCurrentProfiles.length) {
-      return { mapping, nextGlobalSpeakerIndex: nextIndex };
-    }
-
-    let suggestedMappings = [];
-    try {
-      const completion = await getClient().chat.completions.create({
-        messages: [
-          {
-            role: "system",
-            content: [
-              "너는 회의 전사 화자 정합기다.",
-              "이전 chunk들의 글로벌 화자 프로필과 현재 chunk의 로컬 화자 프로필을 비교해 같은 사람만 매핑한다.",
-              "이미 overlap anchor로 확정된 매핑은 다시 바꾸지 않는다.",
-              "확신이 부족하면 target을 NEW로 돌리고 confidence를 낮게 준다.",
-              "반드시 JSON만 반환한다.",
-              "스키마는 {\"mappings\":[{\"localSpeaker\":\"SPEAKER_00\",\"target\":\"SPEAKER_01|NEW\",\"confidence\":0~1,\"reason\":\"짧은 근거\"}]} 이다.",
-            ].join(" "),
-          },
-          {
-            role: "user",
-            content: buildSpeakerReconcilePrompt(candidateExistingProfiles, unresolvedCurrentProfiles, mapping),
-          },
-        ],
-        model: getMeetingSpeakerReconcileModel(),
-        response_format: { type: "json_object" },
-        temperature: 0,
-      });
-      suggestedMappings = normalizeSpeakerReconcileMappings(
-        safeParseJson(normalizeCompletionContent(completion?.choices?.[0]?.message?.content))?.mappings
-      );
-    } catch {
-      suggestedMappings = [];
-    }
-
-    for (const suggestion of suggestedMappings.sort((left, right) => right.confidence - left.confidence)) {
-      const localSpeaker = normalizeText(suggestion.localSpeaker);
-      const target = normalizeText(suggestion.target);
-      if (!currentLabels.includes(localSpeaker)) continue;
-      if (mapping[localSpeaker]) continue;
-      if (target === "NEW" || suggestion.confidence < MIN_SPEAKER_MATCH_CONFIDENCE || !existingLabels.includes(target) || usedTargets.has(target)) {
-        continue;
-      }
-      mapping[localSpeaker] = target;
-      usedTargets.add(target);
-    }
-    for (const localSpeaker of currentLabels) {
-      if (mapping[localSpeaker]) continue;
-      mapping[localSpeaker] = allocateGlobalSpeakerLabel(nextIndex);
-      nextIndex += 1;
-    }
-    return {
-      mapping,
-      nextGlobalSpeakerIndex: nextIndex,
-    };
-  }
-
-  function buildSpeakerReconcilePrompt(existingProfiles, currentProfiles, anchoredMappings) {
-    return [
-      `이미 overlap anchor로 고정된 매핑: ${Object.keys(anchoredMappings || {}).length ? JSON.stringify(anchoredMappings) : "없음"}`,
-      `기존 글로벌 화자: ${existingProfiles.map((profile) => profile.speakerLabel).join(", ") || "없음"}`,
-      `현재 chunk 로컬 화자: ${currentProfiles.map((profile) => profile.speakerLabel).join(", ") || "없음"}`,
-      "기존 글로벌 화자 프로필:",
-      buildSpeakerProfilePrompt(existingProfiles),
-      "현재 chunk 로컬 화자 프로필:",
-      buildSpeakerProfilePrompt(currentProfiles),
-    ].join("\n\n");
-  }
-
-  function buildSpeakerProfilePrompt(profiles) {
-    return (Array.isArray(profiles) ? profiles : [])
-      .map((profile) => buildSpeakerProfileSummary(profile))
-      .filter(Boolean)
-      .join("\n");
-  }
-
-  function buildSpeakerProfileSummary(profile) {
-    const speakerLabel = normalizeText(profile?.speakerLabel);
-    const samples = Array.isArray(profile?.samples) ? profile.samples.filter(Boolean) : [];
-    return [
-      `${speakerLabel || "화자"} | 발화 ${Math.max(0, Number(profile?.utteranceCount) || 0)}개 | 구간 ${Math.max(0, Number(profile?.startMs) || 0)}-${Math.max(0, Number(profile?.endMs) || 0)}ms`,
-      ...samples.map((sample) => `- ${sample}`),
-    ].join("\n");
-  }
-
-  function buildTranscriptSpeakerProfiles(segments, options) {
-    const sourceSegments = Array.isArray(segments) ? segments : [];
-    const settings = options && typeof options === "object" ? options : {};
-    const speakerMap = new Map();
-    for (const segment of sourceSegments) {
-      const speakerLabel = normalizeText(segment?.speakerLabel);
-      const text = normalizeText(segment?.text);
-      if (!speakerLabel || !text) {
-        continue;
-      }
-      const current = speakerMap.get(speakerLabel) || {
-        endMs: 0,
-        segments: [],
-        speakerLabel,
-        startMs: Number.MAX_SAFE_INTEGER,
-        utteranceCount: 0,
-      };
-      current.endMs = Math.max(current.endMs, Math.max(0, Number(segment?.endMs) || 0));
-      current.startMs = Math.min(current.startMs, Math.max(0, Number(segment?.startMs) || 0));
-      current.utteranceCount += 1;
-      current.segments.push({
-        endMs: Math.max(0, Number(segment?.endMs) || 0),
-        startMs: Math.max(0, Number(segment?.startMs) || 0),
-        text,
-      });
-      speakerMap.set(speakerLabel, current);
-    }
-    return Array.from(speakerMap.values())
-      .map((profile) => {
-        const selectedSegments = selectRepresentativeSpeakerSegments(profile.segments, {
-          limit: MAX_SPEAKER_PROFILE_SEGMENTS,
-          preferRecent: settings.preferRecent,
-        });
-        const samples = [];
-        let usedChars = 0;
-        for (const segment of selectedSegments) {
-          const sample = `${segment.startMs}-${segment.endMs}ms: ${segment.text}`;
-          if (usedChars >= MAX_SPEAKER_PROFILE_TEXT_CHARS) {
-            break;
-          }
-          samples.push(sample.slice(0, Math.max(0, MAX_SPEAKER_PROFILE_TEXT_CHARS - usedChars)));
-          usedChars += sample.length;
-        }
-        return {
-          endMs: profile.endMs,
-          samples,
-          speakerLabel: profile.speakerLabel,
-          startMs: Number.isFinite(profile.startMs) ? profile.startMs : 0,
-          utteranceCount: profile.utteranceCount,
-        };
-      })
-      .sort((left, right) => left.startMs - right.startMs || left.speakerLabel.localeCompare(right.speakerLabel));
-  }
-
-  function selectRepresentativeSpeakerSegments(segments, options) {
-    const sourceSegments = Array.isArray(segments) ? segments : [];
-    const settings = options && typeof options === "object" ? options : {};
-    const limit = Math.max(1, Number(settings.limit) || MAX_SPEAKER_PROFILE_SEGMENTS);
-    if (sourceSegments.length <= limit) {
-      return sourceSegments.slice();
-    }
-    if (settings.preferRecent) {
-      return sourceSegments.slice(-limit);
-    }
-    const indexes = new Set([0, sourceSegments.length - 1]);
-    for (let step = 1; step < limit - 1; step += 1) {
-      const ratio = step / Math.max(1, limit - 1);
-      indexes.add(Math.min(sourceSegments.length - 1, Math.max(0, Math.round(ratio * (sourceSegments.length - 1)))));
-    }
-    return Array.from(indexes)
-      .sort((left, right) => left - right)
-      .slice(0, limit)
-      .map((index) => sourceSegments[index]);
-  }
-
-  function buildOverlapSpeakerLabelMapping(existingSegments, currentSegments, overlapMs) {
-    const previousSegments = Array.isArray(existingSegments) ? existingSegments : [];
-    const nextSegments = Array.isArray(currentSegments) ? currentSegments : [];
-    if (!previousSegments.length || !nextSegments.length) {
-      return {};
-    }
-    const currentStartMs = Math.max(0, Number(nextSegments[0]?.startMs) || 0);
-    const overlapWindowMs = Math.max(DEFAULT_SOURCE_PART_OVERLAP_MS, Math.max(0, Number(overlapMs) || 0));
-    const existingCandidates = previousSegments
-      .filter((segment) => Math.max(0, Number(segment?.endMs) || 0) >= Math.max(0, currentStartMs - overlapWindowMs - 1200))
-      .slice(-12);
-    const currentCandidates = nextSegments
-      .filter((segment) => Math.max(0, Number(segment?.startMs) || 0) <= currentStartMs + overlapWindowMs + 1200)
-      .slice(0, 12);
-    const pairScores = new Map();
-    for (const current of currentCandidates) {
-      const currentSpeaker = normalizeText(current?.speakerLabel);
-      const currentText = normalizeSegmentComparisonText(current?.text);
-      if (!currentSpeaker || !currentText) {
-        continue;
-      }
-      for (const existing of existingCandidates) {
-        const existingSpeaker = normalizeText(existing?.speakerLabel);
-        const existingText = normalizeSegmentComparisonText(existing?.text);
-        if (!existingSpeaker || !existingText) {
-          continue;
-        }
-        let score = 0;
-        if (currentText === existingText) {
-          score = 3;
-        } else if (currentText.includes(existingText) || existingText.includes(currentText)) {
-          score = 1;
-        }
-        if (!score) {
-          continue;
-        }
-        const key = `${currentSpeaker}__${existingSpeaker}`;
-        pairScores.set(key, (pairScores.get(key) || 0) + score);
-      }
-    }
-    const mapping = {};
-    const usedCurrent = new Set();
-    const usedExisting = new Set();
-    for (const [pairKey, score] of Array.from(pairScores.entries()).sort((left, right) => right[1] - left[1])) {
-      if (score < 2) {
-        continue;
-      }
-      const [currentSpeaker, existingSpeaker] = pairKey.split("__");
-      if (!currentSpeaker || !existingSpeaker || usedCurrent.has(currentSpeaker) || usedExisting.has(existingSpeaker)) {
-        continue;
-      }
-      mapping[currentSpeaker] = existingSpeaker;
-      usedCurrent.add(currentSpeaker);
-      usedExisting.add(existingSpeaker);
-    }
-    return mapping;
-  }
-
-  async function consolidateTranscriptSpeakerLabels(segments) {
-    const currentSegments = Array.isArray(segments) ? segments : [];
-    const speakerLabels = Array.from(collectTranscriptSpeakerLabels({ segments: currentSegments }));
-    if (speakerLabels.length <= 2) {
-      return renumberTranscriptSpeakerLabels(currentSegments);
-    }
-    const profiles = buildTranscriptSpeakerProfiles(currentSegments, { preferRecent: false });
-    if (profiles.length <= 2) {
-      return renumberTranscriptSpeakerLabels(currentSegments);
-    }
-    let suggestedMappings = [];
-    try {
-      const completion = await getClient().chat.completions.create({
-        messages: [
-          {
-            role: "system",
-            content: [
-              "너는 chunk 경계로 분리된 회의 전사의 전역 화자 통합기다.",
-              "같은 사람으로 매우 확실한 화자 라벨만 병합한다.",
-              "확신이 없으면 KEEP으로 둔다.",
-              "반드시 JSON만 반환한다.",
-              "스키마는 {\"mappings\":[{\"localSpeaker\":\"SPEAKER_03\",\"target\":\"SPEAKER_01|KEEP\",\"confidence\":0~1,\"reason\":\"짧은 근거\"}]} 이다.",
-            ].join(" "),
-          },
-          {
-            role: "user",
-            content: [
-              `현재 전역 화자 수: ${profiles.length}`,
-              "각 화자 프로필:",
-              buildSpeakerProfilePrompt(profiles),
-            ].join("\n\n"),
-          },
-        ],
-        model: getMeetingSpeakerReconcileModel(),
-        response_format: { type: "json_object" },
-        temperature: 0,
-      });
-      suggestedMappings = normalizeSpeakerReconcileMappings(
-        safeParseJson(normalizeCompletionContent(completion?.choices?.[0]?.message?.content))?.mappings
-      );
-    } catch {
-      suggestedMappings = [];
-    }
-    const mapping = {};
-    const sourceLabels = new Set();
-    const canonicalTargets = new Set();
-    for (const suggestion of suggestedMappings.sort((left, right) => right.confidence - left.confidence)) {
-      const source = normalizeText(suggestion.localSpeaker);
-      const target = normalizeText(suggestion.target);
-      if (!source || !target || source === target || target === "NEW") continue;
-      if (!speakerLabels.includes(source) || !speakerLabels.includes(target)) continue;
-      if (suggestion.confidence < MIN_SPEAKER_CONSOLIDATE_CONFIDENCE) continue;
-      if (sourceLabels.has(source) || canonicalTargets.has(source)) continue;
-      if (sourceLabels.has(target)) continue;
-      mapping[source] = target;
-      sourceLabels.add(source);
-      canonicalTargets.add(target);
-    }
-    if (!Object.keys(mapping).length) {
-      return renumberTranscriptSpeakerLabels(currentSegments);
-    }
-    return renumberTranscriptSpeakerLabels(applySpeakerLabelMapping(currentSegments, mapping));
-  }
-
-  function renumberTranscriptSpeakerLabels(segments) {
-    const sourceSegments = Array.isArray(segments) ? segments : [];
-    const labelMap = new Map();
-    let nextIndex = 0;
-    return sourceSegments.map((segment) => {
-      const currentLabel = normalizeText(segment?.speakerLabel) || "SPEAKER_00";
-      if (!labelMap.has(currentLabel)) {
-        labelMap.set(currentLabel, allocateGlobalSpeakerLabel(nextIndex));
-        nextIndex += 1;
-      }
-      return {
-        ...segment,
-        speakerLabel: labelMap.get(currentLabel),
-      };
-    });
-  }
-
-  function normalizeSpeakerReconcileMappings(input) {
-    return (Array.isArray(input) ? input : []).map((item) => ({
-      confidence: normalizeConfidence(item?.confidence),
-      localSpeaker: normalizeText(item?.localSpeaker),
-      target: normalizeText(item?.target).toUpperCase() === "NEW" ? "NEW" : normalizeText(item?.target),
-    }));
-  }
-
   function offsetTranscriptSegments(segments, offsetMs) {
     return (Array.isArray(segments) ? segments : [])
       .map((segment) => ({
@@ -3371,14 +2971,6 @@ function registerMeetingHandlers(deps) {
         startMs: Math.max(0, Number(segment.startMs) + Math.max(0, Number(offsetMs) || 0)),
       }))
       .filter((segment) => normalizeText(segment.text));
-  }
-
-  function applySpeakerLabelMapping(segments, mapping) {
-    const nextMapping = mapping && typeof mapping === "object" ? mapping : {};
-    return (Array.isArray(segments) ? segments : []).map((segment) => ({
-      ...segment,
-      speakerLabel: normalizeText(nextMapping[normalizeText(segment.speakerLabel)]) || normalizeText(segment.speakerLabel),
-    }));
   }
 
   function mergeTranscriptSegments(existingSegments, nextSegments, overlapMs) {
@@ -3392,7 +2984,6 @@ function registerMeetingHandlers(deps) {
       }
       merged.push({
         endMs: Math.max(Number(segment.startMs) + 1, Number(segment.endMs) || 0),
-        speakerLabel: normalizeText(segment.speakerLabel) || "SPEAKER_00",
         startMs: Math.max(0, Number(segment.startMs) || 0),
         text: normalizeText(segment.text),
       });
@@ -3670,7 +3261,7 @@ function registerMeetingHandlers(deps) {
     const succeededCount = partDocs.filter((part) => part.status === "succeeded").length;
     const failedCount = partDocs.filter((part) => part.status === "failed").length;
     const queuedCount = partDocs.filter((part) => part.status === "queued").length;
-    const transcribeProgressEndPercent = options.speakerLabels ? 64 : 80;
+    const transcribeProgressEndPercent = 80;
     const isFullyTranscribed = totalParts > 0 && succeededCount >= totalParts;
     const defaultPatch = {
       progress: {
@@ -3762,7 +3353,6 @@ function registerMeetingHandlers(deps) {
     }
     const payload = Buffer.from(JSON.stringify({
       segments: Array.isArray(transcript?.segments) ? transcript.segments : [],
-      speakerCount: Math.max(0, Number(transcript?.speakerCount) || 0),
       text: normalizeText(transcript?.text),
     }), "utf8");
     await targetBucket.file(storageObject).save(payload, {
@@ -3779,7 +3369,6 @@ function registerMeetingHandlers(deps) {
     });
     return {
       segmentCount: Array.isArray(transcript?.segments) ? transcript.segments.length : 0,
-      speakerCount: Math.max(0, Number(transcript?.speakerCount) || 0),
       storageObject,
       textLength: normalizeText(transcript?.text).length,
     };
@@ -3795,7 +3384,6 @@ function registerMeetingHandlers(deps) {
     const text = normalizeText(parsed?.text);
     return {
       segments,
-      speakerCount: Math.max(0, Number(parsed?.speakerCount) || countTranscriptSpeakers(segments)),
       text,
     };
   }
@@ -3806,13 +3394,9 @@ function registerMeetingHandlers(deps) {
 
   function buildTranscriptText(segments) {
     return (Array.isArray(segments) ? segments : [])
-      .map((segment) => `${normalizeText(segment.speakerLabel) || "SPEAKER_00"}: ${normalizeText(segment.text)}`)
+      .map((segment) => normalizeText(segment.text))
       .filter(Boolean)
       .join(" ");
-  }
-
-  function allocateGlobalSpeakerLabel(index) {
-    return `SPEAKER_${String(Math.max(0, Number(index) || 0)).padStart(2, "0")}`;
   }
 
   function buildMeetingPartFileName(fileName, partIndex) {
@@ -4099,21 +3683,17 @@ function registerMeetingHandlers(deps) {
       "각 문장은 가능하면 '논의되었다', '언급되었다', '검토가 필요하다'처럼 중립 표현을 사용한다.",
       "actionItems에는 전사나 메모에 실제로 나온 행동만 적고, 담당자나 기한이 없으면 임의로 만들지 않는다.",
       "topics와 executiveSummary는 회의 내용을 business meeting minutes처럼 구조적으로 요약하되, 잘 되었다/옳다/필수다 같은 평가형 문장은 피한다.",
+      "구간 라벨은 보조 정보일 뿐이므로, 누가 말했는지보다 무엇이 논의되고 결정되었는지에 집중한다.",
       "결과는 상용 회의록 SaaS처럼 섹션이 분명한 한국어 회의 정리 톤으로 쓰되, 회의에서 실제로 언급된 내용만 근거로 사용한다.",
       "executiveSummary는 2~4개 항목까지 허용하고, 회의 배경, 핵심 논의, 결정된 내용, 남은 쟁점, 다음 단계 중 중요한 것을 우선 담는다.",
       "meetingMeta.purpose는 이 회의가 왜 열렸고 무엇을 검토·결정하려 했는지 2~4문장 안에서 회의 개요처럼 정리한다.",
       "topics[].topic은 짧은 주제명만 적고 문장형 설명이나 중간 구분점(예: ·, /)을 길게 이어 붙이지 않는다.",
       "topics[].summary는 해당 주제에서 실제로 논의된 배경, 쟁점, 맥락이 드러나도록 2~4문장까지 허용한다.",
       "topics[].keyPoints는 각각 독립된 항목으로 나누고, 필요하면 비즈니스 판단이나 논의 포인트가 읽히도록 한 줄 문장으로 적는다.",
-      "speakerSummaries[]는 화자별로 주로 언급한 내용을 중립적으로 정리하는 배열이다.",
-      "speakerSummaries[]는 {speakerLabel, summary, keyPoints} 형식이다.",
-      "speakerSummaries[].speakerLabel은 전사에 나온 원래 화자 라벨을 그대로 사용한다. 예: SPEAKER_00",
-      "speakerSummaries[].summary는 해당 화자가 주로 말한 내용을 1~2문장으로만 적고, 다른 화자의 발언을 섞지 않는다.",
-      "speakerSummaries[].keyPoints는 해당 화자가 실제로 언급한 포인트만 짧게 나눈다.",
       `선택된 mode는 ${mode} 이다. ${modeInstructionMap[mode] || modeInstructionMap.general}`,
       `선택된 style은 ${style} 이다. ${styleInstructionMap[style] || styleInstructionMap.default}`,
       "반드시 JSON만 반환한다.",
-      "스키마는 meetingMeta, executiveSummary, topics, decisions, actionItems, openQuestions, risksOrDependencies, speakerSummaries, memoHighlights, sourceTrace, modeSpecific 이다.",
+      "스키마는 meetingMeta, executiveSummary, topics, decisions, actionItems, openQuestions, risksOrDependencies, memoHighlights, sourceTrace, modeSpecific 이다.",
       "topics[]는 {topic, summary, keyPoints, decisions, openQuestions, source:{transcript,memo}} 형식이다.",
       "decisions[]는 {text, owner, confidence} 형식이다.",
       "actionItems[]는 {task, assignee, dueDate, status, source} 형식이다.",
@@ -4144,7 +3724,6 @@ function registerMeetingHandlers(deps) {
       `정리 형식(내부 판단): ${normalizeMeetingNotesMode(notesMode) || DEFAULT_NOTES_MODE}`,
       `표현 방식: ${normalizeMeetingNotesStyle(notesStyle) || DEFAULT_NOTES_STYLE}`,
       `공용 메모: ${normalizeTextBlock(context?.sharedMemoSnapshot) || "없음"}`,
-      buildMeetingNotesSpeakerGuide(transcript),
       "아래는 긴 전사를 여러 구간으로 나눈 중간 정리 결과입니다. 중복을 제거하고 회의 전체 관점에서 하나의 최종 회의록 JSON으로 통합해 주세요.",
       `전사 발췌:\n${buildMeetingNotesTranscriptPrompt(transcript, { strategy: "balanced" })}`,
       partialSummaries
@@ -4169,7 +3748,6 @@ function registerMeetingHandlers(deps) {
       `정리 형식(내부 판단): ${normalizeMeetingNotesMode(notesMode) || DEFAULT_NOTES_MODE}`,
       `표현 방식: ${normalizeMeetingNotesStyle(notesStyle) || DEFAULT_NOTES_STYLE}`,
       `공용 메모: ${normalizeTextBlock(context?.sharedMemoSnapshot) || "없음"}`,
-      buildMeetingNotesSpeakerGuide(transcript),
       `전체 ${totalSections}개 구간 중 ${sectionIndex + 1}번째 구간입니다.`,
       "아래 구간 전사에서 실제로 언급된 논의, 결정, 액션, 쟁점만 추출해 주세요.",
       transcriptPrompt,
@@ -4183,7 +3761,6 @@ function registerMeetingHandlers(deps) {
       `정리 형식(내부 판단): ${normalizeMeetingNotesMode(notesMode) || DEFAULT_NOTES_MODE}`,
       `표현 방식: ${normalizeMeetingNotesStyle(notesStyle) || DEFAULT_NOTES_STYLE}`,
       `공용 메모: ${normalizeTextBlock(context?.sharedMemoSnapshot) || "없음"}`,
-      buildMeetingNotesSpeakerGuide(transcript),
       "아래 전사를 기반으로 회의록을 정리해 주세요.",
       transcriptPrompt,
     ].join("\n\n");
@@ -4209,7 +3786,6 @@ function registerMeetingHandlers(deps) {
       openQuestions: normalizeTextList(parsed.openQuestions),
       risksOrDependencies: normalizeMeetingRisks(parsed.risksOrDependencies),
       sourceTrace: normalizeMeetingSourceTrace(parsed.sourceTrace),
-      speakerSummaries: normalizeMeetingSpeakerSummaries(parsed.speakerSummaries),
       topics: normalizeMeetingTopics(parsed.topics),
     };
   }
@@ -4232,7 +3808,6 @@ function normalizeMeetingRequest(input) {
 function normalizeMeetingOptions(input) {
   return {
     redaction: normalizeText(input?.redaction) || "none",
-    speakerLabels: input?.speakerLabels !== false,
     summary: Boolean(input?.summary),
   };
 }
@@ -4328,7 +3903,6 @@ function normalizeMeetingJobPart(input) {
     status: normalizeText(part.status),
     transcript: {
       segmentCount: Math.max(0, Number(part.transcript?.segmentCount) || 0),
-      speakerCount: Math.max(0, Number(part.transcript?.speakerCount) || 0),
       storageObject: normalizeText(part.transcript?.storageObject),
       textLength: Math.max(0, Number(part.transcript?.textLength) || 0),
     },
@@ -4373,13 +3947,11 @@ function buildQueuedMeetingJobPart(job, partInput, queuedAt, existingPartInput, 
     transcript: canReuseTranscript || shouldPreserveExistingState
       ? {
           segmentCount: Math.max(0, Number(existingPart.transcript?.segmentCount) || 0),
-          speakerCount: Math.max(0, Number(existingPart.transcript?.speakerCount) || 0),
           storageObject: normalizeText(existingPart.transcript?.storageObject),
           textLength: Math.max(0, Number(existingPart.transcript?.textLength) || 0),
         }
       : {
           segmentCount: 0,
-          speakerCount: 0,
           storageObject: "",
           textLength: 0,
         },
@@ -4430,8 +4002,8 @@ function normalizeMeetingContext(input) {
   };
 }
 
-function createEmptyMeetingNotes() {
-  return {
+  function createEmptyMeetingNotes() {
+    return {
     actionItems: [],
     decisions: [],
     executiveSummary: [],
@@ -4443,14 +4015,13 @@ function createEmptyMeetingNotes() {
       version: `v${NOTES_SCHEMA_VERSION}`,
     },
     memoHighlights: [],
-    mode: DEFAULT_NOTES_MODE,
-    modeSpecific: {},
-    openQuestions: [],
-    risksOrDependencies: [],
-    speakerSummaries: [],
-    sourceTrace: [],
-    topics: [],
-  };
+      mode: DEFAULT_NOTES_MODE,
+      modeSpecific: {},
+      openQuestions: [],
+      risksOrDependencies: [],
+      sourceTrace: [],
+      topics: [],
+    };
 }
 
 function createEmptyMeetingNotesBundle(selectedMode, detectedMode, selectedStyle, statusInput, degradedReasonInput) {
@@ -4474,17 +4045,16 @@ function createEmptyMeetingNotesBundle(selectedMode, detectedMode, selectedStyle
   };
 }
 
-function normalizeMeetingNotes(input, preferredMode) {
-  const notes = input && typeof input === "object" ? input : {};
-  if (
-    Array.isArray(notes.executiveSummary)
-    || Array.isArray(notes.topics)
-    || Array.isArray(notes.openQuestions)
-    || Array.isArray(notes.risksOrDependencies)
-    || Array.isArray(notes.memoHighlights)
-    || Array.isArray(notes.speakerSummaries)
-  ) {
-    const normalizedMode = normalizeMeetingNotesMode(preferredMode || notes.mode) || DEFAULT_NOTES_MODE;
+  function normalizeMeetingNotes(input, preferredMode) {
+    const notes = input && typeof input === "object" ? input : {};
+    if (
+      Array.isArray(notes.executiveSummary)
+      || Array.isArray(notes.topics)
+      || Array.isArray(notes.openQuestions)
+      || Array.isArray(notes.risksOrDependencies)
+      || Array.isArray(notes.memoHighlights)
+    ) {
+      const normalizedMode = normalizeMeetingNotesMode(preferredMode || notes.mode) || DEFAULT_NOTES_MODE;
       return {
         actionItems: normalizeMeetingActionItems(notes.actionItems),
         decisions: normalizeMeetingDecisionItems(notes.decisions),
@@ -4501,7 +4071,6 @@ function normalizeMeetingNotes(input, preferredMode) {
         modeSpecific: normalizeMeetingModeSpecific(notes.modeSpecific, normalizedMode),
         openQuestions: normalizeTextList(notes.openQuestions),
         risksOrDependencies: normalizeMeetingRisks(notes.risksOrDependencies),
-        speakerSummaries: normalizeMeetingSpeakerSummaries(notes.speakerSummaries),
         sourceTrace: normalizeMeetingSourceTrace(notes.sourceTrace),
         topics: normalizeMeetingTopics(notes.topics),
       };
@@ -4531,7 +4100,6 @@ function normalizeMeetingNotes(input, preferredMode) {
     modeSpecific: {},
     openQuestions: [],
     risksOrDependencies: [],
-    speakerSummaries: [],
     sourceTrace: [],
     topics: normalizeTextList(notes.discussion).length
       ? [
@@ -4607,16 +4175,6 @@ function normalizeMeetingTopics(input) {
       topic: normalizeText(item?.topic),
     }))
     .filter((item) => item.topic || item.summary || item.keyPoints.length || item.decisions.length || item.openQuestions.length);
-}
-
-function normalizeMeetingSpeakerSummaries(input) {
-  return (Array.isArray(input) ? input : [])
-    .map((item) => ({
-      keyPoints: normalizeTextList(item?.keyPoints),
-      speakerLabel: normalizeText(item?.speakerLabel),
-      summary: normalizeText(item?.summary),
-    }))
-    .filter((item) => item.speakerLabel && (item.summary || item.keyPoints.length));
 }
 
 function normalizeMeetingRisks(input) {
@@ -4843,18 +4401,13 @@ function limitMeetingNotesSections(sections) {
 }
 
 function buildMeetingNotesTranscriptLines(transcript) {
-  const speakerAliases = normalizeSpeakerAliases(transcript?.speakerAliases);
   const segments = Array.isArray(transcript?.segments) ? transcript.segments : [];
   const lines = segments
     .map((segment) => {
-      const speakerLabel = normalizeText(segment?.speakerLabel);
-      const speaker = resolveSpeakerDisplayName(speakerLabel, speakerAliases);
       const text = normalizeText(segment?.text);
+      const range = buildMeetingNotesSegmentRange(segment?.startMs, segment?.endMs);
       if (!text) return "";
-      if (speakerLabel && speaker && speaker !== speakerLabel) {
-        return `${speakerLabel} [${speaker}]: ${text}`;
-      }
-      return speakerLabel ? `${speakerLabel}: ${text}` : speaker ? `${speaker}: ${text}` : text;
+      return range ? `[${range}] ${text}` : text;
     })
     .filter(Boolean);
   if (lines.length) {
@@ -4866,66 +4419,22 @@ function buildMeetingNotesTranscriptLines(transcript) {
     .filter(Boolean);
 }
 
-function buildMeetingNotesSpeakerGuide(transcript) {
-  const speakerAliases = normalizeSpeakerAliases(transcript?.speakerAliases);
-  const speakerLabels = Array.from(collectTranscriptSpeakerLabels(transcript));
-  if (!speakerLabels.length) {
-    return "화자 목록: 없음";
+function buildMeetingNotesSegmentRange(startMs, endMs) {
+  const startSeconds = Math.max(0, Math.floor(Number(startMs) / 1000));
+  const endSeconds = Math.max(startSeconds, Math.floor(Number(endMs) / 1000));
+  const formatPart = (value) => {
+    const hours = Math.floor(value / 3600);
+    const minutes = Math.floor((value % 3600) / 60);
+    const seconds = value % 60;
+    if (hours) {
+      return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+    }
+    return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  };
+  if (endSeconds <= startSeconds) {
+    return formatPart(startSeconds);
   }
-  return [
-    "화자 목록:",
-    ...speakerLabels.map((speakerLabel) => `- ${speakerLabel}: ${resolveSpeakerDisplayName(speakerLabel, speakerAliases)}`),
-  ].join("\n");
-}
-
-function normalizeSpeakerAliasValue(value) {
-  return normalizeTextBlock(value)
-    .replace(/\n+/g, " ")
-    .replace(/\s+/g, " ")
-    .slice(0, MAX_SPEAKER_ALIAS_LENGTH);
-}
-
-function normalizeSpeakerAliases(input, allowedLabels) {
-  const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
-  const allowAll = !(allowedLabels instanceof Set);
-  const normalized = {};
-  for (const [rawLabel, rawAlias] of Object.entries(source)) {
-    const label = normalizeText(rawLabel);
-    const alias = normalizeSpeakerAliasValue(rawAlias);
-    if (!label || !alias) continue;
-    if (!allowAll && !allowedLabels.has(label)) continue;
-    if (alias === label) continue;
-    normalized[label] = alias;
-  }
-  return normalized;
-}
-
-function buildDefaultSpeakerDisplayName(value) {
-  const normalized = normalizeText(value);
-  if (!normalized) {
-    return "화자";
-  }
-  const diarizedMatch = normalized.match(/^SPEAKER_(\d+)$/i);
-  if (diarizedMatch) {
-    return `화자 ${Number.parseInt(diarizedMatch[1], 10) + 1}`;
-  }
-  if (/^[A-Z]$/i.test(normalized)) {
-    return `화자 ${normalized.toUpperCase()}`;
-  }
-  return normalized;
-}
-
-function resolveSpeakerDisplayName(value, speakerAliases) {
-  const label = normalizeText(value);
-  return normalizeText(speakerAliases?.[label]) || buildDefaultSpeakerDisplayName(label);
-}
-
-function collectTranscriptSpeakerLabels(transcript) {
-  return new Set(
-    (Array.isArray(transcript?.segments) ? transcript.segments : [])
-      .map((segment) => normalizeText(segment?.speakerLabel))
-      .filter(Boolean)
-  );
+  return `${formatPart(startSeconds)}-${formatPart(endSeconds)}`;
 }
 
 function normalizeMeetingJobLookup(input) {
@@ -4970,12 +4479,9 @@ function normalizeMeetingMutationRequest(input) {
 }
 
 function normalizeMeetingResultMutationRequest(input) {
-  const hasSpeakerAliases = Boolean(input && typeof input === "object" && Object.prototype.hasOwnProperty.call(input, "speakerAliases"));
   return {
     jobId: normalizeText(input?.jobId),
     meetingId: normalizeText(input?.meetingId),
-    speakerAliases: normalizeSpeakerAliases(input?.speakerAliases),
-    speakerAliasesProvided: hasSpeakerAliases,
     title: normalizeText(input?.title),
   };
 }
@@ -5077,14 +4583,12 @@ function buildQueuedJob(jobId, meeting, owner, options, source, context, created
     title: normalizeText(meeting.title),
     transcription: {
       language: meeting.language,
-      speakerLabels: options.speakerLabels,
     },
     updatedAt: createdAt,
   };
 }
 
 function buildSucceededJobPatch(artifact, meeting, options, source, context, transcript, meetingNotes, completedAt, deletedAt, retryInput) {
-  const speakerAliases = normalizeSpeakerAliases(transcript?.speakerAliases);
   const resultTitle = resolveMeetingResultTitle(meetingNotes, meeting.title);
   return {
     artifacts: [
@@ -5127,7 +4631,6 @@ function buildSucceededJobPatch(artifact, meeting, options, source, context, tra
     notesStatus: normalizeMeetingNotesStatus(meetingNotes?.notesStatus),
     notesStyleSelected: normalizeMeetingNotesStyle(meetingNotes?.notesStyleSelected) || DEFAULT_NOTES_STYLE,
     notesSchemaVersion: Math.max(1, Number(meetingNotes?.notesSchemaVersion) || NOTES_SCHEMA_VERSION),
-    speakerAliases,
     title: resultTitle,
     transcript: {
       artifactId: artifact.artifactId,
@@ -5136,8 +4639,6 @@ function buildSucceededJobPatch(artifact, meeting, options, source, context, tra
     },
     transcription: {
       language: meeting.language,
-      speakerCount: transcript.speakerCount,
-      speakerLabels: options.speakerLabels,
     },
     updatedAt: completedAt,
   };
@@ -5149,12 +4650,11 @@ function resolveMeetingResultTitle(meetingNotes, fallbackTitle) {
 }
 
 function buildTranscriptArtifact(artifactId, jobId, meeting, owner, transcript, meetingNotes, createdAt) {
-  const speakerAliases = normalizeSpeakerAliases(transcript?.speakerAliases);
   return {
     artifactId,
     createdAt,
     deletedAt: "",
-    format: "diarized_json",
+    format: "json",
     jobId,
     kind: "transcript",
     meetingId: meeting.meetingId,
@@ -5168,7 +4668,6 @@ function buildTranscriptArtifact(artifactId, jobId, meeting, owner, transcript, 
     notesStyleSelected: normalizeMeetingNotesStyle(meetingNotes?.notesStyleSelected) || DEFAULT_NOTES_STYLE,
     notesSchemaVersion: Math.max(1, Number(meetingNotes?.notesSchemaVersion) || NOTES_SCHEMA_VERSION),
     owner: owner ? { ...owner } : {},
-    speakerAliases,
     segments: transcript.segments,
     sessionId: meeting.sessionId,
     text: transcript.text,
@@ -5303,24 +4802,16 @@ function resolveAudioExtension(mimeType) {
 
 function normalizeTranscriptionResponse(response, fallbackDurationMs) {
   const inputSegments = Array.isArray(response?.segments) ? response.segments : [];
-  const speakerIds = [];
-  const speakerMap = new Map();
   const segments = inputSegments
     .map((segment) => {
       const text = normalizeText(segment?.text);
       if (!text) {
         return null;
       }
-      const speakerId = normalizeText(segment?.speaker) || "speaker-0";
-      if (!speakerMap.has(speakerId)) {
-        speakerMap.set(speakerId, `SPEAKER_${String(speakerIds.length).padStart(2, "0")}`);
-        speakerIds.push(speakerId);
-      }
       const startMs = Math.max(0, Math.round(Number(segment?.start) * 1000));
       const endMs = Math.max(startMs + 1, Math.round(Number(segment?.end) * 1000));
       return {
         endMs,
-        speakerLabel: speakerMap.get(speakerId),
         startMs,
         text,
       };
@@ -5332,7 +4823,6 @@ function normalizeTranscriptionResponse(response, fallbackDurationMs) {
     if (text) {
       segments.push({
         endMs: Math.max(1, Math.round(Number(response?.duration) * 1000) || Math.max(1, Number(fallbackDurationMs) || 1)),
-        speakerLabel: "SPEAKER_00",
         startMs: 0,
         text,
       });
@@ -5340,12 +4830,11 @@ function normalizeTranscriptionResponse(response, fallbackDurationMs) {
   }
 
   const transcriptText = segments.length
-    ? segments.map((segment) => `${segment.speakerLabel}: ${segment.text}`).join(" ")
+    ? segments.map((segment) => segment.text).join(" ")
     : normalizeText(response?.text);
 
   return {
     segments,
-    speakerCount: Math.max(segments.length ? new Set(segments.map((segment) => segment.speakerLabel)).size : 0, 0),
     text: transcriptText,
   };
 }
@@ -5386,7 +4875,6 @@ function normalizeMeetingJob(input) {
     notesSchemaVersion: Math.max(1, Number(job.notesSchemaVersion) || NOTES_SCHEMA_VERSION),
     options: {
       redaction: normalizeText(job.options?.redaction),
-      speakerLabels: Boolean(job.options?.speakerLabels),
       summary: Boolean(job.options?.summary),
     },
     owner: job.owner && typeof job.owner === "object" ? { ...job.owner } : {},
@@ -5404,7 +4892,6 @@ function normalizeMeetingJob(input) {
     },
     queuedAt: normalizeText(job.queuedAt),
     sessionId: normalizeText(job.sessionId || job.meeting?.sessionId),
-    speakerAliases: normalizeSpeakerAliases(job.speakerAliases),
     source: normalizeMeetingSource(job.source),
     status: normalizeText(job.status),
     title: normalizeText(job.title || job.meeting?.title),
@@ -5415,8 +4902,6 @@ function normalizeMeetingJob(input) {
     },
     transcription: {
       language: normalizeText(job.transcription?.language),
-      speakerCount: Math.max(0, Number(job.transcription?.speakerCount) || 0),
-      speakerLabels: Boolean(job.transcription?.speakerLabels),
     },
     updatedAt: normalizeText(job.updatedAt),
   };
@@ -5442,7 +4927,6 @@ function normalizeMeetingArtifact(input) {
     notesStyleSelected: normalizeMeetingNotesStyle(artifact.notesStyleSelected) || DEFAULT_NOTES_STYLE,
     notesSchemaVersion: Math.max(1, Number(artifact.notesSchemaVersion) || NOTES_SCHEMA_VERSION),
     owner: artifact.owner && typeof artifact.owner === "object" ? { ...artifact.owner } : {},
-    speakerAliases: normalizeSpeakerAliases(artifact.speakerAliases),
     segments: Array.isArray(artifact.segments) ? artifact.segments.map(normalizeTranscriptSegment) : [],
     sessionId: normalizeText(artifact.sessionId),
     text: normalizeText(artifact.text),
@@ -5522,8 +5006,6 @@ function normalizeMeetingResultSummary(input) {
     jobId: normalizeText(item.jobId),
     requestId: normalizeText(item.requestId),
     sessionId: normalizeText(item.sessionId),
-    speakerAliases: normalizeSpeakerAliases(item.speakerAliases),
-    speakerCount: Math.max(0, Number(item.speakerCount) || 0),
     status: normalizeText(item.status),
     title: normalizeText(item.title),
     transcriptAvailable: Boolean(item.transcriptAvailable),
@@ -5555,11 +5037,6 @@ function buildMeetingResultSummary(jobInput, artifactInput) {
     previewText: notesPreview || buildTranscriptExcerpt(transcriptText),
     requestId: normalizeText(job.source.requestId),
     sessionId: job.sessionId,
-    speakerAliases: {
-      ...(artifact?.speakerAliases || {}),
-      ...(job.speakerAliases || {}),
-    },
-    speakerCount: Math.max(0, Number(artifact ? countTranscriptSpeakers(artifact.segments) : job.transcription.speakerCount) || 0),
     status: job.status,
     title: job.title || job.meeting.title,
     transcriptAvailable: Boolean(transcriptText || normalizeText(artifact?.artifactId || job.transcript?.artifactId)),
@@ -5625,14 +5102,6 @@ function collectMeetingArtifactIds(jobInput) {
   );
 }
 
-function countTranscriptSpeakers(segments) {
-  return new Set(
-    (Array.isArray(segments) ? segments : [])
-      .map((segment) => normalizeText(segment?.speakerLabel))
-      .filter(Boolean)
-  ).size;
-}
-
 async function upsertMeetingJobSummary(meetingRef, meeting, owner, jobInput, artifactInput) {
   const job = normalizeMeetingJob(jobInput);
   if (!job.jobId || job.deletedAt) {
@@ -5685,7 +5154,6 @@ function normalizeTranscriptSegment(input) {
   const endMs = Math.max(startMs + 1, Number(segment.endMs) || startMs + 1);
   return {
     endMs,
-    speakerLabel: normalizeText(segment.speakerLabel),
     startMs,
     text: normalizeText(segment.text),
   };
@@ -5792,20 +5260,11 @@ async function loadMeetingTranscriptForNotes(jobInput, db, createHttpError) {
       const text = normalizeText(artifact.text);
       const segments = Array.isArray(artifact.segments) ? artifact.segments : [];
       if (text || segments.length) {
-        const speakerLabels = collectTranscriptSpeakerLabels({ segments });
-        const speakerAliases = normalizeSpeakerAliases(
-          {
-            ...(artifact.speakerAliases || {}),
-            ...(job.speakerAliases || {}),
-          },
-          speakerLabels
-        );
         return {
           artifact,
           artifactRef,
           transcript: {
             segments,
-            speakerAliases,
             text,
           },
         };
@@ -5815,14 +5274,12 @@ async function loadMeetingTranscriptForNotes(jobInput, db, createHttpError) {
   const transcriptText = normalizeText(job.transcript?.text);
   const transcriptSegments = Array.isArray(job.transcript?.segments) ? job.transcript.segments : [];
   if (transcriptText || transcriptSegments.length) {
-    const speakerLabels = collectTranscriptSpeakerLabels({ segments: transcriptSegments });
-    const speakerAliases = normalizeSpeakerAliases(job.speakerAliases, speakerLabels);
     return {
       artifact: normalizeMeetingArtifact({
         artifactId,
         createdAt: normalizeText(job.updatedAt || job.createdAt || job.queuedAt),
         deletedAt: "",
-        format: "diarized_json",
+        format: "json",
         jobId: job.jobId,
         kind: "transcript",
         meetingId: job.meetingId,
@@ -5835,7 +5292,6 @@ async function loadMeetingTranscriptForNotes(jobInput, db, createHttpError) {
         notesStatus: job.notesStatus,
         notesSchemaVersion: job.notesSchemaVersion,
         owner: job.owner,
-        speakerAliases,
         segments: transcriptSegments,
         sessionId: job.sessionId,
         text: transcriptText,
@@ -5843,7 +5299,6 @@ async function loadMeetingTranscriptForNotes(jobInput, db, createHttpError) {
       artifactRef,
       transcript: {
         segments: transcriptSegments,
-        speakerAliases,
         text: transcriptText,
       },
     };

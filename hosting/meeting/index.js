@@ -1,6 +1,6 @@
 (function initHostedMeetingWorkspace(global) {
   const ns = global.__INOVA_HOSTED_MEETING__;
-  const { AUTO_RETRY_PENDING_STATUSES, DEFAULT_CREATE_JOB_TIMEOUT_MS, DEFAULT_INLINE_AUDIO_LIMIT_BYTES, DEFAULT_SOURCE_CHUNK_DURATION_MS, DEFAULT_SOURCE_CHUNK_OVERLAP_MS, DEFAULT_SOURCE_MAX_BYTES, DEFAULT_SOURCE_MAX_DURATION_MS, DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS, DEFAULT_SOURCE_TARGET_PART_BYTES, DEFAULT_SOURCE_UPLOAD_TIMEOUT_MS, buildCopyText, buildErrorCopyText, buildRemoteSelectionId, buildWorkspaceHash, buildWorkspaceSessionStorageKey, clearDebugEntries, clearPersistedWorkspaceSession, formatDateTime, getDebugEntries, isDebugPanelEnabled, isLikelyNetworkError, isLocalWorkspaceOrigin, isOnline, loadPersistedWorkspaceSession, logDebug, normalizeSpeakerAliases, normalizeText, normalizeTextBlock, parseParams, pickRecorderMimeType, persistWorkspaceSessionPayload, postJson, resolveConfig, resolveRecordingProfile, safeLocalStorageGet, safeLocalStorageSet, setEnabled: setDebugEnabled, stopTracks, subscribeDebugEntries, summarizeEntries } = ns.shared;
+  const { AUTO_RETRY_PENDING_STATUSES, DEFAULT_CREATE_JOB_TIMEOUT_MS, DEFAULT_INLINE_AUDIO_LIMIT_BYTES, DEFAULT_SOURCE_CHUNK_DURATION_MS, DEFAULT_SOURCE_CHUNK_OVERLAP_MS, DEFAULT_SOURCE_MAX_BYTES, DEFAULT_SOURCE_MAX_DURATION_MS, DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS, DEFAULT_SOURCE_TARGET_PART_BYTES, DEFAULT_SOURCE_UPLOAD_TIMEOUT_MS, buildCopyText, buildErrorCopyText, buildRemoteSelectionId, buildWorkspaceHash, buildWorkspaceSessionStorageKey, clearDebugEntries, clearPersistedWorkspaceSession, formatDateTime, getDebugEntries, isDebugPanelEnabled, isLikelyNetworkError, isLocalWorkspaceOrigin, isOnline, loadPersistedWorkspaceSession, logDebug, normalizeText, normalizeTextBlock, parseParams, pickRecorderMimeType, persistWorkspaceSessionPayload, postJson, resolveConfig, resolveRecordingProfile, safeLocalStorageGet, safeLocalStorageSet, setEnabled: setDebugEnabled, stopTracks, subscribeDebugEntries, summarizeEntries } = ns.shared;
   const { clearWorkspaceAuthCache, ensureWorkspaceAuth, getCollections, subscribeDocument } = ns.firebase;
   const { prepareAudioSourceChunks } = ns.audioChunker;
   const { DEBUG_SCENARIOS: PENDING_UPLOAD_DEBUG_SCENARIOS, blobToBase64, collapseSupersededPendingUploads, createPendingUploadStore, normalizePendingUpload } = ns.storage;
@@ -86,7 +86,7 @@
       blockedTitle: "이 작업실은 패널에서 다시 열어야 합니다",
       blockedTone: "blocked",
       blockedMessage: "",
-      busy: { deleteMeeting: false, deleteRecord: false, queue: Object.create(null), regenerateNotes: false, saveMeetingMemo: false, saveMeetingTitle: false, saveRecordTitle: false, saveSpeakerAliases: false },
+      busy: { deleteMeeting: false, deleteRecord: false, queue: Object.create(null), regenerateNotes: false, saveMeetingMemo: false, saveMeetingTitle: false, saveRecordTitle: false },
       capture: createIdleCapture(recordingProfile),
       confirmation: { body: "", confirmLabel: "확인", eyebrow: "확인", open: false, resolve: null, title: "", tone: "danger" },
       currentArtifact: null,
@@ -163,8 +163,6 @@
       runtimeChunkCache: Object.create(null),
       selectedRecordId: "",
       session: { expiresAt: "", meetingId: "", meetingSessionToken: "", mode: "create", sharedMemo: "", title: "" },
-      speakerAliasDraftRecordId: "",
-      speakerAliasDrafts: Object.create(null),
       supersededRemoteJobIds: [],
       unsubscribeDebug: null,
     };
@@ -175,7 +173,7 @@
   }
 
   function cacheRefs() {
-    for (const id of ["meetingShell", "blockedMessage", "blockedEyebrow", "blockedTitle", "blockedState", "workspace", "pageTitle", "pageSummary", "workspaceBadge", "offlineQueueBadge", "refreshButton", "meetingTitleInput", "saveMeetingTitleButton", "deleteMeetingButton", "meetingStatusChip", "currentBadge", "currentSummary", "currentHint", "currentNotice", "currentTimer", "startButton", "importAudioButton", "importAudioInput", "pauseButton", "resumeButton", "stopButton", "discardButton", "sharedMemoInput", "saveSharedMemoButton", "clearSharedMemoButton", "sharedMemoNotice", "recordCountBadge", "recordList", "detailTitle", "detailBadge", "detailSummary", "recordTitleGroup", "recordTitleInput", "saveRecordTitleButton", "downloadRecordButton", "deleteRecordButton", "detailMeta", "speakerEditor", "speakerAliasList", "saveSpeakerAliasesButton", "saveSpeakerAliasesAndRegenerateButton", "copySegmentsButton", "detailMemoText", "reviewTabSummary", "reviewTabMemo", "reviewTabNotes", "reviewTabSegments", "reviewTabSegmentsCount", "reviewTabSpeakers", "reviewPanelSummary", "summaryStatusPill", "summaryStatusGrid", "summaryActionCard", "reviewPanelMemo", "meetingNotesCard", "reviewPanelSegments", "reviewPanelSpeakers", "speakerDigestList", "notesSummaryMeta", "notesStyleSelect", "regenerateNotesButton", "meetingNotesOverview", "meetingNotesSections", "detailNotice", "segmentList", "debugPanel", "confirmOverlay", "confirmDialog", "confirmDialogEyebrow", "confirmDialogTitle", "confirmDialogBody", "confirmDialogCancel", "confirmDialogConfirm"]) {
+    for (const id of ["meetingShell", "blockedMessage", "blockedEyebrow", "blockedTitle", "blockedState", "workspace", "pageTitle", "pageSummary", "workspaceBadge", "offlineQueueBadge", "refreshButton", "meetingTitleInput", "saveMeetingTitleButton", "deleteMeetingButton", "meetingStatusChip", "currentBadge", "currentSummary", "currentHint", "currentNotice", "currentTimer", "startButton", "importAudioButton", "importAudioInput", "pauseButton", "resumeButton", "stopButton", "discardButton", "sharedMemoInput", "saveSharedMemoButton", "clearSharedMemoButton", "sharedMemoNotice", "recordCountBadge", "recordList", "detailTitle", "detailBadge", "detailSummary", "recordTitleGroup", "recordTitleInput", "saveRecordTitleButton", "downloadRecordButton", "deleteRecordButton", "detailMeta", "copySegmentsButton", "detailMemoText", "reviewTabSummary", "reviewTabMemo", "reviewTabNotes", "reviewTabSegments", "reviewTabSegmentsCount", "reviewPanelSummary", "summaryStatusPill", "summaryStatusGrid", "summaryActionCard", "reviewPanelMemo", "meetingNotesCard", "reviewPanelSegments", "notesSummaryMeta", "notesStyleSelect", "regenerateNotesButton", "meetingNotesOverview", "meetingNotesSections", "detailNotice", "segmentList", "debugPanel", "confirmOverlay", "confirmDialog", "confirmDialogEyebrow", "confirmDialogTitle", "confirmDialogBody", "confirmDialogCancel", "confirmDialogConfirm"]) {
       refs[id] = global.document.getElementById(id);
     }
   }
@@ -207,7 +205,7 @@
       state.notesStyleSelection = normalizeText(refs.notesStyleSelect.value);
       applyRender();
     });
-    for (const tabId of ["reviewTabSummary", "reviewTabMemo", "reviewTabNotes", "reviewTabSegments", "reviewTabSpeakers"]) {
+    for (const tabId of ["reviewTabSummary", "reviewTabMemo", "reviewTabNotes", "reviewTabSegments"]) {
       const tab = refs[tabId];
       if (!tab) continue;
       tab.addEventListener("click", () => {
@@ -226,9 +224,6 @@
     refs.saveRecordTitleButton.addEventListener("click", saveCurrentRecordTitle);
     refs.downloadRecordButton.addEventListener("click", downloadCurrentRecord);
     refs.deleteRecordButton.addEventListener("click", () => deleteCurrentRecord());
-    refs.speakerAliasList?.addEventListener("input", handleSpeakerAliasInput);
-    refs.saveSpeakerAliasesButton?.addEventListener("click", () => saveSpeakerAliases());
-    refs.saveSpeakerAliasesAndRegenerateButton?.addEventListener("click", () => saveSpeakerAliases({ regenerateAfterSave: true }));
     refs.copySegmentsButton?.addEventListener("click", copySegmentsText);
     refs.regenerateNotesButton.addEventListener("click", regenerateNotes);
     refs.debugPanel?.addEventListener("click", handleDebugPanelClick);
@@ -2203,7 +2198,6 @@
     const entry = findHistoryEntry(state, state.selectedRecordId);
     if (!entry) {
       resetSelectedDetailState();
-      syncSpeakerAliasDrafts(true);
       return;
     }
     state.currentLocalRecord = entry.pending || null;
@@ -2214,7 +2208,6 @@
       disconnectArtifactListener();
       state.currentArtifact = null;
       state.currentJob = buildLocalPendingJob(entry.pending);
-      syncSpeakerAliasDrafts(true);
       return;
     }
 
@@ -2225,11 +2218,7 @@
       || (forceRefresh && !state.currentJob)
     );
     if (!shouldReconnect) {
-      await ensureArtifactRealtimeSubscription(entry, {
-        forceReconnect: false,
-        forceResetAliases: false,
-      });
-      syncSpeakerAliasDrafts(false);
+      await ensureArtifactRealtimeSubscription(entry, { forceReconnect: false });
       return;
     }
 
@@ -2253,9 +2242,7 @@
       title: entry.remote.title,
       updatedAt: entry.remote.updatedAt,
     }, state.meeting.title);
-    await subscribeSelectedJobRealtime(entry, {
-      forceResetAliases: true,
-    });
+    await subscribeSelectedJobRealtime(entry);
   }
 
   async function subscribeSelectedJobRealtime(entry, options = {}) {
@@ -2288,7 +2275,6 @@
         },
         next: (snapshot) => {
           void handleJobSnapshot(snapshot, entry, {
-            forceResetAliases: Boolean(options.forceResetAliases),
             listenerVersion,
           })
             .then(finishResolve)
@@ -2307,11 +2293,7 @@
       return;
     }
     if (!snapshot?.exists) {
-      await ensureArtifactRealtimeSubscription(entry, {
-        forceReconnect: true,
-        forceResetAliases: Boolean(options.forceResetAliases),
-      });
-      syncSpeakerAliasDrafts(Boolean(options.forceResetAliases));
+      await ensureArtifactRealtimeSubscription(entry, { forceReconnect: true });
       applyRender();
       return;
     }
@@ -2321,11 +2303,7 @@
       || state.currentJob?.notesStyleSelected
       || state.notesStyleSelection
     );
-    await ensureArtifactRealtimeSubscription(entry, {
-      forceReconnect: false,
-      forceResetAliases: Boolean(options.forceResetAliases),
-    });
-    syncSpeakerAliasDrafts(Boolean(options.forceResetAliases));
+    await ensureArtifactRealtimeSubscription(entry, { forceReconnect: false });
     applyRender();
     logDebug("workspace.snapshot.job", {
       artifactId: normalizeText(state.currentJob?.artifactId),
@@ -2378,7 +2356,6 @@
         },
         next: (snapshot) => {
           void handleArtifactSnapshot(snapshot, {
-            forceResetAliases: Boolean(options.forceResetAliases),
             listenerVersion,
           })
             .then(finishResolve)
@@ -2402,7 +2379,6 @@
       || state.currentJob?.notesStyleSelected
       || state.notesStyleSelection
     );
-    syncSpeakerAliasDrafts(Boolean(options.forceResetAliases));
     applyRender();
     logDebug("workspace.snapshot.artifact", {
       artifactId: normalizeText(state.currentArtifact?.artifactId || state.realtime.artifactDocId),
@@ -3170,7 +3146,7 @@
     }
     return {
       meeting: { endedAt: item.endedAt, language: "ko", meetingId: state.session.meetingId, sharedMemo: item.sharedMemoSnapshot, startedAt: item.startedAt, title: getWorkspaceTitleOrFallback() },
-      options: { redaction: "none", speakerLabels: true, summary: true },
+      options: { redaction: "none", summary: true },
       source,
       context: { sharedMemoSnapshot: item.sharedMemoSnapshot },
     };
@@ -3255,7 +3231,7 @@
         startedAt: item.startedAt,
         title: getWorkspaceTitleOrFallback(),
       },
-      options: { redaction: "none", speakerLabels: true, summary: true },
+      options: { redaction: "none", summary: true },
       source: {
         captureMode: item.captureMode,
         channelCount: item.channelCount,
@@ -3970,90 +3946,6 @@
     applyRender();
   }
 
-  function collectCurrentSpeakerLabels() {
-    return Array.from(
-      new Set(
-        (Array.isArray(state.currentArtifact?.segments) ? state.currentArtifact.segments : Array.isArray(state.currentJob?.transcript?.segments) ? state.currentJob.transcript.segments : [])
-          .map((segment) => normalizeText(segment?.speakerLabel))
-          .filter(Boolean)
-      )
-    );
-  }
-
-  function getCurrentSpeakerAliases() {
-    return normalizeSpeakerAliases({
-      ...(state.currentArtifact?.speakerAliases || {}),
-      ...(state.currentJob?.speakerAliases || {}),
-    });
-  }
-
-  function syncSpeakerAliasDrafts(forceReset) {
-    const recordId = normalizeText(state.selectedRecordId);
-    const speakerLabels = collectCurrentSpeakerLabels();
-    if (!recordId || !speakerLabels.length) {
-      state.speakerAliasDraftRecordId = recordId;
-      state.speakerAliasDrafts = Object.create(null);
-      return;
-    }
-    const savedAliases = getCurrentSpeakerAliases();
-    const reuseDrafts = !forceReset && state.speakerAliasDraftRecordId === recordId;
-    const nextDrafts = Object.create(null);
-    for (const speakerLabel of speakerLabels) {
-      const nextValue = normalizeText(
-        reuseDrafts
-          ? state.speakerAliasDrafts?.[speakerLabel] || savedAliases?.[speakerLabel]
-          : savedAliases?.[speakerLabel]
-      );
-      if (nextValue) {
-        nextDrafts[speakerLabel] = nextValue;
-      }
-    }
-    state.speakerAliasDraftRecordId = recordId;
-    state.speakerAliasDrafts = nextDrafts;
-  }
-
-  function areSpeakerAliasMapsEqual(left, right) {
-    const leftKeys = Object.keys(left || {}).sort();
-    const rightKeys = Object.keys(right || {}).sort();
-    if (leftKeys.length !== rightKeys.length) return false;
-    return leftKeys.every((key, index) => key === rightKeys[index] && normalizeText(left[key]) === normalizeText(right[key]));
-  }
-
-  function updateSpeakerAliasActionButtons() {
-    if (!refs.saveSpeakerAliasesButton || !refs.saveSpeakerAliasesAndRegenerateButton) return;
-    const speakerLabels = collectCurrentSpeakerLabels();
-    const activeEntry = findHistoryEntry(state, state.selectedRecordId);
-    const canEdit = Boolean(activeEntry?.remote?.jobId) && speakerLabels.length > 0;
-    const allowedLabels = new Set(speakerLabels);
-    const savedAliases = normalizeSpeakerAliases(getCurrentSpeakerAliases(), allowedLabels);
-    const draftAliases = normalizeSpeakerAliases(state.speakerAliasDrafts, allowedLabels);
-    const isDirty = !areSpeakerAliasMapsEqual(savedAliases, draftAliases);
-    refs.saveSpeakerAliasesButton.disabled = !canEdit || state.busy.saveSpeakerAliases || !isDirty;
-    refs.saveSpeakerAliasesButton.textContent = state.busy.saveSpeakerAliases ? "저장 중" : isDirty ? "화자명 저장" : "저장됨";
-    refs.saveSpeakerAliasesAndRegenerateButton.disabled = !canEdit || state.busy.saveSpeakerAliases || state.busy.regenerateNotes || !isDirty;
-    refs.saveSpeakerAliasesAndRegenerateButton.textContent = state.busy.regenerateNotes ? "정리 중" : "저장 후 다시 정리";
-  }
-
-  function handleSpeakerAliasInput(event) {
-    const target = event?.target;
-    if (!(target instanceof global.HTMLInputElement)) return;
-    const speakerLabel = normalizeText(target.dataset.speakerLabel);
-    if (!speakerLabel) return;
-    const nextDrafts = { ...state.speakerAliasDrafts };
-    const nextAlias = normalizeTextBlock(target.value).replace(/\n+/g, " ").replace(/\s+/g, " ").slice(0, 80);
-    if (target.value !== nextAlias) {
-      target.value = nextAlias;
-    }
-    if (nextAlias) {
-      nextDrafts[speakerLabel] = nextAlias;
-    } else {
-      delete nextDrafts[speakerLabel];
-    }
-    state.speakerAliasDraftRecordId = normalizeText(state.selectedRecordId);
-    state.speakerAliasDrafts = nextDrafts;
-    updateSpeakerAliasActionButtons();
-  }
-
   function getCurrentRecordTitleForMutation(entry) {
     const activeInputValue = global.document.activeElement === refs.recordTitleInput
       ? refs.recordTitleInput?.value
@@ -4068,67 +3960,6 @@
       || state.session.title
       || "새 기록"
     );
-  }
-
-  async function saveSpeakerAliases(options = {}) {
-    const entry = findHistoryEntry(state, state.selectedRecordId);
-    if (!entry?.remote?.jobId) return;
-    const speakerLabels = collectCurrentSpeakerLabels();
-    if (!speakerLabels.length) return;
-    const nextSpeakerAliases = normalizeSpeakerAliases(state.speakerAliasDrafts, new Set(speakerLabels));
-    const currentRecordTitle = getCurrentRecordTitleForMutation(entry);
-    state.busy.saveSpeakerAliases = true;
-    applyRender();
-    try {
-      const savePayload = await postJson(
-        global,
-        CONFIG.updateMeetingResultUrl,
-        {
-          jobId: entry.remote.jobId,
-          meetingId: state.session.meetingId,
-          speakerAliases: nextSpeakerAliases,
-          title: currentRecordTitle,
-        },
-        state.session.meetingSessionToken
-      );
-      state.currentJob = normalizeJob(savePayload?.job, state.currentJob?.title || state.meeting.title);
-      if (state.currentArtifact) {
-        state.currentArtifact = normalizeArtifact({
-          ...state.currentArtifact,
-          speakerAliases: nextSpeakerAliases,
-        });
-      }
-      syncSpeakerAliasDrafts(true);
-      if (options?.regenerateAfterSave) {
-        state.busy.regenerateNotes = true;
-        applyRender();
-        state.notesStyleSelection = normalizeText(refs.notesStyleSelect.value || state.notesStyleSelection || state.currentJob?.notesStyleSelected);
-        const regeneratePayload = await postJson(
-          global,
-          CONFIG.regenerateNotesUrl,
-          {
-            jobId: entry.remote.jobId,
-            meetingId: state.session.meetingId,
-            notesStyle: normalizeText(refs.notesStyleSelect.value || state.notesStyleSelection),
-            sharedMemo: normalizeTextBlock(state.currentJob?.sharedMemoSnapshot),
-          },
-          state.session.meetingSessionToken
-        );
-        state.currentJob = normalizeJob(regeneratePayload?.job, state.currentJob?.title || state.meeting.title);
-        state.currentArtifact = normalizeArtifact(regeneratePayload?.artifact);
-        state.notesStyleSelection = normalizeText(state.currentArtifact?.notesStyleSelected || state.currentJob?.notesStyleSelected || state.notesStyleSelection);
-        syncSpeakerAliasDrafts(true);
-        state.reviewTab = "notes";
-        setNotice("화자명과 표현 방식을 반영해 회의 정리를 다시 만들었습니다.", "highlight");
-      } else {
-        setNotice("화자명을 저장했습니다.", "highlight");
-      }
-      await syncWorkspaceLocalState(true, "workflow");
-    } finally {
-      state.busy.regenerateNotes = false;
-      state.busy.saveSpeakerAliases = false;
-      applyRender();
-    }
   }
 
   async function saveRecordTitleForEntry(recordId, nextTitleInput) {
@@ -4362,7 +4193,7 @@
   async function copySegmentsText() {
     const entry = findHistoryEntry(state, state.selectedRecordId);
     const detailView = buildDetailView(state, entry);
-    const text = buildSegmentCopyText(detailView.segments, detailView.transcriptText, detailView.speakerAliases);
+    const text = buildSegmentCopyText(detailView.segments, detailView.transcriptText);
     if (!text) {
       setNotice("복사할 전사가 아직 없습니다.", "warning");
       applyRender();
@@ -4545,15 +4376,6 @@
     refs.blockedMessage.textContent = state.blockedMessage;
   }
   function applyRender() {
-    const activeElement = global.document.activeElement;
-    const speakerInputFocusState = activeElement instanceof global.HTMLInputElement && refs.speakerAliasList?.contains(activeElement)
-      ? {
-          selectionDirection: activeElement.selectionDirection || "none",
-          selectionEnd: typeof activeElement.selectionEnd === "number" ? activeElement.selectionEnd : null,
-          selectionStart: typeof activeElement.selectionStart === "number" ? activeElement.selectionStart : null,
-          speakerLabel: normalizeText(activeElement.dataset.speakerLabel),
-        }
-      : null;
     if (state.blocked) {
       refs.workspace.hidden = true;
       refs.blockedState.hidden = false;
@@ -4568,22 +4390,6 @@
     refs.workspace.hidden = false;
     renderWorkspace(state, refs);
     renderDebugPanel();
-    if (speakerInputFocusState?.speakerLabel && refs.speakerAliasList) {
-      const speakerInput = Array.from(refs.speakerAliasList.querySelectorAll("input[data-speaker-label]"))
-        .find((element) => normalizeText(element.dataset.speakerLabel) === speakerInputFocusState.speakerLabel);
-      if (speakerInput) {
-        speakerInput.focus();
-        if (speakerInputFocusState.selectionStart != null && speakerInputFocusState.selectionEnd != null) {
-          try {
-            speakerInput.setSelectionRange(
-              speakerInputFocusState.selectionStart,
-              speakerInputFocusState.selectionEnd,
-              speakerInputFocusState.selectionDirection
-            );
-          } catch {}
-        }
-      }
-    }
     refs.confirmOverlay.hidden = !state.confirmation.open;
     if (refs.confirmDialog) {
       refs.confirmDialog.dataset.tone = state.confirmation.tone || "danger";

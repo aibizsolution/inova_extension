@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 
 const assert = require("assert");
-const { registerMeetingLaunchHandlers } = require("../functions/meeting-launch-service");
-const { registerMeetingHandlers } = require("../functions/meeting-service");
+const { registerMeetingLaunchHandlers } = require("../functions/features/meeting/meeting-launch-service");
+const { registerMeetingHandlers } = require("../functions/features/meeting/meeting-service");
 
 const JOB_COLLECTION = "integration_inova_meeting_jobs";
+const DELETION_COLLECTION = "integration_inova_meeting_deletions";
+const JOB_FINALIZER_COLLECTION = "integration_inova_meeting_job_finalizers";
+const JOB_PART_COLLECTION = "integration_inova_meeting_job_parts";
 const MEETING_COLLECTION = "integration_inova_meetings";
 const WORKSPACE_SESSION_COLLECTION = "integration_inova_meeting_workspace_sessions";
 
@@ -109,7 +112,7 @@ async function main() {
         startedAt: "2026-03-30T08:20:00.000Z",
         title: "주간 스탠드업",
       },
-      options: { redaction: "none", speakerLabels: true, summary: true },
+      options: { redaction: "none", summary: true },
       owner,
       source: {
         captureMode: "tab-audio",
@@ -142,7 +145,7 @@ async function main() {
         startedAt: "2026-03-30T08:20:00.000Z",
         title: "주간 스탠드업",
       },
-      options: { redaction: "none", speakerLabels: true, summary: true },
+      options: { redaction: "none", summary: true },
       owner,
       source: {
         captureMode: "tab-audio",
@@ -182,8 +185,7 @@ async function main() {
   assert.equal(storedJob.jsonBody.data.job.title, "프로모션 일정·예산 실행 계획");
   assert(storedJob.jsonBody.data.job.meetingNotes.executiveSummary.length > 0);
   assert(storedJob.jsonBody.data.job.meetingNotes.modeSpecific.milestones.length > 0);
-  assert.equal(storedJob.jsonBody.data.job.meetingNotes.speakerSummaries[0].speakerLabel, "SPEAKER_00");
-  assert(storedJob.jsonBody.data.job.meetingNotes.speakerSummaries[0].summary.includes("일정"));
+  assert.equal(storedJob.jsonBody.data.job.meetingNotes.speakerSummaries, undefined);
 
   const artifactId = storedJob.jsonBody.data.job.transcript.artifactId;
   const artifact = await invokeHandler(handlers.getInovaMeetingArtifact, {
@@ -280,7 +282,7 @@ async function main() {
   assert.equal(regenerated.jsonBody.data.job.meetingNotes.mode, "interview");
   assert.equal(regenerated.jsonBody.data.job.title, "후보자 응답 및 후속 인터뷰 정리");
   assert(regenerated.jsonBody.data.job.meetingNotes.modeSpecific.followUpQuestions.length > 0);
-  assert.equal(regenerated.jsonBody.data.job.meetingNotes.speakerSummaries[1].speakerLabel, "SPEAKER_01");
+  assert.equal(regenerated.jsonBody.data.job.meetingNotes.speakerSummaries, undefined);
   assert.equal(state.openaiRequests.length, 1, "Notes regeneration should not retrigger transcription");
   assert.equal(state.openaiSummaryRequests.length, 4, "Regeneration should run classifier + notes only");
 
@@ -289,20 +291,15 @@ async function main() {
       jobId,
       meetingId: "meeting-planning-1",
       owner,
-      speakerAliases: {
-        SPEAKER_00: "박영택",
-        SPEAKER_01: "마케팅 팀",
-      },
       title: "3월 30일 회의록",
     },
     method: "POST",
   });
   assert.equal(updatedResult.statusCode, 200);
   assert.equal(updatedResult.jsonBody.data.job.title, "3월 30일 회의록");
-  assert.equal(updatedResult.jsonBody.data.job.speakerAliases.SPEAKER_00, "박영택");
-  assert.equal(updatedResult.jsonBody.data.job.speakerAliases.SPEAKER_01, "마케팅 팀");
+  assert.equal(updatedResult.jsonBody.data.job.speakerAliases, undefined);
 
-  const aliasRegenerated = await invokeHandler(handlers.regenerateInovaMeetingNotes, {
+  const planningRegenerated = await invokeHandler(handlers.regenerateInovaMeetingNotes, {
     body: {
       jobId,
       meetingId: "meeting-planning-1",
@@ -312,12 +309,11 @@ async function main() {
     },
     method: "POST",
   });
-  assert.equal(aliasRegenerated.statusCode, 200);
-  assert.equal(aliasRegenerated.jsonBody.data.job.speakerAliases.SPEAKER_00, "박영택");
-  assert.equal(aliasRegenerated.jsonBody.data.artifact.speakerAliases.SPEAKER_01, "마케팅 팀");
-  assert.equal(aliasRegenerated.jsonBody.data.job.title, "프로모션 일정·예산 실행 계획");
-  assert.equal(state.openaiSummaryRequests.length, 6, "Alias regeneration should run classifier + notes once more");
-  assert(state.openaiSummaryRequests[5].prompt.includes("박영택"), "Notes regeneration prompt should use saved speaker aliases");
+  assert.equal(planningRegenerated.statusCode, 200);
+  assert.equal(planningRegenerated.jsonBody.data.job.speakerAliases, undefined);
+  assert.equal(planningRegenerated.jsonBody.data.artifact.speakerAliases, undefined);
+  assert.equal(planningRegenerated.jsonBody.data.job.title, "프로모션 일정·예산 실행 계획");
+  assert.equal(state.openaiSummaryRequests.length, 6, "Planning regeneration should run classifier + notes once more");
 
   const generalRegenerated = await invokeHandler(handlers.regenerateInovaMeetingNotes, {
     body: {
@@ -348,8 +344,9 @@ async function main() {
     method: "POST",
   });
   assert.equal(deletedResult.statusCode, 200);
+  assert.equal(deletedResult.jsonBody.data.cleanupQueued, true);
   assert.equal(deletedResult.jsonBody.data.deletedJobId, jobId);
-  assert.equal(deletedResult.jsonBody.data.artifactCount, 1);
+  await invokeDeletionWriteTrigger(handlers, state, deletedResult.jsonBody.data.queueTaskId);
 
   const deletedWorkspace = await invokeHandler(handlers.deleteInovaMeeting, {
     body: {
@@ -359,9 +356,10 @@ async function main() {
     method: "POST",
   });
   assert.equal(deletedWorkspace.statusCode, 200);
+  assert.equal(deletedWorkspace.jsonBody.data.cleanupQueued, true);
   assert.equal(deletedWorkspace.jsonBody.data.meetingId, "meeting-planning-1");
   assert.equal(deletedWorkspace.jsonBody.data.jobCount, 0);
-  assert.equal(deletedWorkspace.jsonBody.data.artifactCount, 0);
+  await invokeDeletionWriteTrigger(handlers, state, deletedWorkspace.jsonBody.data.queueTaskId);
 
   const deletedJobLookup = await invokeHandler(handlers.getInovaMeetingJob, {
     body: { jobId, owner },
@@ -385,7 +383,7 @@ async function main() {
         startedAt: "2026-03-30T09:00:00.000Z",
         title: "마이크 테스트 회의",
       },
-      options: { redaction: "none", speakerLabels: true, summary: false },
+      options: { redaction: "none", summary: false },
       owner,
       source: {
         captureMode: "microphone",
@@ -460,7 +458,7 @@ async function main() {
         startedAt: "2026-03-30T10:20:00.000Z",
         title: "대용량 파일 회의",
       },
-      options: { redaction: "none", speakerLabels: true, summary: true },
+      options: { redaction: "none", summary: true },
       owner,
       source: {
         captureMode: "microphone",
@@ -487,6 +485,7 @@ async function main() {
   assert.equal(chunkedCreated.jsonBody.data.job.source.mode, "chunked");
   assert.equal(chunkedCreated.jsonBody.data.job.source.parts.length, 2);
   await invokeJobWriteTrigger(handlers, state, chunkedCreated.jsonBody.data.job.jobId);
+  await drainChunkedMeetingPipeline(handlers, state, chunkedCreated.jsonBody.data.job.jobId);
   const chunkedStoredJob = await invokeHandler(handlers.getInovaMeetingJob, {
     body: { jobId: chunkedCreated.jsonBody.data.job.jobId, owner },
     method: "POST",
@@ -496,7 +495,6 @@ async function main() {
   assert.equal(chunkedStoredJob.jsonBody.data.job.source.mode, "chunked");
   assert.equal(chunkedStoredJob.jsonBody.data.job.source.parts.length, 2);
   assert.equal(chunkedStoredJob.jsonBody.data.job.transcript.segments.length, 4);
-  assert.equal(chunkedStoredJob.jsonBody.data.job.transcription.speakerCount, 2);
   assert.equal(state.openaiRequests.length, 3);
 
   console.log("[verify-meeting-service] Meeting service flow passed");
@@ -556,13 +554,11 @@ function createDeps(state, overrides = {}) {
                 segments: [
                   {
                     end: 5.3,
-                    speaker: "A",
                     start: 0,
                     text: "신규 프로모션 일정을 이번 주 안에 확정합시다.",
                   },
                   {
                     end: 10.4,
-                    speaker: "B",
                     start: 5.4,
                     text: "예산과 랜딩 문구는 오늘 초안으로 정리하겠습니다.",
                   },
@@ -578,23 +574,6 @@ function createDeps(state, overrides = {}) {
             async create(request) {
               const firstSystemMessage = Array.isArray(request.messages) ? String(request.messages[0]?.content || "") : "";
               const userPrompt = Array.isArray(request.messages) ? String(request.messages[1]?.content || "") : "";
-              if (firstSystemMessage.includes("회의 전사 화자 정합기")) {
-                state.openaiSummaryRequests.push({ kind: "speaker-reconcile", model: request.model || "", prompt: userPrompt, systemPrompt: firstSystemMessage });
-                return {
-                  choices: [
-                    {
-                      message: {
-                        content: JSON.stringify({
-                          mappings: [
-                            { confidence: 0.96, localSpeaker: "SPEAKER_00", target: "SPEAKER_00" },
-                            { confidence: 0.94, localSpeaker: "SPEAKER_01", target: "SPEAKER_01" },
-                          ],
-                        }),
-                      },
-                    },
-                  ],
-                };
-              }
               if (firstSystemMessage.includes("회의 전사 분류기")) {
                 state.openaiSummaryRequests.push({ kind: "classifier", model: request.model || "", prompt: userPrompt, systemPrompt: firstSystemMessage });
                 const mode = userPrompt.includes("인터뷰") ? "interview" : "planning";
@@ -669,10 +648,6 @@ function createNotesFixture(mode, style = "default") {
       },
       openQuestions: [],
       risksOrDependencies: [],
-      speakerSummaries: [
-        { keyPoints: ["데이터 기반 의사결정", "문제 구조화"], speakerLabel: "SPEAKER_00", summary: "첫 번째 화자는 후보자의 강점과 응답 내용을 중심으로 말했다." },
-        { keyPoints: ["운영 경험 확인 필요"], speakerLabel: "SPEAKER_01", summary: "두 번째 화자는 추가 확인이 필요한 운영 경험과 후속 질문을 언급했다." },
-      ],
       topics: [{ decisions: [], keyPoints: ["후보자는 데이터 기반 의사결정을 강조했습니다."], openQuestions: [], source: { memo: true, transcript: true }, summary: "응답 정리입니다.", topic: "응답 요약" }],
     };
   }
@@ -693,10 +668,6 @@ function createNotesFixture(mode, style = "default") {
       ],
       risksOrDependencies: [
         { severity: "medium", text: "업체 계약이 늦어지면 전체 오픈 일정이 밀릴 수 있습니다." },
-      ],
-      speakerSummaries: [
-        { keyPoints: ["운영 구조 검토"], speakerLabel: "SPEAKER_00", summary: "첫 번째 화자는 플랫폼 구조와 운영 명분을 중심으로 말했다." },
-        { keyPoints: ["외부 협업 일정"], speakerLabel: "SPEAKER_01", summary: "두 번째 화자는 업체 계약과 입점 일정 쪽 이슈를 언급했다." },
       ],
       topics: [
         {
@@ -726,48 +697,213 @@ function createNotesFixture(mode, style = "default") {
     },
     openQuestions: [],
     risksOrDependencies: [{ severity: "medium", text: "디자인 시안 확정이 늦어질 수 있습니다." }],
-    speakerSummaries: [
-      { keyPoints: ["이번 주 일정 확정"], speakerLabel: "SPEAKER_00", summary: "첫 번째 화자는 신규 프로모션 일정을 이번 주 안에 확정하자는 방향을 말했다." },
-      { keyPoints: ["예산 초안", "랜딩 문구 초안"], speakerLabel: "SPEAKER_01", summary: "두 번째 화자는 예산과 랜딩 문구 초안을 오늘 안에 정리하겠다고 말했다." },
-    ],
     topics: [{ decisions: ["이번 주 일정 확정"], keyPoints: ["예산과 랜딩 문구 초안 정리"], openQuestions: [], source: { memo: true, transcript: true }, summary: "실행 순서를 정리했습니다.", topic: "일정 계획" }],
   };
 }
 
 function createDb(state) {
+  function ensureCollection(name) {
+    const resolvedName = String(name || "").trim();
+    if (!state.collections.has(resolvedName)) {
+      state.collections.set(resolvedName, new Map());
+    }
+    return state.collections.get(resolvedName);
+  }
+
+  function getFieldValue(source, path) {
+    return String(path || "")
+      .split(".")
+      .filter(Boolean)
+      .reduce((current, key) => (current == null ? undefined : current[key]), source);
+  }
+
+  function buildDocSnapshot(collectionName, docId, value) {
+    return {
+      data() {
+        return cloneValue(value);
+      },
+      exists: value !== undefined,
+      id: docId,
+      ref: createDocRef(collectionName, docId),
+    };
+  }
+
+  function createDocRef(collectionName, id) {
+    const resolvedCollectionName = String(collectionName || "").trim();
+    const collectionState = ensureCollection(resolvedCollectionName);
+    const resolvedId = String(id || `doc-${state.nextId++}`);
+    return {
+      id: resolvedId,
+      async get() {
+        return buildDocSnapshot(resolvedCollectionName, resolvedId, collectionState.get(resolvedId));
+      },
+      async delete() {
+        collectionState.delete(resolvedId);
+      },
+      async set(value, options = {}) {
+        const nextValue = cloneValue(value);
+        if (options.merge && collectionState.has(resolvedId)) {
+          collectionState.set(resolvedId, deepMerge(collectionState.get(resolvedId), nextValue));
+          return;
+        }
+        collectionState.set(resolvedId, nextValue);
+      },
+    };
+  }
+
+  function createQuery(collectionName, statePatch = {}) {
+    const queryState = {
+      filters: Array.isArray(statePatch.filters) ? statePatch.filters : [],
+      limitCount: Number.isFinite(statePatch.limitCount) ? statePatch.limitCount : null,
+      orderBy: statePatch.orderBy || null,
+      startAfterId: statePatch.startAfterId || "",
+    };
+    return {
+      where(field, operator, value) {
+        return createQuery(collectionName, {
+          ...queryState,
+          filters: [...queryState.filters, { field, operator, value }],
+        });
+      },
+      orderBy(field, direction = "asc") {
+        return createQuery(collectionName, {
+          ...queryState,
+          orderBy: {
+            direction: normalizeText(direction).toLowerCase() === "desc" ? "desc" : "asc",
+            field,
+          },
+        });
+      },
+      limit(limitCount) {
+        return createQuery(collectionName, {
+          ...queryState,
+          limitCount: Math.max(0, Number(limitCount) || 0),
+        });
+      },
+      startAfter(snapshot) {
+        return createQuery(collectionName, {
+          ...queryState,
+          startAfterId: normalizeText(snapshot?.id || snapshot?.ref?.id),
+        });
+      },
+      async get() {
+        const collectionState = ensureCollection(collectionName);
+        let entries = Array.from(collectionState.entries());
+        for (const filter of queryState.filters) {
+          entries = entries.filter(([, value]) => {
+            if (filter.operator !== "==") {
+              throw new Error(`Unsupported query operator: ${filter.operator}`);
+            }
+            return getFieldValue(value, filter.field) === filter.value;
+          });
+        }
+        if (queryState.orderBy?.field) {
+          const direction = queryState.orderBy.direction === "desc" ? -1 : 1;
+          entries.sort((left, right) => {
+            const leftValue = getFieldValue(left[1], queryState.orderBy.field);
+            const rightValue = getFieldValue(right[1], queryState.orderBy.field);
+            if (leftValue === rightValue) {
+              return left[0].localeCompare(right[0]) * direction;
+            }
+            return (leftValue < rightValue ? -1 : 1) * direction;
+          });
+        }
+        if (queryState.startAfterId) {
+          const startIndex = entries.findIndex(([docId]) => docId === queryState.startAfterId);
+          if (startIndex >= 0) {
+            entries = entries.slice(startIndex + 1);
+          }
+        }
+        if (queryState.limitCount != null) {
+          entries = entries.slice(0, queryState.limitCount);
+        }
+        return {
+          docs: entries.map(([docId, value]) => buildDocSnapshot(collectionName, docId, value)),
+        };
+      },
+    };
+  }
+
+  function resolveDoc(ref) {
+    return ref && typeof ref.get === "function" ? ref : null;
+  }
+
   return {
-    collection(name) {
-      if (!state.collections.has(name)) {
-        state.collections.set(name, new Map());
-      }
-      const collectionState = state.collections.get(name);
+    batch() {
+      const operations = [];
       return {
-        doc(id) {
-          const resolvedId = String(id || `doc-${state.nextId++}`);
-          return {
-            id: resolvedId,
-            async get() {
-              return {
-                data() {
-                  return cloneValue(collectionState.get(resolvedId));
-                },
-                exists: collectionState.has(resolvedId),
-              };
-            },
-            async delete() {
-              collectionState.delete(resolvedId);
-            },
-            async set(value, options = {}) {
-              const nextValue = cloneValue(value);
-              if (options.merge && collectionState.has(resolvedId)) {
-                collectionState.set(resolvedId, deepMerge(collectionState.get(resolvedId), nextValue));
-                return;
-              }
-              collectionState.set(resolvedId, nextValue);
-            },
-          };
+        delete(ref) {
+          operations.push(() => ref.delete());
+        },
+        set(ref, value, options) {
+          operations.push(() => ref.set(value, options));
+        },
+        update(ref, value) {
+          operations.push(() => ref.set(value, { merge: true }));
+        },
+        async commit() {
+          for (const operation of operations) {
+            await operation();
+          }
         },
       };
+    },
+    collection(name) {
+      const resolvedCollectionName = String(name || "").trim();
+      ensureCollection(resolvedCollectionName);
+      return {
+        doc(id) {
+          return createDocRef(resolvedCollectionName, id);
+        },
+        get() {
+          return createQuery(resolvedCollectionName).get();
+        },
+        limit(limitCount) {
+          return createQuery(resolvedCollectionName).limit(limitCount);
+        },
+        orderBy(field, direction) {
+          return createQuery(resolvedCollectionName).orderBy(field, direction);
+        },
+        startAfter(snapshot) {
+          return createQuery(resolvedCollectionName).startAfter(snapshot);
+        },
+        where(field, operator, value) {
+          return createQuery(resolvedCollectionName).where(field, operator, value);
+        },
+      };
+    },
+    async runTransaction(work) {
+      const transaction = {
+        async get(ref) {
+          const doc = resolveDoc(ref);
+          if (!doc) {
+            throw new Error("Unsupported transaction ref");
+          }
+          return doc.get();
+        },
+        set(ref, value, options) {
+          const doc = resolveDoc(ref);
+          if (!doc) {
+            throw new Error("Unsupported transaction ref");
+          }
+          return doc.set(value, options);
+        },
+        update(ref, value) {
+          const doc = resolveDoc(ref);
+          if (!doc) {
+            throw new Error("Unsupported transaction ref");
+          }
+          return doc.set(value, { merge: true });
+        },
+        delete(ref) {
+          const doc = resolveDoc(ref);
+          if (!doc) {
+            throw new Error("Unsupported transaction ref");
+          }
+          return doc.delete();
+        },
+      };
+      return work(transaction);
     },
   };
 }
@@ -837,6 +973,148 @@ async function invokeJobWriteTrigger(handlers, state, jobId, beforeValue) {
   });
 }
 
+function createStateDocRef(state, collectionName, docId) {
+  const resolvedCollection = String(collectionName || "").trim();
+  const resolvedDocId = String(docId || "").trim();
+  if (!state.collections.has(resolvedCollection)) {
+    state.collections.set(resolvedCollection, new Map());
+  }
+  const collection = state.collections.get(resolvedCollection);
+  return {
+    id: resolvedDocId,
+    async get() {
+      return {
+        data() {
+          return cloneValue(collection.get(resolvedDocId));
+        },
+        exists: collection.has(resolvedDocId),
+        id: resolvedDocId,
+        ref: createStateDocRef(state, resolvedCollection, resolvedDocId),
+      };
+    },
+    async delete() {
+      collection.delete(resolvedDocId);
+    },
+    async set(value, options = {}) {
+      const nextValue = cloneValue(value);
+      if (options.merge && collection.has(resolvedDocId)) {
+        collection.set(resolvedDocId, deepMerge(collection.get(resolvedDocId), nextValue));
+        return;
+      }
+      collection.set(resolvedDocId, nextValue);
+    },
+  };
+}
+
+async function invokeDeletionWriteTrigger(handlers, state, taskId, beforeValue) {
+  const collection = state.collections.get(DELETION_COLLECTION) || new Map();
+  const afterValue = cloneValue(collection.get(taskId));
+  const ref = createStateDocRef(state, DELETION_COLLECTION, taskId);
+  await handlers.processMeetingDeletionWrite({
+    data: {
+      after: {
+        data() {
+          return cloneValue(afterValue);
+        },
+        exists: Boolean(afterValue),
+        ref,
+      },
+      before: {
+        data() {
+          return cloneValue(beforeValue);
+        },
+        exists: Boolean(beforeValue),
+        ref,
+      },
+    },
+  });
+}
+
+async function invokePartWriteTrigger(handlers, state, docId, beforeValue) {
+  const collection = state.collections.get(JOB_PART_COLLECTION) || new Map();
+  const afterValue = cloneValue(collection.get(docId));
+  const ref = createStateDocRef(state, JOB_PART_COLLECTION, docId);
+  await handlers.processQueuedMeetingJobPartWrite({
+    data: {
+      after: {
+        data() {
+          return cloneValue(afterValue);
+        },
+        exists: Boolean(afterValue),
+        id: docId,
+        ref,
+      },
+      before: {
+        data() {
+          return cloneValue(beforeValue);
+        },
+        exists: Boolean(beforeValue),
+        id: docId,
+        ref,
+      },
+    },
+  });
+}
+
+async function invokeFinalizerWriteTrigger(handlers, state, docId, beforeValue) {
+  const collection = state.collections.get(JOB_FINALIZER_COLLECTION) || new Map();
+  const afterValue = cloneValue(collection.get(docId));
+  const ref = createStateDocRef(state, JOB_FINALIZER_COLLECTION, docId);
+  await handlers.finalizeChunkedMeetingJobWrite({
+    data: {
+      after: {
+        data() {
+          return cloneValue(afterValue);
+        },
+        exists: Boolean(afterValue),
+        id: docId,
+        ref,
+      },
+      before: {
+        data() {
+          return cloneValue(beforeValue);
+        },
+        exists: Boolean(beforeValue),
+        id: docId,
+        ref,
+      },
+    },
+  });
+}
+
+async function drainChunkedMeetingPipeline(handlers, state, jobId) {
+  const normalizedJobId = String(jobId || "").trim();
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    let progressed = false;
+    const queuedParts = Array.from((state.collections.get(JOB_PART_COLLECTION) || new Map()).entries())
+      .filter(([, value]) => String(value?.jobId || "").trim() === normalizedJobId)
+      .filter(([, value]) => String(value?.status || "").trim() === "queued")
+      .map(([docId]) => docId);
+    for (const docId of queuedParts) {
+      await invokePartWriteTrigger(handlers, state, docId);
+      progressed = true;
+    }
+
+    const queuedFinalizers = Array.from((state.collections.get(JOB_FINALIZER_COLLECTION) || new Map()).entries())
+      .filter(([docId, value]) => docId === normalizedJobId || String(value?.jobId || "").trim() === normalizedJobId)
+      .filter(([, value]) => String(value?.status || "").trim() === "queued")
+      .map(([docId]) => docId);
+    for (const docId of queuedFinalizers) {
+      await invokeFinalizerWriteTrigger(handlers, state, docId);
+      progressed = true;
+    }
+
+    const currentJob = cloneValue((state.collections.get(JOB_COLLECTION) || new Map()).get(normalizedJobId));
+    const currentStatus = String(currentJob?.status || "").trim();
+    if (currentStatus === "succeeded" || currentStatus === "failed") {
+      return;
+    }
+    if (!progressed) {
+      return;
+    }
+  }
+}
+
 function createResponse() {
   return {
     jsonBody: null,
@@ -871,6 +1149,6 @@ function cloneValue(value) {
 }
 
 main().catch((error) => {
-  console.error(`[verify-meeting-service] ${error.message}`);
+  console.error(`[verify-meeting-service] ${error.stack || error.message}`);
   process.exit(1);
 });

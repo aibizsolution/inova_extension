@@ -179,7 +179,6 @@
                 <button id="reviewTabMemo" class="review-tab" type="button" data-review-tab="memo" role="tab" aria-selected="false">메모</button>
                 <button id="reviewTabNotes" class="review-tab" type="button" data-review-tab="notes" role="tab" aria-selected="false">회의 정리</button>
                 <button id="reviewTabSegments" class="review-tab" type="button" data-review-tab="segments" role="tab" aria-selected="false"><span class="review-tab__label">발화 구간</span><span id="reviewTabSegmentsCount" class="review-tab__count" hidden>0</span></button>
-                <button id="reviewTabSpeakers" class="review-tab" type="button" data-review-tab="speakers" role="tab" aria-selected="false">화자별</button>
               </div>
 
               <section id="reviewPanelSummary" class="review-panel" role="tabpanel">
@@ -232,30 +231,7 @@
                   </div>
                   <button id="copySegmentsButton" class="secondary-button" type="button">전체 복사</button>
                 </div>
-                <div id="speakerEditor" class="speaker-editor" hidden>
-                  <div class="panel-card__head panel-card__head--section">
-                    <div>
-                      <p class="panel-card__eyebrow">화자 이름</p>
-                      <h2 class="panel-card__title">발화 이름 수정</h2>
-                    </div>
-                  </div>
-                  <div id="speakerAliasList" class="speaker-alias-list"></div>
-                  <div class="speaker-editor__actions">
-                    <button id="saveSpeakerAliasesButton" class="secondary-button" type="button">화자명 저장</button>
-                    <button id="saveSpeakerAliasesAndRegenerateButton" class="ghost-button" type="button">저장 후 다시 정리</button>
-                  </div>
-                </div>
                 <div id="segmentList" class="segment-list" hidden></div>
-              </section>
-
-              <section id="reviewPanelSpeakers" class="review-panel" hidden role="tabpanel">
-                <div class="panel-card__head panel-card__head--section">
-                  <div>
-                    <p class="panel-card__eyebrow">화자별 정리</p>
-                    <h2 class="panel-card__title">화자별로 말한 내용</h2>
-                  </div>
-                </div>
-                <div id="speakerDigestList" class="speaker-digest-list" hidden></div>
               </section>
             </article>
           </section>

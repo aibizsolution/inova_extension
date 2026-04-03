@@ -55,7 +55,7 @@
   - hosted 작업실 디버그 콘솔은 카드 폭, 패딩, 로그 타이포도 패널 디버그 콘솔과 같은 치수 기준으로 맞춥니다.
   - 로컬 작업실에서는 `파일 불러오기`로 실제 오디오 샘플을 바로 전사 테스트할 수 있고, `25MB 초과` 또는 `약 20분 초과` 원본도 브라우저에서 `16kHz mono wav chunk`로 나눈 뒤 한 기록 결과로 이어 처리합니다.
 - hosted 회의 작업실은 기본적으로 `최대 200MB 또는 2시간` 원본까지 지원하고, 큰 오디오나 긴 녹음은 `약 9분 / 1.5초 overlap` 기준 chunk 업로드 후 서버에서 단일 회의 결과로 병합합니다.
-- chunk 전사는 parent job이 직접 끝까지 돌지 않고, `청크 part 문서 -> chunk worker 함수 1개당 청크 1개 처리 -> chunk transcript JSON 임시 저장 -> finalizer 함수가 최종 병합/화자 정합/회의 정리` 순서로 나눠 처리합니다.
+- chunk 전사는 parent job이 직접 끝까지 돌지 않고, `청크 part 문서 -> chunk worker 함수 1개당 청크 1개 처리 -> chunk transcript JSON 임시 저장 -> finalizer 함수가 최종 병합/회의 정리` 순서로 나눠 처리합니다.
 - chunk 모드에서는 모든 part 업로드가 끝날 때까지 기다리지 않고, 첫 chunk가 올라오는 즉시 parent job을 만들고 이후 올라오는 chunk를 같은 job에 계속 반영해 전사를 앞당깁니다.
 - 각 chunk 업로드 HTTP 성공은 응답만 돌려주고 끝나지 않고, 이미 존재하는 parent job이 있으면 해당 part의 `storageObject/uploadStatus`를 Firestore job source에도 즉시 반영합니다. 그래서 뒤따르는 deduped `createInovaMeetingJob` 호출이 stale source snapshot을 보내더라도, 이미 올라간 chunk가 다시 `pending_upload`로 밀리는 race를 줄입니다.
 - chunk worker는 job 1건 기준으로 업로드가 끝난 chunk를 즉시 `queued`로 승격해 곧바로 전사를 시작합니다. 그래서 1개가 올라오면 1개가 바로 돌고, 20개가 모두 올라온 상태면 20개도 같은 job 안에서 동시에 worker 대상으로 열릴 수 있습니다.
@@ -72,15 +72,15 @@
   - 이때 기록 큐에서는 예전 stalled/failed 원격 job을 새 시도가 대체한 것으로 보고, 같은 제목이 두 줄로 겹쳐 보이지 않게 이전 시도 항목을 숨깁니다.
   - 녹음은 `녹음 시작 -> 일시중지/재개 -> 종료하고 전사` 흐름으로 동작하고, 종료된 녹음본은 원격 처리 완료 전까지 브라우저 로컬 큐에 보관합니다.
   - 한 기록은 기본 `90분`까지 이어지고, 제한 시간에 도달하면 현재 기록을 자동 전사로 넘긴 뒤 다음 개별 기록 녹음을 바로 이어갑니다.
-- 전사가 끝나면 회의록 형식의 자동 정리본과 `발화 구간`, `화자별` AI 정리 화면을 같은 상세 화면에서 함께 보여주고, 회의의 내용 구조는 AI가 자동 판단합니다.
+- 전사가 끝나면 회의록 형식의 자동 정리본과 `발화 구간` 전사를 같은 상세 화면에서 함께 보여주고, 회의의 내용 구조는 AI가 자동 판단합니다.
 - 회의 정리 탭은 이제 상용 회의록 SaaS처럼 `핵심 요약`, `회의 개요`, `주요 논의 내용`, `주요 결정 사항`, `추가 결정 필요 사항`, `리스크 및 제약`, `후속 실행 항목` 순으로 읽히도록 정리합니다.
 - 사용자는 회의 정리 탭에서 `기본 회의록`, `간결 브리프`, `실행 중심` 같은 `표현 방식`만 골라 다시 정리할 수 있습니다.
 - 회의 정리의 `열린 쟁점`, `후속 질문`, `의존성`처럼 배열로 내려오는 항목은 객체형 응답이 섞여도 읽을 수 있는 문장으로 정규화해 표시합니다.
-- `상태` 탭에서는 현재 기록을 `기록 선택 -> 발화 구간 -> 회의 정리 -> 화자 이름 -> 화자별 정리 -> 검토 마무리` 순서의 단계 흐름으로 보여주고, 완료 단계는 조용하게 처리한 채 현재 확인이 필요한 단계만 더 또렷하게 보여줍니다.
+- `상태` 탭에서는 현재 기록을 `기록 선택 -> 발화 구간 -> 회의 정리 -> 검토 마무리` 순서의 단계 흐름으로 보여주고, 완료 단계는 조용하게 처리한 채 현재 확인이 필요한 단계만 더 또렷하게 보여줍니다.
   - 회의 정리가 완료되면 AI가 만든 `meetingMeta.title`을 해당 기록 제목으로 바로 반영하고, 이후 다시 정리해도 최신 AI 제목으로 덮어씁니다.
-- 발화 구간 탭에서는 자동 화자 라벨을 실제 이름/역할로 바꿔 저장할 수 있고, 시간대가 포함된 전체 전사를 바로 복사하거나 저장한 화자명으로 회의 정리를 다시 생성할 수 있습니다. `화자별` 탭에서는 각 화자가 주로 말한 내용을 AI가 화자 기준으로 따로 정리해 보여줍니다.
+- 발화 구간 탭에서는 시간대가 포함된 전체 전사를 바로 복사할 수 있고, 회의 정리 탭에서는 같은 전사를 기준으로 표현 방식만 바꿔 다시 정리할 수 있습니다.
   - 회의는 현재 대화 세션과 분리된 `meetingId` 기준으로 관리하고, 같은 회의의 처리 이력만 페이지 안에 남깁니다.
-- 좌측 `기록 큐` 카드는 긴 본문 미리보기보다 `AI 판단`, `표현 방식`, `화자 수` 같은 칩 중심으로 보여줘서 어떤 기록을 다시 열어야 하는지 빠르게 구분할 수 있게 유지합니다.
+- 좌측 `기록 큐` 카드는 긴 본문 미리보기보다 `AI 판단`, `표현 방식` 같은 칩 중심으로 보여줘서 어떤 기록을 다시 열어야 하는지 빠르게 구분할 수 있게 유지합니다.
 - 작업실에서는 작업실 이름과 공용 메모를 저장할 수 있고, 우측 `기록 검토` 패널에서 개별 기록 이름 수정과 삭제를 함께 처리합니다. 삭제를 실행하면 연결된 job/artifact와 남아 있는 임시 source object까지 함께 정리합니다.
   - 패널에서 회의를 열면 확장이 짧은 수명의 launch grant를 즉시 hosted workspace session으로 교환한 뒤, `#ws`가 붙은 최종 hosted 작업실 URL을 새 탭으로 엽니다.
   - 작업실에서는 사용자가 직접 `녹음 시작`을 눌러 웹앱에서 바로 마이크 녹음을 시작하고, 표준 `getUserMedia + MediaRecorder` 경로로 녹음합니다.
@@ -235,10 +235,9 @@
 - `uploadInovaMeetingSource` HTTP 함수도 chunk/single 원본 업로드에서 raw audio body를 바로 메모리에 받아 bucket에 쓰는 heavy upload 경계라 `concurrency: 1`, `maxInstances: 40`, `1GiB`, `120초`로 따로 고정합니다. 그래서 여러 chunk 업로드가 동시에 들어와도 한 인스턴스가 여러 raw audio 요청을 함께 받아 OOM 나는 기본 `80` 동시성을 타지 않습니다.
 - 회의 결과 삭제와 작업실 삭제는 `queued`/`processing` 상태도 409로 막지 않고 바로 soft-delete/tombstone을 남깁니다. 삭제 요청이 오면 job/meeting/session을 즉시 `deletedAt` 상태로 내려 UI와 summary에서 숨기고, 실제 cleanup은 `integration_inova_meeting_deletions` 큐 문서로 분리합니다.
 - 삭제 큐는 Firestore trigger가 즉시 artifact·chunk part·finalizer·임시 source/chunk transcript 정리를 한 번 시도하고, race 때문에 part/finalizer가 다시 남거나 storage cleanup이 덜 끝났으면 `sweepQueuedInovaMeetingDeletions`가 1시간마다 다시 확인합니다. queue 문서는 정리가 실제로 끝났을 때만 사라지고, 완료 시에는 meeting/job/session tombstone 문서까지 실제 삭제합니다.
-- hosted 회의 작업실은 `종료하고 전사` 또는 `파일 불러오기` 시점에 원본을 먼저 업로드 가능한 source로 준비한 뒤 `createInovaMeetingJob`으로 parent job을 일찍 만들고, chunk 업로드가 이어지는 동안 같은 job source를 계속 보강합니다. Functions background 처리기는 `source download -> chunk worker 전사 -> chunk transcript 임시 저장 -> finalizer 병합/화자 정합 -> 회의록 모드 분류 -> mode별 회의록 정리 생성 -> source/chunk cleanup -> Firestore meeting/job/artifact 저장`까지 처리합니다. 자동 회의록 정리는 이제 `notesStatus`, `notesDegradedReason`, 실제 `notesGeneratedAt`을 함께 기록해 `비활성`, `건너뜀`, `degraded`, `성공`을 구분하고, notes 생성 실패를 완료 시각만 채운 성공처럼 보이지 않게 유지합니다.
+- hosted 회의 작업실은 `종료하고 전사` 또는 `파일 불러오기` 시점에 원본을 먼저 업로드 가능한 source로 준비한 뒤 `createInovaMeetingJob`으로 parent job을 일찍 만들고, chunk 업로드가 이어지는 동안 같은 job source를 계속 보강합니다. Functions background 처리기는 `source download -> chunk worker 전사 -> chunk transcript 임시 저장 -> finalizer 병합 -> 회의록 모드 분류 -> 구간별 요약과 최종 회의록 통합 -> source/chunk cleanup -> Firestore meeting/job/artifact 저장`까지 처리합니다. 자동 회의록 정리는 이제 `notesStatus`, `notesDegradedReason`, 실제 `notesGeneratedAt`을 함께 기록해 `비활성`, `건너뜀`, `degraded`, `성공`을 구분하고, notes 생성 실패를 완료 시각만 채운 성공처럼 보이지 않게 유지합니다.
 - hosted chunk upload는 원격 job 생성/추가 publish/resync 직전에 브라우저 queue와 runtime chunk cache를 다시 merge한 최신 snapshot으로 payload를 만듭니다. 그래서 같은 requestId의 후속 chunk가 이미 업로드된 상태라면 stale pending snapshot이 더 적은 part 정보로 원격 source를 덮어쓰지 않게 유지합니다.
-- chunk 병합의 화자 정합은 이제 overlap 구간 anchor와 chunk 전체 화자 프로필을 같이 써서 같은 사람이 청크 경계마다 새 `SPEAKER_xx`로 늘어나는 현상을 줄입니다. 모든 chunk 병합이 끝난 뒤에는 전역 화자 통합 패스를 한 번 더 돌려 과분리된 화자를 다시 합칩니다.
-- 긴 회의 자동 정리는 전사 앞부분만 잘라 넣는 단일 호출 대신, 전사를 여러 section으로 나눠 중간 요약을 만든 뒤 최종 회의록으로 다시 통합합니다. 그래서 후반부 결정/액션 누락을 줄이고, 작업실 UI도 `신뢰도`, `근거 개수`, `품질 주의` 문구를 함께 보여줍니다.
+- 기본 전사 모델은 diarized transcript가 아니라 plain transcript를 사용하고, 회의록 품질은 `전사 -> section summary -> final reducer` 계층형 요약으로 끌어올립니다. 그래서 기본 경로의 과분리 문제를 줄이고, 긴 회의의 후반부 결정/액션 누락도 함께 줄입니다.
 - 회의 정리와 모드 분류 기본 모델은 `gpt-5.4-mini`를 사용하고, 필요하면 `OPENAI_MEETING_SUMMARY_MODEL` 또는 `OPENAI_SUMMARY_MODEL`로 override할 수 있습니다.
 - Functions는 같은 `requestId` 재전송을 idempotent하게 재사용하고, `sharedMemoSnapshot`과 notes mode 메타데이터를 함께 저장합니다.
 - Functions가 source audio를 임시 bucket object로 저장할 때는 Firebase 설정의 기본 storage bucket을 우선 쓰고, 기본 bucket이 없는 프로젝트에서는 `STORAGE_BUCKET_URL`로 실제 존재하는 bucket을 명시해야 합니다. 현재 프로젝트는 chunk 업로드용으로 `gcf-v2-uploads-1027279095019.asia-northeast3.cloudfunctions.appspot.com`을 사용합니다.
@@ -273,8 +272,8 @@
 7. 로컬 작업실에서는 `파일 불러오기`로 실제 녹음 파일을 직접 넣어 전사 테스트할 수 있고, 큰 파일이나 긴 녹음은 자동으로 chunk 준비/업로드를 거칩니다.
 8. `종료하고 전사`를 누르면 녹음본이 먼저 로컬 큐에 저장되고, 원격 처리 중이어도 바로 다음 녹음을 시작할 수 있습니다.
 9. 녹음이 `90분`에 도달하면 현재 기록은 자동으로 전사 큐에 들어가고, 작업실은 다음 개별 기록 녹음을 이어갑니다.
-10. 저장된 결과를 선택하면 우측 `기록 검토` 패널에서 이름을 수정하거나 삭제하고, 자동 정리와 발화 구간 기준 전사, 화자별 AI 정리를 함께 확인할 수 있습니다.
-11. 필요하면 발화 구간 탭에서 화자명을 저장하고, 시간대 포함 전사를 전체 복사하거나 같은 전사를 기준으로 회의 정리를 다시 생성할 수 있습니다.
+10. 저장된 결과를 선택하면 우측 `기록 검토` 패널에서 이름을 수정하거나 삭제하고, 자동 정리와 발화 구간 기준 전사를 함께 확인할 수 있습니다.
+11. 필요하면 발화 구간 탭에서 시간대 포함 전사를 전체 복사하고, 같은 전사를 기준으로 회의 정리를 다시 생성할 수 있습니다.
 12. 회의 정리의 표현만 바꾸고 싶을 때는 회의 정리 탭에서 `표현 방식`을 고른 뒤 `...로 다시 정리` 버튼을 눌러 같은 전사로 회의록을 다시 생성할 수 있습니다. 회의 종류 판단은 계속 AI가 맡습니다.
 12. `프롬프트` 도구에서는 자주 쓰는 요청을 추가하거나 선택해 현재 입력창에 바로 넣고, `스토어` 서브탭에서 공유 프롬프트를 찾아 좋아요를 누르거나 내 요청으로 가져옵니다.
 13. 대화 입력창 우측 상단의 평가 버튼으로 현재 프롬프트를 참고용으로 평가하고, 필요하면 보완 프롬프트를 다시 반영합니다.

@@ -149,7 +149,6 @@
           },
           options: {
             redaction: "none",
-            speakerLabels: true,
             summary: false,
           },
         }),
@@ -391,7 +390,6 @@
   function renderRecordButton(record, active) {
     const meta = [
       formatDateTime(record.updatedAt || record.createdAt, ""),
-      record.speakerCount > 0 ? `화자 ${record.speakerCount}명` : "",
       record.jobId ? `job ${record.jobId}` : "",
     ].filter(Boolean).join(" · ");
     return `
@@ -410,7 +408,6 @@
     return `
       <article class="segment-item">
         <div class="segment-item__head">
-          <span class="segment-item__speaker">${escapeHtml(formatSpeakerLabel(segment.speakerLabel))}</span>
           <span>${escapeHtml(formatSegmentRange(segment.startMs, segment.endMs))}</span>
         </div>
         <p>${escapeHtml(segment.text)}</p>
@@ -438,8 +435,7 @@
       return createCurrentView("진행 중", "processing", false, false, false, false, "회의 전사를 처리 중입니다.", phase ? `${phase}${percent > 0 ? ` · ${percent}%` : ""}` : "상세 진행 상태를 확인하는 중입니다.", sessionState);
     }
     if (jobStatus === "succeeded") {
-      const speakerCount = Math.max(0, Number(sessionState.transcript.speakerCount) || 0);
-      return createCurrentView("완료", "succeeded", canStartFresh, false, false, false, speakerCount > 0 ? `${speakerCount}명 화자 기준 결과가 준비되었습니다.` : "전사 결과가 준비되었습니다.", "왼쪽 리스트에서 다른 결과를 골라 다시 확인할 수 있습니다.", sessionState);
+      return createCurrentView("완료", "succeeded", canStartFresh, false, false, false, "전사 결과가 준비되었습니다.", "왼쪽 리스트에서 다른 결과를 골라 다시 확인할 수 있습니다.", sessionState);
     }
     if (jobStatus === "failed" || captureStatus === "error") {
       return createCurrentView("오류", "failed", canStartFresh, false, false, false, "회의 처리 중 문제가 생겼습니다.", normalizeText(sessionState.job.error || sessionState.capture.error) || "새 녹음으로 다시 시도할 수 있습니다.", sessionState);
@@ -485,12 +481,11 @@
       job.jobId ? `job ${job.jobId}` : "",
       formatDateTime(job.updatedAt || job.createdAt || job.queuedAt, ""),
       artifact?.segments?.length ? `${artifact.segments.length}구간` : "",
-      artifact?.speakerCount > 0 ? `화자 ${artifact.speakerCount}명` : "",
     ].filter(Boolean);
     const transcriptText = normalizeTextBlock(artifact?.text);
     const segments = Array.isArray(artifact?.segments) ? artifact.segments.filter((segment) => normalizeText(segment.text)) : [];
     if (normalizeText(job.status) === "succeeded" && (transcriptText || segments.length)) {
-      return { badgeLabel: formatStatusLabel(job.status), badgeStatus: normalizeStatus(job.status), meta, notice: transcriptText ? "전체 전사 본문과 화자 구간을 함께 볼 수 있습니다." : "화자 구간을 먼저 불러왔습니다.", noticeTone: "highlight", segments, summary: "선택한 회의 결과 상세입니다.", title: job.title || state.params.title || "회의 결과", transcriptText };
+      return { badgeLabel: formatStatusLabel(job.status), badgeStatus: normalizeStatus(job.status), meta, notice: transcriptText ? "전체 전사 본문을 확인할 수 있습니다." : "전사 구간을 먼저 불러왔습니다.", noticeTone: "highlight", segments, summary: "선택한 회의 결과 상세입니다.", title: job.title || state.params.title || "회의 결과", transcriptText };
     }
     if (normalizeText(job.status) === "failed") {
       return { badgeLabel: "오류", badgeStatus: "failed", meta, notice: normalizeText(job.error) || "회의 처리 중 오류가 발생했습니다.", noticeTone: "error", segments: [], summary: "선택한 결과는 오류 상태입니다.", title: job.title || state.params.title || "회의 결과", transcriptText: "" };
@@ -554,7 +549,6 @@
     return {
       artifactId: normalizeText(sessionState.transcript.artifactId || sessionState.job.artifactId),
       segments,
-      speakerCount: Math.max(0, Number(sessionState.transcript.speakerCount) || countSpeakers(segments)),
       text: transcriptText,
     };
   }
@@ -601,7 +595,6 @@
       ? artifact.segments
           .map((segment) => ({
             endMs: Math.max(0, Number(segment.endMs) || 0),
-            speakerLabel: normalizeText(segment.speakerLabel),
             startMs: Math.max(0, Number(segment.startMs) || 0),
             text: normalizeText(segment.text),
           }))
@@ -610,7 +603,6 @@
     return {
       artifactId: normalizeText(artifact.artifactId),
       segments,
-      speakerCount: countSpeakers(segments),
       text: normalizeTextBlock(artifact.text),
     };
   }
@@ -766,7 +758,7 @@
     if (normalized === "uploading") return "업로드 중";
     if (normalized === "queued") return "대기 중";
     if (normalized === "transcribing") return "텍스트 변환";
-    if (normalized === "diarizing") return "화자 분리";
+    if (normalized === "diarizing") return "전사 중";
     if (normalized === "finalizing") return "결과 정리";
     return normalized || "처리 중";
   }
@@ -800,10 +792,6 @@
     });
   }
 
-  function formatSpeakerLabel(value) {
-    return normalizeText(value) || "화자";
-  }
-
   function formatSegmentRange(startMs, endMs) {
     return `${formatSegmentTime(startMs)} - ${formatSegmentTime(endMs)}`;
   }
@@ -813,10 +801,6 @@
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
     return `${minutes}:${seconds.toString().padStart(2, "0")}`;
-  }
-
-  function countSpeakers(segments) {
-    return new Set((Array.isArray(segments) ? segments : []).map((segment) => normalizeText(segment.speakerLabel)).filter(Boolean)).size;
   }
 
   function isSameMeetingState(left, right) {

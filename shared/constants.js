@@ -120,7 +120,6 @@
           artifactId: "",
           text: "",
           segments: [],
-          speakerCount: 0,
           loadedAt: "",
         },
         records: [],

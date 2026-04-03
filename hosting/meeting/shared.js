@@ -794,11 +794,10 @@
     if (normalized === "remote_processing" || normalized === "processing") return "원격 처리";
     if (normalized === "transcribing") return "전사 중";
     if (normalized === "transcribing_chunks") return "분할 전사 중";
-    if (normalized === "assembling_transcript") return "청크 병합 중";
-    if (normalized === "reconciling_speakers") return "화자 정합 중";
-    if (normalized === "consolidating_speakers") return "전체 화자 통합 중";
+    if (normalized === "assembling_transcript") return "전사 병합 중";
+    if (normalized === "reconciling_speakers" || normalized === "consolidating_speakers") return "전사 병합 중";
     if (normalized === "generating_notes") return "회의 정리 중";
-    if (normalized === "diarizing") return "화자 구분 중";
+    if (normalized === "diarizing") return "전사 중";
     if (normalized === "finalizing") return "회의록 정리 중";
     return normalized;
   }
@@ -839,51 +838,10 @@
     return `${formatDurationShort(startMs)} - ${formatDurationShort(endMs)}`;
   }
 
-  function buildDefaultSpeakerDisplayName(value) {
-    const normalized = normalizeText(value);
-    if (!normalized) return "화자";
-    const diarizedMatch = normalized.match(/^SPEAKER_(\d+)$/i);
-    if (diarizedMatch) {
-      return `화자 ${Number.parseInt(diarizedMatch[1], 10) + 1}`;
-    }
-    if (/^[A-Z]$/i.test(normalized)) {
-      return `화자 ${normalized.toUpperCase()}`;
-    }
-    return normalized;
-  }
-
-  function normalizeSpeakerAliases(input, allowedLabels) {
-    const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
-    const allowAll = !(allowedLabels instanceof Set);
-    const normalized = {};
-    for (const [rawLabel, rawAlias] of Object.entries(source)) {
-      const label = normalizeText(rawLabel);
-      const alias = normalizeTextBlock(rawAlias).replace(/\n+/g, " ").replace(/\s+/g, " ").slice(0, 80);
-      if (!label || !alias) continue;
-      if (!allowAll && !allowedLabels.has(label)) continue;
-      if (alias === label) continue;
-      normalized[label] = alias;
-    }
-    return normalized;
-  }
-
-  function resolveSpeakerDisplayName(value, speakerAliases) {
-    const label = normalizeText(value);
-    return normalizeText(speakerAliases?.[label]) || buildDefaultSpeakerDisplayName(label);
-  }
-
-  function formatSpeakerLabel(value) {
-    return buildDefaultSpeakerDisplayName(value);
-  }
-
   function cleanPreviewText(value) {
-    const normalized = normalizeTextBlock(value).replace(/SPEAKER_\d+\s*:\s*/gi, "").replace(/\s+/g, " ").trim();
+    const normalized = normalizeTextBlock(value).replace(/\s+/g, " ").trim();
     if (!normalized) return "";
     return normalized.length > MAX_PREVIEW_TEXT_LENGTH ? `${normalized.slice(0, MAX_PREVIEW_TEXT_LENGTH - 3)}...` : normalized;
-  }
-
-  function countSpeakers(segments) {
-    return new Set((Array.isArray(segments) ? segments : []).map((segment) => normalizeText(segment?.speakerLabel)).filter(Boolean)).size;
   }
 
   function isOnline(globalObject) {
@@ -1213,9 +1171,6 @@
     formatDateTime,
     formatDuration,
     formatSegmentRange,
-    formatSpeakerLabel,
-    normalizeSpeakerAliases,
-    resolveSpeakerDisplayName,
     formatNotesModeLabel,
     formatNotesStyleLabel,
     formatPhase,
@@ -1225,7 +1180,6 @@
     clearDebugEntries,
     clearDebugFault,
     consumeDebugFault,
-    countSpeakers,
     generateCaptureRequestId,
     getDebugEntries,
     isDebugPanelEnabled,

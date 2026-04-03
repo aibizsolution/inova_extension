@@ -108,16 +108,6 @@
       .filter((item) => item.text);
   }
 
-  function normalizeMeetingSpeakerSummaries(items) {
-    return (Array.isArray(items) ? items : [])
-      .map((item) => ({
-        keyPoints: normalizeTextArray(item?.keyPoints),
-        speakerLabel: normalizeText(item?.speakerLabel),
-        summary: normalizeText(item?.summary),
-      }))
-      .filter((item) => item.speakerLabel && (item.summary || item.keyPoints.length));
-  }
-
   function normalizeMeetingModeSpecific(input, mode) {
     const data = input && typeof input === "object" ? input : {};
     if (mode === "interview") {
@@ -165,7 +155,6 @@
       || Array.isArray(nextNotes.openQuestions)
       || Array.isArray(nextNotes.risksOrDependencies)
       || Array.isArray(nextNotes.memoHighlights)
-      || Array.isArray(nextNotes.speakerSummaries)
     ) {
       return {
         actionItems: normalizeMeetingActionItems(nextNotes.actionItems),
@@ -177,7 +166,6 @@
         modeSpecific: normalizeMeetingModeSpecific(nextNotes.modeSpecific, mode),
         openQuestions: normalizeTextArray(nextNotes.openQuestions),
         risksOrDependencies: normalizeMeetingRiskItems(nextNotes.risksOrDependencies),
-        speakerSummaries: normalizeMeetingSpeakerSummaries(nextNotes.speakerSummaries),
         topics: normalizeMeetingTopics(nextNotes.topics),
       };
     }
@@ -194,7 +182,6 @@
       modeSpecific: normalizeMeetingModeSpecific({}, mode),
       openQuestions: [],
       risksOrDependencies: [],
-      speakerSummaries: [],
       topics: normalizeTextArray(nextNotes.discussion).length
         ? [{ decisions: [], keyPoints: normalizeTextArray(nextNotes.discussion), openQuestions: [], source: { memo: false, transcript: true }, summary: "", topic: "핵심 논의" }]
         : [],
@@ -211,7 +198,6 @@
       || notes?.actionItems?.length
       || notes?.openQuestions?.length
       || notes?.risksOrDependencies?.length
-      || notes?.speakerSummaries?.length
       || notes?.memoHighlights?.length
       || normalizeTextArray(notes?.modeSpecific?.strengths).length
       || normalizeTextArray(notes?.modeSpecific?.concerns).length
