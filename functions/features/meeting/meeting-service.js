@@ -31,6 +31,7 @@ const DEFAULT_NOTES_STYLE = "default";
 const RETRYABLE_MEETING_PROCESS_STATUSES = new Set([408, 409, 429, 500, 502, 503, 504]);
 const SUPPORTED_NOTES_MODES = new Set(["general", "interview", "review", "planning"]);
 const SUPPORTED_NOTES_STYLES = new Set(["default", "brief", "action"]);
+const SUPPORTED_NOTES_STATUSES = new Set(["pending", "disabled", "skipped", "degraded", "succeeded"]);
 
 function registerMeetingHandlers(deps) {
   const {
@@ -1369,11 +1370,13 @@ function registerMeetingHandlers(deps) {
           sharedMemo: normalizeText(effectiveMeeting.sharedMemo),
           title: normalizeText(effectiveMeeting.title),
         },
+        notesDegradedReason: meetingNotes.notesDegradedReason,
         meetingNotes: meetingNotes.notes,
         notesGeneratedAt: meetingNotes.notesGeneratedAt,
         notesModeConfidence: meetingNotes.notesModeConfidence,
         notesModeDetected: meetingNotes.notesModeDetected,
         notesModeSelected: meetingNotes.notesModeSelected,
+        notesStatus: meetingNotes.notesStatus,
         notesStyleSelected: meetingNotes.notesStyleSelected,
         notesSchemaVersion: meetingNotes.notesSchemaVersion,
         speakerAliases,
@@ -1381,11 +1384,13 @@ function registerMeetingHandlers(deps) {
         updatedAt,
       };
       const artifactPatch = {
+        notesDegradedReason: meetingNotes.notesDegradedReason,
         notes: meetingNotes.notes,
         notesGeneratedAt: meetingNotes.notesGeneratedAt,
         notesModeConfidence: meetingNotes.notesModeConfidence,
         notesModeDetected: meetingNotes.notesModeDetected,
         notesModeSelected: meetingNotes.notesModeSelected,
+        notesStatus: meetingNotes.notesStatus,
         notesStyleSelected: meetingNotes.notesStyleSelected,
         notesSchemaVersion: meetingNotes.notesSchemaVersion,
         speakerAliases,
@@ -2918,7 +2923,7 @@ function registerMeetingHandlers(deps) {
 
   async function maybeGenerateMeetingNotes(transcript, meeting, options, context, logEvent, owner, jobId) {
     if (!options.summary) {
-      return createEmptyMeetingNotesBundle();
+      return createEmptyMeetingNotesBundle(null, null, null, "disabled");
     }
     try {
       return await generateMeetingNotesBundle(transcript, meeting, context);
@@ -2929,14 +2934,20 @@ function registerMeetingHandlers(deps) {
         meetingId: meeting.meetingId,
         providerUserKey: owner.providerUserKey,
       });
-      return createEmptyMeetingNotesBundle();
+      return createEmptyMeetingNotesBundle(
+        null,
+        null,
+        null,
+        "degraded",
+        normalizeText(error?.message) || "회의록 자동 정리에 실패했어요."
+      );
     }
   }
 
   async function generateMeetingNotesBundle(transcript, meeting, context, selectedMode, selectedStyle) {
     const promptTranscript = buildMeetingNotesTranscriptPrompt(transcript);
     if (!promptTranscript) {
-      return createEmptyMeetingNotesBundle(selectedMode, null, selectedStyle);
+      return createEmptyMeetingNotesBundle(selectedMode, null, selectedStyle, "skipped");
     }
     const detectedMode = await detectMeetingNotesMode(transcript, meeting, context);
     const notesModeSelected = normalizeMeetingNotesMode(selectedMode)
@@ -2960,14 +2971,16 @@ function registerMeetingHandlers(deps) {
     });
     const content = normalizeCompletionContent(completion?.choices?.[0]?.message?.content);
     if (!content) {
-      return createEmptyMeetingNotesBundle(notesModeSelected, detectedMode, notesStyleSelected);
+      return createEmptyMeetingNotesBundle(notesModeSelected, detectedMode, notesStyleSelected, "skipped");
     }
     return {
       notes: normalizeMeetingNotes(parseMeetingNotesJson(content), notesModeSelected),
+      notesDegradedReason: "",
       notesGeneratedAt: new Date().toISOString(),
       notesModeConfidence: normalizeConfidence(detectedMode.notesModeConfidence),
       notesModeDetected: normalizeMeetingNotesMode(detectedMode.notesModeDetected) || DEFAULT_NOTES_MODE,
       notesModeSelected,
+      notesStatus: "succeeded",
       notesStyleSelected,
       notesSchemaVersion: NOTES_SCHEMA_VERSION,
     };
@@ -3344,7 +3357,7 @@ function createEmptyMeetingNotes() {
   };
 }
 
-function createEmptyMeetingNotesBundle(selectedMode, detectedMode, selectedStyle) {
+function createEmptyMeetingNotesBundle(selectedMode, detectedMode, selectedStyle, statusInput, degradedReasonInput) {
   const selected = normalizeMeetingNotesMode(selectedMode) || normalizeMeetingNotesMode(detectedMode?.notesModeDetected) || DEFAULT_NOTES_MODE;
   const notesStyleSelected = normalizeMeetingNotesStyle(selectedStyle) || DEFAULT_NOTES_STYLE;
   return {
@@ -3354,10 +3367,12 @@ function createEmptyMeetingNotesBundle(selectedMode, detectedMode, selectedStyle
       },
       mode: selected,
     }, selected),
+    notesDegradedReason: normalizeText(degradedReasonInput),
     notesGeneratedAt: "",
     notesModeConfidence: normalizeConfidence(detectedMode?.notesModeConfidence),
     notesModeDetected: normalizeMeetingNotesMode(detectedMode?.notesModeDetected) || selected,
     notesModeSelected: selected,
+    notesStatus: normalizeMeetingNotesStatus(statusInput) || "skipped",
     notesStyleSelected,
     notesSchemaVersion: NOTES_SCHEMA_VERSION,
   };
@@ -3829,10 +3844,12 @@ function buildQueuedJob(jobId, meeting, owner, options, source, context, created
       sharedMemo: normalizeTextBlock(meeting.sharedMemo).slice(0, MAX_SHARED_MEMO_CHARS),
     },
     meetingId: meeting.meetingId,
+    notesDegradedReason: "",
     notesGeneratedAt: "",
     notesModeConfidence: 0,
     notesModeDetected: "",
     notesModeSelected: "",
+    notesStatus: options.summary ? "pending" : "disabled",
     notesStyleSelected: DEFAULT_NOTES_STYLE,
     notesSchemaVersion: NOTES_SCHEMA_VERSION,
     options,
@@ -3897,11 +3914,13 @@ function buildSucceededJobPatch(artifact, meeting, options, source, context, tra
     },
     status: "succeeded",
     context: normalizeMeetingContext(context),
+    notesDegradedReason: normalizeText(meetingNotes?.notesDegradedReason),
     meetingNotes: normalizeMeetingNotes(meetingNotes?.notes),
-    notesGeneratedAt: normalizeText(meetingNotes?.notesGeneratedAt || completedAt),
+    notesGeneratedAt: normalizeText(meetingNotes?.notesGeneratedAt),
     notesModeConfidence: normalizeConfidence(meetingNotes?.notesModeConfidence),
     notesModeDetected: normalizeMeetingNotesMode(meetingNotes?.notesModeDetected),
     notesModeSelected: normalizeMeetingNotesMode(meetingNotes?.notesModeSelected),
+    notesStatus: normalizeMeetingNotesStatus(meetingNotes?.notesStatus),
     notesStyleSelected: normalizeMeetingNotesStyle(meetingNotes?.notesStyleSelected) || DEFAULT_NOTES_STYLE,
     notesSchemaVersion: Math.max(1, Number(meetingNotes?.notesSchemaVersion) || NOTES_SCHEMA_VERSION),
     speakerAliases,
@@ -3935,11 +3954,13 @@ function buildTranscriptArtifact(artifactId, jobId, meeting, owner, transcript, 
     jobId,
     kind: "transcript",
     meetingId: meeting.meetingId,
+    notesDegradedReason: normalizeText(meetingNotes?.notesDegradedReason),
     notes: normalizeMeetingNotes(meetingNotes?.notes),
-    notesGeneratedAt: normalizeText(meetingNotes?.notesGeneratedAt || createdAt),
+    notesGeneratedAt: normalizeText(meetingNotes?.notesGeneratedAt),
     notesModeConfidence: normalizeConfidence(meetingNotes?.notesModeConfidence),
     notesModeDetected: normalizeMeetingNotesMode(meetingNotes?.notesModeDetected),
     notesModeSelected: normalizeMeetingNotesMode(meetingNotes?.notesModeSelected),
+    notesStatus: normalizeMeetingNotesStatus(meetingNotes?.notesStatus),
     notesStyleSelected: normalizeMeetingNotesStyle(meetingNotes?.notesStyleSelected) || DEFAULT_NOTES_STYLE,
     notesSchemaVersion: Math.max(1, Number(meetingNotes?.notesSchemaVersion) || NOTES_SCHEMA_VERSION),
     owner: owner ? { ...owner } : {},
@@ -4151,10 +4172,12 @@ function normalizeMeetingJob(input) {
     },
     meetingId: normalizeText(job.meetingId || job.meeting?.meetingId),
     meetingNotes: normalizeMeetingNotes(job.meetingNotes),
+    notesDegradedReason: normalizeText(job.notesDegradedReason),
     notesGeneratedAt: normalizeText(job.notesGeneratedAt),
     notesModeConfidence: normalizeConfidence(job.notesModeConfidence),
     notesModeDetected: normalizeMeetingNotesMode(job.notesModeDetected),
     notesModeSelected: normalizeMeetingNotesMode(job.notesModeSelected),
+    notesStatus: normalizeMeetingNotesStatus(job.notesStatus),
     notesStyleSelected: normalizeMeetingNotesStyle(job.notesStyleSelected) || DEFAULT_NOTES_STYLE,
     notesSchemaVersion: Math.max(1, Number(job.notesSchemaVersion) || NOTES_SCHEMA_VERSION),
     options: {
@@ -4205,11 +4228,13 @@ function normalizeMeetingArtifact(input) {
     jobId: normalizeText(artifact.jobId),
     kind: normalizeText(artifact.kind),
     meetingId: normalizeText(artifact.meetingId),
+    notesDegradedReason: normalizeText(artifact.notesDegradedReason),
     notes: normalizeMeetingNotes(artifact.notes),
     notesGeneratedAt: normalizeText(artifact.notesGeneratedAt),
     notesModeConfidence: normalizeConfidence(artifact.notesModeConfidence),
     notesModeDetected: normalizeMeetingNotesMode(artifact.notesModeDetected),
     notesModeSelected: normalizeMeetingNotesMode(artifact.notesModeSelected),
+    notesStatus: normalizeMeetingNotesStatus(artifact.notesStatus),
     notesStyleSelected: normalizeMeetingNotesStyle(artifact.notesStyleSelected) || DEFAULT_NOTES_STYLE,
     notesSchemaVersion: Math.max(1, Number(artifact.notesSchemaVersion) || NOTES_SCHEMA_VERSION),
     owner: artifact.owner && typeof artifact.owner === "object" ? { ...artifact.owner } : {},
@@ -4281,10 +4306,12 @@ function normalizeMeetingResultSummary(input) {
     durationMs: Math.max(0, Number(item.durationMs) || 0),
     error: normalizeText(item.error),
     meetingId: normalizeText(item.meetingId || item.sessionId),
+    notesDegradedReason: normalizeText(item.notesDegradedReason),
     notesGeneratedAt: normalizeText(item.notesGeneratedAt),
     notesModeConfidence: normalizeConfidence(item.notesModeConfidence),
     notesModeDetected: normalizeMeetingNotesMode(item.notesModeDetected),
     notesModeSelected: normalizeMeetingNotesMode(item.notesModeSelected),
+    notesStatus: normalizeMeetingNotesStatus(item.notesStatus),
     notesStyleSelected: normalizeMeetingNotesStyle(item.notesStyleSelected) || DEFAULT_NOTES_STYLE,
     notesSchemaVersion: Math.max(1, Number(item.notesSchemaVersion) || NOTES_SCHEMA_VERSION),
     previewText: normalizeText(item.previewText || item.excerpt),
@@ -4313,10 +4340,12 @@ function buildMeetingResultSummary(jobInput, artifactInput) {
     error: job.error,
     jobId: job.jobId,
     meetingId: job.meetingId,
+    notesDegradedReason: normalizeText(artifact?.notesDegradedReason || job.notesDegradedReason),
     notesGeneratedAt: normalizeText(artifact?.notesGeneratedAt || job.notesGeneratedAt),
     notesModeConfidence: normalizeConfidence(artifact?.notesModeConfidence || job.notesModeConfidence),
     notesModeDetected: normalizeMeetingNotesMode(artifact?.notesModeDetected || job.notesModeDetected),
     notesModeSelected: normalizeMeetingNotesMode(artifact?.notesModeSelected || job.notesModeSelected),
+    notesStatus: normalizeMeetingNotesStatus(artifact?.notesStatus || job.notesStatus),
     notesStyleSelected: normalizeMeetingNotesStyle(artifact?.notesStyleSelected || job.notesStyleSelected) || DEFAULT_NOTES_STYLE,
     notesSchemaVersion: Math.max(1, Number(artifact?.notesSchemaVersion || job.notesSchemaVersion) || NOTES_SCHEMA_VERSION),
     previewText: notesPreview || buildTranscriptExcerpt(transcriptText),
@@ -4480,6 +4509,11 @@ function normalizeMeetingNotesMode(value) {
   return SUPPORTED_NOTES_MODES.has(normalized) ? normalized : "";
 }
 
+function normalizeMeetingNotesStatus(value) {
+  const normalized = normalizeText(value).toLowerCase();
+  return SUPPORTED_NOTES_STATUSES.has(normalized) ? normalized : "";
+}
+
 function normalizeMeetingNotesStyle(value) {
   const normalized = normalizeText(value).toLowerCase();
   return SUPPORTED_NOTES_STYLES.has(normalized) ? normalized : "";
@@ -4575,11 +4609,13 @@ async function loadMeetingTranscriptForNotes(jobInput, db, createHttpError) {
         jobId: job.jobId,
         kind: "transcript",
         meetingId: job.meetingId,
+        notesDegradedReason: job.notesDegradedReason,
         notes: job.meetingNotes,
         notesGeneratedAt: job.notesGeneratedAt,
         notesModeConfidence: job.notesModeConfidence,
         notesModeDetected: job.notesModeDetected,
         notesModeSelected: job.notesModeSelected,
+        notesStatus: job.notesStatus,
         notesSchemaVersion: job.notesSchemaVersion,
         owner: job.owner,
         speakerAliases,
