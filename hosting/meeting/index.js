@@ -3,7 +3,7 @@
   const { AUTO_RETRY_PENDING_STATUSES, DEFAULT_CREATE_JOB_TIMEOUT_MS, DEFAULT_INLINE_AUDIO_LIMIT_BYTES, DEFAULT_SOURCE_CHUNK_DURATION_MS, DEFAULT_SOURCE_CHUNK_OVERLAP_MS, DEFAULT_SOURCE_MAX_BYTES, DEFAULT_SOURCE_MAX_DURATION_MS, DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS, DEFAULT_SOURCE_TARGET_PART_BYTES, DEFAULT_SOURCE_UPLOAD_TIMEOUT_MS, buildCopyText, buildErrorCopyText, buildRemoteSelectionId, buildWorkspaceHash, buildWorkspaceSessionStorageKey, clearDebugEntries, clearPersistedWorkspaceSession, formatDateTime, getDebugEntries, isDebugPanelEnabled, isLikelyNetworkError, isLocalWorkspaceOrigin, isOnline, loadPersistedWorkspaceSession, logDebug, normalizeSpeakerAliases, normalizeText, normalizeTextBlock, parseParams, pickRecorderMimeType, persistWorkspaceSessionPayload, postJson, resolveConfig, resolveRecordingProfile, safeLocalStorageGet, safeLocalStorageSet, setEnabled: setDebugEnabled, stopTracks, subscribeDebugEntries, summarizeEntries } = ns.shared;
   const { clearWorkspaceAuthCache, ensureWorkspaceAuth, getCollections, subscribeDocument } = ns.firebase;
   const { prepareAudioSourceChunks } = ns.audioChunker;
-  const { blobToBase64, collapseSupersededPendingUploads, createPendingUploadStore, normalizePendingUpload } = ns.storage;
+  const { DEBUG_SCENARIOS: PENDING_UPLOAD_DEBUG_SCENARIOS, blobToBase64, collapseSupersededPendingUploads, createPendingUploadStore, normalizePendingUpload } = ns.storage;
   const { buildDetailView, buildLocalPendingJob, buildPendingNotice, buildPendingSummary, buildSegmentCopyText, chooseSelectedRecordId, findHistoryEntry, findRemoteForPending, normalizeArtifact, normalizeJob, normalizeRecord, renderWorkspace } = ns.render;
   const debugConsole = ns.debugConsole;
 
@@ -701,9 +701,142 @@
     };
   }
 
+  function findPendingUploadDebugScenario(name) {
+    const normalizedName = normalizeText(name);
+    if (!normalizedName) return null;
+    return Object.values(PENDING_UPLOAD_DEBUG_SCENARIOS || {}).find((scenario) => (
+      normalizeText(scenario?.key) === normalizedName
+      || normalizeText(scenario?.fault) === normalizedName
+    )) || null;
+  }
+
+  function hasPendingUploadQueueEvent(snapshot, eventName) {
+    const normalizedEventName = normalizeText(eventName);
+    return (Array.isArray(snapshot?.recentQueueEvents) ? snapshot.recentQueueEvents : [])
+      .some((entry) => normalizeText(entry?.event) === normalizedEventName);
+  }
+
+  function buildPendingUploadQueueValidationChecks(scenario, snapshot) {
+    const checks = [];
+    const scenarioKey = normalizeText(scenario?.key);
+    const noticeCode = normalizeText(snapshot?.activeDegradedNotice?.code);
+    const noticeTone = normalizeText(snapshot?.notice?.tone);
+    const degradedNotices = snapshot?.degradedNotices && typeof snapshot.degradedNotices === "object"
+      ? snapshot.degradedNotices
+      : {};
+    if (scenarioKey.startsWith("queue-load-")) {
+      checks.push(
+        {
+          label: "작업실이 blocked로 끝나지 않음",
+          passed: !Boolean(snapshot?.blocked?.value),
+          actual: snapshot?.blocked?.value ? normalizeText(snapshot?.blocked?.message) : "open",
+        },
+        {
+          label: "load diagnostics가 degraded reason을 가짐",
+          passed: Boolean(normalizeText(snapshot?.diagnostics?.load?.degradedReason)),
+          actual: normalizeText(snapshot?.diagnostics?.load?.degradedReason),
+        },
+        {
+          label: "load degraded notice가 registry에 남음",
+          passed: Boolean(normalizeText(degradedNotices[DEGRADED_NOTICE_CODES.pendingUploads]?.text)),
+          actual: normalizeText(degradedNotices[DEGRADED_NOTICE_CODES.pendingUploads]?.text),
+        },
+        {
+          label: "load degraded debug event가 최근 로그에 남음",
+          passed: hasPendingUploadQueueEvent(snapshot, "workspace.pending-uploads.load.degraded"),
+          actual: hasPendingUploadQueueEvent(snapshot, "workspace.pending-uploads.load.degraded")
+            ? "workspace.pending-uploads.load.degraded"
+            : "",
+        }
+      );
+      return checks;
+    }
+    if (scenarioKey.startsWith("queue-persist-")) {
+      checks.push(
+        {
+          label: "persist diagnostics가 degraded reason을 가짐",
+          passed: Boolean(normalizeText(snapshot?.diagnostics?.persist?.degradedReason)),
+          actual: normalizeText(snapshot?.diagnostics?.persist?.degradedReason),
+        },
+        {
+          label: "persist degraded notice가 registry에 남음",
+          passed: Boolean(normalizeText(degradedNotices[DEGRADED_NOTICE_CODES.pendingUploadPersist]?.text)),
+          actual: normalizeText(degradedNotices[DEGRADED_NOTICE_CODES.pendingUploadPersist]?.text),
+        },
+        {
+          label: "사용자 notice가 error tone으로 보임",
+          passed: noticeTone === "error",
+          actual: `${noticeTone || "none"}:${normalizeText(snapshot?.notice?.text)}`,
+        },
+        {
+          label: "persist degraded debug event가 최근 로그에 남음",
+          passed: hasPendingUploadQueueEvent(snapshot, "workspace.pending-uploads.persist.degraded"),
+          actual: hasPendingUploadQueueEvent(snapshot, "workspace.pending-uploads.persist.degraded")
+            ? "workspace.pending-uploads.persist.degraded"
+            : "",
+        }
+      );
+      return checks;
+    }
+    if (scenarioKey.startsWith("queue-cleanup-")) {
+      checks.push(
+        {
+          label: "cleanup diagnostics가 degraded reason을 가짐",
+          passed: Boolean(normalizeText(snapshot?.diagnostics?.cleanup?.degradedReason)),
+          actual: normalizeText(snapshot?.diagnostics?.cleanup?.degradedReason),
+        },
+        {
+          label: "cleanup degraded notice가 registry에 남음",
+          passed: Boolean(normalizeText(degradedNotices[DEGRADED_NOTICE_CODES.pendingUploadCleanup]?.text)),
+          actual: normalizeText(degradedNotices[DEGRADED_NOTICE_CODES.pendingUploadCleanup]?.text),
+        },
+        {
+          label: "사용자 notice가 error tone으로 보임",
+          passed: noticeTone === "error",
+          actual: `${noticeTone || "none"}:${normalizeText(snapshot?.notice?.text)}`,
+        },
+        {
+          label: "cleanup degraded debug event가 최근 로그에 남음",
+          passed: hasPendingUploadQueueEvent(snapshot, "workspace.pending-uploads.cleanup.degraded"),
+          actual: hasPendingUploadQueueEvent(snapshot, "workspace.pending-uploads.cleanup.degraded")
+            ? "workspace.pending-uploads.cleanup.degraded"
+            : "",
+        }
+      );
+      return checks;
+    }
+    checks.push({
+      label: "active degraded notice가 있음",
+      passed: Boolean(noticeCode),
+      actual: noticeCode,
+    });
+    return checks;
+  }
+
+  function validatePendingUploadQueueScenario(name, options = {}) {
+    const scenario = findPendingUploadDebugScenario(name);
+    if (!scenario) {
+      throw new Error(`알 수 없는 pending upload queue validation scenario: ${normalizeText(name) || "(empty)"}`);
+    }
+    const snapshot = buildPendingUploadQueueStateSnapshot(options);
+    const checks = buildPendingUploadQueueValidationChecks(scenario, snapshot);
+    return {
+      checks,
+      expectedFlow: normalizeText(scenario.expectedFlow),
+      passed: checks.every((check) => Boolean(check?.passed)),
+      scenario: normalizeText(scenario.key),
+      snapshot,
+      summary: normalizeText(scenario.summary),
+      trigger: normalizeText(scenario.trigger),
+    };
+  }
+
   function syncWorkspaceDebugApi() {
     const debugApi = global.__INOVA_HOSTED_MEETING_DEBUG__ = global.__INOVA_HOSTED_MEETING_DEBUG__ || {};
     debugApi.queueState = buildPendingUploadQueueStateSnapshot;
+    debugApi.queueValidation = {
+      check: validatePendingUploadQueueScenario,
+    };
   }
 
   function consumePendingUploadQueueDiagnostics(context = {}) {
