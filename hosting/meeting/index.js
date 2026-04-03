@@ -738,6 +738,7 @@
       pendingLocalCount: Math.max(0, Number(state.meeting?.pendingLocalCount) || 0),
       pendingUploads: state.pendingUploads.map(buildPendingUploadSnapshotItem),
       recentQueueEvents: buildRecentPendingUploadEventSnapshot(options.limit),
+      runtimeChunkCacheKeys: Object.keys(state.runtimeChunkCache || {}).map((key) => normalizeText(key)).filter(Boolean).sort(),
       selectedRecordId: normalizeText(state.selectedRecordId),
     };
   }
@@ -3264,7 +3265,7 @@
   }
 
   async function deletePendingUpload(requestId, options = {}) {
-    delete state.runtimeChunkCache[normalizeText(requestId)];
+    const normalizedRequestId = normalizeText(requestId);
     try {
       await runPendingUploadQueueOperation(
         () => state.queueStore.delete(requestId),
@@ -3280,8 +3281,9 @@
       showPendingUploadQueueOperationError(error, "브라우저에 보관한 녹음을 정리하지 못했어요.");
       throw error;
     }
-    state.pendingUploads = state.pendingUploads.filter((item) => item.requestId !== normalizeText(requestId));
-    if (state.selectedRecordId === ns.shared.buildLocalSelectionId(requestId)) state.selectedRecordId = chooseSelectedRecordId(state);
+    delete state.runtimeChunkCache[normalizedRequestId];
+    state.pendingUploads = state.pendingUploads.filter((item) => item.requestId !== normalizedRequestId);
+    if (state.selectedRecordId === ns.shared.buildLocalSelectionId(normalizedRequestId)) state.selectedRecordId = chooseSelectedRecordId(state);
     persistWorkspaceSession();
     setNotice("브라우저에 보관하던 녹음을 삭제했습니다.", "highlight");
     applyRender();

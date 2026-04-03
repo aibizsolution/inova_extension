@@ -304,7 +304,7 @@ npm run emulator:hosting
 
 기본 로컬 주소는 `http://127.0.0.1:5000/meeting/index.html` 입니다. 확장프로그램은 그대로 Chrome에서 실행하고, 팝업에서 `상용 / 로컬`과 `디버그 OFF / ON`을 전환해 확인합니다. 디버그를 켜면 패널/작업실에서 세션 복원, 함수 호출, Firestore listener 흐름을 화면 안에서 바로 볼 수 있습니다.
 
-queue degraded 수동 검증만 빠르게 하려면 localhost 작업실을 `http://127.0.0.1:5000/meeting/index.html?debug=1&debugQueueSandbox=1`로 열어 로컬 queue sandbox를 먼저 띄울 수 있습니다. 이 모드에서는 panel/session 없이도 `__INOVA_HOSTED_MEETING_DEBUG__.queueSandbox.seedPending()`로 로컬 pending 항목을 만들고, `queueSandbox.runAction("hold" | "rename" | "delete")`와 reload 중심의 queue load/persist/cleanup 검증을 로컬에서 반복할 수 있으며 원격 refresh/retry는 건너뜁니다. hosted debug console 공통 contract를 확인할 때는 `__INOVA_HOSTED_MEETING_DEBUG__.debugConsoleState()`와 `debugConsoleValidation.checkWorkspace()`로 현재 DOM/toolbar/fab 상태를 한 번에 볼 수 있습니다.
+queue degraded 수동 검증만 빠르게 하려면 localhost 작업실을 `http://127.0.0.1:5000/meeting/index.html?debug=1&debugQueueSandbox=1`로 열어 로컬 queue sandbox를 먼저 띄울 수 있습니다. 이 모드에서는 panel/session 없이도 `__INOVA_HOSTED_MEETING_DEBUG__.queueSandbox.seedPending()`로 로컬 pending 항목을 만들고, `queueSandbox.runAction("hold" | "rename" | "delete")`와 reload 중심의 queue load/persist/cleanup 검증을 로컬에서 반복할 수 있으며 원격 refresh/retry는 건너뜁니다. `queueState()`에는 `runtimeChunkCacheKeys`도 함께 들어 있어 queue storage와 메모리 chunk cache가 어긋난 경우를 바로 확인할 수 있습니다. hosted debug console 공통 contract를 확인할 때는 `__INOVA_HOSTED_MEETING_DEBUG__.debugConsoleState()`와 `debugConsoleValidation.checkWorkspace()`로 현재 DOM/toolbar/fab 상태를 한 번에 볼 수 있습니다.
 
 panel/hosted debug console 실제 Chrome 검증 메모는 `docs/meeting-debug-console-validation.md`를 기준으로 봅니다.
 
