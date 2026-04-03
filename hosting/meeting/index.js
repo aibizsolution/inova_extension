@@ -2460,6 +2460,129 @@
     });
   }
 
+  async function continueChunkedPendingUploadAttempt(latest, buildAttemptQueueContext, activeRequestId, sourceSizeBytes) {
+    let nextPending = await upsertPendingUpload({
+      ...latest,
+      lastError: "",
+      sourceMode: "chunked",
+      status: "preparing_chunks",
+    }, { context: buildAttemptQueueContext(activeRequestId, "chunk-prepare") });
+    const prepared = await getOrPrepareChunkedSource(nextPending);
+    nextPending = await upsertPendingUpload({
+      ...nextPending,
+      lastError: "",
+      mimeType: prepared.mimeType,
+      originalSizeBytes: sourceSizeBytes,
+      parts: prepared.parts,
+      preparedPartCount: prepared.parts.length,
+      sourceMode: "chunked",
+      status: "uploading_chunks",
+      uploadedPartCount: prepared.parts.filter((part) => normalizeText(part.storageObject)).length,
+    }, { context: buildAttemptQueueContext(activeRequestId, "chunk-uploading") });
+
+    let publishedRemoteJobThisAttempt = false;
+    for (const preparedPart of prepared.parts) {
+      const currentPending = state.pendingUploads.find((item) => item.requestId === activeRequestId) || nextPending;
+      const currentPart = (currentPending?.parts || []).find((part) => Number(part.index) === Number(preparedPart.index));
+      if (normalizeText(currentPart?.storageObject)) {
+        continue;
+      }
+      const uploaded = await uploadPendingSource(currentPending, {
+        blob: preparedPart.blob,
+        endMs: preparedPart.endMs,
+        fileName: buildChunkPartFileName(currentPending, preparedPart.index),
+        mimeType: prepared.mimeType,
+        overlapMs: preparedPart.overlapMs,
+        parentRequestId: normalizeText(currentPending?.requestId),
+        partCount: prepared.parts.length,
+        partIndex: preparedPart.index,
+        requestId: preparedPart.requestId,
+        sizeBytes: preparedPart.sizeBytes,
+        startMs: preparedPart.startMs,
+      });
+      nextPending = await updatePendingChunkUploadState(
+        normalizeText(currentPending?.requestId),
+        preparedPart.index,
+        uploaded,
+        { context: buildAttemptQueueContext(activeRequestId, "chunk-part-uploaded") }
+      );
+      const shouldAnnounceChunkStart = !normalizeText(currentPending?.jobId) && !normalizeText(nextPending?.jobId);
+      nextPending = (await createOrRefreshRemoteJob(nextPending, {
+        context: buildAttemptQueueContext(activeRequestId, shouldAnnounceChunkStart ? "chunk-remote-job-start" : "chunk-remote-job-refresh"),
+        noticeText: shouldAnnounceChunkStart
+          ? "첫 청크를 올려 자동 전사를 바로 시작했습니다. 남은 청크를 이어서 업로드합니다."
+          : "",
+        syncWorkspace: shouldAnnounceChunkStart,
+      })).pending;
+      publishedRemoteJobThisAttempt = true;
+    }
+
+    if (!publishedRemoteJobThisAttempt) {
+      return (await createOrRefreshRemoteJob(nextPending, {
+        context: buildAttemptQueueContext(activeRequestId, "chunk-remote-job-resync"),
+        noticeText: "자동 전사를 이어서 확인합니다.",
+        syncWorkspace: true,
+      })).pending;
+    }
+
+    await syncWorkspaceLocalState(false, "workflow");
+    return nextPending;
+  }
+
+  async function continueSinglePendingUploadAttempt(latest, buildAttemptQueueContext, activeRequestId, sourceSizeBytes) {
+    let nextPending = latest;
+    let allowInlineSource = false;
+    let inlineSourceError = "";
+    if (!normalizeText(nextPending?.storageObject)) {
+      nextPending = await upsertPendingUpload({
+        ...nextPending,
+        lastError: "",
+        originalSizeBytes: sourceSizeBytes,
+        sourceMode: "single",
+        status: "uploading",
+      }, { context: buildAttemptQueueContext(activeRequestId, "single-uploading") });
+      try {
+        const uploaded = await uploadPendingSource(nextPending);
+        nextPending = await upsertPendingUpload({
+          ...nextPending,
+          lastError: "",
+          originalSizeBytes: sourceSizeBytes,
+          sizeBytes: Math.max(sourceSizeBytes, Number(uploaded?.sizeBytes) || 0),
+          sourceMode: "single",
+          status: "uploading",
+          storageObject: normalizeText(uploaded?.storageObject),
+        }, { context: buildAttemptQueueContext(activeRequestId, "single-uploaded") });
+      } catch (uploadError) {
+        logDebug("workspace.source-upload.fallback-inline", {
+          error: uploadError,
+          requestId: activeRequestId,
+          sizeBytes: sourceSizeBytes,
+        });
+        nextPending = await upsertPendingUpload({
+          ...nextPending,
+          lastError: "",
+          originalSizeBytes: sourceSizeBytes,
+          sourceMode: "single",
+          status: "uploading",
+          storageObject: "",
+        }, { context: buildAttemptQueueContext(activeRequestId, "single-inline-fallback") });
+        allowInlineSource = true;
+        inlineSourceError = "브라우저 임시 오디오 업로드가 실패해 현재 탭의 원본으로만 전사를 이어갑니다.";
+        setNotice("브라우저 임시 오디오 업로드가 실패했습니다. 현재 탭의 원본으로만 전사를 이어가며, 다음 새로고침 뒤에는 다시 업로드 대기로 돌아올 수 있습니다.", "warning");
+        applyRender();
+      }
+    }
+    return (await createOrRefreshRemoteJob(nextPending, {
+      allowInlineSource,
+      context: buildAttemptQueueContext(activeRequestId, "single-remote-job-start"),
+      inlineSourceError,
+      noticeText: allowInlineSource
+        ? "브라우저 원본으로 전사를 접수했습니다. 현재 탭을 닫기 전까지 결과를 계속 확인합니다."
+        : "자동 전사를 접수했습니다. 결과를 계속 확인하는 중입니다.",
+      syncWorkspace: true,
+    })).pending;
+  }
+
   async function attemptPendingUpload(requestId, options = {}) {
     const normalizedRequestId = normalizeText(requestId);
     const pending = state.pendingUploads.find((item) => item.requestId === normalizedRequestId);
@@ -2513,120 +2636,9 @@
         throw new Error("현재 회의 원본은 최대 2시간까지만 지원해요.");
       }
       if (shouldUseChunkedSource(latest)) {
-        latest = await upsertPendingUpload({
-          ...latest,
-          lastError: "",
-          sourceMode: "chunked",
-          status: "preparing_chunks",
-        }, { context: buildAttemptQueueContext(activeRequestId, "chunk-prepare") });
-        const prepared = await getOrPrepareChunkedSource(latest);
-        latest = await upsertPendingUpload({
-          ...latest,
-          lastError: "",
-          mimeType: prepared.mimeType,
-          originalSizeBytes: sourceSizeBytes,
-          parts: prepared.parts,
-          preparedPartCount: prepared.parts.length,
-          sourceMode: "chunked",
-          status: "uploading_chunks",
-          uploadedPartCount: prepared.parts.filter((part) => normalizeText(part.storageObject)).length,
-        }, { context: buildAttemptQueueContext(activeRequestId, "chunk-uploading") });
-        let refreshedRemoteJob = false;
-        for (const preparedPart of prepared.parts) {
-          const currentPending = state.pendingUploads.find((item) => item.requestId === activeRequestId);
-          const currentPart = (currentPending?.parts || []).find((part) => Number(part.index) === Number(preparedPart.index));
-          if (normalizeText(currentPart?.storageObject)) {
-            continue;
-          }
-          const uploaded = await uploadPendingSource(currentPending || latest, {
-            blob: preparedPart.blob,
-            endMs: preparedPart.endMs,
-            fileName: buildChunkPartFileName(currentPending || latest, preparedPart.index),
-            mimeType: prepared.mimeType,
-            overlapMs: preparedPart.overlapMs,
-            parentRequestId: normalizeText((currentPending || latest)?.requestId),
-            partCount: prepared.parts.length,
-            partIndex: preparedPart.index,
-            requestId: preparedPart.requestId,
-            sizeBytes: preparedPart.sizeBytes,
-            startMs: preparedPart.startMs,
-          });
-          latest = await updatePendingChunkUploadState(
-            normalizeText((currentPending || latest)?.requestId),
-            preparedPart.index,
-            uploaded,
-            { context: buildAttemptQueueContext(activeRequestId, "chunk-part-uploaded") }
-          );
-          const shouldAnnounceChunkStart = !normalizeText(currentPending?.jobId) && !normalizeText(latest?.jobId);
-          latest = (await createOrRefreshRemoteJob(latest, {
-            context: buildAttemptQueueContext(activeRequestId, shouldAnnounceChunkStart ? "chunk-remote-job-start" : "chunk-remote-job-refresh"),
-            noticeText: shouldAnnounceChunkStart
-              ? "첫 청크를 올려 자동 전사를 바로 시작했습니다. 남은 청크를 이어서 업로드합니다."
-              : "",
-            syncWorkspace: shouldAnnounceChunkStart,
-          })).pending;
-          refreshedRemoteJob = true;
-        }
-        if (!refreshedRemoteJob) {
-          latest = (await createOrRefreshRemoteJob(latest, {
-            context: buildAttemptQueueContext(activeRequestId, "chunk-remote-job-resync"),
-            noticeText: "자동 전사를 이어서 확인합니다.",
-            syncWorkspace: true,
-          })).pending;
-        } else {
-          await syncWorkspaceLocalState(false, "workflow");
-        }
+        latest = await continueChunkedPendingUploadAttempt(latest, buildAttemptQueueContext, activeRequestId, sourceSizeBytes);
       } else {
-        let allowInlineSource = false;
-        let inlineSourceError = "";
-        if (!normalizeText(latest?.storageObject)) {
-          latest = await upsertPendingUpload({
-            ...latest,
-            lastError: "",
-            originalSizeBytes: sourceSizeBytes,
-            sourceMode: "single",
-            status: "uploading",
-          }, { context: buildAttemptQueueContext(activeRequestId, "single-uploading") });
-          try {
-            const uploaded = await uploadPendingSource(latest);
-            latest = await upsertPendingUpload({
-              ...latest,
-              lastError: "",
-              originalSizeBytes: sourceSizeBytes,
-              sizeBytes: Math.max(sourceSizeBytes, Number(uploaded?.sizeBytes) || 0),
-              sourceMode: "single",
-              status: "uploading",
-              storageObject: normalizeText(uploaded?.storageObject),
-            }, { context: buildAttemptQueueContext(activeRequestId, "single-uploaded") });
-          } catch (uploadError) {
-            logDebug("workspace.source-upload.fallback-inline", {
-              error: uploadError,
-              requestId: activeRequestId,
-              sizeBytes: sourceSizeBytes,
-            });
-            latest = await upsertPendingUpload({
-              ...latest,
-              lastError: "",
-              originalSizeBytes: sourceSizeBytes,
-              sourceMode: "single",
-              status: "uploading",
-              storageObject: "",
-            }, { context: buildAttemptQueueContext(activeRequestId, "single-inline-fallback") });
-            allowInlineSource = true;
-            inlineSourceError = "브라우저 임시 오디오 업로드가 실패해 현재 탭의 원본으로만 전사를 이어갑니다.";
-            setNotice("브라우저 임시 오디오 업로드가 실패했습니다. 현재 탭의 원본으로만 전사를 이어가며, 다음 새로고침 뒤에는 다시 업로드 대기로 돌아올 수 있습니다.", "warning");
-            applyRender();
-          }
-        }
-        latest = (await createOrRefreshRemoteJob(latest, {
-          allowInlineSource,
-          context: buildAttemptQueueContext(activeRequestId, "single-remote-job-start"),
-          inlineSourceError,
-          noticeText: allowInlineSource
-            ? "브라우저 원본으로 전사를 접수했습니다. 현재 탭을 닫기 전까지 결과를 계속 확인합니다."
-            : "자동 전사를 접수했습니다. 결과를 계속 확인하는 중입니다.",
-          syncWorkspace: true,
-        })).pending;
+        latest = await continueSinglePendingUploadAttempt(latest, buildAttemptQueueContext, activeRequestId, sourceSizeBytes);
       }
     } catch (error) {
       const latest = state.pendingUploads.find((item) => item.requestId === activeRequestId);
