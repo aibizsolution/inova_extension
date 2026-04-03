@@ -329,17 +329,38 @@
     return `${normalizedReason} 삭제했거나 비운 임시 녹음이 다음 새로고침 뒤 다시 보일 수 있습니다.`;
   }
 
+  function buildPendingUploadLoadPhaseDegradedNotice(context = {}, reason) {
+    const normalizedContext = normalizePendingUploadQueueContext(context);
+    const normalizedReason = normalizeText(reason);
+    if (normalizedContext.phase === "load-pending-uploads") {
+      return `${normalizedReason || "브라우저에 남아 있던 로컬 업로드 대기 기록을 완전하게 읽지 못했어요."} 작업실은 계속 열리지만, 일부 임시 녹음이나 업로드 대기 상태는 이번 진입에서 빠져 있을 수 있습니다.`;
+    }
+    return buildPendingUploadStorageDegradedNotice(normalizedReason);
+  }
+
   function buildPendingUploadPersistPhaseDegradedNotice(context = {}, reason) {
     const normalizedContext = normalizePendingUploadQueueContext(context);
     const normalizedReason = normalizeText(reason);
     if (normalizedContext.phase === "transition-start") {
       return `${normalizedReason || "재시작할 로컬 원본 상태를 브라우저에 보관하지 못했어요."} 현재 탭에서는 이전 원본을 유지하지만, 다시 시작 준비 상태가 다음 새로고침 뒤 다시 보이지 않을 수 있습니다.`;
     }
-    if (["chunk-prepare", "chunk-uploading", "single-uploading", "single-uploaded", "single-inline-fallback"].includes(normalizedContext.phase)) {
+    if (["import-save", "capture-save", "capture-save-continue", "offline-queued"].includes(normalizedContext.phase)) {
+      return `${normalizedReason || "새 로컬 원본 상태를 브라우저에 보관하지 못했어요."} 지금 탭에서는 계속 진행하지만, 다음 새로고침 뒤에는 방금 가져오거나 녹음한 원본이 다시 보이지 않을 수 있습니다.`;
+    }
+    if (["chunk-prepare", "chunk-uploading", "chunk-part-uploaded", "single-uploading", "single-uploaded", "single-inline-fallback"].includes(normalizedContext.phase)) {
       return `${normalizedReason || "업로드 진행 상태를 브라우저에 보관하지 못했어요."} 지금 탭에서는 처리를 이어가지만, 다음 새로고침 뒤에는 진행 상태가 일부 뒤로 보일 수 있습니다.`;
+    }
+    if (["chunk-remote-job-start", "chunk-remote-job-refresh", "chunk-remote-job-resync", "single-remote-job-start"].includes(normalizedContext.phase)) {
+      return `${normalizedReason || "원격 전사 작업 연결 상태를 브라우저에 보관하지 못했어요."} 지금 탭에서는 결과를 계속 확인하지만, 다음 새로고침 뒤에는 원격 작업 연결 상태가 잠시 비어 보일 수 있습니다.`;
+    }
+    if (["remote-sync-succeeded", "remote-sync-update", "remote-sync-reset"].includes(normalizedContext.phase)) {
+      return `${normalizedReason || "원격 동기화 결과를 브라우저 로컬 큐에 반영하지 못했어요."} 다음 새로고침 뒤에는 최신 원격 처리 상태가 잠시 이전 값으로 보일 수 있습니다.`;
     }
     if (normalizedContext.phase === "failure-state") {
       return `${normalizedReason || "업로드 실패 상태를 브라우저에 보관하지 못했어요."} 다음 새로고침 뒤에는 방금 실패 이유가 다시 보이지 않을 수 있습니다.`;
+    }
+    if (normalizedContext.phase === "record-title") {
+      return `${normalizedReason || "기록 이름 변경을 브라우저 로컬 큐에 보관하지 못했어요."} 다음 새로고침 뒤에는 방금 바꾼 로컬 기록 이름이 이전 값으로 다시 보일 수 있습니다.`;
     }
     if (normalizedContext.phase === "manual-hold") {
       return `${normalizedReason || "보류 상태를 브라우저에 보관하지 못했어요."} 다음 새로고침 뒤에는 방금 멈춘 업로드가 다시 대기 상태로 보일 수 있습니다.`;
@@ -374,7 +395,7 @@
     if (normalizedScope === PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.cleanup) {
       return buildPendingUploadCleanupPhaseDegradedNotice(context, fallbackReason);
     }
-    return buildPendingUploadStorageDegradedNotice(fallbackReason);
+    return buildPendingUploadLoadPhaseDegradedNotice(context, fallbackReason);
   }
 
   function normalizePendingUploadQueueContext(context = {}) {
@@ -1896,9 +1917,15 @@
             sizeBytes: preparedPart.sizeBytes,
             startMs: preparedPart.startMs,
           });
-          latest = await updatePendingChunkUploadState(normalizeText((currentPending || latest)?.requestId), preparedPart.index, uploaded);
+          latest = await updatePendingChunkUploadState(
+            normalizeText((currentPending || latest)?.requestId),
+            preparedPart.index,
+            uploaded,
+            { context: buildAttemptQueueContext(activeRequestId, "chunk-part-uploaded") }
+          );
           const shouldAnnounceChunkStart = !normalizeText(currentPending?.jobId) && !normalizeText(latest?.jobId);
           latest = (await createOrRefreshRemoteJob(latest, {
+            context: buildAttemptQueueContext(activeRequestId, shouldAnnounceChunkStart ? "chunk-remote-job-start" : "chunk-remote-job-refresh"),
             noticeText: shouldAnnounceChunkStart
               ? "첫 청크를 올려 자동 전사를 바로 시작했습니다. 남은 청크를 이어서 업로드합니다."
               : "",
@@ -1908,6 +1935,7 @@
         }
         if (!refreshedRemoteJob) {
           latest = (await createOrRefreshRemoteJob(latest, {
+            context: buildAttemptQueueContext(activeRequestId, "chunk-remote-job-resync"),
             noticeText: "자동 전사를 이어서 확인합니다.",
             syncWorkspace: true,
           })).pending;
@@ -1953,6 +1981,7 @@
       }
       if (normalizeText(latest?.sourceMode) !== "chunked") {
         latest = (await createOrRefreshRemoteJob(latest, {
+          context: buildAttemptQueueContext(activeRequestId, "single-remote-job-start"),
           noticeText: "자동 전사를 접수했습니다. 결과를 계속 확인하는 중입니다.",
           syncWorkspace: true,
         })).pending;
@@ -2014,6 +2043,10 @@
 
   async function createOrRefreshRemoteJob(item, options = {}) {
     const previousJobId = normalizeText(item?.jobId);
+    const queueContext = normalizePendingUploadQueueContext({
+      requestId: item?.requestId,
+      ...(options?.context || {}),
+    });
     const created = await postJson(global, CONFIG.createJobUrl, await buildCreateJobPayload(item), state.session.meetingSessionToken, {
       timeoutMs: DEFAULT_CREATE_JOB_TIMEOUT_MS,
     });
@@ -2027,7 +2060,7 @@
       status: allChunksUploaded
         ? (normalizeText(createdJob?.status) === "processing" ? "remote_processing" : "remote_queued")
         : "uploading_chunks",
-    });
+    }, { context: queueContext });
     if (
       createdJob?.jobId
       && (!previousJobId || previousJobId !== normalizeText(createdJob.jobId))
@@ -2216,7 +2249,7 @@
     return preparedSource;
   }
 
-  async function updatePendingChunkUploadState(requestId, partIndex, uploaded) {
+  async function updatePendingChunkUploadState(requestId, partIndex, uploaded, options = {}) {
     const current = state.pendingUploads.find((item) => item.requestId === normalizeText(requestId));
     if (!current) {
       throw new Error("업로드 상태를 갱신할 기록을 찾지 못했어요.");
@@ -2239,6 +2272,11 @@
       status: "uploading_chunks",
       uploadedPartCount: nextParts.filter((part) => normalizeText(part.storageObject)).length,
       updatedAt: new Date().toISOString(),
+    }, {
+      context: normalizePendingUploadQueueContext({
+        requestId,
+        ...(options?.context || {}),
+      }),
     });
     if (state.runtimeChunkCache[normalizeText(requestId)]) {
       state.runtimeChunkCache[normalizeText(requestId)] = {
