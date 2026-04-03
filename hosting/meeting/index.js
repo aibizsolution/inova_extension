@@ -12,6 +12,14 @@
   const DEBUG_PANEL_COLLAPSED_STORAGE_KEY = "__INOVA_MEETING_DEBUG_PANEL_COLLAPSED__";
   const SUPERSEDED_REMOTE_JOBS_STORAGE_KEY_PREFIX = "__INOVA_MEETING_SUPERSEDED_REMOTE_JOBS__";
   const BOOT_INITIAL_SNAPSHOT_WAIT_MS = 450;
+  const DEGRADED_NOTICE_PRIORITIES = Object.freeze({
+    "refresh-degraded": 60,
+    "session-restore-degraded": 50,
+    "session-persist-degraded": 40,
+    "pending-uploads-degraded": 30,
+    "pending-upload-persist-degraded": 20,
+    "pending-upload-cleanup-degraded": 10,
+  });
   const refs = {};
   const state = createInitialState();
 
@@ -48,6 +56,10 @@
     };
   }
 
+  function createEmptyNotice() {
+    return { code: "", sticky: false, text: "", tone: "" };
+  }
+
   function createInitialState() {
     const recordingProfile = resolveRecordingProfile(global);
     return {
@@ -63,8 +75,9 @@
       currentDetailSelectionId: "",
       currentJob: null,
       currentLocalRecord: null,
-      debugNotice: { code: "", sticky: false, text: "", tone: "" },
+      debugNotice: createEmptyNotice(),
       debugNoticeTimer: 0,
+      degradedNotices: Object.create(null),
       debugPanelCollapsed: readDebugPanelCollapsed(),
       isLocalWorkspace: isLocalWorkspaceOrigin(global),
       loading: false,
@@ -73,7 +86,7 @@
       media: createEmptyMediaState(),
       meeting: { meetingId: "", pendingLocalCount: 0, sharedMemo: "", title: "", updatedAt: "" },
       mode: "create",
-      notice: { code: "", sticky: false, text: "", tone: "" },
+      notice: createEmptyNotice(),
       noticeTimer: 0,
       params: parseParams(global.location.href),
       pendingUploads: [],
@@ -303,14 +316,75 @@
     return `${normalizedReason} 삭제했거나 비운 임시 녹음이 다음 새로고침 뒤 다시 보일 수 있습니다.`;
   }
 
+  function buildNoticeState(text, tone, options = {}) {
+    const nextText = normalizeText(text);
+    const nextTone = normalizeText(tone);
+    return {
+      code: normalizeText(options?.code),
+      sticky: Boolean(options?.sticky || nextTone === "error"),
+      text: nextText,
+      tone: nextTone,
+    };
+  }
+
+  function isDegradedNoticeCode(code) {
+    const normalizedCode = normalizeText(code);
+    return Boolean(normalizedCode) && Object.prototype.hasOwnProperty.call(DEGRADED_NOTICE_PRIORITIES, normalizedCode);
+  }
+
+  function getHighestPriorityDegradedNotice() {
+    const degradedEntries = Object.values(state.degradedNotices || {})
+      .filter((entry) => normalizeText(entry?.text) && isDegradedNoticeCode(entry?.code))
+      .sort((left, right) => {
+        const priorityGap = (DEGRADED_NOTICE_PRIORITIES[normalizeText(right?.code)] || 0) - (DEGRADED_NOTICE_PRIORITIES[normalizeText(left?.code)] || 0);
+        if (priorityGap !== 0) return priorityGap;
+        return normalizeText(left?.code).localeCompare(normalizeText(right?.code));
+      });
+    return degradedEntries[0] ? { ...degradedEntries[0] } : null;
+  }
+
+  function syncNoticeFromDegradedRegistry() {
+    const currentCode = normalizeText(state.notice.code);
+    const currentIsDegraded = isDegradedNoticeCode(currentCode);
+    const activeDegradedNotice = getHighestPriorityDegradedNotice();
+    if (!activeDegradedNotice) {
+      if (currentIsDegraded) {
+        state.notice = createEmptyNotice();
+      }
+      return;
+    }
+    if (!normalizeText(state.notice.text) || currentIsDegraded) {
+      state.notice = activeDegradedNotice;
+    }
+  }
+
+  function setDegradedNotice(code, text, tone = "warning") {
+    const normalizedCode = normalizeText(code);
+    if (!normalizedCode) return;
+    const nextNotice = buildNoticeState(text, tone, {
+      code: normalizedCode,
+      sticky: true,
+    });
+    if (!normalizeText(nextNotice.text)) {
+      clearDegradedNotice(normalizedCode);
+      return;
+    }
+    state.degradedNotices[normalizedCode] = nextNotice;
+    syncNoticeFromDegradedRegistry();
+  }
+
+  function clearDegradedNotice(code) {
+    const normalizedCode = normalizeText(code);
+    if (!normalizedCode) return;
+    delete state.degradedNotices[normalizedCode];
+    syncNoticeFromDegradedRegistry();
+  }
+
   function surfaceSessionRestoreNotice() {
     if (!state.sessionRestore.hasWarningIssue || !state.session.meetingSessionToken || !state.session.meetingId) {
       return;
     }
-    setNotice(buildSessionRestoreDegradedNotice(), "warning", {
-      code: "session-restore-degraded",
-      sticky: true,
-    });
+    setDegradedNotice("session-restore-degraded", buildSessionRestoreDegradedNotice(), "warning");
   }
 
   function applyPersistWorkspaceSessionResult(result) {
@@ -332,7 +406,7 @@
           meetingId: state.session.meetingId,
         });
       }
-      clearResolvedSessionPersistNotice();
+      clearDegradedNotice("session-persist-degraded");
       return;
     }
     if (previousSignature === nextSignature) {
@@ -344,10 +418,7 @@
       issues,
       meetingId: state.session.meetingId,
     });
-    setNotice(buildSessionPersistDegradedNotice(degradedReason), "warning", {
-      code: "session-persist-degraded",
-      sticky: true,
-    });
+    setDegradedNotice("session-persist-degraded", buildSessionPersistDegradedNotice(degradedReason), "warning");
   }
 
   function applyPendingUploadStorageDiagnostics(result) {
@@ -369,7 +440,7 @@
           meetingId: state.session.meetingId,
         });
       }
-      clearResolvedPendingUploadStorageNotice();
+      clearDegradedNotice("pending-uploads-degraded");
       return;
     }
     if (previousSignature === nextSignature) {
@@ -382,10 +453,7 @@
       meetingId: state.session.meetingId,
       operation: normalizeText(result?.operation),
     });
-    setNotice(buildPendingUploadStorageDegradedNotice(degradedReason), "warning", {
-      code: "pending-uploads-degraded",
-      sticky: true,
-    });
+    setDegradedNotice("pending-uploads-degraded", buildPendingUploadStorageDegradedNotice(degradedReason), "warning");
   }
 
   function applyPendingUploadPersistDiagnostics(result) {
@@ -407,7 +475,7 @@
           meetingId: state.session.meetingId,
         });
       }
-      clearResolvedPendingUploadPersistNotice();
+      clearDegradedNotice("pending-upload-persist-degraded");
       return;
     }
     if (previousSignature === nextSignature) {
@@ -420,10 +488,7 @@
       meetingId: state.session.meetingId,
       operation: normalizeText(result?.operation),
     });
-    setNotice(buildPendingUploadPersistDegradedNotice(degradedReason), "warning", {
-      code: "pending-upload-persist-degraded",
-      sticky: true,
-    });
+    setDegradedNotice("pending-upload-persist-degraded", buildPendingUploadPersistDegradedNotice(degradedReason), "warning");
   }
 
   function applyPendingUploadCleanupDiagnostics(result) {
@@ -445,7 +510,7 @@
           meetingId: state.session.meetingId,
         });
       }
-      clearResolvedPendingUploadCleanupNotice();
+      clearDegradedNotice("pending-upload-cleanup-degraded");
       return;
     }
     if (previousSignature === nextSignature) {
@@ -458,10 +523,7 @@
       meetingId: state.session.meetingId,
       operation: normalizeText(result?.operation),
     });
-    setNotice(buildPendingUploadCleanupDegradedNotice(degradedReason), "warning", {
-      code: "pending-upload-cleanup-degraded",
-      sticky: true,
-    });
+    setDegradedNotice("pending-upload-cleanup-degraded", buildPendingUploadCleanupDegradedNotice(degradedReason), "warning");
   }
 
   function consumePendingUploadQueueDiagnostics() {
@@ -719,10 +781,7 @@
           message,
           reason,
         });
-        setNotice(buildRefreshDegradedNotice(message, reason), "warning", {
-          code: "refresh-degraded",
-          sticky: true,
-        });
+        setDegradedNotice("refresh-degraded", buildRefreshDegradedNotice(message, reason), "warning");
         applyRender();
         return {
           degraded: true,
@@ -2572,19 +2631,22 @@
   }
   function setScopedNotice(key, timerKey, text, tone, options = {}) {
     global.clearTimeout(state[timerKey]);
-    const nextText = normalizeText(text);
-    const nextTone = normalizeText(tone);
-    const nextCode = normalizeText(options?.code);
-    const sticky = Boolean(options?.sticky || nextTone === "error");
-    state[key] = { code: nextCode, sticky, text: nextText, tone: nextTone };
-    if (!nextText || sticky) {
+    const nextNotice = buildNoticeState(text, tone, options);
+    state[key] = nextNotice;
+    if (!normalizeText(nextNotice.text) || nextNotice.sticky) {
       state[timerKey] = 0;
+      if (key === "notice" && !normalizeText(nextNotice.text)) {
+        syncNoticeFromDegradedRegistry();
+      }
       return;
     }
     state[timerKey] = global.setTimeout(() => {
-      if (state[key].text === nextText && state[key].tone === nextTone && normalizeText(state[key].code) === nextCode) {
-        state[key] = { code: "", sticky: false, text: "", tone: "" };
+      if (state[key].text === nextNotice.text && state[key].tone === nextNotice.tone && normalizeText(state[key].code) === nextNotice.code) {
+        state[key] = createEmptyNotice();
         state[timerKey] = 0;
+        if (key === "notice") {
+          syncNoticeFromDegradedRegistry();
+        }
         applyRender();
       }
     }, 2600);
@@ -2695,28 +2757,7 @@
     return normalizeText(message).includes("회의 작업실 응답이 늦어지고 있어요");
   }
   function clearResolvedRefreshNotice() {
-    if (normalizeText(state.notice.code) !== "refresh-degraded") return;
-    setNotice("", "", { code: "" });
-  }
-
-  function clearResolvedSessionPersistNotice() {
-    if (normalizeText(state.notice.code) !== "session-persist-degraded") return;
-    setNotice("", "", { code: "" });
-  }
-
-  function clearResolvedPendingUploadStorageNotice() {
-    if (normalizeText(state.notice.code) !== "pending-uploads-degraded") return;
-    setNotice("", "", { code: "" });
-  }
-
-  function clearResolvedPendingUploadPersistNotice() {
-    if (normalizeText(state.notice.code) !== "pending-upload-persist-degraded") return;
-    setNotice("", "", { code: "" });
-  }
-
-  function clearResolvedPendingUploadCleanupNotice() {
-    if (normalizeText(state.notice.code) !== "pending-upload-cleanup-degraded") return;
-    setNotice("", "", { code: "" });
+    clearDegradedNotice("refresh-degraded");
   }
 
   function buildRefreshDegradedNotice(message, reason) {
