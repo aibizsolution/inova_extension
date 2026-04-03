@@ -5,6 +5,7 @@
 ## Feature-first 작업 시작
 
 - 이 저장소에서는 새 요청이 오면 먼저 [docs/feature-routing.md](docs/feature-routing.md)에서 primary feature를 고르고, 해당 feature `AGENTS.md`와 먼저 볼 파일만 읽고 시작합니다.
+- 저장소 전체 리팩터링의 현재 기준선과 진행률 규칙은 [docs/repo-refactor-plan.md](docs/repo-refactor-plan.md)를 기준으로 맞춥니다.
 - 실행 표면과 런타임 경계가 필요할 때만 [docs/runtime-architecture.md](docs/runtime-architecture.md)를 봅니다.
 - `popup`, `background/service-worker.js`, `content/main.js`, `content/panel.js`, `functions/index.js`, `manifest.json`, `shared/*`는 platform/shell로 취급하고, feature 범위만으로 해결되지 않을 때만 읽습니다.
 - `content/prompt-hub-view.js`, `content/prompt-hub-state.js`, `content/prompt-hub-panel.js`, `content/prompt-hub-controller.js`, `content/prompt-hub-runtime.js`는 `내 요청/스토어/검토` shell을 담당하므로, 단일 prompt feature 소유 파일로 보지 않습니다.
