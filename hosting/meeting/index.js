@@ -347,11 +347,28 @@
       return error instanceof Error ? error : new Error("브라우저 로컬 보관 큐 작업을 완료하지 못했어요.");
     }
     const nextError = new Error(message);
+    nextError.pendingUploadQueueDegradedReason = normalizeText(diagnostics?.degradedReason);
+    nextError.pendingUploadQueueNoticeShown = false;
+    nextError.pendingUploadQueueOperation = normalizeText(diagnostics?.operation);
+    nextError.pendingUploadQueueOperationError = true;
+    nextError.pendingUploadQueueScope = normalizeText(scope);
     if (error instanceof Error) {
       nextError.stack = error.stack;
       nextError.cause = error;
     }
     return nextError;
+  }
+
+  function showPendingUploadQueueOperationError(error, fallbackMessage) {
+    const message = normalizeText(error?.message) || normalizeText(fallbackMessage);
+    if (!message || error?.pendingUploadQueueNoticeShown) {
+      return;
+    }
+    setNotice(message, "error");
+    if (error && typeof error === "object") {
+      error.pendingUploadQueueNoticeShown = true;
+    }
+    applyRender();
   }
 
   function buildNoticeState(text, tone, options = {}) {
@@ -1383,6 +1400,8 @@
     if (!file) return;
     try {
       await importAudioFile(file);
+    } catch (error) {
+      showPendingUploadQueueOperationError(error, "파일 불러오기를 이어가지 못했어요.");
     } finally {
       if (input) input.value = "";
     }
@@ -2435,30 +2454,39 @@
   }
 
   async function handleLocalQueueAction(action, requestId) {
-    const pending = state.pendingUploads.find((item) => item.requestId === normalizeText(requestId));
-    if (!pending) return;
-    if (normalizeText(action) === "retry") return attemptPendingUpload(requestId);
-    if (normalizeText(action) === "restart") return attemptPendingUpload(requestId, { forceRestart: true });
-    if (normalizeText(action) === "hold") return upsertPendingUpload({ ...pending, hold: true, status: "on_hold", lastError: pending.lastError || "업로드를 잠시 멈췄습니다." }).then(applyRender);
-    if (normalizeText(action) === "resume") { await upsertPendingUpload({ ...pending, hold: false, status: "upload_queued", lastError: "" }); return retryPendingUploads(); }
-    if (normalizeText(action) === "delete") {
-      if (!await requestConfirmation({
-        body: "아직 원격 처리 전이면 복구할 수 없습니다.",
-        confirmLabel: "로컬 기록 삭제",
-        eyebrow: "로컬 삭제",
-        title: "이 로컬 기록을 삭제할까요?",
-        tone: "danger",
-      })) return;
-      return deletePendingUpload(requestId);
+    try {
+      const pending = state.pendingUploads.find((item) => item.requestId === normalizeText(requestId));
+      if (!pending) return;
+      if (normalizeText(action) === "retry") return attemptPendingUpload(requestId);
+      if (normalizeText(action) === "restart") return attemptPendingUpload(requestId, { forceRestart: true });
+      if (normalizeText(action) === "hold") return upsertPendingUpload({ ...pending, hold: true, status: "on_hold", lastError: pending.lastError || "업로드를 잠시 멈췄습니다." }).then(applyRender);
+      if (normalizeText(action) === "resume") { await upsertPendingUpload({ ...pending, hold: false, status: "upload_queued", lastError: "" }); return retryPendingUploads(); }
+      if (normalizeText(action) === "delete") {
+        if (!await requestConfirmation({
+          body: "아직 원격 처리 전이면 복구할 수 없습니다.",
+          confirmLabel: "로컬 기록 삭제",
+          eyebrow: "로컬 삭제",
+          title: "이 로컬 기록을 삭제할까요?",
+          tone: "danger",
+        })) return;
+        return deletePendingUpload(requestId);
+      }
+    } catch (error) {
+      showPendingUploadQueueOperationError(error, "로컬 업로드 큐 작업을 이어가지 못했어요.");
     }
   }
 
   async function deletePendingUpload(requestId) {
     delete state.runtimeChunkCache[normalizeText(requestId)];
-    await runPendingUploadQueueOperation(
-      () => state.queueStore.delete(requestId),
-      { scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.cleanup }
-    );
+    try {
+      await runPendingUploadQueueOperation(
+        () => state.queueStore.delete(requestId),
+        { scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.cleanup }
+      );
+    } catch (error) {
+      showPendingUploadQueueOperationError(error, "브라우저에 보관한 녹음을 정리하지 못했어요.");
+      throw error;
+    }
     state.pendingUploads = state.pendingUploads.filter((item) => item.requestId !== normalizeText(requestId));
     if (state.selectedRecordId === ns.shared.buildLocalSelectionId(requestId)) state.selectedRecordId = chooseSelectedRecordId(state);
     persistWorkspaceSession();
@@ -2627,10 +2655,15 @@
 
   async function upsertPendingUpload(item) {
     const normalized = normalizePendingUpload({ ...item, updatedAt: new Date().toISOString() });
-    await runPendingUploadQueueOperation(
-      () => state.queueStore.put(normalized),
-      { scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.persist }
-    );
+    try {
+      await runPendingUploadQueueOperation(
+        () => state.queueStore.put(normalized),
+        { scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.persist }
+      );
+    } catch (error) {
+      showPendingUploadQueueOperationError(error, "브라우저 로컬 보관 큐를 저장하지 못했어요.");
+      throw error;
+    }
     state.pendingUploads = [normalized, ...state.pendingUploads.filter((current) => current.requestId !== normalized.requestId)].sort(ns.storage.comparePendingUploads);
     state.meeting.pendingLocalCount = state.pendingUploads.length;
     return normalized;
