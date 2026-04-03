@@ -54,7 +54,7 @@
         "shared/storage.js",
         "content/dom.js",
         "content/composer.js",
-        "content/files.js",
+        "content/features/prompt-library/files.js",
         "content/features/prompt-review/composer-review-float.js",
         "content/features/prompt-review/prompt-review-view.js",
         "content/bookmark-view.js",

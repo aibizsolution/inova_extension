@@ -173,6 +173,7 @@
   - `bookmark-view.js`: 질문 탭 렌더링과 포커스 이동
   - `features/prompt-review/composer-review-float.js`: 입력창 우측 상단 평가 버튼과 팝오버 렌더링
   - `features/prompt-library/cloud-sync-manager.js`: 프롬프트 보관함 원격 백업 흐름 조정
+  - `features/prompt-library/files.js`: 가져오기/내보내기용 파일 읽기와 JSON 다운로드 helper
   - `features/prompt-store/prompt-realtime-manager.js`: prompt/store용 hosted bridge 연결, Firebase custom token auth, 최신 snapshot fallback 조정
   - `meeting-manager.js`: 패널 회의 허브 Firestore realtime 구독, fallback refresh, local cache 조정
 - `meeting-view.js`: 회의 허브 리스트와 `새 회의하기` CTA, 패널 공용 디버그 콘솔 렌더링

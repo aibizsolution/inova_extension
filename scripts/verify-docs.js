@@ -20,7 +20,7 @@ const requiredFiles = [
   "shared/prompt-library.js",
   path.join("scripts", "verify-readme-update.js"),
   "content/main.js",
-  "content/files.js",
+  "content/features/prompt-library/files.js",
   "content/features/prompt-library/prompt-manager.js",
   "content/panel.css",
   "content/tools.css",

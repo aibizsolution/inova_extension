@@ -6,6 +6,7 @@
 ## 먼저 볼 파일
 - `content/features/prompt-library/prompt-manager.js`
 - `content/features/prompt-library/prompt-view.js`
+- `content/features/prompt-library/files.js`
 - `shared/prompt-library.js`
 - `content/features/prompt-library/cloud-sync-manager.js`
 
