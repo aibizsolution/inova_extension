@@ -145,6 +145,17 @@
     return {};
   }
 
+  function normalizeMeetingMeta(input) {
+    const data = input && typeof input === "object" ? input : {};
+    return {
+      datetime: normalizeText(data?.datetime),
+      participants: normalizeTextArray(data?.participants),
+      purpose: normalizeTextBlock(data?.purpose),
+      title: normalizeText(data?.title),
+      version: normalizeText(data?.version),
+    };
+  }
+
   function normalizeMeetingNotes(notes, preferredMode) {
     const nextNotes = notes && typeof notes === "object" ? notes : {};
     const mode = normalizeMeetingNotesMode(preferredMode || nextNotes.mode) || DEFAULT_NOTES_MODE;
@@ -160,6 +171,7 @@
         actionItems: normalizeMeetingActionItems(nextNotes.actionItems),
         decisions: normalizeMeetingDecisionItems(nextNotes.decisions),
         executiveSummary: normalizeTextArray(nextNotes.executiveSummary),
+        meetingMeta: normalizeMeetingMeta(nextNotes.meetingMeta),
         memoHighlights: normalizeMeetingMemoHighlights(nextNotes.memoHighlights),
         mode,
         modeSpecific: normalizeMeetingModeSpecific(nextNotes.modeSpecific, mode),
@@ -176,6 +188,7 @@
       ],
       decisions: normalizeMeetingDecisionItems(nextNotes.decisions),
       executiveSummary: normalizeTextArray([nextNotes.overview]),
+      meetingMeta: normalizeMeetingMeta(nextNotes.meetingMeta),
       memoHighlights: [],
       mode,
       modeSpecific: normalizeMeetingModeSpecific({}, mode),
@@ -191,6 +204,8 @@
   function hasMeetingNotes(notes) {
     return Boolean(
       notes?.executiveSummary?.length
+      || normalizeTextBlock(notes?.meetingMeta?.purpose)
+      || normalizeTextArray(notes?.meetingMeta?.participants).length
       || notes?.topics?.length
       || notes?.decisions?.length
       || notes?.actionItems?.length

@@ -559,35 +559,55 @@
 
   function buildMeetingNotesSections(notes) {
     const sections = [];
-    pushSection(sections, "논의된 내용", notes.topics.map(formatTopicItem));
+    pushSection(sections, "회의 개요", buildMeetingOverviewItems(notes));
+    pushSection(sections, "주요 논의 내용", notes.topics.map(formatTopicItem));
     if (notes.mode === "interview") {
-      pushSection(sections, "인터뷰 포인트", [
+      pushSection(sections, "인터뷰 핵심 포인트", [
         ...normalizeTextArray(notes.modeSpecific?.strengths),
         ...normalizeTextArray(notes.modeSpecific?.concerns),
       ]);
     } else if (notes.mode === "review") {
-      pushSection(sections, "검토 포인트", [
+      pushSection(sections, "리뷰 및 회고 포인트", [
         ...normalizeTextArray(notes.modeSpecific?.wins),
         ...normalizeTextArray(notes.modeSpecific?.problems),
         ...normalizeTextArray(notes.modeSpecific?.rootCauses),
         ...normalizeTextArray(notes.modeSpecific?.improvements),
       ]);
     } else if (notes.mode === "planning") {
-      pushSection(sections, "범위와 일정 메모", [
+      pushSection(sections, "범위 및 일정 포인트", [
         ...normalizeTextArray(notes.modeSpecific?.scopeItems),
         ...normalizeTextArray(notes.modeSpecific?.milestones),
       ]);
     }
-    pushSection(sections, "결정된 내용", notes.decisions.map(formatDecisionItem));
-    pushSection(sections, "열린 쟁점", [
+    pushSection(sections, "주요 결정 사항", notes.decisions.map(formatDecisionItem));
+    pushSection(sections, "추가 결정 필요 사항", [
       ...normalizeTextArray(notes.openQuestions),
       ...normalizeTextArray(notes.modeSpecific?.followUpQuestions),
+    ]);
+    pushSection(sections, "리스크 및 제약", [
       ...normalizeTextArray(notes.modeSpecific?.dependencies),
       ...notes.risksOrDependencies.map(formatRiskItem),
     ]);
-    pushSection(sections, "액션 아이템", notes.actionItems.map(formatActionItem));
-    pushSection(sections, "메모 반영", notes.memoHighlights.map(formatMemoItem));
+    pushSection(sections, "후속 실행 항목", notes.actionItems.map(formatActionItem));
+    pushSection(sections, "메모 반영 포인트", notes.memoHighlights.map(formatMemoItem));
     return sections;
+  }
+
+  function buildMeetingOverviewItems(notes) {
+    const items = [];
+    const purpose = ns.shared.normalizeTextBlock(notes?.meetingMeta?.purpose);
+    const participants = normalizeTextArray(notes?.meetingMeta?.participants);
+    const datetime = normalizeText(notes?.meetingMeta?.datetime);
+    if (purpose) {
+      items.push(purpose);
+    }
+    if (participants.length) {
+      items.push(`참여자: ${participants.join(", ")}`);
+    }
+    if (datetime) {
+      items.push(`일시: ${datetime}`);
+    }
+    return items;
   }
 
   function pushSection(target, title, items) {
@@ -597,6 +617,14 @@
 
   function renderNotesSection(section) {
     return `<section class="notes-section"><h3 class="notes-section__title">${escapeHtml(section.title)}</h3><ul class="notes-list">${section.items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section>`;
+  }
+
+  function renderNotesOverview(summaryItems) {
+    const items = (Array.isArray(summaryItems) ? summaryItems : []).map((item) => ns.shared.normalizeTextBlock(item)).filter(Boolean);
+    if (!items.length) {
+      return "";
+    }
+    return `<section class="notes-section"><h3 class="notes-section__title">핵심 요약</h3><ul class="notes-list">${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section>`;
   }
 
   function buildStatusFlow(detailView, options = {}) {
@@ -1025,7 +1053,7 @@
     const hasNotesValue = hasMeetingNotes(normalized);
     if (!hasNotesValue) {
       refs.meetingNotesOverview.hidden = true;
-      refs.meetingNotesOverview.textContent = "";
+      refs.meetingNotesOverview.innerHTML = "";
       refs.meetingNotesSections.innerHTML = "";
       refs.notesSummaryMeta.textContent = "AI 판단 대기";
       refs.notesStyleSelect.value = DEFAULT_NOTES_STYLE;
@@ -1047,9 +1075,9 @@
       : pendingStyleChange
         ? `${formatNotesStyleLabel(selectedStyle)}로 다시 정리`
         : "현재 표현 방식으로 다시 정리";
-    const overviewText = normalized.executiveSummary.join("\n");
-    refs.meetingNotesOverview.hidden = !overviewText;
-    refs.meetingNotesOverview.textContent = overviewText;
+    const overviewMarkup = renderNotesOverview(normalized.executiveSummary);
+    refs.meetingNotesOverview.hidden = !overviewMarkup;
+    refs.meetingNotesOverview.innerHTML = overviewMarkup;
     refs.meetingNotesSections.innerHTML = buildMeetingNotesSections(normalized).map(renderNotesSection).join("");
     return true;
   }
