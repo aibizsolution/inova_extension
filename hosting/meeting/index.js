@@ -1883,13 +1883,23 @@
     return nextPending;
   }
 
-  async function commitPendingUploadRemoteReconcileTransition(pending, transition, options = {}) {
+  async function commitPendingUploadRemoteSnapshotTransition(pending, transition) {
     if (!transition?.nextPending) {
       return null;
     }
     const nextPending = await upsertPendingUpload(transition.nextPending, {
-      preserveUpdatedAt: Boolean(options?.preserveUpdatedAt),
-      context: options?.queueContext,
+      preserveUpdatedAt: true,
+      context: {
+        phase: transition.outcome === "succeeded"
+          ? "remote-sync-succeeded"
+          : transition.outcome === "failed"
+            ? "remote-sync-reset"
+            : "remote-sync-update",
+        previousRequestId: pending.requestId,
+        reason: "remote-sync",
+        requestId: transition.nextPending.requestId,
+        shouldResetSource: transition.resetChunkCache === "reset-parts",
+      },
     });
     const normalizedRequestId = normalizeText(pending?.requestId);
     if (!normalizedRequestId) {
@@ -1908,11 +1918,36 @@
       };
     }
     if (
-      options?.applySelectedRecordTransition
-      && transition.nextSelectedRecordId
+      transition.nextSelectedRecordId
       && state.selectedRecordId === ns.shared.buildLocalSelectionId(normalizedRequestId)
     ) {
       state.selectedRecordId = transition.nextSelectedRecordId;
+    }
+    return nextPending;
+  }
+
+  async function commitChunkedPendingUploadRemoteResyncTransition(pending, transition, queueContext) {
+    if (!transition?.nextPending) {
+      return null;
+    }
+    const nextPending = await upsertPendingUpload(transition.nextPending, {
+      context: queueContext,
+    });
+    const normalizedRequestId = normalizeText(pending?.requestId);
+    if (!normalizedRequestId) {
+      return nextPending;
+    }
+    if (transition.resetChunkCache === "clear") {
+      delete state.runtimeChunkCache[normalizedRequestId];
+    } else if (transition.resetChunkCache === "reset-parts" && state.runtimeChunkCache[normalizedRequestId]) {
+      state.runtimeChunkCache[normalizedRequestId] = {
+        ...state.runtimeChunkCache[normalizedRequestId],
+        parts: (state.runtimeChunkCache[normalizedRequestId].parts || []).map((part) => ({
+          ...part,
+          storageObject: "",
+          uploadStatus: "",
+        })),
+      };
     }
     return nextPending;
   }
@@ -1930,21 +1965,7 @@
       applyRender();
       return { degraded: true, pending, resolution: "" };
     }
-    const nextPending = await commitPendingUploadRemoteReconcileTransition(pending, transition, {
-      applySelectedRecordTransition: true,
-      preserveUpdatedAt: true,
-      queueContext: {
-        phase: transition.outcome === "succeeded"
-          ? "remote-sync-succeeded"
-          : transition.outcome === "failed"
-            ? "remote-sync-reset"
-            : "remote-sync-update",
-        previousRequestId: pending.requestId,
-        reason: "remote-sync",
-        requestId: transition.nextPending.requestId,
-        shouldResetSource: transition.resetChunkCache === "reset-parts",
-      },
-    });
+    const nextPending = await commitPendingUploadRemoteSnapshotTransition(pending, transition);
     return {
       degraded: false,
       outcome: normalizeText(transition?.outcome),
@@ -3427,9 +3448,7 @@
       applyRender();
       return { degraded: true, pending: item, remoteState, resolution: "" };
     }
-    const nextPending = await commitPendingUploadRemoteReconcileTransition(item, transition, {
-      queueContext,
-    });
+    const nextPending = await commitChunkedPendingUploadRemoteResyncTransition(item, transition, queueContext);
     const resolution = normalizeText(transition?.resolution);
     logDebug("workspace.pending-upload.chunk-resync.applied", {
       action: transitionAction,
