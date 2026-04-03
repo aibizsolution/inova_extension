@@ -2133,7 +2133,7 @@
     if (!refs.debugNotice) return;
     refs.debugNotice.hidden = !state.debugNotice.text;
     refs.debugNotice.textContent = state.debugNotice.text;
-    refs.debugNotice.dataset.tone = state.debugNotice.tone || "";
+    refs.debugNotice.classList.toggle("is-error", state.debugNotice.tone === "error");
   }
 
   function buildDebugStatusMarkup(summary) {
