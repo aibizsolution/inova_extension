@@ -7,8 +7,8 @@
 - `functions/features/prompt-review/prompt-review-service.js`
 
 ## 관련 프론트 경로
-- `content/prompt-review-manager.js`
-- `content/prompt-review-view.js`
+- `content/features/prompt-review/prompt-review-manager.js`
+- `content/features/prompt-review/prompt-review-view.js`
 
 ## 관련 functions 경로
 - `functions/index.js`

@@ -277,6 +277,11 @@ npm run verify
 - 기본 자동 검증: `npm run verify`
 - 세부 확인이 필요하면 `npm run verify:contracts`, `npm run verify:docs`
 - UI/세션/opener 문제는 실제 Chrome에서 직접 확인
+- prompt 계열 최소 smoke: unpacked extension `Reload` -> `https://inova.incross.com/` 새로고침 -> `실험실` 패널 열기 -> `프롬프트` 도구 진입
+- `prompt-library`: `내 요청` 렌더링, 항목 1건 저장/수정, 입력창 주입 1회
+- `prompt-store`: `전체` 목록, 상세 보기 1건, `좋아요` 또는 `내 요청으로 가져오기` 1회, 탭 이동 후 복귀 시 목록 유지
+- `prompt-review`: 평가 버튼 노출, 평가 결과 1회, 보완 프롬프트 반영 1회
+- 이번 최소 smoke 제외 범위: `import/export`, `cloud sync`, 공개 스토어 `등록/삭제`
 
 회의 작업실 UI를 배포 없이 실제 브라우저에서 먼저 보고 싶으면 `로컬 Hosting + 상용 Functions` 조합을 씁니다.
 

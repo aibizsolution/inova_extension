@@ -7,8 +7,8 @@
 - `functions/features/prompt-store/store-service.js`
 
 ## 관련 프론트 경로
-- `content/store-manager.js`
-- `content/prompt-realtime-manager.js`
+- `content/features/prompt-store/store-manager.js`
+- `content/features/prompt-store/prompt-realtime-manager.js`
 - `shared/prompt-store.js`
 
 ## 관련 functions 경로

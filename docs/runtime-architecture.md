@@ -48,7 +48,7 @@
 
 - 위치: `content/`, `shared/`, `manifest.json`
 - 역할: `inova.incross.com` 안에 실험실 패널을 삽입하고, 질문 탐색/회의록/프롬프트/스토어/릴리스 UI와 회의 허브 진입 흐름을 조립한다.
-- 특징: 현재 대화 DOM을 읽고, 로컬 상태를 붙이고, 필요한 클라우드 호출은 background에 메시지로 위임한다. 회의 기능은 브라우저 쪽에서 `meetingStateByMeetingId` 상태를 붙이고, `content/meeting-manager.js`가 `issueInovaMeetingPanelAuth -> hosted panel bridge -> Firestore meeting query` 경로의 실시간 허브 구독과 fallback refresh를 맡는다. 회의 허브 목록은 별도 `chrome.storage.local` 캐시 대신 hosted bridge의 Firestore persistence와 현재 메모리 상태를 우선한다. 프롬프트/스토어 쪽은 `content/prompt-realtime-manager.js`가 `issueInovaPromptPanelAuth -> hosted prompt panel bridge -> Firestore account/feed doc` 경로를 관리하되, `integration_inova_accounts.promptLibraryMeta` 1개 문서와 `prompt_store_meta/summary`, `prompt_store_feed_pages/latest__{category}__0000`만 구독한다. 패널 디버그는 회의 전용이 아니라 현재 브라우저 탭 세션 기준 전역 버퍼를 쓰고, `content/panel.js`와 `content/meeting-view.js`가 패널 바깥 오버레이 콘솔을 렌더링한다.
+- 특징: 현재 대화 DOM을 읽고, 로컬 상태를 붙이고, 필요한 클라우드 호출은 background에 메시지로 위임한다. 회의 기능은 브라우저 쪽에서 `meetingStateByMeetingId` 상태를 붙이고, `content/meeting-manager.js`가 `issueInovaMeetingPanelAuth -> hosted panel bridge -> Firestore meeting query` 경로의 실시간 허브 구독과 fallback refresh를 맡는다. 회의 허브 목록은 별도 `chrome.storage.local` 캐시 대신 hosted bridge의 Firestore persistence와 현재 메모리 상태를 우선한다. 프롬프트/스토어 쪽은 `content/features/prompt-store/prompt-realtime-manager.js`가 `issueInovaPromptPanelAuth -> hosted prompt panel bridge -> Firestore account/feed doc` 경로를 관리하되, `integration_inova_accounts.promptLibraryMeta` 1개 문서와 `prompt_store_meta/summary`, `prompt_store_feed_pages/latest__{category}__0000`만 구독한다. 패널 디버그는 회의 전용이 아니라 현재 브라우저 탭 세션 기준 전역 버퍼를 쓰고, `content/panel.js`와 `content/meeting-view.js`가 패널 바깥 오버레이 콘솔을 렌더링한다.
 
 ### Background Service Worker
 
@@ -90,7 +90,7 @@
 
 ### C. 프롬프트 원격 메타 실시간
 
-1. 패널의 `프롬프트` 도구가 열리면 `content/prompt-realtime-manager.js`가 `inova-prompt:issue-panel-auth`를 background에 보낸다.
+1. 패널의 `프롬프트` 도구가 열리면 `content/features/prompt-store/prompt-realtime-manager.js`가 `inova-prompt:issue-panel-auth`를 background에 보낸다.
 2. background는 `issueInovaPromptPanelAuth`를 호출해 prompt panel 범위 Firebase custom token을 받는다.
 3. hidden hosted `prompt-panel-bridge.html`이 Firebase Auth에 로그인하고 Firestore offline persistence를 먼저 켠 뒤 `integration_inova_accounts/{providerUserKey}` 문서를 구독한다.
 4. bridge는 `promptLibraryMeta.lastRevision`, `lastSyncedAt`, `itemCount`만 panel로 돌려준다.
@@ -172,6 +172,11 @@
 - `npm run check:cloud-sync -- --userKey <providerUserKey>`
 - `npm run check:function-logs -- --since 10`
 - 실제 브라우저 확인: `docs/e2e-browser-workflow.md`
+- prompt 계열 Chrome smoke 공통 준비: unpacked extension `Reload` -> `https://inova.incross.com/` 새로고침 -> 우측 `실험실` 패널 열기 -> `프롬프트` 도구 진입
+- `prompt-library` smoke: `내 요청` 탭 렌더링, 기존 항목 또는 새 항목 1건 저장/수정, 입력창 주입 1회
+- `prompt-store` smoke: `전체` 목록 로드, 상세 보기 1건, `좋아요` 또는 `내 요청으로 가져오기` 1회, 탭 이동 후 복귀 시 목록 유지
+- `prompt-review` smoke: 입력창 우측 상단 평가 버튼 노출, 평가 결과 1회, 보완 프롬프트 반영 1회
+- 이번 prompt smoke 제외 범위: import/export 전체 조합, 원격 sync 확인, 공개 스토어 등록/삭제. 원격 sync는 필요 시 `npm run check:cloud-sync -- --userKey <providerUserKey> --samples 2 --wait 20`로 별도 점검
 - 로컬 회의 작업실: `npm run emulator:hosting` -> `http://127.0.0.1:5000/meeting/index.html`
 - 회의 전용 로컬 확인은 팝업의 `상용 호스팅 / 로컬 호스팅` 전환과 화면 안 디버그 로그 패널 기준으로 본다.
 - 회의 전사 기반 계약: `docs/meeting-diarization-foundation.md`, `fixtures/meeting-diarization/`

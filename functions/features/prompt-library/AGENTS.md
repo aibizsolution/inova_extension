@@ -7,8 +7,8 @@
 - `functions/features/prompt-library/register.js`
 
 ## 관련 프론트 경로
-- `content/prompt-manager.js`
-- `content/cloud-sync-manager.js`
+- `content/features/prompt-library/prompt-manager.js`
+- `content/features/prompt-library/cloud-sync-manager.js`
 - `shared/prompt-library.js`
 
 ## 관련 functions 경로
