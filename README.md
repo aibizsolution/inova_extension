@@ -306,6 +306,8 @@ npm run emulator:hosting
 
 queue degraded 수동 검증만 빠르게 하려면 localhost 작업실을 `http://127.0.0.1:5000/meeting/index.html?debug=1&debugQueueSandbox=1`로 열어 로컬 queue sandbox를 먼저 띄울 수 있습니다. 이 모드에서는 panel/session 없이도 `__INOVA_HOSTED_MEETING_DEBUG__.queueSandbox.seedPending()`로 로컬 pending 항목을 만들고, `queueSandbox.runAction("hold" | "rename" | "delete")`와 reload 중심의 queue load/persist/cleanup 검증을 로컬에서 반복할 수 있으며 원격 refresh/retry는 건너뜁니다. hosted debug console 공통 contract를 확인할 때는 `__INOVA_HOSTED_MEETING_DEBUG__.debugConsoleState()`와 `debugConsoleValidation.checkWorkspace()`로 현재 DOM/toolbar/fab 상태를 한 번에 볼 수 있습니다.
 
+panel/hosted debug console 실제 Chrome 검증 메모는 `docs/meeting-debug-console-validation.md`를 기준으로 봅니다.
+
 로컬에서 자동 분할 녹음을 빨리 시험하고 싶으면 URL에 `recordLimitSeconds`를 붙이면 됩니다.
 
 ```text

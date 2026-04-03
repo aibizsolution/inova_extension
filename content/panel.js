@@ -54,6 +54,7 @@
     host.querySelector("#inova-tool-content").innerHTML = renderToolContent(state);
     namespace.panelDebug?.captureViewport?.("panel-overlay", debugLayer?.querySelector(".inova-meeting-debug-console__log"));
     debugLayer.innerHTML = renderMeetingDebugLayer(state);
+    syncMeetingDebugLayerDataset(debugLayer, state.panelDebug);
     namespace.panelDebug?.restoreViewport?.("panel-overlay", debugLayer?.querySelector(".inova-meeting-debug-console__log"));
     if (state.activeTool === "prompts" && state.promptTool?.activeTab === "store") namespace.promptHubPanel?.syncStoreList?.(host, host.__callbacks, previousStoreScrollTop);
     namespace.bookmarkView.setActive(state.bookmarksTool.activeId);
@@ -93,6 +94,19 @@
       return "";
     }
     return namespace.meetingView.renderDebugConsole(state.panelDebug);
+  }
+
+  function syncMeetingDebugLayerDataset(debugLayer, panelDebug) {
+    if (!(debugLayer instanceof global.HTMLElement)) {
+      return;
+    }
+    const nextState = panelDebug && typeof panelDebug === "object" ? panelDebug : {};
+    const totalLogs = Math.max(0, Number(nextState?.statusSummary?.totalLogs) || 0);
+    debugLayer.dataset.debugEnabled = String(Boolean(nextState?.enabled));
+    debugLayer.dataset.debugCollapsed = String(Boolean(nextState?.collapsed));
+    debugLayer.dataset.debugEntryCount = String(totalLogs);
+    debugLayer.dataset.debugHasErrors = String(Boolean(nextState?.hasErrors));
+    debugLayer.dataset.debugRendered = String(Boolean(debugLayer.innerHTML));
   }
 
   function renderToolContent(state) {

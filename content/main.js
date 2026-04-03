@@ -134,6 +134,7 @@
       onSelectTool: selectTool,
       onToggle: togglePanel,
     });
+    syncPanelMeetingDebugValidationApi();
     namespace.composerReviewFloat?.ensure?.({
       buildState: buildPromptReviewFloatState,
       onAction: promptReviewManager.handleAction,
@@ -464,6 +465,107 @@
       text: enabled
         ? (namespace.panelDebug?.buildCopyText?.(entries) || "아직 로그가 없습니다.")
         : "",
+    };
+  }
+  function buildPanelMeetingDebugButtonsSnapshot(debugLayer) {
+    const buttons = debugLayer?.querySelectorAll?.("[data-meeting-action]");
+    return Array.from(buttons || [])
+      .map((button) => ({
+        action: namespace.session.normalizeText(button?.dataset?.meetingAction),
+        disabled: Boolean(button?.disabled),
+        label: namespace.session.normalizeText(button?.textContent),
+      }))
+      .filter((button) => button.action.startsWith("debug-"));
+  }
+  function buildPanelMeetingDebugStateSnapshot(entries = namespace.panelDebug?.getEntries?.() || []) {
+    const normalizedEntries = Array.isArray(entries) ? entries : [];
+    const debugState = buildMeetingDebugState();
+    const debugLayer = document.getElementById("inova-meeting-debug-layer");
+    const logElement = debugLayer?.querySelector?.(".inova-meeting-debug-console__log");
+    const feedbackElement = debugLayer?.querySelector?.(".inova-meeting-debug-console__feedback");
+    const statusElement = debugLayer?.querySelector?.(".inova-meeting-debug-console__status");
+    return {
+      buttons: buildPanelMeetingDebugButtonsSnapshot(debugLayer),
+      collapsed: Boolean(debugState?.collapsed),
+      enabled: Boolean(debugState?.enabled),
+      entryCount: normalizedEntries.length,
+      feedback: normalizePanelDebugFeedback(debugState?.feedback),
+      hasErrors: Boolean(debugState?.hasErrors),
+      hasFabBadge: Boolean(debugLayer?.querySelector?.(".inova-meeting-debug-fab__badge")),
+      hasFabButton: Boolean(debugLayer?.querySelector?.(".inova-meeting-debug-fab[data-meeting-action=\"debug-toggle\"]")),
+      hasLog: Boolean(logElement),
+      logText: namespace.session.normalizeText(logElement?.textContent || debugState?.text),
+      noticeText: namespace.session.normalizeText(feedbackElement?.textContent || debugState?.feedback?.text),
+      rendered: Boolean(debugLayer && debugLayer.innerHTML),
+      statusText: namespace.session.normalizeText(statusElement?.getAttribute("aria-label") || debugState?.statusText),
+    };
+  }
+  function buildPanelMeetingDebugValidationChecks(snapshot) {
+    const checks = [
+      {
+        label: "panel meeting debug console이 활성화됨",
+        passed: Boolean(snapshot?.enabled),
+        actual: snapshot?.enabled ? "enabled" : "disabled",
+      },
+      {
+        label: "panel debug console markup이 렌더됨",
+        passed: Boolean(snapshot?.rendered),
+        actual: snapshot?.rendered ? "rendered" : "empty",
+      },
+    ];
+    const actions = Array.isArray(snapshot?.buttons)
+      ? snapshot.buttons.map((button) => namespace.session.normalizeText(button?.action)).filter(Boolean)
+      : [];
+    if (snapshot?.collapsed) {
+      checks.push(
+        {
+          label: "collapsed 상태에서는 debug toggle fab만 보임",
+          passed: actions.length === 1 && actions[0] === "debug-toggle" && Boolean(snapshot?.hasFabButton),
+          actual: actions.join(","),
+        },
+        {
+          label: "오류가 있으면 fab badge가 보임",
+          passed: !snapshot?.hasErrors || Boolean(snapshot?.hasFabBadge),
+          actual: snapshot?.hasFabBadge ? "badge" : "no-badge",
+        }
+      );
+      return checks;
+    }
+    const requiredActions = ["debug-copy", "debug-copy-errors", "debug-clear", "debug-toggle"];
+    checks.push(
+      {
+        label: "expanded 버튼 4종이 모두 렌더됨",
+        passed: requiredActions.every((action) => actions.includes(action)),
+        actual: actions.join(","),
+      },
+      {
+        label: "status text가 비어 있지 않음",
+        passed: Boolean(namespace.session.normalizeText(snapshot?.statusText)),
+        actual: namespace.session.normalizeText(snapshot?.statusText),
+      },
+      {
+        label: "log text가 비어 있지 않음",
+        passed: Boolean(namespace.session.normalizeText(snapshot?.logText)),
+        actual: namespace.session.normalizeText(snapshot?.logText).slice(0, 120),
+      }
+    );
+    return checks;
+  }
+  function validatePanelMeetingDebugConsole() {
+    const snapshot = buildPanelMeetingDebugStateSnapshot();
+    const checks = buildPanelMeetingDebugValidationChecks(snapshot);
+    return {
+      checks,
+      collapsed: Boolean(snapshot?.collapsed),
+      entryCount: Math.max(0, Number(snapshot?.entryCount) || 0),
+      passed: checks.every((check) => Boolean(check?.passed)),
+      snapshot,
+    };
+  }
+  function syncPanelMeetingDebugValidationApi() {
+    namespace.panelDebugValidation = {
+      check: validatePanelMeetingDebugConsole,
+      state: buildPanelMeetingDebugStateSnapshot,
     };
   }
   function toggleMeetingDebugCollapsed() {
