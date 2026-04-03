@@ -178,7 +178,7 @@
                 <button id="reviewTabSummary" class="review-tab is-active" type="button" data-review-tab="summary" role="tab" aria-selected="true">상태</button>
                 <button id="reviewTabMemo" class="review-tab" type="button" data-review-tab="memo" role="tab" aria-selected="false">메모</button>
                 <button id="reviewTabNotes" class="review-tab" type="button" data-review-tab="notes" role="tab" aria-selected="false">회의 정리</button>
-                <button id="reviewTabSegments" class="review-tab" type="button" data-review-tab="segments" role="tab" aria-selected="false"><span class="review-tab__label">발화 구간</span><span id="reviewTabSegmentsCount" class="review-tab__count" hidden>0</span></button>
+                <button id="reviewTabSegments" class="review-tab" type="button" data-review-tab="segments" role="tab" aria-selected="false"><span class="review-tab__label">원문 검토</span><span id="reviewTabSegmentsCount" class="review-tab__count" hidden>0</span></button>
               </div>
 
               <section id="reviewPanelSummary" class="review-panel" role="tabpanel">
@@ -207,17 +207,9 @@
                   <span id="notesSummaryMeta" class="chip chip--muted">AI 판단 대기</span>
                 </div>
                 <div class="notes-toolbar">
-                  <label class="input-group input-group--compact" for="notesStyleSelect">
-                    <span class="input-group__label">표현 방식</span>
-                    <div class="input-group__controls input-group__controls--compact input-group__controls--field-group">
-                      <select id="notesStyleSelect" class="meeting-select">
-                        <option value="default">기본 회의록</option>
-                        <option value="brief">간결 브리프</option>
-                        <option value="action">실행 중심</option>
-                      </select>
-                      <button id="regenerateNotesButton" class="secondary-button" type="button">현재 표현 방식으로 다시 정리</button>
-                    </div>
-                  </label>
+                  <div class="input-group__controls input-group__controls--compact input-group__controls--field-group">
+                    <button id="regenerateNotesButton" class="secondary-button" type="button">회의 정리 다시 만들기</button>
+                  </div>
                 </div>
                 <div id="meetingNotesOverview" class="notes-overview" hidden></div>
                 <div id="meetingNotesSections" class="notes-sections"></div>
@@ -227,7 +219,7 @@
                 <div class="panel-card__head panel-card__head--section">
                   <div>
                     <p class="panel-card__eyebrow">전사 원문</p>
-                    <h2 class="panel-card__title">발화 구간</h2>
+                    <h2 class="panel-card__title">원문 검토</h2>
                   </div>
                   <button id="copySegmentsButton" class="secondary-button" type="button">전체 복사</button>
                 </div>

@@ -17,7 +17,6 @@
   const DEFAULT_SOURCE_CHUNK_SAMPLE_RATE = 16000;
   const DEFAULT_MAX_RECORDING_DURATION_MS = 90 * 60 * 1000;
   const DEFAULT_NOTES_MODE = "general";
-  const DEFAULT_NOTES_STYLE = "default";
   const DEFAULT_RECORDING_AUDIO_BITS_PER_SECOND = 30000;
   const DEFAULT_SOURCE_UPLOAD_TIMEOUT_MS = 3 * 60 * 1000;
   const FIREBASE_WEB_CONFIG = {
@@ -769,20 +768,9 @@
     return "일반 회의";
   }
 
-  function formatNotesStyleLabel(style) {
-    if (style === "brief") return "간결 브리프";
-    if (style === "action") return "실행 중심";
-    return "기본 회의록";
-  }
-
   function normalizeMeetingNotesMode(value) {
     const normalized = normalizeText(value).toLowerCase();
     return ["general", "interview", "review", "planning"].includes(normalized) ? normalized : "";
-  }
-
-  function normalizeMeetingNotesStyle(value) {
-    const normalized = normalizeText(value).toLowerCase();
-    return ["default", "brief", "action"].includes(normalized) ? normalized : "";
   }
 
   function formatPhase(phase) {
@@ -795,9 +783,7 @@
     if (normalized === "transcribing") return "전사 중";
     if (normalized === "transcribing_chunks") return "분할 전사 중";
     if (normalized === "assembling_transcript") return "전사 병합 중";
-    if (normalized === "reconciling_speakers" || normalized === "consolidating_speakers") return "전사 병합 중";
     if (normalized === "generating_notes") return "회의 정리 중";
-    if (normalized === "diarizing") return "전사 중";
     if (normalized === "finalizing") return "회의록 정리 중";
     return normalized;
   }
@@ -1139,8 +1125,7 @@
   ns.shared = {
     AUTO_RETRY_PENDING_STATUSES,
     DEBUG_PREFIX,
-    DEFAULT_NOTES_MODE,
-    DEFAULT_NOTES_STYLE,
+      DEFAULT_NOTES_MODE,
     DEFAULT_CREATE_JOB_TIMEOUT_MS,
     DEFAULT_INLINE_AUDIO_LIMIT_BYTES,
     DEFAULT_MAX_RECORDING_DURATION_MS,
@@ -1171,8 +1156,7 @@
     formatDateTime,
     formatDuration,
     formatSegmentRange,
-    formatNotesModeLabel,
-    formatNotesStyleLabel,
+      formatNotesModeLabel,
     formatPhase,
     formatStatusLabel,
     formatDebugEntry,
@@ -1191,8 +1175,7 @@
     loadPersistedWorkspaceSession,
     logDebug,
     normalizeBaseUrl,
-    normalizeMeetingNotesMode,
-    normalizeMeetingNotesStyle,
+      normalizeMeetingNotesMode,
     normalizeStatus,
     normalizeText,
     normalizeTextArray,

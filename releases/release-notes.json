@@ -2,6 +2,36 @@
   "schemaVersion": 1,
   "versions": [
     {
+      "version": "0.3.18",
+      "level": "patch",
+      "public": {
+        "headline": "전사 중심 회의록 정리로 전환",
+        "summary": "이번 배포는 화자 분석을 기본 경로에서 걷어내고, plain transcript와 구간별 요약을 바탕으로 회의록 품질과 긴 회의 안정성을 높이는 업데이트입니다.",
+        "changes": [
+          {
+            "type": "changed",
+            "text": "회의 작업실이 이제 화자 이름 정리 대신 전사 원문과 회의 정리 품질에 집중하도록 바뀌어, 긴 녹음에서도 결과 흐름이 더 단순하고 안정적으로 이어집니다."
+          },
+          {
+            "type": "changed",
+            "text": "회의록 생성은 plain transcript 기준으로 구간별 요약 후 최종 통합하는 방식으로 바뀌어, 화자 과분리로 인한 어색한 정리와 후반부 누락을 줄였습니다."
+          }
+        ]
+      },
+      "internal": {
+        "changes": [
+          {
+            "type": "changed",
+            "text": "meeting-service, meeting-state, hosted meeting UI를 transcript-first 계약으로 정리하고 speakerLabels, speakerAliases, speakerSummaries 생산 경로를 제거했습니다."
+          },
+          {
+            "type": "changed",
+            "text": "meeting verify script와 diarization fixture를 현재 chunk/finalizer/deletion 흐름에 맞게 갱신해 plain transcript 기준 회귀 검증이 가능하도록 정리했습니다."
+          }
+        ]
+      }
+    },
+    {
       "version": "0.3.17",
       "level": "patch",
       "public": {

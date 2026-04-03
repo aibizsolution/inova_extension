@@ -1328,6 +1328,37 @@ select:disabled {
   line-height: 1.6;
 }
 
+.notes-list__item {
+  display: grid;
+  gap: 6px;
+}
+
+.notes-list__headline {
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.notes-list__body {
+  display: grid;
+  gap: 4px;
+  color: var(--text);
+}
+
+.notes-list__body p {
+  margin: 0;
+}
+
+.notes-list__sublist {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+
+.notes-list__sublist li {
+  white-space: normal;
+}
+
 .transcript-box {
   padding: 15px 16px;
   border: 1px solid var(--line);
@@ -1366,6 +1397,21 @@ select:disabled {
   margin-bottom: 8px;
   color: var(--muted);
   font-size: 12px;
+}
+
+.segment-item__index {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.segment-item__body {
+  display: grid;
+  gap: 8px;
+  line-height: 1.72;
+}
+
+.segment-item__body p {
+  margin: 0;
 }
 
 .debug-panel {

@@ -1,10 +1,16 @@
 (function initHostedMeetingRender(global) {
   const ns = global.__INOVA_HOSTED_MEETING__ = global.__INOVA_HOSTED_MEETING__ || {};
-  const { DEFAULT_NOTES_MODE, DEFAULT_NOTES_STYLE, TERMINAL_REMOTE_STATUSES, cleanPreviewText, escapeHtml, formatBytes, formatDateTime, formatDuration, formatNotesModeLabel, formatNotesStyleLabel, formatPhase, formatSegmentRange, formatStatusLabel, normalizeMeetingNotesMode, normalizeMeetingNotesStyle, normalizeStatus, normalizeText, normalizeTextBlock } = ns.shared;
+  const { DEFAULT_NOTES_MODE, TERMINAL_REMOTE_STATUSES, cleanPreviewText, escapeHtml, formatBytes, formatDateTime, formatDuration, formatNotesModeLabel, formatPhase, formatSegmentRange, formatStatusLabel, normalizeMeetingNotesMode, normalizeStatus, normalizeText, normalizeTextBlock } = ns.shared;
   const { comparePendingUploads, normalizePendingUpload } = ns.storage;
   const { formatActionItem, formatDecisionItem, formatMemoItem, formatRiskItem, formatTopicItem, hasMeetingNotes, normalizeMeetingNotes, normalizeTextArray } = ns.notes;
   const DEFAULT_CHUNK_PROGRESS_ACTIVE_COUNT = 2;
   const STALLED_PROCESSING_THRESHOLD_MS = 10 * 60 * 1000;
+  const DISPLAY_REVIEW_SEGMENT_TARGET_CHARS = 220;
+  const DISPLAY_REVIEW_SEGMENT_MAX_CHARS = 320;
+  const DISPLAY_REVIEW_SEGMENT_MIN_CHARS = 80;
+  const DISPLAY_REVIEW_SEGMENT_TARGET_DURATION_MS = 90 * 1000;
+  const DISPLAY_REVIEW_SEGMENT_MAX_DURATION_MS = 150 * 1000;
+  const DISPLAY_REVIEW_SEGMENT_MIN_DURATION_MS = 25 * 1000;
 
   function getProgressUpdatedAt(job, pending) {
     return normalizeText(job?.updatedAt || pending?.updatedAt);
@@ -37,7 +43,6 @@
       notesModeDetected: normalizeMeetingNotesMode(nextRecord.notesModeDetected),
       notesModeSelected: normalizeMeetingNotesMode(nextRecord.notesModeSelected),
       notesStatus: normalizeText(nextRecord.notesStatus),
-      notesStyleSelected: normalizeMeetingNotesStyle(nextRecord.notesStyleSelected),
       previewText: cleanPreviewText(nextRecord.previewText),
       requestId: normalizeText(nextRecord.requestId),
       status: normalizeText(nextRecord.status) || "idle",
@@ -61,7 +66,6 @@
       notesModeDetected: normalizeMeetingNotesMode(job.notesModeDetected),
       notesModeSelected: normalizeMeetingNotesMode(job.notesModeSelected),
       notesStatus: normalizeText(job.notesStatus),
-      notesStyleSelected: normalizeMeetingNotesStyle(job.notesStyleSelected),
       progress: {
         currentPart: Math.max(0, Number(job?.progress?.currentPart) || 0),
         parallelParts: Math.max(0, Number(job?.progress?.parallelParts) || 0),
@@ -98,7 +102,6 @@
       notesModeDetected: normalizeMeetingNotesMode(artifact.notesModeDetected),
       notesModeSelected: normalizeMeetingNotesMode(artifact.notesModeSelected),
       notesStatus: normalizeText(artifact.notesStatus),
-      notesStyleSelected: normalizeMeetingNotesStyle(artifact.notesStyleSelected),
       segments,
       text: ns.shared.normalizeTextBlock(artifact.text),
     };
@@ -128,7 +131,6 @@
       notesModeConfidence: 0,
       notesModeDetected: "",
       notesModeSelected: "",
-      notesStyleSelected: "",
       progress: { percent: progressPercent, phase: normalizeText(pending.status) },
       requestId: normalizeText(pending.requestId),
       resultTitle: normalizeText(pending.meetingTitleSnapshot),
@@ -442,19 +444,217 @@
     ].filter(Boolean).join("");
   }
 
-  function buildNotesSummaryMeta(meta, selectedStyle) {
+  function buildNotesSummaryMeta(meta) {
     const appliedMode = normalizeMeetingNotesMode(meta?.selected || meta?.detected) || DEFAULT_NOTES_MODE;
-    const appliedStyle = normalizeMeetingNotesStyle(selectedStyle || meta?.styleSelected) || DEFAULT_NOTES_STYLE;
     const confidenceText = meta?.confidence > 0 ? `신뢰도 ${Math.round(meta.confidence * 100)}%` : "";
     const traceText = meta?.sourceTraceCount > 0 ? `근거 ${meta.sourceTraceCount}개` : "";
     const degradedText = normalizeText(meta?.degradedReason) ? `품질 주의: ${normalizeText(meta.degradedReason)}` : "";
     return [
       `AI 판단 ${formatNotesModeLabel(appliedMode)}`,
-      `표현 ${formatNotesStyleLabel(appliedStyle)}`,
       confidenceText,
       traceText,
       degradedText,
     ].filter(Boolean).join(" · ");
+  }
+
+  function buildCompletedRecordSummary(notes) {
+    const executiveSummary = normalizeTextBlock(Array.isArray(notes?.executiveSummary) ? notes.executiveSummary[0] : "");
+    if (executiveSummary) return executiveSummary;
+    const purpose = normalizeTextBlock(notes?.meetingMeta?.purpose);
+    if (purpose) return purpose;
+    const firstTopic = (Array.isArray(notes?.topics) ? notes.topics : []).find((item) => {
+      const headline = normalizeText(item?.summary || item?.topic);
+      return Boolean(headline || normalizeTextArray(item?.keyPoints).length);
+    });
+    if (firstTopic) {
+      const topicHeadline = normalizeText(firstTopic?.summary || firstTopic?.topic);
+      if (topicHeadline) return topicHeadline;
+      const firstKeyPoint = normalizeTextArray(firstTopic?.keyPoints)[0];
+      if (firstKeyPoint) return firstKeyPoint;
+    }
+    const firstDecision = normalizeText(Array.isArray(notes?.decisions) ? notes.decisions[0]?.text : "");
+    if (firstDecision) return `주요 결정: ${firstDecision}`;
+    const firstAction = normalizeText(Array.isArray(notes?.actionItems) ? notes.actionItems[0]?.task : "");
+    if (firstAction) return `후속 실행: ${firstAction}`;
+    return "";
+  }
+
+  function buildCompletedDetailMeta(meta, segmentCount) {
+    const items = [];
+    const normalizedSegmentCount = Math.max(0, Number(segmentCount) || 0);
+    if (normalizedSegmentCount > 0) {
+      items.push(`원문 ${normalizedSegmentCount}개`);
+    }
+    if (Number(meta?.sourceTraceCount) > 0) {
+      items.push(`근거 ${Math.max(0, Number(meta.sourceTraceCount) || 0)}건`);
+    }
+    const generatedAt = formatDateTime(normalizeText(meta?.generatedAt), "");
+    if (generatedAt) {
+      items.push(`마지막 정리 ${generatedAt}`);
+    }
+    const degradedReason = normalizeText(meta?.degradedReason);
+    if (degradedReason) {
+      items.push(`품질 주의 ${degradedReason}`);
+    }
+    return items;
+  }
+
+  function splitSegmentTextIntoDisplaySentences(text) {
+    const normalized = normalizeTextBlock(text).replace(/\s+/g, " ").trim();
+    if (!normalized) {
+      return [];
+    }
+    const sentences = normalized.match(/[^.!?。！？…]+(?:[.!?。！？…]+|$)/g) || [normalized];
+    const normalizedSentences = sentences.map((sentence) => normalizeText(sentence)).filter(Boolean);
+    if (normalizedSentences.length > 1) {
+      return normalizedSentences;
+    }
+    const clauses = normalized
+      .split(/(?<=[,，;])\s+|(?=\b(?:그리고|하지만|다만|또|또는|그래서)\b)/)
+      .map((clause) => normalizeText(clause))
+      .filter(Boolean);
+    if (clauses.length > 1) {
+      return clauses;
+    }
+    const words = normalized.split(/\s+/).map((word) => normalizeText(word)).filter(Boolean);
+    if (words.length <= 1) {
+      return [normalized];
+    }
+    const chunks = [];
+    let current = [];
+    let currentLength = 0;
+    for (const word of words) {
+      const nextLength = currentLength + word.length + (current.length ? 1 : 0);
+      if (current.length && nextLength > DISPLAY_REVIEW_SEGMENT_TARGET_CHARS) {
+        chunks.push(current.join(" "));
+        current = [word];
+        currentLength = word.length;
+        continue;
+      }
+      current.push(word);
+      currentLength = nextLength;
+    }
+    if (current.length) {
+      chunks.push(current.join(" "));
+    }
+    return chunks.length ? chunks : [normalized];
+  }
+
+  function buildDisplaySegmentChunk(sourceSegment, sentences, totalChars, consumedChars, chunkChars) {
+    const text = normalizeTextBlock((Array.isArray(sentences) ? sentences : []).join(" "));
+    if (!text) {
+      return null;
+    }
+    const startMs = Math.max(0, Number(sourceSegment?.startMs) || 0);
+    const endMs = Math.max(startMs, Number(sourceSegment?.endMs) || 0);
+    const durationMs = Math.max(0, endMs - startMs);
+    if (!durationMs || totalChars <= 0) {
+      return {
+        endMs,
+        startMs,
+        text,
+      };
+    }
+    const chunkStartRatio = Math.max(0, Math.min(1, consumedChars / totalChars));
+    const chunkEndRatio = Math.max(chunkStartRatio, Math.min(1, (consumedChars + chunkChars) / totalChars));
+    const chunkStartMs = Math.round(startMs + (durationMs * chunkStartRatio));
+    const chunkEndMs = Math.max(chunkStartMs + 1, Math.round(startMs + (durationMs * chunkEndRatio)));
+    return {
+      endMs: Math.min(endMs, chunkEndMs),
+      startMs: Math.min(endMs, chunkStartMs),
+      text,
+    };
+  }
+
+  function mergeDisplaySegmentChunks(left, right) {
+    const leftText = normalizeTextBlock(left?.text);
+    const rightText = normalizeTextBlock(right?.text);
+    if (!leftText) return right || null;
+    if (!rightText) return left || null;
+    return {
+      endMs: Math.max(Number(left?.endMs) || 0, Number(right?.endMs) || 0),
+      startMs: Math.min(Number(left?.startMs) || 0, Number(right?.startMs) || 0),
+      text: `${leftText} ${rightText}`.replace(/\s+/g, " ").trim(),
+    };
+  }
+
+  function resegmentSingleSegmentForDisplay(segment) {
+    const normalizedText = normalizeTextBlock(segment?.text);
+    if (!normalizedText) {
+      return [];
+    }
+    const startMs = Math.max(0, Number(segment?.startMs) || 0);
+    const endMs = Math.max(startMs, Number(segment?.endMs) || 0);
+    const durationMs = Math.max(0, endMs - startMs);
+    if (
+      normalizedText.length <= DISPLAY_REVIEW_SEGMENT_MAX_CHARS
+      && (!durationMs || durationMs <= DISPLAY_REVIEW_SEGMENT_MAX_DURATION_MS)
+    ) {
+      return [{ endMs, startMs, text: normalizedText }];
+    }
+    const sentences = splitSegmentTextIntoDisplaySentences(normalizedText);
+    if (!sentences.length) {
+      return [{ endMs, startMs, text: normalizedText }];
+    }
+    const totalChars = sentences.reduce((sum, sentence) => sum + sentence.length, 0);
+    const chunks = [];
+    let currentSentences = [];
+    let currentChars = 0;
+    let consumedChars = 0;
+    const pushChunk = () => {
+      const chunk = buildDisplaySegmentChunk(segment, currentSentences, totalChars, consumedChars, currentChars);
+      if (chunk) {
+        chunks.push(chunk);
+        consumedChars += currentChars;
+      }
+      currentSentences = [];
+      currentChars = 0;
+    };
+    for (const sentence of sentences) {
+      const nextChars = currentChars + sentence.length + (currentSentences.length ? 1 : 0);
+      const nextDurationEstimate = totalChars > 0 && durationMs > 0
+        ? Math.round((nextChars / totalChars) * durationMs)
+        : 0;
+      const shouldSplitBeforeAdding = currentSentences.length
+        && currentChars >= DISPLAY_REVIEW_SEGMENT_MIN_CHARS
+        && (
+          nextChars > DISPLAY_REVIEW_SEGMENT_TARGET_CHARS
+          || nextDurationEstimate > DISPLAY_REVIEW_SEGMENT_TARGET_DURATION_MS
+        );
+      const mustSplitBeforeAdding = currentSentences.length
+        && (
+          nextChars > DISPLAY_REVIEW_SEGMENT_MAX_CHARS
+          || nextDurationEstimate > DISPLAY_REVIEW_SEGMENT_MAX_DURATION_MS
+        );
+      if (shouldSplitBeforeAdding || mustSplitBeforeAdding) {
+        pushChunk();
+      }
+      currentSentences.push(sentence);
+      currentChars += sentence.length + (currentSentences.length > 1 ? 1 : 0);
+    }
+    if (currentSentences.length) {
+      pushChunk();
+    }
+    if (chunks.length >= 2) {
+      const last = chunks[chunks.length - 1];
+      const lastDurationMs = Math.max(0, (Number(last?.endMs) || 0) - (Number(last?.startMs) || 0));
+      if (
+        normalizeTextBlock(last?.text).length < DISPLAY_REVIEW_SEGMENT_MIN_CHARS
+        || (lastDurationMs > 0 && lastDurationMs < DISPLAY_REVIEW_SEGMENT_MIN_DURATION_MS)
+      ) {
+        const merged = mergeDisplaySegmentChunks(chunks[chunks.length - 2], last);
+        if (merged) {
+          chunks.splice(chunks.length - 2, 2, merged);
+        }
+      }
+    }
+    return chunks.filter((chunk) => normalizeTextBlock(chunk?.text));
+  }
+
+  function resegmentSegmentsForDisplay(segments) {
+    return (Array.isArray(segments) ? segments : [])
+      .flatMap((segment) => resegmentSingleSegmentForDisplay(segment))
+      .filter((segment) => normalizeTextBlock(segment?.text));
   }
 
   function buildTranscriptTextForDisplay(segments, fallbackText) {
@@ -495,6 +695,12 @@
   function buildMeetingNotesSections(notes) {
     const sections = [];
     pushSection(sections, "회의 개요", buildMeetingOverviewItems(notes));
+    pushSection(sections, "주요 결정 사항", notes.decisions.map(formatDecisionItem));
+    pushSection(sections, "후속 실행 항목", notes.actionItems.map(formatActionItem));
+    pushSection(sections, "추가 결정 필요 사항", [
+      ...normalizeTextArray(notes.openQuestions),
+      ...normalizeTextArray(notes.modeSpecific?.followUpQuestions),
+    ]);
     pushSection(sections, "주요 논의 내용", notes.topics.map(formatTopicItem));
     if (notes.mode === "interview") {
       pushSection(sections, "인터뷰 핵심 포인트", [
@@ -514,16 +720,10 @@
         ...normalizeTextArray(notes.modeSpecific?.milestones),
       ]);
     }
-    pushSection(sections, "주요 결정 사항", notes.decisions.map(formatDecisionItem));
-    pushSection(sections, "추가 결정 필요 사항", [
-      ...normalizeTextArray(notes.openQuestions),
-      ...normalizeTextArray(notes.modeSpecific?.followUpQuestions),
-    ]);
     pushSection(sections, "리스크 및 제약", [
       ...normalizeTextArray(notes.modeSpecific?.dependencies),
       ...notes.risksOrDependencies.map(formatRiskItem),
     ]);
-    pushSection(sections, "후속 실행 항목", notes.actionItems.map(formatActionItem));
     pushSection(sections, "메모 반영 포인트", notes.memoHighlights.map(formatMemoItem));
     return sections;
   }
@@ -550,8 +750,22 @@
     if (normalizedItems.length) target.push({ items: normalizedItems, title });
   }
 
+  function renderNoteListItem(item) {
+    const lines = ns.shared.normalizeTextBlock(item).split("\n").map((line) => normalizeText(line)).filter(Boolean);
+    if (!lines.length) {
+      return "";
+    }
+    const headline = lines[0];
+    const detailLines = lines.slice(1);
+    const bulletLines = detailLines
+      .filter((line) => line.startsWith("- "))
+      .map((line) => normalizeText(line.slice(2)));
+    const bodyLines = detailLines.filter((line) => !line.startsWith("- "));
+    return `<li class="notes-list__item"><div class="notes-list__headline">${escapeHtml(headline)}</div>${bodyLines.length ? `<div class="notes-list__body">${bodyLines.map((line) => `<p>${escapeHtml(line)}</p>`).join("")}</div>` : ""}${bulletLines.length ? `<ul class="notes-list__sublist">${bulletLines.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul>` : ""}</li>`;
+  }
+
   function renderNotesSection(section) {
-    return `<section class="notes-section"><h3 class="notes-section__title">${escapeHtml(section.title)}</h3><ul class="notes-list">${section.items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section>`;
+    return `<section class="notes-section"><h3 class="notes-section__title">${escapeHtml(section.title)}</h3><ul class="notes-list">${section.items.map((item) => renderNoteListItem(item)).join("")}</ul></section>`;
   }
 
   function renderNotesOverview(summaryItems) {
@@ -559,7 +773,7 @@
     if (!items.length) {
       return "";
     }
-    return `<section class="notes-section"><h3 class="notes-section__title">핵심 요약</h3><ul class="notes-list">${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section>`;
+    return `<section class="notes-section"><h3 class="notes-section__title">핵심 요약</h3><ul class="notes-list">${items.map((item) => renderNoteListItem(item)).join("")}</ul></section>`;
   }
 
   function buildStatusFlow(detailView, options = {}) {
@@ -587,15 +801,15 @@
     pushStep("기록 선택", recordSelected ? "done" : "current", recordSelected ? "기록 선택됨" : "검토할 기록을 고릅니다.", recordSelected ? "" : "선택");
 
     if (isFailed) {
-      pushStep("발화 구간", "failed", "오류로 중단되었습니다.");
+      pushStep("원문 검토", "failed", "오류로 중단되었습니다.");
     } else if (options.hasSegmentContent) {
-      pushStep("발화 구간", "done", segmentCount > 0 ? `구간 ${segmentCount}개 확인 가능` : "전사 텍스트 준비 완료");
+      pushStep("원문 검토", "done", segmentCount > 0 ? `구간 ${segmentCount}개 확인 가능` : "전사 텍스트 준비 완료");
     } else if (isBusy) {
-      pushStep("발화 구간", "current", "전사 결과를 준비하는 중입니다.");
+      pushStep("원문 검토", "current", "전사 결과를 준비하는 중입니다.");
     } else if (recordSelected) {
-      pushStep("발화 구간", "warning", "인식된 발화가 아직 충분하지 않습니다.");
+      pushStep("원문 검토", "warning", "인식된 발화가 아직 충분하지 않습니다.");
     } else {
-      pushStep("발화 구간", "pending", "기록 선택 후 전사를 확인합니다.");
+      pushStep("원문 검토", "pending", "기록 선택 후 전사를 확인합니다.");
     }
 
     if (isFailed) {
@@ -613,15 +827,14 @@
     } else if (options.hasNotesValue && options.hasSegmentContent) {
       pushStep("검토 마무리", "done", "복사 · 다운로드 · 제목 수정");
     } else if (options.hasSegmentContent) {
-      pushStep("검토 마무리", "current", "발화 구간부터 확인할 수 있습니다.", "검토");
+      pushStep("검토 마무리", "current", "원문 검토부터 확인할 수 있습니다.", "검토");
     } else {
       pushStep("검토 마무리", "pending", "결과가 준비되면 검토합니다.");
     }
 
     if (recordSelected && !["idle", "succeeded"].includes(normalizedStatus)) pushFact("현재 상태", detailView.badgeLabel);
-    if (segmentCount > 0) pushFact("발화", `${segmentCount}개`);
+    if (segmentCount > 0) pushFact("원문", `${segmentCount}개`);
     pushFact("AI 판단", options.notesModeLabel);
-    pushFact("표현 방식", options.notesStyleLabel);
     pushFact("근거", options.sourceTraceCount > 0 ? `${options.sourceTraceCount}건` : "");
     pushFact("품질 주의", options.degradedReason);
     pushFact("마지막 정리", options.generatedAt);
@@ -816,7 +1029,8 @@
     const normalizedJob = state.currentJob || normalizeJob(remote, detailTitle);
     const normalizedArtifact = state.currentArtifact;
     const meetingNotes = normalizeMeetingNotes(normalizedArtifact?.notes || normalizedJob?.meetingNotes, normalizedArtifact?.notesModeSelected || normalizedJob?.notesModeSelected);
-    const segments = Array.isArray(normalizedArtifact?.segments) ? normalizedArtifact.segments : [];
+    const rawSegments = Array.isArray(normalizedArtifact?.segments) ? normalizedArtifact.segments : [];
+    const segments = resegmentSegmentsForDisplay(rawSegments);
     const transcriptText = buildTranscriptTextForDisplay(segments, normalizedArtifact?.text);
     const hasNotesValue = hasMeetingNotes(meetingNotes);
     const hasTranscriptValue = Boolean(transcriptText);
@@ -829,7 +1043,6 @@
       selected: normalizeMeetingNotesMode(normalizedArtifact?.notesModeSelected || normalizedJob?.notesModeSelected) || meetingNotes.mode,
       sourceTraceCount: Array.isArray(meetingNotes?.sourceTrace) ? meetingNotes.sourceTrace.length : 0,
       status: normalizeText(normalizedArtifact?.notesStatus || normalizedJob?.notesStatus),
-      styleSelected: normalizeMeetingNotesStyle(normalizedArtifact?.notesStyleSelected || normalizedJob?.notesStyleSelected) || DEFAULT_NOTES_STYLE,
     };
     const remoteChunkProgress = buildChunkProgressModel(normalizedJob, pending);
 
@@ -848,11 +1061,60 @@
       completionNotice = "전사는 준비됐지만 회의 정리로 묶을 내용은 충분하지 않았습니다.";
       completionTone = "warning";
     }
-    return { badgeLabel: "완료", badgeStatus: "succeeded", chunkProgress: null, meta: detailMeta, meetingNotes, notesMeta, notice: completionNotice, noticeTone: completionTone, recordMemo: detailMemo, recordTitle: detailTitle, segments, showRecordActions, summary: "", title: detailTitle, transcriptText };
+    detailMeta.push(...buildCompletedDetailMeta(notesMeta, hasSegmentsValue ? segments.length : 0));
+    return {
+      badgeLabel: "완료",
+      badgeStatus: "succeeded",
+      chunkProgress: null,
+      meta: detailMeta,
+      meetingNotes,
+      notesMeta,
+      notice: completionNotice,
+      noticeTone: completionTone,
+      recordMemo: detailMemo,
+      recordTitle: detailTitle,
+      segments,
+      showRecordActions,
+      summary: hasNotesValue ? buildCompletedRecordSummary(meetingNotes) : "",
+      title: detailTitle,
+      transcriptText,
+    };
   }
 
-  function renderSegment(segment) {
-    return `<article class="segment-item"><div class="segment-item__head"><span>${escapeHtml(formatSegmentRange(segment.startMs, segment.endMs))}</span></div><p>${escapeHtml(segment.text)}</p></article>`;
+  function splitSegmentParagraphs(text) {
+    const normalized = ns.shared.normalizeTextBlock(text).replace(/\s+/g, " ").trim();
+    if (!normalized) {
+      return [];
+    }
+    const sentences = normalized.match(/[^.!?。！？…]+(?:[.!?。！？…]+|$)/g) || [normalized];
+    const paragraphs = [];
+    let current = [];
+    let currentLength = 0;
+    for (const sentence of sentences) {
+      const normalizedSentence = normalizeText(sentence);
+      if (!normalizedSentence) {
+        continue;
+      }
+      const nextLength = current.length ? currentLength + normalizedSentence.length + 1 : normalizedSentence.length;
+      if (current.length && nextLength > 180) {
+        paragraphs.push(current.join(" "));
+        current = [normalizedSentence];
+        currentLength = normalizedSentence.length;
+        continue;
+      }
+      current.push(normalizedSentence);
+      currentLength = nextLength;
+    }
+    if (current.length) {
+      paragraphs.push(current.join(" "));
+    }
+    return paragraphs.length ? paragraphs : [normalized];
+  }
+
+  function renderSegment(segment, index) {
+    const paragraphs = splitSegmentParagraphs(segment.text);
+    const label = Number.isFinite(index) ? `원문 ${index + 1}` : "";
+    return `<article class="segment-item"><div class="segment-item__head"><span>${escapeHtml(formatSegmentRange(segment.startMs, segment.endMs))}</span>${label ? `<span class="segment-item__index">${escapeHtml(label)}</span>` : ""}</div><div class="segment-item__body">${paragraphs.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("")}</div></article>`;
   }
 
   function renderTranscriptFallback(transcriptText) {
@@ -866,9 +1128,7 @@
     const meta = [formatDateTime(entry.updatedAt || entry.createdAt, ""), entry.durationMs > 0 ? formatDuration(entry.durationMs) : "", entry.pending?.sizeBytes > 0 ? formatBytes(entry.pending.sizeBytes) : ""].filter(Boolean).join(" · ");
     const chips = [];
     const notesMode = normalizeMeetingNotesMode(entry.remote?.notesModeSelected || entry.remote?.notesModeDetected);
-    const notesStyle = normalizeMeetingNotesStyle(entry.remote?.notesStyleSelected);
     if (notesMode) chips.push({ label: `AI 판단 ${formatNotesModeLabel(notesMode)}`, tone: "accent" });
-    if (notesStyle) chips.push({ label: `표현 ${formatNotesStyleLabel(notesStyle)}`, tone: "muted" });
     if (!chips.length && pendingSummary) chips.push({ label: pendingSummary, tone: "muted" });
     return `
       <button type="button" class="record-item${entry.id === selectedRecordId ? " is-active" : ""}" data-record-id="${escapeHtml(entry.id)}">
@@ -894,25 +1154,15 @@
       refs.meetingNotesOverview.innerHTML = "";
       refs.meetingNotesSections.innerHTML = "";
       refs.notesSummaryMeta.textContent = "AI 판단 대기";
-      refs.notesStyleSelect.value = DEFAULT_NOTES_STYLE;
-      refs.notesStyleSelect.disabled = true;
       refs.regenerateNotesButton.disabled = true;
-      refs.regenerateNotesButton.textContent = "현재 표현 방식으로 다시 정리";
+      refs.regenerateNotesButton.textContent = "회의 정리 다시 만들기";
       return false;
     }
-    const appliedMode = normalizeMeetingNotesMode(detailView.notesMeta?.selected || normalized.mode) || DEFAULT_NOTES_MODE;
-    const appliedStyle = normalizeMeetingNotesStyle(detailView.notesMeta?.styleSelected) || DEFAULT_NOTES_STYLE;
-    const selectedStyle = normalizeMeetingNotesStyle(state.notesStyleSelection || appliedStyle) || DEFAULT_NOTES_STYLE;
-    const pendingStyleChange = selectedStyle !== appliedStyle;
-    refs.notesStyleSelect.value = selectedStyle;
-    refs.notesStyleSelect.disabled = !state.currentJob?.jobId || state.busy.regenerateNotes || !TERMINAL_REMOTE_STATUSES.has(normalizeText(state.currentJob?.status));
-    refs.regenerateNotesButton.disabled = refs.notesStyleSelect.disabled;
-    refs.notesSummaryMeta.textContent = buildNotesSummaryMeta(detailView.notesMeta, selectedStyle);
+    refs.regenerateNotesButton.disabled = !state.currentJob?.jobId || state.busy.regenerateNotes || !TERMINAL_REMOTE_STATUSES.has(normalizeText(state.currentJob?.status));
+    refs.notesSummaryMeta.textContent = buildNotesSummaryMeta(detailView.notesMeta);
     refs.regenerateNotesButton.textContent = state.busy.regenerateNotes
       ? "정리 중"
-      : pendingStyleChange
-        ? `${formatNotesStyleLabel(selectedStyle)}로 다시 정리`
-        : "현재 표현 방식으로 다시 정리";
+      : "회의 정리 다시 만들기";
     const overviewMarkup = renderNotesOverview(normalized.executiveSummary);
     refs.meetingNotesOverview.hidden = !overviewMarkup;
     refs.meetingNotesOverview.innerHTML = overviewMarkup;
@@ -920,11 +1170,18 @@
     return true;
   }
 
-  function resolveReviewTab(state, detailView, hasNotesValue) {
+  function resolveReviewTab(state, detailView, hasNotesValue, options = {}) {
     const hasMemoValue = Boolean(normalizeText(detailView.recordMemo));
     const hasTranscriptValue = Boolean(normalizeText(detailView.transcriptText));
     const hasSegmentsValue = Array.isArray(detailView.segments) && detailView.segments.length > 0;
     const hasSegmentContent = hasSegmentsValue || hasTranscriptValue;
+    const showSummaryTab = options.showSummaryTab !== false;
+    const fallbackTab = () => {
+      if (hasNotesValue) return "notes";
+      if (hasSegmentContent) return "segments";
+      if (hasMemoValue) return "memo";
+      return showSummaryTab ? "summary" : "notes";
+    };
     let nextTab = normalizeText(state.reviewTab) || "notes";
     if (nextTab === "transcript") {
       nextTab = "segments";
@@ -932,17 +1189,23 @@
     if (!["summary", "memo", "notes", "segments"].includes(nextTab)) {
       nextTab = "notes";
     }
+    if (!showSummaryTab && nextTab === "summary") {
+      nextTab = fallbackTab();
+    }
     if (!detailView.showRecordActions && !hasMemoValue && !hasSegmentContent && !hasNotesValue) {
-      return "summary";
+      return showSummaryTab ? "summary" : "notes";
     }
     if (nextTab === "memo" && !hasMemoValue) {
-      return hasNotesValue ? "notes" : hasSegmentContent ? "segments" : "summary";
+      return fallbackTab();
     }
     if (nextTab === "notes" && !hasNotesValue) {
-      return hasMemoValue ? "memo" : hasSegmentContent ? "segments" : "summary";
+      return hasMemoValue ? "memo" : hasSegmentContent ? "segments" : showSummaryTab ? "summary" : "notes";
     }
     if (nextTab === "segments" && !hasSegmentContent) {
-      return hasNotesValue ? "notes" : hasMemoValue ? "memo" : "summary";
+      return hasNotesValue ? "notes" : hasMemoValue ? "memo" : showSummaryTab ? "summary" : "notes";
+    }
+    if (normalizeText(detailView.badgeStatus) === "succeeded" && hasNotesValue && nextTab === "summary") {
+      return "notes";
     }
     return nextTab;
   }
@@ -1055,9 +1318,10 @@
     const hasTranscriptValue = Boolean(normalizeText(detailView.transcriptText));
     const hasSegmentsValue = Array.isArray(detailView.segments) && detailView.segments.length > 0;
     const hasSegmentContent = hasSegmentsValue || hasTranscriptValue;
-    const activeReviewTab = resolveReviewTab(state, detailView, hasNotesValue);
+    const showSummaryReviewTab = normalizeText(detailView.badgeStatus) !== "succeeded" || !hasNotesValue;
+    const activeReviewTab = resolveReviewTab(state, detailView, hasNotesValue, { showSummaryTab: showSummaryReviewTab });
     state.reviewTab = activeReviewTab;
-    refs.reviewTabSummary.hidden = false;
+    refs.reviewTabSummary.hidden = !showSummaryReviewTab;
     refs.reviewTabMemo.hidden = !hasMemoValue;
     refs.reviewTabNotes.hidden = !hasNotesValue;
     refs.reviewTabSegments.hidden = !hasSegmentContent;
@@ -1071,7 +1335,6 @@
       hasNotesValue,
       hasSegmentContent,
       notesModeLabel: hasNotesValue ? formatNotesModeLabel(detailView.notesMeta?.selected || detailView.meetingNotes?.mode) : "",
-      notesStyleLabel: hasNotesValue ? formatNotesStyleLabel(detailView.notesMeta?.styleSelected) : "",
       segmentCount: hasSegmentsValue ? detailView.segments.length : 0,
       sourceTraceCount: Number(detailView.notesMeta?.sourceTraceCount) || 0,
       degradedReason: normalizeText(detailView.notesMeta?.degradedReason),
@@ -1104,7 +1367,7 @@
     refs.detailNotice.hidden = !showSummaryNotice;
     refs.detailNotice.textContent = detailView.notice;
     refs.detailNotice.dataset.tone = showSummaryNotice ? detailView.noticeTone : "";
-    refs.reviewPanelSummary.hidden = activeReviewTab !== "summary";
+    refs.reviewPanelSummary.hidden = activeReviewTab !== "summary" || !showSummaryReviewTab;
     refs.reviewPanelMemo.hidden = activeReviewTab !== "memo" || !hasMemoValue;
     refs.meetingNotesCard.hidden = activeReviewTab !== "notes" || !hasNotesValue;
     refs.reviewPanelSegments.hidden = activeReviewTab !== "segments" || !hasSegmentContent;
@@ -1113,7 +1376,7 @@
     refs.segmentList.innerHTML = !hasSegmentContent
       ? ""
       : hasSegmentsValue
-        ? detailView.segments.map((segment) => renderSegment(segment)).join("")
+        ? detailView.segments.map((segment, index) => renderSegment(segment, index)).join("")
         : renderTranscriptFallback(detailView.transcriptText);
     return { activeEntry, historyEntries };
   }

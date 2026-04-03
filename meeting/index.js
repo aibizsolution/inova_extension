@@ -758,7 +758,6 @@
     if (normalized === "uploading") return "업로드 중";
     if (normalized === "queued") return "대기 중";
     if (normalized === "transcribing") return "텍스트 변환";
-    if (normalized === "diarizing") return "전사 중";
     if (normalized === "finalizing") return "결과 정리";
     return normalized || "처리 중";
   }

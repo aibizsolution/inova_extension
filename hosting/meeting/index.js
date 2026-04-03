@@ -129,7 +129,6 @@
         degradedReason: "",
         issueCodes: [],
       },
-      notesStyleSelection: "",
       queueStore: createPendingUploadStore(global),
       recordMemoDraft: "",
       recordMemoSaved: "",
@@ -173,7 +172,7 @@
   }
 
   function cacheRefs() {
-    for (const id of ["meetingShell", "blockedMessage", "blockedEyebrow", "blockedTitle", "blockedState", "workspace", "pageTitle", "pageSummary", "workspaceBadge", "offlineQueueBadge", "refreshButton", "meetingTitleInput", "saveMeetingTitleButton", "deleteMeetingButton", "meetingStatusChip", "currentBadge", "currentSummary", "currentHint", "currentNotice", "currentTimer", "startButton", "importAudioButton", "importAudioInput", "pauseButton", "resumeButton", "stopButton", "discardButton", "sharedMemoInput", "saveSharedMemoButton", "clearSharedMemoButton", "sharedMemoNotice", "recordCountBadge", "recordList", "detailTitle", "detailBadge", "detailSummary", "recordTitleGroup", "recordTitleInput", "saveRecordTitleButton", "downloadRecordButton", "deleteRecordButton", "detailMeta", "copySegmentsButton", "detailMemoText", "reviewTabSummary", "reviewTabMemo", "reviewTabNotes", "reviewTabSegments", "reviewTabSegmentsCount", "reviewPanelSummary", "summaryStatusPill", "summaryStatusGrid", "summaryActionCard", "reviewPanelMemo", "meetingNotesCard", "reviewPanelSegments", "notesSummaryMeta", "notesStyleSelect", "regenerateNotesButton", "meetingNotesOverview", "meetingNotesSections", "detailNotice", "segmentList", "debugPanel", "confirmOverlay", "confirmDialog", "confirmDialogEyebrow", "confirmDialogTitle", "confirmDialogBody", "confirmDialogCancel", "confirmDialogConfirm"]) {
+    for (const id of ["meetingShell", "blockedMessage", "blockedEyebrow", "blockedTitle", "blockedState", "workspace", "pageTitle", "pageSummary", "workspaceBadge", "offlineQueueBadge", "refreshButton", "meetingTitleInput", "saveMeetingTitleButton", "deleteMeetingButton", "meetingStatusChip", "currentBadge", "currentSummary", "currentHint", "currentNotice", "currentTimer", "startButton", "importAudioButton", "importAudioInput", "pauseButton", "resumeButton", "stopButton", "discardButton", "sharedMemoInput", "saveSharedMemoButton", "clearSharedMemoButton", "sharedMemoNotice", "recordCountBadge", "recordList", "detailTitle", "detailBadge", "detailSummary", "recordTitleGroup", "recordTitleInput", "saveRecordTitleButton", "downloadRecordButton", "deleteRecordButton", "detailMeta", "copySegmentsButton", "detailMemoText", "reviewTabSummary", "reviewTabMemo", "reviewTabNotes", "reviewTabSegments", "reviewTabSegmentsCount", "reviewPanelSummary", "summaryStatusPill", "summaryStatusGrid", "summaryActionCard", "reviewPanelMemo", "meetingNotesCard", "reviewPanelSegments", "notesSummaryMeta", "regenerateNotesButton", "meetingNotesOverview", "meetingNotesSections", "detailNotice", "segmentList", "debugPanel", "confirmOverlay", "confirmDialog", "confirmDialogEyebrow", "confirmDialogTitle", "confirmDialogBody", "confirmDialogCancel", "confirmDialogConfirm"]) {
       refs[id] = global.document.getElementById(id);
     }
   }
@@ -201,10 +200,6 @@
     refs.saveSharedMemoButton.addEventListener("click", saveSharedMemo);
     refs.clearSharedMemoButton.addEventListener("click", clearSharedMemo);
     refs.deleteMeetingButton.addEventListener("click", deleteMeeting);
-    refs.notesStyleSelect.addEventListener("change", () => {
-      state.notesStyleSelection = normalizeText(refs.notesStyleSelect.value);
-      applyRender();
-    });
     for (const tabId of ["reviewTabSummary", "reviewTabMemo", "reviewTabNotes", "reviewTabSegments"]) {
       const tab = refs[tabId];
       if (!tab) continue;
@@ -2229,12 +2224,11 @@
       createdAt: entry.remote.createdAt,
       error: entry.remote.error,
       jobId: entry.remote.jobId,
-      notesGeneratedAt: entry.remote.notesGeneratedAt,
-      notesModeConfidence: entry.remote.notesModeConfidence,
-      notesModeDetected: entry.remote.notesModeDetected,
-      notesModeSelected: entry.remote.notesModeSelected,
-      notesStyleSelected: entry.remote.notesStyleSelected,
-      source: {
+        notesGeneratedAt: entry.remote.notesGeneratedAt,
+        notesModeConfidence: entry.remote.notesModeConfidence,
+        notesModeDetected: entry.remote.notesModeDetected,
+        notesModeSelected: entry.remote.notesModeSelected,
+        source: {
         durationMs: entry.remote.durationMs,
         requestId: entry.remote.requestId,
       },
@@ -2298,11 +2292,6 @@
       return;
     }
     state.currentJob = normalizeJob(snapshot.data(), state.meeting.title);
-    state.notesStyleSelection = normalizeText(
-      state.currentArtifact?.notesStyleSelected
-      || state.currentJob?.notesStyleSelected
-      || state.notesStyleSelection
-    );
     await ensureArtifactRealtimeSubscription(entry, { forceReconnect: false });
     applyRender();
     logDebug("workspace.snapshot.job", {
@@ -2374,11 +2363,6 @@
       return;
     }
     state.currentArtifact = snapshot?.exists ? normalizeArtifact(snapshot.data()) : null;
-    state.notesStyleSelection = normalizeText(
-      state.currentArtifact?.notesStyleSelected
-      || state.currentJob?.notesStyleSelected
-      || state.notesStyleSelection
-    );
     applyRender();
     logDebug("workspace.snapshot.artifact", {
       artifactId: normalizeText(state.currentArtifact?.artifactId || state.realtime.artifactDocId),
@@ -3920,13 +3904,11 @@
     state.busy.regenerateNotes = true;
     applyRender();
     try {
-      state.notesStyleSelection = normalizeText(refs.notesStyleSelect.value);
-      const payload = await postJson(global, CONFIG.regenerateNotesUrl, { jobId: entry.remote.jobId, meetingId: state.session.meetingId, notesStyle: normalizeText(refs.notesStyleSelect.value), sharedMemo: normalizeTextBlock(state.currentJob?.sharedMemoSnapshot) }, state.session.meetingSessionToken);
+      const payload = await postJson(global, CONFIG.regenerateNotesUrl, { jobId: entry.remote.jobId, meetingId: state.session.meetingId, sharedMemo: normalizeTextBlock(state.currentJob?.sharedMemoSnapshot) }, state.session.meetingSessionToken);
       state.currentJob = normalizeJob(payload?.job, state.currentJob?.title || state.meeting.title);
       state.currentArtifact = normalizeArtifact(payload?.artifact);
-      state.notesStyleSelection = normalizeText(state.currentArtifact?.notesStyleSelected || state.currentJob?.notesStyleSelected || state.notesStyleSelection);
       state.reviewTab = "notes";
-      setNotice("표현 방식을 반영해 회의 정리를 다시 만들었습니다.", "highlight");
+      setNotice("같은 원문으로 회의 정리를 다시 만들었습니다.", "highlight");
       await syncWorkspaceLocalState(false, "workflow");
     } finally {
       state.busy.regenerateNotes = false;

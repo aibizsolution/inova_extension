@@ -27,13 +27,28 @@ const MAX_MEETING_LIST_LIMIT = 24;
 const MAX_SUMMARY_TRANSCRIPT_CHARS = 12000;
 const MAX_MEETING_NOTES_SECTION_CHARS = 9000;
 const MAX_MEETING_NOTES_SECTION_COUNT = 8;
+const TARGET_REVIEW_SEGMENT_CHARS = 320;
+const MAX_REVIEW_SEGMENT_CHARS = 420;
+const MIN_REVIEW_SEGMENT_CHARS = 90;
+const TARGET_REVIEW_SEGMENT_DURATION_MS = 30 * 1000;
+const MAX_REVIEW_SEGMENT_DURATION_MS = 45 * 1000;
+const MIN_REVIEW_SEGMENT_DURATION_MS = 12 * 1000;
+const MAX_MEETING_NOTES_SUMMARY_ITEMS = 3;
+const MAX_MEETING_NOTES_TOPIC_COUNT = 4;
+const MAX_MEETING_NOTES_TOPIC_KEY_POINTS = 4;
+const MAX_MEETING_NOTES_TOPIC_DECISIONS = 3;
+const MAX_MEETING_NOTES_TOPIC_OPEN_QUESTIONS = 2;
+const MAX_MEETING_NOTES_DECISIONS = 5;
+const MAX_MEETING_NOTES_ACTION_ITEMS = 5;
+const MAX_MEETING_NOTES_OPEN_QUESTIONS = 3;
+const MAX_MEETING_NOTES_RISKS = 3;
+const MAX_MEETING_NOTES_MEMO_HIGHLIGHTS = 4;
+const MAX_MEETING_NOTES_SOURCE_TRACE = 6;
 const MAX_SHARED_MEMO_CHARS = 12000;
 const NOTES_SCHEMA_VERSION = 2;
 const DEFAULT_NOTES_MODE = "general";
-const DEFAULT_NOTES_STYLE = "default";
 const RETRYABLE_MEETING_PROCESS_STATUSES = new Set([408, 409, 429, 500, 502, 503, 504]);
 const SUPPORTED_NOTES_MODES = new Set(["general", "interview", "review", "planning"]);
-const SUPPORTED_NOTES_STYLES = new Set(["default", "brief", "action"]);
 const SUPPORTED_NOTES_STATUSES = new Set(["pending", "disabled", "skipped", "degraded", "succeeded"]);
 const SUPPORTED_DELETION_SCOPES = new Set(["meeting", "result"]);
 const SUPPORTED_DELETION_STATUSES = new Set(["queued", "processing", "retry"]);
@@ -1365,8 +1380,7 @@ function registerMeetingHandlers(deps) {
         transcriptSource.transcript,
         effectiveMeeting,
         context,
-        input.notesMode,
-        input.notesStyle
+        input.notesMode
       );
       const updatedAt = new Date().toISOString();
       const resultTitle = resolveMeetingResultTitle(meetingNotes, job.title || effectiveMeeting.title);
@@ -1384,7 +1398,6 @@ function registerMeetingHandlers(deps) {
         notesModeDetected: meetingNotes.notesModeDetected,
         notesModeSelected: meetingNotes.notesModeSelected,
         notesStatus: meetingNotes.notesStatus,
-        notesStyleSelected: meetingNotes.notesStyleSelected,
         notesSchemaVersion: meetingNotes.notesSchemaVersion,
         title: resultTitle,
         updatedAt,
@@ -1397,7 +1410,6 @@ function registerMeetingHandlers(deps) {
         notesModeDetected: meetingNotes.notesModeDetected,
         notesModeSelected: meetingNotes.notesModeSelected,
         notesStatus: meetingNotes.notesStatus,
-        notesStyleSelected: meetingNotes.notesStyleSelected,
         notesSchemaVersion: meetingNotes.notesSchemaVersion,
       };
       const nextJob = normalizeMeetingJob({
@@ -1424,7 +1436,6 @@ function registerMeetingHandlers(deps) {
         jobId: input.jobId,
         meetingId: input.meetingId,
         notesMode: input.notesMode || meetingNotes.notesModeSelected,
-        notesStyle: input.notesStyle,
         providerUserKey: owner.providerUserKey,
       });
       response.json({
@@ -2949,9 +2960,10 @@ function registerMeetingHandlers(deps) {
       mergedSegments = mergeTranscriptSegments(mergedSegments, adjustedSegments, part.overlapMs || DEFAULT_SOURCE_PART_OVERLAP_MS);
     }
 
+    const reviewSegments = resegmentTranscriptForReview(mergedSegments);
     return {
-      segments: mergedSegments,
-      text: buildTranscriptText(mergedSegments),
+      segments: reviewSegments,
+      text: buildTranscriptText(reviewSegments),
     };
   }
 
@@ -3392,13 +3404,6 @@ function registerMeetingHandlers(deps) {
     return normalizeText(value).replace(/\s+/g, " ").toLowerCase();
   }
 
-  function buildTranscriptText(segments) {
-    return (Array.isArray(segments) ? segments : [])
-      .map((segment) => normalizeText(segment.text))
-      .filter(Boolean)
-      .join(" ");
-  }
-
   function buildMeetingPartFileName(fileName, partIndex) {
     const normalizedFileName = normalizeText(fileName) || "meeting-source.wav";
     const extensionMatch = normalizedFileName.match(/(\.[^.]+)$/);
@@ -3409,7 +3414,7 @@ function registerMeetingHandlers(deps) {
 
   async function maybeGenerateMeetingNotes(transcript, meeting, options, context, logEvent, owner, jobId) {
     if (!options.summary) {
-      return createEmptyMeetingNotesBundle(null, null, null, "disabled");
+      return createEmptyMeetingNotesBundle(null, null, "disabled");
     }
     try {
       return await generateMeetingNotesBundle(transcript, meeting, context);
@@ -3423,30 +3428,27 @@ function registerMeetingHandlers(deps) {
       return createEmptyMeetingNotesBundle(
         null,
         null,
-        null,
         "degraded",
         normalizeText(error?.message) || "회의록 자동 정리에 실패했어요."
       );
     }
   }
 
-  async function generateMeetingNotesBundle(transcript, meeting, context, selectedMode, selectedStyle) {
+  async function generateMeetingNotesBundle(transcript, meeting, context, selectedMode) {
     const transcriptSections = buildMeetingNotesTranscriptSections(transcript);
     if (!transcriptSections.length) {
-      return createEmptyMeetingNotesBundle(selectedMode, null, selectedStyle, "skipped");
+      return createEmptyMeetingNotesBundle(selectedMode, null, "skipped");
     }
     const detectedMode = await detectMeetingNotesMode(transcript, meeting, context);
     const notesModeSelected = normalizeMeetingNotesMode(selectedMode)
       || detectedMode.notesModeDetected
       || DEFAULT_NOTES_MODE;
-    const notesStyleSelected = normalizeMeetingNotesStyle(selectedStyle) || DEFAULT_NOTES_STYLE;
     if (transcriptSections.length === 1) {
       return await generateMeetingNotesBundleFromPrompt(
         transcript,
         meeting,
         context,
         notesModeSelected,
-        notesStyleSelected,
         detectedMode,
         transcriptSections[0]
       );
@@ -3458,7 +3460,6 @@ function registerMeetingHandlers(deps) {
         meeting,
         context,
         notesModeSelected,
-        notesStyleSelected,
         sectionPrompt,
         index,
         transcriptSections.length
@@ -3468,7 +3469,7 @@ function registerMeetingHandlers(deps) {
       messages: [
         {
           role: "system",
-          content: buildMeetingNotesSystemPrompt(notesModeSelected, notesStyleSelected),
+          content: buildMeetingNotesSystemPrompt(notesModeSelected),
         },
         {
           role: "user",
@@ -3477,7 +3478,6 @@ function registerMeetingHandlers(deps) {
             meeting,
             context,
             notesModeSelected,
-            notesStyleSelected,
             partialSummaries
           ),
         },
@@ -3488,7 +3488,7 @@ function registerMeetingHandlers(deps) {
     });
     const content = normalizeCompletionContent(completion?.choices?.[0]?.message?.content);
     if (!content) {
-      return createEmptyMeetingNotesBundle(notesModeSelected, detectedMode, notesStyleSelected, "skipped");
+      return createEmptyMeetingNotesBundle(notesModeSelected, detectedMode, "skipped");
     }
     return {
       notes: normalizeMeetingNotes(parseMeetingNotesJson(content), notesModeSelected),
@@ -3498,7 +3498,6 @@ function registerMeetingHandlers(deps) {
       notesModeDetected: normalizeMeetingNotesMode(detectedMode.notesModeDetected) || DEFAULT_NOTES_MODE,
       notesModeSelected,
       notesStatus: "succeeded",
-      notesStyleSelected,
       notesSchemaVersion: NOTES_SCHEMA_VERSION,
     };
   }
@@ -3508,7 +3507,6 @@ function registerMeetingHandlers(deps) {
     meeting,
     context,
     notesModeSelected,
-    notesStyleSelected,
     detectedMode,
     transcriptPrompt
   ) {
@@ -3516,7 +3514,7 @@ function registerMeetingHandlers(deps) {
       messages: [
         {
           role: "system",
-          content: buildMeetingNotesSystemPrompt(notesModeSelected, notesStyleSelected),
+          content: buildMeetingNotesSystemPrompt(notesModeSelected),
         },
         {
           role: "user",
@@ -3525,7 +3523,6 @@ function registerMeetingHandlers(deps) {
             meeting,
             context,
             notesModeSelected,
-            notesStyleSelected,
             transcriptPrompt
           ),
         },
@@ -3536,7 +3533,7 @@ function registerMeetingHandlers(deps) {
     });
     const content = normalizeCompletionContent(completion?.choices?.[0]?.message?.content);
     if (!content) {
-      return createEmptyMeetingNotesBundle(notesModeSelected, detectedMode, notesStyleSelected, "skipped");
+      return createEmptyMeetingNotesBundle(notesModeSelected, detectedMode, "skipped");
     }
     return {
       notes: normalizeMeetingNotes(parseMeetingNotesJson(content), notesModeSelected),
@@ -3546,7 +3543,6 @@ function registerMeetingHandlers(deps) {
       notesModeDetected: normalizeMeetingNotesMode(detectedMode.notesModeDetected) || DEFAULT_NOTES_MODE,
       notesModeSelected,
       notesStatus: "succeeded",
-      notesStyleSelected,
       notesSchemaVersion: NOTES_SCHEMA_VERSION,
     };
   }
@@ -3556,7 +3552,6 @@ function registerMeetingHandlers(deps) {
     meeting,
     context,
     notesModeSelected,
-    notesStyleSelected,
     transcriptPrompt,
     sectionIndex,
     totalSections
@@ -3565,7 +3560,7 @@ function registerMeetingHandlers(deps) {
       messages: [
         {
           role: "system",
-          content: buildMeetingNotesSectionSystemPrompt(notesModeSelected, notesStyleSelected),
+          content: buildMeetingNotesSectionSystemPrompt(notesModeSelected),
         },
         {
           role: "user",
@@ -3574,7 +3569,6 @@ function registerMeetingHandlers(deps) {
             meeting,
             context,
             notesModeSelected,
-            notesStyleSelected,
             transcriptPrompt,
             sectionIndex,
             totalSections
@@ -3658,19 +3652,13 @@ function registerMeetingHandlers(deps) {
     ].join("\n\n");
   }
 
-  function buildMeetingNotesSystemPrompt(notesMode, notesStyle) {
+  function buildMeetingNotesSystemPrompt(notesMode) {
     const mode = normalizeMeetingNotesMode(notesMode) || DEFAULT_NOTES_MODE;
-    const style = normalizeMeetingNotesStyle(notesStyle) || DEFAULT_NOTES_STYLE;
     const modeInstructionMap = {
       general: "일반 회의는 핵심 결론, 토픽별 정리, 결정사항, 액션, 미해결 질문, 리스크를 우선 정리한다.",
       interview: "인터뷰는 핵심 인사이트, 답변 요약, 강점, 우려, 후속 질문을 우선 정리한다.",
       planning: "계획 회의는 목표, 범위, 일정, 의존성, 결정, 액션을 우선 정리한다.",
       review: "리뷰/회고는 잘된 점, 문제점, 원인, 개선안, 리스크, 액션을 우선 정리한다.",
-    };
-    const styleInstructionMap = {
-      action: "표현 방식이 실행 중심이면 결정사항, 액션 아이템, 리스크를 더 앞에 두고 문장을 단호하고 짧게 쓴다.",
-      brief: "표현 방식이 간결 브리프면 항목 수를 줄이고 한 줄 요약 위주로 짧게 정리한다.",
-      default: "표현 방식이 기본 회의록이면 중립적인 회의록 문체를 유지하고 설명 길이를 과하게 줄이지 않는다.",
     };
     return [
       "너는 한국어 회의록 작성자다.",
@@ -3680,24 +3668,27 @@ function registerMeetingHandlers(deps) {
       "전사와 메모가 충돌하면 단정하지 말고 openQuestions 또는 sourceTrace에 남긴다.",
       "전문가 자문, 전략 평가, 타당성 판단처럼 들리는 표현은 피하고 회의에서 실제 언급된 내용만 중립적으로 정리한다.",
       "전사에 없는 결론, 추천, 당위, 우선순위 판단을 새로 만들지 않는다.",
-      "각 문장은 가능하면 '논의되었다', '언급되었다', '검토가 필요하다'처럼 중립 표현을 사용한다.",
+      "문장은 단순히 '논의되었다'를 반복하지 말고, 왜 이 논의가 나왔는지, 어떤 쟁점이 있었는지, 그래서 무엇이 정리되었는지가 짧게 이어지도록 쓴다.",
+      "회의록을 읽는 사람이 배경 없이도 흐름을 이해할 수 있게, 배경 -> 핵심 쟁점 -> 결론 또는 미결정 -> 다음 단계 순서를 의식해 정리한다.",
       "actionItems에는 전사나 메모에 실제로 나온 행동만 적고, 담당자나 기한이 없으면 임의로 만들지 않는다.",
-      "topics와 executiveSummary는 회의 내용을 business meeting minutes처럼 구조적으로 요약하되, 잘 되었다/옳다/필수다 같은 평가형 문장은 피한다.",
+      "actionItems는 누가 무엇을 할지 비교적 분명한 항목만 포함하고, 단순한 추가 검토 필요·논의 필요 같은 일반론은 openQuestions 또는 risksOrDependencies로 돌린다.",
+      "topics와 executiveSummary는 단순 항목 나열이 아니라 회의 맥락이 드러나는 짧은 서술형 회의록처럼 정리하되, 잘 되었다/옳다/필수다 같은 평가형 문장은 피한다.",
       "구간 라벨은 보조 정보일 뿐이므로, 누가 말했는지보다 무엇이 논의되고 결정되었는지에 집중한다.",
       "결과는 상용 회의록 SaaS처럼 섹션이 분명한 한국어 회의 정리 톤으로 쓰되, 회의에서 실제로 언급된 내용만 근거로 사용한다.",
-      "executiveSummary는 2~4개 항목까지 허용하고, 회의 배경, 핵심 논의, 결정된 내용, 남은 쟁점, 다음 단계 중 중요한 것을 우선 담는다.",
-      "meetingMeta.purpose는 이 회의가 왜 열렸고 무엇을 검토·결정하려 했는지 2~4문장 안에서 회의 개요처럼 정리한다.",
+      "executiveSummary는 1~3개 항목까지 허용하고, 회의 배경, 핵심 논의 흐름, 결정된 내용, 남은 쟁점, 다음 단계 중 중요한 것만 담는다.",
+      "meetingMeta.purpose는 이 회의가 왜 열렸고 어떤 배경에서 무엇을 검토·결정하려 했는지 2~4문장 안에서 회의 개요처럼 정리한다.",
       "topics[].topic은 짧은 주제명만 적고 문장형 설명이나 중간 구분점(예: ·, /)을 길게 이어 붙이지 않는다.",
-      "topics[].summary는 해당 주제에서 실제로 논의된 배경, 쟁점, 맥락이 드러나도록 2~4문장까지 허용한다.",
-      "topics[].keyPoints는 각각 독립된 항목으로 나누고, 필요하면 비즈니스 판단이나 논의 포인트가 읽히도록 한 줄 문장으로 적는다.",
+      "topics[].summary는 해당 주제가 왜 중요한지, 어떤 배경과 쟁점이 있었는지, 무엇이 정리되었는지가 드러나도록 2~3문장 안에서 적는다.",
+      "topics[].keyPoints는 2~4개 이내의 핵심 포인트만 남기고, 서로 비슷한 표현은 합친다.",
+      "topics 수는 최대 4개, decisions는 최대 5개, actionItems는 최대 5개, openQuestions는 최대 3개, risksOrDependencies는 최대 3개를 넘기지 않는다.",
+      "openQuestions는 실제로 미결정된 승인, 의사결정, 외부 확인, 의존성 문제만 포함하고, 없으면 빈 배열로 둔다.",
       `선택된 mode는 ${mode} 이다. ${modeInstructionMap[mode] || modeInstructionMap.general}`,
-      `선택된 style은 ${style} 이다. ${styleInstructionMap[style] || styleInstructionMap.default}`,
       "반드시 JSON만 반환한다.",
       "스키마는 meetingMeta, executiveSummary, topics, decisions, actionItems, openQuestions, risksOrDependencies, memoHighlights, sourceTrace, modeSpecific 이다.",
       "topics[]는 {topic, summary, keyPoints, decisions, openQuestions, source:{transcript,memo}} 형식이다.",
       "decisions[]는 {text, owner, confidence} 형식이다.",
       "actionItems[]는 {task, assignee, dueDate, status, source} 형식이다.",
-      "openQuestions[]는 짧은 문자열 배열로 작성하되, 아직 확정되지 않은 의사결정 항목이나 추가 검토 필요 사항도 포함할 수 있다.",
+      "openQuestions[]는 짧은 문자열 배열로 작성하되, 아직 확정되지 않은 의사결정이나 외부 확인 필요 사항만 포함한다.",
       "risksOrDependencies[]는 {text, severity} 형식이고, 리스크, 제약, 선행조건, 외부 의존성, 현실적인 난점을 담는다.",
       "meetingMeta.title은 이 기록을 구분할 짧고 구체적인 한국어 제목 한 줄로 작성한다.",
       "meetingMeta.title은 범용적인 '회의', '회의록', '미팅'만 단독으로 쓰지 말고 핵심 주제를 드러낸다.",
@@ -3708,23 +3699,28 @@ function registerMeetingHandlers(deps) {
     ].join(" ");
   }
 
-  function buildMeetingNotesSectionSystemPrompt(notesMode, notesStyle) {
+  function buildMeetingNotesSectionSystemPrompt(notesMode) {
     return [
-      buildMeetingNotesSystemPrompt(notesMode, notesStyle),
+      buildMeetingNotesSystemPrompt(notesMode),
       "지금 입력되는 전사는 전체 회의 중 일부 구간이다.",
       "이 구간에 실제로 나온 내용만 정리하고, 전체 회의 결론처럼 과하게 단정하지 않는다.",
-      "meetingMeta와 modeSpecific은 비워도 되며, sourceTrace에는 section 근거를 남겨도 된다.",
+      "meetingMeta와 modeSpecific은 비워도 되며, sourceTrace에는 꼭 필요한 section 근거만 남긴다.",
+      "구간 요약에서는 executiveSummary 1~2개, topics 최대 2개, decisions/actionItems 각각 최대 2개, openQuestions/risksOrDependencies는 정말 필요한 경우만 남긴다.",
+      "구간 요약도 맥락이 보이게 정리하고, topics[].summary에는 왜 이 논의가 나왔고 어떤 판단이나 미결정으로 이어졌는지 짧게 남긴다.",
     ].join(" ");
   }
 
-  function buildMeetingNotesReducerPrompt(transcript, meeting, context, notesMode, notesStyle, partialSummaries) {
+  function buildMeetingNotesReducerPrompt(transcript, meeting, context, notesMode, partialSummaries) {
     return [
       `회의 제목: ${normalizeText(meeting?.title) || "미정"}`,
       `언어: ${normalizeText(meeting?.language) || "ko"}`,
       `정리 형식(내부 판단): ${normalizeMeetingNotesMode(notesMode) || DEFAULT_NOTES_MODE}`,
-      `표현 방식: ${normalizeMeetingNotesStyle(notesStyle) || DEFAULT_NOTES_STYLE}`,
       `공용 메모: ${normalizeTextBlock(context?.sharedMemoSnapshot) || "없음"}`,
       "아래는 긴 전사를 여러 구간으로 나눈 중간 정리 결과입니다. 중복을 제거하고 회의 전체 관점에서 하나의 최종 회의록 JSON으로 통합해 주세요.",
+      "최종 결과는 사람이 바로 읽는 회의록처럼 간결하게 정리하고, 비슷한 토픽/결정/액션은 합친다.",
+      "특히 executiveSummary와 topics[].summary는 전체 흐름이 이해되게 다시 써야 한다. 무엇이 배경이었고, 어떤 쟁점이 오갔고, 무엇이 정리되었는지가 보이게 만든다.",
+      "최종 결과의 상한은 executiveSummary 1~3개, topics 최대 4개, decisions 최대 5개, actionItems 최대 5개, openQuestions 최대 3개, risksOrDependencies 최대 3개다.",
+      "후속 실행 항목에는 실제 행동만 남기고, 단순한 검토 필요나 논의 필요 문구는 openQuestions 또는 risksOrDependencies로 정리한다.",
       `전사 발췌:\n${buildMeetingNotesTranscriptPrompt(transcript, { strategy: "balanced" })}`,
       partialSummaries
         .map((summary, index) => `[구간 ${index + 1}/${partialSummaries.length}]\n${JSON.stringify(summary)}`)
@@ -3737,7 +3733,6 @@ function registerMeetingHandlers(deps) {
     meeting,
     context,
     notesMode,
-    notesStyle,
     transcriptPrompt,
     sectionIndex,
     totalSections
@@ -3746,33 +3741,30 @@ function registerMeetingHandlers(deps) {
       `회의 제목: ${normalizeText(meeting?.title) || "미정"}`,
       `언어: ${normalizeText(meeting?.language) || "ko"}`,
       `정리 형식(내부 판단): ${normalizeMeetingNotesMode(notesMode) || DEFAULT_NOTES_MODE}`,
-      `표현 방식: ${normalizeMeetingNotesStyle(notesStyle) || DEFAULT_NOTES_STYLE}`,
       `공용 메모: ${normalizeTextBlock(context?.sharedMemoSnapshot) || "없음"}`,
       `전체 ${totalSections}개 구간 중 ${sectionIndex + 1}번째 구간입니다.`,
-      "아래 구간 전사에서 실제로 언급된 논의, 결정, 액션, 쟁점만 추출해 주세요.",
+      "아래 구간 전사에서 실제로 언급된 논의, 결정, 액션, 쟁점을 정리해 주세요. 단순 키워드 추출보다 왜 이 얘기가 나왔고 어떤 판단으로 이어졌는지가 드러나게 써 주세요.",
       transcriptPrompt,
     ].join("\n\n");
   }
 
-  function buildMeetingNotesUserPromptFromText(transcript, meeting, context, notesMode, notesStyle, transcriptPrompt) {
+  function buildMeetingNotesUserPromptFromText(transcript, meeting, context, notesMode, transcriptPrompt) {
     return [
       `회의 제목: ${normalizeText(meeting?.title) || "미정"}`,
       `언어: ${normalizeText(meeting?.language) || "ko"}`,
       `정리 형식(내부 판단): ${normalizeMeetingNotesMode(notesMode) || DEFAULT_NOTES_MODE}`,
-      `표현 방식: ${normalizeMeetingNotesStyle(notesStyle) || DEFAULT_NOTES_STYLE}`,
       `공용 메모: ${normalizeTextBlock(context?.sharedMemoSnapshot) || "없음"}`,
-      "아래 전사를 기반으로 회의록을 정리해 주세요.",
+      "아래 전사를 기반으로 회의록을 정리해 주세요. 왜 이 회의가 열렸고, 어떤 논의 흐름으로 결론이나 미결정 사항이 나왔는지가 보이게 써 주세요.",
       transcriptPrompt,
     ].join("\n\n");
   }
 
-  function buildMeetingNotesUserPrompt(transcript, meeting, context, notesMode, notesStyle) {
+  function buildMeetingNotesUserPrompt(transcript, meeting, context, notesMode) {
     return buildMeetingNotesUserPromptFromText(
       transcript,
       meeting,
       context,
       notesMode,
-      notesStyle,
       buildMeetingNotesTranscriptPrompt(transcript)
     );
   }
@@ -3782,14 +3774,180 @@ function registerMeetingHandlers(deps) {
     return {
       actionItems: normalizeMeetingActionItems(parsed.actionItems),
       decisions: normalizeMeetingDecisionItems(parsed.decisions),
-      executiveSummary: normalizeTextList(parsed.executiveSummary),
-      openQuestions: normalizeTextList(parsed.openQuestions),
+      executiveSummary: normalizeMeetingSummaryItems(parsed.executiveSummary, 2),
+      openQuestions: normalizeMeetingOpenQuestions(parsed.openQuestions, 2),
       risksOrDependencies: normalizeMeetingRisks(parsed.risksOrDependencies),
       sourceTrace: normalizeMeetingSourceTrace(parsed.sourceTrace),
-      topics: normalizeMeetingTopics(parsed.topics),
+      topics: normalizeMeetingTopics(parsed.topics, 2),
     };
   }
 
+}
+
+function buildTranscriptText(segments) {
+  return (Array.isArray(segments) ? segments : [])
+    .map((segment) => normalizeText(segment.text))
+    .filter(Boolean)
+    .join(" ");
+}
+
+function splitTranscriptTextIntoReviewPieces(text) {
+  const normalized = normalizeTextBlock(text).replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return [];
+  }
+  const paragraphs = normalized
+    .split("\n")
+    .map((part) => normalizeText(part))
+    .filter(Boolean);
+  const pieces = [];
+  for (const paragraph of paragraphs.length ? paragraphs : [normalized]) {
+    const sentenceMatches = paragraph.match(/[^.!?。！？…]+(?:[.!?。！？…]+|$)/g) || [paragraph];
+    for (const sentence of sentenceMatches) {
+      const normalizedSentence = normalizeText(sentence);
+      if (!normalizedSentence) {
+        continue;
+      }
+      if (normalizedSentence.length <= MAX_REVIEW_SEGMENT_CHARS) {
+        pieces.push(normalizedSentence);
+        continue;
+      }
+      const words = normalizedSentence.split(/\s+/).filter(Boolean);
+      if (words.length <= 1) {
+        for (let index = 0; index < normalizedSentence.length; index += TARGET_REVIEW_SEGMENT_CHARS) {
+          pieces.push(normalizeText(normalizedSentence.slice(index, index + TARGET_REVIEW_SEGMENT_CHARS)));
+        }
+        continue;
+      }
+      let currentWords = [];
+      let currentLength = 0;
+      for (const word of words) {
+        const nextLength = currentWords.length ? currentLength + word.length + 1 : word.length;
+        if (currentWords.length && nextLength > TARGET_REVIEW_SEGMENT_CHARS) {
+          pieces.push(currentWords.join(" "));
+          currentWords = [word];
+          currentLength = word.length;
+          continue;
+        }
+        currentWords.push(word);
+        currentLength = nextLength;
+      }
+      if (currentWords.length) {
+        pieces.push(currentWords.join(" "));
+      }
+    }
+  }
+  return pieces.filter(Boolean);
+}
+
+function buildTimedTranscriptReviewUnits(segments) {
+  const units = [];
+  for (const segment of Array.isArray(segments) ? segments : []) {
+    const normalizedSegment = normalizeTranscriptSegment(segment);
+    const text = normalizeText(normalizedSegment.text);
+    if (!text) {
+      continue;
+    }
+    const durationMs = Math.max(1, normalizedSegment.endMs - normalizedSegment.startMs);
+    const pieces = splitTranscriptTextIntoReviewPieces(text);
+    if (pieces.length <= 1) {
+      units.push(normalizedSegment);
+      continue;
+    }
+    const totalChars = Math.max(1, pieces.reduce((sum, piece) => sum + piece.length, 0));
+    let cursorMs = normalizedSegment.startMs;
+    pieces.forEach((piece, index) => {
+      const remainingDurationMs = Math.max(1, normalizedSegment.endMs - cursorMs);
+      const pieceDurationMs = index === pieces.length - 1
+        ? remainingDurationMs
+        : Math.max(1, Math.round(durationMs * (piece.length / totalChars)));
+      const nextEndMs = index === pieces.length - 1
+        ? normalizedSegment.endMs
+        : Math.min(normalizedSegment.endMs, Math.max(cursorMs + 1, cursorMs + pieceDurationMs));
+      units.push({
+        endMs: nextEndMs,
+        startMs: cursorMs,
+        text: piece,
+      });
+      cursorMs = nextEndMs;
+    });
+  }
+  return units;
+}
+
+function shouldMergeReviewSegments(current, next) {
+  if (!current || !next) {
+    return false;
+  }
+  const gapMs = Math.max(0, Number(next.startMs) - Number(current.endMs));
+  if (gapMs > 2500) {
+    return false;
+  }
+  const currentDurationMs = Math.max(1, Number(current.endMs) - Number(current.startMs));
+  const nextDurationMs = Math.max(1, Number(next.endMs) - Number(next.startMs));
+  const mergedDurationMs = Math.max(1, Number(next.endMs) - Number(current.startMs));
+  const mergedTextLength = normalizeText(current.text).length + 1 + normalizeText(next.text).length;
+  if (mergedTextLength > MAX_REVIEW_SEGMENT_CHARS || mergedDurationMs > MAX_REVIEW_SEGMENT_DURATION_MS) {
+    return false;
+  }
+  return (
+    currentDurationMs < TARGET_REVIEW_SEGMENT_DURATION_MS
+    || normalizeText(current.text).length < TARGET_REVIEW_SEGMENT_CHARS
+    || nextDurationMs < MIN_REVIEW_SEGMENT_DURATION_MS
+    || normalizeText(next.text).length < MIN_REVIEW_SEGMENT_CHARS
+  );
+}
+
+function mergeReviewSegments(current, next) {
+  return {
+    endMs: Math.max(Number(current?.endMs) || 0, Number(next?.endMs) || 0),
+    startMs: Math.max(0, Number(current?.startMs) || 0),
+    text: [normalizeText(current?.text), normalizeText(next?.text)].filter(Boolean).join(" "),
+  };
+}
+
+function resegmentTranscriptForReview(segments) {
+  const reviewUnits = buildTimedTranscriptReviewUnits(segments);
+  if (!reviewUnits.length) {
+    return [];
+  }
+  const merged = [];
+  let current = null;
+  for (const unit of reviewUnits) {
+    const normalizedUnit = normalizeTranscriptSegment(unit);
+    if (!normalizeText(normalizedUnit.text)) {
+      continue;
+    }
+    if (!current) {
+      current = normalizedUnit;
+      continue;
+    }
+    if (shouldMergeReviewSegments(current, normalizedUnit)) {
+      current = mergeReviewSegments(current, normalizedUnit);
+      continue;
+    }
+    merged.push(current);
+    current = normalizedUnit;
+  }
+  if (current) {
+    merged.push(current);
+  }
+  const finalized = [];
+  for (const segment of merged) {
+    const previous = finalized[finalized.length - 1];
+    const durationMs = Math.max(1, Number(segment.endMs) - Number(segment.startMs));
+    if (
+      previous
+      && durationMs < MIN_REVIEW_SEGMENT_DURATION_MS
+      && normalizeText(segment.text).length < MIN_REVIEW_SEGMENT_CHARS
+      && shouldMergeReviewSegments(previous, segment)
+    ) {
+      finalized[finalized.length - 1] = mergeReviewSegments(previous, segment);
+      continue;
+    }
+    finalized.push(segment);
+  }
+  return finalized.map(normalizeTranscriptSegment).filter((segment) => normalizeText(segment.text));
 }
 
 function normalizeMeetingRequest(input) {
@@ -4024,9 +4182,8 @@ function normalizeMeetingContext(input) {
     };
 }
 
-function createEmptyMeetingNotesBundle(selectedMode, detectedMode, selectedStyle, statusInput, degradedReasonInput) {
+function createEmptyMeetingNotesBundle(selectedMode, detectedMode, statusInput, degradedReasonInput) {
   const selected = normalizeMeetingNotesMode(selectedMode) || normalizeMeetingNotesMode(detectedMode?.notesModeDetected) || DEFAULT_NOTES_MODE;
-  const notesStyleSelected = normalizeMeetingNotesStyle(selectedStyle) || DEFAULT_NOTES_STYLE;
   return {
     notes: normalizeMeetingNotes({
       meetingMeta: {
@@ -4040,7 +4197,6 @@ function createEmptyMeetingNotesBundle(selectedMode, detectedMode, selectedStyle
     notesModeDetected: normalizeMeetingNotesMode(detectedMode?.notesModeDetected) || selected,
     notesModeSelected: selected,
     notesStatus: normalizeMeetingNotesStatus(statusInput) || "skipped",
-    notesStyleSelected,
     notesSchemaVersion: NOTES_SCHEMA_VERSION,
   };
 }
@@ -4058,7 +4214,7 @@ function createEmptyMeetingNotesBundle(selectedMode, detectedMode, selectedStyle
       return {
         actionItems: normalizeMeetingActionItems(notes.actionItems),
         decisions: normalizeMeetingDecisionItems(notes.decisions),
-        executiveSummary: normalizeTextList(notes.executiveSummary),
+        executiveSummary: normalizeMeetingSummaryItems(notes.executiveSummary),
       meetingMeta: {
         datetime: normalizeText(notes.meetingMeta?.datetime),
         participants: normalizeTextList(notes.meetingMeta?.participants),
@@ -4069,7 +4225,7 @@ function createEmptyMeetingNotesBundle(selectedMode, detectedMode, selectedStyle
       memoHighlights: normalizeMeetingMemoHighlights(notes.memoHighlights),
         mode: normalizedMode,
         modeSpecific: normalizeMeetingModeSpecific(notes.modeSpecific, normalizedMode),
-        openQuestions: normalizeTextList(notes.openQuestions),
+        openQuestions: normalizeMeetingOpenQuestions(notes.openQuestions),
         risksOrDependencies: normalizeMeetingRisks(notes.risksOrDependencies),
         sourceTrace: normalizeMeetingSourceTrace(notes.sourceTrace),
         topics: normalizeMeetingTopics(notes.topics),
@@ -4087,7 +4243,7 @@ function createEmptyMeetingNotesBundle(selectedMode, detectedMode, selectedStyle
   return {
     actionItems: [...legacyActionItems, ...legacyNextSteps],
     decisions: normalizeMeetingDecisionItems(notes.decisions),
-    executiveSummary: normalizeTextList([notes.overview]),
+    executiveSummary: normalizeMeetingSummaryItems([notes.overview]),
     meetingMeta: {
       datetime: "",
       participants: [],
@@ -4119,8 +4275,53 @@ function createEmptyMeetingNotesBundle(selectedMode, detectedMode, selectedStyle
   };
 }
 
-function normalizeMeetingActionItems(input) {
-  return (Array.isArray(input) ? input : [])
+function normalizeMeetingComparisonText(value) {
+  return normalizeText(value)
+    .toLowerCase()
+    .replace(/[\s"'`~!@#$%^&*()_+\-=[\]{};:,.<>/?\\|]+/g, " ")
+    .trim();
+}
+
+function dedupeMeetingItems(items, getKey, maxItems) {
+  const seen = new Set();
+  const deduped = [];
+  for (const item of Array.isArray(items) ? items : []) {
+    const key = normalizeText(typeof getKey === "function" ? getKey(item) : "") || crypto.randomUUID();
+    if (!key || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    deduped.push(item);
+    if (maxItems > 0 && deduped.length >= maxItems) {
+      break;
+    }
+  }
+  return deduped;
+}
+
+function normalizeMeetingOpenQuestions(input, maxItems = MAX_MEETING_NOTES_OPEN_QUESTIONS) {
+  const normalized = normalizeTextList(input)
+    .map((item) => normalizeText(item))
+    .filter(Boolean)
+    .filter((item) => !/^(추가\s*)?(논의|검토|확인)\s*필요\s*(사항)?$/i.test(item));
+  return dedupeMeetingItems(normalized, (item) => normalizeMeetingComparisonText(item), maxItems);
+}
+
+function normalizeMeetingSummaryItems(input, maxItems = MAX_MEETING_NOTES_SUMMARY_ITEMS) {
+  const normalized = normalizeTextList(input).map((item) => normalizeText(item)).filter(Boolean);
+  return dedupeMeetingItems(normalized, (item) => normalizeMeetingComparisonText(item), maxItems);
+}
+
+function isWeakMeetingActionTask(task) {
+  const normalizedTask = normalizeText(task);
+  if (!normalizedTask) {
+    return true;
+  }
+  return /(검토가 필요|논의가 필요|추가 확인이 필요|추가 논의가 필요|결정이 필요|추가 검토 필요|추가 논의 필요)$/i.test(normalizedTask);
+}
+
+function normalizeMeetingActionItems(input, maxItems = MAX_MEETING_NOTES_ACTION_ITEMS) {
+  const normalized = (Array.isArray(input) ? input : [])
     .map((item) => {
       if (typeof item === "string") {
         return {
@@ -4139,11 +4340,17 @@ function normalizeMeetingActionItems(input) {
         task: normalizeText(item?.task || item?.text),
       };
     })
-    .filter((item) => item.task);
+    .filter((item) => item.task)
+    .filter((item) => !isWeakMeetingActionTask(item.task) || item.assignee || item.dueDate);
+  return dedupeMeetingItems(
+    normalized,
+    (item) => normalizeMeetingComparisonText(item.task),
+    maxItems
+  );
 }
 
-function normalizeMeetingDecisionItems(input) {
-  return (Array.isArray(input) ? input : [])
+function normalizeMeetingDecisionItems(input, maxItems = MAX_MEETING_NOTES_DECISIONS) {
+  const normalized = (Array.isArray(input) ? input : [])
     .map((item) => {
       if (typeof item === "string") {
         return {
@@ -4159,26 +4366,51 @@ function normalizeMeetingDecisionItems(input) {
       };
     })
     .filter((item) => item.text);
+  return dedupeMeetingItems(
+    normalized,
+    (item) => normalizeMeetingComparisonText(item.text),
+    maxItems
+  );
 }
 
-function normalizeMeetingTopics(input) {
-  return (Array.isArray(input) ? input : [])
-    .map((item) => ({
-      decisions: normalizeTextList(item?.decisions),
-      keyPoints: normalizeTextList(item?.keyPoints),
-      openQuestions: normalizeTextList(item?.openQuestions),
-      source: {
-        memo: Boolean(item?.source?.memo),
-        transcript: item?.source?.transcript !== false,
-      },
-      summary: normalizeText(item?.summary),
-      topic: normalizeText(item?.topic),
-    }))
+function normalizeMeetingTopics(input, maxItems = MAX_MEETING_NOTES_TOPIC_COUNT) {
+  const normalized = (Array.isArray(input) ? input : [])
+    .map((item) => {
+      const topic = normalizeText(item?.topic);
+      const summary = normalizeText(item?.summary);
+      const keyPoints = dedupeMeetingItems(
+        normalizeTextList(item?.keyPoints),
+        (value) => normalizeMeetingComparisonText(value),
+        MAX_MEETING_NOTES_TOPIC_KEY_POINTS
+      );
+      const decisions = dedupeMeetingItems(
+        normalizeTextList(item?.decisions),
+        (value) => normalizeMeetingComparisonText(value),
+        MAX_MEETING_NOTES_TOPIC_DECISIONS
+      );
+      const openQuestions = normalizeMeetingOpenQuestions(item?.openQuestions, MAX_MEETING_NOTES_TOPIC_OPEN_QUESTIONS);
+      return {
+        decisions,
+        keyPoints,
+        openQuestions,
+        source: {
+          memo: Boolean(item?.source?.memo),
+          transcript: item?.source?.transcript !== false,
+        },
+        summary: summary && normalizeMeetingComparisonText(summary) !== normalizeMeetingComparisonText(topic) ? summary : "",
+        topic,
+      };
+    })
     .filter((item) => item.topic || item.summary || item.keyPoints.length || item.decisions.length || item.openQuestions.length);
+  return dedupeMeetingItems(
+    normalized,
+    (item) => normalizeMeetingComparisonText(item.topic || item.summary || item.keyPoints[0]),
+    maxItems
+  );
 }
 
-function normalizeMeetingRisks(input) {
-  return (Array.isArray(input) ? input : [])
+function normalizeMeetingRisks(input, maxItems = MAX_MEETING_NOTES_RISKS) {
+  const normalized = (Array.isArray(input) ? input : [])
     .map((item) => {
       if (typeof item === "string") {
         return {
@@ -4192,10 +4424,15 @@ function normalizeMeetingRisks(input) {
       };
     })
     .filter((item) => item.text);
+  return dedupeMeetingItems(
+    normalized,
+    (item) => normalizeMeetingComparisonText(item.text),
+    maxItems
+  );
 }
 
-function normalizeMeetingMemoHighlights(input) {
-  return (Array.isArray(input) ? input : [])
+function normalizeMeetingMemoHighlights(input, maxItems = MAX_MEETING_NOTES_MEMO_HIGHLIGHTS) {
+  const normalized = (Array.isArray(input) ? input : [])
     .map((item) => {
       if (typeof item === "string") {
         return {
@@ -4211,16 +4448,26 @@ function normalizeMeetingMemoHighlights(input) {
       };
     })
     .filter((item) => item.text);
+  return dedupeMeetingItems(
+    normalized,
+    (item) => normalizeMeetingComparisonText(item.text),
+    maxItems
+  );
 }
 
-function normalizeMeetingSourceTrace(input) {
-  return (Array.isArray(input) ? input : [])
+function normalizeMeetingSourceTrace(input, maxItems = MAX_MEETING_NOTES_SOURCE_TRACE) {
+  const normalized = (Array.isArray(input) ? input : [])
     .map((item) => ({
       evidence: normalizeText(item?.evidence),
       itemRef: normalizeText(item?.itemRef),
       itemType: normalizeText(item?.itemType),
     }))
     .filter((item) => item.itemType || item.itemRef || item.evidence);
+  return dedupeMeetingItems(
+    normalized,
+    (item) => normalizeMeetingComparisonText(`${item.itemType} ${item.itemRef} ${item.evidence}`),
+    maxItems
+  );
 }
 
 function normalizeMeetingModeSpecific(input, notesMode) {
@@ -4228,24 +4475,24 @@ function normalizeMeetingModeSpecific(input, notesMode) {
   const data = input && typeof input === "object" ? input : {};
   if (mode === "interview") {
     return {
-      concerns: normalizeTextList(data.concerns),
-      followUpQuestions: normalizeTextList(data.followUpQuestions),
-      strengths: normalizeTextList(data.strengths),
+      concerns: normalizeMeetingSummaryItems(data.concerns, 3),
+      followUpQuestions: normalizeMeetingOpenQuestions(data.followUpQuestions, 3),
+      strengths: normalizeMeetingSummaryItems(data.strengths, 3),
     };
   }
   if (mode === "review") {
     return {
-      improvements: normalizeTextList(data.improvements),
-      problems: normalizeTextList(data.problems),
-      rootCauses: normalizeTextList(data.rootCauses),
-      wins: normalizeTextList(data.wins),
+      improvements: normalizeMeetingSummaryItems(data.improvements, 4),
+      problems: normalizeMeetingSummaryItems(data.problems, 4),
+      rootCauses: normalizeMeetingSummaryItems(data.rootCauses, 3),
+      wins: normalizeMeetingSummaryItems(data.wins, 3),
     };
   }
   if (mode === "planning") {
     return {
-      dependencies: normalizeTextList(data.dependencies),
-      milestones: normalizeTextList(data.milestones),
-      scopeItems: normalizeTextList(data.scopeItems),
+      dependencies: normalizeMeetingSummaryItems(data.dependencies, 4),
+      milestones: normalizeMeetingSummaryItems(data.milestones, 4),
+      scopeItems: normalizeMeetingSummaryItems(data.scopeItems, 4),
     };
   }
   return {};
@@ -4491,7 +4738,6 @@ function normalizeMeetingNotesRegenerateRequest(input) {
     jobId: normalizeText(input?.jobId),
     meetingId: normalizeText(input?.meetingId),
     notesMode: normalizeMeetingNotesMode(input?.notesMode),
-    notesStyle: normalizeMeetingNotesStyle(input?.notesStyle) || DEFAULT_NOTES_STYLE,
     sharedMemo: normalizeTextBlock(input?.sharedMemo).slice(0, MAX_SHARED_MEMO_CHARS),
   };
 }
@@ -4560,7 +4806,6 @@ function buildQueuedJob(jobId, meeting, owner, options, source, context, created
     notesModeDetected: "",
     notesModeSelected: "",
     notesStatus: options.summary ? "pending" : "disabled",
-    notesStyleSelected: DEFAULT_NOTES_STYLE,
     notesSchemaVersion: NOTES_SCHEMA_VERSION,
     options,
     owner: owner ? { ...owner } : {},
@@ -4629,7 +4874,6 @@ function buildSucceededJobPatch(artifact, meeting, options, source, context, tra
     notesModeDetected: normalizeMeetingNotesMode(meetingNotes?.notesModeDetected),
     notesModeSelected: normalizeMeetingNotesMode(meetingNotes?.notesModeSelected),
     notesStatus: normalizeMeetingNotesStatus(meetingNotes?.notesStatus),
-    notesStyleSelected: normalizeMeetingNotesStyle(meetingNotes?.notesStyleSelected) || DEFAULT_NOTES_STYLE,
     notesSchemaVersion: Math.max(1, Number(meetingNotes?.notesSchemaVersion) || NOTES_SCHEMA_VERSION),
     title: resultTitle,
     transcript: {
@@ -4665,7 +4909,6 @@ function buildTranscriptArtifact(artifactId, jobId, meeting, owner, transcript, 
     notesModeDetected: normalizeMeetingNotesMode(meetingNotes?.notesModeDetected),
     notesModeSelected: normalizeMeetingNotesMode(meetingNotes?.notesModeSelected),
     notesStatus: normalizeMeetingNotesStatus(meetingNotes?.notesStatus),
-    notesStyleSelected: normalizeMeetingNotesStyle(meetingNotes?.notesStyleSelected) || DEFAULT_NOTES_STYLE,
     notesSchemaVersion: Math.max(1, Number(meetingNotes?.notesSchemaVersion) || NOTES_SCHEMA_VERSION),
     owner: owner ? { ...owner } : {},
     segments: transcript.segments,
@@ -4829,12 +5072,13 @@ function normalizeTranscriptionResponse(response, fallbackDurationMs) {
     }
   }
 
-  const transcriptText = segments.length
-    ? segments.map((segment) => segment.text).join(" ")
+  const reviewSegments = resegmentTranscriptForReview(segments);
+  const transcriptText = reviewSegments.length
+    ? reviewSegments.map((segment) => segment.text).join(" ")
     : normalizeText(response?.text);
 
   return {
-    segments,
+    segments: reviewSegments,
     text: transcriptText,
   };
 }
@@ -4871,7 +5115,6 @@ function normalizeMeetingJob(input) {
     notesModeDetected: normalizeMeetingNotesMode(job.notesModeDetected),
     notesModeSelected: normalizeMeetingNotesMode(job.notesModeSelected),
     notesStatus: normalizeMeetingNotesStatus(job.notesStatus),
-    notesStyleSelected: normalizeMeetingNotesStyle(job.notesStyleSelected) || DEFAULT_NOTES_STYLE,
     notesSchemaVersion: Math.max(1, Number(job.notesSchemaVersion) || NOTES_SCHEMA_VERSION),
     options: {
       redaction: normalizeText(job.options?.redaction),
@@ -4924,7 +5167,6 @@ function normalizeMeetingArtifact(input) {
     notesModeDetected: normalizeMeetingNotesMode(artifact.notesModeDetected),
     notesModeSelected: normalizeMeetingNotesMode(artifact.notesModeSelected),
     notesStatus: normalizeMeetingNotesStatus(artifact.notesStatus),
-    notesStyleSelected: normalizeMeetingNotesStyle(artifact.notesStyleSelected) || DEFAULT_NOTES_STYLE,
     notesSchemaVersion: Math.max(1, Number(artifact.notesSchemaVersion) || NOTES_SCHEMA_VERSION),
     owner: artifact.owner && typeof artifact.owner === "object" ? { ...artifact.owner } : {},
     segments: Array.isArray(artifact.segments) ? artifact.segments.map(normalizeTranscriptSegment) : [],
@@ -5000,7 +5242,6 @@ function normalizeMeetingResultSummary(input) {
     notesModeDetected: normalizeMeetingNotesMode(item.notesModeDetected),
     notesModeSelected: normalizeMeetingNotesMode(item.notesModeSelected),
     notesStatus: normalizeMeetingNotesStatus(item.notesStatus),
-    notesStyleSelected: normalizeMeetingNotesStyle(item.notesStyleSelected) || DEFAULT_NOTES_STYLE,
     notesSchemaVersion: Math.max(1, Number(item.notesSchemaVersion) || NOTES_SCHEMA_VERSION),
     previewText: normalizeText(item.previewText || item.excerpt),
     jobId: normalizeText(item.jobId),
@@ -5032,7 +5273,6 @@ function buildMeetingResultSummary(jobInput, artifactInput) {
     notesModeDetected: normalizeMeetingNotesMode(artifact?.notesModeDetected || job.notesModeDetected),
     notesModeSelected: normalizeMeetingNotesMode(artifact?.notesModeSelected || job.notesModeSelected),
     notesStatus: normalizeMeetingNotesStatus(artifact?.notesStatus || job.notesStatus),
-    notesStyleSelected: normalizeMeetingNotesStyle(artifact?.notesStyleSelected || job.notesStyleSelected) || DEFAULT_NOTES_STYLE,
     notesSchemaVersion: Math.max(1, Number(artifact?.notesSchemaVersion || job.notesSchemaVersion) || NOTES_SCHEMA_VERSION),
     previewText: notesPreview || buildTranscriptExcerpt(transcriptText),
     requestId: normalizeText(job.source.requestId),
@@ -5197,11 +5437,6 @@ function normalizeMeetingNotesMode(value) {
 function normalizeMeetingNotesStatus(value) {
   const normalized = normalizeText(value).toLowerCase();
   return SUPPORTED_NOTES_STATUSES.has(normalized) ? normalized : "";
-}
-
-function normalizeMeetingNotesStyle(value) {
-  const normalized = normalizeText(value).toLowerCase();
-  return SUPPORTED_NOTES_STYLES.has(normalized) ? normalized : "";
 }
 
 function normalizeConfidence(value) {
