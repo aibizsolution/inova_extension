@@ -62,6 +62,8 @@
       currentDetailSelectionId: "",
       currentJob: null,
       currentLocalRecord: null,
+      debugNotice: { sticky: false, text: "", tone: "" },
+      debugNoticeTimer: 0,
       debugPanelCollapsed: readDebugPanelCollapsed(),
       isLocalWorkspace: isLocalWorkspaceOrigin(global),
       loading: false,
@@ -109,7 +111,7 @@
   }
 
   function cacheRefs() {
-    for (const id of ["meetingShell", "blockedMessage", "blockedEyebrow", "blockedTitle", "blockedState", "workspace", "pageTitle", "pageSummary", "workspaceBadge", "offlineQueueBadge", "refreshButton", "meetingTitleInput", "saveMeetingTitleButton", "deleteMeetingButton", "meetingStatusChip", "currentBadge", "currentSummary", "currentHint", "currentNotice", "currentTimer", "startButton", "importAudioButton", "importAudioInput", "pauseButton", "resumeButton", "stopButton", "discardButton", "sharedMemoInput", "saveSharedMemoButton", "clearSharedMemoButton", "sharedMemoNotice", "recordCountBadge", "recordList", "detailTitle", "detailBadge", "detailSummary", "recordTitleGroup", "recordTitleInput", "saveRecordTitleButton", "downloadRecordButton", "deleteRecordButton", "detailMeta", "speakerEditor", "speakerAliasList", "saveSpeakerAliasesButton", "saveSpeakerAliasesAndRegenerateButton", "copySegmentsButton", "detailMemoText", "reviewTabSummary", "reviewTabMemo", "reviewTabNotes", "reviewTabSegments", "reviewTabSegmentsCount", "reviewTabSpeakers", "reviewPanelSummary", "summaryStatusPill", "summaryStatusGrid", "summaryActionCard", "reviewPanelMemo", "meetingNotesCard", "reviewPanelSegments", "reviewPanelSpeakers", "speakerDigestList", "notesSummaryMeta", "notesStyleSelect", "regenerateNotesButton", "meetingNotesOverview", "meetingNotesSections", "detailNotice", "segmentList", "debugPanel", "debugPanelCard", "debugPanelBody", "debugStatus", "debugLog", "debugFabButton", "debugFabBadge", "copyDebugButton", "copyDebugErrorsButton", "clearDebugButton", "toggleDebugPanelButton", "confirmOverlay", "confirmDialog", "confirmDialogEyebrow", "confirmDialogTitle", "confirmDialogBody", "confirmDialogCancel", "confirmDialogConfirm"]) {
+    for (const id of ["meetingShell", "blockedMessage", "blockedEyebrow", "blockedTitle", "blockedState", "workspace", "pageTitle", "pageSummary", "workspaceBadge", "offlineQueueBadge", "refreshButton", "meetingTitleInput", "saveMeetingTitleButton", "deleteMeetingButton", "meetingStatusChip", "currentBadge", "currentSummary", "currentHint", "currentNotice", "currentTimer", "startButton", "importAudioButton", "importAudioInput", "pauseButton", "resumeButton", "stopButton", "discardButton", "sharedMemoInput", "saveSharedMemoButton", "clearSharedMemoButton", "sharedMemoNotice", "recordCountBadge", "recordList", "detailTitle", "detailBadge", "detailSummary", "recordTitleGroup", "recordTitleInput", "saveRecordTitleButton", "downloadRecordButton", "deleteRecordButton", "detailMeta", "speakerEditor", "speakerAliasList", "saveSpeakerAliasesButton", "saveSpeakerAliasesAndRegenerateButton", "copySegmentsButton", "detailMemoText", "reviewTabSummary", "reviewTabMemo", "reviewTabNotes", "reviewTabSegments", "reviewTabSegmentsCount", "reviewTabSpeakers", "reviewPanelSummary", "summaryStatusPill", "summaryStatusGrid", "summaryActionCard", "reviewPanelMemo", "meetingNotesCard", "reviewPanelSegments", "reviewPanelSpeakers", "speakerDigestList", "notesSummaryMeta", "notesStyleSelect", "regenerateNotesButton", "meetingNotesOverview", "meetingNotesSections", "detailNotice", "segmentList", "debugPanel", "debugPanelCard", "debugPanelBody", "debugStatus", "debugNotice", "debugLog", "debugFabButton", "debugFabBadge", "copyDebugButton", "copyDebugErrorsButton", "clearDebugButton", "toggleDebugPanelButton", "confirmOverlay", "confirmDialog", "confirmDialogEyebrow", "confirmDialogTitle", "confirmDialogBody", "confirmDialogCancel", "confirmDialogConfirm"]) {
       refs[id] = global.document.getElementById(id);
     }
   }
@@ -544,6 +546,7 @@
     const listenerVersion = state.realtime.meetingListenerVersion + 1;
     state.realtime.meetingListenerVersion = listenerVersion;
 
+    let awaitingInitialSnapshot = true;
     const initialSnapshotResult = await Promise.race([
       new Promise((resolve) => {
         let settled = false;
@@ -561,7 +564,9 @@
           error: (error) => {
             if (listenerVersion !== state.realtime.meetingListenerVersion) return;
             const normalizedError = normalizeRealtimeError(error);
-            handleRealtimeListenerError(normalizedError, "meeting");
+            if (!awaitingInitialSnapshot) {
+              handleRealtimeListenerError(normalizedError, "meeting");
+            }
             finishReject(normalizedError);
           },
           next: (snapshot) => {
@@ -573,7 +578,9 @@
               .then(finishResolve)
               .catch((error) => {
                 const normalizedError = normalizeRealtimeError(error);
-                handleRealtimeListenerError(normalizedError, "meeting");
+                if (!awaitingInitialSnapshot) {
+                  handleRealtimeListenerError(normalizedError, "meeting");
+                }
                 finishReject(normalizedError);
               });
           },
@@ -587,8 +594,24 @@
           ]
         : []),
     ]);
+    awaitingInitialSnapshot = false;
 
     if (!initialSnapshotResult?.ok) {
+      if (isRealtimePermissionError(initialSnapshotResult.error) && options.allowPermissionRetry !== false) {
+        logDebug("workspace.refresh.permission-retry", {
+          meetingId: state.session.meetingId,
+          reason: options.reason,
+        });
+        disposeWorkspaceRealtime({ clearAuthCache: true });
+        setNotice("읽기 권한을 다시 확인하는 중입니다.", "highlight");
+        applyRender();
+        return connectWorkspaceRealtime({
+          ...options,
+          allowPermissionRetry: false,
+          forceReconnect: true,
+        });
+      }
+      handleRealtimeListenerError(initialSnapshotResult.error, "meeting");
       throw initialSnapshotResult.error;
     }
     if (initialSnapshotResult?.deferred) {
@@ -2106,6 +2129,13 @@
     syncDebugLogViewport(refs.debugLog, nextText);
   }
 
+  function renderDebugNotice() {
+    if (!refs.debugNotice) return;
+    refs.debugNotice.hidden = !state.debugNotice.text;
+    refs.debugNotice.textContent = state.debugNotice.text;
+    refs.debugNotice.dataset.tone = state.debugNotice.tone || "";
+  }
+
   function buildDebugStatusMarkup(summary) {
     return [
       renderDebugStatusItem("로그", summary?.totalLogs),
@@ -2159,6 +2189,8 @@
   function clearDebugLogPanel() {
     clearDebugEntries();
     logDebug("workspace.debug.cleared", {});
+    setDebugNotice("디버그 로그를 비웠습니다.", "highlight");
+    applyRender();
   }
 
   async function copyDebugLog() {
@@ -2167,12 +2199,12 @@
     try {
       if (typeof global.navigator?.clipboard?.writeText === "function") {
         await global.navigator.clipboard.writeText(text);
-        setNotice("디버그 로그를 복사했습니다.", "highlight");
+        setDebugNotice("디버그 로그를 복사했습니다.", "highlight");
       } else {
         throw new Error("Clipboard API unavailable");
       }
     } catch {
-      setNotice("클립보드 권한이 없어 로그 복사를 완료하지 못했어요.", "error");
+      setDebugNotice("클립보드 권한이 없어 로그 복사를 완료하지 못했어요.", "error");
     }
     applyRender();
   }
@@ -2180,19 +2212,19 @@
   async function copyDebugErrors() {
     const text = normalizeText(buildErrorCopyText(getDebugEntries()));
     if (!text) {
-      setNotice("복사할 오류 로그가 없습니다.", "highlight");
+      setDebugNotice("복사할 오류 로그가 없습니다.", "highlight");
       applyRender();
       return;
     }
     try {
       if (typeof global.navigator?.clipboard?.writeText === "function") {
         await global.navigator.clipboard.writeText(text);
-        setNotice("오류 로그를 복사했습니다.", "highlight");
+        setDebugNotice("오류 로그를 복사했습니다.", "highlight");
       } else {
         throw new Error("Clipboard API unavailable");
       }
     } catch {
-      setNotice("클립보드 권한이 없어 오류 로그 복사를 완료하지 못했어요.", "error");
+      setDebugNotice("클립보드 권한이 없어 오류 로그 복사를 완료하지 못했어요.", "error");
     }
     applyRender();
   }
@@ -2277,23 +2309,29 @@
     const suffix = normalizeText(requestId).slice(0, 8);
     return `${baseName}${suffix ? `-${suffix}` : ""}.${extension || "webm"}`;
   }
-  function setNotice(text, tone, options = {}) {
-    global.clearTimeout(state.noticeTimer);
+  function setScopedNotice(key, timerKey, text, tone, options = {}) {
+    global.clearTimeout(state[timerKey]);
     const nextText = normalizeText(text);
     const nextTone = normalizeText(tone);
     const sticky = Boolean(options?.sticky || nextTone === "error");
-    state.notice = { sticky, text: nextText, tone: nextTone };
+    state[key] = { sticky, text: nextText, tone: nextTone };
     if (!nextText || sticky) {
-      state.noticeTimer = 0;
+      state[timerKey] = 0;
       return;
     }
-    state.noticeTimer = global.setTimeout(() => {
-      if (state.notice.text === nextText && state.notice.tone === nextTone) {
-        state.notice = { sticky: false, text: "", tone: "" };
-        state.noticeTimer = 0;
+    state[timerKey] = global.setTimeout(() => {
+      if (state[key].text === nextText && state[key].tone === nextTone) {
+        state[key] = { sticky: false, text: "", tone: "" };
+        state[timerKey] = 0;
         applyRender();
       }
     }, 2600);
+  }
+  function setNotice(text, tone, options = {}) {
+    setScopedNotice("notice", "noticeTimer", text, tone, options);
+  }
+  function setDebugNotice(text, tone, options = {}) {
+    setScopedNotice("debugNotice", "debugNoticeTimer", text, tone, options);
   }
   function persistWorkspaceSession() { const entry = findHistoryEntry(state, state.selectedRecordId); const payload = { expiresAt: state.session.expiresAt, jobId: normalizeText(entry?.remote?.jobId || entry?.pending?.jobId), meetingId: state.session.meetingId, meetingSessionToken: state.session.meetingSessionToken, mode: state.mode, sharedMemo: normalizeTextBlock(state.recordMemoDraft || state.recordMemoSaved), supersededRemoteJobIds: collectSupersededRemoteJobIds(), title: normalizeText(state.meeting.title || state.session.title) }; state.supersededRemoteJobIds = payload.supersededRemoteJobIds; safeSessionStorageSet(global, SESSION_STORAGE_KEY, JSON.stringify(payload)); if (payload.meetingId) safeLocalStorageSet(global, buildWorkspaceSessionStorageKey(payload.meetingId), JSON.stringify(payload)); replaceCleanUrl(); }
   function clearWorkspaceSession() { try { global.sessionStorage.removeItem(SESSION_STORAGE_KEY); } catch {} if (state.session.meetingId) safeLocalStorageRemove(global, buildWorkspaceSessionStorageKey(state.session.meetingId)); disposeWorkspaceRealtime({ clearAuthCache: true }); }
@@ -2329,11 +2367,13 @@
       if (refs.blockedEyebrow) refs.blockedEyebrow.textContent = state.blockedEyebrow || "회의 작업실";
       if (refs.blockedTitle) refs.blockedTitle.textContent = state.blockedTitle || "이 작업실은 패널에서 다시 열어야 합니다";
       refs.blockedMessage.textContent = state.blockedMessage || refs.blockedMessage.textContent;
+      renderDebugNotice();
       return;
     }
     refs.blockedState.hidden = true;
     refs.workspace.hidden = false;
     renderWorkspace(state, refs);
+    renderDebugNotice();
     if (speakerInputFocusState?.speakerLabel && refs.speakerAliasList) {
       const speakerInput = Array.from(refs.speakerAliasList.querySelectorAll("input[data-speaker-label]"))
         .find((element) => normalizeText(element.dataset.speakerLabel) === speakerInputFocusState.speakerLabel);

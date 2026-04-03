@@ -1635,6 +1635,10 @@ select:disabled {
   margin-bottom: 10px;
 }
 
+.panel-card--debug .debug-panel__notice {
+  margin-bottom: 12px;
+}
+
 .panel-card--debug .inova-meeting-debug-console__status {
   display: inline-flex;
   align-items: center;
