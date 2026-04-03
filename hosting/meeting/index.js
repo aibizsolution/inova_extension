@@ -3176,6 +3176,64 @@
     };
   }
 
+  function buildLatestPendingUploadSnapshot(item) {
+    const normalizedRequestId = normalizeText(item?.requestId);
+    const currentPending = normalizedRequestId
+      ? state.pendingUploads.find((entry) => normalizeText(entry?.requestId) === normalizedRequestId)
+      : null;
+    const latestPending = normalizePendingUpload({
+      ...(item || {}),
+      ...(currentPending || {}),
+      blob: currentPending?.blob instanceof global.Blob
+        ? currentPending.blob
+        : item?.blob instanceof global.Blob
+          ? item.blob
+          : null,
+    });
+    if (normalizeText(latestPending?.sourceMode) !== "chunked") {
+      return latestPending;
+    }
+    const runtimeChunk = normalizedRequestId ? state.runtimeChunkCache[normalizedRequestId] : null;
+    const pendingParts = Array.isArray(latestPending?.parts) ? latestPending.parts : [];
+    const cachedParts = Array.isArray(runtimeChunk?.parts) ? runtimeChunk.parts : [];
+    const indexedParts = new Map();
+    for (const part of [...cachedParts, ...pendingParts]) {
+      const normalizedPart = part && typeof part === "object" ? part : {};
+      const partIndex = Math.max(0, Number(normalizedPart.index) || 0);
+      const previous = indexedParts.get(partIndex) || {};
+      const storageObject = normalizeText(normalizedPart.storageObject) || normalizeText(previous.storageObject);
+      indexedParts.set(partIndex, {
+        ...previous,
+        ...normalizedPart,
+        index: partIndex,
+        requestId: normalizeText(normalizedPart.requestId) || normalizeText(previous.requestId),
+        sizeBytes: Math.max(0, Number(normalizedPart.sizeBytes) || Number(previous.sizeBytes) || 0),
+        storageObject,
+        uploadStatus: normalizeText(normalizedPart.uploadStatus)
+          || normalizeText(previous.uploadStatus)
+          || (storageObject ? "uploaded" : ""),
+      });
+    }
+    const mergedParts = Array.from(indexedParts.values())
+      .sort((left, right) => left.index - right.index)
+      .map((part) => ({
+        ...part,
+        endMs: Math.max(0, Number(part.endMs) || 0),
+        overlapMs: Math.max(0, Number(part.overlapMs) || 0),
+        startMs: Math.max(0, Number(part.startMs) || 0),
+      }));
+    return normalizePendingUpload({
+      ...latestPending,
+      parts: mergedParts,
+      preparedPartCount: Math.max(
+        mergedParts.length,
+        Number(latestPending?.preparedPartCount) || 0,
+        Number(runtimeChunk?.parts?.length) || 0
+      ),
+      uploadedPartCount: mergedParts.filter((part) => normalizeText(part.storageObject)).length,
+    });
+  }
+
   function buildChunkedPendingUploadRemoteReconcilePayload(item) {
     if (normalizeText(item?.sourceMode) !== "chunked") {
       throw new Error("chunked source만 원격 상태 재조정 요청으로 다시 확인할 수 있어요.");
@@ -3362,18 +3420,19 @@
   }
 
   async function startSinglePendingUploadRemoteJob(item, options = {}) {
+    const latestItem = buildLatestPendingUploadSnapshot(item);
     const transitionAction = normalizeText(options?.transitionAction);
     if (transitionAction !== "single-start") {
       throw new Error("single source 원격 시작 action이 없어 업로드 결과를 안전하게 확정할 수 없어요.");
     }
-    if (normalizeText(item?.sourceMode) === "chunked") {
+    if (normalizeText(latestItem?.sourceMode) === "chunked") {
       throw new Error("chunked source는 single 원격 시작 경로로 보낼 수 없어요.");
     }
-    const createdJob = await requestPendingUploadRemoteMutationState(item, {
+    const createdJob = await requestPendingUploadRemoteMutationState(latestItem, {
       allowInlineSource: Boolean(options?.allowInlineSource),
       inlineSourceError: normalizeText(options?.inlineSourceError),
     });
-    const result = await commitSinglePendingUploadRemoteStart(item, createdJob, options);
+    const result = await commitSinglePendingUploadRemoteStart(latestItem, createdJob, options);
     if (normalizeText(options?.noticeText)) {
       setNotice(normalizeText(options.noticeText), "highlight");
       applyRender();
@@ -3385,18 +3444,19 @@
   }
 
   async function startChunkedPendingUploadRemoteJob(item, options = {}) {
+    const latestItem = buildLatestPendingUploadSnapshot(item);
     const transitionAction = normalizeText(options?.transitionAction);
     if (transitionAction !== "chunk-start") {
       throw new Error("chunk source 원격 시작 action이 없어 업로드 결과를 안전하게 확정할 수 없어요.");
     }
-    if (normalizeText(item?.sourceMode) !== "chunked") {
+    if (normalizeText(latestItem?.sourceMode) !== "chunked") {
       throw new Error("chunk 원격 시작은 chunked source에서만 실행할 수 있어요.");
     }
-    if (Math.max(0, Number(item?.uploadedPartCount) || 0) < 1) {
+    if (Math.max(0, Number(latestItem?.uploadedPartCount) || 0) < 1) {
       throw new Error("올라간 청크 없이 원격 chunk 작업을 시작할 수 없어요.");
     }
-    const createdJob = await requestPendingUploadRemoteMutationState(item);
-    const result = await commitChunkedPendingUploadRemoteStart(item, createdJob, options);
+    const createdJob = await requestPendingUploadRemoteMutationState(latestItem);
+    const result = await commitChunkedPendingUploadRemoteStart(latestItem, createdJob, options);
     if (normalizeText(options?.noticeText)) {
       setNotice(normalizeText(options.noticeText), "highlight");
       applyRender();
@@ -3408,20 +3468,21 @@
   }
 
   async function publishPendingUploadRemoteChunks(item, options = {}) {
+    const latestItem = buildLatestPendingUploadSnapshot(item);
     const transitionAction = normalizeText(options?.transitionAction);
     if (transitionAction !== "chunk-publish") {
       throw new Error("원격 chunk publish action이 없어 추가 청크 반영 결과를 안전하게 확정할 수 없어요.");
     }
-    if (!normalizeText(item?.jobId)) {
+    if (!normalizeText(latestItem?.jobId)) {
       throw new Error("기존 원격 작업 없이 추가 청크 publish를 이어갈 수 없어요.");
     }
     const queueContext = normalizePendingUploadQueueContext({
-      requestId: item?.requestId,
+      requestId: latestItem?.requestId,
       ...(options?.context || {}),
     });
-    const remoteJob = await requestPendingUploadRemoteMutationState(item);
-    const allChunksUploaded = Math.max(0, Number(item?.uploadedPartCount) || 0) >= Math.max(0, Number(item?.preparedPartCount) || 0);
-    const transition = buildPendingUploadRemotePublishTransition(item, remoteJob, {
+    const remoteJob = await requestPendingUploadRemoteMutationState(latestItem);
+    const allChunksUploaded = Math.max(0, Number(latestItem?.uploadedPartCount) || 0) >= Math.max(0, Number(latestItem?.preparedPartCount) || 0);
+    const transition = buildPendingUploadRemotePublishTransition(latestItem, remoteJob, {
       action: transitionAction,
       awaitingMoreUploads: !allChunksUploaded,
     });
@@ -3430,13 +3491,13 @@
       logDebug("workspace.pending-upload.chunk-publish.invalid-status", {
         action: transitionAction,
         error: transitionErrorMessage,
-        jobId: normalizeText(remoteJob?.jobId || item?.jobId),
+        jobId: normalizeText(remoteJob?.jobId || latestItem?.jobId),
         remoteStatus: normalizeText(transition?.remoteStatus),
-        requestId: normalizeText(item?.requestId),
+        requestId: normalizeText(latestItem?.requestId),
       });
       throw new Error(transitionErrorMessage);
     }
-    const nextPending = await commitPendingUploadRemoteMutationTransition(item, transition, {
+    const nextPending = await commitPendingUploadRemoteMutationTransition(latestItem, transition, {
       queueContext,
     });
     const resolution = normalizeText(transition?.resolution);
@@ -3459,13 +3520,14 @@
   }
 
   async function reconcileChunkedPendingUploadRemoteState(item, options = {}) {
+    const latestItem = buildLatestPendingUploadSnapshot(item);
     const transitionAction = normalizeText(options?.transitionAction);
     if (transitionAction !== "chunk-resync") {
       throw new Error("원격 chunk resync action이 없어 브라우저 보관 상태를 안전하게 유지할 수 없어요.");
     }
     let remoteState = null;
     try {
-      remoteState = await requestChunkedPendingUploadRemoteReconcileState(item);
+      remoteState = await requestChunkedPendingUploadRemoteReconcileState(latestItem);
     } catch (error) {
       const degradedMessage = error instanceof Error
         ? `${error.message} 브라우저 보관 상태는 그대로 두고 다음 동기화에서 원격 상태를 다시 확인합니다.`
@@ -3473,15 +3535,15 @@
       logDebug("workspace.pending-upload.chunk-resync.degraded", {
         action: transitionAction,
         error,
-        jobId: normalizeText(item?.jobId),
-        requestId: normalizeText(item?.requestId),
+        jobId: normalizeText(latestItem?.jobId),
+        requestId: normalizeText(latestItem?.requestId),
       });
       setNotice(degradedMessage, "warning");
       applyRender();
-      return { degraded: true, pending: item, remoteState: null, resolution: "" };
+      return { degraded: true, pending: latestItem, remoteState: null, resolution: "" };
     }
-    const allChunksUploaded = Math.max(0, Number(item?.uploadedPartCount) || 0) >= Math.max(0, Number(item?.preparedPartCount) || 0);
-    const transition = buildChunkedPendingUploadRemoteResyncTransition(item, remoteState, {
+    const allChunksUploaded = Math.max(0, Number(latestItem?.uploadedPartCount) || 0) >= Math.max(0, Number(latestItem?.preparedPartCount) || 0);
+    const transition = buildChunkedPendingUploadRemoteResyncTransition(latestItem, remoteState, {
       awaitingMoreUploads: !allChunksUploaded,
     });
     if (!transition?.nextPending) {
@@ -3489,15 +3551,15 @@
       logDebug("workspace.pending-upload.chunk-resync.degraded", {
         action: transitionAction,
         error: transitionErrorMessage,
-        jobId: normalizeText(remoteState?.jobId || item?.jobId),
+        jobId: normalizeText(remoteState?.jobId || latestItem?.jobId),
         remoteStatus: normalizeText(transition?.remoteStatus),
-        requestId: normalizeText(item?.requestId),
+        requestId: normalizeText(latestItem?.requestId),
       });
       setNotice(transitionErrorMessage, "warning");
       applyRender();
-      return { degraded: true, pending: item, remoteState, resolution: "" };
+      return { degraded: true, pending: latestItem, remoteState, resolution: "" };
     }
-    const nextPending = await commitChunkedPendingUploadRemoteResyncTransition(item, transition);
+    const nextPending = await commitChunkedPendingUploadRemoteResyncTransition(latestItem, transition);
     const resolution = normalizeText(transition?.resolution);
     logDebug("workspace.pending-upload.chunk-resync.applied", {
       action: transitionAction,
