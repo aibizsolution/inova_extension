@@ -1,6 +1,6 @@
 (function initHostedMeetingStorage(global) {
   const ns = global.__INOVA_HOSTED_MEETING__ = global.__INOVA_HOSTED_MEETING__ || {};
-  const { consumeDebugFault, normalizeText, normalizeTextBlock, safeLocalStorageSet } = ns.shared;
+  const { clearDebugFault, consumeDebugFault, normalizeText, normalizeTextBlock, safeLocalStorageSet, setDebugFault } = ns.shared;
 
   const PENDING_UPLOAD_LOCAL_STORAGE_KEY = "inova-hosted-meeting-pending-uploads";
   const PENDING_UPLOAD_DB_NAME = "inova-hosted-meeting-workspace";
@@ -20,6 +20,57 @@
     localStorageParse: "pending-uploads:local-storage-parse-failed",
     localStorageRead: "pending-uploads:local-storage-read-failed",
     localStorageWrite: "pending-uploads:local-storage-write-failed",
+  });
+  const PENDING_UPLOAD_DEBUG_SCENARIOS = Object.freeze({
+    loadIndexedDbOpen: Object.freeze({
+      expectedFlow: "load degraded",
+      fault: PENDING_UPLOAD_DEBUG_FAULTS.indexedDbOpen,
+      key: "queue-load-indexeddb-open",
+      summary: "작업실 진입 시 IndexedDB open 실패를 재현합니다.",
+      trigger: "작업실 새로고침 또는 재진입",
+    }),
+    loadIndexedDbRead: Object.freeze({
+      expectedFlow: "load degraded",
+      fault: PENDING_UPLOAD_DEBUG_FAULTS.indexedDbRead,
+      key: "queue-load-indexeddb-read",
+      summary: "작업실 진입 시 IndexedDB read 실패를 재현합니다.",
+      trigger: "작업실 새로고침 또는 재진입",
+    }),
+    loadLocalRead: Object.freeze({
+      expectedFlow: "load degraded",
+      fault: PENDING_UPLOAD_DEBUG_FAULTS.localStorageRead,
+      key: "queue-load-local-read",
+      summary: "localStorage read 실패를 재현합니다.",
+      trigger: "작업실 새로고침 또는 재진입",
+    }),
+    loadLocalParse: Object.freeze({
+      expectedFlow: "load degraded",
+      fault: PENDING_UPLOAD_DEBUG_FAULTS.localStorageParse,
+      key: "queue-load-local-parse",
+      summary: "localStorage parse 실패를 재현합니다.",
+      trigger: "작업실 새로고침 또는 재진입",
+    }),
+    persistIndexedDbWrite: Object.freeze({
+      expectedFlow: "persist degraded / action error",
+      fault: PENDING_UPLOAD_DEBUG_FAULTS.indexedDbWrite,
+      key: "queue-persist-indexeddb-write",
+      summary: "IndexedDB write 실패를 재현합니다.",
+      trigger: "로컬 큐 상태 변경 작업 1회",
+    }),
+    persistLocalWrite: Object.freeze({
+      expectedFlow: "persist degraded / action error",
+      fault: PENDING_UPLOAD_DEBUG_FAULTS.localStorageWrite,
+      key: "queue-persist-local-write",
+      summary: "localStorage write 실패를 재현합니다.",
+      trigger: "로컬 큐 상태 변경 작업 1회",
+    }),
+    cleanupIndexedDbDelete: Object.freeze({
+      expectedFlow: "cleanup degraded / action error",
+      fault: PENDING_UPLOAD_DEBUG_FAULTS.indexedDbDelete,
+      key: "queue-cleanup-indexeddb-delete",
+      summary: "IndexedDB delete 실패를 재현합니다.",
+      trigger: "로컬 큐 삭제 작업 1회",
+    }),
   });
 
   function buildPendingUploadStorageIssue(code, options = {}) {
@@ -97,6 +148,71 @@
 
   function consumePendingUploadStorageDebugFault(name) {
     return typeof consumeDebugFault === "function" && consumeDebugFault(name);
+  }
+
+  function getPendingUploadDebugScenario(name) {
+    const normalizedName = normalizeText(name);
+    if (!normalizedName) return null;
+    return Object.values(PENDING_UPLOAD_DEBUG_SCENARIOS).find((scenario) => (
+      normalizeText(scenario?.key) === normalizedName
+      || normalizeText(scenario?.fault) === normalizedName
+    )) || null;
+  }
+
+  function getPendingUploadDebugScenarios() {
+    const snapshot = {};
+    for (const scenario of Object.values(PENDING_UPLOAD_DEBUG_SCENARIOS)) {
+      if (!normalizeText(scenario?.key)) continue;
+      snapshot[scenario.key] = {
+        expectedFlow: normalizeText(scenario.expectedFlow),
+        fault: normalizeText(scenario.fault),
+        summary: normalizeText(scenario.summary),
+        trigger: normalizeText(scenario.trigger),
+      };
+    }
+    return snapshot;
+  }
+
+  function armPendingUploadDebugScenario(name, count = 1) {
+    const scenario = getPendingUploadDebugScenario(name);
+    if (!scenario) {
+      throw new Error(`알 수 없는 pending upload debug scenario: ${normalizeText(name) || "(empty)"}`);
+    }
+    const normalizedCount = count === true ? true : Math.max(1, Math.floor(Number(count) || 0)) || 1;
+    if (typeof setDebugFault === "function") {
+      setDebugFault(scenario.fault, normalizedCount);
+    }
+    return {
+      ...scenario,
+      armedCount: normalizedCount === true ? "always" : normalizedCount,
+    };
+  }
+
+  function clearPendingUploadDebugScenario(name) {
+    const normalizedName = normalizeText(name);
+    if (!normalizedName) {
+      for (const scenario of Object.values(PENDING_UPLOAD_DEBUG_SCENARIOS)) {
+        if (typeof clearDebugFault === "function") {
+          clearDebugFault(scenario.fault);
+        }
+      }
+      return getPendingUploadDebugScenarios();
+    }
+    const scenario = getPendingUploadDebugScenario(normalizedName);
+    if (scenario && typeof clearDebugFault === "function") {
+      clearDebugFault(scenario.fault);
+      return {
+        cleared: scenario.key,
+        fault: scenario.fault,
+      };
+    }
+    if (typeof clearDebugFault === "function") {
+      clearDebugFault(normalizedName);
+    }
+    return {
+      cleared: normalizedName,
+      fault: normalizedName,
+    };
   }
 
   function buildPendingUploadStorageDebugFaultError(message) {
@@ -609,11 +725,19 @@
 
   ns.storage = {
     DEBUG_FAULTS: PENDING_UPLOAD_DEBUG_FAULTS,
+    DEBUG_SCENARIOS: PENDING_UPLOAD_DEBUG_SCENARIOS,
     blobToBase64,
     collapseSupersededPendingUploads,
     comparePendingUploads,
     createPendingUploadStore,
     normalizePendingUpload,
     normalizePendingStatus,
+  };
+
+  const debugApi = global.__INOVA_HOSTED_MEETING_DEBUG__ = global.__INOVA_HOSTED_MEETING_DEBUG__ || {};
+  debugApi.queueFaults = {
+    arm: armPendingUploadDebugScenario,
+    clear: clearPendingUploadDebugScenario,
+    scenarios: getPendingUploadDebugScenarios,
   };
 })(globalThis);
