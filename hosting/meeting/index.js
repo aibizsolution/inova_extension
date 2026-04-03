@@ -85,6 +85,10 @@
         degradedReason: "",
         issueCodes: [],
       },
+      pendingUploadCleanup: {
+        degradedReason: "",
+        issueCodes: [],
+      },
       notesStyleSelection: "",
       queueStore: createPendingUploadStore(global),
       recordMemoDraft: "",
@@ -294,6 +298,11 @@
     return `${normalizedReason} 현재 탭에서는 계속 진행하지만, 다음 새로고침 뒤에는 방금 바뀐 임시 녹음 상태가 다시 복원되지 않을 수 있습니다.`;
   }
 
+  function buildPendingUploadCleanupDegradedNotice(reason) {
+    const normalizedReason = normalizeText(reason) || "브라우저 로컬 보관 큐를 정리하지 못했어요.";
+    return `${normalizedReason} 삭제했거나 비운 임시 녹음이 다음 새로고침 뒤 다시 보일 수 있습니다.`;
+  }
+
   function surfaceSessionRestoreNotice() {
     if (!state.sessionRestore.hasWarningIssue || !state.session.meetingSessionToken || !state.session.meetingId) {
       return;
@@ -417,6 +426,44 @@
     });
   }
 
+  function applyPendingUploadCleanupDiagnostics(result) {
+    const issues = Array.isArray(result?.issues) ? result.issues : [];
+    const degradedReason = normalizeText(result?.degradedReason);
+    const issueCodes = issues.map((issue) => normalizeText(issue?.code)).filter(Boolean);
+    const previousReason = normalizeText(state.pendingUploadCleanup.degradedReason);
+    const previousSignature = [previousReason, ...(Array.isArray(state.pendingUploadCleanup.issueCodes) ? state.pendingUploadCleanup.issueCodes : [])]
+      .filter(Boolean)
+      .join("|");
+    const nextSignature = [degradedReason, ...issueCodes].filter(Boolean).join("|");
+    state.pendingUploadCleanup = {
+      degradedReason,
+      issueCodes,
+    };
+    if (!degradedReason) {
+      if (previousSignature) {
+        logDebug("workspace.pending-uploads.cleanup.recovered", {
+          meetingId: state.session.meetingId,
+        });
+      }
+      clearResolvedPendingUploadCleanupNotice();
+      return;
+    }
+    if (previousSignature === nextSignature) {
+      return;
+    }
+    logDebug("workspace.pending-uploads.cleanup.degraded", {
+      degradedReason,
+      issueCodes,
+      issues,
+      meetingId: state.session.meetingId,
+      operation: normalizeText(result?.operation),
+    });
+    setNotice(buildPendingUploadCleanupDegradedNotice(degradedReason), "warning", {
+      code: "pending-upload-cleanup-degraded",
+      sticky: true,
+    });
+  }
+
   function consumePendingUploadQueueDiagnostics() {
     const diagnostics = typeof state.queueStore.consumeDiagnostics === "function"
       ? state.queueStore.consumeDiagnostics()
@@ -424,6 +471,10 @@
     const operation = normalizeText(diagnostics?.operation);
     if (operation === "put") {
       applyPendingUploadPersistDiagnostics(diagnostics);
+      return;
+    }
+    if (operation === "delete" || operation === "clearMeeting") {
+      applyPendingUploadCleanupDiagnostics(diagnostics);
       return;
     }
     applyPendingUploadStorageDiagnostics(diagnostics);
@@ -1487,6 +1538,7 @@
     if (shouldResetSource) {
       delete state.runtimeChunkCache[normalizedRequestId];
       await state.queueStore.delete(normalizedRequestId);
+      consumePendingUploadQueueDiagnostics();
       state.pendingUploads = state.pendingUploads.filter((item) => item.requestId !== normalizedRequestId);
       if (
         state.selectedRecordId === ns.shared.buildLocalSelectionId(normalizedRequestId)
@@ -2042,6 +2094,7 @@
     try {
       await postJson(global, CONFIG.deleteMeetingUrl, { meetingId: state.session.meetingId }, state.session.meetingSessionToken);
       await state.queueStore.clearMeeting(state.session.meetingId);
+      consumePendingUploadQueueDiagnostics();
       clearWorkspaceSession();
       renderBlocked("이 탭은 여기까지입니다. 필요할 때 i-Nova 패널에서 새 작업실을 열어 주세요.", {
         eyebrow: "작업실 삭제 완료",
@@ -2294,6 +2347,7 @@
   async function deletePendingUpload(requestId) {
     delete state.runtimeChunkCache[normalizeText(requestId)];
     await state.queueStore.delete(requestId);
+    consumePendingUploadQueueDiagnostics();
     state.pendingUploads = state.pendingUploads.filter((item) => item.requestId !== normalizeText(requestId));
     if (state.selectedRecordId === ns.shared.buildLocalSelectionId(requestId)) state.selectedRecordId = chooseSelectedRecordId(state);
     persistWorkspaceSession();
@@ -2657,6 +2711,11 @@
 
   function clearResolvedPendingUploadPersistNotice() {
     if (normalizeText(state.notice.code) !== "pending-upload-persist-degraded") return;
+    setNotice("", "", { code: "" });
+  }
+
+  function clearResolvedPendingUploadCleanupNotice() {
+    if (normalizeText(state.notice.code) !== "pending-upload-cleanup-degraded") return;
     setNotice("", "", { code: "" });
   }
 

@@ -283,32 +283,24 @@
 
     return {
       async clearMeeting(meetingId) {
-        const items = await this.listByMeeting(meetingId);
-        await Promise.all(items.map((item) => this.delete(item.requestId)));
-      },
-      async delete(requestId) {
-        const normalizedRequestId = normalizeText(requestId);
-        if (!normalizedRequestId) return;
-        const db = await openDb();
-        if (db) {
-          await runIdbRequest(db.transaction(PENDING_UPLOAD_STORE_NAME, "readwrite").objectStore(PENDING_UPLOAD_STORE_NAME).delete(normalizedRequestId));
-          return;
-        }
-        const items = await readLocalItems();
-        await writeLocalItems(items.filter((item) => normalizeText(item.requestId) !== normalizedRequestId));
-      },
-      async listByMeeting(meetingId) {
         const normalizedMeetingId = normalizeText(meetingId);
         const issues = [];
-        const db = await openDb(issues);
-        if (db) {
-          const items = await runIdbRequest(db.transaction(PENDING_UPLOAD_STORE_NAME, "readonly").objectStore(PENDING_UPLOAD_STORE_NAME).getAll());
-          setDiagnostics("listByMeeting", issues);
-          return Promise.all((Array.isArray(items) ? items : []).filter((item) => normalizeText(item.meetingId) === normalizedMeetingId).map(deserializePendingUpload));
+        const items = await listByMeetingInternal(normalizedMeetingId, issues);
+        for (const item of items) {
+          await deletePendingUploadInternal(item.requestId, issues);
         }
-        const localItems = await readLocalItems(issues);
+        setDiagnostics("clearMeeting", issues);
+      },
+      async delete(requestId) {
+        const issues = [];
+        await deletePendingUploadInternal(requestId, issues);
+        setDiagnostics("delete", issues);
+      },
+      async listByMeeting(meetingId) {
+        const issues = [];
+        const localItems = await listByMeetingInternal(meetingId, issues);
         setDiagnostics("listByMeeting", issues);
-        return Promise.all(localItems.filter((item) => normalizeText(item.meetingId) === normalizedMeetingId).map(deserializePendingUpload));
+        return localItems;
       },
       async put(item) {
         const normalized = normalizePendingUpload(item);
@@ -342,6 +334,30 @@
 
     function setDiagnostics(operation, issues) {
       lastDiagnostics = createStorageDiagnostics(operation, issues);
+    }
+
+    async function listByMeetingInternal(meetingId, issues) {
+      const normalizedMeetingId = normalizeText(meetingId);
+      const db = await openDb(issues);
+      if (db) {
+        const items = await runIdbRequest(db.transaction(PENDING_UPLOAD_STORE_NAME, "readonly").objectStore(PENDING_UPLOAD_STORE_NAME).getAll());
+        return Promise.all((Array.isArray(items) ? items : []).filter((item) => normalizeText(item.meetingId) === normalizedMeetingId).map(deserializePendingUpload));
+      }
+      const localItems = await readLocalItems(issues);
+      return Promise.all(localItems.filter((item) => normalizeText(item.meetingId) === normalizedMeetingId).map(deserializePendingUpload));
+    }
+
+    async function deletePendingUploadInternal(requestId, issues) {
+      const normalizedRequestId = normalizeText(requestId);
+      if (!normalizedRequestId) return;
+      const db = await openDb(issues);
+      if (db) {
+        await runIdbRequest(db.transaction(PENDING_UPLOAD_STORE_NAME, "readwrite").objectStore(PENDING_UPLOAD_STORE_NAME).delete(normalizedRequestId));
+        return;
+      }
+      const items = await readLocalItems(issues);
+      const nextItems = items.filter((item) => normalizeText(item.requestId) !== normalizedRequestId);
+      await writeLocalItems(nextItems, issues);
     }
 
     async function openDb(issues) {
