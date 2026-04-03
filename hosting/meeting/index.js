@@ -1680,7 +1680,33 @@
     };
   }
 
-  async function commitPendingUploadRemoteTransition(pending, transition, options = {}) {
+  async function commitPendingUploadRemoteMutationTransition(pending, transition, queueContext) {
+    if (!transition?.nextPending) {
+      return null;
+    }
+    const nextPending = await upsertPendingUpload(transition.nextPending, {
+      context: queueContext,
+    });
+    const normalizedRequestId = normalizeText(pending?.requestId);
+    if (!normalizedRequestId) {
+      return nextPending;
+    }
+    if (transition.resetChunkCache === "clear") {
+      delete state.runtimeChunkCache[normalizedRequestId];
+    } else if (transition.resetChunkCache === "reset-parts" && state.runtimeChunkCache[normalizedRequestId]) {
+      state.runtimeChunkCache[normalizedRequestId] = {
+        ...state.runtimeChunkCache[normalizedRequestId],
+        parts: (state.runtimeChunkCache[normalizedRequestId].parts || []).map((part) => ({
+          ...part,
+          storageObject: "",
+          uploadStatus: "",
+        })),
+      };
+    }
+    return nextPending;
+  }
+
+  async function commitPendingUploadRemoteReconcileTransition(pending, transition, options = {}) {
     if (!transition?.nextPending) {
       return null;
     }
@@ -1729,7 +1755,7 @@
       applyRender();
       return { degraded: true, pending, resolution: "" };
     }
-    const nextPending = await commitPendingUploadRemoteTransition(pending, transition, {
+    const nextPending = await commitPendingUploadRemoteReconcileTransition(pending, transition, {
       applySelectedRecordTransition: true,
       preserveUpdatedAt: true,
       queueContext: {
@@ -2911,9 +2937,7 @@
       });
       throw new Error(transitionErrorMessage);
     }
-    const nextPending = await commitPendingUploadRemoteTransition(item, transition, {
-      queueContext,
-    });
+    const nextPending = await commitPendingUploadRemoteMutationTransition(item, transition, queueContext);
     const resolution = normalizeText(transition?.resolution);
     logDebug("workspace.pending-upload.remote-transition.applied", {
       action: transitionAction,
@@ -3028,9 +3052,7 @@
       });
       throw new Error(transitionErrorMessage);
     }
-    const nextPending = await commitPendingUploadRemoteTransition(item, transition, {
-      queueContext,
-    });
+    const nextPending = await commitPendingUploadRemoteMutationTransition(item, transition, queueContext);
     const resolution = normalizeText(transition?.resolution);
     logDebug("workspace.pending-upload.remote-transition.applied", {
       action: transitionAction,
@@ -3094,7 +3116,7 @@
       applyRender();
       return { createdJob, degraded: true, pending: item, resolution: "" };
     }
-    const nextPending = await commitPendingUploadRemoteTransition(item, transition, {
+    const nextPending = await commitPendingUploadRemoteReconcileTransition(item, transition, {
       queueContext,
     });
     const resolution = normalizeText(transition?.resolution);
