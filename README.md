@@ -58,6 +58,7 @@
 - chunk 전사는 parent job이 직접 끝까지 돌지 않고, `청크 part 문서 -> chunk worker 함수 1개당 청크 1개 처리 -> chunk transcript JSON 임시 저장 -> finalizer 함수가 최종 병합/화자 정합/회의 정리` 순서로 나눠 처리합니다.
 - chunk 모드에서는 모든 part 업로드가 끝날 때까지 기다리지 않고, 첫 chunk가 올라오는 즉시 parent job을 만들고 이후 올라오는 chunk를 같은 job에 계속 반영해 전사를 앞당깁니다.
 - chunk worker는 job 1건 기준으로 업로드가 끝난 chunk를 즉시 `queued`로 승격해 곧바로 전사를 시작합니다. 그래서 1개가 올라오면 1개가 바로 돌고, 20개가 모두 올라온 상태면 20개도 같은 job 안에서 동시에 worker 대상으로 열릴 수 있습니다.
+- `processQueuedInovaMeetingJobPart`는 배포 시 `maxInstanceCount: 20`과 별도로 `concurrency: 1`로 운영해, 한 chunk worker 인스턴스가 여러 청크 요청을 동시에 떠안지 않게 유지합니다. 즉 11개 청크면 인스턴스당 1개 요청 기준으로 최대 11개 worker가 퍼져서 처리되고, 한 프로세스가 11개를 함께 전사하지 않습니다.
 - `OPENAI_MEETING_CHUNK_TRANSCRIPTION_CONCURRENCY`를 주면 이 기본 동작 대신 job별 고정 병렬 수로 명시적으로 핀할 수 있습니다. 값을 주지 않으면 hosted 회의실의 chunk worker queue는 업로드된 chunk 수만큼 즉시 열리고, 단일 invocation 안에서 직접 chunk를 묶어 전사하는 fallback 경로만 별도 adaptive concurrency를 유지합니다.
 - 긴 회의 처리 중 상태 안내는 단계 카드와 청크 진행판 위주로 보여주고, 같은 내용을 반복하는 별도 파란 배너는 processing 상태에서 겹치지 않게 숨깁니다.
 - 작업실 상세 카드 아래에는 chunk 업로드/전사 진행을 별도 진행바와 chunk 칸 목록으로 보여주고, 전사 중에는 실제 병렬 worker 수만큼 파란 칸을 함께 표시해 로그 없이도 진행 상태를 바로 확인할 수 있게 유지합니다.
@@ -229,6 +230,7 @@
 - `background/service-worker.js`는 i-Nova access token과 Firebase Functions를 연결해 원격 백업 호출과 prompt/store panel auth 발급을 처리하고, 회의 기능에서는 launch grant 발급과 session 교환까지 끝낸 최종 hosted 작업실 URL 생성, 허브 조회 라우팅을 맡습니다.
 - `functions/features/meeting/meeting-launch-service.js`는 launch grant, hosted workspace session, Firestore 읽기용 Firebase custom token 발급을 맡깁니다.
 - `processQueuedInovaMeetingJob`, `processQueuedInovaMeetingJobPart`, `finalizeChunkedInovaMeetingJob` Firestore background worker는 모두 `1GiB` 메모리와 `540초` timeout으로 운영하되, 긴 회의는 `parent job queue -> chunk worker들 -> finalizer`로 역할을 나눠 단일 함수가 모든 chunk를 붙잡지 않게 유지합니다.
+- 특히 `processQueuedInovaMeetingJobPart`는 인스턴스당 동시 요청 수를 `1`로 고정해, worker 한 인스턴스가 여러 chunk 전사를 동시에 떠안다가 메모리를 초과하지 않도록 합니다.
 - hosted 회의 작업실은 `종료하고 전사` 또는 `파일 불러오기` 시점에 원본을 먼저 업로드 가능한 source로 준비한 뒤 `createInovaMeetingJob`으로 parent job을 일찍 만들고, chunk 업로드가 이어지는 동안 같은 job source를 계속 보강합니다. Functions background 처리기는 `source download -> chunk worker 전사 -> chunk transcript 임시 저장 -> finalizer 병합/화자 정합 -> 회의록 모드 분류 -> mode별 회의록 정리 생성 -> source/chunk cleanup -> Firestore meeting/job/artifact 저장`까지 처리합니다. 자동 회의록 정리는 이제 `notesStatus`, `notesDegradedReason`, 실제 `notesGeneratedAt`을 함께 기록해 `비활성`, `건너뜀`, `degraded`, `성공`을 구분하고, notes 생성 실패를 완료 시각만 채운 성공처럼 보이지 않게 유지합니다.
 - 회의 정리와 모드 분류 기본 모델은 `gpt-5.4-mini`를 사용하고, 필요하면 `OPENAI_MEETING_SUMMARY_MODEL` 또는 `OPENAI_SUMMARY_MODEL`로 override할 수 있습니다.
 - Functions는 같은 `requestId` 재전송을 idempotent하게 재사용하고, `sharedMemoSnapshot`과 notes mode 메타데이터를 함께 저장합니다.
