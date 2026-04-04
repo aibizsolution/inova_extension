@@ -35,12 +35,10 @@
           ${feedbackNotice}
           ${normalized.degradedNotice ? `<div class="inova-release-card inova-release-card__notice is-info">${escapeHtml(normalized.degradedNotice)}</div>` : ""}
           ${normalized.error ? `<div class="inova-release-card inova-release-card__notice">${escapeHtml(normalized.error)}</div>` : ""}
-          <article class="inova-release-card">
-            <div class="inova-release-card__head">
-              <strong>회의록 목록</strong>
-              <div class="inova-release-card__badges">${renderChip(`${normalized.items.length}건`, true)}</div>
-            </div>
-          </article>
+          <div class="inova-tool-inline-summary">
+            <strong>회의록 목록</strong>
+            <span class="inova-tool-inline-summary__meta">총 ${escapeHtml(String(normalized.items.length))}건</span>
+          </div>
           <div class="inova-meeting-record-list">
             ${listMarkup}
           </div>

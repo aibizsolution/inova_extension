@@ -93,7 +93,7 @@
       ].filter(Boolean).join("")
     );
     return `
-      <article class="inova-release-card">
+      <article class="inova-release-card inova-release-card--compact">
         <div class="inova-release-card__head">
           <strong>${escapeHtml(state.updateAvailable ? "새 버전 안내" : "현재 배포 안내")}</strong>
           <div class="inova-release-card__badges">
