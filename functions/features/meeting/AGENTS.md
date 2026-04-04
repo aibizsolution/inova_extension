@@ -11,7 +11,7 @@
 - `content/meeting-manager.js`
 - `hosting/meeting/index.js`
 - `background/service-worker.js`
-- `shared/meeting-state.js`
+- `shared/meeting-bridge.js`
 
 ## 관련 functions 경로
 - `functions/index.js`

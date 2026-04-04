@@ -1,4 +1,5 @@
 const JOB_COLLECTION = "integration_inova_meeting_jobs";
+const ARTIFACT_COLLECTION = "integration_inova_meeting_artifacts";
 const DELETION_COLLECTION = "integration_inova_meeting_deletions";
 const JOB_FINALIZER_COLLECTION = "integration_inova_meeting_job_finalizers";
 const JOB_PART_COLLECTION = "integration_inova_meeting_job_parts";
@@ -132,69 +133,67 @@ function createNotesFixture(mode) {
     return {
       actionItems: [{ assignee: "채용 리드", dueDate: "다음 주", status: "open", task: "후속 인터뷰 질문을 정리합니다." }],
       decisions: [{ confidence: "medium", owner: "채용 리드", text: "다음 라운드 인터뷰를 진행합니다." }],
-      executiveSummary: ["후보자의 문제 구조화와 커뮤니케이션이 핵심 인사이트였고, 운영 경험은 후속 질문으로 남겼습니다."],
+      discussionFlow: [{
+        heading: "후보자 응답 평가",
+        keyPoints: ["문제 구조화가 빠르고 핵심을 먼저 설명했다.", "운영 경험은 후속 질문이 더 필요하다."],
+        narrative: "후보자는 핵심 쟁점을 빠르게 구조화해 설명했지만, 대규모 운영 경험은 추가 확인이 필요하다는 의견이 정리되었습니다.",
+      }],
       meetingMeta: {
+        datetime: "",
+        participants: ["채용 리드", "면접관"],
+        purpose: "후보자의 답변 내용을 정리하고 다음 인터뷰 라운드 진행 여부와 후속 확인 질문을 정리합니다.",
         title: "후보자 응답 및 후속 인터뷰 정리",
       },
-      memoHighlights: [{ linkedTopic: "후속 질문", mergeStatus: "merged", text: "서비스 운영 경험을 더 확인합니다." }],
-      mode: "interview",
-      modeSpecific: {
-        concerns: ["대규모 운영 경험은 추가 확인이 필요합니다."],
-        followUpQuestions: ["장애 대응 경험을 구체적으로 질문합니다."],
-        strengths: ["문제 구조화가 빠릅니다."],
-      },
-      openQuestions: [],
-      risksOrDependencies: [],
-      topics: [{ decisions: [], keyPoints: ["후보자는 데이터 기반 의사결정을 강조했습니다."], openQuestions: [], source: { memo: true, transcript: true }, summary: "응답 정리입니다.", topic: "응답 요약" }],
+      openQuestions: ["대규모 운영 환경에서의 장애 대응 경험을 어느 수준까지 검증할지 추가 합의가 필요합니다."],
+      overview: "후보자의 문제 구조화와 커뮤니케이션은 강점으로 확인됐고, 운영 경험은 다음 라운드에서 더 구체적으로 확인하기로 했습니다.",
+      risksOrDependencies: [{ severity: "medium", text: "운영 경험 검증이 부족하면 합격 판단 근거가 약해질 수 있습니다." }],
+      sourceTrace: [{ evidence: "운영 경험 추가 확인 필요", itemRef: "추가 맥락", itemType: "memo" }],
     };
   }
   if (mode === "general") {
     return {
       actionItems: [{ assignee: "운영 팀", dueDate: "", status: "open", task: "외부 협업 일정 초안을 정리합니다." }],
       decisions: [{ confidence: "medium", owner: "", text: "전체 일정은 운영 준비와 외부 협업 일정에 맞춰 다시 조정하기로 했다." }],
-      executiveSummary: ["플랫폼 준비와 운영 구조를 함께 검토한 결과, 외부 협업 일정이 확정돼야 전체 일정도 다시 맞출 수 있다는 점이 정리되었습니다."],
+      discussionFlow: [{
+        heading: "운영 일정 조정",
+        keyPoints: ["외부 협업 일정이 전체 오픈 시점을 좌우한다.", "운영 구조 정리가 선행되어야 한다."],
+        narrative: "플랫폼 준비 상황과 외부 협업 일정을 함께 검토하면서, 운영 구조가 정리되어야 전체 일정도 다시 맞출 수 있다는 점이 공감되었습니다.",
+      }],
       meetingMeta: {
+        datetime: "",
+        participants: ["운영 팀"],
+        purpose: "플랫폼 준비 상황과 외부 협업 일정을 함께 검토하고 운영 일정을 다시 정리합니다.",
         title: "플랫폼 구축 및 운영 일정 일반 회의 정리",
       },
-      memoHighlights: [],
-      mode: "general",
-      modeSpecific: {},
       openQuestions: [
         { question: "운영 구조와 명분이 아직 정리되지 않았습니다.", status: "open" },
         { text: "외부 협업 일정을 언제까지 확정할지 추가 논의가 필요합니다." },
       ],
+      overview: "운영 구조와 외부 협업 일정이 함께 정리되어야 전체 오픈 일정도 안정적으로 확정할 수 있다는 점이 회의의 핵심 결론이었습니다.",
       risksOrDependencies: [
         { severity: "medium", text: "업체 계약이 늦어지면 전체 오픈 일정이 밀릴 수 있습니다." },
       ],
-      topics: [
-        {
-          decisions: [],
-          keyPoints: ["운영 구조와 외부 협업 일정 검토"],
-          openQuestions: [{ question: "오픈 시점을 어떻게 잡을지 추가 검토 필요" }],
-          source: { memo: true, transcript: true },
-          summary: "일정과 운영 구조를 함께 검토했다.",
-          topic: "운영 일정",
-        },
-      ],
+      sourceTrace: [{ evidence: "외부 협업 일정 검토", itemRef: "전사", itemType: "transcript" }],
     };
   }
   return {
     actionItems: [{ assignee: "마케팅 팀", dueDate: "오늘", status: "open", task: "예산과 랜딩 문구 초안을 정리합니다." }],
     decisions: [{ confidence: "high", owner: "팀 리드", text: "신규 프로모션 일정은 이번 주 안에 확정합니다." }],
-    executiveSummary: ["신규 프로모션 일정 확정이 회의의 중심이었고, 예산과 랜딩 문구 초안은 이번 주 일정 확정에 맞춰 바로 정리하기로 했습니다."],
+    discussionFlow: [{
+      heading: "프로모션 일정 확정",
+      keyPoints: ["이번 주 안에 일정 확정", "예산과 랜딩 문구 초안은 오늘 정리"],
+      narrative: "프로모션 실행 시점을 확정하는 것이 가장 중요한 안건이었고, 이를 위해 예산과 랜딩 문구 초안을 바로 정리하기로 했습니다.",
+    }],
     meetingMeta: {
+      datetime: "",
+      participants: ["팀 리드", "마케팅 팀"],
+      purpose: "신규 프로모션 일정과 예산, 랜딩 문구 준비 순서를 정리하고 실행 계획을 확정합니다.",
       title: "프로모션 일정·예산 실행 계획",
     },
-    memoHighlights: [{ linkedTopic: "일정 계획", mergeStatus: "merged", text: "담당자 확정이 우선입니다." }],
-    mode: "planning",
-    modeSpecific: {
-      dependencies: ["디자인 시안 최종본"],
-      milestones: ["오늘 초안 정리", "이번 주 일정 확정"],
-      scopeItems: ["프로모션 일정", "예산", "랜딩 문구"],
-    },
     openQuestions: [],
+    overview: "신규 프로모션 일정 확정이 회의의 중심이었고, 예산과 랜딩 문구 초안은 이번 주 일정 확정에 맞춰 바로 정리하기로 했습니다.",
     risksOrDependencies: [{ severity: "medium", text: "디자인 시안 확정이 늦어질 수 있습니다." }],
-    topics: [{ decisions: ["이번 주 일정 확정"], keyPoints: ["예산과 랜딩 문구 초안 정리"], openQuestions: [], source: { memo: true, transcript: true }, summary: "실행 순서를 정리했습니다.", topic: "일정 계획" }],
+    sourceTrace: [{ evidence: "담당자 확정이 우선", itemRef: "추가 맥락", itemType: "memo" }],
   };
 }
 function createDb(state) {
@@ -620,10 +619,16 @@ function deepMerge(base, patch) {
   }
   return result;
 }
+
+function normalizeText(value) {
+  return String(value || "").trim();
+}
+
 function cloneValue(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
 }
 module.exports = {
+  ARTIFACT_COLLECTION,
   DELETION_COLLECTION,
   JOB_COLLECTION,
   JOB_FINALIZER_COLLECTION,

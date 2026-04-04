@@ -2,6 +2,36 @@
   "schemaVersion": 1,
   "versions": [
     {
+      "version": "0.3.21",
+      "level": "patch",
+      "public": {
+        "headline": "회의 작업 경로를 hosted 작업실로 단순화",
+        "summary": "이번 배포는 회의 기능의 구형 녹음·결과 경로를 걷어내고, 패널에서 hosted 회의 작업실로 바로 이어지는 단일 흐름만 남겨 회의 작업과 결과 수정이 더 일관되게 이어지도록 정리한 업데이트입니다.",
+        "changes": [
+          {
+            "type": "changed",
+            "text": "패널의 `새 회의하기`와 기존 회의 열기가 이제 모두 같은 hosted 작업실로 연결되어, 확장 내부 구형 회의 페이지와 섞이지 않고 한 화면에서 작업을 이어갈 수 있습니다."
+          },
+          {
+            "type": "changed",
+            "text": "회의 메모, 추가 맥락, 회의록 재정리 같은 저장·업데이트 흐름이 현재 서버 계약 기준으로만 동작하도록 정리돼, 오래된 호환 경로 때문에 상태가 엇갈리던 여지를 줄였습니다."
+          }
+        ]
+      },
+      "internal": {
+        "changes": [
+          {
+            "type": "removed",
+            "text": "meeting legacy page, offscreen recorder, legacy runtime messages, meetingState/session fallback storage를 제거하고 hosted-only bridge/service worker 계약으로 정리했습니다."
+          },
+          {
+            "type": "removed",
+            "text": "meeting-service에서 legacy session summary 경로, old notes shape 정규화, revisionRequest alias, 사용하지 않는 read endpoints를 제거하고 meetingId 기준 summary/read 계약만 남겼습니다."
+          }
+        ]
+      }
+    },
+    {
       "version": "0.3.20",
       "level": "patch",
       "public": {

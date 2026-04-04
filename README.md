@@ -167,8 +167,6 @@
   - `storage.js`: IndexedDB 기반 로컬 업로드 큐, fallback storage, operation-scoped queue read/write/delete diagnostics helper, IndexedDB transaction failure 진단, superseded retry request collapse helper
   - `notes.js`: 회의록 schema 정규화와 mode별 표시 포맷터
   - `render.js`: 이력/상세/회의록 섹션 렌더링
-- `offscreen/`
-  - `meeting-recorder.js`: 확장 내부 legacy 캡처 경로 호환용 오디오 recorder
 - `shared/`
   - `constants.js`: 저장 키, 셀렉터, 제한값 계약
   - `cloud-api.js`: Firebase Functions 호출 래퍼와 회의 기능 gateway 요청 래퍼
@@ -182,11 +180,9 @@
   - `prompt-store.js`: 스토어 카테고리, 엔트리 정규화, 정렬 규칙
   - `provider-identity.js`: 현재 i-Nova 사용자 식별 정보 정규화
   - `session.js`: `sid`, 질문 정규화, 메시지 ID 생성
-  - `storage.js`: `settings`, `pausedSessions`, `uiPreferences`, `promptLibrary`, `cloudSync`, `meetingState`, `meetingStateByMeetingId` 읽기/쓰기와 legacy `meetingHub` 호환 헬퍼
+  - `storage.js`: `settings`, `pausedSessions`, `uiPreferences`, `promptLibrary`, `cloudSync`, `meetingStateByMeetingId`, `meetingHub` 읽기/쓰기 helper
 - `popup/`
   - 팝업 설정 UI와 hosted 회의 작업실 연결 대상 선택
-- `meeting/`
-  - `index.js`: 확장 내부 legacy 회의 페이지 자산
 - `content/`
   - `dom.js`: 질문 DOM 수집
   - `bookmark-view.js`: 질문 탭 렌더링과 포커스 이동
@@ -243,8 +239,8 @@
 - `processQueuedInovaMeetingJob`, `processQueuedInovaMeetingJobPart`, `finalizeChunkedInovaMeetingJob` Firestore background worker는 모두 `1GiB` 메모리와 `540초` timeout으로 운영하되, 긴 회의는 `parent job queue -> chunk worker들 -> finalizer`로 역할을 나눠 단일 함수가 모든 chunk를 붙잡지 않게 유지합니다. 현재 max instances는 각각 `10 / 50 / 10`으로 분리해, 청크 fan-out 부하는 part worker 쪽으로 더 많이 열고 parent/finalizer는 낮게 유지합니다.
 - 특히 이 세 background worker는 모두 인스턴스당 동시 요청 수를 `1`로 고정해, parent job 처리·chunk 전사·finalizer 병합이 한 인스턴스에 여러 건씩 겹쳐 올라가지 않게 유지합니다. 병렬성은 인스턴스 수 확장으로 확보하고, 무거운 작업 자체는 한 프로세스가 1건씩만 처리합니다.
 - `uploadInovaMeetingSource` HTTP 함수도 chunk/single 원본 업로드에서 raw audio body를 바로 메모리에 받아 bucket에 쓰는 heavy upload 경계라 `concurrency: 1`, `maxInstances: 40`, `1GiB`, `120초`로 따로 고정합니다. 그래서 여러 chunk 업로드가 동시에 들어와도 한 인스턴스가 여러 raw audio 요청을 함께 받아 OOM 나는 기본 `80` 동시성을 타지 않습니다.
-- 회의 결과 삭제와 작업실 삭제는 `queued`/`processing` 상태도 409로 막지 않고 바로 soft-delete/tombstone을 남깁니다. 삭제 요청이 오면 job/meeting/session을 즉시 `deletedAt` 상태로 내려 UI와 summary에서 숨기고, 실제 cleanup은 `integration_inova_meeting_deletions` 큐 문서로 분리합니다.
-- 삭제 큐는 Firestore trigger가 즉시 artifact·chunk part·finalizer·임시 source/chunk transcript 정리를 한 번 시도하고, race 때문에 part/finalizer가 다시 남거나 storage cleanup이 덜 끝났으면 `sweepQueuedInovaMeetingDeletions`가 1시간마다 다시 확인합니다. queue 문서는 정리가 실제로 끝났을 때만 사라지고, 완료 시에는 meeting/job/session tombstone 문서까지 실제 삭제합니다.
+- 회의 결과 삭제와 작업실 삭제는 `queued`/`processing` 상태도 409로 막지 않고 바로 soft-delete/tombstone을 남깁니다. 삭제 요청이 오면 job/meeting을 즉시 `deletedAt` 상태로 내려 UI와 summary에서 숨기고, 실제 cleanup은 `integration_inova_meeting_deletions` 큐 문서로 분리합니다.
+- 삭제 큐는 Firestore trigger가 즉시 artifact·chunk part·finalizer·임시 source/chunk transcript 정리를 한 번 시도하고, race 때문에 part/finalizer가 다시 남거나 storage cleanup이 덜 끝났으면 `sweepQueuedInovaMeetingDeletions`가 1시간마다 다시 확인합니다. queue 문서는 정리가 실제로 끝났을 때만 사라지고, 완료 시에는 meeting/job tombstone 문서까지 실제 삭제합니다.
 - hosted 회의 작업실은 `종료하고 전사` 또는 `파일 불러오기` 시점에 원본을 먼저 업로드 가능한 source로 준비한 뒤 `createInovaMeetingJob`으로 parent job을 일찍 만들고, chunk 업로드가 이어지는 동안 같은 job source를 계속 보강합니다. Functions background 처리기는 `source download -> chunk worker 전사 -> chunk transcript 임시 저장 -> finalizer 병합 -> 구간별 요약과 최종 회의록 통합 -> source/chunk cleanup -> Firestore meeting/job/artifact 저장`까지 처리합니다. 자동 회의록 정리는 이제 `notesStatus`, `notesDegradedReason`, 실제 `notesGeneratedAt`을 함께 기록해 `비활성`, `건너뜀`, `degraded`, `성공`을 구분하고, notes 생성 실패를 완료 시각만 채운 성공처럼 보이지 않게 유지합니다.
 - hosted chunk upload는 원격 job 생성/추가 publish/resync 직전에 브라우저 queue와 runtime chunk cache를 다시 merge한 최신 snapshot으로 payload를 만듭니다. 그래서 같은 requestId의 후속 chunk가 이미 업로드된 상태라면 stale pending snapshot이 더 적은 part 정보로 원격 source를 덮어쓰지 않게 유지합니다.
 - 기본 전사 모델은 diarized transcript가 아니라 plain transcript를 사용하고, 회의록 품질은 `전사 -> section summary -> final reducer` 계층형 요약으로 끌어올립니다. 그래서 기본 경로의 과분리 문제를 줄이고, 긴 회의의 후반부 결정/액션 누락도 함께 줄입니다.
@@ -256,14 +252,14 @@
 - 함수 최적화나 병목 확인이 필요할 때는 `npm run check:function-runtime -- --since 1440 --filter meeting`처럼 실행하면, 현재 배포된 모든 함수의 `memory / timeout / concurrency / maxInstances`와 최근 request latency 요약을 한 번에 볼 수 있습니다. 특정 함수만 보고 싶으면 `--functions processQueuedInovaMeetingJob,processQueuedInovaMeetingJobPart`처럼 export 이름을 직접 넘기면 됩니다.
 - 실제 이벤트/오류 로그를 빨리 훑고 싶을 때는 `npm run check:function-logs -- --since 180 --filter meeting`처럼 실행하면, 함수별 최근 log entry 수, request/error 수, 대표 event, 최근 로그 몇 줄을 한 번에 볼 수 있습니다. 문제 상황만 보려면 `--errors-only`, 특정 함수만 보려면 `--functions processQueuedInovaMeetingJobPart,finalizeChunkedInovaMeetingJob`를 함께 씁니다.
 - 회의 업로드/전사 결과는 패널의 `회의` 도구에서 Firestore 구독 기반 허브 리스트로 보이고, 상세는 hosted `meeting/index.html` 새 탭 작업실에서 다시 확인합니다. 패널은 `issueInovaMeetingPanelAuth`로 발급한 Firebase custom token을 hidden hosted bridge에 넘겨 meeting 목록 query를 맡기고, 상세 상태는 작업실이 `meetingSessionToken`으로 `issueInovaMeetingWorkspaceAuth`를 한 번 호출한 뒤 Firebase Auth에 로그인하고 Firestore `meeting/job/artifact` 문서를 직접 구독해 반영합니다.
-- 브라우저 쪽에서는 `shared/meeting-bridge.js` 와 `shared/meeting-state.js` 로 회의 녹음 start/stop, 회의 job 생성, artifact 반영, local `meetingState` 저장 기준을 먼저 맞춰 두었습니다.
+- 브라우저 쪽 회의 계약은 `shared/meeting-bridge.js`의 runtime message 래퍼와 `shared/storage.js`의 `meetingStateByMeetingId` 저장 helper를 기준으로 맞춥니다.
 - 질문 목록 자체는 `chrome.storage.local`에 저장하지 않고, 현재 대화 화면을 기준으로 바로 렌더링합니다.
 - 요청 보관함은 `chrome.storage.local.promptLibrary`에 저장합니다.
 - 원격 백업 대기 상태는 `chrome.storage.local.cloudSync`에 저장합니다.
 - 프롬프트 원격 실시간은 `integration_inova_accounts`의 `promptLibraryMeta`만 구독하고, 실제 보관함 본문은 필요할 때만 `loadInovaPromptLibrary`로 다시 가져옵니다.
 - 스토어 원격 실시간은 `prompt_store_meta/summary`와 `prompt_store_feed_pages/latest__{category}__0000`만 구독하고, 검색/인기 정렬은 로컬 집합에서 다시 계산합니다. 상세 본문은 `prompt_store_entry_details/{entryId}`를 direct read하고, `내 등록`과 쓰기 액션만 request-response 흐름을 사용합니다.
 - 회의 허브 목록은 더 이상 `chrome.storage.local.meetingHub`를 정본 캐시로 쓰지 않고, hosted panel bridge의 Firestore persistence와 메모리 상태를 우선합니다.
-- 회의 기능 브라우저 상태는 `chrome.storage.local.meetingStateByMeetingId`를 정본으로 두고, `meetingStateBySession`은 legacy fallback으로만 함께 유지합니다.
+- 회의 기능 브라우저 상태는 `chrome.storage.local.meetingStateByMeetingId`만 사용합니다.
 
 ## 설치 방법
 

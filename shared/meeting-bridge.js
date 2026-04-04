@@ -1,46 +1,6 @@
 (function initMeetingBridge(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
 
-  async function createMeetingJob(input, providerIdentity) {
-    return sendRuntimeMessage("inova-meeting:create-job", {
-      input,
-      providerIdentity,
-    });
-  }
-
-  async function startMeetingCapture(input) {
-    return sendRuntimeMessage("inova-meeting:start-capture", {
-      input,
-    });
-  }
-
-  async function stopMeetingCapture(input) {
-    return sendRuntimeMessage("inova-meeting:stop-capture", {
-      input,
-    });
-  }
-
-  async function getMeetingJob(input, providerIdentity) {
-    return sendRuntimeMessage("inova-meeting:get-job", {
-      input,
-      providerIdentity,
-    });
-  }
-
-  async function getMeetingArtifact(input, providerIdentity) {
-    return sendRuntimeMessage("inova-meeting:get-artifact", {
-      input,
-      providerIdentity,
-    });
-  }
-
-  async function listMeetingResults(input, providerIdentity) {
-    return sendRuntimeMessage("inova-meeting:list-results", {
-      input,
-      providerIdentity,
-    });
-  }
-
   async function listMeetings(input, providerIdentity) {
     return sendRuntimeMessage("inova-meeting:list-meetings", {
       input,
@@ -112,19 +72,10 @@
     if (
       normalized === "inova-meeting:issue-panel-auth"
       || normalized === "inova-meeting:list-meetings"
-      || normalized === "inova-meeting:list-results"
-      || normalized === "inova-meeting:get-job"
-      || normalized === "inova-meeting:get-artifact"
     ) {
       return {
         backend: "firebase-function",
         operation: normalized === "inova-meeting:issue-panel-auth" ? "auth" : "read",
-      };
-    }
-    if (normalized === "inova-meeting:create-job") {
-      return {
-        backend: "firebase-function",
-        operation: "write",
       };
     }
     if (
@@ -134,16 +85,6 @@
       return {
         backend: "hosting",
         operation: "open",
-      };
-    }
-    if (
-      normalized === "inova-meeting:start-capture"
-      || normalized === "inova-meeting:stop-capture"
-      || normalized === "inova-meeting:recorder-failed"
-    ) {
-      return {
-        backend: "extension",
-        operation: "",
       };
     }
     return {
@@ -166,15 +107,9 @@
   }
 
   namespace.meetingBridge = {
-    createMeetingJob,
-    getMeetingArtifact,
-    getMeetingJob,
     issuePanelAuth,
     listMeetings,
-    listMeetingResults,
     openMeetingResult,
     openMeetingWorkspace,
-    startMeetingCapture,
-    stopMeetingCapture,
   };
 })(globalThis);

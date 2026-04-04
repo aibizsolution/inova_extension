@@ -84,9 +84,9 @@
 | 기능 목적 | 회의 허브, hosted 작업실, 녹음, 전사, 결과 검토 |
 | 요청 cue | 회의 허브, 새 회의하기, 작업실, launch/session auth, 녹음, 전사, chunk |
 | 먼저 볼 파일 | `content/meeting-manager.js`, `content/meeting-view.js`, `hosting/meeting/index.js`, `popup/index.js` |
-| 관련 프론트 경로 | `background/service-worker.js`, `meeting/index.js`, `hosting/meeting/*` |
+| 관련 프론트 경로 | `background/service-worker.js`, `hosting/meeting/*`, `popup/index.js` |
 | 관련 functions 경로 | `functions/features/meeting/meeting-launch-service.js`, `functions/features/meeting/meeting-service.js` |
-| feature-owned shared | `shared/meeting-state.js`, `shared/meeting-bridge.js`, `shared/meeting-debug.js`, `shared/firebase-config.js` |
+| feature-owned shared | `shared/meeting-bridge.js`, `shared/meeting-debug.js`, `shared/firebase-config.js`, `shared/storage.js` |
 | 관련 데이터 경계 | `integration_inova_meetings`, `integration_inova_meeting_jobs`, `integration_inova_meeting_job_parts`, `integration_inova_meeting_job_finalizers`, `integration_inova_meeting_artifacts`, launch/session 컬렉션 |
 | 보통 건드리지 말 범위 | prompt-library, prompt-store, prompt-review, release |
 | 최소 검증 | 팝업 target 설정, 회의 탭 목록, hosted meeting 진입, 최소 1개 결과 조회 |

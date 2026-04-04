@@ -136,7 +136,6 @@ async function main() {
 
   loadScript("shared/constants.js", context);
   loadScript("shared/session.js", context);
-  loadScript("shared/meeting-state.js", context);
   loadScript("shared/storage.js", context);
   loadScript("shared/meeting-bridge.js", context);
   loadScript("shared/provider-identity.js", context);

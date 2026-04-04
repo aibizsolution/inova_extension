@@ -18,7 +18,6 @@ const JOB_PART_COLLECTION = "integration_inova_meeting_job_parts";
 const DELETION_COLLECTION = "integration_inova_meeting_deletions";
 const ARTIFACT_COLLECTION = "integration_inova_meeting_artifacts";
 const MEETING_COLLECTION = "integration_inova_meetings";
-const SESSION_COLLECTION = "integration_inova_meeting_sessions";
 const TEMP_UPLOAD_TTL_MS = 60 * 60 * 1000;
 const DELETION_RETRY_DELAY_MS = 60 * 60 * 1000;
 const DELETION_PROCESSING_STALE_MS = 15 * 60 * 1000;
@@ -104,9 +103,6 @@ function registerMeetingHandlers(deps) {
       const createdAt = new Date().toISOString();
       const jobRef = db.collection(JOB_COLLECTION).doc(jobId);
       const meetingRef = db.collection(MEETING_COLLECTION).doc(buildMeetingDocId(owner.providerUserKey, meeting.meetingId));
-      const sessionRef = meeting.sessionId
-        ? db.collection(SESSION_COLLECTION).doc(buildSessionDocId(owner.providerUserKey, meeting.sessionId))
-        : null;
       if (requestId) {
         const existingSnapshot = await jobRef.get();
         if (existingSnapshot.exists) {
@@ -121,7 +117,6 @@ function registerMeetingHandlers(deps) {
               nextJob = await persistMeetingJobPatch(
                 jobRef,
                 meetingRef,
-                sessionRef,
                 meeting,
                 owner,
                 existingJob,
@@ -135,7 +130,6 @@ function registerMeetingHandlers(deps) {
                 const synchronized = await synchronizeChunkedMeetingJobProgress(
                   jobRef,
                   meetingRef,
-                  sessionRef,
                   meeting,
                   owner,
                   nextJob,
@@ -175,7 +169,6 @@ function registerMeetingHandlers(deps) {
       const queuedJob = buildQueuedJob(jobId, effectiveMeeting, owner, options, sourceSnapshot, context, createdAt);
       await Promise.all([
         upsertMeetingJobSummary(meetingRef, effectiveMeeting, owner, queuedJob),
-        sessionRef ? upsertLegacySessionJobSummary(sessionRef, effectiveMeeting, owner, queuedJob) : Promise.resolve(),
         jobRef.set(queuedJob),
       ]);
       jobQueued = true;
@@ -337,16 +330,12 @@ function registerMeetingHandlers(deps) {
     const artifactRef = db.collection(ARTIFACT_COLLECTION).doc(artifactId);
     const jobRef = db.collection(JOB_COLLECTION).doc(queuedJob.jobId);
     const meetingRef = db.collection(MEETING_COLLECTION).doc(buildMeetingDocId(owner.providerUserKey, meeting.meetingId));
-    const sessionRef = meeting.sessionId
-      ? db.collection(SESSION_COLLECTION).doc(buildSessionDocId(owner.providerUserKey, meeting.sessionId))
-      : null;
     let currentJob = queuedJob;
 
     const persistPatch = async (patch, artifact) => {
       currentJob = await persistMeetingJobPatch(
         jobRef,
         meetingRef,
-        sessionRef,
         meeting,
         owner,
         currentJob,
@@ -381,7 +370,6 @@ function registerMeetingHandlers(deps) {
         const synchronized = await synchronizeChunkedMeetingJobProgress(
           jobRef,
           meetingRef,
-          sessionRef,
           meeting,
           owner,
           currentJob,
@@ -446,7 +434,6 @@ function registerMeetingHandlers(deps) {
         artifactRef.set(artifact),
         jobRef.set(succeededPatch, { merge: true }),
         upsertMeetingJobSummary(meetingRef, meeting, owner, currentJob, artifact),
-        sessionRef ? upsertLegacySessionJobSummary(sessionRef, meeting, owner, currentJob, artifact) : Promise.resolve(),
       ]);
 
       logEvent("meeting.process.success", {
@@ -549,15 +536,10 @@ function registerMeetingHandlers(deps) {
     const meeting = normalizeMeetingRequest(currentJob.meeting);
     const options = normalizeMeetingOptions(currentJob.options);
     const meetingRef = db.collection(MEETING_COLLECTION).doc(buildMeetingDocId(owner.providerUserKey, meeting.meetingId));
-    const sessionRef = meeting.sessionId
-      ? db.collection(SESSION_COLLECTION).doc(buildSessionDocId(owner.providerUserKey, meeting.sessionId))
-      : null;
-
     const persistJobPatch = async (patch, artifact) => {
       currentJob = await persistMeetingJobPatch(
         jobRef,
         meetingRef,
-        sessionRef,
         meeting,
         owner,
         currentJob,
@@ -577,7 +559,6 @@ function registerMeetingHandlers(deps) {
       const synchronizedStart = await synchronizeChunkedMeetingJobProgress(
         jobRef,
         meetingRef,
-        sessionRef,
         meeting,
         owner,
         currentJob,
@@ -623,7 +604,6 @@ function registerMeetingHandlers(deps) {
       const synchronized = await synchronizeChunkedMeetingJobProgress(
         jobRef,
         meetingRef,
-        sessionRef,
         meeting,
         owner,
         currentJob,
@@ -662,7 +642,6 @@ function registerMeetingHandlers(deps) {
         const synchronized = await synchronizeChunkedMeetingJobProgress(
           jobRef,
           meetingRef,
-          sessionRef,
           meeting,
           owner,
           currentJob,
@@ -694,7 +673,6 @@ function registerMeetingHandlers(deps) {
       const synchronized = await synchronizeChunkedMeetingJobProgress(
         jobRef,
         meetingRef,
-        sessionRef,
         meeting,
         owner,
         currentJob,
@@ -757,15 +735,10 @@ function registerMeetingHandlers(deps) {
     const artifactId = getMeetingArtifactId(currentJob.jobId, owner.providerUserKey, meeting.meetingId, source.requestId, db);
     const artifactRef = db.collection(ARTIFACT_COLLECTION).doc(artifactId);
     const meetingRef = db.collection(MEETING_COLLECTION).doc(buildMeetingDocId(owner.providerUserKey, meeting.meetingId));
-    const sessionRef = meeting.sessionId
-      ? db.collection(SESSION_COLLECTION).doc(buildSessionDocId(owner.providerUserKey, meeting.sessionId))
-      : null;
-
     const persistJobPatch = async (patch, artifact) => {
       currentJob = await persistMeetingJobPatch(
         jobRef,
         meetingRef,
-        sessionRef,
         meeting,
         owner,
         currentJob,
@@ -852,7 +825,6 @@ function registerMeetingHandlers(deps) {
         artifactRef.set(artifact),
         jobRef.set(succeededPatch, { merge: true }),
         upsertMeetingJobSummary(meetingRef, meeting, owner, currentJob, artifact),
-        sessionRef ? upsertLegacySessionJobSummary(sessionRef, meeting, owner, currentJob, artifact) : Promise.resolve(),
         deleteDocumentIfExists(finalizerRef),
         ...partDocs.map((partDoc) => deleteDocumentIfExists(db.collection(JOB_PART_COLLECTION).doc(partDoc.docId))),
       ]);
@@ -943,118 +915,6 @@ function registerMeetingHandlers(deps) {
     }
   };
 
-  const getInovaMeetingJob = onRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
-    try {
-      assertMethod(request);
-      const input = normalizeMeetingJobLookup(request.body);
-      const access = await verifyRequestIdentity(request);
-      const owner = access.owner;
-
-      if (!input.jobId) {
-        throw createHttpError(400, "회의 job ID가 없어요.");
-      }
-
-      const snapshot = await db.collection(JOB_COLLECTION).doc(input.jobId).get();
-      if (!snapshot.exists) {
-        throw createHttpError(404, "회의 job을 찾지 못했어요.");
-      }
-      const job = normalizeMeetingJob(snapshot.data());
-      if (job.deletedAt) {
-        throw createHttpError(404, "삭제된 회의 결과예요.");
-      }
-      assertJobOwnership(job, owner, createHttpError);
-      assertWorkspaceMeetingAccess(access, input.meetingId || job.meetingId, createHttpError);
-      await assertMeetingIsActive(owner, job.meetingId, createHttpError);
-      if (input.meetingId && input.meetingId !== job.meetingId) {
-        throw createHttpError(404, "현재 회의와 맞지 않는 job이에요.");
-      }
-      if (input.sessionId && input.sessionId !== job.sessionId) {
-        throw createHttpError(404, "현재 세션과 맞지 않는 회의 job이에요.");
-      }
-
-      logEvent("meeting.get-job.success", {
-        jobId: job.jobId,
-        meetingId: job.meetingId,
-        providerUserKey: owner.providerUserKey,
-        status: job.status,
-      });
-      response.json({
-        ok: true,
-        data: {
-          job,
-        },
-      });
-    } catch (error) {
-      logEvent("meeting.get-job.error", {
-        error: normalizeText(error?.message),
-        status: Number(error?.status) || 500,
-      });
-      sendError(response, error);
-    }
-  });
-
-  const getInovaMeetingArtifact = onRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
-    try {
-      assertMethod(request);
-      const input = normalizeMeetingArtifactLookup(request.body);
-      const access = await verifyRequestIdentity(request);
-      const owner = access.owner;
-
-      if (!input.jobId || !input.artifactId) {
-        throw createHttpError(400, "회의 artifact 조회에 필요한 ID가 비어 있어요.");
-      }
-
-      const jobSnapshot = await db.collection(JOB_COLLECTION).doc(input.jobId).get();
-      if (!jobSnapshot.exists) {
-        throw createHttpError(404, "회의 job을 찾지 못했어요.");
-      }
-      const job = normalizeMeetingJob(jobSnapshot.data());
-      if (job.deletedAt) {
-        throw createHttpError(404, "삭제된 회의 결과예요.");
-      }
-      assertJobOwnership(job, owner, createHttpError);
-      assertWorkspaceMeetingAccess(access, input.meetingId || job.meetingId, createHttpError);
-      await assertMeetingIsActive(owner, job.meetingId, createHttpError);
-      if (input.meetingId && input.meetingId !== job.meetingId) {
-        throw createHttpError(404, "현재 회의와 맞지 않는 회의 job이에요.");
-      }
-
-      const artifactSnapshot = await db.collection(ARTIFACT_COLLECTION).doc(input.artifactId).get();
-      if (!artifactSnapshot.exists) {
-        throw createHttpError(404, "회의 artifact를 찾지 못했어요.");
-      }
-      const artifact = normalizeMeetingArtifact(artifactSnapshot.data());
-      if (artifact.deletedAt) {
-        throw createHttpError(404, "삭제된 회의 결과 파일이에요.");
-      }
-      if (artifact.jobId !== job.jobId) {
-        throw createHttpError(404, "회의 job과 연결되지 않는 artifact예요.");
-      }
-      if (input.meetingId && artifact.meetingId && artifact.meetingId !== input.meetingId) {
-        throw createHttpError(404, "현재 회의와 연결되지 않는 artifact예요.");
-      }
-
-      logEvent("meeting.get-artifact.success", {
-        artifactId: artifact.artifactId,
-        jobId: job.jobId,
-        meetingId: job.meetingId,
-        providerUserKey: owner.providerUserKey,
-      });
-      response.json({
-        ok: true,
-        data: {
-          artifact,
-        },
-      });
-    } catch (error) {
-      logEvent("meeting.get-artifact.error", {
-        error: normalizeText(error?.message),
-        status: Number(error?.status) || 500,
-      });
-      sendError(response, error);
-    }
-  });
-
   const listInovaMeetings = onRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
     try {
       assertMethod(request);
@@ -1077,68 +937,6 @@ function registerMeetingHandlers(deps) {
       });
     } catch (error) {
       logEvent("meeting.list-hub.error", {
-        error: normalizeText(error?.message),
-        status: Number(error?.status) || 500,
-      });
-      sendError(response, error);
-    }
-  });
-
-  const listInovaMeetingResults = onRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
-    try {
-      assertMethod(request);
-      const input = normalizeMeetingResultsListRequest(request.body);
-      const access = await verifyRequestIdentity(request);
-      const owner = access.owner;
-
-      if (!input.meetingId && !input.sessionId) {
-        throw createHttpError(400, "회의 ID가 없어요.");
-      }
-      assertWorkspaceMeetingAccess(access, input.meetingId, createHttpError);
-
-      const meetingRecord = await loadMeetingSummaryRecord(owner, input, createHttpError);
-      if (!meetingRecord) {
-        response.json({
-          ok: true,
-          data: {
-            items: [],
-            meeting: normalizeMeetingSummary({
-              meetingId: input.meetingId,
-              owner,
-              pendingLocalCount: 0,
-              title: "",
-              updatedAt: "",
-            }),
-          },
-        });
-        return;
-      }
-
-      logEvent("meeting.list-results.success", {
-        itemCount: meetingRecord.recentJobs.length,
-        meetingId: meetingRecord.meeting.meetingId,
-        providerUserKey: owner.providerUserKey,
-      });
-      response.json({
-        ok: true,
-        data: {
-          items: meetingRecord.recentJobs.slice(0, input.limit),
-          meeting: {
-            ...meetingRecord.meeting,
-            pendingLocalCount: Math.max(0, Number(meetingRecord.meeting?.pendingLocalCount) || 0),
-          },
-          session: {
-            endedAt: normalizeText(meetingRecord.meeting.endedAt),
-            language: normalizeText(meetingRecord.meeting.language),
-            sessionId: normalizeText(meetingRecord.meeting.sessionId),
-            sharedMemo: normalizeText(meetingRecord.meeting.sharedMemo),
-            startedAt: normalizeText(meetingRecord.meeting.startedAt),
-            title: normalizeText(meetingRecord.meeting.title),
-          },
-        },
-      });
-    } catch (error) {
-      logEvent("meeting.list-results.error", {
         error: normalizeText(error?.message),
         status: Number(error?.status) || 500,
       });
@@ -1204,29 +1002,6 @@ function registerMeetingHandlers(deps) {
         title: nextTitle,
         updatedAt,
       }, { merge: true });
-
-      if (currentMeeting.sessionId) {
-        const sessionRef = db.collection(SESSION_COLLECTION).doc(buildSessionDocId(owner.providerUserKey, currentMeeting.sessionId));
-        const sessionSnapshot = await sessionRef.get();
-        const currentSession = sessionSnapshot.exists ? normalizeMeetingSession(sessionSnapshot.data()) : normalizeMeetingSession({});
-        const sessionRecentJobs = currentSession.recentJobs.map((item) => (
-          input.hasTitle && shouldSyncMeetingTitleToResult(item, previousTitle)
-            ? {
-                ...item,
-                title: nextTitle,
-              }
-            : item
-        ));
-        await sessionRef.set({
-          language: currentSession.language || currentMeeting.language || "ko",
-          owner: normalizeText(currentSession.owner?.providerUserKey) ? currentSession.owner : owner,
-          recentJobs: sessionRecentJobs,
-          sessionId: currentSession.sessionId || currentMeeting.sessionId,
-          sharedMemo: nextSharedMemo,
-          title: nextTitle,
-          updatedAt,
-        }, { merge: true });
-      }
 
       if (input.hasTitle) {
         await Promise.all(
@@ -1485,8 +1260,6 @@ function registerMeetingHandlers(deps) {
         notesContextItems: persistedNotesContextItems,
         notesGeneratedAt: meetingNotes.notesGeneratedAt,
         notesInputSnapshot,
-        notesRevisionRequest: "",
-        notesRevisionRequestedAt: "",
         notesStatus: meetingNotes.notesStatus,
         notesSchemaVersion: meetingNotes.notesSchemaVersion,
         title: resultTitle,
@@ -1498,8 +1271,6 @@ function registerMeetingHandlers(deps) {
         notesContextItems: persistedNotesContextItems,
         notesGeneratedAt: meetingNotes.notesGeneratedAt,
         notesInputSnapshot,
-        notesRevisionRequest: "",
-        notesRevisionRequestedAt: "",
         notesStatus: meetingNotes.notesStatus,
         notesSchemaVersion: meetingNotes.notesSchemaVersion,
       };
@@ -1636,14 +1407,6 @@ function registerMeetingHandlers(deps) {
         await softDeleteMeetingJob(job, deletedAt);
       }
 
-      if (meeting.sessionId) {
-        const sessionRef = db.collection(SESSION_COLLECTION).doc(buildSessionDocId(owner.providerUserKey, meeting.sessionId));
-        await sessionRef.set({
-          deletedAt,
-          recentJobs: [],
-          updatedAt: deletedAt,
-        }, { merge: true });
-      }
       await meetingRef.set({
         deletedAt,
         recentJobs: [],
@@ -1655,7 +1418,6 @@ function registerMeetingHandlers(deps) {
         meetingId: input.meetingId,
         owner,
         scope: "meeting",
-        sessionId: meeting.sessionId,
       });
 
       logEvent("meeting.delete.success", {
@@ -1728,10 +1490,7 @@ function registerMeetingHandlers(deps) {
     deleteInovaMeeting,
     deleteInovaMeetingResult,
     finalizeChunkedMeetingJobWrite,
-    getInovaMeetingArtifact,
-    getInovaMeetingJob,
     listInovaMeetings,
-    listInovaMeetingResults,
     processMeetingDeletionWrite,
     processQueuedMeetingJobWrite,
     processQueuedMeetingJobPartWrite,
@@ -1895,14 +1654,7 @@ function registerMeetingHandlers(deps) {
     }
     const meeting = normalizeMeetingRequest(nextJob.meeting);
     const meetingRef = db.collection(MEETING_COLLECTION).doc(buildMeetingDocId(owner.providerUserKey, meeting.meetingId));
-    const sessionId = normalizeText(nextJob.sessionId || meeting.sessionId);
-    const sessionRef = sessionId
-      ? db.collection(SESSION_COLLECTION).doc(buildSessionDocId(owner.providerUserKey, sessionId))
-      : null;
-    await Promise.all([
-      upsertMeetingJobSummary(meetingRef, meeting, owner, nextJob),
-      sessionRef ? upsertLegacySessionJobSummary(sessionRef, meeting, owner, nextJob) : Promise.resolve(),
-    ]);
+    await upsertMeetingJobSummary(meetingRef, meeting, owner, nextJob);
     return nextJob;
   }
 
@@ -2333,74 +2085,33 @@ function registerMeetingHandlers(deps) {
 
   async function loadMeetingSummaryRecord(owner, input, createHttpError) {
     const meetingId = normalizeText(input.meetingId);
-    if (meetingId) {
-      const meetingRef = db.collection(MEETING_COLLECTION).doc(buildMeetingDocId(owner.providerUserKey, meetingId));
-      const snapshot = await meetingRef.get();
-      if (!snapshot.exists) {
-        return null;
-      }
-      let meeting = normalizeMeetingSummary(snapshot.data());
-      if (!normalizeText(meeting.owner?.providerUserKey)) {
-        await meetingRef.set({
-          meetingId: meeting.meetingId || meetingId,
-          owner,
-        }, { merge: true });
-        meeting = normalizeMeetingSummary({
-          ...meeting,
-          meetingId: meeting.meetingId || meetingId,
-          owner,
-        });
-      }
-      assertMeetingOwnership(meeting, owner, createHttpError);
-      if (meeting.deletedAt) {
-        return null;
-      }
-      return {
-        meeting,
-        recentJobs: Array.isArray(meeting.recentJobs) ? meeting.recentJobs : [],
-      };
+    if (!meetingId) {
+      return null;
     }
-
-    const sessionRef = db.collection(SESSION_COLLECTION).doc(buildSessionDocId(owner.providerUserKey, input.sessionId));
-    const snapshot = await sessionRef.get();
+    const meetingRef = db.collection(MEETING_COLLECTION).doc(buildMeetingDocId(owner.providerUserKey, meetingId));
+    const snapshot = await meetingRef.get();
     if (!snapshot.exists) {
       return null;
     }
-    let legacySession = normalizeMeetingSession(snapshot.data());
-    if (!normalizeText(legacySession.owner?.providerUserKey)) {
-      await sessionRef.set({
+    let meeting = normalizeMeetingSummary(snapshot.data());
+    if (!normalizeText(meeting.owner?.providerUserKey)) {
+      await meetingRef.set({
+        meetingId: meeting.meetingId || meetingId,
         owner,
-        sessionId: legacySession.sessionId || input.sessionId,
       }, { merge: true });
-      legacySession = normalizeMeetingSession({
-        ...legacySession,
+      meeting = normalizeMeetingSummary({
+        ...meeting,
+        meetingId: meeting.meetingId || meetingId,
         owner,
-        sessionId: legacySession.sessionId || input.sessionId,
       });
     }
-    assertSessionOwnership(legacySession, owner, createHttpError);
-    if (legacySession.deletedAt) {
+    assertMeetingOwnership(meeting, owner, createHttpError);
+    if (meeting.deletedAt) {
       return null;
     }
     return {
-      meeting: normalizeMeetingSummary({
-        createdAt: legacySession.startedAt,
-        endedAt: legacySession.endedAt,
-        excerpt: normalizeText(legacySession.recentJobs?.[0]?.previewText),
-        language: legacySession.language,
-        latestArtifactId: normalizeText(legacySession.recentJobs?.[0]?.artifactId),
-        latestJobId: normalizeText(legacySession.lastJobId),
-        meetingId: legacySession.sessionId,
-        owner: legacySession.owner,
-        recentJobs: legacySession.recentJobs,
-        sessionId: legacySession.sessionId,
-        sharedMemo: legacySession.sharedMemo,
-        startedAt: legacySession.startedAt,
-        status: normalizeText(legacySession.recentJobs?.[0]?.status),
-        title: legacySession.title,
-        updatedAt: legacySession.updatedAt,
-      }),
-      recentJobs: legacySession.recentJobs,
+      meeting,
+      recentJobs: Array.isArray(meeting.recentJobs) ? meeting.recentJobs : [],
     };
   }
 
@@ -2436,16 +2147,6 @@ function registerMeetingHandlers(deps) {
       const recentJobs = mergeRecentJobs(currentMeeting.recentJobs, summaryItem);
       await meetingRef.set(buildMeetingRecentJobsPatch(currentMeeting, recentJobs, updatedAt), { merge: true });
     }
-
-    if (job.sessionId) {
-      const sessionRef = db.collection(SESSION_COLLECTION).doc(buildSessionDocId(owner.providerUserKey, job.sessionId));
-      const sessionSnapshot = await sessionRef.get();
-      if (sessionSnapshot.exists) {
-        const currentSession = normalizeMeetingSession(sessionSnapshot.data());
-        const recentJobs = mergeRecentJobs(currentSession.recentJobs, summaryItem);
-        await sessionRef.set(buildSessionRecentJobsPatch(currentSession, recentJobs, updatedAt), { merge: true });
-      }
-    }
   }
 
   async function removeMeetingResultFromSummaries(owner, job, deletedAt) {
@@ -2466,16 +2167,6 @@ function registerMeetingHandlers(deps) {
         ...buildMeetingRecentJobsPatch(currentMeeting, recentJobs, deletedAt),
       });
       await meetingRef.set(buildMeetingRecentJobsPatch(currentMeeting, recentJobs, deletedAt), { merge: true });
-    }
-
-    if (job.sessionId) {
-      const sessionRef = db.collection(SESSION_COLLECTION).doc(buildSessionDocId(owner.providerUserKey, job.sessionId));
-      const sessionSnapshot = await sessionRef.get();
-      if (sessionSnapshot.exists) {
-        const currentSession = normalizeMeetingSession(sessionSnapshot.data());
-        const recentJobs = currentSession.recentJobs.filter((item) => item.jobId !== job.jobId);
-        await sessionRef.set(buildSessionRecentJobsPatch(currentSession, recentJobs, deletedAt), { merge: true });
-      }
     }
 
     return nextMeeting;
@@ -2707,12 +2398,6 @@ function registerMeetingHandlers(deps) {
         return false;
       }
     }
-    if (task.sessionId) {
-      const sessionSnapshot = await db.collection(SESSION_COLLECTION).doc(buildSessionDocId(owner.providerUserKey, task.sessionId)).get();
-      if (sessionSnapshot.exists && !normalizeMeetingSession(sessionSnapshot.data()).deletedAt) {
-        return false;
-      }
-    }
     return true;
   }
 
@@ -2727,9 +2412,6 @@ function registerMeetingHandlers(deps) {
     );
     if (task.scope === "meeting" && task.meetingId) {
       await deleteDocumentIfExists(db.collection(MEETING_COLLECTION).doc(buildMeetingDocId(owner.providerUserKey, task.meetingId)));
-      if (task.sessionId) {
-        await deleteDocumentIfExists(db.collection(SESSION_COLLECTION).doc(buildSessionDocId(owner.providerUserKey, task.sessionId)));
-      }
     }
   }
 
@@ -3101,7 +2783,7 @@ function registerMeetingHandlers(deps) {
     return false;
   }
 
-  async function persistMeetingJobPatch(jobRef, meetingRef, sessionRef, meeting, owner, currentJobInput, patch, artifactInput) {
+  async function persistMeetingJobPatch(jobRef, meetingRef, meeting, owner, currentJobInput, patch, artifactInput) {
     const storedJob = await loadStoredMeetingJob(jobRef);
     if (!storedJob?.jobId || storedJob.deletedAt) {
       return storedJob || normalizeMeetingJob(currentJobInput);
@@ -3110,7 +2792,6 @@ function registerMeetingHandlers(deps) {
     await Promise.all([
       jobRef.set(patch, { merge: true }),
       upsertMeetingJobSummary(meetingRef, meeting, owner, nextJob, artifactInput),
-      sessionRef ? upsertLegacySessionJobSummary(sessionRef, meeting, owner, nextJob, artifactInput) : Promise.resolve(),
     ]);
     return nextJob;
   }
@@ -3339,7 +3020,7 @@ function registerMeetingHandlers(deps) {
     return loadMeetingJobPartDocs(normalizedJob.jobId);
   }
 
-  async function synchronizeChunkedMeetingJobProgress(jobRef, meetingRef, sessionRef, meeting, owner, currentJobInput, options, overridePatch) {
+  async function synchronizeChunkedMeetingJobProgress(jobRef, meetingRef, meeting, owner, currentJobInput, options, overridePatch) {
     const currentJob = normalizeMeetingJob(currentJobInput);
     const partDocs = await loadMeetingJobPartDocs(currentJob.jobId);
     const totalParts = Math.max(
@@ -3385,7 +3066,6 @@ function registerMeetingHandlers(deps) {
     const nextJob = await persistMeetingJobPatch(
       jobRef,
       meetingRef,
-      sessionRef,
       meeting,
       owner,
       currentJob,
@@ -3927,7 +3607,7 @@ function normalizeMeetingRequest(input) {
   return {
     endedAt: normalizeText(input?.endedAt),
     language: normalizeText(input?.language) || "ko",
-    meetingId: normalizeText(input?.meetingId || input?.sessionId),
+    meetingId: normalizeText(input?.meetingId),
     sessionId: normalizeText(input?.sessionId),
     sharedMemo: normalizeTextBlock(input?.sharedMemo).slice(0, MAX_SHARED_MEMO_CHARS),
     sourceTabId: Math.max(0, Number(input?.sourceTabId) || 0),
@@ -4423,23 +4103,6 @@ function normalizeMeetingSourceTrace(input, maxItems = MAX_MEETING_NOTES_SOURCE_
   );
 }
 
-function buildLegacyDiscussionNarrative(item) {
-  const parts = [];
-  const summary = normalizeTextBlock(item?.summary);
-  const decisions = normalizeTextList(item?.decisions).slice(0, 2);
-  const openQuestions = normalizeMeetingOpenQuestions(item?.openQuestions, 2);
-  if (summary) {
-    parts.push(summary);
-  }
-  if (decisions.length) {
-    parts.push(`정리된 내용: ${decisions.join(" / ")}`);
-  }
-  if (openQuestions.length) {
-    parts.push(`남은 쟁점: ${openQuestions.join(" / ")}`);
-  }
-  return parts.join("\n\n");
-}
-
 function normalizeMeetingDiscussionFlow(input, maxItems = MAX_MEETING_NOTES_TOPIC_COUNT, maxKeyPoints = MAX_MEETING_NOTES_TOPIC_KEY_POINTS) {
   const normalized = (Array.isArray(input) ? input : [])
     .map((item) => {
@@ -4464,41 +4127,6 @@ function normalizeMeetingDiscussionFlow(input, maxItems = MAX_MEETING_NOTES_TOPI
   );
 }
 
-function convertLegacyTopicsToDiscussionFlow(input, maxItems = MAX_MEETING_NOTES_TOPIC_COUNT, maxKeyPoints = MAX_MEETING_NOTES_TOPIC_KEY_POINTS) {
-  const normalized = (Array.isArray(input) ? input : [])
-    .map((item) => ({
-      heading: normalizeText(item?.topic),
-      keyPoints: dedupeMeetingItems(
-        normalizeTextList(item?.keyPoints),
-        (value) => normalizeMeetingComparisonText(value),
-        maxKeyPoints
-      ),
-      narrative: buildLegacyDiscussionNarrative(item),
-    }))
-    .filter((item) => item.heading || item.narrative || item.keyPoints.length);
-  return dedupeMeetingItems(
-    normalized,
-    (item) => normalizeMeetingComparisonText(item.heading || item.narrative || item.keyPoints[0]),
-    maxItems
-  );
-}
-
-function convertLegacyDiscussionListToDiscussionFlow(input, maxItems = MAX_MEETING_NOTES_TOPIC_COUNT) {
-  const keyPoints = dedupeMeetingItems(
-    normalizeTextList(input),
-    (value) => normalizeMeetingComparisonText(value),
-    MAX_MEETING_NOTES_TOPIC_KEY_POINTS
-  );
-  if (!keyPoints.length) {
-    return [];
-  }
-  return [{
-    heading: "주요 논의 흐름",
-    keyPoints,
-    narrative: "",
-  }].slice(0, maxItems);
-}
-
 function normalizeDocumentMeetingNotes(notes, settings) {
   const meetingMeta = normalizeMeetingMeta(notes.meetingMeta);
   const discussionFlow = normalizeMeetingDiscussionFlow(
@@ -4518,65 +4146,10 @@ function normalizeDocumentMeetingNotes(notes, settings) {
   };
 }
 
-function normalizeLegacyMeetingNotes(notes, settings) {
-  const meetingMeta = normalizeMeetingMeta(notes.meetingMeta);
-  const overview = normalizeMeetingOverviewText(notes.overview, notes.executiveSummary);
-  const discussionFlow = Array.isArray(notes.discussionFlow) && notes.discussionFlow.length
-    ? normalizeMeetingDiscussionFlow(
-        notes.discussionFlow,
-        Math.max(1, Number(settings.maxDiscussionFlow) || MAX_MEETING_NOTES_TOPIC_COUNT),
-        Math.max(1, Number(settings.maxKeyPoints) || MAX_MEETING_NOTES_TOPIC_KEY_POINTS)
-      )
-    : Array.isArray(notes.topics) && notes.topics.length
-      ? convertLegacyTopicsToDiscussionFlow(
-          notes.topics,
-          Math.max(1, Number(settings.maxDiscussionFlow) || MAX_MEETING_NOTES_TOPIC_COUNT),
-          Math.max(1, Number(settings.maxKeyPoints) || MAX_MEETING_NOTES_TOPIC_KEY_POINTS)
-        )
-      : convertLegacyDiscussionListToDiscussionFlow(
-          notes.discussion,
-          Math.max(1, Number(settings.maxDiscussionFlow) || MAX_MEETING_NOTES_TOPIC_COUNT)
-        );
-  const legacyActionItems = normalizeMeetingActionItems(notes.actionItems, Math.max(1, Number(settings.maxActionItems) || MAX_MEETING_NOTES_ACTION_ITEMS));
-  const legacyNextSteps = normalizeTextList(notes.nextSteps).map((item) => ({
-    assignee: "",
-    dueDate: "",
-    source: "transcript",
-    status: "open",
-    task: item,
-  }));
-  return {
-    actionItems: dedupeMeetingItems(
-      [...legacyActionItems, ...legacyNextSteps],
-      (item) => normalizeMeetingComparisonText(item.task),
-      Math.max(1, Number(settings.maxActionItems) || MAX_MEETING_NOTES_ACTION_ITEMS)
-    ),
-    decisions: normalizeMeetingDecisionItems(notes.decisions, Math.max(1, Number(settings.maxDecisions) || MAX_MEETING_NOTES_DECISIONS)),
-    discussionFlow,
-    meetingMeta,
-    openQuestions: normalizeMeetingOpenQuestions(notes.openQuestions, Math.max(1, Number(settings.maxOpenQuestions) || MAX_MEETING_NOTES_OPEN_QUESTIONS)),
-    overview,
-    risksOrDependencies: normalizeMeetingRisks(notes.risksOrDependencies, Math.max(1, Number(settings.maxRisks) || MAX_MEETING_NOTES_RISKS)),
-    sourceTrace: normalizeMeetingSourceTrace(notes.sourceTrace, Math.max(1, Number(settings.maxSourceTrace) || MAX_MEETING_NOTES_SOURCE_TRACE)),
-  };
-}
-
 function normalizeMeetingNotes(input, options) {
   const settings = options && typeof options === "object" ? options : {};
   const notes = input && typeof input === "object" ? input : {};
-  if (
-    typeof notes.overview !== "undefined"
-    || Array.isArray(notes.discussionFlow)
-    || (notes.meetingMeta && typeof notes.meetingMeta === "object" && (
-      normalizeText(notes.meetingMeta?.purpose)
-      || normalizeText(notes.meetingMeta?.datetime)
-      || normalizeText(notes.meetingMeta?.title)
-      || normalizeTextList(notes.meetingMeta?.participants).length
-    ))
-  ) {
-    return normalizeDocumentMeetingNotes(notes, settings);
-  }
-  return normalizeLegacyMeetingNotes(notes, settings);
+  return normalizeDocumentMeetingNotes(notes, settings);
 }
 
 function hasMeetingNotes(notes) {
@@ -4728,34 +4301,10 @@ function buildMeetingNotesSegmentRange(startMs, endMs) {
   return `${formatPart(startSeconds)}-${formatPart(endSeconds)}`;
 }
 
-function normalizeMeetingJobLookup(input) {
-  return {
-    jobId: normalizeText(input?.jobId),
-    meetingId: normalizeText(input?.meetingId),
-    sessionId: normalizeText(input?.sessionId),
-  };
-}
-
-function normalizeMeetingArtifactLookup(input) {
-  return {
-    artifactId: normalizeText(input?.artifactId),
-    jobId: normalizeText(input?.jobId),
-    meetingId: normalizeText(input?.meetingId),
-  };
-}
-
 function normalizeMeetingHubListRequest(input) {
   return {
     cursor: normalizeText(input?.cursor),
     limit: Math.max(1, Math.min(MAX_MEETING_LIST_LIMIT, Number(input?.limit) || 12)),
-  };
-}
-
-function normalizeMeetingResultsListRequest(input) {
-  return {
-    limit: Math.max(1, Math.min(MAX_MEETING_RECENT_RESULTS, Number(input?.limit) || 8)),
-    meetingId: normalizeText(input?.meetingId),
-    sessionId: normalizeText(input?.sessionId),
   };
 }
 
@@ -4784,15 +4333,9 @@ function normalizeMeetingResultMutationRequest(input) {
 
 function normalizeMeetingNotesRegenerateRequest(input) {
   const request = input && typeof input === "object" ? input : {};
-  const legacyRevisionRequest = normalizeTextBlock(request.revisionRequest).slice(0, MAX_SHARED_MEMO_CHARS);
-  const contextItemsFromRequest = hasOwn(request, "contextItems")
-    ? request.contextItems
-    : legacyRevisionRequest
-      ? [{ contextId: "legacy-revision-request", text: legacyRevisionRequest }]
-      : [];
   return {
-    contextItems: normalizeMeetingNotesContextItems(contextItemsFromRequest),
-    contextItemsProvided: hasOwn(request, "contextItems") || hasOwn(request, "revisionRequest"),
+    contextItems: normalizeMeetingNotesContextItems(request.contextItems),
+    contextItemsProvided: hasOwn(request, "contextItems"),
     jobId: normalizeText(request.jobId),
     meetingId: normalizeText(request.meetingId),
     sharedMemo: normalizeTextBlock(request.sharedMemo).slice(0, MAX_SHARED_MEMO_CHARS),
@@ -5027,37 +4570,6 @@ function buildMeetingRecentJobsPatch(currentMeetingInput, recentJobsInput, updat
   };
 }
 
-function buildSessionDocument(meeting, owner, jobId, updatedAt) {
-  return {
-    endedAt: meeting.endedAt,
-    recentJobs: [],
-    language: meeting.language,
-    owner: owner ? { ...owner } : {},
-    sessionId: meeting.sessionId,
-    sharedMemo: normalizeTextBlock(meeting.sharedMemo).slice(0, MAX_SHARED_MEMO_CHARS),
-    startedAt: meeting.startedAt,
-    title: meeting.title,
-    updatedAt,
-    lastJobId: jobId,
-  };
-}
-
-function buildSessionRecentJobsPatch(currentSessionInput, recentJobsInput, updatedAt) {
-  const currentSession = normalizeMeetingSession(currentSessionInput);
-  const recentJobs = Array.isArray(recentJobsInput)
-    ? recentJobsInput.map(normalizeMeetingResultSummary).sort(compareMeetingResults).slice(0, MAX_MEETING_RECENT_RESULTS)
-    : [];
-  return {
-    lastJobId: normalizeText(recentJobs[0]?.jobId),
-    recentJobs,
-    updatedAt: normalizeText(updatedAt || recentJobs[0]?.updatedAt || currentSession.updatedAt || new Date().toISOString()),
-  };
-}
-
-function buildSessionDocId(providerUserKey, sessionId) {
-  return `${normalizeText(providerUserKey)}__${normalizeText(sessionId)}`;
-}
-
 function buildTempStorageObjectPath(providerUserKey, meetingId, jobId, fileName) {
   return [
     "tmp",
@@ -5188,8 +4700,6 @@ function normalizeMeetingJob(input) {
       sharedMemo: normalizedContext.sharedMemoSnapshot,
       updatedAt: normalizeText(job.notesGeneratedAt || job.updatedAt),
     }),
-    notesRevisionRequest: normalizeTextBlock(job.notesRevisionRequest).slice(0, MAX_SHARED_MEMO_CHARS),
-    notesRevisionRequestedAt: normalizeText(job.notesRevisionRequestedAt),
     notesStatus: normalizeMeetingNotesStatus(job.notesStatus),
     notesSchemaVersion: Math.max(1, Number(job.notesSchemaVersion) || NOTES_SCHEMA_VERSION),
     options: {
@@ -5245,8 +4755,6 @@ function normalizeMeetingArtifact(input) {
       contextItems: normalizedNotesContextItems,
       updatedAt: normalizeText(artifact.notesGeneratedAt || artifact.createdAt),
     }),
-    notesRevisionRequest: normalizeTextBlock(artifact.notesRevisionRequest).slice(0, MAX_SHARED_MEMO_CHARS),
-    notesRevisionRequestedAt: normalizeText(artifact.notesRevisionRequestedAt),
     notesStatus: normalizeMeetingNotesStatus(artifact.notesStatus),
     notesSchemaVersion: Math.max(1, Number(artifact.notesSchemaVersion) || NOTES_SCHEMA_VERSION),
     owner: artifact.owner && typeof artifact.owner === "object" ? { ...artifact.owner } : {},
@@ -5291,23 +4799,6 @@ function normalizeMeetingSummary(input) {
   };
 }
 
-function normalizeMeetingSession(input) {
-  const session = input && typeof input === "object" ? input : {};
-  return {
-    deletedAt: normalizeText(session.deletedAt),
-    endedAt: normalizeText(session.endedAt),
-    language: normalizeText(session.language) || "ko",
-    lastJobId: normalizeText(session.lastJobId),
-    owner: session.owner && typeof session.owner === "object" ? { ...session.owner } : {},
-    recentJobs: Array.isArray(session.recentJobs) ? session.recentJobs.map(normalizeMeetingResultSummary) : [],
-    sessionId: normalizeText(session.sessionId),
-    sharedMemo: normalizeTextBlock(session.sharedMemo).slice(0, MAX_SHARED_MEMO_CHARS),
-    startedAt: normalizeText(session.startedAt),
-    title: normalizeText(session.title),
-    updatedAt: normalizeText(session.updatedAt),
-  };
-}
-
 function normalizeMeetingResultSummary(input) {
   const item = input && typeof input === "object" ? input : {};
   const normalizedNotesContextItems = normalizeMeetingNotesContextItems(item.notesContextItems);
@@ -5318,7 +4809,7 @@ function normalizeMeetingResultSummary(input) {
     createdAt: normalizeText(item.createdAt),
     durationMs: Math.max(0, Number(item.durationMs) || 0),
     error: normalizeText(item.error),
-    meetingId: normalizeText(item.meetingId || item.sessionId),
+    meetingId: normalizeText(item.meetingId),
     notesContextItems: normalizedNotesContextItems,
     notesDegradedReason: normalizeText(item.notesDegradedReason),
     notesGeneratedAt: normalizeText(item.notesGeneratedAt),
@@ -5327,8 +4818,6 @@ function normalizeMeetingResultSummary(input) {
       sharedMemo: sharedMemoSnapshot,
       updatedAt: normalizeText(item.notesGeneratedAt || item.updatedAt),
     }),
-    notesRevisionRequest: normalizeTextBlock(item.notesRevisionRequest).slice(0, MAX_SHARED_MEMO_CHARS),
-    notesRevisionRequestedAt: normalizeText(item.notesRevisionRequestedAt),
     notesStatus: normalizeMeetingNotesStatus(item.notesStatus),
     notesSchemaVersion: Math.max(1, Number(item.notesSchemaVersion) || NOTES_SCHEMA_VERSION),
     previewText: normalizeText(item.previewText || item.excerpt),
@@ -5371,8 +4860,6 @@ function buildMeetingResultSummary(jobInput, artifactInput) {
         updatedAt: normalizeText(artifact?.notesGeneratedAt || job.notesGeneratedAt || job.updatedAt),
       }
     ),
-    notesRevisionRequest: normalizeTextBlock(artifact?.notesRevisionRequest || job.notesRevisionRequest),
-    notesRevisionRequestedAt: normalizeText(artifact?.notesRevisionRequestedAt || job.notesRevisionRequestedAt),
     notesStatus: normalizeMeetingNotesStatus(artifact?.notesStatus || job.notesStatus),
     notesSchemaVersion: Math.max(1, Number(artifact?.notesSchemaVersion || job.notesSchemaVersion) || NOTES_SCHEMA_VERSION),
     previewText: notesPreview || buildTranscriptExcerpt(transcriptText),
@@ -5462,34 +4949,6 @@ async function upsertMeetingJobSummary(meetingRef, meeting, owner, jobInput, art
   await meetingRef.set(nextDocument, { merge: true });
 }
 
-async function upsertLegacySessionJobSummary(sessionRef, meeting, owner, jobInput, artifactInput) {
-  const job = normalizeMeetingJob(jobInput);
-  if (!job.jobId || job.deletedAt) {
-    return;
-  }
-  const snapshot = await sessionRef.get();
-  const currentSession = snapshot.exists ? normalizeMeetingSession(snapshot.data()) : normalizeMeetingSession({
-    owner,
-    sessionId: meeting.sessionId,
-  });
-  if (currentSession.deletedAt) {
-    return;
-  }
-  const recentJobs = mergeRecentJobs(currentSession.recentJobs, buildMeetingResultSummary(job, artifactInput));
-  await sessionRef.set(
-    {
-      ...buildSessionDocument(
-        meeting,
-        owner,
-        job.jobId || currentSession.lastJobId,
-        job.updatedAt || new Date().toISOString()
-      ),
-      recentJobs,
-    },
-    { merge: true }
-  );
-}
-
 function normalizeTranscriptSegment(input) {
   const segment = input && typeof input === "object" ? input : {};
   const startMs = Math.max(0, Number(segment.startMs) || 0);
@@ -5511,13 +4970,6 @@ function assertMeetingOwnership(meeting, owner, createHttpError) {
   const storedOwnerKey = normalizeText(meeting.owner?.providerUserKey);
   if (storedOwnerKey && storedOwnerKey !== normalizeText(owner?.providerUserKey)) {
     throw createHttpError(403, "현재 사용자에게 허용되지 않은 회의예요.");
-  }
-}
-
-function assertSessionOwnership(session, owner, createHttpError) {
-  const storedOwnerKey = normalizeText(session.owner?.providerUserKey);
-  if (storedOwnerKey && storedOwnerKey !== normalizeText(owner?.providerUserKey)) {
-    throw createHttpError(403, "현재 사용자에게 허용되지 않은 회의 세션이에요.");
   }
 }
 
@@ -5588,8 +5040,6 @@ async function loadMeetingTranscriptForNotes(jobInput, db, createHttpError) {
         notes: job.meetingNotes,
         notesGeneratedAt: job.notesGeneratedAt,
         notesInputSnapshot: job.notesInputSnapshot,
-        notesRevisionRequest: job.notesRevisionRequest,
-        notesRevisionRequestedAt: job.notesRevisionRequestedAt,
         notesStatus: job.notesStatus,
         notesSchemaVersion: job.notesSchemaVersion,
         owner: job.owner,

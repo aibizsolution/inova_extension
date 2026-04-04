@@ -12,7 +12,7 @@
 ## 관련 프론트 경로
 - `background/service-worker.js`
 - `hosting/meeting/*`
-- `meeting/index.js`
+- `popup/index.js`
 
 ## 관련 functions 경로
 - `functions/features/meeting/meeting-launch-service.js`

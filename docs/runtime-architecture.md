@@ -38,29 +38,17 @@
 - 역할: launch token 교환, hosted session 복원, Firebase Auth bootstrap, Firestore 문서 구독, 회의 녹음 시작/종료, 전사 접수, 결과 리스트, 선택한 결과의 발화 구간 상세 렌더링, 화자별 AI 정리, 전체 복사
 - 특징: 회의 제어와 상세 보기를 확장 UI에서 분리한 메인 작업실이다. `meetingSessionToken`으로 회의 명령 API를 호출하고, 작업실 상태는 Firebase custom token으로 로그인한 뒤 Firestore `meeting/job/artifact` 문서를 직접 구독한다. 마이크 녹음은 브라우저 표준 `getUserMedia + MediaRecorder` 경로를 사용한다.
 
-### Meeting Extension Page (Legacy)
-
-- 위치: `meeting/index.html`, `meeting/index.js`
-- 역할: 이전 확장 내부 회의 페이지 자산을 호환용으로 보관한다.
-- 특징: 메인 플로우에서는 더 이상 직접 열지 않는다.
-
 ### Content Script
 
 - 위치: `content/`, `shared/`, `manifest.json`
 - 역할: `inova.incross.com` 안에 실험실 패널을 삽입하고, 질문 탐색/회의록/프롬프트/스토어/릴리스 UI와 회의 허브 진입 흐름을 조립한다.
-- 특징: 현재 대화 DOM을 읽고, 로컬 상태를 붙이고, 필요한 클라우드 호출은 background에 메시지로 위임한다. 회의 기능은 브라우저 쪽에서 `meetingStateByMeetingId` 상태를 붙이고, `content/meeting-manager.js`가 `issueInovaMeetingPanelAuth -> hosted panel bridge -> Firestore meeting query` 경로의 실시간 허브 구독과 fallback refresh를 맡는다. 회의 허브 목록은 별도 `chrome.storage.local` 캐시 대신 hosted bridge의 Firestore persistence와 현재 메모리 상태를 우선한다. 프롬프트/스토어 쪽은 `content/features/prompt-store/prompt-realtime-manager.js`가 `issueInovaPromptPanelAuth -> hosted prompt panel bridge -> Firestore account/feed doc` 경로를 관리하되, `integration_inova_accounts.promptLibraryMeta` 1개 문서와 `prompt_store_meta/summary`, `prompt_store_feed_pages/latest__{category}__0000`만 구독한다. 패널 디버그는 회의 전용이 아니라 현재 브라우저 탭 세션 기준 전역 버퍼를 쓰고, `content/panel.js`와 `content/meeting-view.js`가 패널 바깥 오버레이 콘솔을 렌더링한다.
+- 특징: 현재 대화 DOM을 읽고, 로컬 상태를 붙이고, 필요한 클라우드 호출은 background에 메시지로 위임한다. 회의 기능은 브라우저 쪽에서 `meetingStateByMeetingId` 상태만 유지하고, `content/meeting-manager.js`가 `issueInovaMeetingPanelAuth -> hosted panel bridge -> Firestore meeting query` 경로의 실시간 허브 구독과 fallback refresh를 맡는다. 회의 허브 목록은 별도 `chrome.storage.local` 캐시 대신 hosted bridge의 Firestore persistence와 현재 메모리 상태를 우선한다. 프롬프트/스토어 쪽은 `content/features/prompt-store/prompt-realtime-manager.js`가 `issueInovaPromptPanelAuth -> hosted prompt panel bridge -> Firestore account/feed doc` 경로를 관리하되, `integration_inova_accounts.promptLibraryMeta` 1개 문서와 `prompt_store_meta/summary`, `prompt_store_feed_pages/latest__{category}__0000`만 구독한다. 패널 디버그는 회의 전용이 아니라 현재 브라우저 탭 세션 기준 전역 버퍼를 쓰고, `content/panel.js`와 `content/meeting-view.js`가 패널 바깥 오버레이 콘솔을 렌더링한다.
 
 ### Background Service Worker
 
 - 위치: `background/service-worker.js`
 - 역할: i-Nova access token 확보, Firebase Functions 호출, 릴리스 메타 fetch, 동기화 중복 완화, prompt/store panel auth 발급, hosted 회의 launch grant 발급, 작업실 URL 타깃 분기
 - 특징: 클라우드 경계의 브로커다. content script가 직접 장기 원격 상태를 다루지 않게 막아 준다. 회의 기능은 `inova-meeting:*` 메시지로, 프롬프트 실시간은 `inova-prompt:*` 메시지로 이 경계를 먼저 통과한다. 패널에서 열린 작업실은 popup 설정의 호스팅 타깃을 따라간다.
-
-### Offscreen Document (Legacy)
-
-- 위치: `offscreen/meeting-recorder.html`, `offscreen/meeting-recorder.js`
-- 역할: 이전 확장 내부 캡처 경로 호환 자산이다.
-- 특징: 현재 메인 hosted 회의 플로우에서는 사용하지 않는다.
 
 ### Firebase Functions
 
