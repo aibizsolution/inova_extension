@@ -1546,11 +1546,10 @@
     if (!nextItems) {
       return false;
     }
-    await saveSelectedRecordContextItems(nextItems, {
+    return await saveSelectedRecordContextItems(nextItems, {
       clearDraft: true,
       successMessage: state.notesContext.editingId ? "추가 맥락을 수정했습니다." : "추가 맥락을 저장했습니다.",
     });
-    return true;
   }
 
   function handleNotesContextListClick(event) {
@@ -4261,55 +4260,9 @@
     return message === "수정할 회의 결과 내용이 비어 있어요.";
   }
 
-  function applyLocalSelectedRecordReviewMutation(patch = {}, options = {}) {
-    const hasSharedMemo = Object.prototype.hasOwnProperty.call(patch, "sharedMemo");
-    const hasContextItems = Object.prototype.hasOwnProperty.call(patch, "contextItems");
-    const nextSharedMemo = hasSharedMemo
-      ? normalizeTextBlock(patch.sharedMemo).slice(0, MAX_SHARED_MEMO_CHARS)
-      : "";
-    const nextContextItems = hasContextItems
-      ? cloneNotesContextItems(patch.contextItems)
-      : [];
-    const entry = findHistoryEntry(state, state.selectedRecordId);
-    const currentJobId = normalizeText(entry?.remote?.jobId || state.currentJob?.jobId);
-
-    if (state.currentJob) {
-      if (hasSharedMemo) {
-        state.currentJob.sharedMemoSnapshot = nextSharedMemo;
-      }
-      if (hasContextItems) {
-        state.currentJob.notesContextItems = nextContextItems;
-      }
-    }
-    if (state.currentArtifact && hasContextItems) {
-      state.currentArtifact.notesContextItems = nextContextItems;
-    }
-    if (currentJobId) {
-      state.records = state.records.map((record) => (
-        normalizeText(record.jobId) === currentJobId
-          ? normalizeRecord({
-              ...record,
-              notesContextItems: hasContextItems ? nextContextItems : record.notesContextItems,
-              sharedMemoSnapshot: hasSharedMemo ? nextSharedMemo : record.sharedMemoSnapshot,
-            })
-          : record
-      ));
-    }
-
-    const activeEntry = findHistoryEntry(state, state.selectedRecordId);
-    syncSelectedRecordReviewState(activeEntry);
-    if (options.resetRecordMemoDraft) {
-      state.selectedRecordMemo.draft = state.selectedRecordMemo.saved;
-    }
-    if (options.resetNotesContextDraft) {
-      state.notesContext.draft = "";
-      state.notesContext.editingId = "";
-    }
-    logDebug("workspace.result.update.legacy-fallback", {
-      contextItemCount: hasContextItems ? nextContextItems.length : undefined,
-      jobId: currentJobId,
-      sharedMemoApplied: hasSharedMemo,
-    });
+  function buildLegacyMeetingResultMutationErrorMessage(subject) {
+    const normalizedSubject = normalizeText(subject) || "회의 결과";
+    return `${normalizedSubject} 저장을 지원하는 최신 함수가 아직 배포되지 않았어요. npm run deploy:functions 후 다시 시도해 주세요.`;
   }
 
   async function saveSelectedRecordMemo(options = {}) {
@@ -4340,16 +4293,12 @@
       return true;
     } catch (error) {
       if (isLegacyMeetingResultMutationError(error)) {
-        applyLocalSelectedRecordReviewMutation({ sharedMemo: nextMemo }, { resetRecordMemoDraft: true });
-        if (!options.quiet) {
-          setNotice(
-            nextMemo
-              ? "메모를 저장했습니다. 회의록 업데이트 때 함께 반영됩니다."
-              : "메모를 비웠습니다. 회의록 업데이트 때 함께 반영됩니다.",
-            "highlight"
-          );
-        }
-        return true;
+        logDebug("workspace.result.update.legacy-backend", {
+          jobId: entry.remote.jobId,
+          mutation: "sharedMemo",
+        });
+        setNotice(buildLegacyMeetingResultMutationErrorMessage("메모"), "error");
+        return false;
       }
       setNotice(error instanceof Error ? error.message : "메모를 저장하지 못했어요.", "error");
       return false;
@@ -4388,15 +4337,13 @@
       return true;
     } catch (error) {
       if (isLegacyMeetingResultMutationError(error)) {
-        applyLocalSelectedRecordReviewMutation(
-          { contextItems: nextItems },
-          { resetNotesContextDraft: Boolean(options.clearDraft) }
-        );
-        setNotice(
-          `${normalizeText(options.successMessage) || "추가 맥락을 저장했습니다."} 회의록 업데이트 때 함께 반영됩니다.`,
-          "highlight"
-        );
-        return true;
+        logDebug("workspace.result.update.legacy-backend", {
+          contextItemCount: nextItems.length,
+          jobId: entry.remote.jobId,
+          mutation: "contextItems",
+        });
+        setNotice(buildLegacyMeetingResultMutationErrorMessage("추가 맥락"), "error");
+        return false;
       }
       setNotice(error instanceof Error ? error.message : "추가 맥락을 저장하지 못했어요.", "error");
       return false;
