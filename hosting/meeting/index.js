@@ -4,13 +4,14 @@
   const { clearWorkspaceAuthCache, ensureWorkspaceAuth, getCollections, subscribeDocument } = ns.firebase;
   const { prepareAudioSourceChunks } = ns.audioChunker;
   const { DEBUG_SCENARIOS: PENDING_UPLOAD_DEBUG_SCENARIOS, blobToBase64, collapseSupersededPendingUploads, createPendingUploadStore, normalizePendingUpload } = ns.storage;
-  const { buildDetailView, buildLocalPendingJob, buildPendingNotice, buildPendingSummary, buildSegmentCopyText, chooseSelectedRecordId, findHistoryEntry, findRemoteForPending, normalizeArtifact, normalizeJob, normalizeRecord, renderWorkspace } = ns.render;
+  const { buildDetailView, buildLocalPendingJob, buildMeetingNotesCopyText, buildPendingNotice, buildPendingSummary, buildSegmentCopyText, chooseSelectedRecordId, findHistoryEntry, findRemoteForPending, normalizeArtifact, normalizeJob, normalizeRecord, renderWorkspace } = ns.render;
   const debugConsole = ns.debugConsole;
 
   const CONFIG = resolveConfig(global.__INOVA_HOSTED_MEETING_CONFIG__);
   const FIRESTORE_COLLECTIONS = getCollections();
   const DEBUG_PANEL_COLLAPSED_STORAGE_KEY = "__INOVA_MEETING_DEBUG_PANEL_COLLAPSED__";
   const DEBUG_LOCAL_QUEUE_SANDBOX_PARAM = "debugQueueSandbox";
+  const MAX_NOTES_REVISION_REQUEST_CHARS = 12000;
   const SUPERSEDED_REMOTE_JOBS_STORAGE_KEY_PREFIX = "__INOVA_MEETING_SUPERSEDED_REMOTE_JOBS__";
   const BOOT_INITIAL_SNAPSHOT_WAIT_MS = 450;
   const DEGRADED_NOTICE_CODES = Object.freeze({
@@ -107,6 +108,7 @@
       mode: "create",
       notice: createEmptyNotice(),
       noticeTimer: 0,
+      notesRevision: { draft: "", open: false, recordId: "", requestedAt: "", saved: "" },
       params: parseParams(global.location.href),
       pendingUploads: [],
       pendingUploadStorage: {
@@ -172,7 +174,7 @@
   }
 
   function cacheRefs() {
-    for (const id of ["meetingShell", "blockedMessage", "blockedEyebrow", "blockedTitle", "blockedState", "workspace", "pageTitle", "pageSummary", "workspaceBadge", "offlineQueueBadge", "refreshButton", "meetingTitleInput", "saveMeetingTitleButton", "deleteMeetingButton", "meetingStatusChip", "currentBadge", "currentSummary", "currentHint", "currentNotice", "currentTimer", "startButton", "importAudioButton", "importAudioInput", "pauseButton", "resumeButton", "stopButton", "discardButton", "sharedMemoInput", "saveSharedMemoButton", "clearSharedMemoButton", "sharedMemoNotice", "recordCountBadge", "recordList", "detailTitle", "detailBadge", "detailSummary", "recordTitleGroup", "recordTitleInput", "saveRecordTitleButton", "downloadRecordButton", "deleteRecordButton", "detailMeta", "reviewSectionHeader", "reviewSegmentsToolbar", "copySegmentsButton", "detailMemoText", "reviewTabSummary", "reviewTabMemo", "reviewTabNotes", "reviewTabSegments", "reviewTabSegmentsCount", "reviewPanelSummary", "summaryStatusPill", "summaryStatusGrid", "summaryActionCard", "reviewPanelMemo", "meetingNotesCard", "reviewPanelSegments", "regenerateNotesButton", "meetingNotesOverview", "meetingNotesSections", "detailNotice", "segmentList", "debugPanel", "confirmOverlay", "confirmDialog", "confirmDialogEyebrow", "confirmDialogTitle", "confirmDialogBody", "confirmDialogCancel", "confirmDialogConfirm"]) {
+    for (const id of ["meetingShell", "blockedMessage", "blockedEyebrow", "blockedTitle", "blockedState", "workspace", "pageTitle", "pageSummary", "workspaceBadge", "offlineQueueBadge", "refreshButton", "meetingTitleInput", "saveMeetingTitleButton", "deleteMeetingButton", "meetingStatusChip", "currentBadge", "currentSummary", "currentHint", "currentNotice", "currentTimer", "startButton", "importAudioButton", "importAudioInput", "pauseButton", "resumeButton", "stopButton", "discardButton", "sharedMemoInput", "saveSharedMemoButton", "clearSharedMemoButton", "sharedMemoNotice", "recordCountBadge", "recordList", "detailTitle", "detailBadge", "detailSummary", "recordTitleGroup", "recordTitleInput", "saveRecordTitleButton", "downloadRecordButton", "deleteRecordButton", "detailMeta", "reviewSectionHeader", "reviewSegmentsToolbar", "copySegmentsButton", "detailMemoText", "reviewTabSummary", "reviewTabMemo", "reviewTabNotes", "reviewTabSegments", "reviewTabSegmentsCount", "reviewPanelSummary", "summaryStatusPill", "summaryStatusGrid", "summaryActionCard", "reviewPanelMemo", "meetingNotesCard", "reviewPanelSegments", "copyMeetingNotesButton", "requestNotesRevisionButton", "meetingNotesOverview", "meetingNotesSections", "detailNotice", "segmentList", "debugPanel", "confirmOverlay", "confirmDialog", "confirmDialogEyebrow", "confirmDialogTitle", "confirmDialogBody", "confirmDialogCancel", "confirmDialogConfirm", "notesRevisionOverlay", "notesRevisionDialog", "notesRevisionTitle", "notesRevisionBody", "notesRevisionInput", "notesRevisionCancel", "notesRevisionSubmit"]) {
       refs[id] = global.document.getElementById(id);
     }
   }
@@ -219,8 +221,12 @@
     refs.saveRecordTitleButton.addEventListener("click", saveCurrentRecordTitle);
     refs.downloadRecordButton.addEventListener("click", downloadCurrentRecord);
     refs.deleteRecordButton.addEventListener("click", () => deleteCurrentRecord());
+    refs.copyMeetingNotesButton?.addEventListener("click", copyMeetingNotes);
+    refs.requestNotesRevisionButton?.addEventListener("click", openNotesRevisionModal);
     refs.copySegmentsButton?.addEventListener("click", copySegmentsText);
-    refs.regenerateNotesButton.addEventListener("click", regenerateNotes);
+    refs.notesRevisionInput?.addEventListener("input", () => updateNotesRevisionDraft(refs.notesRevisionInput.value));
+    refs.notesRevisionCancel?.addEventListener("click", () => closeNotesRevisionModal());
+    refs.notesRevisionSubmit?.addEventListener("click", submitNotesRevisionRequest);
     refs.debugPanel?.addEventListener("click", handleDebugPanelClick);
     refs.confirmDialogCancel?.addEventListener("click", () => resolveConfirmation(false));
     refs.confirmDialogConfirm?.addEventListener("click", () => resolveConfirmation(true));
@@ -229,10 +235,20 @@
         resolveConfirmation(false);
       }
     });
+    refs.notesRevisionOverlay?.addEventListener("click", (event) => {
+      if (event.target === refs.notesRevisionOverlay) {
+        closeNotesRevisionModal();
+      }
+    });
     global.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && state.confirmation.open) {
         event.preventDefault();
         resolveConfirmation(false);
+        return;
+      }
+      if (event.key === "Escape" && state.notesRevision.open) {
+        event.preventDefault();
+        closeNotesRevisionModal();
       }
     });
     global.addEventListener("focus", handleBackgroundRefresh, { passive: true });
@@ -1307,6 +1323,79 @@
     }
   }
 
+  function readNotesRevisionForEntry(entry) {
+    return {
+      recordId: normalizeText(entry?.id || state.currentDetailSelectionId),
+      requestedAt: normalizeText(
+        state.currentArtifact?.notesRevisionRequestedAt
+        || state.currentJob?.notesRevisionRequestedAt
+        || entry?.remote?.notesRevisionRequestedAt
+      ),
+      saved: normalizeTextBlock(
+        state.currentArtifact?.notesRevisionRequest
+        || state.currentJob?.notesRevisionRequest
+        || entry?.remote?.notesRevisionRequest
+      ),
+    };
+  }
+
+  function syncNotesRevisionStateForSelection(entry) {
+    const snapshot = readNotesRevisionForEntry(entry);
+    const selectionChanged = normalizeText(state.notesRevision.recordId) !== snapshot.recordId;
+    state.notesRevision.recordId = snapshot.recordId;
+    state.notesRevision.requestedAt = snapshot.requestedAt;
+    state.notesRevision.saved = snapshot.saved;
+    if (selectionChanged || !state.notesRevision.open) {
+      state.notesRevision.draft = snapshot.saved;
+    }
+  }
+
+  function updateNotesRevisionDraft(value) {
+    state.notesRevision.draft = normalizeTextBlock(value).slice(0, MAX_NOTES_REVISION_REQUEST_CHARS);
+    applyRender();
+  }
+
+  function openNotesRevisionModal() {
+    const entry = findHistoryEntry(state, state.selectedRecordId);
+    if (!entry?.remote?.jobId) {
+      return;
+    }
+    syncNotesRevisionStateForSelection(entry);
+    state.notesRevision.open = true;
+    applyRender();
+    global.setTimeout(() => {
+      if (!refs.notesRevisionInput) {
+        return;
+      }
+      refs.notesRevisionInput.focus();
+      if (typeof refs.notesRevisionInput.setSelectionRange === "function") {
+        const length = refs.notesRevisionInput.value.length;
+        refs.notesRevisionInput.setSelectionRange(length, length);
+      }
+    }, 0);
+  }
+
+  function closeNotesRevisionModal(options = {}) {
+    if (state.busy.regenerateNotes) {
+      return;
+    }
+    state.notesRevision.open = false;
+    if (options.resetDraft !== false) {
+      state.notesRevision.draft = state.notesRevision.saved;
+    }
+    applyRender();
+  }
+
+  async function submitNotesRevisionRequest() {
+    const revisionRequest = normalizeTextBlock(state.notesRevision.draft);
+    if (!revisionRequest) {
+      setNotice("반영할 수정 요청을 먼저 입력해 주세요.", "warning");
+      applyRender();
+      return;
+    }
+    await regenerateNotes({ keepModalOpenOnError: true, revisionRequest });
+  }
+
   async function exchangeLaunch(launchToken) {
     logDebug("workspace.launch.exchange.start", { launchToken: Boolean(normalizeText(launchToken)) });
     const payload = await postJson(global, CONFIG.exchangeLaunchUrl, { launchToken });
@@ -2203,6 +2292,7 @@
       disconnectArtifactListener();
       state.currentArtifact = null;
       state.currentJob = buildLocalPendingJob(entry.pending);
+      syncNotesRevisionStateForSelection(entry);
       return;
     }
 
@@ -2225,6 +2315,8 @@
       error: entry.remote.error,
       jobId: entry.remote.jobId,
       notesGeneratedAt: entry.remote.notesGeneratedAt,
+      notesRevisionRequest: entry.remote.notesRevisionRequest,
+      notesRevisionRequestedAt: entry.remote.notesRevisionRequestedAt,
       source: {
         durationMs: entry.remote.durationMs,
         requestId: entry.remote.requestId,
@@ -2233,6 +2325,7 @@
       title: entry.remote.title,
       updatedAt: entry.remote.updatedAt,
     }, state.meeting.title);
+    syncNotesRevisionStateForSelection(entry);
     await subscribeSelectedJobRealtime(entry);
   }
 
@@ -2289,6 +2382,7 @@
       return;
     }
     state.currentJob = normalizeJob(snapshot.data(), state.meeting.title);
+    syncNotesRevisionStateForSelection(entry);
     await ensureArtifactRealtimeSubscription(entry, { forceReconnect: false });
     applyRender();
     logDebug("workspace.snapshot.job", {
@@ -2360,6 +2454,7 @@
       return;
     }
     state.currentArtifact = snapshot?.exists ? normalizeArtifact(snapshot.data()) : null;
+    syncNotesRevisionStateForSelection(findHistoryEntry(state, state.selectedRecordId));
     applyRender();
     logDebug("workspace.snapshot.artifact", {
       artifactId: normalizeText(state.currentArtifact?.artifactId || state.realtime.artifactDocId),
@@ -2375,6 +2470,7 @@
     state.currentDetailSelectionId = "";
     state.currentJob = null;
     state.currentLocalRecord = null;
+    state.notesRevision = { draft: "", open: false, recordId: "", requestedAt: "", saved: "" };
   }
 
   function disconnectMeetingListener(options = {}) {
@@ -3895,18 +3991,36 @@
     }
   }
 
-  async function regenerateNotes() {
+  async function regenerateNotes(options = {}) {
     const entry = findHistoryEntry(state, state.selectedRecordId);
     if (!entry?.remote?.jobId) return;
+    const revisionRequest = normalizeTextBlock(options?.revisionRequest).slice(0, MAX_NOTES_REVISION_REQUEST_CHARS);
     state.busy.regenerateNotes = true;
     applyRender();
     try {
-      const payload = await postJson(global, CONFIG.regenerateNotesUrl, { jobId: entry.remote.jobId, meetingId: state.session.meetingId, sharedMemo: normalizeTextBlock(state.currentJob?.sharedMemoSnapshot) }, state.session.meetingSessionToken);
+      const payload = await postJson(global, CONFIG.regenerateNotesUrl, {
+        jobId: entry.remote.jobId,
+        meetingId: state.session.meetingId,
+        revisionRequest,
+        sharedMemo: normalizeTextBlock(state.currentJob?.sharedMemoSnapshot),
+      }, state.session.meetingSessionToken);
       state.currentJob = normalizeJob(payload?.job, state.currentJob?.title || state.meeting.title);
       state.currentArtifact = normalizeArtifact(payload?.artifact);
+      syncNotesRevisionStateForSelection(entry);
+      state.notesRevision.open = false;
       state.reviewTab = "notes";
-      setNotice("같은 원문으로 회의 정리를 다시 만들었습니다.", "highlight");
+      setNotice(
+        revisionRequest
+          ? "수정 요청을 반영해 회의 정리를 다시 만들었습니다."
+          : "같은 원문으로 회의 정리를 다시 만들었습니다.",
+        "highlight"
+      );
       await syncWorkspaceLocalState(false, "workflow");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "회의 정리를 다시 만들지 못했어요.", "error");
+      if (options?.keepModalOpenOnError !== true) {
+        state.notesRevision.open = false;
+      }
     } finally {
       state.busy.regenerateNotes = false;
       applyRender();
@@ -4169,6 +4283,28 @@
     applyRender();
   }
 
+  async function copyMeetingNotes() {
+    const entry = findHistoryEntry(state, state.selectedRecordId);
+    const detailView = buildDetailView(state, entry);
+    const text = buildMeetingNotesCopyText(detailView.meetingNotes);
+    if (!text) {
+      setNotice("복사할 회의 정리가 아직 없습니다.", "warning");
+      applyRender();
+      return;
+    }
+    try {
+      if (typeof global.navigator?.clipboard?.writeText === "function") {
+        await global.navigator.clipboard.writeText(text);
+        setNotice("회의 정리를 복사했습니다.", "highlight");
+      } else {
+        throw new Error("Clipboard API unavailable");
+      }
+    } catch {
+      setNotice("클립보드 권한이 없어 회의 정리 복사를 완료하지 못했어요.", "error");
+    }
+    applyRender();
+  }
+
   async function copySegmentsText() {
     const entry = findHistoryEntry(state, state.selectedRecordId);
     const detailView = buildDetailView(state, entry);
@@ -4377,6 +4513,20 @@
     if (refs.confirmDialogTitle) refs.confirmDialogTitle.textContent = state.confirmation.title || "이 작업을 진행할까요?";
     if (refs.confirmDialogBody) refs.confirmDialogBody.textContent = state.confirmation.body || "";
     if (refs.confirmDialogConfirm) refs.confirmDialogConfirm.textContent = state.confirmation.confirmLabel || "확인";
+    if (refs.notesRevisionOverlay) refs.notesRevisionOverlay.hidden = !state.notesRevision.open;
+    if (refs.notesRevisionInput && refs.notesRevisionInput.value !== state.notesRevision.draft) {
+      refs.notesRevisionInput.value = state.notesRevision.draft;
+    }
+    if (refs.notesRevisionInput) {
+      refs.notesRevisionInput.disabled = state.busy.regenerateNotes;
+    }
+    if (refs.notesRevisionCancel) {
+      refs.notesRevisionCancel.disabled = state.busy.regenerateNotes;
+    }
+    if (refs.notesRevisionSubmit) {
+      refs.notesRevisionSubmit.disabled = !normalizeTextBlock(state.notesRevision.draft) || state.busy.regenerateNotes;
+      refs.notesRevisionSubmit.textContent = state.busy.regenerateNotes ? "정리 중" : "반영해서 다시 정리";
+    }
   }
   function hasWorkspaceData() {
     return Boolean(state.records.length || state.pendingUploads.length || state.currentJob || state.currentArtifact || state.selectedRecordId);

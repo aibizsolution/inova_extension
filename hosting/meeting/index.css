@@ -546,10 +546,6 @@ button {
   color: var(--text);
 }
 
-#regenerateNotesButton {
-  padding-inline: 16px;
-}
-
 .input-group__controls--field-group .secondary-button:hover,
 .input-group__controls--field-group .ghost-button:hover {
   background: #eef3f9;
@@ -1216,10 +1212,18 @@ select:disabled {
 .notes-toolbar {
   display: flex;
   flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: flex-end;
+  justify-content: flex-end;
+  align-items: center;
   gap: 12px;
   margin-bottom: 14px;
+}
+
+.notes-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 100%;
 }
 
 .review-header__actions {
@@ -1815,6 +1819,45 @@ select:disabled {
   margin-top: 18px;
 }
 
+.notes-revision-dialog {
+  width: min(640px, 100%);
+}
+
+.notes-revision-dialog__label {
+  display: block;
+  margin-top: 18px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.notes-revision-dialog__input {
+  width: 100%;
+  min-height: 180px;
+  margin-top: 8px;
+  padding: 12px 13px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-soft);
+  color: var(--text);
+  font: inherit;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.notes-revision-dialog__input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(44, 92, 229, 0.14);
+}
+
+.notes-revision-dialog__hint {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
 @media (max-width: 1320px) {
   .workspace-layout {
     grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
@@ -1891,6 +1934,7 @@ select:disabled {
   .capture-meter,
   .review-header__actions,
   .notes-toolbar,
+  .notes-toolbar__actions,
   .action-row,
   .inline-action-row,
   .input-group__controls,
