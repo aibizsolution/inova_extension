@@ -2,6 +2,36 @@
   "schemaVersion": 1,
   "versions": [
     {
+      "version": "0.3.20",
+      "level": "patch",
+      "public": {
+        "headline": "회의 정리를 문서처럼 읽기 쉽게 개선",
+        "summary": "이번 배포는 완료된 회의 결과를 상태판보다 읽는 문서에 가깝게 다듬고, 메모와 원문 검토를 함께 보면서 맥락을 따라가기 쉽게 정리한 업데이트입니다.",
+        "changes": [
+          {
+            "type": "changed",
+            "text": "완료된 회의 결과 화면이 `회의 정리 / 메모 / 원문 검토` 3탭 중심으로 바뀌어, 처리 상태보다 실제 회의 내용을 먼저 읽고 검토하기 쉬워졌습니다."
+          },
+          {
+            "type": "changed",
+            "text": "회의 정리는 배경, 논의 흐름, 결정, 열린 쟁점을 하나의 문서형 구조로 다시 정리해 이전보다 맥락이 더 이어지도록 다듬었습니다."
+          }
+        ]
+      },
+      "internal": {
+        "changes": [
+          {
+            "type": "changed",
+            "text": "meeting-service notes pipeline에서 mode detection과 notesMode 메타 생산을 제거하고, 단일 문서형 schema와 section reducer 흐름으로 통일했습니다."
+          },
+          {
+            "type": "changed",
+            "text": "hosted meeting UI에서 완료 기록 탭 구조를 `회의 정리 / 메모 / 원문 검토`로 정리하고, 청크 목표 크기를 28MiB로 올려 긴 파일의 part 수를 줄이도록 맞췄습니다."
+          }
+        ]
+      }
+    },
+    {
       "version": "0.3.19",
       "level": "patch",
       "public": {

@@ -56,6 +56,7 @@
   - hosted 작업실 디버그 콘솔은 카드 폭, 패딩, 로그 타이포도 패널 디버그 콘솔과 같은 치수 기준으로 맞춥니다.
   - 로컬 작업실에서는 `파일 불러오기`로 실제 오디오 샘플을 바로 전사 테스트할 수 있고, `25MB 초과` 또는 `약 20분 초과` 원본도 브라우저에서 `16kHz mono wav chunk`로 나눈 뒤 한 기록 결과로 이어 처리합니다.
 - hosted 회의 작업실은 기본적으로 `최대 200MB 또는 2시간` 원본까지 지원하고, 큰 오디오나 긴 녹음은 `약 9분 / 1.5초 overlap` 기준 chunk 업로드 후 서버에서 단일 회의 결과로 병합합니다.
+- chunk 업로드는 기본적으로 `약 28MiB` target part 크기를 써서, 긴 원본도 불필요하게 너무 많은 part로 잘리지 않게 유지합니다.
 - chunk 전사는 parent job이 직접 끝까지 돌지 않고, `청크 part 문서 -> chunk worker 함수 1개당 청크 1개 처리 -> chunk transcript JSON 임시 저장 -> finalizer 함수가 최종 병합/회의 정리` 순서로 나눠 처리합니다.
 - chunk 모드에서는 모든 part 업로드가 끝날 때까지 기다리지 않고, 첫 chunk가 올라오는 즉시 parent job을 만들고 이후 올라오는 chunk를 같은 job에 계속 반영해 전사를 앞당깁니다.
 - 각 chunk 업로드 HTTP 성공은 응답만 돌려주고 끝나지 않고, 이미 존재하는 parent job이 있으면 해당 part의 `storageObject/uploadStatus`를 Firestore job source에도 즉시 반영합니다. 그래서 뒤따르는 deduped `createInovaMeetingJob` 호출이 stale source snapshot을 보내더라도, 이미 올라간 chunk가 다시 `pending_upload`로 밀리는 race를 줄입니다.
