@@ -93,6 +93,10 @@
     return { contextItems: [], recordId: "", sharedMemo: "", updatedAt: "" };
   }
 
+  function createEmptyWorkspaceMutationState() {
+    return { completedAt: "", error: "", requestedAt: "", requestId: "", status: "", type: "" };
+  }
+
   function createInitialState() {
     const recordingProfile = resolveRecordingProfile(global);
     return {
@@ -128,11 +132,12 @@
       loadingReason: "",
       meetingTitleDraft: "",
       media: createEmptyMediaState(),
-      meeting: { meetingId: "", pendingLocalCount: 0, sharedMemo: "", title: "", updatedAt: "" },
+      meeting: { deletedAt: "", meetingId: "", pendingLocalCount: 0, sharedMemo: "", title: "", updatedAt: "", workspaceMutation: createEmptyWorkspaceMutationState() },
       mode: "create",
       notice: createEmptyNotice(),
       noticeTimer: 0,
       notesContext: createEmptyNotesContextState(),
+      pendingMutations: Object.create(null),
       params: parseParams(global.location.href),
       pendingUploads: [],
       pendingUploadStorage: {
@@ -374,11 +379,13 @@
       title: "로컬 queue sandbox",
     };
     state.meeting = {
+      deletedAt: "",
       meetingId,
       pendingLocalCount: 0,
       sharedMemo: "",
       title: state.session.title,
       updatedAt: "",
+      workspaceMutation: createEmptyWorkspaceMutationState(),
     };
     state.selectedRecordId = "";
     logDebug("workspace.debug.local-queue-sandbox", {
@@ -1370,6 +1377,237 @@
     };
   }
 
+  function normalizeWorkspaceMutation(mutation) {
+    const nextMutation = mutation && typeof mutation === "object" ? mutation : {};
+    return {
+      completedAt: normalizeText(nextMutation.completedAt),
+      error: normalizeText(nextMutation.error),
+      requestedAt: normalizeText(nextMutation.requestedAt),
+      requestId: normalizeText(nextMutation.requestId),
+      status: normalizeText(nextMutation.status),
+      type: normalizeText(nextMutation.type),
+    };
+  }
+
+  function generateClientRequestId(prefix = "mutation") {
+    const normalizedPrefix = normalizeText(prefix) || "mutation";
+    if (typeof global.crypto?.randomUUID === "function") {
+      return `${normalizedPrefix}-${global.crypto.randomUUID()}`;
+    }
+    return `${normalizedPrefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+
+  function getMutationBusyKey(type) {
+    switch (normalizeText(type)) {
+      case "deleteMeeting":
+        return "deleteMeeting";
+      case "deleteRecord":
+        return "deleteRecord";
+      case "regenerateNotes":
+        return "regenerateNotes";
+      case "saveMeetingMemo":
+        return "saveMeetingMemo";
+      case "saveMeetingTitle":
+        return "saveMeetingTitle";
+      case "saveRecordContext":
+        return "saveRecordContext";
+      case "saveRecordMemo":
+        return "saveRecordMemo";
+      case "saveRecordTitle":
+        return "saveRecordTitle";
+      default:
+        return "";
+    }
+  }
+
+  function getSelectedRecordWorkspaceMutation() {
+    const entry = findHistoryEntry(state, state.selectedRecordId);
+    return normalizeWorkspaceMutation(
+      state.currentJob?.workspaceMutation?.requestId
+        ? state.currentJob.workspaceMutation
+        : entry?.remote?.workspaceMutation
+    );
+  }
+
+  function syncWorkspaceMutationBusyState() {
+    const nextBusy = {
+      deleteMeeting: false,
+      deleteRecord: false,
+      regenerateNotes: false,
+      saveMeetingMemo: false,
+      saveMeetingTitle: false,
+      saveRecordContext: false,
+      saveRecordMemo: false,
+      saveRecordTitle: false,
+    };
+    Object.values(state.pendingMutations || {}).forEach((mutation) => {
+      const busyKey = getMutationBusyKey(mutation?.type);
+      if (busyKey) {
+        nextBusy[busyKey] = true;
+      }
+    });
+    const meetingMutation = normalizeWorkspaceMutation(state.meeting?.workspaceMutation);
+    if (["queued", "processing"].includes(meetingMutation.status)) {
+      const busyKey = getMutationBusyKey(meetingMutation.type);
+      if (busyKey) {
+        nextBusy[busyKey] = true;
+      }
+    }
+    const selectedRecordMutation = getSelectedRecordWorkspaceMutation();
+    if (["queued", "processing"].includes(selectedRecordMutation.status)) {
+      const busyKey = getMutationBusyKey(selectedRecordMutation.type);
+      if (busyKey) {
+        nextBusy[busyKey] = true;
+      }
+    }
+    Object.assign(state.busy, nextBusy);
+  }
+
+  function registerPendingMutation(options) {
+    const requestId = normalizeText(options?.requestId);
+    if (!requestId) {
+      return null;
+    }
+    state.pendingMutations[requestId] = {
+      jobId: normalizeText(options?.jobId),
+      pendingRequestId: normalizeText(options?.pendingRequestId),
+      quiet: Boolean(options?.quiet),
+      recordId: normalizeText(options?.recordId),
+      requestId,
+      resetNotesContextDraft: Boolean(options?.resetNotesContextDraft),
+      resetRecordMemoDraft: Boolean(options?.resetRecordMemoDraft),
+      reviewTab: normalizeText(options?.reviewTab),
+      successMessage: normalizeText(options?.successMessage),
+      type: normalizeText(options?.type),
+    };
+    syncWorkspaceMutationBusyState();
+    return state.pendingMutations[requestId];
+  }
+
+  function buildMeetingMutationContractErrorMessage(subject) {
+    const normalizedSubject = normalizeText(subject) || "회의 작업";
+    return `${normalizedSubject} 반영을 지원하는 최신 함수가 아직 배포되지 않았어요. npm run deploy:functions 후 다시 시도해 주세요.`;
+  }
+
+  function assertAcceptedMutationResponse(payload, requestId, subject) {
+    const normalizedRequestId = normalizeText(requestId);
+    const payloadRequestId = normalizeText(payload?.requestId);
+    if (payload?.accepted === true && payloadRequestId === normalizedRequestId) {
+      return;
+    }
+    throw new Error(buildMeetingMutationContractErrorMessage(subject));
+  }
+
+  async function finalizePendingMutation(requestId, outcome, errorMessage) {
+    const normalizedRequestId = normalizeText(requestId);
+    const mutation = state.pendingMutations[normalizedRequestId];
+    if (!mutation) {
+      syncWorkspaceMutationBusyState();
+      return false;
+    }
+    delete state.pendingMutations[normalizedRequestId];
+    syncWorkspaceMutationBusyState();
+
+    if (outcome === "failed") {
+      setNotice(normalizeText(errorMessage) || "회의 변경 사항을 반영하지 못했어요.", "error");
+      applyRender();
+      return true;
+    }
+
+    const isCurrentSelectedRecord = mutation.recordId
+      && mutation.recordId === normalizeText(state.currentDetailSelectionId || state.selectedRecordMemo.recordId);
+    if (mutation.resetRecordMemoDraft && isCurrentSelectedRecord) {
+      state.selectedRecordMemo.draft = state.selectedRecordMemo.saved;
+    }
+    if (mutation.resetNotesContextDraft && isCurrentSelectedRecord) {
+      state.notesContext.draft = "";
+      state.notesContext.editingId = "";
+    }
+    if (mutation.reviewTab && isCurrentSelectedRecord) {
+      state.reviewTab = mutation.reviewTab;
+    }
+
+    if (mutation.type === "deleteMeeting") {
+      try {
+        await runPendingUploadQueueOperation(
+          () => state.queueStore.clearMeeting(state.session.meetingId),
+          {
+            context: {
+              phase: "workspace-delete",
+              reason: "workspace-delete",
+            },
+            scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.cleanup,
+          }
+        );
+      } catch (error) {
+        showPendingUploadQueueOperationError(error, "브라우저에 남아 있는 로컬 녹음을 정리하지 못했어요.");
+      }
+      clearWorkspaceSession();
+      renderBlocked("이 탭은 여기까지입니다. 필요할 때 i-Nova 패널에서 새 회의를 열어 주세요.", {
+        eyebrow: "회의 삭제 완료",
+        title: "회의를 삭제했습니다",
+        tone: "complete",
+      });
+      return true;
+    }
+
+    if (mutation.type === "deleteRecord" && mutation.pendingRequestId) {
+      try {
+        await deletePendingUpload(mutation.pendingRequestId, {
+          context: {
+            phase: "record-delete",
+            reason: "record-delete",
+          },
+        });
+      } catch (error) {
+        showPendingUploadQueueOperationError(error, "브라우저에 남아 있는 로컬 녹음을 정리하지 못했어요.");
+      }
+    }
+
+    if (!mutation.quiet && mutation.successMessage) {
+      setNotice(mutation.successMessage, "highlight");
+    }
+    applyRender();
+    return true;
+  }
+
+  async function resolvePendingMutationsFromSnapshots() {
+    const pendingMutations = Object.values(state.pendingMutations || {});
+    for (const mutation of pendingMutations) {
+      if (!mutation?.requestId) {
+        continue;
+      }
+      if (mutation.type === "deleteMeeting") {
+        if (normalizeText(state.meeting?.deletedAt)) {
+          await finalizePendingMutation(mutation.requestId, "succeeded");
+        }
+        continue;
+      }
+      if (mutation.type === "deleteRecord") {
+        const stillExists = state.records.some((record) => normalizeText(record.jobId) === mutation.jobId);
+        if (!stillExists) {
+          await finalizePendingMutation(mutation.requestId, "succeeded");
+        }
+        continue;
+      }
+      const snapshotMutation = mutation.type === "saveMeetingTitle" || mutation.type === "saveMeetingMemo"
+        ? normalizeWorkspaceMutation(state.meeting?.workspaceMutation)
+        : normalizeWorkspaceMutation(
+            state.records.find((record) => normalizeText(record.jobId) === mutation.jobId)?.workspaceMutation
+              || (normalizeText(state.currentJob?.jobId) === mutation.jobId ? state.currentJob?.workspaceMutation : null)
+          );
+      if (snapshotMutation.requestId !== mutation.requestId) {
+        continue;
+      }
+      if (snapshotMutation.status === "succeeded") {
+        await finalizePendingMutation(mutation.requestId, "succeeded");
+      } else if (snapshotMutation.status === "failed") {
+        await finalizePendingMutation(mutation.requestId, "failed", snapshotMutation.error);
+      }
+    }
+    syncWorkspaceMutationBusyState();
+  }
+
   function normalizeNotesContextDraftValue(value) {
     return normalizeTextBlock(value).slice(0, MAX_NOTES_CONTEXT_ITEM_CHARS);
   }
@@ -1553,7 +1791,13 @@
   }
 
   function handleNotesContextListClick(event) {
-    if (state.busy.saveRecordContext || state.busy.regenerateNotes) {
+    if (
+      state.busy.deleteRecord
+      || state.busy.regenerateNotes
+      || state.busy.saveRecordContext
+      || state.busy.saveRecordMemo
+      || state.busy.saveRecordTitle
+    ) {
       return;
     }
     const actionButton = event.target.closest("[data-notes-context-action]");
@@ -1610,7 +1854,7 @@
     if (!meetingId || !normalizeText(payload?.meetingSessionToken)) throw new Error("회의 작업 세션을 만들지 못했어요. 패널에서 다시 시도해 주세요.");
     state.mode = normalizeText(payload?.mode) === "detail" ? "detail" : "create";
     state.session = { expiresAt: normalizeText(payload?.expiresAt), meetingId, meetingSessionToken: normalizeText(payload?.meetingSessionToken), mode: state.mode, sharedMemo: normalizeTextBlock(payload?.meeting?.sharedMemo), title: normalizeText(payload?.meeting?.title) };
-    state.meeting = { meetingId, pendingLocalCount: 0, sharedMemo: state.session.sharedMemo, title: state.session.title, updatedAt: "" };
+    state.meeting = { deletedAt: "", meetingId, pendingLocalCount: 0, sharedMemo: state.session.sharedMemo, title: state.session.title, updatedAt: "", workspaceMutation: createEmptyWorkspaceMutationState() };
     state.selectedRecordId = normalizeText(payload?.jobId) ? buildRemoteSelectionId(payload.jobId) : "";
     logDebug("workspace.launch.exchange.success", {
       jobId: payload?.jobId,
@@ -1653,7 +1897,7 @@
     const parsed = restored.payload;
     state.mode = normalizeText(parsed?.mode) === "detail" ? "detail" : "create";
     state.session = { expiresAt: normalizeText(parsed?.expiresAt), meetingId: normalizeText(parsed?.meetingId), meetingSessionToken: normalizeText(parsed?.meetingSessionToken), mode: state.mode, sharedMemo: normalizeTextBlock(parsed?.sharedMemo), title: normalizeText(parsed?.title) };
-    state.meeting = { meetingId: state.session.meetingId, pendingLocalCount: 0, sharedMemo: state.session.sharedMemo, title: state.session.title, updatedAt: "" };
+    state.meeting = { deletedAt: "", meetingId: state.session.meetingId, pendingLocalCount: 0, sharedMemo: state.session.sharedMemo, title: state.session.title, updatedAt: "", workspaceMutation: createEmptyWorkspaceMutationState() };
     state.selectedRecordId = normalizeText(state.params.jobId || parsed?.jobId) ? buildRemoteSelectionId(state.params.jobId || parsed?.jobId) : "";
     state.supersededRemoteJobIds = loadSupersededRemoteJobIds(state.session.meetingId);
   }
@@ -2445,11 +2689,13 @@
       ? meetingPayload.recentJobs.map(normalizeRecord).filter((record) => record.jobId)
       : [];
     state.meeting = {
+      deletedAt: normalizeText(meetingPayload?.deletedAt),
       meetingId: normalizeText(meetingPayload?.meetingId) || state.session.meetingId,
       pendingLocalCount: state.pendingUploads.length,
       sharedMemo: normalizeTextBlock(meetingPayload?.sharedMemo || state.session.sharedMemo),
       title: normalizeText(meetingPayload?.title || refs.meetingTitleInput.value || state.session.title || "새 회의"),
       updatedAt: normalizeText(meetingPayload?.updatedAt),
+      workspaceMutation: normalizeWorkspaceMutation(meetingPayload?.workspaceMutation),
     };
     state.session.title = state.meeting.title;
     if (
@@ -2459,6 +2705,16 @@
       state.meetingTitleDraft = state.meeting.title;
     }
     await syncWorkspaceLocalState(Boolean(options.hydrateSelection), options.reason || "snapshot");
+    await resolvePendingMutationsFromSnapshots();
+    if (normalizeText(state.meeting?.deletedAt) && !state.blocked) {
+      clearWorkspaceSession();
+      renderBlocked("이 회의는 더 이상 열어 둘 수 없어요. 필요할 때 i-Nova 패널에서 다시 시작해 주세요.", {
+        eyebrow: "회의 종료",
+        title: "회의가 삭제되었습니다",
+        tone: "complete",
+      });
+      return;
+    }
     logDebug("workspace.snapshot.meeting", {
       exists: Boolean(snapshot?.exists),
       hydrateSelection: Boolean(options.hydrateSelection),
@@ -2534,6 +2790,7 @@
       status: entry.remote.status,
       title: entry.remote.title,
       updatedAt: entry.remote.updatedAt,
+      workspaceMutation: entry.remote.workspaceMutation,
     }, state.meeting.title);
     syncSelectedRecordReviewState(entry);
     await subscribeSelectedJobRealtime(entry);
@@ -2594,6 +2851,7 @@
     state.currentJob = normalizeJob(snapshot.data(), state.meeting.title);
     syncSelectedRecordReviewState(entry);
     await ensureArtifactRealtimeSubscription(entry, { forceReconnect: false });
+    await resolvePendingMutationsFromSnapshots();
     applyRender();
     logDebug("workspace.snapshot.job", {
       artifactId: normalizeText(state.currentJob?.artifactId),
@@ -4081,27 +4339,30 @@
   async function saveMeetingPatch(patch, successMessage, emptyMessage) {
     if (!state.session.meetingId) return;
     if ("title" in patch && !patch.title && emptyMessage) { setNotice(emptyMessage, "error"); return applyRender(); }
-    state.busy.saveMeetingTitle = "title" in patch;
-    state.busy.saveMeetingMemo = "sharedMemo" in patch;
-    Object.assign(state.meeting, patch);
-    Object.assign(state.session, patch);
-    persistWorkspaceSession();
+    const mutationType = "title" in patch ? "saveMeetingTitle" : "saveMeetingMemo";
+    const requestId = generateClientRequestId(mutationType === "saveMeetingTitle" ? "meeting-title" : "meeting-memo");
+    registerPendingMutation({
+      requestId,
+      successMessage,
+      type: mutationType,
+    });
     applyRender();
     try {
-      const payload = await postJson(global, CONFIG.updateMeetingTitleUrl, { meetingId: state.session.meetingId, ...patch }, state.session.meetingSessionToken);
-      state.meeting.title = normalizeText(payload?.meeting?.title || state.meeting.title);
-      state.session.title = state.meeting.title;
-      if ("title" in patch) {
-        state.meetingTitleDraft = state.meeting.title;
-      }
-      setNotice(successMessage, "highlight");
-      await syncWorkspaceLocalState(false, "workflow");
+      const payload = await postJson(global, CONFIG.updateMeetingTitleUrl, {
+        clientRequestId: requestId,
+        meetingId: state.session.meetingId,
+        ...patch,
+      }, state.session.meetingSessionToken);
+      assertAcceptedMutationResponse(payload, requestId, "회의 정보");
+      await resolvePendingMutationsFromSnapshots();
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "회의 정보를 저장하지 못했어요.", "error");
-      applyRender();
+      await finalizePendingMutation(
+        requestId,
+        "failed",
+        error instanceof Error ? error.message : "회의 정보를 저장하지 못했어요."
+      );
     } finally {
-      state.busy.saveMeetingTitle = false;
-      state.busy.saveMeetingMemo = false;
+      syncWorkspaceMutationBusyState();
       applyRender();
     }
   }
@@ -4152,24 +4413,32 @@
       title: "선택한 기록을 삭제할까요?",
       tone: "danger",
     })) return;
-    state.busy.deleteRecord = true;
+    const requestId = generateClientRequestId("delete-record");
+    registerPendingMutation({
+      jobId: entry.remote.jobId,
+      pendingRequestId: entry.pending?.requestId,
+      recordId: entry.id,
+      requestId,
+      successMessage: "선택한 기록을 삭제했습니다.",
+      type: "deleteRecord",
+    });
     applyRender();
     try {
-      await postJson(global, CONFIG.deleteMeetingResultUrl, { jobId: entry.remote.jobId, meetingId: state.session.meetingId }, state.session.meetingSessionToken);
-      if (entry.pending?.requestId) {
-        await deletePendingUpload(entry.pending.requestId, {
-          context: {
-            phase: "record-delete",
-            reason: "record-delete",
-          },
-        });
-      }
-      state.records = state.records.filter((record) => normalizeText(record.jobId) !== normalizeText(entry.remote.jobId));
-      state.selectedRecordId = "";
-      setNotice("선택한 기록을 삭제했습니다.", "highlight");
-      await syncWorkspaceLocalState(true, "workflow");
+      const payload = await postJson(global, CONFIG.deleteMeetingResultUrl, {
+        clientRequestId: requestId,
+        jobId: entry.remote.jobId,
+        meetingId: state.session.meetingId,
+      }, state.session.meetingSessionToken);
+      assertAcceptedMutationResponse(payload, requestId, "기록 삭제");
+      await resolvePendingMutationsFromSnapshots();
+    } catch (error) {
+      await finalizePendingMutation(
+        requestId,
+        "failed",
+        error instanceof Error ? error.message : "기록을 삭제하지 못했어요."
+      );
     } finally {
-      state.busy.deleteRecord = false;
+      syncWorkspaceMutationBusyState();
       applyRender();
     }
   }
@@ -4183,75 +4452,29 @@
       title: "이 회의 전체를 삭제할까요?",
       tone: "danger",
     })) return;
-    state.busy.deleteMeeting = true;
+    const requestId = generateClientRequestId("delete-meeting");
+    registerPendingMutation({
+      requestId,
+      successMessage: "회의를 삭제했습니다.",
+      type: "deleteMeeting",
+    });
     applyRender();
     try {
-      await postJson(global, CONFIG.deleteMeetingUrl, { meetingId: state.session.meetingId }, state.session.meetingSessionToken);
-      await runPendingUploadQueueOperation(
-        () => state.queueStore.clearMeeting(state.session.meetingId),
-        {
-          context: {
-            phase: "workspace-delete",
-            reason: "workspace-delete",
-          },
-          scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.cleanup,
-        }
+      const payload = await postJson(global, CONFIG.deleteMeetingUrl, {
+        clientRequestId: requestId,
+        meetingId: state.session.meetingId,
+      }, state.session.meetingSessionToken);
+      assertAcceptedMutationResponse(payload, requestId, "회의 삭제");
+      await resolvePendingMutationsFromSnapshots();
+    } catch (error) {
+      await finalizePendingMutation(
+        requestId,
+        "failed",
+        error instanceof Error ? error.message : "회의를 삭제하지 못했어요."
       );
-      clearWorkspaceSession();
-      renderBlocked("이 탭은 여기까지입니다. 필요할 때 i-Nova 패널에서 새 회의를 열어 주세요.", {
-        eyebrow: "회의 삭제 완료",
-        title: "회의를 삭제했습니다",
-        tone: "complete",
-      });
     } finally {
-      state.busy.deleteMeeting = false;
-    }
-  }
-
-  function applyMeetingResultPayload(payload, options = {}) {
-    const nextJob = payload?.job
-      ? normalizeJob(payload.job, state.currentJob?.title || state.meeting.title)
-      : null;
-    const nextArtifact = payload?.artifact
-      ? normalizeArtifact(payload.artifact)
-      : null;
-    if (nextJob?.jobId) {
-      state.currentJob = nextJob;
-      state.records = state.records.map((record) => (
-        normalizeText(record.jobId) === normalizeText(nextJob.jobId)
-          ? normalizeRecord({
-              ...record,
-              artifactId: normalizeText(nextArtifact?.artifactId || nextJob.artifactId || record.artifactId),
-              createdAt: nextJob.createdAt,
-              durationMs: nextJob.durationMs,
-              error: nextJob.error,
-              jobId: nextJob.jobId,
-              meetingId: nextJob.meetingId,
-              notesContextItems: nextArtifact?.notesContextItems?.length ? nextArtifact.notesContextItems : nextJob.notesContextItems,
-              notesDegradedReason: normalizeText(nextArtifact?.notesDegradedReason || nextJob.notesDegradedReason),
-              notesGeneratedAt: normalizeText(nextArtifact?.notesGeneratedAt || nextJob.notesGeneratedAt),
-              notesInputSnapshot: nextArtifact?.notesInputSnapshot?.updatedAt ? nextArtifact.notesInputSnapshot : nextJob.notesInputSnapshot,
-              notesStatus: normalizeText(nextArtifact?.notesStatus || nextJob.notesStatus),
-              requestId: nextJob.requestId,
-              resultTitle: nextJob.title,
-              sharedMemoSnapshot: nextJob.sharedMemoSnapshot,
-              status: nextJob.status,
-              updatedAt: nextJob.updatedAt,
-            })
-          : record
-      ));
-    }
-    if (nextArtifact) {
-      state.currentArtifact = nextArtifact;
-    }
-    const activeEntry = findHistoryEntry(state, state.selectedRecordId);
-    syncSelectedRecordReviewState(activeEntry);
-    if (options.resetRecordMemoDraft) {
-      state.selectedRecordMemo.draft = state.selectedRecordMemo.saved;
-    }
-    if (options.resetNotesContextDraft) {
-      state.notesContext.draft = "";
-      state.notesContext.editingId = "";
+      syncWorkspaceMutationBusyState();
+      applyRender();
     }
   }
 
@@ -4278,17 +4501,31 @@
     if (!options.force && normalizeTextBlock(nextMemo) === normalizeTextBlock(state.selectedRecordMemo.saved)) {
       return true;
     }
-    state.busy.saveRecordMemo = true;
+    const requestId = generateClientRequestId("record-memo");
+    if (!options.quiet) {
+      registerPendingMutation({
+        jobId: entry.remote.jobId,
+        quiet: false,
+        recordId: entry.id,
+        requestId,
+        resetRecordMemoDraft: true,
+        successMessage: nextMemo ? "메모를 저장했습니다." : "메모를 비웠습니다.",
+        type: "saveRecordMemo",
+      });
+    } else {
+      state.busy.saveRecordMemo = true;
+    }
     applyRender();
     try {
       const payload = await postJson(global, CONFIG.updateMeetingResultUrl, {
+        clientRequestId: requestId,
         jobId: entry.remote.jobId,
         meetingId: state.session.meetingId,
         sharedMemo: nextMemo,
       }, state.session.meetingSessionToken);
-      applyMeetingResultPayload(payload, { resetRecordMemoDraft: true });
+      assertAcceptedMutationResponse(payload, requestId, "메모");
       if (!options.quiet) {
-        setNotice(nextMemo ? "메모를 저장했습니다." : "메모를 비웠습니다.", "highlight");
+        await resolvePendingMutationsFromSnapshots();
       }
       return true;
     } catch (error) {
@@ -4297,13 +4534,25 @@
           jobId: entry.remote.jobId,
           mutation: "sharedMemo",
         });
-        setNotice(buildLegacyMeetingResultMutationErrorMessage("메모"), "error");
+        if (!options.quiet) {
+          await finalizePendingMutation(requestId, "failed", buildLegacyMeetingResultMutationErrorMessage("메모"));
+        } else {
+          setNotice(buildLegacyMeetingResultMutationErrorMessage("메모"), "error");
+        }
         return false;
       }
-      setNotice(error instanceof Error ? error.message : "메모를 저장하지 못했어요.", "error");
+      if (!options.quiet) {
+        await finalizePendingMutation(
+          requestId,
+          "failed",
+          error instanceof Error ? error.message : "메모를 저장하지 못했어요."
+        );
+      } else {
+        setNotice(error instanceof Error ? error.message : "메모를 저장하지 못했어요.", "error");
+      }
       return false;
     } finally {
-      state.busy.saveRecordMemo = false;
+      syncWorkspaceMutationBusyState();
       applyRender();
     }
   }
@@ -4322,18 +4571,26 @@
       }
       return true;
     }
-    state.busy.saveRecordContext = true;
+    const requestId = generateClientRequestId("record-context");
+    registerPendingMutation({
+      jobId: entry.remote.jobId,
+      quiet: !options.successMessage,
+      recordId: entry.id,
+      requestId,
+      resetNotesContextDraft: Boolean(options.clearDraft),
+      successMessage: options.successMessage,
+      type: "saveRecordContext",
+    });
     applyRender();
     try {
       const payload = await postJson(global, CONFIG.updateMeetingResultUrl, {
+        clientRequestId: requestId,
         contextItems: nextItems,
         jobId: entry.remote.jobId,
         meetingId: state.session.meetingId,
       }, state.session.meetingSessionToken);
-      applyMeetingResultPayload(payload, { resetNotesContextDraft: Boolean(options.clearDraft) });
-      if (options.successMessage) {
-        setNotice(options.successMessage, "highlight");
-      }
+      assertAcceptedMutationResponse(payload, requestId, "추가 맥락");
+      await resolvePendingMutationsFromSnapshots();
       return true;
     } catch (error) {
       if (isLegacyMeetingResultMutationError(error)) {
@@ -4342,13 +4599,17 @@
           jobId: entry.remote.jobId,
           mutation: "contextItems",
         });
-        setNotice(buildLegacyMeetingResultMutationErrorMessage("추가 맥락"), "error");
+        await finalizePendingMutation(requestId, "failed", buildLegacyMeetingResultMutationErrorMessage("추가 맥락"));
         return false;
       }
-      setNotice(error instanceof Error ? error.message : "추가 맥락을 저장하지 못했어요.", "error");
+      await finalizePendingMutation(
+        requestId,
+        "failed",
+        error instanceof Error ? error.message : "추가 맥락을 저장하지 못했어요."
+      );
       return false;
     } finally {
-      state.busy.saveRecordContext = false;
+      syncWorkspaceMutationBusyState();
       applyRender();
     }
   }
@@ -4356,36 +4617,42 @@
   async function regenerateNotes() {
     const entry = findHistoryEntry(state, state.selectedRecordId);
     if (!entry?.remote?.jobId) return;
-    if (isSelectedRecordMemoDirty()) {
-      const savedMemo = await saveSelectedRecordMemo({ quiet: true });
-      if (!savedMemo) {
-        return;
-      }
-    }
-    state.busy.regenerateNotes = true;
+    const requestId = generateClientRequestId("regenerate-notes");
+    registerPendingMutation({
+      jobId: entry.remote.jobId,
+      recordId: entry.id,
+      requestId,
+      resetNotesContextDraft: true,
+      resetRecordMemoDraft: true,
+      reviewTab: "notes",
+      successMessage: "회의록을 업데이트했습니다.",
+      type: "regenerateNotes",
+    });
+    state.reviewTab = "notes";
     applyRender();
     try {
       const persistedSharedMemo = normalizeTextBlock(
         global.document.activeElement === refs.detailMemoInput
           ? refs.detailMemoInput.value
-          : state.selectedRecordMemo.saved
+          : state.selectedRecordMemo.draft
       ).slice(0, MAX_SHARED_MEMO_CHARS);
       const payload = await postJson(global, CONFIG.regenerateNotesUrl, {
+        clientRequestId: requestId,
         contextItems: cloneNotesContextItems(state.notesContext.items),
         jobId: entry.remote.jobId,
         meetingId: state.session.meetingId,
         sharedMemo: persistedSharedMemo,
       }, state.session.meetingSessionToken);
-      applyMeetingResultPayload(payload, {
-        resetNotesContextDraft: true,
-        resetRecordMemoDraft: true,
-      });
-      state.reviewTab = "notes";
-      setNotice("회의록을 업데이트했습니다.", "highlight");
+      assertAcceptedMutationResponse(payload, requestId, "회의록 업데이트");
+      await resolvePendingMutationsFromSnapshots();
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "회의록을 업데이트하지 못했어요.", "error");
+      await finalizePendingMutation(
+        requestId,
+        "failed",
+        error instanceof Error ? error.message : "회의록을 업데이트하지 못했어요."
+      );
     } finally {
-      state.busy.regenerateNotes = false;
+      syncWorkspaceMutationBusyState();
       applyRender();
     }
   }
@@ -4422,12 +4689,29 @@
     const entry = findHistoryEntry(state, recordId);
     const nextTitle = normalizeText(nextTitleInput);
     if (!entry || !nextTitle) return;
-    state.busy.saveRecordTitle = true;
+    const requestId = entry.remote?.jobId ? generateClientRequestId("record-title") : "";
+    if (entry.remote?.jobId) {
+      registerPendingMutation({
+        jobId: entry.remote.jobId,
+        recordId: entry.id,
+        requestId,
+        successMessage: "기록 이름을 저장했습니다.",
+        type: "saveRecordTitle",
+      });
+    } else {
+      state.busy.saveRecordTitle = true;
+    }
     applyRender();
     try {
       if (entry.remote?.jobId) {
-        const payload = await postJson(global, CONFIG.updateMeetingResultUrl, { jobId: entry.remote.jobId, meetingId: state.session.meetingId, title: nextTitle }, state.session.meetingSessionToken);
-        state.currentJob = normalizeJob(payload?.job, nextTitle);
+        const payload = await postJson(global, CONFIG.updateMeetingResultUrl, {
+          clientRequestId: requestId,
+          jobId: entry.remote.jobId,
+          meetingId: state.session.meetingId,
+          title: nextTitle,
+        }, state.session.meetingSessionToken);
+        assertAcceptedMutationResponse(payload, requestId, "기록 이름");
+        await resolvePendingMutationsFromSnapshots();
       }
       if (entry.pending?.requestId) {
         const nextPending = { ...entry.pending, meetingTitleSnapshot: nextTitle };
@@ -4441,10 +4725,22 @@
           state.currentJob = buildLocalPendingJob(nextPending);
         }
       }
-      setNotice("기록 이름을 저장했습니다.", "highlight");
-      await syncWorkspaceLocalState(true, "workflow");
+      if (!entry.remote?.jobId) {
+        setNotice("기록 이름을 저장했습니다.", "highlight");
+        await syncWorkspaceLocalState(true, "workflow");
+      }
+    } catch (error) {
+      if (entry.remote?.jobId) {
+        await finalizePendingMutation(
+          requestId,
+          "failed",
+          error instanceof Error ? error.message : "기록 이름을 저장하지 못했어요."
+        );
+      } else {
+        setNotice(error instanceof Error ? error.message : "기록 이름을 저장하지 못했어요.", "error");
+      }
     } finally {
-      state.busy.saveRecordTitle = false;
+      syncWorkspaceMutationBusyState();
       applyRender();
     }
   }
@@ -4886,18 +5182,23 @@
     if (refs.notesContextInput && refs.notesContextInput.value !== state.notesContext.draft) {
       refs.notesContextInput.value = state.notesContext.draft;
     }
+    const selectedRecordMutationBusy = state.busy.deleteRecord
+      || state.busy.regenerateNotes
+      || state.busy.saveRecordContext
+      || state.busy.saveRecordMemo
+      || state.busy.saveRecordTitle;
     if (refs.notesContextInput) {
-      refs.notesContextInput.disabled = state.busy.regenerateNotes || state.busy.saveRecordContext;
+      refs.notesContextInput.disabled = selectedRecordMutationBusy;
     }
     if (refs.notesContextAddButton) {
       const canAddDraft = Boolean(normalizeNotesContextDraftValue(state.notesContext.draft));
-      refs.notesContextAddButton.disabled = !canAddDraft || state.busy.regenerateNotes || state.busy.saveRecordContext;
+      refs.notesContextAddButton.disabled = !canAddDraft || selectedRecordMutationBusy;
       refs.notesContextAddButton.textContent = state.notesContext.editingId ? "수정 저장" : "항목 추가";
     }
     if (refs.notesContextResetButton) {
       const hasDraft = Boolean(state.notesContext.editingId || normalizeText(state.notesContext.draft));
       refs.notesContextResetButton.hidden = !hasDraft;
-      refs.notesContextResetButton.disabled = state.busy.regenerateNotes || state.busy.saveRecordContext;
+      refs.notesContextResetButton.disabled = selectedRecordMutationBusy;
       refs.notesContextResetButton.textContent = state.notesContext.editingId ? "수정 취소" : "입력 비우기";
     }
   }

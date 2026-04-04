@@ -127,6 +127,17 @@ exports.finalizeChunkedInovaMeetingJob = onDocumentWritten(
   },
   meetingHandlers.finalizeChunkedMeetingJobWrite
 );
+exports.processQueuedInovaMeetingCommand = onDocumentWritten(
+  {
+    concurrency: 1,
+    document: "integration_inova_meeting_commands/{commandId}",
+    maxInstances: 10,
+    memory: "1GiB",
+    region: REGION,
+    timeoutSeconds: 540,
+  },
+  meetingHandlers.processQueuedMeetingCommandWrite
+);
 exports.processQueuedInovaMeetingDeletion = onDocumentWritten(
   {
     concurrency: 1,

@@ -15,6 +15,7 @@ const DEFAULT_SUMMARY_MODEL = "gpt-5.4-mini";
 const JOB_COLLECTION = "integration_inova_meeting_jobs";
 const JOB_FINALIZER_COLLECTION = "integration_inova_meeting_job_finalizers";
 const JOB_PART_COLLECTION = "integration_inova_meeting_job_parts";
+const COMMAND_COLLECTION = "integration_inova_meeting_commands";
 const DELETION_COLLECTION = "integration_inova_meeting_deletions";
 const ARTIFACT_COLLECTION = "integration_inova_meeting_artifacts";
 const MEETING_COLLECTION = "integration_inova_meetings";
@@ -48,8 +49,21 @@ const MAX_NOTES_CONTEXT_ITEM_CHARS = 1200;
 const NOTES_SCHEMA_VERSION = 3;
 const RETRYABLE_MEETING_PROCESS_STATUSES = new Set([408, 409, 429, 500, 502, 503, 504]);
 const SUPPORTED_NOTES_STATUSES = new Set(["pending", "disabled", "skipped", "degraded", "succeeded"]);
+const SUPPORTED_MEETING_COMMAND_STATUSES = new Set(["queued", "processing", "succeeded", "failed"]);
+const SUPPORTED_MEETING_COMMAND_TYPES = new Set(["regenerate_notes"]);
 const SUPPORTED_DELETION_SCOPES = new Set(["meeting", "result"]);
 const SUPPORTED_DELETION_STATUSES = new Set(["queued", "processing", "retry"]);
+const SUPPORTED_WORKSPACE_MUTATION_STATUSES = new Set(["queued", "processing", "succeeded", "failed"]);
+const SUPPORTED_WORKSPACE_MUTATION_TYPES = new Set([
+  "deleteMeeting",
+  "deleteRecord",
+  "regenerateNotes",
+  "saveMeetingMemo",
+  "saveMeetingTitle",
+  "saveRecordContext",
+  "saveRecordMemo",
+  "saveRecordTitle",
+]);
 
 function registerMeetingHandlers(deps) {
   const {
@@ -1015,6 +1029,13 @@ function registerMeetingHandlers(deps) {
           : item
       ));
       const updatedAt = new Date().toISOString();
+      const workspaceMutation = buildWorkspaceMutation({
+        completedAt: updatedAt,
+        requestId: input.clientRequestId,
+        requestedAt: updatedAt,
+        status: "succeeded",
+        type: input.hasTitle ? "saveMeetingTitle" : "saveMeetingMemo",
+      });
       await meetingRef.set({
         createdAt: currentMeeting.createdAt || updatedAt,
         meetingId: currentMeeting.meetingId || input.meetingId,
@@ -1024,6 +1045,7 @@ function registerMeetingHandlers(deps) {
         sharedMemo: nextSharedMemo,
         title: nextTitle,
         updatedAt,
+        ...(workspaceMutation.requestId ? { workspaceMutation } : {}),
       }, { merge: true });
 
       if (input.hasTitle) {
@@ -1047,13 +1069,8 @@ function registerMeetingHandlers(deps) {
       response.json({
         ok: true,
         data: {
-          meeting: normalizeMeetingSummary({
-            ...currentMeeting,
-            recentJobs,
-            sharedMemo: nextSharedMemo,
-            title: nextTitle,
-            updatedAt,
-          }),
+          accepted: true,
+          requestId: input.clientRequestId,
         },
       });
     } catch (error) {
@@ -1111,6 +1128,18 @@ function registerMeetingHandlers(deps) {
       );
       const currentSharedMemoSnapshot = normalizeTextBlock(job.context?.sharedMemoSnapshot || job.meeting?.sharedMemo).slice(0, MAX_SHARED_MEMO_CHARS);
       const updatedAt = new Date().toISOString();
+      const mutationType = input.titleProvided
+        ? "saveRecordTitle"
+        : input.contextItemsProvided
+          ? "saveRecordContext"
+          : "saveRecordMemo";
+      const workspaceMutation = buildWorkspaceMutation({
+        completedAt: updatedAt,
+        requestId: input.clientRequestId,
+        requestedAt: updatedAt,
+        status: "succeeded",
+        type: mutationType,
+      });
       const persistedSharedMemo = input.sharedMemoProvided
         ? input.sharedMemo
         : currentSharedMemoSnapshot;
@@ -1152,6 +1181,9 @@ function registerMeetingHandlers(deps) {
       if (shouldInitializeNotesInputSnapshot) {
         jobPatch.notesInputSnapshot = baselineNotesInputSnapshot;
       }
+      if (workspaceMutation.requestId) {
+        jobPatch.workspaceMutation = workspaceMutation;
+      }
       const artifactPatch = {};
       if (input.contextItemsProvided) {
         artifactPatch.notesContextItems = persistedNotesContextItems;
@@ -1191,8 +1223,8 @@ function registerMeetingHandlers(deps) {
       response.json({
         ok: true,
         data: {
-          artifact: nextArtifact,
-          job: nextJob,
+          accepted: true,
+          requestId: input.clientRequestId,
         },
       });
     } catch (error) {
@@ -1204,7 +1236,7 @@ function registerMeetingHandlers(deps) {
     }
   });
 
-  const regenerateInovaMeetingNotes = onRequest({ cors: CORS_ORIGINS, region: REGION, timeoutSeconds: 120 }, async (request, response) => {
+  const regenerateInovaMeetingNotes = onRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
     try {
       assertMethod(request);
       const input = normalizeMeetingNotesRegenerateRequest(request.body);
@@ -1231,10 +1263,10 @@ function registerMeetingHandlers(deps) {
         throw createHttpError(404, "현재 회의와 맞지 않는 결과예요.");
       }
 
-      const transcriptSource = await loadMeetingTranscriptForNotes(job, db, createHttpError);
-      const artifactRef = transcriptSource.artifactRef;
-      const artifact = transcriptSource.artifact;
-      const meetingRecord = await loadMeetingSummaryRecord(owner, { meetingId: job.meetingId }, createHttpError);
+      const artifactId = normalizeText(job.transcript?.artifactId || job.artifacts?.[0]?.artifactId);
+      const artifactRef = artifactId ? db.collection(ARTIFACT_COLLECTION).doc(artifactId) : null;
+      const artifactSnapshot = artifactRef ? await artifactRef.get() : null;
+      const artifact = artifactSnapshot?.exists ? normalizeMeetingArtifact(artifactSnapshot.data()) : null;
       const existingNotesContextItems = normalizeMeetingNotesContextItems(
         artifact?.notesContextItems?.length
           ? artifact.notesContextItems
@@ -1245,11 +1277,10 @@ function registerMeetingHandlers(deps) {
       const currentSharedMemoSnapshot = normalizeTextBlock(
         job.context?.sharedMemoSnapshot
         || job.meeting?.sharedMemo
-        || meetingRecord?.meeting?.sharedMemo
       ).slice(0, MAX_SHARED_MEMO_CHARS);
-      const updatedAt = new Date().toISOString();
+      const requestedAt = new Date().toISOString();
       const persistedNotesContextItems = input.contextItemsProvided
-        ? mergePersistedMeetingNotesContextItems(existingNotesContextItems, input.contextItems, updatedAt)
+        ? mergePersistedMeetingNotesContextItems(existingNotesContextItems, input.contextItems, requestedAt)
         : existingNotesContextItems;
       const persistedSharedMemo = input.sharedMemoProvided
         ? input.sharedMemo
@@ -1261,67 +1292,85 @@ function registerMeetingHandlers(deps) {
       const notesInputSnapshot = normalizeMeetingNotesInputSnapshot({
         contextItems: persistedNotesContextItems,
         sharedMemo: persistedSharedMemo,
-        updatedAt,
+        updatedAt: requestedAt,
       });
-      const effectiveMeeting = {
-        ...job.meeting,
-        meetingId: job.meetingId,
-        sharedMemo: persistedSharedMemo,
-        title: normalizeText(job.meeting?.title || job.title || meetingRecord?.meeting?.title),
-      };
-      const generationContext = { ...persistedContext };
-      const meetingNotes = await generateMeetingNotesBundle(
-        transcriptSource.transcript,
-        effectiveMeeting,
-        generationContext
-      );
-      const resultTitle = resolveMeetingResultTitle(meetingNotes, job.title || effectiveMeeting.title);
+      const commandId = normalizeText(input.clientRequestId) || db.collection(COMMAND_COLLECTION).doc().id;
+      const commandRef = db.collection(COMMAND_COLLECTION).doc(commandId);
+      const existingCommandSnapshot = await commandRef.get();
+      const existingCommand = existingCommandSnapshot.exists ? normalizeMeetingCommand(existingCommandSnapshot.data()) : null;
+      if (
+        existingCommand?.clientRequestId === commandId
+        && existingCommand.jobId === input.jobId
+        && existingCommand.meetingId === input.meetingId
+        && ["queued", "processing", "succeeded"].includes(existingCommand.status)
+      ) {
+        response.status(existingCommand.status === "succeeded" ? 200 : 202).json({
+          ok: true,
+          data: {
+            accepted: true,
+            requestId: commandId,
+          },
+        });
+        return;
+      }
+      const workspaceMutation = buildWorkspaceMutation({
+        requestId: commandId,
+        requestedAt,
+        status: "queued",
+        type: "regenerateNotes",
+      });
       const jobPatch = {
         context: persistedContext,
-        notesDegradedReason: meetingNotes.notesDegradedReason,
-        meetingNotes: meetingNotes.notes,
         notesContextItems: persistedNotesContextItems,
-        notesGeneratedAt: meetingNotes.notesGeneratedAt,
         notesInputSnapshot,
-        notesStatus: meetingNotes.notesStatus,
-        notesSchemaVersion: meetingNotes.notesSchemaVersion,
-        title: resultTitle,
-        updatedAt,
+        updatedAt: requestedAt,
+        workspaceMutation,
       };
       const artifactPatch = {
-        notesDegradedReason: meetingNotes.notesDegradedReason,
-        notes: meetingNotes.notes,
         notesContextItems: persistedNotesContextItems,
-        notesGeneratedAt: meetingNotes.notesGeneratedAt,
         notesInputSnapshot,
-        notesStatus: meetingNotes.notesStatus,
-        notesSchemaVersion: meetingNotes.notesSchemaVersion,
       };
       const nextJob = normalizeMeetingJob({
         ...job,
         ...jobPatch,
       });
-      const nextArtifact = normalizeMeetingArtifact({
-        ...artifact,
-        ...artifactPatch,
-      });
+      const nextArtifact = artifact
+        ? normalizeMeetingArtifact({
+            ...artifact,
+            ...artifactPatch,
+          })
+        : null;
       await Promise.all([
         jobRef.set(jobPatch, { merge: true }),
         artifactRef ? artifactRef.set(artifactPatch, { merge: true }) : Promise.resolve(),
-        updateMeetingSummaryRecordResult(owner, nextJob, nextArtifact, updatedAt),
+        commandRef.set(normalizeMeetingCommand({
+          clientRequestId: commandId,
+          contextItems: persistedNotesContextItems,
+          contextItemsProvided: input.contextItemsProvided,
+          jobId: input.jobId,
+          meetingId: input.meetingId,
+          owner,
+          requestedAt,
+          sharedMemo: persistedSharedMemo,
+          sharedMemoProvided: input.sharedMemoProvided,
+          status: "queued",
+          type: "regenerate_notes",
+          updatedAt: requestedAt,
+        }), { merge: true }),
+        updateMeetingSummaryRecordResult(owner, nextJob, nextArtifact, requestedAt),
       ]);
 
-      logEvent("meeting.notes.regenerate.success", {
+      logEvent("meeting.notes.regenerate.accepted", {
         hasContextItems: persistedNotesContextItems.length > 0,
         jobId: input.jobId,
         meetingId: input.meetingId,
         providerUserKey: owner.providerUserKey,
       });
-      response.json({
+      response.status(202).json({
         ok: true,
         data: {
-          artifact: nextArtifact,
-          job: nextJob,
+          accepted: true,
+          requestId: commandId,
         },
       });
     } catch (error) {
@@ -1357,8 +1406,17 @@ function registerMeetingHandlers(deps) {
       }
 
       const deletedAt = new Date().toISOString();
-      const deletedJob = await softDeleteMeetingJob(job, deletedAt);
-      const meeting = await removeMeetingResultFromSummaries(owner, job, deletedAt);
+      const workspaceMutation = buildWorkspaceMutation({
+        completedAt: deletedAt,
+        requestId: input.clientRequestId,
+        requestedAt: deletedAt,
+        status: "succeeded",
+        type: "deleteRecord",
+      });
+      await softDeleteMeetingJob(job, deletedAt, {
+        workspaceMutation,
+      });
+      await removeMeetingResultFromSummaries(owner, job, deletedAt);
       const deletionTask = await enqueueMeetingDeletionTask({
         deletedAt,
         jobId: job.jobId,
@@ -1377,12 +1435,13 @@ function registerMeetingHandlers(deps) {
       response.json({
         ok: true,
         data: {
+          accepted: true,
           cleanupQueued: true,
           deletedAt,
-          deletedJob,
-          deletedJobId: input.jobId,
-          meeting,
+          jobId: input.jobId,
+          meetingId: input.meetingId,
           queueTaskId: deletionTask.taskId,
+          requestId: input.clientRequestId,
         },
       });
     } catch (error) {
@@ -1430,10 +1489,18 @@ function registerMeetingHandlers(deps) {
         await softDeleteMeetingJob(job, deletedAt);
       }
 
+      const workspaceMutation = buildWorkspaceMutation({
+        completedAt: deletedAt,
+        requestId: input.clientRequestId,
+        requestedAt: deletedAt,
+        status: "succeeded",
+        type: "deleteMeeting",
+      });
       await meetingRef.set({
         deletedAt,
         recentJobs: [],
         updatedAt: deletedAt,
+        workspaceMutation,
       }, { merge: true });
       const deletionTask = await enqueueMeetingDeletionTask({
         deletedAt,
@@ -1452,11 +1519,12 @@ function registerMeetingHandlers(deps) {
       response.json({
         ok: true,
         data: {
+          accepted: true,
           cleanupQueued: true,
           deletedAt,
-          jobCount: jobs.length,
           meetingId: input.meetingId,
           queueTaskId: deletionTask.taskId,
+          requestId: input.clientRequestId,
         },
       });
     } catch (error) {
@@ -1467,6 +1535,23 @@ function registerMeetingHandlers(deps) {
       sendError(response, error);
     }
   });
+
+  const processQueuedMeetingCommandWrite = async (event) => {
+    const beforeSnapshot = event?.data?.before || null;
+    const afterSnapshot = event?.data?.after || null;
+    if (!afterSnapshot?.exists) {
+      return;
+    }
+    const previousCommand = beforeSnapshot?.exists ? normalizeMeetingCommand(beforeSnapshot.data()) : null;
+    const queuedCommand = normalizeMeetingCommand(afterSnapshot.data());
+    if (!queuedCommand.clientRequestId || !queuedCommand.type) {
+      return;
+    }
+    if (!shouldProcessMeetingCommand(queuedCommand, previousCommand)) {
+      return;
+    }
+    await processMeetingCommand(afterSnapshot.ref);
+  };
 
   const processMeetingDeletionWrite = async (event) => {
     const beforeSnapshot = event?.data?.before || null;
@@ -1514,6 +1599,7 @@ function registerMeetingHandlers(deps) {
     deleteInovaMeetingResult,
     finalizeChunkedMeetingJobWrite,
     listInovaMeetings,
+    processQueuedMeetingCommandWrite,
     processMeetingDeletionWrite,
     processQueuedMeetingJobWrite,
     processQueuedMeetingJobPartWrite,
@@ -1523,6 +1609,227 @@ function registerMeetingHandlers(deps) {
     updateInovaMeeting,
     updateInovaMeetingResult,
   };
+
+  function shouldProcessMeetingCommand(command, previousCommand) {
+    return command.type === "regenerate_notes"
+      && command.status === "queued"
+      && normalizeText(previousCommand?.status) !== "queued";
+  }
+
+  async function claimMeetingCommand(commandRef) {
+    let claimedCommand = null;
+    await db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(commandRef);
+      if (!snapshot.exists) {
+        return;
+      }
+      const currentCommand = normalizeMeetingCommand(snapshot.data());
+      if (currentCommand.status !== "queued" || currentCommand.type !== "regenerate_notes") {
+        return;
+      }
+      const startedAt = new Date().toISOString();
+      transaction.set(commandRef, {
+        startedAt,
+        status: "processing",
+        updatedAt: startedAt,
+      }, { merge: true });
+      claimedCommand = normalizeMeetingCommand({
+        ...currentCommand,
+        startedAt,
+        status: "processing",
+        updatedAt: startedAt,
+      });
+    });
+    return claimedCommand;
+  }
+
+  async function processMeetingCommand(commandRef) {
+    const claimedCommand = await claimMeetingCommand(commandRef);
+    if (!claimedCommand?.clientRequestId) {
+      return false;
+    }
+    try {
+      if (claimedCommand.type === "regenerate_notes") {
+        await processRegenerateNotesCommand(claimedCommand);
+      }
+      const completedAt = new Date().toISOString();
+      await commandRef.set({
+        completedAt,
+        error: "",
+        status: "succeeded",
+        updatedAt: completedAt,
+      }, { merge: true });
+      return true;
+    } catch (error) {
+      const normalizedError = normalizeText(error?.message) || "회의록을 다시 정리하지 못했어요.";
+      const completedAt = new Date().toISOString();
+      await markMeetingCommandFailed(claimedCommand, normalizedError, completedAt);
+      await commandRef.set({
+        completedAt,
+        error: normalizedError,
+        status: "failed",
+        updatedAt: completedAt,
+      }, { merge: true });
+      logEvent("meeting.command.process.error", {
+        error: normalizedError,
+        jobId: claimedCommand.jobId,
+        meetingId: claimedCommand.meetingId,
+        requestId: claimedCommand.clientRequestId,
+        type: claimedCommand.type,
+      });
+      return false;
+    }
+  }
+
+  async function processRegenerateNotesCommand(command) {
+    const jobRef = db.collection(JOB_COLLECTION).doc(command.jobId);
+    const jobSnapshot = await jobRef.get();
+    if (!jobSnapshot.exists) {
+      throw createHttpError(404, "다시 정리할 회의 결과를 찾지 못했어요.");
+    }
+    const job = normalizeMeetingJob(jobSnapshot.data());
+    if (job.deletedAt) {
+      throw createHttpError(404, "이미 삭제된 회의 결과예요.");
+    }
+    const owner = normalizeIdentity(command.owner?.providerUserKey ? command.owner : job.owner);
+    if (!normalizeText(owner?.providerUserKey)) {
+      throw createHttpError(400, "회의 결과 소유자 정보를 확인하지 못했어요.");
+    }
+    await assertMeetingIsActive(owner, job.meetingId, createHttpError);
+
+    const transcriptSource = await loadMeetingTranscriptForNotes(job, db, createHttpError);
+    const artifactRef = transcriptSource.artifactRef;
+    const artifact = transcriptSource.artifact;
+    const meetingRecord = await loadMeetingSummaryRecord(owner, { meetingId: job.meetingId }, createHttpError);
+    const existingNotesContextItems = normalizeMeetingNotesContextItems(
+      artifact?.notesContextItems?.length
+        ? artifact.notesContextItems
+        : job.notesContextItems?.length
+          ? job.notesContextItems
+          : job.context?.notesContextItems
+    );
+    const currentSharedMemoSnapshot = normalizeTextBlock(
+      job.context?.sharedMemoSnapshot
+      || job.meeting?.sharedMemo
+      || meetingRecord?.meeting?.sharedMemo
+    ).slice(0, MAX_SHARED_MEMO_CHARS);
+    const requestedAt = normalizeText(command.requestedAt) || new Date().toISOString();
+    const persistedNotesContextItems = command.contextItemsProvided
+      ? normalizeMeetingNotesContextItems(command.contextItems)
+      : existingNotesContextItems;
+    const persistedSharedMemo = command.sharedMemoProvided
+      ? command.sharedMemo
+      : currentSharedMemoSnapshot;
+    const persistedContext = normalizeMeetingContext({
+      notesContextItems: persistedNotesContextItems,
+      sharedMemoSnapshot: persistedSharedMemo,
+    });
+    const notesInputSnapshot = normalizeMeetingNotesInputSnapshot({
+      contextItems: persistedNotesContextItems,
+      sharedMemo: persistedSharedMemo,
+      updatedAt: requestedAt,
+    });
+    const effectiveMeeting = {
+      ...job.meeting,
+      meetingId: job.meetingId,
+      sharedMemo: persistedSharedMemo,
+      title: normalizeText(job.meeting?.title || job.title || meetingRecord?.meeting?.title),
+    };
+    const meetingNotes = await generateMeetingNotesBundle(
+      transcriptSource.transcript,
+      effectiveMeeting,
+      { ...persistedContext }
+    );
+    const resultTitle = resolveMeetingResultTitle(meetingNotes, job.title || effectiveMeeting.title);
+    const completedAt = new Date().toISOString();
+    const workspaceMutation = buildWorkspaceMutation({
+      completedAt,
+      requestId: command.clientRequestId,
+      requestedAt,
+      status: "succeeded",
+      type: "regenerateNotes",
+    });
+    const jobPatch = {
+      context: persistedContext,
+      meetingNotes: meetingNotes.notes,
+      notesContextItems: persistedNotesContextItems,
+      notesDegradedReason: meetingNotes.notesDegradedReason,
+      notesGeneratedAt: meetingNotes.notesGeneratedAt,
+      notesInputSnapshot,
+      notesSchemaVersion: meetingNotes.notesSchemaVersion,
+      notesStatus: meetingNotes.notesStatus,
+      title: resultTitle,
+      updatedAt: completedAt,
+      workspaceMutation,
+    };
+    const artifactPatch = {
+      notes: meetingNotes.notes,
+      notesContextItems: persistedNotesContextItems,
+      notesDegradedReason: meetingNotes.notesDegradedReason,
+      notesGeneratedAt: meetingNotes.notesGeneratedAt,
+      notesInputSnapshot,
+      notesSchemaVersion: meetingNotes.notesSchemaVersion,
+      notesStatus: meetingNotes.notesStatus,
+    };
+    const nextJob = normalizeMeetingJob({
+      ...job,
+      ...jobPatch,
+    });
+    const nextArtifact = normalizeMeetingArtifact({
+      ...artifact,
+      ...artifactPatch,
+    });
+    await Promise.all([
+      jobRef.set(jobPatch, { merge: true }),
+      artifactRef ? artifactRef.set(artifactPatch, { merge: true }) : Promise.resolve(),
+      updateMeetingSummaryRecordResult(owner, nextJob, nextArtifact, completedAt),
+    ]);
+
+    logEvent("meeting.notes.regenerate.success", {
+      hasContextItems: persistedNotesContextItems.length > 0,
+      jobId: command.jobId,
+      meetingId: command.meetingId,
+      providerUserKey: owner.providerUserKey,
+      requestId: command.clientRequestId,
+    });
+  }
+
+  async function markMeetingCommandFailed(command, errorMessage, completedAt) {
+    const jobRef = db.collection(JOB_COLLECTION).doc(command.jobId);
+    const snapshot = await jobRef.get();
+    if (!snapshot.exists) {
+      return;
+    }
+    const currentJob = normalizeMeetingJob(snapshot.data());
+    if (!currentJob.jobId || currentJob.deletedAt) {
+      return;
+    }
+    const owner = normalizeIdentity(command.owner?.providerUserKey ? command.owner : currentJob.owner);
+    const artifactId = normalizeText(currentJob.transcript?.artifactId || currentJob.artifacts?.[0]?.artifactId);
+    const artifactRef = artifactId ? db.collection(ARTIFACT_COLLECTION).doc(artifactId) : null;
+    const artifactSnapshot = artifactRef ? await artifactRef.get() : null;
+    const artifact = artifactSnapshot?.exists ? normalizeMeetingArtifact(artifactSnapshot.data()) : null;
+    const workspaceMutation = buildWorkspaceMutation({
+      completedAt,
+      error: errorMessage,
+      requestId: command.clientRequestId,
+      requestedAt: command.requestedAt || completedAt,
+      status: "failed",
+      type: "regenerateNotes",
+    });
+    const jobPatch = {
+      updatedAt: completedAt,
+      workspaceMutation,
+    };
+    const failedJob = normalizeMeetingJob({
+      ...currentJob,
+      ...jobPatch,
+    });
+    await jobRef.set(jobPatch, { merge: true });
+    if (normalizeText(owner?.providerUserKey)) {
+      await updateMeetingSummaryRecordResult(owner, failedJob, artifact, completedAt);
+    }
+  }
 
   function assertMethod(request) {
     if (request.method !== "POST") {
@@ -2284,7 +2591,7 @@ function registerMeetingHandlers(deps) {
     return nextMeeting;
   }
 
-  async function softDeleteMeetingJob(jobInput, deletedAt) {
+  async function softDeleteMeetingJob(jobInput, deletedAt, options = {}) {
     const job = normalizeMeetingJob(jobInput);
     if (!job.jobId) {
       return null;
@@ -2307,6 +2614,10 @@ function registerMeetingHandlers(deps) {
       status: "deleted",
       updatedAt: nextDeletedAt,
     };
+    const workspaceMutation = buildWorkspaceMutation(options.workspaceMutation);
+    if (workspaceMutation.requestId) {
+      patch.workspaceMutation = workspaceMutation;
+    }
     await db.collection(JOB_COLLECTION).doc(job.jobId).set(patch, { merge: true });
     return normalizeMeetingJob({
       ...job,
@@ -4427,6 +4738,7 @@ function normalizeMeetingHubListRequest(input) {
 
 function normalizeMeetingMutationRequest(input) {
   return {
+    clientRequestId: normalizeText(input?.clientRequestId),
     hasSharedMemo: hasOwn(input, "sharedMemo"),
     hasTitle: hasOwn(input, "title"),
     meetingId: normalizeText(input?.meetingId),
@@ -4437,6 +4749,7 @@ function normalizeMeetingMutationRequest(input) {
 
 function normalizeMeetingResultMutationRequest(input) {
   return {
+    clientRequestId: normalizeText(input?.clientRequestId),
     jobId: normalizeText(input?.jobId),
     contextItems: normalizeMeetingNotesContextItems(input?.contextItems),
     contextItemsProvided: hasOwn(input, "contextItems"),
@@ -4451,12 +4764,65 @@ function normalizeMeetingResultMutationRequest(input) {
 function normalizeMeetingNotesRegenerateRequest(input) {
   const request = input && typeof input === "object" ? input : {};
   return {
+    clientRequestId: normalizeText(request.clientRequestId),
     contextItems: normalizeMeetingNotesContextItems(request.contextItems),
     contextItemsProvided: hasOwn(request, "contextItems"),
     jobId: normalizeText(request.jobId),
     meetingId: normalizeText(request.meetingId),
     sharedMemo: normalizeTextBlock(request.sharedMemo).slice(0, MAX_SHARED_MEMO_CHARS),
     sharedMemoProvided: hasOwn(request, "sharedMemo"),
+  };
+}
+
+function normalizeWorkspaceMutation(input) {
+  const mutation = input && typeof input === "object" ? input : {};
+  const status = normalizeText(mutation.status);
+  const type = normalizeText(mutation.type);
+  return {
+    completedAt: normalizeText(mutation.completedAt),
+    error: normalizeText(mutation.error),
+    requestedAt: normalizeText(mutation.requestedAt),
+    requestId: normalizeText(mutation.requestId),
+    status: SUPPORTED_WORKSPACE_MUTATION_STATUSES.has(status) ? status : "",
+    type: SUPPORTED_WORKSPACE_MUTATION_TYPES.has(type) ? type : "",
+  };
+}
+
+function buildWorkspaceMutation(input) {
+  const requestId = normalizeText(input?.requestId);
+  if (!requestId) {
+    return {};
+  }
+  return normalizeWorkspaceMutation({
+    completedAt: input?.completedAt,
+    error: input?.error,
+    requestedAt: input?.requestedAt || new Date().toISOString(),
+    requestId,
+    status: input?.status,
+    type: input?.type,
+  });
+}
+
+function normalizeMeetingCommand(input) {
+  const command = input && typeof input === "object" ? input : {};
+  const status = normalizeText(command.status);
+  const type = normalizeText(command.type).toLowerCase();
+  return {
+    clientRequestId: normalizeText(command.clientRequestId),
+    completedAt: normalizeText(command.completedAt),
+    contextItems: normalizeMeetingNotesContextItems(command.contextItems),
+    contextItemsProvided: Boolean(command.contextItemsProvided),
+    error: normalizeText(command.error),
+    jobId: normalizeText(command.jobId),
+    meetingId: normalizeText(command.meetingId),
+    owner: command.owner && typeof command.owner === "object" ? { ...command.owner } : {},
+    requestedAt: normalizeText(command.requestedAt),
+    sharedMemo: normalizeTextBlock(command.sharedMemo).slice(0, MAX_SHARED_MEMO_CHARS),
+    sharedMemoProvided: Boolean(command.sharedMemoProvided),
+    startedAt: normalizeText(command.startedAt),
+    status: SUPPORTED_MEETING_COMMAND_STATUSES.has(status) ? status : "",
+    type: SUPPORTED_MEETING_COMMAND_TYPES.has(type) ? type : "",
+    updatedAt: normalizeText(command.updatedAt),
   };
 }
 
@@ -4850,6 +5216,7 @@ function normalizeMeetingJob(input) {
       language: normalizeText(job.transcription?.language),
     },
     updatedAt: normalizeText(job.updatedAt),
+    workspaceMutation: normalizeWorkspaceMutation(job.workspaceMutation),
   };
 }
 
@@ -4913,6 +5280,7 @@ function normalizeMeetingSummary(input) {
     status: normalizeText(meeting.status),
     title: normalizeText(meeting.title),
     updatedAt: normalizeText(meeting.updatedAt),
+    workspaceMutation: normalizeWorkspaceMutation(meeting.workspaceMutation),
   };
 }
 
@@ -4946,6 +5314,7 @@ function normalizeMeetingResultSummary(input) {
     title: normalizeText(item.title),
     transcriptAvailable: Boolean(item.transcriptAvailable),
     updatedAt: normalizeText(item.updatedAt),
+    workspaceMutation: normalizeWorkspaceMutation(item.workspaceMutation),
   };
 }
 
@@ -4987,6 +5356,7 @@ function buildMeetingResultSummary(jobInput, artifactInput) {
     title: job.title || job.meeting.title,
     transcriptAvailable: Boolean(transcriptText || normalizeText(artifact?.artifactId || job.transcript?.artifactId)),
     updatedAt: job.updatedAt || job.createdAt || job.queuedAt,
+    workspaceMutation: job.workspaceMutation,
   });
 }
 

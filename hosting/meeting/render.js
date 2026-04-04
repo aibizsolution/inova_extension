@@ -28,6 +28,18 @@
     };
   }
 
+  function normalizeWorkspaceMutation(mutation) {
+    const nextMutation = mutation && typeof mutation === "object" ? mutation : {};
+    return {
+      completedAt: normalizeText(nextMutation.completedAt),
+      error: normalizeText(nextMutation.error),
+      requestedAt: normalizeText(nextMutation.requestedAt),
+      requestId: normalizeText(nextMutation.requestId),
+      status: normalizeText(nextMutation.status),
+      type: normalizeText(nextMutation.type),
+    };
+  }
+
   function normalizeRecord(record) {
     const nextRecord = record && typeof record === "object" ? record : {};
     const notesContextItems = normalizeNotesContextItems(nextRecord.notesContextItems);
@@ -54,6 +66,7 @@
       status: normalizeText(nextRecord.status) || "idle",
       title: normalizeText(nextRecord.resultTitle || nextRecord.title || nextRecord.meetingTitle),
       updatedAt: normalizeText(nextRecord.updatedAt),
+      workspaceMutation: normalizeWorkspaceMutation(nextRecord.workspaceMutation),
     };
   }
 
@@ -96,6 +109,7 @@
       status: normalizeText(job.status) || "idle",
       title: normalizeText(job.resultTitle || job.title || job?.meeting?.title) || normalizeText(fallbackTitle),
       updatedAt: normalizeText(job.updatedAt),
+      workspaceMutation: normalizeWorkspaceMutation(job.workspaceMutation),
     };
   }
 
@@ -1235,6 +1249,7 @@
 
     const normalizedJob = state.currentJob || normalizeJob(remote, detailTitle);
     const normalizedArtifact = state.currentArtifact;
+    const workspaceMutation = normalizedJob?.workspaceMutation || remote?.workspaceMutation;
     const meetingNotes = normalizeMeetingNotes(normalizedArtifact?.notes || normalizedJob?.meetingNotes);
     const rawSegments = Array.isArray(normalizedArtifact?.segments) ? normalizedArtifact.segments : [];
     const segments = resegmentSegmentsForDisplay(rawSegments);
@@ -1274,7 +1289,13 @@
     }
     let completionNotice = state.notice.text || "회의 정리가 준비됐습니다.";
     let completionTone = state.notice.tone || "highlight";
-    if (!hasNotesValue && !hasTranscriptValue && !hasSegmentsValue) {
+    if (workspaceMutation?.type === "regenerateNotes" && ["queued", "processing"].includes(workspaceMutation.status)) {
+      completionNotice = "회의록 업데이트를 진행 중입니다. 완료 여부는 실시간 상태로 반영됩니다.";
+      completionTone = "highlight";
+    } else if (workspaceMutation?.type === "regenerateNotes" && workspaceMutation.status === "failed") {
+      completionNotice = workspaceMutation.error || "회의록 업데이트를 완료하지 못했어요.";
+      completionTone = "error";
+    } else if (!hasNotesValue && !hasTranscriptValue && !hasSegmentsValue) {
       completionNotice = "녹음이 너무 짧거나 인식된 발화가 부족해 표시할 내용이 없습니다.";
       completionTone = "warning";
     } else if (!hasNotesValue && (hasTranscriptValue || hasSegmentsValue) && !state.notice.text) {
@@ -1462,6 +1483,11 @@
     const savedRecordTitle = normalizeText(detailView.recordTitle);
     const draftRecordTitle = normalizeText(global.document.activeElement === refs.recordTitleInput ? refs.recordTitleInput.value : savedRecordTitle || refs.recordTitleInput?.value);
     const recordTitleDirty = Boolean(draftRecordTitle && draftRecordTitle !== savedRecordTitle);
+    const selectedRecordMutationBusy = state.busy.deleteRecord
+      || state.busy.regenerateNotes
+      || state.busy.saveRecordContext
+      || state.busy.saveRecordMemo
+      || state.busy.saveRecordTitle;
     const currentTimerText = formatCaptureTimer(state.capture.durationMs);
     const savedSelectedRecordMemo = ns.shared.normalizeTextBlock(state.selectedRecordMemo?.saved || detailView.recordMemo);
     const draftSelectedRecordMemo = ns.shared.normalizeTextBlock(
@@ -1538,11 +1564,11 @@
     refs.detailSummary.textContent = detailView.summary;
     refs.recordTitleGroup.hidden = !detailView.showRecordActions;
     if (global.document.activeElement !== refs.recordTitleInput) refs.recordTitleInput.value = detailView.recordTitle;
-    refs.saveRecordTitleButton.disabled = !canRenameSelectedRecord || state.busy.saveRecordTitle || !draftRecordTitle || !recordTitleDirty;
+    refs.saveRecordTitleButton.disabled = !canRenameSelectedRecord || selectedRecordMutationBusy || !draftRecordTitle || !recordTitleDirty;
     refs.saveRecordTitleButton.textContent = state.busy.saveRecordTitle ? "저장 중" : recordTitleDirty ? "이름 저장" : "저장됨";
     refs.downloadRecordButton.hidden = !canDownloadSelectedRecord;
     refs.downloadRecordButton.disabled = !canDownloadSelectedRecord;
-    refs.deleteRecordButton.disabled = !canDeleteSelectedRecord || state.busy.deleteRecord;
+    refs.deleteRecordButton.disabled = !canDeleteSelectedRecord || selectedRecordMutationBusy;
     refs.detailMeta.hidden = !detailView.meta.length;
     refs.detailMeta.innerHTML = detailView.meta.map((item) => `<span>${escapeHtml(item)}</span>`).join("");
 
@@ -1573,9 +1599,7 @@
     refs.updateMeetingNotesButton.hidden = !isCompletedRecord;
     refs.updateMeetingNotesButton.disabled = !isCompletedRecord
       || !notesInputsDirty
-      || state.busy.regenerateNotes
-      || state.busy.saveRecordMemo
-      || state.busy.saveRecordContext;
+      || selectedRecordMutationBusy;
     refs.updateMeetingNotesButton.textContent = state.busy.regenerateNotes
       ? "업데이트 중"
       : "회의록 업데이트";
@@ -1628,12 +1652,11 @@
       refs.detailMemoInput.value = draftSelectedRecordMemo;
     }
     if (refs.detailMemoInput) {
-      refs.detailMemoInput.disabled = !isCompletedRecord || state.busy.saveRecordMemo || state.busy.regenerateNotes;
+      refs.detailMemoInput.disabled = !isCompletedRecord || selectedRecordMutationBusy;
     }
     refs.saveRecordMemoButton.disabled = !isCompletedRecord
       || !selectedRecordMemoDirty
-      || state.busy.saveRecordMemo
-      || state.busy.regenerateNotes;
+      || selectedRecordMutationBusy;
     refs.saveRecordMemoButton.textContent = state.busy.saveRecordMemo
       ? "저장 중"
       : selectedRecordMemoDirty
