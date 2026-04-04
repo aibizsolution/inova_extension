@@ -593,6 +593,7 @@
     if (refs.blockedEyebrow) refs.blockedEyebrow.textContent = state.blockedEyebrow;
     if (refs.blockedTitle) refs.blockedTitle.textContent = state.blockedTitle;
     refs.blockedMessage.textContent = state.blockedMessage;
+    controllers?.debug?.forceExpand?.();
   }
 
   function buildControllerHelpers() {

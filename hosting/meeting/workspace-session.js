@@ -82,6 +82,14 @@
           tone: "warning",
         };
       }
+      if (normalizedReason === "identity-required") {
+        return {
+          eyebrow: "사용자 확인 필요",
+          message: "확장프로그램이 현재 i-Nova 사용자 정보를 아직 확인하지 못했습니다. 로그인된 i-Nova 탭이나 패널을 한 번 연 뒤 다시 열어 주세요.",
+          title: "i-Nova 사용자 정보를 확인해야 합니다",
+          tone: "warning",
+        };
+      }
       if (normalizedReason === "owner-only") {
         return {
           eyebrow: "소유자 전용",
@@ -453,6 +461,7 @@
           : await authorizeViaExtensionBridge();
         applyAccessState(accessPayload);
       } catch (error) {
+        const errorMessage = normalizeText(error instanceof Error ? error.message : String(error || ""));
         logDebug("workspace.session.authorize.error", {
           error,
           meetingId,
@@ -460,9 +469,13 @@
         applyAccessState({
           accessDecision: "denied",
           accessMode: "blocked",
-          extensionBridge: "failed",
-          inovaLogin: false,
-          reason: "extension-required",
+          extensionBridge: errorMessage.includes("bridge 응답이 없어요.") ? "failed" : "connected",
+          inovaLogin: !errorMessage.includes("로그인"),
+          reason: errorMessage.includes("사용자 키")
+            ? "identity-required"
+            : errorMessage.includes("로그인")
+              ? "login-required"
+              : "extension-required",
           viewer: {},
         });
       }

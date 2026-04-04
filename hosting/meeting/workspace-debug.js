@@ -190,6 +190,15 @@
         syncDebugPanelCollapsedUi({ persist: true });
       }
 
+      function forceExpand(options = {}) {
+        if (!refs.debugPanel || refs.debugPanel.hidden || !state.debugPanelCollapsed) {
+          render(getDebugEntries());
+          return;
+        }
+        state.debugPanelCollapsed = false;
+        syncDebugPanelCollapsedUi({ persist: options.persist === true });
+      }
+
       function escapeHtml(value) {
         return String(value || "")
           .replace(/&/g, "&amp;")
@@ -392,6 +401,7 @@
         copyMeetingNotes,
         copySegmentsText,
         exposeDebugApi,
+        forceExpand,
         handlePanelClick,
         render,
         setup,

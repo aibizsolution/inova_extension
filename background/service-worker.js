@@ -334,6 +334,12 @@ async function authorizeMeetingWorkspaceAccess(input, providerIdentity, sender) 
         inovaLogin: false,
       });
     }
+    if (!namespace.session.normalizeText(owner?.providerUserKey)) {
+      return buildMeetingWorkspaceBlockedAuthPayload(input, owner, "identity-required", {
+        extensionBridge: "connected",
+        inovaLogin: true,
+      });
+    }
     const payload = await namespace.cloudApi.authorizeInovaMeetingWorkspaceAccess({
       debugAuthBypass: namespace.session.normalizeText(input?.debugAuthBypass),
       jobId: namespace.session.normalizeText(input?.jobId),
@@ -352,6 +358,12 @@ async function authorizeMeetingWorkspaceAccess(input, providerIdentity, sender) 
       return buildMeetingWorkspaceBlockedAuthPayload(input, providerIdentity, "login-required", {
         extensionBridge: "connected",
         inovaLogin: false,
+      });
+    }
+    if (looksLikeMeetingIdentityError(message)) {
+      return buildMeetingWorkspaceBlockedAuthPayload(input, providerIdentity, "identity-required", {
+        extensionBridge: "connected",
+        inovaLogin: true,
       });
     }
     throw error;
@@ -589,6 +601,13 @@ function looksLikeMeetingLoginError(message) {
     || normalized.includes("403");
 }
 
+function looksLikeMeetingIdentityError(message) {
+  const normalized = namespace.session.normalizeText(message).toLowerCase();
+  return normalized.includes("사용자 키")
+    || normalized.includes("provideruserkey")
+    || normalized.includes("provider user key");
+}
+
 function isLoopbackHostname(value) {
   return ["127.0.0.1", "localhost"].includes(namespace.session.normalizeText(value).toLowerCase());
 }
@@ -600,10 +619,11 @@ function logMeetingDebug(event, payload) {
 async function resolveMeetingProviderIdentity(providerIdentity) {
   const normalized = normalizeProviderIdentity(providerIdentity);
   if (normalized.providerUserKey) {
+    await persistMeetingProviderIdentity(normalized);
     return normalized;
   }
-  const storageState = await namespace.storage.getState();
-  return normalizeProviderIdentity(storageState?.cloudSync?.providerIdentity);
+  const persisted = await loadStoredMeetingProviderIdentity();
+  return persisted.providerUserKey ? persisted : normalized;
 }
 
 function normalizeProviderIdentity(providerIdentity) {
@@ -614,6 +634,50 @@ function normalizeProviderIdentity(providerIdentity) {
     provider: namespace.session.normalizeText(providerIdentity?.provider) || "inova",
     providerUserKey: namespace.session.normalizeText(providerIdentity?.providerUserKey),
   };
+}
+
+async function loadStoredMeetingProviderIdentity() {
+  try {
+    if (typeof namespace.storage.getCloudSyncState === "function") {
+      const cloudSync = await namespace.storage.getCloudSyncState();
+      return normalizeProviderIdentity(cloudSync?.providerIdentity);
+    }
+    const storageState = await namespace.storage.getState();
+    return normalizeProviderIdentity(storageState?.cloudSync?.providerIdentity);
+  } catch (error) {
+    void error;
+    return normalizeProviderIdentity(null);
+  }
+}
+
+async function persistMeetingProviderIdentity(providerIdentity) {
+  const normalized = normalizeProviderIdentity(providerIdentity);
+  if (!normalized.providerUserKey || typeof namespace.storage.getCloudSyncState !== "function" || typeof namespace.storage.setCloudSyncState !== "function") {
+    return normalized;
+  }
+  try {
+    const current = await namespace.storage.getCloudSyncState();
+    const currentIdentity = normalizeProviderIdentity(current?.providerIdentity);
+    if (
+      currentIdentity.providerUserKey === normalized.providerUserKey
+      && currentIdentity.email === normalized.email
+      && currentIdentity.displayName === normalized.displayName
+      && currentIdentity.numericUserId === normalized.numericUserId
+    ) {
+      return normalized;
+    }
+    await namespace.storage.setCloudSyncState({
+      ...(current && typeof current === "object" ? current : {}),
+      providerIdentity: {
+        ...currentIdentity,
+        ...normalized,
+        available: true,
+      },
+    });
+  } catch (error) {
+    void error;
+  }
+  return normalized;
 }
 
 function isAllowedSender(message, sender) {
@@ -633,7 +697,8 @@ function isHostedMeetingWorkspaceSender(sender) {
     const url = new URL(String(sender?.url || ""));
     return HOSTED_MEETING_ALLOWED_ORIGINS.has(url.origin)
       && /\/meeting\/index\.html$/i.test(String(url.pathname || ""));
-  } catch {
+  } catch (error) {
+    void error;
     return false;
   }
 }
