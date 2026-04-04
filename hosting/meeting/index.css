@@ -1292,6 +1292,10 @@ select:disabled {
   margin-top: 14px;
 }
 
+.review-panel--notes {
+  gap: 18px;
+}
+
 .review-panel__toolbar {
   display: flex;
   justify-content: flex-end;
@@ -1335,10 +1339,6 @@ select:disabled {
   border: 0;
   border-radius: 0;
   background: transparent;
-}
-
-.review-panel--notes > .notes-overview {
-  margin-bottom: 18px;
 }
 
 .notes-overview,
