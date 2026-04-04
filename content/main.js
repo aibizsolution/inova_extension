@@ -45,6 +45,9 @@
     store: {
       availableCategories: [],
       categoryId: "all",
+      dataFreshness: "empty",
+      degraded: false,
+      degradedReason: "",
       error: "",
       expandedEntryId: "",
       feedback: null,
@@ -61,6 +64,7 @@
       searchTimer: 0,
       scope: "all",
       sortBy: "latest",
+      source: "none",
       totalCount: 0,
     },
     observer: null,
@@ -661,26 +665,32 @@
     try {
       const saved = global.sessionStorage?.getItem(PANEL_OPEN_KEY);
       return saved == null ? false : saved === "true";
-    } catch {
+    } catch (error) {
+      console.warn("[i-Nova Bookmarks] panel open preference read failed", error);
       return false;
     }
   }
   function readMeetingDebugCollapsed() {
     try {
       return global.localStorage?.getItem(MEETING_DEBUG_COLLAPSED_KEY) !== "0";
-    } catch {
+    } catch (error) {
+      console.warn("[i-Nova Bookmarks] meeting debug collapsed read failed", error);
       return true;
     }
   }
   function writeMeetingDebugCollapsed(collapsed) {
     try {
       global.localStorage?.setItem(MEETING_DEBUG_COLLAPSED_KEY, collapsed ? "1" : "0");
-    } catch {}
+    } catch (error) {
+      console.warn("[i-Nova Bookmarks] meeting debug collapsed write failed", error);
+    }
   }
   function writePanelOpenPreference(open) {
     try {
       global.sessionStorage?.setItem(PANEL_OPEN_KEY, String(Boolean(open)));
-    } catch {}
+    } catch (error) {
+      console.warn("[i-Nova Bookmarks] panel open preference write failed", error);
+    }
   }
   function normalizeToolId(toolId) {
     return toolId === "release" || toolId === "prompts" || toolId === "meeting"

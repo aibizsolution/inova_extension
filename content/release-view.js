@@ -22,11 +22,13 @@
 
   function renderStatusCard(state) {
     if (state.error) {
-      const hasCachedData = Boolean(
-        state.latest
-        || (Array.isArray(state.history) && state.history.length)
-        || state.lastCheckedAt
-      );
+      const hasCachedData = state.dataFreshness === "stale"
+        || state.source === "cache"
+        || Boolean(
+          state.latest
+          || (Array.isArray(state.history) && state.history.length)
+          || state.lastCheckedAt
+        );
       return `
         <article class="inova-release-card is-muted">
           <strong>${hasCachedData ? "릴리스 정보를 제한적으로 표시 중이에요." : "릴리스 정보를 확인하지 못했어요."}</strong>

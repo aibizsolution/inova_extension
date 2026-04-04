@@ -73,6 +73,7 @@
 - 핵심 기능이 기대 결과를 만들지 못했으면 성공처럼 처리하지 않는다.
 - 기본값, 빈값, 캐시, mock, 추정값은 설명 없이 정상 결과처럼 반환하지 않는다.
 - fallback이 필요하면 반드시 degraded state 또는 명시적 실패로 드러나야 한다.
+- panel/tool read-state는 가능하면 `source`, `degraded`, `degradedReason`, `dataFreshness(fresh|stale|empty)`를 같은 계약으로 써서 fresh runtime-read와 stale cache를 섞어 말하지 않는다.
 - 저장, 전송, 생성, 분석, 변환, 동기화처럼 성공 여부가 중요한 작업은 fallback으로 성공을 위장하지 않는다.
 - retry가 가능한 오류도 결국 기대 결과를 만들지 못하면 degraded 또는 explicit error로 남긴다.
 

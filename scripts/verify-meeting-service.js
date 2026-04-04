@@ -283,7 +283,7 @@ async function main() {
     ...bucketlessDeps,
     authorizeMeetingRequest: bucketlessLaunchHandlers.authorizeMeetingRequest,
   });
-  const bucketlessCreated = await invokeHandler(bucketlessHandlers.createInovaMeetingJob, {
+  const bucketlessProdCreate = await invokeHandler(bucketlessHandlers.createInovaMeetingJob, {
     body: {
       meeting: {
         endedAt: "2026-03-30T09:05:00.000Z",
@@ -307,12 +307,131 @@ async function main() {
     },
     method: "POST",
   });
-  assert.equal(bucketlessCreated.statusCode, 200);
-  await invokeJobWriteTrigger(bucketlessHandlers, bucketlessState, bucketlessCreated.jsonBody.data.job.jobId);
-  const bucketlessJob = getDoc(bucketlessState, JOB_COLLECTION, bucketlessCreated.jsonBody.data.job.jobId);
-  assert(bucketlessJob);
-  assert.equal(bucketlessJob.source.uploadStatus, "inline-only");
-  assert.equal(bucketlessJob.cleanup.sourceAudioDeleted, false);
+  assert.equal(bucketlessProdCreate.statusCode, 500);
+  assert.equal(bucketlessProdCreate.jsonBody.error, "회의 임시 오디오를 저장할 bucket이 설정되지 않았어요.");
+
+  const previousInlineOnlyEnv = process.env.OPENAI_MEETING_ALLOW_INLINE_ONLY;
+  let bucketlessLocalCreate;
+  try {
+    process.env.OPENAI_MEETING_ALLOW_INLINE_ONLY = "true";
+    bucketlessLocalCreate = await invokeHandler(bucketlessHandlers.createInovaMeetingJob, {
+      body: {
+        meeting: {
+          endedAt: "2026-03-30T09:05:00.000Z",
+          language: "ko",
+          meetingId: "meeting-inline-local-1",
+          startedAt: "2026-03-30T09:00:00.000Z",
+          title: "로컬 인라인 업로드 회의",
+        },
+        options: { redaction: "none", summary: true },
+        owner,
+        source: {
+          captureMode: "microphone",
+          channelCount: 1,
+          durationMs: 12000,
+          fileName: "inline-only-local.webm",
+          inlineAudioBase64: audioPayload,
+          mimeType: "audio/webm;codecs=opus",
+          requestId: "capture-inline-local-1",
+          sizeBytes: Buffer.from(audioPayload, "base64").length,
+        },
+      },
+      method: "POST",
+    });
+  } finally {
+    if (previousInlineOnlyEnv == null) {
+      delete process.env.OPENAI_MEETING_ALLOW_INLINE_ONLY;
+    } else {
+      process.env.OPENAI_MEETING_ALLOW_INLINE_ONLY = previousInlineOnlyEnv;
+    }
+  }
+  assert.equal(bucketlessLocalCreate.statusCode, 200);
+  await invokeJobWriteTrigger(bucketlessHandlers, bucketlessState, bucketlessLocalCreate.jsonBody.data.job.jobId);
+  const bucketlessLocalJob = getDoc(bucketlessState, JOB_COLLECTION, bucketlessLocalCreate.jsonBody.data.job.jobId);
+  assert(bucketlessLocalJob);
+  assert.equal(bucketlessLocalJob.source.uploadStatus, "inline-only");
+  assert.equal(bucketlessLocalJob.cleanup.sourceAudioDeleted, false);
+
+  const uploadFailureState = createMemoryState();
+  const uploadFailureDeps = createDeps(uploadFailureState, { bucket: createSaveFailingBucket(uploadFailureState, "forced-upload-failure") });
+  const uploadFailureLaunchHandlers = registerMeetingLaunchHandlers(uploadFailureDeps);
+  const uploadFailureHandlers = registerMeetingHandlers({
+    ...uploadFailureDeps,
+    authorizeMeetingRequest: uploadFailureLaunchHandlers.authorizeMeetingRequest,
+  });
+  const uploadFailureCreate = await invokeHandler(uploadFailureHandlers.createInovaMeetingJob, {
+    body: {
+      meeting: {
+        endedAt: "2026-03-30T09:15:00.000Z",
+        language: "ko",
+        meetingId: "meeting-upload-failure-1",
+        startedAt: "2026-03-30T09:10:00.000Z",
+        title: "업로드 실패 회의",
+      },
+      options: { redaction: "none", summary: true },
+      owner,
+      source: {
+        captureMode: "microphone",
+        channelCount: 1,
+        durationMs: 12000,
+        fileName: "upload-failure.webm",
+        inlineAudioBase64: audioPayload,
+        mimeType: "audio/webm;codecs=opus",
+        requestId: "capture-upload-failure-1",
+        sizeBytes: Buffer.from(audioPayload, "base64").length,
+      },
+    },
+    method: "POST",
+  });
+  assert.equal(uploadFailureCreate.statusCode, 500);
+  assert.equal(uploadFailureCreate.jsonBody.error, "회의 임시 오디오 업로드를 저장하지 못했어요.");
+
+  const cleanupWarningState = createMemoryState();
+  const cleanupWarningDeps = createDeps(cleanupWarningState, { bucket: createDeleteFailingBucket(cleanupWarningState, "forced-delete-failure") });
+  const cleanupWarningLaunchHandlers = registerMeetingLaunchHandlers(cleanupWarningDeps);
+  const cleanupWarningHandlers = registerMeetingHandlers({
+    ...cleanupWarningDeps,
+    authorizeMeetingRequest: cleanupWarningLaunchHandlers.authorizeMeetingRequest,
+  });
+  const cleanupWarningCreate = await invokeHandler(cleanupWarningHandlers.createInovaMeetingJob, {
+    body: {
+      meeting: {
+        endedAt: "2026-03-30T09:25:00.000Z",
+        language: "ko",
+        meetingId: "meeting-cleanup-warning-1",
+        startedAt: "2026-03-30T09:20:00.000Z",
+        title: "정리 경고 회의",
+      },
+      options: { redaction: "none", summary: true },
+      owner,
+      source: {
+        captureMode: "microphone",
+        channelCount: 1,
+        durationMs: 12000,
+        fileName: "cleanup-warning.webm",
+        inlineAudioBase64: audioPayload,
+        mimeType: "audio/webm;codecs=opus",
+        requestId: "capture-cleanup-warning-1",
+        sizeBytes: Buffer.from(audioPayload, "base64").length,
+      },
+    },
+    method: "POST",
+  });
+  assert.equal(cleanupWarningCreate.statusCode, 200);
+  await invokeJobWriteTrigger(cleanupWarningHandlers, cleanupWarningState, cleanupWarningCreate.jsonBody.data.job.jobId);
+  const cleanupWarningJob = getDoc(cleanupWarningState, JOB_COLLECTION, cleanupWarningCreate.jsonBody.data.job.jobId);
+  assert(cleanupWarningJob);
+  assert.equal(cleanupWarningJob.status, "succeeded");
+  assert.equal(cleanupWarningJob.cleanup.sourceAudioDeleted, false);
+  assert.equal(cleanupWarningJob.source.uploadStatus, "uploaded");
+  assert.equal(
+    cleanupWarningState.events.some((event) =>
+      event.name === "meeting.process.cleanup.warning"
+      && event.payload.jobId === cleanupWarningJob.jobId
+      && Number(event.payload.failedStorageObjectCount) === 1
+    ),
+    true
+  );
 
   const chunkedPartA = await invokeHandler(handlers.uploadInovaMeetingSource, {
     headers: { "content-type": "audio/wav" },
@@ -425,6 +544,52 @@ function getDoc(state, collectionName, docId) {
   const collection = getCollection(state, collectionName);
   const value = collection.get(docId);
   return value == null ? null : cloneValue(value);
+}
+
+function createSaveFailingBucket(state, message) {
+  return {
+    file(storageObject) {
+      const normalizedStorageObject = String(storageObject || "").trim();
+      return {
+        async delete() {
+          const current = state.uploads.get(normalizedStorageObject) || {};
+          state.uploads.set(normalizedStorageObject, { ...current, deleted: true });
+        },
+        async download() {
+          const current = state.uploads.get(normalizedStorageObject);
+          return [Buffer.from(current?.buffer || Buffer.alloc(0))];
+        },
+        async save() {
+          throw new Error(message);
+        },
+      };
+    },
+  };
+}
+
+function createDeleteFailingBucket(state, message) {
+  return {
+    file(storageObject) {
+      const normalizedStorageObject = String(storageObject || "").trim();
+      return {
+        async delete() {
+          throw new Error(message);
+        },
+        async download() {
+          const current = state.uploads.get(normalizedStorageObject);
+          return [Buffer.from(current?.buffer || Buffer.alloc(0))];
+        },
+        async save(buffer, options = {}) {
+          state.uploads.set(normalizedStorageObject, {
+            buffer: Buffer.from(buffer),
+            contentType: options.contentType || "",
+            deleted: false,
+            metadata: cloneValue(options.metadata || {}),
+          });
+        },
+      };
+    },
+  };
 }
 
 function cloneValue(value) {

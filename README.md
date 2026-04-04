@@ -11,6 +11,7 @@
 - `content/prompt-hub-view.js`, `content/prompt-hub-state.js`, `content/prompt-hub-panel.js`, `content/prompt-hub-controller.js`, `content/prompt-hub-runtime.js`는 `내 요청/스토어/검토` shell을 담당하므로, 단일 prompt feature 소유 파일로 보지 않습니다.
 - cue가 두 feature 이상에 걸리면 저장소 전체를 넓게 읽는 대신 짧게 `이 기능이 맞나요?`를 먼저 확인합니다.
 - feature 작업 중 두 번째 primary feature를 읽어야 하거나 `content + functions + hosting` 3축이 동시에 필요해지면, 먼저 커밋 또는 다음 세션 분리를 제안합니다.
+- 패널 read-state와 tool 상태는 공통으로 `source + degraded + degradedReason + dataFreshness(fresh|stale|empty)`를 함께 들고, fallback 성공도 이 진단을 지우지 않은 채 surface합니다.
 
 ## 핵심 기능
 
@@ -232,8 +233,8 @@
 - `content/features/prompt-store/store-manager.js`는 `프롬프트 스토어` 목록 조회, 등록, 삭제, 좋아요, 가져오기 흐름을 관리하고, 공개 최신 feed snapshot이 오면 목록에 바로 반영합니다. 상세 `보기`는 Firestore detail doc를 직접 읽습니다.
 - `content/features/prompt-store/store-manager.js`는 `전체 스토어 + realtime 활성`일 때 publish/unpublish 뒤에 강제 `inova-store:list` 재요청을 하지 않고 snapshot 반영을 기다립니다. `내 등록`이나 realtime fallback 상태만 request-response 재조회를 유지합니다.
 - `content/features/prompt-store/store-manager.js`는 `전체 스토어 + realtime 예상 상태`에서는 탭 진입, route refresh, `전체/내 등록` 전환 중 `전체` 복귀 때도 먼저 `inova-store:list`를 치지 않고 Firestore snapshot을 기다립니다. `내 등록`만 요청형 로드를 유지합니다.
-- `content/main.js`와 `content/features/prompt-store/prompt-realtime-manager.js`는 스토어 최신 목록 bridge가 잠깐 끊겨도 이미 화면에 목록이 있으면 그대로 유지하고, 첫 목록이 아직 없을 때만 `fallback` read를 허용합니다. 디버그의 `panel.ui.surface.changed`도 실제 표면 유무가 바뀌는 경우만 남겨 노이즈를 줄입니다.
-- `content/meeting-manager.js`는 패널에서 `issueInovaMeetingPanelAuth -> hosted panel bridge -> Firestore meeting query` 경로로 owner 기준 최신 회의 목록을 실시간 구독하고, 브리지나 인증이 실패할 때만 `listInovaMeetings` fallback으로 현재 메모리 허브 상태를 갱신합니다.
+- `content/main.js`와 `content/features/prompt-store/prompt-realtime-manager.js`는 스토어 최신 목록 bridge가 끊기면 기존 목록이 있을 때는 `cache + stale + degraded` 상태로 유지하고, 첫 목록이 아직 없을 때만 `runtime-read + fresh + degraded` 요청형 읽기를 허용합니다. 디버그의 `panel.ui.surface.changed`도 실제 표면 유무가 바뀌는 경우만 남겨 노이즈를 줄입니다.
+- `content/meeting-manager.js`는 패널에서 `issueInovaMeetingPanelAuth -> hosted panel bridge -> Firestore meeting query` 경로로 owner 기준 최신 회의 목록을 실시간 구독하고, 브리지나 인증이 실패할 때만 `listInovaMeetings` 요청형 읽기로 전환합니다. 이때도 `source`, `degradedReason`, `dataFreshness`를 함께 남겨 stale cache와 fresh runtime-read를 구분합니다.
 - `background/service-worker.js`는 i-Nova access token과 Firebase Functions를 연결해 원격 백업 호출과 prompt/store panel auth 발급을 처리하고, 회의 기능에서는 launch grant 발급과 session 교환까지 끝낸 최종 hosted 작업실 URL 생성, 허브 조회 라우팅을 맡습니다.
 - `functions/features/meeting/meeting-launch-service.js`는 launch grant, hosted workspace session, Firestore 읽기용 Firebase custom token 발급을 맡깁니다.
 - `processQueuedInovaMeetingJob`, `processQueuedInovaMeetingJobPart`, `finalizeChunkedInovaMeetingJob` Firestore background worker는 모두 `1GiB` 메모리와 `540초` timeout으로 운영하되, 긴 회의는 `parent job queue -> chunk worker들 -> finalizer`로 역할을 나눠 단일 함수가 모든 chunk를 붙잡지 않게 유지합니다. 현재 max instances는 각각 `10 / 50 / 10`으로 분리해, 청크 fan-out 부하는 part worker 쪽으로 더 많이 열고 parent/finalizer는 낮게 유지합니다.

@@ -11,6 +11,7 @@
     return {
       handleRealtimeRemoteState,
       handleStorageChange,
+      markPromptLibraryFallback,
       scheduleSync,
     };
 
@@ -59,7 +60,8 @@
         const promptLibrary = namespace.promptLibrary.mergePromptLibrary(storageState.promptLibrary);
         const cloudSync = namespace.cloudSync.mergeCloudSyncState(storageState.cloudSync);
         const remoteState = normalizeRealtimeRemoteState(remoteStateInput, providerIdentity);
-        await applyRemoteState(promptLibrary, cloudSync, providerIdentity, remoteState, false, "realtime");
+        const remoteResult = await applyRemoteState(promptLibrary, cloudSync, providerIdentity, remoteState, false, "realtime");
+        state.cloudSync = namespace.cloudSync.mergeCloudSyncState(remoteResult.cloudSync);
       } catch (error) {
         if (isInvalidatedContextError(error)) {
           return;
@@ -67,6 +69,11 @@
         logDebug("cloud-sync.realtime.error", {
           error: error instanceof Error ? error.message : String(error || ""),
           scope: "cloud-sync",
+        });
+        state.cloudSync = await markPromptLibraryFallback(error, {
+          degradedReason: "prompt-library-realtime-failed",
+          providerIdentity,
+          source: "realtime",
         });
       } finally {
         hooks.render?.();
@@ -97,12 +104,15 @@
         providerUserKey: namespace.session.normalizeText(providerIdentity.providerUserKey),
         scope: "cloud-sync",
       });
+      let failureReason = "prompt-library-sync-failed";
       try {
         const storageState = await namespace.storage.getState();
         const promptLibrary = namespace.promptLibrary.mergePromptLibrary(storageState.promptLibrary);
         let cloudSync = namespace.cloudSync.mergeCloudSyncState(storageState.cloudSync);
+        state.cloudSync = cloudSync;
 
         if (shouldProbeRemote(promptLibrary, cloudSync, providerIdentity, forceRemoteProbe)) {
+          failureReason = "prompt-library-probe-failed";
           logDebug("cloud-sync.probe.start", {
             forceRemoteProbe: Boolean(forceRemoteProbe),
             scope: "cloud-sync",
@@ -120,6 +130,7 @@
             "probe"
           );
           cloudSync = remoteResult.cloudSync;
+          state.cloudSync = namespace.cloudSync.mergeCloudSyncState(cloudSync);
           if (remoteResult.hydrated) {
             return;
           }
@@ -133,13 +144,17 @@
         }
 
         const syncDocument = namespace.cloudSync.buildPromptSyncDocument(promptLibrary, cloudSync);
+        failureReason = "prompt-library-push-failed";
         logDebug("cloud-sync.push.start", {
           itemCount: Array.isArray(promptLibrary.items) ? promptLibrary.items.length : 0,
           revision: namespace.session.normalizeText(cloudSync?.pending?.revision),
           scope: "cloud-sync",
         });
         const result = await sendRuntimeMessage("inova-sync:sync-prompt-library", { syncDocument });
-        await namespace.storage.markPromptLibrarySynced(result.owner || providerIdentity, result.syncedAt || new Date().toISOString());
+        state.cloudSync = await namespace.storage.markPromptLibrarySynced(
+          result.owner || providerIdentity,
+          result.syncedAt || new Date().toISOString()
+        );
         logDebug("cloud-sync.push.success", {
           scope: "cloud-sync",
           syncedAt: namespace.session.normalizeText(result?.syncedAt),
@@ -152,7 +167,15 @@
           error: error instanceof Error ? error.message : String(error || ""),
           scope: "cloud-sync",
         });
-        await namespace.storage.setPromptSyncError(error instanceof Error ? error.message : String(error), providerIdentity);
+        state.cloudSync = await namespace.storage.setPromptSyncDegraded(
+          error instanceof Error ? error.message : String(error),
+          providerIdentity,
+          {
+            degradedReason: failureReason,
+            source: "runtime-read",
+            status: "error",
+          }
+        );
         scheduleSync(RETRY_DELAY_MS);
       } finally {
         inflight = false;
@@ -226,7 +249,14 @@
 
     async function applyRemoteState(promptLibrary, cloudSync, providerIdentity, remoteState, forceRemoteProbe, source = "probe") {
       const normalizedRemoteState = normalizeRealtimeRemoteState(remoteState, providerIdentity);
-      const nextCloudSync = await namespace.storage.recordPromptLibraryRemoteState(normalizedRemoteState, providerIdentity);
+      const nextCloudSync = await namespace.storage.recordPromptLibraryRemoteState(
+        normalizedRemoteState,
+        providerIdentity,
+        {
+          dataFreshness: "fresh",
+          source: source === "realtime" ? "realtime" : "runtime-read",
+        }
+      );
       logDebug(`cloud-sync.remote.${source}`, {
         found: Boolean(normalizedRemoteState?.found),
         itemCount: Math.max(0, Number(normalizedRemoteState?.itemCount) || 0),
@@ -251,18 +281,20 @@
         providerIdentity,
       });
       if (shouldHydrateFromLoadedLibrary(promptLibrary, nextCloudSync, remote)) {
-        await namespace.storage.hydratePromptLibraryFromCloud(
+        const hydratedState = await namespace.storage.hydratePromptLibraryFromCloud(
           remote.promptLibrary,
           remote.owner || providerIdentity,
           remote.syncedAt || normalizedRemoteState.lastSyncedAt || new Date().toISOString()
         );
+        state.cloudSync = namespace.cloudSync.mergeCloudSyncState(hydratedState.cloudSync);
+        state.promptLibrary = namespace.promptLibrary.mergePromptLibrary(hydratedState.promptLibrary);
         logDebug("cloud-sync.hydrate.success", {
           itemCount: Array.isArray(remote?.promptLibrary?.items) ? remote.promptLibrary.items.length : 0,
           scope: "cloud-sync",
           source,
         });
         return {
-          cloudSync: nextCloudSync,
+          cloudSync: hydratedState.cloudSync,
           hydrated: true,
         };
       }
@@ -271,6 +303,18 @@
         cloudSync: nextCloudSync,
         hydrated: false,
       };
+    }
+
+    async function markPromptLibraryFallback(error, options = {}) {
+      const providerIdentity = options.providerIdentity || namespace.providerIdentity.getCurrent();
+      const message = error instanceof Error ? error.message : String(error || "");
+      const hasLocalPrompts = Boolean(Array.isArray(state.promptLibrary?.items) && state.promptLibrary.items.length);
+      return namespace.storage.setPromptSyncDegraded(message, providerIdentity, {
+        degradedReason: namespace.session.normalizeText(options.degradedReason) || "prompt-library-sync-failed",
+        dataFreshness: hasLocalPrompts ? "stale" : "empty",
+        source: namespace.session.normalizeText(options.source) || "runtime-read",
+        status: "error",
+      });
     }
 
     function normalizeRealtimeRemoteState(remoteState, providerIdentity) {

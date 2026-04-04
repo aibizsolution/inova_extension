@@ -7,6 +7,12 @@
       (merged, nextState) => ({
         ...merged,
         ...(nextState || {}),
+        degraded: Boolean((nextState || {}).degraded ?? merged.degraded),
+        degradedReason: Object.prototype.hasOwnProperty.call(nextState || {}, "degradedReason")
+          ? namespace.session.normalizeText((nextState || {}).degradedReason)
+          : merged.degradedReason,
+        dataFreshness: normalizeDataFreshness((nextState || {}).dataFreshness, merged.dataFreshness),
+        source: normalizeReadSource((nextState || {}).source, merged.source),
         providerIdentity: {
           ...merged.providerIdentity,
           ...normalizeProviderIdentity((nextState || {}).providerIdentity),
@@ -29,7 +35,12 @@
   function queuePromptLibrarySyncOperation(currentState, reason, providerIdentity, promptLibrary, operation) {
     const identity = normalizeProviderIdentity(providerIdentity);
     const nextOperation = normalizePendingOperation(operation) || createReplaceLibraryOperation(promptLibrary);
+    const current = mergeCloudSyncState(currentState);
     return mergeCloudSyncState(currentState, {
+      degraded: current.degraded,
+      degradedReason: current.degradedReason,
+      dataFreshness: current.dataFreshness,
+      source: current.source,
       status: identity.available ? "queued" : "blocked",
       providerIdentity: identity,
       pending: {
@@ -38,12 +49,16 @@
         reason: normalizeReason(reason),
         revision: createSyncRevision(),
       },
-      lastError: "",
+      lastError: current.lastError,
     });
   }
 
   function markPromptLibrarySynced(currentState, providerIdentity, syncedAt = new Date().toISOString()) {
     return mergeCloudSyncState(currentState, {
+      degraded: false,
+      degradedReason: "",
+      dataFreshness: "fresh",
+      source: "runtime-read",
       status: "synced",
       providerIdentity: normalizeProviderIdentity(providerIdentity),
       pending: null,
@@ -52,18 +67,43 @@
     });
   }
 
-  function setPromptSyncError(currentState, errorMessage, providerIdentity) {
+  function setPromptSyncError(currentState, errorMessage, providerIdentity, options = {}) {
     return mergeCloudSyncState(currentState, {
+      degraded: true,
+      degradedReason: namespace.session.normalizeText(options.degradedReason) || "sync-request-failed",
+      dataFreshness: normalizeDataFreshness(options.dataFreshness, resolveCloudSyncFreshness(currentState)),
+      source: normalizeReadSource(options.source, currentState?.source || "none"),
       status: "error",
       providerIdentity: normalizeProviderIdentity(providerIdentity),
       lastError: String(errorMessage || "").trim(),
     });
   }
 
-  function recordPromptLibraryRemoteState(currentState, remoteState, providerIdentity) {
+  function recordPromptLibraryRemoteState(currentState, remoteState, providerIdentity, options = {}) {
+    const degraded = Boolean(options.degraded);
     return mergeCloudSyncState(currentState, {
+      degraded,
+      degradedReason: degraded ? namespace.session.normalizeText(options.degradedReason) : "",
+      dataFreshness: normalizeDataFreshness(options.dataFreshness, "fresh"),
+      lastError: degraded ? namespace.session.normalizeText(options.errorMessage) : "",
       providerIdentity: normalizeProviderIdentity(providerIdentity),
+      source: normalizeReadSource(options.source, "realtime"),
+      status: degraded
+        ? namespace.session.normalizeText(options.status) || "error"
+        : "synced",
       remote: normalizeRemoteState(remoteState),
+    });
+  }
+
+  function setPromptSyncDegraded(currentState, errorMessage, providerIdentity, options = {}) {
+    return mergeCloudSyncState(currentState, {
+      degraded: true,
+      degradedReason: namespace.session.normalizeText(options.degradedReason) || "sync-degraded",
+      dataFreshness: normalizeDataFreshness(options.dataFreshness, resolveCloudSyncFreshness(currentState)),
+      providerIdentity: normalizeProviderIdentity(providerIdentity),
+      source: normalizeReadSource(options.source, currentState?.source || "none"),
+      status: namespace.session.normalizeText(options.status) || currentState?.status || "error",
+      lastError: namespace.session.normalizeText(errorMessage) || namespace.session.normalizeText(currentState?.lastError),
     });
   }
 
@@ -131,6 +171,35 @@
       updatedAt: namespace.session.normalizeText(remoteState?.updatedAt || ""),
       version: Math.max(1, Number(remoteState?.version) || 1),
     };
+  }
+
+  function normalizeDataFreshness(value, fallback = "empty") {
+    const normalized = namespace.session.normalizeText(value).toLowerCase();
+    if (normalized === "fresh" || normalized === "stale" || normalized === "empty") {
+      return normalized;
+    }
+    return namespace.session.normalizeText(fallback).toLowerCase() || "empty";
+  }
+
+  function normalizeReadSource(value, fallback = "none") {
+    const normalized = namespace.session.normalizeText(value).toLowerCase();
+    if (normalized === "realtime" || normalized === "runtime-read" || normalized === "cache" || normalized === "local" || normalized === "none") {
+      return normalized;
+    }
+    return namespace.session.normalizeText(fallback).toLowerCase() || "none";
+  }
+
+  function resolveCloudSyncFreshness(currentState) {
+    const syncState = currentState && typeof currentState === "object" ? currentState : {};
+    if (
+      namespace.session.normalizeText(syncState.lastSyncedAt)
+      || namespace.session.normalizeText(syncState.remote?.checkedAt)
+      || Math.max(0, Number(syncState.remote?.itemCount) || 0) > 0
+      || namespace.session.normalizeText(syncState.pending?.revision)
+    ) {
+      return "stale";
+    }
+    return "empty";
   }
 
   function mergePending(currentPending, nextPending) {
@@ -303,6 +372,7 @@
     mergeCloudSyncState,
     queuePromptLibrarySyncOperation,
     recordPromptLibraryRemoteState,
+    setPromptSyncDegraded,
     setPromptSyncError,
   };
 })(globalThis);

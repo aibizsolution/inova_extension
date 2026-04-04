@@ -440,7 +440,13 @@ async function buildHostedMeetingSessionUrl(input) {
 async function resolveMeetingWorkspacePageUrl() {
   const normalizedSettings = await reconcileMeetingWorkspaceSettings((await namespace.storage.getState())?.settings);
   const workspaceTarget = normalizeMeetingWorkspaceTarget(normalizedSettings.meetingWorkspaceTarget);
-  const url = workspaceTarget === "local" ? normalizeLocalMeetingWorkspaceUrl(normalizedSettings.meetingWorkspaceUrlOverride) : namespace.firebaseConfig?.hosting?.meetingWorkspaceUrl;
+  const url = workspaceTarget === "local"
+    ? (
+        normalizedSettings.meetingWorkspaceUrlOverride
+          ? normalizeLocalMeetingWorkspaceUrl(normalizedSettings.meetingWorkspaceUrlOverride)
+          : LOCAL_MEETING_WORKSPACE_URL
+      )
+    : namespace.firebaseConfig?.hosting?.meetingWorkspaceUrl;
   logMeetingDebug("workspace.target", { target: workspaceTarget, url });
   return url;
 }
@@ -449,14 +455,19 @@ function normalizeMeetingWorkspaceTarget(value) { return namespace.session.norma
 async function reconcileMeetingWorkspaceSettings(settings) {
   const currentTarget = normalizeMeetingWorkspaceTarget(settings?.meetingWorkspaceTarget);
   const currentDebugEnabled = normalizeMeetingDebugConsoleEnabled(settings?.meetingDebugConsoleEnabled);
-  const currentOverride = normalizeMeetingWorkspaceOverrideUrl(settings?.meetingWorkspaceUrlOverride);
-  const nextSettings = { meetingDebugConsoleEnabled: currentDebugEnabled, meetingWorkspaceTarget: currentTarget, meetingWorkspaceUrlOverride: currentTarget === "local" ? normalizeLocalMeetingWorkspaceUrl(currentOverride) : "" };
+  const rawOverride = namespace.session.normalizeText(settings?.meetingWorkspaceUrlOverride);
+  const currentOverride = currentTarget === "local"
+    ? normalizeMeetingWorkspaceOverrideUrl(rawOverride)
+    : rawOverride;
+  const nextSettings = {
+    meetingDebugConsoleEnabled: currentDebugEnabled,
+    meetingWorkspaceTarget: currentTarget,
+    meetingWorkspaceUrlOverride: currentTarget === "local"
+      ? normalizeLocalMeetingWorkspaceSettingValue(currentOverride)
+      : "",
+  };
   if (currentTarget === namespace.session.normalizeText(settings?.meetingWorkspaceTarget) && currentDebugEnabled === settings?.meetingDebugConsoleEnabled && nextSettings.meetingWorkspaceUrlOverride === currentOverride) return nextSettings;
-  try {
-    await namespace.storage.updateSettings(nextSettings);
-  } catch (error) {
-    logMeetingDebug("workspace.settings.reconcile.error", { error: error instanceof Error ? error.message : String(error || "") });
-  }
+  await namespace.storage.updateSettings(nextSettings);
   return nextSettings;
 }
 
@@ -480,27 +491,35 @@ function normalizeMeetingWorkspaceOverrideUrl(value) {
     url.search = "";
     url.hash = "";
     return url.toString();
-  } catch {
-    logMeetingDebug("workspace.override.invalid", { value: normalized });
+  } catch (error) {
+    logMeetingDebug("workspace.override.invalid", {
+      error: error instanceof Error ? error.message : String(error || ""),
+      value: normalized,
+    });
+    throw new Error("회의 작업실 주소가 올바르지 않아요. 팝업 설정을 확인해 주세요.");
+  }
+}
+
+function normalizeLocalMeetingWorkspaceSettingValue(value) {
+  const normalized = namespace.session.normalizeText(value);
+  if (!normalized) {
     return "";
   }
+  return normalizeLocalMeetingWorkspaceUrl(normalized);
 }
 
 function normalizeLocalMeetingWorkspaceUrl(value) {
   const normalized = normalizeMeetingWorkspaceOverrideUrl(value);
-  if (!normalized) {
-    return LOCAL_MEETING_WORKSPACE_URL;
+  const url = new URL(normalized);
+  if (!isLoopbackHostname(url.hostname)) {
+    logMeetingDebug("workspace.override.non-loopback", { value: normalized });
+    throw new Error("로컬 회의 작업실 주소는 localhost 또는 127.0.0.1만 사용할 수 있어요.");
   }
-  try {
-    const url = new URL(normalized);
-    if (isLoopbackHostname(url.hostname)) {
-      url.port = "5000";
-      url.pathname = "/meeting/index.html";
-      url.search = ""; url.hash = "";
-      return url.toString();
-    }
-  } catch {}
-  return LOCAL_MEETING_WORKSPACE_URL;
+  url.port = "5000";
+  url.pathname = "/meeting/index.html";
+  url.search = "";
+  url.hash = "";
+  return url.toString();
 }
 
 function isLoopbackHostname(value) {

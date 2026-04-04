@@ -80,6 +80,10 @@ function registerMeetingHandlers(deps) {
       const context = normalizeMeetingContext(request.body?.context);
       const access = await verifyRequestIdentity(request);
       const owner = access.owner;
+      const inlineOnlyOptions = {
+        allowInlineOnly: shouldAllowInlineOnlyMeetingSource(),
+        requestOrigin: resolveRequestOrigin(request),
+      };
 
       if (!meeting.meetingId) {
         throw createHttpError(400, "회의 ID가 없어요.");
@@ -110,7 +114,7 @@ function registerMeetingHandlers(deps) {
           if (!existingJob.deletedAt && normalizeText(existingJob.status) !== "failed") {
             assertJobOwnership(existingJob, owner, createHttpError);
             await assertMeetingIsActive(owner, existingJob.meetingId || meeting.meetingId, createHttpError);
-            const sourcePreparation = await ensureQueuedMeetingSourceReady(source, owner, meeting, jobId, createHttpError);
+            const sourcePreparation = await ensureQueuedMeetingSourceReady(source, owner, meeting, jobId, createHttpError, inlineOnlyOptions);
             const mergedSource = mergeQueuedMeetingSource(existingJob.source, sourcePreparation.source);
             let nextJob = existingJob;
             if (hasMeaningfulMeetingSourceUpdate(existingJob.source, mergedSource)) {
@@ -159,7 +163,7 @@ function registerMeetingHandlers(deps) {
         }
       }
 
-      const sourcePreparation = await ensureQueuedMeetingSourceReady(source, owner, meeting, jobId, createHttpError);
+      const sourcePreparation = await ensureQueuedMeetingSourceReady(source, owner, meeting, jobId, createHttpError, inlineOnlyOptions);
       const sourceSnapshot = sourcePreparation.source;
       cleanupStorageObjects = sourcePreparation.cleanupStorageObjects;
       const effectiveMeeting = {
@@ -190,7 +194,11 @@ function registerMeetingHandlers(deps) {
       });
     } catch (error) {
       if (!jobQueued) {
-        await deleteTemporarySourceGroup(bucket, cleanupStorageObjects);
+        const cleanup = await deleteTemporarySourceGroup(bucket, cleanupStorageObjects);
+        logMeetingCleanupWarning("meeting.create.cleanup.warning", cleanup, {
+          providerUserKey: normalizeText(request.body?.providerIdentity?.providerUserKey),
+          requestOrigin: resolveRequestOrigin(request),
+        });
       }
       logEvent("meeting.create.error", {
         error: normalizeText(error?.message),
@@ -413,6 +421,11 @@ function registerMeetingHandlers(deps) {
       const completedAt = new Date().toISOString();
       const artifact = buildTranscriptArtifact(artifactId, queuedJob.jobId, meeting, owner, transcript, meetingNotes, completedAt, context);
       const deletion = await deleteTemporarySourceGroup(bucket, collectMeetingSourceStorageObjects(source));
+      logMeetingCleanupWarning("meeting.process.cleanup.warning", deletion, {
+        jobId: queuedJob.jobId,
+        meetingId: meeting.meetingId,
+        providerUserKey: owner.providerUserKey,
+      });
       const succeededPatch = buildSucceededJobPatch(
         artifact,
         meeting,
@@ -478,6 +491,11 @@ function registerMeetingHandlers(deps) {
         return;
       }
       const deletion = await deleteTemporarySourceGroup(bucket, collectMeetingSourceStorageObjects(source));
+      logMeetingCleanupWarning("meeting.process.cleanup.warning", deletion, {
+        jobId: currentJob.jobId,
+        meetingId: meeting.meetingId,
+        providerUserKey: owner.providerUserKey,
+      });
       const failedPatch = {
         cleanup: {
           deletedAt: deletion.deletedAt,
@@ -800,6 +818,11 @@ function registerMeetingHandlers(deps) {
           ...collectMeetingChunkTranscriptStorageObjects(partDocs),
         ]
       );
+      logMeetingCleanupWarning("meeting.finalize.cleanup.warning", deletion, {
+        jobId: currentJob.jobId,
+        meetingId: meeting.meetingId,
+        providerUserKey: owner.providerUserKey,
+      });
       const succeededPatch = buildSucceededJobPatch(
         artifact,
         meeting,
@@ -1546,11 +1569,11 @@ function registerMeetingHandlers(deps) {
   }
 
   async function uploadTemporarySource(targetBucket, storageObject, audioBuffer, source, owner, meeting, jobId) {
-    if (!targetBucket || !storageObject) {
-      return {
-        storageObject: "",
-        uploadStatus: "inline-only",
-      };
+    if (!targetBucket) {
+      throw createHttpError(500, "회의 임시 오디오를 저장할 bucket이 설정되지 않았어요.");
+    }
+    if (!storageObject) {
+      throw createHttpError(500, "회의 임시 오디오 저장 경로를 준비하지 못했어요.");
     }
     try {
       await targetBucket.file(storageObject).save(audioBuffer, {
@@ -1576,37 +1599,93 @@ function registerMeetingHandlers(deps) {
         meetingId: meeting.meetingId,
         providerUserKey: owner.providerUserKey,
       });
-      return {
-        storageObject: "",
-        uploadStatus: "inline-only",
-      };
+      throw createHttpError(500, "회의 임시 오디오 업로드를 저장하지 못했어요.");
     }
   }
 
   async function deleteTemporarySource(targetBucket, storageObject) {
-    if (!targetBucket || !storageObject) {
-      return "";
+    const normalizedStorageObject = normalizeText(storageObject);
+    if (!normalizedStorageObject) {
+      return {
+        deletedAt: "",
+        error: "",
+        storageObject: "",
+      };
+    }
+    if (!targetBucket) {
+      return {
+        deletedAt: "",
+        error: "storage-bucket-missing",
+        storageObject: normalizedStorageObject,
+      };
     }
     try {
-      await targetBucket.file(storageObject).delete({ ignoreNotFound: true });
-      return new Date().toISOString();
-    } catch {
-      return "";
+      await targetBucket.file(normalizedStorageObject).delete({ ignoreNotFound: true });
+      return {
+        deletedAt: new Date().toISOString(),
+        error: "",
+        storageObject: normalizedStorageObject,
+      };
+    } catch (error) {
+      return {
+        deletedAt: "",
+        error: normalizeText(error?.message) || "storage-delete-failed",
+        storageObject: normalizedStorageObject,
+      };
     }
   }
 
   async function deleteTemporarySourceGroup(targetBucket, storageObjects) {
     const deletedStorageObjects = [];
+    const failedStorageObjects = [];
     for (const storageObject of Array.from(new Set((storageObjects || []).map((value) => normalizeText(value)).filter(Boolean)))) {
-      const deletedAt = await deleteTemporarySource(targetBucket, storageObject);
-      if (deletedAt) {
+      const deletion = await deleteTemporarySource(targetBucket, storageObject);
+      if (deletion.deletedAt) {
         deletedStorageObjects.push(storageObject);
+        continue;
+      }
+      if (deletion.error) {
+        failedStorageObjects.push(storageObject);
       }
     }
     return {
       deletedAt: deletedStorageObjects.length ? new Date().toISOString() : "",
       deletedStorageObjects,
+      failedStorageObjects,
+      warningMessage: failedStorageObjects.length ? `임시 오디오 정리 ${failedStorageObjects.length}건이 남았어요.` : "",
     };
+  }
+
+  function logMeetingCleanupWarning(eventName, deletion, context = {}) {
+    const failedStorageObjects = Array.isArray(deletion?.failedStorageObjects) ? deletion.failedStorageObjects : [];
+    if (!failedStorageObjects.length) {
+      return;
+    }
+    logEvent(eventName, {
+      ...context,
+      failedStorageObjectCount: failedStorageObjects.length,
+      failedStorageObjects: failedStorageObjects.slice(0, 5),
+      warning: normalizeText(deletion?.warningMessage),
+    });
+  }
+
+  function shouldAllowInlineOnlyMeetingSource() {
+    const explicitFlag = normalizeText(process.env.OPENAI_MEETING_ALLOW_INLINE_ONLY).toLowerCase();
+    if (["1", "true", "yes", "on"].includes(explicitFlag)) {
+      return true;
+    }
+    if (normalizeText(process.env.NODE_ENV).toLowerCase() === "test") {
+      return true;
+    }
+    return normalizeText(process.env.FUNCTIONS_EMULATOR).toLowerCase() === "true";
+  }
+
+  function resolveRequestOrigin(request) {
+    return normalizeText(
+      request?.headers?.origin
+      || request?.get?.("origin")
+      || request?.rawRequest?.headers?.origin
+    );
   }
 
   async function persistUploadedMeetingSourceToExistingJob(jobId, owner, uploadInput, storageObject) {
@@ -1764,7 +1843,7 @@ function registerMeetingHandlers(deps) {
     }
   }
 
-  async function ensureQueuedMeetingSourceReady(source, owner, meeting, jobId, errorFactory) {
+  async function ensureQueuedMeetingSourceReady(source, owner, meeting, jobId, errorFactory, options = {}) {
     const expiresAt = new Date(Date.now() + TEMP_UPLOAD_TTL_MS).toISOString();
     const baseSource = {
       captureMode: source.captureMode,
@@ -1841,6 +1920,16 @@ function registerMeetingHandlers(deps) {
         );
       }
       if (!bucket) {
+        if (!options.allowInlineOnly) {
+          throw errorFactory(500, "회의 임시 오디오를 저장할 bucket이 설정되지 않았어요.");
+        }
+        logEvent("meeting.source-upload.inline-only", {
+          jobId,
+          meetingId: meeting.meetingId,
+          providerUserKey: owner.providerUserKey,
+          reason: "bucket-missing",
+          requestOrigin: normalizeText(options.requestOrigin),
+        });
         return {
           cleanupStorageObjects: [],
           source: {
@@ -1851,7 +1940,30 @@ function registerMeetingHandlers(deps) {
         };
       }
       const storageObject = buildTempStorageObjectPath(owner.providerUserKey, meeting.meetingId, jobId, source.fileName);
-      const uploadedSource = await uploadTemporarySource(bucket, storageObject, audioBuffer, baseSource, owner, meeting, jobId);
+      let uploadedSource = null;
+      try {
+        uploadedSource = await uploadTemporarySource(bucket, storageObject, audioBuffer, baseSource, owner, meeting, jobId);
+      } catch (error) {
+        if (!options.allowInlineOnly) {
+          throw error;
+        }
+        logEvent("meeting.source-upload.inline-only", {
+          error: normalizeText(error?.message),
+          jobId,
+          meetingId: meeting.meetingId,
+          providerUserKey: owner.providerUserKey,
+          reason: "upload-failed",
+          requestOrigin: normalizeText(options.requestOrigin),
+        });
+        return {
+          cleanupStorageObjects: [],
+          source: {
+            ...baseSource,
+            inlineAudioBase64: source.inlineAudioBase64,
+            uploadStatus: "inline-only",
+          },
+        };
+      }
       if (!normalizeText(uploadedSource?.storageObject)) {
         throw errorFactory(500, "임시 오디오 업로드를 준비하지 못했어요.");
       }
@@ -2817,6 +2929,11 @@ function registerMeetingHandlers(deps) {
       ...collectMeetingChunkTranscriptStorageObjects(partDocs),
     ]));
     const deletion = await deleteTemporarySourceGroup(bucket, storageObjects);
+    logMeetingCleanupWarning("meeting.delete.cleanup.warning", deletion, {
+      jobId: job.jobId,
+      meetingId: job.meetingId,
+      providerUserKey: job.owner?.providerUserKey,
+    });
     await Promise.all([
       ...artifactIds.map((artifactId) => deleteDocumentIfExists(db.collection(ARTIFACT_COLLECTION).doc(artifactId))),
       deleteDocumentIfExists(db.collection(JOB_FINALIZER_COLLECTION).doc(job.jobId)),

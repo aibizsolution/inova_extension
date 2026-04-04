@@ -82,6 +82,18 @@ if (countJavaScriptFiles(sharedDirectory) < 3) {
   errors.push("shared 모듈 수가 부족합니다. 최소 3개 파일로 분리해야 합니다.");
 }
 
+assertFileExists("scripts/verify-prompt-fallbacks.js");
+assertNoPattern("content/prompt-hub-runtime.js", /onPromptLibraryFallback:\s*\(\)\s*=>\s*\{\s*\}/, "prompt library fallback가 no-op이면 안 됩니다.");
+assertNoPattern("content/meeting-manager.js", /source:\s*"fallback"/, "meeting hub는 fallback success처럼 source를 표기하면 안 됩니다.");
+assertNoPattern("content/features/prompt-store/store-manager.js", /source:\s*"fallback"/, "store manager는 fallback success처럼 source를 표기하면 안 됩니다.");
+assertNoPattern("functions/features/meeting/meeting-service.js", /revisionRequest/, "meeting notes API에 legacy revisionRequest alias가 남아 있으면 안 됩니다.");
+assertNoBareCatch("background/service-worker.js");
+assertNoBareCatch("content/main.js");
+assertNoBareCatch("content/meeting-manager.js");
+assertNoBareCatch("content/features/prompt-store/prompt-realtime-manager.js");
+assertNoBareCatch("shared/storage.js");
+assertInlineOnlyGating("functions/features/meeting/meeting-service.js");
+
 if (errors.length) {
   console.error("구조 계약 검증 실패");
   for (const error of errors) {
@@ -132,4 +144,39 @@ function countJavaScriptFiles(directory) {
     .readdirSync(directory)
     .filter((file) => file.endsWith(".js"))
     .length;
+}
+
+function assertFileExists(relativePath) {
+  if (!fs.existsSync(path.join(root, relativePath))) {
+    errors.push(`필수 검증 스크립트가 없습니다: ${relativePath}`);
+  }
+}
+
+function assertNoPattern(relativePath, pattern, message) {
+  const fullPath = path.join(root, relativePath);
+  if (!fs.existsSync(fullPath)) {
+    return;
+  }
+  const source = fs.readFileSync(fullPath, "utf8");
+  if (pattern.test(source)) {
+    errors.push(`${message} (${relativePath})`);
+  }
+}
+
+function assertNoBareCatch(relativePath) {
+  assertNoPattern(relativePath, /catch\s*\{\s*\}/, "bare catch가 남아 있으면 안 됩니다.");
+}
+
+function assertInlineOnlyGating(relativePath) {
+  const fullPath = path.join(root, relativePath);
+  if (!fs.existsSync(fullPath)) {
+    return;
+  }
+  const source = fs.readFileSync(fullPath, "utf8");
+  if (!/function\s+shouldAllowInlineOnlyMeetingSource\s*\(/.test(source)) {
+    errors.push(`meeting inline-only gating helper가 없습니다: ${relativePath}`);
+  }
+  if (!source.includes("if (!options.allowInlineOnly)")) {
+    errors.push(`meeting inline-only가 local/dev/test로 좁혀지지 않았습니다: ${relativePath}`);
+  }
 }

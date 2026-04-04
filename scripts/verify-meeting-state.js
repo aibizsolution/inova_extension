@@ -77,6 +77,44 @@ async function main() {
   const storedState = await namespace.storage.getMeetingStateByMeetingId();
   assert.deepEqual(storedState, storageState.meetingStateByMeetingId);
 
+  const storageUnavailableContext = vm.createContext({
+    chrome: {},
+    console,
+    globalThis: null,
+    structuredClone: cloneValue,
+  });
+  storageUnavailableContext.globalThis = storageUnavailableContext;
+  loadScript("shared/constants.js", storageUnavailableContext);
+  loadScript("shared/session.js", storageUnavailableContext);
+  loadScript("shared/storage.js", storageUnavailableContext);
+  await assert.rejects(
+    () => storageUnavailableContext.InovaBookmarks.storage.getState(),
+    (error) => error?.code === "storage-unavailable"
+  );
+
+  const invalidatedStorageContext = vm.createContext({
+    chrome: {
+      storage: {
+        local: {
+          async get() {
+            throw new Error("Extension context invalidated.");
+          },
+        },
+      },
+    },
+    console,
+    globalThis: null,
+    structuredClone: cloneValue,
+  });
+  invalidatedStorageContext.globalThis = invalidatedStorageContext;
+  loadScript("shared/constants.js", invalidatedStorageContext);
+  loadScript("shared/session.js", invalidatedStorageContext);
+  loadScript("shared/storage.js", invalidatedStorageContext);
+  await assert.rejects(
+    () => invalidatedStorageContext.InovaBookmarks.storage.getState(),
+    (error) => error?.code === "extension-context-invalidated"
+  );
+
   await namespace.meetingBridge.issuePanelAuth({ providerUserKey: "fixture-user" });
   await namespace.meetingBridge.listMeetings({ limit: 5 }, { providerUserKey: "fixture-user" });
   await namespace.meetingBridge.openMeetingWorkspace({ meetingId: "meeting-alpha" }, { providerUserKey: "fixture-user" });

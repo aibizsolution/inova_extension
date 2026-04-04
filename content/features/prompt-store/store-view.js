@@ -52,10 +52,22 @@
         </div>
       </div>
       ${renderFeedback(globalFeedback)}
+      ${renderDegradedNotice(state)}
       ${state.error ? `<p class="inova-inline-feedback is-error">${escapeHtml(state.error)}</p>` : ""}
       <div class="inova-store-list" data-store-list="true" data-store-has-more="${state.hasMore}" data-store-loading="${state.loading}">${itemsHtml}</div>
       ${state.loading && state.items.length ? '<div class="inova-store-list__footer">더 불러오는 중...</div>' : ""}
     `;
+  }
+
+  function renderDegradedNotice(state) {
+    if (!state.degraded) {
+      return "";
+    }
+    const message = buildDegradedNotice(state);
+    if (!message) {
+      return "";
+    }
+    return `<p class="inova-inline-feedback">${escapeHtml(message)}</p>`;
   }
 
   function renderCategorySelect(categories, activeCategoryId) {
@@ -180,6 +192,19 @@
       return "";
     }
     return `<p class="inova-inline-feedback ${feedback.tone === "error" ? "is-error" : ""}">${escapeHtml(feedback.message)}</p>`;
+  }
+
+  function buildDegradedNotice(state) {
+    if (state.dataFreshness === "stale" || state.source === "cache") {
+      return "실시간 구독과 추가 읽기가 흔들려 이전에 읽은 스토어 목록을 그대로 보여주고 있어요. 최신 상태가 아닐 수 있습니다.";
+    }
+    if (state.dataFreshness === "empty") {
+      return "스토어 최신 목록을 읽지 못해 비어 있는 상태로 남아 있어요. 잠시 후 다시 시도해 주세요.";
+    }
+    if (state.source === "runtime-read") {
+      return "실시간 구독이 불안정해 요청형 읽기로 다시 가져온 최신 목록을 표시 중이에요.";
+    }
+    return "스토어 목록을 제한 모드로 표시 중이에요.";
   }
 
   function renderDeleteConfirm(entryId, title, pending) {

@@ -2,6 +2,40 @@
   "schemaVersion": 1,
   "versions": [
     {
+      "version": "0.3.22",
+      "level": "patch",
+      "public": {
+        "headline": "제한 모드와 최신 상태를 더 분명하게 표시",
+        "summary": "이번 배포는 프롬프트 도구, 회의 허브, 릴리스 카드가 fallback이나 캐시 데이터를 조용히 성공처럼 보이지 않도록 정리하고, 어떤 읽기 경로를 쓰고 있는지와 최신 여부를 더 분명하게 드러내는 업데이트입니다.",
+        "changes": [
+          {
+            "type": "changed",
+            "text": "회의 허브와 프롬프트 스토어는 실시간 경로가 흔들릴 때 요청형 읽기인지, 이전 캐시인지, 비어 있는 제한 상태인지를 각각 구분해 보여 주므로 지금 보는 목록이 얼마나 최신인지 더 바로 알 수 있습니다."
+          },
+          {
+            "type": "changed",
+            "text": "프롬프트 라이브러리 동기화와 릴리스 카드도 degraded 상태와 오류를 함께 남기도록 바뀌어, 동기화나 확인이 실패했을 때 단순히 조용히 넘어간 것처럼 보이지 않습니다."
+          }
+        ]
+      },
+      "internal": {
+        "changes": [
+          {
+            "type": "changed",
+            "text": "shared storage/release/cloud sync contract에 degraded, degradedReason, dataFreshness, source를 공통으로 추가하고, storage/service worker의 silent fallback과 bare catch를 structured diagnostics로 정리했습니다."
+          },
+          {
+            "type": "changed",
+            "text": "meeting-service는 prod에서 inline-only upload fallback를 숨기지 않도록 좁히고, cleanup warning을 명시적으로 남기도록 바꿨습니다."
+          },
+          {
+            "type": "added",
+            "text": "meeting manager, meeting service, prompt fallback, contract 검증 스크립트를 강화해 stale/runtime-read/degraded 계약과 inline-only gating을 자동으로 확인하도록 정리했습니다."
+          }
+        ]
+      }
+    },
+    {
       "version": "0.3.21",
       "level": "patch",
       "public": {

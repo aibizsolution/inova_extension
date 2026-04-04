@@ -307,9 +307,12 @@
       state.meetingHub = mergeMeetingHub({
         ...state.meetingHub,
         checkedAt: namespace.session.normalizeText(payload.checkedAt) || new Date().toISOString(),
+        degraded: false,
+        degradedReason: "",
+        dataFreshness: "fresh",
         error: "",
         items,
-        source: "firestore",
+        source: "realtime",
         version: Math.max(1, Number(state.meetingHub?.version) || 1),
       });
       hooks.render?.();
@@ -351,27 +354,32 @@
         state.meetingHub = mergeMeetingHub({
           ...state.meetingHub,
           checkedAt: new Date().toISOString(),
-          error: error instanceof Error ? error.message : namespace.session.normalizeText(error),
+          degraded: true,
+          degradedReason: "meeting-hub-realtime-failed",
+          dataFreshness: "fresh",
+          error: composeMeetingHubErrorMessage(error),
           items,
-          source: "fallback",
+          source: "runtime-read",
           version: Math.max(1, Number(state.meetingHub?.version) || 1),
         });
         namespace.panelDebug?.log?.("panel.fallback.refresh.success", {
           count: items.length,
         });
       } catch (refreshError) {
-        const message = refreshError instanceof Error
-          ? refreshError.message
-          : "회의 목록을 불러오지 못했어요.";
+        const cachedItems = Array.isArray(state.meetingHub?.items) ? state.meetingHub.items : [];
+        const message = composeMeetingHubErrorMessage(error, refreshError);
         namespace.panelDebug?.log?.("panel.fallback.refresh.error", {
           error: message,
         });
         state.meetingHub = mergeMeetingHub({
           ...state.meetingHub,
           checkedAt: new Date().toISOString(),
+          degraded: true,
+          degradedReason: cachedItems.length ? "meeting-hub-stale-cache" : "meeting-hub-empty",
+          dataFreshness: cachedItems.length ? "stale" : "empty",
           error: message,
-          items: Array.isArray(state.meetingHub?.items) ? state.meetingHub.items : [],
-          source: "fallback",
+          items: cachedItems,
+          source: cachedItems.length ? "cache" : "none",
           version: Math.max(1, Number(state.meetingHub?.version) || 1),
         });
       } finally {
@@ -388,7 +396,12 @@
       if (bridgePort && (bridgeAttached || bridgeConnected || bridgeConnecting || bridgeConnectionKey)) {
         try {
           bridgePort.postMessage({ type: "disconnect" });
-        } catch {}
+        } catch (error) {
+          namespace.panelDebug?.log?.("panel.bridge.disconnect.error", {
+            error: error instanceof Error ? error.message : String(error || ""),
+            reason,
+          });
+        }
       }
       bridgeAttached = false;
       bridgeConnecting = false;
@@ -420,9 +433,12 @@
       state.meetingHub = mergeMeetingHub({
         ...state.meetingHub,
         checkedAt: new Date().toISOString(),
+        degraded: false,
+        degradedReason: "",
+        dataFreshness: "fresh",
         error: "",
         items,
-        source: "runtime",
+        source: "runtime-read",
         version: Math.max(1, Number(state.meetingHub?.version) || 1),
       });
       namespace.panelDebug?.log?.("panel.warm.refresh.success", {
@@ -466,9 +482,44 @@
     return {
       ...defaults,
       ...(nextHub && typeof nextHub === "object" ? nextHub : {}),
+      degraded: Boolean(nextHub?.degraded),
+      degradedReason: Object.prototype.hasOwnProperty.call(nextHub || {}, "degradedReason")
+        ? namespace.session.normalizeText(nextHub?.degradedReason)
+        : namespace.session.normalizeText(defaults.degradedReason),
+      dataFreshness: normalizeDataFreshness(nextHub?.dataFreshness),
       items: Array.isArray(nextHub?.items) ? nextHub.items : [],
-      source: namespace.session.normalizeText(nextHub?.source),
+      source: normalizeMeetingHubSource(nextHub?.source),
     };
+  }
+
+  function composeMeetingHubErrorMessage(primaryError, secondaryError) {
+    const primaryMessage = namespace.session.normalizeText(primaryError instanceof Error ? primaryError.message : String(primaryError || ""));
+    const secondaryMessage = namespace.session.normalizeText(secondaryError instanceof Error ? secondaryError.message : String(secondaryError || ""));
+    if (!secondaryMessage) {
+      return primaryMessage || "회의 목록을 불러오지 못했어요.";
+    }
+    if (!primaryMessage || primaryMessage === secondaryMessage) {
+      return secondaryMessage;
+    }
+    return `${primaryMessage} 추가 읽기에도 실패했어요: ${secondaryMessage}`;
+  }
+
+  function normalizeDataFreshness(value) {
+    const normalized = namespace.session.normalizeText(value).toLowerCase();
+    return normalized === "fresh" || normalized === "stale" || normalized === "empty"
+      ? normalized
+      : defaults.dataFreshness;
+  }
+
+  function normalizeMeetingHubSource(value) {
+    const normalized = namespace.session.normalizeText(value).toLowerCase();
+    return normalized === "realtime"
+      || normalized === "runtime-read"
+      || normalized === "cache"
+      || normalized === "local"
+      || normalized === "none"
+      ? normalized
+      : defaults.source;
   }
 
   function isMeetingHubPendingInitialLoad(meetingHub) {

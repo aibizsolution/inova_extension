@@ -38,6 +38,10 @@
       cloudSync: {
         version: 1,
         status: "idle",
+        degraded: false,
+        degradedReason: "",
+        dataFreshness: "empty",
+        source: "none",
         providerIdentity: {
           provider: "inova",
           available: false,
@@ -66,6 +70,10 @@
         checkedForVersion: "",
         historyCheckedAt: "",
         historyCheckedForVersion: "",
+        degraded: false,
+        degradedReason: "",
+        dataFreshness: "empty",
+        source: "none",
         error: "",
         latest: null,
         history: [],
@@ -73,6 +81,10 @@
       meetingHub: {
         version: 1,
         checkedAt: "",
+        degraded: false,
+        degradedReason: "",
+        dataFreshness: "empty",
+        source: "none",
         error: "",
         items: [],
       },

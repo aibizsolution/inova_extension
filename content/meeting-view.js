@@ -40,6 +40,7 @@
         <div class="inova-meeting-stack">
           ${progressNotice}
           ${feedbackNotice}
+          ${normalized.degradedNotice ? `<div class="inova-release-card inova-release-card__notice is-info">${escapeHtml(normalized.degradedNotice)}</div>` : ""}
           ${normalized.error ? `<div class="inova-release-card inova-release-card__notice">${escapeHtml(normalized.error)}</div>` : ""}
           <article class="inova-release-card">
             <div class="inova-release-card__head">
@@ -58,16 +59,19 @@
   function normalizeState(state) {
     const items = Array.isArray(state?.items) ? state.items.map(normalizeItem).filter((item) => item.meetingId) : [];
     const checkedAtText = formatDateTime(state?.checkedAt, "");
-    const source = normalizeText(state?.source);
+    const degraded = Boolean(state?.degraded);
+    const dataFreshness = normalizeDataFreshness(state?.dataFreshness);
+    const degradedReason = normalizeText(state?.degradedReason);
+    const source = normalizeSource(state?.source);
     return {
+      degraded,
+      degradedNotice: buildDegradedNotice(degraded, degradedReason, dataFreshness, source),
       error: normalizeText(state?.error),
       feedback: normalizeFeedback(state?.feedback),
       hasCheckedAt: Boolean(checkedAtText),
       items,
       pending: normalizePending(state?.pending),
-      subtitleText: checkedAtText
-        ? `최근 갱신 ${checkedAtText}${source === "fallback" ? " · fallback" : ""}`
-        : "저장된 회의록을 이곳에서 다시 엽니다.",
+      subtitleText: buildSubtitleText(checkedAtText, dataFreshness, source),
     };
   }
 
@@ -77,7 +81,7 @@
       excerpt: normalizeText(nextItem.excerpt || nextItem.previewText),
       latestArtifactId: normalizeText(nextItem.latestArtifactId || nextItem.artifactId),
       latestJobId: normalizeText(nextItem.latestJobId || nextItem.jobId),
-      meetingId: normalizeText(nextItem.meetingId || nextItem.sessionId),
+      meetingId: normalizeText(nextItem.meetingId),
       status: normalizeText(nextItem.status) || "idle",
       title: normalizeText(nextItem.title) || "이름 없는 회의",
       updatedAt: normalizeText(nextItem.updatedAt || nextItem.createdAt),
@@ -163,6 +167,38 @@
     };
   }
 
+  function buildSubtitleText(checkedAtText, dataFreshness, source) {
+    if (!checkedAtText) {
+      return "저장된 회의록을 이곳에서 다시 엽니다.";
+    }
+    const freshnessLabel = dataFreshness === "stale"
+      ? "오래된 데이터"
+      : dataFreshness === "empty"
+        ? "빈 상태"
+        : source === "runtime-read"
+          ? "runtime-read"
+          : "";
+    return freshnessLabel
+      ? `최근 갱신 ${checkedAtText} · ${freshnessLabel}`
+      : `최근 갱신 ${checkedAtText}`;
+  }
+
+  function buildDegradedNotice(degraded, degradedReason, dataFreshness, source) {
+    if (!degraded) {
+      return "";
+    }
+    if (dataFreshness === "stale" || source === "cache") {
+      return "실시간 회의 목록을 읽지 못해 이전에 보던 목록을 제한적으로 유지하고 있습니다.";
+    }
+    if (dataFreshness === "empty") {
+      return "회의 목록 읽기가 모두 실패해 현재는 빈 상태만 표시하고 있습니다.";
+    }
+    if (degradedReason === "meeting-hub-realtime-failed" || source === "runtime-read") {
+      return "실시간 구독에 실패해 요청형 목록 읽기로 계속 표시하고 있습니다.";
+    }
+    return "회의 목록을 제한된 상태로 표시하고 있습니다.";
+  }
+
   function buildPendingMessage(pending) {
     if (pending.action === "open-result") {
       return pending.title
@@ -196,6 +232,24 @@
 
   function normalizeText(value) {
     return String(value || "").trim();
+  }
+
+  function normalizeDataFreshness(value) {
+    const normalized = normalizeText(value).toLowerCase();
+    return normalized === "fresh" || normalized === "stale" || normalized === "empty"
+      ? normalized
+      : "empty";
+  }
+
+  function normalizeSource(value) {
+    const normalized = normalizeText(value).toLowerCase();
+    return normalized === "realtime"
+      || normalized === "runtime-read"
+      || normalized === "cache"
+      || normalized === "local"
+      || normalized === "none"
+      ? normalized
+      : "none";
   }
 
   function escapeHtml(value) {

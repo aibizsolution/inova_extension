@@ -1,16 +1,27 @@
 (function initStorage(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const { defaults } = namespace.constants;
+  const STORAGE_ERROR_CODES = {
+    unavailable: "storage-unavailable",
+    invalidated: "extension-context-invalidated",
+  };
 
   async function getLocal(keys) {
     if (!global.chrome?.storage?.local) {
-      return structuredClone(keys);
+      throw createStorageAccessError(
+        STORAGE_ERROR_CODES.unavailable,
+        "chrome.storage.local을 사용할 수 없어요."
+      );
     }
     try {
-      return global.chrome.storage.local.get(keys);
+      return await global.chrome.storage.local.get(keys);
     } catch (error) {
       if (isExtensionContextInvalidatedError(error)) {
-        return structuredClone(keys);
+        throw createStorageAccessError(
+          STORAGE_ERROR_CODES.invalidated,
+          "Extension context invalidated. 확장프로그램이 갱신되어 저장소에 접근할 수 없어요.",
+          error
+        );
       }
       throw error;
     }
@@ -18,13 +29,20 @@
 
   async function setLocal(partial) {
     if (!global.chrome?.storage?.local) {
-      return;
+      throw createStorageAccessError(
+        STORAGE_ERROR_CODES.unavailable,
+        "chrome.storage.local을 사용할 수 없어요."
+      );
     }
     try {
       await global.chrome.storage.local.set(partial);
     } catch (error) {
       if (isExtensionContextInvalidatedError(error)) {
-        return;
+        throw createStorageAccessError(
+          STORAGE_ERROR_CODES.invalidated,
+          "Extension context invalidated. 확장프로그램이 갱신되어 저장소에 저장할 수 없어요.",
+          error
+        );
       }
       throw error;
     }
@@ -128,16 +146,23 @@
     return cloudSync;
   }
 
-  async function setPromptSyncError(errorMessage, providerIdentity) {
+  async function setPromptSyncError(errorMessage, providerIdentity, options = {}) {
     const current = await getCloudSyncState();
-    const cloudSync = namespace.cloudSync.setPromptSyncError(current, errorMessage, providerIdentity);
+    const cloudSync = namespace.cloudSync.setPromptSyncError(current, errorMessage, providerIdentity, options);
     await setLocal({ cloudSync });
     return cloudSync;
   }
 
-  async function recordPromptLibraryRemoteState(remoteState, providerIdentity) {
+  async function setPromptSyncDegraded(errorMessage, providerIdentity, options = {}) {
     const current = await getCloudSyncState();
-    const cloudSync = namespace.cloudSync.recordPromptLibraryRemoteState(current, remoteState, providerIdentity);
+    const cloudSync = namespace.cloudSync.setPromptSyncDegraded(current, errorMessage, providerIdentity, options);
+    await setLocal({ cloudSync });
+    return cloudSync;
+  }
+
+  async function recordPromptLibraryRemoteState(remoteState, providerIdentity, options = {}) {
+    const current = await getCloudSyncState();
+    const cloudSync = namespace.cloudSync.recordPromptLibraryRemoteState(current, remoteState, providerIdentity, options);
     await setLocal({ cloudSync });
     return cloudSync;
   }
@@ -321,13 +346,33 @@
     setCloudSyncState,
     setLocal,
     setMeetingHub,
+    setPromptSyncDegraded,
     setPromptSyncError,
     setPromptLibrary,
     setReleaseInfo,
     setSessionPaused,
     updateUiPreferences,
     updateSettings,
+    STORAGE_ERROR_CODES,
+    isStorageAccessError,
   };
+
+  function createStorageAccessError(code, message, cause) {
+    const error = new Error(message);
+    error.code = code;
+    if (cause !== undefined) {
+      error.cause = cause;
+    }
+    return error;
+  }
+
+  function isStorageAccessError(error, code = "") {
+    if (!error || typeof error !== "object") {
+      return false;
+    }
+    const currentCode = String(error.code || "").trim();
+    return code ? currentCode === code : Boolean(currentCode && Object.values(STORAGE_ERROR_CODES).includes(currentCode));
+  }
 
   function isExtensionContextInvalidatedError(error) {
     const message = namespace.session?.normalizeText

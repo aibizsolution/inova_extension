@@ -45,20 +45,25 @@
     promptRealtimeManager = namespace.promptRealtimeManager.create(state, {
       getActivePromptTab,
       isToolSurface,
-      onPromptLibraryFallback: () => {},
+      onPromptLibraryFallback: (error) => {
+        cloudSyncManager.markPromptLibraryFallback?.(error, {
+          degradedReason: "prompt-library-realtime-failed",
+          source: "realtime",
+        }).catch((fallbackError) => {
+          console.error("[i-Nova Bookmarks] prompt library fallback state failed", fallbackError);
+        });
+      },
       onPromptLibraryMeta: (remoteState) => cloudSyncManager.handleRealtimeRemoteState(remoteState),
-      onStoreLatestFallback: () => {
-        const hasRenderableStoreData = Boolean(
-          state.store.loaded
-          || (Array.isArray(state.store.items) && state.store.items.length)
-          || Number(state.store.totalCount || 0) > 0
-        );
+      onStoreLatestFallback: (error) => {
+        const hasRenderableStoreData = storeManager.markRealtimeFallback(error);
         if (hasRenderableStoreData) {
-          render();
           return;
         }
-        storeManager.ensureLoaded(true, "fallback").catch((error) => {
-          console.error("[i-Nova Bookmarks] store fallback refresh failed", error);
+        storeManager.ensureLoaded(true, "fallback", {
+          degradedReason: "store-realtime-failed",
+          errorMessage: error instanceof Error ? error.message : String(error || ""),
+        }).catch((fallbackError) => {
+          console.error("[i-Nova Bookmarks] store fallback refresh failed", fallbackError);
         });
       },
       onStoreLatestSnapshot: (payload) => storeManager.applyLatestRealtimeSnapshot(payload),
