@@ -9,6 +9,11 @@ importScripts("panel-auth-cache.js");
 
 const namespace = globalThis.InovaBookmarks || {};
 const INOVA_ORIGIN = "https://inova.incross.com";
+const HOSTED_MEETING_ALLOWED_ORIGINS = new Set([
+  "https://browser-extension-main.web.app",
+  "http://127.0.0.1:5000",
+  "http://localhost:5000",
+]);
 const RECENT_LOAD_TTL_MS = 10000;
 const RECENT_PEEK_TTL_MS = 10000;
 const RECENT_RELEASE_TTL_MS = 60000;
@@ -81,6 +86,9 @@ async function handleMessage(message, sender) {
   }
   if (message.type === "inova-meeting:open-result") {
     return openMeetingResult(message.input, message.providerIdentity, sender);
+  }
+  if (message.type === "inova-meeting:probe-workspace-bridge") {
+    return probeMeetingWorkspaceBridge(sender);
   }
   if (message.type === "inova-release:latest") {
     return fetchReleaseJson("latest");
@@ -305,6 +313,32 @@ async function openMeetingWorkspace(input, providerIdentity, sender) {
 
 async function openMeetingResult(input, providerIdentity, sender) {
   return openHostedMeetingPage("detail", input, providerIdentity, sender);
+}
+
+async function probeMeetingWorkspaceBridge(sender) {
+  const senderUrl = namespace.session.normalizeText(sender?.url);
+  const cookie = await chrome.cookies.get({
+    name: "accessToken",
+    url: INOVA_ORIGIN,
+  }).catch(() => null);
+  let tokenRefreshOk = false;
+  let tokenRefreshError = "";
+
+  try {
+    await getInovaAccessToken();
+    tokenRefreshOk = true;
+  } catch (error) {
+    tokenRefreshError = error instanceof Error ? error.message : String(error || "");
+  }
+
+  return {
+    accessTokenCookiePresent: Boolean(namespace.session.normalizeText(cookie?.value)),
+    inovaLoggedIn: Boolean(namespace.session.normalizeText(cookie?.value)) || tokenRefreshOk,
+    senderUrl,
+    tokenRefreshError,
+    tokenRefreshOk,
+    verifiedAt: new Date().toISOString(),
+  };
 }
 
 async function openHostedMeetingPage(mode, input, providerIdentity, sender) {
@@ -551,7 +585,18 @@ function normalizeProviderIdentity(providerIdentity) {
 
 function isAllowedSender(message, sender) {
   return String(sender?.url || "").startsWith(INOVA_ORIGIN)
-    || message.type === "inova-release:open-url";
+    || message.type === "inova-release:open-url"
+    || (message.type === "inova-meeting:probe-workspace-bridge" && isHostedMeetingWorkspaceSender(sender));
+}
+
+function isHostedMeetingWorkspaceSender(sender) {
+  try {
+    const url = new URL(String(sender?.url || ""));
+    return HOSTED_MEETING_ALLOWED_ORIGINS.has(url.origin)
+      && /\/meeting\/index\.html$/i.test(String(url.pathname || ""));
+  } catch {
+    return false;
+  }
 }
 
 function cleanupRecentLoads() {

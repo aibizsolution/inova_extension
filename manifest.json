@@ -81,6 +81,17 @@
         "content/composer-review.css"
       ],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://browser-extension-main.web.app/meeting/*",
+        "http://127.0.0.1:5000/meeting/*",
+        "http://localhost:5000/meeting/*"
+      ],
+      "js": [
+        "content/meeting-workspace-bridge.js"
+      ],
+      "run_at": "document_start"
     }
   ]
 }

@@ -12,6 +12,7 @@
     DEFAULT_SOURCE_TARGET_PART_BYTES,
     DEFAULT_SOURCE_UPLOAD_TIMEOUT_MS,
     formatDateTime,
+    isDebugPanelEnabled,
     isLocalWorkspaceOrigin,
     logDebug,
     normalizeText,
@@ -31,6 +32,11 @@
   const MAX_NOTES_CONTEXT_ITEM_CHARS = 1200;
   const SUPERSEDED_REMOTE_JOBS_STORAGE_KEY_PREFIX = "__INOVA_MEETING_SUPERSEDED_REMOTE_JOBS__";
   const BOOT_INITIAL_SNAPSHOT_WAIT_MS = 450;
+  const EXTENSION_BRIDGE_PROBE_PAGE_SOURCE = "inova-meeting-workspace-page";
+  const EXTENSION_BRIDGE_PROBE_RESPONSE_SOURCE = "inova-meeting-workspace-extension";
+  const EXTENSION_BRIDGE_PROBE_REQUEST_TYPE = "probe-extension-bridge";
+  const EXTENSION_BRIDGE_PROBE_RESPONSE_TYPE = "probe-extension-bridge-result";
+  const EXTENSION_BRIDGE_PROBE_TIMEOUT_MS = 4000;
   const DEGRADED_NOTICE_CODES = Object.freeze({
     pendingUploadCleanup: "pending-upload-cleanup-degraded",
     pendingUploadChunkResyncPersist: "pending-upload-chunk-resync-persist-degraded",
@@ -226,6 +232,72 @@
   
   function readDebugPanelCollapsed() {
     return normalizeText(safeLocalStorageGet(global, DEBUG_PANEL_COLLAPSED_STORAGE_KEY)) === "1";
+  }
+
+  async function runExtensionBridgeProbe() {
+    if (!isDebugPanelEnabled(global)) {
+      return;
+    }
+
+    const requestId = `probe-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+    global.console?.info?.("[Inova Hosted Meeting] workspace.extension-bridge.probe.start", {
+      href: global.location.href,
+      requestId,
+    });
+
+    try {
+      const payload = await new Promise((resolve, reject) => {
+        const timeoutId = global.setTimeout(() => {
+          cleanup();
+          reject(new Error("확장 bridge 응답이 없어요."));
+        }, EXTENSION_BRIDGE_PROBE_TIMEOUT_MS);
+
+        const handleMessage = (event) => {
+          if (event.source !== global) {
+            return;
+          }
+          const data = event?.data && typeof event.data === "object" ? event.data : {};
+          if (
+            normalizeText(data.source) !== EXTENSION_BRIDGE_PROBE_RESPONSE_SOURCE
+            || normalizeText(data.type) !== EXTENSION_BRIDGE_PROBE_RESPONSE_TYPE
+          ) {
+            return;
+          }
+          const nextPayload = data.payload && typeof data.payload === "object" ? data.payload : {};
+          if (normalizeText(nextPayload.requestId) !== requestId) {
+            return;
+          }
+          cleanup();
+          if (nextPayload.ok) {
+            resolve(nextPayload);
+            return;
+          }
+          reject(new Error(normalizeText(nextPayload.error) || "확장 bridge probe에 실패했어요."));
+        };
+
+        const cleanup = () => {
+          global.clearTimeout(timeoutId);
+          global.removeEventListener("message", handleMessage);
+        };
+
+        global.addEventListener("message", handleMessage);
+        global.postMessage(
+          {
+            requestId,
+            source: EXTENSION_BRIDGE_PROBE_PAGE_SOURCE,
+            type: EXTENSION_BRIDGE_PROBE_REQUEST_TYPE,
+          },
+          global.location.origin
+        );
+      });
+
+      global.console?.info?.("[Inova Hosted Meeting] workspace.extension-bridge.probe.success", payload);
+    } catch (error) {
+      global.console?.warn?.("[Inova Hosted Meeting] workspace.extension-bridge.probe.error", {
+        error: error instanceof Error ? error.message : String(error || ""),
+        requestId,
+      });
+    }
   }
   
   
@@ -677,6 +749,7 @@
   }
 
   async function bootstrap() {
+    runExtensionBridgeProbe().catch(() => {});
     cacheRefs();
     createControllers();
     bindEvents();
