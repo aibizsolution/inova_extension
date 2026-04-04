@@ -30,29 +30,30 @@
         requestId,
       });
     }
-    const response = {
+    const baseResponse = {
       extensionId: global.chrome?.runtime?.id || "",
       requestId,
     };
 
     try {
-      const response = await global.chrome.runtime.sendMessage({
+      const runtimeResponse = await global.chrome.runtime.sendMessage({
         type: "inova-meeting:probe-workspace-bridge",
       });
-      if (!response?.ok) {
-        throw new Error(String(response?.error || "확장 bridge probe 응답이 올바르지 않아요."));
+      if (!runtimeResponse?.ok) {
+        throw new Error(String(runtimeResponse?.error || "확장 bridge probe 응답이 올바르지 않아요."));
       }
       if (DEBUG_ENABLED) {
         global.console?.info?.("[Inova Meeting Workspace Bridge] workspace.extension-bridge.runtime-success", {
           extensionId: global.chrome?.runtime?.id || "",
-          probe: response.data || {},
+          probe: runtimeResponse.data || {},
           requestId,
         });
       }
       postResponse({
-        ...response,
+        ...baseResponse,
+        ...runtimeResponse,
         ok: true,
-        probe: response.data || {},
+        probe: runtimeResponse.data || {},
       });
     } catch (error) {
       if (DEBUG_ENABLED) {
@@ -62,7 +63,7 @@
         });
       }
       postResponse({
-        ...response,
+        ...baseResponse,
         error: error instanceof Error ? error.message : String(error || "확장 브리지를 확인하지 못했어요."),
         ok: false,
       });
