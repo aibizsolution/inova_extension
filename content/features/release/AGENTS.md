@@ -39,3 +39,7 @@
 
 ## 언제 범위를 확장할지
 - 정적 메타만으로 해결되지 않고 background fetch 또는 배포 스크립트가 얽힐 때만 platform/shell로 넓힌다.
+
+## 릴리스 메타 메모
+- 이미 `hosting/extension/releases/latest.json`에 올라간 버전은 재사용하지 않는다.
+- hosting-only 배포라도 새 코드 반영이 필요하면 더 높은 버전으로 bump 한 뒤 `release-notes.json`과 build 산출물을 같이 갱신한다.

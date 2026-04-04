@@ -2,6 +2,28 @@
   "schemaVersion": 1,
   "versions": [
     {
+      "version": "0.3.27",
+      "level": "patch",
+      "public": {
+        "headline": "회의 탭 동시 열기 안정화",
+        "summary": "이번 배포는 새 회의를 연 뒤 기존 회의를 다시 열 때 hosted 작업실이 인증 문제로 멈추지 않도록 회의 탭 간 인증 흐름을 안정화한 업데이트입니다.",
+        "changes": [
+          {
+            "type": "changed",
+            "text": "hosted 회의 작업실이 여러 탭에서 동시에 열려도 다른 회의 탭의 실시간 연결을 서로 끊지 않도록 Firestore 인증 흐름을 조정했습니다."
+          },
+          {
+            "type": "fixed",
+            "text": "기존 회의 탭에서 `실시간 회의 연결이 종료되었습니다`로 막히던 권한 재확인 경로를 고쳐, 같은 회의를 다시 안정적으로 불러오게 했습니다."
+          },
+          {
+            "type": "changed",
+            "text": "회의 작업실 권한 재시도는 기존 meeting auth 문맥을 유지한 채 다시 로그인하도록 정리해, 일시적인 permission 오류를 세션 만료처럼 보이지 않게 맞췄습니다."
+          }
+        ]
+      }
+    },
+    {
       "version": "0.3.26",
       "level": "patch",
       "public": {
