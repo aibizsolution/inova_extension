@@ -8,11 +8,19 @@
         ...(next || {}),
         checkedAt: normalizeText(next?.checkedAt) || merged.checkedAt,
         checkedForVersion: normalizeText(next?.checkedForVersion) || merged.checkedForVersion,
-        error: normalizeText(next?.error),
+        degraded: Boolean(next?.degraded ?? merged.degraded),
+        degradedReason: Object.prototype.hasOwnProperty.call(next || {}, "degradedReason")
+          ? normalizeText(next?.degradedReason)
+          : merged.degradedReason,
+        dataFreshness: normalizeDataFreshness(next?.dataFreshness, merged.dataFreshness),
+        error: Object.prototype.hasOwnProperty.call(next || {}, "error")
+          ? normalizeText(next?.error)
+          : merged.error,
         history: Array.isArray(next?.history) ? next.history.map(normalizeRelease).filter(Boolean) : merged.history,
         historyCheckedAt: normalizeText(next?.historyCheckedAt) || merged.historyCheckedAt,
         historyCheckedForVersion: normalizeText(next?.historyCheckedForVersion) || merged.historyCheckedForVersion,
         latest: next?.latest === null ? null : next?.latest ? normalizeRelease(next.latest) : merged.latest,
+        source: normalizeReadSource(next?.source, merged.source),
         version: Math.max(1, Number(next?.version) || merged.version),
       }),
       {
@@ -66,6 +74,22 @@
   function isHistoryFresh(releaseInfo, maxAgeMs) {
     const checkedAt = Date.parse(releaseInfo?.historyCheckedAt || "");
     return Boolean(checkedAt && Date.now() - checkedAt < maxAgeMs);
+  }
+
+  function normalizeDataFreshness(value, fallback = "empty") {
+    const normalized = normalizeText(value).toLowerCase();
+    if (normalized === "fresh" || normalized === "stale" || normalized === "empty") {
+      return normalized;
+    }
+    return normalizeText(fallback).toLowerCase() || "empty";
+  }
+
+  function normalizeReadSource(value, fallback = "none") {
+    const normalized = normalizeText(value).toLowerCase();
+    if (normalized === "realtime" || normalized === "runtime-read" || normalized === "cache" || normalized === "local" || normalized === "none") {
+      return normalized;
+    }
+    return normalizeText(fallback).toLowerCase() || "none";
   }
 
   function normalizeText(value) {

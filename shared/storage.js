@@ -1,16 +1,27 @@
 (function initStorage(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const { defaults } = namespace.constants;
+  const STORAGE_ERROR_CODES = {
+    unavailable: "storage-unavailable",
+    invalidated: "extension-context-invalidated",
+  };
 
   async function getLocal(keys) {
     if (!global.chrome?.storage?.local) {
-      return structuredClone(keys);
+      throw createStorageAccessError(
+        STORAGE_ERROR_CODES.unavailable,
+        "chrome.storage.local을 사용할 수 없어요."
+      );
     }
     try {
-      return global.chrome.storage.local.get(keys);
+      return await global.chrome.storage.local.get(keys);
     } catch (error) {
       if (isExtensionContextInvalidatedError(error)) {
-        return structuredClone(keys);
+        throw createStorageAccessError(
+          STORAGE_ERROR_CODES.invalidated,
+          "Extension context invalidated. 확장프로그램이 갱신되어 저장소에 접근할 수 없어요.",
+          error
+        );
       }
       throw error;
     }
@@ -18,13 +29,20 @@
 
   async function setLocal(partial) {
     if (!global.chrome?.storage?.local) {
-      return;
+      throw createStorageAccessError(
+        STORAGE_ERROR_CODES.unavailable,
+        "chrome.storage.local을 사용할 수 없어요."
+      );
     }
     try {
       await global.chrome.storage.local.set(partial);
     } catch (error) {
       if (isExtensionContextInvalidatedError(error)) {
-        return;
+        throw createStorageAccessError(
+          STORAGE_ERROR_CODES.invalidated,
+          "Extension context invalidated. 확장프로그램이 갱신되어 저장소에 저장할 수 없어요.",
+          error
+        );
       }
       throw error;
     }
@@ -91,31 +109,12 @@
     };
   }
 
-  async function getMeetingState(meetingId) {
-    const current = await getState();
-    const normalizedMeetingId = namespace.session.normalizeText(meetingId);
-    const meetingStateByMeetingId = mergeMeetingStateByMeetingId(
-      current.meetingStateByMeetingId,
-      current.meetingState,
-      current.meetingStateBySession
-    );
-    if (normalizedMeetingId) {
-      return namespace.meetingState.mergeMeetingState(meetingStateByMeetingId[normalizedMeetingId]);
-    }
-    return namespace.meetingState.mergeMeetingState(current.meetingState);
-  }
-
-  async function getMeetingStateBySession() {
-    return getMeetingStateByMeetingId();
-  }
-
   async function getMeetingStateByMeetingId() {
     const current = await getState();
-    return mergeMeetingStateByMeetingId(
-      current.meetingStateByMeetingId,
-      current.meetingState,
-      current.meetingStateBySession
-    );
+    const nextState = current.meetingStateByMeetingId;
+    return nextState && typeof nextState === "object"
+      ? cloneValue(nextState)
+      : cloneValue(defaults.meetingStateByMeetingId);
   }
 
   async function setCloudSyncState(nextCloudSync) {
@@ -140,98 +139,6 @@
     return meetingHub;
   }
 
-  async function setMeetingState(meetingIdOrNextMeetingState, maybeNextMeetingState) {
-    const current = await getState();
-    const nextMeetingState = typeof meetingIdOrNextMeetingState === "string"
-      ? maybeNextMeetingState
-      : meetingIdOrNextMeetingState;
-    const meetingState = namespace.meetingState.mergeMeetingState(nextMeetingState);
-    const meetingId = namespace.session.normalizeText(
-      typeof meetingIdOrNextMeetingState === "string"
-        ? meetingIdOrNextMeetingState
-        : meetingState.meeting?.meetingId || meetingState.session?.sessionId
-    );
-
-    if (!meetingId) {
-      await setLocal({ meetingState });
-      return meetingState;
-    }
-
-    const meetingStateByMeetingId = mergeMeetingStateByMeetingId(
-      current.meetingStateByMeetingId,
-      current.meetingState,
-      current.meetingStateBySession
-    );
-    const persistedMeetingState = namespace.meetingState.mergeMeetingState(
-      meetingStateByMeetingId[meetingId],
-      meetingState,
-      { meeting: { meetingId } }
-    );
-    const nextMeetingStateByMeetingId = {
-      ...meetingStateByMeetingId,
-      [meetingId]: persistedMeetingState,
-    };
-    const nextLocalPatch = {
-      meetingState: persistedMeetingState,
-      meetingStateByMeetingId: nextMeetingStateByMeetingId,
-    };
-    const legacySessionId = namespace.session.normalizeText(persistedMeetingState.session?.sessionId);
-    if (legacySessionId) {
-      nextLocalPatch.meetingStateBySession = {
-        ...(current.meetingStateBySession || {}),
-        [legacySessionId]: persistedMeetingState,
-      };
-    }
-
-    await setLocal(nextLocalPatch);
-    return persistedMeetingState;
-  }
-
-  function mergeMeetingStateByMeetingId(rawMeetingStateByMeetingId, legacyMeetingState, rawMeetingStateBySession) {
-    const next = {};
-
-    for (const [meetingId, meetingState] of Object.entries(rawMeetingStateByMeetingId || {})) {
-      const normalizedMeetingId = namespace.session.normalizeText(meetingId);
-      if (!normalizedMeetingId) {
-        continue;
-      }
-      next[normalizedMeetingId] = namespace.meetingState.mergeMeetingState(meetingState, {
-        meeting: { meetingId: normalizedMeetingId },
-      });
-    }
-
-    const normalizedLegacyMeetingState = namespace.meetingState.mergeMeetingState(legacyMeetingState);
-    const legacyMeetingId = namespace.session.normalizeText(
-      normalizedLegacyMeetingState.meeting?.meetingId || normalizedLegacyMeetingState.session?.sessionId
-    );
-    if (legacyMeetingId) {
-      next[legacyMeetingId] = namespace.meetingState.mergeMeetingState(
-        next[legacyMeetingId],
-        normalizedLegacyMeetingState,
-        { meeting: { meetingId: legacyMeetingId } }
-      );
-    }
-
-    for (const [sessionId, meetingState] of Object.entries(rawMeetingStateBySession || {})) {
-      const normalizedMeetingState = namespace.meetingState.mergeMeetingState(meetingState, {
-        session: { sessionId: namespace.session.normalizeText(sessionId) },
-      });
-      const meetingId = namespace.session.normalizeText(
-        normalizedMeetingState.meeting?.meetingId || normalizedMeetingState.session?.sessionId
-      );
-      if (!meetingId) {
-        continue;
-      }
-      next[meetingId] = namespace.meetingState.mergeMeetingState(
-        next[meetingId],
-        normalizedMeetingState,
-        { meeting: { meetingId } }
-      );
-    }
-
-    return next;
-  }
-
   async function markPromptLibrarySynced(providerIdentity, syncedAt) {
     const current = await getCloudSyncState();
     const cloudSync = namespace.cloudSync.markPromptLibrarySynced(current, providerIdentity, syncedAt);
@@ -239,16 +146,23 @@
     return cloudSync;
   }
 
-  async function setPromptSyncError(errorMessage, providerIdentity) {
+  async function setPromptSyncError(errorMessage, providerIdentity, options = {}) {
     const current = await getCloudSyncState();
-    const cloudSync = namespace.cloudSync.setPromptSyncError(current, errorMessage, providerIdentity);
+    const cloudSync = namespace.cloudSync.setPromptSyncError(current, errorMessage, providerIdentity, options);
     await setLocal({ cloudSync });
     return cloudSync;
   }
 
-  async function recordPromptLibraryRemoteState(remoteState, providerIdentity) {
+  async function setPromptSyncDegraded(errorMessage, providerIdentity, options = {}) {
     const current = await getCloudSyncState();
-    const cloudSync = namespace.cloudSync.recordPromptLibraryRemoteState(current, remoteState, providerIdentity);
+    const cloudSync = namespace.cloudSync.setPromptSyncDegraded(current, errorMessage, providerIdentity, options);
+    await setLocal({ cloudSync });
+    return cloudSync;
+  }
+
+  async function recordPromptLibraryRemoteState(remoteState, providerIdentity, options = {}) {
+    const current = await getCloudSyncState();
+    const cloudSync = namespace.cloudSync.recordPromptLibraryRemoteState(current, remoteState, providerIdentity, options);
     await setLocal({ cloudSync });
     return cloudSync;
   }
@@ -412,9 +326,7 @@
     getCloudSyncState,
     getHandleRatio,
     getMeetingHub,
-    getMeetingState,
     getMeetingStateByMeetingId,
-    getMeetingStateBySession,
     getPromptLibrary,
     getReleaseInfo,
     getState,
@@ -434,14 +346,33 @@
     setCloudSyncState,
     setLocal,
     setMeetingHub,
-    setMeetingState,
+    setPromptSyncDegraded,
     setPromptSyncError,
     setPromptLibrary,
     setReleaseInfo,
     setSessionPaused,
     updateUiPreferences,
     updateSettings,
+    STORAGE_ERROR_CODES,
+    isStorageAccessError,
   };
+
+  function createStorageAccessError(code, message, cause) {
+    const error = new Error(message);
+    error.code = code;
+    if (cause !== undefined) {
+      error.cause = cause;
+    }
+    return error;
+  }
+
+  function isStorageAccessError(error, code = "") {
+    if (!error || typeof error !== "object") {
+      return false;
+    }
+    const currentCode = String(error.code || "").trim();
+    return code ? currentCode === code : Boolean(currentCode && Object.values(STORAGE_ERROR_CODES).includes(currentCode));
+  }
 
   function isExtensionContextInvalidatedError(error) {
     const message = namespace.session?.normalizeText

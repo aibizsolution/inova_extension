@@ -5,9 +5,10 @@
   const LOCAL_STORAGE_KEY_PREFIX = "inova-hosted-meeting-session::";
   const WORKSPACE_HASH_PARAM = "ws";
   const DEBUG_PREFIX = "[Inova Hosted Meeting]";
+  const DEBUG_FAULTS_SESSION_STORAGE_KEY = "inova-hosted-meeting-debug-faults";
   const DEFAULT_CREATE_JOB_TIMEOUT_MS = 9 * 60 * 1000;
   const DEFAULT_INLINE_AUDIO_LIMIT_BYTES = 25 * 1024 * 1024;
-  const DEFAULT_SOURCE_TARGET_PART_BYTES = 20 * 1024 * 1024;
+  const DEFAULT_SOURCE_TARGET_PART_BYTES = 28 * 1024 * 1024;
   const DEFAULT_SOURCE_MAX_BYTES = 200 * 1024 * 1024;
   const DEFAULT_SOURCE_MAX_DURATION_MS = 2 * 60 * 60 * 1000;
   const DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS = 20 * 60 * 1000;
@@ -15,8 +16,6 @@
   const DEFAULT_SOURCE_CHUNK_OVERLAP_MS = 1500;
   const DEFAULT_SOURCE_CHUNK_SAMPLE_RATE = 16000;
   const DEFAULT_MAX_RECORDING_DURATION_MS = 90 * 60 * 1000;
-  const DEFAULT_NOTES_MODE = "general";
-  const DEFAULT_NOTES_STYLE = "default";
   const DEFAULT_RECORDING_AUDIO_BITS_PER_SECOND = 30000;
   const DEFAULT_SOURCE_UPLOAD_TIMEOUT_MS = 3 * 60 * 1000;
   const FIREBASE_WEB_CONFIG = {
@@ -38,6 +37,7 @@
   const AUTO_RETRY_PENDING_STATUSES = new Set(["local_saved", "upload_queued"]);
   const debugListeners = new Set();
   const debugEntries = [];
+  const debugFaults = readDebugFaultRegistry();
   let debugSequence = 0;
   let debugEnabled = false;
 
@@ -63,6 +63,49 @@
 
   function normalizeBaseUrl(value) {
     return String(value || "").replace(/\/+$/, "");
+  }
+
+  function readDebugFaultRegistry() {
+    try {
+      if (!global?.sessionStorage || typeof global.sessionStorage.getItem !== "function") {
+        return Object.create(null);
+      }
+      const raw = normalizeText(global.sessionStorage.getItem(DEBUG_FAULTS_SESSION_STORAGE_KEY));
+      if (!raw) return Object.create(null);
+      const parsed = JSON.parse(raw);
+      const nextRegistry = Object.create(null);
+      for (const [name, count] of Object.entries(parsed || {})) {
+        const normalizedName = normalizeText(name);
+        if (!normalizedName) continue;
+        const normalizedCount = Number(count);
+        if (normalizedCount === -1) {
+          nextRegistry[normalizedName] = -1;
+          continue;
+        }
+        if (Number.isFinite(normalizedCount) && normalizedCount > 0) {
+          nextRegistry[normalizedName] = Math.floor(normalizedCount);
+        }
+      }
+      return nextRegistry;
+    } catch {
+      return Object.create(null);
+    }
+  }
+
+  function persistDebugFaultRegistry() {
+    try {
+      if (!global?.sessionStorage || typeof global.sessionStorage.setItem !== "function") {
+        return;
+      }
+      const snapshot = {};
+      for (const [name, count] of Object.entries(debugFaults)) {
+        const normalizedName = normalizeText(name);
+        if (!normalizedName) continue;
+        if (count === -1) snapshot[normalizedName] = -1;
+        else if (Number.isFinite(count) && count > 0) snapshot[normalizedName] = Math.floor(count);
+      }
+      global.sessionStorage.setItem(DEBUG_FAULTS_SESSION_STORAGE_KEY, JSON.stringify(snapshot));
+    } catch {}
   }
 
   function parsePositiveInteger(value) {
@@ -143,7 +186,9 @@
       || "https://asia-northeast3-browser-extension-main.cloudfunctions.net"
     );
     return {
+      authorizeWorkspaceAccessUrl: joinUrl(functionsBaseUrl, "authorizeInovaMeetingWorkspaceAccess"),
       createJobUrl: joinUrl(functionsBaseUrl, "createInovaMeetingJob"),
+      createShareLinkUrl: joinUrl(functionsBaseUrl, "createInovaMeetingShareLink"),
       deleteMeetingResultUrl: joinUrl(functionsBaseUrl, "deleteInovaMeetingResult"),
       deleteMeetingUrl: joinUrl(functionsBaseUrl, "deleteInovaMeeting"),
       exchangeLaunchUrl: joinUrl(functionsBaseUrl, "exchangeInovaMeetingLaunch"),
@@ -156,11 +201,9 @@
         ...(normalizedOverride.firebaseWebConfig || {}),
       },
       functionsBaseUrl,
-      getArtifactUrl: joinUrl(functionsBaseUrl, "getInovaMeetingArtifact"),
-      getJobUrl: joinUrl(functionsBaseUrl, "getInovaMeetingJob"),
       issueWorkspaceAuthUrl: joinUrl(functionsBaseUrl, "issueInovaMeetingWorkspaceAuth"),
-      listResultsUrl: joinUrl(functionsBaseUrl, "listInovaMeetingResults"),
       regenerateNotesUrl: joinUrl(functionsBaseUrl, "regenerateInovaMeetingNotes"),
+      revokeShareLinkUrl: joinUrl(functionsBaseUrl, "revokeInovaMeetingShareLink"),
       uploadSourceUrl: joinUrl(functionsBaseUrl, "uploadInovaMeetingSource"),
       updateMeetingResultUrl: joinUrl(functionsBaseUrl, "updateInovaMeetingResult"),
       updateMeetingTitleUrl: joinUrl(functionsBaseUrl, "updateInovaMeeting"),
@@ -171,44 +214,55 @@
     try {
       const current = new URL(url);
       return {
+        debugAuthBypass: normalizeText(current.searchParams.get("debugAuthBypass")),
         jobId: normalizeText(current.searchParams.get("jobId")),
         launchToken: normalizeText(current.searchParams.get("launch")),
         meetingId: normalizeText(current.searchParams.get("meetingId")),
+        shareToken: normalizeText(current.searchParams.get("share")),
         workspaceToken: readHashParam(current.hash, WORKSPACE_HASH_PARAM),
       };
     } catch {
       return {
+        debugAuthBypass: "",
         jobId: "",
         launchToken: "",
         meetingId: "",
+        shareToken: "",
         workspaceToken: "",
       };
     }
   }
 
-  function buildHeaders(meetingSessionToken) {
+  function buildHeaders(auth) {
     const headers = { "Content-Type": "application/json" };
-    const token = normalizeText(meetingSessionToken);
-    if (token) {
-      headers.Authorization = `MeetingSession ${token}`;
+    const normalized = normalizeRequestAuth(auth);
+    if (normalized.firebaseSessionToken) {
+      headers.Authorization = `FirebaseSession ${normalized.firebaseSessionToken}`;
+    } else if (normalized.accessToken) {
+      headers.Authorization = `Bearer ${normalized.accessToken}`;
+    } else if (normalized.meetingSessionToken) {
+      headers.Authorization = `MeetingSession ${normalized.meetingSessionToken}`;
     }
     return headers;
   }
 
-  async function postJson(globalObject, url, body, meetingSessionToken, options) {
+  async function postJson(globalObject, url, body, auth, options) {
     const controller = typeof AbortController === "function" ? new AbortController() : null;
     const timeoutMs = Math.max(1000, Number(options?.timeoutMs) || 25000);
     const timeoutId = controller ? globalObject.setTimeout(() => controller.abort(), timeoutMs) : 0;
+    const resolvedAuth = await resolveRequestAuth(auth);
     logDebug("http.request", {
       body,
-      hasMeetingSessionToken: Boolean(normalizeText(meetingSessionToken)),
+      hasAccessToken: Boolean(normalizeText(resolvedAuth?.accessToken)),
+      hasFirebaseSessionToken: Boolean(normalizeText(resolvedAuth?.firebaseSessionToken)),
+      hasMeetingSessionToken: Boolean(normalizeText(resolvedAuth?.meetingSessionToken)),
       timeoutMs,
       url,
     });
     try {
       const response = await globalObject.fetch(url, {
         body: JSON.stringify(body || {}),
-        headers: buildHeaders(meetingSessionToken),
+        headers: buildHeaders(resolvedAuth),
         method: "POST",
         signal: controller?.signal,
       });
@@ -240,6 +294,36 @@
     }
   }
 
+  function normalizeRequestAuth(auth) {
+    if (typeof auth === "string") {
+      return {
+        accessToken: "",
+        firebaseSessionToken: "",
+        meetingSessionToken: normalizeText(auth),
+      };
+    }
+    return {
+      accessToken: normalizeText(auth?.accessToken),
+      firebaseSessionToken: normalizeText(auth?.firebaseSessionToken),
+      meetingSessionToken: normalizeText(auth?.meetingSessionToken),
+    };
+  }
+
+  async function resolveRequestAuth(auth) {
+    const normalized = normalizeRequestAuth(auth);
+    if (normalized.accessToken || normalized.firebaseSessionToken || normalized.meetingSessionToken) {
+      return normalized;
+    }
+    try {
+      const workspaceAuth = await ns.firebase?.getWorkspaceRequestAuth?.();
+      const resolved = normalizeRequestAuth(workspaceAuth);
+      if (resolved.accessToken || resolved.firebaseSessionToken || resolved.meetingSessionToken) {
+        return resolved;
+      }
+    } catch {}
+    return normalized;
+  }
+
   function buildWorkspaceSessionStorageKey(meetingId) {
     return `${LOCAL_STORAGE_KEY_PREFIX}${normalizeText(meetingId)}`;
   }
@@ -254,6 +338,167 @@
     } catch {
       return null;
     }
+  }
+
+  function buildStorageAccessIssue(code, options = {}) {
+    return {
+      code: normalizeText(code),
+      errorName: normalizeText(options.errorName),
+      key: normalizeText(options.key),
+      message: normalizeText(options.message),
+      source: normalizeText(options.source),
+      storage: normalizeText(options.storage),
+    };
+  }
+
+  function readStorageValueDetailed(globalObject, storage, key, source) {
+    const normalizedKey = normalizeText(key);
+    const normalizedStorage = normalizeText(storage);
+    const normalizedSource = normalizeText(source);
+    try {
+      const target = normalizedStorage === "session-storage"
+        ? globalObject?.sessionStorage
+        : globalObject?.localStorage;
+      if (!target || typeof target.getItem !== "function") {
+        throw new Error(`${normalizedStorage || "storage"} unavailable`);
+      }
+      const value = target.getItem(normalizedKey) || "";
+      return {
+        issue: normalizeText(value)
+          ? null
+          : buildStorageAccessIssue("storage-empty", {
+              key: normalizedKey,
+              source: normalizedSource,
+              storage: normalizedStorage,
+            }),
+        key: normalizedKey,
+        source: normalizedSource,
+        storage: normalizedStorage,
+        value,
+      };
+    } catch (error) {
+      return {
+        issue: buildStorageAccessIssue("storage-read-failed", {
+          errorName: normalizeText(error?.name),
+          key: normalizedKey,
+          message: error instanceof Error ? error.message : String(error || ""),
+          source: normalizedSource,
+          storage: normalizedStorage,
+        }),
+        key: normalizedKey,
+        source: normalizedSource,
+        storage: normalizedStorage,
+        value: "",
+      };
+    }
+  }
+
+  function writeStorageValueDetailed(globalObject, storage, key, value, source) {
+    const normalizedKey = normalizeText(key);
+    const normalizedStorage = normalizeText(storage);
+    const normalizedSource = normalizeText(source);
+    try {
+      const target = normalizedStorage === "session-storage"
+        ? globalObject?.sessionStorage
+        : globalObject?.localStorage;
+      if (!target || typeof target.setItem !== "function") {
+        throw new Error(`${normalizedStorage || "storage"} unavailable`);
+      }
+      target.setItem(normalizedKey, value);
+      return null;
+    } catch (error) {
+      return buildStorageAccessIssue("storage-write-failed", {
+        errorName: normalizeText(error?.name),
+        key: normalizedKey,
+        message: error instanceof Error ? error.message : String(error || ""),
+        source: normalizedSource,
+        storage: normalizedStorage,
+      });
+    }
+  }
+
+  function removeStorageValueDetailed(globalObject, storage, key, source) {
+    const normalizedKey = normalizeText(key);
+    const normalizedStorage = normalizeText(storage);
+    const normalizedSource = normalizeText(source);
+    try {
+      const target = normalizedStorage === "session-storage"
+        ? globalObject?.sessionStorage
+        : globalObject?.localStorage;
+      if (!target || typeof target.removeItem !== "function") {
+        throw new Error(`${normalizedStorage || "storage"} unavailable`);
+      }
+      target.removeItem(normalizedKey);
+      return null;
+    } catch (error) {
+      return buildStorageAccessIssue("storage-remove-failed", {
+        errorName: normalizeText(error?.name),
+        key: normalizedKey,
+        message: error instanceof Error ? error.message : String(error || ""),
+        source: normalizedSource,
+        storage: normalizedStorage,
+      });
+    }
+  }
+
+  function parseStoredValueDetailed(value, key, source, storage) {
+    const normalized = normalizeText(value);
+    if (!normalized) {
+      return {
+        issue: buildStorageAccessIssue("storage-empty", {
+          key,
+          source,
+          storage,
+        }),
+        payload: null,
+      };
+    }
+    try {
+      return {
+        issue: null,
+        payload: JSON.parse(normalized),
+      };
+    } catch (error) {
+      return {
+        issue: buildStorageAccessIssue("storage-parse-failed", {
+          errorName: normalizeText(error?.name),
+          key,
+          message: error instanceof Error ? error.message : String(error || ""),
+          source,
+          storage,
+        }),
+        payload: null,
+      };
+    }
+  }
+
+  function summarizeWorkspaceSessionIssues(issues) {
+    const normalizedIssues = Array.isArray(issues) ? issues : [];
+    const issue = normalizedIssues.find((entry) => ["storage-read-failed", "storage-write-failed", "storage-remove-failed", "storage-parse-failed", "storage-invalid-payload"].includes(normalizeText(entry?.code)));
+    if (!issue) {
+      return "";
+    }
+    const storageLabel = normalizeText(issue.storage) === "session-storage"
+      ? "세션 저장소"
+      : normalizeText(issue.storage) === "local-storage"
+        ? "로컬 저장소"
+        : "브라우저 저장소";
+    if (normalizeText(issue.code) === "storage-read-failed") {
+      return `${storageLabel}를 읽지 못했어요.`;
+    }
+    if (normalizeText(issue.code) === "storage-write-failed") {
+      return `${storageLabel}를 저장하지 못했어요.`;
+    }
+    if (normalizeText(issue.code) === "storage-remove-failed") {
+      return `${storageLabel}를 정리하지 못했어요.`;
+    }
+    if (normalizeText(issue.code) === "storage-parse-failed") {
+      return `${storageLabel}에 저장된 작업실 세션을 해석하지 못했어요.`;
+    }
+    if (normalizeText(issue.code) === "storage-invalid-payload") {
+      return `${storageLabel}에 저장된 작업실 세션 형식이 올바르지 않아요.`;
+    }
+    return "";
   }
 
   function safeSessionStorageGet(globalObject, key) {
@@ -332,49 +577,193 @@
   }
 
   function clearPersistedWorkspaceSession(globalObject, meetingId) {
-    try {
-      globalObject.sessionStorage.removeItem(SESSION_STORAGE_KEY);
-    } catch {}
+    const issues = [];
+    const sessionRemoveIssue = removeStorageValueDetailed(
+      globalObject,
+      "session-storage",
+      SESSION_STORAGE_KEY,
+      "session-storage"
+    );
+    if (sessionRemoveIssue) {
+      issues.push(sessionRemoveIssue);
+    }
     const normalizedMeetingId = normalizeText(meetingId);
     if (normalizedMeetingId) {
-      safeLocalStorageRemove(globalObject, buildWorkspaceSessionStorageKey(normalizedMeetingId));
+      const localRemoveIssue = removeStorageValueDetailed(
+        globalObject,
+        "local-storage",
+        buildWorkspaceSessionStorageKey(normalizedMeetingId),
+        "local-storage"
+      );
+      if (localRemoveIssue) {
+        issues.push(localRemoveIssue);
+      }
     }
+    return {
+      degradedReason: summarizeWorkspaceSessionIssues(issues),
+      issues,
+    };
   }
 
   function loadPersistedWorkspaceSession(globalObject, requestedMeetingId, workspaceToken, requestedJobId) {
-    const candidates = [
-      { payload: buildUrlWorkspaceSession(requestedMeetingId, workspaceToken, requestedJobId), source: "url-hash" },
-      { payload: safeParse(safeSessionStorageGet(globalObject, SESSION_STORAGE_KEY)), source: "session-storage" },
-      {
-        payload: requestedMeetingId
-          ? safeParse(safeLocalStorageGet(globalObject, buildWorkspaceSessionStorageKey(requestedMeetingId)))
-          : null,
-        source: "local-storage",
-      },
-    ].filter((entry) => entry.payload);
+    const issues = [];
+    const candidates = [];
+    const urlPayload = buildUrlWorkspaceSession(requestedMeetingId, workspaceToken, requestedJobId);
+    if (urlPayload) {
+      candidates.push({
+        key: WORKSPACE_HASH_PARAM,
+        payload: urlPayload,
+        source: "url-hash",
+        storage: "url-hash",
+      });
+    }
+    const sessionStorageEntry = readStorageValueDetailed(globalObject, "session-storage", SESSION_STORAGE_KEY, "session-storage");
+    if (sessionStorageEntry.issue) {
+      issues.push(sessionStorageEntry.issue);
+    }
+    if (normalizeText(sessionStorageEntry.value)) {
+      const parsedSessionStorageEntry = parseStoredValueDetailed(
+        sessionStorageEntry.value,
+        sessionStorageEntry.key,
+        sessionStorageEntry.source,
+        sessionStorageEntry.storage
+      );
+      if (parsedSessionStorageEntry.issue) {
+        issues.push(parsedSessionStorageEntry.issue);
+      }
+      if (parsedSessionStorageEntry.payload) {
+        candidates.push({
+          key: sessionStorageEntry.key,
+          payload: parsedSessionStorageEntry.payload,
+          source: sessionStorageEntry.source,
+          storage: sessionStorageEntry.storage,
+        });
+      }
+    }
+    if (requestedMeetingId) {
+      const localStorageKey = buildWorkspaceSessionStorageKey(requestedMeetingId);
+      const localStorageEntry = readStorageValueDetailed(globalObject, "local-storage", localStorageKey, "local-storage");
+      if (localStorageEntry.issue) {
+        issues.push(localStorageEntry.issue);
+      }
+      if (normalizeText(localStorageEntry.value)) {
+        const parsedLocalStorageEntry = parseStoredValueDetailed(
+          localStorageEntry.value,
+          localStorageEntry.key,
+          localStorageEntry.source,
+          localStorageEntry.storage
+        );
+        if (parsedLocalStorageEntry.issue) {
+          issues.push(parsedLocalStorageEntry.issue);
+        }
+        if (parsedLocalStorageEntry.payload) {
+          candidates.push({
+            key: localStorageEntry.key,
+            payload: parsedLocalStorageEntry.payload,
+            source: localStorageEntry.source,
+            storage: localStorageEntry.storage,
+          });
+        }
+      }
+    }
 
     for (const candidate of candidates) {
       const parsed = candidate.payload;
       const meetingId = normalizeText(parsed?.meetingId);
-      const token = normalizeText(parsed?.meetingSessionToken);
       const expiresAt = normalizeText(parsed?.expiresAt);
-      if (!meetingId || !token) {
+      if (!meetingId) {
+        if (candidate.source !== "url-hash") {
+          issues.push(buildStorageAccessIssue("storage-invalid-payload", {
+            key: candidate.key,
+            source: candidate.source,
+            storage: candidate.storage,
+          }));
+        }
         continue;
       }
       if (requestedMeetingId && requestedMeetingId !== meetingId) {
         continue;
       }
       if (isExpired(expiresAt)) {
-        clearPersistedWorkspaceSession(globalObject, meetingId);
+        if (candidate.source !== "url-hash") {
+          issues.push(buildStorageAccessIssue("storage-expired", {
+            key: candidate.key,
+            source: candidate.source,
+            storage: candidate.storage,
+          }));
+        }
+        const cleared = clearPersistedWorkspaceSession(globalObject, meetingId);
+        if (Array.isArray(cleared?.issues) && cleared.issues.length) {
+          issues.push(...cleared.issues);
+        }
         continue;
       }
-      if (!safeSessionStorageGet(globalObject, SESSION_STORAGE_KEY)) {
-        safeSessionStorageSet(globalObject, SESSION_STORAGE_KEY, JSON.stringify(parsed));
+      const sessionWriteIssue = writeStorageValueDetailed(
+        globalObject,
+        "session-storage",
+        SESSION_STORAGE_KEY,
+        JSON.stringify(parsed),
+        "session-storage"
+      );
+      if (sessionWriteIssue) {
+        issues.push(sessionWriteIssue);
       }
-      safeLocalStorageSet(globalObject, buildWorkspaceSessionStorageKey(meetingId), JSON.stringify(parsed));
-      return { payload: parsed, source: candidate.source };
+      const localWriteIssue = writeStorageValueDetailed(
+        globalObject,
+        "local-storage",
+        buildWorkspaceSessionStorageKey(meetingId),
+        JSON.stringify(parsed),
+        "local-storage"
+      );
+      if (localWriteIssue) {
+        issues.push(localWriteIssue);
+      }
+      return {
+        degradedReason: summarizeWorkspaceSessionIssues(issues),
+        issues,
+        payload: parsed,
+        source: candidate.source,
+      };
     }
-    return null;
+    return {
+      degradedReason: summarizeWorkspaceSessionIssues(issues),
+      issues,
+      payload: null,
+      source: "",
+    };
+  }
+
+  function persistWorkspaceSessionPayload(globalObject, payload) {
+    const nextPayload = payload && typeof payload === "object" ? payload : {};
+    const meetingId = normalizeText(nextPayload.meetingId);
+    const serialized = JSON.stringify(nextPayload);
+    const issues = [];
+    const sessionWriteIssue = writeStorageValueDetailed(
+      globalObject,
+      "session-storage",
+      SESSION_STORAGE_KEY,
+      serialized,
+      "session-storage"
+    );
+    if (sessionWriteIssue) {
+      issues.push(sessionWriteIssue);
+    }
+    if (meetingId) {
+      const localWriteIssue = writeStorageValueDetailed(
+        globalObject,
+        "local-storage",
+        buildWorkspaceSessionStorageKey(meetingId),
+        serialized,
+        "local-storage"
+      );
+      if (localWriteIssue) {
+        issues.push(localWriteIssue);
+      }
+    }
+    return {
+      degradedReason: summarizeWorkspaceSessionIssues(issues),
+      issues,
+    };
   }
 
   function toTimestamp(value) {
@@ -411,29 +800,6 @@
     return "대기";
   }
 
-  function formatNotesModeLabel(mode) {
-    if (mode === "interview") return "인터뷰";
-    if (mode === "review") return "리뷰/회고";
-    if (mode === "planning") return "계획 수립";
-    return "일반 회의";
-  }
-
-  function formatNotesStyleLabel(style) {
-    if (style === "brief") return "간결 브리프";
-    if (style === "action") return "실행 중심";
-    return "기본 회의록";
-  }
-
-  function normalizeMeetingNotesMode(value) {
-    const normalized = normalizeText(value).toLowerCase();
-    return ["general", "interview", "review", "planning"].includes(normalized) ? normalized : "";
-  }
-
-  function normalizeMeetingNotesStyle(value) {
-    const normalized = normalizeText(value).toLowerCase();
-    return ["default", "brief", "action"].includes(normalized) ? normalized : "";
-  }
-
   function formatPhase(phase) {
     const normalized = normalizeText(phase);
     if (normalized === "uploading" || normalized === "upload_queued") return "업로드 준비";
@@ -443,10 +809,8 @@
     if (normalized === "remote_processing" || normalized === "processing") return "원격 처리";
     if (normalized === "transcribing") return "전사 중";
     if (normalized === "transcribing_chunks") return "분할 전사 중";
-    if (normalized === "assembling_transcript") return "청크 병합 중";
-    if (normalized === "reconciling_speakers") return "화자 정합 중";
+    if (normalized === "assembling_transcript") return "전사 병합 중";
     if (normalized === "generating_notes") return "회의 정리 중";
-    if (normalized === "diarizing") return "화자 구분 중";
     if (normalized === "finalizing") return "회의록 정리 중";
     return normalized;
   }
@@ -487,51 +851,10 @@
     return `${formatDurationShort(startMs)} - ${formatDurationShort(endMs)}`;
   }
 
-  function buildDefaultSpeakerDisplayName(value) {
-    const normalized = normalizeText(value);
-    if (!normalized) return "화자";
-    const diarizedMatch = normalized.match(/^SPEAKER_(\d+)$/i);
-    if (diarizedMatch) {
-      return `화자 ${Number.parseInt(diarizedMatch[1], 10) + 1}`;
-    }
-    if (/^[A-Z]$/i.test(normalized)) {
-      return `화자 ${normalized.toUpperCase()}`;
-    }
-    return normalized;
-  }
-
-  function normalizeSpeakerAliases(input, allowedLabels) {
-    const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
-    const allowAll = !(allowedLabels instanceof Set);
-    const normalized = {};
-    for (const [rawLabel, rawAlias] of Object.entries(source)) {
-      const label = normalizeText(rawLabel);
-      const alias = normalizeTextBlock(rawAlias).replace(/\n+/g, " ").replace(/\s+/g, " ").slice(0, 80);
-      if (!label || !alias) continue;
-      if (!allowAll && !allowedLabels.has(label)) continue;
-      if (alias === label) continue;
-      normalized[label] = alias;
-    }
-    return normalized;
-  }
-
-  function resolveSpeakerDisplayName(value, speakerAliases) {
-    const label = normalizeText(value);
-    return normalizeText(speakerAliases?.[label]) || buildDefaultSpeakerDisplayName(label);
-  }
-
-  function formatSpeakerLabel(value) {
-    return buildDefaultSpeakerDisplayName(value);
-  }
-
   function cleanPreviewText(value) {
-    const normalized = normalizeTextBlock(value).replace(/SPEAKER_\d+\s*:\s*/gi, "").replace(/\s+/g, " ").trim();
+    const normalized = normalizeTextBlock(value).replace(/\s+/g, " ").trim();
     if (!normalized) return "";
     return normalized.length > MAX_PREVIEW_TEXT_LENGTH ? `${normalized.slice(0, MAX_PREVIEW_TEXT_LENGTH - 3)}...` : normalized;
-  }
-
-  function countSpeakers(segments) {
-    return new Set((Array.isArray(segments) ? segments : []).map((segment) => normalizeText(segment?.speakerLabel)).filter(Boolean)).size;
   }
 
   function isOnline(globalObject) {
@@ -754,20 +1077,81 @@
     return entry;
   }
 
+  function getDebugFaults() {
+    const snapshot = {};
+    for (const [name, count] of Object.entries(debugFaults)) {
+      if (!normalizeText(name)) continue;
+      if (count === -1) snapshot[name] = "always";
+      else if (Number.isFinite(count) && count > 0) snapshot[name] = count;
+    }
+    return snapshot;
+  }
+
+  function setDebugFault(name, count = true) {
+    const normalizedName = normalizeText(name);
+    if (!normalizedName) return getDebugFaults();
+    if (count === false || count === 0) {
+      delete debugFaults[normalizedName];
+      persistDebugFaultRegistry();
+      return getDebugFaults();
+    }
+    if (count === true) {
+      debugFaults[normalizedName] = -1;
+      persistDebugFaultRegistry();
+      return getDebugFaults();
+    }
+    const normalizedCount = Math.max(1, Math.floor(Number(count) || 0)) || 1;
+    debugFaults[normalizedName] = normalizedCount;
+    persistDebugFaultRegistry();
+    return getDebugFaults();
+  }
+
+  function clearDebugFault(name) {
+    const normalizedName = normalizeText(name);
+    if (!normalizedName) {
+      for (const key of Object.keys(debugFaults)) {
+        delete debugFaults[key];
+      }
+      persistDebugFaultRegistry();
+      return getDebugFaults();
+    }
+    delete debugFaults[normalizedName];
+    persistDebugFaultRegistry();
+    return getDebugFaults();
+  }
+
+  function consumeDebugFault(name) {
+    const normalizedName = normalizeText(name);
+    if (!normalizedName) return false;
+    const current = Number(debugFaults[normalizedName]);
+    if (current === -1) return true;
+    if (!Number.isFinite(current) || current <= 0) return false;
+    if (current === 1) {
+      delete debugFaults[normalizedName];
+      persistDebugFaultRegistry();
+      return true;
+    }
+    debugFaults[normalizedName] = current - 1;
+    persistDebugFaultRegistry();
+    return true;
+  }
+
   debugEnabled = isDebugPanelEnabled(global);
 
   global.__INOVA_HOSTED_MEETING_DEBUG__ = {
     clear: clearDebugEntries,
+    clearFault: clearDebugFault,
+    consumeFault: consumeDebugFault,
     entries: getDebugEntries,
+    faults: getDebugFaults,
     format: formatDebugEntry,
     log: logDebug,
+    setFault: setDebugFault,
   };
 
   ns.shared = {
     AUTO_RETRY_PENDING_STATUSES,
     DEBUG_PREFIX,
-    DEFAULT_NOTES_MODE,
-    DEFAULT_NOTES_STYLE,
     DEFAULT_CREATE_JOB_TIMEOUT_MS,
     DEFAULT_INLINE_AUDIO_LIMIT_BYTES,
     DEFAULT_MAX_RECORDING_DURATION_MS,
@@ -798,17 +1182,13 @@
     formatDateTime,
     formatDuration,
     formatSegmentRange,
-    formatSpeakerLabel,
-    normalizeSpeakerAliases,
-    resolveSpeakerDisplayName,
-    formatNotesModeLabel,
-    formatNotesStyleLabel,
     formatPhase,
     formatStatusLabel,
     formatDebugEntry,
     cleanPreviewText,
     clearDebugEntries,
-    countSpeakers,
+    clearDebugFault,
+    consumeDebugFault,
     generateCaptureRequestId,
     getDebugEntries,
     isDebugPanelEnabled,
@@ -820,8 +1200,6 @@
     loadPersistedWorkspaceSession,
     logDebug,
     normalizeBaseUrl,
-    normalizeMeetingNotesMode,
-    normalizeMeetingNotesStyle,
     normalizeStatus,
     normalizeText,
     normalizeTextArray,
@@ -829,6 +1207,7 @@
     pickRecorderMimeType,
     parseParams,
     postJson,
+    persistWorkspaceSessionPayload,
     readHashParam,
     resolveRecordingProfile,
     resolveConfig,
@@ -838,6 +1217,7 @@
     safeParse,
     safeSessionStorageGet,
     safeSessionStorageSet,
+    setDebugFault,
     setEnabled,
     stopTracks,
     subscribeDebugEntries,

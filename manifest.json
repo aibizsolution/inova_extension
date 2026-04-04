@@ -1,16 +1,13 @@
 {
   "manifest_version": 3,
   "name": "아이노바 실험실",
-  "version": "0.3.17",
+  "version": "0.3.26",
   "description": "i-Nova 대화 화면에 패널과 프롬프트 도구를 더하는 크롬 확장입니다.",
   "permissions": [
     "storage",
     "activeTab",
     "tabs",
-    "cookies",
-    "desktopCapture",
-    "offscreen",
-    "tabCapture"
+    "cookies"
   ],
   "host_permissions": [
     "https://inova.incross.com/*",
@@ -43,7 +40,6 @@
         "shared/constants.js",
         "shared/session.js",
         "shared/meeting-debug.js",
-        "shared/meeting-state.js",
         "shared/meeting-bridge.js",
         "shared/prompt-library.js",
         "shared/prompt-store.js",
@@ -54,23 +50,29 @@
         "shared/storage.js",
         "content/dom.js",
         "content/composer.js",
-        "content/files.js",
-        "content/composer-review-float.js",
-        "content/prompt-review-view.js",
+        "content/features/prompt-library/files.js",
+        "content/features/prompt-review/composer-review-float.js",
+        "content/features/prompt-review/prompt-review-view.js",
         "content/bookmark-view.js",
+        "hosting/meeting/debug-console.js",
         "content/meeting-view.js",
-        "content/prompt-view.js",
-        "content/store-view.js",
+        "content/features/prompt-library/prompt-view.js",
+        "content/features/prompt-store/store-view.js",
         "content/prompt-hub-view.js",
         "content/release-view.js",
-        "content/prompt-review-manager.js",
-        "content/cloud-sync-manager.js",
-        "content/prompt-realtime-manager.js",
+        "content/features/prompt-review/prompt-review-manager.js",
+        "content/features/prompt-library/cloud-sync-manager.js",
+        "content/features/prompt-store/prompt-realtime-manager.js",
         "content/meeting-manager.js",
         "content/route-sync.js",
-        "content/prompt-manager.js",
-        "content/store-manager.js",
+        "content/features/prompt-library/prompt-manager.js",
+        "content/features/prompt-store/store-manager.js",
         "content/release-manager.js",
+        "content/provider-identity-sync.js",
+        "content/prompt-hub-state.js",
+        "content/prompt-hub-panel.js",
+        "content/prompt-hub-controller.js",
+        "content/prompt-hub-runtime.js",
         "content/panel.js",
         "content/main.js"
       ],
@@ -80,6 +82,17 @@
         "content/composer-review.css"
       ],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://browser-extension-main.web.app/meeting/*",
+        "http://127.0.0.1/meeting/*",
+        "http://localhost/meeting/*"
+      ],
+      "js": [
+        "content/meeting-workspace-bridge.js"
+      ],
+      "run_at": "document_start"
     }
   ]
 }

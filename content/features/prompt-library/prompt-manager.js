@@ -32,6 +32,7 @@
         publishPromptId: state.promptPublishPromptId,
         publishTitle: state.promptPublishTitle,
         query: state.queries.prompts,
+        syncNotice: buildSyncNotice(),
         storeCategories: namespace.promptStore.getCategories().filter((category) => category.id !== "all"),
         totalCount: state.promptLibrary.items.length,
       };
@@ -49,6 +50,30 @@
     function createPromptEditor(item = null) { return { open: false, mode: item ? "edit" : "create", id: item?.id || "", title: item?.title || "", content: item?.content || "", error: "" }; }
     function resetPublishState() { state.promptPublishPromptId = ""; state.promptPublishTitle = ""; state.promptPublishError = ""; }
     function updateDraft(field, value) { if (!state.promptEditor.open) return; const hadError = Boolean(state.promptEditor.error); state.promptEditor = { ...state.promptEditor, [field]: value, error: "" }; if (hadError) hooks.render(); }
+    function buildSyncNotice() {
+      const cloudSync = namespace.cloudSync.mergeCloudSyncState(state.cloudSync);
+      if (!cloudSync.degraded && !namespace.session.normalizeText(cloudSync.lastError)) {
+        return null;
+      }
+      if (cloudSync.degradedReason === "prompt-library-push-failed") {
+        return {
+          detail: namespace.session.normalizeText(cloudSync.lastError),
+          message: namespace.cloudSync.hasPendingPromptSync(cloudSync)
+            ? "클라우드 백업 전송이 실패해 로컬 변경을 대기열에 남겨 두었어요. 자동 재시도를 계속합니다."
+            : "클라우드 백업 전송이 실패했어요. 현재는 로컬 요청만 기준으로 보여주고 있어요.",
+        };
+      }
+      if (cloudSync.dataFreshness === "empty") {
+        return {
+          detail: namespace.session.normalizeText(cloudSync.lastError),
+          message: "클라우드 요청 보관함 상태를 읽지 못했어요. 로컬에 저장된 요청만 기준으로 계속 사용할게요.",
+        };
+      }
+      return {
+        detail: namespace.session.normalizeText(cloudSync.lastError),
+        message: "클라우드 동기화 상태 확인이 불안정해 현재 로컬 요청만 기준으로 보여주고 있어요.",
+      };
+    }
     async function handleAction(action, detail = {}) {
       if (action === "create") return void openEditor();
       if (action === "edit") return void openEditor(getPromptById(detail.promptId));

@@ -20,6 +20,9 @@
           checking: Boolean(releaseInfo.checking),
           currentVersion,
           currentAheadOfLatest,
+          degraded: Boolean(releaseInfo.degraded),
+          degradedReason: namespace.session.normalizeText(releaseInfo.degradedReason),
+          dataFreshness: namespace.session.normalizeText(releaseInfo.dataFreshness) || "empty",
           error: releaseInfo.error,
           history: Array.isArray(releaseInfo.history) ? releaseInfo.history : [],
           historyRefreshPending: Boolean(releaseInfo.history.length) && !historyCheckedForCurrentVersion,
@@ -27,22 +30,32 @@
           lastCheckedAt: releaseInfo.checkedAt,
           latest: releaseInfo.latest,
           latestVersion: releaseInfo.latest?.version || "",
+          source: namespace.session.normalizeText(releaseInfo.source) || "none",
           updateAvailable: checkedForCurrentVersion && namespace.releaseInfo.isUpdateAvailable(currentVersion, releaseInfo.latest?.version),
           versionRefreshPending: Boolean(releaseInfo.latest) && !checkedForCurrentVersion,
         };
       } catch (error) {
+        const message = isInvalidatedContextError(error)
+          ? "확장프로그램이 갱신되어 릴리스 화면 상태를 다시 계산해야 합니다."
+          : error instanceof Error
+            ? error.message
+            : "릴리스 화면 상태를 계산하지 못했어요.";
         if (!isInvalidatedContextError(error)) console.error("[i-Nova Bookmarks] release view state failed", error);
         return {
           checking: false,
           currentVersion: "알 수 없음",
           currentAheadOfLatest: false,
-          error: "",
+          degraded: true,
+          degradedReason: "release-view-state-failed",
+          dataFreshness: "empty",
+          error: message,
           history: [],
           historyRefreshPending: false,
           historyLoading: false,
           lastCheckedAt: "",
           latest: null,
           latestVersion: "",
+          source: "none",
           updateAvailable: false,
           versionRefreshPending: false,
         };
@@ -81,7 +94,6 @@
       });
       state.releaseInfo = namespace.releaseInfo.mergeReleaseInfo(state.releaseInfo, {
         checking: needsLatest,
-        error: "",
         historyLoading: needsHistory,
       });
       hooks.render();
@@ -95,11 +107,15 @@
         const next = namespace.releaseInfo.mergeReleaseInfo(state.releaseInfo, {
           checkedAt: needsLatest ? checkedAt : current.checkedAt,
           checkedForVersion: needsLatest ? currentVersion : current.checkedForVersion,
+          degraded: false,
+          degradedReason: "",
+          dataFreshness: "fresh",
           error: "",
           history: historyPayload?.releases || current.history,
           historyCheckedAt: needsHistory ? checkedAt : current.historyCheckedAt,
           historyCheckedForVersion: needsHistory ? currentVersion : current.historyCheckedForVersion,
           latest: latestPayload?.release || current.latest,
+          source: "runtime-read",
         });
         delete next.checking;
         delete next.historyLoading;
@@ -112,12 +128,26 @@
         });
       } catch (error) {
         if (isInvalidatedContextError(error)) return;
+        const hasCachedData = Boolean(
+          current.latest
+          || (Array.isArray(current.history) && current.history.length)
+          || current.checkedAt
+        );
         logDebug("release.check.error", {
           error: error instanceof Error ? error.message : "릴리스 정보를 확인하지 못했어요.",
           scope: "release",
         });
         state.releaseInfo = namespace.releaseInfo.mergeReleaseInfo(state.releaseInfo, {
+          degraded: true,
+          degradedReason: "release-fetch-failed",
+          dataFreshness: hasCachedData ? "stale" : "empty",
           error: error instanceof Error ? error.message : "릴리스 정보를 확인하지 못했어요.",
+          source: hasCachedData ? "cache" : "none",
+        });
+        logDebug("release.check.degraded", {
+          historyCount: Array.isArray(current.history) ? current.history.length : 0,
+          latestVersion: namespace.session.normalizeText(current.latest?.version),
+          scope: "release",
         });
       } finally {
         state.releaseInfo = namespace.releaseInfo.mergeReleaseInfo(state.releaseInfo, {

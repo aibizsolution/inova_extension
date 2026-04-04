@@ -36,10 +36,24 @@
           </div>
         </div>
       </div>
+      ${renderSyncNotice(state.syncNotice)}
       ${hasInlineFeedback ? "" : renderFeedback(state.feedback)}
       ${renderImportReview(state.importReview)}
       ${renderEditor(state.editor)}
       <div class="inova-prompt-list">${itemsHtml}</div>
+    `;
+  }
+
+  function renderSyncNotice(syncNotice) {
+    if (!syncNotice?.message) {
+      return "";
+    }
+    return `
+      <section class="inova-inline-feedback">
+        <strong>클라우드 동기화 제한</strong>
+        <span>${escapeHtml(syncNotice.message)}</span>
+        ${syncNotice.detail ? `<span>${escapeHtml(syncNotice.detail)}</span>` : ""}
+      </section>
     `;
   }
 

@@ -8,14 +8,8 @@
       : renderEmptyState(normalized);
     const workspacePending = normalized.pending.active && normalized.pending.action === "open-workspace";
     const workspaceButtonLabel = workspacePending ? "작업실 여는 중..." : "새 회의하기";
-    const progressNotice = normalized.pending.active
-      ? `<article class="inova-release-card inova-release-card__notice is-info">
-          <strong>새 탭을 여는 중입니다.</strong>
-          <p>${escapeHtml(buildPendingMessage(normalized.pending))}</p>
-        </article>`
-      : "";
-    const feedbackNotice = normalized.feedback.text
-      ? `<div class="inova-release-card inova-release-card__notice${normalized.feedback.tone === "error" ? "" : " is-info"}">${escapeHtml(normalized.feedback.text)}</div>`
+    const feedbackNotice = normalized.feedback.text && normalized.feedback.tone === "error"
+      ? `<div class="inova-release-card inova-release-card__notice">${escapeHtml(normalized.feedback.text)}</div>`
       : "";
 
     return `
@@ -23,7 +17,7 @@
         <div class="inova-tool-toolbar">
           <div class="inova-tool-toolbar__row">
             <div class="inova-tool-toolbar__stack">
-              <strong class="inova-tool-toolbar__title">회의 허브</strong>
+              <strong class="inova-tool-toolbar__title">최근 회의록</strong>
               <div class="inova-tool-meta inova-tool-meta--muted">${escapeHtml(normalized.subtitleText)}</div>
             </div>
           </div>
@@ -38,15 +32,13 @@
           </button>
         </div>
         <div class="inova-meeting-stack">
-          ${progressNotice}
           ${feedbackNotice}
+          ${normalized.degradedNotice ? `<div class="inova-release-card inova-release-card__notice is-info">${escapeHtml(normalized.degradedNotice)}</div>` : ""}
           ${normalized.error ? `<div class="inova-release-card inova-release-card__notice">${escapeHtml(normalized.error)}</div>` : ""}
-          <article class="inova-release-card">
-            <div class="inova-release-card__head">
-              <strong>회의록 목록</strong>
-              <div class="inova-release-card__badges">${renderChip(`${normalized.items.length}건`, true)}</div>
-            </div>
-          </article>
+          <div class="inova-tool-inline-summary">
+            <strong>회의록 목록</strong>
+            <span class="inova-tool-inline-summary__meta">총 ${escapeHtml(String(normalized.items.length))}건</span>
+          </div>
           <div class="inova-meeting-record-list">
             ${listMarkup}
           </div>
@@ -58,43 +50,34 @@
   function normalizeState(state) {
     const items = Array.isArray(state?.items) ? state.items.map(normalizeItem).filter((item) => item.meetingId) : [];
     const checkedAtText = formatDateTime(state?.checkedAt, "");
-    const source = normalizeText(state?.source);
+    const degraded = Boolean(state?.degraded);
+    const dataFreshness = normalizeDataFreshness(state?.dataFreshness);
+    const degradedReason = normalizeText(state?.degradedReason);
+    const source = normalizeSource(state?.source);
     return {
-      debug: normalizeDebugState(state?.debug),
+      degraded,
+      degradedNotice: buildDegradedNotice(degraded, degradedReason, dataFreshness, source),
       error: normalizeText(state?.error),
       feedback: normalizeFeedback(state?.feedback),
       hasCheckedAt: Boolean(checkedAtText),
       items,
       pending: normalizePending(state?.pending),
-      subtitleText: checkedAtText
-        ? `최근 갱신 ${checkedAtText}${source === "fallback" ? " · fallback" : ""}`
-        : "저장된 회의록을 이곳에서 다시 엽니다.",
+      subtitleText: buildSubtitleText(checkedAtText, dataFreshness, source),
     };
   }
 
   function normalizeItem(item) {
     const nextItem = item && typeof item === "object" ? item : {};
+    const share = normalizeShare(nextItem.share);
     return {
-      excerpt: normalizeText(nextItem.excerpt || nextItem.previewText),
       latestArtifactId: normalizeText(nextItem.latestArtifactId || nextItem.artifactId),
       latestJobId: normalizeText(nextItem.latestJobId || nextItem.jobId),
-      meetingId: normalizeText(nextItem.meetingId || nextItem.sessionId),
+      meetingId: normalizeText(nextItem.meetingId),
+      shareActive: share.active,
+      shareStatus: share.status,
       status: normalizeText(nextItem.status) || "idle",
       title: normalizeText(nextItem.title) || "이름 없는 회의",
       updatedAt: normalizeText(nextItem.updatedAt || nextItem.createdAt),
-    };
-  }
-
-  function normalizeDebugState(debug) {
-    const enabled = Boolean(debug?.enabled);
-    return {
-      collapsed: enabled ? Boolean(debug?.collapsed) : true,
-      enabled,
-      feedback: normalizeFeedback(debug?.feedback),
-      hasErrors: Boolean(debug?.hasErrors),
-      statusSummary: normalizeDebugSummary(debug?.statusSummary),
-      statusText: normalizeText(debug?.statusText) || "로그 0건",
-      text: normalizeText(debug?.entriesText) || "아직 로그가 없습니다.",
     };
   }
 
@@ -107,75 +90,79 @@
       && pending.action === "open-result"
       && pending.meetingId === item.meetingId
       && (!pending.jobId || pending.jobId === item.latestJobId);
+    const sharePending = pending.active && pending.action === "share" && pending.meetingId === item.meetingId;
+    const revokePending = pending.active && pending.action === "revoke-share" && pending.meetingId === item.meetingId;
     return `
-      <button
-        type="button"
-        class="inova-meeting-record inova-meeting-record--button${isPending ? " is-pending" : ""}"
-        data-meeting-action="open-result"
-        data-meeting-id="${escapeHtml(item.meetingId)}"
-        data-meeting-job-id="${escapeHtml(item.latestJobId)}"
-        data-meeting-artifact-id="${escapeHtml(item.latestArtifactId)}"
-        data-meeting-title="${escapeHtml(item.title)}"
-        ${pending.active ? "disabled" : ""}
-        aria-busy="${isPending}"
-      >
-        <div class="inova-meeting-record__head">
-          <div>
-            <strong>${escapeHtml(item.title)}</strong>
-            ${meta ? `<div class="inova-tool-meta">${escapeHtml(meta)}</div>` : ""}
+      <article class="inova-meeting-record${isPending ? " is-pending" : ""}">
+        <button
+          type="button"
+          class="inova-meeting-record__open"
+          data-meeting-action="open-result"
+          data-meeting-id="${escapeHtml(item.meetingId)}"
+          data-meeting-job-id="${escapeHtml(item.latestJobId)}"
+          data-meeting-artifact-id="${escapeHtml(item.latestArtifactId)}"
+          data-meeting-title="${escapeHtml(item.title)}"
+          ${pending.active ? "disabled" : ""}
+          aria-busy="${isPending}"
+        >
+          <div class="inova-meeting-record__head">
+            <div>
+              <strong>${escapeHtml(item.title)}</strong>
+              ${meta ? `<div class="inova-tool-meta">${escapeHtml(meta)}</div>` : ""}
+            </div>
+            <div class="inova-meeting-record__chips">
+              ${item.shareActive ? renderChip("공유 중", true) : ""}
+              ${renderChip(isPending ? "여는 중" : formatStatusLabel(item.status), false)}
+            </div>
           </div>
-          ${renderChip(isPending ? "여는 중" : formatStatusLabel(item.status), false)}
+        </button>
+        <div class="inova-meeting-record__actions">
+          <button
+            type="button"
+            class="inova-tool-button inova-tool-button--compact"
+            data-meeting-action="share"
+            data-meeting-id="${escapeHtml(item.meetingId)}"
+            data-meeting-job-id="${escapeHtml(item.latestJobId)}"
+            data-meeting-title="${escapeHtml(item.title)}"
+            ${pending.active ? "disabled" : ""}
+            aria-busy="${sharePending}"
+          >
+            ${escapeHtml(sharePending ? "복사 중..." : "공유")}
+          </button>
+          ${item.shareActive || revokePending ? `
+          <button
+            type="button"
+            class="inova-tool-button inova-tool-button--compact is-danger"
+            data-meeting-action="revoke-share"
+            data-meeting-id="${escapeHtml(item.meetingId)}"
+            data-meeting-job-id="${escapeHtml(item.latestJobId)}"
+            data-meeting-title="${escapeHtml(item.title)}"
+            ${pending.active ? "disabled" : ""}
+            aria-busy="${revokePending}"
+          >
+            ${escapeHtml(revokePending ? "해제 중..." : "공유 해제")}
+          </button>`
+            : ""}
         </div>
-        <p>${escapeHtml(isPending ? "새 탭 작업실을 여는 중입니다." : item.excerpt || "새 탭 결과 페이지에서 회의록을 확인할 수 있습니다.")}</p>
-      </button>
+      </article>
     `;
   }
 
   function renderDebugConsole(debug) {
-    const normalizedDebug = normalizeDebugState(debug);
-    if (!normalizedDebug.enabled) {
-      return "";
-    }
-    if (normalizedDebug.collapsed) {
-      return `
-        <div class="inova-meeting-debug-fab-wrap">
-          <button type="button" class="inova-meeting-debug-fab" data-meeting-action="debug-toggle" aria-label="디버그 콘솔 열기">
-            <span class="inova-meeting-debug-fab__icon" aria-hidden="true"></span>
-            ${normalizedDebug.hasErrors ? '<span class="inova-meeting-debug-fab__badge" aria-hidden="true"></span>' : ""}
-          </button>
-        </div>
-      `;
-    }
-    return `
-      <aside class="inova-meeting-debug-console" aria-label="디버그 콘솔">
-        <div class="inova-meeting-debug-console__toolbar">
-          <div class="inova-meeting-debug-console__segment">
-            <button type="button" class="inova-meeting-debug-console__button" data-meeting-action="debug-copy">복사</button>
-            <button type="button" class="inova-meeting-debug-console__button" data-meeting-action="debug-copy-errors">오류</button>
-            <button type="button" class="inova-meeting-debug-console__button" data-meeting-action="debug-clear">비우기</button>
-            <button type="button" class="inova-meeting-debug-console__button" data-meeting-action="debug-toggle">접기</button>
-          </div>
-          ${renderDebugStatus(normalizedDebug)}
-        </div>
-        ${normalizedDebug.feedback.text
-          ? `<div class="inova-meeting-debug-console__feedback${normalizedDebug.feedback.tone === "error" ? " is-error" : ""}">${escapeHtml(normalizedDebug.feedback.text)}</div>`
-          : ""}
-        <pre class="inova-meeting-debug-console__log">${escapeHtml(normalizedDebug.text)}</pre>
-      </aside>
-    `;
+    return namespace.meetingDebugConsole?.renderPanel?.(debug) || "";
   }
 
   function renderEmptyState(state) {
     if (!state.hasCheckedAt && !state.error) {
       return `
         <article class="inova-release-card">
-          <p>회의 목록을 읽는 중입니다. 잠시만 기다려 주세요.</p>
+          <p>최근 회의록을 읽는 중입니다. 잠시만 기다려 주세요.</p>
         </article>
       `;
     }
     return `
       <article class="inova-release-card">
-        <p>아직 저장된 회의록이 없습니다. 상단의 새 회의하기로 hosted 작업실을 열어 주세요.</p>
+        <p>아직 저장된 회의록이 없습니다. 상단의 새 회의하기로 작업실을 열어 주세요.</p>
       </article>
     `;
   }
@@ -207,44 +194,36 @@
     };
   }
 
-  function normalizeDebugSummary(summary) {
-    const next = summary && typeof summary === "object" ? summary : {};
-    return {
-      errorCount: Math.max(0, Number(next.errorCount) || 0),
-      functionCalls: Math.max(0, Number(next.functionCalls) || 0),
-      readCount: Math.max(0, Number(next.readCount) || 0),
-      snapshotCount: Math.max(0, Number(next.snapshotCount) || 0),
-      totalLogs: Math.max(0, Number(next.totalLogs) || 0),
-    };
-  }
-
-  function renderDebugStatus(debug) {
-    const summary = normalizeDebugSummary(debug?.statusSummary);
-    const items = [
-      renderDebugStatusItem("로그", summary.totalLogs),
-      renderDebugStatusItem("함수", summary.functionCalls),
-      renderDebugStatusItem("읽기", summary.readCount),
-      renderDebugStatusItem("스냅샷", summary.snapshotCount),
-      renderDebugStatusItem("오류", summary.errorCount, summary.errorCount > 0),
-    ];
-    return `
-      <span class="inova-meeting-debug-console__status" aria-label="${escapeHtml(normalizeText(debug?.statusText) || "디버그 로그 요약")}">
-        ${items.join("")}
-      </span>
-    `;
-  }
-
-  function renderDebugStatusItem(label, count, isError = false) {
-    return `<span class="inova-meeting-debug-console__status-item${isError ? " is-error" : ""}">${escapeHtml(label)} ${Math.max(0, Number(count) || 0)}건</span>`;
-  }
-
-  function buildPendingMessage(pending) {
-    if (pending.action === "open-result") {
-      return pending.title
-        ? `${pending.title} 결과 화면을 준비하고 있습니다.`
-        : "결과 화면을 준비하고 있습니다.";
+  function buildSubtitleText(checkedAtText, dataFreshness, source) {
+    if (!checkedAtText) {
+      return "저장된 회의록을 이곳에서 다시 엽니다.";
     }
-    return "새 작업실을 준비하고 있습니다.";
+    const freshnessLabel = dataFreshness === "stale"
+      ? "오래된 데이터"
+      : dataFreshness === "empty"
+        ? "빈 상태"
+        : source === "runtime-read"
+          ? "runtime-read"
+          : "";
+    return freshnessLabel
+      ? `최근 갱신 ${checkedAtText} · ${freshnessLabel}`
+      : `최근 갱신 ${checkedAtText}`;
+  }
+
+  function buildDegradedNotice(degraded, degradedReason, dataFreshness, source) {
+    if (!degraded) {
+      return "";
+    }
+    if (dataFreshness === "stale" || source === "cache") {
+      return "실시간 회의록 목록을 읽지 못해 이전에 보던 목록을 제한적으로 유지하고 있습니다.";
+    }
+    if (dataFreshness === "empty") {
+      return "회의록 목록 읽기가 모두 실패해 현재는 빈 상태만 표시하고 있습니다.";
+    }
+    if (degradedReason === "meeting-hub-realtime-failed" || source === "runtime-read") {
+      return "실시간 구독에 실패해 요청형 회의록 목록 읽기로 계속 표시하고 있습니다.";
+    }
+    return "회의록 목록을 제한된 상태로 표시하고 있습니다.";
   }
 
   function formatStatusLabel(status) {
@@ -271,6 +250,35 @@
 
   function normalizeText(value) {
     return String(value || "").trim();
+  }
+
+  function normalizeShare(input) {
+    const share = input && typeof input === "object" ? input : {};
+    const status = normalizeText(share.status);
+    const shareId = normalizeText(share.shareId);
+    return {
+      active: Boolean(share.active) || (status === "active" && Boolean(shareId)),
+      shareId,
+      status,
+    };
+  }
+
+  function normalizeDataFreshness(value) {
+    const normalized = normalizeText(value).toLowerCase();
+    return normalized === "fresh" || normalized === "stale" || normalized === "empty"
+      ? normalized
+      : "empty";
+  }
+
+  function normalizeSource(value) {
+    const normalized = normalizeText(value).toLowerCase();
+    return normalized === "realtime"
+      || normalized === "runtime-read"
+      || normalized === "cache"
+      || normalized === "local"
+      || normalized === "none"
+      ? normalized
+      : "none";
   }
 
   function escapeHtml(value) {

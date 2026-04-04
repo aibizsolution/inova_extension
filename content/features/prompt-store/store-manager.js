@@ -5,20 +5,34 @@
     const viewedEntryIds = new Set();
     let identityRetryTimer = 0;
     let loadSequence = 0;
-    return { applyLatestRealtimeSnapshot, buildViewState, ensureLoaded, handleQueryChange, submitQuery, publishPrompt, unpublishPrompt, handleAction };
+    return {
+      applyLatestRealtimeSnapshot,
+      buildViewState,
+      ensureLoaded,
+      handleAction,
+      handleQueryChange,
+      markRealtimeFallback,
+      publishPrompt,
+      submitQuery,
+      unpublishPrompt,
+    };
     function buildViewState() {
+      const providerIdentity = namespace.providerIdentity.getCurrent();
       const appliedQuery = getAppliedQuery();
-      const categoryFiltered = namespace.promptStore.filterEntries(state.store.items, "", state.store.categoryId);
+      const scopedItems = getScopedStoreItems(providerIdentity.providerUserKey);
+      const categoryFiltered = namespace.promptStore.filterEntries(scopedItems, "", state.store.categoryId);
       const filtered = namespace.promptStore.filterEntries(categoryFiltered, appliedQuery, state.store.categoryId);
       const items = namespace.promptStore.sortEntries(filtered, state.store.sortBy);
-      const providerUserKey = namespace.providerIdentity.getCurrent().providerUserKey;
       const totalCount = hasActiveQuery() ? items.length : categoryFiltered.length;
       const emptyText = hasActiveQuery() ? "검색 결과가 없어요. 다른 표현으로 다시 찾아보세요." : state.store.scope === "mine" ? "내가 등록한 프롬프트가 아직 없어요." : "스토어에 등록된 프롬프트가 아직 없어요.";
       return {
-        categories: getAvailableCategories(),
+        categories: getAvailableCategories(providerIdentity.providerUserKey),
         categoryId: state.store.categoryId,
         actionPending: state.store.actionPending,
         deleteConfirmEntryId: state.store.deleteConfirmEntryId,
+        degraded: Boolean(state.store.degraded),
+        degradedReason: namespace.session.normalizeText(state.store.degradedReason),
+        dataFreshness: normalizeDataFreshness(state.store.dataFreshness),
         detailPendingEntryId: state.store.detailPendingEntryId || "",
         emptyText,
         error: state.store.error,
@@ -31,22 +45,24 @@
         loaded: state.store.loaded,
         loading: state.store.loading,
         ownerScope: state.store.scope,
-        providerUserKey,
+        providerUserKey: providerIdentity.providerUserKey,
         queryActive: hasActiveQuery(),
         queryDirty: isQueryDirty(),
         query: state.queries.store,
         sortBy: state.store.sortBy,
+        source: normalizeReadSource(state.store.source),
         totalCount,
       };
     }
 
-    async function ensureLoaded(force = false, reason = "scheduled") {
+    async function ensureLoaded(force = false, reason = "scheduled", options = {}) {
+      const fallbackErrorMessage = namespace.session.normalizeText(options.errorMessage);
+      const fallbackDegradedReason = namespace.session.normalizeText(options.degradedReason) || "store-realtime-failed";
       if (state.store.loading && !force) return;
       if (!force && state.store.loaded) return;
       if (shouldDeferToRealtimeStoreLatest(reason)) {
         state.store.loading = !state.store.loaded;
         state.store.identityPending = false;
-        state.store.error = "";
         if (typeof hooks.refreshStoreLatestRealtime === "function") {
           hooks.refreshStoreLatestRealtime(reason);
         }
@@ -57,14 +73,12 @@
         state.store.loaded = true;
         state.store.loading = false;
         state.store.identityPending = false;
-        state.store.error = "";
         hooks.render();
         return;
       }
       if (shouldUseRealtimeStoreLatest() && reason !== "fallback") {
         state.store.loading = true;
         state.store.identityPending = false;
-        state.store.error = "";
         hooks.render();
         if (force && typeof hooks.refreshStoreLatestRealtime === "function") {
           hooks.refreshStoreLatestRealtime(reason);
@@ -74,7 +88,6 @@
       const sequence = ++loadSequence;
       let reloadAll = false;
       state.store.loading = true;
-      state.store.error = "";
       hooks.render();
       try {
         const providerIdentity = namespace.providerIdentity.getCurrent();
@@ -90,7 +103,7 @@
           filter: {
             categoryId: "all",
             limit: LOCAL_CACHE_LIMIT,
-            ownerOnly: state.store.scope === "mine",
+            ownerOnly: false,
             query: "",
             sortBy: "latest",
           },
@@ -107,10 +120,25 @@
         }
         state.store.hasMore = false;
         state.store.loaded = true;
+        state.store.degraded = reason === "fallback";
+        state.store.degradedReason = reason === "fallback" ? fallbackDegradedReason : "";
+        state.store.dataFreshness = "fresh";
+        state.store.source = "runtime-read";
+        state.store.error = reason === "fallback"
+          ? fallbackErrorMessage || state.store.error
+          : "";
       } catch (error) {
         if (sequence !== loadSequence) return;
-        state.store.error = error instanceof Error ? error.message : "스토어를 불러오지 못했어요.";
+        state.store.error = buildStoreRuntimeErrorMessage(fallbackErrorMessage, error);
         state.store.hasMore = false;
+        state.store.degraded = true;
+        state.store.degradedReason = hasStoreRenderableData()
+          ? "store-stale-cache"
+          : reason === "fallback"
+            ? "store-empty"
+            : "store-read-failed";
+        state.store.dataFreshness = hasStoreRenderableData() ? "stale" : "empty";
+        state.store.source = hasStoreRenderableData() ? "cache" : "none";
       } finally {
         if (sequence !== loadSequence) return;
         state.store.loading = false;
@@ -137,7 +165,11 @@
       state.store.appliedQuery = state.queries.store;
       hooks.render();
       if (!state.store.loaded) {
-        ensureLoaded().catch(() => {});
+        ensureLoaded().catch((error) => {
+          namespace.panelDebug?.log?.("store.query.load.error", {
+            error: error instanceof Error ? error.message : String(error || ""),
+          });
+        });
       }
     }
 
@@ -195,7 +227,6 @@
     }
 
     async function handleAction(action, detail = {}) {
-      if (action === "refresh") return void ensureLoaded(true, "manual-refresh");
       if (action === "load-more") return void loadMore();
       if (action === "set-category") return void setCategory(detail.categoryId);
       if (action === "set-scope") return void setScope(detail.scope);
@@ -248,10 +279,14 @@
         ? totalPublished
         : Math.max(0, Number(categoryCounts[state.store.categoryId]) || 0);
       state.store.hasMore = false;
+      state.store.degraded = false;
+      state.store.degradedReason = "";
+      state.store.dataFreshness = "fresh";
       state.store.identityPending = false;
       state.store.error = "";
       state.store.loaded = true;
       state.store.loading = false;
+      state.store.source = "realtime";
       hooks.render();
     }
 
@@ -277,11 +312,42 @@
           });
         }
         hooks.render();
-      } catch {
+      } catch (error) {
         state.store.detailPendingEntryId = "";
         setFeedback("상세 내용을 다시 불러와 주세요.", "error", entryId);
+        namespace.panelDebug?.log?.("store.detail.error", {
+          entryId,
+          error: error instanceof Error ? error.message : String(error || ""),
+          scope: "runtime",
+          tool: "prompts",
+        });
         hooks.render();
       }
+    }
+
+    function markRealtimeFallback(error) {
+      const message = error instanceof Error ? error.message : "스토어 최신 목록을 실시간으로 불러오지 못했어요.";
+      const hasRenderableData = hasStoreRenderableData();
+      state.store.degraded = true;
+      state.store.degradedReason = hasRenderableData ? "store-stale-cache" : "store-empty";
+      state.store.dataFreshness = hasRenderableData ? "stale" : "empty";
+      state.store.error = message;
+      state.store.loaded = hasRenderableData;
+      state.store.loading = false;
+      state.store.source = hasRenderableData ? "cache" : "none";
+      hooks.render();
+      return hasRenderableData;
+    }
+
+    function buildStoreRuntimeErrorMessage(primaryMessage, secondaryError) {
+      const fallbackMessage = namespace.session.normalizeText(primaryMessage);
+      const runtimeMessage = namespace.session.normalizeText(
+        secondaryError instanceof Error ? secondaryError.message : String(secondaryError || "")
+      ) || "스토어를 불러오지 못했어요.";
+      if (!fallbackMessage || fallbackMessage === runtimeMessage) {
+        return runtimeMessage;
+      }
+      return `${fallbackMessage} 추가 읽기에도 실패했어요: ${runtimeMessage}`;
     }
 
     async function importEntry(entryId) {
@@ -390,6 +456,9 @@
         state.store.loaded = false;
       }
       hooks.render();
+      if (state.store.scope === "mine" && state.store.loaded) {
+        return;
+      }
       if (state.store.scope !== "all") {
         await ensureLoaded(true);
         return;
@@ -400,12 +469,23 @@
     function getAppliedQuery() { return namespace.session.normalizeText(state.store.appliedQuery); }
     function getNormalizedInputQuery() { return namespace.session.normalizeText(state.queries.store); }
     function isQueryDirty() { return getNormalizedInputQuery() !== getAppliedQuery(); }
-    function getAvailableCategories() {
-      const itemCategories = Array.isArray(state.store.items)
-        ? Array.from(new Set(state.store.items.map((item) => namespace.session.normalizeText(item?.categoryId).toLowerCase()).filter(Boolean)))
+    function getAvailableCategories(providerUserKey) {
+      const scopedItems = getScopedStoreItems(providerUserKey);
+      const itemCategories = Array.isArray(scopedItems)
+        ? Array.from(new Set(scopedItems.map((item) => namespace.session.normalizeText(item?.categoryId).toLowerCase()).filter(Boolean)))
           .map((categoryId) => ({ id: categoryId }))
         : [];
+      if (state.store.scope === "mine") {
+        return normalizeAvailableCategories(itemCategories, state.store.categoryId);
+      }
       return normalizeAvailableCategories(itemCategories.length ? itemCategories : state.store.availableCategories, state.store.categoryId);
+    }
+    function hasStoreRenderableData() {
+      const scopedItems = getScopedStoreItems(namespace.providerIdentity.getCurrent().providerUserKey);
+      return Boolean(
+        Array.isArray(scopedItems) && scopedItems.length
+        || Math.max(0, Number(state.store.totalCount) || 0) > 0
+      );
     }
     function normalizeAvailableCategories(categories, activeCategoryId) {
       const allCategories = namespace.promptStore.getCategories();
@@ -430,11 +510,41 @@
       }
     }
 
+    function getScopedStoreItems(providerUserKey) {
+      const items = Array.isArray(state.store.items) ? state.store.items : [];
+      if (state.store.scope !== "mine") {
+        return items;
+      }
+      const normalizedProviderUserKey = namespace.session.normalizeText(providerUserKey);
+      if (!normalizedProviderUserKey) {
+        return [];
+      }
+      return items.filter((item) => namespace.session.normalizeText(item?.owner?.providerUserKey) === normalizedProviderUserKey);
+    }
+
     function shouldReloadAfterMutation() {
       if (typeof hooks.shouldReloadAfterMutation === "function") {
         return Boolean(hooks.shouldReloadAfterMutation());
       }
       return true;
+    }
+
+    function normalizeDataFreshness(value) {
+      const normalized = namespace.session.normalizeText(value).toLowerCase();
+      return normalized === "fresh" || normalized === "stale" || normalized === "empty"
+        ? normalized
+        : "empty";
+    }
+
+    function normalizeReadSource(value) {
+      const normalized = namespace.session.normalizeText(value).toLowerCase();
+      return normalized === "realtime"
+        || normalized === "runtime-read"
+        || normalized === "cache"
+        || normalized === "local"
+        || normalized === "none"
+        ? normalized
+        : "none";
     }
 
     function shouldSkipScheduledAllStoreRead(force, reason) {

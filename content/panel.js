@@ -15,11 +15,11 @@
     installHandleInteractions(host, handle, callbacks);
     close.addEventListener("click", () => callbacks.onToggle(false));
     host.addEventListener("click", (event) => handleRootClick(event, host, callbacks));
-    host.addEventListener("scroll", (event) => handleStoreScroll(event, host, callbacks), true);
-    host.addEventListener("pointerdown", (event) => handlePromptPointerDown(event, host));
-    host.addEventListener("pointermove", (event) => handlePromptPointerMove(event, host));
-    host.addEventListener("pointerup", (event) => handlePromptPointerEnd(event, host, callbacks));
-    host.addEventListener("pointercancel", (event) => handlePromptPointerEnd(event, host, callbacks));
+    host.addEventListener("scroll", (event) => namespace.promptHubPanel?.handleScroll?.(event, host, callbacks), true);
+    host.addEventListener("pointerdown", (event) => namespace.promptHubPanel?.handlePointerDown?.(event, host));
+    host.addEventListener("pointermove", (event) => namespace.promptHubPanel?.handlePointerMove?.(event, host));
+    host.addEventListener("pointerup", (event) => namespace.promptHubPanel?.handlePointerEnd?.(event, host, callbacks));
+    host.addEventListener("pointercancel", (event) => namespace.promptHubPanel?.handlePointerEnd?.(event, host, callbacks));
     host.addEventListener("compositionstart", (event) => handleRootCompositionStart(event, host));
     host.addEventListener("compositionend", (event) => handleRootCompositionEnd(event, host, callbacks));
     host.addEventListener("search", (event) => handleRootSearch(event, callbacks), true);
@@ -47,15 +47,24 @@
     root.dataset.open = String(state.open);
     document.body.classList.toggle("inova-bookmark-panel-open", Boolean(state.visible && state.open));
     applyHandleRatio(host, state.handleRatio);
-    host.querySelector("#inova-tool-rail").innerHTML = renderToolRail(state.tools, state.activeTool);
+    const toolRail = host.querySelector("#inova-tool-rail");
+    const nextToolRailHtml = renderToolRail(state.tools, state.activeTool);
+    if (toolRail && toolRail.innerHTML !== nextToolRailHtml) {
+      toolRail.innerHTML = nextToolRailHtml;
+    }
     host.querySelector("#inova-tool-title").textContent = state.toolTitle;
     host.querySelector("#inova-tool-total").textContent = String(state.toolCount);
     host.querySelector(".handle-count").textContent = String(state.handleCount);
-    host.querySelector("#inova-tool-content").innerHTML = renderToolContent(state);
+    const toolContent = host.querySelector("#inova-tool-content");
+    const nextToolContentHtml = renderToolContent(state);
+    if (toolContent && toolContent.innerHTML !== nextToolContentHtml) {
+      toolContent.innerHTML = nextToolContentHtml;
+    }
     namespace.panelDebug?.captureViewport?.("panel-overlay", debugLayer?.querySelector(".inova-meeting-debug-console__log"));
     debugLayer.innerHTML = renderMeetingDebugLayer(state);
+    syncMeetingDebugLayerDataset(debugLayer, state.panelDebug);
     namespace.panelDebug?.restoreViewport?.("panel-overlay", debugLayer?.querySelector(".inova-meeting-debug-console__log"));
-    if (state.activeTool === "prompts" && state.promptTool?.activeTab === "store") syncStoreList(host, host.__callbacks, previousStoreScrollTop);
+    if (state.activeTool === "prompts" && state.promptTool?.activeTab === "store") namespace.promptHubPanel?.syncStoreList?.(host, host.__callbacks, previousStoreScrollTop);
     namespace.bookmarkView.setActive(state.bookmarksTool.activeId);
     restoreFocusedControl(root, focusedControl);
   }
@@ -95,6 +104,19 @@
     return namespace.meetingView.renderDebugConsole(state.panelDebug);
   }
 
+  function syncMeetingDebugLayerDataset(debugLayer, panelDebug) {
+    if (!(debugLayer instanceof global.HTMLElement)) {
+      return;
+    }
+    const nextState = panelDebug && typeof panelDebug === "object" ? panelDebug : {};
+    const totalLogs = Math.max(0, Number(nextState?.statusSummary?.totalLogs) || 0);
+    debugLayer.dataset.debugEnabled = String(Boolean(nextState?.enabled));
+    debugLayer.dataset.debugCollapsed = String(Boolean(nextState?.collapsed));
+    debugLayer.dataset.debugEntryCount = String(totalLogs);
+    debugLayer.dataset.debugHasErrors = String(Boolean(nextState?.hasErrors));
+    debugLayer.dataset.debugRendered = String(Boolean(debugLayer.innerHTML));
+  }
+
   function renderToolContent(state) {
     try {
       return state.activeTool === "prompts"
@@ -127,8 +149,7 @@
     if (!event.target.closest('[data-prompt-menu], [data-prompt-action="toggle-menu"]')) callbacks.onPromptAction?.("dismiss-menu");
     const toolButton = event.target.closest("[data-tool-id]");
     if (toolButton) return void callbacks.onSelectTool?.(toolButton.dataset.toolId);
-    const promptTabButton = event.target.closest("[data-prompt-tab-id]");
-    if (promptTabButton) return void callbacks.onSelectPromptTab?.(promptTabButton.dataset.promptTabId);
+    if (namespace.promptHubPanel?.handleClick?.(event, host, callbacks)) return;
     const copyButton = event.target.closest("[data-copy-bookmark-id]");
     if (copyButton) {
       callbacks.onCopyBookmark?.(copyButton.dataset.copyBookmarkId).then((copied) => {
@@ -141,15 +162,6 @@
       bookmarkButton.closest(".inova-bookmark-item")?.focus({ preventScroll: true });
       return void callbacks.onJumpBookmark?.(bookmarkButton.dataset.bookmarkId);
     }
-    const promptAction = event.target.closest("[data-prompt-action]");
-    if (promptAction) {
-      if (promptAction.dataset.promptAction === "import") return void host.querySelector("#inova-prompt-import-file")?.click();
-      return void callbacks.onPromptAction?.(promptAction.dataset.promptAction, {
-        categoryId: promptAction.dataset.categoryId || "",
-        insertMode: promptAction.dataset.insertMode || "",
-        promptId: promptAction.dataset.promptId || "",
-      });
-    }
     const meetingAction = event.target.closest("[data-meeting-action]");
     if (meetingAction) {
       return void callbacks.onMeetingAction?.(meetingAction.dataset.meetingAction, {
@@ -159,23 +171,8 @@
         title: meetingAction.dataset.meetingTitle || "",
       });
     }
-    const storeAction = event.target.closest("[data-store-action]");
-    if (storeAction) {
-      return void callbacks.onStoreAction?.(storeAction.dataset.storeAction, {
-        categoryId: storeAction.dataset.storeCategory || "",
-        entryId: storeAction.dataset.storeEntryId || "",
-        scope: storeAction.dataset.storeScope || "",
-        sortBy: storeAction.dataset.storeSort || "",
-      });
-    }
     const releaseAction = event.target.closest("[data-release-action]");
     if (releaseAction) return void callbacks.onReleaseAction?.(releaseAction.dataset.releaseAction, { version: releaseAction.dataset.releaseVersion || "" });
-    const importMode = event.target.closest("[data-import-mode]");
-    if (importMode) {
-      callbacks.onPromptAction?.("set-import-mode", {
-        importMode: importMode.dataset.importMode || "merge",
-      });
-    }
   }
 
   function handleRootCompositionStart(event, host) {
@@ -208,74 +205,17 @@
         composing: Boolean(event.isComposing || host.__searchComposition?.active),
       });
     }
-    const field = event.target.closest("[data-prompt-field]");
-    if (field) callbacks.onPromptDraftChange?.(field.dataset.promptField, field.value);
-    const publishField = event.target.closest("[data-prompt-publish-field]");
-    if (publishField?.dataset.promptPublishField === "title") {
-      callbacks.onPromptAction?.("set-publish-title", {
-        promptId: publishField.dataset.promptId || "",
-        title: publishField.value || "",
-      });
-    }
+    namespace.promptHubPanel?.handleInput?.(event, callbacks);
   }
 
   function handleRootChange(event, callbacks) {
-    const storeField = event.target.closest("[data-store-field]");
-    if (storeField) return void callbacks.onStoreAction?.("set-category", { categoryId: storeField.value || "all" });
-    const promptSelect = event.target.closest("[data-prompt-select]");
-    if (promptSelect?.dataset.promptSelect === "publish-category") callbacks.onPromptAction?.("set-publish-category", { categoryId: promptSelect.value || "" });
+    namespace.promptHubPanel?.handleChange?.(event, callbacks);
   }
 
   function handleRootSearch(event, callbacks) {
     const search = event.target.closest?.("[data-search-tool]");
     if (!(search instanceof HTMLElement)) return;
     callbacks.onSearchSubmit?.(search.dataset.searchTool, search.value);
-  }
-
-  function handlePromptPointerDown(event, host) {
-    const handle = event.target.closest("[data-prompt-drag-handle]");
-    if (!(handle instanceof HTMLElement) || event.button !== 0) return;
-    const item = handle.closest("[data-prompt-id]");
-    const promptId = handle.dataset.promptDragHandle || "";
-    if (!promptId || !(item instanceof HTMLElement)) return;
-    host.__promptDrag = { handle, placement: "before", promptId, targetPromptId: "" };
-    item.classList.add("is-drag-source");
-    handle.classList.add("is-dragging");
-    handle.setPointerCapture?.(event.pointerId);
-    host.dataset.dragPointerId = String(event.pointerId);
-    event.preventDefault();
-  }
-
-  function handlePromptPointerMove(event, host) {
-    if (host.dataset.dragPointerId !== String(event.pointerId)) return;
-    const dragState = host.__promptDrag;
-    if (!dragState?.promptId) return;
-    const item = document.elementFromPoint(event.clientX, event.clientY)?.closest?.("[data-prompt-id]");
-    if (!(item instanceof HTMLElement)) {
-      dragState.targetPromptId = "";
-      return void clearPromptDropIndicators(host);
-    }
-    const targetPromptId = item.dataset.promptId || "";
-    if (!targetPromptId || targetPromptId === dragState.promptId) {
-      dragState.targetPromptId = "";
-      return void clearPromptDropIndicators(host);
-    }
-    dragState.targetPromptId = targetPromptId;
-    dragState.placement = getDropPlacement(item, event.clientY);
-    setPromptDropIndicator(host, item, dragState.placement);
-  }
-
-  function handlePromptPointerEnd(event, host, callbacks) {
-    if (host.dataset.dragPointerId !== String(event.pointerId)) return;
-    const dragState = host.__promptDrag;
-    dragState?.handle?.releasePointerCapture?.(event.pointerId);
-    const dragPromptId = dragState?.promptId || "";
-    const targetPromptId = dragState?.targetPromptId || "";
-    const placement = dragState?.placement || "before";
-    clearPromptDragState(host);
-    if (event.type === "pointerup" && dragPromptId && targetPromptId && dragPromptId !== targetPromptId) {
-      callbacks.onMovePrompt?.(dragPromptId, targetPromptId, placement);
-    }
   }
 
   function handleRootKeydown(event, callbacks) {
@@ -294,14 +234,6 @@
     if (!item || event.target.closest("[data-copy-bookmark-id]")) return;
     event.preventDefault();
     callbacks.onJumpBookmark?.(item.dataset.bookmarkId);
-  }
-
-  function handleStoreScroll(event, host, callbacks) {
-    const list = event.target instanceof HTMLElement ? event.target.closest(".inova-store-list") : null;
-    if (!(list instanceof HTMLElement)) return;
-    host.__storeScrollTop = list.scrollTop;
-    if (list.dataset.storeHasMore !== "true" || list.dataset.storeLoading === "true" || list.scrollHeight - list.clientHeight - list.scrollTop > 72) return;
-    callbacks.onStoreAction?.("load-more");
   }
 
   function installHandleInteractions(host, handle, callbacks) {
@@ -350,23 +282,6 @@
   function applyHandleRatio(host, value) { host.style.setProperty("--handle-ratio", String(clampRatio(value))); }
   function readHandleRatio(host) { const ratio = Number.parseFloat(host.style.getPropertyValue("--handle-ratio")); return clampRatio(Number.isFinite(ratio) ? ratio : 0.4); }
   function clampRatio(value) { return Math.min(1, Math.max(0, Number(value) || 0)); }
-  function getDropPlacement(item, clientY) { const rect = item.getBoundingClientRect(); return clientY > rect.top + rect.height / 2 ? "after" : "before"; }
-  function setPromptDropIndicator(host, targetItem, placement) { clearPromptDropIndicators(host); targetItem.classList.add(placement === "after" ? "is-drop-after" : "is-drop-before"); }
-  function clearPromptDropIndicators(host) { host.querySelectorAll(".inova-prompt-item.is-drop-before, .inova-prompt-item.is-drop-after").forEach((item) => item.classList.remove("is-drop-before", "is-drop-after")); }
-  function clearPromptDragState(host) {
-    clearPromptDropIndicators(host);
-    host.__promptDrag?.handle?.classList.remove("is-dragging");
-    host.querySelectorAll(".inova-prompt-item.is-drag-source").forEach((item) => item.classList.remove("is-drag-source"));
-    delete host.__promptDrag;
-    delete host.dataset.dragPointerId;
-  }
-  function syncStoreList(host, callbacks, scrollTop) {
-    const list = host.querySelector(".inova-store-list");
-    if (!(list instanceof HTMLElement)) return;
-    if (scrollTop > 0) list.scrollTop = scrollTop;
-    host.__storeScrollTop = list.scrollTop;
-    if (callbacks?.onStoreAction && list.dataset.storeHasMore === "true" && list.dataset.storeLoading !== "true" && list.scrollHeight <= list.clientHeight + 24) global.setTimeout(() => callbacks.onStoreAction("load-more"), 0);
-  }
   function captureFocusedControl(root) {
     if (!(root instanceof HTMLElement)) return null;
     const active = document.activeElement;

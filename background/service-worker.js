@@ -1,6 +1,5 @@
 importScripts("../shared/constants.js");
 importScripts("../shared/session.js");
-importScripts("../shared/meeting-state.js");
 importScripts("../shared/storage.js");
 importScripts("../shared/firebase-config.js");
 importScripts("../shared/inova-auth.js");
@@ -10,11 +9,15 @@ importScripts("panel-auth-cache.js");
 
 const namespace = globalThis.InovaBookmarks || {};
 const INOVA_ORIGIN = "https://inova.incross.com";
+const HOSTED_MEETING_ALLOWED_ORIGINS = new Set([
+  "https://browser-extension-main.web.app",
+  "http://127.0.0.1:5000",
+  "http://localhost:5000",
+]);
 const RECENT_LOAD_TTL_MS = 10000;
 const RECENT_PEEK_TTL_MS = 10000;
 const RECENT_RELEASE_TTL_MS = 60000;
 const RECENT_SYNC_TTL_MS = 30000;
-const OFFSCREEN_RECORDER_URL = "offscreen/meeting-recorder.html";
 const LOCAL_MEETING_WORKSPACE_URL = "http://127.0.0.1:5000/meeting/index.html";
 const activeLoads = new Map();
 const activePeeks = new Map();
@@ -24,15 +27,11 @@ const activeReleaseRequests = new Map();
 const recentReleaseResults = new Map();
 const activeSyncs = new Map();
 const recentSyncResults = new Map();
-let activeOffscreenCreation = null;
 const meetingListCache = namespace.meetingListCache?.create?.(getInovaAccessToken);
 const panelAuthCache = namespace.panelAuthCache?.create?.(getInovaAccessToken);
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const type = String(message?.type || "");
-  if (message?.target === "offscreen") {
-    return false;
-  }
   if (!type.startsWith("inova-sync:") && !type.startsWith("inova-store:") && !type.startsWith("inova-release:") && !type.startsWith("inova-review:") && !type.startsWith("inova-meeting:") && !type.startsWith("inova-prompt:")) {
     return false;
   }
@@ -73,26 +72,8 @@ async function handleMessage(message, sender) {
   if (message.type === "inova-review:prompt") {
     return reviewPromptDraft(message.prompt, message.providerIdentity);
   }
-  if (message.type === "inova-meeting:create-job") {
-    return createMeetingJob(message.input, message.providerIdentity);
-  }
-  if (message.type === "inova-meeting:start-capture") {
-    return startMeetingCapture(message.input);
-  }
-  if (message.type === "inova-meeting:stop-capture") {
-    return stopMeetingCapture(message.input);
-  }
-  if (message.type === "inova-meeting:get-job") {
-    return getMeetingJob(message.input, message.providerIdentity);
-  }
-  if (message.type === "inova-meeting:get-artifact") {
-    return getMeetingArtifact(message.input, message.providerIdentity);
-  }
   if (message.type === "inova-meeting:list-meetings") {
     return meetingListCache.listMeetings(message.input, message.providerIdentity);
-  }
-  if (message.type === "inova-meeting:list-results") {
-    return listMeetingResults(message.input, message.providerIdentity);
   }
   if (message.type === "inova-meeting:issue-panel-auth") {
     return panelAuthCache.issueMeetingPanelAuth(message.providerIdentity);
@@ -106,8 +87,17 @@ async function handleMessage(message, sender) {
   if (message.type === "inova-meeting:open-result") {
     return openMeetingResult(message.input, message.providerIdentity, sender);
   }
-  if (message.type === "inova-meeting:recorder-failed") {
-    return handleMeetingRecorderFailed(message.payload);
+  if (message.type === "inova-meeting:authorize-workspace-access") {
+    return authorizeMeetingWorkspaceAccess(message.input, message.providerIdentity, sender);
+  }
+  if (message.type === "inova-meeting:create-share-link") {
+    return createMeetingShareLink(message.input, message.providerIdentity, sender);
+  }
+  if (message.type === "inova-meeting:revoke-share-link") {
+    return revokeMeetingShareLink(message.input, message.providerIdentity, sender);
+  }
+  if (message.type === "inova-meeting:probe-workspace-bridge") {
+    return probeMeetingWorkspaceBridge(sender);
   }
   if (message.type === "inova-release:latest") {
     return fetchReleaseJson("latest");
@@ -168,149 +158,6 @@ async function recordPromptStoreView(entryId, providerIdentity) {
 async function reviewPromptDraft(prompt, providerIdentity) {
   const accessToken = await getInovaAccessToken();
   return namespace.cloudApi.reviewInovaPrompt(prompt, providerIdentity, accessToken);
-}
-
-async function startMeetingCapture(input) {
-  const captureInput = normalizeMeetingCaptureInput(input);
-  const createdRecorderDocument = await ensureOffscreenRecorderDocument();
-  try {
-    const streamId = captureInput.streamId || await chrome.tabCapture.getMediaStreamId({
-      targetTabId: captureInput.sourceTabId,
-    });
-    const response = ensureMeetingCaptureResponse(
-      await chrome.runtime.sendMessage({
-        data: {
-          ...captureInput,
-          streamId,
-        },
-        target: "offscreen",
-        type: "inova-meeting:start-capture",
-      }),
-      "녹음을 시작하지 못했어요."
-    );
-    const currentMeetingState = await namespace.storage.getMeetingState(captureInput.meetingId);
-    const nextMeetingState = namespace.meetingState.applyMeetingCaptureStarted(currentMeetingState, response);
-    await namespace.storage.setMeetingState(captureInput.meetingId, nextMeetingState);
-    return response;
-  } catch (error) {
-    if (createdRecorderDocument) {
-      await closeOffscreenRecorderDocument().catch(() => {});
-    }
-    throw normalizeMeetingCaptureError(error);
-  }
-}
-
-async function stopMeetingCapture(input) {
-  const response = ensureMeetingCaptureResponse(
-    await chrome.runtime.sendMessage({
-      data: {
-        meetingId: namespace.session.normalizeText(input?.meetingId),
-      },
-      target: "offscreen",
-      type: "inova-meeting:stop-capture",
-    }),
-    "녹음을 마무리하지 못했어요."
-  );
-  const meetingId = namespace.session.normalizeText(response?.meeting?.meetingId);
-  if (meetingId) {
-    const currentMeetingState = await namespace.storage.getMeetingState(meetingId);
-    const nextMeetingState = namespace.meetingState.applyMeetingCaptureFinished(currentMeetingState, response);
-    await namespace.storage.setMeetingState(meetingId, nextMeetingState);
-  }
-  return response;
-}
-
-async function createMeetingJob(input, providerIdentity) {
-  const accessToken = await getInovaAccessToken();
-  const requestBody = namespace.cloudApi.buildCreateInovaMeetingJobRequest(input, providerIdentity);
-  const offscreenResponse = await tryCreateMeetingJobFromOffscreen(requestBody, accessToken);
-  if (offscreenResponse) {
-    return tryRefreshMeetingJobSnapshot(offscreenResponse, providerIdentity, accessToken);
-  }
-  return namespace.cloudApi.createInovaMeetingJob(input, providerIdentity, accessToken);
-}
-
-async function tryCreateMeetingJobFromOffscreen(requestBody, accessToken) {
-  const contexts = await listRuntimeContexts();
-  const hasRecorder = contexts.some((entry) =>
-    entry?.contextType === "OFFSCREEN_DOCUMENT"
-    && String(entry?.documentUrl || "").includes(OFFSCREEN_RECORDER_URL)
-  );
-  if (!hasRecorder) {
-    return null;
-  }
-
-  const response = ensureMeetingJobResponse(
-    await chrome.runtime.sendMessage({
-      data: {
-        accessToken,
-        requestBody,
-        url: namespace.firebaseConfig.functions.createInovaMeetingJobUrl,
-      },
-      target: "offscreen",
-      type: "inova-meeting:create-job",
-    }),
-    "전사 작업을 접수하지 못했어요."
-  );
-  await closeOffscreenRecorderDocument().catch(() => {});
-  return response;
-}
-
-async function tryRefreshMeetingJobSnapshot(payload, providerIdentity, accessToken) {
-  const jobId = namespace.session.normalizeText(payload?.job?.jobId);
-  const meetingId = namespace.session.normalizeText(payload?.job?.meetingId);
-  const sessionId = namespace.session.normalizeText(payload?.job?.sessionId);
-  if (!jobId) {
-    return payload;
-  }
-
-  try {
-    const latestPayload = await namespace.cloudApi.getInovaMeetingJob(
-      {
-        jobId,
-        meetingId,
-        sessionId,
-      },
-      providerIdentity,
-      accessToken
-    );
-    if (namespace.session.normalizeText(latestPayload?.job?.jobId)) {
-      return latestPayload;
-    }
-  } catch {}
-  return payload;
-}
-
-async function getMeetingJob(input, providerIdentity) {
-  const accessToken = await getInovaAccessToken();
-  return namespace.cloudApi.getInovaMeetingJob(input, providerIdentity, accessToken);
-}
-
-async function getMeetingArtifact(input, providerIdentity) {
-  const accessToken = await getInovaAccessToken();
-  return namespace.cloudApi.getInovaMeetingArtifact(input, providerIdentity, accessToken);
-}
-
-async function listMeetings(input, providerIdentity) {
-  const accessToken = await getInovaAccessToken();
-  return namespace.cloudApi.listInovaMeetings(input, providerIdentity, accessToken);
-}
-
-async function listMeetingResults(input, providerIdentity) {
-  const accessToken = await getInovaAccessToken();
-  return namespace.cloudApi.listInovaMeetingResults(input, providerIdentity, accessToken);
-}
-
-async function handleMeetingRecorderFailed(payload) {
-  const meetingId = namespace.session.normalizeText(payload?.meeting?.meetingId);
-  await closeOffscreenRecorderDocument().catch(() => {});
-  if (!meetingId) {
-    return { handled: false };
-  }
-  const currentMeetingState = await namespace.storage.getMeetingState(meetingId);
-  const nextMeetingState = namespace.meetingState.applyMeetingCaptureFailed(currentMeetingState, payload);
-  await namespace.storage.setMeetingState(meetingId, nextMeetingState);
-  return { handled: true };
 }
 
 async function syncPromptLibrary(syncDocument) {
@@ -477,30 +324,137 @@ async function openMeetingResult(input, providerIdentity, sender) {
   return openHostedMeetingPage("detail", input, providerIdentity, sender);
 }
 
+async function authorizeMeetingWorkspaceAccess(input, providerIdentity, sender) {
+  try {
+    const owner = await resolveMeetingProviderIdentity(providerIdentity);
+    const accessToken = await getInovaAccessToken();
+    if (!namespace.session.normalizeText(accessToken)) {
+      return buildMeetingWorkspaceBlockedAuthPayload(input, owner, "login-required", {
+        extensionBridge: "connected",
+        inovaLogin: false,
+      });
+    }
+    if (!namespace.session.normalizeText(owner?.providerUserKey)) {
+      return buildMeetingWorkspaceBlockedAuthPayload(input, owner, "identity-required", {
+        extensionBridge: "connected",
+        inovaLogin: true,
+      });
+    }
+    const payload = await namespace.cloudApi.authorizeInovaMeetingWorkspaceAccess({
+      debugAuthBypass: namespace.session.normalizeText(input?.debugAuthBypass),
+      jobId: namespace.session.normalizeText(input?.jobId),
+      meetingId: namespace.session.normalizeText(input?.meetingId),
+      shareToken: namespace.session.normalizeText(input?.shareToken || input?.share),
+    }, owner, accessToken);
+    return {
+      ...payload,
+      extensionBridge: "connected",
+      inovaLogin: payload?.inovaLogin !== false,
+      senderUrl: namespace.session.normalizeText(sender?.url),
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error || "");
+    if (looksLikeMeetingLoginError(message)) {
+      return buildMeetingWorkspaceBlockedAuthPayload(input, providerIdentity, "login-required", {
+        extensionBridge: "connected",
+        inovaLogin: false,
+      });
+    }
+    if (looksLikeMeetingIdentityError(message)) {
+      return buildMeetingWorkspaceBlockedAuthPayload(input, providerIdentity, "identity-required", {
+        extensionBridge: "connected",
+        inovaLogin: true,
+      });
+    }
+    throw error;
+  }
+}
+
+async function createMeetingShareLink(input, providerIdentity, sender) {
+  const owner = await resolveMeetingProviderIdentity(providerIdentity);
+  const accessToken = await getInovaAccessToken();
+  const payload = await namespace.cloudApi.createInovaMeetingShareLink({
+    jobId: namespace.session.normalizeText(input?.jobId),
+    meetingId: namespace.session.normalizeText(input?.meetingId),
+  }, owner, accessToken);
+  return {
+    ...payload,
+    shareUrl: await buildHostedMeetingCleanUrl({
+      jobId: namespace.session.normalizeText(input?.jobId),
+      meetingId: namespace.session.normalizeText(input?.meetingId),
+      shareToken: namespace.session.normalizeText(payload?.shareToken),
+    }),
+    senderUrl: namespace.session.normalizeText(sender?.url),
+  };
+}
+
+async function revokeMeetingShareLink(input, providerIdentity, sender) {
+  const owner = await resolveMeetingProviderIdentity(providerIdentity);
+  const accessToken = await getInovaAccessToken();
+  const payload = await namespace.cloudApi.revokeInovaMeetingShareLink({
+    jobId: namespace.session.normalizeText(input?.jobId),
+    meetingId: namespace.session.normalizeText(input?.meetingId),
+  }, owner, accessToken);
+  return {
+    ...payload,
+    senderUrl: namespace.session.normalizeText(sender?.url),
+  };
+}
+
+async function probeMeetingWorkspaceBridge(sender) {
+  const senderUrl = namespace.session.normalizeText(sender?.url);
+  const cookie = await chrome.cookies.get({
+    name: "accessToken",
+    url: INOVA_ORIGIN,
+  }).catch(() => null);
+  const accessTokenCookiePresent = Boolean(namespace.session.normalizeText(cookie?.value));
+
+  return {
+    accessTokenCookiePresent,
+    inovaLoggedIn: accessTokenCookiePresent,
+    loginCheckMode: "cookie-only",
+    senderUrl,
+    tokenRefreshError: "",
+    tokenRefreshOk: false,
+    tokenRefreshSkipped: true,
+    verifiedAt: new Date().toISOString(),
+  };
+}
+
 async function openHostedMeetingPage(mode, input, providerIdentity, sender) {
   try {
+    const owner = await resolveMeetingProviderIdentity(providerIdentity);
+    const meetingId = namespace.session.normalizeText(input?.meetingId) || buildMeetingId();
+    const jobId = mode === "detail"
+      ? namespace.session.normalizeText(input?.jobId)
+      : namespace.session.normalizeText(input?.jobId);
+    const finalUrl = await buildHostedMeetingCleanUrl({
+      jobId,
+      meetingId,
+    });
     logMeetingDebug("open.start", {
       input: input || {},
       mode,
+      providerUserKey: owner.providerUserKey,
       senderTabId: Number(sender?.tab?.id) || 0,
       senderTitle: namespace.session.normalizeText(sender?.tab?.title),
       senderUrl: namespace.session.normalizeText(sender?.url),
     });
-    const launch = await issueMeetingLaunch(mode, input, providerIdentity, sender);
-    const workspace = await exchangeMeetingLaunch(launch);
     logMeetingDebug("tabs.create", {
-      finalUrl: workspace.url,
-      hasWorkspaceHash: String(workspace.url || "").includes("#ws="),
-      launchMeetingId: namespace.session.normalizeText(launch?.meeting?.meetingId),
-      meetingId: namespace.session.normalizeText(workspace?.meeting?.meetingId),
+      finalUrl,
+      hasWorkspaceHash: String(finalUrl || "").includes("#ws="),
+      meetingId,
       mode,
     });
-    await chrome.tabs.create({ url: workspace.url });
+    await chrome.tabs.create({ url: finalUrl });
     return {
-      expiresAt: workspace.expiresAt || launch.expiresAt || "",
-      meeting: workspace.meeting || launch.meeting || {},
+      expiresAt: "",
+      meeting: {
+        meetingId,
+        title: namespace.session.normalizeText(input?.title || sender?.tab?.title) || "새 회의",
+      },
       opened: true,
-      url: workspace.url,
+      url: finalUrl,
     };
   } catch (error) {
     logMeetingDebug("open.error", {
@@ -511,106 +465,29 @@ async function openHostedMeetingPage(mode, input, providerIdentity, sender) {
   }
 }
 
-async function issueMeetingLaunch(mode, input, providerIdentity, sender) {
-  try {
-    const owner = await resolveMeetingProviderIdentity(providerIdentity);
-    if (!owner?.providerUserKey) {
-      throw new Error("현재 i-Nova 사용자 정보를 아직 확인하지 못했어요. i-Nova 탭을 다시 연 뒤 시도해 주세요.");
-    }
-    const accessToken = await getInovaAccessToken();
-    const requestPayload = {
-      jobId: namespace.session.normalizeText(input?.jobId),
-      meetingId: namespace.session.normalizeText(input?.meetingId),
-      mode,
-      suggestedTitle: namespace.session.normalizeText(input?.title || sender?.tab?.title) || "새 회의",
-    };
-    logMeetingDebug("launch.issue.request", {
-      ...requestPayload,
-      providerUserKey: owner.providerUserKey,
-    });
-    const launch = await namespace.cloudApi.issueInovaMeetingLaunch(
-      requestPayload,
-      owner,
-      accessToken
-    );
-    logMeetingDebug("launch.issue.success", {
-      hasLaunchToken: Boolean(namespace.session.normalizeText(launch?.launchToken)),
-      meetingId: namespace.session.normalizeText(launch?.meeting?.meetingId),
-      mode,
-      workspaceUrl: namespace.session.normalizeText(launch?.workspaceUrl),
-    });
-    return launch;
-  } catch (error) {
-    logMeetingDebug("launch.issue.error", {
-      error: error instanceof Error ? error.message : String(error || ""),
-      mode,
-    });
-    throw error;
-  }
-}
-
-async function exchangeMeetingLaunch(launch) {
-  try {
-    const launchToken = namespace.session.normalizeText(launch?.launchToken);
-    if (!launchToken) {
-      throw new Error("회의 작업실 열기 토큰이 없어요. 다시 시도해 주세요.");
-    }
-    logMeetingDebug("launch.exchange.request", {
-      launchTokenPreview: `${launchToken.slice(0, 12)}...`,
-      meetingId: namespace.session.normalizeText(launch?.meeting?.meetingId),
-    });
-    const exchange = await namespace.cloudApi.exchangeInovaMeetingLaunch({ launchToken });
-    const meetingId = namespace.session.normalizeText(exchange?.meeting?.meetingId || launch?.meeting?.meetingId);
-    const workspaceToken = namespace.session.normalizeText(exchange?.meetingSessionToken);
-    if (!meetingId || !workspaceToken) {
-      throw new Error("회의 작업실 세션을 만들지 못했어요. 다시 시도해 주세요.");
-    }
-    const finalUrl = await buildHostedMeetingSessionUrl({
-      jobId: namespace.session.normalizeText(exchange?.jobId || launch?.jobId),
-      meetingId,
-      workspaceToken,
-    });
-    logMeetingDebug("launch.exchange.success", {
-      finalUrl,
-      hasWorkspaceHash: finalUrl.includes("#ws="),
-      jobId: namespace.session.normalizeText(exchange?.jobId || launch?.jobId),
-      meetingId,
-      workspaceTokenPreview: `${workspaceToken.slice(0, 12)}...`,
-    });
-    return {
-      expiresAt: namespace.session.normalizeText(exchange?.expiresAt),
-      meeting: {
-        meetingId,
-        title: namespace.session.normalizeText(exchange?.meeting?.title || launch?.meeting?.title),
-      },
-      url: finalUrl,
-    };
-  } catch (error) {
-    logMeetingDebug("launch.exchange.error", {
-      error: error instanceof Error ? error.message : String(error || ""),
-      meetingId: namespace.session.normalizeText(launch?.meeting?.meetingId),
-    });
-    throw error;
-  }
-}
-
-async function buildHostedMeetingSessionUrl(input) {
+async function buildHostedMeetingCleanUrl(input) {
   const normalizedSettings = await reconcileMeetingWorkspaceSettings((await namespace.storage.getState())?.settings);
   const url = new URL(await resolveMeetingWorkspacePageUrl());
   if (normalizeMeetingDebugConsoleEnabled(normalizedSettings.meetingDebugConsoleEnabled)) url.searchParams.set("debug", "1");
   const meetingId = namespace.session.normalizeText(input?.meetingId);
   const jobId = namespace.session.normalizeText(input?.jobId);
-  const workspaceToken = namespace.session.normalizeText(input?.workspaceToken);
+  const shareToken = namespace.session.normalizeText(input?.shareToken || input?.share);
   if (meetingId) url.searchParams.set("meetingId", meetingId);
   if (jobId) url.searchParams.set("jobId", jobId);
-  if (workspaceToken) url.hash = `ws=${encodeURIComponent(workspaceToken)}`;
+  if (shareToken) url.searchParams.set("share", shareToken);
   return url.toString();
 }
 
 async function resolveMeetingWorkspacePageUrl() {
   const normalizedSettings = await reconcileMeetingWorkspaceSettings((await namespace.storage.getState())?.settings);
   const workspaceTarget = normalizeMeetingWorkspaceTarget(normalizedSettings.meetingWorkspaceTarget);
-  const url = workspaceTarget === "local" ? normalizeLocalMeetingWorkspaceUrl(normalizedSettings.meetingWorkspaceUrlOverride) : namespace.firebaseConfig?.hosting?.meetingWorkspaceUrl;
+  const url = workspaceTarget === "local"
+    ? (
+        normalizedSettings.meetingWorkspaceUrlOverride
+          ? normalizeLocalMeetingWorkspaceUrl(normalizedSettings.meetingWorkspaceUrlOverride)
+          : LOCAL_MEETING_WORKSPACE_URL
+      )
+    : namespace.firebaseConfig?.hosting?.meetingWorkspaceUrl;
   logMeetingDebug("workspace.target", { target: workspaceTarget, url });
   return url;
 }
@@ -619,14 +496,19 @@ function normalizeMeetingWorkspaceTarget(value) { return namespace.session.norma
 async function reconcileMeetingWorkspaceSettings(settings) {
   const currentTarget = normalizeMeetingWorkspaceTarget(settings?.meetingWorkspaceTarget);
   const currentDebugEnabled = normalizeMeetingDebugConsoleEnabled(settings?.meetingDebugConsoleEnabled);
-  const currentOverride = normalizeMeetingWorkspaceOverrideUrl(settings?.meetingWorkspaceUrlOverride);
-  const nextSettings = { meetingDebugConsoleEnabled: currentDebugEnabled, meetingWorkspaceTarget: currentTarget, meetingWorkspaceUrlOverride: currentTarget === "local" ? normalizeLocalMeetingWorkspaceUrl(currentOverride) : "" };
+  const rawOverride = namespace.session.normalizeText(settings?.meetingWorkspaceUrlOverride);
+  const currentOverride = currentTarget === "local"
+    ? normalizeMeetingWorkspaceOverrideUrl(rawOverride)
+    : rawOverride;
+  const nextSettings = {
+    meetingDebugConsoleEnabled: currentDebugEnabled,
+    meetingWorkspaceTarget: currentTarget,
+    meetingWorkspaceUrlOverride: currentTarget === "local"
+      ? normalizeLocalMeetingWorkspaceSettingValue(currentOverride)
+      : "",
+  };
   if (currentTarget === namespace.session.normalizeText(settings?.meetingWorkspaceTarget) && currentDebugEnabled === settings?.meetingDebugConsoleEnabled && nextSettings.meetingWorkspaceUrlOverride === currentOverride) return nextSettings;
-  try {
-    await namespace.storage.updateSettings(nextSettings);
-  } catch (error) {
-    logMeetingDebug("workspace.settings.reconcile.error", { error: error instanceof Error ? error.message : String(error || "") });
-  }
+  await namespace.storage.updateSettings(nextSettings);
   return nextSettings;
 }
 
@@ -650,27 +532,80 @@ function normalizeMeetingWorkspaceOverrideUrl(value) {
     url.search = "";
     url.hash = "";
     return url.toString();
-  } catch {
-    logMeetingDebug("workspace.override.invalid", { value: normalized });
+  } catch (error) {
+    logMeetingDebug("workspace.override.invalid", {
+      error: error instanceof Error ? error.message : String(error || ""),
+      value: normalized,
+    });
+    throw new Error("회의 작업실 주소가 올바르지 않아요. 팝업 설정을 확인해 주세요.");
+  }
+}
+
+function normalizeLocalMeetingWorkspaceSettingValue(value) {
+  const normalized = namespace.session.normalizeText(value);
+  if (!normalized) {
     return "";
   }
+  return normalizeLocalMeetingWorkspaceUrl(normalized);
 }
 
 function normalizeLocalMeetingWorkspaceUrl(value) {
   const normalized = normalizeMeetingWorkspaceOverrideUrl(value);
-  if (!normalized) {
-    return LOCAL_MEETING_WORKSPACE_URL;
+  const url = new URL(normalized);
+  if (!isLoopbackHostname(url.hostname)) {
+    logMeetingDebug("workspace.override.non-loopback", { value: normalized });
+    throw new Error("로컬 회의 작업실 주소는 localhost 또는 127.0.0.1만 사용할 수 있어요.");
   }
-  try {
-    const url = new URL(normalized);
-    if (isLoopbackHostname(url.hostname)) {
-      url.port = "5000";
-      url.pathname = "/meeting/index.html";
-      url.search = ""; url.hash = "";
-      return url.toString();
-    }
-  } catch {}
-  return LOCAL_MEETING_WORKSPACE_URL;
+  url.port = "5000";
+  url.pathname = "/meeting/index.html";
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+}
+
+function buildMeetingId() {
+  const partA = Date.now().toString(36);
+  const partB = Math.random().toString(36).slice(2, 8);
+  return `meeting-${partA}-${partB}`;
+}
+
+function buildMeetingWorkspaceBlockedAuthPayload(input, viewer, reason, options = {}) {
+  return {
+    accessDecision: "denied",
+    accessMode: "blocked",
+    bypassApplied: false,
+    bypassMode: "",
+    extensionBridge: namespace.session.normalizeText(options?.extensionBridge) || "connected",
+    firebaseCustomToken: "",
+    inovaLogin: options?.inovaLogin !== false,
+    meetingDocumentId: "",
+    meetingId: namespace.session.normalizeText(input?.meetingId),
+    readOnly: false,
+    reason: namespace.session.normalizeText(reason),
+    shareId: "",
+    viewer: {
+      displayName: namespace.session.normalizeText(viewer?.displayName),
+      email: namespace.session.normalizeText(viewer?.email),
+      providerUserKey: namespace.session.normalizeText(viewer?.providerUserKey),
+    },
+  };
+}
+
+function looksLikeMeetingLoginError(message) {
+  const normalized = namespace.session.normalizeText(message).toLowerCase();
+  return normalized.includes("로그인")
+    || normalized.includes("access token")
+    || normalized.includes("refresh")
+    || normalized.includes("unauth")
+    || normalized.includes("401")
+    || normalized.includes("403");
+}
+
+function looksLikeMeetingIdentityError(message) {
+  const normalized = namespace.session.normalizeText(message).toLowerCase();
+  return normalized.includes("사용자 키")
+    || normalized.includes("provideruserkey")
+    || normalized.includes("provider user key");
 }
 
 function isLoopbackHostname(value) {
@@ -684,10 +619,15 @@ function logMeetingDebug(event, payload) {
 async function resolveMeetingProviderIdentity(providerIdentity) {
   const normalized = normalizeProviderIdentity(providerIdentity);
   if (normalized.providerUserKey) {
+    await persistMeetingProviderIdentity(normalized);
     return normalized;
   }
-  const storageState = await namespace.storage.getState();
-  return normalizeProviderIdentity(storageState?.cloudSync?.providerIdentity);
+  const persisted = await loadStoredMeetingProviderIdentity();
+  if (persisted.providerUserKey) {
+    return persisted;
+  }
+  const activeInovaIdentity = await requestMeetingProviderIdentityFromInovaTabs();
+  return activeInovaIdentity.providerUserKey ? activeInovaIdentity : normalized;
 }
 
 function normalizeProviderIdentity(providerIdentity) {
@@ -700,159 +640,101 @@ function normalizeProviderIdentity(providerIdentity) {
   };
 }
 
-async function ensureOffscreenRecorderDocument() {
-  const contexts = await listRuntimeContexts();
-  const hasRecorder = contexts.some((entry) =>
-    entry?.contextType === "OFFSCREEN_DOCUMENT"
-    && String(entry?.documentUrl || "").includes(OFFSCREEN_RECORDER_URL)
-  );
-  if (hasRecorder) {
-    return false;
-  }
-  if (activeOffscreenCreation) {
-    await activeOffscreenCreation;
-    return false;
-  }
-  activeOffscreenCreation = chrome.offscreen.createDocument({
-    justification: "Record tab audio for i-Nova meeting capture",
-    reasons: ["USER_MEDIA"],
-    url: OFFSCREEN_RECORDER_URL,
-  });
+async function loadStoredMeetingProviderIdentity() {
   try {
-    await activeOffscreenCreation;
-    return true;
-  } finally {
-    activeOffscreenCreation = null;
+    if (typeof namespace.storage.getCloudSyncState === "function") {
+      const cloudSync = await namespace.storage.getCloudSyncState();
+      return normalizeProviderIdentity(cloudSync?.providerIdentity);
+    }
+    const storageState = await namespace.storage.getState();
+    return normalizeProviderIdentity(storageState?.cloudSync?.providerIdentity);
+  } catch (error) {
+    void error;
+    return normalizeProviderIdentity(null);
   }
 }
 
-async function closeOffscreenRecorderDocument() {
-  if (typeof chrome.offscreen?.closeDocument !== "function") {
-    return;
+async function persistMeetingProviderIdentity(providerIdentity) {
+  const normalized = normalizeProviderIdentity(providerIdentity);
+  if (!normalized.providerUserKey || typeof namespace.storage.getCloudSyncState !== "function" || typeof namespace.storage.setCloudSyncState !== "function") {
+    return normalized;
   }
-  const contexts = await listRuntimeContexts();
-  const hasRecorder = contexts.some((entry) =>
-    entry?.contextType === "OFFSCREEN_DOCUMENT"
-    && String(entry?.documentUrl || "").includes(OFFSCREEN_RECORDER_URL)
-  );
-  if (hasRecorder) {
-    await chrome.offscreen.closeDocument();
+  try {
+    const current = await namespace.storage.getCloudSyncState();
+    const currentIdentity = normalizeProviderIdentity(current?.providerIdentity);
+    if (
+      currentIdentity.providerUserKey === normalized.providerUserKey
+      && currentIdentity.email === normalized.email
+      && currentIdentity.displayName === normalized.displayName
+      && currentIdentity.numericUserId === normalized.numericUserId
+    ) {
+      return normalized;
+    }
+    await namespace.storage.setCloudSyncState({
+      ...(current && typeof current === "object" ? current : {}),
+      providerIdentity: {
+        ...currentIdentity,
+        ...normalized,
+        available: true,
+      },
+    });
+  } catch (error) {
+    void error;
   }
+  return normalized;
 }
 
-async function listRuntimeContexts() {
-  if (typeof chrome.runtime.getContexts !== "function") {
-    return [];
+async function requestMeetingProviderIdentityFromInovaTabs() {
+  if (!chrome.tabs?.query || !chrome.tabs?.sendMessage) {
+    return normalizeProviderIdentity(null);
   }
-  return chrome.runtime.getContexts({});
-}
-
-async function requestDesktopTabStreamId() {
-  if (typeof chrome.desktopCapture?.chooseDesktopMedia !== "function") {
-    throw new Error("현재 브라우저에서 탭 공유 선택창을 열 수 없어요.");
+  let tabs = [];
+  try {
+    tabs = await chrome.tabs.query({ url: `${INOVA_ORIGIN}/*` });
+  } catch (error) {
+    void error;
+    return normalizeProviderIdentity(null);
   }
-  return new Promise((resolve, reject) => {
+  for (const tab of Array.isArray(tabs) ? tabs : []) {
+    const tabId = Number(tab?.id) || 0;
+    if (!tabId) continue;
     try {
-      chrome.desktopCapture.chooseDesktopMedia(["tab", "audio"], (streamId, options) => {
-        const errorMessage = namespace.session.normalizeText(chrome.runtime?.lastError?.message);
-        if (errorMessage) {
-          reject(new Error(errorMessage));
-          return;
-        }
-        const normalizedStreamId = namespace.session.normalizeText(streamId);
-        if (!normalizedStreamId) {
-          reject(new Error("탭 공유 선택이 취소되었어요. 다시 시도해 주세요."));
-          return;
-        }
-        if (options && options.canRequestAudioTrack === false) {
-          reject(new Error("탭 공유 창에서 오디오 공유를 켠 뒤 다시 시도해 주세요."));
-          return;
-        }
-        resolve(normalizedStreamId);
+      const response = await chrome.tabs.sendMessage(tabId, {
+        type: "inova-meeting:get-provider-identity",
       });
+      const normalized = normalizeProviderIdentity(response?.providerIdentity);
+      if (normalized.providerUserKey) {
+        await persistMeetingProviderIdentity(normalized);
+        return normalized;
+      }
     } catch (error) {
-      reject(error instanceof Error ? error : new Error(String(error)));
+      void error;
     }
-  });
-}
-
-function normalizeMeetingCaptureInput(input) {
-  const sourceTabId = Number(input?.sourceTabId || input?.tabId);
-  const meetingId = namespace.session.normalizeText(input?.meetingId);
-  const streamId = namespace.session.normalizeText(input?.streamId);
-  const title = namespace.session.normalizeText(input?.title) || "새 회의";
-  const captureMode = namespace.session.normalizeText(input?.captureMode) || "tab-audio";
-  if (!meetingId) {
-    throw new Error("회의 ID를 찾지 못했어요.");
   }
-  if (captureMode === "tab-audio") {
-    if (!Number.isInteger(sourceTabId) || sourceTabId <= 0) {
-      throw new Error("현재 탭을 찾지 못해서 녹음을 시작할 수 없어요.");
-    }
-  } else if (captureMode === "desktop-audio") {
-    if (!streamId) {
-      throw new Error("탭 공유 선택 결과를 찾지 못했어요. 다시 시도해 주세요.");
-    }
-  } else {
-    throw new Error("지금 단계에서는 탭 오디오 녹음만 지원해요.");
-  }
-  return {
-    captureMode,
-    meetingId,
-    sourceTabId,
-    streamId,
-    title,
-  };
-}
-
-function isInternalMeetingRecorderMessage(message, sender) {
-  return String(message?.type || "").startsWith("inova-meeting:recorder-")
-    && String(sender?.url || "").startsWith("chrome-extension://");
-}
-
-function isExtensionMeetingControlMessage(message, sender) {
-  return String(message?.type || "").startsWith("inova-meeting:")
-    && String(sender?.url || "").startsWith("chrome-extension://");
+  return normalizeProviderIdentity(null);
 }
 
 function isAllowedSender(message, sender) {
   return String(sender?.url || "").startsWith(INOVA_ORIGIN)
     || message.type === "inova-release:open-url"
-    || isInternalMeetingRecorderMessage(message, sender)
-    || isExtensionMeetingControlMessage(message, sender);
+    || (
+      [
+        "inova-meeting:authorize-workspace-access",
+        "inova-meeting:probe-workspace-bridge",
+      ].includes(message.type)
+      && isHostedMeetingWorkspaceSender(sender)
+    );
 }
 
-function ensureMeetingCaptureResponse(response, fallbackMessage) {
-  const errorMessage = namespace.session.normalizeText(response?.error || response?.capture?.error);
-  if (namespace.session.normalizeText(response?.capture?.status) === "error" || errorMessage) {
-    throw normalizeMeetingCaptureError(errorMessage || fallbackMessage);
+function isHostedMeetingWorkspaceSender(sender) {
+  try {
+    const url = new URL(String(sender?.url || ""));
+    return HOSTED_MEETING_ALLOWED_ORIGINS.has(url.origin)
+      && /\/meeting\/index\.html$/i.test(String(url.pathname || ""));
+  } catch (error) {
+    void error;
+    return false;
   }
-  return response;
-}
-
-function normalizeMeetingCaptureError(error) {
-  const message = namespace.session.normalizeText(error?.message || error);
-  if (!message) {
-    return new Error("녹음을 시작하지 못했어요.");
-  }
-  if (message.includes("Extension has not been invoked for the current page")) {
-    return new Error("이 탭에서 녹음을 시작하려면 확장 아이콘을 한 번 연 뒤 다시 시도해 주세요. 크롬이 tabCapture 대상을 현재 페이지에 대해 승인하지 않았어요.");
-  }
-  if (message.includes("Chrome pages cannot be captured")) {
-    return new Error("현재 선택된 탭은 크롬 내부 페이지라서 녹음할 수 없어요. i-Nova 탭으로 돌아가 확장 아이콘을 한 번 연 뒤 다시 시도해 주세요.");
-  }
-  return error instanceof Error ? error : new Error(message);
-}
-
-function ensureMeetingJobResponse(response, fallbackMessage) {
-  const errorMessage = namespace.session.normalizeText(response?.error || response?.job?.error);
-  if (errorMessage) {
-    throw new Error(errorMessage || fallbackMessage);
-  }
-  if (!namespace.session.normalizeText(response?.job?.jobId)) {
-    throw new Error(fallbackMessage);
-  }
-  return response;
 }
 
 function cleanupRecentLoads() {

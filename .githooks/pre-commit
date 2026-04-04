@@ -3,5 +3,5 @@
 set -e
 
 node scripts/verify-branch-workflow.js --pre-commit
-node scripts/verify-readme-update.js --staged
+node scripts/verify-feature-doc-update.js --staged
 node scripts/verify-release-metadata.js --staged

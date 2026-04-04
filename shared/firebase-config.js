@@ -5,18 +5,16 @@
   const DEFAULT_HOSTING_ORIGIN = "https://browser-extension-main.web.app";
   const PROMPT_PANEL_BRIDGE_CACHE_TOKEN = "20260402-1";
   const FUNCTION_ENDPOINTS = {
-    createInovaMeetingJobUrl: "createInovaMeetingJob",
+    authorizeInovaMeetingWorkspaceAccessUrl: "authorizeInovaMeetingWorkspaceAccess",
+    createInovaMeetingShareLinkUrl: "createInovaMeetingShareLink",
     deleteInovaMeetingUrl: "deleteInovaMeeting",
     deleteInovaMeetingResultUrl: "deleteInovaMeetingResult",
     exchangeInovaMeetingLaunchUrl: "exchangeInovaMeetingLaunch",
-    getInovaMeetingArtifactUrl: "getInovaMeetingArtifact",
-    getInovaMeetingJobUrl: "getInovaMeetingJob",
     issueInovaMeetingLaunchUrl: "issueInovaMeetingLaunch",
     issueInovaMeetingPanelAuthUrl: "issueInovaMeetingPanelAuth",
     issueInovaPromptPanelAuthUrl: "issueInovaPromptPanelAuth",
     issueInovaMeetingWorkspaceAuthUrl: "issueInovaMeetingWorkspaceAuth",
     listInovaMeetingsUrl: "listInovaMeetings",
-    listInovaMeetingResultsUrl: "listInovaMeetingResults",
     uploadInovaMeetingSourceUrl: "uploadInovaMeetingSource",
     updateInovaMeetingUrl: "updateInovaMeeting",
     updateInovaMeetingResultUrl: "updateInovaMeetingResult",
@@ -27,6 +25,7 @@
     publishPromptToStoreUrl: "publishPromptToStore",
     unpublishPromptFromStoreUrl: "unpublishPromptFromStore",
     importPromptStoreEntryUrl: "importPromptStoreEntry",
+    revokeInovaMeetingShareLinkUrl: "revokeInovaMeetingShareLink",
     togglePromptStoreLikeUrl: "togglePromptStoreLike",
     recordPromptStoreViewUrl: "recordPromptStoreView",
     syncInovaPromptLibraryUrl: "syncInovaPromptLibrary",

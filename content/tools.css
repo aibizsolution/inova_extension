@@ -254,8 +254,17 @@
 .inova-prompt-item.is-drop-before::before { top: -2px; }
 .inova-prompt-item.is-drop-after::after { bottom: -2px; }
 .inova-prompt-item__actions { justify-content: flex-start; }
+.inova-prompt-item__head { align-items: flex-start; }
 .inova-prompt-item__title { font-size: 14px; line-height: 1.3; }
-.inova-prompt-item__title-row { min-width: 0; }
+.inova-prompt-item__title-row { flex: 1 1 auto; min-width: 0; }
+.inova-prompt-item__meta {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  min-width: fit-content;
+  white-space: nowrap;
+}
+.inova-prompt-item__meta .inova-tool-button { flex: 0 0 auto; white-space: nowrap; }
+.inova-prompt-item__date { flex: 0 0 auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .inova-prompt-drag-handle {
   border: 0; padding: 0; background: transparent; color: rgba(98, 127, 145, 0.82); font-size: 14px; font-weight: 700;
   letter-spacing: -0.08em; cursor: grab; flex: 0 0 auto; user-select: none; touch-action: none;
@@ -309,7 +318,26 @@
 .inova-tool-section--meeting .inova-tool-toolbar { align-items: flex-start; justify-content: space-between; gap: 12px; }
 .inova-tool-section--meeting .inova-tool-toolbar__row { flex: 1 1 auto; min-width: 0; justify-content: flex-start; }
 .inova-tool-section--release .inova-tool-toolbar { justify-content: space-between; }
-.inova-meeting-stack { display: flex; flex-direction: column; gap: 10px; padding: 4px 14px 14px; overflow-y: auto; }
+.inova-meeting-stack { display: flex; flex-direction: column; gap: 8px; padding: 2px 14px 14px; overflow-y: auto; }
+.inova-tool-inline-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 2px 0;
+  color: rgba(16, 33, 43, 0.76);
+}
+.inova-tool-inline-summary strong {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.3;
+  color: rgba(16, 33, 43, 0.82);
+}
+.inova-tool-inline-summary__meta {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(16, 33, 43, 0.58);
+}
 .inova-meeting-gateway { display: flex; flex-direction: column; gap: 10px; }
 .inova-bookmark-action {
   min-height: 38px; padding: 0 13px; border: 1px solid rgba(19, 73, 181, 0.12); border-radius: 12px;
@@ -326,20 +354,39 @@
 .inova-bookmark-action:disabled { opacity: 0.55; cursor: default; }
 .inova-meeting-record-list { display: flex; flex-direction: column; gap: 8px; }
 .inova-meeting-record {
-  display: flex; flex-direction: column; gap: 8px; padding: 10px 11px; border-radius: 12px;
+  display: flex; flex-direction: column; gap: 4px; padding: 10px 11px; border-radius: 12px;
   border: 1px solid rgba(98, 127, 145, 0.12); background: rgba(247, 252, 255, 0.88);
 }
-.inova-meeting-record--button {
-  width: 100%;
-  text-align: left;
-  cursor: pointer;
-}
-.inova-meeting-record--button.is-pending {
+.inova-meeting-record.is-pending {
   border-color: rgba(27, 96, 232, 0.22);
   background: rgba(236, 244, 255, 0.94);
 }
+.inova-meeting-record__open {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
 .inova-meeting-record__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
-.inova-meeting-record__head strong { font-size: 12px; color: rgba(16, 33, 43, 0.84); }
+.inova-meeting-record__head > div { display: grid; gap: 2px; min-width: 0; }
+.inova-meeting-record__chips,
+.inova-meeting-record__actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.inova-meeting-record__actions { justify-content: flex-end; }
+.inova-meeting-record__head strong {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+  color: rgba(16, 33, 43, 0.9);
+}
+.inova-meeting-record .inova-tool-meta {
+  color: rgba(16, 33, 43, 0.62);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.45;
+}
 .inova-meeting-record p { margin: 0; font-size: 12px; line-height: 1.6; color: rgba(16, 33, 43, 0.74); white-space: pre-wrap; }
 .inova-meeting-debug-fab-wrap {
   position: fixed;
@@ -518,10 +565,14 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
-.inova-release-stack { display: flex; flex-direction: column; gap: 10px; padding: 4px 14px 14px; overflow-y: auto; }
+.inova-release-stack { display: flex; flex-direction: column; gap: 8px; padding: 2px 14px 14px; overflow-y: auto; }
 .inova-release-card {
-  display: flex; flex-direction: column; gap: 8px; padding: 12px 13px; border: 1px solid rgba(98, 127, 145, 0.16);
+  display: flex; flex-direction: column; gap: 6px; padding: 10px 11px; border: 1px solid rgba(98, 127, 145, 0.16);
   border-radius: 16px; background: rgba(255, 255, 255, 0.92);
+}
+.inova-release-card--compact {
+  gap: 5px;
+  padding: 9px 10px;
 }
 .inova-release-card.is-highlight { border-color: rgba(15, 124, 137, 0.24); background: rgba(242, 251, 252, 0.96); }
 .inova-release-card.is-muted { background: rgba(248, 251, 255, 0.9); }
@@ -530,7 +581,7 @@
   font-size: 12px; line-height: 1.5; color: rgba(16, 33, 43, 0.68);
 }
 .inova-release-card__notice {
-  padding: 10px 11px; border-radius: 12px; background: rgba(255, 249, 239, 0.94); border: 1px solid rgba(173, 125, 51, 0.18);
+  padding: 9px 10px; border-radius: 12px; background: rgba(255, 249, 239, 0.94); border: 1px solid rgba(173, 125, 51, 0.18);
   color: #865d1e !important;
 }
 .inova-release-card__notice.is-info {
@@ -568,7 +619,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 10px 11px;
+  padding: 8px 10px;
   cursor: pointer;
   list-style: none;
   font-size: 12px;
@@ -586,8 +637,8 @@
 .inova-release-details__body {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 0 11px 11px;
+  gap: 8px;
+  padding: 0 10px 10px;
 }
 .inova-release-details__body p {
   margin: 0;
@@ -596,7 +647,7 @@
   color: rgba(16, 33, 43, 0.72);
 }
 .inova-release-details__hint {
-  padding: 8px 9px;
+  padding: 7px 8px;
   border-radius: 10px;
   background: rgba(242, 251, 252, 0.9);
   color: #0f5f77 !important;
@@ -635,7 +686,7 @@
   flex: 1;
   min-width: 0;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
 }
 .inova-release-steps { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
 .inova-release-steps li { font-size: 12px; line-height: 1.5; color: rgba(16, 33, 43, 0.78); }

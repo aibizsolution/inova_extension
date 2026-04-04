@@ -1,396 +1,35 @@
 (function initHostedMeetingRender(global) {
   const ns = global.__INOVA_HOSTED_MEETING__ = global.__INOVA_HOSTED_MEETING__ || {};
-  const { DEFAULT_NOTES_MODE, DEFAULT_NOTES_STYLE, TERMINAL_REMOTE_STATUSES, cleanPreviewText, countSpeakers, escapeHtml, formatBytes, formatDateTime, formatDuration, formatNotesModeLabel, formatNotesStyleLabel, formatPhase, formatSegmentRange, formatSpeakerLabel, formatStatusLabel, normalizeMeetingNotesMode, normalizeMeetingNotesStyle, normalizeSpeakerAliases, normalizeStatus, normalizeText, normalizeTextBlock, resolveSpeakerDisplayName } = ns.shared;
-  const { comparePendingUploads, normalizePendingUpload } = ns.storage;
-  const { formatActionItem, formatDecisionItem, formatMemoItem, formatRiskItem, formatTopicItem, hasMeetingNotes, normalizeMeetingNotes, normalizeTextArray } = ns.notes;
-  const DEFAULT_CHUNK_PROGRESS_ACTIVE_COUNT = 2;
-  const STALLED_PROCESSING_THRESHOLD_MS = 10 * 60 * 1000;
-
-  function getProgressUpdatedAt(job, pending) {
-    return normalizeText(job?.updatedAt || pending?.updatedAt);
-  }
-
-  function getProcessingHealth(job, pending) {
-    const updatedAt = getProgressUpdatedAt(job, pending);
-    const updatedAtMs = updatedAt ? ns.shared.toTimestamp(updatedAt) : 0;
-    const ageMs = updatedAtMs > 0 ? Math.max(0, Date.now() - updatedAtMs) : 0;
-    return {
-      ageMs,
-      isStalled: ageMs >= STALLED_PROCESSING_THRESHOLD_MS,
-      updatedAt,
-      updatedAtLabel: updatedAt ? formatDateTime(updatedAt, "") : "",
-    };
-  }
-
-  function normalizeRecord(record) {
-    const nextRecord = record && typeof record === "object" ? record : {};
-    return {
-      artifactId: normalizeText(nextRecord.artifactId),
-      createdAt: normalizeText(nextRecord.createdAt),
-      durationMs: Math.max(0, Number(nextRecord.durationMs) || 0),
-      error: normalizeText(nextRecord.error),
-      jobId: normalizeText(nextRecord.jobId),
-      meetingId: normalizeText(nextRecord.meetingId),
-      notesGeneratedAt: normalizeText(nextRecord.notesGeneratedAt),
-      notesModeConfidence: Math.max(0, Math.min(1, Number(nextRecord.notesModeConfidence) || 0)),
-      notesModeDetected: normalizeMeetingNotesMode(nextRecord.notesModeDetected),
-      notesModeSelected: normalizeMeetingNotesMode(nextRecord.notesModeSelected),
-      notesStyleSelected: normalizeMeetingNotesStyle(nextRecord.notesStyleSelected),
-      previewText: cleanPreviewText(nextRecord.previewText),
-      requestId: normalizeText(nextRecord.requestId),
-      speakerCount: Math.max(0, Number(nextRecord.speakerCount) || 0),
-      status: normalizeText(nextRecord.status) || "idle",
-      title: normalizeText(nextRecord.resultTitle || nextRecord.title || nextRecord.meetingTitle),
-      updatedAt: normalizeText(nextRecord.updatedAt),
-    };
-  }
-
-  function normalizeJob(job, fallbackTitle) {
-    if (!job || typeof job !== "object") return null;
-    return {
-      artifactId: normalizeText(job?.transcript?.artifactId || job?.artifacts?.[0]?.artifactId),
-      createdAt: normalizeText(job.createdAt || job.queuedAt),
-      durationMs: Math.max(0, Number(job?.source?.durationMs) || 0),
-      error: normalizeText(job.error),
-      jobId: normalizeText(job.jobId),
-      meetingNotes: normalizeMeetingNotes(job.meetingNotes, job.notesModeSelected),
-      notesGeneratedAt: normalizeText(job.notesGeneratedAt),
-      notesModeConfidence: Math.max(0, Math.min(1, Number(job.notesModeConfidence) || 0)),
-      notesModeDetected: normalizeMeetingNotesMode(job.notesModeDetected),
-      notesModeSelected: normalizeMeetingNotesMode(job.notesModeSelected),
-      notesStyleSelected: normalizeMeetingNotesStyle(job.notesStyleSelected),
-      progress: {
-        currentPart: Math.max(0, Number(job?.progress?.currentPart) || 0),
-        parallelParts: Math.max(0, Number(job?.progress?.parallelParts) || 0),
-        percent: Math.max(0, Math.min(100, Number(job?.progress?.percent) || 0)),
-        phase: normalizeText(job?.progress?.phase),
-        totalParts: Math.max(0, Number(job?.progress?.totalParts) || 0),
-      },
-      retry: {
-        count: Math.max(0, Number(job?.retry?.count) || 0),
-        lastError: normalizeText(job?.retry?.lastError),
-        lastRetriedAt: normalizeText(job?.retry?.lastRetriedAt),
-      },
-      requestId: normalizeText(job?.source?.requestId),
-      resultTitle: normalizeText(job.resultTitle || job.title),
-      sharedMemoSnapshot: ns.shared.normalizeTextBlock(job?.context?.sharedMemoSnapshot || job?.meeting?.sharedMemo),
-      sizeBytes: Math.max(0, Number(job?.source?.sizeBytes) || 0),
-      speakerAliases: normalizeSpeakerAliases(job?.speakerAliases),
-      speakerCount: Math.max(0, Number(job?.transcription?.speakerCount) || 0),
-      status: normalizeText(job.status) || "idle",
-      title: normalizeText(job.resultTitle || job.title || job?.meeting?.title) || normalizeText(fallbackTitle),
-      updatedAt: normalizeText(job.updatedAt),
-    };
-  }
-
-  function normalizeArtifact(artifact) {
-    if (!artifact || typeof artifact !== "object") return null;
-    const segments = Array.isArray(artifact.segments)
-      ? artifact.segments.map((segment) => ({ endMs: Math.max(0, Number(segment.endMs) || 0), speakerLabel: normalizeText(segment.speakerLabel), startMs: Math.max(0, Number(segment.startMs) || 0), text: normalizeText(segment.text) })).filter((segment) => segment.text)
-      : [];
-    return {
-      artifactId: normalizeText(artifact.artifactId),
-      notes: normalizeMeetingNotes(artifact.notes, artifact.notesModeSelected),
-      notesGeneratedAt: normalizeText(artifact.notesGeneratedAt),
-      notesModeConfidence: Math.max(0, Math.min(1, Number(artifact.notesModeConfidence) || 0)),
-      notesModeDetected: normalizeMeetingNotesMode(artifact.notesModeDetected),
-      notesModeSelected: normalizeMeetingNotesMode(artifact.notesModeSelected),
-      notesStyleSelected: normalizeMeetingNotesStyle(artifact.notesStyleSelected),
-      speakerAliases: normalizeSpeakerAliases(artifact.speakerAliases),
-      segments,
-      speakerCount: countSpeakers(segments),
-      text: ns.shared.normalizeTextBlock(artifact.text),
-    };
-  }
-
-  function buildLocalPendingJob(pending) {
-    if (!pending) return null;
-    const totalPrepared = Math.max(0, Number(pending.preparedPartCount) || 0);
-    const totalUploaded = Math.max(0, Number(pending.uploadedPartCount) || 0);
-    const progressPercent = pending.status === "preparing_chunks"
-      ? 18
-      : pending.status === "uploading_chunks"
-        ? Math.min(58, totalPrepared > 0 ? Math.round((totalUploaded / totalPrepared) * 58) : 36)
-        : pending.status === "uploading"
-          ? 35
-          : pending.status === "remote_processing"
-            ? 70
-            : 0;
-    return {
-      artifactId: "",
-      createdAt: normalizeText(pending.createdAt),
-      durationMs: Math.max(0, Number(pending.durationMs) || 0),
-      error: normalizeText(pending.lastError),
-      jobId: normalizeText(pending.jobId),
-      meetingNotes: null,
-      notesGeneratedAt: "",
-      notesModeConfidence: 0,
-      notesModeDetected: "",
-      notesModeSelected: "",
-      notesStyleSelected: "",
-      progress: { percent: progressPercent, phase: normalizeText(pending.status) },
-      requestId: normalizeText(pending.requestId),
-      resultTitle: normalizeText(pending.meetingTitleSnapshot),
-      sharedMemoSnapshot: ns.shared.normalizeTextBlock(pending.sharedMemoSnapshot),
-      sizeBytes: Math.max(0, Number(pending.sizeBytes) || 0),
-      speakerCount: 0,
-      status: normalizeText(pending.status),
-      title: normalizeText(pending.meetingTitleSnapshot),
-      updatedAt: normalizeText(pending.updatedAt),
-    };
-  }
-
-  function findRemoteForPending(state, pending) {
-    if (!pending) return null;
-    const pendingStatus = normalizeText(pending.status);
-    const requestId = normalizeText(pending.requestId);
-    const jobId = normalizeText(pending.jobId);
-    if (!jobId && ["local_saved", "preparing_chunks", "uploading", "uploading_chunks", "upload_queued"].includes(pendingStatus)) {
-      return null;
-    }
-    if (requestId) {
-      const byRequestId = state.records.find((record) => normalizeText(record.requestId) === requestId);
-      if (byRequestId) return byRequestId;
-    }
-    if (jobId) {
-      const byJobId = state.records.find((record) => normalizeText(record.jobId) === jobId);
-      if (byJobId) return byJobId;
-    }
-    return null;
-  }
-
-  function buildHistoryEntries(state) {
-    const consumedRemoteJobs = new Set();
-    const supersededRemoteJobs = new Set(
-      (Array.isArray(state.pendingUploads) ? state.pendingUploads : []).flatMap((pending) =>
-        Array.isArray(pending?.supersededJobIds) ? pending.supersededJobIds : []
-      ).map((jobId) => normalizeText(jobId)).filter(Boolean)
-    );
-    const entries = [];
-    for (const pending of state.pendingUploads) {
-      const remote = findRemoteForPending(state, pending);
-      if (remote?.jobId) {
-        consumedRemoteJobs.add(remote.jobId);
-        entries.push({ createdAt: remote.createdAt || pending.createdAt, durationMs: remote.durationMs || pending.durationMs, id: ns.shared.buildRemoteSelectionId(remote.jobId), pending, remote, status: remote.status, updatedAt: remote.updatedAt || pending.updatedAt });
-      } else {
-        entries.push({ createdAt: pending.createdAt, durationMs: pending.durationMs, id: ns.shared.buildLocalSelectionId(pending.requestId), pending, remote: null, status: pending.status, updatedAt: pending.updatedAt });
-      }
-    }
-    for (const remote of state.records) {
-      if (remote.jobId && consumedRemoteJobs.has(remote.jobId)) continue;
-      if (remote.jobId && supersededRemoteJobs.has(remote.jobId)) continue;
-      entries.push({ createdAt: remote.createdAt, durationMs: remote.durationMs, id: ns.shared.buildRemoteSelectionId(remote.jobId), pending: null, remote, status: remote.status, updatedAt: remote.updatedAt });
-    }
-    return entries.sort((left, right) => ns.shared.toTimestamp(right.updatedAt || right.createdAt) - ns.shared.toTimestamp(left.updatedAt || left.createdAt));
-  }
-
-  function findHistoryEntry(state, recordId) {
-    return buildHistoryEntries(state).find((entry) => entry.id === normalizeText(recordId)) || null;
-  }
-
-  function chooseSelectedRecordId(state) {
-    const historyEntries = buildHistoryEntries(state);
-    if (normalizeText(state.params.jobId)) {
-      const requestedId = ns.shared.buildRemoteSelectionId(state.params.jobId);
-      if (historyEntries.some((entry) => entry.id === requestedId)) return requestedId;
-    }
-    if (normalizeText(state.selectedRecordId) && findHistoryEntry(state, state.selectedRecordId)) {
-      return state.selectedRecordId;
-    }
-    return normalizeText(historyEntries[0]?.id);
-  }
-
-  function buildPendingSummary(pending) {
-    if (!pending) return "";
-    const processingHealth = getProcessingHealth(null, pending);
-    if (pending.status === "local_saved") return "로컬 저장 완료. 곧 업로드를 시작합니다.";
-    if (pending.status === "preparing_chunks") return "큰 오디오를 전사용 chunk로 준비하는 중입니다.";
-    if (pending.status === "upload_queued") return pending.lastError || "온라인 복구 후 자동 업로드합니다.";
-    if (pending.status === "uploading_chunks") return `분할 업로드 중입니다. ${Math.max(0, Number(pending.uploadedPartCount) || 0)}/${Math.max(0, Number(pending.preparedPartCount) || 0)}개 업로드했습니다.`;
-    if (pending.status === "uploading") return "오디오 업로드 중입니다.";
-    if (pending.status === "remote_queued") return "원격 처리 대기열에 접수했습니다.";
-    if (pending.status === "remote_processing" && processingHealth.isStalled) {
-      return `정체 의심 상태입니다. 마지막 갱신 ${processingHealth.updatedAtLabel || "-"}`;
-    }
-    if (pending.status === "remote_processing") return "전사와 회의 정리를 진행 중입니다.";
-    if (pending.status === "succeeded") return "업로드와 정리가 끝났고 로컬 사본을 보관 중입니다.";
-    if (pending.status === "on_hold") return "사용자가 다시 시작할 때까지 보류합니다.";
-    if (pending.status === "failed") return pending.lastError || "처리에 실패했습니다. 다시 처리하면 브라우저에 남은 원본으로 재시작합니다.";
-    return pending.lastError || "";
-  }
-
-  function buildPendingNotice(pending) {
-    if (!pending) return "";
-    const processingHealth = getProcessingHealth(null, pending);
-    if (pending.status === "local_saved") return "브라우저에 저장했고 바로 업로드를 시도합니다.";
-    if (pending.status === "preparing_chunks") return "큰 오디오를 분할해 업로드 가능한 형태로 준비하고 있습니다.";
-    if (pending.status === "upload_queued") return pending.lastError || "온라인 상태를 기다리는 중입니다.";
-    if (pending.status === "uploading_chunks") return "분할 업로드와 큐 등록을 이어가는 중입니다.";
-    if (pending.status === "uploading") return "파일 업로드 중입니다.";
-    if (pending.status === "remote_queued") return "처리 대기 중입니다.";
-    if (pending.status === "remote_processing" && processingHealth.isStalled) {
-      return `마지막 갱신 ${processingHealth.updatedAtLabel || "-"} 이후 10분 넘게 멈췄습니다. 다시 처리로 재시작해 주세요.`;
-    }
-    if (pending.status === "remote_processing") return "전사와 정리 중입니다.";
-    if (pending.status === "succeeded") return "브라우저에 로컬 녹음 사본을 계속 보관 중입니다.";
-    if (pending.status === "on_hold") return "수동 재개 전까지 멈춰 둡니다.";
-    if (pending.status === "failed") return pending.lastError || "문제가 있어 브라우저에 보관한 원본으로 다시 처리해야 합니다.";
-    return "";
-  }
-
-  function buildProcessingNotice(job, pending) {
-    const currentPart = Math.max(0, Number(job?.progress?.currentPart) || 0);
-    const percent = Math.round(Number(job?.progress?.percent) || 0);
-    const phase = formatPhase(job?.progress?.phase || pending?.status);
-    const totalParts = Math.max(0, Number(job?.progress?.totalParts) || 0);
-    const retryCount = Math.max(0, Number(job?.retry?.count) || 0);
-    const processingHealth = getProcessingHealth(job, pending);
-    if (processingHealth.isStalled) {
-      return [
-        "정체 의심",
-        currentPart > 0 && totalParts > 0 ? `${currentPart}/${totalParts}` : "",
-        percent > 0 ? `${percent}%` : "",
-        retryCount > 0 ? `자동 재시도 ${retryCount}회` : "",
-        processingHealth.updatedAtLabel ? `마지막 갱신 ${processingHealth.updatedAtLabel}` : "",
-        "10분 넘게 새 갱신이 없습니다. 다시 처리로 재시작해 주세요.",
-      ].filter(Boolean).join(" · ");
-    }
-    return [
-      phase || "결과를 준비하는 중입니다.",
-      currentPart > 0 && totalParts > 0 ? `${currentPart}/${totalParts}` : "",
-      percent > 0 ? `${percent}%` : "",
-      retryCount > 0 ? `자동 재시도 ${retryCount}회` : "",
-      processingHealth.updatedAtLabel ? `마지막 갱신 ${processingHealth.updatedAtLabel}` : "",
-      pending ? "이 녹음과 별개로 다음 녹음을 바로 시작할 수 있습니다." : "",
-    ].filter(Boolean).join(" · ");
-  }
-
-  function buildChunkProgressModel(job, pending) {
-    const pendingStatus = normalizeText(pending?.status);
-    const totalPendingParts = Math.max(
-      0,
-      Number(pending?.preparedPartCount) || (Array.isArray(pending?.parts) ? pending.parts.length : 0)
-    );
-    const uploadedPendingParts = Math.max(0, Number(pending?.uploadedPartCount) || 0);
-    const jobStatus = normalizeText(job?.status);
-    const progressPhase = normalizeText(job?.progress?.phase);
-    const totalJobParts = Math.max(0, Number(job?.progress?.totalParts) || 0);
-    const currentJobPart = Math.max(0, Number(job?.progress?.currentPart) || 0);
-    const maxParallelParts = Math.max(1, totalJobParts || totalPendingParts || 1);
-    const rawParallelParts = Number(job?.progress?.parallelParts);
-    const configuredParallelParts = Number.isFinite(rawParallelParts) && rawParallelParts >= 0
-      ? Math.max(0, Math.min(maxParallelParts, rawParallelParts))
-      : Math.max(1, Math.min(maxParallelParts, DEFAULT_CHUNK_PROGRESS_ACTIVE_COUNT));
-    const overallPercent = Math.max(0, Math.min(100, Number(job?.progress?.percent) || 0));
-    const buildStages = (prepareTone, uploadTone, processTone) => ([
-      { label: "분할", tone: prepareTone },
-      { label: "업로드", tone: uploadTone },
-      { label: "처리", tone: processTone },
-    ]);
-
-    if (pendingStatus === "preparing_chunks") {
-      return {
-        activeCount: 0,
-        activeIndex: -1,
-        doneCount: 0,
-        percent: 0,
-        stages: buildStages("current", "pending", "pending"),
-        summary: "브라우저에서 청크를 준비하는 중",
-        title: "청크 분할 준비",
-        totalCount: totalPendingParts,
-      };
-    }
-
-    if (pendingStatus === "uploading_chunks" && totalPendingParts > 1) {
-      return {
-        activeCount: uploadedPendingParts < totalPendingParts ? 1 : 0,
-        activeIndex: uploadedPendingParts < totalPendingParts ? uploadedPendingParts : -1,
-        doneCount: Math.min(uploadedPendingParts, totalPendingParts),
-        percent: totalPendingParts > 0 ? Math.round((uploadedPendingParts / totalPendingParts) * 100) : 0,
-        stages: buildStages("done", "current", "pending"),
-        summary: `${Math.min(uploadedPendingParts, totalPendingParts)}/${totalPendingParts}개 업로드 완료`,
-        title: "청크 업로드 진행",
-        totalCount: totalPendingParts,
-      };
-    }
-
-    if (["remote_queued", "remote_processing"].includes(pendingStatus) && totalPendingParts > 1 && totalJobParts <= 0) {
-      return {
-        activeCount: 0,
-        activeIndex: -1,
-        doneCount: totalPendingParts,
-        percent: 100,
-        stages: buildStages("done", "done", pendingStatus === "remote_processing" ? "current" : "pending"),
-        summary: `${totalPendingParts}/${totalPendingParts}개 업로드 완료 · 처리 대기 중`,
-        title: "청크 업로드 완료",
-        totalCount: totalPendingParts,
-      };
-    }
-
-    if (["queued", "processing", "failed"].includes(jobStatus) && totalJobParts > 1) {
-      const allPendingPartsUploaded = totalPendingParts > 0 && uploadedPendingParts >= totalPendingParts;
-      const doneCount = Math.min(currentJobPart, totalJobParts);
-      const remainingCount = Math.max(0, totalJobParts - doneCount);
-      const isChunkTranscribing = progressPhase === "transcribing_chunks";
-      const processingHealth = getProcessingHealth(job, pending);
-      const activeCount = isChunkTranscribing && !processingHealth.isStalled
-        ? Math.min(configuredParallelParts, remainingCount)
-        : 0;
-      const activeIndex = activeCount > 0 ? doneCount : -1;
-      const summaryParts = [];
-      if (allPendingPartsUploaded) {
-        summaryParts.push(`${totalPendingParts}/${totalPendingParts}개 업로드 완료`);
-      }
-      summaryParts.push(`${doneCount}/${totalJobParts}개 전사 완료`);
-      if (jobStatus === "failed") {
-        summaryParts.push("중단됨");
-      } else if (processingHealth.isStalled) {
-        summaryParts.push("10분 이상 갱신 없음");
-      } else if (isChunkTranscribing) {
-        summaryParts.push(activeCount > 1 ? `병렬 ${activeCount}개 처리 중` : "처리 중");
-      } else if (jobStatus === "queued" || progressPhase === "queued") {
-        summaryParts.push("처리 대기 중");
-      } else if (doneCount >= totalJobParts) {
-        summaryParts.push("전사 완료");
-      }
-      if (processingHealth.updatedAtLabel) {
-        summaryParts.push(`마지막 갱신 ${processingHealth.updatedAtLabel}`);
-      }
-      return {
-        activeCount,
-        activeIndex,
-        doneCount,
-        isStalled: processingHealth.isStalled,
-        percent: totalJobParts > 0 ? Math.round((doneCount / totalJobParts) * 100) : overallPercent,
-        stages: buildStages(
-          "done",
-          "done",
-          jobStatus === "failed"
-            ? "failed"
-            : processingHealth.isStalled
-              ? "warning"
-              : doneCount >= totalJobParts && !isChunkTranscribing
-                ? "done"
-                : isChunkTranscribing || jobStatus === "queued" || progressPhase === "queued"
-                  ? "current"
-                  : "done"
-        ),
-        summary: summaryParts.join(" · "),
-        title: jobStatus === "failed"
-          ? "청크 전사 중단"
-          : processingHealth.isStalled
-            ? "청크 전사 정체 의심"
-          : isChunkTranscribing
-            ? "청크 전사 진행"
-            : jobStatus === "queued" || progressPhase === "queued"
-              ? "청크 전사 대기"
-              : "청크 전사 완료",
-        totalCount: totalJobParts,
-      };
-    }
-
-    return null;
-  }
+  const { escapeHtml, formatBytes, formatDateTime, formatDuration, formatSegmentRange, formatStatusLabel, normalizeStatus, normalizeText, normalizeTextBlock } = ns.shared;
+  const { hasMeetingNotes, normalizeMeetingNotes, normalizeTextArray } = ns.notes;
+  const {
+    TERMINAL_REMOTE_STATUSES,
+    buildChunkProgressModel,
+    buildHistoryEntries,
+    buildLocalPendingJob,
+    buildPendingNotice,
+    buildPendingSummary,
+    buildProcessingNotice,
+    buildRecorderView,
+    buildWorkspaceView,
+    chooseSelectedRecordId,
+    comparePendingUploads,
+    findHistoryEntry,
+    findRemoteForPending,
+    getPendingDisplayStatus,
+    getProcessingHealth,
+    normalizeArtifact,
+    normalizeJob,
+    normalizeRecord,
+    normalizeWorkspaceMutation,
+    shouldPrioritizePendingUpload,
+  } = ns.renderState;
+  const DISPLAY_REVIEW_SEGMENT_TARGET_CHARS = 220;
+  const DISPLAY_REVIEW_SEGMENT_MAX_CHARS = 320;
+  const DISPLAY_REVIEW_SEGMENT_MIN_CHARS = 80;
+  const DISPLAY_REVIEW_SEGMENT_TARGET_DURATION_MS = 90 * 1000;
+  const DISPLAY_REVIEW_SEGMENT_MAX_DURATION_MS = 150 * 1000;
+  const DISPLAY_REVIEW_SEGMENT_MIN_DURATION_MS = 25 * 1000;
 
   function renderChunkProgress(model) {
     if (!model) return "";
@@ -442,105 +81,205 @@
     ].filter(Boolean).join("");
   }
 
-  function buildNotesSummaryMeta(meta, selectedStyle) {
-    const appliedMode = normalizeMeetingNotesMode(meta?.selected || meta?.detected) || DEFAULT_NOTES_MODE;
-    const appliedStyle = normalizeMeetingNotesStyle(selectedStyle || meta?.styleSelected) || DEFAULT_NOTES_STYLE;
-    return `AI 판단 ${formatNotesModeLabel(appliedMode)} · 표현 ${formatNotesStyleLabel(appliedStyle)}`;
-  }
-
-  function compareSpeakerLabelOrder(left, right) {
-    const leftLabel = normalizeText(left);
-    const rightLabel = normalizeText(right);
-    const leftMatch = leftLabel.match(/^SPEAKER_(\d+)$/i);
-    const rightMatch = rightLabel.match(/^SPEAKER_(\d+)$/i);
-    if (leftMatch && rightMatch) {
-      return Number.parseInt(leftMatch[1], 10) - Number.parseInt(rightMatch[1], 10);
+  function buildCompletedRecordSummary(notes) {
+    const overview = normalizeTextBlock(notes?.overview);
+    if (overview) return overview;
+    const purpose = normalizeTextBlock(notes?.meetingMeta?.purpose);
+    if (purpose) return purpose;
+    const firstFlow = (Array.isArray(notes?.discussionFlow) ? notes.discussionFlow : []).find((item) => {
+      const headline = normalizeText(item?.narrative || item?.heading);
+      return Boolean(headline || normalizeTextArray(item?.keyPoints).length);
+    });
+    if (firstFlow) {
+      const narrative = normalizeText(firstFlow?.narrative || firstFlow?.heading);
+      if (narrative) return narrative;
+      const firstKeyPoint = normalizeTextArray(firstFlow?.keyPoints)[0];
+      if (firstKeyPoint) return firstKeyPoint;
     }
-    if (leftMatch) return -1;
-    if (rightMatch) return 1;
-    return leftLabel.localeCompare(rightLabel, "ko");
+    const firstDecision = normalizeText(Array.isArray(notes?.decisions) ? notes.decisions[0]?.text : "");
+    if (firstDecision) return `주요 결정: ${firstDecision}`;
+    const firstAction = normalizeText(Array.isArray(notes?.actionItems) ? notes.actionItems[0]?.task : "");
+    if (firstAction) return `후속 실행: ${firstAction}`;
+    return "";
   }
 
-  function listSpeakerLabels(segments) {
-    return Array.from(
-      new Set(
-        (Array.isArray(segments) ? segments : [])
-          .map((segment) => normalizeText(segment?.speakerLabel))
-          .filter(Boolean)
-      )
-    ).sort(compareSpeakerLabelOrder);
-  }
-
-  function buildSpeakerEditorItems(segments, savedSpeakerAliases, draftSpeakerAliases) {
-    return listSpeakerLabels(segments).map((speakerLabel) => ({
-      alias: normalizeText(draftSpeakerAliases?.[speakerLabel] || ""),
-      defaultLabel: formatSpeakerLabel(speakerLabel),
-      displayLabel: resolveSpeakerDisplayName(speakerLabel, savedSpeakerAliases),
-      speakerLabel,
-    }));
-  }
-
-  function buildSpeakerSummaryEntries(speakerSummaries, segments, speakerAliases) {
-    const segmentMetaMap = new Map();
-    for (const segment of Array.isArray(segments) ? segments : []) {
-      const speakerLabel = normalizeText(segment?.speakerLabel);
-      const text = normalizeText(segment?.text);
-      if (!speakerLabel || !text) continue;
-      const startMs = Math.max(0, Number(segment?.startMs) || 0);
-      const endMs = Math.max(startMs, Number(segment?.endMs) || startMs);
-      if (!segmentMetaMap.has(speakerLabel)) {
-        segmentMetaMap.set(speakerLabel, { firstStartMs: startMs, segmentCount: 0, totalDurationMs: 0 });
-      }
-      const entry = segmentMetaMap.get(speakerLabel);
-      entry.firstStartMs = Math.min(entry.firstStartMs, startMs);
-      entry.segmentCount += 1;
-      entry.totalDurationMs += Math.max(0, endMs - startMs);
+  function splitSegmentTextIntoDisplaySentences(text) {
+    const normalized = normalizeTextBlock(text).replace(/\s+/g, " ").trim();
+    if (!normalized) {
+      return [];
     }
-    return (Array.isArray(speakerSummaries) ? speakerSummaries : [])
-      .map((item) => {
-        const speakerLabel = normalizeText(item?.speakerLabel);
-        if (!speakerLabel) return null;
-        const meta = segmentMetaMap.get(speakerLabel);
-        return {
-          displayLabel: resolveSpeakerDisplayName(speakerLabel, speakerAliases) || formatSpeakerLabel(speakerLabel) || "화자",
-          keyPoints: normalizeTextArray(item?.keyPoints),
-          metaText: [
-            meta?.segmentCount > 0 ? `발화 ${meta.segmentCount}개` : "",
-            meta?.totalDurationMs > 0 ? formatDuration(meta.totalDurationMs) : "",
-          ].filter(Boolean).join(" · "),
-          sortStartMs: Number(meta?.firstStartMs) || Number.MAX_SAFE_INTEGER,
-          speakerLabel,
-          summary: normalizeText(item?.summary),
-        };
-      })
-      .filter(Boolean)
-      .sort((left, right) => {
-        if (left.sortStartMs !== right.sortStartMs) {
-          return left.sortStartMs - right.sortStartMs;
-        }
-        return compareSpeakerLabelOrder(left.speakerLabel, right.speakerLabel);
-      });
-  }
-
-  function buildTranscriptTextForDisplay(segments, fallbackText, speakerAliases) {
-    const lines = (Array.isArray(segments) ? segments : [])
-      .map((segment) => {
-        const text = normalizeText(segment?.text);
-        if (!text) return "";
-        return `${resolveSpeakerDisplayName(segment?.speakerLabel, speakerAliases)}: ${text}`;
-      })
+    const sentences = normalized.match(/[^.!?。！？…]+(?:[.!?。！？…]+|$)/g) || [normalized];
+    const normalizedSentences = sentences.map((sentence) => normalizeText(sentence)).filter(Boolean);
+    if (normalizedSentences.length > 1) {
+      return normalizedSentences;
+    }
+    const clauses = normalized
+      .split(/(?<=[,，;])\s+|(?=\b(?:그리고|하지만|다만|또|또는|그래서)\b)/)
+      .map((clause) => normalizeText(clause))
       .filter(Boolean);
-    return normalizeTextBlock(lines.join("\n") || fallbackText);
+    if (clauses.length > 1) {
+      return clauses;
+    }
+    const words = normalized.split(/\s+/).map((word) => normalizeText(word)).filter(Boolean);
+    if (words.length <= 1) {
+      return [normalized];
+    }
+    const chunks = [];
+    let current = [];
+    let currentLength = 0;
+    for (const word of words) {
+      const nextLength = currentLength + word.length + (current.length ? 1 : 0);
+      if (current.length && nextLength > DISPLAY_REVIEW_SEGMENT_TARGET_CHARS) {
+        chunks.push(current.join(" "));
+        current = [word];
+        currentLength = word.length;
+        continue;
+      }
+      current.push(word);
+      currentLength = nextLength;
+    }
+    if (current.length) {
+      chunks.push(current.join(" "));
+    }
+    return chunks.length ? chunks : [normalized];
   }
 
-  function buildSegmentCopyText(segments, fallbackText, speakerAliases) {
+  function buildDisplaySegmentChunk(sourceSegment, sentences, totalChars, consumedChars, chunkChars) {
+    const text = normalizeTextBlock((Array.isArray(sentences) ? sentences : []).join(" "));
+    if (!text) {
+      return null;
+    }
+    const startMs = Math.max(0, Number(sourceSegment?.startMs) || 0);
+    const endMs = Math.max(startMs, Number(sourceSegment?.endMs) || 0);
+    const durationMs = Math.max(0, endMs - startMs);
+    if (!durationMs || totalChars <= 0) {
+      return {
+        endMs,
+        startMs,
+        text,
+      };
+    }
+    const chunkStartRatio = Math.max(0, Math.min(1, consumedChars / totalChars));
+    const chunkEndRatio = Math.max(chunkStartRatio, Math.min(1, (consumedChars + chunkChars) / totalChars));
+    const chunkStartMs = Math.round(startMs + (durationMs * chunkStartRatio));
+    const chunkEndMs = Math.max(chunkStartMs + 1, Math.round(startMs + (durationMs * chunkEndRatio)));
+    return {
+      endMs: Math.min(endMs, chunkEndMs),
+      startMs: Math.min(endMs, chunkStartMs),
+      text,
+    };
+  }
+
+  function mergeDisplaySegmentChunks(left, right) {
+    const leftText = normalizeTextBlock(left?.text);
+    const rightText = normalizeTextBlock(right?.text);
+    if (!leftText) return right || null;
+    if (!rightText) return left || null;
+    return {
+      endMs: Math.max(Number(left?.endMs) || 0, Number(right?.endMs) || 0),
+      startMs: Math.min(Number(left?.startMs) || 0, Number(right?.startMs) || 0),
+      text: `${leftText} ${rightText}`.replace(/\s+/g, " ").trim(),
+    };
+  }
+
+  function resegmentSingleSegmentForDisplay(segment) {
+    const normalizedText = normalizeTextBlock(segment?.text);
+    if (!normalizedText) {
+      return [];
+    }
+    const startMs = Math.max(0, Number(segment?.startMs) || 0);
+    const endMs = Math.max(startMs, Number(segment?.endMs) || 0);
+    const durationMs = Math.max(0, endMs - startMs);
+    if (
+      normalizedText.length <= DISPLAY_REVIEW_SEGMENT_MAX_CHARS
+      && (!durationMs || durationMs <= DISPLAY_REVIEW_SEGMENT_MAX_DURATION_MS)
+    ) {
+      return [{ endMs, startMs, text: normalizedText }];
+    }
+    const sentences = splitSegmentTextIntoDisplaySentences(normalizedText);
+    if (!sentences.length) {
+      return [{ endMs, startMs, text: normalizedText }];
+    }
+    const totalChars = sentences.reduce((sum, sentence) => sum + sentence.length, 0);
+    const chunks = [];
+    let currentSentences = [];
+    let currentChars = 0;
+    let consumedChars = 0;
+    const pushChunk = () => {
+      const chunk = buildDisplaySegmentChunk(segment, currentSentences, totalChars, consumedChars, currentChars);
+      if (chunk) {
+        chunks.push(chunk);
+        consumedChars += currentChars;
+      }
+      currentSentences = [];
+      currentChars = 0;
+    };
+    for (const sentence of sentences) {
+      const nextChars = currentChars + sentence.length + (currentSentences.length ? 1 : 0);
+      const nextDurationEstimate = totalChars > 0 && durationMs > 0
+        ? Math.round((nextChars / totalChars) * durationMs)
+        : 0;
+      const shouldSplitBeforeAdding = currentSentences.length
+        && currentChars >= DISPLAY_REVIEW_SEGMENT_MIN_CHARS
+        && (
+          nextChars > DISPLAY_REVIEW_SEGMENT_TARGET_CHARS
+          || nextDurationEstimate > DISPLAY_REVIEW_SEGMENT_TARGET_DURATION_MS
+        );
+      const mustSplitBeforeAdding = currentSentences.length
+        && (
+          nextChars > DISPLAY_REVIEW_SEGMENT_MAX_CHARS
+          || nextDurationEstimate > DISPLAY_REVIEW_SEGMENT_MAX_DURATION_MS
+        );
+      if (shouldSplitBeforeAdding || mustSplitBeforeAdding) {
+        pushChunk();
+      }
+      currentSentences.push(sentence);
+      currentChars += sentence.length + (currentSentences.length > 1 ? 1 : 0);
+    }
+    if (currentSentences.length) {
+      pushChunk();
+    }
+    if (chunks.length >= 2) {
+      const last = chunks[chunks.length - 1];
+      const lastDurationMs = Math.max(0, (Number(last?.endMs) || 0) - (Number(last?.startMs) || 0));
+      if (
+        normalizeTextBlock(last?.text).length < DISPLAY_REVIEW_SEGMENT_MIN_CHARS
+        || (lastDurationMs > 0 && lastDurationMs < DISPLAY_REVIEW_SEGMENT_MIN_DURATION_MS)
+      ) {
+        const merged = mergeDisplaySegmentChunks(chunks[chunks.length - 2], last);
+        if (merged) {
+          chunks.splice(chunks.length - 2, 2, merged);
+        }
+      }
+    }
+    return chunks.filter((chunk) => normalizeTextBlock(chunk?.text));
+  }
+
+  function resegmentSegmentsForDisplay(segments) {
+    return (Array.isArray(segments) ? segments : [])
+      .flatMap((segment) => resegmentSingleSegmentForDisplay(segment))
+      .filter((segment) => normalizeTextBlock(segment?.text));
+  }
+
+  function buildTranscriptTextForDisplay(segments, fallbackText) {
     const lines = (Array.isArray(segments) ? segments : [])
       .map((segment) => {
         const text = normalizeText(segment?.text);
         if (!text) return "";
         const range = normalizeText(formatSegmentRange(segment?.startMs, segment?.endMs));
-        const speaker = resolveSpeakerDisplayName(segment?.speakerLabel, speakerAliases);
-        return `${range ? `[${range}] ` : ""}${speaker}: ${text}`;
+        return range ? `[${range}] ${text}` : text;
+      })
+      .filter(Boolean);
+    return normalizeTextBlock(lines.join("\n") || fallbackText);
+  }
+
+  function buildSegmentCopyText(segments, fallbackText) {
+    const lines = (Array.isArray(segments) ? segments : [])
+      .map((segment) => {
+        const text = normalizeText(segment?.text);
+        if (!text) return "";
+        const range = normalizeText(formatSegmentRange(segment?.startMs, segment?.endMs));
+        return `${range ? `[${range}] ` : ""}${text}`;
       })
       .filter(Boolean);
     return normalizeTextBlock(lines.join("\n") || fallbackText);
@@ -558,45 +297,312 @@
   }
 
   function buildMeetingNotesSections(notes) {
-    const sections = [];
-    pushSection(sections, "논의된 내용", notes.topics.map(formatTopicItem));
-    if (notes.mode === "interview") {
-      pushSection(sections, "인터뷰 포인트", [
-        ...normalizeTextArray(notes.modeSpecific?.strengths),
-        ...normalizeTextArray(notes.modeSpecific?.concerns),
-      ]);
-    } else if (notes.mode === "review") {
-      pushSection(sections, "검토 포인트", [
-        ...normalizeTextArray(notes.modeSpecific?.wins),
-        ...normalizeTextArray(notes.modeSpecific?.problems),
-        ...normalizeTextArray(notes.modeSpecific?.rootCauses),
-        ...normalizeTextArray(notes.modeSpecific?.improvements),
-      ]);
-    } else if (notes.mode === "planning") {
-      pushSection(sections, "범위와 일정 메모", [
-        ...normalizeTextArray(notes.modeSpecific?.scopeItems),
-        ...normalizeTextArray(notes.modeSpecific?.milestones),
-      ]);
-    }
-    pushSection(sections, "결정된 내용", notes.decisions.map(formatDecisionItem));
-    pushSection(sections, "열린 쟁점", [
-      ...normalizeTextArray(notes.openQuestions),
-      ...normalizeTextArray(notes.modeSpecific?.followUpQuestions),
-      ...normalizeTextArray(notes.modeSpecific?.dependencies),
-      ...notes.risksOrDependencies.map(formatRiskItem),
-    ]);
-    pushSection(sections, "액션 아이템", notes.actionItems.map(formatActionItem));
-    pushSection(sections, "메모 반영", notes.memoHighlights.map(formatMemoItem));
-    return sections;
+    return [
+      buildMeetingOverviewSection(notes),
+      buildDiscussionFlowSection(notes?.discussionFlow),
+      buildSimpleListSection("주요 결정 사항", normalizeDecisionItemsForDisplay(notes?.decisions)),
+      buildSimpleListSection("추가 결정 필요 사항", normalizeTextArray(notes?.openQuestions)),
+      buildSimpleListSection("리스크 및 제약", normalizeRiskItemsForDisplay(notes?.risksOrDependencies)),
+      buildSimpleListSection("후속 실행 항목", normalizeActionItemsForDisplay(notes?.actionItems)),
+    ].filter(Boolean);
   }
 
-  function pushSection(target, title, items) {
-    const normalizedItems = (Array.isArray(items) ? items : []).map((item) => ns.shared.normalizeTextBlock(item)).filter(Boolean);
-    if (normalizedItems.length) target.push({ items: normalizedItems, title });
+  function normalizeNotesContextItem(item) {
+    const nextItem = item && typeof item === "object" ? item : {};
+    return {
+      contextId: normalizeText(nextItem.contextId || nextItem.id),
+      createdAt: normalizeText(nextItem.createdAt),
+      text: normalizeTextBlock(nextItem.text || nextItem.context || nextItem.value),
+      updatedAt: normalizeText(nextItem.updatedAt || nextItem.createdAt),
+    };
+  }
+
+  function normalizeNotesContextItems(input) {
+    const seen = new Set();
+    const items = [];
+    for (const item of Array.isArray(input) ? input : []) {
+      const normalized = normalizeNotesContextItem(item);
+      const key = normalizeText(normalized.contextId || normalized.text).toLowerCase();
+      if (!normalized.text || (key && seen.has(key))) {
+        continue;
+      }
+      if (key) {
+        seen.add(key);
+      }
+      items.push(normalized);
+    }
+    return items;
+  }
+
+  function normalizeNotesInputSnapshot(input, fallbackInput) {
+    const snapshot = input && typeof input === "object" ? input : {};
+    const fallback = fallbackInput && typeof fallbackInput === "object" ? fallbackInput : {};
+    const hasContextItems = Array.isArray(snapshot.contextItems);
+    const sharedMemo = normalizeTextBlock(
+      Object.prototype.hasOwnProperty.call(snapshot, "sharedMemo")
+        ? snapshot.sharedMemo
+        : fallback.sharedMemo
+    );
+    const contextItems = normalizeNotesContextItems(hasContextItems ? snapshot.contextItems : fallback.contextItems);
+    const updatedAt = normalizeText(snapshot.updatedAt || fallback.updatedAt);
+    if (!sharedMemo && !contextItems.length && !updatedAt) {
+      return {
+        contextItems: [],
+        sharedMemo: "",
+        updatedAt: "",
+      };
+    }
+    return {
+      contextItems,
+      sharedMemo,
+      updatedAt,
+    };
+  }
+
+  function areNotesContextItemsEqual(leftItems, rightItems) {
+    const left = normalizeNotesContextItems(leftItems);
+    const right = normalizeNotesContextItems(rightItems);
+    if (left.length !== right.length) {
+      return false;
+    }
+    return left.every((item, index) =>
+      normalizeText(item.contextId) === normalizeText(right[index]?.contextId)
+      && normalizeTextBlock(item.text) === normalizeTextBlock(right[index]?.text)
+    );
+  }
+
+  function buildMeetingOverviewSection(notes) {
+    const purpose = normalizeTextBlock(notes?.meetingMeta?.purpose);
+    const overview = normalizeTextBlock(notes?.overview);
+    const participants = normalizeTextArray(notes?.meetingMeta?.participants);
+    const datetime = normalizeText(notes?.meetingMeta?.datetime);
+    const paragraphs = [purpose, overview].filter(Boolean);
+    if (!paragraphs.length && !participants.length && !datetime) {
+      return null;
+    }
+    return {
+      metaItems: [
+        datetime ? `일시 ${datetime}` : "",
+        participants.length ? `참여자 ${participants.join(", ")}` : "",
+      ].filter(Boolean),
+      paragraphs,
+      title: "회의 개요",
+      type: "prose",
+    };
+  }
+
+  function normalizeDecisionItemsForDisplay(items) {
+    return (Array.isArray(items) ? items : [])
+      .map((item) => {
+        const text = normalizeText(item?.text);
+        if (!text) {
+          return null;
+        }
+        const meta = normalizeText(item?.owner) ? `담당: ${normalizeText(item.owner)}` : "";
+        return { body: "", headline: text, meta };
+      })
+      .filter(Boolean);
+  }
+
+  function normalizeActionItemsForDisplay(items) {
+    return (Array.isArray(items) ? items : [])
+      .map((item) => {
+        const task = normalizeText(item?.task);
+        if (!task) {
+          return null;
+        }
+        const metaParts = [
+          normalizeText(item?.assignee) ? `담당: ${normalizeText(item.assignee)}` : "",
+          normalizeText(item?.dueDate) ? `기한: ${normalizeText(item.dueDate)}` : "",
+          normalizeText(item?.status) ? `상태: ${normalizeText(item.status)}` : "",
+        ].filter(Boolean);
+        return { body: "", headline: task, meta: metaParts.join(" · ") };
+      })
+      .filter(Boolean);
+  }
+
+  function normalizeRiskItemsForDisplay(items) {
+    return (Array.isArray(items) ? items : [])
+      .map((item) => {
+        const text = normalizeText(item?.text);
+        if (!text) {
+          return null;
+        }
+        const meta = normalizeText(item?.severity) ? `심각도: ${normalizeText(item.severity)}` : "";
+        return { body: "", headline: text, meta };
+      })
+      .filter(Boolean);
+  }
+
+  function buildDiscussionFlowSection(items) {
+    const normalizedItems = (Array.isArray(items) ? items : [])
+      .map((item) => ({
+        heading: normalizeText(item?.heading),
+        keyPoints: normalizeTextArray(item?.keyPoints),
+        narrative: normalizeTextBlock(item?.narrative),
+      }))
+      .filter((item) => item.heading || item.narrative || item.keyPoints.length);
+    if (!normalizedItems.length) {
+      return null;
+    }
+    return {
+      items: normalizedItems,
+      title: "논의 흐름",
+      type: "flow",
+    };
+  }
+
+  function buildSimpleListSection(title, items) {
+    const normalizedItems = (Array.isArray(items) ? items : [])
+      .map((item) => {
+        if (typeof item === "string") {
+          const text = normalizeTextBlock(item);
+          return text ? { body: "", headline: text, meta: "" } : null;
+        }
+        const headline = normalizeTextBlock(item?.headline);
+        const body = normalizeTextBlock(item?.body);
+        const meta = normalizeText(item?.meta);
+        if (!headline && !body) {
+          return null;
+        }
+        return {
+          body,
+          headline: headline || body,
+          meta,
+        };
+      })
+      .filter(Boolean);
+    if (!normalizedItems.length) {
+      return null;
+    }
+    return {
+      items: normalizedItems,
+      title,
+      type: "list",
+    };
+  }
+
+  function splitNotesParagraphs(text) {
+    return normalizeTextBlock(text)
+      .split("\n")
+      .map((paragraph) => normalizeTextBlock(paragraph))
+      .filter(Boolean);
+  }
+
+  function renderNotesProse(paragraphs) {
+    const normalized = (Array.isArray(paragraphs) ? paragraphs : [])
+      .flatMap((paragraph) => splitNotesParagraphs(paragraph))
+      .filter(Boolean);
+    if (!normalized.length) {
+      return "";
+    }
+    return `<div class="notes-prose">${normalized.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("")}</div>`;
+  }
+
+  function renderNotesMetaRow(items) {
+    const normalized = (Array.isArray(items) ? items : []).map((item) => normalizeText(item)).filter(Boolean);
+    if (!normalized.length) {
+      return "";
+    }
+    return `<div class="notes-meta-row">${normalized.map((item) => `<span class="notes-meta-chip">${escapeHtml(item)}</span>`).join("")}</div>`;
+  }
+
+  function renderNotesListItem(item) {
+    const headline = normalizeTextBlock(item?.headline);
+    const body = normalizeTextBlock(item?.body);
+    const meta = normalizeText(item?.meta);
+    if (!headline && !body) {
+      return "";
+    }
+    return `<li class="notes-list__item"><div class="notes-list__headline">${escapeHtml(headline || body)}</div>${meta ? `<div class="notes-list__meta">${escapeHtml(meta)}</div>` : ""}${body && body !== headline ? `<div class="notes-list__body">${renderNotesProse([body])}</div>` : ""}</li>`;
   }
 
   function renderNotesSection(section) {
-    return `<section class="notes-section"><h3 class="notes-section__title">${escapeHtml(section.title)}</h3><ul class="notes-list">${section.items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section>`;
+    if (!section) {
+      return "";
+    }
+    if (section.type === "prose") {
+      return `<section class="notes-section"><h3 class="notes-section__title">${escapeHtml(section.title)}</h3>${renderNotesMetaRow(section.metaItems)}${renderNotesProse(section.paragraphs)}</section>`;
+    }
+    if (section.type === "flow") {
+      return `<section class="notes-section"><h3 class="notes-section__title">${escapeHtml(section.title)}</h3><div class="notes-flow">${section.items.map((item) => `<article class="notes-flow__item"><h4 class="notes-flow__heading">${escapeHtml(item.heading || "주요 논의")}</h4>${renderNotesProse([item.narrative])}${item.keyPoints.length ? `<ul class="notes-flow__points">${item.keyPoints.map((point) => `<li>${escapeHtml(point)}</li>`).join("")}</ul>` : ""}</article>`).join("")}</div></section>`;
+    }
+    return `<section class="notes-section"><h3 class="notes-section__title">${escapeHtml(section.title)}</h3><ul class="notes-list">${section.items.map((item) => renderNotesListItem(item)).join("")}</ul></section>`;
+  }
+
+  function renderNotesOverview(notes) {
+    const summary = buildCompletedRecordSummary(notes);
+    if (!summary) {
+      return "";
+    }
+    return `<section class="notes-section"><h3 class="notes-section__title">핵심 요약</h3>${renderNotesProse([summary])}</section>`;
+  }
+
+  function buildMeetingNotesCopyText(notes) {
+    const normalized = normalizeMeetingNotes(notes);
+    if (!hasMeetingNotes(normalized)) {
+      return "";
+    }
+    const blocks = [];
+    const summary = buildCompletedRecordSummary(normalized);
+    if (summary) {
+      blocks.push(["핵심 요약", ...splitNotesParagraphs(summary)].filter(Boolean).join("\n"));
+    }
+    for (const section of buildMeetingNotesSections(normalized)) {
+      const sectionText = buildMeetingNotesCopySectionText(section);
+      if (sectionText) {
+        blocks.push(sectionText);
+      }
+    }
+    return blocks.join("\n\n").trim();
+  }
+
+  function buildMeetingNotesCopySectionText(section) {
+    if (!section) {
+      return "";
+    }
+    if (section.type === "prose") {
+      return [
+        normalizeText(section.title),
+        ...normalizeTextArray(section.metaItems),
+        ...(Array.isArray(section.paragraphs) ? section.paragraphs.flatMap((paragraph) => splitNotesParagraphs(paragraph)) : []),
+      ].filter(Boolean).join("\n");
+    }
+    if (section.type === "flow") {
+      const items = (Array.isArray(section.items) ? section.items : [])
+        .map((item, index) => buildMeetingNotesCopyFlowItemText(item, index))
+        .filter(Boolean);
+      return [normalizeText(section.title), ...items].filter(Boolean).join("\n");
+    }
+    const items = (Array.isArray(section.items) ? section.items : [])
+      .map((item) => buildMeetingNotesCopyListItemText(item))
+      .filter(Boolean);
+    return [normalizeText(section.title), ...items].filter(Boolean).join("\n");
+  }
+
+  function buildMeetingNotesCopyFlowItemText(item, index) {
+    const heading = normalizeText(item?.heading) || `주요 논의 ${index + 1}`;
+    const narrative = splitNotesParagraphs(item?.narrative);
+    const keyPoints = normalizeTextArray(item?.keyPoints);
+    return [
+      `${index + 1}. ${heading}`,
+      ...narrative,
+      ...keyPoints.map((point) => `- ${point}`),
+    ].filter(Boolean).join("\n");
+  }
+
+  function buildMeetingNotesCopyListItemText(item) {
+    const headline = normalizeTextBlock(item?.headline || item?.body);
+    const meta = normalizeText(item?.meta);
+    const bodyLines = splitNotesParagraphs(item?.body).filter((line) => line !== headline);
+    if (!headline && !bodyLines.length) {
+      return "";
+    }
+    return [
+      headline ? `- ${headline}` : "",
+      meta ? `  ${meta}` : "",
+      ...bodyLines.map((line) => `  ${line}`),
+    ].filter(Boolean).join("\n");
   }
 
   function buildStatusFlow(detailView, options = {}) {
@@ -604,11 +610,7 @@
     const recordSelected = normalizedStatus !== "idle";
     const isFailed = normalizedStatus === "failed";
     const isBusy = ["queued", "processing", "uploading", "uploading_chunks", "preparing_chunks", "remote_queued", "remote_processing"].includes(normalizedStatus);
-    const speakerCount = Math.max(0, Number(options.speakerCount) || 0);
     const segmentCount = Math.max(0, Number(options.segmentCount) || 0);
-    const speakerAliasCount = Math.max(0, Number(options.speakerAliasCount) || 0);
-    const speakerSummaryCount = Math.max(0, Number(options.speakerSummaryCount) || 0);
-    const recordTitle = normalizeText(detailView.recordTitle || detailView.title);
     const steps = [];
     const facts = [];
     const pushStep = (title, state, detail, stateLabelOverride = "") => {
@@ -628,45 +630,25 @@
     pushStep("기록 선택", recordSelected ? "done" : "current", recordSelected ? "기록 선택됨" : "검토할 기록을 고릅니다.", recordSelected ? "" : "선택");
 
     if (isFailed) {
-      pushStep("발화 구간", "failed", "오류로 중단되었습니다.");
+      pushStep("원문", "failed", "오류로 중단되었습니다.");
     } else if (options.hasSegmentContent) {
-      pushStep("발화 구간", "done", [speakerCount > 0 ? `화자 ${speakerCount}명` : "", segmentCount > 0 ? `구간 ${segmentCount}개` : "전사 준비 완료"].filter(Boolean).join(" · "));
+      pushStep("원문", "done", segmentCount > 0 ? `구간 ${segmentCount}개 확인 가능` : "전사 텍스트 준비 완료");
     } else if (isBusy) {
-      pushStep("발화 구간", "current", "전사 결과를 준비하는 중입니다.");
+      pushStep("원문", "current", "전사 결과를 준비하는 중입니다.");
     } else if (recordSelected) {
-      pushStep("발화 구간", "warning", "인식된 발화가 아직 충분하지 않습니다.");
+      pushStep("원문", "warning", "인식된 발화가 아직 충분하지 않습니다.");
     } else {
-      pushStep("발화 구간", "pending", "기록 선택 후 전사를 확인합니다.");
+      pushStep("원문", "pending", "기록 선택 후 전사를 확인합니다.");
     }
 
     if (isFailed) {
       pushStep("회의 정리", "failed", "오류 해결 후 다시 생성합니다.");
     } else if (options.hasNotesValue) {
-      pushStep("회의 정리", "done", [options.notesModeLabel, options.generatedAt].filter(Boolean).join(" · ") || "회의 정리가 준비됐습니다.");
+      pushStep("회의 정리", "done", options.generatedAt ? `마지막 정리 ${options.generatedAt}` : "회의 정리가 준비됐습니다.");
     } else if (options.hasSegmentContent) {
-      pushStep("회의 정리", "warning", "다시 정리하면 생성됩니다.", "재정리");
+      pushStep("회의 정리", isBusy ? "current" : "warning", isBusy ? "전사를 바탕으로 회의 정리를 만드는 중입니다." : "추가 맥락으로 같은 전사를 더 정확한 문서로 업데이트할 수 있습니다.", isBusy ? "진행" : "보완");
     } else {
       pushStep("회의 정리", isBusy ? "current" : "pending", "전사 확보 후 생성됩니다.");
-    }
-
-    if (speakerCount <= 0) {
-      pushStep("화자 이름", options.hasSegmentContent ? "pending" : "pending", "화자 인식 후 이름을 반영합니다.");
-    } else if (speakerAliasCount >= speakerCount) {
-      pushStep("화자 이름", "done", `${speakerAliasCount}/${speakerCount}명 반영`);
-    } else if (speakerAliasCount > 0) {
-      pushStep("화자 이름", "current", `${speakerAliasCount}/${speakerCount}명 반영`, "입력");
-    } else {
-      pushStep("화자 이름", "current", `${speakerCount}명 이름 지정 가능`, "입력");
-    }
-
-    if (isFailed) {
-      pushStep("화자별 정리", "failed", "오류 해결 후 다시 생성합니다.");
-    } else if (options.hasSpeakerSummaryValue) {
-      pushStep("화자별 정리", "done", `${speakerSummaryCount || speakerCount || 0}명 요약 준비`);
-    } else if (options.hasNotesValue) {
-      pushStep("화자별 정리", "warning", "다시 정리하면 생성됩니다.", "재정리");
-    } else {
-      pushStep("화자별 정리", "pending", "회의 정리 후 채워집니다.");
     }
 
     if (isFailed) {
@@ -674,16 +656,14 @@
     } else if (options.hasNotesValue && options.hasSegmentContent) {
       pushStep("검토 마무리", "done", "복사 · 다운로드 · 제목 수정");
     } else if (options.hasSegmentContent) {
-      pushStep("검토 마무리", "current", "발화 구간부터 확인할 수 있습니다.", "검토");
+      pushStep("검토 마무리", "current", "원문부터 확인할 수 있습니다.", "검토");
     } else {
       pushStep("검토 마무리", "pending", "결과가 준비되면 검토합니다.");
     }
 
     if (recordSelected && !["idle", "succeeded"].includes(normalizedStatus)) pushFact("현재 상태", detailView.badgeLabel);
-    if (speakerCount > 0) pushFact("화자", `${speakerCount}명`);
-    if (segmentCount > 0) pushFact("발화", `${segmentCount}개`);
-    pushFact("AI 판단", options.notesModeLabel);
-    pushFact("표현 방식", options.notesStyleLabel);
+    if (segmentCount > 0) pushFact("원문", `${segmentCount}개`);
+    pushFact("품질 주의", options.degradedReason);
     pushFact("마지막 정리", options.generatedAt);
 
     const focusIndex = steps.findIndex((step) => step.state !== "done");
@@ -732,13 +712,7 @@
       return detailView.notice;
     }
     if (!options.hasNotesValue) {
-      return "회의 정리를 한 번 다시 돌리면 됩니다.";
-    }
-    if (!options.hasSpeakerSummaryValue) {
-      return "화자별 정리는 다시 정리 후 채워집니다.";
-    }
-    if (detailView.showSpeakerEditor && options.speakerCount > Object.keys(detailView.speakerAliases || {}).length) {
-      return "화자명을 저장한 뒤 다시 정리하면 결과가 더 자연스럽습니다.";
+      return "전사를 기준으로 회의 정리를 다시 만들 수 있습니다.";
     }
     return "";
   }
@@ -748,8 +722,9 @@
     return `<button type="button" class="mini-button${toneClass}" data-local-action="${escapeHtml(action)}" data-request-id="${escapeHtml(requestId)}">${escapeHtml(label)}</button>`;
   }
 
-  function buildPendingActions(pending, remote) {
+  function buildPendingActions(pending, remote, options = {}) {
     if (!pending) return "";
+    if (options.readOnly) return "";
     const buttons = [];
     const processingHealth = getProcessingHealth(remote, pending);
     if (pending.status === "remote_processing" && processingHealth.isStalled) {
@@ -763,109 +738,14 @@
     return buttons.length ? `<div class="record-item__actions">${buttons.join("")}</div>` : "";
   }
 
-  function buildWorkspaceView(state, historyEntries) {
-    const hasActionableLocalCopies = state.pendingUploads.some((item) => item.status !== "succeeded");
-    if (!ns.shared.isOnline(global)) {
-      return {
-        badgeLabel: "오프라인",
-        badgeStatus: "queued",
-        meetingStatus: state.pendingUploads.length ? "로컬 보관 중" : "오프라인",
-        pageSummary: "오프라인 상태입니다.",
-      };
-    }
-    if (state.capture.status === "recording") {
-      return {
-        badgeLabel: "녹음 중",
-        badgeStatus: "recording",
-        meetingStatus: "녹음 진행",
-        pageSummary: "녹음 중입니다.",
-      };
-    }
-    if (state.capture.status === "paused") {
-      return {
-        badgeLabel: "일시중지",
-        badgeStatus: "paused",
-        meetingStatus: "녹음 일시중지",
-        pageSummary: "일시중지 상태입니다.",
-      };
-    }
-    if (state.capture.status === "stopping") {
-      return {
-        badgeLabel: "저장 중",
-        badgeStatus: "queued",
-        meetingStatus: "로컬 저장 중",
-        pageSummary: "저장 중입니다.",
-      };
-    }
-    if (historyEntries.some((entry) => ["queued", "processing", "remote_queued", "remote_processing", "uploading"].includes(entry.status))) {
-      return {
-        badgeLabel: "처리 중",
-        badgeStatus: "processing",
-        meetingStatus: "전사 진행 중",
-        pageSummary: "처리 중입니다.",
-      };
-    }
-    if (hasActionableLocalCopies) {
-      return {
-        badgeLabel: "보관 중",
-        badgeStatus: "queued",
-        meetingStatus: "업로드 대기",
-        pageSummary: "보관된 녹음이 있습니다.",
-      };
-    }
-    if (historyEntries.length) {
-      return {
-        badgeLabel: "기록 있음",
-        badgeStatus: "succeeded",
-        meetingStatus: "기록 검토 가능",
-        pageSummary: "",
-      };
-    }
-    return {
-      badgeLabel: "대기",
-      badgeStatus: "idle",
-      meetingStatus: "작업실 준비",
-      pageSummary: "",
-    };
-  }
-
-  function buildRecorderView(state) {
-    if (state.capture.status === "recording") {
-      return { badgeLabel: "녹음 중", badgeStatus: "recording", canDiscard: false, canPause: true, canResume: false, canStart: false, canStop: true, hint: "", showDiscard: false, showPause: true, showResume: false, showStart: false, showStop: true, summary: "녹음 중입니다." };
-    }
-    if (state.capture.status === "paused") {
-      return { badgeLabel: "일시중지", badgeStatus: "paused", canDiscard: false, canPause: false, canResume: true, canStart: false, canStop: true, hint: "", showDiscard: false, showPause: false, showResume: true, showStart: false, showStop: true, summary: "일시중지 상태입니다." };
-    }
-    if (state.capture.status === "stopping") {
-      return { badgeLabel: "저장 중", badgeStatus: "queued", canDiscard: false, canPause: false, canResume: false, canStart: false, canStop: false, hint: "", showDiscard: false, showPause: false, showResume: false, showStart: false, showStop: true, summary: "저장 중입니다." };
-    }
-    if (state.capture.status === "captured") {
-      return { badgeLabel: "임시 보관", badgeStatus: "failed", canDiscard: true, canPause: false, canResume: false, canStart: false, canStop: false, hint: "", showDiscard: true, showPause: false, showResume: false, showStart: false, showStop: false, summary: "임시 저장 상태입니다." };
-    }
-    return {
-      badgeLabel: "대기",
-      badgeStatus: "idle",
-      canDiscard: false,
-      canPause: false,
-      canResume: false,
-      canStart: true,
-      canStop: false,
-      hint: "",
-      showDiscard: false,
-      showPause: false,
-      showResume: false,
-      showStart: true,
-      showStop: false,
-      summary: "",
-    };
-  }
-
   function buildDetailView(state, activeEntry) {
     if (!activeEntry) {
-      return { badgeLabel: "대기", badgeStatus: "idle", chunkProgress: null, meta: [], meetingNotes: null, notesMeta: null, notice: "왼쪽에서 기록을 선택해 주세요.", noticeTone: "", recordMemo: "", recordTitle: "", segments: [], showRecordActions: false, showSpeakerEditor: false, speakerAliases: {}, speakerCount: 0, speakerSummaryEntries: [], speakerEditorItems: [], summary: "", title: "기록을 선택해 주세요", transcriptText: "" };
+      return { badgeLabel: "대기", badgeStatus: "idle", chunkProgress: null, meta: [], meetingNotes: null, notesContextItems: [], notesInputSnapshot: normalizeNotesInputSnapshot(null), notesMeta: null, notice: "왼쪽에서 기록을 선택해 주세요.", noticeTone: "", recordMemo: "", recordTitle: "", segments: [], showRecordActions: false, summary: "", title: "기록을 선택해 주세요", transcriptText: "" };
     }
     const pending = activeEntry.pending;
     const remote = activeEntry.remote;
+    const pendingDisplayStatus = getPendingDisplayStatus(pending);
+    const shouldUsePendingDetail = Boolean(pending) && (!remote?.jobId || shouldPrioritizePendingUpload(pending));
     const detailTitle = normalizeText(state.currentJob?.title || remote?.title || pending?.meetingTitleSnapshot || state.meeting.title || "새 기록");
     const detailMeta = [];
     const remoteStatus = normalizeText(state.currentJob?.status || remote?.status);
@@ -873,137 +753,141 @@
     const canManageRemoteRecord = Boolean(remote?.jobId) && !["queued", "processing"].includes(remoteStatus);
     const showRecordActions = Boolean((pending?.requestId && !remote?.jobId) || canManageRemoteRecord);
     const detailMemo = normalizeTextBlock(state.currentJob?.sharedMemoSnapshot || pending?.sharedMemoSnapshot);
+    const remoteNotesContextItems = normalizeNotesContextItems(remote?.notesContextItems);
+    const remoteNotesInputSnapshot = normalizeNotesInputSnapshot(remote?.notesInputSnapshot, {
+      contextItems: remoteNotesContextItems,
+      sharedMemo: normalizeTextBlock(remote?.sharedMemoSnapshot),
+      updatedAt: normalizeText(remote?.notesGeneratedAt || remote?.updatedAt),
+    });
     const pendingChunkProgress = buildChunkProgressModel(null, pending);
 
-    if (!remote?.jobId && pending) {
-      return { badgeLabel: formatStatusLabel(pending.status), badgeStatus: normalizeStatus(pending.status), chunkProgress: pendingChunkProgress, meta: detailMeta, meetingNotes: null, notesMeta: null, notice: buildPendingNotice(pending), noticeTone: pending.status === "failed" ? "error" : "highlight", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions, showSpeakerEditor: false, speakerAliases: {}, speakerCount: 0, speakerSummaryEntries: [], speakerEditorItems: [], summary: buildPendingSummary(pending), title: detailTitle, transcriptText: "" };
+    if (shouldUsePendingDetail) {
+      return { badgeLabel: formatStatusLabel(pendingDisplayStatus), badgeStatus: normalizeStatus(pendingDisplayStatus), chunkProgress: pendingChunkProgress, meta: detailMeta, meetingNotes: null, notesContextItems: remoteNotesContextItems, notesInputSnapshot: remoteNotesInputSnapshot, notesMeta: null, notice: buildPendingNotice(pending), noticeTone: pendingDisplayStatus === "failed" ? "error" : "highlight", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions, summary: buildPendingSummary(pending), title: detailTitle, transcriptText: "" };
     }
 
     const normalizedJob = state.currentJob || normalizeJob(remote, detailTitle);
     const normalizedArtifact = state.currentArtifact;
-    const speakerCount = Math.max(0, Number(
-      normalizedArtifact?.speakerCount
-      || normalizedJob?.speakerCount
-      || remote?.speakerCount
-    ) || 0);
-    const speakerAliases = normalizeSpeakerAliases({
-      ...(normalizedArtifact?.speakerAliases || {}),
-      ...(normalizedJob?.speakerAliases || {}),
-    });
-    const meetingNotes = normalizeMeetingNotes(normalizedArtifact?.notes || normalizedJob?.meetingNotes, normalizedArtifact?.notesModeSelected || normalizedJob?.notesModeSelected);
-    const segments = Array.isArray(normalizedArtifact?.segments) ? normalizedArtifact.segments : [];
-    const transcriptText = buildTranscriptTextForDisplay(segments, normalizedArtifact?.text, speakerAliases);
-    const speakerSummaryEntries = buildSpeakerSummaryEntries(meetingNotes?.speakerSummaries, segments, speakerAliases);
-    const speakerEditorItems = buildSpeakerEditorItems(segments, speakerAliases, state.speakerAliasDrafts);
+    const workspaceMutation = normalizedJob?.workspaceMutation || remote?.workspaceMutation;
+    const meetingNotes = normalizeMeetingNotes(normalizedArtifact?.notes || normalizedJob?.meetingNotes);
+    const rawSegments = Array.isArray(normalizedArtifact?.segments) ? normalizedArtifact.segments : [];
+    const segments = resegmentSegmentsForDisplay(rawSegments);
+    const transcriptText = buildTranscriptTextForDisplay(segments, normalizedArtifact?.text);
     const hasNotesValue = hasMeetingNotes(meetingNotes);
     const hasTranscriptValue = Boolean(transcriptText);
     const hasSegmentsValue = segments.length > 0;
-    const showSpeakerEditor = Boolean(remote?.jobId) && hasSegmentsValue;
     const notesMeta = {
-      confidence: Number(normalizedArtifact?.notesModeConfidence || normalizedJob?.notesModeConfidence) || 0,
-      detected: normalizeMeetingNotesMode(normalizedArtifact?.notesModeDetected || normalizedJob?.notesModeDetected) || meetingNotes.mode,
+      degradedReason: normalizeText(normalizedArtifact?.notesDegradedReason || normalizedJob?.notesDegradedReason),
       generatedAt: normalizeText(normalizedArtifact?.notesGeneratedAt || normalizedJob?.notesGeneratedAt),
-      selected: normalizeMeetingNotesMode(normalizedArtifact?.notesModeSelected || normalizedJob?.notesModeSelected) || meetingNotes.mode,
-      styleSelected: normalizeMeetingNotesStyle(normalizedArtifact?.notesStyleSelected || normalizedJob?.notesStyleSelected) || DEFAULT_NOTES_STYLE,
+      status: normalizeText(normalizedArtifact?.notesStatus || normalizedJob?.notesStatus),
     };
+    const notesContextItems = normalizeNotesContextItems(
+      normalizedArtifact?.notesContextItems?.length
+        ? normalizedArtifact.notesContextItems
+        : normalizedJob?.notesContextItems?.length
+          ? normalizedJob.notesContextItems
+          : remoteNotesContextItems
+    );
+    const notesInputSnapshot = normalizeNotesInputSnapshot(
+      normalizedArtifact?.notesInputSnapshot?.updatedAt
+        ? normalizedArtifact.notesInputSnapshot
+        : normalizedJob?.notesInputSnapshot,
+      {
+        contextItems: notesContextItems,
+        sharedMemo: detailMemo,
+        updatedAt: normalizeText(normalizedArtifact?.notesGeneratedAt || normalizedJob?.notesGeneratedAt || normalizedJob?.updatedAt),
+      }
+    );
     const remoteChunkProgress = buildChunkProgressModel(normalizedJob, pending);
 
     if (normalizeText(normalizedJob?.status) === "failed") {
-      return { badgeLabel: "오류", badgeStatus: "failed", chunkProgress: remoteChunkProgress, meta: detailMeta, meetingNotes: null, notesMeta, notice: normalizeText(normalizedJob?.error || pending?.lastError) || "회의 처리 중 오류가 발생했습니다.", noticeTone: "error", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions, showSpeakerEditor: false, speakerAliases, speakerCount, speakerSummaryEntries: [], speakerEditorItems: [], summary: "", title: detailTitle, transcriptText: "" };
+      return { badgeLabel: "오류", badgeStatus: "failed", chunkProgress: remoteChunkProgress, meta: detailMeta, meetingNotes: null, notesContextItems, notesInputSnapshot, notesMeta, notice: normalizeText(normalizedJob?.error || pending?.lastError) || "회의 처리 중 오류가 발생했습니다.", noticeTone: "error", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions, summary: "", title: detailTitle, transcriptText: "" };
     }
     if (["queued", "processing"].includes(normalizeText(normalizedJob?.status))) {
-      return { badgeLabel: processingHealth.isStalled ? "정체 의심" : formatStatusLabel(normalizedJob.status), badgeStatus: normalizeStatus(normalizedJob.status), chunkProgress: remoteChunkProgress, meta: detailMeta, meetingNotes: null, notesMeta, notice: buildProcessingNotice(normalizedJob, pending), noticeTone: processingHealth.isStalled ? "warning" : "highlight", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions: false, showSpeakerEditor: false, speakerAliases, speakerCount, speakerSummaryEntries: [], speakerEditorItems: [], summary: "", title: detailTitle, transcriptText: "" };
+      return { badgeLabel: processingHealth.isStalled ? "정체 의심" : formatStatusLabel(normalizedJob.status), badgeStatus: normalizeStatus(normalizedJob.status), chunkProgress: remoteChunkProgress, meta: detailMeta, meetingNotes: null, notesContextItems, notesInputSnapshot, notesMeta, notice: buildProcessingNotice(normalizedJob, pending), noticeTone: processingHealth.isStalled ? "warning" : "highlight", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions: false, summary: "", title: detailTitle, transcriptText: "" };
     }
     let completionNotice = state.notice.text || "회의 정리가 준비됐습니다.";
     let completionTone = state.notice.tone || "highlight";
-    if (!hasNotesValue && !hasTranscriptValue && !hasSegmentsValue) {
+    if (workspaceMutation?.type === "regenerateNotes" && ["queued", "processing"].includes(workspaceMutation.status)) {
+      completionNotice = "회의록 업데이트를 진행 중입니다. 완료 여부는 실시간 상태로 반영됩니다.";
+      completionTone = "highlight";
+    } else if (workspaceMutation?.type === "regenerateNotes" && workspaceMutation.status === "failed") {
+      completionNotice = workspaceMutation.error || "회의록 업데이트를 완료하지 못했어요.";
+      completionTone = "error";
+    } else if (!hasNotesValue && !hasTranscriptValue && !hasSegmentsValue) {
       completionNotice = "녹음이 너무 짧거나 인식된 발화가 부족해 표시할 내용이 없습니다.";
       completionTone = "warning";
     } else if (!hasNotesValue && (hasTranscriptValue || hasSegmentsValue) && !state.notice.text) {
       completionNotice = "전사는 준비됐지만 회의 정리로 묶을 내용은 충분하지 않았습니다.";
       completionTone = "warning";
     }
-    return { badgeLabel: "완료", badgeStatus: "succeeded", chunkProgress: null, meta: detailMeta, meetingNotes, notesMeta, notice: completionNotice, noticeTone: completionTone, recordMemo: detailMemo, recordTitle: detailTitle, segments, showRecordActions, showSpeakerEditor, speakerAliases, speakerCount, speakerSummaryEntries, speakerEditorItems, summary: "", title: detailTitle, transcriptText };
+    return {
+      badgeLabel: "완료",
+      badgeStatus: "succeeded",
+      chunkProgress: null,
+      meta: detailMeta,
+      meetingNotes,
+      notesContextItems,
+      notesInputSnapshot,
+      notesMeta,
+      notice: completionNotice,
+      noticeTone: completionTone,
+      recordMemo: detailMemo,
+      recordTitle: detailTitle,
+      segments,
+      showRecordActions,
+      summary: "",
+      title: detailTitle,
+      transcriptText,
+    };
   }
 
-  function renderSegment(segment, speakerAliases) {
-    return `<article class="segment-item"><div class="segment-item__head"><span class="segment-item__speaker">${escapeHtml(resolveSpeakerDisplayName(segment.speakerLabel, speakerAliases))}</span><span>${escapeHtml(formatSegmentRange(segment.startMs, segment.endMs))}</span></div><p>${escapeHtml(segment.text)}</p></article>`;
+  function splitSegmentParagraphs(text) {
+    const normalized = ns.shared.normalizeTextBlock(text).replace(/\s+/g, " ").trim();
+    if (!normalized) {
+      return [];
+    }
+    const sentences = normalized.match(/[^.!?。！？…]+(?:[.!?。！？…]+|$)/g) || [normalized];
+    const paragraphs = [];
+    let current = [];
+    let currentLength = 0;
+    for (const sentence of sentences) {
+      const normalizedSentence = normalizeText(sentence);
+      if (!normalizedSentence) {
+        continue;
+      }
+      const nextLength = current.length ? currentLength + normalizedSentence.length + 1 : normalizedSentence.length;
+      if (current.length && nextLength > 180) {
+        paragraphs.push(current.join(" "));
+        current = [normalizedSentence];
+        currentLength = normalizedSentence.length;
+        continue;
+      }
+      current.push(normalizedSentence);
+      currentLength = nextLength;
+    }
+    if (current.length) {
+      paragraphs.push(current.join(" "));
+    }
+    return paragraphs.length ? paragraphs : [normalized];
+  }
+
+  function renderSegment(segment, index) {
+    const paragraphs = splitSegmentParagraphs(segment.text);
+    const label = Number.isFinite(index) ? `원문 ${index + 1}` : "";
+    return `<article class="segment-item"><div class="segment-item__head"><span>${escapeHtml(formatSegmentRange(segment.startMs, segment.endMs))}</span>${label ? `<span class="segment-item__index">${escapeHtml(label)}</span>` : ""}</div><div class="segment-item__body">${paragraphs.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("")}</div></article>`;
   }
 
   function renderTranscriptFallback(transcriptText) {
     return `<div class="transcript-box">${escapeHtml(transcriptText)}</div>`;
   }
 
-  function renderSpeakerSummaryEntry(entry) {
-    return `
-      <article class="speaker-digest-card">
-        <div class="speaker-digest-card__head">
-          <div>
-            <strong class="speaker-digest-card__name">${escapeHtml(entry.displayLabel)}</strong>
-            ${entry.metaText ? `<div class="speaker-digest-card__meta">${escapeHtml(entry.metaText)}</div>` : ""}
-          </div>
-        </div>
-        ${entry.summary ? `<div class="speaker-digest-summary">${escapeHtml(entry.summary)}</div>` : ""}
-        ${entry.keyPoints.length ? `<ul class="speaker-digest-items">${entry.keyPoints.map((item) => `<li class="speaker-digest-item"><p class="speaker-digest-item__text">${escapeHtml(item)}</p></li>`).join("")}</ul>` : ""}
-      </article>
-    `;
-  }
-
-  function renderSpeakerEditorItem(item) {
-    return `
-      <label class="speaker-alias-card" for="speaker-alias-${escapeHtml(item.speakerLabel)}">
-        <span class="speaker-alias-card__meta">
-          <span class="speaker-alias-card__chip">${escapeHtml(item.defaultLabel)}</span>
-          <span class="speaker-alias-card__current">${escapeHtml(item.displayLabel)}</span>
-        </span>
-        <input
-          id="speaker-alias-${escapeHtml(item.speakerLabel)}"
-          class="meeting-input speaker-alias-card__input"
-          type="text"
-          maxlength="80"
-          data-speaker-label="${escapeHtml(item.speakerLabel)}"
-          placeholder="${escapeHtml(item.defaultLabel)}"
-          value="${escapeHtml(item.alias)}"
-        />
-      </label>
-    `;
-  }
-
-  function buildSpeakerEditorRenderKey(detailView, state) {
-    return [
-      normalizeText(state.selectedRecordId),
-      detailView.showSpeakerEditor ? "show" : "hidden",
-      ...(Array.isArray(detailView.speakerEditorItems)
-        ? detailView.speakerEditorItems.map((item) => [item.speakerLabel, item.defaultLabel, item.displayLabel].join("::"))
-        : []),
-    ].join("||");
-  }
-
-  function buildDraftSpeakerAliases(detailView, state) {
-    const allowedLabels = new Set((Array.isArray(detailView.speakerEditorItems) ? detailView.speakerEditorItems : []).map((item) => item.speakerLabel));
-    return normalizeSpeakerAliases(state.speakerAliasDrafts, allowedLabels);
-  }
-
-  function areSpeakerAliasesEqual(left, right) {
-    const leftKeys = Object.keys(left || {}).sort(compareSpeakerLabelOrder);
-    const rightKeys = Object.keys(right || {}).sort(compareSpeakerLabelOrder);
-    if (leftKeys.length !== rightKeys.length) return false;
-    return leftKeys.every((key, index) => key === rightKeys[index] && normalizeText(left[key]) === normalizeText(right[key]));
-  }
-
-  function renderHistoryEntry(entry, selectedRecordId) {
+  function renderHistoryEntry(entry, selectedRecordId, options = {}) {
     const title = normalizeText(entry.remote?.title || entry.pending?.meetingTitleSnapshot || "새 기록");
     const pendingSummary = entry.pending?.status === "succeeded" ? "" : buildPendingSummary(entry.pending);
     const pendingNotice = entry.pending?.status === "succeeded" ? "" : buildPendingNotice(entry.pending);
     const meta = [formatDateTime(entry.updatedAt || entry.createdAt, ""), entry.durationMs > 0 ? formatDuration(entry.durationMs) : "", entry.pending?.sizeBytes > 0 ? formatBytes(entry.pending.sizeBytes) : ""].filter(Boolean).join(" · ");
     const chips = [];
-    const notesMode = normalizeMeetingNotesMode(entry.remote?.notesModeSelected || entry.remote?.notesModeDetected);
-    const notesStyle = normalizeMeetingNotesStyle(entry.remote?.notesStyleSelected);
-    const speakerCount = Math.max(0, Number(entry.remote?.speakerCount) || 0);
-    if (notesMode) chips.push({ label: `AI 판단 ${formatNotesModeLabel(notesMode)}`, tone: "accent" });
-    if (notesStyle) chips.push({ label: `표현 ${formatNotesStyleLabel(notesStyle)}`, tone: "muted" });
-    if (speakerCount > 0) chips.push({ label: `화자 ${speakerCount}명`, tone: "muted" });
-    if (!chips.length && pendingSummary) chips.push({ label: pendingSummary, tone: "muted" });
+    if (pendingSummary) chips.push({ label: pendingSummary, tone: "muted" });
     return `
       <button type="button" class="record-item${entry.id === selectedRecordId ? " is-active" : ""}" data-record-id="${escapeHtml(entry.id)}">
         <div class="record-item__top">
@@ -1016,81 +900,77 @@
         ${chips.length ? `<div class="record-item__chips">${chips.map((chip) => `<span class="chip${chip.tone === "accent" ? " chip--accent" : ""}">${escapeHtml(chip.label)}</span>`).join("")}</div>` : ""}
         ${pendingNotice ? `<div class="record-item__local">${escapeHtml(pendingNotice)}</div>` : ""}
       </button>
-      ${buildPendingActions(entry.pending, entry.remote)}
+      ${buildPendingActions(entry.pending, entry.remote, options)}
     `;
   }
 
   function renderMeetingNotes(refs, detailView, state) {
-    const normalized = normalizeMeetingNotes(detailView.meetingNotes, detailView.notesMeta?.selected);
+    const normalized = normalizeMeetingNotes(detailView.meetingNotes);
     const hasNotesValue = hasMeetingNotes(normalized);
     if (!hasNotesValue) {
       refs.meetingNotesOverview.hidden = true;
-      refs.meetingNotesOverview.textContent = "";
-      refs.meetingNotesSections.innerHTML = "";
-      refs.notesSummaryMeta.textContent = "AI 판단 대기";
-      refs.notesStyleSelect.value = DEFAULT_NOTES_STYLE;
-      refs.notesStyleSelect.disabled = true;
-      refs.regenerateNotesButton.disabled = true;
-      refs.regenerateNotesButton.textContent = "현재 표현 방식으로 다시 정리";
+      refs.meetingNotesOverview.innerHTML = "";
+      refs.meetingNotesSections.innerHTML = `<div class="notice-box" data-tone="warning">전사는 준비됐지만 회의 정리로 묶을 내용이 충분하지 않았습니다.</div>`;
       return false;
     }
-    const appliedMode = normalizeMeetingNotesMode(detailView.notesMeta?.selected || normalized.mode) || DEFAULT_NOTES_MODE;
-    const appliedStyle = normalizeMeetingNotesStyle(detailView.notesMeta?.styleSelected) || DEFAULT_NOTES_STYLE;
-    const selectedStyle = normalizeMeetingNotesStyle(state.notesStyleSelection || appliedStyle) || DEFAULT_NOTES_STYLE;
-    const pendingStyleChange = selectedStyle !== appliedStyle;
-    refs.notesStyleSelect.value = selectedStyle;
-    refs.notesStyleSelect.disabled = !state.currentJob?.jobId || state.busy.regenerateNotes || !TERMINAL_REMOTE_STATUSES.has(normalizeText(state.currentJob?.status));
-    refs.regenerateNotesButton.disabled = refs.notesStyleSelect.disabled;
-    refs.notesSummaryMeta.textContent = buildNotesSummaryMeta(detailView.notesMeta, selectedStyle);
-    refs.regenerateNotesButton.textContent = state.busy.regenerateNotes
-      ? "정리 중"
-      : pendingStyleChange
-        ? `${formatNotesStyleLabel(selectedStyle)}로 다시 정리`
-        : "현재 표현 방식으로 다시 정리";
-    const overviewText = normalized.executiveSummary.join("\n");
-    refs.meetingNotesOverview.hidden = !overviewText;
-    refs.meetingNotesOverview.textContent = overviewText;
+    const overviewMarkup = renderNotesOverview(normalized);
+    refs.meetingNotesOverview.hidden = !overviewMarkup;
+    refs.meetingNotesOverview.innerHTML = overviewMarkup;
     refs.meetingNotesSections.innerHTML = buildMeetingNotesSections(normalized).map(renderNotesSection).join("");
     return true;
   }
 
-  function resolveReviewTab(state, detailView, hasNotesValue) {
+  function resolveReviewTab(state, detailView, hasNotesValue, options = {}) {
+    const isCompleted = normalizeText(detailView.badgeStatus) === "succeeded";
     const hasMemoValue = Boolean(normalizeText(detailView.recordMemo));
     const hasTranscriptValue = Boolean(normalizeText(detailView.transcriptText));
     const hasSegmentsValue = Array.isArray(detailView.segments) && detailView.segments.length > 0;
     const hasSegmentContent = hasSegmentsValue || hasTranscriptValue;
-    const hasSpeakerSummaryTab = hasNotesValue;
+    const showSummaryTab = options.showSummaryTab !== false && !isCompleted;
+    const showContextTab = isCompleted;
+    const showMemoTab = isCompleted || hasMemoValue;
+    const showNotesTab = isCompleted || hasNotesValue;
+    const fallbackTab = () => {
+      if (showNotesTab) return "notes";
+      if (showMemoTab) return "memo";
+      if (hasSegmentContent) return "segments";
+      if (showContextTab) return "context";
+      return showSummaryTab ? "summary" : "notes";
+    };
     let nextTab = normalizeText(state.reviewTab) || "notes";
     if (nextTab === "transcript") {
       nextTab = "segments";
     }
-    if (!["summary", "memo", "notes", "segments", "speakers"].includes(nextTab)) {
+    if (!["summary", "memo", "notes", "segments", "context"].includes(nextTab)) {
       nextTab = "notes";
     }
-    if (!detailView.showRecordActions && !hasMemoValue && !hasSegmentContent && !hasNotesValue) {
-      return "summary";
+    if (!showSummaryTab && nextTab === "summary") {
+      nextTab = fallbackTab();
     }
-    if (nextTab === "memo" && !hasMemoValue) {
-      return hasNotesValue ? "notes" : hasSegmentContent ? "segments" : "summary";
+    if (!detailView.showRecordActions && !showMemoTab && !hasSegmentContent && !showNotesTab) {
+      return showSummaryTab ? "summary" : "notes";
     }
-    if (nextTab === "notes" && !hasNotesValue) {
-      return hasMemoValue ? "memo" : hasSegmentContent ? "segments" : "summary";
+    if (nextTab === "memo" && !showMemoTab) {
+      return fallbackTab();
+    }
+    if (nextTab === "notes" && !showNotesTab) {
+      return showMemoTab ? "memo" : hasSegmentContent ? "segments" : showSummaryTab ? "summary" : "notes";
     }
     if (nextTab === "segments" && !hasSegmentContent) {
-      return hasNotesValue ? "notes" : hasMemoValue ? "memo" : "summary";
+      return showNotesTab ? "notes" : showMemoTab ? "memo" : showSummaryTab ? "summary" : "notes";
     }
-    if (nextTab === "speakers" && !hasSpeakerSummaryTab) {
-      return hasNotesValue ? "notes" : hasSegmentContent ? "segments" : hasMemoValue ? "memo" : "summary";
+    if (nextTab === "context" && !showContextTab) {
+      return fallbackTab();
     }
     return nextTab;
   }
 
   function applyReviewTabState(refs, activeTab) {
     const tabMap = {
+      context: refs.reviewTabContext,
       memo: refs.reviewTabMemo,
       notes: refs.reviewTabNotes,
       segments: refs.reviewTabSegments,
-      speakers: refs.reviewTabSpeakers,
       summary: refs.reviewTabSummary,
     };
     for (const [tabName, element] of Object.entries(tabMap)) {
@@ -1121,12 +1001,32 @@
     const savedRecordTitle = normalizeText(detailView.recordTitle);
     const draftRecordTitle = normalizeText(global.document.activeElement === refs.recordTitleInput ? refs.recordTitleInput.value : savedRecordTitle || refs.recordTitleInput?.value);
     const recordTitleDirty = Boolean(draftRecordTitle && draftRecordTitle !== savedRecordTitle);
-    const draftSpeakerAliases = buildDraftSpeakerAliases(detailView, state);
-    const speakerAliasDirty = !areSpeakerAliasesEqual(detailView.speakerAliases, draftSpeakerAliases);
+    const selectedRecordMutationBusy = state.busy.deleteRecord
+      || state.busy.regenerateNotes
+      || state.busy.saveRecordContext
+      || state.busy.saveRecordMemo
+      || state.busy.saveRecordTitle;
+    const readOnly = Boolean(state.auth?.readOnly);
     const currentTimerText = formatCaptureTimer(state.capture.durationMs);
+    const savedSelectedRecordMemo = ns.shared.normalizeTextBlock(state.selectedRecordMemo?.saved || detailView.recordMemo);
+    const draftSelectedRecordMemo = ns.shared.normalizeTextBlock(
+      global.document.activeElement === refs.detailMemoInput
+        ? refs.detailMemoInput.value
+        : state.selectedRecordMemo?.draft ?? detailView.recordMemo
+    );
+    const selectedRecordMemoDirty = draftSelectedRecordMemo !== savedSelectedRecordMemo;
+    const savedNotesContextItems = normalizeNotesContextItems(state.notesContext?.items);
+    const savedNotesInputSnapshot = normalizeNotesInputSnapshot(state.selectedRecordNotesInputSnapshot, {
+      contextItems: detailView.notesContextItems,
+      sharedMemo: savedSelectedRecordMemo,
+      updatedAt: normalizeText(detailView.notesMeta?.generatedAt || detailView.notesInputSnapshot?.updatedAt),
+    });
+    const notesInputsDirty = selectedRecordMemoDirty
+      || savedSelectedRecordMemo !== savedNotesInputSnapshot.sharedMemo
+      || !areNotesContextItemsEqual(savedNotesContextItems, savedNotesInputSnapshot.contextItems);
 
     refs.pageTitle.hidden = true;
-    refs.pageTitle.textContent = savedMeetingTitle || "새 작업실";
+    refs.pageTitle.textContent = savedMeetingTitle || "새 회의";
     refs.pageSummary.hidden = !normalizeText(workspaceView.pageSummary);
     refs.pageSummary.textContent = workspaceView.pageSummary;
     refs.workspaceBadge.textContent = workspaceView.badgeLabel;
@@ -1136,9 +1036,12 @@
     refs.refreshButton.disabled = state.loading;
     refs.refreshButton.textContent = state.loadingReason === "manual" ? "동기화 중" : "새로고침";
     if (global.document.activeElement !== refs.meetingTitleInput) refs.meetingTitleInput.value = normalizeText(state.meetingTitleDraft || savedMeetingTitle);
-    refs.saveMeetingTitleButton.disabled = meetingBusy || !draftMeetingTitle || !meetingTitleDirty;
+    refs.meetingTitleInput.disabled = readOnly || meetingBusy;
+    refs.saveMeetingTitleButton.disabled = readOnly || meetingBusy || !draftMeetingTitle || !meetingTitleDirty;
+    refs.saveMeetingTitleButton.hidden = readOnly;
     refs.saveMeetingTitleButton.textContent = state.busy.saveMeetingTitle ? "저장 중" : meetingTitleDirty ? "이름 저장" : "저장됨";
-    refs.deleteMeetingButton.disabled = meetingBusy || ["recording", "paused", "stopping"].includes(state.capture.status);
+    refs.deleteMeetingButton.disabled = readOnly || meetingBusy || ["recording", "paused", "stopping"].includes(state.capture.status);
+    refs.deleteMeetingButton.hidden = readOnly;
 
     refs.currentBadge.textContent = recorderView.badgeLabel;
     refs.currentBadge.dataset.status = recorderView.badgeStatus;
@@ -1164,12 +1067,15 @@
     refs.discardButton.disabled = !recorderView.canDiscard;
 
     if (global.document.activeElement !== refs.sharedMemoInput) refs.sharedMemoInput.value = draftRecordMemo;
+    refs.sharedMemoInput.disabled = readOnly;
     refs.saveSharedMemoButton.disabled = true;
+    refs.saveSharedMemoButton.hidden = readOnly;
     refs.saveSharedMemoButton.textContent = draftRecordMemo ? "자동 보관됨" : "자동 보관";
-    refs.clearSharedMemoButton.disabled = state.busy.saveMeetingMemo || !draftRecordMemo;
+    refs.clearSharedMemoButton.disabled = readOnly || state.busy.saveMeetingMemo || !draftRecordMemo;
+    refs.clearSharedMemoButton.hidden = readOnly;
     refs.sharedMemoNotice.hidden = true;
     refs.recordCountBadge.textContent = `${historyEntries.length}건`;
-    refs.recordList.innerHTML = historyEntries.length ? historyEntries.map((entry) => renderHistoryEntry(entry, state.selectedRecordId)).join("") : `<div class="notice-box">아직 기록이 없습니다.</div>`;
+    refs.recordList.innerHTML = historyEntries.length ? historyEntries.map((entry) => renderHistoryEntry(entry, state.selectedRecordId, { readOnly })).join("") : `<div class="notice-box">아직 기록이 없습니다.</div>`;
 
     refs.detailTitle.hidden = detailView.showRecordActions;
     refs.detailTitle.textContent = detailView.title;
@@ -1183,73 +1089,72 @@
     refs.detailSummary.textContent = detailView.summary;
     refs.recordTitleGroup.hidden = !detailView.showRecordActions;
     if (global.document.activeElement !== refs.recordTitleInput) refs.recordTitleInput.value = detailView.recordTitle;
-    refs.saveRecordTitleButton.disabled = !canRenameSelectedRecord || state.busy.saveRecordTitle || !draftRecordTitle || !recordTitleDirty;
+    refs.recordTitleInput.disabled = readOnly || !canRenameSelectedRecord || selectedRecordMutationBusy;
+    refs.saveRecordTitleButton.disabled = readOnly || !canRenameSelectedRecord || selectedRecordMutationBusy || !draftRecordTitle || !recordTitleDirty;
+    refs.saveRecordTitleButton.hidden = readOnly;
     refs.saveRecordTitleButton.textContent = state.busy.saveRecordTitle ? "저장 중" : recordTitleDirty ? "이름 저장" : "저장됨";
-    refs.downloadRecordButton.hidden = !canDownloadSelectedRecord;
-    refs.downloadRecordButton.disabled = !canDownloadSelectedRecord;
-    refs.deleteRecordButton.disabled = !canDeleteSelectedRecord || state.busy.deleteRecord;
+    refs.downloadRecordButton.hidden = readOnly || !canDownloadSelectedRecord;
+    refs.downloadRecordButton.disabled = readOnly || !canDownloadSelectedRecord;
+    refs.deleteRecordButton.disabled = readOnly || !canDeleteSelectedRecord || selectedRecordMutationBusy;
+    refs.deleteRecordButton.hidden = readOnly;
     refs.detailMeta.hidden = !detailView.meta.length;
     refs.detailMeta.innerHTML = detailView.meta.map((item) => `<span>${escapeHtml(item)}</span>`).join("");
-    refs.speakerEditor.hidden = !detailView.showSpeakerEditor;
-    const speakerEditorRenderKey = buildSpeakerEditorRenderKey(detailView, state);
-    if (!detailView.showSpeakerEditor) {
-      refs.speakerAliasList.innerHTML = "";
-      refs.speakerAliasList.dataset.renderKey = "";
-    } else if (refs.speakerAliasList.dataset.renderKey !== speakerEditorRenderKey) {
-      refs.speakerAliasList.innerHTML = detailView.speakerEditorItems.map(renderSpeakerEditorItem).join("");
-      refs.speakerAliasList.dataset.renderKey = speakerEditorRenderKey;
-    }
-    refs.saveSpeakerAliasesButton.disabled = !detailView.showSpeakerEditor || state.busy.saveSpeakerAliases || !speakerAliasDirty;
-    refs.saveSpeakerAliasesButton.textContent = state.busy.saveSpeakerAliases ? "저장 중" : speakerAliasDirty ? "화자명 저장" : "저장됨";
-    refs.saveSpeakerAliasesAndRegenerateButton.disabled = !detailView.showSpeakerEditor || state.busy.saveSpeakerAliases || state.busy.regenerateNotes || !speakerAliasDirty;
-    refs.saveSpeakerAliasesAndRegenerateButton.textContent = state.busy.regenerateNotes ? "정리 중" : "저장 후 다시 정리";
 
     const hasNotesValue = renderMeetingNotes(refs, detailView, state);
+    const isCompletedRecord = normalizeText(detailView.badgeStatus) === "succeeded";
     const hasMemoValue = Boolean(normalizeText(detailView.recordMemo));
     const hasTranscriptValue = Boolean(normalizeText(detailView.transcriptText));
     const hasSegmentsValue = Array.isArray(detailView.segments) && detailView.segments.length > 0;
     const hasSegmentContent = hasSegmentsValue || hasTranscriptValue;
-    const hasSpeakerSummaryTab = hasNotesValue;
-    const hasSpeakerDigestValue = Array.isArray(detailView.speakerSummaryEntries) && detailView.speakerSummaryEntries.length > 0;
-    const activeReviewTab = resolveReviewTab(state, detailView, hasNotesValue);
+    const showSummaryReviewTab = !isCompletedRecord;
+    const showContextReviewTab = isCompletedRecord;
+    const showMemoReviewTab = isCompletedRecord || hasMemoValue;
+    const showNotesReviewTab = isCompletedRecord || hasNotesValue;
+    const activeReviewTab = resolveReviewTab(state, detailView, hasNotesValue, { showSummaryTab: showSummaryReviewTab });
     state.reviewTab = activeReviewTab;
-    refs.reviewTabSummary.hidden = false;
-    refs.reviewTabMemo.hidden = !hasMemoValue;
-    refs.reviewTabNotes.hidden = !hasNotesValue;
+    refs.reviewTabSummary.hidden = !showSummaryReviewTab;
+    refs.reviewTabMemo.hidden = !showMemoReviewTab;
+    refs.reviewTabNotes.hidden = !showNotesReviewTab;
+    refs.reviewTabContext.hidden = !showContextReviewTab;
     refs.reviewTabSegments.hidden = !hasSegmentContent;
-    refs.reviewTabSpeakers.hidden = !hasSpeakerSummaryTab;
-    const visibleSpeakerCount = Math.max(0, Number(detailView.speakerCount) || 0);
-    refs.reviewTabSegmentsCount.hidden = visibleSpeakerCount <= 0;
-    refs.reviewTabSegmentsCount.textContent = visibleSpeakerCount > 0 ? `${visibleSpeakerCount}` : "";
-    refs.copySegmentsButton.hidden = !hasSegmentContent;
-    refs.copySegmentsButton.disabled = !hasSegmentContent;
+    refs.reviewTabSegmentsCount.hidden = !hasSegmentsValue;
+    refs.reviewTabSegmentsCount.textContent = hasSegmentsValue ? `${detailView.segments.length}` : "";
     applyReviewTabState(refs, activeReviewTab);
-    const speakerAliasCount = Object.values(detailView.speakerAliases || {}).filter((value) => normalizeText(value)).length;
+    refs.reviewSectionHeader.hidden = activeReviewTab !== "summary" || !showSummaryReviewTab;
+    refs.reviewTabActions.hidden = !isCompletedRecord;
+    refs.copyMeetingNotesButton.hidden = !isCompletedRecord || activeReviewTab !== "notes";
+    refs.copyMeetingNotesButton.disabled = !hasNotesValue;
+    refs.updateMeetingNotesButton.hidden = readOnly || !isCompletedRecord;
+    refs.updateMeetingNotesButton.disabled = !isCompletedRecord
+      || readOnly
+      || !notesInputsDirty
+      || selectedRecordMutationBusy;
+    refs.updateMeetingNotesButton.textContent = state.busy.regenerateNotes
+      ? "업데이트 중"
+      : "회의록 업데이트";
     const summaryFlow = buildStatusFlow(detailView, {
       generatedAt: detailView.notesMeta?.generatedAt ? formatDateTime(detailView.notesMeta.generatedAt, "") : "",
       hasNotesValue,
       hasSegmentContent,
-      hasSpeakerSummaryValue: hasSpeakerDigestValue,
-      notesModeLabel: hasNotesValue ? formatNotesModeLabel(detailView.notesMeta?.selected || detailView.meetingNotes?.mode) : "",
-      notesStyleLabel: hasNotesValue ? formatNotesStyleLabel(detailView.notesMeta?.styleSelected) : "",
       segmentCount: hasSegmentsValue ? detailView.segments.length : 0,
-      speakerAliasCount,
-      speakerCount: visibleSpeakerCount,
-      speakerSummaryCount: hasSpeakerDigestValue ? detailView.speakerSummaryEntries.length : 0,
+      degradedReason: normalizeText(detailView.notesMeta?.degradedReason),
     });
-    const showSummaryStatusPill = Boolean(detailView.badgeLabel) && !["idle", "succeeded"].includes(normalizeText(detailView.badgeStatus));
+    const showSummaryStatusPill = activeReviewTab === "summary"
+      && Boolean(detailView.badgeLabel)
+      && !["idle", "succeeded"].includes(normalizeText(detailView.badgeStatus));
     refs.summaryStatusPill.hidden = !showSummaryStatusPill;
     if (showSummaryStatusPill) {
       refs.summaryStatusPill.textContent = detailView.badgeLabel;
       refs.summaryStatusPill.dataset.status = detailView.badgeStatus;
     }
+    refs.reviewSegmentsToolbar.hidden = activeReviewTab !== "segments" || !hasSegmentContent;
+    refs.copySegmentsButton.hidden = activeReviewTab !== "segments" || !hasSegmentContent;
+    refs.copySegmentsButton.disabled = activeReviewTab !== "segments" || !hasSegmentContent;
     refs.summaryStatusGrid.hidden = !summaryFlow.steps.length;
     refs.summaryStatusGrid.innerHTML = renderStatusFlow(summaryFlow);
     const summaryActionMessage = buildStatusActionMessage(detailView, {
       hasNotesValue,
       hasSegmentContent,
-      hasSpeakerSummaryValue: hasSpeakerDigestValue,
-      speakerCount: visibleSpeakerCount,
       updatedAt: formatDateTime(
         normalizeText(state.currentJob?.updatedAt || activeEntry?.remote?.updatedAt || activeEntry?.pending?.updatedAt),
         ""
@@ -1267,27 +1172,38 @@
     refs.detailNotice.hidden = !showSummaryNotice;
     refs.detailNotice.textContent = detailView.notice;
     refs.detailNotice.dataset.tone = showSummaryNotice ? detailView.noticeTone : "";
-    refs.reviewPanelSummary.hidden = activeReviewTab !== "summary";
-    refs.reviewPanelMemo.hidden = activeReviewTab !== "memo" || !hasMemoValue;
-    refs.meetingNotesCard.hidden = activeReviewTab !== "notes" || !hasNotesValue;
+    refs.reviewPanelSummary.hidden = activeReviewTab !== "summary" || !showSummaryReviewTab;
+    refs.reviewPanelMemo.hidden = activeReviewTab !== "memo" || !showMemoReviewTab;
+    refs.meetingNotesCard.hidden = activeReviewTab !== "notes" || !showNotesReviewTab;
+    refs.reviewPanelContext.hidden = activeReviewTab !== "context" || !showContextReviewTab;
     refs.reviewPanelSegments.hidden = activeReviewTab !== "segments" || !hasSegmentContent;
-    refs.reviewPanelSpeakers.hidden = activeReviewTab !== "speakers" || !hasSpeakerSummaryTab;
-    refs.detailMemoText.textContent = detailView.recordMemo;
+    if (refs.detailMemoInput && global.document.activeElement !== refs.detailMemoInput) {
+      refs.detailMemoInput.value = draftSelectedRecordMemo;
+    }
+    if (refs.detailMemoInput) {
+      refs.detailMemoInput.disabled = readOnly || !isCompletedRecord || selectedRecordMutationBusy;
+    }
+    refs.saveRecordMemoButton.disabled = readOnly || !isCompletedRecord
+      || !selectedRecordMemoDirty
+      || selectedRecordMutationBusy;
+    refs.saveRecordMemoButton.hidden = readOnly;
+    refs.saveRecordMemoButton.textContent = state.busy.saveRecordMemo
+      ? "저장 중"
+      : selectedRecordMemoDirty
+        ? "저장"
+        : "저장됨";
     refs.segmentList.hidden = !hasSegmentContent;
     refs.segmentList.innerHTML = !hasSegmentContent
       ? ""
       : hasSegmentsValue
-        ? detailView.segments.map((segment) => renderSegment(segment, detailView.speakerAliases)).join("")
+        ? detailView.segments.map((segment, index) => renderSegment(segment, index)).join("")
         : renderTranscriptFallback(detailView.transcriptText);
-    refs.speakerDigestList.hidden = activeReviewTab !== "speakers" || !hasSpeakerSummaryTab;
-    refs.speakerDigestList.innerHTML = hasSpeakerDigestValue
-      ? detailView.speakerSummaryEntries.map(renderSpeakerSummaryEntry).join("")
-      : `<div class="notice-box">이 기록에는 아직 화자별 정리가 없습니다. 회의 정리에서 다시 정리하면 생성됩니다.</div>`;
     return { activeEntry, historyEntries };
   }
 
   ns.render = {
     buildDetailView,
+    buildMeetingNotesCopyText,
     buildSegmentCopyText,
     TERMINAL_REMOTE_STATUSES,
     buildRecorderView,
@@ -1295,7 +1211,6 @@
     buildWorkspaceView,
     buildLocalPendingJob,
     buildMeetingNotesSections,
-    buildNotesSummaryMeta,
     buildPendingActions,
     buildPendingNotice,
     buildPendingSummary,
@@ -1307,6 +1222,7 @@
     normalizeArtifact,
     normalizeJob,
     normalizeRecord,
+    normalizeWorkspaceMutation,
     renderWorkspace,
     renderNotesSection,
   };

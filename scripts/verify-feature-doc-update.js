@@ -6,18 +6,77 @@ const path = require("path");
 
 const root = path.resolve(__dirname, "..");
 const ZERO_SHA = "0000000000000000000000000000000000000000";
-const README_PATH = "README.md";
-const FEATURE_PATH_PATTERNS = [
-  /^background\//,
-  /^content\//,
-  /^functions\//,
-  /^meeting\//,
-  /^popup\//,
-  /^shared\//,
-  /^contracts\//,
-  /^firebase\.json$/,
-  /^firestore\.(?:indexes\.json|rules)$/,
-  /^manifest\.json$/,
+
+const FEATURE_DOC_RULES = [
+  {
+    feature: "conversation",
+    docs: ["content/features/conversation/AGENTS.md"],
+    patterns: [
+      /^content\/dom\.js$/,
+      /^content\/bookmark-view\.js$/,
+      /^content\/route-sync\.js$/,
+    ],
+  },
+  {
+    feature: "prompt-library",
+    docs: ["content/features/prompt-library/AGENTS.md"],
+    patterns: [
+      /^content\/features\/prompt-library\//,
+      /^shared\/prompt-library\.js$/,
+      /^shared\/cloud-sync\.js$/,
+    ],
+  },
+  {
+    feature: "prompt-store",
+    docs: ["content/features/prompt-store/AGENTS.md"],
+    patterns: [
+      /^content\/features\/prompt-store\//,
+      /^shared\/prompt-store\.js$/,
+    ],
+  },
+  {
+    feature: "prompt-review",
+    docs: ["content/features/prompt-review/AGENTS.md"],
+    patterns: [
+      /^content\/features\/prompt-review\//,
+    ],
+  },
+  {
+    feature: "prompt-shell",
+    docs: [
+      "content/features/prompt-library/AGENTS.md",
+      "content/features/prompt-store/AGENTS.md",
+      "content/features/prompt-review/AGENTS.md",
+    ],
+    patterns: [
+      /^content\/prompt-hub-view\.js$/,
+      /^content\/prompt-hub-state\.js$/,
+      /^content\/prompt-hub-panel\.js$/,
+      /^content\/prompt-hub-controller\.js$/,
+      /^content\/prompt-hub-runtime\.js$/,
+    ],
+  },
+  {
+    feature: "meeting",
+    docs: ["content/features/meeting/AGENTS.md"],
+    patterns: [
+      /^content\/meeting-manager\.js$/,
+      /^content\/meeting-view\.js$/,
+      /^hosting\/meeting\//,
+      /^functions\/features\/meeting\//,
+      /^shared\/meeting-bridge\.js$/,
+      /^shared\/meeting-debug\.js$/,
+    ],
+  },
+  {
+    feature: "release",
+    docs: ["content/features/release/AGENTS.md"],
+    patterns: [
+      /^content\/release-manager\.js$/,
+      /^content\/release-view\.js$/,
+      /^shared\/release-info\.js$/,
+    ],
+  },
 ];
 
 function main() {
@@ -40,20 +99,44 @@ function main() {
   }
 
   const uniqueFiles = Array.from(new Set(changedFiles.filter(Boolean)));
-  const featureFiles = uniqueFiles.filter(isFeatureFacingFile);
-  const readmeChanged = uniqueFiles.includes(README_PATH);
+  const failures = FEATURE_DOC_RULES
+    .map((rule) => buildRuleFailure(rule, uniqueFiles))
+    .filter(Boolean);
 
-  if (featureFiles.length > 0 && !readmeChanged) {
+  if (failures.length > 0) {
     fail([
-      "기능 관련 파일이 바뀌었는데 README.md 변경이 함께 잡히지 않았어요.",
-      "README.md도 같이 업데이트한 뒤 다시 push 해 주세요.",
+      "feature-owned 파일이 바뀌었는데 해당 feature 문서가 같이 갱신되지 않았어요.",
+      "README가 아니라 그 feature의 `AGENTS.md` 또는 전용 feature docs를 먼저 맞춰 주세요.",
       "",
-      "감지한 기능 변경 파일:",
-      ...featureFiles.map((file) => `- ${file}`),
-    ].join("\n"));
+      ...failures.flatMap((failure) => [
+        `[${failure.feature}]`,
+        `필수 문서: ${failure.docs.join(", ")}`,
+        "감지한 변경 파일:",
+        ...failure.files.map((file) => `- ${file}`),
+        "",
+      ]),
+    ].join("\n").trim());
   }
 
-  console.log("README 업데이트 가드 통과");
+  console.log("Feature 문서 업데이트 가드 통과");
+}
+
+function buildRuleFailure(rule, changedFiles) {
+  const impactedFiles = changedFiles.filter((filePath) => rule.patterns.some((pattern) => pattern.test(filePath)));
+  if (impactedFiles.length === 0) {
+    return null;
+  }
+
+  const docsUpdated = rule.docs.some((docPath) => changedFiles.includes(docPath));
+  if (docsUpdated) {
+    return null;
+  }
+
+  return {
+    docs: rule.docs,
+    feature: rule.feature,
+    files: impactedFiles,
+  };
 }
 
 function getChangedFilesForPush(stdin, remoteName) {
@@ -131,10 +214,6 @@ function readGitLines(args, options = {}) {
     const stderr = String(error.stderr || "").trim();
     fail(stderr || `git ${args.join(" ")} 실행에 실패했어요.`);
   }
-}
-
-function isFeatureFacingFile(filePath) {
-  return FEATURE_PATH_PATTERNS.some((pattern) => pattern.test(filePath));
 }
 
 function fail(message) {

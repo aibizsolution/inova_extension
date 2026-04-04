@@ -1,19 +1,21 @@
 {
   "name": "inova-session-bookmarks",
-  "version": "0.3.17",
+  "version": "0.3.26",
   "private": true,
   "scripts": {
     "prepare": "node scripts/install-git-hooks.js",
     "hooks:install": "node scripts/install-git-hooks.js",
     "deploy:hosting": "npm run release:build && firebase deploy --only hosting",
     "deploy:functions": "firebase deploy --only functions",
-    "deploy:all": "npm run release:build && firebase deploy --only hosting,functions",
+    "deploy:firestore": "firebase deploy --only firestore",
+    "deploy:all": "npm run release:build && firebase deploy --only hosting,functions,firestore",
     "emulator:hosting": "firebase emulators:start --only hosting --project browser-extension-main",
     "release:build": "node scripts/build-release-package.js",
     "release:deploy": "npm run deploy:hosting",
     "version:bump": "node scripts/bump-version.js",
     "check:cloud-sync": "node scripts/check-cloud-sync.js",
     "check:function-logs": "node scripts/check-function-logs.js",
+    "check:function-runtime": "node scripts/check-function-runtime.js",
     "cleanup:branches": "node scripts/cleanup-local-branches.js",
     "rebuild:store-feeds": "node scripts/rebuild-store-feeds.js",
     "seed:business-store": "node scripts/seed-business-store.js",
@@ -26,7 +28,8 @@
     "verify:branch-guard": "node scripts/verify-branch-workflow.js --pre-commit",
     "verify:contracts": "node scripts/verify-contracts.js",
     "verify:docs": "node scripts/verify-docs.js",
-    "verify:readme-guard": "node scripts/verify-readme-update.js --staged",
+    "verify:prompt-fallbacks": "node scripts/verify-prompt-fallbacks.js",
+    "verify:feature-doc-guard": "node scripts/verify-feature-doc-update.js --staged",
     "verify:release-guard": "node scripts/verify-release-metadata.js --staged"
   },
   "devDependencies": {

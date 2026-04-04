@@ -236,7 +236,8 @@
   function buildSnapshotSignature(snapshot) {
     const docs = (Array.isArray(snapshot?.docs) ? snapshot.docs : []).map((doc) => {
       const data = doc?.data && typeof doc.data === "function" ? doc.data() : {};
-      return `${normalizeText(doc?.id)}:${normalizeText(data?.updatedAt || data?.createdAt)}:${normalizeText(data?.status)}`;
+      const share = data?.share && typeof data.share === "object" ? data.share : {};
+      return `${normalizeText(doc?.id)}:${normalizeText(data?.updatedAt || data?.createdAt)}:${normalizeText(data?.status)}:${normalizeText(share?.status)}:${normalizeText(share?.shareId)}:${normalizeText(share?.revokedAt)}`;
     });
     return JSON.stringify({
       docs,
@@ -247,9 +248,26 @@
 
   function serializeDocument(doc) {
     const data = doc?.data && typeof doc.data === "function" ? doc.data() : {};
+    const share = normalizeShareMetadata(data?.share);
     return {
       ...cloneJson(data),
       docId: normalizeText(doc?.id),
+      share,
+    };
+  }
+
+  function normalizeShareMetadata(input) {
+    const share = input && typeof input === "object" ? input : {};
+    const status = normalizeText(share.status);
+    const shareId = normalizeText(share.shareId);
+    return {
+      ...cloneJson(share),
+      active: status === "active" && Boolean(shareId),
+      createdAt: normalizeText(share.createdAt),
+      createdBy: share.createdBy && typeof share.createdBy === "object" ? cloneJson(share.createdBy) : {},
+      revokedAt: normalizeText(share.revokedAt),
+      shareId,
+      status,
     };
   }
 

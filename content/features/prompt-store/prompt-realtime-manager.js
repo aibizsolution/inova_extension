@@ -359,7 +359,14 @@
       if (bridgePort) {
         try {
           bridgePort.postMessage({ type: "unsubscribe-prompt-library-meta" });
-        } catch {}
+        } catch (error) {
+          namespace.panelDebug?.log?.("prompt.panel.unsubscribe.meta.error", {
+            error: error instanceof Error ? error.message : String(error || ""),
+            reason,
+            scope: "runtime",
+            tool: "prompts",
+          });
+        }
       }
       namespace.panelDebug?.log?.("prompt.panel.unsubscribe.meta", {
         reason,
@@ -377,7 +384,14 @@
       if (bridgePort) {
         try {
           bridgePort.postMessage({ type: "unsubscribe-store-latest" });
-        } catch {}
+        } catch (error) {
+          namespace.panelDebug?.log?.("prompt.panel.unsubscribe.store-latest.error", {
+            error: error instanceof Error ? error.message : String(error || ""),
+            reason,
+            scope: "runtime",
+            tool: "prompts",
+          });
+        }
       }
       namespace.panelDebug?.log?.("prompt.panel.unsubscribe.store-latest", {
         reason,
@@ -591,7 +605,14 @@
       if (bridgePort && (bridgeConnected || bridgeConnecting || bridgeConnectionKey)) {
         try {
           bridgePort.postMessage({ type: "disconnect" });
-        } catch {}
+        } catch (error) {
+          namespace.panelDebug?.log?.("prompt.panel.bridge.disconnect.error", {
+            error: error instanceof Error ? error.message : String(error || ""),
+            reason,
+            scope: "runtime",
+            tool: "prompts",
+          });
+        }
       }
       rejectBridgeConnect(new Error("프롬프트 패널 Firestore bridge 연결이 닫혔어요."));
       resetBridgeState();
