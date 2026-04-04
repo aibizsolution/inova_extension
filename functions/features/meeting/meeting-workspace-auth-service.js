@@ -43,7 +43,7 @@ function registerMeetingWorkspaceAuthHandlers(deps) {
         return;
       }
 
-      const viewer = await verifyBearerViewer(request);
+      const viewer = await verifyBearerViewer(request, request.body?.providerIdentity || request.body?.owner);
       const payload = input.shareToken
         ? await buildShareAccessPayload(input, viewer)
         : await buildOwnerAccessPayload(input, viewer);
