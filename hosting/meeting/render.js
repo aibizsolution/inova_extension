@@ -1054,13 +1054,13 @@
     refs.currentNotice.textContent = state.notice.text;
     refs.currentNotice.dataset.tone = state.notice.tone || "";
     refs.startButton.hidden = !recorderView.showStart;
-    refs.importAudioButton.hidden = !state.isLocalWorkspace || !recorderView.showStart;
+    refs.importAudioButton.hidden = !recorderView.showStart;
     refs.pauseButton.hidden = !recorderView.showPause;
     refs.resumeButton.hidden = !recorderView.showResume;
     refs.stopButton.hidden = !recorderView.showStop;
     refs.discardButton.hidden = !recorderView.showDiscard;
     refs.startButton.disabled = !recorderView.canStart;
-    refs.importAudioButton.disabled = !state.isLocalWorkspace || !recorderView.canStart;
+    refs.importAudioButton.disabled = !recorderView.canStart;
     refs.pauseButton.disabled = !recorderView.canPause;
     refs.resumeButton.disabled = !recorderView.canResume;
     refs.stopButton.disabled = !recorderView.canStop;

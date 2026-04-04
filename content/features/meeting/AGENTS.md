@@ -22,6 +22,7 @@
 - hosted 회의 작업실 Firebase auth claim은 `meetingId` 단위로 달라질 수 있다.
 - 그래서 `hosting/meeting/firebase-client.js`에서는 `synchronizeTabs: true` 같은 cross-tab Firestore persistence를 켜지 않고, 여러 회의 탭이 각자 auth를 유지하도록 둔다.
 - 실시간 listener permission 오류 재시도는 기존 작업실 access payload를 지운 뒤 막히지 않게, 같은 meeting auth로 강제 재로그인하는 흐름을 유지한다.
+- hosted 회의 작업실의 `파일 불러오기`는 로컬/상용 모두 지원 대상이다. origin이 다르다는 이유만으로 버튼 표시나 import 실행을 막지 않는다.
 
 ## 관련 functions 경로
 - `functions/features/meeting/meeting-launch-service.js`

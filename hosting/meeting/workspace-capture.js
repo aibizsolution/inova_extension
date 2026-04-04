@@ -89,7 +89,7 @@
       }
 
       function openImportAudioPicker() {
-        if (!state.isLocalWorkspace || !refs.importAudioInput || ["recording", "paused", "stopping"].includes(state.capture.status)) return;
+        if (!refs.importAudioInput || ["recording", "paused", "stopping"].includes(state.capture.status)) return;
         refs.importAudioInput.value = "";
         refs.importAudioInput.click();
       }
@@ -108,11 +108,6 @@
       }
 
       async function importAudioFile(file) {
-        if (!state.isLocalWorkspace) {
-          helpers.setNotice?.("파일 불러오기는 로컬 회의 화면에서만 사용할 수 있습니다.", "error");
-          helpers.applyRender?.();
-          return;
-        }
         if (["recording", "paused", "stopping"].includes(state.capture.status)) {
           helpers.setNotice?.("현재 녹음을 먼저 마친 뒤 파일을 불러와 주세요.", "warning");
           helpers.applyRender?.();
