@@ -1328,9 +1328,9 @@ select:disabled {
 .notes-overview {
   margin-bottom: 0;
   padding: 18px 18px;
-  border: 1px solid #c9d7fb;
+  border: 1px solid #d3e4f6;
   border-radius: 16px;
-  background: #f7faff;
+  background: #f3f8ff;
   line-height: 1.7;
 }
 
@@ -1407,6 +1407,7 @@ select:disabled {
 
 .notes-overview .notes-section__title {
   font-size: 20px;
+  color: #245a8a;
 }
 
 .notes-list {
