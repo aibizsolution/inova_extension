@@ -321,22 +321,16 @@ async function probeMeetingWorkspaceBridge(sender) {
     name: "accessToken",
     url: INOVA_ORIGIN,
   }).catch(() => null);
-  let tokenRefreshOk = false;
-  let tokenRefreshError = "";
-
-  try {
-    await getInovaAccessToken();
-    tokenRefreshOk = true;
-  } catch (error) {
-    tokenRefreshError = error instanceof Error ? error.message : String(error || "");
-  }
+  const accessTokenCookiePresent = Boolean(namespace.session.normalizeText(cookie?.value));
 
   return {
-    accessTokenCookiePresent: Boolean(namespace.session.normalizeText(cookie?.value)),
-    inovaLoggedIn: Boolean(namespace.session.normalizeText(cookie?.value)) || tokenRefreshOk,
+    accessTokenCookiePresent,
+    inovaLoggedIn: accessTokenCookiePresent,
+    loginCheckMode: "cookie-only",
     senderUrl,
-    tokenRefreshError,
-    tokenRefreshOk,
+    tokenRefreshError: "",
+    tokenRefreshOk: false,
+    tokenRefreshSkipped: true,
     verifiedAt: new Date().toISOString(),
   };
 }
