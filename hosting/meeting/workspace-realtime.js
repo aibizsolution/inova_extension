@@ -8,7 +8,7 @@
       const state = deps?.state || {};
       const constants = deps?.constants || {};
       const helpers = deps?.helpers || {};
-      const { buildLocalPendingJob, chooseSelectedRecordId, findHistoryEntry, normalizeArtifact, normalizeJob, normalizeRecord } = ns.render;
+      const { buildLocalPendingJob, chooseSelectedRecordId, findHistoryEntry, normalizeArtifact, normalizeJob, normalizeRecord, normalizeWorkspaceMutation } = ns.render;
       const { clearWorkspaceAuthCache, ensureWorkspaceAuth, getCollections, subscribeDocument } = ns.firebase;
       const { isLikelyNetworkError, logDebug, normalizeText, normalizeTextBlock } = ns.shared;
       const FIRESTORE_COLLECTIONS = getCollections();
@@ -22,6 +22,9 @@
       const setNotice = (...args) => helpers.setNotice?.(...args);
       const applyRender = (...args) => helpers.applyRender?.(...args);
       const clearDegradedNotice = (...args) => helpers.clearDegradedNotice?.(...args);
+      const createEmptyNotesContextState = (...args) => helpers.createEmptyNotesContextState?.(...args);
+      const createEmptyNotesInputSnapshotState = (...args) => helpers.createEmptyNotesInputSnapshotState?.(...args);
+      const createEmptySelectedRecordMemoState = (...args) => helpers.createEmptySelectedRecordMemoState?.(...args);
       const setDegradedNotice = (...args) => helpers.setDegradedNotice?.(...args);
       const renderBlocked = (...args) => helpers.renderBlocked?.(...args);
       const persistWorkspaceSession = (...args) => controller("session")?.persistSession?.(...args);
@@ -159,6 +162,10 @@
         state.realtime.meetingListenerVersion = listenerVersion;
       
         let awaitingInitialSnapshot = true;
+        let pendingSnapshotOptions = {
+          hydrateSelection: Boolean(options.hydrateSelection),
+          reason: normalizeText(options.reason) || "snapshot",
+        };
         const initialSnapshotResult = await Promise.race([
           new Promise((resolve) => {
             let settled = false;
@@ -182,10 +189,15 @@
                 finishReject(normalizedError);
               },
               next: (snapshot) => {
+                const snapshotOptions = pendingSnapshotOptions || {
+                  hydrateSelection: false,
+                  reason: "snapshot",
+                };
+                pendingSnapshotOptions = null;
                 void handleMeetingSnapshot(snapshot, {
-                  hydrateSelection: Boolean(options.hydrateSelection),
+                  hydrateSelection: Boolean(snapshotOptions.hydrateSelection),
                   listenerVersion,
-                  reason: options.reason,
+                  reason: snapshotOptions.reason,
                 })
                   .then(finishResolve)
                   .catch((error) => {

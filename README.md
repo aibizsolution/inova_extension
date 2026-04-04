@@ -5,7 +5,6 @@
 ## Feature-first 작업 시작
 
 - 이 저장소에서는 새 요청이 오면 먼저 [docs/feature-routing.md](docs/feature-routing.md)에서 primary feature를 고르고, 해당 feature `AGENTS.md`와 먼저 볼 파일만 읽고 시작합니다.
-- 저장소 전체 리팩터링의 현재 기준선과 진행률 규칙은 [docs/repo-refactor-plan.md](docs/repo-refactor-plan.md)를 기준으로 맞춥니다.
 - 실행 표면과 런타임 경계가 필요할 때만 [docs/runtime-architecture.md](docs/runtime-architecture.md)를 봅니다.
 - `popup`, `background/service-worker.js`, `content/main.js`, `content/panel.js`, `functions/index.js`, `manifest.json`, `shared/*`는 platform/shell로 취급하고, feature 범위만으로 해결되지 않을 때만 읽습니다.
 - `content/prompt-hub-view.js`, `content/prompt-hub-state.js`, `content/prompt-hub-panel.js`, `content/prompt-hub-controller.js`, `content/prompt-hub-runtime.js`는 `내 요청/스토어/검토` shell을 담당하므로, 단일 prompt feature 소유 파일로 보지 않습니다.
@@ -66,6 +65,7 @@
 - `OPENAI_MEETING_CHUNK_TRANSCRIPTION_CONCURRENCY`를 주면 이 기본 동작 대신 job별 고정 병렬 수로 명시적으로 핀할 수 있습니다. 값을 주지 않으면 hosted 회의실의 chunk worker queue는 업로드된 chunk 수만큼 즉시 열리고, 단일 invocation 안에서 직접 chunk를 묶어 전사하는 fallback 경로만 별도 adaptive concurrency를 유지합니다.
 - 긴 회의 처리 중 상태 안내는 단계 카드와 청크 진행판 위주로 보여주고, 같은 내용을 반복하는 별도 파란 배너는 processing 상태에서 겹치지 않게 숨깁니다.
 - 작업실 상세 카드 아래에는 chunk 업로드/전사 진행을 별도 진행바와 chunk 칸 목록으로 보여주고, 전사 중에는 실제 병렬 worker 수만큼 파란 칸을 함께 표시해 로그 없이도 진행 상태를 바로 확인할 수 있게 유지합니다.
+- chunk 진행 UI는 remote job이 먼저 생겨도 `uploadedPartCount < preparedPartCount` 동안은 계속 `n/N 업로드`를 주 진행으로 보여주고, `N/N 업로드 완료` 뒤에만 전사 진행을 전면에 올립니다.
 - 실패한 기록을 `다시 처리`로 재시작한 직후에는, 새 업로드/분할 준비가 끝나기 전까지 예전 stalled remote job 상태를 상세 카드에 다시 섞어 보여주지 않고 현재 로컬 재시작 상태를 우선 표시합니다.
 - 전사/정리 중 OpenAI `429/5xx` 같은 일시 오류가 나면 회의 job을 바로 `failed`로 끝내지 않고, 제한 횟수 안에서 자동으로 다시 `queued`에 태워 재시도합니다.
 - 작업실 진행 안내에는 자동 재시도가 발생한 경우 `자동 재시도 n회`를 함께 표시해, 멈춘 것인지 다시 도는 중인지 바로 구분할 수 있게 유지합니다.
@@ -228,7 +228,8 @@
 
 - 확장프로그램은 `manifest V3`로 구성되어 있습니다.
 - `popup/index.js`는 `settings.meetingWorkspaceTarget`을 읽고, hosted 회의 작업실 연결 대상을 `상용 호스팅 / 로컬 호스팅` 중 하나로 저장합니다.
-- `hosting/meeting/index.js`는 hosted 회의 작업실의 composition root로서 state/DOM 공통 render와 controller wiring을 맡고, 실제 workflow 책임은 `hosting/meeting/workspace-session.js`, `hosting/meeting/workspace-realtime.js`, `hosting/meeting/workspace-capture.js`, `hosting/meeting/workspace-pending-uploads.js`, `hosting/meeting/workspace-mutations.js`, `hosting/meeting/workspace-debug.js`로 나눕니다. 마이크 녹음은 `workspace-capture.js`의 `getUserMedia + MediaRecorder` 경로가 담당합니다.
+- `hosting/meeting/index.js`는 hosted 회의 작업실의 composition root로서 state/DOM 공통 render와 controller wiring을 맡고, 실제 workflow 책임은 `hosting/meeting/workspace-session.js`, `hosting/meeting/workspace-realtime.js`, `hosting/meeting/workspace-capture.js`, `hosting/meeting/workspace-pending-uploads.js`, `hosting/meeting/workspace-mutations.js`, `hosting/meeting/workspace-debug.js`로 나눕니다. hosted render contract는 `hosting/meeting/render-state.js`의 상태 해석과 `hosting/meeting/render.js`의 markup/render orchestration으로 1차 분리돼 있습니다. 세션 복원/교환 직후에는 바로 boot refresh를 돌립니다. 마이크 녹음은 `workspace-capture.js`의 `getUserMedia + MediaRecorder` 경로가 담당합니다.
+- controller로 분리된 hosted 작업실 모듈은 private helper를 직접 가정하지 않고 `ns.render`, `ns.storage`처럼 명시적으로 노출된 helper 계약만 통해 값을 주고받습니다. 그래서 queue supersede 정리나 `workspaceMutation` 정규화도 각 파일 내부 복제가 아니라 namespace export를 기준으로 연결합니다.
 - hosted 회의 작업실은 `공용 메모 저장 -> 녹음 종료와 동시에 로컬 큐 적재 -> 온라인이면 즉시 job 생성 -> 원격 처리와 별개로 다음 녹음 허용` 흐름으로 동작합니다.
 - `content/main.js`는 현재 URL의 `sid`를 기준으로 대화를 나누고, `.chat-message--user`를 실시간으로 수집합니다.
 - `content/features/prompt-library/prompt-manager.js`는 `promptLibrary`를 관리하고, 선택한 요청을 현재 대화 입력창에 주입합니다.

@@ -448,6 +448,7 @@
         discardCapture,
         downloadCurrentRecord,
         handleImportAudioSelection,
+        inferAudioExtension,
         importAudioFile,
         openImportAudioPicker,
         pauseCapture,

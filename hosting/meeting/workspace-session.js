@@ -3,20 +3,11 @@
   function createController(deps) {
     const shared = ns.shared;
     const render = ns.render;
-    const {
-      CONFIG,
-      DEBUG_PANEL_COLLAPSED_STORAGE_KEY,
-      DEGRADED_NOTICE_CODES,
-      SESSION_STORAGE_KEY,
-      applyRender,
-      createEmptyWorkspaceMutationState,
-      disposeWorkspaceRealtime,
-      global: globalObject,
-      refs,
-      state,
-      setDegradedNotice,
-      clearDegradedNotice,
-    } = deps;
+    const state = deps?.state || {};
+    const constants = deps?.constants || {};
+    const helpers = deps?.helpers || {};
+    const CONFIG = constants.CONFIG || {};
+    const DEGRADED_NOTICE_CODES = constants.DEGRADED_NOTICE_CODES || {};
     const {
       buildRemoteSelectionId,
       buildWorkspaceHash,
@@ -30,8 +21,18 @@
       persistWorkspaceSessionPayload,
       postJson,
       safeLocalStorageGet,
+      SESSION_STORAGE_KEY,
     } = shared;
     const { findHistoryEntry } = render;
+
+    function controller(name) {
+      return typeof helpers.controller === "function" ? helpers.controller(name) : null;
+    }
+
+    const applyDegradedDiagnostics = (...args) => helpers.applyDegradedDiagnostics?.(...args);
+    const createEmptyWorkspaceMutationState = (...args) => helpers.createEmptyWorkspaceMutationState?.(...args);
+    const disposeWorkspaceRealtime = (...args) => controller("realtime")?.disposeRealtime?.(...args);
+    const setDegradedNotice = (...args) => helpers.setDegradedNotice?.(...args);
       function hasSessionRestoreBlockingIssue(issueCodes) {
         const normalizedCodes = Array.isArray(issueCodes) ? issueCodes : [];
         return normalizedCodes.some((code) => ["storage-invalid-payload", "storage-parse-failed", "storage-read-failed"].includes(normalizeText(code)));

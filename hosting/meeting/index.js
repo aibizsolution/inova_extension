@@ -507,8 +507,12 @@
       controller(name) {
         return controllers?.[name] || null;
       },
+      createEmptyNotesContextState,
+      createEmptyNotesInputSnapshotState,
+      createEmptySelectedRecordMemoState,
       createEmptyWorkspaceMutationState,
       createIdleCapture,
+      getWorkspaceTitleOrFallback,
       renderBlocked,
       requestConfirmation,
       resolveConfirmation,
@@ -648,6 +652,30 @@
     global.addEventListener("beforeunload", controllers.realtime.disposeRealtime, { passive: true });
   }
 
+  async function bootWorkspace() {
+    const debugSandboxRequested = controllers.pendingUploads.isDebugLocalQueueSandboxRequested?.();
+    await controllers.session.bootSession();
+    if (!state.session.meetingId || !state.session.meetingSessionToken) {
+      if (!debugSandboxRequested) {
+        const blockedOptions = controllers.session.buildMissingSessionBlockedOptions();
+        renderBlocked(blockedOptions.message, blockedOptions);
+        applyRender();
+        return;
+      }
+    }
+    if (debugSandboxRequested) {
+      controllers.pendingUploads.activateDebugLocalQueueSandbox();
+    } else {
+      controllers.session.surfaceSessionRestoreNotice();
+    }
+    state.meetingTitleDraft = normalizeText(state.meeting.title || state.session.title);
+    state.recordMemoDraft = normalizeTextBlock(state.session.sharedMemo);
+    state.recordMemoSaved = state.recordMemoDraft;
+    applyRender();
+    await controllers.realtime.refreshWorkspace(true, "boot");
+    controllers.pendingUploads.retryPendingUploads("boot-retry");
+  }
+
   async function bootstrap() {
     cacheRefs();
     createControllers();
@@ -659,7 +687,7 @@
       href: global.location.href,
       params: state.params,
     });
-    await controllers.session.bootSession();
+    await bootWorkspace();
   }
 
   function setScopedNotice(key, timerKey, text, tone, options = {}) {

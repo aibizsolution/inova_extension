@@ -10,7 +10,7 @@
       const helpers = deps?.helpers || {};
       const { buildLocalPendingJob, chooseSelectedRecordId, findHistoryEntry, findRemoteForPending, normalizeArtifact, normalizeJob, normalizeRecord } = ns.render;
       const { prepareAudioSourceChunks } = ns.audioChunker;
-      const { blobToBase64, normalizePendingUpload, PENDING_UPLOAD_DEBUG_SCENARIOS } = ns.storage;
+      const { blobToBase64, collapseSupersededPendingUploads, normalizePendingUpload, PENDING_UPLOAD_DEBUG_SCENARIOS } = ns.storage;
       const {
         AUTO_RETRY_PENDING_STATUSES,
         DEFAULT_CREATE_JOB_TIMEOUT_MS,
@@ -27,11 +27,13 @@
         buildWorkspaceSessionStorageKey,
         formatDateTime,
         isDebugPanelEnabled,
+        isOnline,
         logDebug,
         normalizeText,
         normalizeTextBlock,
         postJson,
         safeLocalStorageGet,
+        SESSION_STORAGE_KEY,
       } = ns.shared;
       const DEGRADED_NOTICE_CODES = constants.DEGRADED_NOTICE_CODES || {};
       const DEGRADED_NOTICE_SPECS = constants.DEGRADED_NOTICE_SPECS || {};
@@ -53,8 +55,10 @@
       const setDegradedNotice = (...args) => helpers.setDegradedNotice?.(...args);
       const clearDegradedNotice = (...args) => helpers.clearDegradedNotice?.(...args);
       const applyDegradedDiagnostics = (...args) => helpers.applyDegradedDiagnostics?.(...args);
+      const getWorkspaceTitleOrFallback = (...args) => helpers.getWorkspaceTitleOrFallback?.(...args);
       const persistWorkspaceSession = (...args) => controller("session")?.persistSession?.(...args);
       const clearWorkspaceSession = (...args) => controller("session")?.clearSession?.(...args);
+      const inferAudioExtension = (...args) => controller("capture")?.inferAudioExtension?.(...args);
       const refreshWorkspace = (...args) => controller("realtime")?.refreshWorkspace?.(...args);
       const syncWorkspaceLocalState = (...args) => controller("realtime")?.syncWorkspaceLocalState?.(...args);
       const saveRecordTitleForEntry = (...args) => controller("mutations")?.saveRecordTitleForEntry?.(...args);
