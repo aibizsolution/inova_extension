@@ -1878,17 +1878,17 @@ select:disabled {
 
   .workspace-rail {
     grid-column: 1;
-    grid-row: 1;
+    grid-row: 1 / span 2;
   }
 
   .workspace-column--queue {
-    grid-column: 1;
-    grid-row: 2;
+    grid-column: 2;
+    grid-row: 1;
   }
 
   .workspace-column--detail {
     grid-column: 2;
-    grid-row: 1 / span 2;
+    grid-row: 2;
   }
 }
 
