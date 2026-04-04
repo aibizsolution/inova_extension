@@ -428,6 +428,41 @@
     if (fileName) return fileName;
     return buildRecordTitle(seedAt);
   }
+
+  function shouldWarnOnRecordingUnload(status) {
+    return ["recording", "paused", "stopping"].includes(normalizeText(status));
+  }
+
+  function shouldWarnOnPendingUploadUnload(status) {
+    return ["preparing_chunks", "uploading", "uploading_chunks"].includes(normalizeText(status));
+  }
+
+  function getUnloadWarningState() {
+    const captureStatus = normalizeText(state.capture?.status);
+    const activeUploadCount = (Array.isArray(state.pendingUploads) ? state.pendingUploads : [])
+      .filter((pending) => shouldWarnOnPendingUploadUnload(pending?.status))
+      .length;
+    return {
+      activeUploadCount,
+      captureStatus,
+      shouldWarn: shouldWarnOnRecordingUnload(captureStatus) || activeUploadCount > 0,
+    };
+  }
+
+  function handleBeforeUnload(event) {
+    const unloadWarningState = getUnloadWarningState();
+    if (!unloadWarningState.shouldWarn) {
+      return undefined;
+    }
+    logDebug("workspace.beforeunload.warn", {
+      activeUploadCount: unloadWarningState.activeUploadCount,
+      captureStatus: unloadWarningState.captureStatus,
+      meetingId: state.session.meetingId,
+    });
+    event.preventDefault();
+    event.returnValue = "";
+    return "";
+  }
   
   
   function requestConfirmation(options = {}) {
@@ -680,7 +715,8 @@
       setNotice("인터넷이 끊겨도 종료된 녹음은 브라우저에 보관합니다. 연결이 돌아오면 이어서 업로드합니다.", "highlight");
       applyRender();
     }, { passive: true });
-    global.addEventListener("beforeunload", controllers.realtime.disposeRealtime, { passive: true });
+    global.addEventListener("beforeunload", handleBeforeUnload);
+    global.addEventListener("pagehide", controllers.realtime.disposeRealtime, { passive: true });
   }
 
   async function bootWorkspace() {
