@@ -423,7 +423,7 @@ function registerMeetingHandlers(deps) {
       });
       const meetingNotes = await maybeGenerateMeetingNotes(transcript, meeting, options, context, logEvent, owner, queuedJob.jobId);
       const completedAt = new Date().toISOString();
-      const artifact = buildTranscriptArtifact(artifactId, queuedJob.jobId, meeting, owner, transcript, meetingNotes, completedAt);
+      const artifact = buildTranscriptArtifact(artifactId, queuedJob.jobId, meeting, owner, transcript, meetingNotes, completedAt, context);
       const deletion = await deleteTemporarySourceGroup(bucket, collectMeetingSourceStorageObjects(source));
       const succeededPatch = buildSucceededJobPatch(
         artifact,
@@ -819,7 +819,7 @@ function registerMeetingHandlers(deps) {
       });
       const meetingNotes = await maybeGenerateMeetingNotes(transcript, meeting, options, context, logEvent, owner, currentJob.jobId);
       const completedAt = new Date().toISOString();
-      const artifact = buildTranscriptArtifact(artifactId, currentJob.jobId, meeting, owner, transcript, meetingNotes, completedAt);
+      const artifact = buildTranscriptArtifact(artifactId, currentJob.jobId, meeting, owner, transcript, meetingNotes, completedAt, context);
       const deletion = await deleteTemporarySourceGroup(
         bucket,
         [
@@ -1277,7 +1277,10 @@ function registerMeetingHandlers(deps) {
       if (!input.meetingId || !input.jobId) {
         throw createHttpError(400, "회의 결과를 수정할 ID가 비어 있어요.");
       }
-      if (!input.title) {
+      if (!input.titleProvided && !input.sharedMemoProvided && !input.contextItemsProvided) {
+        throw createHttpError(400, "수정할 회의 결과 내용이 비어 있어요.");
+      }
+      if (input.titleProvided && !input.title) {
         throw createHttpError(400, "수정할 회의 결과 내용이 비어 있어요.");
       }
       assertWorkspaceMeetingAccess(access, input.meetingId, createHttpError);
@@ -1297,18 +1300,89 @@ function registerMeetingHandlers(deps) {
         throw createHttpError(404, "현재 회의와 맞지 않는 결과예요.");
       }
 
-      const updatedAt = input.title ? new Date().toISOString() : normalizeText(job.updatedAt);
+      const artifactId = normalizeText(job.transcript?.artifactId || job.artifacts?.[0]?.artifactId);
+      const artifactRef = artifactId ? db.collection(ARTIFACT_COLLECTION).doc(artifactId) : null;
+      const artifactSnapshot = artifactRef ? await artifactRef.get() : null;
+      const artifact = artifactSnapshot?.exists ? normalizeMeetingArtifact(artifactSnapshot.data()) : null;
+      const currentNotesContextItems = normalizeMeetingNotesContextItems(
+        artifact?.notesContextItems?.length
+          ? artifact.notesContextItems
+          : job.notesContextItems?.length
+            ? job.notesContextItems
+            : job.context?.notesContextItems
+      );
+      const currentSharedMemoSnapshot = normalizeTextBlock(job.context?.sharedMemoSnapshot || job.meeting?.sharedMemo).slice(0, MAX_SHARED_MEMO_CHARS);
+      const updatedAt = new Date().toISOString();
+      const persistedSharedMemo = input.sharedMemoProvided
+        ? input.sharedMemo
+        : currentSharedMemoSnapshot;
+      const persistedNotesContextItems = input.contextItemsProvided
+        ? mergePersistedMeetingNotesContextItems(currentNotesContextItems, input.contextItems, updatedAt)
+        : currentNotesContextItems;
+      const existingNotesInputSnapshot = normalizeMeetingNotesInputSnapshot(
+        artifact?.notesInputSnapshot?.updatedAt ? artifact.notesInputSnapshot : job.notesInputSnapshot,
+        {
+          contextItems: currentNotesContextItems,
+          sharedMemo: currentSharedMemoSnapshot,
+          updatedAt: normalizeText(artifact?.notesGeneratedAt || job.notesGeneratedAt),
+        }
+      );
+      const shouldInitializeNotesInputSnapshot = !normalizeText(existingNotesInputSnapshot.updatedAt)
+        && Boolean(normalizeText(artifact?.notesGeneratedAt || job.notesGeneratedAt));
+      const baselineNotesInputSnapshot = shouldInitializeNotesInputSnapshot
+        ? normalizeMeetingNotesInputSnapshot({
+            contextItems: currentNotesContextItems,
+            sharedMemo: currentSharedMemoSnapshot,
+            updatedAt: normalizeText(artifact?.notesGeneratedAt || job.notesGeneratedAt || job.updatedAt || updatedAt),
+          })
+        : existingNotesInputSnapshot;
+      const nextContext = normalizeMeetingContext({
+        ...job.context,
+        notesContextItems: persistedNotesContextItems,
+        sharedMemoSnapshot: persistedSharedMemo,
+      });
       const jobPatch = {};
-      if (input.title) {
+      if (input.titleProvided) {
         jobPatch.title = input.title;
         jobPatch.updatedAt = updatedAt;
       }
-      if (Object.keys(jobPatch).length) {
-        await jobRef.set(jobPatch, { merge: true });
+      if (input.sharedMemoProvided || input.contextItemsProvided) {
+        jobPatch.context = nextContext;
+        jobPatch.notesContextItems = persistedNotesContextItems;
+        jobPatch.updatedAt = updatedAt;
+      }
+      if (shouldInitializeNotesInputSnapshot) {
+        jobPatch.notesInputSnapshot = baselineNotesInputSnapshot;
+      }
+      const artifactPatch = {};
+      if (input.contextItemsProvided) {
+        artifactPatch.notesContextItems = persistedNotesContextItems;
+      }
+      if (shouldInitializeNotesInputSnapshot) {
+        artifactPatch.notesInputSnapshot = baselineNotesInputSnapshot;
       }
 
-      if (input.title) {
-        await updateMeetingSummaryRecordTitle(owner, job, input.title, updatedAt);
+      const nextJob = normalizeMeetingJob({
+        ...job,
+        ...jobPatch,
+      });
+      const nextArtifact = artifact
+        ? normalizeMeetingArtifact({
+            ...artifact,
+            ...artifactPatch,
+          })
+        : null;
+
+      const writes = [];
+      if (Object.keys(jobPatch).length) {
+        writes.push(jobRef.set(jobPatch, { merge: true }));
+      }
+      if (artifactRef && Object.keys(artifactPatch).length) {
+        writes.push(artifactRef.set(artifactPatch, { merge: true }));
+      }
+      if (writes.length) {
+        await Promise.all(writes);
+        await updateMeetingSummaryRecordResult(owner, nextJob, nextArtifact, updatedAt);
       }
 
       logEvent("meeting.result.update.success", {
@@ -1319,11 +1393,8 @@ function registerMeetingHandlers(deps) {
       response.json({
         ok: true,
         data: {
-          job: normalizeMeetingJob({
-            ...job,
-            ...jobPatch,
-            updatedAt: normalizeText(jobPatch.updatedAt || job.updatedAt),
-          }),
+          artifact: nextArtifact,
+          job: nextJob,
         },
       });
     } catch (error) {
@@ -1373,19 +1444,32 @@ function registerMeetingHandlers(deps) {
             ? job.notesContextItems
             : job.context?.notesContextItems
       );
-      const effectiveMeeting = {
-        ...job.meeting,
-        meetingId: job.meetingId,
-        sharedMemo: normalizeText(input.sharedMemo || meetingRecord?.meeting?.sharedMemo || job.context?.sharedMemoSnapshot),
-        title: normalizeText(job.meeting?.title || job.title || meetingRecord?.meeting?.title),
-      };
+      const currentSharedMemoSnapshot = normalizeTextBlock(
+        job.context?.sharedMemoSnapshot
+        || job.meeting?.sharedMemo
+        || meetingRecord?.meeting?.sharedMemo
+      ).slice(0, MAX_SHARED_MEMO_CHARS);
       const updatedAt = new Date().toISOString();
       const persistedNotesContextItems = input.contextItemsProvided
         ? mergePersistedMeetingNotesContextItems(existingNotesContextItems, input.contextItems, updatedAt)
         : existingNotesContextItems;
-      const persistedContext = {
+      const persistedSharedMemo = input.sharedMemoProvided
+        ? input.sharedMemo
+        : currentSharedMemoSnapshot;
+      const persistedContext = normalizeMeetingContext({
         notesContextItems: persistedNotesContextItems,
-        sharedMemoSnapshot: normalizeText(effectiveMeeting.sharedMemo),
+        sharedMemoSnapshot: persistedSharedMemo,
+      });
+      const notesInputSnapshot = normalizeMeetingNotesInputSnapshot({
+        contextItems: persistedNotesContextItems,
+        sharedMemo: persistedSharedMemo,
+        updatedAt,
+      });
+      const effectiveMeeting = {
+        ...job.meeting,
+        meetingId: job.meetingId,
+        sharedMemo: persistedSharedMemo,
+        title: normalizeText(job.meeting?.title || job.title || meetingRecord?.meeting?.title),
       };
       const generationContext = { ...persistedContext };
       const meetingNotes = await generateMeetingNotesBundle(
@@ -1396,15 +1480,11 @@ function registerMeetingHandlers(deps) {
       const resultTitle = resolveMeetingResultTitle(meetingNotes, job.title || effectiveMeeting.title);
       const jobPatch = {
         context: persistedContext,
-        meeting: {
-          ...job.meeting,
-          sharedMemo: normalizeText(effectiveMeeting.sharedMemo),
-          title: normalizeText(effectiveMeeting.title),
-        },
         notesDegradedReason: meetingNotes.notesDegradedReason,
         meetingNotes: meetingNotes.notes,
         notesContextItems: persistedNotesContextItems,
         notesGeneratedAt: meetingNotes.notesGeneratedAt,
+        notesInputSnapshot,
         notesRevisionRequest: "",
         notesRevisionRequestedAt: "",
         notesStatus: meetingNotes.notesStatus,
@@ -1417,6 +1497,7 @@ function registerMeetingHandlers(deps) {
         notes: meetingNotes.notes,
         notesContextItems: persistedNotesContextItems,
         notesGeneratedAt: meetingNotes.notesGeneratedAt,
+        notesInputSnapshot,
         notesRevisionRequest: "",
         notesRevisionRequestedAt: "",
         notesStatus: meetingNotes.notesStatus,
@@ -1430,16 +1511,10 @@ function registerMeetingHandlers(deps) {
         ...artifact,
         ...artifactPatch,
       });
-      const meetingRef = db.collection(MEETING_COLLECTION).doc(buildMeetingDocId(owner.providerUserKey, job.meetingId));
-      const sessionRef = job.sessionId
-        ? db.collection(SESSION_COLLECTION).doc(buildSessionDocId(owner.providerUserKey, job.sessionId))
-        : null;
-
       await Promise.all([
         jobRef.set(jobPatch, { merge: true }),
         artifactRef ? artifactRef.set(artifactPatch, { merge: true }) : Promise.resolve(),
-        upsertMeetingJobSummary(meetingRef, effectiveMeeting, owner, nextJob, nextArtifact),
-        sessionRef ? upsertLegacySessionJobSummary(sessionRef, effectiveMeeting, owner, nextJob, nextArtifact) : Promise.resolve(),
+        updateMeetingSummaryRecordResult(owner, nextJob, nextArtifact, updatedAt),
       ]);
 
       logEvent("meeting.notes.regenerate.success", {
@@ -2345,20 +2420,20 @@ function registerMeetingHandlers(deps) {
     }
   }
 
-  async function updateMeetingSummaryRecordTitle(owner, job, title, updatedAt) {
+  async function updateMeetingSummaryRecordResult(owner, jobInput, artifactInput, updatedAtInput) {
+    const job = normalizeMeetingJob(jobInput);
+    if (!job.jobId || job.deletedAt) {
+      return;
+    }
+    const artifact = artifactInput ? normalizeMeetingArtifact(artifactInput) : null;
+    const updatedAt = normalizeText(updatedAtInput || artifact?.notesGeneratedAt || job.updatedAt || new Date().toISOString());
+    const summaryItem = buildMeetingResultSummary(job, artifact);
+
     const meetingRef = db.collection(MEETING_COLLECTION).doc(buildMeetingDocId(owner.providerUserKey, job.meetingId));
     const meetingSnapshot = await meetingRef.get();
     if (meetingSnapshot.exists) {
       const currentMeeting = normalizeMeetingSummary(meetingSnapshot.data());
-      const recentJobs = currentMeeting.recentJobs.map((item) => (
-        item.jobId === job.jobId
-          ? {
-              ...item,
-              title,
-              updatedAt,
-            }
-          : item
-      ));
+      const recentJobs = mergeRecentJobs(currentMeeting.recentJobs, summaryItem);
       await meetingRef.set(buildMeetingRecentJobsPatch(currentMeeting, recentJobs, updatedAt), { merge: true });
     }
 
@@ -2367,15 +2442,7 @@ function registerMeetingHandlers(deps) {
       const sessionSnapshot = await sessionRef.get();
       if (sessionSnapshot.exists) {
         const currentSession = normalizeMeetingSession(sessionSnapshot.data());
-        const recentJobs = currentSession.recentJobs.map((item) => (
-          item.jobId === job.jobId
-            ? {
-                ...item,
-                title,
-                updatedAt,
-              }
-            : item
-        ));
+        const recentJobs = mergeRecentJobs(currentSession.recentJobs, summaryItem);
         await sessionRef.set(buildSessionRecentJobsPatch(currentSession, recentJobs, updatedAt), { merge: true });
       }
     }
@@ -4067,6 +4134,35 @@ function normalizeMeetingContext(input) {
   };
 }
 
+function normalizeMeetingNotesInputSnapshot(input, fallbackInput) {
+  const snapshot = input && typeof input === "object" ? input : {};
+  const fallback = fallbackInput && typeof fallbackInput === "object" ? fallbackInput : {};
+  const hasExplicitContextItems = hasOwn(snapshot, "contextItems");
+  const sharedMemo = normalizeTextBlock(
+    hasOwn(snapshot, "sharedMemo")
+      ? snapshot.sharedMemo
+      : fallback.sharedMemo
+  ).slice(0, MAX_SHARED_MEMO_CHARS);
+  const contextItems = normalizeMeetingNotesContextItems(
+    hasExplicitContextItems
+      ? snapshot.contextItems
+      : fallback.contextItems
+  );
+  const updatedAt = normalizeText(snapshot.updatedAt || fallback.updatedAt);
+  if (!sharedMemo && !contextItems.length && !updatedAt) {
+    return {
+      contextItems: [],
+      sharedMemo: "",
+      updatedAt: "",
+    };
+  }
+  return {
+    contextItems,
+    sharedMemo,
+    updatedAt,
+  };
+}
+
 function normalizeMeetingNotesContextItem(input) {
   const item = input && typeof input === "object" ? input : {};
   return {
@@ -4676,8 +4772,13 @@ function normalizeMeetingMutationRequest(input) {
 function normalizeMeetingResultMutationRequest(input) {
   return {
     jobId: normalizeText(input?.jobId),
+    contextItems: normalizeMeetingNotesContextItems(input?.contextItems),
+    contextItemsProvided: hasOwn(input, "contextItems"),
     meetingId: normalizeText(input?.meetingId),
+    sharedMemo: normalizeTextBlock(input?.sharedMemo).slice(0, MAX_SHARED_MEMO_CHARS),
+    sharedMemoProvided: hasOwn(input, "sharedMemo"),
     title: normalizeText(input?.title),
+    titleProvided: hasOwn(input, "title"),
   };
 }
 
@@ -4695,6 +4796,7 @@ function normalizeMeetingNotesRegenerateRequest(input) {
     jobId: normalizeText(request.jobId),
     meetingId: normalizeText(request.meetingId),
     sharedMemo: normalizeTextBlock(request.sharedMemo).slice(0, MAX_SHARED_MEMO_CHARS),
+    sharedMemoProvided: hasOwn(request, "sharedMemo"),
   };
 }
 
@@ -4788,6 +4890,12 @@ function buildQueuedJob(jobId, meeting, owner, options, source, context, created
 
 function buildSucceededJobPatch(artifact, meeting, options, source, context, transcript, meetingNotes, completedAt, deletedAt, retryInput) {
   const resultTitle = resolveMeetingResultTitle(meetingNotes, meeting.title);
+  const normalizedContext = normalizeMeetingContext(context);
+  const notesInputSnapshot = normalizeMeetingNotesInputSnapshot({
+    contextItems: normalizedContext.notesContextItems,
+    sharedMemo: normalizedContext.sharedMemoSnapshot,
+    updatedAt: normalizeText(meetingNotes?.notesGeneratedAt || completedAt),
+  });
   return {
     artifacts: [
       {
@@ -4819,10 +4927,12 @@ function buildSucceededJobPatch(artifact, meeting, options, source, context, tra
       uploadStatus: deletedAt ? "deleted" : source.uploadStatus,
     },
     status: "succeeded",
-    context: normalizeMeetingContext(context),
+    context: normalizedContext,
     notesDegradedReason: normalizeText(meetingNotes?.notesDegradedReason),
     meetingNotes: normalizeMeetingNotes(meetingNotes?.notes),
+    notesContextItems: normalizedContext.notesContextItems,
     notesGeneratedAt: normalizeText(meetingNotes?.notesGeneratedAt),
+    notesInputSnapshot,
     notesStatus: normalizeMeetingNotesStatus(meetingNotes?.notesStatus),
     notesSchemaVersion: Math.max(1, Number(meetingNotes?.notesSchemaVersion) || NOTES_SCHEMA_VERSION),
     title: resultTitle,
@@ -4843,7 +4953,11 @@ function resolveMeetingResultTitle(meetingNotes, fallbackTitle) {
   return suggestedTitle || normalizeText(fallbackTitle);
 }
 
-function buildTranscriptArtifact(artifactId, jobId, meeting, owner, transcript, meetingNotes, createdAt) {
+function buildTranscriptArtifact(artifactId, jobId, meeting, owner, transcript, meetingNotes, createdAt, contextInput) {
+  const normalizedContext = normalizeMeetingContext(contextInput);
+  const normalizedNotesContextItems = normalizeMeetingNotesContextItems(
+    meetingNotes?.notesContextItems?.length ? meetingNotes.notesContextItems : normalizedContext.notesContextItems
+  );
   return {
     artifactId,
     createdAt,
@@ -4852,9 +4966,15 @@ function buildTranscriptArtifact(artifactId, jobId, meeting, owner, transcript, 
     jobId,
     kind: "transcript",
     meetingId: meeting.meetingId,
+    notesContextItems: normalizedNotesContextItems,
     notesDegradedReason: normalizeText(meetingNotes?.notesDegradedReason),
     notes: normalizeMeetingNotes(meetingNotes?.notes),
     notesGeneratedAt: normalizeText(meetingNotes?.notesGeneratedAt),
+    notesInputSnapshot: normalizeMeetingNotesInputSnapshot({
+      contextItems: normalizedNotesContextItems,
+      sharedMemo: meetingNotes?.sharedMemoSnapshot || normalizedContext.sharedMemoSnapshot,
+      updatedAt: normalizeText(meetingNotes?.notesGeneratedAt || createdAt),
+    }),
     notesStatus: normalizeMeetingNotesStatus(meetingNotes?.notesStatus),
     notesSchemaVersion: Math.max(1, Number(meetingNotes?.notesSchemaVersion) || NOTES_SCHEMA_VERSION),
     owner: owner ? { ...owner } : {},
@@ -5033,6 +5153,9 @@ function normalizeTranscriptionResponse(response, fallbackDurationMs) {
 function normalizeMeetingJob(input) {
   const job = input && typeof input === "object" ? input : {};
   const normalizedContext = normalizeMeetingContext(job.context);
+  const normalizedNotesContextItems = normalizeMeetingNotesContextItems(
+    job.notesContextItems?.length ? job.notesContextItems : normalizedContext.notesContextItems
+  );
   return {
     artifacts: Array.isArray(job.artifacts) ? job.artifacts.map(normalizeArtifactSummary) : [],
     cleanup: {
@@ -5057,9 +5180,14 @@ function normalizeMeetingJob(input) {
     },
     meetingId: normalizeText(job.meetingId || job.meeting?.meetingId),
     meetingNotes: normalizeMeetingNotes(job.meetingNotes),
-    notesContextItems: normalizeMeetingNotesContextItems(job.notesContextItems?.length ? job.notesContextItems : normalizedContext.notesContextItems),
+    notesContextItems: normalizedNotesContextItems,
     notesDegradedReason: normalizeText(job.notesDegradedReason),
     notesGeneratedAt: normalizeText(job.notesGeneratedAt),
+    notesInputSnapshot: normalizeMeetingNotesInputSnapshot(job.notesInputSnapshot, {
+      contextItems: normalizedNotesContextItems,
+      sharedMemo: normalizedContext.sharedMemoSnapshot,
+      updatedAt: normalizeText(job.notesGeneratedAt || job.updatedAt),
+    }),
     notesRevisionRequest: normalizeTextBlock(job.notesRevisionRequest).slice(0, MAX_SHARED_MEMO_CHARS),
     notesRevisionRequestedAt: normalizeText(job.notesRevisionRequestedAt),
     notesStatus: normalizeMeetingNotesStatus(job.notesStatus),
@@ -5100,6 +5228,7 @@ function normalizeMeetingJob(input) {
 
 function normalizeMeetingArtifact(input) {
   const artifact = input && typeof input === "object" ? input : {};
+  const normalizedNotesContextItems = normalizeMeetingNotesContextItems(artifact.notesContextItems);
   return {
     artifactId: normalizeText(artifact.artifactId),
     createdAt: normalizeText(artifact.createdAt),
@@ -5108,10 +5237,14 @@ function normalizeMeetingArtifact(input) {
     jobId: normalizeText(artifact.jobId),
     kind: normalizeText(artifact.kind),
     meetingId: normalizeText(artifact.meetingId),
-    notesContextItems: normalizeMeetingNotesContextItems(artifact.notesContextItems),
+    notesContextItems: normalizedNotesContextItems,
     notesDegradedReason: normalizeText(artifact.notesDegradedReason),
     notes: normalizeMeetingNotes(artifact.notes),
     notesGeneratedAt: normalizeText(artifact.notesGeneratedAt),
+    notesInputSnapshot: normalizeMeetingNotesInputSnapshot(artifact.notesInputSnapshot, {
+      contextItems: normalizedNotesContextItems,
+      updatedAt: normalizeText(artifact.notesGeneratedAt || artifact.createdAt),
+    }),
     notesRevisionRequest: normalizeTextBlock(artifact.notesRevisionRequest).slice(0, MAX_SHARED_MEMO_CHARS),
     notesRevisionRequestedAt: normalizeText(artifact.notesRevisionRequestedAt),
     notesStatus: normalizeMeetingNotesStatus(artifact.notesStatus),
@@ -5177,6 +5310,8 @@ function normalizeMeetingSession(input) {
 
 function normalizeMeetingResultSummary(input) {
   const item = input && typeof input === "object" ? input : {};
+  const normalizedNotesContextItems = normalizeMeetingNotesContextItems(item.notesContextItems);
+  const sharedMemoSnapshot = normalizeTextBlock(item.sharedMemoSnapshot).slice(0, MAX_SHARED_MEMO_CHARS);
   return {
     artifactId: normalizeText(item.artifactId),
     captureMode: normalizeText(item.captureMode),
@@ -5184,9 +5319,14 @@ function normalizeMeetingResultSummary(input) {
     durationMs: Math.max(0, Number(item.durationMs) || 0),
     error: normalizeText(item.error),
     meetingId: normalizeText(item.meetingId || item.sessionId),
-    notesContextItems: normalizeMeetingNotesContextItems(item.notesContextItems),
+    notesContextItems: normalizedNotesContextItems,
     notesDegradedReason: normalizeText(item.notesDegradedReason),
     notesGeneratedAt: normalizeText(item.notesGeneratedAt),
+    notesInputSnapshot: normalizeMeetingNotesInputSnapshot(item.notesInputSnapshot, {
+      contextItems: normalizedNotesContextItems,
+      sharedMemo: sharedMemoSnapshot,
+      updatedAt: normalizeText(item.notesGeneratedAt || item.updatedAt),
+    }),
     notesRevisionRequest: normalizeTextBlock(item.notesRevisionRequest).slice(0, MAX_SHARED_MEMO_CHARS),
     notesRevisionRequestedAt: normalizeText(item.notesRevisionRequestedAt),
     notesStatus: normalizeMeetingNotesStatus(item.notesStatus),
@@ -5195,6 +5335,7 @@ function normalizeMeetingResultSummary(input) {
     jobId: normalizeText(item.jobId),
     requestId: normalizeText(item.requestId),
     sessionId: normalizeText(item.sessionId),
+    sharedMemoSnapshot,
     status: normalizeText(item.status),
     title: normalizeText(item.title),
     transcriptAvailable: Boolean(item.transcriptAvailable),
@@ -5207,6 +5348,10 @@ function buildMeetingResultSummary(jobInput, artifactInput) {
   const artifact = artifactInput ? normalizeMeetingArtifact(artifactInput) : null;
   const transcriptText = normalizeText(artifact?.text || job.transcript?.text);
   const notesPreview = getMeetingNotesPreviewText(artifact?.notes || job.meetingNotes);
+  const notesContextItems = normalizeMeetingNotesContextItems(
+    artifact?.notesContextItems?.length ? artifact.notesContextItems : job.notesContextItems
+  );
+  const sharedMemoSnapshot = normalizeTextBlock(job.context?.sharedMemoSnapshot).slice(0, MAX_SHARED_MEMO_CHARS);
   return normalizeMeetingResultSummary({
     artifactId: normalizeText(artifact?.artifactId || job.transcript?.artifactId || job.artifacts?.[0]?.artifactId),
     captureMode: job.source.captureMode,
@@ -5215,9 +5360,17 @@ function buildMeetingResultSummary(jobInput, artifactInput) {
     error: job.error,
     jobId: job.jobId,
     meetingId: job.meetingId,
-    notesContextItems: normalizeMeetingNotesContextItems(artifact?.notesContextItems?.length ? artifact.notesContextItems : job.notesContextItems),
+    notesContextItems,
     notesDegradedReason: normalizeText(artifact?.notesDegradedReason || job.notesDegradedReason),
     notesGeneratedAt: normalizeText(artifact?.notesGeneratedAt || job.notesGeneratedAt),
+    notesInputSnapshot: normalizeMeetingNotesInputSnapshot(
+      artifact?.notesInputSnapshot || job.notesInputSnapshot,
+      {
+        contextItems: notesContextItems,
+        sharedMemo: sharedMemoSnapshot,
+        updatedAt: normalizeText(artifact?.notesGeneratedAt || job.notesGeneratedAt || job.updatedAt),
+      }
+    ),
     notesRevisionRequest: normalizeTextBlock(artifact?.notesRevisionRequest || job.notesRevisionRequest),
     notesRevisionRequestedAt: normalizeText(artifact?.notesRevisionRequestedAt || job.notesRevisionRequestedAt),
     notesStatus: normalizeMeetingNotesStatus(artifact?.notesStatus || job.notesStatus),
@@ -5225,6 +5378,7 @@ function buildMeetingResultSummary(jobInput, artifactInput) {
     previewText: notesPreview || buildTranscriptExcerpt(transcriptText),
     requestId: normalizeText(job.source.requestId),
     sessionId: job.sessionId,
+    sharedMemoSnapshot,
     status: job.status,
     title: job.title || job.meeting.title,
     transcriptAvailable: Boolean(transcriptText || normalizeText(artifact?.artifactId || job.transcript?.artifactId)),
@@ -5433,6 +5587,7 @@ async function loadMeetingTranscriptForNotes(jobInput, db, createHttpError) {
         notesDegradedReason: job.notesDegradedReason,
         notes: job.meetingNotes,
         notesGeneratedAt: job.notesGeneratedAt,
+        notesInputSnapshot: job.notesInputSnapshot,
         notesRevisionRequest: job.notesRevisionRequest,
         notesRevisionRequestedAt: job.notesRevisionRequestedAt,
         notesStatus: job.notesStatus,

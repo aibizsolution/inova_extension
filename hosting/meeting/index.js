@@ -11,6 +11,7 @@
   const FIRESTORE_COLLECTIONS = getCollections();
   const DEBUG_PANEL_COLLAPSED_STORAGE_KEY = "__INOVA_MEETING_DEBUG_PANEL_COLLAPSED__";
   const DEBUG_LOCAL_QUEUE_SANDBOX_PARAM = "debugQueueSandbox";
+  const MAX_SHARED_MEMO_CHARS = 12000;
   const MAX_NOTES_CONTEXT_ITEMS = 8;
   const MAX_NOTES_CONTEXT_ITEM_CHARS = 1200;
   const SUPERSEDED_REMOTE_JOBS_STORAGE_KEY_PREFIX = "__INOVA_MEETING_SUPERSEDED_REMOTE_JOBS__";
@@ -81,7 +82,15 @@
   }
 
   function createEmptyNotesContextState() {
-    return { draft: "", editingId: "", items: [], open: false, recordId: "", saved: [] };
+    return { draft: "", editingId: "", items: [], recordId: "" };
+  }
+
+  function createEmptySelectedRecordMemoState() {
+    return { draft: "", recordId: "", saved: "" };
+  }
+
+  function createEmptyNotesInputSnapshotState() {
+    return { contextItems: [], recordId: "", sharedMemo: "", updatedAt: "" };
   }
 
   function createInitialState() {
@@ -92,7 +101,17 @@
       blockedTitle: "이 작업실은 패널에서 다시 열어야 합니다",
       blockedTone: "blocked",
       blockedMessage: "",
-      busy: { deleteMeeting: false, deleteRecord: false, queue: Object.create(null), regenerateNotes: false, saveMeetingMemo: false, saveMeetingTitle: false, saveRecordTitle: false },
+      busy: {
+        deleteMeeting: false,
+        deleteRecord: false,
+        queue: Object.create(null),
+        regenerateNotes: false,
+        saveMeetingMemo: false,
+        saveMeetingTitle: false,
+        saveRecordContext: false,
+        saveRecordMemo: false,
+        saveRecordTitle: false,
+      },
       capture: createIdleCapture(recordingProfile),
       confirmation: { body: "", confirmLabel: "확인", eyebrow: "확인", open: false, resolve: null, title: "", tone: "danger" },
       currentArtifact: null,
@@ -142,6 +161,8 @@
       recordingProfile,
       records: [],
       reviewTab: "notes",
+      selectedRecordMemo: createEmptySelectedRecordMemoState(),
+      selectedRecordNotesInputSnapshot: createEmptyNotesInputSnapshotState(),
       realtime: {
         artifactDocId: "",
         artifactListenerVersion: 0,
@@ -179,7 +200,7 @@
   }
 
   function cacheRefs() {
-    for (const id of ["meetingShell", "blockedMessage", "blockedEyebrow", "blockedTitle", "blockedState", "workspace", "pageTitle", "pageSummary", "workspaceBadge", "offlineQueueBadge", "refreshButton", "meetingTitleInput", "saveMeetingTitleButton", "deleteMeetingButton", "meetingStatusChip", "currentBadge", "currentSummary", "currentHint", "currentNotice", "currentTimer", "startButton", "importAudioButton", "importAudioInput", "pauseButton", "resumeButton", "stopButton", "discardButton", "sharedMemoInput", "saveSharedMemoButton", "clearSharedMemoButton", "sharedMemoNotice", "recordCountBadge", "recordList", "detailTitle", "detailBadge", "detailSummary", "recordTitleGroup", "recordTitleInput", "saveRecordTitleButton", "downloadRecordButton", "deleteRecordButton", "detailMeta", "reviewSectionHeader", "reviewSegmentsToolbar", "copySegmentsButton", "detailMemoText", "reviewTabSummary", "reviewTabMemo", "reviewTabNotes", "reviewTabSegments", "reviewTabSegmentsCount", "reviewPanelSummary", "summaryStatusPill", "summaryStatusGrid", "summaryActionCard", "reviewPanelMemo", "meetingNotesCard", "reviewPanelSegments", "copyMeetingNotesButton", "manageNotesContextButton", "updateMeetingNotesButton", "meetingNotesContextHint", "meetingNotesOverview", "meetingNotesSections", "detailNotice", "segmentList", "debugPanel", "confirmOverlay", "confirmDialog", "confirmDialogEyebrow", "confirmDialogTitle", "confirmDialogBody", "confirmDialogCancel", "confirmDialogConfirm", "notesContextOverlay", "notesContextDialog", "notesContextTitle", "notesContextBody", "notesContextList", "notesContextEmpty", "notesContextInput", "notesContextAddButton", "notesContextResetButton", "notesContextCancel", "notesContextSubmit"]) {
+    for (const id of ["meetingShell", "blockedMessage", "blockedEyebrow", "blockedTitle", "blockedState", "workspace", "pageTitle", "pageSummary", "workspaceBadge", "offlineQueueBadge", "refreshButton", "meetingTitleInput", "saveMeetingTitleButton", "deleteMeetingButton", "meetingStatusChip", "currentBadge", "currentSummary", "currentHint", "currentNotice", "currentTimer", "startButton", "importAudioButton", "importAudioInput", "pauseButton", "resumeButton", "stopButton", "discardButton", "sharedMemoInput", "saveSharedMemoButton", "clearSharedMemoButton", "sharedMemoNotice", "recordCountBadge", "recordList", "detailTitle", "detailBadge", "detailSummary", "recordTitleGroup", "recordTitleInput", "saveRecordTitleButton", "downloadRecordButton", "deleteRecordButton", "detailMeta", "reviewSectionHeader", "reviewSegmentsToolbar", "copySegmentsButton", "detailMemoInput", "saveRecordMemoButton", "reviewTabSummary", "reviewTabMemo", "reviewTabNotes", "reviewTabSegments", "reviewTabSegmentsCount", "reviewTabContext", "reviewTabActions", "reviewPanelSummary", "summaryStatusPill", "summaryStatusGrid", "summaryActionCard", "reviewPanelMemo", "meetingNotesCard", "reviewPanelSegments", "reviewPanelContext", "copyMeetingNotesButton", "updateMeetingNotesButton", "meetingNotesOverview", "meetingNotesSections", "detailNotice", "segmentList", "debugPanel", "confirmOverlay", "confirmDialog", "confirmDialogEyebrow", "confirmDialogTitle", "confirmDialogBody", "confirmDialogCancel", "confirmDialogConfirm", "notesContextList", "notesContextInput", "notesContextAddButton", "notesContextResetButton"]) {
       refs[id] = global.document.getElementById(id);
     }
   }
@@ -203,11 +224,13 @@
       }
     });
     refs.sharedMemoInput.addEventListener("input", () => updateRecordMemoDraft(refs.sharedMemoInput.value));
+    refs.detailMemoInput?.addEventListener("input", () => updateSelectedRecordMemoDraft(refs.detailMemoInput.value));
     refs.saveMeetingTitleButton.addEventListener("click", saveMeetingTitle);
     refs.saveSharedMemoButton.addEventListener("click", saveSharedMemo);
     refs.clearSharedMemoButton.addEventListener("click", clearSharedMemo);
+    refs.saveRecordMemoButton?.addEventListener("click", () => saveSelectedRecordMemo());
     refs.deleteMeetingButton.addEventListener("click", deleteMeeting);
-    for (const tabId of ["reviewTabSummary", "reviewTabMemo", "reviewTabNotes", "reviewTabSegments"]) {
+    for (const tabId of ["reviewTabSummary", "reviewTabNotes", "reviewTabMemo", "reviewTabSegments", "reviewTabContext"]) {
       const tab = refs[tabId];
       if (!tab) continue;
       tab.addEventListener("click", () => {
@@ -227,14 +250,11 @@
     refs.downloadRecordButton.addEventListener("click", downloadCurrentRecord);
     refs.deleteRecordButton.addEventListener("click", () => deleteCurrentRecord());
     refs.copyMeetingNotesButton?.addEventListener("click", copyMeetingNotes);
-    refs.manageNotesContextButton?.addEventListener("click", openNotesContextModal);
     refs.updateMeetingNotesButton?.addEventListener("click", () => regenerateNotes());
     refs.copySegmentsButton?.addEventListener("click", copySegmentsText);
     refs.notesContextInput?.addEventListener("input", () => updateNotesContextDraft(refs.notesContextInput.value));
     refs.notesContextAddButton?.addEventListener("click", upsertNotesContextDraft);
     refs.notesContextResetButton?.addEventListener("click", resetNotesContextDraft);
-    refs.notesContextCancel?.addEventListener("click", () => closeNotesContextModal());
-    refs.notesContextSubmit?.addEventListener("click", submitNotesContextUpdate);
     refs.notesContextList?.addEventListener("click", handleNotesContextListClick);
     refs.debugPanel?.addEventListener("click", handleDebugPanelClick);
     refs.confirmDialogCancel?.addEventListener("click", () => resolveConfirmation(false));
@@ -244,20 +264,10 @@
         resolveConfirmation(false);
       }
     });
-    refs.notesContextOverlay?.addEventListener("click", (event) => {
-      if (event.target === refs.notesContextOverlay) {
-        closeNotesContextModal();
-      }
-    });
     global.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && state.confirmation.open) {
         event.preventDefault();
         resolveConfirmation(false);
-        return;
-      }
-      if (event.key === "Escape" && state.notesContext.open) {
-        event.preventDefault();
-        closeNotesContextModal();
       }
     });
     global.addEventListener("focus", handleBackgroundRefresh, { passive: true });
@@ -1343,33 +1353,94 @@
       .filter((item) => item.text);
   }
 
+  function cloneNotesInputSnapshot(snapshot, fallback = {}) {
+    const source = snapshot && typeof snapshot === "object" ? snapshot : {};
+    return {
+      contextItems: cloneNotesContextItems(
+        Array.isArray(source.contextItems)
+          ? source.contextItems
+          : fallback.contextItems
+      ),
+      sharedMemo: normalizeTextBlock(
+        Object.prototype.hasOwnProperty.call(source, "sharedMemo")
+          ? source.sharedMemo
+          : fallback.sharedMemo
+      ).slice(0, MAX_SHARED_MEMO_CHARS),
+      updatedAt: normalizeText(source.updatedAt || fallback.updatedAt),
+    };
+  }
+
   function normalizeNotesContextDraftValue(value) {
     return normalizeTextBlock(value).slice(0, MAX_NOTES_CONTEXT_ITEM_CHARS);
   }
 
-  function readNotesContextForEntry(entry) {
+  function readSelectedRecordReviewState(entry) {
+    const savedMemo = normalizeTextBlock(
+      state.currentJob?.sharedMemoSnapshot
+      || entry?.remote?.sharedMemoSnapshot
+      || entry?.pending?.sharedMemoSnapshot
+    ).slice(0, MAX_SHARED_MEMO_CHARS);
+    const contextItems = cloneNotesContextItems(
+      state.currentArtifact?.notesContextItems?.length
+        ? state.currentArtifact.notesContextItems
+        : state.currentJob?.notesContextItems?.length
+          ? state.currentJob.notesContextItems
+          : entry?.remote?.notesContextItems
+    );
+    const notesInputSnapshot = cloneNotesInputSnapshot(
+      state.currentArtifact?.notesInputSnapshot?.updatedAt
+        ? state.currentArtifact.notesInputSnapshot
+        : state.currentJob?.notesInputSnapshot,
+      {
+        contextItems,
+        sharedMemo: savedMemo,
+        updatedAt: normalizeText(state.currentArtifact?.notesGeneratedAt || state.currentJob?.notesGeneratedAt || state.currentJob?.updatedAt || entry?.remote?.updatedAt),
+      }
+    );
     return {
+      contextItems,
+      notesInputSnapshot,
       recordId: normalizeText(entry?.id || state.currentDetailSelectionId),
-      saved: cloneNotesContextItems(
-        state.currentArtifact?.notesContextItems?.length
-          ? state.currentArtifact.notesContextItems
-          : state.currentJob?.notesContextItems?.length
-            ? state.currentJob.notesContextItems
-            : entry?.remote?.notesContextItems
-      ),
+      savedMemo,
     };
   }
 
-  function syncNotesContextStateForSelection(entry) {
-    const snapshot = readNotesContextForEntry(entry);
-    const selectionChanged = normalizeText(state.notesContext.recordId) !== snapshot.recordId;
+  function isSelectedRecordMemoDirty() {
+    return normalizeTextBlock(state.selectedRecordMemo.draft) !== normalizeTextBlock(state.selectedRecordMemo.saved);
+  }
+
+  function syncSelectedRecordReviewState(entry) {
+    const snapshot = readSelectedRecordReviewState(entry);
+    const selectionChanged = normalizeText(state.selectedRecordMemo.recordId) !== snapshot.recordId;
+
+    if (selectionChanged || !isSelectedRecordMemoDirty()) {
+      state.selectedRecordMemo.draft = snapshot.savedMemo;
+    }
+    state.selectedRecordMemo.recordId = snapshot.recordId;
+    state.selectedRecordMemo.saved = snapshot.savedMemo;
+
     state.notesContext.recordId = snapshot.recordId;
-    state.notesContext.saved = snapshot.saved;
-    if (selectionChanged || !state.notesContext.open) {
-      state.notesContext.items = cloneNotesContextItems(snapshot.saved);
+    state.notesContext.items = snapshot.contextItems;
+    if (selectionChanged) {
+      state.notesContext.draft = "";
+      state.notesContext.editingId = "";
+    } else if (
+      state.notesContext.editingId
+      && !snapshot.contextItems.some((item) => normalizeText(item.contextId) === normalizeText(state.notesContext.editingId))
+    ) {
       state.notesContext.draft = "";
       state.notesContext.editingId = "";
     }
+
+    state.selectedRecordNotesInputSnapshot = {
+      ...snapshot.notesInputSnapshot,
+      recordId: snapshot.recordId,
+    };
+  }
+
+  function updateSelectedRecordMemoDraft(value) {
+    state.selectedRecordMemo.draft = normalizeTextareaDraft(value).slice(0, MAX_SHARED_MEMO_CHARS);
+    applyRender();
   }
 
   function updateNotesContextDraft(value) {
@@ -1423,67 +1494,18 @@
     }, 0);
   }
 
-  function deleteNotesContextItem(contextId) {
-    const normalizedContextId = normalizeText(contextId);
-    state.notesContext.items = state.notesContext.items.filter((item) => normalizeText(item.contextId) !== normalizedContextId);
-    if (normalizeText(state.notesContext.editingId) === normalizedContextId) {
-      state.notesContext.editingId = "";
-      state.notesContext.draft = "";
-    }
-    applyRender();
-  }
-
-  function upsertNotesContextDraft() {
+  function buildUpdatedNotesContextItemsFromDraft() {
+    let items = cloneNotesContextItems(state.notesContext.items);
     const text = normalizeNotesContextDraftValue(state.notesContext.draft);
     if (!text) {
-      setNotice("추가할 맥락을 먼저 입력해 주세요.", "warning");
+      setNotice("추가 맥락이 있으면 넣어주세요.", "warning");
       applyRender();
-      return false;
+      return null;
     }
     const editingId = normalizeText(state.notesContext.editingId);
-    const duplicate = state.notesContext.items.find((item) =>
-      normalizeText(item.contextId) !== editingId
-      && normalizeTextBlock(item.text) === text
-    );
-    if (duplicate) {
-      setNotice("같은 추가 맥락이 이미 있습니다.", "warning");
-      applyRender();
-      return false;
-    }
-    if (!editingId && state.notesContext.items.length >= MAX_NOTES_CONTEXT_ITEMS) {
-      setNotice(`추가 맥락은 최대 ${MAX_NOTES_CONTEXT_ITEMS}개까지 저장할 수 있습니다.`, "warning");
-      applyRender();
-      return false;
-    }
-    const now = new Date().toISOString();
-    if (editingId) {
-      state.notesContext.items = state.notesContext.items.map((item) =>
-        normalizeText(item.contextId) === editingId
-          ? { ...item, text, updatedAt: now }
-          : item
-      );
-    } else {
-      state.notesContext.items = [
-        ...state.notesContext.items,
-        { contextId: generateNotesContextId(), createdAt: now, text, updatedAt: now },
-      ];
-    }
-    state.notesContext.draft = "";
-    state.notesContext.editingId = "";
-    applyRender();
-    return true;
-  }
-
-  function buildNotesContextItemsForSubmit() {
-    let items = cloneNotesContextItems(state.notesContext.items);
-    const draftText = normalizeNotesContextDraftValue(state.notesContext.draft);
-    const editingId = normalizeText(state.notesContext.editingId);
-    if (!draftText) {
-      return items;
-    }
     const duplicate = items.find((item) =>
       normalizeText(item.contextId) !== editingId
-      && normalizeTextBlock(item.text) === draftText
+      && normalizeTextBlock(item.text) === text
     );
     if (duplicate) {
       setNotice("같은 추가 맥락이 이미 있습니다.", "warning");
@@ -1492,12 +1514,11 @@
     }
     const now = new Date().toISOString();
     if (editingId) {
-      items = items.map((item) =>
+      return items.map((item) =>
         normalizeText(item.contextId) === editingId
-          ? { ...item, text: draftText, updatedAt: now }
+          ? { ...item, text, updatedAt: now }
           : item
       );
-      return items;
     }
     if (items.length >= MAX_NOTES_CONTEXT_ITEMS) {
       setNotice(`추가 맥락은 최대 ${MAX_NOTES_CONTEXT_ITEMS}개까지 저장할 수 있습니다.`, "warning");
@@ -1506,11 +1527,36 @@
     }
     return [
       ...items,
-      { contextId: generateNotesContextId(), createdAt: now, text: draftText, updatedAt: now },
+      { contextId: generateNotesContextId(), createdAt: now, text, updatedAt: now },
     ];
   }
 
+  async function deleteNotesContextItem(contextId) {
+    const normalizedContextId = normalizeText(contextId);
+    const nextItems = state.notesContext.items.filter((item) => normalizeText(item.contextId) !== normalizedContextId);
+    const resetDraft = normalizeText(state.notesContext.editingId) === normalizedContextId;
+    await saveSelectedRecordContextItems(nextItems, {
+      clearDraft: resetDraft,
+      successMessage: "추가 맥락을 삭제했습니다.",
+    });
+  }
+
+  async function upsertNotesContextDraft() {
+    const nextItems = buildUpdatedNotesContextItemsFromDraft();
+    if (!nextItems) {
+      return false;
+    }
+    await saveSelectedRecordContextItems(nextItems, {
+      clearDraft: true,
+      successMessage: state.notesContext.editingId ? "추가 맥락을 수정했습니다." : "추가 맥락을 저장했습니다.",
+    });
+    return true;
+  }
+
   function handleNotesContextListClick(event) {
+    if (state.busy.saveRecordContext || state.busy.regenerateNotes) {
+      return;
+    }
     const actionButton = event.target.closest("[data-notes-context-action]");
     if (!(actionButton instanceof global.HTMLElement)) {
       return;
@@ -1525,55 +1571,8 @@
       return;
     }
     if (action === "delete") {
-      deleteNotesContextItem(contextId);
+      void deleteNotesContextItem(contextId);
     }
-  }
-
-  function openNotesContextModal() {
-    const entry = findHistoryEntry(state, state.selectedRecordId);
-    if (!entry?.remote?.jobId) {
-      return;
-    }
-    syncNotesContextStateForSelection(entry);
-    state.notesContext.open = true;
-    applyRender();
-    global.setTimeout(() => {
-      if (!refs.notesContextInput) {
-        return;
-      }
-      refs.notesContextInput.focus();
-      if (typeof refs.notesContextInput.setSelectionRange === "function") {
-        const length = refs.notesContextInput.value.length;
-        refs.notesContextInput.setSelectionRange(length, length);
-      }
-    }, 0);
-  }
-
-  function closeNotesContextModal(options = {}) {
-    if (state.busy.regenerateNotes) {
-      return;
-    }
-    state.notesContext.open = false;
-    if (options.resetDraft !== false) {
-      state.notesContext.items = cloneNotesContextItems(state.notesContext.saved);
-      state.notesContext.draft = "";
-      state.notesContext.editingId = "";
-    }
-    applyRender();
-  }
-
-  async function submitNotesContextUpdate() {
-    const contextItems = buildNotesContextItemsForSubmit();
-    if (!contextItems) {
-      return;
-    }
-    const hasPendingChange = !areNotesContextItemsEqual(contextItems, state.notesContext.saved);
-    if (!contextItems.length && !hasPendingChange) {
-      setNotice("추가 맥락을 먼저 입력해 주세요.", "warning");
-      applyRender();
-      return;
-    }
-    await regenerateNotes({ contextItems, keepModalOpenOnError: true });
   }
 
   function escapeNotesContextHtml(value) {
@@ -1586,28 +1585,20 @@
   }
 
   function renderNotesContextList() {
-    if (!refs.notesContextList || !refs.notesContextEmpty) {
+    if (!refs.notesContextList) {
       return;
     }
     const items = cloneNotesContextItems(state.notesContext.items);
     refs.notesContextList.hidden = items.length === 0;
-    refs.notesContextEmpty.hidden = items.length > 0;
-    refs.notesContextList.innerHTML = items.map((item, index) => {
-      const updatedAtLabel = formatDateTime(item.updatedAt || item.createdAt, "");
+    refs.notesContextList.innerHTML = items.map((item) => {
       const isEditing = normalizeText(state.notesContext.editingId) === normalizeText(item.contextId);
       return `
         <article class="notes-context-item">
-          <div class="notes-context-item__head">
-            <div>
-              <div class="notes-context-item__title">${escapeNotesContextHtml(isEditing ? `추가 맥락 ${index + 1} 편집 중` : `추가 맥락 ${index + 1}`)}</div>
-              ${updatedAtLabel ? `<div class="notes-context-item__meta">마지막 수정 ${escapeNotesContextHtml(updatedAtLabel)}</div>` : ""}
-            </div>
-            <div class="notes-context-item__actions">
-              <button class="ghost-button" type="button" data-notes-context-action="edit" data-notes-context-id="${escapeNotesContextHtml(item.contextId)}">수정</button>
-              <button class="ghost-button ghost-button--soft" type="button" data-notes-context-action="delete" data-notes-context-id="${escapeNotesContextHtml(item.contextId)}">삭제</button>
-            </div>
-          </div>
           <div class="notes-context-item__body">${escapeNotesContextHtml(item.text).replace(/\n/g, "<br />")}</div>
+          <div class="notes-context-item__actions">
+            <button class="ghost-button" type="button" data-notes-context-action="edit" data-notes-context-id="${escapeNotesContextHtml(item.contextId)}">${isEditing ? "편집 중" : "수정"}</button>
+            <button class="ghost-button ghost-button--soft" type="button" data-notes-context-action="delete" data-notes-context-id="${escapeNotesContextHtml(item.contextId)}">삭제</button>
+          </div>
         </article>
       `;
     }).join("");
@@ -2509,7 +2500,7 @@
       disconnectArtifactListener();
       state.currentArtifact = null;
       state.currentJob = buildLocalPendingJob(entry.pending);
-      syncNotesContextStateForSelection(entry);
+      syncSelectedRecordReviewState(entry);
       return;
     }
 
@@ -2533,6 +2524,10 @@
       jobId: entry.remote.jobId,
       notesGeneratedAt: entry.remote.notesGeneratedAt,
       notesContextItems: entry.remote.notesContextItems,
+      notesInputSnapshot: entry.remote.notesInputSnapshot,
+      context: {
+        sharedMemoSnapshot: entry.remote.sharedMemoSnapshot,
+      },
       source: {
         durationMs: entry.remote.durationMs,
         requestId: entry.remote.requestId,
@@ -2541,7 +2536,7 @@
       title: entry.remote.title,
       updatedAt: entry.remote.updatedAt,
     }, state.meeting.title);
-    syncNotesContextStateForSelection(entry);
+    syncSelectedRecordReviewState(entry);
     await subscribeSelectedJobRealtime(entry);
   }
 
@@ -2598,7 +2593,7 @@
       return;
     }
     state.currentJob = normalizeJob(snapshot.data(), state.meeting.title);
-    syncNotesContextStateForSelection(entry);
+    syncSelectedRecordReviewState(entry);
     await ensureArtifactRealtimeSubscription(entry, { forceReconnect: false });
     applyRender();
     logDebug("workspace.snapshot.job", {
@@ -2670,7 +2665,7 @@
       return;
     }
     state.currentArtifact = snapshot?.exists ? normalizeArtifact(snapshot.data()) : null;
-    syncNotesContextStateForSelection(findHistoryEntry(state, state.selectedRecordId));
+    syncSelectedRecordReviewState(findHistoryEntry(state, state.selectedRecordId));
     applyRender();
     logDebug("workspace.snapshot.artifact", {
       artifactId: normalizeText(state.currentArtifact?.artifactId || state.realtime.artifactDocId),
@@ -2687,6 +2682,8 @@
     state.currentJob = null;
     state.currentLocalRecord = null;
     state.notesContext = createEmptyNotesContextState();
+    state.selectedRecordMemo = createEmptySelectedRecordMemoState();
+    state.selectedRecordNotesInputSnapshot = createEmptyNotesInputSnapshotState();
   }
 
   function disconnectMeetingListener(options = {}) {
@@ -4212,44 +4209,148 @@
     }
   }
 
-  async function regenerateNotes(options = {}) {
+  function applyMeetingResultPayload(payload, options = {}) {
+    const nextJob = payload?.job
+      ? normalizeJob(payload.job, state.currentJob?.title || state.meeting.title)
+      : null;
+    const nextArtifact = payload?.artifact
+      ? normalizeArtifact(payload.artifact)
+      : null;
+    if (nextJob?.jobId) {
+      state.currentJob = nextJob;
+      state.records = state.records.map((record) => (
+        normalizeText(record.jobId) === normalizeText(nextJob.jobId)
+          ? normalizeRecord({
+              ...record,
+              artifactId: normalizeText(nextArtifact?.artifactId || nextJob.artifactId || record.artifactId),
+              createdAt: nextJob.createdAt,
+              durationMs: nextJob.durationMs,
+              error: nextJob.error,
+              jobId: nextJob.jobId,
+              meetingId: nextJob.meetingId,
+              notesContextItems: nextArtifact?.notesContextItems?.length ? nextArtifact.notesContextItems : nextJob.notesContextItems,
+              notesDegradedReason: normalizeText(nextArtifact?.notesDegradedReason || nextJob.notesDegradedReason),
+              notesGeneratedAt: normalizeText(nextArtifact?.notesGeneratedAt || nextJob.notesGeneratedAt),
+              notesInputSnapshot: nextArtifact?.notesInputSnapshot?.updatedAt ? nextArtifact.notesInputSnapshot : nextJob.notesInputSnapshot,
+              notesStatus: normalizeText(nextArtifact?.notesStatus || nextJob.notesStatus),
+              requestId: nextJob.requestId,
+              resultTitle: nextJob.title,
+              sharedMemoSnapshot: nextJob.sharedMemoSnapshot,
+              status: nextJob.status,
+              updatedAt: nextJob.updatedAt,
+            })
+          : record
+      ));
+    }
+    if (nextArtifact) {
+      state.currentArtifact = nextArtifact;
+    }
+    const activeEntry = findHistoryEntry(state, state.selectedRecordId);
+    syncSelectedRecordReviewState(activeEntry);
+    if (options.resetRecordMemoDraft) {
+      state.selectedRecordMemo.draft = state.selectedRecordMemo.saved;
+    }
+    if (options.resetNotesContextDraft) {
+      state.notesContext.draft = "";
+      state.notesContext.editingId = "";
+    }
+  }
+
+  async function saveSelectedRecordMemo(options = {}) {
+    const entry = findHistoryEntry(state, state.selectedRecordId);
+    if (!entry?.remote?.jobId) {
+      return false;
+    }
+    const nextMemo = normalizeTextareaDraft(
+      global.document.activeElement === refs.detailMemoInput
+        ? refs.detailMemoInput.value
+        : state.selectedRecordMemo.draft
+    ).slice(0, MAX_SHARED_MEMO_CHARS);
+    if (!options.force && normalizeTextBlock(nextMemo) === normalizeTextBlock(state.selectedRecordMemo.saved)) {
+      return true;
+    }
+    state.busy.saveRecordMemo = true;
+    applyRender();
+    try {
+      const payload = await postJson(global, CONFIG.updateMeetingResultUrl, {
+        jobId: entry.remote.jobId,
+        meetingId: state.session.meetingId,
+        sharedMemo: nextMemo,
+      }, state.session.meetingSessionToken);
+      applyMeetingResultPayload(payload, { resetRecordMemoDraft: true });
+      if (!options.quiet) {
+        setNotice(nextMemo ? "메모를 저장했습니다." : "메모를 비웠습니다.", "highlight");
+      }
+      return true;
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "메모를 저장하지 못했어요.", "error");
+      return false;
+    } finally {
+      state.busy.saveRecordMemo = false;
+      applyRender();
+    }
+  }
+
+  async function saveSelectedRecordContextItems(nextItemsInput, options = {}) {
+    const entry = findHistoryEntry(state, state.selectedRecordId);
+    if (!entry?.remote?.jobId) {
+      return false;
+    }
+    const nextItems = cloneNotesContextItems(nextItemsInput);
+    if (!options.force && areNotesContextItemsEqual(nextItems, state.notesContext.items)) {
+      if (options.clearDraft) {
+        state.notesContext.draft = "";
+        state.notesContext.editingId = "";
+        applyRender();
+      }
+      return true;
+    }
+    state.busy.saveRecordContext = true;
+    applyRender();
+    try {
+      const payload = await postJson(global, CONFIG.updateMeetingResultUrl, {
+        contextItems: nextItems,
+        jobId: entry.remote.jobId,
+        meetingId: state.session.meetingId,
+      }, state.session.meetingSessionToken);
+      applyMeetingResultPayload(payload, { resetNotesContextDraft: Boolean(options.clearDraft) });
+      if (options.successMessage) {
+        setNotice(options.successMessage, "highlight");
+      }
+      return true;
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "추가 맥락을 저장하지 못했어요.", "error");
+      return false;
+    } finally {
+      state.busy.saveRecordContext = false;
+      applyRender();
+    }
+  }
+
+  async function regenerateNotes() {
     const entry = findHistoryEntry(state, state.selectedRecordId);
     if (!entry?.remote?.jobId) return;
-    const contextItemsProvided = Array.isArray(options?.contextItems);
-    const contextItems = contextItemsProvided
-      ? cloneNotesContextItems(options.contextItems)
-      : cloneNotesContextItems(state.notesContext.saved);
+    if (isSelectedRecordMemoDirty()) {
+      const savedMemo = await saveSelectedRecordMemo({ quiet: true });
+      if (!savedMemo) {
+        return;
+      }
+    }
     state.busy.regenerateNotes = true;
     applyRender();
     try {
       const payload = await postJson(global, CONFIG.regenerateNotesUrl, {
-        contextItems,
         jobId: entry.remote.jobId,
         meetingId: state.session.meetingId,
-        sharedMemo: normalizeTextBlock(state.currentJob?.sharedMemoSnapshot),
       }, state.session.meetingSessionToken);
-      state.currentJob = normalizeJob(payload?.job, state.currentJob?.title || state.meeting.title);
-      state.currentArtifact = normalizeArtifact(payload?.artifact);
-      syncNotesContextStateForSelection(entry);
-      state.notesContext.items = cloneNotesContextItems(state.notesContext.saved);
-      state.notesContext.open = false;
-      state.notesContext.draft = "";
-      state.notesContext.editingId = "";
+      applyMeetingResultPayload(payload, {
+        resetNotesContextDraft: true,
+        resetRecordMemoDraft: true,
+      });
       state.reviewTab = "notes";
-      setNotice(
-        contextItemsProvided
-          ? "추가 맥락 변경을 반영해 회의록을 업데이트했습니다."
-          : contextItems.length
-            ? "저장된 추가 맥락을 기준으로 회의록을 업데이트했습니다."
-            : "같은 원문과 메모로 회의록을 다시 업데이트했습니다.",
-        "highlight"
-      );
-      await syncWorkspaceLocalState(false, "workflow");
+      setNotice("회의록을 업데이트했습니다.", "highlight");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "회의록을 업데이트하지 못했어요.", "error");
-      if (options?.keepModalOpenOnError !== true) {
-        state.notesContext.open = false;
-      }
     } finally {
       state.busy.regenerateNotes = false;
       applyRender();
@@ -4748,38 +4849,23 @@
     if (refs.confirmDialogTitle) refs.confirmDialogTitle.textContent = state.confirmation.title || "이 작업을 진행할까요?";
     if (refs.confirmDialogBody) refs.confirmDialogBody.textContent = state.confirmation.body || "";
     if (refs.confirmDialogConfirm) refs.confirmDialogConfirm.textContent = state.confirmation.confirmLabel || "확인";
-    if (refs.notesContextOverlay) refs.notesContextOverlay.hidden = !state.notesContext.open;
     renderNotesContextList();
     if (refs.notesContextInput && refs.notesContextInput.value !== state.notesContext.draft) {
       refs.notesContextInput.value = state.notesContext.draft;
     }
     if (refs.notesContextInput) {
-      refs.notesContextInput.disabled = state.busy.regenerateNotes;
+      refs.notesContextInput.disabled = state.busy.regenerateNotes || state.busy.saveRecordContext;
     }
     if (refs.notesContextAddButton) {
       const canAddDraft = Boolean(normalizeNotesContextDraftValue(state.notesContext.draft));
-      refs.notesContextAddButton.disabled = !canAddDraft || state.busy.regenerateNotes;
+      refs.notesContextAddButton.disabled = !canAddDraft || state.busy.regenerateNotes || state.busy.saveRecordContext;
       refs.notesContextAddButton.textContent = state.notesContext.editingId ? "수정 저장" : "항목 추가";
     }
     if (refs.notesContextResetButton) {
       const hasDraft = Boolean(state.notesContext.editingId || normalizeText(state.notesContext.draft));
       refs.notesContextResetButton.hidden = !hasDraft;
-      refs.notesContextResetButton.disabled = state.busy.regenerateNotes;
+      refs.notesContextResetButton.disabled = state.busy.regenerateNotes || state.busy.saveRecordContext;
       refs.notesContextResetButton.textContent = state.notesContext.editingId ? "수정 취소" : "입력 비우기";
-    }
-    if (refs.notesContextCancel) {
-      refs.notesContextCancel.disabled = state.busy.regenerateNotes;
-    }
-    if (refs.notesContextSubmit) {
-      const canSubmit = state.busy.regenerateNotes
-        ? false
-        : Boolean(
-          state.notesContext.items.length
-          || normalizeNotesContextDraftValue(state.notesContext.draft)
-          || !areNotesContextItemsEqual(state.notesContext.items, state.notesContext.saved)
-        );
-      refs.notesContextSubmit.disabled = !canSubmit;
-      refs.notesContextSubmit.textContent = state.busy.regenerateNotes ? "업데이트 중" : "반영해서 업데이트";
     }
   }
   function hasWorkspaceData() {

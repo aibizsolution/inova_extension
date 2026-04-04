@@ -183,11 +183,18 @@
                   <span id="summaryStatusPill" class="status-pill status-pill--soft" data-status="idle" hidden>대기</span>
                 </div>
               </div>
-              <div class="review-tabs" role="tablist" aria-label="결과 검토 탭">
-                <button id="reviewTabSummary" class="review-tab is-active" type="button" data-review-tab="summary" role="tab" aria-selected="true">상태</button>
-                <button id="reviewTabMemo" class="review-tab" type="button" data-review-tab="memo" role="tab" aria-selected="false">메모</button>
-                <button id="reviewTabNotes" class="review-tab" type="button" data-review-tab="notes" role="tab" aria-selected="false">회의 정리</button>
-                <button id="reviewTabSegments" class="review-tab" type="button" data-review-tab="segments" role="tab" aria-selected="false"><span class="review-tab__label">원문 검토</span><span id="reviewTabSegmentsCount" class="review-tab__count" hidden>0</span></button>
+              <div class="review-tabs-row">
+                <div class="review-tabs" role="tablist" aria-label="결과 검토 탭">
+                  <button id="reviewTabSummary" class="review-tab is-active" type="button" data-review-tab="summary" role="tab" aria-selected="true">상태</button>
+                  <button id="reviewTabNotes" class="review-tab" type="button" data-review-tab="notes" role="tab" aria-selected="false">회의 정리</button>
+                  <button id="reviewTabMemo" class="review-tab" type="button" data-review-tab="memo" role="tab" aria-selected="false">메모</button>
+                  <button id="reviewTabSegments" class="review-tab" type="button" data-review-tab="segments" role="tab" aria-selected="false"><span class="review-tab__label">원문</span><span id="reviewTabSegmentsCount" class="review-tab__count" hidden>0</span></button>
+                  <button id="reviewTabContext" class="review-tab" type="button" data-review-tab="context" role="tab" aria-selected="false">추가 맥락</button>
+                </div>
+                <div id="reviewTabActions" class="review-tab-actions" hidden>
+                  <button id="copyMeetingNotesButton" class="secondary-button" type="button" hidden>복사</button>
+                  <button id="updateMeetingNotesButton" class="primary-button" type="button">회의록 업데이트</button>
+                </div>
               </div>
 
               <section id="reviewPanelSummary" class="review-panel" role="tabpanel">
@@ -197,18 +204,15 @@
               </section>
 
               <section id="reviewPanelMemo" class="review-panel" hidden role="tabpanel">
-                <div id="detailMemoText" class="memo-panel-box"></div>
+                <div class="review-editor">
+                  <textarea id="detailMemoInput" class="meeting-textarea review-editor__textarea" rows="10" aria-label="기록 메모"></textarea>
+                  <div class="review-editor__actions">
+                    <button id="saveRecordMemoButton" class="secondary-button" type="button">저장</button>
+                  </div>
+                </div>
               </section>
 
               <section id="meetingNotesCard" class="review-panel review-panel--notes" hidden role="tabpanel">
-                <div class="notes-toolbar">
-                  <div id="meetingNotesContextHint" class="notes-toolbar__hint" hidden></div>
-                  <div class="notes-toolbar__actions">
-                    <button id="copyMeetingNotesButton" class="secondary-button" type="button">복사</button>
-                    <button id="manageNotesContextButton" class="secondary-button" type="button">추가 맥락</button>
-                    <button id="updateMeetingNotesButton" class="primary-button" type="button">회의록 업데이트</button>
-                  </div>
-                </div>
                 <div id="meetingNotesOverview" class="notes-overview" hidden></div>
                 <div id="meetingNotesSections" class="notes-sections"></div>
               </section>
@@ -218,6 +222,18 @@
                   <button id="copySegmentsButton" class="secondary-button" type="button" hidden>전체 복사</button>
                 </div>
                 <div id="segmentList" class="segment-list" hidden></div>
+              </section>
+
+              <section id="reviewPanelContext" class="review-panel" hidden role="tabpanel">
+                <div class="review-context">
+                  <p class="review-context__title">추가 맥락</p>
+                  <div id="notesContextList" class="notes-context-list" hidden></div>
+                  <textarea id="notesContextInput" class="meeting-textarea review-editor__textarea" rows="7" maxlength="1200" placeholder="추가 맥락이 있으면 넣어주세요."></textarea>
+                  <div class="review-editor__actions">
+                    <button id="notesContextAddButton" class="secondary-button" type="button">항목 추가</button>
+                    <button id="notesContextResetButton" class="ghost-button" type="button" hidden>수정 취소</button>
+                  </div>
+                </div>
               </section>
             </article>
           </section>
@@ -234,27 +250,6 @@
           <div class="confirm-dialog__actions">
             <button id="confirmDialogCancel" class="ghost-button" type="button">취소</button>
             <button id="confirmDialogConfirm" class="danger-button" type="button">삭제</button>
-          </div>
-        </div>
-      </section>
-
-      <section id="notesContextOverlay" class="confirm-overlay" hidden>
-        <div id="notesContextDialog" class="confirm-dialog notes-context-dialog" role="dialog" aria-modal="true" aria-labelledby="notesContextTitle" aria-describedby="notesContextBody">
-          <p class="confirm-dialog__eyebrow">회의 정리 추가 맥락</p>
-          <h2 id="notesContextTitle" class="confirm-dialog__title">원문에 덜 담긴 배경이나 정정 정보를 더해 주세요</h2>
-          <p id="notesContextBody" class="confirm-dialog__body">인물 관계, 용어 표기, 고유명사 정정, 회의 목적처럼 정리를 더 정확하게 만드는 보완 맥락만 남겨 주세요.</p>
-          <div id="notesContextList" class="notes-context-list" hidden></div>
-          <p id="notesContextEmpty" class="notes-context-empty">아직 저장된 추가 맥락이 없습니다.</p>
-          <label class="notes-context-dialog__label" for="notesContextInput">추가 맥락</label>
-          <textarea id="notesContextInput" class="notes-context-dialog__input" rows="6" maxlength="1200" placeholder="예: 스테라이스는 스텔라이즈를 잘못 들은 표현입니다."></textarea>
-          <div class="notes-context-dialog__editor-actions">
-            <button id="notesContextAddButton" class="secondary-button" type="button">항목 추가</button>
-            <button id="notesContextResetButton" class="ghost-button" type="button" hidden>수정 취소</button>
-          </div>
-          <p class="notes-context-dialog__hint">추가 맥락은 원문을 지우는 지시가 아니라, 빠진 배경이나 잘못 인식된 표현을 보완해 회의록 품질을 높이는 용도로만 반영합니다.</p>
-          <div class="confirm-dialog__actions">
-            <button id="notesContextCancel" class="ghost-button" type="button">취소</button>
-            <button id="notesContextSubmit" class="primary-button" type="button">반영해서 업데이트</button>
           </div>
         </div>
       </section>

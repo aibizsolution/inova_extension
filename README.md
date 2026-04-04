@@ -50,7 +50,7 @@
   - 디버그 상태 바에서 `오류 n건`은 별도 경고 톤으로 강조해, 이상 징후가 있을 때 바로 눈에 띄게 표시합니다.
   - hosted 작업실 디버그 상태 바도 패널과 같은 `로그/함수/읽기/스냅샷/오류` 개별 배지 구조와 공통 요약 카운트를 사용합니다.
 - hosted `meeting/shared.js`도 패널과 같은 디버그 복사/오류 필터/요약 helper 계약을 함께 내보내서, blocked/bootstrap 실패 화면에서도 디버그 패널이 먼저 살아 있도록 유지합니다.
-- 완료된 회의 결과는 `상태판`보다 `문서`가 먼저 보이도록 `회의 정리` 탭을 기본 검토 화면으로 두고, 전사 원문은 `원문 검토` 탭에서 더 짧은 시간/문장 단위로 다시 나눠 읽기 쉽게 보여줍니다.
+- 완료된 회의 결과는 `상태판`보다 `문서`가 먼저 보이도록 `회의 정리` 탭을 기본 검토 화면으로 두고, 전사 원문은 `원문` 탭에서 더 짧은 시간/문장 단위로 다시 나눠 읽기 쉽게 보여줍니다.
 - hosted 작업실 세션/큐 degraded 경고는 `저장값 없음`, `session/local storage 접근 실패`, `파싱 실패`, `저장 실패`, `삭제 실패`, `stale refresh`를 같은 결과로 뭉개지 않고, 명시적 code/priority registry와 공통 diagnostics consumer를 기준으로 우선순위가 있는 scoped warning UI와 디버그 로그에서 구분해 보여줍니다. 로컬 업로드 큐 read 실패는 작업실 shell 전체를 바로 막지 않고 degraded 상태로 계속 진행하고, failed/stalled 기록 재시작은 새 retry 항목 `put` 안에서 이전 requestId를 함께 supersede해 old/new 중복 항목이 남지 않도록 정리합니다. 같은 retry/restart 전이는 `index.js`의 공통 transition helper를 기준으로 추적하고, queue degraded/error 로그도 같은 `requestId/reason/phase` 문맥을 함께 남깁니다. `attemptPendingUpload()`도 single/chunk source 모드를 한 흐름에 뒤섞지 않고 mode별 전이로 나누고, chunk 경로는 `uploadedPartCount`와 `publishedPartCount`를 분리해 로컬 청크 업로드 진행과 원격 job publish 진행을 같은 상태로 취급하지 않습니다. 또한 chunk 모드는 `첫 chunk로 remote parent job bootstrap -> 남은 local chunk backlog upload -> remote start follow-up 판단 -> remote publish follow-up 판단 -> 이번 시도에 local chunk 진척이 없을 때만 remote resync 판단` 순서로 단계가 갈려 있고, `chunk-start`, `chunk-publish`, `chunk-resync`가 같은 계획 객체를 공유하지 않습니다. `uploaded/published gap`, `jobId 존재`, `이번 시도에서 local chunk가 실제로 더 올라갔는지`를 기준으로 `chunk-start`, `chunk-publish`, `chunk-resync`, `sync`를 명시적으로 구분해 해석하며, `chunk-resync`처럼 상태 확인 성격의 호출은 실패해도 local pending을 곧바로 `failed`로 덮지 않고 warning/degraded로 남깁니다. snapshot 기반 remote sync와 chunk follow-up resync의 terminal-state 해석도 이제 같은 builder를 공유하지 않고, snapshot 쪽은 `completed/remote-failed`, chunk-resync 쪽은 `reconcile-completed/reconcile-remote-failed`를 써서 같은 terminal state라도 서로 다른 운영 의미로 남깁니다. 또한 chunk workflow sync도 이제 같은 불린 하나로 묶지 않고, 결과 생성성 mutation이 만든 `workflow-chunk-mutation` 동기화와 resync가 terminal remote state를 발견했을 때만 만드는 `workflow-chunk-reconcile` 동기화로 나뉩니다. 원격 상태 해석도 이제 `buildPendingUploadRemoteStartTransition()`, `buildPendingUploadRemotePublishTransition()`, `buildPendingUploadRemoteSnapshotTransition()`, `buildChunkedPendingUploadRemoteResyncTransition()`으로 갈려, remote job 시작 응답과 추가 chunk 반영 응답, snapshot 기반 상태 반영, chunk-resync 기반 상태 반영이 같은 error 문맥이나 완료 판정 규칙을 공유하지 않습니다. transition commit 경계도 이제 `commitPendingUploadRemoteMutationTransition()`과 `commitPendingUploadRemoteSnapshotTransition()`, `commitChunkedPendingUploadRemoteResyncTransition()`으로 갈려, snapshot 쪽만 `updatedAt` 보존과 local->remote selection 전환, `remote-sync-*` write phase를 소유하고 chunk-resync commit은 `chunk-resync-*` write phase와 `resyncCacheAction`만 받도록 좁혀져 snapshot용 selection 승격이나 generic reset contract를 공유하지 않습니다. persist degraded state도 더 이상 하나의 `pendingUploadPersist` 슬롯으로 뭉치지 않고, 일반 queue 저장 실패, snapshot remote sync 저장 실패, chunk-resync 저장 실패를 각각 다른 notice code와 diagnostics bucket으로 남겨 서로의 경고를 덮어쓰지 않게 유지합니다. start 완료 경계도 `commitSinglePendingUploadRemoteStart()`와 `commitChunkedPendingUploadRemoteStart()`로 갈라져, single-start와 bootstrap chunk 기반 chunk-start가 같은 invalid-status log와 rename-after-create 문맥을 공유하지 않습니다. 원격 요청 경계도 `requestPendingUploadRemoteMutationState()`와 `requestChunkedPendingUploadRemoteReconcileState()`로 갈라져, single/chunk 결과 생성 요청만 inline source fallback과 create 문맥을 가지며 chunk follow-up resync는 기존 job이 있는 chunked source만 다시 확인하도록 입력 보장과 오류 의미를 따로 유지합니다. publish/resync 완료 증거도 `workspace.pending-upload.chunk-publish.*`와 `workspace.pending-upload.chunk-resync.*`로 갈라져, 기존 job에 추가 chunk를 반영한 결과와 원격 상태를 다시 읽어 브라우저 보관 상태를 맞춘 결과가 같은 `remote-create` 또는 공통 applied 로그 의미를 공유하지 않습니다. 원격 상태 반영도 `applyPendingUploadRemoteSnapshotState()`, `startSinglePendingUploadRemoteJob()`, `startChunkedPendingUploadRemoteJob()`, `publishPendingUploadRemoteChunks()`, `reconcileChunkedPendingUploadRemoteState()`로 source가 갈려, realtime snapshot sync, single remote start, bootstrap chunk 기반 remote start, existing job chunk publish, chunk follow-up resync가 같은 degraded/selection/success 정책을 공유하지 않습니다. 특히 single start만 inline source fallback을 허용하고, chunk start는 실제로 업로드된 bootstrap chunk가 있어야만 원격 job 시작 경로를 타며, start 성공 뒤 notice/sync 정책도 shared helper가 아니라 각 start 경로에서 직접 결정합니다. manual hold/resume/delete와 workspace delete는 물론 load/remote sync/import/capture/record rename, chunk part upload, remote job create/refresh까지 queue context를 같은 축으로 남기고, degraded notice도 load/persist/cleanup phase에 맞는 문구로 갈라 어느 단계에서 브라우저 보관 정리가 흔들렸는지 더 바로 구분합니다.
   - hosted 작업실 디버그가 켜져 있으면 브라우저 콘솔에서 `__INOVA_HOSTED_MEETING_DEBUG__.queueFaults.arm("queue-load-indexeddb-read")`처럼 queue storage fault scenario를 바로 걸 수 있고, 가능한 시나리오는 `__INOVA_HOSTED_MEETING_DEBUG__.queueFaults.scenarios()`와 [docs/meeting-storage-fault-validation.md](docs/meeting-storage-fault-validation.md)에서 확인할 수 있습니다. fault를 건 뒤에는 `__INOVA_HOSTED_MEETING_DEBUG__.queueState()`로 현재 notice, degraded diagnostics, pending upload 요약, 최근 queue 이벤트를 한 번에 읽을 수 있고, `__INOVA_HOSTED_MEETING_DEBUG__.queueValidation.check("queue-load-indexeddb-read")`로 기대 결과를 pass/fail로 바로 요약할 수 있습니다. 낮은 레벨 fault key가 필요하면 `__INOVA_HOSTED_MEETING_DEBUG__.setFault(name, count)`와 `__INOVA_HOSTED_MEETING__.storage.DEBUG_FAULTS`를 그대로 쓸 수 있고, `queueFaults.clear(name)` 또는 `clearFault()`로 개별/전체 fault를 비울 수 있습니다.
   - hosted 작업실 디버그 콘솔은 카드 폭, 패딩, 로그 타이포도 패널 디버그 콘솔과 같은 치수 기준으로 맞춥니다.
@@ -74,20 +74,23 @@
   - 이때 기록 큐에서는 예전 stalled/failed 원격 job을 새 시도가 대체한 것으로 보고, 같은 제목이 두 줄로 겹쳐 보이지 않게 이전 시도 항목을 숨깁니다.
   - 녹음은 `녹음 시작 -> 일시중지/재개 -> 종료하고 전사` 흐름으로 동작하고, 종료된 녹음본은 원격 처리 완료 전까지 브라우저 로컬 큐에 보관합니다.
   - 한 기록은 기본 `90분`까지 이어지고, 제한 시간에 도달하면 현재 기록을 자동 전사로 넘긴 뒤 다음 개별 기록 녹음을 바로 이어갑니다.
-- 전사가 끝나면 완료된 결과 화면을 `회의 정리 / 메모 / 원문 검토` 3탭으로 보여주고, 기본 진입은 항상 `회의 정리` 문서 탭으로 맞춥니다.
+- 전사가 끝나면 완료된 결과 화면을 `회의 정리 / 메모 / 원문 / 추가 맥락` 4탭으로 보여주고, 기본 진입은 항상 `회의 정리` 문서 탭으로 맞춥니다.
 - 회의 정리 탭은 이제 상용 회의록 SaaS처럼 `핵심 요약`, `회의 개요`, `논의 흐름`, `주요 결정 사항`, `추가 결정 필요 사항`, `리스크 및 제약`, `후속 실행 항목` 순으로 읽히도록 정리합니다.
 - 회의 정리는 `왜 이 회의가 열렸고 어떤 논의 흐름으로 결론과 미결정이 나왔는지`가 보이도록 하나의 문서형 흐름으로 다시 생성합니다.
 - 회의 정리의 `열린 쟁점`, `후속 질문`, `의존성`처럼 배열로 내려오는 항목은 객체형 응답이 섞여도 읽을 수 있는 문장으로 정규화해 표시합니다.
+- 회의 정리 카드의 섹션 타이틀은 더 큰 accent 톤으로 맞추고, `핵심 요약` overview 카드와 아래 섹션 카드 사이 간격도 같은 기준으로 넓혀 문서 위계를 더 분명하게 유지합니다.
 - 처리 중이거나 실패한 기록에서만 `상태` 탭을 유지하고, 완료된 기록에서는 운영 상태판보다 문서형 결과를 먼저 읽게 합니다.
 - 회의 정리가 완료되면 AI가 만든 `meetingMeta.title`을 해당 기록 제목으로 바로 반영하고, 이후 `회의록 업데이트`를 다시 돌려도 최신 AI 제목으로 덮어씁니다.
-- 원문 검토 탭에서는 시간대가 포함된 전체 전사를 바로 복사할 수 있고, 회의 정리 탭에서는 문서 전체 복사와 `추가 맥락` 관리, `회의록 업데이트`를 함께 제공합니다.
+- 완료된 기록 탭 줄 오른쪽에는 공통 `회의록 업데이트` 액션을 두고, 현재 기록 메모 또는 저장된 추가 맥락이 마지막 회의록 반영 입력과 다를 때만 활성화합니다.
+- `회의 정리` 탭에서는 같은 공통 액션 줄에서 문서 전체 `복사`만 함께 제공하고, `원문` 탭에서는 시간대 포함 전체 전사를 바로 복사할 수 있습니다.
+- `메모` 탭은 기록별 메모를 직접 수정하고 `저장`할 수 있으며, 저장된 메모를 반영해 `회의록 업데이트`를 다시 실행할 수 있습니다.
 - `추가 맥락`은 회의록을 지우거나 숨기는 명령이 아니라, 전사에 덜 잡힌 배경, 인물 관계, 고유명사 정정, 회의 목적 같은 보완 정보를 여러 항목으로 저장해 같은 전사 정리에 반영하는 용도입니다.
 - 회의 정리는 이제 `원문 + 공용 메모 + 추가 맥락(n개)`를 함께 반영해 다시 생성하고, 추가 맥락이 핵심 사실·결정·후속 액션을 지우는 방향으로는 사용되지 않도록 가드레일을 둡니다.
 - `현재 기록 메모`와 `추가 맥락` 입력창은 사용자가 입력 중인 띄어쓰기와 줄바꿈을 그대로 유지하고, 저장/전송 시점에만 정규화합니다.
-- 추가 맥락은 기록별로 여러 개 저장할 수 있고, 회의 정리 모달에서 항목 추가·수정·삭제 후 바로 `반영해서 업데이트`할 수 있습니다.
+- `추가 맥락` 탭에서는 항목 추가·수정·삭제를 바로 저장하고, 저장된 목록이 마지막 회의록 반영 입력과 달라졌을 때만 `회의록 업데이트`를 활성화합니다.
   - 회의는 현재 대화 세션과 분리된 `meetingId` 기준으로 관리하고, 같은 회의의 처리 이력만 페이지 안에 남깁니다.
 - 좌측 `기록 큐` 카드는 AI 내부 판단보다 제목, 상태, 마지막 정리 결과를 중심으로 보여줘서 어떤 기록을 다시 열어야 하는지 빠르게 구분할 수 있게 유지합니다.
-- 작업실에서는 작업실 이름과 공용 메모를 저장할 수 있고, 우측 `기록 검토` 패널에서는 탭으로 메모/회의 정리/원문 검토를 전환합니다. 상단 카드에서는 개별 기록 이름 수정과 삭제를 처리하며, 삭제를 실행하면 연결된 job/artifact와 남아 있는 임시 source object까지 함께 정리합니다.
+- 작업실에서는 작업실 이름과 공용 메모를 저장할 수 있고, 우측 `기록 검토` 패널에서는 완료 기록 기준 `회의 정리 / 메모 / 원문 / 추가 맥락` 탭을 전환합니다. 상단 카드에서는 개별 기록 이름 수정과 삭제를 처리하며, 삭제를 실행하면 연결된 job/artifact와 남아 있는 임시 source object까지 함께 정리합니다.
   - 패널에서 회의를 열면 확장이 짧은 수명의 launch grant를 즉시 hosted workspace session으로 교환한 뒤, `#ws`가 붙은 최종 hosted 작업실 URL을 새 탭으로 엽니다.
   - 작업실에서는 사용자가 직접 `녹음 시작`을 눌러 웹앱에서 바로 마이크 녹음을 시작하고, 표준 `getUserMedia + MediaRecorder` 경로로 녹음합니다.
   - 녹음을 마치면 `종료하고 전사`가 즉시 로컬 저장과 업로드 큐 등록을 끝내고, 원격 처리 중이어도 바로 다음 녹음을 시작할 수 있습니다.
@@ -280,8 +283,8 @@
 8. `종료하고 전사`를 누르면 녹음본이 먼저 로컬 큐에 저장되고, 원격 처리 중이어도 바로 다음 녹음을 시작할 수 있습니다.
 9. 녹음이 `90분`에 도달하면 현재 기록은 자동으로 전사 큐에 들어가고, 작업실은 다음 개별 기록 녹음을 이어갑니다.
 10. 저장된 결과를 선택하면 우측 `기록 검토` 패널 상단에서 이름을 수정하거나 삭제하고, 검토 탭에서 자동 정리와 발화 구간 기준 전사를 함께 확인할 수 있습니다.
-11. 필요하면 `원문 검토` 탭에서 시간대 포함 전사를 전체 복사하고, `회의 정리` 탭에서는 문서 전체를 바로 복사할 수 있습니다.
-12. 회의 정리가 어색하거나 원문에 덜 잡힌 배경이 있으면 회의 정리 탭의 `추가 맥락`에 보완 정보를 여러 개 저장한 뒤 `회의록 업데이트`로 같은 전사를 다시 정리할 수 있습니다. 이 맥락은 회의 내용을 지우는 지시가 아니라 결과 품질을 높이는 보완 정보로만 반영합니다.
+11. 필요하면 `원문` 탭에서 시간대 포함 전사를 전체 복사하고, `회의 정리` 탭에서는 문서 전체를 바로 복사할 수 있습니다.
+12. 회의 정리가 어색하거나 원문에 덜 잡힌 배경이 있으면 `메모`를 저장하거나 `추가 맥락` 탭에 보완 정보를 여러 개 저장한 뒤 `회의록 업데이트`로 같은 전사를 다시 정리할 수 있습니다. 이 맥락은 회의 내용을 지우는 지시가 아니라 결과 품질을 높이는 보완 정보로만 반영합니다.
 13. `프롬프트` 도구에서는 자주 쓰는 요청을 추가하거나 선택해 현재 입력창에 바로 넣고, `스토어` 서브탭에서 공유 프롬프트를 찾아 좋아요를 누르거나 내 요청으로 가져옵니다.
 14. 대화 입력창 우측 상단의 평가 버튼으로 현재 프롬프트를 참고용으로 평가하고, 필요하면 보완 프롬프트를 다시 반영합니다.
 15. `릴리스` 도구에서는 현재 버전, 최신 버전, 업데이트 ZIP, 이전 버전 롤백 링크를 확인합니다.
