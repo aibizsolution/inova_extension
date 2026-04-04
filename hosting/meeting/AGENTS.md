@@ -5,4 +5,5 @@
 - `hosting/meeting/*`만으로 해결되지 않으면 `shared/meeting-*`, 그다음 `background/service-worker.js`, 마지막에 `functions/features/meeting/*` 순서로 확장한다.
 - hosted workspace Firebase auth claim은 `meetingId` 단위로 달라질 수 있으므로, `hosting/meeting/firebase-client.js`에서는 `synchronizeTabs: true` 같은 cross-tab Firestore persistence를 다시 켜지 않는다. 여러 회의 탭은 탭별 auth를 유지하고, persistence는 단일 탭 또는 메모리 fallback으로만 다룬다.
 - hosted workspace의 `파일 불러오기`는 로컬 origin 전용 기능이 아니다. 상용/로컬 hosted 둘 다 같은 업로드 흐름을 쓰므로 origin 기반으로 버튼을 숨기거나 import를 차단하지 않는다.
+- owner-secure hosted 작업실은 `meetingId`만으로 다시 열려도 authorize 응답에서 `meetingSessionToken`을 받아 세션 저장소에 보존해야 한다. 업로드와 작업실 mutation은 Firestore custom token이 아니라 이 meeting session으로 인증된다.
 - prompt/release/conversation 영역은 기본적으로 읽지 않는다.
