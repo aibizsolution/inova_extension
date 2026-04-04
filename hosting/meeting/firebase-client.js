@@ -8,7 +8,9 @@
   const { logDebug, normalizeText, resolveConfig } = shared;
   const CONFIG = resolveConfig(global.__INOVA_HOSTED_MEETING_CONFIG__);
   const APP_NAME = "inova-hosted-meeting";
-  const FIRESTORE_PERSISTENCE_OPTIONS = { synchronizeTabs: true };
+  // Workspace auth claims are meeting-scoped, so cross-tab synchronized persistence
+  // lets one meeting tab invalidate another tab's Firestore reads.
+  const FIRESTORE_PERSISTENCE_OPTIONS = null;
   let authState = {
     accessMode: "",
     firebaseCustomToken: "",
@@ -94,9 +96,11 @@
     firestoreReadyPromise = (async () => {
       if (typeof nextServices.firestore?.enablePersistence === "function") {
         try {
-          await runWithSuppressedFirestorePersistenceWarning(() =>
-            nextServices.firestore.enablePersistence(FIRESTORE_PERSISTENCE_OPTIONS)
-          );
+          await runWithSuppressedFirestorePersistenceWarning(() => (
+            FIRESTORE_PERSISTENCE_OPTIONS
+              ? nextServices.firestore.enablePersistence(FIRESTORE_PERSISTENCE_OPTIONS)
+              : nextServices.firestore.enablePersistence()
+          ));
         } catch (error) {
           const code = normalizeText(error?.code);
           if (code !== "failed-precondition" && code !== "unimplemented") {

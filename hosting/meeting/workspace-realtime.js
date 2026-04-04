@@ -226,7 +226,9 @@
               meetingId: state.session.meetingId,
               reason: options.reason,
             });
-            disposeWorkspaceRealtime({ clearAuthCache: true });
+            // Keep the issued workspace token so the forced reconnect can sign
+            // back into the same meeting instead of falling into an empty-auth error.
+            disposeWorkspaceRealtime();
             setNotice("읽기 권한을 다시 확인하는 중입니다.", "highlight");
             applyRender();
             return connectWorkspaceRealtime({
