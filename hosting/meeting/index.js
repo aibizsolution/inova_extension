@@ -234,6 +234,13 @@
     return normalizeText(safeLocalStorageGet(global, DEBUG_PANEL_COLLAPSED_STORAGE_KEY)) === "1";
   }
 
+  function createExtensionBridgeProbeError(kind, message, detail = {}) {
+    const error = new Error(message);
+    error.kind = kind;
+    Object.assign(error, detail);
+    return error;
+  }
+
   async function runExtensionBridgeProbe() {
     if (!isDebugPanelEnabled(global)) {
       return;
@@ -249,11 +256,14 @@
       const payload = await new Promise((resolve, reject) => {
         const timeoutId = global.setTimeout(() => {
           cleanup();
-          reject(new Error("확장 bridge 응답이 없어요."));
+          reject(createExtensionBridgeProbeError("timeout", "확장 bridge 응답이 없어요.", {
+            requestId,
+            timeoutMs: EXTENSION_BRIDGE_PROBE_TIMEOUT_MS,
+          }));
         }, EXTENSION_BRIDGE_PROBE_TIMEOUT_MS);
 
         const handleMessage = (event) => {
-          if (event.source !== global) {
+          if (event.origin !== global.location.origin) {
             return;
           }
           const data = event?.data && typeof event.data === "object" ? event.data : {};
@@ -272,7 +282,11 @@
             resolve(nextPayload);
             return;
           }
-          reject(new Error(normalizeText(nextPayload.error) || "확장 bridge probe에 실패했어요."));
+          reject(createExtensionBridgeProbeError("runtime-error", normalizeText(nextPayload.error) || "확장 bridge probe에 실패했어요.", {
+            requestId,
+            responseSource: normalizeText(data.source),
+            responseType: normalizeText(data.type),
+          }));
         };
 
         const cleanup = () => {
@@ -294,8 +308,12 @@
       global.console?.info?.("[Inova Hosted Meeting] workspace.extension-bridge.probe.success", payload);
     } catch (error) {
       global.console?.warn?.("[Inova Hosted Meeting] workspace.extension-bridge.probe.error", {
+        kind: normalizeText(error?.kind) || (String(error?.message || "").includes("응답이 없어요.") ? "timeout" : "error"),
         error: error instanceof Error ? error.message : String(error || ""),
+        responseSource: normalizeText(error?.responseSource),
+        responseType: normalizeText(error?.responseType),
         requestId,
+        timeoutMs: error?.timeoutMs || EXTENSION_BRIDGE_PROBE_TIMEOUT_MS,
       });
     }
   }

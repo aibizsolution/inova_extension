@@ -85,8 +85,8 @@
     {
       "matches": [
         "https://browser-extension-main.web.app/meeting/*",
-        "http://127.0.0.1:5000/meeting/*",
-        "http://localhost:5000/meeting/*"
+        "http://127.0.0.1/meeting/*",
+        "http://localhost/meeting/*"
       ],
       "js": [
         "content/meeting-workspace-bridge.js"
