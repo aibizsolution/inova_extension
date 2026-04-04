@@ -28,6 +28,20 @@
     });
   }
 
+  async function createMeetingShareLink(input, providerIdentity) {
+    return sendRuntimeMessage("inova-meeting:create-share-link", {
+      input,
+      providerIdentity,
+    });
+  }
+
+  async function revokeMeetingShareLink(input, providerIdentity) {
+    return sendRuntimeMessage("inova-meeting:revoke-share-link", {
+      input,
+      providerIdentity,
+    });
+  }
+
   async function sendRuntimeMessage(type, payload) {
     const metadata = classifyMeetingRuntimeMetadata(type);
     try {
@@ -87,6 +101,15 @@
         operation: "open",
       };
     }
+    if (
+      normalized === "inova-meeting:create-share-link"
+      || normalized === "inova-meeting:revoke-share-link"
+    ) {
+      return {
+        backend: "firebase-function",
+        operation: normalized === "inova-meeting:create-share-link" ? "share-create" : "share-revoke",
+      };
+    }
     return {
       backend: "",
       operation: "",
@@ -107,9 +130,11 @@
   }
 
   namespace.meetingBridge = {
+    createMeetingShareLink,
     issuePanelAuth,
     listMeetings,
     openMeetingResult,
     openMeetingWorkspace,
+    revokeMeetingShareLink,
   };
 })(globalThis);

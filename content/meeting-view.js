@@ -81,6 +81,8 @@
       latestArtifactId: normalizeText(nextItem.latestArtifactId || nextItem.artifactId),
       latestJobId: normalizeText(nextItem.latestJobId || nextItem.jobId),
       meetingId: normalizeText(nextItem.meetingId),
+      shareActive: Boolean(nextItem.share?.active),
+      shareStatus: normalizeText(nextItem.share?.status),
       status: normalizeText(nextItem.status) || "idle",
       title: normalizeText(nextItem.title) || "이름 없는 회의",
       updatedAt: normalizeText(nextItem.updatedAt || nextItem.createdAt),
@@ -96,26 +98,59 @@
       && pending.action === "open-result"
       && pending.meetingId === item.meetingId
       && (!pending.jobId || pending.jobId === item.latestJobId);
+    const sharePending = pending.active && pending.action === "share" && pending.meetingId === item.meetingId;
+    const revokePending = pending.active && pending.action === "revoke-share" && pending.meetingId === item.meetingId;
     return `
-      <button
-        type="button"
-        class="inova-meeting-record inova-meeting-record--button${isPending ? " is-pending" : ""}"
-        data-meeting-action="open-result"
-        data-meeting-id="${escapeHtml(item.meetingId)}"
-        data-meeting-job-id="${escapeHtml(item.latestJobId)}"
-        data-meeting-artifact-id="${escapeHtml(item.latestArtifactId)}"
-        data-meeting-title="${escapeHtml(item.title)}"
-        ${pending.active ? "disabled" : ""}
-        aria-busy="${isPending}"
-      >
-        <div class="inova-meeting-record__head">
-          <div>
-            <strong>${escapeHtml(item.title)}</strong>
-            ${meta ? `<div class="inova-tool-meta">${escapeHtml(meta)}</div>` : ""}
+      <article class="inova-meeting-record${isPending ? " is-pending" : ""}">
+        <button
+          type="button"
+          class="inova-meeting-record__open"
+          data-meeting-action="open-result"
+          data-meeting-id="${escapeHtml(item.meetingId)}"
+          data-meeting-job-id="${escapeHtml(item.latestJobId)}"
+          data-meeting-artifact-id="${escapeHtml(item.latestArtifactId)}"
+          data-meeting-title="${escapeHtml(item.title)}"
+          ${pending.active ? "disabled" : ""}
+          aria-busy="${isPending}"
+        >
+          <div class="inova-meeting-record__head">
+            <div>
+              <strong>${escapeHtml(item.title)}</strong>
+              ${meta ? `<div class="inova-tool-meta">${escapeHtml(meta)}</div>` : ""}
+            </div>
+            <div class="inova-meeting-record__chips">
+              ${item.shareActive ? renderChip("공유 중", true) : ""}
+              ${renderChip(isPending ? "여는 중" : formatStatusLabel(item.status), false)}
+            </div>
           </div>
-          ${renderChip(isPending ? "여는 중" : formatStatusLabel(item.status), false)}
+        </button>
+        <div class="inova-meeting-record__actions">
+          <button
+            type="button"
+            class="inova-tool-button inova-tool-button--compact"
+            data-meeting-action="share"
+            data-meeting-id="${escapeHtml(item.meetingId)}"
+            data-meeting-job-id="${escapeHtml(item.latestJobId)}"
+            data-meeting-title="${escapeHtml(item.title)}"
+            ${pending.active ? "disabled" : ""}
+            aria-busy="${sharePending}"
+          >
+            ${escapeHtml(sharePending ? "복사 중..." : "공유")}
+          </button>
+          <button
+            type="button"
+            class="inova-tool-button inova-tool-button--compact is-danger"
+            data-meeting-action="revoke-share"
+            data-meeting-id="${escapeHtml(item.meetingId)}"
+            data-meeting-job-id="${escapeHtml(item.latestJobId)}"
+            data-meeting-title="${escapeHtml(item.title)}"
+            ${pending.active || !item.shareActive ? "disabled" : ""}
+            aria-busy="${revokePending}"
+          >
+            ${escapeHtml(revokePending ? "해제 중..." : "공유 해제")}
+          </button>
         </div>
-      </button>
+      </article>
     `;
   }
 
@@ -202,6 +237,16 @@
       return pending.title
         ? `${pending.title} 결과 화면을 준비하고 있습니다.`
         : "결과 화면을 준비하고 있습니다.";
+    }
+    if (pending.action === "share") {
+      return pending.title
+        ? `${pending.title} 공유 링크를 준비하고 있습니다.`
+        : "공유 링크를 준비하고 있습니다.";
+    }
+    if (pending.action === "revoke-share") {
+      return pending.title
+        ? `${pending.title} 공유 링크를 해제하고 있습니다.`
+        : "공유 링크를 해제하고 있습니다.";
     }
     return "새 작업실을 준비하고 있습니다.";
   }

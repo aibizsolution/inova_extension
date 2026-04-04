@@ -1,4 +1,5 @@
 const { registerMeetingLaunchHandlers } = require("./features/meeting/meeting-launch-service");
+const { registerMeetingWorkspaceAuthHandlers } = require("./features/meeting/meeting-workspace-auth-service");
 const { registerMeetingHandlers } = require("./features/meeting/meeting-service");
 const { registerPromptLibraryHandlers } = require("./features/prompt-library/register");
 const { registerPromptReviewHandlers } = require("./features/prompt-review/prompt-review-service");
@@ -62,10 +63,16 @@ const meetingLaunchHandlers = registerMeetingLaunchHandlers({
   hostedMeetingPageUrl: HOSTED_MEETING_PAGE_URL,
 });
 
+const meetingWorkspaceAuthHandlers = registerMeetingWorkspaceAuthHandlers({
+  ...sharedHttpDeps,
+  createFirebaseCustomToken: (uid, claims) => admin.auth().createCustomToken(uid, claims),
+  verifyFirebaseIdToken: (token) => admin.auth().verifyIdToken(token),
+});
+
 const meetingHandlers = registerMeetingHandlers({
   ...sharedHttpDeps,
   admin,
-  authorizeMeetingRequest: meetingLaunchHandlers.authorizeMeetingRequest,
+  authorizeMeetingRequest: meetingWorkspaceAuthHandlers.authorizeMeetingRequest,
   bucket,
 });
 
@@ -161,12 +168,15 @@ exports.sweepQueuedInovaMeetingDeletions = onSchedule(
 );
 exports.deleteInovaMeeting = meetingHandlers.deleteInovaMeeting;
 exports.deleteInovaMeetingResult = meetingHandlers.deleteInovaMeetingResult;
+exports.authorizeInovaMeetingWorkspaceAccess = meetingWorkspaceAuthHandlers.authorizeInovaMeetingWorkspaceAccess;
+exports.createInovaMeetingShareLink = meetingWorkspaceAuthHandlers.createInovaMeetingShareLink;
 exports.exchangeInovaMeetingLaunch = meetingLaunchHandlers.exchangeInovaMeetingLaunch;
 exports.issueInovaMeetingLaunch = meetingLaunchHandlers.issueInovaMeetingLaunch;
 exports.issueInovaMeetingPanelAuth = meetingLaunchHandlers.issueInovaMeetingPanelAuth;
 exports.issueInovaMeetingWorkspaceAuth = meetingLaunchHandlers.issueInovaMeetingWorkspaceAuth;
 exports.listInovaMeetings = meetingHandlers.listInovaMeetings;
 exports.regenerateInovaMeetingNotes = meetingHandlers.regenerateInovaMeetingNotes;
+exports.revokeInovaMeetingShareLink = meetingWorkspaceAuthHandlers.revokeInovaMeetingShareLink;
 exports.updateInovaMeeting = meetingHandlers.updateInovaMeeting;
 exports.updateInovaMeetingResult = meetingHandlers.updateInovaMeetingResult;
 exports.uploadInovaMeetingSource = meetingHandlers.uploadInovaMeetingSource;

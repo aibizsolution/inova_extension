@@ -1845,12 +1845,19 @@ function registerMeetingHandlers(deps) {
     return {
       authType: "access-token",
       owner: await verifyInovaIdentity(providerIdentity, request),
+      readOnly: false,
       workspaceSession: null,
     };
   }
 
   function assertWorkspaceMeetingAccess(access, meetingId, createHttpError) {
-    const sessionMeetingId = normalizeText(access?.workspaceSession?.meeting?.meetingId);
+    if (access?.readOnly) {
+      throw createHttpError(403, "공유 링크는 읽기 전용이라 수정할 수 없어요.");
+    }
+    const sessionMeetingId = normalizeText(
+      access?.firebaseSession?.meetingId
+      || access?.workspaceSession?.meeting?.meetingId
+    );
     if (!sessionMeetingId) {
       return;
     }
@@ -5274,6 +5281,7 @@ function normalizeMeetingSummary(input) {
     pendingLocalCount: Math.max(0, Number(meeting.pendingLocalCount) || 0),
     recentJobs: Array.isArray(meeting.recentJobs) ? meeting.recentJobs.map(normalizeMeetingResultSummary) : [],
     sessionId: normalizeText(meeting.sessionId),
+    share: normalizeMeetingShareSummary(meeting.share),
     sharedMemo: normalizeTextBlock(meeting.sharedMemo).slice(0, MAX_SHARED_MEMO_CHARS),
     sourceTabId: Math.max(0, Number(meeting.sourceTabId) || 0),
     startedAt: normalizeText(meeting.startedAt),
@@ -5281,6 +5289,19 @@ function normalizeMeetingSummary(input) {
     title: normalizeText(meeting.title),
     updatedAt: normalizeText(meeting.updatedAt),
     workspaceMutation: normalizeWorkspaceMutation(meeting.workspaceMutation),
+  };
+}
+
+function normalizeMeetingShareSummary(input) {
+  const share = input && typeof input === "object" ? input : {};
+  const status = normalizeText(share.status);
+  return {
+    active: status === "active" && Boolean(normalizeText(share.shareId)),
+    createdAt: normalizeText(share.createdAt),
+    createdBy: share.createdBy && typeof share.createdBy === "object" ? { ...share.createdBy } : {},
+    revokedAt: normalizeText(share.revokedAt),
+    shareId: normalizeText(share.shareId),
+    status,
   };
 }
 

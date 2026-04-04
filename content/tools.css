@@ -329,17 +329,23 @@
   display: flex; flex-direction: column; gap: 6px; padding: 12px 12px; border-radius: 12px;
   border: 1px solid rgba(98, 127, 145, 0.12); background: rgba(247, 252, 255, 0.88);
 }
-.inova-meeting-record--button {
-  width: 100%;
-  text-align: left;
-  cursor: pointer;
-}
-.inova-meeting-record--button.is-pending {
+.inova-meeting-record.is-pending {
   border-color: rgba(27, 96, 232, 0.22);
   background: rgba(236, 244, 255, 0.94);
 }
+.inova-meeting-record__open {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
 .inova-meeting-record__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .inova-meeting-record__head > div { display: grid; gap: 4px; min-width: 0; }
+.inova-meeting-record__chips,
+.inova-meeting-record__actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.inova-meeting-record__actions { justify-content: flex-end; }
 .inova-meeting-record__head strong {
   font-size: 14px;
   font-weight: 700;

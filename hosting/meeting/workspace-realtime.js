@@ -138,10 +138,10 @@
           && !state.currentArtifact
           && !normalizeText(state.selectedRecordId)
         );
-        if (!state.session.meetingSessionToken || !state.session.meetingId) {
-          throw new Error("회의 작업 세션이 없어요. 패널에서 다시 열어 주세요.");
+        if (!state.session.meetingId) {
+          throw new Error("회의 작업실 접근 권한이 없어요. 패널에서 다시 열어 주세요.");
         }
-        const authPayload = await ensureWorkspaceAuth(state.session.meetingSessionToken, {
+        const authPayload = await ensureWorkspaceAuth({
           forceRefresh: forceReconnect,
         });
         const nextMeetingDocId = normalizeText(authPayload?.meetingDocumentId);
@@ -150,8 +150,8 @@
         }
       
         state.realtime.meetingDocId = nextMeetingDocId;
-        state.realtime.workspaceAuthExpiresAt = normalizeText(authPayload?.expiresAt);
-        state.realtime.workspaceSessionId = normalizeText(authPayload?.workspaceSessionId);
+        state.realtime.workspaceAuthExpiresAt = "";
+        state.realtime.workspaceSessionId = "";
       
         if (!forceReconnect && typeof state.realtime.unsubscribeMeeting === "function") {
           return authPayload;

@@ -73,6 +73,7 @@
         const logElement = panelElement?.querySelector?.("#debugLog");
         return {
           buttons,
+          hasAuthCard: Boolean(panelElement?.querySelector?.(".debug-auth-card")),
           collapsed: Boolean(stateSnapshot?.collapsed),
           enabled: Boolean(stateSnapshot?.enabled),
           entryCount: normalizedEntries.length,
@@ -126,6 +127,11 @@
         }
         const requiredActions = ["copy", "copy-errors", "clear", "toggle"];
         checks.push(
+          {
+            label: "expanded 상태에서는 auth 카드가 보임",
+            passed: Boolean(snapshot?.hasAuthCard),
+            actual: snapshot?.hasAuthCard ? "auth-card" : "missing",
+          },
           {
             label: "expanded 상태에서는 toolbar가 보임",
             passed: Boolean(snapshot?.hasToolbar),
@@ -184,6 +190,44 @@
         syncDebugPanelCollapsedUi({ persist: true });
       }
 
+      function escapeHtml(value) {
+        return String(value || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function renderAuthStatePanel() {
+        const authMode = normalizeText(state.auth?.accessMode || state.auth?.accessDecision || "unknown");
+        const rows = [
+          ["authMode", authMode || "unknown"],
+          ["extensionBridge", normalizeText(state.auth?.extensionBridge) || "not-requested"],
+          ["inovaLogin", state.auth?.inovaLogin ? "yes" : "no"],
+          ["accessDecision", normalizeText(state.auth?.accessDecision) || "unknown"],
+          ["reason", normalizeText(state.auth?.reason) || "-"],
+          ["viewer", normalizeText(state.auth?.viewer) || "-"],
+          ["bypassMode", normalizeText(state.auth?.bypassMode) || "-"],
+        ];
+        return `
+          <article class="debug-auth-card">
+            <div class="debug-auth-card__head">
+              <strong>인증 상태</strong>
+              ${normalizeText(state.auth?.bypassMode) ? '<span class="debug-auth-card__badge">DEV BYPASS</span>' : ""}
+            </div>
+            <dl class="debug-auth-card__grid">
+              ${rows.map(([label, value]) => `
+                <div class="debug-auth-card__row">
+                  <dt>${escapeHtml(label)}</dt>
+                  <dd>${escapeHtml(value)}</dd>
+                </div>
+              `).join("")}
+            </dl>
+          </article>
+        `;
+      }
+
       function render(entries = getDebugEntries()) {
         if (!refs.debugPanel) return;
         if (refs.debugPanel.hidden) {
@@ -191,7 +235,10 @@
           return;
         }
         const previousViewport = debugConsole?.captureLogViewport?.(refs.debugPanel.querySelector("#debugLog")) || null;
-        refs.debugPanel.innerHTML = debugConsole?.renderWorkspace?.(buildDebugPanelState(entries)) || "";
+        const debugMarkup = debugConsole?.renderWorkspace?.(buildDebugPanelState(entries)) || "";
+        refs.debugPanel.innerHTML = state.debugPanelCollapsed
+          ? debugMarkup
+          : `${renderAuthStatePanel()}${debugMarkup}`;
         const nextLog = refs.debugPanel.querySelector("#debugLog");
         if (!nextLog) return;
         debugConsole?.restoreLogViewport?.(nextLog, previousViewport);

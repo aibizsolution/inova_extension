@@ -337,7 +337,13 @@
       meetingId: namespace.session.normalizeText(detail.meetingId),
       title: namespace.session.normalizeText(detail.title || state.sessionTitle),
     };
-    const pendingAction = action === "open-result" ? "open-result" : "open-workspace";
+    const pendingAction = action === "open-result"
+      ? "open-result"
+      : action === "share"
+        ? "share"
+        : action === "revoke-share"
+          ? "revoke-share"
+          : "open-workspace";
     setMeetingPending({
       action: pendingAction,
       jobId: input.jobId,
@@ -363,6 +369,32 @@
           url: namespace.session.normalizeText(result?.url),
         });
         setMeetingFeedback("결과 탭을 열었습니다.", "info", 1800);
+        return;
+      }
+      if (action === "share" && input.meetingId) {
+        const result = await namespace.meetingBridge.createMeetingShareLink(input, providerIdentity);
+        const shareUrl = namespace.session.normalizeText(result?.shareUrl);
+        if (!shareUrl) {
+          throw new Error("공유 링크를 만들지 못했어요.");
+        }
+        await navigator.clipboard.writeText(shareUrl);
+        logMeetingAction("success", {
+          action,
+          meetingId: input.meetingId,
+          shareUrl,
+        });
+        setMeetingFeedback("공유 링크를 복사했습니다.", "info", 2200);
+        meetingManager.scheduleSync(0);
+        return;
+      }
+      if (action === "revoke-share" && input.meetingId) {
+        await namespace.meetingBridge.revokeMeetingShareLink(input, providerIdentity);
+        logMeetingAction("success", {
+          action,
+          meetingId: input.meetingId,
+        });
+        setMeetingFeedback("공유 링크를 해제했습니다.", "info", 2200);
+        meetingManager.scheduleSync(0);
         return;
       }
       const result = await namespace.meetingBridge.openMeetingWorkspace(input, providerIdentity);

@@ -5,6 +5,8 @@
   const DEFAULT_HOSTING_ORIGIN = "https://browser-extension-main.web.app";
   const PROMPT_PANEL_BRIDGE_CACHE_TOKEN = "20260402-1";
   const FUNCTION_ENDPOINTS = {
+    authorizeInovaMeetingWorkspaceAccessUrl: "authorizeInovaMeetingWorkspaceAccess",
+    createInovaMeetingShareLinkUrl: "createInovaMeetingShareLink",
     deleteInovaMeetingUrl: "deleteInovaMeeting",
     deleteInovaMeetingResultUrl: "deleteInovaMeetingResult",
     exchangeInovaMeetingLaunchUrl: "exchangeInovaMeetingLaunch",
@@ -23,6 +25,7 @@
     publishPromptToStoreUrl: "publishPromptToStore",
     unpublishPromptFromStoreUrl: "unpublishPromptFromStore",
     importPromptStoreEntryUrl: "importPromptStoreEntry",
+    revokeInovaMeetingShareLinkUrl: "revokeInovaMeetingShareLink",
     togglePromptStoreLikeUrl: "togglePromptStoreLike",
     recordPromptStoreViewUrl: "recordPromptStoreView",
     syncInovaPromptLibraryUrl: "syncInovaPromptLibrary",

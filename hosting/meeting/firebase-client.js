@@ -5,17 +5,19 @@
     throw new Error("Hosted meeting shared helpers are required before Firebase helpers.");
   }
 
-  const { isExpired, logDebug, normalizeText, postJson, resolveConfig } = shared;
+  const { logDebug, normalizeText, resolveConfig } = shared;
   const CONFIG = resolveConfig(global.__INOVA_HOSTED_MEETING_CONFIG__);
   const APP_NAME = "inova-hosted-meeting";
   const FIRESTORE_PERSISTENCE_OPTIONS = { synchronizeTabs: true };
   let authState = {
-    expiresAt: "",
+    accessMode: "",
+    firebaseCustomToken: "",
+    inovaLogin: false,
     meetingDocumentId: "",
     meetingId: "",
     promise: null,
-    sessionToken: "",
-    workspaceSessionId: "",
+    readOnly: false,
+    viewer: null,
   };
   let services = null;
   let firestoreReadyPromise = null;
@@ -111,83 +113,97 @@
     return firestoreReadyPromise;
   }
 
-  async function ensureWorkspaceAuth(meetingSessionToken, options = {}) {
-    const normalizedToken = normalizeText(meetingSessionToken);
+  function setWorkspaceAccess(payload) {
+    const nextPayload = payload && typeof payload === "object" ? payload : {};
+    authState = {
+      accessMode: normalizeText(nextPayload.accessMode),
+      firebaseCustomToken: normalizeText(nextPayload.firebaseCustomToken),
+      inovaLogin: nextPayload.inovaLogin !== false,
+      meetingDocumentId: normalizeText(nextPayload.meetingDocumentId),
+      meetingId: normalizeText(nextPayload.meetingId),
+      promise: null,
+      readOnly: Boolean(nextPayload.readOnly),
+      viewer: nextPayload.viewer && typeof nextPayload.viewer === "object" ? { ...nextPayload.viewer } : null,
+    };
+  }
+
+  async function ensureWorkspaceAuth(options = {}) {
     const forceRefresh = Boolean(options?.forceRefresh);
-    if (!normalizedToken) {
-      throw new Error("회의 작업실 세션이 없어요. 패널에서 다시 열어 주세요.");
+    if (!authState.firebaseCustomToken || !authState.meetingDocumentId || !authState.meetingId) {
+      throw new Error("회의 작업실 접근 권한을 아직 확인하지 못했어요.");
     }
 
     if (
       !forceRefresh
-      && authState.sessionToken === normalizedToken
       && authState.meetingDocumentId
-      && !isExpired(authState.expiresAt)
     ) {
       return {
-        expiresAt: authState.expiresAt,
+        accessMode: authState.accessMode,
         meetingDocumentId: authState.meetingDocumentId,
         meetingId: authState.meetingId,
-        workspaceSessionId: authState.workspaceSessionId,
+        readOnly: authState.readOnly,
+        viewer: authState.viewer,
       };
     }
 
-    if (!forceRefresh && authState.sessionToken === normalizedToken && authState.promise) {
+    if (!forceRefresh && authState.promise) {
       return authState.promise;
     }
 
-    authState = {
-      expiresAt: authState.expiresAt,
-      meetingDocumentId: authState.meetingDocumentId,
-      meetingId: authState.meetingId,
-      promise: null,
-      sessionToken: normalizedToken,
-      workspaceSessionId: authState.workspaceSessionId,
-    };
-
     authState.promise = (async () => {
       logDebug("firestore.auth.start", {
-        hasMeetingSessionToken: true,
+        accessMode: authState.accessMode,
+        hasFirebaseCustomToken: Boolean(authState.firebaseCustomToken),
+        meetingId: authState.meetingId,
       });
-      const payload = await postJson(global, CONFIG.issueWorkspaceAuthUrl, {}, normalizedToken);
       const { auth } = await ensureFirestoreReady();
       const firebase = getFirebaseGlobal();
       await auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
-      await auth.signInWithCustomToken(normalizeText(payload?.firebaseCustomToken));
-      authState = {
-        expiresAt: normalizeText(payload?.expiresAt),
-        meetingDocumentId: normalizeText(payload?.meetingDocumentId),
-        meetingId: normalizeText(payload?.meetingId),
-        promise: null,
-        sessionToken: normalizedToken,
-        workspaceSessionId: normalizeText(payload?.workspaceSessionId),
-      };
+      await auth.signInWithCustomToken(authState.firebaseCustomToken);
       logDebug("firestore.auth.success", {
-        expiresAt: authState.expiresAt,
+        accessMode: authState.accessMode,
         meetingDocumentId: authState.meetingDocumentId,
         meetingId: authState.meetingId,
-        workspaceSessionId: authState.workspaceSessionId,
+        readOnly: authState.readOnly,
       });
+      authState.promise = null;
       return {
-        expiresAt: authState.expiresAt,
+        accessMode: authState.accessMode,
         meetingDocumentId: authState.meetingDocumentId,
         meetingId: authState.meetingId,
-        workspaceSessionId: authState.workspaceSessionId,
+        readOnly: authState.readOnly,
+        viewer: authState.viewer,
       };
     })().catch((error) => {
       authState = {
-        expiresAt: "",
+        accessMode: "",
+        firebaseCustomToken: "",
+        inovaLogin: false,
         meetingDocumentId: "",
         meetingId: "",
         promise: null,
-        sessionToken: "",
-        workspaceSessionId: "",
+        readOnly: false,
+        viewer: null,
       };
       logDebug("firestore.auth.error", { error });
       throw error;
     });
 
     return authState.promise;
+  }
+
+  async function getWorkspaceRequestAuth() {
+    const { auth } = await ensureFirestoreReady();
+    const currentUser = auth.currentUser;
+    if (!currentUser || typeof currentUser.getIdToken !== "function") {
+      return {
+        firebaseSessionToken: "",
+      };
+    }
+    const firebaseSessionToken = normalizeText(await currentUser.getIdToken());
+    return {
+      firebaseSessionToken,
+    };
   }
 
   function subscribeDocument(collectionName, documentId, handlers = {}) {
@@ -241,21 +257,25 @@
 
   function clearWorkspaceAuthCache() {
     authState = {
-      expiresAt: "",
+      accessMode: "",
+      firebaseCustomToken: "",
+      inovaLogin: false,
       meetingDocumentId: "",
       meetingId: "",
       promise: null,
-      sessionToken: "",
-      workspaceSessionId: "",
+      readOnly: false,
+      viewer: null,
     };
   }
 
   ns.firebase = {
     clearWorkspaceAuthCache,
     ensureWorkspaceAuth,
+    getWorkspaceRequestAuth,
     getCollections() {
       return { ...CONFIG.firestoreCollections };
     },
+    setWorkspaceAccess,
     subscribeDocument,
   };
 })(globalThis);

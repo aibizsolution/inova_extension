@@ -722,8 +722,9 @@
     return `<button type="button" class="mini-button${toneClass}" data-local-action="${escapeHtml(action)}" data-request-id="${escapeHtml(requestId)}">${escapeHtml(label)}</button>`;
   }
 
-  function buildPendingActions(pending, remote) {
+  function buildPendingActions(pending, remote, options = {}) {
     if (!pending) return "";
+    if (options.readOnly) return "";
     const buttons = [];
     const processingHealth = getProcessingHealth(remote, pending);
     if (pending.status === "remote_processing" && processingHealth.isStalled) {
@@ -880,7 +881,7 @@
     return `<div class="transcript-box">${escapeHtml(transcriptText)}</div>`;
   }
 
-  function renderHistoryEntry(entry, selectedRecordId) {
+  function renderHistoryEntry(entry, selectedRecordId, options = {}) {
     const title = normalizeText(entry.remote?.title || entry.pending?.meetingTitleSnapshot || "새 기록");
     const pendingSummary = entry.pending?.status === "succeeded" ? "" : buildPendingSummary(entry.pending);
     const pendingNotice = entry.pending?.status === "succeeded" ? "" : buildPendingNotice(entry.pending);
@@ -899,7 +900,7 @@
         ${chips.length ? `<div class="record-item__chips">${chips.map((chip) => `<span class="chip${chip.tone === "accent" ? " chip--accent" : ""}">${escapeHtml(chip.label)}</span>`).join("")}</div>` : ""}
         ${pendingNotice ? `<div class="record-item__local">${escapeHtml(pendingNotice)}</div>` : ""}
       </button>
-      ${buildPendingActions(entry.pending, entry.remote)}
+      ${buildPendingActions(entry.pending, entry.remote, options)}
     `;
   }
 
@@ -1005,6 +1006,7 @@
       || state.busy.saveRecordContext
       || state.busy.saveRecordMemo
       || state.busy.saveRecordTitle;
+    const readOnly = Boolean(state.auth?.readOnly);
     const currentTimerText = formatCaptureTimer(state.capture.durationMs);
     const savedSelectedRecordMemo = ns.shared.normalizeTextBlock(state.selectedRecordMemo?.saved || detailView.recordMemo);
     const draftSelectedRecordMemo = ns.shared.normalizeTextBlock(
@@ -1034,9 +1036,12 @@
     refs.refreshButton.disabled = state.loading;
     refs.refreshButton.textContent = state.loadingReason === "manual" ? "동기화 중" : "새로고침";
     if (global.document.activeElement !== refs.meetingTitleInput) refs.meetingTitleInput.value = normalizeText(state.meetingTitleDraft || savedMeetingTitle);
-    refs.saveMeetingTitleButton.disabled = meetingBusy || !draftMeetingTitle || !meetingTitleDirty;
+    refs.meetingTitleInput.disabled = readOnly || meetingBusy;
+    refs.saveMeetingTitleButton.disabled = readOnly || meetingBusy || !draftMeetingTitle || !meetingTitleDirty;
+    refs.saveMeetingTitleButton.hidden = readOnly;
     refs.saveMeetingTitleButton.textContent = state.busy.saveMeetingTitle ? "저장 중" : meetingTitleDirty ? "이름 저장" : "저장됨";
-    refs.deleteMeetingButton.disabled = meetingBusy || ["recording", "paused", "stopping"].includes(state.capture.status);
+    refs.deleteMeetingButton.disabled = readOnly || meetingBusy || ["recording", "paused", "stopping"].includes(state.capture.status);
+    refs.deleteMeetingButton.hidden = readOnly;
 
     refs.currentBadge.textContent = recorderView.badgeLabel;
     refs.currentBadge.dataset.status = recorderView.badgeStatus;
@@ -1062,12 +1067,15 @@
     refs.discardButton.disabled = !recorderView.canDiscard;
 
     if (global.document.activeElement !== refs.sharedMemoInput) refs.sharedMemoInput.value = draftRecordMemo;
+    refs.sharedMemoInput.disabled = readOnly;
     refs.saveSharedMemoButton.disabled = true;
+    refs.saveSharedMemoButton.hidden = readOnly;
     refs.saveSharedMemoButton.textContent = draftRecordMemo ? "자동 보관됨" : "자동 보관";
-    refs.clearSharedMemoButton.disabled = state.busy.saveMeetingMemo || !draftRecordMemo;
+    refs.clearSharedMemoButton.disabled = readOnly || state.busy.saveMeetingMemo || !draftRecordMemo;
+    refs.clearSharedMemoButton.hidden = readOnly;
     refs.sharedMemoNotice.hidden = true;
     refs.recordCountBadge.textContent = `${historyEntries.length}건`;
-    refs.recordList.innerHTML = historyEntries.length ? historyEntries.map((entry) => renderHistoryEntry(entry, state.selectedRecordId)).join("") : `<div class="notice-box">아직 기록이 없습니다.</div>`;
+    refs.recordList.innerHTML = historyEntries.length ? historyEntries.map((entry) => renderHistoryEntry(entry, state.selectedRecordId, { readOnly })).join("") : `<div class="notice-box">아직 기록이 없습니다.</div>`;
 
     refs.detailTitle.hidden = detailView.showRecordActions;
     refs.detailTitle.textContent = detailView.title;
@@ -1081,11 +1089,14 @@
     refs.detailSummary.textContent = detailView.summary;
     refs.recordTitleGroup.hidden = !detailView.showRecordActions;
     if (global.document.activeElement !== refs.recordTitleInput) refs.recordTitleInput.value = detailView.recordTitle;
-    refs.saveRecordTitleButton.disabled = !canRenameSelectedRecord || selectedRecordMutationBusy || !draftRecordTitle || !recordTitleDirty;
+    refs.recordTitleInput.disabled = readOnly || !canRenameSelectedRecord || selectedRecordMutationBusy;
+    refs.saveRecordTitleButton.disabled = readOnly || !canRenameSelectedRecord || selectedRecordMutationBusy || !draftRecordTitle || !recordTitleDirty;
+    refs.saveRecordTitleButton.hidden = readOnly;
     refs.saveRecordTitleButton.textContent = state.busy.saveRecordTitle ? "저장 중" : recordTitleDirty ? "이름 저장" : "저장됨";
-    refs.downloadRecordButton.hidden = !canDownloadSelectedRecord;
-    refs.downloadRecordButton.disabled = !canDownloadSelectedRecord;
-    refs.deleteRecordButton.disabled = !canDeleteSelectedRecord || selectedRecordMutationBusy;
+    refs.downloadRecordButton.hidden = readOnly || !canDownloadSelectedRecord;
+    refs.downloadRecordButton.disabled = readOnly || !canDownloadSelectedRecord;
+    refs.deleteRecordButton.disabled = readOnly || !canDeleteSelectedRecord || selectedRecordMutationBusy;
+    refs.deleteRecordButton.hidden = readOnly;
     refs.detailMeta.hidden = !detailView.meta.length;
     refs.detailMeta.innerHTML = detailView.meta.map((item) => `<span>${escapeHtml(item)}</span>`).join("");
 
@@ -1113,8 +1124,9 @@
     refs.reviewTabActions.hidden = !isCompletedRecord;
     refs.copyMeetingNotesButton.hidden = !isCompletedRecord || activeReviewTab !== "notes";
     refs.copyMeetingNotesButton.disabled = !hasNotesValue;
-    refs.updateMeetingNotesButton.hidden = !isCompletedRecord;
+    refs.updateMeetingNotesButton.hidden = readOnly || !isCompletedRecord;
     refs.updateMeetingNotesButton.disabled = !isCompletedRecord
+      || readOnly
       || !notesInputsDirty
       || selectedRecordMutationBusy;
     refs.updateMeetingNotesButton.textContent = state.busy.regenerateNotes
@@ -1169,11 +1181,12 @@
       refs.detailMemoInput.value = draftSelectedRecordMemo;
     }
     if (refs.detailMemoInput) {
-      refs.detailMemoInput.disabled = !isCompletedRecord || selectedRecordMutationBusy;
+      refs.detailMemoInput.disabled = readOnly || !isCompletedRecord || selectedRecordMutationBusy;
     }
-    refs.saveRecordMemoButton.disabled = !isCompletedRecord
+    refs.saveRecordMemoButton.disabled = readOnly || !isCompletedRecord
       || !selectedRecordMemoDirty
       || selectedRecordMutationBusy;
+    refs.saveRecordMemoButton.hidden = readOnly;
     refs.saveRecordMemoButton.textContent = state.busy.saveRecordMemo
       ? "저장 중"
       : selectedRecordMemoDirty

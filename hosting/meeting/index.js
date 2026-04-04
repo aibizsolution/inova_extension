@@ -129,6 +129,16 @@
   function createInitialState() {
     const recordingProfile = resolveRecordingProfile(global);
     return {
+      auth: {
+        accessDecision: "unknown",
+        accessMode: "",
+        bypassMode: "",
+        extensionBridge: "not-requested",
+        inovaLogin: false,
+        readOnly: false,
+        reason: "",
+        viewer: "",
+      },
       blocked: false,
       blockedEyebrow: "회의 작업",
       blockedTitle: "이 회의 화면은 패널에서 다시 열어야 합니다",
@@ -223,7 +233,7 @@
       },
       runtimeChunkCache: Object.create(null),
       selectedRecordId: "",
-      session: { expiresAt: "", meetingId: "", meetingSessionToken: "", mode: "create", sharedMemo: "", title: "" },
+      session: { accessMode: "", expiresAt: "", meetingId: "", meetingSessionToken: "", mode: "create", shareToken: "", sharedMemo: "", title: "" },
       supersededRemoteJobIds: [],
       unsubscribeDebug: null,
     };
@@ -656,11 +666,27 @@
   }
 
   function bindEvents() {
+    const blockReadOnlyAction = (label) => {
+      if (!state.auth?.readOnly) return false;
+      setNotice(`${label}은 읽기 전용 모드에서 사용할 수 없습니다.`, "warning");
+      applyRender();
+      return true;
+    };
+    const runWritableAction = (label, handler) => (...args) => {
+      if (blockReadOnlyAction(label)) {
+        return;
+      }
+      return handler(...args);
+    };
     refs.refreshButton.addEventListener("click", () => controllers.realtime.refreshWorkspace(false, "manual"));
     refs.meetingTitleInput.addEventListener("input", () => controllers.mutations.updateMeetingTitleDraft(refs.meetingTitleInput.value));
     refs.meetingTitleInput.addEventListener("keydown", (event) => {
       if (event.key !== "Enter" || event.shiftKey) return;
       event.preventDefault();
+      if (state.auth?.readOnly) {
+        blockReadOnlyAction("회의 이름 저장");
+        return;
+      }
       if (!refs.saveMeetingTitleButton.disabled) {
         void controllers.mutations.saveMeetingTitle();
       }
@@ -669,17 +695,21 @@
     refs.recordTitleInput.addEventListener("keydown", (event) => {
       if (event.key !== "Enter" || event.shiftKey) return;
       event.preventDefault();
+      if (state.auth?.readOnly) {
+        blockReadOnlyAction("기록 이름 저장");
+        return;
+      }
       if (!refs.saveRecordTitleButton.disabled) {
         void controllers.mutations.saveCurrentRecordTitle();
       }
     });
     refs.sharedMemoInput.addEventListener("input", () => controllers.mutations.updateRecordMemoDraft(refs.sharedMemoInput.value));
     refs.detailMemoInput?.addEventListener("input", () => controllers.mutations.updateSelectedRecordMemoDraft(refs.detailMemoInput.value));
-    refs.saveMeetingTitleButton.addEventListener("click", () => void controllers.mutations.saveMeetingTitle());
-    refs.saveSharedMemoButton.addEventListener("click", () => void controllers.mutations.saveSharedMemo());
-    refs.clearSharedMemoButton.addEventListener("click", () => void controllers.mutations.clearSharedMemo());
-    refs.saveRecordMemoButton?.addEventListener("click", () => void controllers.mutations.saveSelectedRecordMemo());
-    refs.deleteMeetingButton.addEventListener("click", () => void controllers.mutations.deleteMeeting());
+    refs.saveMeetingTitleButton.addEventListener("click", runWritableAction("회의 이름 저장", () => void controllers.mutations.saveMeetingTitle()));
+    refs.saveSharedMemoButton.addEventListener("click", runWritableAction("기록 메모 저장", () => void controllers.mutations.saveSharedMemo()));
+    refs.clearSharedMemoButton.addEventListener("click", runWritableAction("기록 메모 비우기", () => void controllers.mutations.clearSharedMemo()));
+    refs.saveRecordMemoButton?.addEventListener("click", runWritableAction("기록 메모 저장", () => void controllers.mutations.saveSelectedRecordMemo()));
+    refs.deleteMeetingButton.addEventListener("click", runWritableAction("회의 삭제", () => void controllers.mutations.deleteMeeting()));
     for (const tabId of ["reviewTabSummary", "reviewTabNotes", "reviewTabMemo", "reviewTabSegments", "reviewTabContext"]) {
       const tab = refs[tabId];
       if (!tab) continue;
@@ -688,24 +718,24 @@
         applyRender();
       });
     }
-    refs.startButton.addEventListener("click", () => void controllers.capture.startCapture());
-    refs.importAudioButton?.addEventListener("click", controllers.capture.openImportAudioPicker);
-    refs.importAudioInput?.addEventListener("change", (event) => void controllers.capture.handleImportAudioSelection(event));
-    refs.pauseButton.addEventListener("click", () => void controllers.capture.pauseCapture());
-    refs.resumeButton.addEventListener("click", () => void controllers.capture.resumeCapture());
-    refs.stopButton.addEventListener("click", () => void controllers.capture.stopCapture());
-    refs.discardButton.addEventListener("click", controllers.capture.discardCapture);
+    refs.startButton.addEventListener("click", runWritableAction("녹음 시작", () => void controllers.capture.startCapture()));
+    refs.importAudioButton?.addEventListener("click", runWritableAction("파일 불러오기", controllers.capture.openImportAudioPicker));
+    refs.importAudioInput?.addEventListener("change", runWritableAction("파일 불러오기", (event) => void controllers.capture.handleImportAudioSelection(event)));
+    refs.pauseButton.addEventListener("click", runWritableAction("녹음 일시중지", () => void controllers.capture.pauseCapture()));
+    refs.resumeButton.addEventListener("click", runWritableAction("녹음 재개", () => void controllers.capture.resumeCapture()));
+    refs.stopButton.addEventListener("click", runWritableAction("종료하고 전사", () => void controllers.capture.stopCapture()));
+    refs.discardButton.addEventListener("click", runWritableAction("녹음 버리기", controllers.capture.discardCapture));
     refs.recordList.addEventListener("click", (event) => void controllers.realtime.handleRecordListClick(event));
-    refs.saveRecordTitleButton.addEventListener("click", () => void controllers.mutations.saveCurrentRecordTitle());
-    refs.downloadRecordButton.addEventListener("click", controllers.capture.downloadCurrentRecord);
-    refs.deleteRecordButton.addEventListener("click", () => void controllers.mutations.deleteCurrentRecord());
+    refs.saveRecordTitleButton.addEventListener("click", runWritableAction("기록 이름 저장", () => void controllers.mutations.saveCurrentRecordTitle()));
+    refs.downloadRecordButton.addEventListener("click", runWritableAction("기록 다운로드", controllers.capture.downloadCurrentRecord));
+    refs.deleteRecordButton.addEventListener("click", runWritableAction("기록 삭제", () => void controllers.mutations.deleteCurrentRecord()));
     refs.copyMeetingNotesButton?.addEventListener("click", () => void controllers.debug.copyMeetingNotes());
-    refs.updateMeetingNotesButton?.addEventListener("click", () => void controllers.mutations.regenerateNotes());
+    refs.updateMeetingNotesButton?.addEventListener("click", runWritableAction("회의록 업데이트", () => void controllers.mutations.regenerateNotes()));
     refs.copySegmentsButton?.addEventListener("click", () => void controllers.debug.copySegmentsText());
     refs.notesContextInput?.addEventListener("input", () => controllers.mutations.updateNotesContextDraft(refs.notesContextInput.value));
-    refs.notesContextAddButton?.addEventListener("click", () => void controllers.mutations.upsertNotesContextDraft());
-    refs.notesContextResetButton?.addEventListener("click", controllers.mutations.resetNotesContextDraft);
-    refs.notesContextList?.addEventListener("click", (event) => controllers.mutations.handleNotesContextListClick(event));
+    refs.notesContextAddButton?.addEventListener("click", runWritableAction("추가 맥락 저장", () => void controllers.mutations.upsertNotesContextDraft()));
+    refs.notesContextResetButton?.addEventListener("click", runWritableAction("추가 맥락 입력 비우기", controllers.mutations.resetNotesContextDraft));
+    refs.notesContextList?.addEventListener("click", runWritableAction("추가 맥락 편집", (event) => controllers.mutations.handleNotesContextListClick(event)));
     refs.debugPanel?.addEventListener("click", (event) => controllers.debug.handlePanelClick(event));
     refs.confirmDialogCancel?.addEventListener("click", () => resolveConfirmation(false));
     refs.confirmDialogConfirm?.addEventListener("click", () => resolveConfirmation(true));
@@ -745,7 +775,7 @@
   async function bootWorkspace() {
     const debugSandboxRequested = controllers.pendingUploads.isDebugLocalQueueSandboxRequested?.();
     await controllers.session.bootSession();
-    if (!state.session.meetingId || !state.session.meetingSessionToken) {
+    if (state.auth.accessDecision !== "allowed") {
       if (!debugSandboxRequested) {
         const blockedOptions = controllers.session.buildMissingSessionBlockedOptions();
         renderBlocked(blockedOptions.message, blockedOptions);
@@ -836,18 +866,20 @@
       || state.busy.saveRecordContext
       || state.busy.saveRecordMemo
       || state.busy.saveRecordTitle;
+    const readOnly = Boolean(state.auth?.readOnly);
     if (refs.notesContextInput) {
-      refs.notesContextInput.disabled = selectedRecordMutationBusy;
+      refs.notesContextInput.disabled = readOnly || selectedRecordMutationBusy;
     }
     if (refs.notesContextAddButton) {
       const canAddDraft = Boolean(controllers?.mutations?.normalizeNotesContextDraftValue?.(state.notesContext.draft));
-      refs.notesContextAddButton.disabled = !canAddDraft || selectedRecordMutationBusy;
+      refs.notesContextAddButton.disabled = readOnly || !canAddDraft || selectedRecordMutationBusy;
+      refs.notesContextAddButton.hidden = readOnly;
       refs.notesContextAddButton.textContent = state.notesContext.editingId ? "수정 저장" : "항목 추가";
     }
     if (refs.notesContextResetButton) {
       const hasDraft = Boolean(state.notesContext.editingId || normalizeText(state.notesContext.draft));
-      refs.notesContextResetButton.hidden = !hasDraft;
-      refs.notesContextResetButton.disabled = selectedRecordMutationBusy;
+      refs.notesContextResetButton.hidden = readOnly || !hasDraft;
+      refs.notesContextResetButton.disabled = readOnly || selectedRecordMutationBusy;
       refs.notesContextResetButton.textContent = state.notesContext.editingId ? "수정 취소" : "입력 비우기";
     }
   }

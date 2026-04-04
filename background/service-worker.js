@@ -87,6 +87,15 @@ async function handleMessage(message, sender) {
   if (message.type === "inova-meeting:open-result") {
     return openMeetingResult(message.input, message.providerIdentity, sender);
   }
+  if (message.type === "inova-meeting:authorize-workspace-access") {
+    return authorizeMeetingWorkspaceAccess(message.input, message.providerIdentity, sender);
+  }
+  if (message.type === "inova-meeting:create-share-link") {
+    return createMeetingShareLink(message.input, message.providerIdentity, sender);
+  }
+  if (message.type === "inova-meeting:revoke-share-link") {
+    return revokeMeetingShareLink(message.input, message.providerIdentity, sender);
+  }
   if (message.type === "inova-meeting:probe-workspace-bridge") {
     return probeMeetingWorkspaceBridge(sender);
   }
@@ -315,6 +324,71 @@ async function openMeetingResult(input, providerIdentity, sender) {
   return openHostedMeetingPage("detail", input, providerIdentity, sender);
 }
 
+async function authorizeMeetingWorkspaceAccess(input, providerIdentity, sender) {
+  try {
+    const owner = await resolveMeetingProviderIdentity(providerIdentity);
+    const accessToken = await getInovaAccessToken();
+    if (!namespace.session.normalizeText(accessToken)) {
+      return buildMeetingWorkspaceBlockedAuthPayload(input, owner, "login-required", {
+        extensionBridge: "connected",
+        inovaLogin: false,
+      });
+    }
+    const payload = await namespace.cloudApi.authorizeInovaMeetingWorkspaceAccess({
+      debugAuthBypass: namespace.session.normalizeText(input?.debugAuthBypass),
+      jobId: namespace.session.normalizeText(input?.jobId),
+      meetingId: namespace.session.normalizeText(input?.meetingId),
+      shareToken: namespace.session.normalizeText(input?.shareToken || input?.share),
+    }, owner, accessToken);
+    return {
+      ...payload,
+      extensionBridge: "connected",
+      inovaLogin: payload?.inovaLogin !== false,
+      senderUrl: namespace.session.normalizeText(sender?.url),
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error || "");
+    if (looksLikeMeetingLoginError(message)) {
+      return buildMeetingWorkspaceBlockedAuthPayload(input, providerIdentity, "login-required", {
+        extensionBridge: "connected",
+        inovaLogin: false,
+      });
+    }
+    throw error;
+  }
+}
+
+async function createMeetingShareLink(input, providerIdentity, sender) {
+  const owner = await resolveMeetingProviderIdentity(providerIdentity);
+  const accessToken = await getInovaAccessToken();
+  const payload = await namespace.cloudApi.createInovaMeetingShareLink({
+    jobId: namespace.session.normalizeText(input?.jobId),
+    meetingId: namespace.session.normalizeText(input?.meetingId),
+  }, owner, accessToken);
+  return {
+    ...payload,
+    shareUrl: await buildHostedMeetingCleanUrl({
+      jobId: namespace.session.normalizeText(input?.jobId),
+      meetingId: namespace.session.normalizeText(input?.meetingId),
+      shareToken: namespace.session.normalizeText(payload?.shareToken),
+    }),
+    senderUrl: namespace.session.normalizeText(sender?.url),
+  };
+}
+
+async function revokeMeetingShareLink(input, providerIdentity, sender) {
+  const owner = await resolveMeetingProviderIdentity(providerIdentity);
+  const accessToken = await getInovaAccessToken();
+  const payload = await namespace.cloudApi.revokeInovaMeetingShareLink({
+    jobId: namespace.session.normalizeText(input?.jobId),
+    meetingId: namespace.session.normalizeText(input?.meetingId),
+  }, owner, accessToken);
+  return {
+    ...payload,
+    senderUrl: namespace.session.normalizeText(sender?.url),
+  };
+}
+
 async function probeMeetingWorkspaceBridge(sender) {
   const senderUrl = namespace.session.normalizeText(sender?.url);
   const cookie = await chrome.cookies.get({
@@ -337,28 +411,38 @@ async function probeMeetingWorkspaceBridge(sender) {
 
 async function openHostedMeetingPage(mode, input, providerIdentity, sender) {
   try {
+    const owner = await resolveMeetingProviderIdentity(providerIdentity);
+    const meetingId = namespace.session.normalizeText(input?.meetingId) || buildMeetingId();
+    const jobId = mode === "detail"
+      ? namespace.session.normalizeText(input?.jobId)
+      : namespace.session.normalizeText(input?.jobId);
+    const finalUrl = await buildHostedMeetingCleanUrl({
+      jobId,
+      meetingId,
+    });
     logMeetingDebug("open.start", {
       input: input || {},
       mode,
+      providerUserKey: owner.providerUserKey,
       senderTabId: Number(sender?.tab?.id) || 0,
       senderTitle: namespace.session.normalizeText(sender?.tab?.title),
       senderUrl: namespace.session.normalizeText(sender?.url),
     });
-    const launch = await issueMeetingLaunch(mode, input, providerIdentity, sender);
-    const workspace = await exchangeMeetingLaunch(launch);
     logMeetingDebug("tabs.create", {
-      finalUrl: workspace.url,
-      hasWorkspaceHash: String(workspace.url || "").includes("#ws="),
-      launchMeetingId: namespace.session.normalizeText(launch?.meeting?.meetingId),
-      meetingId: namespace.session.normalizeText(workspace?.meeting?.meetingId),
+      finalUrl,
+      hasWorkspaceHash: String(finalUrl || "").includes("#ws="),
+      meetingId,
       mode,
     });
-    await chrome.tabs.create({ url: workspace.url });
+    await chrome.tabs.create({ url: finalUrl });
     return {
-      expiresAt: workspace.expiresAt || launch.expiresAt || "",
-      meeting: workspace.meeting || launch.meeting || {},
+      expiresAt: "",
+      meeting: {
+        meetingId,
+        title: namespace.session.normalizeText(input?.title || sender?.tab?.title) || "새 회의",
+      },
       opened: true,
-      url: workspace.url,
+      url: finalUrl,
     };
   } catch (error) {
     logMeetingDebug("open.error", {
@@ -369,99 +453,16 @@ async function openHostedMeetingPage(mode, input, providerIdentity, sender) {
   }
 }
 
-async function issueMeetingLaunch(mode, input, providerIdentity, sender) {
-  try {
-    const owner = await resolveMeetingProviderIdentity(providerIdentity);
-    if (!owner?.providerUserKey) {
-      throw new Error("현재 i-Nova 사용자 정보를 아직 확인하지 못했어요. i-Nova 탭을 다시 연 뒤 시도해 주세요.");
-    }
-    const accessToken = await getInovaAccessToken();
-    const requestPayload = {
-      jobId: namespace.session.normalizeText(input?.jobId),
-      meetingId: namespace.session.normalizeText(input?.meetingId),
-      mode,
-      suggestedTitle: namespace.session.normalizeText(input?.title || sender?.tab?.title) || "새 회의",
-    };
-    logMeetingDebug("launch.issue.request", {
-      ...requestPayload,
-      providerUserKey: owner.providerUserKey,
-    });
-    const launch = await namespace.cloudApi.issueInovaMeetingLaunch(
-      requestPayload,
-      owner,
-      accessToken
-    );
-    logMeetingDebug("launch.issue.success", {
-      hasLaunchToken: Boolean(namespace.session.normalizeText(launch?.launchToken)),
-      meetingId: namespace.session.normalizeText(launch?.meeting?.meetingId),
-      mode,
-      workspaceUrl: namespace.session.normalizeText(launch?.workspaceUrl),
-    });
-    return launch;
-  } catch (error) {
-    logMeetingDebug("launch.issue.error", {
-      error: error instanceof Error ? error.message : String(error || ""),
-      mode,
-    });
-    throw error;
-  }
-}
-
-async function exchangeMeetingLaunch(launch) {
-  try {
-    const launchToken = namespace.session.normalizeText(launch?.launchToken);
-    if (!launchToken) {
-      throw new Error("회의 작업실 열기 토큰이 없어요. 다시 시도해 주세요.");
-    }
-    logMeetingDebug("launch.exchange.request", {
-      launchTokenPreview: `${launchToken.slice(0, 12)}...`,
-      meetingId: namespace.session.normalizeText(launch?.meeting?.meetingId),
-    });
-    const exchange = await namespace.cloudApi.exchangeInovaMeetingLaunch({ launchToken });
-    const meetingId = namespace.session.normalizeText(exchange?.meeting?.meetingId || launch?.meeting?.meetingId);
-    const workspaceToken = namespace.session.normalizeText(exchange?.meetingSessionToken);
-    if (!meetingId || !workspaceToken) {
-      throw new Error("회의 작업실 세션을 만들지 못했어요. 다시 시도해 주세요.");
-    }
-    const finalUrl = await buildHostedMeetingSessionUrl({
-      jobId: namespace.session.normalizeText(exchange?.jobId || launch?.jobId),
-      meetingId,
-      workspaceToken,
-    });
-    logMeetingDebug("launch.exchange.success", {
-      finalUrl,
-      hasWorkspaceHash: finalUrl.includes("#ws="),
-      jobId: namespace.session.normalizeText(exchange?.jobId || launch?.jobId),
-      meetingId,
-      workspaceTokenPreview: `${workspaceToken.slice(0, 12)}...`,
-    });
-    return {
-      expiresAt: namespace.session.normalizeText(exchange?.expiresAt),
-      meeting: {
-        meetingId,
-        title: namespace.session.normalizeText(exchange?.meeting?.title || launch?.meeting?.title),
-      },
-      url: finalUrl,
-    };
-  } catch (error) {
-    logMeetingDebug("launch.exchange.error", {
-      error: error instanceof Error ? error.message : String(error || ""),
-      meetingId: namespace.session.normalizeText(launch?.meeting?.meetingId),
-    });
-    throw error;
-  }
-}
-
-async function buildHostedMeetingSessionUrl(input) {
+async function buildHostedMeetingCleanUrl(input) {
   const normalizedSettings = await reconcileMeetingWorkspaceSettings((await namespace.storage.getState())?.settings);
   const url = new URL(await resolveMeetingWorkspacePageUrl());
   if (normalizeMeetingDebugConsoleEnabled(normalizedSettings.meetingDebugConsoleEnabled)) url.searchParams.set("debug", "1");
   const meetingId = namespace.session.normalizeText(input?.meetingId);
   const jobId = namespace.session.normalizeText(input?.jobId);
-  const workspaceToken = namespace.session.normalizeText(input?.workspaceToken);
+  const shareToken = namespace.session.normalizeText(input?.shareToken || input?.share);
   if (meetingId) url.searchParams.set("meetingId", meetingId);
   if (jobId) url.searchParams.set("jobId", jobId);
-  if (workspaceToken) url.hash = `ws=${encodeURIComponent(workspaceToken)}`;
+  if (shareToken) url.searchParams.set("share", shareToken);
   return url.toString();
 }
 
@@ -550,6 +551,44 @@ function normalizeLocalMeetingWorkspaceUrl(value) {
   return url.toString();
 }
 
+function buildMeetingId() {
+  const partA = Date.now().toString(36);
+  const partB = Math.random().toString(36).slice(2, 8);
+  return `meeting-${partA}-${partB}`;
+}
+
+function buildMeetingWorkspaceBlockedAuthPayload(input, viewer, reason, options = {}) {
+  return {
+    accessDecision: "denied",
+    accessMode: "blocked",
+    bypassApplied: false,
+    bypassMode: "",
+    extensionBridge: namespace.session.normalizeText(options?.extensionBridge) || "connected",
+    firebaseCustomToken: "",
+    inovaLogin: options?.inovaLogin !== false,
+    meetingDocumentId: "",
+    meetingId: namespace.session.normalizeText(input?.meetingId),
+    readOnly: false,
+    reason: namespace.session.normalizeText(reason),
+    shareId: "",
+    viewer: {
+      displayName: namespace.session.normalizeText(viewer?.displayName),
+      email: namespace.session.normalizeText(viewer?.email),
+      providerUserKey: namespace.session.normalizeText(viewer?.providerUserKey),
+    },
+  };
+}
+
+function looksLikeMeetingLoginError(message) {
+  const normalized = namespace.session.normalizeText(message).toLowerCase();
+  return normalized.includes("로그인")
+    || normalized.includes("access token")
+    || normalized.includes("refresh")
+    || normalized.includes("unauth")
+    || normalized.includes("401")
+    || normalized.includes("403");
+}
+
 function isLoopbackHostname(value) {
   return ["127.0.0.1", "localhost"].includes(namespace.session.normalizeText(value).toLowerCase());
 }
@@ -580,7 +619,13 @@ function normalizeProviderIdentity(providerIdentity) {
 function isAllowedSender(message, sender) {
   return String(sender?.url || "").startsWith(INOVA_ORIGIN)
     || message.type === "inova-release:open-url"
-    || (message.type === "inova-meeting:probe-workspace-bridge" && isHostedMeetingWorkspaceSender(sender));
+    || (
+      [
+        "inova-meeting:authorize-workspace-access",
+        "inova-meeting:probe-workspace-bridge",
+      ].includes(message.type)
+      && isHostedMeetingWorkspaceSender(sender)
+    );
 }
 
 function isHostedMeetingWorkspaceSender(sender) {

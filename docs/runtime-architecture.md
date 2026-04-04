@@ -102,11 +102,11 @@
 ### F. 회의 작업실 진입
 
 1. popup은 `settings.meetingWorkspaceTarget`을 저장하고, content 패널은 `새 회의하기` 또는 결과 리스트 항목에서 `inova-meeting:open-workspace` / `inova-meeting:open-result`를 background로 보낸다.
-2. background가 i-Nova access token으로 `issueInovaMeetingLaunch`를 호출해 launch grant를 만든다.
-3. background가 이어서 `exchangeInovaMeetingLaunch`를 호출해 `meetingSessionToken`을 받은 뒤, popup 설정의 호스팅 타깃에 맞는 최종 작업실 URL을 만든다.
-4. background가 `chrome.tabs.create()`로 최종 hosted `meeting/index.html?meetingId=...#ws=...` URL 또는 로컬 `http://127.0.0.1:5000/meeting/index.html?...#ws=...` URL을 연다.
-5. hosted 회의 작업실은 URL hash 또는 storage에 있는 `meetingSessionToken`으로 부팅하고, `issueInovaMeetingWorkspaceAuth`로 Firebase custom token을 받아 Firebase Auth에 로그인한다. 이때 Firestore offline persistence를 먼저 켠다.
-6. hosted 회의 작업실은 `meeting` 문서 구독을 붙이고, 선택된 기록에 따라 `job`, `artifact` 문서를 추가 구독한다. hash 없는 clean URL만 직접 열면 hosted 세션이 없으므로 접근을 막고 패널에서 다시 열도록 안내한다.
+2. background는 popup 설정의 호스팅 타깃에 맞는 clean hosted 작업실 URL(`meetingId`, optional `jobId`, optional `share`)을 만든다.
+3. background가 `chrome.tabs.create()`로 hosted `meeting/index.html?meetingId=...&jobId=...` 또는 로컬 `http://127.0.0.1:5000/meeting/index.html?...` URL을 연다.
+4. hosted 회의 작업실은 부팅 직후 확장 bridge와 handshake하고, background가 현재 i-Nova 로그인 상태와 접근 권한을 확인한다.
+5. background는 `authorizeInovaMeetingWorkspaceAccess`를 호출해 `owner-secure` 또는 `share-readonly` 접근을 판정하고, 허용 시에만 Firebase custom token을 돌려준다.
+6. hosted 회의 작업실은 그 custom token으로 Firebase Auth에 로그인한 뒤 `meeting` 문서 구독을 붙이고, 선택된 기록에 따라 `job`, `artifact` 문서를 추가 구독한다. 확장 미설치, 로그인 안 됨, owner-only 위반, 무효한 share 링크는 모두 blocked 상태로 남긴다.
 
 ### G. hosted 회의 녹음 시작/종료
 

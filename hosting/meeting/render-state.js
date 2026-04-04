@@ -567,6 +567,16 @@
   }
 
   function buildWorkspaceView(state, historyEntries) {
+    if (state.auth?.readOnly) {
+      return {
+        badgeLabel: state.auth?.bypassMode ? "DEV BYPASS" : "읽기 전용",
+        badgeStatus: "queued",
+        meetingStatus: "공유 링크 열람",
+        pageSummary: state.auth?.bypassMode
+          ? "개발 우회 모드로 열려 있습니다."
+          : "공유 링크 열람 중입니다. 수정 없이 보기와 복사만 가능합니다.",
+      };
+    }
     const hasActionableLocalCopies = state.pendingUploads.some((item) => item.status !== "succeeded");
     if (!ns.shared.isOnline(global)) {
       return {
@@ -633,6 +643,24 @@
   }
 
   function buildRecorderView(state) {
+    if (state.auth?.readOnly) {
+      return {
+        badgeLabel: state.auth?.bypassMode ? "DEV BYPASS" : "읽기 전용",
+        badgeStatus: "queued",
+        canDiscard: false,
+        canPause: false,
+        canResume: false,
+        canStart: false,
+        canStop: false,
+        hint: state.auth?.bypassMode ? "개발용 우회 읽기 모드입니다." : "공유 링크에서는 녹음이나 업로드를 시작할 수 없습니다.",
+        showDiscard: false,
+        showPause: false,
+        showResume: false,
+        showStart: false,
+        showStop: false,
+        summary: state.auth?.bypassMode ? "개발용 읽기 모드입니다." : "읽기 전용 모드입니다.",
+      };
+    }
     if (state.capture.status === "recording") {
       return { badgeLabel: "녹음 중", badgeStatus: "recording", canDiscard: false, canPause: true, canResume: false, canStart: false, canStop: true, hint: "", showDiscard: false, showPause: true, showResume: false, showStart: false, showStop: true, summary: "녹음 중입니다." };
     }

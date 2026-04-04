@@ -133,6 +133,21 @@
     return payload?.data || { items: [], nextCursor: "" };
   }
 
+  async function authorizeInovaMeetingWorkspaceAccess(input, providerIdentity, accessToken) {
+    const payload = await postJson(
+      functions.authorizeInovaMeetingWorkspaceAccessUrl,
+      {
+        debugAuthBypass: input?.debugAuthBypass || "",
+        jobId: input?.jobId || "",
+        meetingId: input?.meetingId || "",
+        providerIdentity: toProviderIdentityPayload(providerIdentity),
+        shareToken: input?.shareToken || input?.share || "",
+      },
+      accessToken
+    );
+    return payload?.data || {};
+  }
+
   async function issueInovaMeetingLaunch(input, providerIdentity, accessToken) {
     const payload = await postJson(
       functions.issueInovaMeetingLaunchUrl,
@@ -142,6 +157,32 @@
         mode: input?.mode || "create",
         owner: toProviderIdentityPayload(providerIdentity),
         suggestedTitle: input?.suggestedTitle || input?.title || "",
+      },
+      accessToken
+    );
+    return payload?.data || {};
+  }
+
+  async function createInovaMeetingShareLink(input, providerIdentity, accessToken) {
+    const payload = await postJson(
+      functions.createInovaMeetingShareLinkUrl,
+      {
+        jobId: input?.jobId || "",
+        meetingId: input?.meetingId || "",
+        owner: toProviderIdentityPayload(providerIdentity),
+      },
+      accessToken
+    );
+    return payload?.data || {};
+  }
+
+  async function revokeInovaMeetingShareLink(input, providerIdentity, accessToken) {
+    const payload = await postJson(
+      functions.revokeInovaMeetingShareLinkUrl,
+      {
+        jobId: input?.jobId || "",
+        meetingId: input?.meetingId || "",
+        owner: toProviderIdentityPayload(providerIdentity),
       },
       accessToken
     );
@@ -222,6 +263,10 @@
     const headers = {
       "Content-Type": "application/json",
     };
+    if (normalized.firebaseSessionToken) {
+      headers.Authorization = `FirebaseSession ${normalized.firebaseSessionToken}`;
+      return headers;
+    }
     if (normalized.accessToken) {
       headers.Authorization = `Bearer ${normalized.accessToken}`;
       return headers;
@@ -236,16 +281,20 @@
     if (typeof auth === "string") {
       return {
         accessToken: auth,
+        firebaseSessionToken: "",
         meetingSessionToken: "",
       };
     }
     return {
       accessToken: auth?.accessToken || "",
+      firebaseSessionToken: auth?.firebaseSessionToken || "",
       meetingSessionToken: auth?.meetingSessionToken || "",
     };
   }
 
   namespace.cloudApi = {
+    authorizeInovaMeetingWorkspaceAccess,
+    createInovaMeetingShareLink,
     exchangeInovaMeetingLaunch,
     issueInovaMeetingLaunch,
     issueInovaMeetingPanelAuth,
@@ -257,6 +306,7 @@
     peekInovaPromptLibrary,
     publishPromptToStore,
     recordPromptStoreView,
+    revokeInovaMeetingShareLink,
     reviewInovaPrompt,
     syncInovaPromptLibrary,
     togglePromptStoreLike,

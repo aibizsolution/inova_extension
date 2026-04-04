@@ -2,25 +2,52 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isWorkspaceSessionActive() {
+    function isLegacyWorkspaceSessionActive() {
       return request.auth != null
         && request.auth.token.scope == "meeting-workspace"
         && request.time.toMillis() < request.auth.token.workspaceExpMs;
     }
 
+    function isOwnerWorkspaceSessionActive() {
+      return request.auth != null
+        && (
+          request.auth.token.scope == "meeting-workspace-owner"
+          || isLegacyWorkspaceSessionActive()
+        );
+    }
+
+    function isShareWorkspaceSessionActive() {
+      return request.auth != null
+        && request.auth.token.scope == "meeting-workspace-share";
+    }
+
+    function isWorkspaceSessionActive() {
+      return isOwnerWorkspaceSessionActive() || isShareWorkspaceSessionActive();
+    }
+
+    function workspaceOwnerProviderUserKey() {
+      return request.auth != null
+        ? (
+          request.auth.token.ownerProviderUserKey != null
+            ? request.auth.token.ownerProviderUserKey
+            : request.auth.token.providerUserKey
+        )
+        : "";
+    }
+
     function matchesMeetingWorkspace(resourceData) {
       return isWorkspaceSessionActive()
-        && resourceData.owner.providerUserKey == request.auth.token.providerUserKey
+        && resourceData.owner.providerUserKey == workspaceOwnerProviderUserKey()
         && resourceData.meetingId == request.auth.token.meetingId;
     }
 
     function matchesMeetingWorkspaceDoc(docId) {
       return isWorkspaceSessionActive()
-        && docId == request.auth.token.providerUserKey + "__" + request.auth.token.meetingId
+        && docId == workspaceOwnerProviderUserKey() + "__" + request.auth.token.meetingId
         && (
           resource == null
           || (
-            resource.data.owner.providerUserKey == request.auth.token.providerUserKey
+            resource.data.owner.providerUserKey == workspaceOwnerProviderUserKey()
             && resource.data.meetingId == request.auth.token.meetingId
           )
         );

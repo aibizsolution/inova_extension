@@ -186,7 +186,9 @@
       || "https://asia-northeast3-browser-extension-main.cloudfunctions.net"
     );
     return {
+      authorizeWorkspaceAccessUrl: joinUrl(functionsBaseUrl, "authorizeInovaMeetingWorkspaceAccess"),
       createJobUrl: joinUrl(functionsBaseUrl, "createInovaMeetingJob"),
+      createShareLinkUrl: joinUrl(functionsBaseUrl, "createInovaMeetingShareLink"),
       deleteMeetingResultUrl: joinUrl(functionsBaseUrl, "deleteInovaMeetingResult"),
       deleteMeetingUrl: joinUrl(functionsBaseUrl, "deleteInovaMeeting"),
       exchangeLaunchUrl: joinUrl(functionsBaseUrl, "exchangeInovaMeetingLaunch"),
@@ -201,6 +203,7 @@
       functionsBaseUrl,
       issueWorkspaceAuthUrl: joinUrl(functionsBaseUrl, "issueInovaMeetingWorkspaceAuth"),
       regenerateNotesUrl: joinUrl(functionsBaseUrl, "regenerateInovaMeetingNotes"),
+      revokeShareLinkUrl: joinUrl(functionsBaseUrl, "revokeInovaMeetingShareLink"),
       uploadSourceUrl: joinUrl(functionsBaseUrl, "uploadInovaMeetingSource"),
       updateMeetingResultUrl: joinUrl(functionsBaseUrl, "updateInovaMeetingResult"),
       updateMeetingTitleUrl: joinUrl(functionsBaseUrl, "updateInovaMeeting"),
@@ -211,44 +214,55 @@
     try {
       const current = new URL(url);
       return {
+        debugAuthBypass: normalizeText(current.searchParams.get("debugAuthBypass")),
         jobId: normalizeText(current.searchParams.get("jobId")),
         launchToken: normalizeText(current.searchParams.get("launch")),
         meetingId: normalizeText(current.searchParams.get("meetingId")),
+        shareToken: normalizeText(current.searchParams.get("share")),
         workspaceToken: readHashParam(current.hash, WORKSPACE_HASH_PARAM),
       };
     } catch {
       return {
+        debugAuthBypass: "",
         jobId: "",
         launchToken: "",
         meetingId: "",
+        shareToken: "",
         workspaceToken: "",
       };
     }
   }
 
-  function buildHeaders(meetingSessionToken) {
+  function buildHeaders(auth) {
     const headers = { "Content-Type": "application/json" };
-    const token = normalizeText(meetingSessionToken);
-    if (token) {
-      headers.Authorization = `MeetingSession ${token}`;
+    const normalized = normalizeRequestAuth(auth);
+    if (normalized.firebaseSessionToken) {
+      headers.Authorization = `FirebaseSession ${normalized.firebaseSessionToken}`;
+    } else if (normalized.accessToken) {
+      headers.Authorization = `Bearer ${normalized.accessToken}`;
+    } else if (normalized.meetingSessionToken) {
+      headers.Authorization = `MeetingSession ${normalized.meetingSessionToken}`;
     }
     return headers;
   }
 
-  async function postJson(globalObject, url, body, meetingSessionToken, options) {
+  async function postJson(globalObject, url, body, auth, options) {
     const controller = typeof AbortController === "function" ? new AbortController() : null;
     const timeoutMs = Math.max(1000, Number(options?.timeoutMs) || 25000);
     const timeoutId = controller ? globalObject.setTimeout(() => controller.abort(), timeoutMs) : 0;
+    const resolvedAuth = await resolveRequestAuth(auth);
     logDebug("http.request", {
       body,
-      hasMeetingSessionToken: Boolean(normalizeText(meetingSessionToken)),
+      hasAccessToken: Boolean(normalizeText(resolvedAuth?.accessToken)),
+      hasFirebaseSessionToken: Boolean(normalizeText(resolvedAuth?.firebaseSessionToken)),
+      hasMeetingSessionToken: Boolean(normalizeText(resolvedAuth?.meetingSessionToken)),
       timeoutMs,
       url,
     });
     try {
       const response = await globalObject.fetch(url, {
         body: JSON.stringify(body || {}),
-        headers: buildHeaders(meetingSessionToken),
+        headers: buildHeaders(resolvedAuth),
         method: "POST",
         signal: controller?.signal,
       });
@@ -278,6 +292,36 @@
         globalObject.clearTimeout(timeoutId);
       }
     }
+  }
+
+  function normalizeRequestAuth(auth) {
+    if (typeof auth === "string") {
+      return {
+        accessToken: "",
+        firebaseSessionToken: "",
+        meetingSessionToken: normalizeText(auth),
+      };
+    }
+    return {
+      accessToken: normalizeText(auth?.accessToken),
+      firebaseSessionToken: normalizeText(auth?.firebaseSessionToken),
+      meetingSessionToken: normalizeText(auth?.meetingSessionToken),
+    };
+  }
+
+  async function resolveRequestAuth(auth) {
+    const normalized = normalizeRequestAuth(auth);
+    if (normalized.accessToken || normalized.firebaseSessionToken || normalized.meetingSessionToken) {
+      return normalized;
+    }
+    try {
+      const workspaceAuth = await ns.firebase?.getWorkspaceRequestAuth?.();
+      const resolved = normalizeRequestAuth(workspaceAuth);
+      if (resolved.accessToken || resolved.firebaseSessionToken || resolved.meetingSessionToken) {
+        return resolved;
+      }
+    } catch {}
+    return normalized;
   }
 
   function buildWorkspaceSessionStorageKey(meetingId) {
@@ -626,9 +670,8 @@
     for (const candidate of candidates) {
       const parsed = candidate.payload;
       const meetingId = normalizeText(parsed?.meetingId);
-      const token = normalizeText(parsed?.meetingSessionToken);
       const expiresAt = normalizeText(parsed?.expiresAt);
-      if (!meetingId || !token) {
+      if (!meetingId) {
         if (candidate.source !== "url-hash") {
           issues.push(buildStorageAccessIssue("storage-invalid-payload", {
             key: candidate.key,

@@ -1,6 +1,6 @@
 # 회의 전사 기반 계약
 
-이 문서는 현재 회의 기능의 hosted-only 경계를 짧게 고정합니다. 정식 경로는 `panel -> background open/launch -> hosted workspace -> Firestore/Functions` 하나입니다.
+이 문서는 현재 회의 기능의 hosted-only 경계를 짧게 고정합니다. 정식 경로는 `panel -> background open/authorize -> hosted workspace -> Firestore/Functions` 하나입니다.
 
 ## 1. 실행 경계
 
@@ -12,8 +12,8 @@
 
 ### Hosted Workspace
 
-- hosted 작업실은 `launch token` 또는 workspace hash 토큰으로 부팅합니다.
-- 작업실은 `issueInovaMeetingWorkspaceAuth`로 Firebase custom token을 받아 Firestore `meeting/job/artifact` 문서를 직접 구독합니다.
+- hosted 작업실은 clean URL(`meetingId`, optional `jobId`, optional `share`)로 부팅합니다.
+- 작업실은 먼저 확장 bridge와 handshake하고, background가 `authorizeInovaMeetingWorkspaceAccess`로 `owner-secure` 또는 `share-readonly` 권한을 판정한 뒤 Firebase custom token을 받아 Firestore `meeting/job/artifact` 문서를 직접 구독합니다.
 - 녹음은 브라우저 표준 `getUserMedia + MediaRecorder` 경로만 사용합니다.
 - 로컬 큐와 브라우저 상태는 `chrome.storage.local.meetingStateByMeetingId`만 사용합니다.
 
