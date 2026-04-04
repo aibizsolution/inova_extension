@@ -37,6 +37,7 @@
       error: normalizeText(nextRecord.error),
       jobId: normalizeText(nextRecord.jobId),
       meetingId: normalizeText(nextRecord.meetingId),
+      notesContextItems: normalizeNotesContextItems(nextRecord.notesContextItems),
       notesDegradedReason: normalizeText(nextRecord.notesDegradedReason),
       notesGeneratedAt: normalizeText(nextRecord.notesGeneratedAt),
       notesRevisionRequest: normalizeTextBlock(nextRecord.notesRevisionRequest),
@@ -59,6 +60,7 @@
       error: normalizeText(job.error),
       jobId: normalizeText(job.jobId),
       meetingNotes: normalizeMeetingNotes(job.meetingNotes),
+      notesContextItems: normalizeNotesContextItems(job.notesContextItems || job?.context?.notesContextItems),
       notesDegradedReason: normalizeText(job.notesDegradedReason),
       notesGeneratedAt: normalizeText(job.notesGeneratedAt),
       notesRevisionRequest: ns.shared.normalizeTextBlock(job.notesRevisionRequest),
@@ -94,6 +96,7 @@
     return {
       artifactId: normalizeText(artifact.artifactId),
       notes: normalizeMeetingNotes(artifact.notes),
+      notesContextItems: normalizeNotesContextItems(artifact.notesContextItems),
       notesDegradedReason: normalizeText(artifact.notesDegradedReason),
       notesGeneratedAt: normalizeText(artifact.notesGeneratedAt),
       notesRevisionRequest: ns.shared.normalizeTextBlock(artifact.notesRevisionRequest),
@@ -664,6 +667,33 @@
     ].filter(Boolean);
   }
 
+  function normalizeNotesContextItem(item) {
+    const nextItem = item && typeof item === "object" ? item : {};
+    return {
+      contextId: normalizeText(nextItem.contextId || nextItem.id),
+      createdAt: normalizeText(nextItem.createdAt),
+      text: normalizeTextBlock(nextItem.text || nextItem.context || nextItem.value),
+      updatedAt: normalizeText(nextItem.updatedAt || nextItem.createdAt),
+    };
+  }
+
+  function normalizeNotesContextItems(input) {
+    const seen = new Set();
+    const items = [];
+    for (const item of Array.isArray(input) ? input : []) {
+      const normalized = normalizeNotesContextItem(item);
+      const key = normalizeText(normalized.contextId || normalized.text).toLowerCase();
+      if (!normalized.text || (key && seen.has(key))) {
+        continue;
+      }
+      if (key) {
+        seen.add(key);
+      }
+      items.push(normalized);
+    }
+    return items;
+  }
+
   function buildMeetingOverviewSection(notes) {
     const purpose = normalizeTextBlock(notes?.meetingMeta?.purpose);
     const overview = normalizeTextBlock(notes?.overview);
@@ -939,7 +969,7 @@
     } else if (options.hasNotesValue) {
       pushStep("회의 정리", "done", options.generatedAt ? `마지막 정리 ${options.generatedAt}` : "회의 정리가 준비됐습니다.");
     } else if (options.hasSegmentContent) {
-      pushStep("회의 정리", isBusy ? "current" : "warning", isBusy ? "전사를 바탕으로 회의 정리를 만드는 중입니다." : "수정 요청으로 같은 전사를 보완 정리할 수 있습니다.", isBusy ? "진행" : "보완");
+      pushStep("회의 정리", isBusy ? "current" : "warning", isBusy ? "전사를 바탕으로 회의 정리를 만드는 중입니다." : "추가 맥락으로 같은 전사를 더 정확한 문서로 업데이트할 수 있습니다.", isBusy ? "진행" : "보완");
     } else {
       pushStep("회의 정리", isBusy ? "current" : "pending", "전사 확보 후 생성됩니다.");
     }
@@ -1129,7 +1159,7 @@
 
   function buildDetailView(state, activeEntry) {
     if (!activeEntry) {
-      return { badgeLabel: "대기", badgeStatus: "idle", chunkProgress: null, meta: [], meetingNotes: null, notesMeta: null, notesRevisionRequest: "", notesRevisionRequestedAt: "", notice: "왼쪽에서 기록을 선택해 주세요.", noticeTone: "", recordMemo: "", recordTitle: "", segments: [], showRecordActions: false, summary: "", title: "기록을 선택해 주세요", transcriptText: "" };
+      return { badgeLabel: "대기", badgeStatus: "idle", chunkProgress: null, meta: [], meetingNotes: null, notesContextItems: [], notesMeta: null, notice: "왼쪽에서 기록을 선택해 주세요.", noticeTone: "", recordMemo: "", recordTitle: "", segments: [], showRecordActions: false, summary: "", title: "기록을 선택해 주세요", transcriptText: "" };
     }
     const pending = activeEntry.pending;
     const remote = activeEntry.remote;
@@ -1140,12 +1170,11 @@
     const canManageRemoteRecord = Boolean(remote?.jobId) && !["queued", "processing"].includes(remoteStatus);
     const showRecordActions = Boolean((pending?.requestId && !remote?.jobId) || canManageRemoteRecord);
     const detailMemo = normalizeTextBlock(state.currentJob?.sharedMemoSnapshot || pending?.sharedMemoSnapshot);
-    const remoteNotesRevisionRequest = normalizeTextBlock(remote?.notesRevisionRequest);
-    const remoteNotesRevisionRequestedAt = normalizeText(remote?.notesRevisionRequestedAt);
+    const remoteNotesContextItems = normalizeNotesContextItems(remote?.notesContextItems);
     const pendingChunkProgress = buildChunkProgressModel(null, pending);
 
     if (!remote?.jobId && pending) {
-      return { badgeLabel: formatStatusLabel(pending.status), badgeStatus: normalizeStatus(pending.status), chunkProgress: pendingChunkProgress, meta: detailMeta, meetingNotes: null, notesMeta: null, notesRevisionRequest: remoteNotesRevisionRequest, notesRevisionRequestedAt: remoteNotesRevisionRequestedAt, notice: buildPendingNotice(pending), noticeTone: pending.status === "failed" ? "error" : "highlight", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions, summary: buildPendingSummary(pending), title: detailTitle, transcriptText: "" };
+      return { badgeLabel: formatStatusLabel(pending.status), badgeStatus: normalizeStatus(pending.status), chunkProgress: pendingChunkProgress, meta: detailMeta, meetingNotes: null, notesContextItems: remoteNotesContextItems, notesMeta: null, notice: buildPendingNotice(pending), noticeTone: pending.status === "failed" ? "error" : "highlight", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions, summary: buildPendingSummary(pending), title: detailTitle, transcriptText: "" };
     }
 
     const normalizedJob = state.currentJob || normalizeJob(remote, detailTitle);
@@ -1162,15 +1191,20 @@
       generatedAt: normalizeText(normalizedArtifact?.notesGeneratedAt || normalizedJob?.notesGeneratedAt),
       status: normalizeText(normalizedArtifact?.notesStatus || normalizedJob?.notesStatus),
     };
-    const notesRevisionRequest = normalizeTextBlock(normalizedArtifact?.notesRevisionRequest || normalizedJob?.notesRevisionRequest || remoteNotesRevisionRequest);
-    const notesRevisionRequestedAt = normalizeText(normalizedArtifact?.notesRevisionRequestedAt || normalizedJob?.notesRevisionRequestedAt || remoteNotesRevisionRequestedAt);
+    const notesContextItems = normalizeNotesContextItems(
+      normalizedArtifact?.notesContextItems?.length
+        ? normalizedArtifact.notesContextItems
+        : normalizedJob?.notesContextItems?.length
+          ? normalizedJob.notesContextItems
+          : remoteNotesContextItems
+    );
     const remoteChunkProgress = buildChunkProgressModel(normalizedJob, pending);
 
     if (normalizeText(normalizedJob?.status) === "failed") {
-      return { badgeLabel: "오류", badgeStatus: "failed", chunkProgress: remoteChunkProgress, meta: detailMeta, meetingNotes: null, notesMeta, notesRevisionRequest, notesRevisionRequestedAt, notice: normalizeText(normalizedJob?.error || pending?.lastError) || "회의 처리 중 오류가 발생했습니다.", noticeTone: "error", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions, summary: "", title: detailTitle, transcriptText: "" };
+      return { badgeLabel: "오류", badgeStatus: "failed", chunkProgress: remoteChunkProgress, meta: detailMeta, meetingNotes: null, notesContextItems, notesMeta, notice: normalizeText(normalizedJob?.error || pending?.lastError) || "회의 처리 중 오류가 발생했습니다.", noticeTone: "error", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions, summary: "", title: detailTitle, transcriptText: "" };
     }
     if (["queued", "processing"].includes(normalizeText(normalizedJob?.status))) {
-      return { badgeLabel: processingHealth.isStalled ? "정체 의심" : formatStatusLabel(normalizedJob.status), badgeStatus: normalizeStatus(normalizedJob.status), chunkProgress: remoteChunkProgress, meta: detailMeta, meetingNotes: null, notesMeta, notesRevisionRequest, notesRevisionRequestedAt, notice: buildProcessingNotice(normalizedJob, pending), noticeTone: processingHealth.isStalled ? "warning" : "highlight", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions: false, summary: "", title: detailTitle, transcriptText: "" };
+      return { badgeLabel: processingHealth.isStalled ? "정체 의심" : formatStatusLabel(normalizedJob.status), badgeStatus: normalizeStatus(normalizedJob.status), chunkProgress: remoteChunkProgress, meta: detailMeta, meetingNotes: null, notesContextItems, notesMeta, notice: buildProcessingNotice(normalizedJob, pending), noticeTone: processingHealth.isStalled ? "warning" : "highlight", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions: false, summary: "", title: detailTitle, transcriptText: "" };
     }
     let completionNotice = state.notice.text || "회의 정리가 준비됐습니다.";
     let completionTone = state.notice.tone || "highlight";
@@ -1187,9 +1221,8 @@
       chunkProgress: null,
       meta: detailMeta,
       meetingNotes,
+      notesContextItems,
       notesMeta,
-      notesRevisionRequest,
-      notesRevisionRequestedAt,
       notice: completionNotice,
       noticeTone: completionTone,
       recordMemo: detailMemo,
@@ -1268,16 +1301,31 @@
   function renderMeetingNotes(refs, detailView, state) {
     const normalized = normalizeMeetingNotes(detailView.meetingNotes);
     const hasNotesValue = hasMeetingNotes(normalized);
-    const canRequestNotesRevision = Boolean(state.currentJob?.jobId) && TERMINAL_REMOTE_STATUSES.has(normalizeText(state.currentJob?.status));
+    const canUpdateMeetingNotes = Boolean(state.currentJob?.jobId) && TERMINAL_REMOTE_STATUSES.has(normalizeText(state.currentJob?.status));
+    const notesContextItems = normalizeNotesContextItems(
+      state.currentArtifact?.notesContextItems?.length
+        ? state.currentArtifact.notesContextItems
+        : state.currentJob?.notesContextItems
+    );
     refs.copyMeetingNotesButton.disabled = !hasNotesValue;
-    refs.requestNotesRevisionButton.disabled = !canRequestNotesRevision || state.busy.regenerateNotes;
-    refs.requestNotesRevisionButton.textContent = state.busy.regenerateNotes
-      ? "정리 중"
-      : "수정 요청";
+    refs.manageNotesContextButton.disabled = !canUpdateMeetingNotes || state.busy.regenerateNotes;
+    refs.manageNotesContextButton.textContent = notesContextItems.length
+      ? `추가 맥락 ${notesContextItems.length}개`
+      : "추가 맥락";
+    refs.updateMeetingNotesButton.disabled = !canUpdateMeetingNotes || state.busy.regenerateNotes;
+    refs.updateMeetingNotesButton.textContent = state.busy.regenerateNotes
+      ? "업데이트 중"
+      : "회의록 업데이트";
+    if (refs.meetingNotesContextHint) {
+      refs.meetingNotesContextHint.hidden = !notesContextItems.length;
+      refs.meetingNotesContextHint.textContent = notesContextItems.length
+        ? `추가 맥락 ${notesContextItems.length}개 반영됨`
+        : "";
+    }
     if (!hasNotesValue) {
       refs.meetingNotesOverview.hidden = true;
       refs.meetingNotesOverview.innerHTML = "";
-      refs.meetingNotesSections.innerHTML = `<div class="notice-box" data-tone="warning">전사는 준비됐지만 회의 정리 문서로 묶을 내용은 충분하지 않았습니다. 원문 검토를 확인하거나 수정 요청으로 원하는 정리 방향을 남겨 보세요.</div>`;
+      refs.meetingNotesSections.innerHTML = `<div class="notice-box" data-tone="warning">전사는 준비됐지만 회의 정리 문서로 묶을 내용은 충분하지 않았습니다. 원문 검토를 확인하거나 추가 맥락으로 배경을 보완한 뒤 회의록 업데이트를 눌러 보세요.</div>`;
       return false;
     }
     const overviewMarkup = renderNotesOverview(normalized);

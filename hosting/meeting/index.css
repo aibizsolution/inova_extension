@@ -1212,18 +1212,27 @@ select:disabled {
 .notes-toolbar {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: space-between;
   align-items: center;
   gap: 12px;
   margin-bottom: 14px;
 }
 
+.notes-toolbar__hint {
+  flex: 1 1 220px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
 .notes-toolbar__actions {
   display: flex;
+  flex: 0 0 auto;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
-  width: 100%;
 }
 
 .review-header__actions {
@@ -1819,11 +1828,66 @@ select:disabled {
   margin-top: 18px;
 }
 
-.notes-revision-dialog {
+.notes-context-dialog {
   width: min(640px, 100%);
 }
 
-.notes-revision-dialog__label {
+.notes-context-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.notes-context-item {
+  display: grid;
+  gap: 10px;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+
+.notes-context-item__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.notes-context-item__title {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.notes-context-item__meta {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.notes-context-item__body {
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.notes-context-item__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.notes-context-empty {
+  margin: 18px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.notes-context-dialog__label {
   display: block;
   margin-top: 18px;
   color: var(--text);
@@ -1831,7 +1895,7 @@ select:disabled {
   font-weight: 700;
 }
 
-.notes-revision-dialog__input {
+.notes-context-dialog__input {
   width: 100%;
   min-height: 180px;
   margin-top: 8px;
@@ -1845,13 +1909,20 @@ select:disabled {
   resize: vertical;
 }
 
-.notes-revision-dialog__input:focus {
+.notes-context-dialog__input:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(44, 92, 229, 0.14);
 }
 
-.notes-revision-dialog__hint {
+.notes-context-dialog__editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.notes-context-dialog__hint {
   margin: 10px 0 0;
   color: var(--muted);
   font-size: 12px;
