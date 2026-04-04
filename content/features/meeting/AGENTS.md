@@ -24,6 +24,7 @@
 - 실시간 listener permission 오류 재시도는 기존 작업실 access payload를 지운 뒤 막히지 않게, 같은 meeting auth로 강제 재로그인하는 흐름을 유지한다.
 - hosted 회의 작업실의 `파일 불러오기`는 로컬/상용 모두 지원 대상이다. origin이 다르다는 이유만으로 버튼 표시나 import 실행을 막지 않는다.
 - owner-secure hosted 작업실은 `meetingId`만으로 진입하거나 새로고침해도 업로드/삭제/수정이 계속 동작하도록 `authorizeInovaMeetingWorkspaceAccess`가 `meetingSessionToken`을 함께 돌려주고, 작업실은 그 토큰을 복원 세션에 저장한다.
+- hosted 작업실의 오디오 import는 duration 메타데이터가 비어 있는 파일도 실제 decode로 길이를 다시 계산해 본다. 둘 다 실패할 때만 `길이를 확인하지 못해 바로 전사할 수 없습니다`를 유지한다.
 
 ## 관련 functions 경로
 - `functions/features/meeting/meeting-launch-service.js`

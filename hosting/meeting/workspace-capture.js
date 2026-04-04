@@ -205,6 +205,24 @@
       }
 
       async function measureAudioDuration(file) {
+        try {
+          return await measureAudioDurationFromMetadata(file);
+        } catch (metadataError) {
+          logDebug("workspace.import.duration.metadata-fallback", {
+            error: metadataError,
+            fileName: normalizeText(file?.name),
+            mimeType: normalizeText(file?.type),
+            sizeBytes: Math.max(0, Number(file?.size) || 0),
+          });
+          const fallbackMeasureDuration = ns.audioChunker?.measureAudioDuration;
+          if (typeof fallbackMeasureDuration !== "function") {
+            throw metadataError;
+          }
+          return fallbackMeasureDuration(file);
+        }
+      }
+
+      async function measureAudioDurationFromMetadata(file) {
         return new Promise((resolve, reject) => {
           const objectUrl = globalObject.URL.createObjectURL(file);
           const audio = globalObject.document.createElement("audio");
