@@ -8,12 +8,6 @@
       : renderEmptyState(normalized);
     const workspacePending = normalized.pending.active && normalized.pending.action === "open-workspace";
     const workspaceButtonLabel = workspacePending ? "작업실 여는 중..." : "새 회의하기";
-    const progressNotice = normalized.pending.active
-      ? `<article class="inova-release-card inova-release-card__notice is-info">
-          <strong>새 탭을 여는 중입니다.</strong>
-          <p>${escapeHtml(buildPendingMessage(normalized.pending))}</p>
-        </article>`
-      : "";
     const feedbackNotice = normalized.feedback.text && normalized.feedback.tone === "error"
       ? `<div class="inova-release-card inova-release-card__notice">${escapeHtml(normalized.feedback.text)}</div>`
       : "";
@@ -38,7 +32,6 @@
           </button>
         </div>
         <div class="inova-meeting-stack">
-          ${progressNotice}
           ${feedbackNotice}
           ${normalized.degradedNotice ? `<div class="inova-release-card inova-release-card__notice is-info">${escapeHtml(normalized.degradedNotice)}</div>` : ""}
           ${normalized.error ? `<div class="inova-release-card inova-release-card__notice">${escapeHtml(normalized.error)}</div>` : ""}
@@ -231,25 +224,6 @@
       return "실시간 구독에 실패해 요청형 회의록 목록 읽기로 계속 표시하고 있습니다.";
     }
     return "회의록 목록을 제한된 상태로 표시하고 있습니다.";
-  }
-
-  function buildPendingMessage(pending) {
-    if (pending.action === "open-result") {
-      return pending.title
-        ? `${pending.title} 결과 화면을 준비하고 있습니다.`
-        : "결과 화면을 준비하고 있습니다.";
-    }
-    if (pending.action === "share") {
-      return pending.title
-        ? `${pending.title} 공유 링크를 준비하고 있습니다.`
-        : "공유 링크를 준비하고 있습니다.";
-    }
-    if (pending.action === "revoke-share") {
-      return pending.title
-        ? `${pending.title} 공유 링크를 해제하고 있습니다.`
-        : "공유 링크를 해제하고 있습니다.";
-    }
-    return "새 작업실을 준비하고 있습니다.";
   }
 
   function formatStatusLabel(status) {
