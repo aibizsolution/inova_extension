@@ -68,6 +68,7 @@
         "content/features/prompt-library/prompt-manager.js",
         "content/features/prompt-store/store-manager.js",
         "content/release-manager.js",
+        "content/provider-identity-sync.js",
         "content/prompt-hub-state.js",
         "content/prompt-hub-panel.js",
         "content/prompt-hub-controller.js",

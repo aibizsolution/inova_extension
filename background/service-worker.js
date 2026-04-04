@@ -623,7 +623,11 @@ async function resolveMeetingProviderIdentity(providerIdentity) {
     return normalized;
   }
   const persisted = await loadStoredMeetingProviderIdentity();
-  return persisted.providerUserKey ? persisted : normalized;
+  if (persisted.providerUserKey) {
+    return persisted;
+  }
+  const activeInovaIdentity = await requestMeetingProviderIdentityFromInovaTabs();
+  return activeInovaIdentity.providerUserKey ? activeInovaIdentity : normalized;
 }
 
 function normalizeProviderIdentity(providerIdentity) {
@@ -678,6 +682,36 @@ async function persistMeetingProviderIdentity(providerIdentity) {
     void error;
   }
   return normalized;
+}
+
+async function requestMeetingProviderIdentityFromInovaTabs() {
+  if (!chrome.tabs?.query || !chrome.tabs?.sendMessage) {
+    return normalizeProviderIdentity(null);
+  }
+  let tabs = [];
+  try {
+    tabs = await chrome.tabs.query({ url: `${INOVA_ORIGIN}/*` });
+  } catch (error) {
+    void error;
+    return normalizeProviderIdentity(null);
+  }
+  for (const tab of Array.isArray(tabs) ? tabs : []) {
+    const tabId = Number(tab?.id) || 0;
+    if (!tabId) continue;
+    try {
+      const response = await chrome.tabs.sendMessage(tabId, {
+        type: "inova-meeting:get-provider-identity",
+      });
+      const normalized = normalizeProviderIdentity(response?.providerIdentity);
+      if (normalized.providerUserKey) {
+        await persistMeetingProviderIdentity(normalized);
+        return normalized;
+      }
+    } catch (error) {
+      void error;
+    }
+  }
+  return normalizeProviderIdentity(null);
 }
 
 function isAllowedSender(message, sender) {
