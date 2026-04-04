@@ -4256,6 +4256,62 @@
     }
   }
 
+  function isLegacyMeetingResultMutationError(error) {
+    const message = normalizeText(error instanceof Error ? error.message : error?.message);
+    return message === "수정할 회의 결과 내용이 비어 있어요.";
+  }
+
+  function applyLocalSelectedRecordReviewMutation(patch = {}, options = {}) {
+    const hasSharedMemo = Object.prototype.hasOwnProperty.call(patch, "sharedMemo");
+    const hasContextItems = Object.prototype.hasOwnProperty.call(patch, "contextItems");
+    const nextSharedMemo = hasSharedMemo
+      ? normalizeTextBlock(patch.sharedMemo).slice(0, MAX_SHARED_MEMO_CHARS)
+      : "";
+    const nextContextItems = hasContextItems
+      ? cloneNotesContextItems(patch.contextItems)
+      : [];
+    const entry = findHistoryEntry(state, state.selectedRecordId);
+    const currentJobId = normalizeText(entry?.remote?.jobId || state.currentJob?.jobId);
+
+    if (state.currentJob) {
+      if (hasSharedMemo) {
+        state.currentJob.sharedMemoSnapshot = nextSharedMemo;
+      }
+      if (hasContextItems) {
+        state.currentJob.notesContextItems = nextContextItems;
+      }
+    }
+    if (state.currentArtifact && hasContextItems) {
+      state.currentArtifact.notesContextItems = nextContextItems;
+    }
+    if (currentJobId) {
+      state.records = state.records.map((record) => (
+        normalizeText(record.jobId) === currentJobId
+          ? normalizeRecord({
+              ...record,
+              notesContextItems: hasContextItems ? nextContextItems : record.notesContextItems,
+              sharedMemoSnapshot: hasSharedMemo ? nextSharedMemo : record.sharedMemoSnapshot,
+            })
+          : record
+      ));
+    }
+
+    const activeEntry = findHistoryEntry(state, state.selectedRecordId);
+    syncSelectedRecordReviewState(activeEntry);
+    if (options.resetRecordMemoDraft) {
+      state.selectedRecordMemo.draft = state.selectedRecordMemo.saved;
+    }
+    if (options.resetNotesContextDraft) {
+      state.notesContext.draft = "";
+      state.notesContext.editingId = "";
+    }
+    logDebug("workspace.result.update.legacy-fallback", {
+      contextItemCount: hasContextItems ? nextContextItems.length : undefined,
+      jobId: currentJobId,
+      sharedMemoApplied: hasSharedMemo,
+    });
+  }
+
   async function saveSelectedRecordMemo(options = {}) {
     const entry = findHistoryEntry(state, state.selectedRecordId);
     if (!entry?.remote?.jobId) {
@@ -4283,6 +4339,18 @@
       }
       return true;
     } catch (error) {
+      if (isLegacyMeetingResultMutationError(error)) {
+        applyLocalSelectedRecordReviewMutation({ sharedMemo: nextMemo }, { resetRecordMemoDraft: true });
+        if (!options.quiet) {
+          setNotice(
+            nextMemo
+              ? "메모를 저장했습니다. 회의록 업데이트 때 함께 반영됩니다."
+              : "메모를 비웠습니다. 회의록 업데이트 때 함께 반영됩니다.",
+            "highlight"
+          );
+        }
+        return true;
+      }
       setNotice(error instanceof Error ? error.message : "메모를 저장하지 못했어요.", "error");
       return false;
     } finally {
@@ -4319,6 +4387,17 @@
       }
       return true;
     } catch (error) {
+      if (isLegacyMeetingResultMutationError(error)) {
+        applyLocalSelectedRecordReviewMutation(
+          { contextItems: nextItems },
+          { resetNotesContextDraft: Boolean(options.clearDraft) }
+        );
+        setNotice(
+          `${normalizeText(options.successMessage) || "추가 맥락을 저장했습니다."} 회의록 업데이트 때 함께 반영됩니다.`,
+          "highlight"
+        );
+        return true;
+      }
       setNotice(error instanceof Error ? error.message : "추가 맥락을 저장하지 못했어요.", "error");
       return false;
     } finally {
@@ -4339,9 +4418,16 @@
     state.busy.regenerateNotes = true;
     applyRender();
     try {
+      const persistedSharedMemo = normalizeTextBlock(
+        global.document.activeElement === refs.detailMemoInput
+          ? refs.detailMemoInput.value
+          : state.selectedRecordMemo.saved
+      ).slice(0, MAX_SHARED_MEMO_CHARS);
       const payload = await postJson(global, CONFIG.regenerateNotesUrl, {
+        contextItems: cloneNotesContextItems(state.notesContext.items),
         jobId: entry.remote.jobId,
         meetingId: state.session.meetingId,
+        sharedMemo: persistedSharedMemo,
       }, state.session.meetingSessionToken);
       applyMeetingResultPayload(payload, {
         resetNotesContextDraft: true,
