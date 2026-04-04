@@ -226,7 +226,7 @@
 
 - 확장프로그램은 `manifest V3`로 구성되어 있습니다.
 - `popup/index.js`는 `settings.meetingWorkspaceTarget`을 읽고, hosted 회의 작업실 연결 대상을 `상용 호스팅 / 로컬 호스팅` 중 하나로 저장합니다.
-- `hosting/meeting/index.js`는 `launch` 또는 clean URL의 `meetingId`, `jobId`, workspace hash 토큰을 기준으로 hosted 세션을 부팅하고, `getUserMedia + MediaRecorder`로 마이크 녹음을 처리합니다.
+- `hosting/meeting/index.js`는 hosted 회의 작업실의 composition root로서 state/DOM 공통 render와 controller wiring을 맡고, 실제 workflow 책임은 `hosting/meeting/workspace-session.js`, `hosting/meeting/workspace-realtime.js`, `hosting/meeting/workspace-capture.js`, `hosting/meeting/workspace-pending-uploads.js`, `hosting/meeting/workspace-mutations.js`, `hosting/meeting/workspace-debug.js`로 나눕니다. 마이크 녹음은 `workspace-capture.js`의 `getUserMedia + MediaRecorder` 경로가 담당합니다.
 - hosted 회의 작업실은 `공용 메모 저장 -> 녹음 종료와 동시에 로컬 큐 적재 -> 온라인이면 즉시 job 생성 -> 원격 처리와 별개로 다음 녹음 허용` 흐름으로 동작합니다.
 - `content/main.js`는 현재 URL의 `sid`를 기준으로 대화를 나누고, `.chat-message--user`를 실시간으로 수집합니다.
 - `content/features/prompt-library/prompt-manager.js`는 `promptLibrary`를 관리하고, 선택한 요청을 현재 대화 입력창에 주입합니다.

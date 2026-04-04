@@ -16,6 +16,12 @@ const requiredFiles = [
   "popup/index.js",
   path.join("hosting", "meeting", "index.html"),
   path.join("hosting", "meeting", "index.js"),
+  path.join("hosting", "meeting", "workspace-session.js"),
+  path.join("hosting", "meeting", "workspace-realtime.js"),
+  path.join("hosting", "meeting", "workspace-capture.js"),
+  path.join("hosting", "meeting", "workspace-pending-uploads.js"),
+  path.join("hosting", "meeting", "workspace-mutations.js"),
+  path.join("hosting", "meeting", "workspace-debug.js"),
   path.join("hosting", "meeting", "shared.js"),
   path.join("scripts", "install-git-hooks.js"),
   "shared/prompt-library.js",
@@ -96,9 +102,33 @@ const codeChecks = [
     file: "hosting/meeting/index.js",
     patterns: [
       /createPendingUploadStore/,
-      /getUserMedia/,
-      /MediaRecorder/,
+      /createControllers/,
+      /workspaceCapture|workspacePendingUploads|workspaceSession|workspaceRealtime|workspaceMutations|workspaceDebug/,
     ],
+  },
+  {
+    file: "hosting/meeting/workspace-session.js",
+    patterns: [/bootSession/, /persistSession/, /replaceCleanUrl/],
+  },
+  {
+    file: "hosting/meeting/workspace-realtime.js",
+    patterns: [/refreshWorkspace/, /handleBackgroundRefresh/, /disposeRealtime/],
+  },
+  {
+    file: "hosting/meeting/workspace-capture.js",
+    patterns: [/getUserMedia/, /MediaRecorder/, /startCapture/, /stopCapture/],
+  },
+  {
+    file: "hosting/meeting/workspace-pending-uploads.js",
+    patterns: [/createOrUpdatePendingUpload/, /retryPendingUploads/, /syncPendingUploadsWithRemote/],
+  },
+  {
+    file: "hosting/meeting/workspace-mutations.js",
+    patterns: [/saveMeetingTitle/, /saveMeetingMemo/, /saveRecordTitleForEntry/, /renderNotesContextList/],
+  },
+  {
+    file: "hosting/meeting/workspace-debug.js",
+    patterns: [/setup/, /handlePanelClick/, /exposeDebugApi/],
   },
   {
     file: "content/route-sync.js",

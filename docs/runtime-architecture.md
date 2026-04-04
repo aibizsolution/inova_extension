@@ -34,9 +34,9 @@
 
 ### Hosted Meeting App
 
-- 위치: `hosting/meeting/index.html`, `hosting/meeting/index.js`
-- 역할: launch token 교환, hosted session 복원, Firebase Auth bootstrap, Firestore 문서 구독, 회의 녹음 시작/종료, 전사 접수, 결과 리스트, 선택한 결과의 발화 구간 상세 렌더링, 화자별 AI 정리, 전체 복사
-- 특징: 회의 제어와 상세 보기를 확장 UI에서 분리한 메인 작업실이다. `meetingSessionToken`으로 회의 명령 API를 호출하고, 작업실 상태는 Firebase custom token으로 로그인한 뒤 Firestore `meeting/job/artifact` 문서를 직접 구독한다. 마이크 녹음은 브라우저 표준 `getUserMedia + MediaRecorder` 경로를 사용한다.
+- 위치: `hosting/meeting/index.html`, `hosting/meeting/index.js`, `hosting/meeting/workspace-*.js`
+- 역할: `index.js`는 composition root로서 초기 state/DOM/cache/common render/controller wiring을 맡고, `workspace-session`, `workspace-realtime`, `workspace-capture`, `workspace-pending-uploads`, `workspace-mutations`, `workspace-debug`가 세션, 실시간 구독, 녹음/가져오기, 로컬 queue, 사용자 mutation, debug 부수효과를 각각 소유한다.
+- 특징: 회의 제어와 상세 보기를 확장 UI에서 분리한 메인 작업실이다. `meetingSessionToken`으로 회의 명령 API를 호출하고, 작업실 상태는 Firebase custom token으로 로그인한 뒤 Firestore `meeting/job/artifact` 문서를 직접 구독한다. 마이크 녹음은 `workspace-capture.js`가 브라우저 표준 `getUserMedia + MediaRecorder` 경로로 처리한다.
 
 ### Content Script
 
