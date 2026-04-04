@@ -109,6 +109,7 @@
 - clean URL이나 공유 URL을 직접 붙여 넣어 열어도, 확장 bridge와 i-Nova 로그인 확인이 통과하지 않으면 blocked 상태로 남깁니다.
 - direct clean URL을 새 브라우저 프로필이나 새 확장 세션에서 바로 열었을 때 `i-Nova 사용자 정보를 확인해야 합니다`가 보이면, 로그인된 i-Nova 탭이나 패널을 한 번 연 뒤 다시 열어 현재 사용자 식별을 확장 저장소에 다시 채워야 합니다.
 - content script는 i-Nova 탭이 로드되거나 다시 포커스를 받을 때 현재 `providerIdentity`를 확장 저장소에 자동으로 캐시합니다. 그래서 확장 새로고침 직후에는 i-Nova 탭도 한 번 새로고침해 두면 hosted 작업실 secure authorize가 더 안정적으로 바로 붙습니다.
+- 현재 i-Nova 사용자 식별은 브라우저 저장소의 `auth`/`userInfo` payload에서 읽고, `userKey`뿐 아니라 `fullUserKey`/`providerUserKey` 같은 변형 키도 함께 허용합니다. 로그인은 살아 있는데 작업실만 `identity-required`로 막히면 이 경계부터 먼저 확인합니다.
 - `대화 안에서 찾기`
   - 지금 보고 있는 대화 안에서만 질문을 검색합니다.
   - 결과를 클릭하면 해당 질문 위치로 이동하고, 좁은 화면에서는 패널을 잠시 접어 원문을 보기 쉽게 합니다.

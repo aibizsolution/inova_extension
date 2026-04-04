@@ -12,10 +12,30 @@
   }
 
   function normalizeIdentity(rawIdentity) {
-    const providerUserKey = namespace.session.normalizeText(rawIdentity?.userKey || "");
-    const email = namespace.session.normalizeText(rawIdentity?.email || "").toLowerCase();
-    const displayName = namespace.session.normalizeText(rawIdentity?.name || "");
-    const numericUserId = Number.isFinite(Number(rawIdentity?.id)) ? Number(rawIdentity.id) : null;
+    const providerUserKey = namespace.session.normalizeText(
+      rawIdentity?.userKey
+      || rawIdentity?.fullUserKey
+      || rawIdentity?.providerUserKey
+      || rawIdentity?.provider_key
+      || ""
+    );
+    const email = namespace.session.normalizeText(
+      rawIdentity?.email
+      || rawIdentity?.userEmail
+      || rawIdentity?.mail
+      || ""
+    ).toLowerCase();
+    const displayName = namespace.session.normalizeText(
+      rawIdentity?.name
+      || rawIdentity?.displayName
+      || rawIdentity?.userName
+      || ""
+    );
+    const numericUserId = Number.isFinite(Number(rawIdentity?.id))
+      ? Number(rawIdentity.id)
+      : Number.isFinite(Number(rawIdentity?.userId))
+        ? Number(rawIdentity.userId)
+        : null;
 
     return {
       provider: "inova",
