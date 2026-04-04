@@ -1412,10 +1412,14 @@ select:disabled {
 
 .notes-list {
   margin: 0;
-  padding-left: 22px;
+  padding-left: 28px;
   display: grid;
   gap: 8px;
   line-height: 1.6;
+}
+
+.notes-list > li {
+  padding-left: 4px;
 }
 
 .notes-list__item {
@@ -1481,10 +1485,14 @@ select:disabled {
 
 .notes-flow__points {
   margin: 0;
-  padding-left: 22px;
+  padding-left: 28px;
   display: grid;
   gap: 6px;
   line-height: 1.6;
+}
+
+.notes-flow__points > li {
+  padding-left: 4px;
 }
 
 .transcript-box {
