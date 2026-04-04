@@ -47,6 +47,7 @@
 
 ## 최소 검증 방법
 - 팝업 target 설정, 회의 탭 목록, hosted meeting 진입, 결과 조회를 확인한다.
+- 상용 회의 데이터 정리 여부는 `npm run check:meeting-data`로 Firestore meeting 컬렉션과 Storage `tmp/meetings/` prefix 잔존 건수를 함께 확인한다.
 
 ## 언제 사용자에게 다시 물을지
 - 패널 회의 허브 문제인지 hosted 작업실 문제인지, auth 문제인지 전사 backend 문제인지 모호할 때만 확인한다.
