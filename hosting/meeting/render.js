@@ -469,23 +469,6 @@
     return "";
   }
 
-  function buildCompletedDetailMeta(meta, segmentCount) {
-    const items = [];
-    const normalizedSegmentCount = Math.max(0, Number(segmentCount) || 0);
-    if (normalizedSegmentCount > 0) {
-      items.push(`원문 ${normalizedSegmentCount}개`);
-    }
-    const generatedAt = formatDateTime(normalizeText(meta?.generatedAt), "");
-    if (generatedAt) {
-      items.push(`마지막 정리 ${generatedAt}`);
-    }
-    const degradedReason = normalizeText(meta?.degradedReason);
-    if (degradedReason) {
-      items.push(`품질 주의 ${degradedReason}`);
-    }
-    return items;
-  }
-
   function splitSegmentTextIntoDisplaySentences(text) {
     const normalized = normalizeTextBlock(text).replace(/\s+/g, " ").trim();
     if (!normalized) {
@@ -1136,7 +1119,6 @@
       completionNotice = "전사는 준비됐지만 회의 정리로 묶을 내용은 충분하지 않았습니다.";
       completionTone = "warning";
     }
-    detailMeta.push(...buildCompletedDetailMeta(notesMeta, hasSegmentsValue ? segments.length : 0));
     return {
       badgeLabel: "완료",
       badgeStatus: "succeeded",
@@ -1150,7 +1132,7 @@
       recordTitle: detailTitle,
       segments,
       showRecordActions,
-      summary: hasNotesValue ? buildCompletedRecordSummary(meetingNotes) : "",
+      summary: "",
       title: detailTitle,
       transcriptText,
     };
