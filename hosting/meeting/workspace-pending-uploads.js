@@ -74,6 +74,10 @@
           return false;
         }
       }
+
+      function shouldBypassPendingUploadQueue() {
+        return Boolean(state.auth?.readOnly) || normalizeText(state.auth?.accessMode) === "share-readonly";
+      }
       
       
       function activateDebugLocalQueueSandbox() {
@@ -742,6 +746,15 @@
       async function loadPendingUploads() {
         if (!state.session.meetingId) {
           applyLoadedPendingUploads([]);
+          return;
+        }
+        if (shouldBypassPendingUploadQueue()) {
+          applyLoadedPendingUploads([]);
+          logDebug("workspace.pending-uploads.load.skipped", {
+            accessMode: normalizeText(state.auth?.accessMode),
+            meetingId: state.session.meetingId,
+            reason: "read-only-share",
+          });
           return;
         }
         try {

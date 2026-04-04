@@ -158,6 +158,25 @@
     }
 
     function restoreWorkspaceSession() {
+      if (normalizeText(state.params.shareToken)) {
+        state.sessionRestore = {
+          degradedReason: "",
+          hasBlockingIssue: false,
+          hasWarningIssue: false,
+          issueCodes: [],
+          source: "share-link-bypassed",
+        };
+        logDebug("workspace.session.restore", {
+          degradedReason: "",
+          hasRestoredPayload: false,
+          issueCodes: [],
+          issueCount: 0,
+          meetingId: state.params.meetingId,
+          source: "share-link-bypassed",
+          workspaceToken: Boolean(state.params.workspaceToken),
+        });
+        return;
+      }
       const restored = loadPersistedWorkspaceSession(global, normalizeText(state.params.meetingId), "", state.params.jobId);
       const restoreIssues = Array.isArray(restored?.issues) ? restored.issues : [];
       const degradedReason = normalizeText(restored?.degradedReason);
@@ -366,6 +385,10 @@
 
     function persistWorkspaceSession() {
       if (!state.session.meetingId) {
+        return;
+      }
+      if (state.auth?.readOnly || normalizeText(state.auth?.accessMode) === "share-readonly") {
+        replaceCleanUrl();
         return;
       }
       const entry = findHistoryEntry(state, state.selectedRecordId);
