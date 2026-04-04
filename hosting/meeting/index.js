@@ -97,8 +97,8 @@
     const recordingProfile = resolveRecordingProfile(global);
     return {
       blocked: false,
-      blockedEyebrow: "회의 작업실",
-      blockedTitle: "이 작업실은 패널에서 다시 열어야 합니다",
+      blockedEyebrow: "회의 작업",
+      blockedTitle: "이 회의 화면은 패널에서 다시 열어야 합니다",
       blockedTone: "blocked",
       blockedMessage: "",
       busy: {
@@ -338,15 +338,15 @@
     }
     return {
       eyebrow: "세션 복원 실패",
-      message: `${state.sessionRestore.degradedReason || "브라우저 저장소에서 작업실 세션을 다시 읽지 못했어요."} i-Nova 패널의 회의 허브에서 작업실을 다시 열어 새 세션을 받아 주세요.`,
-      title: "저장된 작업실 세션을 다시 읽지 못했습니다",
+      message: `${state.sessionRestore.degradedReason || "브라우저 저장소에서 회의 작업 세션을 다시 읽지 못했어요."} i-Nova 패널의 회의 허브에서 회의 화면을 다시 열어 새 세션을 받아 주세요.`,
+      title: "저장된 회의 작업 세션을 다시 읽지 못했습니다",
       tone: "warning",
     };
   }
 
   function buildSessionRestoreDegradedNotice() {
-    const reason = normalizeText(state.sessionRestore.degradedReason) || "브라우저 저장소에 작업실 세션을 다시 저장하거나 읽는 중 문제가 있었습니다.";
-    return `${reason} 현재 작업실은 계속 사용할 수 있지만, 다음 새로고침이나 재진입에서 세션 복원이 제한될 수 있습니다.`;
+    const reason = normalizeText(state.sessionRestore.degradedReason) || "브라우저 저장소에 회의 작업 세션을 다시 저장하거나 읽는 중 문제가 있었습니다.";
+    return `${reason} 현재 화면은 계속 사용할 수 있지만, 다음 새로고침이나 재진입에서 세션 복원이 제한될 수 있습니다.`;
   }
 
   function isDebugLocalQueueSandboxRequested() {
@@ -388,8 +388,8 @@
   }
 
   function buildSessionPersistDegradedNotice(reason) {
-    const normalizedReason = normalizeText(reason) || "브라우저 저장소에 작업실 세션을 저장하지 못했어요.";
-    return `${normalizedReason} 현재 탭에서는 작업을 계속할 수 있지만, 다음 새로고침이나 재진입에서는 최신 작업실 상태가 복원되지 않을 수 있습니다.`;
+    const normalizedReason = normalizeText(reason) || "브라우저 저장소에 회의 작업 세션을 저장하지 못했어요.";
+    return `${normalizedReason} 현재 탭에서는 작업을 계속할 수 있지만, 다음 새로고침이나 재진입에서는 최신 회의 상태가 복원되지 않을 수 있습니다.`;
   }
 
   function buildPendingUploadStorageDegradedNotice(reason) {
@@ -411,7 +411,7 @@
     const normalizedContext = normalizePendingUploadQueueContext(context);
     const normalizedReason = normalizeText(reason);
     if (normalizedContext.phase === "load-pending-uploads") {
-      return `${normalizedReason || "브라우저에 남아 있던 로컬 업로드 대기 기록을 완전하게 읽지 못했어요."} 작업실은 계속 열리지만, 일부 임시 녹음이나 업로드 대기 상태는 이번 진입에서 빠져 있을 수 있습니다.`;
+      return `${normalizedReason || "브라우저에 남아 있던 로컬 업로드 대기 기록을 완전하게 읽지 못했어요."} 회의 화면은 계속 열리지만, 일부 임시 녹음이나 업로드 대기 상태는 이번 진입에서 빠져 있을 수 있습니다.`;
     }
     return buildPendingUploadStorageDegradedNotice(normalizedReason);
   }
@@ -462,7 +462,7 @@
       return `${normalizedReason || "선택한 기록의 로컬 원본을 정리하지 못했어요."} 기록 삭제 후에도 브라우저 원본이 다음 새로고침 뒤 다시 보일 수 있습니다.`;
     }
     if (normalizedContext.phase === "workspace-delete") {
-      return `${normalizedReason || "작업실에 남은 로컬 원본을 정리하지 못했어요."} 작업실 삭제 후에도 일부 브라우저 원본이 다음 새로고침 뒤 다시 보일 수 있습니다.`;
+      return `${normalizedReason || "회의에 남은 로컬 원본을 정리하지 못했어요."} 회의 삭제 후에도 일부 브라우저 원본이 다음 새로고침 뒤 다시 보일 수 있습니다.`;
     }
     return buildPendingUploadCleanupDegradedNotice(normalizedReason);
   }
@@ -840,7 +840,7 @@
     if (scenarioKey.startsWith("queue-load-")) {
       checks.push(
         {
-          label: "작업실이 blocked로 끝나지 않음",
+          label: "회의 화면이 blocked로 끝나지 않음",
           passed: !Boolean(snapshot?.blocked?.value),
           actual: snapshot?.blocked?.value ? normalizeText(snapshot?.blocked?.message) : "open",
         },
@@ -1287,7 +1287,7 @@
       retryPendingUploads("boot-retry");
     } catch (error) {
       logDebug("workspace.boot.error", { error });
-      renderBlocked(error instanceof Error ? error.message : "회의 작업실을 열지 못했어요. 패널에서 다시 시도해 주세요.");
+      renderBlocked(error instanceof Error ? error.message : "회의 작업 화면을 열지 못했어요. 패널에서 다시 시도해 주세요.");
     }
   }
 
@@ -1296,7 +1296,7 @@
   }
 
   function getWorkspaceTitleOrFallback() {
-    return getWorkspaceTitleDraft() || "새 작업실";
+    return getWorkspaceTitleDraft() || "새 회의";
   }
 
   function buildRecordTitle(seedAt) {
@@ -1607,7 +1607,7 @@
     logDebug("workspace.launch.exchange.start", { launchToken: Boolean(normalizeText(launchToken)) });
     const payload = await postJson(global, CONFIG.exchangeLaunchUrl, { launchToken });
     const meetingId = normalizeText(payload?.meeting?.meetingId);
-    if (!meetingId || !normalizeText(payload?.meetingSessionToken)) throw new Error("회의 작업실 세션을 만들지 못했어요. 패널에서 다시 시도해 주세요.");
+    if (!meetingId || !normalizeText(payload?.meetingSessionToken)) throw new Error("회의 작업 세션을 만들지 못했어요. 패널에서 다시 시도해 주세요.");
     state.mode = normalizeText(payload?.mode) === "detail" ? "detail" : "create";
     state.session = { expiresAt: normalizeText(payload?.expiresAt), meetingId, meetingSessionToken: normalizeText(payload?.meetingSessionToken), mode: state.mode, sharedMemo: normalizeTextBlock(payload?.meeting?.sharedMemo), title: normalizeText(payload?.meeting?.title) };
     state.meeting = { meetingId, pendingLocalCount: 0, sharedMemo: state.session.sharedMemo, title: state.session.title, updatedAt: "" };
@@ -1709,7 +1709,7 @@
     state.loading = true;
     state.loadingReason = normalizeText(reason);
     if (state.loadingReason === "manual") {
-      setNotice("작업실을 다시 불러오는 중입니다.", "highlight");
+      setNotice("회의 정보를 다시 불러오는 중입니다.", "highlight");
       applyRender();
     }
     try {
@@ -2334,14 +2334,14 @@
       && !normalizeText(state.selectedRecordId)
     );
     if (!state.session.meetingSessionToken || !state.session.meetingId) {
-      throw new Error("회의 작업실 세션이 없어요. 패널에서 다시 열어 주세요.");
+      throw new Error("회의 작업 세션이 없어요. 패널에서 다시 열어 주세요.");
     }
     const authPayload = await ensureWorkspaceAuth(state.session.meetingSessionToken, {
       forceRefresh: forceReconnect,
     });
     const nextMeetingDocId = normalizeText(authPayload?.meetingDocumentId);
     if (!nextMeetingDocId) {
-      throw new Error("회의 작업실 Firestore 문서를 확인하지 못했어요.");
+      throw new Error("회의 화면 Firestore 문서를 확인하지 못했어요.");
     }
 
     state.realtime.meetingDocId = nextMeetingDocId;
@@ -2448,7 +2448,7 @@
       meetingId: normalizeText(meetingPayload?.meetingId) || state.session.meetingId,
       pendingLocalCount: state.pendingUploads.length,
       sharedMemo: normalizeTextBlock(meetingPayload?.sharedMemo || state.session.sharedMemo),
-      title: normalizeText(meetingPayload?.title || refs.meetingTitleInput.value || state.session.title || "새 작업실"),
+      title: normalizeText(meetingPayload?.title || refs.meetingTitleInput.value || state.session.title || "새 회의"),
       updatedAt: normalizeText(meetingPayload?.updatedAt),
     };
     state.session.title = state.meeting.title;
@@ -2724,7 +2724,7 @@
     if (error instanceof Error) {
       return error;
     }
-    const normalized = new Error(normalizeText(error?.message) || "실시간 작업실 연결을 복구하지 못했어요.");
+    const normalized = new Error(normalizeText(error?.message) || "실시간 회의 화면 연결을 복구하지 못했어요.");
     normalized.code = normalizeText(error?.code);
     return normalized;
   }
@@ -2741,9 +2741,9 @@
   function handleRealtimeListenerError(error, scope) {
     if (isRealtimePermissionError(error)) {
       clearWorkspaceSession();
-      renderBlocked("회의 작업실 세션이 만료되었거나 읽기 권한을 확인하지 못했어요. 패널에서 다시 열어 주세요.", {
-        eyebrow: "작업실 세션 종료",
-        title: "실시간 작업실 연결이 종료되었습니다",
+      renderBlocked("회의 작업 세션이 만료되었거나 읽기 권한을 확인하지 못했어요. 패널에서 다시 열어 주세요.", {
+        eyebrow: "회의 세션 종료",
+        title: "실시간 회의 연결이 종료되었습니다",
       });
       return;
     }
@@ -2780,7 +2780,7 @@
 
   async function importAudioFile(file) {
     if (!state.isLocalWorkspace) {
-      setNotice("파일 불러오기는 로컬 작업실에서만 사용할 수 있습니다.", "error");
+      setNotice("파일 불러오기는 로컬 회의 화면에서만 사용할 수 있습니다.", "error");
       applyRender();
       return;
     }
@@ -4055,13 +4055,13 @@
     return `${state.session.meetingId || "meeting"}-${normalizeText(item?.requestId) || "source"}-part-${String(Math.max(0, Number(partIndex) || 0)).padStart(4, "0")}.wav`;
   }
 
-  async function saveMeetingTitle() { return saveMeetingPatch({ title: normalizeText(state.meetingTitleDraft || refs.meetingTitleInput.value) }, "작업실 이름을 저장했습니다.", "작업실 이름을 먼저 입력해 주세요."); }
+  async function saveMeetingTitle() { return saveMeetingPatch({ title: normalizeText(state.meetingTitleDraft || refs.meetingTitleInput.value) }, "회의 이름을 저장했습니다.", "회의 이름을 먼저 입력해 주세요."); }
   async function saveSharedMemo() {
     updateRecordMemoDraft(refs.sharedMemoInput.value);
     setNotice(
       normalizeTextBlock(refs.sharedMemoInput.value)
-        ? "현재 기록 메모를 자동 보관했습니다."
-        : "현재 기록 메모를 비웠습니다.",
+        ? "기록 메모를 자동 보관했습니다."
+        : "기록 메모를 비웠습니다.",
       "highlight"
     );
     applyRender();
@@ -4074,7 +4074,7 @@
     persistWorkspaceSession();
     refs.sharedMemoNotice.hidden = true;
     refs.sharedMemoNotice.textContent = "";
-    setNotice("현재 기록 메모를 비웠습니다.", "highlight");
+    setNotice("기록 메모를 비웠습니다.", "highlight");
     applyRender();
   }
 
@@ -4097,7 +4097,7 @@
       setNotice(successMessage, "highlight");
       await syncWorkspaceLocalState(false, "workflow");
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "작업실 정보를 저장하지 못했어요.", "error");
+      setNotice(error instanceof Error ? error.message : "회의 정보를 저장하지 못했어요.", "error");
       applyRender();
     } finally {
       state.busy.saveMeetingTitle = false;
@@ -4177,10 +4177,10 @@
   async function deleteMeeting() {
     if (!state.session.meetingId) return;
     if (!await requestConfirmation({
-      body: "작업실에 연결된 기록, 산출물, 남아 있는 임시 원본까지 함께 정리합니다. 처리 중인 기록이 있어도 지금 즉시 삭제 요청을 우선 반영하고, 남은 정리는 backend cleanup 경계에서 이어서 마칩니다.",
-      confirmLabel: "작업실 삭제",
-      eyebrow: "작업실 삭제",
-      title: "이 작업실 전체를 삭제할까요?",
+      body: "회의에 연결된 기록, 산출물, 남아 있는 임시 원본까지 함께 정리합니다. 처리 중인 기록이 있어도 지금 즉시 삭제 요청을 우선 반영하고, 남은 정리는 backend cleanup 경계에서 이어서 마칩니다.",
+      confirmLabel: "회의 삭제",
+      eyebrow: "회의 삭제",
+      title: "이 회의 전체를 삭제할까요?",
       tone: "danger",
     })) return;
     state.busy.deleteMeeting = true;
@@ -4198,9 +4198,9 @@
         }
       );
       clearWorkspaceSession();
-      renderBlocked("이 탭은 여기까지입니다. 필요할 때 i-Nova 패널에서 새 작업실을 열어 주세요.", {
-        eyebrow: "작업실 삭제 완료",
-        title: "작업실을 삭제했습니다",
+      renderBlocked("이 탭은 여기까지입니다. 필요할 때 i-Nova 패널에서 새 회의를 열어 주세요.", {
+        eyebrow: "회의 삭제 완료",
+        title: "회의를 삭제했습니다",
         tone: "complete",
       });
     } finally {
@@ -4848,8 +4848,8 @@
   function renderBlocked(message, options = {}) {
     logDebug("workspace.blocked", { message, tone: options?.tone, title: options?.title });
     state.blocked = true;
-    state.blockedEyebrow = normalizeText(options?.eyebrow) || "회의 작업실";
-    state.blockedTitle = normalizeText(options?.title) || "이 작업실은 패널에서 다시 열어야 합니다";
+    state.blockedEyebrow = normalizeText(options?.eyebrow) || "회의 작업";
+    state.blockedTitle = normalizeText(options?.title) || "이 회의 화면은 패널에서 다시 열어야 합니다";
     state.blockedTone = normalizeText(options?.tone) || "blocked";
     state.blockedMessage = normalizeText(message);
     refs.workspace.hidden = true;
@@ -4864,8 +4864,8 @@
       refs.workspace.hidden = true;
       refs.blockedState.hidden = false;
       refs.blockedState.dataset.tone = state.blockedTone || "blocked";
-      if (refs.blockedEyebrow) refs.blockedEyebrow.textContent = state.blockedEyebrow || "회의 작업실";
-      if (refs.blockedTitle) refs.blockedTitle.textContent = state.blockedTitle || "이 작업실은 패널에서 다시 열어야 합니다";
+      if (refs.blockedEyebrow) refs.blockedEyebrow.textContent = state.blockedEyebrow || "회의 작업";
+      if (refs.blockedTitle) refs.blockedTitle.textContent = state.blockedTitle || "이 회의 화면은 패널에서 다시 열어야 합니다";
       refs.blockedMessage.textContent = state.blockedMessage || refs.blockedMessage.textContent;
       renderDebugPanel();
       return;
@@ -4905,21 +4905,21 @@
     return Boolean(state.records.length || state.pendingUploads.length || state.currentJob || state.currentArtifact || state.selectedRecordId);
   }
   function isSlowResponseMessage(message) {
-    return normalizeText(message).includes("회의 작업실 응답이 늦어지고 있어요");
+    return normalizeText(message).includes("회의 작업 화면 응답이 늦어지고 있어요");
   }
   function clearResolvedRefreshNotice() {
     clearDegradedNotice(DEGRADED_NOTICE_CODES.refresh);
   }
 
   function buildRefreshDegradedNotice(message, reason) {
-    const normalizedMessage = normalizeText(message) || "작업실 최신 상태를 다시 읽지 못했어요.";
+    const normalizedMessage = normalizeText(message) || "회의 최신 상태를 다시 읽지 못했어요.";
     const normalizedReason = normalizeText(reason);
     const surfaceLabel = normalizedReason === "background"
       ? "백그라운드 동기화"
       : normalizedReason === "workflow"
         ? "작업 후 동기화"
-        : "작업실 동기화";
-    return `${surfaceLabel}에 실패해 이전 작업실 데이터를 그대로 보여주고 있습니다. 최신 기록이나 상태는 아직 반영되지 않았을 수 있습니다. 원인: ${normalizedMessage}`;
+        : "회의 동기화";
+    return `${surfaceLabel}에 실패해 이전 회의 데이터를 그대로 보여주고 있습니다. 최신 기록이나 상태는 아직 반영되지 않았을 수 있습니다. 원인: ${normalizedMessage}`;
   }
 
   function shouldDegradeRefreshError(error, message, reason) {

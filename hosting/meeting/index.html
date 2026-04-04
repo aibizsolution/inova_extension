@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>i-Nova 회의 작업실</title>
+    <title>i-Nova 회의 작업</title>
     <link rel="stylesheet" href="index.css" />
     <script src="shared.js" defer></script>
     <script src="debug-console.js" defer></script>
@@ -44,8 +44,8 @@
     <main id="meetingShell" class="meeting-shell">
       <section id="blockedState" class="blocked-state" hidden>
         <div class="blocked-state__card">
-          <p id="blockedEyebrow" class="blocked-state__eyebrow">회의 작업실</p>
-          <h1 id="blockedTitle" class="blocked-state__title">이 작업실은 패널에서 다시 열어야 합니다</h1>
+          <p id="blockedEyebrow" class="blocked-state__eyebrow">회의 작업</p>
+          <h1 id="blockedTitle" class="blocked-state__title">이 회의 화면은 패널에서 다시 열어야 합니다</h1>
           <p id="blockedMessage" class="blocked-state__body">직접 주소를 붙여 넣어 열면 회의 세션을 확인할 수 없습니다. i-Nova 패널의 회의 허브에서 다시 열어 주세요.</p>
         </div>
       </section>
@@ -54,9 +54,9 @@
         <header class="workspace-header">
           <div class="workspace-header__mast">
             <div class="workspace-header__identity">
-              <p class="workspace-header__eyebrow">작업실</p>
+              <p class="workspace-header__eyebrow">회의 작업</p>
               <div class="workspace-header__title-row">
-                <h1 id="pageTitle" class="workspace-header__title">i-Nova 회의 작업실</h1>
+                <h1 id="pageTitle" class="workspace-header__title">i-Nova 회의 작업</h1>
                 <span id="workspaceBadge" class="status-pill" data-status="idle">대기</span>
                 <span id="offlineQueueBadge" class="chip chip--accent">로컬 보관 0건</span>
               </div>
@@ -69,7 +69,7 @@
                 <details class="menu-popover">
                   <summary id="meetingMenuButton" class="ghost-button" role="button">더보기</summary>
                   <div class="menu-popover__panel">
-                    <button id="deleteMeetingButton" class="danger-button danger-button--block" type="button">작업실 삭제</button>
+                    <button id="deleteMeetingButton" class="danger-button danger-button--block" type="button">회의 삭제</button>
                   </div>
                 </details>
               </div>
@@ -84,7 +84,7 @@
                   <button id="saveMeetingTitleButton" class="secondary-button" type="button">이름 저장</button>
                 </div>
               </div>
-              <span id="meetingStatusChip" class="chip" hidden>작업실 준비</span>
+              <span id="meetingStatusChip" class="chip" hidden>회의 준비</span>
             </div>
           </div>
         </header>
@@ -94,7 +94,7 @@
             <article class="panel-card panel-card--control">
               <div class="panel-card__head">
                 <div>
-                  <p class="panel-card__eyebrow">새 기록</p>
+                  <p class="panel-card__eyebrow">기록 추가</p>
                 </div>
                 <span id="currentBadge" class="status-pill status-pill--soft" data-status="idle">대기</span>
               </div>
@@ -121,9 +121,9 @@
             <article class="panel-card panel-card--memo">
               <div class="panel-card__head">
                 <div>
-                  <p class="panel-card__eyebrow">현재 기록 메모</p>
+                  <p class="panel-card__eyebrow">기록 메모</p>
                 </div>
-                <span class="tooltip-chip tooltip-chip--icon" title="이 메모는 지금 녹음하거나 곧 만들 기록에만 붙습니다. 녹음이 끝나면 그 기록의 정리와 함께 사용됩니다." aria-label="현재 기록 메모 도움말">?</span>
+                <span class="tooltip-chip tooltip-chip--icon" title="이 메모는 지금 녹음하거나 곧 만들 기록에만 붙습니다. 녹음이 끝나면 그 기록의 정리와 함께 사용됩니다." aria-label="기록 메모 도움말">?</span>
               </div>
               <label class="input-group input-group--textarea" for="sharedMemoInput">
                 <textarea id="sharedMemoInput" class="meeting-textarea" rows="8" placeholder="예: 이번 회의는 런칭 일정 조정과 담당자 확정이 핵심입니다."></textarea>
@@ -142,7 +142,7 @@
             <article class="panel-card panel-card--queue">
               <div class="panel-card__head">
                 <div>
-                  <p class="panel-card__eyebrow">기록 큐</p>
+                  <p class="panel-card__eyebrow">기록 선택</p>
                 </div>
                 <span id="recordCountBadge" class="chip chip--muted">0건</span>
               </div>
@@ -154,7 +154,7 @@
             <article class="panel-card panel-card--detail">
               <div class="panel-card__head">
                 <div>
-                  <p class="panel-card__eyebrow">기록 검토</p>
+                  <p class="panel-card__eyebrow">기록 상세</p>
                   <h2 id="detailTitle" class="panel-card__title">기록을 선택해 주세요</h2>
                 </div>
                 <span id="detailBadge" class="status-pill status-pill--soft" data-status="idle">대기</span>

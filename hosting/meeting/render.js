@@ -1171,14 +1171,14 @@
       return {
         badgeLabel: "기록 있음",
         badgeStatus: "succeeded",
-        meetingStatus: "기록 검토 가능",
+        meetingStatus: "기록 상세 확인",
         pageSummary: "",
       };
     }
     return {
       badgeLabel: "대기",
       badgeStatus: "idle",
-      meetingStatus: "작업실 준비",
+      meetingStatus: "회의 준비",
       pageSummary: "",
     };
   }
@@ -1487,7 +1487,7 @@
       || !areNotesContextItemsEqual(savedNotesContextItems, savedNotesInputSnapshot.contextItems);
 
     refs.pageTitle.hidden = true;
-    refs.pageTitle.textContent = savedMeetingTitle || "새 작업실";
+    refs.pageTitle.textContent = savedMeetingTitle || "새 회의";
     refs.pageSummary.hidden = !normalizeText(workspaceView.pageSummary);
     refs.pageSummary.textContent = workspaceView.pageSummary;
     refs.workspaceBadge.textContent = workspaceView.badgeLabel;
