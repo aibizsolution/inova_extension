@@ -1412,7 +1412,7 @@ select:disabled {
 
 .notes-list {
   margin: 0;
-  padding-left: 18px;
+  padding-left: 22px;
   display: grid;
   gap: 8px;
   line-height: 1.6;
