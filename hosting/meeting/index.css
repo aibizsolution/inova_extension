@@ -1481,7 +1481,7 @@ select:disabled {
 
 .notes-flow__points {
   margin: 0;
-  padding-left: 18px;
+  padding-left: 22px;
   display: grid;
   gap: 6px;
   line-height: 1.6;
