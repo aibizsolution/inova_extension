@@ -236,7 +236,8 @@
   function buildSnapshotSignature(snapshot) {
     const docs = (Array.isArray(snapshot?.docs) ? snapshot.docs : []).map((doc) => {
       const data = doc?.data && typeof doc.data === "function" ? doc.data() : {};
-      return `${normalizeText(doc?.id)}:${normalizeText(data?.updatedAt || data?.createdAt)}:${normalizeText(data?.status)}`;
+      const share = data?.share && typeof data.share === "object" ? data.share : {};
+      return `${normalizeText(doc?.id)}:${normalizeText(data?.updatedAt || data?.createdAt)}:${normalizeText(data?.status)}:${normalizeText(share?.status)}:${normalizeText(share?.shareId)}:${normalizeText(share?.revokedAt)}`;
     });
     return JSON.stringify({
       docs,

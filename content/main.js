@@ -384,6 +384,7 @@
         if (!shareUrl) {
           throw new Error("공유 링크를 만들지 못했어요.");
         }
+        patchMeetingHubShareState(input.meetingId, result?.share);
         await navigator.clipboard.writeText(shareUrl);
         logMeetingAction("success", {
           action,
@@ -395,7 +396,8 @@
         return;
       }
       if (action === "revoke-share" && input.meetingId) {
-        await namespace.meetingBridge.revokeMeetingShareLink(input, providerIdentity);
+        const result = await namespace.meetingBridge.revokeMeetingShareLink(input, providerIdentity);
+        patchMeetingHubShareState(input.meetingId, result?.share);
         logMeetingAction("success", {
           action,
           meetingId: input.meetingId,
@@ -440,6 +442,46 @@
   }
   function clearMeetingPending() {
     state.meetingUi.pending = { action: "", jobId: "", meetingId: "", startedAt: 0, title: "" };
+    render();
+  }
+  function patchMeetingHubShareState(meetingId, share) {
+    const normalizedMeetingId = namespace.session.normalizeText(meetingId);
+    if (!normalizedMeetingId || !Array.isArray(state.meetingHub?.items) || !state.meetingHub.items.length) {
+      return;
+    }
+    const nextShare = share && typeof share === "object" ? {
+      active: Boolean(share.active),
+      createdAt: namespace.session.normalizeText(share.createdAt),
+      createdBy: share.createdBy && typeof share.createdBy === "object" ? { ...share.createdBy } : {},
+      revokedAt: namespace.session.normalizeText(share.revokedAt),
+      shareId: namespace.session.normalizeText(share.shareId),
+      status: namespace.session.normalizeText(share.status),
+    } : null;
+    let changed = false;
+    const nextItems = state.meetingHub.items.map((item) => {
+      if (namespace.session.normalizeText(item?.meetingId) !== normalizedMeetingId) {
+        return item;
+      }
+      changed = true;
+      return {
+        ...(item && typeof item === "object" ? item : {}),
+        share: nextShare || {
+          active: false,
+          createdAt: "",
+          createdBy: {},
+          revokedAt: "",
+          shareId: "",
+          status: "",
+        },
+      };
+    });
+    if (!changed) {
+      return;
+    }
+    state.meetingHub = namespace.meetingManager.mergeMeetingHub({
+      ...state.meetingHub,
+      items: nextItems,
+    });
     render();
   }
   function setMeetingFeedback(text, tone = "info", timeoutMs = 2200) {
