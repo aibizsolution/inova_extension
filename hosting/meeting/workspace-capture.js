@@ -208,9 +208,9 @@
         try {
           return await measureAudioDurationFromMetadata(file);
         } catch (metadataError) {
-          logDebug("workspace.import.duration.metadata-fallback", {
-            error: metadataError,
+          logDebug("workspace.import.duration.metadata-unavailable", {
             fileName: normalizeText(file?.name),
+            message: normalizeText(metadataError?.message) || "duration-unavailable",
             mimeType: normalizeText(file?.type),
             sizeBytes: Math.max(0, Number(file?.size) || 0),
           });
@@ -218,7 +218,14 @@
           if (typeof fallbackMeasureDuration !== "function") {
             throw metadataError;
           }
-          return fallbackMeasureDuration(file);
+          const durationMs = await fallbackMeasureDuration(file);
+          logDebug("workspace.import.duration.decode-recovered", {
+            durationMs,
+            fileName: normalizeText(file?.name),
+            mimeType: normalizeText(file?.type),
+            sizeBytes: Math.max(0, Number(file?.size) || 0),
+          });
+          return durationMs;
         }
       }
 

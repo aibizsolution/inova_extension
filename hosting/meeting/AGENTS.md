@@ -7,4 +7,5 @@
 - hosted workspace의 `파일 불러오기`는 로컬 origin 전용 기능이 아니다. 상용/로컬 hosted 둘 다 같은 업로드 흐름을 쓰므로 origin 기반으로 버튼을 숨기거나 import를 차단하지 않는다.
 - owner-secure hosted 작업실은 `meetingId`만으로 다시 열려도 authorize 응답에서 `meetingSessionToken`을 받아 세션 저장소에 보존해야 한다. 업로드와 작업실 mutation은 Firestore custom token이 아니라 이 meeting session으로 인증된다.
 - imported audio duration은 메타데이터가 비어 있어도 바로 임의값으로 넘기지 않는다. 먼저 메타데이터를 읽고, 실패하면 실제 오디오 decode로 duration을 다시 계산한 뒤 둘 다 실패할 때만 명시적 오류를 보여 준다.
+- imported audio duration의 메타데이터 실패는 decode fallback으로 복구되면 informational debug log로만 남긴다. 최종 길이 계산까지 실패한 경우에만 error 로그와 사용자 오류를 유지한다.
 - prompt/release/conversation 영역은 기본적으로 읽지 않는다.
