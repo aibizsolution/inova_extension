@@ -34,7 +34,7 @@
   - `회의` 도구는 Firestore 회의 문서를 실시간으로 구독해 최신 회의록 목록과 `새 회의하기` CTA를 제공합니다.
   - 패널용 hidden bridge는 Firestore persistence와 탭 세션 Firebase auth를 함께 써서, 같은 탭 새로고침에서는 캐시 우선 표시와 auth 재사용을 우선합니다.
   - Firestore 첫 snapshot이 늦게 오면, 빈 목록 상태에서만 요청형 회의 목록 1회를 워밍업으로 먼저 보여주고 이후 실시간 snapshot으로 정본을 맞춥니다. 이 워밍업 응답은 background에서 짧게 재사용해 연속 새로고침 비용을 줄입니다.
-  - 회의 허브 목록과 hosted 작업실 진입에 쓰는 panel/session auth도 background의 짧은 TTL 캐시를 함께 써서, 같은 탭 재진입이나 새로고침에서 같은 토큰/목록을 불필요하게 다시 만들지 않게 유지합니다.
+  - 회의록 목록과 hosted 작업실 진입에 쓰는 panel/session auth도 background의 짧은 TTL 캐시를 함께 써서, 같은 탭 재진입이나 새로고침에서 같은 토큰/목록을 불필요하게 다시 만들지 않게 유지합니다.
   - 패널 목록의 항목을 누르면 해당 회의 결과를 전용 새 탭 작업실에서 다시 확인합니다.
 - `회의 페이지`
   - Firebase Hosting에 올린 전용 회의 작업실에서 `회의 식별`, `현재 녹음`, `회의 공용 메모`, `처리 이력/업로드 큐`, `선택 결과 검토`를 한 화면에서 처리합니다.
@@ -193,8 +193,8 @@
   - `features/prompt-library/cloud-sync-manager.js`: 프롬프트 보관함 원격 백업 흐름 조정
   - `features/prompt-library/files.js`: 가져오기/내보내기용 파일 읽기와 JSON 다운로드 helper
   - `features/prompt-store/prompt-realtime-manager.js`: prompt/store용 hosted bridge 연결, Firebase custom token auth, 최신 snapshot fallback 조정
-  - `meeting-manager.js`: 패널 회의 허브 Firestore realtime 구독, fallback refresh, local cache 조정
-- `meeting-view.js`: 회의 허브 리스트와 `새 회의하기` CTA, 패널 공용 디버그 콘솔 렌더링
+  - `meeting-manager.js`: 패널 회의록 Firestore realtime 구독, fallback refresh, local cache 조정
+  - `meeting-view.js`: 회의록 리스트와 `새 회의하기` CTA, 패널 공용 디버그 콘솔 렌더링
   - `release-manager.js`, `release-view.js`: 릴리스 확인 실패 시 cached data 여부를 구분해 degraded 상태를 명시적으로 표시
   - `features/prompt-review/prompt-review-manager.js`: 현재 입력 프롬프트 평가 호출과 상태 관리
   - `features/prompt-library/prompt-view.js`: 요청 탭 렌더링
@@ -261,7 +261,7 @@
 - 원격 백업 대기 상태는 `chrome.storage.local.cloudSync`에 저장합니다.
 - 프롬프트 원격 실시간은 `integration_inova_accounts`의 `promptLibraryMeta`만 구독하고, 실제 보관함 본문은 필요할 때만 `loadInovaPromptLibrary`로 다시 가져옵니다.
 - 스토어 원격 실시간은 `prompt_store_meta/summary`와 `prompt_store_feed_pages/latest__{category}__0000`만 구독하고, 검색/인기 정렬은 로컬 집합에서 다시 계산합니다. 상세 본문은 `prompt_store_entry_details/{entryId}`를 direct read하고, `내 등록`과 쓰기 액션만 request-response 흐름을 사용합니다.
-- 회의 허브 목록은 더 이상 `chrome.storage.local.meetingHub`를 정본 캐시로 쓰지 않고, hosted panel bridge의 Firestore persistence와 메모리 상태를 우선합니다.
+- 회의록 목록은 더 이상 `chrome.storage.local.meetingHub`를 정본 캐시로 쓰지 않고, hosted panel bridge의 Firestore persistence와 메모리 상태를 우선합니다.
 - 회의 기능 브라우저 상태는 `chrome.storage.local.meetingStateByMeetingId`만 사용합니다.
 
 ## 설치 방법
@@ -277,7 +277,7 @@
 2. i-Nova 채팅에서 질문을 보내면 `대화` 도구에 자동으로 반영됩니다.
 3. 오른쪽 슬라이드 패널의 세로 레일에서 `대화`, `회의`, `프롬프트`, `릴리스`를 전환합니다.
 4. `대화` 도구에서는 검색하거나 항목을 클릭해 해당 질문으로 이동합니다.
-5. `회의` 도구에서는 DB 기반 회의 허브 목록과 `새 회의하기` 버튼을 확인하고, 항목을 눌러 hosted 새 탭 작업실 상세 페이지를 엽니다.
+5. `회의` 도구에서는 DB 기반 회의록 목록과 `새 회의하기` 버튼을 확인하고, 항목을 눌러 hosted 새 탭 작업실 상세 페이지를 엽니다.
 6. hosted 회의 작업 화면에서는 회의 이름과 공용 메모를 먼저 정리한 뒤 녹음을 시작하고, 필요하면 일시중지/재개하거나 녹음을 버리고 다시 시작할 수 있습니다.
 7. 로컬 작업실에서는 `파일 불러오기`로 실제 녹음 파일을 직접 넣어 전사 테스트할 수 있고, 큰 파일이나 긴 녹음은 자동으로 chunk 준비/업로드를 거칩니다.
 8. `종료하고 전사`를 누르면 녹음본이 먼저 로컬 큐에 저장되고, 원격 처리 중이어도 바로 다음 녹음을 시작할 수 있습니다.

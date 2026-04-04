@@ -23,7 +23,7 @@
         <div class="inova-tool-toolbar">
           <div class="inova-tool-toolbar__row">
             <div class="inova-tool-toolbar__stack">
-              <strong class="inova-tool-toolbar__title">회의 허브</strong>
+              <strong class="inova-tool-toolbar__title">최근 회의록</strong>
               <div class="inova-tool-meta inova-tool-meta--muted">${escapeHtml(normalized.subtitleText)}</div>
             </div>
           </div>
@@ -78,7 +78,6 @@
   function normalizeItem(item) {
     const nextItem = item && typeof item === "object" ? item : {};
     return {
-      excerpt: normalizeText(nextItem.excerpt || nextItem.previewText),
       latestArtifactId: normalizeText(nextItem.latestArtifactId || nextItem.artifactId),
       latestJobId: normalizeText(nextItem.latestJobId || nextItem.jobId),
       meetingId: normalizeText(nextItem.meetingId),
@@ -116,7 +115,6 @@
           </div>
           ${renderChip(isPending ? "여는 중" : formatStatusLabel(item.status), false)}
         </div>
-        <p>${escapeHtml(isPending ? "새 탭 작업실을 여는 중입니다." : item.excerpt || "새 탭 결과 페이지에서 회의록을 확인할 수 있습니다.")}</p>
       </button>
     `;
   }
@@ -129,13 +127,13 @@
     if (!state.hasCheckedAt && !state.error) {
       return `
         <article class="inova-release-card">
-          <p>회의 목록을 읽는 중입니다. 잠시만 기다려 주세요.</p>
+          <p>최근 회의록을 읽는 중입니다. 잠시만 기다려 주세요.</p>
         </article>
       `;
     }
     return `
       <article class="inova-release-card">
-        <p>아직 저장된 회의록이 없습니다. 상단의 새 회의하기로 hosted 작업실을 열어 주세요.</p>
+        <p>아직 저장된 회의록이 없습니다. 상단의 새 회의하기로 작업실을 열어 주세요.</p>
       </article>
     `;
   }
@@ -188,15 +186,15 @@
       return "";
     }
     if (dataFreshness === "stale" || source === "cache") {
-      return "실시간 회의 목록을 읽지 못해 이전에 보던 목록을 제한적으로 유지하고 있습니다.";
+      return "실시간 회의록 목록을 읽지 못해 이전에 보던 목록을 제한적으로 유지하고 있습니다.";
     }
     if (dataFreshness === "empty") {
-      return "회의 목록 읽기가 모두 실패해 현재는 빈 상태만 표시하고 있습니다.";
+      return "회의록 목록 읽기가 모두 실패해 현재는 빈 상태만 표시하고 있습니다.";
     }
     if (degradedReason === "meeting-hub-realtime-failed" || source === "runtime-read") {
-      return "실시간 구독에 실패해 요청형 목록 읽기로 계속 표시하고 있습니다.";
+      return "실시간 구독에 실패해 요청형 회의록 목록 읽기로 계속 표시하고 있습니다.";
     }
-    return "회의 목록을 제한된 상태로 표시하고 있습니다.";
+    return "회의록 목록을 제한된 상태로 표시하고 있습니다.";
   }
 
   function buildPendingMessage(pending) {

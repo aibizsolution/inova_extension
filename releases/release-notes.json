@@ -2,6 +2,44 @@
   "schemaVersion": 1,
   "versions": [
     {
+      "version": "0.3.24",
+      "level": "patch",
+      "public": {
+        "headline": "회의 작업실 구조 정리와 회의록 표현 개선",
+        "summary": "이번 배포는 hosted 회의 작업실 내부를 책임 경계 기준으로 다시 나누고, 패널의 최근 회의록 목록과 작업실 안 회의 정리 표현을 함께 다듬어 이후 변경 안정성과 실제 읽는 경험을 같이 개선한 업데이트입니다.",
+        "changes": [
+          {
+            "type": "changed",
+            "text": "패널의 `회의` 도구가 `최근 회의록` 중심 표현으로 정리되고 카드 밀도와 제목 강조가 조정돼, 어떤 결과를 다시 열어야 하는지 더 빠르게 구분할 수 있습니다."
+          },
+          {
+            "type": "changed",
+            "text": "hosted 회의 작업실의 메모·회의 정리 목록 간격과 타이포를 다듬어 긴 항목도 덜 답답하게 읽히도록 정리했습니다."
+          },
+          {
+            "type": "changed",
+            "text": "세션 복원, 실시간 구독, 녹음/가져오기, 업로드 큐, 저장 mutation, 디버그 흐름을 내부 controller 경계로 다시 나눠 이후 회의 작업실 변경 안정성을 높였습니다."
+          }
+        ]
+      },
+      "internal": {
+        "changes": [
+          {
+            "type": "changed",
+            "text": "hosting/meeting/index.js를 composition root로 줄이고 workspace-session, workspace-realtime, workspace-capture, workspace-pending-uploads, workspace-mutations, workspace-debug controller로 책임을 재배치했습니다."
+          },
+          {
+            "type": "changed",
+            "text": "meeting panel wording/CSS와 hosted notes list CSS를 정리하고, verify-docs와 runtime/feature routing 문서를 새 hosted controller 구조에 맞게 갱신했습니다."
+          },
+          {
+            "type": "changed",
+            "text": ".gitignore와 feature-first refactor handoff 문서를 보강해 로컬 작업 산출물과 다음 세션 인계 기준을 정리했습니다."
+          }
+        ]
+      }
+    },
+    {
       "version": "0.3.23",
       "level": "patch",
       "public": {

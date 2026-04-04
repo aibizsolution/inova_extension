@@ -1412,30 +1412,36 @@ select:disabled {
 
 .notes-list {
   margin: 0;
-  padding-left: 28px;
-  display: grid;
-  gap: 8px;
+  padding-left: 24px;
+  list-style: disc;
   line-height: 1.6;
 }
 
 .notes-list > li {
-  padding-left: 4px;
+  padding-left: 0;
+}
+
+.notes-list > li + li {
+  margin-top: 8px;
 }
 
 .notes-list__item {
-  display: grid;
-  gap: 6px;
+  list-style-position: outside;
+}
+
+.notes-list__item > * + * {
+  margin-top: 6px;
 }
 
 .notes-list__headline {
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-strong);
 }
 
 .notes-list__meta {
   color: var(--muted);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .notes-list__body {
