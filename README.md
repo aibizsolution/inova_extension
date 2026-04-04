@@ -413,6 +413,7 @@ npm run hooks:install
 - `release:build`는 현재 버전의 릴리스 메타를 읽어 `hosting/extension/releases/latest.json`과 `history.json`에 그대로 반영합니다.
 - `release:build`, `deploy:hosting`, `deploy:all`은 마지막 배포 버전보다 더 높은 새 버전이 준비되지 않았으면 실패합니다.
 - `release:build`는 고정 최신 링크용 `hosting/extension/downloads/latest.zip`도 함께 갱신합니다.
+- `background/`, `content/`, `manifest.json`이 같이 바뀐 배포라면 Hosting/Functions 배포만으로 끝나지 않습니다. 로컬 Chrome의 압축해제된 확장도 반드시 새로고침해야 hosted 작업실의 새 인증 계약과 맞습니다.
 
 ## 배포 기본값
 
