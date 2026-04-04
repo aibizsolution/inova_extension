@@ -32,11 +32,6 @@
   const MAX_NOTES_CONTEXT_ITEM_CHARS = 1200;
   const SUPERSEDED_REMOTE_JOBS_STORAGE_KEY_PREFIX = "__INOVA_MEETING_SUPERSEDED_REMOTE_JOBS__";
   const BOOT_INITIAL_SNAPSHOT_WAIT_MS = 450;
-  const EXTENSION_BRIDGE_PROBE_PAGE_SOURCE = "inova-meeting-workspace-page";
-  const EXTENSION_BRIDGE_PROBE_RESPONSE_SOURCE = "inova-meeting-workspace-extension";
-  const EXTENSION_BRIDGE_PROBE_REQUEST_TYPE = "probe-extension-bridge";
-  const EXTENSION_BRIDGE_PROBE_RESPONSE_TYPE = "probe-extension-bridge-result";
-  const EXTENSION_BRIDGE_PROBE_TIMEOUT_MS = 4000;
   const DEGRADED_NOTICE_CODES = Object.freeze({
     pendingUploadCleanup: "pending-upload-cleanup-degraded",
     pendingUploadChunkResyncPersist: "pending-upload-chunk-resync-persist-degraded",
@@ -244,91 +239,6 @@
     return normalizeText(safeLocalStorageGet(global, DEBUG_PANEL_COLLAPSED_STORAGE_KEY)) === "1";
   }
 
-  function createExtensionBridgeProbeError(kind, message, detail = {}) {
-    const error = new Error(message);
-    error.kind = kind;
-    Object.assign(error, detail);
-    return error;
-  }
-
-  async function runExtensionBridgeProbe() {
-    if (!isDebugPanelEnabled(global)) {
-      return;
-    }
-
-    const requestId = `probe-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
-    global.console?.info?.("[Inova Hosted Meeting] workspace.extension-bridge.probe.start", {
-      href: global.location.href,
-      requestId,
-    });
-
-    try {
-      const payload = await new Promise((resolve, reject) => {
-        const timeoutId = global.setTimeout(() => {
-          cleanup();
-          reject(createExtensionBridgeProbeError("timeout", "확장 bridge 응답이 없어요.", {
-            requestId,
-            timeoutMs: EXTENSION_BRIDGE_PROBE_TIMEOUT_MS,
-          }));
-        }, EXTENSION_BRIDGE_PROBE_TIMEOUT_MS);
-
-        const handleMessage = (event) => {
-          if (event.origin !== global.location.origin) {
-            return;
-          }
-          const data = event?.data && typeof event.data === "object" ? event.data : {};
-          if (
-            normalizeText(data.source) !== EXTENSION_BRIDGE_PROBE_RESPONSE_SOURCE
-            || normalizeText(data.type) !== EXTENSION_BRIDGE_PROBE_RESPONSE_TYPE
-          ) {
-            return;
-          }
-          const nextPayload = data.payload && typeof data.payload === "object" ? data.payload : {};
-          if (normalizeText(nextPayload.requestId) !== requestId) {
-            return;
-          }
-          cleanup();
-          if (nextPayload.ok) {
-            resolve(nextPayload);
-            return;
-          }
-          reject(createExtensionBridgeProbeError("runtime-error", normalizeText(nextPayload.error) || "확장 bridge probe에 실패했어요.", {
-            requestId,
-            responseSource: normalizeText(data.source),
-            responseType: normalizeText(data.type),
-          }));
-        };
-
-        const cleanup = () => {
-          global.clearTimeout(timeoutId);
-          global.removeEventListener("message", handleMessage);
-        };
-
-        global.addEventListener("message", handleMessage);
-        global.postMessage(
-          {
-            requestId,
-            source: EXTENSION_BRIDGE_PROBE_PAGE_SOURCE,
-            type: EXTENSION_BRIDGE_PROBE_REQUEST_TYPE,
-          },
-          global.location.origin
-        );
-      });
-
-      global.console?.info?.("[Inova Hosted Meeting] workspace.extension-bridge.probe.success", payload);
-    } catch (error) {
-      global.console?.warn?.("[Inova Hosted Meeting] workspace.extension-bridge.probe.error", {
-        kind: normalizeText(error?.kind) || (String(error?.message || "").includes("응답이 없어요.") ? "timeout" : "error"),
-        error: error instanceof Error ? error.message : String(error || ""),
-        responseSource: normalizeText(error?.responseSource),
-        responseType: normalizeText(error?.responseType),
-        requestId,
-        timeoutMs: error?.timeoutMs || EXTENSION_BRIDGE_PROBE_TIMEOUT_MS,
-      });
-    }
-  }
-  
-  
   function cacheRefs() {
     for (const id of ["meetingShell", "blockedMessage", "blockedEyebrow", "blockedTitle", "blockedState", "workspace", "pageTitle", "pageSummary", "workspaceBadge", "offlineQueueBadge", "refreshButton", "meetingTitleInput", "saveMeetingTitleButton", "deleteMeetingButton", "meetingStatusChip", "currentBadge", "currentSummary", "currentHint", "currentNotice", "currentTimer", "startButton", "importAudioButton", "importAudioInput", "pauseButton", "resumeButton", "stopButton", "discardButton", "sharedMemoInput", "saveSharedMemoButton", "clearSharedMemoButton", "sharedMemoNotice", "recordCountBadge", "recordList", "detailTitle", "detailBadge", "detailSummary", "recordTitleGroup", "recordTitleInput", "saveRecordTitleButton", "downloadRecordButton", "deleteRecordButton", "detailMeta", "reviewSectionHeader", "reviewSegmentsToolbar", "copySegmentsButton", "detailMemoInput", "saveRecordMemoButton", "reviewTabSummary", "reviewTabMemo", "reviewTabNotes", "reviewTabSegments", "reviewTabSegmentsCount", "reviewTabContext", "reviewTabActions", "reviewPanelSummary", "summaryStatusPill", "summaryStatusGrid", "summaryActionCard", "reviewPanelMemo", "meetingNotesCard", "reviewPanelSegments", "reviewPanelContext", "copyMeetingNotesButton", "updateMeetingNotesButton", "meetingNotesOverview", "meetingNotesSections", "detailNotice", "segmentList", "debugPanel", "confirmOverlay", "confirmDialog", "confirmDialogEyebrow", "confirmDialogTitle", "confirmDialogBody", "confirmDialogCancel", "confirmDialogConfirm", "notesContextList", "notesContextInput", "notesContextAddButton", "notesContextResetButton"]) {
       refs[id] = global.document.getElementById(id);
@@ -798,7 +708,6 @@
   }
 
   async function bootstrap() {
-    runExtensionBridgeProbe().catch(() => {});
     cacheRefs();
     createControllers();
     bindEvents();

@@ -41,7 +41,7 @@
 - 패널 디버그는 회의 탭 전용이 아니라 현재 브라우저 탭 세션 기준 전역 버퍼로 유지되고, `대화/회의/프롬프트/릴리스` 흐름 로그를 함께 모읍니다.
   - 작업실과 패널의 디버그 콘솔은 팝업의 `디버그`가 ON일 때만 표시되고, OFF일 때는 로그도 수집하지 않습니다.
   - hosted 작업실은 blocked 상태로 멈추더라도, `debug=1`이면 bootstrap/session 실패 같은 초기 로그를 디버그 콘솔에서 바로 확인할 수 있게 유지합니다.
-  - hosted 작업실 디버그 패널은 `authMode`, `extensionBridge`, `inovaLogin`, `accessDecision`, `reason`, `viewer`, `bypassMode`를 함께 보여 줘서 보안 진입 상태를 화면 안에서 바로 확인할 수 있습니다.
+- hosted 작업실 디버그 패널은 `authMode`, `extensionBridge`, `inovaLogin`, `accessDecision`, `reason`, `viewer`, `bypassMode`를 별도 카드가 아니라 로그 상단의 auth 스냅샷으로 함께 보여 줘서 보안 진입 상태를 화면 안에서 바로 확인할 수 있습니다.
   - 디버그 로그는 화면 안 패널/작업실 콘솔에만 모아 보여주고, panel/workspace/service worker가 같은 내용을 DevTools 브라우저 콘솔에 다시 미러링하지 않습니다.
   - hosted 작업실과 prompt/meeting hosted bridge는 Firestore SDK DevTools 경고 로그도 `silent`로 낮추고, Firebase SDK보다 먼저 `enableMultiTabIndexedDbPersistence()` deprecation 경고 같은 반복 persistence 안내를 숨겨 브라우저 콘솔에는 꼭 필요한 런타임 오류만 남깁니다.
   - 상태 바의 `함수` 카운트는 실제 Firebase Functions 요청만 세고, `읽기` 카운트는 스토어 `보기` 같은 backend read 요청만 따로 셉니다.
@@ -340,7 +340,6 @@ npm run emulator:hosting
 
 기본 로컬 주소는 `http://127.0.0.1:5000/meeting/index.html` 입니다. 확장프로그램은 그대로 Chrome에서 실행하고, 팝업에서 `상용 / 로컬`과 `디버그 OFF / ON`을 전환해 확인합니다. 디버그를 켜면 패널/작업실에서 세션 복원, 함수 호출, Firestore listener 흐름을 화면 안에서 바로 볼 수 있습니다.
 
-- hosted 회의 작업실이 확장과 실제로 대화할 수 있는지 빠르게 확인해야 할 때는 `debug=1` URL을 연 뒤 DevTools 콘솔에서 `workspace.extension-bridge.probe.start`, `workspace.extension-bridge.probe.success`, `workspace.extension-bridge.probe.error` 로그를 확인합니다. 이 probe는 화면 UI를 바꾸지 않고, hosted 페이지의 window 메시지가 content script와 background까지 왕복되는지만 콘솔에 남깁니다. 현재 probe 응답은 `loginCheckMode: "cookie-only"`와 `tokenRefreshSkipped: true`를 함께 남겨, 네트워크 refresh를 기다리지 않는 빠른 연결 확인임을 구분합니다. 로컬 개발용 content script 매칭은 Chrome match pattern 규칙에 맞춰 `localhost`/`127.0.0.1` 호스트만 선언하고 포트는 넣지 않습니다. `response-posted.requestId`는 `probe.start.requestId`와 같아야 hosted 쪽이 응답을 자기 요청으로 매칭할 수 있습니다.
 - localhost나 emulator에서는 `debug=1&debugAuthBypass=owner|readonly`를 붙여 secure auth를 우회할 수 있습니다. 이 bypass는 개발용 loopback origin에서만 동작하고, production 호스팅에서는 무시됩니다.
 
 queue degraded 수동 검증만 빠르게 하려면 localhost 작업실을 `http://127.0.0.1:5000/meeting/index.html?debug=1&debugQueueSandbox=1`로 열어 로컬 queue sandbox를 먼저 띄울 수 있습니다. 이 모드에서는 panel/session 없이도 `__INOVA_HOSTED_MEETING_DEBUG__.queueSandbox.seedPending()`로 로컬 pending 항목을 만들고, `queueSandbox.runAction("hold" | "rename" | "delete")`와 reload 중심의 queue load/persist/cleanup 검증을 로컬에서 반복할 수 있으며 원격 refresh/retry는 건너뜁니다. `queueState()`에는 `runtimeChunkCacheKeys`도 함께 들어 있어 queue storage와 메모리 chunk cache가 어긋난 경우를 바로 확인할 수 있습니다. hosted debug console 공통 contract를 확인할 때는 `__INOVA_HOSTED_MEETING_DEBUG__.debugConsoleState()`와 `debugConsoleValidation.checkWorkspace()`로 현재 DOM/toolbar/fab 상태를 한 번에 볼 수 있습니다.

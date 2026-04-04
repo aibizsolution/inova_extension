@@ -1552,7 +1552,7 @@ select:disabled {
   right: 20px;
   bottom: 20px;
   z-index: 40;
-  width: min(640px, calc(100vw - 40px));
+  width: min(760px, calc(100vw - 40px));
   display: flex;
   justify-content: flex-end;
   pointer-events: none;
@@ -1633,72 +1633,6 @@ select:disabled {
 
 .panel-card--debug .panel-card__head {
   align-items: center;
-}
-
-.debug-auth-card {
-  margin: 0 0 12px;
-  padding: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.05);
-  color: #f5f7fb;
-}
-
-.debug-auth-card__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-
-.debug-auth-card__head strong {
-  font-size: 13px;
-  letter-spacing: 0.01em;
-}
-
-.debug-auth-card__badge {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 0 10px;
-  border: 1px solid rgba(110, 188, 255, 0.3);
-  border-radius: 999px;
-  background: rgba(20, 84, 156, 0.32);
-  color: #d7ebff;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-}
-
-.debug-auth-card__grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 12px;
-  margin: 0;
-}
-
-.debug-auth-card__row {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-
-.debug-auth-card__row dt {
-  color: rgba(245, 247, 251, 0.62);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.debug-auth-card__row dd {
-  margin: 0;
-  color: #f5f7fb;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
 }
 
 .debug-panel__toolbar {
@@ -1989,20 +1923,14 @@ select:disabled {
   }
 
   .debug-panel {
-    right: 16px;
-    bottom: 16px;
-    width: min(420px, calc(100vw - 32px));
+    right: 14px;
+    bottom: 14px;
+    width: min(620px, calc(100vw - 28px));
   }
 
   .workspace-column--detail {
     grid-column: auto;
     grid-row: auto;
-  }
-
-  .debug-panel {
-    right: 14px;
-    bottom: 14px;
-    width: min(500px, calc(100vw - 28px));
   }
 }
 
@@ -2073,7 +2001,4 @@ select:disabled {
     justify-content: flex-start;
   }
 
-  .debug-auth-card__grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }

@@ -46,12 +46,13 @@
       function buildDebugPanelState(entries = getDebugEntries()) {
         const normalizedEntries = Array.isArray(entries) ? entries : [];
         const summary = summarizeEntries(normalizedEntries);
+        const text = buildDebugConsoleText(normalizedEntries);
         return debugConsole?.buildState?.({
           collapsed: state.debugPanelCollapsed,
           enabled: Boolean(refs.debugPanel && !refs.debugPanel.hidden),
           feedback: state.debugNotice,
           statusSummary: summary,
-          text: buildCopyText(normalizedEntries),
+          text,
         }) || {
           collapsed: state.debugPanelCollapsed,
           enabled: Boolean(refs.debugPanel && !refs.debugPanel.hidden),
@@ -59,7 +60,7 @@
           hasErrors: Math.max(0, Number(summary?.errorCount) || 0) > 0,
           statusSummary: summary,
           statusText: "",
-          text: normalizeText(buildCopyText(normalizedEntries)) || "아직 로그가 없습니다.",
+          text: normalizeText(text) || "아직 로그가 없습니다.",
         };
       }
 
@@ -73,7 +74,6 @@
         const logElement = panelElement?.querySelector?.("#debugLog");
         return {
           buttons,
-          hasAuthCard: Boolean(panelElement?.querySelector?.(".debug-auth-card")),
           collapsed: Boolean(stateSnapshot?.collapsed),
           enabled: Boolean(stateSnapshot?.enabled),
           entryCount: normalizedEntries.length,
@@ -128,9 +128,9 @@
         const requiredActions = ["copy", "copy-errors", "clear", "toggle"];
         checks.push(
           {
-            label: "expanded 상태에서는 auth 카드가 보임",
-            passed: Boolean(snapshot?.hasAuthCard),
-            actual: snapshot?.hasAuthCard ? "auth-card" : "missing",
+            label: "expanded 상태에서는 auth 상태가 로그 상단에 포함됨",
+            passed: normalizeText(snapshot?.logText).includes("authMode:"),
+            actual: normalizeText(snapshot?.logText).slice(0, 120),
           },
           {
             label: "expanded 상태에서는 toolbar가 보임",
@@ -159,6 +159,27 @@
           }
         );
         return checks;
+      }
+
+      function buildAuthSnapshotText() {
+        const rows = [
+          ["authMode", normalizeText(state.auth?.accessMode || state.auth?.accessDecision || "unknown") || "unknown"],
+          ["extensionBridge", normalizeText(state.auth?.extensionBridge) || "not-requested"],
+          ["inovaLogin", state.auth?.inovaLogin ? "yes" : "no"],
+          ["accessDecision", normalizeText(state.auth?.accessDecision) || "unknown"],
+          ["reason", normalizeText(state.auth?.reason) || "-"],
+          ["viewer", normalizeText(state.auth?.viewer) || "-"],
+          ["bypassMode", normalizeText(state.auth?.bypassMode) || "-"],
+        ];
+        return ["[auth]", ...rows.map(([label, value]) => `${label}: ${value}`)].join("\n");
+      }
+
+      function buildDebugConsoleText(entries = getDebugEntries()) {
+        const logText = normalizeText(buildCopyText(Array.isArray(entries) ? entries : [])) || "아직 로그가 없습니다.";
+        if (state.debugPanelCollapsed) {
+          return logText;
+        }
+        return `${buildAuthSnapshotText()}\n\n${logText}`;
       }
 
       function validateHostedDebugConsoleWorkspace(options = {}) {
@@ -199,44 +220,6 @@
         syncDebugPanelCollapsedUi({ persist: options.persist === true });
       }
 
-      function escapeHtml(value) {
-        return String(value || "")
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;")
-          .replace(/"/g, "&quot;")
-          .replace(/'/g, "&#39;");
-      }
-
-      function renderAuthStatePanel() {
-        const authMode = normalizeText(state.auth?.accessMode || state.auth?.accessDecision || "unknown");
-        const rows = [
-          ["authMode", authMode || "unknown"],
-          ["extensionBridge", normalizeText(state.auth?.extensionBridge) || "not-requested"],
-          ["inovaLogin", state.auth?.inovaLogin ? "yes" : "no"],
-          ["accessDecision", normalizeText(state.auth?.accessDecision) || "unknown"],
-          ["reason", normalizeText(state.auth?.reason) || "-"],
-          ["viewer", normalizeText(state.auth?.viewer) || "-"],
-          ["bypassMode", normalizeText(state.auth?.bypassMode) || "-"],
-        ];
-        return `
-          <article class="debug-auth-card">
-            <div class="debug-auth-card__head">
-              <strong>인증 상태</strong>
-              ${normalizeText(state.auth?.bypassMode) ? '<span class="debug-auth-card__badge">DEV BYPASS</span>' : ""}
-            </div>
-            <dl class="debug-auth-card__grid">
-              ${rows.map(([label, value]) => `
-                <div class="debug-auth-card__row">
-                  <dt>${escapeHtml(label)}</dt>
-                  <dd>${escapeHtml(value)}</dd>
-                </div>
-              `).join("")}
-            </dl>
-          </article>
-        `;
-      }
-
       function render(entries = getDebugEntries()) {
         if (!refs.debugPanel) return;
         if (refs.debugPanel.hidden) {
@@ -245,9 +228,7 @@
         }
         const previousViewport = debugConsole?.captureLogViewport?.(refs.debugPanel.querySelector("#debugLog")) || null;
         const debugMarkup = debugConsole?.renderWorkspace?.(buildDebugPanelState(entries)) || "";
-        refs.debugPanel.innerHTML = state.debugPanelCollapsed
-          ? debugMarkup
-          : `${renderAuthStatePanel()}${debugMarkup}`;
+        refs.debugPanel.innerHTML = debugMarkup;
         const nextLog = refs.debugPanel.querySelector("#debugLog");
         if (!nextLog) return;
         debugConsole?.restoreLogViewport?.(nextLog, previousViewport);
@@ -280,7 +261,7 @@
       }
 
       async function copyDebugLog() {
-        const text = normalizeText(buildCopyText(getDebugEntries()));
+        const text = normalizeText(buildDebugConsoleText(getDebugEntries()));
         if (!text) return;
         try {
           if (typeof globalObject.navigator?.clipboard?.writeText === "function") {
