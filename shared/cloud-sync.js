@@ -370,6 +370,7 @@
     hasPendingPromptSync,
     markPromptLibrarySynced,
     mergeCloudSyncState,
+    normalizeProviderIdentity,
     queuePromptLibrarySyncOperation,
     recordPromptLibraryRemoteState,
     setPromptSyncDegraded,

@@ -120,6 +120,7 @@
   async function bootstrapContent() {
     state.preferredOpen = readPanelOpenPreference();
     state.open = state.preferredOpen;
+    void syncProviderIdentityToStorage("bootstrap");
     namespace.contentPanel.ensurePanel({
       onCopyBookmark: copyBookmarkText,
       onHandlePositionChange: updateHandlePosition,
@@ -282,6 +283,49 @@
       console.error("[i-Nova Bookmarks] active tool save failed", error);
     }
   }
+  async function syncProviderIdentityToStorage(reason = "runtime", providedIdentity = null) {
+    const providerIdentity = namespace.cloudSync.normalizeProviderIdentity(
+      providedIdentity || namespace.providerIdentity.getCurrent()
+    );
+    if (!providerIdentity.available || !providerIdentity.providerUserKey) {
+      return false;
+    }
+    try {
+      const currentCloudSync = await namespace.storage.getCloudSyncState();
+      const currentIdentity = namespace.cloudSync.normalizeProviderIdentity(currentCloudSync?.providerIdentity);
+      if (
+        currentIdentity.providerUserKey === providerIdentity.providerUserKey
+        && currentIdentity.email === providerIdentity.email
+        && currentIdentity.displayName === providerIdentity.displayName
+        && currentIdentity.numericUserId === providerIdentity.numericUserId
+      ) {
+        return false;
+      }
+      const nextCloudSync = namespace.cloudSync.mergeCloudSyncState(currentCloudSync, {
+        providerIdentity: {
+          ...currentIdentity,
+          ...providerIdentity,
+          available: true,
+        },
+      });
+      state.cloudSync = nextCloudSync;
+      await namespace.storage.setCloudSyncState(nextCloudSync);
+      logPanelDebug("panel.identity.cached", {
+        providerUserKey: namespace.session.normalizeText(providerIdentity.providerUserKey),
+        reason: namespace.session.normalizeText(reason) || "runtime",
+        scope: "panel-ui",
+        tool: "panel",
+      });
+      render();
+      return true;
+    } catch (error) {
+      if (isExtensionContextInvalidatedError(error)) {
+        return false;
+      }
+      console.error("[i-Nova Bookmarks] provider identity cache failed", error);
+      return false;
+    }
+  }
   async function copyBookmarkText(bookmarkId) {
     const bookmark = state.bookmarks.find((entry) => entry.id === bookmarkId);
     if (!bookmark?.text) return false;
@@ -332,6 +376,7 @@
       return;
     }
     const providerIdentity = namespace.providerIdentity.getCurrent();
+    await syncProviderIdentityToStorage(`meeting-action:${action}`, providerIdentity);
     const input = {
       jobId: namespace.session.normalizeText(detail.jobId),
       meetingId: namespace.session.normalizeText(detail.meetingId),
@@ -795,6 +840,7 @@
       render();
       return;
     }
+    void syncProviderIdentityToStorage("visibility-visible");
     if (shouldRunPromptCloudSync()) {
       cloudSyncManager.scheduleSync(320);
     }
@@ -808,6 +854,7 @@
     render();
   }
   function handleWindowFocus() {
+    void syncProviderIdentityToStorage("window-focus");
     if (shouldRunPromptCloudSync()) {
       cloudSyncManager.scheduleSync(320);
     }
