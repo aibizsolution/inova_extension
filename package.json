@@ -15,6 +15,7 @@
     "version:bump": "node scripts/bump-version.js",
     "check:cloud-sync": "node scripts/check-cloud-sync.js",
     "check:meeting-data": "node scripts/check-meeting-data.js",
+    "delete:meeting-data": "node scripts/delete-meeting-data.js",
     "check:function-logs": "node scripts/check-function-logs.js",
     "check:function-runtime": "node scripts/check-function-runtime.js",
     "cleanup:branches": "node scripts/cleanup-local-branches.js",

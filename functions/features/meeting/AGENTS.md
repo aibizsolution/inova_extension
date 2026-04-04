@@ -33,7 +33,8 @@
 
 ## 최소 검증 방법
 - meeting 관련 export 이름, Firestore trigger 문서 경로, hosted meeting auth 흐름이 그대로 유지되는지 확인한다.
-- 상용 회의 데이터 잔존 여부를 확인할 때는 `npm run check:meeting-data`로 Firestore meeting 컬렉션과 Storage `tmp/meetings/` prefix를 함께 점검한다.
+- 상용 회의 데이터 잔존 여부를 편하게 볼 때는 `npm run check:meeting-data`를 사용한다.
+- 회의 데이터를 전체 또는 특정 `meetingId` 기준으로 수동 정리할 때는 기본 dry-run인 `npm run delete:meeting-data -- --all` 또는 `npm run delete:meeting-data -- --meeting-id <id>`를 먼저 보고, 실제 삭제는 같은 명령에 `--execute`를 붙인다.
 
 ## 언제 사용자에게 다시 물을지
 - 패널 회의 허브 문제인지 hosted 작업실 문제인지, auth 문제인지 전사 worker 문제인지 모호할 때만 확인한다.
