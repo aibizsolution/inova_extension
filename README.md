@@ -31,6 +31,7 @@
   - 패널 상태가 다시 그려져도 검색창과 주요 입력 필드의 포커스/커서 위치를 최대한 유지합니다.
 - `회의록 패널`
   - `회의` 도구는 Firestore 회의 문서를 실시간으로 구독해 최신 회의록 목록과 `새 회의하기` CTA를 제공합니다.
+  - 패널의 `공유`/`공유 해제` 상태는 Functions 응답뿐 아니라 Firestore snapshot에서도 같은 `share.status/shareId` 계약으로 해석해, 새로고침이나 포커스 복귀 뒤에도 버튼 활성 상태가 흔들리지 않게 유지합니다.
   - 패널용 hidden bridge는 Firestore persistence와 탭 세션 Firebase auth를 함께 써서, 같은 탭 새로고침에서는 캐시 우선 표시와 auth 재사용을 우선합니다.
   - Firestore 첫 snapshot이 늦게 오면, 빈 목록 상태에서만 요청형 회의 목록 1회를 워밍업으로 먼저 보여주고 이후 실시간 snapshot으로 정본을 맞춥니다. 이 워밍업 응답은 background에서 짧게 재사용해 연속 새로고침 비용을 줄입니다.
   - 회의록 목록과 hosted 작업실 진입에 쓰는 panel/session auth도 background의 짧은 TTL 캐시를 함께 써서, 같은 탭 재진입이나 새로고침에서 같은 토큰/목록을 불필요하게 다시 만들지 않게 유지합니다.

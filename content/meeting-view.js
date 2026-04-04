@@ -77,12 +77,13 @@
 
   function normalizeItem(item) {
     const nextItem = item && typeof item === "object" ? item : {};
+    const share = normalizeShare(nextItem.share);
     return {
       latestArtifactId: normalizeText(nextItem.latestArtifactId || nextItem.artifactId),
       latestJobId: normalizeText(nextItem.latestJobId || nextItem.jobId),
       meetingId: normalizeText(nextItem.meetingId),
-      shareActive: Boolean(nextItem.share?.active),
-      shareStatus: normalizeText(nextItem.share?.status),
+      shareActive: share.active,
+      shareStatus: share.status,
       status: normalizeText(nextItem.status) || "idle",
       title: normalizeText(nextItem.title) || "이름 없는 회의",
       updatedAt: normalizeText(nextItem.updatedAt || nextItem.createdAt),
@@ -275,6 +276,17 @@
 
   function normalizeText(value) {
     return String(value || "").trim();
+  }
+
+  function normalizeShare(input) {
+    const share = input && typeof input === "object" ? input : {};
+    const status = normalizeText(share.status);
+    const shareId = normalizeText(share.shareId);
+    return {
+      active: Boolean(share.active) || (status === "active" && Boolean(shareId)),
+      shareId,
+      status,
+    };
   }
 
   function normalizeDataFreshness(value) {

@@ -248,9 +248,26 @@
 
   function serializeDocument(doc) {
     const data = doc?.data && typeof doc.data === "function" ? doc.data() : {};
+    const share = normalizeShareMetadata(data?.share);
     return {
       ...cloneJson(data),
       docId: normalizeText(doc?.id),
+      share,
+    };
+  }
+
+  function normalizeShareMetadata(input) {
+    const share = input && typeof input === "object" ? input : {};
+    const status = normalizeText(share.status);
+    const shareId = normalizeText(share.shareId);
+    return {
+      ...cloneJson(share),
+      active: status === "active" && Boolean(shareId),
+      createdAt: normalizeText(share.createdAt),
+      createdBy: share.createdBy && typeof share.createdBy === "object" ? cloneJson(share.createdBy) : {},
+      revokedAt: normalizeText(share.revokedAt),
+      shareId,
+      status,
     };
   }
 
