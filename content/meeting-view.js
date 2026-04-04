@@ -14,8 +14,8 @@
           <p>${escapeHtml(buildPendingMessage(normalized.pending))}</p>
         </article>`
       : "";
-    const feedbackNotice = normalized.feedback.text
-      ? `<div class="inova-release-card inova-release-card__notice${normalized.feedback.tone === "error" ? "" : " is-info"}">${escapeHtml(normalized.feedback.text)}</div>`
+    const feedbackNotice = normalized.feedback.text && normalized.feedback.tone === "error"
+      ? `<div class="inova-release-card inova-release-card__notice">${escapeHtml(normalized.feedback.text)}</div>`
       : "";
 
     return `
