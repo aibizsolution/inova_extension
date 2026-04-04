@@ -210,9 +210,9 @@
       state.mode = normalizeText(parsed?.mode) === "detail" ? "detail" : "create";
       state.session = {
         accessMode: normalizeText(parsed?.accessMode),
-        expiresAt: "",
+        expiresAt: normalizeText(parsed?.expiresAt),
         meetingId: normalizeText(parsed?.meetingId),
-        meetingSessionToken: "",
+        meetingSessionToken: normalizeText(parsed?.meetingSessionToken),
         mode: state.mode,
         sharedMemo: normalizeTextBlock(parsed?.sharedMemo),
         shareToken: normalizeText(parsed?.shareToken),
@@ -303,11 +303,17 @@
         return;
       }
       state.mode = normalizeText(state.params.jobId) ? "detail" : "create";
+      const resolvedMeetingSessionToken = readOnly
+        ? ""
+        : normalizeText(payload.meetingSessionToken || state.session.meetingSessionToken);
+      const resolvedExpiresAt = readOnly
+        ? ""
+        : normalizeText(payload.expiresAt || state.session.expiresAt);
       state.session = {
         accessMode,
-        expiresAt: "",
+        expiresAt: resolvedExpiresAt,
         meetingId,
-        meetingSessionToken: "",
+        meetingSessionToken: resolvedMeetingSessionToken,
         mode: state.mode,
         sharedMemo: normalizeTextBlock(state.session.sharedMemo),
         shareToken: normalizeText(state.params.shareToken),
@@ -403,8 +409,10 @@
       const payload = {
         accessMode: normalizeText(state.auth.accessMode),
         bypassMode: normalizeText(state.auth.bypassMode),
+        expiresAt: normalizeText(state.session.expiresAt),
         jobId: normalizeText(state.params.jobId || entry?.remote?.jobId || entry?.pending?.jobId),
         meetingId: state.session.meetingId,
+        meetingSessionToken: normalizeText(state.session.meetingSessionToken),
         mode: state.mode,
         readOnly: Boolean(state.auth.readOnly),
         sharedMemo: normalizeTextBlock(state.recordMemoDraft || state.recordMemoSaved || state.session.sharedMemo),

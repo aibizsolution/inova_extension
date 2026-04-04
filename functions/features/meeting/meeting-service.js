@@ -18,7 +18,9 @@ const JOB_PART_COLLECTION = "integration_inova_meeting_job_parts";
 const COMMAND_COLLECTION = "integration_inova_meeting_commands";
 const DELETION_COLLECTION = "integration_inova_meeting_deletions";
 const ARTIFACT_COLLECTION = "integration_inova_meeting_artifacts";
+const LAUNCH_COLLECTION = "integration_inova_meeting_launches";
 const MEETING_COLLECTION = "integration_inova_meetings";
+const WORKSPACE_SESSION_COLLECTION = "integration_inova_meeting_workspace_sessions";
 const TEMP_UPLOAD_TTL_MS = 60 * 60 * 1000;
 const DELETION_RETRY_DELAY_MS = 60 * 60 * 1000;
 const DELETION_PROCESSING_STALE_MS = 15 * 60 * 1000;
@@ -1653,7 +1655,7 @@ function registerMeetingHandlers(deps) {
         await processRegenerateNotesCommand(claimedCommand);
       }
       const completedAt = new Date().toISOString();
-      await commandRef.set({
+      await setDocumentIfExists(commandRef, {
         completedAt,
         error: "",
         status: "succeeded",
@@ -1664,7 +1666,7 @@ function registerMeetingHandlers(deps) {
       const normalizedError = normalizeText(error?.message) || "회의록을 다시 정리하지 못했어요.";
       const completedAt = new Date().toISOString();
       await markMeetingCommandFailed(claimedCommand, normalizedError, completedAt);
-      await commandRef.set({
+      await setDocumentIfExists(commandRef, {
         completedAt,
         error: normalizedError,
         status: "failed",
@@ -1698,7 +1700,6 @@ function registerMeetingHandlers(deps) {
     await assertMeetingIsActive(owner, job.meetingId, createHttpError);
 
     const transcriptSource = await loadMeetingTranscriptForNotes(job, db, createHttpError);
-    const artifactRef = transcriptSource.artifactRef;
     const artifact = transcriptSource.artifact;
     const meetingRecord = await loadMeetingSummaryRecord(owner, { meetingId: job.meetingId }, createHttpError);
     const existingNotesContextItems = normalizeMeetingNotesContextItems(
@@ -1742,6 +1743,13 @@ function registerMeetingHandlers(deps) {
     );
     const resultTitle = resolveMeetingResultTitle(meetingNotes, job.title || effectiveMeeting.title);
     const completedAt = new Date().toISOString();
+    const latestJob = await loadStoredMeetingJob(jobRef);
+    if (!latestJob?.jobId || latestJob.deletedAt) {
+      throw createHttpError(404, "이미 삭제된 회의 결과예요.");
+    }
+    await assertMeetingIsActive(owner, latestJob.meetingId, createHttpError);
+    const latestArtifactId = normalizeText(latestJob.transcript?.artifactId || latestJob.artifacts?.[0]?.artifactId || artifact?.artifactId);
+    const latestArtifactRef = latestArtifactId ? db.collection(ARTIFACT_COLLECTION).doc(latestArtifactId) : null;
     const workspaceMutation = buildWorkspaceMutation({
       completedAt,
       requestId: command.clientRequestId,
@@ -1772,16 +1780,20 @@ function registerMeetingHandlers(deps) {
       notesStatus: meetingNotes.notesStatus,
     };
     const nextJob = normalizeMeetingJob({
-      ...job,
+      ...latestJob,
       ...jobPatch,
     });
     const nextArtifact = normalizeMeetingArtifact({
       ...artifact,
+      artifactId: latestArtifactId,
       ...artifactPatch,
     });
+    const jobUpdated = await setDocumentIfExists(jobRef, jobPatch);
+    if (!jobUpdated) {
+      throw createHttpError(404, "이미 삭제된 회의 결과예요.");
+    }
     await Promise.all([
-      jobRef.set(jobPatch, { merge: true }),
-      artifactRef ? artifactRef.set(artifactPatch, { merge: true }) : Promise.resolve(),
+      latestArtifactRef ? setDocumentIfExists(latestArtifactRef, artifactPatch) : Promise.resolve(),
       updateMeetingSummaryRecordResult(owner, nextJob, nextArtifact, completedAt),
     ]);
 
@@ -2445,6 +2457,20 @@ function registerMeetingHandlers(deps) {
     return false;
   }
 
+  async function setDocumentIfExists(ref, patch, options = { merge: true }) {
+    if (!ref || typeof ref.get !== "function" || typeof ref.set !== "function") {
+      return false;
+    }
+    return db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(ref);
+      if (!snapshot.exists) {
+        return false;
+      }
+      transaction.set(ref, patch, options);
+      return true;
+    });
+  }
+
   async function loadOwnedMeetingJobs(owner, meetingId) {
     const collection = db.collection(JOB_COLLECTION);
     const normalizedMeetingId = normalizeText(meetingId);
@@ -2469,6 +2495,46 @@ function registerMeetingHandlers(deps) {
         .filter((job) => normalizeText(job.meetingId) === normalizedMeetingId);
     }
     return [];
+  }
+
+  async function loadMeetingCommandDocsByJobId(jobId) {
+    const normalizedJobId = normalizeText(jobId);
+    if (!normalizedJobId) {
+      return [];
+    }
+    const snapshot = await db.collection(COMMAND_COLLECTION).where("jobId", "==", normalizedJobId).get();
+    return (Array.isArray(snapshot?.docs) ? snapshot.docs : [])
+      .map((doc) => ({ command: normalizeMeetingCommand(doc.data()), docId: doc.id, ref: doc.ref }))
+      .filter((entry) => normalizeText(entry.command.jobId) === normalizedJobId);
+  }
+
+  async function loadMeetingCommandDocsByMeetingId(meetingId) {
+    const normalizedMeetingId = normalizeText(meetingId);
+    if (!normalizedMeetingId) {
+      return [];
+    }
+    const snapshot = await db.collection(COMMAND_COLLECTION).where("meetingId", "==", normalizedMeetingId).get();
+    return (Array.isArray(snapshot?.docs) ? snapshot.docs : [])
+      .map((doc) => ({ command: normalizeMeetingCommand(doc.data()), docId: doc.id, ref: doc.ref }))
+      .filter((entry) => normalizeText(entry.command.meetingId) === normalizedMeetingId);
+  }
+
+  async function loadMeetingWorkspaceSessionDocs(meetingId) {
+    const normalizedMeetingId = normalizeText(meetingId);
+    if (!normalizedMeetingId) {
+      return [];
+    }
+    const snapshot = await db.collection(WORKSPACE_SESSION_COLLECTION).where("meeting.meetingId", "==", normalizedMeetingId).get();
+    return Array.isArray(snapshot?.docs) ? snapshot.docs.map((doc) => ({ docId: doc.id, ref: doc.ref })) : [];
+  }
+
+  async function loadMeetingLaunchDocs(meetingId) {
+    const normalizedMeetingId = normalizeText(meetingId);
+    if (!normalizedMeetingId) {
+      return [];
+    }
+    const snapshot = await db.collection(LAUNCH_COLLECTION).where("meeting.meetingId", "==", normalizedMeetingId).get();
+    return Array.isArray(snapshot?.docs) ? snapshot.docs.map((doc) => ({ docId: doc.id, ref: doc.ref })) : [];
   }
 
   async function loadOwnedMeetings(owner, limit, cursor) {
@@ -2741,13 +2807,20 @@ function registerMeetingHandlers(deps) {
     for (const job of jobs) {
       deletions.push(await deleteMeetingJobRuntimeArtifacts(job, task.deletedAt));
     }
+    const scopedDeletion = await deleteMeetingScopedRuntimeArtifacts(task);
     return {
       artifactCount: Array.from(new Set(deletions.flatMap((item) => item.artifactIds))).length,
+      commandCount: Array.from(new Set([
+        ...deletions.flatMap((item) => item.commandIds),
+        ...scopedDeletion.commandIds,
+      ])).length,
       jobCount: jobs.length,
+      launchCount: scopedDeletion.launchIds.length,
       storageObjectCount: Array.from(new Set(deletions.flatMap((item) => item.deletedStorageObjects))).length,
       taskId: task.taskId,
       meetingId: task.meetingId,
       owner,
+      workspaceSessionCount: scopedDeletion.workspaceSessionIds.length,
     };
   }
 
@@ -2765,6 +2838,7 @@ function registerMeetingHandlers(deps) {
     const deletion = await deleteMeetingJobRuntimeArtifacts(storedJob || fallbackJob, task.deletedAt);
     return {
       artifactCount: deletion.artifactIds.length,
+      commandCount: deletion.commandIds.length,
       jobCount: task.jobId ? 1 : 0,
       storageObjectCount: deletion.deletedStorageObjects.length,
       taskId: task.taskId,
@@ -2823,6 +2897,18 @@ function registerMeetingHandlers(deps) {
       }
     }
     if (task.meetingId) {
+      const commandDocs = await loadMeetingCommandDocsByMeetingId(task.meetingId);
+      if (commandDocs.length) {
+        return false;
+      }
+      const launchDocs = await loadMeetingLaunchDocs(task.meetingId);
+      if (launchDocs.length) {
+        return false;
+      }
+      const workspaceSessionDocs = await loadMeetingWorkspaceSessionDocs(task.meetingId);
+      if (workspaceSessionDocs.length) {
+        return false;
+      }
       const meetingSnapshot = await db.collection(MEETING_COLLECTION).doc(buildMeetingDocId(owner.providerUserKey, task.meetingId)).get();
       if (meetingSnapshot.exists && !normalizeMeetingSummary(meetingSnapshot.data()).deletedAt) {
         return false;
@@ -2864,6 +2950,10 @@ function registerMeetingHandlers(deps) {
     }
     const partDocs = await loadMeetingJobPartDocs(job.jobId);
     if (partDocs.length) {
+      return false;
+    }
+    const commandDocs = await loadMeetingCommandDocsByJobId(job.jobId);
+    if (commandDocs.length) {
       return false;
     }
     const artifactIds = Array.from(new Set(collectMeetingArtifactIds(storedJob || job)));
@@ -3241,6 +3331,7 @@ function registerMeetingHandlers(deps) {
     const job = normalizeMeetingJob(jobInput);
     const jobRef = db.collection(JOB_COLLECTION).doc(job.jobId);
     const artifactIds = Array.from(new Set(collectMeetingArtifactIds(job)));
+    const commandDocs = await loadMeetingCommandDocsByJobId(job.jobId);
     const partDocs = await loadMeetingJobPartDocs(job.jobId);
     const storageObjects = Array.from(new Set([
       ...collectMeetingSourceStorageObjects(job.source),
@@ -3254,6 +3345,7 @@ function registerMeetingHandlers(deps) {
     });
     await Promise.all([
       ...artifactIds.map((artifactId) => deleteDocumentIfExists(db.collection(ARTIFACT_COLLECTION).doc(artifactId))),
+      ...commandDocs.map((commandDoc) => deleteDocumentIfExists(commandDoc.ref)),
       deleteDocumentIfExists(db.collection(JOB_FINALIZER_COLLECTION).doc(job.jobId)),
       ...partDocs.map((partDoc) => deleteDocumentIfExists(db.collection(JOB_PART_COLLECTION).doc(partDoc.docId))),
     ]);
@@ -3277,8 +3369,34 @@ function registerMeetingHandlers(deps) {
     }, { merge: true });
     return {
       artifactIds,
+      commandIds: commandDocs.map((commandDoc) => commandDoc.docId),
       deletedStorageObjects: deletion.deletedStorageObjects,
       partCount: partDocs.length,
+    };
+  }
+
+  async function deleteMeetingScopedRuntimeArtifacts(task) {
+    if (task.scope !== "meeting" || !normalizeText(task.meetingId)) {
+      return {
+        commandIds: [],
+        launchIds: [],
+        workspaceSessionIds: [],
+      };
+    }
+    const [commandDocs, launchDocs, workspaceSessionDocs] = await Promise.all([
+      loadMeetingCommandDocsByMeetingId(task.meetingId),
+      loadMeetingLaunchDocs(task.meetingId),
+      loadMeetingWorkspaceSessionDocs(task.meetingId),
+    ]);
+    await Promise.all([
+      ...commandDocs.map((commandDoc) => deleteDocumentIfExists(commandDoc.ref)),
+      ...launchDocs.map((launchDoc) => deleteDocumentIfExists(launchDoc.ref)),
+      ...workspaceSessionDocs.map((sessionDoc) => deleteDocumentIfExists(sessionDoc.ref)),
+    ]);
+    return {
+      commandIds: commandDocs.map((commandDoc) => commandDoc.docId),
+      launchIds: launchDocs.map((launchDoc) => launchDoc.docId),
+      workspaceSessionIds: workspaceSessionDocs.map((sessionDoc) => sessionDoc.docId),
     };
   }
 

@@ -24,7 +24,10 @@
     const decoded = await decodeAudioBlob(sourceBlob);
     const monoSamples = downmixToMono(decoded);
     const resampled = resampleMono(monoSamples, decoded.sampleRate, targetSampleRate);
-    const derivedDurationMs = Math.round((resampled.length / targetSampleRate) * 1000);
+    const derivedDurationMs = Math.max(
+      deriveAudioBufferDurationMs(decoded),
+      Math.round((resampled.length / targetSampleRate) * 1000)
+    );
     const maxDurationMs = Math.max(30 * 1000, Number(options.maxDurationMs) || DEFAULT_SOURCE_MAX_DURATION_MS);
     if (derivedDurationMs > maxDurationMs) {
       throw new Error("현재 회의 원본은 최대 2시간까지만 지원해요.");
@@ -55,6 +58,15 @@
       parts,
       sampleRate: targetSampleRate,
     };
+  }
+
+  async function measureAudioDuration(blob) {
+    const decoded = await decodeAudioBlob(blob);
+    const durationMs = deriveAudioBufferDurationMs(decoded);
+    if (!(durationMs > 0)) {
+      throw new Error("decoded-duration-unavailable");
+    }
+    return durationMs;
   }
 
   async function decodeAudioBlob(blob) {
@@ -91,6 +103,14 @@
       }
     }
     return mono;
+  }
+
+  function deriveAudioBufferDurationMs(audioBuffer) {
+    const sampleRate = Math.max(1, Number(audioBuffer?.sampleRate) || 0);
+    const sampleLength = Math.max(0, Number(audioBuffer?.length) || 0);
+    const durationFromSamples = sampleLength > 0 ? Math.round((sampleLength / sampleRate) * 1000) : 0;
+    const durationFromMetadata = Math.round(Math.max(0, Number(audioBuffer?.duration) || 0) * 1000);
+    return Math.max(durationFromSamples, durationFromMetadata);
   }
 
   function resampleMono(samples, inputSampleRate, outputSampleRate) {
@@ -143,6 +163,7 @@
   }
 
   ns.audioChunker = {
+    measureAudioDuration,
     prepareAudioSourceChunks,
   };
 })(globalThis);

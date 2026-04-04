@@ -23,6 +23,9 @@
 - 그래서 `hosting/meeting/firebase-client.js`에서는 `synchronizeTabs: true` 같은 cross-tab Firestore persistence를 켜지 않고, 여러 회의 탭이 각자 auth를 유지하도록 둔다.
 - 실시간 listener permission 오류 재시도는 기존 작업실 access payload를 지운 뒤 막히지 않게, 같은 meeting auth로 강제 재로그인하는 흐름을 유지한다.
 - hosted 회의 작업실의 `파일 불러오기`는 로컬/상용 모두 지원 대상이다. origin이 다르다는 이유만으로 버튼 표시나 import 실행을 막지 않는다.
+- owner-secure hosted 작업실은 `meetingId`만으로 진입하거나 새로고침해도 업로드/삭제/수정이 계속 동작하도록 `authorizeInovaMeetingWorkspaceAccess`가 `meetingSessionToken`을 함께 돌려주고, 작업실은 그 토큰을 복원 세션에 저장한다.
+- hosted 작업실의 오디오 import는 duration 메타데이터가 비어 있는 파일도 실제 decode로 길이를 다시 계산해 본다. 둘 다 실패할 때만 `길이를 확인하지 못해 바로 전사할 수 없습니다`를 유지한다.
+- 위 duration decode fallback이 성공한 경우는 최종 실패처럼 취급하지 않는다. debug 로그는 informational하게 남기고, 실제 사용자 에러는 decode까지 실패했을 때만 보여 준다.
 
 ## 관련 functions 경로
 - `functions/features/meeting/meeting-launch-service.js`
@@ -44,6 +47,9 @@
 
 ## 최소 검증 방법
 - 팝업 target 설정, 회의 탭 목록, hosted meeting 진입, 결과 조회를 확인한다.
+- 상용 회의 데이터 정리 여부를 편하게 볼 때는 `npm run check:meeting-data`를 사용한다.
+- 회의 데이터를 전체 또는 특정 `meetingId` 기준으로 수동 정리할 때는 기본 dry-run인 `npm run delete:meeting-data -- --all` 또는 `npm run delete:meeting-data -- --meeting-id <id>`를 먼저 보고, 실제 삭제는 같은 명령에 `--execute`를 붙인다.
+- 회의 삭제와 기록 개별 삭제는 화면 항목 제거로 끝나지 않고, 관련 command 문서와 회의 단위 launch/workspace session까지 cleanup task가 정리해야 한다.
 
 ## 언제 사용자에게 다시 물을지
 - 패널 회의 허브 문제인지 hosted 작업실 문제인지, auth 문제인지 전사 backend 문제인지 모호할 때만 확인한다.

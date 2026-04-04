@@ -12,6 +12,7 @@ const SHARE_ACCESS_MODE = "share-readonly";
 const SHARE_REVOKED_STATUS = "revoked";
 const SHARE_SCOPE = "meeting-workspace-share";
 const WORKSPACE_SESSION_COLLECTION = "integration_inova_meeting_workspace_sessions";
+const DEFAULT_WORKSPACE_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 
 function registerMeetingWorkspaceAuthHandlers(deps) {
   const {
@@ -404,6 +405,9 @@ function registerMeetingWorkspaceAuthHandlers(deps) {
     const shareId = normalizeText(options.shareId);
     const bypassMode = normalizeText(options.bypassMode);
     const meetingDocumentId = buildMeetingDocId(owner.providerUserKey, meetingId);
+    const workspaceSession = readOnly
+      ? null
+      : await issueWorkspaceSession({ input, owner });
     const firebaseCustomToken = await createFirebaseCustomToken(
       buildWorkspaceFirebaseUid(owner.providerUserKey, viewer.providerUserKey, readOnly),
       {
@@ -430,16 +434,52 @@ function registerMeetingWorkspaceAuthHandlers(deps) {
     return {
       accessDecision: "allowed",
       accessMode,
+      expiresAt: normalizeText(workspaceSession?.expiresAt),
       bypassApplied: Boolean(bypassMode),
       bypassMode,
       firebaseCustomToken,
       inovaLogin: true,
       meetingDocumentId,
       meetingId,
+      meetingSessionToken: normalizeText(workspaceSession?.meetingSessionToken),
       readOnly,
       reason: "",
       shareId,
       viewer: buildViewerSummary(viewer),
+      workspaceSessionId: normalizeText(workspaceSession?.workspaceSessionId),
+    };
+  }
+
+  async function issueWorkspaceSession(options) {
+    const input = options?.input || {};
+    const owner = normalizeIdentity(options?.owner);
+    const meetingId = normalizeText(input.meetingId);
+    if (!meetingId || !owner?.providerUserKey) {
+      throw createHttpError(400, "회의 작업실 세션 발급에 필요한 정보가 비어 있어요.");
+    }
+    const workspaceSessionId = db.collection(WORKSPACE_SESSION_COLLECTION).doc().id;
+    const workspaceSecret = createSecret();
+    const issuedAt = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + DEFAULT_WORKSPACE_SESSION_TTL_MS).toISOString();
+    const workspaceSessionToken = `${workspaceSessionId}.${workspaceSecret}`;
+    await db.collection(WORKSPACE_SESSION_COLLECTION).doc(workspaceSessionId).set({
+      expiresAt,
+      issuedAt,
+      jobId: normalizeText(input.jobId),
+      meeting: {
+        meetingId,
+        title: "",
+      },
+      mode: normalizeText(input.jobId) ? "detail" : "create",
+      owner: { ...owner },
+      secretHash: hashSecret(workspaceSecret),
+      status: "active",
+      workspaceSessionId,
+    });
+    return {
+      expiresAt,
+      meetingSessionToken: workspaceSessionToken,
+      workspaceSessionId,
     };
   }
 
