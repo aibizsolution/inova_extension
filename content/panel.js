@@ -47,11 +47,19 @@
     root.dataset.open = String(state.open);
     document.body.classList.toggle("inova-bookmark-panel-open", Boolean(state.visible && state.open));
     applyHandleRatio(host, state.handleRatio);
-    host.querySelector("#inova-tool-rail").innerHTML = renderToolRail(state.tools, state.activeTool);
+    const toolRail = host.querySelector("#inova-tool-rail");
+    const nextToolRailHtml = renderToolRail(state.tools, state.activeTool);
+    if (toolRail && toolRail.innerHTML !== nextToolRailHtml) {
+      toolRail.innerHTML = nextToolRailHtml;
+    }
     host.querySelector("#inova-tool-title").textContent = state.toolTitle;
     host.querySelector("#inova-tool-total").textContent = String(state.toolCount);
     host.querySelector(".handle-count").textContent = String(state.handleCount);
-    host.querySelector("#inova-tool-content").innerHTML = renderToolContent(state);
+    const toolContent = host.querySelector("#inova-tool-content");
+    const nextToolContentHtml = renderToolContent(state);
+    if (toolContent && toolContent.innerHTML !== nextToolContentHtml) {
+      toolContent.innerHTML = nextToolContentHtml;
+    }
     namespace.panelDebug?.captureViewport?.("panel-overlay", debugLayer?.querySelector(".inova-meeting-debug-console__log"));
     debugLayer.innerHTML = renderMeetingDebugLayer(state);
     syncMeetingDebugLayerDataset(debugLayer, state.panelDebug);

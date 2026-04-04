@@ -66,7 +66,9 @@
 
     async function handleStoreAction(action, detail = {}) {
       const result = storeManager.handleAction(action, detail);
-      promptRealtimeManager.scheduleSync(80);
+      if (shouldScheduleStoreRealtimeSync(action)) {
+        promptRealtimeManager.scheduleSync(80);
+      }
       return result;
     }
 
@@ -85,6 +87,10 @@
       selectPromptTab,
       showPromptTab,
     };
+
+    function shouldScheduleStoreRealtimeSync(action) {
+      return action === "import" || action === "toggle-like" || action === "unpublish";
+    }
   }
 
   namespace.promptHubController = { create };

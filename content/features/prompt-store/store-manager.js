@@ -17,15 +17,16 @@
       unpublishPrompt,
     };
     function buildViewState() {
+      const providerIdentity = namespace.providerIdentity.getCurrent();
       const appliedQuery = getAppliedQuery();
-      const categoryFiltered = namespace.promptStore.filterEntries(state.store.items, "", state.store.categoryId);
+      const scopedItems = getScopedStoreItems(providerIdentity.providerUserKey);
+      const categoryFiltered = namespace.promptStore.filterEntries(scopedItems, "", state.store.categoryId);
       const filtered = namespace.promptStore.filterEntries(categoryFiltered, appliedQuery, state.store.categoryId);
       const items = namespace.promptStore.sortEntries(filtered, state.store.sortBy);
-      const providerUserKey = namespace.providerIdentity.getCurrent().providerUserKey;
       const totalCount = hasActiveQuery() ? items.length : categoryFiltered.length;
       const emptyText = hasActiveQuery() ? "검색 결과가 없어요. 다른 표현으로 다시 찾아보세요." : state.store.scope === "mine" ? "내가 등록한 프롬프트가 아직 없어요." : "스토어에 등록된 프롬프트가 아직 없어요.";
       return {
-        categories: getAvailableCategories(),
+        categories: getAvailableCategories(providerIdentity.providerUserKey),
         categoryId: state.store.categoryId,
         actionPending: state.store.actionPending,
         deleteConfirmEntryId: state.store.deleteConfirmEntryId,
@@ -44,7 +45,7 @@
         loaded: state.store.loaded,
         loading: state.store.loading,
         ownerScope: state.store.scope,
-        providerUserKey,
+        providerUserKey: providerIdentity.providerUserKey,
         queryActive: hasActiveQuery(),
         queryDirty: isQueryDirty(),
         query: state.queries.store,
@@ -102,7 +103,7 @@
           filter: {
             categoryId: "all",
             limit: LOCAL_CACHE_LIMIT,
-            ownerOnly: state.store.scope === "mine",
+            ownerOnly: false,
             query: "",
             sortBy: "latest",
           },
@@ -455,6 +456,9 @@
         state.store.loaded = false;
       }
       hooks.render();
+      if (state.store.scope === "mine" && state.store.loaded) {
+        return;
+      }
       if (state.store.scope !== "all") {
         await ensureLoaded(true);
         return;
@@ -465,16 +469,21 @@
     function getAppliedQuery() { return namespace.session.normalizeText(state.store.appliedQuery); }
     function getNormalizedInputQuery() { return namespace.session.normalizeText(state.queries.store); }
     function isQueryDirty() { return getNormalizedInputQuery() !== getAppliedQuery(); }
-    function getAvailableCategories() {
-      const itemCategories = Array.isArray(state.store.items)
-        ? Array.from(new Set(state.store.items.map((item) => namespace.session.normalizeText(item?.categoryId).toLowerCase()).filter(Boolean)))
+    function getAvailableCategories(providerUserKey) {
+      const scopedItems = getScopedStoreItems(providerUserKey);
+      const itemCategories = Array.isArray(scopedItems)
+        ? Array.from(new Set(scopedItems.map((item) => namespace.session.normalizeText(item?.categoryId).toLowerCase()).filter(Boolean)))
           .map((categoryId) => ({ id: categoryId }))
         : [];
+      if (state.store.scope === "mine") {
+        return normalizeAvailableCategories(itemCategories, state.store.categoryId);
+      }
       return normalizeAvailableCategories(itemCategories.length ? itemCategories : state.store.availableCategories, state.store.categoryId);
     }
     function hasStoreRenderableData() {
+      const scopedItems = getScopedStoreItems(namespace.providerIdentity.getCurrent().providerUserKey);
       return Boolean(
-        Array.isArray(state.store.items) && state.store.items.length
+        Array.isArray(scopedItems) && scopedItems.length
         || Math.max(0, Number(state.store.totalCount) || 0) > 0
       );
     }
@@ -499,6 +508,18 @@
         global.clearTimeout(state.store.searchTimer);
         state.store.searchTimer = global.setTimeout(() => ensureLoaded(), 0);
       }
+    }
+
+    function getScopedStoreItems(providerUserKey) {
+      const items = Array.isArray(state.store.items) ? state.store.items : [];
+      if (state.store.scope !== "mine") {
+        return items;
+      }
+      const normalizedProviderUserKey = namespace.session.normalizeText(providerUserKey);
+      if (!normalizedProviderUserKey) {
+        return [];
+      }
+      return items.filter((item) => namespace.session.normalizeText(item?.owner?.providerUserKey) === normalizedProviderUserKey);
     }
 
     function shouldReloadAfterMutation() {
