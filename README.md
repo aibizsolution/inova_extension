@@ -111,6 +111,7 @@
 - content script는 i-Nova 탭이 로드되거나 다시 포커스를 받을 때 현재 `providerIdentity`를 확장 저장소에 자동으로 캐시합니다. 그래서 확장 새로고침 직후에는 i-Nova 탭도 한 번 새로고침해 두면 hosted 작업실 secure authorize가 더 안정적으로 바로 붙습니다.
 - 현재 i-Nova 사용자 식별은 브라우저 저장소의 `auth`/`userInfo` payload에서 읽고, `userKey`뿐 아니라 `fullUserKey`/`providerUserKey` 같은 변형 키도 함께 허용합니다. 로그인은 살아 있는데 작업실만 `identity-required`로 막히면 이 경계부터 먼저 확인합니다.
 - direct clean URL에서 secure authorize가 시작될 때 background는 저장된 캐시가 비어 있으면 현재 열려 있는 `https://inova.incross.com/*` 탭에 runtime message로 사용자 identity를 다시 물어봅니다. 그래서 같은 브라우저에 로그인된 i-Nova 탭이 열려 있으면 패널을 먼저 열지 않아도 owner auth를 복구할 수 있어야 합니다.
+- i-Nova 탭의 identity runtime responder는 `content/main.js` 부팅 완료를 기다리지 않고 `content/provider-identity-sync.js`가 로드되는 즉시 등록합니다. 그래서 secure authorize의 identity probe는 패널 렌더/route sync보다 먼저 와도 응답할 수 있어야 합니다.
 - `대화 안에서 찾기`
   - 지금 보고 있는 대화 안에서만 질문을 검색합니다.
   - 결과를 클릭하면 해당 질문 위치로 이동하고, 좁은 화면에서는 패널을 잠시 접어 원문을 보기 쉽게 합니다.

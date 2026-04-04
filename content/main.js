@@ -158,7 +158,6 @@
     chrome.storage.onChanged?.addListener(cloudSyncManager.handleStorageChange);
     chrome.storage.onChanged?.addListener(meetingManager.handleStorageChange);
     chrome.storage.onChanged?.addListener(releaseManager.handleStorageChange);
-    chrome.runtime.onMessage?.addListener(providerIdentitySync.handleRuntimeMessage);
     namespace.panelDebug?.subscribe?.(() => {
       render();
     });

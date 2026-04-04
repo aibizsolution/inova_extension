@@ -1,5 +1,38 @@
 (function initProviderIdentitySync(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const RUNTIME_PROVIDER_IDENTITY_REQUEST = "inova-meeting:get-provider-identity";
+
+  function readCurrentProviderIdentity() {
+    const normalizeProviderIdentity = typeof namespace.cloudSync?.normalizeProviderIdentity === "function"
+      ? namespace.cloudSync.normalizeProviderIdentity
+      : (identity) => identity && typeof identity === "object" ? identity : {};
+    return normalizeProviderIdentity(namespace.providerIdentity?.getCurrent?.() || null);
+  }
+
+  function handleRuntimeProviderIdentityMessage(message, sender, sendResponse) {
+    const type = namespace.session.normalizeText(message?.type);
+    if (type !== RUNTIME_PROVIDER_IDENTITY_REQUEST) {
+      return false;
+    }
+    Promise.resolve().then(() => {
+      sendResponse({
+        ok: true,
+        providerIdentity: readCurrentProviderIdentity(),
+        senderUrl: namespace.session.normalizeText(sender?.url),
+      });
+    }).catch((error) => {
+      sendResponse({
+        error: error instanceof Error ? error.message : String(error || "현재 i-Nova 사용자 정보를 읽지 못했어요."),
+        ok: false,
+      });
+    });
+    return true;
+  }
+
+  if (!namespace.providerIdentitySyncRuntimeInstalled && global.chrome?.runtime?.onMessage?.addListener) {
+    global.chrome.runtime.onMessage.addListener(handleRuntimeProviderIdentityMessage);
+    namespace.providerIdentitySyncRuntimeInstalled = true;
+  }
 
   namespace.providerIdentitySync = {
     create(state, deps = {}) {
@@ -55,7 +88,7 @@
 
       function handleRuntimeMessage(message, sender, sendResponse) {
         const type = namespace.session.normalizeText(message?.type);
-        if (type !== "inova-meeting:get-provider-identity") {
+        if (type !== RUNTIME_PROVIDER_IDENTITY_REQUEST) {
           return false;
         }
         Promise.resolve().then(async () => {
