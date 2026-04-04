@@ -3,6 +3,10 @@
 ## 기능 목적
 - 회의 허브, hosted 작업실, 녹음, 전사, 결과 검토를 다룬다.
 
+## 문서 갱신 규칙
+- 이 feature의 사용자 체감 동작, 데이터 경계, 먼저 볼 파일, 검증 기준이 바뀌면 이 문서를 같은 작업 안에서 갱신한다.
+- `README.md` 대신 이 문서나 meeting 전용 docs에 먼저 기록한다.
+
 ## 먼저 볼 파일
 - `content/meeting-manager.js`
 - `content/meeting-view.js`

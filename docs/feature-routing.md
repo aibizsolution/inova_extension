@@ -5,6 +5,7 @@
 ## 기본 규칙
 
 - 먼저 primary feature를 하나 고른다.
+- `README.md`는 상위 개요만 유지하고, feature-local 세부 규칙과 변경 기록은 각 feature `AGENTS.md`나 전용 docs를 우선한다.
 - cue가 두 feature 이상에 걸리면 저장소 전체 탐색 대신 짧게 `이 기능이 맞나요?`를 확인한다.
 - 읽기 순서는 `feature-local -> feature-owned shared -> platform/shell -> 인접 feature`다.
 - `popup`, `background/service-worker.js`, `content/main.js`, `content/panel.js`, `functions/index.js`, `manifest.json`, `shared/*`는 platform/shell이다.

@@ -16,7 +16,11 @@
 ## 문서와 구조
 - feature 진입점과 데이터 경계는 항상 `docs/feature-routing.md`를 먼저 기준으로 삼는다.
 - 기능 상세 규칙은 루트 문서에 다시 길게 적지 말고 feature 하위 `AGENTS.md`에 추가한다.
-- 기능 관련 소스나 설정을 바꾸면 `README.md`도 같은 작업 안에서 함께 맞춘다.
+- `README.md`는 저장소/제품 개요, 설치/배포, 상위 feature 축이 바뀔 때만 갱신한다.
+- 실제 기능 변경 내용은 해당 feature `AGENTS.md` 또는 feature 전용 docs에 먼저 기록한다.
+- feature-local 변경 때문에 `README.md`를 기능 변경 일지처럼 누적하지 않는다.
+- 문서는 완벽하지 않다고 가정하고, 작업 중 문서와 실제 코드/함수/파일 경계가 다르면 코드를 기준으로 같은 작업 안에서 문서를 갱신한다.
+- feature 문서가 실제 파일 경로나 진입점과 어긋나기 시작하면 검증 스크립트와 문서를 함께 보강해 다음 작업자가 좁은 범위만 읽고도 시작할 수 있게 유지한다.
 
 ## 공통화 원칙
 - 같은 feature 안에서 panel, hosted, popup 같은 여러 표면이 비슷한 markup/helper/state contract를 반복하면 먼저 shared module 또는 render contract로 묶을 수 있는지 검토한다.

@@ -3,6 +3,10 @@
 ## 기능 목적
 - 스토어 목록, 상세 보기, 좋아요, 가져오기, 등록/삭제와 realtime feed를 다룬다.
 
+## 문서 갱신 규칙
+- 이 feature의 사용자 체감 동작, 데이터 경계, 먼저 볼 파일, 검증 기준이 바뀌면 이 문서를 같은 작업 안에서 갱신한다.
+- `README.md` 대신 이 문서나 prompt-store 전용 docs에 먼저 기록한다.
+
 ## 먼저 볼 파일
 - `content/features/prompt-store/store-manager.js`
 - `content/features/prompt-store/store-view.js`

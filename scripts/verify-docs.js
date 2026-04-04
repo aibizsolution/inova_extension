@@ -12,8 +12,15 @@ const requiredFiles = [
   "README.md",
   path.join(".githooks", "pre-push"),
   path.join("docs", "feature-spec.md"),
+  path.join("docs", "feature-routing.md"),
   "popup/index.html",
   "popup/index.js",
+  path.join("content", "features", "conversation", "AGENTS.md"),
+  path.join("content", "features", "prompt-library", "AGENTS.md"),
+  path.join("content", "features", "prompt-store", "AGENTS.md"),
+  path.join("content", "features", "prompt-review", "AGENTS.md"),
+  path.join("content", "features", "meeting", "AGENTS.md"),
+  path.join("content", "features", "release", "AGENTS.md"),
   path.join("hosting", "meeting", "index.html"),
   path.join("hosting", "meeting", "index.js"),
   path.join("hosting", "meeting", "workspace-session.js"),
@@ -25,7 +32,7 @@ const requiredFiles = [
   path.join("hosting", "meeting", "shared.js"),
   path.join("scripts", "install-git-hooks.js"),
   "shared/prompt-library.js",
-  path.join("scripts", "verify-readme-update.js"),
+  path.join("scripts", "verify-feature-doc-update.js"),
   "content/main.js",
   "content/prompt-hub-state.js",
   "content/prompt-hub-panel.js",
@@ -70,8 +77,64 @@ const keywordGroups = [
 
 const readmeOnlyKeywordGroups = [
   {
-    name: "Git 훅 가드",
-    patterns: [/pre-push/i, /README\.md/, /hooks:install|verify:readme-guard/],
+    name: "Feature 문서 가드",
+    patterns: [/pre-push/i, /feature\s+`AGENTS\.md`/i, /hooks:install|verify:feature-doc-guard/],
+  },
+];
+
+const featureDocContracts = [
+  {
+    feature: "conversation",
+    doc: path.join("content", "features", "conversation", "AGENTS.md"),
+    expectedFiles: ["content/dom.js", "content/bookmark-view.js", "content/route-sync.js"],
+  },
+  {
+    feature: "prompt-library",
+    doc: path.join("content", "features", "prompt-library", "AGENTS.md"),
+    expectedFiles: [
+      "content/features/prompt-library/prompt-manager.js",
+      "content/features/prompt-library/prompt-view.js",
+      "content/features/prompt-library/files.js",
+      "shared/prompt-library.js",
+    ],
+  },
+  {
+    feature: "prompt-store",
+    doc: path.join("content", "features", "prompt-store", "AGENTS.md"),
+    expectedFiles: [
+      "content/features/prompt-store/store-manager.js",
+      "content/features/prompt-store/store-view.js",
+      "content/features/prompt-store/prompt-realtime-manager.js",
+      "shared/prompt-store.js",
+    ],
+  },
+  {
+    feature: "prompt-review",
+    doc: path.join("content", "features", "prompt-review", "AGENTS.md"),
+    expectedFiles: [
+      "content/features/prompt-review/prompt-review-manager.js",
+      "content/features/prompt-review/prompt-review-view.js",
+      "content/features/prompt-review/composer-review-float.js",
+    ],
+  },
+  {
+    feature: "meeting",
+    doc: path.join("content", "features", "meeting", "AGENTS.md"),
+    expectedFiles: [
+      "content/meeting-manager.js",
+      "content/meeting-view.js",
+      "hosting/meeting/index.js",
+      "popup/index.js",
+    ],
+  },
+  {
+    feature: "release",
+    doc: path.join("content", "features", "release", "AGENTS.md"),
+    expectedFiles: [
+      "content/release-manager.js",
+      "content/release-view.js",
+      "shared/release-info.js",
+    ],
   },
 ];
 
@@ -248,6 +311,8 @@ function main() {
     }
   }
 
+  validateFeatureDocs(errors);
+
   for (const keyword of contract.requiredDocKeywords) {
     const spec = readText(path.join(root, "docs", "feature-spec.md"), errors);
     if (!readmeText.includes(keyword) && !spec.includes(keyword)) {
@@ -286,6 +351,32 @@ function readJson(filePath, errors) {
   } catch (error) {
     errors.push(`JSON 파싱 실패: ${path.relative(root, filePath)} (${error.message})`);
     return null;
+  }
+}
+
+function validateFeatureDocs(errors) {
+  const routingDocPath = path.join(root, "docs", "feature-routing.md");
+  const routingText = readText(routingDocPath, errors);
+
+  for (const feature of featureDocContracts) {
+    const featureDocPath = path.join(root, feature.doc);
+    const featureDocText = readText(featureDocPath, errors);
+
+    for (const file of feature.expectedFiles) {
+      const fullPath = path.join(root, file);
+      if (!fs.existsSync(fullPath)) {
+        errors.push(`${feature.feature} feature 문서가 가리키는 파일이 없습니다: ${file}`);
+        continue;
+      }
+
+      if (!featureDocText.includes(file)) {
+        errors.push(`${feature.doc}에 feature 핵심 파일이 빠졌습니다: ${file}`);
+      }
+
+      if (routingText && !routingText.includes(file)) {
+        errors.push(`docs/feature-routing.md에 feature 시작 파일이 빠졌습니다: ${feature.feature} / ${file}`);
+      }
+    }
   }
 }
 

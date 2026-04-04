@@ -5,5 +5,5 @@ set -e
 stdin_payload="$(cat)"
 
 printf "%s" "$stdin_payload" | node scripts/verify-branch-workflow.js "$@"
-printf "%s" "$stdin_payload" | node scripts/verify-readme-update.js "$@"
+printf "%s" "$stdin_payload" | node scripts/verify-feature-doc-update.js "$@"
 printf "%s" "$stdin_payload" | node scripts/verify-release-metadata.js "$@"

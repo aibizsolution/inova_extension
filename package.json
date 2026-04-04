@@ -29,7 +29,7 @@
     "verify:contracts": "node scripts/verify-contracts.js",
     "verify:docs": "node scripts/verify-docs.js",
     "verify:prompt-fallbacks": "node scripts/verify-prompt-fallbacks.js",
-    "verify:readme-guard": "node scripts/verify-readme-update.js --staged",
+    "verify:feature-doc-guard": "node scripts/verify-feature-doc-update.js --staged",
     "verify:release-guard": "node scripts/verify-release-metadata.js --staged"
   },
   "devDependencies": {

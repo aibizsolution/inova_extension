@@ -5,6 +5,7 @@
 ## Feature-first 작업 시작
 
 - 이 저장소에서는 새 요청이 오면 먼저 [docs/feature-routing.md](docs/feature-routing.md)에서 primary feature를 고르고, 해당 feature `AGENTS.md`와 먼저 볼 파일만 읽고 시작합니다.
+- `README.md`는 저장소와 제품의 상위 개요만 유지하고, 실제 기능 변경 기록과 세부 규칙은 각 feature `AGENTS.md` 또는 feature 전용 docs에 남깁니다.
 - 실행 표면과 런타임 경계가 필요할 때만 [docs/runtime-architecture.md](docs/runtime-architecture.md)를 봅니다.
 - `popup`, `background/service-worker.js`, `content/main.js`, `content/panel.js`, `functions/index.js`, `manifest.json`, `shared/*`는 platform/shell로 취급하고, feature 범위만으로 해결되지 않을 때만 읽습니다.
 - `content/prompt-hub-view.js`, `content/prompt-hub-state.js`, `content/prompt-hub-panel.js`, `content/prompt-hub-controller.js`, `content/prompt-hub-runtime.js`는 `내 요청/스토어/검토` shell을 담당하므로, 단일 prompt feature 소유 파일로 보지 않습니다.
@@ -368,10 +369,10 @@ http://127.0.0.1:5000/meeting/index.html?...&debug=1&debugAuthBypass=owner&recor
 localStorage.setItem("__INOVA_MEETING_RECORD_LIMIT_SECONDS__", "30");
 ```
 
-README 가드만 미리 확인하려면 다음을 실행합니다.
+Feature 문서 가드만 미리 확인하려면 다음을 실행합니다.
 
 ```bash
-npm run verify:readme-guard
+npm run verify:feature-doc-guard
 ```
 
 릴리스 메타 가드만 미리 확인하려면 다음을 실행합니다.
@@ -382,7 +383,7 @@ npm run verify:release-guard
 
 ## Git 훅
 
-이 저장소는 기능 관련 파일이 바뀌었는데 `README.md`가 같이 수정되지 않으면 `pre-push`에서 push를 막습니다.
+이 저장소는 feature-owned 파일이 바뀌었는데 해당 feature `AGENTS.md`가 같이 수정되지 않으면 `pre-push`에서 push를 막습니다.
 
 릴리스 준비 파일인 `package.json`, `manifest.json`, `releases/release-notes.json` 중 일부만 바뀌면 `pre-push`에서 함께 막습니다.
 
@@ -414,7 +415,7 @@ npm run hooks:install
 ## 협업 가드레일
 
 - 로컬에서는 `pre-commit`, `pre-push`가 같은 규칙을 단계별로 검사합니다.
-- 원격에서는 [`.github/workflows/repo-guardrails.yml`](/C:/Users/parkyoungtack/Documents/code/inova_extension/.github/workflows/repo-guardrails.yml)이 `verify`, README 가드, 릴리스 메타 가드를 다시 검사하고, 릴리스 준비 파일이 바뀐 경우에만 `release:build`를 추가로 확인합니다.
+- 원격에서는 [`.github/workflows/repo-guardrails.yml`](/C:/Users/parkyoungtack/Documents/code/inova_extension/.github/workflows/repo-guardrails.yml)이 `verify`, feature 문서 가드, 릴리스 메타 가드를 다시 검사하고, 릴리스 준비 파일이 바뀐 경우에만 `release:build`를 추가로 확인합니다.
 - PR 화면에는 [`.github/pull_request_template.md`](/C:/Users/parkyoungtack/Documents/code/inova_extension/.github/pull_request_template.md) 체크리스트가 자동으로 들어갑니다.
 - GitHub branch protection에서는 `main` direct push 금지와 `Repo Guardrails / verify` 체크 통과를 필수로 두고, 사람 승인 수는 0으로 두는 것을 기본값으로 권장합니다.
 

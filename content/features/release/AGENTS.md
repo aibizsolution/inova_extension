@@ -3,6 +3,10 @@
 ## 기능 목적
 - 릴리스 패널, 최신 버전 확인, 정적 JSON/ZIP 링크 표시를 다룬다.
 
+## 문서 갱신 규칙
+- 이 feature의 사용자 체감 동작, 릴리스 메타 경계, 먼저 볼 파일, 검증 기준이 바뀌면 이 문서를 같은 작업 안에서 갱신한다.
+- `README.md` 대신 이 문서나 release 전용 docs에 먼저 기록한다.
+
 ## 먼저 볼 파일
 - `content/release-manager.js`
 - `content/release-view.js`

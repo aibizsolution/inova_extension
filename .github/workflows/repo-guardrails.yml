@@ -28,11 +28,11 @@ jobs:
       - name: Verify Contracts And Docs
         run: npm run verify
 
-      - name: Verify README Guard On PR Range
+      - name: Verify Feature Doc Guard On PR Range
         if: github.event_name == 'pull_request'
         run: |
           git fetch origin "${{ github.base_ref }}" --depth=1
-          node scripts/verify-readme-update.js --range "origin/${{ github.base_ref }}..HEAD"
+          node scripts/verify-feature-doc-update.js --range "origin/${{ github.base_ref }}..HEAD"
 
       - name: Verify Release Guard On PR Range
         if: github.event_name == 'pull_request'
@@ -40,9 +40,9 @@ jobs:
           git fetch origin "${{ github.base_ref }}" --depth=1
           node scripts/verify-release-metadata.js --range "origin/${{ github.base_ref }}..HEAD"
 
-      - name: Verify README Guard On Push Range
+      - name: Verify Feature Doc Guard On Push Range
         if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
-        run: node scripts/verify-readme-update.js --range "${{ github.event.before }}..HEAD"
+        run: node scripts/verify-feature-doc-update.js --range "${{ github.event.before }}..HEAD"
 
       - name: Verify Release Guard On Push Range
         if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'

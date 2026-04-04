@@ -3,6 +3,10 @@
 ## 기능 목적
 - 내 요청 보관함 CRUD, 가져오기/내보내기, 로컬 우선 클라우드 백업 동기화를 다룬다.
 
+## 문서 갱신 규칙
+- 이 feature의 사용자 체감 동작, 데이터 경계, 먼저 볼 파일, 검증 기준이 바뀌면 이 문서를 같은 작업 안에서 갱신한다.
+- `README.md` 대신 이 문서나 prompt-library 전용 docs에 먼저 기록한다.
+
 ## 먼저 볼 파일
 - `content/features/prompt-library/prompt-manager.js`
 - `content/features/prompt-library/prompt-view.js`
