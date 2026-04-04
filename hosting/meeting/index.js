@@ -1351,7 +1351,7 @@
   }
 
   function updateNotesRevisionDraft(value) {
-    state.notesRevision.draft = normalizeTextBlock(value).slice(0, MAX_NOTES_REVISION_REQUEST_CHARS);
+    state.notesRevision.draft = normalizeTextareaDraft(value).slice(0, MAX_NOTES_REVISION_REQUEST_CHARS);
     applyRender();
   }
 
@@ -3846,7 +3846,12 @@
   async function saveMeetingTitle() { return saveMeetingPatch({ title: normalizeText(state.meetingTitleDraft || refs.meetingTitleInput.value) }, "작업실 이름을 저장했습니다.", "작업실 이름을 먼저 입력해 주세요."); }
   async function saveSharedMemo() {
     updateRecordMemoDraft(refs.sharedMemoInput.value);
-    setNotice(state.recordMemoDraft ? "현재 기록 메모를 자동 보관했습니다." : "현재 기록 메모를 비웠습니다.", "highlight");
+    setNotice(
+      normalizeTextBlock(refs.sharedMemoInput.value)
+        ? "현재 기록 메모를 자동 보관했습니다."
+        : "현재 기록 메모를 비웠습니다.",
+      "highlight"
+    );
     applyRender();
   }
   async function clearSharedMemo() {
@@ -4160,8 +4165,14 @@
     applyRender();
   }
 
+  function normalizeTextareaDraft(value) {
+    return String(value || "")
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n");
+  }
+
   function updateRecordMemoDraft(value) {
-    const nextValue = normalizeTextBlock(value);
+    const nextValue = normalizeTextareaDraft(value);
     state.recordMemoDraft = nextValue;
     state.recordMemoSaved = nextValue;
     state.session.sharedMemo = nextValue;
