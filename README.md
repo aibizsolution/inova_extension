@@ -73,15 +73,15 @@
   - 이때 기록 큐에서는 예전 stalled/failed 원격 job을 새 시도가 대체한 것으로 보고, 같은 제목이 두 줄로 겹쳐 보이지 않게 이전 시도 항목을 숨깁니다.
   - 녹음은 `녹음 시작 -> 일시중지/재개 -> 종료하고 전사` 흐름으로 동작하고, 종료된 녹음본은 원격 처리 완료 전까지 브라우저 로컬 큐에 보관합니다.
   - 한 기록은 기본 `90분`까지 이어지고, 제한 시간에 도달하면 현재 기록을 자동 전사로 넘긴 뒤 다음 개별 기록 녹음을 바로 이어갑니다.
-- 전사가 끝나면 회의록 형식의 자동 정리본과 `원문 검토` 전사를 같은 상세 화면에서 함께 보여주고, 회의의 내용 구조는 AI가 자동 판단합니다.
-- 회의 정리 탭은 이제 상용 회의록 SaaS처럼 `핵심 요약`, `회의 개요`, `주요 논의 내용`, `주요 결정 사항`, `추가 결정 필요 사항`, `리스크 및 제약`, `후속 실행 항목` 순으로 읽히도록 정리합니다.
+- 전사가 끝나면 완료된 결과 화면을 `회의 정리 / 메모 / 원문 검토` 3탭으로 보여주고, 기본 진입은 항상 `회의 정리` 문서 탭으로 맞춥니다.
+- 회의 정리 탭은 이제 상용 회의록 SaaS처럼 `핵심 요약`, `회의 개요`, `논의 흐름`, `주요 결정 사항`, `추가 결정 필요 사항`, `리스크 및 제약`, `후속 실행 항목` 순으로 읽히도록 정리합니다.
 - 회의 정리는 `왜 이 회의가 열렸고 어떤 논의 흐름으로 결론과 미결정이 나왔는지`가 보이도록 하나의 문서형 흐름으로 다시 생성합니다.
 - 회의 정리의 `열린 쟁점`, `후속 질문`, `의존성`처럼 배열로 내려오는 항목은 객체형 응답이 섞여도 읽을 수 있는 문장으로 정규화해 표시합니다.
-- `상태` 탭에서는 현재 기록을 `기록 선택 -> 발화 구간 -> 회의 정리 -> 검토 마무리` 순서의 단계 흐름으로 보여주고, 완료 단계는 조용하게 처리한 채 현재 확인이 필요한 단계만 더 또렷하게 보여줍니다.
-  - 회의 정리가 완료되면 AI가 만든 `meetingMeta.title`을 해당 기록 제목으로 바로 반영하고, 이후 다시 정리해도 최신 AI 제목으로 덮어씁니다.
+- 처리 중이거나 실패한 기록에서만 `상태` 탭을 유지하고, 완료된 기록에서는 운영 상태판보다 문서형 결과를 먼저 읽게 합니다.
+- 회의 정리가 완료되면 AI가 만든 `meetingMeta.title`을 해당 기록 제목으로 바로 반영하고, 이후 다시 정리해도 최신 AI 제목으로 덮어씁니다.
 - 원문 검토 탭에서는 시간대가 포함된 전체 전사를 바로 복사할 수 있고, 회의 정리 탭에서는 같은 전사를 기준으로 회의 정리를 다시 생성할 수 있습니다.
   - 회의는 현재 대화 세션과 분리된 `meetingId` 기준으로 관리하고, 같은 회의의 처리 이력만 페이지 안에 남깁니다.
-- 좌측 `기록 큐` 카드는 긴 본문 미리보기보다 `AI 판단`과 상태 중심으로 보여줘서 어떤 기록을 다시 열어야 하는지 빠르게 구분할 수 있게 유지합니다.
+- 좌측 `기록 큐` 카드는 AI 내부 판단보다 제목, 상태, 마지막 정리 결과를 중심으로 보여줘서 어떤 기록을 다시 열어야 하는지 빠르게 구분할 수 있게 유지합니다.
 - 작업실에서는 작업실 이름과 공용 메모를 저장할 수 있고, 우측 `기록 검토` 패널에서 개별 기록 이름 수정과 삭제를 함께 처리합니다. 삭제를 실행하면 연결된 job/artifact와 남아 있는 임시 source object까지 함께 정리합니다.
   - 패널에서 회의를 열면 확장이 짧은 수명의 launch grant를 즉시 hosted workspace session으로 교환한 뒤, `#ws`가 붙은 최종 hosted 작업실 URL을 새 탭으로 엽니다.
   - 작업실에서는 사용자가 직접 `녹음 시작`을 눌러 웹앱에서 바로 마이크 녹음을 시작하고, 표준 `getUserMedia + MediaRecorder` 경로로 녹음합니다.
@@ -236,12 +236,12 @@
 - `uploadInovaMeetingSource` HTTP 함수도 chunk/single 원본 업로드에서 raw audio body를 바로 메모리에 받아 bucket에 쓰는 heavy upload 경계라 `concurrency: 1`, `maxInstances: 40`, `1GiB`, `120초`로 따로 고정합니다. 그래서 여러 chunk 업로드가 동시에 들어와도 한 인스턴스가 여러 raw audio 요청을 함께 받아 OOM 나는 기본 `80` 동시성을 타지 않습니다.
 - 회의 결과 삭제와 작업실 삭제는 `queued`/`processing` 상태도 409로 막지 않고 바로 soft-delete/tombstone을 남깁니다. 삭제 요청이 오면 job/meeting/session을 즉시 `deletedAt` 상태로 내려 UI와 summary에서 숨기고, 실제 cleanup은 `integration_inova_meeting_deletions` 큐 문서로 분리합니다.
 - 삭제 큐는 Firestore trigger가 즉시 artifact·chunk part·finalizer·임시 source/chunk transcript 정리를 한 번 시도하고, race 때문에 part/finalizer가 다시 남거나 storage cleanup이 덜 끝났으면 `sweepQueuedInovaMeetingDeletions`가 1시간마다 다시 확인합니다. queue 문서는 정리가 실제로 끝났을 때만 사라지고, 완료 시에는 meeting/job/session tombstone 문서까지 실제 삭제합니다.
-- hosted 회의 작업실은 `종료하고 전사` 또는 `파일 불러오기` 시점에 원본을 먼저 업로드 가능한 source로 준비한 뒤 `createInovaMeetingJob`으로 parent job을 일찍 만들고, chunk 업로드가 이어지는 동안 같은 job source를 계속 보강합니다. Functions background 처리기는 `source download -> chunk worker 전사 -> chunk transcript 임시 저장 -> finalizer 병합 -> 회의록 모드 분류 -> 구간별 요약과 최종 회의록 통합 -> source/chunk cleanup -> Firestore meeting/job/artifact 저장`까지 처리합니다. 자동 회의록 정리는 이제 `notesStatus`, `notesDegradedReason`, 실제 `notesGeneratedAt`을 함께 기록해 `비활성`, `건너뜀`, `degraded`, `성공`을 구분하고, notes 생성 실패를 완료 시각만 채운 성공처럼 보이지 않게 유지합니다.
+- hosted 회의 작업실은 `종료하고 전사` 또는 `파일 불러오기` 시점에 원본을 먼저 업로드 가능한 source로 준비한 뒤 `createInovaMeetingJob`으로 parent job을 일찍 만들고, chunk 업로드가 이어지는 동안 같은 job source를 계속 보강합니다. Functions background 처리기는 `source download -> chunk worker 전사 -> chunk transcript 임시 저장 -> finalizer 병합 -> 구간별 요약과 최종 회의록 통합 -> source/chunk cleanup -> Firestore meeting/job/artifact 저장`까지 처리합니다. 자동 회의록 정리는 이제 `notesStatus`, `notesDegradedReason`, 실제 `notesGeneratedAt`을 함께 기록해 `비활성`, `건너뜀`, `degraded`, `성공`을 구분하고, notes 생성 실패를 완료 시각만 채운 성공처럼 보이지 않게 유지합니다.
 - hosted chunk upload는 원격 job 생성/추가 publish/resync 직전에 브라우저 queue와 runtime chunk cache를 다시 merge한 최신 snapshot으로 payload를 만듭니다. 그래서 같은 requestId의 후속 chunk가 이미 업로드된 상태라면 stale pending snapshot이 더 적은 part 정보로 원격 source를 덮어쓰지 않게 유지합니다.
 - 기본 전사 모델은 diarized transcript가 아니라 plain transcript를 사용하고, 회의록 품질은 `전사 -> section summary -> final reducer` 계층형 요약으로 끌어올립니다. 그래서 기본 경로의 과분리 문제를 줄이고, 긴 회의의 후반부 결정/액션 누락도 함께 줄입니다.
 - 회의록 후처리는 최종 저장 전에 중복 토픽·결정·액션·리스크를 줄이고 항목 수 상한을 적용해, 결과가 `모델 중간 산출물`보다 사람이 바로 읽는 회의 정리 문서에 가깝게 유지합니다.
-- 회의 정리와 모드 분류 기본 모델은 `gpt-5.4-mini`를 사용하고, 필요하면 `OPENAI_MEETING_SUMMARY_MODEL` 또는 `OPENAI_SUMMARY_MODEL`로 override할 수 있습니다.
-- Functions는 같은 `requestId` 재전송을 idempotent하게 재사용하고, `sharedMemoSnapshot`과 notes mode 메타데이터를 함께 저장합니다.
+- 회의 정리 기본 모델은 `gpt-5.4-mini`를 사용하고, 필요하면 `OPENAI_MEETING_SUMMARY_MODEL` 또는 `OPENAI_SUMMARY_MODEL`로 override할 수 있습니다.
+- Functions는 같은 `requestId` 재전송을 idempotent하게 재사용하고, `sharedMemoSnapshot`을 함께 저장합니다.
 - Functions가 source audio를 임시 bucket object로 저장할 때는 Firebase 설정의 기본 storage bucket을 우선 쓰고, 기본 bucket이 없는 프로젝트에서는 `STORAGE_BUCKET_URL`로 실제 존재하는 bucket을 명시해야 합니다. 현재 프로젝트는 chunk 업로드용으로 `gcf-v2-uploads-1027279095019.asia-northeast3.cloudfunctions.appspot.com`을 사용합니다.
 - 회의 작업실 Firestore 구독용 Firebase custom token은 기본적으로 `1027279095019-compute@developer.gserviceaccount.com`으로 서명하고, 다른 계정을 써야 하면 `FIREBASE_AUTH_SIGNING_SERVICE_ACCOUNT`로 override할 수 있습니다.
 - 함수 최적화나 병목 확인이 필요할 때는 `npm run check:function-runtime -- --since 1440 --filter meeting`처럼 실행하면, 현재 배포된 모든 함수의 `memory / timeout / concurrency / maxInstances`와 최근 request latency 요약을 한 번에 볼 수 있습니다. 특정 함수만 보고 싶으면 `--functions processQueuedInovaMeetingJob,processQueuedInovaMeetingJobPart`처럼 export 이름을 직접 넘기면 됩니다.
@@ -276,7 +276,7 @@
 9. 녹음이 `90분`에 도달하면 현재 기록은 자동으로 전사 큐에 들어가고, 작업실은 다음 개별 기록 녹음을 이어갑니다.
 10. 저장된 결과를 선택하면 우측 `기록 검토` 패널에서 이름을 수정하거나 삭제하고, 자동 정리와 발화 구간 기준 전사를 함께 확인할 수 있습니다.
 11. 필요하면 `원문 검토` 탭에서 시간대 포함 전사를 전체 복사하고, 같은 전사를 기준으로 회의 정리를 다시 생성할 수 있습니다.
-12. 회의 정리가 어색하거나 맥락이 부족하면 회의 정리 탭에서 `회의 정리 다시 만들기`를 눌러 같은 전사를 기준으로 다시 생성할 수 있습니다. 회의 종류 판단은 계속 AI가 맡습니다.
+12. 회의 정리가 어색하거나 맥락이 부족하면 회의 정리 탭에서 `다시 정리`를 눌러 같은 전사를 기준으로 다시 생성할 수 있습니다.
 12. `프롬프트` 도구에서는 자주 쓰는 요청을 추가하거나 선택해 현재 입력창에 바로 넣고, `스토어` 서브탭에서 공유 프롬프트를 찾아 좋아요를 누르거나 내 요청으로 가져옵니다.
 13. 대화 입력창 우측 상단의 평가 버튼으로 현재 프롬프트를 참고용으로 평가하고, 필요하면 보완 프롬프트를 다시 반영합니다.
 14. `릴리스` 도구에서는 현재 버전, 최신 버전, 업데이트 ZIP, 이전 버전 롤백 링크를 확인합니다.

@@ -2224,11 +2224,8 @@
       createdAt: entry.remote.createdAt,
       error: entry.remote.error,
       jobId: entry.remote.jobId,
-        notesGeneratedAt: entry.remote.notesGeneratedAt,
-        notesModeConfidence: entry.remote.notesModeConfidence,
-        notesModeDetected: entry.remote.notesModeDetected,
-        notesModeSelected: entry.remote.notesModeSelected,
-        source: {
+      notesGeneratedAt: entry.remote.notesGeneratedAt,
+      source: {
         durationMs: entry.remote.durationMs,
         requestId: entry.remote.requestId,
       },

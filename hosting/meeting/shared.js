@@ -8,7 +8,7 @@
   const DEBUG_FAULTS_SESSION_STORAGE_KEY = "inova-hosted-meeting-debug-faults";
   const DEFAULT_CREATE_JOB_TIMEOUT_MS = 9 * 60 * 1000;
   const DEFAULT_INLINE_AUDIO_LIMIT_BYTES = 25 * 1024 * 1024;
-  const DEFAULT_SOURCE_TARGET_PART_BYTES = 20 * 1024 * 1024;
+  const DEFAULT_SOURCE_TARGET_PART_BYTES = 28 * 1024 * 1024;
   const DEFAULT_SOURCE_MAX_BYTES = 200 * 1024 * 1024;
   const DEFAULT_SOURCE_MAX_DURATION_MS = 2 * 60 * 60 * 1000;
   const DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS = 20 * 60 * 1000;
@@ -16,7 +16,6 @@
   const DEFAULT_SOURCE_CHUNK_OVERLAP_MS = 1500;
   const DEFAULT_SOURCE_CHUNK_SAMPLE_RATE = 16000;
   const DEFAULT_MAX_RECORDING_DURATION_MS = 90 * 60 * 1000;
-  const DEFAULT_NOTES_MODE = "general";
   const DEFAULT_RECORDING_AUDIO_BITS_PER_SECOND = 30000;
   const DEFAULT_SOURCE_UPLOAD_TIMEOUT_MS = 3 * 60 * 1000;
   const FIREBASE_WEB_CONFIG = {
@@ -761,18 +760,6 @@
     return "대기";
   }
 
-  function formatNotesModeLabel(mode) {
-    if (mode === "interview") return "인터뷰";
-    if (mode === "review") return "리뷰/회고";
-    if (mode === "planning") return "계획 수립";
-    return "일반 회의";
-  }
-
-  function normalizeMeetingNotesMode(value) {
-    const normalized = normalizeText(value).toLowerCase();
-    return ["general", "interview", "review", "planning"].includes(normalized) ? normalized : "";
-  }
-
   function formatPhase(phase) {
     const normalized = normalizeText(phase);
     if (normalized === "uploading" || normalized === "upload_queued") return "업로드 준비";
@@ -1125,7 +1112,6 @@
   ns.shared = {
     AUTO_RETRY_PENDING_STATUSES,
     DEBUG_PREFIX,
-      DEFAULT_NOTES_MODE,
     DEFAULT_CREATE_JOB_TIMEOUT_MS,
     DEFAULT_INLINE_AUDIO_LIMIT_BYTES,
     DEFAULT_MAX_RECORDING_DURATION_MS,
@@ -1156,7 +1142,6 @@
     formatDateTime,
     formatDuration,
     formatSegmentRange,
-      formatNotesModeLabel,
     formatPhase,
     formatStatusLabel,
     formatDebugEntry,
@@ -1175,7 +1160,6 @@
     loadPersistedWorkspaceSession,
     logDebug,
     normalizeBaseUrl,
-      normalizeMeetingNotesMode,
     normalizeStatus,
     normalizeText,
     normalizeTextArray,

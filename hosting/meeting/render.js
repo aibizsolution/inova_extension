@@ -1,8 +1,8 @@
 (function initHostedMeetingRender(global) {
   const ns = global.__INOVA_HOSTED_MEETING__ = global.__INOVA_HOSTED_MEETING__ || {};
-  const { DEFAULT_NOTES_MODE, TERMINAL_REMOTE_STATUSES, cleanPreviewText, escapeHtml, formatBytes, formatDateTime, formatDuration, formatNotesModeLabel, formatPhase, formatSegmentRange, formatStatusLabel, normalizeMeetingNotesMode, normalizeStatus, normalizeText, normalizeTextBlock } = ns.shared;
+  const { TERMINAL_REMOTE_STATUSES, cleanPreviewText, escapeHtml, formatBytes, formatDateTime, formatDuration, formatPhase, formatSegmentRange, formatStatusLabel, normalizeStatus, normalizeText, normalizeTextBlock } = ns.shared;
   const { comparePendingUploads, normalizePendingUpload } = ns.storage;
-  const { formatActionItem, formatDecisionItem, formatMemoItem, formatRiskItem, formatTopicItem, hasMeetingNotes, normalizeMeetingNotes, normalizeTextArray } = ns.notes;
+  const { hasMeetingNotes, normalizeMeetingNotes, normalizeTextArray } = ns.notes;
   const DEFAULT_CHUNK_PROGRESS_ACTIVE_COUNT = 2;
   const STALLED_PROCESSING_THRESHOLD_MS = 10 * 60 * 1000;
   const DISPLAY_REVIEW_SEGMENT_TARGET_CHARS = 220;
@@ -39,9 +39,6 @@
       meetingId: normalizeText(nextRecord.meetingId),
       notesDegradedReason: normalizeText(nextRecord.notesDegradedReason),
       notesGeneratedAt: normalizeText(nextRecord.notesGeneratedAt),
-      notesModeConfidence: Math.max(0, Math.min(1, Number(nextRecord.notesModeConfidence) || 0)),
-      notesModeDetected: normalizeMeetingNotesMode(nextRecord.notesModeDetected),
-      notesModeSelected: normalizeMeetingNotesMode(nextRecord.notesModeSelected),
       notesStatus: normalizeText(nextRecord.notesStatus),
       previewText: cleanPreviewText(nextRecord.previewText),
       requestId: normalizeText(nextRecord.requestId),
@@ -59,12 +56,9 @@
       durationMs: Math.max(0, Number(job?.source?.durationMs) || 0),
       error: normalizeText(job.error),
       jobId: normalizeText(job.jobId),
-      meetingNotes: normalizeMeetingNotes(job.meetingNotes, job.notesModeSelected),
+      meetingNotes: normalizeMeetingNotes(job.meetingNotes),
       notesDegradedReason: normalizeText(job.notesDegradedReason),
       notesGeneratedAt: normalizeText(job.notesGeneratedAt),
-      notesModeConfidence: Math.max(0, Math.min(1, Number(job.notesModeConfidence) || 0)),
-      notesModeDetected: normalizeMeetingNotesMode(job.notesModeDetected),
-      notesModeSelected: normalizeMeetingNotesMode(job.notesModeSelected),
       notesStatus: normalizeText(job.notesStatus),
       progress: {
         currentPart: Math.max(0, Number(job?.progress?.currentPart) || 0),
@@ -95,12 +89,9 @@
       : [];
     return {
       artifactId: normalizeText(artifact.artifactId),
-      notes: normalizeMeetingNotes(artifact.notes, artifact.notesModeSelected),
+      notes: normalizeMeetingNotes(artifact.notes),
       notesDegradedReason: normalizeText(artifact.notesDegradedReason),
       notesGeneratedAt: normalizeText(artifact.notesGeneratedAt),
-      notesModeConfidence: Math.max(0, Math.min(1, Number(artifact.notesModeConfidence) || 0)),
-      notesModeDetected: normalizeMeetingNotesMode(artifact.notesModeDetected),
-      notesModeSelected: normalizeMeetingNotesMode(artifact.notesModeSelected),
       notesStatus: normalizeText(artifact.notesStatus),
       segments,
       text: ns.shared.normalizeTextBlock(artifact.text),
@@ -128,9 +119,6 @@
       jobId: normalizeText(pending.jobId),
       meetingNotes: null,
       notesGeneratedAt: "",
-      notesModeConfidence: 0,
-      notesModeDetected: "",
-      notesModeSelected: "",
       progress: { percent: progressPercent, phase: normalizeText(pending.status) },
       requestId: normalizeText(pending.requestId),
       resultTitle: normalizeText(pending.meetingTitleSnapshot),
@@ -445,31 +433,33 @@
   }
 
   function buildNotesSummaryMeta(meta) {
-    const appliedMode = normalizeMeetingNotesMode(meta?.selected || meta?.detected) || DEFAULT_NOTES_MODE;
-    const confidenceText = meta?.confidence > 0 ? `신뢰도 ${Math.round(meta.confidence * 100)}%` : "";
-    const traceText = meta?.sourceTraceCount > 0 ? `근거 ${meta.sourceTraceCount}개` : "";
-    const degradedText = normalizeText(meta?.degradedReason) ? `품질 주의: ${normalizeText(meta.degradedReason)}` : "";
-    return [
-      `AI 판단 ${formatNotesModeLabel(appliedMode)}`,
-      confidenceText,
-      traceText,
-      degradedText,
-    ].filter(Boolean).join(" · ");
+    const generatedAt = formatDateTime(normalizeText(meta?.generatedAt), "");
+    const degradedText = normalizeText(meta?.degradedReason);
+    if (generatedAt && degradedText) {
+      return `마지막 정리 ${generatedAt} · 품질 주의: ${degradedText}`;
+    }
+    if (generatedAt) {
+      return `마지막 정리 ${generatedAt}`;
+    }
+    if (degradedText) {
+      return `품질 주의: ${degradedText}`;
+    }
+    return "";
   }
 
   function buildCompletedRecordSummary(notes) {
-    const executiveSummary = normalizeTextBlock(Array.isArray(notes?.executiveSummary) ? notes.executiveSummary[0] : "");
-    if (executiveSummary) return executiveSummary;
+    const overview = normalizeTextBlock(notes?.overview);
+    if (overview) return overview;
     const purpose = normalizeTextBlock(notes?.meetingMeta?.purpose);
     if (purpose) return purpose;
-    const firstTopic = (Array.isArray(notes?.topics) ? notes.topics : []).find((item) => {
-      const headline = normalizeText(item?.summary || item?.topic);
+    const firstFlow = (Array.isArray(notes?.discussionFlow) ? notes.discussionFlow : []).find((item) => {
+      const headline = normalizeText(item?.narrative || item?.heading);
       return Boolean(headline || normalizeTextArray(item?.keyPoints).length);
     });
-    if (firstTopic) {
-      const topicHeadline = normalizeText(firstTopic?.summary || firstTopic?.topic);
-      if (topicHeadline) return topicHeadline;
-      const firstKeyPoint = normalizeTextArray(firstTopic?.keyPoints)[0];
+    if (firstFlow) {
+      const narrative = normalizeText(firstFlow?.narrative || firstFlow?.heading);
+      if (narrative) return narrative;
+      const firstKeyPoint = normalizeTextArray(firstFlow?.keyPoints)[0];
       if (firstKeyPoint) return firstKeyPoint;
     }
     const firstDecision = normalizeText(Array.isArray(notes?.decisions) ? notes.decisions[0]?.text : "");
@@ -484,9 +474,6 @@
     const normalizedSegmentCount = Math.max(0, Number(segmentCount) || 0);
     if (normalizedSegmentCount > 0) {
       items.push(`원문 ${normalizedSegmentCount}개`);
-    }
-    if (Number(meta?.sourceTraceCount) > 0) {
-      items.push(`근거 ${Math.max(0, Number(meta.sourceTraceCount) || 0)}건`);
     }
     const generatedAt = formatDateTime(normalizeText(meta?.generatedAt), "");
     if (generatedAt) {
@@ -693,87 +680,181 @@
   }
 
   function buildMeetingNotesSections(notes) {
-    const sections = [];
-    pushSection(sections, "회의 개요", buildMeetingOverviewItems(notes));
-    pushSection(sections, "주요 결정 사항", notes.decisions.map(formatDecisionItem));
-    pushSection(sections, "후속 실행 항목", notes.actionItems.map(formatActionItem));
-    pushSection(sections, "추가 결정 필요 사항", [
-      ...normalizeTextArray(notes.openQuestions),
-      ...normalizeTextArray(notes.modeSpecific?.followUpQuestions),
-    ]);
-    pushSection(sections, "주요 논의 내용", notes.topics.map(formatTopicItem));
-    if (notes.mode === "interview") {
-      pushSection(sections, "인터뷰 핵심 포인트", [
-        ...normalizeTextArray(notes.modeSpecific?.strengths),
-        ...normalizeTextArray(notes.modeSpecific?.concerns),
-      ]);
-    } else if (notes.mode === "review") {
-      pushSection(sections, "리뷰 및 회고 포인트", [
-        ...normalizeTextArray(notes.modeSpecific?.wins),
-        ...normalizeTextArray(notes.modeSpecific?.problems),
-        ...normalizeTextArray(notes.modeSpecific?.rootCauses),
-        ...normalizeTextArray(notes.modeSpecific?.improvements),
-      ]);
-    } else if (notes.mode === "planning") {
-      pushSection(sections, "범위 및 일정 포인트", [
-        ...normalizeTextArray(notes.modeSpecific?.scopeItems),
-        ...normalizeTextArray(notes.modeSpecific?.milestones),
-      ]);
-    }
-    pushSection(sections, "리스크 및 제약", [
-      ...normalizeTextArray(notes.modeSpecific?.dependencies),
-      ...notes.risksOrDependencies.map(formatRiskItem),
-    ]);
-    pushSection(sections, "메모 반영 포인트", notes.memoHighlights.map(formatMemoItem));
-    return sections;
+    return [
+      buildMeetingOverviewSection(notes),
+      buildDiscussionFlowSection(notes?.discussionFlow),
+      buildSimpleListSection("주요 결정 사항", normalizeDecisionItemsForDisplay(notes?.decisions)),
+      buildSimpleListSection("후속 실행 항목", normalizeActionItemsForDisplay(notes?.actionItems)),
+      buildSimpleListSection("추가 결정 필요 사항", normalizeTextArray(notes?.openQuestions)),
+      buildSimpleListSection("리스크 및 제약", normalizeRiskItemsForDisplay(notes?.risksOrDependencies)),
+    ].filter(Boolean);
   }
 
-  function buildMeetingOverviewItems(notes) {
-    const items = [];
-    const purpose = ns.shared.normalizeTextBlock(notes?.meetingMeta?.purpose);
+  function buildMeetingOverviewSection(notes) {
+    const purpose = normalizeTextBlock(notes?.meetingMeta?.purpose);
+    const overview = normalizeTextBlock(notes?.overview);
     const participants = normalizeTextArray(notes?.meetingMeta?.participants);
     const datetime = normalizeText(notes?.meetingMeta?.datetime);
-    if (purpose) {
-      items.push(purpose);
+    const paragraphs = [purpose, overview].filter(Boolean);
+    if (!paragraphs.length && !participants.length && !datetime) {
+      return null;
     }
-    if (participants.length) {
-      items.push(`참여자: ${participants.join(", ")}`);
-    }
-    if (datetime) {
-      items.push(`일시: ${datetime}`);
-    }
-    return items;
+    return {
+      metaItems: [
+        datetime ? `일시 ${datetime}` : "",
+        participants.length ? `참여자 ${participants.join(", ")}` : "",
+      ].filter(Boolean),
+      paragraphs,
+      title: "회의 개요",
+      type: "prose",
+    };
   }
 
-  function pushSection(target, title, items) {
-    const normalizedItems = (Array.isArray(items) ? items : []).map((item) => ns.shared.normalizeTextBlock(item)).filter(Boolean);
-    if (normalizedItems.length) target.push({ items: normalizedItems, title });
+  function normalizeDecisionItemsForDisplay(items) {
+    return (Array.isArray(items) ? items : [])
+      .map((item) => {
+        const text = normalizeText(item?.text);
+        if (!text) {
+          return null;
+        }
+        const meta = normalizeText(item?.owner) ? `담당: ${normalizeText(item.owner)}` : "";
+        return { body: "", headline: text, meta };
+      })
+      .filter(Boolean);
   }
 
-  function renderNoteListItem(item) {
-    const lines = ns.shared.normalizeTextBlock(item).split("\n").map((line) => normalizeText(line)).filter(Boolean);
-    if (!lines.length) {
+  function normalizeActionItemsForDisplay(items) {
+    return (Array.isArray(items) ? items : [])
+      .map((item) => {
+        const task = normalizeText(item?.task);
+        if (!task) {
+          return null;
+        }
+        const metaParts = [
+          normalizeText(item?.assignee) ? `담당: ${normalizeText(item.assignee)}` : "",
+          normalizeText(item?.dueDate) ? `기한: ${normalizeText(item.dueDate)}` : "",
+          normalizeText(item?.status) ? `상태: ${normalizeText(item.status)}` : "",
+        ].filter(Boolean);
+        return { body: "", headline: task, meta: metaParts.join(" · ") };
+      })
+      .filter(Boolean);
+  }
+
+  function normalizeRiskItemsForDisplay(items) {
+    return (Array.isArray(items) ? items : [])
+      .map((item) => {
+        const text = normalizeText(item?.text);
+        if (!text) {
+          return null;
+        }
+        const meta = normalizeText(item?.severity) ? `심각도: ${normalizeText(item.severity)}` : "";
+        return { body: "", headline: text, meta };
+      })
+      .filter(Boolean);
+  }
+
+  function buildDiscussionFlowSection(items) {
+    const normalizedItems = (Array.isArray(items) ? items : [])
+      .map((item) => ({
+        heading: normalizeText(item?.heading),
+        keyPoints: normalizeTextArray(item?.keyPoints),
+        narrative: normalizeTextBlock(item?.narrative),
+      }))
+      .filter((item) => item.heading || item.narrative || item.keyPoints.length);
+    if (!normalizedItems.length) {
+      return null;
+    }
+    return {
+      items: normalizedItems,
+      title: "논의 흐름",
+      type: "flow",
+    };
+  }
+
+  function buildSimpleListSection(title, items) {
+    const normalizedItems = (Array.isArray(items) ? items : [])
+      .map((item) => {
+        if (typeof item === "string") {
+          const text = normalizeTextBlock(item);
+          return text ? { body: "", headline: text, meta: "" } : null;
+        }
+        const headline = normalizeTextBlock(item?.headline);
+        const body = normalizeTextBlock(item?.body);
+        const meta = normalizeText(item?.meta);
+        if (!headline && !body) {
+          return null;
+        }
+        return {
+          body,
+          headline: headline || body,
+          meta,
+        };
+      })
+      .filter(Boolean);
+    if (!normalizedItems.length) {
+      return null;
+    }
+    return {
+      items: normalizedItems,
+      title,
+      type: "list",
+    };
+  }
+
+  function splitNotesParagraphs(text) {
+    return normalizeTextBlock(text)
+      .split("\n")
+      .map((paragraph) => normalizeTextBlock(paragraph))
+      .filter(Boolean);
+  }
+
+  function renderNotesProse(paragraphs) {
+    const normalized = (Array.isArray(paragraphs) ? paragraphs : [])
+      .flatMap((paragraph) => splitNotesParagraphs(paragraph))
+      .filter(Boolean);
+    if (!normalized.length) {
       return "";
     }
-    const headline = lines[0];
-    const detailLines = lines.slice(1);
-    const bulletLines = detailLines
-      .filter((line) => line.startsWith("- "))
-      .map((line) => normalizeText(line.slice(2)));
-    const bodyLines = detailLines.filter((line) => !line.startsWith("- "));
-    return `<li class="notes-list__item"><div class="notes-list__headline">${escapeHtml(headline)}</div>${bodyLines.length ? `<div class="notes-list__body">${bodyLines.map((line) => `<p>${escapeHtml(line)}</p>`).join("")}</div>` : ""}${bulletLines.length ? `<ul class="notes-list__sublist">${bulletLines.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul>` : ""}</li>`;
+    return `<div class="notes-prose">${normalized.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("")}</div>`;
+  }
+
+  function renderNotesMetaRow(items) {
+    const normalized = (Array.isArray(items) ? items : []).map((item) => normalizeText(item)).filter(Boolean);
+    if (!normalized.length) {
+      return "";
+    }
+    return `<div class="notes-meta-row">${normalized.map((item) => `<span class="notes-meta-chip">${escapeHtml(item)}</span>`).join("")}</div>`;
+  }
+
+  function renderNotesListItem(item) {
+    const headline = normalizeTextBlock(item?.headline);
+    const body = normalizeTextBlock(item?.body);
+    const meta = normalizeText(item?.meta);
+    if (!headline && !body) {
+      return "";
+    }
+    return `<li class="notes-list__item"><div class="notes-list__headline">${escapeHtml(headline || body)}</div>${meta ? `<div class="notes-list__meta">${escapeHtml(meta)}</div>` : ""}${body && body !== headline ? `<div class="notes-list__body">${renderNotesProse([body])}</div>` : ""}</li>`;
   }
 
   function renderNotesSection(section) {
-    return `<section class="notes-section"><h3 class="notes-section__title">${escapeHtml(section.title)}</h3><ul class="notes-list">${section.items.map((item) => renderNoteListItem(item)).join("")}</ul></section>`;
-  }
-
-  function renderNotesOverview(summaryItems) {
-    const items = (Array.isArray(summaryItems) ? summaryItems : []).map((item) => ns.shared.normalizeTextBlock(item)).filter(Boolean);
-    if (!items.length) {
+    if (!section) {
       return "";
     }
-    return `<section class="notes-section"><h3 class="notes-section__title">핵심 요약</h3><ul class="notes-list">${items.map((item) => renderNoteListItem(item)).join("")}</ul></section>`;
+    if (section.type === "prose") {
+      return `<section class="notes-section"><h3 class="notes-section__title">${escapeHtml(section.title)}</h3>${renderNotesMetaRow(section.metaItems)}${renderNotesProse(section.paragraphs)}</section>`;
+    }
+    if (section.type === "flow") {
+      return `<section class="notes-section"><h3 class="notes-section__title">${escapeHtml(section.title)}</h3><div class="notes-flow">${section.items.map((item) => `<article class="notes-flow__item"><h4 class="notes-flow__heading">${escapeHtml(item.heading || "주요 논의")}</h4>${renderNotesProse([item.narrative])}${item.keyPoints.length ? `<ul class="notes-flow__points">${item.keyPoints.map((point) => `<li>${escapeHtml(point)}</li>`).join("")}</ul>` : ""}</article>`).join("")}</div></section>`;
+    }
+    return `<section class="notes-section"><h3 class="notes-section__title">${escapeHtml(section.title)}</h3><ul class="notes-list">${section.items.map((item) => renderNotesListItem(item)).join("")}</ul></section>`;
+  }
+
+  function renderNotesOverview(notes) {
+    const summary = buildCompletedRecordSummary(notes);
+    if (!summary) {
+      return "";
+    }
+    return `<section class="notes-section"><h3 class="notes-section__title">핵심 요약</h3>${renderNotesProse([summary])}</section>`;
   }
 
   function buildStatusFlow(detailView, options = {}) {
@@ -815,7 +896,7 @@
     if (isFailed) {
       pushStep("회의 정리", "failed", "오류 해결 후 다시 생성합니다.");
     } else if (options.hasNotesValue) {
-      pushStep("회의 정리", "done", [options.notesModeLabel, options.generatedAt].filter(Boolean).join(" · ") || "회의 정리가 준비됐습니다.");
+      pushStep("회의 정리", "done", options.generatedAt ? `마지막 정리 ${options.generatedAt}` : "회의 정리가 준비됐습니다.");
     } else if (options.hasSegmentContent) {
       pushStep("회의 정리", isBusy ? "current" : "warning", isBusy ? "전사를 바탕으로 회의 정리를 만드는 중입니다." : "같은 전사로 다시 정리할 수 있습니다.", isBusy ? "진행" : "재정리");
     } else {
@@ -834,8 +915,6 @@
 
     if (recordSelected && !["idle", "succeeded"].includes(normalizedStatus)) pushFact("현재 상태", detailView.badgeLabel);
     if (segmentCount > 0) pushFact("원문", `${segmentCount}개`);
-    pushFact("AI 판단", options.notesModeLabel);
-    pushFact("근거", options.sourceTraceCount > 0 ? `${options.sourceTraceCount}건` : "");
     pushFact("품질 주의", options.degradedReason);
     pushFact("마지막 정리", options.generatedAt);
 
@@ -1028,7 +1107,7 @@
 
     const normalizedJob = state.currentJob || normalizeJob(remote, detailTitle);
     const normalizedArtifact = state.currentArtifact;
-    const meetingNotes = normalizeMeetingNotes(normalizedArtifact?.notes || normalizedJob?.meetingNotes, normalizedArtifact?.notesModeSelected || normalizedJob?.notesModeSelected);
+    const meetingNotes = normalizeMeetingNotes(normalizedArtifact?.notes || normalizedJob?.meetingNotes);
     const rawSegments = Array.isArray(normalizedArtifact?.segments) ? normalizedArtifact.segments : [];
     const segments = resegmentSegmentsForDisplay(rawSegments);
     const transcriptText = buildTranscriptTextForDisplay(segments, normalizedArtifact?.text);
@@ -1036,12 +1115,8 @@
     const hasTranscriptValue = Boolean(transcriptText);
     const hasSegmentsValue = segments.length > 0;
     const notesMeta = {
-      confidence: Number(normalizedArtifact?.notesModeConfidence || normalizedJob?.notesModeConfidence) || 0,
       degradedReason: normalizeText(normalizedArtifact?.notesDegradedReason || normalizedJob?.notesDegradedReason),
-      detected: normalizeMeetingNotesMode(normalizedArtifact?.notesModeDetected || normalizedJob?.notesModeDetected) || meetingNotes.mode,
       generatedAt: normalizeText(normalizedArtifact?.notesGeneratedAt || normalizedJob?.notesGeneratedAt),
-      selected: normalizeMeetingNotesMode(normalizedArtifact?.notesModeSelected || normalizedJob?.notesModeSelected) || meetingNotes.mode,
-      sourceTraceCount: Array.isArray(meetingNotes?.sourceTrace) ? meetingNotes.sourceTrace.length : 0,
       status: normalizeText(normalizedArtifact?.notesStatus || normalizedJob?.notesStatus),
     };
     const remoteChunkProgress = buildChunkProgressModel(normalizedJob, pending);
@@ -1127,9 +1202,7 @@
     const pendingNotice = entry.pending?.status === "succeeded" ? "" : buildPendingNotice(entry.pending);
     const meta = [formatDateTime(entry.updatedAt || entry.createdAt, ""), entry.durationMs > 0 ? formatDuration(entry.durationMs) : "", entry.pending?.sizeBytes > 0 ? formatBytes(entry.pending.sizeBytes) : ""].filter(Boolean).join(" · ");
     const chips = [];
-    const notesMode = normalizeMeetingNotesMode(entry.remote?.notesModeSelected || entry.remote?.notesModeDetected);
-    if (notesMode) chips.push({ label: `AI 판단 ${formatNotesModeLabel(notesMode)}`, tone: "accent" });
-    if (!chips.length && pendingSummary) chips.push({ label: pendingSummary, tone: "muted" });
+    if (pendingSummary) chips.push({ label: pendingSummary, tone: "muted" });
     return `
       <button type="button" class="record-item${entry.id === selectedRecordId ? " is-active" : ""}" data-record-id="${escapeHtml(entry.id)}">
         <div class="record-item__top">
@@ -1147,23 +1220,22 @@
   }
 
   function renderMeetingNotes(refs, detailView, state) {
-    const normalized = normalizeMeetingNotes(detailView.meetingNotes, detailView.notesMeta?.selected);
+    const normalized = normalizeMeetingNotes(detailView.meetingNotes);
     const hasNotesValue = hasMeetingNotes(normalized);
+    const notesMetaText = buildNotesSummaryMeta(detailView.notesMeta);
+    refs.notesSummaryMeta.hidden = !notesMetaText;
+    refs.notesSummaryMeta.textContent = notesMetaText;
+    refs.regenerateNotesButton.disabled = !state.currentJob?.jobId || state.busy.regenerateNotes || !TERMINAL_REMOTE_STATUSES.has(normalizeText(state.currentJob?.status));
+    refs.regenerateNotesButton.textContent = state.busy.regenerateNotes
+      ? "정리 중"
+      : "다시 정리";
     if (!hasNotesValue) {
       refs.meetingNotesOverview.hidden = true;
       refs.meetingNotesOverview.innerHTML = "";
-      refs.meetingNotesSections.innerHTML = "";
-      refs.notesSummaryMeta.textContent = "AI 판단 대기";
-      refs.regenerateNotesButton.disabled = true;
-      refs.regenerateNotesButton.textContent = "회의 정리 다시 만들기";
+      refs.meetingNotesSections.innerHTML = `<div class="notice-box" data-tone="warning">전사는 준비됐지만 회의 정리 문서로 묶을 내용은 충분하지 않았습니다. 원문 검토를 확인하거나 다시 정리해 보세요.</div>`;
       return false;
     }
-    refs.regenerateNotesButton.disabled = !state.currentJob?.jobId || state.busy.regenerateNotes || !TERMINAL_REMOTE_STATUSES.has(normalizeText(state.currentJob?.status));
-    refs.notesSummaryMeta.textContent = buildNotesSummaryMeta(detailView.notesMeta);
-    refs.regenerateNotesButton.textContent = state.busy.regenerateNotes
-      ? "정리 중"
-      : "회의 정리 다시 만들기";
-    const overviewMarkup = renderNotesOverview(normalized.executiveSummary);
+    const overviewMarkup = renderNotesOverview(normalized);
     refs.meetingNotesOverview.hidden = !overviewMarkup;
     refs.meetingNotesOverview.innerHTML = overviewMarkup;
     refs.meetingNotesSections.innerHTML = buildMeetingNotesSections(normalized).map(renderNotesSection).join("");
@@ -1171,15 +1243,18 @@
   }
 
   function resolveReviewTab(state, detailView, hasNotesValue, options = {}) {
+    const isCompleted = normalizeText(detailView.badgeStatus) === "succeeded";
     const hasMemoValue = Boolean(normalizeText(detailView.recordMemo));
     const hasTranscriptValue = Boolean(normalizeText(detailView.transcriptText));
     const hasSegmentsValue = Array.isArray(detailView.segments) && detailView.segments.length > 0;
     const hasSegmentContent = hasSegmentsValue || hasTranscriptValue;
-    const showSummaryTab = options.showSummaryTab !== false;
+    const showSummaryTab = options.showSummaryTab !== false && !isCompleted;
+    const showMemoTab = isCompleted || hasMemoValue;
+    const showNotesTab = isCompleted || hasNotesValue;
     const fallbackTab = () => {
-      if (hasNotesValue) return "notes";
+      if (showNotesTab) return "notes";
+      if (showMemoTab) return "memo";
       if (hasSegmentContent) return "segments";
-      if (hasMemoValue) return "memo";
       return showSummaryTab ? "summary" : "notes";
     };
     let nextTab = normalizeText(state.reviewTab) || "notes";
@@ -1192,20 +1267,17 @@
     if (!showSummaryTab && nextTab === "summary") {
       nextTab = fallbackTab();
     }
-    if (!detailView.showRecordActions && !hasMemoValue && !hasSegmentContent && !hasNotesValue) {
+    if (!detailView.showRecordActions && !showMemoTab && !hasSegmentContent && !showNotesTab) {
       return showSummaryTab ? "summary" : "notes";
     }
-    if (nextTab === "memo" && !hasMemoValue) {
+    if (nextTab === "memo" && !showMemoTab) {
       return fallbackTab();
     }
-    if (nextTab === "notes" && !hasNotesValue) {
-      return hasMemoValue ? "memo" : hasSegmentContent ? "segments" : showSummaryTab ? "summary" : "notes";
+    if (nextTab === "notes" && !showNotesTab) {
+      return showMemoTab ? "memo" : hasSegmentContent ? "segments" : showSummaryTab ? "summary" : "notes";
     }
     if (nextTab === "segments" && !hasSegmentContent) {
-      return hasNotesValue ? "notes" : hasMemoValue ? "memo" : showSummaryTab ? "summary" : "notes";
-    }
-    if (normalizeText(detailView.badgeStatus) === "succeeded" && hasNotesValue && nextTab === "summary") {
-      return "notes";
+      return showNotesTab ? "notes" : showMemoTab ? "memo" : showSummaryTab ? "summary" : "notes";
     }
     return nextTab;
   }
@@ -1314,16 +1386,19 @@
     refs.detailMeta.innerHTML = detailView.meta.map((item) => `<span>${escapeHtml(item)}</span>`).join("");
 
     const hasNotesValue = renderMeetingNotes(refs, detailView, state);
+    const isCompletedRecord = normalizeText(detailView.badgeStatus) === "succeeded";
     const hasMemoValue = Boolean(normalizeText(detailView.recordMemo));
     const hasTranscriptValue = Boolean(normalizeText(detailView.transcriptText));
     const hasSegmentsValue = Array.isArray(detailView.segments) && detailView.segments.length > 0;
     const hasSegmentContent = hasSegmentsValue || hasTranscriptValue;
-    const showSummaryReviewTab = normalizeText(detailView.badgeStatus) !== "succeeded" || !hasNotesValue;
+    const showSummaryReviewTab = !isCompletedRecord;
+    const showMemoReviewTab = isCompletedRecord || hasMemoValue;
+    const showNotesReviewTab = isCompletedRecord || hasNotesValue;
     const activeReviewTab = resolveReviewTab(state, detailView, hasNotesValue, { showSummaryTab: showSummaryReviewTab });
     state.reviewTab = activeReviewTab;
     refs.reviewTabSummary.hidden = !showSummaryReviewTab;
-    refs.reviewTabMemo.hidden = !hasMemoValue;
-    refs.reviewTabNotes.hidden = !hasNotesValue;
+    refs.reviewTabMemo.hidden = !showMemoReviewTab;
+    refs.reviewTabNotes.hidden = !showNotesReviewTab;
     refs.reviewTabSegments.hidden = !hasSegmentContent;
     refs.reviewTabSegmentsCount.hidden = !hasSegmentsValue;
     refs.reviewTabSegmentsCount.textContent = hasSegmentsValue ? `${detailView.segments.length}` : "";
@@ -1334,9 +1409,7 @@
       generatedAt: detailView.notesMeta?.generatedAt ? formatDateTime(detailView.notesMeta.generatedAt, "") : "",
       hasNotesValue,
       hasSegmentContent,
-      notesModeLabel: hasNotesValue ? formatNotesModeLabel(detailView.notesMeta?.selected || detailView.meetingNotes?.mode) : "",
       segmentCount: hasSegmentsValue ? detailView.segments.length : 0,
-      sourceTraceCount: Number(detailView.notesMeta?.sourceTraceCount) || 0,
       degradedReason: normalizeText(detailView.notesMeta?.degradedReason),
     });
     const showSummaryStatusPill = Boolean(detailView.badgeLabel) && !["idle", "succeeded"].includes(normalizeText(detailView.badgeStatus));
@@ -1368,10 +1441,14 @@
     refs.detailNotice.textContent = detailView.notice;
     refs.detailNotice.dataset.tone = showSummaryNotice ? detailView.noticeTone : "";
     refs.reviewPanelSummary.hidden = activeReviewTab !== "summary" || !showSummaryReviewTab;
-    refs.reviewPanelMemo.hidden = activeReviewTab !== "memo" || !hasMemoValue;
-    refs.meetingNotesCard.hidden = activeReviewTab !== "notes" || !hasNotesValue;
+    refs.reviewPanelMemo.hidden = activeReviewTab !== "memo" || !showMemoReviewTab;
+    refs.meetingNotesCard.hidden = activeReviewTab !== "notes" || !showNotesReviewTab;
     refs.reviewPanelSegments.hidden = activeReviewTab !== "segments" || !hasSegmentContent;
-    refs.detailMemoText.textContent = detailView.recordMemo;
+    refs.detailMemoText.textContent = hasMemoValue
+      ? detailView.recordMemo
+      : showMemoReviewTab
+        ? "아직 남긴 메모가 없습니다."
+        : "";
     refs.segmentList.hidden = !hasSegmentContent;
     refs.segmentList.innerHTML = !hasSegmentContent
       ? ""
