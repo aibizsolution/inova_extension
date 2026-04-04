@@ -354,6 +354,12 @@ function registerMeetingWorkspaceAuthHandlers(deps) {
         viewer,
       });
     }
+    if (!hasSameEmailDomain(owner?.email, viewer?.email)) {
+      return buildBlockedAccessPayload(input, "share-domain-mismatch", {
+        inovaLogin: true,
+        viewer,
+      });
+    }
     return buildAllowedAccessPayload({
       accessMode: SHARE_ACCESS_MODE,
       bypassMode: "",
@@ -646,6 +652,21 @@ function normalizeIdentityLike(identity) {
 
 function normalizeString(value) {
   return String(value || "").trim();
+}
+
+function getEmailDomain(email) {
+  const normalized = normalizeString(email).toLowerCase();
+  const atIndex = normalized.lastIndexOf("@");
+  if (atIndex <= 0 || atIndex >= normalized.length - 1) {
+    return "";
+  }
+  return normalized.slice(atIndex + 1);
+}
+
+function hasSameEmailDomain(leftEmail, rightEmail) {
+  const leftDomain = getEmailDomain(leftEmail);
+  const rightDomain = getEmailDomain(rightEmail);
+  return Boolean(leftDomain) && leftDomain === rightDomain;
 }
 
 function createSecret() {

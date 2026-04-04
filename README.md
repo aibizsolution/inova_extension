@@ -103,6 +103,7 @@
   - 패널에서 회의를 열면 확장이 clean URL(`meetingId`, optional `jobId`)만 가진 hosted 작업실 새 탭을 열고, hosted 페이지는 부팅 직후 확장 bridge를 통해 i-Nova 로그인 상태와 접근 권한을 다시 확인합니다.
 - 기본 작업실은 `확장 설치 + i-Nova 로그인 + 회의 소유자 본인`만 열 수 있고, 공유는 패널의 `공유` 버튼으로 만든 read-only 링크만 허용합니다.
 - 공유 URL은 같은 `meeting/index.html`을 read-only로 열고, 보기/복사는 가능하지만 수정/삭제/재처리/다운로드/저장은 막습니다.
+- 공유 URL은 링크를 알아도 아무 로그인 사용자에게 열리지 않고, 회의 소유자와 같은 이메일 도메인으로 로그인한 i-Nova 사용자에게만 허용됩니다.
 - 공유 read-only 모드는 같은 브라우저의 owner 로컬 작업실 세션/업로드 큐를 복원하지 않고, 원격 Firestore 상태만 기준으로 렌더합니다.
 - 패널의 `공유 / 공유 해제` 버튼은 create/revoke 응답으로 현재 목록 item의 share 상태도 즉시 갱신하고, panel bridge snapshot 중복 제거에도 `share.status/shareId/revokedAt`를 포함해 버튼 활성화가 `updatedAt` 변화에 묶이지 않게 유지합니다.
   - 작업실에서는 사용자가 직접 `녹음 시작`을 눌러 웹앱에서 바로 마이크 녹음을 시작하고, 표준 `getUserMedia + MediaRecorder` 경로로 녹음합니다.

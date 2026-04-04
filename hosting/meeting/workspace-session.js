@@ -114,6 +114,14 @@
           tone: "warning",
         };
       }
+      if (normalizedReason === "share-domain-mismatch") {
+        return {
+          eyebrow: "공유 범위 제한",
+          message: "이 공유 링크는 회의 소유자와 같은 이메일 도메인으로 로그인한 i-Nova 사용자만 열 수 있습니다.",
+          title: "같은 이메일 도메인에서만 공유 회의를 열 수 있습니다",
+          tone: "warning",
+        };
+      }
       if (!state.sessionRestore.hasBlockingIssue) {
         return {
           message: "직접 주소를 붙여 넣어 열면 회의 작업 세션을 확인할 수 없습니다. i-Nova 패널의 회의 허브에서 다시 열어 주세요.",
