@@ -432,21 +432,6 @@
     ].filter(Boolean).join("");
   }
 
-  function buildNotesSummaryMeta(meta) {
-    const generatedAt = formatDateTime(normalizeText(meta?.generatedAt), "");
-    const degradedText = normalizeText(meta?.degradedReason);
-    if (generatedAt && degradedText) {
-      return `마지막 정리 ${generatedAt} · 품질 주의: ${degradedText}`;
-    }
-    if (generatedAt) {
-      return `마지막 정리 ${generatedAt}`;
-    }
-    if (degradedText) {
-      return `품질 주의: ${degradedText}`;
-    }
-    return "";
-  }
-
   function buildCompletedRecordSummary(notes) {
     const overview = normalizeTextBlock(notes?.overview);
     if (overview) return overview;
@@ -1204,9 +1189,6 @@
   function renderMeetingNotes(refs, detailView, state) {
     const normalized = normalizeMeetingNotes(detailView.meetingNotes);
     const hasNotesValue = hasMeetingNotes(normalized);
-    const notesMetaText = buildNotesSummaryMeta(detailView.notesMeta);
-    refs.notesSummaryMeta.hidden = !notesMetaText;
-    refs.notesSummaryMeta.textContent = notesMetaText;
     refs.regenerateNotesButton.disabled = !state.currentJob?.jobId || state.busy.regenerateNotes || !TERMINAL_REMOTE_STATUSES.has(normalizeText(state.currentJob?.status));
     refs.regenerateNotesButton.textContent = state.busy.regenerateNotes
       ? "정리 중"
@@ -1277,6 +1259,20 @@
       element.classList.toggle("is-active", selected);
       element.setAttribute("aria-selected", selected ? "true" : "false");
     }
+  }
+
+  function buildReviewHeaderModel(activeTab) {
+    const tabKey = normalizeText(activeTab) || "summary";
+    if (tabKey === "notes") {
+      return { eyebrow: "회의 정리", title: "회의 정리" };
+    }
+    if (tabKey === "segments") {
+      return { eyebrow: "전사 원문", title: "원문 검토" };
+    }
+    if (tabKey === "memo") {
+      return { eyebrow: "기록 메모", title: "메모" };
+    }
+    return { eyebrow: "검토 흐름", title: "현재 기록 단계" };
   }
 
   function renderWorkspace(state, refs) {
@@ -1384,9 +1380,10 @@
     refs.reviewTabSegments.hidden = !hasSegmentContent;
     refs.reviewTabSegmentsCount.hidden = !hasSegmentsValue;
     refs.reviewTabSegmentsCount.textContent = hasSegmentsValue ? `${detailView.segments.length}` : "";
-    refs.copySegmentsButton.hidden = !hasSegmentContent;
-    refs.copySegmentsButton.disabled = !hasSegmentContent;
     applyReviewTabState(refs, activeReviewTab);
+    const reviewHeader = buildReviewHeaderModel(activeReviewTab);
+    refs.reviewSectionEyebrow.textContent = reviewHeader.eyebrow;
+    refs.reviewSectionTitle.textContent = reviewHeader.title;
     const summaryFlow = buildStatusFlow(detailView, {
       generatedAt: detailView.notesMeta?.generatedAt ? formatDateTime(detailView.notesMeta.generatedAt, "") : "",
       hasNotesValue,
@@ -1394,12 +1391,16 @@
       segmentCount: hasSegmentsValue ? detailView.segments.length : 0,
       degradedReason: normalizeText(detailView.notesMeta?.degradedReason),
     });
-    const showSummaryStatusPill = Boolean(detailView.badgeLabel) && !["idle", "succeeded"].includes(normalizeText(detailView.badgeStatus));
+    const showSummaryStatusPill = activeReviewTab === "summary"
+      && Boolean(detailView.badgeLabel)
+      && !["idle", "succeeded"].includes(normalizeText(detailView.badgeStatus));
     refs.summaryStatusPill.hidden = !showSummaryStatusPill;
     if (showSummaryStatusPill) {
       refs.summaryStatusPill.textContent = detailView.badgeLabel;
       refs.summaryStatusPill.dataset.status = detailView.badgeStatus;
     }
+    refs.copySegmentsButton.hidden = activeReviewTab !== "segments" || !hasSegmentContent;
+    refs.copySegmentsButton.disabled = activeReviewTab !== "segments" || !hasSegmentContent;
     refs.summaryStatusGrid.hidden = !summaryFlow.steps.length;
     refs.summaryStatusGrid.innerHTML = renderStatusFlow(summaryFlow);
     const summaryActionMessage = buildStatusActionMessage(detailView, {
@@ -1449,7 +1450,6 @@
     buildWorkspaceView,
     buildLocalPendingJob,
     buildMeetingNotesSections,
-    buildNotesSummaryMeta,
     buildPendingActions,
     buildPendingNotice,
     buildPendingSummary,

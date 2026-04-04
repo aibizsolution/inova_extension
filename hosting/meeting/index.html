@@ -174,6 +174,16 @@
             </article>
 
             <article class="panel-card panel-card--review">
+              <div class="panel-card__head panel-card__head--review">
+                <div>
+                  <p id="reviewSectionEyebrow" class="panel-card__eyebrow">검토 흐름</p>
+                  <h2 id="reviewSectionTitle" class="panel-card__title">현재 기록 단계</h2>
+                </div>
+                <div class="review-header__actions">
+                  <span id="summaryStatusPill" class="status-pill status-pill--soft" data-status="idle" hidden>대기</span>
+                  <button id="copySegmentsButton" class="secondary-button" type="button" hidden>전체 복사</button>
+                </div>
+              </div>
               <div class="review-tabs" role="tablist" aria-label="결과 검토 탭">
                 <button id="reviewTabSummary" class="review-tab is-active" type="button" data-review-tab="summary" role="tab" aria-selected="true">상태</button>
                 <button id="reviewTabMemo" class="review-tab" type="button" data-review-tab="memo" role="tab" aria-selected="false">메모</button>
@@ -182,13 +192,6 @@
               </div>
 
               <section id="reviewPanelSummary" class="review-panel" role="tabpanel">
-                <div class="panel-card__head panel-card__head--section">
-                  <div>
-                    <p class="panel-card__eyebrow">검토 흐름</p>
-                    <h2 class="panel-card__title">현재 기록 단계</h2>
-                  </div>
-                  <span id="summaryStatusPill" class="status-pill status-pill--soft" data-status="idle">대기</span>
-                </div>
                 <div id="summaryStatusGrid" class="summary-status-grid" hidden></div>
                 <div id="detailNotice" class="notice-box">왼쪽에서 기록을 선택해 주세요.</div>
                 <div id="summaryActionCard" class="summary-action-card" hidden></div>
@@ -199,13 +202,6 @@
               </section>
 
               <section id="meetingNotesCard" class="review-panel review-panel--notes" hidden role="tabpanel">
-                <div class="panel-card__head panel-card__head--section">
-                  <div>
-                    <p class="panel-card__eyebrow">회의 정리</p>
-                    <h2 class="panel-card__title">회의 정리</h2>
-                  </div>
-                  <span id="notesSummaryMeta" class="chip chip--muted" hidden></span>
-                </div>
                 <div class="notes-toolbar">
                   <div class="input-group__controls input-group__controls--compact input-group__controls--field-group">
                     <button id="regenerateNotesButton" class="secondary-button" type="button">다시 정리</button>
@@ -216,13 +212,6 @@
               </section>
 
               <section id="reviewPanelSegments" class="review-panel" hidden role="tabpanel">
-                <div class="panel-card__head panel-card__head--section">
-                  <div>
-                    <p class="panel-card__eyebrow">전사 원문</p>
-                    <h2 class="panel-card__title">원문 검토</h2>
-                  </div>
-                  <button id="copySegmentsButton" class="secondary-button" type="button">전체 복사</button>
-                </div>
                 <div id="segmentList" class="segment-list" hidden></div>
               </section>
             </article>

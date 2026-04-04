@@ -269,6 +269,10 @@ button {
   margin-bottom: 14px;
 }
 
+.panel-card__head--review {
+  margin-bottom: 0;
+}
+
 .capture-meter {
   display: flex;
   align-items: baseline;
@@ -1218,11 +1222,19 @@ select:disabled {
   margin-bottom: 14px;
 }
 
+.review-header__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .review-tabs {
   display: inline-flex;
   flex-wrap: wrap;
   width: fit-content;
   max-width: 100%;
+  margin-top: 14px;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--surface-soft);
@@ -1873,6 +1885,7 @@ select:disabled {
   .panel-card__head,
   .panel-card__inline-meta,
   .capture-meter,
+  .review-header__actions,
   .notes-toolbar,
   .action-row,
   .inline-action-row,
