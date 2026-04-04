@@ -254,8 +254,17 @@
 .inova-prompt-item.is-drop-before::before { top: -2px; }
 .inova-prompt-item.is-drop-after::after { bottom: -2px; }
 .inova-prompt-item__actions { justify-content: flex-start; }
+.inova-prompt-item__head { align-items: flex-start; }
 .inova-prompt-item__title { font-size: 14px; line-height: 1.3; }
-.inova-prompt-item__title-row { min-width: 0; }
+.inova-prompt-item__title-row { flex: 1 1 auto; min-width: 0; }
+.inova-prompt-item__meta {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  min-width: fit-content;
+  white-space: nowrap;
+}
+.inova-prompt-item__meta .inova-tool-button { flex: 0 0 auto; white-space: nowrap; }
+.inova-prompt-item__date { flex: 0 0 auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .inova-prompt-drag-handle {
   border: 0; padding: 0; background: transparent; color: rgba(98, 127, 145, 0.82); font-size: 14px; font-weight: 700;
   letter-spacing: -0.08em; cursor: grab; flex: 0 0 auto; user-select: none; touch-action: none;
