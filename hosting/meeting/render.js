@@ -1261,20 +1261,6 @@
     }
   }
 
-  function buildReviewHeaderModel(activeTab) {
-    const tabKey = normalizeText(activeTab) || "summary";
-    if (tabKey === "notes") {
-      return { eyebrow: "회의 정리", title: "회의 정리" };
-    }
-    if (tabKey === "segments") {
-      return { eyebrow: "전사 원문", title: "원문 검토" };
-    }
-    if (tabKey === "memo") {
-      return { eyebrow: "기록 메모", title: "메모" };
-    }
-    return { eyebrow: "검토 흐름", title: "현재 기록 단계" };
-  }
-
   function renderWorkspace(state, refs) {
     const historyEntries = buildHistoryEntries(state);
     const workspaceView = buildWorkspaceView(state, historyEntries);
@@ -1381,9 +1367,7 @@
     refs.reviewTabSegmentsCount.hidden = !hasSegmentsValue;
     refs.reviewTabSegmentsCount.textContent = hasSegmentsValue ? `${detailView.segments.length}` : "";
     applyReviewTabState(refs, activeReviewTab);
-    const reviewHeader = buildReviewHeaderModel(activeReviewTab);
-    refs.reviewSectionEyebrow.textContent = reviewHeader.eyebrow;
-    refs.reviewSectionTitle.textContent = reviewHeader.title;
+    refs.reviewSectionHeader.hidden = activeReviewTab !== "summary" || !showSummaryReviewTab;
     const summaryFlow = buildStatusFlow(detailView, {
       generatedAt: detailView.notesMeta?.generatedAt ? formatDateTime(detailView.notesMeta.generatedAt, "") : "",
       hasNotesValue,
@@ -1399,6 +1383,7 @@
       refs.summaryStatusPill.textContent = detailView.badgeLabel;
       refs.summaryStatusPill.dataset.status = detailView.badgeStatus;
     }
+    refs.reviewSegmentsToolbar.hidden = activeReviewTab !== "segments" || !hasSegmentContent;
     refs.copySegmentsButton.hidden = activeReviewTab !== "segments" || !hasSegmentContent;
     refs.copySegmentsButton.disabled = activeReviewTab !== "segments" || !hasSegmentContent;
     refs.summaryStatusGrid.hidden = !summaryFlow.steps.length;

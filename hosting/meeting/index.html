@@ -174,14 +174,13 @@
             </article>
 
             <article class="panel-card panel-card--review">
-              <div class="panel-card__head panel-card__head--review">
+              <div id="reviewSectionHeader" class="panel-card__head panel-card__head--review">
                 <div>
-                  <p id="reviewSectionEyebrow" class="panel-card__eyebrow">검토 흐름</p>
-                  <h2 id="reviewSectionTitle" class="panel-card__title">현재 기록 단계</h2>
+                  <p class="panel-card__eyebrow">검토 흐름</p>
+                  <h2 class="panel-card__title">현재 기록 단계</h2>
                 </div>
                 <div class="review-header__actions">
                   <span id="summaryStatusPill" class="status-pill status-pill--soft" data-status="idle" hidden>대기</span>
-                  <button id="copySegmentsButton" class="secondary-button" type="button" hidden>전체 복사</button>
                 </div>
               </div>
               <div class="review-tabs" role="tablist" aria-label="결과 검토 탭">
@@ -212,6 +211,9 @@
               </section>
 
               <section id="reviewPanelSegments" class="review-panel" hidden role="tabpanel">
+                <div id="reviewSegmentsToolbar" class="review-panel__toolbar" hidden>
+                  <button id="copySegmentsButton" class="secondary-button" type="button" hidden>전체 복사</button>
+                </div>
                 <div id="segmentList" class="segment-list" hidden></div>
               </section>
             </article>

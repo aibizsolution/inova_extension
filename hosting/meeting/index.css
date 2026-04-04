@@ -270,7 +270,7 @@ button {
 }
 
 .panel-card__head--review {
-  margin-bottom: 0;
+  margin-bottom: 14px;
 }
 
 .capture-meter {
@@ -1234,7 +1234,6 @@ select:disabled {
   flex-wrap: wrap;
   width: fit-content;
   max-width: 100%;
-  margin-top: 14px;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--surface-soft);
@@ -1289,6 +1288,11 @@ select:disabled {
   display: grid;
   gap: 12px;
   margin-top: 14px;
+}
+
+.review-panel__toolbar {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .notes-overview {
