@@ -131,6 +131,7 @@
           >
             ${escapeHtml(sharePending ? "복사 중..." : "공유")}
           </button>
+          ${item.shareActive || revokePending ? `
           <button
             type="button"
             class="inova-tool-button inova-tool-button--compact is-danger"
@@ -138,11 +139,12 @@
             data-meeting-id="${escapeHtml(item.meetingId)}"
             data-meeting-job-id="${escapeHtml(item.latestJobId)}"
             data-meeting-title="${escapeHtml(item.title)}"
-            ${pending.active || !item.shareActive ? "disabled" : ""}
+            ${pending.active ? "disabled" : ""}
             aria-busy="${revokePending}"
           >
             ${escapeHtml(revokePending ? "해제 중..." : "공유 해제")}
-          </button>
+          </button>`
+            : ""}
         </div>
       </article>
     `;
