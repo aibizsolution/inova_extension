@@ -2,6 +2,32 @@
   "schemaVersion": 1,
   "versions": [
     {
+      "version": "0.4.1",
+      "level": "patch",
+      "public": {
+        "headline": "확장 패키지 로드 오류 수정",
+        "summary": "이번 배포는 Chrome에서 압축해제 확장을 다시 로드할 때 회의 디버그 스크립트 누락으로 설치가 막히던 패키지 오류를 바로잡은 안정화 업데이트입니다.",
+        "changes": [
+          {
+            "type": "fixed",
+            "text": "릴리스 ZIP에 `hosting/meeting/debug-console.js`가 빠지지 않도록 패키징 대상을 manifest 기준으로 다시 계산하게 수정했습니다."
+          },
+          {
+            "type": "changed",
+            "text": "배포 전 `npm run verify`와 `release:build`에서 manifest가 참조한 런타임 파일 누락을 바로 실패시키도록 검증 가드를 추가했습니다."
+          }
+        ]
+      },
+      "internal": {
+        "changes": [
+          {
+            "type": "fixed",
+            "text": "release package staging이 고정 디렉터리 목록만 복사하던 동작을 manifest 런타임 파일 집합 기반으로 교체했습니다."
+          }
+        ]
+      }
+    },
+    {
       "version": "0.4.0",
       "level": "minor",
       "public": {

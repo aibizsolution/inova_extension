@@ -154,7 +154,7 @@ function compressDirectory(sourceDir, destinationPath) {
 function compressDirectoryOnWindows(sourceDir, destinationPath) {
   const command = [
     "Add-Type -AssemblyName System.IO.Compression.FileSystem",
-    `[System.IO.Compression.ZipFile]::CreateFromDirectory('${escapePowerShell(sourceDir)}', '${escapePowerShell(destinationPath)}', [System.IO.Compression.CompressionLevel]::Optimal, $true)`,
+    `[System.IO.Compression.ZipFile]::CreateFromDirectory('${escapePowerShell(sourceDir)}', '${escapePowerShell(destinationPath)}', [System.IO.Compression.CompressionLevel]::Optimal, $false)`,
   ].join("; ");
   const result = spawnSync("powershell", ["-NoLogo", "-NoProfile", "-Command", command], {
     cwd: root,

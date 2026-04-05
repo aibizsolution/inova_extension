@@ -1,6 +1,6 @@
 {
   "name": "inova-session-bookmarks",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "scripts": {
     "prepare": "node scripts/install-git-hooks.js",
