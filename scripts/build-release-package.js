@@ -12,6 +12,11 @@ const {
   readReleaseCatalog,
   validateReleaseEntry,
 } = require("./release-metadata");
+const {
+  collectRequiredReleasePackagePaths,
+  findMissingPaths,
+  resolveReleaseRuntimeItems,
+} = require("./release-package-runtime");
 
 const root = path.resolve(__dirname, "..");
 const packageJson = readJson("package.json");
@@ -33,7 +38,7 @@ const hostingReleaseDir = path.join(hostingRoot, "releases");
 const hostingBaseUrl = "https://browser-extension-main.web.app/extension";
 const latestDownloadFileName = "latest.zip";
 const publishedAt = new Date().toISOString();
-const runtimeItems = ["manifest.json", "background", "content", "icons", "popup", "shared", "README.md"];
+const runtimeItems = resolveReleaseRuntimeItems(manifestJson);
 const releaseCatalog = readReleaseCatalog(root);
 const releaseEntry = findReleaseEntry(releaseCatalog, version);
 const releaseErrors = validateReleaseEntry(releaseEntry, version);
@@ -47,6 +52,7 @@ if (releaseErrors.length) {
 for (const item of runtimeItems) {
   fs.cpSync(path.join(root, item), path.join(stagingDir, item), { force: true, recursive: true });
 }
+assertReleasePackageIntegrity(stagingDir, manifestJson);
 fs.mkdirSync(releasesDir, { recursive: true });
 compressDirectory(stagingDir, zipPath);
 fs.rmSync(stagingDir, { force: true, recursive: true });
@@ -115,6 +121,18 @@ function buildProductMeta() {
     name: "i-Nova 더하기",
     team: "AI비즈솔루션팀",
   };
+}
+
+function assertReleasePackageIntegrity(stagingDirectory, manifest) {
+  const missingPaths = findMissingPaths(stagingDirectory, collectRequiredReleasePackagePaths(manifest));
+  if (!missingPaths.length) {
+    return;
+  }
+
+  throw new Error([
+    "release package staging 결과에 manifest 런타임 파일이 빠졌어요.",
+    ...missingPaths.map((missingPath) => `- ${missingPath}`),
+  ].join("\n"));
 }
 
 function compressDirectory(sourceDir, destinationPath) {

@@ -64,6 +64,11 @@ npm run deploy:functions
 - `hosting/extension/releases/history.json`
 - `hosting/extension/downloads/<zip>`
 
+## 패키지 가드레일
+
+- `release:build`와 `npm run verify`는 ZIP staging에 `manifest.json`이 참조한 런타임 파일이 모두 들어있는지 확인해야 합니다.
+- 기본 runtime 디렉터리 밖의 단일 파일이 manifest에 추가되면, 빌드가 그 파일을 자동 포함하거나 누락 시 즉시 실패해야 합니다.
+
 ## 운영 원칙
 
 - ZIP은 덮어쓰지 않고 버전별로 누적합니다.

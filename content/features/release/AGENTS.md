@@ -43,3 +43,4 @@
 ## 릴리스 메타 메모
 - 이미 `hosting/extension/releases/latest.json`에 올라간 버전은 재사용하지 않는다.
 - hosting-only 배포라도 새 코드 반영이 필요하면 더 높은 버전으로 bump 한 뒤 `release-notes.json`과 build 산출물을 같이 갱신한다.
+- `release:build`는 기본 runtime 디렉터리뿐 아니라 `manifest.json`이 직접 참조하는 추가 파일도 ZIP에 포함해야 하며, staging 결과에 누락이 있으면 바로 실패해야 한다.
