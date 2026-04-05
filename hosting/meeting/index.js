@@ -703,13 +703,7 @@
     });
     global.addEventListener("focus", controllers.realtime.handleBackgroundRefresh, { passive: true });
     global.document.addEventListener("visibilitychange", () => {
-      if (global.document.hidden) {
-        logDebug("workspace.refresh.skipped", {
-          reason: "document-hidden",
-        });
-        return;
-      }
-      controllers.realtime.handleBackgroundRefresh();
+      controllers.realtime.handleVisibilityChange();
     }, { passive: true });
     global.addEventListener("online", () => {
       setNotice("인터넷 연결이 돌아왔습니다. 보관한 녹음을 다시 확인합니다.", "highlight");
