@@ -300,8 +300,8 @@
       
       
       async function syncWorkspaceLocalState(hydrateSelection, reason) {
-        await syncPendingUploadsWithRemote();
-        await reconcileRemoteRecordSummaries();
+        await syncPendingUploadsWithRemote(reason);
+        await reconcileRemoteRecordSummaries(reason);
         if (!state.selectedRecordId || hydrateSelection || !findHistoryEntry(state, state.selectedRecordId)) {
           state.selectedRecordId = chooseSelectedRecordId(state);
         }
@@ -315,6 +315,45 @@
           resultCount: state.records.length,
           selectedRecordId: state.selectedRecordId,
         });
+      }
+
+      function mergeLiveJobIntoRecords(job) {
+        const normalizedJob = normalizeJob(job, state.meeting.title);
+        const normalizedJobId = normalizeText(normalizedJob?.jobId);
+        if (!normalizedJobId) {
+          return;
+        }
+        const existingIndex = (Array.isArray(state.records) ? state.records : [])
+          .findIndex((record) => normalizeText(record?.jobId) === normalizedJobId);
+        if (existingIndex < 0) {
+          return;
+        }
+        const nextRecord = normalizeRecord({
+          ...state.records[existingIndex],
+          artifactId: normalizedJob.artifactId,
+          createdAt: normalizedJob.createdAt,
+          durationMs: normalizedJob.durationMs,
+          error: normalizedJob.error,
+          jobId: normalizedJob.jobId,
+          meetingId: state.meeting.meetingId,
+          notesContextItems: normalizedJob.notesContextItems,
+          notesDegradedReason: normalizedJob.notesDegradedReason,
+          notesGeneratedAt: normalizedJob.notesGeneratedAt,
+          notesInputSnapshot: normalizedJob.notesInputSnapshot,
+          notesStatus: normalizedJob.notesStatus,
+          requestId: normalizedJob.requestId,
+          resultTitle: normalizedJob.resultTitle,
+          sharedMemoSnapshot: normalizedJob.sharedMemoSnapshot,
+          status: normalizedJob.status,
+          title: normalizedJob.title,
+          updatedAt: normalizedJob.updatedAt,
+          workspaceMutation: normalizedJob.workspaceMutation,
+        });
+        state.records = [
+          ...state.records.slice(0, existingIndex),
+          nextRecord,
+          ...state.records.slice(existingIndex + 1),
+        ];
       }
       
       
@@ -428,6 +467,7 @@
           return;
         }
         state.currentJob = normalizeJob(snapshot.data(), state.meeting.title);
+        mergeLiveJobIntoRecords(snapshot.data());
         syncSelectedRecordReviewState(entry);
         await ensureArtifactRealtimeSubscription(entry, { forceReconnect: false });
         await resolvePendingMutationsFromSnapshots();

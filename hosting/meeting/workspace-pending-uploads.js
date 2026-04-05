@@ -47,6 +47,7 @@
       const CONFIG = constants.CONFIG || {};
       const DEBUG_LOCAL_QUEUE_SANDBOX_PARAM = constants.DEBUG_LOCAL_QUEUE_SANDBOX_PARAM || "debugQueueSandbox";
       const REMOTE_REQUEST_RECOVERY_STALE_MS = 2 * 60 * 1000;
+      const REMOTE_RECORD_SUMMARY_CONFIRM_STALE_MS = 10 * 60 * 1000;
 
       function controller(name) {
         return typeof helpers.controller === "function" ? helpers.controller(name) : null;
@@ -1465,6 +1466,12 @@
         return millis > 0 ? Math.max(0, Date.now() - millis) : Number.POSITIVE_INFINITY;
       }
 
+      function getRemoteRecordAgeMs(record) {
+        const timestamp = normalizeText(record?.updatedAt || record?.createdAt);
+        const millis = timestamp ? toTimestamp(timestamp) : 0;
+        return millis > 0 ? Math.max(0, Date.now() - millis) : Number.POSITIVE_INFINITY;
+      }
+
       function hasPendingUploadSourceUploaded(pending) {
         const parts = Array.isArray(pending?.parts) ? pending.parts : [];
         const uploadedPartCount = Math.max(
@@ -1486,17 +1493,22 @@
           || ["remote_queued", "remote_processing", "succeeded", "failed"].includes(status);
       }
 
+      function shouldAttemptJobIdDocReadForPending(pending) {
+        return Boolean(normalizeText(pending?.jobId))
+          && getPendingUploadAgeMs(pending) >= REMOTE_REQUEST_RECOVERY_STALE_MS;
+      }
+
       function shouldAttemptRequestIdDocReadForPending(pending) {
         if (!normalizeText(pending?.requestId)) {
+          return false;
+        }
+        if (getPendingUploadAgeMs(pending) < REMOTE_REQUEST_RECOVERY_STALE_MS) {
           return false;
         }
         if (hasPendingUploadRemoteMutationEvidence(pending)) {
           return true;
         }
         if (!hasPendingUploadSourceUploaded(pending)) {
-          return false;
-        }
-        if (getPendingUploadAgeMs(pending) < REMOTE_REQUEST_RECOVERY_STALE_MS) {
           return false;
         }
         return ["upload_queued", "on_hold", "failed", "uploading", "uploading_chunks"].includes(
@@ -1507,10 +1519,25 @@
       function shouldConfirmExactRemoteMatch(exactMatch) {
         return Boolean(exactMatch)
           && !TERMINAL_REMOTE_STATUSES.has(normalizeText(exactMatch?.status))
+          && getRemoteRecordAgeMs(exactMatch) >= REMOTE_REQUEST_RECOVERY_STALE_MS
           && Boolean(normalizeText(exactMatch?.jobId || exactMatch?.requestId));
       }
 
-      async function reconcileRemoteRecordSummaries() {
+      function isSelectedRemoteJobRecord(record) {
+        const normalizedJobId = normalizeText(record?.jobId);
+        return Boolean(normalizedJobId)
+          && normalizedJobId === normalizeText(state.realtime?.jobDocId)
+          && typeof state.realtime?.unsubscribeJob === "function";
+      }
+
+      function shouldConfirmRemoteRecordSummary(record) {
+        return Boolean(record?.jobId)
+          && !TERMINAL_REMOTE_STATUSES.has(normalizeText(record?.status))
+          && !isSelectedRemoteJobRecord(record)
+          && getRemoteRecordAgeMs(record) >= REMOTE_RECORD_SUMMARY_CONFIRM_STALE_MS;
+      }
+
+      async function reconcileRemoteRecordSummaries(reason) {
         const records = Array.isArray(state.records) ? [...state.records] : [];
         if (!records.length) {
           return false;
@@ -1521,7 +1548,7 @@
         const nextRecords = [];
         for (const record of records) {
           const currentStatus = normalizeText(record?.status);
-          if (!record?.jobId || TERMINAL_REMOTE_STATUSES.has(currentStatus)) {
+          if (!record?.jobId || TERMINAL_REMOTE_STATUSES.has(currentStatus) || !shouldConfirmRemoteRecordSummary(record)) {
             nextRecords.push(record);
             continue;
           }
@@ -1576,6 +1603,7 @@
           logDebug("workspace.records.remote-summary-confirmed", {
             jobId: normalizeText(confirmed.jobId || record?.jobId),
             previousStatus: currentStatus,
+            reason: normalizeText(reason),
             requestId: nextRequestId,
             status: nextStatus,
             updatedAt: nextUpdatedAt,
@@ -1588,7 +1616,7 @@
       }
       
       
-      async function syncPendingUploadsWithRemote() {
+      async function syncPendingUploadsWithRemote(reason) {
         const pendingItems = Array.isArray(state.pendingUploads) ? [...state.pendingUploads] : [];
         const consumedRemoteJobIds = new Set();
         const remoteJobReadCache = new Map();
@@ -1602,7 +1630,7 @@
             ? await loadRemoteJobRecordByRequestId(exactMatch?.requestId || pending?.requestId, remoteRequestReadCache)
             : null;
           const confirmedExactMatch = confirmedExactJobMatch || confirmedExactRequestMatch;
-          const directJobMatch = !exactMatch
+          const directJobMatch = !exactMatch && shouldAttemptJobIdDocReadForPending(pending)
             ? await loadRemoteJobRecordByJobId(pending?.jobId, remoteJobReadCache)
             : null;
           const directRequestMatch = !exactMatch && !directJobMatch && shouldAttemptRequestIdDocReadForPending(pending)
@@ -1630,6 +1658,7 @@
           if (directJobMatch?.jobId) {
             logDebug("workspace.pending-uploads.remote-sync.job-read-match", {
               pendingRequestId: normalizeText(pending?.requestId),
+              reason: normalizeText(reason),
               recoveredJobId: matchedJobId,
               status: normalizeText(directJobMatch.status),
             });
@@ -1637,6 +1666,7 @@
           if (directRequestMatch?.jobId) {
             logDebug("workspace.pending-uploads.remote-sync.requestid-doc-read-match", {
               pendingRequestId: normalizeText(pending?.requestId),
+              reason: normalizeText(reason),
               recoveredJobId: matchedJobId,
               status: normalizeText(directRequestMatch.status),
             });

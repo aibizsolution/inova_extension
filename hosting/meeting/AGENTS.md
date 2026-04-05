@@ -14,6 +14,7 @@
 - stale pending cleanup은 `meeting.recentJobs`만 믿지 않는다. 오래된 성공 job이 recent list에서 밀려날 수 있고, recent list 안의 같은 `requestId` entry도 `processing`으로 stale할 수 있으므로 non-terminal exact match는 `pending.jobId` direct lookup과 `pending.requestId -> deterministic jobId -> doc get`으로 다시 확인한다.
 - 위 requestId fallback은 이미 원격 job이 생겼을 가능성이 있는 stale pending에만 쓴다. 새 import 직후의 local-only pending은 fallback read 대상이 아니며, 존재하지 않는 job doc는 rules상 `permission denied`처럼 보일 수 있으니 이런 케이스는 로그를 낮추지 말고 애초에 시도하지 않도록 고친다.
 - 이 direct 확인은 pending entry뿐 아니라 `recentJobs`에 남은 non-terminal remote summary에도 적용한다. 실제 job 문서가 terminal이면 hosted list status도 즉시 맞춘다.
+- 다만 normal processing에는 이 direct 확인을 남발하지 않는다. meeting snapshot이나 chunk mutation이 올 때마다 selected job을 다시 읽지 말고, 선택된 기록은 job realtime listener를 source of truth로 쓰며 direct read는 stale summary/stale pending 복구일 때만 실행한다.
 - 같은 hosted 증상이 1~2회 패치 후에도 재현되면, 더 이상 heuristic recovery를 추가하지 않고 정확한 증거 수집 모드로 전환한다.
 - 정확한 증거 수집은 실제 상용 페이지 `?debug=1` 기준으로 한다. 최소 세트는 `화면 스크린샷`, `디버그 패널 복사 로그`, 아래 콘솔 helper 출력이다.
 - hosted 디버그 콘솔은 일반 이벤트 로그와 오류 로그를 분리해서 본다. 일반 이벤트는 최근 `120`건만 보관하지만, 오류는 별도 보존 버퍼를 유지해야 하며 `오류` 버튼 또는 `window.__INOVA_HOSTED_MEETING_DEBUG__.errors()`로 복사 가능해야 한다.

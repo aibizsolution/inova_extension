@@ -34,6 +34,7 @@
 - remote success cleanup은 먼저 `recentJobs` exact match를 본다. 다만 exact match가 있어도 meeting summary가 `processing`으로 stale할 수 있으므로, non-terminal match는 `jobId` direct lookup 또는 `requestId -> deterministic jobId -> doc get`으로 다시 확인한 뒤 정리한다. workspace Firestore rules는 `jobs` collection `list/query`를 허용하지 않으므로 request 기반 복구도 query가 아니라 doc read만 사용한다.
 - 다만 requestId 기반 doc read는 `복구 fallback`일 뿐이다. 아직 원격 job이 생성되지 않은 local-only pending까지 여기에 넣지 말고, 새 import/prepare/upload 초반 상태는 skip한다. 존재하지 않는 job doc는 workspace rules상 `permission denied`처럼 보일 수 있으므로, 이런 케이스는 `miss`로 다운그레이드하지 말고 애초에 시도하지 않는 쪽으로 고친다.
 - stale summary는 pending이 있을 때만 고치지 않는다. `recentJobs`에 남은 non-terminal remote record도 실제 job 문서와 다시 대조해 `succeeded/failed`가 확인되면 list status를 즉시 교정한다.
+- 위 direct read 복구는 정상 진행 중 every-snapshot 경로가 아니다. 활성 processing record나 선택된 job은 realtime listener와 `recentJobs` 요약을 우선 쓰고, direct doc read는 stale pending 또는 오래된 non-terminal summary처럼 복구 근거가 있을 때만 제한적으로 실행한다.
 - hosted stale pending, orphan queue, 잘못된 진행 상태가 1~2회 패치 후에도 남으면 더 이상 추측 패치를 누적하지 않는다. 실제 상용 페이지에서 `debug=1` 로그, 화면 스크린샷, `window.__INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20, entriesLimit: 40 })` 결과를 먼저 모은 뒤 그 식별자 기준으로 수정한다.
 - 위 console helper가 없으면 코드 문제가 아니라 배포/캐시 mismatch 가능성을 먼저 본다. 이 경우는 `hosting` 재배포 여부와 페이지 강한 새로고침 여부를 확인하고, helper가 보이는 최신 JS인지부터 맞춘다.
 - meeting feature에서 반복 오류가 stale pending, orphan record, 잘못된 진행 상태처럼 화면에 남는 유형이면 수동 정리를 운영 절차로 두지 않는다. 원인 수정과 함께 자동 복구 패치 또는 안전한 정리 스크립트를 같은 작업 안에서 판단한다.
