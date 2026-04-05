@@ -15,6 +15,7 @@
   - `public.headline`
   - `public.summary`
   - `public.changes[]`
+- 공개 목록에 계속 남길 이전 버전은 `artifact.fileName`, `artifact.publishedAt`, `artifact.sha256`, `artifact.sizeBytes`를 함께 유지해 CI와 재빌드가 로컬 ZIP 없이도 history 메타를 다시 만들 수 있어야 합니다.
 - `public.headline`, `public.summary`, `public.changes[].text`에 `TODO`가 남아 있으면 `pre-push`와 `release:build`가 실패합니다.
 - `internal.changes[]`는 선택 사항이며, 내부 운영/배포/구조 변경 기록용입니다.
 - 릴리스 패널과 Hosting `latest.json`, `history.json`에는 `public` 정보만 반영합니다.

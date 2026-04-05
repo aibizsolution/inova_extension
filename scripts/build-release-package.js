@@ -94,11 +94,12 @@ const publishedReleaseMap = buildPublishedReleaseMap({
   releaseCatalog,
 });
 const curatedHistory = curatedVersions.map((curatedVersion) => {
-  const publishedRelease = publishedReleaseMap.get(curatedVersion);
+  const publishedRelease = publishedReleaseMap.get(curatedVersion)
+    || buildPublishedReleaseFromCatalogEntry(findReleaseEntry(releaseCatalog, curatedVersion), curatedVersion, hostingBaseUrl);
   if (!publishedRelease) {
     throw new Error([
       `공개 릴리스 ${curatedVersion} 의 배포 메타를 찾지 못했어요.`,
-      "releases/release-notes.json에는 실제로 배포 ZIP과 메타가 존재하는 버전만 남겨 주세요.",
+      "releases/release-notes.json에는 실제로 배포 ZIP과 artifact 메타가 존재하는 버전만 남겨 주세요.",
     ].join("\n"));
   }
   return toHistoryPublishedRelease(publishedRelease);
@@ -217,6 +218,35 @@ function buildPublishedRelease({ version, releaseEntry, publishedAt, fileName, d
     sha256,
     sizeBytes,
     minSupportedVersion: version,
+  };
+}
+
+function buildPublishedReleaseFromCatalogEntry(releaseEntry, version, hostingBaseUrl) {
+  if (!releaseEntry || typeof releaseEntry !== "object") {
+    return null;
+  }
+
+  const artifact = normalizeArtifactMetadata(releaseEntry?.artifact);
+  if (!artifact.fileName) {
+    return null;
+  }
+
+  const publicEntry = getPublicReleaseSection(releaseEntry);
+  const versionedDownloadUrl = `${hostingBaseUrl}/downloads/${artifact.fileName}`;
+  return {
+    version: normalizeText(version || releaseEntry?.version),
+    level: normalizeText(releaseEntry.level || "patch"),
+    headline: normalizeText(publicEntry.headline),
+    summary: normalizeText(publicEntry.summary),
+    changes: normalizeChanges(publicEntry.changes),
+    publishedAt: artifact.publishedAt,
+    fileName: artifact.fileName,
+    downloadUrl: versionedDownloadUrl,
+    versionDownloadUrl: versionedDownloadUrl,
+    notes: normalizeText(publicEntry.headline || publicEntry.summary || "수동 배포본"),
+    sha256: artifact.sha256,
+    sizeBytes: artifact.sizeBytes,
+    minSupportedVersion: normalizeText(artifact.minSupportedVersion || version || releaseEntry?.version),
   };
 }
 
@@ -345,6 +375,16 @@ function pruneZipFiles(directoryPath, allowedFileNames) {
     }
     fs.rmSync(path.join(directoryPath, fileName), { force: true });
   }
+}
+
+function normalizeArtifactMetadata(artifact) {
+  return {
+    fileName: normalizeText(artifact?.fileName),
+    minSupportedVersion: normalizeText(artifact?.minSupportedVersion),
+    publishedAt: normalizeText(artifact?.publishedAt),
+    sha256: normalizeText(artifact?.sha256),
+    sizeBytes: Math.max(0, Number(artifact?.sizeBytes) || 0),
+  };
 }
 
 function normalizeChanges(changes) {
