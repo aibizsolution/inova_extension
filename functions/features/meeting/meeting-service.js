@@ -85,14 +85,7 @@ function registerMeetingHandlers(deps) {
 
   let client = null;
 
-  const createInovaMeetingJob = onRequest({
-    concurrency: 80,
-    cors: CORS_ORIGINS,
-    maxInstances: 20,
-    memory: "256MiB",
-    region: REGION,
-    timeoutSeconds: 60,
-  }, async (request, response) => {
+  const createInovaMeetingJob = onRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
     let cleanupStorageObjects = [];
     let jobQueued = false;
     try {
@@ -234,8 +227,8 @@ function registerMeetingHandlers(deps) {
   const uploadInovaMeetingSource = onRequest({
     concurrency: 1,
     cors: CORS_ORIGINS,
-    maxInstances: 40,
-    memory: "1GiB",
+    maxInstances: 60,
+    memory: "512MiB",
     region: REGION,
     timeoutSeconds: 60,
   }, async (request, response) => {
@@ -1245,14 +1238,7 @@ function registerMeetingHandlers(deps) {
     }
   });
 
-  const regenerateInovaMeetingNotes = onRequest({
-    concurrency: 80,
-    cors: CORS_ORIGINS,
-    maxInstances: 20,
-    memory: "256MiB",
-    region: REGION,
-    timeoutSeconds: 60,
-  }, async (request, response) => {
+  const regenerateInovaMeetingNotes = onRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
     try {
       assertMethod(request);
       const input = normalizeMeetingNotesRegenerateRequest(request.body);
