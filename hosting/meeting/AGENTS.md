@@ -10,7 +10,7 @@
 - imported audio duration의 메타데이터 실패는 decode fallback으로 복구되면 informational debug log로만 남긴다. 최종 길이 계산까지 실패한 경우에만 error 로그와 사용자 오류를 유지한다.
 - hosted 작업실은 녹음 중이거나 실제 업로드가 진행 중일 때 탭/브라우저 이탈을 브라우저 기본 `beforeunload` 경고로 막아야 한다. 업로드가 끝나고 원격 처리만 남은 상태까지 과하게 막지 말고, realtime 정리는 경고 취소와 충돌하지 않게 `pagehide` 같은 실제 이탈 시점으로 둔다.
 - stale pending, orphan local queue, self-healing reconciliation은 `hosting/meeting/workspace-recovery.js`에 먼저 모은다. `workspace-pending-uploads.js`에는 실행 연결만 두고 복구 규칙 조건문을 계속 누적하지 않는다.
-- stale pending cleanup은 `meeting.recentJobs`만 믿지 않는다. 오래된 성공 job이 recent list에서 밀려날 수 있고, recent list 안의 같은 `requestId` entry도 `processing`으로 stale할 수 있으므로 non-terminal exact match는 `pending.jobId` direct lookup과 `pending.requestId` exact query로 다시 확인한다.
+- stale pending cleanup은 `meeting.recentJobs`만 믿지 않는다. 오래된 성공 job이 recent list에서 밀려날 수 있고, recent list 안의 같은 `requestId` entry도 `processing`으로 stale할 수 있으므로 non-terminal exact match는 `pending.jobId` direct lookup과 `pending.requestId -> deterministic jobId -> doc get`으로 다시 확인한다.
 - 이 direct 확인은 pending entry뿐 아니라 `recentJobs`에 남은 non-terminal remote summary에도 적용한다. 실제 job 문서가 terminal이면 hosted list status도 즉시 맞춘다.
 - 같은 hosted 증상이 1~2회 패치 후에도 재현되면, 더 이상 heuristic recovery를 추가하지 않고 정확한 증거 수집 모드로 전환한다.
 - 정확한 증거 수집은 실제 상용 페이지 `?debug=1` 기준으로 한다. 최소 세트는 `화면 스크린샷`, `디버그 패널 복사 로그`, 아래 콘솔 helper 출력이다.

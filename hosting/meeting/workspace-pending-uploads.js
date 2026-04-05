@@ -10,7 +10,7 @@
       const helpers = deps?.helpers || {};
       const { buildLocalPendingJob, chooseSelectedRecordId, findHistoryEntry, findRemoteForPending, normalizeArtifact, normalizeJob, normalizeRecord } = ns.render;
       const { findRecoveredRemoteForPending } = ns.workspaceRecovery || {};
-      const { getCollections, queryDocuments, readDocument } = ns.firebase || {};
+      const { buildWorkspaceMeetingJobId, getCollections, readDocument } = ns.firebase || {};
       const { prepareAudioSourceChunks } = ns.audioChunker;
       const { blobToBase64, collapseSupersededPendingUploads, normalizePendingUpload, PENDING_UPLOAD_DEBUG_SCENARIOS } = ns.storage;
       const {
@@ -1409,7 +1409,7 @@
       async function loadRemoteJobRecordByRequestId(requestId, cache) {
         const normalizedRequestId = normalizeText(requestId);
         const meetingId = normalizeText(state.meeting?.meetingId || state.session?.meetingId);
-        if (!normalizedRequestId || !meetingId || typeof queryDocuments !== "function" || typeof getCollections !== "function") {
+        if (!normalizedRequestId || !meetingId || typeof buildWorkspaceMeetingJobId !== "function" || typeof getCollections !== "function") {
           return null;
         }
         const cacheKey = `${meetingId}::${normalizedRequestId}`;
@@ -1419,18 +1419,15 @@
         const readTask = (async () => {
           try {
             const collections = getCollections();
-            const docs = await queryDocuments(collections?.jobs, {
-              filters: [
-                { field: "meetingId", op: "==", value: meetingId },
-                { field: "source.requestId", op: "==", value: normalizedRequestId },
-              ],
-              limit: 2,
-            });
-            if (!Array.isArray(docs) || docs.length !== 1) {
+            const deterministicJobId = await buildWorkspaceMeetingJobId(normalizedRequestId);
+            if (!deterministicJobId || typeof readDocument !== "function") {
               return null;
             }
-            const doc = docs[0];
-            const normalizedJob = normalizeJob(typeof doc?.data === "function" ? doc.data() : null, state.meeting?.title);
+            const snapshot = await readDocument(collections?.jobs, deterministicJobId);
+            if (!snapshot?.exists || typeof snapshot.data !== "function") {
+              return null;
+            }
+            const normalizedJob = normalizeJob(snapshot.data(), state.meeting?.title);
             if (!normalizedJob?.jobId) {
               return null;
             }
@@ -1446,7 +1443,7 @@
               updatedAt: normalizeText(normalizedJob.updatedAt),
             };
           } catch (error) {
-            logDebug("workspace.pending-uploads.remote-sync.request-query.error", {
+            logDebug("workspace.pending-uploads.remote-sync.requestid-doc-read.error", {
               error,
               meetingId,
               requestId: normalizedRequestId,
@@ -1591,7 +1588,7 @@
             });
           }
           if (directRequestMatch?.jobId) {
-            logDebug("workspace.pending-uploads.remote-sync.request-query-match", {
+            logDebug("workspace.pending-uploads.remote-sync.requestid-doc-read-match", {
               pendingRequestId: normalizeText(pending?.requestId),
               recoveredJobId: matchedJobId,
               status: normalizeText(directRequestMatch.status),
