@@ -152,16 +152,38 @@
     };
   }
 
+  async function hasMatchingWorkspaceAuthSession() {
+    if (!authState.firebaseCustomToken || !authState.meetingDocumentId || !authState.meetingId) {
+      return false;
+    }
+    const expectedOwnerProviderUserKey = extractOwnerProviderUserKey(authState.meetingDocumentId, authState.meetingId);
+    if (!expectedOwnerProviderUserKey) {
+      return false;
+    }
+    const { auth } = await ensureFirestoreReady();
+    const currentUser = auth.currentUser;
+    if (!currentUser || typeof currentUser.getIdTokenResult !== "function") {
+      return false;
+    }
+    try {
+      const tokenResult = await currentUser.getIdTokenResult();
+      const claims = tokenResult?.claims && typeof tokenResult.claims === "object" ? tokenResult.claims : {};
+      const activeMeetingId = normalizeText(claims.meetingId);
+      const activeOwnerProviderUserKey = normalizeText(claims.ownerProviderUserKey || claims.providerUserKey);
+      return activeMeetingId === normalizeText(authState.meetingId)
+        && activeOwnerProviderUserKey === expectedOwnerProviderUserKey;
+    } catch {
+      return false;
+    }
+  }
+
   async function ensureWorkspaceAuth(options = {}) {
     const forceRefresh = Boolean(options?.forceRefresh);
     if (!authState.firebaseCustomToken || !authState.meetingDocumentId || !authState.meetingId) {
       throw new Error("회의 작업실 접근 권한을 아직 확인하지 못했어요.");
     }
 
-    if (
-      !forceRefresh
-      && authState.meetingDocumentId
-    ) {
+    if (!forceRefresh && await hasMatchingWorkspaceAuthSession()) {
       return {
         accessMode: authState.accessMode,
         meetingDocumentId: authState.meetingDocumentId,
@@ -237,6 +259,9 @@
     if (!normalizedCollection || !normalizedDocumentId) {
       return null;
     }
+    if (authState.firebaseCustomToken) {
+      await ensureWorkspaceAuth();
+    }
     const { firestore } = await ensureFirestoreReady();
     logDebug("firestore.document.read.start", {
       collection: normalizedCollection,
@@ -274,6 +299,9 @@
     const limit = Math.max(1, Number(options?.limit) || 1);
     if (!normalizedCollection || !filters.length) {
       return [];
+    }
+    if (authState.firebaseCustomToken) {
+      await ensureWorkspaceAuth();
     }
     const { firestore } = await ensureFirestoreReady();
     let query = firestore.collection(normalizedCollection);

@@ -22,6 +22,7 @@
 ## hosted workspace auth 메모
 - hosted 회의 작업실 Firebase auth claim은 `meetingId` 단위로 달라질 수 있다.
 - 그래서 `hosting/meeting/firebase-client.js`에서는 `synchronizeTabs: true` 같은 cross-tab Firestore persistence를 켜지 않고, 여러 회의 탭이 각자 auth를 유지하도록 둔다.
+- hosted Firestore `doc get/query`는 `meetingDocumentId` 같은 로컬 상태만 보고 바로 실행하지 않는다. 실제 Firebase custom-token sign-in이 완료됐는지 `ensureWorkspaceAuth()`로 먼저 보장한 뒤 읽어야 하며, 그렇지 않으면 실제 문서가 있어도 `Missing or insufficient permissions`가 날 수 있다.
 - 실시간 listener permission 오류 재시도는 기존 작업실 access payload를 지운 뒤 막히지 않게, 같은 meeting auth로 강제 재로그인하는 흐름을 유지한다.
 - hosted 회의 작업실의 `파일 불러오기`는 로컬/상용 모두 지원 대상이다. origin이 다르다는 이유만으로 버튼 표시나 import 실행을 막지 않는다.
 - owner-secure hosted 작업실은 `meetingId`만으로 진입하거나 새로고침해도 업로드/삭제/수정이 계속 동작하도록 `authorizeInovaMeetingWorkspaceAccess`가 `meetingSessionToken`을 함께 돌려주고, 작업실은 그 토큰을 복원 세션에 저장한다.
