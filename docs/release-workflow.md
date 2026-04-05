@@ -18,6 +18,7 @@
 - `public.headline`, `public.summary`, `public.changes[].text`에 `TODO`가 남아 있으면 `pre-push`와 `release:build`가 실패합니다.
 - `internal.changes[]`는 선택 사항이며, 내부 운영/배포/구조 변경 기록용입니다.
 - 릴리스 패널과 Hosting `latest.json`, `history.json`에는 `public` 정보만 반영합니다.
+- `release:build`는 공개 최신 버전보다 낮은 버전으로는 진행할 수 없지만, 같은 공개 버전으로 로컬 재빌드하거나 최종 배포하는 흐름은 허용합니다.
 - 로컬 훅이 빠졌더라도 GitHub Actions `Repo Guardrails`가 같은 규칙을 다시 검사합니다.
 - PR 머지 후 GitHub 원격 브랜치는 자동 삭제되고, 로컬 `codex/*` 브랜치는 `main` 기준으로 이미 머지된 경우 훅이 자동 정리합니다.
 
