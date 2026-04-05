@@ -56,6 +56,34 @@
       const createEmptyWorkspaceMutationState = (...args) => helpers.createEmptyWorkspaceMutationState?.(...args);
       const setDegradedNotice = (...args) => helpers.setDegradedNotice?.(...args);
       const clearDegradedNotice = (...args) => helpers.clearDegradedNotice?.(...args);
+      const cloneNoticeSnapshot = typeof helpers.cloneNoticeSnapshot === "function"
+        ? (...args) => helpers.cloneNoticeSnapshot(...args)
+        : (notice) => ({
+            code: normalizeText(notice?.code),
+            sticky: Boolean(notice?.sticky),
+            text: normalizeText(notice?.text),
+            tone: normalizeText(notice?.tone),
+          });
+      const cloneDegradedDiagnosticsSnapshot = typeof helpers.cloneDegradedDiagnosticsSnapshot === "function"
+        ? (...args) => helpers.cloneDegradedDiagnosticsSnapshot(...args)
+        : (entry) => ({
+            degradedReason: normalizeText(entry?.degradedReason),
+            issueCodes: (Array.isArray(entry?.issueCodes) ? entry.issueCodes : []).map((code) => normalizeText(code)).filter(Boolean),
+          });
+      const buildDegradedNoticeRegistrySnapshot = typeof helpers.buildDegradedNoticeRegistrySnapshot === "function"
+        ? (...args) => helpers.buildDegradedNoticeRegistrySnapshot(...args)
+        : () => {
+            const snapshot = {};
+            for (const [code, notice] of Object.entries(state.degradedNotices || {})) {
+              const normalizedCode = normalizeText(code);
+              if (!normalizedCode) continue;
+              snapshot[normalizedCode] = cloneNoticeSnapshot(notice);
+            }
+            return snapshot;
+          };
+      const getHighestPriorityDegradedNotice = typeof helpers.getHighestPriorityDegradedNotice === "function"
+        ? (...args) => helpers.getHighestPriorityDegradedNotice(...args)
+        : () => null;
       const applyDegradedDiagnostics = (...args) => helpers.applyDegradedDiagnostics?.(...args);
       const getWorkspaceTitleOrFallback = (...args) => helpers.getWorkspaceTitleOrFallback?.(...args);
       const persistWorkspaceSession = (...args) => controller("session")?.persistSession?.(...args);

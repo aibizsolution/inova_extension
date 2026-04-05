@@ -545,9 +545,12 @@
     return {
       applyDegradedDiagnostics,
       applyRender,
+      buildDegradedNoticeRegistrySnapshot,
       buildImportedRecordTitle,
       buildRecordTitle,
       clearDegradedNotice,
+      cloneDegradedDiagnosticsSnapshot,
+      cloneNoticeSnapshot,
       cloneNotesContextItems,
       cloneNotesInputSnapshot,
       controller(name) {
@@ -559,6 +562,7 @@
       createEmptyWorkspaceMutationState,
       createIdleCapture,
       getWorkspaceTitleOrFallback,
+      getHighestPriorityDegradedNotice,
       renderBlocked,
       requestConfirmation,
       resolveConfirmation,
