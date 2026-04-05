@@ -48,3 +48,5 @@
 - `release:build`는 기본 runtime 디렉터리뿐 아니라 `manifest.json`이 직접 참조하는 추가 파일도 ZIP에 포함해야 하며, staging 결과에 누락이 있으면 바로 실패해야 한다.
 - `content/*`, `background/*`, `popup/*`, `manifest.json`, 확장 번들에 포함되는 `shared/*` 변경은 Firebase 배포만으로 끝나지 않는다. 실제 확장 버전 빌드/배포와 Chrome 확장 새로고침까지 포함해 안내한다.
 - `hosting/*`만 바뀐 경우는 hosting 배포와 페이지 새로고침으로 끝날 수 있지만, 사용자에게는 `탭 새로고침 필요 여부`와 `확장 Reload 불필요 여부`를 함께 전달한다.
+- `auto-merge`를 걸었으면 그 순간을 완료로 보지 않는다. `gh pr view <번호> --json state,mergedAt,url` 또는 GitHub UI에서 실제 `MERGED`를 확인한 뒤에만 릴리스/배포 작업이 완전히 닫힌 것으로 본다.
+- 실제 merged 확인 후에는 `git checkout main`, `git pull --ff-only origin main`으로 로컬 기준을 맞추고, 해당 `codex/*` 브랜치를 삭제한다. squash/rebase로 `git branch --merged`에 안 잡혀도 PR이 merged로 확인된 브랜치는 로컬 정리 대상으로 본다.
