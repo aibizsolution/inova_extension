@@ -33,10 +33,13 @@
   };
   const MAX_PREVIEW_TEXT_LENGTH = 180;
   const MAX_DEBUG_LOG_ENTRIES = 120;
+  const MAX_DEBUG_ERROR_ENTRIES = 120;
   const TERMINAL_REMOTE_STATUSES = new Set(["succeeded", "failed"]);
   const AUTO_RETRY_PENDING_STATUSES = new Set(["local_saved", "upload_queued"]);
   const debugListeners = new Set();
   const debugEntries = [];
+  const debugErrorEntries = [];
+  const debugStats = createEmptyDebugStats();
   const debugFaults = readDebugFaultRegistry();
   let debugSequence = 0;
   let debugEnabled = false;
@@ -949,8 +952,48 @@
     }));
   }
 
+  function createEmptyDebugStats() {
+    return {
+      errorCount: 0,
+      functionCalls: 0,
+      readCount: 0,
+      snapshotCount: 0,
+      totalLogs: 0,
+    };
+  }
+
+  function classifyDebugEntry(entry) {
+    const event = normalizeText(entry?.event);
+    return {
+      errorCount: isErrorDebugEntry(entry) ? 1 : 0,
+      functionCalls: event === "http.request" || event === "workspace.source-upload.request" ? 1 : 0,
+      readCount: event === "firestore.document.read.start" || event === "firestore.query.start" ? 1 : 0,
+      snapshotCount: event === "firestore.listener.snapshot" ? 1 : 0,
+      totalLogs: event ? 1 : 0,
+    };
+  }
+
+  function getDebugStatsSummary() {
+    return {
+      errorCount: Math.max(0, Number(debugStats.errorCount) || 0),
+      functionCalls: Math.max(0, Number(debugStats.functionCalls) || 0),
+      readCount: Math.max(0, Number(debugStats.readCount) || 0),
+      snapshotCount: Math.max(0, Number(debugStats.snapshotCount) || 0),
+      totalLogs: Math.max(0, Number(debugStats.totalLogs) || 0),
+    };
+  }
+
+  function getRetainedErrorDebugEntries() {
+    return debugErrorEntries.map((entry) => ({
+      ...entry,
+      payload: normalizeDebugPayload(entry.payload),
+    }));
+  }
+
   function clearDebugEntries() {
     debugEntries.length = 0;
+    debugErrorEntries.length = 0;
+    Object.assign(debugStats, createEmptyDebugStats());
     notifyDebugListeners();
   }
 
@@ -997,48 +1040,33 @@
       || hasDebugErrorPayload(entry?.payload);
   }
 
-  function getErrorDebugEntries(entries = getDebugEntries()) {
-    return (Array.isArray(entries) ? entries : []).filter((entry) => isErrorDebugEntry(entry));
+  function getErrorDebugEntries(entries) {
+    const sourceEntries = Array.isArray(entries) ? entries : getRetainedErrorDebugEntries();
+    return sourceEntries.filter((entry) => isErrorDebugEntry(entry));
   }
 
   function buildCopyText(entries = getDebugEntries()) {
     return (Array.isArray(entries) ? entries : []).map((entry) => formatDebugEntry(entry)).join("\n\n").trim();
   }
 
-  function buildErrorCopyText(entries = getDebugEntries()) {
+  function buildErrorCopyText(entries) {
     return getErrorDebugEntries(entries).map((entry) => formatDebugEntry(entry)).join("\n\n").trim();
   }
 
-  function summarizeEntries(entries = getDebugEntries()) {
-    const normalizedEntries = Array.isArray(entries) ? entries : [];
-    let functionCalls = 0;
-    let readCount = 0;
-    let snapshotCount = 0;
-    let errorCount = 0;
-    for (const entry of normalizedEntries) {
-      const event = normalizeText(entry?.event);
-      const backend = normalizeText(entry?.payload?.backend).toLowerCase();
-      const operation = normalizeText(entry?.payload?.operation).toLowerCase();
-      if (event.endsWith(".request") && backend === "firebase-function") {
-        functionCalls += 1;
-      }
-      if (event.endsWith(".request") && operation === "read") {
-        readCount += 1;
-      }
-      if (event.includes("firestore") && event.endsWith(".snapshot")) {
-        snapshotCount += 1;
-      }
-      if (isErrorDebugEntry(entry)) {
-        errorCount += 1;
-      }
+  function summarizeEntries(entries) {
+    if (!Array.isArray(entries)) {
+      return getDebugStatsSummary();
     }
-    return {
-      errorCount,
-      functionCalls,
-      readCount,
-      snapshotCount,
-      totalLogs: normalizedEntries.length,
-    };
+    const summary = createEmptyDebugStats();
+    for (const entry of entries) {
+      const classified = classifyDebugEntry(entry);
+      summary.errorCount += classified.errorCount;
+      summary.functionCalls += classified.functionCalls;
+      summary.readCount += classified.readCount;
+      summary.snapshotCount += classified.snapshotCount;
+      summary.totalLogs += classified.totalLogs;
+    }
+    return summary;
   }
 
   function notifyDebugListeners() {
@@ -1069,9 +1097,21 @@
       payload: normalizeDebugPayload(payload),
       timestamp: new Date().toISOString(),
     };
+    const classified = classifyDebugEntry(entry);
+    debugStats.errorCount += classified.errorCount;
+    debugStats.functionCalls += classified.functionCalls;
+    debugStats.readCount += classified.readCount;
+    debugStats.snapshotCount += classified.snapshotCount;
+    debugStats.totalLogs += classified.totalLogs;
     debugEntries.push(entry);
     while (debugEntries.length > MAX_DEBUG_LOG_ENTRIES) {
       debugEntries.shift();
+    }
+    if (isErrorDebugEntry(entry)) {
+      debugErrorEntries.push(entry);
+      while (debugErrorEntries.length > MAX_DEBUG_ERROR_ENTRIES) {
+        debugErrorEntries.shift();
+      }
     }
     notifyDebugListeners();
     return entry;
@@ -1143,9 +1183,11 @@
     clearFault: clearDebugFault,
     consumeFault: consumeDebugFault,
     entries: getDebugEntries,
+    errors: getRetainedErrorDebugEntries,
     faults: getDebugFaults,
     format: formatDebugEntry,
     log: logDebug,
+    stats: getDebugStatsSummary,
     setFault: setDebugFault,
   };
 
@@ -1191,6 +1233,9 @@
     consumeDebugFault,
     generateCaptureRequestId,
     getDebugEntries,
+    getDebugStatsSummary,
+    getErrorDebugEntries,
+    getRetainedErrorDebugEntries,
     isDebugPanelEnabled,
     isLikelyNetworkError,
     isLocalWorkspaceOrigin,

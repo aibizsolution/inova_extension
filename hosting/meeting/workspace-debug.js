@@ -14,13 +14,14 @@
         buildErrorCopyText,
         clearDebugEntries,
         getDebugEntries,
+        getDebugStatsSummary,
+        getRetainedErrorDebugEntries,
         isDebugPanelEnabled,
         logDebug,
         normalizeText,
         safeLocalStorageSet,
         setEnabled: setDebugEnabled,
         subscribeDebugEntries,
-        summarizeEntries,
       } = ns.shared;
       const {
         buildDetailView,
@@ -45,7 +46,7 @@
 
       function buildDebugPanelState(entries = getDebugEntries()) {
         const normalizedEntries = Array.isArray(entries) ? entries : [];
-        const summary = summarizeEntries(normalizedEntries);
+        const summary = getDebugStatsSummary();
         const text = buildDebugConsoleText(normalizedEntries);
         return debugConsole?.buildState?.({
           collapsed: state.debugPanelCollapsed,
@@ -352,7 +353,7 @@
       }
 
       async function copyDebugErrors() {
-        const text = normalizeText(buildErrorCopyText(getDebugEntries()));
+        const text = normalizeText(buildErrorCopyText(getRetainedErrorDebugEntries()));
         if (!text) {
           helpers.setDebugNotice?.("복사할 오류 로그가 없습니다.", "highlight");
           helpers.applyRender?.();
@@ -441,6 +442,8 @@
         debugApi.debugConsoleValidation = {
           checkWorkspace: validateHostedDebugConsoleWorkspace,
         };
+        debugApi.errors = getRetainedErrorDebugEntries;
+        debugApi.stats = getDebugStatsSummary;
         debugApi.collectPendingSyncEvidence = buildPendingSyncEvidence;
         debugApi.printPendingSyncEvidence = printPendingSyncEvidence;
         debugApi.queueState = (...args) => controller("pendingUploads")?.buildPendingUploadQueueStateSnapshot?.(...args);
