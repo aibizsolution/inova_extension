@@ -954,6 +954,7 @@
 
   function createEmptyDebugStats() {
     return {
+      billableCount: 0,
       errorCount: 0,
       functionCalls: 0,
       readCount: 0,
@@ -964,17 +965,22 @@
 
   function classifyDebugEntry(entry) {
     const event = normalizeText(entry?.event);
+    const functionCalls = event === "http.request" || event === "workspace.source-upload.request" ? 1 : 0;
+    const readCount = event === "firestore.document.read.start" || event === "firestore.query.start" ? 1 : 0;
+    const snapshotCount = event === "firestore.listener.snapshot" ? 1 : 0;
     return {
+      billableCount: functionCalls + readCount + snapshotCount,
       errorCount: isErrorDebugEntry(entry) ? 1 : 0,
-      functionCalls: event === "http.request" || event === "workspace.source-upload.request" ? 1 : 0,
-      readCount: event === "firestore.document.read.start" || event === "firestore.query.start" ? 1 : 0,
-      snapshotCount: event === "firestore.listener.snapshot" ? 1 : 0,
+      functionCalls,
+      readCount,
+      snapshotCount,
       totalLogs: event ? 1 : 0,
     };
   }
 
   function getDebugStatsSummary() {
     return {
+      billableCount: Math.max(0, Number(debugStats.billableCount) || 0),
       errorCount: Math.max(0, Number(debugStats.errorCount) || 0),
       functionCalls: Math.max(0, Number(debugStats.functionCalls) || 0),
       readCount: Math.max(0, Number(debugStats.readCount) || 0),
@@ -1060,6 +1066,7 @@
     const summary = createEmptyDebugStats();
     for (const entry of entries) {
       const classified = classifyDebugEntry(entry);
+      summary.billableCount += classified.billableCount;
       summary.errorCount += classified.errorCount;
       summary.functionCalls += classified.functionCalls;
       summary.readCount += classified.readCount;
@@ -1098,6 +1105,7 @@
       timestamp: new Date().toISOString(),
     };
     const classified = classifyDebugEntry(entry);
+    debugStats.billableCount += classified.billableCount;
     debugStats.errorCount += classified.errorCount;
     debugStats.functionCalls += classified.functionCalls;
     debugStats.readCount += classified.readCount;
