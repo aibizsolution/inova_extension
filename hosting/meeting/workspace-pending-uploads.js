@@ -1146,10 +1146,13 @@
         if (!transition?.nextPending) {
           return null;
         }
-        const nextPending = await upsertPendingUpload(transition.nextPending, {
-          context: options?.queueContext,
-        });
         const normalizedRequestId = normalizeText(pending?.requestId);
+        const shouldCleanupPending = normalizeText(transition?.outcome) === "succeeded";
+        const nextPending = shouldCleanupPending
+          ? normalizePendingUpload(transition.nextPending)
+          : await upsertPendingUpload(transition.nextPending, {
+            context: options?.queueContext,
+          });
         if (!normalizedRequestId) {
           return nextPending;
         }
@@ -1172,6 +1175,14 @@
         ) {
           state.selectedRecordId = transition.nextSelectedRecordId;
         }
+        if (shouldCleanupPending) {
+          await removePendingUploadQueueEntry(normalizedRequestId, {
+            context: options?.queueContext,
+            nextSelectedRecordId: options?.applySelectedRecordTransition ? transition.nextSelectedRecordId : "",
+            persistSession: false,
+          });
+          persistWorkspaceSession();
+        }
         return nextPending;
       }
       
@@ -1180,21 +1191,25 @@
         if (!transition?.nextPending) {
           return null;
         }
-        const nextPending = await upsertPendingUpload(transition.nextPending, {
-          preserveUpdatedAt: true,
-          context: {
-            phase: transition.outcome === "succeeded"
-              ? "remote-sync-succeeded"
-              : transition.outcome === "failed"
-                ? "remote-sync-reset"
-                : "remote-sync-update",
-            previousRequestId: pending.requestId,
-            reason: "remote-sync",
-            requestId: transition.nextPending.requestId,
-            shouldResetSource: transition.resetChunkCache === "reset-parts",
-          },
-        });
         const normalizedRequestId = normalizeText(pending?.requestId);
+        const queueContext = {
+          phase: transition.outcome === "succeeded"
+            ? "remote-sync-succeeded"
+            : transition.outcome === "failed"
+              ? "remote-sync-reset"
+              : "remote-sync-update",
+          previousRequestId: pending.requestId,
+          reason: "remote-sync",
+          requestId: transition.nextPending.requestId,
+          shouldResetSource: transition.resetChunkCache === "reset-parts",
+        };
+        const shouldCleanupPending = normalizeText(transition?.outcome) === "succeeded";
+        const nextPending = shouldCleanupPending
+          ? normalizePendingUpload(transition.nextPending)
+          : await upsertPendingUpload(transition.nextPending, {
+            preserveUpdatedAt: true,
+            context: queueContext,
+          });
         if (!normalizedRequestId) {
           return nextPending;
         }
@@ -1216,6 +1231,14 @@
         ) {
           state.selectedRecordId = transition.nextSelectedRecordId;
         }
+        if (shouldCleanupPending) {
+          await removePendingUploadQueueEntry(normalizedRequestId, {
+            context: queueContext,
+            nextSelectedRecordId: transition.nextSelectedRecordId,
+            persistSession: false,
+          });
+          persistWorkspaceSession();
+        }
         return nextPending;
       }
       
@@ -1229,16 +1252,20 @@
           : transition.outcome === "failed"
             ? "chunk-resync-reset"
             : "chunk-resync-update";
-        const nextPending = await upsertPendingUpload(transition.nextPending, {
-          context: {
-            phase,
-            previousRequestId: pending.requestId,
-            reason: "chunk-resync",
-            requestId: transition.nextPending.requestId,
-            shouldResetSource: transition.resyncCacheAction === "reset-parts",
-          },
-        });
         const normalizedRequestId = normalizeText(pending?.requestId);
+        const queueContext = {
+          phase,
+          previousRequestId: pending.requestId,
+          reason: "chunk-resync",
+          requestId: transition.nextPending.requestId,
+          shouldResetSource: transition.resyncCacheAction === "reset-parts",
+        };
+        const shouldCleanupPending = normalizeText(transition?.outcome) === "succeeded";
+        const nextPending = shouldCleanupPending
+          ? normalizePendingUpload(transition.nextPending)
+          : await upsertPendingUpload(transition.nextPending, {
+            context: queueContext,
+          });
         if (!normalizedRequestId) {
           return nextPending;
         }
@@ -1253,6 +1280,13 @@
               uploadStatus: "",
             })),
           };
+        }
+        if (shouldCleanupPending) {
+          await removePendingUploadQueueEntry(normalizedRequestId, {
+            context: queueContext,
+            persistSession: false,
+          });
+          persistWorkspaceSession();
         }
         return nextPending;
       }
@@ -2398,8 +2432,11 @@
       }
       
       
-      async function deletePendingUpload(requestId, options = {}) {
+      async function removePendingUploadQueueEntry(requestId, options = {}) {
         const normalizedRequestId = normalizeText(requestId);
+        if (!normalizedRequestId) {
+          return;
+        }
         try {
           await runPendingUploadQueueOperation(
             () => state.queueStore.delete(requestId),
@@ -2417,8 +2454,18 @@
         }
         delete state.runtimeChunkCache[normalizedRequestId];
         state.pendingUploads = state.pendingUploads.filter((item) => item.requestId !== normalizedRequestId);
-        if (state.selectedRecordId === ns.shared.buildLocalSelectionId(normalizedRequestId)) state.selectedRecordId = chooseSelectedRecordId(state);
-        persistWorkspaceSession();
+        if (state.selectedRecordId === ns.shared.buildLocalSelectionId(normalizedRequestId)) {
+          state.selectedRecordId = normalizeText(options?.nextSelectedRecordId) || chooseSelectedRecordId(state);
+        }
+        state.meeting.pendingLocalCount = state.pendingUploads.length;
+        if (options?.persistSession !== false) {
+          persistWorkspaceSession();
+        }
+      }
+
+
+      async function deletePendingUpload(requestId, options = {}) {
+        await removePendingUploadQueueEntry(requestId, options);
         setNotice("브라우저에 보관하던 녹음을 삭제했습니다.", "highlight");
         applyRender();
       }
