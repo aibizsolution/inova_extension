@@ -14,6 +14,7 @@
         buildErrorCopyText,
         clearDebugEntries,
         getDebugEntries,
+        getDebugStatsSummary,
         getRetainedErrorDebugEntries,
         isDebugPanelEnabled,
         logDebug,
@@ -21,7 +22,6 @@
         safeLocalStorageSet,
         setEnabled: setDebugEnabled,
         subscribeDebugEntries,
-        summarizeEntries,
       } = ns.shared;
       const {
         buildDetailView,
@@ -46,27 +46,20 @@
 
       function buildDebugPanelState(entries = getDebugEntries()) {
         const normalizedEntries = Array.isArray(entries) ? entries : [];
-        const summary = summarizeEntries(normalizedEntries);
-        const retainedErrorCount = getRetainedErrorDebugEntries().length;
+        const summary = getDebugStatsSummary();
         const text = buildDebugConsoleText(normalizedEntries);
         return debugConsole?.buildState?.({
           collapsed: state.debugPanelCollapsed,
           enabled: Boolean(refs.debugPanel && !refs.debugPanel.hidden),
           feedback: state.debugNotice,
-          statusSummary: {
-            ...summary,
-            errorCount: retainedErrorCount,
-          },
+          statusSummary: summary,
           text,
         }) || {
           collapsed: state.debugPanelCollapsed,
           enabled: Boolean(refs.debugPanel && !refs.debugPanel.hidden),
           feedback: state.debugNotice,
-          hasErrors: retainedErrorCount > 0,
-          statusSummary: {
-            ...summary,
-            errorCount: retainedErrorCount,
-          },
+          hasErrors: Math.max(0, Number(summary?.errorCount) || 0) > 0,
+          statusSummary: summary,
           statusText: "",
           text: normalizeText(text) || "아직 로그가 없습니다.",
         };
@@ -450,6 +443,7 @@
           checkWorkspace: validateHostedDebugConsoleWorkspace,
         };
         debugApi.errors = getRetainedErrorDebugEntries;
+        debugApi.stats = getDebugStatsSummary;
         debugApi.collectPendingSyncEvidence = buildPendingSyncEvidence;
         debugApi.printPendingSyncEvidence = printPendingSyncEvidence;
         debugApi.queueState = (...args) => controller("pendingUploads")?.buildPendingUploadQueueStateSnapshot?.(...args);

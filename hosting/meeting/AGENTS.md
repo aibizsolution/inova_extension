@@ -17,6 +17,7 @@
 - 같은 hosted 증상이 1~2회 패치 후에도 재현되면, 더 이상 heuristic recovery를 추가하지 않고 정확한 증거 수집 모드로 전환한다.
 - 정확한 증거 수집은 실제 상용 페이지 `?debug=1` 기준으로 한다. 최소 세트는 `화면 스크린샷`, `디버그 패널 복사 로그`, 아래 콘솔 helper 출력이다.
 - hosted 디버그 콘솔은 일반 이벤트 로그와 오류 로그를 분리해서 본다. 일반 이벤트는 최근 `120`건만 보관하지만, 오류는 별도 보존 버퍼를 유지해야 하며 `오류` 버튼 또는 `window.__INOVA_HOSTED_MEETING_DEBUG__.errors()`로 복사 가능해야 한다.
+- 디버그 패널 통계 배지는 최근 표시 버퍼 기준이 아니라 누적 기준이어야 한다. 함수 호출, Firestore 읽기, 스냅샷, 오류 카운트는 로그 창에서 오래된 항목이 밀려도 `비우기` 전까지 유지한다.
 
 ```js
 window.__INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20, entriesLimit: 40 })
