@@ -83,6 +83,7 @@ npm run deploy:all
 
 - 기본 작업 브랜치는 `codex/<task-name>` 형식입니다.
 - `main`에는 직접 commit 하지 않고 작업 브랜치에서 commit 후 PR로 머지합니다.
+- PR은 기본적으로 auto-merge를 사용하고, required status check가 모두 통과되면 자동 머지되게 운영합니다.
 - `pre-commit`과 `pre-push`는 feature-owned 파일이 바뀌었는데 해당 feature `AGENTS.md`가 함께 갱신되지 않으면 막습니다.
 - `README.md`는 상위 개요용이므로, feature-local 변경 때문에 기능 변경 일지처럼 누적하지 않습니다.
 - 문서와 코드가 다르면 코드를 기준으로 같은 작업 안에서 feature 문서나 관련 docs를 갱신합니다.
