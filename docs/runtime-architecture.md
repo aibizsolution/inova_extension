@@ -55,6 +55,7 @@
 - 위치: `functions/index.js`, `functions/features/prompt-library/register.js`, `functions/features/prompt-review/prompt-review-service.js`, `functions/features/prompt-store/store-service.js`, `functions/features/meeting/meeting-service.js`, `functions/features/meeting/meeting-launch-service.js`
 - 역할: i-Nova 사용자 검증 뒤 prompt review, prompt store, prompt library sync API와 회의 기능 gateway endpoint를 제공한다.
 - 특징: 현재 원격 백업과 공개 스토어의 진입점이며, 프롬프트 패널용 `issueInovaPromptPanelAuth`가 Firebase custom token을 발급한다. prompt store는 `latest` 공개 feed page만 미리 써 두고, 검색/인기 정렬/상세는 요청 시 직접 query한다. 회의 기능은 launch grant 발급, hosted session 교환, 임시 source audio 업로드, OpenAI diarization 호출, `integration_inova_meeting_*` Firestore 기록, source cleanup까지 Functions 안에서 처리한다.
+- runtime 운영 기본값과 예외 프로파일은 `docs/functions-runtime-guide.md`를 기준으로 본다.
 
 ### Firestore / Hosting
 
@@ -160,6 +161,7 @@
 
 - `npm run check:cloud-sync -- --userKey <providerUserKey>`
 - `npm run check:function-logs -- --since 10`
+- `docs/functions-runtime-guide.md`
 - 실제 브라우저 확인: `docs/e2e-browser-workflow.md`
 - prompt 계열 Chrome smoke 공통 준비: unpacked extension `Reload` -> `https://inova.incross.com/` 새로고침 -> 우측 `실험실` 패널 열기 -> `프롬프트` 도구 진입
 - `prompt-library` smoke: `내 요청` 탭 렌더링, 기존 항목 또는 새 항목 1건 저장/수정, 입력창 주입 1회

@@ -14,6 +14,7 @@
 - [AGENTS.md](AGENTS.md): 전역 작업 규칙, 검증 기본값, 세션 분리 기준
 - [docs/feature-spec.md](docs/feature-spec.md): 제품 요구사항과 공통 계약
 - [docs/runtime-architecture.md](docs/runtime-architecture.md): popup, panel, background, hosted runtime 경계
+- [docs/functions-runtime-guide.md](docs/functions-runtime-guide.md): Firebase Functions runtime 기본값, 예외 프로파일, 운영 점검 기준
 - [docs/e2e-browser-workflow.md](docs/e2e-browser-workflow.md): 실제 Chrome 기준 수동 검증 흐름
 - [docs/release-workflow.md](docs/release-workflow.md): 버전 상승, 릴리스 메타, hosting 배포 순서
 
