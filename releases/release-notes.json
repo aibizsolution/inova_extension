@@ -2,36 +2,29 @@
   "schemaVersion": 1,
   "versions": [
     {
-      "version": "0.4.1",
+      "version": "0.4.2",
       "level": "patch",
       "public": {
-        "headline": "확장 패키지 로드 오류 수정",
-        "summary": "이번 배포는 Chrome에서 압축해제 확장을 다시 로드할 때 회의 디버그 스크립트 누락으로 설치가 막히던 패키지 오류를 바로잡은 안정화 업데이트입니다.",
+        "headline": "회의 디버그 콘솔 가독성 정리",
+        "summary": "이번 배포는 회의 디버그 콘솔의 카운터 의미를 단순화하고, 패널과 작업실에서 보이는 표시 방식과 크기를 맞춘 안정화 업데이트입니다.",
         "changes": [
           {
-            "type": "fixed",
-            "text": "릴리스 ZIP에 `hosting/meeting/debug-console.js`가 빠지지 않도록 패키징 대상을 manifest 기준으로 다시 계산하게 수정했습니다."
+            "type": "changed",
+            "text": "디버그 카운터를 `함수`, `읽기`, `리스너`, `오류` 기준으로 정리해 상태를 더 바로 이해할 수 있게 했습니다."
           },
           {
             "type": "changed",
-            "text": "배포 전 `npm run verify`와 `release:build`에서 manifest가 참조한 런타임 파일 누락을 바로 실패시키도록 검증 가드를 추가했습니다."
+            "text": "회의 패널과 작업실의 디버그 콘솔 폭, 로그 높이, 상태 배지 라벨을 같은 기준으로 맞춰 화면마다 체감이 달라지지 않게 했습니다."
           }
         ]
       },
       "internal": {
         "changes": [
           {
-            "type": "fixed",
-            "text": "release package staging이 고정 디렉터리 목록만 복사하던 동작을 manifest 런타임 파일 집합 기반으로 교체했습니다."
+            "type": "changed",
+            "text": "hosted/panel debug console 공통 렌더 계약을 `함수/읽기/리스너/오류` 라벨로 정리하고, 중복되던 billable aggregate 집계를 제거했습니다."
           }
         ]
-      },
-      "artifact": {
-        "fileName": "inova-extension-0.4.1-2026-04-05.zip",
-        "publishedAt": "2026-04-05T01:46:44.760Z",
-        "sha256": "f88aae4e4ad5f18776e7c4dfa70641713b87807747ba12ff387060d476c920fd",
-        "sizeBytes": 247608,
-        "minSupportedVersion": "0.4.1"
       }
     },
     {

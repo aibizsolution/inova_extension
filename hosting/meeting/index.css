@@ -1552,7 +1552,7 @@ select:disabled {
   right: 20px;
   bottom: 20px;
   z-index: 40;
-  width: min(760px, calc(100vw - 40px));
+  width: min(640px, calc(100vw - 40px));
   display: flex;
   justify-content: flex-end;
   pointer-events: none;

@@ -545,8 +545,8 @@
       hasErrors: statusSummary.errorCount > 0,
       statusSummary,
       statusText: enabled
-        ? `로그 ${statusSummary.totalLogs}건 · 함수 ${statusSummary.functionCalls}건 · 읽기 ${statusSummary.readCount}건 · 스냅샷 ${statusSummary.snapshotCount}건 · 오류 ${statusSummary.errorCount}건`
-        : "로그 0건 · 함수 0건 · 읽기 0건 · 스냅샷 0건 · 오류 0건",
+        ? `함수 ${statusSummary.functionCalls}건 · 읽기 ${statusSummary.readCount}건 · 리스너 ${statusSummary.snapshotCount}건 · 오류 ${statusSummary.errorCount}건`
+        : "함수 0건 · 읽기 0건 · 리스너 0건 · 오류 0건",
       text: enabled
         ? (namespace.panelDebug?.buildCopyText?.(entries) || "아직 로그가 없습니다.")
         : "",
