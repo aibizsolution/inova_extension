@@ -5,13 +5,12 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawnSync } = require("child_process");
+const { compareVersions, findReleaseEntry, getPublicReleaseSection, readReleaseCatalog, validateReleaseEntry } = require("./release-metadata");
 const {
-  compareVersions,
-  findReleaseEntry,
-  getPublicReleaseSection,
-  readReleaseCatalog,
-  validateReleaseEntry,
-} = require("./release-metadata");
+  collectRequiredReleasePackagePaths,
+  findMissingPaths,
+  resolveReleaseRuntimeItems,
+} = require("./release-package-runtime");
 
 const root = path.resolve(__dirname, "..");
 const packageJson = readJson("package.json");
@@ -33,7 +32,7 @@ const hostingReleaseDir = path.join(hostingRoot, "releases");
 const hostingBaseUrl = "https://browser-extension-main.web.app/extension";
 const latestDownloadFileName = "latest.zip";
 const publishedAt = new Date().toISOString();
-const runtimeItems = ["manifest.json", "background", "content", "icons", "popup", "shared", "README.md"];
+const runtimeItems = resolveReleaseRuntimeItems(manifestJson);
 const releaseCatalog = readReleaseCatalog(root);
 const releaseEntry = findReleaseEntry(releaseCatalog, version);
 const releaseErrors = validateReleaseEntry(releaseEntry, version);
@@ -47,6 +46,7 @@ if (releaseErrors.length) {
 for (const item of runtimeItems) {
   fs.cpSync(path.join(root, item), path.join(stagingDir, item), { force: true, recursive: true });
 }
+assertReleasePackageIntegrity(stagingDir, manifestJson);
 fs.mkdirSync(releasesDir, { recursive: true });
 compressDirectory(stagingDir, zipPath);
 fs.rmSync(stagingDir, { force: true, recursive: true });
@@ -62,16 +62,6 @@ const sizeBytes = fs.statSync(zipPath).size;
 const sha256 = crypto.createHash("sha256").update(fs.readFileSync(zipPath)).digest("hex");
 const versionedDownloadUrl = `${hostingBaseUrl}/downloads/${bundleName}.zip`;
 const latestDownloadUrl = `${hostingBaseUrl}/downloads/${latestDownloadFileName}`;
-const latestRelease = buildPublishedRelease({
-  version,
-  releaseEntry,
-  publishedAt,
-  fileName: `${bundleName}.zip`,
-  downloadUrl: latestDownloadUrl,
-  versionDownloadUrl: versionedDownloadUrl,
-  sha256,
-  sizeBytes,
-});
 const historyRelease = buildPublishedRelease({
   version,
   releaseEntry,
@@ -86,21 +76,56 @@ const historyRelease = buildPublishedRelease({
 const latestPath = path.join(hostingReleaseDir, "latest.json");
 const historyPath = path.join(hostingReleaseDir, "history.json");
 const latestPublishedVersion = normalizeText(readJsonSafe(latestPath)?.release?.version);
-if (latestPublishedVersion && compareVersions(version, latestPublishedVersion) <= 0) {
+if (latestPublishedVersion && compareVersions(version, latestPublishedVersion) < 0) {
   throw new Error([
     `현재 버전 ${version} 은(는) 마지막 배포 버전 ${latestPublishedVersion} 보다 높지 않아요.`,
     "배포 전에 `npm run version:bump -- <patch|minor|major>`로 새 버전을 먼저 준비해 주세요.",
   ].join("\n"));
 }
-const history = normalizePublishedReleaseList(readJsonSafe(historyPath)?.releases || [], releaseCatalog);
-const nextHistory = [historyRelease, ...history.filter((item) => String(item?.version || "") !== version)];
+const curatedVersions = getCuratedReleaseVersions(releaseCatalog);
+if (!curatedVersions.length) {
+  throw new Error("releases/release-notes.json에 사용자 패널에 남길 공개 릴리스를 1개 이상 유지해 주세요.");
+}
+const publishedReleaseMap = buildPublishedReleaseMap({
+  currentHistoryRelease: historyRelease,
+  currentVersion: version,
+  existingLatestRelease: readJsonSafe(latestPath)?.release,
+  existingHistoryReleases: readJsonSafe(historyPath)?.releases,
+  releaseCatalog,
+});
+const curatedHistory = curatedVersions.map((curatedVersion) => {
+  const publishedRelease = publishedReleaseMap.get(curatedVersion)
+    || buildPublishedReleaseFromCatalogEntry(findReleaseEntry(releaseCatalog, curatedVersion), curatedVersion, hostingBaseUrl);
+  if (!publishedRelease) {
+    throw new Error([
+      `공개 릴리스 ${curatedVersion} 의 배포 메타를 찾지 못했어요.`,
+      "releases/release-notes.json에는 실제로 배포 ZIP과 artifact 메타가 존재하는 버전만 남겨 주세요.",
+    ].join("\n"));
+  }
+  return toHistoryPublishedRelease(publishedRelease);
+});
+const latestHistoryRelease = curatedHistory[0];
+const latestRelease = toLatestPublishedRelease(latestHistoryRelease, latestDownloadUrl);
 writeJson(latestPath, {
   product: buildProductMeta(),
   release: latestRelease,
 });
 writeJson(historyPath, {
   product: buildProductMeta(),
-  releases: nextHistory.slice(0, 30),
+  releases: curatedHistory.slice(0, 30),
+});
+fs.copyFileSync(resolveLatestDownloadSourcePath({
+  currentVersion: version,
+  hostingDownloadDir,
+  latestHistoryRelease,
+  releasesDir,
+  zipPath,
+}), hostingLatestZipPath);
+pruneCuratedReleaseArtifacts({
+  curatedHistory,
+  hostingDownloadDir,
+  latestDownloadFileName,
+  releasesDir,
 });
 
 console.log(`[release-build] version=${version}`);
@@ -115,6 +140,18 @@ function buildProductMeta() {
     name: "i-Nova 더하기",
     team: "AI비즈솔루션팀",
   };
+}
+
+function assertReleasePackageIntegrity(stagingDirectory, manifest) {
+  const missingPaths = findMissingPaths(stagingDirectory, collectRequiredReleasePackagePaths(manifest));
+  if (!missingPaths.length) {
+    return;
+  }
+
+  throw new Error([
+    "release package staging 결과에 manifest 런타임 파일이 빠졌어요.",
+    ...missingPaths.map((missingPath) => `- ${missingPath}`),
+  ].join("\n"));
 }
 
 function compressDirectory(sourceDir, destinationPath) {
@@ -136,7 +173,7 @@ function compressDirectory(sourceDir, destinationPath) {
 function compressDirectoryOnWindows(sourceDir, destinationPath) {
   const command = [
     "Add-Type -AssemblyName System.IO.Compression.FileSystem",
-    `[System.IO.Compression.ZipFile]::CreateFromDirectory('${escapePowerShell(sourceDir)}', '${escapePowerShell(destinationPath)}', [System.IO.Compression.CompressionLevel]::Optimal, $true)`,
+    `[System.IO.Compression.ZipFile]::CreateFromDirectory('${escapePowerShell(sourceDir)}', '${escapePowerShell(destinationPath)}', [System.IO.Compression.CompressionLevel]::Optimal, $false)`,
   ].join("; ");
   const result = spawnSync("powershell", ["-NoLogo", "-NoProfile", "-Command", command], {
     cwd: root,
@@ -184,6 +221,56 @@ function buildPublishedRelease({ version, releaseEntry, publishedAt, fileName, d
   };
 }
 
+function buildPublishedReleaseFromCatalogEntry(releaseEntry, version, hostingBaseUrl) {
+  if (!releaseEntry || typeof releaseEntry !== "object") {
+    return null;
+  }
+
+  const artifact = normalizeArtifactMetadata(releaseEntry?.artifact);
+  if (!artifact.fileName) {
+    return null;
+  }
+
+  const publicEntry = getPublicReleaseSection(releaseEntry);
+  const versionedDownloadUrl = `${hostingBaseUrl}/downloads/${artifact.fileName}`;
+  return {
+    version: normalizeText(version || releaseEntry?.version),
+    level: normalizeText(releaseEntry.level || "patch"),
+    headline: normalizeText(publicEntry.headline),
+    summary: normalizeText(publicEntry.summary),
+    changes: normalizeChanges(publicEntry.changes),
+    publishedAt: artifact.publishedAt,
+    fileName: artifact.fileName,
+    downloadUrl: versionedDownloadUrl,
+    versionDownloadUrl: versionedDownloadUrl,
+    notes: normalizeText(publicEntry.headline || publicEntry.summary || "수동 배포본"),
+    sha256: artifact.sha256,
+    sizeBytes: artifact.sizeBytes,
+    minSupportedVersion: normalizeText(artifact.minSupportedVersion || version || releaseEntry?.version),
+  };
+}
+
+function getCuratedReleaseVersions(releaseCatalog) {
+  return (Array.isArray(releaseCatalog?.versions) ? releaseCatalog.versions : [])
+    .map((entry) => normalizeText(entry?.version))
+    .filter(Boolean)
+    .sort((left, right) => compareVersions(right, left));
+}
+
+function buildPublishedReleaseMap({ currentHistoryRelease, currentVersion, existingLatestRelease, existingHistoryReleases, releaseCatalog }) {
+  const output = new Map();
+  const existingReleases = normalizePublishedReleaseList([
+    existingLatestRelease,
+    ...(Array.isArray(existingHistoryReleases) ? existingHistoryReleases : []),
+  ], releaseCatalog);
+
+  for (const release of existingReleases) {
+    output.set(release.version, toHistoryPublishedRelease(release));
+  }
+  output.set(currentVersion, currentHistoryRelease);
+  return output;
+}
+
 function normalizePublishedReleaseList(releases, releaseCatalog) {
   return (Array.isArray(releases) ? releases : []).map((release) => normalizePublishedRelease(release, releaseCatalog)).filter(Boolean);
 }
@@ -209,6 +296,94 @@ function normalizePublishedRelease(release, releaseCatalog) {
     sha256: normalizeText(release?.sha256),
     sizeBytes: Math.max(0, Number(release?.sizeBytes) || 0),
     minSupportedVersion: normalizeText(release?.minSupportedVersion || version),
+  };
+}
+
+function toHistoryPublishedRelease(release) {
+  if (!release || typeof release !== "object") {
+    return null;
+  }
+  return {
+    ...release,
+    downloadUrl: normalizeText(release.versionDownloadUrl || release.downloadUrl),
+    versionDownloadUrl: normalizeText(release.versionDownloadUrl || release.downloadUrl),
+  };
+}
+
+function toLatestPublishedRelease(release, latestDownloadUrl) {
+  if (!release || typeof release !== "object") {
+    return null;
+  }
+  return {
+    ...release,
+    downloadUrl: normalizeText(latestDownloadUrl),
+    versionDownloadUrl: normalizeText(release.versionDownloadUrl || release.downloadUrl),
+  };
+}
+
+function resolveLatestDownloadSourcePath({ currentVersion, hostingDownloadDir, latestHistoryRelease, releasesDir, zipPath }) {
+  if (normalizeText(latestHistoryRelease?.version) === normalizeText(currentVersion)) {
+    return zipPath;
+  }
+
+  const fileName = normalizeText(latestHistoryRelease?.fileName);
+  if (!fileName) {
+    throw new Error("공개 최신 릴리스의 ZIP 파일 이름이 비어 있어 latest.zip을 갱신할 수 없어요.");
+  }
+
+  const candidatePaths = [
+    path.join(hostingDownloadDir, fileName),
+    path.join(releasesDir, fileName),
+  ];
+  const existingPath = candidatePaths.find((candidatePath) => fs.existsSync(candidatePath));
+  if (existingPath) {
+    return existingPath;
+  }
+
+  throw new Error([
+    `공개 최신 릴리스 ZIP을 찾지 못했어요: ${fileName}`,
+    ...candidatePaths.map((candidatePath) => `- ${candidatePath}`),
+  ].join("\n"));
+}
+
+function pruneCuratedReleaseArtifacts({ curatedHistory, hostingDownloadDir, latestDownloadFileName, releasesDir }) {
+  const curatedFileNames = new Set(
+    (Array.isArray(curatedHistory) ? curatedHistory : [])
+      .map((release) => normalizeText(release?.fileName))
+      .filter(Boolean)
+  );
+
+  pruneZipFiles(releasesDir, curatedFileNames);
+  pruneZipFiles(hostingDownloadDir, new Set([latestDownloadFileName, ...curatedFileNames]));
+}
+
+function pruneZipFiles(directoryPath, allowedFileNames) {
+  if (!fs.existsSync(directoryPath)) {
+    return;
+  }
+
+  for (const entry of fs.readdirSync(directoryPath, { withFileTypes: true })) {
+    if (!entry.isFile()) {
+      continue;
+    }
+    const fileName = normalizeText(entry.name);
+    if (!/\.zip$/i.test(fileName)) {
+      continue;
+    }
+    if (allowedFileNames.has(fileName)) {
+      continue;
+    }
+    fs.rmSync(path.join(directoryPath, fileName), { force: true });
+  }
+}
+
+function normalizeArtifactMetadata(artifact) {
+  return {
+    fileName: normalizeText(artifact?.fileName),
+    minSupportedVersion: normalizeText(artifact?.minSupportedVersion),
+    publishedAt: normalizeText(artifact?.publishedAt),
+    sha256: normalizeText(artifact?.sha256),
+    sizeBytes: Math.max(0, Number(artifact?.sizeBytes) || 0),
   };
 }
 

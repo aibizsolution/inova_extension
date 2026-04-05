@@ -111,7 +111,8 @@ function createSnapshot(label, changedFiles, payload) {
     changedFiles: uniqueFiles,
     featureFiles: uniqueFiles.filter(isFeatureFacingFile),
     releaseMetadataFiles: uniqueFiles.filter(isReleaseMetadataFile),
-    releasePreparation: releaseNotesChanged || packageVersionChanged || manifestVersionChanged,
+    releaseNotesChanged,
+    releasePreparation: packageVersionChanged || manifestVersionChanged,
     packageJson: payload.packageJson || {},
     manifestJson: payload.manifestJson || {},
     releaseCatalog: payload.releaseCatalog || readReleaseCatalog(root),
@@ -120,32 +121,34 @@ function createSnapshot(label, changedFiles, payload) {
 }
 
 function validateSnapshot(snapshot) {
-  if (!snapshot.releasePreparation) {
+  if (!snapshot.releasePreparation && !snapshot.releaseNotesChanged) {
     return;
   }
 
   const currentVersion = String(snapshot.packageJson.version || "").trim();
   const manifestVersion = String(snapshot.manifestJson.version || "").trim();
 
-  if (!currentVersion || currentVersion !== manifestVersion) {
-    fail(`[${snapshot.label}] feature 변경이 있는데 package.json과 manifest.json 버전이 다르거나 비어 있어요.`);
-  }
-
-  const requiredMetadataFiles = [PACKAGE_PATH, MANIFEST_PATH, RELEASE_NOTES_PATH];
-  const missingMetadataFiles = requiredMetadataFiles.filter((filePath) => !snapshot.releaseMetadataFiles.includes(filePath));
-  if (missingMetadataFiles.length) {
-    fail([
-      `[${snapshot.label}] 릴리스 준비 파일이 일부만 바뀌었어요. 버전과 릴리스 메타는 항상 같이 움직여야 합니다.`,
-      "다음 파일을 같이 업데이트해 주세요.",
-      ...missingMetadataFiles.map((filePath) => `- ${filePath}`),
-    ].join("\n"));
-  }
-
-  snapshot.baseVersions.forEach((baseVersion) => {
-    if (baseVersion && compareVersions(currentVersion, baseVersion) <= 0) {
-      fail(`[${snapshot.label}] 현재 버전 ${currentVersion} 이(가) 기준 버전 ${baseVersion} 보다 높지 않아요. 릴리스 준비 시에는 버전 상승이 필요합니다.`);
+  if (snapshot.releasePreparation) {
+    if (!currentVersion || currentVersion !== manifestVersion) {
+      fail(`[${snapshot.label}] feature 변경이 있는데 package.json과 manifest.json 버전이 다르거나 비어 있어요.`);
     }
-  });
+
+    const requiredMetadataFiles = [PACKAGE_PATH, MANIFEST_PATH, RELEASE_NOTES_PATH];
+    const missingMetadataFiles = requiredMetadataFiles.filter((filePath) => !snapshot.releaseMetadataFiles.includes(filePath));
+    if (missingMetadataFiles.length) {
+      fail([
+        `[${snapshot.label}] 릴리스 준비 파일이 일부만 바뀌었어요. 버전과 릴리스 메타는 항상 같이 움직여야 합니다.`,
+        "다음 파일을 같이 업데이트해 주세요.",
+        ...missingMetadataFiles.map((filePath) => `- ${filePath}`),
+      ].join("\n"));
+    }
+
+    snapshot.baseVersions.forEach((baseVersion) => {
+      if (baseVersion && compareVersions(currentVersion, baseVersion) <= 0) {
+        fail(`[${snapshot.label}] 현재 버전 ${currentVersion} 이(가) 기준 버전 ${baseVersion} 보다 높지 않아요. 릴리스 준비 시에는 버전 상승이 필요합니다.`);
+      }
+    });
+  }
 
   const releaseEntry = findReleaseEntry(snapshot.releaseCatalog, currentVersion);
   const releaseErrors = validateReleaseEntry(releaseEntry, currentVersion);

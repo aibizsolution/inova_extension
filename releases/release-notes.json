@@ -2,23 +2,19 @@
   "schemaVersion": 1,
   "versions": [
     {
-      "version": "0.4.0",
-      "level": "minor",
+      "version": "0.4.1",
+      "level": "patch",
       "public": {
-        "headline": "회의록 기능 추가",
-        "summary": "이번 배포는 0.3.2 이후 회의 허브와 hosted 회의 작업실에 회의록 흐름을 더해, 녹음부터 결과 확인까지 한곳에서 이어서 처리할 수 있게 정리한 업데이트입니다.",
+        "headline": "확장 패키지 로드 오류 수정",
+        "summary": "이번 배포는 Chrome에서 압축해제 확장을 다시 로드할 때 회의 디버그 스크립트 누락으로 설치가 막히던 패키지 오류를 바로잡은 안정화 업데이트입니다.",
         "changes": [
           {
-            "type": "added",
-            "text": "패널의 `회의` 도구에서 회의 기록과 결과를 다시 열어보는 회의록 흐름을 추가했습니다."
-          },
-          {
-            "type": "added",
-            "text": "hosted 회의 작업실에서 녹음과 파일 불러오기 이후 전사와 회의록 확인을 같은 화면에서 이어갈 수 있게 했습니다."
+            "type": "fixed",
+            "text": "릴리스 ZIP에 `hosting/meeting/debug-console.js`가 빠지지 않도록 패키징 대상을 manifest 기준으로 다시 계산하게 수정했습니다."
           },
           {
             "type": "changed",
-            "text": "이번 상용 릴리스 이력은 비교 기준 버전 `0.3.2`와 최신 버전 `0.4.0`만 보이도록 정리했습니다."
+            "text": "배포 전 `npm run verify`와 `release:build`에서 manifest가 참조한 런타임 파일 누락을 바로 실패시키도록 검증 가드를 추가했습니다."
           }
         ]
       },
@@ -26,53 +22,16 @@
         "changes": [
           {
             "type": "fixed",
-            "text": "상용 hosted 회의 작업실에서도 파일 불러오기 버튼과 import 흐름이 로컬과 같은 조건으로 동작하도록 수정했습니다."
+            "text": "release package staging이 고정 디렉터리 목록만 복사하던 동작을 manifest 런타임 파일 집합 기반으로 교체했습니다."
           }
         ]
-      }
-    },
-    {
-      "version": "0.3.27",
-      "level": "patch",
-      "public": {
-        "headline": "회의 탭 동시 열기 안정화",
-        "summary": "이번 배포는 새 회의를 연 뒤 기존 회의를 다시 열 때 hosted 작업실이 인증 문제로 멈추지 않도록 회의 탭 간 인증 흐름을 안정화한 업데이트입니다.",
-        "changes": [
-          {
-            "type": "changed",
-            "text": "hosted 회의 작업실이 여러 탭에서 동시에 열려도 다른 회의 탭의 실시간 연결을 서로 끊지 않도록 Firestore 인증 흐름을 조정했습니다."
-          },
-          {
-            "type": "fixed",
-            "text": "기존 회의 탭에서 `실시간 회의 연결이 종료되었습니다`로 막히던 권한 재확인 경로를 고쳐, 같은 회의를 다시 안정적으로 불러오게 했습니다."
-          },
-          {
-            "type": "changed",
-            "text": "회의 작업실 권한 재시도는 기존 meeting auth 문맥을 유지한 채 다시 로그인하도록 정리해, 일시적인 permission 오류를 세션 만료처럼 보이지 않게 맞췄습니다."
-          }
-        ]
-      }
-    },
-    {
-      "version": "0.3.26",
-      "level": "patch",
-      "public": {
-        "headline": "회의록 기능 추가",
-        "summary": "이번 배포는 패널과 hosted 회의 작업실에서 회의록을 만들고 다시 확인하는 흐름을 더 분명하게 이어, 회의 결과를 한곳에서 관리하기 쉽게 정리한 업데이트입니다.",
-        "changes": [
-          {
-            "type": "added",
-            "text": "패널의 `회의` 도구에서 최신 회의록 목록을 바로 확인하고 필요한 결과를 다시 열 수 있도록 정리했습니다."
-          },
-          {
-            "type": "added",
-            "text": "hosted 회의 작업실에서 녹음과 업로드 이후 회의록 생성과 결과 검토를 같은 흐름으로 이어갈 수 있게 했습니다."
-          },
-          {
-            "type": "changed",
-            "text": "회의 탭과 릴리스 안내 카드의 간격과 패딩을 줄여 같은 정보를 더 가볍게 읽히도록 다듬었습니다."
-          }
-        ]
+      },
+      "artifact": {
+        "fileName": "inova-extension-0.4.1-2026-04-05.zip",
+        "publishedAt": "2026-04-05T01:46:44.760Z",
+        "sha256": "f88aae4e4ad5f18776e7c4dfa70641713b87807747ba12ff387060d476c920fd",
+        "sizeBytes": 247608,
+        "minSupportedVersion": "0.4.1"
       }
     },
     {
@@ -87,6 +46,13 @@
             "text": "프롬프트 검토와 스토어 구성을 정리해 초기 사용 흐름을 다듬었습니다."
           }
         ]
+      },
+      "artifact": {
+        "fileName": "inova-extension-0.3.2-2026-03-26.zip",
+        "publishedAt": "2026-03-26T07:52:36.444Z",
+        "sha256": "d77aaed60259418ed3a47912cb5c432ef694eca4207dcfcb6dc9a67634813dfc",
+        "sizeBytes": 192549,
+        "minSupportedVersion": "0.3.2"
       }
     }
   ]
