@@ -9,4 +9,5 @@
 - imported audio duration은 메타데이터가 비어 있어도 바로 임의값으로 넘기지 않는다. 먼저 메타데이터를 읽고, 실패하면 실제 오디오 decode로 duration을 다시 계산한 뒤 둘 다 실패할 때만 명시적 오류를 보여 준다.
 - imported audio duration의 메타데이터 실패는 decode fallback으로 복구되면 informational debug log로만 남긴다. 최종 길이 계산까지 실패한 경우에만 error 로그와 사용자 오류를 유지한다.
 - hosted 작업실은 녹음 중이거나 실제 업로드가 진행 중일 때 탭/브라우저 이탈을 브라우저 기본 `beforeunload` 경고로 막아야 한다. 업로드가 끝나고 원격 처리만 남은 상태까지 과하게 막지 말고, realtime 정리는 경고 취소와 충돌하지 않게 `pagehide` 같은 실제 이탈 시점으로 둔다.
+- stale pending, orphan local queue, self-healing reconciliation은 `hosting/meeting/workspace-recovery.js`에 먼저 모은다. `workspace-pending-uploads.js`에는 실행 연결만 두고 복구 규칙 조건문을 계속 누적하지 않는다.
 - prompt/release/conversation 영역은 기본적으로 읽지 않는다.

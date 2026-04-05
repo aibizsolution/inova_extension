@@ -17,6 +17,7 @@
 - `background/service-worker.js`
 - `hosting/meeting/*`
 - `popup/index.js`
+- hosted recovery/self-healing 경로는 `hosting/meeting/workspace-recovery.js`를 먼저 본다.
 
 ## hosted workspace auth 메모
 - hosted 회의 작업실 Firebase auth claim은 `meetingId` 단위로 달라질 수 있다.

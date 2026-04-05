@@ -9,6 +9,7 @@
       const constants = deps?.constants || {};
       const helpers = deps?.helpers || {};
       const { buildLocalPendingJob, chooseSelectedRecordId, findHistoryEntry, findRemoteForPending, normalizeArtifact, normalizeJob, normalizeRecord } = ns.render;
+      const { findRecoveredRemoteForPending } = ns.workspaceRecovery || {};
       const { prepareAudioSourceChunks } = ns.audioChunker;
       const { blobToBase64, collapseSupersededPendingUploads, normalizePendingUpload, PENDING_UPLOAD_DEBUG_SCENARIOS } = ns.storage;
       const {
@@ -1317,9 +1318,28 @@
       
       async function syncPendingUploadsWithRemote() {
         const pendingItems = Array.isArray(state.pendingUploads) ? [...state.pendingUploads] : [];
+        const consumedRemoteJobIds = new Set();
         for (const pending of pendingItems) {
-          const matched = findRemoteForPending(state, pending);
+          const exactMatch = findRemoteForPending(state, pending);
+          const recoveredMatch = !exactMatch && typeof findRecoveredRemoteForPending === "function"
+            ? findRecoveredRemoteForPending(state, pending)
+            : null;
+          const matched = exactMatch || recoveredMatch?.remote;
+          const matchedJobId = normalizeText(matched?.jobId);
+          if (matchedJobId && consumedRemoteJobIds.has(matchedJobId)) continue;
           if (!matched) continue;
+          if (matchedJobId) {
+            consumedRemoteJobIds.add(matchedJobId);
+          }
+          if (recoveredMatch?.remote) {
+            logDebug("workspace.pending-uploads.remote-sync.recovered-match", {
+              createdAtDeltaMs: Math.max(0, Number(recoveredMatch.createdAtDeltaMs) || 0),
+              durationDeltaMs: Math.max(0, Number(recoveredMatch.durationDeltaMs) || 0),
+              pendingRequestId: normalizeText(pending?.requestId),
+              recoveredJobId: matchedJobId,
+              strategy: normalizeText(recoveredMatch.strategy),
+            });
+          }
           await applyPendingUploadRemoteSnapshotState(pending, matched);
         }
         state.meeting.pendingLocalCount = state.pendingUploads.length;
