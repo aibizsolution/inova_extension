@@ -33,6 +33,16 @@
 - 기본 해석은 `배포 = hosting-only` 입니다. 함수 배포는 반드시 명시 요청이 있을 때만 진행하는 것을 원칙으로 합니다.
 - 고정 최신 링크 `https://browser-extension-main.web.app/extension/downloads/latest.zip` 갱신은 `release:build`를 동반한 사용자용 릴리스 배포에서만 일어납니다.
 
+## 배포 경계 체크
+
+- `hosting/meeting/*`, `hosting/extension/*`, 정적 JSON/HTML/CSS 같은 Hosting 자산만 바뀌면 `deploy:hosting`으로 충분합니다.
+- `functions/*`만 바뀌면 `deploy:functions`로 충분합니다.
+- `content/*`, `background/*`, `popup/*`, `manifest.json`, 확장 번들에 포함되는 `shared/*`가 바뀌면 Firebase 배포만으로는 끝나지 않습니다. 실제 확장 버전 빌드/배포가 필요합니다.
+- Hosted와 확장 코드가 함께 바뀌면 `Firebase 배포 + 실제 확장 릴리스`를 둘 다 해야 합니다.
+- Hosted만 바뀐 경우 사용자는 해당 페이지를 새로고침해야 최신 JS를 받습니다.
+- 확장 코드가 바뀐 경우 개발 환경에서는 Chrome의 압축해제된 확장을 다시 로드해야 하고, 사용자 릴리스라면 새 ZIP/새 버전 배포까지 끝나야 합니다.
+- 따라서 배포 안내에는 항상 `무엇을 배포했는지`, `페이지 새로고침만 필요한지`, `확장 새로고침/재설치가 필요한지`를 함께 적습니다.
+
 ## 권장 순서
 
 1. hosted 검증이나 운영 배포만 필요하면 `npm run deploy:hosting` 또는 `npm run deploy:all`을 사용합니다.
@@ -47,6 +57,14 @@
 8. 공개 릴리스는 `npm run release:deploy` 또는 `npm run release:deploy:all`로 반영합니다.
 9. Chrome 신규 설치/기존 설치를 각각 확인합니다.
 10. 팀에 `새 ZIP`, `변경 요약`, `Reload 필요 여부`를 공지합니다.
+
+## 배포 보고 형식
+
+- `hosting 배포 완료`만으로 끝내지 말고, `functions 반영 여부`, `hosting 반영 여부`, `확장 버전 배포 필요 여부`, `사용자/개발자 새로고침 필요 여부`를 함께 적습니다.
+- 예시:
+  - `hosting만 반영됨. 회의 작업실 탭 새로고침 필요, 확장 새로고침은 불필요`
+  - `functions만 반영됨. 새 요청부터 backend 반영, 확장 새로고침은 불필요`
+  - `extension bundle 변경 포함. release:build/release:deploy 필요, 개발 환경은 chrome://extensions에서 Reload 필요`
 
 ## 명령
 
