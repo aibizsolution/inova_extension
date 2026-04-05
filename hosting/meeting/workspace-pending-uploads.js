@@ -37,6 +37,7 @@
         safeLocalStorageGet,
         SESSION_STORAGE_KEY,
         TERMINAL_REMOTE_STATUSES,
+        toTimestamp,
       } = ns.shared;
       const DEGRADED_NOTICE_CODES = constants.DEGRADED_NOTICE_CODES || {};
       const DEGRADED_NOTICE_SPECS = constants.DEGRADED_NOTICE_SPECS || {};
@@ -45,6 +46,7 @@
       const MAX_SHARED_MEMO_CHARS = constants.MAX_SHARED_MEMO_CHARS || 0;
       const CONFIG = constants.CONFIG || {};
       const DEBUG_LOCAL_QUEUE_SANDBOX_PARAM = constants.DEBUG_LOCAL_QUEUE_SANDBOX_PARAM || "debugQueueSandbox";
+      const REMOTE_REQUEST_RECOVERY_STALE_MS = 2 * 60 * 1000;
 
       function controller(name) {
         return typeof helpers.controller === "function" ? helpers.controller(name) : null;
@@ -1457,6 +1459,51 @@
         return readTask;
       }
 
+      function getPendingUploadAgeMs(pending) {
+        const timestamp = normalizeText(pending?.updatedAt || pending?.createdAt);
+        const millis = timestamp ? toTimestamp(timestamp) : 0;
+        return millis > 0 ? Math.max(0, Date.now() - millis) : Number.POSITIVE_INFINITY;
+      }
+
+      function hasPendingUploadSourceUploaded(pending) {
+        const parts = Array.isArray(pending?.parts) ? pending.parts : [];
+        const uploadedPartCount = Math.max(
+          0,
+          Number(pending?.uploadedPartCount)
+          || parts.filter((part) => Boolean(normalizeText(part?.storageObject))).length
+        );
+        const sourceMode = normalizeText(pending?.sourceMode) || (parts.length ? "chunked" : "single");
+        if (sourceMode === "chunked") {
+          return uploadedPartCount > 0;
+        }
+        return Boolean(normalizeText(pending?.storageObject));
+      }
+
+      function hasPendingUploadRemoteMutationEvidence(pending) {
+        const status = normalizeText(pending?.status);
+        return Boolean(normalizeText(pending?.jobId))
+          || Math.max(0, Number(pending?.publishedPartCount) || 0) > 0
+          || ["remote_queued", "remote_processing", "succeeded", "failed"].includes(status);
+      }
+
+      function shouldAttemptRequestIdDocReadForPending(pending) {
+        if (!normalizeText(pending?.requestId)) {
+          return false;
+        }
+        if (hasPendingUploadRemoteMutationEvidence(pending)) {
+          return true;
+        }
+        if (!hasPendingUploadSourceUploaded(pending)) {
+          return false;
+        }
+        if (getPendingUploadAgeMs(pending) < REMOTE_REQUEST_RECOVERY_STALE_MS) {
+          return false;
+        }
+        return ["upload_queued", "on_hold", "failed", "uploading", "uploading_chunks"].includes(
+          normalizeText(pending?.status)
+        );
+      }
+
       function shouldConfirmExactRemoteMatch(exactMatch) {
         return Boolean(exactMatch)
           && !TERMINAL_REMOTE_STATUSES.has(normalizeText(exactMatch?.status))
@@ -1558,7 +1605,7 @@
           const directJobMatch = !exactMatch
             ? await loadRemoteJobRecordByJobId(pending?.jobId, remoteJobReadCache)
             : null;
-          const directRequestMatch = !exactMatch && !directJobMatch
+          const directRequestMatch = !exactMatch && !directJobMatch && shouldAttemptRequestIdDocReadForPending(pending)
             ? await loadRemoteJobRecordByRequestId(pending?.requestId, remoteRequestReadCache)
             : null;
           const recoveredMatch = !exactMatch && !directJobMatch && !directRequestMatch && typeof findRecoveredRemoteForPending === "function"
