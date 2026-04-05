@@ -762,7 +762,7 @@
     const pendingChunkProgress = buildChunkProgressModel(null, pending);
 
     if (shouldUsePendingDetail) {
-      return { badgeLabel: formatStatusLabel(pendingDisplayStatus), badgeStatus: normalizeStatus(pendingDisplayStatus), chunkProgress: pendingChunkProgress, meta: detailMeta, meetingNotes: null, notesContextItems: remoteNotesContextItems, notesInputSnapshot: remoteNotesInputSnapshot, notesMeta: null, notice: buildPendingNotice(pending), noticeTone: pendingDisplayStatus === "failed" ? "error" : "highlight", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions, summary: buildPendingSummary(pending), title: detailTitle, transcriptText: "" };
+      return { badgeLabel: formatStatusLabel(pendingDisplayStatus), badgeStatus: normalizeStatus(pendingDisplayStatus), chunkProgress: pendingChunkProgress, meta: detailMeta, meetingNotes: null, notesContextItems: remoteNotesContextItems, notesInputSnapshot: remoteNotesInputSnapshot, notesMeta: null, notice: buildPendingNotice(pending), noticeTone: pendingDisplayStatus === "failed" ? "error" : "highlight", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions, summary: "", title: detailTitle, transcriptText: "" };
     }
 
     const normalizedJob = state.currentJob || normalizeJob(remote, detailTitle);
@@ -1079,7 +1079,7 @@
 
     refs.detailTitle.hidden = detailView.showRecordActions;
     refs.detailTitle.textContent = detailView.title;
-    const showDetailBadge = Boolean(detailView.badgeLabel) && !["idle", "succeeded"].includes(normalizeText(detailView.badgeStatus));
+    const showDetailBadge = Boolean(detailView.badgeLabel) && ["failed"].includes(normalizeText(detailView.badgeStatus));
     refs.detailBadge.hidden = !showDetailBadge;
     if (showDetailBadge) {
       refs.detailBadge.textContent = detailView.badgeLabel;
