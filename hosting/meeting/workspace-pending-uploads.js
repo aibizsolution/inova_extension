@@ -1526,8 +1526,7 @@
       function isSelectedRemoteJobRecord(record) {
         const normalizedJobId = normalizeText(record?.jobId);
         return Boolean(normalizedJobId)
-          && normalizedJobId === normalizeText(state.realtime?.jobDocId)
-          && typeof state.realtime?.unsubscribeJob === "function";
+          && normalizedJobId === normalizeText(state.realtime?.jobDocId);
       }
 
       function shouldConfirmRemoteRecordSummary(record) {

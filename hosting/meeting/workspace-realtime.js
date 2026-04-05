@@ -9,11 +9,15 @@
       const constants = deps?.constants || {};
       const helpers = deps?.helpers || {};
       const { buildLocalPendingJob, chooseSelectedRecordId, findHistoryEntry, normalizeArtifact, normalizeJob, normalizeRecord, normalizeWorkspaceMutation } = ns.render;
-      const { clearWorkspaceAuthCache, ensureWorkspaceAuth, getCollections, subscribeDocument } = ns.firebase;
-      const { isLikelyNetworkError, logDebug, normalizeText, normalizeTextBlock } = ns.shared;
+      const { clearWorkspaceAuthCache, ensureWorkspaceAuth, getCollections, readDocument, subscribeDocument } = ns.firebase;
+      const { TERMINAL_REMOTE_STATUSES, isLikelyNetworkError, logDebug, normalizeText, normalizeTextBlock } = ns.shared;
       const FIRESTORE_COLLECTIONS = getCollections();
       const BOOT_INITIAL_SNAPSHOT_WAIT_MS = constants.BOOT_INITIAL_SNAPSHOT_WAIT_MS || 0;
       const DEGRADED_NOTICE_CODES = constants.DEGRADED_NOTICE_CODES || {};
+      const SELECTED_DETAIL_POLL_INTERVAL_MS = constants.SELECTED_DETAIL_POLL_INTERVAL_MS || 10 * 1000;
+      let selectedDetailPollTimer = 0;
+      let selectedDetailPollVersion = 0;
+      let selectedDetailPollInFlight = false;
 
       function controller(name) {
         return typeof helpers.controller === "function" ? helpers.controller(name) : null;
@@ -375,14 +379,14 @@
           return;
         }
       
-        const shouldReconnect = Boolean(
+        const shouldRefreshRemoteSelection = Boolean(
           selectionChanged
           || normalizeText(state.realtime.jobDocId) !== normalizeText(entry.remote.jobId)
-          || typeof state.realtime.unsubscribeJob !== "function"
-          || (forceRefresh && !state.currentJob)
+          || forceRefresh
+          || !state.currentJob
         );
-        if (!shouldReconnect) {
-          await ensureArtifactRealtimeSubscription(entry, { forceReconnect: false });
+        if (!shouldRefreshRemoteSelection) {
+          ensureSelectedDetailPolling(entry);
           return;
         }
       
@@ -409,147 +413,148 @@
           workspaceMutation: entry.remote.workspaceMutation,
         }, state.meeting.title);
         syncSelectedRecordReviewState(entry);
-        await subscribeSelectedJobRealtime(entry);
-      }
-      
-      
-      async function subscribeSelectedJobRealtime(entry, options = {}) {
-        const jobId = normalizeText(entry?.remote?.jobId);
-        if (!jobId) {
-          return;
-        }
-        const listenerVersion = state.realtime.jobListenerVersion + 1;
-        state.realtime.jobDocId = jobId;
-        state.realtime.jobListenerVersion = listenerVersion;
-      
-        await new Promise((resolve, reject) => {
-          let settled = false;
-          const finishResolve = () => {
-            if (settled) return;
-            settled = true;
-            resolve();
-          };
-          const finishReject = (error) => {
-            if (settled) return;
-            settled = true;
-            reject(error);
-          };
-          state.realtime.unsubscribeJob = subscribeDocument(FIRESTORE_COLLECTIONS.jobs, jobId, {
-            error: (error) => {
-              if (listenerVersion !== state.realtime.jobListenerVersion) return;
-              const normalizedError = normalizeRealtimeError(error);
-              handleRealtimeListenerError(normalizedError, "job");
-              finishReject(normalizedError);
-            },
-            next: (snapshot) => {
-              void handleJobSnapshot(snapshot, entry, {
-                listenerVersion,
-              })
-                .then(finishResolve)
-                .catch((error) => {
-                  const normalizedError = normalizeRealtimeError(error);
-                  handleRealtimeListenerError(normalizedError, "job");
-                  finishReject(normalizedError);
-                });
-            },
-          });
+        await refreshSelectedRemoteDetail(entry, {
+          forceArtifactRead: Boolean(selectionChanged || forceRefresh),
+          reason: selectionChanged ? "selection" : forceRefresh ? "force-refresh" : "hydrate",
         });
+        restartSelectedDetailPolling(entry);
       }
       
       
-      async function handleJobSnapshot(snapshot, entry, options = {}) {
-        if (options.listenerVersion !== state.realtime.jobListenerVersion) {
+      async function refreshSelectedRemoteDetail(entry, options = {}) {
+        const jobId = normalizeText(entry?.remote?.jobId || state.currentJob?.jobId);
+        if (!jobId || typeof readDocument !== "function") {
           return;
         }
-        if (!snapshot?.exists) {
-          await ensureArtifactRealtimeSubscription(entry, { forceReconnect: true });
-          applyRender();
-          return;
+        state.realtime.jobDocId = jobId;
+        const jobSnapshot = await readDocument(FIRESTORE_COLLECTIONS.jobs, jobId);
+        if (jobSnapshot?.exists && typeof jobSnapshot.data === "function") {
+          state.currentJob = normalizeJob(jobSnapshot.data(), state.meeting.title);
+          mergeLiveJobIntoRecords(jobSnapshot.data());
         }
-        state.currentJob = normalizeJob(snapshot.data(), state.meeting.title);
-        mergeLiveJobIntoRecords(snapshot.data());
-        syncSelectedRecordReviewState(entry);
-        await ensureArtifactRealtimeSubscription(entry, { forceReconnect: false });
+        const artifactId = normalizeText(state.currentJob?.artifactId || entry?.remote?.artifactId);
+        const shouldReadArtifact = Boolean(
+          artifactId
+          && (
+            options.forceArtifactRead
+            || normalizeText(state.currentArtifact?.artifactId) !== artifactId
+            || (TERMINAL_REMOTE_STATUSES.has(normalizeText(state.currentJob?.status)) && !state.currentArtifact)
+          )
+        );
+        if (!artifactId) {
+          disconnectArtifactListener();
+          state.currentArtifact = null;
+        } else if (shouldReadArtifact && typeof readDocument === "function") {
+          state.realtime.artifactDocId = artifactId;
+          const artifactSnapshot = await readDocument(FIRESTORE_COLLECTIONS.artifacts, artifactId);
+          state.currentArtifact = artifactSnapshot?.exists && typeof artifactSnapshot.data === "function"
+            ? normalizeArtifact(artifactSnapshot.data())
+            : null;
+          logDebug("workspace.detail.artifact-sync", {
+            artifactId,
+            exists: Boolean(artifactSnapshot?.exists),
+            reason: normalizeText(options.reason),
+            segmentCount: Array.isArray(state.currentArtifact?.segments) ? state.currentArtifact.segments.length : 0,
+          });
+        }
+        syncSelectedRecordReviewState(findHistoryEntry(state, state.selectedRecordId));
         await resolvePendingMutationsFromSnapshots();
         applyRender();
-        logDebug("workspace.snapshot.job", {
+        logDebug("workspace.detail.job-sync", {
           artifactId: normalizeText(state.currentJob?.artifactId),
           jobId: normalizeText(state.currentJob?.jobId),
+          reason: normalizeText(options.reason),
           status: normalizeText(state.currentJob?.status),
           updatedAt: normalizeText(state.currentJob?.updatedAt),
         });
       }
-      
-      
-      async function ensureArtifactRealtimeSubscription(entry, options = {}) {
-        const artifactId = normalizeText(state.currentJob?.artifactId || entry?.remote?.artifactId);
-        if (!artifactId) {
-          disconnectArtifactListener();
-          state.currentArtifact = null;
+
+      function clearSelectedDetailPollTimer() {
+        if (!selectedDetailPollTimer) {
           return;
         }
-        const shouldReconnect = Boolean(
-          options.forceReconnect
-          || normalizeText(state.realtime.artifactDocId) !== artifactId
-          || typeof state.realtime.unsubscribeArtifact !== "function"
-        );
-        if (!shouldReconnect) {
-          return;
-        }
-      
-        disconnectArtifactListener();
-        state.currentArtifact = null;
-        state.realtime.artifactDocId = artifactId;
-        const listenerVersion = state.realtime.artifactListenerVersion + 1;
-        state.realtime.artifactListenerVersion = listenerVersion;
-      
-        await new Promise((resolve, reject) => {
-          let settled = false;
-          const finishResolve = () => {
-            if (settled) return;
-            settled = true;
-            resolve();
-          };
-          const finishReject = (error) => {
-            if (settled) return;
-            settled = true;
-            reject(error);
-          };
-          state.realtime.unsubscribeArtifact = subscribeDocument(FIRESTORE_COLLECTIONS.artifacts, artifactId, {
-            error: (error) => {
-              if (listenerVersion !== state.realtime.artifactListenerVersion) return;
-              const normalizedError = normalizeRealtimeError(error);
-              handleRealtimeListenerError(normalizedError, "artifact");
-              finishReject(normalizedError);
-            },
-            next: (snapshot) => {
-              void handleArtifactSnapshot(snapshot, {
-                listenerVersion,
-              })
-                .then(finishResolve)
-                .catch((error) => {
-                  const normalizedError = normalizeRealtimeError(error);
-                  handleRealtimeListenerError(normalizedError, "artifact");
-                  finishReject(normalizedError);
-                });
-            },
-          });
-        });
+        global.clearTimeout(selectedDetailPollTimer);
+        selectedDetailPollTimer = 0;
       }
-      
-      
-      async function handleArtifactSnapshot(snapshot, options = {}) {
-        if (options.listenerVersion !== state.realtime.artifactListenerVersion) {
+
+      function stopSelectedDetailPolling() {
+        clearSelectedDetailPollTimer();
+        selectedDetailPollVersion += 1;
+      }
+
+      function shouldPollSelectedDetail(entry) {
+        const jobId = normalizeText(entry?.remote?.jobId || state.currentJob?.jobId);
+        if (!jobId || global.document.hidden) {
+          return false;
+        }
+        const currentStatus = normalizeText(state.currentJob?.status || entry?.remote?.status);
+        if (!TERMINAL_REMOTE_STATUSES.has(currentStatus)) {
+          return true;
+        }
+        return Boolean(normalizeText(state.currentJob?.artifactId || entry?.remote?.artifactId)) && !state.currentArtifact;
+      }
+
+      function scheduleSelectedDetailPoll(generation, options = {}) {
+        clearSelectedDetailPollTimer();
+        if (generation !== selectedDetailPollVersion) {
           return;
         }
-        state.currentArtifact = snapshot?.exists ? normalizeArtifact(snapshot.data()) : null;
-        syncSelectedRecordReviewState(findHistoryEntry(state, state.selectedRecordId));
-        applyRender();
-        logDebug("workspace.snapshot.artifact", {
-          artifactId: normalizeText(state.currentArtifact?.artifactId || state.realtime.artifactDocId),
-          exists: Boolean(snapshot?.exists),
-          segmentCount: Array.isArray(state.currentArtifact?.segments) ? state.currentArtifact.segments.length : 0,
-        });
+        const entry = findHistoryEntry(state, state.selectedRecordId);
+        if (!shouldPollSelectedDetail(entry)) {
+          return;
+        }
+        selectedDetailPollTimer = global.setTimeout(() => {
+          selectedDetailPollTimer = 0;
+          void runSelectedDetailPoll(generation);
+        }, options.immediate ? 0 : SELECTED_DETAIL_POLL_INTERVAL_MS);
+      }
+
+      async function runSelectedDetailPoll(generation) {
+        if (generation !== selectedDetailPollVersion || selectedDetailPollInFlight) {
+          return;
+        }
+        const entry = findHistoryEntry(state, state.selectedRecordId);
+        if (!shouldPollSelectedDetail(entry)) {
+          return;
+        }
+        selectedDetailPollInFlight = true;
+        try {
+          await refreshSelectedRemoteDetail(entry, {
+            forceArtifactRead: false,
+            reason: "poll",
+          });
+        } catch (error) {
+          const normalizedError = normalizeRealtimeError(error);
+          handleRealtimeListenerError(normalizedError, "job-poll");
+        } finally {
+          selectedDetailPollInFlight = false;
+          scheduleSelectedDetailPoll(generation);
+        }
+      }
+
+      function restartSelectedDetailPolling(entry, options = {}) {
+        stopSelectedDetailPolling();
+        if (!shouldPollSelectedDetail(entry)) {
+          return;
+        }
+        const generation = selectedDetailPollVersion + 1;
+        selectedDetailPollVersion = generation;
+        scheduleSelectedDetailPoll(generation, options);
+      }
+
+      function ensureSelectedDetailPolling(entry, options = {}) {
+        if (!shouldPollSelectedDetail(entry)) {
+          stopSelectedDetailPolling();
+          return;
+        }
+        if (selectedDetailPollTimer || selectedDetailPollInFlight) {
+          return;
+        }
+        if (selectedDetailPollVersion < 1) {
+          restartSelectedDetailPolling(entry, options);
+          return;
+        }
+        scheduleSelectedDetailPoll(selectedDetailPollVersion, options);
       }
       
       
@@ -580,6 +585,7 @@
       
       
       function disconnectJobListener() {
+        stopSelectedDetailPolling();
         if (typeof state.realtime.unsubscribeJob === "function") {
           state.realtime.unsubscribeJob();
         }
@@ -693,15 +699,32 @@
       }
       
       function handleBackgroundRefresh() {
-        if (state.blocked || state.loading || global.document.hidden) return;
+        if (state.blocked || state.loading) return;
+        if (global.document.hidden) {
+          stopSelectedDetailPolling();
+          return;
+        }
+        restartSelectedDetailPolling(findHistoryEntry(state, state.selectedRecordId), { immediate: true });
         if (typeof state.realtime.unsubscribeMeeting === "function") return;
         void refreshWorkspace(false, "background");
+      }
+
+      function handleVisibilityChange() {
+        if (global.document.hidden) {
+          stopSelectedDetailPolling();
+          logDebug("workspace.refresh.skipped", {
+            reason: "document-hidden",
+          });
+          return;
+        }
+        handleBackgroundRefresh();
       }
       
 
       return {
         disposeRealtime: disposeWorkspaceRealtime,
         handleBackgroundRefresh,
+        handleVisibilityChange,
         handleRecordListClick,
         hydrateSelectedDetail,
         refreshWorkspace,
