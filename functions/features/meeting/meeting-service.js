@@ -85,7 +85,7 @@ function registerMeetingHandlers(deps) {
 
   let client = null;
 
-  const createInovaMeetingJob = onRequest({ cors: CORS_ORIGINS, region: REGION, timeoutSeconds: 540 }, async (request, response) => {
+  const createInovaMeetingJob = onRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
     let cleanupStorageObjects = [];
     let jobQueued = false;
     try {
@@ -227,10 +227,10 @@ function registerMeetingHandlers(deps) {
   const uploadInovaMeetingSource = onRequest({
     concurrency: 1,
     cors: CORS_ORIGINS,
-    maxInstances: 40,
-    memory: "1GiB",
+    maxInstances: 60,
+    memory: "512MiB",
     region: REGION,
-    timeoutSeconds: 120,
+    timeoutSeconds: 60,
   }, async (request, response) => {
     try {
       assertMethod(request);
@@ -3032,7 +3032,21 @@ function registerMeetingHandlers(deps) {
     if (Number.isFinite(requested) && requested > 0) {
       return Math.max(1, Math.min(normalizedTotalParts, requested));
     }
-    return normalizedTotalParts;
+    if (normalizedTotalParts <= DEFAULT_IN_PROCESS_CHUNK_TRANSCRIPTION_CONCURRENCY) {
+      return normalizedTotalParts;
+    }
+    const adaptive = Math.max(
+      DEFAULT_IN_PROCESS_CHUNK_TRANSCRIPTION_CONCURRENCY,
+      Math.ceil(normalizedTotalParts / 2)
+    );
+    return Math.max(
+      1,
+      Math.min(
+        normalizedTotalParts,
+        DEFAULT_IN_PROCESS_CHUNK_TRANSCRIPTION_MAX_CONCURRENCY,
+        adaptive
+      )
+    );
   }
 
   function getMeetingChunkTranscriptionConcurrency(totalParts) {
@@ -3916,7 +3930,6 @@ function registerMeetingHandlers(deps) {
 
   function buildMeetingNotesReducerPrompt(transcript, meeting, context, partialSummaries) {
     return [
-      `회의 제목: ${normalizeText(meeting?.title) || "미정"}`,
       `언어: ${normalizeText(meeting?.language) || "ko"}`,
       `공용 메모: ${normalizeTextBlock(context?.sharedMemoSnapshot) || "없음"}`,
       ...buildMeetingNotesContextPromptLines(context),
@@ -3941,7 +3954,6 @@ function registerMeetingHandlers(deps) {
     totalSections
   ) {
     return [
-      `회의 제목: ${normalizeText(meeting?.title) || "미정"}`,
       `언어: ${normalizeText(meeting?.language) || "ko"}`,
       `공용 메모: ${normalizeTextBlock(context?.sharedMemoSnapshot) || "없음"}`,
       ...buildMeetingNotesContextPromptLines(context),
@@ -3953,7 +3965,6 @@ function registerMeetingHandlers(deps) {
 
   function buildMeetingNotesUserPromptFromText(transcript, meeting, context, transcriptPrompt) {
     return [
-      `회의 제목: ${normalizeText(meeting?.title) || "미정"}`,
       `언어: ${normalizeText(meeting?.language) || "ko"}`,
       `공용 메모: ${normalizeTextBlock(context?.sharedMemoSnapshot) || "없음"}`,
       ...buildMeetingNotesContextPromptLines(context),

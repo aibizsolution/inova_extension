@@ -545,9 +545,12 @@
     return {
       applyDegradedDiagnostics,
       applyRender,
+      buildDegradedNoticeRegistrySnapshot,
       buildImportedRecordTitle,
       buildRecordTitle,
       clearDegradedNotice,
+      cloneDegradedDiagnosticsSnapshot,
+      cloneNoticeSnapshot,
       cloneNotesContextItems,
       cloneNotesInputSnapshot,
       controller(name) {
@@ -558,7 +561,9 @@
       createEmptySelectedRecordMemoState,
       createEmptyWorkspaceMutationState,
       createIdleCapture,
+      getDebugEntries: ns.shared.getDebugEntries,
       getWorkspaceTitleOrFallback,
+      getHighestPriorityDegradedNotice,
       renderBlocked,
       requestConfirmation,
       resolveConfirmation,

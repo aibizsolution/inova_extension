@@ -14,6 +14,7 @@
 - [AGENTS.md](AGENTS.md): 전역 작업 규칙, 검증 기본값, 세션 분리 기준
 - [docs/feature-spec.md](docs/feature-spec.md): 제품 요구사항과 공통 계약
 - [docs/runtime-architecture.md](docs/runtime-architecture.md): popup, panel, background, hosted runtime 경계
+- [docs/functions-runtime-guide.md](docs/functions-runtime-guide.md): Firebase Functions runtime 기본값, 예외 프로파일, 운영 점검 기준
 - [docs/e2e-browser-workflow.md](docs/e2e-browser-workflow.md): 실제 Chrome 기준 수동 검증 흐름
 - [docs/release-workflow.md](docs/release-workflow.md): 버전 상승, 릴리스 메타, hosting 배포 순서
 
@@ -78,6 +79,8 @@ npm run deploy:all
 - 실제 사용자용 확장 릴리스를 함께 갱신할 때만 `release:deploy` 또는 `release:deploy:all`을 사용합니다.
 - `releases/release-notes.json`에는 패널에 보여줄 사용자용 릴리스만 남기고, build는 그 목록만 `latest.json`, `history.json`, `latest.zip`에 반영합니다.
 - 확장 코드와 hosted 계약이 함께 바뀐 배포라면 Firebase 배포 뒤 Chrome의 압축해제된 확장도 새로고침해야 합니다.
+- `hosting/*`만 바뀐 경우는 보통 페이지 새로고침이면 충분하고, `content/*`, `background/*`, `popup/*`, `manifest.json`, 확장 번들에 포함되는 `shared/*`가 바뀐 경우는 실제 확장 버전 배포와 Chrome 확장 Reload가 필요합니다.
+- 배포 보고에는 항상 `functions 반영 여부`, `hosting 반영 여부`, `확장 버전 배포 필요 여부`, `페이지 새로고침/확장 새로고침 필요 여부`를 함께 적습니다.
 
 ## 브랜치와 가드레일
 

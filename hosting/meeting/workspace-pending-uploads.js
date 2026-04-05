@@ -9,6 +9,8 @@
       const constants = deps?.constants || {};
       const helpers = deps?.helpers || {};
       const { buildLocalPendingJob, chooseSelectedRecordId, findHistoryEntry, findRemoteForPending, normalizeArtifact, normalizeJob, normalizeRecord } = ns.render;
+      const { findRecoveredRemoteForPending } = ns.workspaceRecovery || {};
+      const { getCollections, queryDocuments, readDocument } = ns.firebase || {};
       const { prepareAudioSourceChunks } = ns.audioChunker;
       const { blobToBase64, collapseSupersededPendingUploads, normalizePendingUpload, PENDING_UPLOAD_DEBUG_SCENARIOS } = ns.storage;
       const {
@@ -34,6 +36,7 @@
         postJson,
         safeLocalStorageGet,
         SESSION_STORAGE_KEY,
+        TERMINAL_REMOTE_STATUSES,
       } = ns.shared;
       const DEGRADED_NOTICE_CODES = constants.DEGRADED_NOTICE_CODES || {};
       const DEGRADED_NOTICE_SPECS = constants.DEGRADED_NOTICE_SPECS || {};
@@ -54,6 +57,37 @@
       const createEmptyWorkspaceMutationState = (...args) => helpers.createEmptyWorkspaceMutationState?.(...args);
       const setDegradedNotice = (...args) => helpers.setDegradedNotice?.(...args);
       const clearDegradedNotice = (...args) => helpers.clearDegradedNotice?.(...args);
+      const cloneNoticeSnapshot = typeof helpers.cloneNoticeSnapshot === "function"
+        ? (...args) => helpers.cloneNoticeSnapshot(...args)
+        : (notice) => ({
+            code: normalizeText(notice?.code),
+            sticky: Boolean(notice?.sticky),
+            text: normalizeText(notice?.text),
+            tone: normalizeText(notice?.tone),
+          });
+      const cloneDegradedDiagnosticsSnapshot = typeof helpers.cloneDegradedDiagnosticsSnapshot === "function"
+        ? (...args) => helpers.cloneDegradedDiagnosticsSnapshot(...args)
+        : (entry) => ({
+            degradedReason: normalizeText(entry?.degradedReason),
+            issueCodes: (Array.isArray(entry?.issueCodes) ? entry.issueCodes : []).map((code) => normalizeText(code)).filter(Boolean),
+          });
+      const buildDegradedNoticeRegistrySnapshot = typeof helpers.buildDegradedNoticeRegistrySnapshot === "function"
+        ? (...args) => helpers.buildDegradedNoticeRegistrySnapshot(...args)
+        : () => {
+            const snapshot = {};
+            for (const [code, notice] of Object.entries(state.degradedNotices || {})) {
+              const normalizedCode = normalizeText(code);
+              if (!normalizedCode) continue;
+              snapshot[normalizedCode] = cloneNoticeSnapshot(notice);
+            }
+            return snapshot;
+          };
+      const getHighestPriorityDegradedNotice = typeof helpers.getHighestPriorityDegradedNotice === "function"
+        ? (...args) => helpers.getHighestPriorityDegradedNotice(...args)
+        : () => null;
+      const getDebugEntries = typeof helpers.getDebugEntries === "function"
+        ? (...args) => helpers.getDebugEntries(...args)
+        : () => [];
       const applyDegradedDiagnostics = (...args) => helpers.applyDegradedDiagnostics?.(...args);
       const getWorkspaceTitleOrFallback = (...args) => helpers.getWorkspaceTitleOrFallback?.(...args);
       const persistWorkspaceSession = (...args) => controller("session")?.persistSession?.(...args);
@@ -329,13 +363,25 @@
       
       function buildPendingUploadSnapshotItem(item) {
         return {
+          captureMode: normalizeText(item?.captureMode),
+          createdAt: normalizeText(item?.createdAt),
+          durationMs: Math.max(0, Number(item?.durationMs) || 0),
+          endedAt: normalizeText(item?.endedAt),
           hold: Boolean(item?.hold),
           jobId: normalizeText(item?.jobId),
+          lastError: normalizeText(item?.lastError),
+          meetingId: normalizeText(item?.meetingId),
+          meetingTitleSnapshot: normalizeText(item?.meetingTitleSnapshot),
+          originalSizeBytes: Math.max(0, Number(item?.originalSizeBytes) || 0),
           publishedPartCount: Math.max(0, Number(item?.publishedPartCount) || 0),
           preparedPartCount: Math.max(0, Number(item?.preparedPartCount) || 0),
           requestId: normalizeText(item?.requestId),
+          sizeBytes: Math.max(0, Number(item?.sizeBytes) || 0),
           sourceMode: normalizeText(item?.sourceMode),
+          startedAt: normalizeText(item?.startedAt),
           status: normalizeText(item?.status),
+          storageObject: normalizeText(item?.storageObject),
+          supersededJobIds: (Array.isArray(item?.supersededJobIds) ? item.supersededJobIds : []).map((jobId) => normalizeText(jobId)).filter(Boolean),
           supersededRequestIds: (Array.isArray(item?.supersededRequestIds) ? item.supersededRequestIds : []).map((requestId) => normalizeText(requestId)).filter(Boolean),
           updatedAt: normalizeText(item?.updatedAt),
           uploadedPartCount: Math.max(0, Number(item?.uploadedPartCount) || 0),
@@ -1146,10 +1192,13 @@
         if (!transition?.nextPending) {
           return null;
         }
-        const nextPending = await upsertPendingUpload(transition.nextPending, {
-          context: options?.queueContext,
-        });
         const normalizedRequestId = normalizeText(pending?.requestId);
+        const shouldCleanupPending = normalizeText(transition?.outcome) === "succeeded";
+        const nextPending = shouldCleanupPending
+          ? normalizePendingUpload(transition.nextPending)
+          : await upsertPendingUpload(transition.nextPending, {
+            context: options?.queueContext,
+          });
         if (!normalizedRequestId) {
           return nextPending;
         }
@@ -1172,6 +1221,14 @@
         ) {
           state.selectedRecordId = transition.nextSelectedRecordId;
         }
+        if (shouldCleanupPending) {
+          await removePendingUploadQueueEntry(normalizedRequestId, {
+            context: options?.queueContext,
+            nextSelectedRecordId: options?.applySelectedRecordTransition ? transition.nextSelectedRecordId : "",
+            persistSession: false,
+          });
+          persistWorkspaceSession();
+        }
         return nextPending;
       }
       
@@ -1180,21 +1237,25 @@
         if (!transition?.nextPending) {
           return null;
         }
-        const nextPending = await upsertPendingUpload(transition.nextPending, {
-          preserveUpdatedAt: true,
-          context: {
-            phase: transition.outcome === "succeeded"
-              ? "remote-sync-succeeded"
-              : transition.outcome === "failed"
-                ? "remote-sync-reset"
-                : "remote-sync-update",
-            previousRequestId: pending.requestId,
-            reason: "remote-sync",
-            requestId: transition.nextPending.requestId,
-            shouldResetSource: transition.resetChunkCache === "reset-parts",
-          },
-        });
         const normalizedRequestId = normalizeText(pending?.requestId);
+        const queueContext = {
+          phase: transition.outcome === "succeeded"
+            ? "remote-sync-succeeded"
+            : transition.outcome === "failed"
+              ? "remote-sync-reset"
+              : "remote-sync-update",
+          previousRequestId: pending.requestId,
+          reason: "remote-sync",
+          requestId: transition.nextPending.requestId,
+          shouldResetSource: transition.resetChunkCache === "reset-parts",
+        };
+        const shouldCleanupPending = normalizeText(transition?.outcome) === "succeeded";
+        const nextPending = shouldCleanupPending
+          ? normalizePendingUpload(transition.nextPending)
+          : await upsertPendingUpload(transition.nextPending, {
+            preserveUpdatedAt: true,
+            context: queueContext,
+          });
         if (!normalizedRequestId) {
           return nextPending;
         }
@@ -1216,6 +1277,14 @@
         ) {
           state.selectedRecordId = transition.nextSelectedRecordId;
         }
+        if (shouldCleanupPending) {
+          await removePendingUploadQueueEntry(normalizedRequestId, {
+            context: queueContext,
+            nextSelectedRecordId: transition.nextSelectedRecordId,
+            persistSession: false,
+          });
+          persistWorkspaceSession();
+        }
         return nextPending;
       }
       
@@ -1229,16 +1298,20 @@
           : transition.outcome === "failed"
             ? "chunk-resync-reset"
             : "chunk-resync-update";
-        const nextPending = await upsertPendingUpload(transition.nextPending, {
-          context: {
-            phase,
-            previousRequestId: pending.requestId,
-            reason: "chunk-resync",
-            requestId: transition.nextPending.requestId,
-            shouldResetSource: transition.resyncCacheAction === "reset-parts",
-          },
-        });
         const normalizedRequestId = normalizeText(pending?.requestId);
+        const queueContext = {
+          phase,
+          previousRequestId: pending.requestId,
+          reason: "chunk-resync",
+          requestId: transition.nextPending.requestId,
+          shouldResetSource: transition.resyncCacheAction === "reset-parts",
+        };
+        const shouldCleanupPending = normalizeText(transition?.outcome) === "succeeded";
+        const nextPending = shouldCleanupPending
+          ? normalizePendingUpload(transition.nextPending)
+          : await upsertPendingUpload(transition.nextPending, {
+            context: queueContext,
+          });
         if (!normalizedRequestId) {
           return nextPending;
         }
@@ -1253,6 +1326,13 @@
               uploadStatus: "",
             })),
           };
+        }
+        if (shouldCleanupPending) {
+          await removePendingUploadQueueEntry(normalizedRequestId, {
+            context: queueContext,
+            persistSession: false,
+          });
+          persistWorkspaceSession();
         }
         return nextPending;
       }
@@ -1279,13 +1359,253 @@
           resolution: normalizeText(transition?.resolution),
         };
       }
+
+
+      async function loadRemoteJobRecordByJobId(jobId, cache) {
+        const normalizedJobId = normalizeText(jobId);
+        if (!normalizedJobId || typeof readDocument !== "function" || typeof getCollections !== "function") {
+          return null;
+        }
+        if (cache instanceof Map && cache.has(normalizedJobId)) {
+          return cache.get(normalizedJobId);
+        }
+        const readTask = (async () => {
+          try {
+            const collections = getCollections();
+            const snapshot = await readDocument(collections?.jobs, normalizedJobId);
+            if (!snapshot?.exists || typeof snapshot.data !== "function") {
+              return null;
+            }
+            const normalizedJob = normalizeJob(snapshot.data(), state.meeting?.title);
+            if (!normalizedJob?.jobId) {
+              return null;
+            }
+            return {
+              createdAt: normalizeText(normalizedJob.createdAt),
+              durationMs: Math.max(0, Number(normalizedJob.durationMs) || 0),
+              error: normalizeText(normalizedJob.error),
+              jobId: normalizeText(normalizedJob.jobId),
+              meetingId: normalizeText(state.meeting?.meetingId),
+              requestId: normalizeText(normalizedJob.requestId),
+              status: normalizeText(normalizedJob.status),
+              title: normalizeText(normalizedJob.title),
+              updatedAt: normalizeText(normalizedJob.updatedAt),
+            };
+          } catch (error) {
+            logDebug("workspace.pending-uploads.remote-sync.job-read.error", {
+              error,
+              jobId: normalizedJobId,
+            });
+            return null;
+          }
+        })();
+        if (cache instanceof Map) {
+          cache.set(normalizedJobId, readTask);
+        }
+        return readTask;
+      }
+
+
+      async function loadRemoteJobRecordByRequestId(requestId, cache) {
+        const normalizedRequestId = normalizeText(requestId);
+        const meetingId = normalizeText(state.meeting?.meetingId || state.session?.meetingId);
+        if (!normalizedRequestId || !meetingId || typeof queryDocuments !== "function" || typeof getCollections !== "function") {
+          return null;
+        }
+        const cacheKey = `${meetingId}::${normalizedRequestId}`;
+        if (cache instanceof Map && cache.has(cacheKey)) {
+          return cache.get(cacheKey);
+        }
+        const readTask = (async () => {
+          try {
+            const collections = getCollections();
+            const docs = await queryDocuments(collections?.jobs, {
+              filters: [
+                { field: "meetingId", op: "==", value: meetingId },
+                { field: "source.requestId", op: "==", value: normalizedRequestId },
+              ],
+              limit: 2,
+            });
+            if (!Array.isArray(docs) || docs.length !== 1) {
+              return null;
+            }
+            const doc = docs[0];
+            const normalizedJob = normalizeJob(typeof doc?.data === "function" ? doc.data() : null, state.meeting?.title);
+            if (!normalizedJob?.jobId) {
+              return null;
+            }
+            return {
+              createdAt: normalizeText(normalizedJob.createdAt),
+              durationMs: Math.max(0, Number(normalizedJob.durationMs) || 0),
+              error: normalizeText(normalizedJob.error),
+              jobId: normalizeText(normalizedJob.jobId),
+              meetingId,
+              requestId: normalizeText(normalizedJob.requestId),
+              status: normalizeText(normalizedJob.status),
+              title: normalizeText(normalizedJob.title),
+              updatedAt: normalizeText(normalizedJob.updatedAt),
+            };
+          } catch (error) {
+            logDebug("workspace.pending-uploads.remote-sync.request-query.error", {
+              error,
+              meetingId,
+              requestId: normalizedRequestId,
+            });
+            return null;
+          }
+        })();
+        if (cache instanceof Map) {
+          cache.set(cacheKey, readTask);
+        }
+        return readTask;
+      }
+
+      function shouldConfirmExactRemoteMatch(exactMatch) {
+        return Boolean(exactMatch)
+          && !TERMINAL_REMOTE_STATUSES.has(normalizeText(exactMatch?.status))
+          && Boolean(normalizeText(exactMatch?.jobId || exactMatch?.requestId));
+      }
+
+      async function reconcileRemoteRecordSummaries() {
+        const records = Array.isArray(state.records) ? [...state.records] : [];
+        if (!records.length) {
+          return false;
+        }
+        const remoteJobReadCache = new Map();
+        const remoteRequestReadCache = new Map();
+        let changed = false;
+        const nextRecords = [];
+        for (const record of records) {
+          const currentStatus = normalizeText(record?.status);
+          if (!record?.jobId || TERMINAL_REMOTE_STATUSES.has(currentStatus)) {
+            nextRecords.push(record);
+            continue;
+          }
+          const confirmed = await loadRemoteJobRecordByJobId(record?.jobId, remoteJobReadCache)
+            || await loadRemoteJobRecordByRequestId(record?.requestId, remoteRequestReadCache);
+          if (!confirmed?.jobId) {
+            nextRecords.push(record);
+            continue;
+          }
+          const nextStatus = normalizeText(confirmed.status || currentStatus);
+          const nextTitle = normalizeText(confirmed.title || record?.title);
+          const nextUpdatedAt = normalizeText(confirmed.updatedAt || record?.updatedAt);
+          const nextRequestId = normalizeText(confirmed.requestId || record?.requestId);
+          const statusChanged = nextStatus !== currentStatus;
+          const titleChanged = nextTitle !== normalizeText(record?.title);
+          const updatedAtChanged = nextUpdatedAt !== normalizeText(record?.updatedAt);
+          const requestIdChanged = nextRequestId !== normalizeText(record?.requestId);
+          if (!statusChanged && !titleChanged && !updatedAtChanged && !requestIdChanged) {
+            nextRecords.push(record);
+            continue;
+          }
+          const nextProgress = TERMINAL_REMOTE_STATUSES.has(nextStatus)
+            ? {
+                currentPart: Math.max(
+                  Math.max(0, Number(record?.progress?.currentPart) || 0),
+                  Math.max(0, Number(record?.progress?.totalParts) || 0)
+                ),
+                parallelParts: 0,
+                percent: nextStatus === "succeeded"
+                  ? 100
+                  : Math.max(0, Math.min(100, Number(record?.progress?.percent) || 0)),
+                phase: nextStatus === "succeeded"
+                  ? "completed"
+                  : normalizeText(record?.progress?.phase),
+                totalParts: Math.max(0, Number(record?.progress?.totalParts) || 0),
+              }
+            : record?.progress;
+          nextRecords.push({
+            ...record,
+            createdAt: normalizeText(confirmed.createdAt || record?.createdAt),
+            durationMs: Math.max(0, Number(confirmed.durationMs) || Number(record?.durationMs) || 0),
+            error: nextStatus === "succeeded" ? "" : normalizeText(confirmed.error || record?.error),
+            jobId: normalizeText(confirmed.jobId || record?.jobId),
+            progress: nextProgress,
+            requestId: nextRequestId,
+            resultTitle: nextTitle || normalizeText(record?.resultTitle),
+            status: nextStatus,
+            title: nextTitle || normalizeText(record?.title),
+            updatedAt: nextUpdatedAt,
+          });
+          changed = true;
+          logDebug("workspace.records.remote-summary-confirmed", {
+            jobId: normalizeText(confirmed.jobId || record?.jobId),
+            previousStatus: currentStatus,
+            requestId: nextRequestId,
+            status: nextStatus,
+            updatedAt: nextUpdatedAt,
+          });
+        }
+        if (changed) {
+          state.records = nextRecords;
+        }
+        return changed;
+      }
       
       
       async function syncPendingUploadsWithRemote() {
         const pendingItems = Array.isArray(state.pendingUploads) ? [...state.pendingUploads] : [];
+        const consumedRemoteJobIds = new Set();
+        const remoteJobReadCache = new Map();
+        const remoteRequestReadCache = new Map();
         for (const pending of pendingItems) {
-          const matched = findRemoteForPending(state, pending);
+          const exactMatch = findRemoteForPending(state, pending);
+          const confirmedExactJobMatch = shouldConfirmExactRemoteMatch(exactMatch)
+            ? await loadRemoteJobRecordByJobId(exactMatch?.jobId || pending?.jobId, remoteJobReadCache)
+            : null;
+          const confirmedExactRequestMatch = shouldConfirmExactRemoteMatch(exactMatch) && !confirmedExactJobMatch
+            ? await loadRemoteJobRecordByRequestId(exactMatch?.requestId || pending?.requestId, remoteRequestReadCache)
+            : null;
+          const confirmedExactMatch = confirmedExactJobMatch || confirmedExactRequestMatch;
+          const directJobMatch = !exactMatch
+            ? await loadRemoteJobRecordByJobId(pending?.jobId, remoteJobReadCache)
+            : null;
+          const directRequestMatch = !exactMatch && !directJobMatch
+            ? await loadRemoteJobRecordByRequestId(pending?.requestId, remoteRequestReadCache)
+            : null;
+          const recoveredMatch = !exactMatch && !directJobMatch && !directRequestMatch && typeof findRecoveredRemoteForPending === "function"
+            ? findRecoveredRemoteForPending(state, pending)
+            : null;
+          const matched = confirmedExactMatch || exactMatch || directJobMatch || directRequestMatch || recoveredMatch?.remote;
+          const matchedJobId = normalizeText(matched?.jobId);
+          if (matchedJobId && consumedRemoteJobIds.has(matchedJobId)) continue;
           if (!matched) continue;
+          if (matchedJobId) {
+            consumedRemoteJobIds.add(matchedJobId);
+          }
+          if (confirmedExactMatch?.jobId) {
+            logDebug("workspace.pending-uploads.remote-sync.exact-match-confirmed", {
+              exactMatchJobId: normalizeText(exactMatch?.jobId),
+              exactMatchStatus: normalizeText(exactMatch?.status),
+              pendingRequestId: normalizeText(pending?.requestId),
+              recoveredJobId: matchedJobId,
+              status: normalizeText(confirmedExactMatch.status),
+            });
+          }
+          if (directJobMatch?.jobId) {
+            logDebug("workspace.pending-uploads.remote-sync.job-read-match", {
+              pendingRequestId: normalizeText(pending?.requestId),
+              recoveredJobId: matchedJobId,
+              status: normalizeText(directJobMatch.status),
+            });
+          }
+          if (directRequestMatch?.jobId) {
+            logDebug("workspace.pending-uploads.remote-sync.request-query-match", {
+              pendingRequestId: normalizeText(pending?.requestId),
+              recoveredJobId: matchedJobId,
+              status: normalizeText(directRequestMatch.status),
+            });
+          }
+          if (recoveredMatch?.remote) {
+            logDebug("workspace.pending-uploads.remote-sync.recovered-match", {
+              createdAtDeltaMs: Math.max(0, Number(recoveredMatch.createdAtDeltaMs) || 0),
+              durationDeltaMs: Math.max(0, Number(recoveredMatch.durationDeltaMs) || 0),
+              pendingRequestId: normalizeText(pending?.requestId),
+              recoveredJobId: matchedJobId,
+              strategy: normalizeText(recoveredMatch.strategy),
+            });
+          }
           await applyPendingUploadRemoteSnapshotState(pending, matched);
         }
         state.meeting.pendingLocalCount = state.pendingUploads.length;
@@ -2398,8 +2718,11 @@
       }
       
       
-      async function deletePendingUpload(requestId, options = {}) {
+      async function removePendingUploadQueueEntry(requestId, options = {}) {
         const normalizedRequestId = normalizeText(requestId);
+        if (!normalizedRequestId) {
+          return;
+        }
         try {
           await runPendingUploadQueueOperation(
             () => state.queueStore.delete(requestId),
@@ -2417,8 +2740,18 @@
         }
         delete state.runtimeChunkCache[normalizedRequestId];
         state.pendingUploads = state.pendingUploads.filter((item) => item.requestId !== normalizedRequestId);
-        if (state.selectedRecordId === ns.shared.buildLocalSelectionId(normalizedRequestId)) state.selectedRecordId = chooseSelectedRecordId(state);
-        persistWorkspaceSession();
+        if (state.selectedRecordId === ns.shared.buildLocalSelectionId(normalizedRequestId)) {
+          state.selectedRecordId = normalizeText(options?.nextSelectedRecordId) || chooseSelectedRecordId(state);
+        }
+        state.meeting.pendingLocalCount = state.pendingUploads.length;
+        if (options?.persistSession !== false) {
+          persistWorkspaceSession();
+        }
+      }
+
+
+      async function deletePendingUpload(requestId, options = {}) {
+        await removePendingUploadQueueEntry(requestId, options);
         setNotice("브라우저에 보관하던 녹음을 삭제했습니다.", "highlight");
         applyRender();
       }
@@ -2480,6 +2813,7 @@
         loadPendingUploads,
         loadSupersededRemoteJobIds,
         retryPendingUploads,
+        reconcileRemoteRecordSummaries,
         runDebugLocalQueueSandboxAction,
         seedDebugLocalQueueSandboxPendingUpload,
         showPendingUploadQueueOperationError,

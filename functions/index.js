@@ -105,10 +105,10 @@ exports.processQueuedInovaMeetingJob = onDocumentWritten(
   {
     concurrency: 1,
     document: "integration_inova_meeting_jobs/{jobId}",
-    maxInstances: 10,
+    maxInstances: 20,
     memory: "1GiB",
     region: REGION,
-    timeoutSeconds: 540,
+    timeoutSeconds: 120,
   },
   meetingHandlers.processQueuedMeetingJobWrite
 );
@@ -116,10 +116,10 @@ exports.processQueuedInovaMeetingJobPart = onDocumentWritten(
   {
     document: "integration_inova_meeting_job_parts/{partId}",
     concurrency: 1,
-    maxInstances: 50,
+    maxInstances: 80,
     memory: "1GiB",
     region: REGION,
-    timeoutSeconds: 540,
+    timeoutSeconds: 180,
   },
   meetingHandlers.processQueuedMeetingJobPartWrite
 );
@@ -127,10 +127,10 @@ exports.finalizeChunkedInovaMeetingJob = onDocumentWritten(
   {
     concurrency: 1,
     document: "integration_inova_meeting_job_finalizers/{jobId}",
-    maxInstances: 10,
+    maxInstances: 20,
     memory: "1GiB",
     region: REGION,
-    timeoutSeconds: 540,
+    timeoutSeconds: 180,
   },
   meetingHandlers.finalizeChunkedMeetingJobWrite
 );
@@ -139,9 +139,9 @@ exports.processQueuedInovaMeetingCommand = onDocumentWritten(
     concurrency: 1,
     document: "integration_inova_meeting_commands/{commandId}",
     maxInstances: 10,
-    memory: "1GiB",
+    memory: "512MiB",
     region: REGION,
-    timeoutSeconds: 540,
+    timeoutSeconds: 120,
   },
   meetingHandlers.processQueuedMeetingCommandWrite
 );
@@ -149,19 +149,21 @@ exports.processQueuedInovaMeetingDeletion = onDocumentWritten(
   {
     concurrency: 1,
     document: "integration_inova_meeting_deletions/{taskId}",
-    memory: "1GiB",
+    maxInstances: 5,
+    memory: "512MiB",
     region: REGION,
-    timeoutSeconds: 540,
+    timeoutSeconds: 120,
   },
   meetingHandlers.processMeetingDeletionWrite
 );
 exports.sweepQueuedInovaMeetingDeletions = onSchedule(
   {
     concurrency: 1,
-    memory: "512MiB",
+    maxInstances: 1,
+    memory: "256MiB",
     region: REGION,
     schedule: "every 60 minutes",
-    timeoutSeconds: 540,
+    timeoutSeconds: 60,
     timeZone: "Asia/Seoul",
   },
   meetingHandlers.sweepQueuedMeetingDeletions

@@ -161,6 +161,81 @@
         return checks;
       }
 
+      function buildRecentDebugEntrySnapshot(options = {}) {
+        const limit = Math.max(1, Math.min(80, Number(options?.entriesLimit) || Number(options?.limit) || 40));
+        return getDebugEntries()
+          .slice(-limit)
+          .map((entry) => ({
+            event: normalizeText(entry?.event),
+            payload: entry?.payload && typeof entry.payload === "object" ? { ...entry.payload } : entry?.payload ?? null,
+            timestamp: normalizeText(entry?.timestamp),
+          }));
+      }
+
+      function buildPendingSyncEvidence(options = {}) {
+        const queueLimit = Math.max(1, Math.min(50, Number(options?.queueLimit) || Number(options?.limit) || 20));
+        return {
+          debugConsole: buildHostedDebugConsoleStateSnapshot(getDebugEntries()),
+          href: normalizeText(globalObject.location?.href),
+          meetingId: normalizeText(state.session?.meetingId || state.params?.meetingId),
+          queueSnapshot: controller("pendingUploads")?.buildPendingUploadQueueStateSnapshot?.({ limit: queueLimit }) || null,
+          recentDebugEntries: buildRecentDebugEntrySnapshot({
+            entriesLimit: options?.entriesLimit,
+          }),
+          selectedRecordId: normalizeText(state.selectedRecordId),
+        };
+      }
+
+      function printPendingSyncEvidence(options = {}) {
+        const evidence = buildPendingSyncEvidence(options);
+        const consoleRef = globalObject.console;
+        const pendingUploads = Array.isArray(evidence?.queueSnapshot?.pendingUploads) ? evidence.queueSnapshot.pendingUploads : [];
+        const recentQueueEvents = Array.isArray(evidence?.queueSnapshot?.recentQueueEvents)
+          ? evidence.queueSnapshot.recentQueueEvents.map((entry) => ({
+              event: normalizeText(entry?.event),
+              payload: entry?.payload && typeof entry.payload === "object" ? JSON.stringify(entry.payload) : normalizeText(entry?.payload),
+              timestamp: normalizeText(entry?.timestamp),
+            }))
+          : [];
+        const recentDebugEntries = Array.isArray(evidence?.recentDebugEntries)
+          ? evidence.recentDebugEntries.map((entry) => ({
+              event: normalizeText(entry?.event),
+              payload: entry?.payload && typeof entry.payload === "object" ? JSON.stringify(entry.payload) : normalizeText(entry?.payload),
+              timestamp: normalizeText(entry?.timestamp),
+            }))
+          : [];
+        const summary = {
+          href: evidence?.href || "",
+          meetingId: evidence?.meetingId || "",
+          pendingLocalCount: Math.max(0, Number(evidence?.queueSnapshot?.pendingLocalCount) || 0),
+          recentDebugEntryCount: recentDebugEntries.length,
+          recentQueueEventCount: recentQueueEvents.length,
+          selectedRecordId: evidence?.selectedRecordId || "",
+        };
+        if (typeof consoleRef?.groupCollapsed === "function") {
+          consoleRef.groupCollapsed("[Inova Hosted Meeting] pending sync evidence");
+        }
+        if (typeof consoleRef?.log === "function") {
+          consoleRef.log("summary", summary);
+          consoleRef.log("evidence", evidence);
+        }
+        if (typeof consoleRef?.table === "function") {
+          if (pendingUploads.length) {
+            consoleRef.table(pendingUploads);
+          }
+          if (recentQueueEvents.length) {
+            consoleRef.table(recentQueueEvents);
+          }
+          if (recentDebugEntries.length) {
+            consoleRef.table(recentDebugEntries);
+          }
+        }
+        if (typeof consoleRef?.groupEnd === "function") {
+          consoleRef.groupEnd();
+        }
+        return evidence;
+      }
+
       function buildAuthSnapshotText() {
         const rows = [
           ["authMode", normalizeText(state.auth?.accessMode || state.auth?.accessDecision || "unknown") || "unknown"],
@@ -366,6 +441,8 @@
         debugApi.debugConsoleValidation = {
           checkWorkspace: validateHostedDebugConsoleWorkspace,
         };
+        debugApi.collectPendingSyncEvidence = buildPendingSyncEvidence;
+        debugApi.printPendingSyncEvidence = printPendingSyncEvidence;
         debugApi.queueState = (...args) => controller("pendingUploads")?.buildPendingUploadQueueStateSnapshot?.(...args);
         debugApi.queueSandbox = {
           active: () => Boolean(state.debugLocalQueueSandbox),

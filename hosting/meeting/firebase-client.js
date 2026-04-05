@@ -210,6 +210,75 @@
     };
   }
 
+  async function readDocument(collectionName, documentId) {
+    const normalizedCollection = normalizeText(collectionName);
+    const normalizedDocumentId = normalizeText(documentId);
+    if (!normalizedCollection || !normalizedDocumentId) {
+      return null;
+    }
+    const { firestore } = await ensureFirestoreReady();
+    logDebug("firestore.document.read.start", {
+      collection: normalizedCollection,
+      documentId: normalizedDocumentId,
+    });
+    const snapshot = await firestore.collection(normalizedCollection).doc(normalizedDocumentId).get();
+    logDebug("firestore.document.read.success", {
+      collection: normalizedCollection,
+      documentId: normalizedDocumentId,
+      exists: Boolean(snapshot?.exists),
+      fromCache: Boolean(snapshot?.metadata?.fromCache),
+      hasPendingWrites: Boolean(snapshot?.metadata?.hasPendingWrites),
+    });
+    return snapshot;
+  }
+
+  async function queryDocuments(collectionName, options = {}) {
+    const normalizedCollection = normalizeText(collectionName);
+    const filters = Array.isArray(options?.filters) ? options.filters : [];
+    const limit = Math.max(1, Number(options?.limit) || 1);
+    if (!normalizedCollection || !filters.length) {
+      return [];
+    }
+    const { firestore } = await ensureFirestoreReady();
+    let query = firestore.collection(normalizedCollection);
+    const normalizedFilters = filters
+      .map((filter) => ({
+        field: normalizeText(filter?.field),
+        op: normalizeText(filter?.op) || "==",
+        value: filter?.value,
+      }))
+      .filter((filter) => filter.field);
+    if (!normalizedFilters.length) {
+      return [];
+    }
+    logDebug("firestore.query.start", {
+      collection: normalizedCollection,
+      filters: normalizedFilters.map((filter) => ({
+        field: filter.field,
+        op: filter.op,
+        value: normalizeText(filter.value),
+      })),
+      limit,
+    });
+    for (const filter of normalizedFilters) {
+      query = query.where(filter.field, filter.op, filter.value);
+    }
+    const snapshot = await query.limit(limit).get();
+    logDebug("firestore.query.success", {
+      collection: normalizedCollection,
+      count: Math.max(0, Number(snapshot?.size) || 0),
+      filters: normalizedFilters.map((filter) => ({
+        field: filter.field,
+        op: filter.op,
+        value: normalizeText(filter.value),
+      })),
+      fromCache: Boolean(snapshot?.metadata?.fromCache),
+      hasPendingWrites: Boolean(snapshot?.metadata?.hasPendingWrites),
+      limit,
+    });
+    return Array.isArray(snapshot?.docs) ? snapshot.docs : [];
+  }
+
   function subscribeDocument(collectionName, documentId, handlers = {}) {
     const normalizedCollection = normalizeText(collectionName);
     const normalizedDocumentId = normalizeText(documentId);
@@ -279,6 +348,8 @@
     getCollections() {
       return { ...CONFIG.firestoreCollections };
     },
+    queryDocuments,
+    readDocument,
     setWorkspaceAccess,
     subscribeDocument,
   };
