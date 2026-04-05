@@ -703,6 +703,10 @@
     left: 12px;
     width: auto;
   }
+  .inova-meeting-debug-console__log {
+    min-height: 160px;
+    max-height: 34vh;
+  }
   .inova-meeting-debug-console__toolbar {
     align-items: stretch;
   }
