@@ -10,7 +10,7 @@
       const helpers = deps?.helpers || {};
       const { buildLocalPendingJob, chooseSelectedRecordId, findHistoryEntry, findRemoteForPending, normalizeArtifact, normalizeJob, normalizeRecord } = ns.render;
       const { findRecoveredRemoteForPending } = ns.workspaceRecovery || {};
-      const { getCollections, readDocument } = ns.firebase || {};
+      const { getCollections, queryDocuments, readDocument } = ns.firebase || {};
       const { prepareAudioSourceChunks } = ns.audioChunker;
       const { blobToBase64, collapseSupersededPendingUploads, normalizePendingUpload, PENDING_UPLOAD_DEBUG_SCENARIOS } = ns.storage;
       const {
@@ -1360,21 +1360,80 @@
         }
         return readTask;
       }
+
+
+      async function loadRemoteJobRecordByRequestId(requestId, cache) {
+        const normalizedRequestId = normalizeText(requestId);
+        const meetingId = normalizeText(state.meeting?.meetingId || state.session?.meetingId);
+        if (!normalizedRequestId || !meetingId || typeof queryDocuments !== "function" || typeof getCollections !== "function") {
+          return null;
+        }
+        const cacheKey = `${meetingId}::${normalizedRequestId}`;
+        if (cache instanceof Map && cache.has(cacheKey)) {
+          return cache.get(cacheKey);
+        }
+        const readTask = (async () => {
+          try {
+            const collections = getCollections();
+            const docs = await queryDocuments(collections?.jobs, {
+              filters: [
+                { field: "meetingId", op: "==", value: meetingId },
+                { field: "source.requestId", op: "==", value: normalizedRequestId },
+              ],
+              limit: 2,
+            });
+            if (!Array.isArray(docs) || docs.length !== 1) {
+              return null;
+            }
+            const doc = docs[0];
+            const normalizedJob = normalizeJob(typeof doc?.data === "function" ? doc.data() : null, state.meeting?.title);
+            if (!normalizedJob?.jobId) {
+              return null;
+            }
+            return {
+              createdAt: normalizeText(normalizedJob.createdAt),
+              durationMs: Math.max(0, Number(normalizedJob.durationMs) || 0),
+              error: normalizeText(normalizedJob.error),
+              jobId: normalizeText(normalizedJob.jobId),
+              meetingId,
+              requestId: normalizeText(normalizedJob.requestId),
+              status: normalizeText(normalizedJob.status),
+              title: normalizeText(normalizedJob.title),
+              updatedAt: normalizeText(normalizedJob.updatedAt),
+            };
+          } catch (error) {
+            logDebug("workspace.pending-uploads.remote-sync.request-query.error", {
+              error,
+              meetingId,
+              requestId: normalizedRequestId,
+            });
+            return null;
+          }
+        })();
+        if (cache instanceof Map) {
+          cache.set(cacheKey, readTask);
+        }
+        return readTask;
+      }
       
       
       async function syncPendingUploadsWithRemote() {
         const pendingItems = Array.isArray(state.pendingUploads) ? [...state.pendingUploads] : [];
         const consumedRemoteJobIds = new Set();
         const remoteJobReadCache = new Map();
+        const remoteRequestReadCache = new Map();
         for (const pending of pendingItems) {
           const exactMatch = findRemoteForPending(state, pending);
           const directJobMatch = !exactMatch
             ? await loadRemoteJobRecordByJobId(pending?.jobId, remoteJobReadCache)
             : null;
-          const recoveredMatch = !exactMatch && !directJobMatch && typeof findRecoveredRemoteForPending === "function"
+          const directRequestMatch = !exactMatch && !directJobMatch
+            ? await loadRemoteJobRecordByRequestId(pending?.requestId, remoteRequestReadCache)
+            : null;
+          const recoveredMatch = !exactMatch && !directJobMatch && !directRequestMatch && typeof findRecoveredRemoteForPending === "function"
             ? findRecoveredRemoteForPending(state, pending)
             : null;
-          const matched = exactMatch || directJobMatch || recoveredMatch?.remote;
+          const matched = exactMatch || directJobMatch || directRequestMatch || recoveredMatch?.remote;
           const matchedJobId = normalizeText(matched?.jobId);
           if (matchedJobId && consumedRemoteJobIds.has(matchedJobId)) continue;
           if (!matched) continue;
@@ -1386,6 +1445,13 @@
               pendingRequestId: normalizeText(pending?.requestId),
               recoveredJobId: matchedJobId,
               status: normalizeText(directJobMatch.status),
+            });
+          }
+          if (directRequestMatch?.jobId) {
+            logDebug("workspace.pending-uploads.remote-sync.request-query-match", {
+              pendingRequestId: normalizeText(pending?.requestId),
+              recoveredJobId: matchedJobId,
+              status: normalizeText(directRequestMatch.status),
             });
           }
           if (recoveredMatch?.remote) {
