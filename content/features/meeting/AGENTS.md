@@ -31,6 +31,8 @@
 - hosted 작업실의 회의 제목은 UI에서 회의를 구분하는 편집용 라벨로만 취급한다. 회의 정리/회의록 생성 prompt에는 이 제목을 근거로 넣지 않고, 전사·공용 메모·추가 맥락만 사용한다.
 - hosted 작업실의 로컬 pending queue는 원격 작업이 `succeeded`로 확정되면 자동 정리한다. 완료 후에도 같은 기록이 `진행 중`과 `완료`로 중복 표시되면 remote success cleanup 경로부터 본다.
 - remote success cleanup은 먼저 `recentJobs` exact match를 보고, 거기서 빠진 오래된 job은 `pending.jobId` direct lookup, `pending.requestId` exact query 순서로 Firestore job을 직접 확인한 뒤 정리한다. 그것도 실패할 때만 recovery heuristic을 본다.
+- hosted stale pending, orphan queue, 잘못된 진행 상태가 1~2회 패치 후에도 남으면 더 이상 추측 패치를 누적하지 않는다. 실제 상용 페이지에서 `debug=1` 로그, 화면 스크린샷, `window.__INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20, entriesLimit: 40 })` 결과를 먼저 모은 뒤 그 식별자 기준으로 수정한다.
+- 위 console helper가 없으면 코드 문제가 아니라 배포/캐시 mismatch 가능성을 먼저 본다. 이 경우는 `hosting` 재배포 여부와 페이지 강한 새로고침 여부를 확인하고, helper가 보이는 최신 JS인지부터 맞춘다.
 - meeting feature에서 반복 오류가 stale pending, orphan record, 잘못된 진행 상태처럼 화면에 남는 유형이면 수동 정리를 운영 절차로 두지 않는다. 원인 수정과 함께 자동 복구 패치 또는 안전한 정리 스크립트를 같은 작업 안에서 판단한다.
 - meeting feature에서 복구 규칙이 늘어나면 `workspace-*.js` 본문에 조건문만 계속 쌓지 말고 recovery/patch 전용 JS로 분리한다. 대신 일회성 cleanup은 `scripts/` 쪽 별도 실행 경로로 둔다.
 
@@ -64,6 +66,12 @@
 ## 최소 검증 방법
 - 팝업 target 설정, 회의 탭 목록, hosted meeting 진입, 결과 조회를 확인한다.
 - 상용 회의 데이터 정리 여부를 편하게 볼 때는 `npm run check:meeting-data`를 사용한다.
+- hosted 상태 mismatch를 조사할 때는 실제 상용 페이지를 `?debug=1`로 열고, 디버그 패널 복사 로그와 아래 콘솔 명령 결과를 함께 확보한다.
+
+```js
+window.__INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20, entriesLimit: 40 })
+```
+
 - 회의 데이터를 전체 또는 특정 `meetingId` 기준으로 수동 정리할 때는 기본 dry-run인 `npm run delete:meeting-data -- --all` 또는 `npm run delete:meeting-data -- --meeting-id <id>`를 먼저 보고, 실제 삭제는 같은 명령에 `--execute`를 붙인다.
 - 회의 삭제와 기록 개별 삭제는 화면 항목 제거로 끝나지 않고, 관련 command 문서와 회의 단위 launch/workspace session까지 cleanup task가 정리해야 한다.
 

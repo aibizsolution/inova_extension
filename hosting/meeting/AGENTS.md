@@ -11,4 +11,13 @@
 - hosted 작업실은 녹음 중이거나 실제 업로드가 진행 중일 때 탭/브라우저 이탈을 브라우저 기본 `beforeunload` 경고로 막아야 한다. 업로드가 끝나고 원격 처리만 남은 상태까지 과하게 막지 말고, realtime 정리는 경고 취소와 충돌하지 않게 `pagehide` 같은 실제 이탈 시점으로 둔다.
 - stale pending, orphan local queue, self-healing reconciliation은 `hosting/meeting/workspace-recovery.js`에 먼저 모은다. `workspace-pending-uploads.js`에는 실행 연결만 두고 복구 규칙 조건문을 계속 누적하지 않는다.
 - stale pending cleanup은 `meeting.recentJobs`만 믿지 않는다. 오래된 성공 job이 recent list에서 밀려날 수 있으므로 `pending.jobId` direct lookup과 `pending.requestId` exact query 경로를 유지한다.
+- 같은 hosted 증상이 1~2회 패치 후에도 재현되면, 더 이상 heuristic recovery를 추가하지 않고 정확한 증거 수집 모드로 전환한다.
+- 정확한 증거 수집은 실제 상용 페이지 `?debug=1` 기준으로 한다. 최소 세트는 `화면 스크린샷`, `디버그 패널 복사 로그`, 아래 콘솔 helper 출력이다.
+
+```js
+window.__INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20, entriesLimit: 40 })
+```
+
+- 위 helper는 `pending.requestId`, `pending.jobId`, `createdAt`, `durationMs`, `meetingTitleSnapshot`, 최근 queue 이벤트와 debug entry를 함께 덤프한다. stale pending 수정은 이 증거로 식별자가 확인된 뒤에만 진행한다.
+- helper가 보이지 않으면 기능 버그로 추정하지 말고 먼저 최신 hosted JS가 내려왔는지 확인한다. 이 경우는 `hosting` 배포 여부, 페이지 강한 새로고침, 필요 시 확장 Reload 여부를 먼저 점검한다.
 - prompt/release/conversation 영역은 기본적으로 읽지 않는다.
