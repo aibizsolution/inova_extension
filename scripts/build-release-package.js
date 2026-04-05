@@ -120,6 +120,12 @@ fs.copyFileSync(resolveLatestDownloadSourcePath({
   releasesDir,
   zipPath,
 }), hostingLatestZipPath);
+pruneCuratedReleaseArtifacts({
+  curatedHistory,
+  hostingDownloadDir,
+  latestDownloadFileName,
+  releasesDir,
+});
 
 console.log(`[release-build] version=${version}`);
 console.log(`[release-build] zip=${zipPath}`);
@@ -308,6 +314,37 @@ function resolveLatestDownloadSourcePath({ currentVersion, hostingDownloadDir, l
     `공개 최신 릴리스 ZIP을 찾지 못했어요: ${fileName}`,
     ...candidatePaths.map((candidatePath) => `- ${candidatePath}`),
   ].join("\n"));
+}
+
+function pruneCuratedReleaseArtifacts({ curatedHistory, hostingDownloadDir, latestDownloadFileName, releasesDir }) {
+  const curatedFileNames = new Set(
+    (Array.isArray(curatedHistory) ? curatedHistory : [])
+      .map((release) => normalizeText(release?.fileName))
+      .filter(Boolean)
+  );
+
+  pruneZipFiles(releasesDir, curatedFileNames);
+  pruneZipFiles(hostingDownloadDir, new Set([latestDownloadFileName, ...curatedFileNames]));
+}
+
+function pruneZipFiles(directoryPath, allowedFileNames) {
+  if (!fs.existsSync(directoryPath)) {
+    return;
+  }
+
+  for (const entry of fs.readdirSync(directoryPath, { withFileTypes: true })) {
+    if (!entry.isFile()) {
+      continue;
+    }
+    const fileName = normalizeText(entry.name);
+    if (!/\.zip$/i.test(fileName)) {
+      continue;
+    }
+    if (allowedFileNames.has(fileName)) {
+      continue;
+    }
+    fs.rmSync(path.join(directoryPath, fileName), { force: true });
+  }
 }
 
 function normalizeChanges(changes) {

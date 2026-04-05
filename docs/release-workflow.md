@@ -78,6 +78,7 @@ npm run deploy:functions
 - ZIP은 덮어쓰지 않고 버전별로 누적합니다.
 - 고정 최신 링크 `downloads/latest.zip`은 `releases/release-notes.json`에 남아 있는 사용자용 최신 릴리스 ZIP으로만 교체합니다.
 - `latest.json`과 `history.json`도 `releases/release-notes.json`에 남긴 공개 버전 목록 기준으로 다시 생성합니다.
+- `release:build`는 공개 목록에 없는 이전 ZIP을 `releases/`와 `hosting/extension/downloads/`에서 함께 정리합니다.
 - `latest.json`, `history.json`에는 버전 번호뿐 아니라 `level`, `headline`, `summary`, `changes`를 함께 넣습니다.
 - 릴리스 패널은 위 메타 중 사용자용 `public` 정보만 읽어 버전별 업데이트 내용을 보여줍니다.
 - 문제 발생 시 이전 ZIP을 다시 받아 같은 방식으로 롤백할 수 있습니다.
