@@ -84,6 +84,9 @@
       const getHighestPriorityDegradedNotice = typeof helpers.getHighestPriorityDegradedNotice === "function"
         ? (...args) => helpers.getHighestPriorityDegradedNotice(...args)
         : () => null;
+      const getDebugEntries = typeof helpers.getDebugEntries === "function"
+        ? (...args) => helpers.getDebugEntries(...args)
+        : () => [];
       const applyDegradedDiagnostics = (...args) => helpers.applyDegradedDiagnostics?.(...args);
       const getWorkspaceTitleOrFallback = (...args) => helpers.getWorkspaceTitleOrFallback?.(...args);
       const persistWorkspaceSession = (...args) => controller("session")?.persistSession?.(...args);

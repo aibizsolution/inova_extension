@@ -561,6 +561,7 @@
       createEmptySelectedRecordMemoState,
       createEmptyWorkspaceMutationState,
       createIdleCapture,
+      getDebugEntries: ns.shared.getDebugEntries,
       getWorkspaceTitleOrFallback,
       getHighestPriorityDegradedNotice,
       renderBlocked,
