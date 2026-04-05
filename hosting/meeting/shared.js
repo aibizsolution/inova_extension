@@ -33,10 +33,12 @@
   };
   const MAX_PREVIEW_TEXT_LENGTH = 180;
   const MAX_DEBUG_LOG_ENTRIES = 120;
+  const MAX_DEBUG_ERROR_ENTRIES = 120;
   const TERMINAL_REMOTE_STATUSES = new Set(["succeeded", "failed"]);
   const AUTO_RETRY_PENDING_STATUSES = new Set(["local_saved", "upload_queued"]);
   const debugListeners = new Set();
   const debugEntries = [];
+  const debugErrorEntries = [];
   const debugFaults = readDebugFaultRegistry();
   let debugSequence = 0;
   let debugEnabled = false;
@@ -949,8 +951,16 @@
     }));
   }
 
+  function getRetainedErrorDebugEntries() {
+    return debugErrorEntries.map((entry) => ({
+      ...entry,
+      payload: normalizeDebugPayload(entry.payload),
+    }));
+  }
+
   function clearDebugEntries() {
     debugEntries.length = 0;
+    debugErrorEntries.length = 0;
     notifyDebugListeners();
   }
 
@@ -997,15 +1007,16 @@
       || hasDebugErrorPayload(entry?.payload);
   }
 
-  function getErrorDebugEntries(entries = getDebugEntries()) {
-    return (Array.isArray(entries) ? entries : []).filter((entry) => isErrorDebugEntry(entry));
+  function getErrorDebugEntries(entries) {
+    const sourceEntries = Array.isArray(entries) ? entries : getRetainedErrorDebugEntries();
+    return sourceEntries.filter((entry) => isErrorDebugEntry(entry));
   }
 
   function buildCopyText(entries = getDebugEntries()) {
     return (Array.isArray(entries) ? entries : []).map((entry) => formatDebugEntry(entry)).join("\n\n").trim();
   }
 
-  function buildErrorCopyText(entries = getDebugEntries()) {
+  function buildErrorCopyText(entries) {
     return getErrorDebugEntries(entries).map((entry) => formatDebugEntry(entry)).join("\n\n").trim();
   }
 
@@ -1072,6 +1083,12 @@
     debugEntries.push(entry);
     while (debugEntries.length > MAX_DEBUG_LOG_ENTRIES) {
       debugEntries.shift();
+    }
+    if (isErrorDebugEntry(entry)) {
+      debugErrorEntries.push(entry);
+      while (debugErrorEntries.length > MAX_DEBUG_ERROR_ENTRIES) {
+        debugErrorEntries.shift();
+      }
     }
     notifyDebugListeners();
     return entry;
@@ -1143,6 +1160,7 @@
     clearFault: clearDebugFault,
     consumeFault: consumeDebugFault,
     entries: getDebugEntries,
+    errors: getRetainedErrorDebugEntries,
     faults: getDebugFaults,
     format: formatDebugEntry,
     log: logDebug,
@@ -1191,6 +1209,8 @@
     consumeDebugFault,
     generateCaptureRequestId,
     getDebugEntries,
+    getErrorDebugEntries,
+    getRetainedErrorDebugEntries,
     isDebugPanelEnabled,
     isLikelyNetworkError,
     isLocalWorkspaceOrigin,

@@ -68,6 +68,7 @@
 - 팝업 target 설정, 회의 탭 목록, hosted meeting 진입, 결과 조회를 확인한다.
 - 상용 회의 데이터 정리 여부를 편하게 볼 때는 `npm run check:meeting-data`를 사용한다.
 - hosted 상태 mismatch를 조사할 때는 실제 상용 페이지를 `?debug=1`로 열고, 디버그 패널 복사 로그와 아래 콘솔 명령 결과를 함께 확보한다.
+- hosted 디버그 콘솔의 일반 로그는 최근 `120`건만 유지한다. 대신 오류 로그는 별도 버퍼로 유지하므로, 일반 이벤트가 많아 오래된 항목이 밀려도 `오류` 복사 버튼이나 `window.__INOVA_HOSTED_MEETING_DEBUG__.errors()`로 오류만 따로 확보할 수 있어야 한다.
 - 위 helper는 degraded notice가 있거나 pending queue 진단 정보가 일부 비어 있어도 예외를 던지지 않고 현재 가능한 snapshot을 우선 덤프해야 한다.
 - 위 helper 출력에는 pending queue snapshot뿐 아니라 최근 hosted debug entry도 함께 포함되어야 한다. stale pending 조사에서 queue 상태와 Firestore/read/query 로그를 같은 캡처로 맞춰 본다.
 
