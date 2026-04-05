@@ -3916,7 +3916,6 @@ function registerMeetingHandlers(deps) {
 
   function buildMeetingNotesReducerPrompt(transcript, meeting, context, partialSummaries) {
     return [
-      `회의 제목: ${normalizeText(meeting?.title) || "미정"}`,
       `언어: ${normalizeText(meeting?.language) || "ko"}`,
       `공용 메모: ${normalizeTextBlock(context?.sharedMemoSnapshot) || "없음"}`,
       ...buildMeetingNotesContextPromptLines(context),
@@ -3941,7 +3940,6 @@ function registerMeetingHandlers(deps) {
     totalSections
   ) {
     return [
-      `회의 제목: ${normalizeText(meeting?.title) || "미정"}`,
       `언어: ${normalizeText(meeting?.language) || "ko"}`,
       `공용 메모: ${normalizeTextBlock(context?.sharedMemoSnapshot) || "없음"}`,
       ...buildMeetingNotesContextPromptLines(context),
@@ -3953,7 +3951,6 @@ function registerMeetingHandlers(deps) {
 
   function buildMeetingNotesUserPromptFromText(transcript, meeting, context, transcriptPrompt) {
     return [
-      `회의 제목: ${normalizeText(meeting?.title) || "미정"}`,
       `언어: ${normalizeText(meeting?.language) || "ko"}`,
       `공용 메모: ${normalizeTextBlock(context?.sharedMemoSnapshot) || "없음"}`,
       ...buildMeetingNotesContextPromptLines(context),
