@@ -432,17 +432,20 @@
           state.currentJob = normalizeJob(jobSnapshot.data(), state.meeting.title);
           mergeLiveJobIntoRecords(jobSnapshot.data());
         }
+        const currentStatus = normalizeText(state.currentJob?.status || entry?.remote?.status);
+        const canReadArtifact = TERMINAL_REMOTE_STATUSES.has(currentStatus);
         const artifactId = normalizeText(state.currentJob?.artifactId || entry?.remote?.artifactId);
         const shouldReadArtifact = Boolean(
-          artifactId
+          canReadArtifact
+          && artifactId
           && (
             options.forceArtifactRead
             || normalizeText(state.currentArtifact?.artifactId) !== artifactId
-            || (TERMINAL_REMOTE_STATUSES.has(normalizeText(state.currentJob?.status)) && !state.currentArtifact)
+            || !state.currentArtifact
           )
         );
-        if (!artifactId) {
-          disconnectArtifactListener();
+        if (!artifactId || !canReadArtifact) {
+          state.realtime.artifactDocId = "";
           state.currentArtifact = null;
         } else if (shouldReadArtifact && typeof readDocument === "function") {
           state.realtime.artifactDocId = artifactId;
@@ -461,10 +464,11 @@
         await resolvePendingMutationsFromSnapshots();
         applyRender();
         logDebug("workspace.detail.job-sync", {
-          artifactId: normalizeText(state.currentJob?.artifactId),
+          artifactId: canReadArtifact ? normalizeText(state.currentJob?.artifactId) : "",
+          canReadArtifact,
           jobId: normalizeText(state.currentJob?.jobId),
           reason: normalizeText(options.reason),
-          status: normalizeText(state.currentJob?.status),
+          status: currentStatus,
           updatedAt: normalizeText(state.currentJob?.updatedAt),
         });
       }
