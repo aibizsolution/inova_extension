@@ -85,7 +85,14 @@ function registerMeetingHandlers(deps) {
 
   let client = null;
 
-  const createInovaMeetingJob = onRequest({ cors: CORS_ORIGINS, region: REGION, timeoutSeconds: 540 }, async (request, response) => {
+  const createInovaMeetingJob = onRequest({
+    concurrency: 80,
+    cors: CORS_ORIGINS,
+    maxInstances: 20,
+    memory: "256MiB",
+    region: REGION,
+    timeoutSeconds: 60,
+  }, async (request, response) => {
     let cleanupStorageObjects = [];
     let jobQueued = false;
     try {
@@ -230,7 +237,7 @@ function registerMeetingHandlers(deps) {
     maxInstances: 40,
     memory: "1GiB",
     region: REGION,
-    timeoutSeconds: 120,
+    timeoutSeconds: 60,
   }, async (request, response) => {
     try {
       assertMethod(request);
@@ -1238,7 +1245,14 @@ function registerMeetingHandlers(deps) {
     }
   });
 
-  const regenerateInovaMeetingNotes = onRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
+  const regenerateInovaMeetingNotes = onRequest({
+    concurrency: 80,
+    cors: CORS_ORIGINS,
+    maxInstances: 20,
+    memory: "256MiB",
+    region: REGION,
+    timeoutSeconds: 60,
+  }, async (request, response) => {
     try {
       assertMethod(request);
       const input = normalizeMeetingNotesRegenerateRequest(request.body);
@@ -3032,7 +3046,21 @@ function registerMeetingHandlers(deps) {
     if (Number.isFinite(requested) && requested > 0) {
       return Math.max(1, Math.min(normalizedTotalParts, requested));
     }
-    return normalizedTotalParts;
+    if (normalizedTotalParts <= DEFAULT_IN_PROCESS_CHUNK_TRANSCRIPTION_CONCURRENCY) {
+      return normalizedTotalParts;
+    }
+    const adaptive = Math.max(
+      DEFAULT_IN_PROCESS_CHUNK_TRANSCRIPTION_CONCURRENCY,
+      Math.ceil(normalizedTotalParts / 2)
+    );
+    return Math.max(
+      1,
+      Math.min(
+        normalizedTotalParts,
+        DEFAULT_IN_PROCESS_CHUNK_TRANSCRIPTION_MAX_CONCURRENCY,
+        adaptive
+      )
+    );
   }
 
   function getMeetingChunkTranscriptionConcurrency(totalParts) {

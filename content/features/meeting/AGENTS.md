@@ -33,6 +33,12 @@
 - `functions/features/meeting/meeting-launch-service.js`
 - `functions/features/meeting/meeting-service.js`
 
+## 운영 튜닝 메모
+- Functions runtime 점검은 `npm run check:function-runtime -- --functions createInovaMeetingJob,uploadInovaMeetingSource,processQueuedInovaMeetingJob,processQueuedInovaMeetingJobPart,finalizeChunkedInovaMeetingJob,processQueuedInovaMeetingCommand,regenerateInovaMeetingNotes --since 2100 --limit 200`부터 본다.
+- `processQueuedInovaMeetingJobPart`에서 `429 no available instance`가 보이면 메모리를 먼저 늘리기보다 `OPENAI_MEETING_CHUNK_TRANSCRIPTION_CONCURRENCY`와 queue burst를 먼저 확인한다.
+- chunk worker 기본 queue concurrency는 env override가 없으면 adaptive `1~5`로 본다. 한 번에 모든 part를 동시에 queued 상태로 밀어 넣지 않는다.
+- `uploadInovaMeetingSource`와 chunk/finalize worker 메모리는 과거 OOM 이력이 있으니, 최근 로그에서 여유를 다시 확인하기 전까지는 섣불리 낮추지 않는다.
+
 ## 관련 데이터 경계
 - `integration_inova_meetings`
 - `integration_inova_meeting_jobs`

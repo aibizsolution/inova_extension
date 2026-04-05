@@ -108,7 +108,7 @@ exports.processQueuedInovaMeetingJob = onDocumentWritten(
     maxInstances: 10,
     memory: "1GiB",
     region: REGION,
-    timeoutSeconds: 540,
+    timeoutSeconds: 180,
   },
   meetingHandlers.processQueuedMeetingJobWrite
 );
@@ -119,7 +119,7 @@ exports.processQueuedInovaMeetingJobPart = onDocumentWritten(
     maxInstances: 50,
     memory: "1GiB",
     region: REGION,
-    timeoutSeconds: 540,
+    timeoutSeconds: 180,
   },
   meetingHandlers.processQueuedMeetingJobPartWrite
 );
@@ -130,7 +130,7 @@ exports.finalizeChunkedInovaMeetingJob = onDocumentWritten(
     maxInstances: 10,
     memory: "1GiB",
     region: REGION,
-    timeoutSeconds: 540,
+    timeoutSeconds: 180,
   },
   meetingHandlers.finalizeChunkedMeetingJobWrite
 );
@@ -141,7 +141,7 @@ exports.processQueuedInovaMeetingCommand = onDocumentWritten(
     maxInstances: 10,
     memory: "1GiB",
     region: REGION,
-    timeoutSeconds: 540,
+    timeoutSeconds: 120,
   },
   meetingHandlers.processQueuedMeetingCommandWrite
 );
