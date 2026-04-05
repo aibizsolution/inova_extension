@@ -88,6 +88,7 @@
   function normalizeSummary(summary) {
     const nextSummary = summary && typeof summary === "object" ? summary : {};
     return {
+      billableCount: Math.max(0, Number(nextSummary.billableCount) || 0),
       errorCount: Math.max(0, Number(nextSummary.errorCount) || 0),
       functionCalls: Math.max(0, Number(nextSummary.functionCalls) || 0),
       readCount: Math.max(0, Number(nextSummary.readCount) || 0),
@@ -98,7 +99,7 @@
 
   function buildStatusText(summary) {
     const normalizedSummary = normalizeSummary(summary);
-    return `로그 ${normalizedSummary.totalLogs}건 · 함수 ${normalizedSummary.functionCalls}건 · 읽기 ${normalizedSummary.readCount}건 · 스냅샷 ${normalizedSummary.snapshotCount}건 · 오류 ${normalizedSummary.errorCount}건`;
+    return `유료 ${normalizedSummary.billableCount}건 · 상세 함수 ${normalizedSummary.functionCalls}건 / 문서읽기 ${normalizedSummary.readCount}건 / 리스너 ${normalizedSummary.snapshotCount}건 · 오류 ${normalizedSummary.errorCount}건`;
   }
 
   function buildState(state) {
@@ -118,17 +119,18 @@
   function renderStatus(summary, statusText, options = {}) {
     const normalizedSummary = normalizeSummary(summary);
     const items = [
-      renderStatusItem("로그", normalizedSummary.totalLogs),
-      renderStatusItem("함수", normalizedSummary.functionCalls),
-      renderStatusItem("읽기", normalizedSummary.readCount),
-      renderStatusItem("스냅샷", normalizedSummary.snapshotCount),
+      renderStatusItem("유료", `${normalizedSummary.billableCount}건`),
+      renderStatusItem("상세", `함수 ${normalizedSummary.functionCalls} · 문서읽기 ${normalizedSummary.readCount} · 리스너 ${normalizedSummary.snapshotCount}`),
       renderStatusItem("오류", normalizedSummary.errorCount, normalizedSummary.errorCount > 0),
     ].join("");
     return `<span class="${joinClasses("inova-meeting-debug-console__status", options.className)}"${buildAttributes({ "aria-label": normalizeText(statusText) || buildStatusText(normalizedSummary), ...(options.attributes || {}) })}>${items}</span>`;
   }
 
   function renderStatusItem(label, count, isError = false) {
-    return `<span class="inova-meeting-debug-console__status-item${isError ? " is-error" : ""}">${escapeHtml(label)} ${Math.max(0, Number(count) || 0)}건</span>`;
+    const text = typeof count === "number"
+      ? `${Math.max(0, Number(count) || 0)}건`
+      : normalizeText(count);
+    return `<span class="inova-meeting-debug-console__status-item${isError ? " is-error" : ""}">${escapeHtml(label)} ${escapeHtml(text)}</span>`;
   }
 
   function renderButtons(buttons = []) {
