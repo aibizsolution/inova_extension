@@ -30,6 +30,7 @@
 - hosted 작업실은 녹음 중 또는 실제 업로드 진행 중에 탭/브라우저를 닫으려 하면 브라우저 기본 이탈 경고를 띄운다. 업로드가 끝난 뒤 원격 처리만 남은 상태는 불필요하게 막지 않는다.
 - hosted 작업실의 회의 제목은 UI에서 회의를 구분하는 편집용 라벨로만 취급한다. 회의 정리/회의록 생성 prompt에는 이 제목을 근거로 넣지 않고, 전사·공용 메모·추가 맥락만 사용한다.
 - hosted 작업실의 로컬 pending queue는 원격 작업이 `succeeded`로 확정되면 자동 정리한다. 완료 후에도 같은 기록이 `진행 중`과 `완료`로 중복 표시되면 remote success cleanup 경로부터 본다.
+- remote success cleanup은 먼저 `recentJobs` exact match를 보고, 거기서 빠진 오래된 job은 `pending.jobId`로 Firestore job 문서를 직접 확인한 뒤 정리한다. 그것도 실패할 때만 recovery heuristic을 본다.
 - meeting feature에서 반복 오류가 stale pending, orphan record, 잘못된 진행 상태처럼 화면에 남는 유형이면 수동 정리를 운영 절차로 두지 않는다. 원인 수정과 함께 자동 복구 패치 또는 안전한 정리 스크립트를 같은 작업 안에서 판단한다.
 - meeting feature에서 복구 규칙이 늘어나면 `workspace-*.js` 본문에 조건문만 계속 쌓지 말고 recovery/patch 전용 JS로 분리한다. 대신 일회성 cleanup은 `scripts/` 쪽 별도 실행 경로로 둔다.
 

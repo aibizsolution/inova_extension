@@ -210,6 +210,28 @@
     };
   }
 
+  async function readDocument(collectionName, documentId) {
+    const normalizedCollection = normalizeText(collectionName);
+    const normalizedDocumentId = normalizeText(documentId);
+    if (!normalizedCollection || !normalizedDocumentId) {
+      return null;
+    }
+    const { firestore } = await ensureFirestoreReady();
+    logDebug("firestore.document.read.start", {
+      collection: normalizedCollection,
+      documentId: normalizedDocumentId,
+    });
+    const snapshot = await firestore.collection(normalizedCollection).doc(normalizedDocumentId).get();
+    logDebug("firestore.document.read.success", {
+      collection: normalizedCollection,
+      documentId: normalizedDocumentId,
+      exists: Boolean(snapshot?.exists),
+      fromCache: Boolean(snapshot?.metadata?.fromCache),
+      hasPendingWrites: Boolean(snapshot?.metadata?.hasPendingWrites),
+    });
+    return snapshot;
+  }
+
   function subscribeDocument(collectionName, documentId, handlers = {}) {
     const normalizedCollection = normalizeText(collectionName);
     const normalizedDocumentId = normalizeText(documentId);
@@ -279,6 +301,7 @@
     getCollections() {
       return { ...CONFIG.firestoreCollections };
     },
+    readDocument,
     setWorkspaceAccess,
     subscribeDocument,
   };
