@@ -36,6 +36,7 @@
         postJson,
         safeLocalStorageGet,
         SESSION_STORAGE_KEY,
+        TERMINAL_REMOTE_STATUSES,
       } = ns.shared;
       const DEGRADED_NOTICE_CODES = constants.DEGRADED_NOTICE_CODES || {};
       const DEGRADED_NOTICE_SPECS = constants.DEGRADED_NOTICE_SPECS || {};
@@ -1458,6 +1459,89 @@
         }
         return readTask;
       }
+
+      function shouldConfirmExactRemoteMatch(exactMatch) {
+        return Boolean(exactMatch)
+          && !TERMINAL_REMOTE_STATUSES.has(normalizeText(exactMatch?.status))
+          && Boolean(normalizeText(exactMatch?.jobId || exactMatch?.requestId));
+      }
+
+      async function reconcileRemoteRecordSummaries() {
+        const records = Array.isArray(state.records) ? [...state.records] : [];
+        if (!records.length) {
+          return false;
+        }
+        const remoteJobReadCache = new Map();
+        const remoteRequestReadCache = new Map();
+        let changed = false;
+        const nextRecords = [];
+        for (const record of records) {
+          const currentStatus = normalizeText(record?.status);
+          if (!record?.jobId || TERMINAL_REMOTE_STATUSES.has(currentStatus)) {
+            nextRecords.push(record);
+            continue;
+          }
+          const confirmed = await loadRemoteJobRecordByJobId(record?.jobId, remoteJobReadCache)
+            || await loadRemoteJobRecordByRequestId(record?.requestId, remoteRequestReadCache);
+          if (!confirmed?.jobId) {
+            nextRecords.push(record);
+            continue;
+          }
+          const nextStatus = normalizeText(confirmed.status || currentStatus);
+          const nextTitle = normalizeText(confirmed.title || record?.title);
+          const nextUpdatedAt = normalizeText(confirmed.updatedAt || record?.updatedAt);
+          const nextRequestId = normalizeText(confirmed.requestId || record?.requestId);
+          const statusChanged = nextStatus !== currentStatus;
+          const titleChanged = nextTitle !== normalizeText(record?.title);
+          const updatedAtChanged = nextUpdatedAt !== normalizeText(record?.updatedAt);
+          const requestIdChanged = nextRequestId !== normalizeText(record?.requestId);
+          if (!statusChanged && !titleChanged && !updatedAtChanged && !requestIdChanged) {
+            nextRecords.push(record);
+            continue;
+          }
+          const nextProgress = TERMINAL_REMOTE_STATUSES.has(nextStatus)
+            ? {
+                currentPart: Math.max(
+                  Math.max(0, Number(record?.progress?.currentPart) || 0),
+                  Math.max(0, Number(record?.progress?.totalParts) || 0)
+                ),
+                parallelParts: 0,
+                percent: nextStatus === "succeeded"
+                  ? 100
+                  : Math.max(0, Math.min(100, Number(record?.progress?.percent) || 0)),
+                phase: nextStatus === "succeeded"
+                  ? "completed"
+                  : normalizeText(record?.progress?.phase),
+                totalParts: Math.max(0, Number(record?.progress?.totalParts) || 0),
+              }
+            : record?.progress;
+          nextRecords.push({
+            ...record,
+            createdAt: normalizeText(confirmed.createdAt || record?.createdAt),
+            durationMs: Math.max(0, Number(confirmed.durationMs) || Number(record?.durationMs) || 0),
+            error: nextStatus === "succeeded" ? "" : normalizeText(confirmed.error || record?.error),
+            jobId: normalizeText(confirmed.jobId || record?.jobId),
+            progress: nextProgress,
+            requestId: nextRequestId,
+            resultTitle: nextTitle || normalizeText(record?.resultTitle),
+            status: nextStatus,
+            title: nextTitle || normalizeText(record?.title),
+            updatedAt: nextUpdatedAt,
+          });
+          changed = true;
+          logDebug("workspace.records.remote-summary-confirmed", {
+            jobId: normalizeText(confirmed.jobId || record?.jobId),
+            previousStatus: currentStatus,
+            requestId: nextRequestId,
+            status: nextStatus,
+            updatedAt: nextUpdatedAt,
+          });
+        }
+        if (changed) {
+          state.records = nextRecords;
+        }
+        return changed;
+      }
       
       
       async function syncPendingUploadsWithRemote() {
@@ -1467,6 +1551,13 @@
         const remoteRequestReadCache = new Map();
         for (const pending of pendingItems) {
           const exactMatch = findRemoteForPending(state, pending);
+          const confirmedExactJobMatch = shouldConfirmExactRemoteMatch(exactMatch)
+            ? await loadRemoteJobRecordByJobId(exactMatch?.jobId || pending?.jobId, remoteJobReadCache)
+            : null;
+          const confirmedExactRequestMatch = shouldConfirmExactRemoteMatch(exactMatch) && !confirmedExactJobMatch
+            ? await loadRemoteJobRecordByRequestId(exactMatch?.requestId || pending?.requestId, remoteRequestReadCache)
+            : null;
+          const confirmedExactMatch = confirmedExactJobMatch || confirmedExactRequestMatch;
           const directJobMatch = !exactMatch
             ? await loadRemoteJobRecordByJobId(pending?.jobId, remoteJobReadCache)
             : null;
@@ -1476,12 +1567,21 @@
           const recoveredMatch = !exactMatch && !directJobMatch && !directRequestMatch && typeof findRecoveredRemoteForPending === "function"
             ? findRecoveredRemoteForPending(state, pending)
             : null;
-          const matched = exactMatch || directJobMatch || directRequestMatch || recoveredMatch?.remote;
+          const matched = confirmedExactMatch || exactMatch || directJobMatch || directRequestMatch || recoveredMatch?.remote;
           const matchedJobId = normalizeText(matched?.jobId);
           if (matchedJobId && consumedRemoteJobIds.has(matchedJobId)) continue;
           if (!matched) continue;
           if (matchedJobId) {
             consumedRemoteJobIds.add(matchedJobId);
+          }
+          if (confirmedExactMatch?.jobId) {
+            logDebug("workspace.pending-uploads.remote-sync.exact-match-confirmed", {
+              exactMatchJobId: normalizeText(exactMatch?.jobId),
+              exactMatchStatus: normalizeText(exactMatch?.status),
+              pendingRequestId: normalizeText(pending?.requestId),
+              recoveredJobId: matchedJobId,
+              status: normalizeText(confirmedExactMatch.status),
+            });
           }
           if (directJobMatch?.jobId) {
             logDebug("workspace.pending-uploads.remote-sync.job-read-match", {
@@ -2713,6 +2813,7 @@
         loadPendingUploads,
         loadSupersededRemoteJobIds,
         retryPendingUploads,
+        reconcileRemoteRecordSummaries,
         runDebugLocalQueueSandboxAction,
         seedDebugLocalQueueSandboxPendingUpload,
         showPendingUploadQueueOperationError,

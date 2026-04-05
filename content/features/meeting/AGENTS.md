@@ -30,7 +30,8 @@
 - hosted 작업실은 녹음 중 또는 실제 업로드 진행 중에 탭/브라우저를 닫으려 하면 브라우저 기본 이탈 경고를 띄운다. 업로드가 끝난 뒤 원격 처리만 남은 상태는 불필요하게 막지 않는다.
 - hosted 작업실의 회의 제목은 UI에서 회의를 구분하는 편집용 라벨로만 취급한다. 회의 정리/회의록 생성 prompt에는 이 제목을 근거로 넣지 않고, 전사·공용 메모·추가 맥락만 사용한다.
 - hosted 작업실의 로컬 pending queue는 원격 작업이 `succeeded`로 확정되면 자동 정리한다. 완료 후에도 같은 기록이 `진행 중`과 `완료`로 중복 표시되면 remote success cleanup 경로부터 본다.
-- remote success cleanup은 먼저 `recentJobs` exact match를 보고, 거기서 빠진 오래된 job은 `pending.jobId` direct lookup, `pending.requestId` exact query 순서로 Firestore job을 직접 확인한 뒤 정리한다. 그것도 실패할 때만 recovery heuristic을 본다.
+- remote success cleanup은 먼저 `recentJobs` exact match를 본다. 다만 exact match가 있어도 meeting summary가 `processing`으로 stale할 수 있으므로, non-terminal match는 `jobId` direct lookup 또는 `requestId` exact query로 다시 확인한 뒤 정리한다. 거기서 빠진 오래된 job도 같은 direct 확인 경로를 탄다. 그것도 실패할 때만 recovery heuristic을 본다.
+- stale summary는 pending이 있을 때만 고치지 않는다. `recentJobs`에 남은 non-terminal remote record도 실제 job 문서와 다시 대조해 `succeeded/failed`가 확인되면 list status를 즉시 교정한다.
 - hosted stale pending, orphan queue, 잘못된 진행 상태가 1~2회 패치 후에도 남으면 더 이상 추측 패치를 누적하지 않는다. 실제 상용 페이지에서 `debug=1` 로그, 화면 스크린샷, `window.__INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20, entriesLimit: 40 })` 결과를 먼저 모은 뒤 그 식별자 기준으로 수정한다.
 - 위 console helper가 없으면 코드 문제가 아니라 배포/캐시 mismatch 가능성을 먼저 본다. 이 경우는 `hosting` 재배포 여부와 페이지 강한 새로고침 여부를 확인하고, helper가 보이는 최신 JS인지부터 맞춘다.
 - meeting feature에서 반복 오류가 stale pending, orphan record, 잘못된 진행 상태처럼 화면에 남는 유형이면 수동 정리를 운영 절차로 두지 않는다. 원인 수정과 함께 자동 복구 패치 또는 안전한 정리 스크립트를 같은 작업 안에서 판단한다.

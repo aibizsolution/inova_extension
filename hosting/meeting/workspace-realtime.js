@@ -30,6 +30,7 @@
       const persistWorkspaceSession = (...args) => controller("session")?.persistSession?.(...args);
       const clearWorkspaceSession = (...args) => controller("session")?.clearSession?.(...args);
       const loadPendingUploads = (...args) => controller("pendingUploads")?.loadPendingUploads?.(...args);
+      const reconcileRemoteRecordSummaries = (...args) => controller("pendingUploads")?.reconcileRemoteRecordSummaries?.(...args);
       const syncPendingUploadsWithRemote = (...args) => controller("pendingUploads")?.syncPendingUploadsWithRemote?.(...args);
       const handleLocalQueueAction = (...args) => controller("pendingUploads")?.handleLocalQueueAction?.(...args);
       const resolvePendingMutationsFromSnapshots = (...args) => controller("mutations")?.resolvePendingMutationsFromSnapshots?.(...args);
@@ -300,6 +301,7 @@
       
       async function syncWorkspaceLocalState(hydrateSelection, reason) {
         await syncPendingUploadsWithRemote();
+        await reconcileRemoteRecordSummaries();
         if (!state.selectedRecordId || hydrateSelection || !findHistoryEntry(state, state.selectedRecordId)) {
           state.selectedRecordId = chooseSelectedRecordId(state);
         }
