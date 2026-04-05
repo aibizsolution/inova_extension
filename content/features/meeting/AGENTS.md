@@ -74,6 +74,7 @@
 - 디버그 패널 상단 통계(`로그/함수/읽기/스냅샷/오류`)는 현재 보이는 `120`건 버퍼가 아니라, 마지막 `비우기` 이후의 누적값을 기준으로 유지한다. 최근 로그 창에서 오래된 항목이 밀려도 통계는 줄어들면 안 된다.
 - 상단 카운터는 일반 로그 개수를 섞지 않고 `함수`, `읽기`, `리스너`, `오류`만 보여 준다. `함수`는 HTTP/Functions 요청, `읽기`는 direct read/query, `리스너`는 snapshot 이벤트를 뜻한다.
 - panel과 hosted debug console은 같은 렌더 계약과 같은 상태 라벨(`함수/읽기/리스너/오류`)을 유지한다. 폭과 로그 영역 높이도 가능한 한 같은 기준값을 써서 표면별 UI drift를 줄인다.
+- hosted 기록 상세 카드 상단은 제목과 기록 액션 중심으로 유지한다. 진행 중 상태 설명이나 분할 업로드/처리 배지는 상세 카드에 다시 노출하지 않고, 이런 진행 정보는 기록 목록 또는 아래 `상태` 검토 탭에서만 본다.
 - 위 helper는 degraded notice가 있거나 pending queue 진단 정보가 일부 비어 있어도 예외를 던지지 않고 현재 가능한 snapshot을 우선 덤프해야 한다.
 - 위 helper 출력에는 pending queue snapshot뿐 아니라 최근 hosted debug entry도 함께 포함되어야 한다. stale pending 조사에서 queue 상태와 Firestore/read/query 로그를 같은 캡처로 맞춰 본다.
 
