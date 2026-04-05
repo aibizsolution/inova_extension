@@ -17,6 +17,8 @@
 - 다만 normal processing에는 이 direct 확인을 남발하지 않는다. meeting snapshot이나 chunk mutation이 올 때마다 selected job을 다시 읽지 말고, 선택된 기록 상세는 `10초 polling`을 source of truth로 쓰며 direct read는 stale summary/stale pending 복구일 때만 실행한다.
 - hosted 작업실은 meeting 문서만 realtime listener를 유지하고, 선택된 job/artifact 상세는 문서별 listener 대신 `10초 polling`으로 읽는다. 탭이 hidden이면 polling을 멈추고 다시 visible/focus 될 때 즉시 재개한다.
 - 새 전사 job이 `processing`인 동안에는 artifact 문서를 읽지 않는다. artifact는 성공 직전 또는 성공 후에 생성되는 쪽이 기본이므로, processing detail은 job progress만으로 그리고 artifact polling은 terminal job이나 기존 completed record mutation 상황에서만 허용한다.
+- completed record를 선택했을 때도 항상 `job`을 다시 읽지 않는다. `recentJobs` summary가 terminal 상태와 workspaceMutation을 이미 갖고 있으면 이를 신뢰하고, 활성 mutation이 없을 때는 selection 시 artifact만 읽는다.
+- hosted 상단에는 별도 `새로고침` 버튼을 두지 않는다. meeting listener와 선택 상세 polling이 기본 동기화 경로이며, 페이지 재진입 후 선택 복원은 기존 URL `jobId`보다 현재 사용자가 고른 record 기준을 우선한다.
 - 같은 hosted 증상이 1~2회 패치 후에도 재현되면, 더 이상 heuristic recovery를 추가하지 않고 정확한 증거 수집 모드로 전환한다.
 - 정확한 증거 수집은 실제 상용 페이지 `?debug=1` 기준으로 한다. 최소 세트는 `화면 스크린샷`, `디버그 패널 복사 로그`, 아래 콘솔 helper 출력이다.
 - hosted 디버그 콘솔은 일반 이벤트 로그와 오류 로그를 분리해서 본다. 일반 이벤트는 최근 `120`건만 보관하지만, 오류는 별도 보존 버퍼를 유지해야 하며 `오류` 버튼 또는 `window.__INOVA_HOSTED_MEETING_DEBUG__.errors()`로 복사 가능해야 한다.

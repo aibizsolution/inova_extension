@@ -1033,8 +1033,10 @@
     refs.workspaceBadge.dataset.status = workspaceView.badgeStatus;
     refs.offlineQueueBadge.textContent = `로컬 보관 ${state.pendingUploads.length}건`;
     refs.meetingStatusChip.textContent = workspaceView.meetingStatus;
-    refs.refreshButton.disabled = state.loading;
-    refs.refreshButton.textContent = state.loadingReason === "manual" ? "동기화 중" : "새로고침";
+    if (refs.refreshButton) {
+      refs.refreshButton.disabled = state.loading;
+      refs.refreshButton.textContent = state.loadingReason === "manual" ? "동기화 중" : "새로고침";
+    }
     if (global.document.activeElement !== refs.meetingTitleInput) refs.meetingTitleInput.value = normalizeText(state.meetingTitleDraft || savedMeetingTitle);
     refs.meetingTitleInput.disabled = readOnly || meetingBusy;
     refs.saveMeetingTitleButton.disabled = readOnly || meetingBusy || !draftMeetingTitle || !meetingTitleDirty;
