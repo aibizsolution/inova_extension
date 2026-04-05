@@ -22,6 +22,7 @@
 - `release:build`는 공개 최신 버전보다 낮은 버전으로는 진행할 수 없지만, 같은 공개 버전으로 로컬 재빌드하거나 최종 배포하는 흐름은 허용합니다.
 - 로컬 훅이 빠졌더라도 GitHub Actions `Repo Guardrails`가 같은 규칙을 다시 검사합니다.
 - PR 머지 후 GitHub 원격 브랜치는 자동 삭제되고, 로컬 `codex/*` 브랜치는 `main` 기준으로 이미 머지된 경우 훅이 자동 정리합니다.
+- `auto-merge`를 걸었다고 바로 끝난 것으로 보지 않습니다. 실제 완료 판단은 PR의 `state=MERGED` 확인까지 포함합니다.
 
 ## 배포 범위 규칙
 
@@ -57,14 +58,21 @@
 8. 공개 릴리스는 `npm run release:deploy` 또는 `npm run release:deploy:all`로 반영합니다.
 9. Chrome 신규 설치/기존 설치를 각각 확인합니다.
 10. 팀에 `새 ZIP`, `변경 요약`, `Reload 필요 여부`를 공지합니다.
+11. PR에 `auto-merge`를 걸었으면 `gh pr view <번호> --json state,mergedAt,url` 또는 GitHub UI에서 실제 `MERGED` 상태와 완료 시각을 확인합니다.
+12. 머지가 확인되면 `git checkout main` 후 `git pull --ff-only origin main`으로 로컬 기준 브랜치를 최신으로 맞춥니다.
+13. 그다음 작업 브랜치를 정리합니다.
+    - 일반 merge로 `git branch --merged main`에 잡히면 `git branch -d <branch>`
+    - squash/rebase처럼 local tip이 `main` 조상으로 안 잡혀도 PR이 `MERGED`로 확인된 `codex/*` 브랜치는 `git branch -D <branch>`로 정리 가능
 
 ## 배포 보고 형식
 
 - `hosting 배포 완료`만으로 끝내지 말고, `functions 반영 여부`, `hosting 반영 여부`, `확장 버전 배포 필요 여부`, `사용자/개발자 새로고침 필요 여부`를 함께 적습니다.
+- PR 마감 보고에는 `auto-merge 설정 여부`, `실제 merged 확인 여부`, `로컬 branch 정리 여부`도 함께 적습니다.
 - 예시:
   - `hosting만 반영됨. 회의 작업실 탭 새로고침 필요, 확장 새로고침은 불필요`
   - `functions만 반영됨. 새 요청부터 backend 반영, 확장 새로고침은 불필요`
   - `extension bundle 변경 포함. release:build/release:deploy 필요, 개발 환경은 chrome://extensions에서 Reload 필요`
+  - `PR #18 auto-merge 후 merged 확인 완료, local codex/firebase-function-runtime-tuning 삭제 완료`
 
 ## 명령
 
@@ -77,6 +85,8 @@ npm run release:build
 npm run release:deploy
 npm run release:deploy:all
 npm run deploy:functions
+gh pr view 18 --json state,mergedAt,url
+git branch -d codex/example-task
 ```
 
 ## 생성 결과
