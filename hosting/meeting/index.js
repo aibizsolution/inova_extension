@@ -629,7 +629,7 @@
       }
       return handler(...args);
     };
-    refs.refreshButton.addEventListener("click", () => controllers.realtime.refreshWorkspace(false, "manual"));
+    refs.refreshButton?.addEventListener("click", () => controllers.realtime.refreshWorkspace(false, "manual"));
     refs.meetingTitleInput.addEventListener("input", () => controllers.mutations.updateMeetingTitleDraft(refs.meetingTitleInput.value));
     refs.meetingTitleInput.addEventListener("keydown", (event) => {
       if (event.key !== "Enter" || event.shiftKey) return;

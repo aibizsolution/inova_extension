@@ -359,6 +359,11 @@
           ...state.records.slice(existingIndex + 1),
         ];
       }
+
+      function hasActiveWorkspaceMutation(mutation) {
+        const status = normalizeText(mutation?.status);
+        return ["queued", "processing"].includes(status);
+      }
       
       
       async function hydrateSelectedDetail(forceRefresh) {
@@ -394,15 +399,21 @@
         disconnectArtifactListener();
         state.currentArtifact = null;
         state.currentJob = normalizeJob({
+          artifacts: entry.remote.artifactId
+            ? [{ artifactId: entry.remote.artifactId }]
+            : [],
           createdAt: entry.remote.createdAt,
           error: entry.remote.error,
           jobId: entry.remote.jobId,
+          notesDegradedReason: entry.remote.notesDegradedReason,
           notesGeneratedAt: entry.remote.notesGeneratedAt,
           notesContextItems: entry.remote.notesContextItems,
           notesInputSnapshot: entry.remote.notesInputSnapshot,
+          notesStatus: entry.remote.notesStatus,
           context: {
             sharedMemoSnapshot: entry.remote.sharedMemoSnapshot,
           },
+          resultTitle: entry.remote.resultTitle,
           source: {
             durationMs: entry.remote.durationMs,
             requestId: entry.remote.requestId,
@@ -413,8 +424,11 @@
           workspaceMutation: entry.remote.workspaceMutation,
         }, state.meeting.title);
         syncSelectedRecordReviewState(entry);
+        const skipJobRead = TERMINAL_REMOTE_STATUSES.has(normalizeText(entry.remote.status))
+          && !hasActiveWorkspaceMutation(entry.remote.workspaceMutation);
         await refreshSelectedRemoteDetail(entry, {
           forceArtifactRead: Boolean(selectionChanged || forceRefresh),
+          skipJobRead,
           reason: selectionChanged ? "selection" : forceRefresh ? "force-refresh" : "hydrate",
         });
         restartSelectedDetailPolling(entry);
@@ -427,10 +441,13 @@
           return;
         }
         state.realtime.jobDocId = jobId;
-        const jobSnapshot = await readDocument(FIRESTORE_COLLECTIONS.jobs, jobId);
-        if (jobSnapshot?.exists && typeof jobSnapshot.data === "function") {
-          state.currentJob = normalizeJob(jobSnapshot.data(), state.meeting.title);
-          mergeLiveJobIntoRecords(jobSnapshot.data());
+        const shouldReadJob = !Boolean(options.skipJobRead);
+        if (shouldReadJob) {
+          const jobSnapshot = await readDocument(FIRESTORE_COLLECTIONS.jobs, jobId);
+          if (jobSnapshot?.exists && typeof jobSnapshot.data === "function") {
+            state.currentJob = normalizeJob(jobSnapshot.data(), state.meeting.title);
+            mergeLiveJobIntoRecords(jobSnapshot.data());
+          }
         }
         const currentStatus = normalizeText(state.currentJob?.status || entry?.remote?.status);
         const canReadArtifact = TERMINAL_REMOTE_STATUSES.has(currentStatus);
@@ -467,6 +484,7 @@
           artifactId: canReadArtifact ? normalizeText(state.currentJob?.artifactId) : "",
           canReadArtifact,
           jobId: normalizeText(state.currentJob?.jobId),
+          jobReadSkipped: !shouldReadJob,
           reason: normalizeText(options.reason),
           status: currentStatus,
           updatedAt: normalizeText(state.currentJob?.updatedAt),

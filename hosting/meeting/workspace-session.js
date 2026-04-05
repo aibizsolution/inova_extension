@@ -406,11 +406,12 @@
         return;
       }
       const entry = findHistoryEntry(state, state.selectedRecordId);
+      const selectedJobId = normalizeText(entry?.remote?.jobId || entry?.pending?.jobId || state.params.jobId);
       const payload = {
         accessMode: normalizeText(state.auth.accessMode),
         bypassMode: normalizeText(state.auth.bypassMode),
         expiresAt: normalizeText(state.session.expiresAt),
-        jobId: normalizeText(state.params.jobId || entry?.remote?.jobId || entry?.pending?.jobId),
+        jobId: selectedJobId,
         meetingId: state.session.meetingId,
         meetingSessionToken: normalizeText(state.session.meetingSessionToken),
         mode: state.mode,
@@ -449,7 +450,7 @@
       if (preserveDebug) nextUrl.searchParams.set("debug", "1");
       if (state.session.meetingId) nextUrl.searchParams.set("meetingId", state.session.meetingId);
       const entry = findHistoryEntry(state, state.selectedRecordId);
-      const jobId = normalizeText(state.params.jobId || entry?.remote?.jobId || entry?.pending?.jobId);
+      const jobId = normalizeText(entry?.remote?.jobId || entry?.pending?.jobId || state.params.jobId);
       if (jobId) nextUrl.searchParams.set("jobId", jobId);
       const shareToken = normalizeText(state.params.shareToken || state.session.shareToken);
       if (shareToken) nextUrl.searchParams.set("share", shareToken);
