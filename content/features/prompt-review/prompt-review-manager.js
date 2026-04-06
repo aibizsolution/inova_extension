@@ -13,6 +13,8 @@
   };
 
   function create(state, hooks) {
+    let copyStateTimer = 0;
+
     return {
       buildViewState,
       consumeEscape,
@@ -29,6 +31,7 @@
       return {
         available: composerState.available,
         canApply: Boolean(result?.refinedPrompt && !state.promptReview.pending && !stale),
+        copyState: normalizeEnum(state.promptReview.copyState, ["idle", "copied", "failed"], "idle"),
         error: state.promptReview.error,
         hasText: Boolean(currentText),
         lastReviewedAt: state.promptReview.lastReviewedAt,
@@ -51,6 +54,7 @@
       if (action === "activate-review") return void activateReview();
       if (action === "review-composer") return void reviewComposer();
       if (action === "apply-reviewed-prompt") return void applyReviewedPrompt();
+      if (action === "copy-reviewed-prompt") return void copyReviewedPrompt();
       if (action === "dismiss-review") return void dismissReview();
     }
 
@@ -126,6 +130,7 @@
       const sessionId = state.sessionId;
       hooks.showPromptTab?.("review");
       updateState({
+        copyState: "idle",
         error: "",
         lastReviewedAt: "",
         open: true,
@@ -145,6 +150,7 @@
           totalScore: Number(result?.totalScore) || 0,
         });
         updateState({
+          copyState: "idle",
           error: "",
           lastReviewedAt: new Date().toISOString(),
           open: true,
@@ -164,6 +170,7 @@
           sessionId,
         });
         updateState({
+          copyState: "idle",
           error: getErrorMessage(error),
           open: true,
           pending: false,
@@ -204,15 +211,42 @@
       if (!namespace.composer.applyPromptText(refinedPrompt, "replace")) {
         return void updateState({ error: "입력창에 보완 프롬프트를 반영하지 못했어요." });
       }
-      updateState({ error: "", placeholderConfirmation: false });
+      updateState({ copyState: "idle", error: "", placeholderConfirmation: false });
+    }
+
+    async function copyReviewedPrompt() {
+      const viewState = buildViewState();
+      const promptText = String(viewState.result?.formattedPrompt || viewState.result?.refinedPrompt || "").trim();
+      if (!promptText) {
+        return void updateState({
+          copyState: "failed",
+          error: "복사할 보완 프롬프트가 없어요.",
+        });
+      }
+      try {
+        await global.navigator.clipboard.writeText(promptText);
+        updateState({
+          copyState: "copied",
+          error: "",
+        });
+      } catch (error) {
+        console.error("[i-Nova Bookmarks] prompt review copy failed", error);
+        updateState({
+          copyState: "failed",
+          error: "보완 프롬프트를 복사하지 못했어요.",
+        });
+      }
+      scheduleCopyStateReset();
     }
 
     function dismissReview() {
+      global.clearTimeout(copyStateTimer);
       logReviewDebug("prompt.review.dismiss", {
         hadResult: Boolean(state.promptReview.result),
       });
       hooks.showPromptTab?.("library");
       updateState({
+        copyState: "idle",
         error: "",
         open: false,
         pending: false,
@@ -227,6 +261,13 @@
         ...(patch || {}),
       };
       hooks.render();
+    }
+
+    function scheduleCopyStateReset() {
+      global.clearTimeout(copyStateTimer);
+      copyStateTimer = global.setTimeout(() => {
+        updateState({ copyState: "idle" });
+      }, 1600);
     }
 
     async function sendRuntimeMessage(type, payload) {
@@ -256,6 +297,7 @@
     const refinedPrompt = String(result.refinedPrompt || "").trim();
     return {
       checks,
+      formattedPrompt: formatRefinedPrompt(refinedPrompt),
       placeholderTokens: detectPlaceholderTokens(refinedPrompt),
       quickImprovements: Array.isArray(result.quickImprovements) ? result.quickImprovements.filter(Boolean).map(String) : [],
       refinedPrompt,
@@ -301,6 +343,26 @@
       tokens.push(`[${token}]`);
     }
     return Array.from(new Set(tokens)).slice(0, 6);
+  }
+
+  function formatRefinedPrompt(text) {
+    const normalized = String(text || "")
+      .replace(/\r\n?/g, "\n")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    if (!normalized) {
+      return "";
+    }
+    if (normalized.split("\n").filter(Boolean).length >= 3) {
+      return normalized;
+    }
+    return normalized
+      .replace(/([.!?。！？…])\s+/g, "$1\n")
+      .replace(/([:：])\s+(?=[^\s])/g, "$1\n")
+      .replace(/\s+(?=(답변은|반드시|분량은|톤은|형식은|출력 형식은|포함할 내용은|금지 사항은|예시는|주의 사항은))/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
   }
 
   function getErrorMessage(error) {

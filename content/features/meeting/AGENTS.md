@@ -30,6 +30,14 @@
 - 위 duration decode fallback이 성공한 경우는 최종 실패처럼 취급하지 않는다. debug 로그는 informational하게 남기고, 실제 사용자 에러는 decode까지 실패했을 때만 보여 준다.
 - hosted 작업실은 녹음 중 또는 실제 업로드 진행 중에 탭/브라우저를 닫으려 하면 브라우저 기본 이탈 경고를 띄운다. 업로드가 끝난 뒤 원격 처리만 남은 상태는 불필요하게 막지 않는다.
 - hosted 작업실의 회의 제목은 UI에서 회의를 구분하는 편집용 라벨로만 취급한다. 회의 정리/회의록 생성 prompt에는 이 제목을 근거로 넣지 않고, 전사·공용 메모·추가 맥락만 사용한다.
+- hosted 작업실의 녹음 종료 액션은 사용자 기준 결과가 바로 읽히는 문구를 우선한다. 현재 `종료하고 전사` 대신 `녹음 완료`를 쓰고, 완료 시 자동으로 기록 생성이 이어진다는 설명을 함께 보여 준다.
+- panel 회의 허브는 그룹 단위 화면임을 패널 제목과 생성 CTA에서 먼저 드러낸다. 패널 제목은 `회의 룸`, 생성 액션은 `새 회의 룸 생성`처럼 두되, 본문 리스트 표면은 `목록`처럼 짧게 유지해 같은 단어를 과하게 반복하지 않는다.
+- panel 회의 허브 리스트 카드에서는 상태를 두 번 반복하지 않는다. 시간/메타 줄과 우측 칩 중 하나만 상태 source of truth로 쓰고, 현재는 우측 칩만 상태를 보여 준다.
+- hosted 회의 룸 헤더의 관리 액션이 하나뿐이면 `더보기`로 숨기지 않고 바로 노출한다. 현재는 `회의 룸 삭제`를 우측 툴바에 직접 보여 주고, 확인 모달도 같은 용어로 맞춘다.
+- hosted 회의 룸의 기본 헤더 용어와 launch 기본 제목도 같은 위계를 따라간다. 상단 eyebrow는 `회의 룸`, 새 작업실 기본 제목은 `새 회의 룸`을 우선한다.
+- hosted 작업실의 `기록 메모` placeholder는 짧은 감상문보다 실제 회의 정리에 필요한 배경 정보를 예시로 직접 보여 준다. 회의 목적, 참석자/역할, 전사에 잘 안 남는 제약이나 꼭 반영할 포인트를 바로 적을 수 있게 안내한다.
+- hosted 회의 룸 헤더의 단일 관리 액션은 분할 버튼 래퍼에 넣지 않는다. 액션이 하나뿐이면 독립 버튼으로 렌더해 잔여 구획 배경이나 분할선이 보이지 않게 유지한다.
+- 회의 정리는 전사 텍스트가 있다고 바로 생성하지 않는다. 발화가 거의 없거나 잡음/오인식처럼 보이는 약한 전사는 backend gate로 한 번 더 판별하고, 건너뛸 때는 왜 자동 회의 정리를 만들지 않았는지 사용자 문구로 드러낸다.
 - hosted 작업실의 로컬 pending queue는 원격 작업이 `succeeded`로 확정되면 자동 정리한다. 완료 후에도 같은 기록이 `진행 중`과 `완료`로 중복 표시되면 remote success cleanup 경로부터 본다.
 - remote success cleanup은 먼저 `recentJobs` exact match를 본다. 다만 exact match가 있어도 meeting summary가 `processing`으로 stale할 수 있으므로, non-terminal match는 `jobId` direct lookup 또는 `requestId -> deterministic jobId -> doc get`으로 다시 확인한 뒤 정리한다. workspace Firestore rules는 `jobs` collection `list/query`를 허용하지 않으므로 request 기반 복구도 query가 아니라 doc read만 사용한다.
 - 다만 requestId 기반 doc read는 `복구 fallback`일 뿐이다. 아직 원격 job이 생성되지 않은 local-only pending까지 여기에 넣지 말고, 새 import/prepare/upload 초반 상태는 skip한다. 존재하지 않는 job doc는 workspace rules상 `permission denied`처럼 보일 수 있으므로, 이런 케이스는 `miss`로 다운그레이드하지 말고 애초에 시도하지 않는 쪽으로 고친다.

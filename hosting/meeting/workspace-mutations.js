@@ -208,9 +208,9 @@
             showPendingUploadQueueOperationError(error, "브라우저에 남아 있는 로컬 녹음을 정리하지 못했어요.");
           }
           clearWorkspaceSession();
-          renderBlocked("이 탭은 여기까지입니다. 필요할 때 i-Nova 패널에서 새 회의를 열어 주세요.", {
-            eyebrow: "회의 삭제 완료",
-            title: "회의를 삭제했습니다",
+          renderBlocked("이 탭은 여기까지입니다. 필요할 때 i-Nova 패널에서 새 회의 룸을 열어 주세요.", {
+            eyebrow: "회의 룸 삭제 완료",
+            title: "회의 룸을 삭제했습니다",
             tone: "complete",
           });
           return true;
@@ -642,16 +642,16 @@
       async function deleteMeeting() {
         if (!state.session.meetingId) return;
         if (!await requestConfirmation({
-          body: "회의에 연결된 기록, 산출물, 남아 있는 임시 원본까지 함께 정리합니다. 처리 중인 기록이 있어도 지금 즉시 삭제 요청을 우선 반영하고, 남은 정리는 backend cleanup 경계에서 이어서 마칩니다.",
-          confirmLabel: "회의 삭제",
-          eyebrow: "회의 삭제",
-          title: "이 회의 전체를 삭제할까요?",
+          body: "회의 룸에 연결된 기록, 산출물, 남아 있는 임시 원본까지 함께 정리합니다. 처리 중인 기록이 있어도 지금 즉시 삭제 요청을 우선 반영하고, 남은 정리는 backend cleanup 경계에서 이어서 마칩니다.",
+          confirmLabel: "회의 룸 삭제",
+          eyebrow: "회의 룸 삭제",
+          title: "이 회의 룸 전체를 삭제할까요?",
           tone: "danger",
         })) return;
         const requestId = generateClientRequestId("delete-meeting");
         registerPendingMutation({
           requestId,
-          successMessage: "회의를 삭제했습니다.",
+          successMessage: "회의 룸을 삭제했습니다.",
           type: "deleteMeeting",
         });
         applyRender();
@@ -660,13 +660,13 @@
             clientRequestId: requestId,
             meetingId: state.session.meetingId,
           }, state.session.meetingSessionToken);
-          assertAcceptedMutationResponse(payload, requestId, "회의 삭제");
+          assertAcceptedMutationResponse(payload, requestId, "회의 룸 삭제");
           await resolvePendingMutationsFromSnapshots();
         } catch (error) {
           await finalizePendingMutation(
             requestId,
             "failed",
-            error instanceof Error ? error.message : "회의를 삭제하지 못했어요."
+            error instanceof Error ? error.message : "회의 룸을 삭제하지 못했어요."
           );
         } finally {
           syncWorkspaceMutationBusyState();

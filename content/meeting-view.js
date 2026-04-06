@@ -7,7 +7,7 @@
       ? normalized.items.map((item) => renderMeetingItem(item, normalized.pending)).join("")
       : renderEmptyState(normalized);
     const workspacePending = normalized.pending.active && normalized.pending.action === "open-workspace";
-    const workspaceButtonLabel = workspacePending ? "작업실 여는 중..." : "새 회의하기";
+    const workspaceButtonLabel = workspacePending ? "작업실 여는 중..." : "새 회의 룸 생성";
     const feedbackNotice = normalized.feedback.text && normalized.feedback.tone === "error"
       ? `<div class="inova-release-card inova-release-card__notice">${escapeHtml(normalized.feedback.text)}</div>`
       : "";
@@ -15,12 +15,7 @@
     return `
       <section class="inova-tool-section inova-tool-section--meeting">
         <div class="inova-tool-toolbar">
-          <div class="inova-tool-toolbar__row">
-            <div class="inova-tool-toolbar__stack">
-              <strong class="inova-tool-toolbar__title">최근 회의록</strong>
-              <div class="inova-tool-meta inova-tool-meta--muted">${escapeHtml(normalized.subtitleText)}</div>
-            </div>
-          </div>
+          <div class="inova-tool-toolbar__row" aria-hidden="true"></div>
           <button
             type="button"
             class="inova-bookmark-action${workspacePending ? " is-pending" : ""}"
@@ -36,7 +31,7 @@
           ${normalized.degradedNotice ? `<div class="inova-release-card inova-release-card__notice is-info">${escapeHtml(normalized.degradedNotice)}</div>` : ""}
           ${normalized.error ? `<div class="inova-release-card inova-release-card__notice">${escapeHtml(normalized.error)}</div>` : ""}
           <div class="inova-tool-inline-summary">
-            <strong>회의록 목록</strong>
+            <strong>목록</strong>
             <span class="inova-tool-inline-summary__meta">총 ${escapeHtml(String(normalized.items.length))}건</span>
           </div>
           <div class="inova-meeting-record-list">
@@ -62,7 +57,6 @@
       hasCheckedAt: Boolean(checkedAtText),
       items,
       pending: normalizePending(state?.pending),
-      subtitleText: buildSubtitleText(checkedAtText, dataFreshness, source),
     };
   }
 
@@ -84,7 +78,6 @@
   function renderMeetingItem(item, pending) {
     const meta = [
       formatDateTime(item.updatedAt, ""),
-      formatStatusLabel(item.status),
     ].filter(Boolean).join(" · ");
     const isPending = pending.active
       && pending.action === "open-result"
@@ -156,13 +149,13 @@
     if (!state.hasCheckedAt && !state.error) {
       return `
         <article class="inova-release-card">
-          <p>최근 회의록을 읽는 중입니다. 잠시만 기다려 주세요.</p>
+          <p>목록을 불러오는 중입니다. 잠시만 기다려 주세요.</p>
         </article>
       `;
     }
     return `
       <article class="inova-release-card">
-        <p>아직 저장된 회의록이 없습니다. 상단의 새 회의하기로 작업실을 열어 주세요.</p>
+        <p>아직 생성된 회의가 없습니다. 상단의 새 회의 룸 생성으로 작업을 시작해 주세요.</p>
       </article>
     `;
   }
@@ -194,36 +187,20 @@
     };
   }
 
-  function buildSubtitleText(checkedAtText, dataFreshness, source) {
-    if (!checkedAtText) {
-      return "저장된 회의록을 이곳에서 다시 엽니다.";
-    }
-    const freshnessLabel = dataFreshness === "stale"
-      ? "오래된 데이터"
-      : dataFreshness === "empty"
-        ? "빈 상태"
-        : source === "runtime-read"
-          ? "runtime-read"
-          : "";
-    return freshnessLabel
-      ? `최근 갱신 ${checkedAtText} · ${freshnessLabel}`
-      : `최근 갱신 ${checkedAtText}`;
-  }
-
   function buildDegradedNotice(degraded, degradedReason, dataFreshness, source) {
     if (!degraded) {
       return "";
     }
     if (dataFreshness === "stale" || source === "cache") {
-      return "실시간 회의록 목록을 읽지 못해 이전에 보던 목록을 제한적으로 유지하고 있습니다.";
+      return "실시간 목록을 읽지 못해 이전에 보던 목록을 제한적으로 유지하고 있습니다.";
     }
     if (dataFreshness === "empty") {
-      return "회의록 목록 읽기가 모두 실패해 현재는 빈 상태만 표시하고 있습니다.";
+      return "목록 읽기가 모두 실패해 현재는 빈 상태만 표시하고 있습니다.";
     }
     if (degradedReason === "meeting-hub-realtime-failed" || source === "runtime-read") {
-      return "실시간 구독에 실패해 요청형 회의록 목록 읽기로 계속 표시하고 있습니다.";
+      return "실시간 구독에 실패해 요청형 목록 읽기로 계속 표시하고 있습니다.";
     }
-    return "회의록 목록을 제한된 상태로 표시하고 있습니다.";
+    return "목록을 제한된 상태로 표시하고 있습니다.";
   }
 
   function formatStatusLabel(status) {

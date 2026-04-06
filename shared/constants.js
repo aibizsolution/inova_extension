@@ -26,6 +26,7 @@
         items: [],
       },
       promptReview: {
+        copyState: "idle",
         error: "",
         lastReviewedAt: "",
         open: false,

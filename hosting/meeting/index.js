@@ -135,8 +135,8 @@
         viewer: "",
       },
       blocked: false,
-      blockedEyebrow: "회의 작업",
-      blockedTitle: "이 회의 화면은 패널에서 다시 열어야 합니다",
+      blockedEyebrow: "회의 룸",
+      blockedTitle: "이 회의 룸은 패널에서 다시 열어야 합니다",
       blockedTone: "blocked",
       blockedMessage: "",
       busy: {
@@ -409,7 +409,7 @@
   
   
   function getWorkspaceTitleOrFallback() {
-    return getWorkspaceTitleDraft() || "새 회의";
+    return getWorkspaceTitleDraft() || "새 회의 룸";
   }
   
   
@@ -528,8 +528,8 @@
   function renderBlocked(message, options = {}) {
     logDebug("workspace.blocked", { message, tone: options?.tone, title: options?.title });
     state.blocked = true;
-    state.blockedEyebrow = normalizeText(options?.eyebrow) || "회의 작업";
-    state.blockedTitle = normalizeText(options?.title) || "이 회의 화면은 패널에서 다시 열어야 합니다";
+    state.blockedEyebrow = normalizeText(options?.eyebrow) || "회의 룸";
+    state.blockedTitle = normalizeText(options?.title) || "이 회의 룸은 패널에서 다시 열어야 합니다";
     state.blockedTone = normalizeText(options?.tone) || "blocked";
     state.blockedMessage = normalizeText(message);
     refs.workspace.hidden = true;
@@ -660,7 +660,7 @@
     refs.saveSharedMemoButton.addEventListener("click", runWritableAction("기록 메모 저장", () => void controllers.mutations.saveSharedMemo()));
     refs.clearSharedMemoButton.addEventListener("click", runWritableAction("기록 메모 비우기", () => void controllers.mutations.clearSharedMemo()));
     refs.saveRecordMemoButton?.addEventListener("click", runWritableAction("기록 메모 저장", () => void controllers.mutations.saveSelectedRecordMemo()));
-    refs.deleteMeetingButton.addEventListener("click", runWritableAction("회의 삭제", () => void controllers.mutations.deleteMeeting()));
+    refs.deleteMeetingButton.addEventListener("click", runWritableAction("회의 룸 삭제", () => void controllers.mutations.deleteMeeting()));
     for (const tabId of ["reviewTabSummary", "reviewTabNotes", "reviewTabMemo", "reviewTabSegments", "reviewTabContext"]) {
       const tab = refs[tabId];
       if (!tab) continue;
@@ -674,7 +674,7 @@
     refs.importAudioInput?.addEventListener("change", runWritableAction("파일 불러오기", (event) => void controllers.capture.handleImportAudioSelection(event)));
     refs.pauseButton.addEventListener("click", runWritableAction("녹음 일시중지", () => void controllers.capture.pauseCapture()));
     refs.resumeButton.addEventListener("click", runWritableAction("녹음 재개", () => void controllers.capture.resumeCapture()));
-    refs.stopButton.addEventListener("click", runWritableAction("종료하고 전사", () => void controllers.capture.stopCapture()));
+    refs.stopButton.addEventListener("click", runWritableAction("녹음 완료", () => void controllers.capture.stopCapture()));
     refs.discardButton.addEventListener("click", runWritableAction("녹음 버리기", controllers.capture.discardCapture));
     refs.recordList.addEventListener("click", (event) => void controllers.realtime.handleRecordListClick(event));
     refs.saveRecordTitleButton.addEventListener("click", runWritableAction("기록 이름 저장", () => void controllers.mutations.saveCurrentRecordTitle()));
@@ -784,8 +784,8 @@
       refs.workspace.hidden = true;
       refs.blockedState.hidden = false;
       refs.blockedState.dataset.tone = state.blockedTone || "blocked";
-      if (refs.blockedEyebrow) refs.blockedEyebrow.textContent = state.blockedEyebrow || "회의 작업";
-      if (refs.blockedTitle) refs.blockedTitle.textContent = state.blockedTitle || "이 회의 화면은 패널에서 다시 열어야 합니다";
+      if (refs.blockedEyebrow) refs.blockedEyebrow.textContent = state.blockedEyebrow || "회의 룸";
+      if (refs.blockedTitle) refs.blockedTitle.textContent = state.blockedTitle || "이 회의 룸은 패널에서 다시 열어야 합니다";
       refs.blockedMessage.textContent = state.blockedMessage || refs.blockedMessage.textContent;
       controllers?.debug?.render?.();
       return;

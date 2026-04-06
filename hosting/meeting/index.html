@@ -3,7 +3,9 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>i-Nova 회의 작업</title>
+    <title>i-Nova 회의 룸</title>
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png" />
     <link rel="stylesheet" href="index.css" />
     <script src="shared.js" defer></script>
     <script src="debug-console.js" defer></script>
@@ -52,9 +54,9 @@
     <main id="meetingShell" class="meeting-shell">
       <section id="blockedState" class="blocked-state" hidden>
         <div class="blocked-state__card">
-          <p id="blockedEyebrow" class="blocked-state__eyebrow">회의 작업</p>
-          <h1 id="blockedTitle" class="blocked-state__title">이 회의 화면은 패널에서 다시 열어야 합니다</h1>
-          <p id="blockedMessage" class="blocked-state__body">직접 주소를 붙여 넣어 열면 회의 세션을 확인할 수 없습니다. i-Nova 패널의 회의 허브에서 다시 열어 주세요.</p>
+          <p id="blockedEyebrow" class="blocked-state__eyebrow">회의 룸</p>
+          <h1 id="blockedTitle" class="blocked-state__title">이 회의 룸은 패널에서 다시 열어야 합니다</h1>
+          <p id="blockedMessage" class="blocked-state__body">직접 주소를 붙여 넣어 열면 회의 룸 세션을 확인할 수 없습니다. i-Nova 패널의 회의 허브에서 다시 열어 주세요.</p>
         </div>
       </section>
 
@@ -62,9 +64,9 @@
         <header class="workspace-header">
           <div class="workspace-header__mast">
             <div class="workspace-header__identity">
-              <p class="workspace-header__eyebrow">회의 작업</p>
+              <p class="workspace-header__eyebrow">회의 룸</p>
               <div class="workspace-header__title-row">
-                <h1 id="pageTitle" class="workspace-header__title">i-Nova 회의 작업</h1>
+                <h1 id="pageTitle" class="workspace-header__title">i-Nova 회의 룸</h1>
                 <span id="workspaceBadge" class="status-pill" data-status="idle">대기</span>
                 <span id="offlineQueueBadge" class="chip chip--accent">로컬 보관 0건</span>
               </div>
@@ -72,14 +74,7 @@
             </div>
 
             <div class="workspace-header__toolbar">
-              <div class="segment-cluster segment-cluster--toolbar">
-                <details class="menu-popover">
-                  <summary id="meetingMenuButton" class="ghost-button" role="button">더보기</summary>
-                  <div class="menu-popover__panel">
-                    <button id="deleteMeetingButton" class="danger-button danger-button--block" type="button">회의 삭제</button>
-                  </div>
-                </details>
-              </div>
+              <button id="deleteMeetingButton" class="danger-button" type="button">회의 룸 삭제</button>
             </div>
           </div>
 
@@ -105,7 +100,7 @@
                 </div>
                 <span id="currentBadge" class="status-pill status-pill--soft" data-status="idle">대기</span>
               </div>
-              <p id="currentSummary" class="panel-card__summary">종료하면 자동 전사를 시작합니다.</p>
+              <p id="currentSummary" class="panel-card__summary">완료하면 자동으로 기록 생성을 시작합니다.</p>
               <div class="capture-meter">
                 <span class="capture-meter__label">녹음 시간</span>
                 <strong id="currentTimer" class="capture-meter__value">00:00</strong>
@@ -118,7 +113,7 @@
                   <button id="importAudioButton" class="secondary-button" type="button" hidden>파일 불러오기</button>
                   <button id="pauseButton" class="secondary-button" type="button" hidden>일시중지</button>
                   <button id="resumeButton" class="secondary-button" type="button" hidden>이어서 녹음</button>
-                  <button id="stopButton" class="warn-button" type="button" hidden>종료하고 전사</button>
+                  <button id="stopButton" class="warn-button" type="button" hidden>녹음 완료</button>
                   <button id="discardButton" class="ghost-button ghost-button--soft" type="button" hidden>녹음 버리기</button>
                 </div>
               </div>
@@ -133,7 +128,7 @@
                 <span class="tooltip-chip tooltip-chip--icon" title="이 메모는 지금 녹음하거나 곧 만들 기록에만 붙습니다. 녹음이 끝나면 그 기록의 정리와 함께 사용됩니다." aria-label="기록 메모 도움말">?</span>
               </div>
               <label class="input-group input-group--textarea" for="sharedMemoInput">
-                <textarea id="sharedMemoInput" class="meeting-textarea" rows="8" placeholder="예: 이번 회의는 런칭 일정 조정과 담당자 확정이 핵심입니다."></textarea>
+                <textarea id="sharedMemoInput" class="meeting-textarea" rows="8" placeholder="예: 회의 목적, 참석자/역할, 미리 정해진 제약이나 꼭 반영할 배경을 적어 주세요.&#10;예: 5월 런칭 일정 조정 회의 / 참석자: 김민수(PO), 박지연(디자인), 이현우(개발)&#10;디자인 시안 확정 전까지 개발 일정은 가안으로 정리해 주세요."></textarea>
               </label>
               <div class="inline-action-row">
                 <div class="segment-cluster segment-cluster--buttons">

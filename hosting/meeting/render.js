@@ -646,7 +646,7 @@
     } else if (options.hasNotesValue) {
       pushStep("회의 정리", "done", options.generatedAt ? `마지막 정리 ${options.generatedAt}` : "회의 정리가 준비됐습니다.");
     } else if (options.hasSegmentContent) {
-      pushStep("회의 정리", isBusy ? "current" : "warning", isBusy ? "전사를 바탕으로 회의 정리를 만드는 중입니다." : "추가 맥락으로 같은 전사를 더 정확한 문서로 업데이트할 수 있습니다.", isBusy ? "진행" : "보완");
+      pushStep("회의 정리", isBusy ? "current" : "warning", isBusy ? "전사를 바탕으로 회의 정리를 만드는 중입니다." : normalizeText(options.degradedReason) || "추가 맥락으로 같은 전사를 더 정확한 문서로 업데이트할 수 있습니다.", isBusy ? "진행" : "보완");
     } else {
       pushStep("회의 정리", isBusy ? "current" : "pending", "전사 확보 후 생성됩니다.");
     }
@@ -712,7 +712,7 @@
       return detailView.notice;
     }
     if (!options.hasNotesValue) {
-      return "전사를 기준으로 회의 정리를 다시 만들 수 있습니다.";
+      return normalizeText(detailView.notesMeta?.degradedReason) || "전사를 기준으로 회의 정리를 다시 만들 수 있습니다.";
     }
     return "";
   }
@@ -814,10 +814,10 @@
       completionNotice = workspaceMutation.error || "회의록 업데이트를 완료하지 못했어요.";
       completionTone = "error";
     } else if (!hasNotesValue && !hasTranscriptValue && !hasSegmentsValue) {
-      completionNotice = "녹음이 너무 짧거나 인식된 발화가 부족해 표시할 내용이 없습니다.";
+      completionNotice = notesMeta.degradedReason || "녹음이 너무 짧거나 인식된 발화가 부족해 표시할 내용이 없습니다.";
       completionTone = "warning";
     } else if (!hasNotesValue && (hasTranscriptValue || hasSegmentsValue) && !state.notice.text) {
-      completionNotice = "전사는 준비됐지만 회의 정리로 묶을 내용은 충분하지 않았습니다.";
+      completionNotice = notesMeta.degradedReason || "전사는 준비됐지만 회의 정리로 묶을 내용은 충분하지 않았습니다.";
       completionTone = "warning";
     }
     return {
@@ -910,7 +910,7 @@
     if (!hasNotesValue) {
       refs.meetingNotesOverview.hidden = true;
       refs.meetingNotesOverview.innerHTML = "";
-      refs.meetingNotesSections.innerHTML = `<div class="notice-box" data-tone="warning">전사는 준비됐지만 회의 정리로 묶을 내용이 충분하지 않았습니다.</div>`;
+      refs.meetingNotesSections.innerHTML = `<div class="notice-box" data-tone="warning">${escapeHtml(normalizeText(detailView.notesMeta?.degradedReason) || "전사는 준비됐지만 회의 정리로 묶을 내용이 충분하지 않았습니다.")}</div>`;
       return false;
     }
     const overviewMarkup = renderNotesOverview(normalized);
@@ -1026,7 +1026,7 @@
       || !areNotesContextItemsEqual(savedNotesContextItems, savedNotesInputSnapshot.contextItems);
 
     refs.pageTitle.hidden = true;
-    refs.pageTitle.textContent = savedMeetingTitle || "새 회의";
+    refs.pageTitle.textContent = savedMeetingTitle || "새 회의 룸";
     refs.pageSummary.hidden = !normalizeText(workspaceView.pageSummary);
     refs.pageSummary.textContent = workspaceView.pageSummary;
     refs.workspaceBadge.textContent = workspaceView.badgeLabel;

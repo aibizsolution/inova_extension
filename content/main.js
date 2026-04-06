@@ -223,13 +223,13 @@
       toolTitle: state.activeTool === "prompts"
         ? "프롬프트"
         : state.activeTool === "meeting"
-            ? "회의록"
+            ? "회의 룸"
             : state.activeTool === "release"
                 ? "릴리스 안내"
                 : "대화 탐색",
       tools: [
         { id: "bookmarks", label: "대화", count: bookmarkCount },
-        { id: "meeting", label: "회의", count: meetingCount },
+        { id: "meeting", label: "회의 룸", count: meetingCount },
         { id: "prompts", label: "프롬프트", count: promptCount },
         { id: "release", label: "릴리스", count: releaseCount },
       ],

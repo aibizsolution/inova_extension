@@ -271,7 +271,7 @@
           meetingId: normalizeText(meetingPayload?.meetingId) || state.session.meetingId,
           pendingLocalCount: state.pendingUploads.length,
           sharedMemo: normalizeTextBlock(meetingPayload?.sharedMemo || state.session.sharedMemo),
-          title: normalizeText(meetingPayload?.title || refs.meetingTitleInput.value || state.session.title || "새 회의"),
+          title: normalizeText(meetingPayload?.title || refs.meetingTitleInput.value || state.session.title || "새 회의 룸"),
           updatedAt: normalizeText(meetingPayload?.updatedAt),
           workspaceMutation: normalizeWorkspaceMutation(meetingPayload?.workspaceMutation),
         };

@@ -24,7 +24,7 @@
     }
 
     function handlePromptAction(action, detail = {}) {
-      if (action === "review-composer" || action === "apply-reviewed-prompt" || action === "dismiss-review") {
+      if (action === "review-composer" || action === "apply-reviewed-prompt" || action === "copy-reviewed-prompt" || action === "dismiss-review") {
         return promptReviewManager.handleAction(action, detail);
       }
       return promptManager.handleAction(action, detail);
