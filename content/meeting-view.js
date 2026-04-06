@@ -78,7 +78,6 @@
   function renderMeetingItem(item, pending) {
     const meta = [
       formatDateTime(item.updatedAt, ""),
-      formatStatusLabel(item.status),
     ].filter(Boolean).join(" · ");
     const isPending = pending.active
       && pending.action === "open-result"
