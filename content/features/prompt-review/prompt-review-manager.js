@@ -221,7 +221,6 @@
     return {
       checks,
       placeholderTokens: detectPlaceholderTokens(refinedPrompt),
-      priorityIssues: buildPriorityIssues(checks),
       quickImprovements: Array.isArray(result.quickImprovements) ? result.quickImprovements.filter(Boolean).map(String) : [],
       refinedPrompt,
       summary: String(result.summary || "").trim(),
@@ -257,23 +256,6 @@
   function normalizeEnum(value, allowed, fallback) {
     const normalized = namespace.session.normalizeText(value).toLowerCase();
     return allowed.includes(normalized) ? normalized : fallback;
-  }
-
-  function buildPriorityIssues(checks) {
-    const severityRank = {
-      missing: 0,
-      partial: 1,
-      good: 2,
-    };
-    return (Array.isArray(checks) ? checks : [])
-      .filter((check) => check.status !== "good")
-      .sort((left, right) => (severityRank[left.status] ?? 9) - (severityRank[right.status] ?? 9))
-      .map((check) => ({
-        feedback: check.feedback,
-        label: check.label,
-        status: check.status,
-        statusLabel: check.statusLabel,
-      }));
   }
 
   function detectPlaceholderTokens(text) {

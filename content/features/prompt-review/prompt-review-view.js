@@ -45,22 +45,6 @@
   function renderResult(result) {
     const verdictTone = result.verdict === "ready" ? "good" : result.verdict === "insufficient" ? "missing" : "partial";
     return `
-      ${result.priorityIssues.length ? `
-        <section class="inova-prompt-review__priority">
-          <strong class="inova-prompt-review__section-title">먼저 보완할 점</strong>
-          <ul class="inova-prompt-review__priority-list">
-            ${result.priorityIssues.map((issue) => `
-              <li class="inova-prompt-review__priority-item">
-                <div class="inova-prompt-review__priority-head">
-                  <strong>${escapeHtml(issue.label)}</strong>
-                  <span class="inova-prompt-review__status is-${escapeHtml(issue.status)}">${escapeHtml(issue.statusLabel)}</span>
-                </div>
-                <p>${escapeHtml(issue.feedback)}</p>
-              </li>
-            `).join("")}
-          </ul>
-        </section>
-      ` : ""}
       <div class="inova-prompt-review__summary">
         <div class="inova-prompt-review__score">
           <strong>${escapeHtml(result.totalScoreLabel)}</strong>

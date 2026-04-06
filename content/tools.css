@@ -134,33 +134,6 @@
 .inova-prompt-review__summary {
   padding: 14px 16px 16px; border-bottom: 1px solid rgba(52, 81, 100, 0.08);
 }
-.inova-prompt-review__priority {
-  padding: 14px 16px 16px;
-  border-bottom: 1px solid rgba(52, 81, 100, 0.08);
-  background: rgba(255, 249, 239, 0.52);
-}
-.inova-prompt-review__priority-list {
-  margin: 0;
-  padding-left: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.inova-prompt-review__priority-item {
-  color: rgba(16, 33, 43, 0.78);
-}
-.inova-prompt-review__priority-item p {
-  margin: 4px 0 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: rgba(16, 33, 43, 0.72);
-}
-.inova-prompt-review__priority-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
 .inova-prompt-review__score { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .inova-prompt-review__score strong { font-size: 15px; color: #0f5f77; }
 .inova-prompt-review__score-help {
@@ -718,7 +691,6 @@
   .inova-store-item__header { grid-template-columns: 1fr; }
   .inova-store-item__side { justify-content: flex-start; }
   .inova-prompt-review__check-head { flex-direction: column; align-items: flex-start; }
-  .inova-prompt-review__priority-head { flex-direction: column; align-items: flex-start; }
   .inova-release-card__head,
   .inova-release-history__item {
     flex-direction: column;
