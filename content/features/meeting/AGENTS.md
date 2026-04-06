@@ -31,6 +31,7 @@
 - hosted 작업실은 녹음 중 또는 실제 업로드 진행 중에 탭/브라우저를 닫으려 하면 브라우저 기본 이탈 경고를 띄운다. 업로드가 끝난 뒤 원격 처리만 남은 상태는 불필요하게 막지 않는다.
 - hosted 작업실의 회의 제목은 UI에서 회의를 구분하는 편집용 라벨로만 취급한다. 회의 정리/회의록 생성 prompt에는 이 제목을 근거로 넣지 않고, 전사·공용 메모·추가 맥락만 사용한다.
 - hosted 작업실의 녹음 종료 액션은 사용자 기준 결과가 바로 읽히는 문구를 우선한다. 현재 `종료하고 전사` 대신 `녹음 완료`를 쓰고, 완료 시 자동으로 기록 생성이 이어진다는 설명을 함께 보여 준다.
+- panel 회의 허브에서 새 그룹을 만드는 액션은 세션 단위 시작처럼 보이지 않게 `새 회의하기`보다 `새 회의 룸 생성` 같은 그룹 단위 용어를 우선한다.
 - hosted 작업실의 로컬 pending queue는 원격 작업이 `succeeded`로 확정되면 자동 정리한다. 완료 후에도 같은 기록이 `진행 중`과 `완료`로 중복 표시되면 remote success cleanup 경로부터 본다.
 - remote success cleanup은 먼저 `recentJobs` exact match를 본다. 다만 exact match가 있어도 meeting summary가 `processing`으로 stale할 수 있으므로, non-terminal match는 `jobId` direct lookup 또는 `requestId -> deterministic jobId -> doc get`으로 다시 확인한 뒤 정리한다. workspace Firestore rules는 `jobs` collection `list/query`를 허용하지 않으므로 request 기반 복구도 query가 아니라 doc read만 사용한다.
 - 다만 requestId 기반 doc read는 `복구 fallback`일 뿐이다. 아직 원격 job이 생성되지 않은 local-only pending까지 여기에 넣지 말고, 새 import/prepare/upload 초반 상태는 skip한다. 존재하지 않는 job doc는 workspace rules상 `permission denied`처럼 보일 수 있으므로, 이런 케이스는 `miss`로 다운그레이드하지 말고 애초에 시도하지 않는 쪽으로 고친다.

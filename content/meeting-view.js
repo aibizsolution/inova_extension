@@ -7,7 +7,7 @@
       ? normalized.items.map((item) => renderMeetingItem(item, normalized.pending)).join("")
       : renderEmptyState(normalized);
     const workspacePending = normalized.pending.active && normalized.pending.action === "open-workspace";
-    const workspaceButtonLabel = workspacePending ? "작업실 여는 중..." : "새 회의하기";
+    const workspaceButtonLabel = workspacePending ? "작업실 여는 중..." : "새 회의 룸 생성";
     const feedbackNotice = normalized.feedback.text && normalized.feedback.tone === "error"
       ? `<div class="inova-release-card inova-release-card__notice">${escapeHtml(normalized.feedback.text)}</div>`
       : "";
@@ -162,7 +162,7 @@
     }
     return `
       <article class="inova-release-card">
-        <p>아직 저장된 회의록이 없습니다. 상단의 새 회의하기로 작업실을 열어 주세요.</p>
+        <p>아직 저장된 회의록이 없습니다. 상단의 새 회의 룸 생성으로 작업실을 열어 주세요.</p>
       </article>
     `;
   }
