@@ -37,6 +37,7 @@
 - hosted 회의 룸의 기본 헤더 용어와 launch 기본 제목도 같은 위계를 따라간다. 상단 eyebrow는 `회의 룸`, 새 작업실 기본 제목은 `새 회의 룸`을 우선한다.
 - hosted 작업실의 `기록 메모` placeholder는 짧은 감상문보다 실제 회의 정리에 필요한 배경 정보를 예시로 직접 보여 준다. 회의 목적, 참석자/역할, 전사에 잘 안 남는 제약이나 꼭 반영할 포인트를 바로 적을 수 있게 안내한다.
 - hosted 회의 룸 헤더의 단일 관리 액션은 분할 버튼 래퍼에 넣지 않는다. 액션이 하나뿐이면 독립 버튼으로 렌더해 잔여 구획 배경이나 분할선이 보이지 않게 유지한다.
+- 회의 정리는 전사 텍스트가 있다고 바로 생성하지 않는다. 발화가 거의 없거나 잡음/오인식처럼 보이는 약한 전사는 backend gate로 한 번 더 판별하고, 건너뛸 때는 왜 자동 회의 정리를 만들지 않았는지 사용자 문구로 드러낸다.
 - hosted 작업실의 로컬 pending queue는 원격 작업이 `succeeded`로 확정되면 자동 정리한다. 완료 후에도 같은 기록이 `진행 중`과 `완료`로 중복 표시되면 remote success cleanup 경로부터 본다.
 - remote success cleanup은 먼저 `recentJobs` exact match를 본다. 다만 exact match가 있어도 meeting summary가 `processing`으로 stale할 수 있으므로, non-terminal match는 `jobId` direct lookup 또는 `requestId -> deterministic jobId -> doc get`으로 다시 확인한 뒤 정리한다. workspace Firestore rules는 `jobs` collection `list/query`를 허용하지 않으므로 request 기반 복구도 query가 아니라 doc read만 사용한다.
 - 다만 requestId 기반 doc read는 `복구 fallback`일 뿐이다. 아직 원격 job이 생성되지 않은 local-only pending까지 여기에 넣지 말고, 새 import/prepare/upload 초반 상태는 skip한다. 존재하지 않는 job doc는 workspace rules상 `permission denied`처럼 보일 수 있으므로, 이런 케이스는 `miss`로 다운그레이드하지 말고 애초에 시도하지 않는 쪽으로 고친다.

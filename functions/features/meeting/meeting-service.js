@@ -29,6 +29,10 @@ const MAX_MEETING_LIST_LIMIT = 24;
 const MAX_SUMMARY_TRANSCRIPT_CHARS = 12000;
 const MAX_MEETING_NOTES_SECTION_CHARS = 9000;
 const MAX_MEETING_NOTES_SECTION_COUNT = 8;
+const MAX_MEETING_NOTES_GATE_TRANSCRIPT_CHARS = 1800;
+const MIN_MEETING_NOTES_DIRECT_TEXT_CHARS = 180;
+const MIN_MEETING_NOTES_DIRECT_SEGMENTS = 4;
+const MIN_MEETING_NOTES_DIRECT_SENTENCES = 3;
 const TARGET_REVIEW_SEGMENT_CHARS = 320;
 const MAX_REVIEW_SEGMENT_CHARS = 420;
 const MIN_REVIEW_SEGMENT_CHARS = 90;
@@ -3741,6 +3745,21 @@ function registerMeetingHandlers(deps) {
       return createEmptyMeetingNotesBundle("disabled");
     }
     try {
+      const gateDecision = await classifyMeetingNotesSignal(transcript);
+      logEvent("meeting.notes.gate", {
+        decision: gateDecision.decision,
+        jobId,
+        meetingId: meeting.meetingId,
+        providerUserKey: owner.providerUserKey,
+        reason: gateDecision.reason,
+        segmentCount: gateDecision.segmentCount,
+        sentenceCount: gateDecision.sentenceCount,
+        strategy: gateDecision.strategy,
+        textLength: gateDecision.textLength,
+      });
+      if (gateDecision.decision === "skip") {
+        return createEmptyMeetingNotesBundle("skipped", gateDecision.reason);
+      }
       return await generateMeetingNotesBundle(transcript, meeting, context);
     } catch (error) {
       logEvent("meeting.notes.skipped", {
@@ -3873,6 +3892,137 @@ function registerMeetingHandlers(deps) {
     return normalizeMeetingNotesSectionSummary(
       parseMeetingNotesJson(normalizeCompletionContent(completion?.choices?.[0]?.message?.content))
     );
+  }
+
+  async function classifyMeetingNotesSignal(transcript) {
+    const signal = buildMeetingNotesSignal(transcript);
+    if (!signal.textLength) {
+      return {
+        decision: "skip",
+        reason: "인식된 발화가 없어 자동 회의 정리를 만들지 않았습니다.",
+        segmentCount: signal.segmentCount,
+        sentenceCount: signal.sentenceCount,
+        strategy: "empty-transcript",
+        textLength: signal.textLength,
+      };
+    }
+    if (isClearlySummarizableMeetingSignal(signal)) {
+      return {
+        decision: "generate",
+        reason: "",
+        segmentCount: signal.segmentCount,
+        sentenceCount: signal.sentenceCount,
+        strategy: "direct-generate",
+        textLength: signal.textLength,
+      };
+    }
+    try {
+      const completion = await getClient().chat.completions.create({
+        messages: [
+          {
+            role: "system",
+            content: buildMeetingNotesGateSystemPrompt(),
+          },
+          {
+            role: "user",
+            content: buildMeetingNotesGateUserPrompt(signal),
+          },
+        ],
+        model: getMeetingClassifierModel(),
+        response_format: { type: "json_object" },
+        temperature: 0,
+      });
+      const gate = parseMeetingNotesGateResult(
+        normalizeCompletionContent(completion?.choices?.[0]?.message?.content)
+      );
+      return {
+        decision: gate.decision === "skip" ? "skip" : "generate",
+        reason: gate.decision === "skip"
+          ? gate.reason || "전사된 음성 내용이 너무 적거나 불분명해 자동 회의 정리를 만들지 않았습니다."
+          : "",
+        segmentCount: signal.segmentCount,
+        sentenceCount: signal.sentenceCount,
+        strategy: "llm-gate",
+        textLength: signal.textLength,
+      };
+    } catch {
+      return {
+        decision: "generate",
+        reason: "",
+        segmentCount: signal.segmentCount,
+        sentenceCount: signal.sentenceCount,
+        strategy: "gate-fallback-generate",
+        textLength: signal.textLength,
+      };
+    }
+  }
+
+  function buildMeetingNotesSignal(transcript) {
+    const segmentTexts = (Array.isArray(transcript?.segments) ? transcript.segments : [])
+      .map((segment) => normalizeText(segment?.text))
+      .filter(Boolean);
+    const plainText = normalizeTextBlock(segmentTexts.join("\n") || transcript?.text);
+    const sentenceCount = plainText
+      ? plainText
+        .split(/[\n.!?。！？…]+/g)
+        .map((line) => normalizeText(line))
+        .filter(Boolean)
+        .length
+      : 0;
+    const excerpt = plainText.length > MAX_MEETING_NOTES_GATE_TRANSCRIPT_CHARS
+      ? `${plainText.slice(0, MAX_MEETING_NOTES_GATE_TRANSCRIPT_CHARS)}...`
+      : plainText;
+    return {
+      excerpt,
+      segmentCount: segmentTexts.length,
+      sentenceCount,
+      textLength: plainText.length,
+    };
+  }
+
+  function isClearlySummarizableMeetingSignal(signal) {
+    return signal.textLength >= MIN_MEETING_NOTES_DIRECT_TEXT_CHARS
+      || signal.segmentCount >= MIN_MEETING_NOTES_DIRECT_SEGMENTS
+      || signal.sentenceCount >= MIN_MEETING_NOTES_DIRECT_SENTENCES;
+  }
+
+  function buildMeetingNotesGateSystemPrompt() {
+    return [
+      "너는 회의 전사 신호 판별기다.",
+      "전사 텍스트만 보고 이 기록이 자동 회의 정리를 만들 만큼 실제 발화 내용이 충분한지 판단한다.",
+      "짧더라도 실제 결정, 요청, 일정, 논의, 질문과 답변이 보이면 generate를 선택한다.",
+      "무음, 잡음, 의미 없는 짧은 감탄사, 인사만 있는 경우, 끊긴 한두 문장, 전사 오류처럼 보이는 경우는 skip을 선택한다.",
+      "회의 제목이나 메모가 좋아 보여도 전사 근거가 부족하면 skip을 선택한다.",
+      "반드시 JSON 하나만 반환한다.",
+      '형식: {"decision":"generate|skip","reason":"skip일 때만 사용자에게 보여 줄 짧은 한국어 문장"}',
+    ].join(" ");
+  }
+
+  function buildMeetingNotesGateUserPrompt(signal) {
+    return [
+      `전사 길이: ${signal.textLength}자`,
+      `구간 수: ${signal.segmentCount}개`,
+      `문장 수: ${signal.sentenceCount}개`,
+      "아래 전사가 자동 회의 정리를 만들 만큼 실제 회의 내용이 있는지 판단해 주세요.",
+      signal.excerpt ? `전사:\n${signal.excerpt}` : "전사: 없음",
+    ].join("\n\n");
+  }
+
+  function parseMeetingNotesGateResult(value) {
+    const normalized = normalizeText(value);
+    if (!normalized) {
+      return { decision: "", reason: "" };
+    }
+    try {
+      const parsed = JSON.parse(normalized);
+      const decision = normalizeText(parsed?.decision).toLowerCase();
+      return {
+        decision: decision === "skip" ? "skip" : decision === "generate" ? "generate" : "",
+        reason: normalizeTextBlock(parsed?.reason).slice(0, 200),
+      };
+    } catch {
+      return { decision: "", reason: "" };
+    }
   }
 
   function buildMeetingNotesSystemPrompt() {
