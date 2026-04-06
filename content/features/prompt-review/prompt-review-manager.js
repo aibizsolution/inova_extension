@@ -5,11 +5,6 @@
     missing: "부족",
     partial: "보완 필요",
   };
-  const VERDICT_LABELS = {
-    ready: "요건 충족",
-    insufficient: "정보 보강 필요",
-    revise: "보완 추천",
-  };
   const CHECK_LABELS = {
     context: "배경/대상/상황",
     goal: "원하는 결과",
@@ -215,7 +210,6 @@
 
   function normalizeResult(result) {
     if (!result || typeof result !== "object") return null;
-    const verdict = normalizeEnum(result.verdict, ["ready", "revise", "insufficient"], "revise");
     const checks = normalizeChecks(result.checks);
     const refinedPrompt = String(result.refinedPrompt || "").trim();
     return {
@@ -225,8 +219,6 @@
       refinedPrompt,
       summary: String(result.summary || "").trim(),
       totalScoreLabel: `${Math.max(0, Math.min(100, Number(result.totalScore) || 0))}점`,
-      verdict,
-      verdictLabel: VERDICT_LABELS[verdict] || VERDICT_LABELS.revise,
     };
   }
 
@@ -251,11 +243,6 @@
     if (key.includes("constraint")) return CHECK_LABELS.constraints;
     if (key.includes("output")) return CHECK_LABELS.output;
     return source.replace(/\s*\((context|goal|constraints?|output)\)\s*/gi, "").trim() || "검토 항목";
-  }
-
-  function normalizeEnum(value, allowed, fallback) {
-    const normalized = namespace.session.normalizeText(value).toLowerCase();
-    return allowed.includes(normalized) ? normalized : fallback;
   }
 
   function detectPlaceholderTokens(text) {

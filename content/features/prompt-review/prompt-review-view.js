@@ -43,12 +43,10 @@
   }
 
   function renderResult(result) {
-    const verdictTone = result.verdict === "ready" ? "good" : result.verdict === "insufficient" ? "missing" : "partial";
     return `
       <div class="inova-prompt-review__summary">
         <div class="inova-prompt-review__score">
           <strong>${escapeHtml(result.totalScoreLabel)}</strong>
-          <span class="inova-prompt-review__status is-${escapeHtml(verdictTone)}">${escapeHtml(result.verdictLabel)}</span>
         </div>
         <p class="inova-prompt-review__score-help">점수는 맥락, 목표, 제약, 출력 형식 4개 기준만 본 참고값이에요.</p>
         <p>${escapeHtml(result.summary)}</p>
