@@ -46,7 +46,7 @@
     return `
       <div class="inova-prompt-review__summary">
         <div class="inova-prompt-review__score">
-          <strong>${escapeHtml(result.totalScoreLabel)}</strong>
+          <strong>총점 ${escapeHtml(result.totalScoreLabel)}</strong>
         </div>
         <p class="inova-prompt-review__score-help">점수는 맥락, 목표, 제약, 출력 형식 4개 기준만 본 참고값이에요.</p>
         <p>${escapeHtml(result.summary)}</p>
