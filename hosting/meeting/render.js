@@ -608,6 +608,7 @@
   function buildStatusFlow(detailView, options = {}) {
     const normalizedStatus = normalizeText(detailView.badgeStatus);
     const recordSelected = normalizedStatus !== "idle";
+    const isHydratingDetail = Boolean(options.isHydratingDetail);
     const isFailed = normalizedStatus === "failed";
     const isBusy = ["queued", "processing", "uploading", "uploading_chunks", "preparing_chunks", "remote_queued", "remote_processing"].includes(normalizedStatus);
     const segmentCount = Math.max(0, Number(options.segmentCount) || 0);
@@ -633,6 +634,8 @@
       pushStep("원문", "failed", "오류로 중단되었습니다.");
     } else if (options.hasSegmentContent) {
       pushStep("원문", "done", segmentCount > 0 ? `구간 ${segmentCount}개 확인 가능` : "전사 텍스트 준비 완료");
+    } else if (isHydratingDetail) {
+      pushStep("원문", "current", "상세 기록을 불러오는 중입니다.");
     } else if (isBusy) {
       pushStep("원문", "current", "전사 결과를 준비하는 중입니다.");
     } else if (recordSelected) {
@@ -645,6 +648,8 @@
       pushStep("회의 정리", "failed", "오류 해결 후 다시 생성합니다.");
     } else if (options.hasNotesValue) {
       pushStep("회의 정리", "done", options.generatedAt ? `마지막 정리 ${options.generatedAt}` : "회의 정리가 준비됐습니다.");
+    } else if (isHydratingDetail) {
+      pushStep("회의 정리", "pending", "상세 기록이 준비되면 이어서 확인합니다.");
     } else if (options.hasSegmentContent) {
       pushStep("회의 정리", isBusy ? "current" : "warning", isBusy ? "전사를 바탕으로 회의 정리를 만드는 중입니다." : normalizeText(options.degradedReason) || "추가 맥락으로 같은 전사를 더 정확한 문서로 업데이트할 수 있습니다.", isBusy ? "진행" : "보완");
     } else {
@@ -655,6 +660,8 @@
       pushStep("검토 마무리", "failed", "오류를 정리한 뒤 다시 확인합니다.");
     } else if (options.hasNotesValue && options.hasSegmentContent) {
       pushStep("검토 마무리", "done", "복사 · 다운로드 · 제목 수정");
+    } else if (isHydratingDetail) {
+      pushStep("검토 마무리", "pending", "상세 기록을 불러온 뒤 검토합니다.");
     } else if (options.hasSegmentContent) {
       pushStep("검토 마무리", "current", "원문부터 확인할 수 있습니다.", "검토");
     } else {
@@ -702,6 +709,9 @@
     if (!normalizeText(detailView.recordTitle) && detailView.badgeStatus === "idle") {
       return "";
     }
+    if (options.isHydratingDetail) {
+      return normalizeText(detailView.notice) || "상세 기록을 불러오는 중입니다.";
+    }
     if (["queued", "processing"].includes(normalizedStatus)) {
       return "";
     }
@@ -740,7 +750,7 @@
 
   function buildDetailView(state, activeEntry) {
     if (!activeEntry) {
-      return { badgeLabel: "대기", badgeStatus: "idle", chunkProgress: null, meta: [], meetingNotes: null, notesContextItems: [], notesInputSnapshot: normalizeNotesInputSnapshot(null), notesMeta: null, notice: "왼쪽에서 기록을 선택해 주세요.", noticeTone: "", recordMemo: "", recordTitle: "", segments: [], showRecordActions: false, summary: "", title: "기록을 선택해 주세요", transcriptText: "" };
+      return { badgeLabel: "대기", badgeStatus: "idle", chunkProgress: null, isHydratingDetail: false, meta: [], meetingNotes: null, notesContextItems: [], notesInputSnapshot: normalizeNotesInputSnapshot(null), notesMeta: null, notice: "왼쪽에서 기록을 선택해 주세요.", noticeTone: "", recordMemo: "", recordTitle: "", segments: [], showRecordActions: false, summary: "", title: "기록을 선택해 주세요", transcriptText: "" };
     }
     const pending = activeEntry.pending;
     const remote = activeEntry.remote;
@@ -762,11 +772,17 @@
     const pendingChunkProgress = buildChunkProgressModel(null, pending);
 
     if (shouldUsePendingDetail) {
-      return { badgeLabel: formatStatusLabel(pendingDisplayStatus), badgeStatus: normalizeStatus(pendingDisplayStatus), chunkProgress: pendingChunkProgress, meta: detailMeta, meetingNotes: null, notesContextItems: remoteNotesContextItems, notesInputSnapshot: remoteNotesInputSnapshot, notesMeta: null, notice: buildPendingNotice(pending), noticeTone: pendingDisplayStatus === "failed" ? "error" : "highlight", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions, summary: "", title: detailTitle, transcriptText: "" };
+      return { badgeLabel: formatStatusLabel(pendingDisplayStatus), badgeStatus: normalizeStatus(pendingDisplayStatus), chunkProgress: pendingChunkProgress, isHydratingDetail: false, meta: detailMeta, meetingNotes: null, notesContextItems: remoteNotesContextItems, notesInputSnapshot: remoteNotesInputSnapshot, notesMeta: null, notice: buildPendingNotice(pending), noticeTone: pendingDisplayStatus === "failed" ? "error" : "highlight", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions, summary: "", title: detailTitle, transcriptText: "" };
     }
 
     const normalizedJob = state.currentJob || normalizeJob(remote, detailTitle);
     const normalizedArtifact = state.currentArtifact;
+    const isHydratingDetail = Boolean(
+      state.selectedDetailHydrating
+      && normalizeText(state.currentDetailSelectionId) === normalizeText(activeEntry.id)
+      && !normalizedArtifact
+      && TERMINAL_REMOTE_STATUSES.has(normalizeText(normalizedJob?.status || remote?.status))
+    );
     const workspaceMutation = normalizedJob?.workspaceMutation || remote?.workspaceMutation;
     const meetingNotes = normalizeMeetingNotes(normalizedArtifact?.notes || normalizedJob?.meetingNotes);
     const rawSegments = Array.isArray(normalizedArtifact?.segments) ? normalizedArtifact.segments : [];
@@ -799,11 +815,34 @@
     );
     const remoteChunkProgress = buildChunkProgressModel(normalizedJob, pending);
 
+    if (isHydratingDetail) {
+      return {
+        badgeLabel: "불러오는 중",
+        badgeStatus: "processing",
+        chunkProgress: null,
+        isHydratingDetail: true,
+        meta: detailMeta,
+        meetingNotes: null,
+        notesContextItems,
+        notesInputSnapshot,
+        notesMeta,
+        notice: "상세 기록을 불러오는 중입니다.",
+        noticeTone: "highlight",
+        recordMemo: detailMemo,
+        recordTitle: detailTitle,
+        segments: [],
+        showRecordActions: false,
+        summary: "",
+        title: detailTitle,
+        transcriptText: "",
+      };
+    }
+
     if (normalizeText(normalizedJob?.status) === "failed") {
-      return { badgeLabel: "오류", badgeStatus: "failed", chunkProgress: remoteChunkProgress, meta: detailMeta, meetingNotes: null, notesContextItems, notesInputSnapshot, notesMeta, notice: normalizeText(normalizedJob?.error || pending?.lastError) || "회의 처리 중 오류가 발생했습니다.", noticeTone: "error", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions, summary: "", title: detailTitle, transcriptText: "" };
+      return { badgeLabel: "오류", badgeStatus: "failed", chunkProgress: remoteChunkProgress, isHydratingDetail: false, meta: detailMeta, meetingNotes: null, notesContextItems, notesInputSnapshot, notesMeta, notice: normalizeText(normalizedJob?.error || pending?.lastError) || "회의 처리 중 오류가 발생했습니다.", noticeTone: "error", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions, summary: "", title: detailTitle, transcriptText: "" };
     }
     if (["queued", "processing"].includes(normalizeText(normalizedJob?.status))) {
-      return { badgeLabel: processingHealth.isStalled ? "정체 의심" : formatStatusLabel(normalizedJob.status), badgeStatus: normalizeStatus(normalizedJob.status), chunkProgress: remoteChunkProgress, meta: detailMeta, meetingNotes: null, notesContextItems, notesInputSnapshot, notesMeta, notice: buildProcessingNotice(normalizedJob, pending), noticeTone: processingHealth.isStalled ? "warning" : "highlight", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions: false, summary: "", title: detailTitle, transcriptText: "" };
+      return { badgeLabel: processingHealth.isStalled ? "정체 의심" : formatStatusLabel(normalizedJob.status), badgeStatus: normalizeStatus(normalizedJob.status), chunkProgress: remoteChunkProgress, isHydratingDetail: false, meta: detailMeta, meetingNotes: null, notesContextItems, notesInputSnapshot, notesMeta, notice: buildProcessingNotice(normalizedJob, pending), noticeTone: processingHealth.isStalled ? "warning" : "highlight", recordMemo: detailMemo, recordTitle: detailTitle, segments: [], showRecordActions: false, summary: "", title: detailTitle, transcriptText: "" };
     }
     let completionNotice = state.notice.text || "회의 정리가 준비됐습니다.";
     let completionTone = state.notice.tone || "highlight";
@@ -824,6 +863,7 @@
       badgeLabel: "완료",
       badgeStatus: "succeeded",
       chunkProgress: null,
+      isHydratingDetail: false,
       meta: detailMeta,
       meetingNotes,
       notesContextItems,
@@ -1136,6 +1176,7 @@
       : "회의록 업데이트";
     const summaryFlow = buildStatusFlow(detailView, {
       generatedAt: detailView.notesMeta?.generatedAt ? formatDateTime(detailView.notesMeta.generatedAt, "") : "",
+      isHydratingDetail: Boolean(detailView.isHydratingDetail),
       hasNotesValue,
       hasSegmentContent,
       segmentCount: hasSegmentsValue ? detailView.segments.length : 0,
@@ -1157,6 +1198,7 @@
     const summaryActionMessage = buildStatusActionMessage(detailView, {
       hasNotesValue,
       hasSegmentContent,
+      isHydratingDetail: Boolean(detailView.isHydratingDetail),
       updatedAt: formatDateTime(
         normalizeText(state.currentJob?.updatedAt || activeEntry?.remote?.updatedAt || activeEntry?.pending?.updatedAt),
         ""

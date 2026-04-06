@@ -27,6 +27,7 @@
 - panel과 hosted debug console은 같은 렌더 계약과 같은 상태 라벨을 유지한다. 폭과 로그 높이도 같은 기준값을 우선 사용해 표면별 체감이 달라지지 않게 맞춘다.
 - 기록 상세 카드 상단은 진행 상태 패널이 아니다. 제목/액션만 두고, pending/processing 배지나 분할 업로드 설명은 상세 카드에서 숨긴다. 진행 정보는 기록 목록과 `상태` 탭에서만 노출한다.
 - hosted boot/record 로딩이 느릴 때는 먼저 `firestore.auth.step`, `firestore.auth.success`, `workspace.realtime.connect.success`, `workspace.sync.state`, `workspace.detail.job-sync`의 `elapsedMs`를 본다. auth, 첫 snapshot 대기, 상세 artifact 읽기를 한 덩어리로 보지 말고 단계별로 분리해 원인을 좁힌다.
+- hosted boot에서는 회의 룸과 기록 목록을 먼저 그리고, 선택된 기록 상세 artifact는 비차단으로 뒤늦게 채운다. 느린 부팅은 `workspace.detail.hydrate.deferred` 이후 `workspace.detail.job-sync`가 언제 끝나는지로 본다.
 
 ```js
 window.__INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20, entriesLimit: 40 })

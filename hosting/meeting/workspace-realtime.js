@@ -23,6 +23,19 @@
         return typeof helpers.controller === "function" ? helpers.controller(name) : null;
       }
 
+      function shouldDeferSelectedDetailHydration(reason) {
+        const normalizedReason = normalizeText(reason);
+        return normalizedReason === "boot" || normalizedReason === "boot-deferred";
+      }
+
+      function isSelectedDetailRequestStale(expectedSelectionId, requestVersion) {
+        if (requestVersion > 0 && Number(state.selectedDetailHydrateVersion) !== Number(requestVersion)) {
+          return true;
+        }
+        return Boolean(normalizeText(expectedSelectionId))
+          && normalizeText(state.currentDetailSelectionId) !== normalizeText(expectedSelectionId);
+      }
+
       const setNotice = (...args) => helpers.setNotice?.(...args);
       const applyRender = (...args) => helpers.applyRender?.(...args);
       const clearDegradedNotice = (...args) => helpers.clearDegradedNotice?.(...args);
@@ -361,11 +374,17 @@
           state.selectedRecordId = chooseSelectedRecordId(state);
         }
         const detailHydrateStartedAt = Date.now();
-        await hydrateSelectedDetail(Boolean(hydrateSelection));
-        const detailHydrateMs = Math.max(0, Date.now() - detailHydrateStartedAt);
+        const detailHydrateDeferred = shouldDeferSelectedDetailHydration(reason);
+        if (detailHydrateDeferred) {
+          queueSelectedDetailHydration(Boolean(hydrateSelection), reason);
+        } else {
+          await runSelectedDetailHydration(Boolean(hydrateSelection), reason);
+        }
+        const detailHydrateMs = detailHydrateDeferred ? 0 : Math.max(0, Date.now() - detailHydrateStartedAt);
         persistWorkspaceSession();
         applyRender();
         logDebug("workspace.sync.state", {
+          detailHydrateDeferred,
           detailHydrateMs,
           elapsedMs: Math.max(0, Date.now() - syncStartedAt),
           meetingId: state.meeting.meetingId,
@@ -375,6 +394,38 @@
           reason,
           resultCount: state.records.length,
           selectedRecordId: state.selectedRecordId,
+        });
+      }
+
+      async function runSelectedDetailHydration(forceRefresh, reason) {
+        const requestVersion = Number(state.selectedDetailHydrateVersion) + 1;
+        state.selectedDetailHydrateVersion = requestVersion;
+        state.selectedDetailHydrating = true;
+        state.selectedDetailHydrateReason = normalizeText(reason);
+        applyRender();
+        try {
+          await hydrateSelectedDetail(Boolean(forceRefresh), {
+            reason,
+            requestVersion,
+          });
+        } finally {
+          if (Number(state.selectedDetailHydrateVersion) === requestVersion) {
+            state.selectedDetailHydrating = false;
+            state.selectedDetailHydrateReason = "";
+            applyRender();
+          }
+        }
+      }
+
+      function queueSelectedDetailHydration(forceRefresh, reason) {
+        logDebug("workspace.detail.hydrate.deferred", {
+          forceRefresh: Boolean(forceRefresh),
+          meetingId: state.meeting.meetingId,
+          reason: normalizeText(reason),
+          selectedRecordId: normalizeText(state.selectedRecordId),
+        });
+        void runSelectedDetailHydration(forceRefresh, reason).catch((error) => {
+          handleRealtimeListenerError(normalizeRealtimeError(error), "detail-hydrate");
         });
       }
 
@@ -423,12 +474,13 @@
       }
       
       
-      async function hydrateSelectedDetail(forceRefresh) {
+      async function hydrateSelectedDetail(forceRefresh, options = {}) {
         const entry = findHistoryEntry(state, state.selectedRecordId);
         if (!entry) {
           resetSelectedDetailState();
           return;
         }
+        const requestVersion = Number(options.requestVersion) || 0;
         state.currentLocalRecord = entry.pending || null;
         const selectionChanged = normalizeText(state.currentDetailSelectionId) !== normalizeText(entry.id);
         state.currentDetailSelectionId = entry.id;
@@ -484,7 +536,9 @@
         const skipJobRead = TERMINAL_REMOTE_STATUSES.has(normalizeText(entry.remote.status))
           && !hasActiveWorkspaceMutation(entry.remote.workspaceMutation);
         await refreshSelectedRemoteDetail(entry, {
+          expectedSelectionId: normalizeText(entry.id),
           forceArtifactRead: Boolean(selectionChanged || forceRefresh),
+          requestVersion,
           skipJobRead,
           reason: selectionChanged ? "selection" : forceRefresh ? "force-refresh" : "hydrate",
         });
@@ -495,6 +549,8 @@
       async function refreshSelectedRemoteDetail(entry, options = {}) {
         const detailStartedAt = Date.now();
         const jobId = normalizeText(entry?.remote?.jobId || state.currentJob?.jobId);
+        const expectedSelectionId = normalizeText(options.expectedSelectionId || entry?.id);
+        const requestVersion = Number(options.requestVersion) || 0;
         if (!jobId || typeof readDocument !== "function") {
           return;
         }
@@ -505,6 +561,9 @@
           const jobReadStartedAt = Date.now();
           const jobSnapshot = await readDocument(FIRESTORE_COLLECTIONS.jobs, jobId);
           jobReadMs = Math.max(0, Date.now() - jobReadStartedAt);
+          if (isSelectedDetailRequestStale(expectedSelectionId, requestVersion)) {
+            return;
+          }
           if (jobSnapshot?.exists && typeof jobSnapshot.data === "function") {
             state.currentJob = normalizeJob(jobSnapshot.data(), state.meeting.title);
             mergeLiveJobIntoRecords(jobSnapshot.data());
@@ -531,6 +590,9 @@
           const artifactReadStartedAt = Date.now();
           const artifactSnapshot = await readDocument(FIRESTORE_COLLECTIONS.artifacts, artifactId);
           artifactReadMs = Math.max(0, Date.now() - artifactReadStartedAt);
+          if (isSelectedDetailRequestStale(expectedSelectionId, requestVersion)) {
+            return;
+          }
           state.currentArtifact = artifactSnapshot?.exists && typeof artifactSnapshot.data === "function"
             ? normalizeArtifact(artifactSnapshot.data())
             : null;
@@ -540,6 +602,9 @@
             reason: normalizeText(options.reason),
             segmentCount: Array.isArray(state.currentArtifact?.segments) ? state.currentArtifact.segments.length : 0,
           });
+        }
+        if (isSelectedDetailRequestStale(expectedSelectionId, requestVersion)) {
+          return;
         }
         syncSelectedRecordReviewState(findHistoryEntry(state, state.selectedRecordId));
         await resolvePendingMutationsFromSnapshots();
@@ -750,7 +815,7 @@
         state.selectedRecordId = normalizeText(target.dataset.recordId);
         state.reviewTab = "notes";
         persistWorkspaceSession();
-        await hydrateSelectedDetail();
+        await runSelectedDetailHydration(false, "selection");
         applyRender();
       }
       
