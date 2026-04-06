@@ -43,6 +43,11 @@
     }
 
     async function handleAction(action) {
+      logReviewDebug("prompt.review.action", {
+        action,
+        open: Boolean(state.promptReview.open),
+        pending: Boolean(state.promptReview.pending),
+      });
       if (action === "activate-review") return void activateReview();
       if (action === "review-composer") return void reviewComposer();
       if (action === "apply-reviewed-prompt") return void applyReviewedPrompt();
@@ -58,6 +63,12 @@
     function activateReview() {
       hooks.showPromptTab?.("review");
       const viewState = buildViewState();
+      logReviewDebug("prompt.review.activate", {
+        hasError: Boolean(viewState.error),
+        hasResult: Boolean(viewState.result),
+        hasText: Boolean(viewState.hasText),
+        stale: Boolean(viewState.stale),
+      });
       if (viewState.result && !viewState.stale && !viewState.error) {
         updateState({ open: true });
         return;
@@ -69,6 +80,10 @@
       if (state.promptReview.pending) return;
       const composerState = namespace.composer.getComposerState();
       const prompt = String(composerState.text || "").trim();
+      logReviewDebug("prompt.review.request.start", {
+        promptLength: prompt.length,
+        sessionId: state.sessionId,
+      });
       if (!composerState.available) {
         return void updateState({
           error: "현재 화면에서 대화 입력창을 찾지 못했어요.",
@@ -125,6 +140,10 @@
         if (!isActiveReviewRequest(requestId, sessionId)) {
           return;
         }
+        logReviewDebug("prompt.review.request.success", {
+          sessionId,
+          totalScore: Number(result?.totalScore) || 0,
+        });
         updateState({
           error: "",
           lastReviewedAt: new Date().toISOString(),
@@ -139,6 +158,11 @@
         if (!isActiveReviewRequest(requestId, sessionId)) {
           return;
         }
+        logReviewDebug("prompt.review.request.error", {
+          error: getErrorMessage(error),
+          level: "error",
+          sessionId,
+        });
         updateState({
           error: getErrorMessage(error),
           open: true,
@@ -153,6 +177,13 @@
 
     function applyReviewedPrompt() {
       const viewState = buildViewState();
+      logReviewDebug("prompt.review.apply.start", {
+        canApply: Boolean(viewState.canApply),
+        pending: Boolean(viewState.pending),
+        placeholderConfirmation: Boolean(viewState.placeholderConfirmation),
+        requiresPlaceholderConfirm: Boolean(viewState.requiresPlaceholderConfirm),
+        stale: Boolean(viewState.stale),
+      });
       if (viewState.pending) {
         return void updateState({ error: "프롬프트 검토가 끝난 뒤 다시 반영해 주세요." });
       }
@@ -177,6 +208,9 @@
     }
 
     function dismissReview() {
+      logReviewDebug("prompt.review.dismiss", {
+        hadResult: Boolean(state.promptReview.result),
+      });
       hooks.showPromptTab?.("library");
       updateState({
         error: "",
@@ -196,10 +230,18 @@
     }
 
     async function sendRuntimeMessage(type, payload) {
+      logReviewDebug("prompt.review.runtime.request", {
+        backend: "firebase-function",
+        type,
+      });
       const response = await chrome.runtime.sendMessage({ type, ...(payload || {}) });
       if (!response?.ok) {
         throw new Error(namespace.session.normalizeText(response?.error || "") || "프롬프트 평가를 처리하지 못했어요.");
       }
+      logReviewDebug("prompt.review.runtime.success", {
+        backend: "firebase-function",
+        type,
+      });
       return response.data;
     }
 
@@ -267,6 +309,14 @@
       return "확장프로그램이 갱신됐어요. 페이지를 새로고침해 주세요.";
     }
     return message || "프롬프트 평가를 완료하지 못했어요.";
+  }
+
+  function logReviewDebug(event, payload) {
+    namespace.panelDebug?.log?.(event, {
+      scope: "prompt",
+      tool: "prompts",
+      ...(payload || {}),
+    });
   }
 
   namespace.promptReviewManager = {
