@@ -245,6 +245,11 @@
     return source.replace(/\s*\((context|goal|constraints?|output)\)\s*/gi, "").trim() || "검토 항목";
   }
 
+  function normalizeEnum(value, allowed, fallback) {
+    const normalized = namespace.session.normalizeText(value).toLowerCase();
+    return allowed.includes(normalized) ? normalized : fallback;
+  }
+
   function detectPlaceholderTokens(text) {
     const matches = String(text || "").matchAll(/\[([^\[\]\n]{1,40})\]/g);
     const tokens = [];
