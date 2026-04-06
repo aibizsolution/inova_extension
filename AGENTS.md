@@ -4,8 +4,15 @@
 
 ## 시작 순서
 - 작업 시작 시 `cwd`, Git 상태, 셸 환경을 먼저 확인한다.
+- 작업 시작 직후 첫 셸 명령을 실행하기 전에 아래 `셸/도구 환경 메모`를 다시 보고, 현재 세션에 해당하는 known workaround를 먼저 적용한다.
 - 기본 최소 읽기 세트는 루트 `AGENTS.md`, `README.md`, `package.json`, `manifest.json`, `docs/feature-routing.md`, 그리고 요청과 일치하는 feature `AGENTS.md` 1개다.
 - `content/`, `functions/`, `hosting/meeting/`, `shared/`를 처음부터 넓게 읽지 않는다.
+
+## 셸/도구 환경 메모
+- 현재 기본 셸이 PowerShell이면 `npm` 실행 시 `npm.ps1` 실행 정책 오류가 날 수 있다. 이 환경에서는 처음부터 `npm.cmd run <script>` 형태를 우선한다.
+- 같은 원인으로 `npm` 계열 명령이 한 번 막혔으면 같은 문법을 반복 재시도하지 말고 즉시 `npm.cmd`, 필요 시 `npx.cmd` 같은 대안으로 전환한다.
+- 세션 중 반복해서 걸린 환경/도구 실패 패턴은 `실패한 명령`, `원인`, `바로 쓸 대안`을 이 문서나 해당 feature 문서에 같은 작업 안에서 남겨 다음 세션에 재사용한다.
+- 새 세션에서도 이 메모는 선택 사항이 아니라 시작 절차 일부로 취급한다. 같은 환경에서 이미 기록된 실패 패턴은 첫 시도부터 우회 경로를 기본값으로 쓴다.
 
 ## Feature-First 규칙
 - 새 요청이 오면 먼저 primary feature를 고른다. 기본 feature는 `conversation`, `prompt-library`, `prompt-store`, `prompt-review`, `meeting`, `release`다.
