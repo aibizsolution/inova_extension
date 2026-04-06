@@ -108,7 +108,7 @@
 
 - `uploadInovaMeetingSource`: `512MiB`, `60s`, `concurrency 1`, `maxInstances 150`
 - `processQueuedInovaMeetingJob`: `1GiB`, `120s`, `concurrency 1`, `maxInstances 80`
-- `processQueuedInovaMeetingJobPart`: `1GiB`, `180s`, `concurrency 1`, `maxInstances 300`
+- `processQueuedInovaMeetingJobPart`: `1GiB`, `180s`, `concurrency 1`, `maxInstances 200`
 - `finalizeChunkedInovaMeetingJob`: `1GiB`, `180s`, `concurrency 1`, `maxInstances 80`
 - `processQueuedInovaMeetingCommand`: `512MiB`, `120s`, `concurrency 1`, `maxInstances 20`
 - `processQueuedInovaMeetingDeletion`: `512MiB`, `120s`, `concurrency 1`, `maxInstances 5`
@@ -168,6 +168,7 @@
 - 기본 HTTP 함수는 기본 프로파일로도 충분한 경우가 많다
 - 실제 확장 리스크는 `upload`, `chunk worker`, `finalize`처럼 heavy path에 집중된다
 - 동시 사용자 가정이 커질수록 먼저 볼 축은 `processQueuedInovaMeetingJobPart`의 `maxInstances`와 fresh OOM 여부다
+- 현재 `processQueuedInovaMeetingJobPart`는 `1 CPU` 기준 regional CPU quota 때문에 `maxInstances 200`까지 반영 가능하다. 그 이상은 quota 상향이나 CPU 재설계가 필요하다.
 
 ## 8. 변경 절차
 
