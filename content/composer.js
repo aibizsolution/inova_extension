@@ -194,10 +194,15 @@
 
   function startAutoSendMonitor(element, context) {
     const form = element.closest?.("form") || null;
+    const anchor = findComposerAnchor(element) || element;
     const beforeSignature = String(context?.beforeSignature || "");
     let stopped = false;
     let timer = 0;
     let submitListener = null;
+    let keydownListener = null;
+    let clickListener = null;
+    let submitSignal = "";
+    let submitter = "";
     const baseContext = {
       beforeSignatureLength: beforeSignature.length,
       beforeUserCount: Number(context?.beforeUserCount) || 0,
@@ -210,30 +215,96 @@
 
     if (form) {
       submitListener = (event) => {
+        const nextSubmitter = normalizeDebugText(
+          event?.submitter?.getAttribute?.("aria-label")
+            || event?.submitter?.textContent
+            || event?.submitter?.getAttribute?.("title")
+            || event?.submitter?.tagName
+            || ""
+        );
+        rememberSubmitSignal("form-submit", nextSubmitter);
         logComposerDebug("prompt.composer.submit.detected", {
           ...baseContext,
-          submitter: normalizeDebugText(
-            event?.submitter?.getAttribute?.("aria-label")
-              || event?.submitter?.textContent
-              || ""
-          ),
+          submitSignal,
+          submitter,
         });
       };
       form.addEventListener("submit", submitListener, true);
     }
+
+    keydownListener = (event) => {
+      if (
+        stopped
+        || event.defaultPrevented
+        || event.isComposing
+        || event.key !== "Enter"
+        || event.shiftKey
+        || event.altKey
+        || event.ctrlKey
+        || event.metaKey
+      ) {
+        return;
+      }
+      const target = event.target;
+      if (!(target instanceof Element) || !anchor.contains(target)) {
+        return;
+      }
+      rememberSubmitSignal(
+        "enter-key",
+        normalizeDebugText(target.getAttribute?.("aria-label") || target.tagName)
+      );
+    };
+    document.addEventListener("keydown", keydownListener, true);
+
+    clickListener = (event) => {
+      if (stopped) {
+        return;
+      }
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      const button = target.closest?.('button, [role="button"], [type="submit"]');
+      if (!(button instanceof Element) || !anchor.contains(button)) {
+        return;
+      }
+      if (button.closest?.("#inova-bookmark-host, #inova-composer-review-host")) {
+        return;
+      }
+      rememberSubmitSignal(
+        "button-click",
+        normalizeDebugText(
+          button.getAttribute?.("aria-label")
+            || button.textContent
+            || button.getAttribute?.("title")
+            || button.tagName
+        )
+      );
+    };
+    document.addEventListener("click", clickListener, true);
 
     timer = global.setTimeout(() => {
       if (stopped) return;
       const afterUserCount = Number(namespace.contentDom?.getConversationState?.()?.userCount) || 0;
       const afterSignature = namespace.contentDom?.getUserMessageSignature?.() || "";
       if (afterUserCount > baseContext.beforeUserCount || afterSignature !== beforeSignature) {
-        logComposerDebug("prompt.composer.auto-send.suspected", {
+        const payload = {
           ...baseContext,
           afterUserCount,
           afterSignatureLength: afterSignature.length,
+          messageAdded: afterUserCount > baseContext.beforeUserCount,
           signatureChanged: afterSignature !== beforeSignature,
-          level: "error",
-        });
+          submitSignal,
+          submitter,
+          userCountDelta: Math.max(0, afterUserCount - baseContext.beforeUserCount),
+        };
+        logComposerDebug(
+          submitSignal ? "prompt.composer.message.after-apply" : "prompt.composer.auto-send.suspected",
+          {
+            ...payload,
+            level: submitSignal ? "info" : "warning",
+          }
+        );
       }
       stop();
     }, AUTO_SEND_OBSERVE_MS);
@@ -250,6 +321,20 @@
       if (form && submitListener) {
         form.removeEventListener("submit", submitListener, true);
       }
+      if (keydownListener) {
+        document.removeEventListener("keydown", keydownListener, true);
+      }
+      if (clickListener) {
+        document.removeEventListener("click", clickListener, true);
+      }
+    }
+
+    function rememberSubmitSignal(signal, detail) {
+      if (submitSignal) {
+        return;
+      }
+      submitSignal = normalizeDebugText(signal);
+      submitter = normalizeDebugText(detail);
     }
   }
 
