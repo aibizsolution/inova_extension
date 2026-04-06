@@ -133,7 +133,7 @@
       element.value = text;
     }
 
-    dispatchComposerEvents(element, text);
+    dispatchComposerEvents(element, text, { includeChange: false });
     return {
       applied: true,
       method: descriptor?.set ? "input-value-setter" : "input-value-direct",
@@ -143,7 +143,7 @@
   function setEditableValue(element, text) {
     element.focus();
     if (selectAllEditableText(element) && document.execCommand?.("insertText", false, text)) {
-      dispatchComposerEvents(element, text);
+      dispatchComposerEvents(element, text, { includeChange: true });
       return {
         applied: true,
         method: "editable-exec-command",
@@ -159,7 +159,7 @@
       }
     });
     element.replaceChildren(fragment);
-    dispatchComposerEvents(element, text);
+    dispatchComposerEvents(element, text, { includeChange: true });
     return {
       applied: true,
       method: "editable-replace-children",
@@ -179,7 +179,7 @@
     return true;
   }
 
-  function dispatchComposerEvents(element, text) {
+  function dispatchComposerEvents(element, text, options = {}) {
     element.dispatchEvent(
       new InputEvent("input", {
         bubbles: true,
@@ -187,7 +187,9 @@
         inputType: "insertText",
       })
     );
-    element.dispatchEvent(new Event("change", { bubbles: true }));
+    if (options.includeChange) {
+      element.dispatchEvent(new Event("change", { bubbles: true }));
+    }
   }
 
   function startAutoSendMonitor(element, context) {
