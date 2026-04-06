@@ -1,5 +1,6 @@
 (function initPromptReviewView(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const SCORE_GUIDE_TEXT = "점수는 맥락, 목표, 제약, 출력 형식 4개 기준만 본 참고값이에요.";
 
   function render(review) {
     const result = review.result;
@@ -43,24 +44,20 @@
   }
 
   function renderResult(result) {
+    const scoreGuide = escapeHtml(SCORE_GUIDE_TEXT);
     return `
       <div class="inova-prompt-review__summary">
         <div class="inova-prompt-review__score">
           <strong>총점 ${escapeHtml(result.totalScoreLabel)}</strong>
+          <span
+            class="inova-help-chip"
+            tabindex="0"
+            role="note"
+            aria-label="${scoreGuide}"
+            title="${scoreGuide}"
+          >?</span>
         </div>
-        <p class="inova-prompt-review__score-help">점수는 맥락, 목표, 제약, 출력 형식 4개 기준만 본 참고값이에요.</p>
         <p>${escapeHtml(result.summary)}</p>
-      </div>
-      <div class="inova-prompt-review__checks">
-        ${result.checks.map((check) => `
-          <article class="inova-prompt-review__check">
-            <div class="inova-prompt-review__check-head">
-              <strong>${escapeHtml(check.label)}</strong>
-              <span class="inova-prompt-review__status is-${escapeHtml(check.status)}">${escapeHtml(check.statusLabel)}</span>
-            </div>
-            <p>${escapeHtml(check.feedback)}</p>
-          </article>
-        `).join("")}
       </div>
       ${result.quickImprovements.length ? `
         <section class="inova-prompt-review__section">
@@ -74,6 +71,17 @@
         <span>보완 프롬프트</span>
         <textarea rows="10" readonly>${escapeHtml(result.refinedPrompt)}</textarea>
       </label>
+      <div class="inova-prompt-review__checks">
+        ${result.checks.map((check) => `
+          <article class="inova-prompt-review__check">
+            <div class="inova-prompt-review__check-head">
+              <strong>${escapeHtml(check.label)}</strong>
+              <span class="inova-prompt-review__status is-${escapeHtml(check.status)}">${escapeHtml(check.statusLabel)}</span>
+            </div>
+            <p>${escapeHtml(check.feedback)}</p>
+          </article>
+        `).join("")}
+      </div>
     `;
   }
 

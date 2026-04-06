@@ -136,13 +136,12 @@
 }
 .inova-prompt-review__score { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .inova-prompt-review__score strong { font-size: 15px; color: #0f5f77; }
-.inova-prompt-review__score-help {
-  margin: 0 0 8px;
-  font-size: 12px;
-  line-height: 1.5;
-  color: rgba(16, 33, 43, 0.6);
+.inova-prompt-review__score .inova-help-chip { width: 18px; height: 18px; font-size: 10px; }
+.inova-prompt-review__checks {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid rgba(52, 81, 100, 0.08);
 }
-.inova-prompt-review__checks { display: flex; flex-direction: column; }
 .inova-prompt-review__body { display: flex; flex-direction: column; gap: 0; flex: 1; min-height: 0; overflow-y: auto; padding-right: 2px; }
 .inova-prompt-review__notices {
   display: flex;
