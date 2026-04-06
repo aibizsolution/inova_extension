@@ -674,7 +674,7 @@
     refs.importAudioInput?.addEventListener("change", runWritableAction("파일 불러오기", (event) => void controllers.capture.handleImportAudioSelection(event)));
     refs.pauseButton.addEventListener("click", runWritableAction("녹음 일시중지", () => void controllers.capture.pauseCapture()));
     refs.resumeButton.addEventListener("click", runWritableAction("녹음 재개", () => void controllers.capture.resumeCapture()));
-    refs.stopButton.addEventListener("click", runWritableAction("종료하고 전사", () => void controllers.capture.stopCapture()));
+    refs.stopButton.addEventListener("click", runWritableAction("녹음 완료", () => void controllers.capture.stopCapture()));
     refs.discardButton.addEventListener("click", runWritableAction("녹음 버리기", controllers.capture.discardCapture));
     refs.recordList.addEventListener("click", (event) => void controllers.realtime.handleRecordListClick(event));
     refs.saveRecordTitleButton.addEventListener("click", runWritableAction("기록 이름 저장", () => void controllers.mutations.saveCurrentRecordTitle()));
