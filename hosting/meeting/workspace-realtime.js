@@ -59,13 +59,18 @@
           setNotice("회의 정보를 다시 불러오는 중입니다.", "highlight");
           applyRender();
         }
+        const refreshStartedAt = Date.now();
+        let pendingLoadMs = 0;
+        let realtimeConnectMs = 0;
         try {
           logDebug("workspace.refresh.start", {
             hydrateSelection: Boolean(hydrateSelection),
             meetingId: state.session.meetingId,
             reason,
           });
+          const pendingLoadStartedAt = Date.now();
           await loadPendingUploads();
+          pendingLoadMs = Math.max(0, Date.now() - pendingLoadStartedAt);
           if (state.loadingReason === "boot") {
             // Show the workspace shell as soon as local state is ready.
             applyRender();
@@ -75,21 +80,26 @@
             || normalizeText(reason) === "manual"
             || !state.realtime.unsubscribeMeeting
           );
+          const realtimeConnectStartedAt = Date.now();
           await connectWorkspaceRealtime({
             forceReconnect: shouldReconnect,
             hydrateSelection: Boolean(hydrateSelection),
             reason,
           });
+          realtimeConnectMs = Math.max(0, Date.now() - realtimeConnectStartedAt);
           if (!shouldReconnect) {
             await syncWorkspaceLocalState(Boolean(hydrateSelection), reason);
           }
           clearResolvedRefreshNotice();
           applyRender();
           logDebug("workspace.refresh.success", {
+            elapsedMs: Math.max(0, Date.now() - refreshStartedAt),
             meetingId: state.meeting.meetingId,
             pendingLocalCount: state.pendingUploads.length,
+            pendingLoadMs,
             reason,
             resultCount: state.records.length,
+            realtimeConnectMs,
           });
           return {
             items: state.records,
@@ -133,6 +143,7 @@
       
       
       async function connectWorkspaceRealtime(options = {}) {
+        const connectStartedAt = Date.now();
         const forceReconnect = Boolean(options.forceReconnect);
         const shouldDeferInitialSnapshot = (
           normalizeText(options.reason) === "boot"
@@ -146,9 +157,11 @@
         if (!state.session.meetingId) {
           throw new Error("회의 작업실 접근 권한이 없어요. 패널에서 다시 열어 주세요.");
         }
+        const authStartedAt = Date.now();
         const authPayload = await ensureWorkspaceAuth({
           forceRefresh: forceReconnect,
         });
+        const authElapsedMs = Math.max(0, Date.now() - authStartedAt);
         const nextMeetingDocId = normalizeText(authPayload?.meetingDocumentId);
         if (!nextMeetingDocId) {
           throw new Error("회의 화면 Firestore 문서를 확인하지 못했어요.");
@@ -159,6 +172,12 @@
         state.realtime.workspaceSessionId = "";
       
         if (!forceReconnect && typeof state.realtime.unsubscribeMeeting === "function") {
+          logDebug("workspace.realtime.connect.reuse-listener", {
+            authElapsedMs,
+            elapsedMs: Math.max(0, Date.now() - connectStartedAt),
+            meetingId: state.session.meetingId,
+            reason: normalizeText(options.reason),
+          });
           return authPayload;
         }
       
@@ -167,6 +186,9 @@
         state.realtime.meetingListenerVersion = listenerVersion;
       
         let awaitingInitialSnapshot = true;
+        const initialSnapshotWaitStartedAt = Date.now();
+        let initialSnapshotWaitMs = 0;
+        let initialSnapshotHandleMs = 0;
         let pendingSnapshotOptions = {
           hydrateSelection: Boolean(options.hydrateSelection),
           reason: normalizeText(options.reason) || "snapshot",
@@ -199,12 +221,17 @@
                   reason: "snapshot",
                 };
                 pendingSnapshotOptions = null;
+                initialSnapshotWaitMs = Math.max(0, Date.now() - initialSnapshotWaitStartedAt);
+                const initialSnapshotHandleStartedAt = Date.now();
                 void handleMeetingSnapshot(snapshot, {
                   hydrateSelection: Boolean(snapshotOptions.hydrateSelection),
                   listenerVersion,
                   reason: snapshotOptions.reason,
                 })
-                  .then(finishResolve)
+                  .then(() => {
+                    initialSnapshotHandleMs = Math.max(0, Date.now() - initialSnapshotHandleStartedAt);
+                    finishResolve();
+                  })
                   .catch((error) => {
                     const normalizedError = normalizeRealtimeError(error);
                     if (!awaitingInitialSnapshot) {
@@ -226,6 +253,14 @@
         awaitingInitialSnapshot = false;
       
         if (!initialSnapshotResult?.ok) {
+          logDebug("workspace.realtime.connect.error", {
+            authElapsedMs,
+            elapsedMs: Math.max(0, Date.now() - connectStartedAt),
+            initialSnapshotHandleMs,
+            initialSnapshotWaitMs: Math.max(0, initialSnapshotWaitMs || (Date.now() - initialSnapshotWaitStartedAt)),
+            meetingId: state.session.meetingId,
+            reason: normalizeText(options.reason),
+          });
           if (isRealtimePermissionError(initialSnapshotResult.error) && options.allowPermissionRetry !== false) {
             logDebug("workspace.refresh.permission-retry", {
               meetingId: state.session.meetingId,
@@ -252,12 +287,22 @@
             waitMs: BOOT_INITIAL_SNAPSHOT_WAIT_MS,
           });
         }
+        logDebug("workspace.realtime.connect.success", {
+          authElapsedMs,
+          deferred: Boolean(initialSnapshotResult?.deferred),
+          elapsedMs: Math.max(0, Date.now() - connectStartedAt),
+          initialSnapshotHandleMs,
+          initialSnapshotWaitMs,
+          meetingId: state.session.meetingId,
+          reason: normalizeText(options.reason),
+        });
       
         return authPayload;
       }
       
       
       async function handleMeetingSnapshot(snapshot, options = {}) {
+        const snapshotStartedAt = Date.now();
         if (options.listenerVersion !== state.realtime.meetingListenerVersion) {
           return;
         }
@@ -294,6 +339,7 @@
           return;
         }
         logDebug("workspace.snapshot.meeting", {
+          elapsedMs: Math.max(0, Date.now() - snapshotStartedAt),
           exists: Boolean(snapshot?.exists),
           hydrateSelection: Boolean(options.hydrateSelection),
           meetingId: state.meeting.meetingId,
@@ -304,17 +350,28 @@
       
       
       async function syncWorkspaceLocalState(hydrateSelection, reason) {
+        const syncStartedAt = Date.now();
+        const pendingSyncStartedAt = Date.now();
         await syncPendingUploadsWithRemote(reason);
+        const pendingSyncMs = Math.max(0, Date.now() - pendingSyncStartedAt);
+        const reconcileStartedAt = Date.now();
         await reconcileRemoteRecordSummaries(reason);
+        const reconcileMs = Math.max(0, Date.now() - reconcileStartedAt);
         if (!state.selectedRecordId || hydrateSelection || !findHistoryEntry(state, state.selectedRecordId)) {
           state.selectedRecordId = chooseSelectedRecordId(state);
         }
+        const detailHydrateStartedAt = Date.now();
         await hydrateSelectedDetail(Boolean(hydrateSelection));
+        const detailHydrateMs = Math.max(0, Date.now() - detailHydrateStartedAt);
         persistWorkspaceSession();
         applyRender();
         logDebug("workspace.sync.state", {
+          detailHydrateMs,
+          elapsedMs: Math.max(0, Date.now() - syncStartedAt),
           meetingId: state.meeting.meetingId,
           pendingLocalCount: state.pendingUploads.length,
+          pendingSyncMs,
+          reconcileMs,
           reason,
           resultCount: state.records.length,
           selectedRecordId: state.selectedRecordId,
@@ -436,14 +493,18 @@
       
       
       async function refreshSelectedRemoteDetail(entry, options = {}) {
+        const detailStartedAt = Date.now();
         const jobId = normalizeText(entry?.remote?.jobId || state.currentJob?.jobId);
         if (!jobId || typeof readDocument !== "function") {
           return;
         }
         state.realtime.jobDocId = jobId;
         const shouldReadJob = !Boolean(options.skipJobRead);
+        let jobReadMs = 0;
         if (shouldReadJob) {
+          const jobReadStartedAt = Date.now();
           const jobSnapshot = await readDocument(FIRESTORE_COLLECTIONS.jobs, jobId);
+          jobReadMs = Math.max(0, Date.now() - jobReadStartedAt);
           if (jobSnapshot?.exists && typeof jobSnapshot.data === "function") {
             state.currentJob = normalizeJob(jobSnapshot.data(), state.meeting.title);
             mergeLiveJobIntoRecords(jobSnapshot.data());
@@ -461,12 +522,15 @@
             || !state.currentArtifact
           )
         );
+        let artifactReadMs = 0;
         if (!artifactId || !canReadArtifact) {
           state.realtime.artifactDocId = "";
           state.currentArtifact = null;
         } else if (shouldReadArtifact && typeof readDocument === "function") {
           state.realtime.artifactDocId = artifactId;
+          const artifactReadStartedAt = Date.now();
           const artifactSnapshot = await readDocument(FIRESTORE_COLLECTIONS.artifacts, artifactId);
+          artifactReadMs = Math.max(0, Date.now() - artifactReadStartedAt);
           state.currentArtifact = artifactSnapshot?.exists && typeof artifactSnapshot.data === "function"
             ? normalizeArtifact(artifactSnapshot.data())
             : null;
@@ -482,7 +546,10 @@
         applyRender();
         logDebug("workspace.detail.job-sync", {
           artifactId: canReadArtifact ? normalizeText(state.currentJob?.artifactId) : "",
+          artifactReadMs,
           canReadArtifact,
+          elapsedMs: Math.max(0, Date.now() - detailStartedAt),
+          jobReadMs,
           jobId: normalizeText(state.currentJob?.jobId),
           jobReadSkipped: !shouldReadJob,
           reason: normalizeText(options.reason),

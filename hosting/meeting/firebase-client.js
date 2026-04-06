@@ -183,7 +183,13 @@
       throw new Error("회의 작업실 접근 권한을 아직 확인하지 못했어요.");
     }
 
+    const authStartedAt = Date.now();
     if (!forceRefresh && await hasMatchingWorkspaceAuthSession()) {
+      logDebug("firestore.auth.reuse", {
+        accessMode: authState.accessMode,
+        elapsedMs: Math.max(0, Date.now() - authStartedAt),
+        meetingId: authState.meetingId,
+      });
       return {
         accessMode: authState.accessMode,
         meetingDocumentId: authState.meetingDocumentId,
@@ -203,15 +209,40 @@
         hasFirebaseCustomToken: Boolean(authState.firebaseCustomToken),
         meetingId: authState.meetingId,
       });
+      const firestoreReadyStartedAt = Date.now();
       const { auth } = await ensureFirestoreReady();
+      const firestoreReadyMs = Math.max(0, Date.now() - firestoreReadyStartedAt);
+      logDebug("firestore.auth.step", {
+        elapsedMs: firestoreReadyMs,
+        meetingId: authState.meetingId,
+        step: "firestore-ready",
+      });
       const firebase = getFirebaseGlobal();
+      const persistenceStartedAt = Date.now();
       await auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
+      const persistenceMs = Math.max(0, Date.now() - persistenceStartedAt);
+      logDebug("firestore.auth.step", {
+        elapsedMs: persistenceMs,
+        meetingId: authState.meetingId,
+        step: "set-persistence",
+      });
+      const signInStartedAt = Date.now();
       await auth.signInWithCustomToken(authState.firebaseCustomToken);
+      const signInMs = Math.max(0, Date.now() - signInStartedAt);
+      logDebug("firestore.auth.step", {
+        elapsedMs: signInMs,
+        meetingId: authState.meetingId,
+        step: "custom-token-sign-in",
+      });
       logDebug("firestore.auth.success", {
         accessMode: authState.accessMode,
+        elapsedMs: Math.max(0, Date.now() - authStartedAt),
+        firestoreReadyMs,
         meetingDocumentId: authState.meetingDocumentId,
         meetingId: authState.meetingId,
+        persistenceMs,
         readOnly: authState.readOnly,
+        signInMs,
       });
       authState.promise = null;
       return {
