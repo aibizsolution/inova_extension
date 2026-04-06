@@ -270,16 +270,19 @@
   }
 
   function renderToolbarActionWithHelp(action, label, helpText, disabled = false) {
+    const helpLabel = `${label}. ${helpText}`;
     return `
-      <span class="inova-tool-action-with-help">
-        <button type="button" class="inova-tool-button" data-prompt-action="${escapeHtml(action)}" ${renderDisabled(disabled)}>${escapeHtml(label)}</button>
-        <span
-          class="inova-help-chip"
-          tabindex="0"
-          role="note"
-          aria-label="${escapeHtml(helpText)}"
-          title="${escapeHtml(helpText)}"
-        >?</span>
+      <span class="inova-tool-action-with-help" title="${escapeHtml(helpText)}">
+        <button
+          type="button"
+          class="inova-tool-button inova-tool-button--with-help"
+          data-prompt-action="${escapeHtml(action)}"
+          aria-label="${escapeHtml(helpLabel)}"
+          ${renderDisabled(disabled)}
+        >
+          <span>${escapeHtml(label)}</span>
+          <span class="inova-tool-button__help" aria-hidden="true">?</span>
+        </button>
       </span>
     `;
   }
