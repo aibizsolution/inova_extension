@@ -7,8 +7,6 @@ const DEFAULT_SOURCE_TARGET_PART_BYTES = 28 * 1024 * 1024;
 const DEFAULT_SOURCE_MAX_BYTES = 200 * 1024 * 1024;
 const DEFAULT_SOURCE_MAX_DURATION_MS = 2 * 60 * 60 * 1000;
 const DEFAULT_SOURCE_PART_OVERLAP_MS = 1500;
-const DEFAULT_IN_PROCESS_CHUNK_TRANSCRIPTION_CONCURRENCY = 2;
-const DEFAULT_IN_PROCESS_CHUNK_TRANSCRIPTION_MAX_CONCURRENCY = 5;
 const DEFAULT_MEETING_PROCESS_RETRY_LIMIT = 2;
 const DEFAULT_MODEL = "gpt-4o-transcribe";
 const DEFAULT_SUMMARY_MODEL = "gpt-5.4-mini";
@@ -231,7 +229,7 @@ function registerMeetingHandlers(deps) {
   const uploadInovaMeetingSource = onRequest({
     concurrency: 1,
     cors: CORS_ORIGINS,
-    maxInstances: 60,
+    maxInstances: 150,
     memory: "512MiB",
     region: REGION,
     timeoutSeconds: 60,
@@ -3029,54 +3027,27 @@ function registerMeetingHandlers(deps) {
 
   function getMeetingChunkWorkerQueueConcurrency(totalParts) {
     const normalizedTotalParts = Math.max(1, Number(totalParts) || 1);
-    const requested = Number.parseInt(
-      normalizeText(process.env.OPENAI_MEETING_CHUNK_TRANSCRIPTION_CONCURRENCY),
-      10
-    );
-    if (Number.isFinite(requested) && requested > 0) {
-      return Math.max(1, Math.min(normalizedTotalParts, requested));
-    }
-    if (normalizedTotalParts <= DEFAULT_IN_PROCESS_CHUNK_TRANSCRIPTION_CONCURRENCY) {
-      return normalizedTotalParts;
-    }
-    const adaptive = Math.max(
-      DEFAULT_IN_PROCESS_CHUNK_TRANSCRIPTION_CONCURRENCY,
-      Math.ceil(normalizedTotalParts / 2)
-    );
-    return Math.max(
-      1,
-      Math.min(
-        normalizedTotalParts,
-        DEFAULT_IN_PROCESS_CHUNK_TRANSCRIPTION_MAX_CONCURRENCY,
-        adaptive
-      )
-    );
+    const override = resolveMeetingChunkTranscriptionConcurrencyOverride(normalizedTotalParts);
+    return override || normalizedTotalParts;
   }
 
   function getMeetingChunkTranscriptionConcurrency(totalParts) {
+    const normalizedTotalParts = Math.max(1, Number(totalParts) || 1);
+    const override = resolveMeetingChunkTranscriptionConcurrencyOverride(normalizedTotalParts);
+    return override || normalizedTotalParts;
+  }
+
+  function resolveMeetingChunkTranscriptionConcurrencyOverride(totalParts) {
     const normalizedTotalParts = Math.max(1, Number(totalParts) || 1);
     const requested = Number.parseInt(
       normalizeText(process.env.OPENAI_MEETING_CHUNK_TRANSCRIPTION_CONCURRENCY),
       10
     );
-    if (Number.isFinite(requested) && requested > 0) {
-      return Math.max(1, Math.min(normalizedTotalParts, requested));
+    if (!Number.isFinite(requested) || requested <= 0) {
+      return null;
     }
-    if (normalizedTotalParts <= DEFAULT_IN_PROCESS_CHUNK_TRANSCRIPTION_CONCURRENCY) {
-      return normalizedTotalParts;
-    }
-    const adaptive = Math.max(
-      DEFAULT_IN_PROCESS_CHUNK_TRANSCRIPTION_CONCURRENCY,
-      Math.ceil(normalizedTotalParts / 2)
-    );
-    return Math.max(
-      1,
-      Math.min(
-        normalizedTotalParts,
-        DEFAULT_IN_PROCESS_CHUNK_TRANSCRIPTION_MAX_CONCURRENCY,
-        adaptive
-      )
-    );
+    // Keep the env override as an emergency throttle even though the default is now full fan-out.
+    return Math.max(1, Math.min(normalizedTotalParts, requested));
   }
 
   function getMeetingProcessRetryLimit() {
@@ -3496,9 +3467,11 @@ function registerMeetingHandlers(deps) {
     const normalizedJob = normalizeMeetingJob(job);
     const existingParts = await loadMeetingJobPartDocs(normalizedJob.jobId);
     const existingByIndex = new Map(existingParts.map((part) => [Number(part.index), part]));
+    const totalParts = Array.isArray(normalizedJob.source.parts) ? normalizedJob.source.parts.length : 0;
     const concurrency = getMeetingChunkWorkerQueueConcurrency(
-      Array.isArray(normalizedJob.source.parts) ? normalizedJob.source.parts.length : 0
+      totalParts
     );
+    const enforceQueueLimit = concurrency < Math.max(1, totalParts);
     let activeSlotCount = existingParts.filter((part) => ["processing", "queued"].includes(normalizeText(part.status))).length;
     const batch = db.batch();
     const queuedAt = new Date().toISOString();
@@ -3524,7 +3497,7 @@ function registerMeetingHandlers(deps) {
       } else if (isSameSource && existingStatus === "failed") {
         nextStatus = "failed";
       } else if (normalizeText(sourcePart?.storageObject)) {
-        if (activeSlotCount < concurrency) {
+        if (!enforceQueueLimit || activeSlotCount < concurrency) {
           nextStatus = "queued";
           activeSlotCount += 1;
         } else {

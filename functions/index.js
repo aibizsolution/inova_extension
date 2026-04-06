@@ -105,7 +105,7 @@ exports.processQueuedInovaMeetingJob = onDocumentWritten(
   {
     concurrency: 1,
     document: "integration_inova_meeting_jobs/{jobId}",
-    maxInstances: 20,
+    maxInstances: 80,
     memory: "1GiB",
     region: REGION,
     timeoutSeconds: 120,
@@ -116,7 +116,7 @@ exports.processQueuedInovaMeetingJobPart = onDocumentWritten(
   {
     document: "integration_inova_meeting_job_parts/{partId}",
     concurrency: 1,
-    maxInstances: 80,
+    maxInstances: 300,
     memory: "1GiB",
     region: REGION,
     timeoutSeconds: 180,
@@ -127,7 +127,7 @@ exports.finalizeChunkedInovaMeetingJob = onDocumentWritten(
   {
     concurrency: 1,
     document: "integration_inova_meeting_job_finalizers/{jobId}",
-    maxInstances: 20,
+    maxInstances: 80,
     memory: "1GiB",
     region: REGION,
     timeoutSeconds: 180,
@@ -138,7 +138,7 @@ exports.processQueuedInovaMeetingCommand = onDocumentWritten(
   {
     concurrency: 1,
     document: "integration_inova_meeting_commands/{commandId}",
-    maxInstances: 10,
+    maxInstances: 20,
     memory: "512MiB",
     region: REGION,
     timeoutSeconds: 120,
