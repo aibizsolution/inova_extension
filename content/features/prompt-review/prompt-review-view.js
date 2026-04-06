@@ -33,7 +33,7 @@
         </div>
         <div class="inova-prompt-review__body">
           ${notices ? `<div class="inova-prompt-review__notices">${notices}</div>` : ""}
-          ${result ? renderResult(result) : ""}
+          ${result ? renderResult(result, review) : ""}
         </div>
         <div class="inova-tool-actions inova-prompt-review__actions">
           ${applyButton}
@@ -43,8 +43,14 @@
     `;
   }
 
-  function renderResult(result) {
+  function renderResult(result, review) {
     const scoreGuide = escapeHtml(SCORE_GUIDE_TEXT);
+    const copyLabel = review.copyState === "copied"
+      ? "복사됨"
+      : review.copyState === "failed"
+      ? "다시 시도"
+      : "복사";
+    const formattedPrompt = escapeHtml(result.formattedPrompt || result.refinedPrompt);
     return `
       <div class="inova-prompt-review__summary">
         <div class="inova-prompt-review__score">
@@ -67,10 +73,13 @@
           </ul>
         </section>
       ` : ""}
-      <label class="inova-prompt-review__field">
-        <span>보완 프롬프트</span>
-        <textarea rows="10" readonly>${escapeHtml(result.refinedPrompt)}</textarea>
-      </label>
+      <section class="inova-prompt-review__field">
+        <div class="inova-prompt-review__field-head">
+          <span>보완 프롬프트</span>
+          <button type="button" class="inova-tool-button inova-tool-button--compact" data-prompt-action="copy-reviewed-prompt">${escapeHtml(copyLabel)}</button>
+        </div>
+        <textarea rows="10" readonly>${formattedPrompt}</textarea>
+      </section>
       <div class="inova-prompt-review__checks">
         ${result.checks.map((check) => `
           <article class="inova-prompt-review__check">
