@@ -660,7 +660,7 @@
     refs.saveSharedMemoButton.addEventListener("click", runWritableAction("기록 메모 저장", () => void controllers.mutations.saveSharedMemo()));
     refs.clearSharedMemoButton.addEventListener("click", runWritableAction("기록 메모 비우기", () => void controllers.mutations.clearSharedMemo()));
     refs.saveRecordMemoButton?.addEventListener("click", runWritableAction("기록 메모 저장", () => void controllers.mutations.saveSelectedRecordMemo()));
-    refs.deleteMeetingButton.addEventListener("click", runWritableAction("회의 삭제", () => void controllers.mutations.deleteMeeting()));
+    refs.deleteMeetingButton.addEventListener("click", runWritableAction("회의 룸 삭제", () => void controllers.mutations.deleteMeeting()));
     for (const tabId of ["reviewTabSummary", "reviewTabNotes", "reviewTabMemo", "reviewTabSegments", "reviewTabContext"]) {
       const tab = refs[tabId];
       if (!tab) continue;
