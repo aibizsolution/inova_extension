@@ -89,6 +89,9 @@
 - hosted 기록 상세 카드 상단은 제목과 기록 액션 중심으로 유지한다. 진행 중 상태 설명이나 분할 업로드/처리 배지는 상세 카드에 다시 노출하지 않고, 이런 진행 정보는 기록 목록 또는 아래 `상태` 검토 탭에서만 본다.
 - 위 helper는 degraded notice가 있거나 pending queue 진단 정보가 일부 비어 있어도 예외를 던지지 않고 현재 가능한 snapshot을 우선 덤프해야 한다.
 - 위 helper 출력에는 pending queue snapshot뿐 아니라 최근 hosted debug entry도 함께 포함되어야 한다. stale pending 조사에서 queue 상태와 Firestore/read/query 로그를 같은 캡처로 맞춰 본다.
+- hosted boot나 기록 선택 로딩이 느릴 때는 `firestore.auth.step/success`, `workspace.realtime.connect.success`, `workspace.sync.state`, `workspace.detail.job-sync`의 단계별 timing 로그를 먼저 보고 auth, 첫 snapshot, 상세 artifact read 중 어디가 병목인지부터 가른다.
+- hosted boot는 회의 룸과 기록 목록을 먼저 그리고, 선택된 기록 상세 artifact는 비차단으로 뒤늦게 채우는 흐름을 우선한다. 그래서 boot 체감은 `workspace.refresh.success`와 `workspace.detail.job-sync` 완료 시점을 분리해서 본다.
+- 위 deferred 상세 로딩 로그는 boot 분석 때 `selection`으로 뭉개지지 않게 reason을 유지한다. boot 후속 상세 읽기는 `boot`/`boot-deferred` reason으로 남겨 같은 기록 선택 로그와 구분한다.
 
 ```js
 window.__INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20, entriesLimit: 40 })
