@@ -1026,7 +1026,7 @@
       || !areNotesContextItemsEqual(savedNotesContextItems, savedNotesInputSnapshot.contextItems);
 
     refs.pageTitle.hidden = true;
-    refs.pageTitle.textContent = savedMeetingTitle || "새 회의";
+    refs.pageTitle.textContent = savedMeetingTitle || "새 회의 룸";
     refs.pageSummary.hidden = !normalizeText(workspaceView.pageSummary);
     refs.pageSummary.textContent = workspaceView.pageSummary;
     refs.workspaceBadge.textContent = workspaceView.badgeLabel;

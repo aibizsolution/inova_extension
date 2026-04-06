@@ -451,7 +451,7 @@ async function openHostedMeetingPage(mode, input, providerIdentity, sender) {
       expiresAt: "",
       meeting: {
         meetingId,
-        title: namespace.session.normalizeText(input?.title || sender?.tab?.title) || "새 회의",
+        title: namespace.session.normalizeText(input?.title || sender?.tab?.title) || "새 회의 룸",
       },
       opened: true,
       url: finalUrl,

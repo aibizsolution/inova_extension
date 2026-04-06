@@ -135,8 +135,8 @@
         viewer: "",
       },
       blocked: false,
-      blockedEyebrow: "회의 작업",
-      blockedTitle: "이 회의 화면은 패널에서 다시 열어야 합니다",
+      blockedEyebrow: "회의 룸",
+      blockedTitle: "이 회의 룸은 패널에서 다시 열어야 합니다",
       blockedTone: "blocked",
       blockedMessage: "",
       busy: {
@@ -409,7 +409,7 @@
   
   
   function getWorkspaceTitleOrFallback() {
-    return getWorkspaceTitleDraft() || "새 회의";
+    return getWorkspaceTitleDraft() || "새 회의 룸";
   }
   
   
@@ -528,8 +528,8 @@
   function renderBlocked(message, options = {}) {
     logDebug("workspace.blocked", { message, tone: options?.tone, title: options?.title });
     state.blocked = true;
-    state.blockedEyebrow = normalizeText(options?.eyebrow) || "회의 작업";
-    state.blockedTitle = normalizeText(options?.title) || "이 회의 화면은 패널에서 다시 열어야 합니다";
+    state.blockedEyebrow = normalizeText(options?.eyebrow) || "회의 룸";
+    state.blockedTitle = normalizeText(options?.title) || "이 회의 룸은 패널에서 다시 열어야 합니다";
     state.blockedTone = normalizeText(options?.tone) || "blocked";
     state.blockedMessage = normalizeText(message);
     refs.workspace.hidden = true;
@@ -784,8 +784,8 @@
       refs.workspace.hidden = true;
       refs.blockedState.hidden = false;
       refs.blockedState.dataset.tone = state.blockedTone || "blocked";
-      if (refs.blockedEyebrow) refs.blockedEyebrow.textContent = state.blockedEyebrow || "회의 작업";
-      if (refs.blockedTitle) refs.blockedTitle.textContent = state.blockedTitle || "이 회의 화면은 패널에서 다시 열어야 합니다";
+      if (refs.blockedEyebrow) refs.blockedEyebrow.textContent = state.blockedEyebrow || "회의 룸";
+      if (refs.blockedTitle) refs.blockedTitle.textContent = state.blockedTitle || "이 회의 룸은 패널에서 다시 열어야 합니다";
       refs.blockedMessage.textContent = state.blockedMessage || refs.blockedMessage.textContent;
       controllers?.debug?.render?.();
       return;
