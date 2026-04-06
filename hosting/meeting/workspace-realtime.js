@@ -481,6 +481,7 @@
           return;
         }
         const requestVersion = Number(options.requestVersion) || 0;
+        const requestedReason = normalizeText(options.reason);
         state.currentLocalRecord = entry.pending || null;
         const selectionChanged = normalizeText(state.currentDetailSelectionId) !== normalizeText(entry.id);
         state.currentDetailSelectionId = entry.id;
@@ -540,7 +541,7 @@
           forceArtifactRead: Boolean(selectionChanged || forceRefresh),
           requestVersion,
           skipJobRead,
-          reason: selectionChanged ? "selection" : forceRefresh ? "force-refresh" : "hydrate",
+          reason: requestedReason || (selectionChanged ? "selection" : forceRefresh ? "force-refresh" : "hydrate"),
         });
         restartSelectedDetailPolling(entry);
       }
