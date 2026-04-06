@@ -78,6 +78,7 @@
 .inova-tool-meta--muted { color: rgba(16, 33, 43, 0.62); }
 .inova-tool-actions, .inova-import-review__summary, .inova-import-review__modes { display: flex; flex-wrap: wrap; gap: 6px; }
 .inova-tool-actions--toolbar { justify-content: flex-end; }
+.inova-tool-action-with-help { display: inline-flex; align-items: center; gap: 6px; }
 .inova-tool-button, .inova-tool-pill { padding: 7px 11px; }
 .inova-tool-select-field { display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-weight: 700; color: rgba(16, 33, 43, 0.74); }
 .inova-tool-select { appearance: none; background-image: linear-gradient(45deg, transparent 50%, #5b7a88 50%), linear-gradient(135deg, #5b7a88 50%, transparent 50%); background-position: calc(100% - 18px) calc(50% - 1px), calc(100% - 12px) calc(50% - 1px); background-size: 6px 6px, 6px 6px; background-repeat: no-repeat; padding-right: 34px; }
