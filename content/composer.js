@@ -8,6 +8,7 @@
     ".chat-input__box",
     "form",
   ].join(", ");
+  const AUTO_SEND_OBSERVE_MS = 1200;
 
   function getComposerElement() {
     const direct = findComposerCandidate(namespace.constants.selectors.composer);
@@ -73,6 +74,10 @@
   function applyPromptText(promptText, mode = "replace") {
     const element = getComposerElement();
     if (!element) {
+      logComposerDebug("prompt.composer.apply.missing", {
+        mode,
+        promptLength: String(promptText || "").length,
+      });
       return false;
     }
 
@@ -81,17 +86,33 @@
       mode === "append" && currentText
         ? `${currentText.replace(/\s+$/, "")}\n\n${promptText}`
         : promptText;
+    const monitor = startAutoSendMonitor(element, {
+      beforeSignature: namespace.contentDom?.getUserMessageSignature?.() || "",
+      beforeUserCount: Number(namespace.contentDom?.getConversationState?.()?.userCount) || 0,
+      composer: describeComposerElement(element),
+      mode,
+      promptLength: String(nextText || "").length,
+      promptLineCount: countLineBreaks(nextText),
+    });
+    logComposerDebug("prompt.composer.apply.start", monitor.context);
 
     const applied =
       element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement
         ? setInputValue(element, nextText)
         : setEditableValue(element, nextText);
 
-    if (applied) {
+    if (applied.applied) {
       element.focus();
+      logComposerDebug("prompt.composer.apply.success", {
+        ...monitor.context,
+        method: applied.method,
+      });
+      return true;
     }
 
-    return applied;
+    monitor.stop();
+    logComposerDebug("prompt.composer.apply.failed", monitor.context);
+    return false;
   }
 
   function readComposerText(element) {
@@ -112,15 +133,21 @@
       element.value = text;
     }
 
-    dispatchComposerEvents(element, text);
-    return true;
+    dispatchComposerEvents(element, text, { includeChange: false });
+    return {
+      applied: true,
+      method: descriptor?.set ? "input-value-setter" : "input-value-direct",
+    };
   }
 
   function setEditableValue(element, text) {
     element.focus();
     if (selectAllEditableText(element) && document.execCommand?.("insertText", false, text)) {
-      dispatchComposerEvents(element, text);
-      return true;
+      dispatchComposerEvents(element, text, { includeChange: true });
+      return {
+        applied: true,
+        method: "editable-exec-command",
+      };
     }
 
     const fragment = document.createDocumentFragment();
@@ -132,8 +159,11 @@
       }
     });
     element.replaceChildren(fragment);
-    dispatchComposerEvents(element, text);
-    return true;
+    dispatchComposerEvents(element, text, { includeChange: true });
+    return {
+      applied: true,
+      method: "editable-replace-children",
+    };
   }
 
   function selectAllEditableText(element) {
@@ -149,7 +179,7 @@
     return true;
   }
 
-  function dispatchComposerEvents(element, text) {
+  function dispatchComposerEvents(element, text, options = {}) {
     element.dispatchEvent(
       new InputEvent("input", {
         bubbles: true,
@@ -157,7 +187,194 @@
         inputType: "insertText",
       })
     );
-    element.dispatchEvent(new Event("change", { bubbles: true }));
+    if (options.includeChange) {
+      element.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  }
+
+  function startAutoSendMonitor(element, context) {
+    const form = element.closest?.("form") || null;
+    const anchor = findComposerAnchor(element) || element;
+    const beforeSignature = String(context?.beforeSignature || "");
+    let stopped = false;
+    let timer = 0;
+    let submitListener = null;
+    let keydownListener = null;
+    let clickListener = null;
+    let submitSignal = "";
+    let submitter = "";
+    const baseContext = {
+      beforeSignatureLength: beforeSignature.length,
+      beforeUserCount: Number(context?.beforeUserCount) || 0,
+      composer: context?.composer || {},
+      hasForm: Boolean(form),
+      mode: normalizeDebugText(context?.mode),
+      promptLength: Number(context?.promptLength) || 0,
+      promptLineCount: Number(context?.promptLineCount) || 0,
+    };
+
+    if (form) {
+      submitListener = (event) => {
+        const nextSubmitter = normalizeDebugText(
+          event?.submitter?.getAttribute?.("aria-label")
+            || event?.submitter?.textContent
+            || event?.submitter?.getAttribute?.("title")
+            || event?.submitter?.tagName
+            || ""
+        );
+        rememberSubmitSignal("form-submit", nextSubmitter);
+        logComposerDebug("prompt.composer.submit.detected", {
+          ...baseContext,
+          submitSignal,
+          submitter,
+        });
+      };
+      form.addEventListener("submit", submitListener, true);
+    }
+
+    keydownListener = (event) => {
+      if (
+        stopped
+        || event.defaultPrevented
+        || event.isComposing
+        || event.key !== "Enter"
+        || event.shiftKey
+        || event.altKey
+        || event.ctrlKey
+        || event.metaKey
+      ) {
+        return;
+      }
+      const target = event.target;
+      if (!(target instanceof Element) || !anchor.contains(target)) {
+        return;
+      }
+      rememberSubmitSignal(
+        "enter-key",
+        normalizeDebugText(target.getAttribute?.("aria-label") || target.tagName)
+      );
+    };
+    document.addEventListener("keydown", keydownListener, true);
+
+    clickListener = (event) => {
+      if (stopped) {
+        return;
+      }
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      const button = target.closest?.('button, [role="button"], [type="submit"]');
+      if (!(button instanceof Element) || !anchor.contains(button)) {
+        return;
+      }
+      if (button.closest?.("#inova-bookmark-host, #inova-composer-review-host")) {
+        return;
+      }
+      rememberSubmitSignal(
+        "button-click",
+        normalizeDebugText(
+          button.getAttribute?.("aria-label")
+            || button.textContent
+            || button.getAttribute?.("title")
+            || button.tagName
+        )
+      );
+    };
+    document.addEventListener("click", clickListener, true);
+
+    timer = global.setTimeout(() => {
+      if (stopped) return;
+      const afterUserCount = Number(namespace.contentDom?.getConversationState?.()?.userCount) || 0;
+      const afterSignature = namespace.contentDom?.getUserMessageSignature?.() || "";
+      if (afterUserCount > baseContext.beforeUserCount || afterSignature !== beforeSignature) {
+        const payload = {
+          ...baseContext,
+          afterUserCount,
+          afterSignatureLength: afterSignature.length,
+          messageAdded: afterUserCount > baseContext.beforeUserCount,
+          signatureChanged: afterSignature !== beforeSignature,
+          submitSignal,
+          submitter,
+          userCountDelta: Math.max(0, afterUserCount - baseContext.beforeUserCount),
+        };
+        logComposerDebug(
+          submitSignal ? "prompt.composer.message.after-apply" : "prompt.composer.auto-send.suspected",
+          {
+            ...payload,
+            level: submitSignal ? "info" : "warning",
+          }
+        );
+      }
+      stop();
+    }, AUTO_SEND_OBSERVE_MS);
+
+    return {
+      context: baseContext,
+      stop,
+    };
+
+    function stop() {
+      if (stopped) return;
+      stopped = true;
+      global.clearTimeout(timer);
+      if (form && submitListener) {
+        form.removeEventListener("submit", submitListener, true);
+      }
+      if (keydownListener) {
+        document.removeEventListener("keydown", keydownListener, true);
+      }
+      if (clickListener) {
+        document.removeEventListener("click", clickListener, true);
+      }
+    }
+
+    function rememberSubmitSignal(signal, detail) {
+      if (submitSignal) {
+        return;
+      }
+      submitSignal = normalizeDebugText(signal);
+      submitter = normalizeDebugText(detail);
+    }
+  }
+
+  function describeComposerElement(element) {
+    if (!element) {
+      return {
+        className: "",
+        role: "",
+        tagName: "",
+        type: "",
+      };
+    }
+
+    return {
+      className: normalizeDebugText(element.className),
+      role: normalizeDebugText(element.getAttribute?.("role")),
+      tagName: normalizeDebugText(element.tagName).toLowerCase(),
+      type: element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement
+        ? normalizeDebugText(element.type)
+        : element.isContentEditable
+          ? "contenteditable"
+          : "",
+    };
+  }
+
+  function countLineBreaks(text) {
+    const normalized = String(text || "");
+    return normalized ? normalized.split("\n").length : 0;
+  }
+
+  function normalizeDebugText(value) {
+    return namespace.session?.normalizeText?.(value) || String(value || "").trim();
+  }
+
+  function logComposerDebug(event, payload) {
+    namespace.panelDebug?.log?.(event, {
+      scope: "prompt",
+      tool: "prompts",
+      ...(payload || {}),
+    });
   }
 
   function findComposerAnchor(element) {

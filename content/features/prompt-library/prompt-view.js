@@ -1,5 +1,7 @@
 (function initPromptView(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const IMPORT_GUIDE_TEXT = "이전에 내보낸 백업 파일(.json)만 가져올 수 있어요. 일반 문서 파일은 가져올 수 없어요.";
+  const EXPORT_GUIDE_TEXT = "내 요청 목록을 백업 파일(.json)로 저장해요. 나중에 가져오기로 다시 불러올 수 있어요.";
 
   function render(state) {
     return `
@@ -31,8 +33,8 @@
           <div class="inova-tool-meta">총 ${state.totalCount}개</div>
           <div class="inova-tool-actions inova-tool-actions--toolbar">
             <button type="button" class="inova-tool-button is-primary" data-prompt-action="create">추가</button>
-            <button type="button" class="inova-tool-button" data-prompt-action="import">가져오기</button>
-            <button type="button" class="inova-tool-button" data-prompt-action="export" ${state.totalCount ? "" : "disabled"}>내보내기</button>
+            ${renderToolbarActionWithHelp("import", "가져오기", IMPORT_GUIDE_TEXT)}
+            ${renderToolbarActionWithHelp("export", "내보내기", EXPORT_GUIDE_TEXT, !state.totalCount)}
           </div>
         </div>
       </div>
@@ -265,6 +267,24 @@
 
   function renderDisabled(disabled) {
     return disabled ? 'disabled aria-disabled="true"' : "";
+  }
+
+  function renderToolbarActionWithHelp(action, label, helpText, disabled = false) {
+    const helpLabel = `${label}. ${helpText}`;
+    return `
+      <span class="inova-tool-action-with-help" title="${escapeHtml(helpText)}">
+        <button
+          type="button"
+          class="inova-tool-button inova-tool-button--with-help"
+          data-prompt-action="${escapeHtml(action)}"
+          aria-label="${escapeHtml(helpLabel)}"
+          ${renderDisabled(disabled)}
+        >
+          <span>${escapeHtml(label)}</span>
+          <span class="inova-tool-button__help" aria-hidden="true">?</span>
+        </button>
+      </span>
+    `;
   }
 
   function getImportModeLabel(mode) {
