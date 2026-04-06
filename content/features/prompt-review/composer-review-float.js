@@ -4,6 +4,8 @@
   const ROOT_ID = "inova-composer-review-root";
   const TRACKING_DURATION_MS = 320;
   const VIEWPORT_MARGIN = 12;
+  const OUTSIDE_OFFSET_X = 10;
+  const OUTSIDE_OFFSET_Y = 8;
 
   function ensure(callbacks) {
     let host = document.getElementById(HOST_ID);
@@ -129,8 +131,8 @@
     const buttonRect = button?.getBoundingClientRect();
     const width = Math.max(56, Math.ceil(buttonRect?.width || 112));
     const height = Math.max(34, Math.ceil(buttonRect?.height || 34));
-    const left = clamp(rect.right - 12 - width, VIEWPORT_MARGIN, global.innerWidth - VIEWPORT_MARGIN - width);
-    const top = clamp(rect.top + 16, VIEWPORT_MARGIN, global.innerHeight - VIEWPORT_MARGIN - height);
+    const left = clamp(rect.right - width - OUTSIDE_OFFSET_X, VIEWPORT_MARGIN, global.innerWidth - VIEWPORT_MARGIN - width);
+    const top = clamp(rect.top - height - OUTSIDE_OFFSET_Y, VIEWPORT_MARGIN, global.innerHeight - VIEWPORT_MARGIN - height);
     root.style.left = `${Math.round(left)}px`;
     root.style.top = `${Math.round(top)}px`;
   }
