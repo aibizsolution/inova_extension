@@ -8,6 +8,7 @@
     ".chat-input__box",
     "form",
   ].join(", ");
+  const AUTO_SEND_OBSERVE_MS = 1200;
 
   function getComposerElement() {
     const direct = findComposerCandidate(namespace.constants.selectors.composer);
@@ -73,6 +74,10 @@
   function applyPromptText(promptText, mode = "replace") {
     const element = getComposerElement();
     if (!element) {
+      logComposerDebug("prompt.composer.apply.missing", {
+        mode,
+        promptLength: String(promptText || "").length,
+      });
       return false;
     }
 
@@ -81,17 +86,33 @@
       mode === "append" && currentText
         ? `${currentText.replace(/\s+$/, "")}\n\n${promptText}`
         : promptText;
+    const monitor = startAutoSendMonitor(element, {
+      beforeSignature: namespace.contentDom?.getUserMessageSignature?.() || "",
+      beforeUserCount: Number(namespace.contentDom?.getConversationState?.()?.userCount) || 0,
+      composer: describeComposerElement(element),
+      mode,
+      promptLength: String(nextText || "").length,
+      promptLineCount: countLineBreaks(nextText),
+    });
+    logComposerDebug("prompt.composer.apply.start", monitor.context);
 
     const applied =
       element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement
         ? setInputValue(element, nextText)
         : setEditableValue(element, nextText);
 
-    if (applied) {
+    if (applied.applied) {
       element.focus();
+      logComposerDebug("prompt.composer.apply.success", {
+        ...monitor.context,
+        method: applied.method,
+      });
+      return true;
     }
 
-    return applied;
+    monitor.stop();
+    logComposerDebug("prompt.composer.apply.failed", monitor.context);
+    return false;
   }
 
   function readComposerText(element) {
@@ -113,14 +134,20 @@
     }
 
     dispatchComposerEvents(element, text);
-    return true;
+    return {
+      applied: true,
+      method: descriptor?.set ? "input-value-setter" : "input-value-direct",
+    };
   }
 
   function setEditableValue(element, text) {
     element.focus();
     if (selectAllEditableText(element) && document.execCommand?.("insertText", false, text)) {
       dispatchComposerEvents(element, text);
-      return true;
+      return {
+        applied: true,
+        method: "editable-exec-command",
+      };
     }
 
     const fragment = document.createDocumentFragment();
@@ -133,7 +160,10 @@
     });
     element.replaceChildren(fragment);
     dispatchComposerEvents(element, text);
-    return true;
+    return {
+      applied: true,
+      method: "editable-replace-children",
+    };
   }
 
   function selectAllEditableText(element) {
@@ -158,6 +188,106 @@
       })
     );
     element.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  function startAutoSendMonitor(element, context) {
+    const form = element.closest?.("form") || null;
+    const beforeSignature = String(context?.beforeSignature || "");
+    let stopped = false;
+    let timer = 0;
+    let submitListener = null;
+    const baseContext = {
+      beforeSignatureLength: beforeSignature.length,
+      beforeUserCount: Number(context?.beforeUserCount) || 0,
+      composer: context?.composer || {},
+      hasForm: Boolean(form),
+      mode: normalizeDebugText(context?.mode),
+      promptLength: Number(context?.promptLength) || 0,
+      promptLineCount: Number(context?.promptLineCount) || 0,
+    };
+
+    if (form) {
+      submitListener = (event) => {
+        logComposerDebug("prompt.composer.submit.detected", {
+          ...baseContext,
+          submitter: normalizeDebugText(
+            event?.submitter?.getAttribute?.("aria-label")
+              || event?.submitter?.textContent
+              || ""
+          ),
+        });
+      };
+      form.addEventListener("submit", submitListener, true);
+    }
+
+    timer = global.setTimeout(() => {
+      if (stopped) return;
+      const afterUserCount = Number(namespace.contentDom?.getConversationState?.()?.userCount) || 0;
+      const afterSignature = namespace.contentDom?.getUserMessageSignature?.() || "";
+      if (afterUserCount > baseContext.beforeUserCount || afterSignature !== beforeSignature) {
+        logComposerDebug("prompt.composer.auto-send.suspected", {
+          ...baseContext,
+          afterUserCount,
+          afterSignatureLength: afterSignature.length,
+          signatureChanged: afterSignature !== beforeSignature,
+          level: "error",
+        });
+      }
+      stop();
+    }, AUTO_SEND_OBSERVE_MS);
+
+    return {
+      context: baseContext,
+      stop,
+    };
+
+    function stop() {
+      if (stopped) return;
+      stopped = true;
+      global.clearTimeout(timer);
+      if (form && submitListener) {
+        form.removeEventListener("submit", submitListener, true);
+      }
+    }
+  }
+
+  function describeComposerElement(element) {
+    if (!element) {
+      return {
+        className: "",
+        role: "",
+        tagName: "",
+        type: "",
+      };
+    }
+
+    return {
+      className: normalizeDebugText(element.className),
+      role: normalizeDebugText(element.getAttribute?.("role")),
+      tagName: normalizeDebugText(element.tagName).toLowerCase(),
+      type: element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement
+        ? normalizeDebugText(element.type)
+        : element.isContentEditable
+          ? "contenteditable"
+          : "",
+    };
+  }
+
+  function countLineBreaks(text) {
+    const normalized = String(text || "");
+    return normalized ? normalized.split("\n").length : 0;
+  }
+
+  function normalizeDebugText(value) {
+    return namespace.session?.normalizeText?.(value) || String(value || "").trim();
+  }
+
+  function logComposerDebug(event, payload) {
+    namespace.panelDebug?.log?.(event, {
+      scope: "prompt",
+      tool: "prompts",
+      ...(payload || {}),
+    });
   }
 
   function findComposerAnchor(element) {
