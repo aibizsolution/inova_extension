@@ -223,7 +223,7 @@
       toolTitle: state.activeTool === "prompts"
         ? "프롬프트"
         : state.activeTool === "meeting"
-            ? "회의록"
+            ? "회의 룸"
             : state.activeTool === "release"
                 ? "릴리스 안내"
                 : "대화 탐색",
