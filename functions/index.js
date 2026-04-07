@@ -115,9 +115,10 @@ exports.processQueuedInovaMeetingJob = onDocumentWritten(
 exports.processQueuedInovaMeetingJobPart = onDocumentWritten(
   {
     document: "integration_inova_meeting_job_parts/{partId}",
-    concurrency: 1,
+    concurrency: 2,
+    cpu: 1,
     maxInstances: 200,
-    memory: "1GiB",
+    memory: "2GiB",
     region: REGION,
     timeoutSeconds: 180,
   },

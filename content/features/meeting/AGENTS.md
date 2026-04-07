@@ -60,7 +60,7 @@
 - 기본 HTTP 함수는 특별한 이유가 없으면 Firebase 기본 runtime(`256MiB`, `60s`, `concurrency 80`, `maxInstances 20`)을 그대로 쓴다.
 - `processQueuedInovaMeetingJobPart`는 기본값에서 chunk 수만큼 바로 fan-out한다. 외부 압력으로 임시 throttle이 필요할 때만 `OPENAI_MEETING_CHUNK_TRANSCRIPTION_CONCURRENCY`를 쓴다.
 - `uploadInovaMeetingSource`는 raw audio buffer를 직접 받아서 storage upload까지 처리하므로 기본 `256MiB` 대신 중간값 `512MiB`를 유지한다.
-- chunk/finalize worker는 전사와 notes finalize를 맡으므로 메모리는 `1GiB`를 유지하고, 현재 운영 기준 `job 80 / jobPart 200 / finalize 80 / upload 150 / command 20`을 먼저 본다.
+- chunk worker는 1차 운영 기준을 `2GiB / cpu 1 / concurrency 2 / maxInstances 200`으로 두고, finalize는 `1GiB / concurrency 1 / maxInstances 80`을 유지한다. `concurrency 3` 이상은 fresh OOM/429 없이 48-72시간 관찰한 뒤에만 올린다.
 - deletion worker는 전사 처리 함수가 아니므로 최근 운영 로그에서 안정적이면 `512MiB/120s`, scheduler sweep은 `256MiB/60s`처럼 가볍게 유지한다.
 
 ## 관련 데이터 경계

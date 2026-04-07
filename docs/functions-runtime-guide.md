@@ -56,8 +56,8 @@
 ### Chunk Worker
 
 - 대상: part 단위 오디오 전사와 chunk transcript 저장
-- 기준값: `1GiB`, `180s`, `concurrency 1`, 높은 `maxInstances`
-- 메모: 사용자 수가 늘 때 가장 먼저 병목이 생길 가능성이 큰 축이다. 기본값은 part 수만큼 fan-out하고, 필요할 때만 `OPENAI_MEETING_CHUNK_TRANSCRIPTION_CONCURRENCY`로 긴급 throttle을 건다.
+- 기준값: `2GiB`, `180s`, `cpu 1`, `concurrency 2`, 높은 `maxInstances`
+- 메모: 사용자 수가 늘 때 가장 먼저 병목이 생길 가능성이 큰 축이다. 기본값은 part 수만큼 fan-out하고, 필요할 때만 `OPENAI_MEETING_CHUNK_TRANSCRIPTION_CONCURRENCY`로 긴급 throttle을 건다. `concurrency 3` 이상은 fresh OOM/429 없이 48-72시간 관찰한 뒤에만 올린다.
 
 ### Finalize
 
@@ -108,7 +108,7 @@
 
 - `uploadInovaMeetingSource`: `512MiB`, `60s`, `concurrency 1`, `maxInstances 150`
 - `processQueuedInovaMeetingJob`: `1GiB`, `120s`, `concurrency 1`, `maxInstances 80`
-- `processQueuedInovaMeetingJobPart`: `1GiB`, `180s`, `concurrency 1`, `maxInstances 200`
+- `processQueuedInovaMeetingJobPart`: `2GiB`, `180s`, `cpu 1`, `concurrency 2`, `maxInstances 200`
 - `finalizeChunkedInovaMeetingJob`: `1GiB`, `180s`, `concurrency 1`, `maxInstances 80`
 - `processQueuedInovaMeetingCommand`: `512MiB`, `120s`, `concurrency 1`, `maxInstances 20`
 - `processQueuedInovaMeetingDeletion`: `512MiB`, `120s`, `concurrency 1`, `maxInstances 5`
@@ -167,8 +167,8 @@
 - `500명 이하 사용자`라도 모든 함수가 `동시 100명`을 그대로 감당할 필요는 없다
 - 기본 HTTP 함수는 기본 프로파일로도 충분한 경우가 많다
 - 실제 확장 리스크는 `upload`, `chunk worker`, `finalize`처럼 heavy path에 집중된다
-- 동시 사용자 가정이 커질수록 먼저 볼 축은 `processQueuedInovaMeetingJobPart`의 `maxInstances`와 fresh OOM 여부다
-- 현재 `processQueuedInovaMeetingJobPart`는 `1 CPU` 기준 regional CPU quota 때문에 `maxInstances 200`까지 반영 가능하다. 그 이상은 quota 상향이나 CPU 재설계가 필요하다.
+- 동시 사용자 가정이 커질수록 먼저 볼 축은 `processQueuedInovaMeetingJobPart`의 `maxInstances`뿐 아니라 `concurrency/memory` 균형과 fresh OOM 여부다
+- 현재 `processQueuedInovaMeetingJobPart`는 `1 CPU` 기준 regional CPU quota 때문에 `maxInstances 200`까지 반영 가능하다. 1차 운영값은 `2GiB / cpu 1 / concurrency 2`이며, 그 이상은 quota 상향이나 추가 로그 근거가 필요하다.
 
 ## 8. 변경 절차
 
