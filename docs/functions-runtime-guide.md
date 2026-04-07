@@ -114,6 +114,17 @@
 - `processQueuedInovaMeetingDeletion`: `512MiB`, `120s`, `concurrency 1`, `maxInstances 5`
 - `sweepQueuedInovaMeetingDeletions`: `256MiB`, `60s`, `concurrency 1`, `maxInstances 1`
 
+### 2026-04-07 chunk worker 결정 메모
+
+- 배경: `processQueuedInovaMeetingJobPart`는 regional CPU quota 때문에 `maxInstances 200`이 현재 ceiling이다. `300`은 배포에서 거절됐다.
+- 구조: 이 worker는 part 오디오를 통째로 내려받아 메모리에 올리고 외부 전사 API 응답을 기다린다. CPU-only worker보다 `memory`와 in-flight 요청 수 영향이 크다.
+- 선택: 1차 운영값은 `2GiB / cpu 1 / concurrency 2 / maxInstances 200`이다.
+- 이유: `concurrency 1`로 되돌리면 인스턴스 수를 더 빨리 소모해 ceiling에 먼저 닿고, `4GiB/2CPU`처럼 올리면 quota 상 인스턴스 상한이 다시 줄 수 있다.
+- 유지 기준: fresh `OOM`, OpenAI `429`, retry 급증이 없으면 `concurrency 2`를 유지한다.
+- 하향 기준: fresh `OOM`이나 retry 폭증이 다시 보이면 `concurrency 1` 복귀 또는 `OPENAI_MEETING_CHUNK_TRANSCRIPTION_CONCURRENCY` throttle을 먼저 검토한다.
+- 상향 기준: `48-72시간` 이상 안정적이고 backlog 감소가 확인될 때만 `concurrency 3`을 다음 단계로 검토한다.
+- 배포 확인 메모: 배포 직후 `check:function-runtime`가 이전 revision 값을 잠깐 보여줄 수 있으니, 값이 엇갈리면 `gcloud functions describe --project browser-extension-main --gen2 --region asia-northeast3`를 최종 기준으로 본다.
+
 ## 5. 로그 해석 기준
 
 ### OOM
