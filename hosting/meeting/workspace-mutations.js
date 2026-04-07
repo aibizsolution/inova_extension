@@ -191,7 +191,14 @@
         if (mutation.reviewTab && isCurrentSelectedRecord) {
           state.reviewTab = mutation.reviewTab;
         }
-      
+        if (mutation.type === "regenerateNotes" && isCurrentSelectedRecord) {
+          state.selectedRecordNotesInputSnapshot = {
+            ...state.selectedRecordNotesInputSnapshot,
+            contextItems: cloneNotesContextItems(state.notesContext.items),
+            sharedMemo: normalizeTextBlock(state.selectedRecordMemo.saved),
+          };
+        }
+
         if (mutation.type === "deleteMeeting") {
           try {
             await runPendingUploadQueueOperation(
@@ -771,13 +778,21 @@
           }
           return true;
         }
+        const previousItems = cloneNotesContextItems(state.notesContext.items);
+        const previousDraft = state.notesContext.draft;
+        const previousEditingId = state.notesContext.editingId;
+        state.notesContext.items = nextItems;
+        if (options.clearDraft) {
+          state.notesContext.draft = "";
+          state.notesContext.editingId = "";
+        }
         const requestId = generateClientRequestId("record-context");
         registerPendingMutation({
           jobId: entry.remote.jobId,
           quiet: !options.successMessage,
           recordId: entry.id,
           requestId,
-          resetNotesContextDraft: Boolean(options.clearDraft),
+          resetNotesContextDraft: false,
           successMessage: options.successMessage,
           type: "saveRecordContext",
         });
@@ -793,6 +808,11 @@
           await resolvePendingMutationsFromSnapshots();
           return true;
         } catch (error) {
+          state.notesContext.items = previousItems;
+          if (options.clearDraft) {
+            state.notesContext.draft = previousDraft;
+            state.notesContext.editingId = previousEditingId;
+          }
           if (isLegacyMeetingResultMutationError(error)) {
             logDebug("workspace.result.update.legacy-backend", {
               contextItemCount: nextItems.length,

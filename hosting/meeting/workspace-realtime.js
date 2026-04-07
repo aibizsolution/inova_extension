@@ -494,17 +494,22 @@
           return;
         }
       
+        const snapshotMutationRequestId = normalizeText(entry.remote.workspaceMutation?.requestId);
+        const pendingMutationJustCompleted = Boolean(
+          snapshotMutationRequestId && state.pendingMutations?.[snapshotMutationRequestId]
+        );
         const shouldRefreshRemoteSelection = Boolean(
           selectionChanged
           || normalizeText(state.realtime.jobDocId) !== normalizeText(entry.remote.jobId)
           || forceRefresh
           || !state.currentJob
+          || pendingMutationJustCompleted
         );
         if (!shouldRefreshRemoteSelection) {
           ensureSelectedDetailPolling(entry);
           return;
         }
-      
+
         disconnectJobListener();
         disconnectArtifactListener();
         state.currentArtifact = null;
@@ -535,7 +540,8 @@
         }, state.meeting.title);
         syncSelectedRecordReviewState(entry);
         const skipJobRead = TERMINAL_REMOTE_STATUSES.has(normalizeText(entry.remote.status))
-          && !hasActiveWorkspaceMutation(entry.remote.workspaceMutation);
+          && !hasActiveWorkspaceMutation(entry.remote.workspaceMutation)
+          && !pendingMutationJustCompleted;
         await refreshSelectedRemoteDetail(entry, {
           expectedSelectionId: normalizeText(entry.id),
           forceArtifactRead: Boolean(selectionChanged || forceRefresh),
