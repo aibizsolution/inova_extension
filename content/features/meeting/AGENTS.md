@@ -44,7 +44,7 @@
 - stale summary는 pending이 있을 때만 고치지 않는다. `recentJobs`에 남은 non-terminal remote record도 실제 job 문서와 다시 대조해 `succeeded/failed`가 확인되면 list status를 즉시 교정한다.
 - 위 direct read 복구는 정상 진행 중 every-snapshot 경로가 아니다. 활성 processing record는 `recentJobs` 요약을 우선 쓰고, 선택된 job/artifact 상세는 `10초 polling`으로만 동기화한다. direct doc read는 stale pending 또는 오래된 non-terminal summary처럼 복구 근거가 있을 때만 제한적으로 실행한다.
 - 새 전사 processing 구간은 artifact가 아직 없다고 보고 설계한다. 선택 상세 polling도 processing job에서는 artifact를 읽지 않고, terminal 상태나 기존 completed record mutation처럼 artifact가 실제로 의미 있는 시점에만 읽는다.
-- completed record selection도 terminal summary를 우선 신뢰한다. 활성 workspaceMutation이 없는 완료 기록은 selection 때 `job` 재읽기를 생략하고, 실제 본문이 필요한 artifact만 읽는 쪽을 기본으로 둔다.
+- completed record selection도 terminal summary를 우선 신뢰한다. 활성 workspaceMutation이 없는 완료 기록은 selection 때 `job` 재읽기를 생략하고, 실제 본문이 필요한 artifact만 읽는 쪽을 기본으로 둔다. 단, 클라이언트가 추적 중인 pending mutation의 requestId가 snapshot workspaceMutation.requestId와 일치할 때는 (`pendingMutationJustCompleted`) mutation 완료 직후로 판단해 job을 강제로 재읽기한다 — 제목 저장, 추가 맥락 저장, 회의록 업데이트 후 UI 즉시 반영을 위한 예외다.
 - hosted 상단에는 수동 `새로고침` 액션을 기본 노출하지 않는다. 회의 문서 listener와 선택 상세 polling을 기본 동기화로 두고, 세션/URL 복원도 예전 `jobId`보다 현재 선택 record를 우선 저장한다.
 - hosted stale pending, orphan queue, 잘못된 진행 상태가 1~2회 패치 후에도 남으면 더 이상 추측 패치를 누적하지 않는다. 실제 상용 페이지에서 `debug=1` 로그, 화면 스크린샷, `window.__INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20, entriesLimit: 40 })` 결과를 먼저 모은 뒤 그 식별자 기준으로 수정한다.
 - 위 console helper가 없으면 코드 문제가 아니라 배포/캐시 mismatch 가능성을 먼저 본다. 이 경우는 `hosting` 재배포 여부와 페이지 강한 새로고침 여부를 확인하고, helper가 보이는 최신 JS인지부터 맞춘다.
