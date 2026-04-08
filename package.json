@@ -35,6 +35,7 @@
     "verify:docs": "node scripts/verify-docs.js",
     "verify:prompt-fallbacks": "node scripts/verify-prompt-fallbacks.js",
     "verify:feature-doc-guard": "node scripts/verify-feature-doc-update.js --staged",
+    "verify:refactor-plan-guard": "node scripts/verify-refactor-plan-update.js --staged",
     "verify:release-guard": "node scripts/verify-release-metadata.js --staged"
   },
   "devDependencies": {

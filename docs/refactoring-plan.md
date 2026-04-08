@@ -16,6 +16,7 @@
 - 버전은 리팩토링의 목표가 아니라 결과다.
 - 이번 작업은 `무조건 1.0.0`이 아니라, 구현 결과에 따라 `0.5.x` 같은 minor로 끝날지 `1.0.0`으로 승격할지 판단하는 구조다.
 - 새 세션은 과거 대화나 초안이 아니라, 이 문서의 `Version Decision Gate`, `Current Implementation Reality`, `Meeting Legacy Baseline`, `세션 인계 로그`를 기준으로 시작한다.
+- refactor-sensitive 파일이 바뀌면 `docs/refactoring-plan.md`를 같이 갱신하지 않는 한 pre-commit/pre-push 가드가 커밋과 푸시를 막는다.
 
 ---
 
