@@ -71,6 +71,7 @@
 
 ### 기록 규칙
 
+- `현재 가설`은 `minor 가설`, `major 가설`, `미정` 중 하나만 사용한다.
 - 구현자가 `minor candidate ready` 또는 `major candidate ready`를 주장하려면, 이 블록과 `세션 인계 로그`를 같은 커밋 안에서 함께 갱신한다.
 - candidate 증거 요약에는 어떤 smoke를 돌렸고 어떤 조건을 통과했는지 3-5줄로 남긴다.
 - 유지보수자는 이 블록의 `유지보수자 최종 결정` 항목에만 `minor 확정`, `major 확정`, `보류` 중 하나를 남긴다.
@@ -95,7 +96,7 @@
 ### Minor 경로에서 foundation 코드 처리 규칙
 
 - 최종 결정이 `minor 확정`이면, major 전용 dormant path를 그대로 장기 보존하지 않는다.
-- 현재 기능에 실제로 쓰이는 일반 helper만 남기고, `major >= 1 => v2` 분기, v2 endpoint override, v2 release lane처럼 minor 릴리스에 필요 없는 코드는 같은 작업 또는 직후 cleanup 커밋에서 제거한다.
+- 현재 기능에 실제로 쓰이는 일반 helper만 남기고, `major >= 1 => v2` 분기, v2 endpoint override, v2 release lane처럼 minor 릴리스에 필요 없는 코드는 `minor 확정 커밋` 또는 그 직후 `cleanup 커밋`에서 제거한다.
 - 예외는 현재 runtime을 단순화하는 공용 helper뿐이다. `미사용 lane switch`를 미래 가능성만으로 남겨 두지 않는다.
 
 ### 현재 세션의 핵심 질문
