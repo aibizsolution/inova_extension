@@ -31,6 +31,8 @@
 - 따라서 같은 시점에 여러 ZIP 버전이 공존할 수 있다.
 - mixed-version 기간을 전제로 backend/hosting 호환성을 잡아야 한다.
 - 배포 보고에는 항상 `새 ZIP 배포 여부`, `hosting 반영 여부`, `functions 반영 여부`, `사용자 reload 필요 여부`를 함께 적는다.
+- 다만 내부 배포는 대상 인원과 전환 시점을 어느 정도 제어할 수 있으므로, mixed-version 지원을 무기한으로 두지 않는다.
+- 기본값은 `현재 minor + 이전 minor` 지원이며, 각 릴리스 공지에는 `이전 minor 지원 종료 조건` 또는 `예상 전환 완료 시점`을 함께 적는다.
 
 ## 호환 범위 정책
 
@@ -38,6 +40,7 @@
 - 이 범위를 벗어난 클라이언트를 조용히 깨뜨리지 않는다.
 - 구조적으로 호환이 어려워지면 compat shim, additive field, dual-read/write, lazy migration을 먼저 검토한다.
 - 그래도 흡수할 수 없을 때만 다음 major를 검토한다.
+- 내부 ZIP 배포에서는 같은 minor 안의 patch 혼재는 허용하되, `이전 minor`를 넘는 지원은 명시 이유 없이 자동 연장하지 않는다.
 
 ### `minSupportedVersion` 메모
 

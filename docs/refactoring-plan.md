@@ -61,6 +61,22 @@
 
 ---
 
+## Version Decision Record
+
+- 현재 가설: `미정`
+- candidate ready 상태: `not-started`
+- 마지막 candidate 갱신 커밋: `없음`
+- candidate 증거 요약: `없음`
+- 유지보수자 최종 결정: `미정`
+
+### 기록 규칙
+
+- 구현자가 `minor candidate ready` 또는 `major candidate ready`를 주장하려면, 이 블록과 `세션 인계 로그`를 같은 커밋 안에서 함께 갱신한다.
+- candidate 증거 요약에는 어떤 smoke를 돌렸고 어떤 조건을 통과했는지 3-5줄로 남긴다.
+- 유지보수자는 이 블록의 `유지보수자 최종 결정` 항목에만 `minor 확정`, `major 확정`, `보류` 중 하나를 남긴다.
+
+---
+
 ## Current Implementation Reality
 
 ### 이미 코드에 들어간 것
@@ -75,6 +91,12 @@
 - 위 foundation은 `major가 필요할 때 사용할 준비된 메커니즘`이지, `1.0.0 출시 확정`이 아니다.
 - 현재 버전이 여전히 `0.4.4`이므로, 위 foundation만으로는 기존 사용자 lane이 바뀌지 않는다.
 - meeting은 아직 legacy 계약 위에 있고, 이번 리팩토링이 minor로 끝날지 major가 필요한지는 meeting 경계를 확인해야 결정된다.
+
+### Minor 경로에서 foundation 코드 처리 규칙
+
+- 최종 결정이 `minor 확정`이면, major 전용 dormant path를 그대로 장기 보존하지 않는다.
+- 현재 기능에 실제로 쓰이는 일반 helper만 남기고, `major >= 1 => v2` 분기, v2 endpoint override, v2 release lane처럼 minor 릴리스에 필요 없는 코드는 같은 작업 또는 직후 cleanup 커밋에서 제거한다.
+- 예외는 현재 runtime을 단순화하는 공용 helper뿐이다. `미사용 lane switch`를 미래 가능성만으로 남겨 두지 않는다.
 
 ### 현재 세션의 핵심 질문
 
@@ -177,6 +199,7 @@
   - 최소 1개 기존 결과 조회
   - 새 녹음 또는 import 1회
   - 기록 수정 또는 삭제 1회
+- 구현자가 위 smoke를 실행하고 결과를 `Version Decision Record`와 `세션 인계 로그`에 남긴다.
 
 ### Major 경로 green 조건
 
@@ -192,11 +215,13 @@
   - `1.x candidate + v2 hosting/functions`
   - legacy 데이터가 migration 전후 원본 보존 상태를 유지
 - rollback 절차가 문서에 있고 dry-run 수준으로라도 검토가 끝났다.
+- 구현자가 위 smoke를 실행하고 결과를 `Version Decision Record`와 `세션 인계 로그`에 남긴다.
 
 ### 현재 판정 상태
 
 - `미정`
 - 다음 구현/탐색의 목적은 “meeting이 정말 major를 요구하는지”를 증명하거나 반증하는 것이다.
+- 유지보수자는 구현자가 남긴 candidate 기록을 보고 최종 판정을 남긴다.
 
 ---
 
@@ -255,6 +280,11 @@
 - migration 오류율 또는 수동 대응 건수
 
 위 측정 기준이 없으면 `legacy sunset`은 `미정`이 아니라 `시작 불가` 상태다.
+
+### 세팅 시점 규칙
+
+- `major candidate ready`를 기록하는 같은 작업 안에서 sunset 측정 방식과 수집 책임자를 최소 초안이라도 함께 적는다.
+- 측정 방식이 비어 있으면 `major candidate ready`는 불완전 상태로 보고, 유지보수자는 최종 `major 확정`을 남기지 않는다.
 
 ---
 
