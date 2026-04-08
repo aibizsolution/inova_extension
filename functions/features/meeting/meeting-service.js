@@ -2268,7 +2268,7 @@ function registerMeetingHandlers(deps) {
         };
       }
       const storageObject = buildTempStorageObjectPath(owner.providerUserKey, meeting.meetingId, jobId, source.fileName);
-      let uploadedSource = null;
+      let uploadedSource;
       try {
         uploadedSource = await uploadTemporarySource(bucket, storageObject, audioBuffer, baseSource, owner, meeting, jobId);
       } catch (error) {

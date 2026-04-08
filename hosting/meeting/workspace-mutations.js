@@ -31,6 +31,7 @@
       const runPendingUploadQueueOperation = (...args) => controller("pendingUploads")?.runPendingUploadQueueOperation?.(...args);
       const showPendingUploadQueueOperationError = (...args) => controller("pendingUploads")?.showPendingUploadQueueOperationError?.(...args);
       const deletePendingUpload = (...args) => controller("pendingUploads")?.deletePendingUpload?.(...args);
+      const handleLocalQueueAction = (...args) => controller("pendingUploads")?.handleLocalQueueAction?.(...args);
       const upsertPendingUpload = (...args) => controller("pendingUploads")?.createOrUpdatePendingUpload?.(...args);
       const syncWorkspaceLocalState = (...args) => controller("realtime")?.syncWorkspaceLocalState?.(...args);
 

@@ -11,6 +11,7 @@
 ## 셸/도구 환경 메모
 - 현재 기본 셸이 PowerShell이면 `npm` 실행 시 `npm.ps1` 실행 정책 오류가 날 수 있다. 이 환경에서는 처음부터 `npm.cmd run <script>` 형태를 우선한다.
 - 같은 원인으로 `npm` 계열 명령이 한 번 막혔으면 같은 문법을 반복 재시도하지 말고 즉시 `npm.cmd`, 필요 시 `npx.cmd` 같은 대안으로 전환한다.
+- 이 세션 계열 환경에서는 `rg`가 WindowsApps 경로 권한 문제로 `액세스가 거부되었습니다`를 내고 실패할 수 있다. 같은 호출을 반복하지 말고 바로 `Get-ChildItem`, `Select-String` 같은 PowerShell 대안으로 전환한다.
 - 세션 중 반복해서 걸린 환경/도구 실패 패턴은 `실패한 명령`, `원인`, `바로 쓸 대안`을 이 문서나 해당 feature 문서에 같은 작업 안에서 남겨 다음 세션에 재사용한다.
 - 새 세션에서도 이 메모는 선택 사항이 아니라 시작 절차 일부로 취급한다. 같은 환경에서 이미 기록된 실패 패턴은 첫 시도부터 우회 경로를 기본값으로 쓴다.
 
@@ -28,6 +29,12 @@
 - feature-local 변경 때문에 `README.md`를 기능 변경 일지처럼 누적하지 않는다.
 - 문서는 완벽하지 않다고 가정하고, 작업 중 문서와 실제 코드/함수/파일 경계가 다르면 코드를 기준으로 같은 작업 안에서 문서를 갱신한다.
 - feature 문서가 실제 파일 경로나 진입점과 어긋나기 시작하면 검증 스크립트와 문서를 함께 보강해 다음 작업자가 좁은 범위만 읽고도 시작할 수 있게 유지한다.
+
+## Lint 운영 원칙
+- lint 세부 규칙, 범위, 예외, 확장 계획은 루트 `AGENTS.md`가 아니라 `docs/lint-workflow.md`에서 관리한다.
+- lint는 처음부터 크게 키우지 않는다. 오류 탐지 중심의 가벼운 기준으로 시작하고, 새 규칙이나 범위 확장은 필요한 작업과 함께 점진적으로 올린다.
+- `eslint.config.js`, lint 대상 범위, ignore/override, suppression, 관련 package script가 바뀌면 같은 작업 안에서 `docs/lint-workflow.md`도 함께 갱신한다.
+- lint 오류를 잠재우기 위해 전역 ignore나 넓은 disable을 먼저 넣지 않는다. 우선순위는 `코드 수정 -> 좁은 범위 예외 -> 문서화`다.
 
 ## 공통화 원칙
 - 같은 feature 안에서 panel, hosted, popup 같은 여러 표면이 비슷한 markup/helper/state contract를 반복하면 먼저 shared module 또는 render contract로 묶을 수 있는지 검토한다.
@@ -63,6 +70,7 @@
 
 ## 검증과 세션 분리
 - 기본 검증은 `npm run verify`부터 수행한다.
+- `verify`에는 lint가 포함되므로, lint 범위나 규칙을 바꿨다면 `npm.cmd run lint` 또는 `npm.cmd run verify`로 실제 통과를 확인한다.
 - UI 체감과 opener, 세션 복원, 배포 경계는 실제 Chrome 확인을 우선한다.
 - 작업 결과를 보고할 때는 이 변경이 실제 상용 반영에 무엇을 배포해야 하는지도 함께 적는다. `hosting/*`나 hosted 정적 자산 변경은 hosting 배포, `functions/*` 변경은 functions 배포, 둘 다 바뀌면 둘 다라고 명시하고, 확장 `content/background/popup/shared`만 바뀐 경우는 Firebase 배포 대상이 아니라 확장 새로고침 또는 별도 확장 배포가 필요하다고 구분해서 설명한다.
 - 기능 수정이 끝났고 현재 턴 경계 안의 검증이 녹색이면, 다음 요청을 기다리며 커밋을 미루지 말고 바로 커밋한다.

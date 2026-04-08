@@ -44,3 +44,6 @@
 
 ## 언제 범위를 확장할지
 - 입력창 주입, prompt tool shell, panel shell 상태와 충돌할 때만 platform/shell로 넓힌다.
+
+## 구현 메모
+- placeholder token 감지는 한 줄 안의 단순 `[...]` 토큰만 대상으로 유지한다. nested bracket이나 줄바꿈이 섞인 텍스트는 placeholder 경고 후보로 넓히지 않는다.

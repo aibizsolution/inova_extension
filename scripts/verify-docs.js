@@ -13,6 +13,7 @@ const requiredFiles = [
   path.join(".githooks", "pre-push"),
   path.join("docs", "feature-spec.md"),
   path.join("docs", "feature-routing.md"),
+  path.join("docs", "lint-workflow.md"),
   "popup/index.html",
   "popup/index.js",
   path.join("content", "features", "conversation", "AGENTS.md"),
@@ -79,6 +80,14 @@ const readmeOnlyKeywordGroups = [
   {
     name: "Feature 문서 가드",
     patterns: [/pre-push/i, /feature\s+`AGENTS\.md`/i, /hooks:install|verify:feature-doc-guard/],
+  },
+  {
+    name: "Lint 가이드 링크",
+    patterns: [/docs\/lint-workflow\.md/i, /lint-workflow/i],
+  },
+  {
+    name: "Lint 명령",
+    patterns: [/npm run lint/i, /lint를 포함/i],
   },
 ];
 

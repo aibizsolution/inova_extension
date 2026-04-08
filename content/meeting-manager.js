@@ -524,7 +524,7 @@
 
   function isMeetingHubPendingInitialLoad(meetingHub) {
     const hub = meetingHub && typeof meetingHub === "object" ? meetingHub : null;
-    return !Boolean(
+    return !(
       Array.isArray(hub?.items) && hub.items.length
       || namespace.session.normalizeText(hub?.checkedAt)
       || namespace.session.normalizeText(hub?.error)

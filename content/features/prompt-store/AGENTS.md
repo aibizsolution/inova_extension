@@ -47,3 +47,6 @@
 
 ## 언제 범위를 확장할지
 - realtime bridge, prompt tool shell, panel auth cache, background read 경로가 원인일 때만 platform/shell로 넓힌다.
+
+## 구현 메모
+- store 로드 정리 구간은 `finally`에서 `return`으로 흐름을 끊지 않는다. `loadSequence`가 현재 요청과 같을 때만 `loading` 해제, render, `reload-all` 재호출 예약을 수행한다.

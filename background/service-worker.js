@@ -688,7 +688,7 @@ async function requestMeetingProviderIdentityFromInovaTabs() {
   if (!chrome.tabs?.query || !chrome.tabs?.sendMessage) {
     return normalizeProviderIdentity(null);
   }
-  let tabs = [];
+  let tabs;
   try {
     tabs = await chrome.tabs.query({ url: `${INOVA_ORIGIN}/*` });
   } catch (error) {

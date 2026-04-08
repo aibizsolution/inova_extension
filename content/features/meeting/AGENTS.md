@@ -104,3 +104,6 @@ window.__INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20,
 
 ## 언제 범위를 확장할지
 - feature-local과 owned-shared만으로 해결되지 않고 launch/session 발급 또는 panel cache가 얽힐 때만 platform/shell로 넓힌다.
+
+## 구현 안전 메모
+- hosted workspace controller 간 helper 계약은 암묵 전역에 기대지 말고 `controller("pendingUploads")`나 `ns.shared`에서 명시적으로 연결한다. queue action, network error helper처럼 여러 파일이 같이 쓰는 경로일수록 wiring 누락을 lint로 바로 드러나게 유지한다.

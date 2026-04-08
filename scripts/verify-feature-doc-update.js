@@ -82,7 +82,7 @@ const FEATURE_DOC_RULES = [
 function main() {
   const args = process.argv.slice(2);
   const mode = args[0] || "";
-  let changedFiles = [];
+  let changedFiles;
 
   if (mode === "--staged") {
     changedFiles = getChangedFilesForArgs(["diff", "--cached", "--name-only", "--diff-filter=ACMR"]);

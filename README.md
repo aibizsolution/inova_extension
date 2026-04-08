@@ -15,6 +15,7 @@
 - [docs/feature-spec.md](docs/feature-spec.md): 제품 요구사항과 공통 계약
 - [docs/runtime-architecture.md](docs/runtime-architecture.md): popup, panel, background, hosted runtime 경계
 - [docs/functions-runtime-guide.md](docs/functions-runtime-guide.md): Firebase Functions runtime 기본값, 예외 프로파일, 운영 점검 기준
+- [docs/lint-workflow.md](docs/lint-workflow.md): lint 범위, 예외, 점진적 확장 원칙
 - [docs/e2e-browser-workflow.md](docs/e2e-browser-workflow.md): 실제 Chrome 기준 수동 검증 흐름
 - [docs/release-workflow.md](docs/release-workflow.md): 버전 상승, 릴리스 메타, hosting 배포 순서
 
@@ -56,6 +57,7 @@
 ## 공통 명령
 
 ```bash
+npm run lint
 npm run verify
 npm run verify:docs
 npm run verify:feature-doc-guard
@@ -67,7 +69,7 @@ npm run deploy:functions
 npm run deploy:all
 ```
 
-- 기본 자동 검증은 `npm run verify`입니다.
+- 기본 자동 검증은 `npm run verify`이며 lint를 포함합니다.
 - UI 체감, opener, 세션 복원, hosted 경계는 실제 Chrome 확인을 우선합니다.
 - hosted 회의 작업실을 배포 전 먼저 보려면 `npm run emulator:hosting` 후 팝업에서 `로컬 호스팅`을 고릅니다.
 

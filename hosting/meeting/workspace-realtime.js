@@ -73,8 +73,8 @@
           applyRender();
         }
         const refreshStartedAt = Date.now();
-        let pendingLoadMs = 0;
-        let realtimeConnectMs = 0;
+        let pendingLoadMs;
+        let realtimeConnectMs;
         try {
           logDebug("workspace.refresh.start", {
             hydrateSelection: Boolean(hydrateSelection),
@@ -562,7 +562,7 @@
           return;
         }
         state.realtime.jobDocId = jobId;
-        const shouldReadJob = !Boolean(options.skipJobRead);
+        const shouldReadJob = !options.skipJobRead;
         let jobReadMs = 0;
         if (shouldReadJob) {
           const jobReadStartedAt = Date.now();
