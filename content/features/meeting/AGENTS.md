@@ -6,6 +6,8 @@
 ## 문서 갱신 규칙
 - 이 feature의 사용자 체감 동작, 데이터 경계, 먼저 볼 파일, 검증 기준이 바뀌면 이 문서를 같은 작업 안에서 갱신한다.
 - `README.md` 대신 이 문서나 meeting 전용 docs에 먼저 기록한다.
+- meeting endpoint/auth/collection baseline이 바뀌면 `docs/refactoring-plan.md`의 `Meeting Legacy Baseline`과 `Version Decision Gate`도 같은 작업 안에서 함께 갱신한다.
+- meeting refactor가 minor로 끝나는지 major가 필요한지의 최종 판단 기준은 `docs/refactoring-plan.md`에 둔다. 이 문서는 meeting local 사실과 검증 기준을 맞춰 주는 역할을 한다.
 
 ## 먼저 볼 파일
 - `content/meeting-manager.js`
@@ -19,6 +21,7 @@
 - `popup/index.js`
 - hosted recovery/self-healing 경로는 `hosting/meeting/workspace-recovery.js`를 먼저 본다.
 - legacy lane은 현재 `browser-extension-main` hosted meeting 경로를 유지한다. v2 lane은 별도 hosting origin/site로 분리하는 것을 기본 전제로 둔다.
+- 다만 v2 lane은 `major가 실제로 필요할 때만` 활성화 후보로 본다. 현재 핵심 질문은 meeting 리팩터링이 legacy 계약 유지로 끝날 수 있는지 여부다.
 
 ## hosted workspace auth 메모
 - hosted 회의 작업실 Firebase auth claim은 `meetingId` 단위로 달라질 수 있다.
@@ -72,6 +75,7 @@
 - `integration_inova_meeting_artifacts`
 - launch/session 컬렉션
 - v2 lane을 열 때는 위 mutable meeting namespace를 legacy와 공용 write하지 않는다. 새 lane은 별도 namespace 또는 안전한 copy migration을 전제로 설계한다.
+- 반대로, 위 namespace를 유지한 채 refactor가 가능하다고 검증되면 버전은 major가 아니라 minor 경로를 우선한다.
 
 ## 보통 건드리지 말아야 할 범위
 - prompt-library
