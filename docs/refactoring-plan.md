@@ -1,8 +1,111 @@
 # Full Product V2 With Legacy 0.4.4 Freeze
 
+이 문서는 단순 전략 메모가 아니라, 새 세션에서도 바로 이어서 작업할 수 있게 만드는 `living handoff` 문서다.  
+lane 경계, migration 계약, 검증 상태, 추천 다음 작업 순서가 바뀌면 같은 커밋 안에서 이 문서도 함께 갱신한다.
+
 리팩토링 기준일: 2026-04-08  
+마지막 상태 갱신: 2026-04-08  
+마지막 검증 성공: `npm.cmd run verify` at `ce38835`  
 현재 공개 사용자 기준선: `0.4.4`  
 현재 구현 상태: `legacy/v2 lane` 골격, v2 local storage 분리, v2 prompt-library cloud lane, lane-aware release build foundation
+
+---
+
+## 이 문서에서 가장 먼저 이해해야 할 것
+
+- 현재 채택된 설계는 `legacy 0.4.4 동결 + full product v2 별도 lane`이다.
+- 예전의 `0.4.4 위에서 in-place refactor를 이어간다`는 아이디어는 더 이상 유효하지 않다.
+- 새 세션은 과거 초안이나 이전 대화 맥락이 아니라, 이 문서의 `현재 상태 스냅샷`, `Phase 상태`, `세션 인계 로그`를 기준으로 시작한다.
+
+---
+
+## 폐기된 접근
+
+- legacy lane 위에서 hosted/functions/data namespace를 그대로 둔 채 점진 분해
+- `0.4.4` 사용자가 같은 backend 위에서 자연스럽게 새 구조를 같이 쓰게 만드는 방식
+- mutable data를 same namespace 안에서 upgrade-in-place 하는 방식
+
+위 접근은 새 세션에서 참고 대상이 아니라 `폐기된 설계`로 취급한다.  
+새 세션에서 과거 메모나 오래된 대화가 이 방향을 말하고 있으면, 그 내용은 현재 계획보다 우선하지 않는다.
+
+---
+
+## 현재 채택된 설계 요약
+
+- legacy lane은 기존 사용자 보호를 위한 운영면으로 유지한다.
+- v2 lane은 새 확장, 새 hosted 경로, 새 backend, 새 mutable namespace를 가진다.
+- migration은 `copy only`, `idempotent`, `resume 가능` 원칙을 따른다.
+- 현재 진행 기준선은 `ce38835`까지 반영된 foundation 상태다.
+
+---
+
+## 진행 현황 요약
+
+- 설계 상태: `legacy/v2 2-lane 전략 확정`
+- 구현 상태: `foundation 완료, meeting lane 분리 미완료`
+- 현재 next step: `meeting v2 hosted origin/site + meeting v2 backend/data namespace 분리`
+- release 가능 상태: `아직 아님`
+
+---
+
+## 이 문서를 반드시 갱신해야 하는 경우
+
+- lane별 origin, endpoint, collection namespace, release 경로가 바뀔 때
+- migration marker shape 또는 migration 순서가 바뀔 때
+- `완료됨/미완료` 상태가 바뀔 때
+- 다음 세션 추천 시작점이 달라질 때
+- 검증 결과가 새로 생기거나 기존 전제가 깨졌을 때
+
+---
+
+## 현재 상태 스냅샷
+
+### 이미 끝난 것
+
+- `0.4.x = legacy`, `1.x+ = v2`라는 lane 판단 규칙을 코드에 넣었다.
+- v2 lane은 local storage를 `v2.` prefix로 분리하고, 첫 실행 시 legacy local state를 `copy only`로 가져온다.
+- prompt-library는 v2 전용 Functions export와 v2 전용 Firestore namespace를 갖는다.
+- release build는 버전 major를 보고 `hosting/extension/*`와 `hosting/extension-v2/*`를 나눠 산출한다.
+- 현재 버전이 아직 `0.4.4`라서, 이 기반 작업만으로는 기존 공개 사용자 lane이 바뀌지 않는다.
+
+### 아직 안 끝난 것
+
+- meeting v2 hosted site/origin의 실제 분리
+- meeting v2 Functions export와 mutable Firestore namespace 분리
+- meeting domain lazy migration 설계와 구현
+- legacy lane과 v2 lane 각각의 Chrome 실사용 smoke 기록
+- v2 실제 cutover 체크리스트와 rollout 절차 확정
+
+### 지금 이 문서를 읽는 새 세션이 바로 알아야 하는 사실
+
+- 현재 기준 커밋 `ce38835`는 `v2 foundation`까지만 넣은 상태다.
+- 아직 `manifest.json`과 `package.json`을 `1.0.0+`로 올리면 안 된다.
+- prompt-library만 v2 cloud lane 골격이 있고, meeting은 아직 legacy lane 의존이 남아 있다.
+- 따라서 다음 큰 작업의 primary feature는 기본적으로 `meeting`이다.
+
+---
+
+## 다음 세션 시작 체크리스트
+
+1. `git status --short`로 작업 트리가 깨끗한지 먼저 확인한다.
+2. 이 문서와 `docs/feature-routing.md`, 그리고 이번 세션의 primary feature `AGENTS.md`만 먼저 읽는다.
+3. 현재 작업이 `meeting`, `prompt-library`, `release` 중 어디를 주로 건드리는지 먼저 고른다.
+4. `content + hosting + functions` 3축을 동시에 건드리게 되면 커밋 경계 또는 세션 분리를 먼저 제안한다.
+5. lane 경계나 migration 계약을 건드릴 예정이면, 코드 수정 전에 이 문서의 어떤 섹션을 같이 바꿀지 먼저 정한다.
+6. 작업이 끝나면 `npm.cmd run verify`를 돌리고, 검증 결과와 다음 시작점을 이 문서에 남긴다.
+
+---
+
+## Legacy lane 절대 금지사항
+
+- `0.4.4` 사용자를 새 hosted origin 또는 새 backend로 조용히 우회시키지 않는다.
+- legacy endpoint 이름, hosted path, Firestore namespace를 sunset 전까지 rename/delete/retype 하지 않는다.
+- migration 중 legacy 원본을 수정하거나 삭제하지 않는다.
+- fallback이나 cached data를 migration 성공처럼 보이게 만들지 않는다.
+- meeting v2 backend가 준비되기 전에는 버전만 `1.0.0+`로 올려 release cutover 하지 않는다.
+- mutable 운영 데이터에 대해 legacy/v2 공용 write를 허용하지 않는다.
+
+---
 
 ## 핵심 전략
 
@@ -91,51 +194,79 @@
 
 ---
 
-## 남은 단계
+## 추천 다음 작업 순서
 
-### Phase 1. Legacy freeze 문서화
+### 추천 순서 A: meeting lane 분리부터 시작
 
-- meeting/release/prompt-library 문서에 legacy freeze와 lane 분리 규칙을 고정한다.
-- legacy는 기능 개선이 아니라 보안/운영 hotfix만 허용한다.
+1. meeting v2 hosted origin/site를 어떤 식으로 분리할지 문서에 먼저 고정한다.
+2. meeting runtime config가 lane별 origin을 실제로 바라보게 만든다.
+3. meeting Functions export와 Firestore namespace를 v2용으로 분리한다.
+4. meeting lazy migration marker shape를 prompt-library와 같은 원칙으로 고정한다.
+5. legacy lane과 v2 lane Chrome smoke를 각각 수행하고 결과를 이 문서에 기록한다.
 
-### Phase 2. V2 routing skeleton 확장
+### 추천 순서 B: cutover 준비 문서 보강
 
-- v2 hosted meeting site를 실제 별도 Hosting origin/site에 배치한다.
-- background가 v2 workspace URL을 실제 운영 origin으로 열게 한다.
-- release panel이 v2 metadata만 읽는지 실제 브라우저에서 확인한다.
+- release cutover 전제조건 표 작성
+- legacy sunset 측정 방식 정의
+- rollback 시 legacy/v2 각각 무엇을 되돌리는지 표로 정리
 
-### Phase 3. V2 backend/data namespace 확장
+현재 기본 추천은 `순서 A`다. 이유는 prompt-library만 먼저 분리된 상태라서, 제품 lane 전체를 실제로 여는 데 가장 큰 공백이 meeting에 남아 있기 때문이다.
 
-- meeting lane의 Functions export와 mutable Firestore namespace를 분리한다.
-- prompt-library처럼 lane migration marker와 lazy copy 규칙을 동일하게 적용한다.
-- `content + hosting + functions`를 한 번에 바꾸지 않고 lane별 facade 뒤에서 진행한다.
+---
 
-### Phase 4. Lazy migration 확대
+## Phase 상태
 
-- user-owned cloud data를 도메인별로 나눠 migration 한다.
-- 대상:
-  - prompt-library
-  - meeting summary/job/artifact/session
-  - 필요 시 user preference meta
-- migration은 항상 사용자 단위, idempotent, resume 가능해야 한다.
+### Phase 0. Legacy freeze 문서화
 
-### Phase 5. V2 내부 리팩토링
+- 상태: `완료`
+- 비고: legacy/v2 2-lane 전략과 legacy 금지사항을 문서에 고정했다.
 
-- 실제 구조 분해는 v2 lane 안에서만 한다.
+### Phase 1. V2 routing skeleton 확장
+
+- 상태: `부분 완료`
+- 완료:
+  - lane-aware runtime config
+  - lane-aware release build
+- 미완료:
+  - meeting v2 hosted site/origin의 실제 분리
+  - meeting runtime의 실제 운영 origin 연결
+
+### Phase 2. V2 backend/data namespace 확장
+
+- 상태: `부분 완료`
+- 완료:
+  - prompt-library v2 endpoint/namespace
+- 미완료:
+  - meeting Functions export 분리
+  - meeting mutable namespace 분리
+
+### Phase 3. Lazy migration 확대
+
+- 상태: `부분 완료`
+- 완료:
+  - local storage migration
+  - prompt-library cloud migration
+- 미완료:
+  - meeting summary/job/artifact/session migration
+  - 사용자 단위 migration 운영 기록 정리
+
+### Phase 4. V2 내부 리팩토링
+
+- 상태: `미시작`
 - 우선순위:
   1. meeting functions
   2. hosted meeting app
   3. content shell
   4. shared utility
 
-### Phase 6. Legacy sunset
+### Phase 5. Legacy sunset
 
+- 상태: `미시작`
 - 기본 무트래픽 관찰 기간: `30일`
 - sunset 조건:
   - legacy hosted/functions traffic 0
   - migration 오류율 안정
   - rollback 필요 없음
-- 위 조건 충족 후 별도 cleanup PR에서 legacy endpoint/hosting/release lane/data namespace를 제거한다.
 
 ---
 
@@ -168,6 +299,7 @@
 - prompt-library가 v2 account/library namespace를 사용
 - v2 release build가 `hosting/extension-v2/*`에 산출됨
 - v2 release/runtime가 legacy release URL을 보지 않음
+- meeting이 준비되면 v2 hosted origin/functions/data namespace를 전부 legacy와 분리해 검증함
 
 ### Lazy migration
 
@@ -175,6 +307,7 @@
 - 실패 후 재실행 성공
 - 중복 실행 시 변질 없음
 - migration 전후 legacy 원본 불변
+- migration 완료 전에는 v2가 legacy mutable 데이터를 직접 write하지 않음
 
 ---
 
@@ -183,3 +316,22 @@
 - v2 lane을 실제로 켜기 전에는 `manifest.json`/`package.json` 버전을 `1.0.0+`로 올리지 않는다.
 - v2 hosted meeting origin/site와 meeting V2 backend가 준비되기 전까지는 release cutover를 하지 않는다.
 - 새 lane이 열리기 전에도 legacy lane은 계속 운영면으로 유지한다. 새 구조를 legacy 경로에 직접 덮어쓰지 않는다.
+- 이 문서만 읽고도 다음 세션이 시작될 수 있어야 한다. 새로 구현한 것과 아직 안 한 것을 모호하게 남기지 않는다.
+
+---
+
+## 세션 인계 로그
+
+### 2026-04-08
+
+- 기준 커밋: `ce38835`
+- 완료:
+  - lane-aware runtime config
+  - lane-aware local storage migration
+  - prompt-library v2 cloud lane foundation
+  - lane-aware release build foundation
+- 검증:
+  - `npm.cmd run verify` green
+- 다음 시작점:
+  - meeting v2 hosted origin/site 분리 설계
+  - meeting v2 Functions/data namespace 골격 추가
