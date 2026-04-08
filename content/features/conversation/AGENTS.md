@@ -23,6 +23,7 @@
 - DOM 수집 결과
 - `sid`
 - 패널 UI 상태
+- v2 lane에서는 질문 기능 자체는 같지만, panel shell이 읽는 local storage key가 `v2.*` prefix로 분리될 수 있다. route sync는 lane별 storage change만 반영해야 한다.
 
 ## 보통 건드리지 말아야 할 범위
 - `functions/*`

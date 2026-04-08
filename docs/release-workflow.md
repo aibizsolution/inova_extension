@@ -32,11 +32,15 @@
 - `deploy:all`은 Hosting과 Functions를 함께 배포하지만, 기본적으로 사용자용 릴리스 메타를 건드리지 않습니다.
 - `release:deploy:all`은 `release:build` 후 Hosting과 Functions를 함께 배포합니다.
 - 기본 해석은 `배포 = hosting-only` 입니다. 함수 배포는 반드시 명시 요청이 있을 때만 진행하는 것을 원칙으로 합니다.
-- 고정 최신 링크 `https://browser-extension-main.web.app/extension/downloads/latest.zip` 갱신은 `release:build`를 동반한 사용자용 릴리스 배포에서만 일어납니다.
+- 고정 최신 링크는 lane별로 따로 관리합니다.
+  - legacy: `https://browser-extension-main.web.app/extension/downloads/latest.zip`
+  - v2: `https://browser-extension-v2.web.app/extension/downloads/latest.zip`
+- lane 기본값은 버전 major로 정합니다. `0.x`는 legacy lane, `1.x+`는 v2 lane입니다.
 
 ## 배포 경계 체크
 
 - `hosting/meeting/*`, `hosting/extension/*`, 정적 JSON/HTML/CSS 같은 Hosting 자산만 바뀌면 `deploy:hosting`으로 충분합니다.
+- `release:build` 산출 위치는 lane에 따라 달라집니다. `0.x`는 `hosting/extension/*`, `1.x+`는 `hosting/extension-v2/*`를 사용합니다.
 - `functions/*`만 바뀌면 `deploy:functions`로 충분합니다.
 - `content/*`, `background/*`, `popup/*`, `manifest.json`, 확장 번들에 포함되는 `shared/*`가 바뀌면 Firebase 배포만으로는 끝나지 않습니다. 실제 확장 버전 빌드/배포가 필요합니다.
 - Hosted와 확장 코드가 함께 바뀌면 `Firebase 배포 + 실제 확장 릴리스`를 둘 다 해야 합니다.
@@ -55,6 +59,8 @@
 5. 저장소/제품 개요나 설치·배포 흐름 자체가 바뀐 경우에만 `README.md`를 함께 갱신합니다.
 6. `npm run verify`, `npm run verify:feature-doc-guard`, `npm run verify:release-guard`를 확인합니다.
 7. `npm run release:build`로 공개 ZIP과 Hosting용 릴리스 메타를 생성합니다.
+   - `0.x`는 legacy release lane을 갱신합니다.
+   - `1.x+`는 v2 release lane을 갱신합니다.
 8. 공개 릴리스는 `npm run release:deploy` 또는 `npm run release:deploy:all`로 반영합니다.
 9. Chrome 신규 설치/기존 설치를 각각 확인합니다.
 10. 팀에 `새 ZIP`, `변경 요약`, `Reload 필요 여부`를 공지합니다.
@@ -97,6 +103,9 @@ git branch -d codex/example-task
 - `hosting/extension/releases/latest.json`
 - `hosting/extension/releases/history.json`
 - `hosting/extension/downloads/<zip>`
+- `hosting/extension-v2/releases/latest.json` - `1.x+` lane에서만 생성
+- `hosting/extension-v2/releases/history.json` - `1.x+` lane에서만 생성
+- `hosting/extension-v2/downloads/<zip>` - `1.x+` lane에서만 생성
 
 ## 패키지 가드레일
 

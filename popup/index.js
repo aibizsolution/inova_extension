@@ -1,5 +1,6 @@
 const popupRoot = globalThis.InovaBookmarks;
 const LOCAL_MEETING_WORKSPACE_URL = "http://127.0.0.1:5000/meeting/index.html";
+const SETTINGS_STORAGE_KEY = popupRoot.productLane?.buildStorageKey?.(popupRoot.constants.storageKeys.settings) || popupRoot.constants.storageKeys.settings;
 // verify-docs anchor: workspaceTargetHint
 
 const popupState = {
@@ -41,13 +42,14 @@ function listenPopupStorage() {
   }
 
   chrome.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName !== "local" || !changes.settings) {
+    const settingsChange = changes?.[SETTINGS_STORAGE_KEY];
+    if (areaName !== "local" || !settingsChange) {
       return;
     }
 
     popupState.settings = {
       ...popupRoot.constants.defaults.settings,
-      ...(changes.settings.newValue || {}),
+      ...(settingsChange.newValue || {}),
     };
     renderPopup();
   });

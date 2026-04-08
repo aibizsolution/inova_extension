@@ -167,8 +167,9 @@
     }
 
     function handleStorageChange(changes, areaName) {
-      if (areaName !== "local" || !changes.releaseInfo) return;
-      state.releaseInfo = namespace.releaseInfo.mergeReleaseInfo(changes.releaseInfo.newValue, {
+      const releaseInfoChange = namespace.productLane?.getStorageChange?.(changes, namespace.constants.storageKeys.releaseInfo) || changes.releaseInfo;
+      if (areaName !== "local" || !releaseInfoChange) return;
+      state.releaseInfo = namespace.releaseInfo.mergeReleaseInfo(releaseInfoChange.newValue, {
         checking: state.releaseInfo.checking,
         historyLoading: state.releaseInfo.historyLoading,
       });

@@ -86,6 +86,29 @@ const promptLibraryHandlers = registerPromptLibraryHandlers({
   normalizePromptContent,
 });
 
+const promptLibraryV2Handlers = registerPromptLibraryHandlers({
+  ...sharedHttpDeps,
+  admin,
+  buildPromptLibraryId: (providerUserKey) => `v2__${buildPromptLibraryId(providerUserKey)}`,
+  buildPromptPanelFirebaseUid: (providerUserKey) => `prompt-panel-v2__${providerUserKey}`,
+  MAX_CONTENT_LENGTH,
+  MAX_TITLE_LENGTH,
+  normalizePromptContent,
+  promptAccountsCollection: "integration_inova_accounts_v2",
+  promptLibrariesCollection: "prompt_libraries_v2",
+  promptLibraryChunksCollection: "prompt_library_chunks_v2",
+  promptLibraryMigrationCollection: "product_lane_migrations_v2",
+  promptLibraryOrdersCollection: "prompt_library_orders_v2",
+  promptLegacySource: {
+    accounts: "integration_inova_accounts",
+    buildPromptLibraryId,
+    promptLibraries: "prompt_libraries",
+    promptLibraryChunks: "prompt_library_chunks",
+    promptLibraryOrders: "prompt_library_orders",
+  },
+  promptPanelScope: "prompt-panel-v2",
+});
+
 exports.listPromptStoreEntries = storeHandlers.listPromptStoreEntries;
 exports.publishPromptToStore = storeHandlers.publishPromptToStore;
 exports.unpublishPromptFromStore = storeHandlers.unpublishPromptFromStore;
@@ -96,9 +119,13 @@ exports.recordPromptStoreView = storeHandlers.recordPromptStoreView;
 exports.reviewInovaPrompt = promptReviewHandlers.reviewInovaPrompt;
 
 exports.issueInovaPromptPanelAuth = promptLibraryHandlers.issueInovaPromptPanelAuth;
+exports.issueInovaPromptPanelAuthV2 = promptLibraryV2Handlers.issueInovaPromptPanelAuth;
 exports.loadInovaPromptLibrary = promptLibraryHandlers.loadInovaPromptLibrary;
+exports.loadInovaPromptLibraryV2 = promptLibraryV2Handlers.loadInovaPromptLibrary;
 exports.peekInovaPromptLibrary = promptLibraryHandlers.peekInovaPromptLibrary;
+exports.peekInovaPromptLibraryV2 = promptLibraryV2Handlers.peekInovaPromptLibrary;
 exports.syncInovaPromptLibrary = promptLibraryHandlers.syncInovaPromptLibrary;
+exports.syncInovaPromptLibraryV2 = promptLibraryV2Handlers.syncInovaPromptLibrary;
 
 exports.createInovaMeetingJob = meetingHandlers.createInovaMeetingJob;
 exports.processQueuedInovaMeetingJob = onDocumentWritten(

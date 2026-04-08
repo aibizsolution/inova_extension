@@ -43,7 +43,9 @@
       if (areaName !== "local") {
         return;
       }
-      if (changes.settings || changes.cloudSync) {
+      const settingsChange = namespace.productLane?.getStorageChange?.(changes, namespace.constants.storageKeys.settings) || changes.settings;
+      const cloudSyncChange = namespace.productLane?.getStorageChange?.(changes, namespace.constants.storageKeys.cloudSync) || changes.cloudSync;
+      if (settingsChange || cloudSyncChange) {
         scheduleSync(240);
       }
     }

@@ -11,6 +11,7 @@
       releaseInfo: "releaseInfo",
       meetingHub: "meetingHub",
       meetingStateByMeetingId: "meetingStateByMeetingId",
+      productLaneMigration: "productLaneMigration",
     },
     defaults: {
       settings: {
@@ -90,6 +91,16 @@
         items: [],
       },
       meetingStateByMeetingId: {},
+      productLaneMigration: {
+        version: 1,
+        attemptCount: 0,
+        startedAt: "",
+        completedAt: "",
+        sourceLane: "",
+        targetLane: "",
+        sourceRevision: "",
+        lastError: "",
+      },
       uiPreferences: {
         activeTool: "bookmarks",
         activePromptTab: "library",

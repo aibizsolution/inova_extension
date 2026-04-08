@@ -24,6 +24,7 @@
 - `hosting/extension/releases/latest.json`
 - `hosting/extension/releases/history.json`
 - 버전별 ZIP
+- `1.0.0+` v2 lane은 `hosting/extension-v2/releases/latest.json`, `hosting/extension-v2/releases/history.json`, `hosting/extension-v2/downloads/*`를 사용한다.
 
 ## 보통 건드리지 말아야 할 범위
 - meeting
@@ -41,9 +42,11 @@
 - 정적 메타만으로 해결되지 않고 background fetch 또는 배포 스크립트가 얽힐 때만 platform/shell로 넓힌다.
 
 ## 릴리스 메타 메모
+- lane 기본값은 버전 major로 정한다. `0.x`는 legacy lane, `1.x+`는 v2 lane이다.
 - `release:build`는 공개 최신 버전보다 낮은 버전으로는 진행할 수 없지만, 같은 공개 버전으로 로컬 재빌드/최종 배포하는 흐름은 허용한다.
 - `deploy:hosting`과 `deploy:all`은 hosted 검증/운영 배포용이며, 기본적으로 확장 패키지 버전과 사용자 릴리스 메타를 갱신하지 않는다.
 - 실제 사용자 패널에 보일 버전만 `releases/release-notes.json`에 남기고, `release:build`는 그 목록만 `latest.json`, `history.json`, `latest.zip`에 반영하며 공개 목록 밖의 로컬/hosting ZIP도 정리한다.
+- `release:build` 산출 경로는 lane에 따라 다르다. `0.x`는 `hosting/extension/*`, `1.x+`는 `hosting/extension-v2/*`를 갱신한다.
 - 공개 목록에 남길 이전 버전은 `releases/release-notes.json`에 artifact 메타를 유지해, CI나 새 환경에서도 history 메타를 다시 생성할 수 있게 관리한다.
 - `release:build`는 기본 runtime 디렉터리뿐 아니라 `manifest.json`이 직접 참조하는 추가 파일도 ZIP에 포함해야 하며, staging 결과에 누락이 있으면 바로 실패해야 한다.
 - `content/*`, `background/*`, `popup/*`, `manifest.json`, 확장 번들에 포함되는 `shared/*` 변경은 Firebase 배포만으로 끝나지 않는다. 실제 확장 버전 빌드/배포와 Chrome 확장 새로고침까지 포함해 안내한다.

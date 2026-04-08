@@ -22,14 +22,17 @@ if (!version || version !== manifestVersion) {
 }
 
 const date = new Date().toISOString().slice(0, 10);
+const productLane = inferProductLane(version);
 const bundleName = `inova-extension-${version}-${date}`;
 const releasesDir = path.join(root, "releases");
 const stagingDir = fs.mkdtempSync(path.join(os.tmpdir(), `${bundleName}-`));
 const zipPath = path.join(releasesDir, `${bundleName}.zip`);
-const hostingRoot = path.join(root, "hosting", "extension");
+const hostingRoot = path.join(root, "hosting", productLane === "v2" ? "extension-v2" : "extension");
 const hostingDownloadDir = path.join(hostingRoot, "downloads");
 const hostingReleaseDir = path.join(hostingRoot, "releases");
-const hostingBaseUrl = "https://browser-extension-main.web.app/extension";
+const hostingBaseUrl = productLane === "v2"
+  ? "https://browser-extension-v2.web.app/extension"
+  : "https://browser-extension-main.web.app/extension";
 const latestDownloadFileName = "latest.zip";
 const publishedAt = new Date().toISOString();
 const runtimeItems = resolveReleaseRuntimeItems(manifestJson);
@@ -129,6 +132,7 @@ pruneCuratedReleaseArtifacts({
 });
 
 console.log(`[release-build] version=${version}`);
+console.log(`[release-build] lane=${productLane}`);
 console.log(`[release-build] zip=${zipPath}`);
 console.log(`[release-build] latest-zip=${hostingLatestZipPath}`);
 console.log(`[release-build] latest=${latestPath}`);
@@ -137,9 +141,15 @@ console.log(`[release-build] history=${historyPath}`);
 function buildProductMeta() {
   return {
     experimental: true,
+    lane: productLane,
     name: "i-Nova 더하기",
     team: "AI비즈솔루션팀",
   };
+}
+
+function inferProductLane(currentVersion) {
+  const [major] = String(currentVersion || "").split(".");
+  return (Number.parseInt(major, 10) || 0) >= 1 ? "v2" : "legacy";
 }
 
 function assertReleasePackageIntegrity(stagingDirectory, manifest) {

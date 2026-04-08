@@ -1,8 +1,5 @@
 (function initFirebaseConfig(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const DEFAULT_FUNCTIONS_BASE_URL = "https://asia-northeast3-browser-extension-main.cloudfunctions.net";
-  const DEFAULT_HOSTING_BASE_URL = "https://browser-extension-main.web.app/extension";
-  const DEFAULT_HOSTING_ORIGIN = "https://browser-extension-main.web.app";
   const PROMPT_PANEL_BRIDGE_CACHE_TOKEN = "20260402-1";
   const FUNCTION_ENDPOINTS = {
     authorizeInovaMeetingWorkspaceAccessUrl: "authorizeInovaMeetingWorkspaceAccess",
@@ -34,39 +31,75 @@
     latestReleaseUrl: "releases/latest.json",
     releaseHistoryUrl: "releases/history.json",
   };
+  const DEFAULT_WEB_CONFIG = {
+    apiKey: "AIzaSyDnVS7MmQs7wWjVPihr1MNmcALxJ0a1qPM",
+    appId: "1:1027279095019:web:755f1f1a02cbae0d262aae",
+    authDomain: "browser-extension-main.firebaseapp.com",
+    messagingSenderId: "1027279095019",
+    projectId: "browser-extension-main",
+    storageBucket: "browser-extension-main.firebasestorage.app",
+  };
 
-  namespace.firebaseConfig = mergeConfig({
-    project: {
-      displayName: "browser-extension",
-      projectId: "browser-extension-main",
-      region: "asia-northeast3",
-    },
-    functions: buildFunctionsConfig(DEFAULT_FUNCTIONS_BASE_URL),
-    hosting: buildHostingConfig(DEFAULT_HOSTING_BASE_URL, DEFAULT_HOSTING_ORIGIN),
-    web: buildWebConfig(),
-  }, global.__INOVA_FIREBASE_CONFIG_OVERRIDE__);
+  namespace.firebaseConfig = buildFirebaseConfig(global.__INOVA_FIREBASE_CONFIG_OVERRIDE__);
 
-  function mergeConfig(baseConfig, overrideConfig) {
+  function buildFirebaseConfig(overrideConfig) {
     const override = overrideConfig && typeof overrideConfig === "object" ? overrideConfig : {};
+    const activeLane = namespace.productLane?.getActiveLane?.() || "legacy";
+    const laneConfig = namespace.productLane?.getLaneConfig?.(activeLane) || {
+      functions: { baseUrl: "", endpointOverrides: {} },
+      hosting: { baseUrl: "", originUrl: "" },
+      id: activeLane,
+      prompt: {
+        firestoreCollections: {
+          accountsCollection: "integration_inova_accounts",
+          storeDetailCollection: "prompt_store_entry_details",
+          storeFeedCollection: "prompt_store_feed_pages",
+          storeSummaryCollection: "prompt_store_meta",
+        },
+        panelScope: "prompt-panel",
+      },
+      storagePrefix: "",
+    };
+
     return {
+      activeLane: laneConfig.id,
       project: {
-        ...baseConfig.project,
+        displayName: "browser-extension",
+        projectId: DEFAULT_WEB_CONFIG.projectId,
+        region: "asia-northeast3",
         ...(override.project || {}),
       },
-      functions: buildFunctionsConfig(baseConfig.functions.baseUrl, override.functions || {}),
-      hosting: buildHostingConfig(baseConfig.hosting.baseUrl, baseConfig.hosting.originUrl, override.hosting || {}),
-      web: buildWebConfig(override.web || {}),
+      functions: buildFunctionsConfig(
+        laneConfig.functions?.baseUrl,
+        laneConfig.functions?.endpointOverrides,
+        override.functions || {}
+      ),
+      hosting: buildHostingConfig(
+        laneConfig.hosting?.baseUrl,
+        laneConfig.hosting?.originUrl,
+        override.hosting || {}
+      ),
+      prompt: buildPromptConfig(laneConfig.prompt, override.prompt || {}),
+      storage: {
+        prefix: normalizeText(laneConfig.storagePrefix),
+      },
+      web: buildWebConfig(laneConfig.web || {}, override.web || {}),
     };
   }
 
-  function buildFunctionsConfig(defaultBaseUrl, overrideConfig = {}) {
+  function buildFunctionsConfig(defaultBaseUrl, endpointOverrides = {}, overrideConfig = {}) {
     const baseUrl = normalizeBaseUrl(overrideConfig.baseUrl || defaultBaseUrl);
+    const endpointMap = {
+      ...FUNCTION_ENDPOINTS,
+      ...(endpointOverrides && typeof endpointOverrides === "object" ? endpointOverrides : {}),
+      ...(overrideConfig.endpointPaths && typeof overrideConfig.endpointPaths === "object" ? overrideConfig.endpointPaths : {}),
+    };
     return buildUrlConfig(
       {
         region: "asia-northeast3",
         baseUrl,
       },
-      FUNCTION_ENDPOINTS,
+      endpointMap,
       baseUrl,
       overrideConfig
     );
@@ -79,6 +112,10 @@
       overrideConfig.promptPanelBridgeAssetVersion
       || [readRuntimeManifestVersion(), PROMPT_PANEL_BRIDGE_CACHE_TOKEN].filter(Boolean).join("-")
     );
+    const endpointMap = {
+      ...HOSTING_ENDPOINTS,
+      ...(overrideConfig.endpointPaths && typeof overrideConfig.endpointPaths === "object" ? overrideConfig.endpointPaths : {}),
+    };
     return buildUrlConfig(
       {
         baseUrl,
@@ -88,20 +125,29 @@
         promptPanelBridgeUrl: appendQueryParam(joinUrl(baseUrl, "prompt-panel-bridge.html"), "v", promptPanelBridgeAssetVersion),
         originUrl,
       },
-      HOSTING_ENDPOINTS,
+      endpointMap,
       baseUrl,
       overrideConfig
     );
   }
 
-  function buildWebConfig(overrideConfig = {}) {
+  function buildPromptConfig(defaultPromptConfig = {}, overrideConfig = {}) {
+    const defaultCollections = defaultPromptConfig.firestoreCollections || {};
     return {
-      apiKey: "AIzaSyDnVS7MmQs7wWjVPihr1MNmcALxJ0a1qPM",
-      appId: "1:1027279095019:web:755f1f1a02cbae0d262aae",
-      authDomain: "browser-extension-main.firebaseapp.com",
-      messagingSenderId: "1027279095019",
-      projectId: "browser-extension-main",
-      storageBucket: "browser-extension-main.firebasestorage.app",
+      firestoreCollections: {
+        accountsCollection: normalizeText(overrideConfig?.firestoreCollections?.accountsCollection || defaultCollections.accountsCollection) || "integration_inova_accounts",
+        storeDetailCollection: normalizeText(overrideConfig?.firestoreCollections?.storeDetailCollection || defaultCollections.storeDetailCollection) || "prompt_store_entry_details",
+        storeFeedCollection: normalizeText(overrideConfig?.firestoreCollections?.storeFeedCollection || defaultCollections.storeFeedCollection) || "prompt_store_feed_pages",
+        storeSummaryCollection: normalizeText(overrideConfig?.firestoreCollections?.storeSummaryCollection || defaultCollections.storeSummaryCollection) || "prompt_store_meta",
+      },
+      panelScope: normalizeText(overrideConfig.panelScope || defaultPromptConfig.panelScope) || "prompt-panel",
+    };
+  }
+
+  function buildWebConfig(defaultConfig = {}, overrideConfig = {}) {
+    return {
+      ...DEFAULT_WEB_CONFIG,
+      ...(defaultConfig || {}),
       ...(overrideConfig || {}),
     };
   }
@@ -111,7 +157,7 @@
       ...baseConfig,
     };
 
-    for (const [configKey, endpointPath] of Object.entries(endpointMap)) {
+    for (const [configKey, endpointPath] of Object.entries(endpointMap || {})) {
       config[configKey] = joinUrl(baseUrl, endpointPath);
     }
 

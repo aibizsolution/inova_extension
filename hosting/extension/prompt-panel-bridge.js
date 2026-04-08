@@ -1,5 +1,12 @@
 (function initPromptPanelBridge(global) {
   const ALLOWED_PARENT_ORIGINS = new Set(["https://inova.incross.com"]);
+  const DEFAULT_FIRESTORE_COLLECTIONS = Object.freeze({
+    accountsCollection: "integration_inova_accounts",
+    storeDetailCollection: "prompt_store_entry_details",
+    storeFeedCollection: "prompt_store_feed_pages",
+    storeSummaryCollection: "prompt_store_meta",
+  });
+  const DEFAULT_PROMPT_PANEL_SCOPE = "prompt-panel";
   const FIRESTORE_PERSISTENCE_OPTIONS = { synchronizeTabs: true };
   const PORT_CONNECT_SOURCE = "inova-prompt-panel-client";
   const STORE_SUMMARY_DOC_ID = "summary";
@@ -19,6 +26,8 @@
   let unsubscribePromptLibraryMeta = null;
   let unsubscribeStoreFeeds = new Map();
   let unsubscribeStoreSummary = null;
+  let connectedFirestoreCollections = { ...DEFAULT_FIRESTORE_COLLECTIONS };
+  let connectedPromptPanelScope = DEFAULT_PROMPT_PANEL_SCOPE;
 
   global.addEventListener("message", handleWindowMessage);
 
@@ -136,6 +145,8 @@
     const firebaseConfig = payload.firebaseConfig && typeof payload.firebaseConfig === "object"
       ? payload.firebaseConfig
       : {};
+    connectedFirestoreCollections = resolveFirestoreCollections(payload.firestoreCollections);
+    connectedPromptPanelScope = normalizeText(payload.promptPanelScope) || DEFAULT_PROMPT_PANEL_SCOPE;
     const firebaseCustomToken = normalizeText(payload.firebaseCustomToken);
     const expectedProviderUserKey = normalizeText(payload.providerUserKey);
     const expectedPromptPanelExpMs = Math.max(0, Date.parse(normalizeText(payload.expiresAt)) || 0);
@@ -163,7 +174,7 @@
       const tokenResult = await currentUser.getIdTokenResult();
       const claims = tokenResult?.claims && typeof tokenResult.claims === "object" ? tokenResult.claims : {};
       const sameProviderUserKey = normalizeText(claims.providerUserKey) === expectedProviderUserKey;
-      const sameScope = normalizeText(claims.scope) === "prompt-panel";
+      const sameScope = normalizeText(claims.scope) === connectedPromptPanelScope;
       const activePromptPanelExpMs = Math.max(0, Number(claims.promptPanelExpMs) || 0);
       const canReuseSession = sameProviderUserKey
         && sameScope
@@ -205,7 +216,7 @@
     }
     clearPromptLibraryMeta();
     unsubscribePromptLibraryMeta = db
-      .collection("integration_inova_accounts")
+      .collection(connectedFirestoreCollections.accountsCollection)
       .doc(providerUserKey)
       .onSnapshot(
         (snapshot) => {
@@ -229,7 +240,7 @@
     clearStoreLatest();
     ensureStoreFeedSubscription(0);
     unsubscribeStoreSummary = db
-      .collection("prompt_store_meta")
+      .collection(connectedFirestoreCollections.storeSummaryCollection)
       .doc(STORE_SUMMARY_DOC_ID)
       .onSnapshot(
         (snapshot) => {
@@ -276,6 +287,8 @@
   function disconnectAll() {
     clearPromptLibraryMeta();
     clearStoreLatest();
+    connectedFirestoreCollections = { ...DEFAULT_FIRESTORE_COLLECTIONS };
+    connectedPromptPanelScope = DEFAULT_PROMPT_PANEL_SCOPE;
   }
 
   async function loadStoreDetail(payload) {
@@ -286,7 +299,7 @@
     }
     try {
       const snapshot = await db
-        .collection("prompt_store_entry_details")
+        .collection(connectedFirestoreCollections.storeDetailCollection)
         .doc(entryId)
         .get();
       if (!snapshot?.exists) {
@@ -404,6 +417,16 @@
     return normalized || "all";
   }
 
+  function resolveFirestoreCollections(input) {
+    const nextCollections = input && typeof input === "object" ? input : {};
+    return {
+      accountsCollection: normalizeText(nextCollections.accountsCollection) || DEFAULT_FIRESTORE_COLLECTIONS.accountsCollection,
+      storeDetailCollection: normalizeText(nextCollections.storeDetailCollection) || DEFAULT_FIRESTORE_COLLECTIONS.storeDetailCollection,
+      storeFeedCollection: normalizeText(nextCollections.storeFeedCollection) || DEFAULT_FIRESTORE_COLLECTIONS.storeFeedCollection,
+      storeSummaryCollection: normalizeText(nextCollections.storeSummaryCollection) || DEFAULT_FIRESTORE_COLLECTIONS.storeSummaryCollection,
+    };
+  }
+
   function compareFeedSnapshots(left, right) {
     return getFeedPageNumber(left) - getFeedPageNumber(right);
   }
@@ -438,7 +461,7 @@
       return;
     }
     const unsubscribe = db
-      .collection("prompt_store_feed_pages")
+      .collection(connectedFirestoreCollections.storeFeedCollection)
       .doc(pageId)
       .onSnapshot(
         (snapshot) => {

@@ -65,6 +65,16 @@ service cloud.firestore {
         && request.time.toMillis() < request.auth.token.promptPanelExpMs;
     }
 
+    function isPromptPanelV2SessionActive() {
+      return request.auth != null
+        && request.auth.token.scope == "prompt-panel-v2"
+        && request.time.toMillis() < request.auth.token.promptPanelExpMs;
+    }
+
+    function isAnyPromptPanelSessionActive() {
+      return isPromptPanelSessionActive() || isPromptPanelV2SessionActive();
+    }
+
     function matchesMeetingPanel(resourceData) {
       return isPanelSessionActive()
         && resourceData.owner.providerUserKey == request.auth.token.providerUserKey;
@@ -95,21 +105,28 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /integration_inova_accounts_v2/{providerUserKey} {
+      allow get: if isPromptPanelV2SessionActive()
+        && request.auth.token.providerUserKey == providerUserKey;
+      allow list: if false;
+      allow write: if false;
+    }
+
     match /prompt_store_meta/{docId} {
-      allow get: if isPromptPanelSessionActive() && docId == "summary";
+      allow get: if isAnyPromptPanelSessionActive() && docId == "summary";
       allow list: if false;
       allow write: if false;
     }
 
     match /prompt_store_feed_pages/{docId} {
-      allow get: if isPromptPanelSessionActive()
+      allow get: if isAnyPromptPanelSessionActive()
         && docId.matches('^latest__all__000[0-1]$');
       allow list: if false;
       allow write: if false;
     }
 
     match /prompt_store_entry_details/{entryId} {
-      allow get: if isPromptPanelSessionActive()
+      allow get: if isAnyPromptPanelSessionActive()
         && exists(/databases/$(database)/documents/prompt_store_entries/$(entryId))
         && get(/databases/$(database)/documents/prompt_store_entries/$(entryId)).data.status == "published";
       allow list: if false;

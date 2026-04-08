@@ -1,4 +1,5 @@
 importScripts("../shared/constants.js");
+importScripts("../shared/product-lane.js");
 importScripts("../shared/session.js");
 importScripts("../shared/storage.js");
 importScripts("../shared/firebase-config.js");
@@ -9,8 +10,9 @@ importScripts("panel-auth-cache.js");
 
 const namespace = globalThis.InovaBookmarks || {};
 const INOVA_ORIGIN = "https://inova.incross.com";
-const HOSTED_MEETING_ALLOWED_ORIGINS = new Set([
+const HOSTED_MEETING_ALLOWED_ORIGINS = new Set(namespace.productLane?.getKnownHostingOrigins?.() || [
   "https://browser-extension-main.web.app",
+  "https://browser-extension-v2.web.app",
   "http://127.0.0.1:5000",
   "http://localhost:5000",
 ]);

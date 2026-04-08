@@ -292,8 +292,15 @@
       port.postMessage({
         payload: {
           expiresAt: auth.expiresAt,
+          firestoreCollections: {
+            ...(namespace.firebaseConfig.prompt?.firestoreCollections || {}),
+            ...((auth.promptFirestoreCollections && typeof auth.promptFirestoreCollections === "object")
+              ? auth.promptFirestoreCollections
+              : {}),
+          },
           firebaseConfig: { ...namespace.firebaseConfig.web },
           firebaseCustomToken: auth.firebaseCustomToken,
+          promptPanelScope: namespace.session.normalizeText(auth.promptPanelScope || namespace.firebaseConfig.prompt?.panelScope),
           promptLibraryId: auth.promptLibraryId,
           providerUserKey: auth.providerUserKey,
         },

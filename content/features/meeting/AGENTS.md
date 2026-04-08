@@ -18,6 +18,7 @@
 - `hosting/meeting/*`
 - `popup/index.js`
 - hosted recovery/self-healing 경로는 `hosting/meeting/workspace-recovery.js`를 먼저 본다.
+- legacy lane은 현재 `browser-extension-main` hosted meeting 경로를 유지한다. v2 lane은 별도 hosting origin/site로 분리하는 것을 기본 전제로 둔다.
 
 ## hosted workspace auth 메모
 - hosted 회의 작업실 Firebase auth claim은 `meetingId` 단위로 달라질 수 있다.
@@ -70,6 +71,7 @@
 - `integration_inova_meeting_job_finalizers`
 - `integration_inova_meeting_artifacts`
 - launch/session 컬렉션
+- v2 lane을 열 때는 위 mutable meeting namespace를 legacy와 공용 write하지 않는다. 새 lane은 별도 namespace 또는 안전한 copy migration을 전제로 설계한다.
 
 ## 보통 건드리지 말아야 할 범위
 - prompt-library
@@ -107,3 +109,4 @@ window.__INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20,
 
 ## 구현 안전 메모
 - hosted workspace controller 간 helper 계약은 암묵 전역에 기대지 말고 `controller("pendingUploads")`나 `ns.shared`에서 명시적으로 연결한다. queue action, network error helper처럼 여러 파일이 같이 쓰는 경로일수록 wiring 누락을 lint로 바로 드러나게 유지한다.
+- `0.4.4` legacy lane은 새 구조를 직접 덮어쓰지 않는다. v2를 도입할 때도 legacy hosted path, 기존 Functions export, 기존 meeting namespace는 sunset 전까지 그대로 둔다.
