@@ -5,6 +5,7 @@
 
 ## 먼저 볼 파일
 - `functions/features/meeting/meeting-launch-service.js`
+- `functions/features/meeting/meeting-notes-context-domain.js`
 - `functions/features/meeting/meeting-service.js`
 - `functions/features/meeting/meeting-transcript-domain.js`
 
@@ -17,6 +18,7 @@
 ## 관련 functions 경로
 - `functions/index.js`
 - `functions/platform/*`
+- `functions/features/meeting/meeting-notes-context-domain.js`는 notes context/snapshot normalize helper를 분리한 내부 모듈이다. mutation payload, notes input snapshot, context dedupe 경계를 볼 때 먼저 확인한다.
 - `functions/features/meeting/meeting-transcript-domain.js`는 `meeting-service.js`의 전사 분절과 회의록 transcript shaping helper를 분리한 내부 모듈이다. export 이름, trigger 경로, 데이터 계약 변경 없이 handler 파일을 가볍게 유지할 때 먼저 확인한다.
 
 ## 관련 데이터 경계
