@@ -57,6 +57,7 @@
 
 ## 관련 functions 경로
 - `functions/features/meeting/meeting-launch-service.js`
+- `functions/features/meeting/meeting-common-domain.js`
 - `functions/features/meeting/meeting-notes-context-domain.js`
 - `functions/features/meeting/meeting-notes-document-domain.js`
 - `functions/features/meeting/meeting-notes-runtime-domain.js`
@@ -123,6 +124,7 @@ window.__INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20,
 - hosted workspace controller 간 helper 계약은 암묵 전역에 기대지 말고 `controller("pendingUploads")`나 `ns.shared`에서 명시적으로 연결한다. queue action, network error helper처럼 여러 파일이 같이 쓰는 경로일수록 wiring 누락을 lint로 바로 드러나게 유지한다.
 - `0.4.4` legacy lane은 새 구조를 직접 덮어쓰지 않는다. v2를 도입할 때도 legacy hosted path, 기존 Functions export, 기존 meeting namespace는 sunset 전까지 그대로 둔다.
 - `functions/features/meeting/meeting-service.js`는 legacy export와 handler surface를 유지하고, 전사 분절과 회의록 transcript shaping 같은 순수 helper부터 `functions/features/meeting/meeting-transcript-domain.js`로 옮겨 내부 분리를 진행한다.
+- text/block normalize, transcript segment, JSON parse, source filename 같은 순수 공용 helper는 `functions/features/meeting/meeting-common-domain.js`로 분리해도 handler/export surface와 persisted 계약은 그대로 유지한다.
 - notes context/snapshot helper는 `functions/features/meeting/meeting-notes-context-domain.js`로 분리해도 HTTP/trigger surface와 Firestore 계약은 바꾸지 않는다.
 - notes 문서 normalize/preview helper는 `functions/features/meeting/meeting-notes-document-domain.js`로 분리해도 회의록 스키마 의미나 persisted payload shape는 그대로 유지한다.
 - notes bundle/completion runtime helper는 `functions/features/meeting/meeting-notes-runtime-domain.js`로 분리해도 notes status, schema version, completion parsing 의미는 그대로 유지한다.

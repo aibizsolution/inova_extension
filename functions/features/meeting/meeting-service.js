@@ -1,5 +1,14 @@
 const crypto = require("crypto");
 const OpenAI = require("openai");
+const {
+  buildDefaultFileName,
+  buildTranscriptExcerpt,
+  hasOwn,
+  normalizeText,
+  normalizeTextBlock,
+  normalizeTranscriptSegment,
+  safeParseJson,
+} = require("./meeting-common-domain");
 const { createMeetingNotesContextDomain } = require("./meeting-notes-context-domain");
 const { createMeetingNotesDocumentDomain } = require("./meeting-notes-document-domain");
 const { createMeetingNotesRuntimeDomain } = require("./meeting-notes-runtime-domain");
@@ -4328,31 +4337,10 @@ function registerMeetingHandlers(deps) {
 
 }
 
-function buildDefaultFileName(mimeType) {
-  return `meeting-source.${resolveAudioExtension(mimeType)}`;
-}
-
-function resolveAudioExtension(mimeType) {
-  const normalized = String(mimeType || "").toLowerCase();
-  if (normalized.includes("webm")) return "webm";
-  if (normalized.includes("wav")) return "wav";
-  if (normalized.includes("mpeg") || normalized.includes("mp3")) return "mp3";
-  if (normalized.includes("ogg")) return "ogg";
-  return "bin";
-}
-
 function shouldSyncMeetingTitleToResult(item, previousTitle) {
   const title = normalizeText(item?.title);
   const normalizedPrevious = normalizeText(previousTitle);
   return !title || title === normalizedPrevious;
-}
-
-function buildTranscriptExcerpt(text) {
-  const normalized = normalizeText(text).replace(/\s+/g, " ");
-  if (!normalized) {
-    return "";
-  }
-  return normalized.length > 140 ? `${normalized.slice(0, 137)}...` : normalized;
 }
 
 function collectMeetingArtifactIds(jobInput) {
@@ -4383,17 +4371,6 @@ async function upsertMeetingJobSummary(meetingRef, meeting, owner, jobInput, art
   await meetingRef.set(nextDocument, { merge: true });
 }
 
-function normalizeTranscriptSegment(input) {
-  const segment = input && typeof input === "object" ? input : {};
-  const startMs = Math.max(0, Number(segment.startMs) || 0);
-  const endMs = Math.max(startMs + 1, Number(segment.endMs) || startMs + 1);
-  return {
-    endMs,
-    startMs,
-    text: normalizeText(segment.text),
-  };
-}
-
 function assertJobOwnership(job, owner, createHttpError) {
   if (normalizeText(job.owner?.providerUserKey) !== normalizeText(owner?.providerUserKey)) {
     throw createHttpError(403, "현재 사용자에게 허용되지 않은 회의 job이에요.");
@@ -4405,16 +4382,6 @@ function assertMeetingOwnership(meeting, owner, createHttpError) {
   if (storedOwnerKey && storedOwnerKey !== normalizeText(owner?.providerUserKey)) {
     throw createHttpError(403, "현재 사용자에게 허용되지 않은 회의예요.");
   }
-}
-
-function normalizeTextBlock(value) {
-  return String(value || "")
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .split("\n")
-    .map((line) => line.trim())
-    .join("\n")
-    .trim();
 }
 
 function normalizeMeetingJobForSource(input) {
@@ -4481,18 +4448,6 @@ async function loadMeetingTranscriptForNotes(jobInput, db, createHttpError) {
   throw createHttpError(404, "전사 원본을 찾지 못했어요.");
 }
 
-function hasOwn(input, key) {
-  return Boolean(input && typeof input === "object" && Object.prototype.hasOwnProperty.call(input, key));
-}
-
-function safeParseJson(value) {
-  try {
-    return JSON.parse(String(value || ""));
-  } catch {
-    return null;
-  }
-}
-
 function getInlineAudioLimitBytes() {
   return Math.max(1024, Number(process.env.OPENAI_MEETING_INLINE_AUDIO_LIMIT_BYTES) || DEFAULT_INLINE_AUDIO_LIMIT_BYTES);
 }
@@ -4507,10 +4462,6 @@ function getMeetingSourceMaxBytes() {
 
 function getMeetingSourceMaxDurationMs() {
   return Math.max(30 * 1000, Number(process.env.OPENAI_MEETING_SOURCE_MAX_DURATION_MS) || DEFAULT_SOURCE_MAX_DURATION_MS);
-}
-
-function normalizeText(value) {
-  return String(value || "").trim();
 }
 
 module.exports = {
