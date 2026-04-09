@@ -56,7 +56,7 @@
 
 이미 나눈 파일도 자동으로 유지 확정으로 보지 않는다. 새 철학에 맞지 않으면 다시 합치는 것도 정상적인 리팩토링으로 본다.
 
-- `meeting-transcript-domain.js`, `meeting-deletion-domain.js`, `meeting-notes-context-domain.js`, `meeting-notes-document-domain.js`, `meeting-notes-regeneration-domain.js`, `meeting-notes-runtime-domain.js`, `meeting-notes-source-domain.js`, `meeting-source-domain.js`, `meeting-mutation-domain.js`, `meeting-processing-domain.js`, `meeting-record-domain.js`, `meeting-state-domain.js`는 현재 기준으로 `workflow/data contract` 경계에 가까워 우선 유지 후보로 본다.
+- `meeting-transcript-domain.js`, `meeting-creation-domain.js`, `meeting-deletion-domain.js`, `meeting-notes-context-domain.js`, `meeting-notes-document-domain.js`, `meeting-notes-regeneration-domain.js`, `meeting-notes-runtime-domain.js`, `meeting-notes-source-domain.js`, `meeting-source-domain.js`, `meeting-mutation-domain.js`, `meeting-processing-domain.js`, `meeting-record-domain.js`, `meeting-state-domain.js`는 현재 기준으로 `workflow/data contract` 경계에 가까워 우선 유지 후보로 본다.
 - `meeting-summary-sync-domain.js`는 meeting summary 문서 lifecycle을 다루는 `workflow/data contract boundary`로 유지 후보로 본다.
 - `meeting-common-domain.js`는 `meeting-service.js`, `meeting-launch-service.js`, `meeting-workspace-auth-service.js`가 함께 쓰는 `shared normalization boundary`로 승격했다.
 - `meeting-guard-domain.js`는 helper-only 경계가 약해서 `meeting-service.js`로 재통합했다.
@@ -462,9 +462,12 @@
 - meeting internal split 15차:
   - queued job claim/retry, chunk part worker, finalizer assembly, queue progress synchronization을 `functions/features/meeting/meeting-processing-domain.js`로 분리
   - chunk/finalize processing trigger, job/job_part/finalizer 상태 계약, artifact 생성 의미 변화 없음
+- meeting internal split 16차:
+  - job create request validation, source ready/dedupe, upload sync를 `functions/features/meeting/meeting-creation-domain.js`로 분리
+  - create/upload request 의미, queued job source 상태 계약, dedupe/upload sync 동작 의미 변화 없음
 - 철학 정렬 후속:
   - `docs/development-philosophy.md`와 `meeting-service Target End State` 기준을 먼저 확정
   - split 9-10은 `새 기본 패턴`이 아니라 `재평가 대상`으로 명시
 - 다음 시작점:
-  - 그 다음 `job creation`이 추가 workflow 분리 가치가 있는지 판단
-  - 그 뒤 `Meeting Ready Gate` 기준 smoke를 실행해 minor 경로 증거를 문서에 남길지 판단
+  - 그 다음 `Meeting Ready Gate` 기준 smoke를 실행해 minor 경로 증거를 문서에 남길지 판단
+  - smoke 결과를 바탕으로 split 재통합 후보나 실제 release blocker를 다시 판단

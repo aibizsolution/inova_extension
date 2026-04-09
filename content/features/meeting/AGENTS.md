@@ -58,6 +58,7 @@
 ## 관련 functions 경로
 - `functions/features/meeting/meeting-launch-service.js`
 - `functions/features/meeting/meeting-common-domain.js`
+- `functions/features/meeting/meeting-creation-domain.js`
 - `functions/features/meeting/meeting-deletion-domain.js`
 - `functions/features/meeting/meeting-notes-context-domain.js`
 - `functions/features/meeting/meeting-notes-document-domain.js`
@@ -135,6 +136,7 @@ window.__INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20,
 - `functions/features/meeting/meeting-summary-sync-domain.js`는 meeting summary 문서의 read/write, active check, recentJobs synchronization을 한 lifecycle로 묶은 workflow boundary다. summary 문서 의미를 바꾸지 않고 service orchestration만 얇게 할 때 먼저 본다.
 - `functions/features/meeting/meeting-deletion-domain.js`는 deletion queue claim/retry, result/meeting cleanup, tombstone completion check를 한 lifecycle로 묶은 workflow boundary다. deletion worker와 sweep 의미를 바꾸지 않고 service orchestration만 얇게 할 때 먼저 본다.
 - `functions/features/meeting/meeting-notes-regeneration-domain.js`는 regenerate request accept, command claim/process, 실패 workspace mutation 반영을 한 lifecycle로 묶은 workflow boundary다. notes regenerate command 의미를 바꾸지 않고 service orchestration만 얇게 할 때 먼저 본다.
+- `functions/features/meeting/meeting-creation-domain.js`는 job create request validation, source ready/dedupe, upload sync를 한 lifecycle로 묶은 workflow boundary다. 새 job 초기화와 source 업로드 반영 의미를 바꾸지 않고 service orchestration만 얇게 할 때 먼저 본다.
 - `functions/features/meeting/meeting-processing-domain.js`는 queued job claim/retry, chunk part worker, finalizer assembly, queue progress synchronization을 한 lifecycle로 묶은 workflow boundary다. chunk/finalize processing 의미를 바꾸지 않고 service orchestration만 얇게 할 때 먼저 본다.
 - text/block normalize, transcript segment, JSON parse, source filename 같은 순수 공용 helper는 `functions/features/meeting/meeting-common-domain.js`로 분리해도 handler/export surface와 persisted 계약은 그대로 유지한다.
 - ownership assert와 제목 동기화 guard helper는 현재 다시 `functions/features/meeting/meeting-service.js` 안에 둔다. service-local workflow에서만 쓰이고, 독립 file 경계보다 orchestration 근처에 둘 때 더 자연스럽다.

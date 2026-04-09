@@ -6,6 +6,7 @@
 ## 먼저 볼 파일
 - `functions/features/meeting/meeting-launch-service.js`
 - `functions/features/meeting/meeting-common-domain.js`
+- `functions/features/meeting/meeting-creation-domain.js`
 - `functions/features/meeting/meeting-deletion-domain.js`
 - `functions/features/meeting/meeting-notes-context-domain.js`
 - `functions/features/meeting/meeting-notes-document-domain.js`
@@ -31,6 +32,7 @@
 - `functions/index.js`
 - `functions/platform/*`
 - `functions/features/meeting/meeting-common-domain.js`는 `meeting-service.js`, `meeting-launch-service.js`, `meeting-workspace-auth-service.js`가 함께 쓰는 text normalize와 source/transcript 공용 helper root다. backend meeting 서비스 간 같은 normalize 규칙을 맞출 때 먼저 확인한다.
+- `functions/features/meeting/meeting-creation-domain.js`는 job create request validation, source ready/dedupe, upload sync를 한 lifecycle로 묶은 내부 모듈이다. 새 job 초기화와 source 업로드 반영 의미를 바꾸지 않고 service orchestration만 얇게 할 때 먼저 확인한다.
 - `functions/features/meeting/meeting-deletion-domain.js`는 deletion queue claim/retry, result/meeting cleanup, tombstone completion check helper를 분리한 내부 모듈이다. deletion/sweep lifecycle을 바꿀 때 먼저 확인한다.
 - `functions/features/meeting/meeting-notes-context-domain.js`는 notes context/snapshot normalize helper를 분리한 내부 모듈이다. mutation payload, notes input snapshot, context dedupe 경계를 볼 때 먼저 확인한다.
 - `functions/features/meeting/meeting-notes-document-domain.js`는 notes 문서 normalize, empty bundle source note, preview helper를 분리한 내부 모듈이다. 회의록 스키마/후처리 의미를 건드리지 않고 handler 본문을 줄일 때 먼저 확인한다.
@@ -51,7 +53,7 @@
 - `common`, `guard`처럼 얇은 helper-only 파일은 새로 늘리기 전에 재사용, 독립 테스트 가치, 분리된 변경 이유가 충분한지 먼저 확인한다.
 - `meeting-guard-domain.js`는 helper-only 경계가 약해 다시 `meeting-service.js`로 합쳤다. 반대로 `meeting-common-domain.js`는 launch/workspace auth service까지 같은 normalize 규칙을 공유하게 하면서 `shared normalization boundary`로 유지한다.
 - `meeting-summary-sync-domain.js`처럼 summary read/write와 active check가 한 문서 lifecycle로 설명되면 helper 수와 무관하게 독립 workflow boundary로 분리할 수 있다.
-- 앞으로의 우선 검토 후보는 helper 묶음보다 `job creation`처럼 남은 handler workflow 경계와 `Meeting Ready Gate` smoke다.
+- 앞으로의 우선 검토 후보는 남은 큰 workflow 분리보다 `Meeting Ready Gate` smoke와 split 재평가다.
 
 ## 관련 데이터 경계
 - `integration_inova_meetings`
