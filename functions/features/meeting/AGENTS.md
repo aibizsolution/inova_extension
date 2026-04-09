@@ -54,6 +54,8 @@
 - `meeting-guard-domain.js`는 helper-only 경계가 약해 다시 `meeting-service.js`로 합쳤다. 반대로 `meeting-common-domain.js`는 launch/workspace auth service까지 같은 normalize 규칙을 공유하게 하면서 `shared normalization boundary`로 유지한다.
 - `meeting-summary-sync-domain.js`처럼 summary read/write와 active check가 한 문서 lifecycle로 설명되면 helper 수와 무관하게 독립 workflow boundary로 분리할 수 있다.
 - 앞으로의 우선 검토 후보는 남은 큰 workflow 분리보다 `Meeting Ready Gate` smoke와 split 재평가다.
+- `updateInovaMeeting`는 mutation accepted만이 아니라 수정된 `meeting` payload도 계속 돌려준다. hosted-only service harness와 response envelope 회귀 점검에서 이 계약을 유지한다.
+- 실제 `Meeting Ready Gate` 전에는 `node scripts/verify-meeting-service.js`, `node scripts/verify-meeting-manager.js`, `node scripts/verify-content-smoke.js`를 hosted-only 사전 smoke로 먼저 확인한다. 다만 이 셋만으로 minor candidate를 선언하지는 않고, 실제 Chrome/manual smoke는 별도로 남긴다.
 
 ## 관련 데이터 경계
 - `integration_inova_meetings`

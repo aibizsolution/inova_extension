@@ -734,7 +734,7 @@ function registerMeetingHandlers(deps) {
         status: "succeeded",
         type: input.hasTitle ? "saveMeetingTitle" : "saveMeetingMemo",
       });
-      await meetingRef.set({
+      const nextMeetingPatch = {
         createdAt: currentMeeting.createdAt || updatedAt,
         meetingId: currentMeeting.meetingId || input.meetingId,
         owner: normalizeText(currentMeeting.owner?.providerUserKey) ? currentMeeting.owner : owner,
@@ -744,7 +744,12 @@ function registerMeetingHandlers(deps) {
         title: nextTitle,
         updatedAt,
         ...(workspaceMutation.requestId ? { workspaceMutation } : {}),
-      }, { merge: true });
+      };
+      await meetingRef.set(nextMeetingPatch, { merge: true });
+      const nextMeeting = normalizeMeetingSummary({
+        ...currentMeeting,
+        ...nextMeetingPatch,
+      });
 
       if (input.hasTitle) {
         await Promise.all(
@@ -768,6 +773,7 @@ function registerMeetingHandlers(deps) {
         ok: true,
         data: {
           accepted: true,
+          meeting: nextMeeting,
           requestId: input.clientRequestId,
         },
       });

@@ -1,5 +1,6 @@
 const JOB_COLLECTION = "integration_inova_meeting_jobs";
 const ARTIFACT_COLLECTION = "integration_inova_meeting_artifacts";
+const COMMAND_COLLECTION = "integration_inova_meeting_commands";
 const DELETION_COLLECTION = "integration_inova_meeting_deletions";
 const JOB_FINALIZER_COLLECTION = "integration_inova_meeting_job_finalizers";
 const JOB_PART_COLLECTION = "integration_inova_meeting_job_parts";
@@ -512,6 +513,29 @@ async function invokeDeletionWriteTrigger(handlers, state, taskId, beforeValue) 
     },
   });
 }
+async function invokeCommandWriteTrigger(handlers, state, commandId, beforeValue) {
+  const collection = state.collections.get(COMMAND_COLLECTION) || new Map();
+  const afterValue = cloneValue(collection.get(commandId));
+  const ref = createStateDocRef(state, COMMAND_COLLECTION, commandId);
+  await handlers.processQueuedMeetingCommandWrite({
+    data: {
+      after: {
+        data() {
+          return cloneValue(afterValue);
+        },
+        exists: Boolean(afterValue),
+        ref,
+      },
+      before: {
+        data() {
+          return cloneValue(beforeValue);
+        },
+        exists: Boolean(beforeValue),
+        ref,
+      },
+    },
+  });
+}
 async function invokePartWriteTrigger(handlers, state, docId, beforeValue) {
   const collection = state.collections.get(JOB_PART_COLLECTION) || new Map();
   const afterValue = cloneValue(collection.get(docId));
@@ -629,6 +653,7 @@ function cloneValue(value) {
 }
 module.exports = {
   ARTIFACT_COLLECTION,
+  COMMAND_COLLECTION,
   DELETION_COLLECTION,
   JOB_COLLECTION,
   JOB_FINALIZER_COLLECTION,
@@ -638,6 +663,7 @@ module.exports = {
   createDeps,
   createMemoryState,
   drainChunkedMeetingPipeline,
+  invokeCommandWriteTrigger,
   invokeDeletionWriteTrigger,
   invokeHandler,
   invokeJobWriteTrigger,

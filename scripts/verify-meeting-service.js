@@ -5,6 +5,7 @@ const { registerMeetingLaunchHandlers } = require("../functions/features/meeting
 const { registerMeetingHandlers } = require("../functions/features/meeting/meeting-service");
 const {
   ARTIFACT_COLLECTION,
+  COMMAND_COLLECTION,
   JOB_COLLECTION,
   JOB_FINALIZER_COLLECTION,
   JOB_PART_COLLECTION,
@@ -13,6 +14,7 @@ const {
   createDeps,
   createMemoryState,
   drainChunkedMeetingPipeline,
+  invokeCommandWriteTrigger,
   invokeDeletionWriteTrigger,
   invokeHandler,
   invokeJobWriteTrigger,
@@ -224,11 +226,17 @@ async function main() {
     },
     method: "POST",
   });
-  assert.equal(regenerated.statusCode, 200);
-  assert.equal(regenerated.jsonBody.data.job.notesContextItems.length, 1);
-  assert.equal(regenerated.jsonBody.data.job.notesContextItems[0].text, "후속 일정 확인이 필요합니다.");
-  assert.equal(regenerated.jsonBody.data.job.context.sharedMemoSnapshot, "후속 일정 확인이 필요한 회의입니다.");
-  assert.equal(regenerated.jsonBody.data.artifact.notesContextItems.length, 1);
+  assert.equal(regenerated.statusCode, 202);
+  assert.equal(regenerated.jsonBody.data.accepted, true);
+  const regenerateCommandId = regenerated.jsonBody.data.requestId;
+  assert.equal(getDoc(state, COMMAND_COLLECTION, regenerateCommandId).status, "queued");
+  await invokeCommandWriteTrigger(handlers, state, regenerateCommandId);
+  const regeneratedJob = getDoc(state, JOB_COLLECTION, jobId);
+  const regeneratedArtifact = getDoc(state, ARTIFACT_COLLECTION, artifactId);
+  assert.equal(regeneratedJob.notesContextItems.length, 1);
+  assert.equal(regeneratedJob.notesContextItems[0].text, "후속 일정 확인이 필요합니다.");
+  assert.equal(regeneratedJob.context.sharedMemoSnapshot, "후속 일정 확인이 필요한 회의입니다.");
+  assert.equal(regeneratedArtifact.notesContextItems.length, 1);
   assert(state.openaiSummaryRequests.length > summaryRequestsBeforeRegenerate);
 
   const updatedResult = await invokeHandler(handlers.updateInovaMeetingResult, {
@@ -246,9 +254,11 @@ async function main() {
     method: "POST",
   });
   assert.equal(updatedResult.statusCode, 200);
-  assert.equal(updatedResult.jsonBody.data.job.title, "3월 30일 회의록");
-  assert.equal(updatedResult.jsonBody.data.job.notesContextItems.length, 2);
-  assert.equal(updatedResult.jsonBody.data.job.context.sharedMemoSnapshot, "회의 후속 조치와 디자인 시안 리뷰 일정까지 포함합니다.");
+  assert.equal(updatedResult.jsonBody.data.accepted, true);
+  const patchedJob = getDoc(state, JOB_COLLECTION, jobId);
+  assert.equal(patchedJob.title, "3월 30일 회의록");
+  assert.equal(patchedJob.notesContextItems.length, 2);
+  assert.equal(patchedJob.context.sharedMemoSnapshot, "회의 후속 조치와 디자인 시안 리뷰 일정까지 포함합니다.");
 
   const deletedResult = await invokeHandler(handlers.deleteInovaMeetingResult, {
     body: {

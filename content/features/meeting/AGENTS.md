@@ -139,6 +139,8 @@ window.__INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20,
 - `functions/features/meeting/meeting-creation-domain.js`는 job create request validation, source ready/dedupe, upload sync를 한 lifecycle로 묶은 workflow boundary다. 새 job 초기화와 source 업로드 반영 의미를 바꾸지 않고 service orchestration만 얇게 할 때 먼저 본다.
 - `functions/features/meeting/meeting-processing-domain.js`는 queued job claim/retry, chunk part worker, finalizer assembly, queue progress synchronization을 한 lifecycle로 묶은 workflow boundary다. chunk/finalize processing 의미를 바꾸지 않고 service orchestration만 얇게 할 때 먼저 본다.
 - text/block normalize, transcript segment, JSON parse, source filename 같은 순수 공용 helper는 `functions/features/meeting/meeting-common-domain.js`로 분리해도 handler/export surface와 persisted 계약은 그대로 유지한다.
+- meeting title/shared memo 저장 API인 `updateInovaMeeting`는 accepted/requestId뿐 아니라 수정된 `meeting` payload도 계속 돌려준다. hosted-only service smoke와 response envelope 회귀 점검에서 이 계약을 유지한다.
+- `Meeting Ready Gate` 전 사전 smoke는 `node scripts/verify-meeting-service.js`, `node scripts/verify-meeting-manager.js`, `node scripts/verify-content-smoke.js`를 먼저 돈다. 다만 이건 hosted-only 자동 smoke이고, minor candidate 판단에는 실제 Chrome/manual smoke가 추가로 필요하다.
 - ownership assert와 제목 동기화 guard helper는 현재 다시 `functions/features/meeting/meeting-service.js` 안에 둔다. service-local workflow에서만 쓰이고, 독립 file 경계보다 orchestration 근처에 둘 때 더 자연스럽다.
 - notes context/snapshot helper는 `functions/features/meeting/meeting-notes-context-domain.js`로 분리해도 HTTP/trigger surface와 Firestore 계약은 바꾸지 않는다.
 - notes 문서 normalize/preview helper는 `functions/features/meeting/meeting-notes-document-domain.js`로 분리해도 회의록 스키마 의미나 persisted payload shape는 그대로 유지한다.

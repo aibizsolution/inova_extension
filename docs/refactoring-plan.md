@@ -465,9 +465,13 @@
 - meeting internal split 16차:
   - job create request validation, source ready/dedupe, upload sync를 `functions/features/meeting/meeting-creation-domain.js`로 분리
   - create/upload request 의미, queued job source 상태 계약, dedupe/upload sync 동작 의미 변화 없음
+- Meeting Ready Gate 사전 점검:
+  - `node scripts/verify-meeting-service.js`, `node scripts/verify-meeting-manager.js`, `node scripts/verify-content-smoke.js`를 현재 계약에 맞게 다시 녹색화
+  - `updateInovaMeeting` 응답에 수정된 `meeting` payload를 복원해 hosted-only service harness 회귀를 제거
+  - 다만 실제 minor candidate 증거로 쓰려면 여전히 Chrome 수동 smoke와 기존 상용 데이터 확인이 필요
 - 철학 정렬 후속:
   - `docs/development-philosophy.md`와 `meeting-service Target End State` 기준을 먼저 확정
   - split 9-10은 `새 기본 패턴`이 아니라 `재평가 대상`으로 명시
 - 다음 시작점:
-  - 그 다음 `Meeting Ready Gate` 기준 smoke를 실행해 minor 경로 증거를 문서에 남길지 판단
+  - 그 다음 실제 Chrome에서 `Meeting Ready Gate` minor smoke를 실행해 candidate 증거를 남길지 판단
   - smoke 결과를 바탕으로 split 재통합 후보나 실제 release blocker를 다시 판단
