@@ -60,6 +60,7 @@
 - `functions/features/meeting/meeting-notes-context-domain.js`
 - `functions/features/meeting/meeting-notes-document-domain.js`
 - `functions/features/meeting/meeting-mutation-domain.js`
+- `functions/features/meeting/meeting-record-domain.js`
 - `functions/features/meeting/meeting-source-domain.js`
 - `functions/features/meeting/meeting-service.js`
 - `functions/features/meeting/meeting-transcript-domain.js`
@@ -124,3 +125,4 @@ window.__INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20,
 - notes 문서 normalize/preview helper는 `functions/features/meeting/meeting-notes-document-domain.js`로 분리해도 회의록 스키마 의미나 persisted payload shape는 그대로 유지한다.
 - request/source/job-part normalize helper는 `functions/features/meeting/meeting-source-domain.js`로 분리해도 upload request 의미, queued part/finalizer 상태 계약은 그대로 유지한다.
 - mutation/deletion normalize helper는 `functions/features/meeting/meeting-mutation-domain.js`로 분리해도 workspace mutation, command, deletion task 문서 shape와 상태 의미는 그대로 유지한다.
+- queued job/result artifact/meeting summary builder는 `functions/features/meeting/meeting-record-domain.js`로 분리해도 summary 문서 shape, artifact payload, stable ID/path 규칙은 그대로 유지한다.
