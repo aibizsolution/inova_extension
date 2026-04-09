@@ -310,6 +310,7 @@
         const nextState = createEmptySectionEditState();
         nextState.recordId = normalizeText(options.recordId ?? state.sectionEdit.recordId);
         nextState.jobId = normalizeText(options.jobId ?? state.sectionEdit.jobId);
+        nextState.open = Boolean(options.open ?? state.sectionEdit.open);
         nextState.sectionKey = normalizeText(options.sectionKey ?? state.sectionEdit.sectionKey) || "overview";
         nextState.instruction = options.preserveInstruction
           ? normalizeTextareaDraft(options.instruction ?? state.sectionEdit.instruction).slice(0, MAX_MEETING_SECTION_EDIT_INSTRUCTION_CHARS)
@@ -332,6 +333,7 @@
         if (meetingChanged) {
           state.termReplacementState.draftFrom = "";
           state.termReplacementState.draftTo = "";
+          state.termReplacementState.open = false;
         }
       }
 
@@ -519,9 +521,67 @@
         applyRender();
       }
 
+      function toggleTermReplacementPanel() {
+        state.termReplacementState.open = !state.termReplacementState.open;
+        applyRender();
+      }
+
+      function openSectionEdit(sectionKeyInput) {
+        const entry = findHistoryEntry(state, state.selectedRecordId);
+        if (!entry?.remote?.jobId) {
+          setNotice("섹션 수정을 하려면 완료된 기록을 선택해 주세요.", "warning");
+          applyRender();
+          return false;
+        }
+        const nextSectionKey = normalizeText(sectionKeyInput) || "overview";
+        const sameRecord = normalizeText(state.sectionEdit.recordId) === normalizeText(entry.id);
+        const sameSection = normalizeText(state.sectionEdit.sectionKey) === nextSectionKey;
+        if (!sameRecord || !sameSection) {
+          resetSectionEditPreviewState({
+            jobId: entry.remote.jobId,
+            open: true,
+            preserveInstruction: false,
+            recordId: entry.id,
+            sectionKey: nextSectionKey,
+          });
+        } else {
+          state.sectionEdit.open = true;
+          state.sectionEdit.jobId = entry.remote.jobId;
+          state.sectionEdit.recordId = entry.id;
+          state.sectionEdit.sectionKey = nextSectionKey;
+        }
+        state.reviewTab = "notes";
+        applyRender();
+        return true;
+      }
+
+      function closeSectionEdit() {
+        if (!state.sectionEdit.open) {
+          return false;
+        }
+        if (state.busy.applySectionEdit || state.busy.previewSectionEdit) {
+          return false;
+        }
+        state.sectionEdit.open = false;
+        applyRender();
+        return true;
+      }
+
+      function handleMeetingNotesSectionAction(event) {
+        const target = event.target?.closest?.("[data-notes-section-action='edit']");
+        if (!(target instanceof globalObject.HTMLElement)) {
+          return false;
+        }
+        if (typeof event.preventDefault === "function") {
+          event.preventDefault();
+        }
+        return openSectionEdit(target.dataset.sectionKey);
+      }
+
       function resetSectionEditPreview() {
         resetSectionEditPreviewState({
           jobId: state.sectionEdit.jobId,
+          open: state.sectionEdit.open,
           preserveInstruction: true,
           recordId: state.sectionEdit.recordId,
           sectionKey: state.sectionEdit.sectionKey,
@@ -662,16 +722,17 @@
             state.meeting.title = normalizeText(patch.title);
             state.meetingTitleDraft = normalizeText(patch.title);
           }
-          if (mutationType === "saveMeetingTermReplacements") {
-            state.meeting.termReplacements = cloneTermReplacements(patch.termReplacements);
-            state.termReplacementState.saved = cloneTermReplacements(patch.termReplacements);
-            state.termReplacementState.items = cloneTermReplacements(patch.termReplacements);
-            resetSectionEditPreviewState({
-              jobId: state.sectionEdit.jobId,
-              preserveInstruction: true,
-              recordId: state.sectionEdit.recordId,
-              sectionKey: state.sectionEdit.sectionKey,
-              statusText: "용어 치환을 반영했습니다. 필요하면 새 미리보기를 다시 만들어 주세요.",
+            if (mutationType === "saveMeetingTermReplacements") {
+              state.meeting.termReplacements = cloneTermReplacements(patch.termReplacements);
+              state.termReplacementState.saved = cloneTermReplacements(patch.termReplacements);
+              state.termReplacementState.items = cloneTermReplacements(patch.termReplacements);
+              resetSectionEditPreviewState({
+                jobId: state.sectionEdit.jobId,
+                open: state.sectionEdit.open,
+                preserveInstruction: true,
+                recordId: state.sectionEdit.recordId,
+                sectionKey: state.sectionEdit.sectionKey,
+                statusText: "용어 치환을 반영했습니다. 필요하면 새 미리보기를 다시 만들어 주세요.",
               statusTone: "highlight",
             });
             await refreshWorkspace(true, "workflow");
@@ -954,12 +1015,12 @@
           patchSelectedRecordNotes(entry.remote.jobId, payload.notes, payload.title, payload.requestId);
           resetSectionEditPreviewState({
             jobId: entry.remote.jobId,
-            preserveInstruction: true,
+            open: false,
+            preserveInstruction: false,
             recordId: entry.id,
             sectionKey: normalizeText(payload.sectionKey || state.sectionEdit.sectionKey),
-            statusText: `${resolveSectionLabel(payload.sectionKey || state.sectionEdit.sectionKey)} 섹션을 반영했습니다.`,
-            statusTone: "highlight",
           });
+          setNotice(`${resolveSectionLabel(payload.sectionKey || state.sectionEdit.sectionKey)} 섹션을 반영했습니다.`, "highlight");
           await finalizePendingMutation(requestId, "succeeded");
           return true;
         } catch (error) {
@@ -1116,6 +1177,8 @@
         const showTools = canRenderNotesTools();
         refs.meetingNotesTools.hidden = !showTools;
         if (!showTools) {
+          if (refs.termReplacementPanel) refs.termReplacementPanel.hidden = true;
+          if (refs.sectionEditOverlay) refs.sectionEditOverlay.hidden = true;
           return;
         }
 
@@ -1136,8 +1199,14 @@
           && normalizeText(state.termReplacementState.draftTo)
         );
         const termDirty = isTermReplacementDirty();
+        const sectionEditOpen = Boolean(state.sectionEdit.open);
 
         if (refs.termReplacementDirtyBadge) refs.termReplacementDirtyBadge.hidden = !termDirty;
+        if (refs.termReplacementPanel) refs.termReplacementPanel.hidden = !state.termReplacementState.open;
+        if (refs.toggleTermReplacementButton) {
+          refs.toggleTermReplacementButton.textContent = "용어 치환";
+          refs.toggleTermReplacementButton.setAttribute("aria-expanded", state.termReplacementState.open ? "true" : "false");
+        }
         if (refs.termReplacementFromInput) refs.termReplacementFromInput.disabled = readOnly || termBusy;
         if (refs.termReplacementToInput) refs.termReplacementToInput.disabled = readOnly || termBusy;
         if (refs.termReplacementAddButton) refs.termReplacementAddButton.disabled = readOnly || termBusy || !termDraftReady;
@@ -1148,7 +1217,11 @@
           refs.saveTermReplacementsButton.textContent = termBusy ? "저장 중" : "용어 치환 저장";
         }
 
-        if (refs.sectionEditSelect) refs.sectionEditSelect.disabled = readOnly || selectedRecordBusy;
+        if (refs.sectionEditOverlay) refs.sectionEditOverlay.hidden = !sectionEditOpen;
+        if (refs.closeSectionEditButton) refs.closeSectionEditButton.disabled = selectedRecordBusy;
+        if (refs.sectionEditDialogTitle) refs.sectionEditDialogTitle.textContent = `${resolveSectionLabel(state.sectionEdit.sectionKey)} 수정`;
+        if (refs.sectionEditDialogBody) refs.sectionEditDialogBody.textContent = "선택한 섹션만 미리보기한 뒤 확인 후 적용합니다.";
+        if (refs.sectionEditTargetLabel) refs.sectionEditTargetLabel.textContent = resolveSectionLabel(state.sectionEdit.sectionKey);
         if (refs.sectionEditInstructionInput) refs.sectionEditInstructionInput.disabled = readOnly || selectedRecordBusy;
         if (refs.previewSectionEditButton) {
           refs.previewSectionEditButton.disabled = readOnly
@@ -1182,10 +1255,13 @@
         applySectionEdit,
         clearSharedMemo,
         clearTermReplacements,
+        closeSectionEdit,
         deleteCurrentRecord,
         deleteMeeting,
         finalizePendingMutation,
+        handleMeetingNotesSectionAction,
         handleTermReplacementListClick,
+        openSectionEdit,
         previewSectionEdit,
         renderMeetingNotesTools,
         resetSectionEditPreview,
@@ -1199,6 +1275,7 @@
         saveSharedMemo,
         syncSelectedRecordReviewState,
         syncWorkspaceMutationBusyState,
+        toggleTermReplacementPanel,
         updateMeetingTitleDraft,
         updateRecordMemoDraft,
         updateSectionEditInstruction,

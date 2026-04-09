@@ -214,13 +214,22 @@
 
               <section id="meetingNotesCard" class="review-panel review-panel--notes" hidden role="tabpanel">
                 <div id="meetingNotesTools" class="notes-tools" hidden>
-                  <section class="notes-tool-card">
+                  <div class="notes-tools__bar">
+                    <div class="notes-tools__intro">
+                      <p class="panel-card__eyebrow">보정 도구</p>
+                      <p class="notes-tools__summary">회의 정리를 먼저 읽고, 반복 표기 교정이 필요할 때만 도구를 여세요.</p>
+                    </div>
+                    <div class="notes-tools__actions">
+                      <span id="termReplacementDirtyBadge" class="chip chip--muted" hidden>변경 있음</span>
+                      <button id="toggleTermReplacementButton" class="ghost-button ghost-button--soft" type="button" aria-expanded="false" aria-controls="termReplacementPanel">용어 치환</button>
+                    </div>
+                  </div>
+                  <section id="termReplacementPanel" class="notes-tool-card notes-tool-card--drawer" hidden>
                     <div class="notes-tool-card__head">
                       <div>
                         <p class="panel-card__eyebrow">용어 치환</p>
-                        <h3 class="notes-tool-card__title">회의 정리 보정</h3>
+                        <h3 class="notes-tool-card__title">반복되는 표기만 일괄 교정</h3>
                       </div>
-                      <span id="termReplacementDirtyBadge" class="chip chip--muted" hidden>변경 있음</span>
                     </div>
                     <p class="notes-tool-card__summary">기존 회의 정리와 이후 섹션 수정 결과에 같은 용어를 일관되게 적용합니다.</p>
                     <div class="notes-term-editor">
@@ -243,46 +252,6 @@
                       </div>
                     </div>
                   </section>
-
-                  <section class="notes-tool-card">
-                    <div class="notes-tool-card__head">
-                      <div>
-                        <p class="panel-card__eyebrow">섹션 수정</p>
-                        <h3 class="notes-tool-card__title">필요한 부분만 다시 다듬기</h3>
-                      </div>
-                    </div>
-                    <p class="notes-tool-card__summary">선택한 섹션만 LLM으로 미리보기한 뒤 확인 후 적용합니다.</p>
-                    <div class="notes-section-edit">
-                      <label class="input-group" for="sectionEditSelect">
-                        <span class="input-group__label">수정할 섹션</span>
-                        <select id="sectionEditSelect" class="meeting-input">
-                          <option value="overview">회의 개요</option>
-                          <option value="discussionFlow">논의 흐름</option>
-                          <option value="decisions">주요 결정 사항</option>
-                          <option value="openQuestions">추가 결정 필요 사항</option>
-                          <option value="risksOrDependencies">리스크 및 제약</option>
-                          <option value="actionItems">후속 실행 항목</option>
-                        </select>
-                      </label>
-                      <label class="input-group input-group--textarea" for="sectionEditInstructionInput">
-                        <span class="input-group__label">수정 요청</span>
-                        <textarea id="sectionEditInstructionInput" class="meeting-textarea review-editor__textarea" rows="6" maxlength="1600" placeholder="예: 참석자 이름 표기를 통일하고, 결정 배경을 조금 더 명확하게 정리해 주세요."></textarea>
-                      </label>
-                      <div class="review-editor__actions">
-                        <button id="previewSectionEditButton" class="secondary-button" type="button">미리보기 만들기</button>
-                        <button id="cancelSectionEditButton" class="ghost-button ghost-button--soft" type="button">미리보기 지우기</button>
-                        <button id="applySectionEditButton" class="primary-button" type="button">이 섹션만 적용</button>
-                      </div>
-                      <div id="sectionEditStatus" class="subtle-text" hidden></div>
-                      <div id="sectionEditPreviewCard" class="notes-section-preview" hidden>
-                        <div class="notes-section-preview__head">
-                          <strong id="sectionEditPreviewTitle" class="notes-section-preview__title">미리보기</strong>
-                          <span class="chip chip--muted">Preview</span>
-                        </div>
-                        <div id="sectionEditPreviewBody" class="notes-section-preview__body"></div>
-                      </div>
-                    </div>
-                  </section>
                 </div>
                 <div id="meetingNotesOverview" class="notes-overview" hidden></div>
                 <div id="meetingNotesSections" class="notes-sections"></div>
@@ -300,10 +269,41 @@
         </section>
       </section>
 
-      <section id="debugPanel" class="debug-panel" hidden></section>
+        <section id="debugPanel" class="debug-panel" hidden></section>
 
-      <section id="confirmOverlay" class="confirm-overlay" hidden>
-        <div id="confirmDialog" class="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirmDialogTitle" aria-describedby="confirmDialogBody">
+        <section id="sectionEditOverlay" class="confirm-overlay section-edit-overlay" hidden>
+          <div id="sectionEditDialog" class="confirm-dialog section-edit-dialog" role="dialog" aria-modal="true" aria-labelledby="sectionEditDialogTitle" aria-describedby="sectionEditDialogBody">
+            <div class="section-edit-dialog__head">
+              <div>
+                <p class="confirm-dialog__eyebrow">섹션 수정</p>
+                <h2 id="sectionEditDialogTitle" class="confirm-dialog__title">회의 개요 수정</h2>
+              </div>
+              <button id="closeSectionEditButton" class="ghost-button ghost-button--soft" type="button">닫기</button>
+            </div>
+            <p id="sectionEditDialogBody" class="confirm-dialog__body">선택한 섹션만 LLM으로 미리보기한 뒤 확인 후 적용합니다.</p>
+            <div id="sectionEditTargetLabel" class="section-edit-dialog__target chip chip--muted">회의 개요</div>
+            <label class="input-group input-group--textarea" for="sectionEditInstructionInput">
+              <span class="input-group__label">수정 요청</span>
+              <textarea id="sectionEditInstructionInput" class="meeting-textarea review-editor__textarea" rows="6" maxlength="1600" placeholder="예: 참석자 이름 표기를 통일하고, 결정 배경을 조금 더 명확하게 정리해 주세요."></textarea>
+            </label>
+            <div class="review-editor__actions">
+              <button id="previewSectionEditButton" class="secondary-button" type="button">미리보기 만들기</button>
+              <button id="cancelSectionEditButton" class="ghost-button ghost-button--soft" type="button">미리보기 지우기</button>
+              <button id="applySectionEditButton" class="primary-button" type="button">이 섹션만 적용</button>
+            </div>
+            <div id="sectionEditStatus" class="subtle-text" hidden></div>
+            <div id="sectionEditPreviewCard" class="notes-section-preview" hidden>
+              <div class="notes-section-preview__head">
+                <strong id="sectionEditPreviewTitle" class="notes-section-preview__title">미리보기</strong>
+                <span class="chip chip--muted">Preview</span>
+              </div>
+              <div id="sectionEditPreviewBody" class="notes-section-preview__body"></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="confirmOverlay" class="confirm-overlay" hidden>
+          <div id="confirmDialog" class="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirmDialogTitle" aria-describedby="confirmDialogBody">
           <p id="confirmDialogEyebrow" class="confirm-dialog__eyebrow">확인</p>
           <h2 id="confirmDialogTitle" class="confirm-dialog__title">이 작업을 진행할까요?</h2>
           <p id="confirmDialogBody" class="confirm-dialog__body"></p>

@@ -117,6 +117,7 @@
       draftTo: "",
       items: [],
       meetingId: "",
+      open: false,
       saved: [],
     };
   }
@@ -126,6 +127,7 @@
       baseRevisionToken: "",
       instruction: "",
       jobId: "",
+      open: false,
       previewSectionData: null,
       previewSectionKey: "",
       recordId: "",
@@ -274,7 +276,7 @@
   }
 
   function cacheRefs() {
-    for (const id of ["meetingShell", "blockedMessage", "blockedEyebrow", "blockedTitle", "blockedState", "workspace", "pageTitle", "pageSummary", "workspaceBadge", "offlineQueueBadge", "refreshButton", "meetingTitleInput", "saveMeetingTitleButton", "deleteMeetingButton", "meetingStatusChip", "currentBadge", "currentSummary", "currentHint", "currentNotice", "currentTimer", "startButton", "importAudioButton", "importAudioInput", "pauseButton", "resumeButton", "stopButton", "discardButton", "sharedMemoInput", "saveSharedMemoButton", "clearSharedMemoButton", "sharedMemoNotice", "recordCountBadge", "recordList", "detailTitle", "detailBadge", "detailSummary", "recordTitleGroup", "recordTitleInput", "saveRecordTitleButton", "downloadRecordButton", "deleteRecordButton", "detailMeta", "reviewSectionHeader", "reviewSegmentsToolbar", "copySegmentsButton", "detailMemoInput", "saveRecordMemoButton", "reviewTabSummary", "reviewTabMemo", "reviewTabNotes", "reviewTabSegments", "reviewTabSegmentsCount", "reviewTabActions", "reviewPanelSummary", "summaryStatusPill", "summaryStatusGrid", "summaryActionCard", "reviewPanelMemo", "meetingNotesCard", "reviewPanelSegments", "copyMeetingNotesButton", "meetingNotesTools", "meetingNotesOverview", "meetingNotesSections", "detailNotice", "segmentList", "termReplacementDirtyBadge", "termReplacementList", "termReplacementFromInput", "termReplacementToInput", "termReplacementAddButton", "termReplacementResetButton", "termReplacementClearButton", "saveTermReplacementsButton", "sectionEditSelect", "sectionEditInstructionInput", "previewSectionEditButton", "cancelSectionEditButton", "applySectionEditButton", "sectionEditStatus", "sectionEditPreviewCard", "sectionEditPreviewTitle", "sectionEditPreviewBody", "debugPanel", "confirmOverlay", "confirmDialog", "confirmDialogEyebrow", "confirmDialogTitle", "confirmDialogBody", "confirmDialogCancel", "confirmDialogConfirm"]) {
+    for (const id of ["meetingShell", "blockedMessage", "blockedEyebrow", "blockedTitle", "blockedState", "workspace", "pageTitle", "pageSummary", "workspaceBadge", "offlineQueueBadge", "refreshButton", "meetingTitleInput", "saveMeetingTitleButton", "deleteMeetingButton", "meetingStatusChip", "currentBadge", "currentSummary", "currentHint", "currentNotice", "currentTimer", "startButton", "importAudioButton", "importAudioInput", "pauseButton", "resumeButton", "stopButton", "discardButton", "sharedMemoInput", "saveSharedMemoButton", "clearSharedMemoButton", "sharedMemoNotice", "recordCountBadge", "recordList", "detailTitle", "detailBadge", "detailSummary", "recordTitleGroup", "recordTitleInput", "saveRecordTitleButton", "downloadRecordButton", "deleteRecordButton", "detailMeta", "reviewSectionHeader", "reviewSegmentsToolbar", "copySegmentsButton", "detailMemoInput", "saveRecordMemoButton", "reviewTabSummary", "reviewTabMemo", "reviewTabNotes", "reviewTabSegments", "reviewTabSegmentsCount", "reviewTabActions", "reviewPanelSummary", "summaryStatusPill", "summaryStatusGrid", "summaryActionCard", "reviewPanelMemo", "meetingNotesCard", "reviewPanelSegments", "copyMeetingNotesButton", "meetingNotesTools", "meetingNotesOverview", "meetingNotesSections", "detailNotice", "segmentList", "toggleTermReplacementButton", "termReplacementPanel", "termReplacementDirtyBadge", "termReplacementList", "termReplacementFromInput", "termReplacementToInput", "termReplacementAddButton", "termReplacementResetButton", "termReplacementClearButton", "saveTermReplacementsButton", "sectionEditOverlay", "sectionEditDialog", "sectionEditDialogTitle", "sectionEditDialogBody", "sectionEditTargetLabel", "closeSectionEditButton", "sectionEditInstructionInput", "previewSectionEditButton", "cancelSectionEditButton", "applySectionEditButton", "sectionEditStatus", "sectionEditPreviewCard", "sectionEditPreviewTitle", "sectionEditPreviewBody", "debugPanel", "confirmOverlay", "confirmDialog", "confirmDialogEyebrow", "confirmDialogTitle", "confirmDialogBody", "confirmDialogCancel", "confirmDialogConfirm"]) {
       refs[id] = global.document.getElementById(id);
     }
   }
@@ -727,11 +729,18 @@
     refs.termReplacementClearButton?.addEventListener("click", runWritableAction("용어 치환 전체 비우기", controllers.mutations.clearTermReplacements));
     refs.saveTermReplacementsButton?.addEventListener("click", runWritableAction("용어 치환 저장", () => void controllers.mutations.saveMeetingTermReplacements()));
     refs.termReplacementList?.addEventListener("click", runWritableAction("용어 치환 삭제", (event) => controllers.mutations.handleTermReplacementListClick(event)));
-    refs.sectionEditSelect?.addEventListener("change", () => controllers.mutations.updateSectionEditSectionKey(refs.sectionEditSelect.value));
+    refs.toggleTermReplacementButton?.addEventListener("click", runWritableAction("용어 치환 열기", controllers.mutations.toggleTermReplacementPanel));
+    refs.meetingNotesSections?.addEventListener("click", runWritableAction("섹션 수정 열기", (event) => controllers.mutations.handleMeetingNotesSectionAction(event)));
     refs.sectionEditInstructionInput?.addEventListener("input", () => controllers.mutations.updateSectionEditInstruction(refs.sectionEditInstructionInput.value));
     refs.previewSectionEditButton?.addEventListener("click", runWritableAction("섹션 미리보기", () => void controllers.mutations.previewSectionEdit()));
     refs.cancelSectionEditButton?.addEventListener("click", runWritableAction("섹션 미리보기 지우기", controllers.mutations.resetSectionEditPreview));
     refs.applySectionEditButton?.addEventListener("click", runWritableAction("섹션 수정 적용", () => void controllers.mutations.applySectionEdit()));
+    refs.closeSectionEditButton?.addEventListener("click", controllers.mutations.closeSectionEdit);
+    refs.sectionEditOverlay?.addEventListener("click", (event) => {
+      if (event.target === refs.sectionEditOverlay) {
+        controllers.mutations.closeSectionEdit();
+      }
+    });
     refs.debugPanel?.addEventListener("click", (event) => controllers.debug.handlePanelClick(event));
     refs.confirmDialogCancel?.addEventListener("click", () => resolveConfirmation(false));
     refs.confirmDialogConfirm?.addEventListener("click", () => resolveConfirmation(true));
@@ -744,6 +753,11 @@
       if (event.key === "Escape" && state.confirmation.open) {
         event.preventDefault();
         resolveConfirmation(false);
+        return;
+      }
+      if (event.key === "Escape" && state.sectionEdit.open) {
+        event.preventDefault();
+        controllers.mutations.closeSectionEdit();
       }
     });
     global.addEventListener("focus", controllers.realtime.handleBackgroundRefresh, { passive: true });
@@ -862,9 +876,6 @@
     }
     if (refs.sectionEditInstructionInput && refs.sectionEditInstructionInput.value !== state.sectionEdit.instruction) {
       refs.sectionEditInstructionInput.value = state.sectionEdit.instruction;
-    }
-    if (refs.sectionEditSelect) {
-      refs.sectionEditSelect.value = normalizeText(state.sectionEdit.sectionKey) || "overview";
     }
   }
 })(globalThis);

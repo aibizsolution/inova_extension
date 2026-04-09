@@ -520,17 +520,31 @@
     return `<li class="notes-list__item"><div class="notes-list__headline">${escapeHtml(headline || body)}</div>${meta ? `<div class="notes-list__meta">${escapeHtml(meta)}</div>` : ""}${body && body !== headline ? `<div class="notes-list__body">${renderNotesProse([body])}</div>` : ""}</li>`;
   }
 
-  function renderNotesSection(section) {
+  function renderNotesSectionHeader(section, options = {}) {
+    const actionKey = normalizeText(section?.key);
+    const actionButton = options.allowSectionEdit && actionKey
+      ? `<button type="button" class="notes-section__action" data-notes-section-action="edit" data-section-key="${escapeHtml(actionKey)}" aria-label="${escapeHtml(section.title)} 섹션 수정">
+          <svg class="notes-section__action-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M11.667 2.667a1.414 1.414 0 0 1 2 2L6 12.333l-2.667.667L4 10.333l7.667-7.666Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.2"/>
+          </svg>
+          <span>이 섹션 수정</span>
+        </button>`
+      : "";
+    return `<div class="notes-section__head"><h3 class="notes-section__title">${escapeHtml(section.title)}</h3>${actionButton}</div>`;
+  }
+
+  function renderNotesSection(section, options = {}) {
     if (!section) {
       return "";
     }
+    const header = renderNotesSectionHeader(section, options);
     if (section.type === "prose") {
-      return `<section class="notes-section"><h3 class="notes-section__title">${escapeHtml(section.title)}</h3>${renderNotesMetaRow(section.metaItems)}${renderNotesProse(section.paragraphs)}</section>`;
+      return `<section class="notes-section">${header}${renderNotesMetaRow(section.metaItems)}${renderNotesProse(section.paragraphs)}</section>`;
     }
     if (section.type === "flow") {
-      return `<section class="notes-section"><h3 class="notes-section__title">${escapeHtml(section.title)}</h3><div class="notes-flow">${section.items.map((item) => `<article class="notes-flow__item"><h4 class="notes-flow__heading">${escapeHtml(item.heading || "주요 논의")}</h4>${renderNotesProse([item.narrative])}${item.keyPoints.length ? `<ul class="notes-flow__points">${item.keyPoints.map((point) => `<li>${escapeHtml(point)}</li>`).join("")}</ul>` : ""}</article>`).join("")}</div></section>`;
+      return `<section class="notes-section">${header}<div class="notes-flow">${section.items.map((item) => `<article class="notes-flow__item"><h4 class="notes-flow__heading">${escapeHtml(item.heading || "주요 논의")}</h4>${renderNotesProse([item.narrative])}${item.keyPoints.length ? `<ul class="notes-flow__points">${item.keyPoints.map((point) => `<li>${escapeHtml(point)}</li>`).join("")}</ul>` : ""}</article>`).join("")}</div></section>`;
     }
-    return `<section class="notes-section"><h3 class="notes-section__title">${escapeHtml(section.title)}</h3><ul class="notes-list">${section.items.map((item) => renderNotesListItem(item)).join("")}</ul></section>`;
+    return `<section class="notes-section">${header}<ul class="notes-list">${section.items.map((item) => renderNotesListItem(item)).join("")}</ul></section>`;
   }
 
   function renderNotesOverview(notes) {
@@ -945,9 +959,15 @@
       return false;
     }
     const overviewMarkup = renderNotesOverview(normalized);
+    const allowSectionEdit = Boolean(
+      !state.auth?.readOnly
+      && normalizeText(detailView.badgeStatus) === "succeeded"
+    );
     refs.meetingNotesOverview.hidden = !overviewMarkup;
     refs.meetingNotesOverview.innerHTML = overviewMarkup;
-    refs.meetingNotesSections.innerHTML = buildMeetingNotesSections(normalized).map(renderNotesSection).join("");
+    refs.meetingNotesSections.innerHTML = buildMeetingNotesSections(normalized)
+      .map((section) => renderNotesSection(section, { allowSectionEdit }))
+      .join("");
     return true;
   }
 
