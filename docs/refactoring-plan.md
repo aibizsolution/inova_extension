@@ -468,6 +468,8 @@
 - Meeting Ready Gate 사전 점검:
   - `node scripts/verify-meeting-service.js`, `node scripts/verify-meeting-manager.js`, `node scripts/verify-content-smoke.js`를 현재 계약에 맞게 다시 녹색화
   - `updateInovaMeeting` 응답에 수정된 `meeting` payload를 복원해 hosted-only service harness 회귀를 제거
+  - `npm.cmd run check:meeting-data -- --sample-size 1`로 상용 meeting 문서/결과 데이터가 아직 존재함을 확인
+  - `npm.cmd run check:function-runtime -- --functions createInovaMeetingJob,listInovaMeetings,updateInovaMeeting,regenerateInovaMeetingNotes,deleteInovaMeetingResult --since 60 --limit 10 --recent 2`로 주요 meeting HTTP 함수 config 조회 가능함을 확인
   - 다만 실제 minor candidate 증거로 쓰려면 여전히 Chrome 수동 smoke와 기존 상용 데이터 확인이 필요
 - 철학 정렬 후속:
   - `docs/development-philosophy.md`와 `meeting-service Target End State` 기준을 먼저 확정
