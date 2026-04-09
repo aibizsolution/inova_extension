@@ -89,6 +89,7 @@
 - release build lane 분리 foundation
 - meeting legacy Functions surface를 유지한 채, 전사 분절/회의록 transcript shaping helper를 `functions/features/meeting/meeting-transcript-domain.js`로 분리하는 내부 분해 1차
 - meeting notes context/snapshot normalize helper를 `functions/features/meeting/meeting-notes-context-domain.js`로 분리하는 내부 분해 2차
+- meeting notes document normalize/preview helper를 `functions/features/meeting/meeting-notes-document-domain.js`로 분리하는 내부 분해 3차
 
 ### 아직 이것만으로 결정되지 않는 것
 
@@ -362,6 +363,9 @@
 - meeting internal split 2차:
   - notes context/snapshot normalize helper를 `functions/features/meeting/meeting-notes-context-domain.js`로 분리
   - mutation request, notes input snapshot, context dedupe 로직은 기존 계약과 같은 의미를 유지
+- meeting internal split 3차:
+  - notes document normalize, status normalize, preview helper를 `functions/features/meeting/meeting-notes-document-domain.js`로 분리
+  - 회의록 JSON 스키마, notes status 의미, persisted payload shape 변화 없음
 - 다음 시작점:
-  - `meeting-service.js`에 남아 있는 notes document normalization 또는 request/source/job builder 묶음을 같은 방식으로 더 분리할 수 있는지 확인
+  - `meeting-service.js`에 남아 있는 request/source/job builder 묶음을 같은 방식으로 더 분리할 수 있는지 확인
   - 그 뒤 `Meeting Ready Gate` 기준 smoke를 실행해 minor 경로 증거를 문서에 남길지 판단
