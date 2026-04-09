@@ -10,6 +10,7 @@
 - `functions/features/meeting/meeting-mutation-domain.js`
 - `functions/features/meeting/meeting-record-domain.js`
 - `functions/features/meeting/meeting-source-domain.js`
+- `functions/features/meeting/meeting-state-domain.js`
 - `functions/features/meeting/meeting-service.js`
 - `functions/features/meeting/meeting-transcript-domain.js`
 
@@ -27,6 +28,7 @@
 - `functions/features/meeting/meeting-mutation-domain.js`는 list/mutation request, workspace mutation, command, deletion task normalize helper를 분리한 내부 모듈이다. command/deletion 문서 shape를 유지한 채 handler 본문을 줄일 때 먼저 확인한다.
 - `functions/features/meeting/meeting-record-domain.js`는 queued job, succeeded patch, transcript artifact, summary document, stable ID/path builder를 분리한 내부 모듈이다. persisted record shape를 유지한 채 handler 본문을 줄일 때 먼저 확인한다.
 - `functions/features/meeting/meeting-source-domain.js`는 meeting request/source upload/job-part/finalizer normalize helper를 분리한 내부 모듈이다. 업로드 payload와 queued state contract를 바꾸지 않고 handler 본문을 줄일 때 먼저 확인한다.
+- `functions/features/meeting/meeting-state-domain.js`는 transcription response, job/artifact/summary normalize, recentJobs 정렬 helper를 분리한 내부 모듈이다. persisted state 의미를 유지한 채 handler 본문을 줄일 때 먼저 확인한다.
 - `functions/features/meeting/meeting-transcript-domain.js`는 `meeting-service.js`의 전사 분절과 회의록 transcript shaping helper를 분리한 내부 모듈이다. export 이름, trigger 경로, 데이터 계약 변경 없이 handler 파일을 가볍게 유지할 때 먼저 확인한다.
 
 ## 관련 데이터 경계
