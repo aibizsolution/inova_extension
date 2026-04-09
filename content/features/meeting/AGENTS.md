@@ -126,7 +126,7 @@ window.__INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20,
 - `functions/features/meeting/meeting-service.js`는 legacy export와 handler surface를 유지하고, 전사 분절과 회의록 transcript shaping 같은 순수 helper부터 `functions/features/meeting/meeting-transcript-domain.js`로 옮겨 내부 분리를 진행한다.
 - meeting backend 리팩토링은 파일 수보다 workflow/data 경계를 우선한다. 항상 같이 로드되고 같이 수정되는 얇은 helper는 같은 domain이나 service에 남길 수 있다.
 - `functions/features/meeting/meeting-service.js`의 목표 end-state는 `legacy handler/export surface + cross-domain orchestration`이다. 여러 backend domain을 함께 엮어 auth, Firestore, Storage, OpenAI 흐름을 끝내는 helper는 service에 남길 수 있다.
-- `functions/features/meeting/meeting-guard-domain.js`는 helper-only 경계가 약해서 다시 `meeting-service.js`로 합쳤다. `functions/features/meeting/meeting-common-domain.js`는 여전히 `provisional boundary`이며 필요하면 다시 service나 기존 domain에 합칠 수 있다.
+- `functions/features/meeting/meeting-guard-domain.js`는 helper-only 경계가 약해서 다시 `meeting-service.js`로 합쳤다. 반대로 `functions/features/meeting/meeting-common-domain.js`는 launch/workspace auth service까지 같은 normalize 규칙을 공유하게 하면서 `shared normalization boundary`로 유지한다.
 - text/block normalize, transcript segment, JSON parse, source filename 같은 순수 공용 helper는 `functions/features/meeting/meeting-common-domain.js`로 분리해도 handler/export surface와 persisted 계약은 그대로 유지한다.
 - ownership assert와 제목 동기화 guard helper는 현재 다시 `functions/features/meeting/meeting-service.js` 안에 둔다. service-local workflow에서만 쓰이고, 독립 file 경계보다 orchestration 근처에 둘 때 더 자연스럽다.
 - notes context/snapshot helper는 `functions/features/meeting/meeting-notes-context-domain.js`로 분리해도 HTTP/trigger surface와 Firestore 계약은 바꾸지 않는다.

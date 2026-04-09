@@ -57,7 +57,7 @@
 이미 나눈 파일도 자동으로 유지 확정으로 보지 않는다. 새 철학에 맞지 않으면 다시 합치는 것도 정상적인 리팩토링으로 본다.
 
 - `meeting-transcript-domain.js`, `meeting-notes-context-domain.js`, `meeting-notes-document-domain.js`, `meeting-notes-runtime-domain.js`, `meeting-source-domain.js`, `meeting-mutation-domain.js`, `meeting-record-domain.js`, `meeting-state-domain.js`는 현재 기준으로 `workflow/data contract` 경계에 가까워 우선 유지 후보로 본다.
-- `meeting-common-domain.js`는 helper root 역할이 남아 있어 현재는 `provisional` 상태로 본다. 이후 재사용 범위나 분리 이유가 약하면 service나 기존 domain으로 다시 합칠 수 있다.
+- `meeting-common-domain.js`는 `meeting-service.js`, `meeting-launch-service.js`, `meeting-workspace-auth-service.js`가 함께 쓰는 `shared normalization boundary`로 승격했다.
 - `meeting-guard-domain.js`는 helper-only 경계가 약해서 `meeting-service.js`로 재통합했다.
 - 이후 진행 로그에는 `새로 분리한 것`만이 아니라 `유지 확정`, `재통합`, `보류` 판단도 같이 남긴다.
 - 다음 구조 판단의 기본 질문은 `새 파일을 더 만들까?`가 아니라 `기존에 나눈 경계가 정말 독립 책임인가?`다.
@@ -130,7 +130,7 @@
 - meeting transcription response와 job/artifact/summary normalize helper를 `functions/features/meeting/meeting-state-domain.js`로 분리하는 내부 분해 7차
 - meeting notes bundle 생성과 completion content normalize helper를 `functions/features/meeting/meeting-notes-runtime-domain.js`로 분리하는 내부 분해 8차
 - meeting text/block normalize, transcript segment, JSON parse, source filename 같은 순수 공용 helper를 `functions/features/meeting/meeting-common-domain.js`로 분리하는 내부 분해 9차
-  - 현재는 `helper-only provisional boundary`로 기록하며, 유지 확정은 아님
+  - 철학 정렬 후 `meeting-launch-service.js`, `meeting-workspace-auth-service.js`까지 같은 normalize 규칙을 공유하면서 `shared normalization boundary`로 승격
 - meeting ownership assert와 title sync guard helper를 `functions/features/meeting/meeting-guard-domain.js`로 분리하는 내부 분해 10차
   - 현재는 `helper-only provisional boundary`로 기록하며, 유지 확정은 아님
 - 철학 정렬 후 split 10 재통합:
@@ -430,7 +430,7 @@
 - meeting internal split 9차:
   - text/block normalize, transcript segment, JSON parse, source filename 같은 순수 공용 helper를 `functions/features/meeting/meeting-common-domain.js`로 분리
   - handler/export surface, persisted 계약, source filename 규칙 변화 없음
-  - 다만 helper-only 경계라서 현재는 `provisional`, 이후 재통합 가능
+  - 철학 정렬 후 `meeting-launch-service.js`, `meeting-workspace-auth-service.js`도 같은 normalize 규칙을 재사용하면서 `shared normalization boundary`로 승격
 - meeting internal split 10차:
   - ownership assert와 title sync guard helper를 `functions/features/meeting/meeting-guard-domain.js`로 분리
   - auth scope, mutation 권한 의미, title sync 조건 변화 없음
@@ -442,6 +442,5 @@
   - `docs/development-philosophy.md`와 `meeting-service Target End State` 기준을 먼저 확정
   - split 9-10은 `새 기본 패턴`이 아니라 `재평가 대상`으로 명시
 - 다음 시작점:
-  - 위 `meeting-service Target End State`와 `Existing Split Review Rule` 기준으로, split 9 성격을 유지할지 더 큰 shared boundary로 승격할지 판단
   - 그 다음 summary/transcript loading helper가 정말 독립 workflow 경계인지부터 판단
   - 그 뒤 `Meeting Ready Gate` 기준 smoke를 실행해 minor 경로 증거를 문서에 남길지 판단

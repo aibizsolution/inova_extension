@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const { normalizeText: normalizeString } = require("./meeting-common-domain");
 
 const LOCAL_WORKSPACE_ORIGINS = new Set([
   "http://127.0.0.1:5000",
@@ -688,10 +689,6 @@ function normalizeIdentityLike(identity) {
     provider: normalizeString(identity?.provider) || "inova",
     providerUserKey: normalizeString(identity?.providerUserKey),
   };
-}
-
-function normalizeString(value) {
-  return String(value || "").trim();
 }
 
 function getEmailDomain(email) {
