@@ -40,6 +40,18 @@
 
 ---
 
+## meeting-service Target End State
+
+`functions/features/meeting/meeting-service.js`의 목표 end-state는 `legacy handler/export surface + cross-domain orchestration`이다.
+
+- 이 파일에는 legacy Functions 이름, handler 등록, auth 확인, Firestore/Storage/OpenAI 호출 순서, transaction/batch orchestration처럼 여러 domain을 함께 조정하는 흐름이 남을 수 있다.
+- 순수 normalize, schema shaping, prompt/transcript shaping, standalone guard처럼 경계가 분명한 규칙은 domain module로 옮기는 쪽을 우선한다.
+- 반대로 helper가 `여러 domain 결과를 엮어 하나의 workflow를 끝내는 역할`이라면, line count가 길더라도 이 파일에 남길 수 있다.
+- 추가 분리는 `job creation`, `chunk/finalize`, `notes regeneration`, `deletion/sweep`, `summary synchronization`처럼 workflow 단위가 독립적으로 설명될 때만 검토한다.
+- env getter나 작은 helper는 별도 lifecycle이나 독립 변경 이유가 없다면 굳이 새 파일로 빼지 않는다.
+
+---
+
 ## Version Decision Gate
 
 ### Minor 유지 조건
@@ -405,5 +417,5 @@
   - ownership assert와 title sync guard helper를 `functions/features/meeting/meeting-guard-domain.js`로 분리
   - auth scope, mutation 권한 의미, title sync 조건 변화 없음
 - 다음 시작점:
-  - `meeting-service.js`의 목표 end-state 책임을 먼저 적고, summary/transcript loading helper가 정말 독립 workflow 경계인지부터 판단
+  - 위 `meeting-service Target End State` 기준으로, summary/transcript loading helper가 정말 독립 workflow 경계인지부터 판단
   - 그 뒤 `Meeting Ready Gate` 기준 smoke를 실행해 minor 경로 증거를 문서에 남길지 판단

@@ -39,6 +39,7 @@
 
 ## meeting 리팩토링 경계 규칙
 - `meeting-service.js` 분리는 line count 자체가 아니라 `workflow`, `persisted data contract`, `queue lifecycle`, `notes/source/record/state` 같은 도메인 경계를 기준으로 판단한다.
+- `meeting-service.js`의 목표 end-state는 `legacy handler/export surface + cross-domain orchestration`이다. 여러 domain 결과를 묶어 auth, Firestore, Storage, OpenAI 흐름을 끝내는 helper는 service 안에 남길 수 있다.
 - `common`, `guard`처럼 얇은 helper-only 파일은 새로 늘리기 전에 재사용, 독립 테스트 가치, 분리된 변경 이유가 충분한지 먼저 확인한다.
 - 앞으로의 우선 분리 후보는 helper 묶음보다 `job creation`, `chunk/finalize`, `notes regeneration`, `deletion`, `summary read/write`처럼 handler workflow 단위다.
 
