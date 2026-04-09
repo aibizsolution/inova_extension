@@ -9,7 +9,7 @@
   const FALLBACK_REFRESH_COOLDOWN_MS = 15000;
 
   function create(state, hooks) {
-    let authState = { expiresAt: "", firebaseCustomToken: "", providerUserKey: "" };
+    let authState = { expiresAt: "", firebaseCustomToken: "", functionsBaseUrl: "", providerUserKey: "" };
     let authPromise = null;
     let authPromiseKey = "";
     let bridgeFrame = null;
@@ -83,11 +83,40 @@
       );
     }
 
+    function resolveMeetingRuntimeConfig() {
+      return namespace.firebaseConfig?.meeting?.resolveRuntime?.(state.settings) || {
+        functions: namespace.firebaseConfig?.functions || {},
+        hosting: namespace.firebaseConfig?.hosting || {},
+        target: "production",
+        web: namespace.firebaseConfig?.web || {},
+      };
+    }
+
+    function closeBridgePort(context) {
+      try {
+        bridgePort?.close?.();
+      } catch (error) {
+        namespace.panelDebug?.log?.("panel.bridge.close.error", {
+          context,
+          error: error instanceof Error ? error.message : String(error || ""),
+        });
+      }
+      bridgePort = null;
+      bridgePortPromise = null;
+    }
+
     async function ensureRealtime(providerIdentity, reason) {
+      const runtimeConfig = resolveMeetingRuntimeConfig();
       const ownerKey = namespace.session.normalizeText(providerIdentity?.providerUserKey);
-      const port = await ensureBridgePort();
-      const auth = await ensurePanelAuth(providerIdentity);
-      const connectionKey = `${ownerKey}::${namespace.session.normalizeText(auth.expiresAt)}`;
+      const port = await ensureBridgePort(runtimeConfig);
+      const auth = await ensurePanelAuth(providerIdentity, runtimeConfig);
+      const connectionKey = [
+        namespace.session.normalizeText(runtimeConfig?.target) || "production",
+        namespace.session.normalizeText(runtimeConfig?.hosting?.originUrl),
+        namespace.session.normalizeText(runtimeConfig?.functions?.baseUrl),
+        ownerKey,
+        namespace.session.normalizeText(auth.expiresAt),
+      ].join("::");
       if (
         bridgePort
         && connectionKey
@@ -109,7 +138,7 @@
       port.postMessage({
         payload: {
           expiresAt: auth.expiresAt,
-          firebaseConfig: { ...namespace.firebaseConfig.web },
+          firebaseConfig: { ...(runtimeConfig?.web || namespace.firebaseConfig.web) },
           firebaseCustomToken: auth.firebaseCustomToken,
           providerUserKey: auth.providerUserKey,
           queryLimit: BRIDGE_QUERY_LIMIT,
@@ -119,33 +148,39 @@
       });
     }
 
-    async function ensurePanelAuth(providerIdentity) {
+    async function ensurePanelAuth(providerIdentity, runtimeConfig) {
       const providerUserKey = namespace.session.normalizeText(providerIdentity?.providerUserKey);
+      const functionsBaseUrl = namespace.session.normalizeText(runtimeConfig?.functions?.baseUrl);
       const expiryTime = Date.parse(authState.expiresAt || "");
       if (
         authState.firebaseCustomToken
+        && authState.functionsBaseUrl === functionsBaseUrl
         && authState.providerUserKey === providerUserKey
         && expiryTime > Date.now() + 60000
       ) {
         return authState;
       }
-      if (authPromise && authPromiseKey === providerUserKey) {
+      const nextAuthPromiseKey = `${providerUserKey}::${functionsBaseUrl}`;
+      if (authPromise && authPromiseKey === nextAuthPromiseKey) {
         return authPromise;
       }
 
       namespace.panelDebug?.log?.("panel.auth.start", {
+        functionsBaseUrl,
         providerUserKey,
       });
-      authPromiseKey = providerUserKey;
+      authPromiseKey = nextAuthPromiseKey;
       authPromise = (async () => {
         const nextAuth = await namespace.meetingBridge.issuePanelAuth(providerIdentity);
         authState = {
           expiresAt: namespace.session.normalizeText(nextAuth?.expiresAt),
           firebaseCustomToken: namespace.session.normalizeText(nextAuth?.firebaseCustomToken),
+          functionsBaseUrl,
           providerUserKey: namespace.session.normalizeText(nextAuth?.providerUserKey),
         };
         namespace.panelDebug?.log?.("panel.auth.success", {
           expiresAt: authState.expiresAt,
+          functionsBaseUrl: authState.functionsBaseUrl,
           providerUserKey: authState.providerUserKey,
         });
         return authState;
@@ -158,15 +193,33 @@
       }
     }
 
-    async function ensureBridgePort() {
-      if (bridgePort) {
+    async function ensureBridgePort(runtimeConfig) {
+      const expectedSrc = namespace.session.normalizeText(runtimeConfig?.hosting?.meetingPanelBridgeUrl) || namespace.firebaseConfig.hosting.meetingPanelBridgeUrl;
+      if (
+        bridgePort
+        && bridgeFrame instanceof global.HTMLIFrameElement
+        && bridgeFrame.src === expectedSrc
+      ) {
         return bridgePort;
       }
-      if (bridgePortPromise) {
+      if (
+        bridgePortPromise
+        && bridgeFrame instanceof global.HTMLIFrameElement
+        && bridgeFrame.src === expectedSrc
+      ) {
         return bridgePortPromise;
       }
+      if (bridgeFrame instanceof global.HTMLIFrameElement && bridgeFrame.src !== expectedSrc) {
+        closeBridgePort("runtime-change");
+        bridgeAttached = false;
+        bridgeConnected = false;
+        bridgeConnecting = false;
+        bridgeConnectionKey = "";
+        bridgeFrame.remove();
+        bridgeFrame = null;
+      }
 
-      bridgeFrame = ensureBridgeFrame();
+      bridgeFrame = ensureBridgeFrame(runtimeConfig);
       bridgePortPromise = new Promise((resolve, reject) => {
         const timeoutId = global.setTimeout(() => {
           bridgeReadyResolve = null;
@@ -214,7 +267,7 @@
               source: BRIDGE_MESSAGE_SOURCE,
               type: "connect-port",
             },
-            namespace.firebaseConfig.hosting.originUrl,
+            namespace.session.normalizeText(runtimeConfig?.hosting?.originUrl) || namespace.firebaseConfig.hosting.originUrl,
             [channel.port2]
           );
         };
@@ -235,14 +288,23 @@
       return bridgePortPromise;
     }
 
-    function ensureBridgeFrame() {
+    function ensureBridgeFrame(runtimeConfig) {
+      const expectedSrc = namespace.session.normalizeText(runtimeConfig?.hosting?.meetingPanelBridgeUrl) || namespace.firebaseConfig.hosting.meetingPanelBridgeUrl;
       const existing = global.document.getElementById(BRIDGE_IFRAME_ID);
       if (existing instanceof global.HTMLIFrameElement) {
-        return existing;
+        if (existing.src === expectedSrc) {
+          return existing;
+        }
+        closeBridgePort("iframe-recreate");
+        bridgeAttached = false;
+        bridgeConnected = false;
+        bridgeConnecting = false;
+        bridgeConnectionKey = "";
+        existing.remove();
       }
       const iframe = global.document.createElement("iframe");
       iframe.id = BRIDGE_IFRAME_ID;
-      iframe.src = namespace.firebaseConfig.hosting.meetingPanelBridgeUrl;
+      iframe.src = expectedSrc;
       iframe.hidden = true;
       iframe.tabIndex = -1;
       iframe.setAttribute("aria-hidden", "true");

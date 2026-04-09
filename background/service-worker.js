@@ -75,10 +75,10 @@ async function handleMessage(message, sender) {
     return reviewPromptDraft(message.prompt, message.providerIdentity);
   }
   if (message.type === "inova-meeting:list-meetings") {
-    return meetingListCache.listMeetings(message.input, message.providerIdentity);
+    return listMeetings(message.input, message.providerIdentity);
   }
   if (message.type === "inova-meeting:issue-panel-auth") {
-    return panelAuthCache.issueMeetingPanelAuth(message.providerIdentity);
+    return issueMeetingPanelAuth(message.providerIdentity);
   }
   if (message.type === "inova-prompt:issue-panel-auth") {
     return panelAuthCache.issuePromptPanelAuth(message.providerIdentity);
@@ -326,10 +326,21 @@ async function openMeetingResult(input, providerIdentity, sender) {
   return openHostedMeetingPage("detail", input, providerIdentity, sender);
 }
 
+async function listMeetings(input, providerIdentity) {
+  const functionsConfig = await getMeetingFunctionsConfig();
+  return meetingListCache.listMeetings(input, providerIdentity, { functionsConfig });
+}
+
+async function issueMeetingPanelAuth(providerIdentity) {
+  const functionsConfig = await getMeetingFunctionsConfig();
+  return panelAuthCache.issueMeetingPanelAuth(providerIdentity, { functionsConfig });
+}
+
 async function authorizeMeetingWorkspaceAccess(input, providerIdentity, sender) {
   try {
     const owner = await resolveMeetingProviderIdentity(providerIdentity);
     const accessToken = await getInovaAccessToken();
+    const functionsConfig = await getMeetingFunctionsConfig();
     if (!namespace.session.normalizeText(accessToken)) {
       return buildMeetingWorkspaceBlockedAuthPayload(input, owner, "login-required", {
         extensionBridge: "connected",
@@ -347,7 +358,7 @@ async function authorizeMeetingWorkspaceAccess(input, providerIdentity, sender) 
       jobId: namespace.session.normalizeText(input?.jobId),
       meetingId: namespace.session.normalizeText(input?.meetingId),
       shareToken: namespace.session.normalizeText(input?.shareToken || input?.share),
-    }, owner, accessToken);
+    }, owner, accessToken, { functionsConfig });
     return {
       ...payload,
       extensionBridge: "connected",
@@ -375,10 +386,11 @@ async function authorizeMeetingWorkspaceAccess(input, providerIdentity, sender) 
 async function createMeetingShareLink(input, providerIdentity, sender) {
   const owner = await resolveMeetingProviderIdentity(providerIdentity);
   const accessToken = await getInovaAccessToken();
+  const functionsConfig = await getMeetingFunctionsConfig();
   const payload = await namespace.cloudApi.createInovaMeetingShareLink({
     jobId: namespace.session.normalizeText(input?.jobId),
     meetingId: namespace.session.normalizeText(input?.meetingId),
-  }, owner, accessToken);
+  }, owner, accessToken, { functionsConfig });
   return {
     ...payload,
     shareUrl: await buildHostedMeetingCleanUrl({
@@ -393,10 +405,11 @@ async function createMeetingShareLink(input, providerIdentity, sender) {
 async function revokeMeetingShareLink(input, providerIdentity, sender) {
   const owner = await resolveMeetingProviderIdentity(providerIdentity);
   const accessToken = await getInovaAccessToken();
+  const functionsConfig = await getMeetingFunctionsConfig();
   const payload = await namespace.cloudApi.revokeInovaMeetingShareLink({
     jobId: namespace.session.normalizeText(input?.jobId),
     meetingId: namespace.session.normalizeText(input?.meetingId),
-  }, owner, accessToken);
+  }, owner, accessToken, { functionsConfig });
   return {
     ...payload,
     senderUrl: namespace.session.normalizeText(sender?.url),
@@ -481,19 +494,30 @@ async function buildHostedMeetingCleanUrl(input) {
 }
 
 async function resolveMeetingWorkspacePageUrl() {
-  const normalizedSettings = await reconcileMeetingWorkspaceSettings((await namespace.storage.getState())?.settings);
-  const workspaceTarget = normalizeMeetingWorkspaceTarget(normalizedSettings.meetingWorkspaceTarget);
-  const url = workspaceTarget === "local"
-    ? (
-        normalizedSettings.meetingWorkspaceUrlOverride
-          ? normalizeLocalMeetingWorkspaceUrl(normalizedSettings.meetingWorkspaceUrlOverride)
-          : LOCAL_MEETING_WORKSPACE_URL
-      )
-    : namespace.firebaseConfig?.hosting?.meetingWorkspaceUrl;
-  logMeetingDebug("workspace.target", { target: workspaceTarget, url });
+  const runtimeConfig = await getMeetingRuntimeConfig();
+  const url = namespace.session.normalizeText(runtimeConfig?.hosting?.meetingWorkspaceUrl) || namespace.firebaseConfig?.hosting?.meetingWorkspaceUrl;
+  logMeetingDebug("workspace.target", {
+    functionsBaseUrl: namespace.session.normalizeText(runtimeConfig?.functions?.baseUrl),
+    target: namespace.session.normalizeText(runtimeConfig?.target) || "production",
+    url,
+  });
   return url;
 }
 function normalizeMeetingWorkspaceTarget(value) { return namespace.session.normalizeText(value).toLowerCase() === "local" ? "local" : "production"; }
+
+async function getMeetingFunctionsConfig() {
+  const runtimeConfig = await getMeetingRuntimeConfig();
+  return runtimeConfig?.functions || namespace.firebaseConfig?.functions || {};
+}
+
+async function getMeetingRuntimeConfig() {
+  const normalizedSettings = await reconcileMeetingWorkspaceSettings((await namespace.storage.getState())?.settings);
+  return namespace.firebaseConfig?.meeting?.resolveRuntime?.(normalizedSettings) || {
+    functions: namespace.firebaseConfig?.functions || {},
+    hosting: namespace.firebaseConfig?.hosting || {},
+    target: "production",
+  };
+}
 
 async function reconcileMeetingWorkspaceSettings(settings) {
   const currentTarget = normalizeMeetingWorkspaceTarget(settings?.meetingWorkspaceTarget);

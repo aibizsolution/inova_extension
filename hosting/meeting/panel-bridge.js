@@ -1,10 +1,15 @@
 (function initMeetingPanelBridge(global) {
   const ALLOWED_PARENT_ORIGINS = new Set(["https://inova.incross.com"]);
   const FIRESTORE_PERSISTENCE_OPTIONS = { synchronizeTabs: true };
+  const LOCAL_BRIDGE_ORIGINS = new Set([
+    "http://127.0.0.1:5000",
+    "http://localhost:5000",
+  ]);
   const PORT_CONNECT_SOURCE = "inova-meeting-panel-client";
   let app = null;
   let auth = null;
   let db = null;
+  let emulatorsConfigured = false;
   let firestorePersistencePromise = null;
   let lastSnapshotSignature = "";
   let port = null;
@@ -124,6 +129,7 @@
       app = global.firebase.initializeApp(firebaseConfig, "meeting-panel-bridge");
       auth = app.auth();
       db = app.firestore();
+      configureFirebaseEmulators();
       await ensureFirestorePersistence();
       await auth.setPersistence(global.firebase.auth.Auth.Persistence.SESSION);
     }
@@ -195,6 +201,20 @@
       }
     });
     return firestorePersistencePromise;
+  }
+
+  function configureFirebaseEmulators() {
+    if (emulatorsConfigured || !isLocalBridgeOrigin()) {
+      return;
+    }
+    const emulatorHost = resolveLocalEmulatorHost();
+    if (typeof auth?.useEmulator === "function") {
+      auth.useEmulator(`http://${emulatorHost}:9099`);
+    }
+    if (typeof db?.useEmulator === "function") {
+      db.useEmulator(emulatorHost, 8080);
+    }
+    emulatorsConfigured = true;
   }
 
   function disconnect() {
@@ -291,5 +311,14 @@
 
   function normalizeText(value) {
     return String(value || "").trim();
+  }
+
+  function isLocalBridgeOrigin() {
+    return LOCAL_BRIDGE_ORIGINS.has(String(global.location?.origin || ""));
+  }
+
+  function resolveLocalEmulatorHost() {
+    const hostname = normalizeText(global.location?.hostname).toLowerCase();
+    return hostname === "localhost" ? "localhost" : "127.0.0.1";
   }
 })(globalThis);

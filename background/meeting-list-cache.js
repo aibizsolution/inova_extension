@@ -6,8 +6,8 @@
     const activeRequests = new Map();
     const recentResults = new Map();
     return {
-      async listMeetings(input, providerIdentity) {
-        const cacheKey = buildCacheKey(input, providerIdentity);
+      async listMeetings(input, providerIdentity, requestOptions = {}) {
+        const cacheKey = buildCacheKey(input, providerIdentity, requestOptions);
         const recent = getRecent(cacheKey);
         if (recent) return recent;
         if (cacheKey && activeRequests.has(cacheKey)) {
@@ -15,7 +15,7 @@
         }
         const request = (async () => {
           const accessToken = await getAccessToken();
-          const result = await namespace.cloudApi.listInovaMeetings(input, providerIdentity, accessToken);
+          const result = await namespace.cloudApi.listInovaMeetings(input, providerIdentity, accessToken, requestOptions);
           if (cacheKey) {
             recentResults.set(cacheKey, {
               expiresAt: Date.now() + RECENT_MEETING_LIST_TTL_MS,
@@ -45,14 +45,16 @@
       return entry.result;
     }
 
-    function buildCacheKey(input, providerIdentity) {
+    function buildCacheKey(input, providerIdentity, requestOptions) {
       const providerUserKey = namespace.session.normalizeText(providerIdentity?.providerUserKey);
       if (!providerUserKey) {
         return "";
       }
       const normalizedInput = input && typeof input === "object" ? input : {};
+      const functionsBaseUrl = namespace.session.normalizeText(requestOptions?.functionsConfig?.baseUrl);
       return JSON.stringify({
         cursor: namespace.session.normalizeText(normalizedInput.cursor),
+        functionsBaseUrl,
         limit: Math.max(1, Number(normalizedInput.limit) || 24),
         providerUserKey,
       });

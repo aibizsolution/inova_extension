@@ -12,6 +12,7 @@
     "deploy:firestore": "firebase deploy --only firestore",
     "deploy:all": "firebase deploy --only hosting,functions,firestore",
     "emulator:hosting": "firebase emulators:start --only hosting --project browser-extension-main",
+    "emulator:meeting-local": "firebase emulators:start --only auth,firestore,functions,hosting,storage --project browser-extension-main",
     "release:build": "node scripts/build-release-package.js",
     "release:deploy": "npm run release:build && firebase deploy --only hosting",
     "release:deploy:all": "npm run release:build && firebase deploy --only hosting,functions,firestore",

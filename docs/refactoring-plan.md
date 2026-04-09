@@ -188,6 +188,12 @@
 - hosted panel bridge: `https://browser-extension-main.web.app/meeting/panel-bridge.html`
 - legacy path는 `0.4.4` 지원이 끝나기 전까지 rename/delete 하지 않는다.
 
+### Local rehearsal boundary
+
+- popup에서 `settings.meetingWorkspaceTarget=local`을 고르면 rehearsal target은 `http://127.0.0.1:5000/meeting/index.html`과 `http://127.0.0.1:5000/meeting/panel-bridge.html`이다.
+- local target은 hosted workspace만 바꾸는 반쪽 경로가 아니라, meeting Functions/Auth/Firestore/Storage도 loopback emulator로 함께 맞춘다.
+- 이 경로는 release lane을 늘리거나 legacy hosted origin/path 의미를 바꾸지 않는다. 목적은 `Meeting Ready Gate` 전의 full-local 회귀 확인이다.
+
 ### Auth scope와 URL 의미
 
 - panel auth 기본 scope: `meeting-panel`
@@ -255,6 +261,7 @@
 - auth scope, workspace URL, response envelope가 그대로다.
 - meeting 관련 migration이 필요 없다.
 - 기존 회의 데이터가 새 ZIP에서도 별도 복구 없이 열린다.
+- `npm.cmd run emulator:meeting-local` + 팝업 `로컬 호스팅`으로 full-local rehearsal을 먼저 통과한다.
 - 다음 smoke가 통과한다:
   - 기존 데이터가 있는 사용자로 회의 목록 조회
   - hosted workspace 진입
@@ -262,6 +269,7 @@
   - 새 녹음 또는 import 1회
   - 기록 수정 또는 삭제 1회
 - 구현자가 위 smoke를 실행하고 결과를 `Version Decision Record`와 `세션 인계 로그`에 남긴다.
+- 단, local rehearsal 통과만으로는 minor green을 선언하지 않는다. 최종 판정은 기존 상용 데이터가 있는 실제 Chrome smoke로 남긴다.
 
 ### Major 경로 green 조건
 
@@ -472,6 +480,7 @@
   - `updateInovaMeeting` 응답에 수정된 `meeting` payload를 복원해 hosted-only service harness 회귀를 제거
   - `npm.cmd run check:meeting-data -- --sample-size 1`로 상용 meeting 문서/결과 데이터가 아직 존재함을 확인
   - `npm.cmd run check:function-runtime -- --functions createInovaMeetingJob,listInovaMeetings,updateInovaMeeting,regenerateInovaMeetingNotes,deleteInovaMeetingResult --since 60 --limit 10 --recent 2`로 주요 meeting HTTP 함수 config 조회 가능함을 확인
+  - popup `로컬 호스팅`이 local hosted workspace + panel bridge + meeting Functions/Auth/Firestore/Storage emulator를 함께 보도록 wiring하고 `npm.cmd run emulator:meeting-local` 부팅을 확인
   - 다만 실제 minor candidate 증거로 쓰려면 여전히 Chrome 수동 smoke와 기존 상용 데이터 확인이 필요
 - 철학 정렬 후속:
   - `docs/development-philosophy.md`와 `meeting-service Target End State` 기준을 먼저 확정

@@ -63,6 +63,7 @@ npm run verify:docs
 npm run verify:feature-doc-guard
 npm run verify:release-guard
 npm run emulator:hosting
+npm run emulator:meeting-local
 npm run deploy:hosting
 npm run release:deploy
 npm run deploy:functions
@@ -73,6 +74,7 @@ npm run deploy:all
 - `npm run verify:feature-doc-guard`는 blocking guard가 아니라 문서 검토 후보를 보여 주는 audit 용도입니다.
 - UI 체감, opener, 세션 복원, hosted 경계는 실제 Chrome 확인을 우선합니다.
 - hosted 회의 작업실을 배포 전 먼저 보려면 `npm run emulator:hosting` 후 팝업에서 `로컬 호스팅`을 고릅니다.
+- meeting을 진짜 local full-stack으로 보려면 `npm run emulator:meeting-local`을 켠 뒤 팝업에서 `로컬 호스팅`을 고릅니다. 이 경로는 local hosted workspace뿐 아니라 meeting panel bridge, meeting Functions, Auth, Firestore, Storage emulator까지 함께 봅니다.
 
 ## 배포 기본값
 
