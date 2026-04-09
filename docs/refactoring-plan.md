@@ -87,6 +87,7 @@
 - lane-aware local storage key와 lazy local migration marker
 - prompt-library v2 endpoint/collection foundation
 - release build lane 분리 foundation
+- meeting legacy Functions surface를 유지한 채, 전사 분절/회의록 transcript shaping helper를 `functions/features/meeting/meeting-transcript-domain.js`로 분리하는 내부 분해 1차
 
 ### 아직 이것만으로 결정되지 않는 것
 
@@ -112,7 +113,7 @@
 ## 진행 현황 요약
 
 - 설계 상태: `조건부 major 전략 채택`
-- 구현 상태: `lane foundation 있음, 버전 결정 미완료`
+- 구현 상태: `lane foundation 있음, meeting internal split 진행 중, 버전 결정 미완료`
 - 현재 blocker: `meeting이 minor 경로로 가능한지 여부`
 - release 가능 상태: `아직 아님`
 
@@ -353,3 +354,10 @@
   - `1.0.0 확정` 대신 `조건부 major`
   - `Chrome Web Store` 대신 `내부 ZIP + 수동 리로드`
   - `meeting ready gate`, `rollback model`, `rules coexistence`, `legacy sunset blocker`를 문서 기준선에 추가
+- meeting internal split 1차:
+  - `functions/features/meeting/meeting-service.js`는 legacy handler/export surface를 그대로 유지
+  - 전사 분절과 회의록 transcript shaping helper를 `functions/features/meeting/meeting-transcript-domain.js`로 분리
+  - hosted origin, Functions export 이름, mutable namespace, auth scope 변화 없음
+- 다음 시작점:
+  - `meeting-service.js`에 남아 있는 notes/context normalization 또는 request/source/job builder 묶음을 같은 방식으로 더 분리할 수 있는지 확인
+  - 그 뒤 `Meeting Ready Gate` 기준 smoke를 실행해 minor 경로 증거를 문서에 남길지 판단
