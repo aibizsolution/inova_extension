@@ -9,7 +9,6 @@ const {
   normalizeTranscriptSegment,
   safeParseJson,
 } = require("./meeting-common-domain");
-const { createMeetingGuardDomain } = require("./meeting-guard-domain");
 const { createMeetingNotesContextDomain } = require("./meeting-notes-context-domain");
 const { createMeetingNotesDocumentDomain } = require("./meeting-notes-document-domain");
 const { createMeetingNotesRuntimeDomain } = require("./meeting-notes-runtime-domain");
@@ -86,14 +85,6 @@ const SUPPORTED_WORKSPACE_MUTATION_TYPES = new Set([
   "saveRecordMemo",
   "saveRecordTitle",
 ]);
-
-const {
-  assertJobOwnership,
-  assertMeetingOwnership,
-  shouldSyncMeetingTitleToResult,
-} = createMeetingGuardDomain({
-  normalizeText,
-});
 
 const {
   createEmptyMeetingNotes,
@@ -4346,6 +4337,12 @@ function registerMeetingHandlers(deps) {
 
 }
 
+function shouldSyncMeetingTitleToResult(item, previousTitle) {
+  const title = normalizeText(item?.title);
+  const normalizedPrevious = normalizeText(previousTitle);
+  return !title || title === normalizedPrevious;
+}
+
 function collectMeetingArtifactIds(jobInput) {
   const job = normalizeMeetingJob(jobInput);
   return Array.from(
@@ -4372,6 +4369,19 @@ async function upsertMeetingJobSummary(meetingRef, meeting, owner, jobInput, art
   const jobSummary = buildMeetingResultSummary(job, artifactInput);
   const nextDocument = buildMeetingSummaryDocument(meeting, owner, jobSummary, currentMeeting);
   await meetingRef.set(nextDocument, { merge: true });
+}
+
+function assertJobOwnership(job, owner, createHttpError) {
+  if (normalizeText(job.owner?.providerUserKey) !== normalizeText(owner?.providerUserKey)) {
+    throw createHttpError(403, "현재 사용자에게 허용되지 않은 회의 job이에요.");
+  }
+}
+
+function assertMeetingOwnership(meeting, owner, createHttpError) {
+  const storedOwnerKey = normalizeText(meeting.owner?.providerUserKey);
+  if (storedOwnerKey && storedOwnerKey !== normalizeText(owner?.providerUserKey)) {
+    throw createHttpError(403, "현재 사용자에게 허용되지 않은 회의예요.");
+  }
 }
 
 function normalizeMeetingJobForSource(input) {

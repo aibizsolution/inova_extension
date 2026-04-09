@@ -6,7 +6,6 @@
 ## 먼저 볼 파일
 - `functions/features/meeting/meeting-launch-service.js`
 - `functions/features/meeting/meeting-common-domain.js`
-- `functions/features/meeting/meeting-guard-domain.js`
 - `functions/features/meeting/meeting-notes-context-domain.js`
 - `functions/features/meeting/meeting-notes-document-domain.js`
 - `functions/features/meeting/meeting-notes-runtime-domain.js`
@@ -27,7 +26,6 @@
 - `functions/index.js`
 - `functions/platform/*`
 - `functions/features/meeting/meeting-common-domain.js`는 text/block normalize, transcript segment, JSON parse, source filename 같은 순수 공용 helper를 분리한 내부 모듈이다. 다른 meeting domain의 공통 입력 정리를 볼 때 먼저 확인한다.
-- `functions/features/meeting/meeting-guard-domain.js`는 ownership assert와 제목 동기화 guard helper를 분리한 내부 모듈이다. mutation 권한 체크와 title sync 조건을 건드릴 때 먼저 확인한다.
 - `functions/features/meeting/meeting-notes-context-domain.js`는 notes context/snapshot normalize helper를 분리한 내부 모듈이다. mutation payload, notes input snapshot, context dedupe 경계를 볼 때 먼저 확인한다.
 - `functions/features/meeting/meeting-notes-document-domain.js`는 notes 문서 normalize, empty bundle source note, preview helper를 분리한 내부 모듈이다. 회의록 스키마/후처리 의미를 건드리지 않고 handler 본문을 줄일 때 먼저 확인한다.
 - `functions/features/meeting/meeting-notes-runtime-domain.js`는 notes bundle 생성과 completion content normalize helper를 분리한 내부 모듈이다. notes generation 흐름을 줄일 때 service 상단 wiring과 함께 먼저 확인한다.
@@ -41,7 +39,7 @@
 - `meeting-service.js` 분리는 line count 자체가 아니라 `workflow`, `persisted data contract`, `queue lifecycle`, `notes/source/record/state` 같은 도메인 경계를 기준으로 판단한다.
 - `meeting-service.js`의 목표 end-state는 `legacy handler/export surface + cross-domain orchestration`이다. 여러 domain 결과를 묶어 auth, Firestore, Storage, OpenAI 흐름을 끝내는 helper는 service 안에 남길 수 있다.
 - `common`, `guard`처럼 얇은 helper-only 파일은 새로 늘리기 전에 재사용, 독립 테스트 가치, 분리된 변경 이유가 충분한지 먼저 확인한다.
-- 이미 만든 `meeting-common-domain.js`, `meeting-guard-domain.js`도 유지 확정이 아니다. helper-only 경계가 약하면 service나 기존 domain으로 다시 합칠 수 있다.
+- `meeting-guard-domain.js`는 helper-only 경계가 약해 다시 `meeting-service.js`로 합쳤다. `meeting-common-domain.js`도 유지 확정이 아니며, 경계가 약하면 service나 기존 domain으로 다시 합칠 수 있다.
 - 앞으로의 우선 분리 후보는 helper 묶음보다 `job creation`, `chunk/finalize`, `notes regeneration`, `deletion`, `summary read/write`처럼 handler workflow 단위다.
 
 ## 관련 데이터 경계
