@@ -91,6 +91,7 @@
 - meeting notes context/snapshot normalize helper를 `functions/features/meeting/meeting-notes-context-domain.js`로 분리하는 내부 분해 2차
 - meeting notes document normalize/preview helper를 `functions/features/meeting/meeting-notes-document-domain.js`로 분리하는 내부 분해 3차
 - meeting request/source upload/job-part/finalizer helper를 `functions/features/meeting/meeting-source-domain.js`로 분리하는 내부 분해 4차
+- meeting list/mutation request, workspace mutation, command/deletion normalize helper를 `functions/features/meeting/meeting-mutation-domain.js`로 분리하는 내부 분해 5차
 
 ### 아직 이것만으로 결정되지 않는 것
 
@@ -370,6 +371,9 @@
 - meeting internal split 4차:
   - request/source upload/job-part/finalizer helper를 `functions/features/meeting/meeting-source-domain.js`로 분리
   - meeting create/upload payload 의미, queued part/finalizer 상태 계약 변화 없음
+- meeting internal split 5차:
+  - list/mutation request, workspace mutation, command/deletion normalize helper를 `functions/features/meeting/meeting-mutation-domain.js`로 분리
+  - workspace mutation, command, deletion task 문서 shape와 상태 의미 변화 없음
 - 다음 시작점:
   - `meeting-service.js`에 남아 있는 mutation/deletion/job summary builder 묶음을 같은 방식으로 더 분리할 수 있는지 확인
   - 그 뒤 `Meeting Ready Gate` 기준 smoke를 실행해 minor 경로 증거를 문서에 남길지 판단
