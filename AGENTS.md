@@ -1,12 +1,18 @@
 # inova_extension 작업 규칙
 
-이 문서는 이 저장소에서 계속 반복해서 적용할 전역 운영 규칙만 다룬다. feature 상세 규칙은 각 feature 하위 `AGENTS.md`와 `docs/feature-routing.md`로 분산한다.
+이 문서는 저장소별 운영 규칙만 다룬다. 저장소를 넘어 반복해서 쓸 설계/모듈화 철학은 `docs/development-philosophy.md`에 둔다. feature 상세 규칙은 각 feature 하위 `AGENTS.md`와 `docs/feature-routing.md`로 분산한다.
 
 ## 시작 순서
 - 작업 시작 시 `cwd`, Git 상태, 셸 환경을 먼저 확인한다.
 - 작업 시작 직후 첫 셸 명령을 실행하기 전에 아래 `셸/도구 환경 메모`를 다시 보고, 현재 세션에 해당하는 known workaround를 먼저 적용한다.
-- 기본 최소 읽기 세트는 루트 `AGENTS.md`, `README.md`, `package.json`, `manifest.json`, `docs/feature-routing.md`, 그리고 요청과 일치하는 feature `AGENTS.md` 1개다.
+- 기본 최소 읽기 세트는 `docs/development-philosophy.md`, 루트 `AGENTS.md`, `README.md`, `package.json`, `manifest.json`, `docs/feature-routing.md`, 그리고 요청과 일치하는 environment `AGENTS.md` 1개와 feature `AGENTS.md` 1개다.
 - `content/`, `functions/`, `hosting/meeting/`, `shared/`를 처음부터 넓게 읽지 않는다.
+
+## 문서 계층
+- 상위 철학과 모듈화 판단 기준은 `docs/development-philosophy.md`에 둔다.
+- 실행 환경별 기준은 `content/AGENTS.md`, `functions/AGENTS.md`, 필요 시 `hosting/*/AGENTS.md`에 둔다.
+- 이 문서와 `docs/feature-routing.md`는 저장소 운영 규칙과 feature 라우팅을 담당한다.
+- 가장 구체적인 기능 예외와 데이터 경계는 각 feature `AGENTS.md`와 feature 전용 docs에 둔다.
 
 ## 셸/도구 환경 메모
 - 현재 기본 셸이 PowerShell이면 `npm` 실행 시 `npm.ps1` 실행 정책 오류가 날 수 있다. 이 환경에서는 처음부터 `npm.cmd run <script>` 형태를 우선한다.
@@ -21,6 +27,12 @@
 - 읽기 범위는 `feature-local -> feature-owned shared -> platform/shell -> 인접 feature` 순서로만 확장한다.
 - `popup`, `background/service-worker.js`, `content/main.js`, `content/panel.js`, `functions/index.js`, `manifest.json`, `shared/*`는 platform/shell로 취급하고 필요할 때만 본다.
 
+## 설계와 모듈화 적용 규칙
+- 구현 전에 먼저 책임 경계를 정하고, 파일 길이만을 이유로 분리하지 않는다.
+- 책임 분리와 파일 분리를 같은 의미로 보지 않는다. 항상 함께 로드되고, 함께 수정되고, 함께 이해되는 코드는 같은 파일이나 같은 모듈에 남길 수 있다.
+- 여러 곳 재사용, 독립 상태/생명주기, 독립 테스트/교체 가치가 큰 코드만 새 파일 또는 새 진입점으로 분리한다.
+- 같은 구조 문제나 tradeoff가 반복되면 개별 helper 분리만 누적하지 말고 시스템 차원의 해법을 검토한다.
+
 ## 문서와 구조
 - feature 진입점과 데이터 경계는 항상 `docs/feature-routing.md`를 먼저 기준으로 삼는다.
 - 기능 상세 규칙은 루트 문서에 다시 길게 적지 말고 feature 하위 `AGENTS.md`에 추가한다.
@@ -29,6 +41,7 @@
 - feature-local 변경 때문에 `README.md`를 기능 변경 일지처럼 누적하지 않는다.
 - 문서는 완벽하지 않다고 가정하고, 작업 중 문서와 실제 코드/함수/파일 경계가 다르면 코드를 기준으로 같은 작업 안에서 문서를 갱신한다.
 - feature 문서가 실제 파일 경로나 진입점과 어긋나기 시작하면 검증 스크립트와 문서를 함께 보강해 다음 작업자가 좁은 범위만 읽고도 시작할 수 있게 유지한다.
+- 문서는 결과 설명서보다 다음 구조 판단을 더 잘하게 만드는 기준 문서가 되어야 한다.
 
 ## Lint 운영 원칙
 - lint 세부 규칙, 범위, 예외, 확장 계획은 루트 `AGENTS.md`가 아니라 `docs/lint-workflow.md`에서 관리한다.

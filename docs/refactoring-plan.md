@@ -30,6 +30,16 @@
 
 ---
 
+## Refactor Philosophy Update
+
+- module 경계와 file 경계를 같은 의미로 취급하지 않는다.
+- meeting 내부 분리는 `파일이 길다`는 이유만으로 진행하지 않고, `workflow`, `persisted contract`, `독립 lifecycle`, `재사용 가치`를 먼저 근거로 삼는다.
+- 항상 같이 로드되고, 같이 수정되고, 같이 이해되는 helper는 같은 file이나 같은 domain module에 남길 수 있다.
+- `meeting-common-domain.js`, `meeting-guard-domain.js` 같은 helper-only 분리는 현재 상태를 설명하는 기록이지, 이후 helper-only 추출을 계속 늘리라는 뜻은 아니다.
+- 다음 추가 분리 전에는 `meeting-service.js`가 최종적으로 어떤 orchestration 책임만 남길지 먼저 적고 그 기준으로 판단한다.
+
+---
+
 ## Version Decision Gate
 
 ### Minor 유지 조건
@@ -395,5 +405,5 @@
   - ownership assert와 title sync guard helper를 `functions/features/meeting/meeting-guard-domain.js`로 분리
   - auth scope, mutation 권한 의미, title sync 조건 변화 없음
 - 다음 시작점:
-  - `meeting-service.js`에 남아 있는 summary/transcript loading helper를 같은 방식으로 더 분리할 수 있는지 확인
+  - `meeting-service.js`의 목표 end-state 책임을 먼저 적고, summary/transcript loading helper가 정말 독립 workflow 경계인지부터 판단
   - 그 뒤 `Meeting Ready Gate` 기준 smoke를 실행해 minor 경로 증거를 문서에 남길지 판단

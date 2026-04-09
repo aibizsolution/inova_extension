@@ -37,6 +37,11 @@
 - `functions/features/meeting/meeting-state-domain.js`는 transcription response, job/artifact/summary normalize, recentJobs 정렬 helper를 분리한 내부 모듈이다. persisted state 의미를 유지한 채 handler 본문을 줄일 때 먼저 확인한다.
 - `functions/features/meeting/meeting-transcript-domain.js`는 `meeting-service.js`의 전사 분절과 회의록 transcript shaping helper를 분리한 내부 모듈이다. export 이름, trigger 경로, 데이터 계약 변경 없이 handler 파일을 가볍게 유지할 때 먼저 확인한다.
 
+## meeting 리팩토링 경계 규칙
+- `meeting-service.js` 분리는 line count 자체가 아니라 `workflow`, `persisted data contract`, `queue lifecycle`, `notes/source/record/state` 같은 도메인 경계를 기준으로 판단한다.
+- `common`, `guard`처럼 얇은 helper-only 파일은 새로 늘리기 전에 재사용, 독립 테스트 가치, 분리된 변경 이유가 충분한지 먼저 확인한다.
+- 앞으로의 우선 분리 후보는 helper 묶음보다 `job creation`, `chunk/finalize`, `notes regeneration`, `deletion`, `summary read/write`처럼 handler workflow 단위다.
+
 ## 관련 데이터 경계
 - `integration_inova_meetings`
 - `integration_inova_meeting_jobs`
