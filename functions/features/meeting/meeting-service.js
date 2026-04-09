@@ -12,6 +12,7 @@ const {
 const { createMeetingNotesContextDomain } = require("./meeting-notes-context-domain");
 const { createMeetingNotesDocumentDomain } = require("./meeting-notes-document-domain");
 const { createMeetingNotesRuntimeDomain } = require("./meeting-notes-runtime-domain");
+const { createMeetingNotesSourceDomain } = require("./meeting-notes-source-domain");
 const { createMeetingMutationDomain } = require("./meeting-mutation-domain");
 const { createMeetingRecordDomain } = require("./meeting-record-domain");
 const { createMeetingSourceDomain } = require("./meeting-source-domain");
@@ -300,6 +301,22 @@ function registerMeetingHandlers(deps) {
   } = deps;
 
   let client = null;
+
+  const {
+    loadMeetingArtifactSource,
+    loadMeetingNotesSource,
+    loadMeetingTranscriptForNotes,
+  } = createMeetingNotesSourceDomain({
+    artifactCollection: ARTIFACT_COLLECTION,
+    db,
+    maxSharedMemoChars: MAX_SHARED_MEMO_CHARS,
+    normalizeMeetingArtifact,
+    normalizeMeetingJob,
+    normalizeMeetingNotesContextItems,
+    normalizeMeetingNotesInputSnapshot,
+    normalizeText,
+    normalizeTextBlock,
+  });
 
   const {
     assertMeetingIsActive,
@@ -1354,18 +1371,13 @@ function registerMeetingHandlers(deps) {
         throw createHttpError(404, "현재 회의와 맞지 않는 결과예요.");
       }
 
-      const artifactId = normalizeText(job.transcript?.artifactId || job.artifacts?.[0]?.artifactId);
-      const artifactRef = artifactId ? db.collection(ARTIFACT_COLLECTION).doc(artifactId) : null;
-      const artifactSnapshot = artifactRef ? await artifactRef.get() : null;
-      const artifact = artifactSnapshot?.exists ? normalizeMeetingArtifact(artifactSnapshot.data()) : null;
-      const currentNotesContextItems = normalizeMeetingNotesContextItems(
-        artifact?.notesContextItems?.length
-          ? artifact.notesContextItems
-          : job.notesContextItems?.length
-            ? job.notesContextItems
-            : job.context?.notesContextItems
-      );
-      const currentSharedMemoSnapshot = normalizeTextBlock(job.context?.sharedMemoSnapshot || job.meeting?.sharedMemo).slice(0, MAX_SHARED_MEMO_CHARS);
+      const {
+        artifact,
+        artifactRef,
+        notesContextItems: currentNotesContextItems,
+        notesInputSnapshot: existingNotesInputSnapshot,
+        sharedMemoSnapshot: currentSharedMemoSnapshot,
+      } = await loadMeetingNotesSource(job);
       const updatedAt = new Date().toISOString();
       const mutationType = input.titleProvided
         ? "saveRecordTitle"
@@ -1385,14 +1397,6 @@ function registerMeetingHandlers(deps) {
       const persistedNotesContextItems = input.contextItemsProvided
         ? mergePersistedMeetingNotesContextItems(currentNotesContextItems, input.contextItems, updatedAt)
         : currentNotesContextItems;
-      const existingNotesInputSnapshot = normalizeMeetingNotesInputSnapshot(
-        artifact?.notesInputSnapshot?.updatedAt ? artifact.notesInputSnapshot : job.notesInputSnapshot,
-        {
-          contextItems: currentNotesContextItems,
-          sharedMemo: currentSharedMemoSnapshot,
-          updatedAt: normalizeText(artifact?.notesGeneratedAt || job.notesGeneratedAt),
-        }
-      );
       const shouldInitializeNotesInputSnapshot = !normalizeText(existingNotesInputSnapshot.updatedAt)
         && Boolean(normalizeText(artifact?.notesGeneratedAt || job.notesGeneratedAt));
       const baselineNotesInputSnapshot = shouldInitializeNotesInputSnapshot
@@ -1502,21 +1506,12 @@ function registerMeetingHandlers(deps) {
         throw createHttpError(404, "현재 회의와 맞지 않는 결과예요.");
       }
 
-      const artifactId = normalizeText(job.transcript?.artifactId || job.artifacts?.[0]?.artifactId);
-      const artifactRef = artifactId ? db.collection(ARTIFACT_COLLECTION).doc(artifactId) : null;
-      const artifactSnapshot = artifactRef ? await artifactRef.get() : null;
-      const artifact = artifactSnapshot?.exists ? normalizeMeetingArtifact(artifactSnapshot.data()) : null;
-      const existingNotesContextItems = normalizeMeetingNotesContextItems(
-        artifact?.notesContextItems?.length
-          ? artifact.notesContextItems
-          : job.notesContextItems?.length
-            ? job.notesContextItems
-            : job.context?.notesContextItems
-      );
-      const currentSharedMemoSnapshot = normalizeTextBlock(
-        job.context?.sharedMemoSnapshot
-        || job.meeting?.sharedMemo
-      ).slice(0, MAX_SHARED_MEMO_CHARS);
+      const {
+        artifact,
+        artifactRef,
+        notesContextItems: existingNotesContextItems,
+        sharedMemoSnapshot: currentSharedMemoSnapshot,
+      } = await loadMeetingNotesSource(job);
       const requestedAt = new Date().toISOString();
       const persistedNotesContextItems = input.contextItemsProvided
         ? mergePersistedMeetingNotesContextItems(existingNotesContextItems, input.contextItems, requestedAt)
@@ -1936,21 +1931,17 @@ function registerMeetingHandlers(deps) {
     }
     await assertMeetingIsActive(owner, job.meetingId, createHttpError);
 
-    const transcriptSource = await loadMeetingTranscriptForNotes(job, db, createHttpError);
+    const transcriptSource = await loadMeetingTranscriptForNotes(job, createHttpError);
     const artifact = transcriptSource.artifact;
     const meetingRecord = await loadMeetingSummaryRecord(owner, { meetingId: job.meetingId }, createHttpError);
-    const existingNotesContextItems = normalizeMeetingNotesContextItems(
-      artifact?.notesContextItems?.length
-        ? artifact.notesContextItems
-        : job.notesContextItems?.length
-          ? job.notesContextItems
-          : job.context?.notesContextItems
-    );
-    const currentSharedMemoSnapshot = normalizeTextBlock(
-      job.context?.sharedMemoSnapshot
-      || job.meeting?.sharedMemo
-      || meetingRecord?.meeting?.sharedMemo
-    ).slice(0, MAX_SHARED_MEMO_CHARS);
+    const {
+      notesContextItems: existingNotesContextItems,
+      sharedMemoSnapshot: currentSharedMemoSnapshot,
+    } = await loadMeetingNotesSource(job, {
+      artifact,
+      artifactRef: transcriptSource.artifactRef,
+      sharedMemoFallback: meetingRecord?.meeting?.sharedMemo,
+    });
     const requestedAt = normalizeText(command.requestedAt) || new Date().toISOString();
     const persistedNotesContextItems = command.contextItemsProvided
       ? normalizeMeetingNotesContextItems(command.contextItems)
@@ -2054,10 +2045,7 @@ function registerMeetingHandlers(deps) {
       return;
     }
     const owner = normalizeIdentity(command.owner?.providerUserKey ? command.owner : currentJob.owner);
-    const artifactId = normalizeText(currentJob.transcript?.artifactId || currentJob.artifacts?.[0]?.artifactId);
-    const artifactRef = artifactId ? db.collection(ARTIFACT_COLLECTION).doc(artifactId) : null;
-    const artifactSnapshot = artifactRef ? await artifactRef.get() : null;
-    const artifact = artifactSnapshot?.exists ? normalizeMeetingArtifact(artifactSnapshot.data()) : null;
+    const { artifact } = await loadMeetingArtifactSource(currentJob);
     const workspaceMutation = buildWorkspaceMutation({
       completedAt,
       error: errorMessage,
@@ -4301,66 +4289,6 @@ function assertMeetingOwnership(meeting, owner, createHttpError) {
 
 function normalizeMeetingJobForSource(input) {
   return normalizeMeetingJob(input);
-}
-
-async function loadMeetingTranscriptForNotes(jobInput, db, createHttpError) {
-  const job = normalizeMeetingJob(jobInput);
-  const artifactId = normalizeText(job.transcript?.artifactId || job.artifacts?.[0]?.artifactId);
-  const artifactRef = artifactId ? db.collection(ARTIFACT_COLLECTION).doc(artifactId) : null;
-  if (artifactRef) {
-    const snapshot = await artifactRef.get();
-    if (snapshot.exists) {
-      const artifact = normalizeMeetingArtifact(snapshot.data());
-      const text = normalizeText(artifact.text);
-      const segments = Array.isArray(artifact.segments) ? artifact.segments : [];
-      if (text || segments.length) {
-        return {
-          artifact,
-          artifactRef,
-          transcript: {
-            segments,
-            text,
-          },
-        };
-      }
-    }
-  }
-  const transcriptText = normalizeText(job.transcript?.text);
-  const transcriptSegments = Array.isArray(job.transcript?.segments) ? job.transcript.segments : [];
-  if (transcriptText || transcriptSegments.length) {
-    return {
-      artifact: normalizeMeetingArtifact({
-        artifactId,
-        createdAt: normalizeText(job.updatedAt || job.createdAt || job.queuedAt),
-        deletedAt: "",
-        format: "json",
-        jobId: job.jobId,
-        kind: "transcript",
-        meetingId: job.meetingId,
-        notesContextItems: job.notesContextItems,
-        notesDegradedReason: job.notesDegradedReason,
-        notes: job.meetingNotes,
-        notesGeneratedAt: job.notesGeneratedAt,
-        notesInputSnapshot: job.notesInputSnapshot,
-        notesStatus: job.notesStatus,
-        notesSchemaVersion: job.notesSchemaVersion,
-        owner: job.owner,
-        segments: transcriptSegments,
-        sessionId: job.sessionId,
-        text: transcriptText,
-      }),
-      artifactRef,
-      transcript: {
-        segments: transcriptSegments,
-        text: transcriptText,
-      },
-    };
-  }
-
-  if (!artifactId) {
-    throw createHttpError(409, "전사 원본이 아직 준비되지 않았어요.");
-  }
-  throw createHttpError(404, "전사 원본을 찾지 못했어요.");
 }
 
 function getInlineAudioLimitBytes() {

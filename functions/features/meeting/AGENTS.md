@@ -9,6 +9,7 @@
 - `functions/features/meeting/meeting-notes-context-domain.js`
 - `functions/features/meeting/meeting-notes-document-domain.js`
 - `functions/features/meeting/meeting-notes-runtime-domain.js`
+- `functions/features/meeting/meeting-notes-source-domain.js`
 - `functions/features/meeting/meeting-mutation-domain.js`
 - `functions/features/meeting/meeting-record-domain.js`
 - `functions/features/meeting/meeting-source-domain.js`
@@ -30,6 +31,7 @@
 - `functions/features/meeting/meeting-notes-context-domain.js`는 notes context/snapshot normalize helper를 분리한 내부 모듈이다. mutation payload, notes input snapshot, context dedupe 경계를 볼 때 먼저 확인한다.
 - `functions/features/meeting/meeting-notes-document-domain.js`는 notes 문서 normalize, empty bundle source note, preview helper를 분리한 내부 모듈이다. 회의록 스키마/후처리 의미를 건드리지 않고 handler 본문을 줄일 때 먼저 확인한다.
 - `functions/features/meeting/meeting-notes-runtime-domain.js`는 notes bundle 생성과 completion content normalize helper를 분리한 내부 모듈이다. notes generation 흐름을 줄일 때 service 상단 wiring과 함께 먼저 확인한다.
+- `functions/features/meeting/meeting-notes-source-domain.js`는 notes workflow에서 공통으로 쓰는 transcript/artifact access, notes context baseline, shared memo snapshot helper를 분리한 내부 모듈이다. notes regeneration/update 흐름의 source contract를 바꿀 때 먼저 확인한다.
 - `functions/features/meeting/meeting-mutation-domain.js`는 list/mutation request, workspace mutation, command, deletion task normalize helper를 분리한 내부 모듈이다. command/deletion 문서 shape를 유지한 채 handler 본문을 줄일 때 먼저 확인한다.
 - `functions/features/meeting/meeting-record-domain.js`는 queued job, succeeded patch, transcript artifact, summary document, stable ID/path builder를 분리한 내부 모듈이다. persisted record shape를 유지한 채 handler 본문을 줄일 때 먼저 확인한다.
 - `functions/features/meeting/meeting-source-domain.js`는 meeting request/source upload/job-part/finalizer normalize helper를 분리한 내부 모듈이다. 업로드 payload와 queued state contract를 바꾸지 않고 handler 본문을 줄일 때 먼저 확인한다.
@@ -43,7 +45,7 @@
 - `common`, `guard`처럼 얇은 helper-only 파일은 새로 늘리기 전에 재사용, 독립 테스트 가치, 분리된 변경 이유가 충분한지 먼저 확인한다.
 - `meeting-guard-domain.js`는 helper-only 경계가 약해 다시 `meeting-service.js`로 합쳤다. 반대로 `meeting-common-domain.js`는 launch/workspace auth service까지 같은 normalize 규칙을 공유하게 하면서 `shared normalization boundary`로 유지한다.
 - `meeting-summary-sync-domain.js`처럼 summary read/write와 active check가 한 문서 lifecycle로 설명되면 helper 수와 무관하게 독립 workflow boundary로 분리할 수 있다.
-- 앞으로의 우선 분리 후보는 helper 묶음보다 `job creation`, `chunk/finalize`, `notes regeneration`, `deletion`, `transcript source access`처럼 handler workflow 단위다.
+- 앞으로의 우선 분리 후보는 helper 묶음보다 `job creation`, `chunk/finalize`, `notes regeneration`, `deletion`처럼 handler workflow 단위다.
 
 ## 관련 데이터 경계
 - `integration_inova_meetings`

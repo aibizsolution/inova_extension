@@ -56,7 +56,7 @@
 
 이미 나눈 파일도 자동으로 유지 확정으로 보지 않는다. 새 철학에 맞지 않으면 다시 합치는 것도 정상적인 리팩토링으로 본다.
 
-- `meeting-transcript-domain.js`, `meeting-notes-context-domain.js`, `meeting-notes-document-domain.js`, `meeting-notes-runtime-domain.js`, `meeting-source-domain.js`, `meeting-mutation-domain.js`, `meeting-record-domain.js`, `meeting-state-domain.js`는 현재 기준으로 `workflow/data contract` 경계에 가까워 우선 유지 후보로 본다.
+- `meeting-transcript-domain.js`, `meeting-notes-context-domain.js`, `meeting-notes-document-domain.js`, `meeting-notes-runtime-domain.js`, `meeting-notes-source-domain.js`, `meeting-source-domain.js`, `meeting-mutation-domain.js`, `meeting-record-domain.js`, `meeting-state-domain.js`는 현재 기준으로 `workflow/data contract` 경계에 가까워 우선 유지 후보로 본다.
 - `meeting-summary-sync-domain.js`는 meeting summary 문서 lifecycle을 다루는 `workflow/data contract boundary`로 유지 후보로 본다.
 - `meeting-common-domain.js`는 `meeting-service.js`, `meeting-launch-service.js`, `meeting-workspace-auth-service.js`가 함께 쓰는 `shared normalization boundary`로 승격했다.
 - `meeting-guard-domain.js`는 helper-only 경계가 약해서 `meeting-service.js`로 재통합했다.
@@ -139,6 +139,8 @@
   - helper-only file 경계보다 service-local workflow 응집도가 더 높다고 판단
 - meeting summary read/write, active check, recentJobs synchronization helper를 `functions/features/meeting/meeting-summary-sync-domain.js`로 분리하는 내부 분해 11차
   - meeting summary 문서 lifecycle을 하나의 workflow boundary로 설명할 수 있다고 판단
+- notes workflow 공통 transcript/artifact access와 baseline helper를 `functions/features/meeting/meeting-notes-source-domain.js`로 분리하는 내부 분해 12차
+  - notes regeneration/update가 공통으로 의존하는 source lifecycle을 하나의 workflow boundary로 설명할 수 있다고 판단
 
 ### 아직 이것만으로 결정되지 않는 것
 
@@ -444,9 +446,12 @@
 - meeting internal split 11차:
   - meeting summary read/write, active check, recentJobs synchronization helper를 `functions/features/meeting/meeting-summary-sync-domain.js`로 분리
   - meeting summary 문서 shape, recentJobs 의미, active/deleted 판정 규칙 변화 없음
+- meeting internal split 12차:
+  - transcript/artifact access, notes context baseline, shared memo snapshot helper를 `functions/features/meeting/meeting-notes-source-domain.js`로 분리
+  - notes regeneration/update command contract와 artifact/job persisted shape 변화 없음
 - 철학 정렬 후속:
   - `docs/development-philosophy.md`와 `meeting-service Target End State` 기준을 먼저 확정
   - split 9-10은 `새 기본 패턴`이 아니라 `재평가 대상`으로 명시
 - 다음 시작점:
-  - 그 다음 transcript source access가 notes regeneration/deletion에서 함께 설명되는 독립 workflow 경계인지부터 판단
+  - 그 다음 `notes regeneration` 또는 `deletion/sweep`이 추가 workflow 분리 가치가 있는지 판단
   - 그 뒤 `Meeting Ready Gate` 기준 smoke를 실행해 minor 경로 증거를 문서에 남길지 판단
