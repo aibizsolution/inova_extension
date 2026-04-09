@@ -5,7 +5,7 @@
 ## 이 문서의 역할
 
 - `README.md`는 저장소/제품의 상위 개요, 설치/배포, 공통 개발 루프만 다룹니다.
-- 실제 기능 변경 내용과 세부 규칙은 각 feature `AGENTS.md` 또는 feature 전용 docs에 기록합니다.
+- feature-local 규칙, 계약, 최소 검증 기준은 각 feature `AGENTS.md` 또는 feature 전용 docs에 문서화합니다.
 - 새 요청을 받으면 저장소 전체를 읽기 전에 [docs/feature-routing.md](docs/feature-routing.md)부터 확인합니다.
 
 ## 문서 맵
@@ -70,6 +70,7 @@ npm run deploy:all
 ```
 
 - 기본 자동 검증은 `npm run verify`이며 lint를 포함합니다.
+- `npm run verify:feature-doc-guard`는 blocking guard가 아니라 문서 검토 후보를 보여 주는 audit 용도입니다.
 - UI 체감, opener, 세션 복원, hosted 경계는 실제 Chrome 확인을 우선합니다.
 - hosted 회의 작업실을 배포 전 먼저 보려면 `npm run emulator:hosting` 후 팝업에서 `로컬 호스팅`을 고릅니다.
 
@@ -90,9 +91,12 @@ npm run deploy:all
 - `main`에는 직접 commit 하지 않고 작업 브랜치에서 commit 후 PR로 머지합니다.
 - PR은 기본적으로 auto-merge를 사용하고, required status check가 모두 통과되면 자동 머지되게 운영합니다.
 - auto-merge를 걸었어도 PR이 실제 `MERGED` 상태가 되었는지 확인해야 하며, 확인 후에는 `main`을 최신으로 맞추고 해당 로컬 `codex/*` 브랜치를 정리합니다.
-- `pre-commit`과 `pre-push`는 feature-owned 파일이 바뀌었는데 해당 feature `AGENTS.md`가 함께 갱신되지 않으면 막습니다.
+- `pre-commit`과 `pre-push`는 branch workflow와 release metadata 같은 실제 안전장치를 유지합니다.
+- `verify:feature-doc-guard`는 feature-owned 파일 변경 시 `AGENTS.md` 갱신을 강제하지 않고, 문서 검토 후보만 audit로 보여 줍니다.
+- `verify-refactor-plan-update`는 ordinary feature 구현 변경을 막지 않고, version lane, legacy/v2 baseline, release gate처럼 장기 판단 비용이 큰 변경에만 `docs/refactoring-plan.md` 갱신을 요구합니다.
 - `README.md`는 상위 개요용이므로, feature-local 변경 때문에 기능 변경 일지처럼 누적하지 않습니다.
-- 문서와 코드가 다르면 코드를 기준으로 같은 작업 안에서 feature 문서나 관련 docs를 갱신합니다.
+- entrypoint, 데이터 경계, 최소 검증, durable invariant가 실제 코드와 달라지면 같은 작업 안에서 feature 문서나 관련 docs를 갱신합니다.
+- 최근 작업 순서나 세션별 변경 요약처럼 git으로 복구 가능한 정보는 문서에 중복 기록하지 않습니다.
 
 ## 검증 기준
 

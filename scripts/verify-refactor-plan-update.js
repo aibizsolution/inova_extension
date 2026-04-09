@@ -25,17 +25,12 @@ const REFACTOR_PLAN_RULES = [
     ],
   },
   {
-    scope: "meeting-refactor-boundary",
+    scope: "meeting-legacy-baseline",
     docs: [REFACTOR_PLAN_DOC],
     patterns: [
-      /^background\/service-worker\.js$/,
-      /^popup\/index\.js$/,
-      /^content\/meeting-manager\.js$/,
-      /^content\/meeting-view\.js$/,
-      /^hosting\/meeting\//,
-      /^functions\/features\/meeting\//,
       /^functions\/index\.js$/,
-      /^content\/features\/meeting\/AGENTS\.md$/,
+      /^shared\/meeting-bridge\.js$/,
+      /^shared\/firebase-config\.js$/,
     ],
   },
   {
@@ -76,8 +71,8 @@ function main() {
 
   if (failures.length > 0) {
     fail([
-      "refactor-sensitive 파일이 바뀌었는데 docs/refactoring-plan.md가 같이 갱신되지 않았어요.",
-      "리팩토링 진행 상태, 버전 결정 기준, 다음 시작점을 이 문서에 먼저 맞춰 주세요.",
+      "장기 판단 기준에 영향을 주는 파일이 바뀌었는데 docs/refactoring-plan.md가 같이 갱신되지 않았어요.",
+      "ordinary feature 구현 변경은 이 가드 대상이 아니지만, version lane, legacy/v2 baseline, release gate 같은 비가역 결정은 이 문서에 먼저 맞춰 주세요.",
       "",
       ...failures.flatMap((failure) => [
         `[${failure.scope}]`,

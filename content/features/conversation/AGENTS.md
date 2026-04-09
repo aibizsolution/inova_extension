@@ -4,8 +4,8 @@
 - 현재 대화 화면의 질문 수집, 대화 안에서 찾기, 질문 위치 이동을 다룬다.
 
 ## 문서 갱신 규칙
-- 이 feature의 사용자 체감 동작, 먼저 볼 파일, 검증 기준이 바뀌면 이 문서를 같은 작업 안에서 갱신한다.
-- `README.md` 대신 이 문서나 conversation 전용 docs에 먼저 기록한다.
+- 이 feature의 entrypoint, 관련 경계, 최소 검증, durable invariant가 바뀌면 이 문서를 같은 작업 안에서 갱신한다.
+- `README.md`가 아니라 conversation feature-local 규칙과 계약은 이 문서나 conversation 전용 docs에 문서화한다.
 
 ## 먼저 볼 파일
 - `content/dom.js`

@@ -4,8 +4,8 @@
 - 내 요청 보관함 CRUD, 가져오기/내보내기, 로컬 우선 클라우드 백업 동기화를 다룬다.
 
 ## 문서 갱신 규칙
-- 이 feature의 사용자 체감 동작, 데이터 경계, 먼저 볼 파일, 검증 기준이 바뀌면 이 문서를 같은 작업 안에서 갱신한다.
-- `README.md` 대신 이 문서나 prompt-library 전용 docs에 먼저 기록한다.
+- 이 feature의 entrypoint, 데이터 경계, 최소 검증, lane invariant가 바뀌면 이 문서를 같은 작업 안에서 갱신한다.
+- `README.md`가 아니라 prompt-library feature-local 규칙과 계약은 이 문서나 prompt-library 전용 docs에 문서화한다.
 
 ## 먼저 볼 파일
 - `content/features/prompt-library/prompt-manager.js`
@@ -51,7 +51,7 @@
 ## 언제 범위를 확장할지
 - feature-local과 owned-shared만으로 해결되지 않고 prompt tool shell, panel auth, background cache가 얽힐 때만 platform/shell로 넓힌다.
 
-## lane 메모
+## lane 경계
 - `0.4.4` legacy lane은 기존 namespace를 유지한다.
 - `1.0.0+` v2 lane은 local storage를 분리하고, prompt-library cloud lane도 별도 endpoint와 별도 namespace로 분리한다.
 - v2 첫 read/write는 legacy prompt-library를 copy-only lazy migration 할 수 있어야 하며, migration 실패 시 legacy 원본을 수정하지 않는다.

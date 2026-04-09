@@ -4,8 +4,8 @@
 - 현재 입력 프롬프트 평가, 보완안 생성, 평가 UI를 다룬다.
 
 ## 문서 갱신 규칙
-- 이 feature의 사용자 체감 동작, 먼저 볼 파일, 검증 기준이 바뀌면 이 문서를 같은 작업 안에서 갱신한다.
-- `README.md` 대신 이 문서나 prompt-review 전용 docs에 먼저 기록한다.
+- 이 feature의 entrypoint, 관련 경계, 최소 검증, durable invariant가 바뀌면 이 문서를 같은 작업 안에서 갱신한다.
+- `README.md`가 아니라 prompt-review feature-local 규칙과 계약은 이 문서나 prompt-review 전용 docs에 문서화한다.
 
 ## 먼저 볼 파일
 - `content/features/prompt-review/prompt-review-manager.js`
@@ -45,5 +45,5 @@
 ## 언제 범위를 확장할지
 - 입력창 주입, prompt tool shell, panel shell 상태와 충돌할 때만 platform/shell로 넓힌다.
 
-## 구현 메모
+## 구현 경계
 - placeholder token 감지는 한 줄 안의 단순 `[...]` 토큰만 대상으로 유지한다. nested bracket이나 줄바꿈이 섞인 텍스트는 placeholder 경고 후보로 넓히지 않는다.

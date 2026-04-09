@@ -2,6 +2,7 @@
 
 이 문서는 단순 아이디어 메모가 아니라, 새 세션에서도 바로 이어서 작업할 수 있게 만드는 `living handoff` 문서다.  
 현재 유효한 설계, 버전 결정 기준, 진행 상태, 다음 시작점을 한 문서에 모은다.
+다만 `git log`, `diff`, 커밋 메시지로 충분히 복구 가능한 세부 변경 이력은 중복 기록하지 않고, 다음 판단에 필요한 milestone과 비가역 결정을 우선 남긴다.
 
 리팩토링 기준일: 2026-04-09  
 마지막 상태 갱신: 2026-04-09  
@@ -16,7 +17,7 @@
 - 버전은 리팩토링의 목표가 아니라 결과다.
 - 이번 작업은 `무조건 1.0.0`이 아니라, 구현 결과에 따라 `0.5.x` 같은 minor로 끝날지 `1.0.0`으로 승격할지 판단하는 구조다.
 - 새 세션은 과거 대화나 초안이 아니라, 이 문서의 `Version Decision Gate`, `Current Implementation Reality`, `Meeting Legacy Baseline`, `세션 인계 로그`를 기준으로 시작한다.
-- refactor-sensitive 파일이 바뀌면 `docs/refactoring-plan.md`를 같이 갱신하지 않는 한 pre-commit/pre-push 가드가 커밋과 푸시를 막는다.
+- version lane, legacy/v2 baseline, release gate처럼 장기 판단 비용이 큰 파일이 바뀌면 `docs/refactoring-plan.md`를 같이 갱신하지 않는 한 pre-commit/pre-push 가드가 커밋과 푸시를 막는다.
 
 ---
 
@@ -111,6 +112,7 @@
 - 구현자가 `minor candidate ready` 또는 `major candidate ready`를 주장하려면, 이 블록과 `세션 인계 로그`를 같은 커밋 안에서 함께 갱신한다.
 - candidate 증거 요약에는 어떤 smoke를 돌렸고 어떤 조건을 통과했는지 3-5줄로 남긴다.
 - 유지보수자는 이 블록의 `유지보수자 최종 결정` 항목에만 `minor 확정`, `major 확정`, `보류` 중 하나를 남긴다.
+- ordinary meeting 구현 변경이나 git으로 복구 가능한 commit chronology는 이 문서 갱신 조건이 아니다.
 
 ---
 

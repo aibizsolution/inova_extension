@@ -4,8 +4,8 @@
 - 릴리스 패널, 최신 버전 확인, 정적 JSON/ZIP 링크 표시를 다룬다.
 
 ## 문서 갱신 규칙
-- 이 feature의 사용자 체감 동작, 릴리스 메타 경계, 먼저 볼 파일, 검증 기준이 바뀌면 이 문서를 같은 작업 안에서 갱신한다.
-- `README.md` 대신 이 문서나 release 전용 docs에 먼저 기록한다.
+- 이 feature의 entrypoint, 릴리스 메타 경계, 최소 검증, durable invariant가 바뀌면 이 문서를 같은 작업 안에서 갱신한다.
+- `README.md`가 아니라 release feature-local 규칙과 계약은 이 문서나 release 전용 docs에 문서화한다.
 
 ## 먼저 볼 파일
 - `content/release-manager.js`
@@ -41,7 +41,7 @@
 ## 언제 범위를 확장할지
 - 정적 메타만으로 해결되지 않고 background fetch 또는 배포 스크립트가 얽힐 때만 platform/shell로 넓힌다.
 
-## 릴리스 메타 메모
+## 릴리스 메타 경계
 - lane 기본값은 버전 major로 정한다. `0.x`는 legacy lane, `1.x+`는 v2 lane이다.
 - `release:build`는 공개 최신 버전보다 낮은 버전으로는 진행할 수 없지만, 같은 공개 버전으로 로컬 재빌드/최종 배포하는 흐름은 허용한다.
 - `deploy:hosting`과 `deploy:all`은 hosted 검증/운영 배포용이며, 기본적으로 확장 패키지 버전과 사용자 릴리스 메타를 갱신하지 않는다.
