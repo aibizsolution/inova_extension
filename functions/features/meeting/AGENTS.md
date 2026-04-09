@@ -6,6 +6,7 @@
 ## 먼저 볼 파일
 - `functions/features/meeting/meeting-launch-service.js`
 - `functions/features/meeting/meeting-common-domain.js`
+- `functions/features/meeting/meeting-guard-domain.js`
 - `functions/features/meeting/meeting-notes-context-domain.js`
 - `functions/features/meeting/meeting-notes-document-domain.js`
 - `functions/features/meeting/meeting-notes-runtime-domain.js`
@@ -26,6 +27,7 @@
 - `functions/index.js`
 - `functions/platform/*`
 - `functions/features/meeting/meeting-common-domain.js`는 text/block normalize, transcript segment, JSON parse, source filename 같은 순수 공용 helper를 분리한 내부 모듈이다. 다른 meeting domain의 공통 입력 정리를 볼 때 먼저 확인한다.
+- `functions/features/meeting/meeting-guard-domain.js`는 ownership assert와 제목 동기화 guard helper를 분리한 내부 모듈이다. mutation 권한 체크와 title sync 조건을 건드릴 때 먼저 확인한다.
 - `functions/features/meeting/meeting-notes-context-domain.js`는 notes context/snapshot normalize helper를 분리한 내부 모듈이다. mutation payload, notes input snapshot, context dedupe 경계를 볼 때 먼저 확인한다.
 - `functions/features/meeting/meeting-notes-document-domain.js`는 notes 문서 normalize, empty bundle source note, preview helper를 분리한 내부 모듈이다. 회의록 스키마/후처리 의미를 건드리지 않고 handler 본문을 줄일 때 먼저 확인한다.
 - `functions/features/meeting/meeting-notes-runtime-domain.js`는 notes bundle 생성과 completion content normalize helper를 분리한 내부 모듈이다. notes generation 흐름을 줄일 때 service 상단 wiring과 함께 먼저 확인한다.
