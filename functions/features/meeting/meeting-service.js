@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const OpenAI = require("openai");
 const { createMeetingNotesContextDomain } = require("./meeting-notes-context-domain");
 const { createMeetingNotesDocumentDomain } = require("./meeting-notes-document-domain");
+const { createMeetingNotesRuntimeDomain } = require("./meeting-notes-runtime-domain");
 const { createMeetingMutationDomain } = require("./meeting-mutation-domain");
 const { createMeetingRecordDomain } = require("./meeting-record-domain");
 const { createMeetingSourceDomain } = require("./meeting-source-domain");
@@ -103,6 +104,39 @@ const {
 });
 
 const {
+  mergePersistedMeetingNotesContextItems,
+  normalizeMeetingContext,
+  normalizeMeetingNotesContextItems,
+  normalizeMeetingNotesInputSnapshot,
+} = createMeetingNotesContextDomain({
+  crypto,
+  dedupeMeetingItems,
+  hasOwn,
+  normalizeMeetingComparisonText,
+  normalizeText,
+  normalizeTextBlock,
+  limits: {
+    MAX_NOTES_CONTEXT_ITEMS,
+    MAX_NOTES_CONTEXT_ITEM_CHARS,
+    MAX_SHARED_MEMO_CHARS,
+  },
+});
+
+const {
+  createEmptyMeetingNotesBundle,
+  createMeetingNotesBundleFromNotes,
+  normalizeCompletionContent,
+} = createMeetingNotesRuntimeDomain({
+  createEmptyMeetingNotes,
+  hasMeetingNotes,
+  normalizeMeetingNotes,
+  normalizeMeetingNotesContextItems,
+  normalizeMeetingNotesStatus,
+  normalizeText,
+  notesSchemaVersion: NOTES_SCHEMA_VERSION,
+});
+
+const {
   buildMeetingDeletionTaskId,
   buildWorkspaceMutation,
   normalizeMeetingCommand,
@@ -126,6 +160,50 @@ const {
   supportedWorkspaceMutationTypes: SUPPORTED_WORKSPACE_MUTATION_TYPES,
   limits: {
     MAX_MEETING_LIST_LIMIT,
+    MAX_SHARED_MEMO_CHARS,
+  },
+});
+
+const {
+  buildMeetingNotesTranscriptPrompt,
+  buildMeetingNotesTranscriptSections,
+  buildTranscriptText,
+  resegmentTranscriptForReview,
+} = createMeetingTranscriptDomain({
+  normalizeText,
+  normalizeTextBlock,
+  normalizeTranscriptSegment,
+  limits: {
+    MAX_MEETING_NOTES_SECTION_CHARS,
+    MAX_MEETING_NOTES_SECTION_COUNT,
+    MAX_REVIEW_SEGMENT_CHARS,
+    MAX_REVIEW_SEGMENT_DURATION_MS,
+    MAX_SUMMARY_TRANSCRIPT_CHARS,
+    MIN_REVIEW_SEGMENT_CHARS,
+    MIN_REVIEW_SEGMENT_DURATION_MS,
+    TARGET_REVIEW_SEGMENT_CHARS,
+    TARGET_REVIEW_SEGMENT_DURATION_MS,
+  },
+});
+
+const {
+  buildQueuedMeetingJobFinalizer,
+  buildQueuedMeetingJobPart,
+  normalizeMeetingJobFinalizer,
+  normalizeMeetingJobPart,
+  normalizeMeetingOptions,
+  normalizeMeetingRequest,
+  normalizeMeetingSource,
+  normalizeMeetingSourceMode,
+  normalizeMeetingSourcePart,
+  normalizeMeetingSourceUploadRequest,
+} = createMeetingSourceDomain({
+  allowedCaptureModes: ALLOWED_CAPTURE_MODES,
+  buildDefaultFileName,
+  normalizeMeetingJob: normalizeMeetingJobForSource,
+  normalizeText,
+  normalizeTextBlock,
+  limits: {
     MAX_SHARED_MEMO_CHARS,
   },
 });
@@ -192,69 +270,6 @@ const {
     MAX_MEETING_RECENT_RESULTS,
     MAX_SHARED_MEMO_CHARS,
     NOTES_SCHEMA_VERSION,
-  },
-});
-
-const {
-  buildQueuedMeetingJobFinalizer,
-  buildQueuedMeetingJobPart,
-  normalizeMeetingJobFinalizer,
-  normalizeMeetingJobPart,
-  normalizeMeetingOptions,
-  normalizeMeetingRequest,
-  normalizeMeetingSource,
-  normalizeMeetingSourceMode,
-  normalizeMeetingSourcePart,
-  normalizeMeetingSourceUploadRequest,
-} = createMeetingSourceDomain({
-  allowedCaptureModes: ALLOWED_CAPTURE_MODES,
-  buildDefaultFileName,
-  normalizeMeetingJob,
-  normalizeText,
-  normalizeTextBlock,
-  limits: {
-    MAX_SHARED_MEMO_CHARS,
-  },
-});
-
-const {
-  buildMeetingNotesTranscriptPrompt,
-  buildMeetingNotesTranscriptSections,
-  buildTranscriptText,
-  resegmentTranscriptForReview,
-} = createMeetingTranscriptDomain({
-  normalizeText,
-  normalizeTextBlock,
-  normalizeTranscriptSegment,
-  limits: {
-    MAX_MEETING_NOTES_SECTION_CHARS,
-    MAX_MEETING_NOTES_SECTION_COUNT,
-    MAX_REVIEW_SEGMENT_CHARS,
-    MAX_REVIEW_SEGMENT_DURATION_MS,
-    MAX_SUMMARY_TRANSCRIPT_CHARS,
-    MIN_REVIEW_SEGMENT_CHARS,
-    MIN_REVIEW_SEGMENT_DURATION_MS,
-    TARGET_REVIEW_SEGMENT_CHARS,
-    TARGET_REVIEW_SEGMENT_DURATION_MS,
-  },
-});
-
-const {
-  mergePersistedMeetingNotesContextItems,
-  normalizeMeetingContext,
-  normalizeMeetingNotesContextItems,
-  normalizeMeetingNotesInputSnapshot,
-} = createMeetingNotesContextDomain({
-  crypto,
-  dedupeMeetingItems,
-  hasOwn,
-  normalizeMeetingComparisonText,
-  normalizeText,
-  normalizeTextBlock,
-  limits: {
-    MAX_NOTES_CONTEXT_ITEMS,
-    MAX_NOTES_CONTEXT_ITEM_CHARS,
-    MAX_SHARED_MEMO_CHARS,
   },
 });
 
@@ -4313,48 +4328,6 @@ function registerMeetingHandlers(deps) {
 
 }
 
-function createEmptyMeetingNotesBundle(statusInput, degradedReasonInput) {
-  return {
-    notes: createEmptyMeetingNotes(),
-    notesDegradedReason: normalizeText(degradedReasonInput),
-    notesGeneratedAt: "",
-    notesStatus: normalizeMeetingNotesStatus(statusInput) || "skipped",
-    notesSchemaVersion: NOTES_SCHEMA_VERSION,
-  };
-}
-
-function createMeetingNotesBundleFromNotes(notesInput, context) {
-  const notes = normalizeMeetingNotes(notesInput);
-  if (normalizeMeetingNotesContextItems(context?.notesContextItems).length && !hasMeetingNotes(notes)) {
-    throw new Error("추가 맥락은 회의 정리를 비우거나 핵심 내용을 삭제하는 용도로 사용할 수 없어요. 전사와 메모를 보완하는 정보만 남겨 주세요.");
-  }
-  return {
-    notes,
-    notesDegradedReason: "",
-    notesGeneratedAt: new Date().toISOString(),
-    notesStatus: "succeeded",
-    notesSchemaVersion: NOTES_SCHEMA_VERSION,
-  };
-}
-
-function normalizeCompletionContent(content) {
-  if (typeof content === "string") {
-    return content;
-  }
-  if (Array.isArray(content)) {
-    return content
-      .map((item) => {
-        if (typeof item === "string") {
-          return item;
-        }
-        return normalizeText(item?.text || item?.content);
-      })
-      .filter(Boolean)
-      .join("\n");
-  }
-  return normalizeText(content?.text || content?.content);
-}
-
 function buildDefaultFileName(mimeType) {
   return `meeting-source.${resolveAudioExtension(mimeType)}`;
 }
@@ -4442,6 +4415,10 @@ function normalizeTextBlock(value) {
     .map((line) => line.trim())
     .join("\n")
     .trim();
+}
+
+function normalizeMeetingJobForSource(input) {
+  return normalizeMeetingJob(input);
 }
 
 async function loadMeetingTranscriptForNotes(jobInput, db, createHttpError) {

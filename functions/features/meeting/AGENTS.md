@@ -7,6 +7,7 @@
 - `functions/features/meeting/meeting-launch-service.js`
 - `functions/features/meeting/meeting-notes-context-domain.js`
 - `functions/features/meeting/meeting-notes-document-domain.js`
+- `functions/features/meeting/meeting-notes-runtime-domain.js`
 - `functions/features/meeting/meeting-mutation-domain.js`
 - `functions/features/meeting/meeting-record-domain.js`
 - `functions/features/meeting/meeting-source-domain.js`
@@ -25,6 +26,7 @@
 - `functions/platform/*`
 - `functions/features/meeting/meeting-notes-context-domain.js`는 notes context/snapshot normalize helper를 분리한 내부 모듈이다. mutation payload, notes input snapshot, context dedupe 경계를 볼 때 먼저 확인한다.
 - `functions/features/meeting/meeting-notes-document-domain.js`는 notes 문서 normalize, empty bundle source note, preview helper를 분리한 내부 모듈이다. 회의록 스키마/후처리 의미를 건드리지 않고 handler 본문을 줄일 때 먼저 확인한다.
+- `functions/features/meeting/meeting-notes-runtime-domain.js`는 notes bundle 생성과 completion content normalize helper를 분리한 내부 모듈이다. notes generation 흐름을 줄일 때 service 상단 wiring과 함께 먼저 확인한다.
 - `functions/features/meeting/meeting-mutation-domain.js`는 list/mutation request, workspace mutation, command, deletion task normalize helper를 분리한 내부 모듈이다. command/deletion 문서 shape를 유지한 채 handler 본문을 줄일 때 먼저 확인한다.
 - `functions/features/meeting/meeting-record-domain.js`는 queued job, succeeded patch, transcript artifact, summary document, stable ID/path builder를 분리한 내부 모듈이다. persisted record shape를 유지한 채 handler 본문을 줄일 때 먼저 확인한다.
 - `functions/features/meeting/meeting-source-domain.js`는 meeting request/source upload/job-part/finalizer normalize helper를 분리한 내부 모듈이다. 업로드 payload와 queued state contract를 바꾸지 않고 handler 본문을 줄일 때 먼저 확인한다.
