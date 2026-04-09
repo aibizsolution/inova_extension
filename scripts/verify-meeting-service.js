@@ -5,7 +5,6 @@ const { registerMeetingLaunchHandlers } = require("../functions/features/meeting
 const { registerMeetingHandlers } = require("../functions/features/meeting/meeting-service");
 const {
   ARTIFACT_COLLECTION,
-  COMMAND_COLLECTION,
   JOB_COLLECTION,
   JOB_FINALIZER_COLLECTION,
   JOB_PART_COLLECTION,
@@ -14,7 +13,6 @@ const {
   createDeps,
   createMemoryState,
   drainChunkedMeetingPipeline,
-  invokeCommandWriteTrigger,
   invokeDeletionWriteTrigger,
   invokeHandler,
   invokeJobWriteTrigger,
@@ -192,6 +190,10 @@ async function main() {
   assert.equal(storedMeeting.recentJobs[0].jobId, jobId);
   assert.equal(storedMeeting.recentJobs[0].meetingId, "meeting-planning-1");
   assert.equal(state.collections.has(removedSessionCollectionName), false);
+  assert.equal(
+    state.openaiSummaryRequests.some((request) => request.kind === "notes" && request.model === "gpt-5.4"),
+    true
+  );
 
   const listedMeetings = await invokeHandler(handlers.listInovaMeetings, {
     body: { owner },
@@ -214,37 +216,35 @@ async function main() {
   assert.equal(updatedMeeting.jsonBody.data.meeting.sharedMemo, "업데이트된 공용 메모");
   assert.equal(updatedMeeting.jsonBody.data.meeting.title, "주간 스탠드업 v2");
   assert.equal(getDoc(state, MEETING_COLLECTION, "fixture-user__meeting-planning-1").sharedMemo, "업데이트된 공용 메모");
+  const originalNotesTitle = storedJob.meetingNotes.meetingMeta.title;
+  const originalDecisionText = storedJob.meetingNotes.decisions[0]?.text || "";
 
-  const summaryRequestsBeforeRegenerate = state.openaiSummaryRequests.length;
-  const regenerated = await invokeHandler(handlers.regenerateInovaMeetingNotes, {
+  const updatedTermReplacements = await invokeHandler(handlers.updateInovaMeeting, {
     body: {
-      contextItems: [{ contextId: "ctx-1", text: "후속 일정 확인이 필요합니다." }],
-      jobId,
       meetingId: "meeting-planning-1",
       owner,
-      sharedMemo: "후속 일정 확인이 필요한 회의입니다.",
+      termReplacements: [
+        { from: originalNotesTitle, to: "치환된 회의 제목" },
+        { from: originalDecisionText, to: "치환된 결정" },
+      ],
     },
     method: "POST",
   });
-  assert.equal(regenerated.statusCode, 202);
-  assert.equal(regenerated.jsonBody.data.accepted, true);
-  const regenerateCommandId = regenerated.jsonBody.data.requestId;
-  assert.equal(getDoc(state, COMMAND_COLLECTION, regenerateCommandId).status, "queued");
-  await invokeCommandWriteTrigger(handlers, state, regenerateCommandId);
-  const regeneratedJob = getDoc(state, JOB_COLLECTION, jobId);
-  const regeneratedArtifact = getDoc(state, ARTIFACT_COLLECTION, artifactId);
-  assert.equal(regeneratedJob.notesContextItems.length, 1);
-  assert.equal(regeneratedJob.notesContextItems[0].text, "후속 일정 확인이 필요합니다.");
-  assert.equal(regeneratedJob.context.sharedMemoSnapshot, "후속 일정 확인이 필요한 회의입니다.");
-  assert.equal(regeneratedArtifact.notesContextItems.length, 1);
-  assert(state.openaiSummaryRequests.length > summaryRequestsBeforeRegenerate);
+  assert.equal(updatedTermReplacements.statusCode, 200);
+  assert.equal(updatedTermReplacements.jsonBody.data.accepted, true);
+  assert.equal(updatedTermReplacements.jsonBody.data.meeting.termReplacements.length, 2);
+  const patchedMeeting = getDoc(state, MEETING_COLLECTION, "fixture-user__meeting-planning-1");
+  assert.equal(patchedMeeting.termReplacements.length, 2);
+  assert.equal(patchedMeeting.termReplacements[0].from, originalNotesTitle);
+  const termReplacementJob = getDoc(state, JOB_COLLECTION, jobId);
+  const termReplacementArtifact = getDoc(state, ARTIFACT_COLLECTION, artifactId);
+  assert.equal(termReplacementJob.meetingNotes.meetingMeta.title, "치환된 회의 제목");
+  assert.equal(termReplacementJob.meetingNotes.decisions[0].text, "치환된 결정");
+  assert.equal(termReplacementArtifact.notes.meetingMeta.title, "치환된 회의 제목");
+  assert.equal(termReplacementArtifact.notes.decisions[0].text, "치환된 결정");
 
   const updatedResult = await invokeHandler(handlers.updateInovaMeetingResult, {
     body: {
-      contextItems: [
-        { contextId: "ctx-1", text: "후속 일정 확인이 필요합니다." },
-        { contextId: "ctx-2", text: "디자인 시안 리뷰 일정도 포함합니다." },
-      ],
       jobId,
       meetingId: "meeting-planning-1",
       owner,
@@ -257,8 +257,65 @@ async function main() {
   assert.equal(updatedResult.jsonBody.data.accepted, true);
   const patchedJob = getDoc(state, JOB_COLLECTION, jobId);
   assert.equal(patchedJob.title, "3월 30일 회의록");
-  assert.equal(patchedJob.notesContextItems.length, 2);
   assert.equal(patchedJob.context.sharedMemoSnapshot, "회의 후속 조치와 디자인 시안 리뷰 일정까지 포함합니다.");
+  assert.equal(typeof patchedJob.notesContextItems, "undefined");
+
+  const summaryRequestsBeforePreview = state.openaiSummaryRequests.length;
+  const previewedSection = await invokeHandler(handlers.previewInovaMeetingResultSectionEdit, {
+    body: {
+      instruction: "회의 개요를 더 간결하게 다시 정리해 주세요.",
+      jobId,
+      meetingId: "meeting-planning-1",
+      owner,
+      sectionKey: "overview",
+    },
+    method: "POST",
+  });
+  assert.equal(previewedSection.statusCode, 200);
+  assert.equal(previewedSection.jsonBody.data.sectionKey, "overview");
+  assert(previewedSection.jsonBody.data.baseRevisionToken);
+  assert(previewedSection.jsonBody.data.sectionData);
+  assert(previewedSection.jsonBody.data.sectionData.overview.length > 0);
+  assert.equal(
+    state.openaiSummaryRequests
+      .slice(summaryRequestsBeforePreview)
+      .some((request) => request.kind === "notes" && request.model === "gpt-5.4"),
+    true
+  );
+
+  const staleAppliedSection = await invokeHandler(handlers.applyInovaMeetingResultSectionEdit, {
+    body: {
+      baseRevisionToken: `${previewedSection.jsonBody.data.baseRevisionToken}-stale`,
+      jobId,
+      meetingId: "meeting-planning-1",
+      owner,
+      sectionData: previewedSection.jsonBody.data.sectionData,
+      sectionKey: "overview",
+    },
+    method: "POST",
+  });
+  assert.equal(staleAppliedSection.statusCode, 409);
+
+  const appliedSection = await invokeHandler(handlers.applyInovaMeetingResultSectionEdit, {
+    body: {
+      baseRevisionToken: previewedSection.jsonBody.data.baseRevisionToken,
+      clientRequestId: "section-apply-fixture-1",
+      jobId,
+      meetingId: "meeting-planning-1",
+      owner,
+      sectionData: previewedSection.jsonBody.data.sectionData,
+      sectionKey: "overview",
+    },
+    method: "POST",
+  });
+  assert.equal(appliedSection.statusCode, 200);
+  assert.equal(appliedSection.jsonBody.data.accepted, true);
+  assert.equal(appliedSection.jsonBody.data.sectionKey, "overview");
+  const sectionEditedJob = getDoc(state, JOB_COLLECTION, jobId);
+  const sectionEditedArtifact = getDoc(state, ARTIFACT_COLLECTION, artifactId);
+  assert.equal(sectionEditedJob.meetingNotes.overview, previewedSection.jsonBody.data.sectionData.overview);
+  assert.equal(sectionEditedArtifact.notes.overview, previewedSection.jsonBody.data.sectionData.overview);
+  assert.equal(sectionEditedJob.meetingNotes.meetingMeta.title, previewedSection.jsonBody.data.sectionData.meetingMeta.title);
 
   const deletedResult = await invokeHandler(handlers.deleteInovaMeetingResult, {
     body: {

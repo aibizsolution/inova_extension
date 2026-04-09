@@ -6,11 +6,11 @@ function createMeetingRecordDomain(deps) {
     mergeRecentJobs,
     normalizeMeetingContext,
     normalizeMeetingNotes,
-    normalizeMeetingNotesContextItems,
     normalizeMeetingNotesInputSnapshot,
     normalizeMeetingNotesStatus,
     normalizeMeetingResultSummary,
     normalizeMeetingSummary,
+    normalizeMeetingTermReplacements,
     normalizeText,
     normalizeTextBlock,
   } = deps;
@@ -67,7 +67,6 @@ function createMeetingRecordDomain(deps) {
     const resultTitle = resolveMeetingResultTitle(meetingNotes, meeting.title);
     const normalizedContext = normalizeMeetingContext(context);
     const notesInputSnapshot = normalizeMeetingNotesInputSnapshot({
-      contextItems: normalizedContext.notesContextItems,
       sharedMemo: normalizedContext.sharedMemoSnapshot,
       updatedAt: normalizeText(meetingNotes?.notesGeneratedAt || completedAt),
     });
@@ -105,7 +104,6 @@ function createMeetingRecordDomain(deps) {
       context: normalizedContext,
       notesDegradedReason: normalizeText(meetingNotes?.notesDegradedReason),
       meetingNotes: normalizeMeetingNotes(meetingNotes?.notes),
-      notesContextItems: normalizedContext.notesContextItems,
       notesGeneratedAt: normalizeText(meetingNotes?.notesGeneratedAt),
       notesInputSnapshot,
       notesStatus: normalizeMeetingNotesStatus(meetingNotes?.notesStatus),
@@ -130,9 +128,6 @@ function createMeetingRecordDomain(deps) {
 
   function buildTranscriptArtifact(artifactId, jobId, meeting, owner, transcript, meetingNotes, createdAt, contextInput) {
     const normalizedContext = normalizeMeetingContext(contextInput);
-    const normalizedNotesContextItems = normalizeMeetingNotesContextItems(
-      meetingNotes?.notesContextItems?.length ? meetingNotes.notesContextItems : normalizedContext.notesContextItems
-    );
     return {
       artifactId,
       createdAt,
@@ -141,12 +136,10 @@ function createMeetingRecordDomain(deps) {
       jobId,
       kind: "transcript",
       meetingId: meeting.meetingId,
-      notesContextItems: normalizedNotesContextItems,
       notesDegradedReason: normalizeText(meetingNotes?.notesDegradedReason),
       notes: normalizeMeetingNotes(meetingNotes?.notes),
       notesGeneratedAt: normalizeText(meetingNotes?.notesGeneratedAt),
       notesInputSnapshot: normalizeMeetingNotesInputSnapshot({
-        contextItems: normalizedNotesContextItems,
         sharedMemo: meetingNotes?.sharedMemoSnapshot || normalizedContext.sharedMemoSnapshot,
         updatedAt: normalizeText(meetingNotes?.notesGeneratedAt || createdAt),
       }),
@@ -181,6 +174,7 @@ function createMeetingRecordDomain(deps) {
       sourceTabId: Math.max(0, Number(meeting.sourceTabId) || 0),
       startedAt: normalizeText(meeting.startedAt),
       status: normalizeText(normalizedJobSummary.status),
+      termReplacements: normalizeMeetingTermReplacements(meeting.termReplacements || normalizedCurrent.termReplacements),
       title: normalizeText(meeting.title),
       updatedAt: normalizeText(normalizedJobSummary.updatedAt || new Date().toISOString()),
     };

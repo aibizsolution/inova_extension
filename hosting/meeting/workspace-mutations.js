@@ -1,5 +1,13 @@
 (function initHostedMeetingWorkspaceMutations(global) {
   const ns = global.__INOVA_HOSTED_MEETING__ = global.__INOVA_HOSTED_MEETING__ || {};
+  const SECTION_LABELS = Object.freeze({
+    actionItems: "후속 실행 항목",
+    decisions: "주요 결정 사항",
+    discussionFlow: "논의 흐름",
+    openQuestions: "추가 결정 필요 사항",
+    overview: "회의 개요",
+    risksOrDependencies: "리스크 및 제약",
+  });
 
   ns.workspaceMutations = {
     createController(deps) {
@@ -8,11 +16,21 @@
       const state = deps?.state || {};
       const constants = deps?.constants || {};
       const helpers = deps?.helpers || {};
-      const { buildLocalPendingJob, findHistoryEntry } = ns.render;
-      const { logDebug, normalizeText, normalizeTextBlock, postJson } = ns.shared;
+      const {
+        buildLocalPendingJob,
+        buildMeetingNotesSectionPreview,
+        findHistoryEntry,
+        getMeetingNotesSectionLabel,
+        normalizeArtifact,
+        normalizeJob,
+        normalizeRecord,
+        renderNotesSection,
+      } = ns.render;
+      const { escapeHtml, logDebug, normalizeText, normalizeTextBlock, postJson } = ns.shared;
       const CONFIG = constants.CONFIG || {};
-      const MAX_NOTES_CONTEXT_ITEM_CHARS = constants.MAX_NOTES_CONTEXT_ITEM_CHARS || 0;
-      const MAX_NOTES_CONTEXT_ITEMS = constants.MAX_NOTES_CONTEXT_ITEMS || 0;
+      const MAX_MEETING_SECTION_EDIT_INSTRUCTION_CHARS = constants.MAX_MEETING_SECTION_EDIT_INSTRUCTION_CHARS || 1600;
+      const MAX_MEETING_TERM_REPLACEMENTS = constants.MAX_MEETING_TERM_REPLACEMENTS || 24;
+      const MAX_MEETING_TERM_REPLACEMENT_TEXT_CHARS = constants.MAX_MEETING_TERM_REPLACEMENT_TEXT_CHARS || 120;
       const MAX_SHARED_MEMO_CHARS = constants.MAX_SHARED_MEMO_CHARS || 0;
       const PENDING_UPLOAD_QUEUE_OPERATION_SCOPES = constants.PENDING_UPLOAD_QUEUE_OPERATION_SCOPES || {};
 
@@ -21,19 +39,31 @@
       }
 
       const applyRender = (...args) => helpers.applyRender?.(...args);
+      const cloneNotesInputSnapshot = (...args) => helpers.cloneNotesInputSnapshot?.(...args);
+      const cloneTermReplacements = (...args) => helpers.cloneTermReplacements?.(...args);
+      const createEmptyNotesInputSnapshotState = (...args) => helpers.createEmptyNotesInputSnapshotState?.(...args);
+      const createEmptySectionEditState = (...args) => helpers.createEmptySectionEditState?.(...args);
+      const createEmptySelectedRecordMemoState = (...args) => helpers.createEmptySelectedRecordMemoState?.(...args);
+      const createEmptyTermReplacementState = (...args) => helpers.createEmptyTermReplacementState?.(...args);
       const renderBlocked = (...args) => helpers.renderBlocked?.(...args);
       const requestConfirmation = (...args) => helpers.requestConfirmation?.(...args);
       const setNotice = (...args) => helpers.setNotice?.(...args);
-      const cloneNotesContextItems = (...args) => helpers.cloneNotesContextItems?.(...args);
-      const cloneNotesInputSnapshot = (...args) => helpers.cloneNotesInputSnapshot?.(...args);
       const persistWorkspaceSession = (...args) => controller("session")?.persistSession?.(...args);
       const clearWorkspaceSession = (...args) => controller("session")?.clearSession?.(...args);
+      const refreshWorkspace = (...args) => controller("realtime")?.refreshWorkspace?.(...args);
       const runPendingUploadQueueOperation = (...args) => controller("pendingUploads")?.runPendingUploadQueueOperation?.(...args);
       const showPendingUploadQueueOperationError = (...args) => controller("pendingUploads")?.showPendingUploadQueueOperationError?.(...args);
       const deletePendingUpload = (...args) => controller("pendingUploads")?.deletePendingUpload?.(...args);
       const handleLocalQueueAction = (...args) => controller("pendingUploads")?.handleLocalQueueAction?.(...args);
       const upsertPendingUpload = (...args) => controller("pendingUploads")?.createOrUpdatePendingUpload?.(...args);
       const syncWorkspaceLocalState = (...args) => controller("realtime")?.syncWorkspaceLocalState?.(...args);
+
+      function resolveSectionLabel(sectionKey) {
+        const normalized = normalizeText(sectionKey);
+        return typeof getMeetingNotesSectionLabel === "function"
+          ? getMeetingNotesSectionLabel(normalized)
+          : SECTION_LABELS[normalized] || "회의 정리";
+      }
 
       function normalizeWorkspaceMutation(mutation) {
         const nextMutation = mutation && typeof mutation === "object" ? mutation : {};
@@ -46,31 +76,37 @@
           type: normalizeText(nextMutation.type),
         };
       }
-      
-      
+
+      function normalizeTextareaDraft(value) {
+        return String(value || "")
+          .replace(/\r\n/g, "\n")
+          .replace(/\r/g, "\n");
+      }
+
       function generateClientRequestId(prefix = "mutation") {
         const normalizedPrefix = normalizeText(prefix) || "mutation";
-        if (typeof global.crypto?.randomUUID === "function") {
-          return `${normalizedPrefix}-${global.crypto.randomUUID()}`;
+        if (typeof globalObject.crypto?.randomUUID === "function") {
+          return `${normalizedPrefix}-${globalObject.crypto.randomUUID()}`;
         }
         return `${normalizedPrefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
       }
-      
-      
+
       function getMutationBusyKey(type) {
         switch (normalizeText(type)) {
+          case "applySectionEdit":
+            return "applySectionEdit";
           case "deleteMeeting":
             return "deleteMeeting";
           case "deleteRecord":
             return "deleteRecord";
-          case "regenerateNotes":
-            return "regenerateNotes";
+          case "previewSectionEdit":
+            return "previewSectionEdit";
           case "saveMeetingMemo":
             return "saveMeetingMemo";
+          case "saveMeetingTermReplacements":
+            return "saveMeetingTermReplacements";
           case "saveMeetingTitle":
             return "saveMeetingTitle";
-          case "saveRecordContext":
-            return "saveRecordContext";
           case "saveRecordMemo":
             return "saveRecordMemo";
           case "saveRecordTitle":
@@ -79,8 +115,7 @@
             return "";
         }
       }
-      
-      
+
       function getSelectedRecordWorkspaceMutation() {
         const entry = findHistoryEntry(state, state.selectedRecordId);
         return normalizeWorkspaceMutation(
@@ -89,16 +124,17 @@
             : entry?.remote?.workspaceMutation
         );
       }
-      
-      
+
       function syncWorkspaceMutationBusyState() {
         const nextBusy = {
+          applySectionEdit: false,
           deleteMeeting: false,
           deleteRecord: false,
-          regenerateNotes: false,
+          previewSectionEdit: false,
+          queue: state.busy.queue || Object.create(null),
           saveMeetingMemo: false,
+          saveMeetingTermReplacements: false,
           saveMeetingTitle: false,
-          saveRecordContext: false,
           saveRecordMemo: false,
           saveRecordTitle: false,
         };
@@ -124,8 +160,7 @@
         }
         Object.assign(state.busy, nextBusy);
       }
-      
-      
+
       function registerPendingMutation(options) {
         const requestId = normalizeText(options?.requestId);
         if (!requestId) {
@@ -137,33 +172,13 @@
           quiet: Boolean(options?.quiet),
           recordId: normalizeText(options?.recordId),
           requestId,
-          resetNotesContextDraft: Boolean(options?.resetNotesContextDraft),
-          resetRecordMemoDraft: Boolean(options?.resetRecordMemoDraft),
-          reviewTab: normalizeText(options?.reviewTab),
           successMessage: normalizeText(options?.successMessage),
           type: normalizeText(options?.type),
         };
         syncWorkspaceMutationBusyState();
         return state.pendingMutations[requestId];
       }
-      
-      
-      function buildMeetingMutationContractErrorMessage(subject) {
-        const normalizedSubject = normalizeText(subject) || "회의 작업";
-        return `${normalizedSubject} 반영을 지원하는 최신 함수가 아직 배포되지 않았어요. npm run deploy:functions 후 다시 시도해 주세요.`;
-      }
-      
-      
-      function assertAcceptedMutationResponse(payload, requestId, subject) {
-        const normalizedRequestId = normalizeText(requestId);
-        const payloadRequestId = normalizeText(payload?.requestId);
-        if (payload?.accepted === true && payloadRequestId === normalizedRequestId) {
-          return;
-        }
-        throw new Error(buildMeetingMutationContractErrorMessage(subject));
-      }
-      
-      
+
       async function finalizePendingMutation(requestId, outcome, errorMessage) {
         const normalizedRequestId = normalizeText(requestId);
         const mutation = state.pendingMutations[normalizedRequestId];
@@ -173,31 +188,11 @@
         }
         delete state.pendingMutations[normalizedRequestId];
         syncWorkspaceMutationBusyState();
-      
+
         if (outcome === "failed") {
           setNotice(normalizeText(errorMessage) || "회의 변경 사항을 반영하지 못했어요.", "error");
           applyRender();
           return true;
-        }
-      
-        const isCurrentSelectedRecord = mutation.recordId
-          && mutation.recordId === normalizeText(state.currentDetailSelectionId || state.selectedRecordMemo.recordId);
-        if (mutation.resetRecordMemoDraft && isCurrentSelectedRecord) {
-          state.selectedRecordMemo.draft = state.selectedRecordMemo.saved;
-        }
-        if (mutation.resetNotesContextDraft && isCurrentSelectedRecord) {
-          state.notesContext.draft = "";
-          state.notesContext.editingId = "";
-        }
-        if (mutation.reviewTab && isCurrentSelectedRecord) {
-          state.reviewTab = mutation.reviewTab;
-        }
-        if (mutation.type === "regenerateNotes" && isCurrentSelectedRecord) {
-          state.selectedRecordNotesInputSnapshot = {
-            ...state.selectedRecordNotesInputSnapshot,
-            contextItems: cloneNotesContextItems(state.notesContext.items),
-            sharedMemo: normalizeTextBlock(state.selectedRecordMemo.saved),
-          };
         }
 
         if (mutation.type === "deleteMeeting") {
@@ -223,7 +218,7 @@
           });
           return true;
         }
-      
+
         if (mutation.type === "deleteRecord" && mutation.pendingRequestId) {
           try {
             await deletePendingUpload(mutation.pendingRequestId, {
@@ -236,15 +231,14 @@
             showPendingUploadQueueOperationError(error, "브라우저에 남아 있는 로컬 녹음을 정리하지 못했어요.");
           }
         }
-      
+
         if (!mutation.quiet && mutation.successMessage) {
           setNotice(mutation.successMessage, "highlight");
         }
         applyRender();
         return true;
       }
-      
-      
+
       async function resolvePendingMutationsFromSnapshots() {
         const pendingMutations = Object.values(state.pendingMutations || {});
         for (const mutation of pendingMutations) {
@@ -264,7 +258,7 @@
             }
             continue;
           }
-          const snapshotMutation = mutation.type === "saveMeetingTitle" || mutation.type === "saveMeetingMemo"
+          const snapshotMutation = ["saveMeetingTitle", "saveMeetingMemo", "saveMeetingTermReplacements"].includes(mutation.type)
             ? normalizeWorkspaceMutation(state.meeting?.workspaceMutation)
             : normalizeWorkspaceMutation(
                 state.records.find((record) => normalizeText(record.jobId) === mutation.jobId)?.workspaceMutation
@@ -281,294 +275,376 @@
         }
         syncWorkspaceMutationBusyState();
       }
-      
-      
-      function normalizeNotesContextDraftValue(value) {
-        return normalizeTextBlock(value).slice(0, MAX_NOTES_CONTEXT_ITEM_CHARS);
+
+      function buildMeetingMutationContractErrorMessage(subject) {
+        const normalizedSubject = normalizeText(subject) || "회의 작업";
+        return `${normalizedSubject} 반영을 지원하는 최신 함수가 아직 배포되지 않았어요. npm run deploy:functions 후 다시 시도해 주세요.`;
       }
-      
-      
+
+      function assertAcceptedMutationResponse(payload, requestId, subject) {
+        const normalizedRequestId = normalizeText(requestId);
+        const payloadRequestId = normalizeText(payload?.requestId);
+        if (payload?.accepted === true && payloadRequestId === normalizedRequestId) {
+          return;
+        }
+        throw new Error(buildMeetingMutationContractErrorMessage(subject));
+      }
+
+      function compareTermReplacements(leftItems, rightItems) {
+        const left = cloneTermReplacements(leftItems);
+        const right = cloneTermReplacements(rightItems);
+        if (left.length !== right.length) {
+          return false;
+        }
+        return left.every((item, index) =>
+          normalizeText(item.from) === normalizeText(right[index]?.from)
+          && normalizeText(item.to) === normalizeText(right[index]?.to)
+        );
+      }
+
+      function isTermReplacementDirty() {
+        return !compareTermReplacements(state.termReplacementState.items, state.termReplacementState.saved);
+      }
+
+      function resetSectionEditPreviewState(options = {}) {
+        const nextState = createEmptySectionEditState();
+        nextState.recordId = normalizeText(options.recordId ?? state.sectionEdit.recordId);
+        nextState.jobId = normalizeText(options.jobId ?? state.sectionEdit.jobId);
+        nextState.sectionKey = normalizeText(options.sectionKey ?? state.sectionEdit.sectionKey) || "overview";
+        nextState.instruction = options.preserveInstruction
+          ? normalizeTextareaDraft(options.instruction ?? state.sectionEdit.instruction).slice(0, MAX_MEETING_SECTION_EDIT_INSTRUCTION_CHARS)
+          : "";
+        nextState.statusText = normalizeText(options.statusText);
+        nextState.statusTone = normalizeText(options.statusTone);
+        state.sectionEdit = nextState;
+      }
+
+      function syncTermReplacementState() {
+        const saved = cloneTermReplacements(state.meeting?.termReplacements);
+        const meetingId = normalizeText(state.meeting?.meetingId || state.session.meetingId);
+        const meetingChanged = normalizeText(state.termReplacementState.meetingId) !== meetingId;
+        const shouldReplaceDraft = meetingChanged || !isTermReplacementDirty();
+        state.termReplacementState.saved = saved;
+        state.termReplacementState.meetingId = meetingId;
+        if (shouldReplaceDraft) {
+          state.termReplacementState.items = saved;
+        }
+        if (meetingChanged) {
+          state.termReplacementState.draftFrom = "";
+          state.termReplacementState.draftTo = "";
+        }
+      }
+
       function readSelectedRecordReviewState(entry) {
         const savedMemo = normalizeTextBlock(
           state.currentJob?.sharedMemoSnapshot
           || entry?.remote?.sharedMemoSnapshot
           || entry?.pending?.sharedMemoSnapshot
         ).slice(0, MAX_SHARED_MEMO_CHARS);
-        const contextItems = cloneNotesContextItems(
-          state.currentArtifact?.notesContextItems?.length
-            ? state.currentArtifact.notesContextItems
-            : state.currentJob?.notesContextItems?.length
-              ? state.currentJob.notesContextItems
-              : entry?.remote?.notesContextItems
-        );
         const notesInputSnapshot = cloneNotesInputSnapshot(
           state.currentArtifact?.notesInputSnapshot?.updatedAt
             ? state.currentArtifact.notesInputSnapshot
             : state.currentJob?.notesInputSnapshot,
           {
-            contextItems,
             sharedMemo: savedMemo,
-            updatedAt: normalizeText(state.currentArtifact?.notesGeneratedAt || state.currentJob?.notesGeneratedAt || state.currentJob?.updatedAt || entry?.remote?.updatedAt),
+            updatedAt: normalizeText(
+              state.currentArtifact?.notesGeneratedAt
+              || state.currentJob?.notesGeneratedAt
+              || state.currentJob?.updatedAt
+              || entry?.remote?.updatedAt
+            ),
           }
         );
         return {
-          contextItems,
           notesInputSnapshot,
           recordId: normalizeText(entry?.id || state.currentDetailSelectionId),
           savedMemo,
         };
       }
-      
-      
+
       function isSelectedRecordMemoDirty() {
         return normalizeTextBlock(state.selectedRecordMemo.draft) !== normalizeTextBlock(state.selectedRecordMemo.saved);
       }
-      
-      
+
       function syncSelectedRecordReviewState(entry) {
         const snapshot = readSelectedRecordReviewState(entry);
         const selectionChanged = normalizeText(state.selectedRecordMemo.recordId) !== snapshot.recordId;
-      
+
         if (selectionChanged || !isSelectedRecordMemoDirty()) {
           state.selectedRecordMemo.draft = snapshot.savedMemo;
         }
         state.selectedRecordMemo.recordId = snapshot.recordId;
         state.selectedRecordMemo.saved = snapshot.savedMemo;
-      
-        state.notesContext.recordId = snapshot.recordId;
-        state.notesContext.items = snapshot.contextItems;
-        if (selectionChanged) {
-          state.notesContext.draft = "";
-          state.notesContext.editingId = "";
-        } else if (
-          state.notesContext.editingId
-          && !snapshot.contextItems.some((item) => normalizeText(item.contextId) === normalizeText(state.notesContext.editingId))
-        ) {
-          state.notesContext.draft = "";
-          state.notesContext.editingId = "";
-        }
-      
         state.selectedRecordNotesInputSnapshot = {
           ...snapshot.notesInputSnapshot,
           recordId: snapshot.recordId,
         };
+
+        syncTermReplacementState();
+
+        const nextJobId = normalizeText(entry?.remote?.jobId);
+        if (selectionChanged || normalizeText(state.sectionEdit.jobId) !== nextJobId) {
+          resetSectionEditPreviewState({
+            jobId: nextJobId,
+            preserveInstruction: false,
+            recordId: snapshot.recordId,
+            sectionKey: state.sectionEdit.sectionKey,
+          });
+        } else {
+          state.sectionEdit.recordId = snapshot.recordId;
+          state.sectionEdit.jobId = nextJobId;
+        }
       }
-      
-      
+
+      function updateMeetingTitleDraft(value) {
+        state.meetingTitleDraft = normalizeText(value);
+        applyRender();
+      }
+
+      function updateRecordMemoDraft(value) {
+        const nextValue = normalizeTextareaDraft(value);
+        state.recordMemoDraft = nextValue;
+        state.recordMemoSaved = nextValue;
+        state.session.sharedMemo = nextValue;
+        persistWorkspaceSession();
+        refs.sharedMemoNotice.hidden = true;
+        refs.sharedMemoNotice.textContent = "";
+        applyRender();
+      }
+
       function updateSelectedRecordMemoDraft(value) {
         state.selectedRecordMemo.draft = normalizeTextareaDraft(value).slice(0, MAX_SHARED_MEMO_CHARS);
         applyRender();
       }
-      
-      
-      function updateNotesContextDraft(value) {
-        state.notesContext.draft = normalizeTextareaDraft(value).slice(0, MAX_NOTES_CONTEXT_ITEM_CHARS);
-        applyRender();
-      }
-      
-      
-      function resetNotesContextDraft() {
-        state.notesContext.draft = "";
-        state.notesContext.editingId = "";
-        applyRender();
-      }
-      
-      
-      function generateNotesContextId() {
-        if (typeof global.crypto?.randomUUID === "function") {
-          return global.crypto.randomUUID();
+
+      function updateTermReplacementDraft(field, value) {
+        const nextValue = normalizeText(value).slice(0, MAX_MEETING_TERM_REPLACEMENT_TEXT_CHARS);
+        if (field === "from") {
+          state.termReplacementState.draftFrom = nextValue;
+        } else if (field === "to") {
+          state.termReplacementState.draftTo = nextValue;
         }
-        return `notes-context-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+        applyRender();
       }
-      
-      
-      function areNotesContextItemsEqual(leftItems, rightItems) {
-        const left = cloneNotesContextItems(leftItems);
-        const right = cloneNotesContextItems(rightItems);
-        if (left.length !== right.length) {
+
+      function addTermReplacementDraft() {
+        const from = normalizeText(state.termReplacementState.draftFrom).slice(0, MAX_MEETING_TERM_REPLACEMENT_TEXT_CHARS);
+        const to = normalizeText(state.termReplacementState.draftTo).slice(0, MAX_MEETING_TERM_REPLACEMENT_TEXT_CHARS);
+        if (!from || !to) {
+          setNotice("기존 표현과 바꿀 표현을 모두 입력해 주세요.", "warning");
+          applyRender();
           return false;
         }
-        return left.every((item, index) =>
-          normalizeText(item.contextId) === normalizeText(right[index]?.contextId)
-          && normalizeTextBlock(item.text) === normalizeTextBlock(right[index]?.text)
-        );
-      }
-      
-      
-      function startEditingNotesContextItem(contextId) {
-        const normalizedContextId = normalizeText(contextId);
-        const target = state.notesContext.items.find((item) => normalizeText(item.contextId) === normalizedContextId);
-        if (!target) {
-          return;
-        }
-        state.notesContext.editingId = normalizedContextId;
-        state.notesContext.draft = target.text;
-        applyRender();
-        global.setTimeout(() => {
-          if (!refs.notesContextInput) {
-            return;
-          }
-          refs.notesContextInput.focus();
-          if (typeof refs.notesContextInput.setSelectionRange === "function") {
-            const length = refs.notesContextInput.value.length;
-            refs.notesContextInput.setSelectionRange(length, length);
-          }
-        }, 0);
-      }
-      
-      
-      function buildUpdatedNotesContextItemsFromDraft() {
-        let items = cloneNotesContextItems(state.notesContext.items);
-        const text = normalizeNotesContextDraftValue(state.notesContext.draft);
-        if (!text) {
-          setNotice("추가 맥락이 있으면 넣어주세요.", "warning");
+        if (normalizeText(from).toLowerCase() === normalizeText(to).toLowerCase()) {
+          setNotice("같은 표현끼리는 치환할 수 없습니다.", "warning");
           applyRender();
-          return null;
-        }
-        const editingId = normalizeText(state.notesContext.editingId);
-        const duplicate = items.find((item) =>
-          normalizeText(item.contextId) !== editingId
-          && normalizeTextBlock(item.text) === text
-        );
-        if (duplicate) {
-          setNotice("같은 추가 맥락이 이미 있습니다.", "warning");
-          applyRender();
-          return null;
-        }
-        const now = new Date().toISOString();
-        if (editingId) {
-          return items.map((item) =>
-            normalizeText(item.contextId) === editingId
-              ? { ...item, text, updatedAt: now }
-              : item
-          );
-        }
-        if (items.length >= MAX_NOTES_CONTEXT_ITEMS) {
-          setNotice(`추가 맥락은 최대 ${MAX_NOTES_CONTEXT_ITEMS}개까지 저장할 수 있습니다.`, "warning");
-          applyRender();
-          return null;
-        }
-        return [
-          ...items,
-          { contextId: generateNotesContextId(), createdAt: now, text, updatedAt: now },
-        ];
-      }
-      
-      
-      async function deleteNotesContextItem(contextId) {
-        const normalizedContextId = normalizeText(contextId);
-        const nextItems = state.notesContext.items.filter((item) => normalizeText(item.contextId) !== normalizedContextId);
-        const resetDraft = normalizeText(state.notesContext.editingId) === normalizedContextId;
-        await saveSelectedRecordContextItems(nextItems, {
-          clearDraft: resetDraft,
-          successMessage: "추가 맥락을 삭제했습니다.",
-        });
-      }
-      
-      
-      async function upsertNotesContextDraft() {
-        const nextItems = buildUpdatedNotesContextItemsFromDraft();
-        if (!nextItems) {
           return false;
         }
-        return await saveSelectedRecordContextItems(nextItems, {
-          clearDraft: true,
-          successMessage: state.notesContext.editingId ? "추가 맥락을 수정했습니다." : "추가 맥락을 저장했습니다.",
+        if (state.termReplacementState.items.some((item) => normalizeText(item.from).toLowerCase() === from.toLowerCase())) {
+          setNotice("같은 기존 표현은 회의 안에서 한 번만 등록할 수 있습니다.", "warning");
+          applyRender();
+          return false;
+        }
+        if (state.termReplacementState.items.length >= MAX_MEETING_TERM_REPLACEMENTS) {
+          setNotice(`용어 치환은 최대 ${MAX_MEETING_TERM_REPLACEMENTS}개까지 저장할 수 있습니다.`, "warning");
+          applyRender();
+          return false;
+        }
+        state.termReplacementState.items = cloneTermReplacements([
+          ...state.termReplacementState.items,
+          { from, to },
+        ]);
+        state.termReplacementState.draftFrom = "";
+        state.termReplacementState.draftTo = "";
+        applyRender();
+        return true;
+      }
+
+      function resetTermReplacements() {
+        state.termReplacementState.items = cloneTermReplacements(state.termReplacementState.saved);
+        state.termReplacementState.draftFrom = "";
+        state.termReplacementState.draftTo = "";
+        applyRender();
+      }
+
+      function clearTermReplacements() {
+        state.termReplacementState.items = [];
+        state.termReplacementState.draftFrom = "";
+        state.termReplacementState.draftTo = "";
+        applyRender();
+      }
+
+      function removeTermReplacementAt(indexInput) {
+        const index = Math.max(-1, Number(indexInput));
+        if (index < 0 || index >= state.termReplacementState.items.length) {
+          return;
+        }
+        state.termReplacementState.items = state.termReplacementState.items.filter((_, itemIndex) => itemIndex !== index);
+        applyRender();
+      }
+
+      function handleTermReplacementListClick(event) {
+        const target = event.target.closest("[data-term-replacement-remove-index]");
+        if (!(target instanceof globalObject.HTMLElement)) {
+          return;
+        }
+        removeTermReplacementAt(target.dataset.termReplacementRemoveIndex);
+      }
+
+      function updateSectionEditSectionKey(value) {
+        const nextSectionKey = normalizeText(value) || "overview";
+        const changed = nextSectionKey !== normalizeText(state.sectionEdit.sectionKey);
+        state.sectionEdit.sectionKey = nextSectionKey;
+        if (changed) {
+          state.sectionEdit.baseRevisionToken = "";
+          state.sectionEdit.previewSectionData = null;
+          state.sectionEdit.previewSectionKey = "";
+          state.sectionEdit.statusText = "";
+          state.sectionEdit.statusTone = "";
+        }
+        applyRender();
+      }
+
+      function updateSectionEditInstruction(value) {
+        const nextInstruction = normalizeTextareaDraft(value).slice(0, MAX_MEETING_SECTION_EDIT_INSTRUCTION_CHARS);
+        const changed = nextInstruction !== normalizeText(state.sectionEdit.instruction);
+        state.sectionEdit.instruction = nextInstruction;
+        if (changed) {
+          state.sectionEdit.baseRevisionToken = "";
+          state.sectionEdit.previewSectionData = null;
+          state.sectionEdit.previewSectionKey = "";
+          state.sectionEdit.statusText = "";
+          state.sectionEdit.statusTone = "";
+        }
+        applyRender();
+      }
+
+      function resetSectionEditPreview() {
+        resetSectionEditPreviewState({
+          jobId: state.sectionEdit.jobId,
+          preserveInstruction: true,
+          recordId: state.sectionEdit.recordId,
+          sectionKey: state.sectionEdit.sectionKey,
         });
+        applyRender();
       }
-      
-      
-      function handleNotesContextListClick(event) {
-        if (
-          state.busy.deleteRecord
-          || state.busy.regenerateNotes
-          || state.busy.saveRecordContext
-          || state.busy.saveRecordMemo
-          || state.busy.saveRecordTitle
-        ) {
-          return;
-        }
-        const actionButton = event.target.closest("[data-notes-context-action]");
-        if (!(actionButton instanceof global.HTMLElement)) {
-          return;
-        }
-        const contextId = normalizeText(actionButton.dataset.notesContextId);
-        if (!contextId) {
-          return;
-        }
-        const action = normalizeText(actionButton.dataset.notesContextAction);
-        if (action === "edit") {
-          startEditingNotesContextItem(contextId);
-          return;
-        }
-        if (action === "delete") {
-          void deleteNotesContextItem(contextId);
-        }
+
+      function isLegacyMeetingResultMutationError(error) {
+        const message = normalizeText(error instanceof Error ? error.message : error?.message);
+        return message === "수정할 회의 결과 내용이 비어 있어요.";
       }
-      
-      
-      function escapeNotesContextHtml(value) {
-        return String(value || "")
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;")
-          .replace(/"/g, "&quot;")
-          .replace(/'/g, "&#39;");
+
+      function buildLegacyMeetingResultMutationErrorMessage(subject) {
+        const normalizedSubject = normalizeText(subject) || "회의 결과";
+        return `${normalizedSubject} 저장을 지원하는 최신 함수가 아직 배포되지 않았어요. npm run deploy:functions 후 다시 시도해 주세요.`;
       }
-      
-      
-      function renderNotesContextList() {
-        if (!refs.notesContextList) {
+
+      function patchSelectedRecordTitle(jobId, nextTitle) {
+        const normalizedJobId = normalizeText(jobId);
+        const normalizedTitle = normalizeText(nextTitle);
+        if (!normalizedJobId || !normalizedTitle) {
           return;
         }
-        const items = cloneNotesContextItems(state.notesContext.items);
-        refs.notesContextList.hidden = items.length === 0;
-        refs.notesContextList.innerHTML = items.map((item) => {
-          const isEditing = normalizeText(state.notesContext.editingId) === normalizeText(item.contextId);
-          return `
-            <article class="notes-context-item">
-              <div class="notes-context-item__body">${escapeNotesContextHtml(item.text).replace(/\n/g, "<br />")}</div>
-              <div class="notes-context-item__actions">
-                <button class="ghost-button" type="button" data-notes-context-action="edit" data-notes-context-id="${escapeNotesContextHtml(item.contextId)}">${isEditing ? "편집 중" : "수정"}</button>
-                <button class="ghost-button ghost-button--soft" type="button" data-notes-context-action="delete" data-notes-context-id="${escapeNotesContextHtml(item.contextId)}">삭제</button>
-              </div>
-            </article>
-          `;
-        }).join("");
-      }
-      
-      
-      async function saveMeetingTitle() { return saveMeetingPatch({ title: normalizeText(state.meetingTitleDraft || refs.meetingTitleInput.value) }, "회의 이름을 저장했습니다.", "회의 이름을 먼저 입력해 주세요."); }
-      
-      async function saveSharedMemo() {
-        updateRecordMemoDraft(refs.sharedMemoInput.value);
-        setNotice(
-          normalizeTextBlock(refs.sharedMemoInput.value)
-            ? "기록 메모를 자동 보관했습니다."
-            : "기록 메모를 비웠습니다.",
-          "highlight"
+        if (normalizeText(state.currentJob?.jobId) === normalizedJobId) {
+          state.currentJob = normalizeJob({
+            ...state.currentJob,
+            resultTitle: normalizedTitle,
+            title: normalizedTitle,
+          }, state.meeting.title);
+        }
+        state.records = (Array.isArray(state.records) ? state.records : []).map((record) =>
+          normalizeText(record?.jobId) === normalizedJobId
+            ? normalizeRecord({
+                ...record,
+                resultTitle: normalizedTitle,
+                title: normalizedTitle,
+              })
+            : record
         );
-        applyRender();
       }
-      
-      async function clearSharedMemo() {
-        refs.sharedMemoInput.value = "";
-        state.recordMemoDraft = "";
-        state.recordMemoSaved = "";
-        state.session.sharedMemo = "";
-        persistWorkspaceSession();
-        refs.sharedMemoNotice.hidden = true;
-        refs.sharedMemoNotice.textContent = "";
-        setNotice("기록 메모를 비웠습니다.", "highlight");
-        applyRender();
+
+      function patchSelectedRecordMemo(jobId, nextMemo) {
+        const normalizedJobId = normalizeText(jobId);
+        const normalizedMemo = normalizeTextBlock(nextMemo);
+        if (normalizeText(state.currentJob?.jobId) === normalizedJobId) {
+          state.currentJob = normalizeJob({
+            ...state.currentJob,
+            context: {
+              sharedMemoSnapshot: normalizedMemo,
+            },
+            sharedMemoSnapshot: normalizedMemo,
+          }, state.meeting.title);
+        }
+        state.records = (Array.isArray(state.records) ? state.records : []).map((record) =>
+          normalizeText(record?.jobId) === normalizedJobId
+            ? normalizeRecord({
+                ...record,
+                sharedMemoSnapshot: normalizedMemo,
+              })
+            : record
+        );
       }
-      
-      
+
+      function patchSelectedRecordNotes(jobId, notes, title, requestId) {
+        const normalizedJobId = normalizeText(jobId);
+        const normalizedTitle = normalizeText(title);
+        const updatedAt = new Date().toISOString();
+        const workspaceMutation = {
+          completedAt: updatedAt,
+          error: "",
+          requestedAt: updatedAt,
+          requestId: normalizeText(requestId),
+          status: "succeeded",
+          type: "applySectionEdit",
+        };
+
+        if (normalizeText(state.currentJob?.jobId) === normalizedJobId) {
+          state.currentJob = normalizeJob({
+            ...state.currentJob,
+            meetingNotes: notes,
+            title: normalizedTitle || state.currentJob.title,
+            updatedAt,
+            workspaceMutation,
+          }, state.meeting.title);
+        }
+        if (normalizeText(state.currentJob?.jobId) === normalizedJobId && state.currentArtifact) {
+          state.currentArtifact = normalizeArtifact({
+            ...state.currentArtifact,
+            notes,
+          });
+        }
+        state.records = (Array.isArray(state.records) ? state.records : []).map((record) =>
+          normalizeText(record?.jobId) === normalizedJobId
+            ? normalizeRecord({
+                ...record,
+                resultTitle: normalizedTitle || record.resultTitle || record.title,
+                title: normalizedTitle || record.title,
+                updatedAt,
+                workspaceMutation,
+              })
+            : record
+        );
+      }
+
       async function saveMeetingPatch(patch, successMessage, emptyMessage) {
         if (!state.session.meetingId) return;
-        if ("title" in patch && !patch.title && emptyMessage) { setNotice(emptyMessage, "error"); return applyRender(); }
-        const mutationType = "title" in patch ? "saveMeetingTitle" : "saveMeetingMemo";
-        const requestId = generateClientRequestId(mutationType === "saveMeetingTitle" ? "meeting-title" : "meeting-memo");
+        if ("title" in patch && !patch.title && emptyMessage) {
+          setNotice(emptyMessage, "error");
+          applyRender();
+          return;
+        }
+        const mutationType = patch.termReplacements
+          ? "saveMeetingTermReplacements"
+          : "title" in patch
+            ? "saveMeetingTitle"
+            : "saveMeetingMemo";
+        const requestId = generateClientRequestId(
+          mutationType === "saveMeetingTitle"
+            ? "meeting-title"
+            : mutationType === "saveMeetingTermReplacements"
+              ? "meeting-terms"
+              : "meeting-memo"
+        );
         registerPendingMutation({
           requestId,
           successMessage,
@@ -576,13 +652,31 @@
         });
         applyRender();
         try {
-          const payload = await postJson(global, CONFIG.updateMeetingTitleUrl, {
+          const payload = await postJson(globalObject, CONFIG.updateMeetingTitleUrl, {
             clientRequestId: requestId,
             meetingId: state.session.meetingId,
             ...patch,
           }, state.session.meetingSessionToken);
-          assertAcceptedMutationResponse(payload, requestId, "회의 정보");
-          await resolvePendingMutationsFromSnapshots();
+          assertAcceptedMutationResponse(payload, requestId, mutationType === "saveMeetingTermReplacements" ? "용어 치환" : "회의 정보");
+          if (mutationType === "saveMeetingTitle" && normalizeText(patch.title)) {
+            state.meeting.title = normalizeText(patch.title);
+            state.meetingTitleDraft = normalizeText(patch.title);
+          }
+          if (mutationType === "saveMeetingTermReplacements") {
+            state.meeting.termReplacements = cloneTermReplacements(patch.termReplacements);
+            state.termReplacementState.saved = cloneTermReplacements(patch.termReplacements);
+            state.termReplacementState.items = cloneTermReplacements(patch.termReplacements);
+            resetSectionEditPreviewState({
+              jobId: state.sectionEdit.jobId,
+              preserveInstruction: true,
+              recordId: state.sectionEdit.recordId,
+              sectionKey: state.sectionEdit.sectionKey,
+              statusText: "용어 치환을 반영했습니다. 필요하면 새 미리보기를 다시 만들어 주세요.",
+              statusTone: "highlight",
+            });
+            await refreshWorkspace(true, "workflow");
+          }
+          await finalizePendingMutation(requestId, "succeeded");
         } catch (error) {
           await finalizePendingMutation(
             requestId,
@@ -594,15 +688,295 @@
           applyRender();
         }
       }
-      
-      
+
+      async function saveMeetingTitle() {
+        return saveMeetingPatch(
+          { title: normalizeText(state.meetingTitleDraft || refs.meetingTitleInput.value) },
+          "회의 이름을 저장했습니다.",
+          "회의 이름을 먼저 입력해 주세요."
+        );
+      }
+
+      async function saveMeetingTermReplacements() {
+        if (!state.session.meetingId) {
+          return false;
+        }
+        if (!isTermReplacementDirty()) {
+          setNotice("저장할 용어 치환 변경이 없습니다.", "highlight");
+          applyRender();
+          return true;
+        }
+        return saveMeetingPatch(
+          { termReplacements: cloneTermReplacements(state.termReplacementState.items) },
+          "용어 치환을 저장했습니다."
+        );
+      }
+
+      async function saveSharedMemo() {
+        updateRecordMemoDraft(refs.sharedMemoInput.value);
+        setNotice(
+          normalizeTextBlock(refs.sharedMemoInput.value)
+            ? "기록 메모를 자동 보관했습니다."
+            : "기록 메모를 비웠습니다.",
+          "highlight"
+        );
+        applyRender();
+      }
+
+      async function clearSharedMemo() {
+        refs.sharedMemoInput.value = "";
+        state.recordMemoDraft = "";
+        state.recordMemoSaved = "";
+        state.session.sharedMemo = "";
+        persistWorkspaceSession();
+        refs.sharedMemoNotice.hidden = true;
+        refs.sharedMemoNotice.textContent = "";
+        setNotice("기록 메모를 비웠습니다.", "highlight");
+        applyRender();
+      }
+
+      async function saveSelectedRecordMemo(options = {}) {
+        const entry = findHistoryEntry(state, state.selectedRecordId);
+        if (!entry?.remote?.jobId) {
+          return false;
+        }
+        const nextMemo = normalizeTextareaDraft(
+          globalObject.document.activeElement === refs.detailMemoInput
+            ? refs.detailMemoInput.value
+            : state.selectedRecordMemo.draft
+        ).slice(0, MAX_SHARED_MEMO_CHARS);
+        if (!options.force && normalizeTextBlock(nextMemo) === normalizeTextBlock(state.selectedRecordMemo.saved)) {
+          return true;
+        }
+        const requestId = generateClientRequestId("record-memo");
+        registerPendingMutation({
+          jobId: entry.remote.jobId,
+          quiet: Boolean(options.quiet),
+          recordId: entry.id,
+          requestId,
+          successMessage: nextMemo ? "메모를 저장했습니다." : "메모를 비웠습니다.",
+          type: "saveRecordMemo",
+        });
+        applyRender();
+        try {
+          const payload = await postJson(globalObject, CONFIG.updateMeetingResultUrl, {
+            clientRequestId: requestId,
+            jobId: entry.remote.jobId,
+            meetingId: state.session.meetingId,
+            sharedMemo: nextMemo,
+          }, state.session.meetingSessionToken);
+          assertAcceptedMutationResponse(payload, requestId, "메모");
+          state.selectedRecordMemo.saved = normalizeTextBlock(nextMemo);
+          state.selectedRecordMemo.draft = normalizeTextBlock(nextMemo);
+          patchSelectedRecordMemo(entry.remote.jobId, nextMemo);
+          await finalizePendingMutation(requestId, "succeeded");
+          return true;
+        } catch (error) {
+          if (isLegacyMeetingResultMutationError(error)) {
+            logDebug("workspace.result.update.legacy-backend", {
+              jobId: entry.remote.jobId,
+              mutation: "sharedMemo",
+            });
+            await finalizePendingMutation(requestId, "failed", buildLegacyMeetingResultMutationErrorMessage("메모"));
+            return false;
+          }
+          await finalizePendingMutation(
+            requestId,
+            "failed",
+            error instanceof Error ? error.message : "메모를 저장하지 못했어요."
+          );
+          return false;
+        } finally {
+          syncWorkspaceMutationBusyState();
+          applyRender();
+        }
+      }
+
+      async function saveRecordTitleForEntry(recordId, nextTitleInput) {
+        const entry = findHistoryEntry(state, recordId);
+        const nextTitle = normalizeText(nextTitleInput);
+        if (!entry || !nextTitle) return;
+        const requestId = entry.remote?.jobId ? generateClientRequestId("record-title") : "";
+        if (entry.remote?.jobId) {
+          registerPendingMutation({
+            jobId: entry.remote.jobId,
+            recordId: entry.id,
+            requestId,
+            successMessage: "기록 이름을 저장했습니다.",
+            type: "saveRecordTitle",
+          });
+        } else {
+          state.busy.saveRecordTitle = true;
+        }
+        applyRender();
+        try {
+          if (entry.remote?.jobId) {
+            const payload = await postJson(globalObject, CONFIG.updateMeetingResultUrl, {
+              clientRequestId: requestId,
+              jobId: entry.remote.jobId,
+              meetingId: state.session.meetingId,
+              title: nextTitle,
+            }, state.session.meetingSessionToken);
+            assertAcceptedMutationResponse(payload, requestId, "기록 이름");
+            patchSelectedRecordTitle(entry.remote.jobId, nextTitle);
+            await finalizePendingMutation(requestId, "succeeded");
+          }
+          if (entry.pending?.requestId) {
+            const nextPending = { ...entry.pending, meetingTitleSnapshot: nextTitle };
+            await upsertPendingUpload(nextPending, {
+              context: {
+                phase: "record-title",
+                reason: "record-title",
+              },
+            });
+            if (!entry.remote?.jobId) {
+              state.currentJob = buildLocalPendingJob(nextPending);
+              setNotice("기록 이름을 저장했습니다.", "highlight");
+              await syncWorkspaceLocalState(true, "workflow");
+            }
+          }
+        } catch (error) {
+          if (entry.remote?.jobId) {
+            await finalizePendingMutation(
+              requestId,
+              "failed",
+              error instanceof Error ? error.message : "기록 이름을 저장하지 못했어요."
+            );
+          } else {
+            setNotice(error instanceof Error ? error.message : "기록 이름을 저장하지 못했어요.", "error");
+          }
+        } finally {
+          syncWorkspaceMutationBusyState();
+          applyRender();
+        }
+      }
+
       async function saveCurrentRecordTitle() {
         return saveRecordTitleForEntry(state.selectedRecordId, refs.recordTitleInput.value);
       }
-      
-      
+
+      async function previewSectionEdit() {
+        const entry = findHistoryEntry(state, state.selectedRecordId);
+        if (!entry?.remote?.jobId) {
+          setNotice("섹션 수정을 하려면 완료된 기록을 선택해 주세요.", "warning");
+          applyRender();
+          return false;
+        }
+        const sectionKey = normalizeText(state.sectionEdit.sectionKey) || "overview";
+        const instruction = normalizeTextareaDraft(state.sectionEdit.instruction).slice(0, MAX_MEETING_SECTION_EDIT_INSTRUCTION_CHARS);
+        if (!instruction) {
+          setNotice("섹션 수정 요청을 입력해 주세요.", "warning");
+          applyRender();
+          return false;
+        }
+        const requestId = generateClientRequestId("section-preview");
+        registerPendingMutation({
+          jobId: entry.remote.jobId,
+          quiet: true,
+          recordId: entry.id,
+          requestId,
+          type: "previewSectionEdit",
+        });
+        state.reviewTab = "notes";
+        state.sectionEdit.statusText = "미리보기를 만드는 중입니다.";
+        state.sectionEdit.statusTone = "highlight";
+        applyRender();
+        try {
+          const payload = await postJson(globalObject, CONFIG.previewMeetingResultSectionEditUrl, {
+            clientRequestId: requestId,
+            instruction,
+            jobId: entry.remote.jobId,
+            meetingId: state.session.meetingId,
+            sectionKey,
+          }, state.session.meetingSessionToken);
+          state.sectionEdit.baseRevisionToken = normalizeText(payload.baseRevisionToken);
+          state.sectionEdit.previewSectionData = payload.sectionData && typeof payload.sectionData === "object"
+            ? JSON.parse(JSON.stringify(payload.sectionData))
+            : null;
+          state.sectionEdit.previewSectionKey = normalizeText(payload.sectionKey || sectionKey) || sectionKey;
+          state.sectionEdit.statusText = "미리보기를 만들었습니다. 확인 후 적용해 주세요.";
+          state.sectionEdit.statusTone = "highlight";
+          await finalizePendingMutation(requestId, "succeeded");
+          return true;
+        } catch (error) {
+          state.sectionEdit.baseRevisionToken = "";
+          state.sectionEdit.previewSectionData = null;
+          state.sectionEdit.previewSectionKey = "";
+          state.sectionEdit.statusText = "";
+          state.sectionEdit.statusTone = "";
+          await finalizePendingMutation(
+            requestId,
+            "failed",
+            error instanceof Error ? error.message : "섹션 미리보기를 만들지 못했어요."
+          );
+          return false;
+        } finally {
+          syncWorkspaceMutationBusyState();
+          applyRender();
+        }
+      }
+
+      async function applySectionEdit() {
+        const entry = findHistoryEntry(state, state.selectedRecordId);
+        if (!entry?.remote?.jobId) {
+          setNotice("섹션 수정을 적용할 완료 기록이 필요합니다.", "warning");
+          applyRender();
+          return false;
+        }
+        if (!state.sectionEdit.baseRevisionToken || !state.sectionEdit.previewSectionData) {
+          setNotice("먼저 섹션 미리보기를 만들어 주세요.", "warning");
+          applyRender();
+          return false;
+        }
+        const requestId = generateClientRequestId("section-apply");
+        registerPendingMutation({
+          jobId: entry.remote.jobId,
+          quiet: true,
+          recordId: entry.id,
+          requestId,
+          successMessage: "선택한 섹션을 적용했습니다.",
+          type: "applySectionEdit",
+        });
+        state.reviewTab = "notes";
+        state.sectionEdit.statusText = "선택한 섹션을 적용하는 중입니다.";
+        state.sectionEdit.statusTone = "highlight";
+        applyRender();
+        try {
+          const payload = await postJson(globalObject, CONFIG.applyMeetingResultSectionEditUrl, {
+            baseRevisionToken: state.sectionEdit.baseRevisionToken,
+            clientRequestId: requestId,
+            jobId: entry.remote.jobId,
+            meetingId: state.session.meetingId,
+            sectionData: state.sectionEdit.previewSectionData,
+            sectionKey: normalizeText(state.sectionEdit.previewSectionKey || state.sectionEdit.sectionKey),
+          }, state.session.meetingSessionToken);
+          assertAcceptedMutationResponse(payload, requestId, "섹션 수정");
+          patchSelectedRecordNotes(entry.remote.jobId, payload.notes, payload.title, payload.requestId);
+          resetSectionEditPreviewState({
+            jobId: entry.remote.jobId,
+            preserveInstruction: true,
+            recordId: entry.id,
+            sectionKey: normalizeText(payload.sectionKey || state.sectionEdit.sectionKey),
+            statusText: `${resolveSectionLabel(payload.sectionKey || state.sectionEdit.sectionKey)} 섹션을 반영했습니다.`,
+            statusTone: "highlight",
+          });
+          await finalizePendingMutation(requestId, "succeeded");
+          return true;
+        } catch (error) {
+          await finalizePendingMutation(
+            requestId,
+            "failed",
+            error instanceof Error ? error.message : "섹션 수정을 적용하지 못했어요."
+          );
+          return false;
+        } finally {
+          syncWorkspaceMutationBusyState();
+          applyRender();
+        }
+      }
+
       async function deleteCurrentRecord(recordId = state.selectedRecordId) {
-        const normalizedRecordId = recordId instanceof global.Event ? state.selectedRecordId : recordId;
+        const normalizedRecordId = recordId instanceof globalObject.Event ? state.selectedRecordId : recordId;
         const entry = findHistoryEntry(state, normalizedRecordId);
         if (!entry) return;
         if (!entry.remote?.jobId && entry.pending?.requestId) {
@@ -627,13 +1001,14 @@
         });
         applyRender();
         try {
-          const payload = await postJson(global, CONFIG.deleteMeetingResultUrl, {
+          const payload = await postJson(globalObject, CONFIG.deleteMeetingResultUrl, {
             clientRequestId: requestId,
             jobId: entry.remote.jobId,
             meetingId: state.session.meetingId,
           }, state.session.meetingSessionToken);
           assertAcceptedMutationResponse(payload, requestId, "기록 삭제");
-          await resolvePendingMutationsFromSnapshots();
+          await refreshWorkspace(true, "workflow");
+          await finalizePendingMutation(requestId, "succeeded");
         } catch (error) {
           await finalizePendingMutation(
             requestId,
@@ -645,8 +1020,7 @@
           applyRender();
         }
       }
-      
-      
+
       async function deleteMeeting() {
         if (!state.session.meetingId) return;
         if (!await requestConfirmation({
@@ -664,12 +1038,13 @@
         });
         applyRender();
         try {
-          const payload = await postJson(global, CONFIG.deleteMeetingUrl, {
+          const payload = await postJson(globalObject, CONFIG.deleteMeetingUrl, {
             clientRequestId: requestId,
             meetingId: state.session.meetingId,
           }, state.session.meetingSessionToken);
           assertAcceptedMutationResponse(payload, requestId, "회의 룸 삭제");
-          await resolvePendingMutationsFromSnapshots();
+          state.meeting.deletedAt = new Date().toISOString();
+          await finalizePendingMutation(requestId, "succeeded");
         } catch (error) {
           await finalizePendingMutation(
             requestId,
@@ -681,332 +1056,155 @@
           applyRender();
         }
       }
-      
-      
-      function isLegacyMeetingResultMutationError(error) {
-        const message = normalizeText(error instanceof Error ? error.message : error?.message);
-        return message === "수정할 회의 결과 내용이 비어 있어요.";
-      }
-      
-      
-      function buildLegacyMeetingResultMutationErrorMessage(subject) {
-        const normalizedSubject = normalizeText(subject) || "회의 결과";
-        return `${normalizedSubject} 저장을 지원하는 최신 함수가 아직 배포되지 않았어요. npm run deploy:functions 후 다시 시도해 주세요.`;
-      }
-      
-      
-      async function saveSelectedRecordMemo(options = {}) {
+
+      function canRenderNotesTools() {
         const entry = findHistoryEntry(state, state.selectedRecordId);
-        if (!entry?.remote?.jobId) {
-          return false;
-        }
-        const nextMemo = normalizeTextareaDraft(
-          global.document.activeElement === refs.detailMemoInput
-            ? refs.detailMemoInput.value
-            : state.selectedRecordMemo.draft
-        ).slice(0, MAX_SHARED_MEMO_CHARS);
-        if (!options.force && normalizeTextBlock(nextMemo) === normalizeTextBlock(state.selectedRecordMemo.saved)) {
-          return true;
-        }
-        const requestId = generateClientRequestId("record-memo");
-        if (!options.quiet) {
-          registerPendingMutation({
-            jobId: entry.remote.jobId,
-            quiet: false,
-            recordId: entry.id,
-            requestId,
-            resetRecordMemoDraft: true,
-            successMessage: nextMemo ? "메모를 저장했습니다." : "메모를 비웠습니다.",
-            type: "saveRecordMemo",
-          });
-        } else {
-          state.busy.saveRecordMemo = true;
-        }
-        applyRender();
-        try {
-          const payload = await postJson(global, CONFIG.updateMeetingResultUrl, {
-            clientRequestId: requestId,
-            jobId: entry.remote.jobId,
-            meetingId: state.session.meetingId,
-            sharedMemo: nextMemo,
-          }, state.session.meetingSessionToken);
-          assertAcceptedMutationResponse(payload, requestId, "메모");
-          if (!options.quiet) {
-            await resolvePendingMutationsFromSnapshots();
-          }
-          return true;
-        } catch (error) {
-          if (isLegacyMeetingResultMutationError(error)) {
-            logDebug("workspace.result.update.legacy-backend", {
-              jobId: entry.remote.jobId,
-              mutation: "sharedMemo",
-            });
-            if (!options.quiet) {
-              await finalizePendingMutation(requestId, "failed", buildLegacyMeetingResultMutationErrorMessage("메모"));
-            } else {
-              setNotice(buildLegacyMeetingResultMutationErrorMessage("메모"), "error");
-            }
-            return false;
-          }
-          if (!options.quiet) {
-            await finalizePendingMutation(
-              requestId,
-              "failed",
-              error instanceof Error ? error.message : "메모를 저장하지 못했어요."
-            );
-          } else {
-            setNotice(error instanceof Error ? error.message : "메모를 저장하지 못했어요.", "error");
-          }
-          return false;
-        } finally {
-          syncWorkspaceMutationBusyState();
-          applyRender();
-        }
-      }
-      
-      
-      async function saveSelectedRecordContextItems(nextItemsInput, options = {}) {
-        const entry = findHistoryEntry(state, state.selectedRecordId);
-        if (!entry?.remote?.jobId) {
-          return false;
-        }
-        const nextItems = cloneNotesContextItems(nextItemsInput);
-        if (!options.force && areNotesContextItemsEqual(nextItems, state.notesContext.items)) {
-          if (options.clearDraft) {
-            state.notesContext.draft = "";
-            state.notesContext.editingId = "";
-            applyRender();
-          }
-          return true;
-        }
-        const previousItems = cloneNotesContextItems(state.notesContext.items);
-        const previousDraft = state.notesContext.draft;
-        const previousEditingId = state.notesContext.editingId;
-        state.notesContext.items = nextItems;
-        if (options.clearDraft) {
-          state.notesContext.draft = "";
-          state.notesContext.editingId = "";
-        }
-        const requestId = generateClientRequestId("record-context");
-        registerPendingMutation({
-          jobId: entry.remote.jobId,
-          quiet: !options.successMessage,
-          recordId: entry.id,
-          requestId,
-          resetNotesContextDraft: false,
-          successMessage: options.successMessage,
-          type: "saveRecordContext",
-        });
-        applyRender();
-        try {
-          const payload = await postJson(global, CONFIG.updateMeetingResultUrl, {
-            clientRequestId: requestId,
-            contextItems: nextItems,
-            jobId: entry.remote.jobId,
-            meetingId: state.session.meetingId,
-          }, state.session.meetingSessionToken);
-          assertAcceptedMutationResponse(payload, requestId, "추가 맥락");
-          await resolvePendingMutationsFromSnapshots();
-          return true;
-        } catch (error) {
-          state.notesContext.items = previousItems;
-          if (options.clearDraft) {
-            state.notesContext.draft = previousDraft;
-            state.notesContext.editingId = previousEditingId;
-          }
-          if (isLegacyMeetingResultMutationError(error)) {
-            logDebug("workspace.result.update.legacy-backend", {
-              contextItemCount: nextItems.length,
-              jobId: entry.remote.jobId,
-              mutation: "contextItems",
-            });
-            await finalizePendingMutation(requestId, "failed", buildLegacyMeetingResultMutationErrorMessage("추가 맥락"));
-            return false;
-          }
-          await finalizePendingMutation(
-            requestId,
-            "failed",
-            error instanceof Error ? error.message : "추가 맥락을 저장하지 못했어요."
-          );
-          return false;
-        } finally {
-          syncWorkspaceMutationBusyState();
-          applyRender();
-        }
-      }
-      
-      
-      async function regenerateNotes() {
-        const entry = findHistoryEntry(state, state.selectedRecordId);
-        if (!entry?.remote?.jobId) return;
-        const requestId = generateClientRequestId("regenerate-notes");
-        registerPendingMutation({
-          jobId: entry.remote.jobId,
-          recordId: entry.id,
-          requestId,
-          resetNotesContextDraft: true,
-          resetRecordMemoDraft: true,
-          reviewTab: "notes",
-          successMessage: "회의록을 업데이트했습니다.",
-          type: "regenerateNotes",
-        });
-        state.reviewTab = "notes";
-        applyRender();
-        try {
-          const persistedSharedMemo = normalizeTextBlock(
-            global.document.activeElement === refs.detailMemoInput
-              ? refs.detailMemoInput.value
-              : state.selectedRecordMemo.draft
-          ).slice(0, MAX_SHARED_MEMO_CHARS);
-          const payload = await postJson(global, CONFIG.regenerateNotesUrl, {
-            clientRequestId: requestId,
-            contextItems: cloneNotesContextItems(state.notesContext.items),
-            jobId: entry.remote.jobId,
-            meetingId: state.session.meetingId,
-            sharedMemo: persistedSharedMemo,
-          }, state.session.meetingSessionToken);
-          assertAcceptedMutationResponse(payload, requestId, "회의록 업데이트");
-          await resolvePendingMutationsFromSnapshots();
-        } catch (error) {
-          await finalizePendingMutation(
-            requestId,
-            "failed",
-            error instanceof Error ? error.message : "회의록을 업데이트하지 못했어요."
-          );
-        } finally {
-          syncWorkspaceMutationBusyState();
-          applyRender();
-        }
-      }
-      
-      
-      function getCurrentRecordTitleForMutation(entry) {
-        const activeInputValue = global.document.activeElement === refs.recordTitleInput
-          ? refs.recordTitleInput?.value
-          : "";
-        return normalizeText(
-          activeInputValue
-          || refs.recordTitleInput?.value
-          || state.currentJob?.title
-          || entry?.remote?.title
-          || entry?.pending?.meetingTitleSnapshot
-          || state.meeting.title
-          || state.session.title
-          || "새 기록"
+        const remoteStatus = normalizeText(state.currentJob?.status || entry?.remote?.status);
+        return Boolean(
+          refs.meetingNotesTools
+          && entry?.remote?.jobId
+          && !state.auth?.readOnly
+          && remoteStatus === "succeeded"
         );
       }
-      
-      
-      async function saveRecordTitleForEntry(recordId, nextTitleInput) {
-        const entry = findHistoryEntry(state, recordId);
-        const nextTitle = normalizeText(nextTitleInput);
-        if (!entry || !nextTitle) return;
-        const requestId = entry.remote?.jobId ? generateClientRequestId("record-title") : "";
-        if (entry.remote?.jobId) {
-          registerPendingMutation({
-            jobId: entry.remote.jobId,
-            recordId: entry.id,
-            requestId,
-            successMessage: "기록 이름을 저장했습니다.",
-            type: "saveRecordTitle",
-          });
-        } else {
-          state.busy.saveRecordTitle = true;
+
+      function renderTermReplacementList() {
+        if (!refs.termReplacementList) {
+          return;
         }
-        applyRender();
-        try {
-          if (entry.remote?.jobId) {
-            const payload = await postJson(global, CONFIG.updateMeetingResultUrl, {
-              clientRequestId: requestId,
-              jobId: entry.remote.jobId,
-              meetingId: state.session.meetingId,
-              title: nextTitle,
-            }, state.session.meetingSessionToken);
-            assertAcceptedMutationResponse(payload, requestId, "기록 이름");
-            await resolvePendingMutationsFromSnapshots();
-          }
-          if (entry.pending?.requestId) {
-            const nextPending = { ...entry.pending, meetingTitleSnapshot: nextTitle };
-            await upsertPendingUpload(nextPending, {
-              context: {
-                phase: "record-title",
-                reason: "record-title",
-              },
-            });
-            if (!entry.remote?.jobId) {
-              state.currentJob = buildLocalPendingJob(nextPending);
-            }
-          }
-          if (!entry.remote?.jobId) {
-            setNotice("기록 이름을 저장했습니다.", "highlight");
-            await syncWorkspaceLocalState(true, "workflow");
-          }
-        } catch (error) {
-          if (entry.remote?.jobId) {
-            await finalizePendingMutation(
-              requestId,
-              "failed",
-              error instanceof Error ? error.message : "기록 이름을 저장하지 못했어요."
-            );
-          } else {
-            setNotice(error instanceof Error ? error.message : "기록 이름을 저장하지 못했어요.", "error");
-          }
-        } finally {
-          syncWorkspaceMutationBusyState();
-          applyRender();
+        const items = cloneTermReplacements(state.termReplacementState.items);
+        refs.termReplacementList.hidden = false;
+        if (!items.length) {
+          refs.termReplacementList.innerHTML = `<div class="notice-box">아직 등록된 용어 치환이 없습니다.</div>`;
+          return;
+        }
+        refs.termReplacementList.innerHTML = items.map((item, index) => `
+          <article class="notes-term-item">
+            <div class="notes-term-item__body">
+              <strong class="notes-term-item__from">${escapeHtml(item.from)}</strong>
+              <span class="notes-term-item__arrow">→</span>
+              <span class="notes-term-item__to">${escapeHtml(item.to)}</span>
+            </div>
+            <button class="ghost-button ghost-button--soft" type="button" data-term-replacement-remove-index="${index}">삭제</button>
+          </article>
+        `).join("");
+      }
+
+      function renderSectionEditPreview() {
+        if (!refs.sectionEditPreviewCard || !refs.sectionEditPreviewBody || !refs.sectionEditPreviewTitle) {
+          return;
+        }
+        const sectionKey = normalizeText(state.sectionEdit.previewSectionKey || state.sectionEdit.sectionKey);
+        if (!sectionKey || !state.sectionEdit.previewSectionData) {
+          refs.sectionEditPreviewCard.hidden = true;
+          refs.sectionEditPreviewBody.innerHTML = "";
+          refs.sectionEditPreviewTitle.textContent = "미리보기";
+          return;
+        }
+        const sectionModel = buildMeetingNotesSectionPreview(sectionKey, state.sectionEdit.previewSectionData);
+        refs.sectionEditPreviewCard.hidden = false;
+        refs.sectionEditPreviewTitle.textContent = `${resolveSectionLabel(sectionKey)} 미리보기`;
+        refs.sectionEditPreviewBody.innerHTML = sectionModel
+          ? renderNotesSection(sectionModel)
+          : `<div class="notice-box" data-tone="warning">미리보기 결과를 표시할 수 없습니다.</div>`;
+      }
+
+      function renderMeetingNotesTools() {
+        if (!refs.meetingNotesTools) {
+          return;
+        }
+        const showTools = canRenderNotesTools();
+        refs.meetingNotesTools.hidden = !showTools;
+        if (!showTools) {
+          return;
+        }
+
+        renderTermReplacementList();
+        renderSectionEditPreview();
+
+        const readOnly = Boolean(state.auth?.readOnly);
+        const selectedRecordBusy = Boolean(
+          state.busy.applySectionEdit
+          || state.busy.deleteRecord
+          || state.busy.previewSectionEdit
+          || state.busy.saveRecordMemo
+          || state.busy.saveRecordTitle
+        );
+        const termBusy = Boolean(state.busy.saveMeetingTermReplacements);
+        const termDraftReady = Boolean(
+          normalizeText(state.termReplacementState.draftFrom)
+          && normalizeText(state.termReplacementState.draftTo)
+        );
+        const termDirty = isTermReplacementDirty();
+
+        if (refs.termReplacementDirtyBadge) refs.termReplacementDirtyBadge.hidden = !termDirty;
+        if (refs.termReplacementFromInput) refs.termReplacementFromInput.disabled = readOnly || termBusy;
+        if (refs.termReplacementToInput) refs.termReplacementToInput.disabled = readOnly || termBusy;
+        if (refs.termReplacementAddButton) refs.termReplacementAddButton.disabled = readOnly || termBusy || !termDraftReady;
+        if (refs.termReplacementResetButton) refs.termReplacementResetButton.disabled = readOnly || termBusy || !termDirty;
+        if (refs.termReplacementClearButton) refs.termReplacementClearButton.disabled = readOnly || termBusy || !state.termReplacementState.items.length;
+        if (refs.saveTermReplacementsButton) {
+          refs.saveTermReplacementsButton.disabled = readOnly || termBusy || !termDirty;
+          refs.saveTermReplacementsButton.textContent = termBusy ? "저장 중" : "용어 치환 저장";
+        }
+
+        if (refs.sectionEditSelect) refs.sectionEditSelect.disabled = readOnly || selectedRecordBusy;
+        if (refs.sectionEditInstructionInput) refs.sectionEditInstructionInput.disabled = readOnly || selectedRecordBusy;
+        if (refs.previewSectionEditButton) {
+          refs.previewSectionEditButton.disabled = readOnly
+            || selectedRecordBusy
+            || !normalizeText(state.sectionEdit.sectionKey)
+            || !normalizeText(state.sectionEdit.instruction);
+          refs.previewSectionEditButton.textContent = state.busy.previewSectionEdit ? "미리보기 생성 중" : "미리보기 만들기";
+        }
+        if (refs.cancelSectionEditButton) {
+          const hasAnyPreviewState = Boolean(
+            state.sectionEdit.baseRevisionToken
+            || state.sectionEdit.previewSectionData
+            || normalizeText(state.sectionEdit.statusText)
+          );
+          refs.cancelSectionEditButton.disabled = readOnly || selectedRecordBusy || !hasAnyPreviewState;
+        }
+        if (refs.applySectionEditButton) {
+          const hasPreview = Boolean(state.sectionEdit.baseRevisionToken && state.sectionEdit.previewSectionData);
+          refs.applySectionEditButton.disabled = readOnly || selectedRecordBusy || !hasPreview;
+          refs.applySectionEditButton.textContent = state.busy.applySectionEdit ? "적용 중" : "이 섹션만 적용";
+        }
+        if (refs.sectionEditStatus) {
+          refs.sectionEditStatus.hidden = !normalizeText(state.sectionEdit.statusText);
+          refs.sectionEditStatus.textContent = state.sectionEdit.statusText;
+          refs.sectionEditStatus.dataset.tone = normalizeText(state.sectionEdit.statusTone);
         }
       }
-      
-      
-      function updateMeetingTitleDraft(value) {
-        state.meetingTitleDraft = normalizeText(value);
-        applyRender();
-      }
-      
-      
-      function normalizeTextareaDraft(value) {
-        return String(value || "")
-          .replace(/\r\n/g, "\n")
-          .replace(/\r/g, "\n");
-      }
-      
-      
-      function updateRecordMemoDraft(value) {
-        const nextValue = normalizeTextareaDraft(value);
-        state.recordMemoDraft = nextValue;
-        state.recordMemoSaved = nextValue;
-        state.session.sharedMemo = nextValue;
-        persistWorkspaceSession();
-        refs.sharedMemoNotice.hidden = true;
-        refs.sharedMemoNotice.textContent = "";
-        applyRender();
-      }
-      
 
       return {
+        addTermReplacementDraft,
+        applySectionEdit,
         clearSharedMemo,
+        clearTermReplacements,
         deleteCurrentRecord,
         deleteMeeting,
         finalizePendingMutation,
-        handleNotesContextListClick,
-        normalizeNotesContextDraftValue,
-        regenerateNotes,
-        renderNotesContextList,
+        handleTermReplacementListClick,
+        previewSectionEdit,
+        renderMeetingNotesTools,
+        resetSectionEditPreview,
+        resetTermReplacements,
         resolvePendingMutationsFromSnapshots,
-        resetNotesContextDraft,
         saveCurrentRecordTitle,
+        saveMeetingTermReplacements,
         saveMeetingTitle,
         saveRecordTitleForEntry,
-        saveSelectedRecordContextItems,
         saveSelectedRecordMemo,
         saveSharedMemo,
         syncSelectedRecordReviewState,
         syncWorkspaceMutationBusyState,
         updateMeetingTitleDraft,
-        updateNotesContextDraft,
         updateRecordMemoDraft,
+        updateSectionEditInstruction,
+        updateSectionEditSectionKey,
         updateSelectedRecordMemoDraft,
-        upsertNotesContextDraft,
+        updateTermReplacementDraft,
       };
     },
   };

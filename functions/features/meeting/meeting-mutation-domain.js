@@ -1,8 +1,9 @@
 function createMeetingMutationDomain(deps) {
   const {
+    editableMeetingSectionKeys,
     hasOwn,
     limits,
-    normalizeMeetingNotesContextItems,
+    normalizeMeetingTermReplacements,
     normalizeText,
     normalizeTextBlock,
     supportedMeetingCommandStatuses,
@@ -14,6 +15,7 @@ function createMeetingMutationDomain(deps) {
   } = deps;
   const {
     MAX_MEETING_LIST_LIMIT,
+    MAX_MEETING_SECTION_EDIT_INSTRUCTION_CHARS,
     MAX_SHARED_MEMO_CHARS,
   } = limits;
 
@@ -28,9 +30,11 @@ function createMeetingMutationDomain(deps) {
     return {
       clientRequestId: normalizeText(input?.clientRequestId),
       hasSharedMemo: hasOwn(input, "sharedMemo"),
+      hasTermReplacements: hasOwn(input, "termReplacements"),
       hasTitle: hasOwn(input, "title"),
       meetingId: normalizeText(input?.meetingId),
       sharedMemo: normalizeTextBlock(input?.sharedMemo).slice(0, MAX_SHARED_MEMO_CHARS),
+      termReplacements: normalizeMeetingTermReplacements(input?.termReplacements),
       title: normalizeText(input?.title),
     };
   }
@@ -39,8 +43,6 @@ function createMeetingMutationDomain(deps) {
     return {
       clientRequestId: normalizeText(input?.clientRequestId),
       jobId: normalizeText(input?.jobId),
-      contextItems: normalizeMeetingNotesContextItems(input?.contextItems),
-      contextItemsProvided: hasOwn(input, "contextItems"),
       meetingId: normalizeText(input?.meetingId),
       sharedMemo: normalizeTextBlock(input?.sharedMemo).slice(0, MAX_SHARED_MEMO_CHARS),
       sharedMemoProvided: hasOwn(input, "sharedMemo"),
@@ -49,17 +51,34 @@ function createMeetingMutationDomain(deps) {
     };
   }
 
-  function normalizeMeetingNotesRegenerateRequest(input) {
+  function normalizeMeetingSectionEditPreviewRequest(input) {
     const request = input && typeof input === "object" ? input : {};
     return {
       clientRequestId: normalizeText(request.clientRequestId),
-      contextItems: normalizeMeetingNotesContextItems(request.contextItems),
-      contextItemsProvided: hasOwn(request, "contextItems"),
+      instruction: normalizeTextBlock(request.instruction).slice(0, MAX_MEETING_SECTION_EDIT_INSTRUCTION_CHARS),
       jobId: normalizeText(request.jobId),
       meetingId: normalizeText(request.meetingId),
-      sharedMemo: normalizeTextBlock(request.sharedMemo).slice(0, MAX_SHARED_MEMO_CHARS),
-      sharedMemoProvided: hasOwn(request, "sharedMemo"),
+      sectionKey: normalizeMeetingSectionKey(request.sectionKey),
     };
+  }
+
+  function normalizeMeetingSectionEditApplyRequest(input) {
+    const request = input && typeof input === "object" ? input : {};
+    return {
+      baseRevisionToken: normalizeText(request.baseRevisionToken),
+      clientRequestId: normalizeText(request.clientRequestId),
+      jobId: normalizeText(request.jobId),
+      meetingId: normalizeText(request.meetingId),
+      sectionData: request.sectionData && typeof request.sectionData === "object"
+        ? JSON.parse(JSON.stringify(request.sectionData))
+        : {},
+      sectionKey: normalizeMeetingSectionKey(request.sectionKey),
+    };
+  }
+
+  function normalizeMeetingSectionKey(value) {
+    const normalized = normalizeText(value);
+    return editableMeetingSectionKeys.has(normalized) ? normalized : "";
   }
 
   function normalizeWorkspaceMutation(input) {
@@ -98,15 +117,11 @@ function createMeetingMutationDomain(deps) {
     return {
       clientRequestId: normalizeText(command.clientRequestId),
       completedAt: normalizeText(command.completedAt),
-      contextItems: normalizeMeetingNotesContextItems(command.contextItems),
-      contextItemsProvided: Boolean(command.contextItemsProvided),
       error: normalizeText(command.error),
       jobId: normalizeText(command.jobId),
       meetingId: normalizeText(command.meetingId),
       owner: command.owner && typeof command.owner === "object" ? { ...command.owner } : {},
       requestedAt: normalizeText(command.requestedAt),
-      sharedMemo: normalizeTextBlock(command.sharedMemo).slice(0, MAX_SHARED_MEMO_CHARS),
-      sharedMemoProvided: Boolean(command.sharedMemoProvided),
       startedAt: normalizeText(command.startedAt),
       status: supportedMeetingCommandStatuses.has(status) ? status : "",
       type: supportedMeetingCommandTypes.has(type) ? type : "",
@@ -166,8 +181,9 @@ function createMeetingMutationDomain(deps) {
     normalizeMeetingDeletionTask,
     normalizeMeetingHubListRequest,
     normalizeMeetingMutationRequest,
-    normalizeMeetingNotesRegenerateRequest,
     normalizeMeetingResultMutationRequest,
+    normalizeMeetingSectionEditApplyRequest,
+    normalizeMeetingSectionEditPreviewRequest,
     normalizeMeetingTaskOwner,
     normalizeWorkspaceMutation,
   };

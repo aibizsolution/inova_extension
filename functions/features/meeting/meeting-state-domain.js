@@ -5,10 +5,10 @@ function createMeetingStateDomain(deps) {
     limits,
     normalizeMeetingContext,
     normalizeMeetingNotes,
-    normalizeMeetingNotesContextItems,
     normalizeMeetingNotesInputSnapshot,
     normalizeMeetingNotesStatus,
     normalizeMeetingSource,
+    normalizeMeetingTermReplacements,
     normalizeTranscriptSegment,
     normalizeWorkspaceMutation,
     resegmentTranscriptForReview,
@@ -64,9 +64,6 @@ function createMeetingStateDomain(deps) {
   function normalizeMeetingJob(input) {
     const job = input && typeof input === "object" ? input : {};
     const normalizedContext = normalizeMeetingContext(job.context);
-    const normalizedNotesContextItems = normalizeMeetingNotesContextItems(
-      job.notesContextItems?.length ? job.notesContextItems : normalizedContext.notesContextItems
-    );
     return {
       artifacts: Array.isArray(job.artifacts) ? job.artifacts.map(normalizeArtifactSummary) : [],
       cleanup: {
@@ -91,11 +88,9 @@ function createMeetingStateDomain(deps) {
       },
       meetingId: normalizeText(job.meetingId || job.meeting?.meetingId),
       meetingNotes: normalizeMeetingNotes(job.meetingNotes),
-      notesContextItems: normalizedNotesContextItems,
       notesDegradedReason: normalizeText(job.notesDegradedReason),
       notesGeneratedAt: normalizeText(job.notesGeneratedAt),
       notesInputSnapshot: normalizeMeetingNotesInputSnapshot(job.notesInputSnapshot, {
-        contextItems: normalizedNotesContextItems,
         sharedMemo: normalizedContext.sharedMemoSnapshot,
         updatedAt: normalizeText(job.notesGeneratedAt || job.updatedAt),
       }),
@@ -138,7 +133,6 @@ function createMeetingStateDomain(deps) {
 
   function normalizeMeetingArtifact(input) {
     const artifact = input && typeof input === "object" ? input : {};
-    const normalizedNotesContextItems = normalizeMeetingNotesContextItems(artifact.notesContextItems);
     return {
       artifactId: normalizeText(artifact.artifactId),
       createdAt: normalizeText(artifact.createdAt),
@@ -147,12 +141,10 @@ function createMeetingStateDomain(deps) {
       jobId: normalizeText(artifact.jobId),
       kind: normalizeText(artifact.kind),
       meetingId: normalizeText(artifact.meetingId),
-      notesContextItems: normalizedNotesContextItems,
       notesDegradedReason: normalizeText(artifact.notesDegradedReason),
       notes: normalizeMeetingNotes(artifact.notes),
       notesGeneratedAt: normalizeText(artifact.notesGeneratedAt),
       notesInputSnapshot: normalizeMeetingNotesInputSnapshot(artifact.notesInputSnapshot, {
-        contextItems: normalizedNotesContextItems,
         updatedAt: normalizeText(artifact.notesGeneratedAt || artifact.createdAt),
       }),
       notesStatus: normalizeMeetingNotesStatus(artifact.notesStatus),
@@ -195,6 +187,7 @@ function createMeetingStateDomain(deps) {
       sourceTabId: Math.max(0, Number(meeting.sourceTabId) || 0),
       startedAt: normalizeText(meeting.startedAt),
       status: normalizeText(meeting.status),
+      termReplacements: normalizeMeetingTermReplacements(meeting.termReplacements),
       title: normalizeText(meeting.title),
       updatedAt: normalizeText(meeting.updatedAt),
       workspaceMutation: normalizeWorkspaceMutation(meeting.workspaceMutation),
@@ -216,7 +209,6 @@ function createMeetingStateDomain(deps) {
 
   function normalizeMeetingResultSummary(input) {
     const item = input && typeof input === "object" ? input : {};
-    const normalizedNotesContextItems = normalizeMeetingNotesContextItems(item.notesContextItems);
     const sharedMemoSnapshot = normalizeTextBlock(item.sharedMemoSnapshot).slice(0, MAX_SHARED_MEMO_CHARS);
     return {
       artifactId: normalizeText(item.artifactId),
@@ -225,11 +217,9 @@ function createMeetingStateDomain(deps) {
       durationMs: Math.max(0, Number(item.durationMs) || 0),
       error: normalizeText(item.error),
       meetingId: normalizeText(item.meetingId),
-      notesContextItems: normalizedNotesContextItems,
       notesDegradedReason: normalizeText(item.notesDegradedReason),
       notesGeneratedAt: normalizeText(item.notesGeneratedAt),
       notesInputSnapshot: normalizeMeetingNotesInputSnapshot(item.notesInputSnapshot, {
-        contextItems: normalizedNotesContextItems,
         sharedMemo: sharedMemoSnapshot,
         updatedAt: normalizeText(item.notesGeneratedAt || item.updatedAt),
       }),
@@ -253,9 +243,6 @@ function createMeetingStateDomain(deps) {
     const artifact = artifactInput ? normalizeMeetingArtifact(artifactInput) : null;
     const transcriptText = normalizeText(artifact?.text || job.transcript?.text);
     const notesPreview = getMeetingNotesPreviewText(artifact?.notes || job.meetingNotes);
-    const notesContextItems = normalizeMeetingNotesContextItems(
-      artifact?.notesContextItems?.length ? artifact.notesContextItems : job.notesContextItems
-    );
     const sharedMemoSnapshot = normalizeTextBlock(job.context?.sharedMemoSnapshot).slice(0, MAX_SHARED_MEMO_CHARS);
     return normalizeMeetingResultSummary({
       artifactId: normalizeText(artifact?.artifactId || job.transcript?.artifactId || job.artifacts?.[0]?.artifactId),
@@ -265,13 +252,11 @@ function createMeetingStateDomain(deps) {
       error: job.error,
       jobId: job.jobId,
       meetingId: job.meetingId,
-      notesContextItems,
       notesDegradedReason: normalizeText(artifact?.notesDegradedReason || job.notesDegradedReason),
       notesGeneratedAt: normalizeText(artifact?.notesGeneratedAt || job.notesGeneratedAt),
       notesInputSnapshot: normalizeMeetingNotesInputSnapshot(
         artifact?.notesInputSnapshot || job.notesInputSnapshot,
         {
-          contextItems: notesContextItems,
           sharedMemo: sharedMemoSnapshot,
           updatedAt: normalizeText(artifact?.notesGeneratedAt || job.notesGeneratedAt || job.updatedAt),
         }

@@ -205,7 +205,7 @@ const codeChecks = [
   },
   {
     file: "hosting/meeting/workspace-mutations.js",
-    patterns: [/saveMeetingTitle/, /saveMeetingMemo/, /saveRecordTitleForEntry/, /renderNotesContextList/],
+    patterns: [/saveMeetingTitle/, /saveMeetingTermReplacements/, /saveRecordTitleForEntry/, /renderMeetingNotesTools/],
   },
   {
     file: "hosting/meeting/workspace-debug.js",

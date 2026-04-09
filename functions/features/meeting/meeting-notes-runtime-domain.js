@@ -3,7 +3,6 @@ function createMeetingNotesRuntimeDomain(deps) {
     createEmptyMeetingNotes,
     hasMeetingNotes,
     normalizeMeetingNotes,
-    normalizeMeetingNotesContextItems,
     normalizeMeetingNotesStatus,
     normalizeText,
     notesSchemaVersion,
@@ -21,8 +20,8 @@ function createMeetingNotesRuntimeDomain(deps) {
 
   function createMeetingNotesBundleFromNotes(notesInput, context) {
     const notes = normalizeMeetingNotes(notesInput);
-    if (normalizeMeetingNotesContextItems(context?.notesContextItems).length && !hasMeetingNotes(notes)) {
-      throw new Error("추가 맥락은 회의 정리를 비우거나 핵심 내용을 삭제하는 용도로 사용할 수 없어요. 전사와 메모를 보완하는 정보만 남겨 주세요.");
+    if (!hasMeetingNotes(notes)) {
+      throw new Error("전사에 근거한 회의 정리를 만들지 못했어요.");
     }
     return {
       notes,

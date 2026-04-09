@@ -191,11 +191,9 @@
                   <button id="reviewTabNotes" class="review-tab" type="button" data-review-tab="notes" role="tab" aria-selected="false">회의 정리</button>
                   <button id="reviewTabMemo" class="review-tab" type="button" data-review-tab="memo" role="tab" aria-selected="false">메모</button>
                   <button id="reviewTabSegments" class="review-tab" type="button" data-review-tab="segments" role="tab" aria-selected="false"><span class="review-tab__label">원문</span><span id="reviewTabSegmentsCount" class="review-tab__count" hidden>0</span></button>
-                  <button id="reviewTabContext" class="review-tab" type="button" data-review-tab="context" role="tab" aria-selected="false">추가 맥락</button>
                 </div>
                 <div id="reviewTabActions" class="review-tab-actions" hidden>
                   <button id="copyMeetingNotesButton" class="secondary-button" type="button" hidden>복사</button>
-                  <button id="updateMeetingNotesButton" class="primary-button" type="button">회의록 업데이트</button>
                 </div>
               </div>
 
@@ -215,6 +213,77 @@
               </section>
 
               <section id="meetingNotesCard" class="review-panel review-panel--notes" hidden role="tabpanel">
+                <div id="meetingNotesTools" class="notes-tools" hidden>
+                  <section class="notes-tool-card">
+                    <div class="notes-tool-card__head">
+                      <div>
+                        <p class="panel-card__eyebrow">용어 치환</p>
+                        <h3 class="notes-tool-card__title">회의 정리 보정</h3>
+                      </div>
+                      <span id="termReplacementDirtyBadge" class="chip chip--muted" hidden>변경 있음</span>
+                    </div>
+                    <p class="notes-tool-card__summary">기존 회의 정리와 이후 섹션 수정 결과에 같은 용어를 일관되게 적용합니다.</p>
+                    <div class="notes-term-editor">
+                      <div id="termReplacementList" class="notes-term-list" hidden></div>
+                      <div class="notes-term-editor__draft">
+                        <label class="input-group" for="termReplacementFromInput">
+                          <span class="input-group__label">기존 표현</span>
+                          <input id="termReplacementFromInput" class="meeting-input" type="text" placeholder="예: 박영탁" />
+                        </label>
+                        <label class="input-group" for="termReplacementToInput">
+                          <span class="input-group__label">바꿀 표현</span>
+                          <input id="termReplacementToInput" class="meeting-input" type="text" placeholder="예: 박영택" />
+                        </label>
+                      </div>
+                      <div class="review-editor__actions">
+                        <button id="termReplacementAddButton" class="secondary-button" type="button">치환 추가</button>
+                        <button id="termReplacementResetButton" class="ghost-button ghost-button--soft" type="button">변경 취소</button>
+                        <button id="termReplacementClearButton" class="ghost-button ghost-button--soft" type="button">전체 비우기</button>
+                        <button id="saveTermReplacementsButton" class="primary-button" type="button">용어 치환 저장</button>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section class="notes-tool-card">
+                    <div class="notes-tool-card__head">
+                      <div>
+                        <p class="panel-card__eyebrow">섹션 수정</p>
+                        <h3 class="notes-tool-card__title">필요한 부분만 다시 다듬기</h3>
+                      </div>
+                    </div>
+                    <p class="notes-tool-card__summary">선택한 섹션만 LLM으로 미리보기한 뒤 확인 후 적용합니다.</p>
+                    <div class="notes-section-edit">
+                      <label class="input-group" for="sectionEditSelect">
+                        <span class="input-group__label">수정할 섹션</span>
+                        <select id="sectionEditSelect" class="meeting-input">
+                          <option value="overview">회의 개요</option>
+                          <option value="discussionFlow">논의 흐름</option>
+                          <option value="decisions">주요 결정 사항</option>
+                          <option value="openQuestions">추가 결정 필요 사항</option>
+                          <option value="risksOrDependencies">리스크 및 제약</option>
+                          <option value="actionItems">후속 실행 항목</option>
+                        </select>
+                      </label>
+                      <label class="input-group input-group--textarea" for="sectionEditInstructionInput">
+                        <span class="input-group__label">수정 요청</span>
+                        <textarea id="sectionEditInstructionInput" class="meeting-textarea review-editor__textarea" rows="6" maxlength="1600" placeholder="예: 참석자 이름 표기를 통일하고, 결정 배경을 조금 더 명확하게 정리해 주세요."></textarea>
+                      </label>
+                      <div class="review-editor__actions">
+                        <button id="previewSectionEditButton" class="secondary-button" type="button">미리보기 만들기</button>
+                        <button id="cancelSectionEditButton" class="ghost-button ghost-button--soft" type="button">미리보기 지우기</button>
+                        <button id="applySectionEditButton" class="primary-button" type="button">이 섹션만 적용</button>
+                      </div>
+                      <div id="sectionEditStatus" class="subtle-text" hidden></div>
+                      <div id="sectionEditPreviewCard" class="notes-section-preview" hidden>
+                        <div class="notes-section-preview__head">
+                          <strong id="sectionEditPreviewTitle" class="notes-section-preview__title">미리보기</strong>
+                          <span class="chip chip--muted">Preview</span>
+                        </div>
+                        <div id="sectionEditPreviewBody" class="notes-section-preview__body"></div>
+                      </div>
+                    </div>
+                  </section>
+                </div>
                 <div id="meetingNotesOverview" class="notes-overview" hidden></div>
                 <div id="meetingNotesSections" class="notes-sections"></div>
               </section>
@@ -226,17 +295,6 @@
                 <div id="segmentList" class="segment-list" hidden></div>
               </section>
 
-              <section id="reviewPanelContext" class="review-panel" hidden role="tabpanel">
-                <div class="review-context">
-                  <p class="review-context__title">추가 맥락</p>
-                  <div id="notesContextList" class="notes-context-list" hidden></div>
-                  <textarea id="notesContextInput" class="meeting-textarea review-editor__textarea" rows="7" maxlength="1200" placeholder="추가 맥락이 있으면 넣어주세요."></textarea>
-                  <div class="review-editor__actions">
-                    <button id="notesContextAddButton" class="secondary-button" type="button">항목 추가</button>
-                    <button id="notesContextResetButton" class="ghost-button" type="button" hidden>수정 취소</button>
-                  </div>
-                </div>
-              </section>
             </article>
           </section>
         </section>

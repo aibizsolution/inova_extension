@@ -204,6 +204,7 @@
       || "https://asia-northeast3-browser-extension-main.cloudfunctions.net"
     );
     return {
+      applyMeetingResultSectionEditUrl: joinUrl(functionsBaseUrl, "applyInovaMeetingResultSectionEdit"),
       authorizeWorkspaceAccessUrl: joinUrl(functionsBaseUrl, "authorizeInovaMeetingWorkspaceAccess"),
       createJobUrl: joinUrl(functionsBaseUrl, "createInovaMeetingJob"),
       createShareLinkUrl: joinUrl(functionsBaseUrl, "createInovaMeetingShareLink"),
@@ -221,7 +222,7 @@
       functionsBaseUrl,
       emulators,
       issueWorkspaceAuthUrl: joinUrl(functionsBaseUrl, "issueInovaMeetingWorkspaceAuth"),
-      regenerateNotesUrl: joinUrl(functionsBaseUrl, "regenerateInovaMeetingNotes"),
+      previewMeetingResultSectionEditUrl: joinUrl(functionsBaseUrl, "previewInovaMeetingResultSectionEdit"),
       revokeShareLinkUrl: joinUrl(functionsBaseUrl, "revokeInovaMeetingShareLink"),
       uploadSourceUrl: joinUrl(functionsBaseUrl, "uploadInovaMeetingSource"),
       updateMeetingResultUrl: joinUrl(functionsBaseUrl, "updateInovaMeetingResult"),

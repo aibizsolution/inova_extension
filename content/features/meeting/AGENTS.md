@@ -30,7 +30,8 @@
 - hosted 작업실의 `파일 불러오기`는 로컬/상용 hosted 모두 같은 업로드 흐름을 쓴다. origin 차이만으로 버튼을 숨기거나 import 실행을 막지 않는다.
 - 오디오 import 길이는 메타데이터를 먼저 읽고, 실패하면 실제 decode로 다시 계산한다. 두 경로가 모두 실패할 때만 사용자 오류를 유지한다.
 - hosted 작업실은 녹음 중이거나 실제 업로드가 진행 중일 때만 브라우저 기본 이탈 경고를 유지하고, 원격 처리만 남은 상태는 과하게 막지 않는다.
-- 회의 제목은 UI에서 회의를 구분하는 편집용 라벨이다. 회의 정리/회의록 생성 prompt에는 제목이 아니라 전사, 공용 메모, 추가 맥락만 사용한다.
+- 회의 제목은 UI에서 회의를 구분하는 편집용 라벨이다. 최초 회의 정리 생성 prompt에는 제목이 아니라 전사와 공용 메모만 사용한다.
+- hosted 작업실의 회의록 보정은 전체 재생성이 아니라 `회의별 용어 치환`과 `섹션 단위 preview/apply`로 제한한다.
 - 발화가 거의 없거나 잡음에 가까운 약한 전사는 backend gate로 한 번 더 걸러 자동 회의 정리를 건너뛸 수 있어야 하며, 이 경우 이유를 사용자 문구로 드러낸다.
 - hosted 상단에는 수동 `새로고침` 액션을 기본 노출하지 않는다. meeting listener와 선택 상세 polling을 기본 동기화 경로로 유지하고, 복원 기준은 예전 URL `jobId`보다 현재 사용자가 고른 record를 우선한다.
 - 기록 상세 카드 상단은 제목과 액션 중심으로 유지하고, 진행 정보는 목록 또는 `상태` 탭에서만 본다.
@@ -40,7 +41,7 @@
 - `functions/features/meeting/meeting-launch-service.js`
 - `functions/features/meeting/meeting-summary-sync-domain.js`
 - `functions/features/meeting/meeting-deletion-domain.js`
-- `functions/features/meeting/meeting-notes-regeneration-domain.js`
+- `functions/features/meeting/meeting-notes-source-domain.js`
 
 ## 관련 데이터 경계
 - `integration_inova_meetings`
@@ -60,7 +61,8 @@
 ## 최소 검증 방법
 - 팝업 target 설정, 회의 탭 목록, hosted meeting 진입, 기존 결과 1건 조회를 확인한다.
 - 새 녹음 또는 파일 import 1회와 제목/메모/결과 수정 또는 삭제 1회를 확인한다.
-- local full-stack smoke가 필요하면 `npm run emulator:meeting-local`을 먼저 켜고, 팝업에서 `로컬 호스팅`을 고른 뒤 같은 흐름을 확인한다.
+- 회의록 보정 변경이 있으면 `용어 치환 저장 1회`, `섹션 수정 preview/apply 1회`, stale preview 재적용 거절을 함께 확인한다.
+- local full-stack smoke가 필요하면 `npm.cmd run emulator:meeting-local`을 먼저 켜고, 팝업에서 `로컬 호스팅`을 고른 뒤 같은 흐름을 확인한다.
 - hosted 상태 mismatch를 조사할 때는 실제 상용 페이지를 `?debug=1`로 열고, `docs/meeting-debug-console-validation.md` 기준으로 디버그 패널 로그와 helper 출력까지 함께 확보한다.
 - 상용 회의 데이터 정리 여부를 편하게 볼 때는 `npm run check:meeting-data`를 사용하고, 실제 삭제 전에는 `npm run delete:meeting-data -- --all` 또는 `--meeting-id <id>` dry-run을 먼저 본다.
 

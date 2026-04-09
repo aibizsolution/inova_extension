@@ -1325,6 +1325,124 @@ select:disabled {
   line-height: 1.4;
 }
 
+.notes-tools {
+  display: grid;
+  gap: 16px;
+}
+
+.notes-tool-card {
+  display: grid;
+  gap: 14px;
+  padding: 18px 18px 19px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fbfcff;
+}
+
+.notes-tool-card__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.notes-tool-card__title {
+  margin: 3px 0 0;
+  color: var(--text-strong);
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.notes-tool-card__summary {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.notes-term-editor,
+.notes-section-edit {
+  display: grid;
+  gap: 12px;
+}
+
+.notes-term-editor__draft {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.notes-term-list {
+  display: grid;
+  gap: 10px;
+}
+
+.notes-term-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.notes-term-item__body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.notes-term-item__from {
+  color: var(--text-strong);
+}
+
+.notes-term-item__arrow {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.notes-term-item__to {
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+
+.notes-section-preview {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #d5e1f3;
+  border-radius: 16px;
+  background: #f3f8ff;
+}
+
+.notes-section-preview__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.notes-section-preview__title {
+  color: #245a8a;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.notes-section-preview__body .notes-section {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
 .notes-overview {
   margin-bottom: 0;
   padding: 18px 18px;
@@ -1960,6 +2078,7 @@ select:disabled {
   .action-row,
   .inline-action-row,
   .input-group__controls,
+  .notes-tool-card__head,
   .confirm-dialog__actions {
     flex-direction: column;
     align-items: stretch;
@@ -1970,6 +2089,11 @@ select:disabled {
   .review-tabs {
     width: 100%;
     flex-wrap: wrap;
+  }
+
+  .notes-term-editor__draft {
+    width: 100%;
+    grid-template-columns: 1fr;
   }
 
   .segment-cluster > *,

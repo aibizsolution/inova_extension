@@ -48,7 +48,7 @@
 - 이 파일에는 legacy Functions 이름, handler 등록, auth 확인, Firestore/Storage/OpenAI 호출 순서, transaction/batch orchestration처럼 여러 domain을 함께 조정하는 흐름이 남을 수 있다.
 - 순수 normalize, schema shaping, prompt/transcript shaping, standalone guard처럼 경계가 분명한 규칙은 domain module로 옮기는 쪽을 우선한다.
 - 반대로 helper가 `여러 domain 결과를 엮어 하나의 workflow를 끝내는 역할`이라면, line count가 길더라도 이 파일에 남길 수 있다.
-- 추가 분리는 `job creation`, `chunk/finalize`, `notes regeneration`, `deletion/sweep`, `summary synchronization`처럼 workflow 단위가 독립적으로 설명될 때만 검토한다.
+- 추가 분리는 `job creation`, `chunk/finalize`, `section edit preview/apply`, `deletion/sweep`, `summary synchronization`처럼 workflow 단위가 독립적으로 설명될 때만 검토한다.
 - env getter나 작은 helper는 별도 lifecycle이나 독립 변경 이유가 없다면 굳이 새 파일로 빼지 않는다.
 
 ---
@@ -57,7 +57,7 @@
 
 이미 나눈 파일도 자동으로 유지 확정으로 보지 않는다. 새 철학에 맞지 않으면 다시 합치는 것도 정상적인 리팩토링으로 본다.
 
-- `meeting-transcript-domain.js`, `meeting-creation-domain.js`, `meeting-deletion-domain.js`, `meeting-notes-context-domain.js`, `meeting-notes-document-domain.js`, `meeting-notes-regeneration-domain.js`, `meeting-notes-runtime-domain.js`, `meeting-notes-source-domain.js`, `meeting-source-domain.js`, `meeting-mutation-domain.js`, `meeting-processing-domain.js`, `meeting-record-domain.js`, `meeting-state-domain.js`는 현재 기준으로 `workflow/data contract` 경계에 가까워 우선 유지 후보로 본다.
+- `meeting-transcript-domain.js`, `meeting-creation-domain.js`, `meeting-deletion-domain.js`, `meeting-notes-context-domain.js`, `meeting-notes-document-domain.js`, `meeting-notes-runtime-domain.js`, `meeting-notes-source-domain.js`, `meeting-source-domain.js`, `meeting-mutation-domain.js`, `meeting-processing-domain.js`, `meeting-record-domain.js`, `meeting-state-domain.js`는 현재 기준으로 `workflow/data contract` 경계에 가까워 우선 유지 후보로 본다.
 - `meeting-summary-sync-domain.js`는 meeting summary 문서 lifecycle을 다루는 `workflow/data contract boundary`로 유지 후보로 본다.
 - `meeting-common-domain.js`는 `meeting-service.js`, `meeting-launch-service.js`, `meeting-workspace-auth-service.js`가 함께 쓰는 `shared normalization boundary`로 승격했다.
 - `meeting-guard-domain.js`는 helper-only 경계가 약해서 `meeting-service.js`로 재통합했다.
@@ -142,11 +142,12 @@
 - meeting summary read/write, active check, recentJobs synchronization helper를 `functions/features/meeting/meeting-summary-sync-domain.js`로 분리하는 내부 분해 11차
   - meeting summary 문서 lifecycle을 하나의 workflow boundary로 설명할 수 있다고 판단
 - notes workflow 공통 transcript/artifact access와 baseline helper를 `functions/features/meeting/meeting-notes-source-domain.js`로 분리하는 내부 분해 12차
-  - notes regeneration/update가 공통으로 의존하는 source lifecycle을 하나의 workflow boundary로 설명할 수 있다고 판단
+  - notes section preview/apply와 결과 update가 공통으로 의존하는 source lifecycle을 하나의 workflow boundary로 설명할 수 있다고 판단
 - deletion queue claim/retry, result/meeting cleanup, tombstone completion check를 `functions/features/meeting/meeting-deletion-domain.js`로 분리하는 내부 분해 13차
   - deletion trigger와 sweep이 공유하는 cleanup lifecycle을 하나의 workflow boundary로 설명할 수 있다고 판단
-- notes regenerate request accept, command claim/process, 실패 workspace mutation 반영을 `functions/features/meeting/meeting-notes-regeneration-domain.js`로 분리하는 내부 분해 14차
-  - `regenerate_notes` command lifecycle을 하나의 workflow boundary로 설명할 수 있다고 판단
+- 1차 scope reset:
+  - hosted `추가 맥락`/`회의록 업데이트` 경로를 제거하고, 회의록 보정을 `termReplacements + section preview/apply`로 재정의
+  - summary model과 section edit model을 `gpt-5.4`로 맞추고, 기존 전사 파이프라인은 유지
 
 ### 아직 이것만으로 결정되지 않는 것
 
@@ -213,11 +214,12 @@
   - `listInovaMeetings`
   - `updateInovaMeeting`
   - `updateInovaMeetingResult`
+  - `previewInovaMeetingResultSectionEdit`
+  - `applyInovaMeetingResultSectionEdit`
   - `deleteInovaMeeting`
   - `deleteInovaMeetingResult`
   - `createInovaMeetingShareLink`
   - `revokeInovaMeetingShareLink`
-  - `regenerateInovaMeetingNotes`
 - processing 계열:
   - `createInovaMeetingJob`
   - `uploadInovaMeetingSource`
@@ -461,14 +463,15 @@
   - meeting summary read/write, active check, recentJobs synchronization helper를 `functions/features/meeting/meeting-summary-sync-domain.js`로 분리
   - meeting summary 문서 shape, recentJobs 의미, active/deleted 판정 규칙 변화 없음
 - meeting internal split 12차:
-  - transcript/artifact access, notes context baseline, shared memo snapshot helper를 `functions/features/meeting/meeting-notes-source-domain.js`로 분리
-  - notes regeneration/update command contract와 artifact/job persisted shape 변화 없음
+  - transcript/artifact access, shared memo snapshot, section edit source helper를 `functions/features/meeting/meeting-notes-source-domain.js`로 분리
+  - notes preview/apply와 result update contract, artifact/job persisted shape 변화 없음
 - meeting internal split 13차:
   - deletion queue claim/retry, cleanup completion check, tombstone hard delete helper를 `functions/features/meeting/meeting-deletion-domain.js`로 분리
   - deletion task, cleanup sweep, job/artifact/meeting cleanup 의미 변화 없음
-- meeting internal split 14차:
-  - regenerate request accept, command claim/process, 실패 workspace mutation 반영 helper를 `functions/features/meeting/meeting-notes-regeneration-domain.js`로 분리
-  - `regenerate_notes` command 문서 shape와 notes regenerate 결과 의미 변화 없음
+- meeting notes v1 scope reset:
+  - hosted `추가 맥락`/`회의록 업데이트` UI와 backend regenerate 경로를 제거
+  - 회의별 `termReplacements` 저장과 `preview/apply section edit` 계약을 추가
+  - 회의록 생성과 섹션 수정 모델을 `gpt-5.4`로 맞추고, shared memo는 최초 생성 입력에만 유지
 - meeting internal split 15차:
   - queued job claim/retry, chunk part worker, finalizer assembly, queue progress synchronization을 `functions/features/meeting/meeting-processing-domain.js`로 분리
   - chunk/finalize processing trigger, job/job_part/finalizer 상태 계약, artifact 생성 의미 변화 없음
@@ -479,7 +482,7 @@
   - `node scripts/verify-meeting-service.js`, `node scripts/verify-meeting-manager.js`, `node scripts/verify-content-smoke.js`를 현재 계약에 맞게 다시 녹색화
   - `updateInovaMeeting` 응답에 수정된 `meeting` payload를 복원해 hosted-only service harness 회귀를 제거
   - `npm.cmd run check:meeting-data -- --sample-size 1`로 상용 meeting 문서/결과 데이터가 아직 존재함을 확인
-  - `npm.cmd run check:function-runtime -- --functions createInovaMeetingJob,listInovaMeetings,updateInovaMeeting,regenerateInovaMeetingNotes,deleteInovaMeetingResult --since 60 --limit 10 --recent 2`로 주요 meeting HTTP 함수 config 조회 가능함을 확인
+  - `npm.cmd run check:function-runtime -- --functions createInovaMeetingJob,listInovaMeetings,updateInovaMeeting,previewInovaMeetingResultSectionEdit,applyInovaMeetingResultSectionEdit,deleteInovaMeetingResult --since 60 --limit 10 --recent 2`로 주요 meeting HTTP 함수 config 조회 가능함을 확인
   - popup `로컬 호스팅`이 local hosted workspace + panel bridge + meeting Functions/Auth/Firestore/Storage emulator를 함께 보도록 wiring하고 `npm.cmd run emulator:meeting-local` 부팅을 확인
   - 다만 실제 minor candidate 증거로 쓰려면 여전히 Chrome 수동 smoke와 기존 상용 데이터 확인이 필요
 - 철학 정렬 후속:

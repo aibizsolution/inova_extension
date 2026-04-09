@@ -80,7 +80,8 @@ feature `AGENTS.md`에는 per-session runtime 변경 기록을 누적하지 않�
 
 - meeting의 일반 HTTP 함수는 특별한 로그 근거가 없으면 `maxInstances 20`을 유지한다.
 - `createInovaMeetingJob`
-- `regenerateInovaMeetingNotes`
+- `previewInovaMeetingResultSectionEdit`
+- `applyInovaMeetingResultSectionEdit`
 - `reviewInovaPrompt`
 - `issueInovaPromptPanelAuth`
 - `loadInovaPromptLibrary`

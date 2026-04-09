@@ -311,7 +311,71 @@ function createMeetingNotesDocumentDomain(deps) {
     return buildTranscriptExcerpt(candidates.join(" "));
   }
 
+  function applyMeetingTermReplacements(notesInput, replacementsInput) {
+    const notes = normalizeMeetingNotes(notesInput);
+    const replacements = normalizeMeetingTermReplacementsInput(replacementsInput);
+    if (!replacements.length) {
+      return notes;
+    }
+    return normalizeMeetingNotes({
+      ...notes,
+      actionItems: notes.actionItems.map((item) => ({
+        ...item,
+        assignee: applyLiteralReplacements(item.assignee, replacements),
+        dueDate: applyLiteralReplacements(item.dueDate, replacements),
+        source: applyLiteralReplacements(item.source, replacements),
+        status: applyLiteralReplacements(item.status, replacements),
+        task: applyLiteralReplacements(item.task, replacements),
+      })),
+      decisions: notes.decisions.map((item) => ({
+        ...item,
+        confidence: applyLiteralReplacements(item.confidence, replacements),
+        owner: applyLiteralReplacements(item.owner, replacements),
+        text: applyLiteralReplacements(item.text, replacements),
+      })),
+      discussionFlow: notes.discussionFlow.map((item) => ({
+        ...item,
+        heading: applyLiteralReplacements(item.heading, replacements),
+        keyPoints: item.keyPoints.map((value) => applyLiteralReplacements(value, replacements)),
+        narrative: applyLiteralReplacements(item.narrative, replacements),
+      })),
+      meetingMeta: {
+        ...notes.meetingMeta,
+        datetime: applyLiteralReplacements(notes.meetingMeta.datetime, replacements),
+        participants: notes.meetingMeta.participants.map((value) => applyLiteralReplacements(value, replacements)),
+        purpose: applyLiteralReplacements(notes.meetingMeta.purpose, replacements),
+        title: applyLiteralReplacements(notes.meetingMeta.title, replacements),
+      },
+      openQuestions: notes.openQuestions.map((value) => applyLiteralReplacements(value, replacements)),
+      overview: applyLiteralReplacements(notes.overview, replacements),
+      risksOrDependencies: notes.risksOrDependencies.map((item) => ({
+        ...item,
+        severity: applyLiteralReplacements(item.severity, replacements),
+        text: applyLiteralReplacements(item.text, replacements),
+      })),
+      sourceTrace: notes.sourceTrace,
+    });
+  }
+
+  function normalizeMeetingTermReplacementsInput(input) {
+    return (Array.isArray(input) ? input : [])
+      .map((item) => ({
+        from: normalizeText(item?.from),
+        to: normalizeText(item?.to),
+      }))
+      .filter((item) => item.from && item.to);
+  }
+
+  function applyLiteralReplacements(value, replacements) {
+    let text = String(value || "");
+    for (const replacement of replacements) {
+      text = text.split(replacement.from).join(replacement.to);
+    }
+    return typeof value === "string" ? text : normalizeText(text);
+  }
+
   return {
+    applyMeetingTermReplacements,
     createEmptyMeetingNotes,
     dedupeMeetingItems,
     getMeetingNotesPreviewText,

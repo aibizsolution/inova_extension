@@ -5,7 +5,6 @@ function createMeetingNotesSourceDomain(deps) {
     maxSharedMemoChars,
     normalizeMeetingArtifact,
     normalizeMeetingJob,
-    normalizeMeetingNotesContextItems,
     normalizeMeetingNotesInputSnapshot,
     normalizeText,
     normalizeTextBlock,
@@ -44,13 +43,6 @@ function createMeetingNotesSourceDomain(deps) {
   async function loadMeetingNotesSource(jobInput, options = {}) {
     const job = normalizeMeetingJob(jobInput);
     const { artifact, artifactId, artifactRef } = await loadMeetingArtifactSource(job, options);
-    const notesContextItems = normalizeMeetingNotesContextItems(
-      artifact?.notesContextItems?.length
-        ? artifact.notesContextItems
-        : job.notesContextItems?.length
-          ? job.notesContextItems
-          : job.context?.notesContextItems
-    );
     const sharedMemoSnapshot = normalizeTextBlock(
       job.context?.sharedMemoSnapshot
       || job.meeting?.sharedMemo
@@ -59,7 +51,6 @@ function createMeetingNotesSourceDomain(deps) {
     const notesInputSnapshot = normalizeMeetingNotesInputSnapshot(
       artifact?.notesInputSnapshot?.updatedAt ? artifact.notesInputSnapshot : job.notesInputSnapshot,
       {
-        contextItems: notesContextItems,
         sharedMemo: sharedMemoSnapshot,
         updatedAt: normalizeText(artifact?.notesGeneratedAt || job.notesGeneratedAt || options.notesGeneratedAtFallback),
       }
@@ -68,7 +59,6 @@ function createMeetingNotesSourceDomain(deps) {
       artifact,
       artifactId,
       artifactRef,
-      notesContextItems,
       notesInputSnapshot,
       sharedMemoSnapshot,
     };
@@ -104,7 +94,6 @@ function createMeetingNotesSourceDomain(deps) {
           jobId: job.jobId,
           kind: "transcript",
           meetingId: job.meetingId,
-          notesContextItems: job.notesContextItems,
           notesDegradedReason: job.notesDegradedReason,
           notes: job.meetingNotes,
           notesGeneratedAt: job.notesGeneratedAt,
