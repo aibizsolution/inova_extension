@@ -11,6 +11,7 @@
 - `functions/features/meeting/meeting-notes-context-domain.js`
 - `functions/features/meeting/meeting-notes-edit-domain.js`
 - `functions/features/meeting/meeting-notes-document-domain.js`
+- `functions/features/meeting/meeting-notes-generation-domain.js`
 - `functions/features/meeting/meeting-notes-runtime-domain.js`
 - `functions/features/meeting/meeting-notes-source-domain.js`
 - `functions/features/meeting/meeting-mutation-domain.js`
@@ -43,6 +44,7 @@
 - ownership assert와 제목 동기화 helper는 service-local workflow에 가까우므로 `meeting-service.js` 안에 남긴다.
 - `meeting-creation-domain.js`, `meeting-processing-domain.js`, `meeting-summary-sync-domain.js`, `meeting-deletion-domain.js`, `meeting-notes-source-domain.js`처럼 설명 가능한 workflow/data boundary만 독립 모듈로 유지한다.
 - `meeting-notes-edit-domain.js`는 `termReplacements` 저장 이후 결과 notes 재적용과 section preview/apply, notes 기반 제목 sync를 묶는 workflow boundary다.
+- `meeting-notes-generation-domain.js`는 signal gate, full/compact notes 생성, section/reducer prompt builder, compact notes 후처리를 묶는 workflow boundary다.
 - `meeting-result-domain.js`는 결과 title/sharedMemo 수정과 record move transaction, recentJobs sync를 묶는 workflow boundary다.
 - `updateInovaMeeting`는 mutation accepted만이 아니라 수정된 `meeting` payload도 계속 돌려준다. hosted-only service harness와 response envelope 회귀 점검에서 이 계약을 유지한다.
 - 회의록 보정은 `termReplacements` 저장과 `preview/apply section edit` 두 경로로만 확장한다. 추가 맥락 기반 전체 재생성 경로는 다시 도입하지 않는다.
