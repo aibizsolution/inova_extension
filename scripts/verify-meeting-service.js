@@ -282,6 +282,28 @@ async function main() {
       .some((request) => request.kind === "notes" && request.model === "gpt-5.4"),
     true
   );
+  const shortPreviewRequestsBefore = state.openaiSummaryRequests.length;
+  const shortPreviewedSection = await invokeHandler(handlers.previewInovaMeetingResultSectionEdit, {
+    body: {
+      instruction: "10글자로 수정해줘",
+      jobId,
+      meetingId: "meeting-planning-1",
+      owner,
+      sectionKey: "overview",
+    },
+    method: "POST",
+  });
+  assert.equal(shortPreviewedSection.statusCode, 200);
+  const compactShortPreviewLength = [
+    shortPreviewedSection.jsonBody.data.sectionData.meetingMeta?.purpose || "",
+    shortPreviewedSection.jsonBody.data.sectionData.overview || "",
+  ].join("").replace(/\s+/g, "").length;
+  assert.equal(compactShortPreviewLength <= 12, true);
+  const shortPreviewRequests = state.openaiSummaryRequests.slice(shortPreviewRequestsBefore);
+  assert.equal(shortPreviewRequests.length, 2);
+  assert.equal(shortPreviewRequests[0].systemPrompt.includes("사용자 요청은 가장 높은 우선순위다."), true);
+  assert.equal(shortPreviewRequests[0].prompt.includes("현재 전체 회의록 요약 JSON"), true);
+  assert.equal(shortPreviewRequests[1].systemPrompt.includes("직전 시도는 사용자 요청을 충분히 반영하지 못했다."), true);
 
   const staleAppliedSection = await invokeHandler(handlers.applyInovaMeetingResultSectionEdit, {
     body: {

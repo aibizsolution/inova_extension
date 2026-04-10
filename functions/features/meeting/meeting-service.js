@@ -2472,31 +2472,41 @@ function registerMeetingHandlers(deps) {
     });
   }
 
-  function buildMeetingNotesSectionEditSystemPrompt(sectionKey) {
+  function buildMeetingNotesSectionEditSystemPrompt(sectionKey, options = {}) {
+    const retryReason = normalizeTextBlock(options.retryReason);
     return [
       "너는 한국어 회의록 편집기다.",
-      "전사와 현재 회의록 전체를 참고해 요청된 섹션 하나만 더 정확하고 읽기 좋게 다듬는다.",
+      "사용자 요청은 가장 높은 우선순위다.",
+      "전사와 현재 회의록 전체를 참고하되, 현재 회의록은 참고용 초안일 뿐이며 사용자 요청과 충돌하면 요청을 따른다.",
+      "요청된 섹션 하나만 수정하되, 필요하면 기존 문장을 조금 손보는 수준을 넘어서 대상 섹션을 새로 다시 써도 된다.",
+      "길이, 형식, 문체, 강조 범위, 삭제, 축약, 재구성 요청은 직접적으로 반영해야 한다.",
       "절대 전체 회의록을 다시 쓰지 않는다.",
       "요청된 섹션 외 다른 섹션 내용, sourceTrace, 원문 근거를 바꾸지 않는다.",
       "전사에 없는 사실, 결정, 액션, 담당자, 일정은 만들지 않는다.",
-      "현재 전체 회의록의 어조와 구조를 유지하되, 요청된 섹션만 수정한다.",
+      "현재 전체 회의록의 어조와 구조는 참고하되, 요청된 섹션만 수정한다.",
       "용어 치환 사전이 있으면 그 표현을 우선 사용한다.",
+      retryReason ? `직전 시도는 사용자 요청을 충분히 반영하지 못했다. 이번에는 특히 ${retryReason}` : "",
       "반드시 JSON 하나만 반환한다.",
       buildMeetingNotesSectionEditSchemaPrompt(sectionKey),
-    ].join(" ");
+    ].filter(Boolean).join(" ");
   }
 
-  function buildMeetingNotesSectionEditUserPrompt(input) {
+  function buildMeetingNotesSectionEditUserPrompt(input, options = {}) {
+    const retryReason = normalizeTextBlock(options.retryReason);
+    const instructionHints = buildMeetingNotesSectionEditInstructionHints(input.instruction);
     return [
       `섹션 키: ${input.sectionKey}`,
+      "편집 우선순위: 사용자 요청 > 전사 근거 > 현재 대상 섹션 > 현재 전체 회의록 문맥",
       input.termReplacements.length
         ? `용어 치환 사전:\n${input.termReplacements.map((item) => `- ${item.from} -> ${item.to}`).join("\n")}`
         : "용어 치환 사전: 없음",
+      instructionHints ? `반드시 지킬 제약:\n${instructionHints}` : "",
       `사용자 요청:\n${input.instruction}`,
-      `현재 전체 회의록 JSON:\n${JSON.stringify(input.currentNotes)}`,
-      `현재 대상 섹션 JSON:\n${JSON.stringify(input.currentSectionData)}`,
       `전사 발췌:\n${buildMeetingNotesTranscriptPrompt(input.transcript, { strategy: "balanced" })}`,
-    ].join("\n\n");
+      `현재 대상 섹션 JSON(수정 전):\n${JSON.stringify(input.currentSectionData)}`,
+      `현재 전체 회의록 요약 JSON(문맥 참고용, 요청보다 우선하지 않음):\n${JSON.stringify(normalizeMeetingNotesSectionSummary(input.currentNotes))}`,
+      retryReason ? `재시도 사유:\n${retryReason}` : "",
+    ].filter(Boolean).join("\n\n");
   }
 
   function buildMeetingNotesSectionEditSchemaPrompt(sectionKey) {
@@ -2516,6 +2526,129 @@ function registerMeetingHandlers(deps) {
       default:
         return "요청된 섹션 하나만 JSON으로 반환한다.";
     }
+  }
+
+  function buildMeetingNotesSectionEditInstructionHints(instructionInput) {
+    const constraint = extractMeetingNotesSectionEditConstraint(instructionInput);
+    if (!constraint) {
+      return "";
+    }
+    if (constraint.type === "maxChars") {
+      return `사람이 읽는 핵심 문구를 공백 제외 ${constraint.limit}자 안팎으로 아주 짧게 줄이고, 길이 준수를 우선한다.`;
+    }
+    return "";
+  }
+
+  function extractMeetingNotesSectionEditConstraint(instructionInput) {
+    const instruction = normalizeTextBlock(instructionInput);
+    const compactInstruction = instruction.replace(/\s+/g, "");
+    const charMatch = compactInstruction.match(/(\d{1,3})글자(?:로|만|안으로|이내|내외)?/);
+    if (charMatch) {
+      const limit = Number(charMatch[1]);
+      if (Number.isFinite(limit) && limit > 0 && limit <= 400) {
+        return {
+          limit,
+          type: "maxChars",
+        };
+      }
+    }
+    return null;
+  }
+
+  function describeMeetingNotesSectionEditConstraintViolation(sectionKey, sectionPayload, instructionInput) {
+    const constraint = extractMeetingNotesSectionEditConstraint(instructionInput);
+    if (!constraint) {
+      return "";
+    }
+    if (constraint.type === "maxChars") {
+      const compactLength = readMeetingNotesSectionVisibleText(sectionKey, sectionPayload).replace(/\s+/g, "").length;
+      const allowedLength = constraint.limit <= 20
+        ? constraint.limit + 2
+        : constraint.limit + Math.max(4, Math.ceil(constraint.limit * 0.2));
+      if (compactLength > allowedLength) {
+        return `사람이 읽는 핵심 문구를 공백 제외 ${constraint.limit}자 안팎으로 줄여야 하지만 현재 결과는 ${compactLength}자입니다.`;
+      }
+    }
+    return "";
+  }
+
+  function readMeetingNotesSectionVisibleText(sectionKey, payloadInput) {
+    const payload = normalizeMeetingNotesSectionPayload(sectionKey, payloadInput);
+    switch (sectionKey) {
+      case "overview":
+        return [
+          normalizeTextBlock(payload.meetingMeta?.purpose),
+          normalizeTextBlock(payload.overview),
+        ].filter(Boolean).join(" ");
+      case "discussionFlow":
+        return (Array.isArray(payload.discussionFlow) ? payload.discussionFlow : [])
+          .flatMap((item) => [
+            normalizeText(item?.heading),
+            normalizeTextBlock(item?.narrative),
+            ...(Array.isArray(item?.keyPoints) ? item.keyPoints.map((value) => normalizeText(value)) : []),
+          ])
+          .filter(Boolean)
+          .join(" ");
+      case "decisions":
+        return (Array.isArray(payload.decisions) ? payload.decisions : [])
+          .map((item) => normalizeText(item?.text))
+          .filter(Boolean)
+          .join(" ");
+      case "openQuestions":
+        return (Array.isArray(payload.openQuestions) ? payload.openQuestions : [])
+          .map((item) => normalizeTextBlock(item))
+          .filter(Boolean)
+          .join(" ");
+      case "risksOrDependencies":
+        return (Array.isArray(payload.risksOrDependencies) ? payload.risksOrDependencies : [])
+          .map((item) => normalizeTextBlock(item?.text))
+          .filter(Boolean)
+          .join(" ");
+      case "actionItems":
+        return (Array.isArray(payload.actionItems) ? payload.actionItems : [])
+          .map((item) => normalizeTextBlock(item?.task))
+          .filter(Boolean)
+          .join(" ");
+      default:
+        return "";
+    }
+  }
+
+  async function generateMeetingNotesSectionEditPayload(input) {
+    let retryReason = "";
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const completion = await getClient().chat.completions.create({
+        messages: [
+          {
+            role: "system",
+            content: buildMeetingNotesSectionEditSystemPrompt(input.sectionKey, { retryReason }),
+          },
+          {
+            role: "user",
+            content: buildMeetingNotesSectionEditUserPrompt(input, { retryReason }),
+          },
+        ],
+        model: getMeetingSummaryModel(),
+        response_format: { type: "json_object" },
+        temperature: 0.2,
+      });
+      const content = normalizeCompletionContent(completion?.choices?.[0]?.message?.content);
+      if (!content) {
+        retryReason = "빈 응답이 아니라 요청을 반영한 JSON을 반환해야 한다.";
+        continue;
+      }
+      const normalizedPayload = normalizeMeetingNotesSectionPayload(input.sectionKey, parseMeetingNotesJson(content));
+      const constraintViolation = describeMeetingNotesSectionEditConstraintViolation(
+        input.sectionKey,
+        normalizedPayload,
+        input.instruction
+      );
+      if (!constraintViolation) {
+        return normalizedPayload;
+      }
+      retryReason = constraintViolation;
+    }
+    throw createHttpError(502, retryReason || "섹션 미리보기를 만들지 못했어요.");
   }
 
   function assertValidMeetingTermReplacementRequest(rawInput, normalizedInput, provided, createHttpError) {
@@ -2590,33 +2723,14 @@ function registerMeetingHandlers(deps) {
 
   async function previewMeetingNotesSectionEdit(input, owner) {
     const source = await loadMeetingNotesSectionEditSource(input, owner);
-    const completion = await getClient().chat.completions.create({
-      messages: [
-        {
-          role: "system",
-          content: buildMeetingNotesSectionEditSystemPrompt(input.sectionKey),
-        },
-        {
-          role: "user",
-          content: buildMeetingNotesSectionEditUserPrompt({
-            currentNotes: source.currentNotes,
-            currentSectionData: readMeetingNotesSectionData(source.currentNotes, input.sectionKey),
-            instruction: input.instruction,
-            sectionKey: input.sectionKey,
-            termReplacements: source.termReplacements,
-            transcript: source.transcript,
-          }),
-        },
-      ],
-      model: getMeetingSummaryModel(),
-      response_format: { type: "json_object" },
-      temperature: 0.2,
+    const normalizedPayload = await generateMeetingNotesSectionEditPayload({
+      currentNotes: source.currentNotes,
+      currentSectionData: readMeetingNotesSectionData(source.currentNotes, input.sectionKey),
+      instruction: input.instruction,
+      sectionKey: input.sectionKey,
+      termReplacements: source.termReplacements,
+      transcript: source.transcript,
     });
-    const content = normalizeCompletionContent(completion?.choices?.[0]?.message?.content);
-    if (!content) {
-      throw createHttpError(502, "섹션 미리보기를 만들지 못했어요.");
-    }
-    const normalizedPayload = normalizeMeetingNotesSectionPayload(input.sectionKey, parseMeetingNotesJson(content));
     const mergedNotes = applyMeetingNotesSectionPayload(source.currentNotes, input.sectionKey, normalizedPayload);
     const nextNotes = applyMeetingTermReplacements(mergedNotes, source.termReplacements);
     return {
@@ -2818,7 +2932,15 @@ function registerMeetingHandlers(deps) {
       case "overview":
         return normalizeMeetingNotes({
           ...currentNotes,
-          meetingMeta: payload.meetingMeta,
+          meetingMeta: {
+            ...currentNotes.meetingMeta,
+            title: normalizeText(payload.meetingMeta?.title) || currentNotes.meetingMeta.title,
+            datetime: normalizeText(payload.meetingMeta?.datetime) || currentNotes.meetingMeta.datetime,
+            participants: Array.isArray(payload.meetingMeta?.participants) && payload.meetingMeta.participants.length
+              ? payload.meetingMeta.participants
+              : currentNotes.meetingMeta.participants,
+            purpose: normalizeTextBlock(payload.meetingMeta?.purpose),
+          },
           overview: payload.overview,
         });
       case "discussionFlow":

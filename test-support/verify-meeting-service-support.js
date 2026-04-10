@@ -104,6 +104,23 @@ function createDeps(state, overrides = {}) {
                   : userPrompt.includes("정리 형식(내부 판단): planning")
                     ? "planning"
                     : "general";
+              const sectionMatch = userPrompt.match(/섹션 키:\s*([a-zA-Z]+)/);
+              if (sectionMatch) {
+                return {
+                  choices: [
+                    {
+                      message: {
+                        content: JSON.stringify(createSectionEditFixture({
+                          isRetry: firstSystemMessage.includes("직전 시도는 사용자 요청을 충분히 반영하지 못했다."),
+                          mode,
+                          sectionKey: sectionMatch[1],
+                          userPrompt,
+                        })),
+                      },
+                    },
+                  ],
+                };
+              }
               return {
                 choices: [
                   {
@@ -196,6 +213,31 @@ function createNotesFixture(mode) {
     risksOrDependencies: [{ severity: "medium", text: "디자인 시안 확정이 늦어질 수 있습니다." }],
     sourceTrace: [{ evidence: "담당자 확정이 우선", itemRef: "추가 맥락", itemType: "memo" }],
   };
+}
+
+function createSectionEditFixture({ isRetry, mode, sectionKey, userPrompt }) {
+  const notes = createNotesFixture(mode);
+  if (sectionKey === "overview") {
+    const isTenCharsRequest = userPrompt.includes("10글자");
+    if (isTenCharsRequest && !isRetry) {
+      return {
+        meetingMeta: notes.meetingMeta,
+        overview: notes.overview,
+      };
+    }
+    return {
+      meetingMeta: {
+        ...notes.meetingMeta,
+        purpose: isTenCharsRequest
+          ? ""
+          : "프로모션 일정과 준비 순서를 다시 짧게 정리합니다.",
+      },
+      overview: isTenCharsRequest
+        ? "테스트 점검"
+        : "일정 확정과 초안 정리가 핵심으로 다시 정리됐습니다.",
+    };
+  }
+  return notes;
 }
 function createDb(state) {
   function ensureCollection(name) {
