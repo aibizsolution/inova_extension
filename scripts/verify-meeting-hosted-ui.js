@@ -8,12 +8,14 @@ const { JSDOM } = require("jsdom");
 const root = path.resolve(__dirname, "..");
 const hostedMeetingHtmlPath = path.join(root, "hosting", "meeting", "index.html");
 const hostedMeetingCssPath = path.join(root, "hosting", "meeting", "index.css");
+const hostedMeetingIndexPath = path.join(root, "hosting", "meeting", "index.js");
 const hostedMeetingRenderPath = path.join(root, "hosting", "meeting", "render.js");
 const hostedMeetingMutationsPath = path.join(root, "hosting", "meeting", "workspace-mutations.js");
 
 function main() {
   const html = fs.readFileSync(hostedMeetingHtmlPath, "utf8");
   const css = fs.readFileSync(hostedMeetingCssPath, "utf8");
+  const indexJs = fs.readFileSync(hostedMeetingIndexPath, "utf8");
   const renderJs = fs.readFileSync(hostedMeetingRenderPath, "utf8");
   const mutationsJs = fs.readFileSync(hostedMeetingMutationsPath, "utf8");
   const dom = new JSDOM(html);
@@ -80,6 +82,14 @@ function main() {
   assert(
     mutationsJs.includes("용어 치환 규칙을 저장했습니다. 이 회의의 정리 결과에 반영됩니다."),
     "Term replacement save flow should use the updated save feedback copy"
+  );
+  assert(
+    mutationsJs.includes("state.termReplacementState.open = false;"),
+    "Term replacement save flow should close the panel after a successful save"
+  );
+  assert(
+    indexJs.includes("if (stored === \"0\") {") && indexJs.includes("return true;"),
+    "Hosted meeting debug panel should default to collapsed unless local storage explicitly keeps it open"
   );
 
   assert.equal(document.getElementById("sectionEditStatus"), null, "Section edit dialog should not render a separate status strip");

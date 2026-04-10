@@ -288,7 +288,11 @@
   
   
   function readDebugPanelCollapsed() {
-    return normalizeText(safeLocalStorageGet(global, DEBUG_PANEL_COLLAPSED_STORAGE_KEY)) === "1";
+    const stored = normalizeText(safeLocalStorageGet(global, DEBUG_PANEL_COLLAPSED_STORAGE_KEY));
+    if (stored === "0") {
+      return false;
+    }
+    return true;
   }
 
   function cacheRefs() {

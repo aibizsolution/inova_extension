@@ -962,16 +962,17 @@ const SECTION_LABELS = Object.freeze({
             state.meeting.title = normalizeText(patch.title);
             state.meetingTitleDraft = normalizeText(patch.title);
           }
-            if (mutationType === "saveMeetingTermReplacements") {
-              state.meeting.termReplacements = cloneTermReplacements(patch.termReplacements);
-              state.termReplacementState.saved = cloneTermReplacements(patch.termReplacements);
-              state.termReplacementState.items = cloneTermReplacements(patch.termReplacements);
-              resetSectionEditPreviewState({
-                jobId: state.sectionEdit.jobId,
-                open: state.sectionEdit.open,
-                preserveInstruction: true,
-                recordId: state.sectionEdit.recordId,
-                sectionKey: state.sectionEdit.sectionKey,
+          if (mutationType === "saveMeetingTermReplacements") {
+            state.meeting.termReplacements = cloneTermReplacements(patch.termReplacements);
+            state.termReplacementState.saved = cloneTermReplacements(patch.termReplacements);
+            state.termReplacementState.items = cloneTermReplacements(patch.termReplacements);
+            state.termReplacementState.open = false;
+            resetSectionEditPreviewState({
+              jobId: state.sectionEdit.jobId,
+              open: state.sectionEdit.open,
+              preserveInstruction: true,
+              recordId: state.sectionEdit.recordId,
+              sectionKey: state.sectionEdit.sectionKey,
             });
             await refreshWorkspace(true, "workflow");
           }
