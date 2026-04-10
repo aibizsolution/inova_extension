@@ -111,6 +111,19 @@
     return { recordId: "", sharedMemo: "", updatedAt: "" };
   }
 
+  function createEmptyRecordMoveState() {
+    return {
+      error: "",
+      items: [],
+      loadRequestId: "",
+      loading: false,
+      open: false,
+      recordId: "",
+      selectedMeetingId: "",
+      submitting: false,
+    };
+  }
+
   function createEmptyTermReplacementState() {
     return {
       draftFrom: "",
@@ -161,10 +174,12 @@
       blockedTitle: "이 회의 룸은 패널에서 다시 열어야 합니다",
       blockedTone: "blocked",
       blockedMessage: "",
+      autoFocusRecordRequestId: "",
       busy: {
         applySectionEdit: false,
         deleteMeeting: false,
         deleteRecord: false,
+        moveRecord: false,
         previewSectionEdit: false,
         queue: Object.create(null),
         saveMeetingMemo: false,
@@ -226,6 +241,7 @@
         issueCodes: [],
       },
       queueStore: createPendingUploadStore(global),
+      recordMove: createEmptyRecordMoveState(),
       recordMemoDraft: "",
       recordMemoSaved: "",
       recordingProfile,
@@ -276,7 +292,7 @@
   }
 
   function cacheRefs() {
-    for (const id of ["meetingShell", "blockedMessage", "blockedEyebrow", "blockedTitle", "blockedState", "workspace", "pageTitle", "pageSummary", "workspaceBadge", "offlineQueueBadge", "refreshButton", "meetingTitleInput", "saveMeetingTitleButton", "deleteMeetingButton", "meetingStatusChip", "currentBadge", "currentSummary", "currentHint", "currentTimer", "toastNotice", "startButton", "importAudioButton", "importAudioInput", "pauseButton", "resumeButton", "stopButton", "discardButton", "sharedMemoInput", "saveSharedMemoButton", "clearSharedMemoButton", "sharedMemoNotice", "recordCountBadge", "recordList", "detailTitle", "detailBadge", "detailSummary", "recordTitleGroup", "recordTitleInput", "saveRecordTitleButton", "downloadRecordButton", "deleteRecordButton", "detailMeta", "reviewSectionHeader", "copySegmentsButton", "detailMemoInput", "saveRecordMemoButton", "reviewTabSummary", "reviewTabMemo", "reviewTabNotes", "reviewTabSegments", "reviewTabSegmentsCount", "reviewTabActions", "reviewPanelSummary", "summaryStatusPill", "summaryStatusGrid", "summaryActionCard", "reviewPanelMemo", "meetingNotesCard", "reviewPanelSegments", "copyMeetingNotesButton", "meetingNotesTools", "meetingNotesOverview", "meetingNotesSections", "detailNotice", "segmentList", "toggleTermReplacementButton", "termReplacementPanel", "termReplacementDirtyBadge", "termReplacementList", "termReplacementFromInput", "termReplacementToInput", "termReplacementAddButton", "termReplacementResetButton", "termReplacementClearButton", "saveTermReplacementsButton", "sectionEditOverlay", "sectionEditDialog", "sectionEditDialogTitle", "sectionEditDialogBody", "sectionEditTargetLabel", "closeSectionEditButton", "sectionEditInstructionInput", "previewSectionEditButton", "cancelSectionEditButton", "applySectionEditButton", "sectionEditStatus", "sectionEditPreviewCard", "sectionEditPreviewTitle", "sectionEditPreviewBody", "debugPanel", "confirmOverlay", "confirmDialog", "confirmDialogEyebrow", "confirmDialogTitle", "confirmDialogBody", "confirmDialogCancel", "confirmDialogConfirm"]) {
+    for (const id of ["meetingShell", "blockedMessage", "blockedEyebrow", "blockedTitle", "blockedState", "workspace", "pageTitle", "pageSummary", "workspaceBadge", "offlineQueueBadge", "refreshButton", "meetingTitleInput", "saveMeetingTitleButton", "deleteMeetingButton", "meetingStatusChip", "currentBadge", "currentSummary", "currentHint", "currentTimer", "toastNotice", "startButton", "importAudioButton", "importAudioInput", "pauseButton", "resumeButton", "stopButton", "discardButton", "sharedMemoInput", "saveSharedMemoButton", "clearSharedMemoButton", "sharedMemoNotice", "recordCountBadge", "recordList", "detailTitle", "detailBadge", "detailSummary", "recordTitleGroup", "recordTitleInput", "saveRecordTitleButton", "downloadRecordButton", "moveRecordButton", "deleteRecordButton", "detailMeta", "reviewSectionHeader", "copySegmentsButton", "detailMemoInput", "saveRecordMemoButton", "reviewTabSummary", "reviewTabMemo", "reviewTabNotes", "reviewTabSegments", "reviewTabSegmentsCount", "reviewTabActions", "reviewPanelSummary", "summaryStatusPill", "summaryStatusGrid", "summaryActionCard", "reviewPanelMemo", "meetingNotesCard", "reviewPanelSegments", "copyMeetingNotesButton", "meetingNotesTools", "meetingNotesOverview", "meetingNotesSections", "detailNotice", "segmentList", "toggleTermReplacementButton", "termReplacementPanel", "termReplacementDirtyBadge", "termReplacementList", "termReplacementFromInput", "termReplacementToInput", "termReplacementAddButton", "termReplacementResetButton", "termReplacementClearButton", "saveTermReplacementsButton", "sectionEditOverlay", "sectionEditDialog", "sectionEditDialogTitle", "sectionEditDialogBody", "sectionEditTargetLabel", "closeSectionEditButton", "sectionEditInstructionInput", "previewSectionEditButton", "cancelSectionEditButton", "applySectionEditButton", "sectionEditStatus", "sectionEditPreviewCard", "sectionEditPreviewTitle", "sectionEditPreviewBody", "debugPanel", "confirmOverlay", "confirmDialog", "confirmDialogEyebrow", "confirmDialogTitle", "confirmDialogBody", "confirmDialogCancel", "confirmDialogConfirm", "recordMoveOverlay", "recordMoveDialog", "recordMoveDialogTitle", "recordMoveNotice", "recordMoveList", "recordMoveCancel", "recordMoveConfirm"]) {
       refs[id] = global.document.getElementById(id);
     }
   }
@@ -595,6 +611,7 @@
         return controllers?.[name] || null;
       },
       createEmptyNotesInputSnapshotState,
+      createEmptyRecordMoveState,
       createEmptySelectedRecordMemoState,
       createEmptySectionEditState,
       createEmptyTermReplacementState,
@@ -719,6 +736,7 @@
     refs.recordList.addEventListener("click", (event) => void controllers.realtime.handleRecordListClick(event));
     refs.saveRecordTitleButton.addEventListener("click", runWritableAction("기록 이름 저장", () => void controllers.mutations.saveCurrentRecordTitle()));
     refs.downloadRecordButton.addEventListener("click", runWritableAction("기록 다운로드", controllers.capture.downloadCurrentRecord));
+    refs.moveRecordButton?.addEventListener("click", runWritableAction("기록 이동", () => void controllers.mutations.openRecordMoveDialog()));
     refs.deleteRecordButton.addEventListener("click", runWritableAction("기록 삭제", () => void controllers.mutations.deleteCurrentRecord()));
     refs.copyMeetingNotesButton?.addEventListener("click", () => void controllers.debug.copyMeetingNotes());
     refs.copySegmentsButton?.addEventListener("click", () => void controllers.debug.copySegmentsText());
@@ -750,7 +768,20 @@
         resolveConfirmation(false);
       }
     });
+    refs.recordMoveCancel?.addEventListener("click", () => controllers.mutations.closeRecordMoveDialog());
+    refs.recordMoveConfirm?.addEventListener("click", runWritableAction("기록 이동", () => void controllers.mutations.moveCurrentRecord()));
+    refs.recordMoveList?.addEventListener("click", runWritableAction("이동할 회의 룸 선택", (event) => controllers.mutations.handleRecordMoveListClick(event)));
+    refs.recordMoveOverlay?.addEventListener("click", (event) => {
+      if (event.target === refs.recordMoveOverlay) {
+        controllers.mutations.closeRecordMoveDialog();
+      }
+    });
     global.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && state.recordMove.open) {
+        event.preventDefault();
+        controllers.mutations.closeRecordMoveDialog();
+        return;
+      }
       if (event.key === "Escape" && state.confirmation.open) {
         event.preventDefault();
         resolveConfirmation(false);
@@ -862,9 +893,11 @@
     if (refs.confirmDialogTitle) refs.confirmDialogTitle.textContent = state.confirmation.title || "이 작업을 진행할까요?";
     if (refs.confirmDialogBody) refs.confirmDialogBody.textContent = state.confirmation.body || "";
     if (refs.confirmDialogConfirm) refs.confirmDialogConfirm.textContent = state.confirmation.confirmLabel || "확인";
+    controllers?.mutations?.renderRecordMoveDialog?.();
     controllers?.mutations?.renderMeetingNotesTools?.();
     const selectedRecordMutationBusy = state.busy.deleteRecord
       || state.busy.applySectionEdit
+      || state.busy.moveRecord
       || state.busy.previewSectionEdit
       || state.busy.saveRecordMemo
       || state.busy.saveRecordTitle;

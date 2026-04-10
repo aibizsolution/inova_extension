@@ -8,16 +8,32 @@
     ".chat-input__box",
     "form",
   ].join(", ");
+  const COMPOSER_SELECTOR_TIERS = [
+    "textarea.chat-input__textarea",
+    'textarea[placeholder*="무엇이든 입력하고 대화하세요"]',
+    "textarea",
+    '[role="textbox"]',
+    '[contenteditable="true"]',
+  ];
+  const COMPOSER_FALLBACK_SELECTOR_TIERS = ["input[type=\"text\"]", '[contenteditable="true"]'];
   const AUTO_SEND_OBSERVE_MS = 1200;
 
   function getComposerElement() {
-    const direct = findComposerCandidate(namespace.constants.selectors.composer);
-    if (direct) {
-      return direct;
+    for (const selector of COMPOSER_SELECTOR_TIERS) {
+      const direct = findComposerCandidate(selector);
+      if (direct) {
+        return direct;
+      }
     }
 
-    const fallback = findComposerCandidate('textarea, input[type="text"], [contenteditable="true"]');
-    return fallback || null;
+    for (const selector of COMPOSER_FALLBACK_SELECTOR_TIERS) {
+      const fallback = findComposerCandidate(selector);
+      if (fallback) {
+        return fallback;
+      }
+    }
+
+    return null;
   }
 
   function findComposerCandidate(selector) {

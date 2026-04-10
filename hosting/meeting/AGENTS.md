@@ -24,6 +24,8 @@
 
 ## UI 불변식
 - 기록 상세 카드 상단은 진행 상태 패널이 아니다. 제목/액션만 두고, pending/processing 배지나 분할 업로드 설명은 상세 카드에서 숨긴다.
+- 완료된 remote record만 기록 상세 카드 상단 action row에 `기록 이동`을 노출한다. 이동 dialog는 별도 overlay를 쓰고, 현재 회의 룸을 제외한 다른 owned 회의 룸 제목만 보여 준다.
+- 기록 이동 성공 후에는 target 회의 룸으로 자동 이동하지 않는다. 현재 룸에서 기록이 사라진 뒤 기존 selection fallback으로 다음 record를 고른다.
 - hosted boot에서는 회의 룸과 기록 목록을 먼저 그리고, 선택된 기록 상세 artifact는 비차단으로 뒤늦게 채운다.
 - 회의 룸 header 상단 우측은 destructive action 영역이 아니라 짧은 toast notice 슬롯으로 쓴다. `회의 룸 삭제`는 제목 저장 row에 둔다.
 - completed record의 review tab action row가 `회의 정리 복사`, `원문 복사`, `용어 치환`을 함께 소유한다. `원문` 탭 전용 별도 toolbar는 다시 만들지 않는다.

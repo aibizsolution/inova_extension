@@ -191,6 +191,7 @@
         refs.sharedMemoNotice.hidden = true;
         refs.sharedMemoNotice.textContent = "";
         state.reviewTab = "summary";
+        state.autoFocusRecordRequestId = pending.requestId;
         state.selectedRecordId = buildLocalSelectionId(pending.requestId);
         helpers.setNotice?.(
           state.debugLocalQueueSandbox
@@ -417,6 +418,7 @@
         cleanupMedia();
         resetCaptureState();
         state.reviewTab = "summary";
+        state.autoFocusRecordRequestId = pending.requestId;
         state.selectedRecordId = buildLocalSelectionId(pending.requestId);
         resolveRecorderStop();
         if (stopContext.continueRecording) {

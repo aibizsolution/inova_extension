@@ -51,6 +51,16 @@ function createMeetingMutationDomain(deps) {
     };
   }
 
+  function normalizeMeetingResultMoveRequest(input) {
+    const request = input && typeof input === "object" ? input : {};
+    return {
+      clientRequestId: normalizeText(request.clientRequestId),
+      jobId: normalizeText(request.jobId),
+      meetingId: normalizeText(request.meetingId),
+      targetMeetingId: normalizeText(request.targetMeetingId),
+    };
+  }
+
   function normalizeMeetingSectionEditPreviewRequest(input) {
     const request = input && typeof input === "object" ? input : {};
     return {
@@ -182,6 +192,7 @@ function createMeetingMutationDomain(deps) {
     normalizeMeetingHubListRequest,
     normalizeMeetingMutationRequest,
     normalizeMeetingResultMutationRequest,
+    normalizeMeetingResultMoveRequest,
     normalizeMeetingSectionEditApplyRequest,
     normalizeMeetingSectionEditPreviewRequest,
     normalizeMeetingTaskOwner,

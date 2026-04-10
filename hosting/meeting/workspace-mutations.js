@@ -42,6 +42,16 @@ const SECTION_LABELS = Object.freeze({
       const cloneNotesInputSnapshot = (...args) => helpers.cloneNotesInputSnapshot?.(...args);
       const cloneTermReplacements = (...args) => helpers.cloneTermReplacements?.(...args);
       const createEmptyNotesInputSnapshotState = (...args) => helpers.createEmptyNotesInputSnapshotState?.(...args);
+      const createEmptyRecordMoveState = (...args) => helpers.createEmptyRecordMoveState?.(...args) || {
+        error: "",
+        items: [],
+        loadRequestId: "",
+        loading: false,
+        open: false,
+        recordId: "",
+        selectedMeetingId: "",
+        submitting: false,
+      };
       const createEmptySectionEditState = (...args) => helpers.createEmptySectionEditState?.(...args);
       const createEmptySelectedRecordMemoState = (...args) => helpers.createEmptySelectedRecordMemoState?.(...args);
       const createEmptyTermReplacementState = (...args) => helpers.createEmptyTermReplacementState?.(...args);
@@ -99,6 +109,8 @@ const SECTION_LABELS = Object.freeze({
             return "deleteMeeting";
           case "deleteRecord":
             return "deleteRecord";
+          case "moveRecord":
+            return "moveRecord";
           case "previewSectionEdit":
             return "previewSectionEdit";
           case "saveMeetingMemo":
@@ -130,6 +142,7 @@ const SECTION_LABELS = Object.freeze({
           applySectionEdit: false,
           deleteMeeting: false,
           deleteRecord: false,
+          moveRecord: false,
           previewSectionEdit: false,
           queue: state.busy.queue || Object.create(null),
           saveMeetingMemo: false,
@@ -258,6 +271,13 @@ const SECTION_LABELS = Object.freeze({
             }
             continue;
           }
+          if (mutation.type === "moveRecord") {
+            const stillExists = state.records.some((record) => normalizeText(record.jobId) === mutation.jobId);
+            if (!stillExists) {
+              await finalizePendingMutation(mutation.requestId, "succeeded");
+            }
+            continue;
+          }
           const snapshotMutation = ["saveMeetingTitle", "saveMeetingMemo", "saveMeetingTermReplacements"].includes(mutation.type)
             ? normalizeWorkspaceMutation(state.meeting?.workspaceMutation)
             : normalizeWorkspaceMutation(
@@ -318,6 +338,226 @@ const SECTION_LABELS = Object.freeze({
         nextState.statusText = normalizeText(options.statusText);
         nextState.statusTone = normalizeText(options.statusTone);
         state.sectionEdit = nextState;
+      }
+
+      function normalizeRecordMoveTarget(item) {
+        const nextItem = item && typeof item === "object" ? item : {};
+        return {
+          meetingId: normalizeText(nextItem.meetingId),
+          title: normalizeText(nextItem.title) || "이름 없는 회의 룸",
+          updatedAt: normalizeText(nextItem.updatedAt || nextItem.createdAt),
+        };
+      }
+
+      function closeRecordMoveDialog() {
+        state.recordMove = createEmptyRecordMoveState();
+        applyRender();
+      }
+
+      function renderRecordMoveDialog() {
+        if (!refs.recordMoveOverlay || !refs.recordMoveDialog) {
+          return;
+        }
+        const dialogState = state.recordMove && typeof state.recordMove === "object"
+          ? state.recordMove
+          : createEmptyRecordMoveState();
+        refs.recordMoveOverlay.hidden = !dialogState.open;
+        if (!dialogState.open) {
+          return;
+        }
+        if (refs.recordMoveDialogTitle) {
+          refs.recordMoveDialogTitle.textContent = "이동할 회의 룸 선택";
+        }
+        const items = Array.isArray(dialogState.items) ? dialogState.items : [];
+        if (refs.recordMoveList) {
+          refs.recordMoveList.innerHTML = items.map((item) => {
+            const meetingId = normalizeText(item.meetingId);
+            const isSelected = meetingId && meetingId === normalizeText(dialogState.selectedMeetingId);
+            return `
+              <button
+                type="button"
+                class="record-move__item${isSelected ? " is-selected" : ""}"
+                data-move-meeting-id="${escapeHtml(meetingId)}"
+                role="option"
+                aria-selected="${isSelected ? "true" : "false"}"
+              >
+                ${escapeHtml(item.title)}
+              </button>
+            `;
+          }).join("");
+        }
+        const noticeText = dialogState.loading
+          ? "회의 룸 목록을 불러오는 중입니다."
+          : normalizeText(dialogState.error)
+            ? dialogState.error
+            : !items.length
+              ? "이동할 다른 회의 룸이 없습니다."
+              : "";
+        if (refs.recordMoveNotice) {
+          refs.recordMoveNotice.hidden = !noticeText;
+          refs.recordMoveNotice.textContent = noticeText;
+          refs.recordMoveNotice.dataset.tone = normalizeText(dialogState.error) ? "error" : "";
+        }
+        if (refs.recordMoveConfirm) {
+          refs.recordMoveConfirm.disabled = dialogState.loading
+            || dialogState.submitting
+            || !normalizeText(dialogState.selectedMeetingId);
+          refs.recordMoveConfirm.textContent = dialogState.submitting ? "이동 중" : "이동";
+        }
+      }
+
+      async function loadRecordMoveTargets() {
+        if (!normalizeText(CONFIG.listMeetingsUrl)) {
+          throw new Error(buildMeetingMutationContractErrorMessage("회의 룸 목록"));
+        }
+        const items = [];
+        const seen = new Set();
+        let cursor = "";
+        for (let page = 0; page < 10; page += 1) {
+          const payload = await postJson(globalObject, CONFIG.listMeetingsUrl, {
+            cursor,
+            limit: 24,
+          }, state.session.meetingSessionToken);
+          const nextItems = (Array.isArray(payload?.items) ? payload.items : [])
+            .map(normalizeRecordMoveTarget)
+            .filter((item) => item.meetingId)
+            .filter((item) => item.meetingId !== normalizeText(state.session.meetingId))
+            .filter((item) => {
+              const key = normalizeText(item.meetingId);
+              if (!key || seen.has(key)) {
+                return false;
+              }
+              seen.add(key);
+              return true;
+            });
+          items.push(...nextItems);
+          const nextCursor = normalizeText(payload?.nextCursor);
+          if (!nextCursor) {
+            break;
+          }
+          cursor = nextCursor;
+        }
+        return items.sort((left, right) => {
+          const rightTime = Date.parse(normalizeText(right.updatedAt || "")) || 0;
+          const leftTime = Date.parse(normalizeText(left.updatedAt || "")) || 0;
+          return rightTime - leftTime;
+        });
+      }
+
+      async function openRecordMoveDialog(recordId = state.selectedRecordId) {
+        const normalizedRecordId = recordId instanceof globalObject.Event ? state.selectedRecordId : recordId;
+        const entry = findHistoryEntry(state, normalizedRecordId);
+        if (!entry?.remote?.jobId || normalizeText(entry.remote.status) !== "succeeded") {
+          return false;
+        }
+        const loadRequestId = generateClientRequestId("move-record-dialog");
+        state.recordMove = {
+          error: "",
+          items: [],
+          loadRequestId,
+          loading: true,
+          open: true,
+          recordId: entry.id,
+          selectedMeetingId: "",
+          submitting: false,
+        };
+        applyRender();
+        try {
+          const items = await loadRecordMoveTargets();
+          if (!state.recordMove.open || normalizeText(state.recordMove.loadRequestId) !== loadRequestId) {
+            return false;
+          }
+          state.recordMove = {
+            ...state.recordMove,
+            error: "",
+            items,
+            loading: false,
+            selectedMeetingId: "",
+          };
+          applyRender();
+          return true;
+        } catch (error) {
+          if (!state.recordMove.open || normalizeText(state.recordMove.loadRequestId) !== loadRequestId) {
+            return false;
+          }
+          state.recordMove = {
+            ...state.recordMove,
+            error: error instanceof Error ? error.message : "회의 룸 목록을 불러오지 못했어요.",
+            items: [],
+            loading: false,
+            selectedMeetingId: "",
+          };
+          applyRender();
+          return false;
+        }
+      }
+
+      function handleRecordMoveListClick(event) {
+        const target = event?.target?.closest?.("[data-move-meeting-id]");
+        if (!target) {
+          return;
+        }
+        state.recordMove = {
+          ...state.recordMove,
+          selectedMeetingId: normalizeText(target.dataset.moveMeetingId),
+        };
+        applyRender();
+      }
+
+      async function moveCurrentRecord() {
+        const targetMeetingId = normalizeText(state.recordMove?.selectedMeetingId);
+        const entry = findHistoryEntry(state, state.recordMove?.recordId || state.selectedRecordId);
+        if (!entry?.remote?.jobId || !targetMeetingId) {
+          return false;
+        }
+        if (!normalizeText(CONFIG.moveMeetingResultUrl)) {
+          setNotice(buildMeetingMutationContractErrorMessage("기록 이동"), "error");
+          applyRender();
+          return false;
+        }
+        const requestId = generateClientRequestId("move-record");
+        registerPendingMutation({
+          jobId: entry.remote.jobId,
+          quiet: true,
+          recordId: entry.id,
+          requestId,
+          type: "moveRecord",
+        });
+        state.recordMove = {
+          ...state.recordMove,
+          error: "",
+          submitting: true,
+        };
+        applyRender();
+        try {
+          const payload = await postJson(globalObject, CONFIG.moveMeetingResultUrl, {
+            clientRequestId: requestId,
+            jobId: entry.remote.jobId,
+            meetingId: state.session.meetingId,
+            targetMeetingId,
+          }, state.session.meetingSessionToken);
+          assertAcceptedMutationResponse(payload, requestId, "기록 이동");
+          closeRecordMoveDialog();
+          setNotice("기록을 다른 회의 룸으로 이동했습니다.", "highlight");
+          await refreshWorkspace(false, "move-record");
+          await resolvePendingMutationsFromSnapshots();
+          return true;
+        } catch (error) {
+          state.recordMove = {
+            ...state.recordMove,
+            error: error instanceof Error ? error.message : "기록을 이동하지 못했어요.",
+            submitting: false,
+          };
+          await finalizePendingMutation(
+            requestId,
+            "failed",
+            error instanceof Error ? error.message : "기록을 이동하지 못했어요."
+          );
+          return false;
+        } finally {
+          syncWorkspaceMutationBusyState();
+          applyRender();
+        }
       }
 
       function syncTermReplacementState() {
@@ -1178,6 +1418,7 @@ const SECTION_LABELS = Object.freeze({
         const selectedRecordBusy = Boolean(
           state.busy.applySectionEdit
           || state.busy.deleteRecord
+          || state.busy.moveRecord
           || state.busy.previewSectionEdit
           || state.busy.saveRecordMemo
           || state.busy.saveRecordTitle
@@ -1242,14 +1483,19 @@ const SECTION_LABELS = Object.freeze({
         applySectionEdit,
         clearSharedMemo,
         clearTermReplacements,
+        closeRecordMoveDialog,
         closeSectionEdit,
         deleteCurrentRecord,
         deleteMeeting,
         finalizePendingMutation,
         handleMeetingNotesSectionAction,
+        handleRecordMoveListClick,
         handleTermReplacementListClick,
+        moveCurrentRecord,
+        openRecordMoveDialog,
         openSectionEdit,
         previewSectionEdit,
+        renderRecordMoveDialog,
         renderMeetingNotesTools,
         resetSectionEditPreview,
         resetTermReplacements,

@@ -214,6 +214,7 @@
   - `listInovaMeetings`
   - `updateInovaMeeting`
   - `updateInovaMeetingResult`
+  - `moveInovaMeetingResult`
   - `previewInovaMeetingResultSectionEdit`
   - `applyInovaMeetingResultSectionEdit`
   - `deleteInovaMeeting`
@@ -406,6 +407,24 @@
 
 ## 세션 인계 로그
 
+### 2026-04-10
+
+- `codex/add-lightweight-lint` 작업선이 한 번 `main`에 안 들어간 채 정리된 사실을 확인했고, 복구 PR로 현재 `main`에 다시 통합했다.
+- full-local wiring과 meeting notes v1 reset이 반영된 현재 `main` 기준으로 작업을 재시작했다. `codex/move-meeting-record`는 참고용으로만 두고, 현재 기준선에서 회의 기록 이동 기능을 다시 붙였다.
+- legacy baseline surface는 유지했다.
+  - hosted origin/path 변화 없음
+  - mutable namespace 변화 없음
+  - meeting Functions family에 `moveInovaMeetingResult`를 추가
+  - popup `로컬 호스팅`과 shared meeting functions config는 기존 full-local rehearsal 경계를 유지한 채 move endpoint만 확장
+- hosted 작업실에는 완료된 remote record 전용 `기록 이동` action과 별도 `recordMoveOverlay`를 추가했다.
+  - 이동 대상 목록은 현재 회의 룸을 제외한 다른 owned 회의 룸 제목만 노출
+  - 성공 후 target 회의 룸으로 자동 이동하지 않고 현재 룸에 남아 selection fallback으로 정리
+- 검증:
+  - `node scripts/verify-meeting-service.js`
+  - `node scripts/verify-meeting-hosted-ui.js`
+  - `npm.cmd run verify`
+- 다음 시작점:
+  - 로컬 full-stack에서 실제 record move smoke 1회를 확인하고, 이후 상용 반영이 필요하면 `functions + hosting + extension reload/배포` 범위를 함께 판단
 ### 2026-04-08
 
 - 기준 구현 앵커: `ce38835`

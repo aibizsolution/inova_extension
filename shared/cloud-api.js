@@ -134,6 +134,21 @@
     return payload?.data || { items: [], nextCursor: "" };
   }
 
+  async function moveInovaMeetingResult(input, providerIdentity, accessToken, requestOptions = {}) {
+    const meetingFunctions = resolveFunctionsConfig(requestOptions.functionsConfig);
+    const payload = await postJson(
+      meetingFunctions.moveInovaMeetingResultUrl,
+      {
+        clientRequestId: input?.clientRequestId || "",
+        jobId: input?.jobId || "",
+        meetingId: input?.meetingId || "",
+        targetMeetingId: input?.targetMeetingId || "",
+      },
+      accessToken
+    );
+    return payload?.data || {};
+  }
+
   async function authorizeInovaMeetingWorkspaceAccess(input, providerIdentity, accessToken, requestOptions = {}) {
     const meetingFunctions = resolveFunctionsConfig(requestOptions.functionsConfig);
     const payload = await postJson(
@@ -314,6 +329,7 @@
     importPromptStoreEntry,
     listPromptStoreEntries,
     loadInovaPromptLibrary,
+    moveInovaMeetingResult,
     peekInovaPromptLibrary,
     publishPromptToStore,
     recordPromptStoreView,
