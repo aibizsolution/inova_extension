@@ -1,6 +1,7 @@
 # Functions Runtime Guide
 
 이 문서는 Firebase Functions runtime 설정을 앞으로 어떻게 유지·점검·조정할지 정하는 운영 가이드다. 목표는 `모든 함수를 매번 손으로 튜닝`하는 것이 아니라, `기본 프로파일을 표준으로 두고 예외 함수만 로그 근거로 조정`하는 것이다.
+feature `AGENTS.md`에는 per-session runtime 변경 기록을 누적하지 않고, 계속 유지할 runtime 기준과 운영 판단은 이 문서에서 관리한다.
 
 ## 1. 운영 원칙
 
@@ -79,7 +80,8 @@
 
 - meeting의 일반 HTTP 함수는 특별한 로그 근거가 없으면 `maxInstances 20`을 유지한다.
 - `createInovaMeetingJob`
-- `regenerateInovaMeetingNotes`
+- `previewInovaMeetingResultSectionEdit`
+- `applyInovaMeetingResultSectionEdit`
 - `reviewInovaPrompt`
 - `issueInovaPromptPanelAuth`
 - `loadInovaPromptLibrary`

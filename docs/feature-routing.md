@@ -11,6 +11,7 @@
 - `popup`, `background/service-worker.js`, `content/main.js`, `content/panel.js`, `functions/index.js`, `manifest.json`, `shared/*`는 platform/shell이다.
 - prompt 계열의 공용 탭 셸인 `content/prompt-hub-view.js`, `content/prompt-hub-state.js`, `content/prompt-hub-panel.js`, `content/prompt-hub-controller.js`, `content/prompt-hub-runtime.js`는 단일 feature 소유가 아니라 prompt tool shell로 취급한다.
 - 두 번째 primary feature를 읽어야 하거나 `content + functions + hosting` 3축을 함께 수정해야 하면 먼저 커밋 또는 다음 세션 분리를 제안한다.
+- 이유: 내부 ZIP 배포 환경에서는 세 축이 서로 다른 시점에 섞여 적용될 수 있어 mixed-version 검증 매트릭스와 rollback 범위가 급격히 커진다.
 
 ## Feature Map
 

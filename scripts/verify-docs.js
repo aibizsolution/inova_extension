@@ -11,8 +11,10 @@ const requiredFiles = [
   "manifest.json",
   "README.md",
   path.join(".githooks", "pre-push"),
+  path.join("scripts", "verify-refactor-plan-update.js"),
   path.join("docs", "feature-spec.md"),
   path.join("docs", "feature-routing.md"),
+  path.join("docs", "lint-workflow.md"),
   "popup/index.html",
   "popup/index.js",
   path.join("content", "features", "conversation", "AGENTS.md"),
@@ -80,6 +82,14 @@ const readmeOnlyKeywordGroups = [
     name: "Feature 문서 가드",
     patterns: [/pre-push/i, /feature\s+`AGENTS\.md`/i, /hooks:install|verify:feature-doc-guard/],
   },
+  {
+    name: "Lint 가이드 링크",
+    patterns: [/docs\/lint-workflow\.md/i, /lint-workflow/i],
+  },
+  {
+    name: "Lint 명령",
+    patterns: [/npm run lint/i, /lint를 포함/i],
+  },
 ];
 
 const featureDocContracts = [
@@ -140,6 +150,14 @@ const featureDocContracts = [
 
 const codeChecks = [
   {
+    file: path.join(".githooks", "pre-commit"),
+    patterns: [/verify-refactor-plan-update\.js/, /verify-feature-doc-update\.js/, /verify-release-metadata\.js/],
+  },
+  {
+    file: path.join(".githooks", "pre-push"),
+    patterns: [/verify-refactor-plan-update\.js/, /verify-feature-doc-update\.js/, /verify-release-metadata\.js/],
+  },
+  {
     file: "manifest.json",
     patterns: [
       /"default_popup"\s*:\s*"popup\/index\.html"/,
@@ -187,7 +205,7 @@ const codeChecks = [
   },
   {
     file: "hosting/meeting/workspace-mutations.js",
-    patterns: [/saveMeetingTitle/, /saveMeetingMemo/, /saveRecordTitleForEntry/, /renderNotesContextList/],
+    patterns: [/saveMeetingTitle/, /saveMeetingTermReplacements/, /saveRecordTitleForEntry/, /renderMeetingNotesTools/],
   },
   {
     file: "hosting/meeting/workspace-debug.js",

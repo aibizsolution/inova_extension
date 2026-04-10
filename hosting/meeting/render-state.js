@@ -32,53 +32,45 @@
     };
   }
 
-  function normalizeNotesContextItem(item) {
+  function normalizeTermReplacement(item) {
     const nextItem = item && typeof item === "object" ? item : {};
     return {
-      contextId: normalizeText(nextItem.contextId || nextItem.id),
-      createdAt: normalizeText(nextItem.createdAt),
-      text: normalizeTextBlock(nextItem.text || nextItem.context || nextItem.value),
-      updatedAt: normalizeText(nextItem.updatedAt || nextItem.createdAt),
+      from: normalizeText(nextItem.from),
+      to: normalizeText(nextItem.to),
     };
   }
 
-  function normalizeNotesContextItems(input) {
+  function normalizeTermReplacements(input) {
     const seen = new Set();
-    const items = [];
+    const replacements = [];
     for (const item of Array.isArray(input) ? input : []) {
-      const normalized = normalizeNotesContextItem(item);
-      const key = normalizeText(normalized.contextId || normalized.text).toLowerCase();
-      if (!normalized.text || (key && seen.has(key))) {
+      const normalized = normalizeTermReplacement(item);
+      const key = normalizeText(normalized.from).toLowerCase();
+      if (!normalized.from || !normalized.to || seen.has(key)) {
         continue;
       }
-      if (key) {
-        seen.add(key);
-      }
-      items.push(normalized);
+      seen.add(key);
+      replacements.push(normalized);
     }
-    return items;
+    return replacements;
   }
 
   function normalizeNotesInputSnapshot(input, fallbackInput) {
     const snapshot = input && typeof input === "object" ? input : {};
     const fallback = fallbackInput && typeof fallbackInput === "object" ? fallbackInput : {};
-    const hasContextItems = Array.isArray(snapshot.contextItems);
     const sharedMemo = normalizeTextBlock(
       Object.prototype.hasOwnProperty.call(snapshot, "sharedMemo")
         ? snapshot.sharedMemo
         : fallback.sharedMemo
     );
-    const contextItems = normalizeNotesContextItems(hasContextItems ? snapshot.contextItems : fallback.contextItems);
     const updatedAt = normalizeText(snapshot.updatedAt || fallback.updatedAt);
-    if (!sharedMemo && !contextItems.length && !updatedAt) {
+    if (!sharedMemo && !updatedAt) {
       return {
-        contextItems: [],
         sharedMemo: "",
         updatedAt: "",
       };
     }
     return {
-      contextItems,
       sharedMemo,
       updatedAt,
     };
@@ -98,7 +90,6 @@
 
   function normalizeRecord(record) {
     const nextRecord = record && typeof record === "object" ? record : {};
-    const notesContextItems = normalizeNotesContextItems(nextRecord.notesContextItems);
     const sharedMemoSnapshot = normalizeTextBlock(nextRecord.sharedMemoSnapshot);
     return {
       artifactId: normalizeText(nextRecord.artifactId),
@@ -107,11 +98,9 @@
       error: normalizeText(nextRecord.error),
       jobId: normalizeText(nextRecord.jobId),
       meetingId: normalizeText(nextRecord.meetingId),
-      notesContextItems,
       notesDegradedReason: normalizeText(nextRecord.notesDegradedReason),
       notesGeneratedAt: normalizeText(nextRecord.notesGeneratedAt),
       notesInputSnapshot: normalizeNotesInputSnapshot(nextRecord.notesInputSnapshot, {
-        contextItems: notesContextItems,
         sharedMemo: sharedMemoSnapshot,
         updatedAt: normalizeText(nextRecord.notesGeneratedAt || nextRecord.updatedAt),
       }),
@@ -128,7 +117,6 @@
 
   function normalizeJob(job, fallbackTitle) {
     if (!job || typeof job !== "object") return null;
-    const notesContextItems = normalizeNotesContextItems(job.notesContextItems || job?.context?.notesContextItems);
     const sharedMemoSnapshot = normalizeTextBlock(job?.context?.sharedMemoSnapshot || job?.meeting?.sharedMemo);
     return {
       artifactId: normalizeText(job?.transcript?.artifactId || job?.artifacts?.[0]?.artifactId),
@@ -137,11 +125,9 @@
       error: normalizeText(job.error),
       jobId: normalizeText(job.jobId),
       meetingNotes: normalizeMeetingNotes(job.meetingNotes),
-      notesContextItems,
       notesDegradedReason: normalizeText(job.notesDegradedReason),
       notesGeneratedAt: normalizeText(job.notesGeneratedAt),
       notesInputSnapshot: normalizeNotesInputSnapshot(job.notesInputSnapshot, {
-        contextItems: notesContextItems,
         sharedMemo: sharedMemoSnapshot,
         updatedAt: normalizeText(job.notesGeneratedAt || job.updatedAt),
       }),
@@ -180,15 +166,12 @@
         }))
         .filter((segment) => segment.text)
       : [];
-    const notesContextItems = normalizeNotesContextItems(artifact.notesContextItems);
     return {
       artifactId: normalizeText(artifact.artifactId),
       notes: normalizeMeetingNotes(artifact.notes),
-      notesContextItems,
       notesDegradedReason: normalizeText(artifact.notesDegradedReason),
       notesGeneratedAt: normalizeText(artifact.notesGeneratedAt),
       notesInputSnapshot: normalizeNotesInputSnapshot(artifact.notesInputSnapshot, {
-        contextItems: notesContextItems,
         updatedAt: normalizeText(artifact.notesGeneratedAt || artifact.createdAt),
       }),
       notesStatus: normalizeText(artifact.notesStatus),
@@ -710,6 +693,7 @@
     normalizeArtifact,
     normalizeJob,
     normalizeRecord,
+    normalizeTermReplacements,
     normalizeWorkspaceMutation,
     resolveEntryDisplayStatus,
     shouldPrioritizePendingUpload,

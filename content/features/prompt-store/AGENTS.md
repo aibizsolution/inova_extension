@@ -4,8 +4,8 @@
 - 스토어 목록, 상세 보기, 좋아요, 가져오기, 등록/삭제와 realtime feed를 다룬다.
 
 ## 문서 갱신 규칙
-- 이 feature의 사용자 체감 동작, 데이터 경계, 먼저 볼 파일, 검증 기준이 바뀌면 이 문서를 같은 작업 안에서 갱신한다.
-- `README.md` 대신 이 문서나 prompt-store 전용 docs에 먼저 기록한다.
+- 이 feature의 entrypoint, 데이터 경계, 최소 검증, durable invariant가 바뀌면 이 문서를 같은 작업 안에서 갱신한다.
+- `README.md`가 아니라 prompt-store feature-local 규칙과 계약은 이 문서나 prompt-store 전용 docs에 문서화한다.
 
 ## 먼저 볼 파일
 - `content/features/prompt-store/store-manager.js`
@@ -30,6 +30,7 @@
 - `prompt_store_feed_pages`
 - `prompt_store_meta`
 - 하위 likes/imports/views
+- v2 lane에서도 공개 store catalog는 shared read-only data로 유지할 수 있다. 다만 prompt realtime bridge가 같이 읽는 prompt-library meta는 active lane 기준 account collection(`integration_inova_accounts` 또는 `integration_inova_accounts_v2`)을 따라야 한다.
 
 ## 보통 건드리지 말아야 할 범위
 - meeting
@@ -47,3 +48,7 @@
 
 ## 언제 범위를 확장할지
 - realtime bridge, prompt tool shell, panel auth cache, background read 경로가 원인일 때만 platform/shell로 넓힌다.
+
+## 구현 경계
+- store 로드 정리 구간은 `finally`에서 `return`으로 흐름을 끊지 않는다. `loadSequence`가 현재 요청과 같을 때만 `loading` 해제, render, `reload-all` 재호출 예약을 수행한다.
+- prompt realtime bridge connect payload에는 active lane의 `promptPanelScope`와 Firestore collection config를 함께 싣는다. store summary/feed/detail은 shared doc를 계속 읽더라도, prompt-library meta collection은 lane과 auth scope가 맞아야 한다.

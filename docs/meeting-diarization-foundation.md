@@ -19,9 +19,10 @@
 
 ### Functions
 
-- 유지되는 HTTP 진입점은 `createInovaMeetingJob`, `uploadInovaMeetingSource`, `updateInovaMeeting`, `updateInovaMeetingResult`, `regenerateInovaMeetingNotes`, `deleteInovaMeetingResult`, `deleteInovaMeeting`, `listInovaMeetings`입니다.
+- 유지되는 HTTP 진입점은 `createInovaMeetingJob`, `uploadInovaMeetingSource`, `updateInovaMeeting`, `updateInovaMeetingResult`, `previewInovaMeetingResultSectionEdit`, `applyInovaMeetingResultSectionEdit`, `deleteInovaMeetingResult`, `deleteInovaMeeting`, `listInovaMeetings`입니다.
 - 회의 summary/read 정본은 `integration_inova_meetings` 문서 하나입니다.
 - `sessionId`는 보조 메타로 남을 수 있지만 조회 키나 summary 정본으로 쓰지 않습니다.
+- 회의록 생성과 섹션 수정 preview는 모두 `gpt-5.4`를 사용하고, 전사 모델과 파이프라인은 그대로 유지합니다.
 
 ## 2. 최소 데이터 모델
 
@@ -31,6 +32,7 @@
 - `owner`
 - `title`
 - `sharedMemo`
+- `termReplacements[]`
 - `recentJobs[]`
 - `latestJobId`
 - `latestArtifactId`
@@ -43,7 +45,6 @@
 - `progress`
 - `source`
 - `context.sharedMemoSnapshot`
-- `notesContextItems`
 - `meetingNotes`
 - `transcript.artifactId`
 
@@ -60,7 +61,8 @@
 
 - notes는 현재 문서 스키마만 읽습니다.
 - 스키마 필드는 `meetingMeta`, `overview`, `discussionFlow`, `decisions`, `actionItems`, `openQuestions`, `risksOrDependencies`, `sourceTrace`입니다.
-- 추가 맥락 입력은 `contextItems`만 허용합니다.
+- 회의록 보정은 회의 단위 `termReplacements[]`와 `preview/apply` 섹션 수정 계약으로만 확장합니다.
+- `overview`, `discussionFlow`, `decisions`, `openQuestions`, `risksOrDependencies`, `actionItems`만 섹션 수정 대상입니다.
 
 ## 4. 검증 기준
 

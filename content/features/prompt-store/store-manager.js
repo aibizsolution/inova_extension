@@ -140,10 +140,11 @@
         state.store.dataFreshness = hasStoreRenderableData() ? "stale" : "empty";
         state.store.source = hasStoreRenderableData() ? "cache" : "none";
       } finally {
-        if (sequence !== loadSequence) return;
-        state.store.loading = false;
-        hooks.render();
-        if (reloadAll) global.setTimeout(() => ensureLoaded(true, "reload-all"), 0);
+        if (sequence === loadSequence) {
+          state.store.loading = false;
+          hooks.render();
+          if (reloadAll) global.setTimeout(() => ensureLoaded(true, "reload-all"), 0);
+        }
       }
     }
 

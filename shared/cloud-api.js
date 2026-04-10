@@ -120,9 +120,10 @@
     return payload?.data || {};
   }
 
-  async function listInovaMeetings(input, providerIdentity, accessToken) {
+  async function listInovaMeetings(input, providerIdentity, accessToken, requestOptions = {}) {
+    const meetingFunctions = resolveFunctionsConfig(requestOptions.functionsConfig);
     const payload = await postJson(
-      functions.listInovaMeetingsUrl,
+      meetingFunctions.listInovaMeetingsUrl,
       {
         cursor: input?.cursor || "",
         limit: Number(input?.limit) || 24,
@@ -133,9 +134,10 @@
     return payload?.data || { items: [], nextCursor: "" };
   }
 
-  async function authorizeInovaMeetingWorkspaceAccess(input, providerIdentity, accessToken) {
+  async function authorizeInovaMeetingWorkspaceAccess(input, providerIdentity, accessToken, requestOptions = {}) {
+    const meetingFunctions = resolveFunctionsConfig(requestOptions.functionsConfig);
     const payload = await postJson(
-      functions.authorizeInovaMeetingWorkspaceAccessUrl,
+      meetingFunctions.authorizeInovaMeetingWorkspaceAccessUrl,
       {
         debugAuthBypass: input?.debugAuthBypass || "",
         jobId: input?.jobId || "",
@@ -148,9 +150,10 @@
     return payload?.data || {};
   }
 
-  async function issueInovaMeetingLaunch(input, providerIdentity, accessToken) {
+  async function issueInovaMeetingLaunch(input, providerIdentity, accessToken, requestOptions = {}) {
+    const meetingFunctions = resolveFunctionsConfig(requestOptions.functionsConfig);
     const payload = await postJson(
-      functions.issueInovaMeetingLaunchUrl,
+      meetingFunctions.issueInovaMeetingLaunchUrl,
       {
         jobId: input?.jobId || "",
         meetingId: input?.meetingId || "",
@@ -163,9 +166,10 @@
     return payload?.data || {};
   }
 
-  async function createInovaMeetingShareLink(input, providerIdentity, accessToken) {
+  async function createInovaMeetingShareLink(input, providerIdentity, accessToken, requestOptions = {}) {
+    const meetingFunctions = resolveFunctionsConfig(requestOptions.functionsConfig);
     const payload = await postJson(
-      functions.createInovaMeetingShareLinkUrl,
+      meetingFunctions.createInovaMeetingShareLinkUrl,
       {
         jobId: input?.jobId || "",
         meetingId: input?.meetingId || "",
@@ -176,9 +180,10 @@
     return payload?.data || {};
   }
 
-  async function revokeInovaMeetingShareLink(input, providerIdentity, accessToken) {
+  async function revokeInovaMeetingShareLink(input, providerIdentity, accessToken, requestOptions = {}) {
+    const meetingFunctions = resolveFunctionsConfig(requestOptions.functionsConfig);
     const payload = await postJson(
-      functions.revokeInovaMeetingShareLinkUrl,
+      meetingFunctions.revokeInovaMeetingShareLinkUrl,
       {
         jobId: input?.jobId || "",
         meetingId: input?.meetingId || "",
@@ -189,9 +194,10 @@
     return payload?.data || {};
   }
 
-  async function issueInovaMeetingPanelAuth(providerIdentity, accessToken) {
+  async function issueInovaMeetingPanelAuth(providerIdentity, accessToken, requestOptions = {}) {
+    const meetingFunctions = resolveFunctionsConfig(requestOptions.functionsConfig);
     const payload = await postJson(
-      functions.issueInovaMeetingPanelAuthUrl,
+      meetingFunctions.issueInovaMeetingPanelAuthUrl,
       {
         owner: toProviderIdentityPayload(providerIdentity),
       },
@@ -211,9 +217,10 @@
     return payload?.data || {};
   }
 
-  async function exchangeInovaMeetingLaunch(input) {
+  async function exchangeInovaMeetingLaunch(input, requestOptions = {}) {
+    const meetingFunctions = resolveFunctionsConfig(requestOptions.functionsConfig);
     const payload = await postJson(
-      functions.exchangeInovaMeetingLaunchUrl,
+      meetingFunctions.exchangeInovaMeetingLaunchUrl,
       {
         launchToken: input?.launchToken || "",
       }
@@ -290,6 +297,10 @@
       firebaseSessionToken: auth?.firebaseSessionToken || "",
       meetingSessionToken: auth?.meetingSessionToken || "",
     };
+  }
+
+  function resolveFunctionsConfig(overrideConfig) {
+    return overrideConfig && typeof overrideConfig === "object" ? overrideConfig : functions;
   }
 
   namespace.cloudApi = {

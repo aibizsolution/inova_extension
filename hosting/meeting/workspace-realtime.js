@@ -39,9 +39,10 @@
       const setNotice = (...args) => helpers.setNotice?.(...args);
       const applyRender = (...args) => helpers.applyRender?.(...args);
       const clearDegradedNotice = (...args) => helpers.clearDegradedNotice?.(...args);
-      const createEmptyNotesContextState = (...args) => helpers.createEmptyNotesContextState?.(...args);
       const createEmptyNotesInputSnapshotState = (...args) => helpers.createEmptyNotesInputSnapshotState?.(...args);
       const createEmptySelectedRecordMemoState = (...args) => helpers.createEmptySelectedRecordMemoState?.(...args);
+      const createEmptySectionEditState = (...args) => helpers.createEmptySectionEditState?.(...args);
+      const createEmptyTermReplacementState = (...args) => helpers.createEmptyTermReplacementState?.(...args);
       const setDegradedNotice = (...args) => helpers.setDegradedNotice?.(...args);
       const renderBlocked = (...args) => helpers.renderBlocked?.(...args);
       const persistWorkspaceSession = (...args) => controller("session")?.persistSession?.(...args);
@@ -73,8 +74,8 @@
           applyRender();
         }
         const refreshStartedAt = Date.now();
-        let pendingLoadMs = 0;
-        let realtimeConnectMs = 0;
+        let pendingLoadMs;
+        let realtimeConnectMs;
         try {
           logDebug("workspace.refresh.start", {
             hydrateSelection: Boolean(hydrateSelection),
@@ -329,6 +330,7 @@
           meetingId: normalizeText(meetingPayload?.meetingId) || state.session.meetingId,
           pendingLocalCount: state.pendingUploads.length,
           sharedMemo: normalizeTextBlock(meetingPayload?.sharedMemo || state.session.sharedMemo),
+          termReplacements: ns.renderState.normalizeTermReplacements(meetingPayload?.termReplacements),
           title: normalizeText(meetingPayload?.title || refs.meetingTitleInput.value || state.session.title || "새 회의 룸"),
           updatedAt: normalizeText(meetingPayload?.updatedAt),
           workspaceMutation: normalizeWorkspaceMutation(meetingPayload?.workspaceMutation),
@@ -448,7 +450,6 @@
           error: normalizedJob.error,
           jobId: normalizedJob.jobId,
           meetingId: state.meeting.meetingId,
-          notesContextItems: normalizedJob.notesContextItems,
           notesDegradedReason: normalizedJob.notesDegradedReason,
           notesGeneratedAt: normalizedJob.notesGeneratedAt,
           notesInputSnapshot: normalizedJob.notesInputSnapshot,
@@ -522,7 +523,6 @@
           jobId: entry.remote.jobId,
           notesDegradedReason: entry.remote.notesDegradedReason,
           notesGeneratedAt: entry.remote.notesGeneratedAt,
-          notesContextItems: entry.remote.notesContextItems,
           notesInputSnapshot: entry.remote.notesInputSnapshot,
           notesStatus: entry.remote.notesStatus,
           context: {
@@ -562,7 +562,7 @@
           return;
         }
         state.realtime.jobDocId = jobId;
-        const shouldReadJob = !Boolean(options.skipJobRead);
+        const shouldReadJob = !options.skipJobRead;
         let jobReadMs = 0;
         if (shouldReadJob) {
           const jobReadStartedAt = Date.now();
@@ -726,9 +726,10 @@
         state.currentDetailSelectionId = "";
         state.currentJob = null;
         state.currentLocalRecord = null;
-        state.notesContext = createEmptyNotesContextState();
         state.selectedRecordMemo = createEmptySelectedRecordMemoState();
         state.selectedRecordNotesInputSnapshot = createEmptyNotesInputSnapshotState();
+        state.sectionEdit = createEmptySectionEditState();
+        state.termReplacementState = createEmptyTermReplacementState();
       }
       
       

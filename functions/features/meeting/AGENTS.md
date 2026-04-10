@@ -1,11 +1,25 @@
 # functions meeting feature
 
 ## 기능 목적
-- 회의 launch/session auth, 회의 job 생성, chunk worker, finalizer, 결과 수정/삭제를 다룬다.
+- 회의 launch/session auth, 회의 job 생성, chunk worker, finalizer, 결과 수정/삭제, 회의록 섹션 수정 preview/apply를 다룬다.
 
 ## 먼저 볼 파일
 - `functions/features/meeting/meeting-launch-service.js`
+- `functions/features/meeting/meeting-common-domain.js`
+- `functions/features/meeting/meeting-creation-domain.js`
+- `functions/features/meeting/meeting-deletion-domain.js`
+- `functions/features/meeting/meeting-notes-context-domain.js`
+- `functions/features/meeting/meeting-notes-document-domain.js`
+- `functions/features/meeting/meeting-notes-runtime-domain.js`
+- `functions/features/meeting/meeting-notes-source-domain.js`
+- `functions/features/meeting/meeting-mutation-domain.js`
+- `functions/features/meeting/meeting-processing-domain.js`
+- `functions/features/meeting/meeting-record-domain.js`
+- `functions/features/meeting/meeting-source-domain.js`
+- `functions/features/meeting/meeting-summary-sync-domain.js`
+- `functions/features/meeting/meeting-state-domain.js`
 - `functions/features/meeting/meeting-service.js`
+- `functions/features/meeting/meeting-transcript-domain.js`
 
 ## 관련 프론트 경로
 - `content/meeting-manager.js`
@@ -16,6 +30,19 @@
 ## 관련 functions 경로
 - `functions/index.js`
 - `functions/platform/*`
+- `docs/refactoring-plan.md`는 meeting version gate, legacy baseline, split milestone처럼 장기 판단 기준을 맡는다.
+- `docs/functions-runtime-guide.md`는 runtime sizing과 운영 튜닝 기준을 맡는다.
+
+## meeting 리팩토링 경계 규칙
+- `meeting-service.js` 분리는 line count 자체가 아니라 `workflow`, `persisted data contract`, `queue lifecycle`, `notes/source/record/state` 같은 도메인 경계를 기준으로 판단한다.
+- `meeting-service.js`의 목표 end-state는 `legacy handler/export surface + cross-domain orchestration`이다. 여러 domain 결과를 묶어 auth, Firestore, Storage, OpenAI 흐름을 끝내는 helper는 service 안에 남길 수 있다.
+- `common`, `guard`처럼 얇은 helper-only 파일은 새로 늘리기 전에 재사용, 독립 테스트 가치, 분리된 변경 이유가 충분한지 먼저 확인한다.
+- `meeting-common-domain.js`는 `meeting-service.js`, `meeting-launch-service.js`, `meeting-workspace-auth-service.js`가 함께 쓰는 shared normalization boundary다.
+- ownership assert와 제목 동기화 helper는 service-local workflow에 가까우므로 `meeting-service.js` 안에 남긴다.
+- `meeting-creation-domain.js`, `meeting-processing-domain.js`, `meeting-summary-sync-domain.js`, `meeting-deletion-domain.js`, `meeting-notes-source-domain.js`처럼 설명 가능한 workflow/data boundary만 독립 모듈로 유지한다.
+- `updateInovaMeeting`는 mutation accepted만이 아니라 수정된 `meeting` payload도 계속 돌려준다. hosted-only service harness와 response envelope 회귀 점검에서 이 계약을 유지한다.
+- 회의록 보정은 `termReplacements` 저장과 `preview/apply section edit` 두 경로로만 확장한다. 추가 맥락 기반 전체 재생성 경로는 다시 도입하지 않는다.
+- 회의록 자동 생성은 `skip`만이 아니라 `full`과 `compact` 두 출력 프로필을 가질 수 있다. 짧은 테스트성/저신호 전사는 `compact`로 정리하되, 정식 회의처럼 서사를 부풀리지 않는다.
 
 ## 관련 데이터 경계
 - `integration_inova_meetings`
@@ -34,10 +61,16 @@
 ## 최소 검증 방법
 - meeting 관련 export 이름, Firestore trigger 문서 경로, hosted meeting auth 흐름이 그대로 유지되는지 확인한다.
 - chunk worker 기본값은 per-job staged queue가 아니라 full fan-out이다. `OPENAI_MEETING_CHUNK_TRANSCRIPTION_CONCURRENCY`를 넣었을 때만 waiting/queued 제한이 다시 걸리는지 확인한다.
+- runtime sizing, `check:function-runtime`, chunk/finalize 운영 기준은 `docs/functions-runtime-guide.md`를 기준으로 확인한다.
+- version gate와 manual smoke 기준은 `docs/refactoring-plan.md`를 기준으로 확인한다.
+- `termReplacements`는 회의 단위 순서 보존 배열이며, `from` 중복/빈 값이 거부되고 기존 notes와 이후 notes 결과에 모두 deterministic pass가 적용되는지 확인한다.
+- `previewInovaMeetingResultSectionEdit`와 `applyInovaMeetingResultSectionEdit`는 editable section key, `baseRevisionToken`, stale preview 거절 계약을 유지해야 한다.
+- persisted meeting notes는 `summary`와 `overview`를 독립 필드로 유지한다. `summary`는 핵심 요약 카드용 짧은 요약이고, `summary`/`overview` 모두 섹션 preview/apply 대상이지만 서로를 덮어쓰지 않아야 한다.
+- 섹션 preview는 사용자 요청 우선 prompt로 한 번 생성하고, 형식이 맞지 않으면 같은 요청으로 한 번 더 재시도한다. `warning` 필드는 호환용으로 유지한다.
+- compact 회의록은 `overview` 중심의 짧은 기록 메모를 기본으로 하고, `decisions/actionItems/risks`는 전사에 직접 근거가 없으면 비워 둔다.
 - 상용 회의 데이터 잔존 여부를 편하게 볼 때는 `npm run check:meeting-data`를 사용한다.
 - 회의 데이터를 전체 또는 특정 `meetingId` 기준으로 수동 정리할 때는 기본 dry-run인 `npm run delete:meeting-data -- --all` 또는 `npm run delete:meeting-data -- --meeting-id <id>`를 먼저 보고, 실제 삭제는 같은 명령에 `--execute`를 붙인다.
 - 회의 삭제 task와 1시간 sweep은 job/artifact/part/finalizer뿐 아니라 관련 `integration_inova_meeting_commands`와 회의 단위 `launch/workspace session`까지 함께 정리해야 한다.
-- notes regenerate worker는 삭제 중 command/job/artifact를 다시 만들지 않게, 삭제된 문서에는 `set-if-exists` 식으로만 상태를 갱신한다.
 
 ## 언제 사용자에게 다시 물을지
 - 패널 회의 허브 문제인지 hosted 작업실 문제인지, auth 문제인지 전사 worker 문제인지 모호할 때만 확인한다.

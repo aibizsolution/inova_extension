@@ -29,6 +29,7 @@
         buildWorkspaceSessionStorageKey,
         formatDateTime,
         isDebugPanelEnabled,
+        isLikelyNetworkError,
         isOnline,
         logDebug,
         normalizeText,
@@ -465,7 +466,7 @@
           checks.push(
             {
               label: "회의 화면이 blocked로 끝나지 않음",
-              passed: !Boolean(snapshot?.blocked?.value),
+              passed: !snapshot?.blocked?.value,
               actual: snapshot?.blocked?.value ? normalizeText(snapshot?.blocked?.message) : "open",
             },
             {
@@ -1687,14 +1688,14 @@
       function resolvePendingUploadAttemptReason(pending, options = {}) {
         const explicitReason = normalizeText(options?.reason);
         if (explicitReason) return explicitReason;
-        if (Boolean(options?.forceRestart)) return "manual-restart";
+        if (options?.forceRestart) return "manual-restart";
         if (normalizeText(pending?.status) === "failed") return "failed-retry";
         return "retry";
       }
       
       
       function buildPendingUploadAttemptPlan(pending, options = {}) {
-        const forceRestart = Boolean(options?.forceRestart);
+        const forceRestart = options?.forceRestart === true;
         const normalizedRequestId = normalizeText(pending?.requestId);
         const previousRemoteJobId = normalizeText(pending?.jobId);
         const previousRemoteSelectionId = previousRemoteJobId ? buildRemoteSelectionId(previousRemoteJobId) : "";
@@ -2472,7 +2473,7 @@
         if (transitionAction !== "chunk-resync") {
           throw new Error("원격 chunk resync action이 없어 브라우저 보관 상태를 안전하게 유지할 수 없어요.");
         }
-        let remoteState = null;
+        let remoteState;
         try {
           remoteState = await requestChunkedPendingUploadRemoteReconcileState(latestItem);
         } catch (error) {

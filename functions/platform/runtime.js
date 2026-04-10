@@ -5,11 +5,16 @@ const { onSchedule } = require("firebase-functions/v2/scheduler");
 
 const FIREBASE_AUTH_SIGNING_SERVICE_ACCOUNT = process.env.FIREBASE_AUTH_SIGNING_SERVICE_ACCOUNT
   || "1027279095019-compute@developer.gserviceaccount.com";
+const RUNNING_IN_FIREBASE_EMULATOR = isFirebaseEmulatorRuntime();
 
 if (!admin.apps.length) {
-  admin.initializeApp({
-    serviceAccountId: FIREBASE_AUTH_SIGNING_SERVICE_ACCOUNT,
-  });
+  if (RUNNING_IN_FIREBASE_EMULATOR) {
+    admin.initializeApp();
+  } else {
+    admin.initializeApp({
+      serviceAccountId: FIREBASE_AUTH_SIGNING_SERVICE_ACCOUNT,
+    });
+  }
 }
 
 const db = admin.firestore();
@@ -200,4 +205,11 @@ function logEvent(event, payload) {
       scope: "prompt-sync",
     })
   );
+}
+
+function isFirebaseEmulatorRuntime() {
+  return ["1", "true", "yes", "on"].includes(normalizeText(process.env.FUNCTIONS_EMULATOR).toLowerCase())
+    || Boolean(normalizeText(process.env.FIREBASE_AUTH_EMULATOR_HOST))
+    || Boolean(normalizeText(process.env.FIRESTORE_EMULATOR_HOST))
+    || Boolean(normalizeText(process.env.FIREBASE_STORAGE_EMULATOR_HOST));
 }

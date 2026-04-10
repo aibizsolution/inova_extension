@@ -98,6 +98,17 @@
       .join("\n\n");
   }
 
+  function normalizeSummaryText(primary, fallback) {
+    const direct = typeof primary === "string" ? normalizeTextBlock(primary) : "";
+    if (direct) {
+      return direct;
+    }
+    return normalizeTextArray(fallback)
+      .map((item) => normalizeTextBlock(item))
+      .filter(Boolean)
+      .join(" ");
+  }
+
   function normalizeMeetingActionItems(items, maxItems = MAX_ACTION_COUNT) {
     const normalized = (Array.isArray(items) ? items : [])
       .map((item) => {
@@ -244,6 +255,7 @@
       ),
       meetingMeta: normalizeMeetingMeta(notes.meetingMeta),
       openQuestions: normalizeMeetingOpenQuestions(notes.openQuestions, Math.max(1, Number(settings.maxOpenQuestions) || MAX_OPEN_QUESTION_COUNT)),
+      summary: normalizeSummaryText(notes.summary, [notes.overview]),
       overview: normalizeOverviewText(notes.overview, []),
       risksOrDependencies: normalizeMeetingRiskItems(notes.risksOrDependencies, Math.max(1, Number(settings.maxRisks) || MAX_RISK_COUNT)),
       sourceTrace: normalizeMeetingSourceTrace(notes.sourceTrace, Math.max(1, Number(settings.maxSourceTrace) || MAX_SOURCE_TRACE_COUNT)),
@@ -278,6 +290,7 @@
           ),
       meetingMeta: normalizeMeetingMeta(notes.meetingMeta),
       openQuestions: normalizeMeetingOpenQuestions(notes.openQuestions, Math.max(1, Number(settings.maxOpenQuestions) || MAX_OPEN_QUESTION_COUNT)),
+      summary: normalizeSummaryText(notes.summary, notes.executiveSummary || notes.overview || []),
       overview: normalizeOverviewText(notes.overview, notes.executiveSummary),
       risksOrDependencies: normalizeMeetingRiskItems(notes.risksOrDependencies, Math.max(1, Number(settings.maxRisks) || MAX_RISK_COUNT)),
       sourceTrace: normalizeMeetingSourceTrace(notes.sourceTrace, Math.max(1, Number(settings.maxSourceTrace) || MAX_SOURCE_TRACE_COUNT)),
@@ -288,7 +301,8 @@
     const settings = options && typeof options === "object" ? options : {};
     const nextNotes = notes && typeof notes === "object" ? notes : {};
     if (
-      typeof nextNotes.overview !== "undefined"
+      typeof nextNotes.summary !== "undefined"
+      || typeof nextNotes.overview !== "undefined"
       || Array.isArray(nextNotes.discussionFlow)
       || (nextNotes.meetingMeta && typeof nextNotes.meetingMeta === "object" && (
         normalizeText(nextNotes.meetingMeta?.purpose)
@@ -305,7 +319,8 @@
   function hasMeetingNotes(notes) {
     const normalized = normalizeMeetingNotes(notes);
     return Boolean(
-      normalized.overview
+      normalized.summary
+      || normalized.overview
       || normalized.meetingMeta?.purpose
       || normalized.meetingMeta?.title
       || normalized.meetingMeta?.datetime

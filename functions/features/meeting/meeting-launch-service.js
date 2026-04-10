@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const { normalizeText: normalizeString } = require("./meeting-common-domain");
 
 const LAUNCH_COLLECTION = "integration_inova_meeting_launches";
 const WORKSPACE_SESSION_COLLECTION = "integration_inova_meeting_workspace_sessions";
@@ -398,10 +399,6 @@ function normalizeLaunchIssueRequest(input) {
 
 function normalizeMode(value) {
   return normalizeString(value) === "detail" ? "detail" : "create";
-}
-
-function normalizeString(value) {
-  return String(value || "").trim();
 }
 
 function createMeetingId() {

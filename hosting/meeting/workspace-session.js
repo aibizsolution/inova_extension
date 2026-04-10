@@ -223,6 +223,7 @@
         meetingId: state.session.meetingId,
         pendingLocalCount: 0,
         sharedMemo: state.session.sharedMemo,
+        termReplacements: [],
         title: state.session.title,
         updatedAt: "",
         workspaceMutation: createEmptyWorkspaceMutationState(),

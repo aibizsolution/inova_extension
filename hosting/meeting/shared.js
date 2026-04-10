@@ -31,6 +31,10 @@
     jobs: "integration_inova_meeting_jobs",
     meetings: "integration_inova_meetings",
   };
+  const LOCAL_AUTH_EMULATOR_PORT = 9099;
+  const LOCAL_FIRESTORE_EMULATOR_PORT = 8080;
+  const LOCAL_FUNCTIONS_EMULATOR_PORT = 5001;
+  const LOCAL_STORAGE_EMULATOR_PORT = 9199;
   const MAX_PREVIEW_TEXT_LENGTH = 180;
   const MAX_DEBUG_LOG_ENTRIES = 120;
   const MAX_DEBUG_ERROR_ENTRIES = 120;
@@ -66,6 +70,15 @@
 
   function normalizeBaseUrl(value) {
     return String(value || "").replace(/\/+$/, "");
+  }
+
+  function resolveLocalEmulatorHost(globalObject, fallbackHost) {
+    const normalizedFallbackHost = normalizeText(fallbackHost).toLowerCase();
+    if (["127.0.0.1", "localhost"].includes(normalizedFallbackHost)) {
+      return normalizedFallbackHost;
+    }
+    const currentHost = normalizeText(globalObject?.location?.hostname).toLowerCase();
+    return currentHost === "localhost" ? "localhost" : "127.0.0.1";
   }
 
   function readDebugFaultRegistry() {
@@ -184,11 +197,14 @@
 
   function resolveConfig(override) {
     const normalizedOverride = override && typeof override === "object" ? override : {};
+    const emulators = resolveFirebaseEmulators(global, normalizedOverride.emulators);
     const functionsBaseUrl = normalizeBaseUrl(
       normalizedOverride.functionsBaseUrl
+      || (emulators.enabled ? emulators.functionsBaseUrl : "")
       || "https://asia-northeast3-browser-extension-main.cloudfunctions.net"
     );
     return {
+      applyMeetingResultSectionEditUrl: joinUrl(functionsBaseUrl, "applyInovaMeetingResultSectionEdit"),
       authorizeWorkspaceAccessUrl: joinUrl(functionsBaseUrl, "authorizeInovaMeetingWorkspaceAccess"),
       createJobUrl: joinUrl(functionsBaseUrl, "createInovaMeetingJob"),
       createShareLinkUrl: joinUrl(functionsBaseUrl, "createInovaMeetingShareLink"),
@@ -204,12 +220,43 @@
         ...(normalizedOverride.firebaseWebConfig || {}),
       },
       functionsBaseUrl,
+      emulators,
       issueWorkspaceAuthUrl: joinUrl(functionsBaseUrl, "issueInovaMeetingWorkspaceAuth"),
-      regenerateNotesUrl: joinUrl(functionsBaseUrl, "regenerateInovaMeetingNotes"),
+      previewMeetingResultSectionEditUrl: joinUrl(functionsBaseUrl, "previewInovaMeetingResultSectionEdit"),
       revokeShareLinkUrl: joinUrl(functionsBaseUrl, "revokeInovaMeetingShareLink"),
       uploadSourceUrl: joinUrl(functionsBaseUrl, "uploadInovaMeetingSource"),
       updateMeetingResultUrl: joinUrl(functionsBaseUrl, "updateInovaMeetingResult"),
       updateMeetingTitleUrl: joinUrl(functionsBaseUrl, "updateInovaMeeting"),
+    };
+  }
+
+  function resolveFirebaseEmulators(globalObject, override) {
+    const normalizedOverride = override && typeof override === "object" ? override : {};
+    if (!isLocalWorkspaceOrigin(globalObject) && normalizedOverride.enabled !== true) {
+      return {
+        authUrl: "",
+        enabled: false,
+        firestoreHost: "",
+        firestorePort: 0,
+        functionsBaseUrl: "",
+        storageHost: "",
+        storagePort: 0,
+      };
+    }
+    const emulatorHost = resolveLocalEmulatorHost(globalObject, normalizedOverride.host);
+    const authUrl = normalizeText(normalizedOverride.authUrl) || `http://${emulatorHost}:${LOCAL_AUTH_EMULATOR_PORT}`;
+    const firestorePort = Math.max(1, Number(normalizedOverride.firestorePort) || LOCAL_FIRESTORE_EMULATOR_PORT);
+    const functionsPort = Math.max(1, Number(normalizedOverride.functionsPort) || LOCAL_FUNCTIONS_EMULATOR_PORT);
+    const projectId = normalizeText(normalizedOverride.projectId || FIREBASE_WEB_CONFIG.projectId) || FIREBASE_WEB_CONFIG.projectId;
+    const region = normalizeText(normalizedOverride.region || "asia-northeast3") || "asia-northeast3";
+    return {
+      authUrl,
+      enabled: true,
+      firestoreHost: emulatorHost,
+      firestorePort,
+      functionsBaseUrl: normalizeText(normalizedOverride.functionsBaseUrl) || `http://${emulatorHost}:${functionsPort}/${projectId}/${region}`,
+      storageHost: emulatorHost,
+      storagePort: Math.max(1, Number(normalizedOverride.storagePort) || LOCAL_STORAGE_EMULATOR_PORT),
     };
   }
 

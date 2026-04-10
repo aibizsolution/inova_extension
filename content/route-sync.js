@@ -179,16 +179,22 @@
         return;
       }
 
-      if (changes.settings) state.settings = { ...namespace.constants.defaults.settings, ...(changes.settings.newValue || {}) };
-      if (changes.pausedSessions) state.pausedSessions = changes.pausedSessions.newValue || {};
-      if (changes.cloudSync) state.cloudSync = namespace.cloudSync.mergeCloudSyncState(changes.cloudSync.newValue);
-      if (changes.uiPreferences) {
-        state.uiPreferences = applyUiPreferenceLock(namespace.storage.mergeUiPreferences(changes.uiPreferences.newValue));
+      const settingsChange = namespace.productLane?.getStorageChange?.(changes, namespace.constants.storageKeys.settings) || changes.settings;
+      const pausedSessionsChange = namespace.productLane?.getStorageChange?.(changes, namespace.constants.storageKeys.pausedSessions) || changes.pausedSessions;
+      const cloudSyncChange = namespace.productLane?.getStorageChange?.(changes, namespace.constants.storageKeys.cloudSync) || changes.cloudSync;
+      const uiPreferencesChange = namespace.productLane?.getStorageChange?.(changes, namespace.constants.storageKeys.uiPreferences) || changes.uiPreferences;
+      const promptLibraryChange = namespace.productLane?.getStorageChange?.(changes, namespace.constants.storageKeys.promptLibrary) || changes.promptLibrary;
+
+      if (settingsChange) state.settings = { ...namespace.constants.defaults.settings, ...(settingsChange.newValue || {}) };
+      if (pausedSessionsChange) state.pausedSessions = pausedSessionsChange.newValue || {};
+      if (cloudSyncChange) state.cloudSync = namespace.cloudSync.mergeCloudSyncState(cloudSyncChange.newValue);
+      if (uiPreferencesChange) {
+        state.uiPreferences = applyUiPreferenceLock(namespace.storage.mergeUiPreferences(uiPreferencesChange.newValue));
         state.uiPreferences.activePromptTab = normalizePromptTab(state.uiPreferences.activeTool === "store" ? "store" : state.uiPreferences.activePromptTab);
         state.activeTool = hooks.normalizeToolId(state.uiPreferences.activeTool || state.activeTool);
         if (isStoreTabActive()) hooks.ensureStoreLoaded?.();
       }
-      if (changes.promptLibrary) state.promptLibrary = namespace.promptLibrary.mergePromptLibrary(changes.promptLibrary.newValue);
+      if (promptLibraryChange) state.promptLibrary = namespace.promptLibrary.mergePromptLibrary(promptLibraryChange.newValue);
       scheduleRefresh();
     }
 

@@ -82,7 +82,7 @@
 
       function buildDownloadFileName(title, requestId, extension) {
         const normalizedTitle = normalizeText(title) || "recording";
-        const safeTitle = normalizedTitle.replace(/[\\/:*?\"<>|]+/g, "-").replace(/\s+/g, " ").trim();
+        const safeTitle = normalizedTitle.replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim();
         const safeRequestId = normalizeText(requestId).replace(/[^a-zA-Z0-9_-]+/g, "").slice(-12);
         const name = safeRequestId ? `${safeTitle || "recording"}-${safeRequestId}` : (safeTitle || "recording");
         return `${name}.${normalizeText(extension) || "webm"}`;

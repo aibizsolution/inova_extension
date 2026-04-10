@@ -20,14 +20,17 @@
         return;
       }
 
-      if (changes.promptLibrary) {
+      const promptLibraryChange = namespace.productLane?.getStorageChange?.(changes, namespace.constants.storageKeys.promptLibrary) || changes.promptLibrary;
+      const cloudSyncChange = namespace.productLane?.getStorageChange?.(changes, namespace.constants.storageKeys.cloudSync) || changes.cloudSync;
+
+      if (promptLibraryChange) {
         scheduleSync(520);
         return;
       }
 
-      if (changes.cloudSync) {
-        const previousCloudSync = namespace.cloudSync.mergeCloudSyncState(changes.cloudSync.oldValue);
-        const nextCloudSync = namespace.cloudSync.mergeCloudSyncState(changes.cloudSync.newValue);
+      if (cloudSyncChange) {
+        const previousCloudSync = namespace.cloudSync.mergeCloudSyncState(cloudSyncChange.oldValue);
+        const nextCloudSync = namespace.cloudSync.mergeCloudSyncState(cloudSyncChange.newValue);
         if (nextCloudSync.pending?.revision && nextCloudSync.pending.revision !== previousCloudSync.pending?.revision) {
           scheduleSync(240);
         }

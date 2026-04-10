@@ -335,7 +335,7 @@
   }
 
   function detectPlaceholderTokens(text) {
-    const matches = String(text || "").matchAll(/\[([^\[\]\n]{1,40})\]/g);
+    const matches = String(text || "").matchAll(/\[([^[\]\n]{1,40})\]/g);
     const tokens = [];
     for (const match of matches) {
       const token = String(match?.[1] || "").trim();

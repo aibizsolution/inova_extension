@@ -21,6 +21,25 @@ function registerPromptLibraryHandlers(deps) {
     sendError,
     verifyInovaIdentity,
   } = deps;
+  const promptPanelScope = normalizeText(deps.promptPanelScope) || "prompt-panel";
+  const promptLibraryCollections = {
+    accounts: normalizeCollectionName(deps.promptAccountsCollection, "integration_inova_accounts"),
+    migrations: normalizeCollectionName(deps.promptLibraryMigrationCollection, ""),
+    promptLibraries: normalizeCollectionName(deps.promptLibrariesCollection, "prompt_libraries"),
+    promptLibraryChunks: normalizeCollectionName(deps.promptLibraryChunksCollection, "prompt_library_chunks"),
+    promptLibraryOrders: normalizeCollectionName(deps.promptLibraryOrdersCollection, "prompt_library_orders"),
+  };
+  const promptLegacySource = deps.promptLegacySource && typeof deps.promptLegacySource === "object"
+    ? {
+        accounts: normalizeCollectionName(deps.promptLegacySource.accounts, "integration_inova_accounts"),
+        buildPromptLibraryId: typeof deps.promptLegacySource.buildPromptLibraryId === "function"
+          ? deps.promptLegacySource.buildPromptLibraryId
+          : buildPromptLibraryId,
+        promptLibraries: normalizeCollectionName(deps.promptLegacySource.promptLibraries, "prompt_libraries"),
+        promptLibraryChunks: normalizeCollectionName(deps.promptLegacySource.promptLibraryChunks, "prompt_library_chunks"),
+        promptLibraryOrders: normalizeCollectionName(deps.promptLegacySource.promptLibraryOrders, "prompt_library_orders"),
+      }
+    : null;
 
   const issueInovaPromptPanelAuth = onRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
     try {
@@ -34,7 +53,7 @@ function registerPromptLibraryHandlers(deps) {
         promptLibraryId,
         promptPanelExpMs,
         providerUserKey: owner.providerUserKey,
-        scope: "prompt-panel",
+        scope: promptPanelScope,
       });
 
       logEvent("prompt.panel-auth.issue.success", {
@@ -46,6 +65,10 @@ function registerPromptLibraryHandlers(deps) {
         data: {
           expiresAt,
           firebaseCustomToken,
+          promptFirestoreCollections: {
+            accountsCollection: promptLibraryCollections.accounts,
+          },
+          promptPanelScope,
           promptLibraryId,
           providerUserKey: owner.providerUserKey,
         },
@@ -66,10 +89,11 @@ function registerPromptLibraryHandlers(deps) {
       logEvent("load.start", {
         providerUserKey: providerIdentity.providerUserKey,
       });
-      await verifyInovaIdentity(providerIdentity, request);
+      const owner = await verifyInovaIdentity(providerIdentity, request);
+      await maybeMigrateLegacyPromptLibrary(owner);
 
       const libraryId = buildPromptLibraryId(providerIdentity.providerUserKey);
-      const snapshot = await db.collection("prompt_libraries").doc(libraryId).get();
+      const snapshot = await db.collection(promptLibraryCollections.promptLibraries).doc(libraryId).get();
       const libraryState = await loadPersistedPromptLibrary(libraryId, snapshot);
       if (!libraryState.found) {
         logEvent("load.success", {
@@ -103,7 +127,7 @@ function registerPromptLibraryHandlers(deps) {
         data: {
           found: true,
           libraryId,
-          owner: normalizeIdentity(libraryState.owner || providerIdentity),
+          owner: normalizeIdentity(libraryState.owner || owner),
           promptLibrary,
           syncedAt: libraryState.syncedAt,
         },
@@ -125,7 +149,8 @@ function registerPromptLibraryHandlers(deps) {
         providerUserKey: providerIdentity.providerUserKey,
       });
       const owner = await verifyInovaIdentity(providerIdentity, request);
-      const snapshot = await db.collection("integration_inova_accounts").doc(owner.providerUserKey).get();
+      await maybeMigrateLegacyPromptLibrary(owner);
+      const snapshot = await db.collection(promptLibraryCollections.accounts).doc(owner.providerUserKey).get();
       const checkedAt = new Date().toISOString();
 
       if (!snapshot.exists) {
@@ -190,15 +215,16 @@ function registerPromptLibraryHandlers(deps) {
         revision: syncDocument.sync.revision,
       });
       const owner = await verifyInovaIdentity(syncDocument.owner, request);
+      await maybeMigrateLegacyPromptLibrary(owner);
       const libraryId = buildPromptLibraryId(owner.providerUserKey);
       const syncedAt = new Date().toISOString();
-      const librarySnapshot = await db.collection("prompt_libraries").doc(libraryId).get();
+      const librarySnapshot = await db.collection(promptLibraryCollections.promptLibraries).doc(libraryId).get();
       const currentState = await loadPersistedPromptLibraryRecord(libraryId, librarySnapshot);
       const { bucketIds, promptLibrary } = await syncPromptLibraryState(libraryId, currentState, syncDocument);
       const promptLibraryMeta = buildPromptLibraryMeta(promptLibrary, syncDocument.sync.revision, syncedAt, bucketIds);
 
       await Promise.all([
-        db.collection("integration_inova_accounts").doc(owner.providerUserKey).set(
+        db.collection(promptLibraryCollections.accounts).doc(owner.providerUserKey).set(
           {
             provider: owner.provider,
             providerUserKey: owner.providerUserKey,
@@ -212,7 +238,7 @@ function registerPromptLibraryHandlers(deps) {
           },
           { merge: true }
         ),
-        db.collection("prompt_libraries").doc(libraryId).set(
+        db.collection(promptLibraryCollections.promptLibraries).doc(libraryId).set(
           {
             schemaVersion: 2,
             libraryId,
@@ -419,8 +445,8 @@ function registerPromptLibraryHandlers(deps) {
     };
   }
 
-  async function loadPersistedPromptLibrary(libraryId, snapshot) {
-    const record = await loadPersistedPromptLibraryRecord(libraryId, snapshot);
+  async function loadPersistedPromptLibrary(libraryId, snapshot, collectionConfig = promptLibraryCollections) {
+    const record = await loadPersistedPromptLibraryRecord(libraryId, snapshot, collectionConfig);
     if (!record.found) {
       return record;
     }
@@ -428,11 +454,11 @@ function registerPromptLibraryHandlers(deps) {
       ...record,
       promptLibrary: record.legacy
         ? record.promptLibrary
-        : await buildPromptLibraryFromStoredChunks(libraryId, record.meta),
+        : await buildPromptLibraryFromStoredChunks(libraryId, record.meta, collectionConfig),
     };
   }
 
-  async function loadPersistedPromptLibraryRecord(libraryId, snapshot) {
+  async function loadPersistedPromptLibraryRecord(libraryId, snapshot, collectionConfig = promptLibraryCollections) {
     if (!snapshot?.exists) {
       return {
         found: false,
@@ -458,10 +484,10 @@ function registerPromptLibraryHandlers(deps) {
     };
   }
 
-  async function buildPromptLibraryFromStoredChunks(libraryId, meta) {
+  async function buildPromptLibraryFromStoredChunks(libraryId, meta, collectionConfig = promptLibraryCollections) {
     const [orderedIds, chunkGroups] = await Promise.all([
-      loadPromptLibraryOrder(libraryId),
-      loadPromptLibraryChunks(libraryId, meta.bucketIds),
+      loadPromptLibraryOrder(libraryId, collectionConfig),
+      loadPromptLibraryChunks(libraryId, meta.bucketIds, collectionConfig),
     ]);
     const itemMap = new Map();
     for (const items of chunkGroups) {
@@ -487,34 +513,34 @@ function registerPromptLibraryHandlers(deps) {
     };
   }
 
-  async function syncPromptLibraryState(libraryId, currentState, syncDocument) {
+  async function syncPromptLibraryState(libraryId, currentState, syncDocument, collectionConfig = promptLibraryCollections) {
     if (currentState.legacy) {
       const promptLibrary = applyPromptLibraryOperation(currentState.promptLibrary, syncDocument.operation);
-      const bucketIds = await writePromptLibrarySnapshot(libraryId, promptLibrary, currentState.meta.bucketIds);
+      const bucketIds = await writePromptLibrarySnapshot(libraryId, promptLibrary, currentState.meta.bucketIds, collectionConfig);
       return { bucketIds, promptLibrary };
     }
 
     if (syncDocument.operation.type === "replace-library") {
       const promptLibrary = normalizeStoredPromptLibrary(syncDocument.operation.promptLibrary);
-      const bucketIds = await writePromptLibrarySnapshot(libraryId, promptLibrary, currentState.meta.bucketIds);
+      const bucketIds = await writePromptLibrarySnapshot(libraryId, promptLibrary, currentState.meta.bucketIds, collectionConfig);
       return { bucketIds, promptLibrary };
     }
 
     if (syncDocument.operation.type === "upsert-item") {
-      return syncPromptLibraryUpsert(libraryId, currentState.meta, syncDocument);
+      return syncPromptLibraryUpsert(libraryId, currentState.meta, syncDocument, collectionConfig);
     }
 
     if (syncDocument.operation.type === "delete-item") {
-      return syncPromptLibraryDelete(libraryId, currentState.meta, syncDocument);
+      return syncPromptLibraryDelete(libraryId, currentState.meta, syncDocument, collectionConfig);
     }
 
-    return syncPromptLibraryReorder(libraryId, currentState.meta, syncDocument);
+    return syncPromptLibraryReorder(libraryId, currentState.meta, syncDocument, collectionConfig);
   }
 
-  async function syncPromptLibraryUpsert(libraryId, meta, syncDocument) {
+  async function syncPromptLibraryUpsert(libraryId, meta, syncDocument, collectionConfig = promptLibraryCollections) {
     const operation = syncDocument.operation;
     const bucketId = getPromptLibraryBucketId(operation.item.id);
-    const chunkRef = getPromptLibraryChunkRef(libraryId, bucketId);
+    const chunkRef = getPromptLibraryChunkRef(libraryId, bucketId, collectionConfig);
     const chunkItems = normalizePromptChunkItems((await chunkRef.get()).data()?.items);
     const currentIndex = chunkItems.findIndex((item) => item.id === operation.item.id);
     if (currentIndex >= 0) {
@@ -525,7 +551,7 @@ function registerPromptLibraryHandlers(deps) {
 
     const batch = db.batch();
     batch.set(chunkRef, buildPromptLibraryChunkDocument(libraryId, bucketId, chunkItems));
-    batch.set(getPromptLibraryOrderRef(libraryId), buildPromptLibraryOrderDocument(libraryId, operation.orderedIds));
+    batch.set(getPromptLibraryOrderRef(libraryId, collectionConfig), buildPromptLibraryOrderDocument(libraryId, operation.orderedIds));
     await batch.commit();
 
     const bucketIds = normalizeBucketIds([...meta.bucketIds, bucketId]);
@@ -540,10 +566,10 @@ function registerPromptLibraryHandlers(deps) {
     };
   }
 
-  async function syncPromptLibraryDelete(libraryId, meta, syncDocument) {
+  async function syncPromptLibraryDelete(libraryId, meta, syncDocument, collectionConfig = promptLibraryCollections) {
     const operation = syncDocument.operation;
     const bucketId = getPromptLibraryBucketId(operation.promptId);
-    const chunkRef = getPromptLibraryChunkRef(libraryId, bucketId);
+    const chunkRef = getPromptLibraryChunkRef(libraryId, bucketId, collectionConfig);
     const chunkItems = normalizePromptChunkItems((await chunkRef.get()).data()?.items).filter((item) => item.id !== operation.promptId);
     const batch = db.batch();
     if (chunkItems.length) {
@@ -551,7 +577,7 @@ function registerPromptLibraryHandlers(deps) {
     } else {
       batch.delete(chunkRef);
     }
-    batch.set(getPromptLibraryOrderRef(libraryId), buildPromptLibraryOrderDocument(libraryId, operation.orderedIds));
+    batch.set(getPromptLibraryOrderRef(libraryId, collectionConfig), buildPromptLibraryOrderDocument(libraryId, operation.orderedIds));
     await batch.commit();
 
     return {
@@ -565,8 +591,8 @@ function registerPromptLibraryHandlers(deps) {
     };
   }
 
-  async function syncPromptLibraryReorder(libraryId, meta, syncDocument) {
-    await getPromptLibraryOrderRef(libraryId).set(buildPromptLibraryOrderDocument(libraryId, syncDocument.operation.orderedIds), { merge: true });
+  async function syncPromptLibraryReorder(libraryId, meta, syncDocument, collectionConfig = promptLibraryCollections) {
+    await getPromptLibraryOrderRef(libraryId, collectionConfig).set(buildPromptLibraryOrderDocument(libraryId, syncDocument.operation.orderedIds), { merge: true });
     return {
       bucketIds: meta.bucketIds,
       promptLibrary: {
@@ -578,16 +604,16 @@ function registerPromptLibraryHandlers(deps) {
     };
   }
 
-  async function writePromptLibrarySnapshot(libraryId, promptLibrary, previousBucketIds) {
+  async function writePromptLibrarySnapshot(libraryId, promptLibrary, previousBucketIds, collectionConfig = promptLibraryCollections) {
     const bucketMap = groupPromptItemsByBucket(promptLibrary.items);
     const nextBucketIds = Object.keys(bucketMap).sort();
     const batch = db.batch();
-    batch.set(getPromptLibraryOrderRef(libraryId), buildPromptLibraryOrderDocument(libraryId, promptLibrary.items.map((item) => item.id)));
+    batch.set(getPromptLibraryOrderRef(libraryId, collectionConfig), buildPromptLibraryOrderDocument(libraryId, promptLibrary.items.map((item) => item.id)));
     for (const bucketId of nextBucketIds) {
-      batch.set(getPromptLibraryChunkRef(libraryId, bucketId), buildPromptLibraryChunkDocument(libraryId, bucketId, bucketMap[bucketId]));
+      batch.set(getPromptLibraryChunkRef(libraryId, bucketId, collectionConfig), buildPromptLibraryChunkDocument(libraryId, bucketId, bucketMap[bucketId]));
     }
     for (const bucketId of normalizeBucketIds(previousBucketIds).filter((bucketId) => !nextBucketIds.includes(bucketId))) {
-      batch.delete(getPromptLibraryChunkRef(libraryId, bucketId));
+      batch.delete(getPromptLibraryChunkRef(libraryId, bucketId, collectionConfig));
     }
     await batch.commit();
     return nextBucketIds;
@@ -632,21 +658,21 @@ function registerPromptLibraryHandlers(deps) {
     }, {});
   }
 
-  async function loadPromptLibraryOrder(libraryId) {
-    const snapshot = await getPromptLibraryOrderRef(libraryId).get();
+  async function loadPromptLibraryOrder(libraryId, collectionConfig = promptLibraryCollections) {
+    const snapshot = await getPromptLibraryOrderRef(libraryId, collectionConfig).get();
     return normalizeOrderedIds(snapshot.data()?.orderedIds);
   }
 
-  async function loadPromptLibraryChunks(libraryId, bucketIds) {
-    return Promise.all(normalizeBucketIds(bucketIds).map(async (bucketId) => normalizePromptChunkItems((await getPromptLibraryChunkRef(libraryId, bucketId).get()).data()?.items)));
+  async function loadPromptLibraryChunks(libraryId, bucketIds, collectionConfig = promptLibraryCollections) {
+    return Promise.all(normalizeBucketIds(bucketIds).map(async (bucketId) => normalizePromptChunkItems((await getPromptLibraryChunkRef(libraryId, bucketId, collectionConfig).get()).data()?.items)));
   }
 
-  function getPromptLibraryOrderRef(libraryId) {
-    return db.collection("prompt_library_orders").doc(libraryId);
+  function getPromptLibraryOrderRef(libraryId, collectionConfig = promptLibraryCollections) {
+    return db.collection(collectionConfig.promptLibraryOrders).doc(libraryId);
   }
 
-  function getPromptLibraryChunkRef(libraryId, bucketId) {
-    return db.collection("prompt_library_chunks").doc(`${libraryId}__${bucketId}`);
+  function getPromptLibraryChunkRef(libraryId, bucketId, collectionConfig = promptLibraryCollections) {
+    return db.collection(collectionConfig.promptLibraryChunks).doc(`${libraryId}__${bucketId}`);
   }
 
   function buildPromptLibraryOrderDocument(libraryId, orderedIds) {
@@ -690,6 +716,170 @@ function registerPromptLibraryHandlers(deps) {
       hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
     }
     return `b${String(hash % PROMPT_LIBRARY_BUCKET_COUNT).padStart(2, "0")}`;
+  }
+
+  async function maybeMigrateLegacyPromptLibrary(owner) {
+    if (!promptLegacySource || !promptLibraryCollections.migrations || !owner?.providerUserKey) {
+      return null;
+    }
+    const migrationRef = db.collection(promptLibraryCollections.migrations).doc(owner.providerUserKey);
+    const currentMigration = normalizePromptLibraryMigration((await migrationRef.get()).data());
+    if (currentMigration.completedAt) {
+      return currentMigration;
+    }
+
+    const startedAt = currentMigration.startedAt || new Date().toISOString();
+    const attemptCount = Math.max(0, Number(currentMigration.attemptCount) || 0) + 1;
+    await migrationRef.set({
+      attemptCount,
+      completedAt: currentMigration.completedAt,
+      lastError: "",
+      sourceLane: "legacy",
+      startedAt,
+      targetLane: "v2",
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      version: 1,
+    }, { merge: true });
+
+    try {
+      const currentLibraryId = buildPromptLibraryId(owner.providerUserKey);
+      const currentLibrarySnapshot = await db.collection(promptLibraryCollections.promptLibraries).doc(currentLibraryId).get();
+      const currentLibraryState = await loadPersistedPromptLibraryRecord(currentLibraryId, currentLibrarySnapshot, promptLibraryCollections);
+      if (currentLibraryState.found) {
+        const nextMigration = normalizePromptLibraryMigration({
+          attemptCount,
+          completedAt: new Date().toISOString(),
+          lastError: "",
+          sourceLane: "legacy",
+          sourceRevision: inferPromptLibrarySourceRevision(currentLibraryState),
+          startedAt,
+          targetLane: "v2",
+          version: 1,
+        });
+        await migrationRef.set(nextMigration, { merge: true });
+        return nextMigration;
+      }
+
+      const legacyLibraryId = promptLegacySource.buildPromptLibraryId(owner.providerUserKey);
+      const legacyLibrarySnapshot = await db.collection(promptLegacySource.promptLibraries).doc(legacyLibraryId).get();
+      const legacyLibraryState = await loadPersistedPromptLibrary(legacyLibraryId, legacyLibrarySnapshot, promptLegacySource);
+      if (!legacyLibraryState.found) {
+        const nextMigration = normalizePromptLibraryMigration({
+          attemptCount,
+          completedAt: new Date().toISOString(),
+          lastError: "",
+          sourceLane: "legacy",
+          sourceRevision: "legacy-empty",
+          startedAt,
+          targetLane: "v2",
+          version: 1,
+        });
+        await migrationRef.set(nextMigration, { merge: true });
+        return nextMigration;
+      }
+
+      const promptLibrary = normalizeStoredPromptLibrary(legacyLibraryState.promptLibrary);
+      const bucketIds = await writePromptLibrarySnapshot(currentLibraryId, promptLibrary, [], promptLibraryCollections);
+      const promptLibraryMeta = buildPromptLibraryMeta(
+        promptLibrary,
+        legacyLibraryState.meta.lastRevision,
+        legacyLibraryState.syncedAt || legacyLibraryState.meta.lastSyncedAt,
+        bucketIds
+      );
+
+      await Promise.all([
+        db.collection(promptLibraryCollections.accounts).doc(owner.providerUserKey).set(
+          {
+            provider: owner.provider,
+            providerUserKey: owner.providerUserKey,
+            email: owner.email,
+            displayName: owner.displayName,
+            numericUserId: owner.numericUserId,
+            lastPromptSyncAt: legacyLibraryState.syncedAt || legacyLibraryState.meta.lastSyncedAt,
+            promptLibraryId: currentLibraryId,
+            promptLibraryMeta,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        ),
+        db.collection(promptLibraryCollections.promptLibraries).doc(currentLibraryId).set(
+          {
+            schemaVersion: 2,
+            libraryId: currentLibraryId,
+            source: {
+              integration: "inova",
+              kind: "prompt-library-v2-migration",
+              migratedFromLibraryId: legacyLibraryId,
+            },
+            owner: normalizeIdentity(legacyLibraryState.owner || owner),
+            promptLibrary: {
+              itemCount: promptLibrary.itemCount,
+              updatedAt: promptLibrary.updatedAt,
+              version: promptLibrary.version,
+            },
+            promptLibraryMeta,
+            sync: {
+              lastReason: "lane-migration",
+              lastRevision: promptLibraryMeta.lastRevision,
+              lastSyncedAt: promptLibraryMeta.lastSyncedAt,
+              status: "synced",
+            },
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        ),
+      ]);
+
+      const nextMigration = normalizePromptLibraryMigration({
+        attemptCount,
+        completedAt: new Date().toISOString(),
+        lastError: "",
+        sourceLane: "legacy",
+        sourceRevision: inferPromptLibrarySourceRevision(legacyLibraryState),
+        startedAt,
+        targetLane: "v2",
+        version: 1,
+      });
+      await migrationRef.set(nextMigration, { merge: true });
+      return nextMigration;
+    } catch (error) {
+      await migrationRef.set({
+        attemptCount,
+        lastError: normalizeText(error?.message),
+        sourceLane: "legacy",
+        startedAt,
+        targetLane: "v2",
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        version: 1,
+      }, { merge: true });
+      throw error;
+    }
+  }
+
+  function inferPromptLibrarySourceRevision(promptLibraryState) {
+    return normalizeText(
+      promptLibraryState?.meta?.lastRevision
+      || promptLibraryState?.syncedAt
+      || promptLibraryState?.meta?.lastSyncedAt
+      || promptLibraryState?.promptLibrary?.updatedAt
+    ) || "legacy-unknown";
+  }
+
+  function normalizePromptLibraryMigration(input) {
+    return {
+      attemptCount: Math.max(0, Number(input?.attemptCount) || 0),
+      completedAt: normalizeText(input?.completedAt),
+      lastError: normalizeText(input?.lastError),
+      sourceLane: normalizeText(input?.sourceLane),
+      sourceRevision: normalizeText(input?.sourceRevision),
+      startedAt: normalizeText(input?.startedAt),
+      targetLane: normalizeText(input?.targetLane),
+      version: Math.max(1, Number(input?.version) || 1),
+    };
+  }
+
+  function normalizeCollectionName(value, fallback) {
+    return normalizeText(value) || normalizeText(fallback);
   }
 
   function createEmptyReplaceOperation() {

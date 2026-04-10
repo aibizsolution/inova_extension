@@ -83,6 +83,7 @@ if (countJavaScriptFiles(sharedDirectory) < 3) {
 }
 
 assertFileExists("scripts/verify-prompt-fallbacks.js");
+assertFileExists("eslint.config.js");
 assertNoPattern("content/prompt-hub-runtime.js", /onPromptLibraryFallback:\s*\(\)\s*=>\s*\{\s*\}/, "prompt library fallback가 no-op이면 안 됩니다.");
 assertNoPattern("content/meeting-manager.js", /source:\s*"fallback"/, "meeting hub는 fallback success처럼 source를 표기하면 안 됩니다.");
 assertNoPattern("content/features/prompt-store/store-manager.js", /source:\s*"fallback"/, "store manager는 fallback success처럼 source를 표기하면 안 됩니다.");

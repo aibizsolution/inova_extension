@@ -22,6 +22,7 @@
     viewer: null,
   };
   let services = null;
+  let emulatorsApplied = false;
   let firestoreReadyPromise = null;
 
   async function sha256Hex(input) {
@@ -106,6 +107,7 @@
       auth: firebase.auth(app),
       firestore: firebase.firestore(app),
     };
+    applyFirebaseEmulators(services);
     return services;
   }
 
@@ -136,6 +138,29 @@
       return nextServices;
     })();
     return firestoreReadyPromise;
+  }
+
+  function applyFirebaseEmulators(nextServices) {
+    if (emulatorsApplied) {
+      return;
+    }
+    const emulatorConfig = CONFIG.emulators && typeof CONFIG.emulators === "object" ? CONFIG.emulators : {};
+    if (!emulatorConfig.enabled) {
+      emulatorsApplied = true;
+      return;
+    }
+    if (typeof nextServices.auth?.useEmulator === "function") {
+      nextServices.auth.useEmulator(emulatorConfig.authUrl);
+    }
+    if (typeof nextServices.firestore?.useEmulator === "function") {
+      nextServices.firestore.useEmulator(emulatorConfig.firestoreHost, Number(emulatorConfig.firestorePort) || 8080);
+    }
+    emulatorsApplied = true;
+    logDebug("firebase.emulators.connected", {
+      authUrl: normalizeText(emulatorConfig.authUrl),
+      firestoreHost: normalizeText(emulatorConfig.firestoreHost),
+      firestorePort: Number(emulatorConfig.firestorePort) || 0,
+    });
   }
 
   function setWorkspaceAccess(payload) {

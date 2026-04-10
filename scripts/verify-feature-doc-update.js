@@ -82,7 +82,7 @@ const FEATURE_DOC_RULES = [
 function main() {
   const args = process.argv.slice(2);
   const mode = args[0] || "";
-  let changedFiles = [];
+  let changedFiles;
 
   if (mode === "--staged") {
     changedFiles = getChangedFilesForArgs(["diff", "--cached", "--name-only", "--diff-filter=ACMR"]);
@@ -104,21 +104,23 @@ function main() {
     .filter(Boolean);
 
   if (failures.length > 0) {
-    fail([
-      "feature-owned 파일이 바뀌었는데 해당 feature 문서가 같이 갱신되지 않았어요.",
-      "README가 아니라 그 feature의 `AGENTS.md` 또는 전용 feature docs를 먼저 맞춰 주세요.",
+    console.warn([
+      "Feature 문서 audit: 검토 후보가 있습니다.",
+      "이 스크립트는 더 이상 커밋을 막지 않습니다.",
+      "entrypoint, 데이터 경계, 최소 검증, durable invariant가 실제로 바뀐 경우에만 해당 feature 문서를 갱신하세요.",
       "",
       ...failures.flatMap((failure) => [
         `[${failure.feature}]`,
-        `필수 문서: ${failure.docs.join(", ")}`,
+        `검토 후보 문서: ${failure.docs.join(", ")}`,
         "감지한 변경 파일:",
         ...failure.files.map((file) => `- ${file}`),
         "",
       ]),
     ].join("\n").trim());
+    return;
   }
 
-  console.log("Feature 문서 업데이트 가드 통과");
+  console.log("Feature 문서 audit 통과");
 }
 
 function buildRuleFailure(rule, changedFiles) {
