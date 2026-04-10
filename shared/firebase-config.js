@@ -12,6 +12,7 @@
     issueInovaPromptPanelAuthUrl: "issueInovaPromptPanelAuth",
     issueInovaMeetingWorkspaceAuthUrl: "issueInovaMeetingWorkspaceAuth",
     listInovaMeetingsUrl: "listInovaMeetings",
+    moveInovaMeetingResultUrl: "moveInovaMeetingResult",
     uploadInovaMeetingSourceUrl: "uploadInovaMeetingSource",
     updateInovaMeetingUrl: "updateInovaMeeting",
     updateInovaMeetingResultUrl: "updateInovaMeetingResult",

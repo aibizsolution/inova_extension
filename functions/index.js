@@ -206,6 +206,7 @@ exports.issueInovaMeetingLaunch = meetingLaunchHandlers.issueInovaMeetingLaunch;
 exports.issueInovaMeetingPanelAuth = meetingLaunchHandlers.issueInovaMeetingPanelAuth;
 exports.issueInovaMeetingWorkspaceAuth = meetingLaunchHandlers.issueInovaMeetingWorkspaceAuth;
 exports.listInovaMeetings = meetingHandlers.listInovaMeetings;
+exports.moveInovaMeetingResult = meetingHandlers.moveInovaMeetingResult;
 exports.previewInovaMeetingResultSectionEdit = meetingHandlers.previewInovaMeetingResultSectionEdit;
 exports.revokeInovaMeetingShareLink = meetingWorkspaceAuthHandlers.revokeInovaMeetingShareLink;
 exports.updateInovaMeeting = meetingHandlers.updateInovaMeeting;

@@ -723,6 +723,7 @@ async function drainChunkedMeetingPipeline(handlers, state, jobId) {
     }
   }
 }
+
 function createResponse() {
   return {
     jsonBody: null,
@@ -758,6 +759,7 @@ function normalizeText(value) {
 function cloneValue(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
 }
+
 module.exports = {
   ARTIFACT_COLLECTION,
   COMMAND_COLLECTION,

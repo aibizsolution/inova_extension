@@ -29,12 +29,20 @@ function main() {
   const reviewTabActions = document.getElementById("reviewTabActions");
   const copySegmentsButton = document.getElementById("copySegmentsButton");
   const copyMeetingNotesButton = document.getElementById("copyMeetingNotesButton");
+  const moveRecordButton = document.getElementById("moveRecordButton");
+  const recordMoveConfirm = document.getElementById("recordMoveConfirm");
+  const recordMoveList = document.getElementById("recordMoveList");
+  const recordMoveOverlay = document.getElementById("recordMoveOverlay");
   const toggleTermReplacementButton = document.getElementById("toggleTermReplacementButton");
 
   assert(reviewTabActions, "Hosted workspace should render the shared review action row");
   assert.equal(document.getElementById("reviewSegmentsToolbar"), null, "Separate segments toolbar should be removed");
   assert(copySegmentsButton, "Hosted workspace should render the transcript copy action");
   assert(copyMeetingNotesButton, "Hosted workspace should render the meeting notes copy action");
+  assert(moveRecordButton, "Hosted workspace should render the move record action in the detail action row");
+  assert(recordMoveOverlay, "Hosted workspace should render the dedicated move record overlay");
+  assert(recordMoveList, "Hosted workspace should render the move target list");
+  assert(recordMoveConfirm, "Hosted workspace should render the move confirm action");
   assert(toggleTermReplacementButton, "Hosted workspace should render the term replacement toggle");
   assert(
     reviewTabActions.contains(copySegmentsButton) && reviewTabActions.contains(copyMeetingNotesButton),
@@ -57,6 +65,7 @@ function main() {
   );
 
   assert.equal(document.getElementById("sectionEditStatus"), null, "Section edit dialog should not render a separate status strip");
+  assert.equal(document.querySelector("#reviewTabActions #moveRecordButton"), null, "Move record action should not live in the shared review action row");
 
   console.log("[verify-meeting-hosted-ui] Hosted meeting UI contract passed");
 }

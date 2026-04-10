@@ -17,6 +17,7 @@ const {
   invokeHandler,
   invokeJobWriteTrigger,
 } = require("../test-support/verify-meeting-service-support");
+const { verifyMoveMeetingResultFlow } = require("../test-support/verify-meeting-record-move-support");
 
 async function main() {
   const owner = {
@@ -228,6 +229,7 @@ async function main() {
   await invokeJobWriteTrigger(handlers, state, compactJobId);
   const compactStoredJob = getDoc(state, JOB_COLLECTION, compactJobId);
   assert(compactStoredJob);
+  const compactArtifactId = compactStoredJob.transcript.artifactId;
   assert.equal(compactStoredJob.notesStatus, "succeeded");
   assert.equal(compactStoredJob.meetingNotes.meetingMeta.title, "녹음 테스트 및 마이크 위치 확인");
   assert.equal(compactStoredJob.meetingNotes.meetingMeta.purpose, "");
@@ -434,6 +436,16 @@ async function main() {
   assert.equal(summaryEditedJob.meetingNotes.summary, summaryPreview.jsonBody.data.sectionData.summary);
   assert.equal(summaryEditedArtifact.notes.summary, summaryPreview.jsonBody.data.sectionData.summary);
   assert.equal(summaryEditedJob.meetingNotes.overview, previewedSection.jsonBody.data.sectionData.overview);
+
+  await verifyMoveMeetingResultFlow({
+    audioPayload,
+    compactArtifactId,
+    compactJobId,
+    handlers,
+    invokeJobWriteTrigger,
+    owner,
+    state,
+  });
 
   const deletedResult = await invokeHandler(handlers.deleteInovaMeetingResult, {
     body: {

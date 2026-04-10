@@ -168,6 +168,7 @@
                   <input id="recordTitleInput" class="meeting-input" type="text" placeholder="기록 이름" />
                   <button id="saveRecordTitleButton" class="secondary-button" type="button">이름 저장</button>
                   <button id="downloadRecordButton" class="ghost-button" type="button" hidden>다운로드</button>
+                  <button id="moveRecordButton" class="secondary-button" type="button" hidden>기록 이동</button>
                   <button id="deleteRecordButton" class="danger-button" type="button">삭제</button>
                 </div>
               </div>
@@ -300,6 +301,18 @@
           <div class="confirm-dialog__actions">
             <button id="confirmDialogCancel" class="ghost-button" type="button">취소</button>
             <button id="confirmDialogConfirm" class="danger-button" type="button">삭제</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="recordMoveOverlay" class="confirm-overlay" hidden>
+        <div id="recordMoveDialog" class="confirm-dialog record-move-dialog" role="dialog" aria-modal="true" aria-labelledby="recordMoveDialogTitle">
+          <h2 id="recordMoveDialogTitle" class="confirm-dialog__title">이동할 회의 룸 선택</h2>
+          <div id="recordMoveNotice" class="record-move__notice" hidden></div>
+          <div id="recordMoveList" class="record-move__list" role="listbox" aria-label="회의 룸 목록"></div>
+          <div class="confirm-dialog__actions">
+            <button id="recordMoveCancel" class="ghost-button" type="button">취소</button>
+            <button id="recordMoveConfirm" class="secondary-button" type="button">이동</button>
           </div>
         </div>
       </section>

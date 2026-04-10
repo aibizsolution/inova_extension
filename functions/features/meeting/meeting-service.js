@@ -89,6 +89,7 @@ const SUPPORTED_WORKSPACE_MUTATION_TYPES = new Set([
   "applySectionEdit",
   "deleteMeeting",
   "deleteRecord",
+  "moveRecord",
   "saveMeetingMemo",
   "saveMeetingTermReplacements",
   "saveMeetingTitle",
@@ -169,6 +170,7 @@ const {
   normalizeMeetingHubListRequest,
   normalizeMeetingMutationRequest,
   normalizeMeetingResultMutationRequest,
+  normalizeMeetingResultMoveRequest,
   normalizeMeetingSectionEditApplyRequest,
   normalizeMeetingSectionEditPreviewRequest,
   normalizeMeetingTaskOwner,
@@ -985,6 +987,171 @@ function registerMeetingHandlers(deps) {
     }
   });
 
+  const moveInovaMeetingResult = onRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
+    try {
+      assertMethod(request);
+      const input = normalizeMeetingResultMoveRequest(request.body);
+      const access = await verifyRequestIdentity(request);
+      const owner = access.owner;
+
+      if (!input.meetingId || !input.jobId || !input.targetMeetingId) {
+        throw createHttpError(400, "이동할 회의 결과 ID가 비어 있어요.");
+      }
+      if (input.meetingId === input.targetMeetingId) {
+        throw createHttpError(400, "같은 회의 룸으로는 이동할 수 없어요.");
+      }
+      assertWorkspaceMeetingAccess(access, input.meetingId, createHttpError);
+
+      const jobRef = db.collection(JOB_COLLECTION).doc(input.jobId);
+      const sourceMeetingRef = db.collection(MEETING_COLLECTION).doc(buildMeetingDocId(owner.providerUserKey, input.meetingId));
+      const targetMeetingRef = db.collection(MEETING_COLLECTION).doc(buildMeetingDocId(owner.providerUserKey, input.targetMeetingId));
+      const movedAt = new Date().toISOString();
+      const result = await db.runTransaction(async (transaction) => {
+        const [jobSnapshot, sourceMeetingSnapshot, targetMeetingSnapshot] = await Promise.all([
+          transaction.get(jobRef),
+          transaction.get(sourceMeetingRef),
+          transaction.get(targetMeetingRef),
+        ]);
+
+        if (!jobSnapshot.exists) {
+          throw createHttpError(404, "이동할 회의 결과를 찾지 못했어요.");
+        }
+        if (!sourceMeetingSnapshot.exists) {
+          throw createHttpError(404, "현재 회의 룸을 찾지 못했어요.");
+        }
+        if (!targetMeetingSnapshot.exists) {
+          throw createHttpError(404, "이동할 회의 룸을 찾지 못했어요.");
+        }
+
+        const rawJobData = jobSnapshot.data();
+        const persistedJobTitle = normalizeText(rawJobData?.title);
+        const job = normalizeMeetingJob(rawJobData);
+        const sourceMeeting = normalizeMeetingSummary(sourceMeetingSnapshot.data());
+        const targetMeeting = normalizeMeetingSummary(targetMeetingSnapshot.data());
+
+        assertJobOwnership(job, owner, createHttpError);
+        assertMeetingOwnership(sourceMeeting, owner, createHttpError);
+        assertMeetingOwnership(targetMeeting, owner, createHttpError);
+
+        if (job.deletedAt) {
+          throw createHttpError(404, "이미 삭제된 회의 결과예요.");
+        }
+        if (job.meetingId !== input.meetingId) {
+          throw createHttpError(404, "현재 회의와 맞지 않는 결과예요.");
+        }
+        if (job.status !== "succeeded") {
+          throw createHttpError(409, "완료된 기록만 이동할 수 있어요.");
+        }
+        if (sourceMeeting.deletedAt) {
+          throw createHttpError(404, "현재 회의 룸을 더 이상 찾을 수 없어요.");
+        }
+        if (targetMeeting.deletedAt) {
+          throw createHttpError(404, "이동할 회의 룸이 이미 삭제되었어요.");
+        }
+
+        const artifactId = normalizeText(job.transcript?.artifactId || job.artifacts?.[0]?.artifactId);
+        const artifactRef = artifactId ? db.collection(ARTIFACT_COLLECTION).doc(artifactId) : null;
+        const artifactSnapshot = artifactRef ? await transaction.get(artifactRef) : null;
+        const artifact = artifactSnapshot?.exists ? normalizeMeetingArtifact(artifactSnapshot.data()) : null;
+        const sourceSummaryItem = sourceMeeting.recentJobs.find((item) => normalizeText(item.jobId) === job.jobId) || null;
+        const notesTitle = normalizeText(artifact?.notes?.meetingMeta?.title || job.meetingNotes?.meetingMeta?.title);
+        const materializedTitle = normalizeText(
+          persistedJobTitle
+          || sourceSummaryItem?.title
+          || notesTitle
+          || job.meeting?.title
+          || sourceMeeting.title
+          || targetMeeting.title
+          || "새 기록"
+        );
+        const workspaceMutation = buildWorkspaceMutation({
+          completedAt: movedAt,
+          requestId: input.clientRequestId,
+          requestedAt: movedAt,
+          status: "succeeded",
+          type: "moveRecord",
+        });
+        const nextJobPatch = {
+          meeting: {
+            ...job.meeting,
+            meetingId: input.targetMeetingId,
+            title: targetMeeting.title,
+          },
+          meetingId: input.targetMeetingId,
+          title: materializedTitle,
+          updatedAt: movedAt,
+          ...(workspaceMutation.requestId ? { workspaceMutation } : {}),
+        };
+        const nextJob = normalizeMeetingJob({
+          ...job,
+          ...nextJobPatch,
+          meeting: {
+            ...job.meeting,
+            meetingId: input.targetMeetingId,
+            title: targetMeeting.title,
+          },
+        });
+        const nextArtifactPatch = artifact
+          ? {
+              meetingId: input.targetMeetingId,
+            }
+          : null;
+        const nextArtifact = artifact
+          ? normalizeMeetingArtifact({
+              ...artifact,
+              meetingId: input.targetMeetingId,
+            })
+          : null;
+        const movedSummary = buildMeetingResultSummary(nextJob, nextArtifact);
+        const nextSourceRecentJobs = sourceMeeting.recentJobs.filter((item) => normalizeText(item.jobId) !== job.jobId);
+        const nextTargetRecentJobs = mergeRecentJobs(targetMeeting.recentJobs, movedSummary);
+
+        transaction.set(jobRef, nextJobPatch, { merge: true });
+        if (artifactRef && nextArtifactPatch) {
+          transaction.set(artifactRef, nextArtifactPatch, { merge: true });
+        }
+        transaction.set(sourceMeetingRef, {
+          ...buildMeetingRecentJobsPatch(sourceMeeting, nextSourceRecentJobs, movedAt),
+          meetingId: sourceMeeting.meetingId || input.meetingId,
+        }, { merge: true });
+        transaction.set(targetMeetingRef, {
+          ...buildMeetingRecentJobsPatch(targetMeeting, nextTargetRecentJobs, movedAt),
+          meetingId: targetMeeting.meetingId || input.targetMeetingId,
+        }, { merge: true });
+
+        return {
+          artifactId,
+          jobId: job.jobId,
+          targetMeetingId: input.targetMeetingId,
+        };
+      });
+
+      logEvent("meeting.result.move.success", {
+        artifactId: result?.artifactId || "",
+        jobId: input.jobId,
+        meetingId: input.meetingId,
+        providerUserKey: owner.providerUserKey,
+        targetMeetingId: input.targetMeetingId,
+      });
+      response.json({
+        ok: true,
+        data: {
+          accepted: true,
+          jobId: result?.jobId || input.jobId,
+          meetingId: input.meetingId,
+          requestId: input.clientRequestId,
+          targetMeetingId: result?.targetMeetingId || input.targetMeetingId,
+        },
+      });
+    } catch (error) {
+      logEvent("meeting.result.move.error", {
+        error: normalizeText(error?.message),
+        status: Number(error?.status) || 500,
+      });
+      sendError(response, error);
+    }
+  });
+
   const deleteInovaMeetingResult = onRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
     try {
       assertMethod(request);
@@ -1209,6 +1376,7 @@ function registerMeetingHandlers(deps) {
     deleteInovaMeetingResult,
     finalizeChunkedMeetingJobWrite,
     listInovaMeetings,
+    moveInovaMeetingResult,
     previewInovaMeetingResultSectionEdit,
     processQueuedMeetingCommandWrite,
     processMeetingDeletionWrite,

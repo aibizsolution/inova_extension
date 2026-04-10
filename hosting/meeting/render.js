@@ -1065,6 +1065,7 @@
     const canRenameSelectedRecord = activeEntry?.remote?.jobId ? !remoteRecordLocked : Boolean(activeEntry?.pending?.requestId);
     const canDownloadSelectedRecord = Boolean(activeEntry?.pending?.requestId && Number(activeEntry?.pending?.blob?.size || activeEntry?.pending?.sizeBytes) > 0);
     const canDeleteSelectedRecord = activeEntry?.remote?.jobId ? !remoteRecordLocked : Boolean(activeEntry?.pending?.requestId);
+    const canMoveSelectedRecord = Boolean(activeEntry?.remote?.jobId) && normalizeText(detailView.badgeStatus) === "succeeded";
     const savedRecordTitle = normalizeText(detailView.recordTitle);
     const draftRecordTitle = normalizeText(global.document.activeElement === refs.recordTitleInput ? refs.recordTitleInput.value : savedRecordTitle || refs.recordTitleInput?.value);
     const recordTitleDirty = Boolean(draftRecordTitle && draftRecordTitle !== savedRecordTitle);
@@ -1154,6 +1155,8 @@
     refs.saveRecordTitleButton.textContent = state.busy.saveRecordTitle ? "저장 중" : recordTitleDirty ? "이름 저장" : "저장됨";
     refs.downloadRecordButton.hidden = readOnly || !canDownloadSelectedRecord;
     refs.downloadRecordButton.disabled = readOnly || !canDownloadSelectedRecord;
+    refs.moveRecordButton.hidden = readOnly || !canMoveSelectedRecord;
+    refs.moveRecordButton.disabled = readOnly || !canMoveSelectedRecord || selectedRecordMutationBusy;
     refs.deleteRecordButton.disabled = readOnly || !canDeleteSelectedRecord || selectedRecordMutationBusy;
     refs.deleteRecordButton.hidden = readOnly;
     refs.detailMeta.hidden = !detailView.meta.length;

@@ -222,6 +222,8 @@
       functionsBaseUrl,
       emulators,
       issueWorkspaceAuthUrl: joinUrl(functionsBaseUrl, "issueInovaMeetingWorkspaceAuth"),
+      listMeetingsUrl: joinUrl(functionsBaseUrl, "listInovaMeetings"),
+      moveMeetingResultUrl: joinUrl(functionsBaseUrl, "moveInovaMeetingResult"),
       previewMeetingResultSectionEditUrl: joinUrl(functionsBaseUrl, "previewInovaMeetingResultSectionEdit"),
       revokeShareLinkUrl: joinUrl(functionsBaseUrl, "revokeInovaMeetingShareLink"),
       uploadSourceUrl: joinUrl(functionsBaseUrl, "uploadInovaMeetingSource"),
