@@ -820,6 +820,7 @@
         if (actionButton instanceof global.HTMLElement) return handleLocalQueueAction(actionButton.dataset.localAction, actionButton.dataset.requestId);
         const target = event.target.closest("[data-record-id]");
         if (!(target instanceof global.HTMLElement)) return;
+        state.autoFocusRecordRequestId = "";
         state.selectedRecordId = normalizeText(target.dataset.recordId);
         state.reviewTab = "notes";
         persistWorkspaceSession();

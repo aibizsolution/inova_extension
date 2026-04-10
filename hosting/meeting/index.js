@@ -174,6 +174,7 @@
       blockedTitle: "이 회의 룸은 패널에서 다시 열어야 합니다",
       blockedTone: "blocked",
       blockedMessage: "",
+      autoFocusRecordRequestId: "",
       busy: {
         applySectionEdit: false,
         deleteMeeting: false,

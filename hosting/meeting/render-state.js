@@ -292,6 +292,16 @@
 
   function chooseSelectedRecordId(state) {
     const historyEntries = buildHistoryEntries(state);
+    const autoFocusRequestId = normalizeText(state.autoFocusRecordRequestId);
+    if (autoFocusRequestId) {
+      const autoFocusedEntry = historyEntries.find((entry) => (
+        normalizeText(entry?.pending?.requestId) === autoFocusRequestId
+        || normalizeText(entry?.remote?.requestId) === autoFocusRequestId
+      ));
+      if (autoFocusedEntry?.id) {
+        return autoFocusedEntry.id;
+      }
+    }
     if (normalizeText(state.params.jobId)) {
       const requestedId = ns.shared.buildRemoteSelectionId(state.params.jobId);
       if (historyEntries.some((entry) => entry.id === requestedId)) return requestedId;

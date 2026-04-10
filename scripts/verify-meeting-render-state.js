@@ -47,8 +47,9 @@ function main() {
 
   require(path.resolve(__dirname, "..", "hosting", "meeting", "render-state.js"));
 
-  const { buildHistoryEntries, findRemoteForPending } = namespace.renderState;
+  const { buildHistoryEntries, chooseSelectedRecordId, findRemoteForPending } = namespace.renderState;
   const state = {
+    autoFocusRecordRequestId: "capture-1",
     pendingUploads: [
       {
         createdAt: "2026-04-10T07:31:00.000Z",
@@ -60,6 +61,15 @@ function main() {
       },
     ],
     records: [
+      {
+        createdAt: "2026-04-10T07:20:01.000Z",
+        durationMs: 3000,
+        jobId: "job-old",
+        requestId: "capture-old",
+        status: "succeeded",
+        title: "기존 기록",
+        updatedAt: "2026-04-10T07:20:04.000Z",
+      },
       {
         createdAt: "2026-04-10T07:31:01.000Z",
         durationMs: 4000,
@@ -77,10 +87,19 @@ function main() {
   assert.equal(matchedRemote.jobId, "job-1");
 
   const historyEntries = buildHistoryEntries(state);
-  assert.equal(historyEntries.length, 1, "Pending and remote entries with the same requestId should render as one history card");
+  assert.equal(historyEntries.length, 2, "Pending and remote entries with the same requestId should merge while existing records remain visible");
   assert.equal(historyEntries[0].id, "remote:job-1");
   assert(historyEntries[0].pending, "Merged history entry should keep pending upload state");
   assert(historyEntries[0].remote, "Merged history entry should keep remote job state");
+  assert.equal(
+    chooseSelectedRecordId({
+      ...state,
+      params: {},
+      selectedRecordId: "remote:job-old",
+    }),
+    "remote:job-1",
+    "Auto-focus requestId should move selection to the newly created record once it appears"
+  );
 
   console.log("[verify-meeting-render-state] Hosted meeting render-state merge contract passed");
 }
