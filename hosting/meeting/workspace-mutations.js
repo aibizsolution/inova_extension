@@ -1,13 +1,13 @@
 (function initHostedMeetingWorkspaceMutations(global) {
   const ns = global.__INOVA_HOSTED_MEETING__ = global.__INOVA_HOSTED_MEETING__ || {};
-  const SECTION_LABELS = Object.freeze({
-    actionItems: "후속 실행 항목",
-    decisions: "주요 결정 사항",
-    discussionFlow: "논의 흐름",
-    openQuestions: "추가 결정 필요 사항",
-    overview: "회의 개요",
-    risksOrDependencies: "리스크 및 제약",
-  });
+const SECTION_LABELS = Object.freeze({
+  actionItems: "후속 실행 항목",
+  decisions: "주요 결정 사항",
+  discussionFlow: "논의 흐름",
+  openQuestions: "추가 결정 필요 사항",
+  overview: "회의 개요",
+  risksOrDependencies: "리스크 및 제약",
+});
 
   ns.workspaceMutations = {
     createController(deps) {
@@ -732,8 +732,6 @@
                 preserveInstruction: true,
                 recordId: state.sectionEdit.recordId,
                 sectionKey: state.sectionEdit.sectionKey,
-                statusText: "용어 치환을 반영했습니다. 필요하면 새 미리보기를 다시 만들어 주세요.",
-              statusTone: "highlight",
             });
             await refreshWorkspace(true, "workflow");
           }
@@ -939,8 +937,6 @@
           type: "previewSectionEdit",
         });
         state.reviewTab = "notes";
-        state.sectionEdit.statusText = "미리보기를 만드는 중입니다.";
-        state.sectionEdit.statusTone = "highlight";
         applyRender();
         try {
           const payload = await postJson(globalObject, CONFIG.previewMeetingResultSectionEditUrl, {
@@ -955,8 +951,6 @@
             ? JSON.parse(JSON.stringify(payload.sectionData))
             : null;
           state.sectionEdit.previewSectionKey = normalizeText(payload.sectionKey || sectionKey) || sectionKey;
-          state.sectionEdit.statusText = "미리보기를 만들었습니다. 확인 후 적용해 주세요.";
-          state.sectionEdit.statusTone = "highlight";
           await finalizePendingMutation(requestId, "succeeded");
           return true;
         } catch (error) {
@@ -999,8 +993,6 @@
           type: "applySectionEdit",
         });
         state.reviewTab = "notes";
-        state.sectionEdit.statusText = "선택한 섹션을 적용하는 중입니다.";
-        state.sectionEdit.statusTone = "highlight";
         applyRender();
         try {
           const payload = await postJson(globalObject, CONFIG.applyMeetingResultSectionEditUrl, {
@@ -1119,6 +1111,7 @@
       }
 
       function canRenderNotesTools() {
+        if (state.reviewTab === "segments" || state.reviewTab === "memo") return false;
         const entry = findHistoryEntry(state, state.selectedRecordId);
         const remoteStatus = normalizeText(state.currentJob?.status || entry?.remote?.status);
         return Boolean(
@@ -1200,7 +1193,8 @@
         if (refs.termReplacementDirtyBadge) refs.termReplacementDirtyBadge.hidden = !termDirty;
         if (refs.termReplacementPanel) refs.termReplacementPanel.hidden = !state.termReplacementState.open;
         if (refs.toggleTermReplacementButton) {
-          refs.toggleTermReplacementButton.textContent = "용어 치환";
+          const labelSpan = refs.toggleTermReplacementButton.querySelector("span:first-child");
+          if (labelSpan) labelSpan.textContent = "용어 치환";
           refs.toggleTermReplacementButton.setAttribute("aria-expanded", state.termReplacementState.open ? "true" : "false");
         }
         if (refs.termReplacementFromInput) refs.termReplacementFromInput.disabled = readOnly || termBusy;
@@ -1228,7 +1222,6 @@
           const hasAnyPreviewState = Boolean(
             state.sectionEdit.baseRevisionToken
             || state.sectionEdit.previewSectionData
-            || normalizeText(state.sectionEdit.statusText)
           );
           refs.cancelSectionEditButton.disabled = readOnly || selectedRecordBusy || !hasAnyPreviewState;
         }

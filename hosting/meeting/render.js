@@ -1109,9 +1109,9 @@
     refs.currentHint.hidden = !normalizeText(recorderView.hint);
     refs.currentHint.textContent = recorderView.hint;
     refs.currentTimer.textContent = currentTimerText;
-    refs.currentNotice.hidden = !state.notice.text;
-    refs.currentNotice.textContent = state.notice.text;
-    refs.currentNotice.dataset.tone = state.notice.tone || "";
+    refs.toastNotice.hidden = !state.notice.text;
+    refs.toastNotice.textContent = state.notice.text;
+    refs.toastNotice.dataset.tone = state.notice.tone || "";
     refs.startButton.hidden = !recorderView.showStart;
     refs.importAudioButton.hidden = !recorderView.showStart;
     refs.pauseButton.hidden = !recorderView.showPause;
@@ -1197,7 +1197,6 @@
       refs.summaryStatusPill.textContent = detailView.badgeLabel;
       refs.summaryStatusPill.dataset.status = detailView.badgeStatus;
     }
-    refs.reviewSegmentsToolbar.hidden = activeReviewTab !== "segments" || !hasSegmentContent;
     refs.copySegmentsButton.hidden = activeReviewTab !== "segments" || !hasSegmentContent;
     refs.copySegmentsButton.disabled = activeReviewTab !== "segments" || !hasSegmentContent;
     refs.summaryStatusGrid.hidden = !summaryFlow.steps.length;

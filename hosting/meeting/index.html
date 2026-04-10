@@ -74,7 +74,7 @@
             </div>
 
             <div class="workspace-header__toolbar">
-              <button id="deleteMeetingButton" class="danger-button" type="button">회의 룸 삭제</button>
+              <div id="toastNotice" class="toast-notice" hidden></div>
             </div>
           </div>
 
@@ -87,6 +87,7 @@
                 </div>
               </div>
               <span id="meetingStatusChip" class="chip" hidden>회의 준비</span>
+              <button id="deleteMeetingButton" class="danger-button" type="button">회의 룸 삭제</button>
             </div>
           </div>
         </header>
@@ -106,8 +107,7 @@
                 <strong id="currentTimer" class="capture-meter__value">00:00</strong>
               </div>
               <span id="currentHint" class="hint-text" hidden></span>
-              <div id="currentNotice" class="notice-box" hidden></div>
-              <div class="action-row action-row--stacked">
+                      <div class="action-row action-row--stacked">
                 <div class="segment-cluster segment-cluster--buttons">
                   <button id="startButton" class="primary-button" type="button">녹음 시작</button>
                   <button id="importAudioButton" class="secondary-button" type="button" hidden>파일 불러오기</button>
@@ -193,7 +193,8 @@
                   <button id="reviewTabSegments" class="review-tab" type="button" data-review-tab="segments" role="tab" aria-selected="false"><span class="review-tab__label">원문</span><span id="reviewTabSegmentsCount" class="review-tab__count" hidden>0</span></button>
                 </div>
                 <div id="reviewTabActions" class="review-tab-actions" hidden>
-                  <button id="copyMeetingNotesButton" class="secondary-button" type="button" hidden>복사</button>
+                  <button id="copySegmentsButton" class="secondary-button" type="button" hidden>원문 복사</button>
+                  <button id="copyMeetingNotesButton" class="secondary-button" type="button" hidden>회의 정리 복사</button>
                   <span id="termReplacementDirtyBadge" class="chip chip--muted" hidden>변경 있음</span>
                   <button
                     id="toggleTermReplacementButton"
@@ -256,9 +257,6 @@
               </section>
 
               <section id="reviewPanelSegments" class="review-panel" hidden role="tabpanel">
-                <div id="reviewSegmentsToolbar" class="review-panel__toolbar" hidden>
-                  <button id="copySegmentsButton" class="secondary-button" type="button" hidden>전체 복사</button>
-                </div>
                 <div id="segmentList" class="segment-list" hidden></div>
               </section>
 
@@ -284,7 +282,6 @@
               <button id="cancelSectionEditButton" class="ghost-button ghost-button--soft" type="button">미리보기 지우기</button>
               <button id="applySectionEditButton" class="primary-button" type="button">이 섹션만 적용</button>
             </div>
-            <div id="sectionEditStatus" class="subtle-text" hidden></div>
             <div id="sectionEditPreviewCard" class="notes-section-preview" hidden>
               <div class="notes-section-preview__head">
                 <strong id="sectionEditPreviewTitle" class="notes-section-preview__title">미리보기</strong>

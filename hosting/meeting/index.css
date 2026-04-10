@@ -2044,13 +2044,11 @@ select:disabled {
 
 /* section-edit-dialog는 confirm-dialog보다 넓고 긴 콘텐츠를 담으므로 캐스케이드 순서상 여기서 재정의 */
 .section-edit-dialog {
+  display: grid;
+  gap: 16px;
   width: min(760px, 100%);
   max-height: calc(100svh - 48px);
   overflow-y: auto;
-}
-
-.section-edit-dialog .review-editor__actions {
-  margin-top: 18px;
 }
 
 .confirm-dialog[data-tone="danger"] {
@@ -2247,4 +2245,47 @@ select:disabled {
     justify-content: flex-start;
   }
 
+}
+
+/* ── Floating toast ─────────────────────────────────────────── */
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.toast-notice {
+  max-width: 280px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  animation: toast-in 0.2s ease forwards;
+  pointer-events: none;
+}
+
+.toast-notice[hidden] {
+  display: none;
+}
+
+.toast-notice[data-tone="error"] {
+  border-color: #f2c7be;
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.toast-notice[data-tone="highlight"] {
+  border-color: #c4dafc;
+  background: var(--info-soft);
+  color: var(--info);
+}
+
+.toast-notice[data-tone="warning"] {
+  border-color: #f0d6a3;
+  background: var(--warn-soft);
+  color: var(--warn);
 }
