@@ -160,6 +160,9 @@
 - meeting internal split 20차:
   - OpenAI 전사 호출, retry/error 분류, chunk 병렬 전사, transcript merge/dedupe를 `functions/features/meeting/meeting-processing-runtime-domain.js`로 분리
   - `meeting-processing-domain.js`는 queue/finalizer workflow를 유지하고, `meeting-service.js`는 runtime wiring만 남기며 processing export 이름과 job/part/finalizer 상태 계약 의미는 유지
+- meeting internal split 21차:
+  - temp source 업로드/정리, chunk transcript 저장/로드, runtime artifact cleanup을 `functions/features/meeting/meeting-runtime-artifact-domain.js`로 분리
+  - `meeting-creation-domain.js`, `meeting-processing-domain.js`, `meeting-deletion-domain.js`는 공통 runtime artifact lifecycle을 이 모듈에 위임하고, `meeting-service.js`에는 handler/query/start-delete orchestration만 남긴다
 
 ### 아직 이것만으로 결정되지 않는 것
 
@@ -447,12 +450,16 @@
   - OpenAI 전사 호출, retry/error 분류, chunk 병렬 전사, transcript merge/dedupe를 `functions/features/meeting/meeting-processing-runtime-domain.js`로 이동했다.
   - `meeting-processing-domain.js`는 queue/finalizer workflow와 persisted job orchestration을 유지하고, `meeting-service.js`는 runtime wiring만 남기도록 정리했다.
   - 기존 processing export 이름, job/job_part/finalizer 상태 의미, transcript/notes output contract는 유지했다.
+- meeting internal split 21차:
+  - temp source 업로드/정리, chunk transcript 저장/로드, runtime artifact cleanup을 `functions/features/meeting/meeting-runtime-artifact-domain.js`로 이동했다.
+  - `meeting-creation-domain.js`, `meeting-processing-domain.js`, `meeting-deletion-domain.js`는 공통 runtime artifact lifecycle을 이 모듈에 위임하고, `meeting-service.js`는 handler/query/start-delete orchestration 위주로 줄였다.
+  - 기존 source upload, chunk transcript storage, deletion cleanup, processing export 이름과 persisted contract 의미는 유지했다.
 - 검증:
   - `node scripts/verify-meeting-service.js`
   - `node scripts/verify-meeting-hosted-ui.js`
   - `npm.cmd run verify`
 - 다음 시작점:
-  - 남은 `meeting-service.js` storage/cleanup helper가 실제 `source lifecycle` 또는 `deletion lifecycle` 경계인지 먼저 재평가
+  - 남은 `meeting-service.js` query/start-delete helper가 실제 `deletion request lifecycle` 또는 `meeting query boundary`인지 먼저 재평가
   - helper-only split을 늘리지 말고, workflow/data contract로 설명되는 다음 경계가 없으면 현재 상태를 유지
   - 이후 실제 release 판단이 필요하면 record move 포함 핵심 사용자 흐름을 기준으로 오너 확인을 받아 `functions + hosting + extension reload/배포` 범위를 함께 판단
 ### 2026-04-08
