@@ -221,12 +221,8 @@
 
   function findRemoteForPending(state, pending) {
     if (!pending) return null;
-    const pendingStatus = normalizeText(pending.status);
     const requestId = normalizeText(pending.requestId);
     const jobId = normalizeText(pending.jobId);
-    if (!jobId && ["local_saved", "preparing_chunks", "uploading", "uploading_chunks", "upload_queued"].includes(pendingStatus)) {
-      return null;
-    }
     if (requestId) {
       const byRequestId = state.records.find((record) => normalizeText(record.requestId) === requestId);
       if (byRequestId) return byRequestId;
