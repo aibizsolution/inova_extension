@@ -745,7 +745,7 @@
     refs.termReplacementAddButton?.addEventListener("click", runWritableAction("용어 치환 추가", () => void controllers.mutations.addTermReplacementDraft()));
     refs.termReplacementResetButton?.addEventListener("click", runWritableAction("용어 치환 변경 취소", controllers.mutations.resetTermReplacements));
     refs.termReplacementClearButton?.addEventListener("click", runWritableAction("용어 치환 전체 비우기", controllers.mutations.clearTermReplacements));
-    refs.saveTermReplacementsButton?.addEventListener("click", runWritableAction("용어 치환 저장", () => void controllers.mutations.saveMeetingTermReplacements()));
+    refs.saveTermReplacementsButton?.addEventListener("click", runWritableAction("용어 치환 적용하기", () => void controllers.mutations.saveMeetingTermReplacements()));
     refs.termReplacementList?.addEventListener("click", runWritableAction("용어 치환 삭제", (event) => controllers.mutations.handleTermReplacementListClick(event)));
     refs.toggleTermReplacementButton?.addEventListener("click", runWritableAction("용어 치환 열기", controllers.mutations.toggleTermReplacementPanel));
     refs.meetingNotesOverview?.addEventListener("click", runWritableAction("핵심 요약 수정 열기", (event) => controllers.mutations.handleMeetingNotesSectionAction(event)));
