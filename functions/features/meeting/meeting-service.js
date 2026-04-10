@@ -2433,6 +2433,7 @@ function registerMeetingHandlers(deps) {
       "actionItems는 누가 무엇을 할지 비교적 분명한 항목만 포함하고, 단순한 추가 검토 필요·논의 필요 같은 일반론은 openQuestions 또는 risksOrDependencies로 돌린다.",
       "overview와 discussionFlow는 단순 항목 나열이 아니라 회의 맥락이 드러나는 짧은 서술형 회의록처럼 정리하되, 잘 되었다/옳다/필수다 같은 평가형 문장은 피한다.",
       "결과는 상용 회의록 SaaS처럼 사람이 바로 읽는 문서 톤으로 쓰되, 회의에서 실제 언급된 내용만 근거로 사용한다.",
+      "summary는 핵심 요약 섹션에 들어갈 1~2문장 길이의 짧은 요약이다. 가장 중요한 결론이나 핵심 맥락만 간결하게 적는다.",
       "overview는 회의 배경, 목적, 핵심 논의 방향, 결론 또는 남은 쟁점을 2~5문장 안에서 하나의 문단으로 정리한다.",
       "meetingMeta.purpose는 이 회의가 왜 열렸고 어떤 배경에서 무엇을 검토·결정하려 했는지 2~4문장 안에서 회의 개요처럼 정리한다.",
       "discussionFlow[].heading은 짧은 주제명만 적고 문장형 설명이나 중간 구분점(예: ·, /)을 길게 이어 붙이지 않는다.",
@@ -2441,7 +2442,7 @@ function registerMeetingHandlers(deps) {
       "discussionFlow 수는 최대 4개, decisions는 최대 5개, actionItems는 최대 5개, openQuestions는 최대 3개, risksOrDependencies는 최대 3개를 넘기지 않는다.",
       "openQuestions는 실제로 미결정된 승인, 의사결정, 외부 확인, 의존성 문제만 포함하고, 없으면 빈 배열로 둔다.",
       "반드시 JSON만 반환한다.",
-      "스키마는 meetingMeta, overview, discussionFlow, decisions, actionItems, openQuestions, risksOrDependencies, sourceTrace 이다.",
+      "스키마는 summary, meetingMeta, overview, discussionFlow, decisions, actionItems, openQuestions, risksOrDependencies, sourceTrace 이다.",
       "meetingMeta는 {title, datetime, participants, purpose} 형식이다.",
       "discussionFlow[]는 {heading, narrative, keyPoints} 형식이다.",
       "decisions[]는 {text, owner, confidence} 형식이다.",
@@ -2462,6 +2463,7 @@ function registerMeetingHandlers(deps) {
       "정식 회의록처럼 배경, 쟁점, 결론을 억지로 만들지 않는다.",
       "전사에 직접 나온 사실만 짧게 적고, 해석이나 확장 서사를 붙이지 않는다.",
       "짧은 테스트 발화는 그대로 테스트성 기록 톤으로 남긴다.",
+      "summary는 핵심 요약용 한 문장으로 작성한다.",
       "overview는 1~2문장 안의 짧은 메모로 작성한다.",
       "meetingMeta.purpose는 보통 빈 문자열로 두고, 정말 명시된 목적이 있을 때만 한 문장으로 쓴다.",
       "discussionFlow는 보통 빈 배열이며, 분명한 단일 주제가 있을 때만 최대 1개 남긴다.",
@@ -2469,7 +2471,7 @@ function registerMeetingHandlers(deps) {
       "openQuestions는 실제로 확인이 필요하거나 모르겠다고 말한 내용만 최대 1개 남긴다.",
       "원문에 없는 결론, 실패 판정, 의도, 배경 설명을 만들지 않는다.",
       "반드시 JSON만 반환한다.",
-      "스키마는 meetingMeta, overview, discussionFlow, decisions, actionItems, openQuestions, risksOrDependencies, sourceTrace 이다.",
+      "스키마는 summary, meetingMeta, overview, discussionFlow, decisions, actionItems, openQuestions, risksOrDependencies, sourceTrace 이다.",
     ].join(" ");
   }
 
@@ -2598,6 +2600,8 @@ function registerMeetingHandlers(deps) {
         title: clampCompactMeetingTitle(normalized.meetingMeta.title) || buildCompactMeetingFallbackTitle(transcriptText),
       },
       openQuestions,
+      summary: clampCompactMeetingLine(normalized.summary || normalized.overview)
+        || clampCompactMeetingLine(buildCompactMeetingFallbackOverview(transcriptText)),
       overview: clampCompactMeetingBody(normalized.overview, 2) || buildCompactMeetingFallbackOverview(transcriptText),
       risksOrDependencies: hasRiskCue && !hasQuestionCue
         ? normalized.risksOrDependencies.slice(0, 1).map((item) => ({

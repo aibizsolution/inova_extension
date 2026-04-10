@@ -180,6 +180,7 @@ function createNotesFixture(mode) {
         title: "후보자 응답 및 후속 인터뷰 정리",
       },
       openQuestions: ["대규모 운영 환경에서의 장애 대응 경험을 어느 수준까지 검증할지 추가 합의가 필요합니다."],
+      summary: "후보자 강점은 확인됐고 운영 경험은 추가 검증이 필요합니다.",
       overview: "후보자의 문제 구조화와 커뮤니케이션은 강점으로 확인됐고, 운영 경험은 다음 라운드에서 더 구체적으로 확인하기로 했습니다.",
       risksOrDependencies: [{ severity: "medium", text: "운영 경험 검증이 부족하면 합격 판단 근거가 약해질 수 있습니다." }],
       sourceTrace: [{ evidence: "운영 경험 추가 확인 필요", itemRef: "추가 맥락", itemType: "memo" }],
@@ -204,6 +205,7 @@ function createNotesFixture(mode) {
         { question: "운영 구조와 명분이 아직 정리되지 않았습니다.", status: "open" },
         { text: "외부 협업 일정을 언제까지 확정할지 추가 논의가 필요합니다." },
       ],
+      summary: "운영 구조와 외부 협업 일정을 함께 정리해야 전체 일정이 안정됩니다.",
       overview: "운영 구조와 외부 협업 일정이 함께 정리되어야 전체 오픈 일정도 안정적으로 확정할 수 있다는 점이 회의의 핵심 결론이었습니다.",
       risksOrDependencies: [
         { severity: "medium", text: "업체 계약이 늦어지면 전체 오픈 일정이 밀릴 수 있습니다." },
@@ -226,6 +228,7 @@ function createNotesFixture(mode) {
       title: "프로모션 일정·예산 실행 계획",
     },
     openQuestions: [],
+    summary: "프로모션 일정은 이번 주 안에 확정하고 초안은 바로 정리하기로 했습니다.",
     overview: "신규 프로모션 일정 확정이 회의의 중심이었고, 예산과 랜딩 문구 초안은 이번 주 일정 확정에 맞춰 바로 정리하기로 했습니다.",
     risksOrDependencies: [{ severity: "medium", text: "디자인 시안 확정이 늦어질 수 있습니다." }],
     sourceTrace: [{ evidence: "담당자 확정이 우선", itemRef: "추가 맥락", itemType: "memo" }],
@@ -242,6 +245,7 @@ function createSectionEditFixture({ mode, sectionKey, userPrompt }) {
           ...notes.meetingMeta,
           purpose: "",
         },
+        summary: notes.summary,
         overview: "테스트 점검",
       };
     }
@@ -250,6 +254,7 @@ function createSectionEditFixture({ mode, sectionKey, userPrompt }) {
         ...notes.meetingMeta,
         purpose: "",
       },
+      summary: notes.summary,
       overview: "일정 확정과 초안 정리가 핵심으로 다시 정리됐습니다.",
     };
   }
@@ -269,6 +274,7 @@ function createCompactNotesFixture(userPrompt) {
         title: "녹음 테스트 및 마이크 위치 확인",
       },
       openQuestions: ["마이크 위치 확인 필요"],
+      summary: "녹음 테스트와 마이크 위치 확인이 언급됐다.",
       overview: "녹음 테스트와 수정 반영 여부 확인이 언급됐다. 마이크 위치를 몰라 테스트 진행이 어렵다는 말이 나왔다.",
       risksOrDependencies: [],
       sourceTrace: [{ evidence: "마이크 위치를 모르겠다고 언급함", itemRef: "전사", itemType: "transcript" }],
@@ -285,6 +291,7 @@ function createCompactNotesFixture(userPrompt) {
       title: "짧은 상태 확인",
     },
     openQuestions: [],
+    summary: "짧은 상태 확인 발화가 기록되었다.",
     overview: "짧은 상태 확인 성격의 발화가 기록되었다.",
     risksOrDependencies: [],
     sourceTrace: [{ evidence: "짧은 상태 확인", itemRef: "전사", itemType: "transcript" }],

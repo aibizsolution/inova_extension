@@ -231,6 +231,7 @@ async function main() {
   assert.equal(compactStoredJob.notesStatus, "succeeded");
   assert.equal(compactStoredJob.meetingNotes.meetingMeta.title, "녹음 테스트 및 마이크 위치 확인");
   assert.equal(compactStoredJob.meetingNotes.meetingMeta.purpose, "");
+  assert.equal(compactStoredJob.meetingNotes.summary, "녹음 테스트와 마이크 위치 확인이 언급됐다.");
   assert.equal(compactStoredJob.meetingNotes.discussionFlow.length, 0);
   assert.equal(compactStoredJob.meetingNotes.decisions.length, 0);
   assert.equal(compactStoredJob.meetingNotes.actionItems.length, 0);
@@ -334,6 +335,7 @@ async function main() {
   assert(previewedSection.jsonBody.data.baseRevisionToken);
   assert(previewedSection.jsonBody.data.sectionData);
   assert(previewedSection.jsonBody.data.sectionData.overview.length > 0);
+  const originalSummary = storedJob.meetingNotes.summary;
   assert.equal(
     state.openaiSummaryRequests
       .slice(summaryRequestsBeforePreview)
@@ -394,6 +396,8 @@ async function main() {
   assert.equal(appliedSection.jsonBody.data.sectionKey, "overview");
   const sectionEditedJob = getDoc(state, JOB_COLLECTION, jobId);
   const sectionEditedArtifact = getDoc(state, ARTIFACT_COLLECTION, artifactId);
+  assert.equal(sectionEditedJob.meetingNotes.summary, originalSummary);
+  assert.equal(sectionEditedArtifact.notes.summary, originalSummary);
   assert.equal(sectionEditedJob.meetingNotes.overview, previewedSection.jsonBody.data.sectionData.overview);
   assert.equal(sectionEditedArtifact.notes.overview, previewedSection.jsonBody.data.sectionData.overview);
   assert.equal(sectionEditedJob.meetingNotes.meetingMeta.title, previewedSection.jsonBody.data.sectionData.meetingMeta.title);

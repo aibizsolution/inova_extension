@@ -65,7 +65,8 @@
 - version gate와 manual smoke 기준은 `docs/refactoring-plan.md`를 기준으로 확인한다.
 - `termReplacements`는 회의 단위 순서 보존 배열이며, `from` 중복/빈 값이 거부되고 기존 notes와 이후 notes 결과에 모두 deterministic pass가 적용되는지 확인한다.
 - `previewInovaMeetingResultSectionEdit`와 `applyInovaMeetingResultSectionEdit`는 editable section key, `baseRevisionToken`, stale preview 거절 계약을 유지해야 한다.
-- 섹션 preview는 사용자 요청을 완전히 못 맞춘 경우에도 가능하면 5xx 대신 best-effort payload를 돌려주고, 미충족 제약은 `warning`으로 노출한다.
+- persisted meeting notes는 `summary`와 `overview`를 독립 필드로 유지한다. `summary`는 핵심 요약 카드용 짧은 요약이고, `overview` 섹션 수정은 이 값을 덮어쓰지 않아야 한다.
+- 섹션 preview는 사용자 요청 우선 prompt로 한 번 생성하고, 형식이 맞지 않으면 같은 요청으로 한 번 더 재시도한다. `warning` 필드는 호환용으로 유지한다.
 - compact 회의록은 `overview` 중심의 짧은 기록 메모를 기본으로 하고, `decisions/actionItems/risks`는 전사에 직접 근거가 없으면 비워 둔다.
 - 상용 회의 데이터 잔존 여부를 편하게 볼 때는 `npm run check:meeting-data`를 사용한다.
 - 회의 데이터를 전체 또는 특정 `meetingId` 기준으로 수동 정리할 때는 기본 dry-run인 `npm run delete:meeting-data -- --all` 또는 `npm run delete:meeting-data -- --meeting-id <id>`를 먼저 보고, 실제 삭제는 같은 명령에 `--execute`를 붙인다.

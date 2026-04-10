@@ -82,6 +82,8 @@
   }
 
   function buildCompletedRecordSummary(notes) {
+    const summary = normalizeTextBlock(notes?.summary);
+    if (summary) return summary;
     const overview = normalizeTextBlock(notes?.overview);
     if (overview) return overview;
     const purpose = normalizeTextBlock(notes?.meetingMeta?.purpose);

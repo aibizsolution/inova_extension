@@ -29,6 +29,7 @@ function createMeetingNotesDocumentDomain(deps) {
         title: "",
       },
       openQuestions: [],
+      summary: "",
       overview: "",
       risksOrDependencies: [],
       sourceTrace: [],
@@ -118,6 +119,17 @@ function createMeetingNotesDocumentDomain(deps) {
       .map((item) => normalizeTextBlock(item))
       .filter(Boolean);
     return fallbackParagraphs.join("\n\n");
+  }
+
+  function normalizeMeetingSummaryText(primary, fallback) {
+    const direct = normalizeTextBlock(primary);
+    if (direct) {
+      return direct;
+    }
+    return normalizeTextList(fallback)
+      .map((item) => normalizeTextBlock(item))
+      .filter(Boolean)
+      .join(" ");
   }
 
   function normalizeMeetingOpenQuestions(input, maxItems = MAX_MEETING_NOTES_OPEN_QUESTIONS) {
@@ -251,6 +263,7 @@ function createMeetingNotesDocumentDomain(deps) {
       discussionFlow,
       meetingMeta,
       openQuestions: normalizeMeetingOpenQuestions(notes.openQuestions, Math.max(1, Number(settings.maxOpenQuestions) || MAX_MEETING_NOTES_OPEN_QUESTIONS)),
+      summary: normalizeMeetingSummaryText(notes.summary, [notes.overview]),
       overview: normalizeMeetingOverviewText(notes.overview, []),
       risksOrDependencies: normalizeMeetingRisks(notes.risksOrDependencies, Math.max(1, Number(settings.maxRisks) || MAX_MEETING_NOTES_RISKS)),
       sourceTrace: normalizeMeetingSourceTrace(notes.sourceTrace, Math.max(1, Number(settings.maxSourceTrace) || MAX_MEETING_NOTES_SOURCE_TRACE)),
@@ -266,7 +279,8 @@ function createMeetingNotesDocumentDomain(deps) {
   function hasMeetingNotes(notes) {
     const normalized = normalizeMeetingNotes(notes);
     return Boolean(
-      normalized.overview
+      normalized.summary
+      || normalized.overview
       || normalized.meetingMeta.purpose
       || normalized.meetingMeta.title
       || normalized.meetingMeta.datetime
@@ -301,6 +315,7 @@ function createMeetingNotesDocumentDomain(deps) {
   function getMeetingNotesPreviewText(notesInput) {
     const notes = normalizeMeetingNotes(notesInput);
     const candidates = [
+      normalizeTextBlock(notes.summary),
       normalizeTextBlock(notes.overview),
       ...notes.discussionFlow.flatMap((item) => [normalizeText(item.heading), normalizeTextBlock(item.narrative)]),
       ...notes.decisions.map((item) => normalizeText(item.text)),
@@ -347,6 +362,7 @@ function createMeetingNotesDocumentDomain(deps) {
         title: applyLiteralReplacements(notes.meetingMeta.title, replacements),
       },
       openQuestions: notes.openQuestions.map((value) => applyLiteralReplacements(value, replacements)),
+      summary: applyLiteralReplacements(notes.summary, replacements),
       overview: applyLiteralReplacements(notes.overview, replacements),
       risksOrDependencies: notes.risksOrDependencies.map((item) => ({
         ...item,
