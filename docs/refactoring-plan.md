@@ -148,6 +148,9 @@
 - 1차 scope reset:
   - hosted `추가 맥락`/`회의록 업데이트` 경로를 제거하고, 회의록 보정을 `termReplacements + section preview/apply`로 재정의
   - summary model과 section edit model을 `gpt-5.4`로 맞추고, 기존 전사 파이프라인은 유지
+- meeting internal split 17차:
+  - `termReplacements` 요청 검증/재적용, section preview/apply, revision token, notes 기반 title sync와 편집 prompt builder를 `functions/features/meeting/meeting-notes-edit-domain.js`로 분리
+  - `updateInovaMeeting`, `previewInovaMeetingResultSectionEdit`, `applyInovaMeetingResultSectionEdit` export 이름과 response envelope 의미 변화 없음
 
 ### 아직 이것만으로 결정되지 않는 것
 
@@ -419,6 +422,10 @@
 - hosted 작업실에는 완료된 remote record 전용 `기록 이동` action과 별도 `recordMoveOverlay`를 추가했다.
   - 이동 대상 목록은 현재 회의 룸을 제외한 다른 owned 회의 룸 제목만 노출
   - 성공 후 target 회의 룸으로 자동 이동하지 않고 현재 룸에 남아 selection fallback으로 정리
+- meeting internal split 17차:
+  - `termReplacements` 저장 후 결과 notes 재적용, section preview/apply, revision token, notes title sync workflow를 `functions/features/meeting/meeting-notes-edit-domain.js`로 이동했다.
+  - `meeting-service.js`에는 legacy HTTP handler/export surface와 cross-domain wiring을 남기고, notes edit 세부 helper는 service 바깥 workflow 경계로 정리했다.
+  - 기존 Functions 이름, response envelope, workspace mutation type 의미는 유지했다.
 - 검증:
   - `node scripts/verify-meeting-service.js`
   - `node scripts/verify-meeting-hosted-ui.js`
