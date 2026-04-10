@@ -2309,7 +2309,12 @@ select:disabled {
 }
 
 .toast-notice {
-  max-width: 280px;
+  position: fixed;
+  top: max(20px, env(safe-area-inset-top));
+  right: max(20px, env(safe-area-inset-right));
+  z-index: 120;
+  width: min(340px, calc(100vw - 32px));
+  max-width: 340px;
   padding: 10px 14px;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -2318,6 +2323,7 @@ select:disabled {
   font-size: 13px;
   font-weight: 500;
   line-height: 1.5;
+  box-shadow: var(--shadow);
   animation: toast-in 0.2s ease forwards;
   pointer-events: none;
 }

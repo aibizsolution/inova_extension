@@ -7,9 +7,19 @@ const { JSDOM } = require("jsdom");
 
 const root = path.resolve(__dirname, "..");
 const hostedMeetingHtmlPath = path.join(root, "hosting", "meeting", "index.html");
+const hostedMeetingCssPath = path.join(root, "hosting", "meeting", "index.css");
+const hostedMeetingIndexPath = path.join(root, "hosting", "meeting", "index.js");
+const hostedMeetingRenderPath = path.join(root, "hosting", "meeting", "render.js");
+const hostedMeetingMutationsPath = path.join(root, "hosting", "meeting", "workspace-mutations.js");
+const hostedMeetingDebugPath = path.join(root, "hosting", "meeting", "workspace-debug.js");
 
 function main() {
   const html = fs.readFileSync(hostedMeetingHtmlPath, "utf8");
+  const css = fs.readFileSync(hostedMeetingCssPath, "utf8");
+  const indexJs = fs.readFileSync(hostedMeetingIndexPath, "utf8");
+  const renderJs = fs.readFileSync(hostedMeetingRenderPath, "utf8");
+  const mutationsJs = fs.readFileSync(hostedMeetingMutationsPath, "utf8");
+  const debugJs = fs.readFileSync(hostedMeetingDebugPath, "utf8");
   const dom = new JSDOM(html);
   const { document } = dom.window;
 
@@ -62,6 +72,30 @@ function main() {
   assert(
     String(termReplacementHelp.getAttribute("data-tooltip") || "").includes("모든 회의 정리"),
     "Term replacement help tooltip should describe meeting-wide application"
+  );
+  assert(
+    /\.toast-notice\s*\{[\s\S]*position:\s*fixed;/.test(css),
+    "Hosted workspace toast notice should use fixed positioning so mutation feedback stays visible while scrolling"
+  );
+  assert(
+    renderJs.includes("이 기록은 회의 정리가 없는 기록입니다. 원문 탭에서 전사를 확인할 수 있습니다."),
+    "Hosted workspace should explain empty notes as a notes-state message instead of reusing the degraded warning copy"
+  );
+  assert(
+    mutationsJs.includes("용어 치환 규칙을 저장했습니다. 이 회의의 정리 결과에 반영됩니다."),
+    "Term replacement save flow should use the updated save feedback copy"
+  );
+  assert(
+    mutationsJs.includes("state.termReplacementState.open = false;"),
+    "Term replacement save flow should close the panel after a successful save"
+  );
+  assert(
+    indexJs.includes("function readDebugPanelCollapsed() {") && indexJs.includes("return true;"),
+    "Hosted meeting debug panel should default to collapsed on every page load"
+  );
+  assert(
+    !debugJs.includes("safeLocalStorageSet"),
+    "Hosted meeting debug panel should not persist expanded state across refreshes"
   );
 
   assert.equal(document.getElementById("sectionEditStatus"), null, "Section edit dialog should not render a separate status strip");
