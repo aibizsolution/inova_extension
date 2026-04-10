@@ -15,6 +15,7 @@
 - `functions/features/meeting/meeting-notes-runtime-domain.js`
 - `functions/features/meeting/meeting-notes-source-domain.js`
 - `functions/features/meeting/meeting-mutation-domain.js`
+- `functions/features/meeting/meeting-owned-query-domain.js`
 - `functions/features/meeting/meeting-processing-domain.js`
 - `functions/features/meeting/meeting-processing-runtime-domain.js`
 - `functions/features/meeting/meeting-runtime-artifact-domain.js`
@@ -47,6 +48,8 @@
 - `meeting-creation-domain.js`, `meeting-processing-domain.js`, `meeting-summary-sync-domain.js`, `meeting-deletion-domain.js`, `meeting-notes-source-domain.js`처럼 설명 가능한 workflow/data boundary만 독립 모듈로 유지한다.
 - `meeting-processing-runtime-domain.js`는 OpenAI 전사 호출, retry/error 분류, chunk 병렬 처리, transcript merge/dedupe를 묶는 runtime boundary다. `meeting-processing-domain.js`는 queue/finalizer workflow를 유지하고 runtime 세부 정책은 이 모듈에 위임한다.
 - `meeting-runtime-artifact-domain.js`는 temp source 업로드/정리, chunk transcript 저장/로드, runtime artifact cleanup을 묶는 storage lifecycle boundary다. `meeting-creation-domain.js`, `meeting-processing-domain.js`, `meeting-deletion-domain.js`가 같은 runtime artifact 규칙을 공유할 때 이 모듈을 우선 본다.
+- `meeting-owned-query-domain.js`는 owner-scoped meeting/job 조회를 묶는 Firestore query boundary다. `meeting-notes-edit-domain.js`, meeting hub list, delete request handler가 같은 owner filter와 emulator fallback 규칙을 공유할 때 이 모듈을 우선 본다.
+- `meeting-deletion-domain.js`는 queue/sweep뿐 아니라 soft delete 시작 단계도 포함한 deletion workflow boundary다. 회의 결과/회의 삭제 handler는 tombstone patch를 직접 만들기보다 이 모듈에 위임한다.
 - `meeting-notes-edit-domain.js`는 `termReplacements` 저장 이후 결과 notes 재적용과 section preview/apply, notes 기반 제목 sync를 묶는 workflow boundary다.
 - `meeting-notes-generation-domain.js`는 signal gate, full/compact notes 생성, section/reducer prompt builder, compact notes 후처리를 묶는 workflow boundary다.
 - `meeting-result-domain.js`는 결과 title/sharedMemo 수정과 record move transaction, recentJobs sync를 묶는 workflow boundary다.

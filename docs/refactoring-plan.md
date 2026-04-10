@@ -163,6 +163,9 @@
 - meeting internal split 21차:
   - temp source 업로드/정리, chunk transcript 저장/로드, runtime artifact cleanup을 `functions/features/meeting/meeting-runtime-artifact-domain.js`로 분리
   - `meeting-creation-domain.js`, `meeting-processing-domain.js`, `meeting-deletion-domain.js`는 공통 runtime artifact lifecycle을 이 모듈에 위임하고, `meeting-service.js`에는 handler/query/start-delete orchestration만 남긴다
+- meeting internal split 22차:
+  - owner-scoped meeting/job 조회를 `functions/features/meeting/meeting-owned-query-domain.js`로 분리하고, soft delete 시작 단계는 `functions/features/meeting/meeting-deletion-domain.js`로 이동
+  - `meeting-service.js`는 list/delete handler orchestration만 남기고, owned query 규칙과 tombstone patch write는 service 바깥 workflow/data boundary로 정리한다
 
 ### 아직 이것만으로 결정되지 않는 것
 
@@ -454,13 +457,17 @@
   - temp source 업로드/정리, chunk transcript 저장/로드, runtime artifact cleanup을 `functions/features/meeting/meeting-runtime-artifact-domain.js`로 이동했다.
   - `meeting-creation-domain.js`, `meeting-processing-domain.js`, `meeting-deletion-domain.js`는 공통 runtime artifact lifecycle을 이 모듈에 위임하고, `meeting-service.js`는 handler/query/start-delete orchestration 위주로 줄였다.
   - 기존 source upload, chunk transcript storage, deletion cleanup, processing export 이름과 persisted contract 의미는 유지했다.
+- meeting internal split 22차:
+  - owner-scoped meeting/job 조회를 `functions/features/meeting/meeting-owned-query-domain.js`로 이동하고, soft delete 시작 단계는 `functions/features/meeting/meeting-deletion-domain.js`로 이동했다.
+  - `meeting-service.js`는 list/delete handler orchestration만 남기고, owned query 규칙과 tombstone patch write는 service 바깥 workflow/data boundary로 정리했다.
+  - 기존 meeting hub list, notes edit 대상 job 조회, delete request response envelope, tombstone 상태 의미는 유지했다.
 - 검증:
   - `node scripts/verify-meeting-service.js`
   - `node scripts/verify-meeting-hosted-ui.js`
   - `npm.cmd run verify`
 - 다음 시작점:
-  - 남은 `meeting-service.js` query/start-delete helper가 실제 `deletion request lifecycle` 또는 `meeting query boundary`인지 먼저 재평가
-  - helper-only split을 늘리지 말고, workflow/data contract로 설명되는 다음 경계가 없으면 현재 상태를 유지
+  - 남은 `meeting-service.js`의 OpenAI/model getter, inline-only fallback helper, service-local assert가 정말 독립 boundary인지 재평가
+  - helper-only split을 늘리지 말고, workflow/data contract로 설명되는 다음 경계가 없으면 여기서 멈춘다
   - 이후 실제 release 판단이 필요하면 record move 포함 핵심 사용자 흐름을 기준으로 오너 확인을 받아 `functions + hosting + extension reload/배포` 범위를 함께 판단
 ### 2026-04-08
 

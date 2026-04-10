@@ -18,6 +18,7 @@ const { createMeetingNotesGenerationDomain } = require("./meeting-notes-generati
 const { createMeetingNotesRuntimeDomain } = require("./meeting-notes-runtime-domain");
 const { createMeetingNotesSourceDomain } = require("./meeting-notes-source-domain");
 const { createMeetingMutationDomain } = require("./meeting-mutation-domain");
+const { createMeetingOwnedQueryDomain } = require("./meeting-owned-query-domain");
 const { createMeetingProcessingDomain } = require("./meeting-processing-domain");
 const { createMeetingProcessingRuntimeDomain } = require("./meeting-processing-runtime-domain");
 const { createMeetingRuntimeArtifactDomain } = require("./meeting-runtime-artifact-domain");
@@ -362,6 +363,17 @@ function registerMeetingHandlers(deps) {
     normalizeText,
   });
 
+  const meetingOwnedQueryDomain = createMeetingOwnedQueryDomain({
+    buildMeetingDocId,
+    compareMeetings,
+    db,
+    jobCollection: JOB_COLLECTION,
+    meetingCollection: MEETING_COLLECTION,
+    normalizeMeetingJob,
+    normalizeMeetingSummary,
+    normalizeText,
+  });
+
   const meetingNotesEditDomain = createMeetingNotesEditDomain({
     applyMeetingTermReplacements,
     assertJobOwnership,
@@ -378,7 +390,7 @@ function registerMeetingHandlers(deps) {
     loadMeetingArtifactSource,
     loadMeetingSummaryRecord,
     loadMeetingTranscriptForNotes,
-    loadOwnedMeetingJobs,
+    loadOwnedMeetingJobs: meetingOwnedQueryDomain.loadOwnedMeetingJobs,
     logEvent,
     normalizeCompletionContent,
     normalizeMeetingArtifact,
@@ -487,11 +499,13 @@ function registerMeetingHandlers(deps) {
     enqueueMeetingDeletionTask,
     isMeetingDeletionRetryDue,
     processMeetingDeletionTask,
+    softDeleteMeetingJob,
     shouldProcessMeetingDeletionTask,
   } = createMeetingDeletionDomain({
     artifactCollection: ARTIFACT_COLLECTION,
     buildMeetingDeletionTaskId,
     buildMeetingDocId,
+    buildWorkspaceMutation,
     collectMeetingArtifactIds,
     db,
     deleteDocumentIfExists: meetingRuntimeArtifactDomain.deleteDocumentIfExists,
@@ -507,7 +521,7 @@ function registerMeetingHandlers(deps) {
     loadMeetingJobPartDocs: meetingRuntimeArtifactDomain.loadMeetingJobPartDocs,
     loadMeetingLaunchDocs: meetingRuntimeArtifactDomain.loadMeetingLaunchDocs,
     loadMeetingWorkspaceSessionDocs: meetingRuntimeArtifactDomain.loadMeetingWorkspaceSessionDocs,
-    loadOwnedMeetingJobs,
+    loadOwnedMeetingJobs: meetingOwnedQueryDomain.loadOwnedMeetingJobs,
     loadStoredMeetingJob: meetingRuntimeArtifactDomain.loadStoredMeetingJob,
     logEvent,
     meetingCollection: MEETING_COLLECTION,
@@ -761,7 +775,7 @@ function registerMeetingHandlers(deps) {
       const access = await verifyRequestIdentity(request);
       const owner = access.owner;
       const input = normalizeMeetingHubListRequest(request.body);
-      const items = await loadOwnedMeetings(owner, input.limit, input.cursor);
+      const items = await meetingOwnedQueryDomain.loadOwnedMeetings(owner, input.limit, input.cursor);
       const nextCursor = items.length === input.limit ? normalizeText(items[items.length - 1]?.meetingId) : "";
 
       logEvent("meeting.list-hub.success", {
@@ -1169,7 +1183,7 @@ function registerMeetingHandlers(deps) {
         });
       }
       assertMeetingOwnership(meeting, owner, createHttpError);
-      const jobs = await loadOwnedMeetingJobs(owner, meeting.meetingId);
+      const jobs = await meetingOwnedQueryDomain.loadOwnedMeetingJobs(owner, meeting.meetingId);
       const deletedAt = new Date().toISOString();
       for (const job of jobs) {
         await softDeleteMeetingJob(job, deletedAt);
@@ -1405,104 +1419,6 @@ function registerMeetingHandlers(deps) {
     return normalizeText(requestId)
       ? buildStableMeetingEntityId("meeting-artifact", providerUserKey, meetingId, requestId)
       : targetDb.collection(ARTIFACT_COLLECTION).doc().id;
-  }
-
-  async function loadOwnedMeetingJobs(owner, meetingId) {
-    const collection = db.collection(JOB_COLLECTION);
-    const normalizedMeetingId = normalizeText(meetingId);
-    if (!normalizedMeetingId) {
-      return [];
-    }
-    if (typeof collection.where === "function") {
-      const snapshot = await collection
-        .where("owner.providerUserKey", "==", owner.providerUserKey)
-        .where("meetingId", "==", normalizedMeetingId)
-        .get();
-      return (Array.isArray(snapshot?.docs) ? snapshot.docs : [])
-        .map((doc) => normalizeMeetingJob(doc.data()))
-        .filter((job) => normalizeText(job.owner?.providerUserKey) === owner.providerUserKey)
-        .filter((job) => normalizeText(job.meetingId) === normalizedMeetingId);
-    }
-    if (typeof collection.get === "function") {
-      const snapshot = await collection.get();
-      return (Array.isArray(snapshot?.docs) ? snapshot.docs : [])
-        .map((doc) => normalizeMeetingJob(doc.data()))
-        .filter((job) => normalizeText(job.owner?.providerUserKey) === owner.providerUserKey)
-        .filter((job) => normalizeText(job.meetingId) === normalizedMeetingId);
-    }
-    return [];
-  }
-
-  async function loadOwnedMeetings(owner, limit, cursor) {
-    const collection = db.collection(MEETING_COLLECTION);
-    const cursorId = normalizeText(cursor);
-    if (typeof collection.where === "function") {
-      let query = collection
-        .where("owner.providerUserKey", "==", owner.providerUserKey)
-        .orderBy("updatedAt", "desc")
-        .limit(limit);
-      if (cursorId && typeof query.startAfter === "function") {
-        const cursorSnapshot = await collection.doc(buildMeetingDocId(owner.providerUserKey, cursorId)).get();
-        if (cursorSnapshot?.exists) {
-          query = query.startAfter(cursorSnapshot);
-        }
-      }
-      const snapshot = await query.get();
-      return (Array.isArray(snapshot?.docs) ? snapshot.docs : [])
-        .map((doc) => normalizeMeetingSummary(doc.data()))
-        .filter((meeting) => normalizeText(meeting.owner?.providerUserKey) === owner.providerUserKey)
-        .filter((meeting) => !meeting.deletedAt);
-    }
-
-    if (typeof collection.get === "function") {
-      const snapshot = await collection.get();
-      const items = (Array.isArray(snapshot?.docs) ? snapshot.docs : [])
-        .map((doc) => normalizeMeetingSummary(doc.data()))
-        .filter((meeting) => normalizeText(meeting.owner?.providerUserKey) === owner.providerUserKey)
-        .filter((meeting) => !meeting.deletedAt)
-        .sort(compareMeetings);
-      if (!cursorId) {
-        return items.slice(0, limit);
-      }
-      const cursorIndex = items.findIndex((meeting) => meeting.meetingId === cursorId);
-      return (cursorIndex >= 0 ? items.slice(cursorIndex + 1) : items).slice(0, limit);
-    }
-
-    return [];
-  }
-
-  async function softDeleteMeetingJob(jobInput, deletedAt, options = {}) {
-    const job = normalizeMeetingJob(jobInput);
-    if (!job.jobId) {
-      return null;
-    }
-    const nextDeletedAt = normalizeText(deletedAt) || new Date().toISOString();
-    const totalParts = Math.max(
-      0,
-      Number(job.progress?.totalParts) || (Array.isArray(job.source?.parts) ? job.source.parts.length : 0)
-    );
-    const patch = {
-      deletedAt: nextDeletedAt,
-      error: "",
-      progress: {
-        currentPart: Math.max(0, Number(job.progress?.currentPart) || 0),
-        parallelParts: 0,
-        percent: 100,
-        phase: "deleted",
-        totalParts,
-      },
-      status: "deleted",
-      updatedAt: nextDeletedAt,
-    };
-    const workspaceMutation = buildWorkspaceMutation(options.workspaceMutation);
-    if (workspaceMutation.requestId) {
-      patch.workspaceMutation = workspaceMutation;
-    }
-    await db.collection(JOB_COLLECTION).doc(job.jobId).set(patch, { merge: true });
-    return normalizeMeetingJob({
-      ...job,
-      ...patch,
-    });
   }
 
   function getClient() {

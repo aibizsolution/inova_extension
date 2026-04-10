@@ -46,6 +46,7 @@
 - `functions/features/meeting/meeting-service.js`
 - `functions/features/meeting/meeting-launch-service.js`
 - `functions/features/meeting/meeting-notes-generation-domain.js`
+- `functions/features/meeting/meeting-owned-query-domain.js`
 - `functions/features/meeting/meeting-processing-runtime-domain.js`
 - `functions/features/meeting/meeting-runtime-artifact-domain.js`
 - `functions/features/meeting/meeting-result-domain.js`
