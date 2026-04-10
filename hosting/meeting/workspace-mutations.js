@@ -1007,7 +1007,7 @@ const SECTION_LABELS = Object.freeze({
         }
         return saveMeetingPatch(
           { termReplacements: cloneTermReplacements(state.termReplacementState.items) },
-          "용어 치환을 적용했습니다."
+          "용어 치환 규칙을 저장했습니다. 이 회의의 정리 결과에 반영됩니다."
         );
       }
 

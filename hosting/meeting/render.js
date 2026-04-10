@@ -743,6 +743,23 @@
     `;
   }
 
+  function buildMeetingNotesEmptyState(detailView) {
+    const isCompleted = normalizeText(detailView?.badgeStatus) === "succeeded";
+    const hasTranscriptValue = Boolean(normalizeText(detailView?.transcriptText));
+    const hasSegmentsValue = Array.isArray(detailView?.segments) && detailView.segments.length > 0;
+    const degradedReason = normalizeText(detailView?.notesMeta?.degradedReason);
+    if (isCompleted && (hasTranscriptValue || hasSegmentsValue)) {
+      return {
+        text: "이 기록은 회의 정리가 없는 기록입니다. 원문 탭에서 전사를 확인할 수 있습니다.",
+        tone: "",
+      };
+    }
+    return {
+      text: degradedReason || "전사는 준비됐지만 회의 정리로 묶을 내용이 충분하지 않았습니다.",
+      tone: "warning",
+    };
+  }
+
   function buildStatusActionMessage(detailView, options = {}) {
     const normalizedStatus = normalizeText(detailView.badgeStatus);
     if (!normalizeText(detailView.recordTitle) && detailView.badgeStatus === "idle") {
@@ -761,7 +778,7 @@
       return detailView.notice;
     }
     if (!options.hasNotesValue) {
-      return normalizeText(detailView.notesMeta?.degradedReason) || "전사를 기준으로 회의 정리를 다시 만들 수 있습니다.";
+      return buildMeetingNotesEmptyState(detailView).text;
     }
     return "";
   }
@@ -884,8 +901,14 @@
       completionNotice = notesMeta.degradedReason || "녹음이 너무 짧거나 인식된 발화가 부족해 표시할 내용이 없습니다.";
       completionTone = "warning";
     } else if (!hasNotesValue && (hasTranscriptValue || hasSegmentsValue) && !state.notice.text) {
-      completionNotice = notesMeta.degradedReason || "전사는 준비됐지만 회의 정리로 묶을 내용은 충분하지 않았습니다.";
-      completionTone = "warning";
+      const emptyNotesState = buildMeetingNotesEmptyState({
+        badgeStatus: "succeeded",
+        notesMeta,
+        segments,
+        transcriptText,
+      });
+      completionNotice = emptyNotesState.text;
+      completionTone = emptyNotesState.tone;
     }
     return {
       badgeLabel: "완료",
@@ -975,9 +998,13 @@
     const normalized = normalizeMeetingNotes(detailView.meetingNotes);
     const hasNotesValue = hasMeetingNotes(normalized);
     if (!hasNotesValue) {
+      const emptyState = buildMeetingNotesEmptyState(detailView);
+      const toneAttr = normalizeText(emptyState.tone)
+        ? ` data-tone="${escapeHtml(emptyState.tone)}"`
+        : "";
       refs.meetingNotesOverview.hidden = true;
       refs.meetingNotesOverview.innerHTML = "";
-      refs.meetingNotesSections.innerHTML = `<div class="notice-box" data-tone="warning">${escapeHtml(normalizeText(detailView.notesMeta?.degradedReason) || "전사는 준비됐지만 회의 정리로 묶을 내용이 충분하지 않았습니다.")}</div>`;
+      refs.meetingNotesSections.innerHTML = `<div class="notice-box"${toneAttr}>${escapeHtml(emptyState.text)}</div>`;
       return false;
     }
     const allowSectionEdit = Boolean(
