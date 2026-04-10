@@ -48,12 +48,29 @@ function createDeps(state, overrides = {}) {
         audio: {
           transcriptions: {
             async create(request) {
+              const fileName = String(request?.file?.name || request?.file?.filename || "");
               state.openaiRequests.push({
                 chunking_strategy: request.chunking_strategy || "",
+                fileName,
                 language: request.language || "",
                 model: request.model || "",
                 response_format: request.response_format || "",
               });
+              if (fileName.includes("microphone-test")) {
+                return {
+                  duration: 22,
+                  language: "ko",
+                  segments: [
+                    {
+                      end: 22,
+                      start: 0,
+                      text: "녹음이 잘 되고 있는지 테스트를 하는 중입니다. 이번 수정이 잘 반영되었기를 바랍니다. 근데 마이크는 어디에 있는 걸까요? 테스트하려면 마이크 위치를 정확히 알아야 되는데 마이크가 어디 있는지 모르겠습니다.",
+                    },
+                  ],
+                  task: "transcribe",
+                  text: "녹음이 잘 되고 있는지 테스트를 하는 중입니다. 이번 수정이 잘 반영되었기를 바랍니다. 근데 마이크는 어디에 있는 걸까요? 테스트하려면 마이크 위치를 정확히 알아야 되는데 마이크가 어디 있는지 모르겠습니다.",
+                };
+              }
               return {
                 duration: 10.4,
                 language: "ko",
@@ -80,16 +97,16 @@ function createDeps(state, overrides = {}) {
             async create(request) {
               const firstSystemMessage = Array.isArray(request.messages) ? String(request.messages[0]?.content || "") : "";
               const userPrompt = Array.isArray(request.messages) ? String(request.messages[1]?.content || "") : "";
-              if (firstSystemMessage.includes("회의 전사 분류기")) {
+              if (firstSystemMessage.includes("회의 전사 요약 프로필 분류기")) {
                 state.openaiSummaryRequests.push({ kind: "classifier", model: request.model || "", prompt: userPrompt, systemPrompt: firstSystemMessage });
-                const mode = userPrompt.includes("인터뷰") ? "interview" : "planning";
+                const profile = /테스트|마이크|장비|점검/.test(userPrompt) ? "compact" : "full";
                 return {
                   choices: [
                     {
                       message: {
                         content: JSON.stringify({
-                          confidence: mode === "interview" ? 0.74 : 0.88,
-                          mode,
+                          profile,
+                          reason: profile === "compact" ? "짧은 테스트성 전사입니다." : "",
                         }),
                       },
                     },
@@ -104,6 +121,7 @@ function createDeps(state, overrides = {}) {
                   : userPrompt.includes("정리 형식(내부 판단): planning")
                     ? "planning"
                     : "general";
+              const isCompact = firstSystemMessage.includes("짧은 테스트성 또는 저신호 전사");
               const sectionMatch = userPrompt.match(/섹션 키:\s*([a-zA-Z]+)/);
               if (sectionMatch) {
                 return {
@@ -125,7 +143,7 @@ function createDeps(state, overrides = {}) {
                 choices: [
                   {
                     message: {
-                      content: JSON.stringify(createNotesFixture(mode)),
+                      content: JSON.stringify(isCompact ? createCompactNotesFixture(userPrompt) : createNotesFixture(mode)),
                     },
                   },
                 ],
@@ -219,7 +237,8 @@ function createSectionEditFixture({ isRetry, mode, sectionKey, userPrompt }) {
   const notes = createNotesFixture(mode);
   if (sectionKey === "overview") {
     const isTenCharsRequest = userPrompt.includes("10글자");
-    if (isTenCharsRequest && !isRetry) {
+    const forceFallback = userPrompt.includes("강제fallback");
+    if (isTenCharsRequest && (!isRetry || forceFallback)) {
       return {
         meetingMeta: notes.meetingMeta,
         overview: notes.overview,
@@ -238,6 +257,41 @@ function createSectionEditFixture({ isRetry, mode, sectionKey, userPrompt }) {
     };
   }
   return notes;
+}
+
+function createCompactNotesFixture(userPrompt) {
+  if (/마이크|녹음|테스트/.test(userPrompt)) {
+    return {
+      actionItems: [],
+      decisions: [],
+      discussionFlow: [],
+      meetingMeta: {
+        datetime: "",
+        participants: [],
+        purpose: "",
+        title: "녹음 테스트 및 마이크 위치 확인",
+      },
+      openQuestions: ["마이크 위치 확인 필요"],
+      overview: "녹음 테스트와 수정 반영 여부 확인이 언급됐다. 마이크 위치를 몰라 테스트 진행이 어렵다는 말이 나왔다.",
+      risksOrDependencies: [],
+      sourceTrace: [{ evidence: "마이크 위치를 모르겠다고 언급함", itemRef: "전사", itemType: "transcript" }],
+    };
+  }
+  return {
+    actionItems: [],
+    decisions: [],
+    discussionFlow: [],
+    meetingMeta: {
+      datetime: "",
+      participants: [],
+      purpose: "",
+      title: "짧은 상태 확인",
+    },
+    openQuestions: [],
+    overview: "짧은 상태 확인 성격의 발화가 기록되었다.",
+    risksOrDependencies: [],
+    sourceTrace: [{ evidence: "짧은 상태 확인", itemRef: "전사", itemType: "transcript" }],
+  };
 }
 function createDb(state) {
   function ensureCollection(name) {

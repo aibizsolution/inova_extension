@@ -195,13 +195,71 @@ async function main() {
     true
   );
 
+  const compactCreated = await invokeHandler(handlers.createInovaMeetingJob, {
+    body: {
+      meeting: {
+        endedAt: "2026-03-30T09:01:00.000Z",
+        language: "ko",
+        meetingId: "meeting-compact-1",
+        sessionId: "fixture-session-compact",
+        startedAt: "2026-03-30T09:00:00.000Z",
+        title: "장비 테스트",
+      },
+      options: { redaction: "none", summary: true },
+      owner,
+      source: {
+        captureMode: "microphone",
+        channelCount: 1,
+        durationMs: 22000,
+        fileName: "microphone-test.webm",
+        inlineAudioBase64: audioPayload,
+        mimeType: "audio/webm;codecs=opus",
+        requestId: "capture-fixture-compact-1",
+        sizeBytes: Buffer.from(audioPayload, "base64").length,
+      },
+      context: {
+        sharedMemoSnapshot: "",
+      },
+    },
+    method: "POST",
+  });
+  assert.equal(compactCreated.statusCode, 200);
+  const compactJobId = compactCreated.jsonBody.data.job.jobId;
+  await invokeJobWriteTrigger(handlers, state, compactJobId);
+  const compactStoredJob = getDoc(state, JOB_COLLECTION, compactJobId);
+  assert(compactStoredJob);
+  assert.equal(compactStoredJob.notesStatus, "succeeded");
+  assert.equal(compactStoredJob.meetingNotes.meetingMeta.title, "녹음 테스트 및 마이크 위치 확인");
+  assert.equal(compactStoredJob.meetingNotes.meetingMeta.purpose, "");
+  assert.equal(compactStoredJob.meetingNotes.discussionFlow.length, 0);
+  assert.equal(compactStoredJob.meetingNotes.decisions.length, 0);
+  assert.equal(compactStoredJob.meetingNotes.actionItems.length, 0);
+  assert.equal(compactStoredJob.meetingNotes.risksOrDependencies.length, 0);
+  assert.equal(compactStoredJob.meetingNotes.openQuestions.length, 1);
+  assert.equal(compactStoredJob.meetingNotes.openQuestions[0], "마이크 위치 확인 필요");
+  assert.equal(
+    compactStoredJob.meetingNotes.overview,
+    "녹음 테스트와 수정 반영 여부 확인이 언급됐다. 마이크 위치를 몰라 테스트 진행이 어렵다는 말이 나왔다."
+  );
+  assert.equal(
+    state.events.some((event) =>
+      event.name === "meeting.notes.gate"
+      && event.payload?.meetingId === "meeting-compact-1"
+      && event.payload?.summaryProfile === "compact"
+    ),
+    true
+  );
+
   const listedMeetings = await invokeHandler(handlers.listInovaMeetings, {
     body: { owner },
     method: "POST",
   });
   assert.equal(listedMeetings.statusCode, 200);
   assert.equal(listedMeetings.jsonBody.data.items.length >= 1, true);
-  assert.equal(listedMeetings.jsonBody.data.items[0].meetingId, "meeting-planning-1");
+  assert.equal(
+    listedMeetings.jsonBody.data.items.some((item) => item.meetingId === "meeting-planning-1"),
+    true
+  );
 
   const updatedMeeting = await invokeHandler(handlers.updateInovaMeeting, {
     body: {
@@ -304,6 +362,27 @@ async function main() {
   assert.equal(shortPreviewRequests[0].systemPrompt.includes("사용자 요청은 가장 높은 우선순위다."), true);
   assert.equal(shortPreviewRequests[0].prompt.includes("현재 전체 회의록 요약 JSON"), true);
   assert.equal(shortPreviewRequests[1].systemPrompt.includes("직전 시도는 사용자 요청을 충분히 반영하지 못했다."), true);
+  assert.equal(String(shortPreviewedSection.jsonBody.data.warning || "").trim(), "");
+
+  const fallbackPreviewRequestsBefore = state.openaiSummaryRequests.length;
+  const fallbackPreviewedSection = await invokeHandler(handlers.previewInovaMeetingResultSectionEdit, {
+    body: {
+      instruction: "10글자로 수정해줘 강제fallback",
+      jobId,
+      meetingId: "meeting-planning-1",
+      owner,
+      sectionKey: "overview",
+    },
+    method: "POST",
+  });
+  assert.equal(fallbackPreviewedSection.statusCode, 200);
+  assert.equal(fallbackPreviewedSection.jsonBody.data.sectionKey, "overview");
+  assert.equal(
+    String(fallbackPreviewedSection.jsonBody.data.warning || "").trim().includes("10자 안팎"),
+    true
+  );
+  const fallbackPreviewRequests = state.openaiSummaryRequests.slice(fallbackPreviewRequestsBefore);
+  assert.equal(fallbackPreviewRequests.length, 2);
 
   const staleAppliedSection = await invokeHandler(handlers.applyInovaMeetingResultSectionEdit, {
     body: {

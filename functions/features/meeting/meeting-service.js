@@ -69,6 +69,9 @@ const MAX_MEETING_NOTES_ACTION_ITEMS = 5;
 const MAX_MEETING_NOTES_OPEN_QUESTIONS = 3;
 const MAX_MEETING_NOTES_RISKS = 3;
 const MAX_MEETING_NOTES_SOURCE_TRACE = 6;
+const MAX_COMPACT_MEETING_NOTES_OVERVIEW_CHARS = 180;
+const MAX_COMPACT_MEETING_NOTES_TITLE_CHARS = 48;
+const MAX_COMPACT_MEETING_NOTES_LINE_CHARS = 96;
 const MAX_MEETING_SECTION_EDIT_INSTRUCTION_CHARS = 1600;
 const MAX_MEETING_TERM_REPLACEMENTS = 24;
 const MAX_MEETING_TERM_REPLACEMENT_FROM_CHARS = 120;
@@ -932,6 +935,7 @@ function registerMeetingHandlers(deps) {
           baseRevisionToken: preview.baseRevisionToken,
           sectionData: preview.sectionData,
           sectionKey: preview.sectionKey,
+          warning: normalizeTextBlock(preview.warning),
         },
       });
     } catch (error) {
@@ -2094,13 +2098,19 @@ function registerMeetingHandlers(deps) {
         reason: gateDecision.reason,
         segmentCount: gateDecision.segmentCount,
         sentenceCount: gateDecision.sentenceCount,
+        summaryProfile: gateDecision.summaryProfile,
         strategy: gateDecision.strategy,
         textLength: gateDecision.textLength,
       });
       if (gateDecision.decision === "skip") {
         return createEmptyMeetingNotesBundle("skipped", gateDecision.reason);
       }
-      const notesBundle = await generateMeetingNotesBundle(transcript, meeting, context);
+      const notesBundle = await generateMeetingNotesBundle(
+        transcript,
+        meeting,
+        context,
+        gateDecision.summaryProfile
+      );
       return {
         ...notesBundle,
         notes: applyMeetingTermReplacements(notesBundle.notes, termReplacements),
@@ -2119,7 +2129,11 @@ function registerMeetingHandlers(deps) {
     }
   }
 
-  async function generateMeetingNotesBundle(transcript, meeting, context) {
+  async function generateMeetingNotesBundle(transcript, meeting, context, summaryProfileInput) {
+    const summaryProfile = normalizeMeetingNotesSummaryProfile(summaryProfileInput);
+    if (summaryProfile === "compact") {
+      return generateCompactMeetingNotesBundle(transcript, meeting, context);
+    }
     const transcriptSections = buildMeetingNotesTranscriptSections(transcript);
     if (!transcriptSections.length) {
       return createEmptyMeetingNotesBundle("skipped");
@@ -2168,6 +2182,36 @@ function registerMeetingHandlers(deps) {
       return createEmptyMeetingNotesBundle("skipped");
     }
     return createMeetingNotesBundleFromNotes(parseMeetingNotesJson(content), context);
+  }
+
+  async function generateCompactMeetingNotesBundle(transcript, meeting, context) {
+    const transcriptPrompt = buildMeetingNotesTranscriptPrompt(transcript, { strategy: "balanced" });
+    if (!normalizeTextBlock(transcriptPrompt)) {
+      return createEmptyMeetingNotesBundle("skipped");
+    }
+    const completion = await getClient().chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content: buildCompactMeetingNotesSystemPrompt(),
+        },
+        {
+          role: "user",
+          content: buildCompactMeetingNotesUserPrompt(meeting, context, transcriptPrompt),
+        },
+      ],
+      model: getMeetingSummaryModel(),
+      response_format: { type: "json_object" },
+      temperature: 0.1,
+    });
+    const content = normalizeCompletionContent(completion?.choices?.[0]?.message?.content);
+    if (!content) {
+      return createEmptyMeetingNotesBundle("skipped");
+    }
+    return createMeetingNotesBundleFromNotes(
+      normalizeCompactMeetingNotes(parseMeetingNotesJson(content), transcript),
+      context
+    );
   }
 
   async function generateMeetingNotesBundleFromPrompt(
@@ -2246,6 +2290,7 @@ function registerMeetingHandlers(deps) {
         reason: "인식된 발화가 없어 자동 회의 정리를 만들지 않았습니다.",
         segmentCount: signal.segmentCount,
         sentenceCount: signal.sentenceCount,
+        summaryProfile: "skip",
         strategy: "empty-transcript",
         textLength: signal.textLength,
       };
@@ -2256,7 +2301,8 @@ function registerMeetingHandlers(deps) {
         reason: "",
         segmentCount: signal.segmentCount,
         sentenceCount: signal.sentenceCount,
-        strategy: "direct-generate",
+        summaryProfile: "full",
+        strategy: "direct-full",
         textLength: signal.textLength,
       };
     }
@@ -2280,13 +2326,14 @@ function registerMeetingHandlers(deps) {
         normalizeCompletionContent(completion?.choices?.[0]?.message?.content)
       );
       return {
-        decision: gate.decision === "skip" ? "skip" : "generate",
-        reason: gate.decision === "skip"
-          ? gate.reason || "전사된 음성 내용이 너무 적거나 불분명해 자동 회의 정리를 만들지 않았습니다."
+        decision: "generate",
+        reason: gate.profile === "compact"
+          ? gate.reason || "짧은 테스트성 또는 저신호 전사라 compact 회의록으로 정리했습니다."
           : "",
         segmentCount: signal.segmentCount,
         sentenceCount: signal.sentenceCount,
-        strategy: "llm-gate",
+        summaryProfile: gate.profile === "full" ? "full" : "compact",
+        strategy: "llm-profile",
         textLength: signal.textLength,
       };
     } catch {
@@ -2295,7 +2342,8 @@ function registerMeetingHandlers(deps) {
         reason: "",
         segmentCount: signal.segmentCount,
         sentenceCount: signal.sentenceCount,
-        strategy: "gate-fallback-generate",
+        summaryProfile: "compact",
+        strategy: "profile-fallback-compact",
         textLength: signal.textLength,
       };
     }
@@ -2327,18 +2375,19 @@ function registerMeetingHandlers(deps) {
   function isClearlySummarizableMeetingSignal(signal) {
     return signal.textLength >= MIN_MEETING_NOTES_DIRECT_TEXT_CHARS
       || signal.segmentCount >= MIN_MEETING_NOTES_DIRECT_SEGMENTS
-      || signal.sentenceCount >= MIN_MEETING_NOTES_DIRECT_SENTENCES;
+      || (signal.sentenceCount >= MIN_MEETING_NOTES_DIRECT_SENTENCES && signal.textLength >= 140);
   }
 
   function buildMeetingNotesGateSystemPrompt() {
     return [
-      "너는 회의 전사 신호 판별기다.",
-      "전사 텍스트만 보고 이 기록이 자동 회의 정리를 만들 만큼 실제 발화 내용이 충분한지 판단한다.",
-      "짧더라도 실제 결정, 요청, 일정, 논의, 질문과 답변이 보이면 generate를 선택한다.",
-      "무음, 잡음, 의미 없는 짧은 감탄사, 인사만 있는 경우, 끊긴 한두 문장, 전사 오류처럼 보이는 경우는 skip을 선택한다.",
-      "회의 제목이나 메모가 좋아 보여도 전사 근거가 부족하면 skip을 선택한다.",
+      "너는 회의 전사 요약 프로필 분류기다.",
+      "빈 전사는 여기 들어오지 않는다.",
+      "전사 텍스트만 보고 이 기록이 full 회의록이 맞는지, compact 회의록이 맞는지 판단한다.",
+      "full은 실제 결정, 요청, 일정, 후속 행동, 여러 논의 흐름이 보여 정식 회의록 구조가 자연스러운 경우다.",
+      "compact는 짧은 테스트, 상태 점검, 기기 확인, 단일 질문, 저신호 대화처럼 정식 회의 서사를 만들면 과장되는 경우다.",
+      "애매하면 무조건 compact를 선택한다.",
       "반드시 JSON 하나만 반환한다.",
-      '형식: {"decision":"generate|skip","reason":"skip일 때만 사용자에게 보여 줄 짧은 한국어 문장"}',
+      '형식: {"profile":"full|compact","reason":"compact일 때만 짧은 한국어 이유"}',
     ].join(" ");
   }
 
@@ -2347,7 +2396,7 @@ function registerMeetingHandlers(deps) {
       `전사 길이: ${signal.textLength}자`,
       `구간 수: ${signal.segmentCount}개`,
       `문장 수: ${signal.sentenceCount}개`,
-      "아래 전사가 자동 회의 정리를 만들 만큼 실제 회의 내용이 있는지 판단해 주세요.",
+      "아래 전사가 정식 full 회의록에 맞는지, compact 회의록에 맞는지 판단해 주세요.",
       signal.excerpt ? `전사:\n${signal.excerpt}` : "전사: 없음",
     ].join("\n\n");
   }
@@ -2355,17 +2404,17 @@ function registerMeetingHandlers(deps) {
   function parseMeetingNotesGateResult(value) {
     const normalized = normalizeText(value);
     if (!normalized) {
-      return { decision: "", reason: "" };
+      return { profile: "", reason: "" };
     }
     try {
       const parsed = JSON.parse(normalized);
-      const decision = normalizeText(parsed?.decision).toLowerCase();
+      const profile = normalizeText(parsed?.profile).toLowerCase();
       return {
-        decision: decision === "skip" ? "skip" : decision === "generate" ? "generate" : "",
+        profile: profile === "full" ? "full" : profile === "compact" ? "compact" : "",
         reason: normalizeTextBlock(parsed?.reason).slice(0, 200),
       };
     } catch {
-      return { decision: "", reason: "" };
+      return { profile: "", reason: "" };
     }
   }
 
@@ -2404,6 +2453,23 @@ function registerMeetingHandlers(deps) {
       "meetingMeta.participants는 전사와 메모에서 확인 가능한 참여자만 적고, 확실하지 않으면 비워 둔다.",
       "sourceTrace[]는 {itemType, itemRef, evidence} 형식이다.",
       "sourceTrace[] itemType은 transcript, sharedMemo 중 근거에 맞게 적는다.",
+    ].join(" ");
+  }
+
+  function buildCompactMeetingNotesSystemPrompt() {
+    return [
+      "너는 짧은 테스트성 또는 저신호 전사를 정리하는 한국어 기록 메모 작성자다.",
+      "정식 회의록처럼 배경, 쟁점, 결론을 억지로 만들지 않는다.",
+      "전사에 직접 나온 사실만 짧게 적고, 해석이나 확장 서사를 붙이지 않는다.",
+      "짧은 테스트 발화는 그대로 테스트성 기록 톤으로 남긴다.",
+      "overview는 1~2문장 안의 짧은 메모로 작성한다.",
+      "meetingMeta.purpose는 보통 빈 문자열로 두고, 정말 명시된 목적이 있을 때만 한 문장으로 쓴다.",
+      "discussionFlow는 보통 빈 배열이며, 분명한 단일 주제가 있을 때만 최대 1개 남긴다.",
+      "decisions, actionItems, risksOrDependencies는 전사에 직접 근거가 없으면 빈 배열로 둔다.",
+      "openQuestions는 실제로 확인이 필요하거나 모르겠다고 말한 내용만 최대 1개 남긴다.",
+      "원문에 없는 결론, 실패 판정, 의도, 배경 설명을 만들지 않는다.",
+      "반드시 JSON만 반환한다.",
+      "스키마는 meetingMeta, overview, discussionFlow, decisions, actionItems, openQuestions, risksOrDependencies, sourceTrace 이다.",
     ].join(" ");
   }
 
@@ -2460,6 +2526,16 @@ function registerMeetingHandlers(deps) {
     ].join("\n\n");
   }
 
+  function buildCompactMeetingNotesUserPrompt(meeting, context, transcriptPrompt) {
+    return [
+      `언어: ${normalizeText(meeting?.language) || "ko"}`,
+      `공용 메모: ${normalizeTextBlock(context?.sharedMemoSnapshot) || "없음"}`,
+      "아래 전사는 짧은 테스트나 저신호 기록일 수 있습니다. 정식 회의처럼 부풀리지 말고, 사람이 나중에 다시 볼 때 필요한 사실만 짧게 정리해 주세요.",
+      "핵심은 무엇을 테스트하거나 확인했는지, 무엇이 바로 확인되지 않았는지, 추가 확인이 필요한 항목이 있는지 정도만 남기는 것입니다.",
+      transcriptPrompt,
+    ].join("\n\n");
+  }
+
   function normalizeMeetingNotesSectionSummary(input) {
     return normalizeMeetingNotes(input, {
       maxActionItems: 2,
@@ -2470,6 +2546,141 @@ function registerMeetingHandlers(deps) {
       maxRisks: 2,
       maxSourceTrace: 3,
     });
+  }
+
+  function normalizeMeetingNotesSummaryProfile(input) {
+    return normalizeText(input).toLowerCase() === "compact" ? "compact" : normalizeText(input).toLowerCase() === "skip" ? "skip" : "full";
+  }
+
+  function normalizeCompactMeetingNotes(notesInput, transcriptInput) {
+    const transcriptText = buildCompactMeetingTranscriptText(transcriptInput);
+    const normalized = normalizeMeetingNotes(notesInput, {
+      maxActionItems: 1,
+      maxDecisions: 1,
+      maxDiscussionFlow: 1,
+      maxKeyPoints: 2,
+      maxOpenQuestions: 1,
+      maxRisks: 1,
+      maxSourceTrace: 2,
+    });
+    const hasDecisionCue = /(결정|확정|승인|합의|정하기로|하기로|진행하기로)/.test(transcriptText);
+    const hasActionCue = /(하겠습니다|하겠습니|정리하겠습니다|확인하겠습니다|보내겠습니다|준비하겠습니다|담당|까지\b)/.test(transcriptText);
+    const hasQuestionCue = /(\?|모르겠|모르겠습니다|어디|확인해야|확인이 필요|궁금)/.test(transcriptText);
+    const hasRiskCue = /(문제|어렵|어려|지연|막히|불가|오류|리스크|제약|장애)/.test(transcriptText);
+    const discussionFlow = transcriptText.length >= 140 && !hasQuestionCue
+      ? normalized.discussionFlow.slice(0, 1).map((item) => ({
+          heading: clampCompactMeetingTitle(item.heading),
+          keyPoints: item.keyPoints.map((value) => clampCompactMeetingLine(value)).filter(Boolean).slice(0, 2),
+          narrative: clampCompactMeetingBody(item.narrative, 2),
+        })).filter((item) => item.heading || item.narrative || item.keyPoints.length)
+      : [];
+    const openQuestions = hasQuestionCue
+      ? normalized.openQuestions.map((item) => clampCompactMeetingLine(item)).filter(Boolean).slice(0, 1)
+      : [];
+    const compactNotes = normalizeMeetingNotes({
+      actionItems: hasActionCue
+        ? normalized.actionItems.slice(0, 1).map((item) => ({
+            ...item,
+            source: "transcript",
+            task: clampCompactMeetingLine(item.task),
+          })).filter((item) => item.task)
+        : [],
+      decisions: hasDecisionCue
+        ? normalized.decisions.slice(0, 1).map((item) => ({
+            ...item,
+            text: clampCompactMeetingLine(item.text),
+          })).filter((item) => item.text)
+        : [],
+      discussionFlow,
+      meetingMeta: {
+        ...normalized.meetingMeta,
+        purpose: "",
+        title: clampCompactMeetingTitle(normalized.meetingMeta.title) || buildCompactMeetingFallbackTitle(transcriptText),
+      },
+      openQuestions,
+      overview: clampCompactMeetingBody(normalized.overview, 2) || buildCompactMeetingFallbackOverview(transcriptText),
+      risksOrDependencies: hasRiskCue && !hasQuestionCue
+        ? normalized.risksOrDependencies.slice(0, 1).map((item) => ({
+            ...item,
+            text: clampCompactMeetingLine(item.text),
+          })).filter((item) => item.text)
+        : [],
+      sourceTrace: normalized.sourceTrace
+        .filter((item) => normalizeText(item.itemType) !== "sharedMemo")
+        .slice(0, 2),
+    });
+    return compactNotes;
+  }
+
+  function buildCompactMeetingTranscriptText(transcript) {
+    return normalizeTextBlock(
+      (Array.isArray(transcript?.segments) ? transcript.segments : [])
+        .map((segment) => normalizeText(segment?.text))
+        .filter(Boolean)
+        .join("\n")
+      || transcript?.text
+    );
+  }
+
+  function clampCompactMeetingBody(textInput, maxSentences = 2) {
+    const text = normalizeTextBlock(textInput);
+    if (!text) {
+      return "";
+    }
+    const sentences = text
+      .match(/[^.!?。！？…]+[.!?。！？…]?/g)
+      ?.map((item) => normalizeTextBlock(item))
+      .filter(Boolean)
+      || [text];
+    const limited = sentences.slice(0, Math.max(1, maxSentences)).join(" ");
+    return limited.length > MAX_COMPACT_MEETING_NOTES_OVERVIEW_CHARS
+      ? normalizeTextBlock(limited.slice(0, MAX_COMPACT_MEETING_NOTES_OVERVIEW_CHARS))
+      : limited;
+  }
+
+  function clampCompactMeetingLine(textInput) {
+    const text = normalizeTextBlock(textInput);
+    if (!text) {
+      return "";
+    }
+    return text.length > MAX_COMPACT_MEETING_NOTES_LINE_CHARS
+      ? normalizeTextBlock(text.slice(0, MAX_COMPACT_MEETING_NOTES_LINE_CHARS))
+      : text;
+  }
+
+  function clampCompactMeetingTitle(textInput) {
+    const text = normalizeText(textInput);
+    if (!text) {
+      return "";
+    }
+    return text.length > MAX_COMPACT_MEETING_NOTES_TITLE_CHARS
+      ? normalizeText(text.slice(0, MAX_COMPACT_MEETING_NOTES_TITLE_CHARS))
+      : text;
+  }
+
+  function buildCompactMeetingFallbackTitle(transcriptTextInput) {
+    const transcriptText = normalizeTextBlock(transcriptTextInput);
+    if (!transcriptText) {
+      return "짧은 회의 기록";
+    }
+    if (/녹음/.test(transcriptText) && /마이크/.test(transcriptText)) {
+      return "녹음 테스트 및 마이크 위치 확인";
+    }
+    if (/테스트|점검|확인/.test(transcriptText)) {
+      return "테스트 및 상태 확인";
+    }
+    return clampCompactMeetingTitle(buildTranscriptExcerpt(transcriptText).replace(/\.\.\.$/, "")) || "짧은 회의 기록";
+  }
+
+  function buildCompactMeetingFallbackOverview(transcriptTextInput) {
+    const transcriptText = normalizeTextBlock(transcriptTextInput);
+    if (!transcriptText) {
+      return "짧은 발화가 기록되었지만 추가 맥락은 확인되지 않았습니다.";
+    }
+    if (/녹음/.test(transcriptText) && /테스트/.test(transcriptText) && /마이크/.test(transcriptText)) {
+      return "녹음 테스트와 수정 반영 여부 확인이 언급됐다. 마이크 위치를 몰라 테스트 진행이 어렵다는 말이 나왔다.";
+    }
+    return clampCompactMeetingBody(buildTranscriptExcerpt(transcriptText).replace(/\.\.\.$/, ""), 2);
   }
 
   function buildMeetingNotesSectionEditSystemPrompt(sectionKey, options = {}) {
@@ -2616,6 +2827,8 @@ function registerMeetingHandlers(deps) {
 
   async function generateMeetingNotesSectionEditPayload(input) {
     let retryReason = "";
+    let lastConstraintViolation = "";
+    let lastPayload = null;
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const completion = await getClient().chat.completions.create({
         messages: [
@@ -2638,15 +2851,26 @@ function registerMeetingHandlers(deps) {
         continue;
       }
       const normalizedPayload = normalizeMeetingNotesSectionPayload(input.sectionKey, parseMeetingNotesJson(content));
+      lastPayload = normalizedPayload;
       const constraintViolation = describeMeetingNotesSectionEditConstraintViolation(
         input.sectionKey,
         normalizedPayload,
         input.instruction
       );
       if (!constraintViolation) {
-        return normalizedPayload;
+        return {
+          payload: normalizedPayload,
+          warning: "",
+        };
       }
+      lastConstraintViolation = constraintViolation;
       retryReason = constraintViolation;
+    }
+    if (lastPayload) {
+      return {
+        payload: lastPayload,
+        warning: lastConstraintViolation,
+      };
     }
     throw createHttpError(502, retryReason || "섹션 미리보기를 만들지 못했어요.");
   }
@@ -2723,7 +2947,7 @@ function registerMeetingHandlers(deps) {
 
   async function previewMeetingNotesSectionEdit(input, owner) {
     const source = await loadMeetingNotesSectionEditSource(input, owner);
-    const normalizedPayload = await generateMeetingNotesSectionEditPayload({
+    const previewPayload = await generateMeetingNotesSectionEditPayload({
       currentNotes: source.currentNotes,
       currentSectionData: readMeetingNotesSectionData(source.currentNotes, input.sectionKey),
       instruction: input.instruction,
@@ -2731,12 +2955,22 @@ function registerMeetingHandlers(deps) {
       termReplacements: source.termReplacements,
       transcript: source.transcript,
     });
-    const mergedNotes = applyMeetingNotesSectionPayload(source.currentNotes, input.sectionKey, normalizedPayload);
+    const mergedNotes = applyMeetingNotesSectionPayload(source.currentNotes, input.sectionKey, previewPayload.payload);
     const nextNotes = applyMeetingTermReplacements(mergedNotes, source.termReplacements);
+    if (previewPayload.warning) {
+      logEvent("meeting.notes.section-edit.preview.warning", {
+        jobId: source.job.jobId,
+        meetingId: source.job.meetingId,
+        providerUserKey: owner.providerUserKey,
+        sectionKey: input.sectionKey,
+        warning: previewPayload.warning,
+      });
+    }
     return {
       baseRevisionToken: source.baseRevisionToken,
       sectionData: readMeetingNotesSectionData(nextNotes, input.sectionKey),
       sectionKey: input.sectionKey,
+      warning: previewPayload.warning,
     };
   }
 

@@ -42,6 +42,7 @@
 - `meeting-creation-domain.js`, `meeting-processing-domain.js`, `meeting-summary-sync-domain.js`, `meeting-deletion-domain.js`, `meeting-notes-source-domain.js`처럼 설명 가능한 workflow/data boundary만 독립 모듈로 유지한다.
 - `updateInovaMeeting`는 mutation accepted만이 아니라 수정된 `meeting` payload도 계속 돌려준다. hosted-only service harness와 response envelope 회귀 점검에서 이 계약을 유지한다.
 - 회의록 보정은 `termReplacements` 저장과 `preview/apply section edit` 두 경로로만 확장한다. 추가 맥락 기반 전체 재생성 경로는 다시 도입하지 않는다.
+- 회의록 자동 생성은 `skip`만이 아니라 `full`과 `compact` 두 출력 프로필을 가질 수 있다. 짧은 테스트성/저신호 전사는 `compact`로 정리하되, 정식 회의처럼 서사를 부풀리지 않는다.
 
 ## 관련 데이터 경계
 - `integration_inova_meetings`
@@ -64,6 +65,8 @@
 - version gate와 manual smoke 기준은 `docs/refactoring-plan.md`를 기준으로 확인한다.
 - `termReplacements`는 회의 단위 순서 보존 배열이며, `from` 중복/빈 값이 거부되고 기존 notes와 이후 notes 결과에 모두 deterministic pass가 적용되는지 확인한다.
 - `previewInovaMeetingResultSectionEdit`와 `applyInovaMeetingResultSectionEdit`는 editable section key, `baseRevisionToken`, stale preview 거절 계약을 유지해야 한다.
+- 섹션 preview는 사용자 요청을 완전히 못 맞춘 경우에도 가능하면 5xx 대신 best-effort payload를 돌려주고, 미충족 제약은 `warning`으로 노출한다.
+- compact 회의록은 `overview` 중심의 짧은 기록 메모를 기본으로 하고, `decisions/actionItems/risks`는 전사에 직접 근거가 없으면 비워 둔다.
 - 상용 회의 데이터 잔존 여부를 편하게 볼 때는 `npm run check:meeting-data`를 사용한다.
 - 회의 데이터를 전체 또는 특정 `meetingId` 기준으로 수동 정리할 때는 기본 dry-run인 `npm run delete:meeting-data -- --all` 또는 `npm run delete:meeting-data -- --meeting-id <id>`를 먼저 보고, 실제 삭제는 같은 명령에 `--execute`를 붙인다.
 - 회의 삭제 task와 1시간 sweep은 job/artifact/part/finalizer뿐 아니라 관련 `integration_inova_meeting_commands`와 회의 단위 `launch/workspace session`까지 함께 정리해야 한다.
