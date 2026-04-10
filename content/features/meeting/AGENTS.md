@@ -33,6 +33,9 @@
 - 회의 제목은 UI에서 회의를 구분하는 편집용 라벨이다. 최초 회의 정리 생성 prompt에는 제목이 아니라 전사와 공용 메모만 사용한다.
 - hosted 작업실의 회의록 보정은 전체 재생성이 아니라 `회의별 용어 치환`과 `섹션 단위 preview/apply`로 제한한다.
 - hosted notes는 `핵심 요약(summary)`과 `회의 개요(overview)`를 분리해서 다룬다. 두 필드는 각각 수정할 수 있고, 한쪽 섹션 수정이 다른 쪽 카드를 함께 덮어쓰지 않아야 한다.
+- completed record의 notes action은 탭 우측 공용 action row에서만 노출한다. `회의 정리 복사`, `원문 복사`, `용어 치환`은 이 row를 공유하고, 미완료 기록에는 이 action row를 기본 노출하지 않는다.
+- `용어 치환` 토글은 별도 라벨/설명 블록 대신 버튼 안의 `?` tooltip으로 meeting-wide 적용 범위를 설명한다.
+- 작업실의 짧은 notice는 녹음 카드 inline 박스가 아니라 header toast 슬롯으로 보여 준다.
 - 발화가 거의 없거나 잡음에 가까운 약한 전사는 backend gate로 한 번 더 걸러 자동 회의 정리를 건너뛸 수 있어야 하며, 이 경우 이유를 사용자 문구로 드러낸다.
 - hosted 상단에는 수동 `새로고침` 액션을 기본 노출하지 않는다. meeting listener와 선택 상세 polling을 기본 동기화 경로로 유지하고, 복원 기준은 예전 URL `jobId`보다 현재 사용자가 고른 record를 우선한다.
 - 기록 상세 카드 상단은 제목과 액션 중심으로 유지하고, 진행 정보는 목록 또는 `상태` 탭에서만 본다.
@@ -63,6 +66,7 @@
 - 팝업 target 설정, 회의 탭 목록, hosted meeting 진입, 기존 결과 1건 조회를 확인한다.
 - 새 녹음 또는 파일 import 1회와 제목/메모/결과 수정 또는 삭제 1회를 확인한다.
 - 회의록 보정 변경이 있으면 `용어 치환 저장 1회`, `섹션 수정 preview/apply 1회`, stale preview 재적용 거절을 함께 확인한다.
+- hosted notes action UI를 건드렸다면 `npm.cmd run verify`와 `node scripts/verify-meeting-hosted-ui.js`를 함께 돌리고, 완료 기록에서만 action row가 보이는지와 `용어 치환` 버튼 내부 tooltip 문구를 함께 확인한다.
 - local full-stack smoke가 필요하면 `npm.cmd run emulator:meeting-local`을 먼저 켜고, 팝업에서 `로컬 호스팅`을 고른 뒤 같은 흐름을 확인한다.
 - hosted 상태 mismatch를 조사할 때는 실제 상용 페이지를 `?debug=1`로 열고, `docs/meeting-debug-console-validation.md` 기준으로 디버그 패널 로그와 helper 출력까지 함께 확보한다.
 - 상용 회의 데이터 정리 여부를 편하게 볼 때는 `npm run check:meeting-data`를 사용하고, 실제 삭제 전에는 `npm run delete:meeting-data -- --all` 또는 `--meeting-id <id>` dry-run을 먼저 본다.

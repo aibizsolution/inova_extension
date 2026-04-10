@@ -25,6 +25,10 @@
 ## UI 불변식
 - 기록 상세 카드 상단은 진행 상태 패널이 아니다. 제목/액션만 두고, pending/processing 배지나 분할 업로드 설명은 상세 카드에서 숨긴다.
 - hosted boot에서는 회의 룸과 기록 목록을 먼저 그리고, 선택된 기록 상세 artifact는 비차단으로 뒤늦게 채운다.
+- 회의 룸 header 상단 우측은 destructive action 영역이 아니라 짧은 toast notice 슬롯으로 쓴다. `회의 룸 삭제`는 제목 저장 row에 둔다.
+- completed record의 review tab action row가 `회의 정리 복사`, `원문 복사`, `용어 치환`을 함께 소유한다. `원문` 탭 전용 별도 toolbar는 다시 만들지 않는다.
+- `용어 치환` 설명은 버튼 안쪽 `?` tooltip으로만 노출한다. 별도 heading/body 도움말 블록을 notes 상단에 다시 두지 않는다.
+- 섹션 수정 dialog는 preview card와 버튼 상태로만 안내하고, 별도 inline status strip은 두지 않는다.
 
 ## 디버그 / 증거 수집
 - hosted debug console render contract, `?debug=1` 절차, 로그 확보 helper, boot timing 해석은 `docs/meeting-debug-console-validation.md`에서 관리한다.
