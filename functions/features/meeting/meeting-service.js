@@ -18,6 +18,7 @@ const { createMeetingNotesRuntimeDomain } = require("./meeting-notes-runtime-dom
 const { createMeetingNotesSourceDomain } = require("./meeting-notes-source-domain");
 const { createMeetingMutationDomain } = require("./meeting-mutation-domain");
 const { createMeetingProcessingDomain } = require("./meeting-processing-domain");
+const { createMeetingResultDomain } = require("./meeting-result-domain");
 const { createMeetingRecordDomain } = require("./meeting-record-domain");
 const { createMeetingSourceDomain } = require("./meeting-source-domain");
 const { createMeetingSummarySyncDomain } = require("./meeting-summary-sync-domain");
@@ -385,6 +386,30 @@ function registerMeetingHandlers(deps) {
     normalizeTextBlock,
     parseMeetingNotesJson,
     resolveMeetingResultTitle,
+    updateMeetingSummaryRecordResult,
+  });
+
+  const meetingResultDomain = createMeetingResultDomain({
+    artifactCollection: ARTIFACT_COLLECTION,
+    assertJobOwnership,
+    assertMeetingIsActive,
+    assertMeetingOwnership,
+    buildMeetingDocId,
+    buildMeetingRecentJobsPatch,
+    buildMeetingResultSummary,
+    buildWorkspaceMutation,
+    createHttpError,
+    db,
+    jobCollection: JOB_COLLECTION,
+    loadMeetingNotesSource,
+    meetingCollection: MEETING_COLLECTION,
+    mergeRecentJobs,
+    normalizeMeetingArtifact,
+    normalizeMeetingContext,
+    normalizeMeetingJob,
+    normalizeMeetingNotesInputSnapshot,
+    normalizeMeetingSummary,
+    normalizeText,
     updateMeetingSummaryRecordResult,
   });
 
@@ -837,107 +862,18 @@ function registerMeetingHandlers(deps) {
         throw createHttpError(400, "수정할 회의 결과 내용이 비어 있어요.");
       }
       assertWorkspaceMeetingAccess(access, input.meetingId, createHttpError);
-
-      const jobRef = db.collection(JOB_COLLECTION).doc(input.jobId);
-      const jobSnapshot = await jobRef.get();
-      if (!jobSnapshot.exists) {
-        throw createHttpError(404, "수정할 회의 결과를 찾지 못했어요.");
-      }
-      const job = normalizeMeetingJob(jobSnapshot.data());
-      if (job.deletedAt) {
-        throw createHttpError(404, "이미 삭제된 회의 결과예요.");
-      }
-      assertJobOwnership(job, owner, createHttpError);
-      await assertMeetingIsActive(owner, job.meetingId, createHttpError);
-      if (job.meetingId !== input.meetingId) {
-        throw createHttpError(404, "현재 회의와 맞지 않는 결과예요.");
-      }
-
-      const {
-        artifact,
-        artifactRef,
-        notesInputSnapshot: existingNotesInputSnapshot,
-        sharedMemoSnapshot: currentSharedMemoSnapshot,
-      } = await loadMeetingNotesSource(job);
-      const updatedAt = new Date().toISOString();
-      const mutationType = input.titleProvided
-        ? "saveRecordTitle"
-        : "saveRecordMemo";
-      const workspaceMutation = buildWorkspaceMutation({
-        completedAt: updatedAt,
-        requestId: input.clientRequestId,
-        requestedAt: updatedAt,
-        status: "succeeded",
-        type: mutationType,
-      });
-      const persistedSharedMemo = input.sharedMemoProvided
-        ? input.sharedMemo
-        : currentSharedMemoSnapshot;
-      const shouldInitializeNotesInputSnapshot = !normalizeText(existingNotesInputSnapshot.updatedAt)
-        && Boolean(normalizeText(artifact?.notesGeneratedAt || job.notesGeneratedAt));
-      const baselineNotesInputSnapshot = shouldInitializeNotesInputSnapshot
-        ? normalizeMeetingNotesInputSnapshot({
-            sharedMemo: currentSharedMemoSnapshot,
-            updatedAt: normalizeText(artifact?.notesGeneratedAt || job.notesGeneratedAt || job.updatedAt || updatedAt),
-          })
-        : existingNotesInputSnapshot;
-      const nextContext = normalizeMeetingContext({
-        ...job.context,
-        sharedMemoSnapshot: persistedSharedMemo,
-      });
-      const jobPatch = {};
-      if (input.titleProvided) {
-        jobPatch.title = input.title;
-        jobPatch.updatedAt = updatedAt;
-      }
-      if (input.sharedMemoProvided) {
-        jobPatch.context = nextContext;
-        jobPatch.updatedAt = updatedAt;
-      }
-      if (shouldInitializeNotesInputSnapshot) {
-        jobPatch.notesInputSnapshot = baselineNotesInputSnapshot;
-      }
-      if (workspaceMutation.requestId) {
-        jobPatch.workspaceMutation = workspaceMutation;
-      }
-      const artifactPatch = {};
-      if (shouldInitializeNotesInputSnapshot) {
-        artifactPatch.notesInputSnapshot = baselineNotesInputSnapshot;
-      }
-
-      const nextJob = normalizeMeetingJob({
-        ...job,
-        ...jobPatch,
-      });
-      const nextArtifact = artifact
-        ? normalizeMeetingArtifact({
-            ...artifact,
-            ...artifactPatch,
-          })
-        : null;
-
-      const writes = [];
-      if (Object.keys(jobPatch).length) {
-        writes.push(jobRef.set(jobPatch, { merge: true }));
-      }
-      if (artifactRef && Object.keys(artifactPatch).length) {
-        writes.push(artifactRef.set(artifactPatch, { merge: true }));
-      }
-      if (writes.length) {
-        await Promise.all(writes);
-        await updateMeetingSummaryRecordResult(owner, nextJob, nextArtifact, updatedAt);
-      }
+      const updated = await meetingResultDomain.updateMeetingResult(input, owner);
 
       logEvent("meeting.result.update.success", {
-        jobId: input.jobId,
-        meetingId: input.meetingId,
+        jobId: updated.jobId,
+        meetingId: updated.meetingId,
         providerUserKey: owner.providerUserKey,
       });
       response.json({
         ok: true,
         data: {
           accepted: true,
-          requestId: input.clientRequestId,
+          requestId: updated.requestId,
         },
       });
     } catch (error) {
@@ -1036,146 +972,23 @@ function registerMeetingHandlers(deps) {
         throw createHttpError(400, "같은 회의 룸으로는 이동할 수 없어요.");
       }
       assertWorkspaceMeetingAccess(access, input.meetingId, createHttpError);
-
-      const jobRef = db.collection(JOB_COLLECTION).doc(input.jobId);
-      const sourceMeetingRef = db.collection(MEETING_COLLECTION).doc(buildMeetingDocId(owner.providerUserKey, input.meetingId));
-      const targetMeetingRef = db.collection(MEETING_COLLECTION).doc(buildMeetingDocId(owner.providerUserKey, input.targetMeetingId));
-      const movedAt = new Date().toISOString();
-      const result = await db.runTransaction(async (transaction) => {
-        const [jobSnapshot, sourceMeetingSnapshot, targetMeetingSnapshot] = await Promise.all([
-          transaction.get(jobRef),
-          transaction.get(sourceMeetingRef),
-          transaction.get(targetMeetingRef),
-        ]);
-
-        if (!jobSnapshot.exists) {
-          throw createHttpError(404, "이동할 회의 결과를 찾지 못했어요.");
-        }
-        if (!sourceMeetingSnapshot.exists) {
-          throw createHttpError(404, "현재 회의 룸을 찾지 못했어요.");
-        }
-        if (!targetMeetingSnapshot.exists) {
-          throw createHttpError(404, "이동할 회의 룸을 찾지 못했어요.");
-        }
-
-        const rawJobData = jobSnapshot.data();
-        const persistedJobTitle = normalizeText(rawJobData?.title);
-        const job = normalizeMeetingJob(rawJobData);
-        const sourceMeeting = normalizeMeetingSummary(sourceMeetingSnapshot.data());
-        const targetMeeting = normalizeMeetingSummary(targetMeetingSnapshot.data());
-
-        assertJobOwnership(job, owner, createHttpError);
-        assertMeetingOwnership(sourceMeeting, owner, createHttpError);
-        assertMeetingOwnership(targetMeeting, owner, createHttpError);
-
-        if (job.deletedAt) {
-          throw createHttpError(404, "이미 삭제된 회의 결과예요.");
-        }
-        if (job.meetingId !== input.meetingId) {
-          throw createHttpError(404, "현재 회의와 맞지 않는 결과예요.");
-        }
-        if (job.status !== "succeeded") {
-          throw createHttpError(409, "완료된 기록만 이동할 수 있어요.");
-        }
-        if (sourceMeeting.deletedAt) {
-          throw createHttpError(404, "현재 회의 룸을 더 이상 찾을 수 없어요.");
-        }
-        if (targetMeeting.deletedAt) {
-          throw createHttpError(404, "이동할 회의 룸이 이미 삭제되었어요.");
-        }
-
-        const artifactId = normalizeText(job.transcript?.artifactId || job.artifacts?.[0]?.artifactId);
-        const artifactRef = artifactId ? db.collection(ARTIFACT_COLLECTION).doc(artifactId) : null;
-        const artifactSnapshot = artifactRef ? await transaction.get(artifactRef) : null;
-        const artifact = artifactSnapshot?.exists ? normalizeMeetingArtifact(artifactSnapshot.data()) : null;
-        const sourceSummaryItem = sourceMeeting.recentJobs.find((item) => normalizeText(item.jobId) === job.jobId) || null;
-        const notesTitle = normalizeText(artifact?.notes?.meetingMeta?.title || job.meetingNotes?.meetingMeta?.title);
-        const materializedTitle = normalizeText(
-          persistedJobTitle
-          || sourceSummaryItem?.title
-          || notesTitle
-          || job.meeting?.title
-          || sourceMeeting.title
-          || targetMeeting.title
-          || "새 기록"
-        );
-        const workspaceMutation = buildWorkspaceMutation({
-          completedAt: movedAt,
-          requestId: input.clientRequestId,
-          requestedAt: movedAt,
-          status: "succeeded",
-          type: "moveRecord",
-        });
-        const nextJobPatch = {
-          meeting: {
-            ...job.meeting,
-            meetingId: input.targetMeetingId,
-            title: targetMeeting.title,
-          },
-          meetingId: input.targetMeetingId,
-          title: materializedTitle,
-          updatedAt: movedAt,
-          ...(workspaceMutation.requestId ? { workspaceMutation } : {}),
-        };
-        const nextJob = normalizeMeetingJob({
-          ...job,
-          ...nextJobPatch,
-          meeting: {
-            ...job.meeting,
-            meetingId: input.targetMeetingId,
-            title: targetMeeting.title,
-          },
-        });
-        const nextArtifactPatch = artifact
-          ? {
-              meetingId: input.targetMeetingId,
-            }
-          : null;
-        const nextArtifact = artifact
-          ? normalizeMeetingArtifact({
-              ...artifact,
-              meetingId: input.targetMeetingId,
-            })
-          : null;
-        const movedSummary = buildMeetingResultSummary(nextJob, nextArtifact);
-        const nextSourceRecentJobs = sourceMeeting.recentJobs.filter((item) => normalizeText(item.jobId) !== job.jobId);
-        const nextTargetRecentJobs = mergeRecentJobs(targetMeeting.recentJobs, movedSummary);
-
-        transaction.set(jobRef, nextJobPatch, { merge: true });
-        if (artifactRef && nextArtifactPatch) {
-          transaction.set(artifactRef, nextArtifactPatch, { merge: true });
-        }
-        transaction.set(sourceMeetingRef, {
-          ...buildMeetingRecentJobsPatch(sourceMeeting, nextSourceRecentJobs, movedAt),
-          meetingId: sourceMeeting.meetingId || input.meetingId,
-        }, { merge: true });
-        transaction.set(targetMeetingRef, {
-          ...buildMeetingRecentJobsPatch(targetMeeting, nextTargetRecentJobs, movedAt),
-          meetingId: targetMeeting.meetingId || input.targetMeetingId,
-        }, { merge: true });
-
-        return {
-          artifactId,
-          jobId: job.jobId,
-          targetMeetingId: input.targetMeetingId,
-        };
-      });
+      const moved = await meetingResultDomain.moveMeetingResult(input, owner);
 
       logEvent("meeting.result.move.success", {
-        artifactId: result?.artifactId || "",
-        jobId: input.jobId,
-        meetingId: input.meetingId,
+        artifactId: moved.artifactId,
+        jobId: moved.jobId,
+        meetingId: moved.meetingId,
         providerUserKey: owner.providerUserKey,
-        targetMeetingId: input.targetMeetingId,
+        targetMeetingId: moved.targetMeetingId,
       });
       response.json({
         ok: true,
         data: {
           accepted: true,
-          jobId: result?.jobId || input.jobId,
-          meetingId: input.meetingId,
-          requestId: input.clientRequestId,
-          targetMeetingId: result?.targetMeetingId || input.targetMeetingId,
+          jobId: moved.jobId,
+          meetingId: moved.meetingId,
+          requestId: moved.requestId,
+          targetMeetingId: moved.targetMeetingId,
         },
       });
     } catch (error) {

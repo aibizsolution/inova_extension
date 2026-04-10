@@ -5,7 +5,7 @@
 다만 `git log`, `diff`, 커밋 메시지로 충분히 복구 가능한 세부 변경 이력은 중복 기록하지 않고, 다음 판단에 필요한 milestone과 비가역 결정을 우선 남긴다.
 
 리팩토링 기준일: 2026-04-09  
-마지막 상태 갱신: 2026-04-09  
+마지막 상태 갱신: 2026-04-10  
 현재 공개 사용자 기준선: `0.4.4`  
 현재 버전 결정 상태: `미정, 기본값은 minor 유지`  
 현재 구현 앵커: `ce38835`의 lane foundation + 후속 문서 정리 커밋들
@@ -151,6 +151,9 @@
 - meeting internal split 17차:
   - `termReplacements` 요청 검증/재적용, section preview/apply, revision token, notes 기반 title sync와 편집 prompt builder를 `functions/features/meeting/meeting-notes-edit-domain.js`로 분리
   - `updateInovaMeeting`, `previewInovaMeetingResultSectionEdit`, `applyInovaMeetingResultSectionEdit` export 이름과 response envelope 의미 변화 없음
+- meeting internal split 18차:
+  - 결과 title/sharedMemo 수정, `notesInputSnapshot` baseline 초기화, record move transaction과 meeting summary `recentJobs` sync를 `functions/features/meeting/meeting-result-domain.js`로 분리
+  - `updateInovaMeetingResult`, `moveInovaMeetingResult` export 이름과 response envelope 의미 변화 없음
 
 ### 아직 이것만으로 결정되지 않는 것
 
@@ -426,12 +429,17 @@
   - `termReplacements` 저장 후 결과 notes 재적용, section preview/apply, revision token, notes title sync workflow를 `functions/features/meeting/meeting-notes-edit-domain.js`로 이동했다.
   - `meeting-service.js`에는 legacy HTTP handler/export surface와 cross-domain wiring을 남기고, notes edit 세부 helper는 service 바깥 workflow 경계로 정리했다.
   - 기존 Functions 이름, response envelope, workspace mutation type 의미는 유지했다.
+- meeting internal split 18차:
+  - 결과 title/sharedMemo 수정과 `notesInputSnapshot` baseline 초기화, record move transaction과 `recentJobs` sync를 `functions/features/meeting/meeting-result-domain.js`로 이동했다.
+  - `meeting-service.js`에는 `updateInovaMeetingResult`, `moveInovaMeetingResult` handler와 auth/response wiring만 남기고, 결과 수정/이동 세부 patch 계산과 transaction은 service 바깥 workflow 경계로 정리했다.
+  - 기존 Functions 이름, response envelope, workspace mutation type 의미는 유지했다.
 - 검증:
   - `node scripts/verify-meeting-service.js`
   - `node scripts/verify-meeting-hosted-ui.js`
   - `npm.cmd run verify`
 - 다음 시작점:
-  - 로컬 full-stack에서 실제 record move smoke 1회를 확인하고, 이후 상용 반영이 필요하면 `functions + hosting + extension reload/배포` 범위를 함께 판단
+  - 회의록 생성 signal gate, full/compact notes 생성, section/reducer prompt builder를 `meeting notes generation` workflow boundary로 다시 묶을지 검토
+  - 이후 실제 release 판단이 필요하면 record move 포함 핵심 사용자 흐름을 기준으로 오너 확인을 받아 `functions + hosting + extension reload/배포` 범위를 함께 판단
 ### 2026-04-08
 
 - 기준 구현 앵커: `ce38835`
