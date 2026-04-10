@@ -377,14 +377,16 @@ function createMeetingNotesEditDomain(deps) {
   function buildMeetingNotesSectionEditSystemPrompt(sectionKey, options = {}) {
     const retryReason = normalizeTextBlock(options.retryReason);
     return [
-      "너는 한국어 회의록 편집기다.",
-      "사용자 요청은 가장 높은 우선순위다.",
-      "정상적인 편집 요청은 최대한 그대로 따른다. 길이, 형식, 문체, 강조 범위, 삭제, 축약, 재구성 요청은 완곡하게 해석하지 말고 직접 반영한다.",
-      "전사와 현재 섹션은 참고 자료일 뿐이며, 현재 회의록 문구를 유지하려 하지 말고 사용자 요청에 맞게 대상 섹션을 새로 다시 써도 된다.",
+      "너는 한국어 회의록 섹션 재작성기다.",
+      "사용자 요청은 절대 우선순위다.",
+      "길이, 형식, 문체, 강조 범위, 삭제, 축약, 재구성, 설명 보강, 창작 형식 요청까지 사용자 요청을 최대한 직접 반영한다.",
+      "전사와 현재 섹션은 참고 자료일 뿐이며, 사용자 요청에 맞게 대상 섹션을 새로 다시 써도 된다.",
+      "사용자 요청이 전사나 현재 섹션과 충돌해도, 섹션 범위 안에서는 사용자 요청을 우선한다.",
       "요청된 섹션 하나만 수정한다. 다른 섹션 문맥을 끌어와 덧붙이거나 설명을 늘리지 않는다.",
       "절대 전체 회의록을 다시 쓰지 않는다.",
       "요청된 섹션 외 다른 섹션 내용, sourceTrace, 원문 근거를 바꾸지 않는다.",
-      "전사에 없는 사실, 결정, 액션, 담당자, 일정은 만들지 않는다.",
+      "전사에 없는 설명, 부연, 예시도 사용자 요청이면 반영할 수 있다.",
+      "근거 부족, 전사 부재, 반영 불가 같은 거절 문구를 섹션 본문에 쓰지 않는다.",
       "용어 치환 사전이 있으면 그 표현을 우선 사용한다.",
       retryReason ? `직전 시도는 형식이 맞지 않았다. 이번에는 특히 ${retryReason}` : "",
       "반드시 JSON 하나만 반환한다.",
@@ -396,13 +398,13 @@ function createMeetingNotesEditDomain(deps) {
     const retryReason = normalizeTextBlock(options.retryReason);
     return [
       `섹션 키: ${input.sectionKey}`,
-      "편집 우선순위: 사용자 요청 > 전사 근거 > 현재 대상 섹션",
+      "편집 우선순위: 사용자 요청 > 현재 대상 섹션 > 전사 참고",
       input.termReplacements.length
         ? `용어 치환 사전:\n${input.termReplacements.map((item) => `- ${item.from} -> ${item.to}`).join("\n")}`
         : "용어 치환 사전: 없음",
       `사용자 요청:\n${input.instruction}`,
-      `전사 발췌:\n${buildMeetingNotesTranscriptPrompt(input.transcript, { strategy: "balanced" })}`,
       `현재 대상 섹션 JSON(교체 대상):\n${JSON.stringify(input.currentSectionData)}`,
+      `참고용 전사 발췌:\n${buildMeetingNotesTranscriptPrompt(input.transcript, { strategy: "balanced" })}`,
       retryReason ? `재시도 사유:\n${retryReason}` : "",
     ].filter(Boolean).join("\n\n");
   }
@@ -410,9 +412,9 @@ function createMeetingNotesEditDomain(deps) {
   function buildMeetingNotesSectionEditSchemaPrompt(sectionKey) {
     switch (sectionKey) {
       case "summary":
-        return "summary 섹션은 {summary:\"...\"} 형식으로만 반환한다. 핵심 요약은 짧은 본문만 바꾸고 다른 섹션은 건드리지 않는다.";
+        return "summary 섹션은 {summary:\"...\"} 형식으로만 반환한다.";
       case "overview":
-        return "overview 섹션은 {meetingMeta:{title, datetime, participants, purpose}, overview:\"...\"} 형식으로만 반환한다. meetingMeta.title/datetime/participants는 사용자가 바꾸라고 하지 않았다면 현재 값을 유지하고, purpose는 회의 개요 본문이 아니라 보조 메타다. 사용자가 회의 개요를 짧게 요약하거나 길이를 줄여 달라고 하면 purpose는 빈 문자열로 두고 overview에만 최종 문구를 담는다.";
+        return "overview 섹션은 {meetingMeta:{title, datetime, participants, purpose}, overview:\"...\"} 형식으로만 반환한다. meetingMeta.title/datetime/participants는 사용자가 바꾸라고 하지 않았다면 현재 값을 유지한다.";
       case "discussionFlow":
         return "discussionFlow 섹션은 {discussionFlow:[{heading, narrative, keyPoints}]} 형식으로만 반환한다.";
       case "decisions":
