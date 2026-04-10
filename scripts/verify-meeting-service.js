@@ -402,6 +402,39 @@ async function main() {
   assert.equal(sectionEditedArtifact.notes.overview, previewedSection.jsonBody.data.sectionData.overview);
   assert.equal(sectionEditedJob.meetingNotes.meetingMeta.title, previewedSection.jsonBody.data.sectionData.meetingMeta.title);
 
+  const summaryPreview = await invokeHandler(handlers.previewInovaMeetingResultSectionEdit, {
+    body: {
+      instruction: "핵심 요약을 더 짧게 정리해줘",
+      jobId,
+      meetingId: "meeting-planning-1",
+      owner,
+      sectionKey: "summary",
+    },
+    method: "POST",
+  });
+  assert.equal(summaryPreview.statusCode, 200);
+  assert.equal(summaryPreview.jsonBody.data.sectionKey, "summary");
+  assert.equal(String(summaryPreview.jsonBody.data.sectionData.summary || "").trim().length > 0, true);
+
+  const summaryAppliedSection = await invokeHandler(handlers.applyInovaMeetingResultSectionEdit, {
+    body: {
+      baseRevisionToken: summaryPreview.jsonBody.data.baseRevisionToken,
+      clientRequestId: "section-apply-fixture-summary-1",
+      jobId,
+      meetingId: "meeting-planning-1",
+      owner,
+      sectionData: summaryPreview.jsonBody.data.sectionData,
+      sectionKey: "summary",
+    },
+    method: "POST",
+  });
+  assert.equal(summaryAppliedSection.statusCode, 200);
+  const summaryEditedJob = getDoc(state, JOB_COLLECTION, jobId);
+  const summaryEditedArtifact = getDoc(state, ARTIFACT_COLLECTION, artifactId);
+  assert.equal(summaryEditedJob.meetingNotes.summary, summaryPreview.jsonBody.data.sectionData.summary);
+  assert.equal(summaryEditedArtifact.notes.summary, summaryPreview.jsonBody.data.sectionData.summary);
+  assert.equal(summaryEditedJob.meetingNotes.overview, previewedSection.jsonBody.data.sectionData.overview);
+
   const deletedResult = await invokeHandler(handlers.deleteInovaMeetingResult, {
     body: {
       jobId,

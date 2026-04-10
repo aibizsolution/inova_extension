@@ -300,6 +300,7 @@
 
   function getMeetingNotesSectionLabel(sectionKey) {
     const normalized = normalizeText(sectionKey);
+    if (normalized === "summary") return "핵심 요약";
     if (normalized === "overview") return "회의 개요";
     if (normalized === "discussionFlow") return "논의 흐름";
     if (normalized === "decisions") return "주요 결정 사항";
@@ -311,6 +312,7 @@
 
   function buildMeetingNotesSectionByKey(sectionKey, notes) {
     const normalized = normalizeText(sectionKey);
+    if (normalized === "summary") return buildMeetingSummarySection(notes);
     if (normalized === "overview") return buildMeetingOverviewSection(notes);
     if (normalized === "discussionFlow") return buildDiscussionFlowSection(notes?.discussionFlow);
     if (normalized === "decisions") return buildSimpleListSection("주요 결정 사항", normalizeDecisionItemsForDisplay(notes?.decisions));
@@ -365,6 +367,20 @@
       ].filter(Boolean),
       paragraphs,
       title: "회의 개요",
+      type: "prose",
+    };
+  }
+
+  function buildMeetingSummarySection(notes) {
+    const summary = normalizeTextBlock(notes?.summary);
+    if (!summary) {
+      return null;
+    }
+    return {
+      key: "summary",
+      metaItems: [],
+      paragraphs: [summary],
+      title: "핵심 요약",
       type: "prose",
     };
   }
@@ -462,6 +478,12 @@
 
   function buildMeetingNotesSectionPreview(sectionKey, sectionData) {
     const normalizedKey = normalizeText(sectionKey);
+    if (normalizedKey === "summary") {
+      const payload = sectionData && typeof sectionData === "object" ? sectionData : {};
+      return buildMeetingSummarySection({
+        summary: payload.summary,
+      });
+    }
     if (normalizedKey === "overview") {
       const payload = sectionData && typeof sectionData === "object" ? sectionData : {};
       return buildMeetingOverviewSection({
@@ -548,12 +570,11 @@
     return `<section class="notes-section">${header}<ul class="notes-list">${section.items.map((item) => renderNotesListItem(item)).join("")}</ul></section>`;
   }
 
-  function renderNotesOverview(notes) {
-    const summary = buildCompletedRecordSummary(notes);
-    if (!summary) {
-      return "";
-    }
-    return `<section class="notes-section"><h3 class="notes-section__title">핵심 요약</h3>${renderNotesProse([summary])}</section>`;
+  function renderNotesOverview(notes, options = {}) {
+    const summarySection = buildMeetingSummarySection({
+      summary: buildCompletedRecordSummary(notes),
+    });
+    return summarySection ? renderNotesSection(summarySection, options) : "";
   }
 
   function buildMeetingNotesCopyText(notes) {
@@ -959,11 +980,11 @@
       refs.meetingNotesSections.innerHTML = `<div class="notice-box" data-tone="warning">${escapeHtml(normalizeText(detailView.notesMeta?.degradedReason) || "전사는 준비됐지만 회의 정리로 묶을 내용이 충분하지 않았습니다.")}</div>`;
       return false;
     }
-    const overviewMarkup = renderNotesOverview(normalized);
     const allowSectionEdit = Boolean(
       !state.auth?.readOnly
       && normalizeText(detailView.badgeStatus) === "succeeded"
     );
+    const overviewMarkup = renderNotesOverview(normalized, { allowSectionEdit });
     refs.meetingNotesOverview.hidden = !overviewMarkup;
     refs.meetingNotesOverview.innerHTML = overviewMarkup;
     refs.meetingNotesSections.innerHTML = buildMeetingNotesSections(normalized)

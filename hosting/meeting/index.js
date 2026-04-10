@@ -730,6 +730,7 @@
     refs.saveTermReplacementsButton?.addEventListener("click", runWritableAction("용어 치환 저장", () => void controllers.mutations.saveMeetingTermReplacements()));
     refs.termReplacementList?.addEventListener("click", runWritableAction("용어 치환 삭제", (event) => controllers.mutations.handleTermReplacementListClick(event)));
     refs.toggleTermReplacementButton?.addEventListener("click", runWritableAction("용어 치환 열기", controllers.mutations.toggleTermReplacementPanel));
+    refs.meetingNotesOverview?.addEventListener("click", runWritableAction("핵심 요약 수정 열기", (event) => controllers.mutations.handleMeetingNotesSectionAction(event)));
     refs.meetingNotesSections?.addEventListener("click", runWritableAction("섹션 수정 열기", (event) => controllers.mutations.handleMeetingNotesSectionAction(event)));
     refs.sectionEditInstructionInput?.addEventListener("input", () => controllers.mutations.updateSectionEditInstruction(refs.sectionEditInstructionInput.value));
     refs.previewSectionEditButton?.addEventListener("click", runWritableAction("섹션 미리보기", () => void controllers.mutations.previewSectionEdit()));

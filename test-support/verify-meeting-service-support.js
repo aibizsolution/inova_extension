@@ -237,6 +237,13 @@ function createNotesFixture(mode) {
 
 function createSectionEditFixture({ mode, sectionKey, userPrompt }) {
   const notes = createNotesFixture(mode);
+  if (sectionKey === "summary") {
+    return {
+      summary: /(?:10|20)글자/.test(userPrompt)
+        ? "핵심 점검"
+        : "일정 확정과 초안 정리가 핵심입니다.",
+    };
+  }
   if (sectionKey === "overview") {
     const isShortSummaryRequest = /(?:10|20)글자/.test(userPrompt);
     if (isShortSummaryRequest) {

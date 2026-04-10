@@ -96,6 +96,7 @@ const SUPPORTED_WORKSPACE_MUTATION_TYPES = new Set([
   "saveRecordTitle",
 ]);
 const EDITABLE_MEETING_SECTION_KEYS = new Set([
+  "summary",
   "overview",
   "discussionFlow",
   "decisions",
@@ -2722,6 +2723,8 @@ function registerMeetingHandlers(deps) {
 
   function buildMeetingNotesSectionEditSchemaPrompt(sectionKey) {
     switch (sectionKey) {
+      case "summary":
+        return "summary 섹션은 {summary:\"...\"} 형식으로만 반환한다. 핵심 요약은 짧은 본문만 바꾸고 다른 섹션은 건드리지 않는다.";
       case "overview":
         return "overview 섹션은 {meetingMeta:{title, datetime, participants, purpose}, overview:\"...\"} 형식으로만 반환한다. meetingMeta.title/datetime/participants는 사용자가 바꾸라고 하지 않았다면 현재 값을 유지하고, purpose는 회의 개요 본문이 아니라 보조 메타다. 사용자가 회의 개요를 짧게 요약하거나 길이를 줄여 달라고 하면 purpose는 빈 문자열로 두고 overview에만 최종 문구를 담는다.";
       case "discussionFlow":
@@ -2997,6 +3000,10 @@ function registerMeetingHandlers(deps) {
   function readMeetingNotesSectionData(notesInput, sectionKey) {
     const notes = normalizeMeetingNotes(notesInput);
     switch (sectionKey) {
+      case "summary":
+        return {
+          summary: notes.summary,
+        };
       case "overview":
         return {
           meetingMeta: notes.meetingMeta,
@@ -3030,6 +3037,10 @@ function registerMeetingHandlers(deps) {
   function normalizeMeetingNotesSectionPayload(sectionKey, input) {
     const payload = input && typeof input === "object" ? input : {};
     switch (sectionKey) {
+      case "summary":
+        return {
+          summary: normalizeMeetingNotes({ summary: payload.summary }).summary,
+        };
       case "overview": {
         const normalized = normalizeMeetingNotes({
           meetingMeta: payload.meetingMeta,
@@ -3069,6 +3080,11 @@ function registerMeetingHandlers(deps) {
     const currentNotes = normalizeMeetingNotes(currentNotesInput);
     const payload = normalizeMeetingNotesSectionPayload(sectionKey, sectionPayload);
     switch (sectionKey) {
+      case "summary":
+        return normalizeMeetingNotes({
+          ...currentNotes,
+          summary: payload.summary,
+        });
       case "overview":
         return normalizeMeetingNotes({
           ...currentNotes,
