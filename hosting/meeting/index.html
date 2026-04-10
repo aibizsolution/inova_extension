@@ -195,7 +195,22 @@
                 <div id="reviewTabActions" class="review-tab-actions" hidden>
                   <button id="copyMeetingNotesButton" class="secondary-button" type="button" hidden>복사</button>
                   <span id="termReplacementDirtyBadge" class="chip chip--muted" hidden>변경 있음</span>
-                  <button id="toggleTermReplacementButton" class="ghost-button ghost-button--soft" type="button" aria-expanded="false" aria-controls="termReplacementPanel" hidden>용어 치환</button>
+                  <button
+                    id="toggleTermReplacementButton"
+                    class="ghost-button ghost-button--soft review-tab-action-button"
+                    type="button"
+                    aria-expanded="false"
+                    aria-controls="termReplacementPanel"
+                    aria-label="용어 치환. 이 회의 룸의 모든 회의 정리에 같은 치환 규칙을 적용합니다. 이미 만든 결과와 이후 생성 또는 수정 결과에도 반영됩니다."
+                    hidden
+                  >
+                    <span>용어 치환</span>
+                    <span
+                      class="review-tab-action-button__help"
+                      aria-hidden="true"
+                      data-tooltip="이 회의 룸의 모든 회의 정리에 같은 치환 규칙을 적용합니다. 이미 만든 결과와 이후 생성·수정 결과에도 반영됩니다."
+                    >?</span>
+                  </button>
                 </div>
               </div>
 

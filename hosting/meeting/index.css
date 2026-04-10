@@ -1286,6 +1286,77 @@ select:disabled {
   gap: 8px;
 }
 
+.review-tab-action-button {
+  gap: 8px;
+}
+
+.review-tab-action-button__help {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  border: 1px solid #c6d3e6;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.review-tab-action-button__help::before,
+.review-tab-action-button__help::after {
+  position: absolute;
+  right: -2px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.review-tab-action-button__help::before {
+  content: "";
+  bottom: calc(100% + 4px);
+  border-width: 6px;
+  border-style: solid;
+  border-color: #18212c transparent transparent transparent;
+  transform: translateY(2px);
+}
+
+.review-tab-action-button__help::after {
+  content: attr(data-tooltip);
+  bottom: calc(100% + 10px);
+  width: 240px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #18212c;
+  box-shadow: 0 12px 24px rgba(16, 24, 40, 0.18);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
+  text-align: left;
+  white-space: normal;
+  transform: translateY(4px);
+  z-index: 2;
+}
+
+.review-tab-action-button__help:hover,
+.review-tab-action-button__help:focus-visible {
+  border-color: #9fb8ea;
+  color: var(--accent-strong);
+}
+
+.review-tab-action-button__help:hover::before,
+.review-tab-action-button__help:hover::after,
+.review-tab-action-button__help:focus-visible::before,
+.review-tab-action-button__help:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .review-panel {
   display: grid;
   gap: 14px;
