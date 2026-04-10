@@ -5,7 +5,7 @@
 다만 `git log`, `diff`, 커밋 메시지로 충분히 복구 가능한 세부 변경 이력은 중복 기록하지 않고, 다음 판단에 필요한 milestone과 비가역 결정을 우선 남긴다.
 
 리팩토링 기준일: 2026-04-09  
-마지막 상태 갱신: 2026-04-09  
+마지막 상태 갱신: 2026-04-10  
 현재 공개 사용자 기준선: `0.4.4`  
 현재 버전 결정 상태: `미정, 기본값은 minor 유지`  
 현재 구현 앵커: `ce38835`의 lane foundation + 후속 문서 정리 커밋들
@@ -148,6 +148,24 @@
 - 1차 scope reset:
   - hosted `추가 맥락`/`회의록 업데이트` 경로를 제거하고, 회의록 보정을 `termReplacements + section preview/apply`로 재정의
   - summary model과 section edit model을 `gpt-5.4`로 맞추고, 기존 전사 파이프라인은 유지
+- meeting internal split 17차:
+  - `termReplacements` 요청 검증/재적용, section preview/apply, revision token, notes 기반 title sync와 편집 prompt builder를 `functions/features/meeting/meeting-notes-edit-domain.js`로 분리
+  - `updateInovaMeeting`, `previewInovaMeetingResultSectionEdit`, `applyInovaMeetingResultSectionEdit` export 이름과 response envelope 의미 변화 없음
+- meeting internal split 18차:
+  - 결과 title/sharedMemo 수정, `notesInputSnapshot` baseline 초기화, record move transaction과 meeting summary `recentJobs` sync를 `functions/features/meeting/meeting-result-domain.js`로 분리
+  - `updateInovaMeetingResult`, `moveInovaMeetingResult` export 이름과 response envelope 의미 변화 없음
+- meeting internal split 19차:
+  - signal gate, full/compact notes 생성, section/reducer prompt builder와 compact notes 후처리를 `functions/features/meeting/meeting-notes-generation-domain.js`로 분리
+  - `processQueuedInovaMeetingJob`, `processQueuedInovaMeetingJobPart`, `finalizeChunkedInovaMeetingJob`가 의존하는 notes generation 의미와 output contract 변화 없음
+- meeting internal split 20차:
+  - OpenAI 전사 호출, retry/error 분류, chunk 병렬 전사, transcript merge/dedupe를 `functions/features/meeting/meeting-processing-runtime-domain.js`로 분리
+  - `meeting-processing-domain.js`는 queue/finalizer workflow를 유지하고, `meeting-service.js`는 runtime wiring만 남기며 processing export 이름과 job/part/finalizer 상태 계약 의미는 유지
+- meeting internal split 21차:
+  - temp source 업로드/정리, chunk transcript 저장/로드, runtime artifact cleanup을 `functions/features/meeting/meeting-runtime-artifact-domain.js`로 분리
+  - `meeting-creation-domain.js`, `meeting-processing-domain.js`, `meeting-deletion-domain.js`는 공통 runtime artifact lifecycle을 이 모듈에 위임하고, `meeting-service.js`에는 handler/query/start-delete orchestration만 남긴다
+- meeting internal split 22차:
+  - owner-scoped meeting/job 조회를 `functions/features/meeting/meeting-owned-query-domain.js`로 분리하고, soft delete 시작 단계는 `functions/features/meeting/meeting-deletion-domain.js`로 이동
+  - `meeting-service.js`는 list/delete handler orchestration만 남기고, owned query 규칙과 tombstone patch write는 service 바깥 workflow/data boundary로 정리한다
 
 ### 아직 이것만으로 결정되지 않는 것
 
@@ -419,12 +437,38 @@
 - hosted 작업실에는 완료된 remote record 전용 `기록 이동` action과 별도 `recordMoveOverlay`를 추가했다.
   - 이동 대상 목록은 현재 회의 룸을 제외한 다른 owned 회의 룸 제목만 노출
   - 성공 후 target 회의 룸으로 자동 이동하지 않고 현재 룸에 남아 selection fallback으로 정리
+- meeting internal split 17차:
+  - `termReplacements` 저장 후 결과 notes 재적용, section preview/apply, revision token, notes title sync workflow를 `functions/features/meeting/meeting-notes-edit-domain.js`로 이동했다.
+  - `meeting-service.js`에는 legacy HTTP handler/export surface와 cross-domain wiring을 남기고, notes edit 세부 helper는 service 바깥 workflow 경계로 정리했다.
+  - 기존 Functions 이름, response envelope, workspace mutation type 의미는 유지했다.
+- meeting internal split 18차:
+  - 결과 title/sharedMemo 수정과 `notesInputSnapshot` baseline 초기화, record move transaction과 `recentJobs` sync를 `functions/features/meeting/meeting-result-domain.js`로 이동했다.
+  - `meeting-service.js`에는 `updateInovaMeetingResult`, `moveInovaMeetingResult` handler와 auth/response wiring만 남기고, 결과 수정/이동 세부 patch 계산과 transaction은 service 바깥 workflow 경계로 정리했다.
+  - 기존 Functions 이름, response envelope, workspace mutation type 의미는 유지했다.
+- meeting internal split 19차:
+  - signal gate, full/compact notes 생성, section/reducer prompt builder와 compact notes 후처리를 `functions/features/meeting/meeting-notes-generation-domain.js`로 이동했다.
+  - `meeting-service.js`에는 notes generation workflow 연결만 남기고, 자동 회의록 생성 정책과 프롬프트 조합은 service 바깥 workflow 경계로 정리했다.
+  - 기존 notes bundle shape, gate 의미, compact/full 출력 프로필 의미는 유지했다.
+- meeting internal split 20차:
+  - OpenAI 전사 호출, retry/error 분류, chunk 병렬 전사, transcript merge/dedupe를 `functions/features/meeting/meeting-processing-runtime-domain.js`로 이동했다.
+  - `meeting-processing-domain.js`는 queue/finalizer workflow와 persisted job orchestration을 유지하고, `meeting-service.js`는 runtime wiring만 남기도록 정리했다.
+  - 기존 processing export 이름, job/job_part/finalizer 상태 의미, transcript/notes output contract는 유지했다.
+- meeting internal split 21차:
+  - temp source 업로드/정리, chunk transcript 저장/로드, runtime artifact cleanup을 `functions/features/meeting/meeting-runtime-artifact-domain.js`로 이동했다.
+  - `meeting-creation-domain.js`, `meeting-processing-domain.js`, `meeting-deletion-domain.js`는 공통 runtime artifact lifecycle을 이 모듈에 위임하고, `meeting-service.js`는 handler/query/start-delete orchestration 위주로 줄였다.
+  - 기존 source upload, chunk transcript storage, deletion cleanup, processing export 이름과 persisted contract 의미는 유지했다.
+- meeting internal split 22차:
+  - owner-scoped meeting/job 조회를 `functions/features/meeting/meeting-owned-query-domain.js`로 이동하고, soft delete 시작 단계는 `functions/features/meeting/meeting-deletion-domain.js`로 이동했다.
+  - `meeting-service.js`는 list/delete handler orchestration만 남기고, owned query 규칙과 tombstone patch write는 service 바깥 workflow/data boundary로 정리했다.
+  - 기존 meeting hub list, notes edit 대상 job 조회, delete request response envelope, tombstone 상태 의미는 유지했다.
 - 검증:
   - `node scripts/verify-meeting-service.js`
   - `node scripts/verify-meeting-hosted-ui.js`
   - `npm.cmd run verify`
 - 다음 시작점:
-  - 로컬 full-stack에서 실제 record move smoke 1회를 확인하고, 이후 상용 반영이 필요하면 `functions + hosting + extension reload/배포` 범위를 함께 판단
+  - 남은 `meeting-service.js`의 OpenAI/model getter, inline-only fallback helper, service-local assert가 정말 독립 boundary인지 재평가
+  - helper-only split을 늘리지 말고, workflow/data contract로 설명되는 다음 경계가 없으면 여기서 멈춘다
+  - 이후 실제 release 판단이 필요하면 record move 포함 핵심 사용자 흐름을 기준으로 오너 확인을 받아 `functions + hosting + extension reload/배포` 범위를 함께 판단
 ### 2026-04-08
 
 - 기준 구현 앵커: `ce38835`

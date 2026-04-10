@@ -1001,13 +1001,13 @@ const SECTION_LABELS = Object.freeze({
           return false;
         }
         if (!isTermReplacementDirty()) {
-          setNotice("저장할 용어 치환 변경이 없습니다.", "highlight");
+          setNotice("적용할 용어 치환 변경이 없습니다.", "highlight");
           applyRender();
           return true;
         }
         return saveMeetingPatch(
           { termReplacements: cloneTermReplacements(state.termReplacementState.items) },
-          "용어 치환을 저장했습니다."
+          "용어 치환을 적용했습니다."
         );
       }
 
@@ -1445,7 +1445,7 @@ const SECTION_LABELS = Object.freeze({
         if (refs.termReplacementClearButton) refs.termReplacementClearButton.disabled = readOnly || termBusy || !state.termReplacementState.items.length;
         if (refs.saveTermReplacementsButton) {
           refs.saveTermReplacementsButton.disabled = readOnly || termBusy || !termDirty;
-          refs.saveTermReplacementsButton.textContent = termBusy ? "저장 중" : "용어 치환 저장";
+          refs.saveTermReplacementsButton.textContent = termBusy ? "적용 중" : "용어 치환 적용하기";
         }
 
         if (refs.sectionEditOverlay) refs.sectionEditOverlay.hidden = !sectionEditOpen;

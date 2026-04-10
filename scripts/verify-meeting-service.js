@@ -363,10 +363,39 @@ async function main() {
   assert.equal(compactShortPreviewLength <= 20, true);
   const shortPreviewRequests = state.openaiSummaryRequests.slice(shortPreviewRequestsBefore);
   assert.equal(shortPreviewRequests.length, 1);
-  assert.equal(shortPreviewRequests[0].systemPrompt.includes("정상적인 편집 요청은 최대한 그대로 따른다."), true);
-  assert.equal(shortPreviewRequests[0].systemPrompt.includes("purpose는 회의 개요 본문이 아니라 보조 메타다."), true);
+  assert.equal(shortPreviewRequests[0].systemPrompt.includes("사용자 요청은 절대 우선순위다."), true);
+  assert.equal(shortPreviewRequests[0].systemPrompt.includes("전사에 없는 설명, 부연, 예시도 사용자 요청이면 반영할 수 있다."), true);
+  assert.equal(shortPreviewRequests[0].systemPrompt.includes("전사에 없는 사실, 결정, 액션, 담당자, 일정은 만들지 않는다."), false);
   assert.equal(shortPreviewRequests[0].prompt.includes("현재 전체 회의록 요약 JSON"), false);
   assert.equal(String(shortPreviewedSection.jsonBody.data.warning || "").trim(), "");
+
+  const caravanPreview = await invokeHandler(handlers.previewInovaMeetingResultSectionEdit, {
+    body: {
+      instruction: "카라반에 대해 설명해줘",
+      jobId,
+      meetingId: "meeting-planning-1",
+      owner,
+      sectionKey: "summary",
+    },
+    method: "POST",
+  });
+  assert.equal(caravanPreview.statusCode, 200);
+  assert.equal(caravanPreview.jsonBody.data.sectionKey, "summary");
+  assert.equal(caravanPreview.jsonBody.data.sectionData.summary.includes("카라반"), true);
+
+  const acrosticPreview = await invokeHandler(handlers.previewInovaMeetingResultSectionEdit, {
+    body: {
+      instruction: "박영택 3행시",
+      jobId,
+      meetingId: "meeting-planning-1",
+      owner,
+      sectionKey: "summary",
+    },
+    method: "POST",
+  });
+  assert.equal(acrosticPreview.statusCode, 200);
+  assert.equal(acrosticPreview.jsonBody.data.sectionKey, "summary");
+  assert.equal(acrosticPreview.jsonBody.data.sectionData.summary.includes("박:"), true);
 
   const staleAppliedSection = await invokeHandler(handlers.applyInovaMeetingResultSectionEdit, {
     body: {

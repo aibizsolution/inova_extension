@@ -237,6 +237,27 @@ function createNotesFixture(mode) {
 
 function createSectionEditFixture({ mode, sectionKey, userPrompt }) {
   const notes = createNotesFixture(mode);
+  if (/카라반/.test(userPrompt)) {
+    if (sectionKey === "summary") {
+      return {
+        summary: "카라반은 이동형 생활 공간으로, 회의에서는 카라반 관련 검토 배경과 설명을 보강한 요약으로 다시 정리했습니다.",
+      };
+    }
+    if (sectionKey === "overview") {
+      return {
+        meetingMeta: {
+          ...notes.meetingMeta,
+          purpose: notes.meetingMeta.purpose,
+        },
+        overview: "카라반은 이동형 생활 공간 또는 차량 기반 숙소를 뜻하며, 이번 정리에서는 카라반 관련 논의 배경과 설명을 이해하기 쉽게 덧붙였습니다.",
+      };
+    }
+  }
+  if (sectionKey === "summary" && /3행시/.test(userPrompt)) {
+    return {
+      summary: "박: 박력 있게\n\n영: 영차영차\n\n택: 택배보다 빠르게 감시 중이시네요.",
+    };
+  }
   if (sectionKey === "summary") {
     return {
       summary: /(?:10|20)글자/.test(userPrompt)

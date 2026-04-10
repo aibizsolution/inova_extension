@@ -3,6 +3,7 @@ function createMeetingDeletionDomain(deps) {
     artifactCollection,
     buildMeetingDeletionTaskId,
     buildMeetingDocId,
+    buildWorkspaceMutation,
     db,
     deleteDocumentIfExists,
     deleteMeetingJobRuntimeArtifacts,
@@ -113,6 +114,40 @@ function createMeetingDeletionDomain(deps) {
     });
     const snapshot = await taskRef.get();
     return snapshot.exists ? normalizeMeetingDeletionTask(snapshot.data()) : baseTask;
+  }
+
+  async function softDeleteMeetingJob(jobInput, deletedAt, options = {}) {
+    const job = normalizeMeetingJob(jobInput);
+    if (!job.jobId) {
+      return null;
+    }
+    const nextDeletedAt = normalizeText(deletedAt) || new Date().toISOString();
+    const totalParts = Math.max(
+      0,
+      Number(job.progress?.totalParts) || (Array.isArray(job.source?.parts) ? job.source.parts.length : 0)
+    );
+    const patch = {
+      deletedAt: nextDeletedAt,
+      error: "",
+      progress: {
+        currentPart: Math.max(0, Number(job.progress?.currentPart) || 0),
+        parallelParts: 0,
+        percent: 100,
+        phase: "deleted",
+        totalParts,
+      },
+      status: "deleted",
+      updatedAt: nextDeletedAt,
+    };
+    const workspaceMutation = buildWorkspaceMutation(options.workspaceMutation);
+    if (workspaceMutation.requestId) {
+      patch.workspaceMutation = workspaceMutation;
+    }
+    await db.collection(jobCollection).doc(job.jobId).set(patch, { merge: true });
+    return normalizeMeetingJob({
+      ...job,
+      ...patch,
+    });
   }
 
   async function processMeetingDeletionTask(taskRef, triggerSource) {
@@ -379,6 +414,7 @@ function createMeetingDeletionDomain(deps) {
     enqueueMeetingDeletionTask,
     isMeetingDeletionRetryDue,
     processMeetingDeletionTask,
+    softDeleteMeetingJob,
     shouldProcessMeetingDeletionTask,
   };
 }
