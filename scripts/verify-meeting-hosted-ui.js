@@ -11,6 +11,7 @@ const hostedMeetingCssPath = path.join(root, "hosting", "meeting", "index.css");
 const hostedMeetingIndexPath = path.join(root, "hosting", "meeting", "index.js");
 const hostedMeetingRenderPath = path.join(root, "hosting", "meeting", "render.js");
 const hostedMeetingMutationsPath = path.join(root, "hosting", "meeting", "workspace-mutations.js");
+const hostedMeetingDebugPath = path.join(root, "hosting", "meeting", "workspace-debug.js");
 
 function main() {
   const html = fs.readFileSync(hostedMeetingHtmlPath, "utf8");
@@ -18,6 +19,7 @@ function main() {
   const indexJs = fs.readFileSync(hostedMeetingIndexPath, "utf8");
   const renderJs = fs.readFileSync(hostedMeetingRenderPath, "utf8");
   const mutationsJs = fs.readFileSync(hostedMeetingMutationsPath, "utf8");
+  const debugJs = fs.readFileSync(hostedMeetingDebugPath, "utf8");
   const dom = new JSDOM(html);
   const { document } = dom.window;
 
@@ -88,8 +90,12 @@ function main() {
     "Term replacement save flow should close the panel after a successful save"
   );
   assert(
-    indexJs.includes("if (stored === \"0\") {") && indexJs.includes("return true;"),
-    "Hosted meeting debug panel should default to collapsed unless local storage explicitly keeps it open"
+    indexJs.includes("function readDebugPanelCollapsed() {") && indexJs.includes("return true;"),
+    "Hosted meeting debug panel should default to collapsed on every page load"
+  );
+  assert(
+    !debugJs.includes("safeLocalStorageSet"),
+    "Hosted meeting debug panel should not persist expanded state across refreshes"
   );
 
   assert.equal(document.getElementById("sectionEditStatus"), null, "Section edit dialog should not render a separate status strip");

@@ -20,12 +20,10 @@
     parseParams,
     resolveConfig,
     resolveRecordingProfile,
-    safeLocalStorageGet,
   } = ns.shared;
   const { createPendingUploadStore } = ns.storage;
   const { renderWorkspace } = ns.render;
   const CONFIG = resolveConfig(global.__INOVA_HOSTED_MEETING_CONFIG__);
-  const DEBUG_PANEL_COLLAPSED_STORAGE_KEY = "__INOVA_MEETING_DEBUG_PANEL_COLLAPSED__";
   const DEBUG_LOCAL_QUEUE_SANDBOX_PARAM = "debugQueueSandbox";
   const MAX_MEETING_SECTION_EDIT_INSTRUCTION_CHARS = 1600;
   const MAX_MEETING_TERM_REPLACEMENTS = 24;
@@ -288,10 +286,6 @@
   
   
   function readDebugPanelCollapsed() {
-    const stored = normalizeText(safeLocalStorageGet(global, DEBUG_PANEL_COLLAPSED_STORAGE_KEY));
-    if (stored === "0") {
-      return false;
-    }
     return true;
   }
 
@@ -642,7 +636,6 @@
         BOOT_INITIAL_SNAPSHOT_WAIT_MS,
         CONFIG,
         DEBUG_LOCAL_QUEUE_SANDBOX_PARAM,
-        DEBUG_PANEL_COLLAPSED_STORAGE_KEY,
         DEFAULT_CREATE_JOB_TIMEOUT_MS,
         DEFAULT_INLINE_AUDIO_LIMIT_BYTES,
         DEFAULT_SOURCE_CHUNK_DURATION_MS,

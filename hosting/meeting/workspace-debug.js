@@ -19,7 +19,6 @@
         isDebugPanelEnabled,
         logDebug,
         normalizeText,
-        safeLocalStorageSet,
         setEnabled: setDebugEnabled,
         subscribeDebugEntries,
       } = ns.shared;
@@ -270,21 +269,13 @@
         };
       }
 
-      function syncDebugPanelCollapsedUi(options = {}) {
-        const persist = options.persist !== false;
-        if (persist) {
-          safeLocalStorageSet(
-            globalObject,
-            constants.DEBUG_PANEL_COLLAPSED_STORAGE_KEY,
-            state.debugPanelCollapsed ? "1" : "0"
-          );
-        }
+      function syncDebugPanelCollapsedUi() {
         render(getDebugEntries());
       }
 
       function toggleDebugPanelCollapsed() {
         state.debugPanelCollapsed = !state.debugPanelCollapsed;
-        syncDebugPanelCollapsedUi({ persist: true });
+        syncDebugPanelCollapsedUi();
       }
 
       function forceExpand(options = {}) {
@@ -322,7 +313,7 @@
         refs.debugPanel.hidden = !enabled;
         render(getDebugEntries());
         if (!enabled) return;
-        syncDebugPanelCollapsedUi({ persist: false });
+        syncDebugPanelCollapsedUi();
         state.unsubscribeDebug = subscribeDebugEntries((entries) => render(entries));
         logDebug("workspace.debug.enabled", {
           href: globalObject.location.href,
