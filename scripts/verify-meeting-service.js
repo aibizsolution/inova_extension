@@ -343,7 +343,7 @@ async function main() {
   const shortPreviewRequestsBefore = state.openaiSummaryRequests.length;
   const shortPreviewedSection = await invokeHandler(handlers.previewInovaMeetingResultSectionEdit, {
     body: {
-      instruction: "10글자로 수정해줘",
+      instruction: "20글자 이내로 요약해줘",
       jobId,
       meetingId: "meeting-planning-1",
       owner,
@@ -356,33 +356,13 @@ async function main() {
     shortPreviewedSection.jsonBody.data.sectionData.meetingMeta?.purpose || "",
     shortPreviewedSection.jsonBody.data.sectionData.overview || "",
   ].join("").replace(/\s+/g, "").length;
-  assert.equal(compactShortPreviewLength <= 12, true);
+  assert.equal(compactShortPreviewLength <= 20, true);
   const shortPreviewRequests = state.openaiSummaryRequests.slice(shortPreviewRequestsBefore);
-  assert.equal(shortPreviewRequests.length, 2);
-  assert.equal(shortPreviewRequests[0].systemPrompt.includes("사용자 요청은 가장 높은 우선순위다."), true);
-  assert.equal(shortPreviewRequests[0].prompt.includes("현재 전체 회의록 요약 JSON"), true);
-  assert.equal(shortPreviewRequests[1].systemPrompt.includes("직전 시도는 사용자 요청을 충분히 반영하지 못했다."), true);
+  assert.equal(shortPreviewRequests.length, 1);
+  assert.equal(shortPreviewRequests[0].systemPrompt.includes("정상적인 편집 요청은 최대한 그대로 따른다."), true);
+  assert.equal(shortPreviewRequests[0].systemPrompt.includes("purpose는 회의 개요 본문이 아니라 보조 메타다."), true);
+  assert.equal(shortPreviewRequests[0].prompt.includes("현재 전체 회의록 요약 JSON"), false);
   assert.equal(String(shortPreviewedSection.jsonBody.data.warning || "").trim(), "");
-
-  const fallbackPreviewRequestsBefore = state.openaiSummaryRequests.length;
-  const fallbackPreviewedSection = await invokeHandler(handlers.previewInovaMeetingResultSectionEdit, {
-    body: {
-      instruction: "10글자로 수정해줘 강제fallback",
-      jobId,
-      meetingId: "meeting-planning-1",
-      owner,
-      sectionKey: "overview",
-    },
-    method: "POST",
-  });
-  assert.equal(fallbackPreviewedSection.statusCode, 200);
-  assert.equal(fallbackPreviewedSection.jsonBody.data.sectionKey, "overview");
-  assert.equal(
-    String(fallbackPreviewedSection.jsonBody.data.warning || "").trim().includes("10자 안팎"),
-    true
-  );
-  const fallbackPreviewRequests = state.openaiSummaryRequests.slice(fallbackPreviewRequestsBefore);
-  assert.equal(fallbackPreviewRequests.length, 2);
 
   const staleAppliedSection = await invokeHandler(handlers.applyInovaMeetingResultSectionEdit, {
     body: {

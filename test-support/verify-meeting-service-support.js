@@ -129,7 +129,6 @@ function createDeps(state, overrides = {}) {
                     {
                       message: {
                         content: JSON.stringify(createSectionEditFixture({
-                          isRetry: firstSystemMessage.includes("직전 시도는 사용자 요청을 충분히 반영하지 못했다."),
                           mode,
                           sectionKey: sectionMatch[1],
                           userPrompt,
@@ -233,27 +232,25 @@ function createNotesFixture(mode) {
   };
 }
 
-function createSectionEditFixture({ isRetry, mode, sectionKey, userPrompt }) {
+function createSectionEditFixture({ mode, sectionKey, userPrompt }) {
   const notes = createNotesFixture(mode);
   if (sectionKey === "overview") {
-    const isTenCharsRequest = userPrompt.includes("10글자");
-    const forceFallback = userPrompt.includes("강제fallback");
-    if (isTenCharsRequest && (!isRetry || forceFallback)) {
+    const isShortSummaryRequest = /(?:10|20)글자/.test(userPrompt);
+    if (isShortSummaryRequest) {
       return {
-        meetingMeta: notes.meetingMeta,
-        overview: notes.overview,
+        meetingMeta: {
+          ...notes.meetingMeta,
+          purpose: "",
+        },
+        overview: "테스트 점검",
       };
     }
     return {
       meetingMeta: {
         ...notes.meetingMeta,
-        purpose: isTenCharsRequest
-          ? ""
-          : "프로모션 일정과 준비 순서를 다시 짧게 정리합니다.",
+        purpose: "",
       },
-      overview: isTenCharsRequest
-        ? "테스트 점검"
-        : "일정 확정과 초안 정리가 핵심으로 다시 정리됐습니다.",
+      overview: "일정 확정과 초안 정리가 핵심으로 다시 정리됐습니다.",
     };
   }
   return notes;
