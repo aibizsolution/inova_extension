@@ -19,6 +19,7 @@ const { createMeetingNotesRuntimeDomain } = require("./meeting-notes-runtime-dom
 const { createMeetingNotesSourceDomain } = require("./meeting-notes-source-domain");
 const { createMeetingMutationDomain } = require("./meeting-mutation-domain");
 const { createMeetingProcessingDomain } = require("./meeting-processing-domain");
+const { createMeetingProcessingRuntimeDomain } = require("./meeting-processing-runtime-domain");
 const { createMeetingResultDomain } = require("./meeting-result-domain");
 const { createMeetingRecordDomain } = require("./meeting-record-domain");
 const { createMeetingSourceDomain } = require("./meeting-source-domain");
@@ -419,6 +420,23 @@ function registerMeetingHandlers(deps) {
     },
   });
 
+  const meetingProcessingRuntimeDomain = createMeetingProcessingRuntimeDomain({
+    OpenAI,
+    buildTranscriptText,
+    bucket,
+    createHttpError,
+    defaultMeetingProcessRetryLimit: DEFAULT_MEETING_PROCESS_RETRY_LIMIT,
+    defaultSourcePartOverlapMs: DEFAULT_SOURCE_PART_OVERLAP_MS,
+    getClient,
+    getMeetingModel,
+    normalizeMeetingSource,
+    normalizeMeetingSourcePart,
+    normalizeText,
+    normalizeTranscriptionResponse,
+    retryableMeetingProcessStatuses: RETRYABLE_MEETING_PROCESS_STATUSES,
+    resegmentTranscriptForReview,
+  });
+
   const meetingResultDomain = createMeetingResultDomain({
     artifactCollection: ARTIFACT_COLLECTION,
     assertJobOwnership,
@@ -494,7 +512,6 @@ function registerMeetingHandlers(deps) {
     buildChunkTranscriptStorageObjectPath,
     buildMeetingDocId,
     buildMeetingJobPartId,
-    buildMeetingPartFileName,
     buildQueuedMeetingJobFinalizer,
     buildQueuedMeetingJobPart,
     buildSucceededJobPatch,
@@ -506,23 +523,22 @@ function registerMeetingHandlers(deps) {
     deleteDocumentIfExists,
     deleteTemporarySourceGroup,
     finalizeCollection: JOB_FINALIZER_COLLECTION,
-    formatMeetingProcessErrorMessage,
+    formatMeetingProcessErrorMessage: meetingProcessingRuntimeDomain.formatMeetingProcessErrorMessage,
     getMeetingArtifactId,
-    getMeetingChunkWorkerQueueConcurrency,
-    getMeetingProcessRetryLimit,
-    isRetryableMeetingProcessError,
+    getMeetingChunkWorkerQueueConcurrency: meetingProcessingRuntimeDomain.getMeetingChunkWorkerQueueConcurrency,
+    getMeetingProcessRetryLimit: meetingProcessingRuntimeDomain.getMeetingProcessRetryLimit,
+    isRetryableMeetingProcessError: meetingProcessingRuntimeDomain.isRetryableMeetingProcessError,
     jobCollection: JOB_COLLECTION,
     jobPartCollection: JOB_PART_COLLECTION,
     loadMeetingChunkTranscript,
     loadMeetingJobPartDocs,
-    loadMeetingSourcePartAudioBuffer,
     loadStoredMeetingJob,
     logEvent,
     logMeetingCleanupWarning,
     markMeetingSourceDeleted,
     maybeGenerateMeetingNotes: meetingNotesGenerationDomain.maybeGenerateMeetingNotes,
     meetingCollection: MEETING_COLLECTION,
-    mergeChunkTranscripts,
+    mergeChunkTranscripts: meetingProcessingRuntimeDomain.mergeChunkTranscripts,
     mergeMeetingJobPatch,
     normalizeMeetingContext,
     normalizeMeetingJob,
@@ -533,8 +549,8 @@ function registerMeetingHandlers(deps) {
     normalizeMeetingSource,
     normalizeText,
     saveMeetingChunkTranscript,
-    transcribeMeetingAudio,
-    transcribeQueuedMeetingSource,
+    transcribeMeetingSourcePart: meetingProcessingRuntimeDomain.transcribeMeetingSourcePart,
+    transcribeQueuedMeetingSource: meetingProcessingRuntimeDomain.transcribeQueuedMeetingSource,
     upsertMeetingJobSummary,
   });
 
@@ -1693,287 +1709,6 @@ function registerMeetingHandlers(deps) {
       || getMeetingSummaryModel();
   }
 
-  async function transcribeMeetingAudio(audioBuffer, meeting, options, source) {
-    const file = await OpenAI.toFile(audioBuffer, source.fileName, {
-      type: source.mimeType || "audio/webm",
-    });
-    const request = {
-      file,
-      language: meeting.language,
-      model: getMeetingModel(),
-      response_format: "json",
-    };
-    const response = await getClient().audio.transcriptions.create(request);
-    return normalizeTranscriptionResponse(response, source.durationMs);
-  }
-
-  function getMeetingChunkWorkerQueueConcurrency(totalParts) {
-    const normalizedTotalParts = Math.max(1, Number(totalParts) || 1);
-    const override = resolveMeetingChunkTranscriptionConcurrencyOverride(normalizedTotalParts);
-    return override || normalizedTotalParts;
-  }
-
-  function getMeetingChunkTranscriptionConcurrency(totalParts) {
-    const normalizedTotalParts = Math.max(1, Number(totalParts) || 1);
-    const override = resolveMeetingChunkTranscriptionConcurrencyOverride(normalizedTotalParts);
-    return override || normalizedTotalParts;
-  }
-
-  function resolveMeetingChunkTranscriptionConcurrencyOverride(totalParts) {
-    const normalizedTotalParts = Math.max(1, Number(totalParts) || 1);
-    const requested = Number.parseInt(
-      normalizeText(process.env.OPENAI_MEETING_CHUNK_TRANSCRIPTION_CONCURRENCY),
-      10
-    );
-    if (!Number.isFinite(requested) || requested <= 0) {
-      return null;
-    }
-    // Keep the env override as an emergency throttle even though the default is now full fan-out.
-    return Math.max(1, Math.min(normalizedTotalParts, requested));
-  }
-
-  function getMeetingProcessRetryLimit() {
-    const requested = Number.parseInt(
-      normalizeText(process.env.OPENAI_MEETING_PROCESS_RETRY_LIMIT),
-      10
-    );
-    const resolved = Number.isFinite(requested) && requested >= 0
-      ? requested
-      : DEFAULT_MEETING_PROCESS_RETRY_LIMIT;
-    return Math.max(0, Math.min(5, resolved));
-  }
-
-  function extractMeetingProcessErrorStatus(error) {
-    const candidates = [error?.status, error?.statusCode, error?.cause?.status];
-    for (const candidate of candidates) {
-      const parsed = Number.parseInt(String(candidate || ""), 10);
-      if (Number.isFinite(parsed) && parsed > 0) {
-        return parsed;
-      }
-    }
-    const messageStatus = normalizeText(error?.message).match(/\b(408|409|429|500|502|503|504)\b/);
-    return messageStatus ? Number.parseInt(messageStatus[1], 10) : 0;
-  }
-
-  function extractMeetingProcessRequestId(error) {
-    const message = normalizeText(error?.message);
-    const match = message.match(/\b(req_[a-zA-Z0-9]+)\b/);
-    return match?.[1] || normalizeText(error?.request_id || error?.requestId);
-  }
-
-  function isRetryableMeetingProcessError(error) {
-    const status = extractMeetingProcessErrorStatus(error);
-    if (RETRYABLE_MEETING_PROCESS_STATUSES.has(status)) {
-      return true;
-    }
-    const message = normalizeText(error?.message).toLowerCase();
-    if (!message) {
-      return false;
-    }
-    return [
-      "server had an error processing your request",
-      "temporarily unavailable",
-      "timed out",
-      "timeout",
-      "rate limit",
-      "overloaded",
-      "socket hang up",
-      "connection error",
-    ].some((token) => message.includes(token));
-  }
-
-  function formatMeetingProcessErrorMessage(error) {
-    const rawMessage = normalizeText(error?.message) || "회의 전사를 처리하지 못했어요.";
-    const status = extractMeetingProcessErrorStatus(error);
-    const requestId = extractMeetingProcessRequestId(error);
-    const requestSuffix = requestId ? ` 요청 ID: ${requestId}` : "";
-    if (status === 429 || rawMessage.toLowerCase().includes("rate limit")) {
-      return `전사 API 요청이 잠시 몰려 있어 처리에 실패했어요. 잠시 후 다시 시도해 주세요.${requestSuffix}`.trim();
-    }
-    if (RETRYABLE_MEETING_PROCESS_STATUSES.has(status) || rawMessage.toLowerCase().includes("server had an error processing your request")) {
-      return `전사 API에서 일시적인 서버 오류가 발생했어요. 다시 시도해 주세요.${requestSuffix}`.trim();
-    }
-    return rawMessage;
-  }
-
-  async function mapWithConcurrency(items, concurrency, worker) {
-    const normalizedItems = Array.isArray(items) ? items : [];
-    if (!normalizedItems.length) {
-      return [];
-    }
-    const limit = Math.max(1, Math.min(normalizedItems.length, Number(concurrency) || 1));
-    const results = new Array(normalizedItems.length);
-    let cursor = 0;
-    await Promise.all(
-      Array.from({ length: limit }, async () => {
-        while (cursor < normalizedItems.length) {
-          const currentIndex = cursor;
-          cursor += 1;
-          results[currentIndex] = await worker(normalizedItems[currentIndex], currentIndex);
-        }
-      })
-    );
-    return results;
-  }
-
-  async function transcribeQueuedMeetingSource(source, meeting, options, owner, jobId, onProgress) {
-    const normalizedSource = normalizeMeetingSource(source);
-    if (normalizedSource.mode !== "chunked" || !normalizedSource.parts.length) {
-      const audioBuffer = await loadSourceAudioBuffer(normalizedSource);
-      if (!audioBuffer.length) {
-        throw createHttpError(400, "회의 원본 오디오가 비어 있어요.");
-      }
-      return transcribeMeetingAudio(audioBuffer, meeting, options, normalizedSource);
-    }
-
-    const orderedParts = normalizedSource.parts
-      .map((part, index) => normalizeMeetingSourcePart(part, index, normalizedSource.requestId))
-      .sort((left, right) => left.index - right.index || left.startMs - right.startMs);
-    const totalParts = orderedParts.length;
-    const transcribeProgressEndPercent = 80;
-    let completedTranscriptionCount = 0;
-    const chunkTranscripts = await mapWithConcurrency(
-      orderedParts,
-      getMeetingChunkTranscriptionConcurrency(totalParts),
-      async (part) => {
-        const audioBuffer = await loadMeetingSourcePartAudioBuffer(part);
-        const transcript = await transcribeMeetingAudio(
-          audioBuffer,
-          meeting,
-          options,
-          {
-            captureMode: normalizedSource.captureMode,
-            durationMs: Math.max(1, part.endMs - part.startMs),
-            fileName: buildMeetingPartFileName(normalizedSource.fileName, part.index),
-            mimeType: part.mimeType || normalizedSource.mimeType,
-            storageObject: part.storageObject,
-          }
-        );
-        completedTranscriptionCount += 1;
-        if (typeof onProgress === "function") {
-          await onProgress({
-            progress: {
-              currentPart: completedTranscriptionCount,
-              percent: Math.max(
-                8,
-                Math.min(
-                  transcribeProgressEndPercent,
-                  Math.round(8 + (completedTranscriptionCount / totalParts) * (transcribeProgressEndPercent - 8))
-                )
-              ),
-              phase: "transcribing_chunks",
-              totalParts,
-            },
-            updatedAt: new Date().toISOString(),
-          });
-        }
-        return { part, transcript };
-      }
-    );
-    return mergeChunkTranscripts(chunkTranscripts, options, onProgress);
-  }
-
-  async function mergeChunkTranscripts(chunkTranscriptsInput, options, onProgress) {
-    const chunkTranscripts = Array.isArray(chunkTranscriptsInput) ? chunkTranscriptsInput : [];
-    let mergedSegments = [];
-    const totalParts = Math.max(1, chunkTranscripts.length);
-    const mergeProgressStartPercent = 80;
-    const mergeProgressEndPercent = 88;
-    for (const [index, chunk] of chunkTranscripts.entries()) {
-      const part = chunk?.part;
-      const transcript = chunk?.transcript;
-      if (!part || !transcript) {
-        continue;
-      }
-      let adjustedSegments = offsetTranscriptSegments(transcript.segments, part.startMs);
-      if (mergedSegments.length && adjustedSegments.length && typeof onProgress === "function") {
-        await onProgress({
-          progress: {
-            currentPart: index + 1,
-            parallelParts: 0,
-            percent: Math.max(
-              mergeProgressStartPercent,
-              Math.min(
-                mergeProgressEndPercent,
-                Math.round(
-                  mergeProgressStartPercent
-                  + ((index + 1) / totalParts) * (mergeProgressEndPercent - mergeProgressStartPercent)
-                )
-              )
-            ),
-            phase: "assembling_transcript",
-            totalParts,
-          },
-          updatedAt: new Date().toISOString(),
-        });
-      }
-      mergedSegments = mergeTranscriptSegments(mergedSegments, adjustedSegments, part.overlapMs || DEFAULT_SOURCE_PART_OVERLAP_MS);
-    }
-
-    const reviewSegments = resegmentTranscriptForReview(mergedSegments);
-    return {
-      segments: reviewSegments,
-      text: buildTranscriptText(reviewSegments),
-    };
-  }
-
-  async function loadMeetingSourcePartAudioBuffer(part) {
-    if (!bucket || !normalizeText(part?.storageObject)) {
-      throw createHttpError(400, "분할 업로드 오디오 원본을 찾지 못했어요.");
-    }
-    const [buffer] = await bucket.file(part.storageObject).download();
-    return buffer;
-  }
-
-  function offsetTranscriptSegments(segments, offsetMs) {
-    return (Array.isArray(segments) ? segments : [])
-      .map((segment) => ({
-        ...segment,
-        endMs: Math.max(0, Number(segment.endMs) + Math.max(0, Number(offsetMs) || 0)),
-        startMs: Math.max(0, Number(segment.startMs) + Math.max(0, Number(offsetMs) || 0)),
-      }))
-      .filter((segment) => normalizeText(segment.text));
-  }
-
-  function mergeTranscriptSegments(existingSegments, nextSegments, overlapMs) {
-    const merged = Array.isArray(existingSegments) ? existingSegments.slice() : [];
-    const overlapStartMs = merged.length
-      ? Math.max(0, Number(merged[merged.length - 1]?.endMs) - Math.max(0, Number(overlapMs) || 0))
-      : 0;
-    for (const segment of Array.isArray(nextSegments) ? nextSegments : []) {
-      if (isDuplicateTranscriptSegment(merged, segment, overlapStartMs)) {
-        continue;
-      }
-      merged.push({
-        endMs: Math.max(Number(segment.startMs) + 1, Number(segment.endMs) || 0),
-        startMs: Math.max(0, Number(segment.startMs) || 0),
-        text: normalizeText(segment.text),
-      });
-    }
-    return merged;
-  }
-
-  function isDuplicateTranscriptSegment(existingSegments, segment, overlapStartMs) {
-    const text = normalizeSegmentComparisonText(segment?.text);
-    if (!text) {
-      return true;
-    }
-    if (Number(segment?.startMs) < overlapStartMs) {
-      const tail = (Array.isArray(existingSegments) ? existingSegments.slice(-6) : []);
-      for (const previous of tail) {
-        const previousText = normalizeSegmentComparisonText(previous?.text);
-        if (!previousText) continue;
-        if (previousText === text) {
-          return true;
-        }
-        if (previousText.includes(text) || text.includes(previousText)) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
   async function loadStoredMeetingJob(jobRef) {
     if (!jobRef || typeof jobRef.get !== "function") {
       return null;
@@ -2112,18 +1847,6 @@ function registerMeetingHandlers(deps) {
       segments,
       text,
     };
-  }
-
-  function normalizeSegmentComparisonText(value) {
-    return normalizeText(value).replace(/\s+/g, " ").toLowerCase();
-  }
-
-  function buildMeetingPartFileName(fileName, partIndex) {
-    const normalizedFileName = normalizeText(fileName) || "meeting-source.wav";
-    const extensionMatch = normalizedFileName.match(/(\.[^.]+)$/);
-    const extension = extensionMatch?.[1] || ".wav";
-    const baseName = extensionMatch ? normalizedFileName.slice(0, -extension.length) : normalizedFileName;
-    return `${baseName}-part-${String(Math.max(0, Number(partIndex) || 0)).padStart(3, "0")}${extension}`;
   }
 
 }

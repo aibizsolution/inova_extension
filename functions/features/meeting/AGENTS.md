@@ -16,6 +16,7 @@
 - `functions/features/meeting/meeting-notes-source-domain.js`
 - `functions/features/meeting/meeting-mutation-domain.js`
 - `functions/features/meeting/meeting-processing-domain.js`
+- `functions/features/meeting/meeting-processing-runtime-domain.js`
 - `functions/features/meeting/meeting-result-domain.js`
 - `functions/features/meeting/meeting-record-domain.js`
 - `functions/features/meeting/meeting-source-domain.js`
@@ -43,6 +44,7 @@
 - `meeting-common-domain.js`는 `meeting-service.js`, `meeting-launch-service.js`, `meeting-workspace-auth-service.js`가 함께 쓰는 shared normalization boundary다.
 - ownership assert와 제목 동기화 helper는 service-local workflow에 가까우므로 `meeting-service.js` 안에 남긴다.
 - `meeting-creation-domain.js`, `meeting-processing-domain.js`, `meeting-summary-sync-domain.js`, `meeting-deletion-domain.js`, `meeting-notes-source-domain.js`처럼 설명 가능한 workflow/data boundary만 독립 모듈로 유지한다.
+- `meeting-processing-runtime-domain.js`는 OpenAI 전사 호출, retry/error 분류, chunk 병렬 처리, transcript merge/dedupe를 묶는 runtime boundary다. `meeting-processing-domain.js`는 queue/finalizer workflow를 유지하고 runtime 세부 정책은 이 모듈에 위임한다.
 - `meeting-notes-edit-domain.js`는 `termReplacements` 저장 이후 결과 notes 재적용과 section preview/apply, notes 기반 제목 sync를 묶는 workflow boundary다.
 - `meeting-notes-generation-domain.js`는 signal gate, full/compact notes 생성, section/reducer prompt builder, compact notes 후처리를 묶는 workflow boundary다.
 - `meeting-result-domain.js`는 결과 title/sharedMemo 수정과 record move transaction, recentJobs sync를 묶는 workflow boundary다.

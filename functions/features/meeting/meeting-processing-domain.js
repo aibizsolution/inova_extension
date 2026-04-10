@@ -5,7 +5,6 @@ function createMeetingProcessingDomain(deps) {
     buildChunkTranscriptStorageObjectPath,
     buildMeetingDocId,
     buildMeetingJobPartId,
-    buildMeetingPartFileName,
     buildQueuedMeetingJobFinalizer,
     buildQueuedMeetingJobPart,
     buildSucceededJobPatch,
@@ -26,7 +25,6 @@ function createMeetingProcessingDomain(deps) {
     jobPartCollection,
     loadMeetingChunkTranscript,
     loadMeetingJobPartDocs,
-    loadMeetingSourcePartAudioBuffer,
     loadStoredMeetingJob,
     logEvent,
     logMeetingCleanupWarning,
@@ -44,8 +42,8 @@ function createMeetingProcessingDomain(deps) {
     normalizeMeetingSource,
     normalizeText,
     saveMeetingChunkTranscript,
+    transcribeMeetingSourcePart,
     transcribeQueuedMeetingSource,
-    transcribeMeetingAudio,
     upsertMeetingJobSummary,
   } = deps;
 
@@ -340,9 +338,6 @@ function createMeetingProcessingDomain(deps) {
       const transcript = await transcribeQueuedMeetingSource(
         source,
         meeting,
-        options,
-        owner,
-        queuedJob.jobId,
         async (progressPatch) => persistPatch(progressPatch)
       );
       await persistPatch({
@@ -519,19 +514,7 @@ function createMeetingProcessingDomain(deps) {
       );
       currentJob = synchronizedStart.currentJob;
 
-      const audioBuffer = await loadMeetingSourcePartAudioBuffer(queuedPart.part);
-      const transcript = await transcribeMeetingAudio(
-        audioBuffer,
-        meeting,
-        options,
-        {
-          captureMode: currentJob.source.captureMode,
-          durationMs: Math.max(1, queuedPart.part.endMs - queuedPart.part.startMs),
-          fileName: buildMeetingPartFileName(currentJob.source.fileName, queuedPart.index),
-          mimeType: queuedPart.part.mimeType || currentJob.source.mimeType,
-          storageObject: queuedPart.part.storageObject,
-        }
-      );
+      const transcript = await transcribeMeetingSourcePart(queuedPart.part, meeting, currentJob.source);
       const transcriptStorageObject = buildChunkTranscriptStorageObjectPath(
         owner.providerUserKey,
         meeting.meetingId,
@@ -730,7 +713,7 @@ function createMeetingProcessingDomain(deps) {
           transcript: await loadMeetingChunkTranscript(bucket, partDoc.transcript.storageObject),
         });
       }
-      const transcript = await mergeChunkTranscripts(chunkTranscripts, options, async (progressPatch) => {
+      const transcript = await mergeChunkTranscripts(chunkTranscripts, async (progressPatch) => {
         await persistJobPatch(progressPatch);
       });
       await persistJobPatch({
