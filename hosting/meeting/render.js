@@ -527,7 +527,6 @@
           <svg class="notes-section__action-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <path d="M11.667 2.667a1.414 1.414 0 0 1 2 2L6 12.333l-2.667.667L4 10.333l7.667-7.666Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.2"/>
           </svg>
-          <span>이 섹션 수정</span>
         </button>`
       : "";
     return `<div class="notes-section__head"><h3 class="notes-section__title">${escapeHtml(section.title)}</h3>${actionButton}</div>`;

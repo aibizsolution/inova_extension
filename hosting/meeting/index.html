@@ -194,6 +194,8 @@
                 </div>
                 <div id="reviewTabActions" class="review-tab-actions" hidden>
                   <button id="copyMeetingNotesButton" class="secondary-button" type="button" hidden>복사</button>
+                  <span id="termReplacementDirtyBadge" class="chip chip--muted" hidden>변경 있음</span>
+                  <button id="toggleTermReplacementButton" class="ghost-button ghost-button--soft" type="button" aria-expanded="false" aria-controls="termReplacementPanel" hidden>용어 치환</button>
                 </div>
               </div>
 
@@ -213,46 +215,27 @@
               </section>
 
               <section id="meetingNotesCard" class="review-panel review-panel--notes" hidden role="tabpanel">
-                <div id="meetingNotesTools" class="notes-tools" hidden>
-                  <div class="notes-tools__bar">
-                    <div class="notes-tools__intro">
-                      <p class="panel-card__eyebrow">보정 도구</p>
-                      <p class="notes-tools__summary">회의 정리를 먼저 읽고, 반복 표기 교정이 필요할 때만 도구를 여세요.</p>
+                <section id="termReplacementPanel" class="notes-tool-card" hidden>
+                  <div class="notes-term-editor">
+                    <div id="termReplacementList" class="notes-term-list" hidden></div>
+                    <div class="notes-term-editor__draft">
+                      <label class="input-group" for="termReplacementFromInput">
+                        <span class="input-group__label">기존 표현</span>
+                        <input id="termReplacementFromInput" class="meeting-input" type="text" placeholder="예: 미팅" />
+                      </label>
+                      <label class="input-group" for="termReplacementToInput">
+                        <span class="input-group__label">바꿀 표현</span>
+                        <input id="termReplacementToInput" class="meeting-input" type="text" placeholder="예: 회의" />
+                      </label>
                     </div>
-                    <div class="notes-tools__actions">
-                      <span id="termReplacementDirtyBadge" class="chip chip--muted" hidden>변경 있음</span>
-                      <button id="toggleTermReplacementButton" class="ghost-button ghost-button--soft" type="button" aria-expanded="false" aria-controls="termReplacementPanel">용어 치환</button>
+                    <div class="review-editor__actions">
+                      <button id="termReplacementAddButton" class="secondary-button" type="button">치환 추가</button>
+                      <button id="termReplacementResetButton" class="ghost-button ghost-button--soft" type="button">변경 취소</button>
+                      <button id="termReplacementClearButton" class="ghost-button ghost-button--soft" type="button">전체 비우기</button>
+                      <button id="saveTermReplacementsButton" class="primary-button" type="button">용어 치환 저장</button>
                     </div>
                   </div>
-                  <section id="termReplacementPanel" class="notes-tool-card notes-tool-card--drawer" hidden>
-                    <div class="notes-tool-card__head">
-                      <div>
-                        <p class="panel-card__eyebrow">용어 치환</p>
-                        <h3 class="notes-tool-card__title">반복되는 표기만 일괄 교정</h3>
-                      </div>
-                    </div>
-                    <p class="notes-tool-card__summary">기존 회의 정리와 이후 섹션 수정 결과에 같은 용어를 일관되게 적용합니다.</p>
-                    <div class="notes-term-editor">
-                      <div id="termReplacementList" class="notes-term-list" hidden></div>
-                      <div class="notes-term-editor__draft">
-                        <label class="input-group" for="termReplacementFromInput">
-                          <span class="input-group__label">기존 표현</span>
-                          <input id="termReplacementFromInput" class="meeting-input" type="text" placeholder="예: 박영탁" />
-                        </label>
-                        <label class="input-group" for="termReplacementToInput">
-                          <span class="input-group__label">바꿀 표현</span>
-                          <input id="termReplacementToInput" class="meeting-input" type="text" placeholder="예: 박영택" />
-                        </label>
-                      </div>
-                      <div class="review-editor__actions">
-                        <button id="termReplacementAddButton" class="secondary-button" type="button">치환 추가</button>
-                        <button id="termReplacementResetButton" class="ghost-button ghost-button--soft" type="button">변경 취소</button>
-                        <button id="termReplacementClearButton" class="ghost-button ghost-button--soft" type="button">전체 비우기</button>
-                        <button id="saveTermReplacementsButton" class="primary-button" type="button">용어 치환 저장</button>
-                      </div>
-                    </div>
-                  </section>
-                </div>
+                </section>
                 <div id="meetingNotesOverview" class="notes-overview" hidden></div>
                 <div id="meetingNotesSections" class="notes-sections"></div>
               </section>
@@ -272,20 +255,15 @@
         <section id="debugPanel" class="debug-panel" hidden></section>
 
         <section id="sectionEditOverlay" class="confirm-overlay section-edit-overlay" hidden>
-          <div id="sectionEditDialog" class="confirm-dialog section-edit-dialog" role="dialog" aria-modal="true" aria-labelledby="sectionEditDialogTitle" aria-describedby="sectionEditDialogBody">
+          <div id="sectionEditDialog" class="confirm-dialog section-edit-dialog" role="dialog" aria-modal="true" aria-labelledby="sectionEditDialogTitle">
             <div class="section-edit-dialog__head">
               <div>
                 <p class="confirm-dialog__eyebrow">섹션 수정</p>
-                <h2 id="sectionEditDialogTitle" class="confirm-dialog__title">회의 개요 수정</h2>
+                <h2 id="sectionEditDialogTitle" class="confirm-dialog__title">회의 개요</h2>
               </div>
               <button id="closeSectionEditButton" class="ghost-button ghost-button--soft" type="button">닫기</button>
             </div>
-            <p id="sectionEditDialogBody" class="confirm-dialog__body">선택한 섹션만 LLM으로 미리보기한 뒤 확인 후 적용합니다.</p>
-            <div id="sectionEditTargetLabel" class="section-edit-dialog__target chip chip--muted">회의 개요</div>
-            <label class="input-group input-group--textarea" for="sectionEditInstructionInput">
-              <span class="input-group__label">수정 요청</span>
-              <textarea id="sectionEditInstructionInput" class="meeting-textarea review-editor__textarea" rows="6" maxlength="1600" placeholder="예: 참석자 이름 표기를 통일하고, 결정 배경을 조금 더 명확하게 정리해 주세요."></textarea>
-            </label>
+            <textarea id="sectionEditInstructionInput" class="meeting-textarea review-editor__textarea" rows="6" maxlength="1600" placeholder="예: 참석자 이름 표기를 통일하고, 결정 배경을 조금 더 명확하게 정리해 주세요." aria-label="수정 요청"></textarea>
             <div class="review-editor__actions">
               <button id="previewSectionEditButton" class="secondary-button" type="button">미리보기 만들기</button>
               <button id="cancelSectionEditButton" class="ghost-button ghost-button--soft" type="button">미리보기 지우기</button>

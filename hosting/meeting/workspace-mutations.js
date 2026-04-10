@@ -1122,8 +1122,7 @@
         const entry = findHistoryEntry(state, state.selectedRecordId);
         const remoteStatus = normalizeText(state.currentJob?.status || entry?.remote?.status);
         return Boolean(
-          refs.meetingNotesTools
-          && entry?.remote?.jobId
+          entry?.remote?.jobId
           && !state.auth?.readOnly
           && remoteStatus === "succeeded"
         );
@@ -1171,11 +1170,8 @@
       }
 
       function renderMeetingNotesTools() {
-        if (!refs.meetingNotesTools) {
-          return;
-        }
         const showTools = canRenderNotesTools();
-        refs.meetingNotesTools.hidden = !showTools;
+        if (refs.toggleTermReplacementButton) refs.toggleTermReplacementButton.hidden = !showTools;
         if (!showTools) {
           if (refs.termReplacementPanel) refs.termReplacementPanel.hidden = true;
           if (refs.sectionEditOverlay) refs.sectionEditOverlay.hidden = true;
@@ -1219,9 +1215,7 @@
 
         if (refs.sectionEditOverlay) refs.sectionEditOverlay.hidden = !sectionEditOpen;
         if (refs.closeSectionEditButton) refs.closeSectionEditButton.disabled = selectedRecordBusy;
-        if (refs.sectionEditDialogTitle) refs.sectionEditDialogTitle.textContent = `${resolveSectionLabel(state.sectionEdit.sectionKey)} 수정`;
-        if (refs.sectionEditDialogBody) refs.sectionEditDialogBody.textContent = "선택한 섹션만 미리보기한 뒤 확인 후 적용합니다.";
-        if (refs.sectionEditTargetLabel) refs.sectionEditTargetLabel.textContent = resolveSectionLabel(state.sectionEdit.sectionKey);
+        if (refs.sectionEditDialogTitle) refs.sectionEditDialogTitle.textContent = resolveSectionLabel(state.sectionEdit.sectionKey);
         if (refs.sectionEditInstructionInput) refs.sectionEditInstructionInput.disabled = readOnly || selectedRecordBusy;
         if (refs.previewSectionEditButton) {
           refs.previewSectionEditButton.disabled = readOnly
