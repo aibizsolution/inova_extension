@@ -63,6 +63,7 @@
       handleSearch,
       handleSelectPromptTab,
       hasRequiredCapabilities,
+      importStorePrompt,
       syncPanelState,
     };
 
@@ -204,6 +205,13 @@
       }
       scheduleRender();
       return true;
+    }
+
+    async function importStorePrompt(storeEntry) {
+      await ensurePromptLibraryLoaded(true, "import-store-prompt");
+      const nextPromptLibrary = namespace.promptLibraryModel.importStoreEntry(state.promptLibrary, storeEntry);
+      await syncPromptLibrary(nextPromptLibrary, "import-store-prompt");
+      return state.promptLibrary;
     }
 
     async function handleMovePrompt(dragPromptId, targetPromptId, placement) {

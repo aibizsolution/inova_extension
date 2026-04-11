@@ -159,6 +159,22 @@
     return mergePromptLibrary({ items: nextItems, version: current.version });
   }
 
+  function importStoreEntry(library, storeEntry) {
+    const current = mergePromptLibrary(library);
+    const nextItem = buildPromptItem({
+      content: storeEntry?.content,
+      importedFrom: {
+        authorName: storeEntry?.owner?.displayName,
+        categoryId: storeEntry?.categoryId,
+        entryId: storeEntry?.entryId,
+        importedAt: new Date().toISOString(),
+        source: "store",
+      },
+      title: storeEntry?.title,
+    });
+    return nextItem ? mergePromptLibrary({ items: [nextItem, ...current.items] }) : current;
+  }
+
   function buildExportPayload(library) {
     const merged = mergePromptLibrary(library);
     return {
@@ -340,6 +356,7 @@
     applyImport,
     buildExportPayload,
     buildReplaceSyncDocument,
+    importStoreEntry,
     mergePromptLibrary,
     movePromptItem,
     parseImportText,

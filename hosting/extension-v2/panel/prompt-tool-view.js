@@ -9,7 +9,7 @@
       : activeTab === "review"
         ? namespace.promptReviewView?.render?.(state.review) || renderPromptPlaceholder("프롬프트 검토를 준비하는 중이에요.")
       : activeTab === "store"
-        ? renderPlaceholder(state.storePlaceholder)
+        ? namespace.storeView?.renderBody?.(state.store) || renderPlaceholder(state.storePlaceholder)
         : renderPlaceholder(state.reviewPlaceholder);
 
     return `
