@@ -5,6 +5,7 @@
     "https://browser-extension-main.web.app",
     "https://browser-extension-v2.web.app",
   ]);
+  const PARENT_ORIGIN_PARAM = "inovaParentOrigin";
   const state = {
     innerLoaded: false,
     parentOrigin: readReferrerOrigin(),
@@ -29,7 +30,7 @@
     state.targetOrigin = readOrigin(resolvedTarget);
     global.addEventListener("message", handleWindowMessage);
     targetFrame.addEventListener("load", handleTargetLoad, { once: false });
-    targetFrame.src = resolvedTarget;
+    targetFrame.src = buildTargetFrameUrl(resolvedTarget);
   }
 
   function handleTargetLoad() {
@@ -110,6 +111,18 @@
       return "";
     }
     return target;
+  }
+
+  function buildTargetFrameUrl(targetUrl) {
+    try {
+      const url = new URL(targetUrl);
+      if (!url.searchParams.get(PARENT_ORIGIN_PARAM)) {
+        url.searchParams.set(PARENT_ORIGIN_PARAM, global.location.origin || "");
+      }
+      return url.toString();
+    } catch {
+      return targetUrl;
+    }
   }
 
   function renderError(message) {

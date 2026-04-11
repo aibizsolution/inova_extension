@@ -39,6 +39,10 @@
 
   function buildAllowedParentOrigins() {
     const origins = new Set(["https://inova.incross.com"]);
+    const configuredParentOrigin = readConfiguredParentOrigin();
+    if (configuredParentOrigin) {
+      origins.add(configuredParentOrigin);
+    }
     const referrerOrigin = readReferrerOrigin();
     if (referrerOrigin.startsWith("chrome-extension://")) {
       origins.add(referrerOrigin);
@@ -228,6 +232,19 @@
   function readReferrerOrigin() {
     try {
       return new URL(global.document?.referrer || "").origin;
+    } catch {
+      return "";
+    }
+  }
+
+  function readConfiguredParentOrigin() {
+    try {
+      const configured = new URLSearchParams(global.location.search || "").get("inovaParentOrigin") || "";
+      const origin = new URL(configured).origin;
+      if (origin === "https://inova.incross.com" || origin.startsWith("chrome-extension://")) {
+        return origin;
+      }
+      return "";
     } catch {
       return "";
     }

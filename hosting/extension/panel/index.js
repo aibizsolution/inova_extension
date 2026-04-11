@@ -911,6 +911,10 @@
 
   function readParentOrigin() {
     try {
+      const configured = new URLSearchParams(global.location.search || "").get("inovaParentOrigin") || "";
+      if (configured) {
+        return normalizeOrigin(new URL(configured).origin);
+      }
       return normalizeOrigin(new URL(document.referrer).origin);
     } catch {
       return "";
