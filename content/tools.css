@@ -10,11 +10,11 @@
 .inova-tool-shell, .inova-tool-section { height: 100%; }
 .inova-tool-body, #inova-tool-content, .inova-prompt-list { flex: 1; min-height: 0; }
 #inova-tool-rail {
-  width: 116px; padding: 12px 0; display: flex; flex-direction: column; gap: 0; overflow-y: auto;
+  width: 144px; padding: 12px 0; display: flex; flex-direction: column; gap: 0; overflow-y: auto;
   border-right: 1px solid rgba(52, 81, 100, 0.1); background: linear-gradient(180deg, rgba(244, 250, 252, 0.95), rgba(249, 252, 255, 0.92));
 }
 .inova-tool-rail__button {
-  position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 14px 16px;
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 16px 16px;
   border: 0; border-radius: 0; background: transparent; color: rgba(16, 33, 43, 0.68); cursor: pointer;
   transition: color 140ms ease, background 140ms ease;
 }
