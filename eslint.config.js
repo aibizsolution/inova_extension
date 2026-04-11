@@ -9,6 +9,11 @@ const recommendedRules = {
   "no-unused-vars": "error",
 };
 
+const runtimeRules = {
+  ...recommendedRules,
+  eqeqeq: ["error", "always", { null: "ignore" }],
+};
+
 module.exports = [
   {
     ignores: [
@@ -46,7 +51,7 @@ module.exports = [
         ...globals.worker,
       },
     },
-    rules: recommendedRules,
+    rules: runtimeRules,
   },
   {
     files: [
@@ -72,6 +77,6 @@ module.exports = [
         ...globals.node,
       },
     },
-    rules: recommendedRules,
+    rules: runtimeRules,
   },
 ];
