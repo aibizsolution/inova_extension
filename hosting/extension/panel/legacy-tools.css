@@ -327,7 +327,7 @@
 .inova-tool-section--meeting .inova-tool-toolbar__row { flex: 1 1 auto; min-width: 0; justify-content: flex-start; }
 .inova-tool-section--meeting .inova-tool-toolbar,
 .inova-tool-section--meeting .inova-meeting-stack {
-  width: min(100%, 430px);
+  width: min(100%, 344px);
   margin-inline: auto;
 }
 .inova-tool-section--release .inova-tool-toolbar { justify-content: space-between; }
