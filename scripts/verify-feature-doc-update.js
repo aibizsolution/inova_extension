@@ -61,6 +61,7 @@ const FEATURE_DOC_RULES = [
       /^content\/prompt-hub-controller\.js$/,
       /^content\/prompt-hub-runtime\.js$/,
       /^content\/panel-prompt-controller\.js$/,
+      /^content\/panel-prompt-bridge-controller\.js$/,
     ],
   },
   {

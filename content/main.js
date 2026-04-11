@@ -27,16 +27,16 @@
     panelMeetingController,
   });
   const panelBookmarkController = namespace.panelBookmarkController.create(state, { render });
-  let panelPromptController = null;
+  let panelPromptBridgeController = null;
   const panelShellController = namespace.panelShellController.create(state, {
     bookmarkController: panelBookmarkController,
-    getPromptController: () => panelPromptController,
+    getPromptController: () => panelPromptBridgeController,
     isExtensionContextInvalidatedError: panelRuntimeController.isExtensionContextInvalidatedError,
     meetingManager,
     releaseManager,
     render,
   });
-  panelPromptController = namespace.panelPromptController.create(state, {
+  const panelPromptController = namespace.panelPromptController.create(state, {
     isPaused: panelRuntimeController.isPaused,
     isToolSurface: panelRuntimeController.isToolSurface,
     lockUiPreferenceSelection: panelShellController.lockUiPreferenceSelection,
@@ -44,20 +44,23 @@
     persistActiveTool: panelShellController.persistActiveTool,
     render,
   });
+  panelPromptBridgeController = namespace.panelPromptBridgeController.create(state, {
+    panelPromptController,
+  });
   const routeStateController = namespace.routeStateController.create(state, {
     applyUiPreferenceLock: panelShellController.applyUiPreferenceLock,
-    ensureStoreLoaded: () => panelPromptController.ensureStoreLoaded(),
+    ensureStoreLoaded: panelPromptBridgeController.ensureStoreLoaded,
     normalizeToolId: panelShellController.normalizeToolId,
   });
   const panelLifecycleController = namespace.panelLifecycleController.create(state, {
-    ensureStoreLoaded: () => panelPromptController.ensureStoreLoaded(),
+    ensureStoreLoaded: panelPromptBridgeController.ensureStoreLoaded,
     isStoreTabActive: panelRuntimeController.isStoreTabActive,
     logPanelDebug: panelRuntimeController.logPanelDebug,
     meetingManager,
     releaseManager,
     render,
-    schedulePromptCloudSyncIfNeeded: (delay) => panelPromptController.scheduleCloudSyncIfNeeded(delay),
-    schedulePromptRealtimeSync: (delay) => panelPromptController.scheduleRealtimeSync(delay),
+    schedulePromptCloudSyncIfNeeded: panelPromptBridgeController.schedulePromptCloudSyncIfNeeded,
+    schedulePromptRealtimeSync: panelPromptBridgeController.schedulePromptRealtimeSync,
   });
   const panelActivityController = namespace.panelActivityController.create(state, {
     logPanelDebug: panelRuntimeController.logPanelDebug,
@@ -65,16 +68,16 @@
     providerIdentitySync,
     releaseManager,
     render,
-    schedulePromptCloudSyncIfNeeded: (delay) => panelPromptController.scheduleCloudSyncIfNeeded(delay),
-    schedulePromptRealtimeSync: (delay) => panelPromptController.scheduleRealtimeSync(delay),
+    schedulePromptCloudSyncIfNeeded: panelPromptBridgeController.schedulePromptCloudSyncIfNeeded,
+    schedulePromptRealtimeSync: panelPromptBridgeController.schedulePromptRealtimeSync,
   });
   const panelSurfaceController = namespace.panelSurfaceController.create(state, {
-    ensureStoreLoaded: () => panelPromptController.ensureStoreLoaded(),
+    ensureStoreLoaded: panelPromptBridgeController.ensureStoreLoaded,
     isStoreTabActive: panelRuntimeController.isStoreTabActive,
     logPanelDebug: panelRuntimeController.logPanelDebug,
     meetingManager,
     render,
-    schedulePromptRealtimeSync: (delay) => panelPromptController.scheduleRealtimeSync(delay),
+    schedulePromptRealtimeSync: panelPromptBridgeController.schedulePromptRealtimeSync,
   });
   const routeSync = namespace.routeSync.create(state, {
     onRouteStateChanged: meetingManager.handleRouteStateChange,
@@ -91,7 +94,7 @@
     panelBookmarkController,
     panelDebugController,
     panelMeetingController,
-    panelPromptController,
+    panelPromptController: panelPromptBridgeController,
     panelShellController,
     releaseManager,
   });
@@ -103,7 +106,7 @@
     panelBookmarkController,
     panelDebugController,
     panelLifecycleController,
-    panelPromptController,
+    panelPromptController: panelPromptBridgeController,
     panelShellController,
     panelSurfaceController,
     providerIdentitySync,
