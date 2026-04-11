@@ -468,6 +468,9 @@
 - panel prompt bridge 책임 정리:
   - prompt shell 외부에서 필요한 store load, search/action callback, review float, realtime/cloud sync 진입점은 `content/panel-prompt-bridge-controller.js`로 좁히고, `content/main.js`는 prompt controller 메서드별 lambda wiring을 반복하지 않는다.
   - 이 단계도 DB 구조, legacy lane, hosted origin/path, runtime message 계약을 바꾸지 않는 확장 내부 책임 축소로 둔다.
+- panel composition 책임 정리:
+  - controller graph 조립과 inter-controller wiring은 `content/panel-composition-controller.js`로 옮기고, `content/main.js`는 state factory 호출과 composition bootstrap만 유지한다.
+  - 이 단계도 DB 구조, legacy lane, hosted origin/path, runtime message 계약을 바꾸지 않는 확장 내부 책임 축소로 둔다.
 - 현재 문서 판단:
   - meeting 리팩토링의 남은 일은 추가 분해보다 `minor로 닫을 수 있는지`를 기록으로 마무리하는 쪽에 가깝다.
   - 다음 문서 작업은 핵심 사용자 흐름 증거를 같은 형식으로 정리해 `minor candidate ready` 여부를 닫는 것이다.

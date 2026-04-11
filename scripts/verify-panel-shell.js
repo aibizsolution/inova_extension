@@ -33,6 +33,7 @@ async function main() {
   assert.equal(harness.bootstrapCalls, 1);
   assert.equal(harness.renderControllerCreated, 1);
   assert.equal(harness.stateFactoryCreated, 1);
+  assert.equal(harness.compositionControllerCreated, 1);
   assert.equal(harness.runtimeControllerCreated, 1);
   assert.equal(harness.actionControllerCreated, 1);
   assert.equal(harness.promptBridgeControllerCreated, 1);
@@ -143,6 +144,12 @@ function createHarness() {
     runtime: context,
   });
 
+  loadScript("content/panel-composition-controller.js", context);
+  const originalCompositionCreate = context.InovaBookmarks.panelCompositionController.create;
+  context.InovaBookmarks.panelCompositionController.create = function instrumentedCreate(state) {
+    controllerEvents.compositionControllerCreated = (controllerEvents.compositionControllerCreated || 0) + 1;
+    return originalCompositionCreate.call(this, state);
+  };
   loadScript("content/main.js", context);
 
   return {
@@ -153,6 +160,7 @@ function createHarness() {
     actionControllerCreated: controllerEvents.actionControllerCreated || 0,
     bootstrapCalls: controllerEvents.bootstrapCalls || 0,
     bootstrapControllerCreated: controllerEvents.bootstrapControllerCreated || 0,
+    compositionControllerCreated: controllerEvents.compositionControllerCreated || 0,
     debugActions: controllerEvents.debugActions,
     documentListeners,
     handlePositionCalls: controllerEvents.handlePositionCalls,

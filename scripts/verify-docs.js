@@ -60,6 +60,7 @@ const requiredFiles = [
   "content/panel-runtime-controller.js",
   "content/panel-action-controller.js",
   "content/panel-prompt-bridge-controller.js",
+  "content/panel-composition-controller.js",
   "content/route-state-controller.js",
   "content/route-watch-controller.js",
   "content/prompt-hub-state.js",
@@ -211,21 +212,9 @@ const codeChecks = [
   {
     file: "content/main.js",
     patterns: [
-      /panelBookmarkController/,
-      /panelShellController/,
-      /routeStateController/,
-      /routeWatchController/,
-      /panelSurfaceController/,
-      /panelActivityController/,
-      /panelRenderController/,
-      /panelBootstrapController/,
       /panelStateFactory/,
-      /panelRuntimeController/,
-      /panelActionController/,
-      /panelPromptBridgeController/,
-      /panelPromptController/,
-      /panelRenderController\??\.render/,
-      /panelBootstrapController\??\.bootstrap/,
+      /panelCompositionController/,
+      /panelCompositionController\??\.bootstrap/,
     ],
   },
   {
@@ -325,6 +314,15 @@ const codeChecks = [
       /schedulePromptCloudSyncIfNeeded/,
       /schedulePromptRealtimeSync/,
       /handleStorageChange/,
+    ],
+  },
+  {
+    file: "content/panel-composition-controller.js",
+    patterns: [
+      /panelRuntimeController/,
+      /panelPromptBridgeController/,
+      /panelRenderController/,
+      /panelBootstrapController/,
     ],
   },
   {
