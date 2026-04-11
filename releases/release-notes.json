@@ -2,6 +2,36 @@
   "schemaVersion": 1,
   "versions": [
     {
+      "version": "0.4.5",
+      "level": "patch",
+      "public": {
+        "headline": "프롬프트 검토 6축 준비와 로컬 검증 보강",
+        "summary": "프롬프트 검토 6축 전환을 준비하고, 로컬 에뮬레이터 기준으로 프롬프트 기능 전체를 더 안전하게 검증할 수 있게 다듬은 업데이트입니다.",
+        "changes": [
+          {
+            "type": "changed",
+            "text": "프롬프트 검토가 4축 legacy 응답과 6축 prompt-telling 응답을 모두 처리할 수 있도록 준비했습니다."
+          },
+          {
+            "type": "changed",
+            "text": "로컬 호스팅 선택 시 프롬프트 보관함, 스토어, 검토 경로도 함께 로컬 Functions와 prompt bridge를 보도록 맞췄습니다."
+          },
+          {
+            "type": "fixed",
+            "text": "프롬프트 검토 rate limit 기록과 로컬 검증 스크립트를 보강해 배포 전 smoke 흐름을 더 안정적으로 확인할 수 있게 했습니다."
+          }
+        ]
+      },
+      "internal": {
+        "changes": [
+          {
+            "type": "changed",
+            "text": "로컬 rehearsal 브랜치에서는 manifest/package 버전을 0.4.5로 올려 prompt-review v2 gate와 관련 smoke를 실제로 검증할 수 있게 유지합니다."
+          }
+        ]
+      }
+    },
+    {
       "version": "0.4.4",
       "level": "patch",
       "public": {

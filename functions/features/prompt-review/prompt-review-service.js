@@ -1,3 +1,4 @@
+const { FieldValue } = require("firebase-admin/firestore");
 const OpenAI = require("openai");
 
 const DEFAULT_MODEL = "gpt-5.4-mini";
@@ -39,7 +40,6 @@ const REVIEW_PROFILE_CONFIGS = {
 
 function registerPromptReviewHandlers(deps) {
   const {
-    admin,
     CORS_ORIGINS,
     REGION,
     createHttpError,
@@ -161,7 +161,7 @@ function registerPromptReviewHandlers(deps) {
         {
           providerUserKey,
           requestCount: withinWindow ? requestCount + 1 : 1,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
           windowStartedAt: withinWindow ? windowStartedAt : now,
         },
         { merge: true }

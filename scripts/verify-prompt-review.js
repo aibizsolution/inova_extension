@@ -259,6 +259,15 @@ function loadPromptReviewServiceHelpers() {
     exports: module.exports,
     module,
     require(name) {
+      if (name === "firebase-admin/firestore") {
+        return {
+          FieldValue: {
+            serverTimestamp() {
+              return { __type: "serverTimestamp" };
+            },
+          },
+        };
+      }
       if (name === "openai") {
         return class FakeOpenAI {};
       }

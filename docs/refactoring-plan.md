@@ -51,6 +51,7 @@ ordinary feature 구현 변경은 이 문서의 대상이 아니고, version lan
 - 유지보수자 최종 결정: `미정`
 - 현재 근거 요약:
   - legacy hosted origin/path, Functions export 이름, mutable namespace, auth scope baseline은 유지 중이다.
+  - 공개 사용자 기준선은 여전히 `0.4.4`지만, local rehearsal 브랜치는 미배포 capability smoke를 위해 manifest/package 버전을 `0.4.5`로 먼저 올려 6축 prompt-review 같은 opt-in 경로를 검증할 수 있다.
   - prompt-review 6축 전환은 backend dual-contract와 client opt-in으로 준비하되, 현재 공개 사용자 기준선 `0.4.4`는 `legacy-v1` 4축 평가를 유지한다.
   - popup `로컬 호스팅` rehearsal target은 meeting만이 아니라 prompt-library sync/read, prompt-review, prompt-store panel auth/write, hidden prompt bridge까지 local Functions/Hosting emulator로 함께 전환해야 한다.
   - local rehearsal 부팅 확인과 기존 사용자의 기존 회의 데이터 read-path 확인은 pass 후보다.
