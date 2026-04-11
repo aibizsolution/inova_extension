@@ -48,11 +48,13 @@
           : error instanceof Error
             ? error.message
             : String(error);
-        logDebug("route.refresh.error", {
-          error: state.lastError,
-          scope: "route",
-          sessionId: state.sessionId,
-        });
+        if (!invalidatedContext) {
+          logDebug("route.refresh.error", {
+            error: state.lastError,
+            scope: "route",
+            sessionId: state.sessionId,
+          });
+        }
         if (!invalidatedContext) {
           console.error("[i-Nova Bookmarks] refresh state failed", error);
         }
