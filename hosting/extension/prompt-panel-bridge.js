@@ -25,6 +25,7 @@
   let port = null;
   let currentRequestId = 0;
   let storeFeedSnapshots = new Map();
+  let storeFeedReadyPages = new Set();
   let storeSummarySnapshot = null;
   let storeLatestEmitTimer = 0;
   let lastStoreLatestSignature = "";
@@ -282,8 +283,9 @@
   }
 
   function flushStoreLatestSnapshot() {
+    const latestFeedPageId = buildLatestFeedPageId(0);
     const feedSnapshots = Array.from(storeFeedSnapshots.values());
-    if (!storeSummarySnapshot || !storeFeedSnapshots.has(buildLatestFeedPageId(0))) {
+    if (!storeSummarySnapshot || !storeFeedReadyPages.has(latestFeedPageId)) {
       return;
     }
     const sourceSnapshots = [storeSummarySnapshot, ...feedSnapshots].filter(Boolean);
@@ -366,6 +368,7 @@
     unsubscribeStoreFeeds = new Map();
     storeSummarySnapshot = null;
     storeFeedSnapshots = new Map();
+    storeFeedReadyPages = new Set();
   }
 
   function serializePromptLibraryMeta(snapshot, providerUserKey) {
@@ -472,6 +475,7 @@
       } catch {}
       unsubscribeStoreFeeds.delete(pageId);
       storeFeedSnapshots.delete(pageId);
+      storeFeedReadyPages.delete(pageId);
     }
   }
 
@@ -485,6 +489,7 @@
       .doc(pageId)
       .onSnapshot(
         (snapshot) => {
+          storeFeedReadyPages.add(pageId);
           if (snapshot?.exists) {
             storeFeedSnapshots.set(pageId, snapshot);
           } else {

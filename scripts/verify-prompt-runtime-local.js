@@ -7,9 +7,10 @@ const vm = require("vm");
 
 const root = path.resolve(__dirname, "..");
 
-function main() {
+async function main() {
   verifyPromptRuntimeResolution();
   verifyPromptLocalWiring();
+  await verifyEmptyStoreLatestSnapshot();
   console.log("[verify-prompt-runtime-local] Prompt local runtime contract passed");
 }
 
@@ -81,6 +82,180 @@ function verifyPromptLocalWiring() {
   );
 }
 
+async function verifyEmptyStoreLatestSnapshot() {
+  const messageListeners = [];
+  const portMessages = [];
+  const subscriptions = new Map();
+  const fakePort = {
+    close() {},
+    onmessage: null,
+    postMessage(message) {
+      portMessages.push(message);
+    },
+    start() {},
+  };
+  const fakeAuth = {
+    Auth: null,
+    currentUser: null,
+    async setPersistence() {},
+    async signInWithCustomToken() {
+      this.currentUser = {
+        async getIdToken() {
+          return "emulator-token";
+        },
+        async getIdTokenResult() {
+          return {
+            claims: {
+              promptPanelExpMs: Date.now() + 60000,
+              providerUserKey: "reviewer-1",
+              scope: "prompt-panel",
+            },
+          };
+        },
+      };
+    },
+    useEmulator() {},
+  };
+  const fakeDb = {
+    collection(name) {
+      return {
+        doc(id) {
+          return {
+            get: async () => createSnapshot({}),
+            onSnapshot(onNext, onError) {
+              subscriptions.set(`${name}/${id}`, { onError, onNext });
+              return () => subscriptions.delete(`${name}/${id}`);
+            },
+          };
+        },
+      };
+    },
+    async enablePersistence() {},
+    useEmulator() {},
+  };
+  const context = vm.createContext({
+    Array,
+    Date,
+    JSON,
+    Map,
+    Math,
+    Object,
+    Promise,
+    Set,
+    URL,
+    clearTimeout,
+    console,
+    firebase: {
+      auth: {
+        Auth: {
+          Persistence: {
+            SESSION: "SESSION",
+          },
+        },
+      },
+      firestore: {
+        setLogLevel() {},
+      },
+      initializeApp() {
+        return {
+          auth() {
+            return fakeAuth;
+          },
+          firestore() {
+            return fakeDb;
+          },
+        };
+      },
+    },
+    globalThis: null,
+    location: {
+      hostname: "127.0.0.1",
+      origin: "http://127.0.0.1:5000",
+    },
+    setTimeout,
+  });
+  context.globalThis = context;
+  context.addEventListener = (type, handler) => {
+    if (type === "message") {
+      messageListeners.push(handler);
+    }
+  };
+
+  loadScript(path.join("hosting", "extension", "prompt-panel-bridge.js"), context);
+  assert.equal(messageListeners.length, 1, "prompt bridge가 message listener를 등록해야 합니다.");
+
+  messageListeners[0]({
+    data: {
+      source: "inova-prompt-panel-client",
+      type: "connect-port",
+    },
+    origin: "https://inova.incross.com",
+    ports: [fakePort],
+  });
+  assert.equal(portMessages[0]?.type, "ready", "prompt bridge가 port 연결 직후 ready를 보내야 합니다.");
+
+  await fakePort.onmessage({
+    data: {
+      payload: {
+        expiresAt: new Date(Date.now() + 60000).toISOString(),
+        firebaseConfig: { projectId: "browser-extension-main" },
+        firebaseCustomToken: "custom-token",
+        firestoreCollections: {
+          accountsCollection: "integration_inova_accounts",
+          storeDetailCollection: "prompt_store_entry_details",
+          storeFeedCollection: "prompt_store_feed_pages",
+          storeSummaryCollection: "prompt_store_meta",
+        },
+        promptLibraryId: "prompt-library-1",
+        promptPanelScope: "prompt-panel",
+        providerUserKey: "reviewer-1",
+      },
+      requestId: 7,
+      type: "connect",
+    },
+  });
+  assert(portMessages.some((message) => message?.type === "connected"), "prompt bridge가 connect 후 connected를 보내야 합니다.");
+
+  await fakePort.onmessage({
+    data: {
+      payload: {},
+      requestId: 7,
+      type: "subscribe-store-latest",
+    },
+  });
+
+  const summarySubscription = subscriptions.get("prompt_store_meta/summary");
+  const latestFeedSubscription = subscriptions.get("prompt_store_feed_pages/latest__all__0000");
+  assert(summarySubscription?.onNext, "store summary 구독이 등록돼야 합니다.");
+  assert(latestFeedSubscription?.onNext, "store latest 첫 페이지 구독이 등록돼야 합니다.");
+
+  summarySubscription.onNext(createSnapshot({
+    exists: false,
+    metadata: { fromCache: false, hasPendingWrites: false },
+  }));
+  await delay(80);
+  assert.equal(
+    portMessages.filter((message) => message?.type === "store-latest").length,
+    0,
+    "첫 feed 페이지 응답 전에는 store-latest를 보내면 안 됩니다."
+  );
+
+  latestFeedSubscription.onNext(createSnapshot({
+    data: {
+      items: [],
+      pageNumber: 0,
+    },
+    exists: false,
+    metadata: { fromCache: false, hasPendingWrites: false },
+  }));
+  await delay(80);
+
+  const storeLatestMessages = portMessages.filter((message) => message?.type === "store-latest");
+  assert.equal(storeLatestMessages.length, 1, "빈 로컬 스토어도 store-latest 빈 스냅샷을 보내야 합니다.");
+  assert.deepEqual(storeLatestMessages[0].payload.items, []);
+  assert.equal(storeLatestMessages[0].payload.summary.totalPublished, 0);
+}
+
 function loadFirebaseConfig() {
   const context = vm.createContext({
     chrome: {
@@ -142,9 +317,24 @@ function loadScript(relativePath, context) {
   new vm.Script(source, { filename: relativePath }).runInContext(context);
 }
 
-try {
-  main();
-} catch (error) {
+function createSnapshot({ data = {}, exists = true, metadata = {} }) {
+  return {
+    data() {
+      return data;
+    },
+    exists,
+    metadata: {
+      fromCache: Boolean(metadata.fromCache),
+      hasPendingWrites: Boolean(metadata.hasPendingWrites),
+    },
+  };
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+main().catch((error) => {
   console.error(`[verify-prompt-runtime-local] ${error.stack || error.message}`);
   process.exitCode = 1;
-}
+});
