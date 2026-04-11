@@ -35,7 +35,9 @@ const requiredFiles = [
   path.join("scripts", "install-git-hooks.js"),
   "shared/prompt-library.js",
   path.join("scripts", "verify-feature-doc-update.js"),
+  path.join("scripts", "verify-panel-prompt-controller.js"),
   "content/main.js",
+  "content/panel-prompt-controller.js",
   "content/prompt-hub-state.js",
   "content/prompt-hub-panel.js",
   "content/prompt-hub-controller.js",
@@ -175,7 +177,7 @@ const codeChecks = [
   {
     file: "content/main.js",
     patterns: [
-      /promptManager/,
+      /panelPromptController/,
       /renderPanel/,
     ],
   },

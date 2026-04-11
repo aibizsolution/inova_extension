@@ -3,23 +3,26 @@
   const PANEL_OPEN_KEY = "inova-plus.panel-open";
 
   function create(state, deps = {}) {
-    const cloudSyncManager = deps.cloudSyncManager || { scheduleSync() {} };
-    const isPaused = typeof deps.isPaused === "function" ? deps.isPaused : () => false;
     const isStoreTabActive = typeof deps.isStoreTabActive === "function" ? deps.isStoreTabActive : () => false;
-    const isToolSurface = typeof deps.isToolSurface === "function" ? deps.isToolSurface : () => false;
     const logPanelDebug = typeof deps.logPanelDebug === "function" ? deps.logPanelDebug : () => {};
     const meetingManager = deps.meetingManager || { scheduleSync() {} };
-    const promptRealtimeManager = deps.promptRealtimeManager || { scheduleSync() {} };
     const providerIdentitySync = deps.providerIdentitySync || { async syncToStorage() { return false; } };
     const releaseManager = deps.releaseManager || { ensureChecked() {} };
     const render = typeof deps.render === "function" ? deps.render : () => {};
-    const shouldRunPromptCloudSync = typeof deps.shouldRunPromptCloudSync === "function" ? deps.shouldRunPromptCloudSync : () => false;
-    const storeManager = deps.storeManager || { ensureLoaded() {} };
+    const schedulePromptCloudSyncIfNeeded = typeof deps.schedulePromptCloudSyncIfNeeded === "function"
+      ? deps.schedulePromptCloudSyncIfNeeded
+      : () => {};
+    const schedulePromptRealtimeSync = typeof deps.schedulePromptRealtimeSync === "function"
+      ? deps.schedulePromptRealtimeSync
+      : () => {};
+    const ensureStoreLoaded = typeof deps.ensureStoreLoaded === "function"
+      ? deps.ensureStoreLoaded
+      : () => {};
 
     function handleVisibilityChange() {
       if (global.document.visibilityState !== "visible") {
         meetingManager.scheduleSync(0);
-        promptRealtimeManager.scheduleSync(0);
+        schedulePromptRealtimeSync(0);
         logPanelDebug("panel.ui.visibility.hidden", {
           scope: "panel-ui",
           tool: "panel",
@@ -28,11 +31,9 @@
         return;
       }
       void providerIdentitySync.syncToStorage("visibility-visible");
-      if (shouldRunPromptCloudSync()) {
-        cloudSyncManager.scheduleSync(320);
-      }
+      schedulePromptCloudSyncIfNeeded(320);
       meetingManager.scheduleSync(320);
-      promptRealtimeManager.scheduleSync(320);
+      schedulePromptRealtimeSync(320);
       if (state.open) {
         releaseManager.ensureChecked();
       }
@@ -45,11 +46,9 @@
 
     function handleWindowFocus() {
       void providerIdentitySync.syncToStorage("window-focus");
-      if (shouldRunPromptCloudSync()) {
-        cloudSyncManager.scheduleSync(320);
-      }
+      schedulePromptCloudSyncIfNeeded(320);
       meetingManager.scheduleSync(320);
-      promptRealtimeManager.scheduleSync(320);
+      schedulePromptRealtimeSync(320);
       if (state.open) {
         releaseManager.ensureChecked();
       }
@@ -84,10 +83,10 @@
           state.open = true;
         }
         if (!hadComposer && hasComposer && isStoreTabActive()) {
-          storeManager.ensureLoaded();
+          ensureStoreLoaded();
         }
         meetingManager.scheduleSync(hasComposer ? 120 : 0);
-        promptRealtimeManager.scheduleSync(120);
+        schedulePromptRealtimeSync(120);
         if (previousSurface.hasComposer !== nextSurface.hasComposer || previousSurface.hasChatLog !== nextSurface.hasChatLog) {
           logPanelDebug("panel.ui.surface.changed", {
             hadChatLog: previousSurface.hasChatLog,
@@ -108,13 +107,11 @@
         state.preferredOpen = state.open;
         writePanelOpenPreference(state.open);
       }
-      if (shouldRunPromptCloudSync()) {
-        cloudSyncManager.scheduleSync(220);
-      }
+      schedulePromptCloudSyncIfNeeded(220);
       meetingManager.scheduleSync(state.open ? 220 : 0);
-      promptRealtimeManager.scheduleSync(state.open ? 220 : 0);
+      schedulePromptRealtimeSync(state.open ? 220 : 0);
       if (state.open && isStoreTabActive()) {
-        storeManager.ensureLoaded();
+        ensureStoreLoaded();
       }
       if (state.open) {
         releaseManager.ensureChecked(false, state.activeTool === "release");

@@ -54,6 +54,7 @@ const FEATURE_DOC_RULES = [
       /^content\/prompt-hub-panel\.js$/,
       /^content\/prompt-hub-controller\.js$/,
       /^content\/prompt-hub-runtime\.js$/,
+      /^content\/panel-prompt-controller\.js$/,
     ],
   },
   {

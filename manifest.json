@@ -80,6 +80,7 @@
         "content/panel.js",
         "content/panel-meeting-controller.js",
         "content/panel-debug-controller.js",
+        "content/panel-prompt-controller.js",
         "content/panel-lifecycle-controller.js",
         "content/main.js"
       ],

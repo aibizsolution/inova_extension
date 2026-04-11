@@ -15,7 +15,8 @@
 - `content/features/prompt-library/cloud-sync-manager.js`
 
 ## 관련 프론트 경로
-- `content/main.js`
+- `content/panel-prompt-controller.js` - prompt tool shell composition root
+- `content/main.js` - panel shell composition root, prompt shell 직접 구현 금지
 - `content/prompt-hub-state.js` - prompt 탭 상태를 묶는 prompt tool shell
 - `content/prompt-hub-panel.js` - prompt/store 상호작용을 묶는 prompt tool shell
 - `content/prompt-hub-controller.js` - prompt 탭 전이와 액션 라우팅을 묶는 prompt tool shell

@@ -13,14 +13,18 @@ async function main() {
 
   assert(harness.callbacks, "Panel callbacks should be registered");
   assert.equal(typeof harness.callbacks.onMeetingAction, "function");
+  assert.equal(typeof harness.callbacks.onPromptAction, "function");
   assert.equal(typeof harness.callbacks.onSelectTool, "function");
   assert.equal(typeof harness.callbacks.onToggle, "function");
 
   const initialPayload = harness.renderPayloads.at(-1);
   assert(initialPayload, "Panel should render at least once");
   assert.equal(initialPayload.meetingTool.count, 2);
+  assert.equal(initialPayload.promptTool.activeTab, "library");
   assert.equal(initialPayload.panelDebug.enabled, true);
   assert.equal(initialPayload.tools.length, 4);
+  assert.equal(harness.reviewFloatEnsured, 1);
+  assert.equal(harness.reviewFloatStates.at(-1)?.visible, true);
 
   await harness.callbacks.onMeetingAction("debug-toggle", {});
   assert.deepEqual(harness.debugActions, ["debug-toggle"]);
@@ -28,6 +32,22 @@ async function main() {
 
   await harness.callbacks.onMeetingAction("share", { meetingId: "meeting-alpha" });
   assert.deepEqual(harness.meetingActions, [{ action: "share", detail: { meetingId: "meeting-alpha" } }]);
+
+  harness.callbacks.onPromptAction("save-prompt", { promptId: "prompt-1" });
+  harness.callbacks.onPromptDraftChange("title", "새 제목");
+  harness.callbacks.onSelectPromptTab("store");
+  harness.callbacks.onSearch("prompts", "회의");
+  harness.callbacks.onSearch("store", "공개", { composing: true });
+  harness.callbacks.onSearchSubmit("store", "공개");
+
+  assert.deepEqual(harness.promptActions, [{ action: "save-prompt", detail: { promptId: "prompt-1" } }]);
+  assert.deepEqual(harness.promptDrafts, [{ field: "title", value: "새 제목" }]);
+  assert.deepEqual(harness.promptTabSelections, ["store"]);
+  assert.deepEqual(harness.promptQueries, [
+    { options: {}, toolId: "prompts", value: "회의" },
+    { options: { composing: true }, toolId: "store", value: "공개" },
+  ]);
+  assert.deepEqual(harness.promptSubmitQueries, [{ toolId: "store", value: "공개" }]);
 
   harness.callbacks.onToggle(false);
   assert.deepEqual(harness.toggleCalls, [false]);
@@ -44,6 +64,12 @@ function createHarness() {
   const controllerEvents = {
     debugActions: [],
     meetingActions: [],
+    promptActions: [],
+    promptDrafts: [],
+    promptQueries: [],
+    promptSubmitQueries: [],
+    promptTabSelections: [],
+    reviewFloatStates: [],
     toggleCalls: [],
   };
   const ensureCalls = [];
@@ -93,7 +119,14 @@ function createHarness() {
     callbacks: ensureCalls[0]?.callbacks || null,
     debugActions: controllerEvents.debugActions,
     meetingActions: controllerEvents.meetingActions,
+    promptActions: controllerEvents.promptActions,
+    promptDrafts: controllerEvents.promptDrafts,
+    promptQueries: controllerEvents.promptQueries,
+    promptSubmitQueries: controllerEvents.promptSubmitQueries,
+    promptTabSelections: controllerEvents.promptTabSelections,
     renderPayloads,
+    reviewFloatEnsured: controllerEvents.reviewFloatEnsured || 0,
+    reviewFloatStates: controllerEvents.reviewFloatStates,
     storageListeners,
     toggleCalls: controllerEvents.toggleCalls,
     async flush() {
@@ -106,9 +139,6 @@ function createHarness() {
 function buildNamespace({ controllerEvents, ensureCalls, renderPayloads }) {
   const namespace = {
     cloudSync: {
-      hasPendingPromptSync() {
-        return false;
-      },
       mergeCloudSyncState() {
         return {
           providerIdentity: {
@@ -118,17 +148,10 @@ function buildNamespace({ controllerEvents, ensureCalls, renderPayloads }) {
         };
       },
     },
-    cloudSyncManager: {
-      create() {
-        return {
-          handleStorageChange() {},
-          scheduleSync() {},
-        };
-      },
-    },
     composerReviewFloat: {
-      ensure() {},
-      render() {},
+      render(payload) {
+        controllerEvents.reviewFloatStates.push(cloneValue(payload));
+      },
     },
     constants: {
       defaults: {
@@ -227,58 +250,62 @@ function buildNamespace({ controllerEvents, ensureCalls, renderPayloads }) {
         };
       },
     },
-    promptHubRuntime: {
+    panelPromptController: {
       create() {
         return {
-          promptHubController: {
-            handleEscape() {
+          buildReviewFloatState(visible) {
+            return {
+              open: false,
+              visible,
+            };
+          },
+          buildToolState() {
+            return {
+              promptCount: 1,
+              promptTool: { activeTab: "library", tabs: [] },
+              promptToolCount: 1,
+            };
+          },
+          ensureReviewFloat() {
+            controllerEvents.reviewFloatEnsured = (controllerEvents.reviewFloatEnsured || 0) + 1;
+          },
+          ensureStoreLoaded() {},
+          handleDraftChange(field, value) {
+            controllerEvents.promptDrafts.push({ field, value });
+          },
+          handleEscape() {
+            return false;
+          },
+          handleImportFile() {},
+          handlePromptAction(action, detail) {
+            controllerEvents.promptActions.push({ action, detail: cloneValue(detail) });
+          },
+          handleStorageChange() {},
+          handleStoreAction() {},
+          movePromptItem() {},
+          scheduleCloudSyncIfNeeded() {},
+          scheduleRealtimeSync() {},
+          selectPromptTab(promptTabId) {
+            controllerEvents.promptTabSelections.push(promptTabId);
+          },
+          async selectTool(toolId) {
+            return toolId === "prompts" || toolId === "store";
+          },
+          submitQuery(toolId, value) {
+            if (toolId !== "prompts" && toolId !== "store") {
               return false;
-            },
-            handlePromptAction() {},
-            handleStoreAction() {},
-            movePromptItem() {},
-            selectPromptTab() {},
+            }
+            controllerEvents.promptSubmitQueries.push({ toolId, value });
+            return true;
           },
-          promptManager: {
-            handleImportFile() {},
-            updateDraft() {},
-          },
-          promptRealtimeManager: {
-            scheduleSync() {},
-          },
-          promptReviewManager: {
-            buildViewState() {
-              return { open: false };
-            },
-            handleAction() {},
-          },
-          storeManager: {
-            ensureLoaded() {},
-            handleQueryChange() {},
-            submitQuery() {},
+          updateQuery(toolId, value, options = {}) {
+            if (toolId !== "prompts" && toolId !== "store") {
+              return false;
+            }
+            controllerEvents.promptQueries.push({ options: cloneValue(options), toolId, value });
+            return true;
           },
         };
-      },
-    },
-    promptHubState: {
-      buildPromptRenderState() {
-        return {
-          promptCount: 1,
-          promptTool: { activeTab: "library", tabs: [] },
-          promptToolCount: 1,
-        };
-      },
-      getActivePromptTab() {
-        return "library";
-      },
-      isStoreTabActive() {
-        return false;
-      },
-      normalizePromptTab(promptTabId) {
-        return promptTabId === "store" || promptTabId === "review" ? promptTabId : "library";
-      },
-      shouldRunPromptCloudSync() {
-        return false;
       },
     },
     promptLibrary: {

@@ -28,6 +28,7 @@
     "content/meeting-manager.js",
     "content/meeting-view.js",
     "content/panel.js",
+    "content/panel-prompt-controller.js",
     "content/features/prompt-library/prompt-manager.js",
     "content/features/prompt-library/prompt-view.js",
     "content/features/prompt-store/store-manager.js",
@@ -46,7 +47,8 @@
     "scripts/verify-contracts.js",
     "scripts/verify-meeting-manager.js",
     "scripts/verify-meeting-service.js",
-    "scripts/verify-meeting-state.js"
+    "scripts/verify-meeting-state.js",
+    "scripts/verify-panel-prompt-controller.js"
   ],
   "manifestPopup": "popup/index.html",
   "manifestContentScripts": [
@@ -86,6 +88,10 @@
     "content/prompt-hub-state.js",
     "content/release-manager.js",
     "content/panel.js",
+    "content/panel-meeting-controller.js",
+    "content/panel-debug-controller.js",
+    "content/panel-prompt-controller.js",
+    "content/panel-lifecycle-controller.js",
     "content/main.js"
   ],
   "popupScripts": [

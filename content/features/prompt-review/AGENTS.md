@@ -13,7 +13,8 @@
 - `content/features/prompt-review/composer-review-float.js`
 
 ## 관련 프론트 경로
-- `content/main.js`
+- `content/panel-prompt-controller.js` - prompt tool shell composition root
+- `content/main.js` - panel shell composition root, prompt shell 직접 구현 금지
 - `content/composer.js`
 - `content/prompt-hub-state.js` - review 탭 포함 여부를 조정하는 prompt tool shell
 - `content/prompt-hub-panel.js` - review 탭 선택과 prompt shell 상호작용을 묶는 prompt tool shell

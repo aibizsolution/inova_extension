@@ -434,6 +434,9 @@
 - 패널 shell 책임 정리:
   - 패널 리팩토링은 `0.4.4` 사용자가 쓰는 DB 구조와 legacy lane 계약을 유지한 채, 확장 내부 책임만 meeting/debug/lifecycle 경계로 나누는 범위로 둔다.
   - `manifest.json` 변경은 새 패널 controller 파일을 확장 번들에 포함하기 위한 wiring이며, hosted origin/path, Functions 이름, storage key, runtime message 계약은 바꾸지 않는다.
+- prompt shell 책임 정리:
+  - prompt/store/review shell은 `content/panel-prompt-controller.js` 경계로 묶고, `content/main.js`는 더 이상 prompt runtime manager 조립과 review float 상태 계산을 직접 소유하지 않는다.
+  - 이번 prompt shell 분리는 legacy lane, prompt DB 구조, lane별 collection 규칙, background/runtime message 계약을 바꾸지 않는 내부 책임 재배치로 둔다.
 - 현재 문서 판단:
   - meeting 리팩토링의 남은 일은 추가 분해보다 `minor로 닫을 수 있는지`를 기록으로 마무리하는 쪽에 가깝다.
   - 다음 문서 작업은 핵심 사용자 흐름 증거를 같은 형식으로 정리해 `minor candidate ready` 여부를 닫는 것이다.
