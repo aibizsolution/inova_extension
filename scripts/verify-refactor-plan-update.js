@@ -71,8 +71,8 @@ function main() {
 
   if (failures.length > 0) {
     fail([
-      "장기 판단 기준에 영향을 주는 파일이 바뀌었는데 docs/refactoring-plan.md가 같이 갱신되지 않았어요.",
-      "ordinary feature 구현 변경은 이 가드 대상이 아니지만, version lane, legacy/v2 baseline, release gate 같은 비가역 결정은 이 문서에 먼저 맞춰 주세요.",
+      "장기 version/release 판단 기준에 영향을 주는 파일이 바뀌었는데 docs/refactoring-plan.md가 같이 갱신되지 않았어요.",
+      "ordinary feature 구현 변경은 이 가드 대상이 아니지만, version lane, meeting legacy baseline, release decision 같은 비가역 결정은 이 문서에 먼저 맞춰 주세요.",
       "",
       ...failures.flatMap((failure) => [
         `[${failure.scope}]`,
@@ -84,7 +84,7 @@ function main() {
     ].join("\n").trim());
   }
 
-  console.log("Refactoring plan 업데이트 가드 통과");
+  console.log("Version decision note 업데이트 가드 통과");
 }
 
 function buildRuleFailure(rule, changedFiles) {

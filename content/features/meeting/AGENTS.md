@@ -6,7 +6,7 @@
 ## 문서 갱신 규칙
 - 이 feature의 entrypoint, hosted/panel 공통 불변식, auth/recovery 경계, 최소 검증 기준이 바뀌면 이 문서를 같은 작업 안에서 갱신한다.
 - `README.md`가 아니라 meeting feature-local 규칙과 계약은 이 문서나 meeting 전용 docs에 문서화한다.
-- meeting endpoint/auth/collection baseline, version gate, candidate 판단 기준은 `docs/refactoring-plan.md`에서 관리한다.
+- meeting endpoint/auth/collection baseline과 version/release 판단 기준은 `docs/refactoring-plan.md`에서 관리한다.
 - hosted debug console 검증과 증거 수집 절차는 `docs/meeting-debug-console-validation.md`에서 관리한다.
 - Functions runtime sizing과 운영 튜닝 기준은 `docs/functions-runtime-guide.md`에서 관리한다.
 
@@ -24,7 +24,7 @@
 - hosted recovery/self-healing 경로는 `hosting/meeting/workspace-recovery.js`를 먼저 본다.
 
 ## hosted/panel 공통 경계
-- legacy lane은 현재 `browser-extension-main` hosted meeting 경로를 유지한다. separate hosted origin/site 판단은 `docs/refactoring-plan.md`의 version gate에서 관리한다.
+- legacy lane은 현재 `browser-extension-main` hosted meeting 경로를 유지한다. separate hosted origin/site 판단은 `docs/refactoring-plan.md`의 version decision gate에서 관리한다.
 - 팝업의 `로컬 호스팅` target은 hosted meeting URL만 바꾸는 모드가 아니다. local target에서는 meeting panel bridge와 meeting HTTP auth/list/share 경로도 함께 local Functions/Auth/Firestore emulator를 보도록 유지한다.
 - hosted Firestore 읽기와 listener 연결은 local state만으로 시작하지 않고 `ensureWorkspaceAuth()`가 custom-token sign-in 완료를 보장한 뒤에만 진행한다.
 - owner-secure hosted 작업실은 `authorizeInovaMeetingWorkspaceAccess`가 돌려주는 `meetingSessionToken`을 세션에 보존해야 하며, 업로드와 작업실 mutation은 이 토큰을 기준으로 인증한다.
