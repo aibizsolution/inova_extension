@@ -66,6 +66,10 @@
     invokeRuntime,
     scheduleRender,
   }) || null;
+  const meetingHubController = namespace.meetingHubController?.create?.({
+    invokeRuntime,
+    scheduleRender,
+  }) || null;
   const callbacks = createCallbacks();
 
   namespace.hostedPanelApp = api;
@@ -136,6 +140,18 @@
         });
       },
       onMeetingAction(meetingAction, detail = {}) {
+        if (meetingHubController?.handleMeetingAction) {
+          return meetingHubController.handleMeetingAction(meetingAction, detail).then((handled) => {
+            if (handled !== false) {
+              return handled;
+            }
+            return request("panel", {
+              action: "meeting-action",
+              detail,
+              meetingAction,
+            });
+          });
+        }
         return request("panel", {
           action: "meeting-action",
           detail,
@@ -531,6 +547,7 @@
     promptLibraryController?.syncPanelState?.(panelState, state.extensionCapabilities);
     promptReviewController?.syncPanelState?.(panelState, state.extensionCapabilities);
     promptStoreController?.syncPanelState?.(panelState, state.extensionCapabilities);
+    meetingHubController?.syncPanelState?.(panelState, state.extensionCapabilities);
     ensureShell();
     const elements = state.elements;
     if (!elements) {
@@ -538,8 +555,12 @@
     }
     const effectivePromptTool = buildEffectivePromptToolState(panelState);
     const effectivePromptCount = readEffectivePromptCount(panelState, effectivePromptTool);
+    const effectiveMeetingTool = buildEffectiveMeetingToolState(panelState);
+    const effectiveMeetingCount = readEffectiveMeetingCount(panelState, effectiveMeetingTool);
     const effectiveToolCount = panelState.activeTool === "prompts"
       ? readEffectivePromptToolCount(effectivePromptTool, effectivePromptCount)
+      : panelState.activeTool === "meeting"
+        ? effectiveMeetingCount
       : Number(panelState.toolCount) || 0;
     const focusedControl = captureFocusedControl(elements.app);
     const previousStoreScrollTop = panelState.activeTool === "prompts" && effectivePromptTool?.activeTab === "store"
@@ -547,7 +568,7 @@
       : 0;
 
     const nextToolRailHtml = renderToolRail(
-      buildEffectiveTools(panelState.tools || [], effectivePromptCount),
+      buildEffectiveTools(panelState.tools || [], effectivePromptCount, effectiveMeetingCount),
       panelState.activeTool
     );
     if (state.renderCache.toolRailHtml !== nextToolRailHtml) {
@@ -652,7 +673,7 @@
       return buildEffectivePromptToolState(panelState);
     }
     if (panelState.activeTool === "meeting") {
-      return panelState.meetingTool;
+      return buildEffectiveMeetingToolState(panelState);
     }
     if (panelState.activeTool === "release") {
       return panelState.releaseTool;
@@ -668,7 +689,7 @@
           || renderToolFailure();
       }
       if (panelState.activeTool === "meeting") {
-        return namespace.meetingView?.render?.(panelState.meetingTool) || renderToolFailure();
+        return namespace.meetingView?.render?.(buildEffectiveMeetingToolState(panelState)) || renderToolFailure();
       }
       if (panelState.activeTool === "release") {
         return namespace.releaseView?.render?.(panelState.releaseTool) || renderToolFailure();
@@ -716,13 +737,29 @@
     return panelState.promptTool;
   }
 
-  function buildEffectiveTools(tools, promptCount) {
-    return (Array.isArray(tools) ? tools : []).map((tool) => tool?.id === "prompts"
-      ? {
+  function buildEffectiveMeetingToolState(panelState) {
+    if (meetingHubController?.hasRequiredCapabilities?.()) {
+      return meetingHubController.buildViewState(panelState.meetingTool || {});
+    }
+    return panelState.meetingTool;
+  }
+
+  function buildEffectiveTools(tools, promptCount, meetingCount) {
+    return (Array.isArray(tools) ? tools : []).map((tool) => {
+      if (tool?.id === "prompts") {
+        return {
           ...tool,
           count: promptCount,
-        }
-      : tool);
+        };
+      }
+      if (tool?.id === "meeting") {
+        return {
+          ...tool,
+          count: meetingCount,
+        };
+      }
+      return tool;
+    });
   }
 
   function readEffectivePromptCount(panelState, effectivePromptTool) {
@@ -756,6 +793,19 @@
       return 0;
     }
     return promptCount;
+  }
+
+  function readEffectiveMeetingCount(panelState, effectiveMeetingTool) {
+    const hostedCount = Math.max(
+      0,
+      Number(effectiveMeetingTool?.count)
+        || (Array.isArray(effectiveMeetingTool?.items) ? effectiveMeetingTool.items.length : 0)
+    );
+    const snapshotCount = Math.max(
+      0,
+      Number((panelState.tools || []).find((tool) => tool.id === "meeting")?.count)
+    );
+    return hostedCount || snapshotCount;
   }
 
   function renderStatusCard(options = {}) {
