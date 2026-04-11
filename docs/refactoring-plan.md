@@ -67,6 +67,7 @@ ordinary feature 구현 변경은 이 문서의 대상이 아니고, version lan
 - `0.x` legacy lane의 hosted panel 기본 경로는 `https://browser-extension-main.web.app/extension/panel/index.html`이다.
 - `1.x+` v2 lane은 같은 규칙으로 `hosting/extension-v2/panel/*`와 `panelAppUrl`을 사용한다.
 - 현재 단계에서는 `hosting/extension-v2/panel/*` scaffold와 lane-aware path 해석만 먼저 준비하고, 공개 기준선 `0.4.x`는 아직 legacy lane에 남긴다.
+- extension composition root도 lane-aware로 분리한다. `0.x`는 기존 `content/panel-composition-controller.js`, `1.x+`는 `content/panel-v2-composition-controller.js`를 사용하되, 이 단계의 v2 composition은 feature ownership을 옮기지 않고 shell/runtime wiring만 유지한다.
 - local rehearsal에서 hosted panel 기본 경로는 `http://127.0.0.1:5000/extension/panel/index.html`이다.
 - local rehearsal에서 `1.x+` v2 lane hosted panel 기본 경로는 `http://127.0.0.1:5000/extension-v2/panel/index.html`이다.
 - local rehearsal에서 page DOM에 삽입되는 hosted panel/meeting bridge/prompt bridge iframe src는 direct loopback URL이 아니라 extension `content/frame-proxy.html?target=...` wrapper를 사용한다. 실제 target URL baseline은 계속 `127.0.0.1:5000/*`로 유지하고, manifest는 이 proxy page와 extension frame-src allowlist를 함께 유지한다.

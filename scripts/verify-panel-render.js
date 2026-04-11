@@ -12,6 +12,7 @@ function main() {
   verifyHostedPanelHostBatching();
   verifyLocalPanelRuntimeSwitch();
   verifyPageBridgeEvents();
+  verifyV2CompositionWiring();
   console.log("[verify-panel-render] Hosted panel host contract passed");
 }
 
@@ -96,6 +97,42 @@ function verifyPageBridgeEvents() {
       },
     },
   ]);
+}
+
+function verifyV2CompositionWiring() {
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(root, "manifest.json"), "utf8")
+  );
+  const mainSource = fs.readFileSync(
+    path.join(root, "content", "main.js"),
+    "utf8"
+  );
+  const v2CompositionSource = fs.readFileSync(
+    path.join(root, "content", "panel-v2-composition-controller.js"),
+    "utf8"
+  );
+
+  const mainContentScript = manifest.content_scripts.find((entry) =>
+    Array.isArray(entry?.matches) && entry.matches.includes("https://inova.incross.com/*")
+  );
+  const scriptList = Array.isArray(mainContentScript?.js) ? mainContentScript.js : [];
+
+  assert(
+    scriptList.includes("content/panel-v2-composition-controller.js"),
+    "manifest should load the v2 composition controller before content/main.js"
+  );
+  assert(
+    mainSource.includes("namespace.productLane?.isV2Lane?.()"),
+    "content/main.js should select the v2 composition by lane"
+  );
+  assert(
+    mainSource.includes("namespace.panelV2CompositionController"),
+    "content/main.js should reference the v2 composition root"
+  );
+  assert(
+    v2CompositionSource.includes("namespace.panelBootstrapController.create"),
+    "v2 composition should keep the existing bootstrap controller contract"
+  );
 }
 
 function createHarness() {
