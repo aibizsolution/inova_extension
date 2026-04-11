@@ -277,7 +277,7 @@
       baseConfig.project?.projectId || DEFAULT_WEB_CONFIG.projectId,
       baseConfig.functions?.region || baseConfig.project?.region || "asia-northeast3"
     );
-    const hostingBaseUrl = buildLocalExtensionBaseUrl(workspaceOrigin);
+    const hostingBaseUrl = buildLocalExtensionBaseUrl(workspaceOrigin, baseConfig.activeLane);
     const hostingConfig = buildHostingConfig(hostingBaseUrl, workspaceOrigin, {
       baseUrl: hostingBaseUrl,
       endpointPaths: cloneValue(baseConfig.hosting?.endpointPaths),
@@ -390,8 +390,9 @@
     return `http://${resolvedHost}:${LOCAL_MEETING_DEFAULTS.hostingPort}/meeting/index.html`;
   }
 
-  function buildLocalExtensionBaseUrl(originUrl) {
-    return joinUrl(normalizeOriginUrl(originUrl), "extension");
+  function buildLocalExtensionBaseUrl(originUrl, lane = "legacy") {
+    const panelBasePath = normalizeText(lane).toLowerCase() === "v2" ? "extension-v2" : "extension";
+    return joinUrl(normalizeOriginUrl(originUrl), panelBasePath);
   }
 
   function buildLocalFunctionsBaseUrl(hostname, projectId, region) {

@@ -31,7 +31,7 @@ const hostingRoot = path.join(root, "hosting", productLane === "v2" ? "extension
 const hostingDownloadDir = path.join(hostingRoot, "downloads");
 const hostingReleaseDir = path.join(hostingRoot, "releases");
 const hostingBaseUrl = productLane === "v2"
-  ? "https://browser-extension-v2.web.app/extension"
+  ? "https://browser-extension-v2.web.app/extension-v2"
   : "https://browser-extension-main.web.app/extension";
 const latestDownloadFileName = "latest.zip";
 const publishedAt = new Date().toISOString();

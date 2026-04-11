@@ -9,14 +9,16 @@ const root = path.resolve(__dirname, "..");
 
 async function main() {
   verifyPanelRuntimeResolution();
+  verifyV2PanelRuntimeResolution();
   await verifyHostedPanelBridgeContract();
-  verifyHostedPanelFiles();
+  verifyHostedPanelFiles("extension");
+  verifyHostedPanelFiles("extension-v2");
   verifyBackgroundInvokeWiring();
   console.log("[verify-hosted-panel-bridge] Hosted panel bridge contract passed");
 }
 
 function verifyPanelRuntimeResolution() {
-  const firebaseConfig = loadFirebaseConfig();
+  const firebaseConfig = loadFirebaseConfig("legacy");
   const localRuntime = firebaseConfig.prompt.resolveRuntime({
     meetingWorkspaceTarget: "local",
     meetingWorkspaceUrlOverride: "http://127.0.0.1:5000/meeting/index.html",
@@ -29,6 +31,23 @@ function verifyPanelRuntimeResolution() {
   assert.equal(
     localRuntime.hosting.panelAppUrl,
     "http://127.0.0.1:5000/extension/panel/index.html"
+  );
+}
+
+function verifyV2PanelRuntimeResolution() {
+  const firebaseConfig = loadFirebaseConfig("v2");
+  const localRuntime = firebaseConfig.prompt.resolveRuntime({
+    meetingWorkspaceTarget: "local",
+    meetingWorkspaceUrlOverride: "http://127.0.0.1:5000/meeting/index.html",
+  });
+
+  assert.equal(
+    firebaseConfig.hosting.panelAppUrl,
+    "https://browser-extension-v2.web.app/extension-v2/panel/index.html"
+  );
+  assert.equal(
+    localRuntime.hosting.panelAppUrl,
+    "http://127.0.0.1:5000/extension-v2/panel/index.html"
   );
 }
 
@@ -132,13 +151,14 @@ async function verifyHostedPanelBridgeContract() {
   assert.deepEqual(responseMessage?.message?.payload?.result, { ok: true });
 }
 
-function verifyHostedPanelFiles() {
+function verifyHostedPanelFiles(directoryName) {
+  const baseDir = path.join(root, "hosting", directoryName, "panel");
   const html = fs.readFileSync(
-    path.join(root, "hosting", "extension", "panel", "index.html"),
+    path.join(baseDir, "index.html"),
     "utf8"
   );
   const indexJs = fs.readFileSync(
-    path.join(root, "hosting", "extension", "panel", "index.js"),
+    path.join(baseDir, "index.js"),
     "utf8"
   );
 
@@ -176,12 +196,12 @@ function verifyBackgroundInvokeWiring() {
   );
 }
 
-function loadFirebaseConfig() {
+function loadFirebaseConfig(lane) {
   const context = vm.createContext({
     chrome: {
       runtime: {
         getManifest() {
-          return { version: "0.4.5" };
+          return { version: lane === "v2" ? "1.0.0" : "0.4.5" };
         },
       },
     },
@@ -192,9 +212,35 @@ function loadFirebaseConfig() {
   context.InovaBookmarks = {
     productLane: {
       getActiveLane() {
-        return "legacy";
+        return lane;
       },
       getLaneConfig() {
+        if (lane === "v2") {
+          return {
+            functions: {
+              baseUrl: "https://asia-northeast3-browser-extension-main.cloudfunctions.net",
+              endpointOverrides: {},
+            },
+            hosting: {
+              baseUrl: "https://browser-extension-v2.web.app/extension-v2",
+              originUrl: "https://browser-extension-v2.web.app",
+            },
+            id: "v2",
+            prompt: {
+              firestoreCollections: {
+                accountsCollection: "integration_inova_accounts_v2",
+                storeDetailCollection: "prompt_store_entry_details",
+                storeFeedCollection: "prompt_store_feed_pages",
+                storeSummaryCollection: "prompt_store_meta",
+              },
+              panelScope: "prompt-panel-v2",
+            },
+            storagePrefix: "v2.",
+            web: {
+              projectId: "browser-extension-main",
+            },
+          };
+        }
         return {
           functions: {
             baseUrl: "https://asia-northeast3-browser-extension-main.cloudfunctions.net",

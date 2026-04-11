@@ -6,7 +6,7 @@
   const DEFAULT_LEGACY_HOSTING_ORIGIN = "https://browser-extension-main.web.app";
   const DEFAULT_V2_HOSTING_ORIGIN = "https://browser-extension-v2.web.app";
   const DEFAULT_LEGACY_HOSTING_BASE_URL = `${DEFAULT_LEGACY_HOSTING_ORIGIN}/extension`;
-  const DEFAULT_V2_HOSTING_BASE_URL = `${DEFAULT_V2_HOSTING_ORIGIN}/extension`;
+  const DEFAULT_V2_HOSTING_BASE_URL = `${DEFAULT_V2_HOSTING_ORIGIN}/extension-v2`;
   const KNOWN_LANES = Object.freeze([LEGACY_LANE, V2_LANE]);
   const STORAGE_PREFIX_BY_LANE = Object.freeze({
     [LEGACY_LANE]: "",
