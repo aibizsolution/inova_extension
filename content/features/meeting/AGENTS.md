@@ -28,6 +28,7 @@
 - legacy lane은 현재 `browser-extension-main` hosted meeting 경로를 유지한다. separate hosted origin/site 판단은 `docs/refactoring-plan.md`의 version decision gate에서 관리한다.
 - `0.4.5`부터 panel 안의 회의 허브 UI는 `hosting/extension/panel/meeting-view.js`가 렌더링하고, 회의 목록 state와 action routing은 기존 `content/meeting-manager.js`/`content/panel-meeting-controller.js`가 계속 소유한다.
 - 팝업의 `로컬 호스팅` target은 hosted meeting URL만 바꾸는 모드가 아니다. local target에서는 meeting panel bridge와 meeting HTTP auth/list/share 경로도 함께 local Functions/Auth/Firestore emulator를 보도록 유지한다.
+- local target의 hosted panel iframe과 hidden meeting panel bridge iframe은 page DOM에서 loopback URL을 직접 열지 않는다. 실제 target URL은 `http://127.0.0.1:5000/*`를 유지하되, 페이지에는 extension `content/frame-proxy.html?target=...` wrapper를 꽂아 site CSP로 인한 direct frame block을 피한다.
 - hosted Firestore 읽기와 listener 연결은 local state만으로 시작하지 않고 `ensureWorkspaceAuth()`가 custom-token sign-in 완료를 보장한 뒤에만 진행한다.
 - owner-secure hosted 작업실은 `authorizeInovaMeetingWorkspaceAccess`가 돌려주는 `meetingSessionToken`을 세션에 보존해야 하며, 업로드와 작업실 mutation은 이 토큰을 기준으로 인증한다.
 - hosted 작업실의 `파일 불러오기`는 로컬/상용 hosted 모두 같은 업로드 흐름을 쓴다. origin 차이만으로 버튼을 숨기거나 import 실행을 막지 않는다.

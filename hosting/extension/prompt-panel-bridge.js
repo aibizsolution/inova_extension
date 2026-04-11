@@ -1,5 +1,5 @@
 (function initPromptPanelBridge(global) {
-  const ALLOWED_PARENT_ORIGINS = new Set(["https://inova.incross.com"]);
+  const ALLOWED_PARENT_ORIGINS = buildAllowedParentOrigins();
   const DEFAULT_FIRESTORE_COLLECTIONS = Object.freeze({
     accountsCollection: "integration_inova_accounts",
     storeDetailCollection: "prompt_store_entry_details",
@@ -36,6 +36,15 @@
   let connectedPromptPanelScope = DEFAULT_PROMPT_PANEL_SCOPE;
 
   global.addEventListener("message", handleWindowMessage);
+
+  function buildAllowedParentOrigins() {
+    const origins = new Set(["https://inova.incross.com"]);
+    const referrerOrigin = readReferrerOrigin();
+    if (referrerOrigin.startsWith("chrome-extension://")) {
+      origins.add(referrerOrigin);
+    }
+    return origins;
+  }
 
   function configureFirestoreLogging(firebase) {
     try {
@@ -214,6 +223,14 @@
       }
     });
     return firestorePersistencePromise;
+  }
+
+  function readReferrerOrigin() {
+    try {
+      return new URL(global.document?.referrer || "").origin;
+    } catch {
+      return "";
+    }
   }
 
   function configureFirebaseEmulators() {

@@ -366,10 +366,13 @@
       namespace.panelDebug?.log?.("prompt.panel.unsubscribe.store-latest", { reason, scope: "runtime", tool: "prompts" });
     }
     function ensureBridgeFrame(runtimeConfig) {
-      const bridgeUrl = resolvePromptBridgeUrl(runtimeConfig);
+      const bridgeTarget = namespace.frameProxy?.resolveTarget?.(resolvePromptBridgeUrl(runtimeConfig)) || {
+        origin: readOrigin(resolvePromptBridgeUrl(runtimeConfig)),
+        src: resolvePromptBridgeUrl(runtimeConfig),
+      };
       const existing = global.document.getElementById(BRIDGE_IFRAME_ID);
       if (existing instanceof global.HTMLIFrameElement) {
-        if (namespace.session.normalizeText(existing.src) === bridgeUrl) {
+        if (namespace.session.normalizeText(existing.src) === bridgeTarget.src) {
           return existing;
         }
         existing.remove();
@@ -380,7 +383,7 @@
       }
       const iframe = global.document.createElement("iframe");
       iframe.id = BRIDGE_IFRAME_ID;
-      iframe.src = bridgeUrl;
+      iframe.src = bridgeTarget.src;
       iframe.hidden = true;
       iframe.tabIndex = -1;
       iframe.setAttribute("aria-hidden", "true");
@@ -395,7 +398,10 @@
       return namespace.session.normalizeText(runtimeConfig?.hosting?.promptPanelBridgeUrl) || namespace.session.normalizeText(namespace.firebaseConfig?.hosting?.promptPanelBridgeUrl);
     }
     function resolvePromptBridgeOrigin(runtimeConfig) {
-      return namespace.session.normalizeText(runtimeConfig?.hosting?.originUrl) || namespace.session.normalizeText(namespace.firebaseConfig?.hosting?.originUrl);
+      const bridgeUrl = resolvePromptBridgeUrl(runtimeConfig);
+      const runtimeOrigin = namespace.session.normalizeText(runtimeConfig?.hosting?.originUrl)
+        || namespace.session.normalizeText(namespace.firebaseConfig?.hosting?.originUrl);
+      return namespace.frameProxy?.resolveTarget?.(bridgeUrl)?.origin || runtimeOrigin || readOrigin(bridgeUrl);
     }
     function buildRuntimeConnectionKey(runtimeConfig) {
       return [namespace.session.normalizeText(runtimeConfig?.target) || "production", namespace.session.normalizeText(runtimeConfig?.functions?.baseUrl), resolvePromptBridgeUrl(runtimeConfig)].join("::");
@@ -404,6 +410,13 @@
       const normalizedProviderUserKey = namespace.session.normalizeText(providerUserKey);
       const normalizedRuntimeKey = buildRuntimeConnectionKey(runtimeConfig);
       return normalizedProviderUserKey && normalizedRuntimeKey ? `${normalizedProviderUserKey}::${normalizedRuntimeKey}` : "";
+    }
+    function readOrigin(value) {
+      try {
+        return new URL(String(value || "")).origin;
+      } catch {
+        return "";
+      }
     }
     function rejectBridgeReady(error) {
       if (typeof bridgeReadyReject === "function") {

@@ -7,8 +7,8 @@
     let host = getPanelHost();
     if (host) {
       host.__callbacks = callbacks;
-    host.__panelElements = host.__panelElements || resolvePanelElements(host);
-    host.__bridge = host.__bridge || createHostedBridge(host);
+      host.__panelElements = host.__panelElements || resolvePanelElements(host);
+      host.__bridge = host.__bridge || createHostedBridge(host);
       return host;
     }
     host = document.createElement("div");
@@ -149,7 +149,12 @@
     }
     const runtimeConfig = resolvePanelRuntimeConfig(state?.settings);
     const panelUrl = normalizeText(runtimeConfig?.hosting?.panelAppUrl || namespace.firebaseConfig?.hosting?.panelAppUrl);
-    const panelOrigin = toOrigin(panelUrl);
+    const frameTarget = namespace.frameProxy?.resolveTarget?.(panelUrl) || {
+      origin: toOrigin(panelUrl),
+      src: panelUrl,
+      targetUrl: panelUrl,
+      wrapped: false,
+    };
 
     if (!panelUrl) {
       updateStatusBanner(host, {
@@ -159,12 +164,13 @@
       return;
     }
 
-    host.__bridge.setAllowedOrigin(panelOrigin);
-    if (host.__panelUrl === panelUrl && frame.getAttribute("src") === panelUrl) {
+    host.__bridge.setAllowedOrigin(frameTarget.origin);
+    if (host.__panelUrl === panelUrl && frame.getAttribute("src") === frameTarget.src) {
       return;
     }
 
     host.__panelUrl = panelUrl;
+    host.__panelFrameSrc = frameTarget.src;
     host.__bridgeReady = false;
     host.__bridge.reset("frame-src-change");
     clearHandshakeTimeout(host);
@@ -180,7 +186,7 @@
       text: "호스팅 패널을 여는 중이에요.",
       tone: "info",
     });
-    frame.setAttribute("src", panelUrl);
+    frame.setAttribute("src", frameTarget.src);
   }
 
   async function handleBridgeRequest(host, request) {

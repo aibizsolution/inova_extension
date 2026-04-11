@@ -55,7 +55,11 @@
     }
 
     async function ensurePort(runtimeConfig) {
-      const expectedSrc = resolveBridgeSrc(runtimeConfig);
+      const expectedFrame = namespace.frameProxy?.resolveTarget?.(resolveBridgeSrc(runtimeConfig)) || {
+        origin: readOrigin(resolveBridgeSrc(runtimeConfig)),
+        src: resolveBridgeSrc(runtimeConfig),
+      };
+      const expectedSrc = expectedFrame.src;
       if (
         bridgePort
         && bridgeFrame instanceof global.HTMLIFrameElement
@@ -123,7 +127,7 @@
               source: BRIDGE_MESSAGE_SOURCE,
               type: "connect-port",
             },
-            resolveBridgeOrigin(runtimeConfig),
+            expectedFrame.origin,
             [channel.port2]
           );
         };
@@ -167,7 +171,9 @@
     }
 
     function ensureBridgeFrame(runtimeConfig) {
-      const expectedSrc = resolveBridgeSrc(runtimeConfig);
+      const expectedSrc = (namespace.frameProxy?.resolveTarget?.(resolveBridgeSrc(runtimeConfig)) || {
+        src: resolveBridgeSrc(runtimeConfig),
+      }).src;
       const existing = global.document.getElementById(BRIDGE_IFRAME_ID);
       if (existing instanceof global.HTMLIFrameElement) {
         if (existing.src === expectedSrc) {
@@ -244,12 +250,16 @@
       }
     }
 
-    function resolveBridgeOrigin(runtimeConfig) {
-      return namespace.session.normalizeText(runtimeConfig?.hosting?.originUrl) || namespace.firebaseConfig.hosting.originUrl;
-    }
-
     function resolveBridgeSrc(runtimeConfig) {
       return namespace.session.normalizeText(runtimeConfig?.hosting?.meetingPanelBridgeUrl) || namespace.firebaseConfig.hosting.meetingPanelBridgeUrl;
+    }
+
+    function readOrigin(value) {
+      try {
+        return new URL(String(value || "")).origin;
+      } catch {
+        return "";
+      }
     }
 
     function runAsyncHook(handler, payload) {

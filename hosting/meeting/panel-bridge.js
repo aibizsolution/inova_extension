@@ -1,5 +1,5 @@
 (function initMeetingPanelBridge(global) {
-  const ALLOWED_PARENT_ORIGINS = new Set(["https://inova.incross.com"]);
+  const ALLOWED_PARENT_ORIGINS = buildAllowedParentOrigins();
   const FIRESTORE_PERSISTENCE_OPTIONS = { synchronizeTabs: true };
   const LOCAL_BRIDGE_ORIGINS = new Set([
     "http://127.0.0.1:5000",
@@ -17,6 +17,15 @@
   let currentRequestId = 0;
 
   global.addEventListener("message", handleWindowMessage);
+
+  function buildAllowedParentOrigins() {
+    const origins = new Set(["https://inova.incross.com"]);
+    const referrerOrigin = readReferrerOrigin();
+    if (referrerOrigin.startsWith("chrome-extension://")) {
+      origins.add(referrerOrigin);
+    }
+    return origins;
+  }
 
   function configureFirestoreLogging(firebase) {
     try {
@@ -79,6 +88,14 @@
     port.onmessage = handlePortMessage;
     port.start?.();
     sendMessage("ready", {});
+  }
+
+  function readReferrerOrigin() {
+    try {
+      return new URL(global.document?.referrer || "").origin;
+    } catch {
+      return "";
+    }
   }
 
   async function handlePortMessage(event) {
