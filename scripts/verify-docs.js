@@ -41,6 +41,7 @@ const requiredFiles = [
   path.join("scripts", "verify-panel-activity-controller.js"),
   path.join("scripts", "verify-panel-surface-controller.js"),
   path.join("scripts", "verify-panel-render-controller.js"),
+  path.join("scripts", "verify-panel-bootstrap-controller.js"),
   path.join("scripts", "verify-route-state-controller.js"),
   path.join("scripts", "verify-route-watch-controller.js"),
   "content/main.js",
@@ -50,6 +51,7 @@ const requiredFiles = [
   "content/panel-prompt-controller.js",
   "content/panel-surface-controller.js",
   "content/panel-render-controller.js",
+  "content/panel-bootstrap-controller.js",
   "content/route-state-controller.js",
   "content/route-watch-controller.js",
   "content/prompt-hub-state.js",
@@ -208,8 +210,10 @@ const codeChecks = [
       /panelSurfaceController/,
       /panelActivityController/,
       /panelRenderController/,
+      /panelBootstrapController/,
       /panelPromptController/,
       /panelRenderController\??\.render/,
+      /panelBootstrapController\??\.bootstrap/,
     ],
   },
   {
@@ -266,6 +270,14 @@ const codeChecks = [
       /installRouteWatchers/,
       /wrapHistoryMethod/,
       /startRoutePolling/,
+    ],
+  },
+  {
+    file: "content/panel-bootstrap-controller.js",
+    patterns: [
+      /ensurePanel/,
+      /syncRouteState/,
+      /chrome\??\.storage/,
     ],
   },
   {

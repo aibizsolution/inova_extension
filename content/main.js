@@ -167,62 +167,26 @@
     panelShellController,
     releaseManager,
   });
+  const panelBootstrapController = namespace.panelBootstrapController.create(state, {
+    handlePanelMeetingAction,
+    isStoreTabActive,
+    meetingManager,
+    panelActivityController,
+    panelBookmarkController,
+    panelDebugController,
+    panelLifecycleController,
+    panelPromptController,
+    panelShellController,
+    panelSurfaceController,
+    providerIdentitySync,
+    releaseManager,
+    render,
+    routeStateController,
+    routeSync,
+    routeWatchController,
+  });
 
-  bootstrapContent().catch((error) => console.error("[i-Nova Bookmarks] bootstrap failed", error));
-
-  async function bootstrapContent() {
-    panelLifecycleController.initializeOpenState();
-    void providerIdentitySync.syncToStorage("bootstrap");
-    namespace.contentPanel.ensurePanel({
-      onCopyBookmark: panelBookmarkController.copyBookmarkText,
-      onHandlePositionChange: panelShellController.updateHandlePosition,
-      onImportFile: panelPromptController.handleImportFile,
-      onJumpBookmark: panelBookmarkController.jumpToBookmark,
-      onMeetingAction: handlePanelMeetingAction,
-      onMovePrompt: panelPromptController.movePromptItem,
-      onPromptAction: panelPromptController.handlePromptAction,
-      onPromptDraftChange: panelPromptController.handleDraftChange,
-      onSelectPromptTab: panelPromptController.selectPromptTab,
-      onReleaseAction: releaseManager.handleAction,
-      onSearch: panelShellController.updateQuery,
-      onSearchSubmit: panelShellController.submitQuery,
-      onSelectTool: panelShellController.selectTool,
-      onStoreAction: panelPromptController.handleStoreAction,
-      onEscape: panelPromptController.handleEscape,
-      onToggle: panelLifecycleController.togglePanel,
-    });
-    panelDebugController.installValidationApi();
-    panelPromptController.ensureReviewFloat();
-    routeWatchController.installRouteWatchers();
-    panelSurfaceController.installSurfaceWatchers();
-    global.addEventListener("resize", render, { passive: true });
-    global.addEventListener("focus", panelActivityController.handleWindowFocus, { passive: true });
-    document.addEventListener("visibilitychange", panelActivityController.handleVisibilityChange, { passive: true });
-    chrome.storage.onChanged?.addListener(handleRouteStorageChange);
-    chrome.storage.onChanged?.addListener(panelPromptController.handleStorageChange);
-    chrome.storage.onChanged?.addListener(meetingManager.handleStorageChange);
-    chrome.storage.onChanged?.addListener(releaseManager.handleStorageChange);
-    namespace.panelDebug?.subscribe?.(() => {
-      render();
-    });
-    await routeSync.syncRouteState(true);
-    meetingManager.scheduleSync(260);
-    panelPromptController.scheduleRealtimeSync(260);
-    panelPromptController.scheduleCloudSyncIfNeeded(1800);
-    if (isStoreTabActive()) {
-      panelPromptController.ensureStoreLoaded();
-    }
-    if (state.open || state.activeTool === "release") {
-      releaseManager.ensureChecked(false, state.activeTool === "release");
-    }
-    [450, 1200].forEach((delay) => global.setTimeout(routeSync.scheduleRefresh, delay));
-  }
-
-  function handleRouteStorageChange(changes, areaName) {
-    if (routeStateController.handleStorageChange(changes, areaName)) {
-      routeSync.scheduleRefresh();
-    }
-  }
+  panelBootstrapController.bootstrap().catch((error) => console.error("[i-Nova Bookmarks] bootstrap failed", error));
 
   async function handlePanelMeetingAction(action, detail = {}) {
     if (panelDebugController.handlesAction(action)) {

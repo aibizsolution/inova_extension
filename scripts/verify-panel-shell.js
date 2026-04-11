@@ -29,6 +29,8 @@ async function main() {
   assert.equal(typeof harness.windowListeners.focus, "function");
   assert.equal(typeof harness.documentListeners.visibilitychange, "function");
   assert.equal(harness.activityControllerCreated, 1);
+  assert.equal(harness.bootstrapControllerCreated, 1);
+  assert.equal(harness.bootstrapCalls, 1);
   assert.equal(harness.renderControllerCreated, 1);
   assert.equal(harness.routeWatchInstallCalls, 1);
   assert.equal(harness.surfaceWatchInstallCalls, 1);
@@ -128,11 +130,13 @@ function createHarness() {
   context.addEventListener = (type, handler) => {
     windowListeners[type] = handler;
   };
+  context.globalThis.addEventListener = context.addEventListener;
 
   context.InovaBookmarks = buildNamespace({
     controllerEvents,
     ensureCalls,
     renderPayloads,
+    runtime: context,
   });
 
   loadScript("content/main.js", context);
@@ -142,6 +146,8 @@ function createHarness() {
     bookmarkJumpCalls: controllerEvents.bookmarkJumpCalls,
     callbacks: ensureCalls[0]?.callbacks || null,
     activityControllerCreated: controllerEvents.activityControllerCreated || 0,
+    bootstrapCalls: controllerEvents.bootstrapCalls || 0,
+    bootstrapControllerCreated: controllerEvents.bootstrapControllerCreated || 0,
     debugActions: controllerEvents.debugActions,
     documentListeners,
     handlePositionCalls: controllerEvents.handlePositionCalls,
@@ -168,7 +174,7 @@ function createHarness() {
   };
 }
 
-function buildNamespace({ controllerEvents, ensureCalls, renderPayloads }) {
+function buildNamespace({ controllerEvents, ensureCalls, renderPayloads, runtime }) {
   const namespace = {
     cloudSync: {
       mergeCloudSyncState() {
@@ -277,6 +283,64 @@ function buildNamespace({ controllerEvents, ensureCalls, renderPayloads }) {
         return {
           handleVisibilityChange() {},
           handleWindowFocus() {},
+        };
+      },
+    },
+    panelBootstrapController: {
+      create(_state, deps) {
+        controllerEvents.bootstrapControllerCreated = (controllerEvents.bootstrapControllerCreated || 0) + 1;
+        return {
+          async bootstrap() {
+            controllerEvents.bootstrapCalls = (controllerEvents.bootstrapCalls || 0) + 1;
+            deps.panelLifecycleController.initializeOpenState();
+            void deps.providerIdentitySync.syncToStorage?.("bootstrap");
+            namespace.contentPanel.ensurePanel({
+              onCopyBookmark: deps.panelBookmarkController.copyBookmarkText,
+              onHandlePositionChange: deps.panelShellController.updateHandlePosition,
+              onImportFile: deps.panelPromptController.handleImportFile,
+              onJumpBookmark: deps.panelBookmarkController.jumpToBookmark,
+              onMeetingAction: deps.handlePanelMeetingAction,
+              onMovePrompt: deps.panelPromptController.movePromptItem,
+              onPromptAction: deps.panelPromptController.handlePromptAction,
+              onPromptDraftChange: deps.panelPromptController.handleDraftChange,
+              onSelectPromptTab: deps.panelPromptController.selectPromptTab,
+              onReleaseAction: deps.releaseManager.handleAction,
+              onSearch: deps.panelShellController.updateQuery,
+              onSearchSubmit: deps.panelShellController.submitQuery,
+              onSelectTool: deps.panelShellController.selectTool,
+              onStoreAction: deps.panelPromptController.handleStoreAction,
+              onEscape: deps.panelPromptController.handleEscape,
+              onToggle: deps.panelLifecycleController.togglePanel,
+            });
+            deps.panelDebugController.installValidationApi();
+            deps.panelPromptController.ensureReviewFloat();
+            deps.routeWatchController.installRouteWatchers();
+            deps.panelSurfaceController.installSurfaceWatchers();
+            runtime.addEventListener("resize", deps.render, { passive: true });
+            runtime.addEventListener("focus", deps.panelActivityController.handleWindowFocus, { passive: true });
+            runtime.document.addEventListener("visibilitychange", deps.panelActivityController.handleVisibilityChange, { passive: true });
+            runtime.chrome.storage.onChanged.addListener(() => {
+              deps.routeSync.scheduleRefresh();
+            });
+            runtime.chrome.storage.onChanged.addListener(deps.panelPromptController.handleStorageChange);
+            runtime.chrome.storage.onChanged.addListener(deps.meetingManager.handleStorageChange);
+            runtime.chrome.storage.onChanged.addListener(deps.releaseManager.handleStorageChange);
+            namespace.panelDebug.subscribe(() => {
+              deps.render();
+            });
+            await deps.routeSync.syncRouteState(true);
+            deps.meetingManager.scheduleSync(260);
+            deps.panelPromptController.scheduleRealtimeSync(260);
+            deps.panelPromptController.scheduleCloudSyncIfNeeded(1800);
+            if (deps.isStoreTabActive()) {
+              deps.panelPromptController.ensureStoreLoaded();
+            }
+            if (_state.open || _state.activeTool === "release") {
+              deps.releaseManager.ensureChecked(false, _state.activeTool === "release");
+            }
+            [450, 1200].forEach((delay) => runtime.setTimeout(() => deps.routeSync.scheduleRefresh(), delay));
+          },
+          handleRouteStorageChange() {},
         };
       },
     },

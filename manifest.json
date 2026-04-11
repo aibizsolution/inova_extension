@@ -89,6 +89,7 @@
         "content/panel-activity-controller.js",
         "content/panel-lifecycle-controller.js",
         "content/panel-render-controller.js",
+        "content/panel-bootstrap-controller.js",
         "content/main.js"
       ],
       "css": [
