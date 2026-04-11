@@ -420,6 +420,35 @@ function registerPromptLibraryHandlers(deps) {
       content,
       createdAt: normalizeText(item?.createdAt) || new Date().toISOString(),
       updatedAt: normalizeText(item?.updatedAt) || new Date().toISOString(),
+      importedFrom: normalizeImportedFrom(item?.importedFrom),
+      storePublication: normalizeStorePublication(item?.storePublication),
+    };
+  }
+
+  function normalizeImportedFrom(importedFrom) {
+    const entryId = normalizeText(importedFrom?.entryId);
+    if (!entryId) {
+      return null;
+    }
+    return {
+      authorName: normalizeText(importedFrom?.authorName),
+      categoryId: normalizeText(importedFrom?.categoryId),
+      entryId,
+      importedAt: normalizeText(importedFrom?.importedAt) || new Date().toISOString(),
+      source: normalizeText(importedFrom?.source || "store") || "store",
+    };
+  }
+
+  function normalizeStorePublication(storePublication) {
+    const entryId = normalizeText(storePublication?.entryId);
+    if (!entryId) {
+      return null;
+    }
+    return {
+      categoryId: normalizeText(storePublication?.categoryId),
+      categoryLabel: normalizeText(storePublication?.categoryLabel),
+      entryId,
+      publishedAt: normalizeText(storePublication?.publishedAt) || new Date().toISOString(),
     };
   }
 

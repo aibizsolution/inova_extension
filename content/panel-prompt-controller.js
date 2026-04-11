@@ -32,9 +32,12 @@
     });
 
     function buildToolState() {
-      const promptItems = getFilteredPrompts();
+      const renderablePromptItems = getRenderablePromptItems();
+      const promptItems = getFilteredPrompts(renderablePromptItems);
       return promptHubState.buildPromptRenderState({
         promptItems,
+        promptCount: renderablePromptItems.length,
+        promptLibraryLoading: Boolean(state.promptLibraryLoading),
         promptManager,
         promptReviewManager,
         state,
@@ -148,6 +151,15 @@
       if (settingsChange || cloudSyncChange) {
         scheduleRealtimeSync(240);
       }
+      if (cloudSyncChange) {
+        const previousCloudSync = namespace.cloudSync.mergeCloudSyncState(cloudSyncChange.oldValue);
+        const nextCloudSync = namespace.cloudSync.mergeCloudSyncState(cloudSyncChange.newValue);
+        const previousProviderUserKey = namespace.session.normalizeText(previousCloudSync.providerIdentity?.providerUserKey);
+        const nextProviderUserKey = namespace.session.normalizeText(nextCloudSync.providerIdentity?.providerUserKey);
+        if ((!previousCloudSync.providerIdentity.available && nextCloudSync.providerIdentity.available) || (previousProviderUserKey && nextProviderUserKey && previousProviderUserKey !== nextProviderUserKey)) {
+          scheduleCloudSyncIfNeeded(240);
+        }
+      }
     }
 
     return {
@@ -170,12 +182,19 @@
       updateQuery,
     };
 
-    function getFilteredPrompts() {
+    function getRenderablePromptItems() {
+      const hasCachedPrompts = Array.isArray(state.promptLibrary?.items) && state.promptLibrary.items.length > 0;
+      const canRenderCachedPrompts = state.promptLibraryRemoteReady
+        || (state.cloudSync.degraded && hasCachedPrompts);
+      return canRenderCachedPrompts ? state.promptLibrary.items : [];
+    }
+
+    function getFilteredPrompts(items = []) {
       const query = namespace.session.normalizeText(state.queries.prompts).toLowerCase();
       if (!query) {
-        return state.promptLibrary.items;
+        return items;
       }
-      return state.promptLibrary.items.filter((item) => `${item.title} ${item.content}`.toLowerCase().includes(query));
+      return items.filter((item) => `${item.title} ${item.content}`.toLowerCase().includes(query));
     }
 
     function shouldRunPromptCloudSync() {

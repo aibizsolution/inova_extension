@@ -14,8 +14,11 @@
   function renderBody(state) {
     const showEmptyState = !state.items.length && !state.editor?.open && !state.importReview;
     const hasInlineFeedback = state.feedback?.promptId && state.items.some((item) => item.id === state.feedback.promptId);
+    const metaText = state.loading ? "불러오는 중" : `총 ${state.totalCount}개`;
     const itemsHtml = state.items.length
       ? state.items.map((item) => renderPromptItem(item, state)).join("")
+      : state.loading
+        ? '<div class="inova-bookmark-empty">요청 보관함을 불러오는 중이에요.</div>'
       : showEmptyState
         ? `<div class="inova-bookmark-empty">${escapeHtml(state.emptyText)}</div>`
         : "";
@@ -30,7 +33,7 @@
           placeholder="내 요청 찾기"
         />
         <div class="inova-tool-toolbar__row">
-          <div class="inova-tool-meta">총 ${state.totalCount}개</div>
+          <div class="inova-tool-meta">${metaText}</div>
           <div class="inova-tool-actions inova-tool-actions--toolbar">
             <button type="button" class="inova-tool-button is-primary" data-prompt-action="create">추가</button>
             ${renderToolbarActionWithHelp("import", "가져오기", IMPORT_GUIDE_TEXT)}

@@ -1,7 +1,7 @@
 # prompt-library feature
 
 ## 기능 목적
-- 내 요청 보관함 CRUD, 가져오기/내보내기, 로컬 우선 클라우드 백업 동기화를 다룬다.
+- 내 요청 보관함 CRUD, 가져오기/내보내기, DB 정본(remote-first) 동기화를 다룬다.
 
 ## 문서 갱신 규칙
 - 이 feature의 entrypoint, 데이터 경계, 최소 검증, lane invariant가 바뀌면 이 문서를 같은 작업 안에서 갱신한다.
@@ -52,6 +52,12 @@
 
 ## 언제 범위를 확장할지
 - feature-local과 owned-shared만으로 해결되지 않고 prompt tool shell, panel auth, background cache가 얽힐 때만 platform/shell로 넓힌다.
+
+## 구현 경계
+- 내 요청 보관함은 인터넷 연결 없이는 쓸 수 없는 제품 전제를 따른다. prompt library의 정본은 Firestore/Functions가 들고, `chrome.storage.local`의 `promptLibrary`는 마지막으로 불러온 캐시와 UI 복구용으로만 취급한다.
+- prompt 저장/수정/삭제/순서 변경/가져오기는 local-first queue로 성공처럼 보이면 안 된다. 서버 ack 후 remote load가 끝난 뒤에만 state와 local cache를 갱신한다.
+- 다른 PC에서 삭제/수정한 항목은 prompt-library realtime meta 또는 다음 remote load에서 현재 PC 캐시보다 우선 반영돼야 한다.
+- prompt item의 `importedFrom`, `storePublication` 메타도 DB 정본 경로를 따라 round-trip 되어야 한다. 멀티 PC에서 store import/publish 표식이 로컬에만 남아 사라지지 않게 유지한다.
 
 ## lane 경계
 - `0.4.4` legacy lane은 기존 namespace를 유지한다.

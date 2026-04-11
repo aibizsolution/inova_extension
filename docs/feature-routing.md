@@ -35,7 +35,7 @@
 
 | 항목 | 내용 |
 | --- | --- |
-| 기능 목적 | 내 요청 보관함 CRUD, 가져오기/내보내기, 클라우드 백업 동기화 |
+| 기능 목적 | 내 요청 보관함 CRUD, 가져오기/내보내기, DB 정본(remote-first) 동기화 |
 | 요청 cue | 자주 쓰는 요청, 내 요청, import/export, prompt library, cloud sync |
 | 먼저 볼 파일 | `content/features/prompt-library/prompt-manager.js`, `content/features/prompt-library/prompt-view.js`, `content/features/prompt-library/files.js`, `shared/prompt-library.js`, `content/features/prompt-library/cloud-sync-manager.js` |
 | 관련 프론트 경로 | `content/main.js`, `content/prompt-hub-view.js` (prompt tool shell), `content/prompt-hub-state.js` (prompt tool shell), `content/prompt-hub-panel.js` (prompt tool shell), `content/prompt-hub-controller.js` (prompt tool shell), `content/prompt-hub-runtime.js` (prompt tool shell) |

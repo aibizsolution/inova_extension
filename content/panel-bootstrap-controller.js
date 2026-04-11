@@ -84,7 +84,7 @@
       await routeSync.syncRouteState(true);
       meetingManager.scheduleSync(260);
       panelPromptController.scheduleRealtimeSync(260);
-      panelPromptController.scheduleCloudSyncIfNeeded(1800);
+      panelPromptController.scheduleCloudSyncIfNeeded(260);
       if (isStoreTabActive()) {
         panelPromptController.ensureStoreLoaded();
       }

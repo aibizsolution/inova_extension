@@ -20,6 +20,7 @@
 - `prompt_library_orders`
 - `prompt_library_chunks`
 - `integration_inova_accounts.promptLibraryMeta`
+- prompt item schema는 `id/title/content/createdAt/updatedAt`뿐 아니라 `importedFrom`, `storePublication` 메타도 round-trip 되어야 한다. client-local 표식만 남기지 않는다.
 
 ## 보통 건드리지 말아야 할 범위
 - meeting

@@ -13,9 +13,12 @@
 
     let promptHubController = null;
     const promptManager = namespace.promptManager.create(state, {
+      importPromptLibrary: (...args) => cloudSyncManager.importPromptLibrary(...args),
       publishPrompt: (...args) => promptHubController.publishPrompt(...args),
       persistActiveTool,
       render,
+      removePromptItem: (...args) => cloudSyncManager.removePromptItem(...args),
+      savePromptItem: (...args) => cloudSyncManager.savePromptItem(...args),
     });
     const promptReviewManager = namespace.promptReviewManager.create(state, {
       render,
@@ -24,6 +27,7 @@
 
     let promptRealtimeManager = null;
     const storeManager = namespace.storeManager.create(state, {
+      importStorePrompt: (...args) => cloudSyncManager.importStorePrompt(...args),
       loadStoreDetail: (entryId) => promptRealtimeManager?.loadStoreDetail?.(entryId),
       refreshStoreLatestRealtime: () => {
         promptRealtimeManager?.scheduleSync?.(80);
@@ -45,6 +49,7 @@
     promptRealtimeManager = namespace.promptRealtimeManager.create(state, {
       getActivePromptTab,
       isToolSurface,
+      loadPromptLibraryNow: (...args) => cloudSyncManager.loadPromptLibraryNow(...args),
       onPromptLibraryFallback: (error) => {
         cloudSyncManager.markPromptLibraryFallback?.(error, {
           degradedReason: "prompt-library-realtime-failed",
@@ -76,6 +81,7 @@
       normalizePromptTab,
       onSelectPromptTab: onPromptTabSelected,
       persistActiveTool,
+      cloudSyncManager,
       promptManager,
       promptRealtimeManager,
       promptReviewManager,

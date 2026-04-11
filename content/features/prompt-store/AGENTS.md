@@ -56,3 +56,4 @@
 - prompt realtime bridge connect payload에는 active lane의 `promptPanelScope`와 Firestore collection config를 함께 싣는다. store summary/feed/detail은 shared doc를 계속 읽더라도, prompt-library meta collection은 lane과 auth scope가 맞아야 한다.
 - popup의 `settings.meetingWorkspaceTarget=local`을 고르면 prompt-store도 local full-stack rehearsal로 같이 전환돼야 한다. hidden prompt bridge src는 `http://127.0.0.1:5000/extension/prompt-panel-bridge.html`을 향하고, prompt panel auth/read/write는 local Functions/Auth/Firestore emulator 경로를 써야 한다.
 - local Firestore에 공개 스토어 문서가 아직 없어도 `store-latest` 최초 스냅샷은 빈 목록으로 한 번 전달돼야 한다. 빈 로컬 스토어를 perpetual loading으로 숨기지 않는다.
+- `내 요청으로 가져오기`는 local-first helper로 성공처럼 처리하면 안 된다. prompt-library가 DB 정본일 때는 remote prompt-library mutation이 server-ack 되고 remote reload가 끝난 뒤에만 prompt 탭 state를 갱신한다.

@@ -9,11 +9,13 @@
       handleImportFile,
       updateDraft,
     };
-    function buildViewState(items) {
+    function buildViewState(items, options = {}) {
       const review = state.promptImportReview
         ? { ...state.promptImportReview, summary: namespace.promptLibrary.previewImport(state.promptLibrary, state.promptImportReview.payload, state.promptImportReview.mode) }
         : null;
       const pendingPrompt = state.promptPendingInsert ? getPromptById(state.promptPendingInsert.promptId) : null;
+      const loading = Boolean(options.loading);
+      const totalCount = Math.max(0, Number(options.totalCount) || 0);
 
       return {
         deletePromptId: state.promptDeleteConfirmId,
@@ -25,6 +27,7 @@
         feedback: state.promptFeedback,
         importReview: review,
         items,
+        loading,
         menuPromptId: state.promptMenuId,
         pendingInsert: pendingPrompt ? { promptId: pendingPrompt.id, title: pendingPrompt.title } : null,
         publishCategoryId: state.promptPublishCategoryId,
@@ -34,7 +37,7 @@
         query: state.queries.prompts,
         syncNotice: buildSyncNotice(),
         storeCategories: namespace.promptStore.getCategories().filter((category) => category.id !== "all"),
-        totalCount: state.promptLibrary.items.length,
+        totalCount,
       };
     }
     function buildEditorView() {
@@ -58,20 +61,18 @@
       if (cloudSync.degradedReason === "prompt-library-push-failed") {
         return {
           detail: namespace.session.normalizeText(cloudSync.lastError),
-          message: namespace.cloudSync.hasPendingPromptSync(cloudSync)
-            ? "클라우드 백업 전송이 실패해 로컬 변경을 대기열에 남겨 두었어요. 자동 재시도를 계속합니다."
-            : "클라우드 백업 전송이 실패했어요. 현재는 로컬 요청만 기준으로 보여주고 있어요.",
+          message: "클라우드 요청 보관함 갱신이 실패했어요. 마지막으로 불러온 요청을 그대로 보여주고 있어요.",
         };
       }
       if (cloudSync.dataFreshness === "empty") {
         return {
           detail: namespace.session.normalizeText(cloudSync.lastError),
-          message: "클라우드 요청 보관함 상태를 읽지 못했어요. 로컬에 저장된 요청만 기준으로 계속 사용할게요.",
+          message: "클라우드 요청 보관함을 아직 읽지 못했어요. 잠시 후 다시 시도해 주세요.",
         };
       }
       return {
         detail: namespace.session.normalizeText(cloudSync.lastError),
-        message: "클라우드 동기화 상태 확인이 불안정해 현재 로컬 요청만 기준으로 보여주고 있어요.",
+        message: "클라우드 요청 보관함 상태 확인이 불안정해 마지막으로 불러온 요청을 그대로 보여주고 있어요.",
       };
     }
     async function handleAction(action, detail = {}) {
@@ -132,7 +133,7 @@
       state.promptActionPending = { type: "save-editor" };
       hooks.render();
       try {
-        state.promptLibrary = await namespace.storage.savePromptItem({ content, id: state.promptEditor.id, title });
+        state.promptLibrary = await hooks.savePromptItem({ content, id: state.promptEditor.id, title });
         state.promptEditor = createPromptEditor();
         state.promptMenuId = "";
         state.promptDeleteConfirmId = "";
@@ -189,7 +190,7 @@
       });
       hooks.render();
       try {
-        state.promptLibrary = await namespace.storage.removePromptItem(promptId);
+        state.promptLibrary = await hooks.removePromptItem(promptId);
         state.promptDeleteConfirmId = "";
         state.promptMenuId = "";
         resetPublishState();
@@ -259,7 +260,7 @@
       try {
         const text = await namespace.contentFiles.readTextFile(file);
         const payload = namespace.promptLibrary.parseImportText(text);
-        const result = await namespace.storage.importPromptLibrary(payload, "add");
+        const result = await hooks.importPromptLibrary(payload, "add");
         state.promptLibrary = result.library;
         state.promptImportReview = null;
         state.promptEditor = createPromptEditor();
@@ -303,7 +304,7 @@
         scope: "prompt",
       });
       try {
-        const result = await namespace.storage.importPromptLibrary(state.promptImportReview.payload, state.promptImportReview.mode);
+        const result = await hooks.importPromptLibrary(state.promptImportReview.payload, state.promptImportReview.mode);
         state.promptLibrary = result.library;
         state.promptImportReview = null;
         setFeedback(

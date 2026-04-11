@@ -68,6 +68,8 @@
       cloudSync: namespace.cloudSync.mergeCloudSyncState(),
       releaseInfo: namespace.releaseInfo.mergeReleaseInfo(),
       uiPreferences: namespace.storage.mergeUiPreferences(),
+      promptLibraryLoading: false,
+      promptLibraryRemoteReady: false,
       promptLibrary: namespace.promptLibrary.mergePromptLibrary(),
       promptEditor: createPromptEditorState(),
       promptImportReview: null,

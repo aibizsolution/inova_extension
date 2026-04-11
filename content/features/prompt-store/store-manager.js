@@ -373,7 +373,9 @@
         const providerIdentity = namespace.providerIdentity.getCurrent();
         const result = await sendRuntimeMessage("inova-store:import", { entryId, providerIdentity });
         if (result.entry) {
-          state.promptLibrary = await namespace.storage.importStorePrompt(result.entry);
+          state.promptLibrary = typeof hooks.importStorePrompt === "function"
+            ? await hooks.importStorePrompt(result.entry)
+            : await namespace.storage.importStorePrompt(result.entry);
           mergeEntry(result.entry, { imported: true });
           setFeedback("스토어 프롬프트를 내 요청으로 가져왔어요.", "info", entryId);
           hooks.render();

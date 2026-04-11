@@ -76,11 +76,14 @@
     const promptManager = options.promptManager;
     const promptReviewManager = options.promptReviewManager;
     const storeManager = options.storeManager;
-    const promptState = promptManager.buildViewState(promptItems);
+    const promptCount = Math.max(0, Number(options.promptCount) || 0);
+    const promptState = promptManager.buildViewState(promptItems, {
+      loading: Boolean(options.promptLibraryLoading),
+      totalCount: promptCount,
+    });
     const reviewState = promptReviewManager.buildViewState();
     const activePromptTab = getActivePromptTab(options.state, reviewState.open);
     const storeState = storeManager.buildViewState();
-    const promptCount = Array.isArray(options.state?.promptLibrary?.items) ? options.state.promptLibrary.items.length : 0;
     const storeItems = Array.isArray(options.state?.store?.items) ? options.state.store.items : [];
     const storeCount = Math.max(0, Number(options.state?.store?.totalCount) || storeItems.length);
 
