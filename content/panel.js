@@ -270,6 +270,13 @@
       await global.navigator.clipboard.writeText(text);
       return { copied: true };
     }
+    if (action === "copy-debug-log") {
+      return copyDebugLog(Boolean(payload?.errorsOnly));
+    }
+    if (action === "clear-debug-log") {
+      namespace.panelDebug?.clearEntries?.();
+      return buildDebugState();
+    }
     if (action === "get-composer-state") {
       return namespace.composer?.getComposerState?.() || { available: false, text: "" };
     }
@@ -278,10 +285,46 @@
         applied: Boolean(namespace.composer?.applyPromptText?.(String(payload?.text || ""), normalizeText(payload?.mode) || "replace")),
       };
     }
-    if (action === "get-conversation-state") {
-      return namespace.contentDom?.getConversationState?.() || {};
+    if (action === "get-conversation-state" || action === "get-conversation-snapshot") {
+      return buildConversationSnapshot();
+    }
+    if (action === "jump-conversation-item") {
+      const bookmarkId = normalizeText(payload?.bookmarkId || payload?.itemId);
+      if (!bookmarkId) {
+        return { jumped: false };
+      }
+      namespace.contentPanel.setActiveBookmark(bookmarkId);
+      namespace.contentPanel.focusBookmark(bookmarkId);
+      return {
+        jumped: Boolean(namespace.contentDom?.scrollToMessage?.(bookmarkId, {
+          behavior: "smooth",
+          block: "start",
+        })),
+      };
+    }
+    if (action === "get-debug-state") {
+      return buildDebugState();
     }
     throw new Error("지원하지 않는 page adapter 요청이에요.");
+  }
+
+  async function copyDebugLog(errorsOnly) {
+    const entries = namespace.panelDebug?.getEntries?.() || [];
+    const text = errorsOnly
+      ? namespace.panelDebug?.buildErrorCopyText?.(entries)
+      : namespace.panelDebug?.buildCopyText?.(entries);
+    const normalizedText = String(text || "").trim();
+    if (!normalizedText) {
+      return {
+        copied: false,
+        text: "",
+      };
+    }
+    await global.navigator.clipboard.writeText(normalizedText);
+    return {
+      copied: true,
+      text: normalizedText,
+    };
   }
 
   async function handlePanelRequest(host, payload) {
@@ -367,6 +410,33 @@
       extensionVersion: readExtensionVersion(),
       panel: cloneValue(state),
       panelAppUrl: normalizeText(host.__panelUrl),
+    };
+  }
+
+  function buildConversationSnapshot() {
+    const sessionId = namespace.session?.getSessionId?.() || "";
+    const items = namespace.contentDom?.collectUserMessages?.(sessionId) || [];
+    return {
+      conversation: cloneValue(namespace.contentDom?.getConversationState?.() || {}),
+      items: cloneValue(items),
+      sessionId,
+      sessionTitle: normalizeText(namespace.contentDom?.getSessionTitle?.())
+        || namespace.session?.formatSessionLabel?.(sessionId)
+        || "현재 세션",
+      visibleMessageId: normalizeText(namespace.contentDom?.getVisibleMessageId?.(items)),
+    };
+  }
+
+  function buildDebugState() {
+    const entries = namespace.panelDebug?.getEntries?.() || [];
+    const statusSummary = namespace.panelDebug?.summarizeEntries?.(entries) || {};
+    return {
+      enabled: Boolean(namespace.panelDebug?.isEnabled?.()),
+      entries: cloneValue(entries),
+      errorsText: String(namespace.panelDebug?.buildErrorCopyText?.(entries) || ""),
+      hasErrors: Math.max(0, Number(statusSummary.errorCount) || 0) > 0,
+      statusSummary: cloneValue(statusSummary),
+      text: String(namespace.panelDebug?.buildCopyText?.(entries) || ""),
     };
   }
 

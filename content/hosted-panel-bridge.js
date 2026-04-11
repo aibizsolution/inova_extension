@@ -10,6 +10,7 @@
     "panel.event.v1",
     "runtime.invoke.v1",
     "page.adapter.v1",
+    "page.adapter.v2",
   ]);
 
   function create(options = {}) {

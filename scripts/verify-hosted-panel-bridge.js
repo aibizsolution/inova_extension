@@ -123,6 +123,10 @@ async function verifyHostedPanelBridgeContract() {
   assert.equal(snapshotMessage?.targetOrigin, "https://browser-extension-main.web.app");
   assert.equal(snapshotMessage?.message?.type, "snapshot");
   assert.equal(snapshotMessage?.message?.source, "inova-hosted-panel-extension");
+  assert(
+    snapshotMessage?.message?.capabilities?.includes("page.adapter.v2"),
+    "extension bridge should advertise the v2 page adapter capability"
+  );
 
   await messageListener({
     data: {

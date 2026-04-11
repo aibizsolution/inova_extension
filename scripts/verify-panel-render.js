@@ -8,11 +8,12 @@ const { JSDOM } = require("jsdom");
 
 const root = path.resolve(__dirname, "..");
 
-function main() {
+async function main() {
   verifyHostedPanelHostBatching();
   verifyLocalPanelRuntimeSwitch();
   verifyPageBridgeEvents();
   verifyV2CompositionWiring();
+  await verifyPageAdapterContract();
   console.log("[verify-panel-render] Hosted panel host contract passed");
 }
 
@@ -135,6 +136,44 @@ function verifyV2CompositionWiring() {
   );
 }
 
+async function verifyPageAdapterContract() {
+  const harness = createHarness();
+  harness.ensure();
+
+  const conversationSnapshot = await harness.bridge.options.onRequest({
+    domain: "page",
+    payload: { action: "get-conversation-snapshot" },
+  });
+  assert.equal(conversationSnapshot?.handled, true);
+  assert.equal(conversationSnapshot?.result?.sessionId, "session-1");
+  assert.equal(conversationSnapshot?.result?.items?.length, 2);
+  assert.equal(conversationSnapshot?.result?.visibleMessageId, "session-1:1:bookmark-2");
+
+  const debugSnapshot = await harness.bridge.options.onRequest({
+    domain: "page",
+    payload: { action: "get-debug-state" },
+  });
+  assert.equal(debugSnapshot?.handled, true);
+  assert.equal(debugSnapshot?.result?.statusSummary?.errorCount, 1);
+  assert.equal(debugSnapshot?.result?.hasErrors, true);
+
+  const debugCopy = await harness.bridge.options.onRequest({
+    domain: "page",
+    payload: { action: "copy-debug-log", errorsOnly: true },
+  });
+  assert.equal(debugCopy?.handled, true);
+  assert.equal(debugCopy?.result?.copied, true);
+  assert.equal(harness.clipboardWrites.at(-1), "error-entry");
+
+  const jumpResult = await harness.bridge.options.onRequest({
+    domain: "page",
+    payload: { action: "jump-conversation-item", bookmarkId: "session-1:1:bookmark-2" },
+  });
+  assert.equal(jumpResult?.handled, true);
+  assert.equal(jumpResult?.result?.jumped, true);
+  assert.equal(harness.scrolledMessageId(), "session-1:1:bookmark-2");
+}
+
 function createHarness() {
   const dom = new JSDOM("<!doctype html><html><body></body></html>", {
     pretendToBeVisual: true,
@@ -143,6 +182,7 @@ function createHarness() {
   });
   const context = dom.getInternalVMContext();
   const animationFrames = [];
+  const clipboardWrites = [];
   const bridge = {
     allowedOrigins: [],
     events: [],
@@ -153,12 +193,52 @@ function createHarness() {
 
   context.console = console;
   context.globalThis = context;
+  context.navigator.clipboard = {
+    writeText(text) {
+      clipboardWrites.push(String(text || ""));
+      return Promise.resolve();
+    },
+  };
   context.requestAnimationFrame = (callback) => {
     animationFrames.push(callback);
     return animationFrames.length;
   };
   context.cancelAnimationFrame = () => {};
   context.InovaBookmarks = {
+    composer: {
+      applyPromptText() {
+        return true;
+      },
+      getComposerState() {
+        return { available: true, text: "draft" };
+      },
+    },
+    contentDom: {
+      collectUserMessages() {
+        return [
+          { id: "session-1:0:bookmark-1", normalizedText: "first", order: 0, text: "First", title: "테스트 세션" },
+          { id: "session-1:1:bookmark-2", normalizedText: "second", order: 1, text: "Second", title: "테스트 세션" },
+        ];
+      },
+      getConversationState() {
+        return {
+          articleCount: 2,
+          hasChatLog: true,
+          hasComposer: true,
+          userCount: 2,
+        };
+      },
+      getSessionTitle() {
+        return "테스트 세션";
+      },
+      getVisibleMessageId(items = []) {
+        return items.at(-1)?.id || "";
+      },
+      scrollToMessage(messageId) {
+        context.__scrolledMessageId = messageId;
+        return true;
+      },
+    },
     firebaseConfig: buildFirebaseConfig(),
     hostedPanelBridge: {
       create(options = {}) {
@@ -193,7 +273,40 @@ function createHarness() {
         };
       },
     },
+    panelDebug: {
+      buildCopyText() {
+        return "all-entry";
+      },
+      buildErrorCopyText() {
+        return "error-entry";
+      },
+      clearEntries() {},
+      getEntries() {
+        return [
+          { event: "panel.test.info", level: "info", payload: {}, timestamp: "2026-01-01T00:00:00.000Z" },
+          { event: "panel.test.error", level: "error", payload: { error: "boom" }, timestamp: "2026-01-01T00:00:01.000Z" },
+        ];
+      },
+      isEnabled() {
+        return true;
+      },
+      summarizeEntries() {
+        return {
+          errorCount: 1,
+          functionCalls: 2,
+          readCount: 1,
+          snapshotCount: 0,
+          totalLogs: 2,
+        };
+      },
+    },
     session: {
+      formatSessionLabel(sessionId) {
+        return sessionId ? `대화 ${sessionId}` : "현재 세션";
+      },
+      getSessionId() {
+        return "session-1";
+      },
       normalizeText(value) {
         return String(value || "").trim();
       },
@@ -205,6 +318,7 @@ function createHarness() {
   return {
     animationFrames,
     bridge,
+    clipboardWrites,
     context,
     ensure() {
       context.InovaBookmarks.contentPanel.ensurePanel({
@@ -225,6 +339,9 @@ function createHarness() {
     },
     get root() {
       return context.document.getElementById("inova-bookmark-root");
+    },
+    scrolledMessageId() {
+      return context.__scrolledMessageId || "";
     },
     render(state) {
       this.ensure();
@@ -355,4 +472,7 @@ function loadScript(relativePath, context) {
   vm.runInContext(source, context, { filename: relativePath });
 }
 
-main();
+main().catch((error) => {
+  console.error(`[verify-panel-render] ${error.stack || error.message}`);
+  process.exitCode = 1;
+});
