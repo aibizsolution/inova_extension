@@ -66,7 +66,7 @@ module.exports = [
         ...globals.node,
       },
     },
-    rules: recommendedRules,
+    rules: runtimeRules,
   },
   {
     files: ["functions/**/*.js"],
