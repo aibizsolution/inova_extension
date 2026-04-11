@@ -70,6 +70,11 @@
     invokeRuntime,
     scheduleRender,
   }) || null;
+  const releaseController = namespace.releaseController?.create?.({
+    getRuntimeVersion: () => state.extensionVersion || "",
+    invokeRuntime,
+    scheduleRender,
+  }) || null;
   const callbacks = createCallbacks();
 
   namespace.hostedPanelApp = api;
@@ -238,6 +243,18 @@
         });
       },
       onReleaseAction(releaseAction, detail = {}) {
+        if (releaseController?.handleReleaseAction) {
+          return releaseController.handleReleaseAction(releaseAction, detail).then((handled) => {
+            if (handled !== false) {
+              return handled;
+            }
+            return request("panel", {
+              action: "release-action",
+              detail,
+              releaseAction,
+            });
+          });
+        }
         return request("panel", {
           action: "release-action",
           detail,
@@ -548,6 +565,7 @@
     promptReviewController?.syncPanelState?.(panelState, state.extensionCapabilities);
     promptStoreController?.syncPanelState?.(panelState, state.extensionCapabilities);
     meetingHubController?.syncPanelState?.(panelState, state.extensionCapabilities);
+    releaseController?.syncPanelState?.(panelState, state.extensionCapabilities);
     ensureShell();
     const elements = state.elements;
     if (!elements) {
@@ -557,18 +575,22 @@
     const effectivePromptCount = readEffectivePromptCount(panelState, effectivePromptTool);
     const effectiveMeetingTool = buildEffectiveMeetingToolState(panelState);
     const effectiveMeetingCount = readEffectiveMeetingCount(panelState, effectiveMeetingTool);
+    const effectiveReleaseTool = buildEffectiveReleaseToolState(panelState);
+    const effectiveReleaseCount = readEffectiveReleaseCount(panelState, effectiveReleaseTool);
     const effectiveToolCount = panelState.activeTool === "prompts"
       ? readEffectivePromptToolCount(effectivePromptTool, effectivePromptCount)
       : panelState.activeTool === "meeting"
         ? effectiveMeetingCount
-      : Number(panelState.toolCount) || 0;
+        : panelState.activeTool === "release"
+          ? effectiveReleaseCount
+          : Number(panelState.toolCount) || 0;
     const focusedControl = captureFocusedControl(elements.app);
     const previousStoreScrollTop = panelState.activeTool === "prompts" && effectivePromptTool?.activeTab === "store"
       ? elements.app.querySelector(".inova-store-list")?.scrollTop || state.storeScrollTop || 0
       : 0;
 
     const nextToolRailHtml = renderToolRail(
-      buildEffectiveTools(panelState.tools || [], effectivePromptCount, effectiveMeetingCount),
+      buildEffectiveTools(panelState.tools || [], effectivePromptCount, effectiveMeetingCount, effectiveReleaseCount),
       panelState.activeTool
     );
     if (state.renderCache.toolRailHtml !== nextToolRailHtml) {
@@ -676,7 +698,7 @@
       return buildEffectiveMeetingToolState(panelState);
     }
     if (panelState.activeTool === "release") {
-      return panelState.releaseTool;
+      return buildEffectiveReleaseToolState(panelState);
     }
     return panelState.bookmarksTool;
   }
@@ -692,7 +714,7 @@
         return namespace.meetingView?.render?.(buildEffectiveMeetingToolState(panelState)) || renderToolFailure();
       }
       if (panelState.activeTool === "release") {
-        return namespace.releaseView?.render?.(panelState.releaseTool) || renderToolFailure();
+        return namespace.releaseView?.render?.(buildEffectiveReleaseToolState(panelState)) || renderToolFailure();
       }
       return namespace.bookmarkView?.renderTool?.(panelState.bookmarksTool) || renderToolFailure();
     } catch (error) {
@@ -744,7 +766,14 @@
     return panelState.meetingTool;
   }
 
-  function buildEffectiveTools(tools, promptCount, meetingCount) {
+  function buildEffectiveReleaseToolState(panelState) {
+    if (releaseController?.hasRequiredCapabilities?.()) {
+      return releaseController.buildViewState(panelState.releaseTool || {});
+    }
+    return panelState.releaseTool;
+  }
+
+  function buildEffectiveTools(tools, promptCount, meetingCount, releaseCount) {
     return (Array.isArray(tools) ? tools : []).map((tool) => {
       if (tool?.id === "prompts") {
         return {
@@ -756,6 +785,12 @@
         return {
           ...tool,
           count: meetingCount,
+        };
+      }
+      if (tool?.id === "release") {
+        return {
+          ...tool,
+          count: releaseCount,
         };
       }
       return tool;
@@ -804,6 +839,20 @@
     const snapshotCount = Math.max(
       0,
       Number((panelState.tools || []).find((tool) => tool.id === "meeting")?.count)
+    );
+    return hostedCount || snapshotCount;
+  }
+
+  function readEffectiveReleaseCount(panelState, effectiveReleaseTool) {
+    const hostedCount = Math.max(
+      0,
+      Number(effectiveReleaseTool?.updateAvailable ? 1 : 0)
+        || Number(effectiveReleaseTool?.count)
+        || 0
+    );
+    const snapshotCount = Math.max(
+      0,
+      Number((panelState.tools || []).find((tool) => tool.id === "release")?.count)
     );
     return hostedCount || snapshotCount;
   }
