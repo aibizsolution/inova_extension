@@ -14,8 +14,12 @@
 
     return `
       <section class="inova-tool-section inova-tool-section--meeting">
-        <div class="inova-tool-toolbar">
-          <div class="inova-tool-toolbar__row" aria-hidden="true"></div>
+        <div class="inova-tool-toolbar inova-tool-toolbar--meeting">
+          <div class="inova-tool-toolbar__row inova-tool-toolbar__row--meeting">
+            <div class="inova-tool-toolbar__stack">
+              <p class="inova-tool-toolbar__title">최근 회의 룸</p>
+              <span class="inova-tool-meta inova-tool-meta--muted">기록 상태와 공유 상태를 보고 바로 이어서 열 수 있어요.</span>
+            </div>
           <button
             type="button"
             class="inova-bookmark-action${workspacePending ? " is-pending" : ""}"
@@ -25,13 +29,14 @@
           >
             ${escapeHtml(workspaceButtonLabel)}
           </button>
+          </div>
         </div>
         <div class="inova-meeting-stack">
           ${feedbackNotice}
           ${normalized.degradedNotice ? `<div class="inova-release-card inova-release-card__notice is-info">${escapeHtml(normalized.degradedNotice)}</div>` : ""}
           ${normalized.error ? `<div class="inova-release-card inova-release-card__notice">${escapeHtml(normalized.error)}</div>` : ""}
           <div class="inova-tool-inline-summary">
-            <strong>목록</strong>
+            <strong>회의 룸 목록</strong>
             <span class="inova-tool-inline-summary__meta">총 ${escapeHtml(String(normalized.items.length))}건</span>
           </div>
           <div class="inova-meeting-record-list">
@@ -76,40 +81,47 @@
   }
 
   function renderMeetingItem(item, pending) {
-    const meta = [
-      formatDateTime(item.updatedAt, ""),
-    ].filter(Boolean).join(" · ");
     const isPending = pending.active
       && pending.action === "open-result"
       && pending.meetingId === item.meetingId
       && (!pending.jobId || pending.jobId === item.latestJobId);
     const sharePending = pending.active && pending.action === "share" && pending.meetingId === item.meetingId;
     const revokePending = pending.active && pending.action === "revoke-share" && pending.meetingId === item.meetingId;
+    const presentation = deriveMeetingPresentation(item, {
+      isPending,
+      revokePending,
+      sharePending,
+    });
     return `
       <article class="inova-meeting-record${isPending ? " is-pending" : ""}">
-        <button
-          type="button"
-          class="inova-meeting-record__open"
-          data-meeting-action="open-result"
-          data-meeting-id="${escapeHtml(item.meetingId)}"
-          data-meeting-job-id="${escapeHtml(item.latestJobId)}"
-          data-meeting-artifact-id="${escapeHtml(item.latestArtifactId)}"
-          data-meeting-title="${escapeHtml(item.title)}"
-          ${pending.active ? "disabled" : ""}
-          aria-busy="${isPending}"
-        >
-          <div class="inova-meeting-record__head">
-            <div>
-              <strong>${escapeHtml(item.title)}</strong>
-              ${meta ? `<div class="inova-tool-meta">${escapeHtml(meta)}</div>` : ""}
-            </div>
-            <div class="inova-meeting-record__chips">
-              ${item.shareActive ? renderChip("공유 중", true) : ""}
-              ${renderChip(isPending ? "여는 중" : formatStatusLabel(item.status), false)}
-            </div>
+        <div class="inova-meeting-record__head">
+          <div class="inova-meeting-record__content">
+            <strong>${escapeHtml(item.title)}</strong>
+            ${presentation.meta ? `<div class="inova-tool-meta inova-tool-meta--muted">${escapeHtml(presentation.meta)}</div>` : ""}
+            ${presentation.description ? `<p class="inova-meeting-record__summary">${escapeHtml(presentation.description)}</p>` : ""}
           </div>
-        </button>
+          <div class="inova-meeting-record__chips">
+            ${item.shareActive ? renderMeetingChip("공유 중", "share") : ""}
+            ${renderMeetingChip(presentation.statusLabel, presentation.statusTone)}
+          </div>
+        </div>
         <div class="inova-meeting-record__actions">
+          <div class="inova-meeting-record__primary">
+            <button
+              type="button"
+              class="inova-tool-button inova-tool-button--compact is-primary"
+              data-meeting-action="open-result"
+              data-meeting-id="${escapeHtml(item.meetingId)}"
+              data-meeting-job-id="${escapeHtml(item.latestJobId)}"
+              data-meeting-artifact-id="${escapeHtml(item.latestArtifactId)}"
+              data-meeting-title="${escapeHtml(item.title)}"
+              ${pending.active ? "disabled" : ""}
+              aria-busy="${isPending}"
+            >
+              ${escapeHtml(presentation.openLabel)}
+            </button>
+          </div>
+          <div class="inova-meeting-record__secondary">
           <button
             type="button"
             class="inova-tool-button inova-tool-button--compact"
@@ -120,7 +132,7 @@
             ${pending.active ? "disabled" : ""}
             aria-busy="${sharePending}"
           >
-            ${escapeHtml(sharePending ? "복사 중..." : "공유")}
+            ${escapeHtml(presentation.shareLabel)}
           </button>
           ${item.shareActive || revokePending ? `
           <button
@@ -136,6 +148,7 @@
             ${escapeHtml(revokePending ? "해제 중..." : "공유 해제")}
           </button>`
             : ""}
+          </div>
         </div>
       </article>
     `;
@@ -155,17 +168,18 @@
     }
     return `
       <article class="inova-release-card">
-        <p>아직 생성된 회의가 없습니다. 상단의 새 회의 룸 생성으로 작업을 시작해 주세요.</p>
+        <strong>아직 회의 룸이 없습니다.</strong>
+        <p>상단의 새 회의 룸 생성으로 작업실을 열고, 녹음이나 파일 업로드로 첫 기록을 시작해 보세요.</p>
       </article>
     `;
   }
 
-  function renderChip(text, muted) {
+  function renderMeetingChip(text, tone = "neutral") {
     const value = normalizeText(text);
     if (!value) {
       return "";
     }
-    return `<span class="inova-store-item__chip${muted ? " is-muted" : ""}">${escapeHtml(value)}</span>`;
+    return `<span class="inova-meeting-record__chip is-${escapeHtml(normalizeText(tone) || "neutral")}">${escapeHtml(value)}</span>`;
   }
 
   function normalizePending(pending) {
@@ -203,13 +217,70 @@
     return "목록을 제한된 상태로 표시하고 있습니다.";
   }
 
-  function formatStatusLabel(status) {
-    const normalized = normalizeText(status);
-    if (normalized === "queued") return "대기";
-    if (normalized === "processing") return "진행 중";
-    if (normalized === "succeeded") return "완료";
-    if (normalized === "failed") return "오류";
-    return normalized || "준비";
+  function deriveMeetingPresentation(item, options = {}) {
+    const normalizedStatus = normalizeText(item.status).toLowerCase();
+    const hasRecord = Boolean(item.latestArtifactId);
+    const timestamp = formatDateTime(item.updatedAt, "");
+    const metaPrefix = hasRecord ? "최근 기록" : "최근 업데이트";
+    const meta = timestamp ? `${metaPrefix} ${timestamp}` : "";
+    if (options.isPending) {
+      return {
+        description: "회의 작업실을 여는 중입니다.",
+        meta,
+        openLabel: "작업실 여는 중...",
+        shareLabel: options.sharePending ? "링크 준비 중..." : item.shareActive ? "링크 복사" : "공유 링크",
+        statusLabel: "여는 중",
+        statusTone: "progress",
+      };
+    }
+    if (normalizedStatus === "processing") {
+      return {
+        description: "업로드한 내용을 정리하고 있어요. 잠시 뒤 다시 열면 최신 기록이 반영됩니다.",
+        meta,
+        openLabel: "작업실 열기",
+        shareLabel: options.sharePending ? "링크 준비 중..." : item.shareActive ? "링크 복사" : "공유 링크",
+        statusLabel: "기록 생성 중",
+        statusTone: "progress",
+      };
+    }
+    if (normalizedStatus === "queued") {
+      return {
+        description: "회의 작업이 대기 중입니다. 작업실에서 진행 상태를 확인할 수 있어요.",
+        meta,
+        openLabel: "작업실 열기",
+        shareLabel: options.sharePending ? "링크 준비 중..." : item.shareActive ? "링크 복사" : "공유 링크",
+        statusLabel: "기록 대기",
+        statusTone: "progress",
+      };
+    }
+    if (normalizedStatus === "failed") {
+      return {
+        description: "최근 기록 생성에 문제가 있었어요. 작업실에서 다시 시도하거나 상태를 확인해 주세요.",
+        meta,
+        openLabel: "작업실 열기",
+        shareLabel: options.sharePending ? "링크 준비 중..." : item.shareActive ? "링크 복사" : "공유 링크",
+        statusLabel: "확인 필요",
+        statusTone: "danger",
+      };
+    }
+    if (hasRecord || normalizedStatus === "succeeded") {
+      return {
+        description: "최근 기록과 메모를 이어서 확인할 수 있어요.",
+        meta,
+        openLabel: "작업실 열기",
+        shareLabel: options.sharePending ? "링크 준비 중..." : item.shareActive ? "링크 복사" : "공유 링크",
+        statusLabel: "기록 있음",
+        statusTone: "success",
+      };
+    }
+    return {
+      description: "아직 기록이 없습니다. 작업실에서 녹음이나 파일 업로드를 시작해 보세요.",
+      meta,
+      openLabel: "작업실 열기",
+      shareLabel: options.sharePending ? "링크 준비 중..." : item.shareActive ? "링크 복사" : "공유 링크",
+      statusLabel: "기록 없음",
+      statusTone: "neutral",
+    };
   }
 
   function formatDateTime(value, fallback = "아직 없음") {
