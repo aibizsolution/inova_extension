@@ -33,6 +33,8 @@ async function main() {
   assert.equal(harness.bootstrapCalls, 1);
   assert.equal(harness.renderControllerCreated, 1);
   assert.equal(harness.stateFactoryCreated, 1);
+  assert.equal(harness.runtimeControllerCreated, 1);
+  assert.equal(harness.actionControllerCreated, 1);
   assert.equal(harness.routeWatchInstallCalls, 1);
   assert.equal(harness.surfaceWatchInstallCalls, 1);
 
@@ -147,6 +149,7 @@ function createHarness() {
     bookmarkJumpCalls: controllerEvents.bookmarkJumpCalls,
     callbacks: ensureCalls[0]?.callbacks || null,
     activityControllerCreated: controllerEvents.activityControllerCreated || 0,
+    actionControllerCreated: controllerEvents.actionControllerCreated || 0,
     bootstrapCalls: controllerEvents.bootstrapCalls || 0,
     bootstrapControllerCreated: controllerEvents.bootstrapControllerCreated || 0,
     debugActions: controllerEvents.debugActions,
@@ -161,6 +164,7 @@ function createHarness() {
     reviewFloatStates: controllerEvents.reviewFloatStates,
     renderControllerCreated: controllerEvents.renderControllerCreated || 0,
     routeWatchInstallCalls: controllerEvents.routeWatchInstallCalls || 0,
+    runtimeControllerCreated: controllerEvents.runtimeControllerCreated || 0,
     stateFactoryCreated: controllerEvents.stateFactoryCreated || 0,
     surfaceWatchInstallCalls: controllerEvents.surfaceWatchInstallCalls || 0,
     shellQueries: controllerEvents.shellQueries,
@@ -253,6 +257,20 @@ function buildNamespace({ controllerEvents, ensureCalls, renderPayloads, runtime
     panelDebug: {
       subscribe() {},
     },
+    panelActionController: {
+      create(_state, deps) {
+        controllerEvents.actionControllerCreated = (controllerEvents.actionControllerCreated || 0) + 1;
+        return {
+          async handlePanelMeetingAction(action, detail = {}) {
+            if (deps.panelDebugController.handlesAction(action)) {
+              await deps.panelDebugController.handleAction(action);
+              return;
+            }
+            await deps.panelMeetingController.handleAction(action, detail);
+          },
+        };
+      },
+    },
     panelStateFactory: {
       createState() {
         controllerEvents.stateFactoryCreated = (controllerEvents.stateFactoryCreated || 0) + 1;
@@ -333,6 +351,30 @@ function buildNamespace({ controllerEvents, ensureCalls, renderPayloads, runtime
           awaitingRouteMessages: false,
           uiPreferenceLock: null,
           lastError: "",
+        };
+      },
+    },
+    panelRuntimeController: {
+      create(state) {
+        controllerEvents.runtimeControllerCreated = (controllerEvents.runtimeControllerCreated || 0) + 1;
+        return {
+          isExtensionContextInvalidatedError(error) {
+            const message = namespace.session.normalizeText(error instanceof Error ? error.message : String(error || "")).toLowerCase();
+            return message.includes("extension context invalidated");
+          },
+          isPaused() {
+            return Boolean(state.sessionId && state.pausedSessions[state.sessionId]);
+          },
+          isStoreTabActive() {
+            return state.activeTool === "prompts"
+              && (state.uiPreferences.activeTool === "store" || state.uiPreferences.activePromptTab === "store");
+          },
+          isToolSurface() {
+            return namespace.contentDom.getConversationState().hasComposer;
+          },
+          logPanelDebug(event, payload) {
+            namespace.panelDebug.log?.(event, payload || {});
+          },
         };
       },
     },

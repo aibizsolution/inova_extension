@@ -461,6 +461,10 @@
 - panel state 책임 정리:
   - 초기 shell state 조립은 `content/panel-state-factory.js`로 옮기고, `content/main.js`는 state literal 대신 factory 호출과 controller wiring만 유지한다.
   - 이 단계도 DB 구조, legacy lane, hosted origin/path, runtime message 계약을 바꾸지 않는 확장 내부 책임 축소로 둔다.
+- panel runtime helper 책임 정리:
+  - paused/store/tool-surface 판정, extension context invalidated 분류, panel debug 로그 helper는 `content/panel-runtime-controller.js`로 옮기고, `content/main.js`는 이 helper들을 다시 구현하지 않는다.
+  - meeting/debug action 분기는 `content/panel-action-controller.js`로 옮기고, `content/main.js`는 callback 라우팅 대신 controller wiring만 유지한다.
+  - 이 단계도 DB 구조, legacy lane, hosted origin/path, runtime message 계약을 바꾸지 않는 확장 내부 책임 축소로 둔다.
 - 현재 문서 판단:
   - meeting 리팩토링의 남은 일은 추가 분해보다 `minor로 닫을 수 있는지`를 기록으로 마무리하는 쪽에 가깝다.
   - 다음 문서 작업은 핵심 사용자 흐름 증거를 같은 형식으로 정리해 `minor candidate ready` 여부를 닫는 것이다.

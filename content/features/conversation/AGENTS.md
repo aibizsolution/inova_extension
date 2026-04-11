@@ -21,6 +21,7 @@
 ## 관련 프론트 경로
 - `content/main.js`
 - `content/panel-state-factory.js`
+- `content/panel-runtime-controller.js`
 - `content/panel.js`
 
 ## 관련 functions 경로
@@ -49,6 +50,7 @@
 ## 구현 경계
 - 북마크 검색/복사/점프와 empty/status 문구 계산은 `content/panel-bookmark-controller.js`가 맡고, `content/main.js`는 이를 다시 구현하지 않는다.
 - panel shell 초기 state 조립은 `content/panel-state-factory.js`가 맡고, `content/main.js`는 기본 state literal을 다시 들고 있지 않는다.
+- paused/store/tool-surface 판정과 panel debug 로깅 helper는 `content/panel-runtime-controller.js`가 맡고, `content/main.js`는 이 helper를 다시 구현하지 않는다.
 - tool 전환, query 라우팅, handle 위치 저장 같은 공용 panel shell 동작은 `content/panel-shell-controller.js`가 맡는다.
 - storage 복원, live bookmark 재수집, route wait fallback은 `content/route-state-controller.js`가 맡고, `content/route-sync.js`는 route 감시와 retry/polling 타이밍만 담당한다.
 - history/click/popstate/visibility/poll watcher 설치는 `content/route-watch-controller.js`가 맡고, `content/route-sync.js`는 실제 sync 실행과 observer/retry 타이밍만 담당한다.
