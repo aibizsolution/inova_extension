@@ -12,11 +12,11 @@
 .inova-tool-body, #inova-tool-content, .inova-prompt-list { flex: 1; min-height: 0; min-width: 0; }
 #inova-tool-content { overflow-x: hidden; }
 #inova-tool-rail {
-  width: 176px; padding: 12px 0; display: flex; flex-direction: column; gap: 0; overflow-y: auto;
+  width: 76px; padding: 12px 0; display: flex; flex-direction: column; gap: 0; overflow-y: auto;
   border-right: 1px solid rgba(52, 81, 100, 0.08); background: linear-gradient(180deg, rgba(245, 250, 252, 0.98), rgba(249, 252, 255, 0.96));
 }
 .inova-tool-rail__button {
-  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 14px 18px 16px;
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 8px 16px;
   border: 0; border-radius: 0; background: transparent; color: rgba(16, 33, 43, 0.68); cursor: pointer;
   transition: color 140ms ease, background 140ms ease;
 }
@@ -32,7 +32,7 @@
 }
 .inova-tool-rail__button.is-active::before { background: #0f7c89; }
 .inova-tool-rail__label {
-  width: 100%; font-size: 12px; font-weight: 700; line-height: 1.25; text-align: left; white-space: nowrap; word-break: keep-all;
+  width: 100%; font-size: 12px; font-weight: 700; line-height: 1.25; text-align: center; white-space: nowrap; word-break: keep-all;
 }
 .inova-tool-rail__count {
   display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 22px; border-radius: 999px;
