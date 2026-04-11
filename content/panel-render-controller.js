@@ -57,6 +57,7 @@
         open: state.open,
         panelDebug,
         promptTool: promptToolState.promptTool,
+        settings: state.settings,
         toolCount: shellChrome.toolCount,
         toolTitle: shellChrome.toolTitle,
         tools: shellChrome.tools,
