@@ -40,6 +40,7 @@
     "content/prompt-hub-controller.js",
     "content/prompt-hub-runtime.js",
     "content/route-state-controller.js",
+    "content/route-watch-controller.js",
     "content/route-sync.js",
     "content/tools.css",
     "content/main.js",
@@ -54,7 +55,8 @@
     "scripts/verify-panel-prompt-controller.js",
     "scripts/verify-panel-bookmark-controller.js",
     "scripts/verify-panel-shell-controller.js",
-    "scripts/verify-route-state-controller.js"
+    "scripts/verify-route-state-controller.js",
+    "scripts/verify-route-watch-controller.js"
   ],
   "manifestPopup": "popup/index.html",
   "manifestContentScripts": [
@@ -86,6 +88,7 @@
     "content/features/prompt-library/cloud-sync-manager.js",
     "content/features/prompt-store/prompt-realtime-manager.js",
     "content/route-state-controller.js",
+    "content/route-watch-controller.js",
     "content/route-sync.js",
     "content/features/prompt-library/prompt-manager.js",
     "content/features/prompt-store/store-manager.js",

@@ -443,6 +443,9 @@
 - route state 책임 정리:
   - route 감시와 retry/polling은 `content/route-sync.js`에 남기고, storage 복원과 live bookmark 재수집, route wait fallback은 `content/route-state-controller.js`로 옮긴다.
   - 이 단계도 DB 구조, legacy lane, hosted origin/path, runtime message 계약을 바꾸지 않는 content 내부 orchestration 정리로 둔다.
+- route watcher 책임 정리:
+  - history/click/popstate/visibility/poll watcher 설치는 `content/route-watch-controller.js`로 옮기고, `content/route-sync.js`는 observer/retry 타이밍과 sync 실행만 담당한다.
+  - 이 단계도 DB 구조, legacy lane, hosted origin/path, runtime message 계약을 바꾸지 않는 content 내부 책임 축소로 둔다.
 - 현재 문서 판단:
   - meeting 리팩토링의 남은 일은 추가 분해보다 `minor로 닫을 수 있는지`를 기록으로 마무리하는 쪽에 가깝다.
   - 다음 문서 작업은 핵심 사용자 흐름 증거를 같은 형식으로 정리해 `minor candidate ready` 여부를 닫는 것이다.

@@ -10,8 +10,8 @@
       : () => {};
 
     return {
-      installRouteWatchers,
       scheduleRefresh,
+      scheduleRouteSync,
       syncRouteState,
     };
 
@@ -99,56 +99,6 @@
     function disconnectObserver() {
       state.observer?.disconnect();
       state.observer = null;
-    }
-
-    function installRouteWatchers() {
-      if (state.routeWatchInstalled) {
-        return;
-      }
-
-      state.lastRouteKey = getRouteKey();
-      wrapHistoryMethod("pushState");
-      wrapHistoryMethod("replaceState");
-      global.addEventListener("popstate", () => scheduleRouteSync("popstate"));
-      global.addEventListener("visibilitychange", () => document.visibilityState === "visible" && scheduleRouteSync("visibility"));
-      document.addEventListener("click", handleDocumentClick, true);
-      startRoutePolling();
-      state.routeWatchInstalled = true;
-    }
-
-    function wrapHistoryMethod(methodName) {
-      const original = history[methodName];
-      history[methodName] = function wrappedHistoryState(...args) {
-        const result = original.apply(this, args);
-        scheduleRouteSync(`history.${methodName}`);
-        return result;
-      };
-    }
-
-    function handleDocumentClick(event) {
-      const target = event.target;
-      if (!(target instanceof Element) || !target.closest("a, button, [role='button']")) {
-        return;
-      }
-
-      global.setTimeout(() => scheduleRouteSync("click.80"), 80);
-      global.setTimeout(() => scheduleRouteSync("click.350"), 350);
-    }
-
-    function startRoutePolling() {
-      if (state.routePollTimer) {
-        global.clearInterval(state.routePollTimer);
-      }
-
-      state.routePollTimer = global.setInterval(() => {
-        const nextRouteKey = getRouteKey();
-        if (nextRouteKey === state.lastRouteKey) {
-          return;
-        }
-
-        state.lastRouteKey = nextRouteKey;
-        scheduleRouteSync("poll");
-      }, 400);
     }
 
     function scheduleRouteSync(reason = "scheduled") {

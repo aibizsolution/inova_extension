@@ -26,6 +26,7 @@ async function main() {
   assert.equal(initialPayload.tools.length, 4);
   assert.equal(harness.reviewFloatEnsured, 1);
   assert.equal(harness.reviewFloatStates.at(-1)?.visible, true);
+  assert.equal(harness.routeWatchInstallCalls, 1);
 
   await harness.callbacks.onCopyBookmark("bookmark-1");
   harness.callbacks.onJumpBookmark("bookmark-1");
@@ -138,6 +139,7 @@ function createHarness() {
     renderPayloads,
     reviewFloatEnsured: controllerEvents.reviewFloatEnsured || 0,
     reviewFloatStates: controllerEvents.reviewFloatStates,
+    routeWatchInstallCalls: controllerEvents.routeWatchInstallCalls || 0,
     shellQueries: controllerEvents.shellQueries,
     shellSubmitQueries: controllerEvents.shellSubmitQueries,
     shellToolSelections: controllerEvents.shellToolSelections,
@@ -445,11 +447,21 @@ function buildNamespace({ controllerEvents, ensureCalls, renderPayloads }) {
         };
       },
     },
+    routeWatchController: {
+      create(_state, hooks) {
+        return {
+          installRouteWatchers() {
+            controllerEvents.routeWatchInstallCalls = (controllerEvents.routeWatchInstallCalls || 0) + 1;
+            hooks.scheduleRouteSync?.("verify-install");
+          },
+        };
+      },
+    },
     routeSync: {
       create(state, hooks) {
         return {
-          installRouteWatchers() {},
           scheduleRefresh() {},
+          scheduleRouteSync() {},
           async syncRouteState() {
             hooks.resetRouteState("session-1", "");
             await hooks.refreshState();

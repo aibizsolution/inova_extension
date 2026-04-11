@@ -136,6 +136,9 @@
     render,
     resetRouteState: routeStateController.resetRouteState,
   });
+  const routeWatchController = namespace.routeWatchController.create(state, {
+    scheduleRouteSync: routeSync.scheduleRouteSync,
+  });
 
   bootstrapContent().catch((error) => console.error("[i-Nova Bookmarks] bootstrap failed", error));
 
@@ -162,7 +165,7 @@
     });
     panelDebugController.installValidationApi();
     panelPromptController.ensureReviewFloat();
-    routeSync.installRouteWatchers();
+    routeWatchController.installRouteWatchers();
     panelLifecycleController.installSurfaceWatchers();
     global.addEventListener("resize", render, { passive: true });
     global.addEventListener("focus", panelLifecycleController.handleWindowFocus, { passive: true });

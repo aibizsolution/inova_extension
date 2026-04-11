@@ -69,6 +69,7 @@
         "content/features/prompt-store/prompt-realtime-manager.js",
         "content/meeting-manager.js",
         "content/route-state-controller.js",
+        "content/route-watch-controller.js",
         "content/route-sync.js",
         "content/features/prompt-library/prompt-manager.js",
         "content/features/prompt-store/store-manager.js",
