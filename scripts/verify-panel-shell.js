@@ -29,6 +29,7 @@ async function main() {
   assert.equal(typeof harness.windowListeners.focus, "function");
   assert.equal(typeof harness.documentListeners.visibilitychange, "function");
   assert.equal(harness.activityControllerCreated, 1);
+  assert.equal(harness.renderControllerCreated, 1);
   assert.equal(harness.routeWatchInstallCalls, 1);
   assert.equal(harness.surfaceWatchInstallCalls, 1);
 
@@ -151,6 +152,7 @@ function createHarness() {
     renderPayloads,
     reviewFloatEnsured: controllerEvents.reviewFloatEnsured || 0,
     reviewFloatStates: controllerEvents.reviewFloatStates,
+    renderControllerCreated: controllerEvents.renderControllerCreated || 0,
     routeWatchInstallCalls: controllerEvents.routeWatchInstallCalls || 0,
     surfaceWatchInstallCalls: controllerEvents.surfaceWatchInstallCalls || 0,
     shellQueries: controllerEvents.shellQueries,
@@ -355,6 +357,43 @@ function buildNamespace({ controllerEvents, ensureCalls, renderPayloads }) {
           },
           async selectTool(toolId) {
             return toolId === "prompts" || toolId === "store";
+          },
+        };
+      },
+    },
+    panelRenderController: {
+      create(state, deps) {
+        controllerEvents.renderControllerCreated = (controllerEvents.renderControllerCreated || 0) + 1;
+        return {
+          render() {
+            deps.panelDebugController.syncEnabled();
+            const bookmarkTool = deps.panelBookmarkController.buildToolState();
+            const promptToolState = deps.panelPromptController.buildToolState();
+            const meetingTool = deps.panelMeetingController.buildToolState(state.meetingHub);
+            const panelDebug = deps.panelDebugController.buildState();
+            const releaseState = deps.releaseManager.buildViewState();
+            const shellChrome = deps.panelShellController.buildRenderChrome({
+              bookmarks: bookmarkTool.count,
+              meeting: meetingTool.count,
+              promptTool: promptToolState.promptToolCount,
+              prompts: promptToolState.promptCount,
+              release: releaseState.updateAvailable ? 1 : 0,
+            });
+            namespace.contentPanel.renderPanel({
+              activeTool: state.activeTool,
+              bookmarksTool: bookmarkTool,
+              handleCount: shellChrome.handleCount,
+              meetingTool,
+              open: state.open,
+              panelDebug,
+              promptTool: promptToolState.promptTool,
+              releaseTool: releaseState,
+              toolCount: shellChrome.toolCount,
+              toolTitle: shellChrome.toolTitle,
+              tools: shellChrome.tools,
+              visible: true,
+            });
+            namespace.composerReviewFloat.render(deps.panelPromptController.buildReviewFloatState(true));
           },
         };
       },

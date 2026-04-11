@@ -24,6 +24,7 @@
     "content/panel-bookmark-controller.js",
     "content/panel-activity-controller.js",
     "content/panel-surface-controller.js",
+    "content/panel-render-controller.js",
     "content/features/prompt-library/cloud-sync-manager.js",
     "content/composer.js",
     "content/dom.js",
@@ -59,6 +60,7 @@
     "scripts/verify-panel-shell-controller.js",
     "scripts/verify-panel-activity-controller.js",
     "scripts/verify-panel-surface-controller.js",
+    "scripts/verify-panel-render-controller.js",
     "scripts/verify-route-state-controller.js",
     "scripts/verify-route-watch-controller.js"
   ],
@@ -110,6 +112,7 @@
     "content/panel-surface-controller.js",
     "content/panel-activity-controller.js",
     "content/panel-lifecycle-controller.js",
+    "content/panel-render-controller.js",
     "content/main.js"
   ],
   "popupScripts": [

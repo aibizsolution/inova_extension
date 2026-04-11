@@ -452,6 +452,9 @@
 - panel activity 책임 정리:
   - focus/visibility 반응은 `content/panel-activity-controller.js`로 옮기고, `content/panel-lifecycle-controller.js`는 open state 초기화와 toggle만 담당한다.
   - 이 단계도 DB 구조, legacy lane, hosted origin/path, runtime message 계약을 바꾸지 않는 확장 내부 책임 축소로 둔다.
+- panel render 책임 정리:
+  - render payload 조립과 review float visible state 계산은 `content/panel-render-controller.js`로 옮기고, `content/main.js`는 render function 본문 대신 composition wiring만 유지한다.
+  - 이 단계도 DB 구조, legacy lane, hosted origin/path, runtime message 계약을 바꾸지 않는 확장 내부 책임 축소로 둔다.
 - 현재 문서 판단:
   - meeting 리팩토링의 남은 일은 추가 분해보다 `minor로 닫을 수 있는지`를 기록으로 마무리하는 쪽에 가깝다.
   - 다음 문서 작업은 핵심 사용자 흐름 증거를 같은 형식으로 정리해 `minor candidate ready` 여부를 닫는 것이다.

@@ -1,5 +1,7 @@
 (function initContentMain(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  let panelRenderController = null;
+  const render = () => panelRenderController?.render();
   const state = {
     sessionId: "",
     sessionTitle: "",
@@ -155,6 +157,16 @@
   const routeWatchController = namespace.routeWatchController.create(state, {
     scheduleRouteSync: routeSync.scheduleRouteSync,
   });
+  panelRenderController = namespace.panelRenderController.create(state, {
+    isPaused,
+    isToolSurface,
+    panelBookmarkController,
+    panelDebugController,
+    panelMeetingController,
+    panelPromptController,
+    panelShellController,
+    releaseManager,
+  });
 
   bootstrapContent().catch((error) => console.error("[i-Nova Bookmarks] bootstrap failed", error));
 
@@ -210,41 +222,6 @@
     if (routeStateController.handleStorageChange(changes, areaName)) {
       routeSync.scheduleRefresh();
     }
-  }
-
-  function render() {
-    panelDebugController.syncEnabled();
-    const visible = state.settings.enabled && isToolSurface() && !isPaused();
-    const bookmarkTool = panelBookmarkController.buildToolState();
-    const promptToolState = panelPromptController.buildToolState();
-    const meetingTool = panelMeetingController.buildToolState(state.meetingHub);
-    const panelDebug = panelDebugController.buildState();
-    const releaseState = releaseManager.buildViewState();
-    const releaseCount = releaseState.updateAvailable ? 1 : 0;
-    const shellChrome = panelShellController.buildRenderChrome({
-      bookmarks: bookmarkTool.count,
-      meeting: meetingTool.count,
-      promptTool: promptToolState.promptToolCount,
-      prompts: promptToolState.promptCount,
-      release: releaseCount,
-    });
-
-    namespace.contentPanel.renderPanel({
-      activeTool: state.activeTool,
-      bookmarksTool: bookmarkTool,
-      handleCount: shellChrome.handleCount,
-      meetingTool,
-      releaseTool: releaseState,
-      handleRatio: namespace.storage.getHandleRatio(state.uiPreferences, global.innerWidth),
-      open: state.open,
-      panelDebug,
-      promptTool: promptToolState.promptTool,
-      toolCount: shellChrome.toolCount,
-      toolTitle: shellChrome.toolTitle,
-      tools: shellChrome.tools,
-      visible,
-    });
-    namespace.composerReviewFloat?.render?.(panelPromptController.buildReviewFloatState(visible));
   }
 
   async function handlePanelMeetingAction(action, detail = {}) {
