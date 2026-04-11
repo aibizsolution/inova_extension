@@ -5,8 +5,13 @@ const recommendedRules = {
   ...js.configs.recommended.rules,
   "no-control-regex": "off",
   "no-empty": ["error", { allowEmptyCatch: true }],
-  "preserve-caught-error": "off",
-  "no-unused-vars": "off",
+  "preserve-caught-error": "error",
+  "no-unused-vars": "error",
+};
+
+const runtimeRules = {
+  ...recommendedRules,
+  eqeqeq: ["error", "always", { null: "ignore" }],
 };
 
 module.exports = [
@@ -46,7 +51,7 @@ module.exports = [
         ...globals.worker,
       },
     },
-    rules: recommendedRules,
+    rules: runtimeRules,
   },
   {
     files: [
@@ -61,7 +66,7 @@ module.exports = [
         ...globals.node,
       },
     },
-    rules: recommendedRules,
+    rules: runtimeRules,
   },
   {
     files: ["functions/**/*.js"],
@@ -72,6 +77,6 @@ module.exports = [
         ...globals.node,
       },
     },
-    rules: recommendedRules,
+    rules: runtimeRules,
   },
 ];

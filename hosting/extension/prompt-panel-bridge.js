@@ -233,7 +233,7 @@
       );
   }
 
-  function subscribeStoreLatest(payload) {
+  function subscribeStoreLatest() {
     if (!db) {
       return;
     }

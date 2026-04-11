@@ -263,7 +263,7 @@
       });
     } catch (error) {
       if (error?.name === "AbortError") {
-        throw new Error("클라우드 응답이 늦어지고 있어요. 잠시 후 다시 시도해 주세요.");
+        throw new Error("클라우드 응답이 늦어지고 있어요. 잠시 후 다시 시도해 주세요.", { cause: error });
       }
       throw error;
     } finally {

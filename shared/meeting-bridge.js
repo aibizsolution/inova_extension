@@ -69,7 +69,7 @@
     } catch (error) {
       if (isInvalidatedContextError(error)) {
         logDebug("invalidated", { type });
-        throw new Error("확장프로그램이 갱신됐어요. 페이지를 새로고침해 주세요.");
+        throw new Error("확장프로그램이 갱신됐어요. 페이지를 새로고침해 주세요.", { cause: error });
       }
       logDebug("error", {
         backend: metadata.backend,

@@ -1,6 +1,6 @@
 (function initHostedMeetingStorage(global) {
   const ns = global.__INOVA_HOSTED_MEETING__ = global.__INOVA_HOSTED_MEETING__ || {};
-  const { clearDebugFault, consumeDebugFault, normalizeText, normalizeTextBlock, safeLocalStorageSet, setDebugFault } = ns.shared;
+  const { clearDebugFault, consumeDebugFault, normalizeText, normalizeTextBlock, setDebugFault } = ns.shared;
 
   const PENDING_UPLOAD_LOCAL_STORAGE_KEY = "inova-hosted-meeting-pending-uploads";
   const PENDING_UPLOAD_DB_NAME = "inova-hosted-meeting-workspace";

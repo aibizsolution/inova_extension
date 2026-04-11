@@ -35,7 +35,34 @@ const requiredFiles = [
   path.join("scripts", "install-git-hooks.js"),
   "shared/prompt-library.js",
   path.join("scripts", "verify-feature-doc-update.js"),
+  path.join("scripts", "verify-panel-bookmark-controller.js"),
+  path.join("scripts", "verify-panel-prompt-controller.js"),
+  path.join("scripts", "verify-panel-shell-controller.js"),
+  path.join("scripts", "verify-panel-activity-controller.js"),
+  path.join("scripts", "verify-panel-surface-controller.js"),
+  path.join("scripts", "verify-panel-render-controller.js"),
+  path.join("scripts", "verify-panel-bootstrap-controller.js"),
+  path.join("scripts", "verify-panel-state-factory.js"),
+  path.join("scripts", "verify-panel-runtime-controller.js"),
+  path.join("scripts", "verify-panel-action-controller.js"),
+  path.join("scripts", "verify-panel-prompt-bridge-controller.js"),
+  path.join("scripts", "verify-route-state-controller.js"),
+  path.join("scripts", "verify-route-watch-controller.js"),
   "content/main.js",
+  "content/panel-activity-controller.js",
+  "content/panel-bookmark-controller.js",
+  "content/panel-shell-controller.js",
+  "content/panel-prompt-controller.js",
+  "content/panel-surface-controller.js",
+  "content/panel-render-controller.js",
+  "content/panel-bootstrap-controller.js",
+  "content/panel-state-factory.js",
+  "content/panel-runtime-controller.js",
+  "content/panel-action-controller.js",
+  "content/panel-prompt-bridge-controller.js",
+  "content/panel-composition-controller.js",
+  "content/route-state-controller.js",
+  "content/route-watch-controller.js",
   "content/prompt-hub-state.js",
   "content/prompt-hub-panel.js",
   "content/prompt-hub-controller.js",
@@ -96,7 +123,17 @@ const featureDocContracts = [
   {
     feature: "conversation",
     doc: path.join("content", "features", "conversation", "AGENTS.md"),
-    expectedFiles: ["content/dom.js", "content/bookmark-view.js", "content/route-sync.js"],
+    expectedFiles: [
+      "content/dom.js",
+      "content/bookmark-view.js",
+      "content/route-sync.js",
+      "content/route-state-controller.js",
+      "content/route-watch-controller.js",
+      "content/panel-bookmark-controller.js",
+      "content/panel-surface-controller.js",
+      "content/panel-activity-controller.js",
+      "content/panel-shell-controller.js",
+    ],
   },
   {
     feature: "prompt-library",
@@ -175,8 +212,9 @@ const codeChecks = [
   {
     file: "content/main.js",
     patterns: [
-      /promptManager/,
-      /renderPanel/,
+      /panelStateFactory/,
+      /panelCompositionController/,
+      /panelCompositionController\??\.bootstrap/,
     ],
   },
   {
@@ -214,8 +252,101 @@ const codeChecks = [
   {
     file: "content/route-sync.js",
     patterns: [
-      /collectUserMessages/,
+      /scheduleRouteSync/,
+      /scheduleRefresh/,
       /syncRouteState/,
+    ],
+  },
+  {
+    file: "content/route-state-controller.js",
+    patterns: [
+      /collectUserMessages/,
+      /refreshState/,
+      /handleStorageChange/,
+    ],
+  },
+  {
+    file: "content/route-watch-controller.js",
+    patterns: [
+      /installRouteWatchers/,
+      /wrapHistoryMethod/,
+      /startRoutePolling/,
+    ],
+  },
+  {
+    file: "content/panel-bootstrap-controller.js",
+    patterns: [
+      /ensurePanel/,
+      /syncRouteState/,
+      /chrome\??\.storage/,
+    ],
+  },
+  {
+    file: "content/panel-state-factory.js",
+    patterns: [
+      /createState/,
+      /mergeCloudSyncState/,
+      /mergeUiPreferences/,
+      /readCollapsedPreference/,
+    ],
+  },
+  {
+    file: "content/panel-runtime-controller.js",
+    patterns: [
+      /isPaused/,
+      /isStoreTabActive/,
+      /isExtensionContextInvalidatedError/,
+      /logPanelDebug/,
+    ],
+  },
+  {
+    file: "content/panel-action-controller.js",
+    patterns: [
+      /handlePanelMeetingAction/,
+      /handlesAction/,
+      /handleAction/,
+    ],
+  },
+  {
+    file: "content/panel-prompt-bridge-controller.js",
+    patterns: [
+      /ensureStoreLoaded/,
+      /schedulePromptCloudSyncIfNeeded/,
+      /schedulePromptRealtimeSync/,
+      /handleStorageChange/,
+    ],
+  },
+  {
+    file: "content/panel-composition-controller.js",
+    patterns: [
+      /panelRuntimeController/,
+      /panelPromptBridgeController/,
+      /panelRenderController/,
+      /panelBootstrapController/,
+    ],
+  },
+  {
+    file: "content/panel-render-controller.js",
+    patterns: [
+      /buildRenderChrome/,
+      /renderPanel/,
+      /buildReviewFloatState/,
+    ],
+  },
+  {
+    file: "content/panel-activity-controller.js",
+    patterns: [
+      /handleVisibilityChange/,
+      /handleWindowFocus/,
+      /visibilityState/,
+    ],
+  },
+  {
+    file: "content/panel-surface-controller.js",
+    patterns: [
+      /installSurfaceWatchers/,
+      /getConversationState/,
+      /surfacePollTimer/,
     ],
   },
   {

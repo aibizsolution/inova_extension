@@ -5,8 +5,9 @@
 ## 현재 기준
 
 - 기본 엔진은 루트 `eslint.config.js`의 ESLint flat config다.
-- 첫 도입 단계는 오류 탐지 중심으로만 운영한다. `eslint:recommended`를 기반으로 두고, 대량 정리성 규칙은 아직 강제하지 않는다.
-- 현재 baseline에서는 `empty catch`는 허용하고, `preserve-caught-error`와 `no-control-regex`는 기존 코드 정리 전까지 보류한다.
+- 첫 도입 단계는 오류 탐지 중심으로만 운영한다. `eslint:recommended`를 기반으로 두고, 대량 style 정리 규칙은 아직 강제하지 않는다.
+- 현재 baseline에서는 `no-unused-vars`, `preserve-caught-error`, `eqeqeq`를 활성화했고, `empty catch`는 허용한다. `no-control-regex`는 기존 코드 정리 전까지 보류한다.
+- `eqeqeq`는 현재 전체 lint 대상에 적용하고, `value == null` 같은 nullish shorthand는 허용한다.
 - 현재 lint 대상은 `background/`, `content/`, `functions/`, `hosting/`, `popup/`, `scripts/`, `shared/`, `test-support/`, 루트 `eslint.config.js`다.
 - `node_modules`, `functions/node_modules`, 임시 산출물 폴더(`output/`, `test-results/`, `tmp/`)는 제외한다.
 
@@ -26,6 +27,6 @@
 
 ## 다음 확장 후보
 
-- `no-unused-vars` 같은 hygiene 규칙을 feature별 정리 작업과 함께 단계적으로 활성화
+- `no-control-regex`를 실제 사용 맥락 기준으로 다시 열지 검토
 - staged 파일 대상 빠른 lint를 pre-commit에 붙일지 검토
 - functions 전용 override가 필요해지면 루트 config 안에서 scope를 분리하고 이유를 이 문서에 기록

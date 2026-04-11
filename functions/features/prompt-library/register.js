@@ -458,7 +458,7 @@ function registerPromptLibraryHandlers(deps) {
     };
   }
 
-  async function loadPersistedPromptLibraryRecord(libraryId, snapshot, collectionConfig = promptLibraryCollections) {
+  async function loadPersistedPromptLibraryRecord(libraryId, snapshot) {
     if (!snapshot?.exists) {
       return {
         found: false,

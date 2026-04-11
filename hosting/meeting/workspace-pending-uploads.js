@@ -3,12 +3,10 @@
 
   ns.workspacePendingUploads = {
     createController(deps) {
-      const globalObject = deps?.global || global;
-      const refs = deps?.refs || {};
       const state = deps?.state || {};
       const constants = deps?.constants || {};
       const helpers = deps?.helpers || {};
-      const { buildLocalPendingJob, chooseSelectedRecordId, findHistoryEntry, findRemoteForPending, normalizeArtifact, normalizeJob, normalizeRecord } = ns.render;
+      const { chooseSelectedRecordId, findRemoteForPending, normalizeJob } = ns.render;
       const { findRecoveredRemoteForPending } = ns.workspaceRecovery || {};
       const { buildWorkspaceMeetingJobId, getCollections, readDocument } = ns.firebase || {};
       const { prepareAudioSourceChunks } = ns.audioChunker;
@@ -16,7 +14,6 @@
       const {
         AUTO_RETRY_PENDING_STATUSES,
         DEFAULT_CREATE_JOB_TIMEOUT_MS,
-        DEFAULT_INLINE_AUDIO_LIMIT_BYTES,
         DEFAULT_SOURCE_CHUNK_DURATION_MS,
         DEFAULT_SOURCE_CHUNK_OVERLAP_MS,
         DEFAULT_SOURCE_MAX_DURATION_MS,
@@ -24,10 +21,8 @@
         DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS,
         DEFAULT_SOURCE_TARGET_PART_BYTES,
         DEFAULT_SOURCE_UPLOAD_TIMEOUT_MS,
-        buildLocalSelectionId,
         buildRemoteSelectionId,
         buildWorkspaceSessionStorageKey,
-        formatDateTime,
         isDebugPanelEnabled,
         isLikelyNetworkError,
         isOnline,
@@ -41,10 +36,7 @@
         toTimestamp,
       } = ns.shared;
       const DEGRADED_NOTICE_CODES = constants.DEGRADED_NOTICE_CODES || {};
-      const DEGRADED_NOTICE_SPECS = constants.DEGRADED_NOTICE_SPECS || {};
       const PENDING_UPLOAD_QUEUE_OPERATION_SCOPES = constants.PENDING_UPLOAD_QUEUE_OPERATION_SCOPES || {};
-      const SUPERSEDED_REMOTE_JOBS_STORAGE_KEY_PREFIX = constants.SUPERSEDED_REMOTE_JOBS_STORAGE_KEY_PREFIX || "";
-      const MAX_SHARED_MEMO_CHARS = constants.MAX_SHARED_MEMO_CHARS || 0;
       const CONFIG = constants.CONFIG || {};
       const DEBUG_LOCAL_QUEUE_SANDBOX_PARAM = constants.DEBUG_LOCAL_QUEUE_SANDBOX_PARAM || "debugQueueSandbox";
       const REMOTE_REQUEST_RECOVERY_STALE_MS = 2 * 60 * 1000;
@@ -56,11 +48,8 @@
 
       const setNotice = (...args) => helpers.setNotice?.(...args);
       const applyRender = (...args) => helpers.applyRender?.(...args);
-      const renderBlocked = (...args) => helpers.renderBlocked?.(...args);
       const requestConfirmation = (...args) => helpers.requestConfirmation?.(...args);
       const createEmptyWorkspaceMutationState = (...args) => helpers.createEmptyWorkspaceMutationState?.(...args);
-      const setDegradedNotice = (...args) => helpers.setDegradedNotice?.(...args);
-      const clearDegradedNotice = (...args) => helpers.clearDegradedNotice?.(...args);
       const cloneNoticeSnapshot = typeof helpers.cloneNoticeSnapshot === "function"
         ? (...args) => helpers.cloneNoticeSnapshot(...args)
         : (notice) => ({
@@ -95,9 +84,7 @@
       const applyDegradedDiagnostics = (...args) => helpers.applyDegradedDiagnostics?.(...args);
       const getWorkspaceTitleOrFallback = (...args) => helpers.getWorkspaceTitleOrFallback?.(...args);
       const persistWorkspaceSession = (...args) => controller("session")?.persistSession?.(...args);
-      const clearWorkspaceSession = (...args) => controller("session")?.clearSession?.(...args);
       const inferAudioExtension = (...args) => controller("capture")?.inferAudioExtension?.(...args);
-      const refreshWorkspace = (...args) => controller("realtime")?.refreshWorkspace?.(...args);
       const syncWorkspaceLocalState = (...args) => controller("realtime")?.syncWorkspaceLocalState?.(...args);
       const saveRecordTitleForEntry = (...args) => controller("mutations")?.saveRecordTitleForEntry?.(...args);
 
@@ -2598,7 +2585,7 @@
               requestId,
               url: url.toString(),
             });
-            throw new Error("오디오 원본 업로드 응답이 늦어지고 있어요. 잠시 후 다시 시도해 주세요.");
+            throw new Error("오디오 원본 업로드 응답이 늦어지고 있어요. 잠시 후 다시 시도해 주세요.", { cause: error });
           }
           logDebug("workspace.source-upload.error", {
             error,

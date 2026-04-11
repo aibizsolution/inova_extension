@@ -20,7 +20,6 @@ const RECENT_LOAD_TTL_MS = 10000;
 const RECENT_PEEK_TTL_MS = 10000;
 const RECENT_RELEASE_TTL_MS = 60000;
 const RECENT_SYNC_TTL_MS = 30000;
-const LOCAL_MEETING_WORKSPACE_URL = "http://127.0.0.1:5000/meeting/index.html";
 const activeLoads = new Map();
 const activePeeks = new Map();
 const recentLoadResults = new Map();
@@ -563,7 +562,7 @@ function normalizeMeetingWorkspaceOverrideUrl(value) {
       error: error instanceof Error ? error.message : String(error || ""),
       value: normalized,
     });
-    throw new Error("회의 작업실 주소가 올바르지 않아요. 팝업 설정을 확인해 주세요.");
+    throw new Error("회의 작업실 주소가 올바르지 않아요. 팝업 설정을 확인해 주세요.", { cause: error });
   }
 }
 
@@ -638,7 +637,7 @@ function isLoopbackHostname(value) {
   return ["127.0.0.1", "localhost"].includes(namespace.session.normalizeText(value).toLowerCase());
 }
 
-function logMeetingDebug(event, payload) {
+function logMeetingDebug() {
   return;
 }
 

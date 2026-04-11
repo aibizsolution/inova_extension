@@ -1,0 +1,155 @@
+#!/usr/bin/env node
+
+const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
+const vm = require("vm");
+
+const root = path.resolve(__dirname, "..");
+
+function main() {
+  const harness = createHarness();
+  const stateA = harness.factory.createState();
+  const stateB = harness.factory.createState();
+
+  assert.equal(harness.readCollapsedCalls, 2);
+  assert.equal(harness.mergeCloudSyncCalls, 2);
+  assert.equal(harness.mergeReleaseInfoCalls, 2);
+  assert.equal(harness.mergeUiPreferencesCalls, 2);
+  assert.equal(harness.mergePromptLibraryCalls, 2);
+
+  assert.equal(stateA.activeTool, "meeting");
+  assert.equal(stateA.panelDebugUi.collapsed, false);
+  assert.equal(stateA.cloudSync.providerIdentity.providerUserKey, "fixture-user");
+  assert.equal(stateA.releaseInfo.lastCheckedAt, "2026-04-11T00:00:00.000Z");
+  assert.equal(stateA.uiPreferences.activePromptTab, "library");
+  assert.equal(stateA.promptLibrary.items.length, 1);
+  assert.equal(stateA.store.limit, 1000);
+  assert.equal(stateA.store.renderKey, 0);
+  assert.equal(stateA.store.renderLimit, 20);
+  assert.equal(stateA.promptEditor.mode, "create");
+  assert.equal(stateA.promptPublishCategoryId, "document");
+  assert.equal(stateA.routeWatchInstalled, false);
+
+  assert.notStrictEqual(stateA, stateB);
+  assert.notStrictEqual(stateA.settings, stateB.settings);
+  assert.notStrictEqual(stateA.meetingUi, stateB.meetingUi);
+  assert.notStrictEqual(stateA.meetingUi.pending, stateB.meetingUi.pending);
+  assert.notStrictEqual(stateA.panelDebugUi, stateB.panelDebugUi);
+  assert.notStrictEqual(stateA.store, stateB.store);
+  assert.notStrictEqual(stateA.queries, stateB.queries);
+
+  stateA.settings.enabled = false;
+  stateA.meetingUi.pending.action = "share";
+  stateA.store.scope = "mine";
+  stateA.queries.bookmarks = "alpha";
+
+  assert.equal(stateB.settings.enabled, true);
+  assert.equal(stateB.meetingUi.pending.action, "");
+  assert.equal(stateB.store.scope, "all");
+  assert.equal(stateB.queries.bookmarks, "");
+
+  console.log("[verify-panel-state-factory] Panel state factory contract passed");
+}
+
+function createHarness() {
+  let readCollapsedCalls = 0;
+  let mergeCloudSyncCalls = 0;
+  let mergePromptLibraryCalls = 0;
+  let mergeReleaseInfoCalls = 0;
+  let mergeUiPreferencesCalls = 0;
+
+  const context = vm.createContext({
+    console,
+    globalThis: null,
+  });
+  context.globalThis = context;
+  context.InovaBookmarks = {
+    cloudSync: {
+      mergeCloudSyncState() {
+        mergeCloudSyncCalls += 1;
+        return {
+          providerIdentity: {
+            available: true,
+            providerUserKey: "fixture-user",
+          },
+        };
+      },
+    },
+    constants: {
+      defaults: {
+        meetingHub: { items: [] },
+        promptReview: { open: false },
+        settings: {
+          autoBookmark: true,
+          enabled: true,
+          meetingDebug: true,
+        },
+        uiPreferences: {
+          activePromptTab: "library",
+          activeTool: "meeting",
+        },
+      },
+    },
+    panelDebugController: {
+      readCollapsedPreference() {
+        readCollapsedCalls += 1;
+        return false;
+      },
+    },
+    promptLibrary: {
+      mergePromptLibrary() {
+        mergePromptLibraryCalls += 1;
+        return {
+          items: [{ id: "prompt-1", title: "Fixture Prompt" }],
+        };
+      },
+    },
+    releaseInfo: {
+      mergeReleaseInfo() {
+        mergeReleaseInfoCalls += 1;
+        return {
+          lastCheckedAt: "2026-04-11T00:00:00.000Z",
+        };
+      },
+    },
+    storage: {
+      mergeUiPreferences() {
+        mergeUiPreferencesCalls += 1;
+        return {
+          activePromptTab: "library",
+          activeTool: "meeting",
+          handleRatios: {},
+        };
+      },
+    },
+  };
+
+  loadScript("content/panel-state-factory.js", context);
+
+  return {
+    factory: context.InovaBookmarks.panelStateFactory,
+    get mergeCloudSyncCalls() {
+      return mergeCloudSyncCalls;
+    },
+    get mergePromptLibraryCalls() {
+      return mergePromptLibraryCalls;
+    },
+    get mergeReleaseInfoCalls() {
+      return mergeReleaseInfoCalls;
+    },
+    get mergeUiPreferencesCalls() {
+      return mergeUiPreferencesCalls;
+    },
+    get readCollapsedCalls() {
+      return readCollapsedCalls;
+    },
+  };
+}
+
+function loadScript(relativePath, context) {
+  const source = fs.readFileSync(path.join(root, relativePath), "utf8");
+  new vm.Script(source, { filename: relativePath }).runInContext(context);
+}
+
+main();

@@ -1,19 +1,26 @@
 (function initContentPanel(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  let panelHost = null;
 
   function ensurePanel(callbacks) {
-    let host = document.getElementById("inova-bookmark-host");
-    if (host) { host.__callbacks = callbacks; return host; }
+    let host = getPanelHost();
+    if (host) {
+      host.__callbacks = callbacks;
+      host.__panelElements = host.__panelElements || resolvePanelElements(host);
+      host.__panelRenderCache = host.__panelRenderCache || createPanelRenderCache();
+      return host;
+    }
     host = document.createElement("div");
     host.id = "inova-bookmark-host";
     host.__callbacks = callbacks;
     host.innerHTML = buildMarkup();
     document.body.appendChild(host);
-    const handle = host.querySelector("#inova-bookmark-handle");
-    const close = host.querySelector("#inova-tool-close");
-    const fileInput = host.querySelector("#inova-prompt-import-file");
+    panelHost = host;
+    host.__panelElements = resolvePanelElements(host);
+    host.__panelRenderCache = createPanelRenderCache();
+    const { close, fileInput, handle } = host.__panelElements;
     installHandleInteractions(host, handle, callbacks);
-    close.addEventListener("click", () => callbacks.onToggle(false));
+    close?.addEventListener("click", () => callbacks.onToggle(false));
     host.addEventListener("click", (event) => handleRootClick(event, host, callbacks));
     host.addEventListener("scroll", (event) => namespace.promptHubPanel?.handleScroll?.(event, host, callbacks), true);
     host.addEventListener("pointerdown", (event) => namespace.promptHubPanel?.handlePointerDown?.(event, host));
@@ -26,47 +33,208 @@
     host.addEventListener("input", (event) => handleRootInput(event, host, callbacks));
     host.addEventListener("change", (event) => handleRootChange(event, callbacks));
     host.addEventListener("keydown", (event) => handleRootKeydown(event, callbacks));
-    fileInput.addEventListener("change", () => { const [file] = Array.from(fileInput.files || []); if (file) callbacks.onImportFile?.(file); fileInput.value = ""; });
+    fileInput?.addEventListener("change", () => { const [file] = Array.from(fileInput.files || []); if (file) callbacks.onImportFile?.(file); fileInput.value = ""; });
     return host;
   }
 
   function renderPanel(state) {
-    const host = document.getElementById("inova-bookmark-host");
+    const host = getPanelHost();
     if (!host) return;
+    host.__pendingPanelState = state;
     if (host.__searchComposition?.active) {
       host.__deferredPanelState = state;
       return;
     }
-    const root = host.querySelector("#inova-bookmark-root");
-    const debugLayer = host.querySelector("#inova-meeting-debug-layer");
+    schedulePanelRender(host);
+  }
+
+  function getPanelHost() {
+    if (panelHost?.isConnected) {
+      return panelHost;
+    }
+    panelHost = document.getElementById("inova-bookmark-host");
+    return panelHost;
+  }
+
+  function resolvePanelElements(host) {
+    return {
+      close: host.querySelector("#inova-tool-close"),
+      debugLayer: host.querySelector("#inova-meeting-debug-layer"),
+      fileInput: host.querySelector("#inova-prompt-import-file"),
+      handle: host.querySelector("#inova-bookmark-handle"),
+      handleCount: host.querySelector(".handle-count"),
+      root: host.querySelector("#inova-bookmark-root"),
+      toolContent: host.querySelector("#inova-tool-content"),
+      toolRail: host.querySelector("#inova-tool-rail"),
+      toolTitle: host.querySelector("#inova-tool-title"),
+      toolTotal: host.querySelector("#inova-tool-total"),
+    };
+  }
+
+  function createPanelRenderCache() {
+    return {
+      debugHtml: "",
+      debugKey: "",
+      handleCount: "",
+      toolContentHtml: "",
+      toolContentKey: "",
+      toolRailHtml: "",
+      toolTitle: "",
+      toolTotal: "",
+    };
+  }
+
+  function schedulePanelRender(host) {
+    if (!(host instanceof global.HTMLElement) || host.__panelFrame) {
+      return;
+    }
+    const scheduleFrame = typeof global.requestAnimationFrame === "function"
+      ? global.requestAnimationFrame.bind(global)
+      : (callback) => global.setTimeout(() => callback(Date.now()), 16);
+    host.__panelFrame = scheduleFrame(() => {
+      host.__panelFrame = 0;
+      flushPanelRender(host);
+      if (host.__pendingPanelState && !host.__searchComposition?.active) {
+        schedulePanelRender(host);
+      }
+    });
+  }
+
+  function flushPanelRender(host) {
+    if (!(host instanceof global.HTMLElement)) {
+      return;
+    }
+    if (host.__searchComposition?.active) {
+      if (host.__pendingPanelState) {
+        host.__deferredPanelState = host.__pendingPanelState;
+        delete host.__pendingPanelState;
+      }
+      return;
+    }
+    const state = host.__pendingPanelState || host.__deferredPanelState;
+    delete host.__pendingPanelState;
+    delete host.__deferredPanelState;
+    if (!state) {
+      return;
+    }
+    const elements = host.__panelElements || resolvePanelElements(host);
+    host.__panelElements = elements;
+    const cache = host.__panelRenderCache || createPanelRenderCache();
+    host.__panelRenderCache = cache;
+    const { debugLayer, handleCount, root, toolContent, toolRail, toolTitle, toolTotal } = elements;
     const focusedControl = captureFocusedControl(root);
     const previousStoreScrollTop = state.activeTool === "prompts" && state.promptTool?.activeTab === "store"
       ? host.querySelector(".inova-store-list")?.scrollTop || host.__storeScrollTop || 0
       : 0;
-    root.hidden = !state.visible;
-    root.dataset.open = String(state.open);
+
+    if (root) {
+      root.hidden = !state.visible;
+      root.dataset.open = String(state.open);
+    }
     document.body.classList.toggle("inova-bookmark-panel-open", Boolean(state.visible && state.open));
     applyHandleRatio(host, state.handleRatio);
-    const toolRail = host.querySelector("#inova-tool-rail");
+
     const nextToolRailHtml = renderToolRail(state.tools, state.activeTool);
-    if (toolRail && toolRail.innerHTML !== nextToolRailHtml) {
+    if (toolRail && cache.toolRailHtml !== nextToolRailHtml) {
       toolRail.innerHTML = nextToolRailHtml;
+      cache.toolRailHtml = nextToolRailHtml;
     }
-    host.querySelector("#inova-tool-title").textContent = state.toolTitle;
-    host.querySelector("#inova-tool-total").textContent = String(state.toolCount);
-    host.querySelector(".handle-count").textContent = String(state.handleCount);
-    const toolContent = host.querySelector("#inova-tool-content");
-    const nextToolContentHtml = renderToolContent(state);
-    if (toolContent && toolContent.innerHTML !== nextToolContentHtml) {
-      toolContent.innerHTML = nextToolContentHtml;
+
+    const nextToolTitle = String(state.toolTitle || "");
+    if (toolTitle && cache.toolTitle !== nextToolTitle) {
+      toolTitle.textContent = nextToolTitle;
+      cache.toolTitle = nextToolTitle;
     }
-    namespace.panelDebug?.captureViewport?.("panel-overlay", debugLayer?.querySelector(".inova-meeting-debug-console__log"));
-    debugLayer.innerHTML = renderMeetingDebugLayer(state);
-    syncMeetingDebugLayerDataset(debugLayer, state.panelDebug);
-    namespace.panelDebug?.restoreViewport?.("panel-overlay", debugLayer?.querySelector(".inova-meeting-debug-console__log"));
-    if (state.activeTool === "prompts" && state.promptTool?.activeTab === "store") namespace.promptHubPanel?.syncStoreList?.(host, host.__callbacks, previousStoreScrollTop);
+
+    const nextToolTotal = String(state.toolCount);
+    if (toolTotal && cache.toolTotal !== nextToolTotal) {
+      toolTotal.textContent = nextToolTotal;
+      cache.toolTotal = nextToolTotal;
+    }
+
+    const nextHandleCount = String(state.handleCount);
+    if (handleCount && cache.handleCount !== nextHandleCount) {
+      handleCount.textContent = nextHandleCount;
+      cache.handleCount = nextHandleCount;
+    }
+
+    renderToolContentIfNeeded(toolContent, cache, state);
+    renderMeetingDebugLayerIfNeeded(debugLayer, cache, state);
+
+    if (state.activeTool === "prompts" && state.promptTool?.activeTab === "store") {
+      namespace.promptHubPanel?.syncStoreList?.(host, host.__callbacks, {
+        renderKey: state.promptTool?.store?.renderKey,
+        scrollTop: previousStoreScrollTop,
+      });
+    }
     namespace.bookmarkView.setActive(state.bookmarksTool.activeId);
     restoreFocusedControl(root, focusedControl);
+  }
+
+  function renderToolContentIfNeeded(toolContent, cache, state) {
+    if (!(toolContent instanceof global.HTMLElement)) {
+      return;
+    }
+    const nextToolContentKey = buildToolContentKey(state);
+    if (cache.toolContentKey !== nextToolContentKey) {
+      cache.toolContentHtml = renderToolContent(state);
+      cache.toolContentKey = nextToolContentKey;
+    }
+    if (toolContent.innerHTML !== cache.toolContentHtml) {
+      toolContent.innerHTML = cache.toolContentHtml;
+    }
+  }
+
+  function buildToolContentKey(state) {
+    return `${state.activeTool}:${serializeRenderState(getActiveToolState(state))}`;
+  }
+
+  function getActiveToolState(state) {
+    if (state.activeTool === "prompts") return state.promptTool;
+    if (state.activeTool === "meeting") return state.meetingTool;
+    if (state.activeTool === "release") return state.releaseTool;
+    return state.bookmarksTool;
+  }
+
+  function renderMeetingDebugLayerIfNeeded(debugLayer, cache, state) {
+    if (!(debugLayer instanceof global.HTMLElement)) {
+      return;
+    }
+    const panelDebug = state.panelDebug && typeof state.panelDebug === "object" ? state.panelDebug : {};
+    const debugEnabled = Boolean(panelDebug.enabled);
+    if (!debugEnabled) {
+      if (cache.debugHtml || debugLayer.innerHTML) {
+        debugLayer.innerHTML = "";
+      }
+      cache.debugHtml = "";
+      cache.debugKey = "disabled";
+      syncMeetingDebugLayerDataset(debugLayer, panelDebug);
+      return;
+    }
+    const nextDebugKey = `enabled:${serializeRenderState(panelDebug)}`;
+    if (cache.debugKey !== nextDebugKey) {
+      namespace.panelDebug?.captureViewport?.("panel-overlay", debugLayer.querySelector(".inova-meeting-debug-console__log"));
+      cache.debugHtml = renderMeetingDebugLayer(state);
+      cache.debugKey = nextDebugKey;
+      if (debugLayer.innerHTML !== cache.debugHtml) {
+        debugLayer.innerHTML = cache.debugHtml;
+      }
+      namespace.panelDebug?.restoreViewport?.("panel-overlay", debugLayer.querySelector(".inova-meeting-debug-console__log"));
+    }
+    syncMeetingDebugLayerDataset(debugLayer, panelDebug);
+  }
+
+  function serializeRenderState(value) {
+    try {
+      return JSON.stringify(value, (_key, current) => {
+        if (typeof current === "function") return undefined;
+        if (current instanceof global.HTMLElement) return undefined;
+        return current;
+      }) || "";
+    } catch (error) {
+      console.warn("[i-Nova Bookmarks] render cache key failed", error);
+      return `cache-error:${Date.now()}`;
+    }
   }
 
   function buildMarkup() {
@@ -221,6 +389,16 @@
   function handleRootKeydown(event, callbacks) {
     const root = document.getElementById("inova-bookmark-root");
     if (event.key === "Escape" && root?.dataset.open === "true") {
+      const storeSearch = event.target instanceof HTMLElement
+        ? event.target.closest?.('[data-search-tool="store"]')
+        : null;
+      if (storeSearch instanceof global.HTMLInputElement && storeSearch.value) {
+        storeSearch.value = "";
+        callbacks.onSearch?.("store", "", { composing: false });
+        callbacks.onSearchSubmit?.("store", "");
+        event.preventDefault();
+        return;
+      }
       if (callbacks.onEscape?.()) { event.preventDefault(); return; }
       return void callbacks.onToggle?.(false);
     }

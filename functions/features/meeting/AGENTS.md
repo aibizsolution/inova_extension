@@ -36,7 +36,7 @@
 ## 관련 functions 경로
 - `functions/index.js`
 - `functions/platform/*`
-- `docs/refactoring-plan.md`는 meeting version gate, legacy baseline, split milestone처럼 장기 판단 기준을 맡는다.
+- `docs/refactoring-plan.md`는 meeting version gate, legacy baseline, release decision처럼 장기 판단 기준을 맡는다.
 - `docs/functions-runtime-guide.md`는 runtime sizing과 운영 튜닝 기준을 맡는다.
 
 ## meeting 리팩토링 경계 규칙
@@ -75,7 +75,7 @@
 - meeting 관련 export 이름, Firestore trigger 문서 경로, hosted meeting auth 흐름이 그대로 유지되는지 확인한다.
 - chunk worker 기본값은 per-job staged queue가 아니라 full fan-out이다. `OPENAI_MEETING_CHUNK_TRANSCRIPTION_CONCURRENCY`를 넣었을 때만 waiting/queued 제한이 다시 걸리는지 확인한다.
 - runtime sizing, `check:function-runtime`, chunk/finalize 운영 기준은 `docs/functions-runtime-guide.md`를 기준으로 확인한다.
-- version gate와 manual smoke 기준은 `docs/refactoring-plan.md`를 기준으로 확인한다.
+- version gate와 호환 판단 기준은 `docs/refactoring-plan.md`를 기준으로 확인한다.
 - `termReplacements`는 회의 단위 순서 보존 배열이며, `from` 중복/빈 값이 거부되고 기존 notes와 이후 notes 결과에 모두 deterministic pass가 적용되는지 확인한다.
 - `previewInovaMeetingResultSectionEdit`와 `applyInovaMeetingResultSectionEdit`는 editable section key, `baseRevisionToken`, stale preview 거절 계약을 유지해야 한다.
 - persisted meeting notes는 `summary`와 `overview`를 독립 필드로 유지한다. `summary`는 핵심 요약 카드용 짧은 요약이고, `summary`/`overview` 모두 섹션 preview/apply 대상이지만 서로를 덮어쓰지 않아야 한다.

@@ -15,10 +15,8 @@
       ? "불러오는 중"
       : state.queryDirty
         ? "엔터를 눌러 검색"
-      : state.queryActive
-        ? `검색 결과 ${state.totalCount}개`
-        : state.totalCount > state.loadedCount
-          ? `총 ${state.totalCount}개 · ${state.loadedCount}개 표시`
+        : state.totalCount > state.renderedCount
+          ? `총 ${state.totalCount}개 · ${state.renderedCount}개 표시`
           : `총 ${state.totalCount}개`;
     const itemsHtml = state.items.length
       ? state.items.map((item) => renderItem(item, state)).join("")

@@ -15,6 +15,12 @@ const FEATURE_DOC_RULES = [
       /^content\/dom\.js$/,
       /^content\/bookmark-view\.js$/,
       /^content\/route-sync\.js$/,
+      /^content\/route-state-controller\.js$/,
+      /^content\/route-watch-controller\.js$/,
+      /^content\/panel-bookmark-controller\.js$/,
+      /^content\/panel-surface-controller\.js$/,
+      /^content\/panel-activity-controller\.js$/,
+      /^content\/panel-shell-controller\.js$/,
     ],
   },
   {
@@ -54,6 +60,8 @@ const FEATURE_DOC_RULES = [
       /^content\/prompt-hub-panel\.js$/,
       /^content\/prompt-hub-controller\.js$/,
       /^content\/prompt-hub-runtime\.js$/,
+      /^content\/panel-prompt-controller\.js$/,
+      /^content\/panel-prompt-bridge-controller\.js$/,
     ],
   },
   {

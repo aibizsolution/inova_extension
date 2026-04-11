@@ -98,7 +98,7 @@ function readUpstreamRef(branchName) {
         stdio: ["ignore", "pipe", "pipe"],
       }) || ""
     ).trim();
-  } catch (error) {
+  } catch {
     return "";
   }
 }
@@ -125,7 +125,7 @@ function fetchRemote(remoteName) {
 function refsPointToSameCommit(leftRef, rightRef) {
   try {
     return readCommit(leftRef) === readCommit(rightRef);
-  } catch (error) {
+  } catch {
     console.warn(`[branch-cleanup] ref 비교 실패: ${leftRef} <-> ${rightRef}`);
     return false;
   }

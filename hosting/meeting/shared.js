@@ -332,7 +332,7 @@
     } catch (error) {
       if (error?.name === "AbortError") {
         logDebug("http.timeout", { url });
-        throw new Error("회의 작업실 응답이 늦어지고 있어요. 잠시 후 다시 시도해 주세요.");
+        throw new Error("회의 작업실 응답이 늦어지고 있어요. 잠시 후 다시 시도해 주세요.", { cause: error });
       }
       logDebug("http.error", {
         error,

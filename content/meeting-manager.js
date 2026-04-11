@@ -2,9 +2,6 @@
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const defaults = namespace.constants.defaults.meetingHub;
   const ACTIVE_SYNC_DELAY_MS = 220;
-  const BRIDGE_IFRAME_ID = "inova-meeting-panel-bridge";
-  const BRIDGE_IFRAME_READY_TIMEOUT_MS = 10000;
-  const BRIDGE_MESSAGE_SOURCE = "inova-meeting-panel-client";
   const BRIDGE_QUERY_LIMIT = 24;
   const FALLBACK_REFRESH_COOLDOWN_MS = 15000;
 
@@ -12,20 +9,19 @@
     let authState = { expiresAt: "", firebaseCustomToken: "", functionsBaseUrl: "", providerUserKey: "" };
     let authPromise = null;
     let authPromiseKey = "";
-    let bridgeFrame = null;
-    let bridgePort = null;
-    let bridgePortPromise = null;
-    let bridgeReadyReject = null;
-    let bridgeReadyResolve = null;
     let currentRequestId = 0;
-    let bridgeConnectionKey = "";
-    let bridgeConnected = false;
-    let bridgeConnecting = false;
-    let bridgeAttached = false;
     let fallbackInflight = false;
     let fallbackCooldownUntil = 0;
     let lastSnapshotRequestId = 0;
     let timerId = 0;
+    const meetingPanelBridgeController = namespace.meetingPanelBridgeController.create({
+      getCurrentRequestId: () => currentRequestId,
+      log: (event, payload) => namespace.panelDebug?.log?.(event, payload),
+      onAsyncError: logRefreshError,
+      onConnected: () => warmRefresh(namespace.providerIdentity.getCurrent(), currentRequestId),
+      onError: handleBridgeError,
+      onSnapshot: handleSnapshotPayload,
+    });
 
     return {
       handleRouteStateChange,
@@ -92,23 +88,10 @@
       };
     }
 
-    function closeBridgePort(context) {
-      try {
-        bridgePort?.close?.();
-      } catch (error) {
-        namespace.panelDebug?.log?.("panel.bridge.close.error", {
-          context,
-          error: error instanceof Error ? error.message : String(error || ""),
-        });
-      }
-      bridgePort = null;
-      bridgePortPromise = null;
-    }
-
     async function ensureRealtime(providerIdentity, reason) {
       const runtimeConfig = resolveMeetingRuntimeConfig();
       const ownerKey = namespace.session.normalizeText(providerIdentity?.providerUserKey);
-      const port = await ensureBridgePort(runtimeConfig);
+      const port = await meetingPanelBridgeController.ensurePort(runtimeConfig);
       const auth = await ensurePanelAuth(providerIdentity, runtimeConfig);
       const connectionKey = [
         namespace.session.normalizeText(runtimeConfig?.target) || "production",
@@ -117,20 +100,12 @@
         ownerKey,
         namespace.session.normalizeText(auth.expiresAt),
       ].join("::");
-      if (
-        bridgePort
-        && connectionKey
-        && bridgeConnectionKey === connectionKey
-        && (bridgeAttached || bridgeConnected || bridgeConnecting)
-      ) {
+      if (meetingPanelBridgeController.hasActiveConnection(connectionKey)) {
         return;
       }
-      bridgeConnectionKey = connectionKey;
-      bridgeAttached = true;
-      bridgeConnecting = true;
-      bridgeConnected = false;
       currentRequestId += 1;
-      namespace.panelDebug?.log?.("panel.bridge.request", {
+      meetingPanelBridgeController.beginConnection({
+        connectionKey,
         providerUserKey: ownerKey,
         reason,
         requestId: currentRequestId,
@@ -193,175 +168,9 @@
       }
     }
 
-    async function ensureBridgePort(runtimeConfig) {
-      const expectedSrc = namespace.session.normalizeText(runtimeConfig?.hosting?.meetingPanelBridgeUrl) || namespace.firebaseConfig.hosting.meetingPanelBridgeUrl;
-      if (
-        bridgePort
-        && bridgeFrame instanceof global.HTMLIFrameElement
-        && bridgeFrame.src === expectedSrc
-      ) {
-        return bridgePort;
-      }
-      if (
-        bridgePortPromise
-        && bridgeFrame instanceof global.HTMLIFrameElement
-        && bridgeFrame.src === expectedSrc
-      ) {
-        return bridgePortPromise;
-      }
-      if (bridgeFrame instanceof global.HTMLIFrameElement && bridgeFrame.src !== expectedSrc) {
-        closeBridgePort("runtime-change");
-        bridgeAttached = false;
-        bridgeConnected = false;
-        bridgeConnecting = false;
-        bridgeConnectionKey = "";
-        bridgeFrame.remove();
-        bridgeFrame = null;
-      }
-
-      bridgeFrame = ensureBridgeFrame(runtimeConfig);
-      bridgePortPromise = new Promise((resolve, reject) => {
-        const timeoutId = global.setTimeout(() => {
-          bridgeReadyResolve = null;
-          bridgeReadyReject = null;
-          bridgePortPromise = null;
-          reject(new Error("패널 Firestore bridge 준비가 지연되고 있어요."));
-        }, BRIDGE_IFRAME_READY_TIMEOUT_MS);
-
-        bridgeReadyResolve = () => {
-          global.clearTimeout(timeoutId);
-          bridgeReadyResolve = null;
-          bridgeReadyReject = null;
-          bridgePortPromise = null;
-          resolve(bridgePort);
-        };
-        bridgeReadyReject = (error) => {
-          global.clearTimeout(timeoutId);
-          bridgeReadyResolve = null;
-          bridgeReadyReject = null;
-          bridgePortPromise = null;
-          reject(error instanceof Error ? error : new Error(String(error || "패널 Firestore bridge를 준비하지 못했어요.")));
-        };
-
-        const connectPort = () => {
-          if (!bridgeFrame?.contentWindow) {
-            bridgeReadyReject?.(new Error("패널 Firestore bridge 창을 찾지 못했어요."));
-            return;
-          }
-          const channel = new MessageChannel();
-          bridgePort = channel.port1;
-          bridgePort.onmessage = handleBridgeMessage;
-          bridgePort.onmessageerror = () => {
-            namespace.panelDebug?.log?.("panel.bridge.error", {
-              error: "패널 Firestore bridge 채널이 끊겼어요.",
-            });
-            bridgeAttached = false;
-            bridgeConnected = false;
-            bridgeConnecting = false;
-            bridgeConnectionKey = "";
-            bridgePort = null;
-          };
-          bridgePort.start?.();
-          bridgeFrame.contentWindow.postMessage(
-            {
-              source: BRIDGE_MESSAGE_SOURCE,
-              type: "connect-port",
-            },
-            namespace.session.normalizeText(runtimeConfig?.hosting?.originUrl) || namespace.firebaseConfig.hosting.originUrl,
-            [channel.port2]
-          );
-        };
-
-        if (bridgeFrame.dataset.loaded === "1") {
-          connectPort();
-          return;
-        }
-
-        const handleLoad = () => {
-          bridgeFrame.removeEventListener("load", handleLoad);
-          bridgeFrame.dataset.loaded = "1";
-          connectPort();
-        };
-        bridgeFrame.addEventListener("load", handleLoad, { once: true });
-      });
-
-      return bridgePortPromise;
-    }
-
-    function ensureBridgeFrame(runtimeConfig) {
-      const expectedSrc = namespace.session.normalizeText(runtimeConfig?.hosting?.meetingPanelBridgeUrl) || namespace.firebaseConfig.hosting.meetingPanelBridgeUrl;
-      const existing = global.document.getElementById(BRIDGE_IFRAME_ID);
-      if (existing instanceof global.HTMLIFrameElement) {
-        if (existing.src === expectedSrc) {
-          return existing;
-        }
-        closeBridgePort("iframe-recreate");
-        bridgeAttached = false;
-        bridgeConnected = false;
-        bridgeConnecting = false;
-        bridgeConnectionKey = "";
-        existing.remove();
-      }
-      const iframe = global.document.createElement("iframe");
-      iframe.id = BRIDGE_IFRAME_ID;
-      iframe.src = expectedSrc;
-      iframe.hidden = true;
-      iframe.tabIndex = -1;
-      iframe.setAttribute("aria-hidden", "true");
-      iframe.style.display = "none";
-      iframe.style.width = "0";
-      iframe.style.height = "0";
-      iframe.style.border = "0";
-      global.document.body.appendChild(iframe);
-      return iframe;
-    }
-
-    function handleBridgeMessage(event) {
-      const data = event?.data && typeof event.data === "object" ? event.data : {};
-      const type = namespace.session.normalizeText(data.type);
-      const payload = data.payload && typeof data.payload === "object" ? data.payload : {};
-      if (type === "ready") {
-        namespace.panelDebug?.log?.("panel.bridge.ready", {});
-        bridgeReadyResolve?.();
-        return;
-      }
-      if (type === "connected") {
-        if (Number(payload.requestId) && Number(payload.requestId) !== currentRequestId) {
-          return;
-        }
-        bridgeAttached = true;
-        bridgeConnecting = false;
-        bridgeConnected = true;
-        namespace.panelDebug?.log?.("panel.bridge.connected", payload);
-        warmRefresh(namespace.providerIdentity.getCurrent(), currentRequestId).catch(logRefreshError);
-        return;
-      }
-      if (type === "disconnected") {
-        bridgeAttached = false;
-        bridgeConnecting = false;
-        bridgeConnected = false;
-        bridgeConnectionKey = "";
-        namespace.panelDebug?.log?.("panel.bridge.detached", payload);
-        return;
-      }
-      if (Number(payload.requestId) && Number(payload.requestId) !== currentRequestId) {
-        return;
-      }
-      if (type === "snapshot") {
-        handleSnapshotPayload(payload).catch(logRefreshError);
-        return;
-      }
-      if (type === "error") {
-        handleBridgeError(payload).catch(logRefreshError);
-      }
-    }
-
     async function handleSnapshotPayload(payload) {
       lastSnapshotRequestId = Math.max(lastSnapshotRequestId, Number(payload.requestId) || currentRequestId);
       const items = normalizeRealtimeItems(payload.items);
-      bridgeAttached = true;
-      bridgeConnecting = false;
-      bridgeConnected = true;
       namespace.panelDebug?.log?.("panel.firestore.snapshot", {
         count: items.length,
         fromCache: Boolean(payload.fromCache),
@@ -383,9 +192,6 @@
     }
 
     async function handleBridgeError(payload) {
-      bridgeAttached = false;
-      bridgeConnecting = false;
-      bridgeConnected = false;
       const providerIdentity = namespace.providerIdentity.getCurrent();
       const error = new Error(namespace.session.normalizeText(payload.error) || "패널 Firestore 구독에 실패했어요.");
       namespace.panelDebug?.log?.("panel.firestore.error", {
@@ -453,28 +259,9 @@
     }
 
     function disconnectRealtime(reason) {
-      if (!bridgeAttached && !bridgeConnected && !bridgeConnecting && !bridgeConnectionKey) {
-        return;
-      }
       currentRequestId += 1;
-      if (bridgePort && (bridgeAttached || bridgeConnected || bridgeConnecting || bridgeConnectionKey)) {
-        try {
-          bridgePort.postMessage({ type: "disconnect" });
-        } catch (error) {
-          namespace.panelDebug?.log?.("panel.bridge.disconnect.error", {
-            error: error instanceof Error ? error.message : String(error || ""),
-            reason,
-          });
-        }
-      }
-      bridgeAttached = false;
-      bridgeConnecting = false;
-      bridgeConnected = false;
-      bridgeConnectionKey = "";
+      meetingPanelBridgeController.disconnect(reason);
       lastSnapshotRequestId = 0;
-      namespace.panelDebug?.log?.("panel.bridge.detach", {
-        reason,
-      });
     }
 
     async function warmRefresh(providerIdentity, requestId) {

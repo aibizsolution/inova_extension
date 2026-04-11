@@ -65,7 +65,7 @@ function readCurrentBranch() {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     }) || "").trim();
-  } catch (error) {
+  } catch {
     fail("현재 Git 브랜치를 확인하지 못했어요.");
   }
 }

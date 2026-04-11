@@ -13,7 +13,9 @@
 - [docs/feature-routing.md](docs/feature-routing.md): primary feature 선택, 시작 파일, 범위 확장 규칙
 - [AGENTS.md](AGENTS.md): 전역 작업 규칙, 검증 기본값, 세션 분리 기준
 - [docs/feature-spec.md](docs/feature-spec.md): 제품 요구사항과 공통 계약
+- [docs/refactoring-plan.md](docs/refactoring-plan.md): version/release decision note, meeting 호환 기준
 - [docs/runtime-architecture.md](docs/runtime-architecture.md): popup, panel, background, hosted runtime 경계
+- [docs/firebase-architecture.md](docs/firebase-architecture.md): Firebase project/data boundary 메모
 - [docs/functions-runtime-guide.md](docs/functions-runtime-guide.md): Firebase Functions runtime 기본값, 예외 프로파일, 운영 점검 기준
 - [docs/lint-workflow.md](docs/lint-workflow.md): lint 범위, 예외, 점진적 확장 원칙
 - [docs/e2e-browser-workflow.md](docs/e2e-browser-workflow.md): 실제 Chrome 기준 수동 검증 흐름
@@ -95,7 +97,7 @@ npm run deploy:all
 - auto-merge를 걸었어도 PR이 실제 `MERGED` 상태가 되었는지 확인해야 하며, 확인 후에는 `main`을 최신으로 맞추고 해당 로컬 `codex/*` 브랜치를 정리합니다.
 - `pre-commit`과 `pre-push`는 branch workflow와 release metadata 같은 실제 안전장치를 유지합니다.
 - `verify:feature-doc-guard`는 feature-owned 파일 변경 시 `AGENTS.md` 갱신을 강제하지 않고, 문서 검토 후보만 audit로 보여 줍니다.
-- `verify-refactor-plan-update`는 ordinary feature 구현 변경을 막지 않고, version lane, legacy/v2 baseline, release gate처럼 장기 판단 비용이 큰 변경에만 `docs/refactoring-plan.md` 갱신을 요구합니다.
+- `verify-refactor-plan-update`는 ordinary feature 구현 변경을 막지 않고, version lane, meeting legacy baseline, release decision 기준처럼 장기 판단 비용이 큰 변경에만 `docs/refactoring-plan.md` 갱신을 요구합니다.
 - `README.md`는 상위 개요용이므로, feature-local 변경 때문에 기능 변경 일지처럼 누적하지 않습니다.
 - entrypoint, 데이터 경계, 최소 검증, durable invariant가 실제 코드와 달라지면 같은 작업 안에서 feature 문서나 관련 docs를 갱신합니다.
 - 최근 작업 순서나 세션별 변경 요약처럼 git으로 복구 가능한 정보는 문서에 중복 기록하지 않습니다.

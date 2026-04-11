@@ -12,7 +12,6 @@
     DEFAULT_SOURCE_TARGET_PART_BYTES,
     DEFAULT_SOURCE_UPLOAD_TIMEOUT_MS,
     formatDateTime,
-    isDebugPanelEnabled,
     isLocalWorkspaceOrigin,
     logDebug,
     normalizeText,
@@ -892,13 +891,6 @@
     if (refs.confirmDialogConfirm) refs.confirmDialogConfirm.textContent = state.confirmation.confirmLabel || "확인";
     controllers?.mutations?.renderRecordMoveDialog?.();
     controllers?.mutations?.renderMeetingNotesTools?.();
-    const selectedRecordMutationBusy = state.busy.deleteRecord
-      || state.busy.applySectionEdit
-      || state.busy.moveRecord
-      || state.busy.previewSectionEdit
-      || state.busy.saveRecordMemo
-      || state.busy.saveRecordTitle;
-    const readOnly = Boolean(state.auth?.readOnly);
     if (refs.termReplacementFromInput && refs.termReplacementFromInput.value !== state.termReplacementState.draftFrom) {
       refs.termReplacementFromInput.value = state.termReplacementState.draftFrom;
     }
