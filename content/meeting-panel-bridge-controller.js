@@ -56,9 +56,13 @@
 
     async function ensurePort(runtimeConfig) {
       const expectedFrame = namespace.frameProxy?.resolveTarget?.(resolveBridgeSrc(runtimeConfig)) || {
+        error: "",
         origin: readOrigin(resolveBridgeSrc(runtimeConfig)),
         src: resolveBridgeSrc(runtimeConfig),
       };
+      if (expectedFrame.error) {
+        throw new Error(expectedFrame.error);
+      }
       const expectedSrc = expectedFrame.src;
       if (
         bridgePort
@@ -171,9 +175,14 @@
     }
 
     function ensureBridgeFrame(runtimeConfig) {
-      const expectedSrc = (namespace.frameProxy?.resolveTarget?.(resolveBridgeSrc(runtimeConfig)) || {
+      const expectedFrame = namespace.frameProxy?.resolveTarget?.(resolveBridgeSrc(runtimeConfig)) || {
+        error: "",
         src: resolveBridgeSrc(runtimeConfig),
-      }).src;
+      };
+      if (expectedFrame.error) {
+        throw new Error(expectedFrame.error);
+      }
+      const expectedSrc = expectedFrame.src;
       const existing = global.document.getElementById(BRIDGE_IFRAME_ID);
       if (existing instanceof global.HTMLIFrameElement) {
         if (existing.src === expectedSrc) {

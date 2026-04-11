@@ -163,6 +163,20 @@
       });
       return;
     }
+    if (frameTarget.error) {
+      host.__panelUrl = panelUrl;
+      host.__panelFrameSrc = "";
+      host.__bridgeReady = false;
+      host.__bridge.reset("frame-proxy-error");
+      host.__bridge.setAllowedOrigin("");
+      clearHandshakeTimeout(host);
+      frame.setAttribute("src", "about:blank");
+      updateStatusBanner(host, {
+        text: frameTarget.error,
+        tone: "warning",
+      });
+      return;
+    }
 
     host.__bridge.setAllowedOrigin(frameTarget.origin);
     if (host.__panelUrl === panelUrl && frame.getAttribute("src") === frameTarget.src) {

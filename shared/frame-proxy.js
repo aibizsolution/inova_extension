@@ -1,17 +1,28 @@
 (function initFrameProxyHelpers(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const INVALIDATED_CONTEXT_MESSAGE = "확장프로그램이 갱신됐어요. 페이지를 새로고침해 주세요.";
   const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "localhost"]);
   const PROXY_PATH = "content/frame-proxy.html";
 
   function resolveTarget(targetUrl) {
     const normalizedTargetUrl = normalizeText(targetUrl);
-    const proxyUrl = shouldWrap(normalizedTargetUrl) ? buildProxyUrl(normalizedTargetUrl) : "";
-    const src = proxyUrl || normalizedTargetUrl;
+    if (!shouldWrap(normalizedTargetUrl)) {
+      return {
+        error: "",
+        origin: readOrigin(normalizedTargetUrl),
+        src: normalizedTargetUrl,
+        targetUrl: normalizedTargetUrl,
+        wrapped: false,
+      };
+    }
+    const proxyResolution = buildProxyUrl(normalizedTargetUrl);
+    const src = proxyResolution.url;
     return {
+      error: proxyResolution.error,
       origin: readOrigin(src),
       src,
       targetUrl: normalizedTargetUrl,
-      wrapped: Boolean(proxyUrl),
+      wrapped: true,
     };
   }
 
@@ -20,13 +31,35 @@
   }
 
   function buildProxyUrl(targetUrl) {
-    const proxyBaseUrl = normalizeText(global.chrome?.runtime?.getURL?.(PROXY_PATH));
-    if (!proxyBaseUrl) {
-      return "";
+    const proxyBaseUrlResult = readProxyBaseUrl();
+    if (!proxyBaseUrlResult.url) {
+      return {
+        error: proxyBaseUrlResult.error,
+        url: "",
+      };
     }
-    const url = new URL(proxyBaseUrl);
+    const url = new URL(proxyBaseUrlResult.url);
     url.searchParams.set("target", targetUrl);
-    return url.toString();
+    return {
+      error: "",
+      url: url.toString(),
+    };
+  }
+
+  function readProxyBaseUrl() {
+    try {
+      return {
+        error: "",
+        url: normalizeText(global.chrome?.runtime?.getURL?.(PROXY_PATH)),
+      };
+    } catch (error) {
+      return {
+        error: isInvalidatedContextError(error)
+          ? INVALIDATED_CONTEXT_MESSAGE
+          : normalizeText(error?.message || "프록시 iframe 주소를 만들지 못했어요."),
+        url: "",
+      };
+    }
   }
 
   function readHostname(value) {
@@ -47,6 +80,10 @@
 
   function normalizeText(value) {
     return namespace.session?.normalizeText?.(value) || String(value || "").trim();
+  }
+
+  function isInvalidatedContextError(error) {
+    return normalizeText(error?.message || error).includes("Extension context invalidated");
   }
 
   namespace.frameProxy = {

@@ -367,9 +367,13 @@
     }
     function ensureBridgeFrame(runtimeConfig) {
       const bridgeTarget = namespace.frameProxy?.resolveTarget?.(resolvePromptBridgeUrl(runtimeConfig)) || {
+        error: "",
         origin: readOrigin(resolvePromptBridgeUrl(runtimeConfig)),
         src: resolvePromptBridgeUrl(runtimeConfig),
       };
+      if (bridgeTarget.error) {
+        throw new Error(bridgeTarget.error);
+      }
       const existing = global.document.getElementById(BRIDGE_IFRAME_ID);
       if (existing instanceof global.HTMLIFrameElement) {
         if (namespace.session.normalizeText(existing.src) === bridgeTarget.src) {
@@ -401,7 +405,11 @@
       const bridgeUrl = resolvePromptBridgeUrl(runtimeConfig);
       const runtimeOrigin = namespace.session.normalizeText(runtimeConfig?.hosting?.originUrl)
         || namespace.session.normalizeText(namespace.firebaseConfig?.hosting?.originUrl);
-      return namespace.frameProxy?.resolveTarget?.(bridgeUrl)?.origin || runtimeOrigin || readOrigin(bridgeUrl);
+      const bridgeTarget = namespace.frameProxy?.resolveTarget?.(bridgeUrl);
+      if (bridgeTarget?.error) {
+        throw new Error(bridgeTarget.error);
+      }
+      return bridgeTarget?.origin || runtimeOrigin || readOrigin(bridgeUrl);
     }
     function buildRuntimeConnectionKey(runtimeConfig) {
       return [namespace.session.normalizeText(runtimeConfig?.target) || "production", namespace.session.normalizeText(runtimeConfig?.functions?.baseUrl), resolvePromptBridgeUrl(runtimeConfig)].join("::");
