@@ -124,6 +124,14 @@
     isStoreTabActive,
     logPanelDebug,
     meetingManager,
+    releaseManager,
+    render,
+    schedulePromptCloudSyncIfNeeded: (delay) => panelPromptController.scheduleCloudSyncIfNeeded(delay),
+    schedulePromptRealtimeSync: (delay) => panelPromptController.scheduleRealtimeSync(delay),
+  });
+  const panelActivityController = namespace.panelActivityController.create(state, {
+    logPanelDebug,
+    meetingManager,
     providerIdentitySync,
     releaseManager,
     render,
@@ -176,8 +184,8 @@
     routeWatchController.installRouteWatchers();
     panelSurfaceController.installSurfaceWatchers();
     global.addEventListener("resize", render, { passive: true });
-    global.addEventListener("focus", panelLifecycleController.handleWindowFocus, { passive: true });
-    document.addEventListener("visibilitychange", panelLifecycleController.handleVisibilityChange, { passive: true });
+    global.addEventListener("focus", panelActivityController.handleWindowFocus, { passive: true });
+    document.addEventListener("visibilitychange", panelActivityController.handleVisibilityChange, { passive: true });
     chrome.storage.onChanged?.addListener(handleRouteStorageChange);
     chrome.storage.onChanged?.addListener(panelPromptController.handleStorageChange);
     chrome.storage.onChanged?.addListener(meetingManager.handleStorageChange);

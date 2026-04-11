@@ -26,6 +26,9 @@ async function main() {
   assert.equal(initialPayload.tools.length, 4);
   assert.equal(harness.reviewFloatEnsured, 1);
   assert.equal(harness.reviewFloatStates.at(-1)?.visible, true);
+  assert.equal(typeof harness.windowListeners.focus, "function");
+  assert.equal(typeof harness.documentListeners.visibilitychange, "function");
+  assert.equal(harness.activityControllerCreated, 1);
   assert.equal(harness.routeWatchInstallCalls, 1);
   assert.equal(harness.surfaceWatchInstallCalls, 1);
 
@@ -88,6 +91,8 @@ function createHarness() {
   const renderPayloads = [];
   const scheduledTimeouts = [];
   const storageListeners = [];
+  const documentListeners = {};
+  const windowListeners = {};
 
   const context = vm.createContext({
     chrome: {
@@ -101,7 +106,9 @@ function createHarness() {
     },
     console,
     document: {
-      addEventListener() {},
+      addEventListener(type, handler) {
+        documentListeners[type] = handler;
+      },
       visibilityState: "visible",
     },
     globalThis: null,
@@ -117,7 +124,9 @@ function createHarness() {
     },
   });
   context.globalThis = context;
-  context.addEventListener = () => {};
+  context.addEventListener = (type, handler) => {
+    windowListeners[type] = handler;
+  };
 
   context.InovaBookmarks = buildNamespace({
     controllerEvents,
@@ -131,7 +140,9 @@ function createHarness() {
     bookmarkCopyCalls: controllerEvents.bookmarkCopyCalls,
     bookmarkJumpCalls: controllerEvents.bookmarkJumpCalls,
     callbacks: ensureCalls[0]?.callbacks || null,
+    activityControllerCreated: controllerEvents.activityControllerCreated || 0,
     debugActions: controllerEvents.debugActions,
+    documentListeners,
     handlePositionCalls: controllerEvents.handlePositionCalls,
     meetingActions: controllerEvents.meetingActions,
     promptActions: controllerEvents.promptActions,
@@ -147,6 +158,7 @@ function createHarness() {
     shellToolSelections: controllerEvents.shellToolSelections,
     storageListeners,
     toggleCalls: controllerEvents.toggleCalls,
+    windowListeners,
     async flush() {
       await Promise.resolve();
       await Promise.resolve();
@@ -257,11 +269,18 @@ function buildNamespace({ controllerEvents, ensureCalls, renderPayloads }) {
         return false;
       },
     },
-    panelLifecycleController: {
+    panelActivityController: {
       create() {
+        controllerEvents.activityControllerCreated = (controllerEvents.activityControllerCreated || 0) + 1;
         return {
           handleVisibilityChange() {},
           handleWindowFocus() {},
+        };
+      },
+    },
+    panelLifecycleController: {
+      create() {
+        return {
           initializeOpenState() {},
           togglePanel(nextOpen) {
             controllerEvents.toggleCalls.push(nextOpen);

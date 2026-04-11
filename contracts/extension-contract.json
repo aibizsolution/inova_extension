@@ -22,6 +22,7 @@
     "shared/storage.js",
     "content/bookmark-view.js",
     "content/panel-bookmark-controller.js",
+    "content/panel-activity-controller.js",
     "content/panel-surface-controller.js",
     "content/features/prompt-library/cloud-sync-manager.js",
     "content/composer.js",
@@ -56,6 +57,7 @@
     "scripts/verify-panel-prompt-controller.js",
     "scripts/verify-panel-bookmark-controller.js",
     "scripts/verify-panel-shell-controller.js",
+    "scripts/verify-panel-activity-controller.js",
     "scripts/verify-panel-surface-controller.js",
     "scripts/verify-route-state-controller.js",
     "scripts/verify-route-watch-controller.js"
@@ -106,6 +108,7 @@
     "content/panel-debug-controller.js",
     "content/panel-prompt-controller.js",
     "content/panel-surface-controller.js",
+    "content/panel-activity-controller.js",
     "content/panel-lifecycle-controller.js",
     "content/main.js"
   ],

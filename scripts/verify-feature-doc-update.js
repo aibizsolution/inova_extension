@@ -19,6 +19,7 @@ const FEATURE_DOC_RULES = [
       /^content\/route-watch-controller\.js$/,
       /^content\/panel-bookmark-controller\.js$/,
       /^content\/panel-surface-controller\.js$/,
+      /^content\/panel-activity-controller\.js$/,
       /^content\/panel-shell-controller\.js$/,
     ],
   },

@@ -6,7 +6,6 @@
     const isStoreTabActive = typeof deps.isStoreTabActive === "function" ? deps.isStoreTabActive : () => false;
     const logPanelDebug = typeof deps.logPanelDebug === "function" ? deps.logPanelDebug : () => {};
     const meetingManager = deps.meetingManager || { scheduleSync() {} };
-    const providerIdentitySync = deps.providerIdentitySync || { async syncToStorage() { return false; } };
     const releaseManager = deps.releaseManager || { ensureChecked() {} };
     const render = typeof deps.render === "function" ? deps.render : () => {};
     const schedulePromptCloudSyncIfNeeded = typeof deps.schedulePromptCloudSyncIfNeeded === "function"
@@ -18,46 +17,6 @@
     const ensureStoreLoaded = typeof deps.ensureStoreLoaded === "function"
       ? deps.ensureStoreLoaded
       : () => {};
-
-    function handleVisibilityChange() {
-      if (global.document.visibilityState !== "visible") {
-        meetingManager.scheduleSync(0);
-        schedulePromptRealtimeSync(0);
-        logPanelDebug("panel.ui.visibility.hidden", {
-          scope: "panel-ui",
-          tool: "panel",
-        });
-        render();
-        return;
-      }
-      void providerIdentitySync.syncToStorage("visibility-visible");
-      schedulePromptCloudSyncIfNeeded(320);
-      meetingManager.scheduleSync(320);
-      schedulePromptRealtimeSync(320);
-      if (state.open) {
-        releaseManager.ensureChecked();
-      }
-      logPanelDebug("panel.ui.visibility.visible", {
-        scope: "panel-ui",
-        tool: "panel",
-      });
-      render();
-    }
-
-    function handleWindowFocus() {
-      void providerIdentitySync.syncToStorage("window-focus");
-      schedulePromptCloudSyncIfNeeded(320);
-      meetingManager.scheduleSync(320);
-      schedulePromptRealtimeSync(320);
-      if (state.open) {
-        releaseManager.ensureChecked();
-      }
-      logPanelDebug("panel.ui.focus", {
-        scope: "panel-ui",
-        tool: "panel",
-      });
-      render();
-    }
 
     function initializeOpenState() {
       state.preferredOpen = readPanelOpenPreference();
@@ -88,8 +47,6 @@
     }
 
     return {
-      handleVisibilityChange,
-      handleWindowFocus,
       initializeOpenState,
       togglePanel,
     };
