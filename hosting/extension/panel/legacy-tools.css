@@ -744,7 +744,7 @@
 .inova-release-steps { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
 .inova-release-steps li { font-size: 12px; line-height: 1.5; color: rgba(16, 33, 43, 0.78); }
 .inova-prompt-editor__actions { margin-top: 2px; }
-@media (max-width: 520px) {
+@media (max-width: 420px) {
   #inova-bookmark-host { --panel-width: min(92vw, 372px); }
   #inova-tool-rail { width: 56px; padding: 10px 0; }
   .inova-tool-rail__label { font-size: 11px; }
