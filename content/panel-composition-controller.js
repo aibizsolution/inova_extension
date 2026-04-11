@@ -2,29 +2,36 @@
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
 
   function create(state) {
-    let panelPromptBridgeController = null;
-    let panelRenderController = null;
-    const render = () => panelRenderController?.render();
+    let promptBridgeController = null;
+    let renderController = null;
+    const render = () => renderController?.render();
 
-    // Runtime and remote manager cluster.
+    // Runtime foundation: surface state, diagnostics, and remote managers.
     const panelRuntimeController = namespace.panelRuntimeController.create(state);
+    const runtimeFlags = {
+      isPaused: panelRuntimeController.isPaused,
+      isStoreTabActive: panelRuntimeController.isStoreTabActive,
+      isToolSurface: panelRuntimeController.isToolSurface,
+    };
+    const runtimeDiagnostics = {
+      isExtensionContextInvalidatedError: panelRuntimeController.isExtensionContextInvalidatedError,
+      logPanelDebug: panelRuntimeController.logPanelDebug,
+    };
     const releaseManager = namespace.releaseManager.create(state, { render });
     const meetingManager = namespace.meetingManager.create(state, { render });
     const providerIdentitySync = namespace.providerIdentitySync.create(state, {
-      isExtensionContextInvalidatedError: panelRuntimeController.isExtensionContextInvalidatedError,
-      logPanelDebug: panelRuntimeController.logPanelDebug,
+      ...runtimeDiagnostics,
       render,
     });
 
-    // Tool/action cluster.
+    // Tool shell: bookmark/meeting/debug/prompt entry points that the panel exposes.
     const panelMeetingController = namespace.panelMeetingController.create(state, {
       meetingManager,
       providerIdentitySync,
       render,
     });
     const panelDebugController = namespace.panelDebugController.create(state, {
-      isPaused: panelRuntimeController.isPaused,
-      isToolSurface: panelRuntimeController.isToolSurface,
+      ...runtimeFlags,
       render,
     });
     const panelActionController = namespace.panelActionController.create(state, {
@@ -34,56 +41,60 @@
     const panelBookmarkController = namespace.panelBookmarkController.create(state, { render });
     const panelShellController = namespace.panelShellController.create(state, {
       bookmarkController: panelBookmarkController,
-      getPromptController: () => panelPromptBridgeController,
-      isExtensionContextInvalidatedError: panelRuntimeController.isExtensionContextInvalidatedError,
+      getPromptController: () => promptBridgeController,
+      isExtensionContextInvalidatedError: runtimeDiagnostics.isExtensionContextInvalidatedError,
       meetingManager,
       releaseManager,
       render,
     });
     const panelPromptController = namespace.panelPromptController.create(state, {
-      isPaused: panelRuntimeController.isPaused,
-      isToolSurface: panelRuntimeController.isToolSurface,
+      ...runtimeFlags,
       lockUiPreferenceSelection: panelShellController.lockUiPreferenceSelection,
       onPromptTabSelected: () => meetingManager.scheduleSync(0),
       persistActiveTool: panelShellController.persistActiveTool,
       render,
     });
-    panelPromptBridgeController = namespace.panelPromptBridgeController.create(state, {
+    promptBridgeController = namespace.panelPromptBridgeController.create(state, {
       panelPromptController,
     });
+    const promptSyncBridge = {
+      ensureStoreLoaded: promptBridgeController.ensureStoreLoaded,
+      schedulePromptCloudSyncIfNeeded: promptBridgeController.schedulePromptCloudSyncIfNeeded,
+      schedulePromptRealtimeSync: promptBridgeController.schedulePromptRealtimeSync,
+    };
 
-    // Route and lifecycle cluster.
+    // Route and lifecycle: browser events, sync scheduling, and visibility-driven reactions.
     const routeStateController = namespace.routeStateController.create(state, {
       applyUiPreferenceLock: panelShellController.applyUiPreferenceLock,
-      ensureStoreLoaded: panelPromptBridgeController.ensureStoreLoaded,
+      ensureStoreLoaded: promptSyncBridge.ensureStoreLoaded,
       normalizeToolId: panelShellController.normalizeToolId,
     });
     const panelLifecycleController = namespace.panelLifecycleController.create(state, {
-      ensureStoreLoaded: panelPromptBridgeController.ensureStoreLoaded,
-      isStoreTabActive: panelRuntimeController.isStoreTabActive,
-      logPanelDebug: panelRuntimeController.logPanelDebug,
+      ensureStoreLoaded: promptSyncBridge.ensureStoreLoaded,
+      isStoreTabActive: runtimeFlags.isStoreTabActive,
+      logPanelDebug: runtimeDiagnostics.logPanelDebug,
       meetingManager,
       releaseManager,
       render,
-      schedulePromptCloudSyncIfNeeded: panelPromptBridgeController.schedulePromptCloudSyncIfNeeded,
-      schedulePromptRealtimeSync: panelPromptBridgeController.schedulePromptRealtimeSync,
+      schedulePromptCloudSyncIfNeeded: promptSyncBridge.schedulePromptCloudSyncIfNeeded,
+      schedulePromptRealtimeSync: promptSyncBridge.schedulePromptRealtimeSync,
     });
     const panelActivityController = namespace.panelActivityController.create(state, {
-      logPanelDebug: panelRuntimeController.logPanelDebug,
+      logPanelDebug: runtimeDiagnostics.logPanelDebug,
       meetingManager,
       providerIdentitySync,
       releaseManager,
       render,
-      schedulePromptCloudSyncIfNeeded: panelPromptBridgeController.schedulePromptCloudSyncIfNeeded,
-      schedulePromptRealtimeSync: panelPromptBridgeController.schedulePromptRealtimeSync,
+      schedulePromptCloudSyncIfNeeded: promptSyncBridge.schedulePromptCloudSyncIfNeeded,
+      schedulePromptRealtimeSync: promptSyncBridge.schedulePromptRealtimeSync,
     });
     const panelSurfaceController = namespace.panelSurfaceController.create(state, {
-      ensureStoreLoaded: panelPromptBridgeController.ensureStoreLoaded,
-      isStoreTabActive: panelRuntimeController.isStoreTabActive,
-      logPanelDebug: panelRuntimeController.logPanelDebug,
+      ensureStoreLoaded: promptSyncBridge.ensureStoreLoaded,
+      isStoreTabActive: runtimeFlags.isStoreTabActive,
+      logPanelDebug: runtimeDiagnostics.logPanelDebug,
       meetingManager,
       render,
-      schedulePromptRealtimeSync: panelPromptBridgeController.schedulePromptRealtimeSync,
+      schedulePromptRealtimeSync: promptSyncBridge.schedulePromptRealtimeSync,
     });
     const routeSync = namespace.routeSync.create(state, {
       onRouteStateChanged: meetingManager.handleRouteStateChange,
@@ -95,26 +106,26 @@
       scheduleRouteSync: routeSync.scheduleRouteSync,
     });
 
-    // Render and bootstrap cluster.
-    panelRenderController = namespace.panelRenderController.create(state, {
-      isPaused: panelRuntimeController.isPaused,
-      isToolSurface: panelRuntimeController.isToolSurface,
+    // Final assembly: render payloads plus bootstrap wiring for the live panel.
+    renderController = namespace.panelRenderController.create(state, {
+      isPaused: runtimeFlags.isPaused,
+      isToolSurface: runtimeFlags.isToolSurface,
       panelBookmarkController,
       panelDebugController,
       panelMeetingController,
-      panelPromptController: panelPromptBridgeController,
+      panelPromptController: promptBridgeController,
       panelShellController,
       releaseManager,
     });
     const panelBootstrapController = namespace.panelBootstrapController.create(state, {
       handlePanelMeetingAction: panelActionController.handlePanelMeetingAction,
-      isStoreTabActive: panelRuntimeController.isStoreTabActive,
+      isStoreTabActive: runtimeFlags.isStoreTabActive,
       meetingManager,
       panelActivityController,
       panelBookmarkController,
       panelDebugController,
       panelLifecycleController,
-      panelPromptController: panelPromptBridgeController,
+      panelPromptController: promptBridgeController,
       panelShellController,
       panelSurfaceController,
       providerIdentitySync,
