@@ -42,13 +42,20 @@
           sessionId: state.sessionId,
         });
       } catch (error) {
-        state.lastError = error instanceof Error ? error.message : String(error);
+        const invalidatedContext = isInvalidatedContextError(error);
+        state.lastError = invalidatedContext
+          ? "확장프로그램이 갱신되어 페이지를 새로고침해야 해요."
+          : error instanceof Error
+            ? error.message
+            : String(error);
         logDebug("route.refresh.error", {
           error: state.lastError,
           scope: "route",
           sessionId: state.sessionId,
         });
-        console.error("[i-Nova Bookmarks] refresh state failed", error);
+        if (!invalidatedContext) {
+          console.error("[i-Nova Bookmarks] refresh state failed", error);
+        }
       }
     }
 
@@ -189,6 +196,12 @@
     function logDebug(event, payload) {
       namespace.panelDebug?.log?.(event, payload || {});
     }
+  }
+
+  function isInvalidatedContextError(error) {
+    const message = namespace.session.normalizeText(error instanceof Error ? error.message : String(error || ""));
+    return message.includes("Extension context invalidated")
+      || message.includes("확장프로그램이 갱신");
   }
 
   namespace.routeStateController = { create };

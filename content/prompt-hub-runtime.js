@@ -55,6 +55,9 @@
           degradedReason: "prompt-library-realtime-failed",
           source: "realtime",
         }).catch((fallbackError) => {
+          if (isInvalidatedContextError(fallbackError)) {
+            return;
+          }
           console.error("[i-Nova Bookmarks] prompt library fallback state failed", fallbackError);
         });
       },
@@ -68,6 +71,9 @@
           degradedReason: "store-realtime-failed",
           errorMessage: error instanceof Error ? error.message : String(error || ""),
         }).catch((fallbackError) => {
+          if (isInvalidatedContextError(fallbackError)) {
+            return;
+          }
           console.error("[i-Nova Bookmarks] store fallback refresh failed", fallbackError);
         });
       },
@@ -96,6 +102,12 @@
       promptReviewManager,
       storeManager,
     };
+  }
+
+  function isInvalidatedContextError(error) {
+    const message = namespace.session.normalizeText(error instanceof Error ? error.message : String(error || ""));
+    return message.includes("Extension context invalidated")
+      || message.includes("확장프로그램이 갱신");
   }
 
   namespace.promptHubRuntime = { create };
