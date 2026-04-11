@@ -3,7 +3,6 @@
 
   ns.workspaceRealtime = {
     createController(deps) {
-      const globalObject = deps?.global || global;
       const refs = deps?.refs || {};
       const state = deps?.state || {};
       const constants = deps?.constants || {};

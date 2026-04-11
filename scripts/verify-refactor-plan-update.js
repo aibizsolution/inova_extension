@@ -33,16 +33,6 @@ const REFACTOR_PLAN_RULES = [
       /^shared\/firebase-config\.js$/,
     ],
   },
-  {
-    scope: "prompt-v2-foundation",
-    docs: [REFACTOR_PLAN_DOC],
-    patterns: [
-      /^functions\/features\/prompt-library\/register\.js$/,
-      /^content\/features\/prompt-library\/cloud-sync-manager\.js$/,
-      /^content\/features\/prompt-store\/prompt-realtime-manager\.js$/,
-      /^hosting\/extension\/prompt-panel-bridge\.js$/,
-    ],
-  },
 ];
 
 function main() {

@@ -18,7 +18,7 @@ function createMeetingNotesRuntimeDomain(deps) {
     };
   }
 
-  function createMeetingNotesBundleFromNotes(notesInput, context) {
+  function createMeetingNotesBundleFromNotes(notesInput) {
     const notes = normalizeMeetingNotes(notesInput);
     if (!hasMeetingNotes(notes)) {
       throw new Error("전사에 근거한 회의 정리를 만들지 못했어요.");

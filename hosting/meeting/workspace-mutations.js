@@ -41,7 +41,6 @@ const SECTION_LABELS = Object.freeze({
       const applyRender = (...args) => helpers.applyRender?.(...args);
       const cloneNotesInputSnapshot = (...args) => helpers.cloneNotesInputSnapshot?.(...args);
       const cloneTermReplacements = (...args) => helpers.cloneTermReplacements?.(...args);
-      const createEmptyNotesInputSnapshotState = (...args) => helpers.createEmptyNotesInputSnapshotState?.(...args);
       const createEmptyRecordMoveState = (...args) => helpers.createEmptyRecordMoveState?.(...args) || {
         error: "",
         items: [],
@@ -53,8 +52,6 @@ const SECTION_LABELS = Object.freeze({
         submitting: false,
       };
       const createEmptySectionEditState = (...args) => helpers.createEmptySectionEditState?.(...args);
-      const createEmptySelectedRecordMemoState = (...args) => helpers.createEmptySelectedRecordMemoState?.(...args);
-      const createEmptyTermReplacementState = (...args) => helpers.createEmptyTermReplacementState?.(...args);
       const renderBlocked = (...args) => helpers.renderBlocked?.(...args);
       const requestConfirmation = (...args) => helpers.requestConfirmation?.(...args);
       const setNotice = (...args) => helpers.setNotice?.(...args);

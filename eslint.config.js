@@ -6,7 +6,7 @@ const recommendedRules = {
   "no-control-regex": "off",
   "no-empty": ["error", { allowEmptyCatch: true }],
   "preserve-caught-error": "off",
-  "no-unused-vars": "off",
+  "no-unused-vars": "error",
 };
 
 module.exports = [

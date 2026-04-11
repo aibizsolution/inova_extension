@@ -25,7 +25,7 @@
     let promptRealtimeManager = null;
     const storeManager = namespace.storeManager.create(state, {
       loadStoreDetail: (entryId) => promptRealtimeManager?.loadStoreDetail?.(entryId),
-      refreshStoreLatestRealtime: (reason) => {
+      refreshStoreLatestRealtime: () => {
         promptRealtimeManager?.scheduleSync?.(80);
       },
       shouldReloadAfterMutation: () => {

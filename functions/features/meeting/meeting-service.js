@@ -7,7 +7,6 @@ const {
   normalizeText,
   normalizeTextBlock,
   normalizeTranscriptSegment,
-  safeParseJson,
 } = require("./meeting-common-domain");
 const { createMeetingNotesInputDomain } = require("./meeting-notes-context-domain");
 const { createMeetingNotesEditDomain } = require("./meeting-notes-edit-domain");
@@ -65,11 +64,8 @@ const MIN_REVIEW_SEGMENT_CHARS = 90;
 const TARGET_REVIEW_SEGMENT_DURATION_MS = 30 * 1000;
 const MAX_REVIEW_SEGMENT_DURATION_MS = 45 * 1000;
 const MIN_REVIEW_SEGMENT_DURATION_MS = 12 * 1000;
-const MAX_MEETING_NOTES_SUMMARY_ITEMS = 3;
 const MAX_MEETING_NOTES_TOPIC_COUNT = 4;
 const MAX_MEETING_NOTES_TOPIC_KEY_POINTS = 4;
-const MAX_MEETING_NOTES_TOPIC_DECISIONS = 3;
-const MAX_MEETING_NOTES_TOPIC_OPEN_QUESTIONS = 2;
 const MAX_MEETING_NOTES_DECISIONS = 5;
 const MAX_MEETING_NOTES_ACTION_ITEMS = 5;
 const MAX_MEETING_NOTES_OPEN_QUESTIONS = 3;
@@ -115,10 +111,8 @@ const EDITABLE_MEETING_SECTION_KEYS = new Set([
 const {
   applyMeetingTermReplacements,
   createEmptyMeetingNotes,
-  dedupeMeetingItems,
   getMeetingNotesPreviewText,
   hasMeetingNotes,
-  normalizeMeetingComparisonText,
   normalizeMeetingNotes,
   normalizeMeetingNotesStatus,
   parseMeetingNotesJson,
@@ -179,7 +173,6 @@ const {
   normalizeMeetingResultMoveRequest,
   normalizeMeetingSectionEditApplyRequest,
   normalizeMeetingSectionEditPreviewRequest,
-  normalizeMeetingTaskOwner,
   normalizeWorkspaceMutation,
 } = createMeetingMutationDomain({
   editableMeetingSectionKeys: EDITABLE_MEETING_SECTION_KEYS,
@@ -249,11 +242,9 @@ const {
   compareMeetingResults,
   compareMeetings,
   mergeRecentJobs,
-  normalizeArtifactSummary,
   normalizeMeetingArtifact,
   normalizeMeetingJob,
   normalizeMeetingResultSummary,
-  normalizeMeetingShareSummary,
   normalizeMeetingSummary,
   normalizeTranscriptionResponse,
 } = createMeetingStateDomain({
@@ -539,7 +530,6 @@ function registerMeetingHandlers(deps) {
     persistMeetingJobPatch,
     processQueuedMeetingJobPartWrite,
     processQueuedMeetingJobWrite,
-    promoteWaitingMeetingJobParts,
     synchronizeChunkedMeetingJobProgress,
     upsertQueuedMeetingJobParts,
   } = createMeetingProcessingDomain({

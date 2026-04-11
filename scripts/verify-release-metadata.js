@@ -228,7 +228,7 @@ function readJsonFromGitObject(target) {
       stdio: ["ignore", "pipe", "pipe"],
     });
     return JSON.parse(String(payload || "{}"));
-  } catch (error) {
+  } catch {
     return null;
   }
 }

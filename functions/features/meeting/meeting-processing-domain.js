@@ -484,18 +484,6 @@ function createMeetingProcessingDomain(deps) {
     const meeting = normalizeMeetingRequest(currentJob.meeting);
     const options = normalizeMeetingOptions(currentJob.options);
     const meetingRef = db.collection(meetingCollection).doc(buildMeetingDocId(owner.providerUserKey, meeting.meetingId));
-    const persistJobPatch = async (patch, artifact) => {
-      currentJob = await persistMeetingJobPatch(
-        jobRef,
-        meetingRef,
-        meeting,
-        owner,
-        currentJob,
-        patch,
-        artifact
-      );
-      return currentJob;
-    };
 
     try {
       const startedAt = new Date().toISOString();
@@ -575,7 +563,7 @@ function createMeetingProcessingDomain(deps) {
           status: "queued",
           updatedAt: retriedAt,
         }, { merge: true });
-        const synchronized = await synchronizeChunkedMeetingJobProgress(
+        await synchronizeChunkedMeetingJobProgress(
           jobRef,
           meetingRef,
           meeting,
@@ -583,7 +571,6 @@ function createMeetingProcessingDomain(deps) {
           currentJob,
           options
         );
-        currentJob = synchronized.currentJob;
         logEvent("meeting.process.part.retry.queued", {
           error: normalizeText(error?.message),
           jobId: queuedPart.jobId,
@@ -606,7 +593,7 @@ function createMeetingProcessingDomain(deps) {
         status: "failed",
         updatedAt: new Date().toISOString(),
       }, { merge: true });
-      const synchronized = await synchronizeChunkedMeetingJobProgress(
+      await synchronizeChunkedMeetingJobProgress(
         jobRef,
         meetingRef,
         meeting,
@@ -628,7 +615,6 @@ function createMeetingProcessingDomain(deps) {
           status: "failed",
         }
       );
-      currentJob = synchronized.currentJob;
       logEvent("meeting.process.part.error", {
         error: normalizeText(error?.message),
         jobId: queuedPart.jobId,

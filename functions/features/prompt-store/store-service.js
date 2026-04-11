@@ -602,15 +602,6 @@ function registerStoreHandlers(deps) {
     return summary.totalCount !== categoryTotal || (summary.totalCount === 0 && categoryTotal === 0);
   }
 
-  async function rebuildStoreSummary() {
-    const snapshot = await db.collection("prompt_store_entries").where("status", "==", "published").select("categoryId").get();
-    const summary = buildSummaryFromEntries(snapshot.docs.map((doc) => ({ categoryId: doc.data()?.categoryId })));
-    summary.updatedAt = new Date().toISOString();
-    await getStoreSummaryRef().set(buildStoreSummaryPatch(summary, summary.updatedAt), { merge: true });
-    return summary;
-  }
-
-
   function incrementCategoryCount(summary, categoryId, delta) {
     const next = normalizeStoreSummary(summary);
     const normalizedCategoryId = normalizePublishCategoryId(categoryId);
