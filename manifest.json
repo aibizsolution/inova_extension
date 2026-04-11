@@ -90,6 +90,7 @@
         "content/panel-lifecycle-controller.js",
         "content/panel-render-controller.js",
         "content/panel-bootstrap-controller.js",
+        "content/panel-state-factory.js",
         "content/main.js"
       ],
       "css": [
