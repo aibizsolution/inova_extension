@@ -18,7 +18,6 @@
           <div class="inova-tool-toolbar__row inova-tool-toolbar__row--meeting">
             <div class="inova-tool-toolbar__stack">
               <p class="inova-tool-toolbar__title">최근 회의 룸</p>
-              <span class="inova-tool-meta inova-tool-meta--muted">기록 상태와 공유 상태를 보고 바로 이어서 열 수 있어요.</span>
             </div>
           <button
             type="button"
@@ -265,7 +264,7 @@
     }
     if (hasRecord || normalizedStatus === "succeeded") {
       return {
-        description: "최근 기록과 메모를 이어서 확인할 수 있어요.",
+        description: "",
         meta,
         openLabel: "작업실 열기",
         shareLabel: options.sharePending ? "링크 준비 중..." : item.shareActive ? "링크 복사" : "공유 링크",
@@ -274,7 +273,7 @@
       };
     }
     return {
-      description: "아직 기록이 없습니다. 작업실에서 녹음이나 파일 업로드를 시작해 보세요.",
+      description: "",
       meta,
       openLabel: "작업실 열기",
       shareLabel: options.sharePending ? "링크 준비 중..." : item.shareActive ? "링크 복사" : "공유 링크",
