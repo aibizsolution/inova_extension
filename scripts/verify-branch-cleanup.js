@@ -12,6 +12,7 @@ const cleanupScriptPath = path.join(root, "scripts", "cleanup-local-branches.js"
 function main() {
   verifyCleanupSkipsWhenLocalMainIsAheadOfOrigin();
   verifyCleanupDeletesOnlyAfterOriginMainCatchesUp();
+  verifyCleanupDeletesSquashMergedCodexBranches();
   verifyCleanupSkipsUnmergedCodexBranches();
   console.log("[verify-branch-cleanup] Branch cleanup guard passed");
 }
@@ -46,6 +47,23 @@ function verifyCleanupDeletesOnlyAfterOriginMainCatchesUp() {
   assert(
     readCombinedOutput(result).includes("삭제한 로컬 작업 브랜치: codex/merged-safe"),
     `expected delete message, got:\n${readCombinedOutput(result)}`
+  );
+}
+
+function verifyCleanupDeletesSquashMergedCodexBranches() {
+  const repo = createHarnessRepo();
+
+  createAndCommitCodexBranch(repo, "codex/squash-merged");
+  checkout(repo, "main");
+  squashMergeIntoMain(repo, "codex/squash-merged");
+  runGit(repo, ["push", "origin", "main"]);
+
+  const result = runCleanup(repo);
+  assert.equal(result.status, 0, readCombinedOutput(result));
+  assert.equal(branchExists(repo, "codex/squash-merged"), false, "squash-merged branch should be deleted after origin/main catches up");
+  assert(
+    readCombinedOutput(result).includes("삭제한 로컬 작업 브랜치: codex/squash-merged"),
+    `expected squash-merged delete message, got:\n${readCombinedOutput(result)}`
   );
 }
 
@@ -93,6 +111,11 @@ function createAndCommitCodexBranch(repoDir, branchName) {
 
 function mergeIntoMain(repoDir, branchName) {
   runGit(repoDir, ["merge", "--no-ff", branchName, "-m", `merge ${branchName}`]);
+}
+
+function squashMergeIntoMain(repoDir, branchName) {
+  runGit(repoDir, ["merge", "--squash", branchName]);
+  runGit(repoDir, ["commit", "-m", `squash merge ${branchName}`]);
 }
 
 function checkout(repoDir, branchName) {
