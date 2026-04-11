@@ -1,15 +1,29 @@
 (function initPromptReviewManager(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const PROMPT_REVIEW_PROFILE_V2 = "prompt-telling-v2";
+  const PROMPT_REVIEW_V2_MIN_VERSION = "0.4.5";
+  const LEGACY_SCORE_GUIDE_TEXT = "점수는 프롬프트의 핵심 정보 충족도를 보는 참고값이에요.";
+  const PROMPT_TELLING_SCORE_GUIDE_TEXT = "점수는 역할 지정·참고 자료·목표 설정(PRO)을 중심으로, 결과 형식·타깃 관점·말투(MPT)를 보조로 반영한 참고값이에요.";
   const STATUS_LABELS = {
     good: "충족",
     missing: "부족",
     partial: "보완 필요",
   };
-  const CHECK_LABELS = {
-    context: "배경/대상/상황",
-    goal: "원하는 결과",
-    constraints: "제약사항",
-    output: "출력 형식",
+  const CHECK_DEFINITIONS = {
+    constraints: { id: "constraints", label: "제약사항", order: 30 },
+    context: { id: "context", label: "배경/대상/상황", order: 10 },
+    goal: { id: "goal", label: "원하는 결과", order: 20 },
+    mode: { group: "refinement", id: "mode", label: "결과 형식", order: 40 },
+    objective: { group: "core", id: "objective", label: "목표 설정", order: 30 },
+    output: { id: "output", label: "출력 형식", order: 40 },
+    persona: { group: "core", id: "persona", label: "역할 지정", order: 10 },
+    pointofview: { group: "refinement", id: "pointOfView", label: "타깃 관점", order: 50 },
+    reference: { group: "core", id: "reference", label: "참고 자료", order: 20 },
+    tone: { group: "refinement", id: "tone", label: "말투", order: 60 },
+  };
+  const CHECK_GROUP_DEFINITIONS = {
+    core: { label: "핵심 구조 (PRO)", order: 10 },
+    refinement: { label: "정교화 요소 (MPT)", order: 20 },
   };
 
   function create(state, hooks) {
@@ -84,8 +98,10 @@
       if (state.promptReview.pending) return;
       const composerState = namespace.composer.getComposerState();
       const prompt = String(composerState.text || "").trim();
+      const reviewProfile = getRequestedReviewProfile();
       logReviewDebug("prompt.review.request.start", {
         promptLength: prompt.length,
+        reviewProfile: reviewProfile || "legacy-v1-default",
         sessionId: state.sessionId,
       });
       if (!composerState.available) {
@@ -141,7 +157,11 @@
         reviewedText: "",
       });
       try {
-        const result = await sendRuntimeMessage("inova-review:prompt", { prompt, providerIdentity });
+        const runtimePayload = { prompt, providerIdentity };
+        if (reviewProfile) {
+          runtimePayload.reviewProfile = reviewProfile;
+        }
+        const result = await sendRuntimeMessage("inova-review:prompt", runtimePayload);
         if (!isActiveReviewRequest(requestId, sessionId)) {
           return;
         }
@@ -294,6 +314,7 @@
   function normalizeResult(result) {
     if (!result || typeof result !== "object") return null;
     const checks = normalizeChecks(result.checks);
+    const sections = buildCheckSections(checks);
     const refinedPrompt = String(result.refinedPrompt || "").trim();
     return {
       checks,
@@ -301,32 +322,74 @@
       placeholderTokens: detectPlaceholderTokens(refinedPrompt),
       quickImprovements: Array.isArray(result.quickImprovements) ? result.quickImprovements.filter(Boolean).map(String) : [],
       refinedPrompt,
+      scoreGuideText: sections.length ? PROMPT_TELLING_SCORE_GUIDE_TEXT : LEGACY_SCORE_GUIDE_TEXT,
+      sections,
       summary: String(result.summary || "").trim(),
       totalScoreLabel: `${Math.max(0, Math.min(100, Number(result.totalScore) || 0))}점`,
     };
   }
 
   function normalizeChecks(checks) {
-    return (Array.isArray(checks) ? checks : []).slice(0, 4).map((check) => {
+    return (Array.isArray(checks) ? checks : []).map((check, index) => {
+      const normalizedKey = normalizeCheckKey(check?.id || check?.label);
+      const definition = CHECK_DEFINITIONS[normalizedKey];
       const status = normalizeEnum(check?.status, ["good", "partial", "missing"], "partial");
-      const label = normalizeCheckLabel(check?.label);
+      const label = normalizeCheckLabel(check?.label, normalizedKey);
       return {
         feedback: String(check?.feedback || "").trim(),
+        group: normalizeCheckGroup(check?.group, definition?.group),
+        id: definition?.id || String(check?.id || "").trim(),
         label,
+        order: definition?.order ?? 1000 + index,
         status,
         statusLabel: STATUS_LABELS[status] || STATUS_LABELS.partial,
       };
-    });
+    }).sort((left, right) => left.order - right.order)
+      .map((check) => ({
+        feedback: check.feedback,
+        group: check.group,
+        id: check.id,
+        label: check.label,
+        status: check.status,
+        statusLabel: check.statusLabel,
+      }));
   }
 
-  function normalizeCheckLabel(label) {
+  function buildCheckSections(checks) {
+    const groupedChecks = Array.isArray(checks) ? checks.filter((check) => CHECK_GROUP_DEFINITIONS[check.group]) : [];
+    if (!groupedChecks.length) {
+      return [];
+    }
+    return Object.entries(CHECK_GROUP_DEFINITIONS)
+      .sort((left, right) => left[1].order - right[1].order)
+      .map(([groupKey, groupDefinition]) => ({
+        id: groupKey,
+        items: groupedChecks.filter((check) => check.group === groupKey),
+        label: groupDefinition.label,
+      }))
+      .filter((section) => section.items.length);
+  }
+
+  function normalizeCheckLabel(label, normalizedKey = normalizeCheckKey(label)) {
+    if (CHECK_DEFINITIONS[normalizedKey]?.label) {
+      return CHECK_DEFINITIONS[normalizedKey].label;
+    }
     const source = String(label || "").trim();
-    const key = namespace.session.normalizeText(source).toLowerCase();
-    if (key.includes("context")) return CHECK_LABELS.context;
-    if (key.includes("goal")) return CHECK_LABELS.goal;
-    if (key.includes("constraint")) return CHECK_LABELS.constraints;
-    if (key.includes("output")) return CHECK_LABELS.output;
-    return source.replace(/\s*\((context|goal|constraints?|output)\)\s*/gi, "").trim() || "검토 항목";
+    return source
+      .replace(/\s*\((context|goal|constraints?|output|persona|reference|objective|mode|point[\s_-]?of[\s_-]?view|tone)\)\s*/gi, "")
+      .trim()
+      || "검토 항목";
+  }
+
+  function normalizeCheckGroup(group, fallback = "") {
+    const normalized = namespace.session.normalizeText(group || fallback).toLowerCase();
+    return normalized === "core" || normalized === "refinement" ? normalized : "";
+  }
+
+  function normalizeCheckKey(value) {
+    return namespace.session.normalizeText(value)
+      .replace(/[\s()_-]+/g, "")
+      .toLowerCase();
   }
 
   function normalizeEnum(value, allowed, fallback) {
@@ -371,6 +434,39 @@
       return "확장프로그램이 갱신됐어요. 페이지를 새로고침해 주세요.";
     }
     return message || "프롬프트 평가를 완료하지 못했어요.";
+  }
+
+  function getRequestedReviewProfile() {
+    return shouldUsePromptReviewProfileV2() ? PROMPT_REVIEW_PROFILE_V2 : "";
+  }
+
+  function shouldUsePromptReviewProfileV2() {
+    const runtimeVersion = readRuntimeVersion();
+    if (!runtimeVersion) {
+      return false;
+    }
+    return compareVersions(runtimeVersion, PROMPT_REVIEW_V2_MIN_VERSION) >= 0;
+  }
+
+  function readRuntimeVersion() {
+    try {
+      return namespace.session.normalizeText(global.chrome?.runtime?.getManifest?.()?.version);
+    } catch {
+      return "";
+    }
+  }
+
+  function compareVersions(left, right) {
+    const leftParts = String(left || "").split(".").map((part) => Number(part) || 0);
+    const rightParts = String(right || "").split(".").map((part) => Number(part) || 0);
+    const length = Math.max(leftParts.length, rightParts.length);
+    for (let index = 0; index < length; index += 1) {
+      const leftPart = leftParts[index] || 0;
+      const rightPart = rightParts[index] || 0;
+      if (leftPart > rightPart) return 1;
+      if (leftPart < rightPart) return -1;
+    }
+    return 0;
   }
 
   function logReviewDebug(event, payload) {

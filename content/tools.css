@@ -160,6 +160,20 @@
   flex-direction: column;
   border-top: 1px solid rgba(52, 81, 100, 0.08);
 }
+.inova-prompt-review__check-group {
+  display: flex;
+  flex-direction: column;
+}
+.inova-prompt-review__check-group + .inova-prompt-review__check-group {
+  border-top: 1px solid rgba(52, 81, 100, 0.08);
+}
+.inova-prompt-review__check-group-title {
+  display: block;
+  padding: 14px 16px 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(15, 95, 119, 0.82);
+}
 .inova-prompt-review__body { display: flex; flex-direction: column; gap: 0; flex: 1; min-height: 0; overflow-y: auto; padding-right: 2px; }
 .inova-prompt-review__notices {
   display: flex;
@@ -178,6 +192,7 @@
   border-bottom: 1px solid rgba(52, 81, 100, 0.08);
   background: transparent;
 }
+.inova-prompt-review__check-group .inova-prompt-review__check:first-of-type { padding-top: 10px; }
 .inova-prompt-review__check:last-child { border-bottom: 0; }
 .inova-prompt-review__check-head { align-items: flex-start; margin-bottom: 6px; }
 .inova-prompt-review__check-head strong { font-size: 14px; line-height: 1.35; }

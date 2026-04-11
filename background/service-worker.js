@@ -71,7 +71,7 @@ async function handleMessage(message, sender) {
     return recordPromptStoreView(message.entryId, message.providerIdentity);
   }
   if (message.type === "inova-review:prompt") {
-    return reviewPromptDraft(message.prompt, message.providerIdentity);
+    return reviewPromptDraft(message.prompt, message.providerIdentity, message.reviewProfile);
   }
   if (message.type === "inova-meeting:list-meetings") {
     return listMeetings(message.input, message.providerIdentity);
@@ -156,9 +156,9 @@ async function recordPromptStoreView(entryId, providerIdentity) {
   return namespace.cloudApi.recordPromptStoreView(entryId, providerIdentity, accessToken);
 }
 
-async function reviewPromptDraft(prompt, providerIdentity) {
+async function reviewPromptDraft(prompt, providerIdentity, reviewProfile) {
   const accessToken = await getInovaAccessToken();
-  return namespace.cloudApi.reviewInovaPrompt(prompt, providerIdentity, accessToken);
+  return namespace.cloudApi.reviewInovaPrompt(prompt, providerIdentity, accessToken, { reviewProfile });
 }
 
 async function syncPromptLibrary(syncDocument) {

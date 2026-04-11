@@ -1,6 +1,5 @@
 (function initPromptReviewView(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const SCORE_GUIDE_TEXT = "점수는 맥락, 목표, 제약, 출력 형식 4개 기준만 본 참고값이에요.";
 
   function render(review) {
     const result = review.result;
@@ -44,7 +43,7 @@
   }
 
   function renderResult(result, review) {
-    const scoreGuide = escapeHtml(SCORE_GUIDE_TEXT);
+    const scoreGuide = escapeHtml(result.scoreGuideText || "점수는 프롬프트 검토 결과를 요약한 참고값이에요.");
     const copyLabel = review.copyState === "copied"
       ? "복사됨"
       : review.copyState === "failed"
@@ -80,17 +79,39 @@
         </div>
         <textarea rows="10" readonly>${formattedPrompt}</textarea>
       </section>
+      ${renderChecks(result)}
+    `;
+  }
+
+  function renderChecks(result) {
+    if (Array.isArray(result.sections) && result.sections.length) {
+      return `
+        <div class="inova-prompt-review__checks">
+          ${result.sections.map((section) => `
+            <section class="inova-prompt-review__check-group">
+              <strong class="inova-prompt-review__check-group-title">${escapeHtml(section.label)}</strong>
+              ${section.items.map(renderCheckCard).join("")}
+            </section>
+          `).join("")}
+        </div>
+      `;
+    }
+    return `
       <div class="inova-prompt-review__checks">
-        ${result.checks.map((check) => `
-          <article class="inova-prompt-review__check">
-            <div class="inova-prompt-review__check-head">
-              <strong>${escapeHtml(check.label)}</strong>
-              <span class="inova-prompt-review__status is-${escapeHtml(check.status)}">${escapeHtml(check.statusLabel)}</span>
-            </div>
-            <p>${escapeHtml(check.feedback)}</p>
-          </article>
-        `).join("")}
+        ${result.checks.map(renderCheckCard).join("")}
       </div>
+    `;
+  }
+
+  function renderCheckCard(check) {
+    return `
+      <article class="inova-prompt-review__check">
+        <div class="inova-prompt-review__check-head">
+          <strong>${escapeHtml(check.label)}</strong>
+          <span class="inova-prompt-review__status is-${escapeHtml(check.status)}">${escapeHtml(check.statusLabel)}</span>
+        </div>
+        <p>${escapeHtml(check.feedback)}</p>
+      </article>
     `;
   }
 

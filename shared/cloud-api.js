@@ -40,12 +40,14 @@
     return payload?.data || { availableCategories: [], hasMore: false, items: [], totalCount: 0 };
   }
 
-  async function reviewInovaPrompt(prompt, providerIdentity, accessToken) {
+  async function reviewInovaPrompt(prompt, providerIdentity, accessToken, options = {}) {
+    const reviewProfile = String(options?.reviewProfile || "").trim();
     const payload = await postJson(
       functions.reviewInovaPromptUrl,
       {
         owner: providerIdentity,
         prompt,
+        ...(reviewProfile ? { reviewProfile } : {}),
       },
       accessToken
     );

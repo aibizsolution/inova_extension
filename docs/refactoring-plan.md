@@ -51,6 +51,7 @@ ordinary feature 구현 변경은 이 문서의 대상이 아니고, version lan
 - 유지보수자 최종 결정: `미정`
 - 현재 근거 요약:
   - legacy hosted origin/path, Functions export 이름, mutable namespace, auth scope baseline은 유지 중이다.
+  - prompt-review 6축 전환은 backend dual-contract와 client opt-in으로 준비하되, 현재 공개 사용자 기준선 `0.4.4`는 `legacy-v1` 4축 평가를 유지한다.
   - local rehearsal 부팅 확인과 기존 사용자의 기존 회의 데이터 read-path 확인은 pass 후보다.
   - `check:meeting-data`, `verify-meeting-service`, `verify-content-smoke`, `check:function-runtime` preflight는 녹색이다.
   - 다만 최종 candidate ready로 올리려면 실제 Chrome 기준의 주요 회의 smoke 기록이 남아 있어야 한다.
