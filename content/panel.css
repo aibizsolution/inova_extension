@@ -1,5 +1,5 @@
 /* i-Nova bookmark panel */
-:root { --inova-bookmark-panel-gap: 8px; --inova-bookmark-panel-width: clamp(300px, 25vw, 340px); --inova-bookmark-panel-reserve: calc(var(--inova-bookmark-panel-width) + var(--inova-bookmark-panel-gap)); }
+:root { --inova-bookmark-panel-gap: 8px; --inova-bookmark-panel-width: clamp(380px, 32vw, 468px); --inova-bookmark-panel-reserve: calc(var(--inova-bookmark-panel-width) + var(--inova-bookmark-panel-gap)); }
 @media (min-width: 1180px) {
   .main-content { min-width: 0; transition: margin-right 220ms ease; }
   body.inova-bookmark-panel-open .main-content { margin-right: var(--inova-bookmark-panel-reserve); }
@@ -39,14 +39,14 @@
   display: flex;
   flex-direction: column;
   border-radius: 24px;
-  border: 1px solid rgba(52, 81, 100, 0.16);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 252, 255, 0.94));
-  box-shadow: -18px 0 38px rgba(16, 33, 43, 0.15), 0 0 12px rgba(16, 33, 43, 0.08);
+  border: 1px solid rgba(52, 81, 100, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.995), rgba(250, 252, 255, 0.98));
+  box-shadow: -16px 0 34px rgba(16, 33, 43, 0.14), 0 0 0 1px rgba(255, 255, 255, 0.55);
   overflow: hidden;
   overflow-x: hidden;
   pointer-events: none;
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   transform: translateX(calc(100% + 18px));
   transition: transform 220ms ease, box-shadow 220ms ease, opacity 180ms ease;
   opacity: 0;
@@ -61,7 +61,7 @@
   flex: 1 1 auto;
   flex-direction: column;
   min-height: 0;
-  background: linear-gradient(180deg, rgba(247, 252, 255, 0.96), rgba(255, 255, 255, 0.92));
+  background: linear-gradient(180deg, rgba(249, 252, 255, 0.98), rgba(255, 255, 255, 0.96));
 }
 .inova-hosted-panel-status {
   flex: 0 0 auto;
@@ -71,7 +71,7 @@
   font-weight: 600;
   line-height: 1.45;
   color: rgba(16, 33, 43, 0.78);
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.96);
 }
 .inova-hosted-panel-status[data-tone="info"] { color: #0f5f77; }
 .inova-hosted-panel-status[data-tone="warning"] { color: #865d1e; }
@@ -328,5 +328,5 @@
     --panel-gap: 6px;
     --panel-right: 6px;
   }
-  #inova-bookmark-panel { width: min(88vw, 320px); height: calc(100vh - (var(--panel-gap) * 2)); }
+  #inova-bookmark-panel { width: min(92vw, 360px); height: calc(100vh - (var(--panel-gap) * 2)); }
 }

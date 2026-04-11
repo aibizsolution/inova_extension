@@ -1,5 +1,9 @@
 :root {
   color-scheme: light;
+  --inova-scrollbar-size: 10px;
+  --inova-scrollbar-track: rgba(164, 184, 197, 0.18);
+  --inova-scrollbar-thumb: rgba(90, 118, 132, 0.42);
+  --inova-scrollbar-thumb-hover: rgba(68, 96, 111, 0.58);
 }
 
 html,
@@ -15,8 +19,43 @@ body {
   font-family: "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Segoe UI", sans-serif;
 }
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--inova-scrollbar-thumb) var(--inova-scrollbar-track);
+}
+
+*::-webkit-scrollbar {
+  width: var(--inova-scrollbar-size);
+  height: var(--inova-scrollbar-size);
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--inova-scrollbar-track);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--inova-scrollbar-thumb), rgba(76, 106, 121, 0.36));
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, var(--inova-scrollbar-thumb-hover), rgba(60, 88, 103, 0.52));
+  background-clip: padding-box;
+}
+
 body {
   position: relative;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
 
 #inova-hosted-panel-root {
