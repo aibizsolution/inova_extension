@@ -103,7 +103,7 @@
 - 현재 가설: `minor 가설`
 - candidate ready 상태: `in-progress`
 - 마지막 candidate 갱신 커밋: `working tree`
-- candidate 증거 요약: `local rehearsal 부팅 확인과 기존 사용자 사용 가능 오너 확인은 확보했다. 남은 일은 이 근거를 핵심 사용자 흐름 기준으로 정리해 minor candidate ready 여부를 닫는 것이다.`
+- candidate 증거 요약: `legacy hosted origin/path, Functions export 이름, mutable namespace, auth scope baseline 유지와 local rehearsal 부팅 확인은 확보했다. 오너 확인으로 기존 사용자가 기존 회의 데이터를 그대로 여는 read-path는 pass 후보로 올렸다. 다만 회의 목록 조회, hosted workspace 진입, 기존 결과 조회, 새 녹음 또는 import, 기록 수정 또는 삭제를 개별 smoke line으로 남긴 기록이 아직 비어 있어 candidate ready는 계속 in-progress로 둔다.`
 - 유지보수자 최종 결정: `미정`
 
 ### 기록 규칙
@@ -293,6 +293,19 @@
 - 단, local rehearsal 통과만으로는 minor green을 선언하지 않는다. 최종 판정은 기존 상용 데이터가 있는 실제 Chrome smoke로 남긴다.
 - 2026-04-11 기준으로는 오너 확인에 따라 `기존 회의 데이터가 새 ZIP에서도 별도 복구 없이 열린다` 항목을 pass 후보로 본다. 나머지 핵심 흐름은 같은 형식의 증거로 묶어야 `minor candidate ready`를 닫을 수 있다.
 
+### 2026-04-11 minor evidence bundle
+
+- hosted origin/path legacy 유지: 현재 hosted workspace와 panel bridge baseline은 `browser-extension-main` legacy 경로를 계속 사용한다.
+- Functions export 이름 유지: meeting internal split은 기존 handler/export surface를 유지한 채 service 바깥 workflow만 정리했다.
+- mutable meeting namespace 유지: `integration_inova_meetings`, `integration_inova_meeting_jobs`, `integration_inova_meeting_artifacts` legacy write namespace를 계속 사용한다.
+- auth scope, workspace URL, response envelope 유지: panel/workspace auth scope와 hosted workspace URL, HTTP response envelope 변화 근거가 없다.
+- meeting migration 불필요: meeting 전용 migration marker나 copy migration 단계가 추가되지 않았다.
+- 기존 회의 데이터 reopen: 오너 확인 기준으로 기존 사용자는 새 ZIP에서도 기존 회의 데이터를 그대로 연다.
+- full-local rehearsal: `npm.cmd run emulator:meeting-local` 부팅과 local hosted/panel bridge wiring 확인은 이미 확보했다.
+- 회의 목록 조회, hosted workspace 진입, 기존 결과 조회: 오너 확인의 범위상 read-path pass 후보로 보지만, 아직 개별 smoke line으로 분리한 기록은 없다.
+- 새 녹음 또는 import 1회: 아직 이 문서에 pass evidence가 없다.
+- 기록 수정 또는 삭제 1회: 아직 이 문서에 pass evidence가 없다.
+
 ### Major 경로 green 조건
 
 아래 항목이 모두 충족되면 meeting은 `major 필요` 판정을 받는다.
@@ -431,6 +444,15 @@
 - 오너 확인:
   - 기존 사용자 기준으로는 회의 기능이 그대로 사용 가능하다는 확인을 받았다.
   - 따라서 `Meeting Ready Gate` minor 조건 중 `기존 회의 데이터가 새 ZIP에서도 별도 복구 없이 열린다` 항목은 pass 후보로 본다.
+- meeting minor evidence 정리:
+  - minor 가설은 유지한다. legacy hosted origin/path, Functions export 이름, mutable namespace, auth scope baseline 유지와 local rehearsal 부팅 확인은 확보했다.
+  - 오너 확인 기준으로 기존 사용자의 기존 회의 데이터 reopen은 pass 후보로 올렸다.
+  - 다만 회의 목록 조회, hosted workspace 진입, 기존 결과 조회, 새 녹음 또는 import, 기록 수정 또는 삭제는 개별 smoke line 증거가 아직 비어 있어 `candidate ready`는 계속 `in-progress`로 둔다.
+- meeting-manager targeted review:
+  - `ensurePanelAuth`는 `유지`로 본다. runtimeConfig/providerUserKey/expiry cache와 promise dedupe가 한 workflow라 지금은 분리 이득보다 결합 비용이 더 크다.
+  - `ensureBridgePort`, `ensureBridgeFrame`, `handleBridgeMessage`, `disconnectRealtime`는 `다음 분리 후보`로 본다. iframe/MessageChannel lifecycle이 독립적이라 bridge bug pressure가 다시 생기면 첫 split 후보가 된다.
+  - `fallbackRefresh`, `warmRefresh`, `mergeMeetingHub`는 `유지`로 본다. degraded/dataFreshness/source 계약과 직접 맞물리고 `node scripts/verify-meeting-manager.js`가 이 경계를 이미 고정하고 있다.
+  - 현재 결론은 `즉시 수정 필요 없음`이며, 다음 구현 우선순위는 코드 분해보다 Meeting Ready Gate의 비어 있는 smoke evidence를 채우는 쪽이다.
 - 패널 shell 책임 정리:
   - 패널 리팩토링은 `0.4.4` 사용자가 쓰는 DB 구조와 legacy lane 계약을 유지한 채, 확장 내부 책임만 meeting/debug/lifecycle 경계로 나누는 범위로 둔다.
   - `manifest.json` 변경은 새 패널 controller 파일을 확장 번들에 포함하기 위한 wiring이며, hosted origin/path, Functions 이름, storage key, runtime message 계약은 바꾸지 않는다.

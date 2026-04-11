@@ -15,6 +15,7 @@
 - `content/meeting-view.js`
 - `hosting/meeting/index.js`
 - `popup/index.js`
+- `content/meeting-manager.js`는 현재 `ensurePanelAuth`, `ensureBridgePort`/`handleBridgeMessage`/`disconnectRealtime`, `fallbackRefresh`/`warmRefresh`/`mergeMeetingHub` 세 workflow로 읽는다. 파일 길이만으로 바로 분리하지 말고, bridge lifecycle에 실제 bug pressure가 반복될 때만 다음 split 후보로 올린다.
 
 ## 관련 프론트 경로
 - `background/service-worker.js`
