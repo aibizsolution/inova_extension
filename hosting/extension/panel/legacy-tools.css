@@ -368,7 +368,7 @@
 }
 .inova-bookmark-action:disabled { opacity: 0.55; cursor: default; }
 .inova-tool-toolbar--meeting { padding-top: 14px; align-items: stretch; }
-.inova-tool-toolbar__row--meeting { width: 100%; align-items: flex-start; }
+.inova-tool-toolbar__row--meeting { width: 100%; align-items: center; justify-content: flex-end; }
 .inova-meeting-record-list { display: flex; flex-direction: column; gap: 0; }
 .inova-meeting-record {
   position: relative; display: flex; flex-direction: column; gap: 12px; padding: 14px 8px; margin-bottom: 0;

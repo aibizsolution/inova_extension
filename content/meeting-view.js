@@ -16,18 +16,15 @@
       <section class="inova-tool-section inova-tool-section--meeting">
         <div class="inova-tool-toolbar inova-tool-toolbar--meeting">
           <div class="inova-tool-toolbar__row inova-tool-toolbar__row--meeting">
-            <div class="inova-tool-toolbar__stack">
-              <p class="inova-tool-toolbar__title">최근 회의 룸</p>
-            </div>
-          <button
-            type="button"
-            class="inova-bookmark-action${workspacePending ? " is-pending" : ""}"
-            data-meeting-action="open-workspace"
-            ${normalized.pending.active ? "disabled" : ""}
-            aria-busy="${workspacePending}"
-          >
-            ${escapeHtml(workspaceButtonLabel)}
-          </button>
+            <button
+              type="button"
+              class="inova-bookmark-action${workspacePending ? " is-pending" : ""}"
+              data-meeting-action="open-workspace"
+              ${normalized.pending.active ? "disabled" : ""}
+              aria-busy="${workspacePending}"
+            >
+              ${escapeHtml(workspaceButtonLabel)}
+            </button>
           </div>
         </div>
         <div class="inova-meeting-stack">
