@@ -1,3 +1,5 @@
+const { FieldValue } = require("firebase-admin/firestore");
+
 const DEFAULT_LIMIT = 500;
 const MAX_LIMIT = 200;
 const SUMMARY_LENGTH = 140;
@@ -10,7 +12,6 @@ const PUBLIC_FEED_SORTS = ["latest"];
 
 function registerStoreHandlers(deps) {
   const {
-    admin,
     db,
     onRequest,
     CORS_ORIGINS,
@@ -147,7 +148,7 @@ function registerStoreHandlers(deps) {
             hasDetail: false,
             status: "removed",
             removedAt: new Date().toISOString(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
           },
           { merge: true }
         );
@@ -513,7 +514,7 @@ function registerStoreHandlers(deps) {
     return {
       metrics,
       score: buildScore(metrics),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     };
   }
 
