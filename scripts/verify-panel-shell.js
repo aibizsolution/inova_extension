@@ -27,6 +27,7 @@ async function main() {
   assert.equal(harness.reviewFloatEnsured, 1);
   assert.equal(harness.reviewFloatStates.at(-1)?.visible, true);
   assert.equal(harness.routeWatchInstallCalls, 1);
+  assert.equal(harness.surfaceWatchInstallCalls, 1);
 
   await harness.callbacks.onCopyBookmark("bookmark-1");
   harness.callbacks.onJumpBookmark("bookmark-1");
@@ -140,6 +141,7 @@ function createHarness() {
     reviewFloatEnsured: controllerEvents.reviewFloatEnsured || 0,
     reviewFloatStates: controllerEvents.reviewFloatStates,
     routeWatchInstallCalls: controllerEvents.routeWatchInstallCalls || 0,
+    surfaceWatchInstallCalls: controllerEvents.surfaceWatchInstallCalls || 0,
     shellQueries: controllerEvents.shellQueries,
     shellSubmitQueries: controllerEvents.shellSubmitQueries,
     shellToolSelections: controllerEvents.shellToolSelections,
@@ -261,9 +263,17 @@ function buildNamespace({ controllerEvents, ensureCalls, renderPayloads }) {
           handleVisibilityChange() {},
           handleWindowFocus() {},
           initializeOpenState() {},
-          installSurfaceWatchers() {},
           togglePanel(nextOpen) {
             controllerEvents.toggleCalls.push(nextOpen);
+          },
+        };
+      },
+    },
+    panelSurfaceController: {
+      create() {
+        return {
+          installSurfaceWatchers() {
+            controllerEvents.surfaceWatchInstallCalls = (controllerEvents.surfaceWatchInstallCalls || 0) + 1;
           },
         };
       },

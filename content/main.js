@@ -130,6 +130,14 @@
     schedulePromptCloudSyncIfNeeded: (delay) => panelPromptController.scheduleCloudSyncIfNeeded(delay),
     schedulePromptRealtimeSync: (delay) => panelPromptController.scheduleRealtimeSync(delay),
   });
+  const panelSurfaceController = namespace.panelSurfaceController.create(state, {
+    ensureStoreLoaded: () => panelPromptController.ensureStoreLoaded(),
+    isStoreTabActive,
+    logPanelDebug,
+    meetingManager,
+    render,
+    schedulePromptRealtimeSync: (delay) => panelPromptController.scheduleRealtimeSync(delay),
+  });
   const routeSync = namespace.routeSync.create(state, {
     onRouteStateChanged: meetingManager.handleRouteStateChange,
     refreshState: routeStateController.refreshState,
@@ -166,7 +174,7 @@
     panelDebugController.installValidationApi();
     panelPromptController.ensureReviewFloat();
     routeWatchController.installRouteWatchers();
-    panelLifecycleController.installSurfaceWatchers();
+    panelSurfaceController.installSurfaceWatchers();
     global.addEventListener("resize", render, { passive: true });
     global.addEventListener("focus", panelLifecycleController.handleWindowFocus, { passive: true });
     document.addEventListener("visibilitychange", panelLifecycleController.handleVisibilityChange, { passive: true });
