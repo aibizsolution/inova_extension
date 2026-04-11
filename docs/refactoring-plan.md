@@ -456,6 +456,9 @@
   - `ensureBridgePort`, `ensureBridgeFrame`, `handleBridgeMessage`, `disconnectRealtime`는 `다음 분리 후보`로 본다. iframe/MessageChannel lifecycle이 독립적이라 bridge bug pressure가 다시 생기면 첫 split 후보가 된다.
   - `fallbackRefresh`, `warmRefresh`, `mergeMeetingHub`는 `유지`로 본다. degraded/dataFreshness/source 계약과 직접 맞물리고 `node scripts/verify-meeting-manager.js`가 이 경계를 이미 고정하고 있다.
   - 현재 결론은 `즉시 수정 필요 없음`이며, 다음 구현 우선순위는 코드 분해보다 Meeting Ready Gate의 비어 있는 smoke evidence를 채우는 쪽이다.
+- meeting bridge lifecycle 책임 정리:
+  - `ensureBridgePort`, `ensureBridgeFrame`, `handleBridgeMessage`, `disconnectRealtime`는 `content/meeting-panel-bridge-controller.js`로 옮기고, `content/meeting-manager.js`는 panel auth/cache와 fallback state shaping 중심으로 유지한다.
+  - `manifest.json`과 계약 파일 변경은 새 bridge controller 로딩/wiring만 위한 것이며, hosted origin/path, Functions 이름, mutable namespace, runtime message 의미는 바꾸지 않는다.
 - 패널 shell 책임 정리:
   - 패널 리팩토링은 `0.4.4` 사용자가 쓰는 DB 구조와 legacy lane 계약을 유지한 채, 확장 내부 책임만 meeting/debug/lifecycle 경계로 나누는 범위로 둔다.
   - `manifest.json` 변경은 새 패널 controller 파일을 확장 번들에 포함하기 위한 wiring이며, hosted origin/path, Functions 이름, storage key, runtime message 계약은 바꾸지 않는다.

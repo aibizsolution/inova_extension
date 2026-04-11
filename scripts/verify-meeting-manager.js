@@ -142,6 +142,7 @@ function createHarness(options = {}) {
     "shared/storage.js",
     "shared/meeting-bridge.js",
     "shared/provider-identity.js",
+    "content/meeting-panel-bridge-controller.js",
     "content/meeting-manager.js",
   ];
   let nextTimerId = 1;
