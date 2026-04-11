@@ -162,7 +162,10 @@
     renderMeetingDebugLayerIfNeeded(debugLayer, cache, state);
 
     if (state.activeTool === "prompts" && state.promptTool?.activeTab === "store") {
-      namespace.promptHubPanel?.syncStoreList?.(host, host.__callbacks, previousStoreScrollTop);
+      namespace.promptHubPanel?.syncStoreList?.(host, host.__callbacks, {
+        renderKey: state.promptTool?.store?.renderKey,
+        scrollTop: previousStoreScrollTop,
+      });
     }
     namespace.bookmarkView.setActive(state.bookmarksTool.activeId);
     restoreFocusedControl(root, focusedControl);
@@ -386,6 +389,16 @@
   function handleRootKeydown(event, callbacks) {
     const root = document.getElementById("inova-bookmark-root");
     if (event.key === "Escape" && root?.dataset.open === "true") {
+      const storeSearch = event.target instanceof HTMLElement
+        ? event.target.closest?.('[data-search-tool="store"]')
+        : null;
+      if (storeSearch instanceof global.HTMLInputElement && storeSearch.value) {
+        storeSearch.value = "";
+        callbacks.onSearch?.("store", "", { composing: false });
+        callbacks.onSearchSubmit?.("store", "");
+        event.preventDefault();
+        return;
+      }
       if (callbacks.onEscape?.()) { event.preventDefault(); return; }
       return void callbacks.onToggle?.(false);
     }

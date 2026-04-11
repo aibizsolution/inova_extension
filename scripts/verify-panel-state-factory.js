@@ -25,6 +25,8 @@ function main() {
   assert.equal(stateA.uiPreferences.activePromptTab, "library");
   assert.equal(stateA.promptLibrary.items.length, 1);
   assert.equal(stateA.store.limit, 1000);
+  assert.equal(stateA.store.renderKey, 0);
+  assert.equal(stateA.store.renderLimit, 20);
   assert.equal(stateA.promptEditor.mode, "create");
   assert.equal(stateA.promptPublishCategoryId, "document");
   assert.equal(stateA.routeWatchInstalled, false);

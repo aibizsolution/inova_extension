@@ -1,8 +1,11 @@
 (function initStoreManager(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const LOCAL_CACHE_LIMIT = 1000;
+  const INITIAL_RENDER_COUNT = 20;
+  const RENDER_BATCH_SIZE = 20;
   function create(state, hooks) {
     const viewedEntryIds = new Set();
+    const derivedItemsCache = createDerivedItemsCache();
     let identityRetryTimer = 0;
     let loadSequence = 0;
     return {
@@ -19,14 +22,13 @@
     function buildViewState() {
       const providerIdentity = namespace.providerIdentity.getCurrent();
       const appliedQuery = getAppliedQuery();
-      const scopedItems = getScopedStoreItems(providerIdentity.providerUserKey);
-      const categoryFiltered = namespace.promptStore.filterEntries(scopedItems, "", state.store.categoryId);
-      const filtered = namespace.promptStore.filterEntries(categoryFiltered, appliedQuery, state.store.categoryId);
-      const items = namespace.promptStore.sortEntries(filtered, state.store.sortBy);
-      const totalCount = hasActiveQuery() ? items.length : categoryFiltered.length;
+      const derived = getDerivedStoreState(providerIdentity.providerUserKey, appliedQuery);
+      const renderLimit = getRenderLimit();
+      const renderedCount = Math.min(derived.items.length, renderLimit);
+      const totalCount = hasActiveQuery() ? derived.items.length : derived.categoryFilteredCount;
       const emptyText = hasActiveQuery() ? "검색 결과가 없어요. 다른 표현으로 다시 찾아보세요." : state.store.scope === "mine" ? "내가 등록한 프롬프트가 아직 없어요." : "스토어에 등록된 프롬프트가 아직 없어요.";
       return {
-        categories: getAvailableCategories(providerIdentity.providerUserKey),
+        categories: derived.categories,
         categoryId: state.store.categoryId,
         actionPending: state.store.actionPending,
         deleteConfirmEntryId: state.store.deleteConfirmEntryId,
@@ -38,10 +40,10 @@
         error: state.store.error,
         expandedEntryId: state.store.expandedEntryId,
         feedback: state.store.feedback,
-        hasMore: false,
+        hasMore: derived.items.length > renderedCount,
         identityPending: Boolean(state.store.identityPending),
-        items,
-        loadedCount: categoryFiltered.length,
+        items: derived.items.slice(0, renderedCount),
+        loadedCount: derived.categoryFilteredCount,
         loaded: state.store.loaded,
         loading: state.store.loading,
         ownerScope: state.store.scope,
@@ -49,6 +51,9 @@
         queryActive: hasActiveQuery(),
         queryDirty: isQueryDirty(),
         query: state.queries.store,
+        renderKey: Number(state.store.renderKey) || 0,
+        renderedCount,
+        renderLimit,
         sortBy: state.store.sortBy,
         source: normalizeReadSource(state.store.source),
         totalCount,
@@ -113,6 +118,7 @@
         state.store.items = namespace.promptStore.normalizeStoreEntries(data.items);
         state.store.availableCategories = normalizeAvailableCategories(data.availableCategories, state.store.categoryId);
         state.store.totalCount = Math.max(0, Number(data.totalCount) || state.store.items.length);
+        preserveRenderWindow();
         if (state.store.categoryId !== "all" && !state.store.availableCategories.some((category) => category.id === state.store.categoryId)) {
           state.store.categoryId = "all";
           state.store.loaded = false;
@@ -158,12 +164,11 @@
     function submitQuery(value) {
       global.clearTimeout(state.store.searchTimer);
       state.queries.store = namespace.session.normalizeText(value);
-      state.store.limit = LOCAL_CACHE_LIMIT;
-      state.store.hasMore = false;
       state.store.deleteConfirmEntryId = "";
       state.store.detailPendingEntryId = "";
       state.store.expandedEntryId = "";
       state.store.appliedQuery = state.queries.store;
+      resetWindow();
       hooks.render();
       if (!state.store.loaded) {
         ensureLoaded().catch((error) => {
@@ -261,7 +266,15 @@
     }
 
     async function loadMore() {
-      return;
+      const providerUserKey = namespace.providerIdentity.getCurrent().providerUserKey;
+      const appliedQuery = getAppliedQuery();
+      const totalItems = getDerivedStoreState(providerUserKey, appliedQuery).items.length;
+      const currentLimit = getRenderLimit();
+      if (currentLimit >= totalItems) {
+        return;
+      }
+      state.store.renderLimit = Math.min(totalItems, currentLimit + RENDER_BATCH_SIZE);
+      hooks.render();
     }
 
     function applyLatestRealtimeSnapshot(payload) {
@@ -279,6 +292,7 @@
       state.store.totalCount = state.store.categoryId === "all"
         ? totalPublished
         : Math.max(0, Number(categoryCounts[state.store.categoryId]) || 0);
+      preserveRenderWindow();
       state.store.hasMore = false;
       state.store.degraded = false;
       state.store.degradedReason = "";
@@ -412,6 +426,7 @@
       }
       state.store.items = nextItems;
       state.store.loaded = true;
+      preserveRenderWindow();
     }
 
     function mergeNormalizedEntry(previous, normalized, viewerPatch = null) {
@@ -470,17 +485,6 @@
     function getAppliedQuery() { return namespace.session.normalizeText(state.store.appliedQuery); }
     function getNormalizedInputQuery() { return namespace.session.normalizeText(state.queries.store); }
     function isQueryDirty() { return getNormalizedInputQuery() !== getAppliedQuery(); }
-    function getAvailableCategories(providerUserKey) {
-      const scopedItems = getScopedStoreItems(providerUserKey);
-      const itemCategories = Array.isArray(scopedItems)
-        ? Array.from(new Set(scopedItems.map((item) => namespace.session.normalizeText(item?.categoryId).toLowerCase()).filter(Boolean)))
-          .map((categoryId) => ({ id: categoryId }))
-        : [];
-      if (state.store.scope === "mine") {
-        return normalizeAvailableCategories(itemCategories, state.store.categoryId);
-      }
-      return normalizeAvailableCategories(itemCategories.length ? itemCategories : state.store.availableCategories, state.store.categoryId);
-    }
     function hasStoreRenderableData() {
       const scopedItems = getScopedStoreItems(namespace.providerIdentity.getCurrent().providerUserKey);
       return Boolean(
@@ -497,13 +501,18 @@
       const active = allCategories.find((category) => category.id === namespace.session.normalizeText(activeCategoryId).toLowerCase());
       return [{ id: "all", label: "전체" }, ...visible, ...(active && active.id !== "all" && !visible.some((category) => category.id === active.id) ? [active] : [])];
     }
-    function resetWindow() { state.store.limit = LOCAL_CACHE_LIMIT; state.store.hasMore = false; }
+    function resetWindow() {
+      state.store.limit = LOCAL_CACHE_LIMIT;
+      state.store.hasMore = false;
+      state.store.renderLimit = INITIAL_RENDER_COUNT;
+      state.store.renderKey = (Number(state.store.renderKey) || 0) + 1;
+    }
     function applyLocalFilters(apply) {
       state.store.deleteConfirmEntryId = "";
       state.store.detailPendingEntryId = "";
       state.store.expandedEntryId = "";
       apply();
-      state.store.hasMore = false;
+      resetWindow();
       hooks.render();
       if (!state.store.loaded) {
         global.clearTimeout(state.store.searchTimer);
@@ -521,6 +530,124 @@
         return [];
       }
       return items.filter((item) => namespace.session.normalizeText(item?.owner?.providerUserKey) === normalizedProviderUserKey);
+    }
+
+    function getDerivedStoreState(providerUserKey, appliedQuery) {
+      const itemsRef = Array.isArray(state.store.items) ? state.store.items : [];
+      const availableCategoriesRef = Array.isArray(state.store.availableCategories) ? state.store.availableCategories : [];
+      const normalizedProviderUserKey = namespace.session.normalizeText(providerUserKey);
+      const normalizedQuery = namespace.session.normalizeText(appliedQuery).toLowerCase();
+      const cacheHit = derivedItemsCache.itemsRef === itemsRef
+        && derivedItemsCache.availableCategoriesRef === availableCategoriesRef
+        && derivedItemsCache.providerUserKey === normalizedProviderUserKey
+        && derivedItemsCache.scope === state.store.scope
+        && derivedItemsCache.categoryId === state.store.categoryId
+        && derivedItemsCache.sortBy === state.store.sortBy
+        && derivedItemsCache.query === normalizedQuery;
+      if (cacheHit) {
+        return derivedItemsCache.result;
+      }
+      const scopedItems = getScopedStoreItems(normalizedProviderUserKey);
+      const categoryFiltered = filterByCategory(scopedItems, state.store.categoryId);
+      const filteredItems = filterByQuery(categoryFiltered, normalizedQuery);
+      const result = {
+        categories: buildAvailableCategories(scopedItems, availableCategoriesRef),
+        categoryFilteredCount: categoryFiltered.length,
+        items: sortStoreItems(filteredItems, state.store.sortBy),
+      };
+      derivedItemsCache.itemsRef = itemsRef;
+      derivedItemsCache.availableCategoriesRef = availableCategoriesRef;
+      derivedItemsCache.providerUserKey = normalizedProviderUserKey;
+      derivedItemsCache.scope = state.store.scope;
+      derivedItemsCache.categoryId = state.store.categoryId;
+      derivedItemsCache.sortBy = state.store.sortBy;
+      derivedItemsCache.query = normalizedQuery;
+      derivedItemsCache.result = result;
+      return result;
+    }
+
+    function filterByCategory(items, categoryId) {
+      const normalizedCategoryId = normalizeCategoryId(categoryId);
+      if (normalizedCategoryId === "all") {
+        return items;
+      }
+      return items.filter((item) => namespace.session.normalizeText(item?.categoryId).toLowerCase() === normalizedCategoryId);
+    }
+
+    function filterByQuery(items, normalizedQuery) {
+      if (!normalizedQuery) {
+        return items;
+      }
+      return items.filter((item) => `${item.title} ${item.summary} ${item.content} ${item.owner.displayName}`.toLowerCase().includes(normalizedQuery));
+    }
+
+    function sortStoreItems(items, sortBy) {
+      return items.slice().sort((left, right) => compareStoreEntries(left, right, sortBy));
+    }
+
+    function compareStoreEntries(left, right, sortBy) {
+      if (sortBy === "likes") {
+        return compareNumber(right.metrics.likeCount, left.metrics.likeCount)
+          || compareNumber(right.metrics.importCount, left.metrics.importCount)
+          || compareDate(right.publishedAt, left.publishedAt);
+      }
+      if (sortBy === "imports") {
+        return compareNumber(right.metrics.importCount, left.metrics.importCount)
+          || compareNumber(right.metrics.likeCount, left.metrics.likeCount)
+          || compareDate(right.publishedAt, left.publishedAt);
+      }
+      if (sortBy === "views") {
+        return compareNumber(right.metrics.viewCount, left.metrics.viewCount)
+          || compareDate(right.publishedAt, left.publishedAt);
+      }
+      return compareDate(right.publishedAt, left.publishedAt) || compareNumber(right.score, left.score);
+    }
+
+    function compareNumber(left, right) {
+      return Number(left || 0) - Number(right || 0);
+    }
+
+    function compareDate(left, right) {
+      return Date.parse(left || "") - Date.parse(right || "");
+    }
+
+    function buildAvailableCategories(scopedItems, fallbackCategories) {
+      const itemCategories = Array.isArray(scopedItems)
+        ? Array.from(new Set(scopedItems.map((item) => namespace.session.normalizeText(item?.categoryId).toLowerCase()).filter(Boolean)))
+          .map((categoryId) => ({ id: categoryId }))
+        : [];
+      if (state.store.scope === "mine") {
+        return normalizeAvailableCategories(itemCategories, state.store.categoryId);
+      }
+      return normalizeAvailableCategories(itemCategories.length ? itemCategories : fallbackCategories, state.store.categoryId);
+    }
+
+    function normalizeCategoryId(categoryId) {
+      const normalized = namespace.session.normalizeText(categoryId).toLowerCase();
+      return normalized === "all" || namespace.promptStore.getCategories().some((category) => category.id === normalized)
+        ? normalized
+        : "other";
+    }
+
+    function getRenderLimit() {
+      return Math.max(INITIAL_RENDER_COUNT, Number(state.store.renderLimit) || INITIAL_RENDER_COUNT);
+    }
+
+    function preserveRenderWindow() {
+      state.store.renderLimit = getRenderLimit();
+    }
+
+    function createDerivedItemsCache() {
+      return {
+        availableCategoriesRef: null,
+        categoryId: "",
+        itemsRef: null,
+        providerUserKey: "",
+        query: "",
+        result: null,
+        scope: "",
+        sortBy: "",
+      };
     }
 
     function shouldReloadAfterMutation() {

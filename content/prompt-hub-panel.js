@@ -141,10 +141,18 @@
     return true;
   }
 
-  function syncStoreList(host, callbacks, scrollTop) {
+  function syncStoreList(host, callbacks, options = {}) {
     const list = host.querySelector(".inova-store-list");
     if (!(list instanceof HTMLElement)) return;
-    if (scrollTop > 0) list.scrollTop = scrollTop;
+    const renderKey = Number(options.renderKey) || 0;
+    const scrollTop = Math.max(0, Number(options.scrollTop) || 0);
+    if (host.__storeRenderKey !== renderKey) {
+      list.scrollTop = 0;
+      host.__storeScrollTop = 0;
+      host.__storeRenderKey = renderKey;
+    } else if (scrollTop > 0) {
+      list.scrollTop = scrollTop;
+    }
     host.__storeScrollTop = list.scrollTop;
     if (callbacks?.onStoreAction && list.dataset.storeHasMore === "true" && list.dataset.storeLoading !== "true" && list.scrollHeight <= list.clientHeight + 24) {
       global.setTimeout(() => callbacks.onStoreAction("load-more"), 0);

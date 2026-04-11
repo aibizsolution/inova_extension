@@ -38,6 +38,8 @@
       identityPending: false,
       items: [],
       limit: 1000,
+      renderKey: 0,
+      renderLimit: 20,
       loaded: false,
       loading: false,
       appliedQuery: "",

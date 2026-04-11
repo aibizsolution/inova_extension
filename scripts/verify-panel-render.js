@@ -12,6 +12,7 @@ function main() {
   verifyFrameBatchingAndHostCaching();
   verifyToolContentCaching();
   verifyDebugRenderSkipping();
+  verifyStoreSearchEscapeBehavior();
   console.log("[verify-panel-render] Panel render batching and cache contract passed");
 }
 
@@ -140,6 +141,62 @@ function verifyDebugRenderSkipping() {
   assert.equal(harness.document.querySelector("#inova-meeting-debug-layer")?.dataset.debugEnabled, "true");
 }
 
+function verifyStoreSearchEscapeBehavior() {
+  const harness = createHarness();
+  const promptState = createPanelState({
+    activeTool: "prompts",
+    promptTool: {
+      activeTab: "store",
+      prompt: { items: [] },
+      review: { open: false },
+      store: {
+        hasMore: false,
+        items: [],
+        loading: false,
+        query: "fixture",
+        renderKey: 0,
+      },
+      tabs: [],
+    },
+    toolCount: 4,
+    toolTitle: "프롬프트",
+    tools: buildTools("prompts"),
+  });
+
+  harness.render(promptState);
+  harness.flushFrame();
+
+  const search = harness.document.querySelector('[data-search-tool="store"]');
+  assert.ok(search, "Expected store search input to render");
+
+  search.value = "fixture";
+  const clearEvent = new harness.window.KeyboardEvent("keydown", {
+    bubbles: true,
+    cancelable: true,
+    key: "Escape",
+  });
+  search.dispatchEvent(clearEvent);
+
+  assert.equal(clearEvent.defaultPrevented, true, "First ESC should be consumed by store search clear");
+  assert.deepEqual(harness.searchCalls[0], {
+    options: { composing: false },
+    toolId: "store",
+    value: "",
+  });
+  assert.deepEqual(harness.searchSubmitCalls, [{ toolId: "store", value: "" }]);
+  assert.deepEqual(harness.toggleCalls, []);
+
+  const closeEvent = new harness.window.KeyboardEvent("keydown", {
+    bubbles: true,
+    cancelable: true,
+    key: "Escape",
+  });
+  search.dispatchEvent(closeEvent);
+
+  assert.equal(closeEvent.defaultPrevented, false, "Second ESC should fall through to close");
+  assert.deepEqual(harness.toggleCalls, [false]);
+}
+
 function createHarness() {
   const dom = new JSDOM("<!doctype html><html><body></body></html>", {
     pretendToBeVisual: true,
@@ -155,6 +212,9 @@ function createHarness() {
     promptTool: 0,
     releaseTool: 0,
   };
+  const searchCalls = [];
+  const searchSubmitCalls = [];
+  const toggleCalls = [];
 
   context.console = console;
   context.globalThis = context;
@@ -207,6 +267,14 @@ function createHarness() {
     promptHubView: {
       render(state) {
         renderCounts.promptTool += 1;
+        if (state.activeTab === "store") {
+          return `
+            <section class="prompt-tool">
+              <input data-search-tool="store" type="search" value="${escapeHtml(state.store?.query || "")}" />
+              <div class="inova-store-list" data-store-has-more="${String(Boolean(state.store?.hasMore))}" data-store-loading="${String(Boolean(state.store?.loading))}"></div>
+            </section>
+          `;
+        }
         return `<section class="prompt-tool">${escapeHtml(state.activeTab)}</section>`;
       },
     },
@@ -220,7 +288,19 @@ function createHarness() {
 
   loadScript("content/panel.js", context);
   context.InovaBookmarks.contentPanel.ensurePanel({
-    onToggle() {},
+    onSearch(toolId, value, options = {}) {
+      searchCalls.push({
+        options: cloneValue(options),
+        toolId,
+        value,
+      });
+    },
+    onSearchSubmit(toolId, value) {
+      searchSubmitCalls.push({ toolId, value });
+    },
+    onToggle(value) {
+      toggleCalls.push(value);
+    },
   });
 
   return {
@@ -229,6 +309,10 @@ function createHarness() {
     host: context.document.getElementById("inova-bookmark-host"),
     render: context.InovaBookmarks.contentPanel.renderPanel,
     renderCounts,
+    searchCalls,
+    searchSubmitCalls,
+    toggleCalls,
+    window: context,
     flushFrame() {
       const callback = animationFrames.shift();
       assert.equal(typeof callback, "function", "Expected a queued animation frame");
