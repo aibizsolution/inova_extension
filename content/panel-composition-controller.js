@@ -6,6 +6,7 @@
     let panelRenderController = null;
     const render = () => panelRenderController?.render();
 
+    // Runtime and remote manager cluster.
     const panelRuntimeController = namespace.panelRuntimeController.create(state);
     const releaseManager = namespace.releaseManager.create(state, { render });
     const meetingManager = namespace.meetingManager.create(state, { render });
@@ -14,6 +15,8 @@
       logPanelDebug: panelRuntimeController.logPanelDebug,
       render,
     });
+
+    // Tool/action cluster.
     const panelMeetingController = namespace.panelMeetingController.create(state, {
       meetingManager,
       providerIdentitySync,
@@ -48,6 +51,8 @@
     panelPromptBridgeController = namespace.panelPromptBridgeController.create(state, {
       panelPromptController,
     });
+
+    // Route and lifecycle cluster.
     const routeStateController = namespace.routeStateController.create(state, {
       applyUiPreferenceLock: panelShellController.applyUiPreferenceLock,
       ensureStoreLoaded: panelPromptBridgeController.ensureStoreLoaded,
@@ -89,6 +94,8 @@
     const routeWatchController = namespace.routeWatchController.create(state, {
       scheduleRouteSync: routeSync.scheduleRouteSync,
     });
+
+    // Render and bootstrap cluster.
     panelRenderController = namespace.panelRenderController.create(state, {
       isPaused: panelRuntimeController.isPaused,
       isToolSurface: panelRuntimeController.isToolSurface,

@@ -191,7 +191,7 @@
 ## 진행 현황 요약
 
 - 설계 상태: `조건부 major 전략 채택`
-- 구현 상태: `lane foundation 있음, meeting internal split 사실상 마감, 버전 결정 기록 정리 단계`
+- 구현 상태: `lane foundation 있음, meeting internal split 사실상 마감, panel shell 1차 마감, 버전 결정 기록 정리 단계`
 - 현재 blocker: `기존 사용자 호환성 확인을 포함한 minor candidate 증거를 문서로 닫는 일`
 - release 가능 상태: `아직 아님`
 
@@ -471,9 +471,14 @@
 - panel composition 책임 정리:
   - controller graph 조립과 inter-controller wiring은 `content/panel-composition-controller.js`로 옮기고, `content/main.js`는 state factory 호출과 composition bootstrap만 유지한다.
   - 이 단계도 DB 구조, legacy lane, hosted origin/path, runtime message 계약을 바꾸지 않는 확장 내부 책임 축소로 둔다.
+- panel 리팩토링 체크포인트:
+  - panel shell 1차 목표는 사실상 완료로 본다. `content/main.js`는 state 생성 + composition bootstrap만 담당하고, `content/panel-composition-controller.js`는 controller graph 조립, `content/panel.js`는 단일 DOM surface + 이벤트 위임 + render cache 경계로 유지한다.
+  - `content/route-sync.js`와 `content/panel.js`는 실제 버그나 새 요구가 생기기 전까지 다음 기본 리팩토링 대상으로 잡지 않는다. `content/panel-composition-controller.js`는 추가 분해보다 in-file 가독성 정리만 허용한다.
+  - 이후 panel shell 안에서 새 controller를 더 만드는 기준은 `독립 lifecycle`, `독립 테스트/교체 가치`, `다른 표면 재사용`, `현재 경계로 반복 버그 수정이 어려운 경우`로 제한한다.
 - 현재 문서 판단:
+  - panel 추가 리팩토링보다 `여기서 구조 리팩토링을 멈추고 안정화/다음 workstream으로 넘어간다`는 판단을 기본값으로 둔다.
   - meeting 리팩토링의 남은 일은 추가 분해보다 `minor로 닫을 수 있는지`를 기록으로 마무리하는 쪽에 가깝다.
-  - 다음 문서 작업은 핵심 사용자 흐름 증거를 같은 형식으로 정리해 `minor candidate ready` 여부를 닫는 것이다.
+  - 다음 active workstream은 `meeting minor candidate evidence` 문서 마감, 그다음 `meeting-manager` targeted review 순서로 둔다. `composer.js` targeted review는 prompt UX 이슈가 생길 때만 연다.
 
 ### 2026-04-10
 
