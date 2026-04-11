@@ -1,5 +1,6 @@
 (function initPanelLifecycleController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const PANEL_OPEN_KEY = "inova-plus.panel-open";
 
   function create(state, deps = {}) {
     const isStoreTabActive = typeof deps.isStoreTabActive === "function" ? deps.isStoreTabActive : () => false;
@@ -18,14 +19,15 @@
       : () => {};
 
     function initializeOpenState() {
-      state.preferredOpen = false;
-      state.open = false;
+      state.preferredOpen = readPanelOpenPreference();
+      state.open = state.preferredOpen;
     }
 
     function togglePanel(nextOpen, persist = true) {
       state.open = typeof nextOpen === "boolean" ? nextOpen : !state.open;
       if (persist) {
         state.preferredOpen = state.open;
+        writePanelOpenPreference(state.open);
       }
       schedulePromptCloudSyncIfNeeded(220);
       meetingManager.scheduleSync(state.open ? 220 : 0);
@@ -48,6 +50,24 @@
       initializeOpenState,
       togglePanel,
     };
+  }
+
+  function readPanelOpenPreference() {
+    try {
+      const saved = global.sessionStorage?.getItem(PANEL_OPEN_KEY);
+      return saved == null ? false : saved === "true";
+    } catch (error) {
+      console.warn("[i-Nova Bookmarks] panel open preference read failed", error);
+      return false;
+    }
+  }
+
+  function writePanelOpenPreference(open) {
+    try {
+      global.sessionStorage?.setItem(PANEL_OPEN_KEY, String(Boolean(open)));
+    } catch (error) {
+      console.warn("[i-Nova Bookmarks] panel open preference write failed", error);
+    }
   }
 
   namespace.panelLifecycleController = { create };
