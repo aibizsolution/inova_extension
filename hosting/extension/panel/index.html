@@ -4,22 +4,56 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>i-Nova Hosted Panel</title>
-    <link rel="stylesheet" href="./legacy-panel.css" />
-    <link rel="stylesheet" href="./legacy-tools.css" />
-    <link rel="stylesheet" href="./index.css" />
-    <script defer src="./runtime.js"></script>
-    <script defer src="./bookmark-view.js"></script>
-    <script defer src="../../meeting/debug-console.js"></script>
-    <script defer src="./meeting-view.js"></script>
-    <script defer src="./prompt-view.js"></script>
-    <script defer src="./store-view.js"></script>
-    <script defer src="./prompt-review-view.js"></script>
-    <script defer src="./prompt-hub-view.js"></script>
-    <script defer src="./prompt-hub-panel.js"></script>
-    <script defer src="./release-view.js"></script>
-    <script defer src="./index.js"></script>
+    <script>
+      (function injectHostedPanelStyles(doc) {
+        const assetSuffix = readAssetSuffix();
+        globalThis.__INOVA_HOSTED_PANEL_ASSET_SUFFIX__ = assetSuffix;
+        [
+          "./legacy-panel.css",
+          "./legacy-tools.css",
+          "./index.css",
+        ].forEach((path) => {
+          const link = doc.createElement("link");
+          link.rel = "stylesheet";
+          link.href = path + assetSuffix;
+          doc.head.appendChild(link);
+        });
+
+        function readAssetSuffix() {
+          try {
+            const version = new URL(globalThis.location.href).searchParams.get("v");
+            return version ? `?v=${encodeURIComponent(version)}` : "";
+          } catch {
+            return "";
+          }
+        }
+      })(document);
+    </script>
   </head>
   <body>
     <div id="inova-hosted-panel-root"></div>
+    <script>
+      (function injectHostedPanelScripts(doc) {
+        const assetSuffix = globalThis.__INOVA_HOSTED_PANEL_ASSET_SUFFIX__ || "";
+        [
+          "./runtime.js",
+          "./bookmark-view.js",
+          "../../meeting/debug-console.js",
+          "./meeting-view.js",
+          "./prompt-view.js",
+          "./store-view.js",
+          "./prompt-review-view.js",
+          "./prompt-hub-view.js",
+          "./prompt-hub-panel.js",
+          "./release-view.js",
+          "./index.js",
+        ].forEach((path) => {
+          const script = doc.createElement("script");
+          script.src = path + assetSuffix;
+          script.async = false;
+          doc.body.appendChild(script);
+        });
+      })(document);
+    </script>
   </body>
 </html>

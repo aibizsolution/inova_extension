@@ -149,10 +149,11 @@
     }
     const runtimeConfig = resolvePanelRuntimeConfig(state?.settings);
     const panelUrl = normalizeText(runtimeConfig?.hosting?.panelAppUrl || namespace.firebaseConfig?.hosting?.panelAppUrl);
-    const frameTarget = namespace.frameProxy?.resolveTarget?.(panelUrl) || {
-      origin: toOrigin(panelUrl),
-      src: panelUrl,
-      targetUrl: panelUrl,
+    const panelFrameUrl = buildHostedPanelFrameUrl(host, panelUrl, runtimeConfig);
+    const frameTarget = namespace.frameProxy?.resolveTarget?.(panelFrameUrl) || {
+      origin: toOrigin(panelFrameUrl),
+      src: panelFrameUrl,
+      targetUrl: panelFrameUrl,
       wrapped: false,
     };
 
@@ -164,7 +165,7 @@
       return;
     }
     if (frameTarget.error) {
-      host.__panelUrl = panelUrl;
+      host.__panelUrl = panelFrameUrl;
       host.__panelFrameSrc = "";
       host.__bridgeReady = false;
       host.__bridge.reset("frame-proxy-error");
@@ -179,11 +180,11 @@
     }
 
     host.__bridge.setAllowedOrigin(frameTarget.origin);
-    if (host.__panelUrl === panelUrl && frame.getAttribute("src") === frameTarget.src) {
+    if (host.__panelUrl === panelFrameUrl && frame.getAttribute("src") === frameTarget.src) {
       return;
     }
 
-    host.__panelUrl = panelUrl;
+    host.__panelUrl = panelFrameUrl;
     host.__panelFrameSrc = frameTarget.src;
     host.__bridgeReady = false;
     host.__bridge.reset("frame-src-change");
@@ -201,6 +202,19 @@
       tone: "info",
     });
     frame.setAttribute("src", frameTarget.src);
+  }
+
+  function buildHostedPanelFrameUrl(host, panelUrl, runtimeConfig) {
+    const normalizedPanelUrl = normalizeText(panelUrl);
+    if (!normalizedPanelUrl) {
+      return "";
+    }
+    if (normalizeText(runtimeConfig?.target) !== "local") {
+      host.__panelLocalAssetVersion = "";
+      return normalizedPanelUrl;
+    }
+    host.__panelLocalAssetVersion = normalizeText(host.__panelLocalAssetVersion) || String(Date.now());
+    return appendQueryParam(normalizedPanelUrl, "v", host.__panelLocalAssetVersion);
   }
 
   async function handleBridgeRequest(host, request) {
@@ -379,6 +393,22 @@
       return new URL(normalized).origin;
     } catch {
       return "";
+    }
+  }
+
+  function appendQueryParam(url, key, value) {
+    const normalizedUrl = normalizeText(url);
+    const normalizedKey = normalizeText(key);
+    const normalizedValue = normalizeText(value);
+    if (!normalizedUrl || !normalizedKey || !normalizedValue) {
+      return normalizedUrl;
+    }
+    try {
+      const nextUrl = new URL(normalizedUrl);
+      nextUrl.searchParams.set(normalizedKey, normalizedValue);
+      return nextUrl.toString();
+    } catch {
+      return normalizedUrl;
     }
   }
 
