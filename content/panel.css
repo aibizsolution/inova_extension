@@ -1,5 +1,5 @@
 /* i-Nova bookmark panel */
-:root { --inova-bookmark-panel-gap: 8px; --inova-bookmark-panel-width: clamp(380px, 32vw, 468px); --inova-bookmark-panel-reserve: calc(var(--inova-bookmark-panel-width) + var(--inova-bookmark-panel-gap)); }
+:root { --inova-bookmark-panel-gap: 8px; --inova-bookmark-panel-width: clamp(420px, 36vw, 540px); --inova-bookmark-panel-reserve: calc(var(--inova-bookmark-panel-width) + var(--inova-bookmark-panel-gap)); }
 @media (min-width: 1180px) {
   .main-content { min-width: 0; transition: margin-right 220ms ease; }
   body.inova-bookmark-panel-open .main-content { margin-right: var(--inova-bookmark-panel-reserve); }
@@ -328,5 +328,5 @@
     --panel-gap: 6px;
     --panel-right: 6px;
   }
-  #inova-bookmark-panel { width: min(92vw, 360px); height: calc(100vh - (var(--panel-gap) * 2)); }
+  #inova-bookmark-panel { width: min(92vw, 380px); height: calc(100vh - (var(--panel-gap) * 2)); }
 }

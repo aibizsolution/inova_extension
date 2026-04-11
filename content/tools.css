@@ -1,4 +1,4 @@
-#inova-bookmark-host { --panel-width: clamp(360px, 31vw, 420px); }
+#inova-bookmark-host { --panel-width: var(--inova-bookmark-panel-width); }
 #inova-meeting-debug-layer {
   position: fixed;
   inset: 0;
@@ -736,7 +736,7 @@
 .inova-release-steps li { font-size: 12px; line-height: 1.5; color: rgba(16, 33, 43, 0.78); }
 .inova-prompt-editor__actions { margin-top: 2px; }
 @media (max-width: 520px) {
-  #inova-bookmark-host { --panel-width: min(92vw, 372px); }
+  #inova-bookmark-host { --panel-width: min(92vw, 380px); }
   #inova-tool-rail { width: 58px; padding: 10px 0; }
   .inova-tool-rail__label { font-size: 11px; }
   .inova-tool-toolbar__row { flex-direction: column; align-items: stretch; }
