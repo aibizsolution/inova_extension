@@ -170,6 +170,7 @@ function verifyHostedPanelFiles(directoryName) {
   assert(html.includes("../../meeting/debug-console.js"), "hosted panel should reuse meeting debug renderer");
   assert(html.includes("./prompt-hub-panel.js"), "hosted panel should load prompt interaction helpers");
   if (directoryName === "extension-v2") {
+    assert(html.includes("./conversation-controller.js"), "v2 hosted panel should load conversation controller");
     assert(html.includes("./prompt-library-model.js"), "v2 hosted panel should load prompt library model");
     assert(html.includes("./prompt-library-controller.js"), "v2 hosted panel should load prompt library controller");
     assert(html.includes("./prompt-store-model.js"), "v2 hosted panel should load prompt store model");
@@ -178,6 +179,7 @@ function verifyHostedPanelFiles(directoryName) {
     assert(html.includes("./prompt-store-controller.js"), "v2 hosted panel should load prompt store controller");
     assert(html.includes("./meeting-hub-controller.js"), "v2 hosted panel should load meeting hub controller");
     assert(html.includes("./release-controller.js"), "v2 hosted panel should load release controller");
+    assert(indexJs.includes("conversationController"), "v2 hosted panel should wire hosted conversation ownership");
     assert(indexJs.includes("promptLibraryController"), "v2 hosted panel should wire hosted prompt library ownership");
     assert(indexJs.includes("promptReviewController"), "v2 hosted panel should wire hosted prompt review ownership");
     assert(indexJs.includes("promptStoreController"), "v2 hosted panel should wire hosted prompt store ownership");

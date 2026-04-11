@@ -45,6 +45,10 @@
     invokeRuntime,
     request,
   };
+  const conversationController = namespace.conversationController?.create?.({
+    invokePage,
+    scheduleRender,
+  }) || null;
   const promptLibraryController = namespace.promptLibraryController?.create?.({
     invokePage,
     invokeRuntime,
@@ -110,6 +114,12 @@
   function createCallbacks() {
     return {
       async onCopyBookmark(bookmarkId) {
+        if (conversationController?.handleCopyBookmark) {
+          const handled = await conversationController.handleCopyBookmark(bookmarkId);
+          if (handled !== false) {
+            return handled;
+          }
+        }
         const response = await request("panel", {
           action: "bookmark-copy",
           bookmarkId,
@@ -139,6 +149,17 @@
         });
       },
       onJumpBookmark(bookmarkId) {
+        if (conversationController?.handleJumpBookmark) {
+          return conversationController.handleJumpBookmark(bookmarkId).then((handled) => {
+            if (handled !== false) {
+              return handled;
+            }
+            return request("panel", {
+              action: "bookmark-jump",
+              bookmarkId,
+            });
+          });
+        }
         return request("panel", {
           action: "bookmark-jump",
           bookmarkId,
@@ -262,6 +283,9 @@
         });
       },
       onSearch(toolId, value, options = {}) {
+        if (conversationController?.handleSearch?.(toolId, value, options) !== false) {
+          return Promise.resolve(true);
+        }
         if (promptStoreController?.handleSearch?.(toolId, value, options) !== false) {
           return Promise.resolve(true);
         }
@@ -276,6 +300,9 @@
         });
       },
       onSearchSubmit(toolId, value) {
+        if (conversationController?.handleSearch?.(toolId, value, { submit: true }) !== false) {
+          return Promise.resolve(true);
+        }
         if (promptStoreController?.handleSearch?.(toolId, value, { submit: true }) !== false) {
           return Promise.resolve(true);
         }
@@ -416,6 +443,7 @@
       return;
     }
     if (action === "set-active-bookmark") {
+      conversationController?.setActiveBookmark?.(normalizeText(envelope.payload?.bookmarkId));
       namespace.bookmarkView?.setActive?.(normalizeText(envelope.payload?.bookmarkId));
     }
   }
@@ -561,6 +589,7 @@
       return;
     }
 
+    conversationController?.syncPanelState?.(panelState, state.extensionCapabilities);
     promptLibraryController?.syncPanelState?.(panelState, state.extensionCapabilities);
     promptReviewController?.syncPanelState?.(panelState, state.extensionCapabilities);
     promptStoreController?.syncPanelState?.(panelState, state.extensionCapabilities);
@@ -571,6 +600,8 @@
     if (!elements) {
       return;
     }
+    const effectiveConversationTool = buildEffectiveConversationToolState(panelState);
+    const effectiveConversationCount = readEffectiveConversationCount(panelState, effectiveConversationTool);
     const effectivePromptTool = buildEffectivePromptToolState(panelState);
     const effectivePromptCount = readEffectivePromptCount(panelState, effectivePromptTool);
     const effectiveMeetingTool = buildEffectiveMeetingToolState(panelState);
@@ -583,14 +614,20 @@
         ? effectiveMeetingCount
         : panelState.activeTool === "release"
           ? effectiveReleaseCount
-          : Number(panelState.toolCount) || 0;
+          : effectiveConversationCount;
     const focusedControl = captureFocusedControl(elements.app);
     const previousStoreScrollTop = panelState.activeTool === "prompts" && effectivePromptTool?.activeTab === "store"
       ? elements.app.querySelector(".inova-store-list")?.scrollTop || state.storeScrollTop || 0
       : 0;
 
     const nextToolRailHtml = renderToolRail(
-      buildEffectiveTools(panelState.tools || [], effectivePromptCount, effectiveMeetingCount, effectiveReleaseCount),
+      buildEffectiveTools(
+        panelState.tools || [],
+        effectiveConversationCount,
+        effectivePromptCount,
+        effectiveMeetingCount,
+        effectiveReleaseCount
+      ),
       panelState.activeTool
     );
     if (state.renderCache.toolRailHtml !== nextToolRailHtml) {
@@ -619,7 +656,7 @@
         scrollTop: previousStoreScrollTop,
       });
     }
-    namespace.bookmarkView?.setActive?.(panelState.bookmarksTool?.activeId);
+    namespace.bookmarkView?.setActive?.(effectiveConversationTool?.activeId);
     restoreFocusedControl(elements.app, focusedControl);
   }
 
@@ -691,6 +728,9 @@
   }
 
   function getActiveToolState(panelState) {
+    if (panelState.activeTool === "bookmarks") {
+      return buildEffectiveConversationToolState(panelState);
+    }
     if (panelState.activeTool === "prompts") {
       return buildEffectivePromptToolState(panelState);
     }
@@ -705,6 +745,9 @@
 
   function renderToolContent(panelState) {
     try {
+      if (panelState.activeTool === "bookmarks") {
+        return namespace.bookmarkView?.renderTool?.(buildEffectiveConversationToolState(panelState)) || renderToolFailure();
+      }
       if (panelState.activeTool === "prompts") {
         return namespace.promptToolView?.render?.(buildEffectivePromptToolState(panelState))
           || namespace.promptHubView?.render?.(panelState.promptTool)
@@ -716,7 +759,7 @@
       if (panelState.activeTool === "release") {
         return namespace.releaseView?.render?.(buildEffectiveReleaseToolState(panelState)) || renderToolFailure();
       }
-      return namespace.bookmarkView?.renderTool?.(panelState.bookmarksTool) || renderToolFailure();
+      return renderToolFailure();
     } catch (error) {
       console.error("[i-Nova Hosted Panel] tool render failed", error);
       return renderToolFailure();
@@ -734,6 +777,13 @@
         <span class="inova-tool-rail__count">${Number(tool.count) || 0}</span>
       </button>
     `).join("");
+  }
+
+  function buildEffectiveConversationToolState(panelState) {
+    if (conversationController?.hasRequiredCapabilities?.()) {
+      return conversationController.buildViewState(panelState.bookmarksTool || {});
+    }
+    return panelState.bookmarksTool;
   }
 
   function buildEffectivePromptToolState(panelState) {
@@ -773,8 +823,14 @@
     return panelState.releaseTool;
   }
 
-  function buildEffectiveTools(tools, promptCount, meetingCount, releaseCount) {
+  function buildEffectiveTools(tools, conversationCount, promptCount, meetingCount, releaseCount) {
     return (Array.isArray(tools) ? tools : []).map((tool) => {
+      if (tool?.id === "bookmarks") {
+        return {
+          ...tool,
+          count: conversationCount,
+        };
+      }
       if (tool?.id === "prompts") {
         return {
           ...tool,
@@ -828,6 +884,20 @@
       return 0;
     }
     return promptCount;
+  }
+
+  function readEffectiveConversationCount(panelState, effectiveConversationTool) {
+    const hostedCount = Math.max(
+      0,
+      Number(effectiveConversationTool?.count)
+        || (Array.isArray(effectiveConversationTool?.items) ? effectiveConversationTool.items.length : 0)
+    );
+    const snapshotCount = Math.max(
+      0,
+      Number((panelState.tools || []).find((tool) => tool.id === "bookmarks")?.count)
+        || Number(panelState.bookmarksTool?.count)
+    );
+    return hostedCount || snapshotCount;
   }
 
   function readEffectiveMeetingCount(panelState, effectiveMeetingTool) {
