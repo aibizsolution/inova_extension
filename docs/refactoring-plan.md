@@ -103,7 +103,7 @@
 - 현재 가설: `minor 가설`
 - candidate ready 상태: `in-progress`
 - 마지막 candidate 갱신 커밋: `working tree`
-- candidate 증거 요약: `legacy hosted origin/path, Functions export 이름, mutable namespace, auth scope baseline 유지와 local rehearsal 부팅 확인은 확보했다. 오너 확인으로 기존 사용자가 기존 회의 데이터를 그대로 여는 read-path는 pass 후보로 올렸다. 다만 회의 목록 조회, hosted workspace 진입, 기존 결과 조회, 새 녹음 또는 import, 기록 수정 또는 삭제를 개별 smoke line으로 남긴 기록이 아직 비어 있어 candidate ready는 계속 in-progress로 둔다.`
+- candidate 증거 요약: legacy hosted origin/path, Functions export 이름, mutable namespace, auth scope baseline 유지와 local rehearsal 부팅 확인은 확보했다. 오너 확인으로 기존 사용자가 기존 회의 데이터를 그대로 여는 read-path는 pass 후보로 올렸고, `check:meeting-data`, `verify-meeting-service`, `verify-content-smoke`, `check:function-runtime` preflight도 녹색이다. 다만 회의 목록 조회, hosted workspace 진입, 기존 결과 조회, 새 녹음 또는 import, 기록 수정 또는 삭제를 개별 Chrome smoke line으로 남긴 기록이 아직 비어 있어 candidate ready는 계속 `in-progress`로 둔다.
 - 유지보수자 최종 결정: `미정`
 
 ### 기록 규칙
@@ -302,6 +302,8 @@
 - meeting migration 불필요: meeting 전용 migration marker나 copy migration 단계가 추가되지 않았다.
 - 기존 회의 데이터 reopen: 오너 확인 기준으로 기존 사용자는 새 ZIP에서도 기존 회의 데이터를 그대로 연다.
 - full-local rehearsal: `npm.cmd run emulator:meeting-local` 부팅과 local hosted/panel bridge wiring 확인은 이미 확보했다.
+- 상용 데이터 잔존 확인: `npm.cmd run check:meeting-data -- --sample-size 1`로 `integration_inova_meetings`, `integration_inova_meeting_jobs`, `integration_inova_meeting_artifacts` 상용 문서가 아직 존재함을 다시 확인했다.
+- 자동 preflight 녹색: `node scripts/verify-meeting-service.js`, `node scripts/verify-content-smoke.js`, `npm.cmd run check:function-runtime -- --functions createInovaMeetingJob,listInovaMeetings,updateInovaMeeting,previewInovaMeetingResultSectionEdit,applyInovaMeetingResultSectionEdit,deleteInovaMeetingResult --since 60 --limit 10 --recent 2`는 모두 통과했다.
 - 회의 목록 조회, hosted workspace 진입, 기존 결과 조회: 오너 확인의 범위상 read-path pass 후보로 보지만, 아직 개별 smoke line으로 분리한 기록은 없다.
 - 새 녹음 또는 import 1회: 아직 이 문서에 pass evidence가 없다.
 - 기록 수정 또는 삭제 1회: 아직 이 문서에 pass evidence가 없다.
@@ -447,7 +449,8 @@
 - meeting minor evidence 정리:
   - minor 가설은 유지한다. legacy hosted origin/path, Functions export 이름, mutable namespace, auth scope baseline 유지와 local rehearsal 부팅 확인은 확보했다.
   - 오너 확인 기준으로 기존 사용자의 기존 회의 데이터 reopen은 pass 후보로 올렸다.
-  - 다만 회의 목록 조회, hosted workspace 진입, 기존 결과 조회, 새 녹음 또는 import, 기록 수정 또는 삭제는 개별 smoke line 증거가 아직 비어 있어 `candidate ready`는 계속 `in-progress`로 둔다.
+  - `check:meeting-data`, `verify-meeting-service`, `verify-content-smoke`, `check:function-runtime` preflight도 녹색으로 확보했다.
+  - 다만 회의 목록 조회, hosted workspace 진입, 기존 결과 조회, 새 녹음 또는 import, 기록 수정 또는 삭제는 개별 Chrome smoke line 증거가 아직 비어 있어 `candidate ready`는 계속 `in-progress`로 둔다.
 - meeting-manager targeted review:
   - `ensurePanelAuth`는 `유지`로 본다. runtimeConfig/providerUserKey/expiry cache와 promise dedupe가 한 workflow라 지금은 분리 이득보다 결합 비용이 더 크다.
   - `ensureBridgePort`, `ensureBridgeFrame`, `handleBridgeMessage`, `disconnectRealtime`는 `다음 분리 후보`로 본다. iframe/MessageChannel lifecycle이 독립적이라 bridge bug pressure가 다시 생기면 첫 split 후보가 된다.
