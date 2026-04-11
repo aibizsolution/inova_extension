@@ -17,6 +17,8 @@
     "panel.request.v1",
     "panel.response.v1",
     "panel.event.v1",
+    "runtime.invoke.v1",
+    "page.adapter.v2",
   ]);
 
   const root = document.getElementById("inova-hosted-panel-root");
@@ -38,13 +40,17 @@
     storeRenderKey: 0,
     storeScrollTop: 0,
   };
-
-  const callbacks = createCallbacks();
   const api = {
     invokePage,
     invokeRuntime,
     request,
   };
+  const promptLibraryController = namespace.promptLibraryController?.create?.({
+    invokePage,
+    invokeRuntime,
+    scheduleRender,
+  }) || null;
+  const callbacks = createCallbacks();
 
   namespace.hostedPanelApp = api;
 
@@ -91,6 +97,17 @@
         });
       },
       onImportFile(file) {
+        if (promptLibraryController?.handleImportFile) {
+          return promptLibraryController.handleImportFile(file).then((handled) => {
+            if (handled !== false) {
+              return handled;
+            }
+            return request("panel", {
+              action: "import-file",
+              file,
+            });
+          });
+        }
         return request("panel", {
           action: "import-file",
           file,
@@ -110,6 +127,19 @@
         });
       },
       onMovePrompt(dragPromptId, targetPromptId, placement) {
+        if (promptLibraryController?.handleMovePrompt) {
+          return promptLibraryController.handleMovePrompt(dragPromptId, targetPromptId, placement).then((handled) => {
+            if (handled !== false) {
+              return handled;
+            }
+            return request("panel", {
+              action: "move-prompt",
+              dragPromptId,
+              placement,
+              targetPromptId,
+            });
+          });
+        }
         return request("panel", {
           action: "move-prompt",
           dragPromptId,
@@ -118,6 +148,18 @@
         });
       },
       onPromptAction(promptAction, detail = {}) {
+        if (promptLibraryController?.handlePromptAction) {
+          return promptLibraryController.handlePromptAction(promptAction, detail).then((handled) => {
+            if (handled !== false) {
+              return handled;
+            }
+            return request("panel", {
+              action: "prompt-action",
+              detail,
+              promptAction,
+            });
+          });
+        }
         return request("panel", {
           action: "prompt-action",
           detail,
@@ -125,6 +167,9 @@
         });
       },
       onPromptDraftChange(field, value) {
+        if (promptLibraryController?.handlePromptDraftChange?.(field, value) !== false) {
+          return Promise.resolve(true);
+        }
         return request("panel", {
           action: "prompt-draft-change",
           field,
@@ -139,6 +184,9 @@
         });
       },
       onSearch(toolId, value, options = {}) {
+        if (promptLibraryController?.handleSearch?.(toolId, value, options) !== false) {
+          return Promise.resolve(true);
+        }
         return request("panel", {
           action: "search",
           options,
@@ -147,6 +195,9 @@
         });
       },
       onSearchSubmit(toolId, value) {
+        if (promptLibraryController?.handleSearch?.(toolId, value, { submit: true }) !== false) {
+          return Promise.resolve(true);
+        }
         return request("panel", {
           action: "search-submit",
           toolId,
@@ -154,6 +205,17 @@
         });
       },
       onSelectPromptTab(promptTabId) {
+        if (promptLibraryController?.handleSelectPromptTab) {
+          return promptLibraryController.handleSelectPromptTab(promptTabId).then((handled) => {
+            if (handled !== false) {
+              return handled;
+            }
+            return request("panel", {
+              action: "prompt-tab-select",
+              promptTabId,
+            });
+          });
+        }
         return request("panel", {
           action: "prompt-tab-select",
           promptTabId,
@@ -403,17 +465,26 @@
       return;
     }
 
+    promptLibraryController?.syncPanelState?.(panelState, state.extensionCapabilities);
     ensureShell();
     const elements = state.elements;
     if (!elements) {
       return;
     }
+    const effectivePromptTool = buildEffectivePromptToolState(panelState);
+    const effectivePromptCount = readEffectivePromptCount(panelState, effectivePromptTool);
+    const effectiveToolCount = panelState.activeTool === "prompts"
+      ? readEffectivePromptToolCount(effectivePromptTool, effectivePromptCount)
+      : Number(panelState.toolCount) || 0;
     const focusedControl = captureFocusedControl(elements.app);
-    const previousStoreScrollTop = panelState.activeTool === "prompts" && panelState.promptTool?.activeTab === "store"
+    const previousStoreScrollTop = panelState.activeTool === "prompts" && effectivePromptTool?.activeTab === "store"
       ? elements.app.querySelector(".inova-store-list")?.scrollTop || state.storeScrollTop || 0
       : 0;
 
-    const nextToolRailHtml = renderToolRail(panelState.tools || [], panelState.activeTool);
+    const nextToolRailHtml = renderToolRail(
+      buildEffectiveTools(panelState.tools || [], effectivePromptCount),
+      panelState.activeTool
+    );
     if (state.renderCache.toolRailHtml !== nextToolRailHtml) {
       elements.toolRail.innerHTML = nextToolRailHtml;
       state.renderCache.toolRailHtml = nextToolRailHtml;
@@ -425,7 +496,7 @@
       state.renderCache.toolTitle = nextToolTitle;
     }
 
-    const nextToolTotal = String(panelState.toolCount || 0);
+    const nextToolTotal = String(effectiveToolCount || 0);
     if (state.renderCache.toolTotal !== nextToolTotal) {
       elements.toolTotal.textContent = nextToolTotal;
       state.renderCache.toolTotal = nextToolTotal;
@@ -434,9 +505,9 @@
     renderToolContentIfNeeded(elements.toolContent, panelState);
     renderMeetingDebugLayerIfNeeded(elements.debugLayer, panelState);
 
-    if (panelState.activeTool === "prompts" && panelState.promptTool?.activeTab === "store") {
+    if (panelState.activeTool === "prompts" && effectivePromptTool?.activeTab === "store") {
       namespace.promptHubPanel?.syncStoreList?.(elements.app, callbacks, {
-        renderKey: panelState.promptTool?.store?.renderKey,
+        renderKey: effectivePromptTool?.store?.renderKey,
         scrollTop: previousStoreScrollTop,
       });
     }
@@ -513,7 +584,7 @@
 
   function getActiveToolState(panelState) {
     if (panelState.activeTool === "prompts") {
-      return panelState.promptTool;
+      return buildEffectivePromptToolState(panelState);
     }
     if (panelState.activeTool === "meeting") {
       return panelState.meetingTool;
@@ -527,7 +598,9 @@
   function renderToolContent(panelState) {
     try {
       if (panelState.activeTool === "prompts") {
-        return namespace.promptHubView?.render?.(panelState.promptTool) || renderToolFailure();
+        return namespace.promptToolView?.render?.(buildEffectivePromptToolState(panelState))
+          || namespace.promptHubView?.render?.(panelState.promptTool)
+          || renderToolFailure();
       }
       if (panelState.activeTool === "meeting") {
         return namespace.meetingView?.render?.(panelState.meetingTool) || renderToolFailure();
@@ -553,6 +626,55 @@
         <span class="inova-tool-rail__count">${Number(tool.count) || 0}</span>
       </button>
     `).join("");
+  }
+
+  function buildEffectivePromptToolState(panelState) {
+    if (promptLibraryController?.hasRequiredCapabilities?.()) {
+      return promptLibraryController.buildPromptToolState(panelState.promptTool || {});
+    }
+    return panelState.promptTool;
+  }
+
+  function buildEffectiveTools(tools, promptCount) {
+    return (Array.isArray(tools) ? tools : []).map((tool) => tool?.id === "prompts"
+      ? {
+          ...tool,
+          count: promptCount,
+        }
+      : tool);
+  }
+
+  function readEffectivePromptCount(panelState, effectivePromptTool) {
+    const promptItems = Array.isArray(effectivePromptTool?.prompt?.items)
+      ? effectivePromptTool.prompt.items
+      : [];
+    const promptTotal = Math.max(
+      0,
+      Number(effectivePromptTool?.prompt?.totalCount)
+        || Number(effectivePromptTool?.tabs?.find?.((tab) => tab.id === "library")?.count)
+        || promptItems.length
+    );
+    const snapshotPromptCount = Math.max(
+      0,
+      Number((panelState.tools || []).find((tool) => tool.id === "prompts")?.count)
+    );
+    return promptTotal || snapshotPromptCount;
+  }
+
+  function readEffectivePromptToolCount(effectivePromptTool, promptCount) {
+    const activeTab = normalizeText(effectivePromptTool?.activeTab) || "library";
+    if (activeTab === "store") {
+      return Math.max(
+        0,
+        Number(effectivePromptTool?.tabs?.find?.((tab) => tab.id === "store")?.count)
+          || Number(effectivePromptTool?.store?.totalCount)
+          || 0
+      );
+    }
+    if (activeTab === "review") {
+      return 0;
+    }
+    return promptCount;
   }
 
   function renderStatusCard(options = {}) {

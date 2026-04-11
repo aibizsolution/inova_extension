@@ -169,6 +169,12 @@ function verifyHostedPanelFiles(directoryName) {
   assert(html.includes("./runtime.js"), "hosted panel should load runtime bootstrap");
   assert(html.includes("../../meeting/debug-console.js"), "hosted panel should reuse meeting debug renderer");
   assert(html.includes("./prompt-hub-panel.js"), "hosted panel should load prompt interaction helpers");
+  if (directoryName === "extension-v2") {
+    assert(html.includes("./prompt-library-model.js"), "v2 hosted panel should load prompt library model");
+    assert(html.includes("./prompt-library-controller.js"), "v2 hosted panel should load prompt library controller");
+    assert(html.includes("./prompt-tool-view.js"), "v2 hosted panel should load prompt tool view");
+    assert(indexJs.includes("promptLibraryController"), "v2 hosted panel should wire hosted prompt library ownership");
+  }
   assert(
     indexJs.includes("확장 업데이트 필요"),
     "hosted panel should show an explicit update-needed state"
