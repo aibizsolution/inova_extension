@@ -499,31 +499,11 @@
     const panelDebug = panelState.panelDebug && typeof panelState.panelDebug === "object"
       ? panelState.panelDebug
       : {};
-    if (!panelDebug.enabled) {
-      if (state.renderCache.debugHtml || debugLayer.innerHTML) {
-        debugLayer.innerHTML = "";
-      }
-      state.renderCache.debugHtml = "";
-      state.renderCache.debugKey = "disabled";
-      syncMeetingDebugLayerDataset(debugLayer, panelDebug);
-      return;
+    if (state.renderCache.debugHtml || debugLayer.innerHTML) {
+      debugLayer.innerHTML = "";
     }
-    const nextDebugKey = `enabled:${serializeRenderState(panelDebug)}`;
-    if (state.renderCache.debugKey !== nextDebugKey) {
-      namespace.panelDebug?.captureViewport?.(
-        "panel-overlay",
-        debugLayer.querySelector(".inova-meeting-debug-console__log")
-      );
-      state.renderCache.debugHtml = namespace.meetingView?.renderDebugConsole?.(panelDebug) || "";
-      state.renderCache.debugKey = nextDebugKey;
-      if (debugLayer.innerHTML !== state.renderCache.debugHtml) {
-        debugLayer.innerHTML = state.renderCache.debugHtml;
-      }
-      namespace.panelDebug?.restoreViewport?.(
-        "panel-overlay",
-        debugLayer.querySelector(".inova-meeting-debug-console__log")
-      );
-    }
+    state.renderCache.debugHtml = "";
+    state.renderCache.debugKey = panelDebug.enabled ? "external-overlay" : "disabled";
     syncMeetingDebugLayerDataset(debugLayer, panelDebug);
   }
 

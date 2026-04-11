@@ -19,8 +19,9 @@
     panelHost = host;
     host.__panelElements = resolvePanelElements(host);
     host.__bridge = createHostedBridge(host);
-    const { frame, handle } = host.__panelElements;
+    const { debugLayer, frame, handle } = host.__panelElements;
     installHandleInteractions(host, handle, callbacks);
+    installDebugLayerInteractions(host, debugLayer);
     frame?.addEventListener("load", () => {
       if (host.__bridgeReady) {
         return;
@@ -52,6 +53,7 @@
 
   function resolvePanelElements(host) {
     return {
+      debugLayer: host.querySelector("#inova-meeting-debug-layer"),
       frame: host.querySelector("#inova-hosted-panel-frame"),
       handle: host.querySelector("#inova-bookmark-handle"),
       handleCount: host.querySelector(".handle-count"),
@@ -134,6 +136,7 @@
       handleCount.textContent = nextHandleCount;
     }
 
+    syncDebugLayer(host, state.panelDebug);
     syncHostedFrame(host, state);
 
     if (host.__bridgeReady) {
@@ -430,6 +433,41 @@
     banner.dataset.tone = normalizeText(status?.tone) || "info";
   }
 
+  function syncDebugLayer(host, panelDebug) {
+    const elements = host.__panelElements || resolvePanelElements(host);
+    const debugLayer = elements.debugLayer;
+    if (!(debugLayer instanceof global.HTMLElement)) {
+      return;
+    }
+    const nextPanelDebug = panelDebug && typeof panelDebug === "object" ? panelDebug : {};
+    if (!nextPanelDebug.enabled) {
+      if (debugLayer.innerHTML) {
+        debugLayer.innerHTML = "";
+      }
+      host.__panelDebugHtml = "";
+      host.__panelDebugKey = "disabled";
+      syncMeetingDebugLayerDataset(debugLayer, nextPanelDebug);
+      return;
+    }
+    const nextDebugKey = `enabled:${serializeRenderState(nextPanelDebug)}`;
+    if (host.__panelDebugKey !== nextDebugKey) {
+      namespace.panelDebug?.captureViewport?.(
+        "panel-overlay",
+        debugLayer.querySelector(".inova-meeting-debug-console__log")
+      );
+      host.__panelDebugHtml = namespace.meetingDebugConsole?.renderPanel?.(nextPanelDebug) || "";
+      host.__panelDebugKey = nextDebugKey;
+      if (debugLayer.innerHTML !== host.__panelDebugHtml) {
+        debugLayer.innerHTML = host.__panelDebugHtml;
+      }
+      namespace.panelDebug?.restoreViewport?.(
+        "panel-overlay",
+        debugLayer.querySelector(".inova-meeting-debug-console__log")
+      );
+    }
+    syncMeetingDebugLayerDataset(debugLayer, nextPanelDebug);
+  }
+
   function clearHandshakeTimeout(host) {
     if (!host?.__handshakeTimeout) {
       return;
@@ -474,6 +512,21 @@
     ["pointerup", "pointercancel"].forEach((type) => handle.addEventListener(type, (event) => finishHandleDrag(event, host, handle, callbacks, dragState)));
   }
 
+  function installDebugLayerInteractions(host, debugLayer) {
+    if (!(debugLayer instanceof global.HTMLElement)) {
+      return;
+    }
+    debugLayer.addEventListener("click", (event) => {
+      const action = normalizeText(event.target?.closest?.("[data-meeting-action]")?.dataset?.meetingAction);
+      if (!action) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      void host.__callbacks?.onMeetingAction?.(action, {});
+    });
+  }
+
   function finishHandleDrag(event, host, handle, callbacks, dragState) {
     if (!dragState.dragging || event.pointerId !== dragState.pointerId) {
       return;
@@ -507,6 +560,7 @@
 
   function buildMarkup() {
     return `
+      <div id="inova-meeting-debug-layer"></div>
       <div id="inova-bookmark-root" data-open="false" aria-live="polite">
         <button id="inova-bookmark-handle" type="button" aria-label="실험실 패널 열기" title="드래그해서 위치를 바꿀 수 있어요">
           <span class="handle-count">0</span>
@@ -529,6 +583,31 @@
 
   function cloneValue(value) {
     return value == null ? value : JSON.parse(JSON.stringify(value));
+  }
+
+  function serializeRenderState(value) {
+    try {
+      return JSON.stringify(value, (_key, current) => {
+        if (typeof current === "function") {
+          return undefined;
+        }
+        if (current instanceof global.HTMLElement) {
+          return undefined;
+        }
+        return current;
+      }) || "";
+    } catch {
+      return "";
+    }
+  }
+
+  function syncMeetingDebugLayerDataset(debugLayer, panelDebug) {
+    const totalLogs = Math.max(0, Number(panelDebug?.statusSummary?.totalLogs) || 0);
+    debugLayer.dataset.debugCollapsed = String(Boolean(panelDebug?.collapsed));
+    debugLayer.dataset.debugEnabled = String(Boolean(panelDebug?.enabled));
+    debugLayer.dataset.debugEntryCount = String(totalLogs);
+    debugLayer.dataset.debugHasErrors = String(Boolean(panelDebug?.hasErrors));
+    debugLayer.dataset.debugRendered = String(Boolean(debugLayer.innerHTML));
   }
 
   function normalizeText(value) {
