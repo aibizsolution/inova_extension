@@ -78,6 +78,7 @@
 - `chrome.storage.local`에는 팝업 작업실 연결 설정과 세션/회의/프롬프트 상태를 저장합니다.
 - 패널 핸들 위치 같은 UI 선호도는 `uiPreferences`에 저장합니다.
 - 팝업이 직접 다루는 설정은 `settings.meetingWorkspaceTarget`이며, 로컬 호스팅 선택 시 `meetingWorkspaceUrlOverride`를 함께 갱신합니다.
+- 같은 `settings.meetingWorkspaceTarget`은 회의 작업실뿐 아니라 prompt-library cloud read/sync, prompt-review, prompt-store panel auth/read/write, hidden prompt bridge rehearsal target도 함께 결정해야 합니다.
 - 현재 선택한 도구는 `uiPreferences.activeTool`에 저장합니다.
 - 핸들 위치는 사이트 기준으로 기억하되, 화면 폭 구간에 따라 따로 보정할 수 있어야 합니다.
 - 질문 목록 자체는 저장하지 않고, 현재 대화 DOM에서 실시간으로 읽습니다.
@@ -142,6 +143,7 @@
 - 질문 3개를 보낸 뒤 자동으로 모여 보이는지 본다.
 - 대화 안에서 찾기로 각각 찾고 클릭 이동이 되는지 본다.
 - 팝업에서 `상용 호스팅 / 로컬 호스팅`을 바꾼 뒤 패널의 `새 회의하기`가 기대한 URL로 열리는지 본다.
+- 팝업에서 `로컬 호스팅`을 고른 뒤 `요청/스토어`가 local Functions와 `http://127.0.0.1:5000/extension/prompt-panel-bridge.html` 경로를 바라보는지 본다.
 - `요청` 도구에서 새 요청을 추가하고 입력창에 바로 넣어 본다.
 - 입력창에 내용이 있을 때 `덮어쓰기`와 `이어붙이기`가 각각 기대대로 동작하는지 본다.
 - 입력창에 임의 프롬프트를 적고 평가했을 때 요건별 피드백과 보완 프롬프트가 보이는지 본다.

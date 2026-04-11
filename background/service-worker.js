@@ -80,7 +80,7 @@ async function handleMessage(message, sender) {
     return issueMeetingPanelAuth(message.providerIdentity);
   }
   if (message.type === "inova-prompt:issue-panel-auth") {
-    return panelAuthCache.issuePromptPanelAuth(message.providerIdentity);
+    return issuePromptPanelAuth(message.providerIdentity);
   }
   if (message.type === "inova-meeting:open-workspace") {
     return openMeetingWorkspace(message.input, message.providerIdentity, sender);
@@ -128,59 +128,74 @@ async function getInovaAccessToken() {
 
 async function listPromptStoreEntries(filter, providerIdentity) {
   const accessToken = await getInovaAccessToken();
-  return namespace.cloudApi.listPromptStoreEntries(filter, providerIdentity, accessToken);
+  const functionsConfig = await getPromptFunctionsConfig();
+  return namespace.cloudApi.listPromptStoreEntries(filter, providerIdentity, accessToken, { functionsConfig });
 }
 
 async function publishPromptToStore(prompt, categoryId, providerIdentity) {
   const accessToken = await getInovaAccessToken();
-  return namespace.cloudApi.publishPromptToStore(prompt, categoryId, providerIdentity, accessToken);
+  const functionsConfig = await getPromptFunctionsConfig();
+  return namespace.cloudApi.publishPromptToStore(prompt, categoryId, providerIdentity, accessToken, { functionsConfig });
 }
 
 async function unpublishPromptFromStore(entryId, providerIdentity) {
   const accessToken = await getInovaAccessToken();
-  return namespace.cloudApi.unpublishPromptFromStore(entryId, providerIdentity, accessToken);
+  const functionsConfig = await getPromptFunctionsConfig();
+  return namespace.cloudApi.unpublishPromptFromStore(entryId, providerIdentity, accessToken, { functionsConfig });
 }
 
 async function importPromptStoreEntry(entryId, providerIdentity) {
   const accessToken = await getInovaAccessToken();
-  return namespace.cloudApi.importPromptStoreEntry(entryId, providerIdentity, accessToken);
+  const functionsConfig = await getPromptFunctionsConfig();
+  return namespace.cloudApi.importPromptStoreEntry(entryId, providerIdentity, accessToken, { functionsConfig });
 }
 
 async function togglePromptStoreLike(entryId, providerIdentity) {
   const accessToken = await getInovaAccessToken();
-  return namespace.cloudApi.togglePromptStoreLike(entryId, providerIdentity, accessToken);
+  const functionsConfig = await getPromptFunctionsConfig();
+  return namespace.cloudApi.togglePromptStoreLike(entryId, providerIdentity, accessToken, { functionsConfig });
 }
 
 async function recordPromptStoreView(entryId, providerIdentity) {
   const accessToken = await getInovaAccessToken();
-  return namespace.cloudApi.recordPromptStoreView(entryId, providerIdentity, accessToken);
+  const functionsConfig = await getPromptFunctionsConfig();
+  return namespace.cloudApi.recordPromptStoreView(entryId, providerIdentity, accessToken, { functionsConfig });
 }
 
 async function reviewPromptDraft(prompt, providerIdentity, reviewProfile) {
   const accessToken = await getInovaAccessToken();
-  return namespace.cloudApi.reviewInovaPrompt(prompt, providerIdentity, accessToken, { reviewProfile });
+  const functionsConfig = await getPromptFunctionsConfig();
+  return namespace.cloudApi.reviewInovaPrompt(prompt, providerIdentity, accessToken, { functionsConfig, reviewProfile });
+}
+
+async function issuePromptPanelAuth(providerIdentity) {
+  const functionsConfig = await getPromptFunctionsConfig();
+  return panelAuthCache.issuePromptPanelAuth(providerIdentity, { functionsConfig });
 }
 
 async function syncPromptLibrary(syncDocument) {
+  const functionsConfig = await getPromptFunctionsConfig();
   const revision = namespace.session.normalizeText(syncDocument?.sync?.revision || "");
+  const runtimeCacheKey = buildPromptRuntimeCacheKey(functionsConfig.baseUrl);
+  const cacheKey = revision && runtimeCacheKey ? `${revision}::${runtimeCacheKey}` : revision;
   cleanupRecentSyncs();
 
-  if (revision) {
-    const recent = recentSyncResults.get(revision);
+  if (cacheKey) {
+    const recent = recentSyncResults.get(cacheKey);
     if (recent && recent.expiresAt > Date.now()) {
       return recent.result;
     }
 
-    if (activeSyncs.has(revision)) {
-      return activeSyncs.get(revision);
+    if (activeSyncs.has(cacheKey)) {
+      return activeSyncs.get(cacheKey);
     }
   }
 
   const run = (async () => {
     const accessToken = await getInovaAccessToken();
-    const result = await namespace.cloudApi.syncInovaPromptLibrary(syncDocument, accessToken);
-    if (revision) {
-      recentSyncResults.set(revision, {
+    const result = await namespace.cloudApi.syncInovaPromptLibrary(syncDocument, accessToken, { functionsConfig });
+    if (cacheKey) {
+      recentSyncResults.set(cacheKey, {
         expiresAt: Date.now() + RECENT_SYNC_TTL_MS,
         result,
       });
@@ -188,39 +203,41 @@ async function syncPromptLibrary(syncDocument) {
     return result;
   })();
 
-  if (revision) {
-    activeSyncs.set(revision, run);
+  if (cacheKey) {
+    activeSyncs.set(cacheKey, run);
   }
 
   try {
     return await run;
   } finally {
-    if (revision) {
-      activeSyncs.delete(revision);
+    if (cacheKey) {
+      activeSyncs.delete(cacheKey);
     }
   }
 }
 
 async function loadPromptLibrary(providerIdentity, force = false) {
   const providerUserKey = namespace.session.normalizeText(providerIdentity?.providerUserKey);
+  const functionsConfig = await getPromptFunctionsConfig();
+  const cacheKey = buildPromptCacheKey(providerUserKey, functionsConfig.baseUrl);
   cleanupRecentLoads();
 
-  if (!force && providerUserKey) {
-    const recent = recentLoadResults.get(providerUserKey);
+  if (!force && cacheKey) {
+    const recent = recentLoadResults.get(cacheKey);
     if (recent && recent.expiresAt > Date.now()) {
       return recent.result;
     }
 
-    if (activeLoads.has(providerUserKey)) {
-      return activeLoads.get(providerUserKey);
+    if (activeLoads.has(cacheKey)) {
+      return activeLoads.get(cacheKey);
     }
   }
 
   const run = (async () => {
     const accessToken = await getInovaAccessToken();
-    const result = await namespace.cloudApi.loadInovaPromptLibrary(providerIdentity, accessToken);
-    if (providerUserKey) {
-      recentLoadResults.set(providerUserKey, {
+    const result = await namespace.cloudApi.loadInovaPromptLibrary(providerIdentity, accessToken, { functionsConfig });
+    if (cacheKey) {
+      recentLoadResults.set(cacheKey, {
         expiresAt: Date.now() + RECENT_LOAD_TTL_MS,
         result,
       });
@@ -228,39 +245,41 @@ async function loadPromptLibrary(providerIdentity, force = false) {
     return result;
   })();
 
-  if (providerUserKey) {
-    activeLoads.set(providerUserKey, run);
+  if (cacheKey) {
+    activeLoads.set(cacheKey, run);
   }
 
   try {
     return await run;
   } finally {
-    if (providerUserKey) {
-      activeLoads.delete(providerUserKey);
+    if (cacheKey) {
+      activeLoads.delete(cacheKey);
     }
   }
 }
 
 async function peekPromptLibrary(providerIdentity, force = false) {
   const providerUserKey = namespace.session.normalizeText(providerIdentity?.providerUserKey);
+  const functionsConfig = await getPromptFunctionsConfig();
+  const cacheKey = buildPromptCacheKey(providerUserKey, functionsConfig.baseUrl);
   cleanupRecentPeeks();
 
-  if (!force && providerUserKey) {
-    const recent = recentPeekResults.get(providerUserKey);
+  if (!force && cacheKey) {
+    const recent = recentPeekResults.get(cacheKey);
     if (recent && recent.expiresAt > Date.now()) {
       return recent.result;
     }
 
-    if (activePeeks.has(providerUserKey)) {
-      return activePeeks.get(providerUserKey);
+    if (activePeeks.has(cacheKey)) {
+      return activePeeks.get(cacheKey);
     }
   }
 
   const run = (async () => {
     const accessToken = await getInovaAccessToken();
-    const result = await namespace.cloudApi.peekInovaPromptLibrary(providerIdentity, accessToken);
-    if (providerUserKey) {
-      recentPeekResults.set(providerUserKey, {
+    const result = await namespace.cloudApi.peekInovaPromptLibrary(providerIdentity, accessToken, { functionsConfig });
+    if (cacheKey) {
+      recentPeekResults.set(cacheKey, {
         expiresAt: Date.now() + RECENT_PEEK_TTL_MS,
         result,
       });
@@ -268,15 +287,15 @@ async function peekPromptLibrary(providerIdentity, force = false) {
     return result;
   })();
 
-  if (providerUserKey) {
-    activePeeks.set(providerUserKey, run);
+  if (cacheKey) {
+    activePeeks.set(cacheKey, run);
   }
 
   try {
     return await run;
   } finally {
-    if (providerUserKey) {
-      activePeeks.delete(providerUserKey);
+    if (cacheKey) {
+      activePeeks.delete(cacheKey);
     }
   }
 }
@@ -509,12 +528,28 @@ async function getMeetingFunctionsConfig() {
   return runtimeConfig?.functions || namespace.firebaseConfig?.functions || {};
 }
 
+async function getPromptFunctionsConfig() {
+  const runtimeConfig = await getPromptRuntimeConfig();
+  return runtimeConfig?.functions || namespace.firebaseConfig?.functions || {};
+}
+
 async function getMeetingRuntimeConfig() {
   const normalizedSettings = await reconcileMeetingWorkspaceSettings((await namespace.storage.getState())?.settings);
   return namespace.firebaseConfig?.meeting?.resolveRuntime?.(normalizedSettings) || {
     functions: namespace.firebaseConfig?.functions || {},
     hosting: namespace.firebaseConfig?.hosting || {},
     target: "production",
+  };
+}
+
+async function getPromptRuntimeConfig() {
+  const normalizedSettings = await reconcileMeetingWorkspaceSettings((await namespace.storage.getState())?.settings);
+  return namespace.firebaseConfig?.prompt?.resolveRuntime?.(normalizedSettings) || {
+    functions: namespace.firebaseConfig?.functions || {},
+    hosting: namespace.firebaseConfig?.hosting || {},
+    prompt: namespace.firebaseConfig?.prompt || {},
+    target: "production",
+    web: namespace.firebaseConfig?.web || {},
   };
 }
 
@@ -538,6 +573,19 @@ async function reconcileMeetingWorkspaceSettings(settings) {
 }
 
 function normalizeMeetingDebugConsoleEnabled(value) { if (typeof value === "boolean") return value; const normalized = namespace.session.normalizeText(value).toLowerCase(); return normalized === "1" || normalized === "true" || normalized === "on" || normalized === "yes"; }
+
+function buildPromptCacheKey(providerUserKey, functionsBaseUrl) {
+  const normalizedProviderUserKey = namespace.session.normalizeText(providerUserKey);
+  const runtimeCacheKey = buildPromptRuntimeCacheKey(functionsBaseUrl);
+  if (!normalizedProviderUserKey || !runtimeCacheKey) {
+    return "";
+  }
+  return `${normalizedProviderUserKey}::${runtimeCacheKey}`;
+}
+
+function buildPromptRuntimeCacheKey(functionsBaseUrl) {
+  return namespace.session.normalizeText(functionsBaseUrl);
+}
 
 function normalizeMeetingWorkspaceOverrideUrl(value) {
   const normalized = namespace.session.normalizeText(value);

@@ -52,6 +52,7 @@ ordinary feature 구현 변경은 이 문서의 대상이 아니고, version lan
 - 현재 근거 요약:
   - legacy hosted origin/path, Functions export 이름, mutable namespace, auth scope baseline은 유지 중이다.
   - prompt-review 6축 전환은 backend dual-contract와 client opt-in으로 준비하되, 현재 공개 사용자 기준선 `0.4.4`는 `legacy-v1` 4축 평가를 유지한다.
+  - popup `로컬 호스팅` rehearsal target은 meeting만이 아니라 prompt-library sync/read, prompt-review, prompt-store panel auth/write, hidden prompt bridge까지 local Functions/Hosting emulator로 함께 전환해야 한다.
   - local rehearsal 부팅 확인과 기존 사용자의 기존 회의 데이터 read-path 확인은 pass 후보다.
   - `check:meeting-data`, `verify-meeting-service`, `verify-content-smoke`, `check:function-runtime` preflight는 녹색이다.
   - 다만 최종 candidate ready로 올리려면 실제 Chrome 기준의 주요 회의 smoke 기록이 남아 있어야 한다.
@@ -68,6 +69,7 @@ ordinary feature 구현 변경은 이 문서의 대상이 아니고, version lan
 
 - popup에서 `settings.meetingWorkspaceTarget=local`을 고르면 rehearsal target은 `http://127.0.0.1:5000/meeting/index.html`과 `http://127.0.0.1:5000/meeting/panel-bridge.html`이다.
 - local target은 hosted page만이 아니라 meeting Functions/Auth/Firestore/Storage emulator까지 함께 보는 full-local 경로다.
+- 같은 local target은 prompt도 full-local rehearsal로 같이 본다. prompt read/write/review/panel auth는 `http://127.0.0.1:5001/browser-extension-main/asia-northeast3/*`를 향하고, hidden prompt bridge는 `http://127.0.0.1:5000/extension/prompt-panel-bridge.html`에서 local Auth/Firestore emulator를 사용한다.
 
 ### Auth scope와 URL 의미
 

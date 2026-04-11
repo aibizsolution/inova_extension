@@ -96,6 +96,7 @@
       web: buildWebConfig(laneConfig.web || {}, override.web || {}),
     };
     config.meeting = buildMeetingConfigHelpers(config);
+    config.prompt = buildPromptConfigHelpers(config, config.prompt);
     return config;
   }
 
@@ -156,6 +157,15 @@
     };
   }
 
+  function buildPromptConfigHelpers(baseConfig, promptConfig) {
+    return {
+      ...promptConfig,
+      resolveRuntime(settings) {
+        return resolvePromptRuntimeConfig(baseConfig, settings);
+      },
+    };
+  }
+
   function buildWebConfig(defaultConfig = {}, overrideConfig = {}) {
     return {
       ...DEFAULT_WEB_CONFIG,
@@ -191,6 +201,34 @@
     };
   }
 
+  function resolvePromptRuntimeConfig(baseConfig, settings) {
+    const normalizedSettings = normalizeMeetingSettings(settings);
+    if (normalizedSettings.meetingWorkspaceTarget !== "local") {
+      return {
+        emulators: {
+          authUrl: "",
+          enabled: false,
+          firestoreHost: "",
+          firestorePort: 0,
+          functionsBaseUrl: "",
+          functionsHost: "",
+          functionsPort: 0,
+          storageHost: "",
+          storagePort: 0,
+        },
+        functions: cloneValue(baseConfig.functions),
+        hosting: cloneValue(baseConfig.hosting),
+        prompt: cloneValue(baseConfig.prompt),
+        settings: normalizedSettings,
+        target: "production",
+        web: cloneValue(baseConfig.web),
+      };
+    }
+
+    const workspaceUrl = normalizeWorkspaceUrlOverride(normalizedSettings.meetingWorkspaceUrlOverride);
+    return buildLocalPromptRuntimeConfig(baseConfig, normalizedSettings, workspaceUrl);
+  }
+
   function resolveMeetingRuntimeConfig(baseConfig, settings) {
     const normalizedSettings = normalizeMeetingSettings(settings);
     if (normalizedSettings.meetingWorkspaceTarget !== "local") {
@@ -216,6 +254,21 @@
     }
 
     const workspaceUrl = normalizeWorkspaceUrlOverride(normalizedSettings.meetingWorkspaceUrlOverride);
+    const promptRuntimeConfig = buildLocalPromptRuntimeConfig(baseConfig, normalizedSettings, workspaceUrl);
+    const workspaceOrigin = normalizeOriginUrl(workspaceUrl);
+    return {
+      ...promptRuntimeConfig,
+      debugConsoleEnabled: normalizedSettings.meetingDebugConsoleEnabled,
+      hosting: {
+        ...promptRuntimeConfig.hosting,
+        meetingPanelBridgeUrl: joinUrl(workspaceOrigin, "meeting/panel-bridge.html"),
+        meetingWorkspaceUrl: workspaceUrl,
+        originUrl: workspaceOrigin,
+      },
+    };
+  }
+
+  function buildLocalPromptRuntimeConfig(baseConfig, normalizedSettings, workspaceUrl) {
     const workspaceOrigin = normalizeOriginUrl(workspaceUrl);
     const workspaceHost = resolveLoopbackHost(readHostname(workspaceUrl));
     const functionsBaseUrl = buildLocalFunctionsBaseUrl(
@@ -223,8 +276,9 @@
       baseConfig.project?.projectId || DEFAULT_WEB_CONFIG.projectId,
       baseConfig.functions?.region || baseConfig.project?.region || "asia-northeast3"
     );
-    const hostingConfig = buildHostingConfig("", workspaceOrigin, {
-      baseUrl: workspaceOrigin,
+    const hostingBaseUrl = buildLocalExtensionBaseUrl(workspaceOrigin);
+    const hostingConfig = buildHostingConfig(hostingBaseUrl, workspaceOrigin, {
+      baseUrl: hostingBaseUrl,
       endpointPaths: cloneValue(baseConfig.hosting?.endpointPaths),
       originUrl: workspaceOrigin,
     });
@@ -241,19 +295,14 @@
     };
 
     return {
-      debugConsoleEnabled: normalizedSettings.meetingDebugConsoleEnabled,
       emulators: emulatorConfig,
       functions: buildFunctionsConfig(functionsBaseUrl, baseConfig.functions?.endpointPaths, {
         baseUrl: functionsBaseUrl,
         endpointPaths: cloneValue(baseConfig.functions?.endpointPaths),
         region: baseConfig.functions?.region || baseConfig.project?.region || "asia-northeast3",
       }),
-      hosting: {
-        ...hostingConfig,
-        meetingPanelBridgeUrl: joinUrl(workspaceOrigin, "meeting/panel-bridge.html"),
-        meetingWorkspaceUrl: workspaceUrl,
-        originUrl: workspaceOrigin,
-      },
+      hosting: hostingConfig,
+      prompt: cloneValue(baseConfig.prompt),
       settings: normalizedSettings,
       target: "local",
       web: cloneValue(baseConfig.web),
@@ -338,6 +387,10 @@
   function buildDefaultLocalMeetingWorkspaceUrl(hostname) {
     const resolvedHost = resolveLoopbackHost(hostname);
     return `http://${resolvedHost}:${LOCAL_MEETING_DEFAULTS.hostingPort}/meeting/index.html`;
+  }
+
+  function buildLocalExtensionBaseUrl(originUrl) {
+    return joinUrl(normalizeOriginUrl(originUrl), "extension");
   }
 
   function buildLocalFunctionsBaseUrl(hostname, projectId, region) {

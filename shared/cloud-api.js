@@ -13,9 +13,10 @@
     };
   }
 
-  async function peekInovaPromptLibrary(providerIdentity, accessToken) {
+  async function peekInovaPromptLibrary(providerIdentity, accessToken, requestOptions = {}) {
+    const promptFunctions = resolveFunctionsConfig(requestOptions.functionsConfig);
     const payload = await postJson(
-      functions.peekInovaPromptLibraryUrl,
+      promptFunctions.peekInovaPromptLibraryUrl,
       {
         providerIdentity: toProviderIdentityPayload(providerIdentity),
       },
@@ -24,9 +25,10 @@
     return payload?.data || { checkedAt: "", found: false };
   }
 
-  async function listPromptStoreEntries(filter, providerIdentity, accessToken) {
+  async function listPromptStoreEntries(filter, providerIdentity, accessToken, requestOptions = {}) {
+    const promptFunctions = resolveFunctionsConfig(requestOptions.functionsConfig);
     const payload = await postJson(
-      functions.listPromptStoreEntriesUrl,
+      promptFunctions.listPromptStoreEntriesUrl,
       {
         categoryId: filter?.categoryId || "all",
         limit: filter?.limit || 24,
@@ -41,9 +43,10 @@
   }
 
   async function reviewInovaPrompt(prompt, providerIdentity, accessToken, options = {}) {
+    const promptFunctions = resolveFunctionsConfig(options.functionsConfig);
     const reviewProfile = String(options?.reviewProfile || "").trim();
     const payload = await postJson(
-      functions.reviewInovaPromptUrl,
+      promptFunctions.reviewInovaPromptUrl,
       {
         owner: providerIdentity,
         prompt,
@@ -54,16 +57,18 @@
     return payload?.data || {};
   }
 
-  async function loadInovaPromptLibrary(providerIdentity, accessToken) {
-    const payload = await postJson(functions.loadInovaPromptLibraryUrl, {
+  async function loadInovaPromptLibrary(providerIdentity, accessToken, requestOptions = {}) {
+    const promptFunctions = resolveFunctionsConfig(requestOptions.functionsConfig);
+    const payload = await postJson(promptFunctions.loadInovaPromptLibraryUrl, {
       providerIdentity: toProviderIdentityPayload(providerIdentity),
     }, accessToken);
     return payload?.data || { found: false };
   }
 
-  async function publishPromptToStore(prompt, categoryId, providerIdentity, accessToken) {
+  async function publishPromptToStore(prompt, categoryId, providerIdentity, accessToken, requestOptions = {}) {
+    const promptFunctions = resolveFunctionsConfig(requestOptions.functionsConfig);
     const payload = await postJson(
-      functions.publishPromptToStoreUrl,
+      promptFunctions.publishPromptToStoreUrl,
       {
         categoryId,
         owner: providerIdentity,
@@ -74,9 +79,10 @@
     return payload?.data || {};
   }
 
-  async function unpublishPromptFromStore(entryId, providerIdentity, accessToken) {
+  async function unpublishPromptFromStore(entryId, providerIdentity, accessToken, requestOptions = {}) {
+    const promptFunctions = resolveFunctionsConfig(requestOptions.functionsConfig);
     const payload = await postJson(
-      functions.unpublishPromptFromStoreUrl,
+      promptFunctions.unpublishPromptFromStoreUrl,
       {
         entryId,
         owner: providerIdentity,
@@ -86,9 +92,10 @@
     return payload?.data || {};
   }
 
-  async function importPromptStoreEntry(entryId, providerIdentity, accessToken) {
+  async function importPromptStoreEntry(entryId, providerIdentity, accessToken, requestOptions = {}) {
+    const promptFunctions = resolveFunctionsConfig(requestOptions.functionsConfig);
     const payload = await postJson(
-      functions.importPromptStoreEntryUrl,
+      promptFunctions.importPromptStoreEntryUrl,
       {
         entryId,
         owner: providerIdentity,
@@ -98,9 +105,10 @@
     return payload?.data || {};
   }
 
-  async function togglePromptStoreLike(entryId, providerIdentity, accessToken) {
+  async function togglePromptStoreLike(entryId, providerIdentity, accessToken, requestOptions = {}) {
+    const promptFunctions = resolveFunctionsConfig(requestOptions.functionsConfig);
     const payload = await postJson(
-      functions.togglePromptStoreLikeUrl,
+      promptFunctions.togglePromptStoreLikeUrl,
       {
         entryId,
         owner: providerIdentity,
@@ -110,9 +118,10 @@
     return payload?.data || {};
   }
 
-  async function recordPromptStoreView(entryId, providerIdentity, accessToken) {
+  async function recordPromptStoreView(entryId, providerIdentity, accessToken, requestOptions = {}) {
+    const promptFunctions = resolveFunctionsConfig(requestOptions.functionsConfig);
     const payload = await postJson(
-      functions.recordPromptStoreViewUrl,
+      promptFunctions.recordPromptStoreViewUrl,
       {
         entryId,
         owner: providerIdentity,
@@ -223,9 +232,10 @@
     return payload?.data || {};
   }
 
-  async function issueInovaPromptPanelAuth(providerIdentity, accessToken) {
+  async function issueInovaPromptPanelAuth(providerIdentity, accessToken, requestOptions = {}) {
+    const promptFunctions = resolveFunctionsConfig(requestOptions.functionsConfig);
     const payload = await postJson(
-      functions.issueInovaPromptPanelAuthUrl,
+      promptFunctions.issueInovaPromptPanelAuthUrl,
       {
         owner: toProviderIdentityPayload(providerIdentity),
       },
@@ -245,8 +255,9 @@
     return payload?.data || {};
   }
 
-  async function syncInovaPromptLibrary(syncDocument, accessToken) {
-    const payload = await postJson(functions.syncInovaPromptLibraryUrl, syncDocument, accessToken);
+  async function syncInovaPromptLibrary(syncDocument, accessToken, requestOptions = {}) {
+    const promptFunctions = resolveFunctionsConfig(requestOptions.functionsConfig);
+    const payload = await postJson(promptFunctions.syncInovaPromptLibraryUrl, syncDocument, accessToken);
     return payload?.data || {};
   }
 

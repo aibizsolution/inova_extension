@@ -30,7 +30,7 @@
 
 - 위치: `popup/index.html`, `popup/index.js`
 - 역할: hosted 회의 작업실 연결 대상을 `상용 호스팅 / 로컬 호스팅` 중 하나로 저장한다.
-- 특징: 팝업은 설정만 맡고, 실제 `새 회의하기`와 결과 열기는 content 패널의 회의 허브에서 처리한다.
+- 특징: 팝업은 설정만 맡고, 실제 `새 회의하기`와 결과 열기는 content 패널의 회의 허브에서 처리한다. 같은 `settings.meetingWorkspaceTarget`은 회의 rehearsal뿐 아니라 prompt-library sync, prompt-review, prompt-store read/write, hidden prompt bridge도 함께 local Functions/Hosting emulator 대상으로 전환한다.
 
 ### Hosted Meeting App
 
@@ -48,7 +48,7 @@
 
 - 위치: `background/service-worker.js`
 - 역할: i-Nova access token 확보, Firebase Functions 호출, 릴리스 메타 fetch, 동기화 중복 완화, prompt/store panel auth 발급, hosted 회의 launch grant 발급, 작업실 URL 타깃 분기
-- 특징: 클라우드 경계의 브로커다. content script가 직접 장기 원격 상태를 다루지 않게 막아 준다. 회의 기능은 `inova-meeting:*` 메시지로, 프롬프트 실시간은 `inova-prompt:*` 메시지로 이 경계를 먼저 통과한다. 패널에서 열린 작업실은 popup 설정의 호스팅 타깃을 따르되, runtime lane이 `v2`면 lane-aware config가 가리키는 v2 hosting/release origin을 사용한다.
+- 특징: 클라우드 경계의 브로커다. content script가 직접 장기 원격 상태를 다루지 않게 막아 준다. 회의 기능은 `inova-meeting:*` 메시지로, 프롬프트 실시간은 `inova-prompt:*` 메시지로 이 경계를 먼저 통과한다. 패널에서 열린 작업실은 popup 설정의 호스팅 타깃을 따르되, runtime lane이 `v2`면 lane-aware config가 가리키는 v2 hosting/release origin을 사용한다. popup 설정이 `local`이면 prompt 관련 Functions 호출과 panel auth도 production 대신 local Functions base URL을 써서 배포 전 full-stack rehearsal을 가능하게 해야 한다.
 
 ### Firebase Functions
 
@@ -84,6 +84,7 @@
 3. hidden hosted `prompt-panel-bridge.html`이 Firebase Auth에 로그인하고 Firestore offline persistence를 먼저 켠 뒤 `integration_inova_accounts/{providerUserKey}` 문서를 구독한다.
 4. bridge는 `promptLibraryMeta.lastRevision`, `lastSyncedAt`, `itemCount`만 panel로 돌려준다.
 5. content script는 local pending sync가 없고 원격 revision이 더 최신일 때만 `loadInovaPromptLibrary`를 다시 호출해 전체 보관함을 hydrate한다.
+6. popup 설정이 `local`이면 2번은 local Functions endpoint를 호출하고, 3번 bridge도 `http://127.0.0.1:5000/extension/prompt-panel-bridge.html`과 local Auth/Firestore emulator를 사용한다.
 
 ### D. 원격 백업
 
@@ -91,6 +92,7 @@
 2. background가 access token을 준비한다.
 3. Functions가 i-Nova 사용자 검증 뒤 Firestore에 반영한다.
 4. 확인용 운영 점검은 `scripts/check-cloud-sync.js`, `scripts/check-function-logs.js`로 한다.
+5. popup 설정이 `local`이면 prompt-library `load/peek/sync`와 prompt-review/store write도 local Functions emulator로 향한다.
 
 ### E. 프롬프트 스토어 / 평가 / 릴리스
 
@@ -183,6 +185,7 @@
 - `prompt-library` smoke: `내 요청` 탭 렌더링, 기존 항목 또는 새 항목 1건 저장/수정, 입력창 주입 1회
 - `prompt-store` smoke: `전체` 목록 로드, 상세 보기 1건, `좋아요` 또는 `내 요청으로 가져오기` 1회, 탭 이동 후 복귀 시 목록 유지
 - `prompt-review` smoke: 입력창 우측 상단 평가 버튼 노출, 평가 결과 1회, 보완 프롬프트 반영 1회
+- prompt local rehearsal: popup에서 `로컬 호스팅` 선택 후 hidden prompt bridge가 `http://127.0.0.1:5000/extension/prompt-panel-bridge.html`을 쓰고, prompt read/write/review/panel auth가 local Functions base URL로 전환되는지 본다.
 - 이번 prompt smoke 제외 범위: import/export 전체 조합, 원격 sync 확인, 공개 스토어 등록/삭제. 원격 sync는 필요 시 `npm run check:cloud-sync -- --userKey <providerUserKey> --samples 2 --wait 20`로 별도 점검
 - 로컬 회의 작업실: `npm run emulator:hosting` -> `http://127.0.0.1:5000/meeting/index.html`
 - 회의 전용 로컬 확인은 팝업의 `상용 호스팅 / 로컬 호스팅` 전환과 화면 안 디버그 로그 패널 기준으로 본다.

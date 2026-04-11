@@ -140,6 +140,14 @@
 
     function handleStorageChange(changes, areaName) {
       cloudSyncManager.handleStorageChange(changes, areaName);
+      if (areaName !== "local") {
+        return;
+      }
+      const settingsChange = namespace.productLane?.getStorageChange?.(changes, namespace.constants.storageKeys.settings) || changes.settings;
+      const cloudSyncChange = namespace.productLane?.getStorageChange?.(changes, namespace.constants.storageKeys.cloudSync) || changes.cloudSync;
+      if (settingsChange || cloudSyncChange) {
+        scheduleRealtimeSync(240);
+      }
     }
 
     return {

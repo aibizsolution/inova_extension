@@ -46,6 +46,7 @@ const requiredFiles = [
   path.join("scripts", "verify-panel-runtime-controller.js"),
   path.join("scripts", "verify-panel-action-controller.js"),
   path.join("scripts", "verify-panel-prompt-bridge-controller.js"),
+  path.join("scripts", "verify-prompt-runtime-local.js"),
   path.join("scripts", "verify-prompt-review.js"),
   path.join("scripts", "verify-route-state-controller.js"),
   path.join("scripts", "verify-route-watch-controller.js"),

@@ -8,6 +8,10 @@
   });
   const DEFAULT_PROMPT_PANEL_SCOPE = "prompt-panel";
   const FIRESTORE_PERSISTENCE_OPTIONS = { synchronizeTabs: true };
+  const LOCAL_BRIDGE_ORIGINS = new Set([
+    "http://127.0.0.1:5000",
+    "http://localhost:5000",
+  ]);
   const PORT_CONNECT_SOURCE = "inova-prompt-panel-client";
   const STORE_SUMMARY_DOC_ID = "summary";
   const STORE_LATEST_LOCAL_LIMIT = 1000;
@@ -16,6 +20,7 @@
   let app = null;
   let auth = null;
   let db = null;
+  let emulatorsConfigured = false;
   let firestorePersistencePromise = null;
   let port = null;
   let currentRequestId = 0;
@@ -159,6 +164,7 @@
       app = global.firebase.initializeApp(firebaseConfig, "prompt-panel-bridge");
       auth = app.auth();
       db = app.firestore();
+      configureFirebaseEmulators();
       await ensureFirestorePersistence();
       await auth.setPersistence(global.firebase.auth.Auth.Persistence.SESSION);
     }
@@ -207,6 +213,20 @@
       }
     });
     return firestorePersistencePromise;
+  }
+
+  function configureFirebaseEmulators() {
+    if (emulatorsConfigured || !isLocalBridgeOrigin()) {
+      return;
+    }
+    const emulatorHost = resolveLocalEmulatorHost();
+    if (typeof auth?.useEmulator === "function") {
+      auth.useEmulator(`http://${emulatorHost}:9099`);
+    }
+    if (typeof db?.useEmulator === "function") {
+      db.useEmulator(emulatorHost, 8080);
+    }
+    emulatorsConfigured = true;
   }
 
   function subscribePromptLibraryMeta(payload) {
@@ -543,5 +563,14 @@
       .replace(/\r\n/g, "\n")
       .replace(/\u00a0/g, " ")
       .trim();
+  }
+
+  function isLocalBridgeOrigin() {
+    return LOCAL_BRIDGE_ORIGINS.has(String(global.location?.origin || ""));
+  }
+
+  function resolveLocalEmulatorHost() {
+    const hostname = normalizeText(global.location?.hostname).toLowerCase();
+    return hostname === "localhost" ? "localhost" : "127.0.0.1";
   }
 })(globalThis);

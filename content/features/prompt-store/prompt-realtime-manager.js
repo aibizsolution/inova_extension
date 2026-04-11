@@ -7,10 +7,10 @@
   const RETRY_COOLDOWN_MS = 15000;
   const STORE_DETAIL_TIMEOUT_MS = 4000;
   const STORE_LATEST_READY_TIMEOUT_MS = 5000;
-
   function create(state, hooks) {
-    let authState = { expiresAt: "", firebaseCustomToken: "", promptLibraryId: "", providerUserKey: "" };
+    let authState = buildEmptyAuthState();
     let authPromise = null;
+    let authPromiseKey = "";
     let bridgeFrame = null;
     let bridgePort = null;
     let bridgePortPromise = null;
@@ -22,6 +22,7 @@
     let bridgeConnected = false;
     let bridgeConnecting = false;
     let bridgeConnectionKey = "";
+    let runtimeConnectionKey = "";
     let currentRequestId = 0;
     let identityRetryTimer = 0;
     let promptMetaRetryUntil = 0;
@@ -35,7 +36,6 @@
     let storeLatestReadyResolve = null;
     let storeLatestReadyReject = null;
     let timerId = 0;
-
     return {
       disconnectRealtime,
       isStoreLatestRealtimeActive,
@@ -44,14 +44,12 @@
       refreshState,
       scheduleSync,
     };
-
     function scheduleSync(delay = ACTIVE_SYNC_DELAY_MS) {
       global.clearTimeout(timerId);
       timerId = global.setTimeout(() => {
         refreshState("scheduled").catch(logRealtimeError);
       }, delay);
     }
-
     async function refreshState(reason = "manual") {
       const wantsPromptMeta = shouldUsePromptLibraryRealtime();
       const wantsStoreLatest = shouldUseStoreLatestRealtime();
@@ -61,16 +59,15 @@
         disconnectRealtime(reason);
         return;
       }
-
       const providerIdentity = namespace.providerIdentity.getCurrent();
       if (!providerIdentity.available) {
         disconnectRealtime(`${reason}-no-provider`);
         scheduleIdentityRetry();
         return;
       }
-
       global.clearTimeout(identityRetryTimer);
-
+      const runtimeConfig = resolvePromptRuntimeConfig();
+      ensureRuntimeConnection(runtimeConfig, reason);
       if (!wantsPromptMeta) {
         unsubscribePromptLibraryMeta("inactive");
       } else if (!promptMetaEligible) {
@@ -81,15 +78,13 @@
       } else if (!storeLatestEligible) {
         unsubscribeStoreLatest("cooldown");
       }
-
       if (!promptMetaEligible && !storeLatestEligible) {
         return;
       }
-
       try {
-        const port = await ensureBridgePort();
-        const auth = await ensurePanelAuth(providerIdentity);
-        await ensureBridgeConnected(port, auth, reason);
+        const auth = await ensurePanelAuth(providerIdentity, runtimeConfig);
+        const port = await ensureBridgePort(runtimeConfig);
+        await ensureBridgeConnected(port, auth, runtimeConfig, reason);
         if (promptMetaEligible) {
           subscribePromptLibraryMeta(auth, reason);
         }
@@ -104,7 +99,6 @@
         });
       }
     }
-
     function isPromptRealtimeSurfaceActive() {
       return Boolean(
         state.open
@@ -113,14 +107,12 @@
         && !global.document.hidden
       );
     }
-
     function shouldUsePromptLibraryRealtime() {
       return Boolean(
         isPromptRealtimeSurfaceActive()
         && hooks.getActivePromptTab?.() === "library"
       );
     }
-
     function shouldUseStoreLatestRealtime() {
       return Boolean(
         isPromptRealtimeSurfaceActive()
@@ -128,7 +120,6 @@
         && state.store.scope === "all"
       );
     }
-
     function isStoreLatestRealtimeActive() {
       return Boolean(
         shouldUseStoreLatestRealtime()
@@ -137,61 +128,73 @@
         && bridgeConnected
       );
     }
-
-    async function ensurePanelAuth(providerIdentity) {
+    function resolvePromptRuntimeConfig() {
+      return namespace.firebaseConfig?.prompt?.resolveRuntime?.(state.settings)
+        || { functions: namespace.firebaseConfig?.functions || {}, hosting: namespace.firebaseConfig?.hosting || {}, prompt: namespace.firebaseConfig?.prompt || {}, target: "production", web: namespace.firebaseConfig?.web || {} };
+    }
+    function ensureRuntimeConnection(runtimeConfig, reason) {
+      const nextRuntimeKey = buildRuntimeConnectionKey(runtimeConfig);
+      if (runtimeConnectionKey && runtimeConnectionKey !== nextRuntimeKey) {
+        disconnectRealtime(`${reason}-runtime-change`);
+      }
+      runtimeConnectionKey = nextRuntimeKey;
+    }
+    async function ensurePanelAuth(providerIdentity, runtimeConfig) {
       const providerUserKey = namespace.session.normalizeText(providerIdentity?.providerUserKey);
+      const requestKey = buildAuthPromiseKey(providerUserKey, runtimeConfig);
       const expiryTime = Date.parse(authState.expiresAt || "");
       if (
         authState.firebaseCustomToken
         && authState.providerUserKey === providerUserKey
+        && authState.runtimeKey === requestKey
         && expiryTime > Date.now() + 60000
       ) {
         return authState;
       }
-      if (authPromise) {
+      if (authPromise && authPromiseKey === requestKey) {
         return authPromise;
       }
-
+      authPromiseKey = requestKey;
       authPromise = (async () => {
-        namespace.panelDebug?.log?.("prompt.panel.auth.start", {
-          providerUserKey,
-          scope: "runtime",
-          tool: "prompts",
-        });
+        namespace.panelDebug?.log?.("prompt.panel.auth.start", { functionsBaseUrl: namespace.session.normalizeText(runtimeConfig?.functions?.baseUrl), providerUserKey, scope: "runtime", target: namespace.session.normalizeText(runtimeConfig?.target) || "production", tool: "prompts" });
         const nextAuth = await sendRuntimeMessage("inova-prompt:issue-panel-auth", {
           providerIdentity,
         });
-        authState = {
+        const nextAuthState = {
           expiresAt: namespace.session.normalizeText(nextAuth?.expiresAt),
           firebaseCustomToken: namespace.session.normalizeText(nextAuth?.firebaseCustomToken),
+          promptFirestoreCollections:
+            nextAuth?.promptFirestoreCollections && typeof nextAuth.promptFirestoreCollections === "object"
+              ? { ...nextAuth.promptFirestoreCollections }
+              : null,
           promptLibraryId: namespace.session.normalizeText(nextAuth?.promptLibraryId),
+          promptPanelScope: namespace.session.normalizeText(nextAuth?.promptPanelScope),
           providerUserKey: namespace.session.normalizeText(nextAuth?.providerUserKey),
+          runtimeKey: requestKey,
         };
-        namespace.panelDebug?.log?.("prompt.panel.auth.success", {
-          expiresAt: authState.expiresAt,
-          promptLibraryId: authState.promptLibraryId,
-          providerUserKey: authState.providerUserKey,
-          scope: "runtime",
-          tool: "prompts",
-        });
-        return authState;
+        if (authPromiseKey === requestKey) {
+          authState = nextAuthState;
+        }
+        namespace.panelDebug?.log?.("prompt.panel.auth.success", { expiresAt: nextAuthState.expiresAt, promptLibraryId: nextAuthState.promptLibraryId, providerUserKey: nextAuthState.providerUserKey, scope: "runtime", target: namespace.session.normalizeText(runtimeConfig?.target) || "production", tool: "prompts" });
+        return authPromiseKey === requestKey ? authState : nextAuthState;
       })();
       try {
         return await authPromise;
       } finally {
-        authPromise = null;
+        if (authPromiseKey === requestKey) {
+          authPromise = null;
+          authPromiseKey = "";
+        }
       }
     }
-
-    async function ensureBridgePort() {
+    async function ensureBridgePort(runtimeConfig) {
       if (bridgePort) {
         return bridgePort;
       }
       if (bridgePortPromise) {
         return bridgePortPromise;
       }
-
-      bridgeFrame = ensureBridgeFrame();
+      bridgeFrame = ensureBridgeFrame(runtimeConfig);
       bridgePortPromise = new Promise((resolve, reject) => {
         const timeoutId = global.setTimeout(() => {
           bridgeReadyResolve = null;
@@ -199,7 +202,6 @@
           bridgePortPromise = null;
           reject(new Error("프롬프트 패널 Firestore bridge 준비가 지연되고 있어요."));
         }, BRIDGE_IFRAME_READY_TIMEOUT_MS);
-
         bridgeReadyResolve = () => {
           global.clearTimeout(timeoutId);
           bridgeReadyResolve = null;
@@ -214,7 +216,6 @@
           bridgePortPromise = null;
           reject(error instanceof Error ? error : new Error(String(error || "프롬프트 패널 Firestore bridge를 준비하지 못했어요.")));
         };
-
         const connectPort = () => {
           if (!bridgeFrame?.contentWindow) {
             bridgeReadyReject?.(new Error("프롬프트 패널 Firestore bridge 창을 찾지 못했어요."));
@@ -239,16 +240,14 @@
               source: BRIDGE_MESSAGE_SOURCE,
               type: "connect-port",
             },
-            namespace.firebaseConfig.hosting.originUrl,
+            resolvePromptBridgeOrigin(runtimeConfig),
             [channel.port2]
           );
         };
-
         if (bridgeFrame.dataset.loaded === "1") {
           connectPort();
           return;
         }
-
         const handleLoad = () => {
           bridgeFrame.removeEventListener("load", handleLoad);
           bridgeFrame.dataset.loaded = "1";
@@ -256,15 +255,16 @@
         };
         bridgeFrame.addEventListener("load", handleLoad, { once: true });
       });
-
       return bridgePortPromise;
     }
-
-    async function ensureBridgeConnected(port, auth, reason) {
+    async function ensureBridgeConnected(port, auth, runtimeConfig, reason) {
       const connectionKey = [
+        runtimeConnectionKey,
         auth.providerUserKey,
         auth.expiresAt,
         auth.promptLibraryId,
+        namespace.session.normalizeText(auth.promptPanelScope),
+        JSON.stringify(auth.promptFirestoreCollections || {}),
       ].join("::");
       if (bridgeConnected && bridgeConnectionKey === connectionKey) {
         return;
@@ -272,19 +272,11 @@
       if (bridgeConnecting && bridgeConnectionKey === connectionKey && bridgeConnectPromise) {
         return bridgeConnectPromise;
       }
-
       bridgeConnectionKey = connectionKey;
       bridgeConnected = false;
       bridgeConnecting = true;
       currentRequestId += 1;
-      namespace.panelDebug?.log?.("prompt.panel.bridge.connect", {
-        promptLibraryId: auth.promptLibraryId,
-        providerUserKey: auth.providerUserKey,
-        reason,
-        requestId: currentRequestId,
-        scope: "runtime",
-        tool: "prompts",
-      });
+      namespace.panelDebug?.log?.("prompt.panel.bridge.connect", { promptLibraryId: auth.promptLibraryId, providerUserKey: auth.providerUserKey, reason, requestId: currentRequestId, scope: "runtime", tool: "prompts" });
       bridgeConnectPromise = new Promise((resolve, reject) => {
         bridgeConnectResolve = resolve;
         bridgeConnectReject = reject;
@@ -293,14 +285,14 @@
         payload: {
           expiresAt: auth.expiresAt,
           firestoreCollections: {
-            ...(namespace.firebaseConfig.prompt?.firestoreCollections || {}),
+            ...(runtimeConfig?.prompt?.firestoreCollections || {}),
             ...((auth.promptFirestoreCollections && typeof auth.promptFirestoreCollections === "object")
               ? auth.promptFirestoreCollections
               : {}),
           },
-          firebaseConfig: { ...namespace.firebaseConfig.web },
+          firebaseConfig: { ...(runtimeConfig?.web || {}) },
           firebaseCustomToken: auth.firebaseCustomToken,
-          promptPanelScope: namespace.session.normalizeText(auth.promptPanelScope || namespace.firebaseConfig.prompt?.panelScope),
+          promptPanelScope: namespace.session.normalizeText(auth.promptPanelScope || runtimeConfig?.prompt?.panelScope),
           promptLibraryId: auth.promptLibraryId,
           providerUserKey: auth.providerUserKey,
         },
@@ -309,7 +301,6 @@
       });
       return bridgeConnectPromise;
     }
-
     function subscribePromptLibraryMeta(auth, reason) {
       if (promptMetaRetryUntil > Date.now()) {
         return;
@@ -319,12 +310,7 @@
         return;
       }
       promptMetaSubscriptionKey = subscriptionKey;
-      namespace.panelDebug?.log?.("prompt.panel.subscribe.meta", {
-        providerUserKey: auth.providerUserKey,
-        reason,
-        scope: "runtime",
-        tool: "prompts",
-      });
+      namespace.panelDebug?.log?.("prompt.panel.subscribe.meta", { providerUserKey: auth.providerUserKey, reason, scope: "runtime", tool: "prompts" });
       bridgePort.postMessage({
         payload: {
           providerUserKey: auth.providerUserKey,
@@ -333,7 +319,6 @@
         type: "subscribe-prompt-library-meta",
       });
     }
-
     function subscribeStoreLatest(auth, reason) {
       if (storeRetryUntil > Date.now()) {
         return;
@@ -344,20 +329,13 @@
       }
       storeSubscriptionKey = subscriptionKey;
       resetStoreLatestReady();
-      namespace.panelDebug?.log?.("prompt.panel.subscribe.store-latest", {
-        categoryId: "all",
-        providerUserKey: auth.providerUserKey,
-        reason,
-        scope: "runtime",
-        tool: "prompts",
-      });
+      namespace.panelDebug?.log?.("prompt.panel.subscribe.store-latest", { categoryId: "all", providerUserKey: auth.providerUserKey, reason, scope: "runtime", tool: "prompts" });
       bridgePort.postMessage({
         payload: {},
         requestId: currentRequestId,
         type: "subscribe-store-latest",
       });
     }
-
     function unsubscribePromptLibraryMeta(reason) {
       if (!promptMetaSubscriptionKey) {
         return;
@@ -367,21 +345,11 @@
         try {
           bridgePort.postMessage({ type: "unsubscribe-prompt-library-meta" });
         } catch (error) {
-          namespace.panelDebug?.log?.("prompt.panel.unsubscribe.meta.error", {
-            error: error instanceof Error ? error.message : String(error || ""),
-            reason,
-            scope: "runtime",
-            tool: "prompts",
-          });
+          namespace.panelDebug?.log?.("prompt.panel.unsubscribe.meta.error", { error: error instanceof Error ? error.message : String(error || ""), reason, scope: "runtime", tool: "prompts" });
         }
       }
-      namespace.panelDebug?.log?.("prompt.panel.unsubscribe.meta", {
-        reason,
-        scope: "runtime",
-        tool: "prompts",
-      });
+      namespace.panelDebug?.log?.("prompt.panel.unsubscribe.meta", { reason, scope: "runtime", tool: "prompts" });
     }
-
     function unsubscribeStoreLatest(reason) {
       if (!storeSubscriptionKey) {
         return;
@@ -392,29 +360,27 @@
         try {
           bridgePort.postMessage({ type: "unsubscribe-store-latest" });
         } catch (error) {
-          namespace.panelDebug?.log?.("prompt.panel.unsubscribe.store-latest.error", {
-            error: error instanceof Error ? error.message : String(error || ""),
-            reason,
-            scope: "runtime",
-            tool: "prompts",
-          });
+          namespace.panelDebug?.log?.("prompt.panel.unsubscribe.store-latest.error", { error: error instanceof Error ? error.message : String(error || ""), reason, scope: "runtime", tool: "prompts" });
         }
       }
-      namespace.panelDebug?.log?.("prompt.panel.unsubscribe.store-latest", {
-        reason,
-        scope: "runtime",
-        tool: "prompts",
-      });
+      namespace.panelDebug?.log?.("prompt.panel.unsubscribe.store-latest", { reason, scope: "runtime", tool: "prompts" });
     }
-
-    function ensureBridgeFrame() {
+    function ensureBridgeFrame(runtimeConfig) {
+      const bridgeUrl = resolvePromptBridgeUrl(runtimeConfig);
       const existing = global.document.getElementById(BRIDGE_IFRAME_ID);
       if (existing instanceof global.HTMLIFrameElement) {
-        return existing;
+        if (namespace.session.normalizeText(existing.src) === bridgeUrl) {
+          return existing;
+        }
+        existing.remove();
+      }
+      if (bridgeFrame instanceof global.HTMLIFrameElement) {
+        bridgeFrame.remove();
+        bridgeFrame = null;
       }
       const iframe = global.document.createElement("iframe");
       iframe.id = BRIDGE_IFRAME_ID;
-      iframe.src = namespace.firebaseConfig.hosting.promptPanelBridgeUrl;
+      iframe.src = bridgeUrl;
       iframe.hidden = true;
       iframe.tabIndex = -1;
       iframe.setAttribute("aria-hidden", "true");
@@ -425,16 +391,66 @@
       global.document.body.appendChild(iframe);
       return iframe;
     }
-
+    function resolvePromptBridgeUrl(runtimeConfig) {
+      return namespace.session.normalizeText(runtimeConfig?.hosting?.promptPanelBridgeUrl) || namespace.session.normalizeText(namespace.firebaseConfig?.hosting?.promptPanelBridgeUrl);
+    }
+    function resolvePromptBridgeOrigin(runtimeConfig) {
+      return namespace.session.normalizeText(runtimeConfig?.hosting?.originUrl) || namespace.session.normalizeText(namespace.firebaseConfig?.hosting?.originUrl);
+    }
+    function buildRuntimeConnectionKey(runtimeConfig) {
+      return [namespace.session.normalizeText(runtimeConfig?.target) || "production", namespace.session.normalizeText(runtimeConfig?.functions?.baseUrl), resolvePromptBridgeUrl(runtimeConfig)].join("::");
+    }
+    function buildAuthPromiseKey(providerUserKey, runtimeConfig) {
+      const normalizedProviderUserKey = namespace.session.normalizeText(providerUserKey);
+      const normalizedRuntimeKey = buildRuntimeConnectionKey(runtimeConfig);
+      return normalizedProviderUserKey && normalizedRuntimeKey ? `${normalizedProviderUserKey}::${normalizedRuntimeKey}` : "";
+    }
+    function rejectBridgeReady(error) {
+      if (typeof bridgeReadyReject === "function") {
+        bridgeReadyReject(error instanceof Error ? error : new Error(String(error || "프롬프트 패널 Firestore bridge를 준비하지 못했어요.")));
+      }
+      bridgeReadyResolve = null;
+      bridgeReadyReject = null;
+      bridgePortPromise = null;
+    }
+    function resetAuthState() {
+      authPromise = null;
+      authPromiseKey = "";
+      authState = buildEmptyAuthState();
+    }
+    function removeBridgeFrame() {
+      const activeFrame = bridgeFrame instanceof global.HTMLIFrameElement
+        ? bridgeFrame
+        : global.document.getElementById(BRIDGE_IFRAME_ID);
+      if (activeFrame instanceof global.HTMLIFrameElement) {
+        activeFrame.remove();
+      }
+      bridgeFrame = null;
+    }
+    function resetBridgeState() {
+      rejectBridgeReady(new Error("프롬프트 패널 Firestore bridge 연결이 닫혔어요."));
+      if (bridgePort) {
+        try {
+          bridgePort.onmessage = null;
+          bridgePort.onmessageerror = null;
+          bridgePort.close?.();
+        } catch (error) {
+          void error;
+        }
+      }
+      bridgePort = null;
+      bridgeConnected = false;
+      bridgeConnecting = false;
+      bridgeConnectionKey = "";
+      clearBridgeConnectPromise();
+      removeBridgeFrame();
+    }
     function handleBridgeMessage(event) {
       const data = event?.data && typeof event.data === "object" ? event.data : {};
       const type = namespace.session.normalizeText(data.type);
       const payload = data.payload && typeof data.payload === "object" ? data.payload : {};
       if (type === "ready") {
-        namespace.panelDebug?.log?.("prompt.panel.bridge.ready", {
-          scope: "runtime",
-          tool: "prompts",
-        });
+        namespace.panelDebug?.log?.("prompt.panel.bridge.ready", { scope: "runtime", tool: "prompts" });
         bridgeReadyResolve?.();
         return;
       }
@@ -446,18 +462,11 @@
         bridgeConnected = true;
         bridgeConnectResolve?.();
         clearBridgeConnectPromise();
-        namespace.panelDebug?.log?.("prompt.panel.bridge.connected", {
-          providerUserKey: namespace.session.normalizeText(payload.providerUserKey),
-          scope: "runtime",
-          tool: "prompts",
-        });
+        namespace.panelDebug?.log?.("prompt.panel.bridge.connected", { providerUserKey: namespace.session.normalizeText(payload.providerUserKey), scope: "runtime", tool: "prompts" });
         return;
       }
       if (type === "disconnected") {
-        namespace.panelDebug?.log?.("prompt.panel.bridge.disconnected", {
-          scope: "runtime",
-          tool: "prompts",
-        });
+        namespace.panelDebug?.log?.("prompt.panel.bridge.disconnected", { scope: "runtime", tool: "prompts" });
         rejectBridgeConnect(new Error("프롬프트 패널 Firestore bridge 연결이 해제됐어요."));
         resetBridgeState();
         return;
@@ -481,7 +490,6 @@
         handleBridgeError(payload).catch(logRealtimeError);
       }
     }
-
     async function handlePromptLibraryMetaPayload(payload) {
       promptMetaRetryUntil = 0;
       bridgeConnected = true;
@@ -495,7 +503,6 @@
       });
       await hooks.onPromptLibraryMeta?.(payload.remoteState || {});
     }
-
     async function handleStoreLatestPayload(payload) {
       storeRetryUntil = 0;
       bridgeConnected = true;
@@ -515,7 +522,6 @@
         summary: payload.summary || {},
       });
     }
-
     function handleStoreDetailPayload(payload) {
       const entryId = namespace.session.normalizeText(payload.entryId);
       const pending = entryId ? pendingStoreDetailRequests.get(entryId) : null;
@@ -538,7 +544,6 @@
         updatedAt: namespace.session.normalizeText(payload.updatedAt),
       });
     }
-
     async function handleBridgeError(payload) {
       const channel = namespace.session.normalizeText(payload.channel || "connect");
       const error = new Error(namespace.session.normalizeText(payload.error) || "프롬프트 패널 Firestore 구독에 실패했어요.");
@@ -576,7 +581,6 @@
         wantsStoreLatest: shouldUseStoreLatestRealtime(),
       });
     }
-
     async function handleRealtimeFailure(reason, error, context) {
       if (context?.wantsPromptMeta) {
         promptMetaRetryUntil = Date.now() + RETRY_COOLDOWN_MS;
@@ -588,7 +592,6 @@
       }
       disconnectRealtime(reason);
     }
-
     function disconnectRealtime(reason) {
       global.clearTimeout(identityRetryTimer);
       global.clearTimeout(timerId);
@@ -623,6 +626,8 @@
       }
       rejectBridgeConnect(new Error("프롬프트 패널 Firestore bridge 연결이 닫혔어요."));
       resetBridgeState();
+      resetAuthState();
+      runtimeConnectionKey = "";
       if (shouldLogDetach) {
         namespace.panelDebug?.log?.("prompt.panel.bridge.detach", {
           reason,
@@ -631,34 +636,23 @@
         });
       }
     }
-
-    function resetBridgeState() {
-      bridgeConnected = false;
-      bridgeConnecting = false;
-      bridgeConnectionKey = "";
-      clearBridgeConnectPromise();
-    }
-
     function rejectBridgeConnect(error) {
       if (typeof bridgeConnectReject === "function") {
         bridgeConnectReject(error instanceof Error ? error : new Error(String(error || "프롬프트 패널 Firestore bridge 연결에 실패했어요.")));
       }
       clearBridgeConnectPromise();
     }
-
     function clearBridgeConnectPromise() {
       bridgeConnectResolve = null;
       bridgeConnectReject = null;
       bridgeConnectPromise = null;
     }
-
     function resetStoreLatestReady() {
       storeLatestReady = false;
       storeLatestReadyPromise = null;
       storeLatestReadyResolve = null;
       storeLatestReadyReject = null;
     }
-
     function resolveStoreLatestReady() {
       storeLatestReady = true;
       storeLatestReadyResolve?.();
@@ -666,7 +660,6 @@
       storeLatestReadyResolve = null;
       storeLatestReadyReject = null;
     }
-
     function rejectStoreLatestReady(error) {
       storeLatestReady = false;
       if (typeof storeLatestReadyReject === "function") {
@@ -676,7 +669,6 @@
       storeLatestReadyResolve = null;
       storeLatestReadyReject = null;
     }
-
     async function waitForStoreLatestReady() {
       if (storeLatestReady || !storeSubscriptionKey) {
         return;
@@ -697,14 +689,12 @@
         }),
       ]);
     }
-
     function rejectPendingStoreDetailRequests(error) {
       for (const pending of pendingStoreDetailRequests.values()) {
         pending.reject(error);
       }
       pendingStoreDetailRequests.clear();
     }
-
     async function loadStoreDetail(entryId) {
       const normalizedEntryId = namespace.session.normalizeText(entryId);
       if (!normalizedEntryId) {
@@ -714,7 +704,6 @@
       if (existing?.promise) {
         return existing.promise;
       }
-
       let resolveRequest = null;
       let rejectRequest = null;
       const requestPromise = new Promise((resolve, reject) => {
@@ -735,15 +724,16 @@
           resolveRequest?.(value);
         },
       });
-
       try {
         const providerIdentity = namespace.providerIdentity.getCurrent();
         if (!providerIdentity.available) {
           throw new Error("사용자 정보를 확인하지 못했어요.");
         }
-        const port = await ensureBridgePort();
-        const auth = await ensurePanelAuth(providerIdentity);
-        await ensureBridgeConnected(port, auth, "store-detail");
+        const runtimeConfig = resolvePromptRuntimeConfig();
+        ensureRuntimeConnection(runtimeConfig, "store-detail");
+        const auth = await ensurePanelAuth(providerIdentity, runtimeConfig);
+        const port = await ensureBridgePort(runtimeConfig);
+        await ensureBridgeConnected(port, auth, runtimeConfig, "store-detail");
         if (shouldUseStoreLatestRealtime() && storeRetryUntil <= Date.now()) {
           subscribeStoreLatest(auth, "store-detail");
           await waitForStoreLatestReady();
@@ -788,7 +778,6 @@
         pendingStoreDetailRequests.delete(normalizedEntryId);
         throw error;
       }
-
       return requestPromise.finally(() => {
         const pending = pendingStoreDetailRequests.get(normalizedEntryId);
         if (pending?.promise === requestPromise) {
@@ -796,19 +785,19 @@
         }
       });
     }
-
     function normalizeDetailContent(value) {
       return String(value || "")
         .replace(/\r\n/g, "\n")
         .replace(/\u00a0/g, " ")
         .trim();
     }
-
+    function buildEmptyAuthState() {
+      return { expiresAt: "", firebaseCustomToken: "", promptFirestoreCollections: null, promptLibraryId: "", promptPanelScope: "", providerUserKey: "", runtimeKey: "" };
+    }
     function scheduleIdentityRetry() {
       global.clearTimeout(identityRetryTimer);
       identityRetryTimer = global.setTimeout(() => scheduleSync(120), 900);
     }
-
     function logRealtimeError(error) {
       if (isInvalidatedContextError(error)) {
         hooks.render?.();
@@ -822,13 +811,11 @@
       console.error("[i-Nova Bookmarks] prompt realtime refresh failed", error);
       hooks.render?.();
     }
-
     function isInvalidatedContextError(error) {
       const message = namespace.session.normalizeText(error instanceof Error ? error.message : String(error || ""));
       return message.includes("Extension context invalidated")
         || message.includes("확장프로그램이 갱신됐어요.");
     }
-
     async function sendRuntimeMessage(type, payload) {
       const metadata = classifyPromptRuntimeMetadata(type);
       namespace.panelDebug?.log?.("prompt.panel.runtime.request", {
@@ -866,7 +853,6 @@
         throw error;
       }
     }
-
     function classifyPromptRuntimeMetadata(type) {
       const normalized = namespace.session.normalizeText(type);
       if (normalized === "inova-prompt:issue-panel-auth") {
@@ -881,7 +867,6 @@
       };
     }
   }
-
   namespace.promptRealtimeManager = {
     create,
   };
