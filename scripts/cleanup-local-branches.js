@@ -51,13 +51,16 @@ function main() {
   const deletedBranches = [];
   const skippedBranches = [];
   for (const branchName of cleanupTargets) {
-    if (!isAncestor(`refs/heads/${branchName}`, upstreamRef)) {
+    const branchRef = `refs/heads/${branchName}`;
+    const mergedByAncestor = isAncestor(branchRef, upstreamRef);
+    const mergedByTree = !mergedByAncestor && refsHaveSameTree(branchRef, upstreamRef);
+    if (!mergedByAncestor && !mergedByTree) {
       skippedBranches.push(branchName);
       console.log(`[branch-cleanup] ${branchName} 정리 보류: ${upstreamRef} 기준 미병합`);
       continue;
     }
 
-    const result = spawnSync("git", ["branch", "-d", branchName], {
+    const result = spawnSync("git", ["branch", mergedByAncestor ? "-d" : "-D", branchName], {
       encoding: "utf8",
       stdio: "pipe",
     });
@@ -139,9 +142,27 @@ function isAncestor(ancestorRef, descendantRef) {
   return result.status === 0;
 }
 
+function refsHaveSameTree(leftRef, rightRef) {
+  try {
+    return readTree(leftRef) === readTree(rightRef);
+  } catch {
+    console.warn(`[branch-cleanup] tree 비교 실패: ${leftRef} <-> ${rightRef}`);
+    return false;
+  }
+}
+
 function readCommit(ref) {
   return String(
     execFileSync("git", ["rev-parse", ref], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }) || ""
+  ).trim();
+}
+
+function readTree(ref) {
+  return String(
+    execFileSync("git", ["rev-parse", `${ref}^{tree}`], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     }) || ""

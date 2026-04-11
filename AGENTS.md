@@ -92,7 +92,7 @@
 - PR은 기본적으로 생성 후 auto-merge를 사용하고, required check가 모두 녹색일 때 자동 머지되게 유지한다.
 - auto-merge를 켰다고 즉시 머지된 것으로 간주하지 않는다. `mergedAt` 또는 동등한 GitHub 상태로 실제 머지를 확인한 뒤에만 `main 반영 완료`라고 보고한다.
 - PR 머지가 확인되면 사용자가 별도 보존을 요청하지 않는 한, 같은 턴 안에서 `main` 동기화, 로컬 작업 브랜치 정리, 남아 있는 원격 작업 브랜치 정리까지 기본 마무리한다.
-- 로컬 작업 브랜치 정리는 `git branch --merged` 같은 local-only 기준으로 판정하지 않는다. cleanup 스크립트와 수동 정리 모두 `origin/main` 동기화 확인 후, 삭제 대상 브랜치 tip이 `origin/main`의 ancestor일 때만 진행한다.
+- 로컬 작업 브랜치 정리는 `git branch --merged` 같은 local-only 기준으로 판정하지 않는다. cleanup 스크립트와 수동 정리 모두 `origin/main` 동기화 확인 후, 삭제 대상 브랜치 tip이 `origin/main`의 ancestor이거나 `origin/main`과 tree가 동일한 경우(예: squash/rebase merge 반영) 에만 진행한다.
 - 커밋 보류는 미검증, 남은 known issue, 같은 턴 안의 추가 구조 의도처럼 분명한 이유가 있을 때만 허용한다.
 - 두 번째 primary feature를 읽어야 하거나 `content + functions + hosting` 3축에 동시에 손대려는 순간, 먼저 커밋 경계 또는 다음 세션 분리를 제안한다.
 - 검증을 못 했으면 성공처럼 말하지 말고 미실행 항목과 이유를 남긴다.
