@@ -2585,7 +2585,7 @@
               requestId,
               url: url.toString(),
             });
-            throw new Error("오디오 원본 업로드 응답이 늦어지고 있어요. 잠시 후 다시 시도해 주세요.");
+            throw new Error("오디오 원본 업로드 응답이 늦어지고 있어요. 잠시 후 다시 시도해 주세요.", { cause: error });
           }
           logDebug("workspace.source-upload.error", {
             error,

@@ -5,7 +5,7 @@ const recommendedRules = {
   ...js.configs.recommended.rules,
   "no-control-regex": "off",
   "no-empty": ["error", { allowEmptyCatch: true }],
-  "preserve-caught-error": "off",
+  "preserve-caught-error": "error",
   "no-unused-vars": "error",
 };
 

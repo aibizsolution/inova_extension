@@ -562,7 +562,7 @@ function normalizeMeetingWorkspaceOverrideUrl(value) {
       error: error instanceof Error ? error.message : String(error || ""),
       value: normalized,
     });
-    throw new Error("회의 작업실 주소가 올바르지 않아요. 팝업 설정을 확인해 주세요.");
+    throw new Error("회의 작업실 주소가 올바르지 않아요. 팝업 설정을 확인해 주세요.", { cause: error });
   }
 }
 

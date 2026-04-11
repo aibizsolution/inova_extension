@@ -29,7 +29,6 @@ const REFACTOR_PLAN_RULES = [
     docs: [REFACTOR_PLAN_DOC],
     patterns: [
       /^functions\/index\.js$/,
-      /^shared\/meeting-bridge\.js$/,
       /^shared\/firebase-config\.js$/,
     ],
   },

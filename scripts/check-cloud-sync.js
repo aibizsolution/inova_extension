@@ -83,7 +83,8 @@ async function getDocument(projectId, documentPath) {
 
     return response.json();
   } catch (error) {
-    throw new Error(`${documentPath} 조회 실패: ${error.message}`);
+    const message = error instanceof Error ? error.message : String(error || "알 수 없는 오류");
+    throw new Error(`${documentPath} 조회 실패: ${message}`, { cause: error });
   }
 }
 
