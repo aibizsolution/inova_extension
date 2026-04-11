@@ -10,6 +10,7 @@
 ## 먼저 볼 파일
 - `content/dom.js`
 - `content/bookmark-view.js`
+- `content/route-state-controller.js`
 - `content/route-sync.js`
 - `content/panel-bookmark-controller.js`
 - `content/panel-shell-controller.js`
@@ -43,4 +44,5 @@
 
 ## 구현 경계
 - 북마크 검색/복사/점프와 empty/status 문구 계산은 `content/panel-bookmark-controller.js`가 맡고, `content/main.js`는 이를 다시 구현하지 않는다.
-- tool 전환, query 라우팅, handle 위치 저장 같은 공용 panel shell 동작은 `content/panel-shell-controller.js`가 맡고, `content/route-sync.js`는 tool 정규화 판단을 hook으로만 받는다.
+- tool 전환, query 라우팅, handle 위치 저장 같은 공용 panel shell 동작은 `content/panel-shell-controller.js`가 맡는다.
+- storage 복원, live bookmark 재수집, route wait fallback은 `content/route-state-controller.js`가 맡고, `content/route-sync.js`는 route 감시와 retry/polling 타이밍만 담당한다.

@@ -440,6 +440,9 @@
 - panel core/bookmark shell 책임 정리:
   - 북마크 검색/복사/점프와 empty/status 문구 계산은 `content/panel-bookmark-controller.js`로, tool 전환/검색 라우팅/handle 위치 저장과 render chrome 계산은 `content/panel-shell-controller.js`로 옮긴다.
   - 이 단계도 `0.4.4` 사용자가 보는 DB 구조, legacy lane, runtime message, hosted origin/path를 바꾸지 않는 확장 내부 책임 정리로 둔다.
+- route state 책임 정리:
+  - route 감시와 retry/polling은 `content/route-sync.js`에 남기고, storage 복원과 live bookmark 재수집, route wait fallback은 `content/route-state-controller.js`로 옮긴다.
+  - 이 단계도 DB 구조, legacy lane, hosted origin/path, runtime message 계약을 바꾸지 않는 content 내부 orchestration 정리로 둔다.
 - 현재 문서 판단:
   - meeting 리팩토링의 남은 일은 추가 분해보다 `minor로 닫을 수 있는지`를 기록으로 마무리하는 쪽에 가깝다.
   - 다음 문서 작업은 핵심 사용자 흐름 증거를 같은 형식으로 정리해 `minor candidate ready` 여부를 닫는 것이다.

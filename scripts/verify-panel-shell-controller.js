@@ -103,6 +103,13 @@ async function verifyHandlePositionAndUiPreferenceLock() {
   harness.controller.lockUiPreferenceSelection("store", "unknown");
   assert.equal(harness.state.uiPreferenceLock.activeTool, "prompts");
   assert.equal(harness.state.uiPreferenceLock.activePromptTab, "library");
+  assert.deepEqual(harness.controller.applyUiPreferenceLock({
+    activePromptTab: "review",
+    activeTool: "meeting",
+  }), {
+    activePromptTab: "library",
+    activeTool: "prompts",
+  });
 
   await harness.controller.updateHandlePosition(0.55);
   assert.equal(harness.renderCalls.length, 1);

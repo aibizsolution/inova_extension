@@ -1,10 +1,15 @@
 (function initRouteSync(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const ROUTE_FALLBACK_MS = 1600;
 
   function create(state, hooks) {
+    const refreshState = typeof hooks.refreshState === "function"
+      ? hooks.refreshState
+      : async () => {};
+    const resetRouteState = typeof hooks.resetRouteState === "function"
+      ? hooks.resetRouteState
+      : () => {};
+
     return {
-      handleStorageChange,
       installRouteWatchers,
       scheduleRefresh,
       syncRouteState,
@@ -12,46 +17,11 @@
 
     function scheduleRefresh() {
       global.clearTimeout(state.syncTimer);
-      state.syncTimer = global.setTimeout(() => refreshState().catch(logRefreshError), 120);
-    }
-
-    async function refreshState() {
-      logDebug("route.refresh.start", {
-        scope: "route",
-        sessionId: state.sessionId,
-      });
-      try {
-        const storageState = await namespace.storage.getState();
-        state.settings = storageState.settings || { ...namespace.constants.defaults.settings };
-        state.pausedSessions = storageState.pausedSessions || {};
-        state.cloudSync = namespace.cloudSync.mergeCloudSyncState(storageState.cloudSync);
-        state.uiPreferences = applyUiPreferenceLock(namespace.storage.mergeUiPreferences(storageState.uiPreferences));
-        state.uiPreferences.activePromptTab = normalizePromptTab(state.uiPreferences.activeTool === "store" ? "store" : state.uiPreferences.activePromptTab);
-        state.activeTool = hooks.normalizeToolId(state.uiPreferences.activeTool || state.activeTool);
-        state.promptLibrary = namespace.promptLibrary.mergePromptLibrary(storageState.promptLibrary);
-        if (state.sessionId) {
-          state.sessionTitle = namespace.contentDom.getSessionTitle();
-        }
-        state.bookmarks = readLiveBookmarks();
-        state.lastError = "";
-        if (isStoreTabActive()) hooks.ensureStoreLoaded?.();
-        logDebug("route.refresh.success", {
-          activeTool: state.activeTool,
-          bookmarkCount: state.bookmarks.length,
-          scope: "route",
-          sessionId: state.sessionId,
-        });
-      } catch (error) {
-        state.lastError = error instanceof Error ? error.message : String(error);
-        logDebug("route.refresh.error", {
-          error: state.lastError,
-          scope: "route",
-          sessionId: state.sessionId,
-        });
-        console.error("[i-Nova Bookmarks] refresh state failed", error);
-      }
-
-      hooks.render();
+      state.syncTimer = global.setTimeout(() => {
+        refreshState()
+          .then(() => hooks.render())
+          .catch(logRefreshError);
+      }, 120);
     }
 
     async function syncRouteState(force = false, reason = "manual") {
@@ -100,6 +70,7 @@
       state.observer = namespace.contentDom.observeMessages(scheduleRefresh);
       scheduleRouteRetryTimers();
       await refreshState();
+      hooks.render();
       logDebug("route.sync.success", {
         force: Boolean(force),
         reason,
@@ -114,19 +85,6 @@
       });
     }
 
-    function resetRouteState(nextSessionId, previousSignature) {
-      state.sessionId = nextSessionId || "";
-      state.sessionTitle = nextSessionId ? namespace.contentDom.getSessionTitle() : "";
-      state.open = namespace.contentDom.getConversationState().hasComposer ? state.preferredOpen : false;
-      state.activeId = "";
-      state.bookmarks = [];
-      state.promptReview = { ...namespace.constants.defaults.promptReview };
-      state.lastError = "";
-      state.routeBaselineSignature = nextSessionId ? previousSignature : "";
-      state.awaitingRouteMessages = Boolean(nextSessionId);
-      state.routeWaitStartedAt = nextSessionId ? Date.now() : 0;
-    }
-
     function scheduleRouteRetryTimers() {
       [180, 500, 900, 1600, 2600].forEach((delay) => {
         state.routeRetryTimers.push(global.setTimeout(scheduleRefresh, delay));
@@ -136,94 +94,6 @@
     function clearRouteRetryTimers() {
       state.routeRetryTimers.forEach((timerId) => global.clearTimeout(timerId));
       state.routeRetryTimers = [];
-    }
-
-    function readLiveBookmarks() {
-      if (!shouldCollectLiveMessages()) {
-        state.awaitingRouteMessages = false;
-        state.routeBaselineSignature = "";
-        return [];
-      }
-
-      const liveBookmarks = namespace.contentDom.collectUserMessages(state.sessionId);
-      const liveSignature = namespace.contentDom.getUserMessageSignature();
-      if (shouldKeepWaiting(liveBookmarks, liveSignature)) {
-        return [];
-      }
-
-      state.awaitingRouteMessages = false;
-      state.routeBaselineSignature = liveSignature;
-      return liveBookmarks;
-    }
-
-    function shouldCollectLiveMessages() {
-      return Boolean(state.sessionId) && state.settings.enabled && state.settings.autoBookmark && !isPaused();
-    }
-
-    function shouldKeepWaiting(liveBookmarks, liveSignature) {
-      if (!state.awaitingRouteMessages) {
-        return false;
-      }
-
-      const conversation = namespace.contentDom.getConversationState();
-      const routeLoaded = Boolean(liveSignature) && liveSignature !== state.routeBaselineSignature;
-      const emptyConversationReady = conversation.hasChatLog && conversation.hasComposer && conversation.articleCount === 0;
-      const readyWithoutBaseline = !state.routeBaselineSignature && liveBookmarks.length > 0;
-      const becameEmpty = !liveBookmarks.length && !liveSignature && emptyConversationReady;
-      const waitedLongEnough = Date.now() - state.routeWaitStartedAt > ROUTE_FALLBACK_MS;
-      return !(routeLoaded || readyWithoutBaseline || becameEmpty || waitedLongEnough);
-    }
-
-    function handleStorageChange(changes, areaName) {
-      if (areaName !== "local") {
-        return;
-      }
-
-      const settingsChange = namespace.productLane?.getStorageChange?.(changes, namespace.constants.storageKeys.settings) || changes.settings;
-      const pausedSessionsChange = namespace.productLane?.getStorageChange?.(changes, namespace.constants.storageKeys.pausedSessions) || changes.pausedSessions;
-      const cloudSyncChange = namespace.productLane?.getStorageChange?.(changes, namespace.constants.storageKeys.cloudSync) || changes.cloudSync;
-      const uiPreferencesChange = namespace.productLane?.getStorageChange?.(changes, namespace.constants.storageKeys.uiPreferences) || changes.uiPreferences;
-      const promptLibraryChange = namespace.productLane?.getStorageChange?.(changes, namespace.constants.storageKeys.promptLibrary) || changes.promptLibrary;
-
-      if (settingsChange) state.settings = { ...namespace.constants.defaults.settings, ...(settingsChange.newValue || {}) };
-      if (pausedSessionsChange) state.pausedSessions = pausedSessionsChange.newValue || {};
-      if (cloudSyncChange) state.cloudSync = namespace.cloudSync.mergeCloudSyncState(cloudSyncChange.newValue);
-      if (uiPreferencesChange) {
-        state.uiPreferences = applyUiPreferenceLock(namespace.storage.mergeUiPreferences(uiPreferencesChange.newValue));
-        state.uiPreferences.activePromptTab = normalizePromptTab(state.uiPreferences.activeTool === "store" ? "store" : state.uiPreferences.activePromptTab);
-        state.activeTool = hooks.normalizeToolId(state.uiPreferences.activeTool || state.activeTool);
-        if (isStoreTabActive()) hooks.ensureStoreLoaded?.();
-      }
-      if (promptLibraryChange) state.promptLibrary = namespace.promptLibrary.mergePromptLibrary(promptLibraryChange.newValue);
-      scheduleRefresh();
-    }
-
-    function isPaused() {
-      return Boolean(state.pausedSessions[state.sessionId]);
-    }
-
-    function isStoreTabActive() {
-      return state.activeTool === "prompts" && state.uiPreferences.activePromptTab === "store";
-    }
-
-    function normalizePromptTab(value) {
-      return value === "store" || value === "review" ? value : "library";
-    }
-
-    function applyUiPreferenceLock(uiPreferences) {
-      const lock = state.uiPreferenceLock;
-      if (!lock) {
-        return uiPreferences;
-      }
-      if ((Number(lock.until) || 0) <= Date.now()) {
-        state.uiPreferenceLock = null;
-        return uiPreferences;
-      }
-      return {
-        ...uiPreferences,
-        activePromptTab: normalizePromptTab(lock.activePromptTab),
-        activeTool: hooks.normalizeToolId(lock.activeTool || uiPreferences.activeTool),
-      };
     }
 
     function disconnectObserver() {

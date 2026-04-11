@@ -15,6 +15,7 @@ const FEATURE_DOC_RULES = [
       /^content\/dom\.js$/,
       /^content\/bookmark-view\.js$/,
       /^content\/route-sync\.js$/,
+      /^content\/route-state-controller\.js$/,
       /^content\/panel-bookmark-controller\.js$/,
       /^content\/panel-shell-controller\.js$/,
     ],

@@ -60,6 +60,22 @@
       };
     }
 
+    function applyUiPreferenceLock(uiPreferences) {
+      const lock = state.uiPreferenceLock;
+      if (!lock) {
+        return uiPreferences;
+      }
+      if ((Number(lock.until) || 0) <= Date.now()) {
+        state.uiPreferenceLock = null;
+        return uiPreferences;
+      }
+      return {
+        ...uiPreferences,
+        activePromptTab: normalizePromptTab(lock.activePromptTab),
+        activeTool: normalizeToolId(lock.activeTool || uiPreferences.activeTool),
+      };
+    }
+
     function normalizeToolId(toolId) {
       return toolId === "release" || toolId === "prompts" || toolId === "meeting"
         ? toolId
@@ -150,6 +166,7 @@
     }
 
     return {
+      applyUiPreferenceLock,
       buildRenderChrome,
       lockUiPreferenceSelection,
       normalizeToolId,

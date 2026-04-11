@@ -38,10 +38,12 @@ const requiredFiles = [
   path.join("scripts", "verify-panel-bookmark-controller.js"),
   path.join("scripts", "verify-panel-prompt-controller.js"),
   path.join("scripts", "verify-panel-shell-controller.js"),
+  path.join("scripts", "verify-route-state-controller.js"),
   "content/main.js",
   "content/panel-bookmark-controller.js",
   "content/panel-shell-controller.js",
   "content/panel-prompt-controller.js",
+  "content/route-state-controller.js",
   "content/prompt-hub-state.js",
   "content/prompt-hub-panel.js",
   "content/prompt-hub-controller.js",
@@ -106,6 +108,7 @@ const featureDocContracts = [
       "content/dom.js",
       "content/bookmark-view.js",
       "content/route-sync.js",
+      "content/route-state-controller.js",
       "content/panel-bookmark-controller.js",
       "content/panel-shell-controller.js",
     ],
@@ -189,6 +192,7 @@ const codeChecks = [
     patterns: [
       /panelBookmarkController/,
       /panelShellController/,
+      /routeStateController/,
       /panelPromptController/,
       /renderPanel/,
     ],
@@ -228,8 +232,17 @@ const codeChecks = [
   {
     file: "content/route-sync.js",
     patterns: [
-      /collectUserMessages/,
+      /scheduleRefresh/,
+      /resetRouteState/,
       /syncRouteState/,
+    ],
+  },
+  {
+    file: "content/route-state-controller.js",
+    patterns: [
+      /collectUserMessages/,
+      /refreshState/,
+      /handleStorageChange/,
     ],
   },
   {

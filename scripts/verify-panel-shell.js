@@ -430,14 +430,29 @@ function buildNamespace({ controllerEvents, ensureCalls, renderPayloads }) {
         };
       },
     },
+    routeStateController: {
+      create(state) {
+        return {
+          handleStorageChange() {
+            return false;
+          },
+          async refreshState() {
+            state.bookmarks = [{ id: "bookmark-1", normalizedText: "hello", text: "Hello" }];
+          },
+          resetRouteState(nextSessionId) {
+            state.sessionId = nextSessionId || "";
+          },
+        };
+      },
+    },
     routeSync: {
       create(state, hooks) {
         return {
-          handleStorageChange() {},
           installRouteWatchers() {},
           scheduleRefresh() {},
           async syncRouteState() {
-            state.bookmarks = [{ id: "bookmark-1", normalizedText: "hello", text: "Hello" }];
+            hooks.resetRouteState("session-1", "");
+            await hooks.refreshState();
             hooks.render();
           },
         };

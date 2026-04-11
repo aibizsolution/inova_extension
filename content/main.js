@@ -114,6 +114,11 @@
     persistActiveTool: panelShellController.persistActiveTool,
     render,
   });
+  const routeStateController = namespace.routeStateController.create(state, {
+    applyUiPreferenceLock: panelShellController.applyUiPreferenceLock,
+    ensureStoreLoaded: () => panelPromptController.ensureStoreLoaded(),
+    normalizeToolId: panelShellController.normalizeToolId,
+  });
   const panelLifecycleController = namespace.panelLifecycleController.create(state, {
     ensureStoreLoaded: () => panelPromptController.ensureStoreLoaded(),
     isStoreTabActive,
@@ -126,10 +131,10 @@
     schedulePromptRealtimeSync: (delay) => panelPromptController.scheduleRealtimeSync(delay),
   });
   const routeSync = namespace.routeSync.create(state, {
-    ensureStoreLoaded: () => panelPromptController.ensureStoreLoaded(),
-    normalizeToolId: panelShellController.normalizeToolId,
     onRouteStateChanged: meetingManager.handleRouteStateChange,
+    refreshState: routeStateController.refreshState,
     render,
+    resetRouteState: routeStateController.resetRouteState,
   });
 
   bootstrapContent().catch((error) => console.error("[i-Nova Bookmarks] bootstrap failed", error));
@@ -162,7 +167,7 @@
     global.addEventListener("resize", render, { passive: true });
     global.addEventListener("focus", panelLifecycleController.handleWindowFocus, { passive: true });
     document.addEventListener("visibilitychange", panelLifecycleController.handleVisibilityChange, { passive: true });
-    chrome.storage.onChanged?.addListener(routeSync.handleStorageChange);
+    chrome.storage.onChanged?.addListener(handleRouteStorageChange);
     chrome.storage.onChanged?.addListener(panelPromptController.handleStorageChange);
     chrome.storage.onChanged?.addListener(meetingManager.handleStorageChange);
     chrome.storage.onChanged?.addListener(releaseManager.handleStorageChange);
@@ -180,6 +185,12 @@
       releaseManager.ensureChecked(false, state.activeTool === "release");
     }
     [450, 1200].forEach((delay) => global.setTimeout(routeSync.scheduleRefresh, delay));
+  }
+
+  function handleRouteStorageChange(changes, areaName) {
+    if (routeStateController.handleStorageChange(changes, areaName)) {
+      routeSync.scheduleRefresh();
+    }
   }
 
   function render() {
