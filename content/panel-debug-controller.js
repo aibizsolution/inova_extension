@@ -1,6 +1,5 @@
 (function initPanelDebugController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const MEETING_DEBUG_COLLAPSED_KEY = "__INOVA_MEETING_PANEL_DEBUG_COLLAPSED__";
   const DEBUG_ACTIONS = new Set(["debug-toggle", "debug-copy", "debug-copy-errors", "debug-clear"]);
 
   function create(state, deps = {}) {
@@ -220,7 +219,6 @@
 
     function toggleCollapsed() {
       state.panelDebugUi.collapsed = !state.panelDebugUi.collapsed;
-      writeCollapsedPreference(state.panelDebugUi.collapsed);
       render();
     }
 
@@ -254,20 +252,7 @@
   }
 
   function readCollapsedPreference() {
-    try {
-      return global.localStorage?.getItem(MEETING_DEBUG_COLLAPSED_KEY) !== "0";
-    } catch (error) {
-      console.warn("[i-Nova Bookmarks] meeting debug collapsed read failed", error);
-      return true;
-    }
-  }
-
-  function writeCollapsedPreference(collapsed) {
-    try {
-      global.localStorage?.setItem(MEETING_DEBUG_COLLAPSED_KEY, collapsed ? "1" : "0");
-    } catch (error) {
-      console.warn("[i-Nova Bookmarks] meeting debug collapsed write failed", error);
-    }
+    return true;
   }
 
   namespace.panelDebugController = {
