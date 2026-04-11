@@ -325,6 +325,11 @@
 .inova-tool-section--meeting { position: relative; }
 .inova-tool-section--meeting .inova-tool-toolbar { align-items: flex-start; justify-content: space-between; gap: 12px; }
 .inova-tool-section--meeting .inova-tool-toolbar__row { flex: 1 1 auto; min-width: 0; justify-content: flex-start; }
+.inova-tool-section--meeting .inova-tool-toolbar,
+.inova-tool-section--meeting .inova-meeting-stack {
+  width: 100%;
+  margin-inline: 0;
+}
 .inova-tool-section--release .inova-tool-toolbar { justify-content: space-between; }
 .inova-meeting-stack { display: flex; flex-direction: column; gap: 8px; padding: 2px 14px 14px; overflow-y: auto; }
 .inova-tool-inline-summary {
