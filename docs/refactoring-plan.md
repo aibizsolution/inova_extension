@@ -100,10 +100,10 @@
 
 ## Version Decision Record
 
-- 현재 가설: `미정`
-- candidate ready 상태: `not-started`
-- 마지막 candidate 갱신 커밋: `없음`
-- candidate 증거 요약: `없음`
+- 현재 가설: `minor 가설`
+- candidate ready 상태: `in-progress`
+- 마지막 candidate 갱신 커밋: `working tree`
+- candidate 증거 요약: `local rehearsal 부팅 확인과 기존 사용자 사용 가능 오너 확인은 확보했다. 남은 일은 이 근거를 핵심 사용자 흐름 기준으로 정리해 minor candidate ready 여부를 닫는 것이다.`
 - 유지보수자 최종 결정: `미정`
 
 ### 기록 규칙
@@ -191,8 +191,8 @@
 ## 진행 현황 요약
 
 - 설계 상태: `조건부 major 전략 채택`
-- 구현 상태: `lane foundation 있음, meeting internal split 진행 중, 버전 결정 미완료`
-- 현재 blocker: `meeting이 minor 경로로 가능한지 여부`
+- 구현 상태: `lane foundation 있음, meeting internal split 사실상 마감, 버전 결정 기록 정리 단계`
+- 현재 blocker: `기존 사용자 호환성 확인을 포함한 minor candidate 증거를 문서로 닫는 일`
 - release 가능 상태: `아직 아님`
 
 ---
@@ -291,6 +291,7 @@
   - 기록 수정 또는 삭제 1회
 - 구현자가 위 smoke를 실행하고 결과를 `Version Decision Record`와 `세션 인계 로그`에 남긴다.
 - 단, local rehearsal 통과만으로는 minor green을 선언하지 않는다. 최종 판정은 기존 상용 데이터가 있는 실제 Chrome smoke로 남긴다.
+- 2026-04-11 기준으로는 오너 확인에 따라 `기존 회의 데이터가 새 ZIP에서도 별도 복구 없이 열린다` 항목을 pass 후보로 본다. 나머지 핵심 흐름은 같은 형식의 증거로 묶어야 `minor candidate ready`를 닫을 수 있다.
 
 ### Major 경로 green 조건
 
@@ -389,11 +390,11 @@
 
 ## 추천 다음 작업
 
-### 1. meeting이 minor로 가능한지 먼저 확인
+### 1. minor 후보 근거를 문서로 닫기
 
-- hosted workspace 진입 경로를 유지한 채 내부 구조 분리만 가능한지 확인
-- legacy endpoint family를 facade로 남긴 채 내부 모듈화가 가능한지 확인
-- 현재 collection namespace를 유지한 채 read/write contract 정리가 가능한지 확인
+- 기존 사용자도 그대로 사용할 수 있다는 오너 확인을 `Meeting Ready Gate` 증거 묶음으로 승격
+- 회의 목록 조회, 작업실 진입, 기존 결과 조회, 새 녹음 또는 import, 수정 또는 삭제 흐름을 같은 형식으로 짧게 정리
+- 위 근거가 모이면 `Version Decision Record`를 `minor candidate ready`까지 올리고 유지보수자 결정을 기다린다
 
 ### 2. minor 불가 근거가 생기면 그때 major로 승격
 
@@ -424,6 +425,18 @@
 ---
 
 ## 세션 인계 로그
+
+### 2026-04-11
+
+- 오너 확인:
+  - 기존 사용자 기준으로는 회의 기능이 그대로 사용 가능하다는 확인을 받았다.
+  - 따라서 `Meeting Ready Gate` minor 조건 중 `기존 회의 데이터가 새 ZIP에서도 별도 복구 없이 열린다` 항목은 pass 후보로 본다.
+- 패널 shell 책임 정리:
+  - 패널 리팩토링은 `0.4.4` 사용자가 쓰는 DB 구조와 legacy lane 계약을 유지한 채, 확장 내부 책임만 meeting/debug/lifecycle 경계로 나누는 범위로 둔다.
+  - `manifest.json` 변경은 새 패널 controller 파일을 확장 번들에 포함하기 위한 wiring이며, hosted origin/path, Functions 이름, storage key, runtime message 계약은 바꾸지 않는다.
+- 현재 문서 판단:
+  - meeting 리팩토링의 남은 일은 추가 분해보다 `minor로 닫을 수 있는지`를 기록으로 마무리하는 쪽에 가깝다.
+  - 다음 문서 작업은 핵심 사용자 흐름 증거를 같은 형식으로 정리해 `minor candidate ready` 여부를 닫는 것이다.
 
 ### 2026-04-10
 
