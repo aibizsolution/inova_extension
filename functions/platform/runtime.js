@@ -191,9 +191,10 @@ function createHttpError(status, message) {
 
 function sendError(response, error) {
   const status = Number(error?.status) || 500;
+  const message = normalizeText(error?.message) || "요청을 처리하지 못했어요.";
   response.status(status).json({
     ok: false,
-    error: status >= 500 ? "클라우드 처리 중 문제가 생겼어요." : normalizeText(error?.message) || "요청을 처리하지 못했어요.",
+    error: status >= 500 && !RUNNING_IN_FIREBASE_EMULATOR ? "클라우드 처리 중 문제가 생겼어요." : message,
   });
 }
 
