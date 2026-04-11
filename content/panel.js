@@ -7,8 +7,8 @@
     let host = getPanelHost();
     if (host) {
       host.__callbacks = callbacks;
-      host.__panelElements = host.__panelElements || resolvePanelElements(host);
-      host.__bridge = host.__bridge || createHostedBridge(host);
+    host.__panelElements = host.__panelElements || resolvePanelElements(host);
+    host.__bridge = host.__bridge || createHostedBridge(host);
       return host;
     }
     host = document.createElement("div");
@@ -22,6 +22,9 @@
     const { frame, handle } = host.__panelElements;
     installHandleInteractions(host, handle, callbacks);
     frame?.addEventListener("load", () => {
+      if (host.__bridgeReady) {
+        return;
+      }
       updateStatusBanner(host, {
         text: "호스팅 패널과 연결하는 중이에요.",
         tone: "info",
