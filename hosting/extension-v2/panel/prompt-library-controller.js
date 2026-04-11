@@ -53,7 +53,9 @@
 
     return {
       buildPromptToolState,
+      getActiveTab,
       getPromptCount,
+      getProviderIdentity,
       handleImportFile,
       handleMovePrompt,
       handlePromptAction,
@@ -82,6 +84,16 @@
 
     function getPromptCount() {
       return Array.isArray(state.promptLibrary?.items) ? state.promptLibrary.items.length : 0;
+    }
+
+    function getActiveTab() {
+      return state.activeTab;
+    }
+
+    function getProviderIdentity() {
+      return {
+        ...state.providerIdentity,
+      };
     }
 
     function buildPromptToolState(fallbackPromptTool = {}) {

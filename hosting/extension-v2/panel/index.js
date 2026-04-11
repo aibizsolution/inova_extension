@@ -50,6 +50,15 @@
     invokeRuntime,
     scheduleRender,
   }) || null;
+  const promptReviewController = namespace.promptReviewController?.create?.({
+    getActivePromptTab: () => promptLibraryController?.getActiveTab?.() || "library",
+    getProviderIdentity: () => promptLibraryController?.getProviderIdentity?.() || { available: false },
+    getRuntimeVersion: () => state.extensionVersion || "",
+    invokePage,
+    invokeRuntime,
+    scheduleRender,
+    setActivePromptTab: (promptTabId) => promptLibraryController?.handleSelectPromptTab?.(promptTabId) || Promise.resolve(false),
+  }) || null;
   const callbacks = createCallbacks();
 
   namespace.hostedPanelApp = api;
@@ -148,6 +157,35 @@
         });
       },
       onPromptAction(promptAction, detail = {}) {
+        if (promptReviewController?.handlePromptAction) {
+          return promptReviewController.handlePromptAction(promptAction, detail).then((handled) => {
+            if (handled !== false) {
+              return handled;
+            }
+            return null;
+          }).then((handled) => {
+            if (handled) {
+              return handled;
+            }
+            if (promptLibraryController?.handlePromptAction) {
+              return promptLibraryController.handlePromptAction(promptAction, detail).then((libraryHandled) => {
+                if (libraryHandled !== false) {
+                  return libraryHandled;
+                }
+                return request("panel", {
+                  action: "prompt-action",
+                  detail,
+                  promptAction,
+                });
+              });
+            }
+            return request("panel", {
+              action: "prompt-action",
+              detail,
+              promptAction,
+            });
+          });
+        }
         if (promptLibraryController?.handlePromptAction) {
           return promptLibraryController.handlePromptAction(promptAction, detail).then((handled) => {
             if (handled !== false) {
@@ -466,6 +504,7 @@
     }
 
     promptLibraryController?.syncPanelState?.(panelState, state.extensionCapabilities);
+    promptReviewController?.syncPanelState?.(panelState, state.extensionCapabilities);
     ensureShell();
     const elements = state.elements;
     if (!elements) {
@@ -630,7 +669,11 @@
 
   function buildEffectivePromptToolState(panelState) {
     if (promptLibraryController?.hasRequiredCapabilities?.()) {
-      return promptLibraryController.buildPromptToolState(panelState.promptTool || {});
+      const promptToolState = promptLibraryController.buildPromptToolState(panelState.promptTool || {});
+      if (promptReviewController?.buildViewState) {
+        promptToolState.review = promptReviewController.buildViewState();
+      }
+      return promptToolState;
     }
     return panelState.promptTool;
   }

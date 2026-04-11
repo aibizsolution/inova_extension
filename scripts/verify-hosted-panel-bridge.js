@@ -173,7 +173,9 @@ function verifyHostedPanelFiles(directoryName) {
     assert(html.includes("./prompt-library-model.js"), "v2 hosted panel should load prompt library model");
     assert(html.includes("./prompt-library-controller.js"), "v2 hosted panel should load prompt library controller");
     assert(html.includes("./prompt-tool-view.js"), "v2 hosted panel should load prompt tool view");
+    assert(html.includes("./prompt-review-controller.js"), "v2 hosted panel should load prompt review controller");
     assert(indexJs.includes("promptLibraryController"), "v2 hosted panel should wire hosted prompt library ownership");
+    assert(indexJs.includes("promptReviewController"), "v2 hosted panel should wire hosted prompt review ownership");
   }
   assert(
     indexJs.includes("확장 업데이트 필요"),

@@ -6,6 +6,8 @@
     const activeTab = state?.activeTab || "library";
     const body = activeTab === "library"
       ? namespace.promptView?.renderBody?.(state.prompt) || renderPromptPlaceholder("내 요청을 준비하는 중이에요.")
+      : activeTab === "review"
+        ? namespace.promptReviewView?.render?.(state.review) || renderPromptPlaceholder("프롬프트 검토를 준비하는 중이에요.")
       : activeTab === "store"
         ? renderPlaceholder(state.storePlaceholder)
         : renderPlaceholder(state.reviewPlaceholder);
