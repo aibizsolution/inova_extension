@@ -1,5 +1,5 @@
 /* i-Nova bookmark panel */
-:root { --inova-bookmark-panel-gap: 8px; --inova-bookmark-panel-width: clamp(420px, 36vw, 540px); --inova-bookmark-panel-reserve: calc(var(--inova-bookmark-panel-width) + var(--inova-bookmark-panel-gap)); }
+:root { --inova-bookmark-panel-gap: 8px; --inova-bookmark-panel-width: clamp(400px, 34vw, 500px); --inova-bookmark-panel-reserve: calc(var(--inova-bookmark-panel-width) + var(--inova-bookmark-panel-gap)); }
 @media (min-width: 1180px) {
   .main-content { min-width: 0; transition: margin-right 220ms ease; }
   body.inova-bookmark-panel-open .main-content { margin-right: var(--inova-bookmark-panel-reserve); }
