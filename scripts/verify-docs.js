@@ -35,8 +35,12 @@ const requiredFiles = [
   path.join("scripts", "install-git-hooks.js"),
   "shared/prompt-library.js",
   path.join("scripts", "verify-feature-doc-update.js"),
+  path.join("scripts", "verify-panel-bookmark-controller.js"),
   path.join("scripts", "verify-panel-prompt-controller.js"),
+  path.join("scripts", "verify-panel-shell-controller.js"),
   "content/main.js",
+  "content/panel-bookmark-controller.js",
+  "content/panel-shell-controller.js",
   "content/panel-prompt-controller.js",
   "content/prompt-hub-state.js",
   "content/prompt-hub-panel.js",
@@ -98,7 +102,13 @@ const featureDocContracts = [
   {
     feature: "conversation",
     doc: path.join("content", "features", "conversation", "AGENTS.md"),
-    expectedFiles: ["content/dom.js", "content/bookmark-view.js", "content/route-sync.js"],
+    expectedFiles: [
+      "content/dom.js",
+      "content/bookmark-view.js",
+      "content/route-sync.js",
+      "content/panel-bookmark-controller.js",
+      "content/panel-shell-controller.js",
+    ],
   },
   {
     feature: "prompt-library",
@@ -177,6 +187,8 @@ const codeChecks = [
   {
     file: "content/main.js",
     patterns: [
+      /panelBookmarkController/,
+      /panelShellController/,
       /panelPromptController/,
       /renderPanel/,
     ],

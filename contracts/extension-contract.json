@@ -21,6 +21,7 @@
     "shared/session.js",
     "shared/storage.js",
     "content/bookmark-view.js",
+    "content/panel-bookmark-controller.js",
     "content/features/prompt-library/cloud-sync-manager.js",
     "content/composer.js",
     "content/dom.js",
@@ -28,6 +29,7 @@
     "content/meeting-manager.js",
     "content/meeting-view.js",
     "content/panel.js",
+    "content/panel-shell-controller.js",
     "content/panel-prompt-controller.js",
     "content/features/prompt-library/prompt-manager.js",
     "content/features/prompt-library/prompt-view.js",
@@ -48,7 +50,9 @@
     "scripts/verify-meeting-manager.js",
     "scripts/verify-meeting-service.js",
     "scripts/verify-meeting-state.js",
-    "scripts/verify-panel-prompt-controller.js"
+    "scripts/verify-panel-prompt-controller.js",
+    "scripts/verify-panel-bookmark-controller.js",
+    "scripts/verify-panel-shell-controller.js"
   ],
   "manifestPopup": "popup/index.html",
   "manifestContentScripts": [
@@ -88,6 +92,8 @@
     "content/prompt-hub-state.js",
     "content/release-manager.js",
     "content/panel.js",
+    "content/panel-bookmark-controller.js",
+    "content/panel-shell-controller.js",
     "content/panel-meeting-controller.js",
     "content/panel-debug-controller.js",
     "content/panel-prompt-controller.js",

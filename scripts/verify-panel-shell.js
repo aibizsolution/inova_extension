@@ -20,11 +20,24 @@ async function main() {
   const initialPayload = harness.renderPayloads.at(-1);
   assert(initialPayload, "Panel should render at least once");
   assert.equal(initialPayload.meetingTool.count, 2);
+  assert.equal(initialPayload.bookmarksTool.count, 1);
   assert.equal(initialPayload.promptTool.activeTab, "library");
   assert.equal(initialPayload.panelDebug.enabled, true);
   assert.equal(initialPayload.tools.length, 4);
   assert.equal(harness.reviewFloatEnsured, 1);
   assert.equal(harness.reviewFloatStates.at(-1)?.visible, true);
+
+  await harness.callbacks.onCopyBookmark("bookmark-1");
+  harness.callbacks.onJumpBookmark("bookmark-1");
+  await harness.callbacks.onHandlePositionChange(0.61);
+  harness.callbacks.onSearch("bookmarks", "회의");
+  harness.callbacks.onSearchSubmit("bookmarks", "회의");
+
+  assert.deepEqual(harness.bookmarkCopyCalls, ["bookmark-1"]);
+  assert.deepEqual(harness.bookmarkJumpCalls, ["bookmark-1"]);
+  assert.deepEqual(harness.handlePositionCalls, [0.61]);
+  assert.deepEqual(harness.shellQueries, [{ options: {}, toolId: "bookmarks", value: "회의" }]);
+  assert.deepEqual(harness.shellSubmitQueries, [{ toolId: "bookmarks", value: "회의" }]);
 
   await harness.callbacks.onMeetingAction("debug-toggle", {});
   assert.deepEqual(harness.debugActions, ["debug-toggle"]);
@@ -36,18 +49,10 @@ async function main() {
   harness.callbacks.onPromptAction("save-prompt", { promptId: "prompt-1" });
   harness.callbacks.onPromptDraftChange("title", "새 제목");
   harness.callbacks.onSelectPromptTab("store");
-  harness.callbacks.onSearch("prompts", "회의");
-  harness.callbacks.onSearch("store", "공개", { composing: true });
-  harness.callbacks.onSearchSubmit("store", "공개");
 
   assert.deepEqual(harness.promptActions, [{ action: "save-prompt", detail: { promptId: "prompt-1" } }]);
   assert.deepEqual(harness.promptDrafts, [{ field: "title", value: "새 제목" }]);
   assert.deepEqual(harness.promptTabSelections, ["store"]);
-  assert.deepEqual(harness.promptQueries, [
-    { options: {}, toolId: "prompts", value: "회의" },
-    { options: { composing: true }, toolId: "store", value: "공개" },
-  ]);
-  assert.deepEqual(harness.promptSubmitQueries, [{ toolId: "store", value: "공개" }]);
 
   harness.callbacks.onToggle(false);
   assert.deepEqual(harness.toggleCalls, [false]);
@@ -56,20 +61,25 @@ async function main() {
   const releasePayload = harness.renderPayloads.at(-1);
   assert.equal(releasePayload.activeTool, "release");
   assert.equal(releasePayload.toolTitle, "릴리스 안내");
+  assert.deepEqual(harness.shellToolSelections, ["release"]);
 
   console.log("[verify-panel-shell] Panel shell assembly contract passed");
 }
 
 function createHarness() {
   const controllerEvents = {
+    bookmarkCopyCalls: [],
+    bookmarkJumpCalls: [],
     debugActions: [],
+    handlePositionCalls: [],
     meetingActions: [],
     promptActions: [],
     promptDrafts: [],
-    promptQueries: [],
-    promptSubmitQueries: [],
     promptTabSelections: [],
     reviewFloatStates: [],
+    shellQueries: [],
+    shellSubmitQueries: [],
+    shellToolSelections: [],
     toggleCalls: [],
   };
   const ensureCalls = [];
@@ -116,17 +126,21 @@ function createHarness() {
   loadScript("content/main.js", context);
 
   return {
+    bookmarkCopyCalls: controllerEvents.bookmarkCopyCalls,
+    bookmarkJumpCalls: controllerEvents.bookmarkJumpCalls,
     callbacks: ensureCalls[0]?.callbacks || null,
     debugActions: controllerEvents.debugActions,
+    handlePositionCalls: controllerEvents.handlePositionCalls,
     meetingActions: controllerEvents.meetingActions,
     promptActions: controllerEvents.promptActions,
     promptDrafts: controllerEvents.promptDrafts,
-    promptQueries: controllerEvents.promptQueries,
-    promptSubmitQueries: controllerEvents.promptSubmitQueries,
     promptTabSelections: controllerEvents.promptTabSelections,
     renderPayloads,
     reviewFloatEnsured: controllerEvents.reviewFloatEnsured || 0,
     reviewFloatStates: controllerEvents.reviewFloatStates,
+    shellQueries: controllerEvents.shellQueries,
+    shellSubmitQueries: controllerEvents.shellSubmitQueries,
+    shellToolSelections: controllerEvents.shellToolSelections,
     storageListeners,
     toggleCalls: controllerEvents.toggleCalls,
     async flush() {
@@ -177,18 +191,38 @@ function buildNamespace({ controllerEvents, ensureCalls, renderPayloads }) {
           userCount: 1,
         };
       },
-      scrollToMessage() {},
     },
     contentPanel: {
       ensurePanel(callbacks) {
         ensureCalls.push({ callbacks });
         return {};
       },
-      focusBookmark() {},
       renderPanel(payload) {
         renderPayloads.push(cloneValue(payload));
       },
-      setActiveBookmark() {},
+    },
+    panelBookmarkController: {
+      create() {
+        return {
+          buildToolState() {
+            return {
+              activeId: "",
+              count: 1,
+              emptyText: "",
+              items: [{ id: "bookmark-1" }],
+              metaText: "",
+              query: "",
+            };
+          },
+          async copyBookmarkText(bookmarkId) {
+            controllerEvents.bookmarkCopyCalls.push(bookmarkId);
+            return true;
+          },
+          jumpToBookmark(bookmarkId) {
+            controllerEvents.bookmarkJumpCalls.push(bookmarkId);
+          },
+        };
+      },
     },
     panelDebug: {
       subscribe() {},
@@ -291,18 +325,73 @@ function buildNamespace({ controllerEvents, ensureCalls, renderPayloads }) {
           async selectTool(toolId) {
             return toolId === "prompts" || toolId === "store";
           },
-          submitQuery(toolId, value) {
-            if (toolId !== "prompts" && toolId !== "store") {
-              return false;
+        };
+      },
+    },
+    panelShellController: {
+      create(state, deps) {
+        return {
+          buildRenderChrome(counts) {
+            const releaseCount = Number(counts.release) || 0;
+            const bookmarkCount = Number(counts.bookmarks) || 0;
+            const meetingCount = Number(counts.meeting) || 0;
+            const promptCount = Number(counts.prompts) || 0;
+            const promptToolCount = Number(counts.promptTool) || 0;
+            const toolCount = state.activeTool === "prompts"
+              ? promptToolCount
+              : state.activeTool === "meeting"
+                  ? meetingCount
+                  : state.activeTool === "release"
+                      ? releaseCount
+                      : bookmarkCount;
+            return {
+              handleCount: state.activeTool === "bookmarks"
+                ? bookmarkCount || promptCount || meetingCount || releaseCount
+                : toolCount,
+              toolCount,
+              toolTitle: state.activeTool === "prompts"
+                ? "프롬프트"
+                : state.activeTool === "meeting"
+                    ? "회의 룸"
+                    : state.activeTool === "release"
+                        ? "릴리스 안내"
+                        : "대화 탐색",
+              tools: [
+                { count: bookmarkCount, id: "bookmarks", label: "대화" },
+                { count: meetingCount, id: "meeting", label: "회의 룸" },
+                { count: promptCount, id: "prompts", label: "프롬프트" },
+                { count: releaseCount, id: "release", label: "릴리스" },
+              ],
+            };
+          },
+          lockUiPreferenceSelection() {},
+          normalizeToolId(toolId) {
+            return toolId === "release" || toolId === "prompts" || toolId === "meeting"
+              ? toolId
+              : toolId === "store"
+                  ? "prompts"
+                  : "bookmarks";
+          },
+          async persistActiveTool() {},
+          async selectTool(toolId) {
+            controllerEvents.shellToolSelections.push(toolId);
+            const promptController = deps.getPromptController?.();
+            if (promptController && await promptController.selectTool(toolId)) {
+              return true;
             }
-            controllerEvents.promptSubmitQueries.push({ toolId, value });
+            state.activeTool = toolId === "release" || toolId === "meeting" ? toolId : "bookmarks";
+            deps.render?.();
             return true;
           },
+          submitQuery(toolId, value) {
+            controllerEvents.shellSubmitQueries.push({ toolId, value });
+            return true;
+          },
+          async updateHandlePosition(ratio) {
+            controllerEvents.handlePositionCalls.push(ratio);
+          },
           updateQuery(toolId, value, options = {}) {
-            if (toolId !== "prompts" && toolId !== "store") {
-              return false;
-            }
-            controllerEvents.promptQueries.push({ options: cloneValue(options), toolId, value });
+            controllerEvents.shellQueries.push({ options: cloneValue(options), toolId, value });
             return true;
           },
         };
@@ -363,26 +452,12 @@ function buildNamespace({ controllerEvents, ensureCalls, renderPayloads }) {
       getHandleRatio() {
         return 0.4;
       },
-      getViewportBucket() {
-        return "desktop";
-      },
       mergeUiPreferences(current = {}, patch = {}) {
         return {
           activePromptTab: "library",
           activeTool: "meeting",
           handleRatios: {},
           ...cloneValue(current || {}),
-          ...cloneValue(patch || {}),
-        };
-      },
-      normalizeHandleRatio(value) {
-        return Number(value) || 0;
-      },
-      async updateUiPreferences(patch = {}) {
-        return {
-          activePromptTab: "library",
-          activeTool: "meeting",
-          handleRatios: {},
           ...cloneValue(patch || {}),
         };
       },

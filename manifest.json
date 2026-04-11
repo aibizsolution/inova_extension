@@ -78,6 +78,8 @@
         "content/prompt-hub-controller.js",
         "content/prompt-hub-runtime.js",
         "content/panel.js",
+        "content/panel-bookmark-controller.js",
+        "content/panel-shell-controller.js",
         "content/panel-meeting-controller.js",
         "content/panel-debug-controller.js",
         "content/panel-prompt-controller.js",
