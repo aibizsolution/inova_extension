@@ -56,34 +56,6 @@
   pointer-events: auto;
   opacity: 1;
 }
-.inova-hosted-panel-shell {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  min-height: 0;
-  background: linear-gradient(180deg, rgba(247, 252, 255, 0.96), rgba(255, 255, 255, 0.92));
-}
-.inova-hosted-panel-status {
-  flex: 0 0 auto;
-  padding: 10px 14px;
-  border-bottom: 1px solid rgba(52, 81, 100, 0.1);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.45;
-  color: rgba(16, 33, 43, 0.78);
-  background: rgba(255, 255, 255, 0.9);
-}
-.inova-hosted-panel-status[data-tone="info"] { color: #0f5f77; }
-.inova-hosted-panel-status[data-tone="warning"] { color: #865d1e; }
-.inova-hosted-panel-status[data-tone="error"] { color: #8a3344; }
-.inova-hosted-panel-frame {
-  width: 100%;
-  height: 100%;
-  flex: 1 1 auto;
-  min-height: 0;
-  border: 0;
-  background: transparent;
-}
 #inova-bookmark-handle {
   position: fixed;
   right: var(--panel-right);

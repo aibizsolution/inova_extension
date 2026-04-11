@@ -22,6 +22,9 @@
 - `content/prompt-hub-controller.js` - prompt 탭 전이와 액션 라우팅을 묶는 prompt tool shell
 - `content/prompt-hub-runtime.js` - prompt manager/runtime wiring을 묶는 prompt tool shell
 - `content/prompt-hub-view.js` - `prompt-store` 단독 view가 아니라 prompt tool shell
+- `hosting/extension/panel/store-view.js` - hosted panel store view
+- `hosting/extension/panel/prompt-hub-view.js` - hosted panel prompt tool shell view
+- `hosting/extension/panel/prompt-hub-panel.js` - hosted panel prompt/store interaction helper
 
 ## 관련 functions 경로
 - `functions/features/prompt-store/store-service.js`
@@ -53,6 +56,7 @@
 
 ## 구현 경계
 - store 로드 정리 구간은 `finally`에서 `return`으로 흐름을 끊지 않는다. `loadSequence`가 현재 요청과 같을 때만 `loading` 해제, render, `reload-all` 재호출 예약을 수행한다.
+- `0.4.5`부터 panel 안의 store UI는 hosted panel iframe이 렌더링하고, `content/panel-prompt-controller.js`와 `content/features/prompt-store/*`는 상태/읽기/쓰기 controller를 계속 소유한다.
 - prompt realtime bridge connect payload에는 active lane의 `promptPanelScope`와 Firestore collection config를 함께 싣는다. store summary/feed/detail은 shared doc를 계속 읽더라도, prompt-library meta collection은 lane과 auth scope가 맞아야 한다.
 - popup의 `settings.meetingWorkspaceTarget=local`을 고르면 prompt-store도 local full-stack rehearsal로 같이 전환돼야 한다. hidden prompt bridge src는 `http://127.0.0.1:5000/extension/prompt-panel-bridge.html`을 향하고, prompt panel auth/read/write는 local Functions/Auth/Firestore emulator 경로를 써야 한다.
 - local Firestore에 공개 스토어 문서가 아직 없어도 `store-latest` 최초 스냅샷은 빈 목록으로 한 번 전달돼야 한다. 빈 로컬 스토어를 perpetual loading으로 숨기지 않는다.

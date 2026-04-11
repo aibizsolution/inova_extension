@@ -23,6 +23,7 @@
 - `content/panel-state-factory.js`
 - `content/panel-runtime-controller.js`
 - `content/panel.js`
+- `hosting/extension/panel/bookmark-view.js`
 
 ## 관련 functions 경로
 - 없음
@@ -49,6 +50,7 @@
 
 ## 구현 경계
 - 북마크 검색/복사/점프와 empty/status 문구 계산은 `content/panel-bookmark-controller.js`가 맡고, `content/main.js`는 이를 다시 구현하지 않는다.
+- 북마크 panel UI 렌더링은 `hosting/extension/panel/bookmark-view.js`가 맡고, `content/panel.js`는 iframe host와 page adapter만 유지한다.
 - panel shell 초기 state 조립은 `content/panel-state-factory.js`가 맡고, `content/main.js`는 기본 state literal을 다시 들고 있지 않는다.
 - paused/store/tool-surface 판정과 panel debug 로깅 helper는 `content/panel-runtime-controller.js`가 맡고, `content/main.js`는 이 helper를 다시 구현하지 않는다.
 - tool 전환, query 라우팅, handle 위치 저장 같은 공용 panel shell 동작은 `content/panel-shell-controller.js`가 맡는다.

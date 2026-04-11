@@ -22,6 +22,8 @@
 - `content/prompt-hub-controller.js` - review 관련 action routing과 prompt 탭 전이를 묶는 prompt tool shell
 - `content/prompt-hub-runtime.js` - prompt manager/runtime wiring을 묶는 prompt tool shell
 - `content/prompt-hub-view.js` - review body를 감싸는 prompt tool shell
+- `hosting/extension/panel/prompt-review-view.js` - hosted panel review view
+- `hosting/extension/panel/prompt-hub-view.js` - hosted panel prompt tool shell view
 
 ## 관련 functions 경로
 - `functions/features/prompt-review/prompt-review-service.js`
@@ -51,6 +53,7 @@
 
 ## 구현 경계
 - `reviewInovaPrompt` 요청에서 `reviewProfile`이 비어 있으면 backend 기본값은 반드시 `legacy-v1`이어야 한다. 0.4.4 사용자는 기존 4축 평가를 그대로 유지하고, 새 확장 버전만 `prompt-telling-v2`를 opt-in 한다.
+- `0.4.5`부터 panel 안의 review UI는 hosted panel iframe이 렌더링하고, composer anchor와 review action/state는 기존 content controller가 계속 소유한다.
 - 새 클라이언트는 `prompt-telling-v2` 6축 응답과 `legacy-v1` 4축 응답을 모두 렌더링할 수 있어야 한다.
 - placeholder token 감지는 한 줄 안의 단순 `[...]` 토큰만 대상으로 유지한다. nested bracket이나 줄바꿈이 섞인 텍스트는 placeholder 경고 후보로 넓히지 않는다.
 - composer 선택은 textarea 같은 구체적인 채팅 입력 selector를 우선하고, broad `contenteditable` 후보는 앞선 tier가 없을 때만 고려한다.

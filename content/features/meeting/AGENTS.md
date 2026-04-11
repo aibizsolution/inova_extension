@@ -20,11 +20,13 @@
 ## 관련 프론트 경로
 - `background/service-worker.js`
 - `hosting/meeting/*`
+- `hosting/extension/panel/meeting-view.js`
 - `popup/index.js`
 - hosted recovery/self-healing 경로는 `hosting/meeting/workspace-recovery.js`를 먼저 본다.
 
 ## hosted/panel 공통 경계
 - legacy lane은 현재 `browser-extension-main` hosted meeting 경로를 유지한다. separate hosted origin/site 판단은 `docs/refactoring-plan.md`의 version decision gate에서 관리한다.
+- `0.4.5`부터 panel 안의 회의 허브 UI는 `hosting/extension/panel/meeting-view.js`가 렌더링하고, 회의 목록 state와 action routing은 기존 `content/meeting-manager.js`/`content/panel-meeting-controller.js`가 계속 소유한다.
 - 팝업의 `로컬 호스팅` target은 hosted meeting URL만 바꾸는 모드가 아니다. local target에서는 meeting panel bridge와 meeting HTTP auth/list/share 경로도 함께 local Functions/Auth/Firestore emulator를 보도록 유지한다.
 - hosted Firestore 읽기와 listener 연결은 local state만으로 시작하지 않고 `ensureWorkspaceAuth()`가 custom-token sign-in 완료를 보장한 뒤에만 진행한다.
 - owner-secure hosted 작업실은 `authorizeInovaMeetingWorkspaceAccess`가 돌려주는 `meetingSessionToken`을 세션에 보존해야 하며, 업로드와 작업실 mutation은 이 토큰을 기준으로 인증한다.

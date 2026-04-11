@@ -23,6 +23,9 @@
 - `content/prompt-hub-controller.js` - prompt 탭 전이와 액션 라우팅을 묶는 prompt tool shell
 - `content/prompt-hub-runtime.js` - prompt manager/runtime wiring을 묶는 prompt tool shell
 - `content/prompt-hub-view.js` - `prompt-library` 단독 view가 아니라 prompt tool shell
+- `hosting/extension/panel/prompt-view.js` - hosted panel library view
+- `hosting/extension/panel/prompt-hub-view.js` - hosted panel prompt tool shell view
+- `hosting/extension/panel/prompt-hub-panel.js` - hosted panel prompt/store interaction helper
 
 ## 관련 functions 경로
 - `functions/features/prompt-library/register.js`
@@ -55,6 +58,7 @@
 
 ## 구현 경계
 - 내 요청 보관함은 인터넷 연결 없이는 쓸 수 없는 제품 전제를 따른다. prompt library의 정본은 Firestore/Functions가 들고, `chrome.storage.local`의 `promptLibrary`는 마지막으로 불러온 캐시와 UI 복구용으로만 취급한다.
+- `0.4.5`부터 panel 안의 `내 요청` UI는 hosted panel iframe이 렌더링하고, `content/panel-prompt-controller.js`는 상태/액션/동기화 controller를 계속 소유한다.
 - prompt 저장/수정/삭제/순서 변경/가져오기는 local-first queue로 성공처럼 보이면 안 된다. 서버 ack 후 remote load가 끝난 뒤에만 state와 local cache를 갱신한다.
 - 다른 PC에서 삭제/수정한 항목은 prompt-library realtime meta 또는 다음 remote load에서 현재 PC 캐시보다 우선 반영돼야 한다.
 - prompt item의 `importedFrom`, `storePublication` 메타도 DB 정본 경로를 따라 round-trip 되어야 한다. 멀티 PC에서 store import/publish 표식이 로컬에만 남아 사라지지 않게 유지한다.

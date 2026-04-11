@@ -52,6 +52,7 @@ ordinary feature 구현 변경은 이 문서의 대상이 아니고, version lan
 - 현재 근거 요약:
   - legacy hosted origin/path, Functions export 이름, mutable namespace, auth scope baseline은 유지 중이다.
   - 공개 사용자 기준선은 여전히 `0.4.4`지만, local rehearsal 브랜치는 미배포 capability smoke를 위해 manifest/package 버전을 `0.4.5`로 먼저 올려 6축 prompt-review 같은 opt-in 경로를 검증할 수 있다.
+  - `0.4.5` candidate baseline부터 우측 `실험실` 패널 기본 UI는 content DOM 직접 렌더링이 아니라 hosted `panelAppUrl` iframe(`hosting/extension/panel/index.html`)을 쓴다. 이 변경은 extension 브리지/host와 hosted panel 자산의 mixed-version capability gate를 전제로 한다.
   - prompt-review 6축 전환은 backend dual-contract와 client opt-in으로 준비하되, 현재 공개 사용자 기준선 `0.4.4`는 `legacy-v1` 4축 평가를 유지한다.
   - prompt-library는 인터넷 연결 전제 제품 판단에 맞춰 `DB 정본(remote-first)`으로 전환 중이다. `chrome.storage.local.promptLibrary`는 authoritative source가 아니라 마지막 remote snapshot 캐시와 UI 복구용으로만 남기고, 저장/삭제/순서 변경/가져오기는 server-ack 후 remote reload가 끝난 뒤에만 반영한다.
   - popup `로컬 호스팅` rehearsal target은 meeting만이 아니라 prompt-library sync/read, prompt-review, prompt-store panel auth/write, hidden prompt bridge까지 local Functions/Hosting emulator로 함께 전환해야 한다.
@@ -60,6 +61,13 @@ ordinary feature 구현 변경은 이 문서의 대상이 아니고, version lan
   - 다만 최종 candidate ready로 올리려면 실제 Chrome 기준의 주요 회의 smoke 기록이 남아 있어야 한다.
 
 ## Meeting Legacy Baseline
+
+## Version Lane Policy
+
+- `0.x` legacy lane의 hosted panel 기본 경로는 `https://browser-extension-main.web.app/extension/panel/index.html`이다.
+- `1.x+` v2 lane은 같은 규칙으로 `hosting/extension-v2/panel/*`와 `panelAppUrl`을 사용한다.
+- local rehearsal에서 hosted panel 기본 경로는 `http://127.0.0.1:5000/extension/panel/index.html`이다.
+- hosted panel 자산이 더 최신이어도 extension bridge capability가 부족하면 조용히 깨지지 않고 explicit update-needed 상태를 보여줘야 한다.
 
 ### Hosted origin/path
 
@@ -71,7 +79,7 @@ ordinary feature 구현 변경은 이 문서의 대상이 아니고, version lan
 
 - popup에서 `settings.meetingWorkspaceTarget=local`을 고르면 rehearsal target은 `http://127.0.0.1:5000/meeting/index.html`과 `http://127.0.0.1:5000/meeting/panel-bridge.html`이다.
 - local target은 hosted page만이 아니라 meeting Functions/Auth/Firestore/Storage emulator까지 함께 보는 full-local 경로다.
-- 같은 local target은 prompt도 full-local rehearsal로 같이 본다. prompt read/write/review/panel auth는 `http://127.0.0.1:5001/browser-extension-main/asia-northeast3/*`를 향하고, hidden prompt bridge는 `http://127.0.0.1:5000/extension/prompt-panel-bridge.html`에서 local Auth/Firestore emulator를 사용한다.
+- 같은 local target은 prompt와 hosted panel도 full-local rehearsal로 같이 본다. prompt read/write/review/panel auth는 `http://127.0.0.1:5001/browser-extension-main/asia-northeast3/*`를 향하고, hidden prompt bridge는 `http://127.0.0.1:5000/extension/prompt-panel-bridge.html`, hosted panel은 `http://127.0.0.1:5000/extension/panel/index.html`에서 local Auth/Firestore emulator와 hosted 자산을 사용한다.
 
 ### Auth scope와 URL 의미
 

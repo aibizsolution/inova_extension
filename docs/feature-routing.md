@@ -8,7 +8,7 @@
 - `README.md`는 상위 개요만 유지하고, feature-local 세부 규칙과 변경 기록은 각 feature `AGENTS.md`나 전용 docs를 우선한다.
 - cue가 두 feature 이상에 걸리면 저장소 전체 탐색 대신 짧게 `이 기능이 맞나요?`를 확인한다.
 - 읽기 순서는 `feature-local -> feature-owned shared -> platform/shell -> 인접 feature`다.
-- `popup`, `background/service-worker.js`, `content/main.js`, `content/panel.js`, `functions/index.js`, `manifest.json`, `shared/*`는 platform/shell이다.
+- `popup`, `background/service-worker.js`, `content/main.js`, `content/panel.js`, `content/hosted-panel-bridge.js`, `hosting/extension/panel/*`, `functions/index.js`, `manifest.json`, `shared/*`는 platform/shell이다.
 - prompt 계열의 공용 탭 셸인 `content/prompt-hub-view.js`, `content/prompt-hub-state.js`, `content/prompt-hub-panel.js`, `content/prompt-hub-controller.js`, `content/prompt-hub-runtime.js`는 단일 feature 소유가 아니라 prompt tool shell로 취급한다.
 - 두 번째 primary feature를 읽어야 하거나 `content + functions + hosting` 3축을 함께 수정해야 하면 먼저 커밋 또는 다음 세션 분리를 제안한다.
 - 이유: 내부 ZIP 배포 환경에서는 세 축이 서로 다른 시점에 섞여 적용될 수 있어 mixed-version 검증 매트릭스와 rollback 범위가 급격히 커진다.
@@ -22,7 +22,7 @@
 | 기능 목적 | 현재 대화 화면의 질문 수집, 탐색, 이동 |
 | 요청 cue | 질문 모아보기, 대화 안에서 찾기, 북마크, route sync, 질문 이동 |
 | 먼저 볼 파일 | `content/dom.js`, `content/bookmark-view.js`, `content/route-state-controller.js`, `content/route-watch-controller.js`, `content/panel-bookmark-controller.js`, `content/panel-surface-controller.js`, `content/panel-activity-controller.js`, `content/panel-shell-controller.js`, `content/route-sync.js` |
-| 관련 프론트 경로 | `content/main.js`, `content/panel.js` |
+| 관련 프론트 경로 | `content/main.js`, `content/panel.js`, `hosting/extension/panel/bookmark-view.js` |
 | 관련 functions 경로 | 없음 |
 | feature-owned shared | `shared/session.js`, `shared/constants.js` |
 | 관련 데이터 경계 | DOM 수집 결과, `sid`, UI 상태 |
@@ -38,7 +38,7 @@
 | 기능 목적 | 내 요청 보관함 CRUD, 가져오기/내보내기, DB 정본(remote-first) 동기화 |
 | 요청 cue | 자주 쓰는 요청, 내 요청, import/export, prompt library, cloud sync |
 | 먼저 볼 파일 | `content/features/prompt-library/prompt-manager.js`, `content/features/prompt-library/prompt-view.js`, `content/features/prompt-library/files.js`, `shared/prompt-library.js`, `content/features/prompt-library/cloud-sync-manager.js` |
-| 관련 프론트 경로 | `content/main.js`, `content/prompt-hub-view.js` (prompt tool shell), `content/prompt-hub-state.js` (prompt tool shell), `content/prompt-hub-panel.js` (prompt tool shell), `content/prompt-hub-controller.js` (prompt tool shell), `content/prompt-hub-runtime.js` (prompt tool shell) |
+| 관련 프론트 경로 | `content/main.js`, `content/prompt-hub-view.js` (prompt tool shell), `content/prompt-hub-state.js` (prompt tool shell), `content/prompt-hub-panel.js` (prompt tool shell), `content/prompt-hub-controller.js` (prompt tool shell), `content/prompt-hub-runtime.js` (prompt tool shell), `hosting/extension/panel/prompt-view.js`, `hosting/extension/panel/prompt-hub-view.js`, `hosting/extension/panel/prompt-hub-panel.js` |
 | 관련 functions 경로 | `functions/features/prompt-library/register.js` |
 | feature-owned shared | `shared/prompt-library.js`, `shared/cloud-sync.js`, `shared/provider-identity.js` |
 | 관련 데이터 경계 | `prompt_libraries`, `prompt_library_orders`, `prompt_library_chunks`, `integration_inova_accounts.promptLibraryMeta` |
@@ -54,7 +54,7 @@
 | 기능 목적 | 스토어 목록, 상세 보기, 좋아요, 가져오기, 등록/삭제 |
 | 요청 cue | 스토어, 공개 프롬프트, 좋아요, 조회수, 가져오기, publish/unpublish |
 | 먼저 볼 파일 | `content/features/prompt-store/store-manager.js`, `content/features/prompt-store/store-view.js`, `content/features/prompt-store/prompt-realtime-manager.js`, `shared/prompt-store.js` |
-| 관련 프론트 경로 | `content/prompt-hub-view.js` (prompt tool shell), `content/prompt-hub-state.js` (prompt tool shell), `content/prompt-hub-panel.js` (prompt tool shell), `content/prompt-hub-controller.js` (prompt tool shell), `content/prompt-hub-runtime.js` (prompt tool shell), `content/main.js` |
+| 관련 프론트 경로 | `content/prompt-hub-view.js` (prompt tool shell), `content/prompt-hub-state.js` (prompt tool shell), `content/prompt-hub-panel.js` (prompt tool shell), `content/prompt-hub-controller.js` (prompt tool shell), `content/prompt-hub-runtime.js` (prompt tool shell), `content/main.js`, `hosting/extension/panel/store-view.js`, `hosting/extension/panel/prompt-hub-view.js`, `hosting/extension/panel/prompt-hub-panel.js` |
 | 관련 functions 경로 | `functions/features/prompt-store/store-service.js` |
 | feature-owned shared | `shared/prompt-store.js`, `shared/provider-identity.js` |
 | 관련 데이터 경계 | `prompt_store_entries`, `prompt_store_entry_details`, `prompt_store_feed_pages`, `prompt_store_meta`, 하위 likes/imports/views |
@@ -70,7 +70,7 @@
 | 기능 목적 | 현재 입력 프롬프트 평가, 보완안 생성, 평가 UI |
 | 요청 cue | 프롬프트 평가, 검토 버튼, refined prompt, review score |
 | 먼저 볼 파일 | `content/features/prompt-review/prompt-review-manager.js`, `content/features/prompt-review/prompt-review-view.js`, `content/features/prompt-review/composer-review-float.js` |
-| 관련 프론트 경로 | `content/main.js`, `content/composer.js`, `content/prompt-hub-view.js` (prompt tool shell), `content/prompt-hub-state.js` (prompt tool shell), `content/prompt-hub-panel.js` (prompt tool shell), `content/prompt-hub-controller.js` (prompt tool shell), `content/prompt-hub-runtime.js` (prompt tool shell) |
+| 관련 프론트 경로 | `content/main.js`, `content/composer.js`, `content/prompt-hub-view.js` (prompt tool shell), `content/prompt-hub-state.js` (prompt tool shell), `content/prompt-hub-panel.js` (prompt tool shell), `content/prompt-hub-controller.js` (prompt tool shell), `content/prompt-hub-runtime.js` (prompt tool shell), `hosting/extension/panel/prompt-review-view.js`, `hosting/extension/panel/prompt-hub-view.js` |
 | 관련 functions 경로 | `functions/features/prompt-review/prompt-review-service.js` |
 | feature-owned shared | `shared/provider-identity.js` |
 | 관련 데이터 경계 | 원격 저장소 없음, Functions `reviewInovaPrompt` 호출과 rate-limit 기록 |
@@ -86,7 +86,7 @@
 | 기능 목적 | 회의 허브, hosted 작업실, 녹음, 전사, 결과 검토 |
 | 요청 cue | 회의 허브, 새 회의하기, 작업실, launch/session auth, 녹음, 전사, chunk |
 | 먼저 볼 파일 | `content/meeting-manager.js`, `content/meeting-view.js`, `hosting/meeting/index.js`, `hosting/meeting/workspace-*.js`, `popup/index.js` |
-| 관련 프론트 경로 | `background/service-worker.js`, `hosting/meeting/*`, `popup/index.js` |
+| 관련 프론트 경로 | `background/service-worker.js`, `hosting/meeting/*`, `hosting/extension/panel/meeting-view.js`, `popup/index.js` |
 | 관련 functions 경로 | `functions/features/meeting/meeting-launch-service.js`, `functions/features/meeting/meeting-service.js` |
 | feature-owned shared | `shared/meeting-bridge.js`, `shared/meeting-debug.js`, `shared/firebase-config.js`, `shared/storage.js` |
 | 관련 데이터 경계 | `integration_inova_meetings`, `integration_inova_meeting_jobs`, `integration_inova_meeting_job_parts`, `integration_inova_meeting_job_finalizers`, `integration_inova_meeting_artifacts`, launch/session 컬렉션 |
@@ -102,7 +102,7 @@
 | 기능 목적 | 릴리스 패널, 최신 버전 확인, 정적 JSON/ZIP 링크 |
 | 요청 cue | 릴리스, 최신 버전, 업데이트 ZIP, 롤백, release notes |
 | 먼저 볼 파일 | `content/release-manager.js`, `content/release-view.js`, `shared/release-info.js` |
-| 관련 프론트 경로 | `background/service-worker.js`, `releases/release-notes.json` |
+| 관련 프론트 경로 | `background/service-worker.js`, `hosting/extension/panel/release-view.js`, `releases/release-notes.json` |
 | 관련 functions 경로 | 없음 |
 | feature-owned shared | `shared/release-info.js` |
 | 관련 데이터 경계 | `releases/release-notes.json`, `hosting/extension/releases/latest.json`, `hosting/extension/releases/history.json`, 다운로드 ZIP |

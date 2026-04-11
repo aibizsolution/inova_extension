@@ -7,6 +7,7 @@ importScripts("../shared/inova-auth.js");
 importScripts("../shared/cloud-api.js");
 importScripts("meeting-list-cache.js");
 importScripts("panel-auth-cache.js");
+importScripts("panel-runtime-invoke.js");
 
 const namespace = globalThis.InovaBookmarks || {};
 const INOVA_ORIGIN = "https://inova.incross.com";
@@ -33,7 +34,7 @@ const panelAuthCache = namespace.panelAuthCache?.create?.(getInovaAccessToken);
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const type = String(message?.type || "");
-  if (!type.startsWith("inova-sync:") && !type.startsWith("inova-store:") && !type.startsWith("inova-release:") && !type.startsWith("inova-review:") && !type.startsWith("inova-meeting:") && !type.startsWith("inova-prompt:")) {
+  if (!type.startsWith("inova-sync:") && !type.startsWith("inova-store:") && !type.startsWith("inova-release:") && !type.startsWith("inova-review:") && !type.startsWith("inova-meeting:") && !type.startsWith("inova-prompt:") && !type.startsWith("inova-panel:")) {
     return false;
   }
   handleMessage(message, sender)
@@ -108,6 +109,9 @@ async function handleMessage(message, sender) {
   }
   if (message.type === "inova-release:open-url") {
     return openReleaseUrl(message.url);
+  }
+  if (message.type === "inova-panel:invoke") {
+    return globalThis.invokeHostedPanelRequest(message.request);
   }
   if (message.type === "inova-sync:sync-prompt-library") {
     return syncPromptLibrary(message.syncDocument);

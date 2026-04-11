@@ -132,6 +132,7 @@
     return buildUrlConfig(
       {
         baseUrl,
+        panelAppUrl: joinUrl(baseUrl, "panel/index.html"),
         meetingPanelBridgeUrl: joinUrl(originUrl, "meeting/panel-bridge.html"),
         meetingWorkspaceUrl: joinUrl(originUrl, "meeting/index.html"),
         promptPanelBridgeAssetVersion,

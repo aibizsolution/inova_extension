@@ -9,212 +9,110 @@ const { JSDOM } = require("jsdom");
 const root = path.resolve(__dirname, "..");
 
 function main() {
-  verifyFrameBatchingAndHostCaching();
-  verifyToolContentCaching();
-  verifyDebugRenderSkipping();
-  verifyStoreSearchEscapeBehavior();
-  console.log("[verify-panel-render] Panel render batching and cache contract passed");
+  verifyHostedPanelHostBatching();
+  verifyLocalPanelRuntimeSwitch();
+  verifyPageBridgeEvents();
+  console.log("[verify-panel-render] Hosted panel host contract passed");
 }
 
-function verifyFrameBatchingAndHostCaching() {
+function verifyHostedPanelHostBatching() {
   const harness = createHarness();
   const stateA = createPanelState({
-    bookmarksTool: {
-      activeId: "bookmark-1",
-      count: 1,
-      emptyText: "",
-      items: [{ id: "bookmark-1", text: "첫 질문" }],
-      metaText: "1개",
-      query: "첫",
-    },
     handleCount: 1,
+    open: true,
     toolCount: 1,
   });
   const stateB = createPanelState({
     bookmarksTool: {
       activeId: "bookmark-2",
       count: 2,
-      emptyText: "",
-      items: [{ id: "bookmark-2", text: "둘째 질문" }],
-      metaText: "2개",
-      query: "둘",
     },
     handleCount: 2,
+    open: false,
     toolCount: 2,
   });
-
-  const originalHostQuerySelector = harness.host.querySelector.bind(harness.host);
-  let hostQueryCount = 0;
-  harness.host.querySelector = (...args) => {
-    hostQueryCount += 1;
-    return originalHostQuerySelector(...args);
-  };
 
   harness.render(stateA);
   harness.render(stateB);
 
   assert.equal(harness.animationFrames.length, 1, "renderPanel should batch multiple renders into one frame");
-  assert.equal(harness.renderCounts.bookmarkTool, 0, "Tool HTML should not render before the animation frame runs");
 
   harness.flushFrame();
 
-  assert.equal(harness.renderCounts.bookmarkTool, 1, "Only the latest state should render after batching");
-  assert.equal(harness.document.querySelector("#inova-tool-total")?.textContent, "2");
-  assert.equal(harness.document.querySelector(".handle-count")?.textContent, "2");
-  assert.equal(harness.document.querySelector("#inova-tool-content")?.textContent.includes("둘"), true);
-  assert.equal(hostQueryCount, 0, "Cached panel elements should avoid host querySelector calls during bookmarks render");
+  assert.equal(harness.handleCount.textContent, "2");
+  assert.equal(harness.root.dataset.open, "false");
+  assert.equal(
+    harness.frame.getAttribute("src"),
+    "https://browser-extension-main.web.app/extension/panel/index.html"
+  );
+  assert.deepEqual(harness.bridge.allowedOrigins, ["https://browser-extension-main.web.app"]);
+  assert.deepEqual(harness.bridge.resets, ["frame-src-change"]);
+
+  harness.bridge.options.onReadyChange({ ready: true });
+  const snapshot = harness.bridge.snapshots.at(-1);
+  assert(snapshot, "bridge should receive a snapshot once ready");
+  assert.equal(snapshot.panel.toolCount, 2);
+  assert.equal(snapshot.panel.bookmarksTool.activeId, "bookmark-2");
+  assert(snapshot.extensionCapabilities.includes("panel.snapshot.v1"));
 }
 
-function verifyToolContentCaching() {
+function verifyLocalPanelRuntimeSwitch() {
   const harness = createHarness();
-  const releaseState = createPanelState({
-    activeTool: "release",
-    releaseTool: {
-      checking: false,
-      currentVersion: "0.4.4",
-      degraded: false,
-      degradedReason: "",
-      error: "",
-      history: [],
-      historyLoading: false,
-      latest: { version: "0.4.5" },
-      latestVersion: "0.4.5",
-      updateAvailable: true,
-      versionRefreshPending: false,
+  harness.render(createPanelState({
+    settings: {
+      meetingWorkspaceTarget: "local",
+      meetingWorkspaceUrlOverride: "http://127.0.0.1:5000/meeting/index.html",
     },
-    toolCount: 1,
-    toolTitle: "릴리스 안내",
-    tools: buildTools("release"),
-  });
-
-  harness.render(releaseState);
-  harness.flushFrame();
-  harness.render(cloneValue(releaseState));
+  }));
   harness.flushFrame();
 
-  assert.equal(harness.renderCounts.releaseTool, 1, "Unchanged release state should reuse cached HTML");
-
-  const nextReleaseState = cloneValue(releaseState);
-  nextReleaseState.releaseTool.latestVersion = "0.4.6";
-  nextReleaseState.releaseTool.latest.version = "0.4.6";
-
-  harness.render(nextReleaseState);
-  harness.flushFrame();
-
-  assert.equal(harness.renderCounts.releaseTool, 2, "Changed release state should regenerate tool HTML");
+  assert.equal(
+    harness.frame.getAttribute("src"),
+    "http://127.0.0.1:5000/extension/panel/index.html"
+  );
+  assert.deepEqual(harness.bridge.allowedOrigins, ["http://127.0.0.1:5000"]);
 }
 
-function verifyDebugRenderSkipping() {
+function verifyPageBridgeEvents() {
   const harness = createHarness();
-  const disabledDebugState = createPanelState({
-    panelDebug: {
-      collapsed: true,
-      enabled: false,
-      hasErrors: false,
-      statusSummary: { totalLogs: 0 },
-    },
-  });
+  harness.ensure();
 
-  harness.render(disabledDebugState);
-  harness.flushFrame();
-  harness.render(cloneValue(disabledDebugState));
-  harness.flushFrame();
+  harness.context.InovaBookmarks.contentPanel.setActiveBookmark("bookmark-alpha");
+  harness.context.InovaBookmarks.contentPanel.focusBookmark("bookmark-alpha");
 
-  assert.equal(harness.renderCounts.debugLayer, 0, "Disabled debug layer should skip debug HTML rendering");
-  assert.equal(harness.document.querySelector("#inova-meeting-debug-layer")?.innerHTML, "");
-
-  const enabledDebugState = createPanelState({
-    panelDebug: {
-      collapsed: false,
-      enabled: true,
-      hasErrors: false,
-      statusSummary: { totalLogs: 2 },
-    },
-  });
-
-  harness.render(enabledDebugState);
-  harness.flushFrame();
-  harness.render(cloneValue(enabledDebugState));
-  harness.flushFrame();
-
-  assert.equal(harness.renderCounts.debugLayer, 1, "Unchanged enabled debug state should reuse cached HTML");
-  assert.equal(harness.document.querySelector("#inova-meeting-debug-layer")?.dataset.debugEnabled, "true");
-}
-
-function verifyStoreSearchEscapeBehavior() {
-  const harness = createHarness();
-  const promptState = createPanelState({
-    activeTool: "prompts",
-    promptTool: {
-      activeTab: "store",
-      prompt: { items: [] },
-      review: { open: false },
-      store: {
-        hasMore: false,
-        items: [],
-        loading: false,
-        query: "fixture",
-        renderKey: 0,
+  assert.deepEqual(harness.bridge.events, [
+    {
+      domain: "page",
+      payload: {
+        action: "set-active-bookmark",
+        bookmarkId: "bookmark-alpha",
       },
-      tabs: [],
     },
-    toolCount: 4,
-    toolTitle: "프롬프트",
-    tools: buildTools("prompts"),
-  });
-
-  harness.render(promptState);
-  harness.flushFrame();
-
-  const search = harness.document.querySelector('[data-search-tool="store"]');
-  assert.ok(search, "Expected store search input to render");
-
-  search.value = "fixture";
-  const clearEvent = new harness.window.KeyboardEvent("keydown", {
-    bubbles: true,
-    cancelable: true,
-    key: "Escape",
-  });
-  search.dispatchEvent(clearEvent);
-
-  assert.equal(clearEvent.defaultPrevented, true, "First ESC should be consumed by store search clear");
-  assert.deepEqual(harness.searchCalls[0], {
-    options: { composing: false },
-    toolId: "store",
-    value: "",
-  });
-  assert.deepEqual(harness.searchSubmitCalls, [{ toolId: "store", value: "" }]);
-  assert.deepEqual(harness.toggleCalls, []);
-
-  const closeEvent = new harness.window.KeyboardEvent("keydown", {
-    bubbles: true,
-    cancelable: true,
-    key: "Escape",
-  });
-  search.dispatchEvent(closeEvent);
-
-  assert.equal(closeEvent.defaultPrevented, false, "Second ESC should fall through to close");
-  assert.deepEqual(harness.toggleCalls, [false]);
+    {
+      domain: "page",
+      payload: {
+        action: "focus-bookmark",
+        bookmarkId: "bookmark-alpha",
+      },
+    },
+  ]);
 }
 
 function createHarness() {
   const dom = new JSDOM("<!doctype html><html><body></body></html>", {
     pretendToBeVisual: true,
     runScripts: "outside-only",
-    url: "https://example.test",
+    url: "https://inova.incross.com/?sid=session-1",
   });
   const context = dom.getInternalVMContext();
   const animationFrames = [];
-  const renderCounts = {
-    bookmarkTool: 0,
-    debugLayer: 0,
-    meetingTool: 0,
-    promptTool: 0,
-    releaseTool: 0,
+  const bridge = {
+    allowedOrigins: [],
+    events: [],
+    options: null,
+    resets: [],
+    snapshots: [],
   };
-  const searchCalls = [];
-  const searchSubmitCalls = [];
-  const toggleCalls = [];
 
   context.console = console;
   context.globalThis = context;
@@ -223,100 +121,77 @@ function createHarness() {
     return animationFrames.length;
   };
   context.cancelAnimationFrame = () => {};
-
   context.InovaBookmarks = {
-    bookmarkView: {
-      flashCopyState() {},
-      focus() {},
-      moveFocus() {
-        return false;
-      },
-      renderTool(state) {
-        renderCounts.bookmarkTool += 1;
-        return `<section class="bookmark-tool">${escapeHtml(state.query)}:${state.count}</section>`;
-      },
-      setActive() {},
-    },
-    meetingView: {
-      render(state) {
-        renderCounts.meetingTool += 1;
-        return `<section class="meeting-tool">${state.count}</section>`;
-      },
-      renderDebugConsole(panelDebug) {
-        renderCounts.debugLayer += 1;
-        const totalLogs = Number(panelDebug?.statusSummary?.totalLogs) || 0;
-        return `<div class="inova-meeting-debug-console__log">${totalLogs}</div>`;
-      },
-    },
-    panelDebug: {
-      captureViewport() {},
-      restoreViewport() {},
-    },
-    promptHubPanel: {
-      handleChange() {},
-      handleClick() {
-        return false;
-      },
-      handleInput() {},
-      handlePointerDown() {},
-      handlePointerEnd() {},
-      handlePointerMove() {},
-      handleScroll() {},
-      syncStoreList() {},
-    },
-    promptHubView: {
-      render(state) {
-        renderCounts.promptTool += 1;
-        if (state.activeTab === "store") {
-          return `
-            <section class="prompt-tool">
-              <input data-search-tool="store" type="search" value="${escapeHtml(state.store?.query || "")}" />
-              <div class="inova-store-list" data-store-has-more="${String(Boolean(state.store?.hasMore))}" data-store-loading="${String(Boolean(state.store?.loading))}"></div>
-            </section>
-          `;
-        }
-        return `<section class="prompt-tool">${escapeHtml(state.activeTab)}</section>`;
+    firebaseConfig: buildFirebaseConfig(),
+    hostedPanelBridge: {
+      create(options = {}) {
+        bridge.options = options;
+        return {
+          attach() {},
+          emitEvent(domain, payload) {
+            bridge.events.push({
+              domain,
+              payload: cloneValue(payload),
+            });
+            return true;
+          },
+          getCapabilities() {
+            return [
+              "panel.snapshot.v1",
+              "panel.request.v1",
+              "panel.response.v1",
+              "panel.event.v1",
+            ];
+          },
+          reset(reason) {
+            bridge.resets.push(reason);
+          },
+          setAllowedOrigin(origin) {
+            bridge.allowedOrigins.push(origin);
+          },
+          updateSnapshot(payload) {
+            bridge.snapshots.push(cloneValue(payload));
+            return true;
+          },
+        };
       },
     },
-    releaseView: {
-      render(state) {
-        renderCounts.releaseTool += 1;
-        return `<section class="release-tool">${escapeHtml(state.latestVersion)}</section>`;
+    session: {
+      normalizeText(value) {
+        return String(value || "").trim();
       },
     },
   };
 
-  loadScript("content/panel.js", context);
-  context.InovaBookmarks.contentPanel.ensurePanel({
-    onSearch(toolId, value, options = {}) {
-      searchCalls.push({
-        options: cloneValue(options),
-        toolId,
-        value,
-      });
-    },
-    onSearchSubmit(toolId, value) {
-      searchSubmitCalls.push({ toolId, value });
-    },
-    onToggle(value) {
-      toggleCalls.push(value);
-    },
-  });
+  loadScript(path.join("content", "panel.js"), context);
 
   return {
     animationFrames,
-    document: context.document,
-    host: context.document.getElementById("inova-bookmark-host"),
-    render: context.InovaBookmarks.contentPanel.renderPanel,
-    renderCounts,
-    searchCalls,
-    searchSubmitCalls,
-    toggleCalls,
-    window: context,
+    bridge,
+    context,
+    ensure() {
+      context.InovaBookmarks.contentPanel.ensurePanel({
+        onToggle() {},
+      });
+      return this;
+    },
     flushFrame() {
       const callback = animationFrames.shift();
       assert.equal(typeof callback, "function", "Expected a queued animation frame");
       callback(Date.now());
+    },
+    get frame() {
+      return context.document.getElementById("inova-hosted-panel-frame");
+    },
+    get handleCount() {
+      return context.document.querySelector(".handle-count");
+    },
+    get root() {
+      return context.document.getElementById("inova-bookmark-root");
+    },
+    render(state) {
+      this.ensure();
+      context.InovaBookmarks.contentPanel.renderPanel(state);
     },
   };
 }
@@ -356,10 +231,7 @@ function createPanelState(overrides = {}) {
     },
     releaseTool: {
       checking: false,
-      currentVersion: "0.4.4",
-      degraded: false,
-      degradedReason: "",
-      error: "",
+      currentVersion: "0.4.5",
       history: [],
       historyLoading: false,
       latest: null,
@@ -367,21 +239,49 @@ function createPanelState(overrides = {}) {
       updateAvailable: false,
       versionRefreshPending: false,
     },
+    settings: {
+      meetingWorkspaceTarget: "production",
+      meetingWorkspaceUrlOverride: "",
+    },
     toolCount: 0,
-    toolTitle: "대화 질문",
-    tools: buildTools("bookmarks"),
+    toolTitle: "대화 탐색",
+    tools: [],
     visible: true,
   };
   return mergeObjects(state, overrides);
 }
 
-function buildTools(activeTool) {
-  return [
-    { count: 3, id: "bookmarks", label: "대화" },
-    { count: 4, id: "prompts", label: "프롬프트" },
-    { count: 2, id: "meeting", label: "회의룸" },
-    { count: 1, id: "release", label: "릴리스" },
-  ].map((tool) => ({ ...tool, count: tool.id === activeTool ? tool.count : tool.count }));
+function buildFirebaseConfig() {
+  return {
+    hosting: {
+      panelAppUrl: "https://browser-extension-main.web.app/extension/panel/index.html",
+    },
+    meeting: {
+      resolveRuntime(settings = {}) {
+        if (settings.meetingWorkspaceTarget === "local") {
+          return {
+            hosting: {
+              panelAppUrl: "http://127.0.0.1:5000/extension/panel/index.html",
+            },
+          };
+        }
+        return {
+          hosting: {
+            panelAppUrl: "https://browser-extension-main.web.app/extension/panel/index.html",
+          },
+        };
+      },
+    },
+    prompt: {
+      resolveRuntime(settings = {}) {
+        return this.meeting?.resolveRuntime?.(settings) || {
+          hosting: {
+            panelAppUrl: "https://browser-extension-main.web.app/extension/panel/index.html",
+          },
+        };
+      },
+    },
+  };
 }
 
 function mergeObjects(base, overrides) {
@@ -410,14 +310,6 @@ function mergeObjects(base, overrides) {
 
 function cloneValue(value) {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
-}
-
-function escapeHtml(text) {
-  return String(text || "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
 }
 
 function loadScript(relativePath, context) {

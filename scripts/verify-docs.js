@@ -32,9 +32,16 @@ const requiredFiles = [
   path.join("hosting", "meeting", "workspace-mutations.js"),
   path.join("hosting", "meeting", "workspace-debug.js"),
   path.join("hosting", "meeting", "shared.js"),
+  path.join("background", "panel-runtime-invoke.js"),
+  path.join("hosting", "extension", "panel", "index.html"),
+  path.join("hosting", "extension", "panel", "index.css"),
+  path.join("hosting", "extension", "panel", "index.js"),
+  path.join("hosting", "extension", "panel", "runtime.js"),
+  path.join("hosting", "extension", "panel", "prompt-hub-panel.js"),
   path.join("scripts", "install-git-hooks.js"),
   "shared/prompt-library.js",
   path.join("scripts", "verify-feature-doc-update.js"),
+  path.join("scripts", "verify-hosted-panel-bridge.js"),
   path.join("scripts", "verify-panel-bookmark-controller.js"),
   path.join("scripts", "verify-panel-prompt-controller.js"),
   path.join("scripts", "verify-panel-shell-controller.js"),
@@ -52,6 +59,7 @@ const requiredFiles = [
   path.join("scripts", "verify-route-state-controller.js"),
   path.join("scripts", "verify-route-watch-controller.js"),
   "content/main.js",
+  "content/hosted-panel-bridge.js",
   "content/panel-activity-controller.js",
   "content/panel-bookmark-controller.js",
   "content/panel-shell-controller.js",
@@ -202,6 +210,7 @@ const codeChecks = [
     patterns: [
       /"default_popup"\s*:\s*"popup\/index\.html"/,
       /"shared\/constants\.js"/,
+      /"content\/hosted-panel-bridge\.js"/,
       /"content\/main\.js"/,
       /"content\/panel\.css"/,
       /"content\/tools\.css"/,
@@ -282,6 +291,44 @@ const codeChecks = [
       /ensurePanel/,
       /syncRouteState/,
       /chrome\??\.storage/,
+    ],
+  },
+  {
+    file: "content/hosted-panel-bridge.js",
+    patterns: [
+      /bridgeVersion/,
+      /panel\.snapshot\.v1/,
+      /type:\s*"response"/,
+    ],
+  },
+  {
+    file: "content/panel.js",
+    patterns: [
+      /inova-hosted-panel-frame/,
+      /panelAppUrl/,
+      /type:\s*"inova-panel:invoke"/,
+    ],
+  },
+  {
+    file: "shared/firebase-config.js",
+    patterns: [
+      /panelAppUrl/,
+      /joinUrl\(baseUrl,\s*"panel\/index\.html"\)/,
+    ],
+  },
+  {
+    file: path.join("hosting", "extension", "panel", "index.js"),
+    patterns: [
+      /inova-hosted-panel-app/,
+      /확장 업데이트 필요/,
+      /function\s+renderToolContent/,
+    ],
+  },
+  {
+    file: path.join("hosting", "extension", "panel", "runtime.js"),
+    patterns: [
+      /clipPreview/,
+      /panelDebug/,
     ],
   },
   {
@@ -380,6 +427,22 @@ const codeChecks = [
       /pausedSessions/,
       /promptLibrary/,
       /updateSettings/,
+    ],
+  },
+  {
+    file: "background/service-worker.js",
+    patterns: [
+      /inova-panel:invoke/,
+      /panel-runtime-invoke\.js/,
+      /invokeHostedPanelRequest/,
+    ],
+  },
+  {
+    file: path.join("background", "panel-runtime-invoke.js"),
+    patterns: [
+      /PANEL_ALLOWED_STORAGE_KEYS/,
+      /PANEL_ALLOWED_FUNCTION_ENDPOINT_KEYS/,
+      /invokeHostedPanelRequest/,
     ],
   },
   {

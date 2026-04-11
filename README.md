@@ -42,8 +42,9 @@
 ## 저장소 구조
 
 - `popup/`: 회의 작업실 대상 선택과 디버그 ON/OFF
-- `content/`: i-Nova 페이지 안의 패널 shell과 feature UI
+- `content/`: i-Nova 페이지 안의 iframe host, DOM/page adapter, feature controller
 - `background/`: 탭/세션 브리지, hosted URL 조립, release fetch
+- `hosting/extension/panel/`: hosting 배포만으로 갱신되는 hosted 실험실 패널 UI
 - `hosting/meeting/`: hosted 회의 작업실
 - `functions/`: 회의와 프롬프트 backend 함수
 - `shared/`: panel, popup, hosted, background가 함께 쓰는 계약과 helper

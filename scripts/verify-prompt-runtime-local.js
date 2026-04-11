@@ -26,6 +26,7 @@ function verifyPromptRuntimeResolution() {
   assert.equal(promptRuntime.target, "local");
   assert.equal(promptRuntime.functions.baseUrl, "http://127.0.0.1:5001/browser-extension-main/asia-northeast3");
   assert.equal(promptRuntime.hosting.originUrl, "http://127.0.0.1:5000");
+  assert.equal(promptRuntime.hosting.panelAppUrl, "http://127.0.0.1:5000/extension/panel/index.html");
   assert(promptRuntime.hosting.promptPanelBridgeUrl.startsWith("http://127.0.0.1:5000/extension/prompt-panel-bridge.html"));
   assert.equal(promptRuntime.emulators.enabled, true);
   assert.equal(promptRuntime.emulators.firestoreHost, "127.0.0.1");
