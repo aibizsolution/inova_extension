@@ -1,5 +1,6 @@
 /* global getInovaAccessToken, getMeetingFunctionsConfig, getPromptFunctionsConfig, issueMeetingPanelAuth, issuePromptPanelAuth, openReleaseUrl */
 
+(() => {
 const namespace = globalThis.InovaBookmarks || {};
 
 const PANEL_ALLOWED_STORAGE_KEYS = new Set([
@@ -137,3 +138,4 @@ async function writeHostedPanelStorageValue(request) {
   await namespace.storage.setLocal(nextPartial);
   return namespace.storage.getState();
 }
+})();
