@@ -15,6 +15,9 @@
     const scheduleRender = typeof options.scheduleRender === "function"
       ? options.scheduleRender
       : () => {};
+    const traceReview = typeof options.traceReview === "function"
+      ? options.traceReview
+      : () => {};
 
     const state = {
       actionPending: null,
@@ -49,6 +52,7 @@
       publishPromptId: "",
       publishTitle: "",
       query: "",
+      reviewPendingAutofocused: false,
       textInputRenderTimer: 0,
       syncNotice: null,
       syncing: false,
@@ -74,6 +78,7 @@
       state.capabilities = Array.isArray(extensionCapabilities)
         ? extensionCapabilities.map((value) => normalizeText(value)).filter(Boolean)
         : [];
+      syncExternalReviewActivation(panelState?.promptTool?.review);
       if (!hasRequiredCapabilities()) {
         return;
       }
@@ -182,6 +187,7 @@
       const nextTab = normalizePromptTab(promptTabId);
       state.activeTab = nextTab;
       state.activeTabUserSelected = true;
+      state.reviewPendingAutofocused = nextTab === "review";
       await persistActivePromptTab(nextTab);
       if (nextTab === "library") {
         void ensurePromptLibraryLoaded(true, "prompt-tab-select");
@@ -660,6 +666,30 @@
       if (!state.activeTabUserSelected) {
         state.activeTab = normalizePromptTab(uiPreferences.activePromptTab);
       }
+    }
+
+    function syncExternalReviewActivation(reviewState) {
+      const pending = Boolean(reviewState?.pending);
+      if (!pending) {
+        state.reviewPendingAutofocused = false;
+        return;
+      }
+      if (state.reviewPendingAutofocused) {
+        return;
+      }
+      state.reviewPendingAutofocused = true;
+      if (state.activeTab === "review") {
+        return;
+      }
+      state.activeTab = "review";
+      state.activeTabUserSelected = true;
+      traceReview("71.hosted.review.autofocus", {
+        pending: true,
+        promptTab: "review",
+        reason: "external-review-pending",
+      });
+      scheduleRender();
+      void persistActivePromptTab("review");
     }
 
     function findPromptById(promptId) {

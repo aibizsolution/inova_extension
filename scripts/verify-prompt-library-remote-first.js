@@ -13,6 +13,7 @@ function main() {
   return Promise.all([
     verifyHostedPromptLibraryAvoidsDuplicateReloads(),
     verifyHostedPromptEditorViewLabels(),
+    verifyHostedPromptReviewPendingAutofocus(),
     verifyHostedPromptTabSelectionSurvivesLateStorageHydration(),
     verifyHostedPromptReviewTabVisibility(),
     verifyHostedPromptTextInputDebouncesRender(),
@@ -445,6 +446,107 @@ async function verifyHostedPromptTabSelectionSurvivesLateStorageHydration() {
     "review",
     "late storage hydration should not override an explicit hosted prompt tab selection"
   );
+}
+
+async function verifyHostedPromptReviewPendingAutofocus() {
+  const reviewTraces = [];
+  const context = vm.createContext({
+    Blob: class Blob {},
+    File: class File {},
+    clearTimeout,
+    console,
+    document: {
+      createElement() {
+        return {
+          click() {},
+        };
+      },
+    },
+    globalThis: null,
+    navigator: {},
+    setTimeout,
+    URL: {
+      createObjectURL() {
+        return "blob:prompt-library";
+      },
+      revokeObjectURL() {},
+    },
+  });
+  context.globalThis = context;
+  context.InovaBookmarks = {
+    promptLibraryModel: {
+      mergePromptLibrary(promptLibrary) {
+        const items = Array.isArray(promptLibrary?.items) ? promptLibrary.items.map((item) => ({ ...item })) : [];
+        return {
+          items,
+          version: Number(promptLibrary?.version) || 1,
+        };
+      },
+    },
+    session: {
+      normalizeText(value) {
+        return String(value ?? "").trim();
+      },
+    },
+  };
+
+  const source = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),
+    "utf8"
+  );
+  new vm.Script(source, {
+    filename: "hosting/extension-v2/panel/prompt-library-controller.js",
+  }).runInContext(context);
+
+  const controller = context.InovaBookmarks.promptLibraryController.create({
+    invokeRuntime: async (request) => {
+      if (request?.action === "storage.get-state") {
+        return {
+          cloudSync: {
+            providerIdentity: {
+              available: true,
+              displayName: "Prompt Tester",
+              email: "prompt@example.com",
+              numericUserId: 42,
+              provider: "inova",
+              providerUserKey: "prompt-user-1",
+            },
+          },
+          uiPreferences: {
+            activePromptTab: "library",
+          },
+        };
+      }
+      return {};
+    },
+    scheduleRender() {},
+    traceReview(step, payload) {
+      reviewTraces.push({ payload: { ...(payload || {}) }, step });
+    },
+  });
+
+  controller.syncPanelState(
+    {
+      activeTool: "prompts",
+      promptTool: {
+        review: {
+          pending: true,
+        },
+      },
+    },
+    ["page.adapter.v2", "runtime.invoke.v1"]
+  );
+
+  await flushAsync();
+  await flushAsync();
+
+  const viewState = controller.buildPromptToolState({}, { reviewOpen: true });
+  assert.equal(
+    viewState.activeTab,
+    "review",
+    "a fresh external review request should autofocus the hosted prompt review tab"
+  );
+  assert.equal(reviewTraces[0]?.step, "71.hosted.review.autofocus");
 }
 
 async function verifyHostedPromptReviewTabVisibility() {

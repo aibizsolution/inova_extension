@@ -54,6 +54,7 @@
     invokePage,
     invokeRuntime,
     scheduleRender,
+    traceReview: traceReviewFlow,
   }) || null;
   const promptReviewController = namespace.promptReviewController?.create?.({
     getActivePromptTab: () => promptLibraryController?.getActiveTab?.() || "library",
