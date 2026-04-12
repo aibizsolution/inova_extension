@@ -1,18 +1,32 @@
 # Version And Release Decision Note
 
-이 문서는 리팩토링 작업 이력 로그가 아니라, `버전 결정`과 `meeting legacy 호환 기준`만 빠르게 확인하기 위한 기준 문서다.  
-ordinary feature 구현 변경은 이 문서의 대상이 아니고, version lane·meeting legacy baseline·release decision처럼 장기 판단 비용이 큰 변경만 여기서 관리한다.
+이 문서는 구조 진행 일지나 세션 handoff가 아니라, `버전 결정`, `version lane`, `meeting legacy baseline`, `release decision boundary`만 빠르게 확인하기 위한 기준 문서다.  
+ordinary feature 구현 변경, 탭별 hosted ownership 진행도, smoke 이슈 목록, git chronology는 이 문서의 대상이 아니다. 그런 내용은 `docs/current-handoff.md`, `docs/runtime-architecture.md`, feature `AGENTS.md`에서 관리한다.
 
-리팩토링 기준일: 2026-04-09  
-마지막 상태 갱신: 2026-04-12  
+마지막 상태 갱신: 2026-04-13  
 현재 공개 사용자 기준선: `0.4.4`
 
 ## 현재 결정 요약
 
 - 기본 전략은 `major`다.
 - 다음 공개 릴리스 목표는 `1.0.0`이다.
-- panel shell 1차 리팩토링과 meeting 내부 분해는 사실상 마감으로 보고, 현재 우선순위는 추가 구조 분해보다 운영/배포 판단이다.
+- 현재 구조 작업은 계속 진행 중이지만, 그 진행 현황 자체는 이 문서가 아니라 handoff/architecture 문서에서 추적한다.
 - green 선언 권한은 유지보수자에게 있고, 구현자는 판단 근거와 candidate 상태까지만 갱신한다.
+
+## 이 문서에 남길 것
+
+- `minor` / `major` 결정 게이트
+- `0.4.4` legacy lane과 `1.0.0` v2 lane 기준
+- hosted path, local rehearsal path, mixed-version gate
+- meeting legacy endpoint/auth/namespace baseline
+- release build와 배포 판단에 직접 영향을 주는 장기 규칙
+
+## 이 문서에 두지 않을 것
+
+- feature migration 진행률
+- hosted ownership 세부 상태
+- 세션별 smoke 이슈와 디버그 로그
+- 커밋 chronology나 작업 일지
 
 ## Version Decision Gate
 
@@ -53,14 +67,13 @@ ordinary feature 구현 변경은 이 문서의 대상이 아니고, version lan
   - legacy hosted origin/path, Functions export 이름, mutable namespace, auth scope baseline은 유지 중이다.
   - 공개 사용자 기준선은 여전히 `0.4.4`지만, 다음 공개 릴리스는 `1.0.0`으로 잡고 local rehearsal도 manifest/package `1.0.0` 기준 v2 lane을 기본 활성화한다.
   - `1.0.0` candidate baseline부터 우측 `실험실` 패널 기본 UI는 hosted `panelAppUrl` iframe을 쓰고, 기본 hosted 경로는 `hosting/extension-v2/panel/index.html`이다. 이 변경은 extension 브리지/host와 hosted panel 자산의 mixed-version capability gate를 전제로 한다.
-  - prompt-review 6축 전환은 backend dual-contract와 client opt-in으로 준비하되, 현재 공개 사용자 기준선 `0.4.4`는 `legacy-v1` 4축 평가를 유지한다.
-  - prompt-library는 인터넷 연결 전제 제품 판단에 맞춰 `DB 정본(remote-first)`으로 전환 중이다. `chrome.storage.local.promptLibrary`는 authoritative source가 아니라 마지막 remote snapshot 캐시와 UI 복구용으로만 남기고, 저장/삭제/순서 변경/가져오기는 server-ack 후 remote reload가 끝난 뒤에만 반영한다.
   - popup `로컬 호스팅` rehearsal target은 meeting만이 아니라 prompt-library sync/read, prompt-review, prompt-store panel auth/write, hidden prompt bridge까지 local Functions/Hosting emulator로 함께 전환해야 한다.
   - local rehearsal 부팅 확인과 기존 사용자의 기존 회의 데이터 read-path 확인은 pass 후보다.
-  - `check:meeting-data`, `verify-meeting-service`, `verify-content-smoke`, `check:function-runtime` preflight는 녹색이다.
   - 다만 최종 candidate ready로 올리려면 실제 Chrome 기준의 주요 회의 smoke 기록이 남아 있어야 한다.
 
 ## Meeting Legacy Baseline
+
+아래 baseline은 `1.0.0` v2 lane에서도 compat 이유로 계속 유지하는 값들이다.
 
 ## Version Lane Policy
 
@@ -69,8 +82,8 @@ ordinary feature 구현 변경은 이 문서의 대상이 아니고, version lan
 - 공개 기준선 `0.4.4`는 legacy lane에 남기고, 다음 공개 릴리스 `1.0.0`은 v2 lane을 기본으로 사용한다.
 - extension composition root도 lane-aware로 분리한다. `0.x`는 기존 `content/panel-composition-controller.js`, `1.x+`는 `content/panel-v2-composition-controller.js`를 사용한다.
 - `1.x+`에서 `release:build`는 `hosting/extension-v2/releases/*`와 `hosting/extension-v2/downloads/*`를 실제 served artifact 기준으로 채워야 한다. hosted v2 release panel은 이 lane-local 경로를 직접 읽으므로, curated history에 남긴 이전 공개 버전 ZIP도 현재 lane download 디렉터리에서 404 없이 열리도록 함께 복사한다.
-- 이후 `1.x+` v2 lane hosted panel은 책임을 합치지 않고 feature별 controller를 따로 둔 채 ownership을 점진 이동한다. 현재 hosted ownership 후보군은 `conversation`, `prompt-library`, `prompt-review`, `prompt-store`, `meeting hub`, `release`, `debug`이고, extension은 page DOM adapter + iframe host + runtime broker를 유지한다.
-- 같은 v2 lane 기준에서 새 기능/수정의 기본 위치는 hosted다. `Chrome API`, `background`, `page DOM`이 꼭 필요한 책임만 extension에 남기고, 문서도 이 ownership 이동과 어긋나면 발견한 작업 안에서 계속 바로잡는다.
+- `1.x+` v2 lane은 hosted-first를 기본값으로 쓴다. 탭 UI/state/action flow의 기본 위치는 hosted이고, extension은 page DOM adapter + iframe host + runtime broker 같은 browser-only capability를 유지한다.
+- 문서가 이 ownership 이동을 뒤따르지 못하면, 발견한 같은 작업 안에서 바로 고친다.
 - v2 lane이라고 해서 모든 backend endpoint family를 바로 분리하지 않는다. 현재 backend 분리가 준비된 것은 prompt-library 계열뿐이고, meeting Functions endpoint는 `1.0.0` v2 lane에서도 legacy 이름(`listInovaMeetings`, `issueInovaMeetingPanelAuth` 등)을 계속 사용한다.
 - local rehearsal에서 hosted panel 기본 경로는 `http://127.0.0.1:5000/extension/panel/index.html`이다.
 - local rehearsal에서 `1.x+` v2 lane hosted panel 기본 경로는 `http://127.0.0.1:5000/extension-v2/panel/index.html`이다.
@@ -90,10 +103,7 @@ ordinary feature 구현 변경은 이 문서의 대상이 아니고, version lan
 - local target은 hosted page만이 아니라 meeting Functions/Auth/Firestore/Storage emulator까지 함께 보는 full-local 경로다.
 - 같은 local target은 prompt와 hosted panel도 full-local rehearsal로 같이 본다. prompt read/write/review/panel auth는 `http://127.0.0.1:5001/browser-extension-main/asia-northeast3/*`를 향하고, hidden prompt bridge target은 `http://127.0.0.1:5000/extension/prompt-panel-bridge.html`, hosted panel target은 legacy lane `http://127.0.0.1:5000/extension/panel/index.html`, v2 lane `http://127.0.0.1:5000/extension-v2/panel/index.html`이다. 다만 페이지에 꽂히는 실제 iframe src는 둘 다 extension frame proxy를 거쳐 local Auth/Firestore emulator와 hosted 자산을 연다.
 - `1.0.0` v2 baseline에서도 panel render payload는 `settings.meetingWorkspaceTarget`을 iframe host까지 반드시 전달해야 한다. 이 local/prod handoff는 `npm.cmd run verify` 안의 `verify-panel-render`로 계속 고정한다.
-- `npm.cmd run verify`에는 `functions/platform/runtime.js`의 i-Nova identity warm-cache 재사용을 고정하는 `scripts/verify-functions-runtime.js`도 포함한다.
-- `npm.cmd run verify`에는 큰 `verify-panel-render.js`에 책임을 계속 싣지 않도록, v2 composition wiring 계약을 별도 `scripts/verify-panel-v2-composition.js`로 분리해 유지한다.
-- `npm.cmd run verify`에는 v2 `meeting-hub-controller`가 hosted runtime read/open/share/revoke ownership을 직접 유지하는지 고정하는 `scripts/verify-meeting-hub-controller.js`도 포함한다.
-- `npm.cmd run verify`에는 hosted prompt 탭의 `activePromptTab persistence dedupe`와 `library tab 재선택 시 불필요한 remote reload 방지`를 고정하는 `scripts/verify-prompt-library-hosted-tabs.js`도 포함한다.
+- 나머지 hosted-first/runtime 계약은 `npm.cmd run verify`에 포함된 lane/runtime/hosted 계약 검증으로 계속 고정한다.
 
 ### Auth scope와 URL 의미
 
