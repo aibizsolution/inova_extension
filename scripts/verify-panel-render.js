@@ -134,6 +134,30 @@ function verifyV2CompositionWiring() {
     v2CompositionSource.includes("namespace.panelBootstrapController.create"),
     "v2 composition should keep the existing bootstrap controller contract"
   );
+  assert(
+    v2CompositionSource.includes("namespace.panelDebugController.create"),
+    "v2 composition should wire the debug controller"
+  );
+  assert(
+    v2CompositionSource.includes("namespace.meetingManager.create"),
+    "v2 composition should wire the meeting manager"
+  );
+  assert(
+    v2CompositionSource.includes("namespace.panelActionController.create"),
+    "v2 composition should wire the shared panel action controller"
+  );
+  assert(
+    v2CompositionSource.includes("namespace.panelPromptBridgeController.create"),
+    "v2 composition should wire the prompt bridge controller"
+  );
+  assert(
+    v2CompositionSource.includes("handlePanelMeetingAction: panelActionController.handlePanelMeetingAction"),
+    "v2 bootstrap should forward hosted meeting actions into the shared top-panel dispatcher"
+  );
+  assert(
+    v2CompositionSource.includes("panelDebugController"),
+    "v2 render/bootstrap wiring should pass the debug controller through"
+  );
 }
 
 async function verifyPageAdapterContract() {

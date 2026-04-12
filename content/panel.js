@@ -751,13 +751,14 @@
   }
 
   function logConsoleTrace(channel, step, payload = {}) {
-    if (!namespace.panelDebug?.isEnabled?.()) {
-      return false;
-    }
     const normalizedChannel = normalizeText(channel) || "trace";
     const normalizedStep = normalizeText(step) || "trace";
     const normalizedLabel = normalizedStep.replace(/^\d+\./, "") || "trace";
     const detail = payload && typeof payload === "object" ? payload : {};
+    const debugEnabled = Boolean(namespace.panelDebug?.isEnabled?.());
+    if (!debugEnabled && !shouldAlwaysTraceStep(normalizedLabel)) {
+      return false;
+    }
     if (shouldSkipTraceStep(normalizedLabel, detail)) {
       return false;
     }
@@ -780,6 +781,9 @@
     scheduleTraceRepeatFlush();
     return true;
   }
+
+  function shouldAlwaysTraceStep(label) { return ["top.panel.bridge.attached", "top.panel.bridge.error", "top.panel.bridge.not-ready", "top.panel.bridge.ready", "top.panel.ensure.reuse", "top.panel.frame.error", "top.panel.frame.load", "top.panel.frame.src.set", "top.panel.handshake.timeout", "top.panel.host.created"].includes(label); }
+
   function shouldSkipTraceStep(label, payload) {
     const quietLabels = new Set(["hosted.listeners.bound", "hosted.message.received", "hosted.ready.ping.fire", "hosted.ready.ping.scheduled", "hosted.render.flush", "hosted.request.success", "hosted.snapshot.applied", "hosted.snapshot.received", "top.panel.bridge.request.completed", "top.panel.bridge.request.received"]);
     if (quietLabels.has(label)) {
@@ -809,6 +813,8 @@
       ["open", normalizeTraceBoolean(payload, "open")],
       ["visible", normalizeTraceBoolean(payload, "visible")],
       ["ready", normalizeTraceBoolean(payload, "ready")],
+      ["target", payload.target],
+      ["wrapped", normalizeTraceBoolean(payload, "wrapped")],
       ["reason", payload.reason],
       ["message", payload.message],
       ["error", payload.error],
@@ -831,17 +837,11 @@
     return !payload || !Object.prototype.hasOwnProperty.call(payload, key) ? "" : payload[key] ? "yes" : "no";
   }
 
-  function normalizeTraceCount(value) {
-    if (value == null || value === "") return "";
-    const numeric = Number(value);
-    return Number.isFinite(numeric) ? String(numeric) : normalizeText(value);
-  }
+  function normalizeTraceCount(value) { if (value == null || value === "") return ""; const numeric = Number(value); return Number.isFinite(numeric) ? String(numeric) : normalizeText(value); }
 
   function summarizeTraceUrl(value) {
     const normalized = normalizeText(value);
-    if (!normalized) {
-      return "";
-    }
+    if (!normalized) return "";
     try {
       const parsed = new URL(normalized);
       const path = `${parsed.host}${parsed.pathname}`;
@@ -855,7 +855,7 @@
 
   function emitTraceLine(channel, text) {
     traceSequence += 1;
-    console.info(`[inova:${channel} #${traceSequence}] ${text}`);
+    console.log(`[inova:${channel} #${traceSequence}] ${text}`);
   }
 
   function scheduleTraceRepeatFlush() {
