@@ -336,8 +336,12 @@ async function fetchReleaseJson(kind) {
 async function openReleaseUrl(url) {
   const nextUrl = namespace.session.normalizeText(url);
   if (!nextUrl) throw new Error("열 링크가 없어요.");
-  await chrome.tabs.create({ url: nextUrl });
-  return { opened: true };
+  const openedTab = await createBrowserTab(nextUrl);
+  return {
+    opened: true,
+    tabId: Number(openedTab?.id) || 0,
+    url: nextUrl,
+  };
 }
 
 async function openMeetingWorkspace(input, providerIdentity, sender) {
@@ -483,7 +487,13 @@ async function openHostedMeetingPage(mode, input, providerIdentity, sender) {
       meetingId,
       mode,
     });
-    await chrome.tabs.create({ url: finalUrl });
+    const openedTab = await createBrowserTab(finalUrl);
+    logMeetingDebug("open.success", {
+      finalUrl,
+      meetingId,
+      mode,
+      tabId: Number(openedTab?.id) || 0,
+    });
     return {
       expiresAt: "",
       meeting: {
@@ -491,6 +501,7 @@ async function openHostedMeetingPage(mode, input, providerIdentity, sender) {
         title: namespace.session.normalizeText(input?.title || sender?.tab?.title) || "새 회의 룸",
       },
       opened: true,
+      tabId: Number(openedTab?.id) || 0,
       url: finalUrl,
     };
   } catch (error) {
@@ -500,6 +511,23 @@ async function openHostedMeetingPage(mode, input, providerIdentity, sender) {
     });
     throw error;
   }
+}
+
+function createBrowserTab(url) {
+  const nextUrl = namespace.session.normalizeText(url);
+  if (!nextUrl) {
+    return Promise.reject(new Error("열 링크가 없어요."));
+  }
+  return new Promise((resolve, reject) => {
+    chrome.tabs.create({ url: nextUrl }, (tab) => {
+      const runtimeError = chrome.runtime?.lastError;
+      if (runtimeError) {
+        reject(new Error(namespace.session.normalizeText(runtimeError.message) || "탭을 열지 못했어요."));
+        return;
+      }
+      resolve(tab || null);
+    });
+  });
 }
 
 async function buildHostedMeetingCleanUrl(input) {

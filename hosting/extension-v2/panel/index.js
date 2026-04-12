@@ -1203,6 +1203,11 @@
     }
     const copyButton = target.closest?.("[data-copy-bookmark-id]");
     if (copyButton) {
+      tracePanelFlow("40.hosted.click.detected", {
+        action: "bookmark-copy",
+        message: copyButton.dataset.copyBookmarkId || "",
+        reason: "click",
+      });
       callbacks.onCopyBookmark(copyButton.dataset.copyBookmarkId || "")
         .then((copied) => namespace.bookmarkView?.flashCopyState?.(copyButton, copied))
         .catch(() => namespace.bookmarkView?.flashCopyState?.(copyButton, false));
@@ -1210,6 +1215,11 @@
     }
     const bookmarkButton = target.closest?.("[data-bookmark-id]");
     if (bookmarkButton && !target.closest?.("[data-copy-bookmark-id]")) {
+      tracePanelFlow("40.hosted.click.detected", {
+        action: "bookmark-jump",
+        message: bookmarkButton.dataset.bookmarkId || "",
+        reason: "click",
+      });
       bookmarkButton.closest(".inova-bookmark-item")?.focus({ preventScroll: true });
       void callbacks.onJumpBookmark(bookmarkButton.dataset.bookmarkId || "");
       return;
@@ -1371,6 +1381,11 @@
       return;
     }
     event.preventDefault();
+    tracePanelFlow("41.hosted.key.detected", {
+      action: "bookmark-jump",
+      message: item.dataset.bookmarkId || "",
+      reason: event.key === " " ? "space" : "enter",
+    });
     void callbacks.onJumpBookmark(item.dataset.bookmarkId || "");
   }
 
