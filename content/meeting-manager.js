@@ -63,6 +63,9 @@
         }
         return false;
       }
+      if (shouldSkipScheduledRefresh(delay)) {
+        return false;
+      }
       traceMeetingFlow("70.top.meeting.sync.scheduled", {
         activeTool: namespace.session.normalizeText(state.activeTool),
         delay,
@@ -461,6 +464,15 @@
 
     function shouldScheduleRefresh() {
       return state.activeTool === "meeting" || realtimeActive;
+    }
+
+    function shouldSkipScheduledRefresh(delay) {
+      return Boolean(
+        Math.max(0, Number(delay) || 0) > 0
+        && realtimeActive
+        && lastSnapshotRequestId >= currentRequestId
+        && !isMeetingHubPendingInitialLoad(state.meetingHub)
+      );
     }
   }
 
