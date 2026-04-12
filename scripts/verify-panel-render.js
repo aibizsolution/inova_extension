@@ -326,6 +326,18 @@ function verifyHostedPromptReviewFallbackContract() {
     hostedPanelSource.includes("...snapshotState,"),
     "hosted panel should fall back to snapshot review data when hosted review state is still blank"
   );
+  assert(
+    hostedPanelSource.includes("const snapshotHasActiveState = Boolean("),
+    "hosted panel should distinguish active snapshot review state from passive hosted review state"
+  );
+  assert(
+    hostedPanelSource.includes("if (snapshotState.pending && !hostedState.pending) {"),
+    "hosted panel should prefer snapshot review state while an external review request is pending"
+  );
+  assert(
+    hostedPanelSource.includes("if (snapshotHasActiveState && !hostedHasActiveState) {"),
+    "hosted panel should prefer snapshot review results when hosted review state has gone stale"
+  );
 }
 
 async function verifyHostedReleaseLocalDownloadUrls() {

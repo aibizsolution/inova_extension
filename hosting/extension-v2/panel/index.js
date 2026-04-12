@@ -976,20 +976,41 @@
     if (!hostedState) {
       return snapshotState;
     }
-    const hostedOwnsReview = Boolean(
+    const snapshotHasActiveState = Boolean(
+      snapshotState.open
+      || snapshotState.pending
+      || snapshotState.result
+    );
+    const hostedHasActiveState = Boolean(
       hostedState.open
       || hostedState.pending
       || hostedState.result
-      || hostedState.error
-      || hostedState.available
     );
-    if (hostedOwnsReview) {
+    if (snapshotState.pending && !hostedState.pending) {
+      return mergeSnapshotReviewState(snapshotState, hostedState, { preserveHostedError: false });
+    }
+    if (hostedState.pending) {
       return hostedState;
     }
+    if (snapshotHasActiveState && !hostedHasActiveState) {
+      return mergeSnapshotReviewState(snapshotState, hostedState, { preserveHostedError: false });
+    }
+    if (hostedHasActiveState) {
+      return hostedState;
+    }
+    if (hostedState.error || hostedState.available) {
+      return hostedState;
+    }
+    return mergeSnapshotReviewState(snapshotState, hostedState, { preserveHostedError: true });
+  }
+
+  function mergeSnapshotReviewState(snapshotState, hostedState, options = {}) {
     return {
       ...snapshotState,
       copyState: hostedState.copyState,
-      error: hostedState.error || snapshotState.error,
+      error: options.preserveHostedError
+        ? hostedState.error || snapshotState.error
+        : snapshotState.error,
       placeholderConfirmation: Boolean(hostedState.placeholderConfirmation || snapshotState.placeholderConfirmation),
     };
   }
