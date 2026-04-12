@@ -127,6 +127,9 @@ function createHarness(options = {}) {
 
   const state = {
     activeTool: options.activeTool || "bookmarks",
+    awaitingRouteMessages: Boolean(options.awaitingRouteMessages),
+    bookmarks: Array.isArray(options.bookmarks) ? options.bookmarks.slice() : [],
+    lastError: options.lastError || "",
     open: Boolean(options.open),
   };
 

@@ -498,7 +498,16 @@ function buildNamespace({ controllerEvents, ensureCalls, renderPayloads, runtime
             if (_state.open || _state.activeTool === "release") {
               deps.releaseManager.ensureChecked(false, _state.activeTool === "release");
             }
-            [450, 1200].forEach((delay) => runtime.setTimeout(() => deps.routeSync.scheduleRefresh(), delay));
+            [450, 1200].forEach((delay) => runtime.setTimeout(() => {
+              if (
+                _state.awaitingRouteMessages
+                || _state.lastError
+                || !Array.isArray(_state.bookmarks)
+                || !_state.bookmarks.length
+              ) {
+                deps.routeSync.scheduleRefresh();
+              }
+            }, delay));
           },
           handleRouteStorageChange() {},
         };

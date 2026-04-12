@@ -88,13 +88,26 @@
       if (state.open || state.activeTool === "release") {
         releaseManager.ensureChecked(false, state.activeTool === "release");
       }
-      [450, 1200].forEach((delay) => global.setTimeout(() => routeSync.scheduleRefresh(), delay));
+      [450, 1200].forEach((delay) => global.setTimeout(() => {
+        if (shouldPrimeRouteRefresh()) {
+          routeSync.scheduleRefresh();
+        }
+      }, delay));
     }
 
     function handleRouteStorageChange(changes, areaName) {
       if (routeStateController.handleStorageChange(changes, areaName)) {
         routeSync.scheduleRefresh();
       }
+    }
+
+    function shouldPrimeRouteRefresh() {
+      return Boolean(
+        state.awaitingRouteMessages
+        || state.lastError
+        || !Array.isArray(state.bookmarks)
+        || !state.bookmarks.length
+      );
     }
   }
 
