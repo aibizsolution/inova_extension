@@ -10,7 +10,7 @@ const root = path.resolve(__dirname, "..");
 async function main() {
   await verifyMeetingAndReleaseToolSelection();
   await verifyPromptAliasDelegation();
-  await verifyQueryRoutingAndRenderChrome();
+  await verifyQueryRoutingAndHandleCount();
   await verifyHandlePositionAndUiPreferenceLock();
   console.log("[verify-panel-shell-controller] Panel shell controller contract passed");
 }
@@ -48,7 +48,7 @@ async function verifyPromptAliasDelegation() {
   assert.deepEqual(harness.persistCalls, []);
 }
 
-async function verifyQueryRoutingAndRenderChrome() {
+async function verifyQueryRoutingAndHandleCount() {
   const harness = createHarness({
     activeTool: "bookmarks",
     uiPreferenceTool: "bookmarks",
@@ -73,28 +73,24 @@ async function verifyQueryRoutingAndRenderChrome() {
     value: "공개",
   });
 
-  const bookmarkChrome = harness.controller.buildRenderChrome({
+  const bookmarkHandleCount = harness.controller.buildHandleCount({
     bookmarks: 2,
     meeting: 1,
     promptTool: 3,
     prompts: 5,
     release: 1,
   });
-  assert.equal(bookmarkChrome.handleCount, 2);
-  assert.equal(bookmarkChrome.toolCount, 2);
-  assert.equal(bookmarkChrome.toolTitle, "대화 탐색");
-  assert.equal(bookmarkChrome.tools[2].count, 5);
+  assert.equal(bookmarkHandleCount, 2);
 
   harness.state.activeTool = "prompts";
-  const promptChrome = harness.controller.buildRenderChrome({
+  const promptHandleCount = harness.controller.buildHandleCount({
     bookmarks: 2,
     meeting: 1,
     promptTool: 3,
     prompts: 5,
     release: 1,
   });
-  assert.equal(promptChrome.toolCount, 3);
-  assert.equal(promptChrome.toolTitle, "프롬프트");
+  assert.equal(promptHandleCount, 3);
 }
 
 async function verifyHandlePositionAndUiPreferenceLock() {

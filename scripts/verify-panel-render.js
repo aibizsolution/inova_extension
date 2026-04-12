@@ -30,7 +30,6 @@ function verifyHostedPanelHostBatching() {
   const stateA = createPanelState({
     handleCount: 1,
     open: true,
-    toolCount: 1,
   });
   const stateB = createPanelState({
     bookmarksTool: {
@@ -39,7 +38,6 @@ function verifyHostedPanelHostBatching() {
     },
     handleCount: 2,
     open: false,
-    toolCount: 2,
   });
 
   harness.render(stateA);
@@ -61,7 +59,6 @@ function verifyHostedPanelHostBatching() {
   harness.bridge.options.onReadyChange({ ready: true });
   const snapshot = harness.bridge.snapshots.at(-1);
   assert(snapshot, "bridge should receive a snapshot once ready");
-  assert.equal(snapshot.panel.toolCount, 2);
   assert.equal(snapshot.panel.bookmarksTool.activeId, "bookmark-2");
   assert(snapshot.extensionCapabilities.includes("panel.snapshot.v1"));
 }
@@ -760,9 +757,6 @@ function createPanelState(overrides = {}) {
       meetingWorkspaceTarget: "production",
       meetingWorkspaceUrlOverride: "",
     },
-    toolCount: 0,
-    toolTitle: "대화 탐색",
-    tools: [],
     visible: true,
   };
   return mergeObjects(state, overrides);

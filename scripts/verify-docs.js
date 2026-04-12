@@ -378,7 +378,7 @@ const codeChecks = [
   {
     file: "content/panel-render-controller.js",
     patterns: [
-      /buildRenderChrome/,
+      /buildHandleCount/,
       /renderPanel/,
       /buildReviewFloatState/,
     ],

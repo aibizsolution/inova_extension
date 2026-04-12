@@ -27,7 +27,6 @@ function verifyRenderPayloadAndReviewFloat() {
   assert.equal(harness.renderPayloads[0].activeTool, "meeting");
   assert.equal(harness.renderPayloads[0].handleCount, 2);
   assert.equal(harness.renderPayloads[0].meetingTool.count, 2);
-  assert.equal(harness.renderPayloads[0].toolTitle, "회의 룸");
   assert.equal(harness.renderPayloads[0].visible, true);
   assert.deepEqual(harness.reviewFloatStates, [{ visible: true }]);
 }
@@ -132,18 +131,8 @@ function createHarness(options = {}) {
       },
     },
     panelShellController: {
-      buildRenderChrome(counts) {
-        return {
-          handleCount: counts.meeting,
-          toolCount: counts.meeting,
-          toolTitle: "회의 룸",
-          tools: [
-            { count: counts.bookmarks, id: "bookmarks", label: "대화" },
-            { count: counts.meeting, id: "meeting", label: "회의 룸" },
-            { count: counts.prompts, id: "prompts", label: "프롬프트" },
-            { count: counts.release, id: "release", label: "릴리스" },
-          ],
-        };
+      buildHandleCount(counts) {
+        return counts.meeting;
       },
     },
     releaseManager: {

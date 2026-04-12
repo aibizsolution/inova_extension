@@ -15,41 +15,25 @@
     const releaseManager = deps.releaseManager || { ensureChecked() {} };
     const render = typeof deps.render === "function" ? deps.render : () => {};
 
-    function buildRenderChrome(counts = {}) {
+    function buildHandleCount(counts = {}) {
       const bookmarkCount = normalizeCount(counts.bookmarks);
       const promptCount = normalizeCount(counts.prompts);
       const promptToolCount = normalizeCount(counts.promptTool, promptCount);
       const meetingCount = normalizeCount(counts.meeting);
       const releaseCount = normalizeCount(counts.release);
-      const toolCounts = {
-        bookmarks: bookmarkCount,
-        meeting: meetingCount,
-        prompts: promptToolCount,
-        release: releaseCount,
-      };
-      const toolCount = Object.prototype.hasOwnProperty.call(toolCounts, state.activeTool)
-        ? toolCounts[state.activeTool]
-        : 0;
-
-      return {
-        handleCount: state.activeTool === "bookmarks"
-          ? bookmarkCount || promptCount || meetingCount || releaseCount
-          : toolCount,
-        toolCount,
-        toolTitle: state.activeTool === "prompts"
-          ? "프롬프트"
-          : state.activeTool === "meeting"
-              ? "회의 룸"
-              : state.activeTool === "release"
-                  ? "릴리스 안내"
-                  : "대화 탐색",
-        tools: [
-          { count: bookmarkCount, id: "bookmarks", label: "대화" },
-          { count: meetingCount, id: "meeting", label: "회의 룸" },
-          { count: promptCount, id: "prompts", label: "프롬프트" },
-          { count: releaseCount, id: "release", label: "릴리스" },
-        ],
-      };
+      if (state.activeTool === "bookmarks") {
+        return bookmarkCount || promptCount || meetingCount || releaseCount;
+      }
+      if (state.activeTool === "prompts") {
+        return promptToolCount;
+      }
+      if (state.activeTool === "meeting") {
+        return meetingCount;
+      }
+      if (state.activeTool === "release") {
+        return releaseCount;
+      }
+      return 0;
     }
 
     function lockUiPreferenceSelection(activeTool, activePromptTab) {
@@ -167,7 +151,7 @@
 
     return {
       applyUiPreferenceLock,
-      buildRenderChrome,
+      buildHandleCount,
       lockUiPreferenceSelection,
       normalizeToolId,
       persistActiveTool,

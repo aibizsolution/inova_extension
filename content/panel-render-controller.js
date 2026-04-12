@@ -14,14 +14,7 @@
       buildToolState() { return { promptCount: 0, promptTool: {}, promptToolCount: 0 }; },
     };
     const panelShellController = deps.panelShellController || {
-      buildRenderChrome() {
-        return {
-          handleCount: 0,
-          toolCount: 0,
-          toolTitle: "",
-          tools: [],
-        };
-      },
+      buildHandleCount() { return 0; },
     };
     const releaseManager = deps.releaseManager || { buildViewState() { return { updateAvailable: false }; } };
 
@@ -41,7 +34,7 @@
       const meetingTool = panelMeetingController.buildToolState(state.meetingHub);
       const releaseState = releaseManager.buildViewState();
       const releaseCount = releaseState.updateAvailable ? 1 : 0;
-      const shellChrome = panelShellController.buildRenderChrome({
+      const handleCount = panelShellController.buildHandleCount({
         bookmarks: bookmarkTool.count,
         meeting: meetingTool.count,
         promptTool: promptToolState.promptToolCount,
@@ -52,7 +45,7 @@
       namespace.contentPanel.renderPanel({
         activeTool: state.activeTool,
         bookmarksTool: bookmarkTool,
-        handleCount: shellChrome.handleCount,
+        handleCount,
         meetingTool,
         releaseTool: releaseState,
         handleRatio: namespace.storage.getHandleRatio(state.uiPreferences, global.innerWidth),
@@ -60,9 +53,6 @@
         promptTool: promptToolState.promptTool,
         settings: state.settings,
         settingsHydrated: Boolean(state.settingsHydrated),
-        toolCount: shellChrome.toolCount,
-        toolTitle: shellChrome.toolTitle,
-        tools: shellChrome.tools,
         visible,
       });
       namespace.composerReviewFloat?.render?.(panelPromptController.buildReviewFloatState(visible));

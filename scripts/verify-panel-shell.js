@@ -23,7 +23,6 @@ async function main() {
   assert.equal(initialPayload.bookmarksTool.count, 1);
   assert.equal(initialPayload.promptTool.activeTab, "library");
   assert.equal(initialPayload.panelDebug.enabled, true);
-  assert.equal(initialPayload.tools.length, 4);
   assert.equal(harness.reviewFloatEnsured, 1);
   assert.equal(harness.reviewFloatStates.at(-1)?.visible, true);
   assert.equal(typeof harness.windowListeners.focus, "function");
@@ -73,7 +72,6 @@ async function main() {
   await harness.callbacks.onSelectTool("release");
   const releasePayload = harness.renderPayloads.at(-1);
   assert.equal(releasePayload.activeTool, "release");
-  assert.equal(releasePayload.toolTitle, "릴리스 안내");
   assert.deepEqual(harness.shellToolSelections, ["release"]);
 
   console.log("[verify-panel-shell] Panel shell assembly contract passed");
@@ -605,7 +603,7 @@ function buildNamespace({ controllerEvents, ensureCalls, renderPayloads, runtime
             const meetingTool = deps.panelMeetingController.buildToolState(state.meetingHub);
             const panelDebug = deps.panelDebugController.buildState();
             const releaseState = deps.releaseManager.buildViewState();
-            const shellChrome = deps.panelShellController.buildRenderChrome({
+            const handleCount = deps.panelShellController.buildHandleCount({
               bookmarks: bookmarkTool.count,
               meeting: meetingTool.count,
               promptTool: promptToolState.promptToolCount,
@@ -615,15 +613,12 @@ function buildNamespace({ controllerEvents, ensureCalls, renderPayloads, runtime
             namespace.contentPanel.renderPanel({
               activeTool: state.activeTool,
               bookmarksTool: bookmarkTool,
-              handleCount: shellChrome.handleCount,
+              handleCount,
               meetingTool,
               open: state.open,
               panelDebug,
               promptTool: promptToolState.promptTool,
               releaseTool: releaseState,
-              toolCount: shellChrome.toolCount,
-              toolTitle: shellChrome.toolTitle,
-              tools: shellChrome.tools,
               visible: true,
             });
             namespace.composerReviewFloat.render(deps.panelPromptController.buildReviewFloatState(true));
@@ -634,38 +629,25 @@ function buildNamespace({ controllerEvents, ensureCalls, renderPayloads, runtime
     panelShellController: {
       create(state, deps) {
         return {
-          buildRenderChrome(counts) {
+          buildHandleCount(counts) {
             const releaseCount = Number(counts.release) || 0;
             const bookmarkCount = Number(counts.bookmarks) || 0;
             const meetingCount = Number(counts.meeting) || 0;
             const promptCount = Number(counts.prompts) || 0;
             const promptToolCount = Number(counts.promptTool) || 0;
-            const toolCount = state.activeTool === "prompts"
-              ? promptToolCount
-              : state.activeTool === "meeting"
-                  ? meetingCount
-                  : state.activeTool === "release"
-                      ? releaseCount
-                      : bookmarkCount;
-            return {
-              handleCount: state.activeTool === "bookmarks"
-                ? bookmarkCount || promptCount || meetingCount || releaseCount
-                : toolCount,
-              toolCount,
-              toolTitle: state.activeTool === "prompts"
-                ? "프롬프트"
-                : state.activeTool === "meeting"
-                    ? "회의 룸"
-                    : state.activeTool === "release"
-                        ? "릴리스 안내"
-                        : "대화 탐색",
-              tools: [
-                { count: bookmarkCount, id: "bookmarks", label: "대화" },
-                { count: meetingCount, id: "meeting", label: "회의 룸" },
-                { count: promptCount, id: "prompts", label: "프롬프트" },
-                { count: releaseCount, id: "release", label: "릴리스" },
-              ],
-            };
+            if (state.activeTool === "bookmarks") {
+              return bookmarkCount || promptCount || meetingCount || releaseCount;
+            }
+            if (state.activeTool === "prompts") {
+              return promptToolCount;
+            }
+            if (state.activeTool === "meeting") {
+              return meetingCount;
+            }
+            if (state.activeTool === "release") {
+              return releaseCount;
+            }
+            return 0;
           },
           lockUiPreferenceSelection() {},
           normalizeToolId(toolId) {

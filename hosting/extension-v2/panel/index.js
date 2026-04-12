@@ -20,6 +20,12 @@
     "runtime.invoke.v1",
     "page.adapter.v2",
   ]);
+  const HOSTED_PANEL_TOOLS = Object.freeze([
+    { id: "bookmarks", label: "대화" },
+    { id: "meeting", label: "회의 룸" },
+    { id: "prompts", label: "프롬프트" },
+    { id: "release", label: "릴리스" },
+  ]);
 
   const root = document.getElementById("inova-hosted-panel-root");
   const state = {
@@ -468,7 +474,7 @@
     tracePanelFlow("18.hosted.snapshot.applied", {
       activeTool: normalizeText(state.panelSnapshot?.activeTool),
       meetingCount: Number(state.panelSnapshot?.meetingTool?.count) || 0,
-      toolTitle: normalizeText(state.panelSnapshot?.toolTitle),
+      toolTitle: buildHostedToolTitle(state.panelSnapshot?.activeTool),
     });
     scheduleRender();
   }
@@ -721,7 +727,7 @@
       activeTool: normalizeText(panelState.activeTool),
       bridgeReady: Boolean(state.bridgeReady),
       meetingCount: Number(panelState.meetingTool?.count) || 0,
-      toolTitle: normalizeText(panelState.toolTitle),
+      toolTitle: buildHostedToolTitle(panelState.activeTool),
     });
     const missingCapabilities = readMissingCapabilities();
     if (missingCapabilities.length) {
@@ -767,8 +773,7 @@
       : 0;
 
     const nextToolRailHtml = renderToolRail(
-      buildEffectiveTools(
-        panelState.tools || [],
+      buildHostedToolItems(
         effectiveConversationCount,
         effectivePromptCount,
         effectiveMeetingCount,
@@ -781,7 +786,7 @@
       state.renderCache.toolRailHtml = nextToolRailHtml;
     }
 
-    const nextToolTitle = String(panelState.toolTitle || "");
+    const nextToolTitle = buildHostedToolTitle(panelState.activeTool);
     if (state.renderCache.toolTitle !== nextToolTitle) {
       elements.toolTitle.textContent = nextToolTitle;
       state.renderCache.toolTitle = nextToolTitle;
@@ -904,6 +909,33 @@
         <span class="inova-tool-rail__count">${Number(tool.count) || 0}</span>
       </button>
     `).join("");
+  }
+
+  function buildHostedToolItems(conversationCount, promptCount, meetingCount, releaseCount) {
+    return HOSTED_PANEL_TOOLS.map((tool) => ({
+      ...tool,
+      count: tool.id === "bookmarks"
+        ? conversationCount
+        : tool.id === "prompts"
+          ? promptCount
+          : tool.id === "meeting"
+            ? meetingCount
+            : releaseCount,
+    }));
+  }
+
+  function buildHostedToolTitle(activeTool) {
+    const normalizedTool = normalizeText(activeTool);
+    if (normalizedTool === "prompts") {
+      return "프롬프트";
+    }
+    if (normalizedTool === "meeting") {
+      return "회의 룸";
+    }
+    if (normalizedTool === "release") {
+      return "릴리스 안내";
+    }
+    return "대화 탐색";
   }
 
   function buildEffectiveConversationToolState(panelState) {
@@ -1029,36 +1061,6 @@
     return panelState.releaseTool;
   }
 
-  function buildEffectiveTools(tools, conversationCount, promptCount, meetingCount, releaseCount) {
-    return (Array.isArray(tools) ? tools : []).map((tool) => {
-      if (tool?.id === "bookmarks") {
-        return {
-          ...tool,
-          count: conversationCount,
-        };
-      }
-      if (tool?.id === "prompts") {
-        return {
-          ...tool,
-          count: promptCount,
-        };
-      }
-      if (tool?.id === "meeting") {
-        return {
-          ...tool,
-          count: meetingCount,
-        };
-      }
-      if (tool?.id === "release") {
-        return {
-          ...tool,
-          count: releaseCount,
-        };
-      }
-      return tool;
-    });
-  }
-
   function readEffectivePromptCount(panelState, effectivePromptTool) {
     const promptItems = Array.isArray(effectivePromptTool?.prompt?.items)
       ? effectivePromptTool.prompt.items
@@ -1067,13 +1069,11 @@
       0,
       Number(effectivePromptTool?.prompt?.totalCount)
         || Number(effectivePromptTool?.tabs?.find?.((tab) => tab.id === "library")?.count)
+        || Number(panelState.promptTool?.prompt?.totalCount)
+        || Number(panelState.promptTool?.tabs?.find?.((tab) => tab.id === "library")?.count)
         || promptItems.length
     );
-    const snapshotPromptCount = Math.max(
-      0,
-      Number((panelState.tools || []).find((tool) => tool.id === "prompts")?.count)
-    );
-    return promptTotal || snapshotPromptCount;
+    return promptTotal;
   }
 
   function readEffectivePromptToolCount(effectivePromptTool, promptCount) {
@@ -1093,44 +1093,32 @@
   }
 
   function readEffectiveConversationCount(panelState, effectiveConversationTool) {
-    const hostedCount = Math.max(
+    return Math.max(
       0,
       Number(effectiveConversationTool?.count)
+        || Number(panelState.bookmarksTool?.count)
         || (Array.isArray(effectiveConversationTool?.items) ? effectiveConversationTool.items.length : 0)
     );
-    const snapshotCount = Math.max(
-      0,
-      Number((panelState.tools || []).find((tool) => tool.id === "bookmarks")?.count)
-        || Number(panelState.bookmarksTool?.count)
-    );
-    return hostedCount || snapshotCount;
   }
 
   function readEffectiveMeetingCount(panelState, effectiveMeetingTool) {
-    const hostedCount = Math.max(
+    return Math.max(
       0,
       Number(effectiveMeetingTool?.count)
+        || Number(panelState.meetingTool?.count)
         || (Array.isArray(effectiveMeetingTool?.items) ? effectiveMeetingTool.items.length : 0)
     );
-    const snapshotCount = Math.max(
-      0,
-      Number((panelState.tools || []).find((tool) => tool.id === "meeting")?.count)
-    );
-    return hostedCount || snapshotCount;
   }
 
   function readEffectiveReleaseCount(panelState, effectiveReleaseTool) {
-    const hostedCount = Math.max(
+    return Math.max(
       0,
       Number(effectiveReleaseTool?.updateAvailable ? 1 : 0)
         || Number(effectiveReleaseTool?.count)
+        || Number(panelState.releaseTool?.updateAvailable ? 1 : 0)
+        || Number(panelState.releaseTool?.count)
         || 0
     );
-    const snapshotCount = Math.max(
-      0,
-      Number((panelState.tools || []).find((tool) => tool.id === "release")?.count)
-    );
-    return hostedCount || snapshotCount;
   }
 
   function renderStatusCard(options = {}) {
