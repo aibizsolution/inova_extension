@@ -178,12 +178,14 @@ function verifyHostedPanelFiles(directoryName) {
     assert(html.includes("./prompt-review-controller.js"), "v2 hosted panel should load prompt review controller");
     assert(html.includes("./prompt-store-controller.js"), "v2 hosted panel should load prompt store controller");
     assert(html.includes("./meeting-hub-controller.js"), "v2 hosted panel should load meeting hub controller");
+    assert(html.includes("./debug-controller.js"), "v2 hosted panel should load debug controller");
     assert(html.includes("./release-controller.js"), "v2 hosted panel should load release controller");
     assert(indexJs.includes("conversationController"), "v2 hosted panel should wire hosted conversation ownership");
     assert(indexJs.includes("promptLibraryController"), "v2 hosted panel should wire hosted prompt library ownership");
     assert(indexJs.includes("promptReviewController"), "v2 hosted panel should wire hosted prompt review ownership");
     assert(indexJs.includes("promptStoreController"), "v2 hosted panel should wire hosted prompt store ownership");
     assert(indexJs.includes("meetingHubController"), "v2 hosted panel should wire hosted meeting ownership");
+    assert(indexJs.includes("debugController"), "v2 hosted panel should wire hosted debug ownership");
     assert(indexJs.includes("releaseController"), "v2 hosted panel should wire hosted release ownership");
   }
   assert(

@@ -305,6 +305,10 @@
     if (action === "get-debug-state") {
       return buildDebugState();
     }
+    if (action === "set-debug-enabled") {
+      namespace.panelDebug?.setEnabled?.(Boolean(payload?.enabled));
+      return buildDebugState();
+    }
     throw new Error("지원하지 않는 page adapter 요청이에요.");
   }
 

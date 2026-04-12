@@ -79,6 +79,10 @@
     invokeRuntime,
     scheduleRender,
   }) || null;
+  const debugController = namespace.debugController?.create?.({
+    invokePage,
+    scheduleRender,
+  }) || null;
   const callbacks = createCallbacks();
 
   namespace.hostedPanelApp = api;
@@ -595,6 +599,7 @@
     promptStoreController?.syncPanelState?.(panelState, state.extensionCapabilities);
     meetingHubController?.syncPanelState?.(panelState, state.extensionCapabilities);
     releaseController?.syncPanelState?.(panelState, state.extensionCapabilities);
+    debugController?.syncPanelState?.(panelState, state.extensionCapabilities);
     ensureShell();
     const elements = state.elements;
     if (!elements) {
@@ -648,7 +653,7 @@
     }
 
     renderToolContentIfNeeded(elements.toolContent, panelState);
-    renderMeetingDebugLayerIfNeeded(elements.debugLayer, panelState);
+    renderMeetingDebugLayerIfNeeded(elements.debugLayer);
 
     if (panelState.activeTool === "prompts" && effectivePromptTool?.activeTab === "store") {
       namespace.promptHubPanel?.syncStoreList?.(elements.app, callbacks, {
@@ -708,18 +713,36 @@
     }
   }
 
-  function renderMeetingDebugLayerIfNeeded(debugLayer, panelState) {
+  function renderMeetingDebugLayerIfNeeded(debugLayer) {
     if (!(debugLayer instanceof global.HTMLElement)) {
       return;
     }
-    const panelDebug = panelState.panelDebug && typeof panelState.panelDebug === "object"
-      ? panelState.panelDebug
-      : {};
-    if (state.renderCache.debugHtml || debugLayer.innerHTML) {
-      debugLayer.innerHTML = "";
+    const panelDebug = debugController?.buildViewState?.() || {};
+    if (!panelDebug.enabled) {
+      if (state.renderCache.debugHtml || debugLayer.innerHTML) {
+        debugLayer.innerHTML = "";
+      }
+      state.renderCache.debugHtml = "";
+      state.renderCache.debugKey = "disabled";
+      syncMeetingDebugLayerDataset(debugLayer, panelDebug);
+      return;
     }
-    state.renderCache.debugHtml = "";
-    state.renderCache.debugKey = panelDebug.enabled ? "external-overlay" : "disabled";
+    const nextDebugKey = `enabled:${serializeRenderState(panelDebug)}`;
+    if (state.renderCache.debugKey !== nextDebugKey) {
+      namespace.panelDebug?.captureViewport?.(
+        "hosted-panel-debug-layer",
+        debugLayer.querySelector(".inova-meeting-debug-console__log")
+      );
+      state.renderCache.debugHtml = namespace.meetingDebugConsole?.renderPanel?.(panelDebug) || "";
+      state.renderCache.debugKey = nextDebugKey;
+      if (debugLayer.innerHTML !== state.renderCache.debugHtml) {
+        debugLayer.innerHTML = state.renderCache.debugHtml;
+      }
+      namespace.panelDebug?.restoreViewport?.(
+        "hosted-panel-debug-layer",
+        debugLayer.querySelector(".inova-meeting-debug-console__log")
+      );
+    }
     syncMeetingDebugLayerDataset(debugLayer, panelDebug);
   }
 
@@ -1003,6 +1026,11 @@
     if (bookmarkButton && !event.target.closest?.("[data-copy-bookmark-id]")) {
       bookmarkButton.closest(".inova-bookmark-item")?.focus({ preventScroll: true });
       void callbacks.onJumpBookmark(bookmarkButton.dataset.bookmarkId || "");
+      return;
+    }
+    const debugAction = event.target.closest?.("[data-meeting-action]");
+    if (debugAction?.dataset?.meetingAction?.startsWith("debug-")) {
+      void debugController?.handleDebugAction?.(debugAction.dataset.meetingAction || "");
       return;
     }
     const meetingAction = event.target.closest?.("[data-meeting-action]");

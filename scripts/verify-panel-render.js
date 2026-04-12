@@ -157,6 +157,20 @@ async function verifyPageAdapterContract() {
   assert.equal(debugSnapshot?.result?.statusSummary?.errorCount, 1);
   assert.equal(debugSnapshot?.result?.hasErrors, true);
 
+  const debugDisabled = await harness.bridge.options.onRequest({
+    domain: "page",
+    payload: { action: "set-debug-enabled", enabled: false },
+  });
+  assert.equal(debugDisabled?.handled, true);
+  assert.equal(debugDisabled?.result?.enabled, false);
+
+  const debugEnabled = await harness.bridge.options.onRequest({
+    domain: "page",
+    payload: { action: "set-debug-enabled", enabled: true },
+  });
+  assert.equal(debugEnabled?.handled, true);
+  assert.equal(debugEnabled?.result?.enabled, true);
+
   const debugCopy = await harness.bridge.options.onRequest({
     domain: "page",
     payload: { action: "copy-debug-log", errorsOnly: true },
@@ -190,6 +204,7 @@ function createHarness() {
     resets: [],
     snapshots: [],
   };
+  let debugEnabled = true;
 
   context.console = console;
   context.globalThis = context;
@@ -288,7 +303,11 @@ function createHarness() {
         ];
       },
       isEnabled() {
-        return true;
+        return debugEnabled;
+      },
+      setEnabled(nextEnabled) {
+        debugEnabled = Boolean(nextEnabled);
+        return debugEnabled;
       },
       summarizeEntries() {
         return {
