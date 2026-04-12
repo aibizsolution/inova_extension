@@ -145,6 +145,14 @@ function main() {
     "v2 bootstrap should forward hosted meeting actions into the shared top-panel dispatcher"
   );
   assert(
+    v2CompositionSource.includes("shouldListenMeetingStorageChanges: () => false"),
+    "v2 bootstrap wiring should not subscribe meeting storage change listeners"
+  );
+  assert(
+    v2CompositionSource.includes("shouldPrimeMeetingSync: () => state.activeTool === \"meeting\""),
+    "v2 bootstrap wiring should only prime meeting sync when the meeting tool starts active"
+  );
+  assert(
     v2CompositionSource.includes("panelDebugController"),
     "v2 render/bootstrap wiring should pass the debug controller through"
   );

@@ -9,6 +9,12 @@
       ? deps.isStoreTabActive
       : () => false;
     const meetingManager = deps.meetingManager || { handleStorageChange() {}, scheduleSync() {} };
+    const shouldListenMeetingStorageChanges = typeof deps.shouldListenMeetingStorageChanges === "function"
+      ? deps.shouldListenMeetingStorageChanges
+      : () => true;
+    const shouldPrimeMeetingSync = typeof deps.shouldPrimeMeetingSync === "function"
+      ? deps.shouldPrimeMeetingSync
+      : () => true;
     const panelActivityController = deps.panelActivityController || { handleVisibilityChange() {}, handleWindowFocus() {} };
     const panelBookmarkController = deps.panelBookmarkController || { copyBookmarkText() {}, jumpToBookmark() {} };
     const panelDebugController = deps.panelDebugController || { installValidationApi() {} };
@@ -76,10 +82,14 @@
       global.document.addEventListener("visibilitychange", panelActivityController.handleVisibilityChange, { passive: true });
       global.chrome?.storage?.onChanged?.addListener(handleRouteStorageChange);
       global.chrome?.storage?.onChanged?.addListener(panelPromptController.handleStorageChange);
-      global.chrome?.storage?.onChanged?.addListener(meetingManager.handleStorageChange);
+      if (shouldListenMeetingStorageChanges()) {
+        global.chrome?.storage?.onChanged?.addListener(meetingManager.handleStorageChange);
+      }
       global.chrome?.storage?.onChanged?.addListener(releaseManager.handleStorageChange);
       await routeSync.syncRouteState(true);
-      meetingManager.scheduleSync(260);
+      if (shouldPrimeMeetingSync()) {
+        meetingManager.scheduleSync(260);
+      }
       panelPromptController.scheduleRealtimeSync(260);
       panelPromptController.scheduleCloudSyncIfNeeded(260);
       if (isStoreTabActive()) {

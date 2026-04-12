@@ -9,6 +9,7 @@ const root = path.resolve(__dirname, "..");
 
 async function main() {
   await verifyBootstrapWiringAndScheduling();
+  await verifyBootstrapMeetingOptOut();
   verifyRouteStorageChangeDelegation();
   console.log("[verify-panel-bootstrap-controller] Panel bootstrap controller contract passed");
 }
@@ -46,6 +47,19 @@ async function verifyBootstrapWiringAndScheduling() {
 
   harness.timeoutCallbacks.forEach((callback) => callback());
   assert.equal(harness.routeRefreshCalls, 2);
+}
+
+async function verifyBootstrapMeetingOptOut() {
+  const harness = createHarness({
+    listenMeetingStorageChanges: false,
+    primeMeetingSync: false,
+  });
+
+  await harness.controller.bootstrap();
+  await harness.flush();
+
+  assert.equal(harness.storageListeners.length, 3);
+  assert.deepEqual(harness.meetingScheduleCalls, []);
 }
 
 function verifyRouteStorageChangeDelegation() {
@@ -143,6 +157,12 @@ function createHarness(options = {}) {
       scheduleSync(delay) {
         meetingScheduleCalls.push(delay);
       },
+    },
+    shouldListenMeetingStorageChanges() {
+      return options.listenMeetingStorageChanges !== false;
+    },
+    shouldPrimeMeetingSync() {
+      return options.primeMeetingSync !== false;
     },
     panelActivityController: {
       handleVisibilityChange() {},

@@ -127,6 +127,8 @@
       handlePanelMeetingAction: panelActionController.handlePanelMeetingAction,
       isStoreTabActive: runtimeFlags.isStoreTabActive,
       meetingManager: hostedOwnedMeetingLifecycle,
+      shouldListenMeetingStorageChanges: () => false,
+      shouldPrimeMeetingSync: () => state.activeTool === "meeting",
       panelActivityController,
       panelBookmarkController,
       panelDebugController,
