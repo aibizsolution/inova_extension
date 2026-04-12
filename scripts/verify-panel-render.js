@@ -16,6 +16,7 @@ async function main() {
   verifyHostedPanelImeCompositionGuard();
   verifyHostedConversationSearchDebounceContract();
   verifyHostedStoreSearchDebounceContract();
+  verifyHostedPromptReviewFallbackContract();
   await verifyPageAdapterContract();
   console.log("[verify-panel-render] Hosted panel host contract passed");
 }
@@ -256,6 +257,26 @@ function verifyHostedStoreSearchDebounceContract() {
   assert(
     promptStoreControllerSource.includes("if (state.query === nextQuery && !options.submit)"),
     "hosted store search should avoid redundant rerenders for repeated values"
+  );
+}
+
+function verifyHostedPromptReviewFallbackContract() {
+  const hostedPanelSource = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "index.js"),
+    "utf8"
+  );
+
+  assert(
+    hostedPanelSource.includes("const reviewState = resolveEffectivePromptReviewState(snapshotReviewState, hostedReviewState);"),
+    "hosted prompt tool should merge snapshot review state before rendering the review tab"
+  );
+  assert(
+    hostedPanelSource.includes("function resolveEffectivePromptReviewState(snapshotReviewState, hostedReviewState)"),
+    "hosted panel should define a dedicated review-state merge helper"
+  );
+  assert(
+    hostedPanelSource.includes("...snapshotState,"),
+    "hosted panel should fall back to snapshot review data when hosted review state is still blank"
   );
 }
 

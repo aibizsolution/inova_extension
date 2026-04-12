@@ -903,9 +903,10 @@
   function buildEffectivePromptToolState(panelState) {
     if (promptLibraryController?.hasRequiredCapabilities?.()) {
       const snapshotReviewState = panelState.promptTool?.review || null;
-      const reviewState = promptReviewController?.buildViewState
+      const hostedReviewState = promptReviewController?.buildViewState
         ? promptReviewController.buildViewState()
         : snapshotReviewState;
+      const reviewState = resolveEffectivePromptReviewState(snapshotReviewState, hostedReviewState);
       const promptToolState = promptLibraryController.buildPromptToolState(panelState.promptTool || {}, {
         reviewOpen: Boolean(reviewState?.open),
       });
@@ -936,10 +937,10 @@
           pending: Boolean(reviewState?.pending),
           promptTab: normalizeText(promptToolState.activeTab),
           snapshotOpen: Boolean(snapshotReviewState?.open),
-          reason: snapshotReviewState?.result && !reviewState?.result
-            ? "snapshot-has-result"
-            : reviewState?.result
+          reason: hostedReviewState?.result
             ? "hosted-has-result"
+            : snapshotReviewState?.result
+            ? "snapshot-has-result"
             : "review-visible",
           reviewOpen: Boolean(reviewState?.open),
         });
@@ -947,6 +948,37 @@
       return promptToolState;
     }
     return panelState.promptTool;
+  }
+
+  function resolveEffectivePromptReviewState(snapshotReviewState, hostedReviewState) {
+    const snapshotState = snapshotReviewState && typeof snapshotReviewState === "object"
+      ? snapshotReviewState
+      : null;
+    const hostedState = hostedReviewState && typeof hostedReviewState === "object"
+      ? hostedReviewState
+      : null;
+    if (!snapshotState) {
+      return hostedState;
+    }
+    if (!hostedState) {
+      return snapshotState;
+    }
+    const hostedOwnsReview = Boolean(
+      hostedState.open
+      || hostedState.pending
+      || hostedState.result
+      || hostedState.error
+      || hostedState.available
+    );
+    if (hostedOwnsReview) {
+      return hostedState;
+    }
+    return {
+      ...snapshotState,
+      copyState: hostedState.copyState,
+      error: hostedState.error || snapshotState.error,
+      placeholderConfirmation: Boolean(hostedState.placeholderConfirmation || snapshotState.placeholderConfirmation),
+    };
   }
 
   function buildEffectiveMeetingToolState(panelState) {
