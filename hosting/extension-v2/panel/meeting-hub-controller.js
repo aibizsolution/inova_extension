@@ -1,18 +1,13 @@
 (function initMeetingHubController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const INITIAL_SYNC_RETRY_MS = 1500;
   const REQUIRED_EXTENSION_CAPABILITIES = Object.freeze([
     "runtime.invoke.v1",
   ]);
 
-  function create(options = {}) {
-    const requestPanel = typeof options.requestPanel === "function"
-      ? options.requestPanel
-      : async () => ({});
+  function create() {
     const state = {
       capabilities: [],
       lastCount: 0,
-      lastSyncRequestedAt: 0,
       settings: {
         meetingDebugConsoleEnabled: false,
       },
@@ -32,12 +27,6 @@
         : [];
       if (!hasRequiredCapabilities()) {
         return;
-      }
-      if (shouldRequestInitialSync(panelState?.activeTool, panelState?.meetingTool)) {
-        state.lastSyncRequestedAt = Date.now();
-        void requestPanel({
-          action: "meeting-refresh",
-        }).catch(() => {});
       }
       state.settings = {
         ...state.settings,
@@ -71,22 +60,6 @@
 
     async function handleMeetingAction() {
       return false;
-    }
-
-    function shouldRequestInitialSync(activeTool, meetingTool) {
-      if (normalizeText(activeTool) !== "meeting") {
-        return false;
-      }
-      const normalizedMeetingTool = meetingTool && typeof meetingTool === "object"
-        ? meetingTool
-        : {};
-      if (normalizeText(normalizedMeetingTool.checkedAt) || normalizeText(normalizedMeetingTool.error)) {
-        return false;
-      }
-      if (Array.isArray(normalizedMeetingTool.items) && normalizedMeetingTool.items.length) {
-        return false;
-      }
-      return Date.now() - state.lastSyncRequestedAt >= INITIAL_SYNC_RETRY_MS;
     }
   }
 

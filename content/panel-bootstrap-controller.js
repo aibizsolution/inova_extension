@@ -55,7 +55,6 @@
         onImportFile: panelPromptController.handleImportFile,
         onJumpBookmark: panelBookmarkController.jumpToBookmark,
         onMeetingAction: handlePanelMeetingAction,
-        onMeetingRefresh: () => meetingManager.scheduleSync(0),
         onMovePrompt: panelPromptController.movePromptItem,
         onPromptAction: panelPromptController.handlePromptAction,
         onPromptDraftChange: panelPromptController.handleDraftChange,

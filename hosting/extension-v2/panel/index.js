@@ -72,7 +72,6 @@
   }) || null;
   const meetingHubController = namespace.meetingHubController?.create?.({
     invokeRuntime,
-    requestPanel: (payload = {}) => request("panel", payload),
     scheduleRender,
   }) || null;
   const releaseController = namespace.releaseController?.create?.({
@@ -171,11 +170,23 @@
         });
       },
       onMeetingAction(meetingAction, detail = {}) {
+        traceMeetingFlow("2.hosted.callback.enter", {
+          detail,
+          meetingAction,
+        });
         if (meetingHubController?.handleMeetingAction) {
-          return meetingHubController.handleMeetingAction(meetingAction, detail).then((handled) => {
+          return Promise.resolve(meetingHubController.handleMeetingAction(meetingAction, detail)).then((handled) => {
+            traceMeetingFlow("3.hosted.controller.result", {
+              handled,
+              meetingAction,
+            });
             if (handled !== false) {
               return handled;
             }
+            traceMeetingFlow("4.hosted.panel.request", {
+              detail,
+              meetingAction,
+            });
             return request("panel", {
               action: "meeting-action",
               detail,
@@ -183,6 +194,10 @@
             });
           });
         }
+        traceMeetingFlow("4.hosted.panel.request", {
+          detail,
+          meetingAction,
+        });
         return request("panel", {
           action: "meeting-action",
           detail,
@@ -1040,6 +1055,12 @@
     }
     const meetingAction = target.closest?.("[data-meeting-action]");
     if (meetingAction) {
+      traceMeetingFlow("1.hosted.click.detected", {
+        action: meetingAction.dataset.meetingAction || "",
+        artifactId: meetingAction.dataset.meetingArtifactId || "",
+        jobId: meetingAction.dataset.meetingJobId || "",
+        meetingId: meetingAction.dataset.meetingId || "",
+      });
       void callbacks.onMeetingAction(meetingAction.dataset.meetingAction || "", {
         artifactId: meetingAction.dataset.meetingArtifactId || "",
         jobId: meetingAction.dataset.meetingJobId || "",
@@ -1338,6 +1359,15 @@
 
   function normalizeText(value) {
     return namespace.session?.normalizeText?.(value) || String(value || "").trim();
+  }
+
+  function traceMeetingFlow(step, payload = {}) {
+    void invokePage({
+      action: "log-trace",
+      channel: "meeting",
+      payload: payload && typeof payload === "object" ? payload : {},
+      step,
+    }).catch(() => {});
   }
 
   function escapeHtml(text) {

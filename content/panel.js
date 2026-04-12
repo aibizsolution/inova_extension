@@ -277,6 +277,14 @@
       namespace.panelDebug?.clearEntries?.();
       return buildDebugState();
     }
+    if (action === "log-trace") {
+      logConsoleTrace(
+        normalizeText(payload?.channel) || "trace",
+        normalizeText(payload?.step) || "trace",
+        payload?.payload && typeof payload.payload === "object" ? payload.payload : {}
+      );
+      return { logged: true };
+    }
     if (action === "get-composer-state") {
       return namespace.composer?.getComposerState?.() || { available: false, text: "" };
     }
@@ -366,12 +374,25 @@
       return { jumped: true };
     }
     if (action === "meeting-action") {
-      await callbacks.onMeetingAction?.(normalizeText(payload?.meetingAction), detail);
-      return { handled: true };
-    }
-    if (action === "meeting-refresh") {
-      await callbacks.onMeetingRefresh?.();
-      return { handled: true };
+      logConsoleTrace("meeting", "5.top.panel.request.received", {
+        detail,
+        meetingAction: normalizeText(payload?.meetingAction),
+      });
+      try {
+        await callbacks.onMeetingAction?.(normalizeText(payload?.meetingAction), detail);
+        logConsoleTrace("meeting", "11.top.panel.request.completed", {
+          detail,
+          meetingAction: normalizeText(payload?.meetingAction),
+        });
+        return { handled: true };
+      } catch (error) {
+        logConsoleTrace("meeting", "11.top.panel.request.error", {
+          detail,
+          error: normalizeText(error instanceof Error ? error.message : String(error || "")),
+          meetingAction: normalizeText(payload?.meetingAction),
+        });
+        throw error;
+      }
     }
     if (action === "release-action") {
       await callbacks.onReleaseAction?.(normalizeText(payload?.releaseAction), detail);
@@ -690,6 +711,18 @@
 
   function normalizeText(value) {
     return namespace.session?.normalizeText?.(value) || String(value || "").trim();
+  }
+
+  function logConsoleTrace(channel, step, payload = {}) {
+    if (!namespace.panelDebug?.isEnabled?.()) {
+      return false;
+    }
+    const normalizedChannel = normalizeText(channel) || "trace";
+    const normalizedStep = normalizeText(step) || "trace";
+    const detail = payload && typeof payload === "object" ? payload : {};
+    console.info(`[inova:${normalizedChannel}] ${normalizedStep}`, detail);
+    namespace.panelDebug?.log?.(`trace.${normalizedChannel}.${normalizedStep}`, detail);
+    return true;
   }
 
   namespace.contentPanel = {
