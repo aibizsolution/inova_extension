@@ -60,6 +60,8 @@
       publishPromptId: "",
       publishTitle: "",
       query: "",
+      persistedActiveTab: "library",
+      persistingActiveTab: "",
       reviewPendingAutofocused: false,
       textInputRenderTimer: 0,
       syncNotice: null,
@@ -201,7 +203,7 @@
       scheduleRender();
       void persistActivePromptTab(nextTab);
       if (nextTab === "library") {
-        void ensurePromptLibraryLoaded(true, "prompt-tab-select");
+        void ensurePromptLibraryLoaded(false, "prompt-tab-select");
       } else if (nextTab === "store") {
         void ensureStoreLoaded(false, "prompt-tab-select");
       }
@@ -787,13 +789,28 @@
     }
 
     async function persistActivePromptTab(promptTabId) {
+      const nextPromptTab = normalizePromptTab(promptTabId);
+      if (!nextPromptTab) {
+        return;
+      }
+      if (state.persistedActiveTab === nextPromptTab || state.persistingActiveTab === nextPromptTab) {
+        return;
+      }
+      state.persistingActiveTab = nextPromptTab;
       await invokeRuntime({
         action: "storage.update-ui-preferences",
         partial: {
-          activePromptTab: normalizePromptTab(promptTabId),
+          activePromptTab: nextPromptTab,
           activeTool: "prompts",
         },
-      }).catch(() => {});
+      }).then(() => {
+        state.persistedActiveTab = nextPromptTab;
+      }).catch(() => {})
+        .finally(() => {
+          if (state.persistingActiveTab === nextPromptTab) {
+            state.persistingActiveTab = "";
+          }
+        });
     }
 
     function hydrateStorageState(storageState) {
@@ -823,6 +840,7 @@
       if (!state.activeTabUserSelected) {
         state.activeTab = normalizePromptTab(uiPreferences.activePromptTab);
       }
+      state.persistedActiveTab = normalizePromptTab(uiPreferences.activePromptTab);
     }
 
     function syncExternalReviewActivation(reviewState) {

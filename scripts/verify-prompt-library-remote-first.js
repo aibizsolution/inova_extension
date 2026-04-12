@@ -583,10 +583,8 @@ async function verifyHostedPromptTabSelectionDoesNotWaitForPersistence() {
 
   const selectionPromise = controller.handleSelectPromptTab("store");
   const viewState = controller.buildPromptToolState({}, { reviewOpen: false });
-
   assert.equal(viewState.activeTab, "store", "hosted prompt tab selection should update immediately before persistence resolves");
   assert.equal(renderCount, 1, "hosted prompt tab selection should schedule an immediate rerender");
-
   resolvePersistence({});
   await selectionPromise;
 }
@@ -635,7 +633,6 @@ async function verifyHostedPromptTabSelectionSurvivesLateStorageHydration() {
       },
     },
   };
-
   const source = fs.readFileSync(
     path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),
     "utf8"

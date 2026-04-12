@@ -15,6 +15,7 @@ async function main() {
   verifyV2CompositionWiring();
   verifyPromptHubShowPromptTabContract();
   verifyHostedPanelImeCompositionGuard();
+  verifyHostedMeetingActionCompletionTraceContract();
   verifyHostedConversationSearchDebounceContract();
   verifyHostedStoreSearchDebounceContract();
   verifyHostedPromptReviewFallbackContract();
@@ -240,6 +241,22 @@ function verifyHostedPanelImeCompositionGuard() {
   assert(
     hostedPanelSource.includes("state.renderDeferred = true;"),
     "hosted panel should defer rerenders while composition is active"
+  );
+}
+
+function verifyHostedMeetingActionCompletionTraceContract() {
+  const hostedPanelSource = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "index.js"),
+    "utf8"
+  );
+
+  assert(
+    hostedPanelSource.includes('traceMeetingFlow("44.hosted.panel.request.success"'),
+    "hosted meeting actions should emit a success trace after the panel bridge request settles"
+  );
+  assert(
+    hostedPanelSource.includes('traceMeetingFlow("44.hosted.panel.request.error"'),
+    "hosted meeting actions should emit an error trace after the panel bridge request fails"
   );
 }
 
