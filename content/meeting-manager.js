@@ -13,6 +13,7 @@
     let fallbackInflight = false;
     let fallbackCooldownUntil = 0;
     let lastSnapshotRequestId = 0;
+    let realtimeActive = false;
     let timerId = 0;
     const meetingPanelBridgeController = namespace.meetingPanelBridgeController.create({
       getCurrentRequestId: () => currentRequestId,
@@ -47,6 +48,16 @@
     }
 
     function scheduleSync(delay = ACTIVE_SYNC_DELAY_MS) {
+      if (!shouldScheduleRefresh()) {
+        if (realtimeActive) {
+          global.clearTimeout(timerId);
+          timerId = global.setTimeout(() => {
+            disconnectRealtime("inactive");
+            hooks.render?.();
+          }, Math.max(0, Number(delay) || 0));
+        }
+        return false;
+      }
       traceMeetingFlow("70.top.meeting.sync.scheduled", {
         activeTool: namespace.session.normalizeText(state.activeTool),
         delay,
@@ -68,15 +79,17 @@
         visibility: global.document.hidden ? "hidden" : "visible",
       });
       if (!shouldUseRealtime(providerIdentity)) {
-        traceMeetingFlow("72.top.meeting.refresh.skip-realtime", {
-          activeTool: namespace.session.normalizeText(state.activeTool),
-          open: Boolean(state.open),
-          providerAvailable: Boolean(providerIdentity?.available),
-          reason,
-          visibility: global.document.hidden ? "hidden" : "visible",
-        });
-        disconnectRealtime(reason);
-        hooks.render?.();
+        if (realtimeActive) {
+          traceMeetingFlow("72.top.meeting.refresh.skip-realtime", {
+            activeTool: namespace.session.normalizeText(state.activeTool),
+            open: Boolean(state.open),
+            providerAvailable: Boolean(providerIdentity?.available),
+            reason,
+            visibility: global.document.hidden ? "hidden" : "visible",
+          });
+          disconnectRealtime(reason);
+          hooks.render?.();
+        }
         return state.meetingHub;
       }
 
@@ -135,6 +148,7 @@
         namespace.session.normalizeText(auth.expiresAt),
       ].join("::");
       if (meetingPanelBridgeController.hasActiveConnection(connectionKey)) {
+        realtimeActive = true;
         traceMeetingFlow("76.top.meeting.realtime.reuse", {
           ownerKey,
           reason,
@@ -143,6 +157,7 @@
         return;
       }
       currentRequestId += 1;
+      realtimeActive = true;
       traceMeetingFlow("76.top.meeting.realtime.init", {
         ownerKey,
         reason,
@@ -349,6 +364,10 @@
     }
 
     function disconnectRealtime(reason) {
+      if (!realtimeActive) {
+        return;
+      }
+      realtimeActive = false;
       currentRequestId += 1;
       traceMeetingFlow("80.top.meeting.realtime.disconnect", {
         reason,
@@ -433,6 +452,10 @@
       const message = namespace.session.normalizeText(error instanceof Error ? error.message : String(error || ""));
       return message.includes("Extension context invalidated")
         || message.includes("확장프로그램이 갱신됐어요.");
+    }
+
+    function shouldScheduleRefresh() {
+      return state.activeTool === "meeting" || realtimeActive;
     }
   }
 

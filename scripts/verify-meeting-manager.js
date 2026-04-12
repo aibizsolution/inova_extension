@@ -12,6 +12,7 @@ async function main() {
   await verifyRuntimeReadFallbackState();
   await verifyStaleCacheFallbackState();
   await verifyEmptyFallbackState();
+  await verifyInactiveRefreshIsQuiet();
   console.log("[verify-meeting-manager] Meeting hub fallback contract passed");
 }
 
@@ -131,6 +132,25 @@ async function verifyEmptyFallbackState() {
   assert.equal(harness.state.meetingHub.dataFreshness, "empty");
   assert.equal(harness.state.meetingHub.source, "none");
   assert(harness.state.meetingHub.error.includes("회의 목록을 다시 불러오지 못했어요."));
+}
+
+async function verifyInactiveRefreshIsQuiet() {
+  const harness = createHarness({
+    activeTool: "bookmarks",
+    bridgeMode: "snapshot",
+    initialMeetingHub: {
+      checkedAt: "2026-04-04T08:00:00.000Z",
+      items: [],
+      source: "none",
+    },
+    open: true,
+  });
+
+  await harness.manager.refreshState("verify-inactive");
+  await harness.flush();
+
+  assert.equal(harness.renderCount(), 0);
+  assert.deepEqual(harness.sentMessages, []);
 }
 
 function createHarness(options = {}) {
@@ -261,9 +281,9 @@ function createHarness(options = {}) {
 
   const namespace = context.InovaBookmarks;
   const state = {
-    activeTool: "meeting",
+    activeTool: options.activeTool || "meeting",
     meetingHub: namespace.meetingManager.mergeMeetingHub(options.initialMeetingHub),
-    open: true,
+    open: Object.prototype.hasOwnProperty.call(options, "open") ? Boolean(options.open) : true,
   };
 
   return {
