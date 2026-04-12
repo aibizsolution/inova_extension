@@ -110,7 +110,6 @@
         });
         await fallbackRefresh(providerIdentity, reason, error);
       }
-      hooks.render?.();
       return state.meetingHub;
     }
 
@@ -268,7 +267,7 @@
         hasPendingWrites: Boolean(payload.hasPendingWrites),
         source: payload.fromCache ? "cache" : "server",
       });
-      state.meetingHub = mergeMeetingHub({
+      const nextMeetingHub = mergeMeetingHub({
         ...state.meetingHub,
         checkedAt: namespace.session.normalizeText(payload.checkedAt) || new Date().toISOString(),
         degraded: false,
@@ -279,6 +278,11 @@
         source: "realtime",
         version: Math.max(1, Number(state.meetingHub?.version) || 1),
       });
+      if (buildMeetingHubRenderFingerprint(nextMeetingHub) === buildMeetingHubRenderFingerprint(state.meetingHub)) {
+        state.meetingHub = nextMeetingHub;
+        return;
+      }
+      state.meetingHub = nextMeetingHub;
       hooks.render?.();
     }
 
@@ -536,6 +540,26 @@
       || namespace.session.normalizeText(hub?.checkedAt)
       || namespace.session.normalizeText(hub?.error)
     );
+  }
+
+  function buildMeetingHubRenderFingerprint(meetingHub) {
+    const hub = meetingHub && typeof meetingHub === "object" ? meetingHub : {};
+    return JSON.stringify({
+      dataFreshness: normalizeDataFreshness(hub.dataFreshness),
+      degraded: Boolean(hub.degraded),
+      degradedReason: namespace.session.normalizeText(hub.degradedReason),
+      error: namespace.session.normalizeText(hub.error),
+      items: (Array.isArray(hub.items) ? hub.items : []).map((item) => ({
+        latestArtifactId: namespace.session.normalizeText(item?.latestArtifactId || item?.artifactId),
+        latestJobId: namespace.session.normalizeText(item?.latestJobId || item?.jobId),
+        meetingId: namespace.session.normalizeText(item?.meetingId),
+        shareActive: Boolean(item?.share?.active),
+        shareStatus: namespace.session.normalizeText(item?.share?.status),
+        status: namespace.session.normalizeText(item?.status),
+        title: namespace.session.normalizeText(item?.title),
+        updatedAt: namespace.session.normalizeText(item?.updatedAt || item?.createdAt),
+      })),
+    });
   }
 
   function traceMeetingFlow(step, payload = {}) {

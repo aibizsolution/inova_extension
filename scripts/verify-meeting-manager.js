@@ -15,6 +15,7 @@ async function main() {
   await verifyInactiveRefreshIsQuiet();
   await verifyRouteStateChangeStaysQuietAfterRealtimeReady();
   await verifyScheduledRefreshStaysQuietAfterRealtimeSnapshot();
+  await verifyDuplicateSnapshotsDoNotRenderTwice();
   console.log("[verify-meeting-manager] Meeting hub fallback contract passed");
 }
 
@@ -50,6 +51,7 @@ async function verifyRealtimeSnapshotState() {
     ["inova-meeting:issue-panel-auth"],
     "Realtime snapshot should stop at panel auth and bridge snapshot"
   );
+  assert.equal(harness.renderCount(), 1);
 }
 
 async function verifyRuntimeReadFallbackState() {
@@ -241,6 +243,30 @@ async function verifyScheduledRefreshStaysQuietAfterRealtimeSnapshot() {
   assert.equal(harness.sentMessages.length, sentCountBefore);
 }
 
+async function verifyDuplicateSnapshotsDoNotRenderTwice() {
+  const harness = createHarness({
+    bridgeMode: "snapshot",
+    duplicateSnapshot: true,
+    initialMeetingHub: {},
+    snapshotItems: [
+      {
+        excerpt: "중복 스냅샷",
+        latestArtifactId: "artifact-duplicate",
+        latestJobId: "job-duplicate",
+        meetingId: "meeting-duplicate",
+        status: "succeeded",
+        title: "중복 회의",
+        updatedAt: "2026-04-04T08:10:00.000Z",
+      },
+    ],
+  });
+
+  await harness.manager.refreshState("verify-duplicate-snapshot");
+  await harness.flush();
+
+  assert.equal(harness.renderCount(), 1);
+}
+
 function createHarness(options = {}) {
   const sentMessages = [];
   const scheduledTasks = [];
@@ -256,6 +282,7 @@ function createHarness(options = {}) {
   let nextTimerId = 1;
   let renderCount = 0;
   const bridgeState = {
+    duplicateSnapshot: Boolean(options.duplicateSnapshot),
     snapshotItems: Array.isArray(options.snapshotItems) ? cloneValue(options.snapshotItems) : [],
   };
   const storageState = {
@@ -439,6 +466,16 @@ function createDocumentStub(bridgeMode, bridgeState) {
                 },
                 type: "snapshot",
               });
+              if (bridgeState.duplicateSnapshot) {
+                bridgePort.postMessage({
+                  payload: {
+                    checkedAt: "2026-04-04T08:10:01.000Z",
+                    items: cloneValue(bridgeState.snapshotItems),
+                    requestId: message.requestId,
+                  },
+                  type: "snapshot",
+                });
+              }
               bridgePort.postMessage({
                 payload: {
                   requestId: message.requestId,
