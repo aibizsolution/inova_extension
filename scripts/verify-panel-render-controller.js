@@ -10,6 +10,7 @@ const root = path.resolve(__dirname, "..");
 function main() {
   verifyCustomConversationSnapshotBridge();
   verifyCustomPromptSnapshotBridge();
+  verifyCustomMeetingSnapshotBridge();
   verifyRenderPayloadAndReviewFloat();
   verifyCustomReleaseSnapshotBridge();
   verifyVisibleStateCalculation();
@@ -94,6 +95,45 @@ function verifyCustomPromptSnapshotBridge() {
         summary: "검토 결과",
       },
     },
+  });
+}
+
+function verifyCustomMeetingSnapshotBridge() {
+  const harness = createHarness({
+    activeTool: "meeting",
+    buildMeetingSnapshot() {
+      return {
+        count: 9,
+        feedback: {
+          text: "회의 작업실을 여는 중입니다.",
+          tone: "info",
+        },
+        pending: {
+          action: "open-workspace",
+          meetingId: "meeting-alpha",
+        },
+        snapshotFingerprint: "meeting-alpha|9|fresh",
+      };
+    },
+    getMeetingCount() {
+      return 9;
+    },
+  });
+
+  harness.controller.render();
+
+  assert.equal(harness.renderPayloads[0].handleCount, 9);
+  assert.deepEqual(harness.renderPayloads[0].meetingTool, {
+    count: 9,
+    feedback: {
+      text: "회의 작업실을 여는 중입니다.",
+      tone: "info",
+    },
+    pending: {
+      action: "open-workspace",
+      meetingId: "meeting-alpha",
+    },
+    snapshotFingerprint: "meeting-alpha|9|fresh",
   });
 }
 
@@ -206,6 +246,8 @@ function createHarness(options = {}) {
         };
       },
     },
+    buildMeetingSnapshot: options.buildMeetingSnapshot,
+    getMeetingCount: options.getMeetingCount,
     buildConversationSnapshot: options.buildConversationSnapshot,
     getConversationCount: options.getConversationCount,
     panelPromptController: {

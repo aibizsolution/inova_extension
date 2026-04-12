@@ -176,6 +176,14 @@ function verifyV2CompositionWiring() {
     "v2 render wiring should pass the hosted-owned conversation snapshot bridge"
   );
   assert(
+    v2CompositionSource.includes("createHostedOwnedMeetingSnapshotBridge"),
+    "v2 composition should wrap meeting snapshot shaping for hosted-owned meeting state"
+  );
+  assert(
+    v2CompositionSource.includes("buildMeetingSnapshot: hostedOwnedMeetingSnapshot.buildMeetingSnapshot"),
+    "v2 render wiring should pass the hosted-owned meeting snapshot bridge"
+  );
+  assert(
     v2CompositionSource.includes("handleStorageChange() {}"),
     "v2 hosted-owned prompt wrapper should silence legacy prompt storage listeners"
   );

@@ -29,6 +29,7 @@
       providerIdentitySync,
       render,
     });
+    const hostedOwnedMeetingSnapshot = createHostedOwnedMeetingSnapshotBridge(panelMeetingController);
     const panelDebugController = namespace.panelDebugController.create(state, {
       ...runtimeFlags,
       render,
@@ -114,6 +115,8 @@
       getConversationCount: hostedOwnedConversationSnapshot.getConversationCount,
       buildPromptSnapshot: hostedOwnedPromptSnapshot.buildPromptSnapshot,
       getPromptCounts: hostedOwnedPromptSnapshot.getPromptCounts,
+      buildMeetingSnapshot: hostedOwnedMeetingSnapshot.buildMeetingSnapshot,
+      getMeetingCount: hostedOwnedMeetingSnapshot.getMeetingCount,
       panelBookmarkController,
       panelDebugController,
       panelMeetingController,
@@ -147,6 +150,48 @@
         return panelBootstrapController.bootstrap();
       },
     };
+  }
+
+  function createHostedOwnedMeetingSnapshotBridge(panelMeetingController = {}) {
+    return {
+      buildMeetingSnapshot(meetingHub) {
+        const meetingTool = panelMeetingController.buildToolState?.(meetingHub) || {};
+        return {
+          count: getMeetingCount(meetingTool),
+          feedback: normalizeMeetingFeedbackSnapshot(meetingTool.feedback),
+          pending: normalizeMeetingPendingSnapshot(meetingTool.pending),
+          snapshotFingerprint: buildMeetingSnapshotFingerprint(meetingTool),
+        };
+      },
+      getMeetingCount,
+    };
+
+    function getMeetingCount(meetingTool = {}) {
+      return Math.max(
+        0,
+        Number(meetingTool.count) || (Array.isArray(meetingTool.items) ? meetingTool.items.length : 0)
+      );
+    }
+
+    function buildMeetingSnapshotFingerprint(meetingTool = {}) {
+      const items = Array.isArray(meetingTool.items) ? meetingTool.items : [];
+      return [
+        String(getMeetingCount(meetingTool)),
+        normalizeText(meetingTool.checkedAt),
+        normalizeText(meetingTool.dataFreshness),
+        meetingTool.degraded ? "1" : "0",
+        normalizeText(meetingTool.error),
+        items.map((item) => [
+          normalizeText(item?.meetingId),
+          normalizeText(item?.latestJobId || item?.jobId),
+          normalizeText(item?.latestArtifactId || item?.artifactId),
+          normalizeText(item?.status),
+          item?.share?.active ? "1" : "0",
+          normalizeText(item?.share?.status),
+          normalizeText(item?.updatedAt || item?.createdAt),
+        ].join("~")).join("||"),
+      ].join("|");
+    }
   }
 
   function createHostedOwnedPromptController(panelPromptController = {}) {
@@ -251,6 +296,32 @@
       result: reviewState.result && typeof reviewState.result === "object"
         ? JSON.parse(JSON.stringify(reviewState.result))
         : null,
+    };
+  }
+
+  function normalizeMeetingPendingSnapshot(pendingState) {
+    if (!pendingState || typeof pendingState !== "object") {
+      return {};
+    }
+    return {
+      action: normalizeText(pendingState.action),
+      jobId: normalizeText(pendingState.jobId),
+      meetingId: normalizeText(pendingState.meetingId),
+      title: normalizeText(pendingState.title),
+    };
+  }
+
+  function normalizeMeetingFeedbackSnapshot(feedbackState) {
+    if (!feedbackState || typeof feedbackState !== "object") {
+      return null;
+    }
+    const text = normalizeText(feedbackState.text);
+    if (!text) {
+      return null;
+    }
+    return {
+      text,
+      tone: normalizeText(feedbackState.tone) || "info",
     };
   }
 

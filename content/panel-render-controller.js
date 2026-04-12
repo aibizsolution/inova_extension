@@ -9,6 +9,12 @@
       syncEnabled() {},
     };
     const panelMeetingController = deps.panelMeetingController || { buildToolState() { return { count: 0 }; } };
+    const buildMeetingSnapshot = typeof deps.buildMeetingSnapshot === "function"
+      ? deps.buildMeetingSnapshot
+      : (meetingHub) => panelMeetingController.buildToolState(meetingHub);
+    const getMeetingCount = typeof deps.getMeetingCount === "function"
+      ? deps.getMeetingCount
+      : (meetingTool) => Number(meetingTool?.count) || (Array.isArray(meetingTool?.items) ? meetingTool.items.length : 0);
     const buildConversationSnapshot = typeof deps.buildConversationSnapshot === "function"
       ? deps.buildConversationSnapshot
       : () => panelBookmarkController.buildToolState();
@@ -58,7 +64,11 @@
       const promptToolState = panelPromptController.buildToolState();
       const promptSnapshot = normalizePromptSnapshot(buildPromptSnapshot(promptToolState));
       const promptCounts = normalizePromptCounts(getPromptCounts(promptToolState), promptToolState);
-      const meetingTool = panelMeetingController.buildToolState(state.meetingHub);
+      const meetingTool = normalizeMeetingSnapshot(buildMeetingSnapshot(state.meetingHub));
+      const meetingCount = normalizeCount(
+        getMeetingCount(meetingTool),
+        Number(meetingTool.count) || (Array.isArray(meetingTool.items) ? meetingTool.items.length : 0)
+      );
       const releaseState = normalizeReleaseSnapshot(buildReleaseSnapshot());
       const releaseCount = normalizeCount(
         getReleaseCount(releaseState),
@@ -66,7 +76,7 @@
       );
       const handleCount = panelShellController.buildHandleCount({
         bookmarks: conversationCount,
-        meeting: meetingTool.count,
+        meeting: meetingCount,
         promptTool: promptCounts.promptToolCount,
         prompts: promptCounts.promptCount,
         release: releaseCount,
@@ -102,6 +112,10 @@
     }
 
     function normalizePromptSnapshot(value) {
+      return value && typeof value === "object" ? value : {};
+    }
+
+    function normalizeMeetingSnapshot(value) {
       return value && typeof value === "object" ? value : {};
     }
 
