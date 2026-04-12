@@ -114,21 +114,21 @@
         }
       },
       onRequest: async (request) => {
-        logConsoleTrace("panel", "18.top.panel.bridge.request.received", {
+        logConsoleTrace("panel", "20.top.panel.bridge.request.received", {
           action: normalizeText(request?.payload?.action),
           domain: normalizeText(request?.domain),
           requestId: normalizeText(request?.requestId),
         });
         try {
           const result = await handleBridgeRequest(host, request);
-          logConsoleTrace("panel", "19.top.panel.bridge.request.completed", {
+          logConsoleTrace("panel", "21.top.panel.bridge.request.completed", {
             action: normalizeText(request?.payload?.action),
             domain: normalizeText(request?.domain),
             requestId: normalizeText(request?.requestId),
           });
           return result;
         } catch (error) {
-          logConsoleTrace("panel", "19.top.panel.bridge.request.error", {
+          logConsoleTrace("panel", "21.top.panel.bridge.request.error", {
             action: normalizeText(request?.payload?.action),
             domain: normalizeText(request?.domain),
             error: normalizeText(error instanceof Error ? error.message : String(error || "")),
