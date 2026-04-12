@@ -1000,40 +1000,44 @@
     if (!(host instanceof global.HTMLElement)) {
       return;
     }
-    if (!event.target.closest?.('[data-prompt-menu], [data-prompt-action="toggle-menu"]')) {
+    const target = getEventElementTarget(event);
+    if (!target) {
+      return;
+    }
+    if (!target.closest?.('[data-prompt-menu], [data-prompt-action="toggle-menu"]')) {
       void callbacks.onPromptAction("dismiss-menu");
     }
-    const toolButton = event.target.closest?.("[data-tool-id]");
+    const toolButton = target.closest?.("[data-tool-id]");
     if (toolButton) {
       void callbacks.onSelectTool(toolButton.dataset.toolId || "");
       return;
     }
-    if (event.target.closest?.("#inova-tool-close")) {
+    if (target.closest?.("#inova-tool-close")) {
       void callbacks.onToggle(false);
       return;
     }
     if (namespace.promptHubPanel?.handleClick?.(event, host, callbacks)) {
       return;
     }
-    const copyButton = event.target.closest?.("[data-copy-bookmark-id]");
+    const copyButton = target.closest?.("[data-copy-bookmark-id]");
     if (copyButton) {
       callbacks.onCopyBookmark(copyButton.dataset.copyBookmarkId || "")
         .then((copied) => namespace.bookmarkView?.flashCopyState?.(copyButton, copied))
         .catch(() => namespace.bookmarkView?.flashCopyState?.(copyButton, false));
       return;
     }
-    const bookmarkButton = event.target.closest?.("[data-bookmark-id]");
-    if (bookmarkButton && !event.target.closest?.("[data-copy-bookmark-id]")) {
+    const bookmarkButton = target.closest?.("[data-bookmark-id]");
+    if (bookmarkButton && !target.closest?.("[data-copy-bookmark-id]")) {
       bookmarkButton.closest(".inova-bookmark-item")?.focus({ preventScroll: true });
       void callbacks.onJumpBookmark(bookmarkButton.dataset.bookmarkId || "");
       return;
     }
-    const debugAction = event.target.closest?.("[data-meeting-action]");
+    const debugAction = target.closest?.("[data-meeting-action]");
     if (debugAction?.dataset?.meetingAction?.startsWith("debug-")) {
       void debugController?.handleDebugAction?.(debugAction.dataset.meetingAction || "");
       return;
     }
-    const meetingAction = event.target.closest?.("[data-meeting-action]");
+    const meetingAction = target.closest?.("[data-meeting-action]");
     if (meetingAction) {
       void callbacks.onMeetingAction(meetingAction.dataset.meetingAction || "", {
         artifactId: meetingAction.dataset.meetingArtifactId || "",
@@ -1110,7 +1114,8 @@
   }
 
   function handleRootInput(event) {
-    const search = event.target.closest?.("[data-search-tool]");
+    const target = getEventElementTarget(event);
+    const search = target?.closest?.("[data-search-tool]");
     if (search) {
       void callbacks.onSearch(search.dataset.searchTool || "", search.value, {
         composing: Boolean(event.isComposing || state.searchComposition.active),
@@ -1125,7 +1130,8 @@
   }
 
   function handleRootSearch(event) {
-    const search = event.target.closest?.("[data-search-tool]");
+    const target = getEventElementTarget(event);
+    const search = target?.closest?.("[data-search-tool]");
     if (!(search instanceof global.HTMLElement)) {
       return;
     }
@@ -1148,11 +1154,12 @@
       void callbacks.onEscape();
       return;
     }
-    if (!(event.target instanceof global.HTMLElement)) {
+    const target = getEventElementTarget(event);
+    if (!(target instanceof global.HTMLElement)) {
       return;
     }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      if (namespace.bookmarkView?.moveFocus?.(event.target, event.key === "ArrowDown" ? 1 : -1)) {
+      if (namespace.bookmarkView?.moveFocus?.(target, event.key === "ArrowDown" ? 1 : -1)) {
         event.preventDefault();
       }
       return;
@@ -1160,8 +1167,8 @@
     if (event.key !== "Enter" && event.key !== " ") {
       return;
     }
-    const item = event.target.closest("[data-bookmark-id]");
-    if (!item || event.target.closest("[data-copy-bookmark-id]")) {
+    const item = target.closest("[data-bookmark-id]");
+    if (!item || target.closest("[data-copy-bookmark-id]")) {
       return;
     }
     event.preventDefault();
@@ -1315,6 +1322,17 @@
 
   function cloneValue(value) {
     return value == null ? value : JSON.parse(JSON.stringify(value));
+  }
+
+  function getEventElementTarget(event) {
+    const target = event?.target;
+    if (target instanceof global.HTMLElement) {
+      return target;
+    }
+    if (target?.parentElement instanceof global.HTMLElement) {
+      return target.parentElement;
+    }
+    return null;
   }
 
   function normalizeText(value) {

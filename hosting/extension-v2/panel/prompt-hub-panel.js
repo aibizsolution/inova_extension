@@ -2,13 +2,17 @@
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
 
   function handleClick(event, host, callbacks) {
-    const promptTabButton = event.target.closest?.("[data-prompt-tab-id]");
+    const target = getEventElementTarget(event);
+    if (!target) {
+      return false;
+    }
+    const promptTabButton = target.closest?.("[data-prompt-tab-id]");
     if (promptTabButton) {
       callbacks.onSelectPromptTab?.(promptTabButton.dataset.promptTabId);
       return true;
     }
 
-    const promptAction = event.target.closest?.("[data-prompt-action]");
+    const promptAction = target.closest?.("[data-prompt-action]");
     if (promptAction) {
       if (promptAction.dataset.promptAction === "import") {
         host.querySelector("#inova-prompt-import-file")?.click();
@@ -22,7 +26,7 @@
       return true;
     }
 
-    const storeAction = event.target.closest?.("[data-store-action]");
+    const storeAction = target.closest?.("[data-store-action]");
     if (storeAction) {
       callbacks.onStoreAction?.(storeAction.dataset.storeAction, {
         categoryId: storeAction.dataset.storeCategory || "",
@@ -33,7 +37,7 @@
       return true;
     }
 
-    const importMode = event.target.closest?.("[data-import-mode]");
+    const importMode = target.closest?.("[data-import-mode]");
     if (importMode) {
       callbacks.onPromptAction?.("set-import-mode", {
         importMode: importMode.dataset.importMode || "merge",
@@ -45,13 +49,14 @@
   }
 
   function handleInput(event, callbacks) {
-    const field = event.target.closest?.("[data-prompt-field]");
+    const target = getEventElementTarget(event);
+    const field = target?.closest?.("[data-prompt-field]");
     if (field) {
       callbacks.onPromptDraftChange?.(field.dataset.promptField, field.value);
       return true;
     }
 
-    const publishField = event.target.closest?.("[data-prompt-publish-field]");
+    const publishField = target?.closest?.("[data-prompt-publish-field]");
     if (publishField?.dataset.promptPublishField === "title") {
       callbacks.onPromptAction?.("set-publish-title", {
         promptId: publishField.dataset.promptId || "",
@@ -64,13 +69,14 @@
   }
 
   function handleChange(event, callbacks) {
-    const storeField = event.target.closest?.("[data-store-field]");
+    const target = getEventElementTarget(event);
+    const storeField = target?.closest?.("[data-store-field]");
     if (storeField) {
       callbacks.onStoreAction?.("set-category", { categoryId: storeField.value || "all" });
       return true;
     }
 
-    const promptSelect = event.target.closest?.("[data-prompt-select]");
+    const promptSelect = target?.closest?.("[data-prompt-select]");
     if (promptSelect?.dataset.promptSelect === "publish-category") {
       callbacks.onPromptAction?.("set-publish-category", { categoryId: promptSelect.value || "" });
       return true;
@@ -80,7 +86,8 @@
   }
 
   function handlePointerDown(event, host) {
-    const handle = event.target.closest?.("[data-prompt-drag-handle]");
+    const target = getEventElementTarget(event);
+    const handle = target?.closest?.("[data-prompt-drag-handle]");
     if (!(handle instanceof HTMLElement) || event.button !== 0) return false;
     const item = handle.closest("[data-prompt-id]");
     const promptId = handle.dataset.promptDragHandle || "";
@@ -131,7 +138,8 @@
   }
 
   function handleScroll(event, host, callbacks) {
-    const list = event.target instanceof HTMLElement ? event.target.closest(".inova-store-list") : null;
+    const target = getEventElementTarget(event);
+    const list = target?.closest?.(".inova-store-list") || null;
     if (!(list instanceof HTMLElement)) return false;
     host.__storeScrollTop = list.scrollTop;
     if (list.dataset.storeHasMore !== "true" || list.dataset.storeLoading === "true" || list.scrollHeight - list.clientHeight - list.scrollTop > 72) {
@@ -191,4 +199,15 @@
     handleScroll,
     syncStoreList,
   };
+
+  function getEventElementTarget(event) {
+    const target = event?.target;
+    if (target instanceof HTMLElement) {
+      return target;
+    }
+    if (target?.parentElement instanceof HTMLElement) {
+      return target.parentElement;
+    }
+    return null;
+  }
 })(globalThis);

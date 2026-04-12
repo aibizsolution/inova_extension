@@ -1,9 +1,11 @@
 (function initMeetingHubController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const ACTIVE_REFRESH_TTL_MS = 30 * 1000;
   const LIST_LIMIT = 24;
   const REQUIRED_EXTENSION_CAPABILITIES = Object.freeze([
     "runtime.invoke.v1",
   ]);
+  const RETRY_COOLDOWN_MS = 15 * 1000;
 
   function create(options = {}) {
     const invokeRuntime = typeof options.invokeRuntime === "function"
@@ -25,6 +27,8 @@
       initialized: false,
       initializing: false,
       items: [],
+      lastLoadProviderKey: "",
+      lastLoadRequestedAt: 0,
       loadPromise: null,
       loading: false,
       pending: createPendingState(),
@@ -33,6 +37,7 @@
         meetingDebugConsoleEnabled: false,
       },
       source: "none",
+      wasMeetingToolActive: false,
     };
 
     return {
@@ -50,13 +55,16 @@
       if (!hasRequiredCapabilities()) {
         return;
       }
+      const meetingToolActive = normalizeText(panelState?.activeTool) === "meeting";
+      const becameActive = meetingToolActive && !state.wasMeetingToolActive;
+      state.wasMeetingToolActive = meetingToolActive;
       state.settings = {
         ...state.settings,
         ...(panelState?.settings && typeof panelState.settings === "object" ? panelState.settings : {}),
       };
       if (state.initialized || state.initializing) {
-        if (panelState?.activeTool === "meeting") {
-          void ensureLoaded(false, "activate");
+        if (shouldRefreshMeetingList(meetingToolActive, becameActive)) {
+          void ensureLoaded(false, becameActive ? "activate" : "sync");
         }
         return;
       }
@@ -157,9 +165,6 @@
 
     async function ensureInitialized(panelState) {
       if (state.initialized || state.initializing) {
-        if (panelState?.activeTool === "meeting") {
-          void ensureLoaded(false, "activate");
-        }
         return;
       }
       state.initializing = true;
@@ -185,6 +190,8 @@
       if (state.loadPromise && !force) {
         return state.loadPromise;
       }
+      state.lastLoadRequestedAt = Date.now();
+      state.lastLoadProviderKey = normalizeText(state.providerIdentity.providerUserKey);
       if (!state.providerIdentity.available) {
         state.error = "사용자 정보를 확인하지 못했어요.";
         state.degraded = true;
@@ -237,6 +244,24 @@
           state.loadPromise = null;
         }
       }
+    }
+
+    function shouldRefreshMeetingList(meetingToolActive, becameActive) {
+      if (!meetingToolActive || state.initializing || state.loading || state.loadPromise) {
+        return false;
+      }
+      const providerUserKey = normalizeText(state.providerIdentity.providerUserKey);
+      const loadAgeMs = state.lastLoadRequestedAt ? Date.now() - state.lastLoadRequestedAt : Number.POSITIVE_INFINITY;
+      if (!state.lastLoadRequestedAt || state.lastLoadProviderKey !== providerUserKey) {
+        return true;
+      }
+      if (!state.checkedAt || state.dataFreshness !== "fresh") {
+        return loadAgeMs >= RETRY_COOLDOWN_MS;
+      }
+      if (becameActive) {
+        return loadAgeMs >= ACTIVE_REFRESH_TTL_MS;
+      }
+      return false;
     }
 
     function hydrateStorageState(storageState) {
