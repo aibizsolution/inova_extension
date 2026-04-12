@@ -1197,7 +1197,6 @@
     if (!binding) {
       return;
     }
-    const shouldFlushDeferred = state.renderDeferred;
     state.renderDeferred = false;
     state.inputComposition = createInputCompositionState({
       field: binding.field || "",
@@ -1206,7 +1205,7 @@
       toolId: binding.toolId || "",
     });
     const handled = applyTextInputBinding(binding, { composing: false });
-    if ((shouldFlushDeferred || !handled) && !state.renderFrame) {
+    if (!handled && !state.renderFrame) {
       scheduleRender();
     }
   }
