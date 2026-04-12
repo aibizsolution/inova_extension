@@ -22,6 +22,7 @@
       ? options.traceMeeting
       : () => {};
     const state = {
+      activeTool: "",
       capabilities: [],
       checkedAt: "",
       dataFreshness: "empty",
@@ -37,6 +38,7 @@
       lastLoadedFingerprint: "",
       loadPromise: null,
       loading: false,
+      panelOpen: false,
       pending: createPendingState(),
       pendingReload: false,
       providerIdentity: createProviderIdentity(),
@@ -61,6 +63,12 @@
       state.capabilities = Array.isArray(extensionCapabilities)
         ? extensionCapabilities.map((value) => normalizeText(value)).filter(Boolean)
         : [];
+      const nextActiveTool = normalizeText(panelState?.activeTool);
+      const nextPanelOpen = Boolean(panelState?.open);
+      const meetingToolBecameActive = nextActiveTool === "meeting" && state.activeTool !== "meeting";
+      const panelReopenedIntoMeeting = nextActiveTool === "meeting" && nextPanelOpen && !state.panelOpen;
+      state.activeTool = nextActiveTool;
+      state.panelOpen = nextPanelOpen;
       const fallbackMeetingTool = panelState?.meetingTool && typeof panelState.meetingTool === "object"
         ? panelState.meetingTool
         : {};
@@ -79,11 +87,12 @@
       } else if (!state.snapshotFingerprint && nextFingerprint) {
         state.snapshotFingerprint = nextFingerprint;
       }
-      if (normalizeText(panelState?.activeTool) !== "meeting") {
+      if (nextActiveTool !== "meeting") {
         return;
       }
-      if (fingerprintChanged || !state.lastLoadedFingerprint || !state.initialized) {
-        void ensureLoaded(fingerprintChanged);
+      const shouldForceReload = fingerprintChanged || meetingToolBecameActive || panelReopenedIntoMeeting;
+      if (shouldForceReload || !state.lastLoadedFingerprint || !state.initialized) {
+        void ensureLoaded(shouldForceReload);
       }
     }
 

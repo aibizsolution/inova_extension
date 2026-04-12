@@ -69,12 +69,24 @@ function main() {
     "v2 composition should provide an idle meeting lifecycle bridge for unrelated shell sidecars"
   );
   assert(
-    v2CompositionSource.includes("meetingManager: hostedOwnedMeetingLifecycle"),
-    "v2 composition should pass the hosted-owned meeting lifecycle bridge into shared shell controllers"
+    /const panelActivityController = namespace\.panelActivityController\.create\(state, \{[\s\S]*?meetingManager: hostedOwnedMeetingLifecycle,/.test(v2CompositionSource),
+    "v2 composition should keep browser visibility/focus meeting sync on the hosted-owned meeting lifecycle bridge"
   );
   assert(
-    v2CompositionSource.includes("meetingManager: hostedOwnedIdleMeetingLifecycle"),
-    "v2 composition should silence unrelated surface-driven meeting sync in v2"
+    /const panelShellController = namespace\.panelShellController\.create\(state, \{[\s\S]*?meetingManager: hostedOwnedIdleMeetingLifecycle,/.test(v2CompositionSource),
+    "v2 shell tool transitions should stop waking extension meeting sync"
+  );
+  assert(
+    /const panelLifecycleController = namespace\.panelLifecycleController\.create\(state, \{[\s\S]*?meetingManager: hostedOwnedIdleMeetingLifecycle,/.test(v2CompositionSource),
+    "v2 panel toggle transitions should stop waking extension meeting sync"
+  );
+  assert(
+    /const panelBootstrapController = namespace\.panelBootstrapController\.create\(state, \{[\s\S]*?meetingManager: hostedOwnedMeetingLifecycle,/.test(v2CompositionSource),
+    "v2 bootstrap should keep the hosted-owned meeting lifecycle bridge for explicit bootstrap priming"
+  );
+  assert(
+    /const panelSurfaceController = namespace\.panelSurfaceController\.create\(state, \{[\s\S]*?meetingManager: hostedOwnedIdleMeetingLifecycle,/.test(v2CompositionSource),
+    "v2 composition should silence surface-driven meeting sync with the idle meeting lifecycle bridge"
   );
   assert(
     v2CompositionSource.includes("onPromptTabSelected: () => hostedOwnedIdleMeetingLifecycle.scheduleSync(0)"),

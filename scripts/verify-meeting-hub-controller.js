@@ -9,10 +9,179 @@ const root = path.resolve(__dirname, "..");
 
 async function main() {
   await verifyHostedMeetingHubOwnership();
+  await verifyHostedMeetingHubLifecycleRefreshOwnership();
   console.log("[verify-meeting-hub-controller] Hosted meeting hub controller contract passed");
 }
 
 async function verifyHostedMeetingHubOwnership() {
+  const harness = createHarness();
+  const controller = harness.controller;
+
+  controller.syncPanelState(
+    {
+      activeTool: "meeting",
+      meetingTool: {
+        count: 1,
+        snapshotFingerprint: "meeting-alpha|1|seed",
+      },
+      settings: {
+        meetingWorkspaceTarget: "production",
+      },
+    },
+    ["runtime.invoke.v1"]
+  );
+  await flushAsyncTurns();
+
+  let viewState = controller.buildViewState({});
+  assert.equal(viewState.items.length, 1, "hosted meeting hub should load meeting items directly");
+  assert.equal(viewState.items[0].meetingId, "meeting-alpha");
+
+  const shareHandled = await controller.handleMeetingAction("share", {
+    meetingId: "meeting-alpha",
+    jobId: "job-alpha",
+    title: "Alpha",
+  });
+  assert.equal(shareHandled, true, "hosted meeting hub should fully handle share actions");
+  viewState = controller.buildViewState({});
+  assert.equal(viewState.items[0].share.active, true, "hosted meeting hub should patch local share state after create");
+  assert.equal(viewState.feedback?.text, "공유 링크를 복사했습니다.");
+  assert.equal(harness.clipboardWrites[0], "https://share.example/meeting-alpha");
+
+  const openHandled = await controller.handleMeetingAction("open-result", {
+    meetingId: "meeting-alpha",
+    jobId: "job-alpha",
+    title: "Alpha",
+  });
+  assert.equal(openHandled, true, "hosted meeting hub should fully handle open-result actions");
+  viewState = controller.buildViewState({});
+  assert.equal(viewState.feedback?.text, "결과 탭을 열었습니다.");
+  assert.equal(viewState.pending?.active, false, "hosted meeting hub should clear pending state after launch");
+
+  assert(
+    harness.runtimeCalls.some((request) => request.action === "meeting.create-share-link"),
+    "hosted meeting hub should call runtime share actions directly"
+  );
+  assert(
+    harness.runtimeCalls.some((request) => request.action === "meeting.open-result"),
+    "hosted meeting hub should call runtime open actions directly"
+  );
+}
+
+async function verifyHostedMeetingHubLifecycleRefreshOwnership() {
+  const harness = createHarness();
+  const controller = harness.controller;
+
+  controller.syncPanelState(
+    {
+      activeTool: "meeting",
+      open: true,
+      meetingTool: {
+        count: 1,
+        snapshotFingerprint: "meeting-alpha|1|seed",
+      },
+      settings: {
+        meetingWorkspaceTarget: "production",
+      },
+    },
+    ["runtime.invoke.v1"]
+  );
+  await flushAsyncTurns();
+
+  assert.equal(countRuntimeCalls(harness.runtimeCalls, "functions.fetch"), 1);
+
+  controller.syncPanelState(
+    {
+      activeTool: "prompts",
+      open: true,
+      meetingTool: {
+        count: 1,
+        snapshotFingerprint: "meeting-alpha|1|seed",
+      },
+      settings: {
+        meetingWorkspaceTarget: "production",
+      },
+    },
+    ["runtime.invoke.v1"]
+  );
+  await flushAsyncTurns();
+
+  const fetchCountBeforeMeetingReenter = countRuntimeCalls(harness.runtimeCalls, "functions.fetch");
+
+  controller.syncPanelState(
+    {
+      activeTool: "meeting",
+      open: true,
+      meetingTool: {
+        count: 1,
+        snapshotFingerprint: "meeting-alpha|1|seed",
+      },
+      settings: {
+        meetingWorkspaceTarget: "production",
+      },
+    },
+    ["runtime.invoke.v1"]
+  );
+  await flushAsyncTurns();
+
+  assert.equal(
+    countRuntimeCalls(harness.runtimeCalls, "functions.fetch"),
+    fetchCountBeforeMeetingReenter + 1,
+    "hosted meeting hub should reload when the meeting tool becomes active again even without a new fingerprint"
+  );
+
+  controller.syncPanelState(
+    {
+      activeTool: "meeting",
+      open: false,
+      meetingTool: {
+        count: 1,
+        snapshotFingerprint: "meeting-alpha|1|seed",
+      },
+      settings: {
+        meetingWorkspaceTarget: "production",
+      },
+    },
+    ["runtime.invoke.v1"]
+  );
+  await flushAsyncTurns();
+
+  const fetchCountBeforeReopen = countRuntimeCalls(harness.runtimeCalls, "functions.fetch");
+
+  controller.syncPanelState(
+    {
+      activeTool: "meeting",
+      open: true,
+      meetingTool: {
+        count: 1,
+        snapshotFingerprint: "meeting-alpha|1|seed",
+      },
+      settings: {
+        meetingWorkspaceTarget: "production",
+      },
+    },
+    ["runtime.invoke.v1"]
+  );
+  await flushAsyncTurns();
+
+  assert.equal(
+    countRuntimeCalls(harness.runtimeCalls, "functions.fetch"),
+    fetchCountBeforeReopen + 1,
+    "hosted meeting hub should reload when the panel reopens on the meeting tool even without a new fingerprint"
+  );
+}
+
+async function flushAsyncTurns(turns = 8) {
+  for (let index = 0; index < turns; index += 1) {
+    await Promise.resolve();
+  }
+}
+
+function loadScript(relativePath, context) {
+  const source = fs.readFileSync(path.join(root, relativePath), "utf8");
+  new vm.Script(source, { filename: relativePath }).runInContext(context);
+}
+
+function createHarness() {
   const runtimeCalls = [];
   const clipboardWrites = [];
   const context = vm.createContext({
@@ -113,65 +282,15 @@ async function verifyHostedMeetingHubOwnership() {
     traceMeeting() {},
   });
 
-  controller.syncPanelState(
-    {
-      activeTool: "meeting",
-      meetingTool: {
-        count: 1,
-        snapshotFingerprint: "meeting-alpha|1|seed",
-      },
-      settings: {
-        meetingWorkspaceTarget: "production",
-      },
-    },
-    ["runtime.invoke.v1"]
-  );
-  await flushAsyncTurns();
-
-  let viewState = controller.buildViewState({});
-  assert.equal(viewState.items.length, 1, "hosted meeting hub should load meeting items directly");
-  assert.equal(viewState.items[0].meetingId, "meeting-alpha");
-
-  const shareHandled = await controller.handleMeetingAction("share", {
-    meetingId: "meeting-alpha",
-    jobId: "job-alpha",
-    title: "Alpha",
-  });
-  assert.equal(shareHandled, true, "hosted meeting hub should fully handle share actions");
-  viewState = controller.buildViewState({});
-  assert.equal(viewState.items[0].share.active, true, "hosted meeting hub should patch local share state after create");
-  assert.equal(viewState.feedback?.text, "공유 링크를 복사했습니다.");
-  assert.equal(clipboardWrites[0], "https://share.example/meeting-alpha");
-
-  const openHandled = await controller.handleMeetingAction("open-result", {
-    meetingId: "meeting-alpha",
-    jobId: "job-alpha",
-    title: "Alpha",
-  });
-  assert.equal(openHandled, true, "hosted meeting hub should fully handle open-result actions");
-  viewState = controller.buildViewState({});
-  assert.equal(viewState.feedback?.text, "결과 탭을 열었습니다.");
-  assert.equal(viewState.pending?.active, false, "hosted meeting hub should clear pending state after launch");
-
-  assert(
-    runtimeCalls.some((request) => request.action === "meeting.create-share-link"),
-    "hosted meeting hub should call runtime share actions directly"
-  );
-  assert(
-    runtimeCalls.some((request) => request.action === "meeting.open-result"),
-    "hosted meeting hub should call runtime open actions directly"
-  );
+  return {
+    clipboardWrites,
+    controller,
+    runtimeCalls,
+  };
 }
 
-async function flushAsyncTurns(turns = 8) {
-  for (let index = 0; index < turns; index += 1) {
-    await Promise.resolve();
-  }
-}
-
-function loadScript(relativePath, context) {
-  const source = fs.readFileSync(path.join(root, relativePath), "utf8");
-  new vm.Script(source, { filename: relativePath }).runInContext(context);
+function countRuntimeCalls(calls, action) {
+  return calls.filter((request) => request?.action === action).length;
 }
 
 function cloneValue(value) {

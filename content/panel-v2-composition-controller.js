@@ -42,7 +42,7 @@
       bookmarkController: panelBookmarkController,
       getPromptController: () => promptBridgeController,
       isExtensionContextInvalidatedError: runtimeDiagnostics.isExtensionContextInvalidatedError,
-      meetingManager: hostedOwnedMeetingLifecycle,
+      meetingManager: hostedOwnedIdleMeetingLifecycle,
       releaseManager,
       render,
     });
@@ -73,7 +73,7 @@
       ensureStoreLoaded: promptSyncBridge.ensureStoreLoaded,
       isStoreTabActive: runtimeFlags.isStoreTabActive,
       logPanelDebug: runtimeDiagnostics.logPanelDebug,
-      meetingManager: hostedOwnedMeetingLifecycle,
+      meetingManager: hostedOwnedIdleMeetingLifecycle,
       releaseManager,
       render,
       schedulePromptCloudSyncIfNeeded: promptSyncBridge.schedulePromptCloudSyncIfNeeded,
