@@ -32,10 +32,10 @@
         title="${escapeHtml(bookmark.text)}"
         aria-label="${bookmark.order}번 질문으로 이동"
       >
-        <button class="bookmark-jump" type="button" data-bookmark-id="${bookmark.id}" tabindex="-1" aria-hidden="true">
+        <div class="bookmark-jump" data-bookmark-id="${bookmark.id}">
           <span class="bookmark-index">${bookmark.order}</span>
           <span class="bookmark-text">${renderQuestionText(bookmark.text, query)}</span>
-        </button>
+        </div>
         <button
           class="bookmark-copy"
           type="button"

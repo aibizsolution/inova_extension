@@ -18,6 +18,7 @@ async function main() {
   verifyHostedMeetingActionCompletionTraceContract();
   verifyHostedConversationSearchDebounceContract();
   verifyHostedStoreSearchDebounceContract();
+  verifyBookmarkJumpAccessibilityContract();
   verifyHostedPromptReviewFallbackContract();
   await verifyHostedReleaseLocalDownloadUrls();
   await verifyPageAdapterContract();
@@ -305,6 +306,30 @@ function verifyHostedStoreSearchDebounceContract() {
   assert(
     promptStoreControllerSource.includes("if (state.query === nextQuery && !options.submit)"),
     "hosted store search should avoid redundant rerenders for repeated values"
+  );
+}
+
+function verifyBookmarkJumpAccessibilityContract() {
+  const hostedBookmarkSource = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "bookmark-view.js"),
+    "utf8"
+  );
+  const contentBookmarkSource = fs.readFileSync(
+    path.join(root, "content", "bookmark-view.js"),
+    "utf8"
+  );
+
+  assert(
+    hostedBookmarkSource.includes('<div class="bookmark-jump" data-bookmark-id="${bookmark.id}">'),
+    "hosted bookmark list should render a non-focusable bookmark jump container"
+  );
+  assert(
+    !hostedBookmarkSource.includes('class="bookmark-jump" type="button"'),
+    "hosted bookmark list should not render a hidden/focusable bookmark jump button"
+  );
+  assert(
+    contentBookmarkSource.includes('<div class="bookmark-jump" data-bookmark-id="${bookmark.id}">'),
+    "content bookmark list should mirror the hosted non-focusable bookmark jump container"
   );
 }
 
