@@ -144,8 +144,24 @@ function verifyV2CompositionWiring() {
     "v2 composition should wire the debug controller"
   );
   assert(
-    v2CompositionSource.includes("namespace.meetingManager.create"),
-    "v2 composition should wire the meeting manager"
+    v2CompositionSource.includes("createHostedOwnedMeetingLifecycleBridge"),
+    "v2 composition should wrap meeting shell lifecycle with a hosted-owned bridge"
+  );
+  assert(
+    !v2CompositionSource.includes("namespace.meetingManager.create"),
+    "v2 composition should not instantiate the legacy meeting manager"
+  );
+  assert(
+    v2CompositionSource.includes("meetingManager: hostedOwnedMeetingLifecycle"),
+    "v2 composition should pass the hosted-owned meeting lifecycle bridge into shared shell controllers"
+  );
+  assert(
+    v2CompositionSource.includes("onRouteStateChanged: hostedOwnedMeetingLifecycle.handleRouteStateChange"),
+    "v2 route sync should stop delegating route refresh decisions to the legacy meeting manager"
+  );
+  assert(
+    v2CompositionSource.includes("onPromptTabSelected: () => hostedOwnedMeetingLifecycle.scheduleSync(0)"),
+    "v2 prompt tab transitions should no longer wake the legacy meeting manager"
   );
   assert(
     v2CompositionSource.includes("namespace.panelActionController.create"),
