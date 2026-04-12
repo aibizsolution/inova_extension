@@ -1,8 +1,11 @@
 (function initContentPanel(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const HANDSHAKE_TIMEOUT_MS = 4000;
+  const TRACE_REPEAT_IDLE_MS = 1600;
   let panelHost = null;
   let traceSequence = 0;
+  let lastTraceEntry = null;
+  let traceRepeatTimer = 0;
 
   function ensurePanel(callbacks) {
     let host = getPanelHost();
@@ -27,9 +30,8 @@
     });
     host.__panelElements = resolvePanelElements(host);
     host.__bridge = createHostedBridge(host);
-    const { debugLayer, frame, handle } = host.__panelElements;
+    const { frame, handle } = host.__panelElements;
     installHandleInteractions(host, handle, callbacks);
-    installDebugLayerInteractions(host, debugLayer);
     frame?.addEventListener("load", () => {
       logConsoleTrace("panel", "06.top.panel.frame.load", {
         bridgeReady: Boolean(host.__bridgeReady),
@@ -66,7 +68,6 @@
 
   function resolvePanelElements(host) {
     return {
-      debugLayer: host.querySelector("#inova-meeting-debug-layer"),
       frame: host.querySelector("#inova-hosted-panel-frame"),
       handle: host.querySelector("#inova-bookmark-handle"),
       handleCount: host.querySelector(".handle-count"),
@@ -189,7 +190,6 @@
       handleCount.textContent = nextHandleCount;
     }
 
-    syncDebugLayer(host, state.panelDebug);
     syncHostedFrame(host, state);
 
     if (host.__bridgeReady) {
@@ -624,41 +624,6 @@
     banner.dataset.tone = normalizeText(status?.tone) || "info";
   }
 
-  function syncDebugLayer(host, panelDebug) {
-    const elements = host.__panelElements || resolvePanelElements(host);
-    const debugLayer = elements.debugLayer;
-    if (!(debugLayer instanceof global.HTMLElement)) {
-      return;
-    }
-    const nextPanelDebug = panelDebug && typeof panelDebug === "object" ? panelDebug : {};
-    if (!nextPanelDebug.enabled) {
-      if (debugLayer.innerHTML) {
-        debugLayer.innerHTML = "";
-      }
-      host.__panelDebugHtml = "";
-      host.__panelDebugKey = "disabled";
-      syncMeetingDebugLayerDataset(debugLayer, nextPanelDebug);
-      return;
-    }
-    const nextDebugKey = `enabled:${serializeRenderState(nextPanelDebug)}`;
-    if (host.__panelDebugKey !== nextDebugKey) {
-      namespace.panelDebug?.captureViewport?.(
-        "panel-overlay",
-        debugLayer.querySelector(".inova-meeting-debug-console__log")
-      );
-      host.__panelDebugHtml = namespace.meetingDebugConsole?.renderPanel?.(nextPanelDebug) || "";
-      host.__panelDebugKey = nextDebugKey;
-      if (debugLayer.innerHTML !== host.__panelDebugHtml) {
-        debugLayer.innerHTML = host.__panelDebugHtml;
-      }
-      namespace.panelDebug?.restoreViewport?.(
-        "panel-overlay",
-        debugLayer.querySelector(".inova-meeting-debug-console__log")
-      );
-    }
-    syncMeetingDebugLayerDataset(debugLayer, nextPanelDebug);
-  }
-
   function clearHandshakeTimeout(host) {
     if (!host?.__handshakeTimeout) {
       return;
@@ -703,21 +668,6 @@
     ["pointerup", "pointercancel"].forEach((type) => handle.addEventListener(type, (event) => finishHandleDrag(event, host, handle, callbacks, dragState)));
   }
 
-  function installDebugLayerInteractions(host, debugLayer) {
-    if (!(debugLayer instanceof global.HTMLElement)) {
-      return;
-    }
-    debugLayer.addEventListener("click", (event) => {
-      const action = normalizeText(event.target?.closest?.("[data-meeting-action]")?.dataset?.meetingAction);
-      if (!action) {
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      void host.__callbacks?.onMeetingAction?.(action, {});
-    });
-  }
-
   function finishHandleDrag(event, host, handle, callbacks, dragState) {
     if (!dragState.dragging || event.pointerId !== dragState.pointerId) {
       return;
@@ -751,7 +701,6 @@
 
   function buildMarkup() {
     return `
-      <div id="inova-meeting-debug-layer"></div>
       <div id="inova-bookmark-root" data-open="false" aria-live="polite">
         <button id="inova-bookmark-handle" type="button" aria-label="실험실 패널 열기" title="드래그해서 위치를 바꿀 수 있어요">
           <span class="handle-count">0</span>
@@ -792,15 +741,6 @@
     }
   }
 
-  function syncMeetingDebugLayerDataset(debugLayer, panelDebug) {
-    const totalLogs = Math.max(0, Number(panelDebug?.statusSummary?.totalLogs) || 0);
-    debugLayer.dataset.debugCollapsed = String(Boolean(panelDebug?.collapsed));
-    debugLayer.dataset.debugEnabled = String(Boolean(panelDebug?.enabled));
-    debugLayer.dataset.debugEntryCount = String(totalLogs);
-    debugLayer.dataset.debugHasErrors = String(Boolean(panelDebug?.hasErrors));
-    debugLayer.dataset.debugRendered = String(Boolean(debugLayer.innerHTML));
-  }
-
   function normalizeText(value) {
     return namespace.session?.normalizeText?.(value) || String(value || "").trim();
   }
@@ -818,9 +758,122 @@
     const normalizedStep = normalizeText(step) || "trace";
     const normalizedLabel = normalizedStep.replace(/^\d+\./, "") || "trace";
     const detail = payload && typeof payload === "object" ? payload : {};
-    traceSequence += 1;
-    console.info(`[inova:${normalizedChannel} #${traceSequence}] ${normalizedLabel}`, detail);
+    if (shouldSkipTraceStep(normalizedLabel, detail)) {
+      return false;
+    }
+    const summary = buildTraceSummary(normalizedLabel, detail);
+    const fingerprint = `${normalizedChannel}|${normalizedLabel}|${summary}`;
+    if (lastTraceEntry?.fingerprint === fingerprint) {
+      lastTraceEntry.repeatCount += 1;
+      scheduleTraceRepeatFlush();
+      return true;
+    }
+    flushRepeatedTraceSummary();
+    lastTraceEntry = {
+      channel: normalizedChannel,
+      fingerprint,
+      label: normalizedLabel,
+      repeatCount: 0,
+      summary,
+    };
+    emitTraceLine(normalizedChannel, formatTraceLine(normalizedLabel, summary));
+    scheduleTraceRepeatFlush();
     return true;
+  }
+  function shouldSkipTraceStep(label, payload) {
+    const quietLabels = new Set(["hosted.listeners.bound", "hosted.message.received", "hosted.ready.ping.fire", "hosted.ready.ping.scheduled", "hosted.render.flush", "hosted.request.success", "hosted.snapshot.applied", "hosted.snapshot.received", "top.panel.bridge.request.completed", "top.panel.bridge.request.received"]);
+    if (quietLabels.has(label)) {
+      return true;
+    }
+    return label === "top.panel.snapshot.push"
+      && !payload?.activeTool
+      && !payload?.open
+      && !payload?.visible;
+  }
+
+  function buildTraceSummary(label, payload = {}) {
+    const parts = [];
+    const requestAction = normalizeText(payload.action);
+    const requestDomain = normalizeText(payload.domain);
+    const requestTarget = [requestDomain, requestAction].filter(Boolean).join("/");
+    if (requestTarget) {
+      parts.push(requestTarget);
+    }
+    [
+      ["meeting", payload.meetingId],
+      ["job", payload.jobId],
+      ["artifact", payload.artifactId],
+      ["tool", payload.activeTool],
+      ["title", payload.toolTitle],
+      ["meetings", normalizeTraceCount(payload.meetingCount)],
+      ["open", normalizeTraceBoolean(payload, "open")],
+      ["visible", normalizeTraceBoolean(payload, "visible")],
+      ["ready", normalizeTraceBoolean(payload, "ready")],
+      ["reason", payload.reason],
+      ["message", payload.message],
+      ["error", payload.error],
+      ["src", summarizeTraceUrl(payload.frameSrc)],
+      ["url", summarizeTraceUrl(payload.panelUrl)],
+      ["origin", summarizeTraceUrl(payload.origin)],
+      ["file", summarizeTraceUrl(payload.filename)],
+    ].forEach(([key, value]) => appendTracePart(parts, key, value));
+    if (!parts.length && label === "hosted.render.waiting-snapshot") {
+      appendTracePart(parts, "ready", normalizeTraceBoolean(payload, "bridgeReady"));
+    }
+    return parts.filter(Boolean).join(", ");
+  }
+  function appendTracePart(parts, key, value) {
+    const normalizedValue = normalizeText(value);
+    if (normalizedValue) parts.push(`${key}=${normalizedValue}`);
+  }
+
+  function normalizeTraceBoolean(payload, key) {
+    return !payload || !Object.prototype.hasOwnProperty.call(payload, key) ? "" : payload[key] ? "yes" : "no";
+  }
+
+  function normalizeTraceCount(value) {
+    if (value == null || value === "") return "";
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? String(numeric) : normalizeText(value);
+  }
+
+  function summarizeTraceUrl(value) {
+    const normalized = normalizeText(value);
+    if (!normalized) {
+      return "";
+    }
+    try {
+      const parsed = new URL(normalized);
+      const path = `${parsed.host}${parsed.pathname}`;
+      return path.length > 72 ? `${path.slice(0, 48)}...${path.slice(-18)}` : path;
+    } catch {
+      return normalized.length > 72 ? `${normalized.slice(0, 48)}...${normalized.slice(-18)}` : normalized;
+    }
+  }
+
+  function formatTraceLine(label, summary) { return summary ? `${label} | ${summary}` : label; }
+
+  function emitTraceLine(channel, text) {
+    traceSequence += 1;
+    console.info(`[inova:${channel} #${traceSequence}] ${text}`);
+  }
+
+  function scheduleTraceRepeatFlush() {
+    global.clearTimeout(traceRepeatTimer);
+    traceRepeatTimer = global.setTimeout(() => {
+      traceRepeatTimer = 0;
+      flushRepeatedTraceSummary();
+    }, TRACE_REPEAT_IDLE_MS);
+  }
+
+  function flushRepeatedTraceSummary() {
+    if (!lastTraceEntry) {
+      return;
+    }
+    global.clearTimeout(traceRepeatTimer);
+    traceRepeatTimer = 0;
+    if (lastTraceEntry.repeatCount > 0) emitTraceLine(lastTraceEntry.channel, `same event repeated ${lastTraceEntry.repeatCount} more times | ${formatTraceLine(lastTraceEntry.label, lastTraceEntry.summary)}`);
+    lastTraceEntry = null;
   }
 
   namespace.contentPanel = {

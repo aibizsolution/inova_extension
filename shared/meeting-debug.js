@@ -336,11 +336,38 @@
   }
 
   function buildCopyText(entries = getEntries()) {
-    return (Array.isArray(entries) ? entries : []).map((entry) => formatEntry(entry)).join("\n\n").trim();
+    return buildDigestText(entries, {
+      emptyText: "아직 로그가 없습니다.",
+      maxEntries: 24,
+      title: "meeting-debug-summary",
+    });
   }
 
   function buildErrorCopyText(entries = getEntries()) {
-    return getErrorEntries(entries).map((entry) => formatEntry(entry)).join("\n\n").trim();
+    return buildDigestText(getErrorEntries(entries), {
+      emptyText: "오류 로그가 없습니다.",
+      maxEntries: 16,
+      title: "meeting-debug-errors",
+    });
+  }
+
+  function buildDigestText(entries, options = {}) {
+    const normalizedEntries = Array.isArray(entries) ? entries : [];
+    if (!normalizedEntries.length) {
+      return normalizeText(options.emptyText) || "";
+    }
+    const summary = summarizeEntries(normalizedEntries);
+    const maxEntries = Math.max(1, Number(options.maxEntries) || 20);
+    const recentEntries = normalizedEntries.slice(-maxEntries);
+    const omittedCount = Math.max(0, normalizedEntries.length - recentEntries.length);
+    const lines = [
+      `[${normalizeText(options.title) || "meeting-debug"}] total=${summary.totalLogs} errors=${summary.errorCount} functions=${summary.functionCalls} reads=${summary.readCount} snapshots=${summary.snapshotCount}`,
+    ];
+    if (omittedCount > 0) {
+      lines.push(`[summary] older entries omitted=${omittedCount}`);
+    }
+    lines.push("");
+    return `${lines.join("\n")}${recentEntries.map((entry) => formatEntry(entry)).join("\n\n")}`.trim();
   }
 
   function summarizeEntries(entries = getEntries()) {

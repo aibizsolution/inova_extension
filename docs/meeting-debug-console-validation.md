@@ -1,12 +1,12 @@
 # meeting debug console 검증 메모
 
-이 문서는 `meeting` debug console 공통 render contract를 실제 Chrome에서 빠르게 확인하고, hosted mismatch/stale pending/performance 이슈의 최소 증거를 같은 방식으로 수집할 때 쓰는 기준 문서다.
+이 문서는 `meeting` 디버그 로그를 실제 Chrome에서 빠르게 확인하고, hosted mismatch/stale pending/performance 이슈의 최소 증거를 같은 방식으로 수집할 때 쓰는 기준 문서다.
 
 ## 언제 이 문서를 쓰는지
 
 - hosted 상태 mismatch, stale pending, orphan record, 잘못된 진행 상태를 조사할 때
 - hosted boot/record 로딩이 느릴 때 단계별 timing 근거를 모을 때
-- panel과 hosted debug console의 render contract가 같은지 빠르게 확인할 때
+- top 콘솔 로그 기준으로 반복 루프와 성능 이슈를 빠르게 확인할 때
 
 ## hosted workspace
 
@@ -38,10 +38,12 @@ __INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20, entrie
   - fab toggle만 보인다.
   - 오류가 있으면 fab badge가 보인다.
 
-## panel overlay
+## panel top console
 
 - `https://inova.incross.com/*` 페이지에서 확장프로그램을 켠다.
-- 팝업에서 `meeting debug console`을 켜고, content panel이 열린 상태를 만든다.
+- 팝업에서 `meeting debug console`을 켠다.
+- `top` 콘솔에서 `inova:` 필터를 걸고 새로고침 직후부터 본다.
+- 화면 overlay 패널은 더 이상 렌더하지 않는다. 반복 원인은 콘솔 요약 로그로 본다.
 - panel helper는 content script 콘솔 문맥에서 아래처럼 읽는다.
 
 ```js
@@ -49,19 +51,11 @@ InovaBookmarks.panelDebugValidation.state()
 InovaBookmarks.panelDebugValidation.check()
 ```
 
-- page DOM에서 빠르게 볼 때는 `#inova-meeting-debug-layer` dataset도 같이 본다.
-
-```js
-document.getElementById("inova-meeting-debug-layer")?.dataset
-```
-
-- expanded 기대 결과:
-  - `debug-copy`, `debug-copy-errors`, `debug-clear`, `debug-toggle` 4개 action이 모두 렌더된다.
-  - status/log text가 비어 있지 않다.
-  - hosted와 같은 상태 라벨과 같은 render contract를 유지한다.
-- collapsed 기대 결과:
-  - `debug-toggle` fab만 남는다.
-  - 오류가 있으면 badge가 보인다.
+- 기대 결과:
+  - transport 레벨 반복 로그는 숨겨지고, 핵심 단계만 순서대로 보인다.
+  - 같은 이벤트가 반복되면 `same event repeated N more times` 한 줄로 합쳐진다.
+  - 대화 탐색은 `get-conversation-snapshot` 기준 최대 10초 간격으로만 다시 읽는다.
+  - 클릭/오류/timeout 같은 사용자 액션 경로는 여전히 개별 로그로 남는다.
 
 ## pending sync 증거
 
@@ -83,5 +77,5 @@ window.__INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20,
 ## 메모
 
 - hosted helper는 localhost/hosted script에서 바로 접근 가능하다.
-- panel helper는 content script 문맥용이므로 page DOM dataset 확인과 함께 쓰는 편이 가장 빠르다.
-- 이 문서의 목표는 `meeting` debug console 검증과 증거 수집을 AGENTS 밖의 durable procedure로 유지하는 것이다.
+- panel helper는 content script 문맥용이므로 top 콘솔 로그와 함께 쓰는 편이 가장 빠르다.
+- 이 문서의 목표는 `meeting` 디버그 로그 검증과 증거 수집 절차를 AGENTS 밖의 durable procedure로 유지하는 것이다.
