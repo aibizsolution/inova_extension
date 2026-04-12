@@ -48,6 +48,7 @@
       publishPromptId: "",
       publishTitle: "",
       query: "",
+      textInputRenderTimer: 0,
       syncNotice: null,
       syncing: false,
     };
@@ -175,7 +176,7 @@
         return true;
       }
       state.query = nextQuery;
-      scheduleRender();
+      scheduleTextInputRender();
       return true;
     }
 
@@ -207,7 +208,7 @@
         [key]: nextValue,
         error: "",
       };
-      scheduleRender();
+      scheduleTextInputRender();
       return true;
     }
 
@@ -485,6 +486,16 @@
       global.setTimeout(() => global.URL.revokeObjectURL(url), 0);
       state.feedback = createFeedback("요청 보관함을 JSON 파일로 내보냈어요.");
       scheduleRender();
+    }
+
+    function scheduleTextInputRender() {
+      if (state.textInputRenderTimer) {
+        global.clearTimeout(state.textInputRenderTimer);
+      }
+      state.textInputRenderTimer = global.setTimeout(() => {
+        state.textInputRenderTimer = 0;
+        scheduleRender();
+      }, 180);
     }
 
     async function ensureInitialized(panelState) {

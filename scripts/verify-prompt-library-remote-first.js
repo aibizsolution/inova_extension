@@ -13,6 +13,7 @@ function main() {
   return Promise.all([
     verifyHostedPromptLibraryAvoidsDuplicateReloads(),
     verifyHostedPromptEditorViewLabels(),
+    verifyHostedPromptTextInputDebouncesRender(),
   ]).then(() => {
     console.log("[verify-prompt-library-remote-first] Prompt library remote-first contract passed");
   });
@@ -66,6 +67,7 @@ async function verifyHostedPromptLibraryAvoidsDuplicateReloads() {
   const context = vm.createContext({
     Blob: class Blob {},
     File: class File {},
+    clearTimeout,
     console,
     document: {
       createElement() {
@@ -178,6 +180,7 @@ async function verifyHostedPromptEditorViewLabels() {
   const context = vm.createContext({
     Blob: class Blob {},
     File: class File {},
+    clearTimeout,
     console,
     document: {
       createElement() {
@@ -274,12 +277,86 @@ async function verifyHostedPromptEditorViewLabels() {
   assert.equal(editView.description, "저장 후 바로 다시 사용할 수 있어요.");
 }
 
+async function verifyHostedPromptTextInputDebouncesRender() {
+  let renderCount = 0;
+  const context = vm.createContext({
+    Blob: class Blob {},
+    File: class File {},
+    clearTimeout,
+    console,
+    document: {
+      createElement() {
+        return {
+          click() {},
+        };
+      },
+    },
+    globalThis: null,
+    navigator: {},
+    setTimeout,
+    URL: {
+      createObjectURL() {
+        return "blob:prompt-library";
+      },
+      revokeObjectURL() {},
+    },
+  });
+  context.globalThis = context;
+  context.InovaBookmarks = {
+    promptLibraryModel: {
+      mergePromptLibrary(promptLibrary) {
+        const items = Array.isArray(promptLibrary?.items) ? promptLibrary.items.map((item) => ({ ...item })) : [];
+        return {
+          items,
+          version: Number(promptLibrary?.version) || 1,
+        };
+      },
+    },
+    session: {
+      normalizeText(value) {
+        return String(value ?? "").trim();
+      },
+    },
+  };
+
+  const source = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),
+    "utf8"
+  );
+  new vm.Script(source, {
+    filename: "hosting/extension-v2/panel/prompt-library-controller.js",
+  }).runInContext(context);
+
+  const controller = context.InovaBookmarks.promptLibraryController.create({
+    invokeRuntime: async () => ({}),
+    scheduleRender() {
+      renderCount += 1;
+    },
+  });
+
+  await controller.handlePromptAction("create");
+  renderCount = 0;
+
+  controller.handlePromptDraftChange("title", "안");
+  controller.handleSearch("prompts", "안");
+
+  await flushAsync();
+  assert.equal(renderCount, 0, "text input changes should not render immediately");
+
+  await wait(220);
+  assert.equal(renderCount, 1, "text input changes should collapse into one deferred render");
+}
+
 function read(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), "utf8");
 }
 
 function flushAsync() {
   return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 try {
