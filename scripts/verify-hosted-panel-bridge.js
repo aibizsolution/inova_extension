@@ -49,6 +49,18 @@ function verifyV2PanelRuntimeResolution() {
     localRuntime.hosting.panelAppUrl,
     "http://127.0.0.1:5000/extension-v2/panel/index.html"
   );
+  assert.equal(
+    firebaseConfig.functions.listInovaMeetingsUrl,
+    "https://asia-northeast3-browser-extension-main.cloudfunctions.net/listInovaMeetings"
+  );
+  assert.equal(
+    firebaseConfig.functions.issueInovaMeetingPanelAuthUrl,
+    "https://asia-northeast3-browser-extension-main.cloudfunctions.net/issueInovaMeetingPanelAuth"
+  );
+  assert.equal(
+    firebaseConfig.functions.loadInovaPromptLibraryUrl,
+    "https://asia-northeast3-browser-extension-main.cloudfunctions.net/loadInovaPromptLibraryV2"
+  );
 }
 
 async function verifyHostedPanelBridgeContract() {
@@ -242,7 +254,12 @@ function loadFirebaseConfig(lane) {
           return {
             functions: {
               baseUrl: "https://asia-northeast3-browser-extension-main.cloudfunctions.net",
-              endpointOverrides: {},
+              endpointOverrides: {
+                issueInovaPromptPanelAuthUrl: "issueInovaPromptPanelAuthV2",
+                loadInovaPromptLibraryUrl: "loadInovaPromptLibraryV2",
+                peekInovaPromptLibraryUrl: "peekInovaPromptLibraryV2",
+                syncInovaPromptLibraryUrl: "syncInovaPromptLibraryV2",
+              },
             },
             hosting: {
               baseUrl: "https://browser-extension-v2.web.app/extension-v2",

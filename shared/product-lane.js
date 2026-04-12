@@ -43,23 +43,10 @@
       functions: Object.freeze({
         baseUrl: DEFAULT_FUNCTIONS_BASE_URL,
         endpointOverrides: Object.freeze({
-          authorizeInovaMeetingWorkspaceAccessUrl: "authorizeInovaMeetingWorkspaceAccessV2",
-          createInovaMeetingShareLinkUrl: "createInovaMeetingShareLinkV2",
-          deleteInovaMeetingResultUrl: "deleteInovaMeetingResultV2",
-          deleteInovaMeetingUrl: "deleteInovaMeetingV2",
-          exchangeInovaMeetingLaunchUrl: "exchangeInovaMeetingLaunchV2",
-          issueInovaMeetingLaunchUrl: "issueInovaMeetingLaunchV2",
-          issueInovaMeetingPanelAuthUrl: "issueInovaMeetingPanelAuthV2",
-          issueInovaMeetingWorkspaceAuthUrl: "issueInovaMeetingWorkspaceAuthV2",
           issueInovaPromptPanelAuthUrl: "issueInovaPromptPanelAuthV2",
-          listInovaMeetingsUrl: "listInovaMeetingsV2",
           loadInovaPromptLibraryUrl: "loadInovaPromptLibraryV2",
           peekInovaPromptLibraryUrl: "peekInovaPromptLibraryV2",
-          revokeInovaMeetingShareLinkUrl: "revokeInovaMeetingShareLinkV2",
           syncInovaPromptLibraryUrl: "syncInovaPromptLibraryV2",
-          updateInovaMeetingResultUrl: "updateInovaMeetingResultV2",
-          updateInovaMeetingUrl: "updateInovaMeetingV2",
-          uploadInovaMeetingSourceUrl: "uploadInovaMeetingSourceV2",
         }),
       }),
       hosting: Object.freeze({
