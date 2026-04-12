@@ -121,6 +121,7 @@
   function buildHostingConfig(defaultBaseUrl, defaultOriginUrl, overrideConfig = {}) {
     const baseUrl = normalizeBaseUrl(overrideConfig.baseUrl || defaultBaseUrl);
     const originUrl = normalizeOriginUrl(overrideConfig.originUrl || defaultOriginUrl || baseUrl);
+    const promptPanelBridgeBaseUrl = buildPromptPanelBridgeBaseUrl(originUrl);
     const promptPanelBridgeAssetVersion = normalizeText(
       overrideConfig.promptPanelBridgeAssetVersion
       || [readRuntimeManifestVersion(), PROMPT_PANEL_BRIDGE_CACHE_TOKEN].filter(Boolean).join("-")
@@ -136,7 +137,11 @@
         meetingPanelBridgeUrl: joinUrl(originUrl, "meeting/panel-bridge.html"),
         meetingWorkspaceUrl: joinUrl(originUrl, "meeting/index.html"),
         promptPanelBridgeAssetVersion,
-        promptPanelBridgeUrl: appendQueryParam(joinUrl(baseUrl, "prompt-panel-bridge.html"), "v", promptPanelBridgeAssetVersion),
+        promptPanelBridgeUrl: appendQueryParam(
+          joinUrl(promptPanelBridgeBaseUrl, "prompt-panel-bridge.html"),
+          "v",
+          promptPanelBridgeAssetVersion
+        ),
         originUrl,
       },
       endpointMap,
@@ -393,6 +398,10 @@
   function buildLocalExtensionBaseUrl(originUrl, lane = "legacy") {
     const panelBasePath = normalizeText(lane).toLowerCase() === "v2" ? "extension-v2" : "extension";
     return joinUrl(normalizeOriginUrl(originUrl), panelBasePath);
+  }
+
+  function buildPromptPanelBridgeBaseUrl(originUrl) {
+    return joinUrl(normalizeOriginUrl(originUrl), "extension");
   }
 
   function buildLocalFunctionsBaseUrl(hostname, projectId, region) {

@@ -74,6 +74,7 @@ ordinary feature 구현 변경은 이 문서의 대상이 아니고, version lan
 - local rehearsal에서 hosted panel 기본 경로는 `http://127.0.0.1:5000/extension/panel/index.html`이다.
 - local rehearsal에서 `1.x+` v2 lane hosted panel 기본 경로는 `http://127.0.0.1:5000/extension-v2/panel/index.html`이다.
 - local rehearsal에서 page DOM에 삽입되는 hosted panel/meeting bridge/prompt bridge iframe src는 direct loopback URL이 아니라 extension `content/frame-proxy.html?target=...` wrapper를 사용한다. 실제 target URL baseline은 계속 `127.0.0.1:5000/*`로 유지하고, manifest는 이 proxy page와 extension frame-src allowlist를 함께 유지한다.
+- prompt bridge 자산 경로는 lane-stable 규칙을 따른다. `1.x+` v2 lane이어도 `panelAppUrl`만 `extension-v2/panel/*`로 이동하고, hidden prompt bridge target은 production/local 모두 계속 `extension/prompt-panel-bridge.html`을 사용한다.
 - hosted panel 자산이 더 최신이어도 extension bridge capability가 부족하면 조용히 깨지지 않고 explicit update-needed 상태를 보여줘야 한다.
 
 ### Hosted origin/path

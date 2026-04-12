@@ -9,6 +9,7 @@ const root = path.resolve(__dirname, "..");
 
 async function main() {
   verifyPromptRuntimeResolution();
+  verifyPromptRuntimeResolutionForV2Lane();
   verifyPromptLocalWiring();
   await verifyEmptyStoreLatestSnapshot();
   console.log("[verify-prompt-runtime-local] Prompt local runtime contract passed");
@@ -33,6 +34,22 @@ function verifyPromptRuntimeResolution() {
   assert.equal(promptRuntime.emulators.functionsPort, 5001);
   assert.equal(meetingRuntime.hosting.meetingWorkspaceUrl, "http://127.0.0.1:5000/meeting/index.html");
   assert.equal(meetingRuntime.functions.baseUrl, promptRuntime.functions.baseUrl);
+}
+
+function verifyPromptRuntimeResolutionForV2Lane() {
+  const firebaseConfig = loadFirebaseConfig("v2");
+  const settings = {
+    meetingWorkspaceTarget: "local",
+    meetingWorkspaceUrlOverride: "http://127.0.0.1:5000/meeting/index.html",
+  };
+  const promptRuntime = firebaseConfig.prompt.resolveRuntime(settings);
+
+  assert.equal(promptRuntime.target, "local");
+  assert.equal(promptRuntime.hosting.panelAppUrl, "http://127.0.0.1:5000/extension-v2/panel/index.html");
+  assert(
+    promptRuntime.hosting.promptPanelBridgeUrl.startsWith("http://127.0.0.1:5000/extension/prompt-panel-bridge.html"),
+    "v2 local prompt runtime도 legacy prompt bridge 경로를 유지해야 합니다."
+  );
 }
 
 function verifyPromptLocalWiring() {
@@ -257,12 +274,13 @@ async function verifyEmptyStoreLatestSnapshot() {
   assert.equal(storeLatestMessages[0].payload.summary.totalPublished, 0);
 }
 
-function loadFirebaseConfig() {
+function loadFirebaseConfig(activeLane = "legacy") {
+  const normalizedLane = activeLane === "v2" ? "v2" : "legacy";
   const context = vm.createContext({
     chrome: {
       runtime: {
         getManifest() {
-          return { version: "0.4.4" };
+          return { version: normalizedLane === "v2" ? "1.0.0" : "0.4.4" };
         },
       },
     },
@@ -273,29 +291,41 @@ function loadFirebaseConfig() {
   context.InovaBookmarks = {
     productLane: {
       getActiveLane() {
-        return "legacy";
+        return normalizedLane;
       },
       getLaneConfig() {
+        const isV2Lane = normalizedLane === "v2";
         return {
           functions: {
             baseUrl: "https://asia-northeast3-browser-extension-main.cloudfunctions.net",
-            endpointOverrides: {},
+            endpointOverrides: isV2Lane
+              ? {
+                issueInovaPromptPanelAuthUrl: "issueInovaPromptPanelAuthV2",
+                loadInovaPromptLibraryUrl: "loadInovaPromptLibraryV2",
+                peekInovaPromptLibraryUrl: "peekInovaPromptLibraryV2",
+                syncInovaPromptLibraryUrl: "syncInovaPromptLibraryV2",
+              }
+              : {},
           },
           hosting: {
-            baseUrl: "https://browser-extension-main.web.app/extension",
-            originUrl: "https://browser-extension-main.web.app",
+            baseUrl: isV2Lane
+              ? "https://browser-extension-v2.web.app/extension-v2"
+              : "https://browser-extension-main.web.app/extension",
+            originUrl: isV2Lane
+              ? "https://browser-extension-v2.web.app"
+              : "https://browser-extension-main.web.app",
           },
-          id: "legacy",
+          id: normalizedLane,
           prompt: {
             firestoreCollections: {
-              accountsCollection: "integration_inova_accounts",
+              accountsCollection: isV2Lane ? "integration_inova_accounts_v2" : "integration_inova_accounts",
               storeDetailCollection: "prompt_store_entry_details",
               storeFeedCollection: "prompt_store_feed_pages",
               storeSummaryCollection: "prompt_store_meta",
             },
-            panelScope: "prompt-panel",
+            panelScope: isV2Lane ? "prompt-panel-v2" : "prompt-panel",
           },
-          storagePrefix: "",
+          storagePrefix: isV2Lane ? "v2." : "",
           web: {
             projectId: "browser-extension-main",
           },
