@@ -1,5 +1,6 @@
 (function initConversationController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const SNAPSHOT_REFRESH_INTERVAL_MS = 1000;
   const REQUIRED_EXTENSION_CAPABILITIES = Object.freeze([
     "page.adapter.v2",
   ]);
@@ -25,7 +26,9 @@
       initialized: false,
       items: [],
       lastLoadedAt: 0,
+      lastRequestedAt: 0,
       loadPromise: null,
+      refreshTimerId: 0,
       loading: false,
       query: "",
       sessionId: "",
@@ -71,7 +74,7 @@
 
       state.snapshotFingerprint = nextFingerprint;
       if (shouldRefresh) {
-        void ensureLoaded(true);
+        requestLoad();
       }
     }
 
@@ -139,10 +142,13 @@
 
     async function ensureLoaded(force = false) {
       void force;
+      global.clearTimeout(state.refreshTimerId);
+      state.refreshTimerId = 0;
       if (state.loadPromise) {
         return state.loadPromise;
       }
       const run = (async () => {
+        state.lastRequestedAt = Date.now();
         state.loading = true;
         scheduleRender();
         try {
@@ -169,6 +175,22 @@
           state.loadPromise = null;
         }
       }
+    }
+
+    function requestLoad() {
+      if (state.loadPromise || state.refreshTimerId) {
+        return false;
+      }
+      const remaining = Math.max(0, SNAPSHOT_REFRESH_INTERVAL_MS - (Date.now() - state.lastRequestedAt));
+      if (remaining > 0) {
+        state.refreshTimerId = global.setTimeout(() => {
+          state.refreshTimerId = 0;
+          void ensureLoaded(true);
+        }, remaining);
+        return true;
+      }
+      void ensureLoaded(true);
+      return true;
     }
 
     function hydrateFallbackState(fallbackBookmarksTool) {

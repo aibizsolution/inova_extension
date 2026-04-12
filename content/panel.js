@@ -98,15 +98,11 @@
         if (ready) {
           updateStatusBanner(host, null);
           if (host.__lastRenderedState) {
-            logConsoleTrace("panel", "10.top.panel.snapshot.push", {
-              activeTool: normalizeText(host.__lastRenderedState?.activeTool),
-              open: Boolean(host.__lastRenderedState?.open),
-              visible: Boolean(host.__lastRenderedState?.visible),
-            });
-            bridge.updateSnapshot(buildBridgeSnapshot(host.__lastRenderedState, host));
+            pushBridgeSnapshotIfChanged(host, host.__lastRenderedState, { force: true });
           }
           return;
         }
+        host.__lastBridgeSnapshotKey = "";
         if (host.__panelUrl) {
           updateStatusBanner(host, {
             text: "호스팅 패널과 다시 연결하는 중이에요.",
@@ -197,12 +193,7 @@
     syncHostedFrame(host, state);
 
     if (host.__bridgeReady) {
-      logConsoleTrace("panel", "10.top.panel.snapshot.push", {
-        activeTool: normalizeText(state?.activeTool),
-        open: Boolean(state?.open),
-        visible: Boolean(state?.visible),
-      });
-      host.__bridge.updateSnapshot(buildBridgeSnapshot(state, host));
+      pushBridgeSnapshotIfChanged(host, state);
     }
   }
 
@@ -243,6 +234,7 @@
       host.__panelUrl = panelFrameUrl;
       host.__panelFrameSrc = "";
       host.__bridgeReady = false;
+      host.__lastBridgeSnapshotKey = "";
       host.__bridge.reset("frame-proxy-error");
       host.__bridge.setAllowedOrigin("");
       clearHandshakeTimeout(host);
@@ -262,6 +254,7 @@
     host.__panelUrl = panelFrameUrl;
     host.__panelFrameSrc = frameTarget.src;
     host.__bridgeReady = false;
+    host.__lastBridgeSnapshotKey = "";
     host.__bridge.reset("frame-src-change");
     clearHandshakeTimeout(host);
     host.__handshakeTimeout = global.setTimeout(() => {
@@ -522,6 +515,23 @@
       panel: cloneValue(state),
       panelAppUrl: normalizeText(host.__panelUrl),
     };
+  }
+
+  function pushBridgeSnapshotIfChanged(host, state, options = {}) {
+    const snapshot = buildBridgeSnapshot(state, host);
+    const snapshotKey = serializeRenderState(snapshot);
+    const force = Boolean(options?.force);
+    if (!force && host.__lastBridgeSnapshotKey === snapshotKey) {
+      return false;
+    }
+    host.__lastBridgeSnapshotKey = snapshotKey;
+    logConsoleTrace("panel", "10.top.panel.snapshot.push", {
+      activeTool: normalizeText(state?.activeTool),
+      open: Boolean(state?.open),
+      visible: Boolean(state?.visible),
+    });
+    host.__bridge.updateSnapshot(snapshot);
+    return true;
   }
 
   function buildConversationSnapshot() {
@@ -810,7 +820,6 @@
     const detail = payload && typeof payload === "object" ? payload : {};
     traceSequence += 1;
     console.info(`[inova:${normalizedChannel} #${traceSequence}] ${normalizedLabel}`, detail);
-    namespace.panelDebug?.log?.(`trace.${normalizedChannel}.${String(traceSequence).padStart(4, "0")}.${normalizedLabel}`, detail);
     return true;
   }
 
