@@ -36,8 +36,8 @@ Important supporting changes already landed:
   - v2 extension composition is shell/runtime/route/page-adapter only
 - `content/panel.js`
   - page adapter now supports conversation/debug/composer actions for hosted v2
-- `hosting/extension-v2/panel/debug-controller.js`
-  - v2 debug UI/state/action now hosted
+- hosted panel debug UI
+  - removed; debugging now relies on top console trace + shared debug buffer
 
 ## Very Important Direction
 
@@ -134,7 +134,7 @@ If continuing immediately, do this order:
    - prompt review run/copy/apply
    - meeting hub list/open/share/revoke
    - release tab
-   - debug console
+   - top console debug trace
 4. Fix only the concrete failures found in smoke
 5. After smoke is stable, do small cleanup of leftover extension-only legacy wiring
 

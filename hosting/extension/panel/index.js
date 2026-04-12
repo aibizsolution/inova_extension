@@ -432,7 +432,6 @@
     }
 
     renderToolContentIfNeeded(elements.toolContent, panelState);
-    renderMeetingDebugLayerIfNeeded(elements.debugLayer, panelState);
 
     if (panelState.activeTool === "prompts" && panelState.promptTool?.activeTab === "store") {
       namespace.promptHubPanel?.syncStoreList?.(elements.app, callbacks, {
@@ -457,7 +456,6 @@
   function resolvePanelElements() {
     return {
       app: root.querySelector(".inova-hosted-panel-app"),
-      debugLayer: root.querySelector("#inova-meeting-debug-layer"),
       fileInput: root.querySelector("#inova-prompt-import-file"),
       toolContent: root.querySelector("#inova-tool-content"),
       toolRail: root.querySelector("#inova-tool-rail"),
@@ -468,8 +466,6 @@
 
   function createPanelRenderCache() {
     return {
-      debugHtml: "",
-      debugKey: "",
       toolContentHtml: "",
       toolContentKey: "",
       toolRailHtml: "",
@@ -490,21 +486,6 @@
     if (toolContent.innerHTML !== state.renderCache.toolContentHtml) {
       toolContent.innerHTML = state.renderCache.toolContentHtml;
     }
-  }
-
-  function renderMeetingDebugLayerIfNeeded(debugLayer, panelState) {
-    if (!(debugLayer instanceof global.HTMLElement)) {
-      return;
-    }
-    const panelDebug = panelState.panelDebug && typeof panelState.panelDebug === "object"
-      ? panelState.panelDebug
-      : {};
-    if (state.renderCache.debugHtml || debugLayer.innerHTML) {
-      debugLayer.innerHTML = "";
-    }
-    state.renderCache.debugHtml = "";
-    state.renderCache.debugKey = panelDebug.enabled ? "external-overlay" : "disabled";
-    syncMeetingDebugLayerDataset(debugLayer, panelDebug);
   }
 
   function buildToolContentKey(panelState) {
@@ -589,7 +570,6 @@
           </section>
         </div>
         <input id="inova-prompt-import-file" type="file" accept="application/json,.json" hidden />
-        <div id="inova-meeting-debug-layer" class="inova-hosted-panel-debug-layer"></div>
       </div>
     `;
   }
@@ -856,15 +836,6 @@
       return `#${escapeSelector(element.id)}`;
     }
     return "";
-  }
-
-  function syncMeetingDebugLayerDataset(debugLayer, panelDebug) {
-    const totalLogs = Math.max(0, Number(panelDebug?.statusSummary?.totalLogs) || 0);
-    debugLayer.dataset.debugCollapsed = String(Boolean(panelDebug?.collapsed));
-    debugLayer.dataset.debugEnabled = String(Boolean(panelDebug?.enabled));
-    debugLayer.dataset.debugEntryCount = String(totalLogs);
-    debugLayer.dataset.debugHasErrors = String(Boolean(panelDebug?.hasErrors));
-    debugLayer.dataset.debugRendered = String(Boolean(debugLayer.innerHTML));
   }
 
   function serializeRenderState(value) {

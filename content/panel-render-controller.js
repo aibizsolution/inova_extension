@@ -6,7 +6,6 @@
     const isToolSurface = typeof deps.isToolSurface === "function" ? deps.isToolSurface : () => false;
     const panelBookmarkController = deps.panelBookmarkController || { buildToolState() { return { count: 0 }; } };
     const panelDebugController = deps.panelDebugController || {
-      buildState() { return {}; },
       syncEnabled() {},
     };
     const panelMeetingController = deps.panelMeetingController || { buildToolState() { return { count: 0 }; } };
@@ -36,7 +35,6 @@
       const bookmarkTool = panelBookmarkController.buildToolState();
       const promptToolState = panelPromptController.buildToolState();
       const meetingTool = panelMeetingController.buildToolState(state.meetingHub);
-      const panelDebug = panelDebugController.buildState();
       const releaseState = releaseManager.buildViewState();
       const releaseCount = releaseState.updateAvailable ? 1 : 0;
       const shellChrome = panelShellController.buildRenderChrome({
@@ -55,7 +53,6 @@
         releaseTool: releaseState,
         handleRatio: namespace.storage.getHandleRatio(state.uiPreferences, global.innerWidth),
         open: state.open,
-        panelDebug,
         promptTool: promptToolState.promptTool,
         settings: state.settings,
         toolCount: shellChrome.toolCount,

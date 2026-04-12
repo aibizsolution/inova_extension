@@ -1,4 +1,4 @@
-# meeting debug console 검증 메모
+# meeting debug 로그 검증 메모
 
 이 문서는 `meeting` 디버그 로그를 실제 Chrome에서 빠르게 확인하고, hosted mismatch/stale pending/performance 이슈의 최소 증거를 같은 방식으로 수집할 때 쓰는 기준 문서다.
 
@@ -44,13 +44,6 @@ __INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20, entrie
 - 팝업에서 `meeting debug console`을 켠다.
 - `top` 콘솔에서 `inova:` 필터를 걸고 새로고침 직후부터 본다.
 - 화면 overlay 패널은 더 이상 렌더하지 않는다. 반복 원인은 콘솔 요약 로그로 본다.
-- panel helper는 content script 콘솔 문맥에서 아래처럼 읽는다.
-
-```js
-InovaBookmarks.panelDebugValidation.state()
-InovaBookmarks.panelDebugValidation.check()
-```
-
 - 기대 결과:
   - transport 레벨 반복 로그는 숨겨지고, 핵심 단계만 순서대로 보인다.
   - 같은 이벤트가 반복되면 `same event repeated N more times` 한 줄로 합쳐진다.
@@ -77,5 +70,4 @@ window.__INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20,
 ## 메모
 
 - hosted helper는 localhost/hosted script에서 바로 접근 가능하다.
-- panel helper는 content script 문맥용이므로 top 콘솔 로그와 함께 쓰는 편이 가장 빠르다.
 - 이 문서의 목표는 `meeting` 디버그 로그 검증과 증거 수집 절차를 AGENTS 밖의 durable procedure로 유지하는 것이다.
