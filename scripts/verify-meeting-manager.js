@@ -13,6 +13,7 @@ async function main() {
   await verifyStaleCacheFallbackState();
   await verifyEmptyFallbackState();
   await verifyInactiveRefreshIsQuiet();
+  await verifyRouteStateChangeStaysQuietAfterRealtimeReady();
   console.log("[verify-meeting-manager] Meeting hub fallback contract passed");
 }
 
@@ -151,6 +152,49 @@ async function verifyInactiveRefreshIsQuiet() {
 
   assert.equal(harness.renderCount(), 0);
   assert.deepEqual(harness.sentMessages, []);
+}
+
+async function verifyRouteStateChangeStaysQuietAfterRealtimeReady() {
+  const harness = createHarness({
+    bridgeMode: "snapshot",
+    initialMeetingHub: {
+      checkedAt: "2026-04-04T08:00:00.000Z",
+      items: [
+        {
+          excerpt: "기존 회의",
+          latestArtifactId: "artifact-existing",
+          latestJobId: "job-existing",
+          meetingId: "meeting-existing",
+          status: "succeeded",
+          title: "기존 회의",
+          updatedAt: "2026-04-04T08:00:00.000Z",
+        },
+      ],
+      source: "realtime",
+    },
+    snapshotItems: [
+      {
+        excerpt: "실시간 스냅샷으로 회의 허브를 받았습니다.",
+        latestArtifactId: "artifact-realtime",
+        latestJobId: "job-realtime",
+        meetingId: "meeting-realtime",
+        status: "succeeded",
+        title: "실시간 회의",
+        updatedAt: "2026-04-04T08:10:00.000Z",
+      },
+    ],
+  });
+
+  await harness.manager.refreshState("verify-realtime-ready");
+  await harness.flush();
+  const renderCountBefore = harness.renderCount();
+  const sentCountBefore = harness.sentMessages.length;
+
+  harness.manager.handleRouteStateChange();
+  await harness.flush();
+
+  assert.equal(harness.renderCount(), renderCountBefore);
+  assert.equal(harness.sentMessages.length, sentCountBefore);
 }
 
 function createHarness(options = {}) {

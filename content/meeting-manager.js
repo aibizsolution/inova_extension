@@ -32,8 +32,13 @@
     };
 
     function handleRouteStateChange() {
-      scheduleSync(80);
-      hooks.render?.();
+      if (!shouldScheduleRefresh()) {
+        return false;
+      }
+      if (realtimeActive || !isMeetingHubPendingInitialLoad(state.meetingHub)) {
+        return false;
+      }
+      return scheduleSync(80);
     }
 
     function handleStorageChange(changes, areaName) {
