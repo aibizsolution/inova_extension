@@ -1,5 +1,6 @@
 (function initMeetingBridge(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const OPEN_RUNTIME_PENDING_MS = 1500;
 
   async function listMeetings(input, providerIdentity) {
     return sendRuntimeMessage("inova-meeting:list-meetings", {
@@ -44,6 +45,7 @@
 
   async function sendRuntimeMessage(type, payload) {
     const metadata = classifyMeetingRuntimeMetadata(type);
+    const openTrace = beginOpenRuntimeTrace(type);
     try {
       logDebug("request", {
         backend: metadata.backend,
@@ -58,6 +60,9 @@
       if (!response?.ok) {
         throw new Error(namespace.session.normalizeText(response?.error || "") || "회의 기능 요청을 처리하지 못했어요.");
       }
+      finishOpenRuntimeTrace(openTrace, "success", {
+        message: namespace.session.normalizeText(response?.data?.url) || "runtime-response",
+      });
       logDebug("success", {
         backend: metadata.backend,
         operation: metadata.operation,
@@ -68,9 +73,15 @@
       return response.data;
     } catch (error) {
       if (isInvalidatedContextError(error)) {
+        finishOpenRuntimeTrace(openTrace, "error", {
+          error: "Extension context invalidated",
+        });
         logDebug("invalidated", { type });
         throw new Error("확장프로그램이 갱신됐어요. 페이지를 새로고침해 주세요.", { cause: error });
       }
+      finishOpenRuntimeTrace(openTrace, "error", {
+        error: error instanceof Error ? error.message : String(error || ""),
+      });
       logDebug("error", {
         backend: metadata.backend,
         error: error instanceof Error ? error.message : String(error || ""),
@@ -119,6 +130,64 @@
   function isInvalidatedContextError(error) {
     const message = namespace.session.normalizeText(error instanceof Error ? error.message : String(error || ""));
     return message.includes("Extension context invalidated");
+  }
+
+  function beginOpenRuntimeTrace(type) {
+    const action = readOpenRuntimeAction(type);
+    if (!action) {
+      return null;
+    }
+    const startedAt = Date.now();
+    const timeoutId = global.setTimeout(() => {
+      traceMeetingFlow("66.top.meeting.runtime.pending", {
+        action,
+        reason: `${OPEN_RUNTIME_PENDING_MS}ms`,
+      });
+    }, OPEN_RUNTIME_PENDING_MS);
+    return {
+      action,
+      startedAt,
+      timeoutId,
+    };
+  }
+
+  function finishOpenRuntimeTrace(trace, outcome, payload = {}) {
+    if (!trace) {
+      return;
+    }
+    global.clearTimeout(trace.timeoutId);
+    traceMeetingFlow(
+      outcome === "success" ? "66.top.meeting.runtime.success" : "66.top.meeting.runtime.error",
+      {
+        action: trace.action,
+        reason: `${Math.max(0, Date.now() - trace.startedAt)}ms`,
+        ...(payload && typeof payload === "object" ? payload : {}),
+      }
+    );
+  }
+
+  function readOpenRuntimeAction(type) {
+    const normalized = namespace.session.normalizeText(type);
+    if (normalized === "inova-meeting:open-workspace") {
+      return "open-workspace";
+    }
+    if (normalized === "inova-meeting:open-result") {
+      return "open-result";
+    }
+    return "";
+  }
+
+  function traceMeetingFlow(step, payload = {}) {
+    if (!namespace.panelDebug?.isEnabled?.()) {
+      return false;
+    }
+    const detail = payload && typeof payload === "object" ? payload : {};
+    if (namespace.panelConsoleTrace?.log) {
+      return namespace.panelConsoleTrace.log("meeting", step, detail);
+    }
+    console.info(`[inova:meeting] ${namespace.session.normalizeText(step) || "trace"}`, detail);
+    namespace.panelDebug?.log?.(`trace.meeting.${namespace.session.normalizeText(step) || "trace"}`, detail);
+    return true;
   }
 
   function logDebug(event, payload) {
