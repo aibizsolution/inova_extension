@@ -9,6 +9,7 @@ const root = path.resolve(__dirname, "..");
 
 async function main() {
   await verifyHostedMeetingHubOwnership();
+  await verifyHostedMeetingHubShareCopyFailure();
   await verifyHostedMeetingHubLifecycleRefreshOwnership();
   console.log("[verify-meeting-hub-controller] Hosted meeting hub controller contract passed");
 }
@@ -45,7 +46,10 @@ async function verifyHostedMeetingHubOwnership() {
   viewState = controller.buildViewState({});
   assert.equal(viewState.items[0].share.active, true, "hosted meeting hub should patch local share state after create");
   assert.equal(viewState.feedback?.text, "공유 링크를 복사했습니다.");
-  assert.equal(harness.clipboardWrites[0], "https://share.example/meeting-alpha");
+  assert.deepEqual(harness.pageCalls[0], {
+    action: "copy-text",
+    text: "https://share.example/meeting-alpha",
+  });
 
   const openHandled = await controller.handleMeetingAction("open-result", {
     meetingId: "meeting-alpha",
@@ -65,6 +69,46 @@ async function verifyHostedMeetingHubOwnership() {
     harness.runtimeCalls.some((request) => request.action === "meeting.open-result"),
     "hosted meeting hub should call runtime open actions directly"
   );
+}
+
+async function verifyHostedMeetingHubShareCopyFailure() {
+  const harness = createHarness({
+    pageCopyResult: {
+      copied: false,
+    },
+  });
+  const controller = harness.controller;
+
+  controller.syncPanelState(
+    {
+      activeTool: "meeting",
+      meetingTool: {
+        count: 1,
+        snapshotFingerprint: "meeting-alpha|1|seed",
+      },
+      settings: {
+        meetingWorkspaceTarget: "production",
+      },
+    },
+    ["runtime.invoke.v1"]
+  );
+  await flushAsyncTurns();
+
+  const handled = await controller.handleMeetingAction("share", {
+    meetingId: "meeting-alpha",
+    jobId: "job-alpha",
+    title: "Alpha",
+  });
+
+  assert.equal(handled, true, "hosted meeting hub should still finish share actions when clipboard copy fails");
+  const viewState = controller.buildViewState({});
+  assert.equal(viewState.items[0].share.active, true, "share state should stay active even when auto-copy fails");
+  assert.equal(viewState.feedback?.text, "공유 링크는 만들었지만 자동 복사는 실패했어요.");
+  assert.equal(viewState.feedback?.tone, "error");
+  assert.deepEqual(harness.pageCalls[0], {
+    action: "copy-text",
+    text: "https://share.example/meeting-alpha",
+  });
 }
 
 async function verifyHostedMeetingHubLifecycleRefreshOwnership() {
@@ -181,20 +225,17 @@ function loadScript(relativePath, context) {
   new vm.Script(source, { filename: relativePath }).runInContext(context);
 }
 
-function createHarness() {
+function createHarness(options = {}) {
+  return createHarnessWithOptions(options);
+}
+
+function createHarnessWithOptions(options = {}) {
   const runtimeCalls = [];
-  const clipboardWrites = [];
+  const pageCalls = [];
   const context = vm.createContext({
     clearTimeout() {},
     console,
     globalThis: null,
-    navigator: {
-      clipboard: {
-        async writeText(text) {
-          clipboardWrites.push(String(text || ""));
-        },
-      },
-    },
     setTimeout() {
       return 1;
     },
@@ -211,6 +252,13 @@ function createHarness() {
   loadScript("hosting/extension-v2/panel/meeting-hub-controller.js", context);
 
   const controller = context.InovaBookmarks.meetingHubController.create({
+    invokePage: async (request) => {
+      pageCalls.push(cloneValue(request));
+      if (request?.action === "copy-text") {
+        return cloneValue(options.pageCopyResult || { copied: true });
+      }
+      throw new Error(`Unexpected page action: ${request?.action}`);
+    },
     invokeRuntime: async (request) => {
       runtimeCalls.push(cloneValue(request));
       if (request?.action === "storage.get-state") {
@@ -283,8 +331,8 @@ function createHarness() {
   });
 
   return {
-    clipboardWrites,
     controller,
+    pageCalls,
     runtimeCalls,
   };
 }

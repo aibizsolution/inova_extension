@@ -12,6 +12,9 @@
   ]);
 
   function create(options = {}) {
+    const invokePage = typeof options.invokePage === "function"
+      ? options.invokePage
+      : async () => ({});
     const invokeRuntime = typeof options.invokeRuntime === "function"
       ? options.invokeRuntime
       : async () => ({});
@@ -166,12 +169,20 @@
             throw new Error("공유 링크를 만들지 못했어요.");
           }
           patchShareState(input.meetingId, result?.share);
-          await global.navigator.clipboard.writeText(shareUrl);
-          traceMeeting("64.top.meeting.bridge.share.success", {
-            meetingId: input.meetingId,
-            shareUrl,
-          });
-          setFeedback("공유 링크를 복사했습니다.", "info", 2200);
+          const copied = await copyShareUrl(shareUrl);
+          if (copied) {
+            traceMeeting("64.top.meeting.bridge.share.success", {
+              meetingId: input.meetingId,
+              shareUrl,
+            });
+            setFeedback("공유 링크를 복사했습니다.", "info", 2200);
+          } else {
+            traceMeeting("64.top.meeting.bridge.share.copy-failed", {
+              meetingId: input.meetingId,
+              shareUrl,
+            });
+            setFeedback("공유 링크는 만들었지만 자동 복사는 실패했어요.", "error", 3600);
+          }
           void ensureLoaded(true);
           return true;
         }
@@ -443,6 +454,23 @@
     function clearPending() {
       state.pending = createPendingState();
       scheduleRender();
+    }
+
+    async function copyShareUrl(shareUrl) {
+      const normalizedShareUrl = normalizeText(shareUrl);
+      if (!normalizedShareUrl) {
+        return false;
+      }
+      try {
+        const result = await invokePage({
+          action: "copy-text",
+          text: normalizedShareUrl,
+        });
+        return Boolean(result?.copied);
+      } catch (error) {
+        void error;
+        return false;
+      }
     }
   }
 

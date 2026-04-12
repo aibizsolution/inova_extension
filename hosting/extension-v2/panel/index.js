@@ -82,6 +82,7 @@
     scheduleRender,
   }) || null;
   const meetingHubController = namespace.meetingHubController?.create?.({
+    invokePage,
     invokeRuntime,
     scheduleRender,
     traceMeeting: traceMeetingFlow,
