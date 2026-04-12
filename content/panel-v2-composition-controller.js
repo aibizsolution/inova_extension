@@ -31,7 +31,7 @@
       providerIdentitySync,
       render,
     });
-    const hostedOwnedMeetingSnapshot = createHostedOwnedMeetingSnapshotBridge(panelMeetingController);
+    const hostedOwnedMeetingSnapshot = createHostedOwnedMeetingSnapshotBridge(namespace.meetingManager);
     const panelDebugController = namespace.panelDebugController.create(state, {
       ...runtimeFlags,
       render,
@@ -121,7 +121,6 @@
       getMeetingCount: hostedOwnedMeetingSnapshot.getMeetingCount,
       panelBookmarkController,
       panelDebugController,
-      panelMeetingController,
       panelPromptController: promptBridgeController,
       panelShellController,
       buildReleaseSnapshot: hostedOwnedReleaseSnapshot.buildReleaseSnapshot,
@@ -178,10 +177,13 @@
     };
   }
 
-  function createHostedOwnedMeetingSnapshotBridge(panelMeetingController = {}) {
+  function createHostedOwnedMeetingSnapshotBridge(meetingManagerNamespace = {}) {
+    const mergeMeetingHub = typeof meetingManagerNamespace.mergeMeetingHub === "function"
+      ? meetingManagerNamespace.mergeMeetingHub
+      : (meetingHub) => (meetingHub && typeof meetingHub === "object" ? meetingHub : {});
     return {
       buildMeetingSnapshot(meetingHub) {
-        const meetingTool = panelMeetingController.buildToolState?.(meetingHub) || {};
+        const meetingTool = mergeMeetingHub(meetingHub);
         return {
           count: getMeetingCount(meetingTool),
           snapshotFingerprint: buildMeetingSnapshotFingerprint(meetingTool),

@@ -204,8 +204,16 @@ function verifyV2CompositionWiring() {
     "v2 composition should wrap meeting snapshot shaping for hosted-owned meeting state"
   );
   assert(
+    v2CompositionSource.includes("createHostedOwnedMeetingSnapshotBridge(namespace.meetingManager)"),
+    "v2 meeting snapshot bridge should derive snapshot state from the raw meeting hub summary"
+  );
+  assert(
     v2CompositionSource.includes("buildMeetingSnapshot: hostedOwnedMeetingSnapshot.buildMeetingSnapshot"),
     "v2 render wiring should pass the hosted-owned meeting snapshot bridge"
+  );
+  assert(
+    !v2CompositionSource.includes("panelMeetingController.buildToolState?.(meetingHub)"),
+    "v2 meeting snapshot shaping should not depend on panel meeting action UI state"
   );
   assert(
     v2CompositionSource.includes("handleStorageChange() {}"),
