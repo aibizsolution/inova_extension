@@ -29,6 +29,18 @@
         meetingId: namespace.session.normalizeText(detail.meetingId),
         title: namespace.session.normalizeText(detail.title || state.sessionTitle),
       };
+      const launchAction = resolveLaunchAction(action, input);
+      logMeetingAction("click", {
+        action: launchAction || action,
+        jobId: input.jobId,
+        meetingId: input.meetingId,
+        providerUserKey: namespace.session.normalizeText(providerIdentity?.providerUserKey),
+        title: input.title,
+      });
+      if (launchAction) {
+        dispatchOpenAction(launchAction, input, providerIdentity);
+        return;
+      }
       setPending({
         action: resolvePendingAction(action),
         jobId: input.jobId,
@@ -36,32 +48,7 @@
         startedAt: Date.now(),
         title: input.title,
       });
-      logMeetingAction("click", {
-        action,
-        jobId: input.jobId,
-        meetingId: input.meetingId,
-        providerUserKey: namespace.session.normalizeText(providerIdentity?.providerUserKey),
-        title: input.title,
-        });
-        try {
-        if (action === "open-result" && (input.meetingId || input.jobId)) {
-          traceMeetingFlow("63.top.meeting.bridge.open-result.start", input);
-          const result = await namespace.meetingBridge.openMeetingResult(input, providerIdentity);
-          logMeetingAction("success", {
-            action,
-            jobId: input.jobId,
-            meetingId: input.meetingId,
-            opened: Boolean(result?.opened),
-            url: namespace.session.normalizeText(result?.url),
-          });
-          traceMeetingFlow("64.top.meeting.bridge.open-result.success", {
-            meetingId: input.meetingId,
-            opened: Boolean(result?.opened),
-            url: namespace.session.normalizeText(result?.url),
-          });
-          setFeedback("결과 탭을 열었습니다.", "info", 1800);
-          return;
-        }
+      try {
         if (action === "share" && input.meetingId) {
           traceMeetingFlow("63.top.meeting.bridge.share.start", input);
           const result = await namespace.meetingBridge.createMeetingShareLink(input, providerIdentity);
@@ -99,21 +86,6 @@
           meetingManager.scheduleSync(0);
           return;
         }
-        traceMeetingFlow("63.top.meeting.bridge.open-workspace.start", input);
-        const result = await namespace.meetingBridge.openMeetingWorkspace(input, providerIdentity);
-        logMeetingAction("success", {
-          action: "open-workspace",
-          jobId: input.jobId,
-          meetingId: input.meetingId,
-          opened: Boolean(result?.opened),
-          url: namespace.session.normalizeText(result?.url),
-        });
-        traceMeetingFlow("64.top.meeting.bridge.open-workspace.success", {
-          meetingId: input.meetingId,
-          opened: Boolean(result?.opened),
-          url: namespace.session.normalizeText(result?.url),
-        });
-        setFeedback("작업실 탭을 열었습니다.", "info", 1800);
       } catch (error) {
         logMeetingAction("error", {
           action,
@@ -149,6 +121,70 @@
     function clearPending() {
       state.meetingUi.pending = { action: "", jobId: "", meetingId: "", startedAt: 0, title: "" };
       render();
+    }
+
+    function dispatchOpenAction(action, input, providerIdentity) {
+      const traceDetail = {
+        action,
+        jobId: input.jobId,
+        meetingId: input.meetingId,
+        title: input.title,
+      };
+      try {
+        traceMeetingFlow("63.top.meeting.launch.requested", traceDetail);
+        const openPromise = action === "open-result"
+          ? namespace.meetingBridge.openMeetingResult(input, providerIdentity)
+          : namespace.meetingBridge.openMeetingWorkspace(input, providerIdentity);
+        traceMeetingFlow("64.top.meeting.launch.dispatched", traceDetail);
+        setFeedback(action === "open-result" ? "결과 탭을 여는 중입니다." : "작업실 탭을 여는 중입니다.", "info", 1500);
+        void Promise.resolve(openPromise)
+          .then((result) => {
+            logMeetingAction("success", {
+              action,
+              jobId: input.jobId,
+              meetingId: input.meetingId,
+              opened: Boolean(result?.opened),
+              url: namespace.session.normalizeText(result?.url),
+            });
+            traceMeetingFlow("65.top.meeting.launch.accepted", {
+              ...traceDetail,
+              opened: Boolean(result?.opened),
+              url: namespace.session.normalizeText(result?.url),
+            });
+            setFeedback(action === "open-result" ? "결과 탭을 열었습니다." : "작업실 탭을 열었습니다.", "info", 1800);
+          })
+          .catch((error) => {
+            logMeetingAction("error", {
+              action,
+              error: error instanceof Error ? error.message : String(error || ""),
+              jobId: input.jobId,
+              meetingId: input.meetingId,
+            });
+            traceMeetingFlow("65.top.meeting.launch.error", {
+              ...traceDetail,
+              error: error instanceof Error ? error.message : String(error || ""),
+            });
+            if (namespace.panelDebug?.isEnabled?.()) {
+              console.error("[i-Nova Bookmarks] meeting launch failed", error);
+            }
+            setFeedback(error instanceof Error ? error.message : "작업실을 열지 못했어요. 다시 시도해 주세요.", "error", 3600);
+          });
+      } catch (error) {
+        logMeetingAction("error", {
+          action,
+          error: error instanceof Error ? error.message : String(error || ""),
+          jobId: input.jobId,
+          meetingId: input.meetingId,
+        });
+        traceMeetingFlow("65.top.meeting.launch.error", {
+          ...traceDetail,
+          error: error instanceof Error ? error.message : String(error || ""),
+        });
+        if (namespace.panelDebug?.isEnabled?.()) {
+          console.error("[i-Nova Bookmarks] meeting launch failed", error);
+        }
+        setFeedback(error instanceof Error ? error.message : "작업실을 열지 못했어요. 다시 시도해 주세요.", "error", 3600);
+      }
     }
 
     function patchShareState(meetingId, share) {
@@ -261,6 +297,16 @@
     if (action === "open-result") return "open-result";
     if (action === "share") return "share";
     if (action === "revoke-share") return "revoke-share";
+    return "open-workspace";
+  }
+
+  function resolveLaunchAction(action, input) {
+    if (action === "share" || action === "revoke-share") {
+      return "";
+    }
+    if (action === "open-result" && (input?.meetingId || input?.jobId)) {
+      return "open-result";
+    }
     return "open-workspace";
   }
 

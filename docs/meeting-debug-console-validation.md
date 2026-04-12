@@ -12,6 +12,7 @@
 
 - localhost 작업실은 `http://127.0.0.1:5000/meeting/index.html?debug=1&debugQueueSandbox=1`로 연다.
 - 상용 hosted 조사도 `?debug=1`을 기준으로 한다.
+- panel에서 `open-workspace` / `open-result`를 눌렀을 때 top 콘솔과 hosted 콘솔의 책임을 섞지 않는다. top 콘솔은 launch dispatch까지만 보고, 새 탭 boot/ready는 hosted debug console에서 본다.
 - hosted helper:
 
 ```js
@@ -49,6 +50,7 @@ __INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20, entrie
   - 같은 이벤트가 반복되면 `same event repeated N more times` 한 줄로 합쳐진다.
   - 대화 탐색은 `get-conversation-snapshot` 기준 최대 10초 간격으로만 다시 읽는다.
   - 클릭/오류/timeout 같은 사용자 액션 경로는 여전히 개별 로그로 남는다.
+  - meeting `open-workspace` / `open-result`는 `launch.requested`와 `launch.dispatched`까지만 top 콘솔에서 기대한다. 새 탭이 실제 ready 상태가 되었는지는 여기서 닫지 않는다.
 
 ## pending sync 증거
 
@@ -66,6 +68,7 @@ window.__INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20,
 - auth, 첫 snapshot 대기, 상세 artifact read를 한 덩어리로 보지 말고 어느 단계가 병목인지부터 분리한다.
 - hosted boot는 회의 룸과 기록 목록을 먼저 그리고, 선택된 기록 상세 artifact는 비차단으로 뒤늦게 채운다.
 - deferred 상세 로딩 로그는 `selection`으로 뭉개지지 않게 `boot`/`boot-deferred` reason을 유지해야 한다.
+- panel launch 뒤 hosted boot가 정상이라면 `workspace.bootstrap` 다음에 `workspace.realtime.connect.success`와 `workspace.ready`를 같은 새 탭 debug console에서 확인한다.
 
 ## 메모
 

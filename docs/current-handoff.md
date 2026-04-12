@@ -124,9 +124,9 @@ What remains is finish-up and cleanup work:
 
 1. Reduce residual console/snapshot noise after tool switches
 2. Investigate conversation bookmark jump over-triggering
-3. Add/align completion traces for meeting actions that still only log `...start`
-   - especially `open-workspace`
-   - and `open-result`
+3. Split meeting open traces between top-panel launch and hosted workspace boot
+   - `open-workspace`
+   - `open-result`
 4. Continue trimming extension-side leftover wiring that no longer needs to own UI decisions
 5. Final release prep from deployed `0.4.4` baseline to hosted v2 `1.0.0`
 
@@ -150,17 +150,18 @@ Start by tracing:
 
 The accessibility warning is fixed, but click/request duplication still needs confirmation and likely reduction.
 
-### 2. Meeting action completion parity
+### 2. Meeting open trace split
 
 `share` / `revoke-share` now emit both start and completion traces.
 
-`open-workspace` and `open-result` still look asymmetric in the logs and should be checked so the console tells the full story.
+`open-workspace` and `open-result` open a new hosted tab, so the top panel console should only tell the launch story. Hosted workspace boot/ready should be checked in the new tab debug console instead of forcing the original tab logs to represent both surfaces.
 
 Start by tracing:
 
 - `content/panel-meeting-controller.js`
 - `content/panel.js`
 - `hosting/extension-v2/panel/index.js`
+- `hosting/meeting/index.js`
 
 ### 3. Residual prompt/store/release noise
 
@@ -182,6 +183,7 @@ If continuing immediately, do this order:
 3. Re-run targeted smoke in local emulator:
    - conversation click/jump/copy
    - meeting open-result/open-workspace/share/revoke
+   - hosted workspace `workspace.ready`
    - prompt review second-run behavior
    - prompt store publish/import
    - release download/open
