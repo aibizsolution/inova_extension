@@ -10,7 +10,10 @@ const root = path.resolve(__dirname, "..");
 function main() {
   verifyPromptLibraryRemoteFirstWiring();
   verifyPromptLibraryMetadataRoundTripContract();
-  return verifyHostedPromptLibraryAvoidsDuplicateReloads().then(() => {
+  return Promise.all([
+    verifyHostedPromptLibraryAvoidsDuplicateReloads(),
+    verifyHostedPromptEditorViewLabels(),
+  ]).then(() => {
     console.log("[verify-prompt-library-remote-first] Prompt library remote-first contract passed");
   });
 }
@@ -169,6 +172,106 @@ async function verifyHostedPromptLibraryAvoidsDuplicateReloads() {
     1,
     "hosted prompt library should not refetch the same remote library on repeated panel sync"
   );
+}
+
+async function verifyHostedPromptEditorViewLabels() {
+  const context = vm.createContext({
+    Blob: class Blob {},
+    File: class File {},
+    console,
+    document: {
+      createElement() {
+        return {
+          click() {},
+        };
+      },
+    },
+    globalThis: null,
+    navigator: {},
+    setTimeout,
+    URL: {
+      createObjectURL() {
+        return "blob:prompt-library";
+      },
+      revokeObjectURL() {},
+    },
+  });
+  context.globalThis = context;
+  context.InovaBookmarks = {
+    promptLibraryModel: {
+      mergePromptLibrary(promptLibrary) {
+        const items = Array.isArray(promptLibrary?.items) ? promptLibrary.items.map((item) => ({ ...item })) : [];
+        return {
+          items,
+          version: Number(promptLibrary?.version) || 1,
+        };
+      },
+    },
+    session: {
+      normalizeText(value) {
+        return String(value ?? "").trim();
+      },
+    },
+  };
+
+  const source = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),
+    "utf8"
+  );
+  new vm.Script(source, {
+    filename: "hosting/extension-v2/panel/prompt-library-controller.js",
+  }).runInContext(context);
+
+  const controller = context.InovaBookmarks.promptLibraryController.create({
+    invokeRuntime: async (request) => {
+      if (request?.action === "storage.get-state") {
+        return {
+          cloudSync: {
+            providerIdentity: {
+              available: true,
+              displayName: "Prompt Tester",
+              email: "prompt@example.com",
+              numericUserId: 42,
+              provider: "inova",
+              providerUserKey: "prompt-user-1",
+            },
+          },
+          uiPreferences: {
+            activePromptTab: "library",
+          },
+        };
+      }
+      if (request?.action === "functions.fetch") {
+        return {
+          promptLibrary: {
+            items: [{ id: "prompt-1", title: "Prompt", content: "Body" }],
+            version: 1,
+          },
+        };
+      }
+      return {};
+    },
+    scheduleRender() {},
+  });
+
+  controller.syncPanelState(
+    { activeTool: "prompts" },
+    ["page.adapter.v2", "runtime.invoke.v1"]
+  );
+  await flushAsync();
+  await flushAsync();
+
+  await controller.handlePromptAction("create");
+  const createView = controller.buildPromptToolState().prompt.editor;
+  assert.equal(createView.titleText, "새 요청 추가");
+  assert.equal(createView.submitLabel, "추가");
+  assert.equal(createView.description, "반복해서 쓰는 요청을 저장해 두세요.");
+
+  await controller.handlePromptAction("edit", { promptId: "prompt-1" });
+  const editView = controller.buildPromptToolState().prompt.editor;
+  assert.equal(editView.titleText, "요청 수정");
+  assert.equal(editView.submitLabel, "저장");
+  assert.equal(editView.description, "저장 후 바로 다시 사용할 수 있어요.");
 }
 
 function read(relativePath) {

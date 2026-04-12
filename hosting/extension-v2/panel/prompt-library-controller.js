@@ -130,7 +130,7 @@
       return {
         actionPending: state.actionPending,
         deletePromptId: state.deletePromptId,
-        editor: state.editor,
+        editor: buildEditorView(),
         emptyText: state.query
           ? "검색 결과가 없어요. 다른 표현으로 찾아보세요."
           : "자주 쓰는 요청을 추가해 두면 여기서 바로 입력창에 넣을 수 있어요.",
@@ -148,6 +148,21 @@
         storeCategories: [],
         syncNotice: state.syncNotice,
         totalCount: getPromptCount(),
+      };
+    }
+
+    function buildEditorView() {
+      if (!state.editor?.open) {
+        return { open: false };
+      }
+      return {
+        ...state.editor,
+        actionPending: state.actionPending,
+        description: state.editor.mode === "edit"
+          ? "저장 후 바로 다시 사용할 수 있어요."
+          : "반복해서 쓰는 요청을 저장해 두세요.",
+        submitLabel: state.editor.mode === "edit" ? "저장" : "추가",
+        titleText: state.editor.mode === "edit" ? "요청 수정" : "새 요청 추가",
       };
     }
 
