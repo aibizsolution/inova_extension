@@ -26,6 +26,13 @@
 - 읽기 범위는 `feature-local -> feature-owned shared -> platform/shell -> 인접 feature` 순서로만 확장한다.
 - `popup`, `background/service-worker.js`, `content/main.js`, `content/panel.js`, `functions/index.js`, `manifest.json`, `shared/*`는 platform/shell로 취급하고 필요할 때만 본다.
 
+## Hosted-First 원칙
+- `1.0.0+` v2 lane의 기본 목표는 `탭 기능의 기본 소유권을 hosting으로 옮기는 것`이다.
+- 새 기능이나 기존 기능 수정은 먼저 `hosting/*`에서 해결할 수 있는지 본다. 특별한 이유가 없으면 UI, view state, action flow, feature controller는 hosted가 기본 위치다.
+- extension에는 `page DOM adapter`, `iframe host`, `postMessage bridge`, `chrome/background runtime broker`, `popup/settings`처럼 브라우저 확장이라서만 가능한 책임만 남긴다.
+- 어떤 책임이 `Chrome API`, `background`, `현재 페이지 DOM` 없이도 성립하면 extension에 새로 싣지 않는다. hosted 쪽으로 옮기거나 hosted에서 시작하는 설계를 우선한다.
+- 리팩터링 중에는 `이 수정이 extension 책임을 실제로 줄였는가`를 기본 판단 질문으로 삼는다.
+
 ## 설계와 모듈화 적용 규칙
 - 구현 전에 먼저 책임 경계를 정하고, 파일 길이만을 이유로 분리하지 않는다.
 - 책임 분리와 파일 분리를 같은 의미로 보지 않는다. 항상 함께 로드되고, 함께 수정되고, 함께 이해되는 코드는 같은 파일이나 같은 모듈에 남길 수 있다.
@@ -43,6 +50,8 @@
 - feature-local 규칙, 계약, 최소 검증 기준은 해당 feature `AGENTS.md` 또는 feature 전용 docs에 문서화한다.
 - feature-local 변경 때문에 `README.md`를 기능 변경 일지처럼 누적하지 않는다.
 - 문서는 완벽하지 않다고 가정하고, 작업 중 문서와 실제 코드/함수/파일 경계가 다르면 코드를 기준으로 같은 작업 안에서 문서를 갱신한다.
+- hosted-first 기준으로 이미 옮겨진 책임을 문서가 아직 extension-owned처럼 설명하면, 발견한 같은 작업 안에서 바로 고친다.
+- 문서 정리는 `언젠가 한 번에` 하지 않는다. 관련 문서를 읽다가 낡은 ownership 설명이나 경계 서술을 찾으면 그 자리에서 계속 바로잡는다.
 - feature 문서가 실제 파일 경로나 진입점과 어긋나기 시작하면 검증 스크립트와 문서를 함께 보강해 다음 작업자가 좁은 범위만 읽고도 시작할 수 있게 유지한다.
 - 문서는 결과 설명서보다 다음 구조 판단을 더 잘하게 만드는 기준 문서가 되어야 한다.
 

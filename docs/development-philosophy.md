@@ -18,6 +18,14 @@
 - 실패를 조용히 숨기지 않고 명시적으로 드러낸다.
 - 문서는 결과 기록보다 다음 판단을 돕는 기준 문서가 되어야 한다.
 
+## Hosted-First 기본값
+
+- `1.0.0+` v2 lane에서는 사용자에게 보이는 탭 기능의 기본 위치를 `hosting`으로 본다.
+- UI, view state, action flow, feature-local controller는 특별한 제약이 없으면 hosted에 둔다.
+- extension에는 `Chrome API`, `background broker`, `page DOM adapter`, `iframe host`, `postMessage bridge`, `popup/settings`처럼 브라우저 확장이라서만 가능한 책임만 남긴다.
+- 기능을 바꾸거나 추가할 때는 먼저 `이 책임이 Chrome/background/page DOM 없이도 성립하는가?`를 묻고, 그렇다면 hosted를 기본 선택으로 삼는다.
+- hosted에서 해결 가능한 책임을 extension에 더 싣는 일은 예외로 취급하고, 필요 사유가 명확할 때만 허용한다.
+
 ## 모듈화 판단 질문
 
 새 기능을 넣거나 기존 구조를 바꿀 때는 먼저 아래 질문으로 책임 경계를 판단한다.
@@ -65,3 +73,9 @@
 - 실행 환경 기준: `content/AGENTS.md`, `functions/AGENTS.md`
 - 저장소 운영 규칙: 루트 `AGENTS.md`, `docs/feature-routing.md`
 - feature-local 예외: 각 feature `AGENTS.md`, feature 전용 docs
+
+## 문서 보정 원칙
+
+- 문서는 항상 코드보다 느리게 낡을 수 있다고 가정한다.
+- hosted-first 리팩터링 중 문서가 이미 이동한 책임을 예전 extension 소유처럼 설명하면, 발견한 같은 작업 안에서 바로 고친다.
+- 문서 보정을 `전면 정리 작업`까지 미루지 않는다. 읽다가 발견한 ownership mismatch는 관련 변경과 함께 계속 누적 수정한다.

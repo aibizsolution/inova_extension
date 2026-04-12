@@ -8,6 +8,8 @@
 - `README.md`는 상위 개요만 유지하고, feature-local 세부 규칙과 변경 기록은 각 feature `AGENTS.md`나 전용 docs를 우선한다.
 - cue가 두 feature 이상에 걸리면 저장소 전체 탐색 대신 짧게 `이 기능이 맞나요?`를 확인한다.
 - 읽기 순서는 `feature-local -> feature-owned shared -> platform/shell -> 인접 feature`다.
+- `1.0.0+` v2 lane에서는 먼저 `hosting/extension-v2/panel/*`에서 해당 탭의 UI/state/action ownership이 이미 hosted로 넘어갔는지 확인한다.
+- 브라우저 확장이라서만 가능한 책임이 아니면, 기본 수정 위치는 extension보다 hosted 쪽으로 본다.
 - `popup`, `background/service-worker.js`, `content/main.js`, `content/panel.js`, `content/hosted-panel-bridge.js`, `hosting/extension/panel/*`, `functions/index.js`, `manifest.json`, `shared/*`는 platform/shell이다.
 - prompt 계열의 공용 탭 셸인 `content/prompt-hub-view.js`, `content/prompt-hub-state.js`, `content/prompt-hub-panel.js`, `content/prompt-hub-controller.js`, `content/prompt-hub-runtime.js`는 단일 feature 소유가 아니라 prompt tool shell로 취급한다.
 - 두 번째 primary feature를 읽어야 하거나 `content + functions + hosting` 3축을 함께 수정해야 하면 먼저 커밋 또는 다음 세션 분리를 제안한다.
