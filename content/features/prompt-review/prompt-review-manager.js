@@ -62,6 +62,8 @@
     async function handleAction(action) {
       logReviewDebug("prompt.review.action", {
         action,
+        hasResult: Boolean(state.promptReview.result),
+        hasText: Boolean(namespace.composer.getComposerState()?.text),
         open: Boolean(state.promptReview.open),
         pending: Boolean(state.promptReview.pending),
       });
@@ -82,6 +84,7 @@
       hooks.showPromptTab?.("review");
       const viewState = buildViewState();
       logReviewDebug("prompt.review.activate", {
+        available: Boolean(viewState.available),
         hasError: Boolean(viewState.error),
         hasResult: Boolean(viewState.result),
         hasText: Boolean(viewState.hasText),
@@ -103,6 +106,7 @@
         promptLength: prompt.length,
         reviewProfile: reviewProfile || "legacy-v1-default",
         sessionId: state.sessionId,
+        target: readReviewRuntimeTarget(state),
       });
       if (!composerState.available) {
         return void updateState({
@@ -166,7 +170,9 @@
           return;
         }
         logReviewDebug("prompt.review.request.success", {
+          hasResult: Boolean(result),
           sessionId,
+          target: readReviewRuntimeTarget(state),
           totalScore: Number(result?.totalScore) || 0,
         });
         updateState({
@@ -188,6 +194,7 @@
           error: getErrorMessage(error),
           level: "error",
           sessionId,
+          target: readReviewRuntimeTarget(state),
         });
         updateState({
           copyState: "idle",
@@ -291,17 +298,39 @@
     }
 
     async function sendRuntimeMessage(type, payload) {
+      const startedAt = Date.now();
       logReviewDebug("prompt.review.runtime.request", {
         backend: "firebase-function",
+        message: "reviewInovaPrompt",
+        target: readReviewRuntimeTarget(state),
         type,
+      });
+      traceReviewFunctions("page.functions.review.start", {
+        message: "reviewInovaPrompt",
+        reason: namespace.session.normalizeText(type),
+        target: readReviewRuntimeTarget(state),
       });
       const response = await chrome.runtime.sendMessage({ type, ...(payload || {}) });
       if (!response?.ok) {
+        traceReviewFunctions("page.functions.review.error", {
+          error: namespace.session.normalizeText(response?.error || "") || "review-runtime-failed",
+          message: "reviewInovaPrompt",
+          reason: `${Math.max(0, Date.now() - startedAt)}ms`,
+          target: readReviewRuntimeTarget(state),
+        });
         throw new Error(namespace.session.normalizeText(response?.error || "") || "프롬프트 평가를 처리하지 못했어요.");
       }
       logReviewDebug("prompt.review.runtime.success", {
         backend: "firebase-function",
+        message: "reviewInovaPrompt",
+        reason: `${Math.max(0, Date.now() - startedAt)}ms`,
+        target: readReviewRuntimeTarget(state),
         type,
+      });
+      traceReviewFunctions("page.functions.review.success", {
+        message: "reviewInovaPrompt",
+        reason: `${Math.max(0, Date.now() - startedAt)}ms`,
+        target: readReviewRuntimeTarget(state),
       });
       return response.data;
     }
@@ -469,12 +498,23 @@
     return 0;
   }
 
+  function readReviewRuntimeTarget(state) {
+    return namespace.session.normalizeText(
+      namespace.firebaseConfig?.prompt?.resolveRuntime?.(state?.settings)?.target
+    );
+  }
+
   function logReviewDebug(event, payload) {
     namespace.panelDebug?.log?.(event, {
       scope: "prompt",
       tool: "prompts",
       ...(payload || {}),
     });
+    namespace.panelConsoleTrace?.log?.("review", event, payload || {});
+  }
+
+  function traceReviewFunctions(step, payload) {
+    namespace.panelConsoleTrace?.log?.("functions", step, payload || {});
   }
 
   namespace.promptReviewManager = {

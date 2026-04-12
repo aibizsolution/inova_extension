@@ -525,11 +525,7 @@
       return false;
     }
     host.__lastBridgeSnapshotKey = snapshotKey;
-    logConsoleTrace("panel", "10.top.panel.snapshot.push", {
-      activeTool: normalizeText(state?.activeTool),
-      open: Boolean(state?.open),
-      visible: Boolean(state?.visible),
-    });
+    logConsoleTrace("panel", "10.top.panel.snapshot.push", { activeTool: normalizeText(state?.activeTool), open: Boolean(state?.open), promptTab: normalizeText(state?.uiPreferences?.activePromptTab), reviewOpen: Boolean(state?.promptReview?.open), visible: Boolean(state?.visible) });
     host.__bridge.updateSnapshot(snapshot);
     return true;
   }
@@ -808,9 +804,16 @@
       ["job", payload.jobId],
       ["artifact", payload.artifactId],
       ["tool", payload.activeTool],
+      ["tab", payload.promptTab],
       ["title", payload.toolTitle],
       ["meetings", normalizeTraceCount(payload.meetingCount)],
       ["open", normalizeTraceBoolean(payload, "open")],
+      ["review", normalizeTraceBoolean(payload, "reviewOpen")],
+      ["snapshot", normalizeTraceBoolean(payload, "snapshotOpen")],
+      ["available", normalizeTraceBoolean(payload, "available")],
+      ["pending", normalizeTraceBoolean(payload, "pending")],
+      ["result", normalizeTraceBoolean(payload, "hasResult")],
+      ["text", normalizeTraceBoolean(payload, "hasText")],
       ["visible", normalizeTraceBoolean(payload, "visible")],
       ["ready", normalizeTraceBoolean(payload, "ready")],
       ["target", payload.target],

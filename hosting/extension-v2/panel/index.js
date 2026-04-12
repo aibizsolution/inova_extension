@@ -902,9 +902,10 @@
 
   function buildEffectivePromptToolState(panelState) {
     if (promptLibraryController?.hasRequiredCapabilities?.()) {
+      const snapshotReviewState = panelState.promptTool?.review || null;
       const reviewState = promptReviewController?.buildViewState
         ? promptReviewController.buildViewState()
-        : panelState.promptTool?.review;
+        : snapshotReviewState;
       const promptToolState = promptLibraryController.buildPromptToolState(panelState.promptTool || {}, {
         reviewOpen: Boolean(reviewState?.open),
       });
@@ -921,6 +922,28 @@
           : promptToolState.tabs;
       }
       promptToolState.review = reviewState;
+      if (
+        promptToolState.activeTab === "review"
+        || snapshotReviewState?.open
+        || reviewState?.open
+        || snapshotReviewState?.result
+        || reviewState?.result
+      ) {
+        traceReviewFlow("70.hosted.review.state", {
+          available: Boolean(reviewState?.available),
+          hasResult: Boolean(reviewState?.result),
+          open: Boolean(reviewState?.open),
+          pending: Boolean(reviewState?.pending),
+          promptTab: normalizeText(promptToolState.activeTab),
+          snapshotOpen: Boolean(snapshotReviewState?.open),
+          reason: snapshotReviewState?.result && !reviewState?.result
+            ? "snapshot-has-result"
+            : reviewState?.result
+            ? "hosted-has-result"
+            : "review-visible",
+          reviewOpen: Boolean(reviewState?.open),
+        });
+      }
       return promptToolState;
     }
     return panelState.promptTool;
@@ -1513,6 +1536,10 @@
 
   function traceMeetingFlow(step, payload = {}) {
     postTrace("meeting", step, payload);
+  }
+
+  function traceReviewFlow(step, payload = {}) {
+    postTrace("review", step, payload);
   }
 
   function traceFunctionsFlow(step, payload = {}) {
