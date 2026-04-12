@@ -151,8 +151,10 @@
           needsLatest ? fetchJson("../releases/latest.json") : Promise.resolve(null),
           needsHistory ? fetchJson("../releases/history.json") : Promise.resolve(null),
         ]);
-        state.latest = latestPayload?.release || state.latest;
-        state.history = Array.isArray(historyPayload?.releases) ? historyPayload.releases : state.history;
+        state.latest = normalizeReleaseRecord(latestPayload?.release, { preferLatestAlias: true }) || state.latest;
+        state.history = Array.isArray(historyPayload?.releases)
+          ? historyPayload.releases.map((item) => normalizeReleaseRecord(item)).filter(Boolean)
+          : state.history;
         state.checkedAt = needsLatest ? checkedAt : state.checkedAt;
         state.checkedForVersion = needsLatest ? currentVersion : state.checkedForVersion;
         state.historyCheckedAt = needsHistory ? checkedAt : state.historyCheckedAt;
@@ -197,6 +199,61 @@
         throw new Error("릴리스 정보를 불러오지 못했어요.");
       }
       return payload;
+    }
+
+    function normalizeReleaseRecord(release, options = {}) {
+      if (!release || typeof release !== "object") {
+        return null;
+      }
+      const versionFileName = readArtifactFileName(release.versionDownloadUrl)
+        || readArtifactFileName(release.downloadUrl)
+        || normalizeText(release.fileName);
+      return {
+        ...release,
+        downloadUrl: resolveArtifactUrl(
+          release.downloadUrl,
+          options.preferLatestAlias ? "latest.zip" : versionFileName
+        ),
+        versionDownloadUrl: resolveArtifactUrl(
+          release.versionDownloadUrl || release.downloadUrl,
+          versionFileName
+        ),
+      };
+    }
+
+    function resolveArtifactUrl(rawUrl, fallbackFileName = "") {
+      const normalizedUrl = normalizeText(rawUrl);
+      if (!shouldUseLocalArtifactUrls()) {
+        return normalizedUrl;
+      }
+      const artifactFileName = readArtifactFileName(normalizedUrl) || normalizeText(fallbackFileName);
+      if (!artifactFileName) {
+        return normalizedUrl;
+      }
+      return new URL(`../downloads/${encodeURIComponent(artifactFileName)}`, global.location.href).href;
+    }
+
+    function readArtifactFileName(rawUrl) {
+      const normalizedUrl = normalizeText(rawUrl);
+      if (!normalizedUrl) {
+        return "";
+      }
+      try {
+        const pathname = new URL(normalizedUrl, global.location.href).pathname || "";
+        return decodeURIComponent(pathname.split("/").filter(Boolean).at(-1) || "");
+      } catch {
+        const fragments = normalizedUrl.split("/").filter(Boolean);
+        return decodeURIComponent(fragments.at(-1) || "");
+      }
+    }
+
+    function shouldUseLocalArtifactUrls() {
+      try {
+        const hostname = normalizeText(new URL(global.location.href).hostname).toLowerCase();
+        return hostname === "127.0.0.1" || hostname === "localhost";
+      } catch {
+        return false;
+      }
     }
 
     function getCurrentVersion() {

@@ -18,6 +18,7 @@ async function main() {
   verifyHostedConversationSearchDebounceContract();
   verifyHostedStoreSearchDebounceContract();
   verifyHostedPromptReviewFallbackContract();
+  await verifyHostedReleaseLocalDownloadUrls();
   await verifyPageAdapterContract();
   console.log("[verify-panel-render] Hosted panel host contract passed");
 }
@@ -307,6 +308,121 @@ function verifyHostedPromptReviewFallbackContract() {
   assert(
     hostedPanelSource.includes("...snapshotState,"),
     "hosted panel should fall back to snapshot review data when hosted review state is still blank"
+  );
+}
+
+async function verifyHostedReleaseLocalDownloadUrls() {
+  const runtimeCalls = [];
+  const context = vm.createContext({
+    Blob: class Blob {},
+    File: class File {},
+    clearTimeout,
+    console,
+    fetch: async (url) => {
+      const href = String(url);
+      if (href.endsWith("/extension-v2/releases/latest.json")) {
+        return {
+          ok: true,
+          async json() {
+            return {
+              release: {
+                downloadUrl: "https://browser-extension-v2.web.app/extension-v2/downloads/latest.zip",
+                fileName: "inova-extension-1.0.0.zip",
+                version: "1.0.0",
+                versionDownloadUrl: "https://browser-extension-v2.web.app/extension-v2/downloads/inova-extension-1.0.0.zip",
+              },
+            };
+          },
+        };
+      }
+      if (href.endsWith("/extension-v2/releases/history.json")) {
+        return {
+          ok: true,
+          async json() {
+            return {
+              releases: [
+                {
+                  downloadUrl: "https://browser-extension-v2.web.app/extension-v2/downloads/inova-extension-0.4.4.zip",
+                  fileName: "inova-extension-0.4.4.zip",
+                  version: "0.4.4",
+                  versionDownloadUrl: "https://browser-extension-v2.web.app/extension-v2/downloads/inova-extension-0.4.4.zip",
+                },
+              ],
+            };
+          },
+        };
+      }
+      throw new Error(`Unexpected fetch URL: ${href}`);
+    },
+    globalThis: null,
+    location: {
+      href: "http://127.0.0.1:5000/extension-v2/panel/index.html",
+    },
+    setTimeout,
+    URL,
+  });
+  context.globalThis = context;
+  context.InovaBookmarks = {
+    constants: {
+      limits: {
+        releaseCheckIntervalMs: 21600000,
+      },
+    },
+    session: {
+      normalizeText(value) {
+        return String(value ?? "").trim();
+      },
+    },
+  };
+
+  const source = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "release-controller.js"),
+    "utf8"
+  );
+  new vm.Script(source, {
+    filename: "hosting/extension-v2/panel/release-controller.js",
+  }).runInContext(context);
+
+  const controller = context.InovaBookmarks.releaseController.create({
+    getRuntimeVersion() {
+      return "1.0.0";
+    },
+    invokeRuntime: async (request) => {
+      runtimeCalls.push(request);
+      return {};
+    },
+    scheduleRender() {},
+  });
+
+  controller.syncPanelState(
+    { activeTool: "release" },
+    ["runtime.invoke.v1"]
+  );
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const viewState = controller.buildViewState();
+  assert.equal(
+    viewState.latest?.downloadUrl,
+    "http://127.0.0.1:5000/extension-v2/downloads/latest.zip",
+    "local hosted release latest download should resolve to the local downloads lane"
+  );
+  assert.equal(
+    viewState.latest?.versionDownloadUrl,
+    "http://127.0.0.1:5000/extension-v2/downloads/inova-extension-1.0.0.zip",
+    "local hosted release version download should resolve to the local artifact file"
+  );
+
+  await controller.handleReleaseAction("download-latest");
+  await controller.handleReleaseAction("download-version", { version: "0.4.4" });
+
+  assert.deepEqual(
+    runtimeCalls.map((call) => [call.action, call.url]),
+    [
+      ["browser.open-url", "http://127.0.0.1:5000/extension-v2/downloads/latest.zip"],
+      ["browser.open-url", "http://127.0.0.1:5000/extension-v2/downloads/inova-extension-0.4.4.zip"],
+    ],
+    "local hosted release downloads should open local artifact URLs"
   );
 }
 
