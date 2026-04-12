@@ -1,6 +1,6 @@
 (function initConversationController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const SNAPSHOT_REFRESH_INTERVAL_MS = 1000;
+  const SNAPSHOT_REFRESH_INTERVAL_MS = 10000;
   const REQUIRED_EXTENSION_CAPABILITIES = Object.freeze([
     "page.adapter.v2",
   ]);
