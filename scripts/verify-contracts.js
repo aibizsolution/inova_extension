@@ -9,6 +9,7 @@ const contract = JSON.parse(
 );
 
 const errors = [];
+const oversizedFiles = [];
 
 for (const file of contract.requiredFiles) {
   if (!fs.existsSync(path.join(root, file))) {
@@ -60,6 +61,7 @@ for (const file of listSourceFiles(root)) {
   const lineCount = countLines(path.join(root, file));
   if (lineCount > contract.maxLinesPerSourceFile) {
     errors.push(`파일이 너무 큽니다 (${lineCount} lines): ${file}`);
+    oversizedFiles.push(file);
   }
 }
 
@@ -106,6 +108,10 @@ if (errors.length) {
   console.error("구조 계약 검증 실패");
   for (const error of errors) {
     console.error(`- ${error}`);
+  }
+  if (oversizedFiles.length) {
+    console.error("- 구조/길이 가드는 회피 대상이 아닙니다. 이 메시지는 해당 파일에 책임을 더 싣지 말고 경계를 다시 나누라는 뜻입니다.");
+    console.error("- 가드를 피하려고 관련 없는 파일에 state, 분기, 우회 render, 진단 helper를 옮겨 싣지 말고, 새 책임을 가진 모듈로 분리하세요.");
   }
   process.exit(1);
 }
