@@ -144,24 +144,32 @@ function verifyV2CompositionWiring() {
     "v2 composition should wire the debug controller"
   );
   assert(
+    v2CompositionSource.includes("namespace.meetingManager.create"),
+    "v2 composition should still instantiate the meeting manager while hosted ownership is partial"
+  );
+  assert(
     v2CompositionSource.includes("createHostedOwnedMeetingLifecycleBridge"),
     "v2 composition should wrap meeting shell lifecycle with a hosted-owned bridge"
-  );
-  assert(
-    !v2CompositionSource.includes("namespace.meetingManager.create"),
-    "v2 composition should not instantiate the legacy meeting manager"
-  );
-  assert(
-    v2CompositionSource.includes("meetingManager: hostedOwnedMeetingLifecycle"),
-    "v2 composition should pass the hosted-owned meeting lifecycle bridge into shared shell controllers"
   );
   assert(
     v2CompositionSource.includes("onRouteStateChanged: hostedOwnedMeetingLifecycle.handleRouteStateChange"),
     "v2 route sync should stop delegating route refresh decisions to the legacy meeting manager"
   );
   assert(
-    v2CompositionSource.includes("onPromptTabSelected: () => hostedOwnedMeetingLifecycle.scheduleSync(0)"),
-    "v2 prompt tab transitions should no longer wake the legacy meeting manager"
+    v2CompositionSource.includes("createHostedOwnedIdleMeetingLifecycleBridge"),
+    "v2 composition should provide an idle meeting lifecycle bridge for unrelated shell sidecars"
+  );
+  assert(
+    v2CompositionSource.includes("meetingManager: hostedOwnedMeetingLifecycle"),
+    "v2 composition should pass the hosted-owned meeting lifecycle bridge into shared shell controllers"
+  );
+  assert(
+    v2CompositionSource.includes("meetingManager: hostedOwnedIdleMeetingLifecycle"),
+    "v2 composition should silence unrelated surface-driven meeting sync in v2"
+  );
+  assert(
+    v2CompositionSource.includes("onPromptTabSelected: () => hostedOwnedIdleMeetingLifecycle.scheduleSync(0)"),
+    "v2 prompt tab transitions should no longer wake meeting sync"
   );
   assert(
     v2CompositionSource.includes("namespace.panelActionController.create"),

@@ -19,7 +19,9 @@
     };
     const releaseManager = namespace.releaseManager.create(state, { render });
     const hostedOwnedReleaseSnapshot = createHostedOwnedReleaseSnapshotBridge(releaseManager);
-    const hostedOwnedMeetingLifecycle = createHostedOwnedMeetingLifecycleBridge();
+    const meetingManager = namespace.meetingManager.create(state, { render });
+    const hostedOwnedMeetingLifecycle = createHostedOwnedMeetingLifecycleBridge(meetingManager);
+    const hostedOwnedIdleMeetingLifecycle = createHostedOwnedIdleMeetingLifecycleBridge();
     const providerIdentitySync = namespace.providerIdentitySync.create(state, {
       ...runtimeDiagnostics,
       render,
@@ -51,7 +53,7 @@
     const sharedPromptController = namespace.panelPromptController.create(state, {
       ...runtimeFlags,
       lockUiPreferenceSelection: panelShellController.lockUiPreferenceSelection,
-      onPromptTabSelected: () => hostedOwnedMeetingLifecycle.scheduleSync(0),
+      onPromptTabSelected: () => hostedOwnedIdleMeetingLifecycle.scheduleSync(0),
       persistActiveTool: panelShellController.persistActiveTool,
       render,
     });
@@ -94,7 +96,7 @@
       ensureStoreLoaded: promptSyncBridge.ensureStoreLoaded,
       isStoreTabActive: runtimeFlags.isStoreTabActive,
       logPanelDebug: runtimeDiagnostics.logPanelDebug,
-      meetingManager: hostedOwnedMeetingLifecycle,
+      meetingManager: hostedOwnedIdleMeetingLifecycle,
       render,
       schedulePromptRealtimeSync: promptSyncBridge.schedulePromptRealtimeSync,
     });
@@ -152,7 +154,19 @@
     };
   }
 
-  function createHostedOwnedMeetingLifecycleBridge() {
+  function createHostedOwnedMeetingLifecycleBridge(meetingManager = {}) {
+    return {
+      handleRouteStateChange() {
+        return false;
+      },
+      handleStorageChange() {},
+      scheduleSync(delay) {
+        return meetingManager.scheduleSync?.(delay) || false;
+      },
+    };
+  }
+
+  function createHostedOwnedIdleMeetingLifecycleBridge() {
     return {
       handleRouteStateChange() {
         return false;
