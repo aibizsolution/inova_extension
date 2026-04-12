@@ -902,7 +902,12 @@
 
   function buildEffectivePromptToolState(panelState) {
     if (promptLibraryController?.hasRequiredCapabilities?.()) {
-      const promptToolState = promptLibraryController.buildPromptToolState(panelState.promptTool || {});
+      const reviewState = promptReviewController?.buildViewState
+        ? promptReviewController.buildViewState()
+        : panelState.promptTool?.review;
+      const promptToolState = promptLibraryController.buildPromptToolState(panelState.promptTool || {}, {
+        reviewOpen: Boolean(reviewState?.open),
+      });
       if (promptStoreController?.hasRequiredCapabilities?.() && promptStoreController?.buildViewState) {
         const storeState = promptStoreController.buildViewState(panelState.promptTool?.store || {});
         promptToolState.store = storeState;
@@ -915,9 +920,7 @@
             : tab)
           : promptToolState.tabs;
       }
-      if (promptReviewController?.buildViewState) {
-        promptToolState.review = promptReviewController.buildViewState();
-      }
+      promptToolState.review = reviewState;
       return promptToolState;
     }
     return panelState.promptTool;

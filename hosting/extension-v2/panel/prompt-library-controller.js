@@ -99,7 +99,7 @@
       };
     }
 
-    function buildPromptToolState(fallbackPromptTool = {}) {
+    function buildPromptToolState(fallbackPromptTool = {}, options = {}) {
       const promptCount = getPromptCount();
       const storeCount = Math.max(
         0,
@@ -107,8 +107,9 @@
           || Number(fallbackPromptTool?.store?.totalCount)
           || 0
       );
+      const reviewOpen = Boolean(options.reviewOpen || fallbackPromptTool?.review?.open);
       return {
-        activeTab: state.activeTab,
+        activeTab: getEffectiveActiveTab(state.activeTab, reviewOpen),
         prompt: buildPromptViewState(),
         reviewPlaceholder: {
           body: "검토 탭의 hosted ownership은 다음 단계에서 이동합니다.",
@@ -118,11 +119,7 @@
           body: "스토어 탭의 hosted ownership은 다음 단계에서 이동합니다.",
           title: "스토어 이동 준비 중",
         },
-        tabs: [
-          { count: promptCount, id: "library", label: "내 요청" },
-          { count: storeCount, id: "store", label: "스토어" },
-          { count: null, id: "review", label: "검토" },
-        ],
+        tabs: buildPromptTabs(promptCount, storeCount, reviewOpen),
       };
     }
 
@@ -692,6 +689,24 @@
     return normalized === "store" || normalized === "review"
       ? normalized
       : "library";
+  }
+
+  function getEffectiveActiveTab(promptTabId, reviewOpen) {
+    const normalized = normalizePromptTab(promptTabId);
+    return normalized === "review" && !reviewOpen
+      ? "library"
+      : normalized;
+  }
+
+  function buildPromptTabs(promptCount, storeCount, reviewOpen) {
+    const tabs = [
+      { count: promptCount, id: "library", label: "내 요청" },
+      { count: storeCount, id: "store", label: "스토어" },
+    ];
+    if (reviewOpen) {
+      tabs.push({ count: null, id: "review", label: "검토" });
+    }
+    return tabs;
   }
 
   function filterPromptItems(items, query) {

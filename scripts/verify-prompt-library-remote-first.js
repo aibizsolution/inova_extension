@@ -13,6 +13,7 @@ function main() {
   return Promise.all([
     verifyHostedPromptLibraryAvoidsDuplicateReloads(),
     verifyHostedPromptEditorViewLabels(),
+    verifyHostedPromptReviewTabVisibility(),
     verifyHostedPromptTextInputDebouncesRender(),
   ]).then(() => {
     console.log("[verify-prompt-library-remote-first] Prompt library remote-first contract passed");
@@ -345,6 +346,91 @@ async function verifyHostedPromptTextInputDebouncesRender() {
 
   await wait(220);
   assert.equal(renderCount, 1, "text input changes should collapse into one deferred render");
+}
+
+async function verifyHostedPromptReviewTabVisibility() {
+  const context = vm.createContext({
+    Blob: class Blob {},
+    File: class File {},
+    clearTimeout,
+    console,
+    document: {
+      createElement() {
+        return {
+          click() {},
+        };
+      },
+    },
+    globalThis: null,
+    navigator: {},
+    setTimeout,
+    URL: {
+      createObjectURL() {
+        return "blob:prompt-library";
+      },
+      revokeObjectURL() {},
+    },
+  });
+  context.globalThis = context;
+  context.InovaBookmarks = {
+    promptLibraryModel: {
+      mergePromptLibrary(promptLibrary) {
+        const items = Array.isArray(promptLibrary?.items) ? promptLibrary.items.map((item) => ({ ...item })) : [];
+        return {
+          items,
+          version: Number(promptLibrary?.version) || 1,
+        };
+      },
+    },
+    session: {
+      normalizeText(value) {
+        return String(value ?? "").trim();
+      },
+    },
+  };
+
+  const source = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),
+    "utf8"
+  );
+  new vm.Script(source, {
+    filename: "hosting/extension-v2/panel/prompt-library-controller.js",
+  }).runInContext(context);
+
+  const controller = context.InovaBookmarks.promptLibraryController.create({
+    invokeRuntime: async () => ({}),
+    scheduleRender() {},
+  });
+
+  let viewState = controller.buildPromptToolState({}, { reviewOpen: false });
+  assert.deepEqual(
+    viewState.tabs.map((tab) => tab.id),
+    ["library", "store"],
+    "hosted prompt tabs should hide review until a review result is actually open"
+  );
+  assert.equal(viewState.activeTab, "library");
+
+  await controller.handleSelectPromptTab("review");
+
+  viewState = controller.buildPromptToolState({}, { reviewOpen: false });
+  assert.deepEqual(
+    viewState.tabs.map((tab) => tab.id),
+    ["library", "store"],
+    "persisted review selection should not surface a hidden review tab"
+  );
+  assert.equal(
+    viewState.activeTab,
+    "library",
+    "hidden review tab should fall back to the library view"
+  );
+
+  viewState = controller.buildPromptToolState({}, { reviewOpen: true });
+  assert.deepEqual(
+    viewState.tabs.map((tab) => tab.id),
+    ["library", "store", "review"],
+    "hosted prompt tabs should surface review only when review state is open"
+  );
+  assert.equal(viewState.activeTab, "review");
 }
 
 function read(relativePath) {

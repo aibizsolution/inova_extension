@@ -73,7 +73,7 @@
     function syncPanelState(panelState) {
       const activeTool = normalizeText(panelState?.activeTool);
       const activePromptTab = getActivePromptTab();
-      if (activeTool === "prompts" && activePromptTab === "review") {
+      if (activeTool === "prompts" && activePromptTab === "review" && state.open) {
         void refreshComposerState();
       }
     }
