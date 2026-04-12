@@ -17,6 +17,12 @@
       buildHandleCount() { return 0; },
     };
     const releaseManager = deps.releaseManager || { buildViewState() { return { updateAvailable: false }; } };
+    const buildReleaseSnapshot = typeof deps.buildReleaseSnapshot === "function"
+      ? deps.buildReleaseSnapshot
+      : () => releaseManager.buildViewState();
+    const getReleaseCount = typeof deps.getReleaseCount === "function"
+      ? deps.getReleaseCount
+      : (releaseState) => (releaseState?.updateAvailable ? 1 : Number(releaseState?.count) || 0);
 
     return {
       render,
@@ -32,8 +38,11 @@
       const bookmarkTool = panelBookmarkController.buildToolState();
       const promptToolState = panelPromptController.buildToolState();
       const meetingTool = panelMeetingController.buildToolState(state.meetingHub);
-      const releaseState = releaseManager.buildViewState();
-      const releaseCount = releaseState.updateAvailable ? 1 : 0;
+      const releaseState = normalizeReleaseSnapshot(buildReleaseSnapshot());
+      const releaseCount = normalizeCount(
+        getReleaseCount(releaseState),
+        releaseState.updateAvailable ? 1 : Number(releaseState.count) || 0
+      );
       const handleCount = panelShellController.buildHandleCount({
         bookmarks: bookmarkTool.count,
         meeting: meetingTool.count,
@@ -56,6 +65,15 @@
         visible,
       });
       namespace.composerReviewFloat?.render?.(panelPromptController.buildReviewFloatState(visible));
+    }
+
+    function normalizeCount(value, fallback = 0) {
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? numeric : fallback;
+    }
+
+    function normalizeReleaseSnapshot(value) {
+      return value && typeof value === "object" ? value : {};
     }
   }
 

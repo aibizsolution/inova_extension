@@ -9,6 +9,7 @@ const root = path.resolve(__dirname, "..");
 
 function main() {
   verifyRenderPayloadAndReviewFloat();
+  verifyCustomReleaseSnapshotBridge();
   verifyVisibleStateCalculation();
   console.log("[verify-panel-render-controller] Panel render controller contract passed");
 }
@@ -40,6 +41,28 @@ function verifyVisibleStateCalculation() {
 
   assert.equal(harness.renderPayloads[0].visible, false);
   assert.deepEqual(harness.reviewFloatStates, [{ visible: false }]);
+}
+
+function verifyCustomReleaseSnapshotBridge() {
+  const harness = createHarness({
+    buildReleaseSnapshot() {
+      return {
+        count: 1,
+        updateAvailable: true,
+      };
+    },
+    getReleaseCount() {
+      return 1;
+    },
+  });
+
+  harness.controller.render();
+
+  assert.equal(harness.renderPayloads[0].handleCount, 1);
+  assert.deepEqual(harness.renderPayloads[0].releaseTool, {
+    count: 1,
+    updateAvailable: true,
+  });
 }
 
 function createHarness(options = {}) {
@@ -81,6 +104,7 @@ function createHarness(options = {}) {
       enabled: true,
       ...(options.settings || {}),
     },
+    settingsHydrated: options.settingsHydrated !== false,
     uiPreferences: {},
   };
 
@@ -132,9 +156,11 @@ function createHarness(options = {}) {
     },
     panelShellController: {
       buildHandleCount(counts) {
-        return counts.meeting;
+        return counts.release || counts.meeting;
       },
     },
+    buildReleaseSnapshot: options.buildReleaseSnapshot,
+    getReleaseCount: options.getReleaseCount,
     releaseManager: {
       buildViewState() {
         return {

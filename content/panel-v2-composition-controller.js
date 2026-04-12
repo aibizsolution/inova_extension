@@ -18,6 +18,7 @@
       logPanelDebug: panelRuntimeController.logPanelDebug,
     };
     const releaseManager = namespace.releaseManager.create(state, { render });
+    const hostedOwnedReleaseSnapshot = createHostedOwnedReleaseSnapshotBridge(releaseManager);
     const meetingManager = namespace.meetingManager.create(state, { render });
     const providerIdentitySync = namespace.providerIdentitySync.create(state, {
       ...runtimeDiagnostics,
@@ -112,6 +113,8 @@
       panelMeetingController,
       panelPromptController: promptBridgeController,
       panelShellController,
+      buildReleaseSnapshot: hostedOwnedReleaseSnapshot.buildReleaseSnapshot,
+      getReleaseCount: hostedOwnedReleaseSnapshot.getReleaseCount,
       releaseManager,
     });
     const panelBootstrapController = namespace.panelBootstrapController.create(state, {
@@ -148,6 +151,28 @@
       scheduleCloudSyncIfNeeded() {},
       scheduleRealtimeSync() {},
     };
+  }
+
+  function createHostedOwnedReleaseSnapshotBridge(releaseManager = {}) {
+    return {
+      buildReleaseSnapshot() {
+        const count = getReleaseCount();
+        return {
+          count,
+          updateAvailable: count > 0,
+        };
+      },
+      getReleaseCount,
+    };
+
+    function getReleaseCount() {
+      const releaseState = releaseManager.buildViewState?.() || {};
+      if (releaseState.updateAvailable) {
+        return 1;
+      }
+      const snapshotCount = Number(releaseState.count) || 0;
+      return snapshotCount > 0 ? snapshotCount : 0;
+    }
   }
 
   namespace.panelV2CompositionController = { create };
