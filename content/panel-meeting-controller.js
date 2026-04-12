@@ -8,19 +8,19 @@
 
     async function handleAction(action, detail = {}) {
       if (namespace.session.normalizeText(state.meetingUi.pending.action)) {
-        traceMeetingFlow("7.top.meeting.pending.skip", {
+        traceMeetingFlow("60.top.meeting.pending.skip", {
           action,
           pending: state.meetingUi.pending,
         });
         return;
       }
-      traceMeetingFlow("7.top.meeting.handle.start", {
+      traceMeetingFlow("61.top.meeting.handle.start", {
         action,
         detail,
       });
       const providerIdentity = namespace.providerIdentity.getCurrent();
       await providerIdentitySync.syncToStorage(`meeting-action:${action}`, providerIdentity);
-      traceMeetingFlow("8.top.meeting.identity.synced", {
+      traceMeetingFlow("62.top.meeting.identity.synced", {
         action,
         providerUserKey: namespace.session.normalizeText(providerIdentity?.providerUserKey),
       });
@@ -42,10 +42,10 @@
         meetingId: input.meetingId,
         providerUserKey: namespace.session.normalizeText(providerIdentity?.providerUserKey),
         title: input.title,
-      });
-      try {
+        });
+        try {
         if (action === "open-result" && (input.meetingId || input.jobId)) {
-          traceMeetingFlow("9.top.meeting.bridge.open-result.start", input);
+          traceMeetingFlow("63.top.meeting.bridge.open-result.start", input);
           const result = await namespace.meetingBridge.openMeetingResult(input, providerIdentity);
           logMeetingAction("success", {
             action,
@@ -54,7 +54,7 @@
             opened: Boolean(result?.opened),
             url: namespace.session.normalizeText(result?.url),
           });
-          traceMeetingFlow("10.top.meeting.bridge.open-result.success", {
+          traceMeetingFlow("64.top.meeting.bridge.open-result.success", {
             meetingId: input.meetingId,
             opened: Boolean(result?.opened),
             url: namespace.session.normalizeText(result?.url),
@@ -63,7 +63,7 @@
           return;
         }
         if (action === "share" && input.meetingId) {
-          traceMeetingFlow("9.top.meeting.bridge.share.start", input);
+          traceMeetingFlow("63.top.meeting.bridge.share.start", input);
           const result = await namespace.meetingBridge.createMeetingShareLink(input, providerIdentity);
           const shareUrl = namespace.session.normalizeText(result?.shareUrl);
           if (!shareUrl) {
@@ -76,7 +76,7 @@
             meetingId: input.meetingId,
             shareUrl,
           });
-          traceMeetingFlow("10.top.meeting.bridge.share.success", {
+          traceMeetingFlow("64.top.meeting.bridge.share.success", {
             meetingId: input.meetingId,
             shareUrl,
           });
@@ -85,21 +85,21 @@
           return;
         }
         if (action === "revoke-share" && input.meetingId) {
-          traceMeetingFlow("9.top.meeting.bridge.revoke-share.start", input);
+          traceMeetingFlow("63.top.meeting.bridge.revoke-share.start", input);
           const result = await namespace.meetingBridge.revokeMeetingShareLink(input, providerIdentity);
           patchShareState(input.meetingId, result?.share);
           logMeetingAction("success", {
             action,
             meetingId: input.meetingId,
           });
-          traceMeetingFlow("10.top.meeting.bridge.revoke-share.success", {
+          traceMeetingFlow("64.top.meeting.bridge.revoke-share.success", {
             meetingId: input.meetingId,
           });
           setFeedback("공유 링크를 해제했습니다.", "info", 2200);
           meetingManager.scheduleSync(0);
           return;
         }
-        traceMeetingFlow("9.top.meeting.bridge.open-workspace.start", input);
+        traceMeetingFlow("63.top.meeting.bridge.open-workspace.start", input);
         const result = await namespace.meetingBridge.openMeetingWorkspace(input, providerIdentity);
         logMeetingAction("success", {
           action: "open-workspace",
@@ -108,7 +108,7 @@
           opened: Boolean(result?.opened),
           url: namespace.session.normalizeText(result?.url),
         });
-        traceMeetingFlow("10.top.meeting.bridge.open-workspace.success", {
+        traceMeetingFlow("64.top.meeting.bridge.open-workspace.success", {
           meetingId: input.meetingId,
           opened: Boolean(result?.opened),
           url: namespace.session.normalizeText(result?.url),
@@ -121,7 +121,7 @@
           jobId: input.jobId,
           meetingId: input.meetingId,
         });
-        traceMeetingFlow("10.top.meeting.bridge.error", {
+        traceMeetingFlow("65.top.meeting.bridge.error", {
           action,
           error: error instanceof Error ? error.message : String(error || ""),
           jobId: input.jobId,

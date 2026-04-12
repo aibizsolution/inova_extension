@@ -6,6 +6,10 @@
   function ensurePanel(callbacks) {
     let host = getPanelHost();
     if (host) {
+      logConsoleTrace("panel", "01.top.panel.ensure.reuse", {
+        bridgeReady: Boolean(host.__bridgeReady),
+        frameSrc: normalizeText(host.__panelFrameSrc),
+      });
       host.__callbacks = callbacks;
       host.__panelElements = host.__panelElements || resolvePanelElements(host);
       host.__bridge = host.__bridge || createHostedBridge(host);
@@ -17,12 +21,20 @@
     host.innerHTML = buildMarkup();
     document.body.appendChild(host);
     panelHost = host;
+    logConsoleTrace("panel", "02.top.panel.host.created", {
+      hostId: host.id,
+    });
     host.__panelElements = resolvePanelElements(host);
     host.__bridge = createHostedBridge(host);
     const { debugLayer, frame, handle } = host.__panelElements;
     installHandleInteractions(host, handle, callbacks);
     installDebugLayerInteractions(host, debugLayer);
     frame?.addEventListener("load", () => {
+      logConsoleTrace("panel", "06.top.panel.frame.load", {
+        bridgeReady: Boolean(host.__bridgeReady),
+        frameSrc: normalizeText(frame.getAttribute("src")),
+        panelUrl: normalizeText(host.__panelUrl),
+      });
       if (host.__bridgeReady) {
         return;
       }
@@ -66,6 +78,9 @@
     const bridge = namespace.hostedPanelBridge.create({
       onError: ({ error }) => {
         const message = normalizeText(error instanceof Error ? error.message : error) || "호스팅 패널과 연결하지 못했어요.";
+        logConsoleTrace("panel", "09.top.panel.bridge.error", {
+          message,
+        });
         updateStatusBanner(host, {
           text: message,
           tone: "error",
@@ -74,9 +89,19 @@
       onReadyChange: ({ ready }) => {
         host.__bridgeReady = Boolean(ready);
         clearHandshakeTimeout(host);
+        logConsoleTrace("panel", ready ? "08.top.panel.bridge.ready" : "08.top.panel.bridge.not-ready", {
+          frameSrc: normalizeText(host.__panelFrameSrc),
+          panelUrl: normalizeText(host.__panelUrl),
+          ready: Boolean(ready),
+        });
         if (ready) {
           updateStatusBanner(host, null);
           if (host.__lastRenderedState) {
+            logConsoleTrace("panel", "10.top.panel.snapshot.push", {
+              activeTool: normalizeText(host.__lastRenderedState?.activeTool),
+              open: Boolean(host.__lastRenderedState?.open),
+              visible: Boolean(host.__lastRenderedState?.visible),
+            });
             bridge.updateSnapshot(buildBridgeSnapshot(host.__lastRenderedState, host));
           }
           return;
@@ -88,9 +113,33 @@
           });
         }
       },
-      onRequest: async (request) => handleBridgeRequest(host, request),
+      onRequest: async (request) => {
+        logConsoleTrace("panel", "18.top.panel.bridge.request.received", {
+          action: normalizeText(request?.payload?.action),
+          domain: normalizeText(request?.domain),
+          requestId: normalizeText(request?.requestId),
+        });
+        try {
+          const result = await handleBridgeRequest(host, request);
+          logConsoleTrace("panel", "19.top.panel.bridge.request.completed", {
+            action: normalizeText(request?.payload?.action),
+            domain: normalizeText(request?.domain),
+            requestId: normalizeText(request?.requestId),
+          });
+          return result;
+        } catch (error) {
+          logConsoleTrace("panel", "19.top.panel.bridge.request.error", {
+            action: normalizeText(request?.payload?.action),
+            domain: normalizeText(request?.domain),
+            error: normalizeText(error instanceof Error ? error.message : String(error || "")),
+            requestId: normalizeText(request?.requestId),
+          });
+          throw error;
+        }
+      },
     });
     bridge.attach();
+    logConsoleTrace("panel", "03.top.panel.bridge.attached", {});
     return bridge;
   }
 
@@ -140,6 +189,11 @@
     syncHostedFrame(host, state);
 
     if (host.__bridgeReady) {
+      logConsoleTrace("panel", "10.top.panel.snapshot.push", {
+        activeTool: normalizeText(state?.activeTool),
+        open: Boolean(state?.open),
+        visible: Boolean(state?.visible),
+      });
       host.__bridge.updateSnapshot(buildBridgeSnapshot(state, host));
     }
   }
@@ -161,6 +215,10 @@
     };
 
     if (!panelUrl) {
+      logConsoleTrace("panel", "04.top.panel.frame.error", {
+        reason: "missing-panel-url",
+        target: normalizeText(runtimeConfig?.target) || "production",
+      });
       updateStatusBanner(host, {
         text: "호스팅 패널 주소를 찾지 못했어요.",
         tone: "error",
@@ -168,6 +226,12 @@
       return;
     }
     if (frameTarget.error) {
+      logConsoleTrace("panel", "04.top.panel.frame.error", {
+        frameSrc: normalizeText(frameTarget.src),
+        panelUrl: normalizeText(panelFrameUrl),
+        reason: normalizeText(frameTarget.error),
+        wrapped: Boolean(frameTarget.wrapped),
+      });
       host.__panelUrl = panelFrameUrl;
       host.__panelFrameSrc = "";
       host.__bridgeReady = false;
@@ -194,6 +258,10 @@
     clearHandshakeTimeout(host);
     host.__handshakeTimeout = global.setTimeout(() => {
       if (!host.__bridgeReady) {
+        logConsoleTrace("panel", "07.top.panel.handshake.timeout", {
+          frameSrc: normalizeText(host.__panelFrameSrc),
+          panelUrl: normalizeText(host.__panelUrl),
+        });
         updateStatusBanner(host, {
           text: "호스팅 패널을 아직 연결하지 못했어요. 페이지를 새로고침하거나 확장을 다시 로드해 주세요.",
           tone: "warning",
@@ -203,6 +271,12 @@
     updateStatusBanner(host, {
       text: "호스팅 패널을 여는 중이에요.",
       tone: "info",
+    });
+    logConsoleTrace("panel", "04.top.panel.frame.src.set", {
+      frameSrc: normalizeText(frameTarget.src),
+      panelUrl: normalizeText(panelFrameUrl),
+      target: normalizeText(runtimeConfig?.target) || "production",
+      wrapped: Boolean(frameTarget.wrapped),
     });
     frame.setAttribute("src", frameTarget.src);
   }
@@ -374,19 +448,19 @@
       return { jumped: true };
     }
     if (action === "meeting-action") {
-      logConsoleTrace("meeting", "5.top.panel.request.received", {
+      logConsoleTrace("meeting", "50.top.panel.request.received", {
         detail,
         meetingAction: normalizeText(payload?.meetingAction),
       });
       try {
         await callbacks.onMeetingAction?.(normalizeText(payload?.meetingAction), detail);
-        logConsoleTrace("meeting", "11.top.panel.request.completed", {
+        logConsoleTrace("meeting", "59.top.panel.request.completed", {
           detail,
           meetingAction: normalizeText(payload?.meetingAction),
         });
         return { handled: true };
       } catch (error) {
-        logConsoleTrace("meeting", "11.top.panel.request.error", {
+        logConsoleTrace("meeting", "59.top.panel.request.error", {
           detail,
           error: normalizeText(error instanceof Error ? error.message : String(error || "")),
           meetingAction: normalizeText(payload?.meetingAction),

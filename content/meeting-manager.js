@@ -47,7 +47,7 @@
     }
 
     function scheduleSync(delay = ACTIVE_SYNC_DELAY_MS) {
-      traceMeetingFlow("20.top.meeting.sync.scheduled", {
+      traceMeetingFlow("70.top.meeting.sync.scheduled", {
         activeTool: namespace.session.normalizeText(state.activeTool),
         delay,
         open: Boolean(state.open),
@@ -60,7 +60,7 @@
 
     async function refreshState(reason = "manual") {
       const providerIdentity = namespace.providerIdentity.getCurrent();
-      traceMeetingFlow("21.top.meeting.refresh.start", {
+      traceMeetingFlow("71.top.meeting.refresh.start", {
         activeTool: namespace.session.normalizeText(state.activeTool),
         open: Boolean(state.open),
         providerAvailable: Boolean(providerIdentity?.available),
@@ -68,7 +68,7 @@
         visibility: global.document.hidden ? "hidden" : "visible",
       });
       if (!shouldUseRealtime(providerIdentity)) {
-        traceMeetingFlow("22.top.meeting.refresh.skip-realtime", {
+        traceMeetingFlow("72.top.meeting.refresh.skip-realtime", {
           activeTool: namespace.session.normalizeText(state.activeTool),
           open: Boolean(state.open),
           providerAvailable: Boolean(providerIdentity?.available),
@@ -83,7 +83,7 @@
       try {
         await ensureRealtime(providerIdentity, reason);
       } catch (error) {
-        traceMeetingFlow("28.top.meeting.realtime.error", {
+        traceMeetingFlow("78.top.meeting.realtime.error", {
           error: error instanceof Error ? error.message : String(error || ""),
           reason,
         });
@@ -114,14 +114,14 @@
     async function ensureRealtime(providerIdentity, reason) {
       const runtimeConfig = resolveMeetingRuntimeConfig();
       const ownerKey = namespace.session.normalizeText(providerIdentity?.providerUserKey);
-      traceMeetingFlow("23.top.meeting.realtime.ensure.start", {
+      traceMeetingFlow("73.top.meeting.realtime.ensure.start", {
         functionsBaseUrl: namespace.session.normalizeText(runtimeConfig?.functions?.baseUrl),
         ownerKey,
         reason,
         target: namespace.session.normalizeText(runtimeConfig?.target) || "production",
       });
       const port = await meetingPanelBridgeController.ensurePort(runtimeConfig);
-      traceMeetingFlow("24.top.meeting.realtime.port.ready", {
+      traceMeetingFlow("74.top.meeting.realtime.port.ready", {
         hasPort: Boolean(port),
         ownerKey,
         reason,
@@ -135,7 +135,7 @@
         namespace.session.normalizeText(auth.expiresAt),
       ].join("::");
       if (meetingPanelBridgeController.hasActiveConnection(connectionKey)) {
-        traceMeetingFlow("26.top.meeting.realtime.reuse", {
+        traceMeetingFlow("76.top.meeting.realtime.reuse", {
           ownerKey,
           reason,
           requestId: currentRequestId,
@@ -143,7 +143,7 @@
         return;
       }
       currentRequestId += 1;
-      traceMeetingFlow("26.top.meeting.realtime.init", {
+      traceMeetingFlow("76.top.meeting.realtime.init", {
         ownerKey,
         reason,
         requestId: currentRequestId,
@@ -177,7 +177,7 @@
         && authState.providerUserKey === providerUserKey
         && expiryTime > Date.now() + 60000
       ) {
-        traceMeetingFlow("25.top.meeting.auth.cached", {
+        traceMeetingFlow("75.top.meeting.auth.cached", {
           functionsBaseUrl,
           providerUserKey,
         });
@@ -185,14 +185,14 @@
       }
       const nextAuthPromiseKey = `${providerUserKey}::${functionsBaseUrl}`;
       if (authPromise && authPromiseKey === nextAuthPromiseKey) {
-        traceMeetingFlow("25.top.meeting.auth.pending", {
+        traceMeetingFlow("75.top.meeting.auth.pending", {
           functionsBaseUrl,
           providerUserKey,
         });
         return authPromise;
       }
 
-      traceMeetingFlow("25.top.meeting.auth.start", {
+      traceMeetingFlow("75.top.meeting.auth.start", {
         functionsBaseUrl,
         providerUserKey,
       });
@@ -209,7 +209,7 @@
           functionsBaseUrl,
           providerUserKey: namespace.session.normalizeText(nextAuth?.providerUserKey),
         };
-        traceMeetingFlow("25.top.meeting.auth.success", {
+        traceMeetingFlow("75.top.meeting.auth.success", {
           expiresAt: authState.expiresAt,
           functionsBaseUrl: authState.functionsBaseUrl,
           providerUserKey: authState.providerUserKey,
@@ -232,7 +232,7 @@
     async function handleSnapshotPayload(payload) {
       lastSnapshotRequestId = Math.max(lastSnapshotRequestId, Number(payload.requestId) || currentRequestId);
       const items = normalizeRealtimeItems(payload.items);
-      traceMeetingFlow("27.top.meeting.snapshot", {
+      traceMeetingFlow("77.top.meeting.snapshot", {
         count: items.length,
         fromCache: Boolean(payload.fromCache),
         hasPendingWrites: Boolean(payload.hasPendingWrites),
@@ -262,7 +262,7 @@
     async function handleBridgeError(payload) {
       const providerIdentity = namespace.providerIdentity.getCurrent();
       const error = new Error(namespace.session.normalizeText(payload.error) || "패널 Firestore 구독에 실패했어요.");
-      traceMeetingFlow("28.top.meeting.bridge.error", {
+      traceMeetingFlow("78.top.meeting.bridge.error", {
         error: error.message,
       });
       namespace.panelDebug?.log?.("panel.firestore.error", {
@@ -276,7 +276,7 @@
         throw error;
       }
       if (fallbackInflight || fallbackCooldownUntil > Date.now()) {
-        traceMeetingFlow("29.top.meeting.fallback.skipped", {
+        traceMeetingFlow("79.top.meeting.fallback.skipped", {
           cooldownUntil: fallbackCooldownUntil,
           inflight: fallbackInflight,
           reason,
@@ -285,7 +285,7 @@
       }
       fallbackInflight = true;
       fallbackCooldownUntil = Date.now() + FALLBACK_REFRESH_COOLDOWN_MS;
-      traceMeetingFlow("29.top.meeting.fallback.start", {
+      traceMeetingFlow("79.top.meeting.fallback.start", {
         error: error instanceof Error ? error.message : namespace.session.normalizeText(error),
         reason,
       });
@@ -312,7 +312,7 @@
           source: "runtime-read",
           version: Math.max(1, Number(state.meetingHub?.version) || 1),
         });
-        traceMeetingFlow("29.top.meeting.fallback.success", {
+        traceMeetingFlow("79.top.meeting.fallback.success", {
           count: items.length,
           reason,
           source: "runtime-read",
@@ -337,7 +337,7 @@
           source: cachedItems.length ? "cache" : "none",
           version: Math.max(1, Number(state.meetingHub?.version) || 1),
         });
-        traceMeetingFlow("29.top.meeting.fallback.error", {
+        traceMeetingFlow("79.top.meeting.fallback.error", {
           error: message,
           hasCachedItems: Boolean(cachedItems.length),
           reason,
@@ -350,7 +350,7 @@
 
     function disconnectRealtime(reason) {
       currentRequestId += 1;
-      traceMeetingFlow("30.top.meeting.realtime.disconnect", {
+      traceMeetingFlow("80.top.meeting.realtime.disconnect", {
         reason,
         requestId: currentRequestId,
       });
@@ -360,7 +360,7 @@
 
     async function warmRefresh(providerIdentity, requestId) {
       if (!providerIdentity?.available || requestId !== currentRequestId || lastSnapshotRequestId >= requestId || fallbackInflight || !isMeetingHubPendingInitialLoad(state.meetingHub)) {
-        traceMeetingFlow("31.top.meeting.warm.skip", {
+        traceMeetingFlow("81.top.meeting.warm.skip", {
           fallbackInflight,
           hasSnapshot: lastSnapshotRequestId >= requestId,
           pendingInitialLoad: isMeetingHubPendingInitialLoad(state.meetingHub),
@@ -369,7 +369,7 @@
         });
         return;
       }
-      traceMeetingFlow("31.top.meeting.warm.start", {
+      traceMeetingFlow("81.top.meeting.warm.start", {
         requestId,
       });
       namespace.panelDebug?.log?.("panel.warm.refresh.request", {
@@ -382,7 +382,7 @@
         providerIdentity
       );
       if (requestId !== currentRequestId || lastSnapshotRequestId >= requestId || !isMeetingHubPendingInitialLoad(state.meetingHub)) {
-        traceMeetingFlow("31.top.meeting.warm.skip-after-read", {
+        traceMeetingFlow("81.top.meeting.warm.skip-after-read", {
           hasSnapshot: lastSnapshotRequestId >= requestId,
           pendingInitialLoad: isMeetingHubPendingInitialLoad(state.meetingHub),
           requestId,
@@ -401,7 +401,7 @@
         source: "runtime-read",
         version: Math.max(1, Number(state.meetingHub?.version) || 1),
       });
-      traceMeetingFlow("31.top.meeting.warm.success", {
+      traceMeetingFlow("81.top.meeting.warm.success", {
         count: items.length,
         requestId,
       });
@@ -417,7 +417,7 @@
         hooks.render?.();
         return;
       }
-      traceMeetingFlow("32.top.meeting.refresh.error", {
+      traceMeetingFlow("82.top.meeting.refresh.error", {
         error: error instanceof Error ? error.message : String(error || ""),
       });
       namespace.panelDebug?.log?.("panel.refresh.error", {

@@ -93,6 +93,9 @@
     if (!(root instanceof global.HTMLElement)) {
       return;
     }
+    tracePanelFlow("11.hosted.bootstrap.start", {
+      parentOrigin: state.parentOrigin || "*",
+    });
     root.addEventListener("click", handleRootClick);
     root.addEventListener("scroll", handleRootScroll, true);
     root.addEventListener("pointerdown", handleRootPointerDown);
@@ -105,7 +108,10 @@
     root.addEventListener("input", handleRootInput);
     root.addEventListener("change", handleRootChange);
     root.addEventListener("keydown", handleRootKeydown);
+    global.addEventListener("error", handleWindowError);
+    global.addEventListener("unhandledrejection", handleUnhandledRejection);
     global.addEventListener("message", handleWindowMessage);
+    tracePanelFlow("12.hosted.listeners.bound", {});
     renderStatusCard({
       body: "확장 프로그램과 패널 상태를 연결하는 중입니다.",
       title: "호스팅 패널 준비 중",
@@ -170,20 +176,20 @@
         });
       },
       onMeetingAction(meetingAction, detail = {}) {
-        traceMeetingFlow("2.hosted.callback.enter", {
+        traceMeetingFlow("41.hosted.callback.enter", {
           detail,
           meetingAction,
         });
         if (meetingHubController?.handleMeetingAction) {
           return Promise.resolve(meetingHubController.handleMeetingAction(meetingAction, detail)).then((handled) => {
-            traceMeetingFlow("3.hosted.controller.result", {
+            traceMeetingFlow("42.hosted.controller.result", {
               handled,
               meetingAction,
             });
             if (handled !== false) {
               return handled;
             }
-            traceMeetingFlow("4.hosted.panel.request", {
+            traceMeetingFlow("43.hosted.panel.request", {
               detail,
               meetingAction,
             });
@@ -194,7 +200,7 @@
             });
           });
         }
-        traceMeetingFlow("4.hosted.panel.request", {
+        traceMeetingFlow("43.hosted.panel.request", {
           detail,
           meetingAction,
         });
@@ -391,8 +397,14 @@
       return;
     }
     state.readyPingCount += 1;
+    tracePanelFlow("14.hosted.ready.ping.scheduled", {
+      count: state.readyPingCount,
+    });
     global.setTimeout(() => {
       if (!state.panelSnapshot) {
+        tracePanelFlow("15.hosted.ready.ping.fire", {
+          count: state.readyPingCount,
+        });
         sendReady();
         scheduleReadyPing();
       }
@@ -400,6 +412,9 @@
   }
 
   function sendReady() {
+    tracePanelFlow("13.hosted.ready.post", {
+      capabilities: APP_CAPABILITIES.slice(),
+    });
     postEnvelope({
       capabilities: APP_CAPABILITIES.slice(),
       type: "ready",
@@ -414,6 +429,12 @@
     if (!envelope || envelope.source !== EXTENSION_SOURCE) {
       return;
     }
+    tracePanelFlow("16.hosted.message.received", {
+      domain: envelope.domain,
+      origin: normalizeText(event.origin),
+      requestId: envelope.requestId,
+      type: envelope.type,
+    });
     if (!state.parentOrigin) {
       state.parentOrigin = normalizeOrigin(event.origin);
     }
@@ -441,6 +462,11 @@
     const payload = envelope.payload && typeof envelope.payload === "object"
       ? envelope.payload
       : {};
+    tracePanelFlow("17.hosted.snapshot.received", {
+      activeTool: normalizeText(payload?.panel?.activeTool),
+      extensionVersion: normalizeText(payload.extensionVersion),
+      panelAppUrl: normalizeText(payload.panelAppUrl),
+    });
     state.bridgeReady = true;
     state.extensionCapabilities = normalizeCapabilities(
       payload.extensionCapabilities?.length ? payload.extensionCapabilities : envelope.capabilities
@@ -450,6 +476,11 @@
     state.panelSnapshot = payload.panel && typeof payload.panel === "object"
       ? cloneValue(payload.panel)
       : null;
+    tracePanelFlow("18.hosted.snapshot.applied", {
+      activeTool: normalizeText(state.panelSnapshot?.activeTool),
+      meetingCount: Number(state.panelSnapshot?.meetingTool?.count) || 0,
+      toolTitle: normalizeText(state.panelSnapshot?.toolTitle),
+    });
     scheduleRender();
   }
 
@@ -470,6 +501,14 @@
 
   function request(domain, payload = {}) {
     const requestId = buildRequestId();
+    const traceAction = readTraceAction(domain, payload);
+    if (!(normalizeText(domain) === "page" && traceAction === "log-trace")) {
+      tracePanelFlow("30.hosted.request.start", {
+        action: traceAction,
+        domain,
+        requestId,
+      });
+    }
     postEnvelope({
       domain,
       payload,
@@ -479,9 +518,18 @@
     return new Promise((resolve, reject) => {
       const timeoutId = global.setTimeout(() => {
         state.pendingRequests.delete(requestId);
+        if (!(normalizeText(domain) === "page" && traceAction === "log-trace")) {
+          tracePanelFlow("31.hosted.request.timeout", {
+            action: traceAction,
+            domain,
+            requestId,
+          });
+        }
         reject(new Error("호스팅 패널 요청 시간이 초과되었어요."));
       }, REQUEST_TIMEOUT_MS);
       state.pendingRequests.set(requestId, {
+        action: traceAction,
+        domain,
         reject,
         resolve,
         timeoutId,
@@ -505,12 +553,35 @@
     state.pendingRequests.delete(requestId);
     global.clearTimeout(entry.timeoutId);
     if (errorMessage) {
+      if (!(normalizeText(entry.domain) === "page" && normalizeText(entry.action) === "log-trace")) {
+        tracePanelFlow("32.hosted.request.error", {
+          action: entry.action,
+          domain: entry.domain,
+          error: normalizeText(errorMessage),
+          requestId,
+        });
+      }
       entry.reject(new Error(errorMessage));
       return;
     }
     if (payload?.handled === false) {
+      if (!(normalizeText(entry.domain) === "page" && normalizeText(entry.action) === "log-trace")) {
+        tracePanelFlow("32.hosted.request.error", {
+          action: entry.action,
+          domain: entry.domain,
+          error: "확장 프로그램이 요청을 처리하지 않았어요.",
+          requestId,
+        });
+      }
       entry.reject(new Error("확장 프로그램이 요청을 처리하지 않았어요."));
       return;
+    }
+    if (!(normalizeText(entry.domain) === "page" && normalizeText(entry.action) === "log-trace")) {
+      tracePanelFlow("33.hosted.request.success", {
+        action: entry.action,
+        domain: entry.domain,
+        requestId,
+      });
     }
     entry.resolve(payload?.result);
   }
@@ -589,6 +660,9 @@
   function flushRender() {
     const panelState = state.panelSnapshot;
     if (!panelState) {
+      tracePanelFlow("19.hosted.render.waiting-snapshot", {
+        bridgeReady: Boolean(state.bridgeReady),
+      });
       renderStatusCard({
         body: "패널 상태 스냅샷을 기다리고 있습니다.",
         meta: state.bridgeReady ? `extension ${state.extensionVersion || "unknown"}` : "",
@@ -597,6 +671,12 @@
       });
       return;
     }
+    tracePanelFlow("19.hosted.render.flush", {
+      activeTool: normalizeText(panelState.activeTool),
+      bridgeReady: Boolean(state.bridgeReady),
+      meetingCount: Number(panelState.meetingTool?.count) || 0,
+      toolTitle: normalizeText(panelState.toolTitle),
+    });
     const missingCapabilities = readMissingCapabilities();
     if (missingCapabilities.length) {
       renderStatusCard({
@@ -1055,7 +1135,7 @@
     }
     const meetingAction = target.closest?.("[data-meeting-action]");
     if (meetingAction) {
-      traceMeetingFlow("1.hosted.click.detected", {
+      traceMeetingFlow("40.hosted.click.detected", {
         action: meetingAction.dataset.meetingAction || "",
         artifactId: meetingAction.dataset.meetingArtifactId || "",
         jobId: meetingAction.dataset.meetingJobId || "",
@@ -1361,13 +1441,56 @@
     return namespace.session?.normalizeText?.(value) || String(value || "").trim();
   }
 
+  function tracePanelFlow(step, payload = {}) {
+    postTrace("panel", step, payload);
+  }
+
   function traceMeetingFlow(step, payload = {}) {
-    void invokePage({
-      action: "log-trace",
-      channel: "meeting",
-      payload: payload && typeof payload === "object" ? payload : {},
-      step,
-    }).catch(() => {});
+    postTrace("meeting", step, payload);
+  }
+
+  function postTrace(channel, step, payload = {}) {
+    postEnvelope({
+      domain: "page",
+      payload: {
+        action: "log-trace",
+        channel,
+        payload: payload && typeof payload === "object" ? payload : {},
+        step,
+      },
+      requestId: buildRequestId(),
+      type: "request",
+    });
+  }
+
+  function readTraceAction(domain, payload = {}) {
+    if (normalizeText(domain) === "page" && normalizeText(payload?.action) === "log-trace") {
+      return "log-trace";
+    }
+    return normalizeText(
+      payload?.action
+      || payload?.meetingAction
+      || payload?.promptAction
+      || payload?.releaseAction
+      || payload?.storeAction
+      || payload?.toolId
+      || domain
+    );
+  }
+
+  function handleWindowError(event) {
+    tracePanelFlow("90.hosted.window.error", {
+      colno: Number(event?.colno) || 0,
+      filename: normalizeText(event?.filename),
+      lineno: Number(event?.lineno) || 0,
+      message: normalizeText(event?.message),
+    });
+  }
+
+  function handleUnhandledRejection(event) {
+    tracePanelFlow("91.hosted.window.rejection", {
+      reason: normalizeText(event?.reason instanceof Error ? event.reason.message : String(event?.reason || "")),
+    });
   }
 
   function escapeHtml(text) {

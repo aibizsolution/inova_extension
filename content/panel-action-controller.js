@@ -14,13 +14,13 @@
 
     async function handlePanelMeetingAction(action, detail = {}) {
       if (panelDebugController.handlesAction(action)) {
-        traceMeetingFlow("6.top.debug.action", {
+        traceMeetingFlow("51.top.debug.action", {
           action,
         });
         await panelDebugController.handleAction(action);
         return;
       }
-      traceMeetingFlow("6.top.panel.action.dispatch", {
+      traceMeetingFlow("52.top.panel.action.dispatch", {
         action,
         detail,
       });
