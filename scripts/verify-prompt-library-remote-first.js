@@ -14,6 +14,7 @@ function main() {
     verifyHostedPromptLibraryAvoidsDuplicateReloads(),
     verifyHostedPromptEditorViewLabels(),
     verifyHostedPromptPublishUsesFunctionsFetch(),
+    verifyHostedPromptTabSelectionDoesNotWaitForPersistence(),
     verifyHostedPromptReviewPendingAutofocus(),
     verifyHostedPromptTabSelectionSurvivesLateStorageHydration(),
     verifyHostedPromptReviewTabVisibility(),
@@ -354,6 +355,7 @@ async function verifyHostedPromptTextInputDebouncesRender() {
 async function verifyHostedPromptPublishUsesFunctionsFetch() {
   const runtimeCalls = [];
   const ensureStoreLoadedCalls = [];
+  const persistedTabs = [];
   let storeCategories = [
     { id: "document", label: "문서" },
     { id: "other", label: "기타" },
@@ -427,6 +429,7 @@ async function verifyHostedPromptPublishUsesFunctionsFetch() {
         action: request?.action,
         body: { ...(request?.body || {}) },
         endpointKey: request?.endpointKey || "",
+        partial: request?.partial ? { ...request.partial } : null,
       });
       if (request?.action === "storage.get-state") {
         return {
@@ -460,6 +463,10 @@ async function verifyHostedPromptPublishUsesFunctionsFetch() {
           },
         };
       }
+      if (request?.action === "storage.update-ui-preferences") {
+        persistedTabs.push(request?.partial?.activePromptTab || "");
+        return {};
+      }
       return {};
     },
     scheduleRender() {},
@@ -492,8 +499,10 @@ async function verifyHostedPromptPublishUsesFunctionsFetch() {
   assert.equal(publishCall?.body?.categoryId, "document");
   assert.equal(publishCall?.body?.categoryLabel, "문서");
   const viewState = controller.buildPromptToolState({}, { reviewOpen: false });
+  assert.equal(viewState.activeTab, "store");
   assert.equal(viewState.prompt.publishPromptId, "");
   assert.equal(viewState.prompt.feedback?.message, "스토어에 별도 복사본으로 등록했어요.");
+  assert(persistedTabs.includes("store"), "hosted prompt publish should persist the store tab after success");
   storeCategories = [];
   await controller.handlePromptAction("open-publish", { promptId: "prompt-1" });
   await controller.handlePromptAction("set-publish-title", { title: "스토어 제목" });
@@ -503,6 +512,83 @@ async function verifyHostedPromptPublishUsesFunctionsFetch() {
   const customPublishCall = runtimeCalls.filter((call) => call.endpointKey === "publishPromptToStoreUrl").at(-1);
   assert.equal(customPublishCall?.body?.categoryId, "", "custom category publish should leave categoryId generation to the backend");
   assert.equal(customPublishCall?.body?.categoryLabel, "접근성 검토");
+}
+
+async function verifyHostedPromptTabSelectionDoesNotWaitForPersistence() {
+  let resolvePersistence;
+  const persistencePromise = new Promise((resolve) => {
+    resolvePersistence = resolve;
+  });
+  let renderCount = 0;
+  const context = vm.createContext({
+    Blob: class Blob {},
+    File: class File {},
+    clearTimeout,
+    console,
+    document: {
+      createElement() {
+        return {
+          click() {},
+        };
+      },
+    },
+    globalThis: null,
+    navigator: {},
+    setTimeout,
+    URL: {
+      createObjectURL() {
+        return "blob:prompt-library";
+      },
+      revokeObjectURL() {},
+    },
+  });
+  context.globalThis = context;
+  context.InovaBookmarks = {
+    promptLibraryModel: {
+      mergePromptLibrary(promptLibrary) {
+        const items = Array.isArray(promptLibrary?.items) ? promptLibrary.items.map((item) => ({ ...item })) : [];
+        return {
+          items,
+          version: Number(promptLibrary?.version) || 1,
+        };
+      },
+    },
+    session: {
+      normalizeText(value) {
+        return String(value ?? "").trim();
+      },
+    },
+  };
+
+  const source = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),
+    "utf8"
+  );
+  new vm.Script(source, {
+    filename: "hosting/extension-v2/panel/prompt-library-controller.js",
+  }).runInContext(context);
+
+  const controller = context.InovaBookmarks.promptLibraryController.create({
+    ensureStoreLoaded: async () => {},
+    invokeRuntime: async (request) => {
+      if (request?.action === "storage.update-ui-preferences") {
+        return persistencePromise;
+      }
+      return {};
+    },
+    scheduleRender() {
+      renderCount += 1;
+    },
+  });
+
+  const selectionPromise = controller.handleSelectPromptTab("store");
+  const viewState = controller.buildPromptToolState({}, { reviewOpen: false });
+
+  assert.equal(viewState.activeTab, "store", "hosted prompt tab selection should update immediately before persistence resolves");
+  assert.equal(renderCount, 1, "hosted prompt tab selection should schedule an immediate rerender");
+
+  resolvePersistence({});
+  await selectionPromise;
 }
 
 async function verifyHostedPromptTabSelectionSurvivesLateStorageHydration() {

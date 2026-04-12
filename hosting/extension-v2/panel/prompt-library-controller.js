@@ -198,11 +198,13 @@
       state.activeTab = nextTab;
       state.activeTabUserSelected = true;
       state.reviewPendingAutofocused = nextTab === "review";
-      await persistActivePromptTab(nextTab);
+      scheduleRender();
+      void persistActivePromptTab(nextTab);
       if (nextTab === "library") {
         void ensurePromptLibraryLoaded(true, "prompt-tab-select");
+      } else if (nextTab === "store") {
+        void ensureStoreLoaded(false, "prompt-tab-select");
       }
-      scheduleRender();
       return true;
     }
 
@@ -576,7 +578,11 @@
         state.publishCategoryLabel = "";
         state.publishCategoryMode = "existing";
         state.publishError = "";
+        state.activeTab = "store";
+        state.activeTabUserSelected = true;
         state.feedback = createFeedback("스토어에 별도 복사본으로 등록했어요.", "info", normalizedPromptId);
+        scheduleRender();
+        void persistActivePromptTab("store");
         await ensureStoreLoaded(true, "publish");
       } catch (error) {
         state.feedback = createFeedback(readErrorMessage(error, "스토어에 등록하지 못했어요."), "error", normalizedPromptId);
