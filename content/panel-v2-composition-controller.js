@@ -3,6 +3,7 @@
 
   function create(state) {
     let promptBridgeController = null;
+    let panelMeetingController = null;
     let renderController = null;
     const render = () => renderController?.render();
 
@@ -26,19 +27,14 @@
       ...runtimeDiagnostics,
       render,
     });
-    const panelMeetingController = namespace.panelMeetingController.create(state, {
-      meetingManager: hostedOwnedMeetingLifecycle,
-      providerIdentitySync,
-      render,
-    });
     const hostedOwnedMeetingSnapshot = createHostedOwnedMeetingSnapshotBridge(namespace.meetingManager);
     const panelDebugController = namespace.panelDebugController.create(state, {
       ...runtimeFlags,
       render,
     });
     const panelActionController = namespace.panelActionController.create(state, {
+      getPanelMeetingController,
       panelDebugController,
-      panelMeetingController,
     });
     const panelBookmarkController = namespace.panelBookmarkController.create(state, { render });
     const hostedOwnedConversationSnapshot = createHostedOwnedConversationSnapshotBridge(panelBookmarkController);
@@ -151,6 +147,17 @@
         return panelBootstrapController.bootstrap();
       },
     };
+
+    function getPanelMeetingController() {
+      if (!panelMeetingController) {
+        panelMeetingController = namespace.panelMeetingController.create(state, {
+          meetingManager: hostedOwnedMeetingLifecycle,
+          providerIdentitySync,
+          render,
+        });
+      }
+      return panelMeetingController;
+    }
   }
 
   function createHostedOwnedMeetingLifecycleBridge(meetingManager = {}) {

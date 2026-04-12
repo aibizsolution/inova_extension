@@ -28,12 +28,23 @@ async function main() {
     { action: "share", detail: { meetingId: "meeting-2" } },
   ]);
 
+  const lazyHarness = createHarness({
+    lazyMeetingController: true,
+  });
+  assert.equal(lazyHarness.meetingControllerCreateCalls, 0);
+  await lazyHarness.controller.handlePanelMeetingAction("share", { meetingId: "meeting-3" });
+  assert.equal(lazyHarness.meetingControllerCreateCalls, 1);
+  assert.deepEqual(lazyHarness.meetingActions, [
+    { action: "share", detail: { meetingId: "meeting-3" } },
+  ]);
+
   console.log("[verify-panel-action-controller] Panel action controller contract passed");
 }
 
 function createHarness(options = {}) {
   const debugActions = [];
   const meetingActions = [];
+  let meetingControllerCreateCalls = 0;
 
   const context = vm.createContext({
     console,
@@ -62,8 +73,24 @@ function createHarness(options = {}) {
           });
         },
       },
+      getPanelMeetingController: options.lazyMeetingController
+        ? () => {
+          meetingControllerCreateCalls += 1;
+          return {
+            async handleAction(action, detail) {
+              meetingActions.push({
+                action,
+                detail: detail == null ? detail : JSON.parse(JSON.stringify(detail)),
+              });
+            },
+          };
+        }
+        : undefined,
     }),
     debugActions,
+    get meetingControllerCreateCalls() {
+      return meetingControllerCreateCalls;
+    },
     meetingActions,
   };
 }

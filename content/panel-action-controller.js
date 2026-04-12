@@ -6,7 +6,10 @@
       handleAction: async () => {},
       handlesAction: () => false,
     };
-    const panelMeetingController = deps.panelMeetingController || { handleAction: async () => {} };
+    const fallbackMeetingController = deps.panelMeetingController || { handleAction: async () => {} };
+    const getPanelMeetingController = typeof deps.getPanelMeetingController === "function"
+      ? deps.getPanelMeetingController
+      : () => fallbackMeetingController;
 
     return {
       handlePanelMeetingAction,
@@ -24,7 +27,7 @@
         action,
         detail,
       });
-      await panelMeetingController.handleAction(action, detail);
+      await getPanelMeetingController().handleAction(action, detail);
     }
   }
 
