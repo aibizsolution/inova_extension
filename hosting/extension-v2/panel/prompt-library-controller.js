@@ -19,6 +19,7 @@
     const state = {
       actionPending: null,
       activeTab: "library",
+      activeTabUserSelected: false,
       capabilities: [],
       deletePromptId: "",
       editor: createEditor(),
@@ -180,6 +181,7 @@
     async function handleSelectPromptTab(promptTabId) {
       const nextTab = normalizePromptTab(promptTabId);
       state.activeTab = nextTab;
+      state.activeTabUserSelected = true;
       await persistActivePromptTab(nextTab);
       if (nextTab === "library") {
         void ensurePromptLibraryLoaded(true, "prompt-tab-select");
@@ -655,7 +657,9 @@
         provider: normalizeText(providerIdentity.provider || "inova") || "inova",
         providerUserKey,
       };
-      state.activeTab = normalizePromptTab(uiPreferences.activePromptTab);
+      if (!state.activeTabUserSelected) {
+        state.activeTab = normalizePromptTab(uiPreferences.activePromptTab);
+      }
     }
 
     function findPromptById(promptId) {

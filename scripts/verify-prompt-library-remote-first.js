@@ -13,6 +13,7 @@ function main() {
   return Promise.all([
     verifyHostedPromptLibraryAvoidsDuplicateReloads(),
     verifyHostedPromptEditorViewLabels(),
+    verifyHostedPromptTabSelectionSurvivesLateStorageHydration(),
     verifyHostedPromptReviewTabVisibility(),
     verifyHostedPromptTextInputDebouncesRender(),
   ]).then(() => {
@@ -346,6 +347,104 @@ async function verifyHostedPromptTextInputDebouncesRender() {
 
   await wait(220);
   assert.equal(renderCount, 1, "text input changes should collapse into one deferred render");
+}
+
+async function verifyHostedPromptTabSelectionSurvivesLateStorageHydration() {
+  let resolveStorage;
+  const storagePromise = new Promise((resolve) => {
+    resolveStorage = resolve;
+  });
+  const context = vm.createContext({
+    Blob: class Blob {},
+    File: class File {},
+    clearTimeout,
+    console,
+    document: {
+      createElement() {
+        return {
+          click() {},
+        };
+      },
+    },
+    globalThis: null,
+    navigator: {},
+    setTimeout,
+    URL: {
+      createObjectURL() {
+        return "blob:prompt-library";
+      },
+      revokeObjectURL() {},
+    },
+  });
+  context.globalThis = context;
+  context.InovaBookmarks = {
+    promptLibraryModel: {
+      mergePromptLibrary(promptLibrary) {
+        const items = Array.isArray(promptLibrary?.items) ? promptLibrary.items.map((item) => ({ ...item })) : [];
+        return {
+          items,
+          version: Number(promptLibrary?.version) || 1,
+        };
+      },
+    },
+    session: {
+      normalizeText(value) {
+        return String(value ?? "").trim();
+      },
+    },
+  };
+
+  const source = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),
+    "utf8"
+  );
+  new vm.Script(source, {
+    filename: "hosting/extension-v2/panel/prompt-library-controller.js",
+  }).runInContext(context);
+
+  const controller = context.InovaBookmarks.promptLibraryController.create({
+    invokeRuntime: async (request) => {
+      if (request?.action === "storage.get-state") {
+        return storagePromise;
+      }
+      return {};
+    },
+    scheduleRender() {},
+  });
+
+  controller.syncPanelState(
+    { activeTool: "prompts" },
+    ["page.adapter.v2", "runtime.invoke.v1"]
+  );
+  await flushAsync();
+
+  await controller.handleSelectPromptTab("review");
+
+  resolveStorage({
+    cloudSync: {
+      providerIdentity: {
+        available: true,
+        displayName: "Prompt Tester",
+        email: "prompt@example.com",
+        numericUserId: 42,
+        provider: "inova",
+        providerUserKey: "prompt-user-1",
+      },
+    },
+    uiPreferences: {
+      activePromptTab: "library",
+    },
+  });
+
+  await flushAsync();
+  await flushAsync();
+
+  const viewState = controller.buildPromptToolState({}, { reviewOpen: true });
+  assert.equal(
+    viewState.activeTab,
+    "review",
+    "late storage hydration should not override an explicit hosted prompt tab selection"
+  );
 }
 
 async function verifyHostedPromptReviewTabVisibility() {
