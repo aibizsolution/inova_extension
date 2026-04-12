@@ -505,7 +505,7 @@
     const traceAction = readTraceAction(domain, payload);
     const traceSpec = buildRequestTraceSpec(domain, payload);
     if (traceSpec) {
-      tracePanelFlow(traceSpec.startStep, {
+      traceSpec.trace(traceSpec.startStep, {
         ...traceSpec.buildStartPayload?.(),
         requestId,
       });
@@ -526,7 +526,7 @@
       const timeoutId = global.setTimeout(() => {
         state.pendingRequests.delete(requestId);
         if (traceSpec) {
-          tracePanelFlow(traceSpec.timeoutStep, {
+          traceSpec.trace(traceSpec.timeoutStep, {
             ...traceSpec.buildTimeoutPayload?.(Date.now() - startedAtMs),
             error: "호스팅 패널 요청 시간이 초과되었어요.",
             requestId,
@@ -570,7 +570,7 @@
     global.clearTimeout(entry.timeoutId);
     if (errorMessage) {
       if (entry.traceSpec) {
-        tracePanelFlow(entry.traceSpec.errorStep, {
+        entry.traceSpec.trace(entry.traceSpec.errorStep, {
           ...entry.traceSpec.buildResultPayload?.(Date.now() - entry.startedAtMs),
           error: normalizeText(errorMessage),
           requestId,
@@ -588,7 +588,7 @@
     }
     if (payload?.handled === false) {
       if (entry.traceSpec) {
-        tracePanelFlow(entry.traceSpec.errorStep, {
+        entry.traceSpec.trace(entry.traceSpec.errorStep, {
           ...entry.traceSpec.buildResultPayload?.(Date.now() - entry.startedAtMs),
           error: "확장 프로그램이 요청을 처리하지 않았어요.",
           requestId,
@@ -605,7 +605,7 @@
       return;
     }
     if (entry.traceSpec) {
-      tracePanelFlow(entry.traceSpec.successStep, {
+      entry.traceSpec.trace(entry.traceSpec.successStep, {
         ...entry.traceSpec.buildResultPayload?.(Date.now() - entry.startedAtMs),
         requestId,
       });
@@ -1429,6 +1429,10 @@
     postTrace("meeting", step, payload);
   }
 
+  function traceFunctionsFlow(step, payload = {}) {
+    postTrace("functions", step, payload);
+  }
+
   function postTrace(channel, step, payload = {}) {
     const requestId = buildRequestId();
     state.traceRequestIds.add(requestId);
@@ -1484,23 +1488,27 @@
           return {
             message: functionLabel,
             reason: `${Math.max(0, Number(durationMs) || 0)}ms`,
+            target: readRuntimeTargetForTrace(),
           };
         },
         buildStartPayload() {
           return {
             message: functionLabel,
             reason: `auth:${authMode}`,
+            target: readRuntimeTargetForTrace(),
           };
         },
         buildTimeoutPayload(durationMs) {
           return {
             message: functionLabel,
             reason: `${Math.max(0, Number(durationMs) || 0)}ms`,
+            target: readRuntimeTargetForTrace(),
           };
         },
         errorStep: "35.hosted.functions.fetch.error",
         startStep: "34.hosted.functions.fetch.start",
         successStep: "35.hosted.functions.fetch.success",
+        trace: traceFunctionsFlow,
         timeoutStep: "35.hosted.functions.fetch.timeout",
       };
     }
@@ -1511,22 +1519,26 @@
           return {
             message: scope,
             reason: `${Math.max(0, Number(durationMs) || 0)}ms`,
+            target: readRuntimeTargetForTrace(),
           };
         },
         buildStartPayload() {
           return {
             message: scope,
+            target: readRuntimeTargetForTrace(),
           };
         },
         buildTimeoutPayload(durationMs) {
           return {
             message: scope,
             reason: `${Math.max(0, Number(durationMs) || 0)}ms`,
+            target: readRuntimeTargetForTrace(),
           };
         },
         errorStep: "35.hosted.panel-auth.error",
         startStep: "34.hosted.panel-auth.start",
         successStep: "35.hosted.panel-auth.success",
+        trace: traceFunctionsFlow,
         timeoutStep: "35.hosted.panel-auth.timeout",
       };
     }
@@ -1537,6 +1549,12 @@
     const service = normalizeText(payload?.service) || "service";
     const endpointKey = normalizeText(payload?.endpointKey) || "endpoint";
     return `${service}/${endpointKey}`;
+  }
+
+  function readRuntimeTargetForTrace() {
+    return normalizeText(state.panelSnapshot?.settings?.meetingWorkspaceTarget).toLowerCase() === "local"
+      ? "local"
+      : "production";
   }
 
   function handleWindowError(event) {

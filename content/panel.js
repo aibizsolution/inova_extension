@@ -855,21 +855,19 @@
 
   function emitTraceLine(channel, text) {
     traceSequence += 1;
-    console.log(`[inova:${channel} #${traceSequence}] ${text}`);
+    const style = channel === "functions" ? "color:#b45309;font-weight:600" : channel === "meeting" ? "color:#0f766e" : "";
+    style
+      ? console.log(`%c[inova:${channel} #${traceSequence}] ${text}`, style)
+      : console.log(`[inova:${channel} #${traceSequence}] ${text}`);
   }
 
   function scheduleTraceRepeatFlush() {
     global.clearTimeout(traceRepeatTimer);
-    traceRepeatTimer = global.setTimeout(() => {
-      traceRepeatTimer = 0;
-      flushRepeatedTraceSummary();
-    }, TRACE_REPEAT_IDLE_MS);
+    traceRepeatTimer = global.setTimeout(() => { traceRepeatTimer = 0; flushRepeatedTraceSummary(); }, TRACE_REPEAT_IDLE_MS);
   }
 
   function flushRepeatedTraceSummary() {
-    if (!lastTraceEntry) {
-      return;
-    }
+    if (!lastTraceEntry) return;
     global.clearTimeout(traceRepeatTimer);
     traceRepeatTimer = 0;
     if (lastTraceEntry.repeatCount > 0) emitTraceLine(lastTraceEntry.channel, `same event repeated ${lastTraceEntry.repeatCount} more times | ${formatTraceLine(lastTraceEntry.label, lastTraceEntry.summary)}`);
