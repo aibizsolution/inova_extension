@@ -503,7 +503,13 @@
   function request(domain, payload = {}) {
     const requestId = buildRequestId();
     const traceAction = readTraceAction(domain, payload);
-    if (!(normalizeText(domain) === "page" && traceAction === "log-trace")) {
+    const traceSpec = buildRequestTraceSpec(domain, payload);
+    if (traceSpec) {
+      tracePanelFlow(traceSpec.startStep, {
+        ...traceSpec.buildStartPayload?.(),
+        requestId,
+      });
+    } else if (!(normalizeText(domain) === "page" && traceAction === "log-trace")) {
       tracePanelFlow("30.hosted.request.start", {
         action: traceAction,
         domain,
@@ -519,7 +525,13 @@
     return new Promise((resolve, reject) => {
       const timeoutId = global.setTimeout(() => {
         state.pendingRequests.delete(requestId);
-        if (!(normalizeText(domain) === "page" && traceAction === "log-trace")) {
+        if (traceSpec) {
+          tracePanelFlow(traceSpec.timeoutStep, {
+            ...traceSpec.buildTimeoutPayload?.(Date.now() - startedAtMs),
+            error: "호스팅 패널 요청 시간이 초과되었어요.",
+            requestId,
+          });
+        } else if (!(normalizeText(domain) === "page" && traceAction === "log-trace")) {
           tracePanelFlow("31.hosted.request.timeout", {
             action: traceAction,
             domain,
@@ -528,11 +540,14 @@
         }
         reject(new Error("호스팅 패널 요청 시간이 초과되었어요."));
       }, REQUEST_TIMEOUT_MS);
+      const startedAtMs = Date.now();
       state.pendingRequests.set(requestId, {
         action: traceAction,
         domain,
         reject,
         resolve,
+        startedAtMs,
+        traceSpec,
         timeoutId,
       });
     });
@@ -554,7 +569,13 @@
     state.pendingRequests.delete(requestId);
     global.clearTimeout(entry.timeoutId);
     if (errorMessage) {
-      if (!(normalizeText(entry.domain) === "page" && normalizeText(entry.action) === "log-trace")) {
+      if (entry.traceSpec) {
+        tracePanelFlow(entry.traceSpec.errorStep, {
+          ...entry.traceSpec.buildResultPayload?.(Date.now() - entry.startedAtMs),
+          error: normalizeText(errorMessage),
+          requestId,
+        });
+      } else if (!(normalizeText(entry.domain) === "page" && normalizeText(entry.action) === "log-trace")) {
         tracePanelFlow("32.hosted.request.error", {
           action: entry.action,
           domain: entry.domain,
@@ -566,7 +587,13 @@
       return;
     }
     if (payload?.handled === false) {
-      if (!(normalizeText(entry.domain) === "page" && normalizeText(entry.action) === "log-trace")) {
+      if (entry.traceSpec) {
+        tracePanelFlow(entry.traceSpec.errorStep, {
+          ...entry.traceSpec.buildResultPayload?.(Date.now() - entry.startedAtMs),
+          error: "확장 프로그램이 요청을 처리하지 않았어요.",
+          requestId,
+        });
+      } else if (!(normalizeText(entry.domain) === "page" && normalizeText(entry.action) === "log-trace")) {
         tracePanelFlow("32.hosted.request.error", {
           action: entry.action,
           domain: entry.domain,
@@ -577,7 +604,12 @@
       entry.reject(new Error("확장 프로그램이 요청을 처리하지 않았어요."));
       return;
     }
-    if (!(normalizeText(entry.domain) === "page" && normalizeText(entry.action) === "log-trace")) {
+    if (entry.traceSpec) {
+      tracePanelFlow(entry.traceSpec.successStep, {
+        ...entry.traceSpec.buildResultPayload?.(Date.now() - entry.startedAtMs),
+        requestId,
+      });
+    } else if (!(normalizeText(entry.domain) === "page" && normalizeText(entry.action) === "log-trace")) {
       tracePanelFlow("33.hosted.request.success", {
         action: entry.action,
         domain: entry.domain,
@@ -1437,6 +1469,74 @@
       || payload?.toolId
       || domain
     );
+  }
+
+  function buildRequestTraceSpec(domain, payload = {}) {
+    if (normalizeText(domain) !== "runtime") {
+      return null;
+    }
+    const runtimeAction = normalizeText(payload?.action).toLowerCase();
+    if (runtimeAction === "functions.fetch") {
+      const functionLabel = buildFunctionsFetchLabel(payload);
+      const authMode = normalizeText(payload?.authMode) || "access-token";
+      return {
+        buildResultPayload(durationMs) {
+          return {
+            message: functionLabel,
+            reason: `${Math.max(0, Number(durationMs) || 0)}ms`,
+          };
+        },
+        buildStartPayload() {
+          return {
+            message: functionLabel,
+            reason: `auth:${authMode}`,
+          };
+        },
+        buildTimeoutPayload(durationMs) {
+          return {
+            message: functionLabel,
+            reason: `${Math.max(0, Number(durationMs) || 0)}ms`,
+          };
+        },
+        errorStep: "35.hosted.functions.fetch.error",
+        startStep: "34.hosted.functions.fetch.start",
+        successStep: "35.hosted.functions.fetch.success",
+        timeoutStep: "35.hosted.functions.fetch.timeout",
+      };
+    }
+    if (runtimeAction === "auth.issue-prompt-panel" || runtimeAction === "auth.issue-meeting-panel") {
+      const scope = runtimeAction === "auth.issue-prompt-panel" ? "prompt-panel" : "meeting-panel";
+      return {
+        buildResultPayload(durationMs) {
+          return {
+            message: scope,
+            reason: `${Math.max(0, Number(durationMs) || 0)}ms`,
+          };
+        },
+        buildStartPayload() {
+          return {
+            message: scope,
+          };
+        },
+        buildTimeoutPayload(durationMs) {
+          return {
+            message: scope,
+            reason: `${Math.max(0, Number(durationMs) || 0)}ms`,
+          };
+        },
+        errorStep: "35.hosted.panel-auth.error",
+        startStep: "34.hosted.panel-auth.start",
+        successStep: "35.hosted.panel-auth.success",
+        timeoutStep: "35.hosted.panel-auth.timeout",
+      };
+    }
+    return null;
+  }
+
+  function buildFunctionsFetchLabel(payload = {}) {
+    const service = normalizeText(payload?.service) || "service";
+    const endpointKey = normalizeText(payload?.endpointKey) || "endpoint";
+    return `${service}/${endpointKey}`;
   }
 
   function handleWindowError(event) {
