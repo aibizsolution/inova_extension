@@ -12,6 +12,9 @@
     const invokeRuntime = typeof options.invokeRuntime === "function"
       ? options.invokeRuntime
       : async () => ({});
+    const getStoreCategories = typeof options.getStoreCategories === "function"
+      ? options.getStoreCategories
+      : () => [];
     const ensureStoreLoaded = typeof options.ensureStoreLoaded === "function"
       ? options.ensureStoreLoaded
       : async () => {};
@@ -51,6 +54,8 @@
         providerUserKey: "",
       },
       publishCategoryId: "",
+      publishCategoryLabel: "",
+      publishCategoryMode: "existing",
       publishError: "",
       publishPromptId: "",
       publishTitle: "",
@@ -148,11 +153,13 @@
         menuPromptId: state.menuPromptId,
         pendingInsert: state.pendingInsert,
         publishCategoryId: state.publishCategoryId,
+        publishCategoryLabel: state.publishCategoryLabel,
+        publishCategoryMode: state.publishCategoryMode,
         publishError: state.publishError,
         publishPromptId: state.publishPromptId,
         publishTitle: state.publishTitle,
         query: state.query,
-        storeCategories: namespace.promptStoreModel?.getCategories?.() || [],
+        storeCategories: getStoreCategories(),
         syncNotice: state.syncNotice,
         totalCount: getPromptCount(),
       };
@@ -378,6 +385,10 @@
         setPublishCategory(normalizeText(detail.categoryId));
         return true;
       }
+      if (normalizedAction === "set-publish-category-label") {
+        setPublishCategoryLabel(detail.categoryLabel);
+        return true;
+      }
       if (normalizedAction === "set-publish-title") {
         setPublishTitle(detail.title);
         return true;
@@ -452,12 +463,16 @@
       if (!prompt) {
         return;
       }
+      const storeCategories = getStoreCategories();
       state.menuPromptId = "";
       state.deletePromptId = "";
       state.publishPromptId = prompt.id;
-      state.publishCategoryId = normalizePublishCategoryId(state.publishCategoryId || "document");
+      state.publishCategoryId = normalizePublishCategoryId(state.publishCategoryId || storeCategories[0]?.id || "");
+      state.publishCategoryLabel = "";
+      state.publishCategoryMode = storeCategories.length ? "existing" : "new";
       state.publishTitle = prompt.title || "";
       state.publishError = "";
+      void ensureStoreLoaded(false, "open-publish");
       scheduleRender();
     }
 
@@ -467,12 +482,27 @@
       }
       state.publishPromptId = "";
       state.publishTitle = "";
+      state.publishCategoryLabel = "";
+      state.publishCategoryMode = "existing";
       state.publishError = "";
       scheduleRender();
     }
 
     function setPublishCategory(categoryId) {
-      state.publishCategoryId = normalizePublishCategoryId(categoryId);
+      const normalizedCategoryId = normalizePublishCategoryId(categoryId);
+      if (normalizedCategoryId === "__new__") {
+        state.publishCategoryMode = "new";
+      } else {
+        state.publishCategoryId = normalizedCategoryId;
+        state.publishCategoryMode = "existing";
+      }
+      state.publishError = "";
+      scheduleRender();
+    }
+
+    function setPublishCategoryLabel(categoryLabel) {
+      state.publishCategoryLabel = String(categoryLabel || "");
+      state.publishCategoryMode = "new";
       state.publishError = "";
       scheduleRender();
     }
@@ -504,6 +534,12 @@
         scheduleRender();
         return;
       }
+      const publishCategory = resolvePublishCategory();
+      if (!publishCategory) {
+        state.publishError = "기존 카테고리를 고르거나 새 카테고리 이름을 입력해 주세요.";
+        scheduleRender();
+        return;
+      }
       if (!state.providerIdentity.available) {
         state.publishError = "사용자 정보를 확인하지 못했어요.";
         scheduleRender();
@@ -516,7 +552,8 @@
           action: "functions.fetch",
           authMode: "access-token",
           body: {
-            categoryId: normalizePublishCategoryId(state.publishCategoryId || "document"),
+            categoryId: publishCategory.id,
+            categoryLabel: publishCategory.label,
             prompt: {
               content: prompt.content,
               title: publishTitle,
@@ -535,6 +572,9 @@
         });
         state.publishPromptId = "";
         state.publishTitle = "";
+        state.publishCategoryId = "";
+        state.publishCategoryLabel = "";
+        state.publishCategoryMode = "existing";
         state.publishError = "";
         state.feedback = createFeedback("스토어에 별도 복사본으로 등록했어요.", "info", normalizedPromptId);
         await ensureStoreLoaded(true, "publish");
@@ -812,9 +852,35 @@
       state.deletePromptId = "";
       state.menuPromptId = "";
       state.publishCategoryId = "";
+      state.publishCategoryLabel = "";
+      state.publishCategoryMode = "existing";
       state.publishError = "";
       state.publishPromptId = "";
       state.publishTitle = "";
+    }
+
+    function resolvePublishCategory() {
+      const storeCategories = getStoreCategories();
+      if (state.publishCategoryMode === "existing") {
+        const selectedCategory = storeCategories.find((category) => category.id === normalizePublishCategoryId(state.publishCategoryId));
+        if (!selectedCategory) {
+          return null;
+        }
+        return {
+          id: selectedCategory.id,
+          label: normalizeText(selectedCategory.label)
+            || namespace.promptStoreModel?.getCategoryLabel?.(selectedCategory.id)
+            || "기타",
+        };
+      }
+      const customCategoryLabel = normalizeText(state.publishCategoryLabel);
+      if (!customCategoryLabel) {
+        return null;
+      }
+      return {
+        id: "",
+        label: customCategoryLabel,
+      };
     }
   }
 
@@ -838,10 +904,7 @@
 
   function normalizePublishCategoryId(categoryId) {
     const normalized = normalizeText(categoryId).toLowerCase();
-    const categories = namespace.promptStoreModel?.getCategories?.() || [];
-    return categories.some((category) => category.id === normalized)
-      ? normalized
-      : "document";
+    return normalized || "";
   }
 
   function getEffectiveActiveTab(promptTabId, reviewOpen) {

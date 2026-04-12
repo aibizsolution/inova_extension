@@ -354,6 +354,10 @@ async function verifyHostedPromptTextInputDebouncesRender() {
 async function verifyHostedPromptPublishUsesFunctionsFetch() {
   const runtimeCalls = [];
   const ensureStoreLoadedCalls = [];
+  let storeCategories = [
+    { id: "document", label: "문서" },
+    { id: "other", label: "기타" },
+  ];
   const context = vm.createContext({
     Blob: class Blob {},
     File: class File {},
@@ -414,6 +418,9 @@ async function verifyHostedPromptPublishUsesFunctionsFetch() {
     ensureStoreLoaded(...args) {
       ensureStoreLoadedCalls.push(args);
       return Promise.resolve();
+    },
+    getStoreCategories() {
+      return storeCategories;
     },
     invokeRuntime: async (request) => {
       runtimeCalls.push({
@@ -478,12 +485,24 @@ async function verifyHostedPromptPublishUsesFunctionsFetch() {
   );
   assert.deepEqual(
     ensureStoreLoadedCalls,
-    [[true, "publish"]],
+    [[false, "open-publish"], [true, "publish"]],
     "hosted prompt publish should refresh the hosted store after publishing"
   );
+  const publishCall = runtimeCalls.find((call) => call.endpointKey === "publishPromptToStoreUrl");
+  assert.equal(publishCall?.body?.categoryId, "document");
+  assert.equal(publishCall?.body?.categoryLabel, "문서");
   const viewState = controller.buildPromptToolState({}, { reviewOpen: false });
   assert.equal(viewState.prompt.publishPromptId, "");
   assert.equal(viewState.prompt.feedback?.message, "스토어에 별도 복사본으로 등록했어요.");
+  storeCategories = [];
+  await controller.handlePromptAction("open-publish", { promptId: "prompt-1" });
+  await controller.handlePromptAction("set-publish-title", { title: "스토어 제목" });
+  await controller.handlePromptAction("set-publish-category-label", { categoryLabel: "접근성 검토" });
+  await controller.handlePromptAction("confirm-publish", { promptId: "prompt-1" });
+
+  const customPublishCall = runtimeCalls.filter((call) => call.endpointKey === "publishPromptToStoreUrl").at(-1);
+  assert.equal(customPublishCall?.body?.categoryId, "", "custom category publish should leave categoryId generation to the backend");
+  assert.equal(customPublishCall?.body?.categoryLabel, "접근성 검토");
 }
 
 async function verifyHostedPromptTabSelectionSurvivesLateStorageHydration() {

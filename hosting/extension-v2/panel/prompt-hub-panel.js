@@ -57,12 +57,21 @@
     }
 
     const publishField = target?.closest?.("[data-prompt-publish-field]");
-    if (publishField?.dataset.promptPublishField === "title") {
-      callbacks.onPromptAction?.("set-publish-title", {
-        promptId: publishField.dataset.promptId || "",
-        title: publishField.value || "",
-      });
-      return true;
+    if (publishField) {
+      if (publishField.dataset.promptPublishField === "title") {
+        callbacks.onPromptAction?.("set-publish-title", {
+          promptId: publishField.dataset.promptId || "",
+          title: publishField.value || "",
+        });
+        return true;
+      }
+      if (publishField.dataset.promptPublishField === "category-label") {
+        callbacks.onPromptAction?.("set-publish-category-label", {
+          categoryLabel: publishField.value || "",
+          promptId: publishField.dataset.promptId || "",
+        });
+        return true;
+      }
     }
 
     return false;

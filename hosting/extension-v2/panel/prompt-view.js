@@ -100,7 +100,16 @@
         ${itemFeedback ? renderFeedback(itemFeedback) : ""}
         ${pendingInsert ? renderPendingInsert() : ""}
         ${menuOpen ? renderPromptMenu(item.id, deletePending || publishPending) : ""}
-        ${publishOpen ? renderPublishForm(item.id, state.storeCategories, state.publishCategoryId, state.publishTitle, state.publishError, publishPending) : ""}
+        ${publishOpen ? renderPublishForm(
+          item.id,
+          state.storeCategories,
+          state.publishCategoryId,
+          state.publishCategoryLabel,
+          state.publishCategoryMode,
+          state.publishTitle,
+          state.publishError,
+          publishPending
+        ) : ""}
         ${deleteConfirm ? renderDeleteConfirm(item.id, item.title, deletePending) : ""}
       </article>
     `;
@@ -116,7 +125,9 @@
     `;
   }
 
-  function renderPublishForm(promptId, categories, activeCategoryId, publishTitle, publishError, pending) {
+  function renderPublishForm(promptId, categories, activeCategoryId, publishCategoryLabel, publishCategoryMode, publishTitle, publishError, pending) {
+    const storeCategories = Array.isArray(categories) ? categories.filter((category) => category.id !== "all") : [];
+    const useCustomCategory = publishCategoryMode === "new" || !storeCategories.length;
     return `
       <section class="inova-inline-feedback">
         <strong>스토어 등록</strong>
@@ -133,13 +144,27 @@
           />
         </label>
         <label class="inova-tool-select-field">
-          <span>카테고리</span>
+          <span>카테고리 선택</span>
           <select class="inova-tool-select" data-prompt-select="publish-category" data-prompt-id="${promptId}" ${renderDisabled(pending)}>
-            ${categories.map((category) => `
+            ${storeCategories.map((category) => `
               <option value="${category.id}" ${category.id === activeCategoryId ? "selected" : ""}>${escapeHtml(category.label)}</option>
             `).join("")}
+            <option value="__new__" ${useCustomCategory ? "selected" : ""}>새 카테고리 만들기</option>
           </select>
         </label>
+        ${useCustomCategory ? `
+          <label class="inova-prompt-field">
+            <span>새 카테고리 이름</span>
+            <input
+              type="text"
+              value="${escapeHtml(publishCategoryLabel || "")}"
+              data-prompt-publish-field="category-label"
+              data-prompt-id="${promptId}"
+              placeholder="${storeCategories.length ? "예: 접근성 검토" : "첫 카테고리 이름을 입력해 주세요"}"
+              ${renderDisabled(pending)}
+            />
+          </label>
+        ` : ""}
         ${publishError ? `<p class="inova-inline-feedback is-error">${escapeHtml(publishError)}</p>` : ""}
         <div class="inova-tool-actions">
           <button type="button" class="inova-tool-button is-primary" data-prompt-action="confirm-publish" data-prompt-id="${promptId}" ${renderDisabled(pending)}>${pending ? "등록 중..." : "등록"}</button>

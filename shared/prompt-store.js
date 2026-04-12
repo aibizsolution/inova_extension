@@ -7,7 +7,9 @@
 
   function getCategoryLabel(categoryId) {
     const normalized = namespace.session.normalizeText(categoryId || "").toLowerCase();
-    return getCategories().find((category) => category.id === normalized)?.label || "기타";
+    return getCategories().find((category) => category.id === normalized)?.label
+      || formatCategoryLabel(normalized)
+      || "기타";
   }
 
   function normalizeStoreEntry(entry) {
@@ -114,11 +116,19 @@
 
   function normalizeCategoryId(categoryId) {
     const normalized = namespace.session.normalizeText(categoryId || "").toLowerCase();
-    return getCategories().some((category) => category.id === normalized) ? normalized : "other";
+    return normalized === "all" ? "all" : normalized || "other";
   }
 
   function buildScore(metrics) {
     return metrics.likeCount * 3 + metrics.importCount * 5 + metrics.viewCount;
+  }
+
+  function formatCategoryLabel(categoryId) {
+    const normalized = namespace.session.normalizeText(categoryId || "");
+    if (!normalized) {
+      return "";
+    }
+    return normalized.replace(/[-_]+/g, " ").trim();
   }
 
   namespace.promptStore = {

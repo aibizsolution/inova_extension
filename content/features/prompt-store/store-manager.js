@@ -246,7 +246,10 @@
     }
 
     async function setCategory(categoryId) {
-      const nextCategoryId = namespace.promptStore.getCategories().some((category) => category.id === categoryId) ? categoryId : "all";
+      const normalizedCategoryId = namespace.session.normalizeText(categoryId).toLowerCase();
+      const nextCategoryId = state.store.availableCategories.some((category) => category.id === normalizedCategoryId)
+        ? normalizedCategoryId
+        : "all";
       if (state.store.categoryId === nextCategoryId) {
         return;
       }
@@ -495,13 +498,31 @@
       );
     }
     function normalizeAvailableCategories(categories, activeCategoryId) {
-      const allCategories = namespace.promptStore.getCategories();
       const available = Array.isArray(categories) ? categories : [];
       const visible = available
-        .map((category) => allCategories.find((item) => item.id === namespace.session.normalizeText(category?.id).toLowerCase()))
+        .map((category) => {
+          const id = namespace.session.normalizeText(category?.id).toLowerCase();
+          if (!id) {
+            return null;
+          }
+          return {
+            id,
+            label: namespace.session.normalizeText(
+              category?.label
+              || namespace.promptStore.getCategoryLabel(id)
+              || (id === "all" ? "전체" : "기타")
+            ) || "전체",
+          };
+        })
         .filter((category, index, list) => category && category.id !== "all" && list.findIndex((item) => item?.id === category.id) === index);
-      const active = allCategories.find((category) => category.id === namespace.session.normalizeText(activeCategoryId).toLowerCase());
-      return [{ id: "all", label: "전체" }, ...visible, ...(active && active.id !== "all" && !visible.some((category) => category.id === active.id) ? [active] : [])];
+      const activeId = namespace.session.normalizeText(activeCategoryId).toLowerCase();
+      const active = activeId && activeId !== "all"
+        ? {
+          id: activeId,
+          label: namespace.promptStore.getCategoryLabel(activeId) || "기타",
+        }
+        : null;
+      return [{ id: "all", label: "전체" }, ...visible, ...(active && !visible.some((category) => category.id === active.id) ? [active] : [])];
     }
     function resetWindow() {
       state.store.limit = LOCAL_CACHE_LIMIT;
@@ -626,9 +647,7 @@
 
     function normalizeCategoryId(categoryId) {
       const normalized = namespace.session.normalizeText(categoryId).toLowerCase();
-      return normalized === "all" || namespace.promptStore.getCategories().some((category) => category.id === normalized)
-        ? normalized
-        : "other";
+      return normalized === "all" ? "all" : normalized || "other";
     }
 
     function getRenderLimit() {

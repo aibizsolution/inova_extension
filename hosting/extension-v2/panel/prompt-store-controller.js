@@ -57,6 +57,7 @@
     return {
       buildViewState,
       ensureLoaded,
+      getPublishCategories,
       getStoreCount,
       handleSearch,
       handleStoreAction,
@@ -82,6 +83,10 @@
 
     function getStoreCount() {
       return Math.max(0, Number(state.totalCount) || state.items.length);
+    }
+
+    function getPublishCategories() {
+      return buildAvailableCategories().filter((category) => category.id !== "all");
     }
 
     function buildViewState() {
@@ -278,8 +283,9 @@
     }
 
     function setCategory(categoryId) {
-      const nextCategoryId = namespace.promptStoreModel?.getCategories?.().some((category) => category.id === categoryId)
-        ? categoryId
+      const normalizedCategoryId = normalizeText(categoryId).toLowerCase();
+      const nextCategoryId = buildAvailableCategories().some((category) => category.id === normalizedCategoryId)
+        ? normalizedCategoryId
         : "all";
       if (state.categoryId === nextCategoryId) {
         return;
@@ -524,18 +530,20 @@
     }
 
     function normalizeAvailableCategories(categories, activeCategoryId) {
-      const allCategories = namespace.promptStoreModel?.getCategories?.() || [];
       const visible = Array.isArray(categories) ? categories : [];
       const normalizedVisible = visible
         .map((category) => {
           const id = normalizeText(category?.id).toLowerCase();
-          const base = allCategories.find((entry) => entry.id === id);
-          if (id !== "all" && !base) {
+          if (!id) {
             return null;
           }
           return {
             id: id || "all",
-            label: normalizeText(category?.label || base?.label || (id === "all" ? "전체" : "기타")) || "전체",
+            label: normalizeText(
+              category?.label
+              || namespace.promptStoreModel?.getCategoryLabel?.(id)
+              || (id === "all" ? "전체" : "기타")
+            ) || "전체",
           };
         })
         .filter(Boolean);

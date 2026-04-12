@@ -99,6 +99,8 @@ assertNoBareCatch("content/meeting-manager.js");
 assertNoBareCatch("content/features/prompt-store/prompt-realtime-manager.js");
 assertNoBareCatch("shared/storage.js");
 assertInlineOnlyGating("functions/features/meeting/meeting-service.js");
+assertPattern("functions/features/prompt-store/store-service.js", /categoryLabels:/, "prompt store summary는 category label map을 함께 저장해야 합니다.");
+assertPattern("functions/features/prompt-store/store-service.js", /function normalizePublishCategory\s*\(/, "prompt store publish는 custom category normalization helper를 가져야 합니다.");
 
 if (errors.length) {
   console.error("구조 계약 검증 실패");
@@ -171,6 +173,17 @@ function assertNoPattern(relativePath, pattern, message) {
 
 function assertNoBareCatch(relativePath) {
   assertNoPattern(relativePath, /catch\s*\{\s*\}/, "bare catch가 남아 있으면 안 됩니다.");
+}
+
+function assertPattern(relativePath, pattern, message) {
+  const fullPath = path.join(root, relativePath);
+  if (!fs.existsSync(fullPath)) {
+    return;
+  }
+  const source = fs.readFileSync(fullPath, "utf8");
+  if (!pattern.test(source)) {
+    errors.push(`${message} (${relativePath})`);
+  }
 }
 
 function assertInlineOnlyGating(relativePath) {

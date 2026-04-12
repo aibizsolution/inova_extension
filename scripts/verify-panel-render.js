@@ -221,12 +221,20 @@ function verifyHostedPanelImeCompositionGuard() {
     "hosted panel IME guard should cover prompt editor fields"
   );
   assert(
+    hostedPanelSource.includes('kind: "prompt-publish-field"'),
+    "hosted panel IME guard should cover prompt publish fields"
+  );
+  assert(
     hostedPanelSource.includes('kind: "search"'),
     "hosted panel IME guard should cover hosted search fields"
   );
   assert(
     hostedPanelSource.includes("applyTextInputBinding(binding, { composing: false })"),
     "hosted panel should commit the final text input value after composition ends"
+  );
+  assert(
+    hostedPanelSource.includes('binding.field === "category-label"'),
+    "hosted panel should route custom publish category input through the shared IME-safe text binding"
   );
   assert(
     hostedPanelSource.includes("state.renderDeferred = true;"),

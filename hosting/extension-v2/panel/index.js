@@ -52,6 +52,7 @@
   }) || null;
   let promptStoreController = null;
   const promptLibraryController = namespace.promptLibraryController?.create?.({
+    getStoreCategories: () => promptStoreController?.getPublishCategories?.() || [],
     ensureStoreLoaded: (...args) => promptStoreController?.ensureLoaded?.(...args) || Promise.resolve(),
     invokePage,
     invokeRuntime,
@@ -1494,6 +1495,13 @@
       void callbacks.onPromptAction("set-publish-title", {
         promptId: binding.promptId || "",
         title: binding.element.value || "",
+      });
+      return true;
+    }
+    if (binding.kind === "prompt-publish-field" && binding.field === "category-label") {
+      void callbacks.onPromptAction("set-publish-category-label", {
+        categoryLabel: binding.element.value || "",
+        promptId: binding.promptId || "",
       });
       return true;
     }
