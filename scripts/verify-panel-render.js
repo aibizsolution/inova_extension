@@ -14,6 +14,7 @@ async function main() {
   verifyPageBridgeEvents();
   verifyV2CompositionWiring();
   verifyHostedPanelImeCompositionGuard();
+  verifyHostedConversationSearchDebounceContract();
   await verifyPageAdapterContract();
   console.log("[verify-panel-render] Hosted panel host contract passed");
 }
@@ -206,6 +207,30 @@ function verifyHostedPanelImeCompositionGuard() {
   assert(
     hostedPanelSource.includes("state.renderDeferred = true;"),
     "hosted panel should defer rerenders while composition is active"
+  );
+}
+
+function verifyHostedConversationSearchDebounceContract() {
+  const conversationControllerSource = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "conversation-controller.js"),
+    "utf8"
+  );
+
+  assert(
+    conversationControllerSource.includes("searchRenderTimerId: 0"),
+    "hosted conversation controller should track a deferred search render timer"
+  );
+  assert(
+    conversationControllerSource.includes("const nextQuery = String(value ?? \"\")"),
+    "hosted conversation search should keep the raw search text until filtering"
+  );
+  assert(
+    conversationControllerSource.includes("scheduleSearchRender();"),
+    "hosted conversation search should defer rerenders instead of rendering on each keystroke"
+  );
+  assert(
+    conversationControllerSource.includes("function scheduleSearchRender()"),
+    "hosted conversation controller should expose a shared deferred search render helper"
   );
 }
 

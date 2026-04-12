@@ -31,6 +31,7 @@
       refreshTimerId: 0,
       loading: false,
       query: "",
+      searchRenderTimerId: 0,
       sessionId: "",
       sessionTitle: "",
       snapshotFingerprint: "",
@@ -131,8 +132,12 @@
       if (normalizeText(toolId) !== "bookmarks") {
         return false;
       }
-      state.query = normalizeText(value);
-      scheduleRender();
+      const nextQuery = String(value ?? "");
+      if (state.query === nextQuery) {
+        return true;
+      }
+      state.query = nextQuery;
+      scheduleSearchRender();
       return true;
     }
 
@@ -203,7 +208,7 @@
       if (nextItems.length) {
         state.items = nextItems;
       }
-      const nextQuery = normalizeText(fallbackBookmarksTool?.query);
+      const nextQuery = String(fallbackBookmarksTool?.query ?? "");
       if (nextQuery || !state.query) {
         state.query = nextQuery;
       }
@@ -282,6 +287,16 @@
         firstId,
         lastId,
       ].join("|");
+    }
+
+    function scheduleSearchRender() {
+      if (state.searchRenderTimerId) {
+        global.clearTimeout(state.searchRenderTimerId);
+      }
+      state.searchRenderTimerId = global.setTimeout(() => {
+        state.searchRenderTimerId = 0;
+        scheduleRender();
+      }, 180);
     }
 
     function cloneValue(value) {
