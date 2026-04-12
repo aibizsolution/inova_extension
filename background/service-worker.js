@@ -336,7 +336,7 @@ async function fetchReleaseJson(kind) {
 async function openReleaseUrl(url) {
   const nextUrl = namespace.session.normalizeText(url);
   if (!nextUrl) throw new Error("열 링크가 없어요.");
-  const openedTab = await createBrowserTab(nextUrl);
+  const openedTab = createBrowserTab(nextUrl);
   return {
     opened: true,
     tabId: Number(openedTab?.id) || 0,
@@ -487,7 +487,7 @@ async function openHostedMeetingPage(mode, input, providerIdentity, sender) {
       meetingId,
       mode,
     });
-    const openedTab = await createBrowserTab(finalUrl);
+    const openedTab = createBrowserTab(finalUrl);
     logMeetingDebug("open.success", {
       finalUrl,
       meetingId,
@@ -516,18 +516,18 @@ async function openHostedMeetingPage(mode, input, providerIdentity, sender) {
 function createBrowserTab(url) {
   const nextUrl = namespace.session.normalizeText(url);
   if (!nextUrl) {
-    return Promise.reject(new Error("열 링크가 없어요."));
+    throw new Error("열 링크가 없어요.");
   }
-  return new Promise((resolve, reject) => {
-    chrome.tabs.create({ url: nextUrl }, (tab) => {
-      const runtimeError = chrome.runtime?.lastError;
-      if (runtimeError) {
-        reject(new Error(namespace.session.normalizeText(runtimeError.message) || "탭을 열지 못했어요."));
-        return;
-      }
-      resolve(tab || null);
-    });
+  let openedTab = null;
+  chrome.tabs.create({ url: nextUrl }, (tab) => {
+    const runtimeError = chrome.runtime?.lastError;
+    if (runtimeError) {
+      console.warn("[i-Nova Service Worker] tab open failed", namespace.session.normalizeText(runtimeError.message) || runtimeError);
+      return;
+    }
+    openedTab = tab || null;
   });
+  return openedTab;
 }
 
 async function buildHostedMeetingCleanUrl(input) {
