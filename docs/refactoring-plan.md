@@ -9,8 +9,8 @@ ordinary feature 구현 변경은 이 문서의 대상이 아니고, version lan
 
 ## 현재 결정 요약
 
-- 기본 전략은 `조건부 major`다.
-- 기본 가설은 `minor 유지`다.
+- 기본 전략은 `major`다.
+- 다음 공개 릴리스 목표는 `1.0.0`이다.
 - panel shell 1차 리팩토링과 meeting 내부 분해는 사실상 마감으로 보고, 현재 우선순위는 추가 구조 분해보다 운영/배포 판단이다.
 - green 선언 권한은 유지보수자에게 있고, 구현자는 판단 근거와 candidate 상태까지만 갱신한다.
 
@@ -39,20 +39,20 @@ ordinary feature 구현 변경은 이 문서의 대상이 아니고, version lan
 
 ### 최종 결정 규칙
 
-- 기본값은 `minor 유지`다.
+- 결정 전 기본값은 `minor 유지`였다.
 - `major 가능성`만으로 먼저 버전을 올리지 않는다.
 - 실제 구현과 smoke 결과가 `Major 승격 조건`에 해당한다고 기록된 뒤에만 `major`를 선택한다.
-- 유지보수자는 `minor 확정`, `major 확정`, `보류` 중 하나만 남긴다.
+- 현재는 유지보수자 판단으로 `major 확정 (1.0.0)` 상태다.
 
 ## Version Decision Record
 
-- 현재 가설: `minor 가설`
+- 현재 가설: `major 가설`
 - candidate ready 상태: `in-progress`
-- 유지보수자 최종 결정: `미정`
+- 유지보수자 최종 결정: `major 확정 (다음 공개 릴리스 1.0.0)`
 - 현재 근거 요약:
   - legacy hosted origin/path, Functions export 이름, mutable namespace, auth scope baseline은 유지 중이다.
-  - 공개 사용자 기준선은 여전히 `0.4.4`지만, local rehearsal 브랜치는 미배포 capability smoke를 위해 manifest/package 버전을 `0.4.5`로 먼저 올려 6축 prompt-review 같은 opt-in 경로를 검증할 수 있다.
-  - `0.4.5` candidate baseline부터 우측 `실험실` 패널 기본 UI는 content DOM 직접 렌더링이 아니라 hosted `panelAppUrl` iframe(`hosting/extension/panel/index.html`)을 쓴다. 이 변경은 extension 브리지/host와 hosted panel 자산의 mixed-version capability gate를 전제로 한다.
+  - 공개 사용자 기준선은 여전히 `0.4.4`지만, 다음 공개 릴리스는 `1.0.0`으로 잡고 local rehearsal도 manifest/package `1.0.0` 기준 v2 lane을 기본 활성화한다.
+  - `1.0.0` candidate baseline부터 우측 `실험실` 패널 기본 UI는 hosted `panelAppUrl` iframe을 쓰고, 기본 hosted 경로는 `hosting/extension-v2/panel/index.html`이다. 이 변경은 extension 브리지/host와 hosted panel 자산의 mixed-version capability gate를 전제로 한다.
   - prompt-review 6축 전환은 backend dual-contract와 client opt-in으로 준비하되, 현재 공개 사용자 기준선 `0.4.4`는 `legacy-v1` 4축 평가를 유지한다.
   - prompt-library는 인터넷 연결 전제 제품 판단에 맞춰 `DB 정본(remote-first)`으로 전환 중이다. `chrome.storage.local.promptLibrary`는 authoritative source가 아니라 마지막 remote snapshot 캐시와 UI 복구용으로만 남기고, 저장/삭제/순서 변경/가져오기는 server-ack 후 remote reload가 끝난 뒤에만 반영한다.
   - popup `로컬 호스팅` rehearsal target은 meeting만이 아니라 prompt-library sync/read, prompt-review, prompt-store panel auth/write, hidden prompt bridge까지 local Functions/Hosting emulator로 함께 전환해야 한다.
@@ -66,8 +66,8 @@ ordinary feature 구현 변경은 이 문서의 대상이 아니고, version lan
 
 - `0.x` legacy lane의 hosted panel 기본 경로는 `https://browser-extension-main.web.app/extension/panel/index.html`이다.
 - `1.x+` v2 lane은 같은 규칙으로 `hosting/extension-v2/panel/*`와 `panelAppUrl`을 사용한다.
-- 현재 단계에서는 `hosting/extension-v2/panel/*` scaffold와 lane-aware path 해석만 먼저 준비하고, 공개 기준선 `0.4.x`는 아직 legacy lane에 남긴다.
-- extension composition root도 lane-aware로 분리한다. `0.x`는 기존 `content/panel-composition-controller.js`, `1.x+`는 `content/panel-v2-composition-controller.js`를 사용하되, 이 단계의 v2 composition은 feature ownership을 옮기지 않고 shell/runtime wiring만 유지한다.
+- 공개 기준선 `0.4.4`는 legacy lane에 남기고, 다음 공개 릴리스 `1.0.0`은 v2 lane을 기본으로 사용한다.
+- extension composition root도 lane-aware로 분리한다. `0.x`는 기존 `content/panel-composition-controller.js`, `1.x+`는 `content/panel-v2-composition-controller.js`를 사용한다.
 - 이후 `1.x+` v2 lane hosted panel은 책임을 합치지 않고 feature별 controller를 따로 둔 채 ownership을 점진 이동한다. 현재 hosted ownership 후보군은 `conversation`, `prompt-library`, `prompt-review`, `prompt-store`, `meeting hub`, `release`이고, extension은 page DOM adapter + iframe host + runtime broker를 유지한다.
 - local rehearsal에서 hosted panel 기본 경로는 `http://127.0.0.1:5000/extension/panel/index.html`이다.
 - local rehearsal에서 `1.x+` v2 lane hosted panel 기본 경로는 `http://127.0.0.1:5000/extension-v2/panel/index.html`이다.
@@ -85,7 +85,7 @@ ordinary feature 구현 변경은 이 문서의 대상이 아니고, version lan
 - popup에서 `settings.meetingWorkspaceTarget=local`을 고르면 rehearsal target은 `http://127.0.0.1:5000/meeting/index.html`과 `http://127.0.0.1:5000/meeting/panel-bridge.html`이다.
 - local target은 hosted page만이 아니라 meeting Functions/Auth/Firestore/Storage emulator까지 함께 보는 full-local 경로다.
 - 같은 local target은 prompt와 hosted panel도 full-local rehearsal로 같이 본다. prompt read/write/review/panel auth는 `http://127.0.0.1:5001/browser-extension-main/asia-northeast3/*`를 향하고, hidden prompt bridge target은 `http://127.0.0.1:5000/extension/prompt-panel-bridge.html`, hosted panel target은 legacy lane `http://127.0.0.1:5000/extension/panel/index.html`, v2 lane `http://127.0.0.1:5000/extension-v2/panel/index.html`이다. 다만 페이지에 꽂히는 실제 iframe src는 둘 다 extension frame proxy를 거쳐 local Auth/Firestore emulator와 hosted 자산을 연다.
-- `0.4.5` hosted panel baseline 이후에는 panel render payload가 `settings.meetingWorkspaceTarget`을 iframe host까지 반드시 전달해야 한다. 이 local/prod handoff는 `npm.cmd run verify` 안의 `verify-panel-render`로 계속 고정한다.
+- `1.0.0` v2 baseline에서도 panel render payload는 `settings.meetingWorkspaceTarget`을 iframe host까지 반드시 전달해야 한다. 이 local/prod handoff는 `npm.cmd run verify` 안의 `verify-panel-render`로 계속 고정한다.
 
 ### Auth scope와 URL 의미
 
