@@ -151,6 +151,22 @@ function verifyV2CompositionWiring() {
     "v2 composition should wire the prompt bridge controller"
   );
   assert(
+    v2CompositionSource.includes("createHostedOwnedPromptController"),
+    "v2 composition should wrap prompt wiring for hosted-owned prompt tabs"
+  );
+  assert(
+    v2CompositionSource.includes("handleStorageChange() {}"),
+    "v2 hosted-owned prompt wrapper should silence legacy prompt storage listeners"
+  );
+  assert(
+    v2CompositionSource.includes("scheduleCloudSyncIfNeeded() {}"),
+    "v2 hosted-owned prompt wrapper should silence legacy prompt cloud sync scheduling"
+  );
+  assert(
+    v2CompositionSource.includes("scheduleRealtimeSync() {}"),
+    "v2 hosted-owned prompt wrapper should silence legacy prompt realtime scheduling"
+  );
+  assert(
     v2CompositionSource.includes("handlePanelMeetingAction: panelActionController.handlePanelMeetingAction"),
     "v2 bootstrap should forward hosted meeting actions into the shared top-panel dispatcher"
   );

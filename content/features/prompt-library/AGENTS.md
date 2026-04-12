@@ -58,8 +58,8 @@
 
 ## 구현 경계
 - 내 요청 보관함은 인터넷 연결 없이는 쓸 수 없는 제품 전제를 따른다. prompt library의 정본은 Firestore/Functions가 들고, `chrome.storage.local`의 `promptLibrary`는 마지막으로 불러온 캐시와 UI 복구용으로만 취급한다.
-- `0.4.5`부터 panel 안의 `내 요청` UI는 hosted panel iframe이 렌더링하고, `content/panel-prompt-controller.js`는 상태/액션/동기화 controller를 계속 소유한다.
-- `1.0.0+` v2 lane에서는 `hosting/extension-v2/panel/prompt-library-controller.js`가 `내 요청` 탭의 query/list/editor/save/delete/import/export/use` 상태를 hosted 쪽에서 먼저 소유한다. extension은 page adapter와 runtime broker만 제공하고, `스토어`/`검토` hosted ownership은 후속 단계로 넘긴다.
+- `0.4.5`부터 panel 안의 `내 요청` UI는 hosted panel iframe이 렌더링하고, `content/panel-prompt-controller.js`는 legacy lane의 상태/액션/동기화 controller를 계속 소유한다.
+- `1.0.0+` v2 lane에서는 `hosting/extension-v2/panel/prompt-library-controller.js`, `prompt-store-controller.js`, `prompt-review-controller.js`가 각 탭의 remote 상태를 hosted 쪽에서 소유한다. extension은 page adapter와 runtime broker만 제공하고, legacy prompt realtime/cloud/store sync 예약은 v2 lane에서 다시 돌리지 않는다.
 - prompt 저장/수정/삭제/순서 변경/가져오기는 local-first queue로 성공처럼 보이면 안 된다. 서버 ack 후 remote load가 끝난 뒤에만 state와 local cache를 갱신한다.
 - 다른 PC에서 삭제/수정한 항목은 prompt-library realtime meta 또는 다음 remote load에서 현재 PC 캐시보다 우선 반영돼야 한다.
 - prompt item의 `importedFrom`, `storePublication` 메타도 DB 정본 경로를 따라 round-trip 되어야 한다. 멀티 PC에서 store import/publish 표식이 로컬에만 남아 사라지지 않게 유지한다.

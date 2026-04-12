@@ -34,6 +34,7 @@
       pendingInsert: null,
       promptLibrary: namespace.promptLibraryModel?.mergePromptLibrary?.() || { items: [], version: 1 },
       promptLibraryRemoteReady: false,
+      loadedProviderUserKey: "",
       providerIdentity: {
         available: false,
         displayName: "",
@@ -491,6 +492,16 @@
       if (state.loadPromise && !force) {
         return state.loadPromise;
       }
+      const providerUserKey = normalizeText(state.providerIdentity?.providerUserKey);
+      if (
+        !force
+        && state.promptLibraryRemoteReady
+        && !state.lastError
+        && providerUserKey
+        && state.loadedProviderUserKey === providerUserKey
+      ) {
+        return state.promptLibrary;
+      }
       if (!state.providerIdentity.available) {
         state.syncNotice = buildLoadNotice("사용자 정보를 확인하지 못했어요.", getPromptCount());
         scheduleRender();
@@ -518,6 +529,7 @@
           });
           state.promptLibrary = namespace.promptLibraryModel.mergePromptLibrary(remote?.promptLibrary);
           state.promptLibraryRemoteReady = true;
+          state.loadedProviderUserKey = providerUserKey;
           state.lastError = "";
           if (!state.lastMutationError) {
             state.syncNotice = null;
@@ -598,6 +610,10 @@
       const uiPreferences = storageState?.uiPreferences && typeof storageState.uiPreferences === "object"
         ? storageState.uiPreferences
         : {};
+      const providerUserKey = normalizeText(providerIdentity.providerUserKey);
+      if (state.loadedProviderUserKey && state.loadedProviderUserKey !== providerUserKey) {
+        state.promptLibraryRemoteReady = false;
+      }
       state.providerIdentity = {
         available: Boolean(providerIdentity.available),
         displayName: normalizeText(providerIdentity.displayName),
@@ -606,7 +622,7 @@
           ? Number(providerIdentity.numericUserId)
           : null,
         provider: normalizeText(providerIdentity.provider || "inova") || "inova",
-        providerUserKey: normalizeText(providerIdentity.providerUserKey),
+        providerUserKey,
       };
       state.activeTab = normalizePromptTab(uiPreferences.activePromptTab);
     }

@@ -3,13 +3,16 @@
 const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
+const vm = require("vm");
 
 const root = path.resolve(__dirname, "..");
 
 function main() {
   verifyPromptLibraryRemoteFirstWiring();
   verifyPromptLibraryMetadataRoundTripContract();
-  console.log("[verify-prompt-library-remote-first] Prompt library remote-first contract passed");
+  return verifyHostedPromptLibraryAvoidsDuplicateReloads().then(() => {
+    console.log("[verify-prompt-library-remote-first] Prompt library remote-first contract passed");
+  });
 }
 
 function verifyPromptLibraryRemoteFirstWiring() {
@@ -55,12 +58,132 @@ function verifyPromptLibraryMetadataRoundTripContract() {
   assert(/function normalizeStorePublication/.test(register), "prompt library register에 storePublication normalizer가 필요합니다.");
 }
 
+async function verifyHostedPromptLibraryAvoidsDuplicateReloads() {
+  const runtimeCalls = [];
+  const context = vm.createContext({
+    Blob: class Blob {},
+    File: class File {},
+    console,
+    document: {
+      createElement() {
+        return {
+          click() {},
+        };
+      },
+    },
+    globalThis: null,
+    navigator: {},
+    setTimeout,
+    URL: {
+      createObjectURL() {
+        return "blob:prompt-library";
+      },
+      revokeObjectURL() {},
+    },
+  });
+  context.globalThis = context;
+  context.InovaBookmarks = {
+    promptLibraryModel: {
+      mergePromptLibrary(promptLibrary) {
+        const items = Array.isArray(promptLibrary?.items) ? promptLibrary.items.map((item) => ({ ...item })) : [];
+        return {
+          items,
+          version: Number(promptLibrary?.version) || 1,
+        };
+      },
+    },
+    session: {
+      normalizeText(value) {
+        return String(value ?? "").trim();
+      },
+    },
+  };
+
+  const source = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),
+    "utf8"
+  );
+  new vm.Script(source, {
+    filename: "hosting/extension-v2/panel/prompt-library-controller.js",
+  }).runInContext(context);
+
+  const controller = context.InovaBookmarks.promptLibraryController.create({
+    invokeRuntime: async (request) => {
+      runtimeCalls.push({
+        action: request?.action,
+        endpointKey: request?.endpointKey || "",
+      });
+      if (request?.action === "storage.get-state") {
+        return {
+          cloudSync: {
+            providerIdentity: {
+              available: true,
+              displayName: "Prompt Tester",
+              email: "prompt@example.com",
+              numericUserId: 42,
+              provider: "inova",
+              providerUserKey: "prompt-user-1",
+            },
+          },
+          uiPreferences: {
+            activePromptTab: "library",
+          },
+        };
+      }
+      if (request?.action === "functions.fetch") {
+        return {
+          promptLibrary: {
+            items: [{ id: "prompt-1", title: "Prompt", content: "Body" }],
+            version: 1,
+          },
+        };
+      }
+      return {};
+    },
+    scheduleRender() {},
+  });
+
+  controller.syncPanelState(
+    { activeTool: "prompts" },
+    ["page.adapter.v2", "runtime.invoke.v1"]
+  );
+  await flushAsync();
+  await flushAsync();
+  await flushAsync();
+
+  assert.equal(
+    runtimeCalls.filter((call) => call.action === "functions.fetch" && call.endpointKey === "loadInovaPromptLibraryUrl").length,
+    1,
+    "hosted prompt library should fetch once during the first prompts activation"
+  );
+
+  controller.syncPanelState(
+    { activeTool: "prompts" },
+    ["page.adapter.v2", "runtime.invoke.v1"]
+  );
+  await flushAsync();
+  await flushAsync();
+
+  assert.equal(
+    runtimeCalls.filter((call) => call.action === "functions.fetch" && call.endpointKey === "loadInovaPromptLibraryUrl").length,
+    1,
+    "hosted prompt library should not refetch the same remote library on repeated panel sync"
+  );
+}
+
 function read(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), "utf8");
 }
 
+function flushAsync() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 try {
-  main();
+  Promise.resolve(main()).catch((error) => {
+    console.error(`[verify-prompt-library-remote-first] ${error.stack || error.message}`);
+    process.exitCode = 1;
+  });
 } catch (error) {
   console.error(`[verify-prompt-library-remote-first] ${error.stack || error.message}`);
   process.exitCode = 1;

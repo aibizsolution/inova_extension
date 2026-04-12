@@ -45,13 +45,14 @@
       releaseManager,
       render,
     });
-    const panelPromptController = namespace.panelPromptController.create(state, {
+    const sharedPromptController = namespace.panelPromptController.create(state, {
       ...runtimeFlags,
       lockUiPreferenceSelection: panelShellController.lockUiPreferenceSelection,
       onPromptTabSelected: () => meetingManager.scheduleSync(0),
       persistActiveTool: panelShellController.persistActiveTool,
       render,
     });
+    const panelPromptController = createHostedOwnedPromptController(sharedPromptController);
     promptBridgeController = namespace.panelPromptBridgeController.create(state, {
       panelPromptController,
     });
@@ -136,6 +137,16 @@
       bootstrap() {
         return panelBootstrapController.bootstrap();
       },
+    };
+  }
+
+  function createHostedOwnedPromptController(panelPromptController = {}) {
+    return {
+      ...panelPromptController,
+      ensureStoreLoaded() {},
+      handleStorageChange() {},
+      scheduleCloudSyncIfNeeded() {},
+      scheduleRealtimeSync() {},
     };
   }
 
