@@ -160,6 +160,14 @@ function verifyV2CompositionWiring() {
     "v2 composition should wrap prompt wiring for hosted-owned prompt tabs"
   );
   assert(
+    v2CompositionSource.includes("createHostedOwnedConversationSnapshotBridge"),
+    "v2 composition should wrap conversation snapshot shaping for hosted-owned conversation state"
+  );
+  assert(
+    v2CompositionSource.includes("buildConversationSnapshot: hostedOwnedConversationSnapshot.buildConversationSnapshot"),
+    "v2 render wiring should pass the hosted-owned conversation snapshot bridge"
+  );
+  assert(
     v2CompositionSource.includes("handleStorageChange() {}"),
     "v2 hosted-owned prompt wrapper should silence legacy prompt storage listeners"
   );
@@ -279,6 +287,10 @@ function verifyHostedConversationSearchDebounceContract() {
   assert(
     conversationControllerSource.includes("function scheduleSearchRender()"),
     "hosted conversation controller should expose a shared deferred search render helper"
+  );
+  assert(
+    conversationControllerSource.includes("const explicitFingerprint = normalizeText(bookmarksTool?.snapshotFingerprint);"),
+    "hosted conversation controller should accept a compact snapshot fingerprint from the top panel"
   );
 }
 

@@ -9,6 +9,12 @@
       syncEnabled() {},
     };
     const panelMeetingController = deps.panelMeetingController || { buildToolState() { return { count: 0 }; } };
+    const buildConversationSnapshot = typeof deps.buildConversationSnapshot === "function"
+      ? deps.buildConversationSnapshot
+      : () => panelBookmarkController.buildToolState();
+    const getConversationCount = typeof deps.getConversationCount === "function"
+      ? deps.getConversationCount
+      : (bookmarkTool) => Number(bookmarkTool?.count) || (Array.isArray(bookmarkTool?.items) ? bookmarkTool.items.length : 0);
     const panelPromptController = deps.panelPromptController || {
       buildReviewFloatState() { return { visible: false }; },
       buildToolState() { return { promptCount: 0, promptTool: {}, promptToolCount: 0 }; },
@@ -35,7 +41,11 @@
         return;
       }
       const visible = state.settings.enabled && isToolSurface() && !isPaused();
-      const bookmarkTool = panelBookmarkController.buildToolState();
+      const bookmarkTool = normalizeConversationSnapshot(buildConversationSnapshot());
+      const conversationCount = normalizeCount(
+        getConversationCount(bookmarkTool),
+        Number(bookmarkTool.count) || (Array.isArray(bookmarkTool.items) ? bookmarkTool.items.length : 0)
+      );
       const promptToolState = panelPromptController.buildToolState();
       const meetingTool = panelMeetingController.buildToolState(state.meetingHub);
       const releaseState = normalizeReleaseSnapshot(buildReleaseSnapshot());
@@ -44,7 +54,7 @@
         releaseState.updateAvailable ? 1 : Number(releaseState.count) || 0
       );
       const handleCount = panelShellController.buildHandleCount({
-        bookmarks: bookmarkTool.count,
+        bookmarks: conversationCount,
         meeting: meetingTool.count,
         promptTool: promptToolState.promptToolCount,
         prompts: promptToolState.promptCount,
@@ -73,6 +83,10 @@
     }
 
     function normalizeReleaseSnapshot(value) {
+      return value && typeof value === "object" ? value : {};
+    }
+
+    function normalizeConversationSnapshot(value) {
       return value && typeof value === "object" ? value : {};
     }
   }

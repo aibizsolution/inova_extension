@@ -38,6 +38,7 @@
       panelMeetingController,
     });
     const panelBookmarkController = namespace.panelBookmarkController.create(state, { render });
+    const hostedOwnedConversationSnapshot = createHostedOwnedConversationSnapshotBridge(panelBookmarkController);
     const panelShellController = namespace.panelShellController.create(state, {
       bookmarkController: panelBookmarkController,
       getPromptController: () => promptBridgeController,
@@ -108,6 +109,8 @@
     renderController = namespace.panelRenderController.create(state, {
       isPaused: runtimeFlags.isPaused,
       isToolSurface: runtimeFlags.isToolSurface,
+      buildConversationSnapshot: hostedOwnedConversationSnapshot.buildConversationSnapshot,
+      getConversationCount: hostedOwnedConversationSnapshot.getConversationCount,
       panelBookmarkController,
       panelDebugController,
       panelMeetingController,
@@ -153,6 +156,37 @@
     };
   }
 
+  function createHostedOwnedConversationSnapshotBridge(panelBookmarkController = {}) {
+    return {
+      buildConversationSnapshot() {
+        const bookmarkTool = panelBookmarkController.buildToolState?.() || {};
+        return {
+          activeId: normalizeText(bookmarkTool.activeId),
+          count: getConversationCount(bookmarkTool),
+          snapshotFingerprint: buildSnapshotFingerprint(bookmarkTool),
+        };
+      },
+      getConversationCount,
+    };
+
+    function getConversationCount(bookmarkTool = {}) {
+      return Math.max(
+        0,
+        Number(bookmarkTool.count) || (Array.isArray(bookmarkTool.items) ? bookmarkTool.items.length : 0)
+      );
+    }
+
+    function buildSnapshotFingerprint(bookmarkTool = {}) {
+      const items = Array.isArray(bookmarkTool.items) ? bookmarkTool.items : [];
+      return [
+        normalizeText(bookmarkTool.activeId),
+        String(getConversationCount(bookmarkTool)),
+        normalizeText(items[0]?.id),
+        normalizeText(items.at?.(-1)?.id),
+      ].join("|");
+    }
+  }
+
   function createHostedOwnedReleaseSnapshotBridge(releaseManager = {}) {
     return {
       buildReleaseSnapshot() {
@@ -173,6 +207,10 @@
       const snapshotCount = Number(releaseState.count) || 0;
       return snapshotCount > 0 ? snapshotCount : 0;
     }
+  }
+
+  function normalizeText(value) {
+    return namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
   }
 
   namespace.panelV2CompositionController = { create };

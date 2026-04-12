@@ -8,10 +8,36 @@ const vm = require("vm");
 const root = path.resolve(__dirname, "..");
 
 function main() {
+  verifyCustomConversationSnapshotBridge();
   verifyRenderPayloadAndReviewFloat();
   verifyCustomReleaseSnapshotBridge();
   verifyVisibleStateCalculation();
   console.log("[verify-panel-render-controller] Panel render controller contract passed");
+}
+
+function verifyCustomConversationSnapshotBridge() {
+  const harness = createHarness({
+    activeTool: "bookmarks",
+    buildConversationSnapshot() {
+      return {
+        activeId: "bookmark-hosted",
+        count: 4,
+        snapshotFingerprint: "bookmark-hosted|4|first|last",
+      };
+    },
+    getConversationCount() {
+      return 4;
+    },
+  });
+
+  harness.controller.render();
+
+  assert.equal(harness.renderPayloads[0].handleCount, 4);
+  assert.deepEqual(harness.renderPayloads[0].bookmarksTool, {
+    activeId: "bookmark-hosted",
+    count: 4,
+    snapshotFingerprint: "bookmark-hosted|4|first|last",
+  });
 }
 
 function verifyRenderPayloadAndReviewFloat() {
@@ -45,6 +71,7 @@ function verifyVisibleStateCalculation() {
 
 function verifyCustomReleaseSnapshotBridge() {
   const harness = createHarness({
+    activeTool: "release",
     buildReleaseSnapshot() {
       return {
         count: 1,
@@ -140,6 +167,8 @@ function createHarness(options = {}) {
         };
       },
     },
+    buildConversationSnapshot: options.buildConversationSnapshot,
+    getConversationCount: options.getConversationCount,
     panelPromptController: {
       buildReviewFloatState(visible) {
         return { visible };
@@ -156,7 +185,19 @@ function createHarness(options = {}) {
     },
     panelShellController: {
       buildHandleCount(counts) {
-        return counts.release || counts.meeting;
+        if (state.activeTool === "bookmarks") {
+          return counts.bookmarks || counts.prompts || counts.meeting || counts.release;
+        }
+        if (state.activeTool === "prompts") {
+          return counts.promptTool || counts.prompts;
+        }
+        if (state.activeTool === "meeting") {
+          return counts.meeting;
+        }
+        if (state.activeTool === "release") {
+          return counts.release;
+        }
+        return 0;
       },
     },
     buildReleaseSnapshot: options.buildReleaseSnapshot,

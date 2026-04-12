@@ -277,6 +277,10 @@
     }
 
     function buildSnapshotFingerprint(bookmarksTool) {
+      const explicitFingerprint = normalizeText(bookmarksTool?.snapshotFingerprint);
+      if (explicitFingerprint) {
+        return explicitFingerprint;
+      }
       const items = Array.isArray(bookmarksTool?.items) ? bookmarksTool.items : [];
       const firstId = normalizeText(items[0]?.id);
       const lastId = normalizeText(items.at?.(-1)?.id);
