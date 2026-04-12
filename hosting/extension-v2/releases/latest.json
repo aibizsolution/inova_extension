@@ -1,0 +1,36 @@
+{
+  "product": {
+    "experimental": true,
+    "lane": "v2",
+    "name": "i-Nova 더하기",
+    "team": "AI비즈솔루션팀"
+  },
+  "release": {
+    "version": "1.0.0",
+    "level": "major",
+    "headline": "호스팅 중심 실험실 패널 1차 전환",
+    "summary": "실험실 패널의 주요 도구 상태와 UI를 hosted panel 중심으로 옮겨, 앞으로는 대부분의 기능과 UI 변경을 호스팅 배포만으로 더 빠르게 반영할 수 있게 준비한 첫 major 업데이트입니다.",
+    "changes": [
+      {
+        "type": "changed",
+        "text": "대화, 프롬프트 보관함, 스토어, 검토, 회의 허브, 릴리스 탭의 상태와 상호작용을 hosted panel 쪽으로 이동해 확장은 page adapter와 runtime broker 중심으로 단순화했습니다."
+      },
+      {
+        "type": "changed",
+        "text": "이제 1.x lane에서는 extension-v2 hosted panel을 기본 경로로 사용해, 로컬 rehearsal과 이후 공개 배포가 같은 구조를 기준으로 동작합니다."
+      },
+      {
+        "type": "added",
+        "text": "legacy 0.4.4 경로는 보호한 채 mixed-version capability gate를 유지해, 기존 설치본과 새 hosted panel 자산이 조용히 어긋나지 않도록 했습니다."
+      }
+    ],
+    "publishedAt": "2026-04-12T00:45:32.411Z",
+    "fileName": "inova-extension-1.0.0-2026-04-12.zip",
+    "downloadUrl": "https://browser-extension-v2.web.app/extension-v2/downloads/latest.zip",
+    "versionDownloadUrl": "https://browser-extension-v2.web.app/extension-v2/downloads/inova-extension-1.0.0-2026-04-12.zip",
+    "notes": "호스팅 중심 실험실 패널 1차 전환",
+    "sha256": "e95e6b1546a392fd0156c2243527a003e3a4b6ca43f8c483c1509fc915f22fe8",
+    "sizeBytes": 295473,
+    "minSupportedVersion": "1.0.0"
+  }
+}

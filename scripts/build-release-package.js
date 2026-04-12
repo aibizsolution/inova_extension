@@ -30,6 +30,7 @@ const zipPath = path.join(releasesDir, `${bundleName}.zip`);
 const hostingRoot = path.join(root, "hosting", productLane === "v2" ? "extension-v2" : "extension");
 const hostingDownloadDir = path.join(hostingRoot, "downloads");
 const hostingReleaseDir = path.join(hostingRoot, "releases");
+const legacyHostingDownloadDir = path.join(root, "hosting", "extension", "downloads");
 const hostingBaseUrl = productLane === "v2"
   ? "https://browser-extension-v2.web.app/extension-v2"
   : "https://browser-extension-main.web.app/extension";
@@ -106,6 +107,12 @@ const curatedHistory = curatedVersions.map((curatedVersion) => {
     ].join("\n"));
   }
   return toHistoryPublishedRelease(publishedRelease);
+});
+ensureCuratedDownloadArtifacts({
+  curatedHistory,
+  hostingDownloadDir,
+  releasesDir,
+  sourceDirs: [legacyHostingDownloadDir],
 });
 const latestHistoryRelease = curatedHistory[0];
 const latestRelease = toLatestPublishedRelease(latestHistoryRelease, latestDownloadUrl);
@@ -367,6 +374,32 @@ function pruneCuratedReleaseArtifacts({ curatedHistory, hostingDownloadDir, late
   pruneZipFiles(hostingDownloadDir, new Set([latestDownloadFileName, ...curatedFileNames]));
 }
 
+function ensureCuratedDownloadArtifacts({ curatedHistory, hostingDownloadDir, releasesDir, sourceDirs = [] }) {
+  const candidateSourceDirs = [
+    releasesDir,
+    ...(Array.isArray(sourceDirs) ? sourceDirs : []),
+  ].filter(Boolean);
+
+  for (const release of Array.isArray(curatedHistory) ? curatedHistory : []) {
+    const fileName = normalizeText(release?.fileName);
+    if (!fileName) {
+      continue;
+    }
+    const targetPath = path.join(hostingDownloadDir, fileName);
+    if (fs.existsSync(targetPath)) {
+      continue;
+    }
+    const sourcePath = resolveArtifactSourcePath(fileName, candidateSourceDirs);
+    if (!sourcePath) {
+      throw new Error([
+        `릴리스 ZIP을 현재 lane downloads로 복사할 수 없어요: ${fileName}`,
+        ...candidateSourceDirs.map((directoryPath) => `- ${path.join(directoryPath, fileName)}`),
+      ].join("\n"));
+    }
+    fs.copyFileSync(sourcePath, targetPath);
+  }
+}
+
 function pruneZipFiles(directoryPath, allowedFileNames) {
   if (!fs.existsSync(directoryPath)) {
     return;
@@ -385,6 +418,16 @@ function pruneZipFiles(directoryPath, allowedFileNames) {
     }
     fs.rmSync(path.join(directoryPath, fileName), { force: true });
   }
+}
+
+function resolveArtifactSourcePath(fileName, sourceDirs) {
+  for (const directoryPath of Array.isArray(sourceDirs) ? sourceDirs : []) {
+    const candidatePath = path.join(directoryPath, fileName);
+    if (fs.existsSync(candidatePath)) {
+      return candidatePath;
+    }
+  }
+  return "";
 }
 
 function normalizeArtifactMetadata(artifact) {

@@ -59,6 +59,13 @@
             "text": "로컬 rehearsal 브랜치에서는 manifest/package 버전을 0.4.5로 올려 prompt-review v2 gate와 관련 smoke를 실제로 검증할 수 있게 유지합니다."
           }
         ]
+      },
+      "artifact": {
+        "fileName": "inova-extension-0.4.5-2026-04-11.zip",
+        "publishedAt": "2026-04-11T10:30:58.210Z",
+        "sha256": "6621f3b835b671d39b598b628af1a0fa9d13a14d59f420de8b5bad3ce777c730",
+        "sizeBytes": 283238,
+        "minSupportedVersion": "0.4.5"
       }
     },
     {
@@ -89,6 +96,13 @@
             "text": "회의 작업실 QA 반영과 프롬프트 검토 UX 보강을 포함한 0.4.4 공개 릴리스 메타로 최신 사용자용 요약을 갱신했습니다."
           }
         ]
+      },
+      "artifact": {
+        "fileName": "inova-extension-0.4.4-2026-04-06.zip",
+        "publishedAt": "2026-04-06T07:59:48.703Z",
+        "sha256": "26928b3ec8b49c46261ed5a1e809408a56f6c705b0ffc218e07f70fb2b042037",
+        "sizeBytes": 255326,
+        "minSupportedVersion": "0.4.4"
       }
     },
     {
