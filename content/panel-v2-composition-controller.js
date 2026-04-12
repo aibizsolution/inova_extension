@@ -158,8 +158,6 @@
         const meetingTool = panelMeetingController.buildToolState?.(meetingHub) || {};
         return {
           count: getMeetingCount(meetingTool),
-          feedback: normalizeMeetingFeedbackSnapshot(meetingTool.feedback),
-          pending: normalizeMeetingPendingSnapshot(meetingTool.pending),
           snapshotFingerprint: buildMeetingSnapshotFingerprint(meetingTool),
         };
       },
@@ -296,32 +294,6 @@
       result: reviewState.result && typeof reviewState.result === "object"
         ? JSON.parse(JSON.stringify(reviewState.result))
         : null,
-    };
-  }
-
-  function normalizeMeetingPendingSnapshot(pendingState) {
-    if (!pendingState || typeof pendingState !== "object") {
-      return {};
-    }
-    return {
-      action: normalizeText(pendingState.action),
-      jobId: normalizeText(pendingState.jobId),
-      meetingId: normalizeText(pendingState.meetingId),
-      title: normalizeText(pendingState.title),
-    };
-  }
-
-  function normalizeMeetingFeedbackSnapshot(feedbackState) {
-    if (!feedbackState || typeof feedbackState !== "object") {
-      return null;
-    }
-    const text = normalizeText(feedbackState.text);
-    if (!text) {
-      return null;
-    }
-    return {
-      text,
-      tone: normalizeText(feedbackState.tone) || "info",
     };
   }
 

@@ -27,7 +27,7 @@
 ## hosted/panel 공통 경계
 - legacy lane은 현재 `browser-extension-main` hosted meeting 경로를 유지한다. separate hosted origin/site 판단은 `docs/refactoring-plan.md`의 version decision gate에서 관리한다.
 - `0.4.5`부터 panel 안의 회의 허브 UI는 `hosting/extension/panel/meeting-view.js`가 렌더링하고, 회의 목록 state와 action routing은 기존 `content/meeting-manager.js`/`content/panel-meeting-controller.js`가 계속 소유한다.
-- `1.0.0+` v2 lane에서는 `hosting/extension-v2/panel/meeting-hub-controller.js`가 회의 허브 목록 렌더 상태(`items`, `error/degraded`, freshness)를 runtime/functions read로 직접 소유한다. extension snapshot은 `count`, action UI 신호(`pending`, `feedback`), refresh fingerprint만 남기고, meeting action routing/open/share/revoke trace는 현재 top panel dispatcher가 계속 맡는다.
+- `1.0.0+` v2 lane에서는 `hosting/extension-v2/panel/meeting-hub-controller.js`가 회의 허브 목록 렌더 상태(`items`, `error/degraded`, freshness`)와 action UI 상태(`pending`, `feedback`, share patch`)를 runtime/functions read로 직접 소유한다. extension snapshot은 `count`와 refresh fingerprint만 남기고, extension은 runtime broker와 브라우저 탭 열기만 맡는다.
 - route change는 회의 목록의 정본이 아니다. meeting hub가 이미 로드되었거나 realtime이 붙어 있는 동안에는 route-driven refresh를 다시 예약하지 않고, 회의 동기화는 realtime 연결과 explicit meeting action 중심으로 유지한다.
 - 팝업의 `로컬 호스팅` target은 hosted meeting URL만 바꾸는 모드가 아니다. local target에서는 meeting panel bridge와 meeting HTTP auth/list/share 경로도 함께 local Functions/Auth/Firestore emulator를 보도록 유지한다.
 - local target의 hosted panel iframe과 hidden meeting panel bridge iframe은 page DOM에서 loopback URL을 직접 열지 않는다. 실제 target URL은 `http://127.0.0.1:5000/*`를 유지하되, 페이지에는 extension `content/frame-proxy.html?target=...` wrapper를 꽂아 site CSP로 인한 direct frame block을 피한다.
@@ -78,6 +78,7 @@
 
 ## 최소 검증 방법
 - 팝업 target 설정, 회의 탭 목록, hosted meeting 진입, 기존 결과 1건 조회를 확인한다.
+- v2 meeting hub ownership을 건드렸다면 `node scripts/verify-meeting-hub-controller.js`로 hosted controller가 runtime read/open/share/revoke를 직접 처리하는지도 함께 확인한다.
 - 새 녹음 또는 파일 import 1회와 제목/메모/결과 수정 또는 삭제 1회를 확인한다.
 - 회의록 보정 변경이 있으면 `용어 치환 적용하기 1회`, `섹션 수정 preview/apply 1회`, stale preview 재적용 거절을 함께 확인한다.
 - 기록 이동 변경이 있으면 완료 기록 1건을 다른 owned 회의 룸으로 옮기고, 현재 룸에서 사라지는지와 대상 회의 룸에서 같은 전사/회의 정리/메모가 유지되는지 확인한다.

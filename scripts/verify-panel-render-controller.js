@@ -104,14 +104,6 @@ function verifyCustomMeetingSnapshotBridge() {
     buildMeetingSnapshot() {
       return {
         count: 9,
-        feedback: {
-          text: "회의 작업실을 여는 중입니다.",
-          tone: "info",
-        },
-        pending: {
-          action: "open-workspace",
-          meetingId: "meeting-alpha",
-        },
         snapshotFingerprint: "meeting-alpha|9|fresh",
       };
     },
@@ -125,14 +117,6 @@ function verifyCustomMeetingSnapshotBridge() {
   assert.equal(harness.renderPayloads[0].handleCount, 9);
   assert.deepEqual(harness.renderPayloads[0].meetingTool, {
     count: 9,
-    feedback: {
-      text: "회의 작업실을 여는 중입니다.",
-      tone: "info",
-    },
-    pending: {
-      action: "open-workspace",
-      meetingId: "meeting-alpha",
-    },
     snapshotFingerprint: "meeting-alpha|9|fresh",
   });
 }

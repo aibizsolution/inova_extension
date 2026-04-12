@@ -1,6 +1,12 @@
 (function initMeetingHubController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const LIST_LIMIT = 24;
+  const SUPPORTED_ACTIONS = new Set([
+    "open-result",
+    "open-workspace",
+    "share",
+    "revoke-share",
+  ]);
   const REQUIRED_EXTENSION_CAPABILITIES = Object.freeze([
     "runtime.invoke.v1",
   ]);
@@ -12,6 +18,9 @@
     const scheduleRender = typeof options.scheduleRender === "function"
       ? options.scheduleRender
       : () => {};
+    const traceMeeting = typeof options.traceMeeting === "function"
+      ? options.traceMeeting
+      : () => {};
     const state = {
       capabilities: [],
       checkedAt: "",
@@ -19,6 +28,8 @@
       degraded: false,
       degradedReason: "",
       error: "",
+      feedback: null,
+      feedbackTimer: 0,
       initialized: false,
       initPromise: null,
       items: [],
@@ -26,6 +37,7 @@
       lastLoadedFingerprint: "",
       loadPromise: null,
       loading: false,
+      pending: createPendingState(),
       pendingReload: false,
       providerIdentity: createProviderIdentity(),
       settings: {
@@ -71,7 +83,7 @@
         return;
       }
       if (fingerprintChanged || !state.lastLoadedFingerprint || !state.initialized) {
-        void ensureLoaded(fingerprintChanged, fingerprintChanged ? "snapshot" : state.initialized ? "activate" : "bootstrap");
+        void ensureLoaded(fingerprintChanged);
       }
     }
 
@@ -96,15 +108,90 @@
         degraded: Boolean(state.degraded),
         degradedReason: normalizeText(state.degradedReason),
         error: normalizeText(state.error),
-        feedback: normalizeFeedback(fallbackMeetingTool.feedback),
+        feedback: normalizeFeedback(state.feedback),
         items: state.items.slice(),
-        pending: normalizePending(fallbackMeetingTool.pending),
+        pending: normalizePending(state.pending),
         source: normalizeEnum(state.source, ["runtime-read", "cache", "none"], "none"),
       };
     }
 
-    async function handleMeetingAction() {
-      return false;
+    async function handleMeetingAction(action, detail = {}) {
+      const normalizedAction = normalizeText(action);
+      if (!SUPPORTED_ACTIONS.has(normalizedAction) || !hasRequiredCapabilities()) {
+        return false;
+      }
+      if (state.pending.active) {
+        return true;
+      }
+      await refreshStorageState();
+      const input = buildActionInput(detail);
+      const launchAction = resolveLaunchAction(normalizedAction, input);
+
+      if ((normalizedAction === "share" || normalizedAction === "revoke-share") && !input.meetingId) {
+        setFeedback("회의 정보를 찾지 못했어요. 다시 시도해 주세요.", "error", 3600);
+        return true;
+      }
+
+      if (launchAction) {
+        await handleLaunchAction(launchAction, input);
+        return true;
+      }
+
+      setPending({
+        action: normalizedAction,
+        jobId: input.jobId,
+        meetingId: input.meetingId,
+        title: input.title,
+      });
+
+      try {
+        if (normalizedAction === "share") {
+          traceMeeting("63.top.meeting.bridge.share.start", input);
+          const result = await invokeRuntime({
+            action: "meeting.create-share-link",
+            input,
+            providerIdentity: buildProviderIdentityPayload(state.providerIdentity),
+          });
+          const shareUrl = normalizeText(result?.shareUrl);
+          if (!shareUrl) {
+            throw new Error("공유 링크를 만들지 못했어요.");
+          }
+          patchShareState(input.meetingId, result?.share);
+          await global.navigator.clipboard.writeText(shareUrl);
+          traceMeeting("64.top.meeting.bridge.share.success", {
+            meetingId: input.meetingId,
+            shareUrl,
+          });
+          setFeedback("공유 링크를 복사했습니다.", "info", 2200);
+          void ensureLoaded(true);
+          return true;
+        }
+
+        traceMeeting("63.top.meeting.bridge.revoke-share.start", input);
+        const result = await invokeRuntime({
+          action: "meeting.revoke-share-link",
+          input,
+          providerIdentity: buildProviderIdentityPayload(state.providerIdentity),
+        });
+        patchShareState(input.meetingId, result?.share);
+        traceMeeting("64.top.meeting.bridge.revoke-share.success", {
+          meetingId: input.meetingId,
+        });
+        setFeedback("공유 링크를 해제했습니다.", "info", 2200);
+        void ensureLoaded(true);
+        return true;
+      } catch (error) {
+        traceMeeting("65.top.meeting.bridge.error", {
+          action: normalizedAction,
+          error: readErrorMessage(error, "회의 작업을 처리하지 못했어요."),
+          jobId: input.jobId,
+          meetingId: input.meetingId,
+        });
+        setFeedback(readErrorMessage(error, "회의 작업을 처리하지 못했어요."), "error", 3600);
+        return true;
+      } finally {
+        clearPending();
+      }
     }
 
     async function ensureInitialized() {
@@ -129,6 +216,16 @@
         }
       })();
       return state.initPromise;
+    }
+
+    async function refreshStorageState() {
+      try {
+        const storageState = await invokeRuntime({ action: "storage.get-state" });
+        hydrateStorageState(storageState);
+        state.initialized = true;
+      } catch (error) {
+        void error;
+      }
     }
 
     async function ensureLoaded(force = false) {
@@ -207,6 +304,57 @@
       }
     }
 
+    async function handleLaunchAction(action, input) {
+      setPending({
+        action,
+        jobId: input.jobId,
+        meetingId: input.meetingId,
+        title: input.title,
+      });
+      try {
+        traceMeeting("63.top.meeting.launch.requested", {
+          action,
+          jobId: input.jobId,
+          meetingId: input.meetingId,
+          title: input.title,
+        });
+        const requestPayload = {
+          action: action === "open-result" ? "meeting.open-result" : "meeting.open-workspace",
+          input,
+          providerIdentity: buildProviderIdentityPayload(state.providerIdentity),
+        };
+        const openPromise = invokeRuntime(requestPayload);
+        traceMeeting("64.top.meeting.launch.dispatched", {
+          action,
+          jobId: input.jobId,
+          meetingId: input.meetingId,
+          title: input.title,
+        });
+        const result = await openPromise;
+        traceMeeting("65.top.meeting.launch.accepted", {
+          action,
+          jobId: input.jobId,
+          meetingId: input.meetingId,
+          opened: Boolean(result?.opened),
+          title: input.title,
+          url: normalizeText(result?.url),
+        });
+        setFeedback(action === "open-result" ? "결과 탭을 열었습니다." : "작업실 탭을 열었습니다.", "info", 1800);
+      } catch (error) {
+        traceMeeting("65.top.meeting.launch.error", {
+          action,
+          error: readErrorMessage(error, "작업실을 열지 못했어요. 다시 시도해 주세요."),
+          jobId: input.jobId,
+          meetingId: input.meetingId,
+          title: input.title,
+        });
+        setFeedback(readErrorMessage(error, "작업실을 열지 못했어요. 다시 시도해 주세요."), "error", 3600);
+      } finally {
+        clearPending();
+      }
+      return true;
+    }
+
     function hydrateStorageState(storageState) {
       const cloudSync = storageState?.cloudSync && typeof storageState.cloudSync === "object"
         ? storageState.cloudSync
@@ -227,6 +375,76 @@
       state.error = readErrorMessage(error, "회의 목록을 불러오지 못했어요.");
       state.source = hasCachedItems ? "cache" : "none";
     }
+
+    function patchShareState(meetingId, share) {
+      const normalizedMeetingId = normalizeText(meetingId);
+      if (!normalizedMeetingId || !Array.isArray(state.items) || !state.items.length) {
+        return false;
+      }
+      const nextShare = normalizeShare(share);
+      let changed = false;
+      state.items = state.items.map((item) => {
+        if (normalizeText(item?.meetingId) !== normalizedMeetingId) {
+          return item;
+        }
+        changed = true;
+        return {
+          ...item,
+          share: nextShare,
+        };
+      });
+      if (changed) {
+        scheduleRender();
+      }
+      return changed;
+    }
+
+    function setFeedback(text, tone = "info", timeoutMs = 2200) {
+      global.clearTimeout(state.feedbackTimer);
+      const nextText = normalizeText(text);
+      state.feedback = nextText
+        ? {
+            text: nextText,
+            tone: normalizeText(tone) || "info",
+          }
+        : null;
+      scheduleRender();
+      if (!nextText || timeoutMs <= 0) {
+        state.feedbackTimer = 0;
+        return;
+      }
+      state.feedbackTimer = global.setTimeout(() => {
+        state.feedback = null;
+        state.feedbackTimer = 0;
+        scheduleRender();
+      }, timeoutMs);
+    }
+
+    function setPending(pending) {
+      state.pending = {
+        action: normalizeText(pending?.action),
+        active: Boolean(normalizeText(pending?.action)),
+        jobId: normalizeText(pending?.jobId),
+        meetingId: normalizeText(pending?.meetingId),
+        title: normalizeText(pending?.title),
+      };
+      scheduleRender();
+    }
+
+    function clearPending() {
+      state.pending = createPendingState();
+      scheduleRender();
+    }
+  }
+
+  function createPendingState() {
+    return {
+      action: "",
+      active: false,
+      jobId: "",
+      meetingId: "",
+      title: "",
+    };
   }
 
   function createProviderIdentity() {
@@ -237,6 +455,16 @@
       numericUserId: null,
       provider: "inova",
       providerUserKey: "",
+    };
+  }
+
+  function buildActionInput(detail) {
+    const normalizedDetail = detail && typeof detail === "object" ? detail : {};
+    return {
+      artifactId: normalizeText(normalizedDetail.artifactId),
+      jobId: normalizeText(normalizedDetail.jobId),
+      meetingId: normalizeText(normalizedDetail.meetingId),
+      title: normalizeText(normalizedDetail.title),
     };
   }
 
@@ -305,7 +533,7 @@
     const action = normalizeText(pending?.action);
     return {
       action,
-      active: Boolean(action),
+      active: Boolean(pending?.active) || Boolean(action),
       jobId: normalizeText(pending?.jobId),
       meetingId: normalizeText(pending?.meetingId),
       title: normalizeText(pending?.title),
@@ -332,6 +560,16 @@
   function readErrorMessage(error, fallbackMessage) {
     const message = normalizeText(error instanceof Error ? error.message : error);
     return message || fallbackMessage;
+  }
+
+  function resolveLaunchAction(action, input) {
+    if (action === "share" || action === "revoke-share") {
+      return "";
+    }
+    if (action === "open-result" && (input?.meetingId || input?.jobId)) {
+      return "open-result";
+    }
+    return "open-workspace";
   }
 
   function normalizeText(value) {

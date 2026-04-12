@@ -84,6 +84,7 @@
   const meetingHubController = namespace.meetingHubController?.create?.({
     invokeRuntime,
     scheduleRender,
+    traceMeeting: traceMeetingFlow,
   }) || null;
   const releaseController = namespace.releaseController?.create?.({
     getRuntimeVersion: () => state.extensionVersion || "",
