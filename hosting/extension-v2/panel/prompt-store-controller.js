@@ -44,6 +44,7 @@
       loadedScope: "",
       loading: false,
       query: "",
+      searchRenderTimerId: 0,
       renderKey: 0,
       renderLimit: INITIAL_RENDER_COUNT,
       scope: "all",
@@ -135,15 +136,25 @@
       if (normalizeText(toolId) !== "store") {
         return false;
       }
-      state.query = String(value || "");
+      const nextQuery = String(value || "");
+      if (state.query === nextQuery && !options.submit) {
+        return true;
+      }
+      state.query = nextQuery;
       if (options.submit) {
+        if (state.searchRenderTimerId) {
+          global.clearTimeout(state.searchRenderTimerId);
+          state.searchRenderTimerId = 0;
+        }
         state.appliedQuery = normalizeText(value);
         resetWindow();
         if (!state.loaded) {
           void ensureLoaded(false, "search-submit");
         }
+        scheduleRender();
+        return true;
       }
-      scheduleRender();
+      scheduleSearchRender();
       return true;
     }
 
@@ -562,6 +573,16 @@
         state.feedback = null;
         scheduleRender();
       }, 2600);
+    }
+
+    function scheduleSearchRender() {
+      if (state.searchRenderTimerId) {
+        global.clearTimeout(state.searchRenderTimerId);
+      }
+      state.searchRenderTimerId = global.setTimeout(() => {
+        state.searchRenderTimerId = 0;
+        scheduleRender();
+      }, 180);
     }
 
     function normalizeText(value) {

@@ -15,6 +15,7 @@ async function main() {
   verifyV2CompositionWiring();
   verifyHostedPanelImeCompositionGuard();
   verifyHostedConversationSearchDebounceContract();
+  verifyHostedStoreSearchDebounceContract();
   await verifyPageAdapterContract();
   console.log("[verify-panel-render] Hosted panel host contract passed");
 }
@@ -231,6 +232,30 @@ function verifyHostedConversationSearchDebounceContract() {
   assert(
     conversationControllerSource.includes("function scheduleSearchRender()"),
     "hosted conversation controller should expose a shared deferred search render helper"
+  );
+}
+
+function verifyHostedStoreSearchDebounceContract() {
+  const promptStoreControllerSource = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "prompt-store-controller.js"),
+    "utf8"
+  );
+
+  assert(
+    promptStoreControllerSource.includes("searchRenderTimerId: 0"),
+    "hosted store controller should track a deferred search render timer"
+  );
+  assert(
+    promptStoreControllerSource.includes("scheduleSearchRender();"),
+    "hosted store search should defer rerenders during typing"
+  );
+  assert(
+    promptStoreControllerSource.includes("if (state.searchRenderTimerId) {"),
+    "hosted store search should clear pending deferred renders before submit"
+  );
+  assert(
+    promptStoreControllerSource.includes("if (state.query === nextQuery && !options.submit)"),
+    "hosted store search should avoid redundant rerenders for repeated values"
   );
 }
 
