@@ -7,16 +7,14 @@ Last updated: 2026-04-12
 - Public deployed baseline: `0.4.4`
 - Current local candidate: `1.0.0`
 - Active branch: `codex/prompt-review-6-dimensions`
+- Latest full validation: `npm.cmd run verify` passed after `a28279d`
 - Current architecture direction:
-  - `extension` keeps only iframe host, page/DOM adapter, runtime broker, popup/settings.
-  - `hosting/extension-v2/panel/*` owns tool UI/state/controller.
-- Latest full validation: `npm.cmd run verify` passed after `849e6e8`
+  - `hosting/extension-v2/panel/*` owns v2 panel UI, feature-local state, and controller/render flow.
+  - `extension` keeps only browser-only capabilities: iframe host, page/DOM adapter, runtime broker, popup/settings, content/background wiring.
 
-## What Is Done
+## Where Ownership Stands
 
-`1.0.0` v2 lane is now the local baseline.
-
-Hosted ownership moved into `hosting/extension-v2/panel/*` for:
+For the `1.0.0` v2 lane, hosted ownership is effectively in place for:
 
 - `conversation`
 - `prompt-library`
@@ -24,102 +22,156 @@ Hosted ownership moved into `hosting/extension-v2/panel/*` for:
 - `prompt-review`
 - `meeting hub`
 - `release`
-- `debug`
 
-Important supporting changes already landed:
+This means the visible panel app is now mostly hosted.
 
-- `shared/product-lane.js`
-  - manifest major `>= 1` activates `v2` lane
-- `shared/firebase-config.js`
-  - `1.x+` panel path resolves to `hosting/extension-v2/panel/index.html`
-- `content/panel-v2-composition-controller.js`
-  - v2 extension composition is shell/runtime/route/page-adapter only
-- `content/panel.js`
-  - page adapter now supports conversation/debug/composer actions for hosted v2
-- hosted panel debug UI
-  - removed; debugging now relies on top console trace + shared debug buffer
+What still remains in the extension on purpose:
 
-## Very Important Direction
+- iframe host and panel shell bootstrap
+- page DOM read/write adapter
+- `chrome.*` / browser-only runtime calls
+- popup/settings
+- content/background message bridge
+- page-side composer/conversation/meeting adapters that only the extension can execute
 
-Do not collapse feature responsibilities back together.
+Short version:
 
-Keep the current style:
+- `hosting` is now the app surface
+- `extension` is now the thin browser/page shell
 
-- one boundary at a time
-- feature-local controller/model/view files stay separate
-- move ownership without merging unrelated files
-- do not reintroduce "one big v2 panel controller" refactors
+## What Was Stabilized In This Session
 
-The user explicitly wants:
+The current branch moved past the raw ownership migration and focused on smoke-fix work for the hosted v2 lane.
 
-- anything that only needs hosting should live in hosting
-- extension should keep only browser-only capabilities
-- responsibility-first refactoring should be preserved
+Major fixes already landed here:
 
-## Recent Commits
+- local v2 panel path and bridge wiring corrected
+- hosted debug UI removed; top console trace is now the primary debug surface
+- function-call trace added to top console, including local vs production target
+- prompt IME/composition bugs fixed across:
+  - `my requests`
+  - `store`
+  - `review`
+  - `conversation` search
+- prompt review activation/result sync fixed so hosted review state can follow snapshot/runtime review state
+- prompt store publishing restored in hosted v2
+- prompt store category flow changed to:
+  - choose existing category when available
+  - otherwise create a new category on publish
+- release downloads now resolve correctly against the local v2 lane
+- bookmark accessibility warning fixed by removing hidden interactive bookmark jump buttons
 
-- `849e6e8` Keep meeting functions on legacy endpoints in v2
-- `8c71582` Move v2 debug ownership into hosted panel
-- `54d8a01` Promote local candidate to v2 1.0.0 baseline
-- `57bfdeb` Move v2 conversation ownership into hosted panel
-- `892d95f` Move v2 release ownership into hosted panel
-- `edeb92d` Move v2 meeting hub ownership into hosted panel
-- `39a56c8` Move v2 prompt store ownership into hosted panel
-- `b102fda` Move v2 prompt review ownership into hosted panel
-- `a033963` Move v2 prompt library ownership into hosted panel
-- `7bd60a7` Expand hosted panel page adapter contract
-- `d883b40` Add v2 shell-only composition root
-- `b4dad65` Add v2 hosted panel scaffold path
+## Recent High-Signal Commits
+
+- `a28279d` Fix bookmark jump accessibility warning
+- `e9d6232` Fix hosted review snapshot precedence
+- `a59d44c` Tighten hosted prompt tab reloads and meeting traces
+- `d0360fa` Resolve local hosted release download URLs
+- `2c97589` Make hosted prompt tab switches optimistic
+- `d3cdc84` Add dynamic prompt store categories
+- `2ce3db2` Enable hosted prompt store publishing
+- `d57176a` Autofocus hosted review on external requests
+- `2cd2fc8` Propagate prompt review tab activation
+- `ad64b9c` Keep hosted review tab selection during init
+- `fd09204` Use snapshot review state in hosted prompt tab
+- `47dbf71` Trace prompt review flow before fixing logic
+- `d0676fb` Debounce hosted store search renders
+- `cd2729e` Debounce hosted conversation search renders
+- `b0ac128` Stop forced render after IME composition end
+- `f281911` Debounce hosted prompt text input renders
+- `0a323b2` Fix hosted panel IME composition handling
 
 ## Current Known State
 
 ### Good
 
 - `npm.cmd run verify` is green.
-- Worktree is clean.
-- v2 panel assets load locally from `/extension-v2/panel/*`.
-- prompt v2 runtime uses v2 prompt endpoints as intended.
+- v2 hosted panel assets load locally from `http://127.0.0.1:5000/extension-v2/panel/index.html`.
+- prompt review/store/library flows are now hosted-owned and functionally connected again.
+- release tab local download path is wired to the v2 local lane.
+- top console traces are readable enough to drive root-cause debugging without the old debug UI.
 
 ### Important nuance
 
-`meeting` is not fully backend-lane-split yet.
+`meeting` is hosted on the panel side, but backend endpoint naming is still legacy.
 
 That means:
 
 - v2 panel UI/controller is hosted
-- but meeting Functions endpoints still use legacy names like:
+- but meeting Functions endpoints still use legacy exports like:
   - `listInovaMeetings`
   - `issueInovaMeetingPanelAuth`
   - `createInovaMeetingShareLink`
 
-This was fixed in `849e6e8`.
-Do not switch meeting endpoints to `...V2` unless the backend exports are actually added first.
+Do not rename meeting endpoints to `...V2` unless backend exports are added first.
 
-### Known follow-up item
+### Worktree nuance
 
-Local emulator logs show repeated 404s for:
+The worktree is not fully clean.
 
-- `/extension-v2/releases/latest.json`
-- `/extension-v2/releases/history.json`
+These local changes were already present and were intentionally left untouched:
 
-This does not block the ownership move itself, but release local rehearsal likely still needs either:
+- `hosting/extension-v2/panel/legacy-tools.css`
+- `hosting/extension-v2/panel/meeting-view.js`
 
-- v2 release assets to exist under `hosting/extension-v2/releases/*`
-- or release local URL resolution to keep using the legacy release path
+Do not accidentally fold those into unrelated cleanup unless the task is explicitly about them.
 
-Treat this as a separate follow-up, not part of the ownership migration itself.
+## What Is Still Not Fully Finished
 
-## What Still Remains
+The large ownership move is effectively done.
 
-The big ownership migration is effectively done.
+What remains is finish-up and cleanup work:
 
-Remaining work is mostly finish-up work:
+1. Reduce residual console/snapshot noise after tool switches
+2. Investigate conversation bookmark jump over-triggering
+3. Add/align completion traces for meeting actions that still only log `...start`
+   - especially `open-workspace`
+   - and `open-result`
+4. Continue trimming extension-side leftover wiring that no longer needs to own UI decisions
+5. Final release prep from deployed `0.4.4` baseline to hosted v2 `1.0.0`
 
-1. Real Chrome smoke on `1.0.0` v2 local lane
-2. Confirm "hosting-only edits -> tab refresh only" boundary in practice
-3. Clean up any leftover legacy extension wiring that is no longer needed in v2
-4. Decide release-path handling for local/prod v2 assets
-5. Final release prep from `0.4.4` deployed baseline to `1.0.0`
+## Concrete Outstanding Issues To Pick Up Next
+
+These are the highest-value next-session follow-ups.
+
+### 1. Conversation jump over-trigger
+
+Recent local logs showed `page/jump-conversation-item` firing many times from a single conversation click sequence.
+
+This is the clearest remaining behavior issue in the current smoke pass.
+
+Start by tracing:
+
+- `hosting/extension-v2/panel/index.js`
+- `hosting/extension-v2/panel/conversation-controller.js`
+- `content/panel.js`
+- `content/bookmark-view.js`
+- `hosting/extension-v2/panel/bookmark-view.js`
+
+The accessibility warning is fixed, but click/request duplication still needs confirmation and likely reduction.
+
+### 2. Meeting action completion parity
+
+`share` / `revoke-share` now emit both start and completion traces.
+
+`open-workspace` and `open-result` still look asymmetric in the logs and should be checked so the console tells the full story.
+
+Start by tracing:
+
+- `content/panel-meeting-controller.js`
+- `content/panel.js`
+- `hosting/extension-v2/panel/index.js`
+
+### 3. Residual prompt/store/release noise
+
+Functionality is mostly working, but there is still repeated:
+
+- `top.panel.snapshot.push`
+- `runtime/storage.update-ui-preferences`
+- `prompt/loadInovaPromptLibraryUrl`
+- `prompt/listPromptStoreEntriesUrl`
+
+These no longer look like hard failures, but they are still optimization candidates.
 
 ## Recommended Next Steps
 
@@ -127,16 +179,14 @@ If continuing immediately, do this order:
 
 1. Chrome extension `Reload`
 2. Refresh the `i-Nova` tab
-3. Smoke test in local emulator:
-   - conversation search/jump/copy
-   - prompt create/edit/delete/import/export
-   - prompt store search/detail/import/like
-   - prompt review run/copy/apply
-   - meeting hub list/open/share/revoke
-   - release tab
-   - top console debug trace
-4. Fix only the concrete failures found in smoke
-5. After smoke is stable, do small cleanup of leftover extension-only legacy wiring
+3. Re-run targeted smoke in local emulator:
+   - conversation click/jump/copy
+   - meeting open-result/open-workspace/share/revoke
+   - prompt review second-run behavior
+   - prompt store publish/import
+   - release download/open
+4. Only fix concrete issues confirmed by console trace
+5. After smoke is stable, remove leftover extension-owned UI wiring only where clearly unnecessary
 
 ## Local Rehearsal Notes
 
@@ -168,11 +218,11 @@ Minimal re-entry set:
 - `hosting/extension-v2/panel/index.html`
 - `hosting/extension-v2/panel/index.js`
 
-Then only read the feature-local v2 controller for the failing area.
+Then read only the feature-local hosted controller for the failing area.
 
 ## Deployment Boundary
 
-Current migration commits touched both extension and hosting.
+Current branch changes span both extension and hosting.
 
 So real rollout still means:
 
