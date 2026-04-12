@@ -19,6 +19,7 @@ async function main() {
   verifyHostedStartupStatusCardDelayContract();
   verifyHostedMeetingSummarySyncContract();
   verifyHostedPromptTabOwnershipContract();
+  verifyHostedPromptActionOwnershipContract();
   verifyHostedConversationSearchDebounceContract();
   verifyHostedStoreSearchDebounceContract();
   verifyBookmarkJumpAccessibilityContract();
@@ -274,6 +275,34 @@ function verifyHostedPromptTabOwnershipContract() {
   assert(
     !hostedPanelSource.includes('action: "prompt-tab-select"'),
     "v2 hosted prompt tab selection should not fall back to the top-panel prompt-tab-select request path"
+  );
+}
+
+function verifyHostedPromptActionOwnershipContract() {
+  const hostedPanelSource = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "index.js"),
+    "utf8"
+  );
+
+  assert(
+    !hostedPanelSource.includes('action: "prompt-action"'),
+    "v2 hosted prompt panel should not fall back to the top-panel prompt-action request path"
+  );
+  assert(
+    !hostedPanelSource.includes('action: "prompt-draft-change"'),
+    "v2 hosted prompt panel should not fall back to the top-panel prompt-draft-change request path"
+  );
+  assert(
+    !hostedPanelSource.includes('action: "store-action"'),
+    "v2 hosted prompt panel should not fall back to the top-panel store-action request path"
+  );
+  assert(
+    !hostedPanelSource.includes('action: "import-file"'),
+    "v2 hosted prompt panel should not fall back to the top-panel import-file request path"
+  );
+  assert(
+    !hostedPanelSource.includes('action: "move-prompt"'),
+    "v2 hosted prompt panel should not fall back to the top-panel move-prompt request path"
   );
 }
 

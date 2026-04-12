@@ -154,20 +154,9 @@
       },
       onImportFile(file) {
         if (promptLibraryController?.handleImportFile) {
-          return promptLibraryController.handleImportFile(file).then((handled) => {
-            if (handled !== false) {
-              return handled;
-            }
-            return request("panel", {
-              action: "import-file",
-              file,
-            });
-          });
+          return promptLibraryController.handleImportFile(file);
         }
-        return request("panel", {
-          action: "import-file",
-          file,
-        });
+        return Promise.resolve(false);
       },
       onJumpBookmark(bookmarkId) {
         if (conversationController?.handleJumpBookmark) {
@@ -207,24 +196,9 @@
       },
       onMovePrompt(dragPromptId, targetPromptId, placement) {
         if (promptLibraryController?.handleMovePrompt) {
-          return promptLibraryController.handleMovePrompt(dragPromptId, targetPromptId, placement).then((handled) => {
-            if (handled !== false) {
-              return handled;
-            }
-            return request("panel", {
-              action: "move-prompt",
-              dragPromptId,
-              placement,
-              targetPromptId,
-            });
-          });
+          return promptLibraryController.handleMovePrompt(dragPromptId, targetPromptId, placement);
         }
-        return request("panel", {
-          action: "move-prompt",
-          dragPromptId,
-          placement,
-          targetPromptId,
-        });
+        return Promise.resolve(false);
       },
       onPromptAction(promptAction, detail = {}) {
         if (promptReviewController?.handlePromptAction) {
@@ -232,57 +206,22 @@
             if (handled !== false) {
               return handled;
             }
-            return null;
-          }).then((handled) => {
-            if (handled) {
-              return handled;
-            }
             if (promptLibraryController?.handlePromptAction) {
-              return promptLibraryController.handlePromptAction(promptAction, detail).then((libraryHandled) => {
-                if (libraryHandled !== false) {
-                  return libraryHandled;
-                }
-                return request("panel", {
-                  action: "prompt-action",
-                  detail,
-                  promptAction,
-                });
-              });
+              return promptLibraryController.handlePromptAction(promptAction, detail);
             }
-            return request("panel", {
-              action: "prompt-action",
-              detail,
-              promptAction,
-            });
+            return false;
           });
         }
         if (promptLibraryController?.handlePromptAction) {
-          return promptLibraryController.handlePromptAction(promptAction, detail).then((handled) => {
-            if (handled !== false) {
-              return handled;
-            }
-            return request("panel", {
-              action: "prompt-action",
-              detail,
-              promptAction,
-            });
-          });
+          return promptLibraryController.handlePromptAction(promptAction, detail);
         }
-        return request("panel", {
-          action: "prompt-action",
-          detail,
-          promptAction,
-        });
+        return Promise.resolve(false);
       },
       onPromptDraftChange(field, value) {
-        if (promptLibraryController?.handlePromptDraftChange?.(field, value) !== false) {
-          return Promise.resolve(true);
+        if (promptLibraryController?.handlePromptDraftChange) {
+          return Promise.resolve(promptLibraryController.handlePromptDraftChange(field, value));
         }
-        return request("panel", {
-          action: "prompt-draft-change",
-          field,
-          value,
-        });
+        return Promise.resolve(false);
       },
       onReleaseAction(releaseAction, detail = {}) {
         if (releaseController?.handleReleaseAction) {
@@ -350,22 +289,9 @@
       },
       onStoreAction(storeAction, detail = {}) {
         if (promptStoreController?.handleStoreAction) {
-          return promptStoreController.handleStoreAction(storeAction, detail).then((handled) => {
-            if (handled !== false) {
-              return handled;
-            }
-            return request("panel", {
-              action: "store-action",
-              detail,
-              storeAction,
-            });
-          });
+          return promptStoreController.handleStoreAction(storeAction, detail);
         }
-        return request("panel", {
-          action: "store-action",
-          detail,
-          storeAction,
-        });
+        return Promise.resolve(false);
       },
       onToggle(open) {
         return request("panel", {

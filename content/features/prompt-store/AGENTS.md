@@ -57,7 +57,7 @@
 ## 구현 경계
 - store 로드 정리 구간은 `finally`에서 `return`으로 흐름을 끊지 않는다. `loadSequence`가 현재 요청과 같을 때만 `loading` 해제, render, `reload-all` 재호출 예약을 수행한다.
 - `0.4.5`부터 panel 안의 store UI는 hosted panel iframe이 렌더링하고, `content/panel-prompt-controller.js`와 `content/features/prompt-store/*`는 상태/읽기/쓰기 controller를 계속 소유한다.
-- `1.0.0+` v2 lane에서는 `hosting/extension-v2/panel/prompt-store-controller.js`가 `스토어` 탭의 목록/정렬/범주/상세/좋아요/가져오기/삭제확인 상태를 소유하고, extension은 runtime broker와 prompt-library mutation adapter만 제공한다. v2 top-panel snapshot은 store item list를 다시 싣지 않고 hosted store controller가 직접 읽은 상태를 우선한다.
+- `1.0.0+` v2 lane에서는 `hosting/extension-v2/panel/prompt-store-controller.js`가 `스토어` 탭의 목록/정렬/범주/상세/좋아요/가져오기/삭제확인 상태와 store action 라우팅을 소유하고, extension은 runtime broker와 prompt-library mutation adapter만 제공한다. v2 top-panel snapshot은 store item list를 다시 싣지 않고 hosted store controller가 직접 읽은 상태를 우선한다.
 - 스토어 카테고리는 고정 taxonomy만 강제하지 않는다. 현재 스토어에 있는 기존 카테고리를 우선 노출하고, publish 시 새 카테고리 이름을 만들면 backend summary/feed/filter가 그 label/id를 그대로 round-trip 해야 한다.
 - prompt realtime bridge connect payload에는 active lane의 `promptPanelScope`와 Firestore collection config를 함께 싣는다. store summary/feed/detail은 shared doc를 계속 읽더라도, prompt-library meta collection은 lane과 auth scope가 맞아야 한다.
 - popup의 `settings.meetingWorkspaceTarget=local`을 고르면 prompt-store도 local full-stack rehearsal로 같이 전환돼야 한다. local target은 계속 `http://127.0.0.1:5000/extension/prompt-panel-bridge.html`을 향하지만, 실제 페이지 DOM의 hidden prompt bridge iframe은 `content/frame-proxy.html?target=...` wrapper를 거쳐 page CSP를 우회한다. prompt panel auth/read/write는 local Functions/Auth/Firestore emulator 경로를 써야 한다.

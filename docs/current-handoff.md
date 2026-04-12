@@ -19,7 +19,7 @@ Last updated: 2026-04-13
 
 - `conversation`: hosted owns list/search/copy/jump UI state; extension only provides page adapter plus thin signals such as count/active/fingerprint.
 - `release`: hosted owns latest/history/download surface; extension only brokers browser/runtime actions.
-- `prompt-library`, `prompt-store`, `prompt-review`: hosted owns most feature state and controller flow, but prompt shell/tab-transition residue still exists in extension.
+- `prompt-library`, `prompt-store`, `prompt-review`: hosted owns prompt tab transition plus prompt/store/review action routing; extension keeps page/runtime bridge and legacy fallback handlers outside the v2 request path.
 - `meeting hub` / `meeting workspace`: hosted owns list/action UI and launch tracing, but extension still carries some `meetingManager` summary/realtime/fallback residue.
 
 Short version:
@@ -93,7 +93,7 @@ Also:
 The remaining work is no longer smoke-fix first. It is mostly structural cleanup to finish the hosted-first boundary.
 
 1. Reduce remaining `meetingManager` coupling in v2 so extension keeps only browser/page capability.
-2. Remove remaining prompt shell/tab-transition ownership from extension.
+2. Trim remaining prompt shell residue and legacy fallback surface in extension.
 3. Keep trimming panel shell/bootstrap/composition so the `content/panel.js` path becomes generic host + broker only.
 4. Prepare final release path from deployed `0.4.4` baseline to hosted v2 `1.0.0`.
 
