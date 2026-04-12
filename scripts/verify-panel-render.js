@@ -18,6 +18,7 @@ async function main() {
   verifyHostedMeetingActionCompletionTraceContract();
   verifyHostedStartupStatusCardDelayContract();
   verifyHostedMeetingSummarySyncContract();
+  verifyHostedPromptTabOwnershipContract();
   verifyHostedConversationSearchDebounceContract();
   verifyHostedStoreSearchDebounceContract();
   verifyBookmarkJumpAccessibilityContract();
@@ -261,6 +262,18 @@ function verifyHostedMeetingSummarySyncContract() {
   assert(
     bootstrapSource.includes("onMeetingSummarySync: handlePanelMeetingSummarySync"),
     "panel bootstrap should forward hosted meeting summary sync callbacks into the top-panel bridge"
+  );
+}
+
+function verifyHostedPromptTabOwnershipContract() {
+  const hostedPanelSource = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "index.js"),
+    "utf8"
+  );
+
+  assert(
+    !hostedPanelSource.includes('action: "prompt-tab-select"'),
+    "v2 hosted prompt tab selection should not fall back to the top-panel prompt-tab-select request path"
   );
 }
 

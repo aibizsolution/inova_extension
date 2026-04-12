@@ -54,7 +54,7 @@
 ## 구현 경계
 - `reviewInovaPrompt` 요청에서 `reviewProfile`이 비어 있으면 backend 기본값은 반드시 `legacy-v1`이어야 한다. 0.4.4 사용자는 기존 4축 평가를 그대로 유지하고, 새 확장 버전만 `prompt-telling-v2`를 opt-in 한다.
 - `0.4.5`부터 panel 안의 review UI는 hosted panel iframe이 렌더링하고, composer anchor와 review action/state는 기존 content controller가 계속 소유한다.
-- `1.0.0+` v2 lane에서는 `hosting/extension-v2/panel/prompt-review-controller.js`가 `검토` 탭의 review/copy/apply/placeholder-confirm` 상태를 hosted 쪽에서 먼저 소유한다. extension은 `get-composer-state`, `apply-prompt-text` 같은 page adapter와 `reviewInovaPrompt` runtime broker만 제공하고, review 탭 전이 자체는 prompt tool shell이 계속 맡는다. top-panel snapshot에는 hosted review tab이 외부 검토 요청을 이어받을 수 있도록 최소 review handoff signal만 남긴다.
+- `1.0.0+` v2 lane에서는 `hosting/extension-v2/panel/prompt-review-controller.js`가 `검토` 탭의 review/copy/apply/placeholder-confirm` 상태를 hosted 쪽에서 먼저 소유한다. extension은 `get-composer-state`, `apply-prompt-text` 같은 page adapter와 `reviewInovaPrompt` runtime broker만 제공하고, review 탭 전이도 hosted prompt tool shell이 직접 맡는다. top-panel snapshot에는 hosted review tab이 외부 검토 요청을 이어받을 수 있도록 최소 review handoff signal만 남긴다.
 - 새 클라이언트는 `prompt-telling-v2` 6축 응답과 `legacy-v1` 4축 응답을 모두 렌더링할 수 있어야 한다.
 - placeholder token 감지는 한 줄 안의 단순 `[...]` 토큰만 대상으로 유지한다. nested bracket이나 줄바꿈이 섞인 텍스트는 placeholder 경고 후보로 넓히지 않는다.
 - composer 선택은 textarea 같은 구체적인 채팅 입력 selector를 우선하고, broad `contenteditable` 후보는 앞선 tier가 없을 때만 고려한다.

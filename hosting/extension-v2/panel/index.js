@@ -338,20 +338,9 @@
       },
       onSelectPromptTab(promptTabId) {
         if (promptLibraryController?.handleSelectPromptTab) {
-          return promptLibraryController.handleSelectPromptTab(promptTabId).then((handled) => {
-            if (handled !== false) {
-              return handled;
-            }
-            return request("panel", {
-              action: "prompt-tab-select",
-              promptTabId,
-            });
-          });
+          return promptLibraryController.handleSelectPromptTab(promptTabId);
         }
-        return request("panel", {
-          action: "prompt-tab-select",
-          promptTabId,
-        });
+        return Promise.resolve(false);
       },
       onSelectTool(toolId) {
         return request("panel", {
