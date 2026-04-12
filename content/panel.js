@@ -369,6 +369,10 @@
       await callbacks.onMeetingAction?.(normalizeText(payload?.meetingAction), detail);
       return { handled: true };
     }
+    if (action === "meeting-refresh") {
+      await callbacks.onMeetingRefresh?.();
+      return { handled: true };
+    }
     if (action === "release-action") {
       await callbacks.onReleaseAction?.(normalizeText(payload?.releaseAction), detail);
       return { handled: true };

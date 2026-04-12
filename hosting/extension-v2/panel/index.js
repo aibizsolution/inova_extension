@@ -72,6 +72,7 @@
   }) || null;
   const meetingHubController = namespace.meetingHubController?.create?.({
     invokeRuntime,
+    requestPanel: (payload = {}) => request("panel", payload),
     scheduleRender,
   }) || null;
   const releaseController = namespace.releaseController?.create?.({
