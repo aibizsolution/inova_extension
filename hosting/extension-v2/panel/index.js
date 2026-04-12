@@ -50,7 +50,9 @@
     invokePage,
     scheduleRender,
   }) || null;
+  let promptStoreController = null;
   const promptLibraryController = namespace.promptLibraryController?.create?.({
+    ensureStoreLoaded: (...args) => promptStoreController?.ensureLoaded?.(...args) || Promise.resolve(),
     invokePage,
     invokeRuntime,
     scheduleRender,
@@ -65,7 +67,7 @@
     scheduleRender,
     setActivePromptTab: (promptTabId) => promptLibraryController?.handleSelectPromptTab?.(promptTabId) || Promise.resolve(false),
   }) || null;
-  const promptStoreController = namespace.promptStoreController?.create?.({
+  promptStoreController = namespace.promptStoreController?.create?.({
     getActivePromptTab: () => promptLibraryController?.getActiveTab?.() || "library",
     getProviderIdentity: () => promptLibraryController?.getProviderIdentity?.() || { available: false },
     importStorePrompt: (storeEntry) => promptLibraryController?.importStorePrompt?.(storeEntry) || Promise.resolve(false),

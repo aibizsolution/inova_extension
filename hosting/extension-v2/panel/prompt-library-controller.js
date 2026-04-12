@@ -12,6 +12,9 @@
     const invokeRuntime = typeof options.invokeRuntime === "function"
       ? options.invokeRuntime
       : async () => ({});
+    const ensureStoreLoaded = typeof options.ensureStoreLoaded === "function"
+      ? options.ensureStoreLoaded
+      : async () => {};
     const scheduleRender = typeof options.scheduleRender === "function"
       ? options.scheduleRender
       : () => {};
@@ -149,7 +152,7 @@
         publishPromptId: state.publishPromptId,
         publishTitle: state.publishTitle,
         query: state.query,
-        storeCategories: [],
+        storeCategories: namespace.promptStoreModel?.getCategories?.() || [],
         syncNotice: state.syncNotice,
         totalCount: getPromptCount(),
       };
@@ -363,15 +366,24 @@
         scheduleRender();
         return true;
       }
-      if (
-        normalizedAction === "open-publish"
-        || normalizedAction === "cancel-publish"
-        || normalizedAction === "set-publish-category"
-        || normalizedAction === "set-publish-title"
-        || normalizedAction === "confirm-publish"
-      ) {
-        state.feedback = createFeedback("스토어 등록은 다음 단계에서 hosted ownership으로 이동합니다.", "error");
-        scheduleRender();
+      if (normalizedAction === "open-publish") {
+        openPublish(normalizeText(detail.promptId));
+        return true;
+      }
+      if (normalizedAction === "cancel-publish") {
+        cancelPublish();
+        return true;
+      }
+      if (normalizedAction === "set-publish-category") {
+        setPublishCategory(normalizeText(detail.categoryId));
+        return true;
+      }
+      if (normalizedAction === "set-publish-title") {
+        setPublishTitle(detail.title);
+        return true;
+      }
+      if (normalizedAction === "confirm-publish") {
+        await confirmPublish(normalizeText(detail.promptId));
         return true;
       }
       return false;
@@ -431,6 +443,105 @@
       } finally {
         state.actionPending = null;
         state.deletePromptId = "";
+        scheduleRender();
+      }
+    }
+
+    function openPublish(promptId) {
+      const prompt = findPromptById(promptId);
+      if (!prompt) {
+        return;
+      }
+      state.menuPromptId = "";
+      state.deletePromptId = "";
+      state.publishPromptId = prompt.id;
+      state.publishCategoryId = normalizePublishCategoryId(state.publishCategoryId || "document");
+      state.publishTitle = prompt.title || "";
+      state.publishError = "";
+      scheduleRender();
+    }
+
+    function cancelPublish() {
+      if (!state.publishPromptId) {
+        return;
+      }
+      state.publishPromptId = "";
+      state.publishTitle = "";
+      state.publishError = "";
+      scheduleRender();
+    }
+
+    function setPublishCategory(categoryId) {
+      state.publishCategoryId = normalizePublishCategoryId(categoryId);
+      state.publishError = "";
+      scheduleRender();
+    }
+
+    function setPublishTitle(title) {
+      state.publishTitle = String(title || "");
+      if (!state.publishError) {
+        return;
+      }
+      state.publishError = "";
+      scheduleRender();
+    }
+
+    async function confirmPublish(promptId = state.publishPromptId) {
+      const normalizedPromptId = normalizeText(promptId || state.publishPromptId);
+      if (!normalizedPromptId) {
+        return;
+      }
+      if (state.actionPending?.type === "publish" && state.actionPending.promptId === normalizedPromptId) {
+        return;
+      }
+      const prompt = findPromptById(normalizedPromptId);
+      if (!prompt) {
+        return;
+      }
+      const publishTitle = normalizeText(state.publishTitle);
+      if (!publishTitle) {
+        state.publishError = "스토어 제목을 입력해 주세요.";
+        scheduleRender();
+        return;
+      }
+      if (!state.providerIdentity.available) {
+        state.publishError = "사용자 정보를 확인하지 못했어요.";
+        scheduleRender();
+        return;
+      }
+      state.actionPending = { type: "publish", promptId: normalizedPromptId };
+      scheduleRender();
+      try {
+        await invokeRuntime({
+          action: "functions.fetch",
+          authMode: "access-token",
+          body: {
+            categoryId: normalizePublishCategoryId(state.publishCategoryId || "document"),
+            prompt: {
+              content: prompt.content,
+              title: publishTitle,
+            },
+            providerIdentity: {
+              available: state.providerIdentity.available,
+              displayName: state.providerIdentity.displayName,
+              email: state.providerIdentity.email,
+              numericUserId: state.providerIdentity.numericUserId,
+              provider: state.providerIdentity.provider,
+              providerUserKey: state.providerIdentity.providerUserKey,
+            },
+          },
+          endpointKey: "publishPromptToStoreUrl",
+          service: "prompt",
+        });
+        state.publishPromptId = "";
+        state.publishTitle = "";
+        state.publishError = "";
+        state.feedback = createFeedback("스토어에 별도 복사본으로 등록했어요.", "info", normalizedPromptId);
+        await ensureStoreLoaded(true, "publish");
+      } catch (error) {
+        state.feedback = createFeedback(readErrorMessage(error, "스토어에 등록하지 못했어요."), "error", normalizedPromptId);
+      } finally {
+        state.actionPending = null;
         scheduleRender();
       }
     }
@@ -723,6 +834,14 @@
     return normalized === "store" || normalized === "review"
       ? normalized
       : "library";
+  }
+
+  function normalizePublishCategoryId(categoryId) {
+    const normalized = normalizeText(categoryId).toLowerCase();
+    const categories = namespace.promptStoreModel?.getCategories?.() || [];
+    return categories.some((category) => category.id === normalized)
+      ? normalized
+      : "document";
   }
 
   function getEffectiveActiveTab(promptTabId, reviewOpen) {

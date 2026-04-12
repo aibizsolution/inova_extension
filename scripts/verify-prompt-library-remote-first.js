@@ -13,6 +13,7 @@ function main() {
   return Promise.all([
     verifyHostedPromptLibraryAvoidsDuplicateReloads(),
     verifyHostedPromptEditorViewLabels(),
+    verifyHostedPromptPublishUsesFunctionsFetch(),
     verifyHostedPromptReviewPendingAutofocus(),
     verifyHostedPromptTabSelectionSurvivesLateStorageHydration(),
     verifyHostedPromptReviewTabVisibility(),
@@ -348,6 +349,141 @@ async function verifyHostedPromptTextInputDebouncesRender() {
 
   await wait(220);
   assert.equal(renderCount, 1, "text input changes should collapse into one deferred render");
+}
+
+async function verifyHostedPromptPublishUsesFunctionsFetch() {
+  const runtimeCalls = [];
+  const ensureStoreLoadedCalls = [];
+  const context = vm.createContext({
+    Blob: class Blob {},
+    File: class File {},
+    clearTimeout,
+    console,
+    document: {
+      createElement() {
+        return {
+          click() {},
+        };
+      },
+    },
+    globalThis: null,
+    navigator: {},
+    setTimeout,
+    URL: {
+      createObjectURL() {
+        return "blob:prompt-library";
+      },
+      revokeObjectURL() {},
+    },
+  });
+  context.globalThis = context;
+  context.InovaBookmarks = {
+    promptLibraryModel: {
+      mergePromptLibrary(promptLibrary) {
+        const items = Array.isArray(promptLibrary?.items) ? promptLibrary.items.map((item) => ({ ...item })) : [];
+        return {
+          items,
+          version: Number(promptLibrary?.version) || 1,
+        };
+      },
+    },
+    promptStoreModel: {
+      getCategories() {
+        return [
+          { id: "document", label: "문서" },
+          { id: "other", label: "기타" },
+        ];
+      },
+    },
+    session: {
+      normalizeText(value) {
+        return String(value ?? "").trim();
+      },
+    },
+  };
+
+  const source = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),
+    "utf8"
+  );
+  new vm.Script(source, {
+    filename: "hosting/extension-v2/panel/prompt-library-controller.js",
+  }).runInContext(context);
+
+  const controller = context.InovaBookmarks.promptLibraryController.create({
+    ensureStoreLoaded(...args) {
+      ensureStoreLoadedCalls.push(args);
+      return Promise.resolve();
+    },
+    invokeRuntime: async (request) => {
+      runtimeCalls.push({
+        action: request?.action,
+        body: { ...(request?.body || {}) },
+        endpointKey: request?.endpointKey || "",
+      });
+      if (request?.action === "storage.get-state") {
+        return {
+          cloudSync: {
+            providerIdentity: {
+              available: true,
+              displayName: "Prompt Tester",
+              email: "prompt@example.com",
+              numericUserId: 42,
+              provider: "inova",
+              providerUserKey: "prompt-user-1",
+            },
+          },
+          uiPreferences: {
+            activePromptTab: "library",
+          },
+        };
+      }
+      if (request?.action === "functions.fetch" && request?.endpointKey === "loadInovaPromptLibraryUrl") {
+        return {
+          promptLibrary: {
+            items: [{ id: "prompt-1", title: "Accessibility Tester", content: "본문" }],
+            version: 1,
+          },
+        };
+      }
+      if (request?.action === "functions.fetch" && request?.endpointKey === "publishPromptToStoreUrl") {
+        return {
+          entry: {
+            entryId: "entry-1",
+          },
+        };
+      }
+      return {};
+    },
+    scheduleRender() {},
+  });
+
+  controller.syncPanelState(
+    { activeTool: "prompts" },
+    ["page.adapter.v2", "runtime.invoke.v1"]
+  );
+  await flushAsync();
+  await flushAsync();
+  await flushAsync();
+
+  await controller.handlePromptAction("open-publish", { promptId: "prompt-1" });
+  await controller.handlePromptAction("set-publish-title", { title: "스토어 제목" });
+  await controller.handlePromptAction("set-publish-category", { categoryId: "document" });
+  await controller.handlePromptAction("confirm-publish", { promptId: "prompt-1" });
+
+  assert.equal(
+    runtimeCalls.filter((call) => call.endpointKey === "publishPromptToStoreUrl").length,
+    1,
+    "hosted prompt publish should call the prompt store publish function endpoint"
+  );
+  assert.deepEqual(
+    ensureStoreLoadedCalls,
+    [[true, "publish"]],
+    "hosted prompt publish should refresh the hosted store after publishing"
+  );
+  const viewState = controller.buildPromptToolState({}, { reviewOpen: false });
+  assert.equal(viewState.prompt.publishPromptId, "");
+  assert.equal(viewState.prompt.feedback?.message, "스토어에 별도 복사본으로 등록했어요.");
 }
 
 async function verifyHostedPromptTabSelectionSurvivesLateStorageHydration() {

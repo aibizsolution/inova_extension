@@ -56,6 +56,7 @@
 
     return {
       buildViewState,
+      ensureLoaded,
       getStoreCount,
       handleSearch,
       handleStoreAction,
