@@ -1,99 +1,77 @@
 # Current Handoff
 
-Last updated: 2026-04-12
+Last updated: 2026-04-13
 
 ## Snapshot
 
 - Public deployed baseline: `0.4.4`
 - Current local candidate: `1.0.0`
 - Active branch: `codex/prompt-review-6-dimensions`
-- Latest full validation: `npm.cmd run verify` passed after `a28279d`
+- Latest full validation: `npm.cmd run verify` passed after `5ca2dd4`
+- Worktree: clean
 - Current architecture direction:
-  - `hosting/extension-v2/panel/*` owns v2 panel UI, feature-local state, and controller/render flow.
-  - `extension` keeps only browser-only capabilities: iframe host, page/DOM adapter, runtime broker, popup/settings, content/background wiring.
+  - `1.0.0` v2 lane is explicitly hosted-first.
+  - default location for tab UI, view state, action flow, and feature-local controllers is `hosting/*`.
+  - `extension` keeps only browser-only capabilities: iframe host, page DOM adapter, `postMessage`/runtime broker, popup/settings, content/background wiring.
+  - when docs still describe already-moved ownership as extension-owned, fix them in the same task instead of deferring to a later doc sweep.
 
 ## Where Ownership Stands
 
-For the `1.0.0` v2 lane, hosted ownership is effectively in place for:
-
-- `conversation`
-- `prompt-library`
-- `prompt-store`
-- `prompt-review`
-- `meeting hub`
-- `release`
-
-This means the visible panel app is now mostly hosted.
-
-What still remains in the extension on purpose:
-
-- iframe host and panel shell bootstrap
-- page DOM read/write adapter
-- `chrome.*` / browser-only runtime calls
-- popup/settings
-- content/background message bridge
-- page-side composer/conversation/meeting adapters that only the extension can execute
+- `conversation`: hosted owns list/search/copy/jump UI state; extension only provides page adapter plus thin signals such as count/active/fingerprint.
+- `release`: hosted owns latest/history/download surface; extension only brokers browser/runtime actions.
+- `prompt-library`, `prompt-store`, `prompt-review`: hosted owns most feature state and controller flow, but prompt shell/tab-transition residue still exists in extension.
+- `meeting hub` / `meeting workspace`: hosted owns list/action UI and launch tracing, but extension still carries some `meetingManager` summary/realtime/fallback residue.
 
 Short version:
 
-- `hosting` is now the app surface
-- `extension` is now the thin browser/page shell
+- `hosting` is now the visible v2 app surface.
+- `extension` is being reduced to the thin browser/page shell.
 
 ## What Was Stabilized In This Session
 
-The current branch moved past the raw ownership migration and focused on smoke-fix work for the hosted v2 lane.
-
-Major fixes already landed here:
-
-- local v2 panel path and bridge wiring corrected
-- hosted debug UI removed; top console trace is now the primary debug surface
-- function-call trace added to top console, including local vs production target
-- prompt IME/composition bugs fixed across:
-  - `my requests`
-  - `store`
-  - `review`
-  - `conversation` search
-- prompt review activation/result sync fixed so hosted review state can follow snapshot/runtime review state
-- prompt store publishing restored in hosted v2
-- prompt store category flow changed to:
-  - choose existing category when available
-  - otherwise create a new category on publish
-- release downloads now resolve correctly against the local v2 lane
-- bookmark accessibility warning fixed by removing hidden interactive bookmark jump buttons
+- panel chrome ownership (`tool rail`, `tool title`, `tool count`) moved out of extension
+- release snapshot trimmed to hosted-owned signals
+- conversation snapshot trimmed to hosted-owned signals
+- prompt snapshot trimmed to hosted-owned signals
+- meeting list state moved into hosted hub controller
+- meeting actions (`open-workspace`, `open-result`, `share`, `revoke-share`) moved into hosted hub controller
+- meeting open traces split correctly:
+  - original `i-Nova` tab now logs only launch request/dispatch/completion
+  - new hosted workspace tab owns workspace bootstrap/ready logs
+- v2 meeting lifecycle coupling reduced across sync, snapshot, fallback, and bootstrap wiring
+- hosted-first ownership and incremental doc-correction rules were written into root/docs guidance
 
 ## Recent High-Signal Commits
 
-- `a28279d` Fix bookmark jump accessibility warning
-- `e9d6232` Fix hosted review snapshot precedence
-- `a59d44c` Tighten hosted prompt tab reloads and meeting traces
-- `d0360fa` Resolve local hosted release download URLs
-- `2c97589` Make hosted prompt tab switches optimistic
-- `d3cdc84` Add dynamic prompt store categories
-- `2ce3db2` Enable hosted prompt store publishing
-- `d57176a` Autofocus hosted review on external requests
-- `2cd2fc8` Propagate prompt review tab activation
-- `ad64b9c` Keep hosted review tab selection during init
-- `fd09204` Use snapshot review state in hosted prompt tab
-- `47dbf71` Trace prompt review flow before fixing logic
-- `d0676fb` Debounce hosted store search renders
-- `cd2729e` Debounce hosted conversation search renders
-- `b0ac128` Stop forced render after IME composition end
-- `f281911` Debounce hosted prompt text input renders
-- `0a323b2` Fix hosted panel IME composition handling
+- `5ca2dd4` Document hosted-first ownership and doc upkeep rules
+- `0b81aa0` Trim v2 meeting bootstrap sync wiring
+- `db73fb3` Lazy-load v2 meeting fallback controller
+- `bdb0e3d` Trim v2 meeting snapshot render dependencies
+- `a1cef3e` Limit v2 meeting sync to core panel lifecycle
+- `44c9538` Decouple v2 meeting shell lifecycle from meeting manager
+- `7d6fe67` Move v2 meeting actions into hosted hub controller
+- `29a407d` Move v2 meeting list state into hosted controller
+- `b672e13` Trim v2 prompt snapshot to hosted-owned signals
+- `725f518` Trim v2 conversation snapshot to hosted-owned signals
+- `f1f19ed` Trim v2 release snapshot down to hosted-owned state
+- `532d525` Move hosted panel chrome ownership out of extension
+- `49cbec3` Split meeting launch and workspace traces
+- `98248c7` Defer panel render until settings hydrate
+- `d310db4` Clarify guard messages around responsibility splits
 
 ## Current Known State
 
 ### Good
 
 - `npm.cmd run verify` is green.
-- v2 hosted panel assets load locally from `http://127.0.0.1:5000/extension-v2/panel/index.html`.
-- prompt review/store/library flows are now hosted-owned and functionally connected again.
-- release tab local download path is wired to the v2 local lane.
-- top console traces are readable enough to drive root-cause debugging without the old debug UI.
+- Worktree is clean.
+- `open-workspace` / `open-result` top-panel traces now close cleanly with launch-requested/launch-dispatched/completed semantics.
+- conversation jump over-trigger is not currently confirmed; after click instrumentation, repeated jumps matched repeated user clicks rather than proven single-click duplication.
+- docs now explicitly state hosted-first ownership and the rule to keep correcting stale ownership docs as they are encountered.
 
 ### Important nuance
 
-`meeting` is hosted on the panel side, but backend endpoint naming is still legacy.
+`meeting` is hosted on the panel/workspace side, but backend endpoint naming is still legacy.
 
 That means:
 
@@ -105,90 +83,76 @@ That means:
 
 Do not rename meeting endpoints to `...V2` unless backend exports are added first.
 
-### Worktree nuance
+Also:
 
-The worktree is not fully clean.
-
-These local changes were already present and were intentionally left untouched:
-
-- `hosting/extension-v2/panel/legacy-tools.css`
-- `hosting/extension-v2/panel/meeting-view.js`
-
-Do not accidentally fold those into unrelated cleanup unless the task is explicitly about them.
+- residual `top.panel.snapshot.push` noise still exists, but it is not the current migration blocker
+- `conversation` jump duplication should only be revisited if a single user click clearly produces multiple jump requests in the trace
 
 ## What Is Still Not Fully Finished
 
-The large ownership move is effectively done.
+The remaining work is no longer smoke-fix first. It is mostly structural cleanup to finish the hosted-first boundary.
 
-What remains is finish-up and cleanup work:
+1. Reduce remaining `meetingManager` coupling in v2 so extension keeps only browser/page capability.
+2. Remove remaining prompt shell/tab-transition ownership from extension.
+3. Keep trimming panel shell/bootstrap/composition so the `content/panel.js` path becomes generic host + broker only.
+4. Prepare final release path from deployed `0.4.4` baseline to hosted v2 `1.0.0`.
 
-1. Reduce residual console/snapshot noise after tool switches
-2. Investigate conversation bookmark jump over-triggering
-3. Split meeting open traces between top-panel launch and hosted workspace boot
-   - `open-workspace`
-   - `open-result`
-4. Continue trimming extension-side leftover wiring that no longer needs to own UI decisions
-5. Final release prep from deployed `0.4.4` baseline to hosted v2 `1.0.0`
+## Concrete Next Session Targets
 
-## Concrete Outstanding Issues To Pick Up Next
+### 1. Meeting residue
 
-These are the highest-value next-session follow-ups.
+Goal:
 
-### 1. Conversation jump over-trigger
+- replace or shrink the remaining v2 dependency on extension-side meeting lifecycle/state
 
-Recent local logs showed `page/jump-conversation-item` firing many times from a single conversation click sequence.
+Start files:
 
-This is the clearest remaining behavior issue in the current smoke pass.
-
-Start by tracing:
-
-- `hosting/extension-v2/panel/index.js`
-- `hosting/extension-v2/panel/conversation-controller.js`
-- `content/panel.js`
-- `content/bookmark-view.js`
-- `hosting/extension-v2/panel/bookmark-view.js`
-
-The accessibility warning is fixed, but click/request duplication still needs confirmation and likely reduction.
-
-### 2. Meeting open trace split
-
-`share` / `revoke-share` now emit both start and completion traces.
-
-`open-workspace` and `open-result` open a new hosted tab, so the top panel console should only tell the launch story. Hosted workspace boot/ready should be checked in the new tab debug console instead of forcing the original tab logs to represent both surfaces.
-
-Start by tracing:
-
+- `content/panel-v2-composition-controller.js`
+- `content/panel-bootstrap-controller.js`
+- `content/panel-action-controller.js`
 - `content/panel-meeting-controller.js`
-- `content/panel.js`
+- `hosting/extension-v2/panel/meeting-hub-controller.js`
+
+### 2. Prompt shell residue
+
+Goal:
+
+- move remaining prompt tab shell/transition decisions into hosted controllers
+
+Start files:
+
+- `content/panel-v2-composition-controller.js`
+- `content/panel-render-controller.js`
+- `content/panel-action-controller.js`
 - `hosting/extension-v2/panel/index.js`
-- `hosting/meeting/index.js`
 
-### 3. Residual prompt/store/release noise
+Then read only the feature-local hosted prompt controllers that the chosen path actually touches.
 
-Functionality is mostly working, but there is still repeated:
+### 3. Common panel shell cleanup
 
-- `top.panel.snapshot.push`
-- `runtime/storage.update-ui-preferences`
-- `prompt/loadInovaPromptLibraryUrl`
-- `prompt/listPromptStoreEntriesUrl`
+Goal:
 
-These no longer look like hard failures, but they are still optimization candidates.
+- make the extension panel path a generic host + bridge instead of a feature-aware UI owner
+
+Start files:
+
+- `content/panel.js`
+- `content/panel-render-controller.js`
+- `content/panel-bootstrap-controller.js`
+- `content/panel-action-controller.js`
+
+### Not the next priority
+
+- console noise cleanup
+- speculative conversation over-trigger fixes without single-click evidence
 
 ## Recommended Next Steps
 
-If continuing immediately, do this order:
-
-1. Chrome extension `Reload`
-2. Refresh the `i-Nova` tab
-3. Re-run targeted smoke in local emulator:
-   - conversation click/jump/copy
-   - meeting open-result/open-workspace/share/revoke
-   - hosted workspace `workspace.ready`
-   - prompt review second-run behavior
-   - prompt store publish/import
-   - release download/open
-4. Only fix concrete issues confirmed by console trace
-5. After smoke is stable, remove leftover extension-owned UI wiring only where clearly unnecessary
+1. Read `docs/current-handoff.md`, `docs/development-philosophy.md`, `docs/refactoring-plan.md`, and `docs/runtime-architecture.md`.
+2. Pick one remaining extension-owned responsibility and move only that slice.
+3. If a doc still describes the old ownership, fix it in the same task.
+4. Run `npm.cmd run verify` and commit each bounded slice.
+5. Only smoke-test the paths needed to validate the boundary that moved.
 
 ## Local Rehearsal Notes
 
@@ -200,38 +164,40 @@ If continuing immediately, do this order:
   - extension reload
   - set popup to local hosting
   - refresh `i-Nova` tab
-
-Current emulator log files from this session:
-
-- `C:\Users\parkyoungtack\Documents\code\inova_extension\.codex-logs\emulator-meeting-local-20260412-091736.out.log`
-- `C:\Users\parkyoungtack\Documents\code\inova_extension\.codex-logs\emulator-meeting-local-20260412-091736.err.log`
+- Meeting launch validation split:
+  - original `i-Nova` tab should show launch request/dispatch/completion
+  - new hosted workspace tab should show workspace bootstrap/ready
 
 ## Key Files To Read First Next Session
 
 Minimal re-entry set:
 
 - `docs/current-handoff.md`
+- `AGENTS.md`
+- `docs/development-philosophy.md`
 - `docs/refactoring-plan.md`
 - `docs/runtime-architecture.md`
 - `shared/product-lane.js`
-- `shared/firebase-config.js`
 - `content/panel-v2-composition-controller.js`
+- `content/panel-bootstrap-controller.js`
+- `content/panel-action-controller.js`
+- `content/panel-render-controller.js`
 - `content/panel.js`
-- `hosting/extension-v2/panel/index.html`
 - `hosting/extension-v2/panel/index.js`
 
-Then read only the feature-local hosted controller for the failing area.
+Then read only the feature-local hosted controller for the chosen slice.
 
 ## Deployment Boundary
 
-Current branch changes span both extension and hosting.
+Current branch changes still span both extension and hosting across recent commits.
 
 So real rollout still means:
 
-- `hosting` deploy for hosted assets
+- `hosting` deploy for hosted assets/controller changes
 - extension reload or extension package update for `content/background/shared/manifest` changes
+- docs-only changes need neither
 
 Long-term target remains:
 
-- hosting-only UI/feature changes should usually need only hosting deploy + tab refresh
-- extension deploy should happen only for browser-only capability changes
+- most UI/feature changes should become `hosting deploy + tab refresh`
+- extension deploy should happen only for browser/page capability changes
