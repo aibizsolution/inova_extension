@@ -418,6 +418,13 @@
     const callbacks = host.__callbacks || {};
     const action = normalizeText(payload?.action);
     const detail = payload?.detail && typeof payload.detail === "object" ? payload.detail : {};
+    const handledMeetingRequest = await namespace.panelHostedMeetingRequest?.handle?.(action, payload, callbacks, {
+      logConsoleTrace,
+      normalizeText,
+    });
+    if (handledMeetingRequest?.handled) {
+      return handledMeetingRequest.result;
+    }
 
     if (action === "toggle-panel") {
       callbacks.onToggle?.(payload?.open);
@@ -447,27 +454,6 @@
     if (action === "bookmark-jump") {
       callbacks.onJumpBookmark?.(normalizeText(payload?.bookmarkId));
       return { jumped: true };
-    }
-    if (action === "meeting-action") {
-      logConsoleTrace("meeting", "50.top.panel.request.received", {
-        detail,
-        meetingAction: normalizeText(payload?.meetingAction),
-      });
-      try {
-        await callbacks.onMeetingAction?.(normalizeText(payload?.meetingAction), detail);
-        logConsoleTrace("meeting", "59.top.panel.request.completed", {
-          detail,
-          meetingAction: normalizeText(payload?.meetingAction),
-        });
-        return { handled: true };
-      } catch (error) {
-        logConsoleTrace("meeting", "59.top.panel.request.error", {
-          detail,
-          error: normalizeText(error instanceof Error ? error.message : String(error || "")),
-          meetingAction: normalizeText(payload?.meetingAction),
-        });
-        throw error;
-      }
     }
     if (action === "release-action") {
       await callbacks.onReleaseAction?.(normalizeText(payload?.releaseAction), detail);

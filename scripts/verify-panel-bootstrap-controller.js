@@ -27,6 +27,7 @@ async function verifyBootstrapWiringAndScheduling() {
   assert.equal(harness.lifecycleInitializeCalls, 1);
   assert.deepEqual(harness.providerIdentityReasons, ["bootstrap"]);
   assert.equal(typeof harness.callbacks.onMeetingAction, "function");
+  assert.equal(typeof harness.callbacks.onMeetingSummarySync, "function");
   assert.equal(typeof harness.callbacks.onSearch, "function");
   assert.equal(typeof harness.callbacks.onToggle, "function");
   assert.equal(harness.debugInstallCalls, 1);
@@ -149,6 +150,7 @@ function createHarness(options = {}) {
 
   const controller = context.InovaBookmarks.panelBootstrapController.create(state, {
     handlePanelMeetingAction: async () => {},
+    handlePanelMeetingSummarySync: async () => {},
     isStoreTabActive() {
       return Boolean(options.storeTabActive);
     },

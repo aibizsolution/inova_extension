@@ -69,8 +69,8 @@ function main() {
     "v2 composition should provide an idle meeting lifecycle bridge for unrelated shell sidecars"
   );
   assert(
-    /const panelActivityController = namespace\.panelActivityController\.create\(state, \{[\s\S]*?meetingManager: hostedOwnedMeetingLifecycle,/.test(v2CompositionSource),
-    "v2 composition should keep browser visibility/focus meeting sync on the hosted-owned meeting lifecycle bridge"
+    /const panelActivityController = namespace\.panelActivityController\.create\(state, \{[\s\S]*?meetingManager: hostedOwnedIdleMeetingLifecycle,/.test(v2CompositionSource),
+    "v2 browser visibility/focus should stop waking extension meeting sync"
   );
   assert(
     /const panelShellController = namespace\.panelShellController\.create\(state, \{[\s\S]*?meetingManager: hostedOwnedIdleMeetingLifecycle,/.test(v2CompositionSource),
@@ -81,8 +81,8 @@ function main() {
     "v2 panel toggle transitions should stop waking extension meeting sync"
   );
   assert(
-    /const panelBootstrapController = namespace\.panelBootstrapController\.create\(state, \{[\s\S]*?meetingManager: hostedOwnedMeetingLifecycle,/.test(v2CompositionSource),
-    "v2 bootstrap should keep the hosted-owned meeting lifecycle bridge for explicit bootstrap priming"
+    /const panelBootstrapController = namespace\.panelBootstrapController\.create\(state, \{[\s\S]*?meetingManager: hostedOwnedIdleMeetingLifecycle,/.test(v2CompositionSource),
+    "v2 bootstrap should stop wiring meeting sync through the extension lifecycle bridge"
   );
   assert(
     /const panelSurfaceController = namespace\.panelSurfaceController\.create\(state, \{[\s\S]*?meetingManager: hostedOwnedIdleMeetingLifecycle,/.test(v2CompositionSource),
@@ -133,6 +133,10 @@ function main() {
     "v2 meeting snapshot bridge should derive snapshot state from the raw meeting hub summary"
   );
   assert(
+    v2CompositionSource.includes("const explicitFingerprint = normalizeText(meetingTool?.snapshotFingerprint);"),
+    "v2 meeting snapshot bridge should honor an explicit hosted-owned meeting fingerprint"
+  );
+  assert(
     v2CompositionSource.includes("buildMeetingSnapshot: hostedOwnedMeetingSnapshot.buildMeetingSnapshot"),
     "v2 render wiring should pass the hosted-owned meeting snapshot bridge"
   );
@@ -157,12 +161,16 @@ function main() {
     "v2 bootstrap should forward hosted meeting actions into the shared top-panel dispatcher"
   );
   assert(
+    v2CompositionSource.includes("handlePanelMeetingSummarySync: handleHostedMeetingSummarySync"),
+    "v2 bootstrap should accept hosted-owned meeting summary sync callbacks"
+  );
+  assert(
     v2CompositionSource.includes("shouldListenMeetingStorageChanges: () => false"),
     "v2 bootstrap wiring should not subscribe meeting storage change listeners"
   );
   assert(
-    v2CompositionSource.includes("shouldPrimeMeetingSync: () => state.activeTool === \"meeting\""),
-    "v2 bootstrap wiring should only prime meeting sync when the meeting tool starts active"
+    v2CompositionSource.includes("shouldPrimeMeetingSync: () => false"),
+    "v2 bootstrap wiring should stop priming extension meeting sync"
   );
   assert(
     v2CompositionSource.includes("panelDebugController"),

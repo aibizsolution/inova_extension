@@ -88,6 +88,7 @@
     invokePage,
     invokeRuntime,
     scheduleRender,
+    syncTopPanelSummary: syncMeetingToolSummary,
     traceMeeting: traceMeetingFlow,
   }) || null;
   const releaseController = namespace.releaseController?.create?.({
@@ -120,9 +121,11 @@
     root.addEventListener("input", handleRootInput);
     root.addEventListener("change", handleRootChange);
     root.addEventListener("keydown", handleRootKeydown);
+    global.addEventListener("focus", handleWindowFocus, { passive: true });
     global.addEventListener("error", handleWindowError);
     global.addEventListener("unhandledrejection", handleUnhandledRejection);
     global.addEventListener("message", handleWindowMessage);
+    global.document.addEventListener("visibilitychange", handleDocumentVisibilityChange, { passive: true });
     tracePanelFlow("12.hosted.listeners.bound", {});
     scheduleStartupStatusCard();
     sendReady();
@@ -571,6 +574,13 @@
         meetingAction,
       });
       throw error;
+    });
+  }
+
+  function syncMeetingToolSummary(meetingTool = {}) {
+    return request("panel", {
+      action: "meeting-summary-sync",
+      meetingTool,
     });
   }
 
@@ -1784,6 +1794,18 @@
       lineno: Number(event?.lineno) || 0,
       message: normalizeText(event?.message),
     });
+  }
+
+  function handleWindowFocus() {
+    void meetingHubController?.handleHostActivity?.("window-focus");
+  }
+
+  function handleDocumentVisibilityChange() {
+    if (global.document.visibilityState === "visible") {
+      void meetingHubController?.handleHostActivity?.("visibility-visible");
+      return;
+    }
+    void meetingHubController?.handleHostActivity?.("visibility-hidden");
   }
 
   function handleUnhandledRejection(event) {

@@ -81,7 +81,7 @@
     });
     const panelActivityController = namespace.panelActivityController.create(state, {
       logPanelDebug: runtimeDiagnostics.logPanelDebug,
-      meetingManager: hostedOwnedMeetingLifecycle,
+      meetingManager: hostedOwnedIdleMeetingLifecycle,
       providerIdentitySync,
       releaseManager,
       render,
@@ -125,10 +125,11 @@
     });
     const panelBootstrapController = namespace.panelBootstrapController.create(state, {
       handlePanelMeetingAction: panelActionController.handlePanelMeetingAction,
+      handlePanelMeetingSummarySync: handleHostedMeetingSummarySync,
       isStoreTabActive: runtimeFlags.isStoreTabActive,
-      meetingManager: hostedOwnedMeetingLifecycle,
+      meetingManager: hostedOwnedIdleMeetingLifecycle,
       shouldListenMeetingStorageChanges: () => false,
-      shouldPrimeMeetingSync: () => state.activeTool === "meeting",
+      shouldPrimeMeetingSync: () => false,
       panelActivityController,
       panelBookmarkController,
       panelDebugController,
@@ -159,6 +160,28 @@
         });
       }
       return panelMeetingController;
+    }
+
+    function handleHostedMeetingSummarySync(meetingTool = {}) {
+      const nextSummary = {
+        checkedAt: normalizeText(meetingTool.checkedAt),
+        count: Math.max(0, Number(meetingTool.count) || 0),
+        dataFreshness: normalizeText(meetingTool.dataFreshness),
+        degraded: Boolean(meetingTool.degraded),
+        degradedReason: normalizeText(meetingTool.degradedReason),
+        error: normalizeText(meetingTool.error),
+        snapshotFingerprint: normalizeText(meetingTool.snapshotFingerprint),
+        source: normalizeText(meetingTool.source),
+      };
+      if (buildMeetingSummaryKey(state.meetingHub) === buildMeetingSummaryKey(nextSummary)) {
+        return false;
+      }
+      state.meetingHub = namespace.meetingManager.mergeMeetingHub({
+        ...state.meetingHub,
+        ...nextSummary,
+      });
+      render();
+      return true;
     }
   }
 
@@ -209,6 +232,10 @@
     }
 
     function buildMeetingSnapshotFingerprint(meetingTool = {}) {
+      const explicitFingerprint = normalizeText(meetingTool?.snapshotFingerprint);
+      if (explicitFingerprint) {
+        return explicitFingerprint;
+      }
       const items = Array.isArray(meetingTool.items) ? meetingTool.items : [];
       return [
         String(getMeetingCount(meetingTool)),
@@ -332,6 +359,19 @@
         ? JSON.parse(JSON.stringify(reviewState.result))
         : null,
     };
+  }
+
+  function buildMeetingSummaryKey(meetingTool) {
+    return JSON.stringify({
+      checkedAt: normalizeText(meetingTool?.checkedAt),
+      count: Math.max(0, Number(meetingTool?.count) || 0),
+      dataFreshness: normalizeText(meetingTool?.dataFreshness),
+      degraded: Boolean(meetingTool?.degraded),
+      degradedReason: normalizeText(meetingTool?.degradedReason),
+      error: normalizeText(meetingTool?.error),
+      snapshotFingerprint: normalizeText(meetingTool?.snapshotFingerprint),
+      source: normalizeText(meetingTool?.source),
+    });
   }
 
   namespace.panelV2CompositionController = { create };

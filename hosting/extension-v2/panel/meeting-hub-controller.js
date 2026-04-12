@@ -21,6 +21,9 @@
     const scheduleRender = typeof options.scheduleRender === "function"
       ? options.scheduleRender
       : () => {};
+    const syncTopPanelSummary = typeof options.syncTopPanelSummary === "function"
+      ? options.syncTopPanelSummary
+      : async () => false;
     const traceMeeting = typeof options.traceMeeting === "function"
       ? options.traceMeeting
       : () => {};
@@ -57,6 +60,7 @@
     return {
       buildViewState,
       getMeetingCount,
+      handleHostActivity,
       handleMeetingAction,
       hasRequiredCapabilities,
       syncPanelState,
@@ -125,6 +129,25 @@
         pending: normalizePending(state.pending),
         source: normalizeEnum(state.source, ["runtime-read", "cache", "none"], "none"),
       };
+    }
+
+    function handleHostActivity(reason) {
+      const normalizedReason = normalizeText(reason);
+      if (!hasRequiredCapabilities()) {
+        return false;
+      }
+      if (normalizedReason !== "window-focus" && normalizedReason !== "visibility-visible") {
+        return false;
+      }
+      if (state.activeTool !== "meeting" || !state.panelOpen) {
+        return false;
+      }
+      traceMeeting("66.top.meeting.host-activity.refresh", {
+        open: state.panelOpen,
+        reason: normalizedReason,
+      });
+      void ensureLoaded(true);
+      return true;
     }
 
     async function handleMeetingAction(action, detail = {}) {
@@ -300,10 +323,13 @@
           state.error = "";
           state.source = "runtime-read";
           state.lastCount = Math.max(0, Number(result?.totalCount) || items.length);
+          await emitTopPanelSummary();
           state.lastLoadedFingerprint = state.snapshotFingerprint;
           return state.items;
         } catch (error) {
           applyLoadError(error);
+          await emitTopPanelSummary();
+          state.lastLoadedFingerprint = state.snapshotFingerprint;
           return state.items;
         } finally {
           state.loading = false;
@@ -472,6 +498,42 @@
         return false;
       }
     }
+
+    async function emitTopPanelSummary() {
+      if (!hasRequiredCapabilities()) {
+        return false;
+      }
+      const summary = buildTopPanelSummary();
+      state.snapshotFingerprint = normalizeText(summary.snapshotFingerprint) || state.snapshotFingerprint;
+      try {
+        await syncTopPanelSummary(summary);
+        return true;
+      } catch (error) {
+        void error;
+        return false;
+      }
+    }
+
+    function buildTopPanelSummary() {
+      const count = Math.max(0, Number(state.lastCount) || state.items.length || 0);
+      return {
+        checkedAt: normalizeText(state.checkedAt),
+        count,
+        dataFreshness: normalizeEnum(state.dataFreshness, ["fresh", "stale", "empty"], "empty"),
+        degraded: Boolean(state.degraded),
+        degradedReason: normalizeText(state.degradedReason),
+        error: normalizeText(state.error),
+        snapshotFingerprint: buildMeetingToolFingerprint({
+          checkedAt: state.checkedAt,
+          count,
+          dataFreshness: state.dataFreshness,
+          degraded: state.degraded,
+          error: state.error,
+          items: state.items,
+        }),
+        source: normalizeEnum(state.source, ["runtime-read", "cache", "none"], "none"),
+      };
+    }
   }
 
   function createPendingState() {
@@ -585,6 +647,27 @@
           tone: normalizeText(feedback?.tone) || "info",
         }
       : null;
+  }
+
+  function buildMeetingToolFingerprint(meetingTool = {}) {
+    const items = Array.isArray(meetingTool.items) ? meetingTool.items : [];
+    const count = Math.max(0, Number(meetingTool.count) || items.length);
+    return [
+      String(count),
+      normalizeText(meetingTool.checkedAt),
+      normalizeText(meetingTool.dataFreshness),
+      meetingTool.degraded ? "1" : "0",
+      normalizeText(meetingTool.error),
+      items.map((item) => [
+        normalizeText(item?.meetingId),
+        normalizeText(item?.latestJobId || item?.jobId),
+        normalizeText(item?.latestArtifactId || item?.artifactId),
+        normalizeText(item?.status),
+        item?.share?.active ? "1" : "0",
+        normalizeText(item?.share?.status),
+        normalizeText(item?.updatedAt || item?.createdAt),
+      ].join("~")).join("||"),
+    ].join("|");
   }
 
   function normalizeEnum(value, allowedValues, fallback) {

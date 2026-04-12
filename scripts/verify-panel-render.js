@@ -12,10 +12,12 @@ async function main() {
   verifyHostedPanelHostBatching();
   verifyLocalPanelRuntimeSwitch();
   verifyPageBridgeEvents();
+  verifyHostedMeetingRequestModuleContract();
   verifyPromptHubShowPromptTabContract();
   verifyHostedPanelImeCompositionGuard();
   verifyHostedMeetingActionCompletionTraceContract();
   verifyHostedStartupStatusCardDelayContract();
+  verifyHostedMeetingSummarySyncContract();
   verifyHostedConversationSearchDebounceContract();
   verifyHostedStoreSearchDebounceContract();
   verifyBookmarkJumpAccessibilityContract();
@@ -103,6 +105,30 @@ function verifyPageBridgeEvents() {
       },
     },
   ]);
+}
+
+function verifyHostedMeetingRequestModuleContract() {
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(root, "manifest.json"), "utf8")
+  );
+  const topPanelSource = fs.readFileSync(
+    path.join(root, "content", "panel.js"),
+    "utf8"
+  );
+
+  const mainContentScript = manifest.content_scripts.find((entry) =>
+    Array.isArray(entry?.matches) && entry.matches.includes("https://inova.incross.com/*")
+  );
+  const scriptList = Array.isArray(mainContentScript?.js) ? mainContentScript.js : [];
+  const helperIndex = scriptList.indexOf("content/panel-hosted-meeting-request.js");
+  const panelIndex = scriptList.indexOf("content/panel.js");
+
+  assert(helperIndex !== -1, "manifest should load the hosted meeting request helper");
+  assert(panelIndex !== -1 && helperIndex < panelIndex, "manifest should load the meeting request helper before content/panel.js");
+  assert(
+    topPanelSource.includes("namespace.panelHostedMeetingRequest?.handle?."),
+    "content/panel.js should delegate meeting-specific hosted requests to the dedicated helper module"
+  );
 }
 
 function verifyPromptHubShowPromptTabContract() {
@@ -207,6 +233,34 @@ function verifyHostedStartupStatusCardDelayContract() {
   assert(
     hostedPanelSource.includes("clearStartupStatusCard();"),
     "hosted panel should clear pending startup status cards when the extension snapshot arrives"
+  );
+}
+
+function verifyHostedMeetingSummarySyncContract() {
+  const hostedPanelSource = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "index.js"),
+    "utf8"
+  );
+  const meetingRequestHelperSource = fs.readFileSync(
+    path.join(root, "content", "panel-hosted-meeting-request.js"),
+    "utf8"
+  );
+  const bootstrapSource = fs.readFileSync(
+    path.join(root, "content", "panel-bootstrap-controller.js"),
+    "utf8"
+  );
+
+  assert(
+    hostedPanelSource.includes('action: "meeting-summary-sync"'),
+    "hosted meeting hub should be able to sync a compact summary back to the top panel"
+  );
+  assert(
+    meetingRequestHelperSource.includes('if (action === "meeting-summary-sync") {'),
+    "top panel bridge should accept hosted meeting summary sync requests through the dedicated helper module"
+  );
+  assert(
+    bootstrapSource.includes("onMeetingSummarySync: handlePanelMeetingSummarySync"),
+    "panel bootstrap should forward hosted meeting summary sync callbacks into the top-panel bridge"
   );
 }
 

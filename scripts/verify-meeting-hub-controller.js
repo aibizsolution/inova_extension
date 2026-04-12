@@ -11,6 +11,7 @@ async function main() {
   await verifyHostedMeetingHubOwnership();
   await verifyHostedMeetingHubShareCopyFailure();
   await verifyHostedMeetingHubLifecycleRefreshOwnership();
+  await verifyHostedMeetingHubActivityRefreshOwnership();
   console.log("[verify-meeting-hub-controller] Hosted meeting hub controller contract passed");
 }
 
@@ -36,6 +37,9 @@ async function verifyHostedMeetingHubOwnership() {
   let viewState = controller.buildViewState({});
   assert.equal(viewState.items.length, 1, "hosted meeting hub should load meeting items directly");
   assert.equal(viewState.items[0].meetingId, "meeting-alpha");
+  assert.equal(harness.summarySyncCalls.length, 1, "hosted meeting hub should sync a compact summary back to the top panel after load");
+  assert.equal(harness.summarySyncCalls[0].count, 1);
+  assert.equal(typeof harness.summarySyncCalls[0].snapshotFingerprint, "string");
 
   const shareHandled = await controller.handleMeetingAction("share", {
     meetingId: "meeting-alpha",
@@ -214,6 +218,57 @@ async function verifyHostedMeetingHubLifecycleRefreshOwnership() {
   );
 }
 
+async function verifyHostedMeetingHubActivityRefreshOwnership() {
+  const harness = createHarness();
+  const controller = harness.controller;
+
+  controller.syncPanelState(
+    {
+      activeTool: "meeting",
+      open: true,
+      meetingTool: {
+        count: 1,
+        snapshotFingerprint: "meeting-alpha|1|seed",
+      },
+      settings: {
+        meetingWorkspaceTarget: "production",
+      },
+    },
+    ["runtime.invoke.v1"]
+  );
+  await flushAsyncTurns();
+
+  const fetchCountBeforeVisible = countRuntimeCalls(harness.runtimeCalls, "functions.fetch");
+  const visibleHandled = controller.handleHostActivity("visibility-visible");
+  await flushAsyncTurns();
+  assert.equal(visibleHandled, true, "hosted meeting hub should handle visible recovery itself");
+  assert.equal(
+    countRuntimeCalls(harness.runtimeCalls, "functions.fetch"),
+    fetchCountBeforeVisible + 1,
+    "hosted meeting hub should refresh itself when the hosted document becomes visible again"
+  );
+
+  controller.syncPanelState(
+    {
+      activeTool: "prompts",
+      open: true,
+      meetingTool: {
+        count: 1,
+        snapshotFingerprint: "meeting-alpha|1|seed",
+      },
+      settings: {
+        meetingWorkspaceTarget: "production",
+      },
+    },
+    ["runtime.invoke.v1"]
+  );
+  await flushAsyncTurns();
+
+  const focusHandled = controller.handleHostActivity("window-focus");
+  await flushAsyncTurns();
+  assert.equal(focusHandled, false, "hosted meeting hub should ignore focus refresh when meeting is not active");
+}
+
 async function flushAsyncTurns(turns = 8) {
   for (let index = 0; index < turns; index += 1) {
     await Promise.resolve();
@@ -232,6 +287,7 @@ function createHarness(options = {}) {
 function createHarnessWithOptions(options = {}) {
   const runtimeCalls = [];
   const pageCalls = [];
+  const summarySyncCalls = [];
   const context = vm.createContext({
     clearTimeout() {},
     console,
@@ -327,6 +383,10 @@ function createHarnessWithOptions(options = {}) {
       throw new Error(`Unexpected runtime action: ${request?.action}`);
     },
     scheduleRender() {},
+    syncTopPanelSummary: async (meetingTool) => {
+      summarySyncCalls.push(cloneValue(meetingTool));
+      return { handled: true };
+    },
     traceMeeting() {},
   });
 
@@ -334,6 +394,7 @@ function createHarnessWithOptions(options = {}) {
     controller,
     pageCalls,
     runtimeCalls,
+    summarySyncCalls,
   };
 }
 

@@ -5,6 +5,9 @@
     const handlePanelMeetingAction = typeof deps.handlePanelMeetingAction === "function"
       ? deps.handlePanelMeetingAction
       : async () => {};
+    const handlePanelMeetingSummarySync = typeof deps.handlePanelMeetingSummarySync === "function"
+      ? deps.handlePanelMeetingSummarySync
+      : async () => false;
     const isStoreTabActive = typeof deps.isStoreTabActive === "function"
       ? deps.isStoreTabActive
       : () => false;
@@ -61,6 +64,7 @@
         onImportFile: panelPromptController.handleImportFile,
         onJumpBookmark: panelBookmarkController.jumpToBookmark,
         onMeetingAction: handlePanelMeetingAction,
+        onMeetingSummarySync: handlePanelMeetingSummarySync,
         onMovePrompt: panelPromptController.movePromptItem,
         onPromptAction: panelPromptController.handlePromptAction,
         onPromptDraftChange: panelPromptController.handleDraftChange,

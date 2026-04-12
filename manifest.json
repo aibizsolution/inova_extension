@@ -87,6 +87,7 @@
         "content/prompt-hub-controller.js",
         "content/prompt-hub-runtime.js",
         "content/hosted-panel-bridge.js",
+        "content/panel-hosted-meeting-request.js",
         "content/panel.js",
         "content/panel-bookmark-controller.js",
         "content/panel-shell-controller.js",
