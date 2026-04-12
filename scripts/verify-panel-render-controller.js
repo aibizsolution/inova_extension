@@ -9,6 +9,7 @@ const root = path.resolve(__dirname, "..");
 
 function main() {
   verifyCustomConversationSnapshotBridge();
+  verifyCustomPromptSnapshotBridge();
   verifyRenderPayloadAndReviewFloat();
   verifyCustomReleaseSnapshotBridge();
   verifyVisibleStateCalculation();
@@ -56,6 +57,44 @@ function verifyRenderPayloadAndReviewFloat() {
   assert.equal(harness.renderPayloads[0].meetingTool.count, 2);
   assert.equal(harness.renderPayloads[0].visible, true);
   assert.deepEqual(harness.reviewFloatStates, [{ visible: true }]);
+}
+
+function verifyCustomPromptSnapshotBridge() {
+  const harness = createHarness({
+    activeTool: "prompts",
+    buildPromptSnapshot() {
+      return {
+        activeTab: "review",
+        review: {
+          open: true,
+          pending: true,
+          result: {
+            summary: "검토 결과",
+          },
+        },
+      };
+    },
+    getPromptCounts() {
+      return {
+        promptCount: 7,
+        promptToolCount: 5,
+      };
+    },
+  });
+
+  harness.controller.render();
+
+  assert.equal(harness.renderPayloads[0].handleCount, 5);
+  assert.deepEqual(harness.renderPayloads[0].promptTool, {
+    activeTab: "review",
+    review: {
+      open: true,
+      pending: true,
+      result: {
+        summary: "검토 결과",
+      },
+    },
+  });
 }
 
 function verifyVisibleStateCalculation() {
@@ -183,6 +222,8 @@ function createHarness(options = {}) {
         };
       },
     },
+    buildPromptSnapshot: options.buildPromptSnapshot,
+    getPromptCounts: options.getPromptCounts,
     panelShellController: {
       buildHandleCount(counts) {
         if (state.activeTool === "bookmarks") {

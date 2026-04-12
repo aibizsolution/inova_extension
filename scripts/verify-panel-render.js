@@ -160,6 +160,14 @@ function verifyV2CompositionWiring() {
     "v2 composition should wrap prompt wiring for hosted-owned prompt tabs"
   );
   assert(
+    v2CompositionSource.includes("createHostedOwnedPromptSnapshotBridge"),
+    "v2 composition should wrap prompt snapshot shaping for hosted-owned prompt state"
+  );
+  assert(
+    v2CompositionSource.includes("buildPromptSnapshot: hostedOwnedPromptSnapshot.buildPromptSnapshot"),
+    "v2 render wiring should pass the hosted-owned prompt snapshot bridge"
+  );
+  assert(
     v2CompositionSource.includes("createHostedOwnedConversationSnapshotBridge"),
     "v2 composition should wrap conversation snapshot shaping for hosted-owned conversation state"
   );
@@ -351,6 +359,10 @@ function verifyHostedPromptReviewFallbackContract() {
   assert(
     hostedPanelSource.includes("const reviewState = resolveEffectivePromptReviewState(snapshotReviewState, hostedReviewState);"),
     "hosted prompt tool should merge snapshot review state before rendering the review tab"
+  );
+  assert(
+    hostedPanelSource.includes("const storeState = promptStoreController.buildViewState();"),
+    "hosted prompt tool should read store state directly from the hosted store controller"
   );
   assert(
     hostedPanelSource.includes("function resolveEffectivePromptReviewState(snapshotReviewState, hostedReviewState)"),

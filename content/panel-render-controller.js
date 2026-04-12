@@ -19,6 +19,15 @@
       buildReviewFloatState() { return { visible: false }; },
       buildToolState() { return { promptCount: 0, promptTool: {}, promptToolCount: 0 }; },
     };
+    const buildPromptSnapshot = typeof deps.buildPromptSnapshot === "function"
+      ? deps.buildPromptSnapshot
+      : (promptToolState) => promptToolState?.promptTool || {};
+    const getPromptCounts = typeof deps.getPromptCounts === "function"
+      ? deps.getPromptCounts
+      : (promptToolState) => ({
+        promptCount: Number(promptToolState?.promptCount) || 0,
+        promptToolCount: Number(promptToolState?.promptToolCount) || 0,
+      });
     const panelShellController = deps.panelShellController || {
       buildHandleCount() { return 0; },
     };
@@ -47,6 +56,8 @@
         Number(bookmarkTool.count) || (Array.isArray(bookmarkTool.items) ? bookmarkTool.items.length : 0)
       );
       const promptToolState = panelPromptController.buildToolState();
+      const promptSnapshot = normalizePromptSnapshot(buildPromptSnapshot(promptToolState));
+      const promptCounts = normalizePromptCounts(getPromptCounts(promptToolState), promptToolState);
       const meetingTool = panelMeetingController.buildToolState(state.meetingHub);
       const releaseState = normalizeReleaseSnapshot(buildReleaseSnapshot());
       const releaseCount = normalizeCount(
@@ -56,8 +67,8 @@
       const handleCount = panelShellController.buildHandleCount({
         bookmarks: conversationCount,
         meeting: meetingTool.count,
-        promptTool: promptToolState.promptToolCount,
-        prompts: promptToolState.promptCount,
+        promptTool: promptCounts.promptToolCount,
+        prompts: promptCounts.promptCount,
         release: releaseCount,
       });
 
@@ -69,7 +80,7 @@
         releaseTool: releaseState,
         handleRatio: namespace.storage.getHandleRatio(state.uiPreferences, global.innerWidth),
         open: state.open,
-        promptTool: promptToolState.promptTool,
+        promptTool: promptSnapshot,
         settings: state.settings,
         settingsHydrated: Boolean(state.settingsHydrated),
         visible,
@@ -88,6 +99,24 @@
 
     function normalizeConversationSnapshot(value) {
       return value && typeof value === "object" ? value : {};
+    }
+
+    function normalizePromptSnapshot(value) {
+      return value && typeof value === "object" ? value : {};
+    }
+
+    function normalizePromptCounts(value, fallbackPromptToolState = {}) {
+      const promptCounts = value && typeof value === "object" ? value : {};
+      return {
+        promptCount: normalizeCount(
+          promptCounts.promptCount,
+          Number(fallbackPromptToolState.promptCount) || 0
+        ),
+        promptToolCount: normalizeCount(
+          promptCounts.promptToolCount,
+          Number(fallbackPromptToolState.promptToolCount) || 0
+        ),
+      };
     }
   }
 

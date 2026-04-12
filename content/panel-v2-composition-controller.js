@@ -54,6 +54,7 @@
       persistActiveTool: panelShellController.persistActiveTool,
       render,
     });
+    const hostedOwnedPromptSnapshot = createHostedOwnedPromptSnapshotBridge();
     const panelPromptController = createHostedOwnedPromptController(sharedPromptController);
     promptBridgeController = namespace.panelPromptBridgeController.create(state, {
       panelPromptController,
@@ -111,6 +112,8 @@
       isToolSurface: runtimeFlags.isToolSurface,
       buildConversationSnapshot: hostedOwnedConversationSnapshot.buildConversationSnapshot,
       getConversationCount: hostedOwnedConversationSnapshot.getConversationCount,
+      buildPromptSnapshot: hostedOwnedPromptSnapshot.buildPromptSnapshot,
+      getPromptCounts: hostedOwnedPromptSnapshot.getPromptCounts,
       panelBookmarkController,
       panelDebugController,
       panelMeetingController,
@@ -153,6 +156,26 @@
       handleStorageChange() {},
       scheduleCloudSyncIfNeeded() {},
       scheduleRealtimeSync() {},
+    };
+  }
+
+  function createHostedOwnedPromptSnapshotBridge() {
+    return {
+      buildPromptSnapshot(promptToolState = {}) {
+        const promptTool = promptToolState?.promptTool && typeof promptToolState.promptTool === "object"
+          ? promptToolState.promptTool
+          : {};
+        return {
+          activeTab: normalizeText(promptTool.activeTab) || "library",
+          review: normalizePromptReviewSnapshot(promptTool.review),
+        };
+      },
+      getPromptCounts(promptToolState = {}) {
+        return {
+          promptCount: Math.max(0, Number(promptToolState.promptCount) || 0),
+          promptToolCount: Math.max(0, Number(promptToolState.promptToolCount) || 0),
+        };
+      },
     };
   }
 
@@ -211,6 +234,24 @@
 
   function normalizeText(value) {
     return namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
+  }
+
+  function normalizePromptReviewSnapshot(reviewState) {
+    if (!reviewState || typeof reviewState !== "object") {
+      return {};
+    }
+    return {
+      available: Boolean(reviewState.available),
+      copyState: normalizeText(reviewState.copyState),
+      error: normalizeText(reviewState.error),
+      lastReviewedAt: normalizeText(reviewState.lastReviewedAt),
+      open: Boolean(reviewState.open),
+      pending: Boolean(reviewState.pending),
+      placeholderConfirmation: Boolean(reviewState.placeholderConfirmation),
+      result: reviewState.result && typeof reviewState.result === "object"
+        ? JSON.parse(JSON.stringify(reviewState.result))
+        : null,
+    };
   }
 
   namespace.panelV2CompositionController = { create };

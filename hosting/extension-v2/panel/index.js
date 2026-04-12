@@ -956,7 +956,7 @@
         reviewOpen: Boolean(reviewState?.open),
       });
       if (promptStoreController?.hasRequiredCapabilities?.() && promptStoreController?.buildViewState) {
-        const storeState = promptStoreController.buildViewState(panelState.promptTool?.store || {});
+        const storeState = promptStoreController.buildViewState();
         promptToolState.store = storeState;
         promptToolState.tabs = Array.isArray(promptToolState.tabs)
           ? promptToolState.tabs.map((tab) => tab.id === "store"
@@ -1069,8 +1069,6 @@
       0,
       Number(effectivePromptTool?.prompt?.totalCount)
         || Number(effectivePromptTool?.tabs?.find?.((tab) => tab.id === "library")?.count)
-        || Number(panelState.promptTool?.prompt?.totalCount)
-        || Number(panelState.promptTool?.tabs?.find?.((tab) => tab.id === "library")?.count)
         || promptItems.length
     );
     return promptTotal;
