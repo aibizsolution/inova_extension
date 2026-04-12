@@ -19,7 +19,10 @@
       global.clearTimeout(state.syncTimer);
       state.syncTimer = global.setTimeout(() => {
         refreshState()
-          .then(() => hooks.render())
+          .then(() => {
+            clearRouteRetriesIfSettled();
+            hooks.render();
+          })
           .catch(logRefreshError);
       }, 120);
     }
@@ -73,6 +76,7 @@
       state.observer = namespace.contentDom.observeMessages(scheduleRefresh);
       scheduleRouteRetryTimers();
       await refreshState();
+      clearRouteRetriesIfSettled();
       hooks.render();
       logDebug("route.sync.success", {
         force: Boolean(force),
@@ -90,13 +94,25 @@
 
     function scheduleRouteRetryTimers() {
       [180, 500, 900, 1600, 2600].forEach((delay) => {
-        state.routeRetryTimers.push(global.setTimeout(scheduleRefresh, delay));
+        state.routeRetryTimers.push(global.setTimeout(() => {
+          if (!shouldRetryRouteRefresh()) {
+            clearRouteRetryTimers();
+            return;
+          }
+          scheduleRefresh();
+        }, delay));
       });
     }
 
     function clearRouteRetryTimers() {
       state.routeRetryTimers.forEach((timerId) => global.clearTimeout(timerId));
       state.routeRetryTimers = [];
+    }
+
+    function clearRouteRetriesIfSettled() {
+      if (!shouldRetryRouteRefresh()) {
+        clearRouteRetryTimers();
+      }
     }
 
     function disconnectObserver() {
@@ -106,6 +122,15 @@
 
     function scheduleRouteSync(reason = "scheduled") {
       global.setTimeout(() => syncRouteState(false, reason).catch((error) => console.error("[i-Nova Bookmarks] route sync failed", error)), 0);
+    }
+
+    function shouldRetryRouteRefresh() {
+      return Boolean(
+        state.awaitingRouteMessages
+        || state.lastError
+        || !Array.isArray(state.bookmarks)
+        || !state.bookmarks.length
+      );
     }
 
     function shouldSkipSyncDebugLog(force, reason, sessionChanged) {
