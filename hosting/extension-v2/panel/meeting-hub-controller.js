@@ -113,21 +113,11 @@
       try {
         if (normalizedAction === "share" && input.meetingId) {
           const result = await invokeRuntime({
-            action: "functions.fetch",
-            authMode: "access-token",
-            body: {
-              jobId: input.jobId,
-              meetingId: input.meetingId,
-              owner: buildProviderIdentityPayload(),
-            },
-            endpointKey: "createInovaMeetingShareLinkUrl",
-            service: "meeting",
+            action: "meeting.create-share-link",
+            input,
+            providerIdentity: buildProviderIdentityPayload(),
           });
-          const shareUrl = buildMeetingWorkspaceUrl({
-            jobId: input.jobId,
-            meetingId: input.meetingId,
-            shareToken: normalizeText(result?.shareToken),
-          });
+          const shareUrl = normalizeText(result?.shareUrl);
           if (!shareUrl) {
             throw new Error("공유 링크를 만들지 못했어요.");
           }
@@ -138,28 +128,22 @@
         }
         if (normalizedAction === "revoke-share" && input.meetingId) {
           const result = await invokeRuntime({
-            action: "functions.fetch",
-            authMode: "access-token",
-            body: {
-              jobId: input.jobId,
-              meetingId: input.meetingId,
-              owner: buildProviderIdentityPayload(),
-            },
-            endpointKey: "revokeInovaMeetingShareLinkUrl",
-            service: "meeting",
+            action: "meeting.revoke-share-link",
+            input,
+            providerIdentity: buildProviderIdentityPayload(),
           });
           patchShareState(input.meetingId, result?.share);
           setFeedback("공유 링크를 해제했습니다.", "info", 2200);
           return true;
         }
 
-        const url = buildMeetingWorkspaceUrl({
-          jobId: normalizedAction === "open-result" ? input.jobId : "",
-          meetingId: input.meetingId || buildMeetingId(),
-        });
         await invokeRuntime({
-          action: "browser.open-url",
-          url,
+          action: normalizedAction === "open-result" ? "meeting.open-result" : "meeting.open-workspace",
+          input: {
+            ...input,
+            jobId: normalizedAction === "open-result" ? input.jobId : "",
+          },
+          providerIdentity: buildProviderIdentityPayload(),
         });
         setFeedback(normalizedAction === "open-result" ? "결과 탭을 열었습니다." : "작업실 탭을 열었습니다.", "info", 1800);
         return true;
@@ -365,33 +349,6 @@
         }))
         .filter((item) => item.meetingId)
         .sort((left, right) => Date.parse(right.updatedAt || "") - Date.parse(left.updatedAt || ""));
-    }
-
-    function buildMeetingWorkspaceUrl(input = {}) {
-      const url = new URL("/meeting/index.html", global.location.origin);
-      const meetingId = normalizeText(input.meetingId);
-      const jobId = normalizeText(input.jobId);
-      const shareToken = normalizeText(input.shareToken || input.share);
-      if (state.settings.meetingDebugConsoleEnabled) {
-        url.searchParams.set("debug", "1");
-      }
-      if (meetingId) {
-        url.searchParams.set("meetingId", meetingId);
-      }
-      if (jobId) {
-        url.searchParams.set("jobId", jobId);
-      }
-      if (shareToken) {
-        url.searchParams.set("share", shareToken);
-      }
-      return url.toString();
-    }
-
-    function buildMeetingId() {
-      if (global.crypto?.randomUUID) {
-        return `meeting-${global.crypto.randomUUID()}`;
-      }
-      return `meeting-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     }
 
     function normalizeShare(share) {
