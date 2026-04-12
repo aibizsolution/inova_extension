@@ -15,6 +15,7 @@ async function main() {
   verifyPromptHubShowPromptTabContract();
   verifyHostedPanelImeCompositionGuard();
   verifyHostedMeetingActionCompletionTraceContract();
+  verifyHostedStartupStatusCardDelayContract();
   verifyHostedConversationSearchDebounceContract();
   verifyHostedStoreSearchDebounceContract();
   verifyBookmarkJumpAccessibilityContract();
@@ -178,6 +179,34 @@ function verifyHostedMeetingActionCompletionTraceContract() {
   assert(
     hostedPanelSource.includes('traceMeetingFlow("44.hosted.panel.request.error"'),
     "hosted meeting actions should emit an error trace after the panel bridge request fails"
+  );
+}
+
+function verifyHostedStartupStatusCardDelayContract() {
+  const hostedPanelSource = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "index.js"),
+    "utf8"
+  );
+
+  assert(
+    hostedPanelSource.includes("const STARTUP_STATUS_CARD_DELAY_MS = 450;"),
+    "hosted panel should defer startup status cards to avoid flashing an info box during normal boot"
+  );
+  assert(
+    hostedPanelSource.includes("startupStatusTimerId: 0,"),
+    "hosted panel should track a startup status timer"
+  );
+  assert(
+    hostedPanelSource.includes("startupStatusShown: false,"),
+    "hosted panel should track whether the delayed startup card is already visible"
+  );
+  assert(
+    hostedPanelSource.includes("scheduleStartupStatusCard();"),
+    "hosted panel should schedule the startup status card instead of rendering it immediately"
+  );
+  assert(
+    hostedPanelSource.includes("clearStartupStatusCard();"),
+    "hosted panel should clear pending startup status cards when the extension snapshot arrives"
   );
 }
 

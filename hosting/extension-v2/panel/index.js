@@ -4,6 +4,7 @@
   const APP_SOURCE = "inova-hosted-panel-app";
   const EXTENSION_SOURCE = "inova-hosted-panel-extension";
   const REQUEST_TIMEOUT_MS = 15000;
+  const STARTUP_STATUS_CARD_DELAY_MS = 450;
   const APP_CAPABILITIES = Object.freeze([
     "panel.snapshot.v1",
     "panel.request.v1",
@@ -42,6 +43,8 @@
     renderDeferred: false,
     renderFrame: 0,
     requestSeq: 0,
+    startupStatusShown: false,
+    startupStatusTimerId: 0,
     traceRequestIds: new Set(),
     inputComposition: createInputCompositionState(),
     storeRenderKey: 0,
@@ -121,11 +124,7 @@
     global.addEventListener("unhandledrejection", handleUnhandledRejection);
     global.addEventListener("message", handleWindowMessage);
     tracePanelFlow("12.hosted.listeners.bound", {});
-    renderStatusCard({
-      body: "확장 프로그램과 패널 상태를 연결하는 중입니다.",
-      title: "호스팅 패널 준비 중",
-      tone: "info",
-    });
+    scheduleStartupStatusCard();
     sendReady();
     scheduleReadyPing();
   }
@@ -473,6 +472,7 @@
     state.panelSnapshot = payload.panel && typeof payload.panel === "object"
       ? cloneValue(payload.panel)
       : null;
+    clearStartupStatusCard();
     tracePanelFlow("18.hosted.snapshot.applied", {
       activeTool: normalizeText(state.panelSnapshot?.activeTool),
       meetingCount: Number(state.panelSnapshot?.meetingTool?.count) || 0,
@@ -717,12 +717,10 @@
       tracePanelFlow("19.hosted.render.waiting-snapshot", {
         bridgeReady: Boolean(state.bridgeReady),
       });
-      renderStatusCard({
-        body: "패널 상태 스냅샷을 기다리고 있습니다.",
-        meta: state.bridgeReady ? `extension ${state.extensionVersion || "unknown"}` : "",
-        title: "패널을 준비하는 중",
-        tone: "info",
-      });
+      scheduleStartupStatusCard();
+      if (state.startupStatusShown) {
+        renderPendingSnapshotStatusCard();
+      }
       return;
     }
     tracePanelFlow("19.hosted.render.flush", {
@@ -1136,6 +1134,39 @@
     `;
     state.elements = null;
     state.renderCache = createPanelRenderCache();
+  }
+
+  function scheduleStartupStatusCard() {
+    if (state.panelSnapshot || state.startupStatusTimerId || state.startupStatusShown) {
+      return;
+    }
+    state.startupStatusTimerId = global.setTimeout(() => {
+      state.startupStatusTimerId = 0;
+      if (state.panelSnapshot) {
+        return;
+      }
+      state.startupStatusShown = true;
+      renderPendingSnapshotStatusCard();
+    }, STARTUP_STATUS_CARD_DELAY_MS);
+  }
+
+  function clearStartupStatusCard() {
+    if (state.startupStatusTimerId) {
+      global.clearTimeout(state.startupStatusTimerId);
+      state.startupStatusTimerId = 0;
+    }
+    state.startupStatusShown = false;
+  }
+
+  function renderPendingSnapshotStatusCard() {
+    renderStatusCard({
+      body: state.bridgeReady
+        ? "패널 상태 스냅샷을 기다리고 있습니다."
+        : "확장 프로그램과 패널 상태를 연결하는 중입니다.",
+      meta: state.bridgeReady ? `extension ${state.extensionVersion || "unknown"}` : "",
+      title: state.bridgeReady ? "패널을 준비하는 중" : "호스팅 패널 준비 중",
+      tone: "info",
+    });
   }
 
   function buildMarkup() {
