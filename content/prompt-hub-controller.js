@@ -63,12 +63,17 @@
         activeTool: "prompts",
       });
       lockUiPreferenceSelection("prompts", nextPromptTab);
+      onSelectPromptTab(nextPromptTab);
       persistActiveTool("prompts", nextPromptTab).catch((error) => {
         console.error("[i-Nova Bookmarks] prompt tab save failed", error);
       });
       if (nextPromptTab === "library") {
         cloudSyncManager.scheduleSync(120, !state.promptLibraryRemoteReady);
       }
+      if (nextPromptTab === "store") {
+        storeManager.ensureLoaded();
+      }
+      render();
     }
 
     function handleEscape() {

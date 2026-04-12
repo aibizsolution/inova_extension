@@ -13,6 +13,7 @@ async function main() {
   verifyLocalPanelRuntimeSwitch();
   verifyPageBridgeEvents();
   verifyV2CompositionWiring();
+  verifyPromptHubShowPromptTabContract();
   verifyHostedPanelImeCompositionGuard();
   verifyHostedConversationSearchDebounceContract();
   verifyHostedStoreSearchDebounceContract();
@@ -177,6 +178,27 @@ function verifyV2CompositionWiring() {
   assert(
     v2CompositionSource.includes("panelDebugController"),
     "v2 render/bootstrap wiring should pass the debug controller through"
+  );
+}
+
+function verifyPromptHubShowPromptTabContract() {
+  const promptHubControllerSource = fs.readFileSync(
+    path.join(root, "content", "prompt-hub-controller.js"),
+    "utf8"
+  );
+
+  assert(
+    promptHubControllerSource.includes("onSelectPromptTab(nextPromptTab);"),
+    "content prompt hub should notify prompt tab observers when showPromptTab changes tabs"
+  );
+  assert(
+    promptHubControllerSource.includes("if (nextPromptTab === \"store\") {\r\n        storeManager.ensureLoaded();")
+      || promptHubControllerSource.includes("if (nextPromptTab === \"store\") {\n        storeManager.ensureLoaded();"),
+    "content prompt hub should load the store when showPromptTab opens the store tab"
+  );
+  assert(
+    promptHubControllerSource.includes("render();"),
+    "content prompt hub should rerender immediately when showPromptTab changes the active tab"
   );
 }
 
