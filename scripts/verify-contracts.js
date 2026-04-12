@@ -83,6 +83,7 @@ if (countJavaScriptFiles(sharedDirectory) < 3) {
 }
 
 assertFileExists("scripts/verify-prompt-fallbacks.js");
+assertFileExists("scripts/verify-functions-runtime.js");
 assertFileExists("scripts/verify-hosted-panel-bridge.js");
 assertFileExists("scripts/verify-prompt-library-remote-first.js");
 assertFileExists("scripts/verify-prompt-review.js");

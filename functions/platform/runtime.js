@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const admin = require("firebase-admin");
 const { onRequest } = require("firebase-functions/v2/https");
 const { onDocumentWritten } = require("firebase-functions/v2/firestore");
@@ -57,6 +58,10 @@ const STORE_CATEGORIES = [
 const STORE_CATEGORY_IDS = STORE_CATEGORIES.map((category) => category.id);
 const MAX_TITLE_LENGTH = 120;
 const MAX_CONTENT_LENGTH = 12000;
+const VERIFIED_INOVA_IDENTITY_CACHE_TTL_MS = 5 * 60 * 1000;
+const VERIFIED_INOVA_IDENTITY_CACHE_LIMIT = 256;
+const recentVerifiedInovaIdentities = new Map();
+const pendingVerifiedInovaIdentities = new Map();
 
 module.exports = {
   admin,
@@ -131,27 +136,57 @@ async function verifyInovaIdentity(providerIdentity, request) {
     throw createHttpError(401, "i-Nova access token이 없어요.");
   }
 
-  const verifyResponse = await fetch(`https://inova.incross.com/api/users/${encodeURIComponent(owner.providerUserKey)}/settings`, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-    method: "GET",
-  });
-
-  if (!verifyResponse.ok) {
-    throw createHttpError(401, "i-Nova 세션 검증에 실패했어요.");
+  const cacheKey = buildVerifiedInovaIdentityCacheKey(owner.providerUserKey, accessToken);
+  const recentOwner = readRecentVerifiedInovaIdentity(cacheKey);
+  if (recentOwner) {
+    return recentOwner;
   }
 
-  return owner;
+  if (cacheKey && pendingVerifiedInovaIdentities.has(cacheKey)) {
+    return pendingVerifiedInovaIdentities.get(cacheKey);
+  }
+
+  const requestPromise = (async () => {
+    const verifyResponse = await fetch(`https://inova.incross.com/api/users/${encodeURIComponent(owner.providerUserKey)}/settings`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      method: "GET",
+    });
+
+    if (!verifyResponse.ok) {
+      throw createHttpError(401, "i-Nova 세션 검증에 실패했어요.");
+    }
+
+    cacheRecentVerifiedInovaIdentity(cacheKey, owner, accessToken);
+    return { ...owner };
+  })();
+
+  if (cacheKey) {
+    pendingVerifiedInovaIdentities.set(cacheKey, requestPromise);
+  }
+
+  try {
+    return await requestPromise;
+  } finally {
+    if (cacheKey) {
+      pendingVerifiedInovaIdentities.delete(cacheKey);
+    }
+  }
 }
 
 function normalizeIdentity(identity) {
+  const numericUserId = identity?.numericUserId;
   return {
     provider: normalizeText(identity?.provider) || "inova",
     providerUserKey: normalizeText(identity?.providerUserKey),
     email: normalizeText(identity?.email).toLowerCase(),
     displayName: normalizeText(identity?.displayName),
-    numericUserId: Number.isFinite(Number(identity?.numericUserId)) ? Number(identity.numericUserId) : null,
+    numericUserId: numericUserId === null || numericUserId === undefined || numericUserId === ""
+      ? null
+      : Number.isFinite(Number(numericUserId))
+        ? Number(numericUserId)
+        : null,
   };
 }
 
@@ -181,6 +216,82 @@ function extractAccessToken(request) {
   }
 
   return authorization.slice(7).trim();
+}
+
+function buildVerifiedInovaIdentityCacheKey(providerUserKey, accessToken) {
+  const normalizedProviderUserKey = normalizeText(providerUserKey);
+  const normalizedAccessToken = normalizeText(accessToken);
+  if (!normalizedProviderUserKey || !normalizedAccessToken) {
+    return "";
+  }
+  return `${normalizedProviderUserKey}::${crypto.createHash("sha256").update(normalizedAccessToken).digest("hex")}`;
+}
+
+function readRecentVerifiedInovaIdentity(cacheKey) {
+  const key = normalizeText(cacheKey);
+  const entry = key ? recentVerifiedInovaIdentities.get(key) : null;
+  if (!entry || entry.expiresAt <= Date.now()) {
+    if (key) {
+      recentVerifiedInovaIdentities.delete(key);
+    }
+    return null;
+  }
+  return { ...entry.owner };
+}
+
+function cacheRecentVerifiedInovaIdentity(cacheKey, owner, accessToken) {
+  const key = normalizeText(cacheKey);
+  const expiresAt = resolveVerifiedInovaIdentityExpiry(accessToken);
+  if (!key || expiresAt <= Date.now()) {
+    return;
+  }
+  pruneRecentVerifiedInovaIdentities();
+  recentVerifiedInovaIdentities.set(key, {
+    expiresAt,
+    owner: normalizeIdentity(owner),
+  });
+  while (recentVerifiedInovaIdentities.size > VERIFIED_INOVA_IDENTITY_CACHE_LIMIT) {
+    const oldestKey = recentVerifiedInovaIdentities.keys().next().value;
+    if (!oldestKey) {
+      break;
+    }
+    recentVerifiedInovaIdentities.delete(oldestKey);
+  }
+}
+
+function pruneRecentVerifiedInovaIdentities() {
+  const now = Date.now();
+  for (const [key, entry] of recentVerifiedInovaIdentities.entries()) {
+    if (!entry || entry.expiresAt <= now) {
+      recentVerifiedInovaIdentities.delete(key);
+    }
+  }
+}
+
+function resolveVerifiedInovaIdentityExpiry(accessToken) {
+  const ttlExpiry = Date.now() + VERIFIED_INOVA_IDENTITY_CACHE_TTL_MS;
+  const tokenExpiry = readJwtExpiryMs(accessToken);
+  if (!tokenExpiry) {
+    return ttlExpiry;
+  }
+  return Math.max(Date.now(), Math.min(ttlExpiry, tokenExpiry - 60000));
+}
+
+function readJwtExpiryMs(accessToken) {
+  const normalizedAccessToken = normalizeText(accessToken);
+  const parts = normalizedAccessToken.split(".");
+  if (parts.length < 2) {
+    return 0;
+  }
+  try {
+    const payload = JSON.parse(
+      Buffer.from(parts[1].replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8")
+    );
+    const expSeconds = Number(payload?.exp) || 0;
+    return expSeconds > 0 ? expSeconds * 1000 : 0;
+  } catch {
+    return 0;
+  }
 }
 
 function createHttpError(status, message) {
