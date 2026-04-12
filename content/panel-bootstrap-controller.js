@@ -78,9 +78,6 @@
       global.chrome?.storage?.onChanged?.addListener(panelPromptController.handleStorageChange);
       global.chrome?.storage?.onChanged?.addListener(meetingManager.handleStorageChange);
       global.chrome?.storage?.onChanged?.addListener(releaseManager.handleStorageChange);
-      namespace.panelDebug?.subscribe?.(() => {
-        render();
-      });
       await routeSync.syncRouteState(true);
       meetingManager.scheduleSync(260);
       panelPromptController.scheduleRealtimeSync(260);

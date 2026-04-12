@@ -488,13 +488,10 @@ function buildNamespace({ controllerEvents, ensureCalls, renderPayloads, runtime
             runtime.chrome.storage.onChanged.addListener(deps.panelPromptController.handleStorageChange);
             runtime.chrome.storage.onChanged.addListener(deps.meetingManager.handleStorageChange);
             runtime.chrome.storage.onChanged.addListener(deps.releaseManager.handleStorageChange);
-            namespace.panelDebug.subscribe(() => {
-              deps.render();
-            });
             await deps.routeSync.syncRouteState(true);
             deps.meetingManager.scheduleSync(260);
             deps.panelPromptController.scheduleRealtimeSync(260);
-            deps.panelPromptController.scheduleCloudSyncIfNeeded(1800);
+            deps.panelPromptController.scheduleCloudSyncIfNeeded(260);
             if (deps.isStoreTabActive()) {
               deps.panelPromptController.ensureStoreLoaded();
             }

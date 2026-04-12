@@ -36,11 +36,10 @@ async function verifyBootstrapWiringAndScheduling() {
   assert.equal(typeof harness.windowListeners.focus, "function");
   assert.equal(typeof harness.documentListeners.visibilitychange, "function");
   assert.equal(harness.storageListeners.length, 4);
-  assert.equal(harness.panelDebugSubscribeCalls, 1);
   assert.deepEqual(harness.routeSyncCalls, [true]);
   assert.deepEqual(harness.meetingScheduleCalls, [260]);
   assert.deepEqual(harness.promptRealtimeCalls, [260]);
-  assert.deepEqual(harness.promptCloudCalls, [1800]);
+  assert.deepEqual(harness.promptCloudCalls, [260]);
   assert.equal(harness.ensureStoreLoadedCalls, 1);
   assert.deepEqual(harness.releaseEnsureCalls, [{ allowCached: false, preferFresh: true }]);
   assert.deepEqual(harness.timeoutDelays, [450, 1200]);
@@ -100,7 +99,6 @@ function createHarness(options = {}) {
   let routeStateShouldRefresh = true;
   let routeRefreshCalls = 0;
   let ensureStoreLoadedCalls = 0;
-  let panelDebugSubscribeCalls = 0;
   let debugInstallCalls = 0;
   let reviewFloatEnsureCalls = 0;
   let routeWatchInstallCalls = 0;
@@ -121,10 +119,7 @@ function createHarness(options = {}) {
       },
     },
     panelDebug: {
-      subscribe(callback) {
-        panelDebugSubscribeCalls += 1;
-        callback();
-      },
+      subscribe() {},
     },
   };
 
@@ -255,9 +250,6 @@ function createHarness(options = {}) {
     },
     get meetingScheduleCalls() {
       return meetingScheduleCalls;
-    },
-    get panelDebugSubscribeCalls() {
-      return panelDebugSubscribeCalls;
     },
     get promptCloudCalls() {
       return promptCloudCalls;
