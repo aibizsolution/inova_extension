@@ -31,6 +31,10 @@
 
     function render() {
       panelDebugController.syncEnabled();
+      if (!state.settingsHydrated) {
+        namespace.composerReviewFloat?.render?.(panelPromptController.buildReviewFloatState(false));
+        return;
+      }
       const visible = state.settings.enabled && isToolSurface() && !isPaused();
       const bookmarkTool = panelBookmarkController.buildToolState();
       const promptToolState = panelPromptController.buildToolState();
@@ -55,6 +59,7 @@
         open: state.open,
         promptTool: promptToolState.promptTool,
         settings: state.settings,
+        settingsHydrated: Boolean(state.settingsHydrated),
         toolCount: shellChrome.toolCount,
         toolTitle: shellChrome.toolTitle,
         tools: shellChrome.tools,

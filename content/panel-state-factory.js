@@ -61,6 +61,7 @@
       activeTool: namespace.constants.defaults.uiPreferences.activeTool,
       queries: { bookmarks: "", prompts: "", store: "" },
       settings: { ...namespace.constants.defaults.settings },
+      settingsHydrated: false,
       pausedSessions: {},
       meetingHub: { ...namespace.constants.defaults.meetingHub },
       meetingUi: createMeetingUiState(),

@@ -91,6 +91,7 @@
           ...namespace.constants.defaults.settings,
           ...(settingsChange.newValue || {}),
         };
+        state.settingsHydrated = true;
         changed = true;
       }
       if (pausedSessionsChange) {
@@ -119,6 +120,7 @@
 
     function mergeStorageState(storageState = {}) {
       state.settings = storageState.settings || { ...namespace.constants.defaults.settings };
+      state.settingsHydrated = true;
       state.pausedSessions = storageState.pausedSessions || {};
       state.cloudSync = namespace.cloudSync.mergeCloudSyncState(storageState.cloudSync);
       state.uiPreferences = readUiPreferences(storageState.uiPreferences);
