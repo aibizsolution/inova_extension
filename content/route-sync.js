@@ -26,6 +26,7 @@
 
     async function syncRouteState(force = false, reason = "manual") {
       const nextSessionId = namespace.session.getSessionId();
+      const hadSession = Boolean(state.sessionId);
       const sessionChanged = nextSessionId !== state.sessionId;
       const quietClickProbe = shouldSkipSyncDebugLog(force, reason, sessionChanged);
       state.lastRouteKey = getRouteKey();
@@ -52,7 +53,9 @@
       disconnectObserver();
       clearRouteRetryTimers();
       resetRouteState(nextSessionId, namespace.contentDom.getUserMessageSignature());
-      hooks.render();
+      if (hadSession || !nextSessionId) {
+        hooks.render();
+      }
       if (!nextSessionId) {
         logDebug("route.sync.empty", {
           force: Boolean(force),
