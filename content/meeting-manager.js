@@ -503,6 +503,9 @@
       return false;
     }
     const detail = payload && typeof payload === "object" ? payload : {};
+    if (namespace.panelConsoleTrace?.log) {
+      return namespace.panelConsoleTrace.log("meeting", step, detail);
+    }
     console.info(`[inova:meeting] ${namespace.session.normalizeText(step) || "trace"}`, detail);
     namespace.panelDebug?.log?.(`trace.meeting.${namespace.session.normalizeText(step) || "trace"}`, detail);
     return true;

@@ -36,6 +36,7 @@
     renderDeferred: false,
     renderFrame: 0,
     requestSeq: 0,
+    traceRequestIds: new Set(),
     searchComposition: { active: false, toolId: "" },
     storeRenderKey: 0,
     storeScrollTop: 0,
@@ -427,6 +428,10 @@
     }
     const envelope = normalizeEnvelope(event.data);
     if (!envelope || envelope.source !== EXTENSION_SOURCE) {
+      return;
+    }
+    if (isTraceTransportEnvelope(envelope)) {
+      state.traceRequestIds.delete(envelope.requestId);
       return;
     }
     tracePanelFlow("16.hosted.message.received", {
@@ -1450,6 +1455,8 @@
   }
 
   function postTrace(channel, step, payload = {}) {
+    const requestId = buildRequestId();
+    state.traceRequestIds.add(requestId);
     postEnvelope({
       domain: "page",
       payload: {
@@ -1458,9 +1465,20 @@
         payload: payload && typeof payload === "object" ? payload : {},
         step,
       },
-      requestId: buildRequestId(),
+      requestId,
       type: "request",
     });
+  }
+
+  function isTraceTransportEnvelope(envelope) {
+    if (!envelope || typeof envelope !== "object") {
+      return false;
+    }
+    if (state.traceRequestIds.has(normalizeText(envelope.requestId))) {
+      return true;
+    }
+    return normalizeText(envelope.domain) === "page"
+      && normalizeText(envelope.payload?.action) === "log-trace";
   }
 
   function readTraceAction(domain, payload = {}) {

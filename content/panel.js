@@ -2,6 +2,7 @@
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const HANDSHAKE_TIMEOUT_MS = 4000;
   let panelHost = null;
+  let traceSequence = 0;
 
   function ensurePanel(callbacks) {
     let host = getPanelHost();
@@ -114,26 +115,33 @@
         }
       },
       onRequest: async (request) => {
-        logConsoleTrace("panel", "20.top.panel.bridge.request.received", {
-          action: normalizeText(request?.payload?.action),
-          domain: normalizeText(request?.domain),
-          requestId: normalizeText(request?.requestId),
-        });
+        const isTransportTrace = isTraceTransportRequest(request);
+        if (!isTransportTrace) {
+          logConsoleTrace("panel", "20.top.panel.bridge.request.received", {
+            action: normalizeText(request?.payload?.action),
+            domain: normalizeText(request?.domain),
+            requestId: normalizeText(request?.requestId),
+          });
+        }
         try {
           const result = await handleBridgeRequest(host, request);
-          logConsoleTrace("panel", "21.top.panel.bridge.request.completed", {
-            action: normalizeText(request?.payload?.action),
-            domain: normalizeText(request?.domain),
-            requestId: normalizeText(request?.requestId),
-          });
+          if (!isTransportTrace) {
+            logConsoleTrace("panel", "21.top.panel.bridge.request.completed", {
+              action: normalizeText(request?.payload?.action),
+              domain: normalizeText(request?.domain),
+              requestId: normalizeText(request?.requestId),
+            });
+          }
           return result;
         } catch (error) {
-          logConsoleTrace("panel", "21.top.panel.bridge.request.error", {
-            action: normalizeText(request?.payload?.action),
-            domain: normalizeText(request?.domain),
-            error: normalizeText(error instanceof Error ? error.message : String(error || "")),
-            requestId: normalizeText(request?.requestId),
-          });
+          if (!isTransportTrace) {
+            logConsoleTrace("panel", "21.top.panel.bridge.request.error", {
+              action: normalizeText(request?.payload?.action),
+              domain: normalizeText(request?.domain),
+              error: normalizeText(error instanceof Error ? error.message : String(error || "")),
+              requestId: normalizeText(request?.requestId),
+            });
+          }
           throw error;
         }
       },
@@ -787,15 +795,22 @@
     return namespace.session?.normalizeText?.(value) || String(value || "").trim();
   }
 
+  function isTraceTransportRequest(request) {
+    return normalizeText(request?.domain) === "page"
+      && normalizeText(request?.payload?.action) === "log-trace";
+  }
+
   function logConsoleTrace(channel, step, payload = {}) {
     if (!namespace.panelDebug?.isEnabled?.()) {
       return false;
     }
     const normalizedChannel = normalizeText(channel) || "trace";
     const normalizedStep = normalizeText(step) || "trace";
+    const normalizedLabel = normalizedStep.replace(/^\d+\./, "") || "trace";
     const detail = payload && typeof payload === "object" ? payload : {};
-    console.info(`[inova:${normalizedChannel}] ${normalizedStep}`, detail);
-    namespace.panelDebug?.log?.(`trace.${normalizedChannel}.${normalizedStep}`, detail);
+    traceSequence += 1;
+    console.info(`[inova:${normalizedChannel} #${traceSequence}] ${normalizedLabel}`, detail);
+    namespace.panelDebug?.log?.(`trace.${normalizedChannel}.${String(traceSequence).padStart(4, "0")}.${normalizedLabel}`, detail);
     return true;
   }
 
@@ -814,5 +829,8 @@
         bookmarkId: normalizeText(bookmarkId),
       });
     },
+  };
+  namespace.panelConsoleTrace = {
+    log: logConsoleTrace,
   };
 })(globalThis);
