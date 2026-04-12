@@ -13,6 +13,7 @@ async function main() {
   verifyLocalPanelRuntimeSwitch();
   verifyPageBridgeEvents();
   verifyV2CompositionWiring();
+  verifyHostedPanelImeCompositionGuard();
   await verifyPageAdapterContract();
   console.log("[verify-panel-render] Hosted panel host contract passed");
 }
@@ -173,6 +174,38 @@ function verifyV2CompositionWiring() {
   assert(
     v2CompositionSource.includes("panelDebugController"),
     "v2 render/bootstrap wiring should pass the debug controller through"
+  );
+}
+
+function verifyHostedPanelImeCompositionGuard() {
+  const hostedPanelSource = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "index.js"),
+    "utf8"
+  );
+
+  assert(
+    hostedPanelSource.includes("inputComposition: createInputCompositionState()"),
+    "hosted panel should track text composition across hosted inputs"
+  );
+  assert(
+    hostedPanelSource.includes("function getTextInputBinding(target)"),
+    "hosted panel should resolve searchable and editable text inputs through a shared binding helper"
+  );
+  assert(
+    hostedPanelSource.includes('kind: "prompt-field"'),
+    "hosted panel IME guard should cover prompt editor fields"
+  );
+  assert(
+    hostedPanelSource.includes('kind: "search"'),
+    "hosted panel IME guard should cover hosted search fields"
+  );
+  assert(
+    hostedPanelSource.includes("applyTextInputBinding(binding, { composing: false })"),
+    "hosted panel should commit the final text input value after composition ends"
+  );
+  assert(
+    hostedPanelSource.includes("state.renderDeferred = true;"),
+    "hosted panel should defer rerenders while composition is active"
   );
 }
 

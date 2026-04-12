@@ -37,7 +37,7 @@
     renderFrame: 0,
     requestSeq: 0,
     traceRequestIds: new Set(),
-    searchComposition: { active: false, toolId: "" },
+    inputComposition: createInputCompositionState(),
     storeRenderKey: 0,
     storeScrollTop: 0,
   };
@@ -670,7 +670,7 @@
   }
 
   function scheduleRender() {
-    if (state.searchComposition.active) {
+    if (state.inputComposition.active) {
       state.renderDeferred = true;
       return;
     }
@@ -683,7 +683,7 @@
     state.renderFrame = scheduleFrame(() => {
       state.renderFrame = 0;
       flushRender();
-      if (state.renderDeferred && !state.searchComposition.active) {
+      if (state.renderDeferred && !state.inputComposition.active) {
         state.renderDeferred = false;
         scheduleRender();
       }
@@ -1179,38 +1179,55 @@
   }
 
   function handleRootCompositionStart(event) {
-    const search = event.target.closest?.("[data-search-tool]");
-    if (!(search instanceof global.HTMLElement)) {
+    const binding = getTextInputBinding(getEventElementTarget(event));
+    if (!binding) {
       return;
     }
-    state.searchComposition = {
+    state.inputComposition = createInputCompositionState({
       active: true,
-      toolId: search.dataset.searchTool || "",
-    };
+      field: binding.field || "",
+      kind: binding.kind,
+      promptId: binding.promptId || "",
+      toolId: binding.toolId || "",
+    });
   }
 
   function handleRootCompositionEnd(event) {
-    const search = event.target.closest?.("[data-search-tool]");
-    if (!(search instanceof global.HTMLElement)) {
+    const binding = getTextInputBinding(getEventElementTarget(event));
+    if (!binding) {
       return;
     }
-    state.searchComposition = {
-      active: false,
-      toolId: search.dataset.searchTool || "",
-    };
-    if (state.renderDeferred) {
-      state.renderDeferred = false;
+    const shouldFlushDeferred = state.renderDeferred;
+    state.renderDeferred = false;
+    state.inputComposition = createInputCompositionState({
+      field: binding.field || "",
+      kind: binding.kind,
+      promptId: binding.promptId || "",
+      toolId: binding.toolId || "",
+    });
+    const handled = applyTextInputBinding(binding, { composing: false });
+    if ((shouldFlushDeferred || !handled) && !state.renderFrame) {
       scheduleRender();
     }
   }
 
   function handleRootInput(event) {
     const target = getEventElementTarget(event);
-    const search = target?.closest?.("[data-search-tool]");
-    if (search) {
-      void callbacks.onSearch(search.dataset.searchTool || "", search.value, {
-        composing: Boolean(event.isComposing || state.searchComposition.active),
-      });
+    const binding = getTextInputBinding(target);
+    if (binding) {
+      const composing = Boolean(event.isComposing || state.inputComposition.active);
+      if (composing) {
+        state.inputComposition = createInputCompositionState({
+          active: true,
+          field: binding.field || "",
+          kind: binding.kind,
+          promptId: binding.promptId || "",
+          toolId: binding.toolId || "",
+        });
+        state.renderDeferred = true;
+        return;
+      }
+      applyTextInputBinding(binding, { composing: false });
       return;
     }
     namespace.promptHubPanel?.handleInput?.(event, callbacks);
@@ -1354,6 +1371,73 @@
       return `#${escapeSelector(element.id)}`;
     }
     return "";
+  }
+
+  function createInputCompositionState(overrides = {}) {
+    return {
+      active: false,
+      field: "",
+      kind: "",
+      promptId: "",
+      toolId: "",
+      ...overrides,
+    };
+  }
+
+  function getTextInputBinding(target) {
+    if (!(target instanceof global.HTMLElement)) {
+      return null;
+    }
+    const search = target.closest?.("[data-search-tool]");
+    if (search instanceof global.HTMLInputElement || search instanceof global.HTMLTextAreaElement) {
+      return {
+        element: search,
+        kind: "search",
+        toolId: search.dataset.searchTool || "",
+      };
+    }
+    const promptField = target.closest?.("[data-prompt-field]");
+    if (promptField instanceof global.HTMLInputElement || promptField instanceof global.HTMLTextAreaElement) {
+      return {
+        element: promptField,
+        field: promptField.dataset.promptField || "",
+        kind: "prompt-field",
+      };
+    }
+    const promptPublishField = target.closest?.("[data-prompt-publish-field]");
+    if (promptPublishField instanceof global.HTMLInputElement || promptPublishField instanceof global.HTMLTextAreaElement) {
+      return {
+        element: promptPublishField,
+        field: promptPublishField.dataset.promptPublishField || "",
+        kind: "prompt-publish-field",
+        promptId: promptPublishField.dataset.promptId || "",
+      };
+    }
+    return null;
+  }
+
+  function applyTextInputBinding(binding, options = {}) {
+    if (!binding?.element) {
+      return false;
+    }
+    if (binding.kind === "search") {
+      void callbacks.onSearch(binding.toolId || "", binding.element.value, {
+        composing: Boolean(options.composing),
+      });
+      return true;
+    }
+    if (binding.kind === "prompt-field") {
+      void callbacks.onPromptDraftChange(binding.field || "", binding.element.value);
+      return true;
+    }
+    if (binding.kind === "prompt-publish-field" && binding.field === "title") {
+      void callbacks.onPromptAction("set-publish-title", {
+        promptId: binding.promptId || "",
+        title: binding.element.value || "",
+      });
+      return true;
+    }
+    return false;
   }
 
   function serializeRenderState(value) {

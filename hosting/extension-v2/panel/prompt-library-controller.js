@@ -170,7 +170,11 @@
       if (normalizeText(toolId) !== "prompts") {
         return false;
       }
-      state.query = String(value || "");
+      const nextQuery = String(value || "");
+      if (state.query === nextQuery) {
+        return true;
+      }
+      state.query = nextQuery;
       scheduleRender();
       return true;
     }
@@ -194,9 +198,13 @@
       if (key !== "title" && key !== "content") {
         return false;
       }
+      const nextValue = String(value || "");
+      if (String(state.editor[key] || "") === nextValue && !state.editor.error) {
+        return true;
+      }
       state.editor = {
         ...state.editor,
-        [key]: String(value || ""),
+        [key]: nextValue,
         error: "",
       };
       scheduleRender();
