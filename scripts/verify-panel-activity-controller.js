@@ -22,7 +22,6 @@ async function verifyVisibilityHiddenAndVisibleFlow() {
   hiddenHarness.controller.handleVisibilityChange();
   await hiddenHarness.flush();
 
-  assert.deepEqual(hiddenHarness.meetingScheduleCalls, [0]);
   assert.deepEqual(hiddenHarness.promptRealtimeScheduleCalls, [0]);
   assert.deepEqual(hiddenHarness.promptCloudScheduleCalls, []);
   assert.deepEqual(hiddenHarness.releaseEnsureCalls, []);
@@ -38,7 +37,6 @@ async function verifyVisibilityHiddenAndVisibleFlow() {
 
   assert.deepEqual(visibleHarness.providerIdentityReasons, ["visibility-visible"]);
   assert.deepEqual(visibleHarness.promptCloudScheduleCalls, [320]);
-  assert.deepEqual(visibleHarness.meetingScheduleCalls, [320]);
   assert.deepEqual(visibleHarness.promptRealtimeScheduleCalls, [320]);
   assert.deepEqual(visibleHarness.releaseEnsureCalls, [{ allowCached: false, preferFresh: false }]);
   assert.equal(visibleHarness.debugEvents.at(-1)?.event, "panel.ui.visibility.visible");
@@ -54,7 +52,6 @@ async function verifyWindowFocusFlow() {
 
   assert.deepEqual(harness.providerIdentityReasons, ["window-focus"]);
   assert.deepEqual(harness.promptCloudScheduleCalls, [320]);
-  assert.deepEqual(harness.meetingScheduleCalls, [320]);
   assert.deepEqual(harness.promptRealtimeScheduleCalls, [320]);
   assert.deepEqual(harness.releaseEnsureCalls, [{ allowCached: false, preferFresh: false }]);
   assert.equal(harness.debugEvents.at(-1)?.event, "panel.ui.focus");
@@ -63,7 +60,6 @@ async function verifyWindowFocusFlow() {
 
 function createHarness(options = {}) {
   const debugEvents = [];
-  const meetingScheduleCalls = [];
   const promptCloudScheduleCalls = [];
   const promptRealtimeScheduleCalls = [];
   const providerIdentityReasons = [];
@@ -89,11 +85,6 @@ function createHarness(options = {}) {
   const controller = context.InovaBookmarks.panelV2ShellBridge.createHostedOwnedPanelActivityBridge(state, {
     logPanelDebug(event, payload) {
       debugEvents.push({ event, payload: cloneValue(payload) });
-    },
-    meetingManager: {
-      scheduleSync(delay) {
-        meetingScheduleCalls.push(delay);
-      },
     },
     providerIdentitySync: {
       async syncToStorage(reason) {
@@ -123,7 +114,6 @@ function createHarness(options = {}) {
   return {
     controller,
     debugEvents,
-    meetingScheduleCalls,
     promptCloudScheduleCalls,
     promptRealtimeScheduleCalls,
     providerIdentityReasons,

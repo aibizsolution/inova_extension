@@ -22,7 +22,6 @@
       isExtensionContextInvalidatedError: panelRuntimeController.isExtensionContextInvalidatedError,
       logPanelDebug: panelRuntimeController.logPanelDebug,
     };
-    const hostedOwnedIdleMeetingLifecycle = createHostedOwnedIdleMeetingLifecycleBridge();
     const hostedOwnedIdleReleaseLifecycle = createHostedOwnedIdleReleaseLifecycleBridge();
     const hostedOwnedReleaseSnapshot = createHostedOwnedReleaseSnapshotBridge(() => state.releaseSummary);
     const providerIdentitySync = createHostedOwnedProviderIdentitySync(state, {
@@ -38,14 +37,12 @@
       bookmarkController: hostedOwnedConversationBridge,
       getPromptController: () => hostedOwnedPromptController,
       isExtensionContextInvalidatedError: runtimeDiagnostics.isExtensionContextInvalidatedError,
-      meetingManager: hostedOwnedIdleMeetingLifecycle,
       releaseManager: hostedOwnedIdleReleaseLifecycle,
       render,
     });
     const sharedPromptController = namespace.panelV2PromptController.create(state, {
       ...runtimeFlags,
       lockUiPreferenceSelection: panelShellController.lockUiPreferenceSelection,
-      onPromptTabSelected: () => hostedOwnedIdleMeetingLifecycle.scheduleSync(0),
       persistActiveTool: panelShellController.persistActiveTool,
       render,
     });
@@ -66,7 +63,6 @@
       ensureStoreLoaded: promptSyncBridge.ensureStoreLoaded,
       isStoreTabActive: runtimeFlags.isStoreTabActive,
       logPanelDebug: runtimeDiagnostics.logPanelDebug,
-      meetingManager: hostedOwnedIdleMeetingLifecycle,
       releaseManager: hostedOwnedIdleReleaseLifecycle,
       render,
       schedulePromptCloudSyncIfNeeded: promptSyncBridge.schedulePromptCloudSyncIfNeeded,
@@ -74,7 +70,6 @@
     });
     const panelActivityController = panelV2ShellBridge.createHostedOwnedPanelActivityBridge(state, {
       logPanelDebug: runtimeDiagnostics.logPanelDebug,
-      meetingManager: hostedOwnedIdleMeetingLifecycle,
       providerIdentitySync,
       releaseManager: hostedOwnedIdleReleaseLifecycle,
       render,
@@ -85,12 +80,11 @@
       ensureStoreLoaded: promptSyncBridge.ensureStoreLoaded,
       isStoreTabActive: runtimeFlags.isStoreTabActive,
       logPanelDebug: runtimeDiagnostics.logPanelDebug,
-      meetingManager: hostedOwnedIdleMeetingLifecycle,
       render,
       schedulePromptRealtimeSync: promptSyncBridge.schedulePromptRealtimeSync,
     });
     const routeSync = namespace.routeSync.create(state, {
-      onRouteStateChanged: hostedOwnedIdleMeetingLifecycle.handleRouteStateChange,
+      onRouteStateChanged: () => false,
       refreshState: routeStateController.refreshState,
       render,
       resetRouteState: routeStateController.resetRouteState,
@@ -119,9 +113,6 @@
       handlePanelMeetingSummarySync: handleHostedMeetingSummarySync,
       handlePanelReleaseSummarySync: handleHostedReleaseSummarySync,
       isStoreTabActive: runtimeFlags.isStoreTabActive,
-      meetingManager: hostedOwnedIdleMeetingLifecycle,
-      shouldListenMeetingStorageChanges: () => false,
-      shouldPrimeMeetingSync: () => false,
       panelActivityController,
       panelBookmarkController: hostedOwnedConversationBridge,
       panelDebugController,
@@ -281,18 +272,6 @@
       awaitingRouteMessages: false,
       uiPreferenceLock: null,
       lastError: "",
-    };
-  }
-
-  function createHostedOwnedIdleMeetingLifecycleBridge() {
-    return {
-      handleRouteStateChange() {
-        return false;
-      },
-      handleStorageChange() {},
-      scheduleSync() {
-        return false;
-      },
     };
   }
 

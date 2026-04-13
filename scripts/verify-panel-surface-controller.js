@@ -41,7 +41,6 @@ function verifySurfaceWatcherInstallationAndComposerRecovery() {
   assert.equal(harness.state.open, true);
   assert.equal(harness.state.surfaceSignature, "true|true|1|1");
   assert.deepEqual(harness.ensureStoreLoadedCalls, [true]);
-  assert.deepEqual(harness.meetingScheduleCalls, [120]);
   assert.deepEqual(harness.promptRealtimeScheduleCalls, [120]);
   assert.equal(harness.renderCalls.length, 1);
   assert.equal(harness.debugEvents.length, 1);
@@ -70,7 +69,6 @@ function verifySurfaceWatcherComposerLoss() {
   harness.intervals[0].callback();
 
   assert.deepEqual(harness.ensureStoreLoadedCalls, []);
-  assert.deepEqual(harness.meetingScheduleCalls, [0]);
   assert.deepEqual(harness.promptRealtimeScheduleCalls, [120]);
   assert.equal(harness.renderCalls.length, 1);
 }
@@ -79,7 +77,6 @@ function createHarness(options = {}) {
   const debugEvents = [];
   const ensureStoreLoadedCalls = [];
   const intervals = [];
-  const meetingScheduleCalls = [];
   const promptRealtimeScheduleCalls = [];
   const renderCalls = [];
 
@@ -129,11 +126,6 @@ function createHarness(options = {}) {
     logPanelDebug(event, payload) {
       debugEvents.push({ event, payload: cloneValue(payload) });
     },
-    meetingManager: {
-      scheduleSync(delay) {
-        meetingScheduleCalls.push(delay);
-      },
-    },
     render() {
       renderCalls.push(true);
     },
@@ -150,7 +142,6 @@ function createHarness(options = {}) {
       return conversationState;
     },
     intervals,
-    meetingScheduleCalls,
     promptRealtimeScheduleCalls,
     renderCalls,
     set conversationState(value) {

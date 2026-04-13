@@ -3,7 +3,6 @@
 
   function createHostedOwnedPanelActivityBridge(state, deps = {}) {
     const logPanelDebug = typeof deps.logPanelDebug === "function" ? deps.logPanelDebug : () => {};
-    const meetingManager = deps.meetingManager || { scheduleSync() {} };
     const providerIdentitySync = deps.providerIdentitySync || { async syncToStorage() { return false; } };
     const releaseManager = deps.releaseManager || { ensureChecked() {} };
     const render = typeof deps.render === "function" ? deps.render : () => {};
@@ -21,7 +20,6 @@
 
     function handleVisibilityChange() {
       if (global.document.visibilityState !== "visible") {
-        meetingManager.scheduleSync(0);
         schedulePromptRealtimeSync(0);
         logPanelDebug("panel.ui.visibility.hidden", {
           scope: "panel-ui",
@@ -32,7 +30,6 @@
       }
       void providerIdentitySync.syncToStorage("visibility-visible");
       schedulePromptCloudSyncIfNeeded(320);
-      meetingManager.scheduleSync(320);
       schedulePromptRealtimeSync(320);
       if (state.open) {
         releaseManager.ensureChecked();
@@ -47,7 +44,6 @@
     function handleWindowFocus() {
       void providerIdentitySync.syncToStorage("window-focus");
       schedulePromptCloudSyncIfNeeded(320);
-      meetingManager.scheduleSync(320);
       schedulePromptRealtimeSync(320);
       if (state.open) {
         releaseManager.ensureChecked();
@@ -63,7 +59,6 @@
   function createHostedOwnedPanelLifecycleBridge(state, deps = {}) {
     const isStoreTabActive = typeof deps.isStoreTabActive === "function" ? deps.isStoreTabActive : () => false;
     const logPanelDebug = typeof deps.logPanelDebug === "function" ? deps.logPanelDebug : () => {};
-    const meetingManager = deps.meetingManager || { scheduleSync() {} };
     const releaseManager = deps.releaseManager || { ensureChecked() {} };
     const render = typeof deps.render === "function" ? deps.render : () => {};
     const schedulePromptCloudSyncIfNeeded = typeof deps.schedulePromptCloudSyncIfNeeded === "function"
@@ -94,7 +89,6 @@
         writePanelOpenPreference(state.open);
       }
       schedulePromptCloudSyncIfNeeded(220);
-      meetingManager.scheduleSync(state.open ? 220 : 0);
       schedulePromptRealtimeSync(state.open ? 220 : 0);
       if (state.open && isStoreTabActive()) {
         ensureStoreLoaded();
@@ -139,7 +133,6 @@
     const logPanelDebug = typeof deps.logPanelDebug === "function"
       ? deps.logPanelDebug
       : () => {};
-    const meetingManager = deps.meetingManager || { scheduleSync() {} };
     const render = typeof deps.render === "function" ? deps.render : () => {};
     const schedulePromptRealtimeSync = typeof deps.schedulePromptRealtimeSync === "function"
       ? deps.schedulePromptRealtimeSync
@@ -170,7 +163,6 @@
         if (!hadComposer && hasComposer && isStoreTabActive()) {
           ensureStoreLoaded();
         }
-        meetingManager.scheduleSync(hasComposer ? 120 : 0);
         schedulePromptRealtimeSync(120);
         if (previousSurface.hasComposer !== nextSurface.hasComposer || previousSurface.hasChatLog !== nextSurface.hasChatLog) {
           logPanelDebug("panel.ui.surface.changed", {
@@ -216,13 +208,6 @@
     const isStoreTabActive = typeof deps.isStoreTabActive === "function"
       ? deps.isStoreTabActive
       : () => false;
-    const meetingManager = deps.meetingManager || { handleStorageChange() {}, scheduleSync() {} };
-    const shouldListenMeetingStorageChanges = typeof deps.shouldListenMeetingStorageChanges === "function"
-      ? deps.shouldListenMeetingStorageChanges
-      : () => true;
-    const shouldPrimeMeetingSync = typeof deps.shouldPrimeMeetingSync === "function"
-      ? deps.shouldPrimeMeetingSync
-      : () => true;
     const panelActivityController = deps.panelActivityController || { handleVisibilityChange() {}, handleWindowFocus() {} };
     const panelBookmarkController = deps.panelBookmarkController || { copyBookmarkText() {}, jumpToBookmark() {} };
     const panelDebugController = deps.panelDebugController || { installValidationApi() {} };
@@ -282,14 +267,8 @@
       global.document.addEventListener("visibilitychange", panelActivityController.handleVisibilityChange, { passive: true });
       global.chrome?.storage?.onChanged?.addListener(handleRouteStorageChange);
       global.chrome?.storage?.onChanged?.addListener(panelPromptController.handleStorageChange);
-      if (shouldListenMeetingStorageChanges()) {
-        global.chrome?.storage?.onChanged?.addListener(meetingManager.handleStorageChange);
-      }
       global.chrome?.storage?.onChanged?.addListener(releaseManager.handleStorageChange);
       await routeSync.syncRouteState(true);
-      if (shouldPrimeMeetingSync()) {
-        meetingManager.scheduleSync(260);
-      }
       panelPromptController.scheduleRealtimeSync(260);
       panelPromptController.scheduleCloudSyncIfNeeded(260);
       if (isStoreTabActive()) {
@@ -514,7 +493,6 @@
     const isExtensionContextInvalidatedError = typeof deps.isExtensionContextInvalidatedError === "function"
       ? deps.isExtensionContextInvalidatedError
       : () => false;
-    const meetingManager = deps.meetingManager || { scheduleSync() {} };
     const releaseManager = deps.releaseManager || { ensureChecked() {} };
     const render = typeof deps.render === "function" ? deps.render : () => {};
     const UI_PREFERENCE_LOCK_MS = 1500;
@@ -615,7 +593,6 @@
         activeTool: state.activeTool,
       });
       lockUiPreferenceSelection(state.activeTool, nextPromptTab);
-      meetingManager.scheduleSync(state.activeTool === "meeting" ? 120 : 0);
       promptController?.scheduleRealtimeSync?.(120);
       if (state.activeTool === "release") {
         releaseManager.ensureChecked(false, true);

@@ -24,7 +24,6 @@ async function verifyMeetingAndReleaseToolSelection() {
 
   await harness.controller.selectTool("meeting");
   assert.equal(harness.state.activeTool, "meeting");
-  assert.deepEqual(harness.meetingScheduleCalls, [120]);
   assert.deepEqual(harness.promptRealtimeScheduleCalls, [120]);
   assert.deepEqual(harness.persistCalls[0], {
     activePromptTab: "store",
@@ -44,7 +43,6 @@ async function verifyPromptAliasDelegation() {
 
   assert.equal(await harness.controller.selectTool("store"), true);
   assert.deepEqual(harness.promptSelectToolCalls, ["store"]);
-  assert.deepEqual(harness.meetingScheduleCalls, []);
   assert.deepEqual(harness.persistCalls, []);
 }
 
@@ -120,7 +118,6 @@ function createHarness(options = {}) {
   const bookmarkQueryCalls = [];
   const bookmarkSubmitCalls = [];
   const handleUpdates = [];
-  const meetingScheduleCalls = [];
   const persistCalls = [];
   const promptQueryCalls = [];
   const promptRealtimeScheduleCalls = [];
@@ -234,11 +231,6 @@ function createHarness(options = {}) {
     isExtensionContextInvalidatedError() {
       return false;
     },
-    meetingManager: {
-      scheduleSync(delay) {
-        meetingScheduleCalls.push(delay);
-      },
-    },
     releaseManager: {
       ensureChecked(allowCached, preferFresh) {
         releaseEnsureCalls.push({
@@ -257,7 +249,6 @@ function createHarness(options = {}) {
     bookmarkSubmitCalls,
     controller,
     handleUpdates,
-    meetingScheduleCalls,
     persistCalls,
     promptQueryCalls,
     promptRealtimeScheduleCalls,

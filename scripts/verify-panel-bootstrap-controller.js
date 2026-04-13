@@ -9,7 +9,7 @@ const root = path.resolve(__dirname, "..");
 
 async function main() {
   await verifyBootstrapWiringAndScheduling();
-  await verifyBootstrapMeetingOptOut();
+  await verifyBootstrapSkipsMeetingLifecycleWiring();
   verifyRouteStorageChangeDelegation();
   console.log("[verify-panel-bootstrap-controller] V2 shell bridge bootstrap contract passed");
 }
@@ -38,9 +38,8 @@ async function verifyBootstrapWiringAndScheduling() {
   assert.equal(typeof harness.windowListeners.resize, "function");
   assert.equal(typeof harness.windowListeners.focus, "function");
   assert.equal(typeof harness.documentListeners.visibilitychange, "function");
-  assert.equal(harness.storageListeners.length, 4);
+  assert.equal(harness.storageListeners.length, 3);
   assert.deepEqual(harness.routeSyncCalls, [true]);
-  assert.deepEqual(harness.meetingScheduleCalls, [260]);
   assert.deepEqual(harness.promptRealtimeCalls, [260]);
   assert.deepEqual(harness.promptCloudCalls, [260]);
   assert.equal(harness.ensureStoreLoadedCalls, 1);
@@ -51,17 +50,13 @@ async function verifyBootstrapWiringAndScheduling() {
   assert.equal(harness.routeRefreshCalls, 2);
 }
 
-async function verifyBootstrapMeetingOptOut() {
-  const harness = createHarness({
-    listenMeetingStorageChanges: false,
-    primeMeetingSync: false,
-  });
-
+async function verifyBootstrapSkipsMeetingLifecycleWiring() {
+  const harness = createHarness();
   await harness.controller.bootstrap();
   await harness.flush();
 
   assert.equal(harness.storageListeners.length, 3);
-  assert.deepEqual(harness.meetingScheduleCalls, []);
+  assert.deepEqual(harness.promptRealtimeCalls, [260]);
 }
 
 function verifyRouteStorageChangeDelegation() {
@@ -122,7 +117,6 @@ function createHarness(options = {}) {
   let lifecycleInitializeCalls = 0;
   const providerIdentityReasons = [];
   const routeSyncCalls = [];
-  const meetingScheduleCalls = [];
   const promptRealtimeCalls = [];
   const promptCloudCalls = [];
   const releaseEnsureCalls = [];
@@ -154,18 +148,6 @@ function createHarness(options = {}) {
     handlePanelMeetingSummarySync: async () => {},
     isStoreTabActive() {
       return Boolean(options.storeTabActive);
-    },
-    meetingManager: {
-      handleStorageChange() {},
-      scheduleSync(delay) {
-        meetingScheduleCalls.push(delay);
-      },
-    },
-    shouldListenMeetingStorageChanges() {
-      return options.listenMeetingStorageChanges !== false;
-    },
-    shouldPrimeMeetingSync() {
-      return options.primeMeetingSync !== false;
     },
     panelActivityController: {
       handleVisibilityChange() {},
@@ -273,9 +255,6 @@ function createHarness(options = {}) {
     },
     get lifecycleInitializeCalls() {
       return lifecycleInitializeCalls;
-    },
-    get meetingScheduleCalls() {
-      return meetingScheduleCalls;
     },
     get promptCloudCalls() {
       return promptCloudCalls;
