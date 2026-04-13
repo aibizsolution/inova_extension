@@ -81,7 +81,7 @@ ordinary feature 구현 변경, 탭별 hosted ownership 진행도, smoke 이슈 
 - `1.x+` v2 lane은 같은 규칙으로 `hosting/extension-v2/panel/*`와 `panelAppUrl`을 사용한다.
 - 공개 기준선 `0.4.4`는 legacy lane에 남기고, 다음 공개 릴리스 `1.0.0`은 v2 lane을 기본으로 사용한다.
 - extension composition root도 lane-aware로 분리한다. `0.x`는 기존 `content/panel-composition-controller.js`, `1.x+`는 `content/panel-v2-composition-controller.js`를 사용한다.
-- content script bootstrap은 계속 `manifest.json` 로드 순서를 정본으로 삼고, `content/panel.js`가 직접 소비하는 hosted panel helper 모듈은 같은 manifest 배열에서 `content/panel.js`보다 먼저 로드해야 한다. 현재 baseline helper는 `content/panel-hosted-meeting-request.js`와 `content/panel-hosted-prompt-request.js`다.
+- content script bootstrap은 계속 `manifest.json` 로드 순서를 정본으로 삼고, `content/panel.js`가 직접 소비하는 hosted panel helper 모듈은 같은 manifest 배열에서 `content/panel.js`보다 먼저 로드해야 한다. 현재 baseline helper는 `content/panel-hosted-meeting-request.js`, `content/panel-hosted-prompt-request.js`, `content/panel-hosted-shell-request.js`다.
 - `1.x+`에서 `release:build`는 `hosting/extension-v2/releases/*`와 `hosting/extension-v2/downloads/*`를 실제 served artifact 기준으로 채워야 한다. hosted v2 release panel은 이 lane-local 경로를 직접 읽으므로, curated history에 남긴 이전 공개 버전 ZIP도 현재 lane download 디렉터리에서 404 없이 열리도록 함께 복사한다.
 - `1.x+` v2 lane은 hosted-first를 기본값으로 쓴다. 탭 UI/state/action flow의 기본 위치는 hosted이고, extension은 page DOM adapter + iframe host + runtime broker 같은 browser-only capability를 유지한다.
 - 문서가 이 ownership 이동을 뒤따르지 못하면, 발견한 같은 작업 안에서 바로 고친다.

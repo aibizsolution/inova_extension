@@ -39,6 +39,7 @@ Short version:
 - meeting actions (`open-workspace`, `open-result`, `share`, `revoke-share`) moved into hosted hub controller
 - v2 hosted meeting panel no longer falls back to extension-side `meeting-action` dispatch
 - v2 meeting snapshot summary no longer depends on `content/meeting-manager.js` merge helpers
+- `content/panel.js` keeps shrinking toward generic host + broker by delegating shell-level hosted requests to helper modules
 - meeting open traces split correctly:
   - original `i-Nova` tab now logs only launch request/dispatch/completion
   - new hosted workspace tab owns workspace bootstrap/ready logs

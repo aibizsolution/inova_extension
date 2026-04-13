@@ -417,7 +417,6 @@
   async function handlePanelRequest(host, payload) {
     const callbacks = host.__callbacks || {};
     const action = normalizeText(payload?.action);
-    const detail = payload?.detail && typeof payload.detail === "object" ? payload.detail : {};
     const handledMeetingRequest = await namespace.panelHostedMeetingRequest?.handle?.(action, payload, callbacks, {
       logConsoleTrace,
       normalizeText,
@@ -431,39 +430,11 @@
     if (handledPromptRequest?.handled) {
       return handledPromptRequest.result;
     }
-
-    if (action === "toggle-panel") {
-      callbacks.onToggle?.(payload?.open);
-      return { open: payload?.open !== false };
-    }
-    if (action === "escape") {
-      const consumed = Boolean(callbacks.onEscape?.());
-      if (!consumed) {
-        callbacks.onToggle?.(false);
-      }
-      return { consumed };
-    }
-    if (action === "select-tool") {
-      return { selected: Boolean(await callbacks.onSelectTool?.(normalizeText(payload?.toolId))) };
-    }
-    if (action === "search") {
-      callbacks.onSearch?.(normalizeText(payload?.toolId), String(payload?.value || ""), payload?.options || {});
-      return { searched: true };
-    }
-    if (action === "search-submit") {
-      callbacks.onSearchSubmit?.(normalizeText(payload?.toolId), String(payload?.value || ""));
-      return { submitted: true };
-    }
-    if (action === "bookmark-copy") {
-      return { copied: Boolean(await callbacks.onCopyBookmark?.(normalizeText(payload?.bookmarkId))) };
-    }
-    if (action === "bookmark-jump") {
-      callbacks.onJumpBookmark?.(normalizeText(payload?.bookmarkId));
-      return { jumped: true };
-    }
-    if (action === "release-action") {
-      await callbacks.onReleaseAction?.(normalizeText(payload?.releaseAction), detail);
-      return { handled: true };
+    const handledShellRequest = await namespace.panelHostedShellRequest?.handle?.(action, payload, callbacks, {
+      normalizeText,
+    });
+    if (handledShellRequest?.handled) {
+      return handledShellRequest.result;
     }
     throw new Error("지원하지 않는 hosted panel action이에요.");
   }

@@ -9,6 +9,7 @@ const root = path.resolve(__dirname, "..");
 function main() {
   verifyHostedMeetingRequestModuleContract();
   verifyHostedPromptRequestModuleContract();
+  verifyHostedShellRequestModuleContract();
   console.log("[verify-panel-hosted-request-modules] Hosted panel request helper contract passed");
 }
 
@@ -82,6 +83,43 @@ function verifyHostedPromptRequestModuleContract() {
     !topPanelSource.includes('if (action === "move-prompt")'),
     "content/panel.js should not keep inline move-prompt hosted request handling once the prompt helper exists"
   );
+}
+
+function verifyHostedShellRequestModuleContract() {
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(root, "manifest.json"), "utf8")
+  );
+  const topPanelSource = fs.readFileSync(
+    path.join(root, "content", "panel.js"),
+    "utf8"
+  );
+
+  const mainContentScript = manifest.content_scripts.find((entry) =>
+    Array.isArray(entry?.matches) && entry.matches.includes("https://inova.incross.com/*")
+  );
+  const scriptList = Array.isArray(mainContentScript?.js) ? mainContentScript.js : [];
+  const helperIndex = scriptList.indexOf("content/panel-hosted-shell-request.js");
+  const panelIndex = scriptList.indexOf("content/panel.js");
+
+  assert(helperIndex !== -1, "manifest should load the hosted shell request helper");
+  assert(panelIndex !== -1 && helperIndex < panelIndex, "manifest should load the shell request helper before content/panel.js");
+  assert(
+    topPanelSource.includes("namespace.panelHostedShellRequest?.handle?."),
+    "content/panel.js should delegate shell-level hosted requests to the dedicated helper module"
+  );
+  [
+    'if (action === "toggle-panel")',
+    'if (action === "escape")',
+    'if (action === "select-tool")',
+    'if (action === "search")',
+    'if (action === "search-submit")',
+    'if (action === "bookmark-copy")',
+    'if (action === "bookmark-jump")',
+    'if (action === "release-action")',
+  ].forEach((pattern) => assert(
+    !topPanelSource.includes(pattern),
+    `content/panel.js should not keep inline hosted shell handling for ${pattern}`
+  ));
 }
 
 main();
