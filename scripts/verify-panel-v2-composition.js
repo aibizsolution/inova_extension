@@ -29,6 +29,9 @@ function main() {
     "manifest should load the v2 prompt controller in the active 1.0.0 bundle"
   );
   [
+    "hosting/meeting/debug-console.js",
+    "shared/meeting-debug.js",
+    "shared/meeting-bridge.js",
     "backup/legacy-panel/features/prompt-library/files.js",
     "backup/legacy-panel/features/prompt-library/cloud-sync-manager.js",
     "backup/legacy-panel/features/prompt-store/prompt-realtime-manager.js",
