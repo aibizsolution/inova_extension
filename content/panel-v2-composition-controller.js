@@ -3,7 +3,6 @@
 
   function create(state) {
     let promptBridgeController = null;
-    let panelMeetingController = null;
     let renderController = null;
     const render = () => renderController?.render();
 
@@ -20,8 +19,6 @@
     };
     const releaseManager = namespace.releaseManager.create(state, { render });
     const hostedOwnedReleaseSnapshot = createHostedOwnedReleaseSnapshotBridge(releaseManager);
-    const meetingManager = namespace.meetingManager.create(state, { render });
-    const hostedOwnedMeetingLifecycle = createHostedOwnedMeetingLifecycleBridge(meetingManager);
     const hostedOwnedIdleMeetingLifecycle = createHostedOwnedIdleMeetingLifecycleBridge();
     const providerIdentitySync = namespace.providerIdentitySync.create(state, {
       ...runtimeDiagnostics,
@@ -31,10 +28,6 @@
     const panelDebugController = namespace.panelDebugController.create(state, {
       ...runtimeFlags,
       render,
-    });
-    const panelActionController = namespace.panelActionController.create(state, {
-      getPanelMeetingController,
-      panelDebugController,
     });
     const panelBookmarkController = namespace.panelBookmarkController.create(state, { render });
     const hostedOwnedConversationSnapshot = createHostedOwnedConversationSnapshotBridge(panelBookmarkController);
@@ -97,7 +90,7 @@
       schedulePromptRealtimeSync: promptSyncBridge.schedulePromptRealtimeSync,
     });
     const routeSync = namespace.routeSync.create(state, {
-      onRouteStateChanged: hostedOwnedMeetingLifecycle.handleRouteStateChange,
+      onRouteStateChanged: hostedOwnedIdleMeetingLifecycle.handleRouteStateChange,
       refreshState: routeStateController.refreshState,
       render,
       resetRouteState: routeStateController.resetRouteState,
@@ -124,7 +117,7 @@
       releaseManager,
     });
     const panelBootstrapController = namespace.panelBootstrapController.create(state, {
-      handlePanelMeetingAction: panelActionController.handlePanelMeetingAction,
+      handlePanelMeetingAction: async () => false,
       handlePanelMeetingSummarySync: handleHostedMeetingSummarySync,
       isStoreTabActive: runtimeFlags.isStoreTabActive,
       meetingManager: hostedOwnedIdleMeetingLifecycle,
@@ -151,17 +144,6 @@
       },
     };
 
-    function getPanelMeetingController() {
-      if (!panelMeetingController) {
-        panelMeetingController = namespace.panelMeetingController.create(state, {
-          meetingManager: hostedOwnedMeetingLifecycle,
-          providerIdentitySync,
-          render,
-        });
-      }
-      return panelMeetingController;
-    }
-
     function handleHostedMeetingSummarySync(meetingTool = {}) {
       const nextSummary = {
         checkedAt: normalizeText(meetingTool.checkedAt),
@@ -183,18 +165,6 @@
       render();
       return true;
     }
-  }
-
-  function createHostedOwnedMeetingLifecycleBridge(meetingManager = {}) {
-    return {
-      handleRouteStateChange() {
-        return false;
-      },
-      handleStorageChange() {},
-      scheduleSync(delay) {
-        return meetingManager.scheduleSync?.(delay) || false;
-      },
-    };
   }
 
   function createHostedOwnedIdleMeetingLifecycleBridge() {

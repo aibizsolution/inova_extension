@@ -182,12 +182,12 @@ function verifyHostedMeetingActionCompletionTraceContract() {
   );
 
   assert(
-    hostedPanelSource.includes('traceMeetingFlow("44.hosted.panel.request.success"'),
-    "hosted meeting actions should emit a success trace after the panel bridge request settles"
+    !hostedPanelSource.includes('action: "meeting-action"'),
+    "v2 hosted meeting actions should not fall back to the top-panel meeting-action request path"
   );
   assert(
-    hostedPanelSource.includes('traceMeetingFlow("44.hosted.panel.request.error"'),
-    "hosted meeting actions should emit an error trace after the panel bridge request fails"
+    hostedPanelSource.includes("meetingHubController.handleMeetingAction(meetingAction, detail)"),
+    "v2 hosted meeting actions should stay inside the hosted meeting hub controller"
   );
 }
 

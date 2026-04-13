@@ -45,23 +45,19 @@ function main() {
     "v2 composition should wire the debug controller"
   );
   assert(
-    v2CompositionSource.includes("namespace.meetingManager.create"),
-    "v2 composition should still instantiate the meeting manager while hosted ownership is partial"
+    !v2CompositionSource.includes("namespace.meetingManager.create"),
+    "v2 composition should not instantiate the legacy meeting manager once hosted meeting actions and lifecycle are detached"
   );
   assert(
-    v2CompositionSource.includes("createHostedOwnedMeetingLifecycleBridge"),
-    "v2 composition should wrap meeting shell lifecycle with a hosted-owned bridge"
+    !v2CompositionSource.includes("let panelMeetingController = null;"),
+    "v2 composition should not keep a meeting fallback controller once hosted meeting actions stay inside hosted ownership"
   );
   assert(
-    v2CompositionSource.includes("let panelMeetingController = null;"),
-    "v2 composition should keep meeting fallback controller creation lazy"
+    !v2CompositionSource.includes("getPanelMeetingController"),
+    "v2 composition should not provide a meeting fallback getter once hosted meeting actions stay inside hosted ownership"
   );
   assert(
-    v2CompositionSource.includes("getPanelMeetingController"),
-    "v2 composition should provide a lazy getter for meeting fallback handling"
-  );
-  assert(
-    v2CompositionSource.includes("onRouteStateChanged: hostedOwnedMeetingLifecycle.handleRouteStateChange"),
+    v2CompositionSource.includes("onRouteStateChanged: hostedOwnedIdleMeetingLifecycle.handleRouteStateChange"),
     "v2 route sync should stop delegating route refresh decisions to the legacy meeting manager"
   );
   assert(
@@ -93,12 +89,8 @@ function main() {
     "v2 prompt tab transitions should no longer wake meeting sync"
   );
   assert(
-    v2CompositionSource.includes("namespace.panelActionController.create"),
-    "v2 composition should wire the shared panel action controller"
-  );
-  assert(
-    v2CompositionSource.includes("getPanelMeetingController,"),
-    "v2 action wiring should defer meeting fallback controller creation until needed"
+    !v2CompositionSource.includes("namespace.panelActionController.create"),
+    "v2 composition should not wire the top-panel meeting action dispatcher once hosted meeting actions stay inside hosted ownership"
   );
   assert(
     v2CompositionSource.includes("namespace.panelPromptBridgeController.create"),
@@ -157,8 +149,8 @@ function main() {
     "v2 hosted-owned prompt wrapper should silence legacy prompt realtime scheduling"
   );
   assert(
-    v2CompositionSource.includes("handlePanelMeetingAction: panelActionController.handlePanelMeetingAction"),
-    "v2 bootstrap should forward hosted meeting actions into the shared top-panel dispatcher"
+    v2CompositionSource.includes("handlePanelMeetingAction: async () => false"),
+    "v2 bootstrap should leave the hosted meeting action callback as an explicit no-op fallback"
   );
   assert(
     v2CompositionSource.includes("handlePanelMeetingSummarySync: handleHostedMeetingSummarySync"),

@@ -188,13 +188,10 @@
               handled,
               meetingAction,
             });
-            if (handled !== false) {
-              return handled;
-            }
-            return requestMeetingAction(meetingAction, detail);
+            return handled;
           });
         }
-        return requestMeetingAction(meetingAction, detail);
+        return Promise.resolve(false);
       },
       onMovePrompt(dragPromptId, targetPromptId, placement) {
         if (promptLibraryController?.handleMovePrompt) {
@@ -466,31 +463,6 @@
         traceSpec,
         timeoutId,
       });
-    });
-  }
-
-  function requestMeetingAction(meetingAction, detail = {}) {
-    traceMeetingFlow("43.hosted.panel.request", {
-      detail,
-      meetingAction,
-    });
-    return request("panel", {
-      action: "meeting-action",
-      detail,
-      meetingAction,
-    }).then((result) => {
-      traceMeetingFlow("44.hosted.panel.request.success", {
-        detail,
-        meetingAction,
-      });
-      return result;
-    }).catch((error) => {
-      traceMeetingFlow("44.hosted.panel.request.error", {
-        detail,
-        error: normalizeText(error instanceof Error ? error.message : String(error || "")),
-        meetingAction,
-      });
-      throw error;
     });
   }
 
