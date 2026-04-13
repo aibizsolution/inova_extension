@@ -45,6 +45,7 @@ Short version:
 - `content/panel.js` now delegates bridge-domain request routing too, leaving the file close to a pure iframe host + bridge endpoint
 - v2 bootstrap now passes only the hosted panel callbacks that are still live in the hosted lane, instead of carrying prompt/meeting legacy action callbacks by default
 - v2 composition now wires the hosted-owned prompt controller directly instead of keeping the extra `panelPromptBridgeController` proxy in the v2 lane
+- legacy composition now also wires `panel-prompt-controller` directly, so the extra `panelPromptBridgeController` proxy file is gone from both lanes
 - meeting open traces split correctly:
   - original `i-Nova` tab now logs only launch request/dispatch/completion
   - new hosted workspace tab owns workspace bootstrap/ready logs

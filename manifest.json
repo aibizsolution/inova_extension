@@ -107,7 +107,6 @@
         "content/panel-state-factory.js",
         "content/panel-runtime-controller.js",
         "content/panel-action-controller.js",
-        "content/panel-prompt-bridge-controller.js",
         "content/panel-composition-controller.js",
         "content/panel-v2-composition-controller.js",
         "content/main.js"

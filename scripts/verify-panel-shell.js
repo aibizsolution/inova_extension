@@ -35,7 +35,6 @@ async function main() {
   assert.equal(harness.compositionControllerCreated, 1);
   assert.equal(harness.runtimeControllerCreated, 1);
   assert.equal(harness.actionControllerCreated, 1);
-  assert.equal(harness.promptBridgeControllerCreated, 1);
   assert.equal(harness.routeWatchInstallCalls, 1);
   assert.equal(harness.surfaceWatchInstallCalls, 1);
 
@@ -164,7 +163,6 @@ function createHarness() {
     handlePositionCalls: controllerEvents.handlePositionCalls,
     meetingActions: controllerEvents.meetingActions,
     promptActions: controllerEvents.promptActions,
-    promptBridgeControllerCreated: controllerEvents.promptBridgeControllerCreated || 0,
     promptDrafts: controllerEvents.promptDrafts,
     promptTabSelections: controllerEvents.promptTabSelections,
     renderPayloads,
@@ -276,32 +274,6 @@ function buildNamespace({ controllerEvents, ensureCalls, renderPayloads, runtime
             }
             await deps.panelMeetingController.handleAction(action, detail);
           },
-        };
-      },
-    },
-    panelPromptBridgeController: {
-      create(_state, deps) {
-        controllerEvents.promptBridgeControllerCreated = (controllerEvents.promptBridgeControllerCreated || 0) + 1;
-        return {
-          buildReviewFloatState: (...args) => deps.panelPromptController.buildReviewFloatState(...args),
-          buildToolState: (...args) => deps.panelPromptController.buildToolState(...args),
-          ensureReviewFloat: (...args) => deps.panelPromptController.ensureReviewFloat(...args),
-          ensureStoreLoaded: (...args) => deps.panelPromptController.ensureStoreLoaded(...args),
-          handleDraftChange: (...args) => deps.panelPromptController.handleDraftChange(...args),
-          handleEscape: (...args) => deps.panelPromptController.handleEscape(...args),
-          handleImportFile: (...args) => deps.panelPromptController.handleImportFile(...args),
-          handlePromptAction: (...args) => deps.panelPromptController.handlePromptAction(...args),
-          handleStorageChange: (...args) => deps.panelPromptController.handleStorageChange(...args),
-          handleStoreAction: (...args) => deps.panelPromptController.handleStoreAction(...args),
-          movePromptItem: (...args) => deps.panelPromptController.movePromptItem(...args),
-          scheduleCloudSyncIfNeeded: (...args) => deps.panelPromptController.scheduleCloudSyncIfNeeded(...args),
-          schedulePromptCloudSyncIfNeeded: (...args) => deps.panelPromptController.scheduleCloudSyncIfNeeded(...args),
-          schedulePromptRealtimeSync: (...args) => deps.panelPromptController.scheduleRealtimeSync(...args),
-          scheduleRealtimeSync: (...args) => deps.panelPromptController.scheduleRealtimeSync(...args),
-          selectPromptTab: (...args) => deps.panelPromptController.selectPromptTab(...args),
-          selectTool: (...args) => deps.panelPromptController.selectTool(...args),
-          submitQuery: (...args) => deps.panelPromptController.submitQuery(...args),
-          updateQuery: (...args) => deps.panelPromptController.updateQuery(...args),
         };
       },
     },

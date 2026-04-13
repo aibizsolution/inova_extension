@@ -52,7 +52,6 @@ const requiredFiles = [
   path.join("scripts", "verify-panel-state-factory.js"),
   path.join("scripts", "verify-panel-runtime-controller.js"),
   path.join("scripts", "verify-panel-action-controller.js"),
-  path.join("scripts", "verify-panel-prompt-bridge-controller.js"),
   path.join("scripts", "verify-prompt-library-remote-first.js"),
   path.join("scripts", "verify-prompt-runtime-local.js"),
   path.join("scripts", "verify-prompt-review.js"),
@@ -70,7 +69,6 @@ const requiredFiles = [
   "content/panel-state-factory.js",
   "content/panel-runtime-controller.js",
   "content/panel-action-controller.js",
-  "content/panel-prompt-bridge-controller.js",
   "content/panel-composition-controller.js",
   "content/route-state-controller.js",
   "content/route-watch-controller.js",
@@ -358,19 +356,10 @@ const codeChecks = [
     ],
   },
   {
-    file: "content/panel-prompt-bridge-controller.js",
-    patterns: [
-      /ensureStoreLoaded/,
-      /schedulePromptCloudSyncIfNeeded/,
-      /schedulePromptRealtimeSync/,
-      /handleStorageChange/,
-    ],
-  },
-  {
     file: "content/panel-composition-controller.js",
     patterns: [
       /panelRuntimeController/,
-      /panelPromptBridgeController/,
+      /panelPromptController/,
       /panelRenderController/,
       /panelBootstrapController/,
     ],

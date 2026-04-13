@@ -16,7 +16,6 @@
 
 ## 관련 프론트 경로
 - `content/panel-prompt-controller.js` - prompt tool shell composition root
-- `content/panel-prompt-bridge-controller.js` - panel shell이 prompt tool shell을 좁은 계약으로 참조하는 외부 adapter
 - `content/main.js` - panel shell composition root, prompt shell 직접 구현 금지
 - `content/prompt-hub-state.js` - prompt 탭 상태를 묶는 prompt tool shell
 - `content/prompt-hub-panel.js` - prompt/store 상호작용을 묶는 prompt tool shell

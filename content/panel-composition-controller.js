@@ -2,7 +2,7 @@
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
 
   function create(state) {
-    let promptBridgeController = null;
+    let panelPromptController = null;
     let renderController = null;
     const render = () => renderController?.render();
 
@@ -41,26 +41,23 @@
     const panelBookmarkController = namespace.panelBookmarkController.create(state, { render });
     const panelShellController = namespace.panelShellController.create(state, {
       bookmarkController: panelBookmarkController,
-      getPromptController: () => promptBridgeController,
+      getPromptController: () => panelPromptController,
       isExtensionContextInvalidatedError: runtimeDiagnostics.isExtensionContextInvalidatedError,
       meetingManager,
       releaseManager,
       render,
     });
-    const panelPromptController = namespace.panelPromptController.create(state, {
+    panelPromptController = namespace.panelPromptController.create(state, {
       ...runtimeFlags,
       lockUiPreferenceSelection: panelShellController.lockUiPreferenceSelection,
       onPromptTabSelected: () => meetingManager.scheduleSync(0),
       persistActiveTool: panelShellController.persistActiveTool,
       render,
     });
-    promptBridgeController = namespace.panelPromptBridgeController.create(state, {
-      panelPromptController,
-    });
     const promptSyncBridge = {
-      ensureStoreLoaded: promptBridgeController.ensureStoreLoaded,
-      schedulePromptCloudSyncIfNeeded: promptBridgeController.schedulePromptCloudSyncIfNeeded,
-      schedulePromptRealtimeSync: promptBridgeController.schedulePromptRealtimeSync,
+      ensureStoreLoaded: panelPromptController.ensureStoreLoaded,
+      schedulePromptCloudSyncIfNeeded: panelPromptController.scheduleCloudSyncIfNeeded,
+      schedulePromptRealtimeSync: panelPromptController.scheduleRealtimeSync,
     };
 
     // Route and lifecycle: browser events, sync scheduling, and visibility-driven reactions.
@@ -113,7 +110,7 @@
       panelBookmarkController,
       panelDebugController,
       panelMeetingController,
-      panelPromptController: promptBridgeController,
+      panelPromptController,
       panelShellController,
       releaseManager,
     });
@@ -125,7 +122,7 @@
       panelBookmarkController,
       panelDebugController,
       panelLifecycleController,
-      panelPromptController: promptBridgeController,
+      panelPromptController,
       panelShellController,
       panelSurfaceController,
       providerIdentitySync,
