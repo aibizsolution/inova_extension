@@ -25,6 +25,25 @@ function main() {
   const scriptList = Array.isArray(mainContentScript?.js) ? mainContentScript.js : [];
 
   assert(
+    scriptList.includes("content/panel-v2-prompt-controller.js"),
+    "manifest should load the v2 prompt controller in the active 1.0.0 bundle"
+  );
+  [
+    "content/features/prompt-library/files.js",
+    "content/features/prompt-library/cloud-sync-manager.js",
+    "content/features/prompt-store/prompt-realtime-manager.js",
+    "content/features/prompt-library/prompt-manager.js",
+    "content/features/prompt-store/store-manager.js",
+    "content/prompt-hub-panel.js",
+    "content/prompt-hub-controller.js",
+    "content/prompt-hub-runtime.js",
+    "content/prompt-hub-state.js",
+    "content/panel-prompt-controller.js",
+  ].forEach((file) => assert(
+    !scriptList.includes(file),
+    `manifest should stop loading the legacy prompt runtime file ${file} in the active 1.0.0 bundle`
+  ));
+  assert(
     scriptList.includes("content/panel-v2-composition-controller.js"),
     "manifest should load the v2 composition controller before content/main.js"
   );
@@ -116,6 +135,14 @@ function main() {
   assert(
     v2CompositionSource.includes("createHostedOwnedPromptController"),
     "v2 composition should wrap prompt wiring for hosted-owned prompt tabs"
+  );
+  assert(
+    v2CompositionSource.includes("namespace.panelV2PromptController.create"),
+    "v2 composition should wire the v2-only prompt controller instead of the legacy prompt runtime"
+  );
+  assert(
+    !v2CompositionSource.includes("namespace.panelPromptController.create"),
+    "v2 composition should stop instantiating the legacy prompt runtime controller"
   );
   assert(
     v2CompositionSource.includes("let hostedOwnedPromptController = null;"),

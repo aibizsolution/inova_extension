@@ -39,7 +39,7 @@
       releaseManager,
       render,
     });
-    const sharedPromptController = namespace.panelPromptController.create(state, {
+    const sharedPromptController = namespace.panelV2PromptController.create(state, {
       ...runtimeFlags,
       lockUiPreferenceSelection: panelShellController.lockUiPreferenceSelection,
       onPromptTabSelected: () => hostedOwnedIdleMeetingLifecycle.scheduleSync(0),

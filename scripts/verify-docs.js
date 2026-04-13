@@ -68,6 +68,7 @@ const requiredFiles = [
   "content/panel-bookmark-controller.js",
   "content/panel-shell-controller.js",
   "content/panel-prompt-controller.js",
+  "content/panel-v2-prompt-controller.js",
   "content/panel-surface-controller.js",
   "content/panel-render-controller.js",
   "content/panel-bootstrap-controller.js",

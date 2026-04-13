@@ -11,7 +11,7 @@
 - `1.0.0+` v2 lane에서는 먼저 `hosting/extension-v2/panel/*`에서 해당 탭의 UI/state/action ownership이 이미 hosted로 넘어갔는지 확인한다.
 - 브라우저 확장이라서만 가능한 책임이 아니면, 기본 수정 위치는 extension보다 hosted 쪽으로 본다.
 - `popup`, `background/service-worker.js`, `content/main.js`, `content/panel.js`, `content/hosted-panel-bridge.js`, `hosting/extension/panel/*`, `functions/index.js`, `manifest.json`, `shared/*`는 platform/shell이다.
-- prompt 계열의 공용 탭 셸은 `content/prompt-hub-state.js`, `content/prompt-hub-panel.js`, `content/prompt-hub-controller.js`, `content/prompt-hub-runtime.js`가 맡고, `backup/legacy-panel/prompt-hub-view.js`는 inactive legacy reference로만 취급한다.
+- prompt 계열의 active v2 extension shell은 `content/panel-v2-prompt-controller.js`가 맡고, `content/prompt-hub-state.js`, `content/prompt-hub-panel.js`, `content/prompt-hub-controller.js`, `content/prompt-hub-runtime.js`, `backup/legacy-panel/prompt-hub-view.js`는 legacy reference로만 취급한다.
 - 두 번째 primary feature를 읽어야 하거나 `content + functions + hosting` 3축을 함께 수정해야 하면 먼저 커밋 또는 다음 세션 분리를 제안한다.
 - 이유: 내부 ZIP 배포 환경에서는 세 축이 서로 다른 시점에 섞여 적용될 수 있어 mixed-version 검증 매트릭스와 rollback 범위가 급격히 커진다.
 
@@ -39,8 +39,8 @@
 | --- | --- |
 | 기능 목적 | 내 요청 보관함 CRUD, 가져오기/내보내기, DB 정본(remote-first) 동기화 |
 | 요청 cue | 자주 쓰는 요청, 내 요청, import/export, prompt library, cloud sync |
-| 먼저 볼 파일 | `content/features/prompt-library/prompt-manager.js`, `hosting/extension-v2/panel/prompt-library-controller.js`, `hosting/extension-v2/panel/prompt-view.js`, `content/features/prompt-library/files.js`, `shared/prompt-library.js`, `content/features/prompt-library/cloud-sync-manager.js` |
-| 관련 프론트 경로 | `content/main.js`, `content/prompt-hub-state.js` (prompt tool shell), `content/prompt-hub-panel.js` (prompt tool shell), `content/prompt-hub-controller.js` (prompt tool shell), `content/prompt-hub-runtime.js` (prompt tool shell), `hosting/extension-v2/panel/prompt-library-controller.js`, `hosting/extension-v2/panel/prompt-view.js`, `hosting/extension-v2/panel/prompt-tool-view.js`, `backup/legacy-panel/prompt-view.js` (legacy reference), `backup/legacy-panel/prompt-hub-view.js` (legacy reference) |
+| 먼저 볼 파일 | `hosting/extension-v2/panel/prompt-library-controller.js`, `hosting/extension-v2/panel/prompt-library-firestore-client.js`, `hosting/extension-v2/panel/prompt-view.js`, `content/panel-v2-prompt-controller.js`, `shared/prompt-library.js`, `content/features/prompt-library/files.js` (legacy reference), `content/features/prompt-library/prompt-manager.js` (legacy reference) |
+| 관련 프론트 경로 | `content/main.js`, `content/panel-v2-prompt-controller.js`, `hosting/extension-v2/panel/prompt-library-controller.js`, `hosting/extension-v2/panel/prompt-view.js`, `hosting/extension-v2/panel/prompt-tool-view.js`, `backup/legacy-panel/prompt-view.js` (legacy reference), `backup/legacy-panel/prompt-hub-view.js` (legacy reference) |
 | 관련 functions 경로 | `functions/features/prompt-library/register.js` |
 | feature-owned shared | `shared/prompt-library.js`, `shared/cloud-sync.js`, `shared/provider-identity.js` |
 | 관련 데이터 경계 | `prompt_libraries`, `prompt_library_orders`, `prompt_library_chunks`, `integration_inova_accounts.promptLibraryMeta` |
@@ -55,8 +55,8 @@
 | --- | --- |
 | 기능 목적 | 스토어 목록, 상세 보기, 좋아요, 가져오기, 등록/삭제 |
 | 요청 cue | 스토어, 공개 프롬프트, 좋아요, 조회수, 가져오기, publish/unpublish |
-| 먼저 볼 파일 | `content/features/prompt-store/store-manager.js`, `hosting/extension-v2/panel/prompt-store-controller.js`, `hosting/extension-v2/panel/store-view.js`, `content/features/prompt-store/prompt-realtime-manager.js`, `shared/prompt-store.js` |
-| 관련 프론트 경로 | `content/prompt-hub-state.js` (prompt tool shell), `content/prompt-hub-panel.js` (prompt tool shell), `content/prompt-hub-controller.js` (prompt tool shell), `content/prompt-hub-runtime.js` (prompt tool shell), `content/main.js`, `hosting/extension-v2/panel/prompt-store-controller.js`, `hosting/extension-v2/panel/store-view.js`, `hosting/extension-v2/panel/prompt-tool-view.js`, `backup/legacy-panel/store-view.js` (legacy reference), `backup/legacy-panel/prompt-hub-view.js` (legacy reference) |
+| 먼저 볼 파일 | `hosting/extension-v2/panel/prompt-store-controller.js`, `hosting/extension-v2/panel/store-view.js`, `content/panel-v2-prompt-controller.js`, `shared/prompt-store.js`, `content/features/prompt-store/store-manager.js` (legacy reference), `content/features/prompt-store/prompt-realtime-manager.js` (legacy reference) |
+| 관련 프론트 경로 | `content/main.js`, `content/panel-v2-prompt-controller.js`, `hosting/extension-v2/panel/prompt-store-controller.js`, `hosting/extension-v2/panel/store-view.js`, `hosting/extension-v2/panel/prompt-tool-view.js`, `backup/legacy-panel/store-view.js` (legacy reference), `backup/legacy-panel/prompt-hub-view.js` (legacy reference) |
 | 관련 functions 경로 | `functions/features/prompt-store/store-service.js` |
 | feature-owned shared | `shared/prompt-store.js`, `shared/provider-identity.js` |
 | 관련 데이터 경계 | `prompt_store_entries`, `prompt_store_entry_details`, `prompt_store_feed_pages`, `prompt_store_meta`, 하위 likes/imports/views |
@@ -72,7 +72,7 @@
 | 기능 목적 | 현재 입력 프롬프트 평가, 보완안 생성, 평가 UI |
 | 요청 cue | 프롬프트 평가, 검토 버튼, refined prompt, review score |
 | 먼저 볼 파일 | `content/features/prompt-review/prompt-review-manager.js`, `hosting/extension-v2/panel/prompt-review-controller.js`, `hosting/extension-v2/panel/prompt-review-view.js`, `content/features/prompt-review/composer-review-float.js` |
-| 관련 프론트 경로 | `content/main.js`, `content/composer.js`, `content/prompt-hub-state.js` (prompt tool shell), `content/prompt-hub-panel.js` (prompt tool shell), `content/prompt-hub-controller.js` (prompt tool shell), `content/prompt-hub-runtime.js` (prompt tool shell), `hosting/extension-v2/panel/prompt-review-controller.js`, `hosting/extension-v2/panel/prompt-review-view.js`, `hosting/extension-v2/panel/prompt-tool-view.js`, `backup/legacy-panel/prompt-review-view.js` (legacy reference), `backup/legacy-panel/prompt-hub-view.js` (legacy reference) |
+| 관련 프론트 경로 | `content/main.js`, `content/composer.js`, `content/panel-v2-prompt-controller.js`, `hosting/extension-v2/panel/prompt-review-controller.js`, `hosting/extension-v2/panel/prompt-review-view.js`, `hosting/extension-v2/panel/prompt-tool-view.js`, `backup/legacy-panel/prompt-review-view.js` (legacy reference), `backup/legacy-panel/prompt-hub-view.js` (legacy reference) |
 | 관련 functions 경로 | `functions/features/prompt-review/prompt-review-service.js` |
 | feature-owned shared | `shared/provider-identity.js` |
 | 관련 데이터 경계 | 원격 저장소 없음, Functions `reviewInovaPrompt` 호출과 rate-limit 기록 |
