@@ -68,7 +68,6 @@ const requiredFiles = [
   "shared/product-lane.js",
   "backup/legacy-panel/panel-bookmark-controller.js",
   "backup/legacy-panel/panel-debug-controller.js",
-  "content/panel-shell-controller.js",
   "backup/legacy-panel/panel-prompt-controller.js",
   "content/panel-v2-prompt-controller.js",
   "content/panel-v2-composition-controller.js",
@@ -151,7 +150,6 @@ const featureDocContracts = [
       "content/panel-v2-composition-controller.js",
       "content/panel-v2-shell-bridge.js",
       "backup/legacy-panel/panel-bookmark-controller.js",
-      "content/panel-shell-controller.js",
     ],
   },
   {
@@ -382,6 +380,7 @@ const codeChecks = [
   {
     file: "content/panel-v2-shell-bridge.js",
     patterns: [
+      /createShellController/,
       /createRenderController/,
       /buildHandleCount/,
       /renderPanel/,

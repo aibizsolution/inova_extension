@@ -143,8 +143,12 @@ function main() {
     "v2 browser visibility/focus should stop waking extension meeting sync"
   );
   assert(
-    /const panelShellController = namespace\.panelShellController\.create\(state, \{[\s\S]*?meetingManager: hostedOwnedIdleMeetingLifecycle,/.test(v2CompositionSource),
+    /const panelShellController = panelV2ShellBridge\.createShellController\(state, \{[\s\S]*?meetingManager: hostedOwnedIdleMeetingLifecycle,/.test(v2CompositionSource),
     "v2 shell tool transitions should stop waking extension meeting sync"
+  );
+  assert(
+    v2CompositionSource.includes("panelV2ShellBridge.createShellController"),
+    "v2 composition should keep shell tool/query wiring inside the shared v2 shell bridge"
   );
   assert(
     /const panelLifecycleController = panelV2ShellBridge\.createHostedOwnedPanelLifecycleBridge\(state, \{[\s\S]*?meetingManager: hostedOwnedIdleMeetingLifecycle,/.test(v2CompositionSource),

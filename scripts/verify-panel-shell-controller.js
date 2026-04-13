@@ -12,7 +12,7 @@ async function main() {
   await verifyPromptAliasDelegation();
   await verifyQueryRoutingAndHandleCount();
   await verifyHandlePositionAndUiPreferenceLock();
-  console.log("[verify-panel-shell-controller] Panel shell controller contract passed");
+  console.log("[verify-panel-shell-controller] V2 shell bridge shell contract passed");
 }
 
 async function verifyMeetingAndReleaseToolSelection() {
@@ -173,7 +173,7 @@ function createHarness(options = {}) {
     },
   };
 
-  loadScript("content/panel-shell-controller.js", context);
+  loadScript("content/panel-v2-shell-bridge.js", context);
 
   const state = {
     activeTool: options.activeTool || "prompts",
@@ -217,7 +217,7 @@ function createHarness(options = {}) {
     },
   };
 
-  const controller = context.InovaBookmarks.panelShellController.create(state, {
+  const controller = context.InovaBookmarks.panelV2ShellBridge.createShellController(state, {
     bookmarkController: {
       submitQuery(value) {
         bookmarkSubmitCalls.push(value);

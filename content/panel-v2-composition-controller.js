@@ -34,7 +34,7 @@
       ...runtimeFlags,
     });
     const hostedOwnedConversationBridge = createHostedOwnedConversationBridge(state, { render });
-    const panelShellController = namespace.panelShellController.create(state, {
+    const panelShellController = panelV2ShellBridge.createShellController(state, {
       bookmarkController: hostedOwnedConversationBridge,
       getPromptController: () => hostedOwnedPromptController,
       isExtensionContextInvalidatedError: runtimeDiagnostics.isExtensionContextInvalidatedError,
