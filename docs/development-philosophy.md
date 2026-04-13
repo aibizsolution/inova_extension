@@ -28,6 +28,9 @@
 - hosted-first 이전 중 발견한 문제는 `이미 옮겨진 hosted lane의 문제`와 `곧 제거할 legacy residue의 문제`를 구분해 다룬다.
 - 이미 옮겨진 hosted ownership에서 재현되거나 다음 ownership 이전을 막는 문제는 즉시 수정한다.
 - legacy residue에만 남아 있고 hosted 이전을 막지 않는 문제라면, 임시 수선보다 ownership 이전을 먼저 진행한다.
+- ownership migration에서는 legacy 구현을 `정답 코드`가 아니라 `행동/spec 참고본`으로 취급한다.
+- legacy 코드를 살리기 위해 adapter, fallback, mixed ownership glue가 늘어나면 재사용을 고집하지 않는다.
+- 새 ownership 위치에 더 짧고 명확하게 다시 구현할 수 있다면, 기존 코드를 참고만 하고 직접 구현하는 편을 기본 선택으로 삼는다.
 
 ## 모듈화 판단 질문
 

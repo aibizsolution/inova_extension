@@ -10,10 +10,12 @@ Last updated: 2026-04-13
 - Latest full validation: `npm.cmd run verify` passed after `5ca2dd4`
 - Worktree: clean
 - Current architecture direction:
-  - `1.0.0` v2 lane is explicitly hosted-first.
-  - default location for tab UI, view state, action flow, and feature-local controllers is `hosting/*`.
-  - `extension` keeps only browser-only capabilities: iframe host, page DOM adapter, `postMessage`/runtime broker, popup/settings, content/background wiring.
-  - when docs still describe already-moved ownership as extension-owned, fix them in the same task instead of deferring to a later doc sweep.
+- `1.0.0` v2 lane is explicitly hosted-first.
+- default location for tab UI, view state, action flow, and feature-local controllers is `hosting/*`.
+- `extension` keeps only browser-only capabilities: iframe host, page DOM adapter, `postMessage`/runtime broker, popup/settings, content/background wiring.
+- when docs still describe already-moved ownership as extension-owned, fix them in the same task instead of deferring to a later doc sweep.
+- for remaining migration slices, treat legacy extension implementations as reference behavior, not code that must be preserved line-for-line.
+- if reusing legacy code adds glue/adapters/mixed ownership, prefer a clean implementation in the target hosted ownership instead.
 
 ## Where Ownership Stands
 
