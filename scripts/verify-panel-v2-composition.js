@@ -97,12 +97,24 @@ function main() {
     "v2 composition should not wire the top-panel meeting action dispatcher once hosted meeting actions stay inside hosted ownership"
   );
   assert(
-    v2CompositionSource.includes("namespace.panelPromptBridgeController.create"),
-    "v2 composition should wire the prompt bridge controller"
+    !v2CompositionSource.includes("namespace.panelPromptBridgeController.create"),
+    "v2 composition should not keep the prompt bridge proxy once hosted-owned prompt wiring can be passed directly"
   );
   assert(
     v2CompositionSource.includes("createHostedOwnedPromptController"),
     "v2 composition should wrap prompt wiring for hosted-owned prompt tabs"
+  );
+  assert(
+    v2CompositionSource.includes("let hostedOwnedPromptController = null;"),
+    "v2 composition should track the hosted-owned prompt controller directly"
+  );
+  assert(
+    v2CompositionSource.includes("getPromptController: () => hostedOwnedPromptController"),
+    "v2 shell wiring should read prompt tool behaviors directly from the hosted-owned prompt controller"
+  );
+  assert(
+    v2CompositionSource.includes("panelPromptController: hostedOwnedPromptController"),
+    "v2 render/bootstrap wiring should pass the hosted-owned prompt controller directly"
   );
   assert(
     v2CompositionSource.includes("createHostedOwnedPromptSnapshotBridge"),

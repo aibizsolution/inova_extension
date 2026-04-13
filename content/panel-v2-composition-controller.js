@@ -2,7 +2,7 @@
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
 
   function create(state) {
-    let promptBridgeController = null;
+    let hostedOwnedPromptController = null;
     let renderController = null;
     const render = () => renderController?.render();
 
@@ -33,7 +33,7 @@
     const hostedOwnedConversationSnapshot = createHostedOwnedConversationSnapshotBridge(panelBookmarkController);
     const panelShellController = namespace.panelShellController.create(state, {
       bookmarkController: panelBookmarkController,
-      getPromptController: () => promptBridgeController,
+      getPromptController: () => hostedOwnedPromptController,
       isExtensionContextInvalidatedError: runtimeDiagnostics.isExtensionContextInvalidatedError,
       meetingManager: hostedOwnedIdleMeetingLifecycle,
       releaseManager,
@@ -47,14 +47,11 @@
       render,
     });
     const hostedOwnedPromptSnapshot = createHostedOwnedPromptSnapshotBridge();
-    const panelPromptController = createHostedOwnedPromptController(sharedPromptController);
-    promptBridgeController = namespace.panelPromptBridgeController.create(state, {
-      panelPromptController,
-    });
+    hostedOwnedPromptController = createHostedOwnedPromptController(sharedPromptController);
     const promptSyncBridge = {
-      ensureStoreLoaded: promptBridgeController.ensureStoreLoaded,
-      schedulePromptCloudSyncIfNeeded: promptBridgeController.schedulePromptCloudSyncIfNeeded,
-      schedulePromptRealtimeSync: promptBridgeController.schedulePromptRealtimeSync,
+      ensureStoreLoaded: hostedOwnedPromptController.ensureStoreLoaded,
+      schedulePromptCloudSyncIfNeeded: hostedOwnedPromptController.schedulePromptCloudSyncIfNeeded,
+      schedulePromptRealtimeSync: hostedOwnedPromptController.schedulePromptRealtimeSync,
     };
 
     const routeStateController = namespace.routeStateController.create(state, {
@@ -110,7 +107,7 @@
       getMeetingCount: hostedOwnedMeetingSnapshot.getMeetingCount,
       panelBookmarkController,
       panelDebugController,
-      panelPromptController: promptBridgeController,
+      panelPromptController: hostedOwnedPromptController,
       panelShellController,
       buildReleaseSnapshot: hostedOwnedReleaseSnapshot.buildReleaseSnapshot,
       getReleaseCount: hostedOwnedReleaseSnapshot.getReleaseCount,
@@ -127,7 +124,7 @@
       panelBookmarkController,
       panelDebugController,
       panelLifecycleController,
-      panelPromptController: promptBridgeController,
+      panelPromptController: hostedOwnedPromptController,
       panelShellController,
       panelSurfaceController,
       providerIdentitySync,
