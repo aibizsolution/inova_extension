@@ -22,6 +22,8 @@
     "delete:meeting-data": "node scripts/delete-meeting-data.js",
     "check:function-logs": "node scripts/check-function-logs.js",
     "check:function-runtime": "node scripts/check-function-runtime.js",
+    "cleanup:artifacts": "node scripts/cleanup-local-artifacts.js",
+    "cleanup:logs": "node scripts/cleanup-local-artifacts.js",
     "cleanup:branches": "node scripts/cleanup-local-branches.js",
     "rebuild:store-feeds": "node scripts/rebuild-store-feeds.js",
     "seed:business-store": "node scripts/seed-business-store.js",
