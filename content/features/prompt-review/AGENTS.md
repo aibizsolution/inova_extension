@@ -17,10 +17,10 @@
 - `content/panel-v2-prompt-controller.js` - v2 review handoff + composer review float shell
 - `content/main.js` - panel shell composition root, prompt shell 직접 구현 금지
 - `content/composer.js`
-- `content/prompt-hub-state.js` - inactive legacy prompt shell reference
-- `content/prompt-hub-panel.js` - inactive legacy prompt shell reference
-- `content/prompt-hub-controller.js` - inactive legacy prompt shell reference
-- `content/prompt-hub-runtime.js` - inactive legacy prompt shell reference
+- `backup/legacy-panel/prompt-hub-state.js` - inactive legacy prompt shell reference
+- `backup/legacy-panel/prompt-hub-panel.js` - inactive legacy prompt shell reference
+- `backup/legacy-panel/prompt-hub-controller.js` - inactive legacy prompt shell reference
+- `backup/legacy-panel/prompt-hub-runtime.js` - inactive legacy prompt shell reference
 - `hosting/extension-v2/panel/prompt-review-controller.js` - hosted panel review state/action ownership
 - `hosting/extension-v2/panel/prompt-review-view.js` - hosted panel review view
 - `hosting/extension-v2/panel/prompt-tool-view.js` - hosted panel prompt tool shell view

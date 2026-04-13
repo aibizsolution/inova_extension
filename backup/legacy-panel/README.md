@@ -14,6 +14,16 @@
 - `backup/legacy-panel/store-view.js`
 - `backup/legacy-panel/prompt-review-view.js`
 - `backup/legacy-panel/prompt-hub-view.js`
+- `backup/legacy-panel/panel-prompt-controller.js`
+- `backup/legacy-panel/prompt-hub-state.js`
+- `backup/legacy-panel/prompt-hub-panel.js`
+- `backup/legacy-panel/prompt-hub-controller.js`
+- `backup/legacy-panel/prompt-hub-runtime.js`
+- `backup/legacy-panel/features/prompt-library/files.js`
+- `backup/legacy-panel/features/prompt-library/cloud-sync-manager.js`
+- `backup/legacy-panel/features/prompt-library/prompt-manager.js`
+- `backup/legacy-panel/features/prompt-store/store-manager.js`
+- `backup/legacy-panel/features/prompt-store/prompt-realtime-manager.js`
 - `backup/legacy-panel/release-view.js`
 
 기준은 아래와 같다.

@@ -29,16 +29,16 @@ function main() {
     "manifest should load the v2 prompt controller in the active 1.0.0 bundle"
   );
   [
-    "content/features/prompt-library/files.js",
-    "content/features/prompt-library/cloud-sync-manager.js",
-    "content/features/prompt-store/prompt-realtime-manager.js",
-    "content/features/prompt-library/prompt-manager.js",
-    "content/features/prompt-store/store-manager.js",
-    "content/prompt-hub-panel.js",
-    "content/prompt-hub-controller.js",
-    "content/prompt-hub-runtime.js",
-    "content/prompt-hub-state.js",
-    "content/panel-prompt-controller.js",
+    "backup/legacy-panel/features/prompt-library/files.js",
+    "backup/legacy-panel/features/prompt-library/cloud-sync-manager.js",
+    "backup/legacy-panel/features/prompt-store/prompt-realtime-manager.js",
+    "backup/legacy-panel/features/prompt-library/prompt-manager.js",
+    "backup/legacy-panel/features/prompt-store/store-manager.js",
+    "backup/legacy-panel/prompt-hub-panel.js",
+    "backup/legacy-panel/prompt-hub-controller.js",
+    "backup/legacy-panel/prompt-hub-runtime.js",
+    "backup/legacy-panel/prompt-hub-state.js",
+    "backup/legacy-panel/panel-prompt-controller.js",
   ].forEach((file) => assert(
     !scriptList.includes(file),
     `manifest should stop loading the legacy prompt runtime file ${file} in the active 1.0.0 bundle`

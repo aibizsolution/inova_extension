@@ -13,9 +13,9 @@
 - `hosting/extension-v2/panel/prompt-view.js`
 - `content/panel-v2-prompt-controller.js`
 - `shared/prompt-library.js`
-- `content/features/prompt-library/prompt-manager.js` - inactive legacy reference
-- `content/features/prompt-library/files.js` - inactive legacy reference
-- `content/features/prompt-library/cloud-sync-manager.js` - inactive legacy reference
+- `backup/legacy-panel/features/prompt-library/prompt-manager.js` - inactive legacy reference
+- `backup/legacy-panel/features/prompt-library/files.js` - inactive legacy reference
+- `backup/legacy-panel/features/prompt-library/cloud-sync-manager.js` - inactive legacy reference
 
 ## 관련 프론트 경로
 - `content/panel-v2-prompt-controller.js` - v2 prompt review handoff + minimal prompt snapshot shell
@@ -23,10 +23,10 @@
 - `hosting/extension-v2/panel/prompt-library-controller.js` - hosted panel library state/action ownership
 - `hosting/extension-v2/panel/prompt-view.js` - hosted panel library view
 - `hosting/extension-v2/panel/prompt-tool-view.js` - hosted panel prompt tool shell view
-- `content/prompt-hub-state.js` - inactive legacy prompt shell reference
-- `content/prompt-hub-panel.js` - inactive legacy prompt shell reference
-- `content/prompt-hub-controller.js` - inactive legacy prompt shell reference
-- `content/prompt-hub-runtime.js` - inactive legacy prompt shell reference
+- `backup/legacy-panel/prompt-hub-state.js` - inactive legacy prompt shell reference
+- `backup/legacy-panel/prompt-hub-panel.js` - inactive legacy prompt shell reference
+- `backup/legacy-panel/prompt-hub-controller.js` - inactive legacy prompt shell reference
+- `backup/legacy-panel/prompt-hub-runtime.js` - inactive legacy prompt shell reference
 - `backup/legacy-panel/prompt-view.js` - inactive legacy content view reference
 - `backup/legacy-panel/prompt-hub-view.js` - inactive legacy prompt tool shell view reference
 
@@ -61,7 +61,7 @@
 
 ## 구현 경계
 - 내 요청 보관함은 인터넷 연결 없이는 쓸 수 없는 제품 전제를 따른다. prompt library의 정본은 Firestore/Functions가 들고, `chrome.storage.local`의 `promptLibrary`는 마지막으로 불러온 캐시와 UI 복구용으로만 취급한다.
-- `0.4.5`부터 panel 안의 `내 요청` UI는 hosted panel iframe이 렌더링하고, `content/panel-prompt-controller.js`는 legacy lane의 상태/액션/동기화 controller를 계속 소유한다.
+- `0.4.5`부터 panel 안의 `내 요청` UI는 hosted panel iframe이 렌더링하고, `backup/legacy-panel/panel-prompt-controller.js`는 legacy lane reference의 상태/액션/동기화 controller를 계속 담는다.
 - `1.0.0+` v2 lane에서는 `hosting/extension-v2/panel/prompt-library-controller.js`, `prompt-store-controller.js`, `prompt-review-controller.js`가 각 탭의 remote 상태와 prompt tab 전환/persistence, prompt action/draft/import/reorder 라우팅을 hosted 쪽에서 소유한다. extension은 page adapter와 runtime broker, `content/panel-v2-prompt-controller.js` 기반 review handoff/composer review float만 제공하고, legacy prompt realtime/cloud/store sync 예약은 v2 lane에서 다시 돌리지 않는다. v2 top-panel snapshot은 prompt/store item list를 싣지 않고 `activeTab`과 review handoff signal 같은 최소 정보만 전달한다.
 - `1.0.0+` v2 lane의 `내 요청` read path는 `auth.issue-prompt-panel -> hosted prompt-library-firestore-client -> integration_inova_accounts_v2.promptLibraryMeta onSnapshot -> prompt_library_orders_v2/prompt_library_chunks_v2 direct read`가 기본이다. 단순 목록 read를 `loadInovaPromptLibraryV2` Functions 호출로 되돌리지 않는다.
 - prompt 저장/수정/삭제/순서 변경/가져오기는 local-first queue로 성공처럼 보이면 안 된다. 서버 ack 후 Firestore refresh가 확인된 뒤에만 state와 local cache를 최신으로 본다.

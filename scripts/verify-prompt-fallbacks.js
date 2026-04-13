@@ -67,7 +67,7 @@ async function verifyPromptLibraryFallbackSurfacesDegradedState() {
   loadScript("shared/constants.js", context);
   loadScript("shared/session.js", context);
   loadScript("shared/cloud-sync.js", context);
-  loadScript("content/features/prompt-library/cloud-sync-manager.js", context);
+  loadScript("backup/legacy-panel/features/prompt-library/cloud-sync-manager.js", context);
 
   const namespace = context.InovaBookmarks;
   const state = {
@@ -193,7 +193,7 @@ function createStoreHarness(options = {}) {
   loadScript("shared/constants.js", context);
   loadScript("shared/session.js", context);
   loadScript("shared/prompt-store.js", context);
-  loadScript("content/features/prompt-store/store-manager.js", context);
+  loadScript("backup/legacy-panel/features/prompt-store/store-manager.js", context);
 
   const namespace = context.InovaBookmarks;
   namespace.providerIdentity = {

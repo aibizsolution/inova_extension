@@ -327,7 +327,7 @@ function createHarness(options = {}) {
     },
   };
 
-  loadScript("content/panel-prompt-controller.js", context);
+  loadScript("backup/legacy-panel/panel-prompt-controller.js", context);
 
   const state = {
     activeTool: options.activeTool || "prompts",

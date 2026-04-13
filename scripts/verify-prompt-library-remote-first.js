@@ -27,7 +27,7 @@ function main() {
 }
 
 function verifyPromptLibraryRemoteFirstWiring() {
-  const cloudSyncManager = read(path.join("content", "features", "prompt-library", "cloud-sync-manager.js"));
+  const cloudSyncManager = read(path.join("backup", "legacy-panel", "features", "prompt-library", "cloud-sync-manager.js"));
   assert(/savePromptItem/.test(cloudSyncManager), "cloud sync manager가 remote save entrypoint를 가져야 합니다.");
   assert(/removePromptItem/.test(cloudSyncManager), "cloud sync manager가 remote delete entrypoint를 가져야 합니다.");
   assert(/movePromptItem/.test(cloudSyncManager), "cloud sync manager가 remote reorder entrypoint를 가져야 합니다.");
@@ -37,7 +37,7 @@ function verifyPromptLibraryRemoteFirstWiring() {
   assert(/sendRuntimeMessage\("inova-sync:load-prompt-library"/.test(cloudSyncManager), "cloud sync manager가 remote load를 직접 호출해야 합니다.");
   assert(/sendRuntimeMessage\("inova-sync:sync-prompt-library"/.test(cloudSyncManager), "cloud sync manager가 remote sync를 직접 호출해야 합니다.");
 
-  const promptManager = read(path.join("content", "features", "prompt-library", "prompt-manager.js"));
+  const promptManager = read(path.join("backup", "legacy-panel", "features", "prompt-library", "prompt-manager.js"));
   assert(!/namespace\.storage\.savePromptItem/.test(promptManager), "prompt manager는 local-first save를 직접 호출하면 안 됩니다.");
   assert(!/namespace\.storage\.removePromptItem/.test(promptManager), "prompt manager는 local-first delete를 직접 호출하면 안 됩니다.");
   assert(!/namespace\.storage\.importPromptLibrary/.test(promptManager), "prompt manager는 local-first import를 직접 호출하면 안 됩니다.");
@@ -45,11 +45,11 @@ function verifyPromptLibraryRemoteFirstWiring() {
   assert(/hooks\.removePromptItem/.test(promptManager), "prompt manager는 remote delete hook을 써야 합니다.");
   assert(/hooks\.importPromptLibrary/.test(promptManager), "prompt manager는 remote import hook을 써야 합니다.");
 
-  const promptHubController = read(path.join("content", "prompt-hub-controller.js"));
+  const promptHubController = read(path.join("backup", "legacy-panel", "prompt-hub-controller.js"));
   assert(!/namespace\.storage\.movePromptItem/.test(promptHubController), "prompt hub controller는 local-first reorder를 직접 호출하면 안 됩니다.");
   assert(/cloudSyncManager\.movePromptItem/.test(promptHubController), "prompt hub controller는 remote reorder를 써야 합니다.");
 
-  const storeManager = read(path.join("content", "features", "prompt-store", "store-manager.js"));
+  const storeManager = read(path.join("backup", "legacy-panel", "features", "prompt-store", "store-manager.js"));
   assert(/hooks\.importStorePrompt/.test(storeManager), "store manager는 remote store import hook을 지원해야 합니다.");
 
   const stateFactory = read(path.join("content", "panel-state-factory.js"));

@@ -116,7 +116,7 @@ function verifyPageBridgeEvents() {
 
 function verifyPromptHubShowPromptTabContract() {
   const promptHubControllerSource = fs.readFileSync(
-    path.join(root, "content", "prompt-hub-controller.js"),
+    path.join(root, "backup", "legacy-panel", "prompt-hub-controller.js"),
     "utf8"
   );
 
