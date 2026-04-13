@@ -7,6 +7,9 @@
 - 작업 시작 직후 첫 셸 명령을 실행하기 전에 아래 `셸/도구 환경 메모`를 다시 보고, 현재 세션에 해당하는 known workaround를 먼저 적용한다.
 - 기본 최소 읽기 세트는 `docs/development-philosophy.md`, 루트 `AGENTS.md`, `README.md`, `package.json`, `manifest.json`, `docs/feature-routing.md`, 그리고 요청과 일치하는 environment `AGENTS.md` 1개와 feature `AGENTS.md` 1개다.
 - `content/`, `functions/`, `hosting/meeting/`, `shared/`를 처음부터 넓게 읽지 않는다.
+- 단순 실행/운영 요청(`로컬 에뮬레이터 켜기`, `dev server 실행`, `lint/test/build/verify 실행`, `로그/상태 확인`)은 feature 구현 요청처럼 취급하지 않는다. 이 경우 `cwd`/Git/셸 확인 뒤 바로 `package.json` 스크립트, 관련 워크플로 문서, 필요한 환경 메모만 읽고 명령부터 실행한다.
+- 위 fast path에서는 feature `AGENTS.md`와 세부 docs를 선행 필수로 읽지 않는다. 실행이 실패했거나 어떤 스크립트를 써야 할지 모호할 때만 해당 feature 또는 environment 문서로 좁혀 들어간다.
+- 사용자가 `로컬 에뮬레이터`만 말하고 범위를 좁히지 않았으면 기본값은 `npm.cmd run emulator:meeting-local`로 본다. `hosting only`, `빠른 hosted smoke`, `meeting 제외` 같은 명시가 있을 때만 `npm.cmd run emulator:hosting`으로 낮춘다.
 
 ## 문서 계층
 - 상위 철학과 모듈화 판단 기준은 `docs/development-philosophy.md`에 둔다.
@@ -17,6 +20,7 @@
 ## 셸/도구 환경 메모
 - 현재 기본 셸이 PowerShell이면 `npm` 실행 시 `npm.ps1` 실행 정책 오류가 날 수 있다. 이 환경에서는 처음부터 `npm.cmd run <script>` 형태를 우선한다.
 - 같은 원인으로 `npm` 계열 명령이 한 번 막혔으면 같은 문법을 반복 재시도하지 말고 즉시 `npm.cmd`, 필요 시 `npx.cmd` 같은 대안으로 전환한다.
+- long-running 명령(`emulator`, `dev`, `watch`)은 가능하면 시작을 먼저 걸고, 그 다음 포트/프로세스/로그로 살아 있는지만 확인한다. 실행 전에 불필요하게 feature 문서를 넓게 읽느라 명령 시작이 지연되지 않게 한다.
 - 세션 중 반복해서 걸린 환경/도구 실패 패턴은 `실패한 명령`, `원인`, `바로 쓸 대안`을 이 문서나 해당 feature 문서에 같은 작업 안에서 남겨 다음 세션에 재사용한다.
 - 새 세션에서도 이 메모는 선택 사항이 아니라 시작 절차 일부로 취급한다. 같은 환경에서 이미 기록된 실패 패턴은 첫 시도부터 우회 경로를 기본값으로 쓴다.
 

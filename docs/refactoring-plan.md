@@ -3,7 +3,7 @@
 이 문서는 구조 진행 일지나 세션 handoff가 아니라, `버전 결정`, `version lane`, `meeting legacy baseline`, `release decision boundary`만 빠르게 확인하기 위한 기준 문서다.  
 ordinary feature 구현 변경, 탭별 hosted ownership 진행도, smoke 이슈 목록, git chronology는 이 문서의 대상이 아니다. 그런 내용은 `docs/current-handoff.md`, `docs/runtime-architecture.md`, feature `AGENTS.md`에서 관리한다.
 
-마지막 상태 갱신: 2026-04-13  
+마지막 상태 갱신: 2026-04-14  
 현재 공개 사용자 기준선: `0.4.4`
 
 ## 현재 결정 요약
@@ -119,6 +119,8 @@ ordinary feature 구현 변경, 탭별 hosted ownership 진행도, smoke 이슈 
 
 - popup에서 `settings.meetingWorkspaceTarget=local`을 고르면 rehearsal target은 `http://127.0.0.1:5000/meeting/index.html`과 `http://127.0.0.1:5000/meeting/panel-bridge.html`이다.
 - local target은 hosted page만이 아니라 meeting Functions/Auth/Firestore/Storage emulator까지 함께 보는 full-local 경로다.
+- 사용자가 `로컬 에뮬레이터`만 요청하면 local rehearsal 기본 부팅 명령은 `npm.cmd run emulator:meeting-local`이다. `hosting only`나 빠른 hosted smoke를 명시했을 때만 `npm.cmd run emulator:hosting`으로 낮춘다.
+- 이런 단순 실행/운영 요청은 feature 구현 탐색보다 명령 시작이 우선이다. `cwd`/Git/셸 확인 뒤 `package.json`과 관련 환경 메모만 보고 먼저 부팅하고, 실패하거나 스크립트 선택이 모호할 때만 feature 문서로 확장한다.
 - 같은 local target은 prompt와 hosted panel도 full-local rehearsal로 같이 본다. prompt read/write/review/panel auth는 `http://127.0.0.1:5001/browser-extension-main/asia-northeast3/*`를 향하고, hidden prompt bridge target은 `http://127.0.0.1:5000/extension/prompt-panel-bridge.html`, hosted panel target은 legacy lane `http://127.0.0.1:5000/extension/panel/index.html`, v2 lane `http://127.0.0.1:5000/extension-v2/panel/index.html`이다. 다만 페이지에 꽂히는 실제 iframe src는 둘 다 extension frame proxy를 거쳐 local Auth/Firestore emulator와 hosted 자산을 연다.
 - `1.0.0` v2 baseline에서도 panel render payload는 `settings.meetingWorkspaceTarget`을 iframe host까지 반드시 전달해야 한다. 이 local/prod handoff는 `npm.cmd run verify` 안의 `verify-panel-render`로 계속 고정한다.
 - 나머지 hosted-first/runtime 계약은 `npm.cmd run verify`에 포함된 lane/runtime/hosted 계약 검증으로 계속 고정한다.

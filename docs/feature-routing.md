@@ -5,6 +5,9 @@
 ## 기본 규칙
 
 - 먼저 primary feature를 하나 고른다.
+- 단순 실행/운영 요청(`에뮬레이터 켜기`, `dev server`, `lint/test/build/verify`, `로그 확인`)은 primary feature 분류보다 명령 실행이 우선이다. 이 경우 `package.json`, 관련 워크플로 문서, 환경 메모만 보고 바로 실행한다.
+- 위 fast path에서는 feature map 전체를 다시 읽지 않는다. 실행 실패나 스크립트 선택 ambiguity가 생겼을 때만 해당 feature로 라우팅한다.
+- 사용자가 `로컬 에뮬레이터`만 요청하면 기본 명령은 `npm.cmd run emulator:meeting-local`이다. `hosting only`나 빠른 hosted smoke를 명시했을 때만 `npm.cmd run emulator:hosting`을 고른다.
 - `README.md`는 상위 개요만 유지하고, feature-local 세부 규칙과 변경 기록은 각 feature `AGENTS.md`나 전용 docs를 우선한다.
 - cue가 두 feature 이상에 걸리면 저장소 전체 탐색 대신 짧게 `이 기능이 맞나요?`를 확인한다.
 - 읽기 순서는 `feature-local -> feature-owned shared -> platform/shell -> 인접 feature`다.
