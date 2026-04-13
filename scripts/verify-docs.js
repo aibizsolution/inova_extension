@@ -43,6 +43,7 @@ const requiredFiles = [
   "shared/prompt-library.js",
   path.join("scripts", "verify-feature-doc-update.js"),
   path.join("scripts", "verify-hosted-panel-bridge.js"),
+  path.join("scripts", "verify-legacy-prompt-backup.js"),
   path.join("scripts", "verify-panel-bookmark-controller.js"),
   path.join("scripts", "verify-panel-prompt-controller.js"),
   path.join("scripts", "verify-panel-shell-controller.js"),

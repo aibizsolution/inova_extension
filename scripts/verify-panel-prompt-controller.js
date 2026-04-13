@@ -339,6 +339,7 @@ function createHarness(options = {}) {
         { content: "릴리스 노트를 요약해 줘", id: "prompt-2", title: "릴리스 요약" },
       ],
     },
+    promptLibraryRemoteReady: options.promptLibraryRemoteReady == null ? true : Boolean(options.promptLibraryRemoteReady),
     promptReview: {
       open: Boolean(options.promptReviewState?.open),
     },

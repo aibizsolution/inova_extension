@@ -64,21 +64,6 @@ function verifyPromptLocalWiring() {
     "background가 prompt panel auth에 runtime functions config를 넘겨야 합니다."
   );
   assertPattern(
-    path.join("backup", "legacy-panel", "features", "prompt-store", "prompt-realtime-manager.js"),
-    /namespace\.firebaseConfig\?\.prompt\?\.resolveRuntime\?\.\(state\.settings\)/,
-    "prompt realtime manager가 state.settings 기준 runtime을 계산해야 합니다."
-  );
-  assertPattern(
-    path.join("backup", "legacy-panel", "features", "prompt-store", "prompt-realtime-manager.js"),
-    /runtimeConfig\?\.hosting\?\.promptPanelBridgeUrl/,
-    "prompt realtime manager가 runtime bridge URL을 써야 합니다."
-  );
-  assertPattern(
-    path.join("backup", "legacy-panel", "features", "prompt-store", "prompt-realtime-manager.js"),
-    /runtimeConfig\?\.hosting\?\.originUrl/,
-    "prompt realtime manager가 runtime bridge origin을 써야 합니다."
-  );
-  assertPattern(
     path.join("hosting", "extension", "prompt-panel-bridge.js"),
     /const LOCAL_BRIDGE_ORIGINS = new Set/,
     "prompt bridge에 local bridge origin 집합이 필요합니다."
