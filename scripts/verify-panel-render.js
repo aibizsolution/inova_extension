@@ -713,6 +713,7 @@ function createHarness() {
   [
     path.join("content", "panel-hosted-meeting-request.js"),
     path.join("content", "panel-hosted-prompt-request.js"),
+    path.join("content", "panel-hosted-runtime-request.js"),
     path.join("content", "panel-hosted-page-request.js"),
     path.join("content", "panel-hosted-shell-request.js"),
     path.join("content", "panel.js"),

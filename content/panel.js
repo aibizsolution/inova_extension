@@ -298,9 +298,12 @@
   async function handleBridgeRequest(host, request) {
     const domain = normalizeText(request?.domain);
     if (domain === "runtime") {
+      const handledRuntimeRequest = await namespace.panelHostedRuntimeRequest?.handle?.(request?.payload, {
+        normalizeText,
+      });
       return {
-        handled: true,
-        result: await handleRuntimeRequest(request?.payload),
+        handled: handledRuntimeRequest?.handled !== false,
+        result: handledRuntimeRequest?.result ?? null,
       };
     }
     if (domain === "page") {
@@ -319,20 +322,6 @@
       handled: false,
       result: null,
     };
-  }
-
-  async function handleRuntimeRequest(payload) {
-    if (!global.chrome?.runtime?.sendMessage) {
-      throw new Error("확장 런타임에 연결할 수 없어요.");
-    }
-    const response = await global.chrome.runtime.sendMessage({
-      request: payload && typeof payload === "object" ? payload : {},
-      type: "inova-panel:invoke",
-    });
-    if (!response?.ok) {
-      throw new Error(normalizeText(response?.error) || "호스팅 패널 요청을 처리하지 못했어요.");
-    }
-    return response.data;
   }
 
   async function handlePageRequest(payload) {

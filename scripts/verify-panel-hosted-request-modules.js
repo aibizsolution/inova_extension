@@ -9,6 +9,7 @@ const root = path.resolve(__dirname, "..");
 function main() {
   verifyHostedMeetingRequestModuleContract();
   verifyHostedPromptRequestModuleContract();
+  verifyHostedRuntimeRequestModuleContract();
   verifyHostedPageRequestModuleContract();
   verifyHostedShellRequestModuleContract();
   console.log("[verify-panel-hosted-request-modules] Hosted panel request helper contract passed");
@@ -83,6 +84,34 @@ function verifyHostedPromptRequestModuleContract() {
   assert(
     !topPanelSource.includes('if (action === "move-prompt")'),
     "content/panel.js should not keep inline move-prompt hosted request handling once the prompt helper exists"
+  );
+}
+
+function verifyHostedRuntimeRequestModuleContract() {
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(root, "manifest.json"), "utf8")
+  );
+  const topPanelSource = fs.readFileSync(
+    path.join(root, "content", "panel.js"),
+    "utf8"
+  );
+
+  const mainContentScript = manifest.content_scripts.find((entry) =>
+    Array.isArray(entry?.matches) && entry.matches.includes("https://inova.incross.com/*")
+  );
+  const scriptList = Array.isArray(mainContentScript?.js) ? mainContentScript.js : [];
+  const helperIndex = scriptList.indexOf("content/panel-hosted-runtime-request.js");
+  const panelIndex = scriptList.indexOf("content/panel.js");
+
+  assert(helperIndex !== -1, "manifest should load the hosted runtime request helper");
+  assert(panelIndex !== -1 && helperIndex < panelIndex, "manifest should load the runtime request helper before content/panel.js");
+  assert(
+    topPanelSource.includes("namespace.panelHostedRuntimeRequest?.handle?."),
+    "content/panel.js should delegate runtime broker requests to the dedicated helper module"
+  );
+  assert(
+    !topPanelSource.includes("function handleRuntimeRequest("),
+    "content/panel.js should not keep inline runtime broker handling once the runtime helper exists"
   );
 }
 
