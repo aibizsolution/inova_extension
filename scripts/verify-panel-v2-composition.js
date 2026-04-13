@@ -49,6 +49,10 @@ function main() {
     "v2 composition should not instantiate the legacy meeting manager once hosted meeting actions and lifecycle are detached"
   );
   assert(
+    !v2CompositionSource.includes("namespace.meetingManager.mergeMeetingHub"),
+    "v2 composition should not normalize hosted meeting summaries through the legacy meeting manager"
+  );
+  assert(
     !v2CompositionSource.includes("let panelMeetingController = null;"),
     "v2 composition should not keep a meeting fallback controller once hosted meeting actions stay inside hosted ownership"
   );
@@ -121,12 +125,16 @@ function main() {
     "v2 composition should wrap meeting snapshot shaping for hosted-owned meeting state"
   );
   assert(
-    v2CompositionSource.includes("createHostedOwnedMeetingSnapshotBridge(namespace.meetingManager)"),
-    "v2 meeting snapshot bridge should derive snapshot state from the raw meeting hub summary"
+    v2CompositionSource.includes("const hostedOwnedMeetingSnapshot = createHostedOwnedMeetingSnapshotBridge();"),
+    "v2 meeting snapshot bridge should derive snapshot state from the hosted meeting summary without the legacy meeting manager"
   );
   assert(
     v2CompositionSource.includes("const explicitFingerprint = normalizeText(meetingTool?.snapshotFingerprint);"),
     "v2 meeting snapshot bridge should honor an explicit hosted-owned meeting fingerprint"
+  );
+  assert(
+    v2CompositionSource.includes("function normalizeHostedMeetingSummary(meetingTool)"),
+    "v2 composition should normalize hosted meeting summary payloads locally"
   );
   assert(
     v2CompositionSource.includes("buildMeetingSnapshot: hostedOwnedMeetingSnapshot.buildMeetingSnapshot"),

@@ -24,7 +24,7 @@
       ...runtimeDiagnostics,
       render,
     });
-    const hostedOwnedMeetingSnapshot = createHostedOwnedMeetingSnapshotBridge(namespace.meetingManager);
+    const hostedOwnedMeetingSnapshot = createHostedOwnedMeetingSnapshotBridge();
     const panelDebugController = namespace.panelDebugController.create(state, {
       ...runtimeFlags,
       render,
@@ -145,23 +145,18 @@
     };
 
     function handleHostedMeetingSummarySync(meetingTool = {}) {
-      const nextSummary = {
-        checkedAt: normalizeText(meetingTool.checkedAt),
-        count: Math.max(0, Number(meetingTool.count) || 0),
-        dataFreshness: normalizeText(meetingTool.dataFreshness),
-        degraded: Boolean(meetingTool.degraded),
-        degradedReason: normalizeText(meetingTool.degradedReason),
-        error: normalizeText(meetingTool.error),
-        snapshotFingerprint: normalizeText(meetingTool.snapshotFingerprint),
-        source: normalizeText(meetingTool.source),
-      };
+      const nextSummary = normalizeHostedMeetingSummary({
+        ...state.meetingHub,
+        ...(meetingTool && typeof meetingTool === "object" ? meetingTool : {}),
+      });
       if (buildMeetingSummaryKey(state.meetingHub) === buildMeetingSummaryKey(nextSummary)) {
         return false;
       }
-      state.meetingHub = namespace.meetingManager.mergeMeetingHub({
+      state.meetingHub = {
         ...state.meetingHub,
+        items: [],
         ...nextSummary,
-      });
+      };
       render();
       return true;
     }
@@ -179,13 +174,10 @@
     };
   }
 
-  function createHostedOwnedMeetingSnapshotBridge(meetingManagerNamespace = {}) {
-    const mergeMeetingHub = typeof meetingManagerNamespace.mergeMeetingHub === "function"
-      ? meetingManagerNamespace.mergeMeetingHub
-      : (meetingHub) => (meetingHub && typeof meetingHub === "object" ? meetingHub : {});
+  function createHostedOwnedMeetingSnapshotBridge() {
     return {
       buildMeetingSnapshot(meetingHub) {
-        const meetingTool = mergeMeetingHub(meetingHub);
+        const meetingTool = normalizeHostedMeetingSummary(meetingHub);
         return {
           count: getMeetingCount(meetingTool),
           snapshotFingerprint: buildMeetingSnapshotFingerprint(meetingTool),
@@ -331,15 +323,51 @@
   }
 
   function buildMeetingSummaryKey(meetingTool) {
+    const normalizedMeetingTool = normalizeHostedMeetingSummary(meetingTool);
     return JSON.stringify({
-      count: Math.max(0, Number(meetingTool?.count) || 0),
-      dataFreshness: normalizeText(meetingTool?.dataFreshness),
-      degraded: Boolean(meetingTool?.degraded),
-      degradedReason: normalizeText(meetingTool?.degradedReason),
-      error: normalizeText(meetingTool?.error),
-      snapshotFingerprint: normalizeText(meetingTool?.snapshotFingerprint),
-      source: normalizeText(meetingTool?.source),
+      count: normalizedMeetingTool.count,
+      dataFreshness: normalizedMeetingTool.dataFreshness,
+      degraded: normalizedMeetingTool.degraded,
+      degradedReason: normalizedMeetingTool.degradedReason,
+      error: normalizedMeetingTool.error,
+      snapshotFingerprint: normalizedMeetingTool.snapshotFingerprint,
+      source: normalizedMeetingTool.source,
     });
+  }
+
+  function normalizeHostedMeetingSummary(meetingTool) {
+    const normalizedMeetingTool = meetingTool && typeof meetingTool === "object" ? meetingTool : {};
+    return {
+      checkedAt: normalizeText(normalizedMeetingTool.checkedAt),
+      count: Math.max(
+        0,
+        Number(normalizedMeetingTool.count) || (Array.isArray(normalizedMeetingTool.items) ? normalizedMeetingTool.items.length : 0)
+      ),
+      dataFreshness: normalizeMeetingDataFreshness(normalizedMeetingTool.dataFreshness),
+      degraded: Boolean(normalizedMeetingTool.degraded),
+      degradedReason: normalizeText(normalizedMeetingTool.degradedReason),
+      error: normalizeText(normalizedMeetingTool.error),
+      snapshotFingerprint: normalizeText(normalizedMeetingTool.snapshotFingerprint),
+      source: normalizeMeetingSource(normalizedMeetingTool.source),
+    };
+  }
+
+  function normalizeMeetingDataFreshness(value) {
+    const normalized = normalizeText(value).toLowerCase();
+    return normalized === "fresh" || normalized === "stale" || normalized === "empty"
+      ? normalized
+      : "empty";
+  }
+
+  function normalizeMeetingSource(value) {
+    const normalized = normalizeText(value).toLowerCase();
+    return normalized === "realtime"
+      || normalized === "runtime-read"
+      || normalized === "cache"
+      || normalized === "local"
+      || normalized === "none"
+      ? normalized
+      : "none";
   }
 
   namespace.panelV2CompositionController = { create };
