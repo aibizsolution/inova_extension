@@ -337,34 +337,12 @@
 
   async function handlePageRequest(payload) {
     const handledPageRequest = await namespace.panelHostedPageRequest?.handle?.(payload, {
-      buildConversationSnapshot,
-      buildDebugState,
-      copyDebugLog,
       logConsoleTrace,
     });
     if (handledPageRequest?.handled) {
       return handledPageRequest.result;
     }
     throw new Error("지원하지 않는 page adapter 요청이에요.");
-  }
-
-  async function copyDebugLog(errorsOnly) {
-    const entries = namespace.panelDebug?.getEntries?.() || [];
-    const text = errorsOnly
-      ? namespace.panelDebug?.buildErrorCopyText?.(entries)
-      : namespace.panelDebug?.buildCopyText?.(entries);
-    const normalizedText = String(text || "").trim();
-    if (!normalizedText) {
-      return {
-        copied: false,
-        text: "",
-      };
-    }
-    await global.navigator.clipboard.writeText(normalizedText);
-    return {
-      copied: true,
-      text: normalizedText,
-    };
   }
 
   async function handlePanelRequest(host, payload) {
@@ -412,33 +390,6 @@
     logConsoleTrace("panel", "10.top.panel.snapshot.push", { activeTool: normalizeText(state?.activeTool), open: Boolean(state?.open), promptTab: normalizeText(state?.uiPreferences?.activePromptTab), reviewOpen: Boolean(state?.promptReview?.open), visible: Boolean(state?.visible) });
     host.__bridge.updateSnapshot(snapshot);
     return true;
-  }
-
-  function buildConversationSnapshot() {
-    const sessionId = namespace.session?.getSessionId?.() || "";
-    const items = namespace.contentDom?.collectUserMessages?.(sessionId) || [];
-    return {
-      conversation: cloneValue(namespace.contentDom?.getConversationState?.() || {}),
-      items: cloneValue(items),
-      sessionId,
-      sessionTitle: normalizeText(namespace.contentDom?.getSessionTitle?.())
-        || namespace.session?.formatSessionLabel?.(sessionId)
-        || "현재 세션",
-      visibleMessageId: normalizeText(namespace.contentDom?.getVisibleMessageId?.(items)),
-    };
-  }
-
-  function buildDebugState() {
-    const entries = namespace.panelDebug?.getEntries?.() || [];
-    const statusSummary = namespace.panelDebug?.summarizeEntries?.(entries) || {};
-    return {
-      enabled: Boolean(namespace.panelDebug?.isEnabled?.()),
-      entries: cloneValue(entries),
-      errorsText: String(namespace.panelDebug?.buildErrorCopyText?.(entries) || ""),
-      hasErrors: Math.max(0, Number(statusSummary.errorCount) || 0) > 0,
-      statusSummary: cloneValue(statusSummary),
-      text: String(namespace.panelDebug?.buildCopyText?.(entries) || ""),
-    };
   }
 
   function readExtensionVersion() {

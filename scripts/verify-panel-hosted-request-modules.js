@@ -108,6 +108,18 @@ function verifyHostedPageRequestModuleContract() {
     topPanelSource.includes("namespace.panelHostedPageRequest?.handle?."),
     "content/panel.js should delegate page adapter requests to the dedicated helper module"
   );
+  assert(
+    !topPanelSource.includes("function copyDebugLog("),
+    "content/panel.js should not keep page debug copy helpers once the page request helper owns them"
+  );
+  assert(
+    !topPanelSource.includes("function buildConversationSnapshot("),
+    "content/panel.js should not keep conversation snapshot builders once the page request helper owns them"
+  );
+  assert(
+    !topPanelSource.includes("function buildDebugState("),
+    "content/panel.js should not keep debug state builders once the page request helper owns them"
+  );
   [
     'if (action === "copy-text")',
     'if (action === "copy-debug-log")',
