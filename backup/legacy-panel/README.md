@@ -2,6 +2,13 @@
 
 이 폴더는 현재 `1.0.0` v2 활성 bundle에서 더 이상 로드하지 않는 legacy extension panel 코드를 임시로 격리해 두는 자리다.
 
+현재 옮겨 둔 대표 파일:
+
+- `backup/legacy-panel/panel-composition-controller.js`
+- `backup/legacy-panel/panel-action-controller.js`
+- `backup/legacy-panel/panel-meeting-controller.js`
+- `backup/legacy-panel/meeting-manager.js`
+
 기준은 아래와 같다.
 
 - 활성 `manifest.json` / `content/main.js` / 현재 v2 bootstrap이 더 이상 참조하지 않는 코드만 옮긴다.

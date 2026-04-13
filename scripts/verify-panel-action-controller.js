@@ -53,7 +53,7 @@ function createHarness(options = {}) {
   context.globalThis = context;
   context.InovaBookmarks = {};
 
-  loadScript("content/panel-action-controller.js", context);
+  loadScript("backup/legacy-panel/panel-action-controller.js", context);
 
   return {
     controller: context.InovaBookmarks.panelActionController.create({}, {

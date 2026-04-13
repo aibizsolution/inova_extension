@@ -16,9 +16,9 @@
 - `content/panel-v2-composition-controller.js`
 - `hosting/meeting/index.js`
 - `popup/index.js`
-- `content/meeting-manager.js`는 현재 `1.0.0` 활성 bundle이 아니라 legacy reference/source로 본다. pure panel v2 migration에서는 이 파일을 먼저 손대지 않는다.
+- `backup/legacy-panel/meeting-manager.js`는 현재 `1.0.0` 활성 bundle이 아니라 legacy reference/source로 본다. pure panel v2 migration에서는 이 파일을 먼저 손대지 않는다.
 - `content/meeting-view.js`도 같은 이유로 legacy reference/source로만 본다.
-- `content/meeting-manager.js`는 현재 `ensurePanelAuth`, `ensureBridgePort`/`handleBridgeMessage`/`disconnectRealtime`, `fallbackRefresh`/`warmRefresh`/`mergeMeetingHub` 세 workflow로 읽는다. 파일 길이만으로 바로 분리하지 말고, bridge lifecycle에 실제 bug pressure가 반복될 때만 다음 split 후보로 올린다.
+- `backup/legacy-panel/meeting-manager.js`는 현재 `ensurePanelAuth`, `ensureBridgePort`/`handleBridgeMessage`/`disconnectRealtime`, `fallbackRefresh`/`warmRefresh`/`mergeMeetingHub` 세 workflow로 읽는다. 파일 길이만으로 바로 분리하지 말고, bridge lifecycle에 실제 bug pressure가 반복될 때만 다음 split 후보로 올린다.
 
 ## 관련 프론트 경로
 - `background/service-worker.js`
@@ -31,10 +31,10 @@
 
 ## hosted/panel 공통 경계
 - legacy lane은 현재 `browser-extension-main` hosted meeting 경로를 유지한다. separate hosted origin/site 판단은 `docs/refactoring-plan.md`의 version decision gate에서 관리한다.
-- `0.4.5`부터 panel 안의 회의 허브 UI는 `hosting/extension/panel/meeting-view.js`가 렌더링하고, 회의 목록 state와 action routing은 기존 `content/meeting-manager.js`/`content/panel-meeting-controller.js`가 계속 소유한다.
+- `0.4.5`부터 panel 안의 회의 허브 UI는 `hosting/extension/panel/meeting-view.js`가 렌더링하고, 회의 목록 state와 action routing은 기존 `backup/legacy-panel/meeting-manager.js`/`backup/legacy-panel/panel-meeting-controller.js`가 계속 소유한다.
 - `1.0.0+` v2 lane에서는 `hosting/extension-v2/panel/meeting-hub-controller.js`가 회의 허브 목록 렌더 상태(`items`, `error/degraded`, freshness`)와 action UI 상태(`pending`, `feedback`, share patch`)를 직접 소유한다. 목록 읽기는 hosted `meeting-firestore-client.js`가 `auth.issue-meeting-panel -> Firestore onSnapshot` 경로로 맡고, share/open 같은 mutation/action만 runtime broker를 탄다. v2 hosted panel은 더 이상 `meeting-action` top-panel fallback request를 쓰지 않는다. extension snapshot은 `count`와 refresh fingerprint만 남기고, extension은 runtime broker와 브라우저 탭 열기만 맡는다.
-- v2 meeting snapshot shaping은 `panelMeetingController`의 action UI state나 `content/meeting-manager.js` merge helper를 거치지 않고, hosted가 올린 raw `meetingHub` summary에서 `count`와 `snapshotFingerprint`만 남긴 `meetingSummary` 상태로 줄인다. 현재 `1.0.0` 활성 bundle은 legacy `panelMeetingController`/`panelActionController`/`meetingManager` path를 로드하지 않는다.
-- 같은 이유로 v2 panel shell은 `route`, `storage`, `prompt tab`, `surface`, `bootstrap`, 브라우저 `visibility/focus` 같은 sidecar/lifecycle 이벤트로는 더 이상 `content/meeting-manager.js` sync를 직접 깨우지 않는다. hosted meeting hub는 snapshot fingerprint, meeting tool 재진입, hosted 문서 `visibility/focus`, explicit action 결과를 기준으로 자체 load/refresh를 이어받고, extension은 handle/rail count용 compact meeting summary sync만 남긴다.
+- v2 meeting snapshot shaping은 `panelMeetingController`의 action UI state나 `backup/legacy-panel/meeting-manager.js` merge helper를 거치지 않고, hosted가 올린 raw `meetingHub` summary에서 `count`와 `snapshotFingerprint`만 남긴 `meetingSummary` 상태로 줄인다. 현재 `1.0.0` 활성 bundle은 legacy `panelMeetingController`/`panelActionController`/`meetingManager` path를 로드하지 않는다.
+- 같은 이유로 v2 panel shell은 `route`, `storage`, `prompt tab`, `surface`, `bootstrap`, 브라우저 `visibility/focus` 같은 sidecar/lifecycle 이벤트로는 더 이상 `backup/legacy-panel/meeting-manager.js` sync를 직접 깨우지 않는다. hosted meeting hub는 snapshot fingerprint, meeting tool 재진입, hosted 문서 `visibility/focus`, explicit action 결과를 기준으로 자체 load/refresh를 이어받고, extension은 handle/rail count용 compact meeting summary sync만 남긴다.
 - v2 bootstrap도 legacy처럼 무조건 meeting sync를 prime하지 않는다. 시작 tool이 `meeting`일 때만 bootstrap prime을 남기고, meeting storage listener는 등록하지 않는다.
 - route change는 회의 목록의 정본이 아니다. meeting hub가 이미 로드되었거나 realtime이 붙어 있는 동안에는 route-driven refresh를 다시 예약하지 않고, 회의 동기화는 realtime 연결과 explicit meeting action 중심으로 유지한다.
 - 팝업의 `로컬 호스팅` target은 hosted meeting URL만 바꾸는 모드가 아니다. local target에서는 meeting panel bridge와 meeting HTTP auth/list/share 경로도 함께 local Functions/Auth/Firestore emulator를 보도록 유지한다.

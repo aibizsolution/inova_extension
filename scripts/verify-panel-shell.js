@@ -141,7 +141,7 @@ function createHarness() {
     runtime: context,
   });
 
-  loadScript("content/panel-composition-controller.js", context);
+  loadScript("backup/legacy-panel/panel-composition-controller.js", context);
   const originalCompositionCreate = context.InovaBookmarks.panelCompositionController.create;
   context.InovaBookmarks.panelCompositionController.create = function instrumentedCreate(state) {
     controllerEvents.compositionControllerCreated = (controllerEvents.compositionControllerCreated || 0) + 1;

@@ -67,7 +67,8 @@ const FEATURE_DOC_RULES = [
     feature: "meeting",
     docs: ["content/features/meeting/AGENTS.md"],
     patterns: [
-      /^content\/meeting-manager\.js$/,
+      /^backup\/legacy-panel\/meeting-manager\.js$/,
+      /^backup\/legacy-panel\/panel-meeting-controller\.js$/,
       /^content\/meeting-view\.js$/,
       /^hosting\/meeting\//,
       /^functions\/features\/meeting\//,

@@ -41,7 +41,7 @@ Short version:
 - meeting list state moved into hosted hub controller
 - meeting actions (`open-workspace`, `open-result`, `share`, `revoke-share`) moved into hosted hub controller
 - v2 hosted meeting panel no longer falls back to extension-side `meeting-action` dispatch
-- v2 meeting snapshot summary no longer depends on `content/meeting-manager.js` merge helpers
+- v2 meeting snapshot summary no longer depends on `backup/legacy-panel/meeting-manager.js` merge helpers
 - `content/panel.js` keeps shrinking toward generic host + broker by delegating shell-level hosted requests to helper modules
 - `content/panel.js` now delegates page adapter requests to a helper too, leaving runtime/page brokering as its main remaining responsibility
 - `content/panel.js` now delegates runtime broker requests too, leaving mostly host/bridge routing responsibilities
@@ -152,7 +152,7 @@ Start files:
 
 - `content/panel-v2-composition-controller.js`
 - `content/panel-render-controller.js`
-- `content/panel-action-controller.js`
+- `backup/legacy-panel/panel-action-controller.js`
 - `hosting/extension-v2/panel/index.js`
 
 Then read only the feature-local hosted prompt controllers that the chosen path actually touches.
@@ -168,7 +168,7 @@ Start files:
 - `content/panel.js`
 - `content/panel-render-controller.js`
 - `content/panel-bootstrap-controller.js`
-- `content/panel-action-controller.js`
+- `backup/legacy-panel/panel-action-controller.js`
 
 ### Not the next priority
 

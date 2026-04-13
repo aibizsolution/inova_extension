@@ -10,7 +10,7 @@ const contract = JSON.parse(
 const requiredFiles = [
   "manifest.json",
   "README.md",
-  path.join("backup", "legacy-panel", "README.md"),
+  "backup/legacy-panel/README.md",
   path.join(".githooks", "pre-push"),
   path.join("scripts", "verify-refactor-plan-update.js"),
   path.join("docs", "feature-spec.md"),
@@ -53,6 +53,8 @@ const requiredFiles = [
   path.join("scripts", "verify-panel-state-factory.js"),
   path.join("scripts", "verify-panel-runtime-controller.js"),
   path.join("scripts", "verify-panel-action-controller.js"),
+  path.join("scripts", "verify-panel-meeting-controller.js"),
+  path.join("scripts", "verify-meeting-manager.js"),
   path.join("scripts", "verify-prompt-library-remote-first.js"),
   path.join("scripts", "verify-prompt-runtime-local.js"),
   path.join("scripts", "verify-prompt-review.js"),
@@ -71,8 +73,10 @@ const requiredFiles = [
   "content/panel-bootstrap-controller.js",
   "content/panel-state-factory.js",
   "content/panel-runtime-controller.js",
-  "content/panel-action-controller.js",
-  "content/panel-composition-controller.js",
+  "backup/legacy-panel/panel-action-controller.js",
+  "backup/legacy-panel/panel-composition-controller.js",
+  "backup/legacy-panel/panel-meeting-controller.js",
+  "backup/legacy-panel/meeting-manager.js",
   "content/route-state-controller.js",
   "content/route-watch-controller.js",
   "content/prompt-hub-state.js",
@@ -180,7 +184,8 @@ const featureDocContracts = [
     feature: "meeting",
     doc: path.join("content", "features", "meeting", "AGENTS.md"),
     expectedFiles: [
-      "content/meeting-manager.js",
+      "backup/legacy-panel/meeting-manager.js",
+      "backup/legacy-panel/panel-meeting-controller.js",
       "content/meeting-view.js",
       "hosting/meeting/index.js",
       "popup/index.js",
@@ -351,7 +356,7 @@ const codeChecks = [
     ],
   },
   {
-    file: "content/panel-action-controller.js",
+    file: "backup/legacy-panel/panel-action-controller.js",
     patterns: [
       /handlePanelMeetingAction/,
       /handlesAction/,
@@ -359,7 +364,7 @@ const codeChecks = [
     ],
   },
   {
-    file: "content/panel-composition-controller.js",
+    file: "backup/legacy-panel/panel-composition-controller.js",
     patterns: [
       /panelRuntimeController/,
       /panelPromptController/,

@@ -87,7 +87,7 @@
 | --- | --- |
 | 기능 목적 | 회의 허브, hosted 작업실, 녹음, 전사, 결과 검토 |
 | 요청 cue | 회의 허브, 새 회의하기, 작업실, launch/session auth, 녹음, 전사, chunk |
-| 먼저 볼 파일 | `hosting/extension-v2/panel/meeting-hub-controller.js`, `hosting/extension-v2/panel/meeting-firestore-client.js`, `content/panel-v2-composition-controller.js`, `hosting/meeting/index.js`, `hosting/meeting/workspace-*.js`, `popup/index.js`, `content/meeting-manager.js`(legacy reference), `content/meeting-view.js`(legacy reference) |
+| 먼저 볼 파일 | `hosting/extension-v2/panel/meeting-hub-controller.js`, `hosting/extension-v2/panel/meeting-firestore-client.js`, `content/panel-v2-composition-controller.js`, `hosting/meeting/index.js`, `hosting/meeting/workspace-*.js`, `popup/index.js`, `backup/legacy-panel/meeting-manager.js`(legacy reference), `backup/legacy-panel/panel-meeting-controller.js`(legacy reference), `content/meeting-view.js`(legacy reference) |
 | 관련 프론트 경로 | `background/service-worker.js`, `hosting/meeting/*`, `hosting/extension-v2/panel/meeting-hub-controller.js`, `hosting/extension-v2/panel/meeting-firestore-client.js`, `hosting/extension/panel/meeting-view.js`, `popup/index.js` |
 | 관련 functions 경로 | `functions/features/meeting/meeting-launch-service.js`, `functions/features/meeting/meeting-service.js` |
 | feature-owned shared | `shared/meeting-bridge.js`, `shared/meeting-debug.js`, `shared/firebase-config.js`, `shared/storage.js` |

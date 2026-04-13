@@ -20,6 +20,7 @@ async function main() {
 async function verifyOpenResultSuccess() {
   const harness = createHarness();
   await harness.controller.handleAction("open-result", { meetingId: "meeting-alpha", jobId: "job-alpha", title: "Alpha" });
+  await harness.flush();
   assert.equal(harness.bridgeCalls.openResult.length, 1);
   assert.equal(harness.state.meetingUi.feedback.text, "결과 탭을 열었습니다.");
   assert.equal(harness.state.meetingUi.pending.action, "");
@@ -31,6 +32,7 @@ async function verifyOpenResultFailure() {
     openResultError: "결과 탭 열기 실패",
   });
   await harness.controller.handleAction("open-result", { meetingId: "meeting-alpha", jobId: "job-alpha" });
+  await harness.flush();
   assert.equal(harness.bridgeCalls.openResult.length, 1);
   assert.equal(harness.state.meetingUi.feedback.text, "결과 탭 열기 실패");
   assert.equal(harness.state.meetingUi.feedback.tone, "error");
@@ -40,6 +42,7 @@ async function verifyOpenResultFailure() {
 async function verifyShareSuccess() {
   const harness = createHarness();
   await harness.controller.handleAction("share", { meetingId: "meeting-alpha", title: "Alpha" });
+  await harness.flush();
   assert.equal(harness.bridgeCalls.createShare.length, 1);
   assert.equal(harness.clipboardWrites[0], "https://share.example/meeting-alpha");
   assert.equal(harness.state.meetingHub.items[0].share.active, true);
@@ -52,6 +55,7 @@ async function verifyShareFailure() {
     createShareResult: { shareUrl: "", share: null },
   });
   await harness.controller.handleAction("share", { meetingId: "meeting-alpha" });
+  await harness.flush();
   assert.equal(harness.bridgeCalls.createShare.length, 1);
   assert.equal(harness.state.meetingUi.feedback.text, "공유 링크를 만들지 못했어요.");
   assert.equal(harness.state.meetingUi.feedback.tone, "error");
@@ -70,6 +74,7 @@ async function verifyRevokeShareSuccess() {
     },
   });
   await harness.controller.handleAction("revoke-share", { meetingId: "meeting-alpha" });
+  await harness.flush();
   assert.equal(harness.bridgeCalls.revokeShare.length, 1);
   assert.equal(harness.state.meetingHub.items[0].share.active, false);
   assert.equal(harness.state.meetingUi.feedback.text, "공유 링크를 해제했습니다.");
@@ -89,6 +94,7 @@ async function verifyRevokeShareFailure() {
     },
   });
   await harness.controller.handleAction("revoke-share", { meetingId: "meeting-alpha" });
+  await harness.flush();
   assert.equal(harness.bridgeCalls.revokeShare.length, 1);
   assert.equal(harness.state.meetingUi.feedback.text, "공유 해제 실패");
   assert.equal(harness.state.meetingUi.feedback.tone, "error");
@@ -204,7 +210,7 @@ function createHarness(options = {}) {
     },
   };
 
-  loadScript("content/panel-meeting-controller.js", context);
+  loadScript("backup/legacy-panel/panel-meeting-controller.js", context);
 
   const state = {
     meetingHub: {
@@ -250,6 +256,10 @@ function createHarness(options = {}) {
     bridgeCalls,
     clipboardWrites,
     controller,
+    async flush() {
+      await Promise.resolve();
+      await Promise.resolve();
+    },
     logEvents,
     scheduleSyncCalls,
     state,
