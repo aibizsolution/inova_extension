@@ -10,6 +10,7 @@
 - `backup/legacy-panel/meeting-manager.js`
 - `backup/legacy-panel/meeting-view.js`
 - `backup/legacy-panel/meeting-panel-bridge-controller.js`
+- `backup/legacy-panel/bookmark-view.js`
 - `backup/legacy-panel/prompt-view.js`
 - `backup/legacy-panel/store-view.js`
 - `backup/legacy-panel/prompt-review-view.js`
@@ -27,6 +28,7 @@
 - `backup/legacy-panel/release-manager.js`
 - `backup/legacy-panel/release-view.js`
 - `backup/legacy-panel/shared/release-info.js`
+- `backup/legacy-panel/tools.css`
 
 기준은 아래와 같다.
 

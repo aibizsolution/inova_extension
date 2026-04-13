@@ -89,8 +89,9 @@ const requiredFiles = [
   "backup/legacy-panel/features/prompt-library/cloud-sync-manager.js",
   "backup/legacy-panel/features/prompt-library/prompt-manager.js",
   "backup/legacy-panel/features/prompt-store/prompt-realtime-manager.js",
+  "backup/legacy-panel/bookmark-view.js",
+  "backup/legacy-panel/tools.css",
   "content/panel.css",
-  "content/tools.css",
 ];
 
 const keywordGroups = [
@@ -145,7 +146,7 @@ const featureDocContracts = [
     doc: path.join("content", "features", "conversation", "AGENTS.md"),
     expectedFiles: [
       "content/dom.js",
-      "content/bookmark-view.js",
+      "backup/legacy-panel/bookmark-view.js",
       "content/route-sync.js",
       "content/route-state-controller.js",
       "content/route-watch-controller.js",
@@ -227,7 +228,6 @@ const codeChecks = [
       /"content\/hosted-panel-bridge\.js"/,
       /"content\/main\.js"/,
       /"content\/panel\.css"/,
-      /"content\/tools\.css"/,
       /"matches"\s*:\s*\[\s*"https:\/\/inova\.incross\.com\/\*"\s*\]/s,
     ],
   },

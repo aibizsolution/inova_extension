@@ -57,7 +57,6 @@
         "content/dom.js",
         "content/composer.js",
         "content/features/prompt-review/composer-review-float.js",
-        "content/bookmark-view.js",
         "content/features/prompt-review/prompt-review-manager.js",
         "content/route-state-controller.js",
         "content/route-watch-controller.js",
@@ -87,7 +86,6 @@
       ],
       "css": [
         "content/panel.css",
-        "content/tools.css",
         "content/composer-review.css"
       ],
       "run_at": "document_idle"

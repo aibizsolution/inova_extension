@@ -51,6 +51,7 @@ Short version:
 - current `1.0.0` manifest no longer loads the legacy prompt runtime bundle; v2 prompt shell now keeps only `content/panel-v2-prompt-controller.js` for minimal review handoff/composer review float
 - current `1.0.0` extension bundle now boots `content/panel-v2-composition-controller.js` directly and stops loading the legacy panel composition/meeting/action lane in `manifest.json`
 - current `1.0.0` manifest no longer loads the legacy release runtime/helper bundle; compact release summary now round-trips through hosted v2 instead of `content/release-manager.js`
+- current `1.0.0` manifest no longer loads the legacy content bookmark view/style bundle; hosted bookmark view owns the visible conversation UI and `content` keeps only snapshot/jump/copy adapters
 - meeting open traces split correctly:
   - original `i-Nova` tab now logs only launch request/dispatch/completion
   - new hosted workspace tab owns workspace bootstrap/ready logs

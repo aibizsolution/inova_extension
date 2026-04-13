@@ -33,6 +33,8 @@ function main() {
     "shared/meeting-debug.js",
     "shared/meeting-bridge.js",
     "shared/release-info.js",
+    "content/bookmark-view.js",
+    "content/tools.css",
     "backup/legacy-panel/features/prompt-library/files.js",
     "backup/legacy-panel/features/prompt-library/cloud-sync-manager.js",
     "backup/legacy-panel/features/prompt-store/prompt-realtime-manager.js",

@@ -323,10 +323,6 @@ function verifyBookmarkJumpAccessibilityContract() {
     path.join(root, "hosting", "extension-v2", "panel", "bookmark-view.js"),
     "utf8"
   );
-  const contentBookmarkSource = fs.readFileSync(
-    path.join(root, "content", "bookmark-view.js"),
-    "utf8"
-  );
 
   assert(
     hostedBookmarkSource.includes('<div class="bookmark-jump" data-bookmark-id="${bookmark.id}">'),
@@ -335,10 +331,6 @@ function verifyBookmarkJumpAccessibilityContract() {
   assert(
     !hostedBookmarkSource.includes('class="bookmark-jump" type="button"'),
     "hosted bookmark list should not render a hidden/focusable bookmark jump button"
-  );
-  assert(
-    contentBookmarkSource.includes('<div class="bookmark-jump" data-bookmark-id="${bookmark.id}">'),
-    "content bookmark list should mirror the hosted non-focusable bookmark jump container"
   );
 }
 

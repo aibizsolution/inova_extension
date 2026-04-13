@@ -22,7 +22,7 @@
     "backup/legacy-panel/shared/release-info.js",
     "shared/session.js",
     "shared/storage.js",
-    "content/bookmark-view.js",
+    "backup/legacy-panel/bookmark-view.js",
     "content/panel-bookmark-controller.js",
     "content/panel-activity-controller.js",
     "content/panel-surface-controller.js",
@@ -55,10 +55,10 @@
     "backup/legacy-panel/prompt-hub-panel.js",
     "backup/legacy-panel/prompt-hub-controller.js",
     "backup/legacy-panel/prompt-hub-runtime.js",
+    "backup/legacy-panel/tools.css",
     "content/route-state-controller.js",
     "content/route-watch-controller.js",
     "content/route-sync.js",
-    "content/tools.css",
     "content/main.js",
     "content/panel.css",
     "hosting/extension/panel/index.html",
@@ -109,7 +109,6 @@
     "content/composer.js",
     "content/dom.js",
     "content/features/prompt-review/composer-review-float.js",
-    "content/bookmark-view.js",
     "content/features/prompt-review/prompt-review-manager.js",
     "content/route-state-controller.js",
     "content/route-watch-controller.js",
@@ -142,8 +141,7 @@
     "index.js"
   ],
   "manifestContentCss": [
-    "content/panel.css",
-    "content/tools.css"
+    "content/panel.css"
   ],
   "requiredStorageKeys": [
     "settings",
