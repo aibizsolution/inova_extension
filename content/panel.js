@@ -425,6 +425,12 @@
     if (handledMeetingRequest?.handled) {
       return handledMeetingRequest.result;
     }
+    const handledPromptRequest = await namespace.panelHostedPromptRequest?.handle?.(action, payload, callbacks, {
+      normalizeText,
+    });
+    if (handledPromptRequest?.handled) {
+      return handledPromptRequest.result;
+    }
 
     if (action === "toggle-panel") {
       callbacks.onToggle?.(payload?.open);
@@ -457,38 +463,6 @@
     }
     if (action === "release-action") {
       await callbacks.onReleaseAction?.(normalizeText(payload?.releaseAction), detail);
-      return { handled: true };
-    }
-    if (action === "prompt-action") {
-      callbacks.onPromptAction?.(normalizeText(payload?.promptAction), detail);
-      return { handled: true };
-    }
-    if (action === "prompt-draft-change") {
-      callbacks.onPromptDraftChange?.(normalizeText(payload?.field), payload?.value);
-      return { handled: true };
-    }
-    if (action === "prompt-tab-select") {
-      callbacks.onSelectPromptTab?.(normalizeText(payload?.promptTabId));
-      return { handled: true };
-    }
-    if (action === "store-action") {
-      callbacks.onStoreAction?.(normalizeText(payload?.storeAction), detail);
-      return { handled: true };
-    }
-    if (action === "import-file") {
-      const file = payload?.file instanceof global.File ? payload.file : null;
-      if (!file) {
-        throw new Error("가져올 파일을 찾지 못했어요.");
-      }
-      await callbacks.onImportFile?.(file);
-      return { imported: true };
-    }
-    if (action === "move-prompt") {
-      callbacks.onMovePrompt?.(
-        normalizeText(payload?.dragPromptId),
-        normalizeText(payload?.targetPromptId),
-        normalizeText(payload?.placement) || "before"
-      );
       return { handled: true };
     }
     throw new Error("지원하지 않는 hosted panel action이에요.");

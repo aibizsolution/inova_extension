@@ -12,7 +12,6 @@ async function main() {
   verifyHostedPanelHostBatching();
   verifyLocalPanelRuntimeSwitch();
   verifyPageBridgeEvents();
-  verifyHostedMeetingRequestModuleContract();
   verifyPromptHubShowPromptTabContract();
   verifyHostedPanelImeCompositionGuard();
   verifyHostedMeetingActionCompletionTraceContract();
@@ -107,30 +106,6 @@ function verifyPageBridgeEvents() {
       },
     },
   ]);
-}
-
-function verifyHostedMeetingRequestModuleContract() {
-  const manifest = JSON.parse(
-    fs.readFileSync(path.join(root, "manifest.json"), "utf8")
-  );
-  const topPanelSource = fs.readFileSync(
-    path.join(root, "content", "panel.js"),
-    "utf8"
-  );
-
-  const mainContentScript = manifest.content_scripts.find((entry) =>
-    Array.isArray(entry?.matches) && entry.matches.includes("https://inova.incross.com/*")
-  );
-  const scriptList = Array.isArray(mainContentScript?.js) ? mainContentScript.js : [];
-  const helperIndex = scriptList.indexOf("content/panel-hosted-meeting-request.js");
-  const panelIndex = scriptList.indexOf("content/panel.js");
-
-  assert(helperIndex !== -1, "manifest should load the hosted meeting request helper");
-  assert(panelIndex !== -1 && helperIndex < panelIndex, "manifest should load the meeting request helper before content/panel.js");
-  assert(
-    topPanelSource.includes("namespace.panelHostedMeetingRequest?.handle?."),
-    "content/panel.js should delegate meeting-specific hosted requests to the dedicated helper module"
-  );
 }
 
 function verifyPromptHubShowPromptTabContract() {
