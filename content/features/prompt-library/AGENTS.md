@@ -73,3 +73,4 @@
 - `1.0.0+` v2 lane은 local storage를 분리하고, prompt-library cloud lane도 별도 endpoint와 별도 namespace로 분리한다.
 - v2 첫 read/write는 legacy prompt-library를 copy-only lazy migration 할 수 있어야 하며, migration 실패 시 legacy 원본을 수정하지 않는다.
 - popup의 `settings.meetingWorkspaceTarget=local`은 회의 전용 설정처럼 보여도 prompt-library cloud read/sync rehearsal target도 함께 바꿔야 한다. 로컬 rehearsal에서는 `load/peek/sync`와 prompt panel auth가 local Functions base URL을 향해야 한다.
+- local rehearsal의 hosted prompt Firestore/auth 경로는 emulator 재시작 뒤 남은 stale Firebase auth session을 재사용하지 않는다. local target에서는 stale auth storage를 먼저 정리하고 새 custom token으로 다시 붙어 `securetoken` 400 노이즈가 기능 실패처럼 보이지 않게 유지한다.

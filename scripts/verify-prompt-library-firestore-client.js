@@ -6,6 +6,7 @@ const vm = require("vm");
 const root = path.resolve(__dirname, "..");
 
 async function verifyHostedPromptLibraryFirestoreClientContract() {
+  const futureExpiryIso = new Date(Date.now() + 10 * 60 * 1000).toISOString();
   const hostedPromptSource = fs.readFileSync(
     path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),
     "utf8"
@@ -50,6 +51,7 @@ async function verifyHostedPromptLibraryFirestoreClientContract() {
     chunkDocs: new Map([
       ["prompt-library-fixture__b00", { items: [{ id: "prompt-1", title: "Prompt", content: "Body", updatedAt: "2026-04-13T01:00:00.000Z" }] }],
     ]),
+    promptPanelExpiryIso: futureExpiryIso,
   };
   const context = vm.createContext({
     console,
@@ -107,7 +109,7 @@ async function verifyHostedPromptLibraryFirestoreClientContract() {
           firestoreHost: "",
           firestorePort: 0,
         },
-        expiresAt: "2026-04-13T12:00:00.000Z",
+        expiresAt: futureExpiryIso,
         firebaseConfig: {
           projectId: "browser-extension-main",
         },
@@ -192,6 +194,8 @@ async function verifyHostedPromptLibraryFirestoreClientContract() {
 
   client.disconnect("test");
   assert.equal(queryState.unsubscribeCount, 1, "prompt firestore client should detach its account listener on disconnect");
+
+  await verifyLocalPromptLibraryAuthSessionPolicy();
 }
 
 async function flushAsyncTurns(turns = 20) {
@@ -209,11 +213,150 @@ function cloneValue(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
 }
 
+async function verifyLocalPromptLibraryAuthSessionPolicy() {
+  const traces = [];
+  const apiKey = "AIzaSyDnVS7MmQs7wWjVPihr1MNmcALxJ0a1qPM";
+  const localStorage = createFakeStorage({
+    [`firebase:authUser:${apiKey}:inova-hosted-panel-prompt-library`]: "{\"stale\":true}",
+  });
+  const sessionStorage = createFakeStorage({
+    [`firebase:redirectUser:${apiKey}:inova-hosted-panel-prompt-library`]: "{\"stale\":true}",
+  });
+  const queryState = {
+    accountOnSnapshot: null,
+    collectionNames: [],
+    emulatorAuthUrls: [],
+    emulatorFirestoreHosts: [],
+    orderDocs: new Map([
+      ["prompt-library-fixture", { orderedIds: ["prompt-1"] }],
+    ]),
+    chunkDocs: new Map([
+      ["prompt-library-fixture__b00", { items: [{ id: "prompt-1", title: "Prompt", content: "Body", updatedAt: "2026-04-13T01:00:00.000Z" }] }],
+    ]),
+  };
+  const context = vm.createContext({
+    console,
+    document: {
+      createElement() {
+        return {
+          async: false,
+          onerror: null,
+          onload: null,
+          set src(value) {
+            this._src = value;
+          },
+          get src() {
+            return this._src || "";
+          },
+        };
+      },
+      head: {
+        appendChild(node) {
+          node.onload?.();
+          return node;
+        },
+      },
+    },
+    globalThis: null,
+    localStorage,
+    sessionStorage,
+  });
+  context.globalThis = context;
+  context.InovaBookmarks = {
+    promptLibraryModel: {
+      mergePromptLibrary(promptLibrary) {
+        const items = Array.isArray(promptLibrary?.items) ? promptLibrary.items.map((item) => ({ ...item })) : [];
+        return {
+          items,
+          version: Number(promptLibrary?.version) || 1,
+        };
+      },
+    },
+    session: {
+      normalizeText(value) {
+        return String(value ?? "").trim();
+      },
+    },
+  };
+  context.firebase = createFakeFirebase(queryState);
+
+  loadScript("hosting/extension-v2/panel/prompt-library-firestore-client.js", context);
+
+  const client = context.InovaBookmarks.promptLibraryFirestoreClient.create({
+    invokeRuntime: async () => ({
+      emulators: {
+        authUrl: "http://127.0.0.1:9099",
+        enabled: true,
+        firestoreHost: "127.0.0.1",
+        firestorePort: 8080,
+      },
+      expiresAt: "2026-04-13T12:00:00.000Z",
+      firebaseConfig: {
+        apiKey,
+        projectId: "browser-extension-main",
+      },
+      firebaseCustomToken: "prompt-panel-token",
+      promptFirestoreCollections: {
+        accountsCollection: "integration_inova_accounts_v2",
+        promptLibraryChunksCollection: "prompt_library_chunks_v2",
+        promptLibraryOrdersCollection: "prompt_library_orders_v2",
+      },
+      promptLibraryId: "prompt-library-fixture",
+      promptPanelScope: "prompt-panel-v2",
+      providerUserKey: "fixture-user",
+      target: "local",
+    }),
+    onError: async () => {},
+    onSnapshot: async () => {},
+    traceFirestore(step, payload) {
+      traces.push({
+        payload: cloneValue(payload),
+        step,
+      });
+    },
+  });
+
+  await client.ensureSubscribed({
+    providerIdentity: {
+      providerUserKey: "fixture-user",
+    },
+    settings: {
+      meetingWorkspaceTarget: "local",
+    },
+  });
+
+  assert.deepEqual(
+    queryState.persistenceValues,
+    ["none"],
+    "local hosted prompt firestore client는 stale emulator session 복원을 피하기 위해 NONE persistence를 사용해야 합니다."
+  );
+  assert.equal(
+    localStorage.getItem(`firebase:authUser:${apiKey}:inova-hosted-panel-prompt-library`),
+    null,
+    "local hosted prompt firestore client는 stale auth user cache를 먼저 지워야 합니다."
+  );
+  assert.equal(
+    sessionStorage.getItem(`firebase:redirectUser:${apiKey}:inova-hosted-panel-prompt-library`),
+    null,
+    "local hosted prompt firestore client는 stale redirect auth state도 같이 지워야 합니다."
+  );
+  assert(
+    traces.some((entry) => entry.step === "34.hosted.firestore.listen.start"),
+    "local hosted prompt firestore client도 정리 후 정상 구독을 이어가야 합니다."
+  );
+}
+
 function createFakeFirebase(queryState) {
   queryState.unsubscribeCount = 0;
+  queryState.persistenceValues = Array.isArray(queryState.persistenceValues)
+    ? queryState.persistenceValues
+    : [];
+  const promptPanelExpiryIso = String(queryState.promptPanelExpiryIso || "");
   const fakeAuth = {
     currentUser: null,
-    async setPersistence() {},
+    async setPersistence(value) {
+      queryState.persistenceValues.push(String(value || ""));
+    },
     async signInWithCustomToken(token) {
       this.currentUser = {
         async getIdToken() {
@@ -222,7 +365,7 @@ function createFakeFirebase(queryState) {
         async getIdTokenResult() {
           return {
             claims: {
-              promptPanelExpMs: Date.parse("2026-04-13T12:00:00.000Z"),
+              promptPanelExpMs: Date.parse(promptPanelExpiryIso) || Date.now() + 10 * 60 * 1000,
               providerUserKey: "fixture-user",
               scope: "prompt-panel-v2",
             },
@@ -306,6 +449,7 @@ function createFakeFirebase(queryState) {
     auth: {
       Auth: {
         Persistence: {
+          NONE: "none",
           SESSION: "session",
         },
       },
@@ -313,6 +457,27 @@ function createFakeFirebase(queryState) {
     initializeApp() {
       this.apps.push(fakeApp);
       return fakeApp;
+    },
+  };
+}
+
+function createFakeStorage(initialEntries = {}) {
+  const map = new Map(Object.entries(initialEntries));
+  return {
+    get length() {
+      return map.size;
+    },
+    getItem(key) {
+      return map.has(String(key)) ? map.get(String(key)) : null;
+    },
+    key(index) {
+      return Array.from(map.keys())[Number(index)] ?? null;
+    },
+    removeItem(key) {
+      map.delete(String(key));
+    },
+    setItem(key, value) {
+      map.set(String(key), String(value));
     },
   };
 }

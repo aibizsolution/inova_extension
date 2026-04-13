@@ -11,6 +11,7 @@ async function main() {
   verifyPromptRuntimeResolution();
   verifyPromptRuntimeResolutionForV2Lane();
   verifyPromptLocalWiring();
+  await verifyLocalPromptBridgeAuthSessionPolicy();
   await verifyEmptyStoreLatestSnapshot();
   console.log("[verify-prompt-runtime-local] Prompt local runtime contract passed");
 }
@@ -100,6 +101,7 @@ async function verifyEmptyStoreLatestSnapshot() {
   const fakeAuth = {
     Auth: null,
     currentUser: null,
+    persistenceValues: [],
     async setPersistence() {},
     async signInWithCustomToken() {
       this.currentUser = {
@@ -175,6 +177,8 @@ async function verifyEmptyStoreLatestSnapshot() {
       hostname: "127.0.0.1",
       origin: "http://127.0.0.1:5000",
     },
+    localStorage: createFakeStorage(),
+    sessionStorage: createFakeStorage(),
     setTimeout,
   });
   context.globalThis = context;
@@ -259,6 +263,173 @@ async function verifyEmptyStoreLatestSnapshot() {
   assert.equal(storeLatestMessages.length, 1, "빈 로컬 스토어도 store-latest 빈 스냅샷을 보내야 합니다.");
   assert.deepEqual(storeLatestMessages[0].payload.items, []);
   assert.equal(storeLatestMessages[0].payload.summary.totalPublished, 0);
+}
+
+async function verifyLocalPromptBridgeAuthSessionPolicy() {
+  const messageListeners = [];
+  const portMessages = [];
+  const fakePort = {
+    close() {},
+    onmessage: null,
+    postMessage(message) {
+      portMessages.push(message);
+    },
+    start() {},
+  };
+  const fakeAuth = {
+    Auth: null,
+    currentUser: null,
+    persistenceValues: [],
+    async setPersistence(value) {
+      this.persistenceValues.push(value);
+    },
+    async signInWithCustomToken() {
+      this.currentUser = {
+        async getIdToken() {
+          return "emulator-token";
+        },
+        async getIdTokenResult() {
+          return {
+            claims: {
+              promptPanelExpMs: Date.now() + 60000,
+              providerUserKey: "reviewer-1",
+              scope: "prompt-panel",
+            },
+          };
+        },
+      };
+    },
+    useEmulator() {},
+  };
+  const fakeDb = {
+    collection() {
+      return {
+        doc() {
+          return {
+            get: async () => createSnapshot({}),
+            onSnapshot() {
+              return () => {};
+            },
+          };
+        },
+      };
+    },
+    async enablePersistence() {},
+    useEmulator() {},
+  };
+  const apiKey = "AIzaSyDnVS7MmQs7wWjVPihr1MNmcALxJ0a1qPM";
+  const localStorage = createFakeStorage({
+    [`firebase:authUser:${apiKey}:prompt-panel-bridge`]: "{\"stale\":true}",
+  });
+  const sessionStorage = createFakeStorage({
+    [`firebase:redirectUser:${apiKey}:prompt-panel-bridge`]: "{\"stale\":true}",
+  });
+  const context = vm.createContext({
+    Array,
+    Date,
+    JSON,
+    Map,
+    Math,
+    Object,
+    Promise,
+    Set,
+    URL,
+    clearTimeout,
+    console,
+    firebase: {
+      auth: {
+        Auth: {
+          Persistence: {
+            NONE: "NONE",
+            SESSION: "SESSION",
+          },
+        },
+      },
+      firestore: {
+        setLogLevel() {},
+      },
+      initializeApp() {
+        return {
+          auth() {
+            return fakeAuth;
+          },
+          firestore() {
+            return fakeDb;
+          },
+        };
+      },
+    },
+    globalThis: null,
+    localStorage,
+    location: {
+      hostname: "127.0.0.1",
+      origin: "http://127.0.0.1:5000",
+      search: "",
+    },
+    sessionStorage,
+    setTimeout,
+  });
+  context.globalThis = context;
+  context.addEventListener = (type, handler) => {
+    if (type === "message") {
+      messageListeners.push(handler);
+    }
+  };
+
+  loadScript(path.join("hosting", "extension", "prompt-panel-bridge.js"), context);
+  assert.equal(messageListeners.length, 1, "prompt bridge가 message listener를 등록해야 합니다.");
+
+  messageListeners[0]({
+    data: {
+      source: "inova-prompt-panel-client",
+      type: "connect-port",
+    },
+    origin: "https://inova.incross.com",
+    ports: [fakePort],
+  });
+  assert.equal(portMessages[0]?.type, "ready");
+
+  await fakePort.onmessage({
+    data: {
+      payload: {
+        expiresAt: new Date(Date.now() + 60000).toISOString(),
+        firebaseConfig: {
+          apiKey,
+          projectId: "browser-extension-main",
+        },
+        firebaseCustomToken: "custom-token",
+        firestoreCollections: {
+          accountsCollection: "integration_inova_accounts",
+          promptLibraryChunksCollection: "prompt_library_chunks",
+          promptLibraryOrdersCollection: "prompt_library_orders",
+          storeDetailCollection: "prompt_store_entry_details",
+          storeFeedCollection: "prompt_store_feed_pages",
+          storeSummaryCollection: "prompt_store_meta",
+        },
+        promptLibraryId: "prompt-library-1",
+        promptPanelScope: "prompt-panel",
+        providerUserKey: "reviewer-1",
+      },
+      requestId: 1,
+      type: "connect",
+    },
+  });
+
+  assert.deepEqual(
+    fakeAuth.persistenceValues,
+    ["NONE"],
+    "local prompt bridge auth는 emulator 재시작 뒤 stale session을 복원하지 않도록 NONE persistence를 사용해야 합니다."
+  );
+  assert.equal(
+    localStorage.getItem(`firebase:authUser:${apiKey}:prompt-panel-bridge`),
+    null,
+    "local prompt bridge는 stale local auth session을 먼저 정리해야 합니다."
+  );
+  assert.equal(
+    sessionStorage.getItem(`firebase:redirectUser:${apiKey}:prompt-panel-bridge`),
+    null,
+    "local prompt bridge는 stale session redirect state도 함께 정리해야 합니다."
+  );
 }
 
 function loadFirebaseConfig(activeLane = "legacy") {
@@ -346,6 +517,27 @@ function createSnapshot({ data = {}, exists = true, metadata = {} }) {
     metadata: {
       fromCache: Boolean(metadata.fromCache),
       hasPendingWrites: Boolean(metadata.hasPendingWrites),
+    },
+  };
+}
+
+function createFakeStorage(initialEntries = {}) {
+  const map = new Map(Object.entries(initialEntries));
+  return {
+    get length() {
+      return map.size;
+    },
+    getItem(key) {
+      return map.has(String(key)) ? map.get(String(key)) : null;
+    },
+    key(index) {
+      return Array.from(map.keys())[Number(index)] ?? null;
+    },
+    removeItem(key) {
+      map.delete(String(key));
+    },
+    setItem(key, value) {
+      map.set(String(key), String(value));
     },
   };
 }

@@ -199,13 +199,17 @@
       const existingApp = Array.isArray(firebase.apps)
         ? firebase.apps.find((entry) => normalizeText(entry?.name) === APP_NAME)
         : null;
+      if (shouldUseEphemeralAuthSession(panelAuth)) {
+        clearStoredAuthSession(panelAuth.firebaseConfig, APP_NAME);
+      }
       state.app = existingApp || firebase.initializeApp(panelAuth.firebaseConfig, APP_NAME);
       state.auth = state.app.auth();
       state.db = state.app.firestore();
       configureFirebaseEmulators(panelAuth);
       await ensureFirestorePersistence();
-      if (firebase?.auth?.Auth?.Persistence?.SESSION) {
-        await state.auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
+      const authPersistence = resolveAuthPersistence(firebase, panelAuth);
+      if (authPersistence) {
+        await state.auth.setPersistence(authPersistence);
       }
       state.runtimeKey = buildRuntimeKey(panelAuth);
       return {
@@ -306,6 +310,58 @@
         }
       });
       return state.persistencePromise;
+    }
+
+    function resolveAuthPersistence(firebase, panelAuth) {
+      const persistence = firebase?.auth?.Auth?.Persistence;
+      if (!persistence) {
+        return "";
+      }
+      if (shouldUseEphemeralAuthSession(panelAuth)) {
+        return persistence.NONE || "";
+      }
+      return persistence.SESSION || "";
+    }
+
+    function shouldUseEphemeralAuthSession(panelAuth) {
+      return Boolean(panelAuth?.emulators?.enabled)
+        || normalizeText(panelAuth?.target).toLowerCase() === "local";
+    }
+
+    function clearStoredAuthSession(firebaseConfig, appName) {
+      const apiKey = normalizeText(firebaseConfig?.apiKey);
+      const normalizedAppName = normalizeText(appName);
+      if (!apiKey || !normalizedAppName) {
+        return;
+      }
+      clearStoredAuthSessionEntries(global.sessionStorage, apiKey, normalizedAppName);
+      clearStoredAuthSessionEntries(global.localStorage, apiKey, normalizedAppName);
+    }
+
+    function clearStoredAuthSessionEntries(storage, apiKey, appName) {
+      if (!storage || typeof storage.length !== "number" || typeof storage.key !== "function") {
+        return;
+      }
+      const keysToRemove = [];
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = normalizeText(storage.key(index));
+        if (shouldClearStoredAuthSessionKey(key, apiKey, appName)) {
+          keysToRemove.push(key);
+        }
+      }
+      for (const key of keysToRemove) {
+        try {
+          storage.removeItem(key);
+        } catch {
+          // Ignore storage cleanup failures and continue with a fresh sign-in attempt.
+        }
+      }
+    }
+
+    function shouldClearStoredAuthSessionKey(key, apiKey, appName) {
+      return key.startsWith("firebase:")
+        && key.includes(apiKey)
+        && key.includes(appName);
     }
 
     async function loadCachedSnapshot(accountRef) {

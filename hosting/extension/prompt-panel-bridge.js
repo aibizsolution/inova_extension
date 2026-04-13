@@ -175,12 +175,18 @@
 
     if (!app) {
       configureFirestoreLogging(global.firebase);
+      if (isLocalBridgeOrigin()) {
+        clearStoredAuthSession(firebaseConfig, "prompt-panel-bridge");
+      }
       app = global.firebase.initializeApp(firebaseConfig, "prompt-panel-bridge");
       auth = app.auth();
       db = app.firestore();
       configureFirebaseEmulators();
       await ensureFirestorePersistence();
-      await auth.setPersistence(global.firebase.auth.Auth.Persistence.SESSION);
+      const authPersistence = resolveAuthPersistence();
+      if (authPersistence) {
+        await auth.setPersistence(authPersistence);
+      }
     }
 
     const currentUser = auth.currentUser || null;
@@ -262,6 +268,51 @@
       db.useEmulator(emulatorHost, 8080);
     }
     emulatorsConfigured = true;
+  }
+
+  function resolveAuthPersistence() {
+    const persistence = global.firebase?.auth?.Auth?.Persistence;
+    if (!persistence) {
+      return "";
+    }
+    if (isLocalBridgeOrigin()) {
+      return persistence.NONE || "";
+    }
+    return persistence.SESSION || "";
+  }
+
+  function clearStoredAuthSession(firebaseConfig, appName) {
+    const apiKey = normalizeText(firebaseConfig?.apiKey);
+    const normalizedAppName = normalizeText(appName);
+    if (!apiKey || !normalizedAppName) {
+      return;
+    }
+    clearStoredAuthSessionEntries(global.sessionStorage, apiKey, normalizedAppName);
+    clearStoredAuthSessionEntries(global.localStorage, apiKey, normalizedAppName);
+  }
+
+  function clearStoredAuthSessionEntries(storage, apiKey, appName) {
+    if (!storage || typeof storage.length !== "number" || typeof storage.key !== "function") {
+      return;
+    }
+    const keysToRemove = [];
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = normalizeText(storage.key(index));
+      if (shouldClearStoredAuthSessionKey(key, apiKey, appName)) {
+        keysToRemove.push(key);
+      }
+    }
+    for (const key of keysToRemove) {
+      try {
+        storage.removeItem(key);
+      } catch {}
+    }
+  }
+
+  function shouldClearStoredAuthSessionKey(key, apiKey, appName) {
+    return key.startsWith("firebase:")
+      && key.includes(apiKey)
+      && key.includes(appName);
   }
 
   function subscribePromptLibraryMeta(payload) {

@@ -6,6 +6,7 @@ const vm = require("vm");
 const root = path.resolve(__dirname, "..");
 
 async function verifyHostedMeetingFirestoreClientContract() {
+  const futureExpiryIso = new Date(Date.now() + 10 * 60 * 1000).toISOString();
   const hostedMeetingSource = fs.readFileSync(
     path.join(root, "hosting", "extension-v2", "panel", "meeting-hub-controller.js"),
     "utf8"
@@ -79,6 +80,7 @@ async function verifyHostedMeetingFirestoreClientContract() {
       },
     },
   };
+  queryState.panelExpiryIso = futureExpiryIso;
   context.firebase = createFakeFirebase(queryState);
 
   loadScript("hosting/extension-v2/panel/meeting-firestore-client.js", context);
@@ -93,7 +95,7 @@ async function verifyHostedMeetingFirestoreClientContract() {
           firestoreHost: "",
           firestorePort: 0,
         },
-        expiresAt: "2026-04-13T12:00:00.000Z",
+        expiresAt: futureExpiryIso,
         firebaseConfig: {
           projectId: "browser-extension-main",
         },
@@ -194,6 +196,7 @@ function cloneValue(value) {
 }
 
 function createFakeFirebase(queryState) {
+  const panelExpiryIso = String(queryState.panelExpiryIso || "");
   const fakeAuth = {
     currentUser: null,
     async setPersistence() {},
@@ -205,7 +208,7 @@ function createFakeFirebase(queryState) {
         async getIdTokenResult() {
           return {
             claims: {
-              panelExpMs: Date.parse("2026-04-13T12:00:00.000Z"),
+              panelExpMs: Date.parse(panelExpiryIso) || Date.now() + 10 * 60 * 1000,
               providerUserKey: "fixture-user",
               scope: "meeting-panel",
             },
