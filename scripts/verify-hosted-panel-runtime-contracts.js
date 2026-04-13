@@ -32,28 +32,28 @@ function verifyHostedMeetingSnapshotSyncGuardContract() {
   );
 }
 
-function verifyHostedMeetingFocusRecoveryContract() {
+function verifyHostedMeetingVisibilityRecoveryContract() {
   const hostedPanelSource = readHostedPanelSource();
 
   assert(
-    hostedPanelSource.includes("windowRecentlyBlurred: false,"),
-    "hosted panel should track whether the window actually blurred before accepting a meeting focus refresh"
+    !hostedPanelSource.includes('global.addEventListener("focus", handleWindowFocus, { passive: true });'),
+    "hosted meeting recovery should not rely on raw iframe window focus events"
   );
   assert(
-    hostedPanelSource.includes('global.addEventListener("blur", handleWindowBlur, { passive: true });'),
-    "hosted panel should listen for real window blur events before treating focus as a recovery signal"
+    !hostedPanelSource.includes('global.addEventListener("blur", handleWindowBlur, { passive: true });'),
+    "hosted meeting recovery should not rely on raw iframe window blur events"
   );
   assert(
-    hostedPanelSource.includes("if (!state.windowRecentlyBlurred) {"),
-    "hosted panel should ignore click-driven focus events that were not preceded by a blur"
+    !hostedPanelSource.includes('handleHostActivity?.("window-focus")'),
+    "hosted meeting recovery should not forward raw window-focus events into the hosted meeting hub"
   );
   assert(
     hostedPanelSource.includes('void meetingHubController?.handleHostActivity?.("visibility-visible");'),
-    "hosted panel should continue to use visibility recovery for hosted meeting refreshes"
+    "hosted panel should use document visibility recovery for hosted meeting refreshes"
   );
 }
 
 module.exports = {
-  verifyHostedMeetingFocusRecoveryContract,
+  verifyHostedMeetingVisibilityRecoveryContract,
   verifyHostedMeetingSnapshotSyncGuardContract,
 };

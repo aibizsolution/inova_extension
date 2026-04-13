@@ -50,7 +50,6 @@
     inputComposition: createInputCompositionState(),
     storeRenderKey: 0,
     storeScrollTop: 0,
-    windowRecentlyBlurred: false,
   };
   const api = {
     invokePage,
@@ -122,9 +121,7 @@
     root.addEventListener("search", handleRootSearch, true);
     root.addEventListener("input", handleRootInput);
     root.addEventListener("change", handleRootChange);
-    global.addEventListener("blur", handleWindowBlur, { passive: true });
     root.addEventListener("keydown", handleRootKeydown);
-    global.addEventListener("focus", handleWindowFocus, { passive: true });
     global.addEventListener("error", handleWindowError);
     global.addEventListener("unhandledrejection", handleUnhandledRejection);
     global.addEventListener("message", handleWindowMessage);
@@ -1726,25 +1723,11 @@
     });
   }
 
-  function handleWindowBlur() {
-    state.windowRecentlyBlurred = true;
-  }
-
-  function handleWindowFocus() {
-    if (!state.windowRecentlyBlurred) {
-      return;
-    }
-    state.windowRecentlyBlurred = false;
-    void meetingHubController?.handleHostActivity?.("window-focus");
-  }
-
   function handleDocumentVisibilityChange() {
     if (global.document.visibilityState === "visible") {
-      state.windowRecentlyBlurred = false;
       void meetingHubController?.handleHostActivity?.("visibility-visible");
       return;
     }
-    state.windowRecentlyBlurred = true;
     void meetingHubController?.handleHostActivity?.("visibility-hidden");
   }
 

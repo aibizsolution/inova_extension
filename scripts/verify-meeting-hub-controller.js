@@ -13,6 +13,7 @@ async function main() {
   await verifyHostedMeetingHubLifecycleRefreshOwnership();
   await verifyHostedMeetingHubActivityRefreshOwnership();
   await verifyHostedMeetingHubDoesNotPrefetchWhileClosed();
+  await verifyHostedMeetingHubIgnoresWindowFocusWhileActive();
   await verifyHostedMeetingHubFingerprintIgnoresCheckedAt();
   console.log("[verify-meeting-hub-controller] Hosted meeting hub controller contract passed");
 }
@@ -319,6 +320,42 @@ async function verifyHostedMeetingHubDoesNotPrefetchWhileClosed() {
     countRuntimeCalls(harness.runtimeCalls, "functions.fetch"),
     1,
     "hosted meeting hub should fetch once when the closed meeting panel actually opens"
+  );
+}
+
+async function verifyHostedMeetingHubIgnoresWindowFocusWhileActive() {
+  const harness = createHarness();
+  const controller = harness.controller;
+
+  controller.syncPanelState(
+    {
+      activeTool: "meeting",
+      open: true,
+      meetingTool: {
+        count: 1,
+        snapshotFingerprint: "meeting-alpha|1|seed",
+      },
+      settings: {
+        meetingWorkspaceTarget: "production",
+      },
+    },
+    ["runtime.invoke.v1"]
+  );
+  await flushAsyncTurns();
+
+  const fetchCountBeforeFocus = countRuntimeCalls(harness.runtimeCalls, "functions.fetch");
+  const focusHandled = controller.handleHostActivity("window-focus");
+  await flushAsyncTurns();
+
+  assert.equal(
+    focusHandled,
+    false,
+    "hosted meeting hub should ignore raw window-focus activity because iframe focus changes are not a reliable stale-data signal"
+  );
+  assert.equal(
+    countRuntimeCalls(harness.runtimeCalls, "functions.fetch"),
+    fetchCountBeforeFocus,
+    "hosted meeting hub should not re-fetch when only a raw window-focus event fires"
   );
 }
 

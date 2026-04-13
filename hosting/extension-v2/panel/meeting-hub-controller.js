@@ -136,7 +136,7 @@
       if (!hasRequiredCapabilities()) {
         return false;
       }
-      if (normalizedReason !== "window-focus" && normalizedReason !== "visibility-visible") {
+      if (normalizedReason !== "visibility-visible") {
         return false;
       }
       if (state.activeTool !== "meeting" || !state.panelOpen) {

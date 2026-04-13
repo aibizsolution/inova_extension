@@ -6,7 +6,7 @@ const path = require("path");
 const vm = require("vm");
 const { JSDOM } = require("jsdom");
 const {
-  verifyHostedMeetingFocusRecoveryContract,
+  verifyHostedMeetingVisibilityRecoveryContract,
   verifyHostedMeetingSnapshotSyncGuardContract,
 } = require("./verify-hosted-panel-runtime-contracts");
 
@@ -22,7 +22,7 @@ async function main() {
   verifyHostedStartupStatusCardDelayContract();
   verifyHostedMeetingSummarySyncContract();
   verifyHostedMeetingSnapshotSyncGuardContract();
-  verifyHostedMeetingFocusRecoveryContract();
+  verifyHostedMeetingVisibilityRecoveryContract();
   verifyHostedPromptTabOwnershipContract();
   verifyHostedPromptActionOwnershipContract();
   verifyHostedConversationSearchDebounceContract();
