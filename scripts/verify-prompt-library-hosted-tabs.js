@@ -4,6 +4,8 @@ const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
+const { createPromptLibraryFirestoreNamespace } = require("./verify-prompt-library-test-helpers");
+const { verifyHostedPromptLibraryFirestoreClientContract } = require("./verify-prompt-library-firestore-client");
 
 const root = path.resolve(__dirname, "..");
 const controllerPath = path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js");
@@ -14,6 +16,7 @@ main().then(() => {
 });
 
 async function main() {
+  await verifyHostedPromptLibraryFirestoreClientContract();
   await verifyHostedPromptTabPersistenceDedupesWrites();
   await verifyHostedPromptLibraryTabSelectionAvoidsForcedReload();
 }
@@ -28,14 +31,6 @@ async function verifyHostedPromptTabPersistenceDedupesWrites() {
       if (request?.action === "storage.update-ui-preferences") {
         persistedTabs.push(request?.partial?.activePromptTab || "");
         return {};
-      }
-      if (request?.action === "functions.fetch") {
-        return {
-          promptLibrary: {
-            items: [],
-            version: 1,
-          },
-        };
       }
       return {};
     },
@@ -72,14 +67,6 @@ async function verifyHostedPromptLibraryTabSelectionAvoidsForcedReload() {
       if (request?.action === "storage.get-state") {
         return buildStorageState("library");
       }
-      if (request?.action === "functions.fetch" && request?.endpointKey === "loadInovaPromptLibraryUrl") {
-        return {
-          promptLibrary: {
-            items: [{ id: "prompt-1", title: "Prompt", content: "Body" }],
-            version: 1,
-          },
-        };
-      }
       return {};
     },
   });
@@ -98,9 +85,9 @@ async function verifyHostedPromptLibraryTabSelectionAvoidsForcedReload() {
   await flushAsync();
 
   assert.equal(
-    runtimeCalls.filter((call) => call.action === "functions.fetch" && call.endpointKey === "loadInovaPromptLibraryUrl").length,
+    runtimeCalls.filter((call) => call.action === "auth.issue-prompt-panel").length,
     1,
-    "hosted prompt library tab selection should not force another remote reload once the library is already ready"
+    "hosted prompt library tab selection should not reissue prompt panel auth while the hosted library subscription stays active"
   );
 }
 
@@ -129,6 +116,7 @@ function createController(options = {}) {
   });
   context.globalThis = context;
   context.InovaBookmarks = {
+    promptLibraryFirestoreClient: createPromptLibraryFirestoreNamespace(),
     promptLibraryModel: {
       mergePromptLibrary(promptLibrary) {
         const items = Array.isArray(promptLibrary?.items) ? promptLibrary.items.map((item) => ({ ...item })) : [];

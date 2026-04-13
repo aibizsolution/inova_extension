@@ -21,9 +21,25 @@
     const scheduleRender = typeof options.scheduleRender === "function"
       ? options.scheduleRender
       : () => {};
+    const traceFirestore = typeof options.traceFirestore === "function"
+      ? options.traceFirestore
+      : () => {};
     const traceReview = typeof options.traceReview === "function"
       ? options.traceReview
       : () => {};
+    const promptLibraryFirestoreClient = namespace.promptLibraryFirestoreClient?.create?.({
+      invokeRuntime,
+      onError: async (error) => {
+        handlePromptLibraryError(error);
+        state.loading = false;
+        scheduleRender();
+      },
+      onSnapshot: async (snapshot) => {
+        applyRemoteSnapshot(snapshot);
+        scheduleRender();
+      },
+      traceFirestore,
+    }) || null;
 
     const state = {
       actionPending: null,
@@ -62,6 +78,7 @@
       query: "",
       persistedActiveTab: "library",
       persistingActiveTab: "",
+      settings: {},
       reviewPendingAutofocused: false,
       textInputRenderTimer: 0,
       syncNotice: null,
@@ -89,6 +106,9 @@
         ? extensionCapabilities.map((value) => normalizeText(value)).filter(Boolean)
         : [];
       syncExternalReviewActivation(panelState?.promptTool?.review);
+      if (panelState?.activeTool !== "prompts") {
+        promptLibraryFirestoreClient?.disconnect?.("panel-inactive");
+      }
       if (!hasRequiredCapabilities()) {
         return;
       }
@@ -687,6 +707,9 @@
     }
 
     async function ensurePromptLibraryLoaded(force) {
+      if (!promptLibraryFirestoreClient) {
+        throw new Error("프롬프트 보관함 Firestore reader를 준비하지 못했어요.");
+      }
       if (state.loadPromise && !force) {
         return state.loadPromise;
       }
@@ -697,6 +720,7 @@
         && !state.lastError
         && providerUserKey
         && state.loadedProviderUserKey === providerUserKey
+        && promptLibraryFirestoreClient.hasActiveSubscription()
       ) {
         return state.promptLibrary;
       }
@@ -709,33 +733,25 @@
         state.loading = true;
         scheduleRender();
         try {
-          const remote = await invokeRuntime({
-            action: "functions.fetch",
-            authMode: "access-token",
-            body: {
-              providerIdentity: {
-                available: state.providerIdentity.available,
-                displayName: state.providerIdentity.displayName,
-                email: state.providerIdentity.email,
-                numericUserId: state.providerIdentity.numericUserId,
-                provider: state.providerIdentity.provider,
-                providerUserKey: state.providerIdentity.providerUserKey,
-              },
-            },
-            endpointKey: "loadInovaPromptLibraryUrl",
-            service: "prompt",
-          });
-          state.promptLibrary = namespace.promptLibraryModel.mergePromptLibrary(remote?.promptLibrary);
-          state.promptLibraryRemoteReady = true;
-          state.loadedProviderUserKey = providerUserKey;
-          state.lastError = "";
-          if (!state.lastMutationError) {
-            state.syncNotice = null;
+          if (force) {
+            state.promptLibraryRemoteReady = false;
+            promptLibraryFirestoreClient.disconnect("force-reload");
           }
+          const remote = await promptLibraryFirestoreClient.ensureSubscribed({
+            providerIdentity: {
+              available: state.providerIdentity.available,
+              displayName: state.providerIdentity.displayName,
+              email: state.providerIdentity.email,
+              numericUserId: state.providerIdentity.numericUserId,
+              provider: state.providerIdentity.provider,
+              providerUserKey: state.providerIdentity.providerUserKey,
+            },
+            settings: state.settings,
+          });
+          applyRemoteSnapshot(remote, providerUserKey);
           return state.promptLibrary;
         } catch (error) {
-          state.lastError = readErrorMessage(error, "요청 보관함을 불러오지 못했어요.");
-          state.syncNotice = buildLoadNotice(state.lastError, getPromptCount());
+          handlePromptLibraryError(error);
           if (!force) {
             return state.promptLibrary;
           }
@@ -826,6 +842,7 @@
       const providerUserKey = normalizeText(providerIdentity.providerUserKey);
       if (state.loadedProviderUserKey && state.loadedProviderUserKey !== providerUserKey) {
         state.promptLibraryRemoteReady = false;
+        promptLibraryFirestoreClient?.disconnect?.("provider-change");
       }
       state.providerIdentity = {
         available: Boolean(providerIdentity.available),
@@ -841,6 +858,24 @@
         state.activeTab = normalizePromptTab(uiPreferences.activePromptTab);
       }
       state.persistedActiveTab = normalizePromptTab(uiPreferences.activePromptTab);
+      state.settings = storageState?.settings && typeof storageState.settings === "object"
+        ? { ...storageState.settings }
+        : {};
+    }
+
+    function applyRemoteSnapshot(snapshot, fallbackProviderUserKey = normalizeText(state.providerIdentity?.providerUserKey)) {
+      state.promptLibrary = namespace.promptLibraryModel.mergePromptLibrary(snapshot?.promptLibrary);
+      state.promptLibraryRemoteReady = true;
+      state.loadedProviderUserKey = normalizeText(fallbackProviderUserKey);
+      state.lastError = "";
+      if (!state.lastMutationError) {
+        state.syncNotice = null;
+      }
+    }
+
+    function handlePromptLibraryError(error) {
+      state.lastError = readErrorMessage(error, "요청 보관함을 불러오지 못했어요.");
+      state.syncNotice = buildLoadNotice(state.lastError, getPromptCount());
     }
 
     function syncExternalReviewActivation(reviewState) {

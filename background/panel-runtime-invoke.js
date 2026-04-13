@@ -1,4 +1,4 @@
-/* global createMeetingShareLink, getInovaAccessToken, getMeetingFunctionsConfig, getPromptFunctionsConfig, issueMeetingPanelAuth, issuePromptPanelAuth, openMeetingResult, openMeetingWorkspace, openReleaseUrl, revokeMeetingShareLink */
+/* global createMeetingShareLink, getInovaAccessToken, getMeetingFunctionsConfig, getPromptFunctionsConfig, getPromptRuntimeConfig, issueMeetingPanelAuth, issuePromptPanelAuth, openMeetingResult, openMeetingWorkspace, openReleaseUrl, revokeMeetingShareLink */
 
 (() => {
 const namespace = globalThis.InovaBookmarks || {};
@@ -77,7 +77,9 @@ globalThis.invokeHostedPanelRequest = async function invokeHostedPanelRequest(re
     return revokeMeetingShareLink(request?.input, request?.providerIdentity);
   }
   if (action === "auth.issue-prompt-panel") {
-    return issuePromptPanelAuth(request?.providerIdentity);
+    return enrichPromptPanelAuth(
+      await issuePromptPanelAuth(request?.providerIdentity)
+    );
   }
   if (action === "auth.issue-meeting-panel") {
     return enrichMeetingPanelAuth(
@@ -168,6 +170,34 @@ async function enrichMeetingPanelAuth(payload) {
     firebaseConfig: runtimeConfig?.web && typeof runtimeConfig.web === "object"
       ? { ...runtimeConfig.web }
       : { ...(namespace.firebaseConfig?.web || {}) },
+    target: namespace.session.normalizeText(runtimeConfig?.target) || "production",
+  };
+}
+
+async function enrichPromptPanelAuth(payload) {
+  const runtimeConfig = await getPromptRuntimeConfig();
+  const promptFirestoreCollections = {
+    ...(runtimeConfig?.prompt?.firestoreCollections && typeof runtimeConfig.prompt.firestoreCollections === "object"
+      ? { ...runtimeConfig.prompt.firestoreCollections }
+      : {}),
+    ...(payload?.promptFirestoreCollections && typeof payload.promptFirestoreCollections === "object"
+      ? { ...payload.promptFirestoreCollections }
+      : {}),
+  };
+  return {
+    ...(payload && typeof payload === "object" ? payload : {}),
+    emulators: runtimeConfig?.emulators && typeof runtimeConfig.emulators === "object"
+      ? { ...runtimeConfig.emulators }
+      : {
+          authUrl: "",
+          enabled: false,
+          firestoreHost: "",
+          firestorePort: 0,
+        },
+    firebaseConfig: runtimeConfig?.web && typeof runtimeConfig.web === "object"
+      ? { ...runtimeConfig.web }
+      : { ...(namespace.firebaseConfig?.web || {}) },
+    promptFirestoreCollections,
     target: namespace.session.normalizeText(runtimeConfig?.target) || "production",
   };
 }

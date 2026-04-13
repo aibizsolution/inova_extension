@@ -62,6 +62,8 @@
       prompt: {
         firestoreCollections: {
           accountsCollection: "integration_inova_accounts",
+          promptLibraryChunksCollection: "prompt_library_chunks",
+          promptLibraryOrdersCollection: "prompt_library_orders",
           storeDetailCollection: "prompt_store_entry_details",
           storeFeedCollection: "prompt_store_feed_pages",
           storeSummaryCollection: "prompt_store_meta",
@@ -155,6 +157,16 @@
     return {
       firestoreCollections: {
         accountsCollection: normalizeText(overrideConfig?.firestoreCollections?.accountsCollection || defaultCollections.accountsCollection) || "integration_inova_accounts",
+        promptLibraryChunksCollection:
+          normalizeText(
+            overrideConfig?.firestoreCollections?.promptLibraryChunksCollection
+            || defaultCollections.promptLibraryChunksCollection
+          ) || "prompt_library_chunks",
+        promptLibraryOrdersCollection:
+          normalizeText(
+            overrideConfig?.firestoreCollections?.promptLibraryOrdersCollection
+            || defaultCollections.promptLibraryOrdersCollection
+          ) || "prompt_library_orders",
         storeDetailCollection: normalizeText(overrideConfig?.firestoreCollections?.storeDetailCollection || defaultCollections.storeDetailCollection) || "prompt_store_entry_details",
         storeFeedCollection: normalizeText(overrideConfig?.firestoreCollections?.storeFeedCollection || defaultCollections.storeFeedCollection) || "prompt_store_feed_pages",
         storeSummaryCollection: normalizeText(overrideConfig?.firestoreCollections?.storeSummaryCollection || defaultCollections.storeSummaryCollection) || "prompt_store_meta",

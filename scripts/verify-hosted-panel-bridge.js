@@ -266,6 +266,8 @@ function loadFirebaseConfig(lane) {
             prompt: {
               firestoreCollections: {
                 accountsCollection: "integration_inova_accounts_v2",
+                promptLibraryChunksCollection: "prompt_library_chunks_v2",
+                promptLibraryOrdersCollection: "prompt_library_orders_v2",
                 storeDetailCollection: "prompt_store_entry_details",
                 storeFeedCollection: "prompt_store_feed_pages",
                 storeSummaryCollection: "prompt_store_meta",
@@ -291,6 +293,8 @@ function loadFirebaseConfig(lane) {
           prompt: {
             firestoreCollections: {
               accountsCollection: "integration_inova_accounts",
+              promptLibraryChunksCollection: "prompt_library_chunks",
+              promptLibraryOrdersCollection: "prompt_library_orders",
               storeDetailCollection: "prompt_store_entry_details",
               storeFeedCollection: "prompt_store_feed_pages",
               storeSummaryCollection: "prompt_store_meta",

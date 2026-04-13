@@ -48,6 +48,7 @@ function registerPromptLibraryHandlers(deps) {
       assertMethod(request);
       const providerIdentity = normalizeIdentity(request.body?.providerIdentity || request.body?.owner);
       const owner = await verifyInovaIdentity(providerIdentity, request);
+      await maybeMigrateLegacyPromptLibrary(owner);
       const expiresAt = new Date(Date.now() + DEFAULT_PROMPT_PANEL_SESSION_TTL_MS).toISOString();
       const promptPanelExpMs = Date.parse(expiresAt);
       const promptLibraryId = buildPromptLibraryId(owner.providerUserKey);
@@ -69,6 +70,8 @@ function registerPromptLibraryHandlers(deps) {
           firebaseCustomToken,
           promptFirestoreCollections: {
             accountsCollection: promptLibraryCollections.accounts,
+            promptLibraryChunksCollection: promptLibraryCollections.promptLibraryChunks,
+            promptLibraryOrdersCollection: promptLibraryCollections.promptLibraryOrders,
           },
           promptPanelScope,
           promptLibraryId,

@@ -220,6 +220,8 @@ async function verifyEmptyStoreLatestSnapshot() {
         firebaseCustomToken: "custom-token",
         firestoreCollections: {
           accountsCollection: "integration_inova_accounts",
+          promptLibraryChunksCollection: "prompt_library_chunks",
+          promptLibraryOrdersCollection: "prompt_library_orders",
           storeDetailCollection: "prompt_store_entry_details",
           storeFeedCollection: "prompt_store_feed_pages",
           storeSummaryCollection: "prompt_store_meta",
@@ -319,6 +321,8 @@ function loadFirebaseConfig(activeLane = "legacy") {
           prompt: {
             firestoreCollections: {
               accountsCollection: isV2Lane ? "integration_inova_accounts_v2" : "integration_inova_accounts",
+              promptLibraryChunksCollection: isV2Lane ? "prompt_library_chunks_v2" : "prompt_library_chunks",
+              promptLibraryOrdersCollection: isV2Lane ? "prompt_library_orders_v2" : "prompt_library_orders",
               storeDetailCollection: "prompt_store_entry_details",
               storeFeedCollection: "prompt_store_feed_pages",
               storeSummaryCollection: "prompt_store_meta",

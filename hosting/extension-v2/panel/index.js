@@ -67,6 +67,7 @@
     invokePage,
     invokeRuntime,
     scheduleRender,
+    traceFirestore: traceFirestoreFlow,
     traceReview: traceReviewFlow,
   }) || null;
   const promptReviewController = namespace.promptReviewController?.create?.({
