@@ -1129,6 +1129,11 @@
     }
     const toolButton = target.closest?.("[data-tool-id]");
     if (toolButton) {
+      tracePanelFlow("40.hosted.click.detected", {
+        action: "select-tool",
+        message: toolButton.dataset.toolId || "",
+        reason: "click",
+      });
       void callbacks.onSelectTool(toolButton.dataset.toolId || "");
       return;
     }
