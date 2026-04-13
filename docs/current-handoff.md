@@ -17,6 +17,8 @@ Last updated: 2026-04-13
 - for remaining migration slices, treat legacy extension implementations as reference behavior, not code that must be preserved line-for-line.
 - if reusing legacy code adds glue/adapters/mixed ownership, prefer a clean implementation in the target hosted ownership instead.
 - pure panel v2 migration that does not change `DB/Functions` contracts should be judged against the current `1.0.0` v2 bundle, not against keeping legacy extension panel code alive in the active bundle.
+- legacy extension panel code that is no longer in the active bundle should be isolated into `backup/legacy-panel/*` or removed, instead of staying interleaved under active `content/*` paths.
+- isolated legacy panel code is now a `0.4.4 impact check` reference only. consult it when `DB/Functions` or shared server contracts change; do not use it as the default implementation target for pure panel migration.
 
 ## Where Ownership Stands
 
@@ -105,10 +107,11 @@ Also:
 
 The remaining work is no longer smoke-fix first. It is mostly structural cleanup to finish the hosted-first boundary.
 
-1. Reduce the remaining compact `meeting` summary residue in v2 so extension keeps only browser/page capability.
-2. Trim remaining prompt shell residue and legacy fallback surface in extension.
-3. Keep trimming panel shell/bootstrap/composition so the `content/panel.js` path becomes generic host + broker only.
-4. Prepare final release path from deployed `0.4.4` baseline to hosted v2 `1.0.0`.
+1. Isolate inactive legacy extension panel files into `backup/legacy-panel/*` and stop leaving dead reference code mixed into active `content/*` paths.
+2. Reduce the remaining compact `meeting` summary residue in v2 so extension keeps only browser/page capability.
+3. Trim remaining prompt shell residue and legacy fallback surface in extension.
+4. Keep trimming panel shell/bootstrap/composition so the `content/panel.js` path becomes generic host + broker only.
+5. Prepare final release path from deployed `0.4.4` baseline to hosted v2 `1.0.0`.
 
 ## Concrete Next Session Targets
 
@@ -124,7 +127,22 @@ Start files:
 - `content/panel-bootstrap-controller.js`
 - `hosting/extension-v2/panel/meeting-hub-controller.js`
 
-### 2. Prompt shell residue
+### 2. Legacy isolation
+
+Goal:
+
+- move inactive extension-side legacy panel code out of active `content/*` paths into `backup/legacy-panel/*`
+
+Start files:
+
+- `manifest.json`
+- `content/main.js`
+- `content/AGENTS.md`
+- `backup/legacy-panel/README.md`
+
+Then read only the legacy files that are already outside the active bundle and can be relocated without touching `DB/Functions` or shared contracts.
+
+### 3. Prompt shell residue
 
 Goal:
 
@@ -139,7 +157,7 @@ Start files:
 
 Then read only the feature-local hosted prompt controllers that the chosen path actually touches.
 
-### 3. Common panel shell cleanup
+### 4. Common panel shell cleanup
 
 Goal:
 

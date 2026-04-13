@@ -10,6 +10,7 @@ const contract = JSON.parse(
 const requiredFiles = [
   "manifest.json",
   "README.md",
+  path.join("backup", "legacy-panel", "README.md"),
   path.join(".githooks", "pre-push"),
   path.join("scripts", "verify-refactor-plan-update.js"),
   path.join("docs", "feature-spec.md"),
