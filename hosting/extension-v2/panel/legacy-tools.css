@@ -12,7 +12,7 @@
 .inova-tool-body, #inova-tool-content, .inova-prompt-list { flex: 1; min-height: 0; min-width: 0; }
 #inova-tool-content { overflow-x: hidden; }
 #inova-tool-rail {
-  width: 76px; padding: 12px 0; display: flex; flex-direction: column; gap: 0; overflow-y: auto;
+  width: 70px; padding: 12px 0; display: flex; flex-direction: column; gap: 0; overflow-y: auto;
   border-right: 1px solid rgba(52, 81, 100, 0.08); background: linear-gradient(180deg, rgba(245, 250, 252, 0.98), rgba(249, 252, 255, 0.96));
 }
 .inova-tool-rail__button {
