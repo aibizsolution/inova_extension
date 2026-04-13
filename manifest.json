@@ -72,7 +72,6 @@
         "content/features/prompt-review/prompt-review-manager.js",
         "content/features/prompt-library/cloud-sync-manager.js",
         "content/features/prompt-store/prompt-realtime-manager.js",
-        "content/meeting-panel-bridge-controller.js",
         "content/route-state-controller.js",
         "content/route-watch-controller.js",
         "content/route-sync.js",

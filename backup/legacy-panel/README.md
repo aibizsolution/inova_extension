@@ -9,6 +9,7 @@
 - `backup/legacy-panel/panel-meeting-controller.js`
 - `backup/legacy-panel/meeting-manager.js`
 - `backup/legacy-panel/meeting-view.js`
+- `backup/legacy-panel/meeting-panel-bridge-controller.js`
 
 기준은 아래와 같다.
 

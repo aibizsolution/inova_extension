@@ -276,7 +276,7 @@ function createHarness(options = {}) {
     "shared/storage.js",
     "shared/meeting-bridge.js",
     "shared/provider-identity.js",
-    "content/meeting-panel-bridge-controller.js",
+    "backup/legacy-panel/meeting-panel-bridge-controller.js",
     "backup/legacy-panel/meeting-manager.js",
   ];
   let nextTimerId = 1;
