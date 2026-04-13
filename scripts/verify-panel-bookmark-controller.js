@@ -12,7 +12,7 @@ async function main() {
   await verifyBookmarkEmptyAndStatusText();
   await verifyCopyBookmarkSuccessAndFailure();
   await verifyJumpBookmarkUpdatesSelection();
-  console.log("[verify-panel-bookmark-controller] Panel bookmark controller contract passed");
+  console.log("[verify-panel-bookmark-controller] Legacy panel bookmark controller backup contract passed");
 }
 
 async function verifyBookmarkFilteringAndMetaText() {
@@ -70,12 +70,19 @@ async function verifyJumpBookmarkUpdatesSelection() {
 function createHarness(options = {}) {
   const activeCalls = [];
   const clipboardWrites = [];
+  const consoleErrors = [];
   const focusCalls = [];
   const renderCalls = [];
   const scrollCalls = [];
 
   const context = vm.createContext({
-    console,
+    console: {
+      error(...args) {
+        consoleErrors.push(args);
+      },
+      log: console.log.bind(console),
+      warn: console.warn.bind(console),
+    },
     globalThis: null,
     navigator: {
       clipboard: {
@@ -113,7 +120,7 @@ function createHarness(options = {}) {
     },
   };
 
-  loadScript("content/panel-bookmark-controller.js", context);
+  loadScript("backup/legacy-panel/panel-bookmark-controller.js", context);
 
   const state = {
     activeId: "",
@@ -148,6 +155,7 @@ function createHarness(options = {}) {
   return {
     activeCalls,
     clipboardWrites,
+    consoleErrors,
     controller,
     focusCalls,
     renderCalls,

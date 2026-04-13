@@ -12,11 +12,12 @@
 - `content/route-state-controller.js`
 - `content/route-watch-controller.js`
 - `content/route-sync.js`
-- `content/panel-bookmark-controller.js`
+- `content/panel-v2-composition-controller.js`
 - `content/panel-surface-controller.js`
 - `content/panel-activity-controller.js`
 - `content/panel-shell-controller.js`
 - `backup/legacy-panel/bookmark-view.js`
+- `backup/legacy-panel/panel-bookmark-controller.js`
 
 ## 관련 프론트 경로
 - `content/main.js`
@@ -53,7 +54,7 @@
 - feature-local 파일만으로 해결되지 않고 panel shell 또는 storage 연동이 원인일 때만 platform/shell로 넓힌다.
 
 ## 구현 경계
-- 북마크 검색/복사/점프와 empty/status 문구 계산은 `content/panel-bookmark-controller.js`가 맡고, `content/main.js`는 이를 다시 구현하지 않는다.
+- active `1.0.0` bundle에서는 북마크 검색/복사/점프와 compact snapshot shaping을 `content/panel-v2-composition-controller.js` 안의 conversation bridge가 맡고, `backup/legacy-panel/panel-bookmark-controller.js`는 legacy reference로만 남긴다.
 - 북마크 panel UI 렌더링은 `hosting/extension/panel/bookmark-view.js`와 `hosting/extension-v2/panel/bookmark-view.js`가 맡고, `content/panel.js`는 iframe host와 page adapter만 유지한다. 기존 `content/bookmark-view.js`와 `content/tools.css`는 inactive reference로 `backup/legacy-panel/*`에 격리한다.
 - `1.0.0+` v2 lane에서는 `hosting/extension-v2/panel/conversation-controller.js`가 대화 탭의 검색/복사/점프/view state를 소유하고, extension은 `content/panel.js`의 page adapter로 현재 대화 snapshot 읽기와 jump/copy만 제공한다. v2 top-panel snapshot은 전체 bookmark item list를 싣지 않고 `count`, `activeId`, refresh용 `snapshotFingerprint` 같은 얇은 신호만 전달한다.
 - panel shell 초기 state 조립은 `content/panel-state-factory.js`가 맡고, `content/main.js`는 기본 state literal을 다시 들고 있지 않는다.

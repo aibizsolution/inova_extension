@@ -34,6 +34,7 @@ function main() {
     "shared/meeting-bridge.js",
     "shared/release-info.js",
     "content/bookmark-view.js",
+    "content/panel-bookmark-controller.js",
     "content/tools.css",
     "backup/legacy-panel/features/prompt-library/files.js",
     "backup/legacy-panel/features/prompt-library/cloud-sync-manager.js",
@@ -196,11 +197,19 @@ function main() {
     "v2 render wiring should pass the hosted-owned prompt snapshot bridge"
   );
   assert(
-    v2CompositionSource.includes("createHostedOwnedConversationSnapshotBridge"),
+    v2CompositionSource.includes("createHostedOwnedConversationBridge"),
     "v2 composition should wrap conversation snapshot shaping for hosted-owned conversation state"
   );
   assert(
-    v2CompositionSource.includes("buildConversationSnapshot: hostedOwnedConversationSnapshot.buildConversationSnapshot"),
+    !v2CompositionSource.includes("namespace.panelBookmarkController.create"),
+    "v2 composition should not instantiate the legacy bookmark controller once the active bundle keeps conversation glue inline"
+  );
+  assert(
+    v2CompositionSource.includes("const hostedOwnedConversationBridge = createHostedOwnedConversationBridge(state, { render });"),
+    "v2 composition should keep the active conversation bridge inline instead of loading the legacy bookmark controller file"
+  );
+  assert(
+    v2CompositionSource.includes("buildConversationSnapshot: hostedOwnedConversationBridge.buildConversationSnapshot"),
     "v2 render wiring should pass the hosted-owned conversation snapshot bridge"
   );
   assert(

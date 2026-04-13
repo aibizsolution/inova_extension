@@ -29,10 +29,9 @@
       ...runtimeFlags,
       render,
     });
-    const panelBookmarkController = namespace.panelBookmarkController.create(state, { render });
-    const hostedOwnedConversationSnapshot = createHostedOwnedConversationSnapshotBridge(panelBookmarkController);
+    const hostedOwnedConversationBridge = createHostedOwnedConversationBridge(state, { render });
     const panelShellController = namespace.panelShellController.create(state, {
-      bookmarkController: panelBookmarkController,
+      bookmarkController: hostedOwnedConversationBridge,
       getPromptController: () => hostedOwnedPromptController,
       isExtensionContextInvalidatedError: runtimeDiagnostics.isExtensionContextInvalidatedError,
       meetingManager: hostedOwnedIdleMeetingLifecycle,
@@ -99,13 +98,12 @@
     renderController = namespace.panelRenderController.create(state, {
       isPaused: runtimeFlags.isPaused,
       isToolSurface: runtimeFlags.isToolSurface,
-      buildConversationSnapshot: hostedOwnedConversationSnapshot.buildConversationSnapshot,
-      getConversationCount: hostedOwnedConversationSnapshot.getConversationCount,
+      buildConversationSnapshot: hostedOwnedConversationBridge.buildConversationSnapshot,
+      getConversationCount: hostedOwnedConversationBridge.getConversationCount,
       buildPromptSnapshot: hostedOwnedPromptSnapshot.buildPromptSnapshot,
       getPromptCounts: hostedOwnedPromptSnapshot.getPromptCounts,
       buildMeetingSnapshot: hostedOwnedMeetingSnapshot.buildMeetingSnapshot,
       getMeetingCount: hostedOwnedMeetingSnapshot.getMeetingCount,
-      panelBookmarkController,
       panelDebugController,
       panelPromptController: hostedOwnedPromptController,
       panelShellController,
@@ -121,7 +119,7 @@
       shouldListenMeetingStorageChanges: () => false,
       shouldPrimeMeetingSync: () => false,
       panelActivityController,
-      panelBookmarkController,
+      panelBookmarkController: hostedOwnedConversationBridge,
       panelDebugController,
       panelLifecycleController,
       panelPromptController: hostedOwnedPromptController,
@@ -281,24 +279,84 @@
     };
   }
 
-  function createHostedOwnedConversationSnapshotBridge(panelBookmarkController = {}) {
+  function createHostedOwnedConversationBridge(state, deps = {}) {
+    const render = typeof deps.render === "function" ? deps.render : () => {};
+
     return {
+      buildToolState,
       buildConversationSnapshot() {
-        const bookmarkTool = panelBookmarkController.buildToolState?.() || {};
+        const bookmarkTool = buildToolState();
         return {
           activeId: normalizeText(bookmarkTool.activeId),
           count: getConversationCount(bookmarkTool),
           snapshotFingerprint: buildSnapshotFingerprint(bookmarkTool),
         };
       },
+      copyBookmarkText,
       getConversationCount,
+      jumpToBookmark,
+      submitQuery,
+      updateQuery,
     };
+
+    function buildToolState() {
+      const items = getFilteredBookmarks();
+      return {
+        activeId: state.activeId,
+        count: Array.isArray(state.bookmarks) ? state.bookmarks.length : 0,
+        emptyText: buildEmptyText(),
+        items,
+        metaText: state.queries.bookmarks ? `검색 결과 ${items.length}개` : buildStatusText(),
+        query: state.queries.bookmarks,
+      };
+    }
+
+    async function copyBookmarkText(bookmarkId) {
+      const bookmark = Array.isArray(state.bookmarks)
+        ? state.bookmarks.find((entry) => normalizeText(entry?.id) === normalizeText(bookmarkId))
+        : null;
+      const writeText = global.navigator?.clipboard?.writeText;
+      if (!bookmark?.text) {
+        return false;
+      }
+      if (typeof writeText !== "function") {
+        return false;
+      }
+      try {
+        await writeText.call(global.navigator.clipboard, bookmark.text);
+        return true;
+      } catch (error) {
+        console.error("[i-Nova Bookmarks] copy failed", error);
+        return false;
+      }
+    }
 
     function getConversationCount(bookmarkTool = {}) {
       return Math.max(
         0,
         Number(bookmarkTool.count) || (Array.isArray(bookmarkTool.items) ? bookmarkTool.items.length : 0)
       );
+    }
+
+    function jumpToBookmark(bookmarkId) {
+      const normalizedBookmarkId = normalizeText(bookmarkId);
+      state.activeId = normalizedBookmarkId;
+      namespace.contentPanel?.setActiveBookmark?.(normalizedBookmarkId);
+      namespace.contentPanel?.focusBookmark?.(normalizedBookmarkId);
+      namespace.contentDom?.scrollToMessage?.(normalizedBookmarkId, { behavior: "smooth", block: "start" });
+      return true;
+    }
+
+    function submitQuery(value) {
+      state.queries.bookmarks = value || "";
+      render();
+      return true;
+    }
+
+    function updateQuery(value) {
+      state.queries.bookmarks = value || "";
+      render();
+      return true;
     }
 
     function buildSnapshotFingerprint(bookmarkTool = {}) {
@@ -309,6 +367,35 @@
         normalizeText(items[0]?.id),
         normalizeText(items.at?.(-1)?.id),
       ].join("|");
+    }
+
+    function buildEmptyText() {
+      return state.queries.bookmarks
+        ? "검색 결과가 없어요. 다른 표현으로 다시 찾아보세요."
+        : !state.settings.autoBookmark
+            ? "팝업에서 대화 자동 모으기를 켜면 대화 탭을 사용할 수 있어요."
+            : state.awaitingRouteMessages
+                ? "이 대화의 흐름을 불러오는 중이에요."
+                : "아직 대화가 없어요.";
+    }
+
+    function buildStatusText() {
+      return state.lastError
+        ? "표시에 문제가 있어요. 새로고침 후 다시 시도해 주세요."
+        : !state.settings.autoBookmark
+            ? "대화 자동 모으기가 꺼져 있어요."
+            : state.awaitingRouteMessages
+                ? "대화를 불러오는 중"
+                : !state.bookmarks.length
+                    ? "아직 대화가 없어요"
+                    : "";
+    }
+
+    function getFilteredBookmarks() {
+      const query = normalizeText(state.queries.bookmarks).toLowerCase();
+      return query
+        ? state.bookmarks.filter((bookmark) => normalizeText(bookmark?.normalizedText || bookmark?.text).toLowerCase().includes(query))
+        : state.bookmarks;
     }
   }
 

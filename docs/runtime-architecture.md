@@ -167,7 +167,6 @@
 - `node scripts/verify-prompt-fallbacks.js`
 - `node scripts/verify-meeting-hub-controller.js`
 - `node scripts/verify-panel-prompt-controller.js`
-- `node scripts/verify-panel-bookmark-controller.js`
 - `node scripts/verify-panel-shell-controller.js`
 - `node scripts/verify-panel-activity-controller.js`
 - `node scripts/verify-panel-surface-controller.js`
@@ -190,6 +189,7 @@
 - `prompt-store` smoke: `전체` 목록 로드, 상세 보기 1건, `좋아요` 또는 `내 요청으로 가져오기` 1회, 탭 이동 후 복귀 시 목록 유지
 - `prompt-review` smoke: 입력창 우측 상단 평가 버튼 노출, 평가 결과 1회, 보완 프롬프트 반영 1회
 - prompt local rehearsal: popup에서 `로컬 호스팅` 선택 후 hidden prompt bridge가 `http://127.0.0.1:5000/extension/prompt-panel-bridge.html`을 쓰고, prompt read/write/review/panel auth가 local Functions base URL로 전환되는지 본다.
+- backup legacy conversation reference가 필요할 때만 `npm run verify:legacy-backup` 안의 `node scripts/verify-panel-bookmark-controller.js`로 `backup/legacy-panel/panel-bookmark-controller.js` 계약을 다시 본다.
 - panel local rehearsal: popup에서 `로컬 호스팅` 선택 후 hosted panel iframe이 `http://127.0.0.1:5000/extension/panel/index.html`을 바라보는지, hosted UI 자체가 hosting 배포만으로 갱신되는지 본다.
 - 이번 prompt smoke 제외 범위: import/export 전체 조합, 원격 sync 확인, 공개 스토어 등록/삭제. 원격 sync는 필요 시 `npm run check:cloud-sync -- --userKey <providerUserKey> --samples 2 --wait 20`로 별도 점검
 - 로컬 회의 작업실: `npm run emulator:hosting` -> `http://127.0.0.1:5000/meeting/index.html`

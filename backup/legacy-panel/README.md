@@ -11,6 +11,7 @@
 - `backup/legacy-panel/meeting-view.js`
 - `backup/legacy-panel/meeting-panel-bridge-controller.js`
 - `backup/legacy-panel/bookmark-view.js`
+- `backup/legacy-panel/panel-bookmark-controller.js`
 - `backup/legacy-panel/prompt-view.js`
 - `backup/legacy-panel/store-view.js`
 - `backup/legacy-panel/prompt-review-view.js`
