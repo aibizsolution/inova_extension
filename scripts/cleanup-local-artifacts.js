@@ -34,6 +34,10 @@ const directoryTargets = [
     patterns: [/^.*\.log(?:\..+)?$/i, /^page-.*\.yml$/i],
   },
   {
+    relativeDir: "output",
+    patterns: [/^.+$/],
+  },
+  {
     relativeDir: "logs",
     patterns: [/^.*\.log(?:\..+)?$/i],
   },
