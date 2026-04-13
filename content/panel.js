@@ -336,61 +336,14 @@
   }
 
   async function handlePageRequest(payload) {
-    const action = normalizeText(payload?.action);
-    if (action === "copy-text") {
-      const text = String(payload?.text || "");
-      if (!text) {
-        return { copied: false };
-      }
-      await global.navigator.clipboard.writeText(text);
-      return { copied: true };
-    }
-    if (action === "copy-debug-log") {
-      return copyDebugLog(Boolean(payload?.errorsOnly));
-    }
-    if (action === "clear-debug-log") {
-      namespace.panelDebug?.clearEntries?.();
-      return buildDebugState();
-    }
-    if (action === "log-trace") {
-      logConsoleTrace(
-        normalizeText(payload?.channel) || "trace",
-        normalizeText(payload?.step) || "trace",
-        payload?.payload && typeof payload.payload === "object" ? payload.payload : {}
-      );
-      return { logged: true };
-    }
-    if (action === "get-composer-state") {
-      return namespace.composer?.getComposerState?.() || { available: false, text: "" };
-    }
-    if (action === "apply-prompt-text") {
-      return {
-        applied: Boolean(namespace.composer?.applyPromptText?.(String(payload?.text || ""), normalizeText(payload?.mode) || "replace")),
-      };
-    }
-    if (action === "get-conversation-state" || action === "get-conversation-snapshot") {
-      return buildConversationSnapshot();
-    }
-    if (action === "jump-conversation-item") {
-      const bookmarkId = normalizeText(payload?.bookmarkId || payload?.itemId);
-      if (!bookmarkId) {
-        return { jumped: false };
-      }
-      namespace.contentPanel.setActiveBookmark(bookmarkId);
-      namespace.contentPanel.focusBookmark(bookmarkId);
-      return {
-        jumped: Boolean(namespace.contentDom?.scrollToMessage?.(bookmarkId, {
-          behavior: "smooth",
-          block: "start",
-        })),
-      };
-    }
-    if (action === "get-debug-state") {
-      return buildDebugState();
-    }
-    if (action === "set-debug-enabled") {
-      namespace.panelDebug?.setEnabled?.(Boolean(payload?.enabled));
-      return buildDebugState();
+    const handledPageRequest = await namespace.panelHostedPageRequest?.handle?.(payload, {
+      buildConversationSnapshot,
+      buildDebugState,
+      copyDebugLog,
+      logConsoleTrace,
+    });
+    if (handledPageRequest?.handled) {
+      return handledPageRequest.result;
     }
     throw new Error("지원하지 않는 page adapter 요청이에요.");
   }

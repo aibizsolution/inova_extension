@@ -9,6 +9,7 @@ const root = path.resolve(__dirname, "..");
 function main() {
   verifyHostedMeetingRequestModuleContract();
   verifyHostedPromptRequestModuleContract();
+  verifyHostedPageRequestModuleContract();
   verifyHostedShellRequestModuleContract();
   console.log("[verify-panel-hosted-request-modules] Hosted panel request helper contract passed");
 }
@@ -83,6 +84,45 @@ function verifyHostedPromptRequestModuleContract() {
     !topPanelSource.includes('if (action === "move-prompt")'),
     "content/panel.js should not keep inline move-prompt hosted request handling once the prompt helper exists"
   );
+}
+
+function verifyHostedPageRequestModuleContract() {
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(root, "manifest.json"), "utf8")
+  );
+  const topPanelSource = fs.readFileSync(
+    path.join(root, "content", "panel.js"),
+    "utf8"
+  );
+
+  const mainContentScript = manifest.content_scripts.find((entry) =>
+    Array.isArray(entry?.matches) && entry.matches.includes("https://inova.incross.com/*")
+  );
+  const scriptList = Array.isArray(mainContentScript?.js) ? mainContentScript.js : [];
+  const helperIndex = scriptList.indexOf("content/panel-hosted-page-request.js");
+  const panelIndex = scriptList.indexOf("content/panel.js");
+
+  assert(helperIndex !== -1, "manifest should load the hosted page request helper");
+  assert(panelIndex !== -1 && helperIndex < panelIndex, "manifest should load the page request helper before content/panel.js");
+  assert(
+    topPanelSource.includes("namespace.panelHostedPageRequest?.handle?."),
+    "content/panel.js should delegate page adapter requests to the dedicated helper module"
+  );
+  [
+    'if (action === "copy-text")',
+    'if (action === "copy-debug-log")',
+    'if (action === "clear-debug-log")',
+    'if (action === "log-trace")',
+    'if (action === "get-composer-state")',
+    'if (action === "apply-prompt-text")',
+    'if (action === "get-conversation-state" || action === "get-conversation-snapshot")',
+    'if (action === "jump-conversation-item")',
+    'if (action === "get-debug-state")',
+    'if (action === "set-debug-enabled")',
+  ].forEach((pattern) => assert(
+    !topPanelSource.includes(pattern),
+    `content/panel.js should not keep inline page adapter handling for ${pattern}`
+  ));
 }
 
 function verifyHostedShellRequestModuleContract() {

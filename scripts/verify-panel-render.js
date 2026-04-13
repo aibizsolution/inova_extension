@@ -710,7 +710,13 @@ function createHarness() {
     },
   };
 
-  loadScript(path.join("content", "panel.js"), context);
+  [
+    path.join("content", "panel-hosted-meeting-request.js"),
+    path.join("content", "panel-hosted-prompt-request.js"),
+    path.join("content", "panel-hosted-page-request.js"),
+    path.join("content", "panel-hosted-shell-request.js"),
+    path.join("content", "panel.js"),
+  ].forEach((relativePath) => loadScript(relativePath, context));
 
   return {
     animationFrames,
