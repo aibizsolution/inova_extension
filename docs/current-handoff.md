@@ -7,8 +7,8 @@ Last updated: 2026-04-13
 - Public deployed baseline: `0.4.4`
 - Current local candidate: `1.0.0`
 - Active branch: `codex/prompt-review-6-dimensions`
-- Latest full validation: `npm.cmd run verify`, `npm.cmd run verify:legacy-backup` passed in the current working tree
-- Worktree: active slice pending commit
+- Latest full validation: `npm.cmd run verify` passed in the current working tree
+- Worktree: clean
 - Current architecture direction:
 - `1.0.0` v2 lane is explicitly hosted-first.
 - default location for tab UI, view state, action flow, and feature-local controllers is `hosting/*`.
@@ -34,6 +34,12 @@ Short version:
 
 ## What Was Stabilized In This Session
 
+- prompt review handoff no longer gets stuck in hosted `pending` after a successful external review result
+- prompt review copy now delegates through top-page `copy-text` instead of iframe-local clipboard access
+- prompt review runtime now surfaces `page.functions.review.*` / `prompt.review.request.*` traces in the top console and fails explicit timeout after `30s` instead of hanging forever
+- top console trace visibility was restored for hosted `meeting panel-auth`, `Firestore listen/snapshot`, conversation snapshot reads, release fetches, and prompt review function calls
+- panel layout now uses a fixed `420px` width with a `70px` left rail for the active v2 surface
+- prompt scope buttons, meeting CTA alignment/dividers, bookmark spacing/copy icon alignment, and release tab section layout were visually normalized around the fixed-width panel shell
 - panel chrome ownership (`tool rail`, `tool title`, `tool count`) moved out of extension
 - release snapshot trimmed to hosted-owned signals
 - conversation snapshot trimmed to hosted-owned signals
@@ -64,6 +70,10 @@ Short version:
 
 ## Recent High-Signal Commits
 
+- `7671df0` Restore hosted panel trace visibility
+- `7e6e115` Stabilize prompt review handoff
+- `694e148` Align release panel with hosted tool layout
+- `72d89d0` Tune hosted panel layout spacing
 - `5ca2dd4` Document hosted-first ownership and doc upkeep rules
 - `0b81aa0` Trim v2 meeting bootstrap sync wiring
 - `db73fb3` Lazy-load v2 meeting fallback controller
@@ -86,6 +96,15 @@ Short version:
 
 - `npm.cmd run verify` is green.
 - Worktree is clean.
+- top console now shows the real active v2 read paths again:
+  - `conversation`: `hosted.conversation.snapshot.*`
+  - `meeting`: `hosted.panel-auth.*` + `hosted.firestore.*`
+  - `prompt review`: `page.functions.review.*` + `prompt.review.request.*`
+  - `release`: `hosted.release.fetch.*`
+- local prompt review succeeds end-to-end again:
+  - external review request returns
+  - hosted review tab hydrates the result
+  - copy-reviewed-prompt succeeds through the top-page adapter
 - `open-workspace` / `open-result` top-panel traces now close cleanly with launch-requested/launch-dispatched/completed semantics.
 - conversation jump over-trigger is not currently confirmed; after click instrumentation, repeated jumps matched repeated user clicks rather than proven single-click duplication.
 - docs now explicitly state hosted-first ownership and the rule to keep correcting stale ownership docs as they are encountered.
@@ -108,15 +127,16 @@ Also:
 
 - residual `top.panel.snapshot.push` noise still exists, but it is not the current migration blocker
 - `conversation` jump duplication should only be revisited if a single user click clearly produces multiple jump requests in the trace
+- local Auth Emulator warning banners/messages may still appear; treat them as non-blocking local warning noise unless they are tied to a real capability failure
 
 ## What Is Still Not Fully Finished
 
 The remaining work is no longer smoke-fix first. It is mostly structural cleanup to finish the hosted-first boundary.
 
-1. Isolate inactive legacy extension panel files into `backup/legacy-panel/*` and stop leaving dead reference code mixed into active `content/*` paths.
-2. Reduce the remaining compact `meeting` summary residue in v2 so extension keeps only browser/page capability.
-3. Trim remaining prompt shell residue and legacy fallback surface in extension.
-4. Keep trimming panel shell/bootstrap/composition so the `content/panel.js` path becomes generic host + broker only.
+1. Reduce the remaining compact `meeting` summary residue in v2 so extension keeps only browser/page capability.
+2. Keep trimming panel shell/bootstrap/composition so the `content/panel.js` path becomes generic host + broker only.
+3. Isolate any still-inactive legacy extension panel files into `backup/legacy-panel/*` instead of leaving dead reference code mixed into active `content/*` paths.
+4. Trim the remaining prompt shell residue and legacy fallback surface in extension.
 5. Prepare final release path from deployed `0.4.4` baseline to hosted v2 `1.0.0`.
 
 ## Concrete Next Session Targets
@@ -132,12 +152,32 @@ Start files:
 - `content/panel-v2-composition-controller.js`
 - `content/panel-v2-shell-bridge.js`
 - `hosting/extension-v2/panel/meeting-hub-controller.js`
+- `hosting/extension-v2/panel/meeting-firestore-client.js`
 
-### 2. Legacy isolation
+Immediate note:
+
+- meeting list reads are already hosted + Firestore
+- next work is not another read migration; it is reducing the remaining top-panel summary/lifecycle residue around the hosted hub
+
+### 2. Common panel shell cleanup
 
 Goal:
 
-- move inactive extension-side legacy panel code out of active `content/*` paths into `backup/legacy-panel/*`
+- make the extension panel path a generic host + bridge instead of a feature-aware UI owner
+
+Start files:
+
+- `content/panel.js`
+- `content/panel-v2-shell-bridge.js`
+- `content/panel-v2-composition-controller.js`
+
+Then read only the feature-local hosted controller touched by the boundary you are removing.
+
+### 3. Legacy isolation
+
+Goal:
+
+- move still-inactive extension-side legacy panel code out of active `content/*` paths into `backup/legacy-panel/*`
 
 Start files:
 
@@ -148,7 +188,7 @@ Start files:
 
 Then read only the legacy files that are already outside the active bundle and can be relocated without touching `DB/Functions` or shared contracts.
 
-### 3. Prompt shell residue
+### 4. Prompt shell residue
 
 Goal:
 
@@ -158,32 +198,19 @@ Start files:
 
 - `content/panel-v2-composition-controller.js`
 - `content/panel-v2-shell-bridge.js`
-- `backup/legacy-panel/panel-action-controller.js`
 - `hosting/extension-v2/panel/index.js`
-
-Then read only the feature-local hosted prompt controllers that the chosen path actually touches.
-
-### 4. Common panel shell cleanup
-
-Goal:
-
-- make the extension panel path a generic host + bridge instead of a feature-aware UI owner
-
-Start files:
-
-- `content/panel.js`
-- `content/panel-v2-shell-bridge.js`
-- `backup/legacy-panel/panel-action-controller.js`
+- `hosting/extension-v2/panel/prompt-library-controller.js`
 
 ### Not the next priority
 
 - console noise cleanup
 - speculative conversation over-trigger fixes without single-click evidence
+- Auth Emulator warning banner suppression
 
 ## Recommended Next Steps
 
 1. Read `docs/current-handoff.md`, `docs/development-philosophy.md`, `docs/refactoring-plan.md`, and `docs/runtime-architecture.md`.
-2. Pick one remaining extension-owned responsibility and move only that slice.
+2. Start with `meeting residue`, not with another bug hunt, unless the same hosted lane blocks the next slice.
 3. If a doc still describes the old ownership, fix it in the same task.
 4. Run `npm.cmd run verify` and commit each bounded slice.
 5. Only smoke-test the paths needed to validate the boundary that moved.
