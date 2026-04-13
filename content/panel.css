@@ -1,5 +1,5 @@
 /* i-Nova bookmark panel */
-:root { --inova-bookmark-panel-gap: 8px; --inova-bookmark-panel-width: 440px; --inova-bookmark-panel-reserve: calc(var(--inova-bookmark-panel-width) + var(--inova-bookmark-panel-gap)); }
+:root { --inova-bookmark-panel-gap: 8px; --inova-bookmark-panel-width: 420px; --inova-bookmark-panel-reserve: calc(var(--inova-bookmark-panel-width) + var(--inova-bookmark-panel-gap)); }
 @media (min-width: 1180px) {
   .main-content { min-width: 0; transition: margin-right 220ms ease; }
   body.inova-bookmark-panel-open .main-content { margin-right: var(--inova-bookmark-panel-reserve); }
@@ -322,11 +322,4 @@
   border-radius: 4px;
   background: rgba(15, 124, 137, 0.14);
   color: #0a5f70;
-}
-@media (max-width: 520px) {
-  #inova-bookmark-host {
-    --panel-gap: 6px;
-    --panel-right: 6px;
-  }
-  #inova-bookmark-panel { width: min(92vw, 380px); height: calc(100vh - (var(--panel-gap) * 2)); }
 }

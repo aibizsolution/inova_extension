@@ -112,9 +112,9 @@
 .inova-store-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .inova-scope-toggle { display: flex; gap: 6px; }
 .inova-scope-toggle__button {
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 10px; flex: 1 1 0;
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 9px 8px; flex: 1 1 0;
   border: 1px solid rgba(98, 127, 145, 0.16); border-radius: 12px; background: rgba(255, 255, 255, 0.82);
-  color: rgba(16, 33, 43, 0.74); font-size: 12px; font-weight: 700; cursor: pointer;
+  color: rgba(16, 33, 43, 0.74); font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap;
 }
 .inova-scope-toggle__button.is-active { border-color: rgba(15, 124, 137, 0.26); background: rgba(15, 124, 137, 0.08); color: #0f5f77; }
 .inova-scope-toggle__icon {
@@ -332,6 +332,10 @@
   width: 100%;
   margin-inline: 0;
 }
+.inova-tool-section--prompts .inova-tool-toolbar__row {
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(52, 81, 100, 0.08);
+}
 .inova-tool-section--release .inova-tool-toolbar { justify-content: space-between; }
 .inova-meeting-stack { display: flex; flex-direction: column; gap: 8px; padding: 2px 14px 14px; overflow-y: auto; overflow-x: hidden; }
 .inova-tool-inline-summary {
@@ -339,7 +343,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 2px 2px 0;
+  padding: 2px 2px 10px;
+  border-bottom: 1px solid rgba(52, 81, 100, 0.08);
   color: rgba(16, 33, 43, 0.76);
 }
 .inova-tool-inline-summary strong {
@@ -369,6 +374,7 @@
 .inova-bookmark-action:disabled { opacity: 0.55; cursor: default; }
 .inova-tool-toolbar--meeting { padding-top: 14px; align-items: stretch; }
 .inova-tool-toolbar__row--meeting { width: 100%; align-items: center; justify-content: flex-end; }
+.inova-tool-section--meeting .inova-tool-toolbar__row--meeting { justify-content: flex-end; }
 .inova-meeting-record-list { display: flex; flex-direction: column; gap: 0; }
 .inova-meeting-record {
   position: relative; display: flex; flex-direction: column; gap: 12px; padding: 14px 8px; margin-bottom: 0;
@@ -746,7 +752,7 @@
 .inova-release-steps { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
 .inova-release-steps li { font-size: 12px; line-height: 1.5; color: rgba(16, 33, 43, 0.78); }
 .inova-prompt-editor__actions { margin-top: 2px; }
-@media (max-width: 420px) {
+@media (max-width: 399px) {
   #inova-bookmark-host { --panel-width: min(92vw, 372px); }
   #inova-tool-rail { width: 56px; padding: 10px 0; }
   .inova-tool-rail__label { font-size: 11px; }

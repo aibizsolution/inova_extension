@@ -50,7 +50,7 @@
   function renderCopyIcon(state = "default") {
     if (state === "copied") return '<span class="bookmark-copy-icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none"><path d="M3.5 8.2 6.4 11 12.5 4.9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
     if (state === "failed") return '<span class="bookmark-copy-icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none"><path d="M5 5 11 11M11 5 5 11" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>';
-    return '<span class="bookmark-copy-icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none"><rect x="5.2" y="3.2" width="7.1" height="9" rx="1.6" stroke="currentColor" stroke-width="1.4"/><path d="M3.7 10.6H3A1.3 1.3 0 0 1 1.7 9.3V4.6A1.3 1.3 0 0 1 3 3.3h4.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></span>';
+    return '<span class="bookmark-copy-icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none"><rect x="6" y="3" width="7" height="9" rx="1.6" stroke="currentColor" stroke-width="1.4"/><rect x="3" y="6" width="7" height="7" rx="1.6" stroke="currentColor" stroke-width="1.4"/></svg></span>';
   }
 
   function renderQuestionText(text, query) {
