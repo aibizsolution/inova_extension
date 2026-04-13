@@ -25,6 +25,9 @@
 - extension에는 `Chrome API`, `background broker`, `page DOM adapter`, `iframe host`, `postMessage bridge`, `popup/settings`처럼 브라우저 확장이라서만 가능한 책임만 남긴다.
 - 기능을 바꾸거나 추가할 때는 먼저 `이 책임이 Chrome/background/page DOM 없이도 성립하는가?`를 묻고, 그렇다면 hosted를 기본 선택으로 삼는다.
 - hosted에서 해결 가능한 책임을 extension에 더 싣는 일은 예외로 취급하고, 필요 사유가 명확할 때만 허용한다.
+- hosted-first 이전 중 발견한 문제는 `이미 옮겨진 hosted lane의 문제`와 `곧 제거할 legacy residue의 문제`를 구분해 다룬다.
+- 이미 옮겨진 hosted ownership에서 재현되거나 다음 ownership 이전을 막는 문제는 즉시 수정한다.
+- legacy residue에만 남아 있고 hosted 이전을 막지 않는 문제라면, 임시 수선보다 ownership 이전을 먼저 진행한다.
 
 ## 모듈화 판단 질문
 

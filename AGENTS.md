@@ -32,6 +32,9 @@
 - extension에는 `page DOM adapter`, `iframe host`, `postMessage bridge`, `chrome/background runtime broker`, `popup/settings`처럼 브라우저 확장이라서만 가능한 책임만 남긴다.
 - 어떤 책임이 `Chrome API`, `background`, `현재 페이지 DOM` 없이도 성립하면 extension에 새로 싣지 않는다. hosted 쪽으로 옮기거나 hosted에서 시작하는 설계를 우선한다.
 - 리팩터링 중에는 `이 수정이 extension 책임을 실제로 줄였는가`를 기본 판단 질문으로 삼는다.
+- hosted-first 이전 중 이슈를 만나면 먼저 `이미 hosted로 옮겨진 lane의 문제인가`, `곧 제거할 legacy extension residue만의 문제인가`를 구분한다.
+- 이미 hosted ownership에서 재현되거나 hosted 이전 자체를 막는 문제는 바로 고친다.
+- legacy residue에만 머무르고 현재 hosted 이전을 막지 않는 문제는 임시 보강보다 ownership 이전을 먼저 진행한다.
 
 ## 설계와 모듈화 적용 규칙
 - 구현 전에 먼저 책임 경계를 정하고, 파일 길이만을 이유로 분리하지 않는다.
