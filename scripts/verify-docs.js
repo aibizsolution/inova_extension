@@ -74,7 +74,7 @@ const requiredFiles = [
   "content/panel-surface-controller.js",
   "content/panel-render-controller.js",
   "content/panel-bootstrap-controller.js",
-  "content/panel-state-factory.js",
+  "content/panel-v2-composition-controller.js",
   "backup/legacy-panel/panel-runtime-controller.js",
   "backup/legacy-panel/panel-action-controller.js",
   "backup/legacy-panel/panel-composition-controller.js",
@@ -240,7 +240,7 @@ const codeChecks = [
   {
     file: "content/main.js",
     patterns: [
-      /panelStateFactory/,
+      /createState/,
       /panelV2CompositionController/,
       /panelCompositionController\??\.bootstrap/,
     ],
@@ -348,11 +348,12 @@ const codeChecks = [
     ],
   },
   {
-    file: "content/panel-state-factory.js",
+    file: "content/panel-v2-composition-controller.js",
     patterns: [
       /createState/,
       /mergeCloudSyncState/,
       /mergeUiPreferences/,
+      /createHostedOwnedProviderIdentitySync/,
     ],
   },
   {

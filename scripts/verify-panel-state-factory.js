@@ -54,7 +54,7 @@ function main() {
   assert.equal(stateB.store.scope, "all");
   assert.equal(stateB.queries.bookmarks, "");
 
-  console.log("[verify-panel-state-factory] Panel state factory contract passed");
+  console.log("[verify-panel-state-factory] V2 composition state factory contract passed");
 }
 
 function createHarness() {
@@ -114,10 +114,10 @@ function createHarness() {
     },
   };
 
-  loadScript("content/panel-state-factory.js", context);
+  loadScript("content/panel-v2-composition-controller.js", context);
 
   return {
-    factory: context.InovaBookmarks.panelStateFactory,
+    factory: context.InovaBookmarks.panelV2CompositionController,
     get mergeCloudSyncCalls() {
       return mergeCloudSyncCalls;
     },

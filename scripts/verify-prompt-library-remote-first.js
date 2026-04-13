@@ -27,7 +27,7 @@ function main() {
 }
 
 function verifyPromptLibraryHostedLaneContract() {
-  const stateFactory = read(path.join("content", "panel-state-factory.js"));
+  const stateFactory = read(path.join("content", "panel-v2-composition-controller.js"));
   assert(/promptLibraryLoading/.test(stateFactory), "panel state에 prompt library loading state가 필요합니다.");
   assert(/promptLibraryRemoteReady/.test(stateFactory), "panel state에 prompt library remote readiness가 필요합니다.");
 

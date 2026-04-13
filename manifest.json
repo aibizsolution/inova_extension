@@ -61,7 +61,6 @@
         "content/route-state-controller.js",
         "content/route-watch-controller.js",
         "content/route-sync.js",
-        "content/provider-identity-sync.js",
         "content/hosted-panel-bridge.js",
         "content/panel-hosted-bridge-request.js",
         "content/panel-hosted-meeting-request.js",
@@ -77,7 +76,6 @@
         "content/panel-lifecycle-controller.js",
         "content/panel-render-controller.js",
         "content/panel-bootstrap-controller.js",
-        "content/panel-state-factory.js",
         "content/panel-v2-composition-controller.js",
         "content/main.js"
       ],

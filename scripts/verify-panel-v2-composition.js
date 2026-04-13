@@ -35,6 +35,8 @@ function main() {
     "shared/release-info.js",
     "content/bookmark-view.js",
     "content/panel-bookmark-controller.js",
+    "content/panel-state-factory.js",
+    "content/provider-identity-sync.js",
     "content/tools.css",
     "backup/legacy-panel/features/prompt-library/files.js",
     "backup/legacy-panel/features/prompt-library/cloud-sync-manager.js",
@@ -69,6 +71,10 @@ function main() {
     "content/main.js should boot the current extension bundle through the v2 composition directly"
   );
   assert(
+    mainSource.includes("namespace.panelV2CompositionController.createState()"),
+    "content/main.js should source active panel state directly from the v2 composition root"
+  );
+  assert(
     mainSource.includes("namespace.panelV2CompositionController"),
     "content/main.js should reference the v2 composition root"
   );
@@ -95,6 +101,14 @@ function main() {
   assert(
     v2CompositionSource.includes("createHostedOwnedPanelDebugBridge"),
     "v2 composition should keep debug helper ownership inline once the standalone debug controller leaves the active bundle"
+  );
+  assert(
+    v2CompositionSource.includes("createHostedOwnedProviderIdentitySync"),
+    "v2 composition should keep provider identity sync ownership inline once the standalone provider identity helper leaves the active bundle"
+  );
+  assert(
+    v2CompositionSource.includes("namespace.panelV2CompositionController = { create, createState };"),
+    "v2 composition should export createState for the active bundle bootstrap"
   );
   assert(
     !v2CompositionSource.includes("namespace.meetingManager.create"),
