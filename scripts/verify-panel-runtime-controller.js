@@ -44,7 +44,7 @@ function main() {
     { event: "panel.empty", payload: {} },
   ]);
 
-  console.log("[verify-panel-runtime-controller] Panel runtime controller contract passed");
+  console.log("[verify-panel-runtime-controller] Legacy panel runtime controller backup contract passed");
 }
 
 function createHarness() {
@@ -77,7 +77,7 @@ function createHarness() {
     },
   };
 
-  loadScript("content/panel-runtime-controller.js", context);
+  loadScript("backup/legacy-panel/panel-runtime-controller.js", context);
 
   const state = {
     activeTool: "bookmarks",

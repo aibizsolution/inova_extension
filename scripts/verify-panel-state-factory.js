@@ -12,13 +12,12 @@ function main() {
   const stateA = harness.factory.createState();
   const stateB = harness.factory.createState();
 
-  assert.equal(harness.readCollapsedCalls, 2);
   assert.equal(harness.mergeCloudSyncCalls, 2);
   assert.equal(harness.mergeUiPreferencesCalls, 2);
   assert.equal(harness.mergePromptLibraryCalls, 2);
 
   assert.equal(stateA.activeTool, "meeting");
-  assert.equal(stateA.panelDebugUi.collapsed, false);
+  assert.equal(stateA.panelDebugUi.collapsed, true);
   assert.equal(stateA.cloudSync.providerIdentity.providerUserKey, "fixture-user");
   assert.equal(stateA.releaseSummary.count, 0);
   assert.equal(stateA.releaseSummary.snapshotFingerprint, "");
@@ -59,7 +58,6 @@ function main() {
 }
 
 function createHarness() {
-  let readCollapsedCalls = 0;
   let mergeCloudSyncCalls = 0;
   let mergePromptLibraryCalls = 0;
   let mergeUiPreferencesCalls = 0;
@@ -96,12 +94,6 @@ function createHarness() {
         },
       },
     },
-    panelDebugController: {
-      readCollapsedPreference() {
-        readCollapsedCalls += 1;
-        return false;
-      },
-    },
     promptLibrary: {
       mergePromptLibrary() {
         mergePromptLibraryCalls += 1;
@@ -134,9 +126,6 @@ function createHarness() {
     },
     get mergeUiPreferencesCalls() {
       return mergeUiPreferencesCalls;
-    },
-    get readCollapsedCalls() {
-      return readCollapsedCalls;
     },
   };
 }

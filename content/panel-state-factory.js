@@ -25,7 +25,7 @@
 
   function createPanelDebugUiState() {
     return {
-      collapsed: namespace.panelDebugController?.readCollapsedPreference?.() ?? true,
+      collapsed: true,
       feedback: null,
       feedbackTimer: 0,
     };

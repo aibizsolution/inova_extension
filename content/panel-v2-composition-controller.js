@@ -7,7 +7,7 @@
     const render = () => renderController?.render();
 
     // v2 shell baseline keeps the shared extension-side runtime wiring.
-    const panelRuntimeController = namespace.panelRuntimeController.create(state);
+    const panelRuntimeController = createHostedOwnedPanelRuntimeBridge(state);
     const runtimeFlags = {
       isPaused: panelRuntimeController.isPaused,
       isStoreTabActive: panelRuntimeController.isStoreTabActive,
@@ -25,9 +25,8 @@
       render,
     });
     const hostedOwnedMeetingSnapshot = createHostedOwnedMeetingSnapshotBridge();
-    const panelDebugController = namespace.panelDebugController.create(state, {
+    const panelDebugController = createHostedOwnedPanelDebugBridge(state, {
       ...runtimeFlags,
-      render,
     });
     const hostedOwnedConversationBridge = createHostedOwnedConversationBridge(state, { render });
     const panelShellController = namespace.panelShellController.create(state, {
@@ -203,6 +202,98 @@
         return false;
       },
     };
+  }
+
+  function createHostedOwnedPanelRuntimeBridge(state) {
+    return {
+      isExtensionContextInvalidatedError,
+      isPaused,
+      isStoreTabActive,
+      isToolSurface,
+      logPanelDebug,
+    };
+
+    function isPaused() {
+      return Boolean(state.sessionId && state.pausedSessions[state.sessionId]);
+    }
+
+    function isStoreTabActive() {
+      return state.activeTool === "prompts"
+        && (state.uiPreferences.activeTool === "store" || state.uiPreferences.activePromptTab === "store");
+    }
+
+    function isToolSurface() {
+      return Boolean(namespace.contentDom?.getConversationState?.().hasComposer);
+    }
+
+    function isExtensionContextInvalidatedError(error) {
+      const message = normalizeText(error instanceof Error ? error.message : String(error || "")).toLowerCase();
+      return message.includes("extension context invalidated");
+    }
+
+    function logPanelDebug(event, payload) {
+      namespace.panelDebug?.log?.(event, payload || {});
+    }
+  }
+
+  function createHostedOwnedPanelDebugBridge(state, deps = {}) {
+    const isPaused = typeof deps.isPaused === "function" ? deps.isPaused : () => false;
+    const isToolSurface = typeof deps.isToolSurface === "function" ? deps.isToolSurface : () => false;
+
+    return {
+      buildState() {
+        return {};
+      },
+      async handleAction(action) {
+        const normalizedAction = normalizeText(action);
+        if (normalizedAction === "debug-copy") {
+          await copyEntries(false);
+          return true;
+        }
+        if (normalizedAction === "debug-copy-errors") {
+          await copyEntries(true);
+          return true;
+        }
+        if (normalizedAction === "debug-clear") {
+          namespace.panelDebug?.clearEntries?.();
+          return true;
+        }
+        return normalizedAction === "debug-toggle";
+      },
+      handlesAction(action) {
+        return new Set(["debug-toggle", "debug-copy", "debug-copy-errors", "debug-clear"]).has(normalizeText(action));
+      },
+      installValidationApi() {
+        delete namespace.panelDebugValidation;
+      },
+      syncEnabled() {
+        namespace.panelDebug?.setEnabled?.(Boolean(
+          namespace.panelDebug?.isLocalDebugEnabled?.(state.settings)
+          && state.settings.enabled
+          && isToolSurface()
+          && !isPaused()
+          && global.document.visibilityState === "visible"
+        ));
+      },
+    };
+
+    async function copyEntries(errorsOnly) {
+      const entries = namespace.panelDebug?.getEntries?.() || [];
+      const text = errorsOnly
+        ? namespace.panelDebug?.buildErrorCopyText?.(entries)
+        : namespace.panelDebug?.buildCopyText?.(entries);
+      if (!normalizeText(text)) {
+        return;
+      }
+      try {
+        await global.navigator?.clipboard?.writeText?.(text);
+      } catch (error) {
+        namespace.panelDebug?.log?.("panel.debug.copy.error", {
+          error: error instanceof Error ? error.message : String(error || ""),
+          errorsOnly: Boolean(errorsOnly),
+        });
+      }
+    }
   }
 
   function createHostedOwnedIdleReleaseLifecycleBridge() {

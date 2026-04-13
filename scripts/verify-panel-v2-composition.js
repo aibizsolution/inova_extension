@@ -81,8 +81,20 @@ function main() {
     "v2 composition should keep the existing bootstrap controller contract"
   );
   assert(
-    v2CompositionSource.includes("namespace.panelDebugController.create"),
-    "v2 composition should wire the debug controller"
+    !v2CompositionSource.includes("namespace.panelDebugController.create"),
+    "v2 composition should stop loading the standalone debug controller file in the active bundle"
+  );
+  assert(
+    !v2CompositionSource.includes("namespace.panelRuntimeController.create"),
+    "v2 composition should stop loading the standalone runtime controller file in the active bundle"
+  );
+  assert(
+    v2CompositionSource.includes("createHostedOwnedPanelRuntimeBridge"),
+    "v2 composition should keep runtime helper ownership inline once the standalone runtime controller leaves the active bundle"
+  );
+  assert(
+    v2CompositionSource.includes("createHostedOwnedPanelDebugBridge"),
+    "v2 composition should keep debug helper ownership inline once the standalone debug controller leaves the active bundle"
   );
   assert(
     !v2CompositionSource.includes("namespace.meetingManager.create"),
