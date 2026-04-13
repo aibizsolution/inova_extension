@@ -545,7 +545,7 @@
     return true;
   }
 
-  function shouldAlwaysTraceStep(label) { return ["hosted.click.detected", "hosted.review.action", "hosted.review.apply.error", "hosted.review.apply.start", "hosted.review.apply.success", "hosted.review.copy.error", "hosted.review.copy.start", "hosted.review.copy.success", "hosted.review.request.error", "hosted.review.request.skip", "hosted.review.request.start", "hosted.review.request.success", "page.functions.review.error", "page.functions.review.start", "page.functions.review.success", "prompt.review.request.error", "prompt.review.request.start", "prompt.review.request.success", "top.panel.bridge.attached", "top.panel.bridge.error", "top.panel.bridge.not-ready", "top.panel.bridge.ready", "top.panel.ensure.reuse", "top.panel.frame.error", "top.panel.frame.load", "top.panel.frame.src.set", "top.panel.handshake.timeout", "top.panel.host.created", "top.panel.snapshot.push"].includes(label); }
+  function shouldAlwaysTraceStep(label) { return ["hosted.click.detected", "hosted.conversation.snapshot.error", "hosted.conversation.snapshot.start", "hosted.conversation.snapshot.success", "hosted.firestore.auth.refresh", "hosted.firestore.auth.reuse", "hosted.firestore.auth.sign-in", "hosted.firestore.disconnect", "hosted.firestore.error", "hosted.firestore.listen.start", "hosted.firestore.reuse", "hosted.firestore.snapshot", "hosted.panel-auth.error", "hosted.panel-auth.start", "hosted.panel-auth.success", "hosted.panel-auth.timeout", "hosted.release.fetch.error", "hosted.release.fetch.start", "hosted.release.fetch.success", "hosted.review.action", "hosted.review.apply.error", "hosted.review.apply.start", "hosted.review.apply.success", "hosted.review.copy.error", "hosted.review.copy.start", "hosted.review.copy.success", "hosted.review.request.error", "hosted.review.request.skip", "hosted.review.request.start", "hosted.review.request.success", "page.functions.review.error", "page.functions.review.start", "page.functions.review.success", "prompt.review.request.error", "prompt.review.request.start", "prompt.review.request.success", "top.panel.bridge.attached", "top.panel.bridge.error", "top.panel.bridge.not-ready", "top.panel.bridge.ready", "top.panel.ensure.reuse", "top.panel.frame.error", "top.panel.frame.load", "top.panel.frame.src.set", "top.panel.handshake.timeout", "top.panel.host.created", "top.panel.snapshot.push"].includes(label); }
 
   function shouldSkipTraceStep(label, payload) {
     const quietLabels = new Set(["hosted.listeners.bound", "hosted.message.received", "hosted.ready.ping.fire", "hosted.ready.ping.scheduled", "hosted.render.flush", "hosted.request.success", "hosted.snapshot.applied", "hosted.snapshot.received", "top.panel.bridge.request.completed", "top.panel.bridge.request.received"]);
@@ -567,13 +567,14 @@
       parts.push(requestTarget);
     }
     [
-      ["meeting", payload.meetingId],
-      ["job", payload.jobId],
-      ["artifact", payload.artifactId],
-      ["tool", payload.activeTool],
-      ["tab", payload.promptTab],
-      ["title", payload.toolTitle],
-      ["meetings", normalizeTraceCount(payload.meetingCount)],
+        ["meeting", payload.meetingId],
+        ["job", payload.jobId],
+        ["artifact", payload.artifactId],
+        ["tool", payload.activeTool],
+        ["tab", payload.promptTab],
+        ["title", payload.toolTitle],
+        ["count", normalizeTraceCount(payload.count)],
+        ["meetings", normalizeTraceCount(payload.meetingCount)],
       ["open", normalizeTraceBoolean(payload, "open")],
       ["review", normalizeTraceBoolean(payload, "reviewOpen")],
       ["snapshot", normalizeTraceBoolean(payload, "snapshotOpen")],

@@ -12,6 +12,9 @@
     const scheduleRender = typeof options.scheduleRender === "function"
       ? options.scheduleRender
       : () => {};
+    const traceConversation = typeof options.traceConversation === "function"
+      ? options.traceConversation
+      : () => {};
 
     const state = {
       activeId: "",
@@ -155,6 +158,7 @@
       const run = (async () => {
         state.lastRequestedAt = Date.now();
         state.loading = true;
+        traceConversation("34.hosted.conversation.snapshot.start", {});
         scheduleRender();
         try {
           const snapshot = await invokePage({
@@ -163,9 +167,15 @@
           hydrateSnapshot(snapshot);
           state.error = "";
           state.lastLoadedAt = Date.now();
+          traceConversation("35.hosted.conversation.snapshot.success", {
+            count: state.items.length,
+          });
           return state.items;
         } catch (error) {
           state.error = getErrorMessage(error, "대화 목록을 불러오지 못했어요.");
+          traceConversation("35.hosted.conversation.snapshot.error", {
+            error: state.error,
+          });
           return state.items;
         } finally {
           state.loading = false;

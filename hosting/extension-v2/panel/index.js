@@ -59,6 +59,7 @@
   const conversationController = namespace.conversationController?.create?.({
     invokePage,
     scheduleRender,
+    traceConversation: traceConversationFlow,
   }) || null;
   let promptStoreController = null;
   const promptLibraryController = namespace.promptLibraryController?.create?.({
@@ -100,6 +101,7 @@
     invokeRuntime,
     scheduleRender,
     syncTopPanelSummary: syncReleaseToolSummary,
+    traceRelease: traceReleaseFlow,
   }) || null;
   const callbacks = createCallbacks();
 
@@ -1586,6 +1588,10 @@
     postTrace("meeting", step, payload);
   }
 
+  function traceConversationFlow(step, payload = {}) {
+    postTrace("conversation", step, payload);
+  }
+
   function traceReviewFlow(step, payload = {}) {
     postTrace("review", step, payload);
   }
@@ -1596,6 +1602,10 @@
 
   function traceFirestoreFlow(step, payload = {}) {
     postTrace("firestore", step, payload);
+  }
+
+  function traceReleaseFlow(step, payload = {}) {
+    postTrace("release", step, payload);
   }
 
   function postTrace(channel, step, payload = {}) {

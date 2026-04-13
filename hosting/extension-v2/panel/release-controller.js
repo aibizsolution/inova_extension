@@ -18,6 +18,9 @@
     const syncTopPanelSummary = typeof options.syncTopPanelSummary === "function"
       ? options.syncTopPanelSummary
       : async () => false;
+    const traceRelease = typeof options.traceRelease === "function"
+      ? options.traceRelease
+      : () => {};
 
     const state = {
       capabilities: [],
@@ -195,15 +198,32 @@
     }
 
     async function fetchJson(relativePath) {
-      const response = await fetch(new URL(relativePath, global.location.href), {
-        cache: "no-store",
-        method: "GET",
+      const startedAt = Date.now();
+      traceRelease("34.hosted.release.fetch.start", {
+        message: normalizeText(relativePath),
       });
-      const payload = await response.json().catch(() => null);
-      if (!response.ok || !payload) {
-        throw new Error("릴리스 정보를 불러오지 못했어요.");
+      try {
+        const response = await fetch(new URL(relativePath, global.location.href), {
+          cache: "no-store",
+          method: "GET",
+        });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || !payload) {
+          throw new Error("릴리스 정보를 불러오지 못했어요.");
+        }
+        traceRelease("35.hosted.release.fetch.success", {
+          message: normalizeText(relativePath),
+          reason: `${Math.max(0, Date.now() - startedAt)}ms`,
+        });
+        return payload;
+      } catch (error) {
+        traceRelease("35.hosted.release.fetch.error", {
+          error: getErrorMessage(error, "릴리스 정보를 불러오지 못했어요."),
+          message: normalizeText(relativePath),
+          reason: `${Math.max(0, Date.now() - startedAt)}ms`,
+        });
+        throw error;
       }
-      return payload;
     }
 
     function normalizeReleaseRecord(release, options = {}) {

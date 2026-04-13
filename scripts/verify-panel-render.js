@@ -9,6 +9,7 @@ const {
   verifyHostedMeetingVisibilityRecoveryContract,
   verifyHostedMeetingSnapshotSyncGuardContract,
 } = require("./verify-hosted-panel-runtime-contracts");
+const { verifyHostedTraceVisibilityContract } = require("./verify-hosted-trace-visibility");
 
 const root = path.resolve(__dirname, "..");
 
@@ -24,6 +25,7 @@ async function main() {
   verifyHostedMeetingVisibilityRecoveryContract();
   verifyHostedPromptTabOwnershipContract();
   verifyHostedPromptActionOwnershipContract();
+  verifyHostedTraceVisibilityContract();
   verifyHostedConversationSearchDebounceContract();
   verifyHostedStoreSearchDebounceContract();
   verifyBookmarkJumpAccessibilityContract();
