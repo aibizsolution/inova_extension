@@ -94,7 +94,7 @@
       } else if (!state.snapshotFingerprint && nextFingerprint) {
         state.snapshotFingerprint = nextFingerprint;
       }
-      if (nextActiveTool !== "meeting") {
+      if (nextActiveTool !== "meeting" || !nextPanelOpen) {
         return;
       }
       const shouldForceReload = fingerprintChanged || meetingToolBecameActive || panelReopenedIntoMeeting;
@@ -140,6 +140,14 @@
         return false;
       }
       if (state.activeTool !== "meeting" || !state.panelOpen) {
+        return false;
+      }
+      if (state.loadPromise) {
+        traceMeeting("66.top.meeting.host-activity.skip", {
+          loading: true,
+          open: state.panelOpen,
+          reason: normalizedReason,
+        });
         return false;
       }
       traceMeeting("66.top.meeting.host-activity.refresh", {

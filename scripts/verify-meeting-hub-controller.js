@@ -12,6 +12,7 @@ async function main() {
   await verifyHostedMeetingHubShareCopyFailure();
   await verifyHostedMeetingHubLifecycleRefreshOwnership();
   await verifyHostedMeetingHubActivityRefreshOwnership();
+  await verifyHostedMeetingHubDoesNotPrefetchWhileClosed();
   await verifyHostedMeetingHubFingerprintIgnoresCheckedAt();
   console.log("[verify-meeting-hub-controller] Hosted meeting hub controller contract passed");
 }
@@ -23,6 +24,7 @@ async function verifyHostedMeetingHubOwnership() {
   controller.syncPanelState(
     {
       activeTool: "meeting",
+      open: true,
       meetingTool: {
         count: 1,
         snapshotFingerprint: "meeting-alpha|1|seed",
@@ -87,6 +89,7 @@ async function verifyHostedMeetingHubShareCopyFailure() {
   controller.syncPanelState(
     {
       activeTool: "meeting",
+      open: true,
       meetingTool: {
         count: 1,
         snapshotFingerprint: "meeting-alpha|1|seed",
@@ -270,6 +273,55 @@ async function verifyHostedMeetingHubActivityRefreshOwnership() {
   assert.equal(focusHandled, false, "hosted meeting hub should ignore focus refresh when meeting is not active");
 }
 
+async function verifyHostedMeetingHubDoesNotPrefetchWhileClosed() {
+  const harness = createHarness();
+  const controller = harness.controller;
+
+  controller.syncPanelState(
+    {
+      activeTool: "meeting",
+      open: false,
+      meetingTool: {
+        count: 1,
+        snapshotFingerprint: "meeting-alpha|1|seed",
+      },
+      settings: {
+        meetingWorkspaceTarget: "production",
+      },
+    },
+    ["runtime.invoke.v1"]
+  );
+  await flushAsyncTurns();
+
+  assert.equal(
+    countRuntimeCalls(harness.runtimeCalls, "functions.fetch"),
+    0,
+    "hosted meeting hub should not prefetch meeting data while the meeting panel is still closed"
+  );
+
+  controller.syncPanelState(
+    {
+      activeTool: "meeting",
+      open: true,
+      meetingTool: {
+        count: 1,
+        snapshotFingerprint: "meeting-alpha|1|seed",
+      },
+      settings: {
+        meetingWorkspaceTarget: "production",
+      },
+    },
+    ["runtime.invoke.v1"]
+  );
+  await flushAsyncTurns();
+
+  assert.equal(
+    countRuntimeCalls(harness.runtimeCalls, "functions.fetch"),
+    1,
+    "hosted meeting hub should fetch once when the closed meeting panel actually opens"
+  );
+}
+
 async function verifyHostedMeetingHubFingerprintIgnoresCheckedAt() {
   const harness = createHarness({
     checkedAtSequence: [
@@ -310,7 +362,7 @@ async function verifyHostedMeetingHubFingerprintIgnoresCheckedAt() {
   );
 }
 
-async function flushAsyncTurns(turns = 8) {
+async function flushAsyncTurns(turns = 20) {
   for (let index = 0; index < turns; index += 1) {
     await Promise.resolve();
   }

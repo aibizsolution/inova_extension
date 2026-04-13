@@ -34,6 +34,7 @@
     elements: null,
     extensionCapabilities: [],
     extensionVersion: "",
+    lastControllerSyncKey: "",
     panelAppUrl: "",
     panelSnapshot: null,
     parentOrigin: readParentOrigin(),
@@ -49,6 +50,7 @@
     inputComposition: createInputCompositionState(),
     storeRenderKey: 0,
     storeScrollTop: 0,
+    windowRecentlyBlurred: false,
   };
   const api = {
     invokePage,
@@ -120,6 +122,7 @@
     root.addEventListener("search", handleRootSearch, true);
     root.addEventListener("input", handleRootInput);
     root.addEventListener("change", handleRootChange);
+    global.addEventListener("blur", handleWindowBlur, { passive: true });
     root.addEventListener("keydown", handleRootKeydown);
     global.addEventListener("focus", handleWindowFocus, { passive: true });
     global.addEventListener("error", handleWindowError);
@@ -666,12 +669,7 @@
       return;
     }
 
-    conversationController?.syncPanelState?.(panelState, state.extensionCapabilities);
-    promptLibraryController?.syncPanelState?.(panelState, state.extensionCapabilities);
-    promptReviewController?.syncPanelState?.(panelState, state.extensionCapabilities);
-    promptStoreController?.syncPanelState?.(panelState, state.extensionCapabilities);
-    meetingHubController?.syncPanelState?.(panelState, state.extensionCapabilities);
-    releaseController?.syncPanelState?.(panelState, state.extensionCapabilities);
+    syncHostedControllersIfNeeded(panelState);
     ensureShell();
     const elements = state.elements;
     if (!elements) {
@@ -754,6 +752,23 @@
       toolTitle: root.querySelector("#inova-tool-title"),
       toolTotal: root.querySelector("#inova-tool-total"),
     };
+  }
+
+  function syncHostedControllersIfNeeded(panelState) {
+    const nextControllerSyncKey = serializeRenderState({
+      extensionCapabilities: state.extensionCapabilities,
+      panel: panelState,
+    });
+    if (state.lastControllerSyncKey === nextControllerSyncKey) {
+      return;
+    }
+    state.lastControllerSyncKey = nextControllerSyncKey;
+    conversationController?.syncPanelState?.(panelState, state.extensionCapabilities);
+    promptLibraryController?.syncPanelState?.(panelState, state.extensionCapabilities);
+    promptReviewController?.syncPanelState?.(panelState, state.extensionCapabilities);
+    promptStoreController?.syncPanelState?.(panelState, state.extensionCapabilities);
+    meetingHubController?.syncPanelState?.(panelState, state.extensionCapabilities);
+    releaseController?.syncPanelState?.(panelState, state.extensionCapabilities);
   }
 
   function createPanelRenderCache() {
@@ -1711,15 +1726,25 @@
     });
   }
 
+  function handleWindowBlur() {
+    state.windowRecentlyBlurred = true;
+  }
+
   function handleWindowFocus() {
+    if (!state.windowRecentlyBlurred) {
+      return;
+    }
+    state.windowRecentlyBlurred = false;
     void meetingHubController?.handleHostActivity?.("window-focus");
   }
 
   function handleDocumentVisibilityChange() {
     if (global.document.visibilityState === "visible") {
+      state.windowRecentlyBlurred = false;
       void meetingHubController?.handleHostActivity?.("visibility-visible");
       return;
     }
+    state.windowRecentlyBlurred = true;
     void meetingHubController?.handleHostActivity?.("visibility-hidden");
   }
 
