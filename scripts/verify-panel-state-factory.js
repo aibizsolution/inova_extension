@@ -14,14 +14,14 @@ function main() {
 
   assert.equal(harness.readCollapsedCalls, 2);
   assert.equal(harness.mergeCloudSyncCalls, 2);
-  assert.equal(harness.mergeReleaseInfoCalls, 2);
   assert.equal(harness.mergeUiPreferencesCalls, 2);
   assert.equal(harness.mergePromptLibraryCalls, 2);
 
   assert.equal(stateA.activeTool, "meeting");
   assert.equal(stateA.panelDebugUi.collapsed, false);
   assert.equal(stateA.cloudSync.providerIdentity.providerUserKey, "fixture-user");
-  assert.equal(stateA.releaseInfo.lastCheckedAt, "2026-04-11T00:00:00.000Z");
+  assert.equal(stateA.releaseSummary.count, 0);
+  assert.equal(stateA.releaseSummary.snapshotFingerprint, "");
   assert.equal(stateA.uiPreferences.activePromptTab, "library");
   assert.equal(stateA.promptLibrary.items.length, 1);
   assert.equal(stateA.store.limit, 1000);
@@ -34,6 +34,7 @@ function main() {
   assert.notStrictEqual(stateA, stateB);
   assert.notStrictEqual(stateA.settings, stateB.settings);
   assert.notStrictEqual(stateA.meetingSummary, stateB.meetingSummary);
+  assert.notStrictEqual(stateA.releaseSummary, stateB.releaseSummary);
   assert.notStrictEqual(stateA.meetingUi, stateB.meetingUi);
   assert.notStrictEqual(stateA.meetingUi.pending, stateB.meetingUi.pending);
   assert.notStrictEqual(stateA.panelDebugUi, stateB.panelDebugUi);
@@ -42,12 +43,14 @@ function main() {
 
   stateA.settings.enabled = false;
   stateA.meetingSummary.count = 7;
+  stateA.releaseSummary.count = 1;
   stateA.meetingUi.pending.action = "share";
   stateA.store.scope = "mine";
   stateA.queries.bookmarks = "alpha";
 
   assert.equal(stateB.settings.enabled, true);
   assert.equal(stateB.meetingSummary.count, 0);
+  assert.equal(stateB.releaseSummary.count, 0);
   assert.equal(stateB.meetingUi.pending.action, "");
   assert.equal(stateB.store.scope, "all");
   assert.equal(stateB.queries.bookmarks, "");
@@ -59,7 +62,6 @@ function createHarness() {
   let readCollapsedCalls = 0;
   let mergeCloudSyncCalls = 0;
   let mergePromptLibraryCalls = 0;
-  let mergeReleaseInfoCalls = 0;
   let mergeUiPreferencesCalls = 0;
 
   const context = vm.createContext({
@@ -108,14 +110,6 @@ function createHarness() {
         };
       },
     },
-    releaseInfo: {
-      mergeReleaseInfo() {
-        mergeReleaseInfoCalls += 1;
-        return {
-          lastCheckedAt: "2026-04-11T00:00:00.000Z",
-        };
-      },
-    },
     storage: {
       mergeUiPreferences() {
         mergeUiPreferencesCalls += 1;
@@ -137,9 +131,6 @@ function createHarness() {
     },
     get mergePromptLibraryCalls() {
       return mergePromptLibraryCalls;
-    },
-    get mergeReleaseInfoCalls() {
-      return mergeReleaseInfoCalls;
     },
     get mergeUiPreferencesCalls() {
       return mergeUiPreferencesCalls;

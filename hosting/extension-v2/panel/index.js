@@ -98,6 +98,7 @@
     getRuntimeVersion: () => state.extensionVersion || "",
     invokeRuntime,
     scheduleRender,
+    syncTopPanelSummary: syncReleaseToolSummary,
   }) || null;
   const callbacks = createCallbacks();
 
@@ -470,6 +471,13 @@
     return request("panel", {
       action: "meeting-summary-sync",
       meetingTool,
+    });
+  }
+
+  function syncReleaseToolSummary(releaseTool = {}) {
+    return request("panel", {
+      action: "release-summary-sync",
+      releaseTool,
     });
   }
 

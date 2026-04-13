@@ -7,8 +7,8 @@ Last updated: 2026-04-13
 - Public deployed baseline: `0.4.4`
 - Current local candidate: `1.0.0`
 - Active branch: `codex/prompt-review-6-dimensions`
-- Latest full validation: `npm.cmd run verify` passed after `5ca2dd4`
-- Worktree: clean
+- Latest full validation: `npm.cmd run verify`, `npm.cmd run verify:legacy-backup` passed in the current working tree
+- Worktree: active slice pending commit
 - Current architecture direction:
 - `1.0.0` v2 lane is explicitly hosted-first.
 - default location for tab UI, view state, action flow, and feature-local controllers is `hosting/*`.
@@ -23,7 +23,7 @@ Last updated: 2026-04-13
 ## Where Ownership Stands
 
 - `conversation`: hosted owns list/search/copy/jump UI state; extension only provides page adapter plus thin signals such as count/active/fingerprint.
-- `release`: hosted owns latest/history/download surface; extension only brokers browser/runtime actions.
+- `release`: hosted owns latest/history/download surface and compact release summary sync; extension only brokers browser/runtime actions plus compact `releaseSummary(count + snapshotFingerprint)`.
 - `prompt-library`, `prompt-store`, `prompt-review`: hosted owns prompt tab transition plus prompt/store/review action routing; extension keeps page/runtime bridge and legacy fallback handlers outside the v2 request path.
 - `meeting hub` / `meeting workspace`: hosted owns list/action UI, Firestore meeting-list subscription, and launch tracing; v2 hosted panel no longer falls back to top-panel `meeting-action` dispatch, and v2 extension now carries only `meetingSummary(count + snapshotFingerprint)` residue outside the hub path.
 
@@ -50,6 +50,7 @@ Short version:
 - v2 composition now wires the hosted-owned prompt controller directly instead of keeping the extra `panelPromptBridgeController` proxy in the v2 lane
 - current `1.0.0` manifest no longer loads the legacy prompt runtime bundle; v2 prompt shell now keeps only `content/panel-v2-prompt-controller.js` for minimal review handoff/composer review float
 - current `1.0.0` extension bundle now boots `content/panel-v2-composition-controller.js` directly and stops loading the legacy panel composition/meeting/action lane in `manifest.json`
+- current `1.0.0` manifest no longer loads the legacy release runtime/helper bundle; compact release summary now round-trips through hosted v2 instead of `content/release-manager.js`
 - meeting open traces split correctly:
   - original `i-Nova` tab now logs only launch request/dispatch/completion
   - new hosted workspace tab owns workspace bootstrap/ready logs

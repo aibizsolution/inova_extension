@@ -103,10 +103,10 @@
 | --- | --- |
 | 기능 목적 | 릴리스 패널, 최신 버전 확인, 정적 JSON/ZIP 링크 |
 | 요청 cue | 릴리스, 최신 버전, 업데이트 ZIP, 롤백, release notes |
-| 먼저 볼 파일 | `content/release-manager.js`, `hosting/extension-v2/panel/release-controller.js`, `hosting/extension-v2/panel/release-view.js`, `shared/release-info.js` |
-| 관련 프론트 경로 | `background/service-worker.js`, `hosting/extension-v2/panel/release-controller.js`, `hosting/extension-v2/panel/release-view.js`, `hosting/extension/panel/release-view.js`, `backup/legacy-panel/release-view.js` (legacy reference), `releases/release-notes.json` |
+| 먼저 볼 파일 | `hosting/extension-v2/panel/release-controller.js`, `hosting/extension-v2/panel/release-view.js`, `backup/legacy-panel/release-manager.js`, `backup/legacy-panel/shared/release-info.js` |
+| 관련 프론트 경로 | `background/service-worker.js`, `hosting/extension-v2/panel/release-controller.js`, `hosting/extension-v2/panel/release-view.js`, `hosting/extension/panel/release-view.js`, `backup/legacy-panel/release-view.js` (legacy reference), `backup/legacy-panel/release-manager.js` (legacy runtime reference), `backup/legacy-panel/shared/release-info.js` (legacy helper reference), `releases/release-notes.json` |
 | 관련 functions 경로 | 없음 |
-| feature-owned shared | `shared/release-info.js` |
+| feature-owned shared | 없음. active v2 lane은 hosted release summary만 유지하고 legacy release helper는 `backup/legacy-panel/shared/release-info.js` reference로 격리한다. |
 | 관련 데이터 경계 | `releases/release-notes.json`, `hosting/extension/releases/latest.json`, `hosting/extension/releases/history.json`, 다운로드 ZIP |
 | 보통 건드리지 말 범위 | meeting, prompts 전 영역 |
 | 최소 검증 | 릴리스 탭에서 현재 버전, 최신 버전, ZIP 링크 표시 |

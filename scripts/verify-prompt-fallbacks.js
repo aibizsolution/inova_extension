@@ -129,8 +129,8 @@ async function verifyReleaseCachedFailureStaysDegraded() {
   });
   loadScript("shared/constants.js", context);
   loadScript("shared/session.js", context);
-  loadScript("shared/release-info.js", context);
-  loadScript("content/release-manager.js", context);
+  loadScript("backup/legacy-panel/shared/release-info.js", context);
+  loadScript("backup/legacy-panel/release-manager.js", context);
 
   const namespace = context.InovaBookmarks;
   namespace.storage = {

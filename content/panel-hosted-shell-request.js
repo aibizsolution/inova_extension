@@ -64,6 +64,16 @@
       });
     }
 
+    if (action === "release-summary-sync") {
+      const releaseTool = payload?.releaseTool && typeof payload.releaseTool === "object"
+        ? payload.releaseTool
+        : {};
+      return Promise.resolve(callbacks.onReleaseSummarySync?.(releaseTool)).then(() => ({
+        handled: true,
+        result: { handled: true },
+      }));
+    }
+
     if (action === "release-action") {
       return Promise.resolve(callbacks.onReleaseAction?.(normalizeText(payload?.releaseAction), detail)).then(() => ({
         handled: true,

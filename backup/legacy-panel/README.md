@@ -24,7 +24,9 @@
 - `backup/legacy-panel/features/prompt-library/prompt-manager.js`
 - `backup/legacy-panel/features/prompt-store/store-manager.js`
 - `backup/legacy-panel/features/prompt-store/prompt-realtime-manager.js`
+- `backup/legacy-panel/release-manager.js`
 - `backup/legacy-panel/release-view.js`
+- `backup/legacy-panel/shared/release-info.js`
 
 기준은 아래와 같다.
 

@@ -235,6 +235,7 @@ function verifyHostedShellRequestModuleContract() {
     'if (action === "search-submit")',
     'if (action === "bookmark-copy")',
     'if (action === "bookmark-jump")',
+    'if (action === "release-summary-sync")',
     'if (action === "release-action")',
   ].forEach((pattern) => assert(
     !bridgeRequestSource.includes(pattern),

@@ -15,6 +15,9 @@
     const scheduleRender = typeof options.scheduleRender === "function"
       ? options.scheduleRender
       : () => {};
+    const syncTopPanelSummary = typeof options.syncTopPanelSummary === "function"
+      ? options.syncTopPanelSummary
+      : async () => false;
 
     const state = {
       capabilities: [],
@@ -30,6 +33,7 @@
       historyCheckedForVersion: "",
       historyLoading: false,
       initialized: false,
+      lastSyncedSummaryKey: "",
       latest: null,
       source: "none",
     };
@@ -175,6 +179,7 @@
         state.checking = false;
         state.historyLoading = false;
         scheduleRender();
+        await emitTopPanelSummary();
       }
     }
 
@@ -258,6 +263,39 @@
 
     function getCurrentVersion() {
       return normalizeText(getRuntimeVersion()) || "알 수 없음";
+    }
+
+    async function emitTopPanelSummary() {
+      if (!hasRequiredCapabilities()) {
+        return false;
+      }
+      const summary = buildTopPanelSummary();
+      const summaryKey = JSON.stringify(summary);
+      if (summaryKey === state.lastSyncedSummaryKey) {
+        return false;
+      }
+      try {
+        await syncTopPanelSummary(summary);
+        state.lastSyncedSummaryKey = summaryKey;
+        return true;
+      } catch (error) {
+        void error;
+        return false;
+      }
+    }
+
+    function buildTopPanelSummary() {
+      const count = getReleaseCount();
+      return {
+        count,
+        snapshotFingerprint: [
+          String(count),
+          normalizeText(state.checkedForVersion),
+          normalizeText(state.latest?.version),
+          normalizeEnum(state.dataFreshness, ["fresh", "stale", "empty"], "empty"),
+          normalizeText(state.degradedReason),
+        ].join("|"),
+      };
     }
 
     function isFresh(checkedAt, ttlMs) {

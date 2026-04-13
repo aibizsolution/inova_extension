@@ -32,6 +32,7 @@ function main() {
     "hosting/meeting/debug-console.js",
     "shared/meeting-debug.js",
     "shared/meeting-bridge.js",
+    "shared/release-info.js",
     "backup/legacy-panel/features/prompt-library/files.js",
     "backup/legacy-panel/features/prompt-library/cloud-sync-manager.js",
     "backup/legacy-panel/features/prompt-store/prompt-realtime-manager.js",
@@ -42,9 +43,10 @@ function main() {
     "backup/legacy-panel/prompt-hub-runtime.js",
     "backup/legacy-panel/prompt-hub-state.js",
     "backup/legacy-panel/panel-prompt-controller.js",
+    "content/release-manager.js",
   ].forEach((file) => assert(
     !scriptList.includes(file),
-    `manifest should stop loading the legacy prompt runtime file ${file} in the active 1.0.0 bundle`
+    `manifest should stop loading the inactive runtime file ${file} in the active 1.0.0 bundle`
   ));
   assert(
     scriptList.includes("content/panel-v2-composition-controller.js"),
@@ -146,6 +148,30 @@ function main() {
   assert(
     !v2CompositionSource.includes("namespace.panelPromptController.create"),
     "v2 composition should stop instantiating the legacy prompt runtime controller"
+  );
+  assert(
+    !v2CompositionSource.includes("namespace.releaseManager.create"),
+    "v2 composition should stop instantiating the legacy release manager in the active 1.0.0 bundle"
+  );
+  assert(
+    v2CompositionSource.includes("createHostedOwnedIdleReleaseLifecycleBridge"),
+    "v2 composition should provide an idle release bridge once hosted release owns release checks"
+  );
+  assert(
+    v2CompositionSource.includes("handlePanelReleaseSummarySync: handleHostedReleaseSummarySync"),
+    "v2 bootstrap wiring should accept compact hosted release summary sync callbacks"
+  );
+  assert(
+    v2CompositionSource.includes("const hostedOwnedReleaseSnapshot = createHostedOwnedReleaseSnapshotBridge(() => state.releaseSummary);"),
+    "v2 render wiring should shape release state from a compact hosted release summary"
+  );
+  assert(
+    v2CompositionSource.includes("state.releaseSummary"),
+    "v2 composition should keep hosted-owned release residue in a dedicated compact releaseSummary state bucket"
+  );
+  assert(
+    !v2CompositionSource.includes("state.releaseInfo"),
+    "v2 composition should stop reading legacy releaseInfo state directly"
   );
   assert(
     v2CompositionSource.includes("let hostedOwnedPromptController = null;"),

@@ -28,6 +28,7 @@ async function verifyBootstrapWiringAndScheduling() {
   assert.deepEqual(harness.providerIdentityReasons, ["bootstrap"]);
   assert.equal(typeof harness.callbacks.onMeetingAction, "function");
   assert.equal(typeof harness.callbacks.onMeetingSummarySync, "function");
+  assert.equal(typeof harness.callbacks.onReleaseSummarySync, "function");
   assert.equal(typeof harness.callbacks.onSearch, "function");
   assert.equal(typeof harness.callbacks.onToggle, "function");
   assert.equal(harness.debugInstallCalls, 1);

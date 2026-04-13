@@ -8,6 +8,9 @@
     const handlePanelMeetingSummarySync = typeof deps.handlePanelMeetingSummarySync === "function"
       ? deps.handlePanelMeetingSummarySync
       : async () => false;
+    const handlePanelReleaseSummarySync = typeof deps.handlePanelReleaseSummarySync === "function"
+      ? deps.handlePanelReleaseSummarySync
+      : async () => false;
     const buildHostedPanelCallbacks = typeof deps.buildHostedPanelCallbacks === "function"
       ? deps.buildHostedPanelCallbacks
       : buildDefaultHostedPanelCallbacks;
@@ -64,6 +67,7 @@
       namespace.contentPanel.ensurePanel(buildHostedPanelCallbacks({
         handlePanelMeetingAction,
         handlePanelMeetingSummarySync,
+        handlePanelReleaseSummarySync,
         panelBookmarkController,
         panelLifecycleController,
         panelPromptController,
@@ -125,6 +129,9 @@
     const handlePanelMeetingSummarySync = typeof deps.handlePanelMeetingSummarySync === "function"
       ? deps.handlePanelMeetingSummarySync
       : async () => false;
+    const handlePanelReleaseSummarySync = typeof deps.handlePanelReleaseSummarySync === "function"
+      ? deps.handlePanelReleaseSummarySync
+      : async () => false;
     const panelBookmarkController = deps.panelBookmarkController || { copyBookmarkText() {}, jumpToBookmark() {} };
     const panelLifecycleController = deps.panelLifecycleController || { togglePanel() {} };
     const panelPromptController = deps.panelPromptController || {
@@ -151,6 +158,7 @@
       onJumpBookmark: panelBookmarkController.jumpToBookmark,
       onMeetingAction: handlePanelMeetingAction,
       onMeetingSummarySync: handlePanelMeetingSummarySync,
+      onReleaseSummarySync: handlePanelReleaseSummarySync,
       onMovePrompt: panelPromptController.movePromptItem,
       onPromptAction: panelPromptController.handlePromptAction,
       onPromptDraftChange: panelPromptController.handleDraftChange,

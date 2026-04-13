@@ -16,6 +16,13 @@
     };
   }
 
+  function createReleaseSummaryState() {
+    return {
+      count: 0,
+      snapshotFingerprint: "",
+    };
+  }
+
   function createPanelDebugUiState() {
     return {
       collapsed: namespace.panelDebugController?.readCollapsedPreference?.() ?? true,
@@ -71,11 +78,11 @@
       settingsHydrated: false,
       pausedSessions: {},
       meetingSummary: createMeetingSummaryState(),
+      releaseSummary: createReleaseSummaryState(),
       meetingHub: { ...namespace.constants.defaults.meetingHub },
       meetingUi: createMeetingUiState(),
       panelDebugUi: createPanelDebugUiState(),
       cloudSync: namespace.cloudSync.mergeCloudSyncState(),
-      releaseInfo: namespace.releaseInfo.mergeReleaseInfo(),
       uiPreferences: namespace.storage.mergeUiPreferences(),
       promptLibraryLoading: false,
       promptLibraryRemoteReady: false,

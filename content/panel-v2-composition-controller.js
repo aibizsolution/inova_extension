@@ -17,9 +17,9 @@
       isExtensionContextInvalidatedError: panelRuntimeController.isExtensionContextInvalidatedError,
       logPanelDebug: panelRuntimeController.logPanelDebug,
     };
-    const releaseManager = namespace.releaseManager.create(state, { render });
-    const hostedOwnedReleaseSnapshot = createHostedOwnedReleaseSnapshotBridge(releaseManager);
     const hostedOwnedIdleMeetingLifecycle = createHostedOwnedIdleMeetingLifecycleBridge();
+    const hostedOwnedIdleReleaseLifecycle = createHostedOwnedIdleReleaseLifecycleBridge();
+    const hostedOwnedReleaseSnapshot = createHostedOwnedReleaseSnapshotBridge(() => state.releaseSummary);
     const providerIdentitySync = namespace.providerIdentitySync.create(state, {
       ...runtimeDiagnostics,
       render,
@@ -36,7 +36,7 @@
       getPromptController: () => hostedOwnedPromptController,
       isExtensionContextInvalidatedError: runtimeDiagnostics.isExtensionContextInvalidatedError,
       meetingManager: hostedOwnedIdleMeetingLifecycle,
-      releaseManager,
+      releaseManager: hostedOwnedIdleReleaseLifecycle,
       render,
     });
     const sharedPromptController = namespace.panelV2PromptController.create(state, {
@@ -64,7 +64,7 @@
       isStoreTabActive: runtimeFlags.isStoreTabActive,
       logPanelDebug: runtimeDiagnostics.logPanelDebug,
       meetingManager: hostedOwnedIdleMeetingLifecycle,
-      releaseManager,
+      releaseManager: hostedOwnedIdleReleaseLifecycle,
       render,
       schedulePromptCloudSyncIfNeeded: promptSyncBridge.schedulePromptCloudSyncIfNeeded,
       schedulePromptRealtimeSync: promptSyncBridge.schedulePromptRealtimeSync,
@@ -73,7 +73,7 @@
       logPanelDebug: runtimeDiagnostics.logPanelDebug,
       meetingManager: hostedOwnedIdleMeetingLifecycle,
       providerIdentitySync,
-      releaseManager,
+      releaseManager: hostedOwnedIdleReleaseLifecycle,
       render,
       schedulePromptCloudSyncIfNeeded: promptSyncBridge.schedulePromptCloudSyncIfNeeded,
       schedulePromptRealtimeSync: promptSyncBridge.schedulePromptRealtimeSync,
@@ -111,11 +111,11 @@
       panelShellController,
       buildReleaseSnapshot: hostedOwnedReleaseSnapshot.buildReleaseSnapshot,
       getReleaseCount: hostedOwnedReleaseSnapshot.getReleaseCount,
-      releaseManager,
     });
     const panelBootstrapController = namespace.panelBootstrapController.create(state, {
       buildHostedPanelCallbacks: buildHostedOwnedPanelCallbacks,
       handlePanelMeetingSummarySync: handleHostedMeetingSummarySync,
+      handlePanelReleaseSummarySync: handleHostedReleaseSummarySync,
       isStoreTabActive: runtimeFlags.isStoreTabActive,
       meetingManager: hostedOwnedIdleMeetingLifecycle,
       shouldListenMeetingStorageChanges: () => false,
@@ -128,7 +128,7 @@
       panelShellController,
       panelSurfaceController,
       providerIdentitySync,
-      releaseManager,
+      releaseManager: hostedOwnedIdleReleaseLifecycle,
       render,
       routeStateController,
       routeSync,
@@ -151,6 +151,16 @@
       return true;
     }
 
+    function handleHostedReleaseSummarySync(releaseTool = {}) {
+      const nextSummary = normalizeHostedReleaseSummary(releaseTool);
+      if (buildReleaseSummaryKey(state.releaseSummary) === buildReleaseSummaryKey(nextSummary)) {
+        return false;
+      }
+      state.releaseSummary = nextSummary;
+      render();
+      return true;
+    }
+
     function buildHostedOwnedPanelCallbacks(deps = {}) {
       const panelBookmarkController = deps.panelBookmarkController || { copyBookmarkText() {}, jumpToBookmark() {} };
       const panelLifecycleController = deps.panelLifecycleController || { togglePanel() {} };
@@ -165,12 +175,16 @@
       const handlePanelMeetingSummarySync = typeof deps.handlePanelMeetingSummarySync === "function"
         ? deps.handlePanelMeetingSummarySync
         : async () => false;
+      const handlePanelReleaseSummarySync = typeof deps.handlePanelReleaseSummarySync === "function"
+        ? deps.handlePanelReleaseSummarySync
+        : async () => false;
 
       return {
         onCopyBookmark: panelBookmarkController.copyBookmarkText,
         onHandlePositionChange: panelShellController.updateHandlePosition,
         onJumpBookmark: panelBookmarkController.jumpToBookmark,
         onMeetingSummarySync: handlePanelMeetingSummarySync,
+        onReleaseSummarySync: handlePanelReleaseSummarySync,
         onReleaseAction: releaseManager.handleAction,
         onSearch: panelShellController.updateQuery,
         onSearchSubmit: panelShellController.submitQuery,
@@ -188,6 +202,25 @@
       },
       handleStorageChange() {},
       scheduleSync() {
+        return false;
+      },
+    };
+  }
+
+  function createHostedOwnedIdleReleaseLifecycleBridge() {
+    return {
+      buildViewState() {
+        return {
+          count: 0,
+          snapshotFingerprint: "",
+          updateAvailable: false,
+        };
+      },
+      handleAction() {
+        return false;
+      },
+      handleStorageChange() {},
+      ensureChecked() {
         return false;
       },
     };
@@ -279,25 +312,30 @@
     }
   }
 
-  function createHostedOwnedReleaseSnapshotBridge(releaseManager = {}) {
+  function createHostedOwnedReleaseSnapshotBridge(getReleaseSummary = () => ({})) {
     return {
       buildReleaseSnapshot() {
-        const count = getReleaseCount();
+        const releaseTool = normalizeHostedReleaseSummary(getReleaseSummary());
+        const count = getReleaseCount(releaseTool);
         return {
           count,
+          snapshotFingerprint: buildReleaseSnapshotFingerprint(releaseTool),
           updateAvailable: count > 0,
         };
       },
       getReleaseCount,
     };
 
-    function getReleaseCount() {
-      const releaseState = releaseManager.buildViewState?.() || {};
-      if (releaseState.updateAvailable) {
-        return 1;
+    function getReleaseCount(releaseTool = normalizeHostedReleaseSummary(getReleaseSummary())) {
+      return Math.max(0, Number(releaseTool.count) || 0);
+    }
+
+    function buildReleaseSnapshotFingerprint(releaseTool = {}) {
+      const explicitFingerprint = normalizeText(releaseTool?.snapshotFingerprint);
+      if (explicitFingerprint) {
+        return explicitFingerprint;
       }
-      const snapshotCount = Number(releaseState.count) || 0;
-      return snapshotCount > 0 ? snapshotCount : 0;
+      return String(getReleaseCount(releaseTool));
     }
   }
 
@@ -336,6 +374,22 @@
     return {
       count: Math.max(0, Number(normalizedMeetingTool.count) || 0),
       snapshotFingerprint: normalizeText(normalizedMeetingTool.snapshotFingerprint),
+    };
+  }
+
+  function buildReleaseSummaryKey(releaseTool) {
+    const normalizedReleaseTool = normalizeHostedReleaseSummary(releaseTool);
+    return JSON.stringify({
+      count: normalizedReleaseTool.count,
+      snapshotFingerprint: normalizedReleaseTool.snapshotFingerprint,
+    });
+  }
+
+  function normalizeHostedReleaseSummary(releaseTool) {
+    const normalizedReleaseTool = releaseTool && typeof releaseTool === "object" ? releaseTool : {};
+    return {
+      count: Math.max(0, Number(normalizedReleaseTool.count) || 0),
+      snapshotFingerprint: normalizeText(normalizedReleaseTool.snapshotFingerprint),
     };
   }
 

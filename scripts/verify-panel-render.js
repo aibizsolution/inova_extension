@@ -28,6 +28,7 @@ async function main() {
   verifyHostedStoreSearchDebounceContract();
   verifyBookmarkJumpAccessibilityContract();
   verifyHostedPromptReviewFallbackContract();
+  verifyHostedReleaseSummarySyncContract();
   await verifyHostedReleaseLocalDownloadUrls();
   await verifyPageAdapterContract();
   console.log("[verify-panel-render] Hosted panel host contract passed");
@@ -374,6 +375,34 @@ function verifyHostedPromptReviewFallbackContract() {
   assert(
     hostedPanelSource.includes("if (snapshotHasActiveState && !hostedHasActiveState) {"),
     "hosted panel should prefer snapshot review results when hosted review state has gone stale"
+  );
+}
+
+function verifyHostedReleaseSummarySyncContract() {
+  const hostedPanelSource = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "index.js"),
+    "utf8"
+  );
+  const releaseControllerSource = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "release-controller.js"),
+    "utf8"
+  );
+  const shellRequestSource = fs.readFileSync(
+    path.join(root, "content", "panel-hosted-shell-request.js"),
+    "utf8"
+  );
+
+  assert(
+    hostedPanelSource.includes('action: "release-summary-sync"'),
+    "hosted release controller should be able to sync a compact release summary back to the top panel"
+  );
+  assert(
+    releaseControllerSource.includes("await emitTopPanelSummary();"),
+    "hosted release controller should emit a compact top-panel summary after release checks settle"
+  );
+  assert(
+    shellRequestSource.includes('if (action === "release-summary-sync") {'),
+    "top panel bridge should accept hosted release summary sync requests through the shell helper"
   );
 }
 

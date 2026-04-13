@@ -106,7 +106,7 @@
 
   async function getReleaseInfo() {
     const current = await getState();
-    return namespace.releaseInfo.mergeReleaseInfo(current.releaseInfo);
+    return normalizeReleaseInfoState(current.releaseInfo);
   }
 
   async function getMeetingHub() {
@@ -136,7 +136,7 @@
   }
 
   async function setReleaseInfo(nextReleaseInfo) {
-    const releaseInfo = namespace.releaseInfo.mergeReleaseInfo(nextReleaseInfo);
+    const releaseInfo = normalizeReleaseInfoState(nextReleaseInfo);
     await setLocal({ releaseInfo });
     return releaseInfo;
   }
@@ -462,6 +462,16 @@
       nextPartial[actualStorageKey] = cloneValue(value);
     }
     return nextPartial;
+  }
+
+  function normalizeReleaseInfoState(nextReleaseInfo) {
+    if (namespace.releaseInfo?.mergeReleaseInfo) {
+      return namespace.releaseInfo.mergeReleaseInfo(nextReleaseInfo);
+    }
+    if (nextReleaseInfo && typeof nextReleaseInfo === "object") {
+      return cloneValue(nextReleaseInfo);
+    }
+    return cloneValue(defaults.releaseInfo || {});
   }
 
   function mergeProductLaneMigrationState(nextState) {

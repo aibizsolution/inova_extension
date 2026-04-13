@@ -202,10 +202,10 @@ const featureDocContracts = [
     feature: "release",
     doc: path.join("content", "features", "release", "AGENTS.md"),
     expectedFiles: [
-      "content/release-manager.js",
       "hosting/extension-v2/panel/release-controller.js",
       "hosting/extension-v2/panel/release-view.js",
-      "shared/release-info.js",
+      "backup/legacy-panel/release-manager.js",
+      "backup/legacy-panel/shared/release-info.js",
     ],
   },
 ];
