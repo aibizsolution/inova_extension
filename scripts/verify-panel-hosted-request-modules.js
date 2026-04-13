@@ -7,6 +7,7 @@ const path = require("path");
 const root = path.resolve(__dirname, "..");
 
 function main() {
+  verifyHostedBridgeRequestModuleContract();
   verifyHostedMeetingRequestModuleContract();
   verifyHostedPromptRequestModuleContract();
   verifyHostedRuntimeRequestModuleContract();
@@ -15,12 +16,40 @@ function main() {
   console.log("[verify-panel-hosted-request-modules] Hosted panel request helper contract passed");
 }
 
-function verifyHostedMeetingRequestModuleContract() {
+function verifyHostedBridgeRequestModuleContract() {
   const manifest = JSON.parse(
     fs.readFileSync(path.join(root, "manifest.json"), "utf8")
   );
   const topPanelSource = fs.readFileSync(
     path.join(root, "content", "panel.js"),
+    "utf8"
+  );
+
+  const mainContentScript = manifest.content_scripts.find((entry) =>
+    Array.isArray(entry?.matches) && entry.matches.includes("https://inova.incross.com/*")
+  );
+  const scriptList = Array.isArray(mainContentScript?.js) ? mainContentScript.js : [];
+  const helperIndex = scriptList.indexOf("content/panel-hosted-bridge-request.js");
+  const panelIndex = scriptList.indexOf("content/panel.js");
+
+  assert(helperIndex !== -1, "manifest should load the hosted bridge request helper");
+  assert(panelIndex !== -1 && helperIndex < panelIndex, "manifest should load the bridge request helper before content/panel.js");
+  assert(
+    topPanelSource.includes("namespace.panelHostedBridgeRequest?.handle?."),
+    "content/panel.js should delegate bridge-domain request routing to the dedicated helper module"
+  );
+  assert(
+    !topPanelSource.includes("function handleBridgeRequest("),
+    "content/panel.js should not keep inline bridge request routing once the bridge helper exists"
+  );
+}
+
+function verifyHostedMeetingRequestModuleContract() {
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(root, "manifest.json"), "utf8")
+  );
+  const bridgeRequestSource = fs.readFileSync(
+    path.join(root, "content", "panel-hosted-bridge-request.js"),
     "utf8"
   );
 
@@ -34,8 +63,8 @@ function verifyHostedMeetingRequestModuleContract() {
   assert(helperIndex !== -1, "manifest should load the hosted meeting request helper");
   assert(panelIndex !== -1 && helperIndex < panelIndex, "manifest should load the meeting request helper before content/panel.js");
   assert(
-    topPanelSource.includes("namespace.panelHostedMeetingRequest?.handle?."),
-    "content/panel.js should delegate meeting-specific hosted requests to the dedicated helper module"
+    bridgeRequestSource.includes("namespace.panelHostedMeetingRequest?.handle?."),
+    "content bridge routing should delegate meeting-specific hosted requests to the dedicated helper module"
   );
 }
 
@@ -43,8 +72,8 @@ function verifyHostedPromptRequestModuleContract() {
   const manifest = JSON.parse(
     fs.readFileSync(path.join(root, "manifest.json"), "utf8")
   );
-  const topPanelSource = fs.readFileSync(
-    path.join(root, "content", "panel.js"),
+  const bridgeRequestSource = fs.readFileSync(
+    path.join(root, "content", "panel-hosted-bridge-request.js"),
     "utf8"
   );
 
@@ -58,32 +87,32 @@ function verifyHostedPromptRequestModuleContract() {
   assert(helperIndex !== -1, "manifest should load the hosted prompt request helper");
   assert(panelIndex !== -1 && helperIndex < panelIndex, "manifest should load the prompt request helper before content/panel.js");
   assert(
-    topPanelSource.includes("namespace.panelHostedPromptRequest?.handle?."),
-    "content/panel.js should delegate prompt-specific hosted requests to the dedicated helper module"
+    bridgeRequestSource.includes("namespace.panelHostedPromptRequest?.handle?."),
+    "content bridge routing should delegate prompt-specific hosted requests to the dedicated helper module"
   );
   assert(
-    !topPanelSource.includes('if (action === "prompt-action")'),
-    "content/panel.js should not keep inline prompt-action hosted request handling once the prompt helper exists"
+    !bridgeRequestSource.includes('if (action === "prompt-action")'),
+    "content bridge routing should not keep inline prompt-action hosted request handling once the prompt helper exists"
   );
   assert(
-    !topPanelSource.includes('if (action === "prompt-draft-change")'),
-    "content/panel.js should not keep inline prompt-draft-change hosted request handling once the prompt helper exists"
+    !bridgeRequestSource.includes('if (action === "prompt-draft-change")'),
+    "content bridge routing should not keep inline prompt-draft-change hosted request handling once the prompt helper exists"
   );
   assert(
-    !topPanelSource.includes('if (action === "prompt-tab-select")'),
-    "content/panel.js should not keep inline prompt-tab-select hosted request handling once the prompt helper exists"
+    !bridgeRequestSource.includes('if (action === "prompt-tab-select")'),
+    "content bridge routing should not keep inline prompt-tab-select hosted request handling once the prompt helper exists"
   );
   assert(
-    !topPanelSource.includes('if (action === "store-action")'),
-    "content/panel.js should not keep inline store-action hosted request handling once the prompt helper exists"
+    !bridgeRequestSource.includes('if (action === "store-action")'),
+    "content bridge routing should not keep inline store-action hosted request handling once the prompt helper exists"
   );
   assert(
-    !topPanelSource.includes('if (action === "import-file")'),
-    "content/panel.js should not keep inline import-file hosted request handling once the prompt helper exists"
+    !bridgeRequestSource.includes('if (action === "import-file")'),
+    "content bridge routing should not keep inline import-file hosted request handling once the prompt helper exists"
   );
   assert(
-    !topPanelSource.includes('if (action === "move-prompt")'),
-    "content/panel.js should not keep inline move-prompt hosted request handling once the prompt helper exists"
+    !bridgeRequestSource.includes('if (action === "move-prompt")'),
+    "content bridge routing should not keep inline move-prompt hosted request handling once the prompt helper exists"
   );
 }
 
@@ -91,8 +120,8 @@ function verifyHostedRuntimeRequestModuleContract() {
   const manifest = JSON.parse(
     fs.readFileSync(path.join(root, "manifest.json"), "utf8")
   );
-  const topPanelSource = fs.readFileSync(
-    path.join(root, "content", "panel.js"),
+  const bridgeRequestSource = fs.readFileSync(
+    path.join(root, "content", "panel-hosted-bridge-request.js"),
     "utf8"
   );
 
@@ -106,12 +135,8 @@ function verifyHostedRuntimeRequestModuleContract() {
   assert(helperIndex !== -1, "manifest should load the hosted runtime request helper");
   assert(panelIndex !== -1 && helperIndex < panelIndex, "manifest should load the runtime request helper before content/panel.js");
   assert(
-    topPanelSource.includes("namespace.panelHostedRuntimeRequest?.handle?."),
-    "content/panel.js should delegate runtime broker requests to the dedicated helper module"
-  );
-  assert(
-    !topPanelSource.includes("function handleRuntimeRequest("),
-    "content/panel.js should not keep inline runtime broker handling once the runtime helper exists"
+    bridgeRequestSource.includes("namespace.panelHostedRuntimeRequest?.handle?."),
+    "content bridge routing should delegate runtime broker requests to the dedicated helper module"
   );
 }
 
@@ -119,8 +144,8 @@ function verifyHostedPageRequestModuleContract() {
   const manifest = JSON.parse(
     fs.readFileSync(path.join(root, "manifest.json"), "utf8")
   );
-  const topPanelSource = fs.readFileSync(
-    path.join(root, "content", "panel.js"),
+  const bridgeRequestSource = fs.readFileSync(
+    path.join(root, "content", "panel-hosted-bridge-request.js"),
     "utf8"
   );
 
@@ -134,20 +159,8 @@ function verifyHostedPageRequestModuleContract() {
   assert(helperIndex !== -1, "manifest should load the hosted page request helper");
   assert(panelIndex !== -1 && helperIndex < panelIndex, "manifest should load the page request helper before content/panel.js");
   assert(
-    topPanelSource.includes("namespace.panelHostedPageRequest?.handle?."),
-    "content/panel.js should delegate page adapter requests to the dedicated helper module"
-  );
-  assert(
-    !topPanelSource.includes("function copyDebugLog("),
-    "content/panel.js should not keep page debug copy helpers once the page request helper owns them"
-  );
-  assert(
-    !topPanelSource.includes("function buildConversationSnapshot("),
-    "content/panel.js should not keep conversation snapshot builders once the page request helper owns them"
-  );
-  assert(
-    !topPanelSource.includes("function buildDebugState("),
-    "content/panel.js should not keep debug state builders once the page request helper owns them"
+    bridgeRequestSource.includes("namespace.panelHostedPageRequest?.handle?."),
+    "content bridge routing should delegate page adapter requests to the dedicated helper module"
   );
   [
     'if (action === "copy-text")',
@@ -161,8 +174,8 @@ function verifyHostedPageRequestModuleContract() {
     'if (action === "get-debug-state")',
     'if (action === "set-debug-enabled")',
   ].forEach((pattern) => assert(
-    !topPanelSource.includes(pattern),
-    `content/panel.js should not keep inline page adapter handling for ${pattern}`
+    !bridgeRequestSource.includes(pattern),
+    `content bridge routing should not keep inline page adapter handling for ${pattern}`
   ));
 }
 
@@ -170,8 +183,8 @@ function verifyHostedShellRequestModuleContract() {
   const manifest = JSON.parse(
     fs.readFileSync(path.join(root, "manifest.json"), "utf8")
   );
-  const topPanelSource = fs.readFileSync(
-    path.join(root, "content", "panel.js"),
+  const bridgeRequestSource = fs.readFileSync(
+    path.join(root, "content", "panel-hosted-bridge-request.js"),
     "utf8"
   );
 
@@ -185,8 +198,8 @@ function verifyHostedShellRequestModuleContract() {
   assert(helperIndex !== -1, "manifest should load the hosted shell request helper");
   assert(panelIndex !== -1 && helperIndex < panelIndex, "manifest should load the shell request helper before content/panel.js");
   assert(
-    topPanelSource.includes("namespace.panelHostedShellRequest?.handle?."),
-    "content/panel.js should delegate shell-level hosted requests to the dedicated helper module"
+    bridgeRequestSource.includes("namespace.panelHostedShellRequest?.handle?."),
+    "content bridge routing should delegate shell-level hosted requests to the dedicated helper module"
   );
   [
     'if (action === "toggle-panel")',
@@ -198,8 +211,8 @@ function verifyHostedShellRequestModuleContract() {
     'if (action === "bookmark-jump")',
     'if (action === "release-action")',
   ].forEach((pattern) => assert(
-    !topPanelSource.includes(pattern),
-    `content/panel.js should not keep inline hosted shell handling for ${pattern}`
+    !bridgeRequestSource.includes(pattern),
+    `content bridge routing should not keep inline hosted shell handling for ${pattern}`
   ));
 }
 

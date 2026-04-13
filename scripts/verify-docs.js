@@ -306,7 +306,7 @@ const codeChecks = [
     patterns: [
       /inova-hosted-panel-frame/,
       /panelAppUrl/,
-      /panelHostedRuntimeRequest\?\.handle\?\./,
+      /panelHostedBridgeRequest\?\.handle\?\./,
     ],
   },
   {

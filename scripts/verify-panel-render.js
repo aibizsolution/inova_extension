@@ -711,6 +711,7 @@ function createHarness() {
   };
 
   [
+    path.join("content", "panel-hosted-bridge-request.js"),
     path.join("content", "panel-hosted-meeting-request.js"),
     path.join("content", "panel-hosted-prompt-request.js"),
     path.join("content", "panel-hosted-runtime-request.js"),

@@ -121,7 +121,14 @@
           });
         }
         try {
-          const result = await handleBridgeRequest(host, request);
+          const result = (await namespace.panelHostedBridgeRequest?.handle?.(request, {
+            callbacks: host.__callbacks || {},
+            logConsoleTrace,
+            normalizeText,
+          })) || {
+            handled: false,
+            result: null,
+          };
           if (!isTransportTrace) {
             logConsoleTrace("panel", "21.top.panel.bridge.request.completed", {
               action: normalizeText(request?.payload?.action),
@@ -293,70 +300,6 @@
     }
     host.__panelLocalAssetVersion = normalizeText(host.__panelLocalAssetVersion) || String(Date.now());
     return appendQueryParam(normalizedPanelUrl, "v", host.__panelLocalAssetVersion);
-  }
-
-  async function handleBridgeRequest(host, request) {
-    const domain = normalizeText(request?.domain);
-    if (domain === "runtime") {
-      const handledRuntimeRequest = await namespace.panelHostedRuntimeRequest?.handle?.(request?.payload, {
-        normalizeText,
-      });
-      return {
-        handled: handledRuntimeRequest?.handled !== false,
-        result: handledRuntimeRequest?.result ?? null,
-      };
-    }
-    if (domain === "page") {
-      return {
-        handled: true,
-        result: await handlePageRequest(request?.payload),
-      };
-    }
-    if (domain === "panel") {
-      return {
-        handled: true,
-        result: await handlePanelRequest(host, request?.payload),
-      };
-    }
-    return {
-      handled: false,
-      result: null,
-    };
-  }
-
-  async function handlePageRequest(payload) {
-    const handledPageRequest = await namespace.panelHostedPageRequest?.handle?.(payload, {
-      logConsoleTrace,
-    });
-    if (handledPageRequest?.handled) {
-      return handledPageRequest.result;
-    }
-    throw new Error("지원하지 않는 page adapter 요청이에요.");
-  }
-
-  async function handlePanelRequest(host, payload) {
-    const callbacks = host.__callbacks || {};
-    const action = normalizeText(payload?.action);
-    const handledMeetingRequest = await namespace.panelHostedMeetingRequest?.handle?.(action, payload, callbacks, {
-      logConsoleTrace,
-      normalizeText,
-    });
-    if (handledMeetingRequest?.handled) {
-      return handledMeetingRequest.result;
-    }
-    const handledPromptRequest = await namespace.panelHostedPromptRequest?.handle?.(action, payload, callbacks, {
-      normalizeText,
-    });
-    if (handledPromptRequest?.handled) {
-      return handledPromptRequest.result;
-    }
-    const handledShellRequest = await namespace.panelHostedShellRequest?.handle?.(action, payload, callbacks, {
-      normalizeText,
-    });
-    if (handledShellRequest?.handled) {
-      return handledShellRequest.result;
-    }
-    throw new Error("지원하지 않는 hosted panel action이에요.");
   }
 
   function buildBridgeSnapshot(state, host) {

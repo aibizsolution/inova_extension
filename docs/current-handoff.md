@@ -42,6 +42,7 @@ Short version:
 - `content/panel.js` keeps shrinking toward generic host + broker by delegating shell-level hosted requests to helper modules
 - `content/panel.js` now delegates page adapter requests to a helper too, leaving runtime/page brokering as its main remaining responsibility
 - `content/panel.js` now delegates runtime broker requests too, leaving mostly host/bridge routing responsibilities
+- `content/panel.js` now delegates bridge-domain request routing too, leaving the file close to a pure iframe host + bridge endpoint
 - meeting open traces split correctly:
   - original `i-Nova` tab now logs only launch request/dispatch/completion
   - new hosted workspace tab owns workspace bootstrap/ready logs
