@@ -9,7 +9,8 @@
 
 ## 먼저 볼 파일
 - `content/features/prompt-store/store-manager.js`
-- `content/features/prompt-store/store-view.js`
+- `hosting/extension-v2/panel/prompt-store-controller.js`
+- `hosting/extension-v2/panel/store-view.js`
 - `content/features/prompt-store/prompt-realtime-manager.js`
 - `shared/prompt-store.js`
 
@@ -20,10 +21,11 @@
 - `content/prompt-hub-panel.js` - prompt/store 상호작용을 묶는 prompt tool shell
 - `content/prompt-hub-controller.js` - prompt 탭 전이와 액션 라우팅을 묶는 prompt tool shell
 - `content/prompt-hub-runtime.js` - prompt manager/runtime wiring을 묶는 prompt tool shell
-- `content/prompt-hub-view.js` - `prompt-store` 단독 view가 아니라 prompt tool shell
-- `hosting/extension/panel/store-view.js` - hosted panel store view
-- `hosting/extension/panel/prompt-hub-view.js` - hosted panel prompt tool shell view
-- `hosting/extension/panel/prompt-hub-panel.js` - hosted panel prompt/store interaction helper
+- `hosting/extension-v2/panel/prompt-store-controller.js` - hosted panel store state/action ownership
+- `hosting/extension-v2/panel/store-view.js` - hosted panel store view
+- `hosting/extension-v2/panel/prompt-tool-view.js` - hosted panel prompt tool shell view
+- `backup/legacy-panel/store-view.js` - inactive legacy content view reference
+- `backup/legacy-panel/prompt-hub-view.js` - inactive legacy prompt tool shell view reference
 
 ## 관련 functions 경로
 - `functions/features/prompt-store/store-service.js`

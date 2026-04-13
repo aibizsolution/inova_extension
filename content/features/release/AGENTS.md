@@ -9,12 +9,16 @@
 
 ## 먼저 볼 파일
 - `content/release-manager.js`
-- `content/release-view.js`
+- `hosting/extension-v2/panel/release-controller.js`
+- `hosting/extension-v2/panel/release-view.js`
 - `shared/release-info.js`
 
 ## 관련 프론트 경로
 - `background/service-worker.js`
+- `hosting/extension-v2/panel/release-controller.js`
+- `hosting/extension-v2/panel/release-view.js`
 - `hosting/extension/panel/release-view.js`
+- `backup/legacy-panel/release-view.js` - inactive legacy content view reference
 - `releases/release-notes.json`
 
 ## 관련 functions 경로

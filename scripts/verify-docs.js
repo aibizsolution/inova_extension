@@ -156,7 +156,8 @@ const featureDocContracts = [
     doc: path.join("content", "features", "prompt-library", "AGENTS.md"),
     expectedFiles: [
       "content/features/prompt-library/prompt-manager.js",
-      "content/features/prompt-library/prompt-view.js",
+      "hosting/extension-v2/panel/prompt-library-controller.js",
+      "hosting/extension-v2/panel/prompt-view.js",
       "content/features/prompt-library/files.js",
       "shared/prompt-library.js",
     ],
@@ -166,7 +167,8 @@ const featureDocContracts = [
     doc: path.join("content", "features", "prompt-store", "AGENTS.md"),
     expectedFiles: [
       "content/features/prompt-store/store-manager.js",
-      "content/features/prompt-store/store-view.js",
+      "hosting/extension-v2/panel/prompt-store-controller.js",
+      "hosting/extension-v2/panel/store-view.js",
       "content/features/prompt-store/prompt-realtime-manager.js",
       "shared/prompt-store.js",
     ],
@@ -176,7 +178,8 @@ const featureDocContracts = [
     doc: path.join("content", "features", "prompt-review", "AGENTS.md"),
     expectedFiles: [
       "content/features/prompt-review/prompt-review-manager.js",
-      "content/features/prompt-review/prompt-review-view.js",
+      "hosting/extension-v2/panel/prompt-review-controller.js",
+      "hosting/extension-v2/panel/prompt-review-view.js",
       "content/features/prompt-review/composer-review-float.js",
     ],
   },
@@ -196,7 +199,8 @@ const featureDocContracts = [
     doc: path.join("content", "features", "release", "AGENTS.md"),
     expectedFiles: [
       "content/release-manager.js",
-      "content/release-view.js",
+      "hosting/extension-v2/panel/release-controller.js",
+      "hosting/extension-v2/panel/release-view.js",
       "shared/release-info.js",
     ],
   },

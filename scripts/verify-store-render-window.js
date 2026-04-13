@@ -93,7 +93,7 @@ function createHarness() {
   loadScript("shared/session.js", context);
   loadScript("shared/prompt-store.js", context);
   loadScript("content/features/prompt-store/store-manager.js", context);
-  loadScript("content/features/prompt-store/store-view.js", context);
+  loadScript("backup/legacy-panel/store-view.js", context);
 
   context.InovaBookmarks.panelDebug = { log() {} };
   context.InovaBookmarks.providerIdentity = {

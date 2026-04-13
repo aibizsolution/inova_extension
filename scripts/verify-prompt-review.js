@@ -216,7 +216,7 @@ function createPromptReviewHarness(options = {}) {
   };
 
   loadScript("content/features/prompt-review/prompt-review-manager.js", context);
-  loadScript("content/features/prompt-review/prompt-review-view.js", context);
+  loadScript("backup/legacy-panel/prompt-review-view.js", context);
 
   const state = {
     promptReview: {

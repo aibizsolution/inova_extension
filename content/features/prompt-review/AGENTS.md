@@ -9,7 +9,8 @@
 
 ## 먼저 볼 파일
 - `content/features/prompt-review/prompt-review-manager.js`
-- `content/features/prompt-review/prompt-review-view.js`
+- `hosting/extension-v2/panel/prompt-review-controller.js`
+- `hosting/extension-v2/panel/prompt-review-view.js`
 - `content/features/prompt-review/composer-review-float.js`
 
 ## 관련 프론트 경로
@@ -20,9 +21,11 @@
 - `content/prompt-hub-panel.js` - review 탭 선택과 prompt shell 상호작용을 묶는 prompt tool shell
 - `content/prompt-hub-controller.js` - review 관련 action routing과 prompt 탭 전이를 묶는 prompt tool shell
 - `content/prompt-hub-runtime.js` - prompt manager/runtime wiring을 묶는 prompt tool shell
-- `content/prompt-hub-view.js` - review body를 감싸는 prompt tool shell
-- `hosting/extension/panel/prompt-review-view.js` - hosted panel review view
-- `hosting/extension/panel/prompt-hub-view.js` - hosted panel prompt tool shell view
+- `hosting/extension-v2/panel/prompt-review-controller.js` - hosted panel review state/action ownership
+- `hosting/extension-v2/panel/prompt-review-view.js` - hosted panel review view
+- `hosting/extension-v2/panel/prompt-tool-view.js` - hosted panel prompt tool shell view
+- `backup/legacy-panel/prompt-review-view.js` - inactive legacy content view reference
+- `backup/legacy-panel/prompt-hub-view.js` - inactive legacy prompt tool shell view reference
 
 ## 관련 functions 경로
 - `functions/features/prompt-review/prompt-review-service.js`

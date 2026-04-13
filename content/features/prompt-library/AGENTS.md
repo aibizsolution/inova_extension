@@ -9,7 +9,8 @@
 
 ## 먼저 볼 파일
 - `content/features/prompt-library/prompt-manager.js`
-- `content/features/prompt-library/prompt-view.js`
+- `hosting/extension-v2/panel/prompt-library-controller.js`
+- `hosting/extension-v2/panel/prompt-view.js`
 - `content/features/prompt-library/files.js`
 - `shared/prompt-library.js`
 - `content/features/prompt-library/cloud-sync-manager.js`
@@ -21,10 +22,11 @@
 - `content/prompt-hub-panel.js` - prompt/store 상호작용을 묶는 prompt tool shell
 - `content/prompt-hub-controller.js` - prompt 탭 전이와 액션 라우팅을 묶는 prompt tool shell
 - `content/prompt-hub-runtime.js` - prompt manager/runtime wiring을 묶는 prompt tool shell
-- `content/prompt-hub-view.js` - `prompt-library` 단독 view가 아니라 prompt tool shell
-- `hosting/extension/panel/prompt-view.js` - hosted panel library view
-- `hosting/extension/panel/prompt-hub-view.js` - hosted panel prompt tool shell view
-- `hosting/extension/panel/prompt-hub-panel.js` - hosted panel prompt/store interaction helper
+- `hosting/extension-v2/panel/prompt-library-controller.js` - hosted panel library state/action ownership
+- `hosting/extension-v2/panel/prompt-view.js` - hosted panel library view
+- `hosting/extension-v2/panel/prompt-tool-view.js` - hosted panel prompt tool shell view
+- `backup/legacy-panel/prompt-view.js` - inactive legacy content view reference
+- `backup/legacy-panel/prompt-hub-view.js` - inactive legacy prompt tool shell view reference
 
 ## 관련 functions 경로
 - `functions/features/prompt-library/register.js`
