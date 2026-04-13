@@ -186,7 +186,7 @@ const featureDocContracts = [
     expectedFiles: [
       "backup/legacy-panel/meeting-manager.js",
       "backup/legacy-panel/panel-meeting-controller.js",
-      "content/meeting-view.js",
+      "backup/legacy-panel/meeting-view.js",
       "hosting/meeting/index.js",
       "popup/index.js",
     ],

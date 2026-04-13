@@ -8,6 +8,7 @@
 - `backup/legacy-panel/panel-action-controller.js`
 - `backup/legacy-panel/panel-meeting-controller.js`
 - `backup/legacy-panel/meeting-manager.js`
+- `backup/legacy-panel/meeting-view.js`
 
 기준은 아래와 같다.
 

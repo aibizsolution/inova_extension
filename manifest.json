@@ -65,7 +65,6 @@
         "content/features/prompt-review/prompt-review-view.js",
         "content/bookmark-view.js",
         "hosting/meeting/debug-console.js",
-        "content/meeting-view.js",
         "content/features/prompt-library/prompt-view.js",
         "content/features/prompt-store/store-view.js",
         "content/prompt-hub-view.js",

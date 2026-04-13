@@ -17,7 +17,7 @@
 - `hosting/meeting/index.js`
 - `popup/index.js`
 - `backup/legacy-panel/meeting-manager.js`는 현재 `1.0.0` 활성 bundle이 아니라 legacy reference/source로 본다. pure panel v2 migration에서는 이 파일을 먼저 손대지 않는다.
-- `content/meeting-view.js`도 같은 이유로 legacy reference/source로만 본다.
+- `backup/legacy-panel/meeting-view.js`도 같은 이유로 legacy reference/source로만 본다.
 - `backup/legacy-panel/meeting-manager.js`는 현재 `ensurePanelAuth`, `ensureBridgePort`/`handleBridgeMessage`/`disconnectRealtime`, `fallbackRefresh`/`warmRefresh`/`mergeMeetingHub` 세 workflow로 읽는다. 파일 길이만으로 바로 분리하지 말고, bridge lifecycle에 실제 bug pressure가 반복될 때만 다음 split 후보로 올린다.
 
 ## 관련 프론트 경로

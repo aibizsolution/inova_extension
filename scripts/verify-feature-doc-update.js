@@ -69,7 +69,7 @@ const FEATURE_DOC_RULES = [
     patterns: [
       /^backup\/legacy-panel\/meeting-manager\.js$/,
       /^backup\/legacy-panel\/panel-meeting-controller\.js$/,
-      /^content\/meeting-view\.js$/,
+      /^backup\/legacy-panel\/meeting-view\.js$/,
       /^hosting\/meeting\//,
       /^functions\/features\/meeting\//,
       /^shared\/meeting-bridge\.js$/,
