@@ -25,6 +25,7 @@
     core: { label: "핵심 구조 (PRO)", order: 10 },
     refinement: { label: "정교화 요소 (MPT)", order: 20 },
   };
+  const REVIEW_RUNTIME_TIMEOUT_MS = 30000;
 
   function create(state, hooks) {
     let copyStateTimer = 0;
@@ -310,7 +311,33 @@
         reason: namespace.session.normalizeText(type),
         target: readReviewRuntimeTarget(state),
       });
-      const response = await chrome.runtime.sendMessage({ type, ...(payload || {}) });
+      const response = await (async () => {
+        let timeoutId = 0;
+        try {
+          return await new Promise((resolve, reject) => {
+            timeoutId = global.setTimeout(() => reject(new Error("review-runtime-timeout")), REVIEW_RUNTIME_TIMEOUT_MS);
+            Promise.resolve(chrome.runtime.sendMessage({ type, ...(payload || {}) })).then(resolve, reject);
+          });
+        } catch (error) {
+          const errorCode = error instanceof Error && error.message === "review-runtime-timeout"
+            ? "review-runtime-timeout"
+            : namespace.session.normalizeText(error instanceof Error ? error.message : error) || "review-runtime-failed";
+          traceReviewFunctions("page.functions.review.error", {
+            error: errorCode,
+            message: "reviewInovaPrompt",
+            reason: `${Math.max(0, Date.now() - startedAt)}ms`,
+            target: readReviewRuntimeTarget(state),
+          });
+          throw new Error(
+            errorCode === "review-runtime-timeout"
+              ? "프롬프트 검토 응답이 지연되고 있어요. 잠시 후 다시 시도해 주세요."
+              : "프롬프트 평가를 처리하지 못했어요.",
+            { cause: error }
+          );
+        } finally {
+          global.clearTimeout(timeoutId);
+        }
+      })();
       if (!response?.ok) {
         traceReviewFunctions("page.functions.review.error", {
           error: namespace.session.normalizeText(response?.error || "") || "review-runtime-failed",

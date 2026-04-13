@@ -10,6 +10,7 @@ const root = path.resolve(__dirname, "..");
 async function main() {
   verifyLegacyReviewContract();
   verifyPromptTellingV2Contract();
+  verifyHostedPromptReviewContract();
   await verifyLegacyClientCompatibility();
   await verifyPromptTellingV2ClientOptIn();
   console.log("[verify-prompt-review] Prompt review contract passed");
@@ -150,6 +151,84 @@ async function verifyPromptTellingV2ClientOptIn() {
   assert.equal(html.includes("핵심 구조 (PRO)"), true);
   assert.equal(html.includes("정교화 요소 (MPT)"), true);
   assert.equal(html.includes("PRO"), true);
+}
+
+function verifyHostedPromptReviewContract() {
+  const hostedControllerSource = fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "prompt-review-controller.js"), "utf8");
+  const hostedIndexSource = fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "index.js"), "utf8");
+  const topPanelSource = fs.readFileSync(path.join(root, "content", "panel.js"), "utf8");
+  const promptReviewManagerSource = fs.readFileSync(path.join(root, "content", "features", "prompt-review", "prompt-review-manager.js"), "utf8");
+
+  assert.equal(
+    hostedControllerSource.includes('action: "copy-text"'),
+    true,
+    "hosted prompt review copy should delegate through top page copy-text"
+  );
+  assert.equal(
+    hostedControllerSource.includes('traceReview("54.hosted.review.request.start"'),
+    true,
+    "hosted prompt review should trace review request start"
+  );
+  assert.equal(
+    hostedControllerSource.includes('traceReview("58.hosted.review.copy.start"'),
+    true,
+    "hosted prompt review should trace copy start"
+  );
+  assert.equal(
+    hostedControllerSource.includes("hydrateFromSnapshotReviewState(panelState?.promptTool?.review)"),
+    true,
+    "hosted prompt review should hydrate snapshot review state before handling actions"
+  );
+  assert.equal(
+    hostedControllerSource.includes('traceReview("52.hosted.review.snapshot.hydrated"'),
+    true,
+    "hosted prompt review should trace snapshot hydration"
+  );
+  assert.equal(
+    hostedControllerSource.includes("snapshotResolvedWhileHostedPending"),
+    true,
+    "hosted prompt review should hydrate external snapshot completion over pending hosted state"
+  );
+  assert.equal(
+    hostedIndexSource.includes("traceReview: traceReviewFlow"),
+    true,
+    "hosted panel should wire review tracing into prompt review controller"
+  );
+  assert.equal(
+    topPanelSource.includes('"hosted.review.request.start"'),
+    true,
+    "top panel should keep hosted review request traces visible"
+  );
+  assert.equal(
+    topPanelSource.includes('"page.functions.review.start"'),
+    true,
+    "top panel should keep content review function traces visible"
+  );
+  assert.equal(
+    topPanelSource.includes('"prompt.review.request.start"'),
+    true,
+    "top panel should keep content review request traces visible"
+  );
+  assert.equal(
+    topPanelSource.includes("state?.promptTool?.review?.open || state?.promptReview?.open"),
+    true,
+    "top panel snapshot trace should report prompt tool review state"
+  );
+  assert.equal(
+    promptReviewManagerSource.includes("REVIEW_RUNTIME_TIMEOUT_MS = 30000"),
+    true,
+    "content prompt review runtime should define a review timeout"
+  );
+  assert.equal(
+    promptReviewManagerSource.includes('new Error("review-runtime-timeout")'),
+    true,
+    "content prompt review runtime should surface explicit timeout errors"
+  );
+  assert.equal(
+    promptReviewManagerSource.includes("프롬프트 검토 응답이 지연되고 있어요. 잠시 후 다시 시도해 주세요."),
+    true,
+    "content prompt review runtime timeout should show a user-facing error"
+  );
 }
 
 function createPromptReviewHarness(options = {}) {

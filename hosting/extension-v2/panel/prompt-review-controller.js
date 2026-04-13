@@ -36,6 +36,9 @@
     const getRuntimeVersion = typeof options.getRuntimeVersion === "function"
       ? options.getRuntimeVersion
       : () => "";
+    const traceReview = typeof options.traceReview === "function"
+      ? options.traceReview
+      : () => {};
     const invokePage = typeof options.invokePage === "function"
       ? options.invokePage
       : async () => ({});
@@ -71,6 +74,7 @@
     };
 
     function syncPanelState(panelState) {
+      hydrateFromSnapshotReviewState(panelState?.promptTool?.review);
       const activeTool = normalizeText(panelState?.activeTool);
       const activePromptTab = getActivePromptTab();
       if (activeTool === "prompts" && activePromptTab === "review" && state.open) {
@@ -127,6 +131,9 @@
     }
 
     async function activateReview() {
+      traceReview("50.hosted.review.action", {
+        action: "activate-review",
+      });
       await setActivePromptTab("review");
       const viewState = buildViewState();
       if (viewState.result && !viewState.stale && !viewState.error) {
@@ -137,7 +144,14 @@
     }
 
     async function reviewComposer() {
+      traceReview("50.hosted.review.action", {
+        action: "review-composer",
+      });
       if (state.pending) {
+        traceReview("51.hosted.review.request.skip", {
+          action: "review-composer",
+          reason: "pending",
+        });
         return;
       }
       const composerState = await refreshComposerState(true);
@@ -198,6 +212,10 @@
         reviewedText: "",
       });
       try {
+        traceReview("54.hosted.review.request.start", {
+          action: "review-composer",
+          reviewProfile: reviewProfile || "legacy-v1",
+        });
         const body = {
           prompt,
           providerIdentity,
@@ -226,6 +244,10 @@
           result,
           reviewedText: prompt,
         });
+        traceReview("55.hosted.review.request.success", {
+          action: "review-composer",
+          reviewProfile: reviewProfile || "legacy-v1",
+        });
       } catch (error) {
         if (requestId !== Number(state.requestId || 0)) {
           return;
@@ -240,17 +262,33 @@
           result: null,
           reviewedText: "",
         });
+        traceReview("55.hosted.review.request.error", {
+          action: "review-composer",
+          error: getErrorMessage(error),
+          reviewProfile: reviewProfile || "legacy-v1",
+        });
       }
     }
 
     async function applyReviewedPrompt() {
+      traceReview("50.hosted.review.action", {
+        action: "apply-reviewed-prompt",
+      });
       const viewState = buildViewState();
       if (viewState.pending) {
         updateState({ error: "프롬프트 검토가 끝난 뒤 다시 반영해 주세요." });
+        traceReview("57.hosted.review.apply.error", {
+          action: "apply-reviewed-prompt",
+          error: "pending",
+        });
         return;
       }
       if (viewState.stale) {
         updateState({ error: "입력창 내용이 바뀌어서 이전 보완안을 바로 반영할 수 없어요. 다시 평가해 주세요." });
+        traceReview("57.hosted.review.apply.error", {
+          action: "apply-reviewed-prompt",
+          error: "stale",
+        });
         return;
       }
       if (viewState.requiresPlaceholderConfirm && !viewState.placeholderConfirmation) {
@@ -258,14 +296,25 @@
           error: "",
           placeholderConfirmation: true,
         });
+        traceReview("57.hosted.review.apply.error", {
+          action: "apply-reviewed-prompt",
+          error: "placeholder-confirmation-required",
+        });
         return;
       }
 
       const refinedPrompt = String(viewState.result?.refinedPrompt || "").trim();
       if (!refinedPrompt) {
         updateState({ error: "반영할 보완 프롬프트가 없어요." });
+        traceReview("57.hosted.review.apply.error", {
+          action: "apply-reviewed-prompt",
+          error: "missing-refined-prompt",
+        });
         return;
       }
+      traceReview("56.hosted.review.apply.start", {
+        action: "apply-reviewed-prompt",
+      });
       const result = await invokePage({
         action: "apply-prompt-text",
         mode: "replace",
@@ -273,13 +322,23 @@
       });
       if (!result?.applied) {
         updateState({ error: "입력창에 보완 프롬프트를 반영하지 못했어요." });
+        traceReview("57.hosted.review.apply.error", {
+          action: "apply-reviewed-prompt",
+          error: "apply-failed",
+        });
         return;
       }
       updateState({ copyState: "idle", error: "", placeholderConfirmation: false });
+      traceReview("56.hosted.review.apply.success", {
+        action: "apply-reviewed-prompt",
+      });
       await refreshComposerState(true);
     }
 
     async function copyReviewedPrompt() {
+      traceReview("50.hosted.review.action", {
+        action: "copy-reviewed-prompt",
+      });
       const viewState = buildViewState();
       const promptText = String(viewState.result?.formattedPrompt || viewState.result?.refinedPrompt || "").trim();
       if (!promptText) {
@@ -287,18 +346,38 @@
           copyState: "failed",
           error: "복사할 보완 프롬프트가 없어요.",
         });
+        traceReview("58.hosted.review.copy.error", {
+          action: "copy-reviewed-prompt",
+          error: "missing-refined-prompt",
+        });
         return;
       }
       try {
-        await global.navigator.clipboard.writeText(promptText);
+        traceReview("58.hosted.review.copy.start", {
+          action: "copy-reviewed-prompt",
+        });
+        const result = await invokePage({
+          action: "copy-text",
+          text: promptText,
+        });
+        if (!result?.copied) {
+          throw new Error("copy-failed");
+        }
         updateState({
           copyState: "copied",
           error: "",
+        });
+        traceReview("58.hosted.review.copy.success", {
+          action: "copy-reviewed-prompt",
         });
       } catch {
         updateState({
           copyState: "failed",
           error: "보완 프롬프트를 복사하지 못했어요.",
+        });
+        traceReview("58.hosted.review.copy.error", {
+          action: "copy-reviewed-prompt",
+          error: "copy-failed",
         });
       }
       scheduleCopyStateReset();
@@ -320,6 +399,55 @@
     function updateState(patch) {
       Object.assign(state, patch || {});
       scheduleRender();
+    }
+
+    function hydrateFromSnapshotReviewState(reviewState) {
+      const snapshotState = reviewState && typeof reviewState === "object" ? reviewState : null;
+      if (!snapshotState) {
+        return;
+      }
+      const snapshotHasResult = Boolean(snapshotState.result);
+      const hostedHasResult = Boolean(state.result);
+      const snapshotPending = Boolean(snapshotState.pending);
+      const hostedPending = Boolean(state.pending);
+      const snapshotHasActiveState = Boolean(
+        snapshotState.open
+        || snapshotPending
+        || snapshotHasResult
+      );
+      const hostedHasActiveState = Boolean(
+        state.open
+        || hostedPending
+        || hostedHasResult
+      );
+      const snapshotResolvedWhileHostedPending = !snapshotPending
+        && hostedPending
+        && (snapshotHasResult || Boolean(snapshotState.error) || Boolean(snapshotState.open));
+      const shouldHydrate = snapshotHasActiveState && (
+        !hostedHasActiveState
+        || (snapshotPending && !hostedPending)
+        || (snapshotHasResult && (!hostedHasResult || hostedPending))
+        || snapshotResolvedWhileHostedPending
+      );
+      if (!shouldHydrate) {
+        return;
+      }
+      const composerText = normalizeText(state.composerState.text);
+      state.copyState = normalizeEnum(snapshotState.copyState, ["idle", "copied", "failed"], "idle");
+      state.error = normalizeText(snapshotState.error);
+      state.lastReviewedAt = normalizeText(snapshotState.lastReviewedAt);
+      state.open = Boolean(snapshotState.open);
+      state.pending = Boolean(snapshotState.pending);
+      state.placeholderConfirmation = Boolean(snapshotState.placeholderConfirmation);
+      state.result = snapshotState.result && typeof snapshotState.result === "object"
+        ? JSON.parse(JSON.stringify(snapshotState.result))
+        : null;
+      state.reviewedText = composerText;
+      traceReview("52.hosted.review.snapshot.hydrated", {
+        hasResult: Boolean(state.result),
+        open: state.open,
+        pending: state.pending,
+      });
     }
 
     function scheduleCopyStateReset() {

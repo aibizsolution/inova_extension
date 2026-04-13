@@ -319,7 +319,7 @@
       return false;
     }
     host.__lastBridgeSnapshotKey = snapshotKey;
-    logConsoleTrace("panel", "10.top.panel.snapshot.push", { activeTool: normalizeText(state?.activeTool), open: Boolean(state?.open), promptTab: normalizeText(state?.uiPreferences?.activePromptTab), reviewOpen: Boolean(state?.promptReview?.open), visible: Boolean(state?.visible) });
+    logConsoleTrace("panel", "10.top.panel.snapshot.push", { activeTool: normalizeText(state?.activeTool), open: Boolean(state?.open), promptTab: normalizeText(state?.promptTool?.activeTab || state?.uiPreferences?.activePromptTab), reviewOpen: Boolean(state?.promptTool?.review?.open || state?.promptReview?.open), visible: Boolean(state?.visible) });
     host.__bridge.updateSnapshot(snapshot);
     return true;
   }
@@ -545,7 +545,7 @@
     return true;
   }
 
-  function shouldAlwaysTraceStep(label) { return ["hosted.click.detected", "top.panel.bridge.attached", "top.panel.bridge.error", "top.panel.bridge.not-ready", "top.panel.bridge.ready", "top.panel.ensure.reuse", "top.panel.frame.error", "top.panel.frame.load", "top.panel.frame.src.set", "top.panel.handshake.timeout", "top.panel.host.created", "top.panel.snapshot.push"].includes(label); }
+  function shouldAlwaysTraceStep(label) { return ["hosted.click.detected", "hosted.review.action", "hosted.review.apply.error", "hosted.review.apply.start", "hosted.review.apply.success", "hosted.review.copy.error", "hosted.review.copy.start", "hosted.review.copy.success", "hosted.review.request.error", "hosted.review.request.skip", "hosted.review.request.start", "hosted.review.request.success", "page.functions.review.error", "page.functions.review.start", "page.functions.review.success", "prompt.review.request.error", "prompt.review.request.start", "prompt.review.request.success", "top.panel.bridge.attached", "top.panel.bridge.error", "top.panel.bridge.not-ready", "top.panel.bridge.ready", "top.panel.ensure.reuse", "top.panel.frame.error", "top.panel.frame.load", "top.panel.frame.src.set", "top.panel.handshake.timeout", "top.panel.host.created", "top.panel.snapshot.push"].includes(label); }
 
   function shouldSkipTraceStep(label, payload) {
     const quietLabels = new Set(["hosted.listeners.bound", "hosted.message.received", "hosted.ready.ping.fire", "hosted.ready.ping.scheduled", "hosted.render.flush", "hosted.request.success", "hosted.snapshot.applied", "hosted.snapshot.received", "top.panel.bridge.request.completed", "top.panel.bridge.request.received"]);

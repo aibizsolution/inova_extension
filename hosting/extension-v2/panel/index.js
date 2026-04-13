@@ -77,6 +77,7 @@
     invokePage,
     invokeRuntime,
     scheduleRender,
+    traceReview: traceReviewFlow,
     setActivePromptTab: (promptTabId) => promptLibraryController?.handleSelectPromptTab?.(promptTabId) || Promise.resolve(false),
   }) || null;
   promptStoreController = namespace.promptStoreController?.create?.({
@@ -1140,6 +1141,22 @@
     if (target.closest?.("#inova-tool-close")) {
       void callbacks.onToggle(false);
       return;
+    }
+    const promptTabButton = target.closest?.("[data-prompt-tab-id]");
+    if (promptTabButton) {
+      tracePanelFlow("40.hosted.click.detected", {
+        action: "select-prompt-tab",
+        message: promptTabButton.dataset.promptTabId || "",
+        reason: "click",
+      });
+    }
+    const promptActionButton = target.closest?.("[data-prompt-action]");
+    if (promptActionButton) {
+      tracePanelFlow("40.hosted.click.detected", {
+        action: promptActionButton.dataset.promptAction || "",
+        message: promptActionButton.dataset.promptId || "",
+        reason: "click",
+      });
     }
     if (namespace.promptHubPanel?.handleClick?.(event, host, callbacks)) {
       return;
