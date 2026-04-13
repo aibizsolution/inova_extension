@@ -207,8 +207,8 @@
     if (dataFreshness === "empty") {
       return "목록 읽기가 모두 실패해 현재는 빈 상태만 표시하고 있습니다.";
     }
-    if (degradedReason === "meeting-hub-realtime-failed" || source === "runtime-read") {
-      return "실시간 구독에 실패해 요청형 목록 읽기로 계속 표시하고 있습니다.";
+    if (degradedReason === "meeting-hub-firestore-unavailable" || degradedReason === "meeting-hub-realtime-failed" || source === "realtime") {
+      return "실시간 Firestore 목록 구독에 실패해 현재 상태를 갱신하지 못하고 있습니다.";
     }
     return "목록을 제한된 상태로 표시하고 있습니다.";
   }

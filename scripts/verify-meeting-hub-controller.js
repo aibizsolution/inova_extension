@@ -8,6 +8,7 @@ const vm = require("vm");
 const root = path.resolve(__dirname, "..");
 
 async function main() {
+  await verifyHostedMeetingFirestoreClientContract();
   await verifyHostedMeetingHubOwnership();
   await verifyHostedMeetingHubShareCopyFailure();
   await verifyHostedMeetingHubLifecycleRefreshOwnership();
@@ -16,6 +17,174 @@ async function main() {
   await verifyHostedMeetingHubIgnoresWindowFocusWhileActive();
   await verifyHostedMeetingHubFingerprintIgnoresCheckedAt();
   console.log("[verify-meeting-hub-controller] Hosted meeting hub controller contract passed");
+}
+
+async function verifyHostedMeetingFirestoreClientContract() {
+  const hostedMeetingSource = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "meeting-hub-controller.js"),
+    "utf8"
+  );
+  const hostedMeetingIndexHtml = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "index.html"),
+    "utf8"
+  );
+  const contentPanelSource = fs.readFileSync(
+    path.join(root, "content", "panel.js"),
+    "utf8"
+  );
+  assert(
+    hostedMeetingIndexHtml.includes("./meeting-firestore-client.js"),
+    "v2 hosted panel should load the dedicated meeting firestore client module"
+  );
+  assert(
+    hostedMeetingSource.includes("namespace.meetingFirestoreClient.create"),
+    "v2 hosted meeting hub should create its own firestore subscription client"
+  );
+  assert(
+    !hostedMeetingSource.includes('action: "functions.fetch"'),
+    "v2 hosted meeting hub should not keep using Functions list reads for meeting room snapshots"
+  );
+  assert(
+    contentPanelSource.includes('channel === "firestore"'),
+    "top panel trace console should render firestore events with a dedicated channel style"
+  );
+
+  const runtimeCalls = [];
+  const traces = [];
+  const snapshotPayloads = [];
+  const queryState = {
+    cacheReads: [],
+    collectionNames: [],
+    emulatorAuthUrls: [],
+    emulatorFirestoreHosts: [],
+    onSnapshotHandler: null,
+    unsubscribeCount: 0,
+  };
+  const context = vm.createContext({
+    console,
+    globalThis: null,
+    document: {
+      createElement() {
+        return {
+          async: false,
+          onerror: null,
+          onload: null,
+          set src(value) {
+            this._src = value;
+          },
+          get src() {
+            return this._src || "";
+          },
+        };
+      },
+      head: {
+        appendChild(node) {
+          node.onload?.();
+          return node;
+        },
+      },
+    },
+  });
+  context.globalThis = context;
+  context.InovaBookmarks = {
+    session: {
+      normalizeText(value) {
+        return String(value ?? "").trim();
+      },
+    },
+  };
+  context.firebase = createFakeFirebase(queryState);
+
+  loadScript("hosting/extension-v2/panel/meeting-firestore-client.js", context);
+
+  const client = context.InovaBookmarks.meetingFirestoreClient.create({
+    invokeRuntime: async (request) => {
+      runtimeCalls.push(cloneValue(request));
+      return {
+        emulators: {
+          authUrl: "",
+          enabled: false,
+          firestoreHost: "",
+          firestorePort: 0,
+        },
+        expiresAt: "2026-04-13T12:00:00.000Z",
+        firebaseConfig: {
+          projectId: "browser-extension-main",
+        },
+        firebaseCustomToken: "panel-token-alpha",
+        providerUserKey: "fixture-user",
+        target: "production",
+      };
+    },
+    onError: async () => {},
+    onSnapshot: async (snapshot) => {
+      snapshotPayloads.push(cloneValue(snapshot));
+    },
+    traceFirestore(step, payload) {
+      traces.push({
+        payload: cloneValue(payload),
+        step,
+      });
+    },
+  });
+
+  const firstSnapshot = await client.ensureSubscribed({
+    providerIdentity: {
+      providerUserKey: "fixture-user",
+    },
+    queryLimit: 24,
+    settings: {
+      meetingWorkspaceTarget: "production",
+    },
+  });
+
+  assert.equal(runtimeCalls.length, 1, "meeting firestore client should request panel auth once for a fresh subscription");
+  assert.equal(runtimeCalls[0].action, "auth.issue-meeting-panel");
+  assert.deepEqual(queryState.collectionNames, ["integration_inova_meetings"]);
+  assert.equal(firstSnapshot.fromCache, true, "meeting firestore client should return cached Firestore data first when available");
+  assert.equal(firstSnapshot.items[0].meetingId, "meeting-alpha");
+  assert.equal(snapshotPayloads.length, 1, "meeting firestore client should forward the initial snapshot");
+
+  const secondSnapshot = await client.ensureSubscribed({
+    providerIdentity: {
+      providerUserKey: "fixture-user",
+    },
+    queryLimit: 24,
+    settings: {
+      meetingWorkspaceTarget: "production",
+    },
+  });
+
+  assert.equal(runtimeCalls.length, 1, "meeting firestore client should reuse panel auth/runtime state while the subscription stays active");
+  assert.equal(secondSnapshot.items[0].meetingId, "meeting-alpha");
+
+  queryState.onSnapshotHandler?.({
+    docs: [createFirestoreDoc({
+      meetingId: "meeting-beta",
+      share: {
+        active: true,
+        shareId: "share-beta",
+        status: "active",
+      },
+      title: "Beta",
+      updatedAt: "2026-04-13T01:08:00.000Z",
+    })],
+    metadata: {
+      fromCache: false,
+      hasPendingWrites: false,
+    },
+  });
+  await flushAsyncTurns();
+
+  assert.equal(snapshotPayloads.length, 2, "meeting firestore client should forward live snapshot updates");
+  assert.equal(snapshotPayloads[1].items[0].meetingId, "meeting-beta");
+  assert(
+    traces.some((entry) => entry.step === "35.hosted.firestore.snapshot"),
+    "meeting firestore client should emit firestore trace events for snapshot updates"
+  );
+
+  client.disconnect("test");
+  assert.equal(queryState.unsubscribeCount, 1, "meeting firestore client should detach its active snapshot listener on disconnect");
 }
 
 async function verifyHostedMeetingHubOwnership() {
@@ -140,7 +309,7 @@ async function verifyHostedMeetingHubLifecycleRefreshOwnership() {
   );
   await flushAsyncTurns();
 
-  assert.equal(countRuntimeCalls(harness.runtimeCalls, "functions.fetch"), 1);
+  assert.equal(harness.realtimeSubscribeCalls.length, 1);
 
   controller.syncPanelState(
     {
@@ -157,8 +326,12 @@ async function verifyHostedMeetingHubLifecycleRefreshOwnership() {
     ["runtime.invoke.v1"]
   );
   await flushAsyncTurns();
+  assert(
+    harness.realtimeDisconnectCalls.includes("panel-inactive"),
+    "hosted meeting hub should detach its Firestore subscription when the meeting tool is no longer active"
+  );
 
-  const fetchCountBeforeMeetingReenter = countRuntimeCalls(harness.runtimeCalls, "functions.fetch");
+  const subscribeCountBeforeMeetingReenter = harness.realtimeSubscribeCalls.length;
 
   controller.syncPanelState(
     {
@@ -177,9 +350,9 @@ async function verifyHostedMeetingHubLifecycleRefreshOwnership() {
   await flushAsyncTurns();
 
   assert.equal(
-    countRuntimeCalls(harness.runtimeCalls, "functions.fetch"),
-    fetchCountBeforeMeetingReenter + 1,
-    "hosted meeting hub should reload when the meeting tool becomes active again even without a new fingerprint"
+    harness.realtimeSubscribeCalls.length,
+    subscribeCountBeforeMeetingReenter + 1,
+    "hosted meeting hub should re-ensure its Firestore subscription when the meeting tool becomes active again"
   );
 
   controller.syncPanelState(
@@ -198,7 +371,7 @@ async function verifyHostedMeetingHubLifecycleRefreshOwnership() {
   );
   await flushAsyncTurns();
 
-  const fetchCountBeforeReopen = countRuntimeCalls(harness.runtimeCalls, "functions.fetch");
+  const subscribeCountBeforeReopen = harness.realtimeSubscribeCalls.length;
 
   controller.syncPanelState(
     {
@@ -217,9 +390,9 @@ async function verifyHostedMeetingHubLifecycleRefreshOwnership() {
   await flushAsyncTurns();
 
   assert.equal(
-    countRuntimeCalls(harness.runtimeCalls, "functions.fetch"),
-    fetchCountBeforeReopen + 1,
-    "hosted meeting hub should reload when the panel reopens on the meeting tool even without a new fingerprint"
+    harness.realtimeSubscribeCalls.length,
+    subscribeCountBeforeReopen + 1,
+    "hosted meeting hub should re-ensure its Firestore subscription when the meeting panel reopens"
   );
 }
 
@@ -243,14 +416,14 @@ async function verifyHostedMeetingHubActivityRefreshOwnership() {
   );
   await flushAsyncTurns();
 
-  const fetchCountBeforeVisible = countRuntimeCalls(harness.runtimeCalls, "functions.fetch");
+  const subscribeCountBeforeVisible = harness.realtimeSubscribeCalls.length;
   const visibleHandled = controller.handleHostActivity("visibility-visible");
   await flushAsyncTurns();
   assert.equal(visibleHandled, true, "hosted meeting hub should handle visible recovery itself");
   assert.equal(
-    countRuntimeCalls(harness.runtimeCalls, "functions.fetch"),
-    fetchCountBeforeVisible + 1,
-    "hosted meeting hub should refresh itself when the hosted document becomes visible again"
+    harness.realtimeSubscribeCalls.length,
+    subscribeCountBeforeVisible + 1,
+    "hosted meeting hub should re-ensure its Firestore subscription when the hosted document becomes visible again"
   );
 
   controller.syncPanelState(
@@ -295,7 +468,7 @@ async function verifyHostedMeetingHubDoesNotPrefetchWhileClosed() {
   await flushAsyncTurns();
 
   assert.equal(
-    countRuntimeCalls(harness.runtimeCalls, "functions.fetch"),
+    harness.realtimeSubscribeCalls.length,
     0,
     "hosted meeting hub should not prefetch meeting data while the meeting panel is still closed"
   );
@@ -317,9 +490,9 @@ async function verifyHostedMeetingHubDoesNotPrefetchWhileClosed() {
   await flushAsyncTurns();
 
   assert.equal(
-    countRuntimeCalls(harness.runtimeCalls, "functions.fetch"),
+    harness.realtimeSubscribeCalls.length,
     1,
-    "hosted meeting hub should fetch once when the closed meeting panel actually opens"
+    "hosted meeting hub should subscribe once when the closed meeting panel actually opens"
   );
 }
 
@@ -343,7 +516,7 @@ async function verifyHostedMeetingHubIgnoresWindowFocusWhileActive() {
   );
   await flushAsyncTurns();
 
-  const fetchCountBeforeFocus = countRuntimeCalls(harness.runtimeCalls, "functions.fetch");
+  const subscribeCountBeforeFocus = harness.realtimeSubscribeCalls.length;
   const focusHandled = controller.handleHostActivity("window-focus");
   await flushAsyncTurns();
 
@@ -353,9 +526,9 @@ async function verifyHostedMeetingHubIgnoresWindowFocusWhileActive() {
     "hosted meeting hub should ignore raw window-focus activity because iframe focus changes are not a reliable stale-data signal"
   );
   assert.equal(
-    countRuntimeCalls(harness.runtimeCalls, "functions.fetch"),
-    fetchCountBeforeFocus,
-    "hosted meeting hub should not re-fetch when only a raw window-focus event fires"
+    harness.realtimeSubscribeCalls.length,
+    subscribeCountBeforeFocus,
+    "hosted meeting hub should not re-subscribe when only a raw window-focus event fires"
   );
 }
 
@@ -416,6 +589,8 @@ function createHarness(options = {}) {
 
 function createHarnessWithOptions(options = {}) {
   const runtimeCalls = [];
+  const realtimeDisconnectCalls = [];
+  const realtimeSubscribeCalls = [];
   const pageCalls = [];
   const summarySyncCalls = [];
   const checkedAtSequence = Array.isArray(options.checkedAtSequence) && options.checkedAtSequence.length
@@ -467,30 +642,6 @@ function createHarnessWithOptions(options = {}) {
           },
         };
       }
-      if (request?.action === "functions.fetch") {
-        const nextCheckedAt = checkedAtSequence?.length
-          ? checkedAtSequence.shift()
-          : "2026-04-13T01:02:03.000Z";
-        return {
-          checkedAt: nextCheckedAt,
-          items: [
-            {
-              artifactId: "artifact-alpha",
-              jobId: "job-alpha",
-              meetingId: "meeting-alpha",
-              share: {
-                active: false,
-                shareId: "",
-                status: "",
-              },
-              status: "succeeded",
-              title: "Alpha",
-              updatedAt: "2026-04-13T01:01:00.000Z",
-            },
-          ],
-          totalCount: 1,
-        };
-      }
       if (request?.action === "meeting.create-share-link") {
         return {
           share: {
@@ -518,6 +669,21 @@ function createHarnessWithOptions(options = {}) {
       }
       throw new Error(`Unexpected runtime action: ${request?.action}`);
     },
+    meetingRealtime: {
+      disconnect(reason) {
+        realtimeDisconnectCalls.push(String(reason || ""));
+      },
+      async ensureSubscribed(request) {
+        realtimeSubscribeCalls.push(cloneValue(request));
+        const nextCheckedAt = checkedAtSequence?.length
+          ? checkedAtSequence.shift()
+          : "2026-04-13T01:02:03.000Z";
+        return buildRealtimeSnapshot({
+          checkedAt: nextCheckedAt,
+          fromCache: Boolean(options.firstSnapshotFromCache),
+        });
+      },
+    },
     scheduleRender() {},
     syncTopPanelSummary: async (meetingTool) => {
       summarySyncCalls.push(cloneValue(meetingTool));
@@ -529,17 +695,152 @@ function createHarnessWithOptions(options = {}) {
   return {
     controller,
     pageCalls,
+    realtimeDisconnectCalls,
+    realtimeSubscribeCalls,
     runtimeCalls,
     summarySyncCalls,
   };
 }
 
-function countRuntimeCalls(calls, action) {
-  return calls.filter((request) => request?.action === action).length;
-}
-
 function cloneValue(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
+function buildRealtimeSnapshot(overrides = {}) {
+  return {
+    checkedAt: "2026-04-13T01:02:03.000Z",
+    fromCache: false,
+    hasPendingWrites: false,
+    items: [
+      {
+        artifactId: "artifact-alpha",
+        jobId: "job-alpha",
+        meetingId: "meeting-alpha",
+        share: {
+          active: false,
+          shareId: "",
+          status: "",
+        },
+        status: "succeeded",
+        title: "Alpha",
+        updatedAt: "2026-04-13T01:01:00.000Z",
+      },
+    ],
+    ...cloneValue(overrides),
+  };
+}
+
+function createFakeFirebase(queryState) {
+  const fakeAuth = {
+    currentUser: null,
+    async setPersistence() {},
+    async signInWithCustomToken(token) {
+      this.currentUser = {
+        async getIdToken() {
+          return token;
+        },
+        async getIdTokenResult() {
+          return {
+            claims: {
+              panelExpMs: Date.parse("2026-04-13T12:00:00.000Z"),
+              providerUserKey: "fixture-user",
+              scope: "meeting-panel",
+            },
+          };
+        },
+      };
+    },
+    useEmulator(url) {
+      queryState.emulatorAuthUrls.push(String(url || ""));
+    },
+  };
+  const fakeQuery = {
+    get(options = {}) {
+      queryState.cacheReads.push(cloneValue(options));
+      return Promise.resolve({
+        docs: [createFirestoreDoc()],
+        metadata: {
+          fromCache: true,
+          hasPendingWrites: false,
+        },
+      });
+    },
+    limit() {
+      return this;
+    },
+    onSnapshot(_options, next) {
+      queryState.onSnapshotHandler = next;
+      return () => {
+        queryState.unsubscribeCount += 1;
+      };
+    },
+    orderBy() {
+      return this;
+    },
+    where() {
+      return this;
+    },
+  };
+  const fakeDb = {
+    collection(name) {
+      queryState.collectionNames.push(String(name || ""));
+      return fakeQuery;
+    },
+    enablePersistence() {
+      return Promise.resolve();
+    },
+    useEmulator(host, port) {
+      queryState.emulatorFirestoreHosts.push(`${host}:${port}`);
+    },
+  };
+  const fakeApp = {
+    async delete() {},
+    auth() {
+      return fakeAuth;
+    },
+    firestore() {
+      return fakeDb;
+    },
+    name: "inova-hosted-panel-meeting",
+  };
+  return {
+    apps: [],
+    auth: {
+      Auth: {
+        Persistence: {
+          SESSION: "session",
+        },
+      },
+    },
+    initializeApp() {
+      this.apps.push(fakeApp);
+      return fakeApp;
+    },
+  };
+}
+
+function createFirestoreDoc(overrides = {}) {
+  const data = {
+    artifactId: "artifact-alpha",
+    createdAt: "2026-04-13T01:00:00.000Z",
+    jobId: "job-alpha",
+    meetingId: "meeting-alpha",
+    share: {
+      active: false,
+      shareId: "",
+      status: "",
+    },
+    status: "succeeded",
+    title: "Alpha",
+    updatedAt: "2026-04-13T01:01:00.000Z",
+    ...cloneValue(overrides),
+  };
+  return {
+    data() {
+      return cloneValue(data);
+    },
+    id: data.meetingId,
+  };
 }
 
 main().catch((error) => {

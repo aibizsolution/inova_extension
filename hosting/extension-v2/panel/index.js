@@ -90,6 +90,7 @@
     invokeRuntime,
     scheduleRender,
     syncTopPanelSummary: syncMeetingToolSummary,
+    traceFirestore: traceFirestoreFlow,
     traceMeeting: traceMeetingFlow,
   }) || null;
   const releaseController = namespace.releaseController?.create?.({
@@ -1588,6 +1589,10 @@
 
   function traceFunctionsFlow(step, payload = {}) {
     postTrace("functions", step, payload);
+  }
+
+  function traceFirestoreFlow(step, payload = {}) {
+    postTrace("firestore", step, payload);
   }
 
   function postTrace(channel, step, payload = {}) {

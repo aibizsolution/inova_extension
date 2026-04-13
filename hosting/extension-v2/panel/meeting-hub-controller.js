@@ -27,6 +27,12 @@
     const traceMeeting = typeof options.traceMeeting === "function"
       ? options.traceMeeting
       : () => {};
+    const traceFirestore = typeof options.traceFirestore === "function"
+      ? options.traceFirestore
+      : () => {};
+    let meetingRealtime = options.meetingRealtime && typeof options.meetingRealtime === "object"
+      ? options.meetingRealtime
+      : null;
     const state = {
       activeTool: "",
       capabilities: [],
@@ -56,6 +62,25 @@
       snapshotFingerprint: "",
       source: "none",
     };
+    if (!meetingRealtime && namespace.meetingFirestoreClient?.create) {
+      meetingRealtime = namespace.meetingFirestoreClient.create({
+        invokeRuntime,
+        onError: handleRealtimeError,
+        onSnapshot: handleRealtimeSnapshot,
+        traceFirestore,
+      });
+    }
+    if (!meetingRealtime) {
+      meetingRealtime = {
+        disconnect() {},
+        ensureSubscribed: async () => ({
+          checkedAt: "",
+          fromCache: false,
+          hasPendingWrites: false,
+          items: [],
+        }),
+      };
+    }
 
     return {
       buildViewState,
@@ -85,6 +110,7 @@
       };
       state.lastCount = Math.max(0, Number(fallbackMeetingTool.count) || state.items.length || state.lastCount);
       if (!hasRequiredCapabilities()) {
+        meetingRealtime?.disconnect?.("capabilities-missing");
         return;
       }
       const nextFingerprint = normalizeText(fallbackMeetingTool.snapshotFingerprint);
@@ -95,6 +121,7 @@
         state.snapshotFingerprint = nextFingerprint;
       }
       if (nextActiveTool !== "meeting" || !nextPanelOpen) {
+        meetingRealtime?.disconnect?.("panel-inactive");
         return;
       }
       const shouldForceReload = fingerprintChanged || meetingToolBecameActive || panelReopenedIntoMeeting;
@@ -127,7 +154,7 @@
         feedback: normalizeFeedback(state.feedback),
         items: state.items.slice(),
         pending: normalizePending(state.pending),
-        source: normalizeEnum(state.source, ["runtime-read", "cache", "none"], "none"),
+        source: normalizeEnum(state.source, ["realtime", "cache", "none"], "none"),
       };
     }
 
@@ -311,31 +338,17 @@
       scheduleRender();
       const run = (async () => {
         try {
-          const result = await invokeRuntime({
-            action: "functions.fetch",
-            authMode: "access-token",
-            body: {
-              cursor: "",
-              limit: LIST_LIMIT,
-              owner: buildProviderIdentityPayload(state.providerIdentity),
-            },
-            endpointKey: "listInovaMeetingsUrl",
-            service: "meeting",
+          const snapshot = await meetingRealtime.ensureSubscribed({
+            forceRefresh: force,
+            providerIdentity: buildProviderIdentityPayload(state.providerIdentity),
+            queryLimit: LIST_LIMIT,
+            settings: state.settings,
           });
-          const items = normalizeMeetingItems(result?.items);
-          state.items = items;
-          state.checkedAt = normalizeText(result?.checkedAt) || new Date().toISOString();
-          state.degraded = false;
-          state.degradedReason = "";
-          state.dataFreshness = "fresh";
-          state.error = "";
-          state.source = "runtime-read";
-          state.lastCount = Math.max(0, Number(result?.totalCount) || items.length);
-          await emitTopPanelSummary();
+          await applySnapshotPayload(snapshot);
           state.lastLoadedFingerprint = state.snapshotFingerprint;
           return state.items;
         } catch (error) {
-          applyLoadError(error);
+          applyLoadError(error, "meeting-hub-firestore-unavailable");
           await emitTopPanelSummary();
           state.lastLoadedFingerprint = state.snapshotFingerprint;
           return state.items;
@@ -356,6 +369,34 @@
           void ensureLoaded(true);
         }
       }
+    }
+
+    async function handleRealtimeSnapshot(snapshot) {
+      await applySnapshotPayload(snapshot);
+    }
+
+    async function handleRealtimeError(error) {
+      applyLoadError(error, "meeting-hub-firestore-unavailable");
+      await emitTopPanelSummary();
+      scheduleRender();
+    }
+
+    async function applySnapshotPayload(snapshot) {
+      const normalizedSnapshot = snapshot && typeof snapshot === "object" ? snapshot : {};
+      const items = normalizeMeetingItems(normalizedSnapshot.items);
+      const fromCache = Boolean(normalizedSnapshot.fromCache);
+      state.items = items;
+      state.checkedAt = normalizeText(normalizedSnapshot.checkedAt) || new Date().toISOString();
+      state.degraded = false;
+      state.degradedReason = "";
+      state.dataFreshness = fromCache
+        ? (items.length ? "stale" : "empty")
+        : (items.length ? "fresh" : "empty");
+      state.error = "";
+      state.source = fromCache ? "cache" : "realtime";
+      state.lastCount = items.length;
+      scheduleRender();
+      await emitTopPanelSummary();
     }
 
     async function handleLaunchAction(action, input) {
@@ -420,11 +461,11 @@
       };
     }
 
-    function applyLoadError(error) {
+    function applyLoadError(error, degradedReason = "") {
       const hasCachedItems = Array.isArray(state.items) && state.items.length > 0;
       state.checkedAt = new Date().toISOString();
       state.degraded = true;
-      state.degradedReason = hasCachedItems ? "meeting-hub-stale-cache" : "meeting-hub-empty";
+      state.degradedReason = normalizeText(degradedReason) || (hasCachedItems ? "meeting-hub-stale-cache" : "meeting-hub-empty");
       state.dataFreshness = hasCachedItems ? "stale" : "empty";
       state.error = readErrorMessage(error, "회의 목록을 불러오지 못했어요.");
       state.source = hasCachedItems ? "cache" : "none";
@@ -539,7 +580,7 @@
           error: state.error,
           items: state.items,
         }),
-        source: normalizeEnum(state.source, ["runtime-read", "cache", "none"], "none"),
+        source: normalizeEnum(state.source, ["realtime", "cache", "none"], "none"),
       };
     }
   }

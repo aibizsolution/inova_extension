@@ -818,7 +818,13 @@
 
   function emitTraceLine(channel, text) {
     traceSequence += 1;
-    const style = channel === "functions" ? "color:#b45309;font-weight:600" : channel === "meeting" ? "color:#0f766e" : "";
+    const style = channel === "functions"
+      ? "color:#b45309;font-weight:600"
+      : channel === "meeting"
+        ? "color:#0f766e"
+        : channel === "firestore"
+          ? "color:#1d4ed8;font-weight:600"
+          : "";
     style
       ? console.log(`%c[inova:${channel} #${traceSequence}] ${text}`, style)
       : console.log(`[inova:${channel} #${traceSequence}] ${text}`);

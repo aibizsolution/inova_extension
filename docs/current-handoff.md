@@ -22,7 +22,7 @@ Last updated: 2026-04-13
 - `conversation`: hosted owns list/search/copy/jump UI state; extension only provides page adapter plus thin signals such as count/active/fingerprint.
 - `release`: hosted owns latest/history/download surface; extension only brokers browser/runtime actions.
 - `prompt-library`, `prompt-store`, `prompt-review`: hosted owns prompt tab transition plus prompt/store/review action routing; extension keeps page/runtime bridge and legacy fallback handlers outside the v2 request path.
-- `meeting hub` / `meeting workspace`: hosted owns list/action UI and launch tracing, but extension still carries some `meetingManager` summary/realtime/fallback residue.
+- `meeting hub` / `meeting workspace`: hosted owns list/action UI, Firestore meeting-list subscription, and launch tracing; extension still carries some `meetingManager` summary/realtime/fallback residue outside the v2 hub path.
 
 Short version:
 

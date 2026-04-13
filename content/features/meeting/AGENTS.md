@@ -27,7 +27,7 @@
 ## hosted/panel 공통 경계
 - legacy lane은 현재 `browser-extension-main` hosted meeting 경로를 유지한다. separate hosted origin/site 판단은 `docs/refactoring-plan.md`의 version decision gate에서 관리한다.
 - `0.4.5`부터 panel 안의 회의 허브 UI는 `hosting/extension/panel/meeting-view.js`가 렌더링하고, 회의 목록 state와 action routing은 기존 `content/meeting-manager.js`/`content/panel-meeting-controller.js`가 계속 소유한다.
-- `1.0.0+` v2 lane에서는 `hosting/extension-v2/panel/meeting-hub-controller.js`가 회의 허브 목록 렌더 상태(`items`, `error/degraded`, freshness`)와 action UI 상태(`pending`, `feedback`, share patch`)를 runtime/functions read로 직접 소유한다. extension snapshot은 `count`와 refresh fingerprint만 남기고, extension은 runtime broker와 브라우저 탭 열기만 맡는다.
+- `1.0.0+` v2 lane에서는 `hosting/extension-v2/panel/meeting-hub-controller.js`가 회의 허브 목록 렌더 상태(`items`, `error/degraded`, freshness`)와 action UI 상태(`pending`, `feedback`, share patch`)를 직접 소유한다. 목록 읽기는 hosted `meeting-firestore-client.js`가 `auth.issue-meeting-panel -> Firestore onSnapshot` 경로로 맡고, share/open 같은 mutation/action만 runtime broker를 탄다. extension snapshot은 `count`와 refresh fingerprint만 남기고, extension은 runtime broker와 브라우저 탭 열기만 맡는다.
 - v2 meeting snapshot shaping은 `panelMeetingController`의 action UI state를 거치지 않고 raw `meetingHub` summary만으로 `count`와 fingerprint를 만든다. action fallback controller는 mixed-version/runtime fallback 경로에만 남기고, v2 부팅 시에는 eager 생성하지 않는다.
 - 같은 이유로 v2 panel shell은 `route`, `storage`, `prompt tab`, `surface`, `bootstrap`, 브라우저 `visibility/focus` 같은 sidecar/lifecycle 이벤트로는 더 이상 `content/meeting-manager.js` sync를 직접 깨우지 않는다. hosted meeting hub는 snapshot fingerprint, meeting tool 재진입, hosted 문서 `visibility/focus`, explicit action 결과를 기준으로 자체 load/refresh를 이어받고, extension은 handle/rail count용 compact meeting summary sync와 fallback action 경로만 남긴다.
 - v2 bootstrap도 legacy처럼 무조건 meeting sync를 prime하지 않는다. 시작 tool이 `meeting`일 때만 bootstrap prime을 남기고, meeting storage listener는 등록하지 않는다.
@@ -81,7 +81,7 @@
 
 ## 최소 검증 방법
 - 팝업 target 설정, 회의 탭 목록, hosted meeting 진입, 기존 결과 1건 조회를 확인한다.
-- v2 meeting hub ownership을 건드렸다면 `node scripts/verify-meeting-hub-controller.js`로 hosted controller가 runtime read/open/share/revoke를 직접 처리하는지도 함께 확인한다.
+- v2 meeting hub ownership을 건드렸다면 `node scripts/verify-meeting-hub-controller.js`로 hosted controller가 Firestore subscription/open/share/revoke 경로를 직접 처리하는지도 함께 확인한다.
 - 새 녹음 또는 파일 import 1회와 제목/메모/결과 수정 또는 삭제 1회를 확인한다.
 - 회의록 보정 변경이 있으면 `용어 치환 적용하기 1회`, `섹션 수정 preview/apply 1회`, stale preview 재적용 거절을 함께 확인한다.
 - 기록 이동 변경이 있으면 완료 기록 1건을 다른 owned 회의 룸으로 옮기고, 현재 룸에서 사라지는지와 대상 회의 룸에서 같은 전사/회의 정리/메모가 유지되는지 확인한다.

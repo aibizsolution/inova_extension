@@ -80,7 +80,9 @@ globalThis.invokeHostedPanelRequest = async function invokeHostedPanelRequest(re
     return issuePromptPanelAuth(request?.providerIdentity);
   }
   if (action === "auth.issue-meeting-panel") {
-    return issueMeetingPanelAuth(request?.providerIdentity);
+    return enrichMeetingPanelAuth(
+      await issueMeetingPanelAuth(request?.providerIdentity)
+    );
   }
   if (action === "functions.fetch") {
     return invokeHostedPanelFunctionFetch(request);
@@ -149,5 +151,41 @@ async function writeHostedPanelStorageValue(request) {
   }
   await namespace.storage.setLocal(nextPartial);
   return namespace.storage.getState();
+}
+
+async function enrichMeetingPanelAuth(payload) {
+  const runtimeConfig = await resolveMeetingRuntimeConfig();
+  return {
+    ...(payload && typeof payload === "object" ? payload : {}),
+    emulators: runtimeConfig?.emulators && typeof runtimeConfig.emulators === "object"
+      ? { ...runtimeConfig.emulators }
+      : {
+          authUrl: "",
+          enabled: false,
+          firestoreHost: "",
+          firestorePort: 0,
+        },
+    firebaseConfig: runtimeConfig?.web && typeof runtimeConfig.web === "object"
+      ? { ...runtimeConfig.web }
+      : { ...(namespace.firebaseConfig?.web || {}) },
+    target: namespace.session.normalizeText(runtimeConfig?.target) || "production",
+  };
+}
+
+async function resolveMeetingRuntimeConfig() {
+  const storageState = await namespace.storage.getState().catch(() => ({}));
+  const settings = storageState?.settings && typeof storageState.settings === "object"
+    ? storageState.settings
+    : {};
+  return namespace.firebaseConfig?.meeting?.resolveRuntime?.(settings) || {
+    emulators: {
+      authUrl: "",
+      enabled: false,
+      firestoreHost: "",
+      firestorePort: 0,
+    },
+    target: "production",
+    web: namespace.firebaseConfig?.web || {},
+  };
 }
 })();
