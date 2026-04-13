@@ -64,7 +64,7 @@
       const promptToolState = panelPromptController.buildToolState();
       const promptSnapshot = normalizePromptSnapshot(buildPromptSnapshot(promptToolState));
       const promptCounts = normalizePromptCounts(getPromptCounts(promptToolState), promptToolState);
-      const meetingTool = normalizeMeetingSnapshot(buildMeetingSnapshot(state.meetingHub));
+      const meetingTool = normalizeMeetingSnapshot(buildMeetingSnapshot(state.meetingSummary));
       const meetingCount = normalizeCount(
         getMeetingCount(meetingTool),
         Number(meetingTool.count) || (Array.isArray(meetingTool.items) ? meetingTool.items.length : 0)

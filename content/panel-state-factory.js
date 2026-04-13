@@ -9,6 +9,13 @@
     };
   }
 
+  function createMeetingSummaryState() {
+    return {
+      count: 0,
+      snapshotFingerprint: "",
+    };
+  }
+
   function createPanelDebugUiState() {
     return {
       collapsed: namespace.panelDebugController?.readCollapsedPreference?.() ?? true,
@@ -63,6 +70,7 @@
       settings: { ...namespace.constants.defaults.settings },
       settingsHydrated: false,
       pausedSessions: {},
+      meetingSummary: createMeetingSummaryState(),
       meetingHub: { ...namespace.constants.defaults.meetingHub },
       meetingUi: createMeetingUiState(),
       panelDebugUi: createPanelDebugUiState(),

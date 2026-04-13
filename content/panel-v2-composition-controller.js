@@ -142,18 +142,11 @@
     };
 
     function handleHostedMeetingSummarySync(meetingTool = {}) {
-      const nextSummary = normalizeHostedMeetingSummary({
-        ...state.meetingHub,
-        ...(meetingTool && typeof meetingTool === "object" ? meetingTool : {}),
-      });
-      if (buildMeetingSummaryKey(state.meetingHub) === buildMeetingSummaryKey(nextSummary)) {
+      const nextSummary = normalizeHostedMeetingSummary(meetingTool);
+      if (buildMeetingSummaryKey(state.meetingSummary) === buildMeetingSummaryKey(nextSummary)) {
         return false;
       }
-      state.meetingHub = {
-        ...state.meetingHub,
-        items: [],
-        ...nextSummary,
-      };
+      state.meetingSummary = nextSummary;
       render();
       return true;
     }
@@ -202,8 +195,8 @@
 
   function createHostedOwnedMeetingSnapshotBridge() {
     return {
-      buildMeetingSnapshot(meetingHub) {
-        const meetingTool = normalizeHostedMeetingSummary(meetingHub);
+      buildMeetingSnapshot(meetingSummary) {
+        const meetingTool = normalizeHostedMeetingSummary(meetingSummary);
         return {
           count: getMeetingCount(meetingTool),
           snapshotFingerprint: buildMeetingSnapshotFingerprint(meetingTool),
@@ -213,10 +206,7 @@
     };
 
     function getMeetingCount(meetingTool = {}) {
-      return Math.max(
-        0,
-        Number(meetingTool.count) || (Array.isArray(meetingTool.items) ? meetingTool.items.length : 0)
-      );
+      return Math.max(0, Number(meetingTool.count) || 0);
     }
 
     function buildMeetingSnapshotFingerprint(meetingTool = {}) {
@@ -224,22 +214,7 @@
       if (explicitFingerprint) {
         return explicitFingerprint;
       }
-      const items = Array.isArray(meetingTool.items) ? meetingTool.items : [];
-      return [
-        String(getMeetingCount(meetingTool)),
-        normalizeText(meetingTool.dataFreshness),
-        meetingTool.degraded ? "1" : "0",
-        normalizeText(meetingTool.error),
-        items.map((item) => [
-          normalizeText(item?.meetingId),
-          normalizeText(item?.latestJobId || item?.jobId),
-          normalizeText(item?.latestArtifactId || item?.artifactId),
-          normalizeText(item?.status),
-          item?.share?.active ? "1" : "0",
-          normalizeText(item?.share?.status),
-          normalizeText(item?.updatedAt || item?.createdAt),
-        ].join("~")).join("||"),
-      ].join("|");
+      return String(getMeetingCount(meetingTool));
     }
   }
 
@@ -352,48 +327,16 @@
     const normalizedMeetingTool = normalizeHostedMeetingSummary(meetingTool);
     return JSON.stringify({
       count: normalizedMeetingTool.count,
-      dataFreshness: normalizedMeetingTool.dataFreshness,
-      degraded: normalizedMeetingTool.degraded,
-      degradedReason: normalizedMeetingTool.degradedReason,
-      error: normalizedMeetingTool.error,
       snapshotFingerprint: normalizedMeetingTool.snapshotFingerprint,
-      source: normalizedMeetingTool.source,
     });
   }
 
   function normalizeHostedMeetingSummary(meetingTool) {
     const normalizedMeetingTool = meetingTool && typeof meetingTool === "object" ? meetingTool : {};
     return {
-      checkedAt: normalizeText(normalizedMeetingTool.checkedAt),
-      count: Math.max(
-        0,
-        Number(normalizedMeetingTool.count) || (Array.isArray(normalizedMeetingTool.items) ? normalizedMeetingTool.items.length : 0)
-      ),
-      dataFreshness: normalizeMeetingDataFreshness(normalizedMeetingTool.dataFreshness),
-      degraded: Boolean(normalizedMeetingTool.degraded),
-      degradedReason: normalizeText(normalizedMeetingTool.degradedReason),
-      error: normalizeText(normalizedMeetingTool.error),
+      count: Math.max(0, Number(normalizedMeetingTool.count) || 0),
       snapshotFingerprint: normalizeText(normalizedMeetingTool.snapshotFingerprint),
-      source: normalizeMeetingSource(normalizedMeetingTool.source),
     };
-  }
-
-  function normalizeMeetingDataFreshness(value) {
-    const normalized = normalizeText(value).toLowerCase();
-    return normalized === "fresh" || normalized === "stale" || normalized === "empty"
-      ? normalized
-      : "empty";
-  }
-
-  function normalizeMeetingSource(value) {
-    const normalized = normalizeText(value).toLowerCase();
-    return normalized === "realtime"
-      || normalized === "runtime-read"
-      || normalized === "cache"
-      || normalized === "local"
-      || normalized === "none"
-      ? normalized
-      : "none";
   }
 
   namespace.panelV2CompositionController = { create };

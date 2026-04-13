@@ -33,6 +33,7 @@ function main() {
 
   assert.notStrictEqual(stateA, stateB);
   assert.notStrictEqual(stateA.settings, stateB.settings);
+  assert.notStrictEqual(stateA.meetingSummary, stateB.meetingSummary);
   assert.notStrictEqual(stateA.meetingUi, stateB.meetingUi);
   assert.notStrictEqual(stateA.meetingUi.pending, stateB.meetingUi.pending);
   assert.notStrictEqual(stateA.panelDebugUi, stateB.panelDebugUi);
@@ -40,11 +41,13 @@ function main() {
   assert.notStrictEqual(stateA.queries, stateB.queries);
 
   stateA.settings.enabled = false;
+  stateA.meetingSummary.count = 7;
   stateA.meetingUi.pending.action = "share";
   stateA.store.scope = "mine";
   stateA.queries.bookmarks = "alpha";
 
   assert.equal(stateB.settings.enabled, true);
+  assert.equal(stateB.meetingSummary.count, 0);
   assert.equal(stateB.meetingUi.pending.action, "");
   assert.equal(stateB.store.scope, "all");
   assert.equal(stateB.queries.bookmarks, "");

@@ -154,12 +154,24 @@ function main() {
     "v2 meeting snapshot bridge should derive snapshot state from the hosted meeting summary without the legacy meeting manager"
   );
   assert(
+    !v2CompositionSource.includes("state.meetingHub"),
+    "v2 composition should stop storing hosted-owned meeting summary residue in the legacy meetingHub state bucket"
+  );
+  assert(
+    v2CompositionSource.includes("state.meetingSummary"),
+    "v2 composition should keep hosted-owned meeting residue in a dedicated compact meetingSummary state bucket"
+  );
+  assert(
     v2CompositionSource.includes("const explicitFingerprint = normalizeText(meetingTool?.snapshotFingerprint);"),
     "v2 meeting snapshot bridge should honor an explicit hosted-owned meeting fingerprint"
   );
   assert(
     v2CompositionSource.includes("function normalizeHostedMeetingSummary(meetingTool)"),
     "v2 composition should normalize hosted meeting summary payloads locally"
+  );
+  assert(
+    !v2CompositionSource.includes("dataFreshness: normalizedMeetingTool.dataFreshness"),
+    "v2 meeting summary state should not keep hosted freshness flags once the extension only needs count and fingerprint"
   );
   assert(
     v2CompositionSource.includes("buildMeetingSnapshot: hostedOwnedMeetingSnapshot.buildMeetingSnapshot"),

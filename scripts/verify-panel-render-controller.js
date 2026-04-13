@@ -188,7 +188,7 @@ function createHarness(options = {}) {
 
   const state = {
     activeTool: options.activeTool || "bookmarks",
-    meetingHub: { items: [] },
+    meetingSummary: { count: 0, snapshotFingerprint: "" },
     open: Boolean(options.open),
     settings: {
       enabled: true,
