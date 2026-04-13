@@ -109,7 +109,6 @@
     "content/route-watch-controller.js",
     "content/route-sync.js",
     "content/hosted-panel-bridge.js",
-    "content/panel-hosted-bridge-request.js",
     "content/panel.js",
     "content/panel-v2-prompt-controller.js",
     "content/panel-v2-shell-bridge.js",

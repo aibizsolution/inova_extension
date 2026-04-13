@@ -20,7 +20,7 @@ function verifyHostedBridgeRequestModuleContract() {
     "utf8"
   );
   const bridgeRequestSource = fs.readFileSync(
-    path.join(root, "content", "panel-hosted-bridge-request.js"),
+    path.join(root, "content", "hosted-panel-bridge.js"),
     "utf8"
   );
 
@@ -28,11 +28,11 @@ function verifyHostedBridgeRequestModuleContract() {
     Array.isArray(entry?.matches) && entry.matches.includes("https://inova.incross.com/*")
   );
   const scriptList = Array.isArray(mainContentScript?.js) ? mainContentScript.js : [];
-  const helperIndex = scriptList.indexOf("content/panel-hosted-bridge-request.js");
+  const helperIndex = scriptList.indexOf("content/hosted-panel-bridge.js");
   const panelIndex = scriptList.indexOf("content/panel.js");
 
-  assert(helperIndex !== -1, "manifest should load the hosted bridge request helper");
-  assert(panelIndex !== -1 && helperIndex < panelIndex, "manifest should load the bridge request helper before content/panel.js");
+  assert(helperIndex !== -1, "manifest should load the hosted panel bridge helper");
+  assert(panelIndex !== -1 && helperIndex < panelIndex, "manifest should load the hosted panel bridge helper before content/panel.js");
   assert(
     topPanelSource.includes("namespace.panelHostedBridgeRequest?.handle?."),
     "content/panel.js should delegate bridge-domain request routing to the dedicated helper module"
@@ -51,6 +51,10 @@ function verifyHostedBridgeRequestModuleContract() {
     !scriptList.includes(file),
     `manifest should stop loading the inlined hosted helper ${file}`
   ));
+  assert(
+    !scriptList.includes("content/panel-hosted-bridge-request.js"),
+    "manifest should stop loading the separate hosted bridge request helper once hosted-panel-bridge.js owns both responsibilities"
+  );
   [
     "namespace.panelHostedMeetingRequest?.handle?.",
     "namespace.panelHostedPromptRequest?.handle?.",

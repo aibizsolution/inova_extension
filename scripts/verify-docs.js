@@ -310,6 +310,9 @@ const codeChecks = [
       /bridgeVersion/,
       /panel\.snapshot\.v1/,
       /type:\s*"response"/,
+      /handleRuntimeRequest/,
+      /handlePageRequest/,
+      /handlePanelRequest/,
     ],
   },
   {

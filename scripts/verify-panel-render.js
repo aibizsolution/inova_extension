@@ -204,7 +204,7 @@ function verifyHostedMeetingSummarySyncContract() {
     "utf8"
   );
   const bridgeRequestSource = fs.readFileSync(
-    path.join(root, "content", "panel-hosted-bridge-request.js"),
+    path.join(root, "content", "hosted-panel-bridge.js"),
     "utf8"
   );
   const bootstrapSource = fs.readFileSync(
@@ -380,7 +380,7 @@ function verifyHostedReleaseSummarySyncContract() {
     "utf8"
   );
   const bridgeRequestSource = fs.readFileSync(
-    path.join(root, "content", "panel-hosted-bridge-request.js"),
+    path.join(root, "content", "hosted-panel-bridge.js"),
     "utf8"
   );
 
@@ -581,6 +581,39 @@ function createHarness() {
     resets: [],
     snapshots: [],
   };
+  const hostedPanelBridgeStub = {
+    create(options = {}) {
+      bridge.options = options;
+      return {
+        attach() {},
+        emitEvent(domain, payload) {
+          bridge.events.push({
+            domain,
+            payload: cloneValue(payload),
+          });
+          return true;
+        },
+        getCapabilities() {
+          return [
+            "panel.snapshot.v1",
+            "panel.request.v1",
+            "panel.response.v1",
+            "panel.event.v1",
+          ];
+        },
+        reset(reason) {
+          bridge.resets.push(reason);
+        },
+        setAllowedOrigin(origin) {
+          bridge.allowedOrigins.push(origin);
+        },
+        updateSnapshot(payload) {
+          bridge.snapshots.push(cloneValue(payload));
+          return true;
+        },
+      };
+    },
+  };
   let debugEnabled = true;
 
   context.console = console;
@@ -632,39 +665,7 @@ function createHarness() {
       },
     },
     firebaseConfig: buildFirebaseConfig(),
-    hostedPanelBridge: {
-      create(options = {}) {
-        bridge.options = options;
-        return {
-          attach() {},
-          emitEvent(domain, payload) {
-            bridge.events.push({
-              domain,
-              payload: cloneValue(payload),
-            });
-            return true;
-          },
-          getCapabilities() {
-            return [
-              "panel.snapshot.v1",
-              "panel.request.v1",
-              "panel.response.v1",
-              "panel.event.v1",
-            ];
-          },
-          reset(reason) {
-            bridge.resets.push(reason);
-          },
-          setAllowedOrigin(origin) {
-            bridge.allowedOrigins.push(origin);
-          },
-          updateSnapshot(payload) {
-            bridge.snapshots.push(cloneValue(payload));
-            return true;
-          },
-        };
-      },
-    },
+    hostedPanelBridge: hostedPanelBridgeStub,
     panelDebug: {
       buildCopyText() {
         return "all-entry";
@@ -709,10 +710,9 @@ function createHarness() {
     },
   };
 
-  [
-    path.join("content", "panel-hosted-bridge-request.js"),
-    path.join("content", "panel.js"),
-  ].forEach((relativePath) => loadScript(relativePath, context));
+  loadScript(path.join("content", "hosted-panel-bridge.js"), context);
+  context.InovaBookmarks.hostedPanelBridge = hostedPanelBridgeStub;
+  loadScript(path.join("content", "panel.js"), context);
 
   return {
     animationFrames,
