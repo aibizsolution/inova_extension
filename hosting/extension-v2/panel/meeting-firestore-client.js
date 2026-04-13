@@ -160,6 +160,12 @@
     }
 
     function disconnect(reason) {
+      const hadConnection = typeof state.unsubscribe === "function"
+        || Boolean(state.subscriptionKey)
+        || Boolean(state.lastSnapshotSignature);
+      if (!hadConnection) {
+        return;
+      }
       if (typeof state.unsubscribe === "function") {
         state.unsubscribe();
       }
@@ -282,7 +288,9 @@
       if (state.persistencePromise) {
         return state.persistencePromise;
       }
-      state.persistencePromise = state.db.enablePersistence(FIRESTORE_PERSISTENCE_OPTIONS).catch((error) => {
+      state.persistencePromise = runWithSuppressedFirestorePersistenceWarning(() =>
+        state.db.enablePersistence(FIRESTORE_PERSISTENCE_OPTIONS)
+      ).catch((error) => {
         const code = normalizeText(error?.code);
         if (code !== "failed-precondition" && code !== "unimplemented") {
           throw error;
@@ -458,6 +466,37 @@
         script.onerror = () => reject(new Error(`스크립트를 불러오지 못했어요: ${src}`));
         global.document.head.appendChild(script);
       });
+    }
+
+    async function runWithSuppressedFirestorePersistenceWarning(task) {
+      if (typeof task !== "function") {
+        return null;
+      }
+      const consoleRef = global.console;
+      const originalWarn = typeof consoleRef?.warn === "function" ? consoleRef.warn : null;
+      if (!originalWarn) {
+        return task();
+      }
+      consoleRef.warn = function patchedFirestoreWarn(...args) {
+        if (shouldSuppressFirestorePersistenceWarning(args)) {
+          return;
+        }
+        return originalWarn.apply(this, args);
+      };
+      try {
+        return await task();
+      } finally {
+        consoleRef.warn = originalWarn;
+      }
+    }
+
+    function shouldSuppressFirestorePersistenceWarning(args) {
+      const text = args
+        .map((value) => normalizeText(typeof value === "string" ? value : value?.message || value))
+        .join(" ");
+      return text.includes("enableMultiTabIndexedDbPersistence()")
+        || text.includes("enableIndexedDbPersistence()")
+        || text.includes("FirestoreSettings.cache");
     }
   }
 

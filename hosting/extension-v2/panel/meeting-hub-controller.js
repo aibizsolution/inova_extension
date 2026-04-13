@@ -345,12 +345,10 @@
             settings: state.settings,
           });
           await applySnapshotPayload(snapshot);
-          state.lastLoadedFingerprint = state.snapshotFingerprint;
           return state.items;
         } catch (error) {
           applyLoadError(error, "meeting-hub-firestore-unavailable");
           await emitTopPanelSummary();
-          state.lastLoadedFingerprint = state.snapshotFingerprint;
           return state.items;
         } finally {
           state.loading = false;
@@ -554,6 +552,7 @@
       }
       const summary = buildTopPanelSummary();
       state.snapshotFingerprint = normalizeText(summary.snapshotFingerprint) || state.snapshotFingerprint;
+      state.lastLoadedFingerprint = state.snapshotFingerprint || state.lastLoadedFingerprint;
       try {
         await syncTopPanelSummary(summary);
         return true;
