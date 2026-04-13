@@ -87,6 +87,10 @@ function main() {
     "v2 composition should keep the bootstrap wiring inside the shared v2 shell bridge"
   );
   assert(
+    v2CompositionSource.includes("panelV2ShellBridge.createRenderController"),
+    "v2 composition should keep render wiring inside the shared v2 shell bridge"
+  );
+  assert(
     !v2CompositionSource.includes("namespace.panelDebugController.create"),
     "v2 composition should stop loading the standalone debug controller file in the active bundle"
   );

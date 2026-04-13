@@ -14,7 +14,7 @@ function main() {
   verifyRenderPayloadAndReviewFloat();
   verifyCustomReleaseSnapshotBridge();
   verifyVisibleStateCalculation();
-  console.log("[verify-panel-render-controller] Panel render controller contract passed");
+  console.log("[verify-panel-render-controller] V2 shell bridge render contract passed");
 }
 
 function verifyCustomConversationSnapshotBridge() {
@@ -184,7 +184,7 @@ function createHarness(options = {}) {
     },
   };
 
-  loadScript("content/panel-render-controller.js", context);
+  loadScript("content/panel-v2-shell-bridge.js", context);
 
   const state = {
     activeTool: options.activeTool || "bookmarks",
@@ -198,7 +198,7 @@ function createHarness(options = {}) {
     uiPreferences: {},
   };
 
-  const controller = context.InovaBookmarks.panelRenderController.create(state, {
+  const controller = context.InovaBookmarks.panelV2ShellBridge.createRenderController(state, {
     isPaused() {
       return false;
     },

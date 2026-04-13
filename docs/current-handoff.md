@@ -157,7 +157,7 @@ Goal:
 Start files:
 
 - `content/panel-v2-composition-controller.js`
-- `content/panel-render-controller.js`
+- `content/panel-v2-shell-bridge.js`
 - `backup/legacy-panel/panel-action-controller.js`
 - `hosting/extension-v2/panel/index.js`
 
@@ -172,7 +172,6 @@ Goal:
 Start files:
 
 - `content/panel.js`
-- `content/panel-render-controller.js`
 - `content/panel-v2-shell-bridge.js`
 - `backup/legacy-panel/panel-action-controller.js`
 
@@ -215,7 +214,6 @@ Minimal re-entry set:
 - `shared/product-lane.js`
 - `content/panel-v2-composition-controller.js`
 - `content/panel-v2-shell-bridge.js`
-- `content/panel-render-controller.js`
 - `content/panel.js`
 - `hosting/extension-v2/panel/index.js`
 

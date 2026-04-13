@@ -71,7 +71,6 @@ const requiredFiles = [
   "content/panel-shell-controller.js",
   "backup/legacy-panel/panel-prompt-controller.js",
   "content/panel-v2-prompt-controller.js",
-  "content/panel-render-controller.js",
   "content/panel-v2-composition-controller.js",
   "backup/legacy-panel/panel-runtime-controller.js",
   "backup/legacy-panel/panel-action-controller.js",
@@ -381,8 +380,9 @@ const codeChecks = [
     ],
   },
   {
-    file: "content/panel-render-controller.js",
+    file: "content/panel-v2-shell-bridge.js",
     patterns: [
+      /createRenderController/,
       /buildHandleCount/,
       /renderPanel/,
       /buildReviewFloatState/,

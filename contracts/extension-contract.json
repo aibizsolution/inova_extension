@@ -24,7 +24,6 @@
     "shared/storage.js",
     "backup/legacy-panel/bookmark-view.js",
     "backup/legacy-panel/panel-bookmark-controller.js",
-    "content/panel-render-controller.js",
     "backup/legacy-panel/panel-runtime-controller.js",
     "content/panel-v2-composition-controller.js",
     "backup/legacy-panel/panel-action-controller.js",
@@ -121,7 +120,6 @@
     "content/panel-shell-controller.js",
     "content/panel-v2-prompt-controller.js",
     "content/panel-v2-shell-bridge.js",
-    "content/panel-render-controller.js",
     "content/panel-v2-composition-controller.js",
     "content/main.js"
   ],

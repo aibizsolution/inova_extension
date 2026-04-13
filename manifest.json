@@ -72,7 +72,6 @@
         "content/panel-shell-controller.js",
         "content/panel-v2-prompt-controller.js",
         "content/panel-v2-shell-bridge.js",
-        "content/panel-render-controller.js",
         "content/panel-v2-composition-controller.js",
         "content/main.js"
       ],

@@ -99,7 +99,7 @@
       scheduleRouteSync: routeSync.scheduleRouteSync,
     });
 
-    renderController = namespace.panelRenderController.create(state, {
+    renderController = panelV2ShellBridge.createRenderController(state, {
       isPaused: runtimeFlags.isPaused,
       isToolSurface: runtimeFlags.isToolSurface,
       buildConversationSnapshot: hostedOwnedConversationBridge.buildConversationSnapshot,
