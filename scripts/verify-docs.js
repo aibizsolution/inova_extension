@@ -58,7 +58,9 @@ const requiredFiles = [
   path.join("scripts", "verify-route-state-controller.js"),
   path.join("scripts", "verify-route-watch-controller.js"),
   "content/main.js",
+  "content/panel-v2-composition-controller.js",
   "content/hosted-panel-bridge.js",
+  "shared/product-lane.js",
   "content/panel-activity-controller.js",
   "content/panel-bookmark-controller.js",
   "content/panel-shell-controller.js",
@@ -223,7 +225,7 @@ const codeChecks = [
     file: "content/main.js",
     patterns: [
       /panelStateFactory/,
-      /panelCompositionController/,
+      /panelV2CompositionController/,
       /panelCompositionController\??\.bootstrap/,
     ],
   },

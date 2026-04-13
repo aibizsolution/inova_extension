@@ -80,11 +80,12 @@ ordinary feature 구현 변경, 탭별 hosted ownership 진행도, smoke 이슈 
 - `0.x` legacy lane의 hosted panel 기본 경로는 `https://browser-extension-main.web.app/extension/panel/index.html`이다.
 - `1.x+` v2 lane은 같은 규칙으로 `hosting/extension-v2/panel/*`와 `panelAppUrl`을 사용한다.
 - 공개 기준선 `0.4.4`는 legacy lane에 남기고, 다음 공개 릴리스 `1.0.0`은 v2 lane을 기본으로 사용한다.
-- extension composition root도 lane-aware로 분리한다. `0.x`는 기존 `content/panel-composition-controller.js`, `1.x+`는 `content/panel-v2-composition-controller.js`를 사용한다.
+- 현재 `1.x+` extension bundle은 panel을 `content/panel-v2-composition-controller.js`로 직접 부팅한다. `content/panel-composition-controller.js`, `content/panel-action-controller.js`, `content/panel-meeting-controller.js`, `content/meeting-manager.js`는 legacy reference/source로만 남아 있고 현재 manifest에는 싣지 않는다.
 - prompt shell controller baseline도 lane-aware로 단순화한다. legacy lane과 v2 lane 모두 extra `panelPromptBridgeController` proxy 없이 `content/panel-prompt-controller.js` 또는 v2 hosted-owned prompt controller를 shell/render/bootstrap wiring에 직접 넘긴다.
 - content script bootstrap은 계속 `manifest.json` 로드 순서를 정본으로 삼고, `content/panel.js`가 직접 소비하는 hosted panel helper 모듈은 같은 manifest 배열에서 `content/panel.js`보다 먼저 로드해야 한다. 현재 baseline helper는 `content/panel-hosted-bridge-request.js`, `content/panel-hosted-meeting-request.js`, `content/panel-hosted-prompt-request.js`, `content/panel-hosted-runtime-request.js`, `content/panel-hosted-page-request.js`, `content/panel-hosted-shell-request.js`다.
 - `1.x+`에서 `release:build`는 `hosting/extension-v2/releases/*`와 `hosting/extension-v2/downloads/*`를 실제 served artifact 기준으로 채워야 한다. hosted v2 release panel은 이 lane-local 경로를 직접 읽으므로, curated history에 남긴 이전 공개 버전 ZIP도 현재 lane download 디렉터리에서 404 없이 열리도록 함께 복사한다.
 - `1.x+` v2 lane은 hosted-first를 기본값으로 쓴다. 탭 UI/state/action flow의 기본 위치는 hosted이고, extension은 page DOM adapter + iframe host + runtime broker 같은 browser-only capability를 유지한다.
+- `DB/Functions 계약을 바꾸지 않는 순수 panel v2 migration`은 현재 `1.x+` bundle이 정상 동작하는지만 먼저 확인한다. 이런 작업에서 legacy extension panel 코드는 활성 bundle 안에 계속 보존할 대상으로 보지 않는다.
 - 문서가 이 ownership 이동을 뒤따르지 못하면, 발견한 같은 작업 안에서 바로 고친다.
 - v2 lane이라고 해서 모든 backend endpoint family를 바로 분리하지 않는다. 현재 backend 분리가 준비된 것은 prompt-library 계열뿐이고, meeting Functions endpoint는 `1.0.0` v2 lane에서도 legacy 이름(`listInovaMeetings`, `issueInovaMeetingPanelAuth` 등)을 계속 사용한다.
 - local rehearsal에서 hosted panel 기본 경로는 `http://127.0.0.1:5000/extension/panel/index.html`이다.

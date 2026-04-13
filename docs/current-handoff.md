@@ -16,6 +16,7 @@ Last updated: 2026-04-13
 - when docs still describe already-moved ownership as extension-owned, fix them in the same task instead of deferring to a later doc sweep.
 - for remaining migration slices, treat legacy extension implementations as reference behavior, not code that must be preserved line-for-line.
 - if reusing legacy code adds glue/adapters/mixed ownership, prefer a clean implementation in the target hosted ownership instead.
+- pure panel v2 migration that does not change `DB/Functions` contracts should be judged against the current `1.0.0` v2 bundle, not against keeping legacy extension panel code alive in the active bundle.
 
 ## Where Ownership Stands
 
@@ -46,6 +47,7 @@ Short version:
 - v2 bootstrap now passes only the hosted panel callbacks that are still live in the hosted lane, instead of carrying prompt/meeting legacy action callbacks by default
 - v2 composition now wires the hosted-owned prompt controller directly instead of keeping the extra `panelPromptBridgeController` proxy in the v2 lane
 - legacy composition now also wires `panel-prompt-controller` directly, so the extra `panelPromptBridgeController` proxy file is gone from both lanes
+- current `1.0.0` extension bundle now boots `content/panel-v2-composition-controller.js` directly and stops loading the legacy panel composition/meeting/action lane in `manifest.json`
 - meeting open traces split correctly:
   - original `i-Nova` tab now logs only launch request/dispatch/completion
   - new hosted workspace tab owns workspace bootstrap/ready logs
@@ -103,7 +105,7 @@ Also:
 
 The remaining work is no longer smoke-fix first. It is mostly structural cleanup to finish the hosted-first boundary.
 
-1. Reduce remaining `meetingManager` coupling in v2 so extension keeps only browser/page capability.
+1. Reduce the remaining compact `meeting` summary residue in v2 so extension keeps only browser/page capability.
 2. Trim remaining prompt shell residue and legacy fallback surface in extension.
 3. Keep trimming panel shell/bootstrap/composition so the `content/panel.js` path becomes generic host + broker only.
 4. Prepare final release path from deployed `0.4.4` baseline to hosted v2 `1.0.0`.
@@ -189,7 +191,6 @@ Minimal re-entry set:
 - `shared/product-lane.js`
 - `content/panel-v2-composition-controller.js`
 - `content/panel-bootstrap-controller.js`
-- `content/panel-action-controller.js`
 - `content/panel-render-controller.js`
 - `content/panel.js`
 - `hosting/extension-v2/panel/index.js`

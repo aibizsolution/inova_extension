@@ -38,6 +38,7 @@
 - ownership 이전 작업에서는 기존 extension 구현을 `보존 대상`보다 `참조용 baseline`으로 본다.
 - 기존 구현을 그대로 끌고 오기 위해 adapter, bridge glue, mixed ownership이 늘어나면 재사용을 멈추고 대상 ownership 위치에 직접 다시 구현한다.
 - 재사용은 `실제로 더 빨라질 때만` 선택한다. 같은 계약을 새 ownership 위치에 짧고 명확하게 다시 쓰는 편이 더 빠르면 그쪽을 기본값으로 삼는다.
+- `DB/Functions 계약을 바꾸지 않는 순수 panel v2 migration`에서는 현재 `1.0.0` v2 bundle이 정상 동작하는지만 우선 확인한다. 이런 작업에서 legacy extension 코드는 호환 이유로 활성 bundle 안에 계속 남겨 둘 대상으로 보지 않는다.
 
 ## 설계와 모듈화 적용 규칙
 - 구현 전에 먼저 책임 경계를 정하고, 파일 길이만을 이유로 분리하지 않는다.

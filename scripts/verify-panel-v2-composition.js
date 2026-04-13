@@ -28,13 +28,26 @@ function main() {
     scriptList.includes("content/panel-v2-composition-controller.js"),
     "manifest should load the v2 composition controller before content/main.js"
   );
+  [
+    "content/meeting-manager.js",
+    "content/panel-meeting-controller.js",
+    "content/panel-action-controller.js",
+    "content/panel-composition-controller.js",
+  ].forEach((file) => assert(
+    !scriptList.includes(file),
+    `manifest should stop loading the legacy panel lane file ${file} in the active 1.0.0 bundle`
+  ));
   assert(
-    mainSource.includes("namespace.productLane?.isV2Lane?.()"),
-    "content/main.js should select the v2 composition by lane"
+    mainSource.includes("namespace.panelV2CompositionController.create(state)"),
+    "content/main.js should boot the current extension bundle through the v2 composition directly"
   );
   assert(
     mainSource.includes("namespace.panelV2CompositionController"),
     "content/main.js should reference the v2 composition root"
+  );
+  assert(
+    !mainSource.includes("namespace.panelCompositionController"),
+    "content/main.js should stop wiring the legacy panel composition into the active 1.0.0 bundle"
   );
   assert(
     v2CompositionSource.includes("namespace.panelBootstrapController.create"),
