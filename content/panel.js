@@ -333,8 +333,7 @@
   }
 
   function resolvePanelRuntimeConfig(settings) {
-    return namespace.firebaseConfig?.meeting?.resolveRuntime?.(settings)
-      || namespace.firebaseConfig?.prompt?.resolveRuntime?.(settings)
+    return namespace.firebaseConfig?.panel?.resolveRuntime?.(settings)
       || {
         hosting: namespace.firebaseConfig?.hosting || {},
         target: "production",

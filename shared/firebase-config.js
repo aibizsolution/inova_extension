@@ -99,6 +99,7 @@
     };
     config.meeting = buildMeetingConfigHelpers(config);
     config.prompt = buildPromptConfigHelpers(config, config.prompt);
+    config.panel = buildPanelConfigHelpers(config);
     return config;
   }
 
@@ -215,6 +216,24 @@
       normalizeWorkspaceUrlOverride,
       resolveRuntime(settings) {
         return resolveMeetingRuntimeConfig(baseConfig, settings);
+      },
+    };
+  }
+
+  function buildPanelConfigHelpers(baseConfig) {
+    return {
+      resolveRuntime(settings) {
+        if (typeof baseConfig.meeting?.resolveRuntime === "function") {
+          return baseConfig.meeting.resolveRuntime(settings);
+        }
+        if (typeof baseConfig.prompt?.resolveRuntime === "function") {
+          return baseConfig.prompt.resolveRuntime(settings);
+        }
+        return {
+          hosting: cloneValue(baseConfig.hosting),
+          settings: normalizeMeetingSettings(settings),
+          target: "production",
+        };
       },
     };
   }

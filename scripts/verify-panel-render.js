@@ -9,6 +9,7 @@ const {
   verifyHostedMeetingVisibilityRecoveryContract,
   verifyHostedMeetingSnapshotSyncGuardContract,
 } = require("./verify-hosted-panel-runtime-contracts");
+const { verifyPanelRuntimeResolverOwnershipContract } = require("./verify-panel-runtime-config");
 const { verifyHostedTraceVisibilityContract } = require("./verify-hosted-trace-visibility");
 
 const root = path.resolve(__dirname, "..");
@@ -16,6 +17,7 @@ const root = path.resolve(__dirname, "..");
 async function main() {
   verifyHostedPanelHostBatching();
   verifyLocalPanelRuntimeSwitch();
+  verifyPanelRuntimeResolverOwnershipContract();
   verifyPageBridgeEvents();
   verifyHostedPanelImeCompositionGuard();
   verifyHostedMeetingActionCompletionTraceContract();
@@ -804,29 +806,35 @@ function createPanelState(overrides = {}) {
 }
 
 function buildFirebaseConfig() {
+  const meeting = {
+    resolveRuntime(settings = {}) {
+      if (settings.meetingWorkspaceTarget === "local") {
+        return {
+          hosting: {
+            panelAppUrl: "http://127.0.0.1:5000/extension/panel/index.html",
+          },
+        };
+      }
+      return {
+        hosting: {
+          panelAppUrl: "https://browser-extension-main.web.app/extension/panel/index.html",
+        },
+      };
+    },
+  };
   return {
     hosting: {
       panelAppUrl: "https://browser-extension-main.web.app/extension/panel/index.html",
     },
-    meeting: {
+    meeting,
+    panel: {
       resolveRuntime(settings = {}) {
-        if (settings.meetingWorkspaceTarget === "local") {
-          return {
-            hosting: {
-              panelAppUrl: "http://127.0.0.1:5000/extension/panel/index.html",
-            },
-          };
-        }
-        return {
-          hosting: {
-            panelAppUrl: "https://browser-extension-main.web.app/extension/panel/index.html",
-          },
-        };
+        return meeting.resolveRuntime(settings);
       },
     },
     prompt: {
       resolveRuntime(settings = {}) {
-        return this.meeting?.resolveRuntime?.(settings) || {
+        return meeting.resolveRuntime(settings) || {
           hosting: {
             panelAppUrl: "https://browser-extension-main.web.app/extension/panel/index.html",
           },

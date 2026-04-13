@@ -93,6 +93,7 @@ ordinary feature 구현 변경, 탭별 hosted ownership 진행도, smoke 이슈 
 - prompt shell controller baseline도 lane-aware로 단순화한다. legacy lane과 v2 lane 모두 extra `panelPromptBridgeController` proxy 없이 `backup/legacy-panel/panel-prompt-controller.js` 또는 v2 hosted-owned prompt controller를 shell/render/bootstrap wiring에 직접 넘긴다.
 - 기본 `npm.cmd run verify`는 활성 v2 lane 기준 검증만 유지하고, backup legacy prompt runtime 검증은 `npm.cmd run verify:legacy-backup`으로 분리한다. backup reference는 `DB/Functions/shared contract` 변경 때만 다시 확인한다.
 - content script bootstrap은 계속 `manifest.json` 로드 순서를 정본으로 삼고, `content/panel.js`가 직접 소비하는 hosted panel bridge/helper preload는 같은 manifest 배열에서 `content/panel.js`보다 먼저 로드해야 한다. 현재 baseline helper는 `content/hosted-panel-bridge.js` 하나다.
+- `content/panel.js`는 hosted panel iframe target을 feature별 helper에서 직접 고르지 않는다. lane/local target 판단은 `shared/firebase-config.js`의 `firebaseConfig.panel.resolveRuntime()`가 맡고, shell host는 그 generic panel runtime만 소비한다.
 - `1.x+`에서 `release:build`는 `hosting/extension-v2/releases/*`와 `hosting/extension-v2/downloads/*`를 실제 served artifact 기준으로 채워야 한다. hosted v2 release panel은 이 lane-local 경로를 직접 읽으므로, curated history에 남긴 이전 공개 버전 ZIP도 현재 lane download 디렉터리에서 404 없이 열리도록 함께 복사한다.
 - `1.x+` v2 lane은 hosted-first를 기본값으로 쓴다. 탭 UI/state/action flow의 기본 위치는 hosted이고, extension은 page DOM adapter + iframe host + runtime broker 같은 browser-only capability를 유지한다.
 - `DB/Functions 계약을 바꾸지 않는 순수 panel v2 migration`은 현재 `1.x+` bundle이 정상 동작하는지만 먼저 확인한다. 이런 작업에서 legacy extension panel 코드는 활성 bundle 안에 계속 보존할 대상으로 보지 않는다.
@@ -122,6 +123,7 @@ ordinary feature 구현 변경, 탭별 hosted ownership 진행도, smoke 이슈 
 - 사용자가 `로컬 에뮬레이터`만 요청하면 local rehearsal 기본 부팅 명령은 `npm.cmd run emulator:meeting-local`이다. `hosting only`나 빠른 hosted smoke를 명시했을 때만 `npm.cmd run emulator:hosting`으로 낮춘다.
 - 이런 단순 실행/운영 요청은 feature 구현 탐색보다 명령 시작이 우선이다. `cwd`/Git/셸 확인 뒤 `package.json`과 관련 환경 메모만 보고 먼저 부팅하고, 실패하거나 스크립트 선택이 모호할 때만 feature 문서로 확장한다.
 - 같은 local target은 prompt와 hosted panel도 full-local rehearsal로 같이 본다. prompt read/write/review/panel auth는 `http://127.0.0.1:5001/browser-extension-main/asia-northeast3/*`를 향하고, hidden prompt bridge target은 `http://127.0.0.1:5000/extension/prompt-panel-bridge.html`, hosted panel target은 legacy lane `http://127.0.0.1:5000/extension/panel/index.html`, v2 lane `http://127.0.0.1:5000/extension-v2/panel/index.html`이다. 다만 페이지에 꽂히는 실제 iframe src는 둘 다 extension frame proxy를 거쳐 local Auth/Firestore emulator와 hosted 자산을 연다.
+- 같은 local/prod panel target handoff는 feature helper 선택이 아니라 `firebaseConfig.panel.resolveRuntime()`를 정본으로 삼는다. `meetingWorkspaceTarget`이 local이면 panel host는 lane-aware local `panelAppUrl`을 받고, production이면 해당 lane의 hosted `panelAppUrl`을 그대로 쓴다.
 - `1.0.0` v2 baseline에서도 panel render payload는 `settings.meetingWorkspaceTarget`을 iframe host까지 반드시 전달해야 한다. 이 local/prod handoff는 `npm.cmd run verify` 안의 `verify-panel-render`로 계속 고정한다.
 - 나머지 hosted-first/runtime 계약은 `npm.cmd run verify`에 포함된 lane/runtime/hosted 계약 검증으로 계속 고정한다.
 
