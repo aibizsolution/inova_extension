@@ -654,7 +654,6 @@
     const count = Math.max(0, Number(meetingTool.count) || items.length);
     return [
       String(count),
-      normalizeText(meetingTool.checkedAt),
       normalizeText(meetingTool.dataFreshness),
       meetingTool.degraded ? "1" : "0",
       normalizeText(meetingTool.error),

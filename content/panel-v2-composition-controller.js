@@ -239,7 +239,6 @@
       const items = Array.isArray(meetingTool.items) ? meetingTool.items : [];
       return [
         String(getMeetingCount(meetingTool)),
-        normalizeText(meetingTool.checkedAt),
         normalizeText(meetingTool.dataFreshness),
         meetingTool.degraded ? "1" : "0",
         normalizeText(meetingTool.error),
@@ -363,7 +362,6 @@
 
   function buildMeetingSummaryKey(meetingTool) {
     return JSON.stringify({
-      checkedAt: normalizeText(meetingTool?.checkedAt),
       count: Math.max(0, Number(meetingTool?.count) || 0),
       dataFreshness: normalizeText(meetingTool?.dataFreshness),
       degraded: Boolean(meetingTool?.degraded),

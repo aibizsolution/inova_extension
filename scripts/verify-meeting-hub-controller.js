@@ -12,6 +12,7 @@ async function main() {
   await verifyHostedMeetingHubShareCopyFailure();
   await verifyHostedMeetingHubLifecycleRefreshOwnership();
   await verifyHostedMeetingHubActivityRefreshOwnership();
+  await verifyHostedMeetingHubFingerprintIgnoresCheckedAt();
   console.log("[verify-meeting-hub-controller] Hosted meeting hub controller contract passed");
 }
 
@@ -269,6 +270,46 @@ async function verifyHostedMeetingHubActivityRefreshOwnership() {
   assert.equal(focusHandled, false, "hosted meeting hub should ignore focus refresh when meeting is not active");
 }
 
+async function verifyHostedMeetingHubFingerprintIgnoresCheckedAt() {
+  const harness = createHarness({
+    checkedAtSequence: [
+      "2026-04-13T01:02:03.000Z",
+      "2026-04-13T01:05:09.000Z",
+    ],
+  });
+  const controller = harness.controller;
+
+  controller.syncPanelState(
+    {
+      activeTool: "meeting",
+      open: true,
+      meetingTool: {
+        count: 1,
+        snapshotFingerprint: "meeting-alpha|1|seed",
+      },
+      settings: {
+        meetingWorkspaceTarget: "production",
+      },
+    },
+    ["runtime.invoke.v1"]
+  );
+  await flushAsyncTurns();
+
+  const initialFingerprint = harness.summarySyncCalls[0]?.snapshotFingerprint || "";
+  assert(initialFingerprint, "hosted meeting hub should emit a snapshot fingerprint after the first load");
+
+  const visibleHandled = controller.handleHostActivity("visibility-visible");
+  await flushAsyncTurns();
+
+  assert.equal(visibleHandled, true, "hosted meeting hub should accept hosted activity refresh triggers while active");
+  assert.equal(harness.summarySyncCalls.length, 2, "hosted meeting hub should emit another summary after a forced refresh");
+  assert.equal(
+    harness.summarySyncCalls[1].snapshotFingerprint,
+    initialFingerprint,
+    "meeting summary fingerprints should stay stable when only checkedAt changes across identical meeting data"
+  );
+}
+
 async function flushAsyncTurns(turns = 8) {
   for (let index = 0; index < turns; index += 1) {
     await Promise.resolve();
@@ -288,6 +329,9 @@ function createHarnessWithOptions(options = {}) {
   const runtimeCalls = [];
   const pageCalls = [];
   const summarySyncCalls = [];
+  const checkedAtSequence = Array.isArray(options.checkedAtSequence) && options.checkedAtSequence.length
+    ? options.checkedAtSequence.slice()
+    : null;
   const context = vm.createContext({
     clearTimeout() {},
     console,
@@ -335,8 +379,11 @@ function createHarnessWithOptions(options = {}) {
         };
       }
       if (request?.action === "functions.fetch") {
+        const nextCheckedAt = checkedAtSequence?.length
+          ? checkedAtSequence.shift()
+          : "2026-04-13T01:02:03.000Z";
         return {
-          checkedAt: "2026-04-13T01:02:03.000Z",
+          checkedAt: nextCheckedAt,
           items: [
             {
               artifactId: "artifact-alpha",
