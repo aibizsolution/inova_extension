@@ -203,8 +203,8 @@ function verifyHostedMeetingSummarySyncContract() {
     path.join(root, "hosting", "extension-v2", "panel", "index.js"),
     "utf8"
   );
-  const meetingRequestHelperSource = fs.readFileSync(
-    path.join(root, "content", "panel-hosted-meeting-request.js"),
+  const bridgeRequestSource = fs.readFileSync(
+    path.join(root, "content", "panel-hosted-bridge-request.js"),
     "utf8"
   );
   const bootstrapSource = fs.readFileSync(
@@ -217,8 +217,8 @@ function verifyHostedMeetingSummarySyncContract() {
     "hosted meeting hub should be able to sync a compact summary back to the top panel"
   );
   assert(
-    meetingRequestHelperSource.includes('if (action === "meeting-summary-sync") {'),
-    "top panel bridge should accept hosted meeting summary sync requests through the dedicated helper module"
+    bridgeRequestSource.includes('if (action === "meeting-summary-sync") {'),
+    "top panel bridge should accept hosted meeting summary sync requests through the shared hosted bridge helper"
   );
   assert(
     bootstrapSource.includes("onMeetingSummarySync: handlePanelMeetingSummarySync"),
@@ -379,8 +379,8 @@ function verifyHostedReleaseSummarySyncContract() {
     path.join(root, "hosting", "extension-v2", "panel", "release-controller.js"),
     "utf8"
   );
-  const shellRequestSource = fs.readFileSync(
-    path.join(root, "content", "panel-hosted-shell-request.js"),
+  const bridgeRequestSource = fs.readFileSync(
+    path.join(root, "content", "panel-hosted-bridge-request.js"),
     "utf8"
   );
 
@@ -393,8 +393,8 @@ function verifyHostedReleaseSummarySyncContract() {
     "hosted release controller should emit a compact top-panel summary after release checks settle"
   );
   assert(
-    shellRequestSource.includes('if (action === "release-summary-sync") {'),
-    "top panel bridge should accept hosted release summary sync requests through the shell helper"
+    bridgeRequestSource.includes('if (action === "release-summary-sync") {'),
+    "top panel bridge should accept hosted release summary sync requests through the shared hosted bridge helper"
   );
 }
 
@@ -711,11 +711,6 @@ function createHarness() {
 
   [
     path.join("content", "panel-hosted-bridge-request.js"),
-    path.join("content", "panel-hosted-meeting-request.js"),
-    path.join("content", "panel-hosted-prompt-request.js"),
-    path.join("content", "panel-hosted-runtime-request.js"),
-    path.join("content", "panel-hosted-page-request.js"),
-    path.join("content", "panel-hosted-shell-request.js"),
     path.join("content", "panel.js"),
   ].forEach((relativePath) => loadScript(relativePath, context));
 
