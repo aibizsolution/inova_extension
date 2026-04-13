@@ -17,7 +17,7 @@ async function main() {
   await verifyHostedMeetingHubDoesNotPrefetchWhileClosed();
   await verifyHostedMeetingHubIgnoresWindowFocusWhileActive();
   await verifyHostedMeetingHubIgnoresOwnSummaryEchoWhileLoading();
-  await verifyHostedMeetingHubFingerprintIgnoresCheckedAt();
+  await verifyHostedMeetingHubSummarySyncStaysCountOnly();
   console.log("[verify-meeting-hub-controller] Hosted meeting hub controller contract passed");
 }
 
@@ -45,8 +45,7 @@ async function verifyHostedMeetingHubOwnership() {
   assert.equal(viewState.items.length, 1, "hosted meeting hub should load meeting items directly");
   assert.equal(viewState.items[0].meetingId, "meeting-alpha");
   assert.equal(harness.summarySyncCalls.length, 1, "hosted meeting hub should sync a compact summary back to the top panel after load");
-  assert.equal(harness.summarySyncCalls[0].count, 1);
-  assert.equal(typeof harness.summarySyncCalls[0].snapshotFingerprint, "string");
+  assert.deepEqual(harness.summarySyncCalls[0], { count: 1 });
 
   const shareHandled = await controller.handleMeetingAction("share", {
     meetingId: "meeting-alpha",
@@ -423,7 +422,6 @@ async function verifyHostedMeetingHubIgnoresOwnSummaryEchoWhileLoading() {
           activeTool: "meeting",
           meetingTool: {
             count: meetingTool.count,
-            snapshotFingerprint: meetingTool.snapshotFingerprint,
           },
           open: true,
           settings: {
@@ -460,7 +458,7 @@ async function verifyHostedMeetingHubIgnoresOwnSummaryEchoWhileLoading() {
   );
 }
 
-async function verifyHostedMeetingHubFingerprintIgnoresCheckedAt() {
+async function verifyHostedMeetingHubSummarySyncStaysCountOnly() {
   const harness = createHarness({
     checkedAtSequence: [
       "2026-04-13T01:02:03.000Z",
@@ -485,18 +483,21 @@ async function verifyHostedMeetingHubFingerprintIgnoresCheckedAt() {
   );
   await flushAsyncTurns();
 
-  const initialFingerprint = harness.summarySyncCalls[0]?.snapshotFingerprint || "";
-  assert(initialFingerprint, "hosted meeting hub should emit a snapshot fingerprint after the first load");
+  assert.deepEqual(
+    harness.summarySyncCalls[0],
+    { count: 1 },
+    "hosted meeting hub should sync a count-only summary after the first load"
+  );
 
   const visibleHandled = controller.handleHostActivity("visibility-visible");
   await flushAsyncTurns();
 
   assert.equal(visibleHandled, true, "hosted meeting hub should accept hosted activity refresh triggers while active");
   assert.equal(harness.summarySyncCalls.length, 2, "hosted meeting hub should emit another summary after a forced refresh");
-  assert.equal(
-    harness.summarySyncCalls[1].snapshotFingerprint,
-    initialFingerprint,
-    "meeting summary fingerprints should stay stable when only checkedAt changes across identical meeting data"
+  assert.deepEqual(
+    harness.summarySyncCalls[1],
+    { count: 1 },
+    "meeting summary sync should stay count-only even when checkedAt changes across identical meeting data"
   );
 }
 

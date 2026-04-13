@@ -1,6 +1,6 @@
 # Current Handoff
 
-Last updated: 2026-04-13
+Last updated: 2026-04-14
 
 ## Snapshot
 
@@ -25,7 +25,7 @@ Last updated: 2026-04-13
 - `conversation`: hosted owns list/search/copy/jump UI state; extension only provides page adapter plus thin signals such as count/active/fingerprint.
 - `release`: hosted owns latest/history/download surface and compact release summary sync; extension only brokers browser/runtime actions plus compact `releaseSummary(count + snapshotFingerprint)`.
 - `prompt-library`, `prompt-store`, `prompt-review`: hosted owns prompt tab transition plus prompt/store/review action routing; extension keeps page/runtime bridge and legacy fallback handlers outside the v2 request path.
-- `meeting hub` / `meeting workspace`: hosted owns list/action UI, Firestore meeting-list subscription, and launch tracing; v2 hosted panel no longer falls back to top-panel `meeting-action` dispatch, and v2 extension now carries only `meetingSummary(count + snapshotFingerprint)` residue outside the hub path.
+- `meeting hub` / `meeting workspace`: hosted owns list/action UI, Firestore meeting-list subscription, and launch tracing; v2 hosted panel no longer falls back to top-panel `meeting-action` dispatch, and v2 extension now carries only count-only `meetingSummary(count)` residue outside the hub path.
 
 Short version:
 
@@ -66,6 +66,7 @@ Short version:
   - original `i-Nova` tab now logs only launch request/dispatch/completion
   - new hosted workspace tab owns workspace bootstrap/ready logs
 - v2 meeting lifecycle coupling reduced across sync, snapshot, fallback, and bootstrap wiring
+- v2 meeting summary residue is now count-only, and hosted meeting hub no longer uses top-panel fingerprint echo for reload decisions
 - hosted-first ownership and incremental doc-correction rules were written into root/docs guidance
 
 ## Recent High-Signal Commits

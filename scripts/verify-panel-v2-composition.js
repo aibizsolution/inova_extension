@@ -268,8 +268,8 @@ function main() {
     "v2 composition should keep hosted-owned meeting residue in a dedicated compact meetingSummary state bucket"
   );
   assert(
-    v2CompositionSource.includes("const explicitFingerprint = normalizeText(meetingTool?.snapshotFingerprint);"),
-    "v2 meeting snapshot bridge should honor an explicit hosted-owned meeting fingerprint"
+    v2CompositionSource.includes("meetingSummary: { count: 0 },"),
+    "v2 composition should keep hosted-owned meeting residue in a count-only meetingSummary state bucket"
   );
   assert(
     v2CompositionSource.includes("function normalizeHostedMeetingSummary(meetingTool)"),
@@ -277,7 +277,11 @@ function main() {
   );
   assert(
     !v2CompositionSource.includes("dataFreshness: normalizedMeetingTool.dataFreshness"),
-    "v2 meeting summary state should not keep hosted freshness flags once the extension only needs count and fingerprint"
+    "v2 meeting summary state should not keep hosted freshness flags once the extension only needs the count"
+  );
+  assert(
+    !v2CompositionSource.includes("function buildMeetingSnapshotFingerprint("),
+    "v2 meeting snapshot bridge should stop carrying hosted-owned meeting fingerprints once extension residue is count-only"
   );
   assert(
     v2CompositionSource.includes("buildMeetingSnapshot: hostedOwnedMeetingSnapshot.buildMeetingSnapshot"),

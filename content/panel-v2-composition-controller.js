@@ -200,7 +200,7 @@
       settings: { ...namespace.constants.defaults.settings },
       settingsHydrated: false,
       pausedSessions: {},
-      meetingSummary: { count: 0, snapshotFingerprint: "" },
+      meetingSummary: { count: 0 },
       releaseSummary: { count: 0, snapshotFingerprint: "" },
       meetingHub: { ...namespace.constants.defaults.meetingHub },
       meetingUi: {
@@ -506,7 +506,6 @@
         const meetingTool = normalizeHostedMeetingSummary(meetingSummary);
         return {
           count: getMeetingCount(meetingTool),
-          snapshotFingerprint: buildMeetingSnapshotFingerprint(meetingTool),
         };
       },
       getMeetingCount,
@@ -514,14 +513,6 @@
 
     function getMeetingCount(meetingTool = {}) {
       return Math.max(0, Number(meetingTool.count) || 0);
-    }
-
-    function buildMeetingSnapshotFingerprint(meetingTool = {}) {
-      const explicitFingerprint = normalizeText(meetingTool?.snapshotFingerprint);
-      if (explicitFingerprint) {
-        return explicitFingerprint;
-      }
-      return String(getMeetingCount(meetingTool));
     }
   }
 
@@ -728,7 +719,6 @@
     const normalizedMeetingTool = normalizeHostedMeetingSummary(meetingTool);
     return JSON.stringify({
       count: normalizedMeetingTool.count,
-      snapshotFingerprint: normalizedMeetingTool.snapshotFingerprint,
     });
   }
 
@@ -736,7 +726,6 @@
     const normalizedMeetingTool = meetingTool && typeof meetingTool === "object" ? meetingTool : {};
     return {
       count: Math.max(0, Number(normalizedMeetingTool.count) || 0),
-      snapshotFingerprint: normalizeText(normalizedMeetingTool.snapshotFingerprint),
     };
   }
 

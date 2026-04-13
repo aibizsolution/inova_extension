@@ -47,7 +47,6 @@
       initPromise: null,
       items: [],
       lastCount: 0,
-      lastLoadedFingerprint: "",
       loadPromise: null,
       loading: false,
       panelOpen: false,
@@ -59,7 +58,6 @@
         meetingWorkspaceTarget: "production",
         meetingWorkspaceUrlOverride: "",
       },
-      snapshotFingerprint: "",
       source: "none",
     };
     if (!meetingRealtime && namespace.meetingFirestoreClient?.create) {
@@ -113,19 +111,12 @@
         meetingRealtime?.disconnect?.("capabilities-missing");
         return;
       }
-      const nextFingerprint = normalizeText(fallbackMeetingTool.snapshotFingerprint);
-      const fingerprintChanged = Boolean(nextFingerprint) && state.snapshotFingerprint !== nextFingerprint;
-      if (fingerprintChanged) {
-        state.snapshotFingerprint = nextFingerprint;
-      } else if (!state.snapshotFingerprint && nextFingerprint) {
-        state.snapshotFingerprint = nextFingerprint;
-      }
       if (nextActiveTool !== "meeting" || !nextPanelOpen) {
         meetingRealtime?.disconnect?.("panel-inactive");
         return;
       }
-      const shouldForceReload = fingerprintChanged || meetingToolBecameActive || panelReopenedIntoMeeting;
-      if (shouldForceReload || !state.lastLoadedFingerprint || !state.initialized) {
+      const shouldForceReload = meetingToolBecameActive || panelReopenedIntoMeeting;
+      if (shouldForceReload || !state.initialized) {
         void ensureLoaded(shouldForceReload);
       }
     }
@@ -319,9 +310,6 @@
           state.pendingReload = true;
         }
         return state.loadPromise;
-      }
-      if (!force && state.lastLoadedFingerprint && state.lastLoadedFingerprint === state.snapshotFingerprint && !state.error) {
-        return state.items;
       }
       if (!state.providerIdentity.available || !normalizeText(state.providerIdentity.providerUserKey)) {
         state.checkedAt = state.checkedAt || "";
@@ -551,8 +539,6 @@
         return false;
       }
       const summary = buildTopPanelSummary();
-      state.snapshotFingerprint = normalizeText(summary.snapshotFingerprint) || state.snapshotFingerprint;
-      state.lastLoadedFingerprint = state.snapshotFingerprint || state.lastLoadedFingerprint;
       try {
         await syncTopPanelSummary(summary);
         return true;
@@ -565,21 +551,7 @@
     function buildTopPanelSummary() {
       const count = Math.max(0, Number(state.lastCount) || state.items.length || 0);
       return {
-        checkedAt: normalizeText(state.checkedAt),
         count,
-        dataFreshness: normalizeEnum(state.dataFreshness, ["fresh", "stale", "empty"], "empty"),
-        degraded: Boolean(state.degraded),
-        degradedReason: normalizeText(state.degradedReason),
-        error: normalizeText(state.error),
-        snapshotFingerprint: buildMeetingToolFingerprint({
-          checkedAt: state.checkedAt,
-          count,
-          dataFreshness: state.dataFreshness,
-          degraded: state.degraded,
-          error: state.error,
-          items: state.items,
-        }),
-        source: normalizeEnum(state.source, ["realtime", "cache", "none"], "none"),
       };
     }
   }
@@ -695,26 +667,6 @@
           tone: normalizeText(feedback?.tone) || "info",
         }
       : null;
-  }
-
-  function buildMeetingToolFingerprint(meetingTool = {}) {
-    const items = Array.isArray(meetingTool.items) ? meetingTool.items : [];
-    const count = Math.max(0, Number(meetingTool.count) || items.length);
-    return [
-      String(count),
-      normalizeText(meetingTool.dataFreshness),
-      meetingTool.degraded ? "1" : "0",
-      normalizeText(meetingTool.error),
-      items.map((item) => [
-        normalizeText(item?.meetingId),
-        normalizeText(item?.latestJobId || item?.jobId),
-        normalizeText(item?.latestArtifactId || item?.artifactId),
-        normalizeText(item?.status),
-        item?.share?.active ? "1" : "0",
-        normalizeText(item?.share?.status),
-        normalizeText(item?.updatedAt || item?.createdAt),
-      ].join("~")).join("||"),
-    ].join("|");
   }
 
   function normalizeEnum(value, allowedValues, fallback) {
