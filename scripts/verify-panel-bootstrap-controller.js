@@ -11,7 +11,7 @@ async function main() {
   await verifyBootstrapWiringAndScheduling();
   await verifyBootstrapMeetingOptOut();
   verifyRouteStorageChangeDelegation();
-  console.log("[verify-panel-bootstrap-controller] Panel bootstrap controller contract passed");
+  console.log("[verify-panel-bootstrap-controller] V2 shell bridge bootstrap contract passed");
 }
 
 async function verifyBootstrapWiringAndScheduling() {
@@ -139,7 +139,7 @@ function createHarness(options = {}) {
     },
   };
 
-  loadScript("content/panel-bootstrap-controller.js", context);
+  loadScript("content/panel-v2-shell-bridge.js", context);
 
   const state = {
     activeTool: options.activeTool || "bookmarks",
@@ -149,7 +149,7 @@ function createHarness(options = {}) {
     open: Boolean(options.open),
   };
 
-  const controller = context.InovaBookmarks.panelBootstrapController.create(state, {
+  const controller = context.InovaBookmarks.panelV2ShellBridge.createBootstrapController(state, {
     handlePanelMeetingAction: async () => {},
     handlePanelMeetingSummarySync: async () => {},
     isStoreTabActive() {

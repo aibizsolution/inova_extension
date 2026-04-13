@@ -208,7 +208,7 @@ function verifyHostedMeetingSummarySyncContract() {
     "utf8"
   );
   const bootstrapSource = fs.readFileSync(
-    path.join(root, "content", "panel-bootstrap-controller.js"),
+    path.join(root, "content", "panel-v2-shell-bridge.js"),
     "utf8"
   );
 

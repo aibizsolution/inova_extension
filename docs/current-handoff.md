@@ -55,7 +55,7 @@ Short version:
 - current `1.0.0` manifest no longer loads `content/panel-bookmark-controller.js`; the active conversation bridge now lives inline in `content/panel-v2-composition-controller.js` and the old controller sits under `backup/legacy-panel/*`
 - current `1.0.0` manifest no longer loads `content/panel-runtime-controller.js` or `content/panel-debug-controller.js`; active runtime/debug helpers now live inline in `content/panel-v2-composition-controller.js`
 - current `1.0.0` manifest no longer loads `content/panel-state-factory.js` or `content/provider-identity-sync.js`; active state initialization and panel-local provider identity sync now live inline in `content/panel-v2-composition-controller.js`
-- current `1.0.0` manifest no longer loads `content/panel-activity-controller.js`, `content/panel-surface-controller.js`, or `content/panel-lifecycle-controller.js`; active shell visibility/open/surface helpers now live in `content/panel-v2-shell-bridge.js`, and `content/panel-v2-composition-controller.js` only wires that bridge into the active v2 graph
+- current `1.0.0` manifest no longer loads `content/panel-activity-controller.js`, `content/panel-surface-controller.js`, `content/panel-lifecycle-controller.js`, or `content/panel-bootstrap-controller.js`; active shell visibility/open/surface/bootstrap helpers now live in `content/panel-v2-shell-bridge.js`, and `content/panel-v2-composition-controller.js` only wires that bridge into the active v2 graph
 - meeting open traces split correctly:
   - original `i-Nova` tab now logs only launch request/dispatch/completion
   - new hosted workspace tab owns workspace bootstrap/ready logs
@@ -130,7 +130,7 @@ Goal:
 Start files:
 
 - `content/panel-v2-composition-controller.js`
-- `content/panel-bootstrap-controller.js`
+- `content/panel-v2-shell-bridge.js`
 - `hosting/extension-v2/panel/meeting-hub-controller.js`
 
 ### 2. Legacy isolation
@@ -173,7 +173,7 @@ Start files:
 
 - `content/panel.js`
 - `content/panel-render-controller.js`
-- `content/panel-bootstrap-controller.js`
+- `content/panel-v2-shell-bridge.js`
 - `backup/legacy-panel/panel-action-controller.js`
 
 ### Not the next priority
@@ -214,7 +214,7 @@ Minimal re-entry set:
 - `docs/runtime-architecture.md`
 - `shared/product-lane.js`
 - `content/panel-v2-composition-controller.js`
-- `content/panel-bootstrap-controller.js`
+- `content/panel-v2-shell-bridge.js`
 - `content/panel-render-controller.js`
 - `content/panel.js`
 - `hosting/extension-v2/panel/index.js`

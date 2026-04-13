@@ -114,7 +114,7 @@
       buildReleaseSnapshot: hostedOwnedReleaseSnapshot.buildReleaseSnapshot,
       getReleaseCount: hostedOwnedReleaseSnapshot.getReleaseCount,
     });
-    const panelBootstrapController = namespace.panelBootstrapController.create(state, {
+    const panelBootstrapController = panelV2ShellBridge.createBootstrapController(state, {
       buildHostedPanelCallbacks: buildHostedOwnedPanelCallbacks,
       handlePanelMeetingSummarySync: handleHostedMeetingSummarySync,
       handlePanelReleaseSummarySync: handleHostedReleaseSummarySync,

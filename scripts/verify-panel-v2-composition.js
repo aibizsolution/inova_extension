@@ -83,8 +83,8 @@ function main() {
     "content/main.js should stop wiring the legacy panel composition into the active 1.0.0 bundle"
   );
   assert(
-    v2CompositionSource.includes("namespace.panelBootstrapController.create"),
-    "v2 composition should keep the existing bootstrap controller contract"
+    v2CompositionSource.includes("panelV2ShellBridge.createBootstrapController"),
+    "v2 composition should keep the bootstrap wiring inside the shared v2 shell bridge"
   );
   assert(
     !v2CompositionSource.includes("namespace.panelDebugController.create"),
@@ -147,7 +147,7 @@ function main() {
     "v2 panel toggle transitions should stop waking extension meeting sync"
   );
   assert(
-    /const panelBootstrapController = namespace\.panelBootstrapController\.create\(state, \{[\s\S]*?meetingManager: hostedOwnedIdleMeetingLifecycle,/.test(v2CompositionSource),
+    /const panelBootstrapController = panelV2ShellBridge\.createBootstrapController\(state, \{[\s\S]*?meetingManager: hostedOwnedIdleMeetingLifecycle,/.test(v2CompositionSource),
     "v2 bootstrap should stop wiring meeting sync through the extension lifecycle bridge"
   );
   assert(
