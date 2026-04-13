@@ -157,13 +157,44 @@ function main() {
     "v2 hosted-owned prompt wrapper should silence legacy prompt realtime scheduling"
   );
   assert(
-    v2CompositionSource.includes("handlePanelMeetingAction: async () => false"),
-    "v2 bootstrap should leave the hosted meeting action callback as an explicit no-op fallback"
+    v2CompositionSource.includes("buildHostedPanelCallbacks: buildHostedOwnedPanelCallbacks"),
+    "v2 bootstrap should provide a hosted-owned callback surface instead of passing the legacy default callback set through unchanged"
   );
   assert(
     v2CompositionSource.includes("handlePanelMeetingSummarySync: handleHostedMeetingSummarySync"),
     "v2 bootstrap should accept hosted-owned meeting summary sync callbacks"
   );
+  assert(
+    v2CompositionSource.includes("function buildHostedOwnedPanelCallbacks(deps = {})"),
+    "v2 composition should define a hosted-owned callback builder for the panel host"
+  );
+  [
+    "onCopyBookmark:",
+    "onHandlePositionChange:",
+    "onJumpBookmark:",
+    "onMeetingSummarySync:",
+    "onReleaseAction:",
+    "onSearch:",
+    "onSearchSubmit:",
+    "onSelectTool:",
+    "onEscape:",
+    "onToggle:",
+  ].forEach((pattern) => assert(
+    v2CompositionSource.includes(pattern),
+    `v2 hosted-owned callback builder should keep the active shell callback ${pattern}`
+  ));
+  [
+    "onMeetingAction:",
+    "onImportFile:",
+    "onMovePrompt:",
+    "onPromptAction:",
+    "onPromptDraftChange:",
+    "onSelectPromptTab:",
+    "onStoreAction:",
+  ].forEach((pattern) => assert(
+    !v2CompositionSource.includes(pattern),
+    `v2 hosted-owned callback builder should drop the legacy callback ${pattern}`
+  ));
   assert(
     v2CompositionSource.includes("shouldListenMeetingStorageChanges: () => false"),
     "v2 bootstrap wiring should not subscribe meeting storage change listeners"

@@ -117,7 +117,7 @@
       releaseManager,
     });
     const panelBootstrapController = namespace.panelBootstrapController.create(state, {
-      handlePanelMeetingAction: async () => false,
+      buildHostedPanelCallbacks: buildHostedOwnedPanelCallbacks,
       handlePanelMeetingSummarySync: handleHostedMeetingSummarySync,
       isStoreTabActive: runtimeFlags.isStoreTabActive,
       meetingManager: hostedOwnedIdleMeetingLifecycle,
@@ -159,6 +159,35 @@
       };
       render();
       return true;
+    }
+
+    function buildHostedOwnedPanelCallbacks(deps = {}) {
+      const panelBookmarkController = deps.panelBookmarkController || { copyBookmarkText() {}, jumpToBookmark() {} };
+      const panelLifecycleController = deps.panelLifecycleController || { togglePanel() {} };
+      const panelPromptController = deps.panelPromptController || { handleEscape() {} };
+      const panelShellController = deps.panelShellController || {
+        selectTool() {},
+        submitQuery() {},
+        updateHandlePosition() {},
+        updateQuery() {},
+      };
+      const releaseManager = deps.releaseManager || { handleAction() {} };
+      const handlePanelMeetingSummarySync = typeof deps.handlePanelMeetingSummarySync === "function"
+        ? deps.handlePanelMeetingSummarySync
+        : async () => false;
+
+      return {
+        onCopyBookmark: panelBookmarkController.copyBookmarkText,
+        onHandlePositionChange: panelShellController.updateHandlePosition,
+        onJumpBookmark: panelBookmarkController.jumpToBookmark,
+        onMeetingSummarySync: handlePanelMeetingSummarySync,
+        onReleaseAction: releaseManager.handleAction,
+        onSearch: panelShellController.updateQuery,
+        onSearchSubmit: panelShellController.submitQuery,
+        onSelectTool: panelShellController.selectTool,
+        onEscape: panelPromptController.handleEscape,
+        onToggle: panelLifecycleController.togglePanel,
+      };
     }
   }
 

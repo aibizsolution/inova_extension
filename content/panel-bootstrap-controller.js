@@ -8,6 +8,9 @@
     const handlePanelMeetingSummarySync = typeof deps.handlePanelMeetingSummarySync === "function"
       ? deps.handlePanelMeetingSummarySync
       : async () => false;
+    const buildHostedPanelCallbacks = typeof deps.buildHostedPanelCallbacks === "function"
+      ? deps.buildHostedPanelCallbacks
+      : buildDefaultHostedPanelCallbacks;
     const isStoreTabActive = typeof deps.isStoreTabActive === "function"
       ? deps.isStoreTabActive
       : () => false;
@@ -58,25 +61,15 @@
     async function bootstrap() {
       panelLifecycleController.initializeOpenState();
       void providerIdentitySync.syncToStorage("bootstrap");
-      namespace.contentPanel.ensurePanel({
-        onCopyBookmark: panelBookmarkController.copyBookmarkText,
-        onHandlePositionChange: panelShellController.updateHandlePosition,
-        onImportFile: panelPromptController.handleImportFile,
-        onJumpBookmark: panelBookmarkController.jumpToBookmark,
-        onMeetingAction: handlePanelMeetingAction,
-        onMeetingSummarySync: handlePanelMeetingSummarySync,
-        onMovePrompt: panelPromptController.movePromptItem,
-        onPromptAction: panelPromptController.handlePromptAction,
-        onPromptDraftChange: panelPromptController.handleDraftChange,
-        onSelectPromptTab: panelPromptController.selectPromptTab,
-        onReleaseAction: releaseManager.handleAction,
-        onSearch: panelShellController.updateQuery,
-        onSearchSubmit: panelShellController.submitQuery,
-        onSelectTool: panelShellController.selectTool,
-        onStoreAction: panelPromptController.handleStoreAction,
-        onEscape: panelPromptController.handleEscape,
-        onToggle: panelLifecycleController.togglePanel,
-      });
+      namespace.contentPanel.ensurePanel(buildHostedPanelCallbacks({
+        handlePanelMeetingAction,
+        handlePanelMeetingSummarySync,
+        panelBookmarkController,
+        panelLifecycleController,
+        panelPromptController,
+        panelShellController,
+        releaseManager,
+      }));
       panelDebugController.installValidationApi();
       panelPromptController.ensureReviewFloat();
       routeWatchController.installRouteWatchers();
@@ -123,6 +116,53 @@
         || !state.bookmarks.length
       );
     }
+  }
+
+  function buildDefaultHostedPanelCallbacks(deps = {}) {
+    const handlePanelMeetingAction = typeof deps.handlePanelMeetingAction === "function"
+      ? deps.handlePanelMeetingAction
+      : async () => {};
+    const handlePanelMeetingSummarySync = typeof deps.handlePanelMeetingSummarySync === "function"
+      ? deps.handlePanelMeetingSummarySync
+      : async () => false;
+    const panelBookmarkController = deps.panelBookmarkController || { copyBookmarkText() {}, jumpToBookmark() {} };
+    const panelLifecycleController = deps.panelLifecycleController || { togglePanel() {} };
+    const panelPromptController = deps.panelPromptController || {
+      handleDraftChange() {},
+      handleEscape() {},
+      handleImportFile() {},
+      handlePromptAction() {},
+      handleStoreAction() {},
+      movePromptItem() {},
+      selectPromptTab() {},
+    };
+    const panelShellController = deps.panelShellController || {
+      selectTool() {},
+      submitQuery() {},
+      updateHandlePosition() {},
+      updateQuery() {},
+    };
+    const releaseManager = deps.releaseManager || { handleAction() {} };
+
+    return {
+      onCopyBookmark: panelBookmarkController.copyBookmarkText,
+      onHandlePositionChange: panelShellController.updateHandlePosition,
+      onImportFile: panelPromptController.handleImportFile,
+      onJumpBookmark: panelBookmarkController.jumpToBookmark,
+      onMeetingAction: handlePanelMeetingAction,
+      onMeetingSummarySync: handlePanelMeetingSummarySync,
+      onMovePrompt: panelPromptController.movePromptItem,
+      onPromptAction: panelPromptController.handlePromptAction,
+      onPromptDraftChange: panelPromptController.handleDraftChange,
+      onSelectPromptTab: panelPromptController.selectPromptTab,
+      onReleaseAction: releaseManager.handleAction,
+      onSearch: panelShellController.updateQuery,
+      onSearchSubmit: panelShellController.submitQuery,
+      onSelectTool: panelShellController.selectTool,
+      onStoreAction: panelPromptController.handleStoreAction,
+      onEscape: panelPromptController.handleEscape,
+      onToggle: panelLifecycleController.togglePanel,
+    };
   }
 
   namespace.panelBootstrapController = { create };

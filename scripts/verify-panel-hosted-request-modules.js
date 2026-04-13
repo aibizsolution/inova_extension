@@ -66,6 +66,17 @@ function verifyHostedMeetingRequestModuleContract() {
     bridgeRequestSource.includes("namespace.panelHostedMeetingRequest?.handle?."),
     "content bridge routing should delegate meeting-specific hosted requests to the dedicated helper module"
   );
+  const meetingRequestSource = fs.readFileSync(
+    path.join(root, "content", "panel-hosted-meeting-request.js"),
+    "utf8"
+  );
+  [
+    'typeof callbacks.onMeetingAction !== "function"',
+    'typeof callbacks.onMeetingSummarySync !== "function"',
+  ].forEach((pattern) => assert(
+    meetingRequestSource.includes(pattern),
+    `meeting request helper should return unhandled when the lane does not expose ${pattern}`
+  ));
 }
 
 function verifyHostedPromptRequestModuleContract() {
@@ -90,6 +101,21 @@ function verifyHostedPromptRequestModuleContract() {
     bridgeRequestSource.includes("namespace.panelHostedPromptRequest?.handle?."),
     "content bridge routing should delegate prompt-specific hosted requests to the dedicated helper module"
   );
+  const promptRequestSource = fs.readFileSync(
+    path.join(root, "content", "panel-hosted-prompt-request.js"),
+    "utf8"
+  );
+  [
+    'typeof callbacks.onPromptAction !== "function"',
+    'typeof callbacks.onPromptDraftChange !== "function"',
+    'typeof callbacks.onSelectPromptTab !== "function"',
+    'typeof callbacks.onStoreAction !== "function"',
+    'typeof callbacks.onImportFile !== "function"',
+    'typeof callbacks.onMovePrompt !== "function"',
+  ].forEach((pattern) => assert(
+    promptRequestSource.includes(pattern),
+    `prompt request helper should return unhandled when the lane does not expose ${pattern}`
+  ));
   assert(
     !bridgeRequestSource.includes('if (action === "prompt-action")'),
     "content bridge routing should not keep inline prompt-action hosted request handling once the prompt helper exists"

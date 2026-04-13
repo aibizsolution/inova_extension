@@ -11,6 +11,12 @@
     const detail = payload?.detail && typeof payload.detail === "object" ? payload.detail : {};
 
     if (action === "meeting-action") {
+      if (typeof callbacks.onMeetingAction !== "function") {
+        return Promise.resolve({
+          handled: false,
+          result: null,
+        });
+      }
       logConsoleTrace("meeting", "50.top.panel.request.received", {
         detail,
         meetingAction: normalizeText(payload?.meetingAction),
@@ -37,6 +43,12 @@
     }
 
     if (action === "meeting-summary-sync") {
+      if (typeof callbacks.onMeetingSummarySync !== "function") {
+        return Promise.resolve({
+          handled: false,
+          result: null,
+        });
+      }
       const meetingTool = payload?.meetingTool && typeof payload.meetingTool === "object"
         ? payload.meetingTool
         : {};
