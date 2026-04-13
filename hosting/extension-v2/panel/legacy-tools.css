@@ -337,6 +337,10 @@
   border-bottom: 1px solid rgba(52, 81, 100, 0.08);
 }
 .inova-tool-section--release .inova-tool-toolbar { justify-content: space-between; }
+.inova-tool-section--release .inova-tool-toolbar__row--release {
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(52, 81, 100, 0.08);
+}
 .inova-meeting-stack { display: flex; flex-direction: column; gap: 8px; padding: 2px 14px 14px; overflow-y: auto; overflow-x: hidden; }
 .inova-tool-inline-summary {
   display: flex;
@@ -626,7 +630,9 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
-.inova-release-stack { display: flex; flex-direction: column; gap: 8px; padding: 2px 14px 14px; overflow-y: auto; overflow-x: hidden; }
+.inova-release-stack { display: flex; flex-direction: column; gap: 12px; padding: 2px 14px 14px; overflow-y: auto; overflow-x: hidden; }
+.inova-release-section { display: flex; flex-direction: column; gap: 10px; }
+.inova-release-section__body { display: flex; flex-direction: column; gap: 8px; }
 .inova-release-card {
   display: flex; flex-direction: column; gap: 6px; padding: 10px 11px; border: 1px solid rgba(98, 127, 145, 0.16);
   border-radius: 16px; background: rgba(255, 255, 255, 0.92);

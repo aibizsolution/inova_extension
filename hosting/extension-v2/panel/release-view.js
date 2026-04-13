@@ -4,17 +4,31 @@
   function render(state) {
     return `
       <section class="inova-tool-section inova-tool-section--release">
-        <div class="inova-tool-toolbar">
-          <div class="inova-tool-meta">현재 ${escapeHtml(state.currentVersion)}</div>
-          <div class="inova-tool-actions inova-tool-actions--toolbar">
-            <button type="button" class="inova-tool-button" data-release-action="refresh" ${renderDisabled(state.checking || state.historyLoading)}>${state.checking ? "확인 중..." : "다시 확인"}</button>
+        <div class="inova-tool-toolbar is-stacked">
+          <div class="inova-tool-toolbar__row inova-tool-toolbar__row--release">
+            <div class="inova-tool-meta">현재 ${escapeHtml(state.currentVersion)}</div>
+            <div class="inova-tool-actions inova-tool-actions--toolbar">
+              <button type="button" class="inova-tool-button" data-release-action="refresh" ${renderDisabled(state.checking || state.historyLoading)}>${state.checking ? "확인 중..." : "다시 확인"}</button>
+            </div>
           </div>
         </div>
         <div class="inova-release-stack">
+          ${renderUpdateSection(state)}
+          ${renderGuideSection()}
+          ${renderHistorySection(state)}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderUpdateSection(state) {
+    const summaryMeta = formatCheckedAt(state.lastCheckedAt) || `현재 ${state.currentVersion}`;
+    return `
+      <section class="inova-release-section">
+        ${renderSectionSummary("업데이트 안내", summaryMeta)}
+        <div class="inova-release-section__body">
           ${renderStatusCard(state)}
           ${state.latest && !state.versionRefreshPending ? renderLatestCard(state) : ""}
-          ${renderGuideCard()}
-          ${renderHistoryCard(state)}
         </div>
       </section>
     `;
@@ -115,53 +129,56 @@
     `;
   }
 
-  function renderGuideCard() {
+  function renderGuideSection() {
     return `
-      <article class="inova-release-card">
-        <strong>설치·업데이트 방법</strong>
-        <p class="inova-release-card__notice">설치나 업데이트를 진행하기 전에 Chrome 확장 프로그램 페이지에서 개발자 모드를 먼저 켜 주세요. 개발자 모드가 꺼져 있으면 설치와 새로고침 버튼이 보이지 않을 수 있어요.</p>
-        ${renderReleaseDetails(
-          "처음 설치 보기",
-          `
-            <ol class="inova-release-steps">
-              <li>ZIP 받기를 눌러 파일을 내려받고, 원하는 폴더에 압축을 풉니다.</li>
-              <li>Chrome 주소창에 chrome://extensions 를 입력해 확장 프로그램 페이지를 엽니다.</li>
-              <li>오른쪽 위 개발자 모드를 켭니다.</li>
-              <li>압축해제된 확장 프로그램을 로드합니다를 눌러 방금 압축을 푼 폴더를 선택합니다.</li>
-              <li>설치가 끝나면 i-Nova 탭으로 돌아가 페이지를 새로고침합니다.</li>
-            </ol>
-          `
-        )}
-        ${renderReleaseDetails(
-          "업데이트 방법 보기",
-          `
-            <ol class="inova-release-steps">
-              <li>새 ZIP을 내려받고 압축을 풉니다.</li>
-              <li>기존 확장 폴더를 새 파일로 바꾸거나, 새 폴더로 교체합니다.</li>
-              <li>chrome://extensions 에서 이 확장의 새로고침 버튼을 누릅니다.</li>
-              <li>i-Nova 탭도 새로고침하면 최신 화면이 반영됩니다.</li>
-            </ol>
-          `
-        )}
-        <p class="inova-release-card__empty">자동 업데이트는 지원하지 않습니다. 문제가 생기면 이전 버전 ZIP을 다시 받아 같은 방법으로 되돌릴 수 있어요.</p>
-      </article>
+      <section class="inova-release-section">
+        ${renderSectionSummary("설치·업데이트 방법", "개발자 모드 필요")}
+        <div class="inova-release-section__body">
+          <article class="inova-release-card">
+            <p class="inova-release-card__notice">설치나 업데이트를 진행하기 전에 Chrome 확장 프로그램 페이지에서 개발자 모드를 먼저 켜 주세요. 개발자 모드가 꺼져 있으면 설치와 새로고침 버튼이 보이지 않을 수 있어요.</p>
+            ${renderReleaseDetails(
+              "처음 설치 보기",
+              `
+                <ol class="inova-release-steps">
+                  <li>ZIP 받기를 눌러 파일을 내려받고, 원하는 폴더에 압축을 풉니다.</li>
+                  <li>Chrome 주소창에 chrome://extensions 를 입력해 확장 프로그램 페이지를 엽니다.</li>
+                  <li>오른쪽 위 개발자 모드를 켭니다.</li>
+                  <li>압축해제된 확장 프로그램을 로드합니다를 눌러 방금 압축을 푼 폴더를 선택합니다.</li>
+                  <li>설치가 끝나면 i-Nova 탭으로 돌아가 페이지를 새로고침합니다.</li>
+                </ol>
+              `
+            )}
+            ${renderReleaseDetails(
+              "업데이트 방법 보기",
+              `
+                <ol class="inova-release-steps">
+                  <li>새 ZIP을 내려받고 압축을 풉니다.</li>
+                  <li>기존 확장 폴더를 새 파일로 바꾸거나, 새 폴더로 교체합니다.</li>
+                  <li>chrome://extensions 에서 이 확장의 새로고침 버튼을 누릅니다.</li>
+                  <li>i-Nova 탭도 새로고침하면 최신 화면이 반영됩니다.</li>
+                </ol>
+              `
+            )}
+            <p class="inova-release-card__empty">자동 업데이트는 지원하지 않습니다. 문제가 생기면 이전 버전 ZIP을 다시 받아 같은 방법으로 되돌릴 수 있어요.</p>
+          </article>
+        </div>
+      </section>
     `;
   }
 
-  function renderHistoryCard(state) {
+  function renderHistorySection(state) {
     const items = state.historyRefreshPending
       ? []
       : state.history.filter((item) => item.version !== state.latest?.version).slice(0, 5);
     return `
-      <article class="inova-release-card">
-        <div class="inova-release-card__head">
-          <strong>이전 버전</strong>
-          <span class="inova-release-card__meta">${state.historyLoading || state.historyRefreshPending ? "불러오는 중" : `${items.length}개`}</span>
+      <section class="inova-release-section">
+        ${renderSectionSummary("이전 버전", state.historyLoading || state.historyRefreshPending ? "불러오는 중" : `${items.length}개`)}
+        <div class="inova-release-section__body">
+          ${items.length
+            ? `<div class="inova-release-history">${items.map((item) => renderHistoryItem(item)).join("")}</div>`
+            : `<article class="inova-release-card"><p class="inova-release-card__empty">${state.historyLoading || state.historyRefreshPending ? "현재 버전에 맞는 이전 버전 목록을 불러오는 중이에요." : "이전 버전 목록은 확인 후 표시됩니다."}</p></article>`}
         </div>
-        ${items.length
-          ? `<div class="inova-release-history">${items.map((item) => renderHistoryItem(item)).join("")}</div>`
-          : `<p class="inova-release-card__empty">${state.historyLoading || state.historyRefreshPending ? "현재 버전에 맞는 이전 버전 목록을 불러오는 중이에요." : "이전 버전 목록은 확인 후 표시됩니다."}</p>`}
-      </article>
+      </section>
     `;
   }
 
@@ -183,6 +200,15 @@
           ${details}
         </div>
         <button type="button" class="inova-tool-button inova-tool-button--compact" data-release-action="download-version" data-release-version="${escapeHtml(item.version)}">받기</button>
+      </div>
+    `;
+  }
+
+  function renderSectionSummary(title, meta = "") {
+    return `
+      <div class="inova-tool-inline-summary">
+        <strong>${escapeHtml(title)}</strong>
+        ${meta ? `<span class="inova-tool-inline-summary__meta">${escapeHtml(meta)}</span>` : ""}
       </div>
     `;
   }
