@@ -23,8 +23,8 @@
 | --- | --- |
 | 기능 목적 | 현재 대화 화면의 질문 수집, 탐색, 이동 |
 | 요청 cue | 질문 모아보기, 대화 안에서 찾기, 북마크, route sync, 질문 이동 |
-| 먼저 볼 파일 | `content/dom.js`, `content/route-state-controller.js`, `content/route-watch-controller.js`, `content/panel-v2-composition-controller.js`, `content/panel-surface-controller.js`, `content/panel-activity-controller.js`, `content/panel-shell-controller.js`, `content/route-sync.js`, `backup/legacy-panel/bookmark-view.js`, `backup/legacy-panel/panel-bookmark-controller.js` |
-| 관련 프론트 경로 | `content/main.js`, `content/panel.js`, `content/panel-v2-composition-controller.js`, `hosting/extension/panel/bookmark-view.js`, `hosting/extension-v2/panel/conversation-controller.js`, `hosting/extension-v2/panel/bookmark-view.js`, `backup/legacy-panel/bookmark-view.js` (inactive content view reference), `backup/legacy-panel/panel-bookmark-controller.js` (inactive bookmark runtime reference) |
+| 먼저 볼 파일 | `content/dom.js`, `content/route-state-controller.js`, `content/route-watch-controller.js`, `content/panel-v2-composition-controller.js`, `content/panel-v2-shell-bridge.js`, `content/panel-shell-controller.js`, `content/route-sync.js`, `backup/legacy-panel/bookmark-view.js`, `backup/legacy-panel/panel-bookmark-controller.js` |
+| 관련 프론트 경로 | `content/main.js`, `content/panel.js`, `content/panel-v2-composition-controller.js`, `content/panel-v2-shell-bridge.js`, `hosting/extension/panel/bookmark-view.js`, `hosting/extension-v2/panel/conversation-controller.js`, `hosting/extension-v2/panel/bookmark-view.js`, `backup/legacy-panel/bookmark-view.js` (inactive content view reference), `backup/legacy-panel/panel-bookmark-controller.js` (inactive bookmark runtime reference) |
 | 관련 functions 경로 | 없음 |
 | feature-owned shared | `shared/session.js`, `shared/constants.js` |
 | 관련 데이터 경계 | DOM 수집 결과, `sid`, UI 상태 |

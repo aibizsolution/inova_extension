@@ -135,7 +135,7 @@ function main() {
     "v2 composition should provide an idle meeting lifecycle bridge for unrelated shell sidecars"
   );
   assert(
-    /const panelActivityController = namespace\.panelActivityController\.create\(state, \{[\s\S]*?meetingManager: hostedOwnedIdleMeetingLifecycle,/.test(v2CompositionSource),
+    /const panelActivityController = panelV2ShellBridge\.createHostedOwnedPanelActivityBridge\(state, \{[\s\S]*?meetingManager: hostedOwnedIdleMeetingLifecycle,/.test(v2CompositionSource),
     "v2 browser visibility/focus should stop waking extension meeting sync"
   );
   assert(
@@ -143,7 +143,7 @@ function main() {
     "v2 shell tool transitions should stop waking extension meeting sync"
   );
   assert(
-    /const panelLifecycleController = namespace\.panelLifecycleController\.create\(state, \{[\s\S]*?meetingManager: hostedOwnedIdleMeetingLifecycle,/.test(v2CompositionSource),
+    /const panelLifecycleController = panelV2ShellBridge\.createHostedOwnedPanelLifecycleBridge\(state, \{[\s\S]*?meetingManager: hostedOwnedIdleMeetingLifecycle,/.test(v2CompositionSource),
     "v2 panel toggle transitions should stop waking extension meeting sync"
   );
   assert(
@@ -151,7 +151,7 @@ function main() {
     "v2 bootstrap should stop wiring meeting sync through the extension lifecycle bridge"
   );
   assert(
-    /const panelSurfaceController = namespace\.panelSurfaceController\.create\(state, \{[\s\S]*?meetingManager: hostedOwnedIdleMeetingLifecycle,/.test(v2CompositionSource),
+    /const panelSurfaceController = panelV2ShellBridge\.createHostedOwnedPanelSurfaceBridge\(state, \{[\s\S]*?meetingManager: hostedOwnedIdleMeetingLifecycle,/.test(v2CompositionSource),
     "v2 composition should silence surface-driven meeting sync with the idle meeting lifecycle bridge"
   );
   assert(

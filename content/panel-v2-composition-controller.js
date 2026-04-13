@@ -6,6 +6,10 @@
     let hostedOwnedPromptController = null;
     let renderController = null;
     const render = () => renderController?.render();
+    const panelV2ShellBridge = namespace.panelV2ShellBridge;
+    if (!panelV2ShellBridge) {
+      throw new Error("panelV2ShellBridge must load before panelV2CompositionController");
+    }
 
     // v2 shell baseline keeps the shared extension-side runtime wiring.
     const panelRuntimeController = createHostedOwnedPanelRuntimeBridge(state);
@@ -58,7 +62,7 @@
       ensureStoreLoaded: promptSyncBridge.ensureStoreLoaded,
       normalizeToolId: panelShellController.normalizeToolId,
     });
-    const panelLifecycleController = namespace.panelLifecycleController.create(state, {
+    const panelLifecycleController = panelV2ShellBridge.createHostedOwnedPanelLifecycleBridge(state, {
       ensureStoreLoaded: promptSyncBridge.ensureStoreLoaded,
       isStoreTabActive: runtimeFlags.isStoreTabActive,
       logPanelDebug: runtimeDiagnostics.logPanelDebug,
@@ -68,7 +72,7 @@
       schedulePromptCloudSyncIfNeeded: promptSyncBridge.schedulePromptCloudSyncIfNeeded,
       schedulePromptRealtimeSync: promptSyncBridge.schedulePromptRealtimeSync,
     });
-    const panelActivityController = namespace.panelActivityController.create(state, {
+    const panelActivityController = panelV2ShellBridge.createHostedOwnedPanelActivityBridge(state, {
       logPanelDebug: runtimeDiagnostics.logPanelDebug,
       meetingManager: hostedOwnedIdleMeetingLifecycle,
       providerIdentitySync,
@@ -77,7 +81,7 @@
       schedulePromptCloudSyncIfNeeded: promptSyncBridge.schedulePromptCloudSyncIfNeeded,
       schedulePromptRealtimeSync: promptSyncBridge.schedulePromptRealtimeSync,
     });
-    const panelSurfaceController = namespace.panelSurfaceController.create(state, {
+    const panelSurfaceController = panelV2ShellBridge.createHostedOwnedPanelSurfaceBridge(state, {
       ensureStoreLoaded: promptSyncBridge.ensureStoreLoaded,
       isStoreTabActive: runtimeFlags.isStoreTabActive,
       logPanelDebug: runtimeDiagnostics.logPanelDebug,

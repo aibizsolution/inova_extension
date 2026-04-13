@@ -10,7 +10,7 @@ const root = path.resolve(__dirname, "..");
 async function main() {
   await verifyVisibilityHiddenAndVisibleFlow();
   await verifyWindowFocusFlow();
-  console.log("[verify-panel-activity-controller] Panel activity controller contract passed");
+  console.log("[verify-panel-activity-controller] V2 shell bridge activity contract passed");
 }
 
 async function verifyVisibilityHiddenAndVisibleFlow() {
@@ -80,13 +80,13 @@ function createHarness(options = {}) {
   context.globalThis = context;
   context.InovaBookmarks = {};
 
-  loadScript("content/panel-activity-controller.js", context);
+  loadScript("content/panel-v2-shell-bridge.js", context);
 
   const state = {
     open: Boolean(options.open),
   };
 
-  const controller = context.InovaBookmarks.panelActivityController.create(state, {
+  const controller = context.InovaBookmarks.panelV2ShellBridge.createHostedOwnedPanelActivityBridge(state, {
     logPanelDebug(event, payload) {
       debugEvents.push({ event, payload: cloneValue(payload) });
     },

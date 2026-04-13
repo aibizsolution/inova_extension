@@ -10,7 +10,7 @@ const root = path.resolve(__dirname, "..");
 function main() {
   verifySurfaceWatcherInstallationAndComposerRecovery();
   verifySurfaceWatcherComposerLoss();
-  console.log("[verify-panel-surface-controller] Panel surface controller contract passed");
+  console.log("[verify-panel-surface-controller] V2 shell bridge surface contract passed");
 }
 
 function verifySurfaceWatcherInstallationAndComposerRecovery() {
@@ -110,7 +110,7 @@ function createHarness(options = {}) {
     },
   };
 
-  loadScript("content/panel-surface-controller.js", context);
+  loadScript("content/panel-v2-shell-bridge.js", context);
 
   const state = {
     open: false,
@@ -119,7 +119,7 @@ function createHarness(options = {}) {
     surfaceSignature: "",
   };
 
-  const controller = context.InovaBookmarks.panelSurfaceController.create(state, {
+  const controller = context.InovaBookmarks.panelV2ShellBridge.createHostedOwnedPanelSurfaceBridge(state, {
     ensureStoreLoaded() {
       ensureStoreLoadedCalls.push(true);
     },
