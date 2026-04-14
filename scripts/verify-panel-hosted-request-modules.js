@@ -74,25 +74,9 @@ function verifyHostedBridgeRequestModuleContract() {
     "handlePanelRequest(",
     "handlePanelSummaryRequest(",
     "handleReleaseRequest(",
-    "handleLegacyPanelRequest(",
-    "handleLegacyMeetingRequest(",
-    "handleLegacyPromptRequest(",
-    'if (action === "meeting-action")',
+    "handleConversationRequest(",
     'if (action === "meeting-summary-sync")',
-    'typeof callbacks.onMeetingAction !== "function"',
     'typeof callbacks.onMeetingSummarySync !== "function"',
-    'if (action === "prompt-action")',
-    'if (action === "prompt-draft-change")',
-    'if (action === "prompt-tab-select")',
-    'if (action === "store-action")',
-    'if (action === "import-file")',
-    'if (action === "move-prompt")',
-    'typeof callbacks.onPromptAction !== "function"',
-    'typeof callbacks.onPromptDraftChange !== "function"',
-    'typeof callbacks.onSelectPromptTab !== "function"',
-    'typeof callbacks.onStoreAction !== "function"',
-    'typeof callbacks.onImportFile !== "function"',
-    'typeof callbacks.onMovePrompt !== "function"',
     'if (action === "toggle-panel")',
     'if (action === "escape")',
     'if (action === "select-tool")',
@@ -116,6 +100,28 @@ function verifyHostedBridgeRequestModuleContract() {
   ].forEach((pattern) => assert(
     bridgeRequestSource.includes(pattern),
     `hosted bridge request helper should keep the inline contract for ${pattern}`
+  ));
+  [
+    "handleLegacyPanelRequest(",
+    "handleLegacyMeetingRequest(",
+    "handleLegacyPromptRequest(",
+    'if (action === "meeting-action")',
+    'typeof callbacks.onMeetingAction !== "function"',
+    'if (action === "prompt-action")',
+    'if (action === "prompt-draft-change")',
+    'if (action === "prompt-tab-select")',
+    'if (action === "store-action")',
+    'if (action === "import-file")',
+    'if (action === "move-prompt")',
+    'typeof callbacks.onPromptAction !== "function"',
+    'typeof callbacks.onPromptDraftChange !== "function"',
+    'typeof callbacks.onSelectPromptTab !== "function"',
+    'typeof callbacks.onStoreAction !== "function"',
+    'typeof callbacks.onImportFile !== "function"',
+    'typeof callbacks.onMovePrompt !== "function"',
+  ].forEach((pattern) => assert(
+    !bridgeRequestSource.includes(pattern),
+    `hosted bridge request helper should drop the inactive legacy request surface ${pattern}`
   ));
 }
 

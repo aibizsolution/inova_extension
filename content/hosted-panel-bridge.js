@@ -435,9 +435,6 @@
     const normalizeText = typeof helpers.normalizeText === "function"
       ? helpers.normalizeText
       : (value) => namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
-    const logConsoleTrace = typeof helpers.logConsoleTrace === "function"
-      ? helpers.logConsoleTrace
-      : () => {};
     const action = normalizeText(payload?.action);
     const handledSummaryRequest = await handlePanelSummaryRequest(action, payload, callbacks);
     if (handledSummaryRequest?.handled) {
@@ -451,12 +448,11 @@
       return handledReleaseRequest;
     }
 
-    const handledLegacyRequest = await handleLegacyPanelRequest(action, payload, callbacks, {
-      logConsoleTrace,
+    const handledConversationRequest = await handleConversationRequest(action, payload, callbacks, {
       normalizeText,
     });
-    if (handledLegacyRequest?.handled) {
-      return handledLegacyRequest;
+    if (handledConversationRequest?.handled) {
+      return handledConversationRequest;
     }
 
     return handleShellRequest(action, payload, callbacks, {
@@ -497,14 +493,6 @@
     });
   }
 
-  async function handleLegacyPanelRequest(action, payload, callbacks, helpers = {}) {
-    const handledMeetingRequest = await handleLegacyMeetingRequest(action, payload, callbacks, helpers);
-    if (handledMeetingRequest?.handled) {
-      return handledMeetingRequest;
-    }
-    return handleLegacyPromptRequest(action, payload, callbacks, helpers);
-  }
-
   function handleReleaseRequest(action, payload, callbacks, helpers = {}) {
     const normalizeText = typeof helpers.normalizeText === "function"
       ? helpers.normalizeText
@@ -524,147 +512,23 @@
     });
   }
 
-  function handleLegacyMeetingRequest(action, payload, callbacks, helpers = {}) {
+  function handleConversationRequest(action, payload, callbacks, helpers = {}) {
     const normalizeText = typeof helpers.normalizeText === "function"
       ? helpers.normalizeText
       : (value) => namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
-    const logConsoleTrace = typeof helpers.logConsoleTrace === "function"
-      ? helpers.logConsoleTrace
-      : () => {};
-    const detail = payload?.detail && typeof payload.detail === "object" ? payload.detail : {};
 
-    if (action === "meeting-action") {
-      if (typeof callbacks.onMeetingAction !== "function") {
-        return Promise.resolve({
-          handled: false,
-          result: null,
-        });
-      }
-      logConsoleTrace("meeting", "50.top.panel.request.received", {
-        detail,
-        meetingAction: normalizeText(payload?.meetingAction),
-      });
-      return Promise.resolve(callbacks.onMeetingAction?.(normalizeText(payload?.meetingAction), detail))
-        .then(() => {
-          logConsoleTrace("meeting", "59.top.panel.request.completed", {
-            detail,
-            meetingAction: normalizeText(payload?.meetingAction),
-          });
-          return {
-            handled: true,
-            result: { handled: true },
-          };
-        })
-        .catch((error) => {
-          logConsoleTrace("meeting", "59.top.panel.request.error", {
-            detail,
-            error: normalizeText(error instanceof Error ? error.message : String(error || "")),
-            meetingAction: normalizeText(payload?.meetingAction),
-          });
-          throw error;
-        });
-    }
-
-    return Promise.resolve({
-      handled: false,
-      result: null,
-    });
-  }
-
-  function handleLegacyPromptRequest(action, payload, callbacks, helpers = {}) {
-    const normalizeText = typeof helpers.normalizeText === "function"
-      ? helpers.normalizeText
-      : (value) => namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
-    const detail = payload?.detail && typeof payload.detail === "object" ? payload.detail : {};
-
-    if (action === "prompt-action") {
-      if (typeof callbacks.onPromptAction !== "function") {
-        return Promise.resolve({
-          handled: false,
-          result: null,
-        });
-      }
-      callbacks.onPromptAction?.(normalizeText(payload?.promptAction), detail);
-      return Promise.resolve({
+    if (action === "bookmark-copy") {
+      return Promise.resolve(callbacks.onCopyBookmark?.(normalizeText(payload?.bookmarkId))).then((copied) => ({
         handled: true,
-        result: { handled: true },
-      });
-    }
-
-    if (action === "prompt-draft-change") {
-      if (typeof callbacks.onPromptDraftChange !== "function") {
-        return Promise.resolve({
-          handled: false,
-          result: null,
-        });
-      }
-      callbacks.onPromptDraftChange?.(normalizeText(payload?.field), payload?.value);
-      return Promise.resolve({
-        handled: true,
-        result: { handled: true },
-      });
-    }
-
-    if (action === "prompt-tab-select") {
-      if (typeof callbacks.onSelectPromptTab !== "function") {
-        return Promise.resolve({
-          handled: false,
-          result: null,
-        });
-      }
-      callbacks.onSelectPromptTab?.(normalizeText(payload?.promptTabId));
-      return Promise.resolve({
-        handled: true,
-        result: { handled: true },
-      });
-    }
-
-    if (action === "store-action") {
-      if (typeof callbacks.onStoreAction !== "function") {
-        return Promise.resolve({
-          handled: false,
-          result: null,
-        });
-      }
-      callbacks.onStoreAction?.(normalizeText(payload?.storeAction), detail);
-      return Promise.resolve({
-        handled: true,
-        result: { handled: true },
-      });
-    }
-
-    if (action === "import-file") {
-      if (typeof callbacks.onImportFile !== "function") {
-        return Promise.resolve({
-          handled: false,
-          result: null,
-        });
-      }
-      const file = payload?.file instanceof global.File ? payload.file : null;
-      if (!file) {
-        throw new Error("가져올 파일을 찾지 못했어요.");
-      }
-      return Promise.resolve(callbacks.onImportFile?.(file)).then(() => ({
-        handled: true,
-        result: { imported: true },
+        result: { copied: Boolean(copied) },
       }));
     }
 
-    if (action === "move-prompt") {
-      if (typeof callbacks.onMovePrompt !== "function") {
-        return Promise.resolve({
-          handled: false,
-          result: null,
-        });
-      }
-      callbacks.onMovePrompt?.(
-        normalizeText(payload?.dragPromptId),
-        normalizeText(payload?.targetPromptId),
-        normalizeText(payload?.placement) || "before"
-      );
+    if (action === "bookmark-jump") {
+      callbacks.onJumpBookmark?.(normalizeText(payload?.bookmarkId));
       return Promise.resolve({
         handled: true,
-        result: { handled: true },
+        result: { jumped: true },
       });
     }
 
@@ -718,21 +582,6 @@
       return Promise.resolve({
         handled: true,
         result: { submitted: true },
-      });
-    }
-
-    if (action === "bookmark-copy") {
-      return Promise.resolve(callbacks.onCopyBookmark?.(normalizeText(payload?.bookmarkId))).then((copied) => ({
-        handled: true,
-        result: { copied: Boolean(copied) },
-      }));
-    }
-
-    if (action === "bookmark-jump") {
-      callbacks.onJumpBookmark?.(normalizeText(payload?.bookmarkId));
-      return Promise.resolve({
-        handled: true,
-        result: { jumped: true },
       });
     }
 
