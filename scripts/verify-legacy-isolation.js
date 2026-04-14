@@ -9,6 +9,7 @@ const root = path.resolve(__dirname, "..");
 function main() {
   verifyDefaultVerifyKeepsLegacyChecksSeparate();
   verifyActiveManifestStaysOutOfBackupLegacyFiles();
+  verifyActiveManifestDropsDormantPromptLibraryHelper();
   verifyActiveContentSourcesDoNotDependOnBackupPaths();
   verifyActiveHostedPanelAssetsStayOutOfDeadLegacyFiles();
   verifyActiveHostedBridgeRequestSurfaceStaysGeneric();
@@ -50,6 +51,19 @@ function verifyActiveManifestStaysOutOfBackupLegacyFiles() {
   assert(
     cssFiles.every((file) => !String(file).startsWith("backup/legacy-panel/")),
     "active manifest should not load backup legacy panel styles"
+  );
+}
+
+function verifyActiveManifestDropsDormantPromptLibraryHelper() {
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
+  const mainContentScript = Array.isArray(manifest.content_scripts)
+    ? manifest.content_scripts.find((entry) => Array.isArray(entry?.matches) && entry.matches.includes("https://inova.incross.com/*"))
+    : null;
+  const jsFiles = Array.isArray(mainContentScript?.js) ? mainContentScript.js : [];
+
+  assert(
+    !jsFiles.includes("shared/prompt-library.js"),
+    "active manifest should not preload the dormant shared/prompt-library.js helper"
   );
 }
 

@@ -48,7 +48,6 @@
         "shared/constants.js",
         "shared/product-lane.js",
         "shared/session.js",
-        "shared/prompt-library.js",
         "shared/firebase-config.js",
         "shared/provider-identity.js",
         "shared/cloud-sync.js",
