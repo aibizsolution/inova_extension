@@ -127,6 +127,7 @@ Short version:
 
 - `npm.cmd run verify` is green.
 - Worktree is clean.
+- current `1.0.0` lane also passes `npm.cmd run release:build`; lane-local `hosting/extension-v2/releases/latest.json`, `history.json`, `downloads/latest.zip`, version ZIP, and curated `releases/release-notes.json` artifact metadata regenerate together without verify drift.
 - top console now shows the real active v2 read paths again:
   - `conversation`: `hosted.conversation.snapshot.*`
   - `meeting`: `hosted.panel-auth.*` + `hosted.firestore.*`
@@ -167,8 +168,7 @@ The remaining work is no longer structural cleanup first.
 The hosted-first boundary is effectively in place. What remains is rollout validation and release preparation for the `0.4.4 -> 1.0.0` switch.
 
 1. Record real Chrome smoke on the current hosted-first `1.0.0` lane.
-2. Rehearse the final release build path from deployed `0.4.4` baseline to hosted v2 `1.0.0`.
-3. Prepare the actual rollout checklist and deployment boundary for release.
+2. Prepare the actual rollout checklist and deployment boundary for release.
 
 ## Concrete Next Session Targets
 
@@ -193,27 +193,7 @@ Then validate only the user-facing hosted v2 flows that matter for release:
 - meeting hub/workspace launch
 - release latest/history/download
 
-### 2. Release rehearsal
-
-Goal:
-
-- prove the current `1.0.0` lane can be turned into the public release artifacts without metadata drift
-
-Start files:
-
-- `docs/release-workflow.md`
-- `scripts/build-release-package.js`
-- `scripts/verify-release-package.js`
-- `releases/release-notes.json`
-
-Then check only release-lane coherence:
-
-- current version metadata
-- lane-local `latest.json` / `history.json`
-- `downloads/latest.zip` and version ZIPs
-- rollout note/deployment wording
-
-### 3. Rollout prep
+### 2. Rollout prep
 
 Goal:
 
@@ -236,7 +216,7 @@ Start files:
 
 1. Read `docs/current-handoff.md`, `docs/development-philosophy.md`, `docs/refactoring-plan.md`, and `docs/runtime-architecture.md`.
 2. Start with real Chrome smoke, not with more structural cleanup, unless the smoke exposes the same hosted lane as the blocker.
-3. If Chrome smoke passes, move directly to release rehearsal and rollout prep instead of reopening minor refactors.
+3. If Chrome smoke passes, move directly to rollout prep instead of reopening minor refactors.
 4. If a doc still describes the old ownership or old next-step order, fix it in the same task.
 5. Run `npm.cmd run verify` and commit each bounded slice.
 

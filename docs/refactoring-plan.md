@@ -69,8 +69,8 @@ ordinary feature 구현 변경, 탭별 hosted ownership 진행도, smoke 이슈 
   - `1.0.0` candidate baseline부터 우측 `실험실` 패널 기본 UI는 hosted `panelAppUrl` iframe을 쓰고, 기본 hosted 경로는 `hosting/extension-v2/panel/index.html`이다. 이 변경은 extension 브리지/host와 hosted panel 자산의 mixed-version capability gate를 전제로 한다.
   - popup `로컬 호스팅` rehearsal target은 meeting만이 아니라 prompt-library sync/read, prompt-review, prompt-store panel auth/write, hidden prompt bridge까지 local Functions/Hosting emulator로 함께 전환해야 한다.
   - local rehearsal 부팅 확인과 기존 사용자의 기존 회의 데이터 read-path 확인은 pass 후보다.
-  - hosted-first 구조 경계와 release metadata/release-package coherence 가드는 대부분 닫혔다.
-  - 다만 최종 candidate ready로 올리려면 실제 Chrome 기준의 주요 회의/프롬프트/릴리스 smoke 기록과 final release rehearsal 기록이 남아 있어야 한다.
+  - hosted-first 구조 경계와 release metadata/release-package coherence 가드는 대부분 닫혔고, current `1.0.0` lane은 `release:build` rehearsal도 통과했다.
+  - 다만 최종 candidate ready로 올리려면 실제 Chrome 기준의 주요 회의/프롬프트/릴리스 smoke 기록과 public rollout checklist가 남아 있어야 한다.
 
 ## Meeting Legacy Baseline
 
