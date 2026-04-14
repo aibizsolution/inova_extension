@@ -272,12 +272,6 @@
     const panelDebugController = deps.panelDebugController || {
       syncEnabled() {},
     };
-    const buildMeetingSnapshot = typeof deps.buildMeetingSnapshot === "function"
-      ? deps.buildMeetingSnapshot
-      : (meetingToolSummary) => meetingToolSummary && typeof meetingToolSummary === "object" ? meetingToolSummary : {};
-    const getMeetingCount = typeof deps.getMeetingCount === "function"
-      ? deps.getMeetingCount
-      : (meetingTool) => Number(meetingTool?.count) || 0;
     const buildConversationSnapshot = typeof deps.buildConversationSnapshot === "function"
       ? deps.buildConversationSnapshot
       : () => panelBookmarkController.buildToolState();
@@ -301,12 +295,24 @@
       buildHandleCount() { return 0; },
     };
     const releaseManager = deps.releaseManager || { buildViewState() { return { updateAvailable: false }; } };
-    const buildReleaseSnapshot = typeof deps.buildReleaseSnapshot === "function"
-      ? deps.buildReleaseSnapshot
-      : () => releaseManager.buildViewState();
-    const getReleaseCount = typeof deps.getReleaseCount === "function"
-      ? deps.getReleaseCount
-      : (releaseState) => (releaseState?.updateAvailable ? 1 : Number(releaseState?.count) || 0);
+    const buildToolSummarySnapshot = typeof deps.buildToolSummarySnapshot === "function"
+      ? deps.buildToolSummarySnapshot
+      : (toolId) => {
+          const normalizedToolId = normalizeToolSummaryId(toolId);
+          if (normalizedToolId === "release") {
+            return releaseManager.buildViewState();
+          }
+          const toolSummary = state.toolSummaries?.[normalizedToolId];
+          return toolSummary && typeof toolSummary === "object" ? toolSummary : {};
+        };
+    const getToolSummaryCount = typeof deps.getToolSummaryCount === "function"
+      ? deps.getToolSummaryCount
+      : (toolId, toolSummary = {}) => {
+          const normalizedToolId = normalizeToolSummaryId(toolId);
+          return normalizedToolId === "release"
+            ? (toolSummary?.updateAvailable ? 1 : Number(toolSummary?.count) || 0)
+            : Number(toolSummary?.count) || 0;
+        };
 
     return {
       render,
@@ -327,14 +333,14 @@
       const promptToolState = panelPromptController.buildToolState();
       const promptSnapshot = normalizePromptSnapshot(buildPromptSnapshot(promptToolState));
       const promptCounts = normalizePromptCounts(getPromptCounts(promptToolState), promptToolState);
-      const meetingTool = normalizeMeetingSnapshot(buildMeetingSnapshot());
+      const meetingTool = normalizeToolSummarySnapshot(buildToolSummarySnapshot("meeting"));
       const meetingCount = normalizeCount(
-        getMeetingCount(meetingTool),
+        getToolSummaryCount("meeting", meetingTool),
         Number(meetingTool.count) || (Array.isArray(meetingTool.items) ? meetingTool.items.length : 0)
       );
-      const releaseState = normalizeReleaseSnapshot(buildReleaseSnapshot());
+      const releaseState = normalizeToolSummarySnapshot(buildToolSummarySnapshot("release"));
       const releaseCount = normalizeCount(
-        getReleaseCount(releaseState),
+        getToolSummaryCount("release", releaseState),
         releaseState.updateAvailable ? 1 : Number(releaseState.count) || 0
       );
       const panelTrace = buildPanelTracePayload({
@@ -393,10 +399,6 @@
       return Number.isFinite(numeric) ? numeric : fallback;
     }
 
-    function normalizeReleaseSnapshot(value) {
-      return value && typeof value === "object" ? value : {};
-    }
-
     function normalizeConversationSnapshot(value) {
       return value && typeof value === "object" ? value : {};
     }
@@ -405,8 +407,12 @@
       return value && typeof value === "object" ? value : {};
     }
 
-    function normalizeMeetingSnapshot(value) {
+    function normalizeToolSummarySnapshot(value) {
       return value && typeof value === "object" ? value : {};
+    }
+
+    function normalizeToolSummaryId(toolId) {
+      return toolId === "meeting" || toolId === "release" ? toolId : "";
     }
 
     function normalizePromptCounts(value, fallbackPromptToolState = {}) {

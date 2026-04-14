@@ -304,20 +304,24 @@ function main() {
     "v2 meeting snapshot bridge should stop carrying hosted-owned meeting fingerprints once extension residue is count-only"
   );
   assert(
-    v2CompositionSource.includes("buildMeetingSnapshot: hostedOwnedMeetingToolSummarySnapshot.buildSnapshot"),
-    "v2 render wiring should pass the shared count-only meeting tool summary bridge"
+    v2CompositionSource.includes("const hostedOwnedToolSummarySnapshotBridges = {"),
+    "v2 composition should keep compact meeting/release render summary helpers in a shared tool summary bridge map"
   );
   assert(
-    v2CompositionSource.includes("getMeetingCount: hostedOwnedMeetingToolSummarySnapshot.getCount"),
-    "v2 render wiring should read meeting rail counts from the shared count-only tool summary bridge"
+    v2CompositionSource.includes("buildToolSummarySnapshot(toolId) {"),
+    "v2 render wiring should request meeting/release snapshots through a shared tool summary callback"
   );
   assert(
-    v2CompositionSource.includes("buildReleaseSnapshot: hostedOwnedReleaseToolSummarySnapshot.buildSnapshot"),
-    "v2 render wiring should pass the shared hosted release tool summary bridge"
+    v2CompositionSource.includes("getToolSummaryCount(toolId, toolSummary) {"),
+    "v2 render wiring should request meeting/release rail counts through a shared tool summary callback"
   );
   assert(
-    v2CompositionSource.includes("getReleaseCount: hostedOwnedReleaseToolSummarySnapshot.getCount"),
-    "v2 render wiring should read release rail counts from the shared hosted release tool summary bridge"
+    v2CompositionSource.includes("hostedOwnedToolSummarySnapshotBridges[normalizeHostedToolSummaryId(toolId)]?.buildSnapshot?.() || {}"),
+    "v2 render wiring should resolve compact meeting/release snapshots from the shared tool summary bridge map"
+  );
+  assert(
+    v2CompositionSource.includes("hostedOwnedToolSummarySnapshotBridges[normalizeHostedToolSummaryId(toolId)]?.getCount?.(toolSummary) || 0"),
+    "v2 render wiring should resolve compact meeting/release rail counts from the shared tool summary bridge map"
   );
   assert(
     !v2CompositionSource.includes("panelMeetingController.buildToolState?.(meetingHub)"),

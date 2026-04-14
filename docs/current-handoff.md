@@ -71,6 +71,7 @@ Short version:
 - active v2 createState no longer carries dead `meetingHub` / `meetingUi` buckets; extension compact hosted residue now lives under `toolSummaries`, with meeting staying count-only
 - compact hosted `meeting` / `release` summaries now round-trip through a shared `tool-summary-sync` bridge contract instead of feature-specific summary actions
 - v2 composition now normalizes compact `meeting` / `release` residue through shared `toolSummaries` helpers instead of per-feature snapshot bridge helpers
+- v2 shell/render now reads compact `meeting` / `release` state through shared tool-summary callbacks instead of feature-specific render deps
 - `content/panel.js` no longer picks meeting/prompt runtime helpers directly; panel iframe target now resolves through shared `firebaseConfig.panel` runtime config
 - `content/panel.js` no longer clones the full render payload into hosted bridge snapshots; v2 render now passes a prebuilt `panelSnapshot` and the host just brokers view + bridge envelope
 - top-panel snapshot trace shaping now comes from v2 shell `panelTrace`; `content/panel.js` no longer reads prompt review detail directly out of hosted tool state

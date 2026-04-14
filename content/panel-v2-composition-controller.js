@@ -78,6 +78,11 @@
       scheduleRouteSync: routeSync.scheduleRouteSync,
     });
 
+    const hostedOwnedToolSummarySnapshotBridges = {
+      meeting: hostedOwnedMeetingToolSummarySnapshot,
+      release: hostedOwnedReleaseToolSummarySnapshot,
+    };
+
     renderController = panelV2ShellBridge.createRenderController(state, {
       isPaused: runtimeFlags.isPaused,
       isToolSurface: runtimeFlags.isToolSurface,
@@ -85,13 +90,15 @@
       getConversationCount: hostedOwnedConversationBridge.getConversationCount,
       buildPromptSnapshot: hostedOwnedPromptSnapshot.buildPromptSnapshot,
       getPromptCounts: hostedOwnedPromptSnapshot.getPromptCounts,
-      buildMeetingSnapshot: hostedOwnedMeetingToolSummarySnapshot.buildSnapshot,
-      getMeetingCount: hostedOwnedMeetingToolSummarySnapshot.getCount,
+      buildToolSummarySnapshot(toolId) {
+        return hostedOwnedToolSummarySnapshotBridges[normalizeHostedToolSummaryId(toolId)]?.buildSnapshot?.() || {};
+      },
+      getToolSummaryCount(toolId, toolSummary) {
+        return hostedOwnedToolSummarySnapshotBridges[normalizeHostedToolSummaryId(toolId)]?.getCount?.(toolSummary) || 0;
+      },
       panelDebugController,
       panelPromptController: hostedOwnedPromptController,
       panelShellController,
-      buildReleaseSnapshot: hostedOwnedReleaseToolSummarySnapshot.buildSnapshot,
-      getReleaseCount: hostedOwnedReleaseToolSummarySnapshot.getCount,
     });
     const panelBootstrapController = panelV2ShellBridge.createBootstrapController(state, {
       buildHostedPanelCallbacks: buildHostedOwnedPanelCallbacks,

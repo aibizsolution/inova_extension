@@ -112,14 +112,17 @@ function verifyCustomPromptSnapshotBridge() {
 function verifyCustomMeetingSnapshotBridge() {
   const harness = createHarness({
     activeTool: "meeting",
-    buildMeetingSnapshot() {
-      return {
-        count: 9,
-        snapshotFingerprint: "meeting-alpha|9|fresh",
-      };
+    buildToolSummarySnapshot(toolId) {
+      if (toolId === "meeting") {
+        return {
+          count: 9,
+          snapshotFingerprint: "meeting-alpha|9|fresh",
+        };
+      }
+      return {};
     },
-    getMeetingCount() {
-      return 9;
+    getToolSummaryCount(toolId) {
+      return toolId === "meeting" ? 9 : 0;
     },
   });
 
@@ -146,14 +149,17 @@ function verifyVisibleStateCalculation() {
 function verifyCustomReleaseSnapshotBridge() {
   const harness = createHarness({
     activeTool: "release",
-    buildReleaseSnapshot() {
-      return {
-        count: 1,
-        updateAvailable: true,
-      };
+    buildToolSummarySnapshot(toolId) {
+      if (toolId === "release") {
+        return {
+          count: 1,
+          updateAvailable: true,
+        };
+      }
+      return {};
     },
-    getReleaseCount() {
-      return 1;
+    getToolSummaryCount(toolId) {
+      return toolId === "release" ? 1 : 0;
     },
   });
 
@@ -237,8 +243,8 @@ function createHarness(options = {}) {
         debugSyncCalls += 1;
       },
     },
-    buildMeetingSnapshot: options.buildMeetingSnapshot || (() => cloneValue(state.toolSummaries?.meeting || {})),
-    getMeetingCount: options.getMeetingCount,
+    buildToolSummarySnapshot: options.buildToolSummarySnapshot || ((toolId) => cloneValue(state.toolSummaries?.[toolId] || {})),
+    getToolSummaryCount: options.getToolSummaryCount,
     buildConversationSnapshot: options.buildConversationSnapshot,
     getConversationCount: options.getConversationCount,
     panelPromptController: {
@@ -274,8 +280,6 @@ function createHarness(options = {}) {
         return 0;
       },
     },
-    buildReleaseSnapshot: options.buildReleaseSnapshot || (() => cloneValue(state.toolSummaries?.release || {})),
-    getReleaseCount: options.getReleaseCount,
     releaseManager: {
       buildViewState() {
         return {
