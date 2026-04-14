@@ -39,7 +39,7 @@
       isExtensionContextInvalidatedError: runtimeDiagnostics.isExtensionContextInvalidatedError,
       render,
     });
-    const hostedOwnedPromptController = namespace.panelV2PromptController.create(state, {
+    const promptShellController = namespace.panelV2PromptController.create(state, {
       ...runtimeFlags,
       lockUiPreferenceSelection: panelShellController.lockUiPreferenceSelection,
       persistActiveTool: panelShellController.persistActiveTool,
@@ -93,7 +93,7 @@
         return hostedOwnedToolSummarySnapshotBridges[normalizeHostedToolSummaryId(toolId)]?.getCount?.(toolSummary) || 0;
       },
       panelDebugController,
-      panelPromptController: hostedOwnedPromptController,
+      promptShellController,
       panelShellController,
     });
     const panelBootstrapController = panelV2ShellBridge.createBootstrapController(state, {
@@ -102,7 +102,7 @@
       panelBookmarkController: hostedOwnedConversationBridge,
       panelDebugController,
       panelLifecycleController,
-      panelPromptController: hostedOwnedPromptController,
+      promptShellController,
       panelShellController,
       panelSurfaceController,
       providerIdentitySync,

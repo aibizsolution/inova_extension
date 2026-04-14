@@ -153,7 +153,7 @@
     const panelBookmarkController = deps.panelBookmarkController || { copyBookmarkText() {}, jumpToBookmark() {} };
     const panelDebugController = deps.panelDebugController || { installValidationApi() {} };
     const panelLifecycleController = deps.panelLifecycleController || { initializeOpenState() {}, togglePanel() {} };
-    const panelPromptController = deps.panelPromptController || {
+    const promptShellController = deps.promptShellController || {
       ensureReviewFloat() {},
       handleEscape() {},
     };
@@ -182,11 +182,11 @@
         handlePanelToolSummarySync,
         panelBookmarkController,
         panelLifecycleController,
-        panelPromptController,
+        promptShellController,
         panelShellController,
       }));
       panelDebugController.installValidationApi();
-      panelPromptController.ensureReviewFloat();
+      promptShellController.ensureReviewFloat();
       routeWatchController.installRouteWatchers();
       panelSurfaceController.installSurfaceWatchers();
       global.addEventListener("resize", render, { passive: true });
@@ -223,7 +223,7 @@
       : async () => false;
     const panelBookmarkController = deps.panelBookmarkController || { copyBookmarkText() {}, jumpToBookmark() {} };
     const panelLifecycleController = deps.panelLifecycleController || { togglePanel() {} };
-    const panelPromptController = deps.panelPromptController || {
+    const promptShellController = deps.promptShellController || {
       handleEscape() {},
     };
     const panelShellController = deps.panelShellController || {
@@ -241,7 +241,7 @@
       onSearch: panelShellController.updateQuery,
       onSearchSubmit: panelShellController.submitQuery,
       onSelectTool: panelShellController.selectTool,
-      onEscape: panelPromptController.handleEscape,
+      onEscape: promptShellController.handleEscape,
       onToggle: panelLifecycleController.togglePanel,
     };
   }
@@ -259,7 +259,7 @@
     const getConversationCount = typeof deps.getConversationCount === "function"
       ? deps.getConversationCount
       : (bookmarkTool) => Number(bookmarkTool?.count) || (Array.isArray(bookmarkTool?.items) ? bookmarkTool.items.length : 0);
-    const panelPromptController = deps.panelPromptController || {
+    const promptShellController = deps.promptShellController || {
       buildReviewFloatState() { return { visible: false }; },
       buildToolState() { return { promptCount: 0, promptTool: {}, promptToolCount: 0 }; },
     };
@@ -293,7 +293,7 @@
     function render() {
       panelDebugController.syncEnabled();
       if (!state.settingsHydrated) {
-        namespace.composerReviewFloat?.render?.(panelPromptController.buildReviewFloatState(false));
+        namespace.composerReviewFloat?.render?.(promptShellController.buildReviewFloatState(false));
         return;
       }
       const visible = state.settings.enabled && isToolSurface() && !isPaused();
@@ -302,7 +302,7 @@
         getConversationCount(bookmarkTool),
         Number(bookmarkTool.count) || (Array.isArray(bookmarkTool.items) ? bookmarkTool.items.length : 0)
       );
-      const promptToolState = panelPromptController.buildToolState();
+      const promptToolState = promptShellController.buildToolState();
       const promptSnapshot = normalizePromptSnapshot(buildPromptSnapshot(promptToolState));
       const promptCounts = normalizePromptCounts(getPromptCounts(promptToolState), promptToolState);
       const meetingTool = normalizeToolSummarySnapshot(buildToolSummarySnapshot("meeting"));
@@ -348,7 +348,7 @@
         settings: state.settings,
         visible,
       });
-      namespace.composerReviewFloat?.render?.(panelPromptController.buildReviewFloatState(visible));
+      namespace.composerReviewFloat?.render?.(promptShellController.buildReviewFloatState(visible));
     }
 
     function buildPanelTracePayload(payload = {}) {

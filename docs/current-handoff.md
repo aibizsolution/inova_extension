@@ -85,12 +85,14 @@ Short version:
 - active v2 shell now keeps generic `prompts/store` tool selection in `panel-v2-shell-bridge`; `panel-v2-prompt-controller.js` no longer intercepts normal prompt/store tool picks
 - active v2 prompt snapshot no longer mirrors hosted prompt activeTab/search state back into extension state
 - active v2 prompt state factory and route hydration no longer mirror hosted-owned prompt library/store/editor buckets inside extension state
+- active v2 prompt shell/render/bootstrap wiring now uses `promptShellController`; the legacy `panelPromptController` contract name is no longer part of the live v2 lane
 - active v2 route/shell no longer keeps legacy `activeTool: store`; old stored values normalize immediately to `activeTool: prompts` plus `activePromptTab: store`
 - active hosted prompt shell now renders only through `prompt-tool-view.js`; the dead `prompt-hub-view.js` fallback is no longer loaded in the v2 panel bundle
 - active hosted prompt shell interaction helper now uses `prompt-tool-panel.js`; legacy `prompt-hub-panel.js` naming stays in legacy lanes only
 - active hosted v2 panel no longer loads `legacy-panel.css`; the live bookmark/empty/header styling now sits with the active hosted shell styles instead of a dead panel-shell stylesheet
 - active hosted v2 panel now loads a single `index.css`; live tool rail/prompt/store/meeting/release shell styling no longer depends on `legacy-tools.css`
 - release path verify now checks lane-local `latest.json`, `history.json`, `downloads/latest.zip`, version ZIPs, and `releases/release-notes.json` curated 목록 coherence together
+- default `verify` now runs an explicit legacy-isolation guard so backup legacy paths stay out of the active manifest/content lane
 - hosted-first ownership and incremental doc-correction rules were written into root/docs guidance
 
 ## Recent High-Signal Commits

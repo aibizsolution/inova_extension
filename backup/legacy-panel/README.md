@@ -41,5 +41,5 @@
 - 이 폴더는 평소 panel v2 migration 때 따라다니는 작업 경로가 아니다. `DB/Functions`나 shared server contract를 바꿀 때만 `0.4.4` 사용자 영향이 없는지 판단하려고 참조한다.
 - 이 폴더에 들어온 코드는 기본적으로 `served asset`이나 `active bundle`로 취급하지 않는다.
 - 이후 실제로 더 이상 참고 가치도 없으면 여기서도 삭제할 수 있다.
-- 기본 `npm.cmd run verify`는 현재 활성 v2 lane 기준으로만 돈다. backup legacy prompt/runtime/view reference를 다시 보고 싶을 때만 `npm.cmd run verify:legacy-backup`을 추가로 실행한다.
+- 기본 `npm.cmd run verify`는 현재 활성 v2 lane 기준으로만 돌고, `scripts/verify-legacy-isolation.js`로 active manifest/content가 이 backup 경로를 다시 밟지 않는지도 같이 본다. backup legacy prompt/runtime/view reference를 다시 보고 싶을 때만 `npm.cmd run verify:legacy-backup`을 추가로 실행한다.
 - backup legacy 전용 검증 스크립트는 active `scripts/` 루트와 섞지 않도록 `scripts/legacy-panel/*` 아래에 모아 둔다.

@@ -247,7 +247,7 @@ function createHarness(options = {}) {
     getToolSummaryCount: options.getToolSummaryCount,
     buildConversationSnapshot: options.buildConversationSnapshot,
     getConversationCount: options.getConversationCount,
-    panelPromptController: {
+    promptShellController: {
       buildReviewFloatState(visible) {
         return { visible };
       },

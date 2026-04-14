@@ -172,7 +172,7 @@ function createHarness(options = {}) {
       },
       togglePanel() {},
     },
-    panelPromptController: {
+    promptShellController: {
       ensureReviewFloat() {
         reviewFloatEnsureCalls += 1;
       },

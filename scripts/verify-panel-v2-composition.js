@@ -184,8 +184,8 @@ function main() {
     "v2 composition should not keep the prompt bridge proxy once hosted-owned prompt wiring can be passed directly"
   );
   assert(
-    v2CompositionSource.includes("const hostedOwnedPromptController = namespace.panelV2PromptController.create(state, {"),
-    "v2 composition should pass the active v2 prompt controller straight through once shell prompt sync sidecars are gone"
+    v2CompositionSource.includes("const promptShellController = namespace.panelV2PromptController.create(state, {"),
+    "v2 composition should keep the active v2 prompt shell controller local once shell prompt sync sidecars are gone"
   );
   assert(
     v2CompositionSource.includes("namespace.panelV2PromptController.create"),
@@ -228,8 +228,12 @@ function main() {
     "v2 shell wiring should stop routing generic prompt tool selection back through the prompt controller"
   );
   assert(
-    v2CompositionSource.includes("panelPromptController: hostedOwnedPromptController"),
-    "v2 render/bootstrap wiring should pass the hosted-owned prompt controller directly"
+    !v2CompositionSource.includes("panelPromptController:"),
+    "v2 render/bootstrap wiring should drop the legacy panelPromptController contract name"
+  );
+  assert(
+    v2CompositionSource.includes("promptShellController,"),
+    "v2 render/bootstrap wiring should pass the active prompt shell controller directly"
   );
   assert(
     v2CompositionSource.includes("createHostedOwnedPromptSnapshotBridge"),
