@@ -196,6 +196,10 @@ function verifyActiveHostedRuntimeStorageSurfaceStaysCompact() {
 
 function verifyActiveBackgroundMessageSurfaceStaysNarrow() {
   const serviceWorkerSource = fs.readFileSync(path.join(root, "background", "service-worker.js"), "utf8");
+  const meetingWorkspaceCapabilitySource = fs.readFileSync(
+    path.join(root, "background", "meeting-workspace-capability.js"),
+    "utf8"
+  );
 
   assert(
     serviceWorkerSource.includes("ACTIVE_BACKGROUND_MESSAGE_TYPES"),
@@ -261,6 +265,14 @@ function verifyActiveBackgroundMessageSurfaceStaysNarrow() {
   assert(
     fs.existsSync(path.join(root, "backup", "legacy-panel", "background", "meeting-list-cache.js")),
     "backup legacy lane should keep the dormant meeting-list-cache helper"
+  );
+  assert(
+    meetingWorkspaceCapabilitySource.includes("namespace.providerIdentityCache?.normalizeProviderIdentity"),
+    "meeting workspace capability should reuse the shared provider identity cache normalizer"
+  );
+  assert(
+    !meetingWorkspaceCapabilitySource.includes("function normalizeProviderIdentity("),
+    "meeting workspace capability should not redefine its own provider identity normalizer"
   );
 }
 

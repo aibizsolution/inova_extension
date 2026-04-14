@@ -2,6 +2,9 @@
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const INOVA_ORIGIN = "https://inova.incross.com";
   const meetingConfig = namespace.firebaseConfig.meeting;
+  const normalizeProviderIdentity = typeof namespace.providerIdentityCache?.normalizeProviderIdentity === "function"
+    ? namespace.providerIdentityCache.normalizeProviderIdentity
+    : (providerIdentity) => providerIdentity && typeof providerIdentity === "object" ? { ...providerIdentity } : {};
   const HOSTED_MEETING_ALLOWED_ORIGINS = new Set(namespace.productLane?.getKnownHostingOrigins?.() || [
     "https://browser-extension-main.web.app",
     "https://browser-extension-v2.web.app",
@@ -312,16 +315,6 @@
     }
     const activeInovaIdentity = await requestMeetingProviderIdentityFromInovaTabs();
     return activeInovaIdentity.providerUserKey ? activeInovaIdentity : normalized;
-  }
-
-  function normalizeProviderIdentity(providerIdentity) {
-    return {
-      displayName: namespace.session.normalizeText(providerIdentity?.displayName),
-      email: namespace.session.normalizeText(providerIdentity?.email).toLowerCase(),
-      numericUserId: Number.isFinite(Number(providerIdentity?.numericUserId)) ? Number(providerIdentity.numericUserId) : null,
-      provider: namespace.session.normalizeText(providerIdentity?.provider) || "inova",
-      providerUserKey: namespace.session.normalizeText(providerIdentity?.providerUserKey),
-    };
   }
 
   async function loadStoredMeetingProviderIdentity() {
