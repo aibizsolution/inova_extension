@@ -208,8 +208,8 @@ function main() {
     "v2 bootstrap wiring should accept compact hosted tool summary sync callbacks"
   );
   assert(
-    v2CompositionSource.includes('const hostedOwnedReleaseSnapshot = createHostedOwnedReleaseSnapshotBridge(() => getHostedToolSummary(state.toolSummaries, "release"));'),
-    "v2 render wiring should shape release state from the compact hosted release tool summary"
+    v2CompositionSource.includes('const hostedOwnedReleaseToolSummarySnapshot = createHostedOwnedReleaseToolSummarySnapshotBridge('),
+    "v2 render wiring should shape release state from the shared compact hosted tool summary helper"
   );
   assert(
     v2CompositionSource.includes("state.toolSummaries"),
@@ -256,12 +256,12 @@ function main() {
     "v2 render wiring should pass the hosted-owned conversation snapshot bridge"
   );
   assert(
-    v2CompositionSource.includes("createHostedOwnedMeetingSnapshotBridge"),
-    "v2 composition should wrap meeting snapshot shaping for hosted-owned meeting state"
+    v2CompositionSource.includes("createHostedOwnedCountToolSummarySnapshotBridge"),
+    "v2 composition should wrap count-only hosted tool summary shaping for meeting state"
   );
   assert(
-    v2CompositionSource.includes('const hostedOwnedMeetingSnapshot = createHostedOwnedMeetingSnapshotBridge(() => getHostedToolSummary(state.toolSummaries, "meeting"));'),
-    "v2 meeting snapshot bridge should derive snapshot state from the hosted meeting tool summary without the legacy meeting manager"
+    v2CompositionSource.includes('const hostedOwnedMeetingToolSummarySnapshot = createHostedOwnedCountToolSummarySnapshotBridge('),
+    "v2 meeting snapshot bridge should derive snapshot state from the shared hosted tool summary helper without the legacy meeting manager"
   );
   assert(
     !v2CompositionSource.includes("state.meetingHub"),
@@ -292,8 +292,8 @@ function main() {
     "v2 composition should keep hosted-owned release residue inside toolSummaries.release"
   );
   assert(
-    v2CompositionSource.includes("function normalizeHostedMeetingCount(value)"),
-    "v2 composition should normalize hosted meeting counts locally"
+    v2CompositionSource.includes("function normalizeHostedToolSummaryCount(value)"),
+    "v2 composition should normalize compact hosted tool summary counts locally"
   );
   assert(
     !v2CompositionSource.includes("dataFreshness: normalizedMeetingTool.dataFreshness"),
@@ -304,8 +304,20 @@ function main() {
     "v2 meeting snapshot bridge should stop carrying hosted-owned meeting fingerprints once extension residue is count-only"
   );
   assert(
-    v2CompositionSource.includes("buildMeetingSnapshot: hostedOwnedMeetingSnapshot.buildMeetingSnapshot"),
-    "v2 render wiring should pass the hosted-owned meeting snapshot bridge"
+    v2CompositionSource.includes("buildMeetingSnapshot: hostedOwnedMeetingToolSummarySnapshot.buildSnapshot"),
+    "v2 render wiring should pass the shared count-only meeting tool summary bridge"
+  );
+  assert(
+    v2CompositionSource.includes("getMeetingCount: hostedOwnedMeetingToolSummarySnapshot.getCount"),
+    "v2 render wiring should read meeting rail counts from the shared count-only tool summary bridge"
+  );
+  assert(
+    v2CompositionSource.includes("buildReleaseSnapshot: hostedOwnedReleaseToolSummarySnapshot.buildSnapshot"),
+    "v2 render wiring should pass the shared hosted release tool summary bridge"
+  );
+  assert(
+    v2CompositionSource.includes("getReleaseCount: hostedOwnedReleaseToolSummarySnapshot.getCount"),
+    "v2 render wiring should read release rail counts from the shared hosted release tool summary bridge"
   );
   assert(
     !v2CompositionSource.includes("panelMeetingController.buildToolState?.(meetingHub)"),
@@ -328,6 +340,14 @@ function main() {
   assert(
     v2CompositionSource.includes("function handleHostedToolSummarySync(toolId, toolState = {})"),
     "v2 composition should route compact hosted tool summary sync callbacks through a shared dispatcher"
+  );
+  assert(
+    v2CompositionSource.includes("function normalizeHostedToolSummary(toolId, toolSummary = {})"),
+    "v2 composition should normalize compact hosted meeting/release residue through a shared tool summary helper"
+  );
+  assert(
+    v2CompositionSource.includes("function shouldUpdateHostedToolSummary(toolSummaries, toolId, nextSummary)"),
+    "v2 composition should diff compact hosted meeting/release residue through a shared tool summary helper"
   );
   assert(
     v2CompositionSource.includes("function buildHostedOwnedPanelCallbacks(deps = {})"),
