@@ -150,6 +150,7 @@
     "README.md",
     "docs/feature-spec.md",
     "scripts/verify-docs.js",
+    "scripts/verify-browser-only-boundary.js",
     "scripts/verify-contracts.js",
     "scripts/verify-hosted-panel-bridge.js",
     "scripts/legacy-panel/verify-legacy-prompt-backup.js",
@@ -292,6 +293,40 @@
     "inova-meeting:authorize-workspace-access",
     "inova-meeting:probe-workspace-bridge",
     "inova-panel:invoke"
+  ],
+  "browserOnlyCapabilityOwners": {
+    "fetch": [
+      "background/cloud-api-client.js",
+      "background/inova-auth-client.js",
+      "background/panel-runtime-capability-router.js"
+    ],
+    "chromeTabs": [
+      "background/browser-capability.js",
+      "background/meeting-workspace-capability.js",
+      "popup/index.js"
+    ],
+    "chromeCookies": [
+      "background/meeting-workspace-capability.js",
+      "background/panel-session-capability.js"
+    ],
+    "chromeStorage": [
+      "popup/index.js",
+      "shared/storage.js"
+    ],
+    "localStorage": [
+      "content/provider-identity-sensor.js"
+    ],
+    "sessionStorage": [
+      "content/panel-v2-shell-bridge.js"
+    ]
+  },
+  "browserOnlyEndpointConfigFiles": [
+    "background/cloud-api-client.js",
+    "background/meeting-workspace-capability.js",
+    "background/panel-auth-cache.js",
+    "background/panel-runtime-capability-router.js",
+    "shared/firebase-config.js",
+    "shared/product-lane.js"
   ],
   "requiredDocKeywords": [
     "팝업 작업실 연결 설정",
