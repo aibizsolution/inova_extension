@@ -54,6 +54,7 @@
 - 특징: `meetingWorkspaceTarget`, `meetingWorkspaceUrlOverride`, `meetingDebugConsoleEnabled` 같은 hosted/local target 설정 정규화는 `shared/firebase-config.js`의 `firebaseConfig.meeting.normalizeSettings()`를 정본으로 쓴다. popup과 background meeting workspace capability가 이 shared helper를 같이 재사용하고, 표면별 임시 normalize 함수를 다시 복제하지 않는다.
 - 특징: active prompt lane도 `chrome.storage.local.promptLibrary`를 정본으로 취급하지 않는다. active `shared/constants.js` / `shared/storage.js`는 dormant prompt local cache schema를 더 이상 들고 있지 않고, backup prompt helper/reference가 그 캐시 계약을 직접 가진다.
 - 특징: background-only auth/cloud network helper도 active shared root에 남기지 않는다. i-Nova access token refresh는 `background/inova-auth-client.js`, Functions-backed cloud POST helper는 `background/cloud-api-client.js`가 맡고, active `shared/*`는 browser-agnostic cache/state/config core만 유지한다.
+- 특징: active shared root inventory는 `shared/constants.js`, `shared/firebase-config.js`, `shared/product-lane.js`, `shared/provider-identity-cache.js`, `shared/session.js`, `shared/storage.js`로 고정하고, 이 목록은 `contracts/extension-contract.json` + `scripts/verify-contracts.js`로 같이 잠근다.
 
 ### Background Service Worker
 

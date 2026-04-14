@@ -1,5 +1,13 @@
 {
   "maxLinesPerSourceFile": 900,
+  "activeSharedRootFiles": [
+    "shared/constants.js",
+    "shared/firebase-config.js",
+    "shared/product-lane.js",
+    "shared/provider-identity-cache.js",
+    "shared/session.js",
+    "shared/storage.js"
+  ],
   "requiredFiles": [
     "manifest.json",
     "package.json",

@@ -89,6 +89,7 @@ if (countJavaScriptFiles(contentDirectory) < 3) {
 if (countJavaScriptFiles(sharedDirectory) < 3) {
   errors.push("shared 모듈 수가 부족합니다. 최소 3개 파일로 분리해야 합니다.");
 }
+verifyActiveSharedRootCatalog();
 verifyHostedCapabilityCatalog();
 verifyBackgroundMessageCatalog();
 
@@ -239,6 +240,37 @@ function verifyHostedCapabilityCatalog() {
     verifyCapabilityCallsInSource(source, relativePath, "invokePage", pageCapabilityActions, "page");
     verifyCapabilityCallsInSource(source, relativePath, "invokeRuntime", runtimeCapabilityActions, "runtime");
     verifyCapabilityTransportIsolation(source, relativePath, entry);
+  }
+}
+
+function verifyActiveSharedRootCatalog() {
+  const activeSharedRootFiles = new Set(contract.activeSharedRootFiles || []);
+  if (!activeSharedRootFiles.size) {
+    errors.push("active shared root catalog가 비어 있습니다.");
+    return;
+  }
+
+  if (!fs.existsSync(sharedDirectory)) {
+    errors.push("shared 디렉터리를 찾지 못했습니다.");
+    return;
+  }
+
+  const actualSharedRootFiles = new Set(
+    fs.readdirSync(sharedDirectory)
+      .filter((file) => file.endsWith(".js"))
+      .map((file) => path.posix.join("shared", file))
+  );
+
+  for (const file of activeSharedRootFiles) {
+    if (!actualSharedRootFiles.has(file)) {
+      errors.push(`active shared root catalog 누락: ${file}`);
+    }
+  }
+
+  for (const file of actualSharedRootFiles) {
+    if (!activeSharedRootFiles.has(file)) {
+      errors.push(`active shared root에 계약 밖 helper가 다시 들어왔습니다: ${file}`);
+    }
   }
 }
 
