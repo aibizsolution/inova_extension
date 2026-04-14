@@ -92,7 +92,7 @@
     invokePage,
     invokeRuntime,
     scheduleRender,
-    syncTopPanelSummary: syncMeetingToolSummary,
+    syncTopPanelSummary: (meetingTool = {}) => syncToolSummary("meeting", meetingTool),
     traceFirestore: traceFirestoreFlow,
     traceMeeting: traceMeetingFlow,
   }) || null;
@@ -100,7 +100,7 @@
     getRuntimeVersion: () => state.extensionVersion || "",
     invokeRuntime,
     scheduleRender,
-    syncTopPanelSummary: syncReleaseToolSummary,
+    syncTopPanelSummary: (releaseTool = {}) => syncToolSummary("release", releaseTool),
     traceRelease: traceReleaseFlow,
   }) || null;
   const callbacks = createCallbacks();
@@ -470,17 +470,11 @@
     });
   }
 
-  function syncMeetingToolSummary(meetingTool = {}) {
+  function syncToolSummary(toolId, toolState = {}) {
     return request("panel", {
-      action: "meeting-summary-sync",
-      meetingTool,
-    });
-  }
-
-  function syncReleaseToolSummary(releaseTool = {}) {
-    return request("panel", {
-      action: "release-summary-sync",
-      releaseTool,
+      action: "tool-summary-sync",
+      toolId: normalizeText(toolId),
+      toolState,
     });
   }
 

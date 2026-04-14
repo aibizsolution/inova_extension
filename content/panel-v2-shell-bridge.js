@@ -154,11 +154,8 @@
   }
 
   function createBootstrapController(state, deps = {}) {
-    const handlePanelMeetingSummarySync = typeof deps.handlePanelMeetingSummarySync === "function"
-      ? deps.handlePanelMeetingSummarySync
-      : async () => false;
-    const handlePanelReleaseSummarySync = typeof deps.handlePanelReleaseSummarySync === "function"
-      ? deps.handlePanelReleaseSummarySync
+    const handlePanelToolSummarySync = typeof deps.handlePanelToolSummarySync === "function"
+      ? deps.handlePanelToolSummarySync
       : async () => false;
     const buildHostedPanelCallbacks = typeof deps.buildHostedPanelCallbacks === "function"
       ? deps.buildHostedPanelCallbacks
@@ -194,8 +191,7 @@
       panelLifecycleController.initializeOpenState();
       void providerIdentitySync.syncToStorage("bootstrap");
       namespace.contentPanel.ensurePanel(buildHostedPanelCallbacks({
-        handlePanelMeetingSummarySync,
-        handlePanelReleaseSummarySync,
+        handlePanelToolSummarySync,
         panelBookmarkController,
         panelLifecycleController,
         panelPromptController,
@@ -239,11 +235,8 @@
   }
 
   function buildDefaultHostedPanelCallbacks(deps = {}) {
-    const handlePanelMeetingSummarySync = typeof deps.handlePanelMeetingSummarySync === "function"
-      ? deps.handlePanelMeetingSummarySync
-      : async () => false;
-    const handlePanelReleaseSummarySync = typeof deps.handlePanelReleaseSummarySync === "function"
-      ? deps.handlePanelReleaseSummarySync
+    const handlePanelToolSummarySync = typeof deps.handlePanelToolSummarySync === "function"
+      ? deps.handlePanelToolSummarySync
       : async () => false;
     const panelBookmarkController = deps.panelBookmarkController || { copyBookmarkText() {}, jumpToBookmark() {} };
     const panelLifecycleController = deps.panelLifecycleController || { togglePanel() {} };
@@ -262,8 +255,7 @@
       onCopyBookmark: panelBookmarkController.copyBookmarkText,
       onHandlePositionChange: panelShellController.updateHandlePosition,
       onJumpBookmark: panelBookmarkController.jumpToBookmark,
-      onMeetingSummarySync: handlePanelMeetingSummarySync,
-      onReleaseSummarySync: handlePanelReleaseSummarySync,
+      onToolSummarySync: handlePanelToolSummarySync,
       onReleaseAction: releaseManager.handleAction,
       onSearch: panelShellController.updateQuery,
       onSearchSubmit: panelShellController.submitQuery,

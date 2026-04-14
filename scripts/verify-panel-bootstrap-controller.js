@@ -26,16 +26,17 @@ async function verifyBootstrapWiringAndScheduling() {
 
   assert.equal(harness.lifecycleInitializeCalls, 1);
   assert.deepEqual(harness.providerIdentityReasons, ["bootstrap"]);
-  assert.equal(typeof harness.callbacks.onMeetingSummarySync, "function");
-  assert.equal(typeof harness.callbacks.onReleaseSummarySync, "function");
+  assert.equal(typeof harness.callbacks.onToolSummarySync, "function");
   assert.equal(typeof harness.callbacks.onSearch, "function");
   assert.equal(typeof harness.callbacks.onToggle, "function");
   [
+    "onMeetingSummarySync",
     "onMeetingAction",
     "onImportFile",
     "onMovePrompt",
     "onPromptAction",
     "onPromptDraftChange",
+    "onReleaseSummarySync",
     "onSelectPromptTab",
     "onStoreAction",
   ].forEach((callbackKey) => assert.equal(
@@ -150,7 +151,7 @@ function createHarness(options = {}) {
 
   const controller = context.InovaBookmarks.panelV2ShellBridge.createBootstrapController(state, {
     handlePanelMeetingAction: async () => {},
-    handlePanelMeetingSummarySync: async () => {},
+    handlePanelToolSummarySync: async () => {},
     isStoreTabActive() {
       return Boolean(options.storeTabActive);
     },

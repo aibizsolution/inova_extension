@@ -436,7 +436,9 @@
       ? helpers.normalizeText
       : (value) => namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
     const action = normalizeText(payload?.action);
-    const handledSummaryRequest = await handlePanelSummaryRequest(action, payload, callbacks);
+    const handledSummaryRequest = await handlePanelSummaryRequest(action, payload, callbacks, {
+      normalizeText,
+    });
     if (handledSummaryRequest?.handled) {
       return handledSummaryRequest;
     }
@@ -460,28 +462,22 @@
     });
   }
 
-  function handlePanelSummaryRequest(action, payload, callbacks) {
-    if (action === "meeting-summary-sync") {
-      if (typeof callbacks.onMeetingSummarySync !== "function") {
+  function handlePanelSummaryRequest(action, payload, callbacks, helpers = {}) {
+    const normalizeText = typeof helpers.normalizeText === "function"
+      ? helpers.normalizeText
+      : (value) => namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
+    if (action === "tool-summary-sync") {
+      if (typeof callbacks.onToolSummarySync !== "function") {
         return Promise.resolve({
           handled: false,
           result: null,
         });
       }
-      const meetingTool = payload?.meetingTool && typeof payload.meetingTool === "object"
-        ? payload.meetingTool
+      const toolId = normalizeText(payload?.toolId);
+      const toolState = payload?.toolState && typeof payload.toolState === "object"
+        ? payload.toolState
         : {};
-      return Promise.resolve(callbacks.onMeetingSummarySync?.(meetingTool)).then(() => ({
-        handled: true,
-        result: { handled: true },
-      }));
-    }
-
-    if (action === "release-summary-sync") {
-      const releaseTool = payload?.releaseTool && typeof payload.releaseTool === "object"
-        ? payload.releaseTool
-        : {};
-      return Promise.resolve(callbacks.onReleaseSummarySync?.(releaseTool)).then(() => ({
+      return Promise.resolve(callbacks.onToolSummarySync?.(toolId, toolState)).then(() => ({
         handled: true,
         result: { handled: true },
       }));

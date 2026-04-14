@@ -454,7 +454,7 @@ async function verifyHostedMeetingHubIgnoresOwnSummaryEchoWhileLoading() {
   assert.equal(
     realtimeSubscribeCalls.length,
     1,
-    "hosted meeting hub should not re-subscribe when its own meeting-summary-sync snapshot echoes back during the first load"
+    "hosted meeting hub should not re-subscribe when its own tool-summary-sync snapshot echoes back during the first load"
   );
 }
 

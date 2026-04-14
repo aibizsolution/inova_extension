@@ -94,8 +94,7 @@
     });
     const panelBootstrapController = panelV2ShellBridge.createBootstrapController(state, {
       buildHostedPanelCallbacks: buildHostedOwnedPanelCallbacks,
-      handlePanelMeetingSummarySync: handleHostedMeetingSummarySync,
-      handlePanelReleaseSummarySync: handleHostedReleaseSummarySync,
+      handlePanelToolSummarySync: handleHostedToolSummarySync,
       panelActivityController,
       panelBookmarkController: hostedOwnedConversationBridge,
       panelDebugController,
@@ -116,6 +115,17 @@
         return panelBootstrapController.bootstrap();
       },
     };
+
+    function handleHostedToolSummarySync(toolId, toolState = {}) {
+      const normalizedToolId = normalizeHostedToolSummaryId(toolId);
+      if (normalizedToolId === "meeting") {
+        return handleHostedMeetingSummarySync(toolState);
+      }
+      if (normalizedToolId === "release") {
+        return handleHostedReleaseSummarySync(toolState);
+      }
+      return false;
+    }
 
     function handleHostedMeetingSummarySync(meetingTool = {}) {
       const nextCount = normalizeHostedMeetingCount(meetingTool?.count);
@@ -148,19 +158,15 @@
         updateQuery() {},
       };
       const releaseManager = deps.releaseManager || { handleAction() {} };
-      const handlePanelMeetingSummarySync = typeof deps.handlePanelMeetingSummarySync === "function"
-        ? deps.handlePanelMeetingSummarySync
-        : async () => false;
-      const handlePanelReleaseSummarySync = typeof deps.handlePanelReleaseSummarySync === "function"
-        ? deps.handlePanelReleaseSummarySync
+      const handlePanelToolSummarySync = typeof deps.handlePanelToolSummarySync === "function"
+        ? deps.handlePanelToolSummarySync
         : async () => false;
 
       return {
         onCopyBookmark: panelBookmarkController.copyBookmarkText,
         onHandlePositionChange: panelShellController.updateHandlePosition,
         onJumpBookmark: panelBookmarkController.jumpToBookmark,
-        onMeetingSummarySync: handlePanelMeetingSummarySync,
-        onReleaseSummarySync: handlePanelReleaseSummarySync,
+        onToolSummarySync: handlePanelToolSummarySync,
         onReleaseAction: releaseManager.handleAction,
         onSearch: panelShellController.updateQuery,
         onSearchSubmit: panelShellController.submitQuery,
@@ -635,6 +641,13 @@
 
   function normalizeHostedMeetingCount(value) {
     return Math.max(0, Number(value) || 0);
+  }
+
+  function normalizeHostedToolSummaryId(value) {
+    const normalizedToolId = normalizeText(value);
+    return normalizedToolId === "meeting" || normalizedToolId === "release"
+      ? normalizedToolId
+      : "";
   }
 
   function buildReleaseSummaryKey(releaseTool) {

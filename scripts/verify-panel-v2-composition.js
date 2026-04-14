@@ -200,8 +200,8 @@ function main() {
     "v2 composition should provide an idle release bridge once hosted release owns release checks"
   );
   assert(
-    v2CompositionSource.includes("handlePanelReleaseSummarySync: handleHostedReleaseSummarySync"),
-    "v2 bootstrap wiring should accept compact hosted release summary sync callbacks"
+    v2CompositionSource.includes("handlePanelToolSummarySync: handleHostedToolSummarySync"),
+    "v2 bootstrap wiring should accept compact hosted tool summary sync callbacks"
   );
   assert(
     v2CompositionSource.includes("const hostedOwnedReleaseSnapshot = createHostedOwnedReleaseSnapshotBridge(() => state.releaseSummary);"),
@@ -314,8 +314,8 @@ function main() {
     "v2 bootstrap should provide a hosted-owned callback surface instead of passing the legacy default callback set through unchanged"
   );
   assert(
-    v2CompositionSource.includes("handlePanelMeetingSummarySync: handleHostedMeetingSummarySync"),
-    "v2 bootstrap should accept hosted-owned meeting summary sync callbacks"
+    v2CompositionSource.includes("function handleHostedToolSummarySync(toolId, toolState = {})"),
+    "v2 composition should route compact hosted tool summary sync callbacks through a shared dispatcher"
   );
   assert(
     v2CompositionSource.includes("function buildHostedOwnedPanelCallbacks(deps = {})"),
@@ -325,7 +325,7 @@ function main() {
     "onCopyBookmark:",
     "onHandlePositionChange:",
     "onJumpBookmark:",
-    "onMeetingSummarySync:",
+    "onToolSummarySync:",
     "onReleaseAction:",
     "onSearch:",
     "onSearchSubmit:",

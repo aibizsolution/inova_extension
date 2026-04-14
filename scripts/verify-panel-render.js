@@ -217,15 +217,15 @@ function verifyHostedMeetingSummarySyncContract() {
   );
 
   assert(
-    hostedPanelSource.includes('action: "meeting-summary-sync"'),
+    hostedPanelSource.includes('syncTopPanelSummary: (meetingTool = {}) => syncToolSummary("meeting", meetingTool),'),
     "hosted meeting hub should be able to sync a compact summary back to the top panel"
   );
   assert(
-    bridgeRequestSource.includes('if (action === "meeting-summary-sync") {'),
+    bridgeRequestSource.includes('if (action === "tool-summary-sync") {'),
     "top panel bridge should accept hosted meeting summary sync requests through the shared hosted bridge helper"
   );
   assert(
-    bootstrapSource.includes("onMeetingSummarySync: handlePanelMeetingSummarySync"),
+    bootstrapSource.includes("onToolSummarySync: handlePanelToolSummarySync"),
     "panel bootstrap should forward hosted meeting summary sync callbacks into the top-panel bridge"
   );
 }
@@ -389,7 +389,7 @@ function verifyHostedReleaseSummarySyncContract() {
   );
 
   assert(
-    hostedPanelSource.includes('action: "release-summary-sync"'),
+    hostedPanelSource.includes('syncTopPanelSummary: (releaseTool = {}) => syncToolSummary("release", releaseTool),'),
     "hosted release controller should be able to sync a compact release summary back to the top panel"
   );
   assert(
@@ -397,7 +397,7 @@ function verifyHostedReleaseSummarySyncContract() {
     "hosted release controller should emit a compact top-panel summary after release checks settle"
   );
   assert(
-    bridgeRequestSource.includes('if (action === "release-summary-sync") {'),
+    bridgeRequestSource.includes('if (action === "tool-summary-sync") {'),
     "top panel bridge should accept hosted release summary sync requests through the shared hosted bridge helper"
   );
 }
