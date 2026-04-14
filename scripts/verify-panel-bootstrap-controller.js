@@ -26,11 +26,23 @@ async function verifyBootstrapWiringAndScheduling() {
 
   assert.equal(harness.lifecycleInitializeCalls, 1);
   assert.deepEqual(harness.providerIdentityReasons, ["bootstrap"]);
-  assert.equal(typeof harness.callbacks.onMeetingAction, "function");
   assert.equal(typeof harness.callbacks.onMeetingSummarySync, "function");
   assert.equal(typeof harness.callbacks.onReleaseSummarySync, "function");
   assert.equal(typeof harness.callbacks.onSearch, "function");
   assert.equal(typeof harness.callbacks.onToggle, "function");
+  [
+    "onMeetingAction",
+    "onImportFile",
+    "onMovePrompt",
+    "onPromptAction",
+    "onPromptDraftChange",
+    "onSelectPromptTab",
+    "onStoreAction",
+  ].forEach((callbackKey) => assert.equal(
+    callbackKey in harness.callbacks,
+    false,
+    `bootstrap default callback surface should drop the legacy callback ${callbackKey}`
+  ));
   assert.equal(harness.debugInstallCalls, 1);
   assert.equal(harness.reviewFloatEnsureCalls, 1);
   assert.equal(harness.routeWatchInstallCalls, 1);

@@ -193,9 +193,6 @@
   }
 
   function createBootstrapController(state, deps = {}) {
-    const handlePanelMeetingAction = typeof deps.handlePanelMeetingAction === "function"
-      ? deps.handlePanelMeetingAction
-      : async () => {};
     const handlePanelMeetingSummarySync = typeof deps.handlePanelMeetingSummarySync === "function"
       ? deps.handlePanelMeetingSummarySync
       : async () => false;
@@ -215,16 +212,10 @@
     const panelPromptController = deps.panelPromptController || {
       ensureReviewFloat() {},
       ensureStoreLoaded() {},
-      handleDraftChange() {},
       handleEscape() {},
-      handleImportFile() {},
-      handlePromptAction() {},
       handleStorageChange() {},
-      handleStoreAction() {},
-      movePromptItem() {},
       scheduleCloudSyncIfNeeded() {},
       scheduleRealtimeSync() {},
-      selectPromptTab() {},
     };
     const panelShellController = deps.panelShellController || {
       selectTool() {},
@@ -249,7 +240,6 @@
       panelLifecycleController.initializeOpenState();
       void providerIdentitySync.syncToStorage("bootstrap");
       namespace.contentPanel.ensurePanel(buildHostedPanelCallbacks({
-        handlePanelMeetingAction,
         handlePanelMeetingSummarySync,
         handlePanelReleaseSummarySync,
         panelBookmarkController,
@@ -301,9 +291,6 @@
   }
 
   function buildDefaultHostedPanelCallbacks(deps = {}) {
-    const handlePanelMeetingAction = typeof deps.handlePanelMeetingAction === "function"
-      ? deps.handlePanelMeetingAction
-      : async () => {};
     const handlePanelMeetingSummarySync = typeof deps.handlePanelMeetingSummarySync === "function"
       ? deps.handlePanelMeetingSummarySync
       : async () => false;
@@ -313,13 +300,7 @@
     const panelBookmarkController = deps.panelBookmarkController || { copyBookmarkText() {}, jumpToBookmark() {} };
     const panelLifecycleController = deps.panelLifecycleController || { togglePanel() {} };
     const panelPromptController = deps.panelPromptController || {
-      handleDraftChange() {},
       handleEscape() {},
-      handleImportFile() {},
-      handlePromptAction() {},
-      handleStoreAction() {},
-      movePromptItem() {},
-      selectPromptTab() {},
     };
     const panelShellController = deps.panelShellController || {
       selectTool() {},
@@ -332,20 +313,13 @@
     return {
       onCopyBookmark: panelBookmarkController.copyBookmarkText,
       onHandlePositionChange: panelShellController.updateHandlePosition,
-      onImportFile: panelPromptController.handleImportFile,
       onJumpBookmark: panelBookmarkController.jumpToBookmark,
-      onMeetingAction: handlePanelMeetingAction,
       onMeetingSummarySync: handlePanelMeetingSummarySync,
       onReleaseSummarySync: handlePanelReleaseSummarySync,
-      onMovePrompt: panelPromptController.movePromptItem,
-      onPromptAction: panelPromptController.handlePromptAction,
-      onPromptDraftChange: panelPromptController.handleDraftChange,
-      onSelectPromptTab: panelPromptController.selectPromptTab,
       onReleaseAction: releaseManager.handleAction,
       onSearch: panelShellController.updateQuery,
       onSearchSubmit: panelShellController.submitQuery,
       onSelectTool: panelShellController.selectTool,
-      onStoreAction: panelPromptController.handleStoreAction,
       onEscape: panelPromptController.handleEscape,
       onToggle: panelLifecycleController.togglePanel,
     };
