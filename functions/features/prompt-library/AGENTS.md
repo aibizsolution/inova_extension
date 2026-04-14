@@ -9,7 +9,7 @@
 ## 관련 프론트 경로
 - `backup/legacy-panel/features/prompt-library/prompt-manager.js`
 - `backup/legacy-panel/features/prompt-library/cloud-sync-manager.js`
-- `shared/prompt-library.js`
+- `backup/legacy-panel/shared/prompt-library.js`
 
 ## 관련 functions 경로
 - `functions/index.js`

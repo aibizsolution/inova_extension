@@ -45,7 +45,7 @@ const requiredFiles = [
   path.join("backup", "legacy-panel", "shared", "prompt-cloud-sync.js"),
   path.join("backup", "legacy-panel", "shared", "prompt-storage.js"),
   path.join("backup", "legacy-panel", "shared", "legacy-storage-accessors.js"),
-  "shared/prompt-library.js",
+  path.join("backup", "legacy-panel", "shared", "prompt-library.js"),
   path.join("scripts", "verify-feature-doc-update.js"),
   path.join("scripts", "verify-hosted-panel-bridge.js"),
   path.join("scripts", "verify-legacy-isolation.js"),
@@ -174,7 +174,7 @@ const featureDocContracts = [
       "hosting/extension-v2/panel/prompt-library-controller.js",
       "hosting/extension-v2/panel/prompt-view.js",
       "backup/legacy-panel/features/prompt-library/files.js",
-      "shared/prompt-library.js",
+      "backup/legacy-panel/shared/prompt-library.js",
     ],
   },
   {
@@ -567,7 +567,7 @@ const codeChecks = [
     patterns: [/PROMPT_LIBRARY_STORAGE_KEY/, /readLegacyPromptLibraryState/, /writeLegacyPromptLibraryState/],
   },
   {
-    file: "shared/prompt-library.js",
+    file: "backup/legacy-panel/shared/prompt-library.js",
     patterns: [
       /parseImportText/,
       /buildExportPayload/,
