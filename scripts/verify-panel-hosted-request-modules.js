@@ -73,6 +73,7 @@ function verifyHostedBridgeRequestModuleContract() {
     "handlePageRequest(",
     "handlePanelRequest(",
     "handlePanelSummaryRequest(",
+    "handleReleaseRequest(",
     "handleLegacyPanelRequest(",
     "handleLegacyMeetingRequest(",
     "handleLegacyPromptRequest(",

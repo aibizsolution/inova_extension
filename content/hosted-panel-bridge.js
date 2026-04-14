@@ -444,6 +444,13 @@
       return handledSummaryRequest;
     }
 
+    const handledReleaseRequest = await handleReleaseRequest(action, payload, callbacks, {
+      normalizeText,
+    });
+    if (handledReleaseRequest?.handled) {
+      return handledReleaseRequest;
+    }
+
     const handledLegacyRequest = await handleLegacyPanelRequest(action, payload, callbacks, {
       logConsoleTrace,
       normalizeText,
@@ -496,6 +503,25 @@
       return handledMeetingRequest;
     }
     return handleLegacyPromptRequest(action, payload, callbacks, helpers);
+  }
+
+  function handleReleaseRequest(action, payload, callbacks, helpers = {}) {
+    const normalizeText = typeof helpers.normalizeText === "function"
+      ? helpers.normalizeText
+      : (value) => namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
+    const detail = payload?.detail && typeof payload.detail === "object" ? payload.detail : {};
+
+    if (action === "release-action") {
+      return Promise.resolve(callbacks.onReleaseAction?.(normalizeText(payload?.releaseAction), detail)).then(() => ({
+        handled: true,
+        result: { handled: true },
+      }));
+    }
+
+    return Promise.resolve({
+      handled: false,
+      result: null,
+    });
   }
 
   function handleLegacyMeetingRequest(action, payload, callbacks, helpers = {}) {
@@ -652,7 +678,6 @@
     const normalizeText = typeof helpers.normalizeText === "function"
       ? helpers.normalizeText
       : (value) => namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
-    const detail = payload?.detail && typeof payload.detail === "object" ? payload.detail : {};
 
     if (action === "toggle-panel") {
       callbacks.onToggle?.(payload?.open);
@@ -709,13 +734,6 @@
         handled: true,
         result: { jumped: true },
       });
-    }
-
-    if (action === "release-action") {
-      return Promise.resolve(callbacks.onReleaseAction?.(normalizeText(payload?.releaseAction), detail)).then(() => ({
-        handled: true,
-        result: { handled: true },
-      }));
     }
 
     return Promise.resolve({
