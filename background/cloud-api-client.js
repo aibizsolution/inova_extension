@@ -1,6 +1,5 @@
 (function initCloudApiClient(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const { functions } = namespace.firebaseConfig;
   const REQUEST_TIMEOUT_MS = 25000;
 
   function toProviderIdentityPayload(providerIdentity) {
@@ -328,7 +327,9 @@
   }
 
   function resolveFunctionsConfig(overrideConfig) {
-    return overrideConfig && typeof overrideConfig === "object" ? overrideConfig : functions;
+    return overrideConfig && typeof overrideConfig === "object"
+      ? overrideConfig
+      : namespace.functionsRuntimeConfig?.getDefaultFunctionsConfig?.() || {};
   }
 
   namespace.cloudApi = {

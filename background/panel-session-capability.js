@@ -1,7 +1,7 @@
 (function initPanelSessionCapability(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const INOVA_ORIGIN = "https://inova.incross.com";
-  const meetingWorkspaceCapability = namespace.meetingWorkspaceCapability || {};
+  const functionsRuntimeConfig = namespace.functionsRuntimeConfig || {};
   const panelAuthCache = namespace.panelAuthCache?.create?.(getInovaAccessToken);
 
   async function getInovaAccessToken() {
@@ -21,19 +21,22 @@
   }
 
   async function issueMeetingPanelAuth(providerIdentity) {
-    const functionsConfig = await meetingWorkspaceCapability.getMeetingFunctionsConfig();
+    const functionsConfig = await getMeetingFunctionsConfig();
     return panelAuthCache.issueMeetingPanelAuth(providerIdentity, { functionsConfig });
   }
 
   async function getPromptFunctionsConfig() {
     const runtimeConfig = await getPromptRuntimeConfig();
-    return runtimeConfig?.functions || namespace.firebaseConfig?.functions || {};
+    return runtimeConfig?.functions || {};
+  }
+
+  async function getMeetingFunctionsConfig() {
+    const runtimeConfig = await functionsRuntimeConfig.getMeetingRuntimeConfig?.();
+    return runtimeConfig?.functions || {};
   }
 
   async function getPromptRuntimeConfig() {
-    const normalizedSettings = await meetingWorkspaceCapability.reconcileSettings((await namespace.storage.getState())?.settings);
-    return namespace.firebaseConfig?.prompt?.resolveRuntime?.(normalizedSettings) || {
-      functions: namespace.firebaseConfig?.functions || {},
+    return functionsRuntimeConfig.getPromptRuntimeConfig?.() || {
       hosting: namespace.firebaseConfig?.hosting || {},
       prompt: namespace.firebaseConfig?.prompt || {},
       target: "production",

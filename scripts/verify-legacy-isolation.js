@@ -250,6 +250,7 @@ function verifyActiveBackgroundMessageSurfaceStaysNarrow() {
   const serviceWorkerSource = fs.readFileSync(path.join(root, "background", "service-worker.js"), "utf8");
   const browserCapabilitySource = fs.readFileSync(path.join(root, "background", "browser-capability.js"), "utf8");
   const cloudApiClientSource = fs.readFileSync(path.join(root, "background", "cloud-api-client.js"), "utf8");
+  const functionsRuntimeSource = fs.readFileSync(path.join(root, "background", "functions-runtime-config.js"), "utf8");
   const inovaAuthClientSource = fs.readFileSync(path.join(root, "background", "inova-auth-client.js"), "utf8");
   const panelSessionCapabilitySource = fs.readFileSync(path.join(root, "background", "panel-session-capability.js"), "utf8");
   const meetingWorkspaceCapabilitySource = fs.readFileSync(
@@ -274,12 +275,20 @@ function verifyActiveBackgroundMessageSurfaceStaysNarrow() {
     "background service worker should preload the dedicated cloud API client module"
   );
   assert(
+    serviceWorkerSource.includes('importScripts("functions-runtime-config.js");'),
+    "background service worker should preload the dedicated functions runtime config module"
+  );
+  assert(
     inovaAuthClientSource.includes("namespace.inovaAuth = {"),
     "background i-Nova auth client should expose the shared auth namespace"
   );
   assert(
     cloudApiClientSource.includes("namespace.cloudApi = {"),
     "background cloud API client should expose the shared cloud API namespace"
+  );
+  assert(
+    functionsRuntimeSource.includes("namespace.functionsRuntimeConfig = {"),
+    "background functions runtime config should expose the shared runtime config namespace"
   );
   assert(
     browserCapabilitySource.includes("chrome.tabs.create({ url: nextUrl }"),
@@ -302,8 +311,8 @@ function verifyActiveBackgroundMessageSurfaceStaysNarrow() {
     "panel session capability should own the panel auth cache wrapper"
   );
   assert(
-    panelSessionCapabilitySource.includes("namespace.firebaseConfig?.prompt?.resolveRuntime?.(normalizedSettings)"),
-    "panel session capability should own prompt runtime resolution"
+    panelSessionCapabilitySource.includes("functionsRuntimeConfig.getPromptRuntimeConfig?.()"),
+    "panel session capability should delegate prompt runtime resolution to the background functions runtime config"
   );
   [
     '"inova-meeting:authorize-workspace-access"',
@@ -350,6 +359,10 @@ function verifyActiveBackgroundMessageSurfaceStaysNarrow() {
     "async function issueMeetingPanelAuth(",
     "async function getPromptFunctionsConfig(",
     "async function getPromptRuntimeConfig(",
+    "issueInovaPromptPanelAuthUrl: \"issueInovaPromptPanelAuthV2\"",
+    "loadInovaPromptLibraryUrl: \"loadInovaPromptLibraryV2\"",
+    "peekInovaPromptLibraryUrl: \"peekInovaPromptLibraryV2\"",
+    "syncInovaPromptLibraryUrl: \"syncInovaPromptLibraryV2\"",
     "async function openReleaseUrl(",
     "function createBrowserTab(",
     "meetingListCache",

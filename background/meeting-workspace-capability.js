@@ -2,6 +2,7 @@
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const INOVA_ORIGIN = "https://inova.incross.com";
   const browserCapability = namespace.browserCapability || {};
+  const functionsRuntimeConfig = namespace.functionsRuntimeConfig || {};
   const meetingConfig = namespace.firebaseConfig.meeting;
   const normalizeProviderIdentity = typeof namespace.providerIdentityCache?.normalizeProviderIdentity === "function"
     ? namespace.providerIdentityCache.normalizeProviderIdentity
@@ -123,7 +124,7 @@
 
   async function getMeetingFunctionsConfig() {
     const runtimeConfig = await getMeetingRuntimeConfig();
-    return runtimeConfig?.functions || namespace.firebaseConfig?.functions || {};
+    return runtimeConfig?.functions || {};
   }
 
   function isHostedWorkspaceSender(sender) {
@@ -211,31 +212,18 @@
   }
 
   async function getMeetingRuntimeConfig() {
-    const normalizedSettings = await reconcileMeetingWorkspaceSettings((await namespace.storage.getState())?.settings);
-    return meetingConfig.resolveRuntime(normalizedSettings) || {
-      functions: namespace.firebaseConfig?.functions || {},
+    return functionsRuntimeConfig.getMeetingRuntimeConfig?.() || {
       hosting: namespace.firebaseConfig?.hosting || {},
       target: "production",
     };
   }
 
   async function reconcileMeetingWorkspaceSettings(settings) {
-    const currentSettings = settings && typeof settings === "object" ? settings : {};
-    const normalizedSettings = meetingConfig.normalizeSettings(currentSettings);
-    const nextSettings = {
-      meetingDebugConsoleEnabled: normalizedSettings.meetingDebugConsoleEnabled,
-      meetingWorkspaceTarget: normalizedSettings.meetingWorkspaceTarget,
-      meetingWorkspaceUrlOverride: normalizedSettings.meetingWorkspaceUrlOverride,
-    };
-    if (
-      nextSettings.meetingWorkspaceTarget === namespace.session.normalizeText(currentSettings.meetingWorkspaceTarget)
-      && nextSettings.meetingDebugConsoleEnabled === currentSettings.meetingDebugConsoleEnabled
-      && nextSettings.meetingWorkspaceUrlOverride === namespace.session.normalizeText(currentSettings.meetingWorkspaceUrlOverride)
-    ) {
-      return nextSettings;
+    if (typeof functionsRuntimeConfig.reconcileSettings === "function") {
+      return functionsRuntimeConfig.reconcileSettings(settings);
     }
-    await namespace.storage.updateSettings(nextSettings);
-    return nextSettings;
+    const currentSettings = settings && typeof settings === "object" ? settings : {};
+    return meetingConfig.normalizeSettings(currentSettings);
   }
 
   function buildMeetingId() {

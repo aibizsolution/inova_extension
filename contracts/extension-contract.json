@@ -11,6 +11,7 @@
   "activeBackgroundRootFiles": [
     "background/browser-capability.js",
     "background/cloud-api-client.js",
+    "background/functions-runtime-config.js",
     "background/inova-auth-client.js",
     "background/meeting-workspace-capability.js",
     "background/panel-auth-cache.js",
@@ -70,6 +71,7 @@
     "hosting/meeting/shared.js",
     "background/browser-capability.js",
     "background/cloud-api-client.js",
+    "background/functions-runtime-config.js",
     "background/inova-auth-client.js",
     "background/meeting-workspace-capability.js",
     "background/panel-auth-cache.js",
@@ -322,11 +324,10 @@
   },
   "browserOnlyEndpointConfigFiles": [
     "background/cloud-api-client.js",
+    "background/functions-runtime-config.js",
     "background/meeting-workspace-capability.js",
     "background/panel-auth-cache.js",
-    "background/panel-runtime-capability-router.js",
-    "shared/firebase-config.js",
-    "shared/product-lane.js"
+    "background/panel-runtime-capability-router.js"
   ],
   "requiredDocKeywords": [
     "팝업 작업실 연결 설정",

@@ -8,8 +8,8 @@ const vm = require("vm");
 const root = path.resolve(__dirname, "..");
 
 async function main() {
-  verifyPanelRuntimeResolution();
-  verifyV2PanelRuntimeResolution();
+  await verifyPanelRuntimeResolution();
+  await verifyV2PanelRuntimeResolution();
   await verifyHostedPanelBridgeContract();
   verifyHostedPanelFiles("extension");
   verifyHostedPanelFiles("extension-v2");
@@ -17,15 +17,15 @@ async function main() {
   console.log("[verify-hosted-panel-bridge] Hosted panel bridge contract passed");
 }
 
-function verifyPanelRuntimeResolution() {
-  const firebaseConfig = loadFirebaseConfig("legacy");
-  const localRuntime = firebaseConfig.prompt.resolveRuntime({
+async function verifyPanelRuntimeResolution() {
+  const runtimeContext = loadRuntimeContext("legacy");
+  const localRuntime = await runtimeContext.functionsRuntimeConfig.getPromptRuntimeConfig({
     meetingWorkspaceTarget: "local",
     meetingWorkspaceUrlOverride: "http://127.0.0.1:5000/meeting/index.html",
   });
 
   assert.equal(
-    firebaseConfig.hosting.panelAppUrl,
+    runtimeContext.firebaseConfig.hosting.panelAppUrl,
     "https://browser-extension-main.web.app/extension/panel/index.html"
   );
   assert.equal(
@@ -34,15 +34,15 @@ function verifyPanelRuntimeResolution() {
   );
 }
 
-function verifyV2PanelRuntimeResolution() {
-  const firebaseConfig = loadFirebaseConfig("v2");
-  const localRuntime = firebaseConfig.prompt.resolveRuntime({
+async function verifyV2PanelRuntimeResolution() {
+  const runtimeContext = loadRuntimeContext("v2");
+  const localRuntime = await runtimeContext.functionsRuntimeConfig.getPromptRuntimeConfig({
     meetingWorkspaceTarget: "local",
     meetingWorkspaceUrlOverride: "http://127.0.0.1:5000/meeting/index.html",
   });
 
   assert.equal(
-    firebaseConfig.hosting.panelAppUrl,
+    runtimeContext.firebaseConfig.hosting.panelAppUrl,
     "https://browser-extension-v2.web.app/extension-v2/panel/index.html"
   );
   assert.equal(
@@ -50,15 +50,15 @@ function verifyV2PanelRuntimeResolution() {
     "http://127.0.0.1:5000/extension-v2/panel/index.html"
   );
   assert.equal(
-    firebaseConfig.functions.listInovaMeetingsUrl,
+    runtimeContext.functionsRuntimeConfig.getDefaultFunctionsConfig().listInovaMeetingsUrl,
     "https://asia-northeast3-browser-extension-main.cloudfunctions.net/listInovaMeetings"
   );
   assert.equal(
-    firebaseConfig.functions.issueInovaMeetingPanelAuthUrl,
+    runtimeContext.functionsRuntimeConfig.getDefaultFunctionsConfig().issueInovaMeetingPanelAuthUrl,
     "https://asia-northeast3-browser-extension-main.cloudfunctions.net/issueInovaMeetingPanelAuth"
   );
   assert.equal(
-    firebaseConfig.functions.loadInovaPromptLibraryUrl,
+    runtimeContext.functionsRuntimeConfig.getDefaultFunctionsConfig().loadInovaPromptLibraryUrl,
     "https://asia-northeast3-browser-extension-main.cloudfunctions.net/loadInovaPromptLibraryV2"
   );
 }
@@ -232,6 +232,10 @@ function verifyBackgroundInvokeWiring() {
     "background service worker should preload the hosted runtime capability router before the invoke shim"
   );
   assert(
+    serviceWorkerSource.includes('importScripts("functions-runtime-config.js");'),
+    "background service worker should preload the dedicated functions runtime config helper"
+  );
+  assert(
     invokeSource.includes("namespace.panelRuntimeCapabilityRouter.handle(request)"),
     "background invoke shim should delegate runtime capability handling through panelRuntimeCapabilityRouter"
   );
@@ -319,7 +323,7 @@ function verifyBackgroundInvokeWiring() {
   );
 }
 
-function loadFirebaseConfig(lane) {
+function loadRuntimeContext(lane) {
   const context = vm.createContext({
     chrome: {
       runtime: {
@@ -340,15 +344,6 @@ function loadFirebaseConfig(lane) {
       getLaneConfig() {
         if (lane === "v2") {
           return {
-            functions: {
-              baseUrl: "https://asia-northeast3-browser-extension-main.cloudfunctions.net",
-              endpointOverrides: {
-                issueInovaPromptPanelAuthUrl: "issueInovaPromptPanelAuthV2",
-                loadInovaPromptLibraryUrl: "loadInovaPromptLibraryV2",
-                peekInovaPromptLibraryUrl: "peekInovaPromptLibraryV2",
-                syncInovaPromptLibraryUrl: "syncInovaPromptLibraryV2",
-              },
-            },
             hosting: {
               baseUrl: "https://browser-extension-v2.web.app/extension-v2",
               originUrl: "https://browser-extension-v2.web.app",
@@ -372,10 +367,6 @@ function loadFirebaseConfig(lane) {
           };
         }
         return {
-          functions: {
-            baseUrl: "https://asia-northeast3-browser-extension-main.cloudfunctions.net",
-            endpointOverrides: {},
-          },
           hosting: {
             baseUrl: "https://browser-extension-main.web.app/extension",
             originUrl: "https://browser-extension-main.web.app",
@@ -399,10 +390,19 @@ function loadFirebaseConfig(lane) {
         };
       },
     },
+    storage: {
+      async getState() {
+        return { settings: {} };
+      },
+      async updateSettings(nextSettings) {
+        return nextSettings;
+      },
+    },
   };
 
   loadScript(path.join("shared", "firebase-config.js"), context);
-  return context.InovaBookmarks.firebaseConfig;
+  loadScript(path.join("background", "functions-runtime-config.js"), context);
+  return context.InovaBookmarks;
 }
 
 function loadScript(relativePath, context) {

@@ -8,22 +8,22 @@ const vm = require("vm");
 const root = path.resolve(__dirname, "..");
 
 async function main() {
-  verifyPromptRuntimeResolution();
-  verifyPromptRuntimeResolutionForV2Lane();
+  await verifyPromptRuntimeResolution();
+  await verifyPromptRuntimeResolutionForV2Lane();
   verifyPromptLocalWiring();
   await verifyLocalPromptBridgeAuthSessionPolicy();
   await verifyEmptyStoreLatestSnapshot();
   console.log("[verify-prompt-runtime-local] Prompt local runtime contract passed");
 }
 
-function verifyPromptRuntimeResolution() {
-  const firebaseConfig = loadFirebaseConfig();
+async function verifyPromptRuntimeResolution() {
+  const runtimeContext = loadRuntimeContext();
   const settings = {
     meetingWorkspaceTarget: "local",
     meetingWorkspaceUrlOverride: "http://127.0.0.1:5000/meeting/index.html",
   };
-  const promptRuntime = firebaseConfig.prompt.resolveRuntime(settings);
-  const meetingRuntime = firebaseConfig.meeting.resolveRuntime(settings);
+  const promptRuntime = await runtimeContext.functionsRuntimeConfig.getPromptRuntimeConfig(settings);
+  const meetingRuntime = await runtimeContext.functionsRuntimeConfig.getMeetingRuntimeConfig(settings);
 
   assert.equal(promptRuntime.target, "local");
   assert.equal(promptRuntime.functions.baseUrl, "http://127.0.0.1:5001/browser-extension-main/asia-northeast3");
@@ -37,13 +37,13 @@ function verifyPromptRuntimeResolution() {
   assert.equal(meetingRuntime.functions.baseUrl, promptRuntime.functions.baseUrl);
 }
 
-function verifyPromptRuntimeResolutionForV2Lane() {
-  const firebaseConfig = loadFirebaseConfig("v2");
+async function verifyPromptRuntimeResolutionForV2Lane() {
+  const runtimeContext = loadRuntimeContext("v2");
   const settings = {
     meetingWorkspaceTarget: "local",
     meetingWorkspaceUrlOverride: "http://127.0.0.1:5000/meeting/index.html",
   };
-  const promptRuntime = firebaseConfig.prompt.resolveRuntime(settings);
+  const promptRuntime = await runtimeContext.functionsRuntimeConfig.getPromptRuntimeConfig(settings);
 
   assert.equal(promptRuntime.target, "local");
   assert.equal(promptRuntime.hosting.panelAppUrl, "http://127.0.0.1:5000/extension-v2/panel/index.html");
@@ -56,8 +56,18 @@ function verifyPromptRuntimeResolutionForV2Lane() {
 function verifyPromptLocalWiring() {
   assertPattern(
     path.join("background", "panel-session-capability.js"),
-    /namespace\.firebaseConfig\?\.prompt\?\.resolveRuntime\?\.\(normalizedSettings\)/,
-    "panel session capability가 prompt runtime resolver를 써야 합니다."
+    /functionsRuntimeConfig\.getPromptRuntimeConfig\?\.\(\)/,
+    "panel session capability가 background functions runtime resolver를 써야 합니다."
+  );
+  assertPattern(
+    path.join("background", "service-worker.js"),
+    /importScripts\("functions-runtime-config\.js"\);/,
+    "service worker가 dedicated functions runtime config helper를 preload해야 합니다."
+  );
+  assertPattern(
+    path.join("background", "functions-runtime-config.js"),
+    /issueInovaPromptPanelAuthUrl:\s*"issueInovaPromptPanelAuthV2"/,
+    "functions runtime config가 v2 prompt endpoint override를 소유해야 합니다."
   );
   assertPattern(
     path.join("background", "panel-session-capability.js"),
@@ -432,7 +442,7 @@ async function verifyLocalPromptBridgeAuthSessionPolicy() {
   );
 }
 
-function loadFirebaseConfig(activeLane = "legacy") {
+function loadRuntimeContext(activeLane = "legacy") {
   const normalizedLane = activeLane === "v2" ? "v2" : "legacy";
   const context = vm.createContext({
     chrome: {
@@ -454,17 +464,6 @@ function loadFirebaseConfig(activeLane = "legacy") {
       getLaneConfig() {
         const isV2Lane = normalizedLane === "v2";
         return {
-          functions: {
-            baseUrl: "https://asia-northeast3-browser-extension-main.cloudfunctions.net",
-            endpointOverrides: isV2Lane
-              ? {
-                issueInovaPromptPanelAuthUrl: "issueInovaPromptPanelAuthV2",
-                loadInovaPromptLibraryUrl: "loadInovaPromptLibraryV2",
-                peekInovaPromptLibraryUrl: "peekInovaPromptLibraryV2",
-                syncInovaPromptLibraryUrl: "syncInovaPromptLibraryV2",
-              }
-              : {},
-          },
           hosting: {
             baseUrl: isV2Lane
               ? "https://browser-extension-v2.web.app/extension-v2"
@@ -492,10 +491,19 @@ function loadFirebaseConfig(activeLane = "legacy") {
         };
       },
     },
+    storage: {
+      async getState() {
+        return { settings: {} };
+      },
+      async updateSettings(nextSettings) {
+        return nextSettings;
+      },
+    },
   };
 
   loadScript(path.join("shared", "firebase-config.js"), context);
-  return context.InovaBookmarks.firebaseConfig;
+  loadScript(path.join("background", "functions-runtime-config.js"), context);
+  return context.InovaBookmarks;
 }
 
 function assertPattern(relativePath, pattern, message) {

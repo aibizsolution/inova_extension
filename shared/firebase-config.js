@@ -1,33 +1,6 @@
 (function initFirebaseConfig(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const PROMPT_PANEL_BRIDGE_CACHE_TOKEN = "20260402-1";
-  const FUNCTION_ENDPOINTS = {
-    authorizeInovaMeetingWorkspaceAccessUrl: "authorizeInovaMeetingWorkspaceAccess",
-    createInovaMeetingShareLinkUrl: "createInovaMeetingShareLink",
-    deleteInovaMeetingUrl: "deleteInovaMeeting",
-    deleteInovaMeetingResultUrl: "deleteInovaMeetingResult",
-    exchangeInovaMeetingLaunchUrl: "exchangeInovaMeetingLaunch",
-    issueInovaMeetingLaunchUrl: "issueInovaMeetingLaunch",
-    issueInovaMeetingPanelAuthUrl: "issueInovaMeetingPanelAuth",
-    issueInovaPromptPanelAuthUrl: "issueInovaPromptPanelAuth",
-    issueInovaMeetingWorkspaceAuthUrl: "issueInovaMeetingWorkspaceAuth",
-    listInovaMeetingsUrl: "listInovaMeetings",
-    moveInovaMeetingResultUrl: "moveInovaMeetingResult",
-    uploadInovaMeetingSourceUrl: "uploadInovaMeetingSource",
-    updateInovaMeetingUrl: "updateInovaMeeting",
-    updateInovaMeetingResultUrl: "updateInovaMeetingResult",
-    loadInovaPromptLibraryUrl: "loadInovaPromptLibrary",
-    listPromptStoreEntriesUrl: "listPromptStoreEntries",
-    peekInovaPromptLibraryUrl: "peekInovaPromptLibrary",
-    reviewInovaPromptUrl: "reviewInovaPrompt",
-    publishPromptToStoreUrl: "publishPromptToStore",
-    unpublishPromptFromStoreUrl: "unpublishPromptFromStore",
-    importPromptStoreEntryUrl: "importPromptStoreEntry",
-    revokeInovaMeetingShareLinkUrl: "revokeInovaMeetingShareLink",
-    togglePromptStoreLikeUrl: "togglePromptStoreLike",
-    recordPromptStoreViewUrl: "recordPromptStoreView",
-    syncInovaPromptLibraryUrl: "syncInovaPromptLibrary",
-  };
   const HOSTING_ENDPOINTS = {
     latestReleaseUrl: "releases/latest.json",
     releaseHistoryUrl: "releases/history.json",
@@ -35,7 +8,6 @@
   const LOCAL_MEETING_DEFAULTS = {
     authPort: 9099,
     firestorePort: 8080,
-    functionsPort: 5001,
     host: "127.0.0.1",
     hostingPort: 5000,
     storagePort: 9199,
@@ -56,7 +28,6 @@
     const override = overrideConfig && typeof overrideConfig === "object" ? overrideConfig : {};
     const activeLane = namespace.productLane?.getActiveLane?.() || "legacy";
     const laneConfig = namespace.productLane?.getLaneConfig?.(activeLane) || {
-      functions: { baseUrl: "", endpointOverrides: {} },
       hosting: { baseUrl: "", originUrl: "" },
       id: activeLane,
       prompt: {
@@ -81,11 +52,6 @@
         region: "asia-northeast3",
         ...(override.project || {}),
       },
-      functions: buildFunctionsConfig(
-        laneConfig.functions?.baseUrl,
-        laneConfig.functions?.endpointOverrides,
-        override.functions || {}
-      ),
       hosting: buildHostingConfig(
         laneConfig.hosting?.baseUrl,
         laneConfig.hosting?.originUrl,
@@ -101,24 +67,6 @@
     config.prompt = buildPromptConfigHelpers(config, config.prompt);
     config.panel = buildPanelConfigHelpers(config);
     return config;
-  }
-
-  function buildFunctionsConfig(defaultBaseUrl, endpointOverrides = {}, overrideConfig = {}) {
-    const baseUrl = normalizeBaseUrl(overrideConfig.baseUrl || defaultBaseUrl);
-    const endpointMap = {
-      ...FUNCTION_ENDPOINTS,
-      ...(endpointOverrides && typeof endpointOverrides === "object" ? endpointOverrides : {}),
-      ...(overrideConfig.endpointPaths && typeof overrideConfig.endpointPaths === "object" ? overrideConfig.endpointPaths : {}),
-    };
-    return buildUrlConfig(
-      {
-        region: "asia-northeast3",
-        baseUrl,
-      },
-      endpointMap,
-      baseUrl,
-      overrideConfig
-    );
   }
 
   function buildHostingConfig(defaultBaseUrl, defaultOriginUrl, overrideConfig = {}) {
@@ -254,7 +202,6 @@
           storageHost: "",
           storagePort: 0,
         },
-        functions: cloneValue(baseConfig.functions),
         hosting: cloneValue(baseConfig.hosting),
         prompt: cloneValue(baseConfig.prompt),
         settings: normalizedSettings,
@@ -283,7 +230,6 @@
           storageHost: "",
           storagePort: 0,
         },
-        functions: cloneValue(baseConfig.functions),
         hosting: cloneValue(baseConfig.hosting),
         settings: normalizedSettings,
         target: "production",
@@ -309,11 +255,6 @@
   function buildLocalPromptRuntimeConfig(baseConfig, normalizedSettings, workspaceUrl) {
     const workspaceOrigin = normalizeOriginUrl(workspaceUrl);
     const workspaceHost = resolveLoopbackHost(readHostname(workspaceUrl));
-    const functionsBaseUrl = buildLocalFunctionsBaseUrl(
-      workspaceHost,
-      baseConfig.project?.projectId || DEFAULT_WEB_CONFIG.projectId,
-      baseConfig.functions?.region || baseConfig.project?.region || "asia-northeast3"
-    );
     const hostingBaseUrl = buildLocalExtensionBaseUrl(workspaceOrigin, baseConfig.activeLane);
     const hostingConfig = buildHostingConfig(hostingBaseUrl, workspaceOrigin, {
       baseUrl: hostingBaseUrl,
@@ -325,20 +266,15 @@
       enabled: true,
       firestoreHost: workspaceHost,
       firestorePort: LOCAL_MEETING_DEFAULTS.firestorePort,
-      functionsBaseUrl,
-      functionsHost: workspaceHost,
-      functionsPort: LOCAL_MEETING_DEFAULTS.functionsPort,
+      functionsBaseUrl: "",
+      functionsHost: "",
+      functionsPort: 0,
       storageHost: workspaceHost,
       storagePort: LOCAL_MEETING_DEFAULTS.storagePort,
     };
 
     return {
       emulators: emulatorConfig,
-      functions: buildFunctionsConfig(functionsBaseUrl, baseConfig.functions?.endpointPaths, {
-        baseUrl: functionsBaseUrl,
-        endpointPaths: cloneValue(baseConfig.functions?.endpointPaths),
-        region: baseConfig.functions?.region || baseConfig.project?.region || "asia-northeast3",
-      }),
       hosting: hostingConfig,
       prompt: cloneValue(baseConfig.prompt),
       settings: normalizedSettings,
@@ -434,13 +370,6 @@
 
   function buildPromptPanelBridgeBaseUrl(originUrl) {
     return joinUrl(normalizeOriginUrl(originUrl), "extension");
-  }
-
-  function buildLocalFunctionsBaseUrl(hostname, projectId, region) {
-    const resolvedHost = resolveLoopbackHost(hostname);
-    const normalizedProjectId = normalizeText(projectId) || DEFAULT_WEB_CONFIG.projectId;
-    const normalizedRegion = normalizeText(region) || "asia-northeast3";
-    return `http://${resolvedHost}:${LOCAL_MEETING_DEFAULTS.functionsPort}/${normalizedProjectId}/${normalizedRegion}`;
   }
 
   function resolveLoopbackHost(value) {

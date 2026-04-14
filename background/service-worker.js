@@ -4,6 +4,7 @@ importScripts("../shared/session.js");
 importScripts("../shared/provider-identity-cache.js");
 importScripts("../shared/storage.js");
 importScripts("../shared/firebase-config.js");
+importScripts("functions-runtime-config.js");
 importScripts("inova-auth-client.js");
 importScripts("cloud-api-client.js");
 importScripts("browser-capability.js");
@@ -21,6 +22,7 @@ const ACTIVE_BACKGROUND_MESSAGE_TYPES = Object.freeze([
   "inova-panel:invoke",
 ]);
 const browserCapability = namespace.browserCapability || {};
+const functionsRuntimeConfig = namespace.functionsRuntimeConfig || {};
 const meetingWorkspaceCapability = namespace.meetingWorkspaceCapability || {};
 const panelSessionCapability = namespace.panelSessionCapability || {};
 
@@ -54,9 +56,9 @@ async function handleMessage(message, sender) {
 Object.assign(globalThis, {
   getInovaAccessToken: panelSessionCapability.getInovaAccessToken,
   createMeetingShareLink: meetingWorkspaceCapability.createShareLink,
-  getMeetingFunctionsConfig: meetingWorkspaceCapability.getMeetingFunctionsConfig,
-  getPromptFunctionsConfig: panelSessionCapability.getPromptFunctionsConfig,
-  getPromptRuntimeConfig: panelSessionCapability.getPromptRuntimeConfig,
+  getMeetingFunctionsConfig: functionsRuntimeConfig.getMeetingFunctionsConfig,
+  getPromptFunctionsConfig: functionsRuntimeConfig.getPromptFunctionsConfig,
+  getPromptRuntimeConfig: functionsRuntimeConfig.getPromptRuntimeConfig,
   issueMeetingPanelAuth: panelSessionCapability.issueMeetingPanelAuth,
   issuePromptPanelAuth: panelSessionCapability.issuePromptPanelAuth,
   openMeetingResult: meetingWorkspaceCapability.openResult,

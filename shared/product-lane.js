@@ -2,7 +2,6 @@
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const LEGACY_LANE = "legacy";
   const V2_LANE = "v2";
-  const DEFAULT_FUNCTIONS_BASE_URL = "https://asia-northeast3-browser-extension-main.cloudfunctions.net";
   const DEFAULT_LEGACY_HOSTING_ORIGIN = "https://browser-extension-main.web.app";
   const DEFAULT_V2_HOSTING_ORIGIN = "https://browser-extension-v2.web.app";
   const DEFAULT_LEGACY_HOSTING_BASE_URL = `${DEFAULT_LEGACY_HOSTING_ORIGIN}/extension`;
@@ -20,10 +19,6 @@
   ]);
   const LANE_CONFIGS = Object.freeze({
     [LEGACY_LANE]: Object.freeze({
-      functions: Object.freeze({
-        baseUrl: DEFAULT_FUNCTIONS_BASE_URL,
-        endpointOverrides: Object.freeze({}),
-      }),
       hosting: Object.freeze({
         baseUrl: DEFAULT_LEGACY_HOSTING_BASE_URL,
         originUrl: DEFAULT_LEGACY_HOSTING_ORIGIN,
@@ -42,15 +37,6 @@
       storagePrefix: STORAGE_PREFIX_BY_LANE[LEGACY_LANE],
     }),
     [V2_LANE]: Object.freeze({
-      functions: Object.freeze({
-        baseUrl: DEFAULT_FUNCTIONS_BASE_URL,
-        endpointOverrides: Object.freeze({
-          issueInovaPromptPanelAuthUrl: "issueInovaPromptPanelAuthV2",
-          loadInovaPromptLibraryUrl: "loadInovaPromptLibraryV2",
-          peekInovaPromptLibraryUrl: "peekInovaPromptLibraryV2",
-          syncInovaPromptLibraryUrl: "syncInovaPromptLibraryV2",
-        }),
-      }),
       hosting: Object.freeze({
         baseUrl: DEFAULT_V2_HOSTING_BASE_URL,
         originUrl: DEFAULT_V2_HOSTING_ORIGIN,
