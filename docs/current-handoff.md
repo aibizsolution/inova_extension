@@ -96,6 +96,7 @@ Short version:
 - release path verify now checks lane-local `latest.json`, `history.json`, `downloads/latest.zip`, version ZIPs, and `releases/release-notes.json` curated 목록 coherence together
 - release build/verify now also treat current public version artifact as curated metadata, so a version exposed in lane-local `latest.json` / `history.json` must carry matching `artifact` metadata in `releases/release-notes.json` too
 - default `verify` now runs an explicit legacy-isolation guard so backup legacy paths stay out of the active manifest/content lane
+- the same legacy-isolation guard now also keeps active hosted v2 entry assets and the live top-panel bridge request surface from reopening dead legacy CSS/script/action fallbacks
 - hosted-first ownership and incremental doc-correction rules were written into root/docs guidance
 
 ## Recent High-Signal Commits

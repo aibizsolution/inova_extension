@@ -10,6 +10,8 @@ function main() {
   verifyDefaultVerifyKeepsLegacyChecksSeparate();
   verifyActiveManifestStaysOutOfBackupLegacyFiles();
   verifyActiveContentSourcesDoNotDependOnBackupPaths();
+  verifyActiveHostedPanelAssetsStayOutOfDeadLegacyFiles();
+  verifyActiveHostedBridgeRequestSurfaceStaysGeneric();
   verifyActivePromptShellContractDropsLegacyName();
   console.log("[verify-legacy-isolation] Active v2 legacy isolation contract passed");
 }
@@ -68,6 +70,61 @@ function verifyActiveContentSourcesDoNotDependOnBackupPaths() {
       `${relativePath} should not directly depend on backup legacy panel paths`
     );
   });
+}
+
+function verifyActiveHostedPanelAssetsStayOutOfDeadLegacyFiles() {
+  const hostedIndexHtml = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "index.html"),
+    "utf8"
+  );
+
+  [
+    "legacy-panel.css",
+    "legacy-tools.css",
+    "prompt-hub-view.js",
+    "prompt-hub-panel.js",
+    "prompt-hub-controller.js",
+    "prompt-hub-runtime.js",
+  ].forEach((legacyAsset) => {
+    assert(
+      !hostedIndexHtml.includes(legacyAsset),
+      `active hosted panel should not load the dead legacy asset ${legacyAsset}`
+    );
+  });
+
+  assert(
+    hostedIndexHtml.includes("./index.css"),
+    "active hosted panel should load the single live index.css stylesheet"
+  );
+  assert(
+    hostedIndexHtml.includes("./prompt-tool-panel.js"),
+    "active hosted panel should load the live prompt-tool-panel helper"
+  );
+}
+
+function verifyActiveHostedBridgeRequestSurfaceStaysGeneric() {
+  const bridgeSource = fs.readFileSync(path.join(root, "content", "hosted-panel-bridge.js"), "utf8");
+
+  [
+    'action === "meeting-action"',
+    'action === "release-action"',
+    'action === "prompt-tab-select"',
+    'action === "prompt-action"',
+    'action === "prompt-draft-change"',
+    'action === "store-action"',
+    'action === "import-file"',
+    'action === "move-prompt"',
+  ].forEach((legacyActionSurface) => {
+    assert(
+      !bridgeSource.includes(legacyActionSurface),
+      `active hosted bridge should not reopen the legacy panel request surface ${legacyActionSurface}`
+    );
+  });
+
+  assert(
+    bridgeSource.includes('if (action === "tool-summary-sync") {'),
+    "active hosted bridge should keep the shared tool-summary-sync request surface"
+  );
 }
 
 function verifyActivePromptShellContractDropsLegacyName() {
