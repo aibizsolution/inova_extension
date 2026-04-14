@@ -90,6 +90,7 @@ Short version:
 - active hosted prompt shell interaction helper now uses `prompt-tool-panel.js`; legacy `prompt-hub-panel.js` naming stays in legacy lanes only
 - active hosted v2 panel no longer loads `legacy-panel.css`; the live bookmark/empty/header styling now sits with the active hosted shell styles instead of a dead panel-shell stylesheet
 - active hosted v2 panel now loads a single `index.css`; live tool rail/prompt/store/meeting/release shell styling no longer depends on `legacy-tools.css`
+- release path verify now checks lane-local `latest.json`, `history.json`, `downloads/latest.zip`, version ZIPs, and `releases/release-notes.json` curated 목록 coherence together
 - hosted-first ownership and incremental doc-correction rules were written into root/docs guidance
 
 ## Recent High-Signal Commits
