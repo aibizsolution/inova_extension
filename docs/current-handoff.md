@@ -89,6 +89,7 @@ Short version:
 - active v2 route/shell no longer keeps legacy `activeTool: store`; old stored values normalize immediately to `activeTool: prompts` plus `activePromptTab: store`
 - active hosted prompt shell now renders only through `prompt-tool-view.js`; the dead `prompt-hub-view.js` fallback is no longer loaded in the v2 panel bundle
 - active hosted prompt shell interaction helper now uses `prompt-tool-panel.js`; legacy `prompt-hub-panel.js` naming stays in legacy lanes only
+- active hosted prompt tool shell no longer carries `review/store` next-stage placeholder fallback; review/store tabs now read hosted controller state directly
 - active hosted v2 panel no longer loads `legacy-panel.css`; the live bookmark/empty/header styling now sits with the active hosted shell styles instead of a dead panel-shell stylesheet
 - active hosted v2 panel now loads a single `index.css`; live tool rail/prompt/store/meeting/release shell styling no longer depends on `legacy-tools.css`
 - release path verify now checks lane-local `latest.json`, `history.json`, `downloads/latest.zip`, version ZIPs, and `releases/release-notes.json` curated 목록 coherence together
@@ -162,7 +163,7 @@ The remaining work is no longer smoke-fix first. It is mostly structural cleanup
 
 1. Keep trimming panel shell/bootstrap/composition so the `content/panel.js` path becomes generic host + broker only.
 2. Isolate any still-inactive legacy extension panel files into `backup/legacy-panel/*` instead of leaving dead reference code mixed into active `content/*` paths.
-3. Trim the remaining prompt shell residue and last legacy fallback surfaces in extension.
+3. Clear the last prompt shell residue and final legacy fallback surfaces in extension.
 4. Prepare final release path from deployed `0.4.4` baseline to hosted v2 `1.0.0`.
 
 ## Concrete Next Session Targets

@@ -17,9 +17,21 @@ main().then(() => {
 
 async function main() {
   await verifyHostedPromptLibraryFirestoreClientContract();
+  verifyHostedPromptToolStateDropsPlaceholderFallback();
   await verifyHostedPromptTabPersistenceDedupesWrites();
   await verifyHostedPromptLibraryTabSelectionAvoidsForcedReload();
   await verifyHostedPromptLibraryActivationDuringInitStillLoads();
+}
+
+function verifyHostedPromptToolStateDropsPlaceholderFallback() {
+  assert(
+    !controllerSource.includes("reviewPlaceholder:"),
+    "hosted prompt library tool state should stop carrying review placeholder fallback once the hosted review controller owns the tab"
+  );
+  assert(
+    !controllerSource.includes("storePlaceholder:"),
+    "hosted prompt library tool state should stop carrying store placeholder fallback once the hosted store controller owns the tab"
+  );
 }
 
 async function verifyHostedPromptTabPersistenceDedupesWrites() {

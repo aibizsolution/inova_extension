@@ -853,20 +853,19 @@
         ? promptReviewController.buildViewState()
         : snapshotReviewState;
       const reviewState = resolveEffectivePromptReviewState(snapshotReviewState, hostedReviewState);
+      const storeState = promptStoreController?.buildViewState
+        ? promptStoreController.buildViewState()
+        : null;
+      const storeCount = Math.max(
+        0,
+        Number(promptStoreController?.getStoreCount?.() || storeState?.totalCount) || 0
+      );
       const promptToolState = promptLibraryController.buildPromptToolState(panelState.promptTool || {}, {
         reviewOpen: Boolean(reviewState?.open),
+        storeCount,
       });
-      if (promptStoreController?.hasRequiredCapabilities?.() && promptStoreController?.buildViewState) {
-        const storeState = promptStoreController.buildViewState();
+      if (storeState) {
         promptToolState.store = storeState;
-        promptToolState.tabs = Array.isArray(promptToolState.tabs)
-          ? promptToolState.tabs.map((tab) => tab.id === "store"
-            ? {
-                ...tab,
-                count: promptStoreController.getStoreCount?.() || storeState.totalCount || 0,
-              }
-            : tab)
-          : promptToolState.tabs;
       }
       promptToolState.review = reviewState;
       if (

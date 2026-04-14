@@ -137,25 +137,13 @@
     }
 
     function buildPromptToolState(fallbackPromptTool = {}, options = {}) {
+      void fallbackPromptTool;
       const promptCount = getPromptCount();
-      const storeCount = Math.max(
-        0,
-        Number(fallbackPromptTool?.tabs?.find?.((tab) => tab.id === "store")?.count)
-          || Number(fallbackPromptTool?.store?.totalCount)
-          || 0
-      );
-      const reviewOpen = Boolean(options.reviewOpen || fallbackPromptTool?.review?.open);
+      const storeCount = Math.max(0, Number(options.storeCount) || 0);
+      const reviewOpen = Boolean(options.reviewOpen);
       return {
         activeTab: getEffectiveActiveTab(state.activeTab, reviewOpen),
         prompt: buildPromptViewState(),
-        reviewPlaceholder: {
-          body: "검토 탭의 hosted ownership은 다음 단계에서 이동합니다.",
-          title: "검토 이동 준비 중",
-        },
-        storePlaceholder: {
-          body: "스토어 탭의 hosted ownership은 다음 단계에서 이동합니다.",
-          title: "스토어 이동 준비 중",
-        },
         tabs: buildPromptTabs(promptCount, storeCount, reviewOpen),
       };
     }

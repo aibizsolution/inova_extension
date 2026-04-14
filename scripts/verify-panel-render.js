@@ -272,13 +272,17 @@ function verifyHostedPromptReviewFallbackContract() {
     path.join(root, "hosting", "extension-v2", "panel", "index.js"),
     "utf8"
   );
+  const promptToolViewSource = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "prompt-tool-view.js"),
+    "utf8"
+  );
 
   assert(
     hostedPanelSource.includes("const reviewState = resolveEffectivePromptReviewState(snapshotReviewState, hostedReviewState);"),
     "hosted prompt tool should merge snapshot review state before rendering the review tab"
   );
   assert(
-    hostedPanelSource.includes("const storeState = promptStoreController.buildViewState();"),
+    hostedPanelSource.includes("const storeState = promptStoreController?.buildViewState"),
     "hosted prompt tool should read store state directly from the hosted store controller"
   );
   assert(
@@ -300,6 +304,10 @@ function verifyHostedPromptReviewFallbackContract() {
   assert(
     hostedPanelSource.includes("if (snapshotHasActiveState && !hostedHasActiveState) {"),
     "hosted panel should prefer snapshot review results when hosted review state has gone stale"
+  );
+  assert(
+    !promptToolViewSource.includes("다음 단계에서 이 탭의 hosted ownership을 이동합니다."),
+    "active hosted prompt tool view should stop rendering next-stage placeholder fallback copy once store/review tabs are hosted"
   );
 }
 
