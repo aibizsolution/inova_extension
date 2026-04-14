@@ -47,7 +47,7 @@
     "verify:prompt-runtime-local": "node scripts/verify-prompt-runtime-local.js",
     "verify:prompt-review": "node scripts/verify-prompt-review.js",
     "verify:prompt-fallbacks": "node scripts/legacy-panel/verify-prompt-fallbacks.js",
-    "verify:legacy-backup": "node scripts/legacy-panel/verify-legacy-prompt-backup.js && node scripts/legacy-panel/verify-panel-prompt-controller.js && node scripts/legacy-panel/verify-panel-bookmark-controller.js && node scripts/legacy-panel/verify-panel-runtime-controller.js && node scripts/legacy-panel/verify-prompt-fallbacks.js && node scripts/legacy-panel/verify-store-render-window.js",
+    "verify:legacy-backup": "node scripts/legacy-panel/verify-legacy-prompt-backup.js && node scripts/legacy-panel/verify-panel-prompt-controller.js && node scripts/legacy-panel/verify-panel-bookmark-controller.js && node scripts/legacy-panel/verify-panel-runtime-controller.js && node scripts/legacy-panel/verify-meeting-state.js && node scripts/legacy-panel/verify-prompt-fallbacks.js && node scripts/legacy-panel/verify-store-render-window.js",
     "verify:feature-doc-guard": "node scripts/verify-feature-doc-update.js --staged",
     "verify:refactor-plan-guard": "node scripts/verify-refactor-plan-update.js --staged",
     "verify:release-guard": "node scripts/verify-release-metadata.js --staged"

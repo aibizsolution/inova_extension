@@ -92,6 +92,7 @@ Short version:
 - active hosted prompt tool shell no longer carries `review/store` next-stage placeholder fallback; review/store tabs now read hosted controller state directly
 - active hosted v2 panel no longer loads `legacy-panel.css`; the live bookmark/empty/header styling now sits with the active hosted shell styles instead of a dead panel-shell stylesheet
 - active hosted v2 panel now loads a single `index.css`; live tool rail/prompt/store/meeting/release shell styling no longer depends on `legacy-tools.css`
+- inactive meeting shared/runtime reference now lives under `backup/legacy-panel/shared/*` and `scripts/legacy-panel/*`, instead of mixed into the active root `shared/` and `scripts/` lane
 - release path verify now checks lane-local `latest.json`, `history.json`, `downloads/latest.zip`, version ZIPs, and `releases/release-notes.json` curated 목록 coherence together
 - default `verify` now runs an explicit legacy-isolation guard so backup legacy paths stay out of the active manifest/content lane
 - hosted-first ownership and incremental doc-correction rules were written into root/docs guidance

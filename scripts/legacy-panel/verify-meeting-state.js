@@ -5,7 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
 
-const root = path.resolve(__dirname, "..");
+const root = path.resolve(__dirname, "..", "..");
 
 async function main() {
   const sentMessages = [];
@@ -59,7 +59,7 @@ async function main() {
   loadScript("shared/constants.js", context);
   loadScript("shared/session.js", context);
   loadScript("shared/storage.js", context);
-  loadScript("shared/meeting-bridge.js", context);
+  loadScript("backup/legacy-panel/shared/meeting-bridge.js", context);
 
   const namespace = context.InovaBookmarks;
   const removedPrimaryStateKey = ["meeting", "State"].join("");

@@ -10,6 +10,8 @@
 - `backup/legacy-panel/meeting-manager.js`
 - `backup/legacy-panel/meeting-view.js`
 - `backup/legacy-panel/meeting-panel-bridge-controller.js`
+- `backup/legacy-panel/shared/meeting-bridge.js`
+- `backup/legacy-panel/shared/meeting-debug.js`
 - `backup/legacy-panel/bookmark-view.js`
 - `backup/legacy-panel/panel-bookmark-controller.js`
 - `backup/legacy-panel/panel-debug-controller.js`
@@ -43,3 +45,4 @@
 - 이후 실제로 더 이상 참고 가치도 없으면 여기서도 삭제할 수 있다.
 - 기본 `npm.cmd run verify`는 현재 활성 v2 lane 기준으로만 돌고, `scripts/verify-legacy-isolation.js`로 active manifest/content가 이 backup 경로를 다시 밟지 않는지도 같이 본다. backup legacy prompt/runtime/view reference를 다시 보고 싶을 때만 `npm.cmd run verify:legacy-backup`을 추가로 실행한다.
 - backup legacy 전용 검증 스크립트는 active `scripts/` 루트와 섞지 않도록 `scripts/legacy-panel/*` 아래에 모아 둔다.
+- meeting shared/runtime reference 검증도 `scripts/legacy-panel/verify-meeting-state.js`처럼 backup 쪽 네임스페이스에서만 유지한다.

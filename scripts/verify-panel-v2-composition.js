@@ -34,8 +34,8 @@ function main() {
   );
   [
     "hosting/meeting/debug-console.js",
-    "shared/meeting-debug.js",
-    "shared/meeting-bridge.js",
+    "backup/legacy-panel/shared/meeting-debug.js",
+    "backup/legacy-panel/shared/meeting-bridge.js",
     "shared/release-info.js",
     "content/bookmark-view.js",
     "content/panel-bookmark-controller.js",

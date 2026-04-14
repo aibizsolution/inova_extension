@@ -72,8 +72,8 @@ const FEATURE_DOC_RULES = [
       /^backup\/legacy-panel\/meeting-view\.js$/,
       /^hosting\/meeting\//,
       /^functions\/features\/meeting\//,
-      /^shared\/meeting-bridge\.js$/,
-      /^shared\/meeting-debug\.js$/,
+      /^backup\/legacy-panel\/shared\/meeting-bridge\.js$/,
+      /^backup\/legacy-panel\/shared\/meeting-debug\.js$/,
     ],
   },
   {

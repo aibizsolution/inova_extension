@@ -274,7 +274,7 @@ function createHarness(options = {}) {
     "shared/constants.js",
     "shared/session.js",
     "shared/storage.js",
-    "shared/meeting-bridge.js",
+    "backup/legacy-panel/shared/meeting-bridge.js",
     "shared/provider-identity.js",
     "backup/legacy-panel/meeting-panel-bridge-controller.js",
     "backup/legacy-panel/meeting-manager.js",

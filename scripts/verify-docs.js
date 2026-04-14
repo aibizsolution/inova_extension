@@ -60,6 +60,7 @@ const requiredFiles = [
   path.join("scripts", "legacy-panel", "verify-panel-meeting-controller.js"),
   path.join("scripts", "legacy-panel", "verify-panel-shell.js"),
   path.join("scripts", "legacy-panel", "verify-meeting-manager.js"),
+  path.join("scripts", "legacy-panel", "verify-meeting-state.js"),
   path.join("scripts", "verify-prompt-library-remote-first.js"),
   path.join("scripts", "verify-prompt-runtime-local.js"),
   path.join("scripts", "verify-prompt-review.js"),
@@ -83,6 +84,8 @@ const requiredFiles = [
   "backup/legacy-panel/panel-composition-controller.js",
   "backup/legacy-panel/panel-meeting-controller.js",
   "backup/legacy-panel/meeting-manager.js",
+  "backup/legacy-panel/shared/meeting-bridge.js",
+  "backup/legacy-panel/shared/meeting-debug.js",
   "content/route-state-controller.js",
   "content/route-watch-controller.js",
   "backup/legacy-panel/prompt-hub-state.js",
@@ -198,6 +201,8 @@ const featureDocContracts = [
       "backup/legacy-panel/meeting-manager.js",
       "backup/legacy-panel/panel-meeting-controller.js",
       "backup/legacy-panel/meeting-view.js",
+      "backup/legacy-panel/shared/meeting-bridge.js",
+      "backup/legacy-panel/shared/meeting-debug.js",
       "hosting/meeting/index.js",
       "popup/index.js",
     ],
@@ -409,6 +414,22 @@ const codeChecks = [
       /panelPromptController/,
       /panelRenderController/,
       /panelBootstrapController/,
+    ],
+  },
+  {
+    file: "backup/legacy-panel/shared/meeting-bridge.js",
+    patterns: [
+      /namespace\.meetingBridge/,
+      /inova-meeting:list-meetings/,
+      /inova-meeting:open-workspace/,
+    ],
+  },
+  {
+    file: "backup/legacy-panel/shared/meeting-debug.js",
+    patterns: [
+      /namespace\.meetingDebug/,
+      /namespace\.panelDebug/,
+      /buildErrorCopyText/,
     ],
   },
   {
