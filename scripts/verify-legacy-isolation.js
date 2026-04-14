@@ -10,6 +10,7 @@ function main() {
   verifyDefaultVerifyKeepsLegacyChecksSeparate();
   verifyActiveManifestStaysOutOfBackupLegacyFiles();
   verifyActiveManifestDropsDormantPromptLibraryHelper();
+  verifyActiveSharedRootDropsLegacyCloudSyncHelper();
   verifyActiveContentSourcesDoNotDependOnBackupPaths();
   verifyActiveHostedPanelAssetsStayOutOfDeadLegacyFiles();
   verifyActiveHostedBridgeRequestSurfaceStaysGeneric();
@@ -65,6 +66,17 @@ function verifyActiveManifestDropsDormantPromptLibraryHelper() {
   assert(
     !jsFiles.includes("shared/prompt-library.js"),
     "active manifest should not preload the dormant shared/prompt-library.js helper"
+  );
+}
+
+function verifyActiveSharedRootDropsLegacyCloudSyncHelper() {
+  assert(
+    !fs.existsSync(path.join(root, "shared", "cloud-sync.js")),
+    "active shared root should not keep the legacy cloud-sync helper"
+  );
+  assert(
+    fs.existsSync(path.join(root, "backup", "legacy-panel", "shared", "cloud-sync.js")),
+    "backup legacy shared lane should keep the legacy cloud-sync helper"
   );
 }
 
