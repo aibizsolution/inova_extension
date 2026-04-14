@@ -78,6 +78,7 @@ Short version:
 - `content/panel.js` no longer clones the full render payload into hosted bridge snapshots; v2 render now passes a prebuilt `panelSnapshot` and the host just brokers view + bridge envelope
 - top-panel snapshot trace shaping now comes from v2 shell `panelTrace`; `content/panel.js` no longer reads prompt review detail directly out of hosted tool state
 - top console trace policy/summary formatting now lives in `content/panel-console-trace.js`; `content/panel.js` no longer carries feature-specific always-trace rules inline
+- hosted panel iframe target/status/handshake/render batching now lives in `content/panel-host-runtime.js`; `content/panel.js` keeps the host element, handle interaction, and bridge endpoint only
 - active `content/hosted-panel-bridge.js` no longer carries inactive legacy `meeting-action`, `release-action`, or prompt action request paths; the live v2 request surface is now `tool-summary-sync`, conversation bookmark, shell, runtime, and page only
 - backup legacy reference verify scripts now live under `scripts/legacy-panel/*` instead of the active root `scripts/` namespace
 - active v2 prompt shell no longer keeps hosted-owned prompt store-load/storage/sync sidecars; extension prompt residue is now review float plus review handoff/persistence only
@@ -190,6 +191,7 @@ Goal:
 Start files:
 
 - `content/panel.js`
+- `content/panel-host-runtime.js`
 - `content/panel-v2-shell-bridge.js`
 - `content/panel-v2-composition-controller.js`
 
@@ -263,6 +265,7 @@ Minimal re-entry set:
 - `shared/product-lane.js`
 - `content/panel-v2-composition-controller.js`
 - `content/panel-v2-shell-bridge.js`
+- `content/panel-host-runtime.js`
 - `content/panel.js`
 - `hosting/extension-v2/panel/index.js`
 

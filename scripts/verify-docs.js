@@ -66,6 +66,7 @@ const requiredFiles = [
   "content/main.js",
   "content/panel-v2-composition-controller.js",
   "content/panel-v2-shell-bridge.js",
+  "content/panel-host-runtime.js",
   "content/hosted-panel-bridge.js",
   "shared/product-lane.js",
   "backup/legacy-panel/panel-bookmark-controller.js",
@@ -320,9 +321,16 @@ const codeChecks = [
   {
     file: "content/panel.js",
     patterns: [
+      /panelHostRuntime\.create/,
+      /panelHostedBridgeRequest\?\.handle\?\./,
+    ],
+  },
+  {
+    file: "content/panel-host-runtime.js",
+    patterns: [
       /inova-hosted-panel-frame/,
       /panelAppUrl/,
-      /panelHostedBridgeRequest\?\.handle\?\./,
+      /frame-src-change/,
     ],
   },
   {

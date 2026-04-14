@@ -9,19 +9,27 @@ function verifyPanelRuntimeResolverOwnershipContract() {
     path.join(root, "content", "panel.js"),
     "utf8"
   );
+  const panelHostRuntimeSource = fs.readFileSync(
+    path.join(root, "content", "panel-host-runtime.js"),
+    "utf8"
+  );
   const firebaseConfigSource = fs.readFileSync(
     path.join(root, "shared", "firebase-config.js"),
     "utf8"
   );
 
   assert(
-    panelSource.includes("namespace.firebaseConfig?.panel?.resolveRuntime?.(settings)"),
-    "content panel host should resolve its runtime target through a generic panel runtime helper"
+    panelSource.includes("panelHostRuntime.create"),
+    "content panel host should delegate host runtime work through the dedicated panel host runtime helper"
   );
   assert(
-    !panelSource.includes("namespace.firebaseConfig?.meeting?.resolveRuntime?.(settings)")
-      && !panelSource.includes("namespace.firebaseConfig?.prompt?.resolveRuntime?.(settings)"),
-    "content panel host should stop choosing meeting/prompt runtime helpers directly"
+    panelHostRuntimeSource.includes("namespace.firebaseConfig?.panel?.resolveRuntime?.(settings)"),
+    "panel host runtime helper should resolve its runtime target through a generic panel runtime helper"
+  );
+  assert(
+    !panelHostRuntimeSource.includes("namespace.firebaseConfig?.meeting?.resolveRuntime?.(settings)")
+      && !panelHostRuntimeSource.includes("namespace.firebaseConfig?.prompt?.resolveRuntime?.(settings)"),
+    "panel host runtime helper should stop choosing meeting/prompt runtime helpers directly"
   );
   assert(
     firebaseConfigSource.includes("config.panel = buildPanelConfigHelpers(config);"),

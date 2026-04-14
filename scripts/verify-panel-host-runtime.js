@@ -9,10 +9,29 @@ const { JSDOM } = require("jsdom");
 const root = path.resolve(__dirname, "..");
 
 async function verifyPanelHostRuntimeContract() {
+  verifyPanelHostRuntimeModuleSplit();
   verifyHostedPanelHostBatching();
   verifyLocalPanelRuntimeSwitch();
   verifyPageBridgeEvents();
   await verifyPageAdapterContract();
+}
+
+function verifyPanelHostRuntimeModuleSplit() {
+  const panelSource = fs.readFileSync(path.join(root, "content", "panel.js"), "utf8");
+  const hostRuntimeSource = fs.readFileSync(path.join(root, "content", "panel-host-runtime.js"), "utf8");
+
+  assert(
+    /panelHostRuntime\.create/.test(panelSource),
+    "content/panel.js should delegate host runtime work through panelHostRuntime.create"
+  );
+  assert(
+    !/function syncHostedFrame/.test(panelSource),
+    "content/panel.js should stop carrying the hosted frame sync inline once host runtime moves to its own helper"
+  );
+  assert(
+    /function syncHostedFrame/.test(hostRuntimeSource),
+    "content/panel-host-runtime.js should own hosted frame sync once panel.js delegates host runtime work"
+  );
 }
 
 function verifyHostedPanelHostBatching() {
@@ -297,6 +316,7 @@ function createHarness() {
   loadScript(path.join("content", "hosted-panel-bridge.js"), context);
   context.InovaBookmarks.hostedPanelBridge = hostedPanelBridgeStub;
   loadScript(path.join("content", "panel-console-trace.js"), context);
+  loadScript(path.join("content", "panel-host-runtime.js"), context);
   loadScript(path.join("content", "panel.js"), context);
 
   return {

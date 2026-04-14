@@ -72,8 +72,8 @@ function verifyHostedTraceVisibilityContract() {
     "feature-aware always-visible trace policy should live in the dedicated panel trace helper instead of the host"
   );
   assert(
-    topPanelSource.includes("traceController.buildPanelSnapshotTracePayload(state)"),
-    "top panel host should consume the panel trace helper instead of rebuilding snapshot trace payloads inline"
+    topPanelSource.includes("buildPanelSnapshotTracePayload: traceController.buildPanelSnapshotTracePayload"),
+    "top panel host should pass the panel trace helper through to the dedicated host runtime instead of rebuilding snapshot trace payloads inline"
   );
   assert(
     topPanelSource.includes("const traceController = panelConsoleTrace.create({"),

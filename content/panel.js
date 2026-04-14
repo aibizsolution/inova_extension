@@ -3,14 +3,26 @@
   const HANDSHAKE_TIMEOUT_MS = 4000;
   let panelHost = null;
   const panelConsoleTrace = namespace.panelConsoleTrace;
+  const panelHostRuntime = namespace.panelHostRuntime;
   if (!panelConsoleTrace || typeof panelConsoleTrace.create !== "function") {
     throw new Error("panelConsoleTrace must load before contentPanel");
+  }
+  if (!panelHostRuntime || typeof panelHostRuntime.create !== "function") {
+    throw new Error("panelHostRuntime must load before contentPanel");
   }
   const traceController = panelConsoleTrace.create({
     isDebugEnabled: () => Boolean(namespace.panelDebug?.isEnabled?.()),
     normalizeText,
   });
   const logConsoleTrace = traceController.log;
+  const hostRuntime = panelHostRuntime.create({
+    applyHandleRatio,
+    buildPanelSnapshotTracePayload: traceController.buildPanelSnapshotTracePayload,
+    handshakeTimeoutMs: HANDSHAKE_TIMEOUT_MS,
+    logConsoleTrace,
+    normalizeText,
+    readExtensionVersion,
+  });
 
   function ensurePanel(callbacks) {
     let host = getPanelHost();
@@ -20,7 +32,7 @@
         frameSrc: normalizeText(host.__panelFrameSrc),
       });
       host.__callbacks = callbacks;
-      host.__panelElements = host.__panelElements || resolvePanelElements(host);
+      host.__panelElements = host.__panelElements || hostRuntime.resolveElements(host);
       host.__bridge = host.__bridge || createHostedBridge(host);
       return host;
     }
@@ -33,24 +45,11 @@
     logConsoleTrace("panel", "02.top.panel.host.created", {
       hostId: host.id,
     });
-    host.__panelElements = resolvePanelElements(host);
+    host.__panelElements = hostRuntime.resolveElements(host);
     host.__bridge = createHostedBridge(host);
     const { frame, handle } = host.__panelElements;
     installHandleInteractions(host, handle, callbacks);
-    frame?.addEventListener("load", () => {
-      logConsoleTrace("panel", "06.top.panel.frame.load", {
-        bridgeReady: Boolean(host.__bridgeReady),
-        frameSrc: normalizeText(frame.getAttribute("src")),
-        panelUrl: normalizeText(host.__panelUrl),
-      });
-      if (host.__bridgeReady) {
-        return;
-      }
-      updateStatusBanner(host, {
-        text: "호스팅 패널과 연결하는 중이에요.",
-        tone: "info",
-      });
-    });
+    frame?.addEventListener("load", () => hostRuntime.handleFrameLoad(host));
     return host;
   }
 
@@ -59,8 +58,7 @@
     if (!host) {
       return;
     }
-    host.__pendingPanelState = state;
-    schedulePanelRender(host);
+    hostRuntime.render(host, state);
   }
 
   function getPanelHost() {
@@ -71,16 +69,6 @@
     return panelHost;
   }
 
-  function resolvePanelElements(host) {
-    return {
-      frame: host.querySelector("#inova-hosted-panel-frame"),
-      handle: host.querySelector("#inova-bookmark-handle"),
-      handleCount: host.querySelector(".handle-count"),
-      root: host.querySelector("#inova-bookmark-root"),
-      status: host.querySelector("#inova-hosted-panel-status"),
-    };
-  }
-
   function createHostedBridge(host) {
     const bridge = namespace.hostedPanelBridge.create({
       onError: ({ error }) => {
@@ -88,33 +76,13 @@
         logConsoleTrace("panel", "09.top.panel.bridge.error", {
           message,
         });
-        updateStatusBanner(host, {
+        hostRuntime.updateStatusBanner(host, {
           text: message,
           tone: "error",
         });
       },
       onReadyChange: ({ ready }) => {
-        host.__bridgeReady = Boolean(ready);
-        clearHandshakeTimeout(host);
-        logConsoleTrace("panel", ready ? "08.top.panel.bridge.ready" : "08.top.panel.bridge.not-ready", {
-          frameSrc: normalizeText(host.__panelFrameSrc),
-          panelUrl: normalizeText(host.__panelUrl),
-          ready: Boolean(ready),
-        });
-        if (ready) {
-          updateStatusBanner(host, null);
-          if (host.__lastRenderedState) {
-            pushBridgeSnapshotIfChanged(host, host.__lastRenderedState, { force: true });
-          }
-          return;
-        }
-        host.__lastBridgeSnapshotKey = "";
-        if (host.__panelUrl) {
-          updateStatusBanner(host, {
-            text: "호스팅 패널과 다시 연결하는 중이에요.",
-            tone: "info",
-          });
-        }
+        hostRuntime.handleBridgeReadyChange(host, ready);
       },
       onRequest: async (request) => {
         const isTransportTrace = isTraceTransportRequest(request);
@@ -160,243 +128,12 @@
     return bridge;
   }
 
-  function schedulePanelRender(host) {
-    if (!(host instanceof global.HTMLElement) || host.__panelFrame) {
-      return;
-    }
-    const scheduleFrame = typeof global.requestAnimationFrame === "function"
-      ? global.requestAnimationFrame.bind(global)
-      : (callback) => global.setTimeout(() => callback(Date.now()), 16);
-    host.__panelFrame = scheduleFrame(() => {
-      host.__panelFrame = 0;
-      flushPanelRender(host);
-      if (host.__pendingPanelState) {
-        schedulePanelRender(host);
-      }
-    });
-  }
-
-  function flushPanelRender(host) {
-    if (!(host instanceof global.HTMLElement)) {
-      return;
-    }
-    const state = host.__pendingPanelState;
-    delete host.__pendingPanelState;
-    if (!state) {
-      return;
-    }
-    host.__lastRenderedState = state;
-    const elements = host.__panelElements || resolvePanelElements(host);
-    host.__panelElements = elements;
-    const { handleCount, root } = elements;
-
-    if (root) {
-      root.hidden = !state.visible;
-      root.dataset.open = String(Boolean(state.open));
-    }
-    document.body.classList.toggle("inova-bookmark-panel-open", Boolean(state.visible && state.open));
-    applyHandleRatio(host, state.handleRatio);
-
-    const nextHandleCount = String(state.handleCount || 0);
-    if (handleCount?.textContent !== nextHandleCount) {
-      handleCount.textContent = nextHandleCount;
-    }
-
-    syncHostedFrame(host, state);
-
-    if (host.__bridgeReady) {
-      pushBridgeSnapshotIfChanged(host, state);
-    }
-  }
-
-  function syncHostedFrame(host, state) {
-    const elements = host.__panelElements || resolvePanelElements(host);
-    const frame = elements.frame;
-    if (!(frame instanceof global.HTMLIFrameElement)) {
-      return;
-    }
-    const runtimeConfig = resolvePanelRuntimeConfig(state?.settings);
-    const panelUrl = normalizeText(runtimeConfig?.hosting?.panelAppUrl || namespace.firebaseConfig?.hosting?.panelAppUrl);
-    const panelFrameUrl = buildHostedPanelFrameUrl(host, panelUrl, runtimeConfig);
-    const frameTarget = namespace.frameProxy?.resolveTarget?.(panelFrameUrl) || {
-      origin: toOrigin(panelFrameUrl),
-      src: panelFrameUrl,
-      targetUrl: panelFrameUrl,
-      wrapped: false,
-    };
-
-    if (!panelUrl) {
-      logConsoleTrace("panel", "04.top.panel.frame.error", {
-        reason: "missing-panel-url",
-        target: normalizeText(runtimeConfig?.target) || "production",
-      });
-      updateStatusBanner(host, {
-        text: "호스팅 패널 주소를 찾지 못했어요.",
-        tone: "error",
-      });
-      return;
-    }
-    if (frameTarget.error) {
-      logConsoleTrace("panel", "04.top.panel.frame.error", {
-        frameSrc: normalizeText(frameTarget.src),
-        panelUrl: normalizeText(panelFrameUrl),
-        reason: normalizeText(frameTarget.error),
-        wrapped: Boolean(frameTarget.wrapped),
-      });
-      host.__panelUrl = panelFrameUrl;
-      host.__panelFrameSrc = "";
-      host.__bridgeReady = false;
-      host.__lastBridgeSnapshotKey = "";
-      host.__bridge.reset("frame-proxy-error");
-      host.__bridge.setAllowedOrigin("");
-      clearHandshakeTimeout(host);
-      frame.setAttribute("src", "about:blank");
-      updateStatusBanner(host, {
-        text: frameTarget.error,
-        tone: "warning",
-      });
-      return;
-    }
-
-    host.__bridge.setAllowedOrigin(frameTarget.origin);
-    if (host.__panelUrl === panelFrameUrl && frame.getAttribute("src") === frameTarget.src) {
-      return;
-    }
-
-    host.__panelUrl = panelFrameUrl;
-    host.__panelFrameSrc = frameTarget.src;
-    host.__bridgeReady = false;
-    host.__lastBridgeSnapshotKey = "";
-    host.__bridge.reset("frame-src-change");
-    clearHandshakeTimeout(host);
-    host.__handshakeTimeout = global.setTimeout(() => {
-      if (!host.__bridgeReady) {
-        logConsoleTrace("panel", "07.top.panel.handshake.timeout", {
-          frameSrc: normalizeText(host.__panelFrameSrc),
-          panelUrl: normalizeText(host.__panelUrl),
-        });
-        updateStatusBanner(host, {
-          text: "호스팅 패널을 아직 연결하지 못했어요. 페이지를 새로고침하거나 확장을 다시 로드해 주세요.",
-          tone: "warning",
-        });
-      }
-    }, HANDSHAKE_TIMEOUT_MS);
-    updateStatusBanner(host, {
-      text: "호스팅 패널을 여는 중이에요.",
-      tone: "info",
-    });
-    logConsoleTrace("panel", "04.top.panel.frame.src.set", {
-      frameSrc: normalizeText(frameTarget.src),
-      panelUrl: normalizeText(panelFrameUrl),
-      target: normalizeText(runtimeConfig?.target) || "production",
-      wrapped: Boolean(frameTarget.wrapped),
-    });
-    frame.setAttribute("src", frameTarget.src);
-  }
-
-  function buildHostedPanelFrameUrl(host, panelUrl, runtimeConfig) {
-    const normalizedPanelUrl = normalizeText(panelUrl);
-    if (!normalizedPanelUrl) {
-      return "";
-    }
-    if (normalizeText(runtimeConfig?.target) !== "local") {
-      host.__panelLocalAssetVersion = "";
-      return normalizedPanelUrl;
-    }
-    host.__panelLocalAssetVersion = normalizeText(host.__panelLocalAssetVersion) || String(Date.now());
-    return appendQueryParam(normalizedPanelUrl, "v", host.__panelLocalAssetVersion);
-  }
-
-  function buildBridgeSnapshot(state, host) {
-    return {
-      extensionCapabilities: host.__bridge?.getCapabilities?.() || [],
-      extensionVersion: readExtensionVersion(),
-      panel: cloneValue(state?.panelSnapshot || {}),
-      panelAppUrl: normalizeText(host.__panelUrl),
-    };
-  }
-
-  function pushBridgeSnapshotIfChanged(host, state, options = {}) {
-    const snapshot = buildBridgeSnapshot(state, host);
-    const snapshotKey = serializeRenderState(snapshot);
-    const force = Boolean(options?.force);
-    if (!force && host.__lastBridgeSnapshotKey === snapshotKey) {
-      return false;
-    }
-    host.__lastBridgeSnapshotKey = snapshotKey;
-    logConsoleTrace("panel", "10.top.panel.snapshot.push", traceController.buildPanelSnapshotTracePayload(state));
-    host.__bridge.updateSnapshot(snapshot);
-    return true;
-  }
-
   function readExtensionVersion() {
     try {
       return normalizeText(global.chrome?.runtime?.getManifest?.()?.version);
     } catch {
       return "";
     }
-  }
-
-  function resolvePanelRuntimeConfig(settings) {
-    return namespace.firebaseConfig?.panel?.resolveRuntime?.(settings)
-      || {
-        hosting: namespace.firebaseConfig?.hosting || {},
-        target: "production",
-      };
-  }
-
-  function toOrigin(url) {
-    const normalized = normalizeText(url);
-    if (!normalized) {
-      return "";
-    }
-    try {
-      return new URL(normalized).origin;
-    } catch {
-      return "";
-    }
-  }
-
-  function appendQueryParam(url, key, value) {
-    const normalizedUrl = normalizeText(url);
-    const normalizedKey = normalizeText(key);
-    const normalizedValue = normalizeText(value);
-    if (!normalizedUrl || !normalizedKey || !normalizedValue) {
-      return normalizedUrl;
-    }
-    try {
-      const nextUrl = new URL(normalizedUrl);
-      nextUrl.searchParams.set(normalizedKey, normalizedValue);
-      return nextUrl.toString();
-    } catch {
-      return normalizedUrl;
-    }
-  }
-
-  function updateStatusBanner(host, status) {
-    const elements = host.__panelElements || resolvePanelElements(host);
-    const banner = elements.status;
-    if (!(banner instanceof global.HTMLElement)) {
-      return;
-    }
-    const text = normalizeText(status?.text);
-    if (!text) {
-      banner.hidden = true;
-      banner.textContent = "";
-      banner.dataset.tone = "";
-      return;
-    }
-    banner.hidden = false;
-    banner.textContent = text;
-    banner.dataset.tone = normalizeText(status?.tone) || "info";
-  }
-
-  function clearHandshakeTimeout(host) {
-    if (!host?.__handshakeTimeout) {
-      return;
-    }
-    global.clearTimeout(host.__handshakeTimeout);
-    host.__handshakeTimeout = 0;
   }
 
   function installHandleInteractions(host, handle, callbacks) {
@@ -486,26 +223,6 @@
         </div>
       </div>
     `;
-  }
-
-  function cloneValue(value) {
-    return value == null ? value : JSON.parse(JSON.stringify(value));
-  }
-
-  function serializeRenderState(value) {
-    try {
-      return JSON.stringify(value, (_key, current) => {
-        if (typeof current === "function") {
-          return undefined;
-        }
-        if (current instanceof global.HTMLElement) {
-          return undefined;
-        }
-        return current;
-      }) || "";
-    } catch {
-      return "";
-    }
   }
 
   function normalizeText(value) {
