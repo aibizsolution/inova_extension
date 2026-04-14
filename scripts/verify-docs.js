@@ -517,7 +517,7 @@ const codeChecks = [
   {
     file: path.join("background", "panel-runtime-invoke.js"),
     patterns: [
-      /PANEL_ALLOWED_STORAGE_KEYS/,
+      /PANEL_RUNTIME_STORAGE_STATE_KEYS/,
       /PANEL_ALLOWED_FUNCTION_ENDPOINT_KEYS/,
       /invokeHostedPanelRequest/,
     ],

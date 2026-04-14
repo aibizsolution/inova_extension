@@ -3,14 +3,8 @@
 (() => {
 const namespace = globalThis.InovaBookmarks || {};
 
-const PANEL_ALLOWED_STORAGE_KEYS = new Set([
+const PANEL_RUNTIME_STORAGE_STATE_KEYS = Object.freeze([
   "cloudSync",
-  "meetingHub",
-  "meetingStateByMeetingId",
-  "pausedSessions",
-  "productLaneMigration",
-  "promptLibrary",
-  "releaseInfo",
   "settings",
   "uiPreferences",
 ]);
@@ -39,25 +33,10 @@ const PANEL_ALLOWED_FUNCTION_ENDPOINT_KEYS = Object.freeze({
 globalThis.invokeHostedPanelRequest = async function invokeHostedPanelRequest(request) {
   const action = namespace.session.normalizeText(request?.action).toLowerCase();
   if (action === "storage.get-state") {
-    return namespace.storage.getState();
-  }
-  if (action === "storage.get") {
-    return readHostedPanelStorageValue(request);
-  }
-  if (action === "storage.set") {
-    return writeHostedPanelStorageValue(request);
-  }
-  if (action === "storage.update-settings") {
-    return namespace.storage.updateSettings(request?.partial && typeof request.partial === "object" ? request.partial : {});
+    return readHostedPanelStorageState();
   }
   if (action === "storage.update-ui-preferences") {
     return namespace.storage.updateUiPreferences(request?.partial && typeof request.partial === "object" ? request.partial : {});
-  }
-  if (action === "storage.set-session-paused") {
-    return namespace.storage.setSessionPaused(
-      namespace.session.normalizeText(request?.sessionId),
-      Boolean(request?.paused)
-    );
   }
   if (action === "browser.open-url" || action === "release.open-url") {
     return openReleaseUrl(request?.url);
@@ -131,26 +110,28 @@ async function invokeHostedPanelFunctionFetch(request) {
   return payload?.data || {};
 }
 
-async function readHostedPanelStorageValue(request) {
-  const key = namespace.session.normalizeText(request?.key);
-  if (!PANEL_ALLOWED_STORAGE_KEYS.has(key)) {
-    throw new Error("허용되지 않은 storage read 요청이에요.");
-  }
-  const state = await namespace.storage.getState();
-  return state?.[key];
+async function readHostedPanelStorageState() {
+  const storageState = await namespace.storage.getState().catch(() => ({}));
+  const normalizedStorageState = storageState && typeof storageState === "object"
+    ? storageState
+    : {};
+  return PANEL_RUNTIME_STORAGE_STATE_KEYS.reduce((snapshot, key) => {
+    if (!Object.prototype.hasOwnProperty.call(normalizedStorageState, key)) {
+      return snapshot;
+    }
+    snapshot[key] = cloneHostedPanelStorageValue(normalizedStorageState[key]);
+    return snapshot;
+  }, {});
 }
 
-async function writeHostedPanelStorageValue(request) {
-  const partial = request?.partial && typeof request.partial === "object" ? request.partial : {};
-  const nextPartial = {};
-  for (const [key, value] of Object.entries(partial)) {
-    if (!PANEL_ALLOWED_STORAGE_KEYS.has(namespace.session.normalizeText(key))) {
-      throw new Error("허용되지 않은 storage write 요청이에요.");
-    }
-    nextPartial[key] = value;
+function cloneHostedPanelStorageValue(value) {
+  if (!value || typeof value !== "object") {
+    return value;
   }
-  await namespace.storage.setLocal(nextPartial);
-  return namespace.storage.getState();
+  if (Array.isArray(value)) {
+    return value.slice();
+  }
+  return { ...value };
 }
 
 async function enrichMeetingPanelAuth(payload) {
@@ -201,7 +182,7 @@ async function enrichPromptPanelAuth(payload) {
 }
 
 async function resolveMeetingRuntimeConfig() {
-  const storageState = await namespace.storage.getState().catch(() => ({}));
+  const storageState = await readHostedPanelStorageState();
   const settings = storageState?.settings && typeof storageState.settings === "object"
     ? storageState.settings
     : {};

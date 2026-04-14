@@ -222,12 +222,44 @@ function verifyBackgroundInvokeWiring() {
 
   assert(serviceWorkerSource.includes("inova-panel:invoke"), "background should expose hosted panel invoke route");
   assert(
-    invokeSource.includes("PANEL_ALLOWED_STORAGE_KEYS"),
-    "background should declare hosted storage allowlist"
+    invokeSource.includes("PANEL_RUNTIME_STORAGE_STATE_KEYS"),
+    "background should declare the compact hosted storage-state allowlist"
   );
   assert(
     invokeSource.includes("PANEL_ALLOWED_FUNCTION_ENDPOINT_KEYS"),
     "background should declare hosted function allowlist"
+  );
+  [
+    '"cloudSync"',
+    '"settings"',
+    '"uiPreferences"',
+  ].forEach((storageKey) => assert(
+    invokeSource.includes(storageKey),
+    `background hosted runtime should keep ${storageKey} in the compact storage-state contract`
+  ));
+  [
+    '"meetingHub"',
+    '"meetingStateByMeetingId"',
+    '"pausedSessions"',
+    '"productLaneMigration"',
+    '"promptLibrary"',
+    '"releaseInfo"',
+  ].forEach((storageKey) => assert(
+    !invokeSource.includes(storageKey),
+    `background hosted runtime should drop the inactive storage-state residue ${storageKey}`
+  ));
+  [
+    'action === "storage.get"',
+    'action === "storage.set"',
+    'action === "storage.update-settings"',
+    'action === "storage.set-session-paused"',
+  ].forEach((actionSurface) => assert(
+    !invokeSource.includes(actionSurface),
+    `background hosted runtime should drop the inactive storage action ${actionSurface}`
+  ));
+  assert(
+    invokeSource.includes("readHostedPanelStorageState"),
+    "background should build a dedicated compact hosted storage-state snapshot"
   );
   assert(
     !invokeSource.includes('"loadInovaPromptLibraryUrl"')

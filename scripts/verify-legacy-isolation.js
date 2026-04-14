@@ -13,6 +13,7 @@ function main() {
   verifyActiveContentSourcesDoNotDependOnBackupPaths();
   verifyActiveHostedPanelAssetsStayOutOfDeadLegacyFiles();
   verifyActiveHostedBridgeRequestSurfaceStaysGeneric();
+  verifyActiveHostedRuntimeStorageSurfaceStaysCompact();
   verifyActivePromptShellContractDropsLegacyName();
   console.log("[verify-legacy-isolation] Active v2 legacy isolation contract passed");
 }
@@ -139,6 +140,35 @@ function verifyActiveHostedBridgeRequestSurfaceStaysGeneric() {
     bridgeSource.includes('if (action === "tool-summary-sync") {'),
     "active hosted bridge should keep the shared tool-summary-sync request surface"
   );
+}
+
+function verifyActiveHostedRuntimeStorageSurfaceStaysCompact() {
+  const invokeSource = fs.readFileSync(path.join(root, "background", "panel-runtime-invoke.js"), "utf8");
+
+  assert(
+    invokeSource.includes("PANEL_RUNTIME_STORAGE_STATE_KEYS"),
+    "active hosted runtime should keep a dedicated compact storage-state contract"
+  );
+  [
+    'action === "storage.get"',
+    'action === "storage.set"',
+    'action === "storage.update-settings"',
+    'action === "storage.set-session-paused"',
+  ].forEach((actionSurface) => assert(
+    !invokeSource.includes(actionSurface),
+    `active hosted runtime should not reopen the dormant storage action ${actionSurface}`
+  ));
+  [
+    '"meetingHub"',
+    '"meetingStateByMeetingId"',
+    '"pausedSessions"',
+    '"productLaneMigration"',
+    '"promptLibrary"',
+    '"releaseInfo"',
+  ].forEach((storageKey) => assert(
+    !invokeSource.includes(storageKey),
+    `active hosted runtime should not leak dormant storage state ${storageKey}`
+  ));
 }
 
 function verifyActivePromptShellContractDropsLegacyName() {
