@@ -162,70 +162,69 @@ Also:
 
 ## What Is Still Not Fully Finished
 
-The remaining work is no longer smoke-fix first. It is mostly structural cleanup to finish the hosted-first boundary.
+The remaining work is no longer structural cleanup first.
 
-1. Isolate any still-inactive legacy extension panel files into `backup/legacy-panel/*` instead of leaving dead reference code mixed into active `content/*` paths.
-2. Keep only final host-shell polish so the `content/panel.js` path stays a generic host + broker entrypoint.
-3. Clear the last prompt shell residue and final legacy fallback surfaces in extension.
-4. Prepare final release path from deployed `0.4.4` baseline to hosted v2 `1.0.0`.
+The hosted-first boundary is effectively in place. What remains is rollout validation and release preparation for the `0.4.4 -> 1.0.0` switch.
+
+1. Record real Chrome smoke on the current hosted-first `1.0.0` lane.
+2. Rehearse the final release build path from deployed `0.4.4` baseline to hosted v2 `1.0.0`.
+3. Prepare the actual rollout checklist and deployment boundary for release.
 
 ## Concrete Next Session Targets
 
-### 1. Legacy isolation
+### 1. Chrome smoke
 
 Goal:
 
-- move still-inactive extension-side legacy panel code out of active `content/*` paths into `backup/legacy-panel/*`
+- confirm the real hosted-first `1.0.0` panel works in Chrome beyond static verify
 
 Start files:
 
-- `manifest.json`
-- `content/main.js`
+- `docs/runtime-architecture.md`
+- `docs/current-handoff.md`
 - `content/AGENTS.md`
-- `backup/legacy-panel/README.md`
+- `docs/release-workflow.md`
 
-Then read only the legacy files that are already outside the active bundle and can be relocated without touching `DB/Functions` or shared contracts.
+Then validate only the user-facing hosted v2 flows that matter for release:
 
-### 2. Common panel shell cleanup
+- panel boot/open
+- conversation jump/copy
+- prompt library/store/review
+- meeting hub/workspace launch
+- release latest/history/download
 
-Goal:
-
-- keep the extension panel path a generic host + bridge entrypoint, not a feature-aware UI owner
-
-Start files:
-
-- `content/panel-host-view.js`
-- `content/panel-host-runtime.js`
-- `content/panel-host-bridge.js`
-- `content/panel.js`
-
-Then read only the feature-local hosted controller touched by the boundary you are removing.
-
-### 3. Prompt shell residue
+### 2. Release rehearsal
 
 Goal:
 
-- move remaining prompt tab shell/transition decisions into hosted controllers and clear the last extension-side fallback residue
-
-Start files:
-
-- `content/panel-v2-composition-controller.js`
-- `content/panel-v2-shell-bridge.js`
-- `hosting/extension-v2/panel/index.js`
-- `hosting/extension-v2/panel/prompt-library-controller.js`
-
-### 4. Final release path
-
-Goal:
-
-- close the last rollout/documentation gaps between deployed `0.4.4` and hosted-first `1.0.0`
+- prove the current `1.0.0` lane can be turned into the public release artifacts without metadata drift
 
 Start files:
 
 - `docs/release-workflow.md`
-- `docs/current-handoff.md`
-- `releases/release-notes.json`
+- `scripts/build-release-package.js`
 - `scripts/verify-release-package.js`
+- `releases/release-notes.json`
+
+Then check only release-lane coherence:
+
+- current version metadata
+- lane-local `latest.json` / `history.json`
+- `downloads/latest.zip` and version ZIPs
+- rollout note/deployment wording
+
+### 3. Rollout prep
+
+Goal:
+
+- prepare the actual public handoff from deployed `0.4.4` to hosted-first `1.0.0`
+
+Start files:
+
+- `docs/current-handoff.md`
+- `docs/release-workflow.md`
+- `docs/refactoring-plan.md`
+- `releases/release-notes.json`
 
 ### Not the next priority
 
@@ -236,10 +235,10 @@ Start files:
 ## Recommended Next Steps
 
 1. Read `docs/current-handoff.md`, `docs/development-philosophy.md`, `docs/refactoring-plan.md`, and `docs/runtime-architecture.md`.
-2. Start with `legacy isolation`, not with another bug hunt, unless the same hosted lane blocks the next slice.
-3. If a doc still describes the old ownership, fix it in the same task.
-4. Run `npm.cmd run verify` and commit each bounded slice.
-5. Only smoke-test the paths needed to validate the boundary that moved.
+2. Start with real Chrome smoke, not with more structural cleanup, unless the smoke exposes the same hosted lane as the blocker.
+3. If Chrome smoke passes, move directly to release rehearsal and rollout prep instead of reopening minor refactors.
+4. If a doc still describes the old ownership or old next-step order, fix it in the same task.
+5. Run `npm.cmd run verify` and commit each bounded slice.
 
 ## Local Rehearsal Notes
 

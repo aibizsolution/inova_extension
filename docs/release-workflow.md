@@ -50,6 +50,16 @@
 7. hosted-only 또는 functions-only 운영 배포면 `deploy:hosting`, `deploy:functions`, `deploy:all` 중 필요한 범위만 수행한다.
 8. 배포 후에는 기존 ZIP 사용자가 업그레이드하는 경로와 reload 필요 여부를 먼저 공지한다.
 
+## 1.0.0 Final Readiness
+
+- 현재 공개 기준선은 `0.4.4`, 다음 공개 릴리스 목표는 hosted-first `1.0.0`이다.
+- 구조 migration이 거의 끝난 뒤에는 작은 shell refactor보다 실제 Chrome smoke와 release rehearsal이 우선이다.
+- `1.0.0` 공개 직전 최소 기준은 아래다.
+  - `npm.cmd run verify` green
+  - 실제 Chrome에서 hosted v2 panel boot, prompt library/store/review, meeting hub/workspace launch, release latest/history/download smoke 기록 확보
+  - `release:build` 또는 동등한 release rehearsal에서 lane-local `latest.json`, `history.json`, `downloads/latest.zip`, version ZIP, `releases/release-notes.json` curated metadata가 함께 맞는지 확인
+  - 사용자 공지에 `hosting 반영`, `새 ZIP 배포`, `확장 reload 필요 여부`, `rollback ZIP`이 함께 정리됨
+
 ## 배포 보고 형식
 
 - `functions 반영 여부`
