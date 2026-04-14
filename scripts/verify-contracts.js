@@ -90,6 +90,7 @@ if (countJavaScriptFiles(sharedDirectory) < 3) {
   errors.push("shared 모듈 수가 부족합니다. 최소 3개 파일로 분리해야 합니다.");
 }
 verifyActiveSharedRootCatalog();
+verifyActiveBackgroundRootCatalog();
 verifyHostedCapabilityCatalog();
 verifyBackgroundMessageCatalog();
 
@@ -270,6 +271,38 @@ function verifyActiveSharedRootCatalog() {
   for (const file of actualSharedRootFiles) {
     if (!activeSharedRootFiles.has(file)) {
       errors.push(`active shared root에 계약 밖 helper가 다시 들어왔습니다: ${file}`);
+    }
+  }
+}
+
+function verifyActiveBackgroundRootCatalog() {
+  const activeBackgroundRootFiles = new Set(contract.activeBackgroundRootFiles || []);
+  if (!activeBackgroundRootFiles.size) {
+    errors.push("active background root catalog가 비어 있습니다.");
+    return;
+  }
+
+  const backgroundDirectory = path.join(root, "background");
+  if (!fs.existsSync(backgroundDirectory)) {
+    errors.push("background 디렉터리를 찾지 못했습니다.");
+    return;
+  }
+
+  const actualBackgroundRootFiles = new Set(
+    fs.readdirSync(backgroundDirectory)
+      .filter((file) => file.endsWith(".js"))
+      .map((file) => path.posix.join("background", file))
+  );
+
+  for (const file of activeBackgroundRootFiles) {
+    if (!actualBackgroundRootFiles.has(file)) {
+      errors.push(`active background root catalog 누락: ${file}`);
+    }
+  }
+
+  for (const file of actualBackgroundRootFiles) {
+    if (!activeBackgroundRootFiles.has(file)) {
+      errors.push(`active background root에 계약 밖 helper가 다시 들어왔습니다: ${file}`);
     }
   }
 }

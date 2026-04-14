@@ -8,6 +8,17 @@
     "shared/session.js",
     "shared/storage.js"
   ],
+  "activeBackgroundRootFiles": [
+    "background/browser-capability.js",
+    "background/cloud-api-client.js",
+    "background/inova-auth-client.js",
+    "background/meeting-workspace-capability.js",
+    "background/panel-auth-cache.js",
+    "background/panel-runtime-capability-router.js",
+    "background/panel-runtime-invoke.js",
+    "background/panel-session-capability.js",
+    "background/service-worker.js"
+  ],
   "requiredFiles": [
     "manifest.json",
     "package.json",
@@ -23,6 +34,7 @@
     "background/cloud-api-client.js",
     "background/inova-auth-client.js",
     "background/meeting-workspace-capability.js",
+    "background/panel-auth-cache.js",
     "background/panel-session-capability.js",
     "background/service-worker.js",
     "background/panel-runtime-capability-router.js",
