@@ -1568,43 +1568,8 @@
     return namespace.session?.normalizeText?.(value) || String(value || "").trim();
   }
 
-  function normalizePageAction(action) {
-    const normalizedAction = normalizeText(action);
-    if (normalizedAction === "log-trace") {
-      return "trace.log";
-    }
-    if (normalizedAction === "copy-text") {
-      return "clipboard.write-text";
-    }
-    if (normalizedAction === "get-conversation-state" || normalizedAction === "get-conversation-snapshot") {
-      return "conversation.read-state";
-    }
-    if (normalizedAction === "jump-conversation-item") {
-      return "conversation.jump-item";
-    }
-    if (normalizedAction === "get-composer-state") {
-      return "composer.read-state";
-    }
-    if (normalizedAction === "apply-prompt-text") {
-      return "composer.apply-text";
-    }
-    if (normalizedAction === "get-debug-state") {
-      return "debug.read-state";
-    }
-    if (normalizedAction === "set-debug-enabled") {
-      return "debug.set-enabled";
-    }
-    if (normalizedAction === "copy-debug-log") {
-      return "debug.copy-log";
-    }
-    if (normalizedAction === "clear-debug-log") {
-      return "debug.clear-log";
-    }
-    return normalizedAction;
-  }
-
   function isPageTraceAction(action) {
-    return normalizePageAction(action) === "trace.log";
+    return normalizeText(action) === "trace.log";
   }
 
   function tracePanelFlow(step, payload = {}) {
@@ -1664,7 +1629,7 @@
 
   function readTraceAction(domain, payload = {}) {
     if (normalizeText(domain) === "page") {
-      return normalizePageAction(payload?.action) || "page";
+      return normalizeText(payload?.action) || "page";
     }
     return normalizeText(
       payload?.action

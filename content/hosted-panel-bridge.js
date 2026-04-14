@@ -311,7 +311,7 @@
   }
 
   function handlePageRequest(payload, helpers = {}) {
-    const action = normalizePageAction(payload?.action);
+    const action = normalizeText(payload?.action);
     const buildConversationSnapshot = typeof helpers.buildConversationSnapshot === "function"
       ? helpers.buildConversationSnapshot
       : defaultBuildConversationSnapshot;
@@ -609,41 +609,6 @@
 
   function cloneValue(value) {
     return value == null ? value : JSON.parse(JSON.stringify(value));
-  }
-
-  function normalizePageAction(value) {
-    const action = normalizeText(value);
-    if (action === "copy-text") {
-      return "clipboard.write-text";
-    }
-    if (action === "copy-debug-log") {
-      return "debug.copy-log";
-    }
-    if (action === "clear-debug-log") {
-      return "debug.clear-log";
-    }
-    if (action === "log-trace") {
-      return "trace.log";
-    }
-    if (action === "get-composer-state") {
-      return "composer.read-state";
-    }
-    if (action === "apply-prompt-text") {
-      return "composer.apply-text";
-    }
-    if (action === "get-conversation-state" || action === "get-conversation-snapshot") {
-      return "conversation.read-state";
-    }
-    if (action === "jump-conversation-item") {
-      return "conversation.jump-item";
-    }
-    if (action === "get-debug-state") {
-      return "debug.read-state";
-    }
-    if (action === "set-debug-enabled") {
-      return "debug.set-enabled";
-    }
-    return action;
   }
 
   function normalizeText(value) {

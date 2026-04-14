@@ -21,6 +21,7 @@ function verifyPanelHostRuntimeModuleSplit() {
   const hostBridgeSource = fs.readFileSync(path.join(root, "content", "panel-host-bridge.js"), "utf8");
   const hostViewSource = fs.readFileSync(path.join(root, "content", "panel-host-view.js"), "utf8");
   const hostRuntimeSource = fs.readFileSync(path.join(root, "content", "panel-host-runtime.js"), "utf8");
+  const hostedIndexSource = fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "index.js"), "utf8");
 
   assert(
     /panelHostRuntime\.create/.test(panelSource),
@@ -66,6 +67,22 @@ function verifyPanelHostRuntimeModuleSplit() {
     /function installHandleInteractions/.test(hostViewSource),
     "content/panel-host-view.js should own handle drag/click wiring once panel.js delegates the host shell view"
   );
+  [
+    "function normalizePageAction(",
+    '"log-trace"',
+    '"copy-text"',
+    '"get-conversation-snapshot"',
+    '"jump-conversation-item"',
+    '"get-composer-state"',
+    '"apply-prompt-text"',
+    '"get-debug-state"',
+    '"set-debug-enabled"',
+    '"copy-debug-log"',
+    '"clear-debug-log"',
+  ].forEach((legacyPattern) => assert(
+    !hostedIndexSource.includes(legacyPattern),
+    `hosting/extension-v2/panel/index.js should not keep the legacy page alias residue ${legacyPattern}`
+  ));
 }
 
 function verifyHostedPanelHostBatching() {

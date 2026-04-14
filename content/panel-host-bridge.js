@@ -95,7 +95,7 @@
 
     function isPageTraceAction(action) {
       const normalizedAction = normalizeText(action);
-      return normalizedAction === "trace.log" || normalizedAction === "log-trace";
+      return normalizedAction === "trace.log";
     }
   }
 

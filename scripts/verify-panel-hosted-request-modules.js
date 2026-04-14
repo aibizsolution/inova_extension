@@ -118,7 +118,7 @@ function verifyHostedBridgeRequestModuleContract() {
     `hosted bridge request helper should keep the inline contract for ${pattern}`
   ));
   [
-    "normalizePageAction(payload?.action)",
+    "const action = normalizeText(payload?.action)",
     'if (action === "clipboard.write-text")',
     'if (action === "debug.copy-log")',
     'if (action === "debug.clear-log")',
@@ -132,6 +132,13 @@ function verifyHostedBridgeRequestModuleContract() {
   ].forEach((pattern) => assert(
     pageRequestSource.includes(pattern),
     `hosted bridge request helper should keep the inline contract for ${pattern}`
+  ));
+  [
+    "function normalizePageAction(",
+    'normalizedAction === "log-trace"',
+  ].forEach((pattern) => assert(
+    !panelHostBridgeSource.includes(pattern),
+    `active panel host bridge should not keep legacy page alias handling ${pattern}`
   ));
   [
     'if (action === "copy-text")',
