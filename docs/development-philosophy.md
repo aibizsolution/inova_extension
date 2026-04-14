@@ -11,10 +11,29 @@
 - 파일 길이만을 이유로 분리하지 않는다.
 - 항상 함께 로드되고, 함께 수정되고, 함께 이해되는 코드는 함께 둔다.
 - 여러 곳에서 재사용되거나, 독립적인 상태와 생명주기를 가지는 코드는 분리한다.
+- 구조/길이 가드는 회피 규칙이 아니라 책임 분리 신호로 읽는다.
+- 가드를 잠재우기 위해 관련 없는 파일에 책임을 우회 적재하지 않는다. 새 책임이 확인되면 그 책임이 속한 모듈로 옮기거나 새 경계를 만든다.
 - `일단 구현 후 즉시 리팩토링`을 기본 작업 방식으로 삼지 않는다.
 - 같은 구조 문제가 반복되면, 개별 코드 정리 대신 시스템 차원의 해결책을 먼저 검토한다.
 - 실패를 조용히 숨기지 않고 명시적으로 드러낸다.
 - 문서는 결과 기록보다 다음 판단을 돕는 기준 문서가 되어야 한다.
+
+## Hosted-First 기본값
+
+- `1.0.0+` v2 lane에서는 사용자에게 보이는 탭 기능의 기본 위치를 `hosting`으로 본다.
+- UI, view state, action flow, feature-local controller는 특별한 제약이 없으면 hosted에 둔다.
+- extension에는 `Chrome API`, `background broker`, `page DOM adapter`, `iframe host`, `postMessage bridge`, `popup/settings`처럼 브라우저 확장이라서만 가능한 책임만 남긴다.
+- 기능을 바꾸거나 추가할 때는 먼저 `이 책임이 Chrome/background/page DOM 없이도 성립하는가?`를 묻고, 그렇다면 hosted를 기본 선택으로 삼는다.
+- hosted에서 해결 가능한 책임을 extension에 더 싣는 일은 예외로 취급하고, 필요 사유가 명확할 때만 허용한다.
+- hosted-first 이전 중 발견한 문제는 `이미 옮겨진 hosted lane의 문제`와 `곧 제거할 legacy residue의 문제`를 구분해 다룬다.
+- 이미 옮겨진 hosted ownership에서 재현되거나 다음 ownership 이전을 막는 문제는 즉시 수정한다.
+- legacy residue에만 남아 있고 hosted 이전을 막지 않는 문제라면, 임시 수선보다 ownership 이전을 먼저 진행한다.
+- `DB/Functions 계약을 바꾸지 않는 순수 panel v2 migration`이라면 판단 기준은 현재 `1.0.0` v2 bundle이 정상 동작하는지다. 이 경우 legacy extension 코드를 활성 번들 안에 계속 보존하는 것보다, v2 경로를 더 짧고 단순하게 만드는 쪽을 기본 선택으로 삼는다.
+- ownership migration에서는 legacy 구현을 `정답 코드`가 아니라 `행동/spec 참고본`으로 취급한다.
+- legacy 코드를 살리기 위해 adapter, fallback, mixed ownership glue가 늘어나면 재사용을 고집하지 않는다.
+- 새 ownership 위치에 더 짧고 명확하게 다시 구현할 수 있다면, 기존 코드를 참고만 하고 직접 구현하는 편을 기본 선택으로 삼는다.
+- 현재 활성 `1.0.0` bundle과 공유 계약에서 빠진 legacy extension panel 코드는 활성 경로에 계속 섞어 두지 않는다. 이런 코드는 `backup/legacy-panel/*` 같은 격리 위치로 보내 `참고본`으로만 남기거나, 참고 가치가 끝나면 삭제하는 쪽을 기본 선택으로 삼는다.
+- 격리된 legacy panel 코드는 `0.4.4` 사용자 영향 판단이 필요할 때만 본다. 즉 `DB/Functions`나 shared server contract를 바꾸는 작업에서는 backup legacy를 비교 기준으로 삼되, 그 외 순수 panel v2 migration에서는 활성 v2 bundle 정상 동작 여부를 우선 기준으로 삼는다.
 
 ## 모듈화 판단 질문
 
@@ -63,3 +82,9 @@
 - 실행 환경 기준: `content/AGENTS.md`, `functions/AGENTS.md`
 - 저장소 운영 규칙: 루트 `AGENTS.md`, `docs/feature-routing.md`
 - feature-local 예외: 각 feature `AGENTS.md`, feature 전용 docs
+
+## 문서 보정 원칙
+
+- 문서는 항상 코드보다 느리게 낡을 수 있다고 가정한다.
+- hosted-first 리팩터링 중 문서가 이미 이동한 책임을 예전 extension 소유처럼 설명하면, 발견한 같은 작업 안에서 바로 고친다.
+- 문서 보정을 `전면 정리 작업`까지 미루지 않는다. 읽다가 발견한 ownership mismatch는 관련 변경과 함께 계속 누적 수정한다.

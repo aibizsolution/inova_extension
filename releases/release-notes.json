@@ -2,6 +2,80 @@
   "schemaVersion": 1,
   "versions": [
     {
+      "version": "1.0.0",
+      "level": "major",
+      "public": {
+        "headline": "호스팅 중심 실험실 패널 1차 전환",
+        "summary": "실험실 패널의 주요 도구 상태와 UI를 hosted panel 중심으로 옮겨, 앞으로는 대부분의 기능과 UI 변경을 호스팅 배포만으로 더 빠르게 반영할 수 있게 준비한 첫 major 업데이트입니다.",
+        "changes": [
+          {
+            "type": "changed",
+            "text": "대화, 프롬프트 보관함, 스토어, 검토, 회의 허브, 릴리스 탭의 상태와 상호작용을 hosted panel 쪽으로 이동해 확장은 page adapter와 runtime broker 중심으로 단순화했습니다."
+          },
+          {
+            "type": "changed",
+            "text": "이제 1.x lane에서는 extension-v2 hosted panel을 기본 경로로 사용해, 로컬 rehearsal과 이후 공개 배포가 같은 구조를 기준으로 동작합니다."
+          },
+          {
+            "type": "added",
+            "text": "legacy 0.4.4 경로는 보호한 채 mixed-version capability gate를 유지해, 기존 설치본과 새 hosted panel 자산이 조용히 어긋나지 않도록 했습니다."
+          }
+        ]
+      },
+      "internal": {
+        "changes": [
+          {
+            "type": "changed",
+            "text": "manifest/package 버전을 1.0.0으로 올려 로컬과 hosted panel이 기본적으로 v2 lane을 타도록 맞췄습니다."
+          }
+        ]
+      },
+      "artifact": {
+        "fileName": "inova-extension-1.0.0-2026-04-14.zip",
+        "publishedAt": "2026-04-14T06:14:16.492Z",
+        "sha256": "ac25bb3724648fcbfa25bcd2dc0c9b9d2e77acaab8c69a9a23f462376d4d7173",
+        "sizeBytes": 224702,
+        "minSupportedVersion": "1.0.0"
+      }
+    },
+    {
+      "version": "0.4.5",
+      "level": "patch",
+      "public": {
+        "headline": "프롬프트 검토 6축 준비와 로컬 검증 보강",
+        "summary": "프롬프트 검토 6축 전환을 준비하고, 로컬 에뮬레이터 기준으로 프롬프트 기능 전체를 더 안전하게 검증할 수 있게 다듬은 업데이트입니다.",
+        "changes": [
+          {
+            "type": "changed",
+            "text": "프롬프트 검토가 4축 legacy 응답과 6축 prompt-telling 응답을 모두 처리할 수 있도록 준비했습니다."
+          },
+          {
+            "type": "changed",
+            "text": "로컬 호스팅 선택 시 프롬프트 보관함, 스토어, 검토 경로도 함께 로컬 Functions와 prompt bridge를 보도록 맞췄습니다."
+          },
+          {
+            "type": "fixed",
+            "text": "프롬프트 검토 rate limit 기록과 로컬 검증 스크립트를 보강해 배포 전 smoke 흐름을 더 안정적으로 확인할 수 있게 했습니다."
+          }
+        ]
+      },
+      "internal": {
+        "changes": [
+          {
+            "type": "changed",
+            "text": "로컬 rehearsal 브랜치에서는 manifest/package 버전을 0.4.5로 올려 prompt-review v2 gate와 관련 smoke를 실제로 검증할 수 있게 유지합니다."
+          }
+        ]
+      },
+      "artifact": {
+        "fileName": "inova-extension-0.4.5-2026-04-11.zip",
+        "publishedAt": "2026-04-11T10:30:58.210Z",
+        "sha256": "6621f3b835b671d39b598b628af1a0fa9d13a14d59f420de8b5bad3ce777c730",
+        "sizeBytes": 283238,
+        "minSupportedVersion": "0.4.5"
+      }
+    },
+    {
       "version": "0.4.4",
       "level": "patch",
       "public": {
@@ -29,6 +103,13 @@
             "text": "회의 작업실 QA 반영과 프롬프트 검토 UX 보강을 포함한 0.4.4 공개 릴리스 메타로 최신 사용자용 요약을 갱신했습니다."
           }
         ]
+      },
+      "artifact": {
+        "fileName": "inova-extension-0.4.4-2026-04-06.zip",
+        "publishedAt": "2026-04-06T07:59:48.703Z",
+        "sha256": "26928b3ec8b49c46261ed5a1e809408a56f6c705b0ffc218e07f70fb2b042037",
+        "sizeBytes": 255326,
+        "minSupportedVersion": "0.4.4"
       }
     },
     {

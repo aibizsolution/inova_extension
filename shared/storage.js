@@ -9,6 +9,7 @@
     invalidated: "extension-context-invalidated",
   };
   let productLaneMigrationPromise = null;
+  let providerIdentityCacheMigrationPromise = null;
 
   async function getRawLocal(keys) {
     if (!global.chrome?.storage?.local) {
@@ -52,14 +53,37 @@
     }
   }
 
+  async function removeRawLocal(keys) {
+    if (!global.chrome?.storage?.local) {
+      throw createStorageAccessError(
+        STORAGE_ERROR_CODES.unavailable,
+        "chrome.storage.local을 사용할 수 없어요."
+      );
+    }
+    try {
+      await global.chrome.storage.local.remove(keys);
+    } catch (error) {
+      if (isExtensionContextInvalidatedError(error)) {
+        throw createStorageAccessError(
+          STORAGE_ERROR_CODES.invalidated,
+          "Extension context invalidated. 확장프로그램이 갱신되어 저장소에서 삭제할 수 없어요.",
+          error
+        );
+      }
+      throw error;
+    }
+  }
+
   async function getState() {
     await ensureProductLaneLocalMigration();
+    await ensureProviderIdentityCacheStorageMigration();
     const rawState = await getRawLocal(Object.values(activeStorageKeyMap));
     return buildCanonicalState(rawState, activeStorageKeyMap);
   }
 
   async function setLocal(partial) {
     await ensureProductLaneLocalMigration();
+    await ensureProviderIdentityCacheStorageMigration();
     const nextPartial = buildCanonicalPartial(partial, activeStorageKeyMap);
     await setRawLocal(nextPartial);
   }
@@ -99,192 +123,19 @@
     return nextUiPreferences;
   }
 
-  async function getCloudSyncState() {
+  async function getProviderIdentityCacheState() {
     const current = await getState();
-    return namespace.cloudSync.mergeCloudSyncState(current.cloudSync);
+    return namespace.providerIdentityCache.mergeProviderIdentityCacheState(current.providerIdentityCache);
   }
 
-  async function getReleaseInfo() {
-    const current = await getState();
-    return namespace.releaseInfo.mergeReleaseInfo(current.releaseInfo);
-  }
-
-  async function getMeetingHub() {
-    const current = await getState();
-    const nextHub = current.meetingHub && typeof current.meetingHub === "object"
-      ? current.meetingHub
-      : defaults.meetingHub;
-    return {
-      ...cloneValue(defaults.meetingHub),
-      ...cloneValue(nextHub),
-      items: Array.isArray(nextHub?.items) ? cloneValue(nextHub.items) : [],
-    };
-  }
-
-  async function getMeetingStateByMeetingId() {
-    const current = await getState();
-    const nextState = current.meetingStateByMeetingId;
-    return nextState && typeof nextState === "object"
-      ? cloneValue(nextState)
-      : cloneValue(defaults.meetingStateByMeetingId);
-  }
-
-  async function setCloudSyncState(nextCloudSync) {
-    const cloudSync = namespace.cloudSync.mergeCloudSyncState(nextCloudSync);
-    await setLocal({ cloudSync });
-    return cloudSync;
-  }
-
-  async function setReleaseInfo(nextReleaseInfo) {
-    const releaseInfo = namespace.releaseInfo.mergeReleaseInfo(nextReleaseInfo);
-    await setLocal({ releaseInfo });
-    return releaseInfo;
-  }
-
-  async function setMeetingHub(nextMeetingHub) {
-    const meetingHub = {
-      ...cloneValue(defaults.meetingHub),
-      ...(nextMeetingHub && typeof nextMeetingHub === "object" ? cloneValue(nextMeetingHub) : {}),
-      items: Array.isArray(nextMeetingHub?.items) ? cloneValue(nextMeetingHub.items) : [],
-    };
-    await setLocal({ meetingHub });
-    return meetingHub;
-  }
-
-  async function markPromptLibrarySynced(providerIdentity, syncedAt) {
-    const current = await getCloudSyncState();
-    const cloudSync = namespace.cloudSync.markPromptLibrarySynced(current, providerIdentity, syncedAt);
-    await setLocal({ cloudSync });
-    return cloudSync;
-  }
-
-  async function setPromptSyncError(errorMessage, providerIdentity, options = {}) {
-    const current = await getCloudSyncState();
-    const cloudSync = namespace.cloudSync.setPromptSyncError(current, errorMessage, providerIdentity, options);
-    await setLocal({ cloudSync });
-    return cloudSync;
-  }
-
-  async function setPromptSyncDegraded(errorMessage, providerIdentity, options = {}) {
-    const current = await getCloudSyncState();
-    const cloudSync = namespace.cloudSync.setPromptSyncDegraded(current, errorMessage, providerIdentity, options);
-    await setLocal({ cloudSync });
-    return cloudSync;
-  }
-
-  async function recordPromptLibraryRemoteState(remoteState, providerIdentity, options = {}) {
-    const current = await getCloudSyncState();
-    const cloudSync = namespace.cloudSync.recordPromptLibraryRemoteState(current, remoteState, providerIdentity, options);
-    await setLocal({ cloudSync });
-    return cloudSync;
-  }
-
-  async function getPromptLibrary() {
-    const current = await getState();
-    return namespace.promptLibrary.mergePromptLibrary(current.promptLibrary);
-  }
-
-  async function setPromptLibrary(nextPromptLibrary) {
-    const promptLibraryState = namespace.promptLibrary.mergePromptLibrary(nextPromptLibrary);
-    const { promptLibrary } = await persistPromptLibrary(
-      promptLibraryState,
-      "set-prompt-library",
-      namespace.cloudSync.createReplaceLibraryOperation(promptLibraryState)
-    );
-    return promptLibrary;
-  }
-
-  async function savePromptItem(itemInput) {
-    const current = await getPromptLibrary();
-    const reason = current.items.some((item) => item.id === itemInput?.id) ? "update-prompt" : "create-prompt";
-    const nextPromptLibrary = namespace.promptLibrary.upsertPromptItem(current, itemInput);
-    const nextIndex = current.items.findIndex((item) => item.id === itemInput?.id);
-    const nextPromptId = nextPromptLibrary.items[Math.max(0, nextIndex)]?.id || nextPromptLibrary.items[0]?.id;
-    const result = await persistPromptLibrary(
-      nextPromptLibrary,
-      reason,
-      namespace.cloudSync.createUpsertPromptOperation(nextPromptLibrary, nextPromptId, nextIndex === -1)
-    );
-    return result.promptLibrary;
-  }
-
-  async function removePromptItem(promptId) {
-    const current = await getPromptLibrary();
-    const nextPromptLibrary = namespace.promptLibrary.removePromptItem(current, promptId);
-    const result = await persistPromptLibrary(
-      nextPromptLibrary,
-      "delete-prompt",
-      namespace.cloudSync.createDeletePromptOperation(nextPromptLibrary, promptId)
-    );
-    return result.promptLibrary;
-  }
-
-  async function importPromptLibrary(payload, mode) {
-    const current = await getPromptLibrary();
-    const result = namespace.promptLibrary.applyImport(current, payload, mode);
-    const syncResult = await persistPromptLibrary(
-      result.library,
-      mode === "replace" ? "replace-import" : mode === "merge" ? "merge-import" : "add-import",
-      namespace.cloudSync.createReplaceLibraryOperation(result.library)
-    );
-    return {
-      ...result,
-      cloudSync: syncResult.cloudSync,
-      library: syncResult.promptLibrary,
-    };
-  }
-
-  async function movePromptItem(dragPromptId, targetPromptId, placement) {
-    const current = await getPromptLibrary();
-    const promptLibrary = namespace.promptLibrary.movePromptItem(current, dragPromptId, targetPromptId, placement);
-    const result = await persistPromptLibrary(
-      promptLibrary,
-      "reorder-prompts",
-      namespace.cloudSync.createReorderPromptOperation(promptLibrary)
-    );
-    return result.promptLibrary;
-  }
-
-  async function importStorePrompt(storeEntry) {
-    const current = await getPromptLibrary();
-    const promptLibrary = namespace.promptLibrary.importStoreEntry(current, storeEntry);
-    const result = await persistPromptLibrary(
-      promptLibrary,
-      "import-store-prompt",
-      namespace.cloudSync.createUpsertPromptOperation(promptLibrary, promptLibrary.items[0]?.id, true)
-    );
-    return result.promptLibrary;
-  }
-
-  async function markPromptPublished(promptId, publication) {
-    const current = await getPromptLibrary();
-    const promptLibrary = namespace.promptLibrary.markPromptPublished(current, promptId, publication);
-    await setLocal({ promptLibrary });
-    return promptLibrary;
-  }
-
-  async function clearPromptPublication(promptId) {
-    const current = await getPromptLibrary();
-    const promptLibrary = namespace.promptLibrary.clearPromptPublication(current, promptId);
-    await setLocal({ promptLibrary });
-    return promptLibrary;
-  }
-
-  async function buildPromptSyncDocument() {
-    const [promptLibrary, cloudSync] = await Promise.all([getPromptLibrary(), getCloudSyncState()]);
-    return namespace.cloudSync.buildPromptSyncDocument(promptLibrary, cloudSync);
-  }
-
-  async function hydratePromptLibraryFromCloud(nextPromptLibrary, providerIdentity, syncedAt) {
-    const promptLibrary = namespace.promptLibrary.mergePromptLibrary(nextPromptLibrary);
-    const currentCloudSync = await getCloudSyncState();
-    const cloudSync = namespace.cloudSync.markPromptLibrarySynced(currentCloudSync, providerIdentity, syncedAt);
-    await setLocal({ cloudSync, promptLibrary });
-    return { cloudSync, promptLibrary };
+  async function setProviderIdentityCacheState(nextProviderIdentityCache) {
+    const providerIdentityCache = namespace.providerIdentityCache.mergeProviderIdentityCacheState(nextProviderIdentityCache);
+    await setLocal({ providerIdentityCache });
+    return providerIdentityCache;
   }
 
   function mergeUiPreferences(...preferenceSets) {
-    return preferenceSets.reduce(
+    const merged = preferenceSets.reduce(
       (merged, nextPreferences) => ({
         ...merged,
         ...(nextPreferences || {}),
@@ -298,6 +149,14 @@
         handleRatios: { ...(defaults.uiPreferences.handleRatios || {}) },
       }
     );
+    if (merged.activeTool === "store") {
+      merged.activeTool = "prompts";
+      merged.activePromptTab = "store";
+    }
+    if (merged.activePromptTab !== "store" && merged.activePromptTab !== "review") {
+      merged.activePromptTab = "library";
+    }
+    return merged;
   }
 
   function getViewportBucket(width = global.innerWidth) {
@@ -318,21 +177,6 @@
     return normalizeHandleRatio(ratios[bucket], bucket);
   }
 
-  async function persistPromptLibrary(nextPromptLibrary, reason, operation) {
-    const promptLibrary = namespace.promptLibrary.mergePromptLibrary(nextPromptLibrary);
-    const currentCloudSync = await getCloudSyncState();
-    const providerIdentity = namespace.providerIdentity.getCurrent();
-    const cloudSync = namespace.cloudSync.queuePromptLibrarySyncOperation(
-      currentCloudSync,
-      reason,
-      providerIdentity,
-      promptLibrary,
-      operation
-    );
-    await setLocal({ cloudSync, promptLibrary });
-    return { cloudSync, promptLibrary };
-  }
-
   async function ensureProductLaneLocalMigration() {
     if (activeLane !== "v2") {
       return namespace.constants.defaults.productLaneMigration;
@@ -348,6 +192,18 @@
     }
   }
 
+  async function ensureProviderIdentityCacheStorageMigration() {
+    if (providerIdentityCacheMigrationPromise) {
+      return providerIdentityCacheMigrationPromise;
+    }
+    providerIdentityCacheMigrationPromise = migrateProviderIdentityCacheStorageKey();
+    try {
+      return await providerIdentityCacheMigrationPromise;
+    } finally {
+      providerIdentityCacheMigrationPromise = null;
+    }
+  }
+
   async function getProductLaneMigrationState() {
     const state = await getState();
     return mergeProductLaneMigrationState(state.productLaneMigration);
@@ -358,6 +214,7 @@
     const rawState = await getRawLocal([
       ...Object.values(activeStorageKeyMap),
       ...Object.values(legacyStorageKeyMap),
+      "releaseInfo",
     ]);
     const currentMigration = mergeProductLaneMigrationState(rawState[migrationStorageKey]);
     if (currentMigration.completedAt) {
@@ -400,6 +257,24 @@
     }
   }
 
+  async function migrateProviderIdentityCacheStorageKey() {
+    const nextStorageKey = activeStorageKeyMap.providerIdentityCache || "providerIdentityCache";
+    const legacyCloudSyncStorageKey = namespace.productLane?.buildStorageKey?.("cloudSync", activeLane) || "cloudSync";
+    const rawState = await getRawLocal([nextStorageKey, legacyCloudSyncStorageKey]);
+    if (Object.prototype.hasOwnProperty.call(rawState || {}, nextStorageKey)) {
+      return namespace.providerIdentityCache.mergeProviderIdentityCacheState(rawState[nextStorageKey]);
+    }
+    if (!Object.prototype.hasOwnProperty.call(rawState || {}, legacyCloudSyncStorageKey)) {
+      return namespace.providerIdentityCache.mergeProviderIdentityCacheState();
+    }
+    const migratedState = buildProviderIdentityCacheMigrationState(rawState[legacyCloudSyncStorageKey]);
+    await setRawLocal({ [nextStorageKey]: migratedState });
+    if (legacyCloudSyncStorageKey !== nextStorageKey) {
+      await removeRawLocal([legacyCloudSyncStorageKey]).catch(() => {});
+    }
+    return migratedState;
+  }
+
   function hasStoredLaneData(rawState, keyMap) {
     return Object.entries(storageKeys).some(([name, baseKey]) => {
       if (name === "productLaneMigration") {
@@ -418,12 +293,26 @@
       }
       const legacyStorageKey = legacyStorageKeyMap[name] || baseKey;
       const nextStorageKey = activeStorageKeyMap[name] || baseKey;
+      if (name === "providerIdentityCache") {
+        const legacyCloudSyncStorageKey = namespace.productLane?.buildStorageKey?.("cloudSync", "legacy") || "cloudSync";
+        if (!Object.prototype.hasOwnProperty.call(rawState || {}, legacyCloudSyncStorageKey)) {
+          continue;
+        }
+        nextState[nextStorageKey] = buildProviderIdentityCacheMigrationState(rawState[legacyCloudSyncStorageKey]);
+        continue;
+      }
       if (!Object.prototype.hasOwnProperty.call(rawState || {}, legacyStorageKey)) {
         continue;
       }
       nextState[nextStorageKey] = cloneValue(rawState[legacyStorageKey]);
     }
     return nextState;
+  }
+
+  function buildProviderIdentityCacheMigrationState(legacyCloudSyncState) {
+    return namespace.providerIdentityCache.mergeProviderIdentityCacheState({
+      providerIdentity: legacyCloudSyncState?.providerIdentity,
+    });
   }
 
   function inferLegacySourceRevision(rawState) {
@@ -480,36 +369,16 @@
   }
 
   namespace.storage = {
-    buildPromptSyncDocument,
     ensureProductLaneLocalMigration,
-    getCloudSyncState,
     getHandleRatio,
-    getMeetingHub,
-    getMeetingStateByMeetingId,
+    getProviderIdentityCacheState,
     getProductLaneMigrationState,
-    getPromptLibrary,
-    getReleaseInfo,
     getState,
     getViewportBucket,
-    hydratePromptLibraryFromCloud,
-    importStorePrompt,
-    importPromptLibrary,
-    markPromptLibrarySynced,
-    markPromptPublished,
     mergeUiPreferences,
-    movePromptItem,
     normalizeHandleRatio,
-    recordPromptLibraryRemoteState,
-    clearPromptPublication,
-    removePromptItem,
-    savePromptItem,
-    setCloudSyncState,
+    setProviderIdentityCacheState,
     setLocal,
-    setMeetingHub,
-    setPromptSyncDegraded,
-    setPromptSyncError,
-    setPromptLibrary,
-    setReleaseInfo,
     setSessionPaused,
     updateUiPreferences,
     updateSettings,

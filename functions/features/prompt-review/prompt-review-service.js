@@ -1,59 +1,45 @@
+const { FieldValue } = require("firebase-admin/firestore");
 const OpenAI = require("openai");
 
 const DEFAULT_MODEL = "gpt-5.4-mini";
 const MAX_PROMPT_LENGTH = 12000;
 const PROMPT_REVIEW_RATE_LIMIT_WINDOW_MS = 60000;
 const PROMPT_REVIEW_RATE_LIMIT_MAX_REQUESTS = 6;
-const REVIEW_DIMENSIONS = [
-  { id: "context", label: "맥락" },
-  { id: "goal", label: "목표" },
-  { id: "constraints", label: "제약" },
-  { id: "output", label: "산출물 형식" },
-];
-const REVIEW_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    verdict: {
-      type: "string",
-      enum: ["ready", "revise", "insufficient"],
-    },
-    totalScore: {
-      type: "integer",
-      minimum: 0,
-      maximum: 100,
-    },
-    summary: {
-      type: "string",
-    },
-    checks: {
-      type: "array",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          id: { type: "string", enum: REVIEW_DIMENSIONS.map((item) => item.id) },
-          label: { type: "string" },
-          status: { type: "string", enum: ["good", "partial", "missing"] },
-          feedback: { type: "string" },
-        },
-        required: ["id", "label", "status", "feedback"],
-      },
-    },
-    quickImprovements: {
-      type: "array",
-      items: { type: "string" },
-    },
-    refinedPrompt: {
-      type: "string",
-    },
+const REVIEW_PROFILES = {
+  LEGACY_V1: "legacy-v1",
+  PROMPT_TELLING_V2: "prompt-telling-v2",
+};
+const CHECK_STATUSES = ["good", "partial", "missing"];
+const STATUS_SCORE_VALUES = {
+  good: 1,
+  missing: 0,
+  partial: 0.5,
+};
+const REVIEW_PROFILE_CONFIGS = {
+  [REVIEW_PROFILES.LEGACY_V1]: {
+    dimensions: [
+      { id: "context", label: "맥락" },
+      { id: "goal", label: "목표" },
+      { id: "constraints", label: "제약" },
+      { id: "output", label: "산출물 형식" },
+    ],
+    includeModelTotalScore: true,
   },
-  required: ["verdict", "totalScore", "summary", "checks", "quickImprovements", "refinedPrompt"],
+  [REVIEW_PROFILES.PROMPT_TELLING_V2]: {
+    dimensions: [
+      { group: "core", id: "persona", label: "역할 지정" },
+      { group: "core", id: "reference", label: "참고 자료" },
+      { group: "core", id: "objective", label: "목표 설정" },
+      { group: "refinement", id: "mode", label: "결과 형식" },
+      { group: "refinement", id: "pointOfView", label: "타깃 관점" },
+      { group: "refinement", id: "tone", label: "말투" },
+    ],
+    includeModelTotalScore: false,
+  },
 };
 
 function registerPromptReviewHandlers(deps) {
   const {
-    admin,
     CORS_ORIGINS,
     REGION,
     createHttpError,
@@ -72,6 +58,7 @@ function registerPromptReviewHandlers(deps) {
       assertMethod(request);
       const owner = await verifyRequestIdentity(request);
       const prompt = normalizePrompt(request.body?.prompt);
+      const reviewProfile = normalizeReviewProfile(request.body?.reviewProfile);
       if (!prompt) {
         throw createHttpError(400, "평가할 프롬프트를 먼저 입력해 주세요.");
       }
@@ -84,11 +71,13 @@ function registerPromptReviewHandlers(deps) {
         model: getModel(),
         promptLength: prompt.length,
         providerUserKey: owner.providerUserKey,
+        reviewProfile,
       });
 
-      const result = await reviewPrompt(prompt);
+      const result = await reviewPrompt(prompt, reviewProfile);
       logEvent("prompt.review.success", {
         providerUserKey: owner.providerUserKey,
+        reviewProfile,
         totalScore: result.totalScore,
         verdict: result.verdict,
       });
@@ -131,11 +120,12 @@ function registerPromptReviewHandlers(deps) {
     return normalizeText(process.env.OPENAI_PROMPT_REVIEW_MODEL) || DEFAULT_MODEL;
   }
 
-  async function reviewPrompt(prompt) {
+  async function reviewPrompt(prompt, reviewProfile) {
+    const profileConfig = getReviewProfileConfig(reviewProfile);
     const sanitizedPrompt = sanitizePromptForModel(prompt);
     const response = await getClient().responses.create({
       input: [
-        { role: "developer", content: buildSystemPrompt() },
+        { role: "developer", content: buildSystemPrompt(profileConfig.profile) },
         { role: "user", content: `<original_prompt>\n${sanitizedPrompt || prompt}\n</original_prompt>` },
       ],
       max_output_tokens: 1800,
@@ -145,11 +135,11 @@ function registerPromptReviewHandlers(deps) {
           type: "json_schema",
           name: "prompt_review",
           strict: true,
-          schema: REVIEW_SCHEMA,
+          schema: buildReviewSchema(profileConfig),
         },
       },
     });
-    return normalizeReviewResult(parseReviewPayload(response.output_text), prompt);
+    return normalizeReviewResult(parseReviewPayload(response.output_text), prompt, profileConfig.profile);
   }
 
   async function enforceReviewRateLimit(providerUserKey) {
@@ -171,7 +161,7 @@ function registerPromptReviewHandlers(deps) {
         {
           providerUserKey,
           requestCount: withinWindow ? requestCount + 1 : 1,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
           windowStartedAt: withinWindow ? windowStartedAt : now,
         },
         { merge: true }
@@ -179,7 +169,26 @@ function registerPromptReviewHandlers(deps) {
     });
   }
 
-  function buildSystemPrompt() {
+  function buildSystemPrompt(reviewProfile) {
+    if (normalizeReviewProfile(reviewProfile) === REVIEW_PROFILES.PROMPT_TELLING_V2) {
+      return [
+        "당신은 사용자가 입력한 프롬프트를 PROMPT 공식 6축으로 평가하고 보완하는 리뷰어입니다.",
+        "반드시 한국어로 평가 요약과 피드백을 작성하세요.",
+        "다만 refinedPrompt는 원문 언어와 의도를 최대한 유지하면서 바로 재사용 가능한 형태로 다시 써야 합니다.",
+        "아래 여섯 기준만 평가하세요: persona, reference, objective, mode, pointOfView, tone.",
+        "persona는 AI가 맡아야 할 역할, 전문성, 직무 시점을 뜻합니다.",
+        "reference는 참고 자료, 예시, 기준, 배경 정보, 입력 데이터입니다.",
+        "objective는 사용자가 원하는 최종 결과와 성공 기준입니다.",
+        "mode는 결과물 형식, 구조, 분량, 포맷 요구입니다.",
+        "pointOfView는 누구의 관점이나 어떤 타깃 눈높이에서 쓸지입니다.",
+        "tone은 전문성, 친근함, 설득력, 차분함 같은 말투와 분위기입니다.",
+        "summary에는 Persona, Reference, Objective 중 가장 먼저 보완할 핵심 부족점 1~2개를 짧게 적으세요.",
+        "checks.feedback에는 왜 점수가 깎였는지와 무엇을 보완하면 좋은지 같이 적으세요.",
+        "세부 정보가 비어 있으면 없는 사실을 지어내지 말고 [역할], [참고 자료], [목표], [결과 형식], [타깃 관점], [말투] 같은 짧은 placeholder를 사용하세요.",
+        "quickImprovements에는 바로 적용 가능한 문장만 1~4개 작성하세요.",
+        "refinedPrompt는 장황한 설명 없이 실제 입력창에 바로 넣을 수 있는 프롬프트 본문만 반환하세요.",
+      ].join("\n");
+    }
     return [
       "당신은 사용자가 입력한 프롬프트를 평가하고 보완하는 리뷰어입니다.",
       "반드시 한국어로 평가 요약과 피드백을 작성하세요.",
@@ -218,16 +227,69 @@ function parseReviewPayload(text) {
   }
 }
 
-function normalizeReviewResult(payload, originalPrompt) {
+function buildReviewSchema(profileConfig) {
+  const properties = {
+    verdict: {
+      type: "string",
+      enum: ["ready", "revise", "insufficient"],
+    },
+    summary: {
+      type: "string",
+    },
+    checks: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          id: { type: "string", enum: profileConfig.dimensions.map((item) => item.id) },
+          label: { type: "string" },
+          status: { type: "string", enum: CHECK_STATUSES },
+          feedback: { type: "string" },
+        },
+        required: ["id", "label", "status", "feedback"],
+      },
+    },
+    quickImprovements: {
+      type: "array",
+      items: { type: "string" },
+    },
+    refinedPrompt: {
+      type: "string",
+    },
+  };
+  const required = ["verdict", "summary", "checks", "quickImprovements", "refinedPrompt"];
+  if (profileConfig.includeModelTotalScore) {
+    properties.totalScore = {
+      type: "integer",
+      minimum: 0,
+      maximum: 100,
+    };
+    required.splice(1, 0, "totalScore");
+  }
+  return {
+    type: "object",
+    additionalProperties: false,
+    properties,
+    required,
+  };
+}
+
+function normalizeReviewResult(payload, originalPrompt, reviewProfile) {
+  const profileConfig = getReviewProfileConfig(reviewProfile);
   const verdict = normalizeEnum(payload?.verdict, ["ready", "revise", "insufficient"], "revise");
-  const checks = REVIEW_DIMENSIONS.map((dimension) => {
-    const match = (Array.isArray(payload?.checks) ? payload.checks : []).find((item) => normalizeText(item?.id) === dimension.id);
-    return {
+  const checks = profileConfig.dimensions.map((dimension) => {
+    const match = (Array.isArray(payload?.checks) ? payload.checks : []).find((item) => normalizeReviewId(item?.id) === normalizeReviewId(dimension.id));
+    const normalizedCheck = {
       feedback: normalizeText(match?.feedback) || `${dimension.label} 정보를 한 번 더 보완해 주세요.`,
       id: dimension.id,
       label: normalizeText(match?.label) || dimension.label,
       status: normalizeEnum(match?.status, ["good", "partial", "missing"], "partial"),
     };
+    if (dimension.group) {
+      normalizedCheck.group = dimension.group;
+    }
+    return normalizedCheck;
   });
   return {
     checks,
@@ -237,9 +299,55 @@ function normalizeReviewResult(payload, originalPrompt) {
       .slice(0, 4),
     refinedPrompt: normalizePromptText(payload?.refinedPrompt) || normalizePromptText(originalPrompt),
     summary: normalizeText(payload?.summary) || "프롬프트를 더 구체적으로 다듬으면 답변 품질을 높일 수 있어요.",
-    totalScore: Math.max(0, Math.min(100, Number(payload?.totalScore) || 0)),
+    totalScore: profileConfig.includeModelTotalScore
+      ? Math.max(0, Math.min(100, Number(payload?.totalScore) || 0))
+      : computePromptTellingV2TotalScore(checks, profileConfig.dimensions),
     verdict,
   };
+}
+
+function getReviewProfileConfig(reviewProfile) {
+  const normalizedProfile = normalizeReviewProfile(reviewProfile);
+  return {
+    ...REVIEW_PROFILE_CONFIGS[normalizedProfile],
+    profile: normalizedProfile,
+  };
+}
+
+function normalizeReviewProfile(value) {
+  const normalized = normalizeText(value).toLowerCase();
+  return normalized === REVIEW_PROFILES.PROMPT_TELLING_V2
+    ? REVIEW_PROFILES.PROMPT_TELLING_V2
+    : REVIEW_PROFILES.LEGACY_V1;
+}
+
+function normalizeReviewId(value) {
+  return normalizeText(value)
+    .replace(/[\s_-]+/g, "")
+    .toLowerCase();
+}
+
+function computePromptTellingV2TotalScore(checks, dimensions) {
+  const dimensionById = new Map(
+    (Array.isArray(dimensions) ? dimensions : []).map((item) => [normalizeReviewId(item.id), item])
+  );
+  const groupScores = {
+    core: { count: 0, sum: 0, weight: 70 },
+    refinement: { count: 0, sum: 0, weight: 30 },
+  };
+  for (const check of Array.isArray(checks) ? checks : []) {
+    const dimension = dimensionById.get(normalizeReviewId(check?.id));
+    const group = normalizeText(check?.group || dimension?.group).toLowerCase();
+    if (!groupScores[group]) continue;
+    const status = normalizeEnum(check?.status, CHECK_STATUSES, "partial");
+    groupScores[group].count += 1;
+    groupScores[group].sum += STATUS_SCORE_VALUES[status] ?? STATUS_SCORE_VALUES.partial;
+  }
+  const totalScore = Object.values(groupScores).reduce((sum, group) => {
+    if (!group.count) return sum;
+    return sum + ((group.sum / group.count) * group.weight);
+  }, 0);
+  return Math.max(0, Math.min(100, Math.round(totalScore)));
 }
 
 function normalizeEnum(value, allowed, fallback) {
@@ -277,4 +385,12 @@ function createHttpError(status, message) {
 
 module.exports = {
   registerPromptReviewHandlers,
+  __test__: {
+    buildReviewSchema,
+    computePromptTellingV2TotalScore,
+    getReviewProfileConfig,
+    normalizeReviewProfile,
+    normalizeReviewResult,
+    REVIEW_PROFILES,
+  },
 };

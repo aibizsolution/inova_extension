@@ -10,7 +10,7 @@ const root = path.resolve(__dirname, "..");
 function main() {
   verifySurfaceWatcherInstallationAndComposerRecovery();
   verifySurfaceWatcherComposerLoss();
-  console.log("[verify-panel-surface-controller] Panel surface controller contract passed");
+  console.log("[verify-panel-surface-controller] V2 shell bridge surface contract passed");
 }
 
 function verifySurfaceWatcherInstallationAndComposerRecovery() {
@@ -40,9 +40,6 @@ function verifySurfaceWatcherInstallationAndComposerRecovery() {
 
   assert.equal(harness.state.open, true);
   assert.equal(harness.state.surfaceSignature, "true|true|1|1");
-  assert.deepEqual(harness.ensureStoreLoadedCalls, [true]);
-  assert.deepEqual(harness.meetingScheduleCalls, [120]);
-  assert.deepEqual(harness.promptRealtimeScheduleCalls, [120]);
   assert.equal(harness.renderCalls.length, 1);
   assert.equal(harness.debugEvents.length, 1);
   assert.equal(harness.debugEvents[0].event, "panel.ui.surface.changed");
@@ -69,18 +66,12 @@ function verifySurfaceWatcherComposerLoss() {
   };
   harness.intervals[0].callback();
 
-  assert.deepEqual(harness.ensureStoreLoadedCalls, []);
-  assert.deepEqual(harness.meetingScheduleCalls, [0]);
-  assert.deepEqual(harness.promptRealtimeScheduleCalls, [120]);
   assert.equal(harness.renderCalls.length, 1);
 }
 
 function createHarness(options = {}) {
   const debugEvents = [];
-  const ensureStoreLoadedCalls = [];
   const intervals = [];
-  const meetingScheduleCalls = [];
-  const promptRealtimeScheduleCalls = [];
   const renderCalls = [];
 
   const context = vm.createContext({
@@ -110,7 +101,7 @@ function createHarness(options = {}) {
     },
   };
 
-  loadScript("content/panel-surface-controller.js", context);
+  loadScript("content/panel-v2-shell-bridge.js", context);
 
   const state = {
     open: false,
@@ -119,39 +110,22 @@ function createHarness(options = {}) {
     surfaceSignature: "",
   };
 
-  const controller = context.InovaBookmarks.panelSurfaceController.create(state, {
-    ensureStoreLoaded() {
-      ensureStoreLoadedCalls.push(true);
-    },
-    isStoreTabActive() {
-      return Boolean(options.storeTabActive);
-    },
+  const controller = context.InovaBookmarks.panelV2ShellBridge.createPanelSurfaceBridge(state, {
     logPanelDebug(event, payload) {
       debugEvents.push({ event, payload: cloneValue(payload) });
     },
-    meetingManager: {
-      scheduleSync(delay) {
-        meetingScheduleCalls.push(delay);
-      },
-    },
     render() {
       renderCalls.push(true);
-    },
-    schedulePromptRealtimeSync(delay) {
-      promptRealtimeScheduleCalls.push(delay);
     },
   });
 
   return {
     controller,
     debugEvents,
-    ensureStoreLoadedCalls,
     get conversationState() {
       return conversationState;
     },
     intervals,
-    meetingScheduleCalls,
-    promptRealtimeScheduleCalls,
     renderCalls,
     set conversationState(value) {
       conversationState = cloneValue(value);

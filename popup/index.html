@@ -7,18 +7,28 @@
     <link rel="stylesheet" href="index.css" />
     <script src="../shared/constants.js"></script>
     <script src="../shared/product-lane.js"></script>
+    <script src="../shared/firebase-config.js"></script>
+    <script src="../shared/session.js"></script>
+    <script src="../shared/provider-identity-cache.js"></script>
     <script src="../shared/storage.js"></script>
     <script src="index.js" defer></script>
   </head>
   <body>
     <main class="shell">
-      <section class="card setting" aria-label="회의 작업실 연결 설정">
+      <section class="card setting" aria-label="호스팅 연결 설정">
         <section class="setting-row" aria-label="회의 작업실 호스팅 대상">
           <p class="setting-row__title">호스팅</p>
           <div class="segment-control" role="group" aria-label="회의 작업실 호스팅 대상">
             <button id="workspaceTargetProductionButton" class="segment-control__button" type="button">상용</button>
             <button id="workspaceTargetLocalButton" class="segment-control__button" type="button">로컬</button>
           </div>
+        </section>
+        <section class="setting-copy" aria-label="호스팅 안내">
+          <p id="workspaceTargetHint" class="setting-copy__hint"></p>
+          <div class="setting-copy__actions">
+            <button id="refreshInovaButton" class="segment-control__button segment-control__button--action" type="button">i-Nova 열기</button>
+          </div>
+          <p id="workspaceTargetStatus" class="setting-copy__status" hidden></p>
         </section>
         <section class="setting-row" aria-label="디버그 콘솔 설정">
           <p class="setting-row__title">디버그</p>

@@ -8,12 +8,19 @@
 - `README.md`가 아니라 release feature-local 규칙과 계약은 이 문서나 release 전용 docs에 문서화한다.
 
 ## 먼저 볼 파일
-- `content/release-manager.js`
-- `content/release-view.js`
-- `shared/release-info.js`
+- `hosting/extension-v2/panel/release-controller.js`
+- `hosting/extension-v2/panel/release-view.js`
+- `backup/legacy-panel/release-manager.js`
+- `backup/legacy-panel/shared/release-info.js`
 
 ## 관련 프론트 경로
 - `background/service-worker.js`
+- `hosting/extension-v2/panel/release-controller.js`
+- `hosting/extension-v2/panel/release-view.js`
+- `hosting/extension/panel/release-view.js`
+- `backup/legacy-panel/release-view.js` - inactive legacy content view reference
+- `backup/legacy-panel/release-manager.js` - inactive legacy content runtime reference
+- `backup/legacy-panel/shared/release-info.js` - inactive legacy release helper reference
 - `releases/release-notes.json`
 
 ## 관련 functions 경로
@@ -43,11 +50,15 @@
 
 ## 릴리스 메타 경계
 - lane 기본값은 버전 major로 정한다. `0.x`는 legacy lane, `1.x+`는 v2 lane이다.
+- `0.4.5`부터 panel 안의 release UI는 `hosting/extension/panel/release-view.js`가 렌더링하고, legacy release fetch/open-url action reference는 `backup/legacy-panel/release-manager.js`와 `backup/legacy-panel/shared/release-info.js`로 격리해 둔다.
+- `1.0.0+` v2 lane에서는 `hosting/extension-v2/panel/release-controller.js`가 latest/history fetch, 다운로드 액션, compact release summary sync를 소유하고, extension은 브라우저 URL 열기 broker와 count-only top-panel release summary 저장만 유지한다.
 - `release:build`는 공개 최신 버전보다 낮은 버전으로는 진행할 수 없지만, 같은 공개 버전으로 로컬 재빌드/최종 배포하는 흐름은 허용한다.
 - `deploy:hosting`과 `deploy:all`은 hosted 검증/운영 배포용이며, 기본적으로 확장 패키지 버전과 사용자 릴리스 메타를 갱신하지 않는다.
 - 실제 사용자 패널에 보일 버전만 `releases/release-notes.json`에 남기고, `release:build`는 그 목록만 `latest.json`, `history.json`, `latest.zip`에 반영하며 공개 목록 밖의 로컬/hosting ZIP도 정리한다.
 - `release:build` 산출 경로는 lane에 따라 다르다. `0.x`는 `hosting/extension/*`, `1.x+`는 `hosting/extension-v2/*`를 갱신한다.
-- 공개 목록에 남길 이전 버전은 `releases/release-notes.json`에 artifact 메타를 유지해, CI나 새 환경에서도 history 메타를 다시 생성할 수 있게 관리한다.
+- 공개 목록에 남길 현재/이전 버전은 `releases/release-notes.json`에 artifact 메타를 유지해, CI나 새 환경에서도 history 메타를 다시 생성할 수 있게 관리한다.
+- `release:build`는 현재 버전 ZIP을 만든 뒤 같은 current version 엔트리의 `artifact` 메타도 `releases/release-notes.json`에 backfill해야 한다.
+- 기본 `npm.cmd run verify`와 `node scripts/verify-release-package.js`는 현재 lane의 `latest.json`, `history.json`, `downloads/latest.zip`, version ZIP, `releases/release-notes.json` curated 목록이 서로 어긋나지 않는지도 함께 확인해야 한다. history/latest에 올라온 공개 버전은 current version까지 포함해 curated notes에도 artifact 메타가 있어야 한다.
 - `release:build`는 기본 runtime 디렉터리뿐 아니라 `manifest.json`이 직접 참조하는 추가 파일도 ZIP에 포함해야 하며, staging 결과에 누락이 있으면 바로 실패해야 한다.
 - `content/*`, `background/*`, `popup/*`, `manifest.json`, 확장 번들에 포함되는 `shared/*` 변경은 Firebase 배포만으로 끝나지 않는다. 실제 확장 버전 빌드/배포와 Chrome 확장 새로고침까지 포함해 안내한다.
 - `hosting/*`만 바뀐 경우는 hosting 배포와 페이지 새로고침으로 끝날 수 있지만, 사용자에게는 `탭 새로고침 필요 여부`와 `확장 Reload 불필요 여부`를 함께 전달한다.

@@ -9,10 +9,13 @@ const root = path.resolve(__dirname, "..");
 
 async function main() {
   await verifyMeetingAndReleaseToolSelection();
-  await verifyPromptAliasDelegation();
-  await verifyQueryRoutingAndRenderChrome();
+  await verifyPromptLibrarySelection();
+  await verifyStoreAliasSelection();
+  await verifyBookmarkQueryRoutingAndHandleCount();
+  verifyPromptQueryFallbackIsDropped();
+  verifyPromptSelectionStaysShellOwned();
   await verifyHandlePositionAndUiPreferenceLock();
-  console.log("[verify-panel-shell-controller] Panel shell controller contract passed");
+  console.log("[verify-panel-shell-controller] V2 shell bridge shell contract passed");
 }
 
 async function verifyMeetingAndReleaseToolSelection() {
@@ -24,8 +27,6 @@ async function verifyMeetingAndReleaseToolSelection() {
 
   await harness.controller.selectTool("meeting");
   assert.equal(harness.state.activeTool, "meeting");
-  assert.deepEqual(harness.meetingScheduleCalls, [120]);
-  assert.deepEqual(harness.promptRealtimeScheduleCalls, [120]);
   assert.deepEqual(harness.persistCalls[0], {
     activePromptTab: "store",
     activeTool: "meeting",
@@ -33,22 +34,35 @@ async function verifyMeetingAndReleaseToolSelection() {
 
   await harness.controller.selectTool("release");
   assert.equal(harness.state.activeTool, "release");
-  assert.deepEqual(harness.releaseEnsureCalls[0], {
-    allowCached: false,
-    preferFresh: true,
+}
+
+async function verifyPromptLibrarySelection() {
+  const harness = createHarness({
+    activePromptTab: "store",
+    activeTool: "meeting",
+    uiPreferenceTool: "meeting",
+  });
+
+  assert.equal(await harness.controller.selectTool("prompts"), true);
+  assert.equal(harness.state.activeTool, "prompts");
+  assert.deepEqual(harness.persistCalls[0], {
+    activePromptTab: "library",
+    activeTool: "prompts",
   });
 }
 
-async function verifyPromptAliasDelegation() {
+async function verifyStoreAliasSelection() {
   const harness = createHarness();
 
   assert.equal(await harness.controller.selectTool("store"), true);
-  assert.deepEqual(harness.promptSelectToolCalls, ["store"]);
-  assert.deepEqual(harness.meetingScheduleCalls, []);
-  assert.deepEqual(harness.persistCalls, []);
+  assert.equal(harness.state.activeTool, "prompts");
+  assert.deepEqual(harness.persistCalls[0], {
+    activePromptTab: "store",
+    activeTool: "prompts",
+  });
 }
 
-async function verifyQueryRoutingAndRenderChrome() {
+async function verifyBookmarkQueryRoutingAndHandleCount() {
   const harness = createHarness({
     activeTool: "bookmarks",
     uiPreferenceTool: "bookmarks",
@@ -57,44 +71,49 @@ async function verifyQueryRoutingAndRenderChrome() {
   assert.equal(harness.controller.updateQuery("bookmarks", "대화"), true);
   assert.deepEqual(harness.bookmarkQueryCalls, ["대화"]);
 
-  assert.equal(harness.controller.updateQuery("prompts", "회의", { composing: true }), true);
-  assert.deepEqual(harness.promptQueryCalls[0], {
-    options: { composing: true },
-    toolId: "prompts",
-    value: "회의",
-  });
-
   assert.equal(harness.controller.submitQuery("bookmarks", "질문"), true);
   assert.deepEqual(harness.bookmarkSubmitCalls, ["질문"]);
 
-  assert.equal(harness.controller.submitQuery("store", "공개"), true);
-  assert.deepEqual(harness.promptSubmitCalls[0], {
-    toolId: "store",
-    value: "공개",
-  });
-
-  const bookmarkChrome = harness.controller.buildRenderChrome({
+  const bookmarkHandleCount = harness.controller.buildHandleCount({
     bookmarks: 2,
     meeting: 1,
     promptTool: 3,
     prompts: 5,
     release: 1,
   });
-  assert.equal(bookmarkChrome.handleCount, 2);
-  assert.equal(bookmarkChrome.toolCount, 2);
-  assert.equal(bookmarkChrome.toolTitle, "대화 탐색");
-  assert.equal(bookmarkChrome.tools[2].count, 5);
+  assert.equal(bookmarkHandleCount, 2);
 
   harness.state.activeTool = "prompts";
-  const promptChrome = harness.controller.buildRenderChrome({
+  const promptHandleCount = harness.controller.buildHandleCount({
     bookmarks: 2,
     meeting: 1,
     promptTool: 3,
     prompts: 5,
     release: 1,
   });
-  assert.equal(promptChrome.toolCount, 3);
-  assert.equal(promptChrome.toolTitle, "프롬프트");
+  assert.equal(promptHandleCount, 3);
+}
+
+function verifyPromptQueryFallbackIsDropped() {
+  const harness = createHarness();
+
+  assert.equal(harness.controller.updateQuery("prompts", "회의", { composing: true }), false);
+  assert.equal(harness.controller.submitQuery("store", "공개"), false);
+}
+
+function verifyPromptSelectionStaysShellOwned() {
+  const source = fs.readFileSync(path.join(root, "content", "panel-v2-shell-bridge.js"), "utf8");
+
+  assert.equal(
+    source.includes("getPromptController"),
+    false,
+    "v2 shell bridge should stop reading generic prompt tool selection back through the prompt controller"
+  );
+  assert.equal(
+    source.includes("promptController && await promptController.selectTool(toolId)"),
+    false,
+    "v2 shell bridge should keep prompt/store tool selection inside the shell instead of delegating it back to the prompt controller"
+  );
 }
 
 async function verifyHandlePositionAndUiPreferenceLock() {
@@ -124,13 +143,7 @@ function createHarness(options = {}) {
   const bookmarkQueryCalls = [];
   const bookmarkSubmitCalls = [];
   const handleUpdates = [];
-  const meetingScheduleCalls = [];
   const persistCalls = [];
-  const promptQueryCalls = [];
-  const promptRealtimeScheduleCalls = [];
-  const promptSelectToolCalls = [];
-  const promptSubmitCalls = [];
-  const releaseEnsureCalls = [];
   const renderCalls = [];
 
   const context = vm.createContext({
@@ -150,13 +163,21 @@ function createHarness(options = {}) {
         return "desktop";
       },
       mergeUiPreferences(current = {}, patch = {}) {
-        return {
+        const merged = {
           activePromptTab: "library",
           activeTool: "bookmarks",
           handleRatios: {},
           ...cloneValue(current),
           ...cloneValue(patch),
         };
+        if (merged.activeTool === "store") {
+          merged.activeTool = "prompts";
+          merged.activePromptTab = "store";
+        }
+        if (merged.activePromptTab !== "store" && merged.activePromptTab !== "review") {
+          merged.activePromptTab = "library";
+        }
+        return merged;
       },
       normalizeHandleRatio(value) {
         return Number(value) || 0;
@@ -171,17 +192,17 @@ function createHarness(options = {}) {
           activePromptTab: "library",
           activeTool: "bookmarks",
           handleRatios: {},
-          ...cloneValue(patch),
+          ...context.InovaBookmarks.storage.mergeUiPreferences(patch),
         };
       },
     },
   };
 
-  loadScript("content/panel-shell-controller.js", context);
+  loadScript("content/panel-v2-shell-bridge.js", context);
 
   const state = {
     activeTool: options.activeTool || "prompts",
-    queries: { bookmarks: "", prompts: "", store: "" },
+    queries: { bookmarks: "" },
     uiPreferenceLock: null,
     uiPreferences: {
       activePromptTab: options.activePromptTab || "library",
@@ -190,38 +211,7 @@ function createHarness(options = {}) {
     },
   };
 
-  const promptController = {
-    scheduleRealtimeSync(delay) {
-      promptRealtimeScheduleCalls.push(delay);
-    },
-    async selectTool(toolId) {
-      if (toolId === "prompts" || toolId === "store") {
-        promptSelectToolCalls.push(toolId);
-        return true;
-      }
-      return false;
-    },
-    submitQuery(toolId, value) {
-      if (toolId !== "prompts" && toolId !== "store") {
-        return false;
-      }
-      promptSubmitCalls.push({ toolId, value });
-      return true;
-    },
-    updateQuery(toolId, value, optionsInput = {}) {
-      if (toolId !== "prompts" && toolId !== "store") {
-        return false;
-      }
-      promptQueryCalls.push({
-        options: cloneValue(optionsInput),
-        toolId,
-        value,
-      });
-      return true;
-    },
-  };
-
-  const controller = context.InovaBookmarks.panelShellController.create(state, {
+  const controller = context.InovaBookmarks.panelV2ShellBridge.createShellController(state, {
     bookmarkController: {
       submitQuery(value) {
         bookmarkSubmitCalls.push(value);
@@ -232,24 +222,8 @@ function createHarness(options = {}) {
         return true;
       },
     },
-    getPromptController() {
-      return promptController;
-    },
     isExtensionContextInvalidatedError() {
       return false;
-    },
-    meetingManager: {
-      scheduleSync(delay) {
-        meetingScheduleCalls.push(delay);
-      },
-    },
-    releaseManager: {
-      ensureChecked(allowCached, preferFresh) {
-        releaseEnsureCalls.push({
-          allowCached: Boolean(allowCached),
-          preferFresh: Boolean(preferFresh),
-        });
-      },
     },
     render() {
       renderCalls.push(true);
@@ -261,13 +235,7 @@ function createHarness(options = {}) {
     bookmarkSubmitCalls,
     controller,
     handleUpdates,
-    meetingScheduleCalls,
     persistCalls,
-    promptQueryCalls,
-    promptRealtimeScheduleCalls,
-    promptSelectToolCalls,
-    promptSubmitCalls,
-    releaseEnsureCalls,
     renderCalls,
     state,
   };

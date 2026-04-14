@@ -1,3 +1,5 @@
+const { FieldValue } = require("firebase-admin/firestore");
+
 const MAX_PROMPT_ITEMS = 1000;
 const PROMPT_LIBRARY_BUCKET_COUNT = 24;
 const DEFAULT_PROMPT_PANEL_SESSION_TTL_MS = 60 * 60 * 1000;
@@ -46,6 +48,7 @@ function registerPromptLibraryHandlers(deps) {
       assertMethod(request);
       const providerIdentity = normalizeIdentity(request.body?.providerIdentity || request.body?.owner);
       const owner = await verifyInovaIdentity(providerIdentity, request);
+      await maybeMigrateLegacyPromptLibrary(owner);
       const expiresAt = new Date(Date.now() + DEFAULT_PROMPT_PANEL_SESSION_TTL_MS).toISOString();
       const promptPanelExpMs = Date.parse(expiresAt);
       const promptLibraryId = buildPromptLibraryId(owner.providerUserKey);
@@ -67,6 +70,8 @@ function registerPromptLibraryHandlers(deps) {
           firebaseCustomToken,
           promptFirestoreCollections: {
             accountsCollection: promptLibraryCollections.accounts,
+            promptLibraryChunksCollection: promptLibraryCollections.promptLibraryChunks,
+            promptLibraryOrdersCollection: promptLibraryCollections.promptLibraryOrders,
           },
           promptPanelScope,
           promptLibraryId,
@@ -234,7 +239,7 @@ function registerPromptLibraryHandlers(deps) {
             lastPromptSyncAt: syncedAt,
             promptLibraryId: libraryId,
             promptLibraryMeta,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
           },
           { merge: true }
         ),
@@ -261,7 +266,7 @@ function registerPromptLibraryHandlers(deps) {
               region: normalizeText(syncDocument?.region),
               status: "synced",
             },
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
           },
           { merge: true }
         ),
@@ -420,6 +425,35 @@ function registerPromptLibraryHandlers(deps) {
       content,
       createdAt: normalizeText(item?.createdAt) || new Date().toISOString(),
       updatedAt: normalizeText(item?.updatedAt) || new Date().toISOString(),
+      importedFrom: normalizeImportedFrom(item?.importedFrom),
+      storePublication: normalizeStorePublication(item?.storePublication),
+    };
+  }
+
+  function normalizeImportedFrom(importedFrom) {
+    const entryId = normalizeText(importedFrom?.entryId);
+    if (!entryId) {
+      return null;
+    }
+    return {
+      authorName: normalizeText(importedFrom?.authorName),
+      categoryId: normalizeText(importedFrom?.categoryId),
+      entryId,
+      importedAt: normalizeText(importedFrom?.importedAt) || new Date().toISOString(),
+      source: normalizeText(importedFrom?.source || "store") || "store",
+    };
+  }
+
+  function normalizeStorePublication(storePublication) {
+    const entryId = normalizeText(storePublication?.entryId);
+    if (!entryId) {
+      return null;
+    }
+    return {
+      categoryId: normalizeText(storePublication?.categoryId),
+      categoryLabel: normalizeText(storePublication?.categoryLabel),
+      entryId,
+      publishedAt: normalizeText(storePublication?.publishedAt) || new Date().toISOString(),
     };
   }
 
@@ -679,7 +713,7 @@ function registerPromptLibraryHandlers(deps) {
     return {
       libraryId,
       orderedIds: normalizeOrderedIds(orderedIds),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     };
   }
 
@@ -690,7 +724,7 @@ function registerPromptLibraryHandlers(deps) {
       itemCount: chunkItems.length,
       items: chunkItems,
       libraryId,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     };
   }
 
@@ -737,7 +771,7 @@ function registerPromptLibraryHandlers(deps) {
       sourceLane: "legacy",
       startedAt,
       targetLane: "v2",
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
       version: 1,
     }, { merge: true });
 
@@ -798,7 +832,7 @@ function registerPromptLibraryHandlers(deps) {
             lastPromptSyncAt: legacyLibraryState.syncedAt || legacyLibraryState.meta.lastSyncedAt,
             promptLibraryId: currentLibraryId,
             promptLibraryMeta,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
           },
           { merge: true }
         ),
@@ -824,7 +858,7 @@ function registerPromptLibraryHandlers(deps) {
               lastSyncedAt: promptLibraryMeta.lastSyncedAt,
               status: "synced",
             },
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
           },
           { merge: true }
         ),
@@ -849,7 +883,7 @@ function registerPromptLibraryHandlers(deps) {
         sourceLane: "legacy",
         startedAt,
         targetLane: "v2",
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
         version: 1,
       }, { merge: true });
       throw error;

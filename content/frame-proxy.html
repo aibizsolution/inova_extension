@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>i-Nova Frame Proxy</title>
+    <style>
+      html, body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        background: transparent;
+      }
+
+      body {
+        overflow: hidden;
+      }
+
+      #inova-frame-proxy-target {
+        width: 100%;
+        height: 100%;
+        border: 0;
+        display: block;
+        background: transparent;
+      }
+
+      #inova-frame-proxy-status {
+        width: 100%;
+        height: 100%;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        box-sizing: border-box;
+        color: #7f5b15;
+        background: linear-gradient(180deg, rgba(255, 248, 225, 0.95), rgba(255, 245, 220, 0.92));
+        font: 13px/1.5 "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+      }
+
+      body[data-status="error"] #inova-frame-proxy-status {
+        display: flex;
+      }
+
+      body[data-status="error"] #inova-frame-proxy-target {
+        display: none;
+      }
+    </style>
+  </head>
+  <body data-status="loading">
+    <iframe id="inova-frame-proxy-target" title="i-Nova Frame Proxy Target"></iframe>
+    <div id="inova-frame-proxy-status">호스팅 프레임을 열지 못했어요.</div>
+    <script src="frame-proxy.js"></script>
+  </body>
+</html>

@@ -9,6 +9,7 @@ const contract = JSON.parse(
 );
 
 const errors = [];
+const oversizedFiles = [];
 
 for (const file of contract.requiredFiles) {
   if (!fs.existsSync(path.join(root, file))) {
@@ -22,10 +23,25 @@ if (fs.existsSync(manifestPath)) {
   if (manifest.action?.default_popup !== contract.manifestPopup) {
     errors.push(`manifest popup 경로가 계약과 다릅니다: ${manifest.action?.default_popup}`);
   }
+  for (const [size, iconPath] of Object.entries(contract.manifestIcons || {})) {
+    if (manifest.icons?.[size] !== iconPath) {
+      errors.push(`manifest icon 경로가 계약과 다릅니다 (${size}): ${manifest.icons?.[size] || ""}`);
+    }
+  }
+  for (const [size, iconPath] of Object.entries(contract.manifestActionIcons || {})) {
+    if (manifest.action?.default_icon?.[size] !== iconPath) {
+      errors.push(`manifest action icon 경로가 계약과 다릅니다 (${size}): ${manifest.action?.default_icon?.[size] || ""}`);
+    }
+  }
 
-  const contentScript = Array.isArray(manifest.content_scripts) ? manifest.content_scripts[0] : null;
-  const jsFiles = contentScript?.js || [];
-  const cssFiles = contentScript?.css || [];
+  const mainContentScript = Array.isArray(manifest.content_scripts)
+    ? manifest.content_scripts.find((entry) => Array.isArray(entry?.matches) && entry.matches.includes("https://inova.incross.com/*"))
+    : null;
+  const meetingWorkspaceScript = Array.isArray(manifest.content_scripts)
+    ? manifest.content_scripts.find((entry) => Array.isArray(entry?.js) && entry.js.includes("content/meeting-workspace-bridge.js"))
+    : null;
+  const jsFiles = mainContentScript?.js || [];
+  const cssFiles = mainContentScript?.css || [];
 
   for (const file of contract.manifestContentScripts) {
     if (!jsFiles.includes(file)) {
@@ -39,11 +55,55 @@ if (fs.existsSync(manifestPath)) {
     }
   }
 
+  for (const file of contract.manifestMeetingWorkspaceScripts || []) {
+    if (!(meetingWorkspaceScript?.js || []).includes(file)) {
+      errors.push(`manifest meeting workspace content script 누락: ${file}`);
+    }
+  }
+
+  const webAccessibleEntries = Array.isArray(manifest.web_accessible_resources)
+    ? manifest.web_accessible_resources
+    : [];
+  const webAccessibleResources = webAccessibleEntries.flatMap((entry) => Array.isArray(entry?.resources) ? entry.resources : []);
+  for (const file of contract.webAccessibleResources || []) {
+    if (!webAccessibleResources.includes(file)) {
+      errors.push(`manifest web accessible resource 누락: ${file}`);
+    }
+  }
+  const webAccessibleMatches = webAccessibleEntries.flatMap((entry) => Array.isArray(entry?.matches) ? entry.matches : []);
+  for (const match of contract.webAccessibleMatches || []) {
+    if (!webAccessibleMatches.includes(match)) {
+      errors.push(`manifest web accessible match 누락: ${match}`);
+    }
+  }
+
+  for (const match of contract.manifestMeetingWorkspaceMatches || []) {
+    if (!(meetingWorkspaceScript?.matches || []).includes(match)) {
+      errors.push(`manifest meeting workspace match 누락: ${match}`);
+    }
+  }
+
   for (const permission of contract.requiredPermissions || []) {
     if (!(manifest.permissions || []).includes(permission)) {
       errors.push(`manifest permission 누락: ${permission}`);
     }
   }
+  for (const permission of manifest.permissions || []) {
+    if (!(contract.requiredPermissions || []).includes(permission)) {
+      errors.push(`manifest permission이 계약 밖으로 넓어졌습니다: ${permission}`);
+    }
+  }
+  for (const permission of contract.requiredHostPermissions || []) {
+    if (!(manifest.host_permissions || []).includes(permission)) {
+      errors.push(`manifest host permission 누락: ${permission}`);
+    }
+  }
+  for (const permission of manifest.host_permissions || []) {
+    if (!(contract.requiredHostPermissions || []).includes(permission)) {
+      errors.push(`manifest host permission이 계약 밖으로 넓어졌습니다: ${permission}`);
+    }
+  }
+  verifyExtensionPageFrameSrc(manifest);
 }
 
 const popupPath = path.join(root, "popup", "index.html");
@@ -60,14 +120,21 @@ for (const file of listSourceFiles(root)) {
   const lineCount = countLines(path.join(root, file));
   if (lineCount > contract.maxLinesPerSourceFile) {
     errors.push(`파일이 너무 큽니다 (${lineCount} lines): ${file}`);
+    oversizedFiles.push(file);
   }
 }
 
 const sharedStoragePath = path.join(root, "shared", "storage.js");
-if (fs.existsSync(sharedStoragePath)) {
-  const sharedStorage = fs.readFileSync(sharedStoragePath, "utf8");
+const sharedConstantsPath = path.join(root, "shared", "constants.js");
+if (fs.existsSync(sharedStoragePath) || fs.existsSync(sharedConstantsPath)) {
+  const sharedStorage = fs.existsSync(sharedStoragePath)
+    ? fs.readFileSync(sharedStoragePath, "utf8")
+    : "";
+  const sharedConstants = fs.existsSync(sharedConstantsPath)
+    ? fs.readFileSync(sharedConstantsPath, "utf8")
+    : "";
   for (const key of contract.requiredStorageKeys) {
-    if (!sharedStorage.includes(key)) {
+    if (!sharedStorage.includes(key) && !sharedConstants.includes(key)) {
       errors.push(`storage 계약 키가 없습니다: ${key}`);
     }
   }
@@ -81,24 +148,41 @@ if (countJavaScriptFiles(contentDirectory) < 3) {
 if (countJavaScriptFiles(sharedDirectory) < 3) {
   errors.push("shared 모듈 수가 부족합니다. 최소 3개 파일로 분리해야 합니다.");
 }
+verifyActiveSharedRootCatalog();
+verifyActiveBackgroundRootCatalog();
+verifyActiveContentRootCatalog();
+verifyActivePopupRootCatalog();
+verifyHostedCapabilityCatalog();
+verifyBackgroundMessageCatalog();
 
-assertFileExists("scripts/verify-prompt-fallbacks.js");
+assertFileExists("scripts/legacy-panel/verify-prompt-fallbacks.js");
+assertFileExists("scripts/verify-functions-runtime.js");
+assertFileExists("scripts/verify-hosted-panel-bridge.js");
+assertFileExists("scripts/verify-prompt-library-remote-first.js");
+assertFileExists("scripts/verify-prompt-review.js");
+assertFileExists("scripts/verify-prompt-runtime-local.js");
 assertFileExists("eslint.config.js");
-assertNoPattern("content/prompt-hub-runtime.js", /onPromptLibraryFallback:\s*\(\)\s*=>\s*\{\s*\}/, "prompt library fallback가 no-op이면 안 됩니다.");
-assertNoPattern("content/meeting-manager.js", /source:\s*"fallback"/, "meeting hub는 fallback success처럼 source를 표기하면 안 됩니다.");
-assertNoPattern("content/features/prompt-store/store-manager.js", /source:\s*"fallback"/, "store manager는 fallback success처럼 source를 표기하면 안 됩니다.");
+assertNoPattern("backup/legacy-panel/prompt-hub-runtime.js", /onPromptLibraryFallback:\s*\(\)\s*=>\s*\{\s*\}/, "prompt library fallback가 no-op이면 안 됩니다.");
+assertNoPattern("backup/legacy-panel/meeting-manager.js", /source:\s*"fallback"/, "meeting hub는 fallback success처럼 source를 표기하면 안 됩니다.");
+assertNoPattern("backup/legacy-panel/features/prompt-store/store-manager.js", /source:\s*"fallback"/, "store manager는 fallback success처럼 source를 표기하면 안 됩니다.");
 assertNoPattern("functions/features/meeting/meeting-service.js", /revisionRequest/, "meeting notes API에 legacy revisionRequest alias가 남아 있으면 안 됩니다.");
 assertNoBareCatch("background/service-worker.js");
 assertNoBareCatch("content/main.js");
-assertNoBareCatch("content/meeting-manager.js");
-assertNoBareCatch("content/features/prompt-store/prompt-realtime-manager.js");
+assertNoBareCatch("backup/legacy-panel/meeting-manager.js");
+assertNoBareCatch("backup/legacy-panel/features/prompt-store/prompt-realtime-manager.js");
 assertNoBareCatch("shared/storage.js");
 assertInlineOnlyGating("functions/features/meeting/meeting-service.js");
+assertPattern("functions/features/prompt-store/store-service.js", /categoryLabels:/, "prompt store summary는 category label map을 함께 저장해야 합니다.");
+assertPattern("functions/features/prompt-store/store-service.js", /function normalizePublishCategory\s*\(/, "prompt store publish는 custom category normalization helper를 가져야 합니다.");
 
 if (errors.length) {
   console.error("구조 계약 검증 실패");
   for (const error of errors) {
     console.error(`- ${error}`);
+  }
+  if (oversizedFiles.length) {
+    console.error("- 구조/길이 가드는 회피 대상이 아닙니다. 이 메시지는 해당 파일에 책임을 더 싣지 말고 경계를 다시 나누라는 뜻입니다.");
+    console.error("- 가드를 피하려고 관련 없는 파일에 state, 분기, 우회 render, 진단 helper를 옮겨 싣지 말고, 새 책임을 가진 모듈로 분리하세요.");
   }
   process.exit(1);
 }
@@ -168,6 +252,17 @@ function assertNoBareCatch(relativePath) {
   assertNoPattern(relativePath, /catch\s*\{\s*\}/, "bare catch가 남아 있으면 안 됩니다.");
 }
 
+function assertPattern(relativePath, pattern, message) {
+  const fullPath = path.join(root, relativePath);
+  if (!fs.existsSync(fullPath)) {
+    return;
+  }
+  const source = fs.readFileSync(fullPath, "utf8");
+  if (!pattern.test(source)) {
+    errors.push(`${message} (${relativePath})`);
+  }
+}
+
 function assertInlineOnlyGating(relativePath) {
   const fullPath = path.join(root, relativePath);
   if (!fs.existsSync(fullPath)) {
@@ -179,5 +274,277 @@ function assertInlineOnlyGating(relativePath) {
   }
   if (!source.includes("if (!options.allowInlineOnly)")) {
     errors.push(`meeting inline-only가 local/dev/test로 좁혀지지 않았습니다: ${relativePath}`);
+  }
+}
+
+function verifyHostedCapabilityCatalog() {
+  const pageCapabilityActions = new Set(contract.pageCapabilityActions || []);
+  const runtimeCapabilityActions = new Set(contract.runtimeCapabilityActions || []);
+  if (!pageCapabilityActions.size) {
+    errors.push("page capability catalog가 비어 있습니다.");
+  }
+  if (!runtimeCapabilityActions.size) {
+    errors.push("runtime capability catalog가 비어 있습니다.");
+  }
+
+  const hostedPanelDir = path.join(root, "hosting", "extension-v2", "panel");
+  if (!fs.existsSync(hostedPanelDir)) {
+    errors.push("v2 hosted panel 디렉터리를 찾지 못했습니다.");
+    return;
+  }
+
+  for (const entry of fs.readdirSync(hostedPanelDir)) {
+    if (!entry.endsWith(".js")) {
+      continue;
+    }
+    const relativePath = path.join("hosting", "extension-v2", "panel", entry);
+    const source = fs.readFileSync(path.join(hostedPanelDir, entry), "utf8");
+    verifyCapabilityCallsInSource(source, relativePath, "invokePage", pageCapabilityActions, "page");
+    verifyCapabilityCallsInSource(source, relativePath, "invokeRuntime", runtimeCapabilityActions, "runtime");
+    verifyCapabilityTransportIsolation(source, relativePath, entry);
+  }
+}
+
+function verifyActiveSharedRootCatalog() {
+  const activeSharedRootFiles = new Set(contract.activeSharedRootFiles || []);
+  if (!activeSharedRootFiles.size) {
+    errors.push("active shared root catalog가 비어 있습니다.");
+    return;
+  }
+
+  if (!fs.existsSync(sharedDirectory)) {
+    errors.push("shared 디렉터리를 찾지 못했습니다.");
+    return;
+  }
+
+  const actualSharedRootFiles = new Set(
+    fs.readdirSync(sharedDirectory)
+      .filter((file) => file.endsWith(".js"))
+      .map((file) => path.posix.join("shared", file))
+  );
+
+  for (const file of activeSharedRootFiles) {
+    if (!actualSharedRootFiles.has(file)) {
+      errors.push(`active shared root catalog 누락: ${file}`);
+    }
+  }
+
+  for (const file of actualSharedRootFiles) {
+    if (!activeSharedRootFiles.has(file)) {
+      errors.push(`active shared root에 계약 밖 helper가 다시 들어왔습니다: ${file}`);
+    }
+  }
+}
+
+function verifyActiveBackgroundRootCatalog() {
+  const activeBackgroundRootFiles = new Set(contract.activeBackgroundRootFiles || []);
+  if (!activeBackgroundRootFiles.size) {
+    errors.push("active background root catalog가 비어 있습니다.");
+    return;
+  }
+
+  const backgroundDirectory = path.join(root, "background");
+  if (!fs.existsSync(backgroundDirectory)) {
+    errors.push("background 디렉터리를 찾지 못했습니다.");
+    return;
+  }
+
+  const actualBackgroundRootFiles = new Set(
+    fs.readdirSync(backgroundDirectory)
+      .filter((file) => file.endsWith(".js"))
+      .map((file) => path.posix.join("background", file))
+  );
+
+  for (const file of activeBackgroundRootFiles) {
+    if (!actualBackgroundRootFiles.has(file)) {
+      errors.push(`active background root catalog 누락: ${file}`);
+    }
+  }
+
+  for (const file of actualBackgroundRootFiles) {
+    if (!activeBackgroundRootFiles.has(file)) {
+      errors.push(`active background root에 계약 밖 helper가 다시 들어왔습니다: ${file}`);
+    }
+  }
+}
+
+function verifyActiveContentRootCatalog() {
+  const activeContentRootFiles = new Set(contract.activeContentRootFiles || []);
+  const activeContentFeatureFiles = new Set(contract.activeContentFeatureFiles || []);
+  if (!activeContentRootFiles.size) {
+    errors.push("active content root catalog가 비어 있습니다.");
+    return;
+  }
+
+  if (!fs.existsSync(contentDirectory)) {
+    errors.push("content 디렉터리를 찾지 못했습니다.");
+    return;
+  }
+
+  const actualContentRootFiles = new Set(
+    fs.readdirSync(contentDirectory)
+      .filter((file) => /\.(js|css|html)$/.test(file))
+      .map((file) => path.posix.join("content", file))
+  );
+
+  for (const file of activeContentRootFiles) {
+    if (!actualContentRootFiles.has(file)) {
+      errors.push(`active content root catalog 누락: ${file}`);
+    }
+  }
+
+  for (const file of actualContentRootFiles) {
+    if (!activeContentRootFiles.has(file)) {
+      errors.push(`active content root에 계약 밖 runtime asset이 다시 들어왔습니다: ${file}`);
+    }
+  }
+
+  const promptReviewDirectory = path.join(root, "content", "features", "prompt-review");
+  const actualPromptReviewFiles = fs.existsSync(promptReviewDirectory)
+    ? new Set(
+        fs.readdirSync(promptReviewDirectory)
+          .filter((file) => file.endsWith(".js"))
+          .map((file) => path.posix.join("content", "features", "prompt-review", file))
+      )
+    : new Set();
+
+  for (const file of activeContentFeatureFiles) {
+    if (!actualPromptReviewFiles.has(file)) {
+      errors.push(`active content feature catalog 누락: ${file}`);
+    }
+  }
+
+  for (const file of actualPromptReviewFiles) {
+    if (!activeContentFeatureFiles.has(file)) {
+      errors.push(`active content feature root에 계약 밖 runtime file이 다시 들어왔습니다: ${file}`);
+    }
+  }
+}
+
+function verifyActivePopupRootCatalog() {
+  const activePopupRootFiles = new Set(contract.activePopupRootFiles || []);
+  if (!activePopupRootFiles.size) {
+    errors.push("active popup root catalog가 비어 있습니다.");
+    return;
+  }
+
+  const popupDirectory = path.join(root, "popup");
+  if (!fs.existsSync(popupDirectory)) {
+    errors.push("popup 디렉터리를 찾지 못했습니다.");
+    return;
+  }
+
+  const actualPopupRootFiles = new Set(
+    fs.readdirSync(popupDirectory)
+      .filter((file) => /\.(js|css|html)$/.test(file))
+      .map((file) => path.posix.join("popup", file))
+  );
+
+  for (const file of activePopupRootFiles) {
+    if (!actualPopupRootFiles.has(file)) {
+      errors.push(`active popup root catalog 누락: ${file}`);
+    }
+  }
+
+  for (const file of actualPopupRootFiles) {
+    if (!activePopupRootFiles.has(file)) {
+      errors.push(`active popup root에 계약 밖 runtime asset이 다시 들어왔습니다: ${file}`);
+    }
+  }
+}
+
+function verifyBackgroundMessageCatalog() {
+  const backgroundMessageTypes = new Set(contract.backgroundMessageTypes || []);
+  if (!backgroundMessageTypes.size) {
+    errors.push("background message catalog가 비어 있습니다.");
+    return;
+  }
+
+  const serviceWorkerPath = path.join(root, "background", "service-worker.js");
+  if (!fs.existsSync(serviceWorkerPath)) {
+    errors.push("background/service-worker.js를 찾지 못했습니다.");
+    return;
+  }
+
+  const serviceWorkerSource = fs.readFileSync(serviceWorkerPath, "utf8");
+  const catalogMatch = serviceWorkerSource.match(
+    /const\s+ACTIVE_BACKGROUND_MESSAGE_TYPES\s*=\s*Object\.freeze\(\[(?<values>[\s\S]*?)\]\);/
+  );
+  if (!catalogMatch?.groups?.values) {
+    errors.push("background/service-worker.js가 ACTIVE_BACKGROUND_MESSAGE_TYPES catalog를 선언하지 않습니다.");
+    return;
+  }
+
+  const actualMessageTypes = new Set(
+    Array.from(catalogMatch.groups.values.matchAll(/"([^"]+)"/g), (match) => String(match[1] || "").trim()).filter(Boolean)
+  );
+
+  for (const action of backgroundMessageTypes) {
+    if (!actualMessageTypes.has(action)) {
+      errors.push(`background message catalog 누락: ${action}`);
+    }
+  }
+
+  for (const action of actualMessageTypes) {
+    if (!backgroundMessageTypes.has(action)) {
+      errors.push(`background/service-worker.js가 계약에 없는 top-level message를 노출합니다: ${action}`);
+    }
+  }
+}
+
+function verifyCapabilityCallsInSource(source, relativePath, calleeName, allowedActions, capabilityType) {
+  const actionPattern = new RegExp(`${calleeName}\\s*\\(\\s*\\{[\\s\\S]{0,220}?action:\\s*"([^"]+)"`, "g");
+  let match;
+  while ((match = actionPattern.exec(source))) {
+    const action = String(match[1] || "").trim();
+    if (!allowedActions.has(action)) {
+      errors.push(`${relativePath}가 계약에 없는 ${capabilityType} capability action을 호출합니다: ${action}`);
+    }
+  }
+}
+
+function verifyCapabilityTransportIsolation(source, relativePath, entryName) {
+  if (entryName === "extension-capability-client.js") {
+    return;
+  }
+  if (/invokePage\s*\(\s*\{[\s\S]{0,220}?action:\s*"/.test(source)) {
+    errors.push(`${relativePath}에 raw page capability action literal이 남아 있습니다. transport 문자열은 extension-capability-client.js로 모아야 합니다.`);
+  }
+  if (/invokeRuntime\s*\(\s*\{[\s\S]{0,220}?action:\s*"/.test(source)) {
+    errors.push(`${relativePath}에 raw runtime capability action literal이 남아 있습니다. transport 문자열은 extension-capability-client.js로 모아야 합니다.`);
+  }
+}
+
+function verifyExtensionPageFrameSrc(manifest) {
+  const csp = String(manifest?.content_security_policy?.extension_pages || "");
+  if (!csp) {
+    errors.push("manifest extension_pages CSP가 없습니다.");
+    return;
+  }
+
+  const frameSrcMatch = csp.match(/frame-src\s+([^;]+)/i);
+  if (!frameSrcMatch?.[1]) {
+    errors.push("manifest extension_pages CSP에 frame-src가 없습니다.");
+    return;
+  }
+
+  const actualOrigins = new Set(
+    frameSrcMatch[1]
+      .split(/\s+/)
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+  );
+  const expectedOrigins = new Set(contract.extensionPageFrameSrcOrigins || []);
+
+  for (const origin of expectedOrigins) {
+    if (!actualOrigins.has(origin)) {
+      errors.push(`manifest frame-src origin 누락: ${origin}`);
+    }
+  }
+
+  for (const origin of actualOrigins) {
+    if (!expectedOrigins.has(origin)) {
+      errors.push(`manifest frame-src origin이 계약 밖으로 넓어졌습니다: ${origin}`);
+    }
   }
 }

@@ -25,7 +25,7 @@
 
 - [content/features/conversation/AGENTS.md](content/features/conversation/AGENTS.md): 현재 대화 질문 수집, 이동, route sync
 - [content/features/meeting/AGENTS.md](content/features/meeting/AGENTS.md): 회의 허브, hosted 작업실, 녹음/전사, session auth
-- [content/features/prompt-library/AGENTS.md](content/features/prompt-library/AGENTS.md): 자주 쓰는 요청, 가져오기/내보내기, cloud sync
+- [content/features/prompt-library/AGENTS.md](content/features/prompt-library/AGENTS.md): 자주 쓰는 요청, 가져오기/내보내기, DB 정본 동기화
 - [content/features/prompt-store/AGENTS.md](content/features/prompt-store/AGENTS.md): 프롬프트 스토어 목록, 상세, 좋아요, 가져오기
 - [content/features/prompt-review/AGENTS.md](content/features/prompt-review/AGENTS.md): 입력 프롬프트 평가와 보완안
 - [content/features/release/AGENTS.md](content/features/release/AGENTS.md): 릴리스 패널, 최신 버전 확인, 정적 메타/ZIP
@@ -42,8 +42,9 @@
 ## 저장소 구조
 
 - `popup/`: 회의 작업실 대상 선택과 디버그 ON/OFF
-- `content/`: i-Nova 페이지 안의 패널 shell과 feature UI
+- `content/`: i-Nova 페이지 안의 iframe host, DOM/page adapter, feature controller
 - `background/`: 탭/세션 브리지, hosted URL 조립, release fetch
+- `hosting/extension/panel/`: hosting 배포만으로 갱신되는 hosted 실험실 패널 UI
 - `hosting/meeting/`: hosted 회의 작업실
 - `functions/`: 회의와 프롬프트 backend 함수
 - `shared/`: panel, popup, hosted, background가 함께 쓰는 계약과 helper

@@ -30,7 +30,14 @@
 
 - 위치: `popup/index.html`, `popup/index.js`
 - 역할: hosted 회의 작업실 연결 대상을 `상용 호스팅 / 로컬 호스팅` 중 하나로 저장한다.
-- 특징: 팝업은 설정만 맡고, 실제 `새 회의하기`와 결과 열기는 content 패널의 회의 허브에서 처리한다.
+- 특징: 팝업은 설정만 맡고, 실제 `새 회의하기`와 결과 열기는 content 패널의 회의 허브에서 처리한다. 같은 `settings.meetingWorkspaceTarget`은 회의 rehearsal뿐 아니라 prompt-library sync, prompt-review, prompt-store read/write, hidden prompt bridge도 함께 local Functions/Hosting emulator 대상으로 전환한다.
+- 특징: active popup root inventory는 `popup/index.html`, `popup/index.css`, `popup/index.js`로 고정하고, manifest `default_popup`과 `icons/default_icon` 경계도 `contracts/extension-contract.json` + `scripts/verify-contracts.js`로 같이 잠근다.
+
+### Hosted Panel App
+
+- 위치: `hosting/extension/panel/index.html`, `hosting/extension/panel/index.js`, `hosting/extension/panel/*.js`
+- 역할: 우측 `실험실` 패널의 tool rail/header/content UI를 hosting에서 서빙한다.
+- 특징: `0.x` legacy lane부터 panel 기본 UI는 content DOM이 아니라 hosted iframe 안에서 렌더링된다. `1.0.0+` v2 lane에서는 conversation/prompt/store/review/meeting/release의 상태와 UI ownership이 hosted `extension-v2/panel/*` controller로 이동하고, tool rail/header chrome도 hosted가 active tool과 feature state로 직접 계산한다. 확장은 iframe host/bridge와 page adapter만 유지한다. hosted feature controller와 Firestore client는 `hosting/extension-v2/panel/extension-capability-client.js`를 통해 semantic capability method만 호출하고, raw page/runtime action 문자열은 그 transport helper 한곳에만 둔다. panel debug는 별도 UI를 렌더링하지 않고 top 콘솔 trace와 세션 전역 버퍼만 유지한다.
 
 ### Hosted Meeting App
 
@@ -42,13 +49,25 @@
 
 - 위치: `content/`, `shared/`, `manifest.json`
 - 역할: `inova.incross.com` 안에 실험실 패널을 삽입하고, 질문 탐색/회의록/프롬프트/스토어/릴리스 UI와 회의 허브 진입 흐름을 조립한다.
-- 특징: 현재 대화 DOM을 읽고, 로컬 상태를 붙이고, 필요한 클라우드 호출은 background에 메시지로 위임한다. panel shell은 `content/main.js`를 composition root로 두고, 초기 shell state 조립은 `content/panel-state-factory.js`, paused/store/tool-surface/error/debug helper는 `content/panel-runtime-controller.js`, meeting/debug action routing은 `content/panel-action-controller.js`, prompt shell 외부 adapter는 `content/panel-prompt-bridge-controller.js`, controller graph 조립은 `content/panel-composition-controller.js`, 북마크 흐름은 `content/panel-bookmark-controller.js`, 공용 tool 전환/검색/handle 상태는 `content/panel-shell-controller.js`, route별 storage 복원과 live bookmark 재수집은 `content/route-state-controller.js`, history/click/popstate/visibility/poll watcher 설치는 `content/route-watch-controller.js`, 실제 route sync 실행과 observer/retry 타이밍은 `content/route-sync.js`, 회의 액션은 `content/panel-meeting-controller.js`, panel debug는 `content/panel-debug-controller.js`, prompt tool shell 조립은 `content/panel-prompt-controller.js`, conversation surface polling과 composer/chatlog 반응은 `content/panel-surface-controller.js`, focus/visibility activity는 `content/panel-activity-controller.js`, 패널 open/toggle과 preference 복원은 `content/panel-lifecycle-controller.js`, render payload 조립은 `content/panel-render-controller.js`, 초기 panel bootstrap과 listener 등록은 `content/panel-bootstrap-controller.js`가 맡는다. 현재 panel shell 1차 리팩토링은 사실상 마감으로 보고, 기본 경계는 `content/main.js`(state 생성 + composition bootstrap), `content/panel-composition-controller.js`(controller graph 조립), `content/panel.js`(단일 DOM surface + 이벤트 위임 + render cache)로 유지한다. `content/route-sync.js`와 `content/panel.js`는 실제 버그나 새 요구가 생기기 전까지 추가 분해 기본 대상으로 삼지 않는다. 회의 기능은 브라우저 쪽에서 `meetingStateByMeetingId` 상태만 유지하고, `content/meeting-manager.js`가 `issueInovaMeetingPanelAuth -> hosted panel bridge -> Firestore meeting query` 경로의 실시간 허브 구독과 runtime-read fallback을 맡는다. 회의 허브 목록은 별도 `chrome.storage.local` 캐시 대신 hosted bridge의 Firestore persistence와 현재 메모리 상태를 우선한다. 프롬프트/스토어 쪽은 `content/panel-prompt-controller.js`가 `prompt-hub-*` shell과 `cloud-sync-manager`, `prompt-realtime-manager` wiring을 감싸고, `content/panel-prompt-bridge-controller.js`가 panel shell 쪽 narrow contract를 제공한다. `content/features/prompt-store/prompt-realtime-manager.js`가 `issueInovaPromptPanelAuth -> hosted prompt panel bridge -> Firestore account/feed doc` 경로를 관리하되 active lane 기준 account/meta collection을 선택한다. `1.0.0+` v2 lane은 `v2.*` local storage key와 `integration_inova_accounts_v2` prompt-library meta 문서를 우선한다. panel/read-state 계약은 공통으로 `source`, `degraded`, `degradedReason`, `dataFreshness(fresh|stale|empty)`를 함께 들고, stale cache나 runtime-read 성공도 success-like fallback으로 숨기지 않는다. 패널 디버그는 회의 전용이 아니라 현재 브라우저 탭 세션 기준 전역 버퍼를 쓰고, `content/panel.js`와 `content/meeting-view.js`가 패널 바깥 오버레이 콘솔을 렌더링한다.
+- 특징: `content/main.js`는 composition root, `content/panel-v2-composition-controller.js`는 active state/composition/runtime/provider-identity bridge와 hosted-owned controller graph 조립, `content/panel-v2-shell-bridge.js`는 tool/activity/surface/lifecycle/bootstrap/render bridge를 맡는다. `content/panel.js`는 host element lifecycle과 helper wiring만 남기고, iframe target/status/handshake/render batching은 `content/panel-host-runtime.js`, hosted bridge endpoint와 page event emit은 `content/panel-host-bridge.js`, host markup과 handle drag/click은 `content/panel-host-view.js`가 맡는다. active `content/hosted-panel-bridge.js`는 compact `tool-summary-sync`, conversation bookmark, shell/runtime/page contract dispatch만 유지하고, 실제 page capability 구현은 `content/page-capability-router.js`, page localStorage 기반 사용자 식별 센서는 `content/provider-identity-sensor.js`, local hosted panel frame proxy resolver는 `content/frame-proxy-helper.js`가 맡는다. `1.0.0+` v2 lane의 extension에는 shell/runtime/route/page adapter 같은 browser-only 책임만 남기고, tool rail/header/content state는 hosted `extension-v2/panel/*` controller가 소유한다. active page adapter capability는 `conversation.read-state`, `conversation.jump-item`, `composer.read-state`, `composer.apply-text`, `clipboard.write-text`, `debug.read-state`, `debug.set-enabled`, `debug.copy-log`, `debug.clear-log`, `trace.log`를 canonical contract로 보고, caller migration이 끝난 alias는 active lane에 남겨 두지 않는다. 이 active page/runtime capability 카탈로그는 문서 설명만이 아니라 `contracts/extension-contract.json`과 `scripts/verify-contracts.js`로도 같이 고정한다.
+- 특징: `shared/storage.js`는 active lane에서 generic local state/settings/ui-preferences/provider-identity-cache/product-lane migration core만 유지한다. inactive release/meeting storage accessor는 active shared core에 남기지 않고 `backup/legacy-panel/shared/legacy-storage-accessors.js` 같은 backup-only helper에서만 유지한다.
+- 특징: `shared/constants.js`도 active lane의 live browser shell 기본값만 유지한다. inactive release/meeting storage key/default schema는 active shared constants에 남기지 않고 backup helper가 직접 가진다.
+- 특징: `meetingWorkspaceTarget`, `meetingWorkspaceUrlOverride`, `meetingDebugConsoleEnabled` 같은 hosted/local target 설정 정규화는 `shared/firebase-config.js`의 `firebaseConfig.meeting.normalizeSettings()`를 정본으로 쓴다. popup과 background meeting workspace capability가 이 shared helper를 같이 재사용하고, 표면별 임시 normalize 함수를 다시 복제하지 않는다.
+- 특징: active prompt lane도 `chrome.storage.local.promptLibrary`를 정본으로 취급하지 않는다. active `shared/constants.js` / `shared/storage.js`는 dormant prompt local cache schema를 더 이상 들고 있지 않고, backup prompt helper/reference가 그 캐시 계약을 직접 가진다.
+- 특징: background-only auth/cloud network helper도 active shared root에 남기지 않는다. i-Nova access token refresh는 `background/inova-auth-client.js`, Functions-backed cloud POST helper는 `background/cloud-api-client.js`가 맡고, active `shared/*`는 browser-agnostic cache/state/config core만 유지한다.
+- 특징: active shared root inventory는 `shared/constants.js`, `shared/firebase-config.js`, `shared/product-lane.js`, `shared/provider-identity-cache.js`, `shared/session.js`, `shared/storage.js`로 고정하고, 이 목록은 `contracts/extension-contract.json` + `scripts/verify-contracts.js`로 같이 잠근다. 이때 `shared/firebase-config.js`는 hosting/panel/meeting target과 browser-agnostic config만 유지하고, Functions endpoint family나 lane-specific endpoint override는 다시 들지 않는다.
+- 특징: active content root inventory도 `composer(.js/.css)`, `dom.js`, `provider-identity-sensor.js`, `frame-proxy(.html/.js/helper)`, `page-capability-router.js`, `hosted-panel-bridge.js`, `panel-console-trace.js`, `panel-host-*`, `panel-v2-*`, `panel.js`, `panel.css`, `route-*`, `main.js`, `meeting-workspace-bridge.js`, `content/features/prompt-review/*.js`로 고정하고, main panel preload/meeting bridge/web-accessible frame proxy 자산을 `contracts/extension-contract.json` + `scripts/verify-contracts.js`가 함께 잠근다.
+- 특징: manifest browser privilege surface도 `permissions`, `host_permissions`, `extension_pages frame-src`, meeting workspace bridge match, frame proxy web-accessible match 기준으로 고정하고, widening은 `contracts/extension-contract.json` + `scripts/verify-contracts.js`를 함께 통과할 때만 허용한다.
+- 특징: active extension의 browser-only power owner도 계약으로 고정한다. `scripts/verify-browser-only-boundary.js`가 direct `fetch`, `chrome.tabs`, `chrome.cookies`, `chrome.storage`, page `localStorage`, panel `sessionStorage`를 선언된 adapter file에서만 허용하고, thin `content/*`/`popup/*` shell이나 generic shared core가 raw Functions endpoint family 이름 또는 Firebase SDK bootstrap을 다시 들지 못하게 잠근다.
 
 ### Background Service Worker
 
 - 위치: `background/service-worker.js`
 - 역할: i-Nova access token 확보, Firebase Functions 호출, 릴리스 메타 fetch, 동기화 중복 완화, prompt/store panel auth 발급, hosted 회의 launch grant 발급, 작업실 URL 타깃 분기
-- 특징: 클라우드 경계의 브로커다. content script가 직접 장기 원격 상태를 다루지 않게 막아 준다. 회의 기능은 `inova-meeting:*` 메시지로, 프롬프트 실시간은 `inova-prompt:*` 메시지로 이 경계를 먼저 통과한다. 패널에서 열린 작업실은 popup 설정의 호스팅 타깃을 따르되, runtime lane이 `v2`면 lane-aware config가 가리키는 v2 hosting/release origin을 사용한다.
+- 특징: 클라우드 경계의 브로커다. content script가 직접 장기 원격 상태를 다루지 않게 막아 준다. active v2 lane에서 background top-level message surface는 `inova-panel:invoke`와 hosted meeting workspace의 `inova-meeting:authorize-workspace-access` / `inova-meeting:probe-workspace-bridge`만 유지한다. 나머지 prompt/release/meeting privileged action은 feature별 메시지 이름으로 다시 열지 않고, hosted panel이 `inova-panel:invoke` 아래의 stable runtime capability만 호출하게 유지한다. hosted panel용 privileged runtime capability 구현은 `background/panel-runtime-capability-router.js`, generic tab/open-url browser adapter는 `background/browser-capability.js`, panel auth/access-token/prompt runtime resolver는 `background/panel-session-capability.js`, i-Nova access token refresh helper는 `background/inova-auth-client.js`, Functions-backed cloud POST helper는 `background/cloud-api-client.js`, hosted meeting workspace open/share/auth/probe browser adapter는 `background/meeting-workspace-capability.js`, 그리고 `background/panel-runtime-invoke.js`는 hosted request dispatch shim만 유지한다. 패널에서 열린 작업실은 popup 설정의 호스팅 타깃을 따르되, runtime lane이 `v2`면 lane-aware config가 가리키는 v2 hosting/release origin을 사용한다. popup 설정이 `local`이면 prompt 관련 Functions 호출과 panel auth도 production 대신 local Functions base URL을 써서 배포 전 full-stack rehearsal을 가능하게 해야 한다. live runtime surface는 generic storage CRUD를 다시 열지 않고, `storage.read-panel-state`, `storage.write-ui-preferences`, `auth.issue-panel-session`, `functions.invoke-endpoint`, `browser.open-url`, `meeting.workspace.open`, `meeting.result.open`, `meeting.share.create`, `meeting.share.revoke` 같은 stable runtime capability만 유지한다.
+- 특징: active background root inventory도 `browser-capability.js`, `cloud-api-client.js`, `functions-runtime-config.js`, `inova-auth-client.js`, `meeting-workspace-capability.js`, `panel-auth-cache.js`, `panel-runtime-capability-router.js`, `panel-runtime-invoke.js`, `panel-session-capability.js`, `service-worker.js`로 고정하고, 이 목록은 `contracts/extension-contract.json` + `scripts/verify-contracts.js`로 같이 잠근다.
+- 특징: Functions endpoint family와 lane-aware local/prod runtime resolution은 active shared root가 아니라 `background/functions-runtime-config.js`가 소유한다. `background/cloud-api-client.js`, `background/panel-session-capability.js`, `background/meeting-workspace-capability.js`는 이 background-only runtime config를 재사용하고, `shared/product-lane.js`나 `shared/firebase-config.js`가 endpoint family 이름을 다시 들지 않는다.
+- 특징: active background/browser adapter가 아닌 파일은 direct browser/network power를 새로 열지 않는다. `background/cloud-api-client.js`, `background/inova-auth-client.js`, `background/panel-runtime-capability-router.js`, `background/browser-capability.js`, `background/meeting-workspace-capability.js`, `background/panel-session-capability.js`, `popup/index.js`, `shared/storage.js`, `content/provider-identity-sensor.js`, `content/panel-v2-shell-bridge.js`만 각각 선언된 `fetch/chrome.tabs/chrome.cookies/chrome.storage/localStorage/sessionStorage` owner로 유지하고, widening은 contract + `scripts/verify-browser-only-boundary.js`를 함께 갱신할 때만 허용한다.
 
 ### Firebase Functions
 
@@ -61,7 +80,7 @@
 
 - 위치: `firebase.json`, `firestore.rules`, `hosting/`
 - 역할: Firestore는 백업/스토어 메타 저장소, Hosting은 릴리스 JSON/ZIP 배포면
-- 특징: Firestore 규칙은 기본 `deny all`을 유지하되, hosted 회의 작업실이 세션 범위의 Firebase custom token으로 `integration_inova_meetings`, `integration_inova_meeting_jobs`, `integration_inova_meeting_artifacts` 문서를 읽기 전용으로 구독할 수 있는 예외와, prompt panel 세션이 active lane에 맞는 account 문서(`integration_inova_accounts` 또는 `integration_inova_accounts_v2`)와 shared store doc을 읽을 수 있는 예외만 연다. bridge는 page 0을 먼저 붙이고, 공개 수가 많을 때만 page 1을 추가로 붙인다. prompt bridge 자산은 cache-busting query와 no-cache 헤더를 함께 써서 hosting-only 배포 직후에도 새 스크립트가 바로 반영되게 한다. release ZIP/history는 `0.x -> hosting/extension/*`, `1.x+ -> hosting/extension-v2/*`로 lane을 분리한다. `prompt_libraries`, chunk/order 문서는 Firestore direct read를 계속 열지 않는다.
+- 특징: Firestore 규칙은 기본 `deny all`을 유지하되, hosted 회의 작업실이 세션 범위의 Firebase custom token으로 `integration_inova_meetings`, `integration_inova_meeting_jobs`, `integration_inova_meeting_artifacts` 문서를 읽기 전용으로 구독할 수 있는 예외와, prompt panel 세션이 active lane에 맞는 account 문서(`integration_inova_accounts` 또는 `integration_inova_accounts_v2`), prompt library order/chunk 문서, shared store doc을 읽을 수 있는 예외만 연다. bridge는 page 0을 먼저 붙이고, 공개 수가 많을 때만 page 1을 추가로 붙인다. prompt bridge 자산은 cache-busting query와 no-cache 헤더를 함께 써서 hosting-only 배포 직후에도 새 스크립트가 바로 반영되게 한다. hosted panel 자산은 `firebaseConfig.hosting.panelAppUrl`로 lane-aware URL을 계산하고, `0.x -> hosting/extension/panel/*`, `1.x+ -> hosting/extension-v2/panel/*` 규칙을 따른다. release ZIP/history는 `0.x -> hosting/extension/*`, `1.x+ -> hosting/extension-v2/*`로 lane을 분리한다.
 
 ## 3. 주요 데이터 흐름
 
@@ -71,19 +90,20 @@
 2. 세션 키는 URL의 `sid`로 정규화한다.
 3. 패널에서 검색/이동은 현재 페이지 DOM을 기준으로 처리한다.
 
-### B. 로컬 프롬프트 보관함
+### B. 브라우저 로컬 상태
 
-1. 사용자가 패널에서 프롬프트를 추가/수정/삭제한다.
-2. `shared/storage.js`가 `chrome.storage.local`에 저장한다.
-3. 같은 시점에 `cloudSync` 메타를 큐잉한다.
+1. extension은 `settings`, `uiPreferences`, `pausedSessions` 같은 browser-local 상태만 `shared/storage.js`로 저장한다.
+2. hosted prompt/meeting 패널이 필요한 사용자 식별 정보는 `providerIdentityCache`에 최소 형태로만 캐시한다.
+3. prompt library/store/review의 정본 데이터와 동기화 상태는 hosted/Firestore/Functions 경로가 소유한다.
 
 ### C. 프롬프트 원격 메타 실시간
 
-1. 패널의 `프롬프트` 도구가 열리면 `content/features/prompt-store/prompt-realtime-manager.js`가 `inova-prompt:issue-panel-auth`를 background에 보낸다.
-2. background는 `issueInovaPromptPanelAuth`를 호출해 prompt panel 범위 Firebase custom token을 받는다.
-3. hidden hosted `prompt-panel-bridge.html`이 Firebase Auth에 로그인하고 Firestore offline persistence를 먼저 켠 뒤 `integration_inova_accounts/{providerUserKey}` 문서를 구독한다.
-4. bridge는 `promptLibraryMeta.lastRevision`, `lastSyncedAt`, `itemCount`만 panel로 돌려준다.
-5. content script는 local pending sync가 없고 원격 revision이 더 최신일 때만 `loadInovaPromptLibrary`를 다시 호출해 전체 보관함을 hydrate한다.
+1. 패널의 `프롬프트` 도구가 열리면 hosted `prompt-library-controller`가 `inova-panel:invoke -> auth.issue-panel-session(panel=prompt)` runtime capability를 background에 보낸다.
+2. background는 `issueInovaPromptPanelAuthV2` 또는 lane-aware prompt panel auth endpoint를 호출해 Firebase custom token을 받는다.
+3. hosted panel 안의 Firestore client가 Firebase Auth에 로그인하고 `integration_inova_accounts_v2/{providerUserKey}` 문서를 구독한다.
+4. hosted panel은 `promptLibraryMeta` 변경을 기준으로 `prompt_library_orders_v2`/`prompt_library_chunks_v2`를 직접 읽어 `내 요청` 상태를 다시 조립한다.
+5. extension은 `content/panel-v2-prompt-controller.js`를 통해 review handoff signal과 composer review float만 유지하고, generic `prompts/store` tool 선택 persistence는 `content/panel-v2-shell-bridge.js`가 맡는다.
+6. popup 설정이 `local`이면 2번은 local Functions endpoint를 호출하고, 3~4번 hosted panel도 local Auth/Firestore emulator를 사용한다.
 
 ### D. 원격 백업
 
@@ -91,6 +111,7 @@
 2. background가 access token을 준비한다.
 3. Functions가 i-Nova 사용자 검증 뒤 Firestore에 반영한다.
 4. 확인용 운영 점검은 `scripts/check-cloud-sync.js`, `scripts/check-function-logs.js`로 한다.
+5. popup 설정이 `local`이면 prompt-library `load/peek/sync`와 prompt-review/store write도 local Functions emulator로 향한다.
 
 ### E. 프롬프트 스토어 / 평가 / 릴리스
 
@@ -102,7 +123,7 @@
 
 ### F. 회의 작업실 진입
 
-1. popup은 `settings.meetingWorkspaceTarget`을 저장하고, content 패널은 `새 회의하기` 또는 결과 리스트 항목에서 `inova-meeting:open-workspace` / `inova-meeting:open-result`를 background로 보낸다.
+1. popup은 `settings.meetingWorkspaceTarget`을 저장하고, hosted/content 패널은 `새 회의하기` 또는 결과 리스트 항목에서 `inova-panel:invoke -> meeting.workspace.open` / `meeting.result.open` runtime capability를 background로 보낸다.
 2. background는 popup 설정의 호스팅 타깃에 맞는 clean hosted 작업실 URL(`meetingId`, optional `jobId`, optional `share`)을 만든다.
 3. background가 `chrome.tabs.create()`로 hosted `meeting/index.html?meetingId=...&jobId=...` 또는 로컬 `http://127.0.0.1:5000/meeting/index.html?...` URL을 연다.
 4. hosted 회의 작업실은 부팅 직후 확장 bridge와 handshake하고, background가 현재 i-Nova 로그인 상태와 접근 권한을 확인한다.
@@ -154,24 +175,17 @@
 ### 정적/구조 검증
 
 - `npm run verify:contracts`
+- `node scripts/verify-hosted-panel-bridge.js`
 - `npm run verify:docs`
-- `node scripts/verify-prompt-fallbacks.js`
-- `node scripts/verify-panel-meeting-controller.js`
-- `node scripts/verify-panel-debug-controller.js`
-- `node scripts/verify-panel-prompt-controller.js`
-- `node scripts/verify-panel-bookmark-controller.js`
+- `node scripts/verify-meeting-hub-controller.js`
 - `node scripts/verify-panel-shell-controller.js`
-- `node scripts/verify-panel-activity-controller.js`
-- `node scripts/verify-panel-surface-controller.js`
 - `node scripts/verify-panel-render-controller.js`
 - `node scripts/verify-panel-bootstrap-controller.js`
-- `node scripts/verify-panel-state-factory.js`
-- `node scripts/verify-panel-runtime-controller.js`
-- `node scripts/verify-panel-action-controller.js`
-- `node scripts/verify-panel-prompt-bridge-controller.js`
+- `node scripts/verify-legacy-isolation.js`
 - `node scripts/verify-route-state-controller.js`
 - `node scripts/verify-route-watch-controller.js`
-- `node scripts/verify-panel-shell.js`
+- backup legacy reference가 필요할 때만 `npm run verify:legacy-backup`
+- backup legacy 개별 계약은 `scripts/legacy-panel/*` 아래에 격리해 둔다.
 
 ### 운영/런타임 점검
 
@@ -183,6 +197,9 @@
 - `prompt-library` smoke: `내 요청` 탭 렌더링, 기존 항목 또는 새 항목 1건 저장/수정, 입력창 주입 1회
 - `prompt-store` smoke: `전체` 목록 로드, 상세 보기 1건, `좋아요` 또는 `내 요청으로 가져오기` 1회, 탭 이동 후 복귀 시 목록 유지
 - `prompt-review` smoke: 입력창 우측 상단 평가 버튼 노출, 평가 결과 1회, 보완 프롬프트 반영 1회
+- prompt local rehearsal: popup에서 `로컬 호스팅` 선택 후 hidden prompt bridge가 `http://127.0.0.1:5000/extension/prompt-panel-bridge.html`을 쓰고, prompt read/write/review/panel auth가 local Functions base URL로 전환되는지 본다.
+- backup legacy conversation/runtime reference가 필요할 때만 `npm run verify:legacy-backup` 안의 `node scripts/legacy-panel/verify-panel-bookmark-controller.js`, `node scripts/legacy-panel/verify-panel-runtime-controller.js`로 `backup/legacy-panel/panel-bookmark-controller.js`, `backup/legacy-panel/panel-runtime-controller.js` 계약을 다시 본다.
+- panel local rehearsal: popup에서 `로컬 호스팅` 선택 후 hosted panel iframe이 `http://127.0.0.1:5000/extension/panel/index.html`을 바라보는지, hosted UI 자체가 hosting 배포만으로 갱신되는지 본다.
 - 이번 prompt smoke 제외 범위: import/export 전체 조합, 원격 sync 확인, 공개 스토어 등록/삭제. 원격 sync는 필요 시 `npm run check:cloud-sync -- --userKey <providerUserKey> --samples 2 --wait 20`로 별도 점검
 - 로컬 회의 작업실: `npm run emulator:hosting` -> `http://127.0.0.1:5000/meeting/index.html`
 - 회의 전용 로컬 확인은 팝업의 `상용 호스팅 / 로컬 호스팅` 전환과 화면 안 디버그 로그 패널 기준으로 본다.

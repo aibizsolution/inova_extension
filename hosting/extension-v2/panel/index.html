@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>i-Nova Hosted Panel</title>
+    <script>
+      (function injectHostedPanelStyles(doc) {
+        const assetSuffix = readAssetSuffix();
+        globalThis.__INOVA_HOSTED_PANEL_ASSET_SUFFIX__ = assetSuffix;
+        [
+          "./index.css",
+        ].forEach((path) => {
+          const link = doc.createElement("link");
+          link.rel = "stylesheet";
+          link.href = path + assetSuffix;
+          doc.head.appendChild(link);
+        });
+
+        function readAssetSuffix() {
+          try {
+            const version = new URL(globalThis.location.href).searchParams.get("v");
+            return version ? `?v=${encodeURIComponent(version)}` : "";
+          } catch {
+            return "";
+          }
+        }
+      })(document);
+    </script>
+  </head>
+  <body>
+    <div id="inova-hosted-panel-root"></div>
+    <script>
+      (function injectHostedPanelScripts(doc) {
+        const assetSuffix = globalThis.__INOVA_HOSTED_PANEL_ASSET_SUFFIX__ || "";
+        [
+          "./runtime.js",
+          "./extension-capability-client.js",
+          "./prompt-library-model.js",
+          "./prompt-library-firestore-client.js",
+          "./prompt-library-controller.js",
+          "./prompt-store-model.js",
+          "./conversation-controller.js",
+          "./bookmark-view.js",
+          "../../meeting/debug-console.js",
+          "./meeting-view.js",
+          "./meeting-firestore-client.js",
+          "./meeting-hub-controller.js",
+          "./prompt-view.js",
+          "./prompt-tool-view.js",
+          "./store-view.js",
+          "./prompt-review-view.js",
+          "./prompt-review-controller.js",
+          "./prompt-store-controller.js",
+          "./prompt-tool-panel.js",
+          "./release-view.js",
+          "./release-controller.js",
+          "./index.js",
+        ].forEach((path) => {
+          const script = doc.createElement("script");
+          script.src = path + assetSuffix;
+          script.async = false;
+          doc.body.appendChild(script);
+        });
+      })(document);
+    </script>
+  </body>
+</html>

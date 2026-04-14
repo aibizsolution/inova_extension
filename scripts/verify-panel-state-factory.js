@@ -12,51 +12,65 @@ function main() {
   const stateA = harness.factory.createState();
   const stateB = harness.factory.createState();
 
-  assert.equal(harness.readCollapsedCalls, 2);
-  assert.equal(harness.mergeCloudSyncCalls, 2);
-  assert.equal(harness.mergeReleaseInfoCalls, 2);
   assert.equal(harness.mergeUiPreferencesCalls, 2);
-  assert.equal(harness.mergePromptLibraryCalls, 2);
 
   assert.equal(stateA.activeTool, "meeting");
-  assert.equal(stateA.panelDebugUi.collapsed, false);
-  assert.equal(stateA.cloudSync.providerIdentity.providerUserKey, "fixture-user");
-  assert.equal(stateA.releaseInfo.lastCheckedAt, "2026-04-11T00:00:00.000Z");
+  assert.equal(stateA.panelDebugUi.collapsed, true);
+  assert.equal(stateA.toolSummaries.release.count, 0);
+  assert.equal("snapshotFingerprint" in stateA.toolSummaries.release, false);
   assert.equal(stateA.uiPreferences.activePromptTab, "library");
-  assert.equal(stateA.promptLibrary.items.length, 1);
-  assert.equal(stateA.store.limit, 1000);
-  assert.equal(stateA.store.renderKey, 0);
-  assert.equal(stateA.store.renderLimit, 20);
-  assert.equal(stateA.promptEditor.mode, "create");
-  assert.equal(stateA.promptPublishCategoryId, "document");
+  assert.deepEqual(Object.keys(stateA.queries), ["bookmarks"]);
+  assert.equal(stateA.promptReview.open, false);
   assert.equal(stateA.routeWatchInstalled, false);
+  assert.equal("cloudSync" in stateA, false);
+  assert.equal("providerIdentityCache" in stateA, false);
 
   assert.notStrictEqual(stateA, stateB);
   assert.notStrictEqual(stateA.settings, stateB.settings);
-  assert.notStrictEqual(stateA.meetingUi, stateB.meetingUi);
-  assert.notStrictEqual(stateA.meetingUi.pending, stateB.meetingUi.pending);
+  assert.notStrictEqual(stateA.toolSummaries, stateB.toolSummaries);
+  assert.notStrictEqual(stateA.toolSummaries.meeting, stateB.toolSummaries.meeting);
+  assert.notStrictEqual(stateA.toolSummaries.release, stateB.toolSummaries.release);
   assert.notStrictEqual(stateA.panelDebugUi, stateB.panelDebugUi);
-  assert.notStrictEqual(stateA.store, stateB.store);
+  assert.notStrictEqual(stateA.promptReview, stateB.promptReview);
   assert.notStrictEqual(stateA.queries, stateB.queries);
+  assert.equal("meetingHub" in stateA, false);
+  assert.equal("meetingUi" in stateA, false);
+  [
+    "promptLibraryLoading",
+    "promptLibraryRemoteReady",
+    "promptLibrary",
+    "promptEditor",
+    "promptImportReview",
+    "promptMenuId",
+    "promptDeleteConfirmId",
+    "promptPendingInsert",
+    "promptActionPending",
+    "promptPublishPromptId",
+    "promptPublishCategoryId",
+    "promptPublishTitle",
+    "promptPublishError",
+    "promptFeedback",
+    "store",
+  ].forEach((key) => assert.equal(key in stateA, false, `state should drop dead hosted-owned prompt residue ${key}`));
 
   stateA.settings.enabled = false;
-  stateA.meetingUi.pending.action = "share";
-  stateA.store.scope = "mine";
+  stateA.toolSummaries.meeting.count = 7;
+  stateA.toolSummaries.release.count = 1;
+  stateA.promptReview.open = true;
   stateA.queries.bookmarks = "alpha";
 
   assert.equal(stateB.settings.enabled, true);
-  assert.equal(stateB.meetingUi.pending.action, "");
-  assert.equal(stateB.store.scope, "all");
+  assert.equal(stateB.toolSummaries.meeting.count, 0);
+  assert.equal(stateB.toolSummaries.release.count, 0);
+  assert.equal(stateB.promptReview.open, false);
   assert.equal(stateB.queries.bookmarks, "");
+  assert.equal("prompts" in stateB.queries, false);
+  assert.equal("store" in stateB.queries, false);
 
-  console.log("[verify-panel-state-factory] Panel state factory contract passed");
+  console.log("[verify-panel-state-factory] V2 composition state factory contract passed");
 }
 
 function createHarness() {
-  let readCollapsedCalls = 0;
-  let mergeCloudSyncCalls = 0;
-  let mergePromptLibraryCalls = 0;
-  let mergeReleaseInfoCalls = 0;
   let mergeUiPreferencesCalls = 0;
 
   const context = vm.createContext({
@@ -65,20 +79,8 @@ function createHarness() {
   });
   context.globalThis = context;
   context.InovaBookmarks = {
-    cloudSync: {
-      mergeCloudSyncState() {
-        mergeCloudSyncCalls += 1;
-        return {
-          providerIdentity: {
-            available: true,
-            providerUserKey: "fixture-user",
-          },
-        };
-      },
-    },
     constants: {
       defaults: {
-        meetingHub: { items: [] },
         promptReview: { open: false },
         settings: {
           autoBookmark: true,
@@ -89,28 +91,6 @@ function createHarness() {
           activePromptTab: "library",
           activeTool: "meeting",
         },
-      },
-    },
-    panelDebugController: {
-      readCollapsedPreference() {
-        readCollapsedCalls += 1;
-        return false;
-      },
-    },
-    promptLibrary: {
-      mergePromptLibrary() {
-        mergePromptLibraryCalls += 1;
-        return {
-          items: [{ id: "prompt-1", title: "Fixture Prompt" }],
-        };
-      },
-    },
-    releaseInfo: {
-      mergeReleaseInfo() {
-        mergeReleaseInfoCalls += 1;
-        return {
-          lastCheckedAt: "2026-04-11T00:00:00.000Z",
-        };
       },
     },
     storage: {
@@ -125,24 +105,12 @@ function createHarness() {
     },
   };
 
-  loadScript("content/panel-state-factory.js", context);
+  loadScript("content/panel-v2-composition-controller.js", context);
 
   return {
-    factory: context.InovaBookmarks.panelStateFactory,
-    get mergeCloudSyncCalls() {
-      return mergeCloudSyncCalls;
-    },
-    get mergePromptLibraryCalls() {
-      return mergePromptLibraryCalls;
-    },
-    get mergeReleaseInfoCalls() {
-      return mergeReleaseInfoCalls;
-    },
+    factory: context.InovaBookmarks.panelV2CompositionController,
     get mergeUiPreferencesCalls() {
       return mergeUiPreferencesCalls;
-    },
-    get readCollapsedCalls() {
-      return readCollapsedCalls;
     },
   };
 }

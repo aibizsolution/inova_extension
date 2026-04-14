@@ -827,6 +827,14 @@
     applyRender();
     await controllers.realtime.refreshWorkspace(true, "boot");
     controllers.pendingUploads.retryPendingUploads("boot-retry");
+    logDebug("workspace.ready", {
+      accessMode: normalizeText(state.auth.accessMode),
+      meetingId: normalizeText(state.meeting.meetingId || state.session.meetingId),
+      pendingLocalCount: Array.isArray(state.pendingUploads) ? state.pendingUploads.length : 0,
+      readOnly: Boolean(state.auth.readOnly),
+      resultCount: Array.isArray(state.records) ? state.records.length : 0,
+      selectedRecordId: normalizeText(state.selectedRecordId),
+    });
   }
 
   async function bootstrap() {

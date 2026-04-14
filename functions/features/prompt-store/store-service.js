@@ -1,3 +1,5 @@
+const { FieldValue } = require("firebase-admin/firestore");
+
 const DEFAULT_LIMIT = 500;
 const MAX_LIMIT = 200;
 const SUMMARY_LENGTH = 140;
@@ -10,7 +12,6 @@ const PUBLIC_FEED_SORTS = ["latest"];
 
 function registerStoreHandlers(deps) {
   const {
-    admin,
     db,
     onRequest,
     CORS_ORIGINS,
@@ -40,7 +41,7 @@ function registerStoreHandlers(deps) {
       const categoryMeta = filter.ownerOnly
         ? await buildOwnerCategoryMeta(owner.providerUserKey)
         : await loadStoreSummary();
-      const availableCategories = buildAvailableCategories(categoryMeta.categoryCounts, filter.categoryId);
+      const availableCategories = buildAvailableCategories(categoryMeta.categoryCounts, categoryMeta.categoryLabels, filter.categoryId);
       const totalCount = filter.categoryId === "all"
         ? Number(categoryMeta.totalCount) || items.length
         : Math.max(0, Number(categoryMeta.categoryCounts?.[filter.categoryId]) || 0);
@@ -67,7 +68,10 @@ function registerStoreHandlers(deps) {
       assertMethod(request);
       const owner = await verifyRequestIdentity(request);
       const prompt = normalizePrompt(request.body?.prompt);
-      const categoryId = normalizePublishCategoryId(request.body?.categoryId);
+      const category = normalizePublishCategory({
+        categoryId: request.body?.categoryId,
+        categoryLabel: request.body?.categoryLabel,
+      });
       if (!prompt.title || !prompt.content) {
         throw createHttpError(400, "스토어에 등록할 요청 정보가 비어 있어요.");
       }
@@ -84,7 +88,8 @@ function registerStoreHandlers(deps) {
           entryId,
           owner,
           prompt,
-          categoryId,
+          categoryId: category.id,
+          categoryLabel: category.label,
           metrics: normalizeMetrics(),
           publishedAt: now,
           updatedAt: now,
@@ -98,7 +103,7 @@ function registerStoreHandlers(deps) {
 
         transaction.set(ref, nextEntry, { merge: false });
         transaction.set(detailRef, detailEntry, { merge: false });
-        transaction.set(summaryRef, buildStoreSummaryPatch(incrementCategoryCount(summary, categoryId, 1), now), { merge: true });
+        transaction.set(summaryRef, buildStoreSummaryPatch(incrementCategoryCount(summary, category.id, 1, category.label), now), { merge: true });
         return nextEntry;
       });
       await rebuildStoreSummaryAndFeeds();
@@ -140,14 +145,14 @@ function registerStoreHandlers(deps) {
 
         const summarySnapshot = await transaction.get(summaryRef);
         const summary = normalizeStoreSummary(summarySnapshot.data());
-        const nextSummary = incrementCategoryCount(summary, normalizePublishCategoryId(data.categoryId), -1);
+        const nextSummary = incrementCategoryCount(summary, normalizePublishCategoryId(data.categoryId), -1, data.categoryLabel);
         transaction.set(
           ref,
           {
             hasDetail: false,
             status: "removed",
             removedAt: new Date().toISOString(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
           },
           { merge: true }
         );
@@ -439,33 +444,45 @@ function registerStoreHandlers(deps) {
       .collection("prompt_store_entries")
       .where("status", "==", "published")
       .where("owner.providerUserKey", "==", providerUserKey)
-      .select("categoryId")
+      .select("categoryId", "categoryLabel")
       .get();
 
     const categoryCounts = {};
+    const categoryLabels = {};
     for (const doc of snapshot.docs) {
       const categoryId = normalizePublishCategoryId(doc.data()?.categoryId);
+      const categoryLabel = getCategoryLabel(categoryId, doc.data()?.categoryLabel);
       categoryCounts[categoryId] = Math.max(0, Number(categoryCounts[categoryId]) || 0) + 1;
+      categoryLabels[categoryId] = categoryLabel;
     }
 
     return {
       categoryCounts,
+      categoryLabels,
       totalCount: snapshot.size,
       updatedAt: "",
     };
   }
 
-  function buildAvailableCategories(categoryCounts, activeCategoryId) {
+  function buildAvailableCategories(categoryCounts, categoryLabels, activeCategoryId) {
     const activeId = normalizeFilterCategoryId(activeCategoryId);
     const available = [{ id: "all", label: "전체" }];
-    for (const category of deps.STORE_CATEGORIES) {
-      if (category.id === "all") {
+    const categoryIds = Object.keys(categoryCounts || {})
+      .map((categoryId) => normalizePublishCategoryId(categoryId))
+      .filter((categoryId, index, list) => categoryId && categoryId !== "all" && list.indexOf(categoryId) === index);
+    if (activeId !== "all" && !categoryIds.includes(activeId)) {
+      categoryIds.push(activeId);
+    }
+    categoryIds.sort((left, right) => compareCategoryIds(left, right, categoryLabels));
+    for (const categoryId of categoryIds) {
+      const count = Number(categoryCounts?.[categoryId]) || 0;
+      if (count <= 0 && categoryId !== activeId) {
         continue;
       }
-      const count = Number(categoryCounts?.[category.id]) || 0;
-      if (count > 0 || category.id === activeId) {
-        available.push({ id: category.id, label: category.label });
-      }
+      available.push({
+        id: categoryId,
+        label: getCategoryLabel(categoryId, categoryLabels?.[categoryId]),
+      });
     }
     return available;
   }
@@ -475,10 +492,10 @@ function registerStoreHandlers(deps) {
     return normalized.map((entry) => attachViewerFlags(entry, providerUserKey ? { imported: false, liked: false, viewed: false } : null));
   }
 
-  function buildEntry({ entryId, owner, prompt, categoryId, metrics, publishedAt, updatedAt }) {
+  function buildEntry({ entryId, owner, prompt, categoryId, categoryLabel, metrics, publishedAt, updatedAt }) {
     return {
       categoryId,
-      categoryLabel: getCategoryLabel(categoryId),
+      categoryLabel: getCategoryLabel(categoryId, categoryLabel),
       entryId,
       hasDetail: true,
       metrics,
@@ -513,7 +530,7 @@ function registerStoreHandlers(deps) {
     return {
       metrics,
       score: buildScore(metrics),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     };
   }
 
@@ -533,7 +550,7 @@ function registerStoreHandlers(deps) {
     const categoryId = normalizePublishCategoryId(entry.categoryId);
     return {
       categoryId,
-      categoryLabel: normalizeText(entry.categoryLabel) || getCategoryLabel(categoryId),
+      categoryLabel: normalizeText(entry.categoryLabel) || getCategoryLabel(categoryId, entry.categoryLabel),
       content: normalizePromptContent(entry.content),
       entryId: normalizeText(entry.entryId),
       hasDetail: Boolean(entry.hasDetail || entry.content),
@@ -571,18 +588,29 @@ function registerStoreHandlers(deps) {
 
   function normalizeStoreSummary(summary) {
     const categoryCounts = {};
-    for (const category of deps.STORE_CATEGORIES) {
-      if (category.id === "all") {
+    const categoryLabels = {};
+    const rawCategoryCounts = summary?.categories && typeof summary.categories === "object"
+      ? summary.categories
+      : {};
+    const rawCategoryLabels = summary?.categoryLabels && typeof summary.categoryLabels === "object"
+      ? summary.categoryLabels
+      : {};
+    for (const [categoryId, rawCount] of Object.entries(rawCategoryCounts)) {
+      const normalizedCategoryId = normalizePublishCategoryId(categoryId);
+      const count = Math.max(0, Number(rawCount) || 0);
+      if (normalizedCategoryId === "all" || count <= 0) {
         continue;
       }
-      const count = Math.max(0, Number(summary?.categories?.[category.id]) || 0);
-      if (count > 0) {
-        categoryCounts[category.id] = count;
-      }
+      categoryCounts[normalizedCategoryId] = count;
+      categoryLabels[normalizedCategoryId] = getCategoryLabel(
+        normalizedCategoryId,
+        rawCategoryLabels[normalizedCategoryId] || rawCategoryLabels[categoryId]
+      );
     }
 
     return {
       categoryCounts,
+      categoryLabels,
       totalCount: Math.max(0, Number(summary?.totalPublished) || 0),
       updatedAt: normalizeText(summary?.updatedAt),
     };
@@ -590,11 +618,14 @@ function registerStoreHandlers(deps) {
 
   function buildSummaryFromEntries(entries) {
     const categoryCounts = {};
+    const categoryLabels = {};
     for (const entry of entries) {
       const categoryId = normalizePublishCategoryId(entry?.categoryId);
+      const categoryLabel = getCategoryLabel(categoryId, entry?.categoryLabel);
       categoryCounts[categoryId] = Math.max(0, Number(categoryCounts[categoryId]) || 0) + 1;
+      categoryLabels[categoryId] = categoryLabel;
     }
-    return { categoryCounts, totalCount: entries.length, updatedAt: "" };
+    return { categoryCounts, categoryLabels, totalCount: entries.length, updatedAt: "" };
   }
 
   function shouldRepairSummary(summary) {
@@ -602,14 +633,19 @@ function registerStoreHandlers(deps) {
     return summary.totalCount !== categoryTotal || (summary.totalCount === 0 && categoryTotal === 0);
   }
 
-  function incrementCategoryCount(summary, categoryId, delta) {
+  function incrementCategoryCount(summary, categoryId, delta, categoryLabel = "") {
     const next = normalizeStoreSummary(summary);
     const normalizedCategoryId = normalizePublishCategoryId(categoryId);
     const nextCount = Math.max(0, (Number(next.categoryCounts[normalizedCategoryId]) || 0) + Number(delta || 0));
     if (nextCount > 0) {
       next.categoryCounts[normalizedCategoryId] = nextCount;
+      next.categoryLabels[normalizedCategoryId] = getCategoryLabel(
+        normalizedCategoryId,
+        categoryLabel || next.categoryLabels[normalizedCategoryId]
+      );
     } else {
       delete next.categoryCounts[normalizedCategoryId];
+      delete next.categoryLabels[normalizedCategoryId];
     }
     next.totalCount = Math.max(0, Number(next.totalCount) + Number(delta || 0));
     return next;
@@ -618,6 +654,7 @@ function registerStoreHandlers(deps) {
   function buildStoreSummaryPatch(summary, updatedAt) {
     return {
       categories: summary.categoryCounts,
+      categoryLabels: summary.categoryLabels,
       totalPublished: Math.max(0, Number(summary.totalCount) || 0),
       updatedAt: normalizeText(updatedAt) || new Date().toISOString(),
     };
@@ -693,17 +730,68 @@ function registerStoreHandlers(deps) {
   }
 
   function normalizeFilterCategoryId(categoryId) {
-    const normalized = normalizeText(categoryId).toLowerCase();
-    return normalized === "all" ? "all" : normalizePublishCategoryId(normalized);
+    const normalized = normalizeCategoryKey(categoryId);
+    return normalized === "all" ? "all" : normalized || "all";
   }
 
   function normalizePublishCategoryId(categoryId) {
-    const normalized = normalizeText(categoryId).toLowerCase();
-    return deps.STORE_CATEGORY_IDS.includes(normalized) ? normalized : "other";
+    return normalizePublishCategory({ categoryId }).id;
   }
 
-  function getCategoryLabel(categoryId) {
-    return deps.STORE_CATEGORIES.find((category) => category.id === categoryId)?.label || "기타";
+  function normalizePublishCategory(input) {
+    const explicitCategoryId = normalizeCategoryKey(input?.categoryId);
+    const explicitCategoryLabel = normalizeCategoryLabel(input?.categoryLabel);
+    if (explicitCategoryId && explicitCategoryId !== "all") {
+      return {
+        id: explicitCategoryId,
+        label: getCategoryLabel(explicitCategoryId, explicitCategoryLabel),
+      };
+    }
+    if (explicitCategoryLabel) {
+      const generatedCategoryId = normalizeCategoryKey(explicitCategoryLabel) || "other";
+      return {
+        id: generatedCategoryId === "all" ? "other" : generatedCategoryId,
+        label: explicitCategoryLabel,
+      };
+    }
+    return {
+      id: "other",
+      label: getCategoryLabel("other"),
+    };
+  }
+
+  function getCategoryLabel(categoryId, fallbackLabel = "") {
+    return normalizeText(fallbackLabel)
+      || deps.STORE_CATEGORIES.find((category) => category.id === categoryId)?.label
+      || normalizeText(categoryId).replace(/[-_]+/g, " ").trim()
+      || "기타";
+  }
+
+  function normalizeCategoryKey(categoryId) {
+    return normalizeText(categoryId)
+      .toLowerCase()
+      .replace(/[/\\]+/g, "-")
+      .replace(/[^\p{L}\p{N}-]+/gu, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "");
+  }
+
+  function normalizeCategoryLabel(categoryLabel) {
+    return normalizeText(categoryLabel).slice(0, 40);
+  }
+
+  function compareCategoryIds(left, right, categoryLabels = {}) {
+    const leftOrder = deps.STORE_CATEGORY_IDS.indexOf(left);
+    const rightOrder = deps.STORE_CATEGORY_IDS.indexOf(right);
+    const normalizedLeftOrder = leftOrder >= 0 ? leftOrder : Number.MAX_SAFE_INTEGER;
+    const normalizedRightOrder = rightOrder >= 0 ? rightOrder : Number.MAX_SAFE_INTEGER;
+    if (normalizedLeftOrder !== normalizedRightOrder) {
+      return normalizedLeftOrder - normalizedRightOrder;
+    }
+    return getCategoryLabel(left, categoryLabels?.[left]).localeCompare(
+      getCategoryLabel(right, categoryLabels?.[right]),
+      "ko"
+    );
   }
 
   function buildSummary(content) {

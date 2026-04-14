@@ -8,14 +8,47 @@ const vm = require("vm");
 const root = path.resolve(__dirname, "..");
 
 function main() {
+  verifyCustomConversationSnapshotBridge();
+  verifyCustomPromptSnapshotBridge();
+  verifyCustomMeetingSnapshotBridge();
   verifyRenderPayloadAndReviewFloat();
+  verifyCustomReleaseSnapshotBridge();
   verifyVisibleStateCalculation();
-  console.log("[verify-panel-render-controller] Panel render controller contract passed");
+  console.log("[verify-panel-render-controller] V2 shell bridge render contract passed");
+}
+
+function verifyCustomConversationSnapshotBridge() {
+  const harness = createHarness({
+    activeTool: "bookmarks",
+    buildConversationSnapshot() {
+      return {
+        activeId: "bookmark-hosted",
+        count: 4,
+        snapshotFingerprint: "bookmark-hosted|4|first|last",
+      };
+    },
+    getConversationCount() {
+      return 4;
+    },
+  });
+
+  harness.controller.render();
+
+  assert.equal(harness.renderPayloads[0].handleCount, 4);
+  assert.deepEqual(harness.renderPayloads[0].panelSnapshot.bookmarksTool, {
+    activeId: "bookmark-hosted",
+    count: 4,
+    snapshotFingerprint: "bookmark-hosted|4|first|last",
+  });
+  assert.equal(harness.renderPayloads[0].bookmarksTool, undefined);
 }
 
 function verifyRenderPayloadAndReviewFloat() {
   const harness = createHarness({
     activeTool: "meeting",
+    toolSummaries: {
+      meeting: { count: 2 },
+    },
     open: true,
     settings: { enabled: true },
   });
@@ -24,12 +57,75 @@ function verifyRenderPayloadAndReviewFloat() {
 
   assert.equal(harness.debugSyncCalls, 1);
   assert.equal(harness.renderPayloads.length, 1);
-  assert.equal(harness.renderPayloads[0].activeTool, "meeting");
+  assert.equal(harness.renderPayloads[0].panelSnapshot.activeTool, "meeting");
   assert.equal(harness.renderPayloads[0].handleCount, 2);
-  assert.equal(harness.renderPayloads[0].meetingTool.count, 2);
-  assert.equal(harness.renderPayloads[0].toolTitle, "회의 룸");
+  assert.equal(harness.renderPayloads[0].panelSnapshot.meetingTool.count, 2);
+  assert.deepEqual(harness.renderPayloads[0].panelTrace, {
+    activeTool: "meeting",
+    open: true,
+    reviewOpen: false,
+    visible: true,
+  });
   assert.equal(harness.renderPayloads[0].visible, true);
   assert.deepEqual(harness.reviewFloatStates, [{ visible: true }]);
+}
+
+function verifyCustomPromptSnapshotBridge() {
+  const harness = createHarness({
+    activeTool: "prompts",
+    uiPreferences: {
+      activePromptTab: "review",
+    },
+    buildPromptSnapshot() {
+      return {
+        review: {
+          requestId: 7,
+        },
+      };
+    },
+    getPromptCounts() {
+      return {
+        promptCount: 7,
+        promptToolCount: 5,
+      };
+    },
+  });
+
+  harness.controller.render();
+
+  assert.equal(harness.renderPayloads[0].handleCount, 5);
+  assert.deepEqual(harness.renderPayloads[0].panelSnapshot.promptTool, {
+    review: {
+      requestId: 7,
+    },
+  });
+  assert.equal(harness.renderPayloads[0].panelTrace.reviewOpen, true);
+}
+
+function verifyCustomMeetingSnapshotBridge() {
+  const harness = createHarness({
+    activeTool: "meeting",
+    buildToolSummarySnapshot(toolId) {
+      if (toolId === "meeting") {
+        return {
+          count: 9,
+          snapshotFingerprint: "meeting-alpha|9|fresh",
+        };
+      }
+      return {};
+    },
+    getToolSummaryCount(toolId) {
+      return toolId === "meeting" ? 9 : 0;
+    },
+  });
+
+  harness.controller.render();
+
+  assert.equal(harness.renderPayloads[0].handleCount, 9);
+  assert.deepEqual(harness.renderPayloads[0].panelSnapshot.meetingTool, {
+    count: 9,
+    snapshotFingerprint: "meeting-alpha|9|fresh",
+  });
 }
 
 function verifyVisibleStateCalculation() {
@@ -41,6 +137,32 @@ function verifyVisibleStateCalculation() {
 
   assert.equal(harness.renderPayloads[0].visible, false);
   assert.deepEqual(harness.reviewFloatStates, [{ visible: false }]);
+}
+
+function verifyCustomReleaseSnapshotBridge() {
+  const harness = createHarness({
+    activeTool: "release",
+    buildToolSummarySnapshot(toolId) {
+      if (toolId === "release") {
+        return {
+          count: 1,
+          updateAvailable: true,
+        };
+      }
+      return {};
+    },
+    getToolSummaryCount(toolId) {
+      return toolId === "release" ? 1 : 0;
+    },
+  });
+
+  harness.controller.render();
+
+  assert.equal(harness.renderPayloads[0].handleCount, 1);
+  assert.deepEqual(harness.renderPayloads[0].panelSnapshot.releaseTool, {
+    count: 1,
+    updateAvailable: true,
+  });
 }
 
 function createHarness(options = {}) {
@@ -72,20 +194,24 @@ function createHarness(options = {}) {
     },
   };
 
-  loadScript("content/panel-render-controller.js", context);
+  loadScript("content/panel-v2-shell-bridge.js", context);
 
   const state = {
     activeTool: options.activeTool || "bookmarks",
-    meetingHub: { items: [] },
     open: Boolean(options.open),
     settings: {
       enabled: true,
       ...(options.settings || {}),
     },
-    uiPreferences: {},
+    settingsHydrated: options.settingsHydrated !== false,
+    toolSummaries: cloneValue(options.toolSummaries || {
+      meeting: { count: 0 },
+      release: { count: 0 },
+    }),
+    uiPreferences: cloneValue(options.uiPreferences || {}),
   };
 
-  const controller = context.InovaBookmarks.panelRenderController.create(state, {
+  const controller = context.InovaBookmarks.panelV2ShellBridge.createRenderController(state, {
     isPaused() {
       return false;
     },
@@ -110,14 +236,11 @@ function createHarness(options = {}) {
         debugSyncCalls += 1;
       },
     },
-    panelMeetingController: {
-      buildToolState() {
-        return {
-          count: 2,
-        };
-      },
-    },
-    panelPromptController: {
+    buildToolSummarySnapshot: options.buildToolSummarySnapshot || ((toolId) => cloneValue(state.toolSummaries?.[toolId] || {})),
+    getToolSummaryCount: options.getToolSummaryCount,
+    buildConversationSnapshot: options.buildConversationSnapshot,
+    getConversationCount: options.getConversationCount,
+    promptShellController: {
       buildReviewFloatState(visible) {
         return { visible };
       },
@@ -131,19 +254,23 @@ function createHarness(options = {}) {
         };
       },
     },
+    buildPromptSnapshot: options.buildPromptSnapshot,
+    getPromptCounts: options.getPromptCounts,
     panelShellController: {
-      buildRenderChrome(counts) {
-        return {
-          handleCount: counts.meeting,
-          toolCount: counts.meeting,
-          toolTitle: "회의 룸",
-          tools: [
-            { count: counts.bookmarks, id: "bookmarks", label: "대화" },
-            { count: counts.meeting, id: "meeting", label: "회의 룸" },
-            { count: counts.prompts, id: "prompts", label: "프롬프트" },
-            { count: counts.release, id: "release", label: "릴리스" },
-          ],
-        };
+      buildHandleCount(counts) {
+        if (state.activeTool === "bookmarks") {
+          return counts.bookmarks || counts.prompts || counts.meeting || counts.release;
+        }
+        if (state.activeTool === "prompts") {
+          return counts.promptTool || counts.prompts;
+        }
+        if (state.activeTool === "meeting") {
+          return counts.meeting;
+        }
+        if (state.activeTool === "release") {
+          return counts.release;
+        }
+        return 0;
       },
     },
     releaseManager: {

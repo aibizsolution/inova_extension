@@ -2,6 +2,7 @@
 
 set -e
 
+node scripts/cleanup-local-artifacts.js
 node scripts/verify-branch-workflow.js --pre-commit
 node scripts/verify-feature-doc-update.js --staged
 node scripts/verify-refactor-plan-update.js --staged

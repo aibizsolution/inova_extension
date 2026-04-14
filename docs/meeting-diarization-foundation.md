@@ -15,7 +15,7 @@
 - hosted 작업실은 clean URL(`meetingId`, optional `jobId`, optional `share`)로 부팅합니다.
 - 작업실은 먼저 확장 bridge와 handshake하고, background가 `authorizeInovaMeetingWorkspaceAccess`로 `owner-secure` 또는 `share-readonly` 권한을 판정한 뒤 Firebase custom token을 받아 Firestore `meeting/job/artifact` 문서를 직접 구독합니다.
 - 녹음은 브라우저 표준 `getUserMedia + MediaRecorder` 경로만 사용합니다.
-- 로컬 큐와 브라우저 상태는 `chrome.storage.local.meetingStateByMeetingId`만 사용합니다.
+- active hosted-first lane은 로컬 큐/브라우저 상태를 `chrome.storage.local.meetingStateByMeetingId`에 의존하지 않습니다. 이 키는 `0.4.4` 영향 판단용 backup/legacy reference에서만 유지합니다.
 
 ### Functions
 

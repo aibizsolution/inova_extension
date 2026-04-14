@@ -10,7 +10,7 @@ const root = path.resolve(__dirname, "..");
 async function main() {
   await verifyVisibilityHiddenAndVisibleFlow();
   await verifyWindowFocusFlow();
-  console.log("[verify-panel-activity-controller] Panel activity controller contract passed");
+  console.log("[verify-panel-activity-controller] V2 shell bridge activity contract passed");
 }
 
 async function verifyVisibilityHiddenAndVisibleFlow() {
@@ -22,8 +22,7 @@ async function verifyVisibilityHiddenAndVisibleFlow() {
   hiddenHarness.controller.handleVisibilityChange();
   await hiddenHarness.flush();
 
-  assert.deepEqual(hiddenHarness.meetingScheduleCalls, [0]);
-  assert.deepEqual(hiddenHarness.promptRealtimeScheduleCalls, [0]);
+  assert.deepEqual(hiddenHarness.promptRealtimeScheduleCalls, []);
   assert.deepEqual(hiddenHarness.promptCloudScheduleCalls, []);
   assert.deepEqual(hiddenHarness.releaseEnsureCalls, []);
   assert.equal(hiddenHarness.debugEvents.at(-1)?.event, "panel.ui.visibility.hidden");
@@ -37,11 +36,11 @@ async function verifyVisibilityHiddenAndVisibleFlow() {
   await visibleHarness.flush();
 
   assert.deepEqual(visibleHarness.providerIdentityReasons, ["visibility-visible"]);
-  assert.deepEqual(visibleHarness.promptCloudScheduleCalls, [320]);
-  assert.deepEqual(visibleHarness.meetingScheduleCalls, [320]);
-  assert.deepEqual(visibleHarness.promptRealtimeScheduleCalls, [320]);
-  assert.deepEqual(visibleHarness.releaseEnsureCalls, [{ allowCached: false, preferFresh: false }]);
+  assert.deepEqual(visibleHarness.promptCloudScheduleCalls, []);
+  assert.deepEqual(visibleHarness.promptRealtimeScheduleCalls, []);
+  assert.deepEqual(visibleHarness.releaseEnsureCalls, []);
   assert.equal(visibleHarness.debugEvents.at(-1)?.event, "panel.ui.visibility.visible");
+  assert.equal(visibleHarness.renderCalls.length, 1);
 }
 
 async function verifyWindowFocusFlow() {
@@ -53,17 +52,15 @@ async function verifyWindowFocusFlow() {
   await harness.flush();
 
   assert.deepEqual(harness.providerIdentityReasons, ["window-focus"]);
-  assert.deepEqual(harness.promptCloudScheduleCalls, [320]);
-  assert.deepEqual(harness.meetingScheduleCalls, [320]);
-  assert.deepEqual(harness.promptRealtimeScheduleCalls, [320]);
-  assert.deepEqual(harness.releaseEnsureCalls, [{ allowCached: false, preferFresh: false }]);
+  assert.deepEqual(harness.promptCloudScheduleCalls, []);
+  assert.deepEqual(harness.promptRealtimeScheduleCalls, []);
+  assert.deepEqual(harness.releaseEnsureCalls, []);
   assert.equal(harness.debugEvents.at(-1)?.event, "panel.ui.focus");
   assert.equal(harness.renderCalls.length, 1);
 }
 
 function createHarness(options = {}) {
   const debugEvents = [];
-  const meetingScheduleCalls = [];
   const promptCloudScheduleCalls = [];
   const promptRealtimeScheduleCalls = [];
   const providerIdentityReasons = [];
@@ -80,20 +77,15 @@ function createHarness(options = {}) {
   context.globalThis = context;
   context.InovaBookmarks = {};
 
-  loadScript("content/panel-activity-controller.js", context);
+  loadScript("content/panel-v2-shell-bridge.js", context);
 
   const state = {
     open: Boolean(options.open),
   };
 
-  const controller = context.InovaBookmarks.panelActivityController.create(state, {
+  const controller = context.InovaBookmarks.panelV2ShellBridge.createPanelActivityBridge(state, {
     logPanelDebug(event, payload) {
       debugEvents.push({ event, payload: cloneValue(payload) });
-    },
-    meetingManager: {
-      scheduleSync(delay) {
-        meetingScheduleCalls.push(delay);
-      },
     },
     providerIdentitySync: {
       async syncToStorage(reason) {
@@ -123,7 +115,6 @@ function createHarness(options = {}) {
   return {
     controller,
     debugEvents,
-    meetingScheduleCalls,
     promptCloudScheduleCalls,
     promptRealtimeScheduleCalls,
     providerIdentityReasons,

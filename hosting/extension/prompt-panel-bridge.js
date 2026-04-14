@@ -1,5 +1,5 @@
 (function initPromptPanelBridge(global) {
-  const ALLOWED_PARENT_ORIGINS = new Set(["https://inova.incross.com"]);
+  const ALLOWED_PARENT_ORIGINS = buildAllowedParentOrigins();
   const DEFAULT_FIRESTORE_COLLECTIONS = Object.freeze({
     accountsCollection: "integration_inova_accounts",
     storeDetailCollection: "prompt_store_entry_details",
@@ -8,6 +8,10 @@
   });
   const DEFAULT_PROMPT_PANEL_SCOPE = "prompt-panel";
   const FIRESTORE_PERSISTENCE_OPTIONS = { synchronizeTabs: true };
+  const LOCAL_BRIDGE_ORIGINS = new Set([
+    "http://127.0.0.1:5000",
+    "http://localhost:5000",
+  ]);
   const PORT_CONNECT_SOURCE = "inova-prompt-panel-client";
   const STORE_SUMMARY_DOC_ID = "summary";
   const STORE_LATEST_LOCAL_LIMIT = 1000;
@@ -16,10 +20,12 @@
   let app = null;
   let auth = null;
   let db = null;
+  let emulatorsConfigured = false;
   let firestorePersistencePromise = null;
   let port = null;
   let currentRequestId = 0;
   let storeFeedSnapshots = new Map();
+  let storeFeedReadyPages = new Set();
   let storeSummarySnapshot = null;
   let storeLatestEmitTimer = 0;
   let lastStoreLatestSignature = "";
@@ -30,6 +36,19 @@
   let connectedPromptPanelScope = DEFAULT_PROMPT_PANEL_SCOPE;
 
   global.addEventListener("message", handleWindowMessage);
+
+  function buildAllowedParentOrigins() {
+    const origins = new Set(["https://inova.incross.com"]);
+    const configuredParentOrigin = readConfiguredParentOrigin();
+    if (configuredParentOrigin) {
+      origins.add(configuredParentOrigin);
+    }
+    const referrerOrigin = readReferrerOrigin();
+    if (referrerOrigin.startsWith("chrome-extension://")) {
+      origins.add(referrerOrigin);
+    }
+    return origins;
+  }
 
   function configureFirestoreLogging(firebase) {
     try {
@@ -156,11 +175,18 @@
 
     if (!app) {
       configureFirestoreLogging(global.firebase);
+      if (isLocalBridgeOrigin()) {
+        clearStoredAuthSession(firebaseConfig, "prompt-panel-bridge");
+      }
       app = global.firebase.initializeApp(firebaseConfig, "prompt-panel-bridge");
       auth = app.auth();
       db = app.firestore();
+      configureFirebaseEmulators();
       await ensureFirestorePersistence();
-      await auth.setPersistence(global.firebase.auth.Auth.Persistence.SESSION);
+      const authPersistence = resolveAuthPersistence();
+      if (authPersistence) {
+        await auth.setPersistence(authPersistence);
+      }
     }
 
     const currentUser = auth.currentUser || null;
@@ -207,6 +233,86 @@
       }
     });
     return firestorePersistencePromise;
+  }
+
+  function readReferrerOrigin() {
+    try {
+      return new URL(global.document?.referrer || "").origin;
+    } catch {
+      return "";
+    }
+  }
+
+  function readConfiguredParentOrigin() {
+    try {
+      const configured = new URLSearchParams(global.location.search || "").get("inovaParentOrigin") || "";
+      const origin = new URL(configured).origin;
+      if (origin === "https://inova.incross.com" || origin.startsWith("chrome-extension://")) {
+        return origin;
+      }
+      return "";
+    } catch {
+      return "";
+    }
+  }
+
+  function configureFirebaseEmulators() {
+    if (emulatorsConfigured || !isLocalBridgeOrigin()) {
+      return;
+    }
+    const emulatorHost = resolveLocalEmulatorHost();
+    if (typeof auth?.useEmulator === "function") {
+      auth.useEmulator(`http://${emulatorHost}:9099`);
+    }
+    if (typeof db?.useEmulator === "function") {
+      db.useEmulator(emulatorHost, 8080);
+    }
+    emulatorsConfigured = true;
+  }
+
+  function resolveAuthPersistence() {
+    const persistence = global.firebase?.auth?.Auth?.Persistence;
+    if (!persistence) {
+      return "";
+    }
+    if (isLocalBridgeOrigin()) {
+      return persistence.NONE || "";
+    }
+    return persistence.SESSION || "";
+  }
+
+  function clearStoredAuthSession(firebaseConfig, appName) {
+    const apiKey = normalizeText(firebaseConfig?.apiKey);
+    const normalizedAppName = normalizeText(appName);
+    if (!apiKey || !normalizedAppName) {
+      return;
+    }
+    clearStoredAuthSessionEntries(global.sessionStorage, apiKey, normalizedAppName);
+    clearStoredAuthSessionEntries(global.localStorage, apiKey, normalizedAppName);
+  }
+
+  function clearStoredAuthSessionEntries(storage, apiKey, appName) {
+    if (!storage || typeof storage.length !== "number" || typeof storage.key !== "function") {
+      return;
+    }
+    const keysToRemove = [];
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = normalizeText(storage.key(index));
+      if (shouldClearStoredAuthSessionKey(key, apiKey, appName)) {
+        keysToRemove.push(key);
+      }
+    }
+    for (const key of keysToRemove) {
+      try {
+        storage.removeItem(key);
+      } catch {}
+    }
+  }
+
+  function shouldClearStoredAuthSessionKey(key, apiKey, appName) {
+    return key.startsWith("firebase:")
+      && key.includes(apiKey)
+      && key.includes(appName);
   }
 
   function subscribePromptLibraryMeta(payload) {
@@ -262,8 +368,9 @@
   }
 
   function flushStoreLatestSnapshot() {
+    const latestFeedPageId = buildLatestFeedPageId(0);
     const feedSnapshots = Array.from(storeFeedSnapshots.values());
-    if (!storeSummarySnapshot || !storeFeedSnapshots.has(buildLatestFeedPageId(0))) {
+    if (!storeSummarySnapshot || !storeFeedReadyPages.has(latestFeedPageId)) {
       return;
     }
     const sourceSnapshots = [storeSummarySnapshot, ...feedSnapshots].filter(Boolean);
@@ -346,6 +453,7 @@
     unsubscribeStoreFeeds = new Map();
     storeSummarySnapshot = null;
     storeFeedSnapshots = new Map();
+    storeFeedReadyPages = new Set();
   }
 
   function serializePromptLibraryMeta(snapshot, providerUserKey) {
@@ -452,6 +560,7 @@
       } catch {}
       unsubscribeStoreFeeds.delete(pageId);
       storeFeedSnapshots.delete(pageId);
+      storeFeedReadyPages.delete(pageId);
     }
   }
 
@@ -465,6 +574,7 @@
       .doc(pageId)
       .onSnapshot(
         (snapshot) => {
+          storeFeedReadyPages.add(pageId);
           if (snapshot?.exists) {
             storeFeedSnapshots.set(pageId, snapshot);
           } else {
@@ -543,5 +653,14 @@
       .replace(/\r\n/g, "\n")
       .replace(/\u00a0/g, " ")
       .trim();
+  }
+
+  function isLocalBridgeOrigin() {
+    return LOCAL_BRIDGE_ORIGINS.has(String(global.location?.origin || ""));
+  }
+
+  function resolveLocalEmulatorHost() {
+    const hostname = normalizeText(global.location?.hostname).toLowerCase();
+    return hostname === "localhost" ? "localhost" : "127.0.0.1";
   }
 })(globalThis);

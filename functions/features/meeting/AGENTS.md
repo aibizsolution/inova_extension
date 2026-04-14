@@ -31,7 +31,7 @@
 - `content/meeting-manager.js`
 - `hosting/meeting/index.js`
 - `background/service-worker.js`
-- `shared/meeting-bridge.js`
+- `shared/meeting-bridge.js` - inactive legacy reference
 
 ## 관련 functions 경로
 - `functions/index.js`

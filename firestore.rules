@@ -112,6 +112,54 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /prompt_library_orders/{libraryId} {
+      allow get: if isPromptPanelSessionActive()
+        && request.auth.token.promptLibraryId == libraryId
+        && (
+          resource == null
+          || resource.data.libraryId == request.auth.token.promptLibraryId
+        );
+      allow list: if false;
+      allow write: if false;
+    }
+
+    match /prompt_library_orders_v2/{libraryId} {
+      allow get: if isPromptPanelV2SessionActive()
+        && request.auth.token.promptLibraryId == libraryId
+        && (
+          resource == null
+          || resource.data.libraryId == request.auth.token.promptLibraryId
+        );
+      allow list: if false;
+      allow write: if false;
+    }
+
+    match /prompt_library_chunks/{docId} {
+      allow get: if isPromptPanelSessionActive()
+        && (
+          docId.matches('^' + request.auth.token.promptLibraryId + '__b[0-9]{2}$')
+          || (
+            resource != null
+            && resource.data.libraryId == request.auth.token.promptLibraryId
+          )
+        );
+      allow list: if false;
+      allow write: if false;
+    }
+
+    match /prompt_library_chunks_v2/{docId} {
+      allow get: if isPromptPanelV2SessionActive()
+        && (
+          docId.matches('^' + request.auth.token.promptLibraryId + '__b[0-9]{2}$')
+          || (
+            resource != null
+            && resource.data.libraryId == request.auth.token.promptLibraryId
+          )
+        );
+      allow list: if false;
+      allow write: if false;
+    }
+
     match /prompt_store_meta/{docId} {
       allow get: if isAnyPromptPanelSessionActive() && docId == "summary";
       allow list: if false;

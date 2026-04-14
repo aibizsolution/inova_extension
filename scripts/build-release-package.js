@@ -5,7 +5,15 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawnSync } = require("child_process");
-const { compareVersions, findReleaseEntry, getPublicReleaseSection, readReleaseCatalog, validateReleaseEntry } = require("./release-metadata");
+const {
+  compareVersions,
+  findReleaseEntry,
+  getPublicReleaseSection,
+  readReleaseCatalog,
+  upsertReleaseEntry,
+  validateReleaseEntry,
+  writeReleaseCatalog,
+} = require("./release-metadata");
 const {
   collectRequiredReleasePackagePaths,
   findMissingPaths,
@@ -30,13 +38,14 @@ const zipPath = path.join(releasesDir, `${bundleName}.zip`);
 const hostingRoot = path.join(root, "hosting", productLane === "v2" ? "extension-v2" : "extension");
 const hostingDownloadDir = path.join(hostingRoot, "downloads");
 const hostingReleaseDir = path.join(hostingRoot, "releases");
+const legacyHostingDownloadDir = path.join(root, "hosting", "extension", "downloads");
 const hostingBaseUrl = productLane === "v2"
-  ? "https://browser-extension-v2.web.app/extension"
+  ? "https://browser-extension-v2.web.app/extension-v2"
   : "https://browser-extension-main.web.app/extension";
 const latestDownloadFileName = "latest.zip";
 const publishedAt = new Date().toISOString();
 const runtimeItems = resolveReleaseRuntimeItems(manifestJson);
-const releaseCatalog = readReleaseCatalog(root);
+let releaseCatalog = readReleaseCatalog(root);
 const releaseEntry = findReleaseEntry(releaseCatalog, version);
 const releaseErrors = validateReleaseEntry(releaseEntry, version);
 if (releaseErrors.length) {
@@ -75,6 +84,14 @@ const historyRelease = buildPublishedRelease({
   sha256,
   sizeBytes,
 });
+releaseCatalog = persistCurrentReleaseArtifact({
+  releaseCatalog,
+  version,
+  publishedAt,
+  fileName: `${bundleName}.zip`,
+  sha256,
+  sizeBytes,
+});
 
 const latestPath = path.join(hostingReleaseDir, "latest.json");
 const historyPath = path.join(hostingReleaseDir, "history.json");
@@ -106,6 +123,12 @@ const curatedHistory = curatedVersions.map((curatedVersion) => {
     ].join("\n"));
   }
   return toHistoryPublishedRelease(publishedRelease);
+});
+ensureCuratedDownloadArtifacts({
+  curatedHistory,
+  hostingDownloadDir,
+  releasesDir,
+  sourceDirs: [legacyHostingDownloadDir],
 });
 const latestHistoryRelease = curatedHistory[0];
 const latestRelease = toLatestPublishedRelease(latestHistoryRelease, latestDownloadUrl);
@@ -367,6 +390,47 @@ function pruneCuratedReleaseArtifacts({ curatedHistory, hostingDownloadDir, late
   pruneZipFiles(hostingDownloadDir, new Set([latestDownloadFileName, ...curatedFileNames]));
 }
 
+function persistCurrentReleaseArtifact({ releaseCatalog, version, publishedAt, fileName, sha256, sizeBytes }) {
+  const nextCatalog = upsertReleaseEntry(releaseCatalog, {
+    version,
+    artifact: {
+      fileName,
+      publishedAt,
+      sha256,
+      sizeBytes,
+      minSupportedVersion: version,
+    },
+  });
+  writeReleaseCatalog(root, nextCatalog);
+  return nextCatalog;
+}
+
+function ensureCuratedDownloadArtifacts({ curatedHistory, hostingDownloadDir, releasesDir, sourceDirs = [] }) {
+  const candidateSourceDirs = [
+    releasesDir,
+    ...(Array.isArray(sourceDirs) ? sourceDirs : []),
+  ].filter(Boolean);
+
+  for (const release of Array.isArray(curatedHistory) ? curatedHistory : []) {
+    const fileName = normalizeText(release?.fileName);
+    if (!fileName) {
+      continue;
+    }
+    const targetPath = path.join(hostingDownloadDir, fileName);
+    if (fs.existsSync(targetPath)) {
+      continue;
+    }
+    const sourcePath = resolveArtifactSourcePath(fileName, candidateSourceDirs);
+    if (!sourcePath) {
+      throw new Error([
+        `릴리스 ZIP을 현재 lane downloads로 복사할 수 없어요: ${fileName}`,
+        ...candidateSourceDirs.map((directoryPath) => `- ${path.join(directoryPath, fileName)}`),
+      ].join("\n"));
+    }
+    fs.copyFileSync(sourcePath, targetPath);
+  }
+}
+
 function pruneZipFiles(directoryPath, allowedFileNames) {
   if (!fs.existsSync(directoryPath)) {
     return;
@@ -385,6 +449,16 @@ function pruneZipFiles(directoryPath, allowedFileNames) {
     }
     fs.rmSync(path.join(directoryPath, fileName), { force: true });
   }
+}
+
+function resolveArtifactSourcePath(fileName, sourceDirs) {
+  for (const directoryPath of Array.isArray(sourceDirs) ? sourceDirs : []) {
+    const candidatePath = path.join(directoryPath, fileName);
+    if (fs.existsSync(candidatePath)) {
+      return candidatePath;
+    }
+  }
+  return "";
 }
 
 function normalizeArtifactMetadata(artifact) {

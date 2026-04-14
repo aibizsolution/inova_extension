@@ -9,19 +9,23 @@
 
 ## 먼저 볼 파일
 - `content/features/prompt-review/prompt-review-manager.js`
-- `content/features/prompt-review/prompt-review-view.js`
+- `hosting/extension-v2/panel/prompt-review-controller.js`
+- `hosting/extension-v2/panel/prompt-review-view.js`
 - `content/features/prompt-review/composer-review-float.js`
 
 ## 관련 프론트 경로
-- `content/panel-prompt-controller.js` - prompt tool shell composition root
-- `content/panel-prompt-bridge-controller.js` - panel shell이 prompt tool shell을 좁은 계약으로 참조하는 외부 adapter
+- `content/panel-v2-prompt-controller.js` - v2 review handoff + composer review float shell
 - `content/main.js` - panel shell composition root, prompt shell 직접 구현 금지
 - `content/composer.js`
-- `content/prompt-hub-state.js` - review 탭 포함 여부를 조정하는 prompt tool shell
-- `content/prompt-hub-panel.js` - review 탭 선택과 prompt shell 상호작용을 묶는 prompt tool shell
-- `content/prompt-hub-controller.js` - review 관련 action routing과 prompt 탭 전이를 묶는 prompt tool shell
-- `content/prompt-hub-runtime.js` - prompt manager/runtime wiring을 묶는 prompt tool shell
-- `content/prompt-hub-view.js` - review body를 감싸는 prompt tool shell
+- `backup/legacy-panel/prompt-hub-state.js` - inactive legacy prompt shell reference
+- `backup/legacy-panel/prompt-hub-panel.js` - inactive legacy prompt shell reference
+- `backup/legacy-panel/prompt-hub-controller.js` - inactive legacy prompt shell reference
+- `backup/legacy-panel/prompt-hub-runtime.js` - inactive legacy prompt shell reference
+- `hosting/extension-v2/panel/prompt-review-controller.js` - hosted panel review state/action ownership
+- `hosting/extension-v2/panel/prompt-review-view.js` - hosted panel review view
+- `hosting/extension-v2/panel/prompt-tool-view.js` - hosted panel prompt tool shell view
+- `backup/legacy-panel/prompt-review-view.js` - inactive legacy content view reference
+- `backup/legacy-panel/prompt-hub-view.js` - inactive legacy prompt tool shell view reference
 
 ## 관련 functions 경로
 - `functions/features/prompt-review/prompt-review-service.js`
@@ -39,8 +43,9 @@
 
 ## 최소 검증 방법
 - 입력창 바깥 우측 상단 평가 버튼, `총점 n점`과 `?` 도움말이 보이는지, `빠른 보완 포인트 -> 보완 프롬프트 -> 기준 항목 평가` 순서로 결과가 열리는지, 보완 프롬프트가 문장 단위 줄바꿈으로 읽히는지, 우측 `복사` 버튼이 동작하는지, 대괄호 placeholder가 남았을 때 `입력창에 반영한 뒤 직접 수정`이 드러나는 경고/버튼 문구를 확인한다.
+- `prompt-telling-v2` opt-in 버전에서는 기준 항목 평가가 `핵심 구조 (PRO)` 3개와 `정교화 요소 (MPT)` 3개, 총 6개 항목으로 나뉘어 보이는지 확인한다.
 - 아티팩트 상세 패널이 열린 상태에서 편집기를 띄워도 `프롬프트 검토` 버튼 anchor는 채팅 composer를 유지해야 하고, 패널 편집기 우측 상단으로 이탈하면 안 된다.
-- 간헐 이슈 조사 시 `prompt.review.*` debug 로그로 실제 검토 요청이 있었는지 확인한다.
+- 간헐 이슈 조사 시 먼저 top 콘솔에서 `inova:review`, `inova:functions`, `inova:panel` 로그로 `외부 검토 버튼 -> review 요청 -> backend 호출 -> snapshot/open/result 상태`가 실제로 어디까지 진행됐는지 확인한다.
 
 ## 언제 사용자에게 다시 물을지
 - 평가 UX 문제인지, 입력창 주입 문제인지, 보관함/스토어 문제인지 모호할 때만 확인한다.
@@ -49,5 +54,9 @@
 - 입력창 주입, prompt tool shell, panel shell 상태와 충돌할 때만 platform/shell로 넓힌다.
 
 ## 구현 경계
+- `reviewInovaPrompt` 요청에서 `reviewProfile`이 비어 있으면 backend 기본값은 반드시 `legacy-v1`이어야 한다. 0.4.4 사용자는 기존 4축 평가를 그대로 유지하고, 새 확장 버전만 `prompt-telling-v2`를 opt-in 한다.
+- `0.4.5`부터 panel 안의 review UI는 hosted panel iframe이 렌더링한다. legacy lane에서는 composer anchor와 review action/state를 content controller가 계속 소유한다.
+- `1.0.0+` v2 lane에서는 `hosting/extension-v2/panel/prompt-review-controller.js`가 `검토` 탭의 review/copy/apply/placeholder-confirm 상태와 review action 라우팅, escape dismiss까지 hosted 쪽에서 소유한다. extension은 `composer.read-state`, `composer.apply-text`, `clipboard.write-text`, `trace.log` 같은 stable page adapter capability와 `reviewInovaPrompt` runtime broker, `content/panel-v2-prompt-controller.js` 기반 composer review float + external handoff signal만 제공한다. 이 capability 이름은 active lane의 canonical contract로 보고, caller migration이 끝난 뒤 `apply-prompt-text`나 `copy-text` 같은 alias를 계속 남기지 않는다. top-panel snapshot에는 monotonic `requestId` 기반 external review activation signal만 남기고, review result/error/open/pending/placeholder-confirm 상태는 다시 싣지 않는다.
+- 새 클라이언트는 `prompt-telling-v2` 6축 응답과 `legacy-v1` 4축 응답을 모두 렌더링할 수 있어야 한다.
 - placeholder token 감지는 한 줄 안의 단순 `[...]` 토큰만 대상으로 유지한다. nested bracket이나 줄바꿈이 섞인 텍스트는 placeholder 경고 후보로 넓히지 않는다.
 - composer 선택은 textarea 같은 구체적인 채팅 입력 selector를 우선하고, broad `contenteditable` 후보는 앞선 tier가 없을 때만 고려한다.

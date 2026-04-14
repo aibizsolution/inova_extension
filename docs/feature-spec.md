@@ -78,13 +78,14 @@
 - `chrome.storage.local`에는 팝업 작업실 연결 설정과 세션/회의/프롬프트 상태를 저장합니다.
 - 패널 핸들 위치 같은 UI 선호도는 `uiPreferences`에 저장합니다.
 - 팝업이 직접 다루는 설정은 `settings.meetingWorkspaceTarget`이며, 로컬 호스팅 선택 시 `meetingWorkspaceUrlOverride`를 함께 갱신합니다.
+- 같은 `settings.meetingWorkspaceTarget`은 회의 작업실뿐 아니라 prompt-library cloud read/sync, prompt-review, prompt-store panel auth/read/write, hidden prompt bridge rehearsal target도 함께 결정해야 합니다.
 - 현재 선택한 도구는 `uiPreferences.activeTool`에 저장합니다.
 - 핸들 위치는 사이트 기준으로 기억하되, 화면 폭 구간에 따라 따로 보정할 수 있어야 합니다.
 - 질문 목록 자체는 저장하지 않고, 현재 대화 DOM에서 실시간으로 읽습니다.
-- 요청 보관함은 `promptLibrary.items`에 저장합니다.
-- 원격 백업 대기 상태와 마지막 동기화 메타는 `cloudSync`에 저장합니다.
+- active hosted-first lane은 요청 보관함을 `chrome.storage.local.promptLibrary` 정본으로 저장하지 않습니다. 정본은 hosted/Firestore 경로에 있고, 이 local key는 backup legacy reference에서만 유지합니다.
+- active hosted-first lane은 프롬프트 동기화 대기/원격 메타를 extension storage에 두지 않습니다. extension은 `providerIdentityCache`에 브라우저용 사용자 식별 정보만 최소로 캐시하고, 실제 동기화 상태는 hosted/Firestore/Functions 경로가 가집니다.
 - 스토어 목록과 반응 상태는 기본적으로 메모리에서만 관리하고, 원격 지표는 필요할 때만 Functions를 통해 읽고 씁니다.
-- 회의 기능 브라우저 상태는 `meetingStateByMeetingId`만 사용합니다.
+- active hosted-first lane은 회의 브라우저 상태를 별도 `meetingStateByMeetingId` storage key로 유지하지 않습니다. 이 키는 `0.4.4` 영향 판단용 backup/legacy reference에서만 남깁니다.
 - 회의 허브 목록은 `chrome.storage.local.meetingHub`에 별도 저장하지 않고, hosted bridge의 Firestore persistence와 현재 메모리 상태를 우선합니다.
 
 ## 6. 질문 모으기 규칙
@@ -102,10 +103,12 @@
 - 요청 항목을 선택하면 현재 대화 입력창에 본문을 바로 주입해야 합니다.
 - 입력창에 기존 텍스트가 있으면 `덮어쓰기`, `이어붙이기`, `취소` 중 하나를 선택할 수 있어야 합니다.
 - 요청 선택은 입력창까지만 주입하고 자동 전송하지 않습니다.
-- 현재 입력창 프롬프트를 `맥락`, `목표`, `제약`, `산출물 형식` 기준으로 평가할 수 있어야 합니다.
+- `reviewProfile`이 비어 있거나 `legacy-v1`인 요청은 현재 입력창 프롬프트를 `맥락`, `목표`, `제약`, `산출물 형식` 4축으로 계속 평가할 수 있어야 합니다.
+- `prompt-telling-v2` opt-in 버전은 현재 입력창 프롬프트를 `역할 지정`, `참고 자료`, `목표 설정`, `결과 형식`, `타깃 관점`, `말투` 6축으로 평가할 수 있어야 합니다.
 - 평가 결과에는 요약, 기준별 상태, 보완 포인트, 재사용 가능한 보완 프롬프트가 포함되어야 합니다.
 - 평가 결과의 보완 프롬프트는 사용자가 선택해 입력창에 바로 다시 반영할 수 있어야 합니다.
 - 평가 점수는 절대값처럼 보이지 않게 참고값으로 안내해야 합니다.
+- `prompt-telling-v2` 총점은 `Persona/Reference/Objective`를 중심 구조로, `Mode/Point of View/Tone`을 정교화 요소로 반영하는 서버 계산 점수여야 합니다.
 - 보완 프롬프트에 자리표시자가 남아 있으면 바로 반영하지 않고 한 번 더 확인을 받아야 합니다.
 - 평가 후 입력창 내용이 바뀌면 이전 보완 프롬프트는 바로 반영하지 않고, 다시 평가를 요구해야 합니다.
 - 요청 가져오기는 JSON 파일 기준으로 동작해야 합니다.
@@ -140,9 +143,11 @@
 - 질문 3개를 보낸 뒤 자동으로 모여 보이는지 본다.
 - 대화 안에서 찾기로 각각 찾고 클릭 이동이 되는지 본다.
 - 팝업에서 `상용 호스팅 / 로컬 호스팅`을 바꾼 뒤 패널의 `새 회의하기`가 기대한 URL로 열리는지 본다.
+- 팝업에서 `로컬 호스팅`을 고른 뒤 `요청/스토어`가 local Functions와 `http://127.0.0.1:5000/extension/prompt-panel-bridge.html` 경로를 바라보는지 본다.
 - `요청` 도구에서 새 요청을 추가하고 입력창에 바로 넣어 본다.
 - 입력창에 내용이 있을 때 `덮어쓰기`와 `이어붙이기`가 각각 기대대로 동작하는지 본다.
 - 입력창에 임의 프롬프트를 적고 평가했을 때 요건별 피드백과 보완 프롬프트가 보이는지 본다.
+- `prompt-telling-v2` opt-in 버전에서는 기준 항목이 `핵심 구조 (PRO)` 3개와 `정교화 요소 (MPT)` 3개, 총 6개로 나뉘어 보이는지 본다.
 - 평가 결과에서 점수보다 먼저 감점 이유/보완 항목이 보이는지 본다.
 - 평가 결과에 외부 AI 모델 참고 의견 안내가 보이는지 본다.
 - 평가 결과의 `입력창에 반영`을 눌렀을 때 보완 프롬프트로 교체되는지 본다.

@@ -9,8 +9,9 @@ const root = path.resolve(__dirname, "..");
 
 async function main() {
   await verifyBootstrapWiringAndScheduling();
+  await verifyBootstrapSkipsMeetingLifecycleWiring();
   verifyRouteStorageChangeDelegation();
-  console.log("[verify-panel-bootstrap-controller] Panel bootstrap controller contract passed");
+  console.log("[verify-panel-bootstrap-controller] V2 shell bridge bootstrap contract passed");
 }
 
 async function verifyBootstrapWiringAndScheduling() {
@@ -25,9 +26,25 @@ async function verifyBootstrapWiringAndScheduling() {
 
   assert.equal(harness.lifecycleInitializeCalls, 1);
   assert.deepEqual(harness.providerIdentityReasons, ["bootstrap"]);
-  assert.equal(typeof harness.callbacks.onMeetingAction, "function");
+  assert.equal(typeof harness.callbacks.onToolSummarySync, "function");
   assert.equal(typeof harness.callbacks.onSearch, "function");
   assert.equal(typeof harness.callbacks.onToggle, "function");
+  [
+    "onMeetingSummarySync",
+    "onMeetingAction",
+    "onImportFile",
+    "onMovePrompt",
+    "onPromptAction",
+    "onPromptDraftChange",
+    "onReleaseAction",
+    "onReleaseSummarySync",
+    "onSelectPromptTab",
+    "onStoreAction",
+  ].forEach((callbackKey) => assert.equal(
+    callbackKey in harness.callbacks,
+    false,
+    `bootstrap default callback surface should drop the legacy callback ${callbackKey}`
+  ));
   assert.equal(harness.debugInstallCalls, 1);
   assert.equal(harness.reviewFloatEnsureCalls, 1);
   assert.equal(harness.routeWatchInstallCalls, 1);
@@ -35,18 +52,20 @@ async function verifyBootstrapWiringAndScheduling() {
   assert.equal(typeof harness.windowListeners.resize, "function");
   assert.equal(typeof harness.windowListeners.focus, "function");
   assert.equal(typeof harness.documentListeners.visibilitychange, "function");
-  assert.equal(harness.storageListeners.length, 4);
-  assert.equal(harness.panelDebugSubscribeCalls, 1);
+  assert.equal(harness.storageListeners.length, 1);
   assert.deepEqual(harness.routeSyncCalls, [true]);
-  assert.deepEqual(harness.meetingScheduleCalls, [260]);
-  assert.deepEqual(harness.promptRealtimeCalls, [260]);
-  assert.deepEqual(harness.promptCloudCalls, [1800]);
-  assert.equal(harness.ensureStoreLoadedCalls, 1);
-  assert.deepEqual(harness.releaseEnsureCalls, [{ allowCached: false, preferFresh: true }]);
   assert.deepEqual(harness.timeoutDelays, [450, 1200]);
 
   harness.timeoutCallbacks.forEach((callback) => callback());
   assert.equal(harness.routeRefreshCalls, 2);
+}
+
+async function verifyBootstrapSkipsMeetingLifecycleWiring() {
+  const harness = createHarness();
+  await harness.controller.bootstrap();
+  await harness.flush();
+
+  assert.equal(harness.storageListeners.length, 1);
 }
 
 function verifyRouteStorageChangeDelegation() {
@@ -99,8 +118,6 @@ function createHarness(options = {}) {
   let callbacks = null;
   let routeStateShouldRefresh = true;
   let routeRefreshCalls = 0;
-  let ensureStoreLoadedCalls = 0;
-  let panelDebugSubscribeCalls = 0;
   let debugInstallCalls = 0;
   let reviewFloatEnsureCalls = 0;
   let routeWatchInstallCalls = 0;
@@ -108,11 +125,6 @@ function createHarness(options = {}) {
   let lifecycleInitializeCalls = 0;
   const providerIdentityReasons = [];
   const routeSyncCalls = [];
-  const meetingScheduleCalls = [];
-  const promptRealtimeCalls = [];
-  const promptCloudCalls = [];
-  const releaseEnsureCalls = [];
-
   context.InovaBookmarks = {
     contentPanel: {
       ensurePanel(nextCallbacks) {
@@ -121,30 +133,25 @@ function createHarness(options = {}) {
       },
     },
     panelDebug: {
-      subscribe(callback) {
-        panelDebugSubscribeCalls += 1;
-        callback();
-      },
+      subscribe() {},
     },
   };
 
-  loadScript("content/panel-bootstrap-controller.js", context);
+  loadScript("content/panel-v2-shell-bridge.js", context);
 
   const state = {
     activeTool: options.activeTool || "bookmarks",
+    awaitingRouteMessages: Boolean(options.awaitingRouteMessages),
+    bookmarks: Array.isArray(options.bookmarks) ? options.bookmarks.slice() : [],
+    lastError: options.lastError || "",
     open: Boolean(options.open),
   };
 
-  const controller = context.InovaBookmarks.panelBootstrapController.create(state, {
+  const controller = context.InovaBookmarks.panelV2ShellBridge.createBootstrapController(state, {
     handlePanelMeetingAction: async () => {},
+    handlePanelToolSummarySync: async () => {},
     isStoreTabActive() {
       return Boolean(options.storeTabActive);
-    },
-    meetingManager: {
-      handleStorageChange() {},
-      scheduleSync(delay) {
-        meetingScheduleCalls.push(delay);
-      },
     },
     panelActivityController: {
       handleVisibilityChange() {},
@@ -165,26 +172,16 @@ function createHarness(options = {}) {
       },
       togglePanel() {},
     },
-    panelPromptController: {
+    promptShellController: {
       ensureReviewFloat() {
         reviewFloatEnsureCalls += 1;
-      },
-      ensureStoreLoaded() {
-        ensureStoreLoadedCalls += 1;
       },
       handleDraftChange() {},
       handleEscape() {},
       handleImportFile() {},
       handlePromptAction() {},
-      handleStorageChange() {},
       handleStoreAction() {},
       movePromptItem() {},
-      scheduleCloudSyncIfNeeded(delay) {
-        promptCloudCalls.push(delay);
-      },
-      scheduleRealtimeSync(delay) {
-        promptRealtimeCalls.push(delay);
-      },
       selectPromptTab() {},
     },
     panelShellController: {
@@ -203,16 +200,6 @@ function createHarness(options = {}) {
         providerIdentityReasons.push(reason);
         return true;
       },
-    },
-    releaseManager: {
-      ensureChecked(allowCached, preferFresh) {
-        releaseEnsureCalls.push({
-          allowCached: Boolean(allowCached),
-          preferFresh: Boolean(preferFresh),
-        });
-      },
-      handleAction() {},
-      handleStorageChange() {},
     },
     render() {},
     routeStateController: {
@@ -247,29 +234,11 @@ function createHarness(options = {}) {
     get debugInstallCalls() {
       return debugInstallCalls;
     },
-    get ensureStoreLoadedCalls() {
-      return ensureStoreLoadedCalls;
-    },
     get lifecycleInitializeCalls() {
       return lifecycleInitializeCalls;
     },
-    get meetingScheduleCalls() {
-      return meetingScheduleCalls;
-    },
-    get panelDebugSubscribeCalls() {
-      return panelDebugSubscribeCalls;
-    },
-    get promptCloudCalls() {
-      return promptCloudCalls;
-    },
-    get promptRealtimeCalls() {
-      return promptRealtimeCalls;
-    },
     get providerIdentityReasons() {
       return providerIdentityReasons;
-    },
-    get releaseEnsureCalls() {
-      return releaseEnsureCalls;
     },
     get reviewFloatEnsureCalls() {
       return reviewFloatEnsureCalls;

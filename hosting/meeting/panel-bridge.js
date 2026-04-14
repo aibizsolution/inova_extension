@@ -1,5 +1,5 @@
 (function initMeetingPanelBridge(global) {
-  const ALLOWED_PARENT_ORIGINS = new Set(["https://inova.incross.com"]);
+  const ALLOWED_PARENT_ORIGINS = buildAllowedParentOrigins();
   const FIRESTORE_PERSISTENCE_OPTIONS = { synchronizeTabs: true };
   const LOCAL_BRIDGE_ORIGINS = new Set([
     "http://127.0.0.1:5000",
@@ -17,6 +17,19 @@
   let currentRequestId = 0;
 
   global.addEventListener("message", handleWindowMessage);
+
+  function buildAllowedParentOrigins() {
+    const origins = new Set(["https://inova.incross.com"]);
+    const configuredParentOrigin = readConfiguredParentOrigin();
+    if (configuredParentOrigin) {
+      origins.add(configuredParentOrigin);
+    }
+    const referrerOrigin = readReferrerOrigin();
+    if (referrerOrigin.startsWith("chrome-extension://")) {
+      origins.add(referrerOrigin);
+    }
+    return origins;
+  }
 
   function configureFirestoreLogging(firebase) {
     try {
@@ -79,6 +92,27 @@
     port.onmessage = handlePortMessage;
     port.start?.();
     sendMessage("ready", {});
+  }
+
+  function readReferrerOrigin() {
+    try {
+      return new URL(global.document?.referrer || "").origin;
+    } catch {
+      return "";
+    }
+  }
+
+  function readConfiguredParentOrigin() {
+    try {
+      const configured = new URLSearchParams(global.location.search || "").get("inovaParentOrigin") || "";
+      const origin = new URL(configured).origin;
+      if (origin === "https://inova.incross.com" || origin.startsWith("chrome-extension://")) {
+        return origin;
+      }
+      return "";
+    } catch {
+      return "";
+    }
   }
 
   async function handlePortMessage(event) {

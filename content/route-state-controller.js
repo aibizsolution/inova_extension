@@ -6,9 +6,6 @@
     const applyUiPreferenceLock = typeof deps.applyUiPreferenceLock === "function"
       ? deps.applyUiPreferenceLock
       : (uiPreferences) => uiPreferences;
-    const ensureStoreLoaded = typeof deps.ensureStoreLoaded === "function"
-      ? deps.ensureStoreLoaded
-      : () => {};
     const normalizeToolId = typeof deps.normalizeToolId === "function"
       ? deps.normalizeToolId
       : defaultNormalizeToolId;
@@ -32,9 +29,6 @@
         }
         state.bookmarks = readLiveBookmarks();
         state.lastError = "";
-        if (isStoreTabActive()) {
-          ensureStoreLoaded();
-        }
         logDebug("route.refresh.success", {
           activeTool: state.activeTool,
           bookmarkCount: state.bookmarks.length,
@@ -42,13 +36,22 @@
           sessionId: state.sessionId,
         });
       } catch (error) {
-        state.lastError = error instanceof Error ? error.message : String(error);
-        logDebug("route.refresh.error", {
-          error: state.lastError,
-          scope: "route",
-          sessionId: state.sessionId,
-        });
-        console.error("[i-Nova Bookmarks] refresh state failed", error);
+        const invalidatedContext = isInvalidatedContextError(error);
+        state.lastError = invalidatedContext
+          ? "확장프로그램이 갱신되어 페이지를 새로고침해야 해요."
+          : error instanceof Error
+            ? error.message
+            : String(error);
+        if (!invalidatedContext) {
+          logDebug("route.refresh.error", {
+            error: state.lastError,
+            scope: "route",
+            sessionId: state.sessionId,
+          });
+        }
+        if (!invalidatedContext) {
+          console.error("[i-Nova Bookmarks] refresh state failed", error);
+        }
       }
     }
 
@@ -73,35 +76,23 @@
       let changed = false;
       const settingsChange = getStorageChange(changes, namespace.constants.storageKeys.settings, "settings");
       const pausedSessionsChange = getStorageChange(changes, namespace.constants.storageKeys.pausedSessions, "pausedSessions");
-      const cloudSyncChange = getStorageChange(changes, namespace.constants.storageKeys.cloudSync, "cloudSync");
       const uiPreferencesChange = getStorageChange(changes, namespace.constants.storageKeys.uiPreferences, "uiPreferences");
-      const promptLibraryChange = getStorageChange(changes, namespace.constants.storageKeys.promptLibrary, "promptLibrary");
 
       if (settingsChange) {
         state.settings = {
           ...namespace.constants.defaults.settings,
           ...(settingsChange.newValue || {}),
         };
+        state.settingsHydrated = true;
         changed = true;
       }
       if (pausedSessionsChange) {
         state.pausedSessions = pausedSessionsChange.newValue || {};
         changed = true;
       }
-      if (cloudSyncChange) {
-        state.cloudSync = namespace.cloudSync.mergeCloudSyncState(cloudSyncChange.newValue);
-        changed = true;
-      }
       if (uiPreferencesChange) {
         state.uiPreferences = readUiPreferences(uiPreferencesChange.newValue);
         state.activeTool = normalizeToolId(state.uiPreferences.activeTool || state.activeTool);
-        if (isStoreTabActive()) {
-          ensureStoreLoaded();
-        }
-        changed = true;
-      }
-      if (promptLibraryChange) {
-        state.promptLibrary = namespace.promptLibrary.mergePromptLibrary(promptLibraryChange.newValue);
         changed = true;
       }
 
@@ -110,20 +101,18 @@
 
     function mergeStorageState(storageState = {}) {
       state.settings = storageState.settings || { ...namespace.constants.defaults.settings };
+      state.settingsHydrated = true;
       state.pausedSessions = storageState.pausedSessions || {};
-      state.cloudSync = namespace.cloudSync.mergeCloudSyncState(storageState.cloudSync);
       state.uiPreferences = readUiPreferences(storageState.uiPreferences);
       state.activeTool = normalizeToolId(state.uiPreferences.activeTool || state.activeTool);
-      state.promptLibrary = namespace.promptLibrary.mergePromptLibrary(storageState.promptLibrary);
     }
 
     function readUiPreferences(value) {
       const merged = namespace.storage.mergeUiPreferences(value);
       const locked = applyUiPreferenceLock(merged);
-      return {
-        ...locked,
-        activePromptTab: normalizePromptTab(locked.activeTool === "store" ? "store" : locked.activePromptTab),
-      };
+      return namespace.storage.mergeUiPreferences(locked, {
+        activePromptTab: normalizePromptTab(locked.activePromptTab),
+      });
     }
 
     function readLiveBookmarks() {
@@ -166,10 +155,6 @@
       return Boolean(state.pausedSessions[state.sessionId]);
     }
 
-    function isStoreTabActive() {
-      return state.activeTool === "prompts" && state.uiPreferences.activePromptTab === "store";
-    }
-
     function normalizePromptTab(value) {
       return value === "store" || value === "review" ? value : "library";
     }
@@ -181,14 +166,18 @@
     function defaultNormalizeToolId(toolId) {
       return toolId === "release" || toolId === "prompts" || toolId === "meeting"
         ? toolId
-        : toolId === "store"
-            ? "prompts"
-            : "bookmarks";
+        : "bookmarks";
     }
 
     function logDebug(event, payload) {
       namespace.panelDebug?.log?.(event, payload || {});
     }
+  }
+
+  function isInvalidatedContextError(error) {
+    const message = namespace.session.normalizeText(error instanceof Error ? error.message : String(error || ""));
+    return message.includes("Extension context invalidated")
+      || message.includes("확장프로그램이 갱신");
   }
 
   namespace.routeStateController = { create };

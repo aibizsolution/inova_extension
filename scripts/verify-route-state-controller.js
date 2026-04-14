@@ -10,6 +10,7 @@ const root = path.resolve(__dirname, "..");
 async function main() {
   await verifyRefreshStateLoadsStorageAndBookmarks();
   verifyLaneAwareStorageChangeHandling();
+  verifyPromptLibraryStorageChangesAreIgnored();
   await verifyRouteWaitLifecycle();
   console.log("[verify-route-state-controller] Route state controller contract passed");
 }
@@ -21,9 +22,7 @@ async function verifyRefreshStateLoadsStorageAndBookmarks() {
     routeWaitStartedAt: Date.now(),
     awaitingRouteMessages: true,
     storageState: {
-      cloudSync: { source: "runtime" },
       pausedSessions: { "session-2": true },
-      promptLibrary: { items: [{ title: "알림", content: "본문" }] },
       settings: { autoBookmark: true, enabled: true, meetingDebug: false },
       uiPreferences: { activePromptTab: "review", activeTool: "store" },
     },
@@ -38,11 +37,11 @@ async function verifyRefreshStateLoadsStorageAndBookmarks() {
 
   assert.equal(harness.state.sessionTitle, "테스트 세션");
   assert.equal(harness.state.activeTool, "prompts");
+  assert.equal(harness.state.uiPreferences.activeTool, "prompts");
   assert.equal(harness.state.uiPreferences.activePromptTab, "store");
   assert.deepEqual(harness.state.bookmarks, [{ id: "bookmark-1", text: "첫 질문" }]);
   assert.equal(harness.state.awaitingRouteMessages, false);
   assert.equal(harness.state.routeBaselineSignature, "sig-after");
-  assert.equal(harness.ensureStoreLoadedCalls, 1);
   assert.equal(harness.state.lastError, "");
 }
 
@@ -56,9 +55,7 @@ function verifyLaneAwareStorageChangeHandling() {
   });
 
   const changed = harness.controller.handleStorageChange({
-    "lane:cloudSyncKey": { newValue: { source: "cache" } },
     "lane:pausedSessionsKey": { newValue: { "session-3": true } },
-    "lane:promptLibraryKey": { newValue: { items: [{ title: "변경", content: "됨" }] } },
     "lane:settingsKey": { newValue: { autoBookmark: false, enabled: true } },
     "lane:uiPreferencesKey": { newValue: { activePromptTab: "review", activeTool: "store" } },
   }, "local");
@@ -66,11 +63,20 @@ function verifyLaneAwareStorageChangeHandling() {
   assert.equal(changed, true);
   assert.equal(harness.state.settings.autoBookmark, false);
   assert.equal(harness.state.activeTool, "prompts");
+  assert.equal(harness.state.uiPreferences.activeTool, "prompts");
   assert.equal(harness.state.uiPreferences.activePromptTab, "store");
   assert.deepEqual(harness.state.pausedSessions, { "session-3": true });
-  assert.deepEqual(harness.state.promptLibrary.items, [{ title: "변경", content: "됨" }]);
-  assert.deepEqual(harness.state.cloudSync, { mergedSource: "cache" });
-  assert.equal(harness.ensureStoreLoadedCalls, 1);
+}
+
+function verifyPromptLibraryStorageChangesAreIgnored() {
+  const harness = createHarness();
+
+  const changed = harness.controller.handleStorageChange({
+    "lane:promptLibraryKey": { newValue: { items: [{ title: "변경", content: "됨" }] } },
+  }, "local");
+
+  assert.equal(changed, false);
+  assert.equal("promptLibrary" in harness.state, false);
 }
 
 async function verifyRouteWaitLifecycle() {
@@ -105,12 +111,9 @@ async function verifyRouteWaitLifecycle() {
 }
 
 function createHarness(options = {}) {
-  const ensureStoreLoadedCalls = [];
   const debugEvents = [];
   const storageState = cloneValue(options.storageState || {
-    cloudSync: {},
     pausedSessions: {},
-    promptLibrary: { items: [] },
     settings: { autoBookmark: true, enabled: true },
     uiPreferences: { activePromptTab: "library", activeTool: "bookmarks" },
   });
@@ -127,13 +130,6 @@ function createHarness(options = {}) {
   });
   context.globalThis = context;
   context.InovaBookmarks = {
-    cloudSync: {
-      mergeCloudSyncState(value) {
-        return {
-          mergedSource: value?.source || "none",
-        };
-      },
-    },
     constants: {
       defaults: {
         promptReview: { open: false },
@@ -144,9 +140,7 @@ function createHarness(options = {}) {
         },
       },
       storageKeys: {
-        cloudSync: "cloudSyncKey",
         pausedSessions: "pausedSessionsKey",
-        promptLibrary: "promptLibraryKey",
         settings: "settingsKey",
         uiPreferences: "uiPreferencesKey",
       },
@@ -175,13 +169,6 @@ function createHarness(options = {}) {
         return changes[`lane:${storageKey}`];
       },
     },
-    promptLibrary: {
-      mergePromptLibrary(value) {
-        return {
-          items: Array.isArray(value?.items) ? cloneValue(value.items) : [],
-        };
-      },
-    },
     session: {
       normalizeText(value) {
         return String(value || "").trim();
@@ -192,12 +179,20 @@ function createHarness(options = {}) {
         return cloneValue(storageState);
       },
       mergeUiPreferences(value = {}) {
-        return {
+        const merged = {
           activePromptTab: "library",
           activeTool: "bookmarks",
           handleRatios: {},
           ...cloneValue(value),
         };
+        if (merged.activeTool === "store") {
+          merged.activeTool = "prompts";
+          merged.activePromptTab = "store";
+        }
+        if (merged.activePromptTab !== "store" && merged.activePromptTab !== "review") {
+          merged.activePromptTab = "library";
+        }
+        return merged;
       },
     },
   };
@@ -209,12 +204,10 @@ function createHarness(options = {}) {
     activeTool: options.activeTool || "bookmarks",
     awaitingRouteMessages: Boolean(options.awaitingRouteMessages),
     bookmarks: [],
-    cloudSync: {},
     lastError: "",
     open: false,
     pausedSessions: options.pausedSessions || {},
     preferredOpen: true,
-    promptLibrary: { items: [] },
     promptReview: { open: true },
     routeBaselineSignature: options.routeBaselineSignature || "",
     routeWaitStartedAt: options.routeWaitStartedAt || 0,
@@ -234,7 +227,6 @@ function createHarness(options = {}) {
   const harness = {
     controller: null,
     debugEvents,
-    ensureStoreLoadedCalls: 0,
     liveBookmarks: cloneValue(options.liveBookmarks || [{ id: "bookmark-1", text: "첫 질문" }]),
     liveSignature: options.liveSignature || "sig-after",
     state,
@@ -243,10 +235,6 @@ function createHarness(options = {}) {
   harness.controller = context.InovaBookmarks.routeStateController.create(state, {
     applyUiPreferenceLock(uiPreferences) {
       return cloneValue(options.uiPreferenceLockResult || uiPreferences);
-    },
-    ensureStoreLoaded() {
-      harness.ensureStoreLoadedCalls += 1;
-      ensureStoreLoadedCalls.push(true);
     },
     normalizeToolId(toolId) {
       return toolId === "release" || toolId === "prompts" || toolId === "meeting"

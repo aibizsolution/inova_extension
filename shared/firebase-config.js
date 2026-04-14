@@ -1,33 +1,6 @@
 (function initFirebaseConfig(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const PROMPT_PANEL_BRIDGE_CACHE_TOKEN = "20260402-1";
-  const FUNCTION_ENDPOINTS = {
-    authorizeInovaMeetingWorkspaceAccessUrl: "authorizeInovaMeetingWorkspaceAccess",
-    createInovaMeetingShareLinkUrl: "createInovaMeetingShareLink",
-    deleteInovaMeetingUrl: "deleteInovaMeeting",
-    deleteInovaMeetingResultUrl: "deleteInovaMeetingResult",
-    exchangeInovaMeetingLaunchUrl: "exchangeInovaMeetingLaunch",
-    issueInovaMeetingLaunchUrl: "issueInovaMeetingLaunch",
-    issueInovaMeetingPanelAuthUrl: "issueInovaMeetingPanelAuth",
-    issueInovaPromptPanelAuthUrl: "issueInovaPromptPanelAuth",
-    issueInovaMeetingWorkspaceAuthUrl: "issueInovaMeetingWorkspaceAuth",
-    listInovaMeetingsUrl: "listInovaMeetings",
-    moveInovaMeetingResultUrl: "moveInovaMeetingResult",
-    uploadInovaMeetingSourceUrl: "uploadInovaMeetingSource",
-    updateInovaMeetingUrl: "updateInovaMeeting",
-    updateInovaMeetingResultUrl: "updateInovaMeetingResult",
-    loadInovaPromptLibraryUrl: "loadInovaPromptLibrary",
-    listPromptStoreEntriesUrl: "listPromptStoreEntries",
-    peekInovaPromptLibraryUrl: "peekInovaPromptLibrary",
-    reviewInovaPromptUrl: "reviewInovaPrompt",
-    publishPromptToStoreUrl: "publishPromptToStore",
-    unpublishPromptFromStoreUrl: "unpublishPromptFromStore",
-    importPromptStoreEntryUrl: "importPromptStoreEntry",
-    revokeInovaMeetingShareLinkUrl: "revokeInovaMeetingShareLink",
-    togglePromptStoreLikeUrl: "togglePromptStoreLike",
-    recordPromptStoreViewUrl: "recordPromptStoreView",
-    syncInovaPromptLibraryUrl: "syncInovaPromptLibrary",
-  };
   const HOSTING_ENDPOINTS = {
     latestReleaseUrl: "releases/latest.json",
     releaseHistoryUrl: "releases/history.json",
@@ -35,7 +8,6 @@
   const LOCAL_MEETING_DEFAULTS = {
     authPort: 9099,
     firestorePort: 8080,
-    functionsPort: 5001,
     host: "127.0.0.1",
     hostingPort: 5000,
     storagePort: 9199,
@@ -56,12 +28,13 @@
     const override = overrideConfig && typeof overrideConfig === "object" ? overrideConfig : {};
     const activeLane = namespace.productLane?.getActiveLane?.() || "legacy";
     const laneConfig = namespace.productLane?.getLaneConfig?.(activeLane) || {
-      functions: { baseUrl: "", endpointOverrides: {} },
       hosting: { baseUrl: "", originUrl: "" },
       id: activeLane,
       prompt: {
         firestoreCollections: {
           accountsCollection: "integration_inova_accounts",
+          promptLibraryChunksCollection: "prompt_library_chunks",
+          promptLibraryOrdersCollection: "prompt_library_orders",
           storeDetailCollection: "prompt_store_entry_details",
           storeFeedCollection: "prompt_store_feed_pages",
           storeSummaryCollection: "prompt_store_meta",
@@ -79,11 +52,6 @@
         region: "asia-northeast3",
         ...(override.project || {}),
       },
-      functions: buildFunctionsConfig(
-        laneConfig.functions?.baseUrl,
-        laneConfig.functions?.endpointOverrides,
-        override.functions || {}
-      ),
       hosting: buildHostingConfig(
         laneConfig.hosting?.baseUrl,
         laneConfig.hosting?.originUrl,
@@ -96,30 +64,15 @@
       web: buildWebConfig(laneConfig.web || {}, override.web || {}),
     };
     config.meeting = buildMeetingConfigHelpers(config);
+    config.prompt = buildPromptConfigHelpers(config, config.prompt);
+    config.panel = buildPanelConfigHelpers(config);
     return config;
-  }
-
-  function buildFunctionsConfig(defaultBaseUrl, endpointOverrides = {}, overrideConfig = {}) {
-    const baseUrl = normalizeBaseUrl(overrideConfig.baseUrl || defaultBaseUrl);
-    const endpointMap = {
-      ...FUNCTION_ENDPOINTS,
-      ...(endpointOverrides && typeof endpointOverrides === "object" ? endpointOverrides : {}),
-      ...(overrideConfig.endpointPaths && typeof overrideConfig.endpointPaths === "object" ? overrideConfig.endpointPaths : {}),
-    };
-    return buildUrlConfig(
-      {
-        region: "asia-northeast3",
-        baseUrl,
-      },
-      endpointMap,
-      baseUrl,
-      overrideConfig
-    );
   }
 
   function buildHostingConfig(defaultBaseUrl, defaultOriginUrl, overrideConfig = {}) {
     const baseUrl = normalizeBaseUrl(overrideConfig.baseUrl || defaultBaseUrl);
     const originUrl = normalizeOriginUrl(overrideConfig.originUrl || defaultOriginUrl || baseUrl);
+    const promptPanelBridgeBaseUrl = buildPromptPanelBridgeBaseUrl(originUrl);
     const promptPanelBridgeAssetVersion = normalizeText(
       overrideConfig.promptPanelBridgeAssetVersion
       || [readRuntimeManifestVersion(), PROMPT_PANEL_BRIDGE_CACHE_TOKEN].filter(Boolean).join("-")
@@ -131,10 +84,15 @@
     return buildUrlConfig(
       {
         baseUrl,
+        panelAppUrl: joinUrl(baseUrl, "panel/index.html"),
         meetingPanelBridgeUrl: joinUrl(originUrl, "meeting/panel-bridge.html"),
         meetingWorkspaceUrl: joinUrl(originUrl, "meeting/index.html"),
         promptPanelBridgeAssetVersion,
-        promptPanelBridgeUrl: appendQueryParam(joinUrl(baseUrl, "prompt-panel-bridge.html"), "v", promptPanelBridgeAssetVersion),
+        promptPanelBridgeUrl: appendQueryParam(
+          joinUrl(promptPanelBridgeBaseUrl, "prompt-panel-bridge.html"),
+          "v",
+          promptPanelBridgeAssetVersion
+        ),
         originUrl,
       },
       endpointMap,
@@ -148,11 +106,30 @@
     return {
       firestoreCollections: {
         accountsCollection: normalizeText(overrideConfig?.firestoreCollections?.accountsCollection || defaultCollections.accountsCollection) || "integration_inova_accounts",
+        promptLibraryChunksCollection:
+          normalizeText(
+            overrideConfig?.firestoreCollections?.promptLibraryChunksCollection
+            || defaultCollections.promptLibraryChunksCollection
+          ) || "prompt_library_chunks",
+        promptLibraryOrdersCollection:
+          normalizeText(
+            overrideConfig?.firestoreCollections?.promptLibraryOrdersCollection
+            || defaultCollections.promptLibraryOrdersCollection
+          ) || "prompt_library_orders",
         storeDetailCollection: normalizeText(overrideConfig?.firestoreCollections?.storeDetailCollection || defaultCollections.storeDetailCollection) || "prompt_store_entry_details",
         storeFeedCollection: normalizeText(overrideConfig?.firestoreCollections?.storeFeedCollection || defaultCollections.storeFeedCollection) || "prompt_store_feed_pages",
         storeSummaryCollection: normalizeText(overrideConfig?.firestoreCollections?.storeSummaryCollection || defaultCollections.storeSummaryCollection) || "prompt_store_meta",
       },
       panelScope: normalizeText(overrideConfig.panelScope || defaultPromptConfig.panelScope) || "prompt-panel",
+    };
+  }
+
+  function buildPromptConfigHelpers(baseConfig, promptConfig) {
+    return {
+      ...promptConfig,
+      resolveRuntime(settings) {
+        return resolvePromptRuntimeConfig(baseConfig, settings);
+      },
     };
   }
 
@@ -183,12 +160,58 @@
 
   function buildMeetingConfigHelpers(baseConfig) {
     return {
+      normalizeSettings: normalizeMeetingSettings,
       normalizeWorkspaceTarget,
       normalizeWorkspaceUrlOverride,
       resolveRuntime(settings) {
         return resolveMeetingRuntimeConfig(baseConfig, settings);
       },
     };
+  }
+
+  function buildPanelConfigHelpers(baseConfig) {
+    return {
+      resolveRuntime(settings) {
+        if (typeof baseConfig.meeting?.resolveRuntime === "function") {
+          return baseConfig.meeting.resolveRuntime(settings);
+        }
+        if (typeof baseConfig.prompt?.resolveRuntime === "function") {
+          return baseConfig.prompt.resolveRuntime(settings);
+        }
+        return {
+          hosting: cloneValue(baseConfig.hosting),
+          settings: normalizeMeetingSettings(settings),
+          target: "production",
+        };
+      },
+    };
+  }
+
+  function resolvePromptRuntimeConfig(baseConfig, settings) {
+    const normalizedSettings = normalizeMeetingSettings(settings);
+    if (normalizedSettings.meetingWorkspaceTarget !== "local") {
+      return {
+        emulators: {
+          authUrl: "",
+          enabled: false,
+          firestoreHost: "",
+          firestorePort: 0,
+          functionsBaseUrl: "",
+          functionsHost: "",
+          functionsPort: 0,
+          storageHost: "",
+          storagePort: 0,
+        },
+        hosting: cloneValue(baseConfig.hosting),
+        prompt: cloneValue(baseConfig.prompt),
+        settings: normalizedSettings,
+        target: "production",
+        web: cloneValue(baseConfig.web),
+      };
+    }
+
+    const workspaceUrl = normalizeWorkspaceUrlOverride(normalizedSettings.meetingWorkspaceUrlOverride);
+    return buildLocalPromptRuntimeConfig(baseConfig, normalizedSettings, workspaceUrl);
   }
 
   function resolveMeetingRuntimeConfig(baseConfig, settings) {
@@ -207,7 +230,6 @@
           storageHost: "",
           storagePort: 0,
         },
-        functions: cloneValue(baseConfig.functions),
         hosting: cloneValue(baseConfig.hosting),
         settings: normalizedSettings,
         target: "production",
@@ -216,15 +238,26 @@
     }
 
     const workspaceUrl = normalizeWorkspaceUrlOverride(normalizedSettings.meetingWorkspaceUrlOverride);
+    const promptRuntimeConfig = buildLocalPromptRuntimeConfig(baseConfig, normalizedSettings, workspaceUrl);
+    const workspaceOrigin = normalizeOriginUrl(workspaceUrl);
+    return {
+      ...promptRuntimeConfig,
+      debugConsoleEnabled: normalizedSettings.meetingDebugConsoleEnabled,
+      hosting: {
+        ...promptRuntimeConfig.hosting,
+        meetingPanelBridgeUrl: joinUrl(workspaceOrigin, "meeting/panel-bridge.html"),
+        meetingWorkspaceUrl: workspaceUrl,
+        originUrl: workspaceOrigin,
+      },
+    };
+  }
+
+  function buildLocalPromptRuntimeConfig(baseConfig, normalizedSettings, workspaceUrl) {
     const workspaceOrigin = normalizeOriginUrl(workspaceUrl);
     const workspaceHost = resolveLoopbackHost(readHostname(workspaceUrl));
-    const functionsBaseUrl = buildLocalFunctionsBaseUrl(
-      workspaceHost,
-      baseConfig.project?.projectId || DEFAULT_WEB_CONFIG.projectId,
-      baseConfig.functions?.region || baseConfig.project?.region || "asia-northeast3"
-    );
-    const hostingConfig = buildHostingConfig("", workspaceOrigin, {
-      baseUrl: workspaceOrigin,
+    const hostingBaseUrl = buildLocalExtensionBaseUrl(workspaceOrigin, baseConfig.activeLane);
+    const hostingConfig = buildHostingConfig(hostingBaseUrl, workspaceOrigin, {
+      baseUrl: hostingBaseUrl,
       endpointPaths: cloneValue(baseConfig.hosting?.endpointPaths),
       originUrl: workspaceOrigin,
     });
@@ -233,27 +266,17 @@
       enabled: true,
       firestoreHost: workspaceHost,
       firestorePort: LOCAL_MEETING_DEFAULTS.firestorePort,
-      functionsBaseUrl,
-      functionsHost: workspaceHost,
-      functionsPort: LOCAL_MEETING_DEFAULTS.functionsPort,
+      functionsBaseUrl: "",
+      functionsHost: "",
+      functionsPort: 0,
       storageHost: workspaceHost,
       storagePort: LOCAL_MEETING_DEFAULTS.storagePort,
     };
 
     return {
-      debugConsoleEnabled: normalizedSettings.meetingDebugConsoleEnabled,
       emulators: emulatorConfig,
-      functions: buildFunctionsConfig(functionsBaseUrl, baseConfig.functions?.endpointPaths, {
-        baseUrl: functionsBaseUrl,
-        endpointPaths: cloneValue(baseConfig.functions?.endpointPaths),
-        region: baseConfig.functions?.region || baseConfig.project?.region || "asia-northeast3",
-      }),
-      hosting: {
-        ...hostingConfig,
-        meetingPanelBridgeUrl: joinUrl(workspaceOrigin, "meeting/panel-bridge.html"),
-        meetingWorkspaceUrl: workspaceUrl,
-        originUrl: workspaceOrigin,
-      },
+      hosting: hostingConfig,
+      prompt: cloneValue(baseConfig.prompt),
       settings: normalizedSettings,
       target: "local",
       web: cloneValue(baseConfig.web),
@@ -340,11 +363,13 @@
     return `http://${resolvedHost}:${LOCAL_MEETING_DEFAULTS.hostingPort}/meeting/index.html`;
   }
 
-  function buildLocalFunctionsBaseUrl(hostname, projectId, region) {
-    const resolvedHost = resolveLoopbackHost(hostname);
-    const normalizedProjectId = normalizeText(projectId) || DEFAULT_WEB_CONFIG.projectId;
-    const normalizedRegion = normalizeText(region) || "asia-northeast3";
-    return `http://${resolvedHost}:${LOCAL_MEETING_DEFAULTS.functionsPort}/${normalizedProjectId}/${normalizedRegion}`;
+  function buildLocalExtensionBaseUrl(originUrl, lane = "legacy") {
+    const panelBasePath = normalizeText(lane).toLowerCase() === "v2" ? "extension-v2" : "extension";
+    return joinUrl(normalizeOriginUrl(originUrl), panelBasePath);
+  }
+
+  function buildPromptPanelBridgeBaseUrl(originUrl) {
+    return joinUrl(normalizeOriginUrl(originUrl), "extension");
   }
 
   function resolveLoopbackHost(value) {

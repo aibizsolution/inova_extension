@@ -9,20 +9,23 @@
 
 ## 먼저 볼 파일
 - `content/dom.js`
-- `content/bookmark-view.js`
 - `content/route-state-controller.js`
 - `content/route-watch-controller.js`
 - `content/route-sync.js`
-- `content/panel-bookmark-controller.js`
-- `content/panel-surface-controller.js`
-- `content/panel-activity-controller.js`
-- `content/panel-shell-controller.js`
+- `content/panel-v2-composition-controller.js`
+- `content/panel-v2-shell-bridge.js`
+- `backup/legacy-panel/bookmark-view.js`
+- `backup/legacy-panel/panel-bookmark-controller.js`
 
 ## 관련 프론트 경로
 - `content/main.js`
-- `content/panel-state-factory.js`
-- `content/panel-runtime-controller.js`
 - `content/panel.js`
+- `hosting/extension/panel/bookmark-view.js`
+- `hosting/extension-v2/panel/conversation-controller.js`
+- `hosting/extension-v2/panel/bookmark-view.js`
+- `backup/legacy-panel/bookmark-view.js` - inactive content bookmark view reference
+- `backup/legacy-panel/panel-runtime-controller.js` - inactive runtime helper reference
+- `backup/legacy-panel/tools.css` - inactive content tool-shell style reference
 
 ## 관련 functions 경로
 - 없음
@@ -48,11 +51,12 @@
 - feature-local 파일만으로 해결되지 않고 panel shell 또는 storage 연동이 원인일 때만 platform/shell로 넓힌다.
 
 ## 구현 경계
-- 북마크 검색/복사/점프와 empty/status 문구 계산은 `content/panel-bookmark-controller.js`가 맡고, `content/main.js`는 이를 다시 구현하지 않는다.
-- panel shell 초기 state 조립은 `content/panel-state-factory.js`가 맡고, `content/main.js`는 기본 state literal을 다시 들고 있지 않는다.
-- paused/store/tool-surface 판정과 panel debug 로깅 helper는 `content/panel-runtime-controller.js`가 맡고, `content/main.js`는 이 helper를 다시 구현하지 않는다.
-- tool 전환, query 라우팅, handle 위치 저장 같은 공용 panel shell 동작은 `content/panel-shell-controller.js`가 맡는다.
+- active `1.0.0` bundle에서는 북마크 검색/복사/점프와 compact snapshot shaping을 `content/panel-v2-composition-controller.js` 안의 conversation bridge가 맡고, `backup/legacy-panel/panel-bookmark-controller.js`는 legacy reference로만 남긴다.
+- 북마크 panel UI 렌더링은 `hosting/extension/panel/bookmark-view.js`와 `hosting/extension-v2/panel/bookmark-view.js`가 맡고, `content/panel.js`는 iframe host와 page adapter만 유지한다. 기존 `content/bookmark-view.js`와 `content/tools.css`는 inactive reference로 `backup/legacy-panel/*`에 격리한다.
+- `1.0.0+` v2 lane에서는 `hosting/extension-v2/panel/conversation-controller.js`가 대화 탭의 검색/복사/점프/view state를 소유하고, extension은 `content/panel.js`의 page adapter로 현재 대화 snapshot 읽기와 jump/copy만 제공한다. v2 top-panel snapshot은 전체 bookmark item list를 싣지 않고 `count`, `activeId`, refresh용 `snapshotFingerprint` 같은 얇은 신호만 전달한다.
+- panel shell 초기 state 조립은 active `1.0.0` bundle에서 `content/panel-v2-composition-controller.js`가 맡고, `content/main.js`는 그 createState 진입점만 호출한다.
+- paused/store/tool-surface 판정과 panel debug 로깅 helper는 active `1.0.0` bundle에서 `content/panel-v2-composition-controller.js` 안의 inline runtime/debug bridge가 맡고, `backup/legacy-panel/panel-runtime-controller.js`와 `backup/legacy-panel/panel-debug-controller.js`는 reference로만 남긴다.
+- tool 전환, query 라우팅, handle 위치 저장 같은 공용 panel shell 동작은 active `1.0.0` bundle에서 `content/panel-v2-shell-bridge.js`가 맡는다.
 - storage 복원, live bookmark 재수집, route wait fallback은 `content/route-state-controller.js`가 맡고, `content/route-sync.js`는 route 감시와 retry/polling 타이밍만 담당한다.
 - history/click/popstate/visibility/poll watcher 설치는 `content/route-watch-controller.js`가 맡고, `content/route-sync.js`는 실제 sync 실행과 observer/retry 타이밍만 담당한다.
-- conversation surface poll과 composer/chatlog 반응은 `content/panel-surface-controller.js`가 맡고, `content/panel-lifecycle-controller.js`는 open/focus/visibility/toggle만 담당한다.
-- focus/visibility 반응은 `content/panel-activity-controller.js`가 맡고, `content/panel-lifecycle-controller.js`는 open state 초기화와 toggle만 담당한다.
+- conversation surface poll, open/visibility/toggle, focus 반응은 active `1.0.0` bundle에서 `content/panel-v2-shell-bridge.js`가 맡고, `content/panel-v2-composition-controller.js`는 그 shell bridge wiring만 담당한다.

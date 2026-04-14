@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "아이노바 실험실",
-  "version": "0.4.4",
+  "version": "1.0.0",
   "description": "i-Nova 대화 화면에 패널과 프롬프트 도구를 더하는 크롬 확장입니다.",
   "permissions": [
     "storage",
@@ -14,9 +14,14 @@
     "https://asia-northeast3-browser-extension-main.cloudfunctions.net/*",
     "https://browser-extension-main.web.app/*",
     "https://browser-extension-v2.web.app/*",
+    "http://127.0.0.1:5000/*",
+    "http://localhost:5000/*",
     "http://127.0.0.1:5001/*",
     "http://localhost:5001/*"
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; frame-src https://browser-extension-main.web.app https://browser-extension-v2.web.app http://127.0.0.1:5000 http://localhost:5000"
+  },
   "background": {
     "service_worker": "background/service-worker.js"
   },
@@ -43,64 +48,32 @@
         "shared/constants.js",
         "shared/product-lane.js",
         "shared/session.js",
-        "shared/meeting-debug.js",
-        "shared/meeting-bridge.js",
-        "shared/prompt-library.js",
-        "shared/prompt-store.js",
-        "shared/release-info.js",
         "shared/firebase-config.js",
-        "shared/provider-identity.js",
-        "shared/cloud-sync.js",
+        "shared/provider-identity-cache.js",
         "shared/storage.js",
         "content/dom.js",
         "content/composer.js",
-        "content/features/prompt-library/files.js",
+        "content/provider-identity-sensor.js",
+        "content/frame-proxy-helper.js",
         "content/features/prompt-review/composer-review-float.js",
-        "content/features/prompt-review/prompt-review-view.js",
-        "content/bookmark-view.js",
-        "hosting/meeting/debug-console.js",
-        "content/meeting-view.js",
-        "content/features/prompt-library/prompt-view.js",
-        "content/features/prompt-store/store-view.js",
-        "content/prompt-hub-view.js",
-        "content/release-view.js",
         "content/features/prompt-review/prompt-review-manager.js",
-        "content/features/prompt-library/cloud-sync-manager.js",
-        "content/features/prompt-store/prompt-realtime-manager.js",
-        "content/meeting-panel-bridge-controller.js",
-        "content/meeting-manager.js",
         "content/route-state-controller.js",
         "content/route-watch-controller.js",
         "content/route-sync.js",
-        "content/features/prompt-library/prompt-manager.js",
-        "content/features/prompt-store/store-manager.js",
-        "content/release-manager.js",
-        "content/provider-identity-sync.js",
-        "content/prompt-hub-state.js",
-        "content/prompt-hub-panel.js",
-        "content/prompt-hub-controller.js",
-        "content/prompt-hub-runtime.js",
+        "content/page-capability-router.js",
+        "content/hosted-panel-bridge.js",
+        "content/panel-console-trace.js",
+        "content/panel-host-runtime.js",
+        "content/panel-host-bridge.js",
+        "content/panel-host-view.js",
         "content/panel.js",
-        "content/panel-bookmark-controller.js",
-        "content/panel-shell-controller.js",
-        "content/panel-meeting-controller.js",
-        "content/panel-debug-controller.js",
-        "content/panel-prompt-controller.js",
-        "content/panel-surface-controller.js",
-        "content/panel-activity-controller.js",
-        "content/panel-lifecycle-controller.js",
-        "content/panel-render-controller.js",
-        "content/panel-bootstrap-controller.js",
-        "content/panel-state-factory.js",
-        "content/panel-runtime-controller.js",
-        "content/panel-action-controller.js",
-        "content/panel-prompt-bridge-controller.js",
-        "content/panel-composition-controller.js",
+        "content/panel-v2-prompt-controller.js",
+        "content/panel-v2-shell-bridge.js",
+        "content/panel-v2-composition-controller.js",
         "content/main.js"
       ],
       "css": [
         "content/panel.css",
-        "content/tools.css",
         "content/composer-review.css"
       ],
       "run_at": "document_idle"
@@ -116,6 +89,17 @@
         "content/meeting-workspace-bridge.js"
       ],
       "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "content/frame-proxy.html",
+        "content/frame-proxy.js"
+      ],
+      "matches": [
+        "https://inova.incross.com/*"
+      ]
     }
   ]
 }

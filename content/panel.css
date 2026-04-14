@@ -1,5 +1,5 @@
 /* i-Nova bookmark panel */
-:root { --inova-bookmark-panel-gap: 8px; --inova-bookmark-panel-width: clamp(300px, 25vw, 340px); --inova-bookmark-panel-reserve: calc(var(--inova-bookmark-panel-width) + var(--inova-bookmark-panel-gap)); }
+:root { --inova-bookmark-panel-gap: 8px; --inova-bookmark-panel-width: 420px; --inova-bookmark-panel-reserve: calc(var(--inova-bookmark-panel-width) + var(--inova-bookmark-panel-gap)); }
 @media (min-width: 1180px) {
   .main-content { min-width: 0; transition: margin-right 220ms ease; }
   body.inova-bookmark-panel-open .main-content { margin-right: var(--inova-bookmark-panel-reserve); }
@@ -39,14 +39,14 @@
   display: flex;
   flex-direction: column;
   border-radius: 24px;
-  border: 1px solid rgba(52, 81, 100, 0.16);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 252, 255, 0.94));
-  box-shadow: -18px 0 38px rgba(16, 33, 43, 0.15), 0 0 12px rgba(16, 33, 43, 0.08);
+  border: 1px solid rgba(52, 81, 100, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.995), rgba(250, 252, 255, 0.98));
+  box-shadow: -16px 0 34px rgba(16, 33, 43, 0.14), 0 0 0 1px rgba(255, 255, 255, 0.55);
   overflow: hidden;
   overflow-x: hidden;
   pointer-events: none;
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   transform: translateX(calc(100% + 18px));
   transition: transform 220ms ease, box-shadow 220ms ease, opacity 180ms ease;
   opacity: 0;
@@ -55,6 +55,34 @@
   transform: translateX(0);
   pointer-events: auto;
   opacity: 1;
+}
+.inova-hosted-panel-shell {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  background: linear-gradient(180deg, rgba(249, 252, 255, 0.98), rgba(255, 255, 255, 0.96));
+}
+.inova-hosted-panel-status {
+  flex: 0 0 auto;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(52, 81, 100, 0.1);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: rgba(16, 33, 43, 0.78);
+  background: rgba(255, 255, 255, 0.96);
+}
+.inova-hosted-panel-status[data-tone="info"] { color: #0f5f77; }
+.inova-hosted-panel-status[data-tone="warning"] { color: #865d1e; }
+.inova-hosted-panel-status[data-tone="error"] { color: #8a3344; }
+.inova-hosted-panel-frame {
+  width: 100%;
+  height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  border: 0;
+  background: transparent;
 }
 #inova-bookmark-handle {
   position: fixed;
@@ -294,11 +322,4 @@
   border-radius: 4px;
   background: rgba(15, 124, 137, 0.14);
   color: #0a5f70;
-}
-@media (max-width: 520px) {
-  #inova-bookmark-host {
-    --panel-gap: 6px;
-    --panel-right: 6px;
-  }
-  #inova-bookmark-panel { width: min(88vw, 320px); height: calc(100vh - (var(--panel-gap) * 2)); }
 }

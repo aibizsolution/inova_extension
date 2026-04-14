@@ -7,6 +7,9 @@
 - 작업 시작 직후 첫 셸 명령을 실행하기 전에 아래 `셸/도구 환경 메모`를 다시 보고, 현재 세션에 해당하는 known workaround를 먼저 적용한다.
 - 기본 최소 읽기 세트는 `docs/development-philosophy.md`, 루트 `AGENTS.md`, `README.md`, `package.json`, `manifest.json`, `docs/feature-routing.md`, 그리고 요청과 일치하는 environment `AGENTS.md` 1개와 feature `AGENTS.md` 1개다.
 - `content/`, `functions/`, `hosting/meeting/`, `shared/`를 처음부터 넓게 읽지 않는다.
+- 단순 실행/운영 요청(`로컬 에뮬레이터 켜기`, `dev server 실행`, `lint/test/build/verify 실행`, `로그/상태 확인`)은 feature 구현 요청처럼 취급하지 않는다. 이 경우 `cwd`/Git/셸 확인 뒤 바로 `package.json` 스크립트, 관련 워크플로 문서, 필요한 환경 메모만 읽고 명령부터 실행한다.
+- 위 fast path에서는 feature `AGENTS.md`와 세부 docs를 선행 필수로 읽지 않는다. 실행이 실패했거나 어떤 스크립트를 써야 할지 모호할 때만 해당 feature 또는 environment 문서로 좁혀 들어간다.
+- 사용자가 `로컬 에뮬레이터`만 말하고 범위를 좁히지 않았으면 기본값은 `npm.cmd run emulator:meeting-local`로 본다. `hosting only`, `빠른 hosted smoke`, `meeting 제외` 같은 명시가 있을 때만 `npm.cmd run emulator:hosting`으로 낮춘다.
 
 ## 문서 계층
 - 상위 철학과 모듈화 판단 기준은 `docs/development-philosophy.md`에 둔다.
@@ -17,6 +20,7 @@
 ## 셸/도구 환경 메모
 - 현재 기본 셸이 PowerShell이면 `npm` 실행 시 `npm.ps1` 실행 정책 오류가 날 수 있다. 이 환경에서는 처음부터 `npm.cmd run <script>` 형태를 우선한다.
 - 같은 원인으로 `npm` 계열 명령이 한 번 막혔으면 같은 문법을 반복 재시도하지 말고 즉시 `npm.cmd`, 필요 시 `npx.cmd` 같은 대안으로 전환한다.
+- long-running 명령(`emulator`, `dev`, `watch`)은 가능하면 시작을 먼저 걸고, 그 다음 포트/프로세스/로그로 살아 있는지만 확인한다. 실행 전에 불필요하게 feature 문서를 넓게 읽느라 명령 시작이 지연되지 않게 한다.
 - 세션 중 반복해서 걸린 환경/도구 실패 패턴은 `실패한 명령`, `원인`, `바로 쓸 대안`을 이 문서나 해당 feature 문서에 같은 작업 안에서 남겨 다음 세션에 재사용한다.
 - 새 세션에서도 이 메모는 선택 사항이 아니라 시작 절차 일부로 취급한다. 같은 환경에서 이미 기록된 실패 패턴은 첫 시도부터 우회 경로를 기본값으로 쓴다.
 
@@ -26,11 +30,29 @@
 - 읽기 범위는 `feature-local -> feature-owned shared -> platform/shell -> 인접 feature` 순서로만 확장한다.
 - `popup`, `background/service-worker.js`, `content/main.js`, `content/panel.js`, `functions/index.js`, `manifest.json`, `shared/*`는 platform/shell로 취급하고 필요할 때만 본다.
 
+## Hosted-First 원칙
+- `1.0.0+` v2 lane의 기본 목표는 `탭 기능의 기본 소유권을 hosting으로 옮기는 것`이다.
+- 새 기능이나 기존 기능 수정은 먼저 `hosting/*`에서 해결할 수 있는지 본다. 특별한 이유가 없으면 UI, view state, action flow, feature controller는 hosted가 기본 위치다.
+- extension에는 `page DOM adapter`, `iframe host`, `postMessage bridge`, `chrome/background runtime broker`, `popup/settings`처럼 브라우저 확장이라서만 가능한 책임만 남긴다.
+- 어떤 책임이 `Chrome API`, `background`, `현재 페이지 DOM` 없이도 성립하면 extension에 새로 싣지 않는다. hosted 쪽으로 옮기거나 hosted에서 시작하는 설계를 우선한다.
+- 리팩터링 중에는 `이 수정이 extension 책임을 실제로 줄였는가`를 기본 판단 질문으로 삼는다.
+- hosted-first 이전 중 이슈를 만나면 먼저 `이미 hosted로 옮겨진 lane의 문제인가`, `곧 제거할 legacy extension residue만의 문제인가`를 구분한다.
+- 이미 hosted ownership에서 재현되거나 hosted 이전 자체를 막는 문제는 바로 고친다.
+- legacy residue에만 머무르고 현재 hosted 이전을 막지 않는 문제는 임시 보강보다 ownership 이전을 먼저 진행한다.
+- ownership 이전 작업에서는 기존 extension 구현을 `보존 대상`보다 `참조용 baseline`으로 본다.
+- 기존 구현을 그대로 끌고 오기 위해 adapter, bridge glue, mixed ownership이 늘어나면 재사용을 멈추고 대상 ownership 위치에 직접 다시 구현한다.
+- 재사용은 `실제로 더 빨라질 때만` 선택한다. 같은 계약을 새 ownership 위치에 짧고 명확하게 다시 쓰는 편이 더 빠르면 그쪽을 기본값으로 삼는다.
+- `DB/Functions 계약을 바꾸지 않는 순수 panel v2 migration`에서는 현재 `1.0.0` v2 bundle이 정상 동작하는지만 우선 확인한다. 이런 작업에서 legacy extension 코드는 호환 이유로 활성 bundle 안에 계속 남겨 둘 대상으로 보지 않는다.
+- 현재 `1.0.0` 활성 bundle과 공유 계약이 더 이상 쓰지 않는 legacy extension panel 코드는 `content/*` 안에 섞어 두지 않는다. 기본 방향은 `backup/legacy-panel/*`로 격리하거나 바로 삭제 후보로 분류하는 것이다.
+- 격리된 legacy panel 코드는 평소 panel v2 migration 판단 기준이 아니다. `DB/Functions`나 shared server contract를 수정할 때만 `0.4.4` 영향 판단용 참고본으로 보고, 그 외 순수 panel migration에서는 현재 v2 bundle 정상 동작만 우선 확인한다.
+
 ## 설계와 모듈화 적용 규칙
 - 구현 전에 먼저 책임 경계를 정하고, 파일 길이만을 이유로 분리하지 않는다.
 - 책임 분리와 파일 분리를 같은 의미로 보지 않는다. 항상 함께 로드되고, 함께 수정되고, 함께 이해되는 코드는 같은 파일이나 같은 모듈에 남길 수 있다.
 - 여러 곳 재사용, 독립 상태/생명주기, 독립 테스트/교체 가치가 큰 코드만 새 파일 또는 새 진입점으로 분리한다.
 - 같은 구조 문제나 tradeoff가 반복되면 개별 helper 분리만 누적하지 말고 시스템 차원의 해법을 검토한다.
+- 구조/길이 가드는 `이 파일에 책임을 더 싣지 말고 경계를 다시 보라`는 신호로 해석한다.
+- 가드를 피하려고 관련 없는 파일에 임시 state, 분기, 우회 render, 진단 helper를 옮겨 싣지 않는다. 새 책임이 생겼다면 해당 책임을 가진 모듈로 분리하거나 새 모듈을 만든다.
 
 ## 문서와 구조
 - feature 진입점과 데이터 경계는 항상 `docs/feature-routing.md`를 먼저 기준으로 삼는다.
@@ -41,6 +63,8 @@
 - feature-local 규칙, 계약, 최소 검증 기준은 해당 feature `AGENTS.md` 또는 feature 전용 docs에 문서화한다.
 - feature-local 변경 때문에 `README.md`를 기능 변경 일지처럼 누적하지 않는다.
 - 문서는 완벽하지 않다고 가정하고, 작업 중 문서와 실제 코드/함수/파일 경계가 다르면 코드를 기준으로 같은 작업 안에서 문서를 갱신한다.
+- hosted-first 기준으로 이미 옮겨진 책임을 문서가 아직 extension-owned처럼 설명하면, 발견한 같은 작업 안에서 바로 고친다.
+- 문서 정리는 `언젠가 한 번에` 하지 않는다. 관련 문서를 읽다가 낡은 ownership 설명이나 경계 서술을 찾으면 그 자리에서 계속 바로잡는다.
 - feature 문서가 실제 파일 경로나 진입점과 어긋나기 시작하면 검증 스크립트와 문서를 함께 보강해 다음 작업자가 좁은 범위만 읽고도 시작할 수 있게 유지한다.
 - 문서는 결과 설명서보다 다음 구조 판단을 더 잘하게 만드는 기준 문서가 되어야 한다.
 
@@ -49,6 +73,7 @@
 - lint는 처음부터 크게 키우지 않는다. 오류 탐지 중심의 가벼운 기준으로 시작하고, 새 규칙이나 범위 확장은 필요한 작업과 함께 점진적으로 올린다.
 - `eslint.config.js`, lint 대상 범위, ignore/override, suppression, 관련 package script가 바뀌면 같은 작업 안에서 `docs/lint-workflow.md`도 함께 갱신한다.
 - lint 오류를 잠재우기 위해 전역 ignore나 넓은 disable을 먼저 넣지 않는다. 우선순위는 `코드 수정 -> 좁은 범위 예외 -> 문서화`다.
+- 구조/계약 가드 메시지가 뜻하는 바가 불명확하면 스크립트 메시지부터 바로 고친다. 사람이 `회피`가 아니라 `책임 분리`를 읽게 만드는 쪽을 우선한다.
 
 ## 공통화 원칙
 - 같은 feature 안에서 panel, hosted, popup 같은 여러 표면이 비슷한 markup/helper/state contract를 반복하면 먼저 shared module 또는 render contract로 묶을 수 있는지 검토한다.
@@ -70,6 +95,9 @@
 - 로컬에서 안정 재현이 안 되면 계측 로그를 추가하거나 사용자/QA에 재현 영상, 발생 시각, 로그를 요청한다.
 - 로그를 요청할 때는 전체 복사를 요구하지 말고, 필요한 이벤트만 추출하는 콘솔 명령이나 수집 방법을 먼저 제공한다.
 - 원인 근거 없이 입력, 전송, 삭제, 동기화 같은 민감 경로를 바로 수정하지 않는다.
+- 입력, 탭 전이, 동기화, 함수 호출, 리뷰/생성/전송 같은 UI-런타임 경계 이슈는 코드 수정 전에 해당 경로의 콘솔 로그를 먼저 확보한다.
+- 콘솔 로그가 부족하면 추측 수정 대신 먼저 계측을 추가한다. 최소 기준은 `사용자 액션 -> top panel request/snapshot -> hosted/controller 상태 -> runtime/functions 호출` 흐름이 콘솔에서 보이는 것이다.
+- 콘솔 로그로 실제 중단 지점이 확인되기 전에는 fallback 추가나 로직 변경으로 증상을 가리려 하지 않는다.
 
 ## Subagent 규칙
 - 저장소 전반 read-only 탐색, 후보 파일 수집, 테스트 실행은 서브에이전트를 우선 검토한다.
