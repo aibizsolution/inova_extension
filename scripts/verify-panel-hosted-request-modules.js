@@ -34,15 +34,22 @@ function verifyHostedBridgeRequestModuleContract() {
   const scriptList = Array.isArray(mainContentScript?.js) ? mainContentScript.js : [];
   const contractHelperIndex = scriptList.indexOf("content/hosted-panel-bridge.js");
   const hostBridgeIndex = scriptList.indexOf("content/panel-host-bridge.js");
+  const hostViewIndex = scriptList.indexOf("content/panel-host-view.js");
   const panelIndex = scriptList.indexOf("content/panel.js");
 
   assert(contractHelperIndex !== -1, "manifest should load the hosted panel bridge contract helper");
   assert(hostBridgeIndex !== -1, "manifest should load the panel host bridge helper");
+  assert(hostViewIndex !== -1, "manifest should load the panel host view helper");
   assert(panelIndex !== -1 && contractHelperIndex < panelIndex, "manifest should load the hosted panel bridge contract helper before content/panel.js");
   assert(panelIndex !== -1 && hostBridgeIndex < panelIndex, "manifest should load the panel host bridge helper before content/panel.js");
+  assert(panelIndex !== -1 && hostViewIndex < panelIndex, "manifest should load the panel host view helper before content/panel.js");
   assert(
     topPanelSource.includes("panelHostBridge.create"),
     "content/panel.js should delegate hosted bridge endpoint wiring to the dedicated helper module"
+  );
+  assert(
+    topPanelSource.includes("panelHostView.create"),
+    "content/panel.js should delegate host markup and handle interaction wiring to the dedicated host view helper"
   );
   assert(
     !topPanelSource.includes("function handleBridgeRequest("),

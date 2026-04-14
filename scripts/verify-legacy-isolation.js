@@ -56,6 +56,7 @@ function verifyActiveContentSourcesDoNotDependOnBackupPaths() {
     "content/main.js",
     "content/panel.js",
     "content/panel-host-runtime.js",
+    "content/panel-host-view.js",
     "content/hosted-panel-bridge.js",
     "content/panel-v2-composition-controller.js",
     "content/panel-v2-shell-bridge.js",

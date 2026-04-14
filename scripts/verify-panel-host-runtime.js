@@ -19,6 +19,7 @@ async function verifyPanelHostRuntimeContract() {
 function verifyPanelHostRuntimeModuleSplit() {
   const panelSource = fs.readFileSync(path.join(root, "content", "panel.js"), "utf8");
   const hostBridgeSource = fs.readFileSync(path.join(root, "content", "panel-host-bridge.js"), "utf8");
+  const hostViewSource = fs.readFileSync(path.join(root, "content", "panel-host-view.js"), "utf8");
   const hostRuntimeSource = fs.readFileSync(path.join(root, "content", "panel-host-runtime.js"), "utf8");
 
   assert(
@@ -30,6 +31,10 @@ function verifyPanelHostRuntimeModuleSplit() {
     "content/panel.js should delegate hosted bridge endpoint work through panelHostBridge.create"
   );
   assert(
+    /panelHostView\.create/.test(panelSource),
+    "content/panel.js should delegate host markup and handle interactions through panelHostView.create"
+  );
+  assert(
     !/function syncHostedFrame/.test(panelSource),
     "content/panel.js should stop carrying the hosted frame sync inline once host runtime moves to its own helper"
   );
@@ -38,12 +43,28 @@ function verifyPanelHostRuntimeModuleSplit() {
     "content/panel.js should stop carrying the hosted bridge endpoint inline once panelHostBridge owns it"
   );
   assert(
+    !/function buildMarkup/.test(panelSource),
+    "content/panel.js should stop carrying hosted panel markup inline once panelHostView owns the host shell view"
+  );
+  assert(
+    !/function installHandleInteractions/.test(panelSource),
+    "content/panel.js should stop carrying handle drag/click wiring inline once panelHostView owns the host shell view"
+  );
+  assert(
     /function syncHostedFrame/.test(hostRuntimeSource),
     "content/panel-host-runtime.js should own hosted frame sync once panel.js delegates host runtime work"
   );
   assert(
     /function createHostedBridge/.test(hostBridgeSource),
     "content/panel-host-bridge.js should own hosted bridge endpoint creation once panel.js delegates it"
+  );
+  assert(
+    /function buildMarkup/.test(hostViewSource),
+    "content/panel-host-view.js should own hosted panel markup once panel.js delegates the host shell view"
+  );
+  assert(
+    /function installHandleInteractions/.test(hostViewSource),
+    "content/panel-host-view.js should own handle drag/click wiring once panel.js delegates the host shell view"
   );
 }
 
@@ -331,6 +352,7 @@ function createHarness() {
   loadScript(path.join("content", "panel-console-trace.js"), context);
   loadScript(path.join("content", "panel-host-runtime.js"), context);
   loadScript(path.join("content", "panel-host-bridge.js"), context);
+  loadScript(path.join("content", "panel-host-view.js"), context);
   loadScript(path.join("content", "panel.js"), context);
 
   return {

@@ -78,7 +78,7 @@ Short version:
 - `content/panel.js` no longer clones the full render payload into hosted bridge snapshots; v2 render now passes a prebuilt `panelSnapshot` and the host just brokers view + bridge envelope
 - top-panel snapshot trace shaping now comes from v2 shell `panelTrace`; `content/panel.js` no longer reads prompt review detail directly out of hosted tool state
 - top console trace policy/summary formatting now lives in `content/panel-console-trace.js`; `content/panel.js` no longer carries feature-specific always-trace rules inline
-- hosted panel iframe target/status/handshake/render batching now lives in `content/panel-host-runtime.js`; hosted bridge endpoint/page event emit now lives in `content/panel-host-bridge.js`; `content/panel.js` keeps the host element and handle interaction only
+- hosted panel iframe target/status/handshake/render batching now lives in `content/panel-host-runtime.js`; hosted bridge endpoint/page event emit now lives in `content/panel-host-bridge.js`; host markup/handle drag-click now lives in `content/panel-host-view.js`; `content/panel.js` keeps host element lifecycle + helper wiring only
 - active `content/hosted-panel-bridge.js` no longer carries inactive legacy `meeting-action`, `release-action`, or prompt action request paths; the live v2 request surface is now `tool-summary-sync`, conversation bookmark, shell, runtime, and page only
 - backup legacy reference verify scripts now live under `scripts/legacy-panel/*` instead of the active root `scripts/` namespace
 - active v2 prompt shell no longer keeps hosted-owned prompt store-load/storage/sync sidecars; extension prompt residue is now review float plus review handoff/persistence only
@@ -161,29 +161,14 @@ Also:
 
 The remaining work is no longer smoke-fix first. It is mostly structural cleanup to finish the hosted-first boundary.
 
-1. Keep trimming panel shell/bootstrap/composition so the `content/panel.js` path becomes generic host + broker only.
-2. Isolate any still-inactive legacy extension panel files into `backup/legacy-panel/*` instead of leaving dead reference code mixed into active `content/*` paths.
+1. Isolate any still-inactive legacy extension panel files into `backup/legacy-panel/*` instead of leaving dead reference code mixed into active `content/*` paths.
+2. Keep only final host-shell polish so the `content/panel.js` path stays a generic host + broker entrypoint.
 3. Clear the last prompt shell residue and final legacy fallback surfaces in extension.
 4. Prepare final release path from deployed `0.4.4` baseline to hosted v2 `1.0.0`.
 
 ## Concrete Next Session Targets
 
-### 1. Common panel shell cleanup
-
-Goal:
-
-- make the extension panel path a generic host + bridge instead of a feature-aware UI owner
-
-Start files:
-
-- `content/panel-v2-composition-controller.js`
-- `content/panel-v2-shell-bridge.js`
-- `content/panel-host-runtime.js`
-- `content/panel.js`
-
-Then read only the feature-local hosted controller touched by the boundary you are removing.
-
-### 2. Legacy isolation
+### 1. Legacy isolation
 
 Goal:
 
@@ -197,6 +182,21 @@ Start files:
 - `backup/legacy-panel/README.md`
 
 Then read only the legacy files that are already outside the active bundle and can be relocated without touching `DB/Functions` or shared contracts.
+
+### 2. Common panel shell cleanup
+
+Goal:
+
+- keep the extension panel path a generic host + bridge entrypoint, not a feature-aware UI owner
+
+Start files:
+
+- `content/panel-host-view.js`
+- `content/panel-host-runtime.js`
+- `content/panel-host-bridge.js`
+- `content/panel.js`
+
+Then read only the feature-local hosted controller touched by the boundary you are removing.
 
 ### 3. Prompt shell residue
 
@@ -233,7 +233,7 @@ Start files:
 ## Recommended Next Steps
 
 1. Read `docs/current-handoff.md`, `docs/development-philosophy.md`, `docs/refactoring-plan.md`, and `docs/runtime-architecture.md`.
-2. Start with `common shell cleanup` or `legacy isolation`, not with another bug hunt, unless the same hosted lane blocks the next slice.
+2. Start with `legacy isolation`, not with another bug hunt, unless the same hosted lane blocks the next slice.
 3. If a doc still describes the old ownership, fix it in the same task.
 4. Run `npm.cmd run verify` and commit each bounded slice.
 5. Only smoke-test the paths needed to validate the boundary that moved.
@@ -264,6 +264,7 @@ Minimal re-entry set:
 - `shared/product-lane.js`
 - `content/panel-v2-composition-controller.js`
 - `content/panel-v2-shell-bridge.js`
+- `content/panel-host-view.js`
 - `content/panel-host-runtime.js`
 - `content/panel.js`
 - `hosting/extension-v2/panel/index.js`
