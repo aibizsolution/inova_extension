@@ -10,6 +10,7 @@ const root = path.resolve(__dirname, "..");
 async function main() {
   await verifyRefreshStateLoadsStorageAndBookmarks();
   verifyLaneAwareStorageChangeHandling();
+  verifyPromptLibraryStorageChangesAreIgnored();
   await verifyRouteWaitLifecycle();
   console.log("[verify-route-state-controller] Route state controller contract passed");
 }
@@ -23,7 +24,6 @@ async function verifyRefreshStateLoadsStorageAndBookmarks() {
     storageState: {
       cloudSync: { source: "runtime" },
       pausedSessions: { "session-2": true },
-      promptLibrary: { items: [{ title: "알림", content: "본문" }] },
       settings: { autoBookmark: true, enabled: true, meetingDebug: false },
       uiPreferences: { activePromptTab: "review", activeTool: "store" },
     },
@@ -57,7 +57,6 @@ function verifyLaneAwareStorageChangeHandling() {
   const changed = harness.controller.handleStorageChange({
     "lane:cloudSyncKey": { newValue: { source: "cache" } },
     "lane:pausedSessionsKey": { newValue: { "session-3": true } },
-    "lane:promptLibraryKey": { newValue: { items: [{ title: "변경", content: "됨" }] } },
     "lane:settingsKey": { newValue: { autoBookmark: false, enabled: true } },
     "lane:uiPreferencesKey": { newValue: { activePromptTab: "review", activeTool: "store" } },
   }, "local");
@@ -67,8 +66,18 @@ function verifyLaneAwareStorageChangeHandling() {
   assert.equal(harness.state.activeTool, "prompts");
   assert.equal(harness.state.uiPreferences.activePromptTab, "store");
   assert.deepEqual(harness.state.pausedSessions, { "session-3": true });
-  assert.deepEqual(harness.state.promptLibrary.items, [{ title: "변경", content: "됨" }]);
   assert.deepEqual(harness.state.cloudSync, { mergedSource: "cache" });
+}
+
+function verifyPromptLibraryStorageChangesAreIgnored() {
+  const harness = createHarness();
+
+  const changed = harness.controller.handleStorageChange({
+    "lane:promptLibraryKey": { newValue: { items: [{ title: "변경", content: "됨" }] } },
+  }, "local");
+
+  assert.equal(changed, false);
+  assert.equal("promptLibrary" in harness.state, false);
 }
 
 async function verifyRouteWaitLifecycle() {
@@ -107,7 +116,6 @@ function createHarness(options = {}) {
   const storageState = cloneValue(options.storageState || {
     cloudSync: {},
     pausedSessions: {},
-    promptLibrary: { items: [] },
     settings: { autoBookmark: true, enabled: true },
     uiPreferences: { activePromptTab: "library", activeTool: "bookmarks" },
   });
@@ -143,7 +151,6 @@ function createHarness(options = {}) {
       storageKeys: {
         cloudSync: "cloudSyncKey",
         pausedSessions: "pausedSessionsKey",
-        promptLibrary: "promptLibraryKey",
         settings: "settingsKey",
         uiPreferences: "uiPreferencesKey",
       },
@@ -170,13 +177,6 @@ function createHarness(options = {}) {
     productLane: {
       getStorageChange(changes, storageKey) {
         return changes[`lane:${storageKey}`];
-      },
-    },
-    promptLibrary: {
-      mergePromptLibrary(value) {
-        return {
-          items: Array.isArray(value?.items) ? cloneValue(value.items) : [],
-        };
       },
     },
     session: {
@@ -211,7 +211,6 @@ function createHarness(options = {}) {
     open: false,
     pausedSessions: options.pausedSessions || {},
     preferredOpen: true,
-    promptLibrary: { items: [] },
     promptReview: { open: true },
     routeBaselineSignature: options.routeBaselineSignature || "",
     routeWaitStartedAt: options.routeWaitStartedAt || 0,

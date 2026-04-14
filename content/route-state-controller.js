@@ -78,7 +78,6 @@
       const pausedSessionsChange = getStorageChange(changes, namespace.constants.storageKeys.pausedSessions, "pausedSessions");
       const cloudSyncChange = getStorageChange(changes, namespace.constants.storageKeys.cloudSync, "cloudSync");
       const uiPreferencesChange = getStorageChange(changes, namespace.constants.storageKeys.uiPreferences, "uiPreferences");
-      const promptLibraryChange = getStorageChange(changes, namespace.constants.storageKeys.promptLibrary, "promptLibrary");
 
       if (settingsChange) {
         state.settings = {
@@ -101,10 +100,6 @@
         state.activeTool = normalizeToolId(state.uiPreferences.activeTool || state.activeTool);
         changed = true;
       }
-      if (promptLibraryChange) {
-        state.promptLibrary = namespace.promptLibrary.mergePromptLibrary(promptLibraryChange.newValue);
-        changed = true;
-      }
 
       return changed;
     }
@@ -116,7 +111,6 @@
       state.cloudSync = namespace.cloudSync.mergeCloudSyncState(storageState.cloudSync);
       state.uiPreferences = readUiPreferences(storageState.uiPreferences);
       state.activeTool = normalizeToolId(state.uiPreferences.activeTool || state.activeTool);
-      state.promptLibrary = namespace.promptLibrary.mergePromptLibrary(storageState.promptLibrary);
     }
 
     function readUiPreferences(value) {

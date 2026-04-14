@@ -14,7 +14,6 @@ function main() {
 
   assert.equal(harness.mergeCloudSyncCalls, 2);
   assert.equal(harness.mergeUiPreferencesCalls, 2);
-  assert.equal(harness.mergePromptLibraryCalls, 2);
 
   assert.equal(stateA.activeTool, "meeting");
   assert.equal(stateA.panelDebugUi.collapsed, true);
@@ -22,12 +21,7 @@ function main() {
   assert.equal(stateA.releaseSummary.count, 0);
   assert.equal(stateA.releaseSummary.snapshotFingerprint, "");
   assert.equal(stateA.uiPreferences.activePromptTab, "library");
-  assert.equal(stateA.promptLibrary.items.length, 1);
-  assert.equal(stateA.store.limit, 1000);
-  assert.equal(stateA.store.renderKey, 0);
-  assert.equal(stateA.store.renderLimit, 20);
-  assert.equal(stateA.promptEditor.mode, "create");
-  assert.equal(stateA.promptPublishCategoryId, "document");
+  assert.equal(stateA.promptReview.open, false);
   assert.equal(stateA.routeWatchInstalled, false);
 
   assert.notStrictEqual(stateA, stateB);
@@ -35,21 +29,38 @@ function main() {
   assert.notStrictEqual(stateA.meetingSummary, stateB.meetingSummary);
   assert.notStrictEqual(stateA.releaseSummary, stateB.releaseSummary);
   assert.notStrictEqual(stateA.panelDebugUi, stateB.panelDebugUi);
-  assert.notStrictEqual(stateA.store, stateB.store);
+  assert.notStrictEqual(stateA.promptReview, stateB.promptReview);
   assert.notStrictEqual(stateA.queries, stateB.queries);
   assert.equal("meetingHub" in stateA, false);
   assert.equal("meetingUi" in stateA, false);
+  [
+    "promptLibraryLoading",
+    "promptLibraryRemoteReady",
+    "promptLibrary",
+    "promptEditor",
+    "promptImportReview",
+    "promptMenuId",
+    "promptDeleteConfirmId",
+    "promptPendingInsert",
+    "promptActionPending",
+    "promptPublishPromptId",
+    "promptPublishCategoryId",
+    "promptPublishTitle",
+    "promptPublishError",
+    "promptFeedback",
+    "store",
+  ].forEach((key) => assert.equal(key in stateA, false, `state should drop dead hosted-owned prompt residue ${key}`));
 
   stateA.settings.enabled = false;
   stateA.meetingSummary.count = 7;
   stateA.releaseSummary.count = 1;
-  stateA.store.scope = "mine";
+  stateA.promptReview.open = true;
   stateA.queries.bookmarks = "alpha";
 
   assert.equal(stateB.settings.enabled, true);
   assert.equal(stateB.meetingSummary.count, 0);
   assert.equal(stateB.releaseSummary.count, 0);
-  assert.equal(stateB.store.scope, "all");
+  assert.equal(stateB.promptReview.open, false);
   assert.equal(stateB.queries.bookmarks, "");
 
   console.log("[verify-panel-state-factory] V2 composition state factory contract passed");
@@ -57,7 +68,6 @@ function main() {
 
 function createHarness() {
   let mergeCloudSyncCalls = 0;
-  let mergePromptLibraryCalls = 0;
   let mergeUiPreferencesCalls = 0;
 
   const context = vm.createContext({
@@ -91,14 +101,6 @@ function createHarness() {
         },
       },
     },
-    promptLibrary: {
-      mergePromptLibrary() {
-        mergePromptLibraryCalls += 1;
-        return {
-          items: [{ id: "prompt-1", title: "Fixture Prompt" }],
-        };
-      },
-    },
     storage: {
       mergeUiPreferences() {
         mergeUiPreferencesCalls += 1;
@@ -117,9 +119,6 @@ function createHarness() {
     factory: context.InovaBookmarks.panelV2CompositionController,
     get mergeCloudSyncCalls() {
       return mergeCloudSyncCalls;
-    },
-    get mergePromptLibraryCalls() {
-      return mergePromptLibraryCalls;
     },
     get mergeUiPreferencesCalls() {
       return mergeUiPreferencesCalls;

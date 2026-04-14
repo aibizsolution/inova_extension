@@ -28,12 +28,18 @@ function main() {
 
 function verifyPromptLibraryHostedLaneContract() {
   const stateFactory = read(path.join("content", "panel-v2-composition-controller.js"));
-  assert(/promptLibraryLoading/.test(stateFactory), "panel state에 prompt library loading state가 필요합니다.");
-  assert(/promptLibraryRemoteReady/.test(stateFactory), "panel state에 prompt library remote readiness가 필요합니다.");
+  const routeStateController = read(path.join("content", "route-state-controller.js"));
+  assert(!/\bpromptLibraryLoading\b/.test(stateFactory), "active v2 panel state는 dead prompt library loading mirror를 유지하면 안 됩니다.");
+  assert(!/\bpromptLibraryRemoteReady\b/.test(stateFactory), "active v2 panel state는 dead prompt library ready mirror를 유지하면 안 됩니다.");
+  assert(!/\bpromptLibrary:\s/.test(stateFactory), "active v2 panel state는 hosted-owned prompt library cache를 직접 들지 않아야 합니다.");
+  assert(!/\bpromptEditor:\s*\{/.test(stateFactory), "active v2 panel state는 hosted-owned prompt editor bucket을 직접 들지 않아야 합니다.");
+  assert(!/\bstore:\s*\{/.test(stateFactory), "active v2 panel state는 hosted-owned store bucket을 직접 들지 않아야 합니다.");
+  assert(!/\bmergePromptLibrary\b/.test(routeStateController), "active route hydration은 hosted-owned prompt library cache를 다시 merge하면 안 됩니다.");
 
   const promptFeatureDoc = read(path.join("content", "features", "prompt-library", "AGENTS.md"));
   assert(/DB 정본/.test(promptFeatureDoc), "prompt-library AGENTS에 DB 정본 invariant가 필요합니다.");
   assert(/server ack/.test(promptFeatureDoc) || /서버 ack/.test(promptFeatureDoc), "prompt-library AGENTS에 server-ack invariant가 필요합니다.");
+  assert(/activeTab/.test(promptFeatureDoc) && /review handoff signal/.test(promptFeatureDoc), "prompt-library AGENTS에 v2 top-panel 최소 snapshot 경계가 필요합니다.");
 }
 
 function verifyPromptLibraryMetadataRoundTripContract() {
