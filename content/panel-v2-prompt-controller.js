@@ -21,11 +21,10 @@
     };
 
     function buildToolState() {
-      const reviewState = promptReviewManager.buildViewState();
       return {
         promptCount: 0,
         promptTool: {
-          review: reviewState,
+          review: promptReviewManager.buildReviewSignalState(),
         },
         promptToolCount: 0,
       };
@@ -46,7 +45,7 @@
     }
 
     function handleEscape() {
-      return promptReviewManager.consumeEscape();
+      return false;
     }
 
     function showPromptTab(promptTabId) {

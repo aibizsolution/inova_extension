@@ -27,8 +27,6 @@ const PANEL_ALLOWED_FUNCTION_ENDPOINT_KEYS = Object.freeze({
     "importPromptStoreEntryUrl",
     "issueInovaPromptPanelAuthUrl",
     "listPromptStoreEntriesUrl",
-    "loadInovaPromptLibraryUrl",
-    "peekInovaPromptLibraryUrl",
     "publishPromptToStoreUrl",
     "recordPromptStoreViewUrl",
     "reviewInovaPromptUrl",

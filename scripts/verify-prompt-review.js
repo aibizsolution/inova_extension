@@ -11,8 +11,7 @@ async function main() {
   verifyLegacyReviewContract();
   verifyPromptTellingV2Contract();
   verifyHostedPromptReviewContract();
-  await verifyLegacyClientCompatibility();
-  await verifyPromptTellingV2ClientOptIn();
+  await verifyExtensionReviewHandoff();
   console.log("[verify-prompt-review] Prompt review contract passed");
 }
 
@@ -84,73 +83,22 @@ function verifyPromptTellingV2Contract() {
   assert.deepEqual(normalized.quickImprovements.length, 4);
 }
 
-async function verifyLegacyClientCompatibility() {
+async function verifyExtensionReviewHandoff() {
   const harness = createPromptReviewHarness({
-    runtimeResponse: {
-      checks: [
-        { feedback: "배경이 부족합니다.", id: "context", label: "맥락", status: "missing" },
-        { feedback: "목표는 비교적 명확합니다.", id: "goal", label: "목표", status: "good" },
-        { feedback: "제약을 조금 더 보강해 주세요.", id: "constraints", label: "제약", status: "partial" },
-        { feedback: "출력 형식을 지정해 주세요.", id: "output", label: "산출물 형식", status: "partial" },
-      ],
-      quickImprovements: ["대상 독자를 먼저 적어 주세요."],
-      refinedPrompt: "상황과 목표를 정리해 주세요.",
-      summary: "배경과 형식이 부족합니다.",
-      totalScore: 61,
-      verdict: "revise",
-    },
-    version: "0.4.4",
+    version: "1.0.0",
   });
 
-  harness.manager.handleAction("review-composer");
+  harness.manager.handleAction("activate-review");
   await flushAsyncWork();
 
-  const message = harness.runtimeMessages[0];
   const viewState = harness.manager.buildViewState();
-  const html = harness.context.InovaBookmarks.promptReviewView.render(viewState);
-
-  assert.equal(Object.prototype.hasOwnProperty.call(message, "reviewProfile"), false);
-  assert.equal(viewState.result.sections.length, 0);
-  assert.equal(html.includes("핵심 구조 (PRO)"), false);
-  assert.equal(html.includes("배경/대상/상황"), true);
-}
-
-async function verifyPromptTellingV2ClientOptIn() {
-  const harness = createPromptReviewHarness({
-    runtimeResponse: {
-      checks: [
-        { feedback: "역할은 잘 정의됐습니다.", group: "core", id: "persona", label: "역할 지정", status: "good" },
-        { feedback: "참고 자료를 붙여 주세요.", group: "core", id: "reference", label: "참고 자료", status: "missing" },
-        { feedback: "목표는 비교적 분명합니다.", group: "core", id: "objective", label: "목표 설정", status: "good" },
-        { feedback: "결과 형식을 더 선명히 적어 주세요.", group: "refinement", id: "mode", label: "결과 형식", status: "partial" },
-        { feedback: "타깃 관점이 없습니다.", group: "refinement", id: "pointOfView", label: "타깃 관점", status: "missing" },
-        { feedback: "말투를 지정해 주세요.", group: "refinement", id: "tone", label: "말투", status: "partial" },
-      ],
-      quickImprovements: ["참고 자료 링크를 넣어 주세요.", "타깃 독자를 써 주세요."],
-      refinedPrompt: "당신은 [역할]입니다.\n[참고 자료]를 참고해\n[목표]를 달성할 수 있도록\n[결과 형식]으로 작성해 주세요.\n[타깃 관점] 기준으로\n[말투]를 유지해 주세요.",
-      summary: "참고 자료와 타깃 관점을 먼저 채워 주세요.",
-      totalScore: 50,
-      verdict: "revise",
-    },
-    version: "0.4.5",
-  });
-
-  harness.manager.handleAction("review-composer");
-  await flushAsyncWork();
-
-  const message = harness.runtimeMessages[0];
-  const viewState = harness.manager.buildViewState();
-  const html = harness.context.InovaBookmarks.promptReviewView.render(viewState);
-
-  assert.equal(message.reviewProfile, "prompt-telling-v2");
-  assert.deepEqual(
-    viewState.result.sections.map((section) => section.label),
-    ["핵심 구조 (PRO)", "정교화 요소 (MPT)"]
-  );
-  assert.equal(viewState.result.totalScoreLabel, "50점");
-  assert.equal(html.includes("핵심 구조 (PRO)"), true);
-  assert.equal(html.includes("정교화 요소 (MPT)"), true);
-  assert.equal(html.includes("PRO"), true);
+  assert.deepEqual(harness.showPromptTabs, ["review"]);
+  assert.deepEqual(harness.manager.buildReviewSignalState(), { requestId: 1 });
+  assert.equal(harness.runtimeMessages.length, 0);
+  assert.equal(viewState.available, true);
+  assert.equal(viewState.hasText, true);
+  assert.equal(viewState.pending, false);
+  assert.equal(viewState.result, null);
 }
 
 function verifyHostedPromptReviewContract() {
@@ -177,19 +125,24 @@ function verifyHostedPromptReviewContract() {
     "hosted prompt review should trace copy start"
   );
   assert.equal(
-    hostedControllerSource.includes("hydrateFromSnapshotReviewState(panelState?.promptTool?.review)"),
+    hostedControllerSource.includes("handleExternalReviewActivation(panelState?.promptTool?.review);"),
     true,
-    "hosted prompt review should hydrate snapshot review state before handling actions"
+    "hosted prompt review should react to external review handoff signals from the top snapshot"
   );
   assert.equal(
-    hostedControllerSource.includes('traceReview("52.hosted.review.snapshot.hydrated"'),
+    hostedControllerSource.includes('traceReview("52.hosted.review.external-activation"'),
     true,
-    "hosted prompt review should trace snapshot hydration"
+    "hosted prompt review should trace external review activations"
   );
   assert.equal(
-    hostedControllerSource.includes("snapshotResolvedWhileHostedPending"),
+    !hostedControllerSource.includes("hydrateFromSnapshotReviewState"),
     true,
-    "hosted prompt review should hydrate external snapshot completion over pending hosted state"
+    "hosted prompt review should stop hydrating result/open state out of the top snapshot"
+  );
+  assert.equal(
+    hostedIndexSource.includes("promptReviewController?.consumeEscape?.()"),
+    true,
+    "hosted panel should let the hosted prompt review controller consume Escape before delegating to the top panel"
   );
   assert.equal(
     hostedIndexSource.includes("traceReview: traceReviewFlow"),
@@ -202,24 +155,14 @@ function verifyHostedPromptReviewContract() {
     "top panel should keep hosted review request traces visible"
   );
   assert.equal(
-    panelTraceSource.includes('"page.functions.review.start"'),
-    true,
-    "top panel should keep content review function traces visible"
-  );
-  assert.equal(
-    panelTraceSource.includes('"prompt.review.request.start"'),
-    true,
-    "top panel should keep content review request traces visible"
-  );
-  assert.equal(
     shellBridgeSource.includes("const panelTrace = buildPanelTracePayload({"),
     true,
     "v2 shell bridge should build a dedicated panelTrace payload for top panel snapshot tracing"
   );
   assert.equal(
-    shellBridgeSource.includes("reviewOpen: Boolean(reviewState.open)"),
+    shellBridgeSource.includes('reviewOpen: activeTool === "prompts" && promptTab === "review"'),
     true,
-    "v2 shell bridge should report prompt review visibility inside the panelTrace payload"
+    "v2 shell bridge should derive prompt review visibility from prompt tab selection instead of snapshot review state"
   );
   assert.equal(
     panelTraceSource.includes('const panelTrace = state?.panelTrace && typeof state.panelTrace === "object"')
@@ -228,19 +171,24 @@ function verifyHostedPromptReviewContract() {
     "top panel trace helper should consume the prebuilt panelTrace payload and the host should wire that helper in"
   );
   assert.equal(
-    promptReviewManagerSource.includes("REVIEW_RUNTIME_TIMEOUT_MS = 30000"),
+    promptReviewManagerSource.includes("buildReviewSignalState"),
     true,
-    "content prompt review runtime should define a review timeout"
+    "content prompt review manager should expose a minimal hosted handoff signal builder"
   );
   assert.equal(
-    promptReviewManagerSource.includes('new Error("review-runtime-timeout")'),
+    !promptReviewManagerSource.includes("chrome.runtime.sendMessage"),
     true,
-    "content prompt review runtime should surface explicit timeout errors"
+    "content prompt review manager should stop issuing runtime review requests directly"
   );
   assert.equal(
-    promptReviewManagerSource.includes("프롬프트 검토 응답이 지연되고 있어요. 잠시 후 다시 시도해 주세요."),
+    !promptReviewManagerSource.includes("review-runtime-timeout"),
     true,
-    "content prompt review runtime timeout should show a user-facing error"
+    "content prompt review manager should no longer carry the legacy runtime timeout flow"
+  );
+  assert.equal(
+    !promptReviewManagerSource.includes("applyReviewedPrompt"),
+    true,
+    "content prompt review manager should stop carrying hosted-owned apply/copy result flows"
   );
 }
 
@@ -287,6 +235,21 @@ function createPromptReviewHarness(options = {}) {
         };
       },
     },
+    constants: {
+      defaults: {
+        promptReview: {
+          copyState: "idle",
+          error: "",
+          lastReviewedAt: "",
+          open: false,
+          pending: false,
+          placeholderConfirmation: false,
+          requestId: 0,
+          result: null,
+          reviewedText: "",
+        },
+      },
+    },
     panelDebug: {
       log() {},
     },
@@ -308,7 +271,6 @@ function createPromptReviewHarness(options = {}) {
   };
 
   loadScript("content/features/prompt-review/prompt-review-manager.js", context);
-  loadScript("backup/legacy-panel/prompt-review-view.js", context);
 
   const state = {
     promptReview: {

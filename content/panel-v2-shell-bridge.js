@@ -318,7 +318,7 @@
       const panelTrace = buildPanelTracePayload({
         activeTool: state.activeTool,
         open: state.open,
-        promptTool: promptSnapshot,
+        promptTab: normalizePromptTab(state.uiPreferences?.activePromptTab),
         visible,
       });
       const handleCount = panelShellController.buildHandleCount({
@@ -352,18 +352,18 @@
     }
 
     function buildPanelTracePayload(payload = {}) {
-      const promptTool = payload?.promptTool && typeof payload.promptTool === "object"
-        ? payload.promptTool
-        : {};
-      const reviewState = promptTool?.review && typeof promptTool.review === "object"
-        ? promptTool.review
-        : {};
+      const activeTool = String(payload?.activeTool ?? "").trim();
+      const promptTab = normalizePromptTab(payload?.promptTab);
       return {
-        activeTool: String(payload?.activeTool ?? "").trim(),
+        activeTool,
         open: Boolean(payload?.open),
-        reviewOpen: Boolean(reviewState.open),
+        reviewOpen: activeTool === "prompts" && promptTab === "review",
         visible: Boolean(payload?.visible),
       };
+    }
+
+    function normalizePromptTab(activePromptTab) {
+      return activePromptTab === "store" || activePromptTab === "review" ? activePromptTab : "library";
     }
 
     function normalizeCount(value, fallback = 0) {

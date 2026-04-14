@@ -57,6 +57,7 @@
       composerState: { available: false, text: "" },
       copyState: "idle",
       error: "",
+      lastExternalActivationRequestId: 0,
       lastReviewedAt: "",
       open: false,
       pending: false,
@@ -69,17 +70,26 @@
 
     return {
       buildViewState,
+      consumeEscape,
       handlePromptAction,
       syncPanelState,
     };
 
     function syncPanelState(panelState) {
-      hydrateFromSnapshotReviewState(panelState?.promptTool?.review);
+      handleExternalReviewActivation(panelState?.promptTool?.review);
       const activeTool = normalizeText(panelState?.activeTool);
       const activePromptTab = getActivePromptTab();
       if (activeTool === "prompts" && activePromptTab === "review" && state.open) {
         void refreshComposerState();
       }
+    }
+
+    function consumeEscape() {
+      if (!state.open) {
+        return false;
+      }
+      void dismissReview();
+      return true;
     }
 
     function buildViewState() {
@@ -401,53 +411,16 @@
       scheduleRender();
     }
 
-    function hydrateFromSnapshotReviewState(reviewState) {
-      const snapshotState = reviewState && typeof reviewState === "object" ? reviewState : null;
-      if (!snapshotState) {
+    function handleExternalReviewActivation(reviewState) {
+      const requestId = Math.max(0, Number(reviewState?.requestId) || 0);
+      if (!requestId || requestId === state.lastExternalActivationRequestId) {
         return;
       }
-      const snapshotHasResult = Boolean(snapshotState.result);
-      const hostedHasResult = Boolean(state.result);
-      const snapshotPending = Boolean(snapshotState.pending);
-      const hostedPending = Boolean(state.pending);
-      const snapshotHasActiveState = Boolean(
-        snapshotState.open
-        || snapshotPending
-        || snapshotHasResult
-      );
-      const hostedHasActiveState = Boolean(
-        state.open
-        || hostedPending
-        || hostedHasResult
-      );
-      const snapshotResolvedWhileHostedPending = !snapshotPending
-        && hostedPending
-        && (snapshotHasResult || Boolean(snapshotState.error) || Boolean(snapshotState.open));
-      const shouldHydrate = snapshotHasActiveState && (
-        !hostedHasActiveState
-        || (snapshotPending && !hostedPending)
-        || (snapshotHasResult && (!hostedHasResult || hostedPending))
-        || snapshotResolvedWhileHostedPending
-      );
-      if (!shouldHydrate) {
-        return;
-      }
-      const composerText = normalizeText(state.composerState.text);
-      state.copyState = normalizeEnum(snapshotState.copyState, ["idle", "copied", "failed"], "idle");
-      state.error = normalizeText(snapshotState.error);
-      state.lastReviewedAt = normalizeText(snapshotState.lastReviewedAt);
-      state.open = Boolean(snapshotState.open);
-      state.pending = Boolean(snapshotState.pending);
-      state.placeholderConfirmation = Boolean(snapshotState.placeholderConfirmation);
-      state.result = snapshotState.result && typeof snapshotState.result === "object"
-        ? JSON.parse(JSON.stringify(snapshotState.result))
-        : null;
-      state.reviewedText = composerText;
-      traceReview("52.hosted.review.snapshot.hydrated", {
-        hasResult: Boolean(state.result),
-        open: state.open,
-        pending: state.pending,
+      state.lastExternalActivationRequestId = requestId;
+      traceReview("52.hosted.review.external-activation", {
+        requestId,
       });
+      void activateReview();
     }
 
     function scheduleCopyStateReset() {

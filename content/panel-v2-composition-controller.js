@@ -558,17 +558,9 @@
     if (!reviewState || typeof reviewState !== "object") {
       return {};
     }
+    const requestId = Math.max(0, Number(reviewState.requestId) || 0);
     return {
-      available: Boolean(reviewState.available),
-      copyState: normalizeText(reviewState.copyState),
-      error: normalizeText(reviewState.error),
-      lastReviewedAt: normalizeText(reviewState.lastReviewedAt),
-      open: Boolean(reviewState.open),
-      pending: Boolean(reviewState.pending),
-      placeholderConfirmation: Boolean(reviewState.placeholderConfirmation),
-      result: reviewState.result && typeof reviewState.result === "object"
-        ? JSON.parse(JSON.stringify(reviewState.result))
-        : null,
+      ...(requestId ? { requestId } : {}),
     };
   }
 

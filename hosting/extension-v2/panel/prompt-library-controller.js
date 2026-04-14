@@ -80,6 +80,7 @@
       persistedActiveTab: "library",
       persistingActiveTab: "",
       settings: {},
+      lastExternalReviewRequestId: 0,
       reviewPendingAutofocused: false,
       textInputRenderTimer: 0,
       syncNotice: null,
@@ -874,14 +875,11 @@
     }
 
     function syncExternalReviewActivation(reviewState) {
-      const pending = Boolean(reviewState?.pending);
-      if (!pending) {
-        state.reviewPendingAutofocused = false;
+      const requestId = Math.max(0, Number(reviewState?.requestId) || 0);
+      if (!requestId || requestId === state.lastExternalReviewRequestId) {
         return;
       }
-      if (state.reviewPendingAutofocused) {
-        return;
-      }
+      state.lastExternalReviewRequestId = requestId;
       state.reviewPendingAutofocused = true;
       if (state.activeTab === "review") {
         return;
@@ -889,9 +887,9 @@
       state.activeTab = "review";
       state.activeTabUserSelected = true;
       traceReview("71.hosted.review.autofocus", {
-        pending: true,
         promptTab: "review",
-        reason: "external-review-pending",
+        reason: "external-review-request",
+        requestId,
       });
       scheduleRender();
       void persistActivePromptTab("review");

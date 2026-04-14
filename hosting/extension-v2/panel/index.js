@@ -154,6 +154,9 @@
         return Boolean(response?.copied);
       },
       onEscape() {
+        if (promptReviewController?.consumeEscape?.()) {
+          return Promise.resolve(true);
+        }
         return request("panel", {
           action: "escape",
         });

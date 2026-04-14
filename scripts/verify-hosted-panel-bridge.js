@@ -230,6 +230,11 @@ function verifyBackgroundInvokeWiring() {
     "background should declare hosted function allowlist"
   );
   assert(
+    !invokeSource.includes('"loadInovaPromptLibraryUrl"')
+      && !invokeSource.includes('"peekInovaPromptLibraryUrl"'),
+    "background hosted prompt runtime surface should drop dead prompt-library read endpoint fallbacks"
+  );
+  assert(
     invokeSource.includes("invokeHostedPanelRequest"),
     "background should implement hosted request router"
   );

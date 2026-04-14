@@ -16,7 +16,7 @@ function main() {
     verifyHostedPromptEditorViewLabels(),
     verifyHostedPromptPublishUsesFunctionsFetch(),
     verifyHostedPromptTabSelectionDoesNotWaitForPersistence(),
-    verifyHostedPromptReviewPendingAutofocus(),
+    verifyHostedPromptReviewRequestAutofocus(),
     verifyHostedPromptTabSelectionSurvivesLateStorageHydration(),
     verifyHostedPromptReviewTabVisibility(),
     verifyHostedPromptTextInputDebouncesRender(),
@@ -560,7 +560,7 @@ async function verifyHostedPromptTabSelectionSurvivesLateStorageHydration() {
   );
 }
 
-async function verifyHostedPromptReviewPendingAutofocus() {
+async function verifyHostedPromptReviewRequestAutofocus() {
   const reviewTraces = [];
   const context = vm.createContext({
     Blob: class Blob {},
@@ -643,7 +643,7 @@ async function verifyHostedPromptReviewPendingAutofocus() {
       activeTool: "prompts",
       promptTool: {
         review: {
-          pending: true,
+          requestId: 3,
         },
       },
     },
@@ -660,6 +660,8 @@ async function verifyHostedPromptReviewPendingAutofocus() {
     "a fresh external review request should autofocus the hosted prompt review tab"
   );
   assert.equal(reviewTraces[0]?.step, "71.hosted.review.autofocus");
+  assert.equal(reviewTraces[0]?.payload?.reason, "external-review-request");
+  assert.equal(reviewTraces[0]?.payload?.requestId, 3);
 }
 
 async function verifyHostedPromptReviewTabVisibility() {

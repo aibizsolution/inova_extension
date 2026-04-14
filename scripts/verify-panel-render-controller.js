@@ -73,15 +73,13 @@ function verifyRenderPayloadAndReviewFloat() {
 function verifyCustomPromptSnapshotBridge() {
   const harness = createHarness({
     activeTool: "prompts",
+    uiPreferences: {
+      activePromptTab: "review",
+    },
     buildPromptSnapshot() {
       return {
-        activeTab: "review",
         review: {
-          open: true,
-          pending: true,
-          result: {
-            summary: "검토 결과",
-          },
+          requestId: 7,
         },
       };
     },
@@ -97,13 +95,8 @@ function verifyCustomPromptSnapshotBridge() {
 
   assert.equal(harness.renderPayloads[0].handleCount, 5);
   assert.deepEqual(harness.renderPayloads[0].panelSnapshot.promptTool, {
-    activeTab: "review",
     review: {
-      open: true,
-      pending: true,
-      result: {
-        summary: "검토 결과",
-      },
+      requestId: 7,
     },
   });
   assert.equal(harness.renderPayloads[0].panelTrace.reviewOpen, true);
@@ -215,7 +208,7 @@ function createHarness(options = {}) {
       meeting: { count: 0 },
       release: { count: 0 },
     }),
-    uiPreferences: {},
+    uiPreferences: cloneValue(options.uiPreferences || {}),
   };
 
   const controller = context.InovaBookmarks.panelV2ShellBridge.createRenderController(state, {
