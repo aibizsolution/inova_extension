@@ -363,7 +363,7 @@ const codeChecks = [
       /createState/,
       /mergeCloudSyncState/,
       /mergeUiPreferences/,
-      /createHostedOwnedProviderIdentitySync/,
+      /createProviderIdentitySync/,
     ],
   },
   {

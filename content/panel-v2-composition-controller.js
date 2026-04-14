@@ -11,7 +11,7 @@
     }
 
     // v2 shell baseline keeps the shared extension-side runtime wiring.
-    const panelRuntimeController = createHostedOwnedPanelRuntimeBridge(state);
+    const panelRuntimeController = createPanelRuntimeBridge(state);
     const runtimeFlags = {
       isPaused: panelRuntimeController.isPaused,
       isToolSurface: panelRuntimeController.isToolSurface,
@@ -20,22 +20,22 @@
       isExtensionContextInvalidatedError: panelRuntimeController.isExtensionContextInvalidatedError,
       logPanelDebug: panelRuntimeController.logPanelDebug,
     };
-    const hostedOwnedReleaseToolSummarySnapshot = createHostedOwnedReleaseToolSummarySnapshotBridge(
-      () => getHostedToolSummary(state.toolSummaries, "release")
+    const releaseToolSummarySnapshot = createReleaseToolSummarySnapshotBridge(
+      () => getToolSummary(state.toolSummaries, "release")
     );
-    const providerIdentitySync = createHostedOwnedProviderIdentitySync(state, {
+    const providerIdentitySync = createProviderIdentitySync(state, {
       ...runtimeDiagnostics,
       render,
     });
-    const hostedOwnedMeetingToolSummarySnapshot = createHostedOwnedCountToolSummarySnapshotBridge(
-      () => getHostedToolSummary(state.toolSummaries, "meeting")
+    const meetingToolSummarySnapshot = createCountToolSummarySnapshotBridge(
+      () => getToolSummary(state.toolSummaries, "meeting")
     );
-    const panelDebugController = createHostedOwnedPanelDebugBridge(state, {
+    const panelDebugController = createPanelDebugBridge(state, {
       ...runtimeFlags,
     });
-    const hostedOwnedConversationBridge = createHostedOwnedConversationBridge(state, { render });
+    const conversationBridge = createConversationBridge(state, { render });
     const panelShellController = panelV2ShellBridge.createShellController(state, {
-      bookmarkController: hostedOwnedConversationBridge,
+      bookmarkController: conversationBridge,
       isExtensionContextInvalidatedError: runtimeDiagnostics.isExtensionContextInvalidatedError,
       render,
     });
@@ -45,22 +45,22 @@
       persistActiveTool: panelShellController.persistActiveTool,
       render,
     });
-    const hostedOwnedPromptSnapshot = createHostedOwnedPromptSnapshotBridge();
+    const promptSnapshotBridge = createPromptSnapshotBridge();
 
     const routeStateController = namespace.routeStateController.create(state, {
       applyUiPreferenceLock: panelShellController.applyUiPreferenceLock,
       normalizeToolId: panelShellController.normalizeToolId,
     });
-    const panelLifecycleController = panelV2ShellBridge.createHostedOwnedPanelLifecycleBridge(state, {
+    const panelLifecycleController = panelV2ShellBridge.createPanelLifecycleBridge(state, {
       logPanelDebug: runtimeDiagnostics.logPanelDebug,
       render,
     });
-    const panelActivityController = panelV2ShellBridge.createHostedOwnedPanelActivityBridge(state, {
+    const panelActivityController = panelV2ShellBridge.createPanelActivityBridge(state, {
       logPanelDebug: runtimeDiagnostics.logPanelDebug,
       providerIdentitySync,
       render,
     });
-    const panelSurfaceController = panelV2ShellBridge.createHostedOwnedPanelSurfaceBridge(state, {
+    const panelSurfaceController = panelV2ShellBridge.createPanelSurfaceBridge(state, {
       logPanelDebug: runtimeDiagnostics.logPanelDebug,
       render,
     });
@@ -74,32 +74,32 @@
       scheduleRouteSync: routeSync.scheduleRouteSync,
     });
 
-    const hostedOwnedToolSummarySnapshotBridges = {
-      meeting: hostedOwnedMeetingToolSummarySnapshot,
-      release: hostedOwnedReleaseToolSummarySnapshot,
+    const toolSummarySnapshotBridges = {
+      meeting: meetingToolSummarySnapshot,
+      release: releaseToolSummarySnapshot,
     };
 
     renderController = panelV2ShellBridge.createRenderController(state, {
       isPaused: runtimeFlags.isPaused,
       isToolSurface: runtimeFlags.isToolSurface,
-      buildConversationSnapshot: hostedOwnedConversationBridge.buildConversationSnapshot,
-      getConversationCount: hostedOwnedConversationBridge.getConversationCount,
-      buildPromptSnapshot: hostedOwnedPromptSnapshot.buildPromptSnapshot,
-      getPromptCounts: hostedOwnedPromptSnapshot.getPromptCounts,
+      buildConversationSnapshot: conversationBridge.buildConversationSnapshot,
+      getConversationCount: conversationBridge.getConversationCount,
+      buildPromptSnapshot: promptSnapshotBridge.buildPromptSnapshot,
+      getPromptCounts: promptSnapshotBridge.getPromptCounts,
       buildToolSummarySnapshot(toolId) {
-        return hostedOwnedToolSummarySnapshotBridges[normalizeHostedToolSummaryId(toolId)]?.buildSnapshot?.() || {};
+        return toolSummarySnapshotBridges[normalizeToolSummaryId(toolId)]?.buildSnapshot?.() || {};
       },
       getToolSummaryCount(toolId, toolSummary) {
-        return hostedOwnedToolSummarySnapshotBridges[normalizeHostedToolSummaryId(toolId)]?.getCount?.(toolSummary) || 0;
+        return toolSummarySnapshotBridges[normalizeToolSummaryId(toolId)]?.getCount?.(toolSummary) || 0;
       },
       panelDebugController,
       promptShellController,
       panelShellController,
     });
     const panelBootstrapController = panelV2ShellBridge.createBootstrapController(state, {
-      handlePanelToolSummarySync: handleHostedToolSummarySync,
+      handlePanelToolSummarySync: handleToolSummarySync,
       panelActivityController,
-      panelBookmarkController: hostedOwnedConversationBridge,
+      panelBookmarkController: conversationBridge,
       panelDebugController,
       panelLifecycleController,
       promptShellController,
@@ -118,13 +118,13 @@
       },
     };
 
-    function handleHostedToolSummarySync(toolId, toolState = {}) {
-      const normalizedToolId = normalizeHostedToolSummaryId(toolId);
+    function handleToolSummarySync(toolId, toolState = {}) {
+      const normalizedToolId = normalizeToolSummaryId(toolId);
       if (!normalizedToolId) {
         return false;
       }
-      const nextSummary = normalizeHostedToolSummary(normalizedToolId, toolState);
-      if (!shouldUpdateHostedToolSummary(state.toolSummaries, normalizedToolId, nextSummary)) {
+      const nextSummary = normalizeToolSummary(normalizedToolId, toolState);
+      if (!shouldUpdateToolSummary(state.toolSummaries, normalizedToolId, nextSummary)) {
         return false;
       }
       state.toolSummaries = {
@@ -178,7 +178,7 @@
     };
   }
 
-  function createHostedOwnedPanelRuntimeBridge(state) {
+  function createPanelRuntimeBridge(state) {
     return {
       isExtensionContextInvalidatedError,
       isPaused,
@@ -204,7 +204,7 @@
     }
   }
 
-  function createHostedOwnedPanelDebugBridge(state, deps = {}) {
+  function createPanelDebugBridge(state, deps = {}) {
     const isPaused = typeof deps.isPaused === "function" ? deps.isPaused : () => false;
     const isToolSurface = typeof deps.isToolSurface === "function" ? deps.isToolSurface : () => false;
 
@@ -264,7 +264,7 @@
     }
   }
 
-  function createHostedOwnedProviderIdentitySync(state, deps = {}) {
+  function createProviderIdentitySync(state, deps = {}) {
     const render = typeof deps.render === "function" ? deps.render : () => {};
     const logPanelDebug = typeof deps.logPanelDebug === "function" ? deps.logPanelDebug : () => {};
     const isExtensionContextInvalidatedError = typeof deps.isExtensionContextInvalidatedError === "function"
@@ -378,7 +378,7 @@
     return normalize(identity || null);
   }
 
-  function createHostedOwnedCountToolSummarySnapshotBridge(getToolSummary = () => ({})) {
+  function createCountToolSummarySnapshotBridge(getToolSummary = () => ({})) {
     return {
       buildSnapshot() {
         return {
@@ -389,11 +389,11 @@
     };
 
     function getCount(toolSummary = {}) {
-      return normalizeHostedToolSummaryCount(toolSummary?.count);
+      return normalizeToolSummaryCount(toolSummary?.count);
     }
   }
 
-  function createHostedOwnedPromptSnapshotBridge() {
+  function createPromptSnapshotBridge() {
     return {
       buildPromptSnapshot(promptToolState = {}) {
         const promptTool = promptToolState?.promptTool && typeof promptToolState.promptTool === "object"
@@ -412,7 +412,7 @@
     };
   }
 
-  function createHostedOwnedConversationBridge(state, deps = {}) {
+  function createConversationBridge(state, deps = {}) {
     const render = typeof deps.render === "function" ? deps.render : () => {};
 
     return {
@@ -532,10 +532,10 @@
     }
   }
 
-  function createHostedOwnedReleaseToolSummarySnapshotBridge(getReleaseSummary = () => ({})) {
+  function createReleaseToolSummarySnapshotBridge(getReleaseSummary = () => ({})) {
     return {
       buildSnapshot() {
-        const releaseTool = normalizeHostedReleaseSummary(getReleaseSummary());
+        const releaseTool = normalizeReleaseSummary(getReleaseSummary());
         const count = getCount(releaseTool);
         return {
           count,
@@ -546,8 +546,8 @@
       getCount,
     };
 
-    function getCount(releaseTool = normalizeHostedReleaseSummary(getReleaseSummary())) {
-      return normalizeHostedToolSummaryCount(releaseTool.count);
+    function getCount(releaseTool = normalizeReleaseSummary(getReleaseSummary())) {
+      return normalizeToolSummaryCount(releaseTool.count);
     }
 
     function buildReleaseSnapshotFingerprint(releaseTool = {}) {
@@ -581,19 +581,19 @@
     };
   }
 
-  function normalizeHostedToolSummaryCount(value) {
+  function normalizeToolSummaryCount(value) {
     return Math.max(0, Number(value) || 0);
   }
 
-  function normalizeHostedToolSummaryId(value) {
+  function normalizeToolSummaryId(value) {
     const normalizedToolId = normalizeText(value);
     return normalizedToolId === "meeting" || normalizedToolId === "release"
       ? normalizedToolId
       : "";
   }
 
-  function getHostedToolSummary(toolSummaries, toolId) {
-    const normalizedToolId = normalizeHostedToolSummaryId(toolId);
+  function getToolSummary(toolSummaries, toolId) {
+    const normalizedToolId = normalizeToolSummaryId(toolId);
     if (!normalizedToolId) {
       return {};
     }
@@ -602,32 +602,32 @@
     return summary && typeof summary === "object" ? summary : {};
   }
 
-  function shouldUpdateHostedToolSummary(toolSummaries, toolId, nextSummary) {
-    return buildHostedToolSummaryKey(toolId, getHostedToolSummary(toolSummaries, toolId))
-      !== buildHostedToolSummaryKey(toolId, nextSummary);
+  function shouldUpdateToolSummary(toolSummaries, toolId, nextSummary) {
+    return buildToolSummaryKey(toolId, getToolSummary(toolSummaries, toolId))
+      !== buildToolSummaryKey(toolId, nextSummary);
   }
 
-  function buildHostedToolSummaryKey(toolId, toolSummary) {
-    return JSON.stringify(normalizeHostedToolSummary(toolId, toolSummary));
+  function buildToolSummaryKey(toolId, toolSummary) {
+    return JSON.stringify(normalizeToolSummary(toolId, toolSummary));
   }
 
-  function normalizeHostedToolSummary(toolId, toolSummary = {}) {
-    const normalizedToolId = normalizeHostedToolSummaryId(toolId);
+  function normalizeToolSummary(toolId, toolSummary = {}) {
+    const normalizedToolId = normalizeToolSummaryId(toolId);
     if (normalizedToolId === "meeting") {
       return {
-        count: normalizeHostedToolSummaryCount(toolSummary?.count),
+        count: normalizeToolSummaryCount(toolSummary?.count),
       };
     }
     if (normalizedToolId === "release") {
-      return normalizeHostedReleaseSummary(toolSummary);
+      return normalizeReleaseSummary(toolSummary);
     }
     return {};
   }
 
-  function normalizeHostedReleaseSummary(releaseTool) {
+  function normalizeReleaseSummary(releaseTool) {
     const normalizedReleaseTool = releaseTool && typeof releaseTool === "object" ? releaseTool : {};
     return {
-      count: normalizeHostedToolSummaryCount(normalizedReleaseTool.count),
+      count: normalizeToolSummaryCount(normalizedReleaseTool.count),
       snapshotFingerprint: normalizeText(normalizedReleaseTool.snapshotFingerprint),
     };
   }

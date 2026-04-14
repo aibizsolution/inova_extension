@@ -1,7 +1,7 @@
 (function initPanelV2ShellBridge(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
 
-  function createHostedOwnedPanelActivityBridge(state, deps = {}) {
+  function createPanelActivityBridge(state, deps = {}) {
     const logPanelDebug = typeof deps.logPanelDebug === "function" ? deps.logPanelDebug : () => {};
     const providerIdentitySync = deps.providerIdentitySync || { async syncToStorage() { return false; } };
     const render = typeof deps.render === "function" ? deps.render : () => {};
@@ -38,7 +38,7 @@
     }
   }
 
-  function createHostedOwnedPanelLifecycleBridge(state, deps = {}) {
+  function createPanelLifecycleBridge(state, deps = {}) {
     const logPanelDebug = typeof deps.logPanelDebug === "function" ? deps.logPanelDebug : () => {};
     const render = typeof deps.render === "function" ? deps.render : () => {};
     const PANEL_OPEN_KEY = "inova-plus.panel-open";
@@ -86,7 +86,7 @@
     }
   }
 
-  function createHostedOwnedPanelSurfaceBridge(state, deps = {}) {
+  function createPanelSurfaceBridge(state, deps = {}) {
     const logPanelDebug = typeof deps.logPanelDebug === "function"
       ? deps.logPanelDebug
       : () => {};
@@ -554,9 +554,9 @@
 
   namespace.panelV2ShellBridge = {
     createBootstrapController,
-    createHostedOwnedPanelActivityBridge,
-    createHostedOwnedPanelLifecycleBridge,
-    createHostedOwnedPanelSurfaceBridge,
+    createPanelActivityBridge,
+    createPanelLifecycleBridge,
+    createPanelSurfaceBridge,
     createRenderController,
     createShellController,
   };

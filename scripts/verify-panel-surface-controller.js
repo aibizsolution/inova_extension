@@ -110,7 +110,7 @@ function createHarness(options = {}) {
     surfaceSignature: "",
   };
 
-  const controller = context.InovaBookmarks.panelV2ShellBridge.createHostedOwnedPanelSurfaceBridge(state, {
+  const controller = context.InovaBookmarks.panelV2ShellBridge.createPanelSurfaceBridge(state, {
     logPanelDebug(event, payload) {
       debugEvents.push({ event, payload: cloneValue(payload) });
     },

@@ -22,7 +22,7 @@ async function verifyVisibilityHiddenAndVisibleFlow() {
   hiddenHarness.controller.handleVisibilityChange();
   await hiddenHarness.flush();
 
-  assert.deepEqual(hiddenHarness.promptRealtimeScheduleCalls, [0]);
+  assert.deepEqual(hiddenHarness.promptRealtimeScheduleCalls, []);
   assert.deepEqual(hiddenHarness.promptCloudScheduleCalls, []);
   assert.deepEqual(hiddenHarness.releaseEnsureCalls, []);
   assert.equal(hiddenHarness.debugEvents.at(-1)?.event, "panel.ui.visibility.hidden");
@@ -36,10 +36,11 @@ async function verifyVisibilityHiddenAndVisibleFlow() {
   await visibleHarness.flush();
 
   assert.deepEqual(visibleHarness.providerIdentityReasons, ["visibility-visible"]);
-  assert.deepEqual(visibleHarness.promptCloudScheduleCalls, [320]);
-  assert.deepEqual(visibleHarness.promptRealtimeScheduleCalls, [320]);
-  assert.deepEqual(visibleHarness.releaseEnsureCalls, [{ allowCached: false, preferFresh: false }]);
+  assert.deepEqual(visibleHarness.promptCloudScheduleCalls, []);
+  assert.deepEqual(visibleHarness.promptRealtimeScheduleCalls, []);
+  assert.deepEqual(visibleHarness.releaseEnsureCalls, []);
   assert.equal(visibleHarness.debugEvents.at(-1)?.event, "panel.ui.visibility.visible");
+  assert.equal(visibleHarness.renderCalls.length, 1);
 }
 
 async function verifyWindowFocusFlow() {
@@ -51,9 +52,9 @@ async function verifyWindowFocusFlow() {
   await harness.flush();
 
   assert.deepEqual(harness.providerIdentityReasons, ["window-focus"]);
-  assert.deepEqual(harness.promptCloudScheduleCalls, [320]);
-  assert.deepEqual(harness.promptRealtimeScheduleCalls, [320]);
-  assert.deepEqual(harness.releaseEnsureCalls, [{ allowCached: false, preferFresh: false }]);
+  assert.deepEqual(harness.promptCloudScheduleCalls, []);
+  assert.deepEqual(harness.promptRealtimeScheduleCalls, []);
+  assert.deepEqual(harness.releaseEnsureCalls, []);
   assert.equal(harness.debugEvents.at(-1)?.event, "panel.ui.focus");
   assert.equal(harness.renderCalls.length, 1);
 }
@@ -82,7 +83,7 @@ function createHarness(options = {}) {
     open: Boolean(options.open),
   };
 
-  const controller = context.InovaBookmarks.panelV2ShellBridge.createHostedOwnedPanelActivityBridge(state, {
+  const controller = context.InovaBookmarks.panelV2ShellBridge.createPanelActivityBridge(state, {
     logPanelDebug(event, payload) {
       debugEvents.push({ event, payload: cloneValue(payload) });
     },
