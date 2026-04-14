@@ -6,7 +6,6 @@
       settings: "settings",
       pausedSessions: "pausedSessions",
       uiPreferences: "uiPreferences",
-      promptLibrary: "promptLibrary",
       cloudSync: "cloudSync",
       productLaneMigration: "productLaneMigration",
     },
@@ -19,10 +18,6 @@
         meetingWorkspaceUrlOverride: "",
       },
       pausedSessions: {},
-      promptLibrary: {
-        version: 1,
-        items: [],
-      },
       promptReview: {
         copyState: "idle",
         error: "",

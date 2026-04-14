@@ -1,6 +1,9 @@
 (function initPromptLibrary(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const defaults = namespace.constants.defaults.promptLibrary;
+  const defaults = Object.freeze({
+    version: 1,
+    items: [],
+  });
 
   function mergePromptLibrary(...libraries) {
     const items = [];

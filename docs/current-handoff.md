@@ -43,6 +43,7 @@ Short version:
 - active extension runtime broker now routes hosted panel privileged capability handling through `background/panel-runtime-capability-router.js`, so auth/functions/open-url/storage snapshot logic also stays isolated in one browser-only adapter instead of leaking through the invoke shim
 - active `shared/storage.js` no longer carries dormant release/meeting accessor surface; those backup-only helpers now live under `backup/legacy-panel/shared/legacy-storage-accessors.js`
 - active `shared/constants.js` also no longer carries dormant release/meeting storage key/default contract; backup legacy helpers now own those fallback schema literals directly
+- active `shared/constants.js` / `shared/storage.js` no longer carry dormant `promptLibrary` local storage schema either; backup prompt storage/reference helpers now own that cache contract directly
 - prompt review runtime now surfaces `page.functions.review.*` / `prompt.review.request.*` traces in the top console and fails explicit timeout after `30s` instead of hanging forever
 - top console trace visibility was restored for hosted `meeting panel-auth`, `Firestore listen/snapshot`, conversation snapshot reads, release fetches, and prompt review function calls
 - panel layout now uses a fixed `420px` width with a `70px` left rail for the active v2 surface
