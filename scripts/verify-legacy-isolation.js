@@ -197,6 +197,7 @@ function verifyActiveHostedRuntimeStorageSurfaceStaysCompact() {
 function verifyActiveBackgroundMessageSurfaceStaysNarrow() {
   const serviceWorkerSource = fs.readFileSync(path.join(root, "background", "service-worker.js"), "utf8");
   const browserCapabilitySource = fs.readFileSync(path.join(root, "background", "browser-capability.js"), "utf8");
+  const panelSessionCapabilitySource = fs.readFileSync(path.join(root, "background", "panel-session-capability.js"), "utf8");
   const meetingWorkspaceCapabilitySource = fs.readFileSync(
     path.join(root, "background", "meeting-workspace-capability.js"),
     "utf8"
@@ -221,6 +222,18 @@ function verifyActiveBackgroundMessageSurfaceStaysNarrow() {
   assert(
     serviceWorkerSource.includes('importScripts("meeting-workspace-capability.js");'),
     "background service worker should preload the dedicated meeting workspace capability module"
+  );
+  assert(
+    serviceWorkerSource.includes('importScripts("panel-session-capability.js");'),
+    "background service worker should preload the dedicated panel session capability module"
+  );
+  assert(
+    panelSessionCapabilitySource.includes("namespace.panelAuthCache?.create?.(getInovaAccessToken)"),
+    "panel session capability should own the panel auth cache wrapper"
+  );
+  assert(
+    panelSessionCapabilitySource.includes("namespace.firebaseConfig?.prompt?.resolveRuntime?.(normalizedSettings)"),
+    "panel session capability should own prompt runtime resolution"
   );
   [
     '"inova-meeting:authorize-workspace-access"',
@@ -262,6 +275,11 @@ function verifyActiveBackgroundMessageSurfaceStaysNarrow() {
     "resolveMeetingProviderIdentity(",
     "requestMeetingProviderIdentityFromInovaTabs(",
     "HOSTED_MEETING_ALLOWED_ORIGINS",
+    "async function getInovaAccessToken(",
+    "async function issuePromptPanelAuth(",
+    "async function issueMeetingPanelAuth(",
+    "async function getPromptFunctionsConfig(",
+    "async function getPromptRuntimeConfig(",
     "async function openReleaseUrl(",
     "function createBrowserTab(",
     "meetingListCache",
@@ -292,6 +310,10 @@ function verifyActiveBackgroundMessageSurfaceStaysNarrow() {
   assert(
     !serviceWorkerSource.includes("chrome.tabs.create("),
     "background service worker should not open browser tabs directly"
+  );
+  assert(
+    !serviceWorkerSource.includes("chrome.cookies.get("),
+    "background service worker should not read panel auth cookies directly"
   );
   assert(
     !meetingWorkspaceCapabilitySource.includes("chrome.tabs.create("),

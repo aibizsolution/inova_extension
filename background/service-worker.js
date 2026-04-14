@@ -9,6 +9,7 @@ importScripts("../shared/cloud-api.js");
 importScripts("browser-capability.js");
 importScripts("meeting-workspace-capability.js");
 importScripts("panel-auth-cache.js");
+importScripts("panel-session-capability.js");
 importScripts("panel-runtime-capability-router.js");
 importScripts("panel-runtime-invoke.js");
 
@@ -21,7 +22,7 @@ const ACTIVE_BACKGROUND_MESSAGE_TYPES = Object.freeze([
 ]);
 const browserCapability = namespace.browserCapability || {};
 const meetingWorkspaceCapability = namespace.meetingWorkspaceCapability || {};
-const panelAuthCache = namespace.panelAuthCache?.create?.(getInovaAccessToken);
+const panelSessionCapability = namespace.panelSessionCapability || {};
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const type = String(message?.type || "");
@@ -50,51 +51,14 @@ async function handleMessage(message, sender) {
   throw new Error("지원하지 않는 background capability 메시지예요.");
 }
 
-async function getInovaAccessToken() {
-  const cookie = await chrome.cookies.get({
-    name: "accessToken",
-    url: INOVA_ORIGIN,
-  });
-  if (cookie?.value) {
-    return cookie.value;
-  }
-  return namespace.inovaAuth.getAccessToken(true);
-}
-
-async function issuePromptPanelAuth(providerIdentity) {
-  const functionsConfig = await getPromptFunctionsConfig();
-  return panelAuthCache.issuePromptPanelAuth(providerIdentity, { functionsConfig });
-}
-
-async function issueMeetingPanelAuth(providerIdentity) {
-  const functionsConfig = await meetingWorkspaceCapability.getMeetingFunctionsConfig();
-  return panelAuthCache.issueMeetingPanelAuth(providerIdentity, { functionsConfig });
-}
-
-async function getPromptFunctionsConfig() {
-  const runtimeConfig = await getPromptRuntimeConfig();
-  return runtimeConfig?.functions || namespace.firebaseConfig?.functions || {};
-}
-
-async function getPromptRuntimeConfig() {
-  const normalizedSettings = await meetingWorkspaceCapability.reconcileSettings((await namespace.storage.getState())?.settings);
-  return namespace.firebaseConfig?.prompt?.resolveRuntime?.(normalizedSettings) || {
-    functions: namespace.firebaseConfig?.functions || {},
-    hosting: namespace.firebaseConfig?.hosting || {},
-    prompt: namespace.firebaseConfig?.prompt || {},
-    target: "production",
-    web: namespace.firebaseConfig?.web || {},
-  };
-}
-
 Object.assign(globalThis, {
-  getInovaAccessToken,
+  getInovaAccessToken: panelSessionCapability.getInovaAccessToken,
   createMeetingShareLink: meetingWorkspaceCapability.createShareLink,
   getMeetingFunctionsConfig: meetingWorkspaceCapability.getMeetingFunctionsConfig,
-  getPromptFunctionsConfig,
-  getPromptRuntimeConfig,
-  issueMeetingPanelAuth,
-  issuePromptPanelAuth,
+  getPromptFunctionsConfig: panelSessionCapability.getPromptFunctionsConfig,
+  getPromptRuntimeConfig: panelSessionCapability.getPromptRuntimeConfig,
+  issueMeetingPanelAuth: panelSessionCapability.issueMeetingPanelAuth,
+  issuePromptPanelAuth: panelSessionCapability.issuePromptPanelAuth,
   openMeetingResult: meetingWorkspaceCapability.openResult,
   openMeetingWorkspace: meetingWorkspaceCapability.openWorkspace,
   openBrowserUrl: browserCapability.openUrl,

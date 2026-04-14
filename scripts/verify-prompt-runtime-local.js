@@ -55,14 +55,14 @@ function verifyPromptRuntimeResolutionForV2Lane() {
 
 function verifyPromptLocalWiring() {
   assertPattern(
-    path.join("background", "service-worker.js"),
+    path.join("background", "panel-session-capability.js"),
     /namespace\.firebaseConfig\?\.prompt\?\.resolveRuntime\?\.\(normalizedSettings\)/,
-    "background가 prompt runtime resolver를 써야 합니다."
+    "panel session capability가 prompt runtime resolver를 써야 합니다."
   );
   assertPattern(
-    path.join("background", "service-worker.js"),
+    path.join("background", "panel-session-capability.js"),
     /panelAuthCache\.issuePromptPanelAuth\(providerIdentity,\s*\{\s*functionsConfig\s*\}\)/,
-    "background가 prompt panel auth에 runtime functions config를 넘겨야 합니다."
+    "panel session capability가 prompt panel auth에 runtime functions config를 넘겨야 합니다."
   );
   assertPattern(
     path.join("hosting", "extension", "prompt-panel-bridge.js"),

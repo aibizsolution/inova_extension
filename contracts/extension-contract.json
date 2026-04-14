@@ -13,6 +13,7 @@
     "hosting/meeting/shared.js",
     "background/browser-capability.js",
     "background/meeting-workspace-capability.js",
+    "background/panel-session-capability.js",
     "background/service-worker.js",
     "background/panel-runtime-capability-router.js",
     "background/panel-runtime-invoke.js",
