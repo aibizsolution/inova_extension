@@ -182,6 +182,7 @@ function verifyHostedPanelFiles(directoryName) {
   assert(html.includes("./prompt-hub-panel.js"), "hosted panel should load prompt interaction helpers");
   if (directoryName === "extension-v2") {
     assert(!html.includes("./legacy-panel.css"), "v2 hosted panel should not load the dead legacy panel shell stylesheet");
+    assert(!html.includes("./legacy-tools.css"), "v2 hosted panel should not load the dead legacy tools stylesheet");
     assert(html.includes("./conversation-controller.js"), "v2 hosted panel should load conversation controller");
     assert(html.includes("./prompt-library-model.js"), "v2 hosted panel should load prompt library model");
     assert(html.includes("./prompt-library-controller.js"), "v2 hosted panel should load prompt library controller");
