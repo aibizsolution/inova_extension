@@ -212,6 +212,7 @@
 
   function buildMeetingConfigHelpers(baseConfig) {
     return {
+      normalizeSettings: normalizeMeetingSettings,
       normalizeWorkspaceTarget,
       normalizeWorkspaceUrlOverride,
       resolveRuntime(settings) {

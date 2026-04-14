@@ -136,6 +136,8 @@
   ],
   "popupScripts": [
     "../shared/constants.js",
+    "../shared/product-lane.js",
+    "../shared/firebase-config.js",
     "../shared/session.js",
     "../shared/provider-identity-cache.js",
     "../shared/storage.js",

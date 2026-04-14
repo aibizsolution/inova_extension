@@ -1,5 +1,6 @@
 const popupRoot = globalThis.InovaBookmarks;
-const LOCAL_MEETING_WORKSPACE_URL = "http://127.0.0.1:5000/meeting/index.html";
+const popupMeetingConfig = popupRoot.firebaseConfig.meeting;
+const LOCAL_MEETING_WORKSPACE_URL = popupMeetingConfig.normalizeWorkspaceUrlOverride("");
 const SETTINGS_STORAGE_KEY = popupRoot.productLane?.buildStorageKey?.(popupRoot.constants.storageKeys.settings) || popupRoot.constants.storageKeys.settings;
 // verify-docs anchor: workspaceTargetHint
 
@@ -72,8 +73,9 @@ async function refreshPopup() {
 }
 
 function renderPopup() {
-  const target = normalizeMeetingWorkspaceTarget(popupState.settings.meetingWorkspaceTarget);
-  const debugEnabled = normalizeMeetingDebugConsoleEnabled(popupState.settings.meetingDebugConsoleEnabled);
+  const normalizedSettings = popupMeetingConfig.normalizeSettings(popupState.settings);
+  const target = normalizedSettings.meetingWorkspaceTarget;
+  const debugEnabled = normalizedSettings.meetingDebugConsoleEnabled;
   popupRefs.workspaceTargetProductionButton.dataset.selected = String(target === "production");
   popupRefs.workspaceTargetLocalButton.dataset.selected = String(target === "local");
   popupRefs.workspaceTargetProductionButton.setAttribute("aria-pressed", String(target === "production"));
@@ -92,7 +94,7 @@ function renderPopup() {
 }
 
 async function setMeetingWorkspaceTarget(target) {
-  const normalizedTarget = normalizeMeetingWorkspaceTarget(target);
+  const normalizedTarget = popupMeetingConfig.normalizeWorkspaceTarget(target);
   const nextSettings = await popupRoot.storage.updateSettings({
     meetingWorkspaceTarget: normalizedTarget,
     meetingWorkspaceUrlOverride: normalizedTarget === "local" ? LOCAL_MEETING_WORKSPACE_URL : "",
@@ -115,7 +117,7 @@ async function setMeetingDebugConsoleEnabled(enabled) {
 }
 
 async function refreshActiveInovaTab() {
-  const target = normalizeMeetingWorkspaceTarget(popupState.settings.meetingWorkspaceTarget);
+  const target = popupMeetingConfig.normalizeWorkspaceTarget(popupState.settings.meetingWorkspaceTarget);
   try {
     const tabs = await chrome.tabs.query({
       currentWindow: true,
@@ -146,28 +148,12 @@ async function refreshActiveInovaTab() {
   }
 }
 
-function normalizeMeetingWorkspaceTarget(value) {
-  return String(value || "").trim().toLowerCase() === "local" ? "local" : "production";
-}
-
-function normalizeMeetingDebugConsoleEnabled(value) {
-  if (typeof value === "boolean") {
-    return value;
-  }
-  const normalized = String(value || "").trim().toLowerCase();
-  return normalized === "1" || normalized === "true" || normalized === "on" || normalized === "yes";
-}
-
 async function reconcileMeetingWorkspaceSettings(settings) {
-  const currentTarget = normalizeMeetingWorkspaceTarget(settings?.meetingWorkspaceTarget);
-  const currentDebugEnabled = normalizeMeetingDebugConsoleEnabled(settings?.meetingDebugConsoleEnabled);
-  const currentOverride = normalizeMeetingWorkspaceOverrideUrl(settings?.meetingWorkspaceUrlOverride);
+  const normalizedSettings = popupMeetingConfig.normalizeSettings(settings);
   const nextSettings = {
     ...popupRoot.constants.defaults.settings,
     ...(settings || {}),
-    meetingDebugConsoleEnabled: currentDebugEnabled,
-    meetingWorkspaceTarget: currentTarget,
-    meetingWorkspaceUrlOverride: currentTarget === "local" ? currentOverride : "",
+    ...normalizedSettings,
   };
   if (
     nextSettings.meetingDebugConsoleEnabled !== settings?.meetingDebugConsoleEnabled
@@ -181,24 +167,6 @@ async function reconcileMeetingWorkspaceSettings(settings) {
     });
   }
   return nextSettings;
-}
-
-function normalizeMeetingWorkspaceOverrideUrl(value) {
-  const normalized = String(value || "").trim();
-  if (!normalized) {
-    return LOCAL_MEETING_WORKSPACE_URL;
-  }
-  try {
-    const url = new URL(normalized);
-    if (url.hostname === "127.0.0.1" || url.hostname === "localhost") {
-      url.port = "5000";
-      url.pathname = "/meeting/index.html";
-      url.search = "";
-      url.hash = "";
-      return url.toString();
-    }
-  } catch {}
-  return LOCAL_MEETING_WORKSPACE_URL;
 }
 
 function setRefreshMessage(message, tone = "info") {

@@ -43,6 +43,7 @@ Short version:
 - active extension runtime broker now routes hosted panel privileged capability handling through `background/panel-runtime-capability-router.js`, so auth/functions/open-url/storage snapshot logic also stays isolated in one browser-only adapter instead of leaking through the invoke shim
 - active `background/service-worker.js` no longer keeps feature-specific top-level prompt/store/release/meeting message branches; the live background message surface is now limited to `inova-panel:invoke` plus hosted meeting workspace `authorize/probe` bridge messages
 - hosted meeting workspace browser capability implementation now lives in `background/meeting-workspace-capability.js`; `background/service-worker.js` keeps top-level gate + shared runtime wiring only
+- popup과 background meeting workspace capability는 이제 `shared/firebase-config.js`의 shared meeting setting normalization을 같이 재사용한다
 - active `shared/storage.js` no longer carries dormant release/meeting accessor surface; those backup-only helpers now live under `backup/legacy-panel/shared/legacy-storage-accessors.js`
 - active `shared/constants.js` also no longer carries dormant release/meeting storage key/default contract; backup legacy helpers now own those fallback schema literals directly
 - active `shared/constants.js` / `shared/storage.js` no longer carry dormant `promptLibrary` local storage schema either; backup prompt storage/reference helpers now own that cache contract directly

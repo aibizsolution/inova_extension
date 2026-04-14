@@ -1,6 +1,7 @@
 (function initMeetingWorkspaceCapability(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const INOVA_ORIGIN = "https://inova.incross.com";
+  const meetingConfig = namespace.firebaseConfig.meeting;
   const HOSTED_MEETING_ALLOWED_ORIGINS = new Set(namespace.productLane?.getKnownHostingOrigins?.() || [
     "https://browser-extension-main.web.app",
     "https://browser-extension-v2.web.app",
@@ -201,7 +202,7 @@
   async function buildHostedMeetingCleanUrl(input) {
     const normalizedSettings = await reconcileMeetingWorkspaceSettings((await namespace.storage.getState())?.settings);
     const url = new URL(await resolveMeetingWorkspacePageUrl());
-    if (normalizeMeetingDebugConsoleEnabled(normalizedSettings.meetingDebugConsoleEnabled)) url.searchParams.set("debug", "1");
+    if (normalizedSettings.meetingDebugConsoleEnabled) url.searchParams.set("debug", "1");
     const meetingId = namespace.session.normalizeText(input?.meetingId);
     const jobId = namespace.session.normalizeText(input?.jobId);
     const shareToken = namespace.session.normalizeText(input?.shareToken || input?.share);
@@ -222,13 +223,9 @@
     return url;
   }
 
-  function normalizeMeetingWorkspaceTarget(value) {
-    return namespace.session.normalizeText(value).toLowerCase() === "local" ? "local" : "production";
-  }
-
   async function getMeetingRuntimeConfig() {
     const normalizedSettings = await reconcileMeetingWorkspaceSettings((await namespace.storage.getState())?.settings);
-    return namespace.firebaseConfig?.meeting?.resolveRuntime?.(normalizedSettings) || {
+    return meetingConfig.resolveRuntime(normalizedSettings) || {
       functions: namespace.firebaseConfig?.functions || {},
       hosting: namespace.firebaseConfig?.hosting || {},
       target: "production",
@@ -236,83 +233,22 @@
   }
 
   async function reconcileMeetingWorkspaceSettings(settings) {
-    const currentTarget = normalizeMeetingWorkspaceTarget(settings?.meetingWorkspaceTarget);
-    const currentDebugEnabled = normalizeMeetingDebugConsoleEnabled(settings?.meetingDebugConsoleEnabled);
-    const rawOverride = namespace.session.normalizeText(settings?.meetingWorkspaceUrlOverride);
-    const currentOverride = currentTarget === "local"
-      ? normalizeMeetingWorkspaceOverrideUrl(rawOverride)
-      : rawOverride;
+    const currentSettings = settings && typeof settings === "object" ? settings : {};
+    const normalizedSettings = meetingConfig.normalizeSettings(currentSettings);
     const nextSettings = {
-      meetingDebugConsoleEnabled: currentDebugEnabled,
-      meetingWorkspaceTarget: currentTarget,
-      meetingWorkspaceUrlOverride: currentTarget === "local"
-        ? normalizeLocalMeetingWorkspaceSettingValue(currentOverride)
-        : "",
+      meetingDebugConsoleEnabled: normalizedSettings.meetingDebugConsoleEnabled,
+      meetingWorkspaceTarget: normalizedSettings.meetingWorkspaceTarget,
+      meetingWorkspaceUrlOverride: normalizedSettings.meetingWorkspaceUrlOverride,
     };
     if (
-      currentTarget === namespace.session.normalizeText(settings?.meetingWorkspaceTarget)
-      && currentDebugEnabled === settings?.meetingDebugConsoleEnabled
-      && nextSettings.meetingWorkspaceUrlOverride === currentOverride
+      nextSettings.meetingWorkspaceTarget === namespace.session.normalizeText(currentSettings.meetingWorkspaceTarget)
+      && nextSettings.meetingDebugConsoleEnabled === currentSettings.meetingDebugConsoleEnabled
+      && nextSettings.meetingWorkspaceUrlOverride === namespace.session.normalizeText(currentSettings.meetingWorkspaceUrlOverride)
     ) {
       return nextSettings;
     }
     await namespace.storage.updateSettings(nextSettings);
     return nextSettings;
-  }
-
-  function normalizeMeetingDebugConsoleEnabled(value) {
-    if (typeof value === "boolean") return value;
-    const normalized = namespace.session.normalizeText(value).toLowerCase();
-    return normalized === "1" || normalized === "true" || normalized === "on" || normalized === "yes";
-  }
-
-  function normalizeMeetingWorkspaceOverrideUrl(value) {
-    const normalized = namespace.session.normalizeText(value);
-    if (!normalized) {
-      return "";
-    }
-    try {
-      const url = new URL(normalized);
-      const pathname = String(url.pathname || "");
-      if (/\/meeting\/index\.html$/i.test(pathname)) {
-        url.search = "";
-        url.hash = "";
-        return url.toString();
-      }
-      const basePath = pathname.replace(/\/+$/, "");
-      url.pathname = `${basePath}/meeting/index.html`.replace(/\/{2,}/g, "/");
-      url.search = "";
-      url.hash = "";
-      return url.toString();
-    } catch (error) {
-      logMeetingDebug("workspace.override.invalid", {
-        error: error instanceof Error ? error.message : String(error || ""),
-        value: normalized,
-      });
-      throw new Error("회의 작업실 주소가 올바르지 않아요. 팝업 설정을 확인해 주세요.", { cause: error });
-    }
-  }
-
-  function normalizeLocalMeetingWorkspaceSettingValue(value) {
-    const normalized = namespace.session.normalizeText(value);
-    if (!normalized) {
-      return "";
-    }
-    return normalizeLocalMeetingWorkspaceUrl(normalized);
-  }
-
-  function normalizeLocalMeetingWorkspaceUrl(value) {
-    const normalized = normalizeMeetingWorkspaceOverrideUrl(value);
-    const url = new URL(normalized);
-    if (!isLoopbackHostname(url.hostname)) {
-      logMeetingDebug("workspace.override.non-loopback", { value: normalized });
-      throw new Error("로컬 회의 작업실 주소는 localhost 또는 127.0.0.1만 사용할 수 있어요.");
-    }
-    url.port = "5000";
-    url.pathname = "/meeting/index.html";
-    url.search = "";
-    url.hash = "";
-    return url.toString();
   }
 
   function buildMeetingId() {
@@ -358,10 +294,6 @@
     return normalized.includes("사용자 키")
       || normalized.includes("provideruserkey")
       || normalized.includes("provider user key");
-  }
-
-  function isLoopbackHostname(value) {
-    return ["127.0.0.1", "localhost"].includes(namespace.session.normalizeText(value).toLowerCase());
   }
 
   function logMeetingDebug() {
