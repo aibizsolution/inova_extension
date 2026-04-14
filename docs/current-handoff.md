@@ -47,6 +47,7 @@ Short version:
 - background meeting workspace capability도 이제 `shared/provider-identity-cache.js`의 provider identity normalizer를 재사용한다
 - generic `browser.open-url` 탭 열기 구현은 이제 `background/browser-capability.js`에 모이고, service worker와 meeting workspace capability가 같은 browser adapter를 재사용한다
 - panel auth/access-token/prompt runtime config wrapper도 이제 `background/panel-session-capability.js`에 모이고, service worker는 top-level gate + helper wiring만 유지한다
+- background-only auth/cloud helper도 이제 active shared root를 떠나 `background/inova-auth-client.js`, `background/cloud-api-client.js`에 있고, active `shared/*`는 browser-agnostic cache/state/config core만 유지한다
 - browser-only provider identity sensor도 active shared root를 떠나 `content/provider-identity-sensor.js`에 있고, legacy reference만 `backup/legacy-panel/shared/provider-identity.js`에 남긴다
 - local hosted panel frame proxy resolver도 active shared root를 떠나 `content/frame-proxy-helper.js`에 있고, active shared root는 browser-agnostic core만 유지한다
 - dormant prompt import/export helper도 active shared root를 떠나 `backup/legacy-panel/shared/prompt-library.js`에 있고, active root는 live browser/runtime core만 유지한다

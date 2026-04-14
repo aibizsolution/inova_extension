@@ -1,4 +1,4 @@
-(function initInovaAuth(global) {
+(function initInovaAuthClient(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const REFRESH_ENDPOINT = "https://inova.incross.com/api/auth/refresh";
   const EXPIRY_BUFFER_SECONDS = 45;

@@ -112,6 +112,14 @@ function verifyActiveSharedRootDropsLegacyCloudSyncHelper() {
     "active shared root should not keep the browser-only frame proxy helper"
   );
   assert(
+    !fs.existsSync(path.join(root, "shared", "cloud-api.js")),
+    "active shared root should not keep the background-only cloud API helper"
+  );
+  assert(
+    !fs.existsSync(path.join(root, "shared", "inova-auth.js")),
+    "active shared root should not keep the background-only i-Nova auth helper"
+  );
+  assert(
     fs.existsSync(path.join(root, "backup", "legacy-panel", "shared", "provider-identity.js")),
     "backup legacy shared lane should keep the legacy provider identity sensor"
   );
@@ -241,6 +249,8 @@ function verifyActiveHostedRuntimeStorageSurfaceStaysCompact() {
 function verifyActiveBackgroundMessageSurfaceStaysNarrow() {
   const serviceWorkerSource = fs.readFileSync(path.join(root, "background", "service-worker.js"), "utf8");
   const browserCapabilitySource = fs.readFileSync(path.join(root, "background", "browser-capability.js"), "utf8");
+  const cloudApiClientSource = fs.readFileSync(path.join(root, "background", "cloud-api-client.js"), "utf8");
+  const inovaAuthClientSource = fs.readFileSync(path.join(root, "background", "inova-auth-client.js"), "utf8");
   const panelSessionCapabilitySource = fs.readFileSync(path.join(root, "background", "panel-session-capability.js"), "utf8");
   const meetingWorkspaceCapabilitySource = fs.readFileSync(
     path.join(root, "background", "meeting-workspace-capability.js"),
@@ -254,6 +264,22 @@ function verifyActiveBackgroundMessageSurfaceStaysNarrow() {
   assert(
     serviceWorkerSource.includes('importScripts("browser-capability.js");'),
     "background service worker should preload the dedicated browser capability module"
+  );
+  assert(
+    serviceWorkerSource.includes('importScripts("inova-auth-client.js");'),
+    "background service worker should preload the dedicated i-Nova auth client module"
+  );
+  assert(
+    serviceWorkerSource.includes('importScripts("cloud-api-client.js");'),
+    "background service worker should preload the dedicated cloud API client module"
+  );
+  assert(
+    inovaAuthClientSource.includes("namespace.inovaAuth = {"),
+    "background i-Nova auth client should expose the shared auth namespace"
+  );
+  assert(
+    cloudApiClientSource.includes("namespace.cloudApi = {"),
+    "background cloud API client should expose the shared cloud API namespace"
   );
   assert(
     browserCapabilitySource.includes("chrome.tabs.create({ url: nextUrl }"),
@@ -331,6 +357,8 @@ function verifyActiveBackgroundMessageSurfaceStaysNarrow() {
     "recentPeekResults",
     "recentReleaseResults",
     "recentSyncResults",
+    'importScripts("../shared/inova-auth.js");',
+    'importScripts("../shared/cloud-api.js");',
   ].forEach((legacySurface) => assert(
     !serviceWorkerSource.includes(legacySurface),
     `background service worker should drop the dormant legacy surface ${legacySurface}`

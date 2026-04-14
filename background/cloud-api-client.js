@@ -1,4 +1,4 @@
-(function initCloudApi(global) {
+(function initCloudApiClient(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const { functions } = namespace.firebaseConfig;
   const REQUEST_TIMEOUT_MS = 25000;
