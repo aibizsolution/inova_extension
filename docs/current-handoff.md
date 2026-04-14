@@ -23,7 +23,7 @@ Last updated: 2026-04-14
 ## Where Ownership Stands
 
 - `conversation`: hosted owns list/search/copy/jump UI state; extension only provides page adapter plus thin signals such as count/active/fingerprint.
-- `release`: hosted owns latest/history/download surface and compact release summary sync; extension only keeps browser/runtime broker capability plus compact `toolSummaries.release(count + snapshotFingerprint)`.
+- `release`: hosted owns latest/history/download surface and compact release summary sync; extension only keeps browser/runtime broker capability plus count-only `toolSummaries.release(count)`.
 - `prompt-library`, `prompt-store`, `prompt-review`: hosted owns prompt tab transition plus prompt/store/review action routing; extension keeps page/runtime bridge, review float, and review-triggered handoff/persistence only.
 - `meeting hub` / `meeting workspace`: hosted owns list/action UI, Firestore meeting-list subscription, and launch tracing; v2 hosted panel no longer falls back to top-panel `meeting-action` dispatch, and v2 extension now carries only count-only `toolSummaries.meeting(count)` residue outside the hub path.
 
@@ -160,33 +160,14 @@ Also:
 
 The remaining work is no longer smoke-fix first. It is mostly structural cleanup to finish the hosted-first boundary.
 
-1. Reduce the remaining compact `meeting` summary residue in v2 so extension keeps only browser/page capability.
-2. Keep trimming panel shell/bootstrap/composition so the `content/panel.js` path becomes generic host + broker only.
-3. Isolate any still-inactive legacy extension panel files into `backup/legacy-panel/*` instead of leaving dead reference code mixed into active `content/*` paths.
-4. Trim the remaining prompt shell residue and legacy fallback surface in extension.
-5. Prepare final release path from deployed `0.4.4` baseline to hosted v2 `1.0.0`.
+1. Keep trimming panel shell/bootstrap/composition so the `content/panel.js` path becomes generic host + broker only.
+2. Isolate any still-inactive legacy extension panel files into `backup/legacy-panel/*` instead of leaving dead reference code mixed into active `content/*` paths.
+3. Trim the remaining prompt shell residue and last legacy fallback surfaces in extension.
+4. Prepare final release path from deployed `0.4.4` baseline to hosted v2 `1.0.0`.
 
 ## Concrete Next Session Targets
 
-### 1. Meeting residue
-
-Goal:
-
-- replace or shrink the remaining v2 dependency on extension-side meeting lifecycle/state
-
-Start files:
-
-- `content/panel-v2-composition-controller.js`
-- `content/panel-v2-shell-bridge.js`
-- `hosting/extension-v2/panel/meeting-hub-controller.js`
-- `hosting/extension-v2/panel/meeting-firestore-client.js`
-
-Immediate note:
-
-- meeting list reads are already hosted + Firestore
-- next work is not another read migration; it is reducing the remaining top-panel summary/lifecycle residue around the hosted hub
-
-### 2. Common panel shell cleanup
+### 1. Common panel shell cleanup
 
 Goal:
 
@@ -194,14 +175,14 @@ Goal:
 
 Start files:
 
-- `content/panel.js`
-- `content/panel-host-runtime.js`
-- `content/panel-v2-shell-bridge.js`
 - `content/panel-v2-composition-controller.js`
+- `content/panel-v2-shell-bridge.js`
+- `content/panel-host-runtime.js`
+- `content/panel.js`
 
 Then read only the feature-local hosted controller touched by the boundary you are removing.
 
-### 3. Legacy isolation
+### 2. Legacy isolation
 
 Goal:
 
@@ -216,11 +197,11 @@ Start files:
 
 Then read only the legacy files that are already outside the active bundle and can be relocated without touching `DB/Functions` or shared contracts.
 
-### 4. Prompt shell residue
+### 3. Prompt shell residue
 
 Goal:
 
-- move remaining prompt tab shell/transition decisions into hosted controllers
+- move remaining prompt tab shell/transition decisions into hosted controllers and clear the last extension-side fallback residue
 
 Start files:
 
@@ -228,6 +209,19 @@ Start files:
 - `content/panel-v2-shell-bridge.js`
 - `hosting/extension-v2/panel/index.js`
 - `hosting/extension-v2/panel/prompt-library-controller.js`
+
+### 4. Final release path
+
+Goal:
+
+- close the last rollout/documentation gaps between deployed `0.4.4` and hosted-first `1.0.0`
+
+Start files:
+
+- `docs/release-workflow.md`
+- `docs/current-handoff.md`
+- `releases/release-notes.json`
+- `scripts/verify-release-package.js`
 
 ### Not the next priority
 

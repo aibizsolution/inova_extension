@@ -19,7 +19,7 @@ function main() {
   assert.equal(stateA.panelDebugUi.collapsed, true);
   assert.equal(stateA.cloudSync.providerIdentity.providerUserKey, "fixture-user");
   assert.equal(stateA.toolSummaries.release.count, 0);
-  assert.equal(stateA.toolSummaries.release.snapshotFingerprint, "");
+  assert.equal("snapshotFingerprint" in stateA.toolSummaries.release, false);
   assert.equal(stateA.uiPreferences.activePromptTab, "library");
   assert.deepEqual(Object.keys(stateA.queries), ["bookmarks"]);
   assert.equal(stateA.promptReview.open, false);

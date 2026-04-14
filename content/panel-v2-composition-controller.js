@@ -150,7 +150,7 @@
       pausedSessions: {},
       toolSummaries: {
         meeting: { count: 0 },
-        release: { count: 0, snapshotFingerprint: "" },
+        release: { count: 0 },
       },
       panelDebugUi: {
         collapsed: true,
@@ -535,27 +535,18 @@
   function createReleaseToolSummarySnapshotBridge(getReleaseSummary = () => ({})) {
     return {
       buildSnapshot() {
-        const releaseTool = normalizeReleaseSummary(getReleaseSummary());
+        const releaseTool = normalizeToolSummary("release", getReleaseSummary());
         const count = getCount(releaseTool);
         return {
           count,
-          snapshotFingerprint: buildReleaseSnapshotFingerprint(releaseTool),
           updateAvailable: count > 0,
         };
       },
       getCount,
     };
 
-    function getCount(releaseTool = normalizeReleaseSummary(getReleaseSummary())) {
+    function getCount(releaseTool = normalizeToolSummary("release", getReleaseSummary())) {
       return normalizeToolSummaryCount(releaseTool.count);
-    }
-
-    function buildReleaseSnapshotFingerprint(releaseTool = {}) {
-      const explicitFingerprint = normalizeText(releaseTool?.snapshotFingerprint);
-      if (explicitFingerprint) {
-        return explicitFingerprint;
-      }
-      return String(getCount(releaseTool));
     }
   }
 
@@ -613,23 +604,12 @@
 
   function normalizeToolSummary(toolId, toolSummary = {}) {
     const normalizedToolId = normalizeToolSummaryId(toolId);
-    if (normalizedToolId === "meeting") {
+    if (normalizedToolId === "meeting" || normalizedToolId === "release") {
       return {
         count: normalizeToolSummaryCount(toolSummary?.count),
       };
     }
-    if (normalizedToolId === "release") {
-      return normalizeReleaseSummary(toolSummary);
-    }
     return {};
-  }
-
-  function normalizeReleaseSummary(releaseTool) {
-    const normalizedReleaseTool = releaseTool && typeof releaseTool === "object" ? releaseTool : {};
-    return {
-      count: normalizeToolSummaryCount(normalizedReleaseTool.count),
-      snapshotFingerprint: normalizeText(normalizedReleaseTool.snapshotFingerprint),
-    };
   }
 
   namespace.panelV2CompositionController = { create, createState };

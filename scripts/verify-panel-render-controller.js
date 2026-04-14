@@ -213,7 +213,7 @@ function createHarness(options = {}) {
     settingsHydrated: options.settingsHydrated !== false,
     toolSummaries: cloneValue(options.toolSummaries || {
       meeting: { count: 0 },
-      release: { count: 0, snapshotFingerprint: "" },
+      release: { count: 0 },
     }),
     uiPreferences: {},
   };

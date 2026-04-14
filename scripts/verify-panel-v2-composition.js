@@ -292,8 +292,12 @@ function main() {
     "v2 composition should keep hosted-owned meeting residue count-only inside toolSummaries.meeting"
   );
   assert(
-    v2CompositionSource.includes('release: { count: 0, snapshotFingerprint: "" },'),
-    "v2 composition should keep hosted-owned release residue inside toolSummaries.release"
+    v2CompositionSource.includes('release: { count: 0 },'),
+    "v2 composition should keep hosted-owned release residue count-only inside toolSummaries.release"
+  );
+  assert(
+    !v2CompositionSource.includes("function buildReleaseSnapshotFingerprint("),
+    "v2 release summary bridge should stop carrying hosted release fingerprints once extension residue is count-only"
   );
   assert(
     v2CompositionSource.includes("function normalizeToolSummaryCount(value)"),

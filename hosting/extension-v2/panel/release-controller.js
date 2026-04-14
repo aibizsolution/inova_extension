@@ -308,13 +308,6 @@
       const count = getReleaseCount();
       return {
         count,
-        snapshotFingerprint: [
-          String(count),
-          normalizeText(state.checkedForVersion),
-          normalizeText(state.latest?.version),
-          normalizeEnum(state.dataFreshness, ["fresh", "stale", "empty"], "empty"),
-          normalizeText(state.degradedReason),
-        ].join("|"),
       };
     }
 
