@@ -68,6 +68,7 @@ Short version:
 - v2 meeting lifecycle coupling reduced across sync, snapshot, fallback, and bootstrap wiring
 - v2 meeting summary residue is now count-only, and hosted meeting hub no longer uses top-panel fingerprint echo for reload decisions
 - hosted meeting hub now treats top-panel `meeting` summary as outbound rail-count sync only; hosted count/state no longer re-hydrates from the echoed panel snapshot
+- hosted meeting bootstrap count now stays inside the hosted controller as a temporary seed; hosted render no longer reads `panelState.meetingTool` directly once meeting capabilities are active
 - active v2 createState no longer carries dead `meetingHub` / `meetingUi` buckets; extension compact hosted residue now lives under `toolSummaries`, with meeting staying count-only
 - compact hosted `meeting` / `release` summaries now round-trip through a shared `tool-summary-sync` bridge contract instead of feature-specific summary actions
 - v2 composition now normalizes compact `meeting` / `release` residue through shared `toolSummaries` helpers instead of per-feature snapshot bridge helpers

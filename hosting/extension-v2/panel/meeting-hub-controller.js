@@ -35,6 +35,7 @@
       : null;
     const state = {
       activeTool: "",
+      bootstrapCount: 0,
       capabilities: [],
       checkedAt: "",
       dataFreshness: "empty",
@@ -94,6 +95,7 @@
         : [];
       const nextActiveTool = normalizeText(panelState?.activeTool);
       const nextPanelOpen = Boolean(panelState?.open);
+      state.bootstrapCount = normalizeBootstrapCount(panelState?.meetingTool, state.bootstrapCount);
       const meetingToolBecameActive = nextActiveTool === "meeting" && state.activeTool !== "meeting";
       const panelReopenedIntoMeeting = nextActiveTool === "meeting" && nextPanelOpen && !state.panelOpen;
       state.activeTool = nextActiveTool;
@@ -120,24 +122,26 @@
       return REQUIRED_EXTENSION_CAPABILITIES.every((capability) => state.capabilities.includes(capability));
     }
 
-    function getMeetingCount(fallbackMeetingTool = {}) {
+    function getMeetingCount() {
       const hostedCount = Math.max(0, Array.isArray(state.items) ? state.items.length : 0);
       if (hostedCount > 0) {
         return hostedCount;
       }
       if (state.loading || !state.initialized) {
-        return readFallbackMeetingCount(fallbackMeetingTool);
+        return state.bootstrapCount;
       }
       return 0;
     }
 
-    function buildViewState(fallbackMeetingTool = {}) {
+    function buildViewState() {
       if (!hasRequiredCapabilities()) {
-        return fallbackMeetingTool;
+        return {
+          count: state.bootstrapCount,
+        };
       }
       return {
         checkedAt: normalizeText(state.checkedAt),
-        count: getMeetingCount(fallbackMeetingTool),
+        count: getMeetingCount(),
         dataFreshness: normalizeEnum(state.dataFreshness, ["fresh", "stale", "empty"], "empty"),
         degraded: Boolean(state.degraded),
         degradedReason: normalizeText(state.degradedReason),
@@ -694,8 +698,11 @@
     return namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
   }
 
-  function readFallbackMeetingCount(fallbackMeetingTool = {}) {
-    return Math.max(0, Number(fallbackMeetingTool?.count) || 0);
+  function normalizeBootstrapCount(meetingTool, fallback = 0) {
+    const nextCount = Number(meetingTool?.count);
+    return Number.isFinite(nextCount) && nextCount >= 0
+      ? nextCount
+      : Math.max(0, Number(fallback) || 0);
   }
 
   namespace.meetingHubController = { create };

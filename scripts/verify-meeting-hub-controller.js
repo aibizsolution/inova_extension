@@ -41,7 +41,7 @@ async function verifyHostedMeetingHubOwnership() {
   );
   await flushAsyncTurns();
 
-  let viewState = controller.buildViewState({});
+  let viewState = controller.buildViewState();
   assert.equal(viewState.items.length, 1, "hosted meeting hub should load meeting items directly");
   assert.equal(viewState.items[0].meetingId, "meeting-alpha");
   assert.equal(harness.summarySyncCalls.length, 1, "hosted meeting hub should sync a compact summary back to the top panel after load");
@@ -53,7 +53,7 @@ async function verifyHostedMeetingHubOwnership() {
     title: "Alpha",
   });
   assert.equal(shareHandled, true, "hosted meeting hub should fully handle share actions");
-  viewState = controller.buildViewState({});
+  viewState = controller.buildViewState();
   assert.equal(viewState.items[0].share.active, true, "hosted meeting hub should patch local share state after create");
   assert.equal(viewState.feedback?.text, "공유 링크를 복사했습니다.");
   assert.deepEqual(harness.pageCalls[0], {
@@ -67,7 +67,7 @@ async function verifyHostedMeetingHubOwnership() {
     title: "Alpha",
   });
   assert.equal(openHandled, true, "hosted meeting hub should fully handle open-result actions");
-  viewState = controller.buildViewState({});
+  viewState = controller.buildViewState();
   assert.equal(viewState.feedback?.text, "결과 탭을 열었습니다.");
   assert.equal(viewState.pending?.active, false, "hosted meeting hub should clear pending state after launch");
 
@@ -112,7 +112,7 @@ async function verifyHostedMeetingHubShareCopyFailure() {
   });
 
   assert.equal(handled, true, "hosted meeting hub should still finish share actions when clipboard copy fails");
-  const viewState = controller.buildViewState({});
+  const viewState = controller.buildViewState();
   assert.equal(viewState.items[0].share.active, true, "share state should stay active even when auto-copy fails");
   assert.equal(viewState.feedback?.text, "공유 링크는 만들었지만 자동 복사는 실패했어요.");
   assert.equal(viewState.feedback?.tone, "error");
@@ -449,6 +449,11 @@ async function verifyHostedMeetingHubIgnoresOwnSummaryEchoWhileLoading() {
     },
     ["runtime.invoke.v1"]
   );
+  assert.equal(
+    controller.buildViewState().count,
+    1,
+    "hosted meeting hub should keep the initial top-panel count only as an internal bootstrap seed before realtime data arrives"
+  );
   await flushAsyncTurns();
 
   assert.equal(
@@ -457,7 +462,7 @@ async function verifyHostedMeetingHubIgnoresOwnSummaryEchoWhileLoading() {
     "hosted meeting hub should not re-subscribe when its own tool-summary-sync snapshot echoes back during the first load"
   );
   assert.equal(
-    controller.buildViewState({ count: 9 }).count,
+    controller.buildViewState().count,
     1,
     "hosted meeting hub should keep hosted meeting count as the source of truth instead of reusing its echoed top-panel summary count"
   );

@@ -145,6 +145,14 @@ function verifyHostedMeetingSummarySyncContract() {
     bootstrapSource.includes("onToolSummarySync: handlePanelToolSummarySync"),
     "panel bootstrap should forward hosted meeting summary sync callbacks into the top-panel bridge"
   );
+  assert(
+    hostedPanelSource.includes("return meetingHubController.buildViewState();"),
+    "hosted meeting render should read meeting tool state from the hosted controller once capabilities are available"
+  );
+  assert(
+    hostedPanelSource.includes("if (meetingHubController?.hasRequiredCapabilities?.()) {"),
+    "hosted meeting render should branch on hosted controller capability before reading effective meeting counts"
+  );
 }
 
 function verifyHostedPromptTabOwnershipContract() {

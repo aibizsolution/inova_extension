@@ -965,7 +965,7 @@
 
   function buildEffectiveMeetingToolState(panelState) {
     if (meetingHubController?.hasRequiredCapabilities?.()) {
-      return meetingHubController.buildViewState(panelState.meetingTool || {});
+      return meetingHubController.buildViewState();
     }
     return panelState.meetingTool;
   }
@@ -1016,6 +1016,13 @@
   }
 
   function readEffectiveMeetingCount(panelState, effectiveMeetingTool) {
+    if (meetingHubController?.hasRequiredCapabilities?.()) {
+      return Math.max(
+        0,
+        Number(effectiveMeetingTool?.count)
+          || (Array.isArray(effectiveMeetingTool?.items) ? effectiveMeetingTool.items.length : 0)
+      );
+    }
     return Math.max(
       0,
       Number(effectiveMeetingTool?.count)
