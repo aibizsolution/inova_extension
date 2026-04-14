@@ -4,7 +4,6 @@
   function createHostedOwnedPanelActivityBridge(state, deps = {}) {
     const logPanelDebug = typeof deps.logPanelDebug === "function" ? deps.logPanelDebug : () => {};
     const providerIdentitySync = deps.providerIdentitySync || { async syncToStorage() { return false; } };
-    const releaseManager = deps.releaseManager || { ensureChecked() {} };
     const render = typeof deps.render === "function" ? deps.render : () => {};
 
     return {
@@ -22,9 +21,6 @@
         return;
       }
       void providerIdentitySync.syncToStorage("visibility-visible");
-      if (state.open) {
-        releaseManager.ensureChecked();
-      }
       logPanelDebug("panel.ui.visibility.visible", {
         scope: "panel-ui",
         tool: "panel",
@@ -34,9 +30,6 @@
 
     function handleWindowFocus() {
       void providerIdentitySync.syncToStorage("window-focus");
-      if (state.open) {
-        releaseManager.ensureChecked();
-      }
       logPanelDebug("panel.ui.focus", {
         scope: "panel-ui",
         tool: "panel",
@@ -47,7 +40,6 @@
 
   function createHostedOwnedPanelLifecycleBridge(state, deps = {}) {
     const logPanelDebug = typeof deps.logPanelDebug === "function" ? deps.logPanelDebug : () => {};
-    const releaseManager = deps.releaseManager || { ensureChecked() {} };
     const render = typeof deps.render === "function" ? deps.render : () => {};
     const PANEL_OPEN_KEY = "inova-plus.panel-open";
 
@@ -66,9 +58,6 @@
       if (persist) {
         state.preferredOpen = state.open;
         writePanelOpenPreference(state.open);
-      }
-      if (state.open) {
-        releaseManager.ensureChecked(false, state.activeTool === "release");
       }
       logPanelDebug("panel.ui.toggle", {
         open: state.open,
@@ -176,7 +165,6 @@
     };
     const panelSurfaceController = deps.panelSurfaceController || { installSurfaceWatchers() {} };
     const providerIdentitySync = deps.providerIdentitySync || { async syncToStorage() { return false; } };
-    const releaseManager = deps.releaseManager || { ensureChecked() {}, handleAction() {}, handleStorageChange() {} };
     const render = typeof deps.render === "function" ? deps.render : () => {};
     const routeStateController = deps.routeStateController || { handleStorageChange() { return false; } };
     const routeSync = deps.routeSync || { scheduleRefresh() {}, syncRouteState: async () => {} };
@@ -196,7 +184,6 @@
         panelLifecycleController,
         panelPromptController,
         panelShellController,
-        releaseManager,
       }));
       panelDebugController.installValidationApi();
       panelPromptController.ensureReviewFloat();
@@ -206,11 +193,7 @@
       global.addEventListener("focus", panelActivityController.handleWindowFocus, { passive: true });
       global.document.addEventListener("visibilitychange", panelActivityController.handleVisibilityChange, { passive: true });
       global.chrome?.storage?.onChanged?.addListener(handleRouteStorageChange);
-      global.chrome?.storage?.onChanged?.addListener(releaseManager.handleStorageChange);
       await routeSync.syncRouteState(true);
-      if (state.open || state.activeTool === "release") {
-        releaseManager.ensureChecked(false, state.activeTool === "release");
-      }
       [450, 1200].forEach((delay) => global.setTimeout(() => {
         if (shouldPrimeRouteRefresh()) {
           routeSync.scheduleRefresh();
@@ -249,14 +232,12 @@
       updateHandlePosition() {},
       updateQuery() {},
     };
-    const releaseManager = deps.releaseManager || { handleAction() {} };
 
     return {
       onCopyBookmark: panelBookmarkController.copyBookmarkText,
       onHandlePositionChange: panelShellController.updateHandlePosition,
       onJumpBookmark: panelBookmarkController.jumpToBookmark,
       onToolSummarySync: handlePanelToolSummarySync,
-      onReleaseAction: releaseManager.handleAction,
       onSearch: panelShellController.updateQuery,
       onSearchSubmit: panelShellController.submitQuery,
       onSelectTool: panelShellController.selectTool,
@@ -294,25 +275,16 @@
     const panelShellController = deps.panelShellController || {
       buildHandleCount() { return 0; },
     };
-    const releaseManager = deps.releaseManager || { buildViewState() { return { updateAvailable: false }; } };
     const buildToolSummarySnapshot = typeof deps.buildToolSummarySnapshot === "function"
       ? deps.buildToolSummarySnapshot
       : (toolId) => {
           const normalizedToolId = normalizeToolSummaryId(toolId);
-          if (normalizedToolId === "release") {
-            return releaseManager.buildViewState();
-          }
           const toolSummary = state.toolSummaries?.[normalizedToolId];
           return toolSummary && typeof toolSummary === "object" ? toolSummary : {};
         };
     const getToolSummaryCount = typeof deps.getToolSummaryCount === "function"
       ? deps.getToolSummaryCount
-      : (toolId, toolSummary = {}) => {
-          const normalizedToolId = normalizeToolSummaryId(toolId);
-          return normalizedToolId === "release"
-            ? (toolSummary?.updateAvailable ? 1 : Number(toolSummary?.count) || 0)
-            : Number(toolSummary?.count) || 0;
-        };
+      : (_toolId, toolSummary = {}) => Number(toolSummary?.count) || 0;
 
     return {
       render,
@@ -438,7 +410,6 @@
     const isExtensionContextInvalidatedError = typeof deps.isExtensionContextInvalidatedError === "function"
       ? deps.isExtensionContextInvalidatedError
       : () => false;
-    const releaseManager = deps.releaseManager || { ensureChecked() {} };
     const render = typeof deps.render === "function" ? deps.render : () => {};
     const UI_PREFERENCE_LOCK_MS = 1500;
 
@@ -534,9 +505,6 @@
         activeTool: nextTool,
       });
       lockUiPreferenceSelection(nextTool, nextPromptTab);
-      if (nextTool === "release") {
-        releaseManager.ensureChecked(false, true);
-      }
       render();
       await persistActiveTool(nextTool, nextPromptTab);
       return true;

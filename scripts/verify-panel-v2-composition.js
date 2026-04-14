@@ -200,8 +200,8 @@ function main() {
     "v2 composition should stop instantiating the legacy release manager in the active 1.0.0 bundle"
   );
   assert(
-    v2CompositionSource.includes("createHostedOwnedIdleReleaseLifecycleBridge"),
-    "v2 composition should provide an idle release bridge once hosted release owns release checks"
+    !v2CompositionSource.includes("createHostedOwnedIdleReleaseLifecycleBridge"),
+    "v2 composition should drop the idle release bridge once hosted release checks stay inside hosted ownership"
   );
   assert(
     v2CompositionSource.includes("handlePanelToolSummarySync: handleHostedToolSummarySync"),
@@ -338,10 +338,6 @@ function main() {
     `v2 composition should drop dead prompt shell sidecar residue ${pattern}`
   ));
   assert(
-    v2CompositionSource.includes("buildHostedPanelCallbacks: buildHostedOwnedPanelCallbacks"),
-    "v2 bootstrap should provide a hosted-owned callback surface instead of passing the legacy default callback set through unchanged"
-  );
-  assert(
     v2CompositionSource.includes("function handleHostedToolSummarySync(toolId, toolState = {})"),
     "v2 composition should route compact hosted tool summary sync callbacks through a shared dispatcher"
   );
@@ -354,36 +350,13 @@ function main() {
     "v2 composition should diff compact hosted meeting/release residue through a shared tool summary helper"
   );
   assert(
-    v2CompositionSource.includes("function buildHostedOwnedPanelCallbacks(deps = {})"),
-    "v2 composition should define a hosted-owned callback builder for the panel host"
+    !v2CompositionSource.includes("function buildHostedOwnedPanelCallbacks(deps = {})"),
+    "v2 composition should rely on the shared shell callback builder once hosted release fallback is gone"
   );
-  [
-    "onCopyBookmark:",
-    "onHandlePositionChange:",
-    "onJumpBookmark:",
-    "onToolSummarySync:",
-    "onReleaseAction:",
-    "onSearch:",
-    "onSearchSubmit:",
-    "onSelectTool:",
-    "onEscape:",
-    "onToggle:",
-  ].forEach((pattern) => assert(
-    v2CompositionSource.includes(pattern),
-    `v2 hosted-owned callback builder should keep the active shell callback ${pattern}`
-  ));
-  [
-    "onMeetingAction:",
-    "onImportFile:",
-    "onMovePrompt:",
-    "onPromptAction:",
-    "onPromptDraftChange:",
-    "onSelectPromptTab:",
-    "onStoreAction:",
-  ].forEach((pattern) => assert(
-    !v2CompositionSource.includes(pattern),
-    `v2 hosted-owned callback builder should drop the legacy callback ${pattern}`
-  ));
+  assert(
+    !v2CompositionSource.includes("onReleaseAction:"),
+    "v2 composition should stop carrying a release-action callback once hosted release actions stay local"
+  );
   assert(
     !v2CompositionSource.includes("shouldListenMeetingStorageChanges:"),
     "v2 bootstrap wiring should no longer expose dead meeting storage listener toggles"

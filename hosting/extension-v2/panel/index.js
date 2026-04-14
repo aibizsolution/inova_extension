@@ -228,22 +228,9 @@
       },
       onReleaseAction(releaseAction, detail = {}) {
         if (releaseController?.handleReleaseAction) {
-          return releaseController.handleReleaseAction(releaseAction, detail).then((handled) => {
-            if (handled !== false) {
-              return handled;
-            }
-            return request("panel", {
-              action: "release-action",
-              detail,
-              releaseAction,
-            });
-          });
+          return releaseController.handleReleaseAction(releaseAction, detail);
         }
-        return request("panel", {
-          action: "release-action",
-          detail,
-          releaseAction,
-        });
+        return Promise.resolve(false);
       },
       onSearch(toolId, value, options = {}) {
         if (conversationController?.handleSearch?.(toolId, value, options) !== false) {

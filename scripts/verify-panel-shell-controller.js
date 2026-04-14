@@ -34,10 +34,6 @@ async function verifyMeetingAndReleaseToolSelection() {
 
   await harness.controller.selectTool("release");
   assert.equal(harness.state.activeTool, "release");
-  assert.deepEqual(harness.releaseEnsureCalls[0], {
-    allowCached: false,
-    preferFresh: true,
-  });
 }
 
 async function verifyPromptLibrarySelection() {
@@ -148,7 +144,6 @@ function createHarness(options = {}) {
   const bookmarkSubmitCalls = [];
   const handleUpdates = [];
   const persistCalls = [];
-  const releaseEnsureCalls = [];
   const renderCalls = [];
 
   const context = vm.createContext({
@@ -230,14 +225,6 @@ function createHarness(options = {}) {
     isExtensionContextInvalidatedError() {
       return false;
     },
-    releaseManager: {
-      ensureChecked(allowCached, preferFresh) {
-        releaseEnsureCalls.push({
-          allowCached: Boolean(allowCached),
-          preferFresh: Boolean(preferFresh),
-        });
-      },
-    },
     render() {
       renderCalls.push(true);
     },
@@ -249,7 +236,6 @@ function createHarness(options = {}) {
     controller,
     handleUpdates,
     persistCalls,
-    releaseEnsureCalls,
     renderCalls,
     state,
   };

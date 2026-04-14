@@ -322,6 +322,10 @@ function verifyHostedReleaseSummarySyncContract() {
     "hosted release controller should be able to sync a compact release summary back to the top panel"
   );
   assert(
+    !hostedPanelSource.includes('action: "release-action"'),
+    "v2 hosted release actions should not fall back to the top-panel release-action request path"
+  );
+  assert(
     releaseControllerSource.includes("await emitTopPanelSummary();"),
     "hosted release controller should emit a compact top-panel summary after release checks settle"
   );

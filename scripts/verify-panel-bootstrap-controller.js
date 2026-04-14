@@ -36,6 +36,7 @@ async function verifyBootstrapWiringAndScheduling() {
     "onMovePrompt",
     "onPromptAction",
     "onPromptDraftChange",
+    "onReleaseAction",
     "onReleaseSummarySync",
     "onSelectPromptTab",
     "onStoreAction",
@@ -51,9 +52,8 @@ async function verifyBootstrapWiringAndScheduling() {
   assert.equal(typeof harness.windowListeners.resize, "function");
   assert.equal(typeof harness.windowListeners.focus, "function");
   assert.equal(typeof harness.documentListeners.visibilitychange, "function");
-  assert.equal(harness.storageListeners.length, 2);
+  assert.equal(harness.storageListeners.length, 1);
   assert.deepEqual(harness.routeSyncCalls, [true]);
-  assert.deepEqual(harness.releaseEnsureCalls, [{ allowCached: false, preferFresh: true }]);
   assert.deepEqual(harness.timeoutDelays, [450, 1200]);
 
   harness.timeoutCallbacks.forEach((callback) => callback());
@@ -65,7 +65,7 @@ async function verifyBootstrapSkipsMeetingLifecycleWiring() {
   await harness.controller.bootstrap();
   await harness.flush();
 
-  assert.equal(harness.storageListeners.length, 2);
+  assert.equal(harness.storageListeners.length, 1);
 }
 
 function verifyRouteStorageChangeDelegation() {
@@ -125,8 +125,6 @@ function createHarness(options = {}) {
   let lifecycleInitializeCalls = 0;
   const providerIdentityReasons = [];
   const routeSyncCalls = [];
-  const releaseEnsureCalls = [];
-
   context.InovaBookmarks = {
     contentPanel: {
       ensurePanel(nextCallbacks) {
@@ -203,16 +201,6 @@ function createHarness(options = {}) {
         return true;
       },
     },
-    releaseManager: {
-      ensureChecked(allowCached, preferFresh) {
-        releaseEnsureCalls.push({
-          allowCached: Boolean(allowCached),
-          preferFresh: Boolean(preferFresh),
-        });
-      },
-      handleAction() {},
-      handleStorageChange() {},
-    },
     render() {},
     routeStateController: {
       handleStorageChange() {
@@ -251,9 +239,6 @@ function createHarness(options = {}) {
     },
     get providerIdentityReasons() {
       return providerIdentityReasons;
-    },
-    get releaseEnsureCalls() {
-      return releaseEnsureCalls;
     },
     get reviewFloatEnsureCalls() {
       return reviewFloatEnsureCalls;

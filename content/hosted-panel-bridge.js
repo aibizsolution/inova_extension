@@ -443,13 +443,6 @@
       return handledSummaryRequest;
     }
 
-    const handledReleaseRequest = await handleReleaseRequest(action, payload, callbacks, {
-      normalizeText,
-    });
-    if (handledReleaseRequest?.handled) {
-      return handledReleaseRequest;
-    }
-
     const handledConversationRequest = await handleConversationRequest(action, payload, callbacks, {
       normalizeText,
     });
@@ -478,25 +471,6 @@
         ? payload.toolState
         : {};
       return Promise.resolve(callbacks.onToolSummarySync?.(toolId, toolState)).then(() => ({
-        handled: true,
-        result: { handled: true },
-      }));
-    }
-
-    return Promise.resolve({
-      handled: false,
-      result: null,
-    });
-  }
-
-  function handleReleaseRequest(action, payload, callbacks, helpers = {}) {
-    const normalizeText = typeof helpers.normalizeText === "function"
-      ? helpers.normalizeText
-      : (value) => namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
-    const detail = payload?.detail && typeof payload.detail === "object" ? payload.detail : {};
-
-    if (action === "release-action") {
-      return Promise.resolve(callbacks.onReleaseAction?.(normalizeText(payload?.releaseAction), detail)).then(() => ({
         handled: true,
         result: { handled: true },
       }));

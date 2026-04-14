@@ -20,7 +20,6 @@
       isExtensionContextInvalidatedError: panelRuntimeController.isExtensionContextInvalidatedError,
       logPanelDebug: panelRuntimeController.logPanelDebug,
     };
-    const hostedOwnedIdleReleaseLifecycle = createHostedOwnedIdleReleaseLifecycleBridge();
     const hostedOwnedReleaseToolSummarySnapshot = createHostedOwnedReleaseToolSummarySnapshotBridge(
       () => getHostedToolSummary(state.toolSummaries, "release")
     );
@@ -38,7 +37,6 @@
     const panelShellController = panelV2ShellBridge.createShellController(state, {
       bookmarkController: hostedOwnedConversationBridge,
       isExtensionContextInvalidatedError: runtimeDiagnostics.isExtensionContextInvalidatedError,
-      releaseManager: hostedOwnedIdleReleaseLifecycle,
       render,
     });
     const hostedOwnedPromptController = namespace.panelV2PromptController.create(state, {
@@ -55,13 +53,11 @@
     });
     const panelLifecycleController = panelV2ShellBridge.createHostedOwnedPanelLifecycleBridge(state, {
       logPanelDebug: runtimeDiagnostics.logPanelDebug,
-      releaseManager: hostedOwnedIdleReleaseLifecycle,
       render,
     });
     const panelActivityController = panelV2ShellBridge.createHostedOwnedPanelActivityBridge(state, {
       logPanelDebug: runtimeDiagnostics.logPanelDebug,
       providerIdentitySync,
-      releaseManager: hostedOwnedIdleReleaseLifecycle,
       render,
     });
     const panelSurfaceController = panelV2ShellBridge.createHostedOwnedPanelSurfaceBridge(state, {
@@ -101,7 +97,6 @@
       panelShellController,
     });
     const panelBootstrapController = panelV2ShellBridge.createBootstrapController(state, {
-      buildHostedPanelCallbacks: buildHostedOwnedPanelCallbacks,
       handlePanelToolSummarySync: handleHostedToolSummarySync,
       panelActivityController,
       panelBookmarkController: hostedOwnedConversationBridge,
@@ -111,7 +106,6 @@
       panelShellController,
       panelSurfaceController,
       providerIdentitySync,
-      releaseManager: hostedOwnedIdleReleaseLifecycle,
       render,
       routeStateController,
       routeSync,
@@ -139,35 +133,6 @@
       };
       render();
       return true;
-    }
-
-    function buildHostedOwnedPanelCallbacks(deps = {}) {
-      const panelBookmarkController = deps.panelBookmarkController || { copyBookmarkText() {}, jumpToBookmark() {} };
-      const panelLifecycleController = deps.panelLifecycleController || { togglePanel() {} };
-      const panelPromptController = deps.panelPromptController || { handleEscape() {} };
-      const panelShellController = deps.panelShellController || {
-        selectTool() {},
-        submitQuery() {},
-        updateHandlePosition() {},
-        updateQuery() {},
-      };
-      const releaseManager = deps.releaseManager || { handleAction() {} };
-      const handlePanelToolSummarySync = typeof deps.handlePanelToolSummarySync === "function"
-        ? deps.handlePanelToolSummarySync
-        : async () => false;
-
-      return {
-        onCopyBookmark: panelBookmarkController.copyBookmarkText,
-        onHandlePositionChange: panelShellController.updateHandlePosition,
-        onJumpBookmark: panelBookmarkController.jumpToBookmark,
-        onToolSummarySync: handlePanelToolSummarySync,
-        onReleaseAction: releaseManager.handleAction,
-        onSearch: panelShellController.updateQuery,
-        onSearchSubmit: panelShellController.submitQuery,
-        onSelectTool: panelShellController.selectTool,
-        onEscape: panelPromptController.handleEscape,
-        onToggle: panelLifecycleController.togglePanel,
-      };
     }
   }
 
@@ -411,25 +376,6 @@
       ? namespace.cloudSync.normalizeProviderIdentity
       : (value) => value && typeof value === "object" ? value : {};
     return normalize(identity || null);
-  }
-
-  function createHostedOwnedIdleReleaseLifecycleBridge() {
-    return {
-      buildViewState() {
-        return {
-          count: 0,
-          snapshotFingerprint: "",
-          updateAvailable: false,
-        };
-      },
-      handleAction() {
-        return false;
-      },
-      handleStorageChange() {},
-      ensureChecked() {
-        return false;
-      },
-    };
   }
 
   function createHostedOwnedCountToolSummarySnapshotBridge(getToolSummary = () => ({})) {
