@@ -346,16 +346,21 @@
       });
 
       namespace.contentPanel.renderPanel({
-        activeTool: state.activeTool,
-        bookmarksTool: bookmarkTool,
         handleCount,
-        meetingTool,
-        releaseTool: releaseState,
         handleRatio: namespace.storage.getHandleRatio(state.uiPreferences, global.innerWidth),
         open: state.open,
-        promptTool: promptSnapshot,
+        panelSnapshot: {
+          activeTool: state.activeTool,
+          bookmarksTool: bookmarkTool,
+          meetingTool,
+          open: state.open,
+          promptTool: promptSnapshot,
+          releaseTool: releaseState,
+          settings: state.settings,
+          settingsHydrated: Boolean(state.settingsHydrated),
+          visible,
+        },
         settings: state.settings,
-        settingsHydrated: Boolean(state.settingsHydrated),
         visible,
       });
       namespace.composerReviewFloat?.render?.(panelPromptController.buildReviewFloatState(visible));

@@ -35,11 +35,12 @@ function verifyCustomConversationSnapshotBridge() {
   harness.controller.render();
 
   assert.equal(harness.renderPayloads[0].handleCount, 4);
-  assert.deepEqual(harness.renderPayloads[0].bookmarksTool, {
+  assert.deepEqual(harness.renderPayloads[0].panelSnapshot.bookmarksTool, {
     activeId: "bookmark-hosted",
     count: 4,
     snapshotFingerprint: "bookmark-hosted|4|first|last",
   });
+  assert.equal(harness.renderPayloads[0].bookmarksTool, undefined);
 }
 
 function verifyRenderPayloadAndReviewFloat() {
@@ -54,9 +55,9 @@ function verifyRenderPayloadAndReviewFloat() {
 
   assert.equal(harness.debugSyncCalls, 1);
   assert.equal(harness.renderPayloads.length, 1);
-  assert.equal(harness.renderPayloads[0].activeTool, "meeting");
+  assert.equal(harness.renderPayloads[0].panelSnapshot.activeTool, "meeting");
   assert.equal(harness.renderPayloads[0].handleCount, 2);
-  assert.equal(harness.renderPayloads[0].meetingTool.count, 2);
+  assert.equal(harness.renderPayloads[0].panelSnapshot.meetingTool.count, 2);
   assert.equal(harness.renderPayloads[0].visible, true);
   assert.deepEqual(harness.reviewFloatStates, [{ visible: true }]);
 }
@@ -87,7 +88,7 @@ function verifyCustomPromptSnapshotBridge() {
   harness.controller.render();
 
   assert.equal(harness.renderPayloads[0].handleCount, 5);
-  assert.deepEqual(harness.renderPayloads[0].promptTool, {
+  assert.deepEqual(harness.renderPayloads[0].panelSnapshot.promptTool, {
     activeTab: "review",
     review: {
       open: true,
@@ -116,7 +117,7 @@ function verifyCustomMeetingSnapshotBridge() {
   harness.controller.render();
 
   assert.equal(harness.renderPayloads[0].handleCount, 9);
-  assert.deepEqual(harness.renderPayloads[0].meetingTool, {
+  assert.deepEqual(harness.renderPayloads[0].panelSnapshot.meetingTool, {
     count: 9,
     snapshotFingerprint: "meeting-alpha|9|fresh",
   });
@@ -150,7 +151,7 @@ function verifyCustomReleaseSnapshotBridge() {
   harness.controller.render();
 
   assert.equal(harness.renderPayloads[0].handleCount, 1);
-  assert.deepEqual(harness.renderPayloads[0].releaseTool, {
+  assert.deepEqual(harness.renderPayloads[0].panelSnapshot.releaseTool, {
     count: 1,
     updateAvailable: true,
   });

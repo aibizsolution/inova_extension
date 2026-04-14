@@ -210,7 +210,7 @@ function verifyHostedPromptReviewContract() {
     "top panel should keep content review request traces visible"
   );
   assert.equal(
-    topPanelSource.includes("state?.promptTool?.review?.open || state?.promptReview?.open"),
+    topPanelSource.includes("const reviewState = promptTool?.review && typeof promptTool.review === \"object\""),
     true,
     "top panel snapshot trace should report prompt tool review state"
   );

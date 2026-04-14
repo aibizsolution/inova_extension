@@ -70,6 +70,7 @@ Short version:
 - active v2 createState no longer carries dead `meetingHub` / `meetingUi` buckets; extension meeting residue is now the compact `meetingSummary(count)` state only
 - compact hosted `meeting` / `release` summaries now round-trip through a shared `tool-summary-sync` bridge contract instead of feature-specific summary actions
 - `content/panel.js` no longer picks meeting/prompt runtime helpers directly; panel iframe target now resolves through shared `firebaseConfig.panel` runtime config
+- `content/panel.js` no longer clones the full render payload into hosted bridge snapshots; v2 render now passes a prebuilt `panelSnapshot` and the host just brokers view + bridge envelope
 - active `content/hosted-panel-bridge.js` no longer carries inactive legacy `meeting-action` / prompt action request paths; the live v2 request surface is now `tool-summary-sync`, release, conversation bookmark, shell, runtime, and page only
 - backup legacy reference verify scripts now live under `scripts/legacy-panel/*` instead of the active root `scripts/` namespace
 - active v2 prompt shell no longer keeps hosted-owned prompt store-load/storage/sync sidecars; extension prompt residue is now review float plus review handoff/persistence only

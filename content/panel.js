@@ -306,7 +306,7 @@
     return {
       extensionCapabilities: host.__bridge?.getCapabilities?.() || [],
       extensionVersion: readExtensionVersion(),
-      panel: cloneValue(state),
+      panel: cloneValue(state?.panelSnapshot || {}),
       panelAppUrl: normalizeText(host.__panelUrl),
     };
   }
@@ -325,10 +325,19 @@
   }
 
   function buildPanelSnapshotTracePayload(state) {
+    const panelSnapshot = state?.panelSnapshot && typeof state.panelSnapshot === "object"
+      ? state.panelSnapshot
+      : {};
+    const promptTool = panelSnapshot?.promptTool && typeof panelSnapshot.promptTool === "object"
+      ? panelSnapshot.promptTool
+      : {};
+    const reviewState = promptTool?.review && typeof promptTool.review === "object"
+      ? promptTool.review
+      : {};
     return {
-      activeTool: normalizeText(state?.activeTool),
+      activeTool: normalizeText(panelSnapshot?.activeTool),
       open: Boolean(state?.open),
-      reviewOpen: Boolean(state?.promptTool?.review?.open || state?.promptReview?.open),
+      reviewOpen: Boolean(reviewState.open),
       visible: Boolean(state?.visible),
     };
   }
