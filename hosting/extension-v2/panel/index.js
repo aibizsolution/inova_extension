@@ -687,7 +687,7 @@
     renderToolContentIfNeeded(elements.toolContent, panelState);
 
     if (panelState.activeTool === "prompts" && effectivePromptTool?.activeTab === "store") {
-      namespace.promptHubPanel?.syncStoreList?.(elements.app, callbacks, {
+      namespace.promptToolPanel?.syncStoreList?.(elements.app, callbacks, {
         renderKey: effectivePromptTool?.store?.renderKey,
         scrollTop: previousStoreScrollTop,
       });
@@ -1146,7 +1146,7 @@
         reason: "click",
       });
     }
-    if (namespace.promptHubPanel?.handleClick?.(event, host, callbacks)) {
+    if (namespace.promptToolPanel?.handleClick?.(event, host, callbacks)) {
       return;
     }
     const copyButton = target.closest?.("[data-copy-bookmark-id]");
@@ -1201,7 +1201,7 @@
     if (!(host instanceof global.HTMLElement)) {
       return;
     }
-    namespace.promptHubPanel?.handleScroll?.(event, host, callbacks);
+    namespace.promptToolPanel?.handleScroll?.(event, host, callbacks);
   }
 
   function handleRootPointerDown(event) {
@@ -1209,7 +1209,7 @@
     if (!(host instanceof global.HTMLElement)) {
       return;
     }
-    namespace.promptHubPanel?.handlePointerDown?.(event, host);
+    namespace.promptToolPanel?.handlePointerDown?.(event, host);
   }
 
   function handleRootPointerMove(event) {
@@ -1217,7 +1217,7 @@
     if (!(host instanceof global.HTMLElement)) {
       return;
     }
-    namespace.promptHubPanel?.handlePointerMove?.(event, host);
+    namespace.promptToolPanel?.handlePointerMove?.(event, host);
   }
 
   function handleRootPointerEnd(event) {
@@ -1225,7 +1225,7 @@
     if (!(host instanceof global.HTMLElement)) {
       return;
     }
-    namespace.promptHubPanel?.handlePointerEnd?.(event, host, callbacks);
+    namespace.promptToolPanel?.handlePointerEnd?.(event, host, callbacks);
   }
 
   function handleRootCompositionStart(event) {
@@ -1279,11 +1279,11 @@
       applyTextInputBinding(binding, { composing: false });
       return;
     }
-    namespace.promptHubPanel?.handleInput?.(event, callbacks);
+    namespace.promptToolPanel?.handleInput?.(event, callbacks);
   }
 
   function handleRootChange(event) {
-    namespace.promptHubPanel?.handleChange?.(event, callbacks);
+    namespace.promptToolPanel?.handleChange?.(event, callbacks);
   }
 
   function handleRootSearch(event) {

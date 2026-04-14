@@ -179,7 +179,11 @@ function verifyHostedPanelFiles(directoryName) {
   );
 
   assert(html.includes("./runtime.js"), "hosted panel should load runtime bootstrap");
-  assert(html.includes("./prompt-hub-panel.js"), "hosted panel should load prompt interaction helpers");
+  if (directoryName === "extension-v2") {
+    assert(html.includes("./prompt-tool-panel.js"), "v2 hosted panel should load prompt tool interaction helpers");
+  } else {
+    assert(html.includes("./prompt-hub-panel.js"), "legacy hosted panel should keep the prompt hub interaction helper");
+  }
   if (directoryName === "extension-v2") {
     assert(!html.includes("./legacy-panel.css"), "v2 hosted panel should not load the dead legacy panel shell stylesheet");
     assert(!html.includes("./legacy-tools.css"), "v2 hosted panel should not load the dead legacy tools stylesheet");

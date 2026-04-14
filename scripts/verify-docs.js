@@ -39,6 +39,7 @@ const requiredFiles = [
   path.join("hosting", "extension", "panel", "index.js"),
   path.join("hosting", "extension", "panel", "runtime.js"),
   path.join("hosting", "extension", "panel", "prompt-hub-panel.js"),
+  path.join("hosting", "extension-v2", "panel", "prompt-tool-panel.js"),
   path.join("scripts", "install-git-hooks.js"),
   "shared/prompt-library.js",
   path.join("scripts", "verify-feature-doc-update.js"),

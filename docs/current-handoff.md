@@ -87,6 +87,7 @@ Short version:
 - active v2 prompt state factory and route hydration no longer mirror hosted-owned prompt library/store/editor buckets inside extension state
 - active v2 route/shell no longer keeps legacy `activeTool: store`; old stored values normalize immediately to `activeTool: prompts` plus `activePromptTab: store`
 - active hosted prompt shell now renders only through `prompt-tool-view.js`; the dead `prompt-hub-view.js` fallback is no longer loaded in the v2 panel bundle
+- active hosted prompt shell interaction helper now uses `prompt-tool-panel.js`; legacy `prompt-hub-panel.js` naming stays in legacy lanes only
 - active hosted v2 panel no longer loads `legacy-panel.css`; the live bookmark/empty/header styling now sits with the active hosted shell styles instead of a dead panel-shell stylesheet
 - active hosted v2 panel now loads a single `index.css`; live tool rail/prompt/store/meeting/release shell styling no longer depends on `legacy-tools.css`
 - hosted-first ownership and incremental doc-correction rules were written into root/docs guidance

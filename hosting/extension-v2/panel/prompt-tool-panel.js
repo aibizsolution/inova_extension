@@ -1,4 +1,4 @@
-(function initPromptHubPanel(global) {
+(function initPromptToolPanel(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
 
   function handleClick(event, host, callbacks) {
@@ -198,7 +198,7 @@
     delete host.dataset.dragPointerId;
   }
 
-  namespace.promptHubPanel = {
+  namespace.promptToolPanel = {
     handleChange,
     handleClick,
     handleInput,
