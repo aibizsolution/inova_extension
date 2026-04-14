@@ -54,6 +54,15 @@ function verifyHostedTraceVisibilityContract() {
     topPanelSource.includes('"hosted.release.fetch.start"'),
     "top panel should keep release fetch traces visible"
   );
+  assert(
+    topPanelSource.includes("buildPanelSnapshotTracePayload(state)"),
+    "top panel snapshot push traces should flow through a generic panel snapshot payload helper"
+  );
+  assert(
+    !topPanelSource.includes("state?.promptTool?.activeTab")
+      && !topPanelSource.includes("state?.uiPreferences?.activePromptTab"),
+    "top panel snapshot push traces should stop reading prompt tab detail directly from the shell host"
+  );
 }
 
 module.exports = {

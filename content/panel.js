@@ -319,9 +319,18 @@
       return false;
     }
     host.__lastBridgeSnapshotKey = snapshotKey;
-    logConsoleTrace("panel", "10.top.panel.snapshot.push", { activeTool: normalizeText(state?.activeTool), open: Boolean(state?.open), promptTab: normalizeText(state?.promptTool?.activeTab || state?.uiPreferences?.activePromptTab), reviewOpen: Boolean(state?.promptTool?.review?.open || state?.promptReview?.open), visible: Boolean(state?.visible) });
+    logConsoleTrace("panel", "10.top.panel.snapshot.push", buildPanelSnapshotTracePayload(state));
     host.__bridge.updateSnapshot(snapshot);
     return true;
+  }
+
+  function buildPanelSnapshotTracePayload(state) {
+    return {
+      activeTool: normalizeText(state?.activeTool),
+      open: Boolean(state?.open),
+      reviewOpen: Boolean(state?.promptTool?.review?.open || state?.promptReview?.open),
+      visible: Boolean(state?.visible),
+    };
   }
 
   function readExtensionVersion() {
