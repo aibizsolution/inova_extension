@@ -21,6 +21,7 @@ function main() {
   assert.equal(stateA.releaseSummary.count, 0);
   assert.equal(stateA.releaseSummary.snapshotFingerprint, "");
   assert.equal(stateA.uiPreferences.activePromptTab, "library");
+  assert.deepEqual(Object.keys(stateA.queries), ["bookmarks"]);
   assert.equal(stateA.promptReview.open, false);
   assert.equal(stateA.routeWatchInstalled, false);
 
@@ -62,6 +63,8 @@ function main() {
   assert.equal(stateB.releaseSummary.count, 0);
   assert.equal(stateB.promptReview.open, false);
   assert.equal(stateB.queries.bookmarks, "");
+  assert.equal("prompts" in stateB.queries, false);
+  assert.equal("store" in stateB.queries, false);
 
   console.log("[verify-panel-state-factory] V2 composition state factory contract passed");
 }

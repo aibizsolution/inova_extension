@@ -524,7 +524,7 @@
 
     function submitQuery(toolId, value) {
       const promptController = getPromptController();
-      if (promptController?.submitQuery(toolId, value)) {
+      if (typeof promptController?.submitQuery === "function" && promptController.submitQuery(toolId, value)) {
         return true;
       }
       if (normalizeToolId(toolId) !== "bookmarks") {
@@ -553,7 +553,7 @@
 
     function updateQuery(toolId, value, options = {}) {
       const promptController = getPromptController();
-      if (promptController?.updateQuery(toolId, value, options)) {
+      if (typeof promptController?.updateQuery === "function" && promptController.updateQuery(toolId, value, options)) {
         return true;
       }
       if (normalizeToolId(toolId) !== "bookmarks") {

@@ -10,7 +10,8 @@ const root = path.resolve(__dirname, "..");
 async function main() {
   await verifyMeetingAndReleaseToolSelection();
   await verifyPromptAliasDelegation();
-  await verifyQueryRoutingAndHandleCount();
+  await verifyBookmarkQueryRoutingAndHandleCount();
+  verifyPromptQueryFallbackIsDropped();
   await verifyHandlePositionAndUiPreferenceLock();
   console.log("[verify-panel-shell-controller] V2 shell bridge shell contract passed");
 }
@@ -45,7 +46,7 @@ async function verifyPromptAliasDelegation() {
   assert.deepEqual(harness.persistCalls, []);
 }
 
-async function verifyQueryRoutingAndHandleCount() {
+async function verifyBookmarkQueryRoutingAndHandleCount() {
   const harness = createHarness({
     activeTool: "bookmarks",
     uiPreferenceTool: "bookmarks",
@@ -54,21 +55,8 @@ async function verifyQueryRoutingAndHandleCount() {
   assert.equal(harness.controller.updateQuery("bookmarks", "대화"), true);
   assert.deepEqual(harness.bookmarkQueryCalls, ["대화"]);
 
-  assert.equal(harness.controller.updateQuery("prompts", "회의", { composing: true }), true);
-  assert.deepEqual(harness.promptQueryCalls[0], {
-    options: { composing: true },
-    toolId: "prompts",
-    value: "회의",
-  });
-
   assert.equal(harness.controller.submitQuery("bookmarks", "질문"), true);
   assert.deepEqual(harness.bookmarkSubmitCalls, ["질문"]);
-
-  assert.equal(harness.controller.submitQuery("store", "공개"), true);
-  assert.deepEqual(harness.promptSubmitCalls[0], {
-    toolId: "store",
-    value: "공개",
-  });
 
   const bookmarkHandleCount = harness.controller.buildHandleCount({
     bookmarks: 2,
@@ -88,6 +76,13 @@ async function verifyQueryRoutingAndHandleCount() {
     release: 1,
   });
   assert.equal(promptHandleCount, 3);
+}
+
+function verifyPromptQueryFallbackIsDropped() {
+  const harness = createHarness();
+
+  assert.equal(harness.controller.updateQuery("prompts", "회의", { composing: true }), false);
+  assert.equal(harness.controller.submitQuery("store", "공개"), false);
 }
 
 async function verifyHandlePositionAndUiPreferenceLock() {
@@ -118,9 +113,7 @@ function createHarness(options = {}) {
   const bookmarkSubmitCalls = [];
   const handleUpdates = [];
   const persistCalls = [];
-  const promptQueryCalls = [];
   const promptSelectToolCalls = [];
-  const promptSubmitCalls = [];
   const releaseEnsureCalls = [];
   const renderCalls = [];
 
@@ -172,7 +165,7 @@ function createHarness(options = {}) {
 
   const state = {
     activeTool: options.activeTool || "prompts",
-    queries: { bookmarks: "", prompts: "", store: "" },
+    queries: { bookmarks: "" },
     uiPreferenceLock: null,
     uiPreferences: {
       activePromptTab: options.activePromptTab || "library",
@@ -188,24 +181,6 @@ function createHarness(options = {}) {
         return true;
       }
       return false;
-    },
-    submitQuery(toolId, value) {
-      if (toolId !== "prompts" && toolId !== "store") {
-        return false;
-      }
-      promptSubmitCalls.push({ toolId, value });
-      return true;
-    },
-    updateQuery(toolId, value, optionsInput = {}) {
-      if (toolId !== "prompts" && toolId !== "store") {
-        return false;
-      }
-      promptQueryCalls.push({
-        options: cloneValue(optionsInput),
-        toolId,
-        value,
-      });
-      return true;
     },
   };
 
@@ -245,9 +220,7 @@ function createHarness(options = {}) {
     controller,
     handleUpdates,
     persistCalls,
-    promptQueryCalls,
     promptSelectToolCalls,
-    promptSubmitCalls,
     releaseEnsureCalls,
     renderCalls,
     state,

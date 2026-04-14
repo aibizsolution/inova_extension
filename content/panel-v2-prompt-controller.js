@@ -19,17 +19,13 @@
       ensureReviewFloat,
       handleEscape,
       selectTool,
-      submitQuery,
-      updateQuery,
     };
 
     function buildToolState() {
       const reviewState = promptReviewManager.buildViewState();
-      const activePromptTab = getActivePromptTab(reviewState.open);
       return {
         promptCount: 0,
         promptTool: {
-          activeTab: activePromptTab,
           review: reviewState,
         },
         promptToolCount: 0,
@@ -66,19 +62,6 @@
       return false;
     }
 
-    function updateQuery(toolId, value) {
-      if (toolId !== "store" && toolId !== "prompts") {
-        return false;
-      }
-      state.queries[toolId === "store" ? "store" : "prompts"] = String(value || "");
-      render();
-      return true;
-    }
-
-    function submitQuery(toolId, value) {
-      return updateQuery(toolId, value);
-    }
-
     function showPromptTab(promptTabId) {
       const nextPromptTab = normalizePromptTab(promptTabId);
       state.open = true;
@@ -106,20 +89,8 @@
       await persistActiveTool("prompts", nextPromptTab);
     }
 
-    function getActivePromptTab(reviewOpen = state?.promptReview?.open) {
-      const activeTool = normalizeText(state?.uiPreferences?.activeTool);
-      const nextPromptTab = activeTool === "store"
-        ? "store"
-        : normalizePromptTab(state?.uiPreferences?.activePromptTab);
-      return nextPromptTab === "review" && !reviewOpen ? "library" : nextPromptTab;
-    }
-
     function normalizePromptTab(promptTabId) {
       return promptTabId === "store" || promptTabId === "review" ? promptTabId : "library";
-    }
-
-    function normalizeText(value) {
-      return namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
     }
   }
 

@@ -179,7 +179,7 @@
       preferredOpen: false,
       activeId: "",
       activeTool: namespace.constants.defaults.uiPreferences.activeTool,
-      queries: { bookmarks: "", prompts: "", store: "" },
+      queries: { bookmarks: "" },
       settings: { ...namespace.constants.defaults.settings },
       settingsHydrated: false,
       pausedSessions: {},
@@ -452,7 +452,6 @@
           ? promptToolState.promptTool
           : {};
         return {
-          activeTab: normalizeText(promptTool.activeTab) || "library",
           review: normalizePromptReviewSnapshot(promptTool.review),
         };
       },
