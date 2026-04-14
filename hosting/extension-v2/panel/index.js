@@ -142,17 +142,9 @@
   function createCallbacks() {
     return {
       async onCopyBookmark(bookmarkId) {
-        if (conversationController?.handleCopyBookmark) {
-          const handled = await conversationController.handleCopyBookmark(bookmarkId);
-          if (handled !== false) {
-            return handled;
-          }
-        }
-        const response = await request("panel", {
-          action: "bookmark-copy",
-          bookmarkId,
-        });
-        return Boolean(response?.copied);
+        return conversationController?.handleCopyBookmark
+          ? conversationController.handleCopyBookmark(bookmarkId)
+          : Promise.resolve(false);
       },
       onEscape() {
         if (promptReviewController?.consumeEscape?.()) {
@@ -169,21 +161,9 @@
         return Promise.resolve(false);
       },
       onJumpBookmark(bookmarkId) {
-        if (conversationController?.handleJumpBookmark) {
-          return conversationController.handleJumpBookmark(bookmarkId).then((handled) => {
-            if (handled !== false) {
-              return handled;
-            }
-            return request("panel", {
-              action: "bookmark-jump",
-              bookmarkId,
-            });
-          });
-        }
-        return request("panel", {
-          action: "bookmark-jump",
-          bookmarkId,
-        });
+        return conversationController?.handleJumpBookmark
+          ? conversationController.handleJumpBookmark(bookmarkId)
+          : Promise.resolve(false);
       },
       onMeetingAction(meetingAction, detail = {}) {
         traceMeetingFlow("41.hosted.callback.enter", {
@@ -246,12 +226,7 @@
         if (promptLibraryController?.handleSearch?.(toolId, value, options) !== false) {
           return Promise.resolve(true);
         }
-        return request("panel", {
-          action: "search",
-          options,
-          toolId,
-          value,
-        });
+        return Promise.resolve(false);
       },
       onSearchSubmit(toolId, value) {
         if (conversationController?.handleSearch?.(toolId, value, { submit: true }) !== false) {
@@ -263,11 +238,7 @@
         if (promptLibraryController?.handleSearch?.(toolId, value, { submit: true }) !== false) {
           return Promise.resolve(true);
         }
-        return request("panel", {
-          action: "search-submit",
-          toolId,
-          value,
-        });
+        return Promise.resolve(false);
       },
       onSelectPromptTab(promptTabId) {
         if (promptLibraryController?.handleSelectPromptTab) {
@@ -276,10 +247,7 @@
         return Promise.resolve(false);
       },
       onSelectTool(toolId) {
-        return request("panel", {
-          action: "select-tool",
-          toolId,
-        });
+        return persistHostedToolSelection(toolId);
       },
       onStoreAction(storeAction, detail = {}) {
         if (promptStoreController?.handleStoreAction) {
@@ -294,6 +262,25 @@
         });
       },
     };
+  }
+
+  async function persistHostedToolSelection(toolId) {
+    const nextTool = normalizeHostedToolId(toolId);
+    const nextUiPreferences = nextTool === "prompts"
+      ? {
+        activePromptTab: "library",
+        activeTool: "prompts",
+      }
+      : {
+        activeTool: nextTool,
+      };
+    try {
+      await browserCapabilities.writeUiPreferences(nextUiPreferences);
+      return true;
+    } catch (error) {
+      console.error("[i-Nova Hosted Panel] active tool save failed", error);
+      return false;
+    }
   }
 
   function scheduleReadyPing() {
@@ -575,6 +562,15 @@
     return Array.isArray(value)
       ? value.map((entry) => normalizeText(entry)).filter(Boolean)
       : [];
+  }
+
+  function normalizeHostedToolId(toolId) {
+    const normalizedToolId = normalizeText(toolId).toLowerCase();
+    return normalizedToolId === "meeting" || normalizedToolId === "prompts" || normalizedToolId === "release"
+      ? normalizedToolId
+      : normalizedToolId === "store"
+        ? "prompts"
+        : "bookmarks";
   }
 
   function isParentOrigin(origin) {

@@ -252,13 +252,39 @@ function main() {
     "v2 composition should not instantiate the legacy bookmark controller once the active bundle keeps conversation glue inline"
   );
   assert(
-    v2CompositionSource.includes("const conversationBridge = createConversationBridge(state, { render });"),
+    v2CompositionSource.includes("const conversationBridge = createConversationBridge(state);"),
     "v2 composition should keep the active conversation bridge inline instead of loading the legacy bookmark controller file"
   );
   assert(
     v2CompositionSource.includes("buildConversationSnapshot: conversationBridge.buildConversationSnapshot"),
     "v2 render wiring should pass the hosted-owned conversation snapshot bridge"
   );
+  [
+    "count: getConversationCount(),",
+    "snapshotFingerprint: buildSnapshotFingerprint(),",
+    "function getConversationCount(conversationSnapshot = null)",
+    "normalizeText(items[0]?.id),",
+    "normalizeText(items.at?.(-1)?.id),",
+  ].forEach((pattern) => assert(
+    v2CompositionSource.includes(pattern),
+    `v2 conversation bridge should keep compact snapshot residue for ${pattern}`
+  ));
+  [
+    "queries: { bookmarks: \"\" },",
+    "copyBookmarkText(bookmarkId)",
+    "jumpToBookmark(bookmarkId)",
+    "submitQuery(toolId, value)",
+    "updateQuery(toolId, value, options = {})",
+    "function getFilteredBookmarks()",
+    "query: state.queries.bookmarks,",
+    "items: getFilteredBookmarks(),",
+    "emptyText: buildEmptyText(filteredBookmarks),",
+    "metaText: buildStatusText(filteredBookmarks),",
+    "activeId: normalizeText(bookmarkTool.activeId)",
+  ].forEach((pattern) => assert(
+    !v2CompositionSource.includes(pattern),
+    `v2 conversation bridge should drop the hosted-owned extension residue ${pattern}`
+  ));
   assert(
     v2CompositionSource.includes("createCountToolSummarySnapshotBridge"),
     "v2 composition should wrap count-only hosted tool summary shaping for meeting state"

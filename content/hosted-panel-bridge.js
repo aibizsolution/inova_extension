@@ -325,16 +325,7 @@
       return handledSummaryRequest;
     }
 
-    const handledConversationRequest = await handleConversationRequest(action, payload, callbacks, {
-      normalizeText,
-    });
-    if (handledConversationRequest?.handled) {
-      return handledConversationRequest;
-    }
-
-    return handleShellRequest(action, payload, callbacks, {
-      normalizeText,
-    });
+    return handleShellRequest(action, payload, callbacks);
   }
 
   function handlePanelSummaryRequest(action, payload, callbacks, helpers = {}) {
@@ -364,37 +355,7 @@
     });
   }
 
-  function handleConversationRequest(action, payload, callbacks, helpers = {}) {
-    const normalizeText = typeof helpers.normalizeText === "function"
-      ? helpers.normalizeText
-      : (value) => namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
-
-    if (action === "bookmark-copy") {
-      return Promise.resolve(callbacks.onCopyBookmark?.(normalizeText(payload?.bookmarkId))).then((copied) => ({
-        handled: true,
-        result: { copied: Boolean(copied) },
-      }));
-    }
-
-    if (action === "bookmark-jump") {
-      callbacks.onJumpBookmark?.(normalizeText(payload?.bookmarkId));
-      return Promise.resolve({
-        handled: true,
-        result: { jumped: true },
-      });
-    }
-
-    return Promise.resolve({
-      handled: false,
-      result: null,
-    });
-  }
-
-  function handleShellRequest(action, payload, callbacks, helpers = {}) {
-    const normalizeText = typeof helpers.normalizeText === "function"
-      ? helpers.normalizeText
-      : (value) => namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
-
+  function handleShellRequest(action, payload, callbacks) {
     if (action === "toggle-panel") {
       callbacks.onToggle?.(payload?.open);
       return Promise.resolve({
@@ -411,29 +372,6 @@
       return Promise.resolve({
         handled: true,
         result: { consumed },
-      });
-    }
-
-    if (action === "select-tool") {
-      return Promise.resolve(callbacks.onSelectTool?.(normalizeText(payload?.toolId))).then((selected) => ({
-        handled: true,
-        result: { selected: Boolean(selected) },
-      }));
-    }
-
-    if (action === "search") {
-      callbacks.onSearch?.(normalizeText(payload?.toolId), String(payload?.value || ""), payload?.options || {});
-      return Promise.resolve({
-        handled: true,
-        result: { searched: true },
-      });
-    }
-
-    if (action === "search-submit") {
-      callbacks.onSearchSubmit?.(normalizeText(payload?.toolId), String(payload?.value || ""));
-      return Promise.resolve({
-        handled: true,
-        result: { submitted: true },
       });
     }
 

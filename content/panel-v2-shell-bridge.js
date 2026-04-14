@@ -150,7 +150,6 @@
       ? deps.buildHostedPanelCallbacks
       : buildDefaultHostedPanelCallbacks;
     const panelActivityController = deps.panelActivityController || { handleVisibilityChange() {}, handleWindowFocus() {} };
-    const panelBookmarkController = deps.panelBookmarkController || { copyBookmarkText() {}, jumpToBookmark() {} };
     const panelDebugController = deps.panelDebugController || { installValidationApi() {} };
     const panelLifecycleController = deps.panelLifecycleController || { initializeOpenState() {}, togglePanel() {} };
     const promptShellController = deps.promptShellController || {
@@ -158,10 +157,7 @@
       handleEscape() {},
     };
     const panelShellController = deps.panelShellController || {
-      selectTool() {},
-      submitQuery() {},
       updateHandlePosition() {},
-      updateQuery() {},
     };
     const panelSurfaceController = deps.panelSurfaceController || { installSurfaceWatchers() {} };
     const providerIdentitySync = deps.providerIdentitySync || { async syncToStorage() { return false; } };
@@ -180,7 +176,6 @@
       void providerIdentitySync.syncToStorage("bootstrap");
       namespace.contentPanel.ensurePanel(buildHostedPanelCallbacks({
         handlePanelToolSummarySync,
-        panelBookmarkController,
         panelLifecycleController,
         promptShellController,
         panelShellController,
@@ -221,26 +216,17 @@
     const handlePanelToolSummarySync = typeof deps.handlePanelToolSummarySync === "function"
       ? deps.handlePanelToolSummarySync
       : async () => false;
-    const panelBookmarkController = deps.panelBookmarkController || { copyBookmarkText() {}, jumpToBookmark() {} };
     const panelLifecycleController = deps.panelLifecycleController || { togglePanel() {} };
     const promptShellController = deps.promptShellController || {
       handleEscape() {},
     };
     const panelShellController = deps.panelShellController || {
-      selectTool() {},
-      submitQuery() {},
       updateHandlePosition() {},
-      updateQuery() {},
     };
 
     return {
-      onCopyBookmark: panelBookmarkController.copyBookmarkText,
       onHandlePositionChange: panelShellController.updateHandlePosition,
-      onJumpBookmark: panelBookmarkController.jumpToBookmark,
       onToolSummarySync: handlePanelToolSummarySync,
-      onSearch: panelShellController.updateQuery,
-      onSearchSubmit: panelShellController.submitQuery,
-      onSelectTool: panelShellController.selectTool,
       onEscape: promptShellController.handleEscape,
       onToggle: panelLifecycleController.togglePanel,
     };
@@ -403,10 +389,6 @@
   }
 
   function createShellController(state, deps = {}) {
-    const bookmarkController = deps.bookmarkController || {
-      submitQuery() { return false; },
-      updateQuery() { return false; },
-    };
     const isExtensionContextInvalidatedError = typeof deps.isExtensionContextInvalidatedError === "function"
       ? deps.isExtensionContextInvalidatedError
       : () => false;
@@ -419,10 +401,7 @@
       lockUiPreferenceSelection,
       normalizeToolId,
       persistActiveTool,
-      selectTool,
-      submitQuery,
       updateHandlePosition,
-      updateQuery,
     };
 
     function buildHandleCount(counts = {}) {
@@ -492,31 +471,6 @@
       }
     }
 
-    async function selectTool(toolId) {
-      const nextTool = normalizeToolId(toolId);
-      const nextPromptTab = toolId === "store"
-        ? "store"
-        : nextTool === "prompts"
-        ? "library"
-        : normalizePromptTab(state.uiPreferences.activePromptTab);
-      state.activeTool = nextTool;
-      state.uiPreferences = namespace.storage.mergeUiPreferences(state.uiPreferences, {
-        activePromptTab: nextPromptTab,
-        activeTool: nextTool,
-      });
-      lockUiPreferenceSelection(nextTool, nextPromptTab);
-      render();
-      await persistActiveTool(nextTool, nextPromptTab);
-      return true;
-    }
-
-    function submitQuery(toolId, value) {
-      if (normalizeToolId(toolId) !== "bookmarks") {
-        return false;
-      }
-      return bookmarkController.submitQuery(value);
-    }
-
     async function updateHandlePosition(nextRatio) {
       const bucket = namespace.storage.getViewportBucket(global.innerWidth);
       const handleRatio = namespace.storage.normalizeHandleRatio(nextRatio, bucket);
@@ -533,13 +487,6 @@
       } catch (error) {
         console.error("[i-Nova Bookmarks] handle position save failed", error);
       }
-    }
-
-    function updateQuery(toolId, value) {
-      if (normalizeToolId(toolId) !== "bookmarks") {
-        return false;
-      }
-      return bookmarkController.updateQuery(value);
     }
 
     function normalizeCount(value, fallback = 0) {

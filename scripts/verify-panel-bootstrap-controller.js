@@ -26,10 +26,13 @@ async function verifyBootstrapWiringAndScheduling() {
 
   assert.equal(harness.lifecycleInitializeCalls, 1);
   assert.deepEqual(harness.providerIdentityReasons, ["bootstrap"]);
+  assert.equal(typeof harness.callbacks.onHandlePositionChange, "function");
   assert.equal(typeof harness.callbacks.onToolSummarySync, "function");
-  assert.equal(typeof harness.callbacks.onSearch, "function");
+  assert.equal(typeof harness.callbacks.onEscape, "function");
   assert.equal(typeof harness.callbacks.onToggle, "function");
   [
+    "onCopyBookmark",
+    "onJumpBookmark",
     "onMeetingSummarySync",
     "onMeetingAction",
     "onImportFile",
@@ -38,6 +41,9 @@ async function verifyBootstrapWiringAndScheduling() {
     "onPromptDraftChange",
     "onReleaseAction",
     "onReleaseSummarySync",
+    "onSearch",
+    "onSearchSubmit",
+    "onSelectTool",
     "onSelectPromptTab",
     "onStoreAction",
   ].forEach((callbackKey) => assert.equal(
@@ -157,10 +163,6 @@ function createHarness(options = {}) {
       handleVisibilityChange() {},
       handleWindowFocus() {},
     },
-    panelBookmarkController: {
-      async copyBookmarkText() {},
-      jumpToBookmark() {},
-    },
     panelDebugController: {
       installValidationApi() {
         debugInstallCalls += 1;
@@ -185,10 +187,7 @@ function createHarness(options = {}) {
       selectPromptTab() {},
     },
     panelShellController: {
-      selectTool() {},
-      submitQuery() {},
       updateHandlePosition() {},
-      updateQuery() {},
     },
     panelSurfaceController: {
       installSurfaceWatchers() {

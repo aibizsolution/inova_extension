@@ -6,8 +6,8 @@ Last updated: 2026-04-15
 
 - Public deployed baseline: `0.4.4`
 - Current local candidate: `1.0.0`
-- Active branch: `main`
-- Latest full validation: `npm.cmd run verify` passed on `main`
+- Active branch: `codex/hosted-first-extra-reduction`
+- Latest full validation: `npm.cmd run verify` passed on `codex/hosted-first-extra-reduction`
 - Worktree: clean
 - Current architecture direction:
 - `1.0.0` v2 lane is explicitly hosted-first.
@@ -22,7 +22,7 @@ Last updated: 2026-04-15
 
 ## Where Ownership Stands
 
-- `conversation`: hosted owns list/search/copy/jump UI state; extension only provides page adapter plus thin signals such as count/active/fingerprint.
+- `conversation`: hosted owns list/search/copy/jump UI state; extension only provides page adapter plus thin count/fingerprint snapshot signals.
 - `release`: hosted owns latest/history/download surface and compact release summary sync; extension only keeps browser/runtime broker capability plus count-only `toolSummaries.release(count)`.
 - `prompt-library`, `prompt-store`, `prompt-review`: hosted owns prompt tab transition plus prompt/store/review action routing and review state/result/dismiss; extension keeps page/runtime bridge, review float, monotonic review-trigger handoff, generic local-state/provider-identity persistence, and stable browser capability APIs only.
 - `meeting hub` / `meeting workspace`: hosted owns list/action UI, Firestore meeting-list subscription, and launch tracing; v2 hosted panel no longer falls back to top-panel `meeting-action` dispatch, and v2 extension now carries only count-only `toolSummaries.meeting(count)` residue outside the hub path.
@@ -68,7 +68,7 @@ Short version:
 - prompt scope buttons, meeting CTA alignment/dividers, bookmark spacing/copy icon alignment, and release tab section layout were visually normalized around the fixed-width panel shell
 - panel chrome ownership (`tool rail`, `tool title`, `tool count`) moved out of extension
 - release snapshot trimmed to hosted-owned signals
-- conversation snapshot trimmed to hosted-owned signals
+- conversation snapshot trimmed to hosted-owned count/fingerprint signals
 - prompt snapshot trimmed to hosted-owned signals
 - meeting list state moved into hosted hub controller
 - meeting actions (`open-workspace`, `open-result`, `share`, `revoke-share`) moved into hosted hub controller
@@ -83,7 +83,7 @@ Short version:
 - current `1.0.0` manifest no longer loads the legacy prompt runtime bundle; v2 prompt shell now keeps only `content/panel-v2-prompt-controller.js` for minimal review handoff/composer review float
 - current `1.0.0` extension bundle now boots `content/panel-v2-composition-controller.js` directly and stops loading the legacy panel composition/meeting/action lane in `manifest.json`
 - current `1.0.0` manifest no longer loads the legacy release runtime/helper bundle; compact release summary now round-trips through hosted v2 instead of `content/release-manager.js`
-- current `1.0.0` manifest no longer loads the legacy content bookmark view/style bundle; hosted bookmark view owns the visible conversation UI and `content` keeps only snapshot/jump/copy adapters
+- current `1.0.0` manifest no longer loads the legacy content bookmark view/style bundle; hosted bookmark view owns the visible conversation UI and `content` keeps only the compact snapshot bridge plus canonical page adapters
 - current `1.0.0` manifest no longer loads `content/panel-bookmark-controller.js`; the active conversation bridge now lives inline in `content/panel-v2-composition-controller.js` and the old controller sits under `backup/legacy-panel/*`
 - current `1.0.0` manifest no longer loads `content/panel-runtime-controller.js` or `content/panel-debug-controller.js`; active runtime/debug helpers now live inline in `content/panel-v2-composition-controller.js`
 - current `1.0.0` manifest no longer loads `content/panel-state-factory.js` or `content/provider-identity-sync.js`; active state initialization and panel-local provider identity sync now live inline in `content/panel-v2-composition-controller.js`
@@ -105,7 +105,9 @@ Short version:
 - top-panel snapshot trace shaping now comes from v2 shell `panelTrace`; `content/panel.js` no longer reads prompt review detail directly out of hosted tool state
 - top console trace policy/summary formatting now lives in `content/panel-console-trace.js`; `content/panel.js` no longer carries feature-specific always-trace rules inline
 - hosted panel iframe target/status/handshake/render batching now lives in `content/panel-host-runtime.js`; hosted bridge endpoint/page event emit now lives in `content/panel-host-bridge.js`; host markup/handle drag-click now lives in `content/panel-host-view.js`; `content/panel.js` keeps host element lifecycle + helper wiring only
-- active `content/hosted-panel-bridge.js` no longer carries inactive legacy `meeting-action`, `release-action`, or prompt action request paths; the live v2 request surface is now `tool-summary-sync`, conversation bookmark, shell, runtime, and page only
+- active hosted tool rail selection now persists `activeTool` through `storage.write-ui-preferences` instead of the old `panel/select-tool` fallback; `prompts` still pins `activePromptTab: library`
+- active conversation bridge in `content/panel-v2-composition-controller.js` now keeps count/fingerprint residue only; query/filter/copy/jump view-model logic no longer lives in extension
+- active `content/hosted-panel-bridge.js` no longer carries inactive legacy `meeting-action`, `release-action`, prompt action, conversation bookmark, or tool-selection/search request paths; the live v2 panel request surface is now `tool-summary-sync`, `toggle-panel`, `escape`, runtime, and page only
 - backup legacy reference verify scripts now live under `scripts/legacy-panel/*` instead of the active root `scripts/` namespace
 - active v2 prompt shell no longer keeps hosted-owned prompt store-load/storage/sync sidecars; extension prompt residue is now review float plus review handoff/persistence only
 - active v2 prompt review no longer mirrors result/error/open/pending state through the top snapshot; extension now sends only a monotonic external `requestId` signal and hosted review owns the request lifecycle plus escape dismiss
