@@ -45,6 +45,7 @@ Short version:
 - hosted meeting workspace browser capability implementation now lives in `background/meeting-workspace-capability.js`; `background/service-worker.js` keeps top-level gate + shared runtime wiring only
 - popup과 background meeting workspace capability는 이제 `shared/firebase-config.js`의 shared meeting setting normalization을 같이 재사용한다
 - background meeting workspace capability도 이제 `shared/provider-identity-cache.js`의 provider identity normalizer를 재사용한다
+- generic `browser.open-url` 탭 열기 구현은 이제 `background/browser-capability.js`에 모이고, service worker와 meeting workspace capability가 같은 browser adapter를 재사용한다
 - active `shared/storage.js` no longer carries dormant release/meeting accessor surface; those backup-only helpers now live under `backup/legacy-panel/shared/legacy-storage-accessors.js`
 - active `shared/constants.js` also no longer carries dormant release/meeting storage key/default contract; backup legacy helpers now own those fallback schema literals directly
 - active `shared/constants.js` / `shared/storage.js` no longer carry dormant `promptLibrary` local storage schema either; backup prompt storage/reference helpers now own that cache contract directly

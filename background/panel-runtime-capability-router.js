@@ -1,4 +1,4 @@
-/* global createMeetingShareLink, getInovaAccessToken, getMeetingFunctionsConfig, getPromptFunctionsConfig, getPromptRuntimeConfig, issueMeetingPanelAuth, issuePromptPanelAuth, openMeetingResult, openMeetingWorkspace, openReleaseUrl, revokeMeetingShareLink */
+/* global createMeetingShareLink, getInovaAccessToken, getMeetingFunctionsConfig, getPromptFunctionsConfig, getPromptRuntimeConfig, issueMeetingPanelAuth, issuePromptPanelAuth, openBrowserUrl, openMeetingResult, openMeetingWorkspace, revokeMeetingShareLink */
 
 (() => {
 const namespace = globalThis.InovaBookmarks || {};
@@ -39,7 +39,7 @@ async function handle(request) {
     return namespace.storage.updateUiPreferences(request?.partial && typeof request.partial === "object" ? request.partial : {});
   }
   if (action === "browser.open-url") {
-    return openReleaseUrl(request?.url);
+    return openBrowserUrl(request?.url);
   }
   if (action === "meeting.workspace.open") {
     return openMeetingWorkspace(request?.input, request?.providerIdentity);

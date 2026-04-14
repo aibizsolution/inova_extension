@@ -1,6 +1,7 @@
 (function initMeetingWorkspaceCapability(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const INOVA_ORIGIN = "https://inova.incross.com";
+  const browserCapability = namespace.browserCapability || {};
   const meetingConfig = namespace.firebaseConfig.meeting;
   const normalizeProviderIdentity = typeof namespace.providerIdentityCache?.normalizeProviderIdentity === "function"
     ? namespace.providerIdentityCache.normalizeProviderIdentity
@@ -159,12 +160,12 @@
         meetingId,
         mode,
       });
-      const openedTab = createBrowserTab(finalUrl);
+      const opened = await browserCapability.openUrl(finalUrl);
       logMeetingDebug("open.success", {
         finalUrl,
         meetingId,
         mode,
-        tabId: Number(openedTab?.id) || 0,
+        tabId: Number(opened?.tabId) || 0,
       });
       return {
         expiresAt: "",
@@ -173,7 +174,7 @@
           title: namespace.session.normalizeText(input?.title || sender?.tab?.title) || "새 회의 룸",
         },
         opened: true,
-        tabId: Number(openedTab?.id) || 0,
+        tabId: Number(opened?.tabId) || 0,
         url: finalUrl,
       };
     } catch (error) {
@@ -183,23 +184,6 @@
       });
       throw error;
     }
-  }
-
-  function createBrowserTab(url) {
-    const nextUrl = namespace.session.normalizeText(url);
-    if (!nextUrl) {
-      throw new Error("열 링크가 없어요.");
-    }
-    let openedTab = null;
-    chrome.tabs.create({ url: nextUrl }, (tab) => {
-      const runtimeError = chrome.runtime?.lastError;
-      if (runtimeError) {
-        console.warn("[i-Nova Service Worker] tab open failed", namespace.session.normalizeText(runtimeError.message) || runtimeError);
-        return;
-      }
-      openedTab = tab || null;
-    });
-    return openedTab;
   }
 
   async function buildHostedMeetingCleanUrl(input) {

@@ -11,6 +11,7 @@
     "hosting/meeting/index.js",
     "hosting/meeting/render.js",
     "hosting/meeting/shared.js",
+    "background/browser-capability.js",
     "background/meeting-workspace-capability.js",
     "background/service-worker.js",
     "background/panel-runtime-capability-router.js",

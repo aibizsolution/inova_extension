@@ -196,6 +196,7 @@ function verifyActiveHostedRuntimeStorageSurfaceStaysCompact() {
 
 function verifyActiveBackgroundMessageSurfaceStaysNarrow() {
   const serviceWorkerSource = fs.readFileSync(path.join(root, "background", "service-worker.js"), "utf8");
+  const browserCapabilitySource = fs.readFileSync(path.join(root, "background", "browser-capability.js"), "utf8");
   const meetingWorkspaceCapabilitySource = fs.readFileSync(
     path.join(root, "background", "meeting-workspace-capability.js"),
     "utf8"
@@ -204,6 +205,18 @@ function verifyActiveBackgroundMessageSurfaceStaysNarrow() {
   assert(
     serviceWorkerSource.includes("ACTIVE_BACKGROUND_MESSAGE_TYPES"),
     "background service worker should keep a dedicated active top-level message catalog"
+  );
+  assert(
+    serviceWorkerSource.includes('importScripts("browser-capability.js");'),
+    "background service worker should preload the dedicated browser capability module"
+  );
+  assert(
+    browserCapabilitySource.includes("chrome.tabs.create({ url: nextUrl }"),
+    "background browser capability should own the direct tab open adapter"
+  );
+  assert(
+    browserCapabilitySource.includes("namespace.browserCapability = {"),
+    "background browser capability should expose the shared browser capability namespace"
   );
   assert(
     serviceWorkerSource.includes('importScripts("meeting-workspace-capability.js");'),
@@ -249,6 +262,8 @@ function verifyActiveBackgroundMessageSurfaceStaysNarrow() {
     "resolveMeetingProviderIdentity(",
     "requestMeetingProviderIdentityFromInovaTabs(",
     "HOSTED_MEETING_ALLOWED_ORIGINS",
+    "async function openReleaseUrl(",
+    "function createBrowserTab(",
     "meetingListCache",
     "recentLoadResults",
     "recentPeekResults",
@@ -271,8 +286,24 @@ function verifyActiveBackgroundMessageSurfaceStaysNarrow() {
     "meeting workspace capability should reuse the shared provider identity cache normalizer"
   );
   assert(
+    meetingWorkspaceCapabilitySource.includes("browserCapability.openUrl"),
+    "meeting workspace capability should reuse the shared browser open-url adapter"
+  );
+  assert(
+    !serviceWorkerSource.includes("chrome.tabs.create("),
+    "background service worker should not open browser tabs directly"
+  );
+  assert(
+    !meetingWorkspaceCapabilitySource.includes("chrome.tabs.create("),
+    "meeting workspace capability should not open browser tabs directly"
+  );
+  assert(
     !meetingWorkspaceCapabilitySource.includes("function normalizeProviderIdentity("),
     "meeting workspace capability should not redefine its own provider identity normalizer"
+  );
+  assert(
+    !meetingWorkspaceCapabilitySource.includes("function createBrowserTab("),
+    "meeting workspace capability should not redefine its own browser tab opener"
   );
 }
 

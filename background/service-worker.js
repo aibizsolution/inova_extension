@@ -6,6 +6,7 @@ importScripts("../shared/storage.js");
 importScripts("../shared/firebase-config.js");
 importScripts("../shared/inova-auth.js");
 importScripts("../shared/cloud-api.js");
+importScripts("browser-capability.js");
 importScripts("meeting-workspace-capability.js");
 importScripts("panel-auth-cache.js");
 importScripts("panel-runtime-capability-router.js");
@@ -18,6 +19,7 @@ const ACTIVE_BACKGROUND_MESSAGE_TYPES = Object.freeze([
   "inova-meeting:probe-workspace-bridge",
   "inova-panel:invoke",
 ]);
+const browserCapability = namespace.browserCapability || {};
 const meetingWorkspaceCapability = namespace.meetingWorkspaceCapability || {};
 const panelAuthCache = namespace.panelAuthCache?.create?.(getInovaAccessToken);
 
@@ -64,37 +66,9 @@ async function issuePromptPanelAuth(providerIdentity) {
   return panelAuthCache.issuePromptPanelAuth(providerIdentity, { functionsConfig });
 }
 
-async function openReleaseUrl(url) {
-  const nextUrl = namespace.session.normalizeText(url);
-  if (!nextUrl) throw new Error("열 링크가 없어요.");
-  const openedTab = createBrowserTab(nextUrl);
-  return {
-    opened: true,
-    tabId: Number(openedTab?.id) || 0,
-    url: nextUrl,
-  };
-}
-
 async function issueMeetingPanelAuth(providerIdentity) {
   const functionsConfig = await meetingWorkspaceCapability.getMeetingFunctionsConfig();
   return panelAuthCache.issueMeetingPanelAuth(providerIdentity, { functionsConfig });
-}
-
-function createBrowserTab(url) {
-  const nextUrl = namespace.session.normalizeText(url);
-  if (!nextUrl) {
-    throw new Error("열 링크가 없어요.");
-  }
-  let openedTab = null;
-  chrome.tabs.create({ url: nextUrl }, (tab) => {
-    const runtimeError = chrome.runtime?.lastError;
-    if (runtimeError) {
-      console.warn("[i-Nova Service Worker] tab open failed", namespace.session.normalizeText(runtimeError.message) || runtimeError);
-      return;
-    }
-    openedTab = tab || null;
-  });
-  return openedTab;
 }
 
 async function getPromptFunctionsConfig() {
@@ -123,7 +97,7 @@ Object.assign(globalThis, {
   issuePromptPanelAuth,
   openMeetingResult: meetingWorkspaceCapability.openResult,
   openMeetingWorkspace: meetingWorkspaceCapability.openWorkspace,
-  openReleaseUrl,
+  openBrowserUrl: browserCapability.openUrl,
   revokeMeetingShareLink: meetingWorkspaceCapability.revokeShareLink,
 });
 
