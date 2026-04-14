@@ -51,12 +51,25 @@ if (fs.existsSync(manifestPath)) {
     }
   }
 
-  const webAccessibleResources = Array.isArray(manifest.web_accessible_resources)
-    ? manifest.web_accessible_resources.flatMap((entry) => Array.isArray(entry?.resources) ? entry.resources : [])
+  const webAccessibleEntries = Array.isArray(manifest.web_accessible_resources)
+    ? manifest.web_accessible_resources
     : [];
+  const webAccessibleResources = webAccessibleEntries.flatMap((entry) => Array.isArray(entry?.resources) ? entry.resources : []);
   for (const file of contract.webAccessibleResources || []) {
     if (!webAccessibleResources.includes(file)) {
       errors.push(`manifest web accessible resource 누락: ${file}`);
+    }
+  }
+  const webAccessibleMatches = webAccessibleEntries.flatMap((entry) => Array.isArray(entry?.matches) ? entry.matches : []);
+  for (const match of contract.webAccessibleMatches || []) {
+    if (!webAccessibleMatches.includes(match)) {
+      errors.push(`manifest web accessible match 누락: ${match}`);
+    }
+  }
+
+  for (const match of contract.manifestMeetingWorkspaceMatches || []) {
+    if (!(meetingWorkspaceScript?.matches || []).includes(match)) {
+      errors.push(`manifest meeting workspace match 누락: ${match}`);
     }
   }
 
@@ -65,6 +78,22 @@ if (fs.existsSync(manifestPath)) {
       errors.push(`manifest permission 누락: ${permission}`);
     }
   }
+  for (const permission of manifest.permissions || []) {
+    if (!(contract.requiredPermissions || []).includes(permission)) {
+      errors.push(`manifest permission이 계약 밖으로 넓어졌습니다: ${permission}`);
+    }
+  }
+  for (const permission of contract.requiredHostPermissions || []) {
+    if (!(manifest.host_permissions || []).includes(permission)) {
+      errors.push(`manifest host permission 누락: ${permission}`);
+    }
+  }
+  for (const permission of manifest.host_permissions || []) {
+    if (!(contract.requiredHostPermissions || []).includes(permission)) {
+      errors.push(`manifest host permission이 계약 밖으로 넓어졌습니다: ${permission}`);
+    }
+  }
+  verifyExtensionPageFrameSrc(manifest);
 }
 
 const popupPath = path.join(root, "popup", "index.html");
@@ -440,5 +469,39 @@ function verifyCapabilityTransportIsolation(source, relativePath, entryName) {
   }
   if (/invokeRuntime\s*\(\s*\{[\s\S]{0,220}?action:\s*"/.test(source)) {
     errors.push(`${relativePath}에 raw runtime capability action literal이 남아 있습니다. transport 문자열은 extension-capability-client.js로 모아야 합니다.`);
+  }
+}
+
+function verifyExtensionPageFrameSrc(manifest) {
+  const csp = String(manifest?.content_security_policy?.extension_pages || "");
+  if (!csp) {
+    errors.push("manifest extension_pages CSP가 없습니다.");
+    return;
+  }
+
+  const frameSrcMatch = csp.match(/frame-src\s+([^;]+)/i);
+  if (!frameSrcMatch?.[1]) {
+    errors.push("manifest extension_pages CSP에 frame-src가 없습니다.");
+    return;
+  }
+
+  const actualOrigins = new Set(
+    frameSrcMatch[1]
+      .split(/\s+/)
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+  );
+  const expectedOrigins = new Set(contract.extensionPageFrameSrcOrigins || []);
+
+  for (const origin of expectedOrigins) {
+    if (!actualOrigins.has(origin)) {
+      errors.push(`manifest frame-src origin 누락: ${origin}`);
+    }
+  }
+
+  for (const origin of actualOrigins) {
+    if (!expectedOrigins.has(origin)) {
+      errors.push(`manifest frame-src origin이 계약 밖으로 넓어졌습니다: ${origin}`);
+    }
   }
 }

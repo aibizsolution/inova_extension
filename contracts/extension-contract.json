@@ -209,6 +209,15 @@
     "content/frame-proxy.html",
     "content/frame-proxy.js"
   ],
+  "webAccessibleMatches": [
+    "https://inova.incross.com/*"
+  ],
+  "manifestMeetingWorkspaceMatches": [
+    "https://browser-extension-main.web.app/meeting/*",
+    "https://browser-extension-v2.web.app/meeting/*",
+    "http://127.0.0.1/meeting/*",
+    "http://localhost/meeting/*"
+  ],
   "requiredStorageKeys": [
     "settings",
     "pausedSessions",
@@ -220,6 +229,22 @@
     "activeTab",
     "tabs",
     "cookies"
+  ],
+  "requiredHostPermissions": [
+    "https://inova.incross.com/*",
+    "https://asia-northeast3-browser-extension-main.cloudfunctions.net/*",
+    "https://browser-extension-main.web.app/*",
+    "https://browser-extension-v2.web.app/*",
+    "http://127.0.0.1:5000/*",
+    "http://localhost:5000/*",
+    "http://127.0.0.1:5001/*",
+    "http://localhost:5001/*"
+  ],
+  "extensionPageFrameSrcOrigins": [
+    "https://browser-extension-main.web.app",
+    "https://browser-extension-v2.web.app",
+    "http://127.0.0.1:5000",
+    "http://localhost:5000"
   ],
   "pageCapabilityActions": [
     "conversation.read-state",
