@@ -68,6 +68,14 @@ function verifyActiveManifestDropsDormantPromptLibraryHelper() {
     !jsFiles.includes("shared/prompt-library.js"),
     "active manifest should not preload the dormant shared/prompt-library.js helper"
   );
+  assert(
+    !jsFiles.includes("shared/provider-identity.js"),
+    "active manifest should not preload the browser-only provider identity sensor from shared root"
+  );
+  assert(
+    jsFiles.includes("content/provider-identity-sensor.js"),
+    "active manifest should preload the content-owned provider identity sensor"
+  );
 }
 
 function verifyActiveSharedRootDropsLegacyCloudSyncHelper() {
@@ -78,6 +86,14 @@ function verifyActiveSharedRootDropsLegacyCloudSyncHelper() {
   assert(
     fs.existsSync(path.join(root, "backup", "legacy-panel", "shared", "cloud-sync.js")),
     "backup legacy shared lane should keep the legacy cloud-sync helper"
+  );
+  assert(
+    !fs.existsSync(path.join(root, "shared", "provider-identity.js")),
+    "active shared root should not keep the browser-only provider identity sensor"
+  );
+  assert(
+    fs.existsSync(path.join(root, "backup", "legacy-panel", "shared", "provider-identity.js")),
+    "backup legacy shared lane should keep the legacy provider identity sensor"
   );
 }
 

@@ -45,7 +45,7 @@
 | 먼저 볼 파일 | `hosting/extension-v2/panel/prompt-library-controller.js`, `hosting/extension-v2/panel/prompt-library-firestore-client.js`, `hosting/extension-v2/panel/prompt-view.js`, `content/panel-v2-prompt-controller.js`, `shared/prompt-library.js` (inactive helper/reference), `backup/legacy-panel/shared/prompt-cloud-sync.js` (legacy prompt sync reference), `backup/legacy-panel/shared/prompt-storage.js` (legacy prompt storage reference), `backup/legacy-panel/features/prompt-library/files.js` (legacy reference), `backup/legacy-panel/features/prompt-library/prompt-manager.js` (legacy reference) |
 | 관련 프론트 경로 | `content/main.js`, `content/panel-v2-prompt-controller.js`, `hosting/extension-v2/panel/prompt-library-controller.js`, `hosting/extension-v2/panel/prompt-view.js`, `hosting/extension-v2/panel/prompt-tool-view.js`, `backup/legacy-panel/prompt-view.js` (legacy reference), `backup/legacy-panel/prompt-hub-view.js` (legacy reference) |
 | 관련 functions 경로 | `functions/features/prompt-library/register.js` |
-| feature-owned shared | `shared/provider-identity-cache.js` (generic provider identity cache only), `shared/storage.js` (generic local storage only), `shared/provider-identity.js`, `shared/prompt-library.js` (inactive helper/reference, active manifest preload 아님), `backup/legacy-panel/shared/cloud-sync.js` (inactive legacy cloud sync base helper), `backup/legacy-panel/shared/prompt-cloud-sync.js` (inactive legacy sync helper), `backup/legacy-panel/shared/prompt-storage.js` (inactive legacy storage helper) |
+| feature-owned shared | `shared/provider-identity-cache.js` (generic provider identity cache only), `shared/storage.js` (generic local storage only), `content/provider-identity-sensor.js` (page localStorage identity sensor), `shared/prompt-library.js` (inactive helper/reference, active manifest preload 아님), `backup/legacy-panel/shared/provider-identity.js` (legacy reference), `backup/legacy-panel/shared/cloud-sync.js` (inactive legacy cloud sync base helper), `backup/legacy-panel/shared/prompt-cloud-sync.js` (inactive legacy sync helper), `backup/legacy-panel/shared/prompt-storage.js` (inactive legacy storage helper) |
 | 관련 데이터 경계 | `prompt_libraries`, `prompt_library_orders`, `prompt_library_chunks`, `integration_inova_accounts.promptLibraryMeta` |
 | 보통 건드리지 말 범위 | meeting, prompt-store, prompt-review, release |
 | 최소 검증 | 프롬프트 탭의 `내 요청` 렌더링, 항목 1건 저장/수정, 입력창 주입 1회 |
@@ -61,7 +61,7 @@
 | 먼저 볼 파일 | `hosting/extension-v2/panel/prompt-store-controller.js`, `hosting/extension-v2/panel/store-view.js`, `content/panel-v2-prompt-controller.js`, `shared/prompt-store.js`, `backup/legacy-panel/features/prompt-store/store-manager.js` (legacy reference), `backup/legacy-panel/features/prompt-store/prompt-realtime-manager.js` (legacy reference) |
 | 관련 프론트 경로 | `content/main.js`, `content/panel-v2-prompt-controller.js`, `hosting/extension-v2/panel/prompt-store-controller.js`, `hosting/extension-v2/panel/store-view.js`, `hosting/extension-v2/panel/prompt-tool-view.js`, `backup/legacy-panel/store-view.js` (legacy reference), `backup/legacy-panel/prompt-hub-view.js` (legacy reference) |
 | 관련 functions 경로 | `functions/features/prompt-store/store-service.js` |
-| feature-owned shared | `shared/prompt-store.js`, `shared/provider-identity.js` |
+| feature-owned shared | `shared/prompt-store.js`, `content/provider-identity-sensor.js`, `backup/legacy-panel/shared/provider-identity.js` (legacy reference) |
 | 관련 데이터 경계 | `prompt_store_entries`, `prompt_store_entry_details`, `prompt_store_feed_pages`, `prompt_store_meta`, 하위 likes/imports/views |
 | 보통 건드리지 말 범위 | meeting, prompt-library, release |
 | 최소 검증 | 스토어 탭 `전체` 목록, 상세 보기 1건, 좋아요 또는 가져오기 1회, 탭 복귀 시 목록 유지 |
@@ -77,7 +77,7 @@
 | 먼저 볼 파일 | `content/features/prompt-review/prompt-review-manager.js`, `hosting/extension-v2/panel/prompt-review-controller.js`, `hosting/extension-v2/panel/prompt-review-view.js`, `content/features/prompt-review/composer-review-float.js` |
 | 관련 프론트 경로 | `content/main.js`, `content/composer.js`, `content/panel-v2-prompt-controller.js`, `hosting/extension-v2/panel/prompt-review-controller.js`, `hosting/extension-v2/panel/prompt-review-view.js`, `hosting/extension-v2/panel/prompt-tool-view.js`, `backup/legacy-panel/prompt-review-view.js` (legacy reference), `backup/legacy-panel/prompt-hub-view.js` (legacy reference) |
 | 관련 functions 경로 | `functions/features/prompt-review/prompt-review-service.js` |
-| feature-owned shared | `shared/provider-identity.js` |
+| feature-owned shared | `content/provider-identity-sensor.js`, `backup/legacy-panel/shared/provider-identity.js` (legacy reference) |
 | 관련 데이터 경계 | 원격 저장소 없음, Functions `reviewInovaPrompt` 호출과 rate-limit 기록 |
 | 보통 건드리지 말 범위 | meeting, prompt-store, release |
 | 최소 검증 | 입력창 우측 상단 평가 버튼 노출, 평가 결과 표시, 보완 프롬프트 반영 |
