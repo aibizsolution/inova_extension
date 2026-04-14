@@ -3,7 +3,6 @@
   const RUNTIME_PROVIDER_IDENTITY_REQUEST = "inova-meeting:get-provider-identity";
 
   function create(state) {
-    let hostedOwnedPromptController = null;
     let renderController = null;
     const render = () => renderController?.render();
     const panelV2ShellBridge = namespace.panelV2ShellBridge;
@@ -34,19 +33,17 @@
     const hostedOwnedConversationBridge = createHostedOwnedConversationBridge(state, { render });
     const panelShellController = panelV2ShellBridge.createShellController(state, {
       bookmarkController: hostedOwnedConversationBridge,
-      getPromptController: () => hostedOwnedPromptController,
       isExtensionContextInvalidatedError: runtimeDiagnostics.isExtensionContextInvalidatedError,
       releaseManager: hostedOwnedIdleReleaseLifecycle,
       render,
     });
-    const sharedPromptController = namespace.panelV2PromptController.create(state, {
+    const hostedOwnedPromptController = namespace.panelV2PromptController.create(state, {
       ...runtimeFlags,
       lockUiPreferenceSelection: panelShellController.lockUiPreferenceSelection,
       persistActiveTool: panelShellController.persistActiveTool,
       render,
     });
     const hostedOwnedPromptSnapshot = createHostedOwnedPromptSnapshotBridge();
-    hostedOwnedPromptController = sharedPromptController;
 
     const routeStateController = namespace.routeStateController.create(state, {
       applyUiPreferenceLock: panelShellController.applyUiPreferenceLock,

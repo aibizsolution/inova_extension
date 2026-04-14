@@ -9,9 +9,11 @@ const root = path.resolve(__dirname, "..");
 
 async function main() {
   await verifyMeetingAndReleaseToolSelection();
-  await verifyPromptAliasDelegation();
+  await verifyPromptLibrarySelection();
+  await verifyStoreAliasSelection();
   await verifyBookmarkQueryRoutingAndHandleCount();
   verifyPromptQueryFallbackIsDropped();
+  verifyPromptSelectionStaysShellOwned();
   await verifyHandlePositionAndUiPreferenceLock();
   console.log("[verify-panel-shell-controller] V2 shell bridge shell contract passed");
 }
@@ -38,12 +40,30 @@ async function verifyMeetingAndReleaseToolSelection() {
   });
 }
 
-async function verifyPromptAliasDelegation() {
+async function verifyPromptLibrarySelection() {
+  const harness = createHarness({
+    activePromptTab: "store",
+    activeTool: "meeting",
+    uiPreferenceTool: "meeting",
+  });
+
+  assert.equal(await harness.controller.selectTool("prompts"), true);
+  assert.equal(harness.state.activeTool, "prompts");
+  assert.deepEqual(harness.persistCalls[0], {
+    activePromptTab: "library",
+    activeTool: "prompts",
+  });
+}
+
+async function verifyStoreAliasSelection() {
   const harness = createHarness();
 
   assert.equal(await harness.controller.selectTool("store"), true);
-  assert.deepEqual(harness.promptSelectToolCalls, ["store"]);
-  assert.deepEqual(harness.persistCalls, []);
+  assert.equal(harness.state.activeTool, "prompts");
+  assert.deepEqual(harness.persistCalls[0], {
+    activePromptTab: "store",
+    activeTool: "prompts",
+  });
 }
 
 async function verifyBookmarkQueryRoutingAndHandleCount() {
@@ -85,6 +105,21 @@ function verifyPromptQueryFallbackIsDropped() {
   assert.equal(harness.controller.submitQuery("store", "공개"), false);
 }
 
+function verifyPromptSelectionStaysShellOwned() {
+  const source = fs.readFileSync(path.join(root, "content", "panel-v2-shell-bridge.js"), "utf8");
+
+  assert.equal(
+    source.includes("getPromptController"),
+    false,
+    "v2 shell bridge should stop reading generic prompt tool selection back through the prompt controller"
+  );
+  assert.equal(
+    source.includes("promptController && await promptController.selectTool(toolId)"),
+    false,
+    "v2 shell bridge should keep prompt/store tool selection inside the shell instead of delegating it back to the prompt controller"
+  );
+}
+
 async function verifyHandlePositionAndUiPreferenceLock() {
   const harness = createHarness();
 
@@ -113,7 +148,6 @@ function createHarness(options = {}) {
   const bookmarkSubmitCalls = [];
   const handleUpdates = [];
   const persistCalls = [];
-  const promptSelectToolCalls = [];
   const releaseEnsureCalls = [];
   const renderCalls = [];
 
@@ -182,16 +216,6 @@ function createHarness(options = {}) {
     },
   };
 
-  const promptController = {
-    async selectTool(toolId) {
-      if (toolId === "prompts" || toolId === "store") {
-        promptSelectToolCalls.push(toolId);
-        return true;
-      }
-      return false;
-    },
-  };
-
   const controller = context.InovaBookmarks.panelV2ShellBridge.createShellController(state, {
     bookmarkController: {
       submitQuery(value) {
@@ -202,9 +226,6 @@ function createHarness(options = {}) {
         bookmarkQueryCalls.push(value);
         return true;
       },
-    },
-    getPromptController() {
-      return promptController;
     },
     isExtensionContextInvalidatedError() {
       return false;
@@ -228,7 +249,6 @@ function createHarness(options = {}) {
     controller,
     handleUpdates,
     persistCalls,
-    promptSelectToolCalls,
     releaseEnsureCalls,
     renderCalls,
     state,

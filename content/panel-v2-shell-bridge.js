@@ -429,7 +429,6 @@
       submitQuery() { return false; },
       updateQuery() { return false; },
     };
-    const getPromptController = typeof deps.getPromptController === "function" ? deps.getPromptController : () => null;
     const isExtensionContextInvalidatedError = typeof deps.isExtensionContextInvalidatedError === "function"
       ? deps.isExtensionContextInvalidatedError
       : () => false;
@@ -517,33 +516,27 @@
     }
 
     async function selectTool(toolId) {
-      const promptController = getPromptController();
-      if (promptController && await promptController.selectTool(toolId)) {
-        return true;
-      }
-
-      state.activeTool = normalizeToolId(toolId);
-      const nextPromptTab = state.activeTool === "prompts"
+      const nextTool = normalizeToolId(toolId);
+      const nextPromptTab = toolId === "store"
+        ? "store"
+        : nextTool === "prompts"
         ? "library"
         : normalizePromptTab(state.uiPreferences.activePromptTab);
+      state.activeTool = nextTool;
       state.uiPreferences = namespace.storage.mergeUiPreferences(state.uiPreferences, {
         activePromptTab: nextPromptTab,
-        activeTool: state.activeTool,
+        activeTool: nextTool,
       });
-      lockUiPreferenceSelection(state.activeTool, nextPromptTab);
-      if (state.activeTool === "release") {
+      lockUiPreferenceSelection(nextTool, nextPromptTab);
+      if (nextTool === "release") {
         releaseManager.ensureChecked(false, true);
       }
       render();
-      await persistActiveTool(state.activeTool, nextPromptTab);
+      await persistActiveTool(nextTool, nextPromptTab);
       return true;
     }
 
     function submitQuery(toolId, value) {
-      const promptController = getPromptController();
-      if (typeof promptController?.submitQuery === "function" && promptController.submitQuery(toolId, value)) {
-        return true;
-      }
       if (normalizeToolId(toolId) !== "bookmarks") {
         return false;
       }
@@ -568,11 +561,7 @@
       }
     }
 
-    function updateQuery(toolId, value, options = {}) {
-      const promptController = getPromptController();
-      if (typeof promptController?.updateQuery === "function" && promptController.updateQuery(toolId, value, options)) {
-        return true;
-      }
+    function updateQuery(toolId, value) {
       if (normalizeToolId(toolId) !== "bookmarks") {
         return false;
       }

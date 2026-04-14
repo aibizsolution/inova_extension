@@ -24,7 +24,7 @@ Last updated: 2026-04-14
 
 - `conversation`: hosted owns list/search/copy/jump UI state; extension only provides page adapter plus thin signals such as count/active/fingerprint.
 - `release`: hosted owns latest/history/download surface and compact release summary sync; extension only brokers browser/runtime actions plus compact `toolSummaries.release(count + snapshotFingerprint)`.
-- `prompt-library`, `prompt-store`, `prompt-review`: hosted owns prompt tab transition plus prompt/store/review action routing; extension keeps page/runtime bridge, review float, and review handoff/persistence only.
+- `prompt-library`, `prompt-store`, `prompt-review`: hosted owns prompt tab transition plus prompt/store/review action routing; extension keeps page/runtime bridge, review float, and review-triggered handoff/persistence only.
 - `meeting hub` / `meeting workspace`: hosted owns list/action UI, Firestore meeting-list subscription, and launch tracing; v2 hosted panel no longer falls back to top-panel `meeting-action` dispatch, and v2 extension now carries only count-only `toolSummaries.meeting(count)` residue outside the hub path.
 
 Short version:
@@ -76,6 +76,7 @@ Short version:
 - active `content/hosted-panel-bridge.js` no longer carries inactive legacy `meeting-action` / prompt action request paths; the live v2 request surface is now `tool-summary-sync`, release, conversation bookmark, shell, runtime, and page only
 - backup legacy reference verify scripts now live under `scripts/legacy-panel/*` instead of the active root `scripts/` namespace
 - active v2 prompt shell no longer keeps hosted-owned prompt store-load/storage/sync sidecars; extension prompt residue is now review float plus review handoff/persistence only
+- active v2 shell now keeps generic `prompts/store` tool selection in `panel-v2-shell-bridge`; `panel-v2-prompt-controller.js` no longer intercepts normal prompt/store tool picks
 - active v2 prompt snapshot no longer mirrors hosted prompt activeTab/search state back into extension state
 - active v2 prompt state factory and route hydration no longer mirror hosted-owned prompt library/store/editor buckets inside extension state
 - active v2 route/shell no longer keeps legacy `activeTool: store`; old stored values normalize immediately to `activeTool: prompts` plus `activePromptTab: store`

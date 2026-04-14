@@ -18,7 +18,6 @@
       buildToolState,
       ensureReviewFloat,
       handleEscape,
-      selectTool,
     };
 
     function buildToolState() {
@@ -50,18 +49,6 @@
       return promptReviewManager.consumeEscape();
     }
 
-    async function selectTool(toolId) {
-      if (toolId === "store") {
-        await setPromptToolState("store");
-        return true;
-      }
-      if (toolId === "prompts") {
-        await setPromptToolState("library");
-        return true;
-      }
-      return false;
-    }
-
     function showPromptTab(promptTabId) {
       const nextPromptTab = normalizePromptTab(promptTabId);
       state.open = true;
@@ -75,18 +62,6 @@
       persistActiveTool("prompts", nextPromptTab).catch((error) => {
         console.error("[i-Nova Bookmarks] prompt tab save failed", error);
       });
-    }
-
-    async function setPromptToolState(promptTabId) {
-      const nextPromptTab = normalizePromptTab(promptTabId);
-      state.activeTool = "prompts";
-      state.uiPreferences = namespace.storage.mergeUiPreferences(state.uiPreferences, {
-        activePromptTab: nextPromptTab,
-        activeTool: "prompts",
-      });
-      lockUiPreferenceSelection("prompts", nextPromptTab);
-      render();
-      await persistActiveTool("prompts", nextPromptTab);
     }
 
     function normalizePromptTab(promptTabId) {
