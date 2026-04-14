@@ -76,6 +76,14 @@ function verifyActiveManifestDropsDormantPromptLibraryHelper() {
     jsFiles.includes("content/provider-identity-sensor.js"),
     "active manifest should preload the content-owned provider identity sensor"
   );
+  assert(
+    !jsFiles.includes("shared/frame-proxy.js"),
+    "active manifest should not preload the browser-only frame proxy helper from shared root"
+  );
+  assert(
+    jsFiles.includes("content/frame-proxy-helper.js"),
+    "active manifest should preload the content-owned frame proxy helper"
+  );
 }
 
 function verifyActiveSharedRootDropsLegacyCloudSyncHelper() {
@@ -90,6 +98,10 @@ function verifyActiveSharedRootDropsLegacyCloudSyncHelper() {
   assert(
     !fs.existsSync(path.join(root, "shared", "provider-identity.js")),
     "active shared root should not keep the browser-only provider identity sensor"
+  );
+  assert(
+    !fs.existsSync(path.join(root, "shared", "frame-proxy.js")),
+    "active shared root should not keep the browser-only frame proxy helper"
   );
   assert(
     fs.existsSync(path.join(root, "backup", "legacy-panel", "shared", "provider-identity.js")),

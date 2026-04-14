@@ -48,6 +48,7 @@ Short version:
 - generic `browser.open-url` 탭 열기 구현은 이제 `background/browser-capability.js`에 모이고, service worker와 meeting workspace capability가 같은 browser adapter를 재사용한다
 - panel auth/access-token/prompt runtime config wrapper도 이제 `background/panel-session-capability.js`에 모이고, service worker는 top-level gate + helper wiring만 유지한다
 - browser-only provider identity sensor도 active shared root를 떠나 `content/provider-identity-sensor.js`에 있고, legacy reference만 `backup/legacy-panel/shared/provider-identity.js`에 남긴다
+- local hosted panel frame proxy resolver도 active shared root를 떠나 `content/frame-proxy-helper.js`에 있고, active shared root는 browser-agnostic core만 유지한다
 - active `shared/storage.js` no longer carries dormant release/meeting accessor surface; those backup-only helpers now live under `backup/legacy-panel/shared/legacy-storage-accessors.js`
 - active `shared/constants.js` also no longer carries dormant release/meeting storage key/default contract; backup legacy helpers now own those fallback schema literals directly
 - active `shared/constants.js` / `shared/storage.js` no longer carry dormant `promptLibrary` local storage schema either; backup prompt storage/reference helpers now own that cache contract directly
