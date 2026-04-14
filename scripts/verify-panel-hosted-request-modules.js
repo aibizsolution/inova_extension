@@ -19,6 +19,10 @@ function verifyHostedBridgeRequestModuleContract() {
     path.join(root, "content", "panel.js"),
     "utf8"
   );
+  const panelHostBridgeSource = fs.readFileSync(
+    path.join(root, "content", "panel-host-bridge.js"),
+    "utf8"
+  );
   const bridgeRequestSource = fs.readFileSync(
     path.join(root, "content", "hosted-panel-bridge.js"),
     "utf8"
@@ -28,18 +32,29 @@ function verifyHostedBridgeRequestModuleContract() {
     Array.isArray(entry?.matches) && entry.matches.includes("https://inova.incross.com/*")
   );
   const scriptList = Array.isArray(mainContentScript?.js) ? mainContentScript.js : [];
-  const helperIndex = scriptList.indexOf("content/hosted-panel-bridge.js");
+  const contractHelperIndex = scriptList.indexOf("content/hosted-panel-bridge.js");
+  const hostBridgeIndex = scriptList.indexOf("content/panel-host-bridge.js");
   const panelIndex = scriptList.indexOf("content/panel.js");
 
-  assert(helperIndex !== -1, "manifest should load the hosted panel bridge helper");
-  assert(panelIndex !== -1 && helperIndex < panelIndex, "manifest should load the hosted panel bridge helper before content/panel.js");
+  assert(contractHelperIndex !== -1, "manifest should load the hosted panel bridge contract helper");
+  assert(hostBridgeIndex !== -1, "manifest should load the panel host bridge helper");
+  assert(panelIndex !== -1 && contractHelperIndex < panelIndex, "manifest should load the hosted panel bridge contract helper before content/panel.js");
+  assert(panelIndex !== -1 && hostBridgeIndex < panelIndex, "manifest should load the panel host bridge helper before content/panel.js");
   assert(
-    topPanelSource.includes("namespace.panelHostedBridgeRequest?.handle?."),
-    "content/panel.js should delegate bridge-domain request routing to the dedicated helper module"
+    topPanelSource.includes("panelHostBridge.create"),
+    "content/panel.js should delegate hosted bridge endpoint wiring to the dedicated helper module"
   );
   assert(
     !topPanelSource.includes("function handleBridgeRequest("),
     "content/panel.js should not keep inline bridge request routing once the bridge helper exists"
+  );
+  assert(
+    !topPanelSource.includes("function createHostedBridge("),
+    "content/panel.js should not keep inline hosted bridge creation once the panel host bridge helper exists"
+  );
+  assert(
+    panelHostBridgeSource.includes("namespace.panelHostedBridgeRequest?.handle?."),
+    "panel host bridge helper should delegate bridge-domain request routing to the dedicated hosted bridge request helper"
   );
   [
     "content/panel-hosted-meeting-request.js",

@@ -78,7 +78,7 @@ Short version:
 - `content/panel.js` no longer clones the full render payload into hosted bridge snapshots; v2 render now passes a prebuilt `panelSnapshot` and the host just brokers view + bridge envelope
 - top-panel snapshot trace shaping now comes from v2 shell `panelTrace`; `content/panel.js` no longer reads prompt review detail directly out of hosted tool state
 - top console trace policy/summary formatting now lives in `content/panel-console-trace.js`; `content/panel.js` no longer carries feature-specific always-trace rules inline
-- hosted panel iframe target/status/handshake/render batching now lives in `content/panel-host-runtime.js`; `content/panel.js` keeps the host element, handle interaction, and bridge endpoint only
+- hosted panel iframe target/status/handshake/render batching now lives in `content/panel-host-runtime.js`; hosted bridge endpoint/page event emit now lives in `content/panel-host-bridge.js`; `content/panel.js` keeps the host element and handle interaction only
 - active `content/hosted-panel-bridge.js` no longer carries inactive legacy `meeting-action`, `release-action`, or prompt action request paths; the live v2 request surface is now `tool-summary-sync`, conversation bookmark, shell, runtime, and page only
 - backup legacy reference verify scripts now live under `scripts/legacy-panel/*` instead of the active root `scripts/` namespace
 - active v2 prompt shell no longer keeps hosted-owned prompt store-load/storage/sync sidecars; extension prompt residue is now review float plus review handoff/persistence only
@@ -233,7 +233,7 @@ Start files:
 ## Recommended Next Steps
 
 1. Read `docs/current-handoff.md`, `docs/development-philosophy.md`, `docs/refactoring-plan.md`, and `docs/runtime-architecture.md`.
-2. Start with `meeting residue`, not with another bug hunt, unless the same hosted lane blocks the next slice.
+2. Start with `common shell cleanup` or `legacy isolation`, not with another bug hunt, unless the same hosted lane blocks the next slice.
 3. If a doc still describes the old ownership, fix it in the same task.
 4. Run `npm.cmd run verify` and commit each bounded slice.
 5. Only smoke-test the paths needed to validate the boundary that moved.

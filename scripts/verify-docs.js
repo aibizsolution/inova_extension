@@ -69,6 +69,7 @@ const requiredFiles = [
   "content/panel-v2-composition-controller.js",
   "content/panel-v2-shell-bridge.js",
   "content/panel-host-runtime.js",
+  "content/panel-host-bridge.js",
   "content/hosted-panel-bridge.js",
   "shared/product-lane.js",
   "backup/legacy-panel/panel-bookmark-controller.js",
@@ -324,7 +325,15 @@ const codeChecks = [
     file: "content/panel.js",
     patterns: [
       /panelHostRuntime\.create/,
+      /panelHostBridge\.create/,
+    ],
+  },
+  {
+    file: "content/panel-host-bridge.js",
+    patterns: [
+      /hostedPanelBridge\.create/,
       /panelHostedBridgeRequest\?\.handle\?\./,
+      /emitPageEvent/,
     ],
   },
   {

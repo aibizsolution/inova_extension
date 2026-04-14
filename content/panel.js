@@ -3,9 +3,13 @@
   const HANDSHAKE_TIMEOUT_MS = 4000;
   let panelHost = null;
   const panelConsoleTrace = namespace.panelConsoleTrace;
+  const panelHostBridge = namespace.panelHostBridge;
   const panelHostRuntime = namespace.panelHostRuntime;
   if (!panelConsoleTrace || typeof panelConsoleTrace.create !== "function") {
     throw new Error("panelConsoleTrace must load before contentPanel");
+  }
+  if (!panelHostBridge || typeof panelHostBridge.create !== "function") {
+    throw new Error("panelHostBridge must load before contentPanel");
   }
   if (!panelHostRuntime || typeof panelHostRuntime.create !== "function") {
     throw new Error("panelHostRuntime must load before contentPanel");
@@ -23,6 +27,11 @@
     normalizeText,
     readExtensionVersion,
   });
+  const hostBridge = panelHostBridge.create({
+    hostRuntime,
+    logConsoleTrace,
+    normalizeText,
+  });
 
   function ensurePanel(callbacks) {
     let host = getPanelHost();
@@ -33,7 +42,7 @@
       });
       host.__callbacks = callbacks;
       host.__panelElements = host.__panelElements || hostRuntime.resolveElements(host);
-      host.__bridge = host.__bridge || createHostedBridge(host);
+      host.__bridge = host.__bridge || hostBridge.createHostedBridge(host);
       return host;
     }
     host = document.createElement("div");
@@ -46,7 +55,7 @@
       hostId: host.id,
     });
     host.__panelElements = hostRuntime.resolveElements(host);
-    host.__bridge = createHostedBridge(host);
+    host.__bridge = hostBridge.createHostedBridge(host);
     const { frame, handle } = host.__panelElements;
     installHandleInteractions(host, handle, callbacks);
     frame?.addEventListener("load", () => hostRuntime.handleFrameLoad(host));
@@ -67,65 +76,6 @@
     }
     panelHost = document.getElementById("inova-bookmark-host");
     return panelHost;
-  }
-
-  function createHostedBridge(host) {
-    const bridge = namespace.hostedPanelBridge.create({
-      onError: ({ error }) => {
-        const message = normalizeText(error instanceof Error ? error.message : error) || "호스팅 패널과 연결하지 못했어요.";
-        logConsoleTrace("panel", "09.top.panel.bridge.error", {
-          message,
-        });
-        hostRuntime.updateStatusBanner(host, {
-          text: message,
-          tone: "error",
-        });
-      },
-      onReadyChange: ({ ready }) => {
-        hostRuntime.handleBridgeReadyChange(host, ready);
-      },
-      onRequest: async (request) => {
-        const isTransportTrace = isTraceTransportRequest(request);
-        if (!isTransportTrace) {
-          logConsoleTrace("panel", "20.top.panel.bridge.request.received", {
-            action: normalizeText(request?.payload?.action),
-            domain: normalizeText(request?.domain),
-            requestId: normalizeText(request?.requestId),
-          });
-        }
-        try {
-          const result = (await namespace.panelHostedBridgeRequest?.handle?.(request, {
-            callbacks: host.__callbacks || {},
-            logConsoleTrace,
-            normalizeText,
-          })) || {
-            handled: false,
-            result: null,
-          };
-          if (!isTransportTrace) {
-            logConsoleTrace("panel", "21.top.panel.bridge.request.completed", {
-              action: normalizeText(request?.payload?.action),
-              domain: normalizeText(request?.domain),
-              requestId: normalizeText(request?.requestId),
-            });
-          }
-          return result;
-        } catch (error) {
-          if (!isTransportTrace) {
-            logConsoleTrace("panel", "21.top.panel.bridge.request.error", {
-              action: normalizeText(request?.payload?.action),
-              domain: normalizeText(request?.domain),
-              error: normalizeText(error instanceof Error ? error.message : String(error || "")),
-              requestId: normalizeText(request?.requestId),
-            });
-          }
-          throw error;
-        }
-      },
-    });
-    bridge.attach();
-    logConsoleTrace("panel", "03.top.panel.bridge.attached", {});
-    return bridge;
   }
 
   function readExtensionVersion() {
@@ -229,23 +179,16 @@
     return namespace.session?.normalizeText?.(value) || String(value || "").trim();
   }
 
-  function isTraceTransportRequest(request) {
-    return normalizeText(request?.domain) === "page"
-      && normalizeText(request?.payload?.action) === "log-trace";
-  }
-
   namespace.contentPanel = {
     ensurePanel,
     focusBookmark(bookmarkId) {
-      panelHost?.__bridge?.emitEvent?.("page", {
-        action: "focus-bookmark",
+      hostBridge.emitPageEvent(panelHost, "focus-bookmark", {
         bookmarkId: normalizeText(bookmarkId),
       });
     },
     renderPanel,
     setActiveBookmark(bookmarkId) {
-      panelHost?.__bridge?.emitEvent?.("page", {
-        action: "set-active-bookmark",
+      hostBridge.emitPageEvent(panelHost, "set-active-bookmark", {
         bookmarkId: normalizeText(bookmarkId),
       });
     },
