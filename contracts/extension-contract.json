@@ -19,6 +19,7 @@
     "shared/inova-auth.js",
     "shared/product-lane.js",
     "shared/provider-identity-cache.js",
+    "backup/legacy-panel/background/meeting-list-cache.js",
     "backup/legacy-panel/shared/meeting-bridge.js",
     "backup/legacy-panel/shared/meeting-debug.js",
     "backup/legacy-panel/shared/legacy-storage-accessors.js",
@@ -176,6 +177,11 @@
     "meeting.result.open",
     "meeting.share.create",
     "meeting.share.revoke"
+  ],
+  "backgroundMessageTypes": [
+    "inova-meeting:authorize-workspace-access",
+    "inova-meeting:probe-workspace-bridge",
+    "inova-panel:invoke"
   ],
   "requiredDocKeywords": [
     "팝업 작업실 연결 설정",

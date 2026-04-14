@@ -15,6 +15,7 @@ function main() {
   verifyActiveHostedPanelAssetsStayOutOfDeadLegacyFiles();
   verifyActiveHostedBridgeRequestSurfaceStaysGeneric();
   verifyActiveHostedRuntimeStorageSurfaceStaysCompact();
+  verifyActiveBackgroundMessageSurfaceStaysNarrow();
   verifyActivePromptShellContractDropsLegacyName();
   console.log("[verify-legacy-isolation] Active v2 legacy isolation contract passed");
 }
@@ -191,6 +192,67 @@ function verifyActiveHostedRuntimeStorageSurfaceStaysCompact() {
     !routerSource.includes(storageKey),
     `active hosted runtime should not leak dormant storage state ${storageKey}`
   ));
+}
+
+function verifyActiveBackgroundMessageSurfaceStaysNarrow() {
+  const serviceWorkerSource = fs.readFileSync(path.join(root, "background", "service-worker.js"), "utf8");
+
+  assert(
+    serviceWorkerSource.includes("ACTIVE_BACKGROUND_MESSAGE_TYPES"),
+    "background service worker should keep a dedicated active top-level message catalog"
+  );
+  [
+    '"inova-meeting:authorize-workspace-access"',
+    '"inova-meeting:probe-workspace-bridge"',
+    '"inova-panel:invoke"',
+  ].forEach((messageType) => assert(
+    serviceWorkerSource.includes(messageType),
+    `background service worker should keep the active top-level message ${messageType}`
+  ));
+  [
+    "inova-sync:load-prompt-library",
+    "inova-sync:peek-prompt-library",
+    "inova-sync:sync-prompt-library",
+    "inova-store:list",
+    "inova-store:publish",
+    "inova-store:unpublish",
+    "inova-store:import",
+    "inova-store:toggle-like",
+    "inova-store:view",
+    "inova-review:prompt",
+    "inova-meeting:list-meetings",
+    "inova-meeting:issue-panel-auth",
+    "inova-prompt:issue-panel-auth",
+    "inova-meeting:open-workspace",
+    "inova-meeting:open-result",
+    "inova-meeting:create-share-link",
+    "inova-meeting:revoke-share-link",
+    "inova-release:latest",
+    "inova-release:history",
+    "inova-release:open-url",
+  ].forEach((legacyMessageType) => assert(
+    !serviceWorkerSource.includes(legacyMessageType),
+    `background service worker should not reopen the legacy top-level message ${legacyMessageType}`
+  ));
+  [
+    'importScripts("meeting-list-cache.js");',
+    "meetingListCache",
+    "recentLoadResults",
+    "recentPeekResults",
+    "recentReleaseResults",
+    "recentSyncResults",
+  ].forEach((legacySurface) => assert(
+    !serviceWorkerSource.includes(legacySurface),
+    `background service worker should drop the dormant legacy surface ${legacySurface}`
+  ));
+  assert(
+    !fs.existsSync(path.join(root, "background", "meeting-list-cache.js")),
+    "active background root should not keep the dormant meeting-list-cache helper"
+  );
+  assert(
+    fs.existsSync(path.join(root, "backup", "legacy-panel", "background", "meeting-list-cache.js")),
+    "backup legacy lane should keep the dormant meeting-list-cache helper"
+  );
 }
 
 function verifyActivePromptShellContractDropsLegacyName() {

@@ -49,7 +49,7 @@
 - 위치: `content/`, `shared/`, `manifest.json`
 - 역할: `inova.incross.com` 안에 실험실 패널을 삽입하고, 질문 탐색/회의록/프롬프트/스토어/릴리스 UI와 회의 허브 진입 흐름을 조립한다.
 - 특징: `content/main.js`는 composition root, `content/panel-v2-composition-controller.js`는 active state/composition/runtime/provider-identity bridge와 hosted-owned controller graph 조립, `content/panel-v2-shell-bridge.js`는 tool/activity/surface/lifecycle/bootstrap/render bridge를 맡는다. `content/panel.js`는 host element lifecycle과 helper wiring만 남기고, iframe target/status/handshake/render batching은 `content/panel-host-runtime.js`, hosted bridge endpoint와 page event emit은 `content/panel-host-bridge.js`, host markup과 handle drag/click은 `content/panel-host-view.js`가 맡는다. active `content/hosted-panel-bridge.js`는 compact `tool-summary-sync`, conversation bookmark, shell/runtime/page contract dispatch만 유지하고, 실제 page capability 구현은 `content/page-capability-router.js`가 맡는다. `1.0.0+` v2 lane의 extension에는 shell/runtime/route/page adapter 같은 browser-only 책임만 남기고, tool rail/header/content state는 hosted `extension-v2/panel/*` controller가 소유한다. active page adapter capability는 `conversation.read-state`, `conversation.jump-item`, `composer.read-state`, `composer.apply-text`, `clipboard.write-text`, `debug.read-state`, `debug.set-enabled`, `debug.copy-log`, `debug.clear-log`, `trace.log`를 canonical contract로 보고, caller migration이 끝난 alias는 active lane에 남겨 두지 않는다. 이 active page/runtime capability 카탈로그는 문서 설명만이 아니라 `contracts/extension-contract.json`과 `scripts/verify-contracts.js`로도 같이 고정한다.
-- 특징: `shared/storage.js`는 active lane에서 generic local state/settings/ui-preferences/cloud-sync/product-lane migration core만 유지한다. inactive release/meeting storage accessor는 active shared core에 남기지 않고 `backup/legacy-panel/shared/legacy-storage-accessors.js` 같은 backup-only helper에서만 유지한다.
+- 특징: `shared/storage.js`는 active lane에서 generic local state/settings/ui-preferences/provider-identity-cache/product-lane migration core만 유지한다. inactive release/meeting storage accessor는 active shared core에 남기지 않고 `backup/legacy-panel/shared/legacy-storage-accessors.js` 같은 backup-only helper에서만 유지한다.
 - 특징: `shared/constants.js`도 active lane의 live browser shell 기본값만 유지한다. inactive release/meeting storage key/default schema는 active shared constants에 남기지 않고 backup helper가 직접 가진다.
 - 특징: active prompt lane도 `chrome.storage.local.promptLibrary`를 정본으로 취급하지 않는다. active `shared/constants.js` / `shared/storage.js`는 dormant prompt local cache schema를 더 이상 들고 있지 않고, backup prompt helper/reference가 그 캐시 계약을 직접 가진다.
 
@@ -57,7 +57,7 @@
 
 - 위치: `background/service-worker.js`
 - 역할: i-Nova access token 확보, Firebase Functions 호출, 릴리스 메타 fetch, 동기화 중복 완화, prompt/store panel auth 발급, hosted 회의 launch grant 발급, 작업실 URL 타깃 분기
-- 특징: 클라우드 경계의 브로커다. content script가 직접 장기 원격 상태를 다루지 않게 막아 준다. 회의 기능은 `inova-meeting:*` 메시지로, 프롬프트 실시간은 `inova-prompt:*` 메시지로 이 경계를 먼저 통과한다. 패널에서 열린 작업실은 popup 설정의 호스팅 타깃을 따르되, runtime lane이 `v2`면 lane-aware config가 가리키는 v2 hosting/release origin을 사용한다. popup 설정이 `local`이면 prompt 관련 Functions 호출과 panel auth도 production 대신 local Functions base URL을 써서 배포 전 full-stack rehearsal을 가능하게 해야 한다. active hosted panel용 privileged runtime capability 구현은 `background/panel-runtime-capability-router.js`가 맡고, `background/panel-runtime-invoke.js`는 hosted request를 router에 dispatch하는 shim만 유지한다. live runtime surface는 generic storage CRUD를 다시 열지 않고, `storage.read-panel-state`, `storage.write-ui-preferences`, `auth.issue-panel-session`, `functions.invoke-endpoint`, `browser.open-url`, `meeting.workspace.open`, `meeting.result.open`, `meeting.share.create`, `meeting.share.revoke` 같은 stable runtime capability만 유지한다.
+- 특징: 클라우드 경계의 브로커다. content script가 직접 장기 원격 상태를 다루지 않게 막아 준다. active v2 lane에서 background top-level message surface는 `inova-panel:invoke`와 hosted meeting workspace의 `inova-meeting:authorize-workspace-access` / `inova-meeting:probe-workspace-bridge`만 유지한다. 나머지 prompt/release/meeting privileged action은 feature별 메시지 이름으로 다시 열지 않고, hosted panel이 `inova-panel:invoke` 아래의 stable runtime capability만 호출하게 유지한다. 패널에서 열린 작업실은 popup 설정의 호스팅 타깃을 따르되, runtime lane이 `v2`면 lane-aware config가 가리키는 v2 hosting/release origin을 사용한다. popup 설정이 `local`이면 prompt 관련 Functions 호출과 panel auth도 production 대신 local Functions base URL을 써서 배포 전 full-stack rehearsal을 가능하게 해야 한다. active hosted panel용 privileged runtime capability 구현은 `background/panel-runtime-capability-router.js`가 맡고, `background/panel-runtime-invoke.js`는 hosted request를 router에 dispatch하는 shim만 유지한다. live runtime surface는 generic storage CRUD를 다시 열지 않고, `storage.read-panel-state`, `storage.write-ui-preferences`, `auth.issue-panel-session`, `functions.invoke-endpoint`, `browser.open-url`, `meeting.workspace.open`, `meeting.result.open`, `meeting.share.create`, `meeting.share.revoke` 같은 stable runtime capability만 유지한다.
 
 ### Firebase Functions
 
@@ -88,7 +88,7 @@
 
 ### C. 프롬프트 원격 메타 실시간
 
-1. 패널의 `프롬프트` 도구가 열리면 hosted `prompt-library-controller`가 `inova-prompt:issue-panel-auth`를 background에 보낸다.
+1. 패널의 `프롬프트` 도구가 열리면 hosted `prompt-library-controller`가 `inova-panel:invoke -> auth.issue-panel-session(panel=prompt)` runtime capability를 background에 보낸다.
 2. background는 `issueInovaPromptPanelAuthV2` 또는 lane-aware prompt panel auth endpoint를 호출해 Firebase custom token을 받는다.
 3. hosted panel 안의 Firestore client가 Firebase Auth에 로그인하고 `integration_inova_accounts_v2/{providerUserKey}` 문서를 구독한다.
 4. hosted panel은 `promptLibraryMeta` 변경을 기준으로 `prompt_library_orders_v2`/`prompt_library_chunks_v2`를 직접 읽어 `내 요청` 상태를 다시 조립한다.
@@ -113,7 +113,7 @@
 
 ### F. 회의 작업실 진입
 
-1. popup은 `settings.meetingWorkspaceTarget`을 저장하고, content 패널은 `새 회의하기` 또는 결과 리스트 항목에서 `inova-meeting:open-workspace` / `inova-meeting:open-result`를 background로 보낸다.
+1. popup은 `settings.meetingWorkspaceTarget`을 저장하고, hosted/content 패널은 `새 회의하기` 또는 결과 리스트 항목에서 `inova-panel:invoke -> meeting.workspace.open` / `meeting.result.open` runtime capability를 background로 보낸다.
 2. background는 popup 설정의 호스팅 타깃에 맞는 clean hosted 작업실 URL(`meetingId`, optional `jobId`, optional `share`)을 만든다.
 3. background가 `chrome.tabs.create()`로 hosted `meeting/index.html?meetingId=...&jobId=...` 또는 로컬 `http://127.0.0.1:5000/meeting/index.html?...` URL을 연다.
 4. hosted 회의 작업실은 부팅 직후 확장 bridge와 handshake하고, background가 현재 i-Nova 로그인 상태와 접근 권한을 확인한다.

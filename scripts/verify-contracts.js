@@ -90,6 +90,7 @@ if (countJavaScriptFiles(sharedDirectory) < 3) {
   errors.push("shared 모듈 수가 부족합니다. 최소 3개 파일로 분리해야 합니다.");
 }
 verifyHostedCapabilityCatalog();
+verifyBackgroundMessageCatalog();
 
 assertFileExists("scripts/legacy-panel/verify-prompt-fallbacks.js");
 assertFileExists("scripts/verify-functions-runtime.js");
@@ -238,6 +239,45 @@ function verifyHostedCapabilityCatalog() {
     verifyCapabilityCallsInSource(source, relativePath, "invokePage", pageCapabilityActions, "page");
     verifyCapabilityCallsInSource(source, relativePath, "invokeRuntime", runtimeCapabilityActions, "runtime");
     verifyCapabilityTransportIsolation(source, relativePath, entry);
+  }
+}
+
+function verifyBackgroundMessageCatalog() {
+  const backgroundMessageTypes = new Set(contract.backgroundMessageTypes || []);
+  if (!backgroundMessageTypes.size) {
+    errors.push("background message catalog가 비어 있습니다.");
+    return;
+  }
+
+  const serviceWorkerPath = path.join(root, "background", "service-worker.js");
+  if (!fs.existsSync(serviceWorkerPath)) {
+    errors.push("background/service-worker.js를 찾지 못했습니다.");
+    return;
+  }
+
+  const serviceWorkerSource = fs.readFileSync(serviceWorkerPath, "utf8");
+  const catalogMatch = serviceWorkerSource.match(
+    /const\s+ACTIVE_BACKGROUND_MESSAGE_TYPES\s*=\s*Object\.freeze\(\[(?<values>[\s\S]*?)\]\);/
+  );
+  if (!catalogMatch?.groups?.values) {
+    errors.push("background/service-worker.js가 ACTIVE_BACKGROUND_MESSAGE_TYPES catalog를 선언하지 않습니다.");
+    return;
+  }
+
+  const actualMessageTypes = new Set(
+    Array.from(catalogMatch.groups.values.matchAll(/"([^"]+)"/g), (match) => String(match[1] || "").trim()).filter(Boolean)
+  );
+
+  for (const action of backgroundMessageTypes) {
+    if (!actualMessageTypes.has(action)) {
+      errors.push(`background message catalog 누락: ${action}`);
+    }
+  }
+
+  for (const action of actualMessageTypes) {
+    if (!backgroundMessageTypes.has(action)) {
+      errors.push(`background/service-worker.js가 계약에 없는 top-level message를 노출합니다: ${action}`);
+    }
   }
 }
 

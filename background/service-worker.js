@@ -6,7 +6,6 @@ importScripts("../shared/storage.js");
 importScripts("../shared/firebase-config.js");
 importScripts("../shared/inova-auth.js");
 importScripts("../shared/cloud-api.js");
-importScripts("meeting-list-cache.js");
 importScripts("panel-auth-cache.js");
 importScripts("panel-runtime-capability-router.js");
 importScripts("panel-runtime-invoke.js");
@@ -19,24 +18,16 @@ const HOSTED_MEETING_ALLOWED_ORIGINS = new Set(namespace.productLane?.getKnownHo
   "http://127.0.0.1:5000",
   "http://localhost:5000",
 ]);
-const RECENT_LOAD_TTL_MS = 10000;
-const RECENT_PEEK_TTL_MS = 10000;
-const RECENT_RELEASE_TTL_MS = 60000;
-const RECENT_SYNC_TTL_MS = 30000;
-const activeLoads = new Map();
-const activePeeks = new Map();
-const recentLoadResults = new Map();
-const recentPeekResults = new Map();
-const activeReleaseRequests = new Map();
-const recentReleaseResults = new Map();
-const activeSyncs = new Map();
-const recentSyncResults = new Map();
-const meetingListCache = namespace.meetingListCache?.create?.(getInovaAccessToken);
+const ACTIVE_BACKGROUND_MESSAGE_TYPES = Object.freeze([
+  "inova-meeting:authorize-workspace-access",
+  "inova-meeting:probe-workspace-bridge",
+  "inova-panel:invoke",
+]);
 const panelAuthCache = namespace.panelAuthCache?.create?.(getInovaAccessToken);
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const type = String(message?.type || "");
-  if (!type.startsWith("inova-sync:") && !type.startsWith("inova-store:") && !type.startsWith("inova-release:") && !type.startsWith("inova-review:") && !type.startsWith("inova-meeting:") && !type.startsWith("inova-prompt:") && !type.startsWith("inova-panel:")) {
+  if (!ACTIVE_BACKGROUND_MESSAGE_TYPES.includes(type)) {
     return false;
   }
   handleMessage(message, sender)
@@ -47,78 +38,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 async function handleMessage(message, sender) {
   if (!isAllowedSender(message, sender)) {
-    throw new Error("i-Nova 화면에서만 클라우드 동기화를 실행할 수 있어요.");
-  }
-  if (message.type === "inova-sync:load-prompt-library") {
-    return loadPromptLibrary(message.providerIdentity, message.force);
-  }
-  if (message.type === "inova-sync:peek-prompt-library") {
-    return peekPromptLibrary(message.providerIdentity, message.force);
-  }
-  if (message.type === "inova-store:list") {
-    return listPromptStoreEntries(message.filter, message.providerIdentity);
-  }
-  if (message.type === "inova-store:publish") {
-    return publishPromptToStore(message.prompt, message.categoryId, message.providerIdentity);
-  }
-  if (message.type === "inova-store:unpublish") {
-    return unpublishPromptFromStore(message.entryId, message.providerIdentity);
-  }
-  if (message.type === "inova-store:import") {
-    return importPromptStoreEntry(message.entryId, message.providerIdentity);
-  }
-  if (message.type === "inova-store:toggle-like") {
-    return togglePromptStoreLike(message.entryId, message.providerIdentity);
-  }
-  if (message.type === "inova-store:view") {
-    return recordPromptStoreView(message.entryId, message.providerIdentity);
-  }
-  if (message.type === "inova-review:prompt") {
-    return reviewPromptDraft(message.prompt, message.providerIdentity, message.reviewProfile);
-  }
-  if (message.type === "inova-meeting:list-meetings") {
-    return listMeetings(message.input, message.providerIdentity);
-  }
-  if (message.type === "inova-meeting:issue-panel-auth") {
-    return issueMeetingPanelAuth(message.providerIdentity);
-  }
-  if (message.type === "inova-prompt:issue-panel-auth") {
-    return issuePromptPanelAuth(message.providerIdentity);
-  }
-  if (message.type === "inova-meeting:open-workspace") {
-    return openMeetingWorkspace(message.input, message.providerIdentity, sender);
-  }
-  if (message.type === "inova-meeting:open-result") {
-    return openMeetingResult(message.input, message.providerIdentity, sender);
+    throw new Error("허용되지 않은 browser capability 호출이에요.");
   }
   if (message.type === "inova-meeting:authorize-workspace-access") {
     return authorizeMeetingWorkspaceAccess(message.input, message.providerIdentity, sender);
   }
-  if (message.type === "inova-meeting:create-share-link") {
-    return createMeetingShareLink(message.input, message.providerIdentity, sender);
-  }
-  if (message.type === "inova-meeting:revoke-share-link") {
-    return revokeMeetingShareLink(message.input, message.providerIdentity, sender);
-  }
   if (message.type === "inova-meeting:probe-workspace-bridge") {
     return probeMeetingWorkspaceBridge(sender);
-  }
-  if (message.type === "inova-release:latest") {
-    return fetchReleaseJson("latest");
-  }
-  if (message.type === "inova-release:history") {
-    return fetchReleaseJson("history");
-  }
-  if (message.type === "inova-release:open-url") {
-    return openReleaseUrl(message.url);
   }
   if (message.type === "inova-panel:invoke") {
     return globalThis.invokeHostedPanelRequest(message.request);
   }
-  if (message.type === "inova-sync:sync-prompt-library") {
-    return syncPromptLibrary(message.syncDocument);
-  }
-  throw new Error("지원하지 않는 동기화 요청이에요.");
+  throw new Error("지원하지 않는 background capability 메시지예요.");
 }
 
 async function getInovaAccessToken() {
@@ -132,207 +63,9 @@ async function getInovaAccessToken() {
   return namespace.inovaAuth.getAccessToken(true);
 }
 
-async function listPromptStoreEntries(filter, providerIdentity) {
-  const accessToken = await getInovaAccessToken();
-  const functionsConfig = await getPromptFunctionsConfig();
-  return namespace.cloudApi.listPromptStoreEntries(filter, providerIdentity, accessToken, { functionsConfig });
-}
-
-async function publishPromptToStore(prompt, categoryId, providerIdentity) {
-  const accessToken = await getInovaAccessToken();
-  const functionsConfig = await getPromptFunctionsConfig();
-  return namespace.cloudApi.publishPromptToStore(prompt, categoryId, providerIdentity, accessToken, { functionsConfig });
-}
-
-async function unpublishPromptFromStore(entryId, providerIdentity) {
-  const accessToken = await getInovaAccessToken();
-  const functionsConfig = await getPromptFunctionsConfig();
-  return namespace.cloudApi.unpublishPromptFromStore(entryId, providerIdentity, accessToken, { functionsConfig });
-}
-
-async function importPromptStoreEntry(entryId, providerIdentity) {
-  const accessToken = await getInovaAccessToken();
-  const functionsConfig = await getPromptFunctionsConfig();
-  return namespace.cloudApi.importPromptStoreEntry(entryId, providerIdentity, accessToken, { functionsConfig });
-}
-
-async function togglePromptStoreLike(entryId, providerIdentity) {
-  const accessToken = await getInovaAccessToken();
-  const functionsConfig = await getPromptFunctionsConfig();
-  return namespace.cloudApi.togglePromptStoreLike(entryId, providerIdentity, accessToken, { functionsConfig });
-}
-
-async function recordPromptStoreView(entryId, providerIdentity) {
-  const accessToken = await getInovaAccessToken();
-  const functionsConfig = await getPromptFunctionsConfig();
-  return namespace.cloudApi.recordPromptStoreView(entryId, providerIdentity, accessToken, { functionsConfig });
-}
-
-async function reviewPromptDraft(prompt, providerIdentity, reviewProfile) {
-  const accessToken = await getInovaAccessToken();
-  const functionsConfig = await getPromptFunctionsConfig();
-  return namespace.cloudApi.reviewInovaPrompt(prompt, providerIdentity, accessToken, { functionsConfig, reviewProfile });
-}
-
 async function issuePromptPanelAuth(providerIdentity) {
   const functionsConfig = await getPromptFunctionsConfig();
   return panelAuthCache.issuePromptPanelAuth(providerIdentity, { functionsConfig });
-}
-
-async function syncPromptLibrary(syncDocument) {
-  const functionsConfig = await getPromptFunctionsConfig();
-  const revision = namespace.session.normalizeText(syncDocument?.sync?.revision || "");
-  const runtimeCacheKey = buildPromptRuntimeCacheKey(functionsConfig.baseUrl);
-  const cacheKey = revision && runtimeCacheKey ? `${revision}::${runtimeCacheKey}` : revision;
-  cleanupRecentSyncs();
-
-  if (cacheKey) {
-    const recent = recentSyncResults.get(cacheKey);
-    if (recent && recent.expiresAt > Date.now()) {
-      return recent.result;
-    }
-
-    if (activeSyncs.has(cacheKey)) {
-      return activeSyncs.get(cacheKey);
-    }
-  }
-
-  const run = (async () => {
-    const accessToken = await getInovaAccessToken();
-    const result = await namespace.cloudApi.syncInovaPromptLibrary(syncDocument, accessToken, { functionsConfig });
-    if (cacheKey) {
-      recentSyncResults.set(cacheKey, {
-        expiresAt: Date.now() + RECENT_SYNC_TTL_MS,
-        result,
-      });
-    }
-    return result;
-  })();
-
-  if (cacheKey) {
-    activeSyncs.set(cacheKey, run);
-  }
-
-  try {
-    return await run;
-  } finally {
-    if (cacheKey) {
-      activeSyncs.delete(cacheKey);
-    }
-  }
-}
-
-async function loadPromptLibrary(providerIdentity, force = false) {
-  const providerUserKey = namespace.session.normalizeText(providerIdentity?.providerUserKey);
-  const functionsConfig = await getPromptFunctionsConfig();
-  const cacheKey = buildPromptCacheKey(providerUserKey, functionsConfig.baseUrl);
-  cleanupRecentLoads();
-
-  if (!force && cacheKey) {
-    const recent = recentLoadResults.get(cacheKey);
-    if (recent && recent.expiresAt > Date.now()) {
-      return recent.result;
-    }
-
-    if (activeLoads.has(cacheKey)) {
-      return activeLoads.get(cacheKey);
-    }
-  }
-
-  const run = (async () => {
-    const accessToken = await getInovaAccessToken();
-    const result = await namespace.cloudApi.loadInovaPromptLibrary(providerIdentity, accessToken, { functionsConfig });
-    if (cacheKey) {
-      recentLoadResults.set(cacheKey, {
-        expiresAt: Date.now() + RECENT_LOAD_TTL_MS,
-        result,
-      });
-    }
-    return result;
-  })();
-
-  if (cacheKey) {
-    activeLoads.set(cacheKey, run);
-  }
-
-  try {
-    return await run;
-  } finally {
-    if (cacheKey) {
-      activeLoads.delete(cacheKey);
-    }
-  }
-}
-
-async function peekPromptLibrary(providerIdentity, force = false) {
-  const providerUserKey = namespace.session.normalizeText(providerIdentity?.providerUserKey);
-  const functionsConfig = await getPromptFunctionsConfig();
-  const cacheKey = buildPromptCacheKey(providerUserKey, functionsConfig.baseUrl);
-  cleanupRecentPeeks();
-
-  if (!force && cacheKey) {
-    const recent = recentPeekResults.get(cacheKey);
-    if (recent && recent.expiresAt > Date.now()) {
-      return recent.result;
-    }
-
-    if (activePeeks.has(cacheKey)) {
-      return activePeeks.get(cacheKey);
-    }
-  }
-
-  const run = (async () => {
-    const accessToken = await getInovaAccessToken();
-    const result = await namespace.cloudApi.peekInovaPromptLibrary(providerIdentity, accessToken, { functionsConfig });
-    if (cacheKey) {
-      recentPeekResults.set(cacheKey, {
-        expiresAt: Date.now() + RECENT_PEEK_TTL_MS,
-        result,
-      });
-    }
-    return result;
-  })();
-
-  if (cacheKey) {
-    activePeeks.set(cacheKey, run);
-  }
-
-  try {
-    return await run;
-  } finally {
-    if (cacheKey) {
-      activePeeks.delete(cacheKey);
-    }
-  }
-}
-
-async function fetchReleaseJson(kind) {
-  cleanupRecentReleases();
-  const releaseKey = kind === "history" ? "history" : "latest";
-  const recent = recentReleaseResults.get(releaseKey);
-  if (recent && recent.expiresAt > Date.now()) return recent.result;
-  if (activeReleaseRequests.has(releaseKey)) return activeReleaseRequests.get(releaseKey);
-
-  const url = releaseKey === "history"
-    ? namespace.firebaseConfig.hosting.releaseHistoryUrl
-    : namespace.firebaseConfig.hosting.latestReleaseUrl;
-  const run = (async () => {
-    const response = await fetch(url, { cache: "no-store", method: "GET" });
-    const payload = await response.json().catch(() => null);
-    if (!response.ok || !payload) throw new Error("릴리스 정보를 불러오지 못했어요.");
-    recentReleaseResults.set(releaseKey, {
-      expiresAt: Date.now() + RECENT_RELEASE_TTL_MS,
-      result: payload,
-    });
-    return payload;
-  })();
-
-  activeReleaseRequests.set(releaseKey, run);
-  try {
-    return await run;
-  } finally {
-    activeReleaseRequests.delete(releaseKey);
-  }
 }
 
 async function openReleaseUrl(url) {
@@ -352,11 +85,6 @@ async function openMeetingWorkspace(input, providerIdentity, sender) {
 
 async function openMeetingResult(input, providerIdentity, sender) {
   return openHostedMeetingPage("detail", input, providerIdentity, sender);
-}
-
-async function listMeetings(input, providerIdentity) {
-  const functionsConfig = await getMeetingFunctionsConfig();
-  return meetingListCache.listMeetings(input, providerIdentity, { functionsConfig });
 }
 
 async function issueMeetingPanelAuth(providerIdentity) {
@@ -587,6 +315,20 @@ async function getPromptRuntimeConfig() {
   };
 }
 
+Object.assign(globalThis, {
+  createMeetingShareLink,
+  getInovaAccessToken,
+  getMeetingFunctionsConfig,
+  getPromptFunctionsConfig,
+  getPromptRuntimeConfig,
+  issueMeetingPanelAuth,
+  issuePromptPanelAuth,
+  openMeetingResult,
+  openMeetingWorkspace,
+  openReleaseUrl,
+  revokeMeetingShareLink,
+});
+
 async function reconcileMeetingWorkspaceSettings(settings) {
   const currentTarget = normalizeMeetingWorkspaceTarget(settings?.meetingWorkspaceTarget);
   const currentDebugEnabled = normalizeMeetingDebugConsoleEnabled(settings?.meetingDebugConsoleEnabled);
@@ -607,19 +349,6 @@ async function reconcileMeetingWorkspaceSettings(settings) {
 }
 
 function normalizeMeetingDebugConsoleEnabled(value) { if (typeof value === "boolean") return value; const normalized = namespace.session.normalizeText(value).toLowerCase(); return normalized === "1" || normalized === "true" || normalized === "on" || normalized === "yes"; }
-
-function buildPromptCacheKey(providerUserKey, functionsBaseUrl) {
-  const normalizedProviderUserKey = namespace.session.normalizeText(providerUserKey);
-  const runtimeCacheKey = buildPromptRuntimeCacheKey(functionsBaseUrl);
-  if (!normalizedProviderUserKey || !runtimeCacheKey) {
-    return "";
-  }
-  return `${normalizedProviderUserKey}::${runtimeCacheKey}`;
-}
-
-function buildPromptRuntimeCacheKey(functionsBaseUrl) {
-  return namespace.session.normalizeText(functionsBaseUrl);
-}
 
 function normalizeMeetingWorkspaceOverrideUrl(value) {
   const normalized = namespace.session.normalizeText(value);
@@ -827,7 +556,6 @@ async function requestMeetingProviderIdentityFromInovaTabs() {
 
 function isAllowedSender(message, sender) {
   return String(sender?.url || "").startsWith(INOVA_ORIGIN)
-    || message.type === "inova-release:open-url"
     || (
       [
         "inova-meeting:authorize-workspace-access",
@@ -845,39 +573,5 @@ function isHostedMeetingWorkspaceSender(sender) {
   } catch (error) {
     void error;
     return false;
-  }
-}
-
-function cleanupRecentLoads() {
-  const now = Date.now();
-  for (const [providerUserKey, entry] of recentLoadResults.entries()) {
-    if (!entry || entry.expiresAt <= now) {
-      recentLoadResults.delete(providerUserKey);
-    }
-  }
-}
-
-function cleanupRecentPeeks() {
-  const now = Date.now();
-  for (const [providerUserKey, entry] of recentPeekResults.entries()) {
-    if (!entry || entry.expiresAt <= now) {
-      recentPeekResults.delete(providerUserKey);
-    }
-  }
-}
-
-function cleanupRecentSyncs() {
-  const now = Date.now();
-  for (const [revision, entry] of recentSyncResults.entries()) {
-    if (!entry || entry.expiresAt <= now) {
-      recentSyncResults.delete(revision);
-    }
-  }
-}
-
-function cleanupRecentReleases() {
-  const now = Date.now();
-  for (const [key, entry] of recentReleaseResults.entries()) {
-    if (!entry || entry.expiresAt <= now) recentReleaseResults.delete(key);
   }
 }
