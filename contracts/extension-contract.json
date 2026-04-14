@@ -48,9 +48,18 @@
     "content/features/prompt-review/composer-review-float.js",
     "content/features/prompt-review/prompt-review-manager.js"
   ],
+  "activePopupRootFiles": [
+    "popup/index.css",
+    "popup/index.html",
+    "popup/index.js"
+  ],
   "requiredFiles": [
     "manifest.json",
     "package.json",
+    "icons/icon-16.png",
+    "icons/icon-32.png",
+    "icons/icon-48.png",
+    "icons/icon-128.png",
     "popup/index.html",
     "popup/index.css",
     "popup/index.js",
@@ -161,6 +170,16 @@
     "scripts/verify-route-watch-controller.js"
   ],
   "manifestPopup": "popup/index.html",
+  "manifestIcons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "manifestActionIcons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png"
+  },
   "manifestContentScripts": [
     "shared/constants.js",
     "shared/product-lane.js",

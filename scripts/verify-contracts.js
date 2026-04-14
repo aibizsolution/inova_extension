@@ -23,6 +23,16 @@ if (fs.existsSync(manifestPath)) {
   if (manifest.action?.default_popup !== contract.manifestPopup) {
     errors.push(`manifest popup 경로가 계약과 다릅니다: ${manifest.action?.default_popup}`);
   }
+  for (const [size, iconPath] of Object.entries(contract.manifestIcons || {})) {
+    if (manifest.icons?.[size] !== iconPath) {
+      errors.push(`manifest icon 경로가 계약과 다릅니다 (${size}): ${manifest.icons?.[size] || ""}`);
+    }
+  }
+  for (const [size, iconPath] of Object.entries(contract.manifestActionIcons || {})) {
+    if (manifest.action?.default_icon?.[size] !== iconPath) {
+      errors.push(`manifest action icon 경로가 계약과 다릅니다 (${size}): ${manifest.action?.default_icon?.[size] || ""}`);
+    }
+  }
 
   const mainContentScript = Array.isArray(manifest.content_scripts)
     ? manifest.content_scripts.find((entry) => Array.isArray(entry?.matches) && entry.matches.includes("https://inova.incross.com/*"))
@@ -141,6 +151,7 @@ if (countJavaScriptFiles(sharedDirectory) < 3) {
 verifyActiveSharedRootCatalog();
 verifyActiveBackgroundRootCatalog();
 verifyActiveContentRootCatalog();
+verifyActivePopupRootCatalog();
 verifyHostedCapabilityCatalog();
 verifyBackgroundMessageCatalog();
 
@@ -406,6 +417,38 @@ function verifyActiveContentRootCatalog() {
   for (const file of actualPromptReviewFiles) {
     if (!activeContentFeatureFiles.has(file)) {
       errors.push(`active content feature root에 계약 밖 runtime file이 다시 들어왔습니다: ${file}`);
+    }
+  }
+}
+
+function verifyActivePopupRootCatalog() {
+  const activePopupRootFiles = new Set(contract.activePopupRootFiles || []);
+  if (!activePopupRootFiles.size) {
+    errors.push("active popup root catalog가 비어 있습니다.");
+    return;
+  }
+
+  const popupDirectory = path.join(root, "popup");
+  if (!fs.existsSync(popupDirectory)) {
+    errors.push("popup 디렉터리를 찾지 못했습니다.");
+    return;
+  }
+
+  const actualPopupRootFiles = new Set(
+    fs.readdirSync(popupDirectory)
+      .filter((file) => /\.(js|css|html)$/.test(file))
+      .map((file) => path.posix.join("popup", file))
+  );
+
+  for (const file of activePopupRootFiles) {
+    if (!actualPopupRootFiles.has(file)) {
+      errors.push(`active popup root catalog 누락: ${file}`);
+    }
+  }
+
+  for (const file of actualPopupRootFiles) {
+    if (!activePopupRootFiles.has(file)) {
+      errors.push(`active popup root에 계약 밖 runtime asset이 다시 들어왔습니다: ${file}`);
     }
   }
 }

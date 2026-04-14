@@ -31,6 +31,7 @@
 - 위치: `popup/index.html`, `popup/index.js`
 - 역할: hosted 회의 작업실 연결 대상을 `상용 호스팅 / 로컬 호스팅` 중 하나로 저장한다.
 - 특징: 팝업은 설정만 맡고, 실제 `새 회의하기`와 결과 열기는 content 패널의 회의 허브에서 처리한다. 같은 `settings.meetingWorkspaceTarget`은 회의 rehearsal뿐 아니라 prompt-library sync, prompt-review, prompt-store read/write, hidden prompt bridge도 함께 local Functions/Hosting emulator 대상으로 전환한다.
+- 특징: active popup root inventory는 `popup/index.html`, `popup/index.css`, `popup/index.js`로 고정하고, manifest `default_popup`과 `icons/default_icon` 경계도 `contracts/extension-contract.json` + `scripts/verify-contracts.js`로 같이 잠근다.
 
 ### Hosted Panel App
 
