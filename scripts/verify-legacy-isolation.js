@@ -201,6 +201,10 @@ function verifyActiveBackgroundMessageSurfaceStaysNarrow() {
     serviceWorkerSource.includes("ACTIVE_BACKGROUND_MESSAGE_TYPES"),
     "background service worker should keep a dedicated active top-level message catalog"
   );
+  assert(
+    serviceWorkerSource.includes('importScripts("meeting-workspace-capability.js");'),
+    "background service worker should preload the dedicated meeting workspace capability module"
+  );
   [
     '"inova-meeting:authorize-workspace-access"',
     '"inova-meeting:probe-workspace-bridge"',
@@ -236,6 +240,11 @@ function verifyActiveBackgroundMessageSurfaceStaysNarrow() {
   ));
   [
     'importScripts("meeting-list-cache.js");',
+    "openHostedMeetingPage(",
+    "buildHostedMeetingCleanUrl(",
+    "resolveMeetingProviderIdentity(",
+    "requestMeetingProviderIdentityFromInovaTabs(",
+    "HOSTED_MEETING_ALLOWED_ORIGINS",
     "meetingListCache",
     "recentLoadResults",
     "recentPeekResults",
