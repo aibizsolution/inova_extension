@@ -104,51 +104,10 @@
     return namespace.cloudSync.mergeCloudSyncState(current.cloudSync);
   }
 
-  async function getReleaseInfo() {
-    const current = await getState();
-    return normalizeReleaseInfoState(current.releaseInfo);
-  }
-
-  async function getMeetingHub() {
-    const current = await getState();
-    const nextHub = current.meetingHub && typeof current.meetingHub === "object"
-      ? current.meetingHub
-      : defaults.meetingHub;
-    return {
-      ...cloneValue(defaults.meetingHub),
-      ...cloneValue(nextHub),
-      items: Array.isArray(nextHub?.items) ? cloneValue(nextHub.items) : [],
-    };
-  }
-
-  async function getMeetingStateByMeetingId() {
-    const current = await getState();
-    const nextState = current.meetingStateByMeetingId;
-    return nextState && typeof nextState === "object"
-      ? cloneValue(nextState)
-      : cloneValue(defaults.meetingStateByMeetingId);
-  }
-
   async function setCloudSyncState(nextCloudSync) {
     const cloudSync = namespace.cloudSync.mergeCloudSyncState(nextCloudSync);
     await setLocal({ cloudSync });
     return cloudSync;
-  }
-
-  async function setReleaseInfo(nextReleaseInfo) {
-    const releaseInfo = normalizeReleaseInfoState(nextReleaseInfo);
-    await setLocal({ releaseInfo });
-    return releaseInfo;
-  }
-
-  async function setMeetingHub(nextMeetingHub) {
-    const meetingHub = {
-      ...cloneValue(defaults.meetingHub),
-      ...(nextMeetingHub && typeof nextMeetingHub === "object" ? cloneValue(nextMeetingHub) : {}),
-      items: Array.isArray(nextMeetingHub?.items) ? cloneValue(nextMeetingHub.items) : [],
-    };
-    await setLocal({ meetingHub });
-    return meetingHub;
   }
 
   function mergeUiPreferences(...preferenceSets) {
@@ -325,16 +284,6 @@
     return nextPartial;
   }
 
-  function normalizeReleaseInfoState(nextReleaseInfo) {
-    if (namespace.releaseInfo?.mergeReleaseInfo) {
-      return namespace.releaseInfo.mergeReleaseInfo(nextReleaseInfo);
-    }
-    if (nextReleaseInfo && typeof nextReleaseInfo === "object") {
-      return cloneValue(nextReleaseInfo);
-    }
-    return cloneValue(defaults.releaseInfo || {});
-  }
-
   function mergeProductLaneMigrationState(nextState) {
     return {
       ...cloneValue(defaults.productLaneMigration),
@@ -354,18 +303,13 @@
     ensureProductLaneLocalMigration,
     getHandleRatio,
     getCloudSyncState,
-    getMeetingHub,
-    getMeetingStateByMeetingId,
     getProductLaneMigrationState,
-    getReleaseInfo,
     getState,
     getViewportBucket,
     mergeUiPreferences,
     normalizeHandleRatio,
     setCloudSyncState,
     setLocal,
-    setMeetingHub,
-    setReleaseInfo,
     setSessionPaused,
     updateUiPreferences,
     updateSettings,

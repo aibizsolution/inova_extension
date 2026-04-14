@@ -59,6 +59,7 @@ async function main() {
   loadScript("shared/constants.js", context);
   loadScript("shared/session.js", context);
   loadScript("shared/storage.js", context);
+  loadScript("backup/legacy-panel/shared/legacy-storage-accessors.js", context);
   loadScript("backup/legacy-panel/shared/meeting-bridge.js", context);
 
   const namespace = context.InovaBookmarks;

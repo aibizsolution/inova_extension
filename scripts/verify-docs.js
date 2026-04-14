@@ -44,6 +44,7 @@ const requiredFiles = [
   path.join("scripts", "install-git-hooks.js"),
   path.join("backup", "legacy-panel", "shared", "prompt-cloud-sync.js"),
   path.join("backup", "legacy-panel", "shared", "prompt-storage.js"),
+  path.join("backup", "legacy-panel", "shared", "legacy-storage-accessors.js"),
   "shared/prompt-library.js",
   path.join("scripts", "verify-feature-doc-update.js"),
   path.join("scripts", "verify-hosted-panel-bridge.js"),
@@ -556,6 +557,10 @@ const codeChecks = [
       /panelRuntimeCapabilityRouter\.handle/,
       /invokeHostedPanelRequest/,
     ],
+  },
+  {
+    file: path.join("backup", "legacy-panel", "shared", "legacy-storage-accessors.js"),
+    patterns: [/getMeetingStateByMeetingId/, /setReleaseInfo/, /setMeetingHub/],
   },
   {
     file: "shared/prompt-library.js",
