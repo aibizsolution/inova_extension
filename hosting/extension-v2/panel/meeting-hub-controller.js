@@ -204,7 +204,7 @@
         if (normalizedAction === "share") {
           traceMeeting("63.top.meeting.bridge.share.start", input);
           const result = await invokeRuntime({
-            action: "meeting.create-share-link",
+            action: "meeting.share.create",
             input,
             providerIdentity: buildProviderIdentityPayload(state.providerIdentity),
           });
@@ -233,7 +233,7 @@
 
         traceMeeting("63.top.meeting.bridge.revoke-share.start", input);
         const result = await invokeRuntime({
-          action: "meeting.revoke-share-link",
+          action: "meeting.share.revoke",
           input,
           providerIdentity: buildProviderIdentityPayload(state.providerIdentity),
         });
@@ -267,7 +267,7 @@
       }
       state.initPromise = (async () => {
         try {
-          const storageState = await invokeRuntime({ action: "storage.get-state" });
+          const storageState = await invokeRuntime({ action: "storage.read-panel-state" });
           hydrateStorageState(storageState);
           state.initialized = true;
           return true;
@@ -284,7 +284,7 @@
 
     async function refreshStorageState() {
       try {
-        const storageState = await invokeRuntime({ action: "storage.get-state" });
+        const storageState = await invokeRuntime({ action: "storage.read-panel-state" });
         hydrateStorageState(storageState);
         state.initialized = true;
       } catch (error) {
@@ -394,7 +394,7 @@
           title: input.title,
         });
         const requestPayload = {
-          action: action === "open-result" ? "meeting.open-result" : "meeting.open-workspace",
+          action: action === "open-result" ? "meeting.result.open" : "meeting.workspace.open",
           input,
           providerIdentity: buildProviderIdentityPayload(state.providerIdentity),
         };

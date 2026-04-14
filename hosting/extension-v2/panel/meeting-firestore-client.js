@@ -77,7 +77,8 @@
         ? state.panelAuth
         : normalizePanelAuth(
           await invokeRuntime({
-            action: "auth.issue-meeting-panel",
+            action: "auth.issue-panel-session",
+            panel: "meeting",
             providerIdentity,
           })
         );

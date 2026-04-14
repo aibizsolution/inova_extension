@@ -261,6 +261,35 @@ function verifyBackgroundInvokeWiring() {
     invokeSource.includes("readHostedPanelStorageState"),
     "background should build a dedicated compact hosted storage-state snapshot"
   );
+  [
+    'action === "storage.read-panel-state"',
+    'action === "storage.write-ui-preferences"',
+    'action === "auth.issue-panel-session"',
+    'action === "functions.invoke-endpoint"',
+    'action === "browser.open-url"',
+    'action === "meeting.workspace.open"',
+    'action === "meeting.result.open"',
+    'action === "meeting.share.create"',
+    'action === "meeting.share.revoke"',
+  ].forEach((actionSurface) => assert(
+    invokeSource.includes(actionSurface),
+    `background hosted runtime should keep the canonical runtime action ${actionSurface}`
+  ));
+  [
+    'action === "storage.get-state"',
+    'action === "storage.update-ui-preferences"',
+    'action === "auth.issue-prompt-panel"',
+    'action === "auth.issue-meeting-panel"',
+    'action === "functions.fetch"',
+    'action === "release.open-url"',
+    'action === "meeting.open-workspace"',
+    'action === "meeting.open-result"',
+    'action === "meeting.create-share-link"',
+    'action === "meeting.revoke-share-link"',
+  ].forEach((actionSurface) => assert(
+    !invokeSource.includes(actionSurface),
+    `background hosted runtime should drop the legacy runtime action ${actionSurface}`
+  ));
   assert(
     !invokeSource.includes('"loadInovaPromptLibraryUrl"')
       && !invokeSource.includes('"peekInovaPromptLibraryUrl"'),

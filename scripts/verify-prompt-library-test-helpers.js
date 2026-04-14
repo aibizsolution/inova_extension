@@ -12,7 +12,8 @@ function createPromptLibraryFirestoreNamespace(snapshotFactory) {
         async ensureSubscribed(request = {}) {
           activeSubscription = true;
           await options.invokeRuntime?.({
-            action: "auth.issue-prompt-panel",
+            action: "auth.issue-panel-session",
+            panel: "prompt",
             providerIdentity: request?.providerIdentity,
           });
           return typeof snapshotFactory === "function"

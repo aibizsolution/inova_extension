@@ -78,7 +78,8 @@
         ? state.panelAuth
         : normalizePanelAuth(
           await invokeRuntime({
-            action: "auth.issue-prompt-panel",
+            action: "auth.issue-panel-session",
+            panel: "prompt",
             providerIdentity,
           })
         );

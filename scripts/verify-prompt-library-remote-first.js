@@ -112,7 +112,7 @@ async function verifyHostedPromptEditorViewLabels() {
 
   const controller = context.InovaBookmarks.promptLibraryController.create({
     invokeRuntime: async (request) => {
-      if (request?.action === "storage.get-state") {
+      if (request?.action === "storage.read-panel-state") {
         return {
           cloudSync: {
             providerIdentity: {
@@ -129,7 +129,7 @@ async function verifyHostedPromptEditorViewLabels() {
           },
         };
       }
-      if (request?.action === "functions.fetch") {
+      if (request?.action === "functions.invoke-endpoint") {
         return {
           promptLibrary: {
             items: [{ id: "prompt-1", title: "Prompt", content: "Body" }],
@@ -313,7 +313,7 @@ async function verifyHostedPromptPublishUsesFunctionsFetch() {
         endpointKey: request?.endpointKey || "",
         partial: request?.partial ? { ...request.partial } : null,
       });
-      if (request?.action === "storage.get-state") {
+      if (request?.action === "storage.read-panel-state") {
         return {
           cloudSync: {
             providerIdentity: {
@@ -330,7 +330,7 @@ async function verifyHostedPromptPublishUsesFunctionsFetch() {
           },
         };
       }
-      if (request?.action === "functions.fetch" && request?.endpointKey === "loadInovaPromptLibraryUrl") {
+      if (request?.action === "functions.invoke-endpoint" && request?.endpointKey === "loadInovaPromptLibraryUrl") {
         return {
           promptLibrary: {
             items: [{ id: "prompt-1", title: "Accessibility Tester", content: "본문" }],
@@ -338,14 +338,14 @@ async function verifyHostedPromptPublishUsesFunctionsFetch() {
           },
         };
       }
-      if (request?.action === "functions.fetch" && request?.endpointKey === "publishPromptToStoreUrl") {
+      if (request?.action === "functions.invoke-endpoint" && request?.endpointKey === "publishPromptToStoreUrl") {
         return {
           entry: {
             entryId: "entry-1",
           },
         };
       }
-      if (request?.action === "storage.update-ui-preferences") {
+      if (request?.action === "storage.write-ui-preferences") {
         persistedTabs.push(request?.partial?.activePromptTab || "");
         return {};
       }
@@ -454,7 +454,7 @@ async function verifyHostedPromptTabSelectionDoesNotWaitForPersistence() {
   const controller = context.InovaBookmarks.promptLibraryController.create({
     ensureStoreLoaded: async () => {},
     invokeRuntime: async (request) => {
-      if (request?.action === "storage.update-ui-preferences") {
+      if (request?.action === "storage.write-ui-preferences") {
         return persistencePromise;
       }
       return {};
@@ -527,7 +527,7 @@ async function verifyHostedPromptTabSelectionSurvivesLateStorageHydration() {
 
   const controller = context.InovaBookmarks.promptLibraryController.create({
     invokeRuntime: async (request) => {
-      if (request?.action === "storage.get-state") {
+      if (request?.action === "storage.read-panel-state") {
         return storagePromise;
       }
       return {};
@@ -623,7 +623,7 @@ async function verifyHostedPromptReviewRequestAutofocus() {
 
   const controller = context.InovaBookmarks.promptLibraryController.create({
     invokeRuntime: async (request) => {
-      if (request?.action === "storage.get-state") {
+      if (request?.action === "storage.read-panel-state") {
         return {
           cloudSync: {
             providerIdentity: {

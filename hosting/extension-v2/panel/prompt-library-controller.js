@@ -563,7 +563,7 @@
       scheduleRender();
       try {
         await invokeRuntime({
-          action: "functions.fetch",
+          action: "functions.invoke-endpoint",
           authMode: "access-token",
           body: {
             categoryId: publishCategory.id,
@@ -686,7 +686,7 @@
       }
       state.initializing = true;
       try {
-        const storageState = await invokeRuntime({ action: "storage.get-state" });
+        const storageState = await invokeRuntime({ action: "storage.read-panel-state" });
         hydrateStorageState(storageState);
         state.initialized = true;
         if (shouldActivateLibrary || state.pendingLibraryLoadAfterInit) {
@@ -782,7 +782,7 @@
         );
         syncDocument.sync.reason = normalizeText(reason) || "manual";
         await invokeRuntime({
-          action: "functions.fetch",
+          action: "functions.invoke-endpoint",
           authMode: "access-token",
           body: syncDocument,
           endpointKey: "syncInovaPromptLibraryUrl",
@@ -810,7 +810,7 @@
       }
       state.persistingActiveTab = nextPromptTab;
       await invokeRuntime({
-        action: "storage.update-ui-preferences",
+        action: "storage.write-ui-preferences",
         partial: {
           activePromptTab: nextPromptTab,
           activeTool: "prompts",

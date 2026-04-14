@@ -32,38 +32,42 @@ const PANEL_ALLOWED_FUNCTION_ENDPOINT_KEYS = Object.freeze({
 
 globalThis.invokeHostedPanelRequest = async function invokeHostedPanelRequest(request) {
   const action = namespace.session.normalizeText(request?.action).toLowerCase();
-  if (action === "storage.get-state") {
+  if (action === "storage.read-panel-state") {
     return readHostedPanelStorageState();
   }
-  if (action === "storage.update-ui-preferences") {
+  if (action === "storage.write-ui-preferences") {
     return namespace.storage.updateUiPreferences(request?.partial && typeof request.partial === "object" ? request.partial : {});
   }
-  if (action === "browser.open-url" || action === "release.open-url") {
+  if (action === "browser.open-url") {
     return openReleaseUrl(request?.url);
   }
-  if (action === "meeting.open-workspace") {
+  if (action === "meeting.workspace.open") {
     return openMeetingWorkspace(request?.input, request?.providerIdentity);
   }
-  if (action === "meeting.open-result") {
+  if (action === "meeting.result.open") {
     return openMeetingResult(request?.input, request?.providerIdentity);
   }
-  if (action === "meeting.create-share-link") {
+  if (action === "meeting.share.create") {
     return createMeetingShareLink(request?.input, request?.providerIdentity);
   }
-  if (action === "meeting.revoke-share-link") {
+  if (action === "meeting.share.revoke") {
     return revokeMeetingShareLink(request?.input, request?.providerIdentity);
   }
-  if (action === "auth.issue-prompt-panel") {
-    return enrichPromptPanelAuth(
-      await issuePromptPanelAuth(request?.providerIdentity)
-    );
+  if (action === "auth.issue-panel-session") {
+    const panel = namespace.session.normalizeText(request?.panel).toLowerCase();
+    if (panel === "prompt") {
+      return enrichPromptPanelAuth(
+        await issuePromptPanelAuth(request?.providerIdentity)
+      );
+    }
+    if (panel === "meeting") {
+      return enrichMeetingPanelAuth(
+        await issueMeetingPanelAuth(request?.providerIdentity)
+      );
+    }
+    throw new Error("허용되지 않은 hosted panel auth scope예요.");
   }
-  if (action === "auth.issue-meeting-panel") {
-    return enrichMeetingPanelAuth(
-      await issueMeetingPanelAuth(request?.providerIdentity)
-    );
-  }
-  if (action === "functions.fetch") {
+  if (action === "functions.invoke-endpoint") {
     return invokeHostedPanelFunctionFetch(request);
   }
   throw new Error("허용되지 않은 hosted panel runtime 요청이에요.");

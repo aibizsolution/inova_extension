@@ -234,7 +234,7 @@
           body.reviewProfile = reviewProfile;
         }
         const result = await invokeRuntime({
-          action: "functions.fetch",
+          action: "functions.invoke-endpoint",
           authMode: "access-token",
           body,
           endpointKey: "reviewInovaPromptUrl",

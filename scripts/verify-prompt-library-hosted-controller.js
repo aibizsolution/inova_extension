@@ -62,8 +62,9 @@ async function verifyHostedPromptLibraryAvoidsDuplicateReloads() {
       runtimeCalls.push({
         action: request?.action,
         endpointKey: request?.endpointKey || "",
+        panel: request?.panel || "",
       });
-      if (request?.action === "storage.get-state") {
+      if (request?.action === "storage.read-panel-state") {
         return {
           cloudSync: {
             providerIdentity: {
@@ -80,7 +81,7 @@ async function verifyHostedPromptLibraryAvoidsDuplicateReloads() {
           },
         };
       }
-      if (request?.action === "functions.fetch") {
+      if (request?.action === "functions.invoke-endpoint") {
         return {
           promptLibrary: {
             items: [{ id: "prompt-1", title: "Prompt", content: "Body" }],
@@ -102,7 +103,7 @@ async function verifyHostedPromptLibraryAvoidsDuplicateReloads() {
   await flushAsync();
 
   assert.equal(
-    runtimeCalls.filter((call) => call.action === "auth.issue-prompt-panel").length,
+    runtimeCalls.filter((call) => call.action === "auth.issue-panel-session" && call.panel === "prompt").length,
     1,
     "hosted prompt library should issue prompt panel auth once during the first prompts activation"
   );
@@ -115,7 +116,7 @@ async function verifyHostedPromptLibraryAvoidsDuplicateReloads() {
   await flushAsync();
 
   assert.equal(
-    runtimeCalls.filter((call) => call.action === "auth.issue-prompt-panel").length,
+    runtimeCalls.filter((call) => call.action === "auth.issue-panel-session" && call.panel === "prompt").length,
     1,
     "hosted prompt library should not reissue prompt panel auth on repeated panel sync while the Firestore subscription stays active"
   );

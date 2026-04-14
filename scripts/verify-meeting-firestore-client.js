@@ -127,7 +127,8 @@ async function verifyHostedMeetingFirestoreClientContract() {
   });
 
   assert.equal(runtimeCalls.length, 1, "meeting firestore client should request panel auth once for a fresh subscription");
-  assert.equal(runtimeCalls[0].action, "auth.issue-meeting-panel");
+  assert.equal(runtimeCalls[0].action, "auth.issue-panel-session");
+  assert.equal(runtimeCalls[0].panel, "meeting");
   assert.deepEqual(queryState.collectionNames, ["integration_inova_meetings"]);
   assert.equal(firstSnapshot.fromCache, true, "meeting firestore client should return cached Firestore data first when available");
   assert.equal(firstSnapshot.items[0].meetingId, "meeting-alpha");

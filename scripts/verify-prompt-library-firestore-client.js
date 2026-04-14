@@ -147,7 +147,8 @@ async function verifyHostedPromptLibraryFirestoreClientContract() {
   });
 
   assert.equal(runtimeCalls.length, 1, "prompt firestore client should request panel auth once for a fresh subscription");
-  assert.equal(runtimeCalls[0].action, "auth.issue-prompt-panel");
+  assert.equal(runtimeCalls[0].action, "auth.issue-panel-session");
+  assert.equal(runtimeCalls[0].panel, "prompt");
   assert.deepEqual(queryState.collectionNames, [
     "integration_inova_accounts_v2",
     "prompt_library_orders_v2",

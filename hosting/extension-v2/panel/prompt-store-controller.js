@@ -236,7 +236,7 @@
       scheduleRender();
       try {
         const result = await invokeRuntime({
-          action: "functions.fetch",
+          action: "functions.invoke-endpoint",
           authMode: "access-token",
           body: {
             filter: {
@@ -342,7 +342,7 @@
       }
       try {
         const result = await invokeRuntime({
-          action: "functions.fetch",
+          action: "functions.invoke-endpoint",
           authMode: "access-token",
           body: {
             entryId: normalizedEntryId,
@@ -371,7 +371,7 @@
       scheduleRender();
       try {
         const result = await invokeRuntime({
-          action: "functions.fetch",
+          action: "functions.invoke-endpoint",
           authMode: "access-token",
           body: {
             entryId: normalizedEntryId,
@@ -402,7 +402,7 @@
       scheduleRender();
       try {
         const result = await invokeRuntime({
-          action: "functions.fetch",
+          action: "functions.invoke-endpoint",
           authMode: "access-token",
           body: {
             entryId: normalizedEntryId,
@@ -453,7 +453,7 @@
       scheduleRender();
       try {
         await invokeRuntime({
-          action: "functions.fetch",
+          action: "functions.invoke-endpoint",
           authMode: "access-token",
           body: {
             entryId: normalizedEntryId,

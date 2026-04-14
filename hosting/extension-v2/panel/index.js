@@ -1647,7 +1647,7 @@
       return null;
     }
     const runtimeAction = normalizeText(payload?.action).toLowerCase();
-    if (runtimeAction === "functions.fetch") {
+    if (runtimeAction === "functions.invoke-endpoint") {
       const functionLabel = buildFunctionsFetchLabel(payload);
       const authMode = normalizeText(payload?.authMode) || "access-token";
       return {
@@ -1672,15 +1672,16 @@
             target: readRuntimeTargetForTrace(),
           };
         },
-        errorStep: "35.hosted.functions.fetch.error",
-        startStep: "34.hosted.functions.fetch.start",
-        successStep: "35.hosted.functions.fetch.success",
+        errorStep: "35.hosted.functions.invoke.error",
+        startStep: "34.hosted.functions.invoke.start",
+        successStep: "35.hosted.functions.invoke.success",
         trace: traceFunctionsFlow,
-        timeoutStep: "35.hosted.functions.fetch.timeout",
+        timeoutStep: "35.hosted.functions.invoke.timeout",
       };
     }
-    if (runtimeAction === "auth.issue-prompt-panel" || runtimeAction === "auth.issue-meeting-panel") {
-      const scope = runtimeAction === "auth.issue-prompt-panel" ? "prompt-panel" : "meeting-panel";
+    if (runtimeAction === "auth.issue-panel-session") {
+      const panel = normalizeText(payload?.panel).toLowerCase();
+      const scope = panel === "prompt" ? "prompt-panel" : panel === "meeting" ? "meeting-panel" : "panel-session";
       return {
         buildResultPayload(durationMs) {
           return {

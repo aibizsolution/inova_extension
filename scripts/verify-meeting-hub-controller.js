@@ -72,11 +72,11 @@ async function verifyHostedMeetingHubOwnership() {
   assert.equal(viewState.pending?.active, false, "hosted meeting hub should clear pending state after launch");
 
   assert(
-    harness.runtimeCalls.some((request) => request.action === "meeting.create-share-link"),
+    harness.runtimeCalls.some((request) => request.action === "meeting.share.create"),
     "hosted meeting hub should call runtime share actions directly"
   );
   assert(
-    harness.runtimeCalls.some((request) => request.action === "meeting.open-result"),
+    harness.runtimeCalls.some((request) => request.action === "meeting.result.open"),
     "hosted meeting hub should call runtime open actions directly"
   );
 }
@@ -392,7 +392,7 @@ async function verifyHostedMeetingHubIgnoresOwnSummaryEchoWhileLoading() {
     invokePage: async () => ({ copied: true }),
     invokeRuntime: async (request) => {
       runtimeCalls.push(cloneValue(request));
-      if (request?.action === "storage.get-state") {
+      if (request?.action === "storage.read-panel-state") {
         return {
           cloudSync: {
             providerIdentity: {
@@ -564,7 +564,7 @@ function createHarnessWithOptions(options = {}) {
     },
     invokeRuntime: async (request) => {
       runtimeCalls.push(cloneValue(request));
-      if (request?.action === "storage.get-state") {
+      if (request?.action === "storage.read-panel-state") {
         return {
           cloudSync: {
             providerIdentity: {
@@ -581,7 +581,7 @@ function createHarnessWithOptions(options = {}) {
           },
         };
       }
-      if (request?.action === "meeting.create-share-link") {
+      if (request?.action === "meeting.share.create") {
         return {
           share: {
             active: true,
@@ -591,7 +591,7 @@ function createHarnessWithOptions(options = {}) {
           shareUrl: "https://share.example/meeting-alpha",
         };
       }
-      if (request?.action === "meeting.revoke-share-link") {
+      if (request?.action === "meeting.share.revoke") {
         return {
           share: {
             active: false,
@@ -600,7 +600,7 @@ function createHarnessWithOptions(options = {}) {
           },
         };
       }
-      if (request?.action === "meeting.open-result") {
+      if (request?.action === "meeting.result.open") {
         return {
           opened: true,
           url: "https://meeting.example/result",

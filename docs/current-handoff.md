@@ -85,7 +85,7 @@ Short version:
 - active v2 prompt shell no longer keeps hosted-owned prompt store-load/storage/sync sidecars; extension prompt residue is now review float plus review handoff/persistence only
 - active v2 prompt review no longer mirrors result/error/open/pending state through the top snapshot; extension now sends only a monotonic external `requestId` signal and hosted review owns the request lifecycle plus escape dismiss
 - active `shared/storage.js` / `shared/cloud-sync.js` no longer carry dormant prompt-library CRUD/sync operation helpers; those backup-only prompt helpers now live under `backup/legacy-panel/shared/*`
-- active hosted runtime broker no longer exposes generic storage read/write mutation to the v2 panel; `storage.get-state` is now a compact `cloudSync/settings/uiPreferences` snapshot and prompt tab persistence writes stay on `storage.update-ui-preferences` only
+- active hosted runtime broker no longer exposes generic storage read/write mutation to the v2 panel; the live runtime contract now converges on `storage.read-panel-state`, `storage.write-ui-preferences`, `auth.issue-panel-session`, `functions.invoke-endpoint`, `browser.open-url`, and `meeting.*` capability actions only
 - active v2 shell now keeps generic `prompts/store` tool selection in `panel-v2-shell-bridge`; `panel-v2-prompt-controller.js` no longer intercepts normal prompt/store tool picks
 - active v2 prompt snapshot no longer mirrors hosted prompt activeTab/search state back into extension state
 - active v2 prompt state factory and route hydration no longer mirror hosted-owned prompt library/store/editor buckets inside extension state

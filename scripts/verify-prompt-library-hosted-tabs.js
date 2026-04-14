@@ -38,10 +38,10 @@ async function verifyHostedPromptTabPersistenceDedupesWrites() {
   const persistedTabs = [];
   const controller = createController({
     invokeRuntime: async (request) => {
-      if (request?.action === "storage.get-state") {
+      if (request?.action === "storage.read-panel-state") {
         return buildStorageState("library");
       }
-      if (request?.action === "storage.update-ui-preferences") {
+      if (request?.action === "storage.write-ui-preferences") {
         persistedTabs.push(request?.partial?.activePromptTab || "");
         return {};
       }
@@ -76,8 +76,9 @@ async function verifyHostedPromptLibraryTabSelectionAvoidsForcedReload() {
       runtimeCalls.push({
         action: request?.action,
         endpointKey: request?.endpointKey || "",
+        panel: request?.panel || "",
       });
-      if (request?.action === "storage.get-state") {
+      if (request?.action === "storage.read-panel-state") {
         return buildStorageState("library");
       }
       return {};
@@ -98,7 +99,7 @@ async function verifyHostedPromptLibraryTabSelectionAvoidsForcedReload() {
   await flushAsync();
 
   assert.equal(
-    runtimeCalls.filter((call) => call.action === "auth.issue-prompt-panel").length,
+    runtimeCalls.filter((call) => call.action === "auth.issue-panel-session" && call.panel === "prompt").length,
     1,
     "hosted prompt library tab selection should not reissue prompt panel auth while the hosted library subscription stays active"
   );
@@ -114,8 +115,9 @@ async function verifyHostedPromptLibraryActivationDuringInitStillLoads() {
     invokeRuntime: async (request) => {
       runtimeCalls.push({
         action: request?.action || "",
+        panel: request?.panel || "",
       });
-      if (request?.action === "storage.get-state") {
+      if (request?.action === "storage.read-panel-state") {
         return storageStatePromise;
       }
       return {};
@@ -140,7 +142,7 @@ async function verifyHostedPromptLibraryActivationDuringInitStillLoads() {
   await flushAsync();
 
   assert.equal(
-    runtimeCalls.filter((call) => call.action === "auth.issue-prompt-panel").length,
+    runtimeCalls.filter((call) => call.action === "auth.issue-panel-session" && call.panel === "prompt").length,
     1,
     "release-to-prompts activation should still start prompt panel auth after late storage hydration finishes"
   );
