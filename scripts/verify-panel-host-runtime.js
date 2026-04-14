@@ -21,6 +21,14 @@ function verifyPanelHostRuntimeModuleSplit() {
   const hostBridgeSource = fs.readFileSync(path.join(root, "content", "panel-host-bridge.js"), "utf8");
   const hostViewSource = fs.readFileSync(path.join(root, "content", "panel-host-view.js"), "utf8");
   const hostRuntimeSource = fs.readFileSync(path.join(root, "content", "panel-host-runtime.js"), "utf8");
+  const pageCapabilityRouterSource = fs.readFileSync(
+    path.join(root, "content", "page-capability-router.js"),
+    "utf8"
+  );
+  const hostedPanelBridgeSource = fs.readFileSync(
+    path.join(root, "content", "hosted-panel-bridge.js"),
+    "utf8"
+  );
   const hostedIndexSource = fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "index.js"), "utf8");
 
   assert(
@@ -60,6 +68,14 @@ function verifyPanelHostRuntimeModuleSplit() {
     "content/panel-host-bridge.js should own hosted bridge endpoint creation once panel.js delegates it"
   );
   assert(
+    /panelPageCapabilityRouter\?\.handle\?\./.test(hostedPanelBridgeSource),
+    "content/hosted-panel-bridge.js should delegate page capability handling through panelPageCapabilityRouter"
+  );
+  assert(
+    !/function handlePageRequest/.test(hostedPanelBridgeSource),
+    "content/hosted-panel-bridge.js should stop carrying inline page capability handlers once page-capability-router owns them"
+  );
+  assert(
     /function buildMarkup/.test(hostViewSource),
     "content/panel-host-view.js should own hosted panel markup once panel.js delegates the host shell view"
   );
@@ -67,6 +83,21 @@ function verifyPanelHostRuntimeModuleSplit() {
     /function installHandleInteractions/.test(hostViewSource),
     "content/panel-host-view.js should own handle drag/click wiring once panel.js delegates the host shell view"
   );
+  [
+    "conversation.read-state",
+    "conversation.jump-item",
+    "composer.read-state",
+    "composer.apply-text",
+    "clipboard.write-text",
+    "debug.read-state",
+    "debug.set-enabled",
+    "debug.copy-log",
+    "debug.clear-log",
+    "trace.log",
+  ].forEach((pageActionPattern) => assert(
+    pageCapabilityRouterSource.includes(pageActionPattern),
+    `content/page-capability-router.js should own the canonical page capability action ${pageActionPattern}`
+  ));
   [
     "function normalizePageAction(",
     '"log-trace"',
@@ -364,6 +395,7 @@ function createHarness() {
     },
   };
 
+  loadScript(path.join("content", "page-capability-router.js"), context);
   loadScript(path.join("content", "hosted-panel-bridge.js"), context);
   context.InovaBookmarks.hostedPanelBridge = hostedPanelBridgeStub;
   loadScript(path.join("content", "panel-console-trace.js"), context);

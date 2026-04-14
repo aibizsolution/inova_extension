@@ -23,28 +23,30 @@ function verifyHostedBridgeRequestModuleContract() {
     path.join(root, "content", "panel-host-bridge.js"),
     "utf8"
   );
+  const pageCapabilityRouterSource = fs.readFileSync(
+    path.join(root, "content", "page-capability-router.js"),
+    "utf8"
+  );
   const bridgeRequestSource = fs.readFileSync(
     path.join(root, "content", "hosted-panel-bridge.js"),
     "utf8"
   );
-  const pageRequestStart = bridgeRequestSource.indexOf("function handlePageRequest(");
-  const pageRequestEnd = bridgeRequestSource.indexOf("async function handlePanelRequest(");
-  const pageRequestSource = pageRequestStart >= 0 && pageRequestEnd > pageRequestStart
-    ? bridgeRequestSource.slice(pageRequestStart, pageRequestEnd)
-    : bridgeRequestSource;
 
   const mainContentScript = manifest.content_scripts.find((entry) =>
     Array.isArray(entry?.matches) && entry.matches.includes("https://inova.incross.com/*")
   );
   const scriptList = Array.isArray(mainContentScript?.js) ? mainContentScript.js : [];
+  const pageCapabilityRouterIndex = scriptList.indexOf("content/page-capability-router.js");
   const contractHelperIndex = scriptList.indexOf("content/hosted-panel-bridge.js");
   const hostBridgeIndex = scriptList.indexOf("content/panel-host-bridge.js");
   const hostViewIndex = scriptList.indexOf("content/panel-host-view.js");
   const panelIndex = scriptList.indexOf("content/panel.js");
 
+  assert(pageCapabilityRouterIndex !== -1, "manifest should load the page capability router");
   assert(contractHelperIndex !== -1, "manifest should load the hosted panel bridge contract helper");
   assert(hostBridgeIndex !== -1, "manifest should load the panel host bridge helper");
   assert(hostViewIndex !== -1, "manifest should load the panel host view helper");
+  assert(panelIndex !== -1 && pageCapabilityRouterIndex < contractHelperIndex, "manifest should load the page capability router before the hosted panel bridge");
   assert(panelIndex !== -1 && contractHelperIndex < panelIndex, "manifest should load the hosted panel bridge contract helper before content/panel.js");
   assert(panelIndex !== -1 && hostBridgeIndex < panelIndex, "manifest should load the panel host bridge helper before content/panel.js");
   assert(panelIndex !== -1 && hostViewIndex < panelIndex, "manifest should load the panel host view helper before content/panel.js");
@@ -97,7 +99,7 @@ function verifyHostedBridgeRequestModuleContract() {
     'if (domain === "page")',
     'if (domain === "panel")',
     "handleRuntimeRequest(",
-    "handlePageRequest(",
+    "namespace.panelPageCapabilityRouter?.handle?.(",
     "handlePanelRequest(",
     "handlePanelSummaryRequest(",
     "handleConversationRequest(",
@@ -118,7 +120,6 @@ function verifyHostedBridgeRequestModuleContract() {
     `hosted bridge request helper should keep the inline contract for ${pattern}`
   ));
   [
-    "const action = normalizeText(payload?.action)",
     'if (action === "clipboard.write-text")',
     'if (action === "debug.copy-log")',
     'if (action === "debug.clear-log")',
@@ -130,8 +131,23 @@ function verifyHostedBridgeRequestModuleContract() {
     'if (action === "debug.read-state")',
     'if (action === "debug.set-enabled")',
   ].forEach((pattern) => assert(
-    pageRequestSource.includes(pattern),
-    `hosted bridge request helper should keep the inline contract for ${pattern}`
+    pageCapabilityRouterSource.includes(pattern),
+    `page capability router should keep the canonical page capability contract for ${pattern}`
+  ));
+  [
+    "function handlePageRequest(",
+    'if (action === "clipboard.write-text")',
+    'if (action === "debug.copy-log")',
+    'if (action === "trace.log")',
+    'if (action === "composer.read-state")',
+    'if (action === "composer.apply-text")',
+    'if (action === "conversation.read-state")',
+    'if (action === "conversation.jump-item")',
+    'if (action === "debug.read-state")',
+    'if (action === "debug.set-enabled")',
+  ].forEach((pattern) => assert(
+    !bridgeRequestSource.includes(pattern),
+    `hosted bridge request helper should delegate page capability handling instead of inlining ${pattern}`
   ));
   [
     "function normalizePageAction(",
@@ -152,8 +168,8 @@ function verifyHostedBridgeRequestModuleContract() {
     'if (action === "get-debug-state")',
     'if (action === "set-debug-enabled")',
   ].forEach((pattern) => assert(
-    !pageRequestSource.includes(pattern),
-    `hosted bridge request helper should stop branching directly on the pre-capability page action ${pattern}`
+    !pageCapabilityRouterSource.includes(pattern),
+    `page capability router should stop branching directly on the pre-capability page action ${pattern}`
   ));
   [
     "handleLegacyPanelRequest(",

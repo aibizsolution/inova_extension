@@ -325,8 +325,17 @@ const codeChecks = [
       /panel\.snapshot\.v1/,
       /type:\s*"response"/,
       /handleRuntimeRequest/,
-      /handlePageRequest/,
+      /panelPageCapabilityRouter\?\.handle\?\./,
       /handlePanelRequest/,
+    ],
+  },
+  {
+    file: "content/page-capability-router.js",
+    patterns: [
+      /conversation\.read-state/,
+      /composer\.apply-text/,
+      /clipboard\.write-text/,
+      /trace\.log/,
     ],
   },
   {
