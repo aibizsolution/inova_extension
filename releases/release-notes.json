@@ -29,6 +29,13 @@
             "text": "manifest/package 버전을 1.0.0으로 올려 로컬과 hosted panel이 기본적으로 v2 lane을 타도록 맞췄습니다."
           }
         ]
+      },
+      "artifact": {
+        "fileName": "inova-extension-1.0.0-2026-04-12.zip",
+        "publishedAt": "2026-04-12T00:45:32.411Z",
+        "sha256": "e95e6b1546a392fd0156c2243527a003e3a4b6ca43f8c483c1509fc915f22fe8",
+        "sizeBytes": 295473,
+        "minSupportedVersion": "1.0.0"
       }
     },
     {

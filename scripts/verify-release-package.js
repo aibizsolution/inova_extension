@@ -125,22 +125,25 @@ function verifyHostedReleaseArtifacts() {
     const artifact = releaseEntry?.artifact && typeof releaseEntry.artifact === "object"
       ? releaseEntry.artifact
       : null;
-    if (artifact) {
-      if (normalizeText(artifact.fileName) !== fileName) {
-        errors.push(`${versionKey} fileName이 releases/release-notes.json artifact와 다릅니다.`);
-      }
-      if (normalizeText(artifact.publishedAt) !== normalizeText(release?.publishedAt)) {
-        errors.push(`${versionKey} publishedAt이 releases/release-notes.json artifact와 다릅니다.`);
-      }
-      if (normalizeText(artifact.sha256) !== normalizeText(release?.sha256)) {
-        errors.push(`${versionKey} sha256이 releases/release-notes.json artifact와 다릅니다.`);
-      }
-      if (Math.max(0, Number(artifact.sizeBytes) || 0) !== Math.max(0, Number(release?.sizeBytes) || 0)) {
-        errors.push(`${versionKey} sizeBytes가 releases/release-notes.json artifact와 다릅니다.`);
-      }
-      if (normalizeText(artifact.minSupportedVersion) !== normalizeText(release?.minSupportedVersion)) {
-        errors.push(`${versionKey} minSupportedVersion이 releases/release-notes.json artifact와 다릅니다.`);
-      }
+    if (!artifact) {
+      errors.push(`${versionKey} artifact가 releases/release-notes.json에 없습니다.`);
+      continue;
+    }
+
+    if (normalizeText(artifact.fileName) !== fileName) {
+      errors.push(`${versionKey} fileName이 releases/release-notes.json artifact와 다릅니다.`);
+    }
+    if (normalizeText(artifact.publishedAt) !== normalizeText(release?.publishedAt)) {
+      errors.push(`${versionKey} publishedAt이 releases/release-notes.json artifact와 다릅니다.`);
+    }
+    if (normalizeText(artifact.sha256) !== normalizeText(release?.sha256)) {
+      errors.push(`${versionKey} sha256이 releases/release-notes.json artifact와 다릅니다.`);
+    }
+    if (Math.max(0, Number(artifact.sizeBytes) || 0) !== Math.max(0, Number(release?.sizeBytes) || 0)) {
+      errors.push(`${versionKey} sizeBytes가 releases/release-notes.json artifact와 다릅니다.`);
+    }
+    if (normalizeText(artifact.minSupportedVersion) !== normalizeText(release?.minSupportedVersion)) {
+      errors.push(`${versionKey} minSupportedVersion이 releases/release-notes.json artifact와 다릅니다.`);
     }
   }
 

@@ -5,7 +5,15 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawnSync } = require("child_process");
-const { compareVersions, findReleaseEntry, getPublicReleaseSection, readReleaseCatalog, validateReleaseEntry } = require("./release-metadata");
+const {
+  compareVersions,
+  findReleaseEntry,
+  getPublicReleaseSection,
+  readReleaseCatalog,
+  upsertReleaseEntry,
+  validateReleaseEntry,
+  writeReleaseCatalog,
+} = require("./release-metadata");
 const {
   collectRequiredReleasePackagePaths,
   findMissingPaths,
@@ -37,7 +45,7 @@ const hostingBaseUrl = productLane === "v2"
 const latestDownloadFileName = "latest.zip";
 const publishedAt = new Date().toISOString();
 const runtimeItems = resolveReleaseRuntimeItems(manifestJson);
-const releaseCatalog = readReleaseCatalog(root);
+let releaseCatalog = readReleaseCatalog(root);
 const releaseEntry = findReleaseEntry(releaseCatalog, version);
 const releaseErrors = validateReleaseEntry(releaseEntry, version);
 if (releaseErrors.length) {
@@ -73,6 +81,14 @@ const historyRelease = buildPublishedRelease({
   fileName: `${bundleName}.zip`,
   downloadUrl: versionedDownloadUrl,
   versionDownloadUrl: versionedDownloadUrl,
+  sha256,
+  sizeBytes,
+});
+releaseCatalog = persistCurrentReleaseArtifact({
+  releaseCatalog,
+  version,
+  publishedAt,
+  fileName: `${bundleName}.zip`,
   sha256,
   sizeBytes,
 });
@@ -372,6 +388,21 @@ function pruneCuratedReleaseArtifacts({ curatedHistory, hostingDownloadDir, late
 
   pruneZipFiles(releasesDir, curatedFileNames);
   pruneZipFiles(hostingDownloadDir, new Set([latestDownloadFileName, ...curatedFileNames]));
+}
+
+function persistCurrentReleaseArtifact({ releaseCatalog, version, publishedAt, fileName, sha256, sizeBytes }) {
+  const nextCatalog = upsertReleaseEntry(releaseCatalog, {
+    version,
+    artifact: {
+      fileName,
+      publishedAt,
+      sha256,
+      sizeBytes,
+      minSupportedVersion: version,
+    },
+  });
+  writeReleaseCatalog(root, nextCatalog);
+  return nextCatalog;
 }
 
 function ensureCuratedDownloadArtifacts({ curatedHistory, hostingDownloadDir, releasesDir, sourceDirs = [] }) {

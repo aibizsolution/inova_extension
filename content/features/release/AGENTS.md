@@ -56,8 +56,9 @@
 - `deploy:hosting`과 `deploy:all`은 hosted 검증/운영 배포용이며, 기본적으로 확장 패키지 버전과 사용자 릴리스 메타를 갱신하지 않는다.
 - 실제 사용자 패널에 보일 버전만 `releases/release-notes.json`에 남기고, `release:build`는 그 목록만 `latest.json`, `history.json`, `latest.zip`에 반영하며 공개 목록 밖의 로컬/hosting ZIP도 정리한다.
 - `release:build` 산출 경로는 lane에 따라 다르다. `0.x`는 `hosting/extension/*`, `1.x+`는 `hosting/extension-v2/*`를 갱신한다.
-- 공개 목록에 남길 이전 버전은 `releases/release-notes.json`에 artifact 메타를 유지해, CI나 새 환경에서도 history 메타를 다시 생성할 수 있게 관리한다.
-- 기본 `npm.cmd run verify`와 `node scripts/verify-release-package.js`는 현재 lane의 `latest.json`, `history.json`, `downloads/latest.zip`, version ZIP, `releases/release-notes.json` curated 목록이 서로 어긋나지 않는지도 함께 확인해야 한다.
+- 공개 목록에 남길 현재/이전 버전은 `releases/release-notes.json`에 artifact 메타를 유지해, CI나 새 환경에서도 history 메타를 다시 생성할 수 있게 관리한다.
+- `release:build`는 현재 버전 ZIP을 만든 뒤 같은 current version 엔트리의 `artifact` 메타도 `releases/release-notes.json`에 backfill해야 한다.
+- 기본 `npm.cmd run verify`와 `node scripts/verify-release-package.js`는 현재 lane의 `latest.json`, `history.json`, `downloads/latest.zip`, version ZIP, `releases/release-notes.json` curated 목록이 서로 어긋나지 않는지도 함께 확인해야 한다. history/latest에 올라온 공개 버전은 current version까지 포함해 curated notes에도 artifact 메타가 있어야 한다.
 - `release:build`는 기본 runtime 디렉터리뿐 아니라 `manifest.json`이 직접 참조하는 추가 파일도 ZIP에 포함해야 하며, staging 결과에 누락이 있으면 바로 실패해야 한다.
 - `content/*`, `background/*`, `popup/*`, `manifest.json`, 확장 번들에 포함되는 `shared/*` 변경은 Firebase 배포만으로 끝나지 않는다. 실제 확장 버전 빌드/배포와 Chrome 확장 새로고침까지 포함해 안내한다.
 - `hosting/*`만 바뀐 경우는 hosting 배포와 페이지 새로고침으로 끝날 수 있지만, 사용자에게는 `탭 새로고침 필요 여부`와 `확장 Reload 불필요 여부`를 함께 전달한다.

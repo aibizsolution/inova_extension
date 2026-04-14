@@ -26,8 +26,9 @@
   - `public.headline`
   - `public.summary`
   - `public.changes[]`
-- 공개 목록에 계속 남길 이전 버전은 `artifact.fileName`, `artifact.publishedAt`, `artifact.sha256`, `artifact.sizeBytes`를 유지한다.
-- 기본 `npm.cmd run verify`와 `node scripts/verify-release-package.js`는 현재 lane의 `latest.json`, `history.json`, `downloads/latest.zip`, version ZIP, `releases/release-notes.json` curated 목록이 서로 일치하는지도 함께 본다.
+- 공개 목록에 남길 현재/이전 버전은 모두 `artifact.fileName`, `artifact.publishedAt`, `artifact.sha256`, `artifact.sizeBytes`, `artifact.minSupportedVersion`을 유지한다.
+- `release:build`는 현재 버전 ZIP을 만든 뒤 `releases/release-notes.json` 현재 버전 엔트리에도 그 artifact 메타를 backfill한다.
+- 기본 `npm.cmd run verify`와 `node scripts/verify-release-package.js`는 현재 lane의 `latest.json`, `history.json`, `downloads/latest.zip`, version ZIP, `releases/release-notes.json` curated 목록이 서로 일치하는지, 그리고 history에 올라온 모든 공개 버전이 curated notes에도 artifact를 갖고 있는지도 함께 본다.
 - `TODO`가 남은 공개 메타는 `pre-push`와 `release:build`가 막는다.
 
 ## 배포 범위 규칙
