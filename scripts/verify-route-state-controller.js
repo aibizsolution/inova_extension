@@ -42,7 +42,6 @@ async function verifyRefreshStateLoadsStorageAndBookmarks() {
   assert.deepEqual(harness.state.bookmarks, [{ id: "bookmark-1", text: "첫 질문" }]);
   assert.equal(harness.state.awaitingRouteMessages, false);
   assert.equal(harness.state.routeBaselineSignature, "sig-after");
-  assert.equal(harness.ensureStoreLoadedCalls, 1);
   assert.equal(harness.state.lastError, "");
 }
 
@@ -70,7 +69,6 @@ function verifyLaneAwareStorageChangeHandling() {
   assert.deepEqual(harness.state.pausedSessions, { "session-3": true });
   assert.deepEqual(harness.state.promptLibrary.items, [{ title: "변경", content: "됨" }]);
   assert.deepEqual(harness.state.cloudSync, { mergedSource: "cache" });
-  assert.equal(harness.ensureStoreLoadedCalls, 1);
 }
 
 async function verifyRouteWaitLifecycle() {
@@ -105,7 +103,6 @@ async function verifyRouteWaitLifecycle() {
 }
 
 function createHarness(options = {}) {
-  const ensureStoreLoadedCalls = [];
   const debugEvents = [];
   const storageState = cloneValue(options.storageState || {
     cloudSync: {},
@@ -234,7 +231,6 @@ function createHarness(options = {}) {
   const harness = {
     controller: null,
     debugEvents,
-    ensureStoreLoadedCalls: 0,
     liveBookmarks: cloneValue(options.liveBookmarks || [{ id: "bookmark-1", text: "첫 질문" }]),
     liveSignature: options.liveSignature || "sig-after",
     state,
@@ -243,10 +239,6 @@ function createHarness(options = {}) {
   harness.controller = context.InovaBookmarks.routeStateController.create(state, {
     applyUiPreferenceLock(uiPreferences) {
       return cloneValue(options.uiPreferenceLockResult || uiPreferences);
-    },
-    ensureStoreLoaded() {
-      harness.ensureStoreLoadedCalls += 1;
-      ensureStoreLoadedCalls.push(true);
     },
     normalizeToolId(toolId) {
       return toolId === "release" || toolId === "prompts" || toolId === "meeting"

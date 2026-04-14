@@ -180,8 +180,8 @@ function main() {
     "v2 composition should not keep the prompt bridge proxy once hosted-owned prompt wiring can be passed directly"
   );
   assert(
-    v2CompositionSource.includes("createHostedOwnedPromptController"),
-    "v2 composition should wrap prompt wiring for hosted-owned prompt tabs"
+    v2CompositionSource.includes("hostedOwnedPromptController = sharedPromptController;"),
+    "v2 composition should pass the active v2 prompt controller straight through once shell prompt sync sidecars are gone"
   );
   assert(
     v2CompositionSource.includes("namespace.panelV2PromptController.create"),
@@ -299,18 +299,16 @@ function main() {
     !v2CompositionSource.includes("panelMeetingController.buildToolState?.(meetingHub)"),
     "v2 meeting snapshot shaping should not depend on panel meeting action UI state"
   );
-  assert(
-    v2CompositionSource.includes("handleStorageChange() {}"),
-    "v2 hosted-owned prompt wrapper should silence legacy prompt storage listeners"
-  );
-  assert(
-    v2CompositionSource.includes("scheduleCloudSyncIfNeeded() {}"),
-    "v2 hosted-owned prompt wrapper should silence legacy prompt cloud sync scheduling"
-  );
-  assert(
-    v2CompositionSource.includes("scheduleRealtimeSync() {}"),
-    "v2 hosted-owned prompt wrapper should silence legacy prompt realtime scheduling"
-  );
+  [
+    "const promptSyncBridge = {",
+    "ensureStoreLoaded: promptSyncBridge.ensureStoreLoaded",
+    "schedulePromptCloudSyncIfNeeded:",
+    "schedulePromptRealtimeSync:",
+    "isStoreTabActive: runtimeFlags.isStoreTabActive",
+  ].forEach((pattern) => assert(
+    !v2CompositionSource.includes(pattern),
+    `v2 composition should drop dead prompt shell sidecar residue ${pattern}`
+  ));
   assert(
     v2CompositionSource.includes("buildHostedPanelCallbacks: buildHostedOwnedPanelCallbacks"),
     "v2 bootstrap should provide a hosted-owned callback surface instead of passing the legacy default callback set through unchanged"

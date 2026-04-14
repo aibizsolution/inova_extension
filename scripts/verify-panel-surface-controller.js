@@ -40,8 +40,6 @@ function verifySurfaceWatcherInstallationAndComposerRecovery() {
 
   assert.equal(harness.state.open, true);
   assert.equal(harness.state.surfaceSignature, "true|true|1|1");
-  assert.deepEqual(harness.ensureStoreLoadedCalls, [true]);
-  assert.deepEqual(harness.promptRealtimeScheduleCalls, [120]);
   assert.equal(harness.renderCalls.length, 1);
   assert.equal(harness.debugEvents.length, 1);
   assert.equal(harness.debugEvents[0].event, "panel.ui.surface.changed");
@@ -68,16 +66,12 @@ function verifySurfaceWatcherComposerLoss() {
   };
   harness.intervals[0].callback();
 
-  assert.deepEqual(harness.ensureStoreLoadedCalls, []);
-  assert.deepEqual(harness.promptRealtimeScheduleCalls, [120]);
   assert.equal(harness.renderCalls.length, 1);
 }
 
 function createHarness(options = {}) {
   const debugEvents = [];
-  const ensureStoreLoadedCalls = [];
   const intervals = [];
-  const promptRealtimeScheduleCalls = [];
   const renderCalls = [];
 
   const context = vm.createContext({
@@ -117,32 +111,21 @@ function createHarness(options = {}) {
   };
 
   const controller = context.InovaBookmarks.panelV2ShellBridge.createHostedOwnedPanelSurfaceBridge(state, {
-    ensureStoreLoaded() {
-      ensureStoreLoadedCalls.push(true);
-    },
-    isStoreTabActive() {
-      return Boolean(options.storeTabActive);
-    },
     logPanelDebug(event, payload) {
       debugEvents.push({ event, payload: cloneValue(payload) });
     },
     render() {
       renderCalls.push(true);
     },
-    schedulePromptRealtimeSync(delay) {
-      promptRealtimeScheduleCalls.push(delay);
-    },
   });
 
   return {
     controller,
     debugEvents,
-    ensureStoreLoadedCalls,
     get conversationState() {
       return conversationState;
     },
     intervals,
-    promptRealtimeScheduleCalls,
     renderCalls,
     set conversationState(value) {
       conversationState = cloneValue(value);

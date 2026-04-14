@@ -5,7 +5,6 @@
     const isPaused = typeof deps.isPaused === "function" ? deps.isPaused : () => false;
     const isToolSurface = typeof deps.isToolSurface === "function" ? deps.isToolSurface : () => false;
     const lockUiPreferenceSelection = typeof deps.lockUiPreferenceSelection === "function" ? deps.lockUiPreferenceSelection : () => {};
-    const onPromptTabSelected = typeof deps.onPromptTabSelected === "function" ? deps.onPromptTabSelected : () => {};
     const persistActiveTool = typeof deps.persistActiveTool === "function" ? deps.persistActiveTool : (async () => {});
     const render = typeof deps.render === "function" ? deps.render : () => {};
 
@@ -18,11 +17,7 @@
       buildReviewFloatState,
       buildToolState,
       ensureReviewFloat,
-      ensureStoreLoaded() {},
       handleEscape,
-      handleStorageChange() {},
-      scheduleCloudSyncIfNeeded() {},
-      scheduleRealtimeSync() {},
       selectTool,
       submitQuery,
       updateQuery,
@@ -93,7 +88,6 @@
         activeTool: "prompts",
       });
       lockUiPreferenceSelection("prompts", nextPromptTab);
-      onPromptTabSelected(nextPromptTab);
       render();
       persistActiveTool("prompts", nextPromptTab).catch((error) => {
         console.error("[i-Nova Bookmarks] prompt tab save failed", error);
@@ -108,7 +102,6 @@
         activeTool: "prompts",
       });
       lockUiPreferenceSelection("prompts", nextPromptTab);
-      onPromptTabSelected(nextPromptTab);
       render();
       await persistActiveTool("prompts", nextPromptTab);
     }

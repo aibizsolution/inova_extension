@@ -6,9 +6,6 @@
     const applyUiPreferenceLock = typeof deps.applyUiPreferenceLock === "function"
       ? deps.applyUiPreferenceLock
       : (uiPreferences) => uiPreferences;
-    const ensureStoreLoaded = typeof deps.ensureStoreLoaded === "function"
-      ? deps.ensureStoreLoaded
-      : () => {};
     const normalizeToolId = typeof deps.normalizeToolId === "function"
       ? deps.normalizeToolId
       : defaultNormalizeToolId;
@@ -32,9 +29,6 @@
         }
         state.bookmarks = readLiveBookmarks();
         state.lastError = "";
-        if (isStoreTabActive()) {
-          ensureStoreLoaded();
-        }
         logDebug("route.refresh.success", {
           activeTool: state.activeTool,
           bookmarkCount: state.bookmarks.length,
@@ -105,9 +99,6 @@
       if (uiPreferencesChange) {
         state.uiPreferences = readUiPreferences(uiPreferencesChange.newValue);
         state.activeTool = normalizeToolId(state.uiPreferences.activeTool || state.activeTool);
-        if (isStoreTabActive()) {
-          ensureStoreLoaded();
-        }
         changed = true;
       }
       if (promptLibraryChange) {
@@ -175,10 +166,6 @@
 
     function isPaused() {
       return Boolean(state.pausedSessions[state.sessionId]);
-    }
-
-    function isStoreTabActive() {
-      return state.activeTool === "prompts" && state.uiPreferences.activePromptTab === "store";
     }
 
     function normalizePromptTab(value) {

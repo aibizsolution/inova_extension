@@ -50,11 +50,8 @@ async function verifyBootstrapWiringAndScheduling() {
   assert.equal(typeof harness.windowListeners.resize, "function");
   assert.equal(typeof harness.windowListeners.focus, "function");
   assert.equal(typeof harness.documentListeners.visibilitychange, "function");
-  assert.equal(harness.storageListeners.length, 3);
+  assert.equal(harness.storageListeners.length, 2);
   assert.deepEqual(harness.routeSyncCalls, [true]);
-  assert.deepEqual(harness.promptRealtimeCalls, [260]);
-  assert.deepEqual(harness.promptCloudCalls, [260]);
-  assert.equal(harness.ensureStoreLoadedCalls, 1);
   assert.deepEqual(harness.releaseEnsureCalls, [{ allowCached: false, preferFresh: true }]);
   assert.deepEqual(harness.timeoutDelays, [450, 1200]);
 
@@ -67,8 +64,7 @@ async function verifyBootstrapSkipsMeetingLifecycleWiring() {
   await harness.controller.bootstrap();
   await harness.flush();
 
-  assert.equal(harness.storageListeners.length, 3);
-  assert.deepEqual(harness.promptRealtimeCalls, [260]);
+  assert.equal(harness.storageListeners.length, 2);
 }
 
 function verifyRouteStorageChangeDelegation() {
@@ -121,7 +117,6 @@ function createHarness(options = {}) {
   let callbacks = null;
   let routeStateShouldRefresh = true;
   let routeRefreshCalls = 0;
-  let ensureStoreLoadedCalls = 0;
   let debugInstallCalls = 0;
   let reviewFloatEnsureCalls = 0;
   let routeWatchInstallCalls = 0;
@@ -129,8 +124,6 @@ function createHarness(options = {}) {
   let lifecycleInitializeCalls = 0;
   const providerIdentityReasons = [];
   const routeSyncCalls = [];
-  const promptRealtimeCalls = [];
-  const promptCloudCalls = [];
   const releaseEnsureCalls = [];
 
   context.InovaBookmarks = {
@@ -184,22 +177,12 @@ function createHarness(options = {}) {
       ensureReviewFloat() {
         reviewFloatEnsureCalls += 1;
       },
-      ensureStoreLoaded() {
-        ensureStoreLoadedCalls += 1;
-      },
       handleDraftChange() {},
       handleEscape() {},
       handleImportFile() {},
       handlePromptAction() {},
-      handleStorageChange() {},
       handleStoreAction() {},
       movePromptItem() {},
-      scheduleCloudSyncIfNeeded(delay) {
-        promptCloudCalls.push(delay);
-      },
-      scheduleRealtimeSync(delay) {
-        promptRealtimeCalls.push(delay);
-      },
       selectPromptTab() {},
     },
     panelShellController: {
@@ -262,17 +245,8 @@ function createHarness(options = {}) {
     get debugInstallCalls() {
       return debugInstallCalls;
     },
-    get ensureStoreLoadedCalls() {
-      return ensureStoreLoadedCalls;
-    },
     get lifecycleInitializeCalls() {
       return lifecycleInitializeCalls;
-    },
-    get promptCloudCalls() {
-      return promptCloudCalls;
-    },
-    get promptRealtimeCalls() {
-      return promptRealtimeCalls;
     },
     get providerIdentityReasons() {
       return providerIdentityReasons;

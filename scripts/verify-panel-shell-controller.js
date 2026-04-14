@@ -24,7 +24,6 @@ async function verifyMeetingAndReleaseToolSelection() {
 
   await harness.controller.selectTool("meeting");
   assert.equal(harness.state.activeTool, "meeting");
-  assert.deepEqual(harness.promptRealtimeScheduleCalls, [120]);
   assert.deepEqual(harness.persistCalls[0], {
     activePromptTab: "store",
     activeTool: "meeting",
@@ -120,7 +119,6 @@ function createHarness(options = {}) {
   const handleUpdates = [];
   const persistCalls = [];
   const promptQueryCalls = [];
-  const promptRealtimeScheduleCalls = [];
   const promptSelectToolCalls = [];
   const promptSubmitCalls = [];
   const releaseEnsureCalls = [];
@@ -184,9 +182,6 @@ function createHarness(options = {}) {
   };
 
   const promptController = {
-    scheduleRealtimeSync(delay) {
-      promptRealtimeScheduleCalls.push(delay);
-    },
     async selectTool(toolId) {
       if (toolId === "prompts" || toolId === "store") {
         promptSelectToolCalls.push(toolId);
@@ -251,7 +246,6 @@ function createHarness(options = {}) {
     handleUpdates,
     persistCalls,
     promptQueryCalls,
-    promptRealtimeScheduleCalls,
     promptSelectToolCalls,
     promptSubmitCalls,
     releaseEnsureCalls,

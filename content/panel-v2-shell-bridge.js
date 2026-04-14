@@ -6,12 +6,6 @@
     const providerIdentitySync = deps.providerIdentitySync || { async syncToStorage() { return false; } };
     const releaseManager = deps.releaseManager || { ensureChecked() {} };
     const render = typeof deps.render === "function" ? deps.render : () => {};
-    const schedulePromptCloudSyncIfNeeded = typeof deps.schedulePromptCloudSyncIfNeeded === "function"
-      ? deps.schedulePromptCloudSyncIfNeeded
-      : () => {};
-    const schedulePromptRealtimeSync = typeof deps.schedulePromptRealtimeSync === "function"
-      ? deps.schedulePromptRealtimeSync
-      : () => {};
 
     return {
       handleVisibilityChange,
@@ -20,7 +14,6 @@
 
     function handleVisibilityChange() {
       if (global.document.visibilityState !== "visible") {
-        schedulePromptRealtimeSync(0);
         logPanelDebug("panel.ui.visibility.hidden", {
           scope: "panel-ui",
           tool: "panel",
@@ -29,8 +22,6 @@
         return;
       }
       void providerIdentitySync.syncToStorage("visibility-visible");
-      schedulePromptCloudSyncIfNeeded(320);
-      schedulePromptRealtimeSync(320);
       if (state.open) {
         releaseManager.ensureChecked();
       }
@@ -43,8 +34,6 @@
 
     function handleWindowFocus() {
       void providerIdentitySync.syncToStorage("window-focus");
-      schedulePromptCloudSyncIfNeeded(320);
-      schedulePromptRealtimeSync(320);
       if (state.open) {
         releaseManager.ensureChecked();
       }
@@ -57,19 +46,9 @@
   }
 
   function createHostedOwnedPanelLifecycleBridge(state, deps = {}) {
-    const isStoreTabActive = typeof deps.isStoreTabActive === "function" ? deps.isStoreTabActive : () => false;
     const logPanelDebug = typeof deps.logPanelDebug === "function" ? deps.logPanelDebug : () => {};
     const releaseManager = deps.releaseManager || { ensureChecked() {} };
     const render = typeof deps.render === "function" ? deps.render : () => {};
-    const schedulePromptCloudSyncIfNeeded = typeof deps.schedulePromptCloudSyncIfNeeded === "function"
-      ? deps.schedulePromptCloudSyncIfNeeded
-      : () => {};
-    const schedulePromptRealtimeSync = typeof deps.schedulePromptRealtimeSync === "function"
-      ? deps.schedulePromptRealtimeSync
-      : () => {};
-    const ensureStoreLoaded = typeof deps.ensureStoreLoaded === "function"
-      ? deps.ensureStoreLoaded
-      : () => {};
     const PANEL_OPEN_KEY = "inova-plus.panel-open";
 
     return {
@@ -87,11 +66,6 @@
       if (persist) {
         state.preferredOpen = state.open;
         writePanelOpenPreference(state.open);
-      }
-      schedulePromptCloudSyncIfNeeded(220);
-      schedulePromptRealtimeSync(state.open ? 220 : 0);
-      if (state.open && isStoreTabActive()) {
-        ensureStoreLoaded();
       }
       if (state.open) {
         releaseManager.ensureChecked(false, state.activeTool === "release");
@@ -124,19 +98,10 @@
   }
 
   function createHostedOwnedPanelSurfaceBridge(state, deps = {}) {
-    const ensureStoreLoaded = typeof deps.ensureStoreLoaded === "function"
-      ? deps.ensureStoreLoaded
-      : () => {};
-    const isStoreTabActive = typeof deps.isStoreTabActive === "function"
-      ? deps.isStoreTabActive
-      : () => false;
     const logPanelDebug = typeof deps.logPanelDebug === "function"
       ? deps.logPanelDebug
       : () => {};
     const render = typeof deps.render === "function" ? deps.render : () => {};
-    const schedulePromptRealtimeSync = typeof deps.schedulePromptRealtimeSync === "function"
-      ? deps.schedulePromptRealtimeSync
-      : () => {};
 
     return {
       installSurfaceWatchers,
@@ -160,10 +125,6 @@
         if (!hadComposer && hasComposer && state.preferredOpen) {
           state.open = true;
         }
-        if (!hadComposer && hasComposer && isStoreTabActive()) {
-          ensureStoreLoaded();
-        }
-        schedulePromptRealtimeSync(120);
         if (previousSurface.hasComposer !== nextSurface.hasComposer || previousSurface.hasChatLog !== nextSurface.hasChatLog) {
           logPanelDebug("panel.ui.surface.changed", {
             hadChatLog: previousSurface.hasChatLog,
@@ -202,20 +163,13 @@
     const buildHostedPanelCallbacks = typeof deps.buildHostedPanelCallbacks === "function"
       ? deps.buildHostedPanelCallbacks
       : buildDefaultHostedPanelCallbacks;
-    const isStoreTabActive = typeof deps.isStoreTabActive === "function"
-      ? deps.isStoreTabActive
-      : () => false;
     const panelActivityController = deps.panelActivityController || { handleVisibilityChange() {}, handleWindowFocus() {} };
     const panelBookmarkController = deps.panelBookmarkController || { copyBookmarkText() {}, jumpToBookmark() {} };
     const panelDebugController = deps.panelDebugController || { installValidationApi() {} };
     const panelLifecycleController = deps.panelLifecycleController || { initializeOpenState() {}, togglePanel() {} };
     const panelPromptController = deps.panelPromptController || {
       ensureReviewFloat() {},
-      ensureStoreLoaded() {},
       handleEscape() {},
-      handleStorageChange() {},
-      scheduleCloudSyncIfNeeded() {},
-      scheduleRealtimeSync() {},
     };
     const panelShellController = deps.panelShellController || {
       selectTool() {},
@@ -256,14 +210,8 @@
       global.addEventListener("focus", panelActivityController.handleWindowFocus, { passive: true });
       global.document.addEventListener("visibilitychange", panelActivityController.handleVisibilityChange, { passive: true });
       global.chrome?.storage?.onChanged?.addListener(handleRouteStorageChange);
-      global.chrome?.storage?.onChanged?.addListener(panelPromptController.handleStorageChange);
       global.chrome?.storage?.onChanged?.addListener(releaseManager.handleStorageChange);
       await routeSync.syncRouteState(true);
-      panelPromptController.scheduleRealtimeSync(260);
-      panelPromptController.scheduleCloudSyncIfNeeded(260);
-      if (isStoreTabActive()) {
-        panelPromptController.ensureStoreLoaded();
-      }
       if (state.open || state.activeTool === "release") {
         releaseManager.ensureChecked(false, state.activeTool === "release");
       }
@@ -566,7 +514,6 @@
         activeTool: state.activeTool,
       });
       lockUiPreferenceSelection(state.activeTool, nextPromptTab);
-      promptController?.scheduleRealtimeSync?.(120);
       if (state.activeTool === "release") {
         releaseManager.ensureChecked(false, true);
       }
