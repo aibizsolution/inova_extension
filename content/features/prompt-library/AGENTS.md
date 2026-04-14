@@ -64,6 +64,7 @@
 - `0.4.5`부터 panel 안의 `내 요청` UI는 hosted panel iframe이 렌더링하고, `backup/legacy-panel/panel-prompt-controller.js`는 legacy lane reference의 상태/액션/동기화 controller를 계속 담는다.
 - `1.0.0+` v2 lane에서는 `hosting/extension-v2/panel/prompt-library-controller.js`, `prompt-store-controller.js`, `prompt-review-controller.js`가 각 탭의 remote 상태와 prompt tab 전환/persistence, prompt action/draft/import/reorder 라우팅을 hosted 쪽에서 소유한다. extension은 page adapter와 runtime broker, `content/panel-v2-prompt-controller.js` 기반 review handoff/composer review float만 제공하고, legacy prompt realtime/cloud/store sync 예약은 v2 lane에서 다시 돌리지 않는다. v2 top-panel snapshot은 prompt/store item list를 싣지 않고 `activeTab`과 review handoff signal 같은 최소 정보만 전달한다.
 - `1.0.0+` v2 lane의 `내 요청` read path는 `auth.issue-prompt-panel -> hosted prompt-library-firestore-client -> integration_inova_accounts_v2.promptLibraryMeta onSnapshot -> prompt_library_orders_v2/prompt_library_chunks_v2 direct read`가 기본이다. 단순 목록 read를 `loadInovaPromptLibraryV2` Functions 호출로 되돌리지 않는다.
+- release 등 다른 탭에서 panel-local storage hydration이 아직 끝나기 전에 `prompts`로 전이해도, hosted prompt controller는 첫 library load 요청을 잃지 말고 hydration 완료 뒤 `auth.issue-prompt-panel`과 Firestore 구독을 이어서 시작해야 한다.
 - prompt 저장/수정/삭제/순서 변경/가져오기는 local-first queue로 성공처럼 보이면 안 된다. 서버 ack 후 Firestore refresh가 확인된 뒤에만 state와 local cache를 최신으로 본다.
 - 다른 PC에서 삭제/수정한 항목은 prompt-library realtime meta 또는 다음 Firestore refresh에서 현재 PC 캐시보다 우선 반영돼야 한다.
 - prompt item의 `importedFrom`, `storePublication` 메타도 DB 정본 경로를 따라 round-trip 되어야 한다. 멀티 PC에서 store import/publish 표식이 로컬에만 남아 사라지지 않게 유지한다.

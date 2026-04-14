@@ -58,6 +58,7 @@
       loading: false,
       menuPromptId: "",
       pendingInsert: null,
+      pendingLibraryLoadAfterInit: false,
       promptLibrary: namespace.promptLibraryModel?.mergePromptLibrary?.() || { items: [], version: 1 },
       promptLibraryRemoteReady: false,
       loadedProviderUserKey: "",
@@ -683,8 +684,13 @@
     }
 
     async function ensureInitialized(panelState) {
+      const shouldActivateLibrary = panelState?.activeTool === "prompts" && state.activeTab === "library";
       if (state.initialized || state.initializing) {
-        if (panelState?.activeTool === "prompts" && state.activeTab === "library") {
+        if (shouldActivateLibrary && state.initializing && !state.initialized) {
+          state.pendingLibraryLoadAfterInit = true;
+          return;
+        }
+        if (shouldActivateLibrary) {
           void ensurePromptLibraryLoaded(false, "activate");
         }
         return;
@@ -694,8 +700,9 @@
         const storageState = await invokeRuntime({ action: "storage.get-state" });
         hydrateStorageState(storageState);
         state.initialized = true;
-        if (panelState?.activeTool === "prompts" && state.activeTab === "library") {
-          void ensurePromptLibraryLoaded(false, "bootstrap");
+        if (shouldActivateLibrary || state.pendingLibraryLoadAfterInit) {
+          state.pendingLibraryLoadAfterInit = false;
+          void ensurePromptLibraryLoaded(false, shouldActivateLibrary ? "bootstrap" : "post-init-activate");
         }
       } catch (error) {
         state.lastError = readErrorMessage(error, "요청 보관함 상태를 준비하지 못했어요.");

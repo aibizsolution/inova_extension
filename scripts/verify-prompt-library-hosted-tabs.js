@@ -19,6 +19,7 @@ async function main() {
   await verifyHostedPromptLibraryFirestoreClientContract();
   await verifyHostedPromptTabPersistenceDedupesWrites();
   await verifyHostedPromptLibraryTabSelectionAvoidsForcedReload();
+  await verifyHostedPromptLibraryActivationDuringInitStillLoads();
 }
 
 async function verifyHostedPromptTabPersistenceDedupesWrites() {
@@ -88,6 +89,48 @@ async function verifyHostedPromptLibraryTabSelectionAvoidsForcedReload() {
     runtimeCalls.filter((call) => call.action === "auth.issue-prompt-panel").length,
     1,
     "hosted prompt library tab selection should not reissue prompt panel auth while the hosted library subscription stays active"
+  );
+}
+
+async function verifyHostedPromptLibraryActivationDuringInitStillLoads() {
+  let resolveStorageState = () => {};
+  const runtimeCalls = [];
+  const storageStatePromise = new Promise((resolve) => {
+    resolveStorageState = resolve;
+  });
+  const controller = createController({
+    invokeRuntime: async (request) => {
+      runtimeCalls.push({
+        action: request?.action || "",
+      });
+      if (request?.action === "storage.get-state") {
+        return storageStatePromise;
+      }
+      return {};
+    },
+  });
+
+  controller.syncPanelState(
+    { activeTool: "release" },
+    ["page.adapter.v2", "runtime.invoke.v1"]
+  );
+  await flushAsync();
+
+  controller.syncPanelState(
+    { activeTool: "prompts" },
+    ["page.adapter.v2", "runtime.invoke.v1"]
+  );
+  await flushAsync();
+
+  resolveStorageState(buildStorageState("library"));
+  await flushAsync();
+  await flushAsync();
+  await flushAsync();
+
+  assert.equal(
+    runtimeCalls.filter((call) => call.action === "auth.issue-prompt-panel").length,
+    1,
+    "release-to-prompts activation should still start prompt panel auth after late storage hydration finishes"
   );
 }
 
