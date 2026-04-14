@@ -1,6 +1,6 @@
 # Current Handoff
 
-Last updated: 2026-04-14
+Last updated: 2026-04-15
 
 ## Snapshot
 
@@ -189,6 +189,65 @@ Also:
 - residual `top.panel.snapshot.push` noise still exists, but it is not the current migration blocker
 - `conversation` jump duplication should only be revisited if a single user click clearly produces multiple jump requests in the trace
 - local Auth Emulator warning banners/messages may still appear; treat them as non-blocking local warning noise unless they are tied to a real capability failure
+
+## Final Active JS Audit
+
+Audit date:
+
+- `2026-04-15`
+
+Audit sources and guards:
+
+- `manifest.json`
+- `contracts/extension-contract.json`
+- `scripts/verify-contracts.js`
+- `scripts/verify-browser-only-boundary.js`
+- `scripts/verify-legacy-isolation.js`
+
+Classification summary:
+
+- `browser-only owner`
+  - page DOM/composer access: `content/dom.js`, `content/composer.js`, `content/page-capability-router.js`
+  - iframe host and bridge/runtime wiring: `content/hosted-panel-bridge.js`, `content/panel-host-runtime.js`, `content/panel-host-bridge.js`, `content/panel-host-view.js`, `content/panel.js`
+  - page/browser sensors and storage: `content/provider-identity-sensor.js`, `content/frame-proxy-helper.js`, `shared/storage.js`
+  - background privileged adapters: `background/browser-capability.js`, `background/panel-runtime-capability-router.js`, `background/panel-session-capability.js`, `background/meeting-workspace-capability.js`, `background/cloud-api-client.js`, `background/inova-auth-client.js`, `background/functions-runtime-config.js`
+  - popup/settings and browser target selection: `popup/index.js`, `shared/firebase-config.js`, `shared/product-lane.js`, `shared/session.js`, `shared/provider-identity-cache.js`, `shared/constants.js`
+- `browser-only glue/composition`
+  - active shell/bootstrap wiring: `content/main.js`, `content/panel-v2-composition-controller.js`, `content/panel-v2-shell-bridge.js`, `content/panel-v2-prompt-controller.js`
+  - route/panel lifecycle glue: `content/route-state-controller.js`, `content/route-watch-controller.js`, `content/route-sync.js`, `content/panel-console-trace.js`
+  - prompt review page handoff glue: `content/features/prompt-review/composer-review-float.js`, `content/features/prompt-review/prompt-review-manager.js`
+- `actual move candidate`
+  - `none` in the current active manifest lane
+
+Audit conclusion:
+
+- active manifest JS is now either browser-only owner code or thin extension glue/composition
+- file count alone is not a reason to move code; the relevant test is whether the file still owns DOM, Chrome API, `postMessage`, runtime broker, popup/settings, or local browser cache responsibility
+- the current active lane does not contain a verified file that can be moved to hosted without either removing a browser-only responsibility or collapsing necessary extension wiring
+
+## Remaining Move Candidates
+
+- `none` in the current active manifest lane
+- if a future file becomes pure hosted feature logic without DOM, Chrome API, `postMessage`, runtime broker, popup/settings, or local browser cache responsibility, move it out of extension instead of extending `content/*` or `background/*`
+
+## What Still Legitimately Requires Extension Changes
+
+- `inova.incross.com` DOM structure or composer behavior changes that affect page read/apply adapters
+- new Chrome permission, manifest widening, or frame origin changes
+- new background privileged action that cannot be expressed with the current runtime capability catalog
+- popup/settings behavior changes
+- a new browser capability contract that must be added to `contracts/extension-contract.json`
+
+## What Should No Longer Require Extension Deploy
+
+- hosted panel UI changes
+- hosted tab/state/action-flow changes for `conversation`, `prompt-library`, `prompt-store`, `prompt-review`, `meeting`, or `release`
+- hosted Firestore/controller/client changes that reuse the current page/runtime capability catalog
+- new hosted feature work that can be expressed with the existing capability API without adding new browser power
+
+Bottom line:
+
+- the remaining active JS is mostly browser-only owner code or thin glue, so hosted feature additions should not require extension changes unless they introduce a new browser capability requirement
 
 ## What Is Still Not Fully Finished
 
