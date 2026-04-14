@@ -248,7 +248,7 @@ function verifyBackgroundInvokeWiring() {
     "background runtime capability router should declare the hosted function allowlist"
   );
   [
-    '"cloudSync"',
+    '"providerIdentityCache"',
     '"settings"',
     '"uiPreferences"',
   ].forEach((storageKey) => assert(

@@ -395,7 +395,7 @@ async function verifyHostedMeetingHubIgnoresOwnSummaryEchoWhileLoading() {
       runtimeCalls.push(cloneValue(request));
       if (request?.action === "storage.read-panel-state") {
         return {
-          cloudSync: {
+          providerIdentityCache: {
             providerIdentity: {
               available: true,
               provider: "inova",
@@ -568,7 +568,7 @@ function createHarnessWithOptions(options = {}) {
       runtimeCalls.push(cloneValue(request));
       if (request?.action === "storage.read-panel-state") {
         return {
-          cloudSync: {
+          providerIdentityCache: {
             providerIdentity: {
               available: true,
               displayName: "Fixture User",

@@ -83,7 +83,7 @@
 - 핸들 위치는 사이트 기준으로 기억하되, 화면 폭 구간에 따라 따로 보정할 수 있어야 합니다.
 - 질문 목록 자체는 저장하지 않고, 현재 대화 DOM에서 실시간으로 읽습니다.
 - active hosted-first lane은 요청 보관함을 `chrome.storage.local.promptLibrary` 정본으로 저장하지 않습니다. 정본은 hosted/Firestore 경로에 있고, 이 local key는 backup legacy reference에서만 유지합니다.
-- 원격 백업 대기 상태와 마지막 동기화 메타는 `cloudSync`에 저장합니다.
+- active hosted-first lane은 프롬프트 동기화 대기/원격 메타를 extension storage에 두지 않습니다. extension은 `providerIdentityCache`에 브라우저용 사용자 식별 정보만 최소로 캐시하고, 실제 동기화 상태는 hosted/Firestore/Functions 경로가 가집니다.
 - 스토어 목록과 반응 상태는 기본적으로 메모리에서만 관리하고, 원격 지표는 필요할 때만 Functions를 통해 읽고 씁니다.
 - active hosted-first lane은 회의 브라우저 상태를 별도 `meetingStateByMeetingId` storage key로 유지하지 않습니다. 이 키는 `0.4.4` 영향 판단용 backup/legacy reference에서만 남깁니다.
 - 회의 허브 목록은 `chrome.storage.local.meetingHub`에 별도 저장하지 않고, hosted bridge의 Firestore persistence와 현재 메모리 상태를 우선합니다.

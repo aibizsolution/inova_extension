@@ -204,7 +204,7 @@ function createController(options = {}) {
 
 function buildStorageState(activePromptTab) {
   return {
-    cloudSync: {
+    providerIdentityCache: {
       providerIdentity: {
         available: true,
         providerUserKey: "prompt-user-1",

@@ -9,6 +9,7 @@
     invalidated: "extension-context-invalidated",
   };
   let productLaneMigrationPromise = null;
+  let providerIdentityCacheMigrationPromise = null;
 
   async function getRawLocal(keys) {
     if (!global.chrome?.storage?.local) {
@@ -52,14 +53,37 @@
     }
   }
 
+  async function removeRawLocal(keys) {
+    if (!global.chrome?.storage?.local) {
+      throw createStorageAccessError(
+        STORAGE_ERROR_CODES.unavailable,
+        "chrome.storage.local을 사용할 수 없어요."
+      );
+    }
+    try {
+      await global.chrome.storage.local.remove(keys);
+    } catch (error) {
+      if (isExtensionContextInvalidatedError(error)) {
+        throw createStorageAccessError(
+          STORAGE_ERROR_CODES.invalidated,
+          "Extension context invalidated. 확장프로그램이 갱신되어 저장소에서 삭제할 수 없어요.",
+          error
+        );
+      }
+      throw error;
+    }
+  }
+
   async function getState() {
     await ensureProductLaneLocalMigration();
+    await ensureProviderIdentityCacheStorageMigration();
     const rawState = await getRawLocal(Object.values(activeStorageKeyMap));
     return buildCanonicalState(rawState, activeStorageKeyMap);
   }
 
   async function setLocal(partial) {
     await ensureProductLaneLocalMigration();
+    await ensureProviderIdentityCacheStorageMigration();
     const nextPartial = buildCanonicalPartial(partial, activeStorageKeyMap);
     await setRawLocal(nextPartial);
   }
@@ -99,15 +123,15 @@
     return nextUiPreferences;
   }
 
-  async function getCloudSyncState() {
+  async function getProviderIdentityCacheState() {
     const current = await getState();
-    return namespace.cloudSync.mergeCloudSyncState(current.cloudSync);
+    return namespace.providerIdentityCache.mergeProviderIdentityCacheState(current.providerIdentityCache);
   }
 
-  async function setCloudSyncState(nextCloudSync) {
-    const cloudSync = namespace.cloudSync.mergeCloudSyncState(nextCloudSync);
-    await setLocal({ cloudSync });
-    return cloudSync;
+  async function setProviderIdentityCacheState(nextProviderIdentityCache) {
+    const providerIdentityCache = namespace.providerIdentityCache.mergeProviderIdentityCacheState(nextProviderIdentityCache);
+    await setLocal({ providerIdentityCache });
+    return providerIdentityCache;
   }
 
   function mergeUiPreferences(...preferenceSets) {
@@ -168,6 +192,18 @@
     }
   }
 
+  async function ensureProviderIdentityCacheStorageMigration() {
+    if (providerIdentityCacheMigrationPromise) {
+      return providerIdentityCacheMigrationPromise;
+    }
+    providerIdentityCacheMigrationPromise = migrateProviderIdentityCacheStorageKey();
+    try {
+      return await providerIdentityCacheMigrationPromise;
+    } finally {
+      providerIdentityCacheMigrationPromise = null;
+    }
+  }
+
   async function getProductLaneMigrationState() {
     const state = await getState();
     return mergeProductLaneMigrationState(state.productLaneMigration);
@@ -221,6 +257,24 @@
     }
   }
 
+  async function migrateProviderIdentityCacheStorageKey() {
+    const nextStorageKey = activeStorageKeyMap.providerIdentityCache || "providerIdentityCache";
+    const legacyCloudSyncStorageKey = namespace.productLane?.buildStorageKey?.("cloudSync", activeLane) || "cloudSync";
+    const rawState = await getRawLocal([nextStorageKey, legacyCloudSyncStorageKey]);
+    if (Object.prototype.hasOwnProperty.call(rawState || {}, nextStorageKey)) {
+      return namespace.providerIdentityCache.mergeProviderIdentityCacheState(rawState[nextStorageKey]);
+    }
+    if (!Object.prototype.hasOwnProperty.call(rawState || {}, legacyCloudSyncStorageKey)) {
+      return namespace.providerIdentityCache.mergeProviderIdentityCacheState();
+    }
+    const migratedState = buildProviderIdentityCacheMigrationState(rawState[legacyCloudSyncStorageKey]);
+    await setRawLocal({ [nextStorageKey]: migratedState });
+    if (legacyCloudSyncStorageKey !== nextStorageKey) {
+      await removeRawLocal([legacyCloudSyncStorageKey]).catch(() => {});
+    }
+    return migratedState;
+  }
+
   function hasStoredLaneData(rawState, keyMap) {
     return Object.entries(storageKeys).some(([name, baseKey]) => {
       if (name === "productLaneMigration") {
@@ -239,12 +293,26 @@
       }
       const legacyStorageKey = legacyStorageKeyMap[name] || baseKey;
       const nextStorageKey = activeStorageKeyMap[name] || baseKey;
+      if (name === "providerIdentityCache") {
+        const legacyCloudSyncStorageKey = namespace.productLane?.buildStorageKey?.("cloudSync", "legacy") || "cloudSync";
+        if (!Object.prototype.hasOwnProperty.call(rawState || {}, legacyCloudSyncStorageKey)) {
+          continue;
+        }
+        nextState[nextStorageKey] = buildProviderIdentityCacheMigrationState(rawState[legacyCloudSyncStorageKey]);
+        continue;
+      }
       if (!Object.prototype.hasOwnProperty.call(rawState || {}, legacyStorageKey)) {
         continue;
       }
       nextState[nextStorageKey] = cloneValue(rawState[legacyStorageKey]);
     }
     return nextState;
+  }
+
+  function buildProviderIdentityCacheMigrationState(legacyCloudSyncState) {
+    return namespace.providerIdentityCache.mergeProviderIdentityCacheState({
+      providerIdentity: legacyCloudSyncState?.providerIdentity,
+    });
   }
 
   function inferLegacySourceRevision(rawState) {
@@ -303,13 +371,13 @@
   namespace.storage = {
     ensureProductLaneLocalMigration,
     getHandleRatio,
-    getCloudSyncState,
+    getProviderIdentityCacheState,
     getProductLaneMigrationState,
     getState,
     getViewportBucket,
     mergeUiPreferences,
     normalizeHandleRatio,
-    setCloudSyncState,
+    setProviderIdentityCacheState,
     setLocal,
     setSessionPaused,
     updateUiPreferences,

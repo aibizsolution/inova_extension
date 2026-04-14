@@ -12,18 +12,18 @@ function main() {
   const stateA = harness.factory.createState();
   const stateB = harness.factory.createState();
 
-  assert.equal(harness.mergeCloudSyncCalls, 2);
   assert.equal(harness.mergeUiPreferencesCalls, 2);
 
   assert.equal(stateA.activeTool, "meeting");
   assert.equal(stateA.panelDebugUi.collapsed, true);
-  assert.equal(stateA.cloudSync.providerIdentity.providerUserKey, "fixture-user");
   assert.equal(stateA.toolSummaries.release.count, 0);
   assert.equal("snapshotFingerprint" in stateA.toolSummaries.release, false);
   assert.equal(stateA.uiPreferences.activePromptTab, "library");
   assert.deepEqual(Object.keys(stateA.queries), ["bookmarks"]);
   assert.equal(stateA.promptReview.open, false);
   assert.equal(stateA.routeWatchInstalled, false);
+  assert.equal("cloudSync" in stateA, false);
+  assert.equal("providerIdentityCache" in stateA, false);
 
   assert.notStrictEqual(stateA, stateB);
   assert.notStrictEqual(stateA.settings, stateB.settings);
@@ -71,7 +71,6 @@ function main() {
 }
 
 function createHarness() {
-  let mergeCloudSyncCalls = 0;
   let mergeUiPreferencesCalls = 0;
 
   const context = vm.createContext({
@@ -80,17 +79,6 @@ function createHarness() {
   });
   context.globalThis = context;
   context.InovaBookmarks = {
-    cloudSync: {
-      mergeCloudSyncState() {
-        mergeCloudSyncCalls += 1;
-        return {
-          providerIdentity: {
-            available: true,
-            providerUserKey: "fixture-user",
-          },
-        };
-      },
-    },
     constants: {
       defaults: {
         promptReview: { open: false },
@@ -121,9 +109,6 @@ function createHarness() {
 
   return {
     factory: context.InovaBookmarks.panelV2CompositionController,
-    get mergeCloudSyncCalls() {
-      return mergeCloudSyncCalls;
-    },
     get mergeUiPreferencesCalls() {
       return mergeUiPreferencesCalls;
     },

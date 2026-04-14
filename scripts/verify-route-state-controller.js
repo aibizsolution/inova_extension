@@ -22,7 +22,6 @@ async function verifyRefreshStateLoadsStorageAndBookmarks() {
     routeWaitStartedAt: Date.now(),
     awaitingRouteMessages: true,
     storageState: {
-      cloudSync: { source: "runtime" },
       pausedSessions: { "session-2": true },
       settings: { autoBookmark: true, enabled: true, meetingDebug: false },
       uiPreferences: { activePromptTab: "review", activeTool: "store" },
@@ -56,7 +55,6 @@ function verifyLaneAwareStorageChangeHandling() {
   });
 
   const changed = harness.controller.handleStorageChange({
-    "lane:cloudSyncKey": { newValue: { source: "cache" } },
     "lane:pausedSessionsKey": { newValue: { "session-3": true } },
     "lane:settingsKey": { newValue: { autoBookmark: false, enabled: true } },
     "lane:uiPreferencesKey": { newValue: { activePromptTab: "review", activeTool: "store" } },
@@ -68,7 +66,6 @@ function verifyLaneAwareStorageChangeHandling() {
   assert.equal(harness.state.uiPreferences.activeTool, "prompts");
   assert.equal(harness.state.uiPreferences.activePromptTab, "store");
   assert.deepEqual(harness.state.pausedSessions, { "session-3": true });
-  assert.deepEqual(harness.state.cloudSync, { mergedSource: "cache" });
 }
 
 function verifyPromptLibraryStorageChangesAreIgnored() {
@@ -116,7 +113,6 @@ async function verifyRouteWaitLifecycle() {
 function createHarness(options = {}) {
   const debugEvents = [];
   const storageState = cloneValue(options.storageState || {
-    cloudSync: {},
     pausedSessions: {},
     settings: { autoBookmark: true, enabled: true },
     uiPreferences: { activePromptTab: "library", activeTool: "bookmarks" },
@@ -134,13 +130,6 @@ function createHarness(options = {}) {
   });
   context.globalThis = context;
   context.InovaBookmarks = {
-    cloudSync: {
-      mergeCloudSyncState(value) {
-        return {
-          mergedSource: value?.source || "none",
-        };
-      },
-    },
     constants: {
       defaults: {
         promptReview: { open: false },
@@ -151,7 +140,6 @@ function createHarness(options = {}) {
         },
       },
       storageKeys: {
-        cloudSync: "cloudSyncKey",
         pausedSessions: "pausedSessionsKey",
         settings: "settingsKey",
         uiPreferences: "uiPreferencesKey",
@@ -216,7 +204,6 @@ function createHarness(options = {}) {
     activeTool: options.activeTool || "bookmarks",
     awaitingRouteMessages: Boolean(options.awaitingRouteMessages),
     bookmarks: [],
-    cloudSync: {},
     lastError: "",
     open: false,
     pausedSessions: options.pausedSessions || {},

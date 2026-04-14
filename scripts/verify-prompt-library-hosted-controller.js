@@ -70,7 +70,7 @@ async function verifyHostedPromptLibraryAvoidsDuplicateReloads() {
       });
       if (request?.action === "storage.read-panel-state") {
         return {
-          cloudSync: {
+          providerIdentityCache: {
             providerIdentity: {
               available: true,
               displayName: "Prompt Tester",

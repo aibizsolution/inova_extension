@@ -80,11 +80,11 @@
 2. 세션 키는 URL의 `sid`로 정규화한다.
 3. 패널에서 검색/이동은 현재 페이지 DOM을 기준으로 처리한다.
 
-### B. 로컬 프롬프트 보관함
+### B. 브라우저 로컬 상태
 
-1. 사용자가 패널에서 프롬프트를 추가/수정/삭제한다.
-2. `shared/storage.js`가 `chrome.storage.local`에 저장한다.
-3. 같은 시점에 `cloudSync` 메타를 큐잉한다.
+1. extension은 `settings`, `uiPreferences`, `pausedSessions` 같은 browser-local 상태만 `shared/storage.js`로 저장한다.
+2. hosted prompt/meeting 패널이 필요한 사용자 식별 정보는 `providerIdentityCache`에 최소 형태로만 캐시한다.
+3. prompt library/store/review의 정본 데이터와 동기화 상태는 hosted/Firestore/Functions 경로가 소유한다.
 
 ### C. 프롬프트 원격 메타 실시간
 

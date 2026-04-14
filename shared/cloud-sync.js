@@ -1,6 +1,34 @@
 (function initCloudSync(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const defaults = namespace.constants.defaults.cloudSync;
+  const defaults = namespace.constants?.defaults?.cloudSync || {
+    version: 1,
+    status: "idle",
+    degraded: false,
+    degradedReason: "",
+    dataFreshness: "empty",
+    source: "none",
+    providerIdentity: {
+      provider: "inova",
+      available: false,
+      providerUserKey: "",
+      email: "",
+      displayName: "",
+      numericUserId: null,
+    },
+    pending: null,
+    lastSyncedAt: "",
+    lastError: "",
+    remote: {
+      checkedAt: "",
+      found: false,
+      itemCount: 0,
+      lastRevision: "",
+      lastSyncedAt: "",
+      providerUserKey: "",
+      updatedAt: "",
+      version: 1,
+    },
+  };
 
   function mergeCloudSyncState(...states) {
     return states.reduce(

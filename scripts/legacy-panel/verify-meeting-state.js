@@ -58,6 +58,7 @@ async function main() {
 
   loadScript("shared/constants.js", context);
   loadScript("shared/session.js", context);
+  loadScript("shared/provider-identity-cache.js", context);
   loadScript("shared/storage.js", context);
   loadScript("backup/legacy-panel/shared/legacy-storage-accessors.js", context);
   loadScript("backup/legacy-panel/shared/meeting-bridge.js", context);
@@ -87,6 +88,7 @@ async function main() {
   storageUnavailableContext.globalThis = storageUnavailableContext;
   loadScript("shared/constants.js", storageUnavailableContext);
   loadScript("shared/session.js", storageUnavailableContext);
+  loadScript("shared/provider-identity-cache.js", storageUnavailableContext);
   loadScript("shared/storage.js", storageUnavailableContext);
   await assert.rejects(
     () => storageUnavailableContext.InovaBookmarks.storage.getState(),
@@ -110,6 +112,7 @@ async function main() {
   invalidatedStorageContext.globalThis = invalidatedStorageContext;
   loadScript("shared/constants.js", invalidatedStorageContext);
   loadScript("shared/session.js", invalidatedStorageContext);
+  loadScript("shared/provider-identity-cache.js", invalidatedStorageContext);
   loadScript("shared/storage.js", invalidatedStorageContext);
   await assert.rejects(
     () => invalidatedStorageContext.InovaBookmarks.storage.getState(),

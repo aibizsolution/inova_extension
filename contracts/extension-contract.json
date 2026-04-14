@@ -18,6 +18,7 @@
     "shared/constants.js",
     "shared/inova-auth.js",
     "shared/product-lane.js",
+    "shared/provider-identity-cache.js",
     "backup/legacy-panel/shared/meeting-bridge.js",
     "backup/legacy-panel/shared/meeting-debug.js",
     "backup/legacy-panel/shared/legacy-storage-accessors.js",
@@ -26,6 +27,7 @@
     "shared/prompt-library.js",
     "backup/legacy-panel/shared/release-info.js",
     "shared/session.js",
+    "shared/cloud-sync.js",
     "shared/storage.js",
     "backup/legacy-panel/bookmark-view.js",
     "backup/legacy-panel/panel-bookmark-controller.js",
@@ -108,7 +110,7 @@
     "shared/session.js",
     "shared/firebase-config.js",
     "shared/provider-identity.js",
-    "shared/cloud-sync.js",
+    "shared/provider-identity-cache.js",
     "shared/storage.js",
     "shared/frame-proxy.js",
     "content/composer.js",
@@ -132,6 +134,8 @@
   ],
   "popupScripts": [
     "../shared/constants.js",
+    "../shared/session.js",
+    "../shared/provider-identity-cache.js",
     "../shared/storage.js",
     "index.js"
   ],
@@ -142,7 +146,7 @@
     "settings",
     "pausedSessions",
     "uiPreferences",
-    "cloudSync"
+    "providerIdentityCache"
   ],
   "requiredPermissions": [
     "storage",

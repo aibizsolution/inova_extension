@@ -273,6 +273,7 @@ function createHarness(options = {}) {
   const loadedScripts = [
     "shared/constants.js",
     "shared/session.js",
+    "shared/provider-identity-cache.js",
     "shared/storage.js",
     "backup/legacy-panel/shared/meeting-bridge.js",
     "shared/provider-identity.js",

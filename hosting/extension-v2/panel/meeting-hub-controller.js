@@ -434,10 +434,10 @@
     }
 
     function hydrateStorageState(storageState) {
-      const cloudSync = storageState?.cloudSync && typeof storageState.cloudSync === "object"
-        ? storageState.cloudSync
+      const providerIdentityCache = storageState?.providerIdentityCache && typeof storageState.providerIdentityCache === "object"
+        ? storageState.providerIdentityCache
         : {};
-      state.providerIdentity = normalizeProviderIdentity(cloudSync.providerIdentity);
+      state.providerIdentity = normalizeProviderIdentity(providerIdentityCache.providerIdentity);
       state.settings = {
         ...state.settings,
         ...(storageState?.settings && typeof storageState.settings === "object" ? storageState.settings : {}),

@@ -50,7 +50,7 @@
         "shared/session.js",
         "shared/firebase-config.js",
         "shared/provider-identity.js",
-        "shared/cloud-sync.js",
+        "shared/provider-identity-cache.js",
         "shared/storage.js",
         "shared/frame-proxy.js",
         "content/dom.js",

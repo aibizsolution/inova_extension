@@ -827,11 +827,11 @@
     }
 
     function hydrateStorageState(storageState) {
-      const cloudSync = storageState?.cloudSync && typeof storageState.cloudSync === "object"
-        ? storageState.cloudSync
+      const providerIdentityCache = storageState?.providerIdentityCache && typeof storageState.providerIdentityCache === "object"
+        ? storageState.providerIdentityCache
         : {};
-      const providerIdentity = cloudSync.providerIdentity && typeof cloudSync.providerIdentity === "object"
-        ? cloudSync.providerIdentity
+      const providerIdentity = providerIdentityCache.providerIdentity && typeof providerIdentityCache.providerIdentity === "object"
+        ? providerIdentityCache.providerIdentity
         : {};
       const uiPreferences = storageState?.uiPreferences && typeof storageState.uiPreferences === "object"
         ? storageState.uiPreferences

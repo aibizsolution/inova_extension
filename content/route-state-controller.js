@@ -76,7 +76,6 @@
       let changed = false;
       const settingsChange = getStorageChange(changes, namespace.constants.storageKeys.settings, "settings");
       const pausedSessionsChange = getStorageChange(changes, namespace.constants.storageKeys.pausedSessions, "pausedSessions");
-      const cloudSyncChange = getStorageChange(changes, namespace.constants.storageKeys.cloudSync, "cloudSync");
       const uiPreferencesChange = getStorageChange(changes, namespace.constants.storageKeys.uiPreferences, "uiPreferences");
 
       if (settingsChange) {
@@ -89,10 +88,6 @@
       }
       if (pausedSessionsChange) {
         state.pausedSessions = pausedSessionsChange.newValue || {};
-        changed = true;
-      }
-      if (cloudSyncChange) {
-        state.cloudSync = namespace.cloudSync.mergeCloudSyncState(cloudSyncChange.newValue);
         changed = true;
       }
       if (uiPreferencesChange) {
@@ -108,7 +103,6 @@
       state.settings = storageState.settings || { ...namespace.constants.defaults.settings };
       state.settingsHydrated = true;
       state.pausedSessions = storageState.pausedSessions || {};
-      state.cloudSync = namespace.cloudSync.mergeCloudSyncState(storageState.cloudSync);
       state.uiPreferences = readUiPreferences(storageState.uiPreferences);
       state.activeTool = normalizeToolId(state.uiPreferences.activeTool || state.activeTool);
     }

@@ -415,7 +415,7 @@ const codeChecks = [
     file: "content/panel-v2-composition-controller.js",
     patterns: [
       /createState/,
-      /mergeCloudSyncState/,
+      /mergeProviderIdentityCacheState/,
       /mergeUiPreferences/,
       /createProviderIdentitySync/,
     ],

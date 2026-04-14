@@ -1,6 +1,7 @@
 importScripts("../shared/constants.js");
 importScripts("../shared/product-lane.js");
 importScripts("../shared/session.js");
+importScripts("../shared/provider-identity-cache.js");
 importScripts("../shared/storage.js");
 importScripts("../shared/firebase-config.js");
 importScripts("../shared/inova-auth.js");
@@ -748,12 +749,12 @@ function normalizeProviderIdentity(providerIdentity) {
 
 async function loadStoredMeetingProviderIdentity() {
   try {
-    if (typeof namespace.storage.getCloudSyncState === "function") {
-      const cloudSync = await namespace.storage.getCloudSyncState();
-      return normalizeProviderIdentity(cloudSync?.providerIdentity);
+    if (typeof namespace.storage.getProviderIdentityCacheState === "function") {
+      const providerIdentityCache = await namespace.storage.getProviderIdentityCacheState();
+      return normalizeProviderIdentity(providerIdentityCache?.providerIdentity);
     }
     const storageState = await namespace.storage.getState();
-    return normalizeProviderIdentity(storageState?.cloudSync?.providerIdentity);
+    return normalizeProviderIdentity(storageState?.providerIdentityCache?.providerIdentity);
   } catch (error) {
     void error;
     return normalizeProviderIdentity(null);
@@ -762,11 +763,15 @@ async function loadStoredMeetingProviderIdentity() {
 
 async function persistMeetingProviderIdentity(providerIdentity) {
   const normalized = normalizeProviderIdentity(providerIdentity);
-  if (!normalized.providerUserKey || typeof namespace.storage.getCloudSyncState !== "function" || typeof namespace.storage.setCloudSyncState !== "function") {
+  if (
+    !normalized.providerUserKey
+    || typeof namespace.storage.getProviderIdentityCacheState !== "function"
+    || typeof namespace.storage.setProviderIdentityCacheState !== "function"
+  ) {
     return normalized;
   }
   try {
-    const current = await namespace.storage.getCloudSyncState();
+    const current = await namespace.storage.getProviderIdentityCacheState();
     const currentIdentity = normalizeProviderIdentity(current?.providerIdentity);
     if (
       currentIdentity.providerUserKey === normalized.providerUserKey
@@ -776,7 +781,7 @@ async function persistMeetingProviderIdentity(providerIdentity) {
     ) {
       return normalized;
     }
-    await namespace.storage.setCloudSyncState({
+    await namespace.storage.setProviderIdentityCacheState({
       ...(current && typeof current === "object" ? current : {}),
       providerIdentity: {
         ...currentIdentity,

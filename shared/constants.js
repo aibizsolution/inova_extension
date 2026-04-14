@@ -6,7 +6,7 @@
       settings: "settings",
       pausedSessions: "pausedSessions",
       uiPreferences: "uiPreferences",
-      cloudSync: "cloudSync",
+      providerIdentityCache: "providerIdentityCache",
       productLaneMigration: "productLaneMigration",
     },
     defaults: {
@@ -29,13 +29,8 @@
         result: null,
         reviewedText: "",
       },
-      cloudSync: {
+      providerIdentityCache: {
         version: 1,
-        status: "idle",
-        degraded: false,
-        degradedReason: "",
-        dataFreshness: "empty",
-        source: "none",
         providerIdentity: {
           provider: "inova",
           available: false,
@@ -43,19 +38,6 @@
           email: "",
           displayName: "",
           numericUserId: null,
-        },
-        pending: null,
-        lastSyncedAt: "",
-        lastError: "",
-        remote: {
-          checkedAt: "",
-          found: false,
-          itemCount: 0,
-          lastRevision: "",
-          lastSyncedAt: "",
-          providerUserKey: "",
-          updatedAt: "",
-          version: 1,
         },
       },
       productLaneMigration: {

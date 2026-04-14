@@ -157,7 +157,6 @@
         feedback: null,
         feedbackTimer: 0,
       },
-      cloudSync: namespace.cloudSync.mergeCloudSyncState(),
       uiPreferences: namespace.storage.mergeUiPreferences(),
       promptReview: { ...namespace.constants.defaults.promptReview },
       feedbackTimer: 0,
@@ -286,8 +285,8 @@
         return false;
       }
       try {
-        const currentCloudSync = await namespace.storage.getCloudSyncState();
-        const currentIdentity = normalizeProviderIdentity(currentCloudSync?.providerIdentity);
+        const currentProviderIdentityCache = await namespace.storage.getProviderIdentityCacheState();
+        const currentIdentity = normalizeProviderIdentity(currentProviderIdentityCache?.providerIdentity);
         if (
           currentIdentity.providerUserKey === providerIdentity.providerUserKey
           && currentIdentity.email === providerIdentity.email
@@ -296,15 +295,14 @@
         ) {
           return false;
         }
-        const nextCloudSync = namespace.cloudSync.mergeCloudSyncState(currentCloudSync, {
+        const nextProviderIdentityCache = namespace.providerIdentityCache.mergeProviderIdentityCacheState(currentProviderIdentityCache, {
           providerIdentity: {
             ...currentIdentity,
             ...providerIdentity,
             available: true,
           },
         });
-        state.cloudSync = nextCloudSync;
-        await namespace.storage.setCloudSyncState(nextCloudSync);
+        await namespace.storage.setProviderIdentityCacheState(nextProviderIdentityCache);
         logPanelDebug("panel.identity.cached", {
           providerUserKey: normalizeText(providerIdentity.providerUserKey),
           reason: normalizeText(reason) || "runtime",
@@ -372,8 +370,8 @@
   }
 
   function normalizeProviderIdentity(identity) {
-    const normalize = typeof namespace.cloudSync?.normalizeProviderIdentity === "function"
-      ? namespace.cloudSync.normalizeProviderIdentity
+    const normalize = typeof namespace.providerIdentityCache?.normalizeProviderIdentity === "function"
+      ? namespace.providerIdentityCache.normalizeProviderIdentity
       : (value) => value && typeof value === "object" ? value : {};
     return normalize(identity || null);
   }

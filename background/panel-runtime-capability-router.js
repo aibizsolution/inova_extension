@@ -4,7 +4,7 @@
 const namespace = globalThis.InovaBookmarks || {};
 
 const PANEL_RUNTIME_STORAGE_STATE_KEYS = Object.freeze([
-  "cloudSync",
+  "providerIdentityCache",
   "settings",
   "uiPreferences",
 ]);
