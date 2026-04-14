@@ -22,12 +22,12 @@
       logPanelDebug: panelRuntimeController.logPanelDebug,
     };
     const hostedOwnedIdleReleaseLifecycle = createHostedOwnedIdleReleaseLifecycleBridge();
-    const hostedOwnedReleaseSnapshot = createHostedOwnedReleaseSnapshotBridge(() => state.releaseSummary);
+    const hostedOwnedReleaseSnapshot = createHostedOwnedReleaseSnapshotBridge(() => getHostedToolSummary(state.toolSummaries, "release"));
     const providerIdentitySync = createHostedOwnedProviderIdentitySync(state, {
       ...runtimeDiagnostics,
       render,
     });
-    const hostedOwnedMeetingSnapshot = createHostedOwnedMeetingSnapshotBridge();
+    const hostedOwnedMeetingSnapshot = createHostedOwnedMeetingSnapshotBridge(() => getHostedToolSummary(state.toolSummaries, "meeting"));
     const panelDebugController = createHostedOwnedPanelDebugBridge(state, {
       ...runtimeFlags,
     });
@@ -129,20 +129,26 @@
 
     function handleHostedMeetingSummarySync(meetingTool = {}) {
       const nextCount = normalizeHostedMeetingCount(meetingTool?.count);
-      if (normalizeHostedMeetingCount(state.meetingSummary?.count) === nextCount) {
+      if (normalizeHostedMeetingCount(getHostedToolSummary(state.toolSummaries, "meeting")?.count) === nextCount) {
         return false;
       }
-      state.meetingSummary = { count: nextCount };
+      state.toolSummaries = {
+        ...state.toolSummaries,
+        meeting: { count: nextCount },
+      };
       render();
       return true;
     }
 
     function handleHostedReleaseSummarySync(releaseTool = {}) {
       const nextSummary = normalizeHostedReleaseSummary(releaseTool);
-      if (buildReleaseSummaryKey(state.releaseSummary) === buildReleaseSummaryKey(nextSummary)) {
+      if (buildReleaseSummaryKey(getHostedToolSummary(state.toolSummaries, "release")) === buildReleaseSummaryKey(nextSummary)) {
         return false;
       }
-      state.releaseSummary = nextSummary;
+      state.toolSummaries = {
+        ...state.toolSummaries,
+        release: nextSummary,
+      };
       render();
       return true;
     }
@@ -189,8 +195,10 @@
       settings: { ...namespace.constants.defaults.settings },
       settingsHydrated: false,
       pausedSessions: {},
-      meetingSummary: { count: 0 },
-      releaseSummary: { count: 0, snapshotFingerprint: "" },
+      toolSummaries: {
+        meeting: { count: 0 },
+        release: { count: 0, snapshotFingerprint: "" },
+      },
       panelDebugUi: {
         collapsed: true,
         feedback: null,
@@ -436,11 +444,11 @@
     };
   }
 
-  function createHostedOwnedMeetingSnapshotBridge() {
+  function createHostedOwnedMeetingSnapshotBridge(getMeetingSummary = () => ({})) {
     return {
-      buildMeetingSnapshot(meetingSummary) {
+      buildMeetingSnapshot() {
         return {
-          count: getMeetingCount(meetingSummary),
+          count: getMeetingCount(getMeetingSummary()),
         };
       },
       getMeetingCount,
@@ -648,6 +656,16 @@
     return normalizedToolId === "meeting" || normalizedToolId === "release"
       ? normalizedToolId
       : "";
+  }
+
+  function getHostedToolSummary(toolSummaries, toolId) {
+    const normalizedToolId = normalizeHostedToolSummaryId(toolId);
+    if (!normalizedToolId) {
+      return {};
+    }
+    const summaries = toolSummaries && typeof toolSummaries === "object" ? toolSummaries : {};
+    const summary = summaries[normalizedToolId];
+    return summary && typeof summary === "object" ? summary : {};
   }
 
   function buildReleaseSummaryKey(releaseTool) {

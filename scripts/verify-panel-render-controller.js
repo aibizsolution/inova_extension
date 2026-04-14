@@ -46,7 +46,9 @@ function verifyCustomConversationSnapshotBridge() {
 function verifyRenderPayloadAndReviewFloat() {
   const harness = createHarness({
     activeTool: "meeting",
-    meetingSummary: { count: 2 },
+    toolSummaries: {
+      meeting: { count: 2 },
+    },
     open: true,
     settings: { enabled: true },
   });
@@ -190,13 +192,16 @@ function createHarness(options = {}) {
 
   const state = {
     activeTool: options.activeTool || "bookmarks",
-    meetingSummary: cloneValue(options.meetingSummary || { count: 0 }),
     open: Boolean(options.open),
     settings: {
       enabled: true,
       ...(options.settings || {}),
     },
     settingsHydrated: options.settingsHydrated !== false,
+    toolSummaries: cloneValue(options.toolSummaries || {
+      meeting: { count: 0 },
+      release: { count: 0, snapshotFingerprint: "" },
+    }),
     uiPreferences: {},
   };
 
@@ -225,7 +230,7 @@ function createHarness(options = {}) {
         debugSyncCalls += 1;
       },
     },
-    buildMeetingSnapshot: options.buildMeetingSnapshot,
+    buildMeetingSnapshot: options.buildMeetingSnapshot || (() => cloneValue(state.toolSummaries?.meeting || {})),
     getMeetingCount: options.getMeetingCount,
     buildConversationSnapshot: options.buildConversationSnapshot,
     getConversationCount: options.getConversationCount,
@@ -262,7 +267,7 @@ function createHarness(options = {}) {
         return 0;
       },
     },
-    buildReleaseSnapshot: options.buildReleaseSnapshot,
+    buildReleaseSnapshot: options.buildReleaseSnapshot || (() => cloneValue(state.toolSummaries?.release || {})),
     getReleaseCount: options.getReleaseCount,
     releaseManager: {
       buildViewState() {

@@ -204,12 +204,12 @@ function main() {
     "v2 bootstrap wiring should accept compact hosted tool summary sync callbacks"
   );
   assert(
-    v2CompositionSource.includes("const hostedOwnedReleaseSnapshot = createHostedOwnedReleaseSnapshotBridge(() => state.releaseSummary);"),
-    "v2 render wiring should shape release state from a compact hosted release summary"
+    v2CompositionSource.includes('const hostedOwnedReleaseSnapshot = createHostedOwnedReleaseSnapshotBridge(() => getHostedToolSummary(state.toolSummaries, "release"));'),
+    "v2 render wiring should shape release state from the compact hosted release tool summary"
   );
   assert(
-    v2CompositionSource.includes("state.releaseSummary"),
-    "v2 composition should keep hosted-owned release residue in a dedicated compact releaseSummary state bucket"
+    v2CompositionSource.includes("state.toolSummaries"),
+    "v2 composition should keep hosted-owned compact tool residue in a shared toolSummaries state bucket"
   );
   assert(
     !v2CompositionSource.includes("state.releaseInfo"),
@@ -256,8 +256,8 @@ function main() {
     "v2 composition should wrap meeting snapshot shaping for hosted-owned meeting state"
   );
   assert(
-    v2CompositionSource.includes("const hostedOwnedMeetingSnapshot = createHostedOwnedMeetingSnapshotBridge();"),
-    "v2 meeting snapshot bridge should derive snapshot state from the hosted meeting summary without the legacy meeting manager"
+    v2CompositionSource.includes('const hostedOwnedMeetingSnapshot = createHostedOwnedMeetingSnapshotBridge(() => getHostedToolSummary(state.toolSummaries, "meeting"));'),
+    "v2 meeting snapshot bridge should derive snapshot state from the hosted meeting tool summary without the legacy meeting manager"
   );
   assert(
     !v2CompositionSource.includes("state.meetingHub"),
@@ -272,12 +272,20 @@ function main() {
     "v2 composition state should not keep a legacy meetingUi bucket once hosted meeting action UI stays hosted"
   );
   assert(
-    v2CompositionSource.includes("state.meetingSummary"),
-    "v2 composition should keep hosted-owned meeting residue in a dedicated compact meetingSummary state bucket"
+    !v2CompositionSource.includes("state.meetingSummary"),
+    "v2 composition should stop keeping hosted-owned meeting residue in a dedicated meetingSummary bucket"
   );
   assert(
-    v2CompositionSource.includes("meetingSummary: { count: 0 },"),
-    "v2 composition should keep hosted-owned meeting residue in a count-only meetingSummary state bucket"
+    v2CompositionSource.includes("toolSummaries: {"),
+    "v2 composition state should keep hosted-owned compact tool residue in a shared toolSummaries bucket"
+  );
+  assert(
+    v2CompositionSource.includes('meeting: { count: 0 },'),
+    "v2 composition should keep hosted-owned meeting residue count-only inside toolSummaries.meeting"
+  );
+  assert(
+    v2CompositionSource.includes('release: { count: 0, snapshotFingerprint: "" },'),
+    "v2 composition should keep hosted-owned release residue inside toolSummaries.release"
   );
   assert(
     v2CompositionSource.includes("function normalizeHostedMeetingCount(value)"),

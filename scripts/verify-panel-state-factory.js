@@ -18,8 +18,8 @@ function main() {
   assert.equal(stateA.activeTool, "meeting");
   assert.equal(stateA.panelDebugUi.collapsed, true);
   assert.equal(stateA.cloudSync.providerIdentity.providerUserKey, "fixture-user");
-  assert.equal(stateA.releaseSummary.count, 0);
-  assert.equal(stateA.releaseSummary.snapshotFingerprint, "");
+  assert.equal(stateA.toolSummaries.release.count, 0);
+  assert.equal(stateA.toolSummaries.release.snapshotFingerprint, "");
   assert.equal(stateA.uiPreferences.activePromptTab, "library");
   assert.deepEqual(Object.keys(stateA.queries), ["bookmarks"]);
   assert.equal(stateA.promptReview.open, false);
@@ -27,8 +27,9 @@ function main() {
 
   assert.notStrictEqual(stateA, stateB);
   assert.notStrictEqual(stateA.settings, stateB.settings);
-  assert.notStrictEqual(stateA.meetingSummary, stateB.meetingSummary);
-  assert.notStrictEqual(stateA.releaseSummary, stateB.releaseSummary);
+  assert.notStrictEqual(stateA.toolSummaries, stateB.toolSummaries);
+  assert.notStrictEqual(stateA.toolSummaries.meeting, stateB.toolSummaries.meeting);
+  assert.notStrictEqual(stateA.toolSummaries.release, stateB.toolSummaries.release);
   assert.notStrictEqual(stateA.panelDebugUi, stateB.panelDebugUi);
   assert.notStrictEqual(stateA.promptReview, stateB.promptReview);
   assert.notStrictEqual(stateA.queries, stateB.queries);
@@ -53,14 +54,14 @@ function main() {
   ].forEach((key) => assert.equal(key in stateA, false, `state should drop dead hosted-owned prompt residue ${key}`));
 
   stateA.settings.enabled = false;
-  stateA.meetingSummary.count = 7;
-  stateA.releaseSummary.count = 1;
+  stateA.toolSummaries.meeting.count = 7;
+  stateA.toolSummaries.release.count = 1;
   stateA.promptReview.open = true;
   stateA.queries.bookmarks = "alpha";
 
   assert.equal(stateB.settings.enabled, true);
-  assert.equal(stateB.meetingSummary.count, 0);
-  assert.equal(stateB.releaseSummary.count, 0);
+  assert.equal(stateB.toolSummaries.meeting.count, 0);
+  assert.equal(stateB.toolSummaries.release.count, 0);
   assert.equal(stateB.promptReview.open, false);
   assert.equal(stateB.queries.bookmarks, "");
   assert.equal("prompts" in stateB.queries, false);

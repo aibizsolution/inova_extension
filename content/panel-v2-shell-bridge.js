@@ -274,7 +274,7 @@
     };
     const buildMeetingSnapshot = typeof deps.buildMeetingSnapshot === "function"
       ? deps.buildMeetingSnapshot
-      : (meetingSummary) => meetingSummary && typeof meetingSummary === "object" ? meetingSummary : {};
+      : (meetingToolSummary) => meetingToolSummary && typeof meetingToolSummary === "object" ? meetingToolSummary : {};
     const getMeetingCount = typeof deps.getMeetingCount === "function"
       ? deps.getMeetingCount
       : (meetingTool) => Number(meetingTool?.count) || 0;
@@ -327,7 +327,7 @@
       const promptToolState = panelPromptController.buildToolState();
       const promptSnapshot = normalizePromptSnapshot(buildPromptSnapshot(promptToolState));
       const promptCounts = normalizePromptCounts(getPromptCounts(promptToolState), promptToolState);
-      const meetingTool = normalizeMeetingSnapshot(buildMeetingSnapshot(state.meetingSummary));
+      const meetingTool = normalizeMeetingSnapshot(buildMeetingSnapshot());
       const meetingCount = normalizeCount(
         getMeetingCount(meetingTool),
         Number(meetingTool.count) || (Array.isArray(meetingTool.items) ? meetingTool.items.length : 0)

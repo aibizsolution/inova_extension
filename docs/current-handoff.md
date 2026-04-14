@@ -23,9 +23,9 @@ Last updated: 2026-04-14
 ## Where Ownership Stands
 
 - `conversation`: hosted owns list/search/copy/jump UI state; extension only provides page adapter plus thin signals such as count/active/fingerprint.
-- `release`: hosted owns latest/history/download surface and compact release summary sync; extension only brokers browser/runtime actions plus compact `releaseSummary(count + snapshotFingerprint)`.
+- `release`: hosted owns latest/history/download surface and compact release summary sync; extension only brokers browser/runtime actions plus compact `toolSummaries.release(count + snapshotFingerprint)`.
 - `prompt-library`, `prompt-store`, `prompt-review`: hosted owns prompt tab transition plus prompt/store/review action routing; extension keeps page/runtime bridge, review float, and review handoff/persistence only.
-- `meeting hub` / `meeting workspace`: hosted owns list/action UI, Firestore meeting-list subscription, and launch tracing; v2 hosted panel no longer falls back to top-panel `meeting-action` dispatch, and v2 extension now carries only count-only `meetingSummary(count)` residue outside the hub path.
+- `meeting hub` / `meeting workspace`: hosted owns list/action UI, Firestore meeting-list subscription, and launch tracing; v2 hosted panel no longer falls back to top-panel `meeting-action` dispatch, and v2 extension now carries only count-only `toolSummaries.meeting(count)` residue outside the hub path.
 
 Short version:
 
@@ -67,7 +67,7 @@ Short version:
   - new hosted workspace tab owns workspace bootstrap/ready logs
 - v2 meeting lifecycle coupling reduced across sync, snapshot, fallback, and bootstrap wiring
 - v2 meeting summary residue is now count-only, and hosted meeting hub no longer uses top-panel fingerprint echo for reload decisions
-- active v2 createState no longer carries dead `meetingHub` / `meetingUi` buckets; extension meeting residue is now the compact `meetingSummary(count)` state only
+- active v2 createState no longer carries dead `meetingHub` / `meetingUi` buckets; extension compact hosted residue now lives under `toolSummaries`, with meeting staying count-only
 - compact hosted `meeting` / `release` summaries now round-trip through a shared `tool-summary-sync` bridge contract instead of feature-specific summary actions
 - `content/panel.js` no longer picks meeting/prompt runtime helpers directly; panel iframe target now resolves through shared `firebaseConfig.panel` runtime config
 - `content/panel.js` no longer clones the full render payload into hosted bridge snapshots; v2 render now passes a prebuilt `panelSnapshot` and the host just brokers view + bridge envelope
