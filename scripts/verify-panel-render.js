@@ -193,6 +193,10 @@ function verifyHostedPromptActionOwnershipContract() {
     !hostedPanelSource.includes('action: "move-prompt"'),
     "v2 hosted prompt panel should not fall back to the top-panel move-prompt request path"
   );
+  assert(
+    !hostedPanelSource.includes("namespace.promptHubView?.render?.(panelState.promptTool)"),
+    "v2 hosted prompt panel should not fall back to the dead promptHubView renderer once promptToolView owns the shell"
+  );
 }
 
 function verifyHostedConversationSearchDebounceContract() {

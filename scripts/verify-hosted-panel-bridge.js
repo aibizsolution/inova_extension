@@ -186,6 +186,7 @@ function verifyHostedPanelFiles(directoryName) {
     assert(html.includes("./prompt-library-controller.js"), "v2 hosted panel should load prompt library controller");
     assert(html.includes("./prompt-store-model.js"), "v2 hosted panel should load prompt store model");
     assert(html.includes("./prompt-tool-view.js"), "v2 hosted panel should load prompt tool view");
+    assert(!html.includes("./prompt-hub-view.js"), "v2 hosted panel should not load the dead promptHubView fallback");
     assert(html.includes("./prompt-review-controller.js"), "v2 hosted panel should load prompt review controller");
     assert(html.includes("./prompt-store-controller.js"), "v2 hosted panel should load prompt store controller");
     assert(html.includes("./meeting-hub-controller.js"), "v2 hosted panel should load meeting hub controller");

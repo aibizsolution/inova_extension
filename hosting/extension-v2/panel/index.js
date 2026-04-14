@@ -797,9 +797,7 @@
         return namespace.bookmarkView?.renderTool?.(buildEffectiveConversationToolState(panelState)) || renderToolFailure();
       }
       if (panelState.activeTool === "prompts") {
-        return namespace.promptToolView?.render?.(buildEffectivePromptToolState(panelState))
-          || namespace.promptHubView?.render?.(panelState.promptTool)
-          || renderToolFailure();
+        return namespace.promptToolView?.render?.(buildEffectivePromptToolState(panelState)) || renderToolFailure();
       }
       if (panelState.activeTool === "meeting") {
         return namespace.meetingView?.render?.(buildEffectiveMeetingToolState(panelState)) || renderToolFailure();
