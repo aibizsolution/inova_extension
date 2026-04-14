@@ -37,6 +37,7 @@ Short version:
 - prompt review handoff no longer gets stuck in hosted `pending` after a successful external review result
 - prompt review copy now delegates through top-page `clipboard.write-text` instead of iframe-local clipboard access
 - active page adapter contract now uses canonical capability-shaped actions (`conversation.read-state`, `conversation.jump-item`, `composer.read-state`, `composer.apply-text`, `clipboard.write-text`, `debug.*`, `trace.log`) so hosted feature work can change without extension-side feature rewrites, and active alias shims are no longer left behind after the caller slice moves
+- active page/runtime capability catalog is now expected to live in `contracts/extension-contract.json` + `scripts/verify-contracts.js`, so future hosted work has to reuse the declared browser capability API before it can add new extension surface
 - prompt review runtime now surfaces `page.functions.review.*` / `prompt.review.request.*` traces in the top console and fails explicit timeout after `30s` instead of hanging forever
 - top console trace visibility was restored for hosted `meeting panel-auth`, `Firestore listen/snapshot`, conversation snapshot reads, release fetches, and prompt review function calls
 - panel layout now uses a fixed `420px` width with a `70px` left rail for the active v2 surface

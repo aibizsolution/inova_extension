@@ -89,6 +89,7 @@ if (countJavaScriptFiles(contentDirectory) < 3) {
 if (countJavaScriptFiles(sharedDirectory) < 3) {
   errors.push("shared 모듈 수가 부족합니다. 최소 3개 파일로 분리해야 합니다.");
 }
+verifyHostedCapabilityCatalog();
 
 assertFileExists("scripts/legacy-panel/verify-prompt-fallbacks.js");
 assertFileExists("scripts/verify-functions-runtime.js");
@@ -209,5 +210,43 @@ function assertInlineOnlyGating(relativePath) {
   }
   if (!source.includes("if (!options.allowInlineOnly)")) {
     errors.push(`meeting inline-only가 local/dev/test로 좁혀지지 않았습니다: ${relativePath}`);
+  }
+}
+
+function verifyHostedCapabilityCatalog() {
+  const pageCapabilityActions = new Set(contract.pageCapabilityActions || []);
+  const runtimeCapabilityActions = new Set(contract.runtimeCapabilityActions || []);
+  if (!pageCapabilityActions.size) {
+    errors.push("page capability catalog가 비어 있습니다.");
+  }
+  if (!runtimeCapabilityActions.size) {
+    errors.push("runtime capability catalog가 비어 있습니다.");
+  }
+
+  const hostedPanelDir = path.join(root, "hosting", "extension-v2", "panel");
+  if (!fs.existsSync(hostedPanelDir)) {
+    errors.push("v2 hosted panel 디렉터리를 찾지 못했습니다.");
+    return;
+  }
+
+  for (const entry of fs.readdirSync(hostedPanelDir)) {
+    if (!entry.endsWith(".js")) {
+      continue;
+    }
+    const relativePath = path.join("hosting", "extension-v2", "panel", entry);
+    const source = fs.readFileSync(path.join(hostedPanelDir, entry), "utf8");
+    verifyCapabilityCallsInSource(source, relativePath, "invokePage", pageCapabilityActions, "page");
+    verifyCapabilityCallsInSource(source, relativePath, "invokeRuntime", runtimeCapabilityActions, "runtime");
+  }
+}
+
+function verifyCapabilityCallsInSource(source, relativePath, calleeName, allowedActions, capabilityType) {
+  const actionPattern = new RegExp(`${calleeName}\\s*\\(\\s*\\{[\\s\\S]{0,220}?action:\\s*"([^"]+)"`, "g");
+  let match;
+  while ((match = actionPattern.exec(source))) {
+    const action = String(match[1] || "").trim();
+    if (!allowedActions.has(action)) {
+      errors.push(`${relativePath}가 계약에 없는 ${capabilityType} capability action을 호출합니다: ${action}`);
+    }
   }
 }

@@ -147,6 +147,29 @@
     "tabs",
     "cookies"
   ],
+  "pageCapabilityActions": [
+    "conversation.read-state",
+    "conversation.jump-item",
+    "composer.read-state",
+    "composer.apply-text",
+    "clipboard.write-text",
+    "debug.read-state",
+    "debug.set-enabled",
+    "debug.copy-log",
+    "debug.clear-log",
+    "trace.log"
+  ],
+  "runtimeCapabilityActions": [
+    "storage.read-panel-state",
+    "storage.write-ui-preferences",
+    "auth.issue-panel-session",
+    "functions.invoke-endpoint",
+    "browser.open-url",
+    "meeting.workspace.open",
+    "meeting.result.open",
+    "meeting.share.create",
+    "meeting.share.revoke"
+  ],
   "requiredDocKeywords": [
     "팝업 작업실 연결 설정",
     "질문 자동 모으기",
