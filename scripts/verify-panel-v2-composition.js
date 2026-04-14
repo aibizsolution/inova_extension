@@ -264,6 +264,14 @@ function main() {
     "v2 composition should stop storing hosted-owned meeting summary residue in the legacy meetingHub state bucket"
   );
   assert(
+    !v2CompositionSource.includes("meetingHub:"),
+    "v2 composition state should not keep a legacy meetingHub bucket once hosted meeting ownership is count-only"
+  );
+  assert(
+    !v2CompositionSource.includes("meetingUi:"),
+    "v2 composition state should not keep a legacy meetingUi bucket once hosted meeting action UI stays hosted"
+  );
+  assert(
     v2CompositionSource.includes("state.meetingSummary"),
     "v2 composition should keep hosted-owned meeting residue in a dedicated compact meetingSummary state bucket"
   );
@@ -272,8 +280,8 @@ function main() {
     "v2 composition should keep hosted-owned meeting residue in a count-only meetingSummary state bucket"
   );
   assert(
-    v2CompositionSource.includes("function normalizeHostedMeetingSummary(meetingTool)"),
-    "v2 composition should normalize hosted meeting summary payloads locally"
+    v2CompositionSource.includes("function normalizeHostedMeetingCount(value)"),
+    "v2 composition should normalize hosted meeting counts locally"
   );
   assert(
     !v2CompositionSource.includes("dataFreshness: normalizedMeetingTool.dataFreshness"),

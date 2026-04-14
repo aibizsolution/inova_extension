@@ -332,13 +332,12 @@
     const panelDebugController = deps.panelDebugController || {
       syncEnabled() {},
     };
-    const panelMeetingController = deps.panelMeetingController || { buildToolState() { return { count: 0 }; } };
     const buildMeetingSnapshot = typeof deps.buildMeetingSnapshot === "function"
       ? deps.buildMeetingSnapshot
-      : (meetingHub) => panelMeetingController.buildToolState(meetingHub);
+      : (meetingSummary) => meetingSummary && typeof meetingSummary === "object" ? meetingSummary : {};
     const getMeetingCount = typeof deps.getMeetingCount === "function"
       ? deps.getMeetingCount
-      : (meetingTool) => Number(meetingTool?.count) || (Array.isArray(meetingTool?.items) ? meetingTool.items.length : 0);
+      : (meetingTool) => Number(meetingTool?.count) || 0;
     const buildConversationSnapshot = typeof deps.buildConversationSnapshot === "function"
       ? deps.buildConversationSnapshot
       : () => panelBookmarkController.buildToolState();

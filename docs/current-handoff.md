@@ -67,6 +67,7 @@ Short version:
   - new hosted workspace tab owns workspace bootstrap/ready logs
 - v2 meeting lifecycle coupling reduced across sync, snapshot, fallback, and bootstrap wiring
 - v2 meeting summary residue is now count-only, and hosted meeting hub no longer uses top-panel fingerprint echo for reload decisions
+- active v2 createState no longer carries dead `meetingHub` / `meetingUi` buckets; extension meeting residue is now the compact `meetingSummary(count)` state only
 - `content/panel.js` no longer picks meeting/prompt runtime helpers directly; panel iframe target now resolves through shared `firebaseConfig.panel` runtime config
 - active `content/hosted-panel-bridge.js` no longer carries inactive legacy `meeting-action` / prompt action request paths; the live v2 request surface is now summary-sync, release, conversation bookmark, shell, runtime, and page only
 - hosted-first ownership and incremental doc-correction rules were written into root/docs guidance

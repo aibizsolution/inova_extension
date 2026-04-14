@@ -45,6 +45,7 @@ function verifyCustomConversationSnapshotBridge() {
 function verifyRenderPayloadAndReviewFloat() {
   const harness = createHarness({
     activeTool: "meeting",
+    meetingSummary: { count: 2 },
     open: true,
     settings: { enabled: true },
   });
@@ -188,7 +189,7 @@ function createHarness(options = {}) {
 
   const state = {
     activeTool: options.activeTool || "bookmarks",
-    meetingSummary: { count: 0, snapshotFingerprint: "" },
+    meetingSummary: cloneValue(options.meetingSummary || { count: 0 }),
     open: Boolean(options.open),
     settings: {
       enabled: true,
@@ -221,13 +222,6 @@ function createHarness(options = {}) {
       },
       syncEnabled() {
         debugSyncCalls += 1;
-      },
-    },
-    panelMeetingController: {
-      buildToolState() {
-        return {
-          count: 2,
-        };
       },
     },
     buildMeetingSnapshot: options.buildMeetingSnapshot,

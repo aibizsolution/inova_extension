@@ -135,11 +135,11 @@
     };
 
     function handleHostedMeetingSummarySync(meetingTool = {}) {
-      const nextSummary = normalizeHostedMeetingSummary(meetingTool);
-      if (buildMeetingSummaryKey(state.meetingSummary) === buildMeetingSummaryKey(nextSummary)) {
+      const nextCount = normalizeHostedMeetingCount(meetingTool?.count);
+      if (normalizeHostedMeetingCount(state.meetingSummary?.count) === nextCount) {
         return false;
       }
-      state.meetingSummary = nextSummary;
+      state.meetingSummary = { count: nextCount };
       render();
       return true;
     }
@@ -202,12 +202,6 @@
       pausedSessions: {},
       meetingSummary: { count: 0 },
       releaseSummary: { count: 0, snapshotFingerprint: "" },
-      meetingHub: { ...namespace.constants.defaults.meetingHub },
-      meetingUi: {
-        feedback: null,
-        feedbackTimer: 0,
-        pending: { action: "", jobId: "", meetingId: "", startedAt: 0, title: "" },
-      },
       panelDebugUi: {
         collapsed: true,
         feedback: null,
@@ -503,16 +497,15 @@
   function createHostedOwnedMeetingSnapshotBridge() {
     return {
       buildMeetingSnapshot(meetingSummary) {
-        const meetingTool = normalizeHostedMeetingSummary(meetingSummary);
         return {
-          count: getMeetingCount(meetingTool),
+          count: getMeetingCount(meetingSummary),
         };
       },
       getMeetingCount,
     };
 
     function getMeetingCount(meetingTool = {}) {
-      return Math.max(0, Number(meetingTool.count) || 0);
+      return normalizeHostedMeetingCount(meetingTool?.count);
     }
   }
 
@@ -715,18 +708,8 @@
     };
   }
 
-  function buildMeetingSummaryKey(meetingTool) {
-    const normalizedMeetingTool = normalizeHostedMeetingSummary(meetingTool);
-    return JSON.stringify({
-      count: normalizedMeetingTool.count,
-    });
-  }
-
-  function normalizeHostedMeetingSummary(meetingTool) {
-    const normalizedMeetingTool = meetingTool && typeof meetingTool === "object" ? meetingTool : {};
-    return {
-      count: Math.max(0, Number(normalizedMeetingTool.count) || 0),
-    };
+  function normalizeHostedMeetingCount(value) {
+    return Math.max(0, Number(value) || 0);
   }
 
   function buildReleaseSummaryKey(releaseTool) {

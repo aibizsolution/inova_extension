@@ -34,23 +34,21 @@ function main() {
   assert.notStrictEqual(stateA.settings, stateB.settings);
   assert.notStrictEqual(stateA.meetingSummary, stateB.meetingSummary);
   assert.notStrictEqual(stateA.releaseSummary, stateB.releaseSummary);
-  assert.notStrictEqual(stateA.meetingUi, stateB.meetingUi);
-  assert.notStrictEqual(stateA.meetingUi.pending, stateB.meetingUi.pending);
   assert.notStrictEqual(stateA.panelDebugUi, stateB.panelDebugUi);
   assert.notStrictEqual(stateA.store, stateB.store);
   assert.notStrictEqual(stateA.queries, stateB.queries);
+  assert.equal("meetingHub" in stateA, false);
+  assert.equal("meetingUi" in stateA, false);
 
   stateA.settings.enabled = false;
   stateA.meetingSummary.count = 7;
   stateA.releaseSummary.count = 1;
-  stateA.meetingUi.pending.action = "share";
   stateA.store.scope = "mine";
   stateA.queries.bookmarks = "alpha";
 
   assert.equal(stateB.settings.enabled, true);
   assert.equal(stateB.meetingSummary.count, 0);
   assert.equal(stateB.releaseSummary.count, 0);
-  assert.equal(stateB.meetingUi.pending.action, "");
   assert.equal(stateB.store.scope, "all");
   assert.equal(stateB.queries.bookmarks, "");
 
@@ -81,7 +79,6 @@ function createHarness() {
     },
     constants: {
       defaults: {
-        meetingHub: { items: [] },
         promptReview: { open: false },
         settings: {
           autoBookmark: true,
