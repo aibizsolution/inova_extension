@@ -24,9 +24,14 @@ if (fs.existsSync(manifestPath)) {
     errors.push(`manifest popup 경로가 계약과 다릅니다: ${manifest.action?.default_popup}`);
   }
 
-  const contentScript = Array.isArray(manifest.content_scripts) ? manifest.content_scripts[0] : null;
-  const jsFiles = contentScript?.js || [];
-  const cssFiles = contentScript?.css || [];
+  const mainContentScript = Array.isArray(manifest.content_scripts)
+    ? manifest.content_scripts.find((entry) => Array.isArray(entry?.matches) && entry.matches.includes("https://inova.incross.com/*"))
+    : null;
+  const meetingWorkspaceScript = Array.isArray(manifest.content_scripts)
+    ? manifest.content_scripts.find((entry) => Array.isArray(entry?.js) && entry.js.includes("content/meeting-workspace-bridge.js"))
+    : null;
+  const jsFiles = mainContentScript?.js || [];
+  const cssFiles = mainContentScript?.css || [];
 
   for (const file of contract.manifestContentScripts) {
     if (!jsFiles.includes(file)) {
@@ -37,6 +42,21 @@ if (fs.existsSync(manifestPath)) {
   for (const file of contract.manifestContentCss) {
     if (!cssFiles.includes(file)) {
       errors.push(`manifest content css 누락: ${file}`);
+    }
+  }
+
+  for (const file of contract.manifestMeetingWorkspaceScripts || []) {
+    if (!(meetingWorkspaceScript?.js || []).includes(file)) {
+      errors.push(`manifest meeting workspace content script 누락: ${file}`);
+    }
+  }
+
+  const webAccessibleResources = Array.isArray(manifest.web_accessible_resources)
+    ? manifest.web_accessible_resources.flatMap((entry) => Array.isArray(entry?.resources) ? entry.resources : [])
+    : [];
+  for (const file of contract.webAccessibleResources || []) {
+    if (!webAccessibleResources.includes(file)) {
+      errors.push(`manifest web accessible resource 누락: ${file}`);
     }
   }
 
@@ -91,6 +111,7 @@ if (countJavaScriptFiles(sharedDirectory) < 3) {
 }
 verifyActiveSharedRootCatalog();
 verifyActiveBackgroundRootCatalog();
+verifyActiveContentRootCatalog();
 verifyHostedCapabilityCatalog();
 verifyBackgroundMessageCatalog();
 
@@ -303,6 +324,59 @@ function verifyActiveBackgroundRootCatalog() {
   for (const file of actualBackgroundRootFiles) {
     if (!activeBackgroundRootFiles.has(file)) {
       errors.push(`active background root에 계약 밖 helper가 다시 들어왔습니다: ${file}`);
+    }
+  }
+}
+
+function verifyActiveContentRootCatalog() {
+  const activeContentRootFiles = new Set(contract.activeContentRootFiles || []);
+  const activeContentFeatureFiles = new Set(contract.activeContentFeatureFiles || []);
+  if (!activeContentRootFiles.size) {
+    errors.push("active content root catalog가 비어 있습니다.");
+    return;
+  }
+
+  if (!fs.existsSync(contentDirectory)) {
+    errors.push("content 디렉터리를 찾지 못했습니다.");
+    return;
+  }
+
+  const actualContentRootFiles = new Set(
+    fs.readdirSync(contentDirectory)
+      .filter((file) => /\.(js|css|html)$/.test(file))
+      .map((file) => path.posix.join("content", file))
+  );
+
+  for (const file of activeContentRootFiles) {
+    if (!actualContentRootFiles.has(file)) {
+      errors.push(`active content root catalog 누락: ${file}`);
+    }
+  }
+
+  for (const file of actualContentRootFiles) {
+    if (!activeContentRootFiles.has(file)) {
+      errors.push(`active content root에 계약 밖 runtime asset이 다시 들어왔습니다: ${file}`);
+    }
+  }
+
+  const promptReviewDirectory = path.join(root, "content", "features", "prompt-review");
+  const actualPromptReviewFiles = fs.existsSync(promptReviewDirectory)
+    ? new Set(
+        fs.readdirSync(promptReviewDirectory)
+          .filter((file) => file.endsWith(".js"))
+          .map((file) => path.posix.join("content", "features", "prompt-review", file))
+      )
+    : new Set();
+
+  for (const file of activeContentFeatureFiles) {
+    if (!actualPromptReviewFiles.has(file)) {
+      errors.push(`active content feature catalog 누락: ${file}`);
+    }
+  }
+
+  for (const file of actualPromptReviewFiles) {
+    if (!activeContentFeatureFiles.has(file)) {
+      errors.push(`active content feature root에 계약 밖 runtime file이 다시 들어왔습니다: ${file}`);
     }
   }
 }

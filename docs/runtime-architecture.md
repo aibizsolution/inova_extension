@@ -55,6 +55,7 @@
 - 특징: active prompt lane도 `chrome.storage.local.promptLibrary`를 정본으로 취급하지 않는다. active `shared/constants.js` / `shared/storage.js`는 dormant prompt local cache schema를 더 이상 들고 있지 않고, backup prompt helper/reference가 그 캐시 계약을 직접 가진다.
 - 특징: background-only auth/cloud network helper도 active shared root에 남기지 않는다. i-Nova access token refresh는 `background/inova-auth-client.js`, Functions-backed cloud POST helper는 `background/cloud-api-client.js`가 맡고, active `shared/*`는 browser-agnostic cache/state/config core만 유지한다.
 - 특징: active shared root inventory는 `shared/constants.js`, `shared/firebase-config.js`, `shared/product-lane.js`, `shared/provider-identity-cache.js`, `shared/session.js`, `shared/storage.js`로 고정하고, 이 목록은 `contracts/extension-contract.json` + `scripts/verify-contracts.js`로 같이 잠근다.
+- 특징: active content root inventory도 `composer(.js/.css)`, `dom.js`, `provider-identity-sensor.js`, `frame-proxy(.html/.js/helper)`, `page-capability-router.js`, `hosted-panel-bridge.js`, `panel-console-trace.js`, `panel-host-*`, `panel-v2-*`, `panel.js`, `panel.css`, `route-*`, `main.js`, `meeting-workspace-bridge.js`, `content/features/prompt-review/*.js`로 고정하고, main panel preload/meeting bridge/web-accessible frame proxy 자산을 `contracts/extension-contract.json` + `scripts/verify-contracts.js`가 함께 잠근다.
 
 ### Background Service Worker
 

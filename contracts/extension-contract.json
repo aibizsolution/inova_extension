@@ -19,6 +19,35 @@
     "background/panel-session-capability.js",
     "background/service-worker.js"
   ],
+  "activeContentRootFiles": [
+    "content/composer-review.css",
+    "content/composer.js",
+    "content/dom.js",
+    "content/frame-proxy-helper.js",
+    "content/frame-proxy.html",
+    "content/frame-proxy.js",
+    "content/hosted-panel-bridge.js",
+    "content/main.js",
+    "content/meeting-workspace-bridge.js",
+    "content/page-capability-router.js",
+    "content/panel-console-trace.js",
+    "content/panel-host-bridge.js",
+    "content/panel-host-runtime.js",
+    "content/panel-host-view.js",
+    "content/panel-v2-composition-controller.js",
+    "content/panel-v2-prompt-controller.js",
+    "content/panel-v2-shell-bridge.js",
+    "content/panel.css",
+    "content/panel.js",
+    "content/provider-identity-sensor.js",
+    "content/route-state-controller.js",
+    "content/route-sync.js",
+    "content/route-watch-controller.js"
+  ],
+  "activeContentFeatureFiles": [
+    "content/features/prompt-review/composer-review-float.js",
+    "content/features/prompt-review/prompt-review-manager.js"
+  ],
   "requiredFiles": [
     "manifest.json",
     "package.json",
@@ -170,7 +199,15 @@
     "index.js"
   ],
   "manifestContentCss": [
-    "content/panel.css"
+    "content/panel.css",
+    "content/composer-review.css"
+  ],
+  "manifestMeetingWorkspaceScripts": [
+    "content/meeting-workspace-bridge.js"
+  ],
+  "webAccessibleResources": [
+    "content/frame-proxy.html",
+    "content/frame-proxy.js"
   ],
   "requiredStorageKeys": [
     "settings",
