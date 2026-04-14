@@ -49,6 +49,14 @@ function verifyLegacyPromptRuntimeLocalWiring() {
 }
 
 function verifyLegacyPromptLibraryRemoteFirstWiring() {
+  const promptCloudSyncHelper = read(path.join("backup", "legacy-panel", "shared", "prompt-cloud-sync.js"));
+  assert(/queuePromptLibrarySyncOperation/.test(promptCloudSyncHelper), "legacy prompt cloud sync helper가 queued sync builder를 가져야 합니다.");
+  assert(/createReplaceLibraryOperation/.test(promptCloudSyncHelper), "legacy prompt cloud sync helper가 replace sync operation builder를 가져야 합니다.");
+
+  const promptStorageHelper = read(path.join("backup", "legacy-panel", "shared", "prompt-storage.js"));
+  assert(/getPromptLibrary/.test(promptStorageHelper), "legacy prompt storage helper가 prompt library read helper를 가져야 합니다.");
+  assert(/savePromptItem/.test(promptStorageHelper), "legacy prompt storage helper가 prompt save helper를 가져야 합니다.");
+
   const cloudSyncManager = read(path.join("backup", "legacy-panel", "features", "prompt-library", "cloud-sync-manager.js"));
   assert(/savePromptItem/.test(cloudSyncManager), "legacy cloud sync manager가 remote save entrypoint를 가져야 합니다.");
   assert(/removePromptItem/.test(cloudSyncManager), "legacy cloud sync manager가 remote delete entrypoint를 가져야 합니다.");

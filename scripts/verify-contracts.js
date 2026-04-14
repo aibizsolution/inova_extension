@@ -66,10 +66,16 @@ for (const file of listSourceFiles(root)) {
 }
 
 const sharedStoragePath = path.join(root, "shared", "storage.js");
-if (fs.existsSync(sharedStoragePath)) {
-  const sharedStorage = fs.readFileSync(sharedStoragePath, "utf8");
+const sharedConstantsPath = path.join(root, "shared", "constants.js");
+if (fs.existsSync(sharedStoragePath) || fs.existsSync(sharedConstantsPath)) {
+  const sharedStorage = fs.existsSync(sharedStoragePath)
+    ? fs.readFileSync(sharedStoragePath, "utf8")
+    : "";
+  const sharedConstants = fs.existsSync(sharedConstantsPath)
+    ? fs.readFileSync(sharedConstantsPath, "utf8")
+    : "";
   for (const key of contract.requiredStorageKeys) {
-    if (!sharedStorage.includes(key)) {
+    if (!sharedStorage.includes(key) && !sharedConstants.includes(key)) {
       errors.push(`storage 계약 키가 없습니다: ${key}`);
     }
   }

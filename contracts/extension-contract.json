@@ -19,6 +19,8 @@
     "shared/product-lane.js",
     "backup/legacy-panel/shared/meeting-bridge.js",
     "backup/legacy-panel/shared/meeting-debug.js",
+    "backup/legacy-panel/shared/prompt-cloud-sync.js",
+    "backup/legacy-panel/shared/prompt-storage.js",
     "shared/prompt-library.js",
     "backup/legacy-panel/shared/release-info.js",
     "shared/session.js",

@@ -29,12 +29,22 @@ function main() {
 function verifyPromptLibraryHostedLaneContract() {
   const stateFactory = read(path.join("content", "panel-v2-composition-controller.js"));
   const routeStateController = read(path.join("content", "route-state-controller.js"));
+  const sharedCloudSync = read(path.join("shared", "cloud-sync.js"));
+  const sharedStorage = read(path.join("shared", "storage.js"));
+  const backupPromptCloudSync = read(path.join("backup", "legacy-panel", "shared", "prompt-cloud-sync.js"));
+  const backupPromptStorage = read(path.join("backup", "legacy-panel", "shared", "prompt-storage.js"));
   assert(!/\bpromptLibraryLoading\b/.test(stateFactory), "active v2 panel state는 dead prompt library loading mirror를 유지하면 안 됩니다.");
   assert(!/\bpromptLibraryRemoteReady\b/.test(stateFactory), "active v2 panel state는 dead prompt library ready mirror를 유지하면 안 됩니다.");
   assert(!/\bpromptLibrary:\s/.test(stateFactory), "active v2 panel state는 hosted-owned prompt library cache를 직접 들지 않아야 합니다.");
   assert(!/\bpromptEditor:\s*\{/.test(stateFactory), "active v2 panel state는 hosted-owned prompt editor bucket을 직접 들지 않아야 합니다.");
   assert(!/\bstore:\s*\{/.test(stateFactory), "active v2 panel state는 hosted-owned store bucket을 직접 들지 않아야 합니다.");
   assert(!/\bmergePromptLibrary\b/.test(routeStateController), "active route hydration은 hosted-owned prompt library cache를 다시 merge하면 안 됩니다.");
+  assert(!/\bqueuePromptLibrarySyncOperation\b/.test(sharedCloudSync), "active shared/cloud-sync.js는 dormant prompt sync operation builder를 다시 들지 않아야 합니다.");
+  assert(!/\bcreateReplaceLibraryOperation\b/.test(sharedCloudSync), "active shared/cloud-sync.js는 dormant prompt library replace helper를 다시 들지 않아야 합니다.");
+  assert(!/\bfunction getPromptLibrary\b/.test(sharedStorage), "active shared/storage.js는 dormant prompt library CRUD helper를 다시 들지 않아야 합니다.");
+  assert(!/\bfunction savePromptItem\b/.test(sharedStorage), "active shared/storage.js는 dormant prompt save helper를 다시 들지 않아야 합니다.");
+  assert(/\bqueuePromptLibrarySyncOperation\b/.test(backupPromptCloudSync), "legacy prompt sync operation helper는 backup shared lane에 남아 있어야 합니다.");
+  assert(/\bfunction getPromptLibrary\b/.test(backupPromptStorage), "legacy prompt storage helper는 backup shared lane에 남아 있어야 합니다.");
 
   const promptFeatureDoc = read(path.join("content", "features", "prompt-library", "AGENTS.md"));
   assert(/DB 정본/.test(promptFeatureDoc), "prompt-library AGENTS에 DB 정본 invariant가 필요합니다.");

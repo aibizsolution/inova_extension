@@ -12,6 +12,8 @@
 - `backup/legacy-panel/meeting-panel-bridge-controller.js`
 - `backup/legacy-panel/shared/meeting-bridge.js`
 - `backup/legacy-panel/shared/meeting-debug.js`
+- `backup/legacy-panel/shared/prompt-cloud-sync.js`
+- `backup/legacy-panel/shared/prompt-storage.js`
 - `backup/legacy-panel/bookmark-view.js`
 - `backup/legacy-panel/panel-bookmark-controller.js`
 - `backup/legacy-panel/panel-debug-controller.js`

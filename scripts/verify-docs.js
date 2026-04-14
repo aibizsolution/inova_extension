@@ -41,6 +41,8 @@ const requiredFiles = [
   path.join("hosting", "extension", "panel", "prompt-hub-panel.js"),
   path.join("hosting", "extension-v2", "panel", "prompt-tool-panel.js"),
   path.join("scripts", "install-git-hooks.js"),
+  path.join("backup", "legacy-panel", "shared", "prompt-cloud-sync.js"),
+  path.join("backup", "legacy-panel", "shared", "prompt-storage.js"),
   "shared/prompt-library.js",
   path.join("scripts", "verify-feature-doc-update.js"),
   path.join("scripts", "verify-hosted-panel-bridge.js"),
@@ -484,8 +486,24 @@ const codeChecks = [
     patterns: [
       /chrome\.storage\.local/,
       /pausedSessions/,
-      /promptLibrary/,
+      /productLaneMigration/,
       /updateSettings/,
+    ],
+  },
+  {
+    file: "backup/legacy-panel/shared/prompt-cloud-sync.js",
+    patterns: [
+      /queuePromptLibrarySyncOperation/,
+      /createReplaceLibraryOperation/,
+      /setPromptSyncDegraded/,
+    ],
+  },
+  {
+    file: "backup/legacy-panel/shared/prompt-storage.js",
+    patterns: [
+      /getPromptLibrary/,
+      /savePromptItem/,
+      /buildPromptSyncDocument/,
     ],
   },
   {

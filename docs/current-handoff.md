@@ -24,7 +24,7 @@ Last updated: 2026-04-14
 
 - `conversation`: hosted owns list/search/copy/jump UI state; extension only provides page adapter plus thin signals such as count/active/fingerprint.
 - `release`: hosted owns latest/history/download surface and compact release summary sync; extension only keeps browser/runtime broker capability plus count-only `toolSummaries.release(count)`.
-- `prompt-library`, `prompt-store`, `prompt-review`: hosted owns prompt tab transition plus prompt/store/review action routing and review state/result/dismiss; extension keeps page/runtime bridge, review float, and monotonic review-trigger handoff/persistence only.
+- `prompt-library`, `prompt-store`, `prompt-review`: hosted owns prompt tab transition plus prompt/store/review action routing and review state/result/dismiss; extension keeps page/runtime bridge, review float, monotonic review-trigger handoff, and generic local-state/provider-identity persistence only.
 - `meeting hub` / `meeting workspace`: hosted owns list/action UI, Firestore meeting-list subscription, and launch tracing; v2 hosted panel no longer falls back to top-panel `meeting-action` dispatch, and v2 extension now carries only count-only `toolSummaries.meeting(count)` residue outside the hub path.
 
 Short version:
@@ -83,6 +83,7 @@ Short version:
 - backup legacy reference verify scripts now live under `scripts/legacy-panel/*` instead of the active root `scripts/` namespace
 - active v2 prompt shell no longer keeps hosted-owned prompt store-load/storage/sync sidecars; extension prompt residue is now review float plus review handoff/persistence only
 - active v2 prompt review no longer mirrors result/error/open/pending state through the top snapshot; extension now sends only a monotonic external `requestId` signal and hosted review owns the request lifecycle plus escape dismiss
+- active `shared/storage.js` / `shared/cloud-sync.js` no longer carry dormant prompt-library CRUD/sync operation helpers; those backup-only prompt helpers now live under `backup/legacy-panel/shared/*`
 - active v2 shell now keeps generic `prompts/store` tool selection in `panel-v2-shell-bridge`; `panel-v2-prompt-controller.js` no longer intercepts normal prompt/store tool picks
 - active v2 prompt snapshot no longer mirrors hosted prompt activeTab/search state back into extension state
 - active v2 prompt state factory and route hydration no longer mirror hosted-owned prompt library/store/editor buckets inside extension state
