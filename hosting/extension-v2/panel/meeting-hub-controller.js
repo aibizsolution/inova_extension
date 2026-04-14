@@ -46,7 +46,6 @@
       initialized: false,
       initPromise: null,
       items: [],
-      lastCount: 0,
       loadPromise: null,
       loading: false,
       panelOpen: false,
@@ -99,14 +98,10 @@
       const panelReopenedIntoMeeting = nextActiveTool === "meeting" && nextPanelOpen && !state.panelOpen;
       state.activeTool = nextActiveTool;
       state.panelOpen = nextPanelOpen;
-      const fallbackMeetingTool = panelState?.meetingTool && typeof panelState.meetingTool === "object"
-        ? panelState.meetingTool
-        : {};
       state.settings = {
         ...state.settings,
         ...(panelState?.settings && typeof panelState.settings === "object" ? panelState.settings : {}),
       };
-      state.lastCount = Math.max(0, Number(fallbackMeetingTool.count) || state.items.length || state.lastCount);
       if (!hasRequiredCapabilities()) {
         meetingRealtime?.disconnect?.("capabilities-missing");
         return;
@@ -125,19 +120,24 @@
       return REQUIRED_EXTENSION_CAPABILITIES.every((capability) => state.capabilities.includes(capability));
     }
 
-    function getMeetingCount() {
-      return Math.max(0, Number(state.items.length) || Number(state.lastCount) || 0);
+    function getMeetingCount(fallbackMeetingTool = {}) {
+      const hostedCount = Math.max(0, Array.isArray(state.items) ? state.items.length : 0);
+      if (hostedCount > 0) {
+        return hostedCount;
+      }
+      if (state.loading || !state.initialized) {
+        return readFallbackMeetingCount(fallbackMeetingTool);
+      }
+      return 0;
     }
 
     function buildViewState(fallbackMeetingTool = {}) {
       if (!hasRequiredCapabilities()) {
         return fallbackMeetingTool;
       }
-      const fallbackCount = Math.max(0, Number(fallbackMeetingTool.count) || 0);
-      state.lastCount = Math.max(0, getMeetingCount() || fallbackCount);
       return {
         checkedAt: normalizeText(state.checkedAt),
-        count: state.lastCount,
+        count: getMeetingCount(fallbackMeetingTool),
         dataFreshness: normalizeEnum(state.dataFreshness, ["fresh", "stale", "empty"], "empty"),
         degraded: Boolean(state.degraded),
         degradedReason: normalizeText(state.degradedReason),
@@ -380,7 +380,6 @@
         : (items.length ? "fresh" : "empty");
       state.error = "";
       state.source = fromCache ? "cache" : "realtime";
-      state.lastCount = items.length;
       scheduleRender();
       await emitTopPanelSummary();
     }
@@ -549,7 +548,7 @@
     }
 
     function buildTopPanelSummary() {
-      const count = Math.max(0, Number(state.lastCount) || state.items.length || 0);
+      const count = Math.max(0, Array.isArray(state.items) ? state.items.length : 0);
       return {
         count,
       };
@@ -693,6 +692,10 @@
 
   function normalizeText(value) {
     return namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
+  }
+
+  function readFallbackMeetingCount(fallbackMeetingTool = {}) {
+    return Math.max(0, Number(fallbackMeetingTool?.count) || 0);
   }
 
   namespace.meetingHubController = { create };

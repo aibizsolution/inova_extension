@@ -421,7 +421,7 @@ async function verifyHostedMeetingHubIgnoresOwnSummaryEchoWhileLoading() {
         {
           activeTool: "meeting",
           meetingTool: {
-            count: meetingTool.count,
+            count: meetingTool.count + 8,
           },
           open: true,
           settings: {
@@ -455,6 +455,11 @@ async function verifyHostedMeetingHubIgnoresOwnSummaryEchoWhileLoading() {
     realtimeSubscribeCalls.length,
     1,
     "hosted meeting hub should not re-subscribe when its own tool-summary-sync snapshot echoes back during the first load"
+  );
+  assert.equal(
+    controller.buildViewState({ count: 9 }).count,
+    1,
+    "hosted meeting hub should keep hosted meeting count as the source of truth instead of reusing its echoed top-panel summary count"
   );
 }
 
