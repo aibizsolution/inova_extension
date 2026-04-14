@@ -296,6 +296,7 @@ function createHarness() {
 
   loadScript(path.join("content", "hosted-panel-bridge.js"), context);
   context.InovaBookmarks.hostedPanelBridge = hostedPanelBridgeStub;
+  loadScript(path.join("content", "panel-console-trace.js"), context);
   loadScript(path.join("content", "panel.js"), context);
 
   return {

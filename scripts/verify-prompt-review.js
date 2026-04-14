@@ -156,6 +156,7 @@ async function verifyPromptTellingV2ClientOptIn() {
 function verifyHostedPromptReviewContract() {
   const hostedControllerSource = fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "prompt-review-controller.js"), "utf8");
   const hostedIndexSource = fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "index.js"), "utf8");
+  const panelTraceSource = fs.readFileSync(path.join(root, "content", "panel-console-trace.js"), "utf8");
   const topPanelSource = fs.readFileSync(path.join(root, "content", "panel.js"), "utf8");
   const shellBridgeSource = fs.readFileSync(path.join(root, "content", "panel-v2-shell-bridge.js"), "utf8");
   const promptReviewManagerSource = fs.readFileSync(path.join(root, "content", "features", "prompt-review", "prompt-review-manager.js"), "utf8");
@@ -196,17 +197,17 @@ function verifyHostedPromptReviewContract() {
     "hosted panel should wire review tracing into prompt review controller"
   );
   assert.equal(
-    topPanelSource.includes('"hosted.review.request.start"'),
+    panelTraceSource.includes('"hosted.review.request.start"'),
     true,
     "top panel should keep hosted review request traces visible"
   );
   assert.equal(
-    topPanelSource.includes('"page.functions.review.start"'),
+    panelTraceSource.includes('"page.functions.review.start"'),
     true,
     "top panel should keep content review function traces visible"
   );
   assert.equal(
-    topPanelSource.includes('"prompt.review.request.start"'),
+    panelTraceSource.includes('"prompt.review.request.start"'),
     true,
     "top panel should keep content review request traces visible"
   );
@@ -221,9 +222,10 @@ function verifyHostedPromptReviewContract() {
     "v2 shell bridge should report prompt review visibility inside the panelTrace payload"
   );
   assert.equal(
-    topPanelSource.includes('const panelTrace = state?.panelTrace && typeof state.panelTrace === "object"'),
+    panelTraceSource.includes('const panelTrace = state?.panelTrace && typeof state.panelTrace === "object"')
+      && topPanelSource.includes("const traceController = panelConsoleTrace.create({"),
     true,
-    "top panel host should consume the prebuilt panelTrace payload instead of reading prompt review state directly"
+    "top panel trace helper should consume the prebuilt panelTrace payload and the host should wire that helper in"
   );
   assert.equal(
     promptReviewManagerSource.includes("REVIEW_RUNTIME_TIMEOUT_MS = 30000"),

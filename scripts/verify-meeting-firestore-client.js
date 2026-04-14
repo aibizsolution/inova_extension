@@ -15,8 +15,8 @@ async function verifyHostedMeetingFirestoreClientContract() {
     path.join(root, "hosting", "extension-v2", "panel", "index.html"),
     "utf8"
   );
-  const contentPanelSource = fs.readFileSync(
-    path.join(root, "content", "panel.js"),
+  const panelTraceSource = fs.readFileSync(
+    path.join(root, "content", "panel-console-trace.js"),
     "utf8"
   );
   assert(
@@ -32,7 +32,7 @@ async function verifyHostedMeetingFirestoreClientContract() {
     "v2 hosted meeting hub should not keep using Functions list reads for meeting room snapshots"
   );
   assert(
-    contentPanelSource.includes('channel === "firestore"'),
+    panelTraceSource.includes('channel === "firestore"'),
     "top panel trace console should render firestore events with a dedicated channel style"
   );
 

@@ -25,6 +25,10 @@ function main() {
   const scriptList = Array.isArray(mainContentScript?.js) ? mainContentScript.js : [];
 
   assert(
+    scriptList.includes("content/panel-console-trace.js"),
+    "manifest should load the dedicated panel trace helper in the active 1.0.0 bundle"
+  );
+  assert(
     scriptList.includes("content/panel-v2-prompt-controller.js"),
     "manifest should load the v2 prompt controller in the active 1.0.0 bundle"
   );
