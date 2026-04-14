@@ -284,7 +284,7 @@
   }
 
   function mergeUiPreferences(...preferenceSets) {
-    return preferenceSets.reduce(
+    const merged = preferenceSets.reduce(
       (merged, nextPreferences) => ({
         ...merged,
         ...(nextPreferences || {}),
@@ -298,6 +298,14 @@
         handleRatios: { ...(defaults.uiPreferences.handleRatios || {}) },
       }
     );
+    if (merged.activeTool === "store") {
+      merged.activeTool = "prompts";
+      merged.activePromptTab = "store";
+    }
+    if (merged.activePromptTab !== "store" && merged.activePromptTab !== "review") {
+      merged.activePromptTab = "library";
+    }
+    return merged;
   }
 
   function getViewportBucket(width = global.innerWidth) {

@@ -38,6 +38,7 @@ async function verifyRefreshStateLoadsStorageAndBookmarks() {
 
   assert.equal(harness.state.sessionTitle, "테스트 세션");
   assert.equal(harness.state.activeTool, "prompts");
+  assert.equal(harness.state.uiPreferences.activeTool, "prompts");
   assert.equal(harness.state.uiPreferences.activePromptTab, "store");
   assert.deepEqual(harness.state.bookmarks, [{ id: "bookmark-1", text: "첫 질문" }]);
   assert.equal(harness.state.awaitingRouteMessages, false);
@@ -64,6 +65,7 @@ function verifyLaneAwareStorageChangeHandling() {
   assert.equal(changed, true);
   assert.equal(harness.state.settings.autoBookmark, false);
   assert.equal(harness.state.activeTool, "prompts");
+  assert.equal(harness.state.uiPreferences.activeTool, "prompts");
   assert.equal(harness.state.uiPreferences.activePromptTab, "store");
   assert.deepEqual(harness.state.pausedSessions, { "session-3": true });
   assert.deepEqual(harness.state.cloudSync, { mergedSource: "cache" });
@@ -189,12 +191,20 @@ function createHarness(options = {}) {
         return cloneValue(storageState);
       },
       mergeUiPreferences(value = {}) {
-        return {
+        const merged = {
           activePromptTab: "library",
           activeTool: "bookmarks",
           handleRatios: {},
           ...cloneValue(value),
         };
+        if (merged.activeTool === "store") {
+          merged.activeTool = "prompts";
+          merged.activePromptTab = "store";
+        }
+        if (merged.activePromptTab !== "store" && merged.activePromptTab !== "review") {
+          merged.activePromptTab = "library";
+        }
+        return merged;
       },
     },
   };

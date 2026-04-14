@@ -116,10 +116,9 @@
     function readUiPreferences(value) {
       const merged = namespace.storage.mergeUiPreferences(value);
       const locked = applyUiPreferenceLock(merged);
-      return {
-        ...locked,
-        activePromptTab: normalizePromptTab(locked.activeTool === "store" ? "store" : locked.activePromptTab),
-      };
+      return namespace.storage.mergeUiPreferences(locked, {
+        activePromptTab: normalizePromptTab(locked.activePromptTab),
+      });
     }
 
     function readLiveBookmarks() {
@@ -173,9 +172,7 @@
     function defaultNormalizeToolId(toolId) {
       return toolId === "release" || toolId === "prompts" || toolId === "meeting"
         ? toolId
-        : toolId === "store"
-            ? "prompts"
-            : "bookmarks";
+        : "bookmarks";
     }
 
     function logDebug(event, payload) {

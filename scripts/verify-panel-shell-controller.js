@@ -134,13 +134,21 @@ function createHarness(options = {}) {
         return "desktop";
       },
       mergeUiPreferences(current = {}, patch = {}) {
-        return {
+        const merged = {
           activePromptTab: "library",
           activeTool: "bookmarks",
           handleRatios: {},
           ...cloneValue(current),
           ...cloneValue(patch),
         };
+        if (merged.activeTool === "store") {
+          merged.activeTool = "prompts";
+          merged.activePromptTab = "store";
+        }
+        if (merged.activePromptTab !== "store" && merged.activePromptTab !== "review") {
+          merged.activePromptTab = "library";
+        }
+        return merged;
       },
       normalizeHandleRatio(value) {
         return Number(value) || 0;
@@ -155,7 +163,7 @@ function createHarness(options = {}) {
           activePromptTab: "library",
           activeTool: "bookmarks",
           handleRatios: {},
-          ...cloneValue(patch),
+          ...context.InovaBookmarks.storage.mergeUiPreferences(patch),
         };
       },
     },

@@ -525,9 +525,7 @@
       state.activeTool = normalizeToolId(toolId);
       const nextPromptTab = state.activeTool === "prompts"
         ? "library"
-        : state.uiPreferences.activeTool === "store"
-            ? "store"
-            : normalizePromptTab(state.uiPreferences.activePromptTab);
+        : normalizePromptTab(state.uiPreferences.activePromptTab);
       state.uiPreferences = namespace.storage.mergeUiPreferences(state.uiPreferences, {
         activePromptTab: nextPromptTab,
         activeTool: state.activeTool,

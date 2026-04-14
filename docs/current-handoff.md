@@ -78,6 +78,7 @@ Short version:
 - active v2 prompt shell no longer keeps hosted-owned prompt store-load/storage/sync sidecars; extension prompt residue is now review float plus review handoff/persistence only
 - active v2 prompt snapshot no longer mirrors hosted prompt activeTab/search state back into extension state
 - active v2 prompt state factory and route hydration no longer mirror hosted-owned prompt library/store/editor buckets inside extension state
+- active v2 route/shell no longer keeps legacy `activeTool: store`; old stored values normalize immediately to `activeTool: prompts` plus `activePromptTab: store`
 - hosted-first ownership and incremental doc-correction rules were written into root/docs guidance
 
 ## Recent High-Signal Commits
