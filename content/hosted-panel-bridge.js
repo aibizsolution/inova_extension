@@ -439,19 +439,17 @@
       ? helpers.logConsoleTrace
       : () => {};
     const action = normalizeText(payload?.action);
-    const handledMeetingRequest = await handleMeetingRequest(action, payload, callbacks, {
+    const handledSummaryRequest = await handlePanelSummaryRequest(action, payload, callbacks);
+    if (handledSummaryRequest?.handled) {
+      return handledSummaryRequest;
+    }
+
+    const handledLegacyRequest = await handleLegacyPanelRequest(action, payload, callbacks, {
       logConsoleTrace,
       normalizeText,
     });
-    if (handledMeetingRequest?.handled) {
-      return handledMeetingRequest;
-    }
-
-    const handledPromptRequest = await handlePromptRequest(action, payload, callbacks, {
-      normalizeText,
-    });
-    if (handledPromptRequest?.handled) {
-      return handledPromptRequest;
+    if (handledLegacyRequest?.handled) {
+      return handledLegacyRequest;
     }
 
     return handleShellRequest(action, payload, callbacks, {
@@ -459,7 +457,48 @@
     });
   }
 
-  function handleMeetingRequest(action, payload, callbacks, helpers = {}) {
+  function handlePanelSummaryRequest(action, payload, callbacks) {
+    if (action === "meeting-summary-sync") {
+      if (typeof callbacks.onMeetingSummarySync !== "function") {
+        return Promise.resolve({
+          handled: false,
+          result: null,
+        });
+      }
+      const meetingTool = payload?.meetingTool && typeof payload.meetingTool === "object"
+        ? payload.meetingTool
+        : {};
+      return Promise.resolve(callbacks.onMeetingSummarySync?.(meetingTool)).then(() => ({
+        handled: true,
+        result: { handled: true },
+      }));
+    }
+
+    if (action === "release-summary-sync") {
+      const releaseTool = payload?.releaseTool && typeof payload.releaseTool === "object"
+        ? payload.releaseTool
+        : {};
+      return Promise.resolve(callbacks.onReleaseSummarySync?.(releaseTool)).then(() => ({
+        handled: true,
+        result: { handled: true },
+      }));
+    }
+
+    return Promise.resolve({
+      handled: false,
+      result: null,
+    });
+  }
+
+  async function handleLegacyPanelRequest(action, payload, callbacks, helpers = {}) {
+    const handledMeetingRequest = await handleLegacyMeetingRequest(action, payload, callbacks, helpers);
+    if (handledMeetingRequest?.handled) {
+      return handledMeetingRequest;
+    }
+    return handleLegacyPromptRequest(action, payload, callbacks, helpers);
+  }
+
+  function handleLegacyMeetingRequest(action, payload, callbacks, helpers = {}) {
     const normalizeText = typeof helpers.normalizeText === "function"
       ? helpers.normalizeText
       : (value) => namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
@@ -500,29 +539,13 @@
         });
     }
 
-    if (action === "meeting-summary-sync") {
-      if (typeof callbacks.onMeetingSummarySync !== "function") {
-        return Promise.resolve({
-          handled: false,
-          result: null,
-        });
-      }
-      const meetingTool = payload?.meetingTool && typeof payload.meetingTool === "object"
-        ? payload.meetingTool
-        : {};
-      return Promise.resolve(callbacks.onMeetingSummarySync?.(meetingTool)).then(() => ({
-        handled: true,
-        result: { handled: true },
-      }));
-    }
-
     return Promise.resolve({
       handled: false,
       result: null,
     });
   }
 
-  function handlePromptRequest(action, payload, callbacks, helpers = {}) {
+  function handleLegacyPromptRequest(action, payload, callbacks, helpers = {}) {
     const normalizeText = typeof helpers.normalizeText === "function"
       ? helpers.normalizeText
       : (value) => namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
@@ -686,16 +709,6 @@
         handled: true,
         result: { jumped: true },
       });
-    }
-
-    if (action === "release-summary-sync") {
-      const releaseTool = payload?.releaseTool && typeof payload.releaseTool === "object"
-        ? payload.releaseTool
-        : {};
-      return Promise.resolve(callbacks.onReleaseSummarySync?.(releaseTool)).then(() => ({
-        handled: true,
-        result: { handled: true },
-      }));
     }
 
     if (action === "release-action") {
