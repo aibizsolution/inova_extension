@@ -451,8 +451,8 @@ async function verifyHostedMeetingHubIgnoresOwnSummaryEchoWhileLoading() {
   );
   assert.equal(
     controller.buildViewState().count,
-    1,
-    "hosted meeting hub should keep the initial top-panel count only as an internal bootstrap seed before realtime data arrives"
+    0,
+    "hosted meeting hub should keep meeting count empty until realtime data arrives instead of borrowing the top-panel summary echo during bootstrap"
   );
   await flushAsyncTurns();
 
@@ -464,7 +464,7 @@ async function verifyHostedMeetingHubIgnoresOwnSummaryEchoWhileLoading() {
   assert.equal(
     controller.buildViewState().count,
     1,
-    "hosted meeting hub should keep hosted meeting count as the source of truth instead of reusing its echoed top-panel summary count"
+    "hosted meeting hub should keep hosted realtime count as the source of truth instead of reusing its echoed top-panel summary count"
   );
 }
 

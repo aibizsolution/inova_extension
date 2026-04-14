@@ -35,7 +35,6 @@
       : null;
     const state = {
       activeTool: "",
-      bootstrapCount: 0,
       capabilities: [],
       checkedAt: "",
       dataFreshness: "empty",
@@ -95,7 +94,6 @@
         : [];
       const nextActiveTool = normalizeText(panelState?.activeTool);
       const nextPanelOpen = Boolean(panelState?.open);
-      state.bootstrapCount = normalizeBootstrapCount(panelState?.meetingTool, state.bootstrapCount);
       const meetingToolBecameActive = nextActiveTool === "meeting" && state.activeTool !== "meeting";
       const panelReopenedIntoMeeting = nextActiveTool === "meeting" && nextPanelOpen && !state.panelOpen;
       state.activeTool = nextActiveTool;
@@ -123,20 +121,13 @@
     }
 
     function getMeetingCount() {
-      const hostedCount = Math.max(0, Array.isArray(state.items) ? state.items.length : 0);
-      if (hostedCount > 0) {
-        return hostedCount;
-      }
-      if (state.loading || !state.initialized) {
-        return state.bootstrapCount;
-      }
-      return 0;
+      return Math.max(0, Array.isArray(state.items) ? state.items.length : 0);
     }
 
     function buildViewState() {
       if (!hasRequiredCapabilities()) {
         return {
-          count: state.bootstrapCount,
+          count: 0,
         };
       }
       return {
@@ -696,13 +687,6 @@
 
   function normalizeText(value) {
     return namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
-  }
-
-  function normalizeBootstrapCount(meetingTool, fallback = 0) {
-    const nextCount = Number(meetingTool?.count);
-    return Number.isFinite(nextCount) && nextCount >= 0
-      ? nextCount
-      : Math.max(0, Number(fallback) || 0);
   }
 
   namespace.meetingHubController = { create };
