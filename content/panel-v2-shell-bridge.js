@@ -337,6 +337,12 @@
         getReleaseCount(releaseState),
         releaseState.updateAvailable ? 1 : Number(releaseState.count) || 0
       );
+      const panelTrace = buildPanelTracePayload({
+        activeTool: state.activeTool,
+        open: state.open,
+        promptTool: promptSnapshot,
+        visible,
+      });
       const handleCount = panelShellController.buildHandleCount({
         bookmarks: conversationCount,
         meeting: meetingCount,
@@ -349,6 +355,7 @@
         handleCount,
         handleRatio: namespace.storage.getHandleRatio(state.uiPreferences, global.innerWidth),
         open: state.open,
+        panelTrace,
         panelSnapshot: {
           activeTool: state.activeTool,
           bookmarksTool: bookmarkTool,
@@ -364,6 +371,21 @@
         visible,
       });
       namespace.composerReviewFloat?.render?.(panelPromptController.buildReviewFloatState(visible));
+    }
+
+    function buildPanelTracePayload(payload = {}) {
+      const promptTool = payload?.promptTool && typeof payload.promptTool === "object"
+        ? payload.promptTool
+        : {};
+      const reviewState = promptTool?.review && typeof promptTool.review === "object"
+        ? promptTool.review
+        : {};
+      return {
+        activeTool: String(payload?.activeTool ?? "").trim(),
+        open: Boolean(payload?.open),
+        reviewOpen: Boolean(reviewState.open),
+        visible: Boolean(payload?.visible),
+      };
     }
 
     function normalizeCount(value, fallback = 0) {

@@ -157,6 +157,7 @@ function verifyHostedPromptReviewContract() {
   const hostedControllerSource = fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "prompt-review-controller.js"), "utf8");
   const hostedIndexSource = fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "index.js"), "utf8");
   const topPanelSource = fs.readFileSync(path.join(root, "content", "panel.js"), "utf8");
+  const shellBridgeSource = fs.readFileSync(path.join(root, "content", "panel-v2-shell-bridge.js"), "utf8");
   const promptReviewManagerSource = fs.readFileSync(path.join(root, "content", "features", "prompt-review", "prompt-review-manager.js"), "utf8");
 
   assert.equal(
@@ -210,9 +211,19 @@ function verifyHostedPromptReviewContract() {
     "top panel should keep content review request traces visible"
   );
   assert.equal(
-    topPanelSource.includes("const reviewState = promptTool?.review && typeof promptTool.review === \"object\""),
+    shellBridgeSource.includes("const panelTrace = buildPanelTracePayload({"),
     true,
-    "top panel snapshot trace should report prompt tool review state"
+    "v2 shell bridge should build a dedicated panelTrace payload for top panel snapshot tracing"
+  );
+  assert.equal(
+    shellBridgeSource.includes("reviewOpen: Boolean(reviewState.open)"),
+    true,
+    "v2 shell bridge should report prompt review visibility inside the panelTrace payload"
+  );
+  assert.equal(
+    topPanelSource.includes('const panelTrace = state?.panelTrace && typeof state.panelTrace === "object"'),
+    true,
+    "top panel host should consume the prebuilt panelTrace payload instead of reading prompt review state directly"
   );
   assert.equal(
     promptReviewManagerSource.includes("REVIEW_RUNTIME_TIMEOUT_MS = 30000"),

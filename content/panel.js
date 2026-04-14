@@ -325,20 +325,17 @@
   }
 
   function buildPanelSnapshotTracePayload(state) {
+    const panelTrace = state?.panelTrace && typeof state.panelTrace === "object"
+      ? state.panelTrace
+      : {};
     const panelSnapshot = state?.panelSnapshot && typeof state.panelSnapshot === "object"
       ? state.panelSnapshot
       : {};
-    const promptTool = panelSnapshot?.promptTool && typeof panelSnapshot.promptTool === "object"
-      ? panelSnapshot.promptTool
-      : {};
-    const reviewState = promptTool?.review && typeof promptTool.review === "object"
-      ? promptTool.review
-      : {};
     return {
-      activeTool: normalizeText(panelSnapshot?.activeTool),
-      open: Boolean(state?.open),
-      reviewOpen: Boolean(reviewState.open),
-      visible: Boolean(state?.visible),
+      activeTool: normalizeText(panelTrace.activeTool || panelSnapshot?.activeTool),
+      open: Object.hasOwn(panelTrace, "open") ? Boolean(panelTrace.open) : Boolean(state?.open),
+      reviewOpen: Boolean(panelTrace.reviewOpen),
+      visible: Object.hasOwn(panelTrace, "visible") ? Boolean(panelTrace.visible) : Boolean(state?.visible),
     };
   }
 

@@ -60,6 +60,12 @@ function verifyRenderPayloadAndReviewFloat() {
   assert.equal(harness.renderPayloads[0].panelSnapshot.activeTool, "meeting");
   assert.equal(harness.renderPayloads[0].handleCount, 2);
   assert.equal(harness.renderPayloads[0].panelSnapshot.meetingTool.count, 2);
+  assert.deepEqual(harness.renderPayloads[0].panelTrace, {
+    activeTool: "meeting",
+    open: true,
+    reviewOpen: false,
+    visible: true,
+  });
   assert.equal(harness.renderPayloads[0].visible, true);
   assert.deepEqual(harness.reviewFloatStates, [{ visible: true }]);
 }
@@ -100,6 +106,7 @@ function verifyCustomPromptSnapshotBridge() {
       },
     },
   });
+  assert.equal(harness.renderPayloads[0].panelTrace.reviewOpen, true);
 }
 
 function verifyCustomMeetingSnapshotBridge() {

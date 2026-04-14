@@ -59,9 +59,14 @@ function verifyHostedTraceVisibilityContract() {
     "top panel snapshot push traces should flow through a generic panel snapshot payload helper"
   );
   assert(
-    !topPanelSource.includes("state?.promptTool?.activeTab")
+    topPanelSource.includes('const panelTrace = state?.panelTrace && typeof state.panelTrace === "object"'),
+    "top panel snapshot push traces should read a prebuilt panelTrace payload instead of feature-local state"
+  );
+  assert(
+    !topPanelSource.includes("promptTool?.review")
+      && !topPanelSource.includes("state?.promptTool?.activeTab")
       && !topPanelSource.includes("state?.uiPreferences?.activePromptTab"),
-    "top panel snapshot push traces should stop reading prompt tab detail directly from the shell host"
+    "top panel snapshot push traces should stop reading prompt review/tab detail directly from the shell host"
   );
 }
 
