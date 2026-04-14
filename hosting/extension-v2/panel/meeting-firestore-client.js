@@ -10,8 +10,9 @@
   ]);
 
   function create(options = {}) {
-    const invokeRuntime = typeof options.invokeRuntime === "function"
-      ? options.invokeRuntime
+    const browserCapabilities = resolveBrowserCapabilities(options);
+    const issuePanelSession = typeof browserCapabilities.issuePanelSession === "function"
+      ? browserCapabilities.issuePanelSession
       : async () => ({});
     const onError = typeof options.onError === "function"
       ? options.onError
@@ -76,11 +77,7 @@
       const panelAuth = canReusePanelAuth
         ? state.panelAuth
         : normalizePanelAuth(
-          await invokeRuntime({
-            action: "auth.issue-panel-session",
-            panel: "meeting",
-            providerIdentity,
-          })
+          await issuePanelSession("meeting", providerIdentity)
         );
       const nextSubscriptionKey = buildSubscriptionKey(panelAuth, queryLimit);
       state.panelAuth = panelAuth;
@@ -521,6 +518,17 @@
 
   function cloneValue(value) {
     return value == null ? value : JSON.parse(JSON.stringify(value));
+  }
+
+  function resolveBrowserCapabilities(options) {
+    const providedCapabilities = options?.browserCapabilities;
+    if (providedCapabilities && typeof providedCapabilities === "object") {
+      return providedCapabilities;
+    }
+    return namespace.extensionCapabilityClient?.create?.({
+      invokePage: options?.invokePage,
+      invokeRuntime: options?.invokeRuntime,
+    }) || {};
   }
 
   namespace.meetingFirestoreClient = { create };

@@ -6,11 +6,12 @@
   ]);
 
   function create(options = {}) {
+    const browserCapabilities = resolveBrowserCapabilities(options);
     const getRuntimeVersion = typeof options.getRuntimeVersion === "function"
       ? options.getRuntimeVersion
       : () => "";
-    const invokeRuntime = typeof options.invokeRuntime === "function"
-      ? options.invokeRuntime
+    const openBrowserUrl = typeof browserCapabilities.openBrowserUrl === "function"
+      ? browserCapabilities.openBrowserUrl
       : async () => ({});
     const scheduleRender = typeof options.scheduleRender === "function"
       ? options.scheduleRender
@@ -191,10 +192,7 @@
       if (!nextUrl) {
         return;
       }
-      await invokeRuntime({
-        action: "browser.open-url",
-        url: nextUrl,
-      });
+      await openBrowserUrl(nextUrl);
     }
 
     async function fetchJson(relativePath) {
@@ -347,6 +345,17 @@
 
     function getErrorMessage(error, fallback) {
       return normalizeText(error instanceof Error ? error.message : error) || fallback;
+    }
+
+    function resolveBrowserCapabilities(createOptions) {
+      const providedCapabilities = createOptions?.browserCapabilities;
+      if (providedCapabilities && typeof providedCapabilities === "object") {
+        return providedCapabilities;
+      }
+      return namespace.extensionCapabilityClient?.create?.({
+        invokePage: createOptions?.invokePage,
+        invokeRuntime: createOptions?.invokeRuntime,
+      }) || {};
     }
   }
 

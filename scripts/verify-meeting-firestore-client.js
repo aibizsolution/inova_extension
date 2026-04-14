@@ -83,6 +83,7 @@ async function verifyHostedMeetingFirestoreClientContract() {
   queryState.panelExpiryIso = futureExpiryIso;
   context.firebase = createFakeFirebase(queryState);
 
+  loadScript("hosting/extension-v2/panel/extension-capability-client.js", context);
   loadScript("hosting/extension-v2/panel/meeting-firestore-client.js", context);
 
   const client = context.InovaBookmarks.meetingFirestoreClient.create({

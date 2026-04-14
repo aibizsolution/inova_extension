@@ -2,7 +2,10 @@ const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
-const { createPromptLibraryFirestoreNamespace } = require("./verify-prompt-library-test-helpers");
+const {
+  createPromptLibraryFirestoreNamespace,
+  installHostedCapabilityClient,
+} = require("./verify-prompt-library-test-helpers");
 
 const root = path.resolve(__dirname, "..");
 
@@ -48,6 +51,7 @@ async function verifyHostedPromptLibraryAvoidsDuplicateReloads() {
       },
     },
   };
+  installHostedCapabilityClient(context);
 
   const source = fs.readFileSync(
     path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),

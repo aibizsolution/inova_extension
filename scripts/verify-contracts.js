@@ -237,6 +237,7 @@ function verifyHostedCapabilityCatalog() {
     const source = fs.readFileSync(path.join(hostedPanelDir, entry), "utf8");
     verifyCapabilityCallsInSource(source, relativePath, "invokePage", pageCapabilityActions, "page");
     verifyCapabilityCallsInSource(source, relativePath, "invokeRuntime", runtimeCapabilityActions, "runtime");
+    verifyCapabilityTransportIsolation(source, relativePath, entry);
   }
 }
 
@@ -248,5 +249,17 @@ function verifyCapabilityCallsInSource(source, relativePath, calleeName, allowed
     if (!allowedActions.has(action)) {
       errors.push(`${relativePath}가 계약에 없는 ${capabilityType} capability action을 호출합니다: ${action}`);
     }
+  }
+}
+
+function verifyCapabilityTransportIsolation(source, relativePath, entryName) {
+  if (entryName === "extension-capability-client.js") {
+    return;
+  }
+  if (/invokePage\s*\(\s*\{[\s\S]{0,220}?action:\s*"/.test(source)) {
+    errors.push(`${relativePath}에 raw page capability action literal이 남아 있습니다. transport 문자열은 extension-capability-client.js로 모아야 합니다.`);
+  }
+  if (/invokeRuntime\s*\(\s*\{[\s\S]{0,220}?action:\s*"/.test(source)) {
+    errors.push(`${relativePath}에 raw runtime capability action literal이 남아 있습니다. transport 문자열은 extension-capability-client.js로 모아야 합니다.`);
   }
 }

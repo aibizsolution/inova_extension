@@ -12,12 +12,7 @@
   ]);
 
   function create(options = {}) {
-    const invokePage = typeof options.invokePage === "function"
-      ? options.invokePage
-      : async () => ({});
-    const invokeRuntime = typeof options.invokeRuntime === "function"
-      ? options.invokeRuntime
-      : async () => ({});
+    const browserCapabilities = resolveBrowserCapabilities(options);
     const scheduleRender = typeof options.scheduleRender === "function"
       ? options.scheduleRender
       : () => {};
@@ -30,6 +25,24 @@
     const traceFirestore = typeof options.traceFirestore === "function"
       ? options.traceFirestore
       : () => {};
+    const createMeetingShare = typeof browserCapabilities.createMeetingShare === "function"
+      ? browserCapabilities.createMeetingShare
+      : async () => ({});
+    const openMeetingResult = typeof browserCapabilities.openMeetingResult === "function"
+      ? browserCapabilities.openMeetingResult
+      : async () => ({});
+    const openMeetingWorkspace = typeof browserCapabilities.openMeetingWorkspace === "function"
+      ? browserCapabilities.openMeetingWorkspace
+      : async () => ({});
+    const readPanelStorageState = typeof browserCapabilities.readPanelStorageState === "function"
+      ? browserCapabilities.readPanelStorageState
+      : async () => ({});
+    const revokeMeetingShare = typeof browserCapabilities.revokeMeetingShare === "function"
+      ? browserCapabilities.revokeMeetingShare
+      : async () => ({});
+    const writeClipboardText = typeof browserCapabilities.writeClipboardText === "function"
+      ? browserCapabilities.writeClipboardText
+      : async () => ({});
     let meetingRealtime = options.meetingRealtime && typeof options.meetingRealtime === "object"
       ? options.meetingRealtime
       : null;
@@ -61,7 +74,7 @@
     };
     if (!meetingRealtime && namespace.meetingFirestoreClient?.create) {
       meetingRealtime = namespace.meetingFirestoreClient.create({
-        invokeRuntime,
+        browserCapabilities,
         onError: handleRealtimeError,
         onSnapshot: handleRealtimeSnapshot,
         traceFirestore,
@@ -203,11 +216,7 @@
       try {
         if (normalizedAction === "share") {
           traceMeeting("63.top.meeting.bridge.share.start", input);
-          const result = await invokeRuntime({
-            action: "meeting.share.create",
-            input,
-            providerIdentity: buildProviderIdentityPayload(state.providerIdentity),
-          });
+          const result = await createMeetingShare(input, buildProviderIdentityPayload(state.providerIdentity));
           const shareUrl = normalizeText(result?.shareUrl);
           if (!shareUrl) {
             throw new Error("공유 링크를 만들지 못했어요.");
@@ -232,11 +241,7 @@
         }
 
         traceMeeting("63.top.meeting.bridge.revoke-share.start", input);
-        const result = await invokeRuntime({
-          action: "meeting.share.revoke",
-          input,
-          providerIdentity: buildProviderIdentityPayload(state.providerIdentity),
-        });
+        const result = await revokeMeetingShare(input, buildProviderIdentityPayload(state.providerIdentity));
         patchShareState(input.meetingId, result?.share);
         traceMeeting("64.top.meeting.bridge.revoke-share.success", {
           meetingId: input.meetingId,
@@ -267,7 +272,7 @@
       }
       state.initPromise = (async () => {
         try {
-          const storageState = await invokeRuntime({ action: "storage.read-panel-state" });
+          const storageState = await readPanelStorageState();
           hydrateStorageState(storageState);
           state.initialized = true;
           return true;
@@ -284,7 +289,7 @@
 
     async function refreshStorageState() {
       try {
-        const storageState = await invokeRuntime({ action: "storage.read-panel-state" });
+        const storageState = await readPanelStorageState();
         hydrateStorageState(storageState);
         state.initialized = true;
       } catch (error) {
@@ -393,12 +398,10 @@
           meetingId: input.meetingId,
           title: input.title,
         });
-        const requestPayload = {
-          action: action === "open-result" ? "meeting.result.open" : "meeting.workspace.open",
-          input,
-          providerIdentity: buildProviderIdentityPayload(state.providerIdentity),
-        };
-        const openPromise = invokeRuntime(requestPayload);
+        const providerIdentity = buildProviderIdentityPayload(state.providerIdentity);
+        const openPromise = action === "open-result"
+          ? openMeetingResult(input, providerIdentity)
+          : openMeetingWorkspace(input, providerIdentity);
         traceMeeting("64.top.meeting.launch.dispatched", {
           action,
           jobId: input.jobId,
@@ -517,10 +520,7 @@
         return false;
       }
       try {
-        const result = await invokePage({
-          action: "clipboard.write-text",
-          text: normalizedShareUrl,
-        });
+        const result = await writeClipboardText(normalizedShareUrl);
         return Boolean(result?.copied);
       } catch (error) {
         void error;
@@ -687,6 +687,17 @@
 
   function normalizeText(value) {
     return namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
+  }
+
+  function resolveBrowserCapabilities(options) {
+    const providedCapabilities = options?.browserCapabilities;
+    if (providedCapabilities && typeof providedCapabilities === "object") {
+      return providedCapabilities;
+    }
+    return namespace.extensionCapabilityClient?.create?.({
+      invokePage: options?.invokePage,
+      invokeRuntime: options?.invokeRuntime,
+    }) || {};
   }
 
   namespace.meetingHubController = { create };

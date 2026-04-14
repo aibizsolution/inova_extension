@@ -97,6 +97,7 @@ async function verifyHostedPromptLibraryFirestoreClientContract() {
   };
   context.firebase = createFakeFirebase(queryState);
 
+  loadScript("hosting/extension-v2/panel/extension-capability-client.js", context);
   loadScript("hosting/extension-v2/panel/prompt-library-firestore-client.js", context);
 
   const client = context.InovaBookmarks.promptLibraryFirestoreClient.create({
@@ -281,6 +282,7 @@ async function verifyLocalPromptLibraryAuthSessionPolicy() {
   };
   context.firebase = createFakeFirebase(queryState);
 
+  loadScript("hosting/extension-v2/panel/extension-capability-client.js", context);
   loadScript("hosting/extension-v2/panel/prompt-library-firestore-client.js", context);
 
   const client = context.InovaBookmarks.promptLibraryFirestoreClient.create({

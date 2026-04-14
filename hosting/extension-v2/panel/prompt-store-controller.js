@@ -8,6 +8,7 @@
   ]);
 
   function create(options = {}) {
+    const browserCapabilities = resolveBrowserCapabilities(options);
     const getActivePromptTab = typeof options.getActivePromptTab === "function"
       ? options.getActivePromptTab
       : () => "library";
@@ -17,8 +18,8 @@
     const importStorePrompt = typeof options.importStorePrompt === "function"
       ? options.importStorePrompt
       : async () => false;
-    const invokeRuntime = typeof options.invokeRuntime === "function"
-      ? options.invokeRuntime
+    const invokeFunctionEndpoint = typeof browserCapabilities.invokeFunctionEndpoint === "function"
+      ? browserCapabilities.invokeFunctionEndpoint
       : async () => ({});
     const scheduleRender = typeof options.scheduleRender === "function"
       ? options.scheduleRender
@@ -235,8 +236,7 @@
       state.identityPending = false;
       scheduleRender();
       try {
-        const result = await invokeRuntime({
-          action: "functions.invoke-endpoint",
+        const result = await invokeFunctionEndpoint({
           authMode: "access-token",
           body: {
             filter: {
@@ -341,8 +341,7 @@
         return;
       }
       try {
-        const result = await invokeRuntime({
-          action: "functions.invoke-endpoint",
+        const result = await invokeFunctionEndpoint({
           authMode: "access-token",
           body: {
             entryId: normalizedEntryId,
@@ -370,8 +369,7 @@
       state.actionPending = { entryId: normalizedEntryId, type: "import" };
       scheduleRender();
       try {
-        const result = await invokeRuntime({
-          action: "functions.invoke-endpoint",
+        const result = await invokeFunctionEndpoint({
           authMode: "access-token",
           body: {
             entryId: normalizedEntryId,
@@ -401,8 +399,7 @@
       state.actionPending = { entryId: normalizedEntryId, type: "like" };
       scheduleRender();
       try {
-        const result = await invokeRuntime({
-          action: "functions.invoke-endpoint",
+        const result = await invokeFunctionEndpoint({
           authMode: "access-token",
           body: {
             entryId: normalizedEntryId,
@@ -452,8 +449,7 @@
       state.actionPending = { entryId: normalizedEntryId, type: "unpublish" };
       scheduleRender();
       try {
-        await invokeRuntime({
-          action: "functions.invoke-endpoint",
+        await invokeFunctionEndpoint({
           authMode: "access-token",
           body: {
             entryId: normalizedEntryId,
@@ -605,6 +601,17 @@
 
     function getErrorMessage(error, fallback) {
       return normalizeText(error instanceof Error ? error.message : error) || fallback;
+    }
+
+    function resolveBrowserCapabilities(createOptions) {
+      const providedCapabilities = createOptions?.browserCapabilities;
+      if (providedCapabilities && typeof providedCapabilities === "object") {
+        return providedCapabilities;
+      }
+      return namespace.extensionCapabilityClient?.create?.({
+        invokePage: createOptions?.invokePage,
+        invokeRuntime: createOptions?.invokeRuntime,
+      }) || {};
     }
   }
 

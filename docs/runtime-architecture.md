@@ -36,7 +36,7 @@
 
 - 위치: `hosting/extension/panel/index.html`, `hosting/extension/panel/index.js`, `hosting/extension/panel/*.js`
 - 역할: 우측 `실험실` 패널의 tool rail/header/content UI를 hosting에서 서빙한다.
-- 특징: `0.x` legacy lane부터 panel 기본 UI는 content DOM이 아니라 hosted iframe 안에서 렌더링된다. `1.0.0+` v2 lane에서는 conversation/prompt/store/review/meeting/release의 상태와 UI ownership이 hosted `extension-v2/panel/*` controller로 이동하고, tool rail/header chrome도 hosted가 active tool과 feature state로 직접 계산한다. 확장은 iframe host/bridge와 page adapter만 유지한다. panel debug는 별도 UI를 렌더링하지 않고 top 콘솔 trace와 세션 전역 버퍼만 유지한다.
+- 특징: `0.x` legacy lane부터 panel 기본 UI는 content DOM이 아니라 hosted iframe 안에서 렌더링된다. `1.0.0+` v2 lane에서는 conversation/prompt/store/review/meeting/release의 상태와 UI ownership이 hosted `extension-v2/panel/*` controller로 이동하고, tool rail/header chrome도 hosted가 active tool과 feature state로 직접 계산한다. 확장은 iframe host/bridge와 page adapter만 유지한다. hosted feature controller와 Firestore client는 `hosting/extension-v2/panel/extension-capability-client.js`를 통해 semantic capability method만 호출하고, raw page/runtime action 문자열은 그 transport helper 한곳에만 둔다. panel debug는 별도 UI를 렌더링하지 않고 top 콘솔 trace와 세션 전역 버퍼만 유지한다.
 
 ### Hosted Meeting App
 

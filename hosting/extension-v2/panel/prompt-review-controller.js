@@ -27,6 +27,7 @@
   };
 
   function create(options = {}) {
+    const browserCapabilities = resolveBrowserCapabilities(options);
     const getActivePromptTab = typeof options.getActivePromptTab === "function"
       ? options.getActivePromptTab
       : () => "library";
@@ -39,18 +40,24 @@
     const traceReview = typeof options.traceReview === "function"
       ? options.traceReview
       : () => {};
-    const invokePage = typeof options.invokePage === "function"
-      ? options.invokePage
+    const applyComposerText = typeof browserCapabilities.applyComposerText === "function"
+      ? browserCapabilities.applyComposerText
       : async () => ({});
-    const invokeRuntime = typeof options.invokeRuntime === "function"
-      ? options.invokeRuntime
+    const invokeFunctionEndpoint = typeof browserCapabilities.invokeFunctionEndpoint === "function"
+      ? browserCapabilities.invokeFunctionEndpoint
       : async () => ({});
+    const readComposerState = typeof browserCapabilities.readComposerState === "function"
+      ? browserCapabilities.readComposerState
+      : async () => ({ available: false, text: "" });
     const scheduleRender = typeof options.scheduleRender === "function"
       ? options.scheduleRender
       : () => {};
     const setActivePromptTab = typeof options.setActivePromptTab === "function"
       ? options.setActivePromptTab
       : async () => {};
+    const writeClipboardText = typeof browserCapabilities.writeClipboardText === "function"
+      ? browserCapabilities.writeClipboardText
+      : async () => ({});
 
     let copyStateTimer = 0;
     const state = {
@@ -233,8 +240,7 @@
         if (reviewProfile) {
           body.reviewProfile = reviewProfile;
         }
-        const result = await invokeRuntime({
-          action: "functions.invoke-endpoint",
+        const result = await invokeFunctionEndpoint({
           authMode: "access-token",
           body,
           endpointKey: "reviewInovaPromptUrl",
@@ -325,11 +331,7 @@
       traceReview("56.hosted.review.apply.start", {
         action: "apply-reviewed-prompt",
       });
-      const result = await invokePage({
-        action: "composer.apply-text",
-        mode: "replace",
-        text: refinedPrompt,
-      });
+      const result = await applyComposerText(refinedPrompt, "replace");
       if (!result?.applied) {
         updateState({ error: "입력창에 보완 프롬프트를 반영하지 못했어요." });
         traceReview("57.hosted.review.apply.error", {
@@ -366,10 +368,7 @@
         traceReview("58.hosted.review.copy.start", {
           action: "copy-reviewed-prompt",
         });
-        const result = await invokePage({
-          action: "clipboard.write-text",
-          text: promptText,
-        });
+        const result = await writeClipboardText(promptText);
         if (!result?.copied) {
           throw new Error("copy-failed");
         }
@@ -434,7 +433,7 @@
       if (state.syncPromise && !force) {
         return state.syncPromise;
       }
-      const run = invokePage({ action: "composer.read-state" })
+      const run = readComposerState()
         .catch(() => ({ available: false, text: "" }))
         .then((composerState) => {
           state.composerState = {
@@ -609,6 +608,17 @@
 
   function normalizeText(value) {
     return namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
+  }
+
+  function resolveBrowserCapabilities(options) {
+    const providedCapabilities = options?.browserCapabilities;
+    if (providedCapabilities && typeof providedCapabilities === "object") {
+      return providedCapabilities;
+    }
+    return namespace.extensionCapabilityClient?.create?.({
+      invokePage: options?.invokePage,
+      invokeRuntime: options?.invokeRuntime,
+    }) || {};
   }
 
   namespace.promptReviewController = { create };

@@ -6,8 +6,12 @@
   ]);
 
   function create(options = {}) {
-    const invokePage = typeof options.invokePage === "function"
-      ? options.invokePage
+    const browserCapabilities = resolveBrowserCapabilities(options);
+    const readConversationState = typeof browserCapabilities.readConversationState === "function"
+      ? browserCapabilities.readConversationState
+      : async () => ({});
+    const jumpConversationItem = typeof browserCapabilities.jumpConversationItem === "function"
+      ? browserCapabilities.jumpConversationItem
       : async () => ({});
     const scheduleRender = typeof options.scheduleRender === "function"
       ? options.scheduleRender
@@ -15,6 +19,9 @@
     const traceConversation = typeof options.traceConversation === "function"
       ? options.traceConversation
       : () => {};
+    const writeClipboardText = typeof browserCapabilities.writeClipboardText === "function"
+      ? browserCapabilities.writeClipboardText
+      : async () => ({});
 
     const state = {
       activeId: "",
@@ -110,10 +117,7 @@
       if (!bookmark?.text) {
         return false;
       }
-      const result = await invokePage({
-        action: "clipboard.write-text",
-        text: bookmark.text,
-      });
+      const result = await writeClipboardText(bookmark.text);
       return Boolean(result?.copied);
     }
 
@@ -124,10 +128,7 @@
       }
       state.activeId = normalizedBookmarkId;
       scheduleRender();
-      const result = await invokePage({
-        action: "conversation.jump-item",
-        bookmarkId: normalizedBookmarkId,
-      });
+      const result = await jumpConversationItem(normalizedBookmarkId);
       return Boolean(result?.jumped);
     }
 
@@ -161,9 +162,7 @@
         traceConversation("34.hosted.conversation.snapshot.start", {});
         scheduleRender();
         try {
-          const snapshot = await invokePage({
-            action: "conversation.read-state",
-          });
+          const snapshot = await readConversationState();
           hydrateSnapshot(snapshot);
           state.error = "";
           state.lastLoadedAt = Date.now();
@@ -323,6 +322,17 @@
 
     function getErrorMessage(error, fallback) {
       return normalizeText(error instanceof Error ? error.message : error) || fallback;
+    }
+
+    function resolveBrowserCapabilities(createOptions) {
+      const providedCapabilities = createOptions?.browserCapabilities;
+      if (providedCapabilities && typeof providedCapabilities === "object") {
+        return providedCapabilities;
+      }
+      return namespace.extensionCapabilityClient?.create?.({
+        invokePage: createOptions?.invokePage,
+        invokeRuntime: createOptions?.invokeRuntime,
+      }) || {};
     }
   }
 

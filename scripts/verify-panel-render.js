@@ -407,6 +407,12 @@ async function verifyHostedReleaseLocalDownloadUrls() {
     },
   };
 
+  new vm.Script(
+    fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "extension-capability-client.js"), "utf8"),
+    {
+      filename: "hosting/extension-v2/panel/extension-capability-client.js",
+    }
+  ).runInContext(context);
   const source = fs.readFileSync(
     path.join(root, "hosting", "extension-v2", "panel", "release-controller.js"),
     "utf8"

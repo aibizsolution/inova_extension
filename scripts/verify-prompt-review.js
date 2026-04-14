@@ -103,6 +103,7 @@ async function verifyExtensionReviewHandoff() {
 
 function verifyHostedPromptReviewContract() {
   const hostedControllerSource = fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "prompt-review-controller.js"), "utf8");
+  const capabilityClientSource = fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "extension-capability-client.js"), "utf8");
   const hostedIndexSource = fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "index.js"), "utf8");
   const panelTraceSource = fs.readFileSync(path.join(root, "content", "panel-console-trace.js"), "utf8");
   const topPanelSource = fs.readFileSync(path.join(root, "content", "panel.js"), "utf8");
@@ -110,9 +111,10 @@ function verifyHostedPromptReviewContract() {
   const promptReviewManagerSource = fs.readFileSync(path.join(root, "content", "features", "prompt-review", "prompt-review-manager.js"), "utf8");
 
   assert.equal(
-    hostedControllerSource.includes('action: "clipboard.write-text"'),
+    hostedControllerSource.includes("const writeClipboardText = typeof browserCapabilities.writeClipboardText === \"function\"")
+      && capabilityClientSource.includes('action: "clipboard.write-text"'),
     true,
-    "hosted prompt review copy should delegate through the stable top page clipboard.write-text capability"
+    "hosted prompt review copy should delegate through the hosted capability client and the stable top page clipboard.write-text capability"
   );
   assert.equal(
     hostedControllerSource.includes('traceReview("54.hosted.review.request.start"'),

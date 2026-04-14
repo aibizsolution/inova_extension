@@ -4,7 +4,10 @@ const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
-const { createPromptLibraryFirestoreNamespace } = require("./verify-prompt-library-test-helpers");
+const {
+  createPromptLibraryFirestoreNamespace,
+  installHostedCapabilityClient,
+} = require("./verify-prompt-library-test-helpers");
 const { verifyHostedPromptLibraryAvoidsDuplicateReloads } = require("./verify-prompt-library-hosted-controller");
 
 const root = path.resolve(__dirname, "..");
@@ -102,6 +105,7 @@ async function verifyHostedPromptEditorViewLabels() {
     },
   };
 
+  installHostedCapabilityClient(context);
   const source = fs.readFileSync(
     path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),
     "utf8"
@@ -205,6 +209,7 @@ async function verifyHostedPromptTextInputDebouncesRender() {
     },
   };
 
+  installHostedCapabilityClient(context);
   const source = fs.readFileSync(
     path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),
     "utf8"
@@ -290,6 +295,7 @@ async function verifyHostedPromptPublishUsesFunctionsFetch() {
     },
   };
 
+  installHostedCapabilityClient(context);
   const source = fs.readFileSync(
     path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),
     "utf8"
@@ -443,6 +449,7 @@ async function verifyHostedPromptTabSelectionDoesNotWaitForPersistence() {
     },
   };
 
+  installHostedCapabilityClient(context);
   const source = fs.readFileSync(
     path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),
     "utf8"
@@ -517,6 +524,7 @@ async function verifyHostedPromptTabSelectionSurvivesLateStorageHydration() {
       },
     },
   };
+  installHostedCapabilityClient(context);
   const source = fs.readFileSync(
     path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),
     "utf8"
@@ -613,6 +621,7 @@ async function verifyHostedPromptReviewRequestAutofocus() {
     },
   };
 
+  installHostedCapabilityClient(context);
   const source = fs.readFileSync(
     path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),
     "utf8"
@@ -716,6 +725,7 @@ async function verifyHostedPromptReviewTabVisibility() {
     },
   };
 
+  installHostedCapabilityClient(context);
   const source = fs.readFileSync(
     path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),
     "utf8"

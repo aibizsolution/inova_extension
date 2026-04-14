@@ -385,6 +385,7 @@ async function verifyHostedMeetingHubIgnoresOwnSummaryEchoWhileLoading() {
     },
   };
 
+  loadScript("hosting/extension-v2/panel/extension-capability-client.js", context);
   loadScript("hosting/extension-v2/panel/meeting-hub-controller.js", context);
 
   let controller = null;
@@ -552,6 +553,7 @@ function createHarnessWithOptions(options = {}) {
     },
   };
 
+  loadScript("hosting/extension-v2/panel/extension-capability-client.js", context);
   loadScript("hosting/extension-v2/panel/meeting-hub-controller.js", context);
 
   const controller = context.InovaBookmarks.meetingHubController.create({

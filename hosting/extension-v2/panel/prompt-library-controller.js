@@ -6,12 +6,7 @@
   ]);
 
   function create(options = {}) {
-    const invokePage = typeof options.invokePage === "function"
-      ? options.invokePage
-      : async () => ({});
-    const invokeRuntime = typeof options.invokeRuntime === "function"
-      ? options.invokeRuntime
-      : async () => ({});
+    const browserCapabilities = resolveBrowserCapabilities(options);
     const getStoreCategories = typeof options.getStoreCategories === "function"
       ? options.getStoreCategories
       : () => [];
@@ -27,8 +22,14 @@
     const traceReview = typeof options.traceReview === "function"
       ? options.traceReview
       : () => {};
+    const applyComposerText = typeof browserCapabilities.applyComposerText === "function"
+      ? browserCapabilities.applyComposerText
+      : async () => ({});
+    const invokeFunctionEndpoint = typeof browserCapabilities.invokeFunctionEndpoint === "function"
+      ? browserCapabilities.invokeFunctionEndpoint
+      : async () => ({});
     const promptLibraryFirestoreClient = namespace.promptLibraryFirestoreClient?.create?.({
-      invokeRuntime,
+      browserCapabilities,
       onError: async (error) => {
         handlePromptLibraryError(error);
         state.loading = false;
@@ -40,6 +41,15 @@
       },
       traceFirestore,
     }) || null;
+    const readComposerState = typeof browserCapabilities.readComposerState === "function"
+      ? browserCapabilities.readComposerState
+      : async () => ({});
+    const readPanelStorageState = typeof browserCapabilities.readPanelStorageState === "function"
+      ? browserCapabilities.readPanelStorageState
+      : async () => ({});
+    const writeUiPreferences = typeof browserCapabilities.writeUiPreferences === "function"
+      ? browserCapabilities.writeUiPreferences
+      : async () => ({});
 
     const state = {
       actionPending: null,
@@ -562,8 +572,7 @@
       state.actionPending = { type: "publish", promptId: normalizedPromptId };
       scheduleRender();
       try {
-        await invokeRuntime({
-          action: "functions.invoke-endpoint",
+        await invokeFunctionEndpoint({
           authMode: "access-token",
           body: {
             categoryId: publishCategory.id,
@@ -609,7 +618,7 @@
       if (!prompt) {
         return;
       }
-      const composerState = await invokePage({ action: "composer.read-state" });
+      const composerState = await readComposerState();
       if (!composerState?.available) {
         state.feedback = createFeedback("대화 입력창을 찾지 못했어요.", "error", promptId);
         scheduleRender();
@@ -631,11 +640,7 @@
       if (!prompt) {
         return;
       }
-      const result = await invokePage({
-        action: "composer.apply-text",
-        mode: normalizeText(mode) || "replace",
-        text: prompt.content,
-      });
+      const result = await applyComposerText(prompt.content, normalizeText(mode) || "replace");
       state.pendingInsert = null;
       state.feedback = createFeedback(
         result?.applied
@@ -686,7 +691,7 @@
       }
       state.initializing = true;
       try {
-        const storageState = await invokeRuntime({ action: "storage.read-panel-state" });
+        const storageState = await readPanelStorageState();
         hydrateStorageState(storageState);
         state.initialized = true;
         if (shouldActivateLibrary || state.pendingLibraryLoadAfterInit) {
@@ -781,8 +786,7 @@
           state.providerIdentity
         );
         syncDocument.sync.reason = normalizeText(reason) || "manual";
-        await invokeRuntime({
-          action: "functions.invoke-endpoint",
+        await invokeFunctionEndpoint({
           authMode: "access-token",
           body: syncDocument,
           endpointKey: "syncInovaPromptLibraryUrl",
@@ -809,12 +813,9 @@
         return;
       }
       state.persistingActiveTab = nextPromptTab;
-      await invokeRuntime({
-        action: "storage.write-ui-preferences",
-        partial: {
-          activePromptTab: nextPromptTab,
-          activeTool: "prompts",
-        },
+      await writeUiPreferences({
+        activePromptTab: nextPromptTab,
+        activeTool: "prompts",
       }).then(() => {
         state.persistedActiveTab = nextPromptTab;
       }).catch(() => {})
@@ -1011,6 +1012,17 @@
 
   function readErrorMessage(error, fallbackMessage) {
     return normalizeText(error instanceof Error ? error.message : error) || normalizeText(fallbackMessage);
+  }
+
+  function resolveBrowserCapabilities(options) {
+    const providedCapabilities = options?.browserCapabilities;
+    if (providedCapabilities && typeof providedCapabilities === "object") {
+      return providedCapabilities;
+    }
+    return namespace.extensionCapabilityClient?.create?.({
+      invokePage: options?.invokePage,
+      invokeRuntime: options?.invokeRuntime,
+    }) || {};
   }
 
   function normalizeText(value) {

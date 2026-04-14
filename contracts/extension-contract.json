@@ -67,6 +67,7 @@
     "hosting/extension/panel/index.css",
     "hosting/extension/panel/index.js",
     "hosting/extension/panel/runtime.js",
+    "hosting/extension-v2/panel/extension-capability-client.js",
     "hosting/extension/panel/bookmark-view.js",
     "hosting/extension/panel/prompt-view.js",
     "hosting/extension/panel/store-view.js",

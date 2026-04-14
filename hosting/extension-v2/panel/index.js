@@ -56,49 +56,50 @@
     invokeRuntime,
     request,
   };
-  const conversationController = namespace.conversationController?.create?.({
+  const browserCapabilities = namespace.extensionCapabilityClient?.create?.({
     invokePage,
+    invokeRuntime,
+  }) || {};
+  const conversationController = namespace.conversationController?.create?.({
+    browserCapabilities,
     scheduleRender,
     traceConversation: traceConversationFlow,
   }) || null;
   let promptStoreController = null;
   const promptLibraryController = namespace.promptLibraryController?.create?.({
+    browserCapabilities,
     getStoreCategories: () => promptStoreController?.getPublishCategories?.() || [],
     ensureStoreLoaded: (...args) => promptStoreController?.ensureLoaded?.(...args) || Promise.resolve(),
-    invokePage,
-    invokeRuntime,
     scheduleRender,
     traceFirestore: traceFirestoreFlow,
     traceReview: traceReviewFlow,
   }) || null;
   const promptReviewController = namespace.promptReviewController?.create?.({
+    browserCapabilities,
     getActivePromptTab: () => promptLibraryController?.getActiveTab?.() || "library",
     getProviderIdentity: () => promptLibraryController?.getProviderIdentity?.() || { available: false },
     getRuntimeVersion: () => state.extensionVersion || "",
-    invokePage,
-    invokeRuntime,
     scheduleRender,
     traceReview: traceReviewFlow,
     setActivePromptTab: (promptTabId) => promptLibraryController?.handleSelectPromptTab?.(promptTabId) || Promise.resolve(false),
   }) || null;
   promptStoreController = namespace.promptStoreController?.create?.({
+    browserCapabilities,
     getActivePromptTab: () => promptLibraryController?.getActiveTab?.() || "library",
     getProviderIdentity: () => promptLibraryController?.getProviderIdentity?.() || { available: false },
     importStorePrompt: (storeEntry) => promptLibraryController?.importStorePrompt?.(storeEntry) || Promise.resolve(false),
-    invokeRuntime,
     scheduleRender,
   }) || null;
   const meetingHubController = namespace.meetingHubController?.create?.({
-    invokePage,
-    invokeRuntime,
+    browserCapabilities,
     scheduleRender,
     syncTopPanelSummary: (meetingTool = {}) => syncToolSummary("meeting", meetingTool),
     traceFirestore: traceFirestoreFlow,
     traceMeeting: traceMeetingFlow,
   }) || null;
   const releaseController = namespace.releaseController?.create?.({
+    browserCapabilities,
     getRuntimeVersion: () => state.extensionVersion || "",
-    invokeRuntime,
     scheduleRender,
     syncTopPanelSummary: (releaseTool = {}) => syncToolSummary("release", releaseTool),
     traceRelease: traceReleaseFlow,

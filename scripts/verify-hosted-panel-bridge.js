@@ -180,6 +180,7 @@ function verifyHostedPanelFiles(directoryName) {
 
   assert(html.includes("./runtime.js"), "hosted panel should load runtime bootstrap");
   if (directoryName === "extension-v2") {
+    assert(html.includes("./extension-capability-client.js"), "v2 hosted panel should load the hosted extension capability client");
     assert(html.includes("./prompt-tool-panel.js"), "v2 hosted panel should load prompt tool interaction helpers");
   } else {
     assert(html.includes("./prompt-hub-panel.js"), "legacy hosted panel should keep the prompt hub interaction helper");
@@ -203,6 +204,7 @@ function verifyHostedPanelFiles(directoryName) {
     assert(indexJs.includes("promptStoreController"), "v2 hosted panel should wire hosted prompt store ownership");
     assert(indexJs.includes("meetingHubController"), "v2 hosted panel should wire hosted meeting ownership");
     assert(indexJs.includes("releaseController"), "v2 hosted panel should wire hosted release ownership");
+    assert(indexJs.includes("const browserCapabilities = namespace.extensionCapabilityClient?.create?.({"), "v2 hosted panel should create a shared browser capability client");
   }
   assert(
     indexJs.includes("확장 업데이트 필요"),
