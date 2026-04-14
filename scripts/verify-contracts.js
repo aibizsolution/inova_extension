@@ -84,7 +84,7 @@ if (countJavaScriptFiles(sharedDirectory) < 3) {
   errors.push("shared 모듈 수가 부족합니다. 최소 3개 파일로 분리해야 합니다.");
 }
 
-assertFileExists("scripts/verify-prompt-fallbacks.js");
+assertFileExists("scripts/legacy-panel/verify-prompt-fallbacks.js");
 assertFileExists("scripts/verify-functions-runtime.js");
 assertFileExists("scripts/verify-hosted-panel-bridge.js");
 assertFileExists("scripts/verify-prompt-library-remote-first.js");

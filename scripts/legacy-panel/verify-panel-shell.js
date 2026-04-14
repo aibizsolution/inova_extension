@@ -5,7 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
 
-const root = path.resolve(__dirname, "..");
+const root = path.resolve(__dirname, "..", "..");
 
 async function main() {
   const harness = createHarness();
@@ -147,7 +147,11 @@ function createHarness() {
     controllerEvents.compositionControllerCreated = (controllerEvents.compositionControllerCreated || 0) + 1;
     return originalCompositionCreate.call(this, state);
   };
-  loadScript("content/main.js", context);
+  const state = context.InovaBookmarks.panelStateFactory.createState();
+  const panelCompositionController = context.InovaBookmarks.panelCompositionController.create(state);
+  panelCompositionController.bootstrap().catch((error) => {
+    throw error;
+  });
 
   return {
     bookmarkCopyCalls: controllerEvents.bookmarkCopyCalls,

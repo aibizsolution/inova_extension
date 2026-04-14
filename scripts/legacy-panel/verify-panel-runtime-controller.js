@@ -5,7 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
 
-const root = path.resolve(__dirname, "..");
+const root = path.resolve(__dirname, "..", "..");
 
 function main() {
   const harness = createHarness();
