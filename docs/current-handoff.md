@@ -6,8 +6,8 @@ Last updated: 2026-04-15
 
 - Public deployed baseline: `0.4.4`
 - Current local candidate: `1.0.0`
-- Active branch: `codex/prompt-review-6-dimensions`
-- Latest full validation: `npm.cmd run verify` passed in the current working tree
+- Active branch: `main`
+- Latest full validation: `npm.cmd run verify` passed on `main`
 - Worktree: clean
 - Current architecture direction:
 - `1.0.0` v2 lane is explicitly hosted-first.
