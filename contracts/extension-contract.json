@@ -27,7 +27,7 @@
     "shared/prompt-library.js",
     "backup/legacy-panel/shared/release-info.js",
     "shared/session.js",
-    "shared/cloud-sync.js",
+    "backup/legacy-panel/shared/cloud-sync.js",
     "shared/storage.js",
     "backup/legacy-panel/bookmark-view.js",
     "backup/legacy-panel/panel-bookmark-controller.js",

@@ -66,7 +66,7 @@ async function verifyPromptLibraryFallbackSurfacesDegradedState() {
   const context = createBaseContext();
   loadScript("shared/constants.js", context);
   loadScript("shared/session.js", context);
-  loadScript("shared/cloud-sync.js", context);
+  loadScript("backup/legacy-panel/shared/cloud-sync.js", context);
   loadScript("backup/legacy-panel/shared/prompt-cloud-sync.js", context);
   loadScript("backup/legacy-panel/features/prompt-library/cloud-sync-manager.js", context);
 
