@@ -57,7 +57,7 @@ async function verifyHostedMeetingHubOwnership() {
   assert.equal(viewState.items[0].share.active, true, "hosted meeting hub should patch local share state after create");
   assert.equal(viewState.feedback?.text, "공유 링크를 복사했습니다.");
   assert.deepEqual(harness.pageCalls[0], {
-    action: "copy-text",
+    action: "clipboard.write-text",
     text: "https://share.example/meeting-alpha",
   });
 
@@ -117,7 +117,7 @@ async function verifyHostedMeetingHubShareCopyFailure() {
   assert.equal(viewState.feedback?.text, "공유 링크는 만들었지만 자동 복사는 실패했어요.");
   assert.equal(viewState.feedback?.tone, "error");
   assert.deepEqual(harness.pageCalls[0], {
-    action: "copy-text",
+    action: "clipboard.write-text",
     text: "https://share.example/meeting-alpha",
   });
 }
@@ -557,7 +557,7 @@ function createHarnessWithOptions(options = {}) {
   const controller = context.InovaBookmarks.meetingHubController.create({
     invokePage: async (request) => {
       pageCalls.push(cloneValue(request));
-      if (request?.action === "copy-text") {
+      if (request?.action === "clipboard.write-text") {
         return cloneValue(options.pageCopyResult || { copied: true });
       }
       throw new Error(`Unexpected page action: ${request?.action}`);

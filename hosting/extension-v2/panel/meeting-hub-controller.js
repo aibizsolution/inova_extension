@@ -518,7 +518,7 @@
       }
       try {
         const result = await invokePage({
-          action: "copy-text",
+          action: "clipboard.write-text",
           text: normalizedShareUrl,
         });
         return Boolean(result?.copied);

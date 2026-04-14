@@ -156,7 +156,7 @@ async function verifyPageAdapterContract() {
 
   const conversationSnapshot = await harness.bridge.options.onRequest({
     domain: "page",
-    payload: { action: "get-conversation-snapshot" },
+    payload: { action: "conversation.read-state" },
   });
   assert.equal(conversationSnapshot?.handled, true);
   assert.equal(conversationSnapshot?.result?.sessionId, "session-1");
@@ -165,7 +165,7 @@ async function verifyPageAdapterContract() {
 
   const debugSnapshot = await harness.bridge.options.onRequest({
     domain: "page",
-    payload: { action: "get-debug-state" },
+    payload: { action: "debug.read-state" },
   });
   assert.equal(debugSnapshot?.handled, true);
   assert.equal(debugSnapshot?.result?.statusSummary?.errorCount, 1);
@@ -173,21 +173,21 @@ async function verifyPageAdapterContract() {
 
   const debugDisabled = await harness.bridge.options.onRequest({
     domain: "page",
-    payload: { action: "set-debug-enabled", enabled: false },
+    payload: { action: "debug.set-enabled", enabled: false },
   });
   assert.equal(debugDisabled?.handled, true);
   assert.equal(debugDisabled?.result?.enabled, false);
 
   const debugEnabled = await harness.bridge.options.onRequest({
     domain: "page",
-    payload: { action: "set-debug-enabled", enabled: true },
+    payload: { action: "debug.set-enabled", enabled: true },
   });
   assert.equal(debugEnabled?.handled, true);
   assert.equal(debugEnabled?.result?.enabled, true);
 
   const debugCopy = await harness.bridge.options.onRequest({
     domain: "page",
-    payload: { action: "copy-debug-log", errorsOnly: true },
+    payload: { action: "debug.copy-log", errorsOnly: true },
   });
   assert.equal(debugCopy?.handled, true);
   assert.equal(debugCopy?.result?.copied, true);
@@ -195,7 +195,7 @@ async function verifyPageAdapterContract() {
 
   const jumpResult = await harness.bridge.options.onRequest({
     domain: "page",
-    payload: { action: "jump-conversation-item", bookmarkId: "session-1:1:bookmark-2" },
+    payload: { action: "conversation.jump-item", bookmarkId: "session-1:1:bookmark-2" },
   });
   assert.equal(jumpResult?.handled, true);
   assert.equal(jumpResult?.result?.jumped, true);

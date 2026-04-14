@@ -48,7 +48,7 @@ __INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20, entrie
 - 기대 결과:
   - transport 레벨 반복 로그는 숨겨지고, 핵심 단계만 순서대로 보인다.
   - 같은 이벤트가 반복되면 `same event repeated N more times` 한 줄로 합쳐진다.
-  - 대화 탐색은 `get-conversation-snapshot` 기준 최대 10초 간격으로만 다시 읽는다.
+  - 대화 탐색은 `conversation.read-state` 기준 최대 10초 간격으로만 다시 읽는다.
   - 클릭/오류/timeout 같은 사용자 액션 경로는 여전히 개별 로그로 남는다.
   - meeting `open-workspace` / `open-result`는 `launch.requested`와 `launch.dispatched`까지만 top 콘솔에서 기대한다. 새 탭이 실제 ready 상태가 되었는지는 여기서 닫지 않는다.
 

@@ -24,7 +24,7 @@ Last updated: 2026-04-14
 
 - `conversation`: hosted owns list/search/copy/jump UI state; extension only provides page adapter plus thin signals such as count/active/fingerprint.
 - `release`: hosted owns latest/history/download surface and compact release summary sync; extension only keeps browser/runtime broker capability plus count-only `toolSummaries.release(count)`.
-- `prompt-library`, `prompt-store`, `prompt-review`: hosted owns prompt tab transition plus prompt/store/review action routing and review state/result/dismiss; extension keeps page/runtime bridge, review float, monotonic review-trigger handoff, and generic local-state/provider-identity persistence only.
+- `prompt-library`, `prompt-store`, `prompt-review`: hosted owns prompt tab transition plus prompt/store/review action routing and review state/result/dismiss; extension keeps page/runtime bridge, review float, monotonic review-trigger handoff, generic local-state/provider-identity persistence, and stable browser capability APIs only.
 - `meeting hub` / `meeting workspace`: hosted owns list/action UI, Firestore meeting-list subscription, and launch tracing; v2 hosted panel no longer falls back to top-panel `meeting-action` dispatch, and v2 extension now carries only count-only `toolSummaries.meeting(count)` residue outside the hub path.
 
 Short version:
@@ -35,7 +35,8 @@ Short version:
 ## What Was Stabilized In This Session
 
 - prompt review handoff no longer gets stuck in hosted `pending` after a successful external review result
-- prompt review copy now delegates through top-page `copy-text` instead of iframe-local clipboard access
+- prompt review copy now delegates through top-page `clipboard.write-text` instead of iframe-local clipboard access
+- active page adapter contract is being normalized around capability-shaped actions (`conversation.read-state`, `conversation.jump-item`, `composer.read-state`, `composer.apply-text`, `clipboard.write-text`, `debug.*`, `trace.log`) so hosted feature work can change without extension-side feature rewrites
 - prompt review runtime now surfaces `page.functions.review.*` / `prompt.review.request.*` traces in the top console and fails explicit timeout after `30s` instead of hanging forever
 - top console trace visibility was restored for hosted `meeting panel-auth`, `Firestore listen/snapshot`, conversation snapshot reads, release fetches, and prompt review function calls
 - panel layout now uses a fixed `420px` width with a `70px` left rail for the active v2 surface

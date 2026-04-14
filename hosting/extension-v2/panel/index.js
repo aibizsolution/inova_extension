@@ -416,7 +416,7 @@
         ...traceSpec.buildStartPayload?.(),
         requestId,
       });
-    } else if (!(normalizeText(domain) === "page" && traceAction === "log-trace")) {
+    } else if (!(normalizeText(domain) === "page" && isPageTraceAction(traceAction))) {
       tracePanelFlow("30.hosted.request.start", {
         action: traceAction,
         domain,
@@ -438,7 +438,7 @@
             error: "호스팅 패널 요청 시간이 초과되었어요.",
             requestId,
           });
-        } else if (!(normalizeText(domain) === "page" && traceAction === "log-trace")) {
+        } else if (!(normalizeText(domain) === "page" && isPageTraceAction(traceAction))) {
           tracePanelFlow("31.hosted.request.timeout", {
             action: traceAction,
             domain,
@@ -490,7 +490,7 @@
           error: normalizeText(errorMessage),
           requestId,
         });
-      } else if (!(normalizeText(entry.domain) === "page" && normalizeText(entry.action) === "log-trace")) {
+      } else if (!(normalizeText(entry.domain) === "page" && isPageTraceAction(entry.action))) {
         tracePanelFlow("32.hosted.request.error", {
           action: entry.action,
           domain: entry.domain,
@@ -508,7 +508,7 @@
           error: "확장 프로그램이 요청을 처리하지 않았어요.",
           requestId,
         });
-      } else if (!(normalizeText(entry.domain) === "page" && normalizeText(entry.action) === "log-trace")) {
+      } else if (!(normalizeText(entry.domain) === "page" && isPageTraceAction(entry.action))) {
         tracePanelFlow("32.hosted.request.error", {
           action: entry.action,
           domain: entry.domain,
@@ -524,7 +524,7 @@
         ...entry.traceSpec.buildResultPayload?.(Date.now() - entry.startedAtMs),
         requestId,
       });
-    } else if (!(normalizeText(entry.domain) === "page" && normalizeText(entry.action) === "log-trace")) {
+    } else if (!(normalizeText(entry.domain) === "page" && isPageTraceAction(entry.action))) {
       tracePanelFlow("33.hosted.request.success", {
         action: entry.action,
         domain: entry.domain,
@@ -1568,6 +1568,45 @@
     return namespace.session?.normalizeText?.(value) || String(value || "").trim();
   }
 
+  function normalizePageAction(action) {
+    const normalizedAction = normalizeText(action);
+    if (normalizedAction === "log-trace") {
+      return "trace.log";
+    }
+    if (normalizedAction === "copy-text") {
+      return "clipboard.write-text";
+    }
+    if (normalizedAction === "get-conversation-state" || normalizedAction === "get-conversation-snapshot") {
+      return "conversation.read-state";
+    }
+    if (normalizedAction === "jump-conversation-item") {
+      return "conversation.jump-item";
+    }
+    if (normalizedAction === "get-composer-state") {
+      return "composer.read-state";
+    }
+    if (normalizedAction === "apply-prompt-text") {
+      return "composer.apply-text";
+    }
+    if (normalizedAction === "get-debug-state") {
+      return "debug.read-state";
+    }
+    if (normalizedAction === "set-debug-enabled") {
+      return "debug.set-enabled";
+    }
+    if (normalizedAction === "copy-debug-log") {
+      return "debug.copy-log";
+    }
+    if (normalizedAction === "clear-debug-log") {
+      return "debug.clear-log";
+    }
+    return normalizedAction;
+  }
+
+  function isPageTraceAction(action) {
+    return normalizePageAction(action) === "trace.log";
+  }
+
   function tracePanelFlow(step, payload = {}) {
     postTrace("panel", step, payload);
   }
@@ -1602,7 +1641,7 @@
     postEnvelope({
       domain: "page",
       payload: {
-        action: "log-trace",
+        action: "trace.log",
         channel,
         payload: payload && typeof payload === "object" ? payload : {},
         step,
@@ -1620,12 +1659,12 @@
       return true;
     }
     return normalizeText(envelope.domain) === "page"
-      && normalizeText(envelope.payload?.action) === "log-trace";
+      && isPageTraceAction(envelope.payload?.action);
   }
 
   function readTraceAction(domain, payload = {}) {
-    if (normalizeText(domain) === "page" && normalizeText(payload?.action) === "log-trace") {
-      return "log-trace";
+    if (normalizeText(domain) === "page") {
+      return normalizePageAction(payload?.action) || "page";
     }
     return normalizeText(
       payload?.action

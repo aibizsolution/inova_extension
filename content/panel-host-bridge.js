@@ -90,7 +90,12 @@
 
     function isTraceTransportRequest(request) {
       return normalizeText(request?.domain) === "page"
-        && normalizeText(request?.payload?.action) === "log-trace";
+        && isPageTraceAction(request?.payload?.action);
+    }
+
+    function isPageTraceAction(action) {
+      const normalizedAction = normalizeText(action);
+      return normalizedAction === "trace.log" || normalizedAction === "log-trace";
     }
   }
 

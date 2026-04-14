@@ -311,7 +311,7 @@
   }
 
   function handlePageRequest(payload, helpers = {}) {
-    const action = normalizeText(payload?.action);
+    const action = normalizePageAction(payload?.action);
     const buildConversationSnapshot = typeof helpers.buildConversationSnapshot === "function"
       ? helpers.buildConversationSnapshot
       : defaultBuildConversationSnapshot;
@@ -325,7 +325,7 @@
       ? helpers.logConsoleTrace
       : () => {};
 
-    if (action === "copy-text") {
+    if (action === "clipboard.write-text") {
       const text = String(payload?.text || "");
       if (!text) {
         return Promise.resolve({
@@ -339,14 +339,14 @@
       }));
     }
 
-    if (action === "copy-debug-log") {
+    if (action === "debug.copy-log") {
       return Promise.resolve(copyDebugLog(Boolean(payload?.errorsOnly))).then((result) => ({
         handled: true,
         result,
       }));
     }
 
-    if (action === "clear-debug-log") {
+    if (action === "debug.clear-log") {
       namespace.panelDebug?.clearEntries?.();
       return Promise.resolve({
         handled: true,
@@ -354,7 +354,7 @@
       });
     }
 
-    if (action === "log-trace") {
+    if (action === "trace.log") {
       logConsoleTrace(
         normalizeText(payload?.channel) || "trace",
         normalizeText(payload?.step) || "trace",
@@ -366,14 +366,14 @@
       });
     }
 
-    if (action === "get-composer-state") {
+    if (action === "composer.read-state") {
       return Promise.resolve({
         handled: true,
         result: namespace.composer?.getComposerState?.() || { available: false, text: "" },
       });
     }
 
-    if (action === "apply-prompt-text") {
+    if (action === "composer.apply-text") {
       return Promise.resolve({
         handled: true,
         result: {
@@ -382,14 +382,14 @@
       });
     }
 
-    if (action === "get-conversation-state" || action === "get-conversation-snapshot") {
+    if (action === "conversation.read-state") {
       return Promise.resolve({
         handled: true,
         result: buildConversationSnapshot(),
       });
     }
 
-    if (action === "jump-conversation-item") {
+    if (action === "conversation.jump-item") {
       const bookmarkId = normalizeText(payload?.bookmarkId || payload?.itemId);
       if (!bookmarkId) {
         return Promise.resolve({
@@ -410,14 +410,14 @@
       });
     }
 
-    if (action === "get-debug-state") {
+    if (action === "debug.read-state") {
       return Promise.resolve({
         handled: true,
         result: buildDebugState(),
       });
     }
 
-    if (action === "set-debug-enabled") {
+    if (action === "debug.set-enabled") {
       namespace.panelDebug?.setEnabled?.(Boolean(payload?.enabled));
       return Promise.resolve({
         handled: true,
@@ -609,6 +609,41 @@
 
   function cloneValue(value) {
     return value == null ? value : JSON.parse(JSON.stringify(value));
+  }
+
+  function normalizePageAction(value) {
+    const action = normalizeText(value);
+    if (action === "copy-text") {
+      return "clipboard.write-text";
+    }
+    if (action === "copy-debug-log") {
+      return "debug.copy-log";
+    }
+    if (action === "clear-debug-log") {
+      return "debug.clear-log";
+    }
+    if (action === "log-trace") {
+      return "trace.log";
+    }
+    if (action === "get-composer-state") {
+      return "composer.read-state";
+    }
+    if (action === "apply-prompt-text") {
+      return "composer.apply-text";
+    }
+    if (action === "get-conversation-state" || action === "get-conversation-snapshot") {
+      return "conversation.read-state";
+    }
+    if (action === "jump-conversation-item") {
+      return "conversation.jump-item";
+    }
+    if (action === "get-debug-state") {
+      return "debug.read-state";
+    }
+    if (action === "set-debug-enabled") {
+      return "debug.set-enabled";
+    }
+    return action;
   }
 
   function normalizeText(value) {

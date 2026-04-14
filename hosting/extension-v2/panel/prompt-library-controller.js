@@ -609,7 +609,7 @@
       if (!prompt) {
         return;
       }
-      const composerState = await invokePage({ action: "get-composer-state" });
+      const composerState = await invokePage({ action: "composer.read-state" });
       if (!composerState?.available) {
         state.feedback = createFeedback("대화 입력창을 찾지 못했어요.", "error", promptId);
         scheduleRender();
@@ -632,7 +632,7 @@
         return;
       }
       const result = await invokePage({
-        action: "apply-prompt-text",
+        action: "composer.apply-text",
         mode: normalizeText(mode) || "replace",
         text: prompt.content,
       });

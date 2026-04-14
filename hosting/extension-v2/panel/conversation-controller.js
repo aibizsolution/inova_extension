@@ -111,7 +111,7 @@
         return false;
       }
       const result = await invokePage({
-        action: "copy-text",
+        action: "clipboard.write-text",
         text: bookmark.text,
       });
       return Boolean(result?.copied);
@@ -125,7 +125,7 @@
       state.activeId = normalizedBookmarkId;
       scheduleRender();
       const result = await invokePage({
-        action: "jump-conversation-item",
+        action: "conversation.jump-item",
         bookmarkId: normalizedBookmarkId,
       });
       return Boolean(result?.jumped);
@@ -162,7 +162,7 @@
         scheduleRender();
         try {
           const snapshot = await invokePage({
-            action: "get-conversation-snapshot",
+            action: "conversation.read-state",
           });
           hydrateSnapshot(snapshot);
           state.error = "";

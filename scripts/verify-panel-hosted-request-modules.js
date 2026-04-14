@@ -27,6 +27,11 @@ function verifyHostedBridgeRequestModuleContract() {
     path.join(root, "content", "hosted-panel-bridge.js"),
     "utf8"
   );
+  const pageRequestStart = bridgeRequestSource.indexOf("function handlePageRequest(");
+  const pageRequestEnd = bridgeRequestSource.indexOf("async function handlePanelRequest(");
+  const pageRequestSource = pageRequestStart >= 0 && pageRequestEnd > pageRequestStart
+    ? bridgeRequestSource.slice(pageRequestStart, pageRequestEnd)
+    : bridgeRequestSource;
 
   const mainContentScript = manifest.content_scripts.find((entry) =>
     Array.isArray(entry?.matches) && entry.matches.includes("https://inova.incross.com/*")
@@ -107,6 +112,28 @@ function verifyHostedBridgeRequestModuleContract() {
     'if (action === "search-submit")',
     'if (action === "bookmark-copy")',
     'if (action === "bookmark-jump")',
+    "global.chrome?.runtime?.sendMessage",
+  ].forEach((pattern) => assert(
+    bridgeRequestSource.includes(pattern),
+    `hosted bridge request helper should keep the inline contract for ${pattern}`
+  ));
+  [
+    "normalizePageAction(payload?.action)",
+    'if (action === "clipboard.write-text")',
+    'if (action === "debug.copy-log")',
+    'if (action === "debug.clear-log")',
+    'if (action === "trace.log")',
+    'if (action === "composer.read-state")',
+    'if (action === "composer.apply-text")',
+    'if (action === "conversation.read-state")',
+    'if (action === "conversation.jump-item")',
+    'if (action === "debug.read-state")',
+    'if (action === "debug.set-enabled")',
+  ].forEach((pattern) => assert(
+    pageRequestSource.includes(pattern),
+    `hosted bridge request helper should keep the inline contract for ${pattern}`
+  ));
+  [
     'if (action === "copy-text")',
     'if (action === "copy-debug-log")',
     'if (action === "clear-debug-log")',
@@ -117,10 +144,9 @@ function verifyHostedBridgeRequestModuleContract() {
     'if (action === "jump-conversation-item")',
     'if (action === "get-debug-state")',
     'if (action === "set-debug-enabled")',
-    "global.chrome?.runtime?.sendMessage",
   ].forEach((pattern) => assert(
-    bridgeRequestSource.includes(pattern),
-    `hosted bridge request helper should keep the inline contract for ${pattern}`
+    !pageRequestSource.includes(pattern),
+    `hosted bridge request helper should stop branching directly on the pre-capability page action ${pattern}`
   ));
   [
     "handleLegacyPanelRequest(",

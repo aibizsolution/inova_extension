@@ -110,9 +110,9 @@ function verifyHostedPromptReviewContract() {
   const promptReviewManagerSource = fs.readFileSync(path.join(root, "content", "features", "prompt-review", "prompt-review-manager.js"), "utf8");
 
   assert.equal(
-    hostedControllerSource.includes('action: "copy-text"'),
+    hostedControllerSource.includes('action: "clipboard.write-text"'),
     true,
-    "hosted prompt review copy should delegate through top page copy-text"
+    "hosted prompt review copy should delegate through the stable top page clipboard.write-text capability"
   );
   assert.equal(
     hostedControllerSource.includes('traceReview("54.hosted.review.request.start"'),

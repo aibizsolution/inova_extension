@@ -326,7 +326,7 @@
         action: "apply-reviewed-prompt",
       });
       const result = await invokePage({
-        action: "apply-prompt-text",
+        action: "composer.apply-text",
         mode: "replace",
         text: refinedPrompt,
       });
@@ -367,7 +367,7 @@
           action: "copy-reviewed-prompt",
         });
         const result = await invokePage({
-          action: "copy-text",
+          action: "clipboard.write-text",
           text: promptText,
         });
         if (!result?.copied) {
@@ -434,7 +434,7 @@
       if (state.syncPromise && !force) {
         return state.syncPromise;
       }
-      const run = invokePage({ action: "get-composer-state" })
+      const run = invokePage({ action: "composer.read-state" })
         .catch(() => ({ available: false, text: "" }))
         .then((composerState) => {
           state.composerState = {
