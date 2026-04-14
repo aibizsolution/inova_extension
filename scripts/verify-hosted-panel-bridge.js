@@ -217,6 +217,10 @@ function verifyBackgroundInvokeWiring() {
     path.join(root, "background", "service-worker.js"),
     "utf8"
   );
+  const routerSource = fs.readFileSync(
+    path.join(root, "background", "panel-runtime-capability-router.js"),
+    "utf8"
+  );
   const invokeSource = fs.readFileSync(
     path.join(root, "background", "panel-runtime-invoke.js"),
     "utf8"
@@ -224,19 +228,31 @@ function verifyBackgroundInvokeWiring() {
 
   assert(serviceWorkerSource.includes("inova-panel:invoke"), "background should expose hosted panel invoke route");
   assert(
-    invokeSource.includes("PANEL_RUNTIME_STORAGE_STATE_KEYS"),
-    "background should declare the compact hosted storage-state allowlist"
+    serviceWorkerSource.includes('importScripts("panel-runtime-capability-router.js");'),
+    "background service worker should preload the hosted runtime capability router before the invoke shim"
   );
   assert(
-    invokeSource.includes("PANEL_ALLOWED_FUNCTION_ENDPOINT_KEYS"),
-    "background should declare hosted function allowlist"
+    invokeSource.includes("namespace.panelRuntimeCapabilityRouter.handle(request)"),
+    "background invoke shim should delegate runtime capability handling through panelRuntimeCapabilityRouter"
+  );
+  assert(
+    !invokeSource.includes('action === "storage.read-panel-state"'),
+    "background invoke shim should stop carrying inline runtime action handlers once panelRuntimeCapabilityRouter owns them"
+  );
+  assert(
+    routerSource.includes("PANEL_RUNTIME_STORAGE_STATE_KEYS"),
+    "background runtime capability router should declare the compact hosted storage-state allowlist"
+  );
+  assert(
+    routerSource.includes("PANEL_ALLOWED_FUNCTION_ENDPOINT_KEYS"),
+    "background runtime capability router should declare the hosted function allowlist"
   );
   [
     '"cloudSync"',
     '"settings"',
     '"uiPreferences"',
   ].forEach((storageKey) => assert(
-    invokeSource.includes(storageKey),
+    routerSource.includes(storageKey),
     `background hosted runtime should keep ${storageKey} in the compact storage-state contract`
   ));
   [
@@ -247,7 +263,7 @@ function verifyBackgroundInvokeWiring() {
     '"promptLibrary"',
     '"releaseInfo"',
   ].forEach((storageKey) => assert(
-    !invokeSource.includes(storageKey),
+    !routerSource.includes(storageKey),
     `background hosted runtime should drop the inactive storage-state residue ${storageKey}`
   ));
   [
@@ -256,11 +272,11 @@ function verifyBackgroundInvokeWiring() {
     'action === "storage.update-settings"',
     'action === "storage.set-session-paused"',
   ].forEach((actionSurface) => assert(
-    !invokeSource.includes(actionSurface),
+    !routerSource.includes(actionSurface),
     `background hosted runtime should drop the inactive storage action ${actionSurface}`
   ));
   assert(
-    invokeSource.includes("readHostedPanelStorageState"),
+    routerSource.includes("readHostedPanelStorageState"),
     "background should build a dedicated compact hosted storage-state snapshot"
   );
   [
@@ -274,7 +290,7 @@ function verifyBackgroundInvokeWiring() {
     'action === "meeting.share.create"',
     'action === "meeting.share.revoke"',
   ].forEach((actionSurface) => assert(
-    invokeSource.includes(actionSurface),
+    routerSource.includes(actionSurface),
     `background hosted runtime should keep the canonical runtime action ${actionSurface}`
   ));
   [
@@ -289,12 +305,12 @@ function verifyBackgroundInvokeWiring() {
     'action === "meeting.create-share-link"',
     'action === "meeting.revoke-share-link"',
   ].forEach((actionSurface) => assert(
-    !invokeSource.includes(actionSurface),
+    !routerSource.includes(actionSurface),
     `background hosted runtime should drop the legacy runtime action ${actionSurface}`
   ));
   assert(
-    !invokeSource.includes('"loadInovaPromptLibraryUrl"')
-      && !invokeSource.includes('"peekInovaPromptLibraryUrl"'),
+    !routerSource.includes('"loadInovaPromptLibraryUrl"')
+      && !routerSource.includes('"peekInovaPromptLibraryUrl"'),
     "background hosted prompt runtime surface should drop dead prompt-library read endpoint fallbacks"
   );
   assert(

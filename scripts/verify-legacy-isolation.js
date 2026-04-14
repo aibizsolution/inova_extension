@@ -143,11 +143,21 @@ function verifyActiveHostedBridgeRequestSurfaceStaysGeneric() {
 }
 
 function verifyActiveHostedRuntimeStorageSurfaceStaysCompact() {
+  const serviceWorkerSource = fs.readFileSync(path.join(root, "background", "service-worker.js"), "utf8");
+  const routerSource = fs.readFileSync(path.join(root, "background", "panel-runtime-capability-router.js"), "utf8");
   const invokeSource = fs.readFileSync(path.join(root, "background", "panel-runtime-invoke.js"), "utf8");
 
   assert(
-    invokeSource.includes("PANEL_RUNTIME_STORAGE_STATE_KEYS"),
+    serviceWorkerSource.includes('importScripts("panel-runtime-capability-router.js");'),
+    "active hosted runtime should preload the dedicated runtime capability router"
+  );
+  assert(
+    routerSource.includes("PANEL_RUNTIME_STORAGE_STATE_KEYS"),
     "active hosted runtime should keep a dedicated compact storage-state contract"
+  );
+  assert(
+    invokeSource.includes("panelRuntimeCapabilityRouter.handle"),
+    "active hosted runtime invoke shim should delegate to the runtime capability router"
   );
   [
     'action === "storage.get"',
@@ -155,7 +165,7 @@ function verifyActiveHostedRuntimeStorageSurfaceStaysCompact() {
     'action === "storage.update-settings"',
     'action === "storage.set-session-paused"',
   ].forEach((actionSurface) => assert(
-    !invokeSource.includes(actionSurface),
+    !routerSource.includes(actionSurface),
     `active hosted runtime should not reopen the dormant storage action ${actionSurface}`
   ));
   [
@@ -166,7 +176,7 @@ function verifyActiveHostedRuntimeStorageSurfaceStaysCompact() {
     '"promptLibrary"',
     '"releaseInfo"',
   ].forEach((storageKey) => assert(
-    !invokeSource.includes(storageKey),
+    !routerSource.includes(storageKey),
     `active hosted runtime should not leak dormant storage state ${storageKey}`
   ));
 }

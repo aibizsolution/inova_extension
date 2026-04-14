@@ -15,8 +15,8 @@ async function verifyHostedPromptLibraryFirestoreClientContract() {
     path.join(root, "hosting", "extension-v2", "panel", "index.html"),
     "utf8"
   );
-  const runtimeInvokeSource = fs.readFileSync(
-    path.join(root, "background", "panel-runtime-invoke.js"),
+  const runtimeRouterSource = fs.readFileSync(
+    path.join(root, "background", "panel-runtime-capability-router.js"),
     "utf8"
   );
 
@@ -33,7 +33,7 @@ async function verifyHostedPromptLibraryFirestoreClientContract() {
     "v2 hosted prompt library should not keep using Functions prompt-library loads"
   );
   assert(
-    runtimeInvokeSource.includes("enrichPromptPanelAuth"),
+    runtimeRouterSource.includes("enrichPromptPanelAuth"),
     "hosted prompt panel auth should be enriched with runtime firestore config"
   );
 

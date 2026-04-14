@@ -33,6 +33,7 @@ const requiredFiles = [
   path.join("hosting", "meeting", "workspace-mutations.js"),
   path.join("hosting", "meeting", "workspace-debug.js"),
   path.join("hosting", "meeting", "shared.js"),
+  path.join("background", "panel-runtime-capability-router.js"),
   path.join("background", "panel-runtime-invoke.js"),
   path.join("hosting", "extension", "panel", "index.html"),
   path.join("hosting", "extension", "panel", "index.css"),
@@ -229,6 +230,23 @@ const codeChecks = [
   {
     file: path.join(".githooks", "pre-push"),
     patterns: [/verify-refactor-plan-update\.js/, /verify-feature-doc-update\.js/, /verify-release-metadata\.js/],
+  },
+  {
+    file: path.join("background", "service-worker.js"),
+    patterns: [/panel-runtime-capability-router\.js/, /panel-runtime-invoke\.js/, /invokeHostedPanelRequest/],
+  },
+  {
+    file: path.join("background", "panel-runtime-capability-router.js"),
+    patterns: [
+      /storage\.read-panel-state/,
+      /functions\.invoke-endpoint/,
+      /auth\.issue-panel-session/,
+      /meeting\.workspace\.open/,
+    ],
+  },
+  {
+    file: path.join("background", "panel-runtime-invoke.js"),
+    patterns: [/panelRuntimeCapabilityRouter\.handle/, /invokeHostedPanelRequest/],
   },
   {
     file: "manifest.json",
@@ -519,15 +537,23 @@ const codeChecks = [
     file: "background/service-worker.js",
     patterns: [
       /inova-panel:invoke/,
+      /panel-runtime-capability-router\.js/,
       /panel-runtime-invoke\.js/,
       /invokeHostedPanelRequest/,
     ],
   },
   {
-    file: path.join("background", "panel-runtime-invoke.js"),
+    file: path.join("background", "panel-runtime-capability-router.js"),
     patterns: [
       /PANEL_RUNTIME_STORAGE_STATE_KEYS/,
       /PANEL_ALLOWED_FUNCTION_ENDPOINT_KEYS/,
+      /invokeHostedPanelFunctionFetch/,
+    ],
+  },
+  {
+    file: path.join("background", "panel-runtime-invoke.js"),
+    patterns: [
+      /panelRuntimeCapabilityRouter\.handle/,
       /invokeHostedPanelRequest/,
     ],
   },

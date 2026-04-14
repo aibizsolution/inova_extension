@@ -12,6 +12,7 @@
     "hosting/meeting/render.js",
     "hosting/meeting/shared.js",
     "background/service-worker.js",
+    "background/panel-runtime-capability-router.js",
     "background/panel-runtime-invoke.js",
     "shared/cloud-api.js",
     "shared/constants.js",

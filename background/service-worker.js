@@ -7,6 +7,7 @@ importScripts("../shared/inova-auth.js");
 importScripts("../shared/cloud-api.js");
 importScripts("meeting-list-cache.js");
 importScripts("panel-auth-cache.js");
+importScripts("panel-runtime-capability-router.js");
 importScripts("panel-runtime-invoke.js");
 
 const namespace = globalThis.InovaBookmarks || {};

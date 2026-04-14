@@ -40,6 +40,7 @@ Short version:
 - active page/runtime capability catalog is now expected to live in `contracts/extension-contract.json` + `scripts/verify-contracts.js`, so future hosted work has to reuse the declared browser capability API before it can add new extension surface
 - active hosted v2 feature controller/Firestore client now route page/runtime transport through `hosting/extension-v2/panel/extension-capability-client.js`, so raw capability action strings stay isolated in one hosted adapter instead of leaking across feature files
 - active extension page adapter now routes `conversation/composer/clipboard/debug/trace` capability handling through `content/page-capability-router.js`, so DOM/clipboard/debug browser power also stays isolated in one extension adapter instead of leaking through the bridge shell
+- active extension runtime broker now routes hosted panel privileged capability handling through `background/panel-runtime-capability-router.js`, so auth/functions/open-url/storage snapshot logic also stays isolated in one browser-only adapter instead of leaking through the invoke shim
 - prompt review runtime now surfaces `page.functions.review.*` / `prompt.review.request.*` traces in the top console and fails explicit timeout after `30s` instead of hanging forever
 - top console trace visibility was restored for hosted `meeting panel-auth`, `Firestore listen/snapshot`, conversation snapshot reads, release fetches, and prompt review function calls
 - panel layout now uses a fixed `420px` width with a `70px` left rail for the active v2 surface
