@@ -50,6 +50,7 @@ Short version:
 - browser-only provider identity sensor도 active shared root를 떠나 `content/provider-identity-sensor.js`에 있고, legacy reference만 `backup/legacy-panel/shared/provider-identity.js`에 남긴다
 - local hosted panel frame proxy resolver도 active shared root를 떠나 `content/frame-proxy-helper.js`에 있고, active shared root는 browser-agnostic core만 유지한다
 - dormant prompt import/export helper도 active shared root를 떠나 `backup/legacy-panel/shared/prompt-library.js`에 있고, active root는 live browser/runtime core만 유지한다
+- dormant prompt store normalization helper도 active shared root를 떠나 `backup/legacy-panel/shared/prompt-store.js`에 있고, active store lane 정본은 hosted `prompt-store-model.js`다
 - active `shared/storage.js` no longer carries dormant release/meeting accessor surface; those backup-only helpers now live under `backup/legacy-panel/shared/legacy-storage-accessors.js`
 - active `shared/constants.js` also no longer carries dormant release/meeting storage key/default contract; backup legacy helpers now own those fallback schema literals directly
 - active `shared/constants.js` / `shared/storage.js` no longer carry dormant `promptLibrary` local storage schema either; backup prompt storage/reference helpers now own that cache contract directly

@@ -100,6 +100,10 @@ function verifyActiveSharedRootDropsLegacyCloudSyncHelper() {
     "active shared root should not keep the dormant prompt library helper"
   );
   assert(
+    !fs.existsSync(path.join(root, "shared", "prompt-store.js")),
+    "active shared root should not keep the dormant prompt store helper"
+  );
+  assert(
     !fs.existsSync(path.join(root, "shared", "provider-identity.js")),
     "active shared root should not keep the browser-only provider identity sensor"
   );
@@ -114,6 +118,10 @@ function verifyActiveSharedRootDropsLegacyCloudSyncHelper() {
   assert(
     fs.existsSync(path.join(root, "backup", "legacy-panel", "shared", "prompt-library.js")),
     "backup legacy shared lane should keep the dormant prompt library helper"
+  );
+  assert(
+    fs.existsSync(path.join(root, "backup", "legacy-panel", "shared", "prompt-store.js")),
+    "backup legacy shared lane should keep the dormant prompt store helper"
   );
 }
 

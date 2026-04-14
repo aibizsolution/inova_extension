@@ -9,7 +9,7 @@
 ## 관련 프론트 경로
 - `backup/legacy-panel/features/prompt-store/store-manager.js`
 - `backup/legacy-panel/features/prompt-store/prompt-realtime-manager.js`
-- `shared/prompt-store.js`
+- `backup/legacy-panel/shared/prompt-store.js`
 
 ## 관련 functions 경로
 - `functions/index.js`

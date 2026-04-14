@@ -185,7 +185,7 @@ const featureDocContracts = [
       "hosting/extension-v2/panel/prompt-store-controller.js",
       "hosting/extension-v2/panel/store-view.js",
       "backup/legacy-panel/features/prompt-store/prompt-realtime-manager.js",
-      "shared/prompt-store.js",
+      "backup/legacy-panel/shared/prompt-store.js",
     ],
   },
   {

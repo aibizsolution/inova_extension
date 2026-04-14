@@ -58,10 +58,10 @@
 | --- | --- |
 | 기능 목적 | 스토어 목록, 상세 보기, 좋아요, 가져오기, 등록/삭제 |
 | 요청 cue | 스토어, 공개 프롬프트, 좋아요, 조회수, 가져오기, publish/unpublish |
-| 먼저 볼 파일 | `hosting/extension-v2/panel/prompt-store-controller.js`, `hosting/extension-v2/panel/store-view.js`, `content/panel-v2-prompt-controller.js`, `shared/prompt-store.js`, `backup/legacy-panel/features/prompt-store/store-manager.js` (legacy reference), `backup/legacy-panel/features/prompt-store/prompt-realtime-manager.js` (legacy reference) |
+| 먼저 볼 파일 | `hosting/extension-v2/panel/prompt-store-controller.js`, `hosting/extension-v2/panel/store-view.js`, `content/panel-v2-prompt-controller.js`, `backup/legacy-panel/shared/prompt-store.js`, `backup/legacy-panel/features/prompt-store/store-manager.js` (legacy reference), `backup/legacy-panel/features/prompt-store/prompt-realtime-manager.js` (legacy reference) |
 | 관련 프론트 경로 | `content/main.js`, `content/panel-v2-prompt-controller.js`, `hosting/extension-v2/panel/prompt-store-controller.js`, `hosting/extension-v2/panel/store-view.js`, `hosting/extension-v2/panel/prompt-tool-view.js`, `backup/legacy-panel/store-view.js` (legacy reference), `backup/legacy-panel/prompt-hub-view.js` (legacy reference) |
 | 관련 functions 경로 | `functions/features/prompt-store/store-service.js` |
-| feature-owned shared | `shared/prompt-store.js`, `content/provider-identity-sensor.js`, `backup/legacy-panel/shared/provider-identity.js` (legacy reference) |
+| feature-owned shared | `backup/legacy-panel/shared/prompt-store.js`, `content/provider-identity-sensor.js`, `backup/legacy-panel/shared/provider-identity.js` (legacy reference) |
 | 관련 데이터 경계 | `prompt_store_entries`, `prompt_store_entry_details`, `prompt_store_feed_pages`, `prompt_store_meta`, 하위 likes/imports/views |
 | 보통 건드리지 말 범위 | meeting, prompt-library, release |
 | 최소 검증 | 스토어 탭 `전체` 목록, 상세 보기 1건, 좋아요 또는 가져오기 1회, 탭 복귀 시 목록 유지 |

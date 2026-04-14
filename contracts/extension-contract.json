@@ -30,6 +30,7 @@
     "backup/legacy-panel/shared/prompt-cloud-sync.js",
     "backup/legacy-panel/shared/prompt-storage.js",
     "backup/legacy-panel/shared/prompt-library.js",
+    "backup/legacy-panel/shared/prompt-store.js",
     "backup/legacy-panel/shared/release-info.js",
     "shared/session.js",
     "backup/legacy-panel/shared/cloud-sync.js",

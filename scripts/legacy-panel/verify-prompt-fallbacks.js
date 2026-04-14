@@ -193,7 +193,7 @@ function createStoreHarness(options = {}) {
 
   loadScript("shared/constants.js", context);
   loadScript("shared/session.js", context);
-  loadScript("shared/prompt-store.js", context);
+  loadScript("backup/legacy-panel/shared/prompt-store.js", context);
   loadScript("backup/legacy-panel/features/prompt-store/store-manager.js", context);
 
   const namespace = context.InovaBookmarks;

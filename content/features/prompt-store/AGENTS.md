@@ -11,7 +11,7 @@
 - `hosting/extension-v2/panel/prompt-store-controller.js`
 - `hosting/extension-v2/panel/store-view.js`
 - `content/panel-v2-prompt-controller.js`
-- `shared/prompt-store.js`
+- `backup/legacy-panel/shared/prompt-store.js`
 - `backup/legacy-panel/features/prompt-store/store-manager.js` - inactive legacy reference
 - `backup/legacy-panel/features/prompt-store/prompt-realtime-manager.js` - inactive legacy reference
 
