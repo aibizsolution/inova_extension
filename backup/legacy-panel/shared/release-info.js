@@ -1,5 +1,19 @@
 (function initReleaseInfo(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const LEGACY_RELEASE_INFO_DEFAULTS = {
+    version: 1,
+    checkedAt: "",
+    checkedForVersion: "",
+    historyCheckedAt: "",
+    historyCheckedForVersion: "",
+    degraded: false,
+    degradedReason: "",
+    dataFreshness: "empty",
+    source: "none",
+    error: "",
+    latest: null,
+    history: [],
+  };
 
   function mergeReleaseInfo(...states) {
     return states.reduce(
@@ -24,7 +38,7 @@
         version: Math.max(1, Number(next?.version) || merged.version),
       }),
       {
-        ...namespace.constants.defaults.releaseInfo,
+        ...LEGACY_RELEASE_INFO_DEFAULTS,
         history: [],
         latest: null,
       }

@@ -1,6 +1,7 @@
 (function initReleaseManager(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const CHECK_INTERVAL_MS = namespace.constants.limits.releaseCheckIntervalMs;
+  const RELEASE_INFO_STORAGE_KEY = "releaseInfo";
 
   function create(state, hooks) {
     return { buildViewState, ensureChecked, handleAction, handleStorageChange };
@@ -167,7 +168,7 @@
     }
 
     function handleStorageChange(changes, areaName) {
-      const releaseInfoChange = namespace.productLane?.getStorageChange?.(changes, namespace.constants.storageKeys.releaseInfo) || changes.releaseInfo;
+      const releaseInfoChange = namespace.productLane?.getStorageChange?.(changes, RELEASE_INFO_STORAGE_KEY) || changes.releaseInfo;
       if (areaName !== "local" || !releaseInfoChange) return;
       state.releaseInfo = namespace.releaseInfo.mergeReleaseInfo(releaseInfoChange.newValue, {
         checking: state.releaseInfo.checking,

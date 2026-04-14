@@ -1,6 +1,15 @@
 (function initMeetingManager(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const defaults = namespace.constants.defaults.meetingHub;
+  const defaults = {
+    version: 1,
+    checkedAt: "",
+    degraded: false,
+    degradedReason: "",
+    dataFreshness: "empty",
+    source: "none",
+    error: "",
+    items: [],
+  };
   const ACTIVE_SYNC_DELAY_MS = 220;
   const BRIDGE_QUERY_LIMIT = 24;
   const FALLBACK_REFRESH_COOLDOWN_MS = 15000;

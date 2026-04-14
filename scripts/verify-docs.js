@@ -560,7 +560,7 @@ const codeChecks = [
   },
   {
     file: path.join("backup", "legacy-panel", "shared", "legacy-storage-accessors.js"),
-    patterns: [/getMeetingStateByMeetingId/, /setReleaseInfo/, /setMeetingHub/],
+    patterns: [/getMeetingStateByMeetingId/, /setReleaseInfo/, /LEGACY_RELEASE_INFO_DEFAULTS/, /LEGACY_MEETING_HUB_DEFAULTS/],
   },
   {
     file: "shared/prompt-library.js",

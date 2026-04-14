@@ -178,6 +178,7 @@
     const rawState = await getRawLocal([
       ...Object.values(activeStorageKeyMap),
       ...Object.values(legacyStorageKeyMap),
+      "releaseInfo",
     ]);
     const currentMigration = mergeProductLaneMigrationState(rawState[migrationStorageKey]);
     if (currentMigration.completedAt) {

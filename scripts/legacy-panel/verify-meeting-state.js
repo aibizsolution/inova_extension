@@ -68,7 +68,7 @@ async function main() {
   const removedPrimaryStateGetter = ["get", "Meeting", "State"].join("");
   const removedSessionScopedStateGetter = ["get", "Meeting", "State", "By", "Session"].join("");
 
-  assert.equal(namespace.constants.storageKeys.meetingStateByMeetingId, "meetingStateByMeetingId");
+  assert.equal(Object.prototype.hasOwnProperty.call(namespace.constants.storageKeys, "meetingStateByMeetingId"), false);
   assert.equal(Object.prototype.hasOwnProperty.call(namespace.constants.storageKeys, removedPrimaryStateKey), false);
   assert.equal(Object.prototype.hasOwnProperty.call(namespace.constants.storageKeys, removedSessionScopedStateKey), false);
   assert.equal(typeof namespace.storage.getMeetingStateByMeetingId, "function");
