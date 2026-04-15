@@ -1,4 +1,6 @@
 const { FieldValue } = require("firebase-admin/firestore");
+require("../../shared/prompt-store-model");
+const promptStoreModel = globalThis.InovaBookmarks.promptStoreModel;
 
 const DEFAULT_LIMIT = 500;
 const MAX_LIMIT = 200;
@@ -24,6 +26,11 @@ function registerStoreHandlers(deps) {
     sendError,
     verifyInovaIdentity,
   } = deps;
+  const storeModel = promptStoreModel.createPromptStoreModel({
+    normalizePromptContent,
+    normalizeText,
+    storeCategories: deps.STORE_CATEGORIES,
+  });
 
   const listPromptStoreEntries = onRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
     try {
@@ -473,7 +480,7 @@ function registerStoreHandlers(deps) {
     if (activeId !== "all" && !categoryIds.includes(activeId)) {
       categoryIds.push(activeId);
     }
-    categoryIds.sort((left, right) => compareCategoryIds(left, right, categoryLabels));
+    categoryIds.sort((left, right) => storeModel.compareCategoryIds(left, right, categoryLabels));
     for (const categoryId of categoryIds) {
       const count = Number(categoryCounts?.[categoryId]) || 0;
       if (count <= 0 && categoryId !== activeId) {
@@ -506,7 +513,7 @@ function registerStoreHandlers(deps) {
         providerUserKey: owner.providerUserKey,
       },
       publishedAt,
-      score: buildScore(metrics),
+      score: storeModel.buildScore(metrics),
       status: "published",
       summary: buildSummary(prompt.content),
       title: prompt.title,
@@ -529,7 +536,7 @@ function registerStoreHandlers(deps) {
   function buildMetricsPatch(metrics) {
     return {
       metrics,
-      score: buildScore(metrics),
+      score: storeModel.buildScore(metrics),
       updatedAt: FieldValue.serverTimestamp(),
     };
   }
@@ -546,28 +553,7 @@ function registerStoreHandlers(deps) {
   }
 
   function normalizeEntry(entry) {
-    const metrics = normalizeMetrics(entry.metrics);
-    const categoryId = normalizePublishCategoryId(entry.categoryId);
-    return {
-      categoryId,
-      categoryLabel: normalizeText(entry.categoryLabel) || getCategoryLabel(categoryId, entry.categoryLabel),
-      content: normalizePromptContent(entry.content),
-      entryId: normalizeText(entry.entryId),
-      hasDetail: Boolean(entry.hasDetail || entry.content),
-      metrics,
-      owner: {
-        displayName: normalizeText(entry.owner?.displayName) || "익명",
-        kind: normalizeText(entry.owner?.kind) || "user",
-        maskedEmail: normalizeText(entry.owner?.maskedEmail),
-        providerUserKey: normalizeText(entry.owner?.providerUserKey),
-      },
-      promptId: normalizeText(entry.promptId),
-      publishedAt: normalizeText(entry.publishedAt),
-      score: Number(entry.score) || buildScore(metrics),
-      summary: normalizeText(entry.summary),
-      title: normalizeText(entry.title),
-      updatedAt: normalizeText(entry.updatedAt || entry.publishedAt),
-    };
+    return storeModel.normalizeStoreEntry(entry);
   }
 
   function normalizePrompt(prompt) {
@@ -579,11 +565,7 @@ function registerStoreHandlers(deps) {
   }
 
   function normalizeMetrics(metrics) {
-    return {
-      importCount: Math.max(0, Number(metrics?.importCount) || 0),
-      likeCount: Math.max(0, Number(metrics?.likeCount) || 0),
-      viewCount: Math.max(0, Number(metrics?.viewCount) || 0),
-    };
+    return storeModel.normalizeMetrics(metrics);
   }
 
   function normalizeStoreSummary(summary) {
@@ -677,10 +659,10 @@ function registerStoreHandlers(deps) {
   }
 
   function buildFeedEntries(entries, sortBy, categoryId) {
-    return sortEntries(
+    return storeModel.sortEntries(
       (categoryId === "all" ? entries : entries.filter((entry) => normalizePublishCategoryId(entry.categoryId) === categoryId)).map(buildFeedItem),
       sortBy
-    );
+    ).map(buildFeedItem);
   }
 
   function buildFeedItem(entry) {
@@ -725,104 +707,27 @@ function registerStoreHandlers(deps) {
   }
 
   function normalizeSort(sortBy) {
-    const normalized = normalizeText(sortBy).toLowerCase();
-    return ["latest", "likes", "imports", "views"].includes(normalized) ? normalized : "latest";
+    return storeModel.normalizeSort(sortBy);
   }
 
   function normalizeFilterCategoryId(categoryId) {
-    const normalized = normalizeCategoryKey(categoryId);
-    return normalized === "all" ? "all" : normalized || "all";
+    return storeModel.normalizeFilterCategoryId(categoryId);
   }
 
   function normalizePublishCategoryId(categoryId) {
-    return normalizePublishCategory({ categoryId }).id;
+    return storeModel.normalizePublishCategoryId(categoryId);
   }
 
   function normalizePublishCategory(input) {
-    const explicitCategoryId = normalizeCategoryKey(input?.categoryId);
-    const explicitCategoryLabel = normalizeCategoryLabel(input?.categoryLabel);
-    if (explicitCategoryId && explicitCategoryId !== "all") {
-      return {
-        id: explicitCategoryId,
-        label: getCategoryLabel(explicitCategoryId, explicitCategoryLabel),
-      };
-    }
-    if (explicitCategoryLabel) {
-      const generatedCategoryId = normalizeCategoryKey(explicitCategoryLabel) || "other";
-      return {
-        id: generatedCategoryId === "all" ? "other" : generatedCategoryId,
-        label: explicitCategoryLabel,
-      };
-    }
-    return {
-      id: "other",
-      label: getCategoryLabel("other"),
-    };
+    return storeModel.normalizePublishCategory(input);
   }
 
   function getCategoryLabel(categoryId, fallbackLabel = "") {
-    return normalizeText(fallbackLabel)
-      || deps.STORE_CATEGORIES.find((category) => category.id === categoryId)?.label
-      || normalizeText(categoryId).replace(/[-_]+/g, " ").trim()
-      || "기타";
-  }
-
-  function normalizeCategoryKey(categoryId) {
-    return normalizeText(categoryId)
-      .toLowerCase()
-      .replace(/[/\\]+/g, "-")
-      .replace(/[^\p{L}\p{N}-]+/gu, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "");
-  }
-
-  function normalizeCategoryLabel(categoryLabel) {
-    return normalizeText(categoryLabel).slice(0, 40);
-  }
-
-  function compareCategoryIds(left, right, categoryLabels = {}) {
-    const leftOrder = deps.STORE_CATEGORY_IDS.indexOf(left);
-    const rightOrder = deps.STORE_CATEGORY_IDS.indexOf(right);
-    const normalizedLeftOrder = leftOrder >= 0 ? leftOrder : Number.MAX_SAFE_INTEGER;
-    const normalizedRightOrder = rightOrder >= 0 ? rightOrder : Number.MAX_SAFE_INTEGER;
-    if (normalizedLeftOrder !== normalizedRightOrder) {
-      return normalizedLeftOrder - normalizedRightOrder;
-    }
-    return getCategoryLabel(left, categoryLabels?.[left]).localeCompare(
-      getCategoryLabel(right, categoryLabels?.[right]),
-      "ko"
-    );
+    return storeModel.getCategoryLabel(categoryId, fallbackLabel);
   }
 
   function buildSummary(content) {
     return normalizePromptContent(content).replace(/\s+/g, " ").slice(0, SUMMARY_LENGTH);
-  }
-
-  function buildScore(metrics) {
-    return metrics.likeCount * 3 + metrics.importCount * 5 + metrics.viewCount;
-  }
-
-  function sortEntries(entries, sortBy) {
-    return entries.slice().sort((left, right) => {
-      if (sortBy === "likes") {
-        return compareNumber(right.metrics.likeCount, left.metrics.likeCount) || compareDate(right.publishedAt, left.publishedAt);
-      }
-      if (sortBy === "imports") {
-        return compareNumber(right.metrics.importCount, left.metrics.importCount) || compareDate(right.publishedAt, left.publishedAt);
-      }
-      if (sortBy === "views") {
-        return compareNumber(right.metrics.viewCount, left.metrics.viewCount) || compareDate(right.publishedAt, left.publishedAt);
-      }
-      return compareDate(right.publishedAt, left.publishedAt);
-    });
-  }
-
-  function compareNumber(left, right) {
-    return Number(left || 0) - Number(right || 0);
-  }
-
-  function compareDate(left, right) {
-    return Date.parse(left || "") - Date.parse(right || "");
   }
 
   function maskEmail(email) {

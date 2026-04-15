@@ -18,7 +18,7 @@
 - 기본 검증 루프: `npm.cmd run verify`
 - prompt-review 계약만 빠르게 확인할 때: `npm.cmd run verify:prompt-review`
 - prompt local rehearsal 경계만 빠르게 확인할 때: `npm.cmd run verify:prompt-runtime-local`
-- `verify`는 lint 뒤에 구조 계약, panel host/render/shell 계약, prompt-review 계약, prompt local runtime 계약, 릴리스 패키지, 문서 검증을 이어서 실행한다.
+- `verify`는 lint 뒤에 구조 계약, panel host/render/shell 계약, prompt-review 계약, prompt-store shared model 계약, prompt local runtime 계약, 릴리스 패키지, 문서 검증을 이어서 실행한다.
 
 ## 운영 원칙
 

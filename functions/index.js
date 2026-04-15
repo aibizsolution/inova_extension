@@ -25,7 +25,6 @@ const {
   REGION,
   sendError,
   STORE_CATEGORIES,
-  STORE_CATEGORY_IDS,
   verifyInovaIdentity,
 } = require("./platform/runtime");
 
@@ -49,7 +48,6 @@ const storeHandlers = registerStoreHandlers({
   MAX_TITLE_LENGTH,
   normalizePromptContent,
   STORE_CATEGORIES,
-  STORE_CATEGORY_IDS,
 });
 
 const promptReviewHandlers = registerPromptReviewHandlers({

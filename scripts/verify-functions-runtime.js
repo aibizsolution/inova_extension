@@ -77,7 +77,8 @@ async function verifyIdentityPendingRequestDeduplication() {
 }
 
 function loadRuntime(overrides = {}) {
-  const context = vm.createContext({
+  let context;
+  context = vm.createContext({
     Buffer,
     console,
     fetch: overrides.fetch || (async () => ({ ok: true })),
@@ -127,6 +128,13 @@ function loadRuntime(overrides = {}) {
             return {};
           },
         };
+      }
+      if (moduleId === "../shared/prompt-store-model") {
+        const source = fs.readFileSync(path.join(root, "functions", "shared", "prompt-store-model.js"), "utf8");
+        new vm.Script(source, {
+          filename: "functions/shared/prompt-store-model.js",
+        }).runInContext(context);
+        return {};
       }
       throw new Error(`Unexpected module: ${moduleId}`);
     },
