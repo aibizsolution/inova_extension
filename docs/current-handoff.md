@@ -305,13 +305,13 @@ Classification summary:
 - `active cleanup candidate`
   - hosted-level state residue inside `content/panel-v2-composition-controller.js`
   - hosted-level shell decision residue inside `content/panel-v2-shell-bridge.js`
-  - prompt review float tab/open handoff residue inside `content/panel-v2-prompt-controller.js`
 
 Audit conclusion:
 
 - active manifest JS is now either browser-only owner code or thin extension glue/composition
 - file count alone is not a reason to move code; the relevant test is whether a specific block owns DOM, Chrome API, `postMessage`, runtime broker, popup/settings, or local browser cache responsibility
 - the 2026-04-15 review found that some active glue files still contain hosted-owned decisions even though the files also contain valid browser-only wiring
+- `content/panel-v2-prompt-controller.js` is no longer a tab/open cleanup candidate; it only wires the composer review float to a hosted review `requestId` signal.
 - do not move those files wholesale; reduce the hosted-owned blocks and keep the browser-only bridge/adapter responsibilities in extension
 
 ## Hosted-First Ownership Status
