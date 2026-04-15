@@ -37,6 +37,9 @@
     const getRuntimeVersion = typeof options.getRuntimeVersion === "function"
       ? options.getRuntimeVersion
       : () => "";
+    const publishToast = typeof options.publishToast === "function"
+      ? options.publishToast
+      : () => false;
     const traceReview = typeof options.traceReview === "function"
       ? options.traceReview
       : () => {};
@@ -356,12 +359,13 @@
       if (!promptText) {
         updateState({
           copyState: "failed",
-          error: "복사할 보완 프롬프트가 없어요.",
         });
+        publishActionToast("복사할 보완 프롬프트가 없어요.", "error");
         traceReview("58.hosted.review.copy.error", {
           action: "copy-reviewed-prompt",
           error: "missing-refined-prompt",
         });
+        scheduleCopyStateReset();
         return;
       }
       try {
@@ -376,14 +380,15 @@
           copyState: "copied",
           error: "",
         });
+        publishActionToast("보완 프롬프트를 복사했어요.");
         traceReview("58.hosted.review.copy.success", {
           action: "copy-reviewed-prompt",
         });
       } catch {
         updateState({
           copyState: "failed",
-          error: "보완 프롬프트를 복사하지 못했어요.",
         });
+        publishActionToast("보완 프롬프트를 복사하지 못했어요.", "error");
         traceReview("58.hosted.review.copy.error", {
           action: "copy-reviewed-prompt",
           error: "copy-failed",
@@ -427,6 +432,19 @@
       copyStateTimer = global.setTimeout(() => {
         updateState({ copyState: "idle" });
       }, 1600);
+    }
+
+    function publishActionToast(message, tone = "success", ttlMs = tone === "error" ? 3600 : 2200) {
+      const nextMessage = normalizeText(message);
+      if (!nextMessage) {
+        return false;
+      }
+      return Boolean(publishToast({
+        message: nextMessage,
+        source: "prompt-review",
+        tone: tone === "error" ? "error" : "success",
+        ttlMs: Math.max(0, Number(ttlMs) || 0),
+      }));
     }
 
     async function refreshComposerState(force = false) {

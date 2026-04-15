@@ -13,6 +13,9 @@
 
   function create(options = {}) {
     const browserCapabilities = resolveBrowserCapabilities(options);
+    const publishToast = typeof options.publishToast === "function"
+      ? options.publishToast
+      : () => false;
     const scheduleRender = typeof options.scheduleRender === "function"
       ? options.scheduleRender
       : () => {};
@@ -480,22 +483,19 @@
     function setFeedback(text, tone = "info", timeoutMs = 2200) {
       global.clearTimeout(state.feedbackTimer);
       const nextText = normalizeText(text);
-      state.feedback = nextText
-        ? {
-            text: nextText,
-            tone: normalizeText(tone) || "info",
-          }
-        : null;
+      state.feedback = null;
+      state.feedbackTimer = 0;
       scheduleRender();
-      if (!nextText || timeoutMs <= 0) {
-        state.feedbackTimer = 0;
+      if (!nextText) {
         return;
       }
-      state.feedbackTimer = global.setTimeout(() => {
-        state.feedback = null;
-        state.feedbackTimer = 0;
-        scheduleRender();
-      }, timeoutMs);
+      publishToast({
+        contextId: normalizeText(state.pending.meetingId || state.pending.jobId || text),
+        message: nextText,
+        source: "meeting",
+        tone: normalizeText(tone) === "error" ? "error" : "success",
+        ttlMs: Math.max(0, Number(timeoutMs) || 0),
+      });
     }
 
     function setPending(pending) {

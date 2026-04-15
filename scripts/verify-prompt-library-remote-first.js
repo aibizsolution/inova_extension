@@ -242,6 +242,7 @@ async function verifyHostedPromptPublishUsesFunctionsFetch() {
   const runtimeCalls = [];
   const ensureStoreLoadedCalls = [];
   const persistedTabs = [];
+  const toastCalls = [];
   let storeCategories = [
     { id: "document", label: "문서" },
     { id: "other", label: "기타" },
@@ -311,6 +312,10 @@ async function verifyHostedPromptPublishUsesFunctionsFetch() {
     },
     getStoreCategories() {
       return storeCategories;
+    },
+    publishToast(payload) {
+      toastCalls.push(JSON.parse(JSON.stringify(payload)));
+      return true;
     },
     invokeRuntime: async (request) => {
       runtimeCalls.push({
@@ -389,7 +394,14 @@ async function verifyHostedPromptPublishUsesFunctionsFetch() {
   const viewState = controller.buildPromptToolState({}, { reviewOpen: false });
   assert.equal(viewState.activeTab, "store");
   assert.equal(viewState.prompt.publishPromptId, "");
-  assert.equal(viewState.prompt.feedback?.message, "스토어에 별도 복사본으로 등록했어요.");
+  assert.equal(viewState.prompt.feedback, null, "hosted prompt publish should keep short action feedback out of inline prompt state");
+  assert.deepEqual(toastCalls.at(-1), {
+    contextId: "prompt-1",
+    message: "스토어에 별도 복사본으로 등록했어요.",
+    source: "prompt-library",
+    tone: "success",
+    ttlMs: 2200,
+  });
   assert(persistedTabs.includes("store"), "hosted prompt publish should persist the store tab after success");
   storeCategories = [];
   await controller.handlePromptAction("open-publish", { promptId: "prompt-1" });

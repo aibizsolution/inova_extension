@@ -13,6 +13,9 @@
     const ensureStoreLoaded = typeof options.ensureStoreLoaded === "function"
       ? options.ensureStoreLoaded
       : async () => {};
+    const publishToast = typeof options.publishToast === "function"
+      ? options.publishToast
+      : () => false;
     const scheduleRender = typeof options.scheduleRender === "function"
       ? options.scheduleRender
       : () => {};
@@ -261,11 +264,11 @@
         const payload = namespace.promptLibraryModel.parseImportText(text);
         const result = namespace.promptLibraryModel.applyImport(state.promptLibrary, payload, "add");
         await syncPromptLibrary(result.library, "add-import");
-        state.feedback = createFeedback(`가져오기 완료: 추가 ${result.summary.added}개, 건너뜀 ${result.summary.skipped}개`);
+        publishActionToast(`가져오기 완료: 추가 ${result.summary.added}개, 건너뜀 ${result.summary.skipped}개`);
         state.importReview = null;
         clearMenuState();
       } catch (error) {
-        state.feedback = createFeedback(readErrorMessage(error, "가져오기 파일을 읽지 못했어요."), "error");
+        publishActionToast(readErrorMessage(error, "가져오기 파일을 읽지 못했어요."), "error");
       }
       scheduleRender();
       return true;
@@ -292,7 +295,7 @@
         );
         await syncPromptLibrary(nextPromptLibrary, "reorder-prompts");
       } catch (error) {
-        state.feedback = createFeedback(readErrorMessage(error, "요청 순서를 바꾸지 못했어요."), "error");
+        publishActionToast(readErrorMessage(error, "요청 순서를 바꾸지 못했어요."), "error");
       }
       scheduleRender();
       return true;
@@ -369,7 +372,7 @@
         try {
           await prepareInsert(normalizeText(detail.promptId));
         } catch (error) {
-          state.feedback = createFeedback(readErrorMessage(error, "입력창에 넣지 못했어요."), "error");
+          publishActionToast(readErrorMessage(error, "입력창에 넣지 못했어요."), "error");
           scheduleRender();
         }
         return true;
@@ -378,7 +381,7 @@
         try {
           await applyInsert(normalizeText(detail.insertMode) || "replace");
         } catch (error) {
-          state.feedback = createFeedback(readErrorMessage(error, "입력창에 넣지 못했어요."), "error");
+          publishActionToast(readErrorMessage(error, "입력창에 넣지 못했어요."), "error");
           scheduleRender();
         }
         return true;
@@ -448,9 +451,9 @@
         await syncPromptLibrary(nextPromptLibrary, wasEdit ? "update-prompt" : "create-prompt");
         state.editor = createEditor();
         clearMenuState();
-        state.feedback = createFeedback(wasEdit ? "요청을 수정했어요." : "요청을 추가했어요.");
+        publishActionToast(wasEdit ? "요청을 수정했어요." : "요청을 추가했어요.");
       } catch (error) {
-        state.feedback = createFeedback(readErrorMessage(error, "요청을 저장하지 못했어요."), "error");
+        publishActionToast(readErrorMessage(error, "요청을 저장하지 못했어요."), "error");
       } finally {
         state.actionPending = null;
         scheduleRender();
@@ -472,9 +475,9 @@
           state.editor = createEditor();
         }
         clearMenuState();
-        state.feedback = createFeedback("요청을 삭제했어요.");
+        publishActionToast("요청을 삭제했어요.");
       } catch (error) {
-        state.feedback = createFeedback(readErrorMessage(error, "요청을 삭제하지 못했어요."), "error");
+        publishActionToast(readErrorMessage(error, "요청을 삭제하지 못했어요."), "error");
       } finally {
         state.actionPending = null;
         state.deletePromptId = "";
@@ -601,12 +604,12 @@
         state.publishError = "";
         state.activeTab = "store";
         state.activeTabUserSelected = true;
-        state.feedback = createFeedback("스토어에 별도 복사본으로 등록했어요.", "info", normalizedPromptId);
+        publishActionToast("스토어에 별도 복사본으로 등록했어요.", "success", normalizedPromptId);
         scheduleRender();
         void persistActivePromptTab("store");
         await ensureStoreLoaded(true, "publish");
       } catch (error) {
-        state.feedback = createFeedback(readErrorMessage(error, "스토어에 등록하지 못했어요."), "error", normalizedPromptId);
+        publishActionToast(readErrorMessage(error, "스토어에 등록하지 못했어요."), "error", normalizedPromptId);
       } finally {
         state.actionPending = null;
         scheduleRender();
@@ -620,7 +623,7 @@
       }
       const composerState = await readComposerState();
       if (!composerState?.available) {
-        state.feedback = createFeedback("대화 입력창을 찾지 못했어요.", "error", promptId);
+        publishActionToast("대화 입력창을 찾지 못했어요.", "error", promptId);
         scheduleRender();
         return;
       }
@@ -642,11 +645,11 @@
       }
       const result = await applyComposerText(prompt.content, normalizeText(mode) || "replace");
       state.pendingInsert = null;
-      state.feedback = createFeedback(
+      publishActionToast(
         result?.applied
           ? `"${prompt.title}" 요청을 입력창에 넣었어요.`
           : "입력창에 넣지 못했어요.",
-        result?.applied ? "info" : "error",
+        result?.applied ? "success" : "error",
         prompt.id
       );
       scheduleRender();
@@ -663,7 +666,7 @@
       anchor.download = `inova-prompts-${new Date().toISOString().slice(0, 10)}.json`;
       anchor.click();
       global.setTimeout(() => global.URL.revokeObjectURL(url), 0);
-      state.feedback = createFeedback("요청 보관함을 JSON 파일로 내보냈어요.");
+      publishActionToast("요청 보관함을 JSON 파일로 내보냈어요.");
       scheduleRender();
     }
 
@@ -935,6 +938,20 @@
         label: customCategoryLabel,
       };
     }
+
+    function publishActionToast(message, tone = "success", promptId = "", ttlMs = tone === "error" ? 3600 : 2200) {
+      const nextMessage = normalizeText(message);
+      if (!nextMessage) {
+        return false;
+      }
+      return Boolean(publishToast({
+        contextId: normalizeText(promptId),
+        message: nextMessage,
+        source: "prompt-library",
+        tone: tone === "error" ? "error" : "success",
+        ttlMs: Math.max(0, Number(ttlMs) || 0),
+      }));
+    }
   }
 
   function createEditor() {
@@ -999,14 +1016,6 @@
     return {
       detail: normalizeText(message),
       message: "클라우드 요청 보관함 갱신이 실패했어요. 마지막으로 불러온 요청을 그대로 보여주고 있어요.",
-    };
-  }
-
-  function createFeedback(message, tone = "info", promptId = "") {
-    return {
-      message: normalizeText(message),
-      promptId: normalizeText(promptId),
-      tone: tone === "error" ? "error" : "info",
     };
   }
 

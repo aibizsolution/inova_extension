@@ -46,6 +46,9 @@
     requestSeq: 0,
     startupStatusShown: false,
     startupStatusTimerId: 0,
+    toast: null,
+    toastSeq: 0,
+    toastTimerId: 0,
     traceRequestIds: new Set(),
     inputComposition: createInputCompositionState(),
     storeRenderKey: 0,
@@ -70,6 +73,7 @@
     browserCapabilities,
     getStoreCategories: () => promptStoreController?.getPublishCategories?.() || [],
     ensureStoreLoaded: (...args) => promptStoreController?.ensureLoaded?.(...args) || Promise.resolve(),
+    publishToast,
     scheduleRender,
     traceFirestore: traceFirestoreFlow,
     traceReview: traceReviewFlow,
@@ -79,6 +83,7 @@
     getActivePromptTab: () => promptLibraryController?.getActiveTab?.() || "library",
     getProviderIdentity: () => promptLibraryController?.getProviderIdentity?.() || { available: false },
     getRuntimeVersion: () => state.extensionVersion || "",
+    publishToast,
     scheduleRender,
     traceReview: traceReviewFlow,
     setActivePromptTab: (promptTabId) => promptLibraryController?.handleSelectPromptTab?.(promptTabId) || Promise.resolve(false),
@@ -88,10 +93,12 @@
     getActivePromptTab: () => promptLibraryController?.getActiveTab?.() || "library",
     getProviderIdentity: () => promptLibraryController?.getProviderIdentity?.() || { available: false },
     importStorePrompt: (storeEntry) => promptLibraryController?.importStorePrompt?.(storeEntry) || Promise.resolve(false),
+    publishToast,
     scheduleRender,
   }) || null;
   const meetingHubController = namespace.meetingHubController?.create?.({
     browserCapabilities,
+    publishToast,
     scheduleRender,
     syncTopPanelSummary: (meetingTool = {}) => syncToolSummary("meeting", meetingTool),
     traceFirestore: traceFirestoreFlow,
@@ -142,9 +149,17 @@
   function createCallbacks() {
     return {
       async onCopyBookmark(bookmarkId) {
-        return conversationController?.handleCopyBookmark
-          ? conversationController.handleCopyBookmark(bookmarkId)
-          : Promise.resolve(false);
+        const copied = conversationController?.handleCopyBookmark
+          ? await conversationController.handleCopyBookmark(bookmarkId)
+          : false;
+        publishToast({
+          contextId: normalizeText(bookmarkId),
+          message: copied ? "질문을 복사했어요." : "질문을 복사하지 못했어요.",
+          source: "conversation",
+          tone: copied ? "success" : "error",
+          ttlMs: copied ? 1800 : 3600,
+        });
+        return copied;
       },
       onEscape() {
         if (promptReviewController?.consumeEscape?.()) {
@@ -684,6 +699,7 @@
       state.renderCache.toolTotal = nextToolTotal;
     }
 
+    renderToastIfNeeded(elements.toolToast);
     renderToolContentIfNeeded(elements.toolContent, panelState);
 
     if (panelState.activeTool === "prompts" && effectivePromptTool?.activeTab === "store") {
@@ -712,6 +728,7 @@
       fileInput: root.querySelector("#inova-prompt-import-file"),
       toolContent: root.querySelector("#inova-tool-content"),
       toolRail: root.querySelector("#inova-tool-rail"),
+      toolToast: root.querySelector("#inova-tool-toast-slot"),
       toolTitle: root.querySelector("#inova-tool-title"),
       toolTotal: root.querySelector("#inova-tool-total"),
     };
@@ -736,12 +753,31 @@
 
   function createPanelRenderCache() {
     return {
+      toolToastKey: "",
       toolContentHtml: "",
       toolContentKey: "",
       toolRailHtml: "",
       toolTitle: "",
       toolTotal: "",
     };
+  }
+
+  function renderToastIfNeeded(toolToast) {
+    if (!(toolToast instanceof global.HTMLElement)) {
+      return;
+    }
+    const nextToastKey = state.toast ? serializeRenderState(state.toast) : "";
+    if (state.renderCache.toolToastKey === nextToastKey) {
+      return;
+    }
+    state.renderCache.toolToastKey = nextToastKey;
+    if (!state.toast?.message) {
+      toolToast.hidden = true;
+      toolToast.innerHTML = "";
+      return;
+    }
+    toolToast.hidden = false;
+    toolToast.innerHTML = renderToastMarkup(state.toast);
   }
 
   function renderToolContentIfNeeded(toolContent, panelState) {
@@ -801,6 +837,17 @@
 
   function renderToolFailure() {
     return '<section class="inova-tool-section"><div class="inova-bookmark-empty">화면을 불러오지 못했어요. 페이지를 새로고침하거나 확장을 다시 로드해 주세요.</div></section>';
+  }
+
+  function renderToastMarkup(toast) {
+    const tone = normalizeToastTone(toast?.tone);
+    const role = normalizeText(toast?.role) || (tone === "error" ? "alert" : "status");
+    const live = role === "alert" ? "assertive" : "polite";
+    return `
+      <div class="inova-tool-toast is-${escapeHtml(tone)}" role="${escapeHtml(role)}" aria-live="${escapeHtml(live)}" aria-atomic="true">
+        <span class="inova-tool-toast__message">${escapeHtml(toast?.message)}</span>
+      </div>
+    `;
   }
 
   function renderToolRail(tools, activeTool) {
@@ -1089,6 +1136,7 @@
               </div>
               <button id="inova-tool-close" type="button" aria-label="도구 패널 닫기">닫기</button>
             </header>
+            <div id="inova-tool-toast-slot" hidden></div>
             <div id="inova-tool-content"></div>
           </section>
         </div>
@@ -1155,9 +1203,15 @@
         message: copyButton.dataset.copyBookmarkId || "",
         reason: "click",
       });
-      callbacks.onCopyBookmark(copyButton.dataset.copyBookmarkId || "")
-        .then((copied) => namespace.bookmarkView?.flashCopyState?.(copyButton, copied))
-        .catch(() => namespace.bookmarkView?.flashCopyState?.(copyButton, false));
+      void callbacks.onCopyBookmark(copyButton.dataset.copyBookmarkId || "").catch(() => {
+        publishToast({
+          contextId: normalizeText(copyButton.dataset.copyBookmarkId),
+          message: "질문을 복사하지 못했어요.",
+          source: "conversation",
+          tone: "error",
+          ttlMs: 3600,
+        });
+      });
       return;
     }
     const bookmarkButton = target.closest?.("[data-bookmark-id]");
@@ -1563,6 +1617,69 @@
 
   function normalizeText(value) {
     return namespace.session?.normalizeText?.(value) || String(value || "").trim();
+  }
+
+  function publishToast(payload = {}) {
+    const nextToast = normalizeToastPayload(payload);
+    clearToastTimer();
+    state.toast = nextToast;
+    scheduleRender();
+    if (!nextToast || nextToast.ttlMs <= 0) {
+      return Boolean(nextToast);
+    }
+    const toastId = nextToast.id;
+    state.toastTimerId = global.setTimeout(() => {
+      dismissToast(toastId);
+    }, nextToast.ttlMs);
+    return true;
+  }
+
+  function dismissToast(toastId = "") {
+    if (!state.toast) {
+      return false;
+    }
+    if (toastId && toastId !== state.toast.id) {
+      return false;
+    }
+    clearToastTimer();
+    state.toast = null;
+    scheduleRender();
+    return true;
+  }
+
+  function clearToastTimer() {
+    if (!state.toastTimerId) {
+      return;
+    }
+    global.clearTimeout(state.toastTimerId);
+    state.toastTimerId = 0;
+  }
+
+  function normalizeToastPayload(payload = {}) {
+    const message = normalizeText(payload?.message);
+    if (!message) {
+      return null;
+    }
+    state.toastSeq += 1;
+    const tone = normalizeToastTone(payload?.tone);
+    const ttlMs = Math.max(0, Number(payload?.ttlMs) || 0);
+    return {
+      contextId: normalizeText(payload?.contextId),
+      id: normalizeText(payload?.id) || `toast-${Date.now()}-${state.toastSeq}`,
+      message,
+      role: normalizeText(payload?.role) || (tone === "error" ? "alert" : "status"),
+      source: normalizeText(payload?.source),
+      tone,
+      ttlMs,
+    };
+  }
+
+  function normalizeToastTone(value) {
+    const normalized = normalizeText(value).toLowerCase();
+    if (normalized === "success" || normalized === "error") {
+      return normalized;
+    }
+    return "info";
   }
 
   function isPageTraceAction(action) {

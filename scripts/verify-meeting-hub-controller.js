@@ -44,6 +44,7 @@ async function verifyHostedMeetingHubOwnership() {
   let viewState = controller.buildViewState();
   assert.equal(viewState.items.length, 1, "hosted meeting hub should load meeting items directly");
   assert.equal(viewState.items[0].meetingId, "meeting-alpha");
+  assert.equal(viewState.feedback, null, "hosted meeting hub should not expose legacy inline feedback after load");
   assert.equal(harness.summarySyncCalls.length, 1, "hosted meeting hub should sync a compact summary back to the top panel after load");
   assert.deepEqual(harness.summarySyncCalls[0], { count: 1 });
 
@@ -55,7 +56,14 @@ async function verifyHostedMeetingHubOwnership() {
   assert.equal(shareHandled, true, "hosted meeting hub should fully handle share actions");
   viewState = controller.buildViewState();
   assert.equal(viewState.items[0].share.active, true, "hosted meeting hub should patch local share state after create");
-  assert.equal(viewState.feedback?.text, "공유 링크를 복사했습니다.");
+  assert.equal(viewState.feedback, null, "hosted meeting hub should keep short action feedback out of inline state");
+  assert.deepEqual(harness.toastCalls.at(-1), {
+    contextId: "meeting-alpha",
+    message: "공유 링크를 복사했습니다.",
+    source: "meeting",
+    tone: "success",
+    ttlMs: 2200,
+  });
   assert.deepEqual(harness.pageCalls[0], {
     action: "clipboard.write-text",
     text: "https://share.example/meeting-alpha",
@@ -68,7 +76,14 @@ async function verifyHostedMeetingHubOwnership() {
   });
   assert.equal(openHandled, true, "hosted meeting hub should fully handle open-result actions");
   viewState = controller.buildViewState();
-  assert.equal(viewState.feedback?.text, "결과 탭을 열었습니다.");
+  assert.equal(viewState.feedback, null, "hosted meeting hub should not duplicate launch feedback inline");
+  assert.deepEqual(harness.toastCalls.at(-1), {
+    contextId: "meeting-alpha",
+    message: "결과 탭을 열었습니다.",
+    source: "meeting",
+    tone: "success",
+    ttlMs: 1800,
+  });
   assert.equal(viewState.pending?.active, false, "hosted meeting hub should clear pending state after launch");
 
   assert(
@@ -114,8 +129,14 @@ async function verifyHostedMeetingHubShareCopyFailure() {
   assert.equal(handled, true, "hosted meeting hub should still finish share actions when clipboard copy fails");
   const viewState = controller.buildViewState();
   assert.equal(viewState.items[0].share.active, true, "share state should stay active even when auto-copy fails");
-  assert.equal(viewState.feedback?.text, "공유 링크는 만들었지만 자동 복사는 실패했어요.");
-  assert.equal(viewState.feedback?.tone, "error");
+  assert.equal(viewState.feedback, null, "hosted meeting hub should not surface short copy failures inline");
+  assert.deepEqual(harness.toastCalls.at(-1), {
+    contextId: "meeting-alpha",
+    message: "공유 링크는 만들었지만 자동 복사는 실패했어요.",
+    source: "meeting",
+    tone: "error",
+    ttlMs: 3600,
+  });
   assert.deepEqual(harness.pageCalls[0], {
     action: "clipboard.write-text",
     text: "https://share.example/meeting-alpha",
@@ -533,6 +554,7 @@ function createHarnessWithOptions(options = {}) {
   const realtimeSubscribeCalls = [];
   const pageCalls = [];
   const summarySyncCalls = [];
+  const toastCalls = [];
   const checkedAtSequence = Array.isArray(options.checkedAtSequence) && options.checkedAtSequence.length
     ? options.checkedAtSequence.slice()
     : null;
@@ -625,6 +647,10 @@ function createHarnessWithOptions(options = {}) {
         });
       },
     },
+    publishToast(payload) {
+      toastCalls.push(cloneValue(payload));
+      return true;
+    },
     scheduleRender() {},
     syncTopPanelSummary: async (meetingTool) => {
       summarySyncCalls.push(cloneValue(meetingTool));
@@ -640,6 +666,7 @@ function createHarnessWithOptions(options = {}) {
     realtimeSubscribeCalls,
     runtimeCalls,
     summarySyncCalls,
+    toastCalls,
   };
 }
 

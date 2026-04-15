@@ -24,6 +24,9 @@
     const scheduleRender = typeof options.scheduleRender === "function"
       ? options.scheduleRender
       : () => {};
+    const publishToast = typeof options.publishToast === "function"
+      ? options.publishToast
+      : () => false;
 
     const viewedEntryIds = new Set();
     const state = {
@@ -570,14 +573,20 @@
 
     function setFeedback(message, tone = "info", entryId = "") {
       global.clearTimeout(state.feedbackTimer);
-      state.feedback = message ? { entryId, message, tone } : null;
-      if (!message) {
+      const nextMessage = normalizeText(message);
+      state.feedback = null;
+      state.feedbackTimer = 0;
+      scheduleRender();
+      if (!nextMessage) {
         return;
       }
-      state.feedbackTimer = global.setTimeout(() => {
-        state.feedback = null;
-        scheduleRender();
-      }, 2600);
+      publishToast({
+        contextId: normalizeText(entryId),
+        message: nextMessage,
+        source: "prompt-store",
+        tone: normalizeText(tone) === "error" ? "error" : "success",
+        ttlMs: normalizeText(tone) === "error" ? 3600 : 2200,
+      });
     }
 
     function scheduleSearchRender() {
