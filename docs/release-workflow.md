@@ -54,6 +54,7 @@
 
 - 현재 공개 기준선은 `0.4.4`, 다음 공개 릴리스 목표는 hosted-first `1.0.0`이다.
 - 구조 migration이 거의 끝난 뒤에는 작은 shell refactor보다 실제 Chrome smoke와 release rehearsal이 우선이다.
+- active extension bundle에서 새 legacy reload blocker가 보이지 않으면, 추가 cleanup refactor를 늘리기보다 검증과 release rehearsal을 진행한다.
 - `1.0.0 공개 ready` 최소 기준은 아래다.
   - `npm.cmd run verify` green
   - 실제 Chrome에서 hosted v2 panel boot, prompt library/store/review, meeting hub/workspace launch, release latest/history/download smoke 기록 확보

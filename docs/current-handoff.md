@@ -240,6 +240,7 @@ Current status:
 - the real `1.0.0 done` question is whether `0.4.4` can be retired later without shipping an extension follow-up release or ZIP
 - server-side cleanup of `hosting/*` or Functions aliases is allowed and is not a blocker by itself
 - current active manifest lane has no verified dependency on `backup/legacy-panel/*` or dead legacy panel assets inside the packaged extension path
+- current audit does not show another extension-side cleanup task; the remaining work is Chrome smoke and release readiness, not more hosted-first refactor slicing
 
 What counts as a blocker:
 
@@ -255,8 +256,9 @@ Not blockers:
 ## Concrete Next Session Targets
 
 1. Finish real Chrome smoke and rollout evidence for `1.0.0`
-2. Keep `verify` focused on preventing active bundle regressions back into legacy extension modules/assets
-3. Treat prompt bridge or meeting endpoint renames as separate server-side follow-up only if they are still useful later
+2. Run release rehearsal and confirm lane-local package/metadata output stays coherent
+3. Keep `verify` focused on preventing active bundle regressions back into legacy extension modules/assets
+4. Treat prompt bridge or meeting endpoint renames as separate server-side follow-up only if they are still useful later
 
 ## Local Rehearsal Notes
 

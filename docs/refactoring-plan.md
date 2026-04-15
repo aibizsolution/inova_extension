@@ -80,6 +80,7 @@ ordinary feature 구현 변경, 탭별 hosted ownership 진행도, smoke 이슈 
 
 ### Extension-bundle blockers
 
+- 현재 감사 기준으로는 새 blocker가 확인되지 않았다. 이 섹션은 앞으로 무엇이 blocker인지 정의하는 용도다.
 - active `content/background/popup/shared/manifest`가 `0.4.4` 전용 extension module, asset, deprecated extension-side action surface를 다시 싣거나 부팅하면 안 된다.
 - verify는 active v2 bundle이 `backup/legacy-panel/*`, dead legacy hosted panel asset, deprecated extension-side controller path를 다시 로드하면 실패해야 한다.
 
