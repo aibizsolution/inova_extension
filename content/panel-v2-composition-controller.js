@@ -1,5 +1,6 @@
 (function initPanelV2CompositionController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const normalizeText = namespace.session?.normalizeText || ((value) => String(value ?? "").trim());
   const RUNTIME_PROVIDER_IDENTITY_REQUEST = "inova-meeting:get-provider-identity";
 
   function create(state) {
@@ -361,10 +362,6 @@
         normalizeText(items.at?.(-1)?.id),
       ].join("|");
     }
-  }
-
-  function normalizeText(value) {
-    return namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
   }
 
   function normalizePromptReviewSnapshot(reviewState) {

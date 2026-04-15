@@ -1,5 +1,6 @@
 (function initFrameProxyHelpers(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const normalizeText = namespace.session?.normalizeText || ((value) => String(value ?? "").trim());
   const INVALIDATED_CONTEXT_MESSAGE = "확장프로그램이 갱신됐어요. 페이지를 새로고침해 주세요.";
   const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "localhost"]);
   const PROXY_PATH = "content/frame-proxy.html";
@@ -76,10 +77,6 @@
     } catch {
       return "";
     }
-  }
-
-  function normalizeText(value) {
-    return namespace.session?.normalizeText?.(value) || String(value || "").trim();
   }
 
   function isInvalidatedContextError(error) {

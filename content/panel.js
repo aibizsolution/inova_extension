@@ -1,5 +1,6 @@
 (function initContentPanel(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const normalizeText = namespace.session?.normalizeText || ((value) => String(value ?? "").trim());
   const HANDSHAKE_TIMEOUT_MS = 4000;
   let panelHost = null;
   const panelConsoleTrace = namespace.panelConsoleTrace;
@@ -97,10 +98,6 @@
     } catch {
       return "";
     }
-  }
-
-  function normalizeText(value) {
-    return namespace.session?.normalizeText?.(value) || String(value || "").trim();
   }
 
   namespace.contentPanel = {

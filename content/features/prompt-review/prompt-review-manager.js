@@ -1,5 +1,6 @@
 (function initPromptReviewManager(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const normalizeText = namespace.session?.normalizeText || ((value) => String(value ?? "").trim());
 
   function create(state, hooks = {}) {
     const render = typeof hooks.render === "function" ? hooks.render : () => {};
@@ -40,10 +41,6 @@
       externalActivationRequestId += 1;
       render();
     }
-  }
-
-  function normalizeText(value) {
-    return namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
   }
 
   namespace.promptReviewManager = {

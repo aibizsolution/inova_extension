@@ -1,5 +1,6 @@
 (function initRouteStateController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const normalizeText = namespace.session?.normalizeText || ((value) => String(value ?? "").trim());
   const ROUTE_FALLBACK_MS = 1600;
   const ROUTE_SETTLE_MS = 260;
 
@@ -209,10 +210,6 @@
 
     function cloneValue(value) {
       return value == null ? value : JSON.parse(JSON.stringify(value));
-    }
-
-    function normalizeText(value) {
-      return namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
     }
 
     function readActiveTool() {

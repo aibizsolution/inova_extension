@@ -1,5 +1,6 @@
 (function initPanelHostRuntime(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const defaultNormalizeText = namespace.session?.normalizeText || ((value) => String(value ?? "").trim());
 
   function create(deps = {}) {
     const applyHandleRatio = typeof deps.applyHandleRatio === "function"
@@ -16,7 +17,7 @@
       : () => false;
     const normalizeText = typeof deps.normalizeText === "function"
       ? deps.normalizeText
-      : (value) => String(value || "").trim();
+      : defaultNormalizeText;
     const readExtensionVersion = typeof deps.readExtensionVersion === "function"
       ? deps.readExtensionVersion
       : () => "";
@@ -357,7 +358,7 @@
   }
 
   function toOrigin(url) {
-    const normalized = normalizeText(url);
+    const normalized = defaultNormalizeText(url);
     if (!normalized) {
       return "";
     }
@@ -369,9 +370,9 @@
   }
 
   function appendQueryParam(url, key, value) {
-    const normalizedUrl = normalizeText(url);
-    const normalizedKey = normalizeText(key);
-    const normalizedValue = normalizeText(value);
+    const normalizedUrl = defaultNormalizeText(url);
+    const normalizedKey = defaultNormalizeText(key);
+    const normalizedValue = defaultNormalizeText(value);
     if (!normalizedUrl || !normalizedKey || !normalizedValue) {
       return normalizedUrl;
     }
@@ -386,10 +387,6 @@
 
   function cloneValue(value) {
     return value == null ? value : JSON.parse(JSON.stringify(value));
-  }
-
-  function normalizeText(value) {
-    return namespace.session?.normalizeText?.(value) || String(value || "").trim();
   }
 
   namespace.panelHostRuntime = {
