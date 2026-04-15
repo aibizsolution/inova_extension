@@ -262,7 +262,9 @@ function main() {
   [
     "count: getConversationCount(),",
     "snapshotFingerprint: buildSnapshotFingerprint(),",
+    "visibleMessageId: normalizeText(namespace.contentDom?.getVisibleMessageId?.(state.bookmarks)),",
     "function getConversationCount(conversationSnapshot = null)",
+    "normalizeText(state.sessionId),",
     "normalizeText(items[0]?.id),",
     "normalizeText(items.at?.(-1)?.id),",
   ].forEach((pattern) => assert(

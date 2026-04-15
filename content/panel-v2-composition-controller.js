@@ -167,6 +167,7 @@
       routeRetryTimers: [],
       lastRouteKey: "",
       routeBaselineSignature: "",
+      routeLastMutationAt: 0,
       routeWaitStartedAt: 0,
       awaitingRouteMessages: false,
       uiPreferenceLock: null,
@@ -413,6 +414,7 @@
         return {
           count: getConversationCount(),
           snapshotFingerprint: buildSnapshotFingerprint(),
+          visibleMessageId: normalizeText(namespace.contentDom?.getVisibleMessageId?.(state.bookmarks)),
         };
       },
       getConversationCount,
@@ -428,6 +430,7 @@
     function buildSnapshotFingerprint() {
       const items = Array.isArray(state.bookmarks) ? state.bookmarks : [];
       return [
+        normalizeText(state.sessionId),
         String(getConversationCount()),
         normalizeText(items[0]?.id),
         normalizeText(items.at?.(-1)?.id),

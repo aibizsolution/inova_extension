@@ -73,7 +73,10 @@
         return;
       }
 
-      state.observer = namespace.contentDom.observeMessages(scheduleRefresh);
+      state.observer = namespace.contentDom.observeMessages(() => {
+        state.routeLastMutationAt = Date.now();
+        scheduleRefresh();
+      });
       scheduleRouteRetryTimers();
       await refreshState();
       clearRouteRetriesIfSettled();

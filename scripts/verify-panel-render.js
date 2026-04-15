@@ -225,6 +225,22 @@ function verifyHostedConversationSearchDebounceContract() {
     conversationControllerSource.includes("const explicitFingerprint = normalizeText(bookmarksTool?.snapshotFingerprint);"),
     "hosted conversation controller should accept a compact snapshot fingerprint from the top panel"
   );
+  assert(
+    !conversationControllerSource.includes("SNAPSHOT_REFRESH_INTERVAL_MS = 10000"),
+    "hosted conversation controller should not keep the old 10s snapshot refresh throttle"
+  );
+  assert(
+    conversationControllerSource.includes("SNAPSHOT_REFRESH_DEBOUNCE_MS = 120"),
+    "hosted conversation controller should coalesce snapshot changes through a short debounce"
+  );
+  assert(
+    conversationControllerSource.includes("pendingRefreshAfterLoad: false"),
+    "hosted conversation controller should track a queued refresh while a snapshot read is in flight"
+  );
+  assert(
+    conversationControllerSource.includes("state.pendingRefreshAfterLoad = true;"),
+    "hosted conversation controller should queue a follow-up read instead of dropping snapshot changes during an active load"
+  );
 }
 
 function verifyHostedStoreSearchDebounceContract() {

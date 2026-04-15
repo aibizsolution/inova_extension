@@ -1,6 +1,7 @@
 (function initRouteStateController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const ROUTE_FALLBACK_MS = 1600;
+  const ROUTE_SETTLE_MS = 260;
 
   function create(state, deps = {}) {
     const applyUiPreferenceLock = typeof deps.applyUiPreferenceLock === "function"
@@ -64,6 +65,7 @@
       state.promptReview = { ...namespace.constants.defaults.promptReview };
       state.lastError = "";
       state.routeBaselineSignature = nextSessionId ? previousSignature : "";
+      state.routeLastMutationAt = nextSessionId ? Date.now() : 0;
       state.awaitingRouteMessages = Boolean(nextSessionId);
       state.routeWaitStartedAt = nextSessionId ? Date.now() : 0;
     }
@@ -123,6 +125,7 @@
       }
 
       const liveBookmarks = namespace.contentDom.collectUserMessages(state.sessionId);
+      const mergedBookmarks = mergeLiveBookmarks(state.bookmarks, liveBookmarks);
       const liveSignature = namespace.contentDom.getUserMessageSignature();
       if (shouldKeepWaiting(liveBookmarks, liveSignature)) {
         return [];
@@ -130,7 +133,43 @@
 
       state.awaitingRouteMessages = false;
       state.routeBaselineSignature = liveSignature;
-      return liveBookmarks;
+      return mergedBookmarks;
+    }
+
+    function mergeLiveBookmarks(previousBookmarks, liveBookmarks) {
+      const previous = Array.isArray(previousBookmarks) ? previousBookmarks : [];
+      const next = Array.isArray(liveBookmarks) ? liveBookmarks : [];
+      if (!previous.length) {
+        return next.slice();
+      }
+      if (!next.length) {
+        return previous.slice();
+      }
+
+      const merged = new Map();
+      previous.forEach((bookmark) => {
+        const bookmarkId = normalizeText(bookmark?.id);
+        if (!bookmarkId) {
+          return;
+        }
+        merged.set(bookmarkId, cloneValue(bookmark));
+      });
+      next.forEach((bookmark) => {
+        const bookmarkId = normalizeText(bookmark?.id);
+        if (!bookmarkId) {
+          return;
+        }
+        merged.set(bookmarkId, {
+          ...(merged.get(bookmarkId) || {}),
+          ...cloneValue(bookmark),
+        });
+      });
+
+      return Array.from(merged.values()).sort((left, right) => {
+        const leftOrder = Math.max(0, Number(left?.order) || 0);
+        const rightOrder = Math.max(0, Number(right?.order) || 0);
+        return leftOrder - rightOrder;
+      });
     }
 
     function shouldCollectLiveMessages() {
@@ -148,7 +187,14 @@
       const readyWithoutBaseline = !state.routeBaselineSignature && liveBookmarks.length > 0;
       const becameEmpty = !liveBookmarks.length && !liveSignature && emptyConversationReady;
       const waitedLongEnough = Date.now() - state.routeWaitStartedAt > ROUTE_FALLBACK_MS;
-      return !(routeLoaded || readyWithoutBaseline || becameEmpty || waitedLongEnough);
+      const transitionDetected = routeLoaded || readyWithoutBaseline || becameEmpty;
+      if (waitedLongEnough) {
+        return false;
+      }
+      if (!transitionDetected) {
+        return true;
+      }
+      return Date.now() - Math.max(0, Number(state.routeLastMutationAt) || 0) < ROUTE_SETTLE_MS;
     }
 
     function isPaused() {
@@ -161,6 +207,14 @@
 
     function getStorageChange(changes, storageKey, fallbackKey) {
       return namespace.productLane?.getStorageChange?.(changes, storageKey) || changes[fallbackKey];
+    }
+
+    function cloneValue(value) {
+      return value == null ? value : JSON.parse(JSON.stringify(value));
+    }
+
+    function normalizeText(value) {
+      return namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
     }
 
     function defaultNormalizeToolId(toolId) {

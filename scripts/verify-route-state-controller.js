@@ -11,7 +11,9 @@ async function main() {
   await verifyRefreshStateLoadsStorageAndBookmarks();
   verifyLaneAwareStorageChangeHandling();
   verifyPromptLibraryStorageChangesAreIgnored();
+  await verifySameSessionPartialRefreshKeepsStableBookmarks();
   await verifyRouteWaitLifecycle();
+  await verifyRouteWaitSettlesAfterMutationQuiet();
   console.log("[verify-route-state-controller] Route state controller contract passed");
 }
 
@@ -108,6 +110,51 @@ async function verifyRouteWaitLifecycle() {
   await harness.controller.refreshState();
   assert.equal(harness.state.awaitingRouteMessages, false);
   assert.deepEqual(harness.state.bookmarks, []);
+}
+
+async function verifySameSessionPartialRefreshKeepsStableBookmarks() {
+  const harness = createHarness({
+    awaitingRouteMessages: false,
+    liveBookmarks: [{ id: "bookmark-2", order: 2, text: "둘째 질문" }],
+    liveSignature: "sig-partial",
+    routeBaselineSignature: "sig-full",
+    sessionId: "session-2",
+  });
+
+  harness.state.bookmarks = [
+    { id: "bookmark-1", order: 1, text: "첫 질문" },
+    { id: "bookmark-2", order: 2, text: "둘째 질문" },
+    { id: "bookmark-3", order: 3, text: "셋째 질문" },
+  ];
+
+  await harness.controller.refreshState();
+
+  assert.deepEqual(harness.state.bookmarks, [
+    { id: "bookmark-1", order: 1, text: "첫 질문" },
+    { id: "bookmark-2", order: 2, text: "둘째 질문" },
+    { id: "bookmark-3", order: 3, text: "셋째 질문" },
+  ]);
+}
+
+async function verifyRouteWaitSettlesAfterMutationQuiet() {
+  const harness = createHarness({
+    awaitingRouteMessages: true,
+    liveBookmarks: [{ id: "bookmark-2", text: "둘째 질문" }],
+    liveSignature: "sig-next",
+    routeBaselineSignature: "sig-start",
+    routeLastMutationAt: Date.now(),
+    routeWaitStartedAt: Date.now(),
+    sessionId: "session-2",
+  });
+
+  await harness.controller.refreshState();
+  assert.equal(harness.state.awaitingRouteMessages, true);
+  assert.deepEqual(harness.state.bookmarks, []);
+
+  harness.state.routeLastMutationAt = Date.now() - 400;
+  await harness.controller.refreshState();
+  assert.equal(harness.state.awaitingRouteMessages, false);
+  assert.deepEqual(harness.state.bookmarks, [{ id: "bookmark-2", text: "둘째 질문" }]);
 }
 
 function createHarness(options = {}) {
@@ -210,6 +257,7 @@ function createHarness(options = {}) {
     preferredOpen: true,
     promptReview: { open: true },
     routeBaselineSignature: options.routeBaselineSignature || "",
+    routeLastMutationAt: options.routeLastMutationAt || 0,
     routeWaitStartedAt: options.routeWaitStartedAt || 0,
     sessionId: options.sessionId || "",
     sessionTitle: "",
