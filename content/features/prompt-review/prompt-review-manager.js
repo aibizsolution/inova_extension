@@ -21,8 +21,6 @@
       return {
         available: Boolean(composerState.available),
         hasText: Boolean(normalizeText(composerState.text)),
-        pending: false,
-        result: null,
       };
     }
 

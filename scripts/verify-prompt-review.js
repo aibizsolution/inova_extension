@@ -98,8 +98,8 @@ async function verifyExtensionReviewHandoff() {
   assert.equal(harness.state.uiPreferences.activePromptTab, "library");
   assert.equal(viewState.available, true);
   assert.equal(viewState.hasText, true);
-  assert.equal(viewState.pending, false);
-  assert.equal(viewState.result, null);
+  assert.equal("pending" in viewState, false);
+  assert.equal("result" in viewState, false);
 }
 
 function verifyHostedPromptReviewContract() {
@@ -109,6 +109,7 @@ function verifyHostedPromptReviewContract() {
   const panelTraceSource = fs.readFileSync(path.join(root, "content", "panel-console-trace.js"), "utf8");
   const topPanelSource = fs.readFileSync(path.join(root, "content", "panel.js"), "utf8");
   const compositionSource = fs.readFileSync(path.join(root, "content", "panel-v2-composition-controller.js"), "utf8");
+  const composerReviewFloatSource = fs.readFileSync(path.join(root, "content", "features", "prompt-review", "composer-review-float.js"), "utf8");
   const shellBridgeSource = fs.readFileSync(path.join(root, "content", "panel-v2-shell-bridge.js"), "utf8");
   const promptShellControllerSource = fs.readFileSync(path.join(root, "content", "panel-v2-prompt-controller.js"), "utf8");
   const promptReviewManagerSource = fs.readFileSync(path.join(root, "content", "features", "prompt-review", "prompt-review-manager.js"), "utf8");
@@ -207,6 +208,15 @@ function verifyHostedPromptReviewContract() {
     "content prompt review manager should keep only a private monotonic handoff signal instead of mutating shared panel state"
   );
   assert.equal(
+    !promptReviewManagerSource.includes("pending: false")
+      && !promptReviewManagerSource.includes("result: null")
+      && !composerReviewFloatSource.includes("state.pending")
+      && !composerReviewFloatSource.includes("state.result")
+      && !composerReviewFloatSource.includes("검토 중"),
+    true,
+    "composer review float should stay a request trigger only and should not pretend to mirror hosted pending/result state"
+  );
+  assert.equal(
     !promptReviewManagerSource.includes("chrome.runtime.sendMessage"),
     true,
     "content prompt review manager should stop issuing runtime review requests directly"
@@ -265,21 +275,7 @@ function createPromptReviewHarness(options = {}) {
         };
       },
     },
-    constants: {
-      defaults: {
-        promptReview: {
-          copyState: "idle",
-          error: "",
-          lastReviewedAt: "",
-          open: false,
-          pending: false,
-          placeholderConfirmation: false,
-          requestId: 0,
-          result: null,
-          reviewedText: "",
-        },
-      },
-    },
+    constants: { defaults: {} },
     panelDebug: {
       log() {},
     },
@@ -303,17 +299,6 @@ function createPromptReviewHarness(options = {}) {
   loadScript("content/features/prompt-review/prompt-review-manager.js", context);
 
   const state = {
-    promptReview: {
-      copyState: "idle",
-      error: "",
-      lastReviewedAt: "",
-      open: false,
-      pending: false,
-      placeholderConfirmation: false,
-      requestId: 0,
-      result: null,
-      reviewedText: "",
-    },
     sessionId: "session-1",
     uiPreferences: {
       activePromptTab: "library",
