@@ -54,11 +54,16 @@
 
 - 현재 공개 기준선은 `0.4.4`, 다음 공개 릴리스 목표는 hosted-first `1.0.0`이다.
 - 구조 migration이 거의 끝난 뒤에는 작은 shell refactor보다 실제 Chrome smoke와 release rehearsal이 우선이다.
-- `1.0.0` 공개 직전 최소 기준은 아래다.
+- `1.0.0 공개 ready` 최소 기준은 아래다.
   - `npm.cmd run verify` green
   - 실제 Chrome에서 hosted v2 panel boot, prompt library/store/review, meeting hub/workspace launch, release latest/history/download smoke 기록 확보
   - `release:build` 또는 동등한 release rehearsal에서 lane-local `latest.json`, `history.json`, `downloads/latest.zip`, version ZIP, `releases/release-notes.json` curated metadata가 함께 맞는지 확인
   - 사용자 공지에 `hosting 반영`, `새 ZIP 배포`, `확장 reload 필요 여부`, `rollback ZIP`이 함께 정리됨
+- `0.4.4 retirement ready`는 별도 체크다.
+  - 나중에 `0.4.4` 사용자가 0명이 되면 `hosting/extension/*`와 `0.4.4` 전용 Functions를 걷어낼 때 extension patch가 필요하지 않아야 한다.
+  - active v2 prompt가 legacy prompt bridge path에 기대지 않아야 한다.
+  - active v2 meeting이 legacy endpoint family에 기대지 않아야 한다.
+  - 공개 시점에 이 조건이 아직 미완료면, 배포 보고와 handoff에 retirement blocker를 함께 남긴다.
 
 ## 배포 보고 형식
 
@@ -66,6 +71,7 @@
 - `hosting 반영 여부`
 - `새 ZIP 배포 여부`
 - `사용자/개발자 reload 필요 여부`
+- `0.4.4 retirement readiness`
 - `rollback 시 사용할 이전 ZIP`
 - `혼재 버전 허용 기간 또는 주의사항`
 
@@ -74,6 +80,7 @@
 - `hosting만 반영됨. 회의 작업실 새로고침 필요, ZIP 재배포는 없음`
 - `functions만 반영됨. 새 요청부터 backend 반영, ZIP 재배포는 없음`
 - `확장 번들 변경 포함. release:build/release:deploy 필요, 사용자 reload와 새 ZIP 안내 필요`
+- `1.0.0 공개는 ready지만 retirement readiness는 아직 아님. prompt bridge path / meeting endpoint family migration 후 legacy cleanup 예정`
 
 ## 명령
 

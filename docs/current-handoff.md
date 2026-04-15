@@ -227,88 +227,40 @@ Audit conclusion:
 - file count alone is not a reason to move code; the relevant test is whether the file still owns DOM, Chrome API, `postMessage`, runtime broker, popup/settings, or local browser cache responsibility
 - the current active lane does not contain a verified file that can be moved to hosted without either removing a browser-only responsibility or collapsing necessary extension wiring
 
-## Remaining Move Candidates
+## Hosted-First Ownership Status
 
-- `none` in the current active manifest lane
-- if a future file becomes pure hosted feature logic without DOM, Chrome API, `postMessage`, runtime broker, popup/settings, or local browser cache responsibility, move it out of extension instead of extending `content/*` or `background/*`
+- active manifest JS is still mostly browser-only owner code or thin glue/composition
+- normal hosted v2 feature work that stays inside the current page/runtime capability catalog should not require extension deploy
+- this status describes current ownership only; it does not mean `0.4.4` retirement is already `hosting/functions-only`
 
-## What Still Legitimately Requires Extension Changes
+## `0.4.4` Retirement Readiness
 
-- `inova.incross.com` DOM structure or composer behavior changes that affect page read/apply adapters
-- new Chrome permission, manifest widening, or frame origin changes
-- new background privileged action that cannot be expressed with the current runtime capability catalog
-- popup/settings behavior changes
-- a new browser capability contract that must be added to `contracts/extension-contract.json`
+Current status:
 
-## What Should No Longer Require Extension Deploy
+- not retirement-ready yet
+- official `1.0.0 done` means that after `0.4.4` users reach zero, removing `hosting/extension/*` and `0.4.4`-only Functions should require `hosting + functions` deploy only
+- if that cleanup still needs an extension `1.0.1` patch or ZIP re-release, `1.0.0` is not done yet
 
-- hosted panel UI changes
-- hosted tab/state/action-flow changes for `conversation`, `prompt-library`, `prompt-store`, `prompt-review`, `meeting`, or `release`
-- hosted Firestore/controller/client changes that reuse the current page/runtime capability catalog
-- new hosted feature work that can be expressed with the existing capability API without adding new browser power
+Current blockers:
 
-Bottom line:
+- active v2 prompt still depends on the legacy hidden prompt bridge path `extension/prompt-panel-bridge.html`
+- active v2 meeting still depends on legacy endpoint names such as `listInovaMeetings`, `issueInovaMeetingPanelAuth`, and `createInovaMeetingShareLink`
+- current verify/docs guard hosted-first ownership, but they do not yet fail on those retirement blockers
 
-- the remaining active JS is mostly browser-only owner code or thin glue, so hosted feature additions should not require extension changes unless they introduce a new browser capability requirement
+Not blockers:
 
-## What Is Still Not Fully Finished
-
-The remaining work is no longer structural cleanup first.
-
-The hosted-first boundary is effectively in place. What remains is rollout validation and release preparation for the `0.4.4 -> 1.0.0` switch.
-
-1. Record real Chrome smoke on the current hosted-first `1.0.0` lane.
-2. Prepare the actual rollout checklist and deployment boundary for release.
+- `backup/legacy-panel/*` and other inactive reference files may remain for impact checks as long as active v2 runtime no longer depends on legacy hosting/functions surface
 
 ## Concrete Next Session Targets
 
-### 1. Chrome smoke
-
-Goal:
-
-- confirm the real hosted-first `1.0.0` panel works in Chrome beyond static verify
-
-Start files:
-
-- `docs/runtime-architecture.md`
-- `docs/current-handoff.md`
-- `content/AGENTS.md`
-- `docs/release-workflow.md`
-
-Then validate only the user-facing hosted v2 flows that matter for release:
-
-- panel boot/open
-- conversation jump/copy
-- prompt library/store/review
-- meeting hub/workspace launch
-- release latest/history/download
-
-### 2. Rollout prep
-
-Goal:
-
-- prepare the actual public handoff from deployed `0.4.4` to hosted-first `1.0.0`
-
-Start files:
-
-- `docs/current-handoff.md`
-- `docs/release-workflow.md`
-- `docs/refactoring-plan.md`
-- `releases/release-notes.json`
-
-### Not the next priority
-
-- console noise cleanup
-- speculative conversation over-trigger fixes without single-click evidence
-- Auth Emulator warning banner suppression
-
-## Recommended Next Steps
-
-1. Read `docs/current-handoff.md`, `docs/development-philosophy.md`, `docs/refactoring-plan.md`, and `docs/runtime-architecture.md`.
-2. Start with real Chrome smoke, not with more structural cleanup, unless the smoke exposes the same hosted lane as the blocker.
-3. If Chrome smoke passes, move directly to rollout prep instead of reopening minor refactors.
-4. If a doc still describes the old ownership or old next-step order, fix it in the same task.
-5. Run `npm.cmd run verify` and commit each bounded slice.
+1. Prompt path migration
+   - move active v2 prompt flow off the legacy hidden prompt bridge path in both production and local rehearsal
+2. Meeting endpoint migration
+   - add v2-only endpoint family or stable server-side aliases, then move active v2 callers off the legacy meeting endpoint names
+3. Guard tightening
+   - make `verify` fail if active v2 refers to the legacy prompt bridge path or legacy meeting endpoint family
+4. After those land
+   - run real Chrome smoke and only then treat `0.4.4` retirement as `hosting/functions-only` cleanup
 
 ## Local Rehearsal Notes
 
