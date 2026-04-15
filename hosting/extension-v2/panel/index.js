@@ -1227,6 +1227,9 @@
     }
     const meetingAction = target.closest?.("[data-meeting-action]");
     if (meetingAction) {
+      if (meetingAction.getAttribute?.("aria-disabled") === "true") {
+        return;
+      }
       traceMeetingFlow("40.hosted.click.detected", {
         action: meetingAction.dataset.meetingAction || "",
         artifactId: meetingAction.dataset.meetingArtifactId || "",
@@ -1375,6 +1378,27 @@
       return;
     }
     if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+    const meetingCard = target.closest?.('[data-meeting-card="true"]');
+    if (meetingCard instanceof global.HTMLElement) {
+      const closestMeetingAction = target.closest?.("[data-meeting-action]");
+      if (closestMeetingAction === meetingCard && meetingCard.getAttribute("aria-disabled") !== "true") {
+        event.preventDefault();
+        traceMeetingFlow("41.hosted.key.detected", {
+          action: meetingCard.dataset.meetingAction || "",
+          artifactId: meetingCard.dataset.meetingArtifactId || "",
+          jobId: meetingCard.dataset.meetingJobId || "",
+          meetingId: meetingCard.dataset.meetingId || "",
+          reason: event.key === " " ? "space" : "enter",
+        });
+        void callbacks.onMeetingAction(meetingCard.dataset.meetingAction || "", {
+          artifactId: meetingCard.dataset.meetingArtifactId || "",
+          jobId: meetingCard.dataset.meetingJobId || "",
+          meetingId: meetingCard.dataset.meetingId || "",
+          title: meetingCard.dataset.meetingTitle || "",
+        });
+      }
       return;
     }
     const item = target.closest("[data-bookmark-id]");

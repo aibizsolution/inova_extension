@@ -439,49 +439,60 @@
 .inova-tool-toolbar__row--meeting { width: 100%; align-items: center; justify-content: flex-end; }
 .inova-tool-section--meeting .inova-tool-toolbar__row--meeting { justify-content: flex-end; }
 .inova-tool-section--meeting .inova-bookmark-action {
-  min-height: 46px;
-  padding: 0 18px;
-  border-radius: 16px;
-  font-size: 13px;
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 14px;
+  font-size: 12px;
 }
-.inova-meeting-record-list { display: flex; flex-direction: column; gap: 12px; }
+.inova-meeting-record-list { display: flex; flex-direction: column; gap: 10px; }
 .inova-meeting-record {
-  position: relative; display: flex; flex-direction: column; gap: 14px; padding: 16px 14px 14px; margin-bottom: 0;
-  border: 1px solid rgba(98, 127, 145, 0.12); border-radius: 18px; background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 10px 24px rgba(26, 52, 73, 0.04);
+  position: relative; display: flex; flex-direction: column; gap: 10px; padding: 12px 12px 10px; margin-bottom: 0;
+  border: 1px solid rgba(98, 127, 145, 0.11); border-radius: 16px; background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 8px 18px rgba(26, 52, 73, 0.035);
+  cursor: pointer;
+  outline: none;
 }
 .inova-meeting-record.is-pending {
   border-color: rgba(27, 96, 232, 0.18);
   background: rgba(241, 246, 255, 0.9);
 }
+.inova-meeting-record.is-disabled {
+  cursor: default;
+}
 .inova-meeting-record:hover {
   border-color: rgba(98, 127, 145, 0.18);
   background: rgba(250, 252, 255, 0.94);
-  box-shadow: 0 14px 28px rgba(26, 52, 73, 0.06);
+  box-shadow: 0 10px 22px rgba(26, 52, 73, 0.05);
 }
-.inova-meeting-record__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-.inova-meeting-record__content { display: grid; gap: 6px; min-width: 0; flex: 1 1 auto; }
+.inova-meeting-record:focus-visible {
+  border-color: rgba(15, 124, 137, 0.36);
+  box-shadow: 0 0 0 3px rgba(15, 124, 137, 0.12), 0 10px 22px rgba(26, 52, 73, 0.05);
+}
+.inova-meeting-record__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.inova-meeting-record__content { display: grid; gap: 4px; min-width: 0; flex: 1 1 auto; }
 .inova-meeting-record__title-row {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
 }
-.inova-meeting-record__primary,
-.inova-meeting-record__secondary { display: flex; flex-wrap: wrap; gap: 6px; }
-.inova-meeting-record__status-row {
+.inova-meeting-record__chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  padding-top: 2px;
 }
+.inova-meeting-record__secondary { display: flex; flex-wrap: wrap; gap: 6px; }
 .inova-meeting-record__actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
-  padding-top: 12px;
+  padding-top: 8px;
   border-top: 1px solid rgba(52, 81, 100, 0.08);
 }
 .inova-meeting-record__secondary { justify-content: flex-end; }
@@ -496,20 +507,20 @@
   color: rgba(16, 33, 43, 0.62);
   font-size: 11px;
   font-weight: 500;
-  line-height: 1.45;
+  line-height: 1.35;
 }
 .inova-meeting-record__summary {
-  margin: 2px 0 0;
+  margin: 0;
   font-size: 12px;
-  line-height: 1.58;
+  line-height: 1.48;
   color: rgba(16, 33, 43, 0.72);
   white-space: pre-wrap;
 }
 .inova-meeting-record__status {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-height: 18px;
+  gap: 5px;
+  min-height: 16px;
   color: rgba(16, 33, 43, 0.64);
   font-size: 11px;
   font-weight: 700;
@@ -540,17 +551,9 @@
 .inova-meeting-record__status.is-share {
   color: rgba(29, 102, 185, 0.94);
 }
-.inova-meeting-record__open-button {
-  min-height: 38px;
-  padding: 0 14px;
-  border-color: rgba(15, 124, 137, 0.18);
-  border-radius: 14px;
-  background: rgba(232, 246, 244, 0.96);
-  color: #0f5f77;
-  font-size: 12px;
-  font-weight: 800;
-}
 .inova-meeting-record__secondary-button {
+  min-height: 34px;
+  padding: 0 12px;
   background: rgba(255, 255, 255, 0.72);
   color: rgba(16, 33, 43, 0.74);
   border-color: rgba(98, 127, 145, 0.14);
