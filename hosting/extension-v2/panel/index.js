@@ -1401,6 +1401,23 @@
       }
       return;
     }
+    const promptCard = target.closest?.('[data-prompt-card="true"]');
+    if (promptCard instanceof global.HTMLElement) {
+      const interactivePromptChild = target.closest?.('button, input, textarea, select, label, [data-prompt-action], [data-prompt-field], [data-prompt-publish-field], [data-prompt-select], [data-import-mode]');
+      const blockedPromptRegion = target.closest?.(".inova-inline-feedback, .inova-prompt-editor, .inova-import-review");
+      if ((!interactivePromptChild || interactivePromptChild === promptCard) && !(blockedPromptRegion instanceof global.HTMLElement)) {
+        event.preventDefault();
+        tracePanelFlow("41.hosted.key.detected", {
+          action: "use",
+          message: promptCard.dataset.promptId || "",
+          reason: event.key === " " ? "space" : "enter",
+        });
+        void callbacks.onPromptAction("use", {
+          promptId: promptCard.dataset.promptId || "",
+        });
+      }
+      return;
+    }
     const item = target.closest("[data-bookmark-id]");
     if (!item || target.closest("[data-copy-bookmark-id]")) {
       return;

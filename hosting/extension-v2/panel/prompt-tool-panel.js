@@ -45,6 +45,21 @@
       return true;
     }
 
+    const promptCard = target.closest?.('[data-prompt-card="true"]');
+    if (promptCard instanceof HTMLElement) {
+      const blockedRegion = target.closest?.(".inova-inline-feedback, .inova-prompt-editor, .inova-import-review");
+      if (blockedRegion instanceof HTMLElement && promptCard.contains(blockedRegion)) {
+        return false;
+      }
+      const interactive = target.closest?.('button, input, textarea, select, label, [data-prompt-action], [data-prompt-field], [data-prompt-publish-field], [data-prompt-select], [data-import-mode]');
+      if (!(interactive instanceof HTMLElement) || !promptCard.contains(interactive) || interactive === promptCard) {
+        callbacks.onPromptAction?.("use", {
+          promptId: promptCard.dataset.promptId || "",
+        });
+        return true;
+      }
+    }
+
     return false;
   }
 

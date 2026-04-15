@@ -72,7 +72,13 @@
     const actionsDisabled = deletePending || publishPending;
 
     return `
-      <article class="inova-prompt-item" data-prompt-id="${item.id}">
+      <article
+        class="inova-prompt-item"
+        data-prompt-card="true"
+        data-prompt-id="${item.id}"
+        tabindex="0"
+        aria-label="${escapeHtml(`${item.title} 입력창에 넣기`)}"
+      >
         <div class="inova-prompt-item__head">
           <div class="inova-prompt-item__title-row">
             <button
@@ -88,18 +94,12 @@
             <span class="inova-prompt-item__date">${formatDate(item.updatedAt)}</span>
             <div class="inova-prompt-item__quick-actions">
               ${renderPromptQuickAction("edit", item.id, "edit", "수정", actionsDisabled)}
-              ${renderPromptQuickAction("open-publish", item.id, "publish", "스토어 등록", actionsDisabled)}
+              ${renderPromptPublishAction(item.id, actionsDisabled)}
               ${renderPromptQuickAction("request-delete", item.id, "delete", "삭제", actionsDisabled, true)}
             </div>
           </div>
         </div>
         <p class="inova-prompt-item__content">${escapeHtml(item.content)}</p>
-        <div class="inova-prompt-item__actions">
-          <button type="button" class="inova-tool-button inova-tool-button--compact inova-tool-button--with-icon inova-prompt-item__use-button" data-prompt-action="use" data-prompt-id="${item.id}">
-            <span class="inova-tool-inline-icon is-insert" aria-hidden="true"></span>
-            <span>넣기</span>
-          </button>
-        </div>
         ${itemFeedback ? renderFeedback(itemFeedback) : ""}
         ${pendingInsert ? renderPendingInsert() : ""}
         ${publishOpen ? renderPublishForm(
@@ -130,6 +130,23 @@
       >
         <span class="inova-tool-inline-icon is-${escapeHtml(icon)}" aria-hidden="true"></span>
         <span class="inova-sr-only">${escapeHtml(label)}</span>
+      </button>
+    `;
+  }
+
+  function renderPromptPublishAction(promptId, disabled) {
+    return `
+      <button
+        type="button"
+        class="inova-tool-button inova-tool-button--compact inova-tool-button--with-icon inova-prompt-item__publish-button"
+        data-prompt-action="open-publish"
+        data-prompt-id="${escapeHtml(promptId)}"
+        aria-label="스토어 등록"
+        title="스토어 등록"
+        ${renderDisabled(disabled)}
+      >
+        <span class="inova-tool-inline-icon is-publish" aria-hidden="true"></span>
+        <span>스토어</span>
       </button>
     `;
   }
@@ -243,7 +260,7 @@
   function renderPendingInsert() {
     return `
       <section class="inova-inline-feedback">
-        <span>입력창에 내용이 이미 있어요. 어떻게 넣을지 선택해 주세요.</span>
+        <span>입력창에 내용이 이미 있어요. 어떻게 할까요?</span>
         <div class="inova-tool-actions">
           <button type="button" class="inova-tool-button is-primary" data-prompt-action="confirm-insert" data-insert-mode="replace">덮어쓰기</button>
           <button type="button" class="inova-tool-button" data-prompt-action="confirm-insert" data-insert-mode="append">이어붙이기</button>
