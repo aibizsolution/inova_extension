@@ -592,6 +592,7 @@ async function verifyHostedPromptTabSelectionSurvivesLateStorageHydration() {
 
 async function verifyHostedPromptReviewRequestAutofocus() {
   const reviewTraces = [];
+  const persistedPreferences = [];
   const context = vm.createContext({
     Blob: class Blob {},
     File: class File {},
@@ -661,6 +662,10 @@ async function verifyHostedPromptReviewRequestAutofocus() {
           },
         };
       }
+      if (request?.action === "storage.write-ui-preferences") {
+        persistedPreferences.push({ ...(request?.partial || {}) });
+        return {};
+      }
       return {};
     },
     scheduleRender() {},
@@ -671,7 +676,7 @@ async function verifyHostedPromptReviewRequestAutofocus() {
 
   controller.syncPanelState(
     {
-      activeTool: "prompts",
+      activeTool: "bookmarks",
       promptTool: {
         review: {
           requestId: 3,
@@ -693,6 +698,14 @@ async function verifyHostedPromptReviewRequestAutofocus() {
   assert.equal(reviewTraces[0]?.step, "71.hosted.review.autofocus");
   assert.equal(reviewTraces[0]?.payload?.reason, "external-review-request");
   assert.equal(reviewTraces[0]?.payload?.requestId, 3);
+  assert.deepEqual(
+    persistedPreferences.at(-1),
+    {
+      activePromptTab: "review",
+      activeTool: "prompts",
+    },
+    "external review handoff should let hosted persist prompt tab/tool activation even when the top snapshot is not already on prompts"
+  );
 }
 
 async function verifyHostedPromptReviewTabVisibility() {

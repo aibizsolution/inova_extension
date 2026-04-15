@@ -109,17 +109,16 @@
     }
 
     function buildPanelSnapshotTracePayload(state = {}) {
-      const panelTrace = state?.panelTrace && typeof state.panelTrace === "object"
-        ? state.panelTrace
-        : {};
       const panelSnapshot = state?.panelSnapshot && typeof state.panelSnapshot === "object"
         ? state.panelSnapshot
         : {};
+      const activeTool = normalizeText(panelSnapshot?.activeTool || panelSnapshot?.uiPreferences?.activeTool);
+      const activePromptTab = normalizeText(panelSnapshot?.uiPreferences?.activePromptTab);
       return {
-        activeTool: normalizeText(panelTrace.activeTool || panelSnapshot?.activeTool),
-        open: Object.hasOwn(panelTrace, "open") ? Boolean(panelTrace.open) : Boolean(state?.open),
-        reviewOpen: Boolean(panelTrace.reviewOpen),
-        visible: Object.hasOwn(panelTrace, "visible") ? Boolean(panelTrace.visible) : Boolean(state?.visible),
+        activeTool,
+        open: Boolean(panelSnapshot.open),
+        reviewOpen: activeTool === "prompts" && activePromptTab === "review",
+        visible: Boolean(panelSnapshot.visible),
       };
     }
 
@@ -160,6 +159,8 @@
         ["visible", normalizeTraceBoolean(payload, "visible")],
         ["ready", normalizeTraceBoolean(payload, "ready")],
         ["target", payload.target],
+        ["purpose", payload.purpose],
+        ["reader", payload.reader],
         ["wrapped", normalizeTraceBoolean(payload, "wrapped")],
         ["reason", payload.reason],
         ["message", payload.message],

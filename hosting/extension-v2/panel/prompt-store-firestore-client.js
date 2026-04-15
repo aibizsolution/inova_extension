@@ -1,4 +1,4 @@
-(function initMeetingFirestoreClient(global) {
+(function initPromptStoreFirestoreClient(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const utils = namespace.panelUtils || {};
   const cloneValue = typeof utils.cloneValue === "function"
@@ -7,13 +7,15 @@
   const normalizeText = typeof utils.normalizeText === "function"
     ? utils.normalizeText
     : (value) => namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
-  const READER = "meeting";
+  const ENTRY_COLLECTION = "prompt_store_entries";
+  const READER = "prompt-store";
 
   const client = namespace.baseFirestoreClient?.createBaseFirestoreClient?.({
-    asyncErrorMessage: "회의 목록 Firestore 처리를 마치지 못했어요.",
-    authErrorMessage: "회의 목록 Firestore 인증 정보를 준비하지 못했어요.",
-    buildListenTrace(_panelAuth, context) {
+    asyncErrorMessage: "스토어 Firestore 처리를 마치지 못했어요.",
+    authErrorMessage: "스토어 Firestore 인증 정보를 준비하지 못했어요.",
+    buildListenTrace(panelAuth, context) {
       return {
+        collection: panelAuth.promptFirestoreCollections.storeEntriesCollection,
         limit: context.queryLimit,
       };
     },
@@ -21,7 +23,7 @@
       return {
         providerIdentity,
         providerUserKey,
-        queryLimit: Math.max(1, Math.min(24, Number(request?.queryLimit) || 24)),
+        queryLimit: Math.max(1, Math.min(1000, Number(request?.queryLimit) || 1000)),
         target,
       };
     },
@@ -29,24 +31,21 @@
     buildSubscriptionKey,
     createTarget({ context, panelAuth, session }) {
       return session.db
-        .collection("integration_inova_meetings")
-        .where("owner.providerUserKey", "==", panelAuth.providerUserKey)
-        .orderBy("updatedAt", "desc")
+        .collection(panelAuth.promptFirestoreCollections.storeEntriesCollection)
+        .where("status", "==", "published")
+        .orderBy("publishedAt", "desc")
         .limit(context.queryLimit);
     },
-    missingIdentityMessage: "회의 사용자 정보를 찾지 못했어요.",
+    missingIdentityMessage: "프롬프트 사용자 정보를 찾지 못했어요.",
     normalizePanelAuth,
     normalizeSnapshot: normalizeQuerySnapshot,
-    panel: "meeting",
+    panel: "prompt",
     reader: READER,
     readSnapshotCount(snapshot) {
       return Array.isArray(snapshot?.items) ? snapshot.items.length : 0;
     },
-    shouldUseCachedSnapshot(snapshot) {
-      const docs = Array.isArray(snapshot?.docs) ? snapshot.docs : [];
-      return docs.length > 0;
-    },
-    subscriptionErrorMessage: "회의 목록 Firestore 구독이 끊겼어요.",
+    resetSubscriptionOnError: true,
+    subscriptionErrorMessage: "스토어 목록 Firestore 구독이 끊겼어요.",
   });
 
   function normalizePanelAuth(input) {
@@ -56,6 +55,9 @@
       : {};
     const emulators = panelAuth.emulators && typeof panelAuth.emulators === "object"
       ? { ...panelAuth.emulators }
+      : {};
+    const promptFirestoreCollections = panelAuth.promptFirestoreCollections && typeof panelAuth.promptFirestoreCollections === "object"
+      ? { ...panelAuth.promptFirestoreCollections }
       : {};
     const normalized = {
       emulators: {
@@ -67,59 +69,65 @@
       expiresAt: normalizeText(panelAuth.expiresAt),
       firebaseConfig,
       firebaseCustomToken: normalizeText(panelAuth.firebaseCustomToken),
-      panelScope: normalizeText(panelAuth.panelScope) || "meeting-panel",
+      promptFirestoreCollections: {
+        storeEntriesCollection: normalizeText(promptFirestoreCollections.storeEntriesCollection) || ENTRY_COLLECTION,
+      },
+      promptPanelScope: normalizeText(panelAuth.panelScope || panelAuth.promptPanelScope) || "prompt-panel",
       providerUserKey: normalizeText(panelAuth.providerUserKey),
       target: normalizeText(panelAuth.target).toLowerCase() === "local" ? "local" : "production",
     };
     if (!normalized.providerUserKey || !normalized.firebaseCustomToken || !normalized.firebaseConfig.projectId) {
-      throw new Error("회의 목록 Firestore 인증 정보를 준비하지 못했어요.");
+      throw new Error("스토어 Firestore 인증 정보를 준비하지 못했어요.");
     }
     return normalized;
   }
 
   function normalizeQuerySnapshot(snapshot) {
+    const items = (Array.isArray(snapshot?.docs) ? snapshot.docs : []).map(serializeDocument);
     return {
+      availableCategories: buildAvailableCategories(items),
       checkedAt: new Date().toISOString(),
       fromCache: Boolean(snapshot?.metadata?.fromCache),
       hasPendingWrites: Boolean(snapshot?.metadata?.hasPendingWrites),
-      items: (Array.isArray(snapshot?.docs) ? snapshot.docs : []).map(serializeDocument),
+      items,
+      totalCount: items.length,
     };
   }
 
   function serializeDocument(doc) {
     const data = doc?.data && typeof doc.data === "function" ? doc.data() : {};
-    const share = normalizeShareMetadata(data?.share);
     return {
       ...cloneValue(data),
-      docId: normalizeText(doc?.id),
-      share,
+      entryId: normalizeText(data?.entryId || doc?.id),
     };
   }
 
-  function normalizeShareMetadata(input) {
-    const share = input && typeof input === "object" ? input : {};
-    const status = normalizeText(share.status);
-    const shareId = normalizeText(share.shareId);
-    return {
-      ...cloneValue(share),
-      active: status === "active" && Boolean(shareId),
-      createdAt: normalizeText(share.createdAt),
-      createdBy: share.createdBy && typeof share.createdBy === "object" ? cloneValue(share.createdBy) : {},
-      revokedAt: normalizeText(share.revokedAt),
-      shareId,
-      status,
-    };
+  function buildAvailableCategories(items) {
+    const categories = new Map();
+    categories.set("all", { id: "all", label: "전체" });
+    for (const item of Array.isArray(items) ? items : []) {
+      const categoryId = normalizeText(item?.categoryId).toLowerCase();
+      if (!categoryId || categoryId === "all") {
+        continue;
+      }
+      if (!categories.has(categoryId)) {
+        categories.set(categoryId, {
+          id: categoryId,
+          label: normalizeText(item?.categoryLabel) || categoryId,
+        });
+      }
+    }
+    return Array.from(categories.values());
   }
 
   function buildSnapshotSignature(snapshot) {
     return JSON.stringify({
       docs: (Array.isArray(snapshot?.items) ? snapshot.items : []).map((item) => [
-        normalizeText(item?.meetingId),
-        normalizeText(item?.updatedAt || item?.createdAt),
-        normalizeText(item?.status),
-        normalizeText(item?.share?.status),
-        normalizeText(item?.share?.shareId),
-        normalizeText(item?.share?.revokedAt),
+        normalizeText(item?.entryId),
+        normalizeText(item?.updatedAt || item?.publishedAt),
+        String(Number(item?.metrics?.viewCount) || 0),
+        String(Number(item?.metrics?.importCount) || 0),
+        String(Number(item?.metrics?.likeCount) || 0),
       ].join("~")),
       fromCache: Boolean(snapshot?.fromCache),
       hasPendingWrites: Boolean(snapshot?.hasPendingWrites),
@@ -131,6 +139,7 @@
       buildRuntimeKey(panelAuth),
       panelAuth.providerUserKey,
       panelAuth.expiresAt,
+      panelAuth.promptFirestoreCollections.storeEntriesCollection,
       String(context.queryLimit),
     ].join("::");
   }
@@ -142,9 +151,10 @@
       firestoreHost: normalizeText(panelAuth?.emulators?.firestoreHost),
       firestorePort: Number(panelAuth?.emulators?.firestorePort) || 0,
       projectId: normalizeText(panelAuth?.firebaseConfig?.projectId),
+      storeEntriesCollection: normalizeText(panelAuth?.promptFirestoreCollections?.storeEntriesCollection),
       target: normalizeText(panelAuth?.target),
     });
   }
 
-  namespace.meetingFirestoreClient = { create: client.create };
+  namespace.promptStoreFirestoreClient = { create: client.create };
 })(globalThis);

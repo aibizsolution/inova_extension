@@ -63,8 +63,13 @@ function verifyHostedTraceVisibilityContract() {
     "top panel snapshot push traces should flow through a dedicated panel trace payload helper"
   );
   assert(
-    panelTraceSource.includes('const panelTrace = state?.panelTrace && typeof state.panelTrace === "object"'),
-    "top panel snapshot push traces should read a prebuilt panelTrace payload instead of feature-local state"
+    panelTraceSource.includes("const activePromptTab = normalizeText(panelSnapshot?.uiPreferences?.activePromptTab);"),
+    "top panel snapshot push traces should derive from the raw panel snapshot instead of feature-local state"
+  );
+  assert(
+    !panelTraceSource.includes("state?.open")
+      && !panelTraceSource.includes("state?.visible"),
+    "top panel snapshot push traces should not fall back to removed top-level render payload fields"
   );
   assert(
     panelTraceSource.includes('"hosted.release.fetch.start"')

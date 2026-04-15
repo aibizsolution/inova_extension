@@ -35,9 +35,13 @@
     extensionCapabilities: [],
     extensionVersion: "",
     lastControllerSyncKey: "",
+    lastPanelChromeSyncKey: "",
     panelAppUrl: "",
+    panelOpen: false,
+    panelOpenHydrated: false,
     panelSnapshot: null,
     parentOrigin: readParentOrigin(),
+    pendingPanelOpenPersist: false,
     pendingRequests: new Map(),
     readyPingCount: 0,
     renderCache: createPanelRenderCache(),
@@ -95,12 +99,12 @@
     importStorePrompt: (storeEntry) => promptLibraryController?.importStorePrompt?.(storeEntry) || Promise.resolve(false),
     publishToast,
     scheduleRender,
+    traceFirestore: traceFirestoreFlow,
   }) || null;
   const meetingHubController = namespace.meetingHubController?.create?.({
     browserCapabilities,
     publishToast,
     scheduleRender,
-    syncTopPanelSummary: (meetingTool = {}) => syncToolSummary("meeting", meetingTool),
     traceFirestore: traceFirestoreFlow,
     traceMeeting: traceMeetingFlow,
   }) || null;
@@ -108,7 +112,6 @@
     browserCapabilities,
     getRuntimeVersion: () => state.extensionVersion || "",
     scheduleRender,
-    syncTopPanelSummary: (releaseTool = {}) => syncToolSummary("release", releaseTool),
     traceRelease: traceReleaseFlow,
   }) || null;
   const callbacks = createCallbacks();
@@ -165,9 +168,7 @@
         if (promptReviewController?.consumeEscape?.()) {
           return Promise.resolve(true);
         }
-        return request("panel", {
-          action: "escape",
-        });
+        return callbacks.onToggle(false);
       },
       onImportFile(file) {
         if (promptLibraryController?.handleImportFile) {
@@ -271,12 +272,18 @@
         return Promise.resolve(false);
       },
       onToggle(open) {
-        return request("panel", {
-          action: "toggle-panel",
-          open,
-        });
+        return setHostedPanelOpen(open);
       },
     };
+  }
+
+  function setHostedPanelOpen(nextOpen) {
+    const open = typeof nextOpen === "boolean" ? nextOpen : !state.panelOpen;
+    state.panelOpen = open;
+    state.panelOpenHydrated = true;
+    state.pendingPanelOpenPersist = true;
+    scheduleRender();
+    return Promise.resolve(true);
   }
 
   async function persistHostedToolSelection(toolId) {
@@ -372,8 +379,10 @@
     const payload = envelope.payload && typeof envelope.payload === "object"
       ? envelope.payload
       : {};
+    const nextPanelSnapshot = normalizePanelSnapshot(payload.panel);
+    hydratePanelOpenState(nextPanelSnapshot);
     tracePanelFlow("17.hosted.snapshot.received", {
-      activeTool: normalizeText(payload?.panel?.activeTool),
+      activeTool: normalizeText(nextPanelSnapshot?.activeTool),
       extensionVersion: normalizeText(payload.extensionVersion),
       panelAppUrl: normalizeText(payload.panelAppUrl),
     });
@@ -383,9 +392,7 @@
     );
     state.extensionVersion = normalizeText(payload.extensionVersion);
     state.panelAppUrl = normalizeText(payload.panelAppUrl);
-    state.panelSnapshot = payload.panel && typeof payload.panel === "object"
-      ? cloneValue(payload.panel)
-      : null;
+    state.panelSnapshot = nextPanelSnapshot;
     clearStartupStatusCard();
     tracePanelFlow("18.hosted.snapshot.applied", {
       activeTool: normalizeText(state.panelSnapshot?.activeTool),
@@ -395,7 +402,55 @@
     scheduleRender();
   }
 
+  function hydratePanelOpenState(panelSnapshot) {
+    if (!panelSnapshot) {
+      return;
+    }
+    const shouldAcceptSnapshotOpen = !state.panelOpenHydrated || panelSnapshot.visible === true;
+    if (!shouldAcceptSnapshotOpen) {
+      return;
+    }
+    state.panelOpen = panelSnapshot.open === true;
+    state.panelOpenHydrated = true;
+  }
+
+  function normalizePanelSnapshot(panel) {
+    if (!panel || typeof panel !== "object") {
+      return null;
+    }
+    const nextPanel = cloneValue(panel);
+    const uiPreferences = normalizePanelUiPreferences(nextPanel.uiPreferences);
+    return {
+      ...nextPanel,
+      activeTool: normalizeHostedToolId(nextPanel.activeTool || uiPreferences.activeTool),
+      uiPreferences,
+    };
+  }
+
+  function normalizePanelUiPreferences(uiPreferences) {
+    const nextUiPreferences = uiPreferences && typeof uiPreferences === "object"
+      ? { ...uiPreferences }
+      : {};
+    const rawActiveTool = normalizeText(nextUiPreferences.activeTool).toLowerCase();
+    let activePromptTab = normalizeText(nextUiPreferences.activePromptTab).toLowerCase();
+    if (rawActiveTool === "store") {
+      activePromptTab = "store";
+    }
+    if (activePromptTab !== "store" && activePromptTab !== "review") {
+      activePromptTab = "library";
+    }
+    return {
+      ...nextUiPreferences,
+      activePromptTab,
+      activeTool: normalizeHostedToolId(rawActiveTool),
+    };
+  }
+
   function handleEventEnvelope(envelope) {
+    if (envelope.domain === "panel") {
+      handlePanelEventEnvelope(envelope);
+      return;
+    }
     if (envelope.domain !== "page") {
       return;
     }
@@ -407,6 +462,16 @@
     if (action === "set-active-bookmark") {
       conversationController?.setActiveBookmark?.(normalizeText(envelope.payload?.bookmarkId));
       namespace.bookmarkView?.setActive?.(normalizeText(envelope.payload?.bookmarkId));
+    }
+  }
+
+  function handlePanelEventEnvelope(envelope) {
+    const action = normalizeText(envelope.payload?.action);
+    if (action === "external-toggle") {
+      tracePanelFlow("23.hosted.panel.event.external-toggle", {
+        open: !state.panelOpen,
+      });
+      void setHostedPanelOpen();
     }
   }
 
@@ -463,11 +528,25 @@
     });
   }
 
-  function syncToolSummary(toolId, toolState = {}) {
-    return request("panel", {
-      action: "tool-summary-sync",
-      toolId: normalizeText(toolId),
-      toolState,
+  function syncPanelChromeIfNeeded(chromeState = {}) {
+    const nextChromeState = {
+      handleCount: Math.max(0, Number(chromeState.handleCount) || 0),
+      open: chromeState.open === true,
+      visible: chromeState.visible === true,
+    };
+    if (chromeState.persistOpen === true) {
+      nextChromeState.persistOpen = true;
+    }
+    const nextChromeSyncKey = serializeRenderState(nextChromeState);
+    if (state.lastPanelChromeSyncKey === nextChromeSyncKey) {
+      return;
+    }
+    state.lastPanelChromeSyncKey = nextChromeSyncKey;
+    request("panel", {
+      action: "panel-chrome-sync",
+      ...nextChromeState,
+    }).catch((error) => {
+      console.error("[i-Nova Hosted Panel] panel chrome sync failed", error);
     });
   }
 
@@ -618,7 +697,7 @@
   }
 
   function flushRender() {
-    const panelState = state.panelSnapshot;
+    const panelState = buildEffectivePanelState(state.panelSnapshot);
     if (!panelState) {
       tracePanelFlow("19.hosted.render.waiting-snapshot", {
         bridgeReady: Boolean(state.bridgeReady),
@@ -668,6 +747,12 @@
         : panelState.activeTool === "release"
           ? effectiveReleaseCount
           : effectiveConversationCount;
+    syncPanelChromeIfNeeded({
+      handleCount: effectiveToolCount,
+      open: panelState.open,
+      persistOpen: consumePendingPanelOpenPersist(),
+      visible: panelState.visible,
+    });
     const focusedControl = captureFocusedControl(elements.app);
     const previousStoreScrollTop = panelState.activeTool === "prompts" && effectivePromptTool?.activeTab === "store"
       ? elements.app.querySelector(".inova-store-list")?.scrollTop || state.storeScrollTop || 0
@@ -710,6 +795,24 @@
     }
     namespace.bookmarkView?.setActive?.(effectiveConversationTool?.activeId);
     restoreFocusedControl(elements.app, focusedControl);
+  }
+
+  function buildEffectivePanelState(panelSnapshot) {
+    if (!panelSnapshot) {
+      return null;
+    }
+    return {
+      ...panelSnapshot,
+      open: state.panelOpenHydrated ? state.panelOpen : panelSnapshot.open === true,
+    };
+  }
+
+  function consumePendingPanelOpenPersist() {
+    if (!state.pendingPanelOpenPersist) {
+      return false;
+    }
+    state.pendingPanelOpenPersist = false;
+    return true;
   }
 
   function ensureShell() {
@@ -998,14 +1101,14 @@
     if (meetingHubController?.hasRequiredCapabilities?.()) {
       return meetingHubController.buildViewState();
     }
-    return panelState.meetingTool;
+    return panelState.meetingTool || {};
   }
 
   function buildEffectiveReleaseToolState(panelState) {
     if (releaseController?.hasRequiredCapabilities?.()) {
       return releaseController.buildViewState(panelState.releaseTool || {});
     }
-    return panelState.releaseTool;
+    return panelState.releaseTool || {};
   }
 
   function readEffectivePromptCount(panelState, effectivePromptTool) {
@@ -1160,8 +1263,30 @@
     if (!target) {
       return;
     }
-    if (!target.closest?.('[data-prompt-menu], [data-prompt-action="toggle-menu"]')) {
+    const promptMenu = target.closest?.("[data-prompt-menu]");
+    const storeMenu = target.closest?.("[data-store-menu]");
+    if (!promptMenu && !target.closest?.('[data-prompt-action="toggle-menu"]')) {
       void callbacks.onPromptAction("dismiss-menu");
+      host.querySelectorAll("[data-prompt-menu][open]").forEach((menu) => {
+        menu.removeAttribute("open");
+      });
+    } else if (promptMenu instanceof global.HTMLElement) {
+      host.querySelectorAll("[data-prompt-menu][open]").forEach((menu) => {
+        if (menu !== promptMenu) {
+          menu.removeAttribute("open");
+        }
+      });
+    }
+    if (!storeMenu) {
+      host.querySelectorAll("[data-store-menu][open]").forEach((menu) => {
+        menu.removeAttribute("open");
+      });
+    } else if (storeMenu instanceof global.HTMLElement) {
+      host.querySelectorAll("[data-store-menu][open]").forEach((menu) => {
+        if (menu !== storeMenu) {
+          menu.removeAttribute("open");
+        }
+      });
     }
     const toolButton = target.closest?.("[data-tool-id]");
     if (toolButton) {
@@ -1403,7 +1528,7 @@
     }
     const promptCard = target.closest?.('[data-prompt-card="true"]');
     if (promptCard instanceof global.HTMLElement) {
-      const interactivePromptChild = target.closest?.('button, input, textarea, select, label, [data-prompt-action], [data-prompt-field], [data-prompt-publish-field], [data-prompt-select], [data-import-mode]');
+      const interactivePromptChild = target.closest?.('button, input, textarea, select, label, summary, details, [data-prompt-menu], [data-prompt-action], [data-prompt-field], [data-prompt-publish-field], [data-prompt-select], [data-import-mode]');
       const blockedPromptRegion = target.closest?.(".inova-inline-feedback, .inova-prompt-editor, .inova-import-review");
       if ((!interactivePromptChild || interactivePromptChild === promptCard) && !(blockedPromptRegion instanceof global.HTMLElement)) {
         event.preventDefault();
@@ -1414,6 +1539,23 @@
         });
         void callbacks.onPromptAction("use", {
           promptId: promptCard.dataset.promptId || "",
+        });
+      }
+      return;
+    }
+    const storeCard = target.closest?.('[data-store-card="true"]');
+    if (storeCard instanceof global.HTMLElement) {
+      const interactiveStoreChild = target.closest?.('button, input, textarea, select, label, summary, details, [data-store-menu], [data-store-action], [data-store-field], [data-store-owner-info]');
+      const blockedStoreRegion = target.closest?.(".inova-inline-feedback");
+      if ((!interactiveStoreChild || interactiveStoreChild === storeCard) && !(blockedStoreRegion instanceof global.HTMLElement)) {
+        event.preventDefault();
+        tracePanelFlow("41.hosted.key.detected", {
+          action: "toggle-expand",
+          message: storeCard.dataset.storeEntryId || "",
+          reason: event.key === " " ? "space" : "enter",
+        });
+        void callbacks.onStoreAction("toggle-expand", {
+          entryId: storeCard.dataset.storeEntryId || "",
         });
       }
       return;
@@ -1836,11 +1978,13 @@
     }
     if (runtimeAction === "auth.issue-panel-session") {
       const panel = normalizeText(payload?.panel).toLowerCase();
-      const scope = panel === "prompt" ? "prompt-panel" : panel === "meeting" ? "meeting-panel" : "panel-session";
+      const purpose = normalizeText(payload?.purpose);
+      const scope = panel === "hosted" ? "hosted-panel" : panel === "prompt" ? "prompt-panel" : panel === "meeting" ? "meeting-panel" : "panel-session";
       return {
         buildResultPayload(durationMs) {
           return {
             message: scope,
+            purpose,
             reason: `${Math.max(0, Number(durationMs) || 0)}ms`,
             target: readRuntimeTargetForTrace(),
           };
@@ -1848,12 +1992,14 @@
         buildStartPayload() {
           return {
             message: scope,
+            purpose,
             target: readRuntimeTargetForTrace(),
           };
         },
         buildTimeoutPayload(durationMs) {
           return {
             message: scope,
+            purpose,
             reason: `${Math.max(0, Number(durationMs) || 0)}ms`,
             target: readRuntimeTargetForTrace(),
           };

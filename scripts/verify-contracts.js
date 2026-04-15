@@ -48,6 +48,12 @@ if (fs.existsSync(manifestPath)) {
       errors.push(`manifest content script 누락: ${file}`);
     }
   }
+  assertOrder(jsFiles, [
+    "shared/constants.js",
+    "shared/firestore-collections.js",
+    "shared/product-lane.js",
+    "shared/firebase-config.js",
+  ], "manifest content script shared config load order");
 
   for (const file of contract.manifestContentCss) {
     if (!cssFiles.includes(file)) {
@@ -114,6 +120,12 @@ if (fs.existsSync(popupPath)) {
       errors.push(`popup script 누락: ${file}`);
     }
   }
+  assertOrder(extractScriptSources(popupHtml), [
+    "../shared/constants.js",
+    "../shared/firestore-collections.js",
+    "../shared/product-lane.js",
+    "../shared/firebase-config.js",
+  ], "popup shared config load order");
 }
 
 for (const file of listSourceFiles(root)) {
@@ -261,6 +273,26 @@ function assertPattern(relativePath, pattern, message) {
   if (!pattern.test(source)) {
     errors.push(`${message} (${relativePath})`);
   }
+}
+
+function assertOrder(items, orderedSubset, label) {
+  let previousIndex = -1;
+  for (const item of orderedSubset) {
+    const index = items.indexOf(item);
+    if (index < 0) {
+      errors.push(`${label} 항목 누락: ${item}`);
+      continue;
+    }
+    if (index <= previousIndex) {
+      errors.push(`${label} 순서 오류: ${orderedSubset.join(" -> ")}`);
+      return;
+    }
+    previousIndex = index;
+  }
+}
+
+function extractScriptSources(html) {
+  return Array.from(html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/g)).map((match) => match[1]);
 }
 
 function assertInlineOnlyGating(relativePath) {

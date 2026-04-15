@@ -11,6 +11,7 @@ async function main() {
   await verifyPanelRuntimeResolution();
   await verifyV2PanelRuntimeResolution();
   await verifyHostedPanelBridgeContract();
+  await verifySharedFirestoreSessionAuthReuse();
   verifyHostedPanelFiles("extension");
   verifyHostedPanelFiles("extension-v2");
   verifyBackgroundInvokeWiring();
@@ -145,7 +146,10 @@ async function verifyHostedPanelBridgeContract() {
       bridgeVersion: 1,
       domain: "panel",
       payload: {
-        action: "toggle-panel",
+        action: "panel-chrome-sync",
+        handleCount: 3,
+        open: true,
+        visible: true,
       },
       requestId: "request-1",
       source: "inova-hosted-panel-app",
@@ -167,6 +171,192 @@ async function verifyHostedPanelBridgeContract() {
   assert.deepEqual(responseMessage?.message?.payload?.result, { ok: true });
 }
 
+async function verifySharedFirestoreSessionAuthReuse() {
+  const runtimeCalls = [];
+  const traces = [];
+  const queryState = {
+    authEmulatorConfigureCount: 0,
+    firestoreEmulatorConfigureCount: 0,
+    signInCount: 0,
+  };
+  const futureExpiryIso = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  const context = vm.createContext({
+    console,
+    document: {
+      createElement() {
+        return {
+          async: false,
+          onerror: null,
+          onload: null,
+          set src(value) {
+            this._src = value;
+          },
+          get src() {
+            return this._src || "";
+          },
+        };
+      },
+      head: {
+        appendChild(node) {
+          node.onload?.();
+          return node;
+        },
+      },
+    },
+    globalThis: null,
+  });
+  context.globalThis = context;
+  context.InovaBookmarks = {
+    session: {
+      normalizeText(value) {
+        return String(value ?? "").trim();
+      },
+    },
+  };
+  context.firebase = createSharedSessionFakeFirebase(queryState, futureExpiryIso);
+
+  loadScript(path.join("hosting", "extension-v2", "panel", "panel-utils.js"), context);
+  loadScript(path.join("hosting", "extension-v2", "panel", "extension-capability-client.js"), context);
+  loadScript(path.join("hosting", "extension-v2", "panel", "panel-firestore-session-client.js"), context);
+
+  const browserCapabilities = context.InovaBookmarks.extensionCapabilityClient.create({
+    invokeRuntime: async (request) => {
+      runtimeCalls.push(cloneValue(request));
+      return {
+        emulators: {
+          authUrl: "http://127.0.0.1:9099",
+          enabled: true,
+          firestoreHost: "127.0.0.1",
+          firestorePort: 8080,
+        },
+        expiresAt: futureExpiryIso,
+        firebaseConfig: {
+          apiKey: "fixture-api-key",
+          projectId: "browser-extension-main",
+        },
+        firebaseCustomToken: "hosted-panel-token",
+        panelScope: "prompt-panel-v2",
+        promptFirestoreCollections: {
+          accountsCollection: "integration_inova_accounts_v2",
+          promptLibraryChunksCollection: "prompt_library_chunks_v2",
+          promptLibraryOrdersCollection: "prompt_library_orders_v2",
+          storeEntriesCollection: "prompt_store_entries",
+        },
+        promptLibraryId: "v2__inova__fixture-user",
+        promptPanelScope: "prompt-panel-v2",
+        providerUserKey: "fixture-user",
+        target: "local",
+      };
+    },
+  });
+  const providerIdentity = {
+    providerUserKey: "fixture-user",
+  };
+
+  await context.InovaBookmarks.panelFirestoreSessionClient.ensureSession({
+    browserCapabilities,
+    panel: "meeting",
+    providerIdentity,
+    purpose: "meeting",
+    settings: {
+      meetingWorkspaceTarget: "local",
+    },
+    traceFirestore(step, payload) {
+      traces.push({ payload: cloneValue(payload), step });
+    },
+  });
+  await context.InovaBookmarks.panelFirestoreSessionClient.ensureSession({
+    browserCapabilities,
+    panel: "prompt",
+    providerIdentity,
+    purpose: "prompt-library",
+    settings: {
+      meetingWorkspaceTarget: "local",
+    },
+    traceFirestore(step, payload) {
+      traces.push({ payload: cloneValue(payload), step });
+    },
+  });
+
+  assert.equal(runtimeCalls.length, 1, "shared Firestore session should issue hosted panel auth once across meeting and prompt readers");
+  assert.equal(runtimeCalls[0].panel, "hosted", "shared Firestore session should request the canonical hosted panel auth scope");
+  assert.equal(queryState.signInCount, 1, "shared Firestore session should sign in Firebase Auth once across meeting and prompt readers");
+  assert.equal(queryState.authEmulatorConfigureCount, 1, "shared Firestore session should configure Auth emulator once before cross-feature reuse");
+  assert.equal(queryState.firestoreEmulatorConfigureCount, 1, "shared Firestore session should configure Firestore emulator once before cross-feature reuse");
+  assert(
+    traces.some((entry) => entry.step === "34.hosted.firestore.auth.reuse" && entry.payload?.reader === "prompt-library"),
+    "shared Firestore session should reuse the first Firebase auth session for the next feature reader"
+  );
+}
+
+function createSharedSessionFakeFirebase(queryState, expiresAt) {
+  const fakeAuth = {
+    currentUser: null,
+    async setPersistence() {},
+    async signInWithCustomToken(token) {
+      queryState.signInCount += 1;
+      this.currentUser = {
+        async getIdToken() {
+          return token;
+        },
+        async getIdTokenResult() {
+          return {
+            claims: {
+              promptPanelExpMs: Date.parse(expiresAt) || Date.now() + 10 * 60 * 1000,
+              providerUserKey: "fixture-user",
+              scope: "prompt-panel-v2",
+            },
+          };
+        },
+      };
+    },
+    useEmulator() {
+      if (queryState.signInCount > 0) {
+        throw new Error("Auth emulator must be configured before sign-in");
+      }
+      queryState.authEmulatorConfigureCount += 1;
+    },
+  };
+  const fakeDb = {
+    enablePersistence() {
+      return Promise.resolve();
+    },
+    useEmulator() {
+      queryState.firestoreEmulatorConfigureCount += 1;
+    },
+  };
+  const fakeApp = {
+    async delete() {},
+    auth() {
+      return fakeAuth;
+    },
+    firestore() {
+      return fakeDb;
+    },
+    name: "inova-hosted-panel",
+  };
+  return {
+    apps: [],
+    auth: {
+      Auth: {
+        Persistence: {
+          NONE: "none",
+          SESSION: "session",
+        },
+      },
+    },
+    firestore: {},
+    initializeApp() {
+      this.apps.push(fakeApp);
+      return fakeApp;
+    },
+  };
+}
+
+function cloneValue(value) {
+  return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
 function verifyHostedPanelFiles(directoryName) {
   const baseDir = path.join(root, "hosting", directoryName, "panel");
   const html = fs.readFileSync(
@@ -177,10 +367,39 @@ function verifyHostedPanelFiles(directoryName) {
     path.join(baseDir, "index.js"),
     "utf8"
   );
+  const panelFiles = directoryName === "extension-v2"
+    ? fs.readdirSync(baseDir)
+      .filter((fileName) => fileName.endsWith("-firestore-client.js"))
+      .map((fileName) => ({
+        fileName,
+        source: fs.readFileSync(path.join(baseDir, fileName), "utf8"),
+      }))
+    : [];
+  const sharedFirestoreSessionJs = directoryName === "extension-v2"
+    ? fs.readFileSync(path.join(baseDir, "panel-firestore-session-client.js"), "utf8")
+    : "";
+  const baseFirestoreClientJs = directoryName === "extension-v2"
+    ? fs.readFileSync(path.join(baseDir, "base-firestore-client.js"), "utf8")
+    : "";
+  const promptStoreControllerJs = directoryName === "extension-v2"
+    ? fs.readFileSync(path.join(baseDir, "prompt-store-controller.js"), "utf8")
+    : "";
 
   assert(html.includes("./runtime.js"), "hosted panel should load runtime bootstrap");
   if (directoryName === "extension-v2") {
+    assert(html.includes("./panel-utils.js"), "v2 hosted panel should load shared panel utilities");
+    assert(html.includes("./base-firestore-client.js"), "v2 hosted panel should load the shared Firestore reader lifecycle factory");
     assert(html.includes("./extension-capability-client.js"), "v2 hosted panel should load the hosted extension capability client");
+    assert(
+      html.indexOf("./panel-utils.js") > html.indexOf("./runtime.js")
+        && html.indexOf("./panel-utils.js") < html.indexOf("./panel-firestore-session-client.js")
+        && html.indexOf("./panel-firestore-session-client.js") > html.indexOf("./extension-capability-client.js")
+        && html.indexOf("./base-firestore-client.js") > html.indexOf("./panel-firestore-session-client.js")
+        && html.indexOf("./base-firestore-client.js") < html.indexOf("./prompt-library-firestore-client.js")
+        && html.indexOf("./base-firestore-client.js") < html.indexOf("./meeting-firestore-client.js")
+        && html.indexOf("./base-firestore-client.js") < html.indexOf("./prompt-store-firestore-client.js"),
+      "v2 hosted panel should load panel utilities, the shared Firestore session coordinator, and the base reader factory before feature Firestore clients"
+    );
     assert(html.includes("./prompt-tool-panel.js"), "v2 hosted panel should load prompt tool interaction helpers");
   } else {
     assert(html.includes("./prompt-hub-panel.js"), "legacy hosted panel should keep the prompt hub interaction helper");
@@ -189,9 +408,11 @@ function verifyHostedPanelFiles(directoryName) {
     assert(!html.includes("./legacy-panel.css"), "v2 hosted panel should not load the dead legacy panel shell stylesheet");
     assert(!html.includes("./legacy-tools.css"), "v2 hosted panel should not load the dead legacy tools stylesheet");
     assert(html.includes("./conversation-controller.js"), "v2 hosted panel should load conversation controller");
+    assert(html.includes("./panel-firestore-session-client.js"), "v2 hosted panel should load the shared Firestore session coordinator");
     assert(html.includes("./prompt-library-model.js"), "v2 hosted panel should load prompt library model");
     assert(html.includes("./prompt-library-controller.js"), "v2 hosted panel should load prompt library controller");
     assert(html.includes("./prompt-store-model.js"), "v2 hosted panel should load prompt store model");
+    assert(html.includes("./prompt-store-firestore-client.js"), "v2 hosted panel should load prompt store Firestore client");
     assert(html.includes("./prompt-tool-view.js"), "v2 hosted panel should load prompt tool view");
     assert(!html.includes("./prompt-hub-view.js"), "v2 hosted panel should not load the dead promptHubView fallback");
     assert(html.includes("./prompt-review-controller.js"), "v2 hosted panel should load prompt review controller");
@@ -205,6 +426,56 @@ function verifyHostedPanelFiles(directoryName) {
     assert(indexJs.includes("meetingHubController"), "v2 hosted panel should wire hosted meeting ownership");
     assert(indexJs.includes("releaseController"), "v2 hosted panel should wire hosted release ownership");
     assert(indexJs.includes("const browserCapabilities = namespace.extensionCapabilityClient?.create?.({"), "v2 hosted panel should create a shared browser capability client");
+    assert(sharedFirestoreSessionJs.includes("firebase.initializeApp"), "shared Firestore session coordinator should own Firebase app creation");
+    assert(sharedFirestoreSessionJs.includes("signInWithCustomToken"), "shared Firestore session coordinator should own Firebase auth sign-in");
+    assert(sharedFirestoreSessionJs.includes("namespace.panelUtils"), "shared Firestore session coordinator should reuse hosted panel utilities");
+    assert(sharedFirestoreSessionJs.includes('const AUTH_PANEL = "hosted"'), "shared Firestore session coordinator should request one hosted panel auth scope");
+    assert(sharedFirestoreSessionJs.includes('const HOSTED_APP_NAME = "inova-hosted-panel"'), "shared Firestore session coordinator should reserve one hosted app name");
+    assert(sharedFirestoreSessionJs.includes("issuePanelSession(AUTH_PANEL"), "shared Firestore session coordinator should own hosted panel auth issuing");
+    assert(baseFirestoreClientJs.includes("panelFirestoreSessionClient.ensureSession"), "base Firestore reader factory should consume the shared Firestore session coordinator");
+    assert(baseFirestoreClientJs.includes("namespace.panelUtils"), "base Firestore reader factory should reuse hosted panel utilities");
+    assert(baseFirestoreClientJs.includes("loadCachedSnapshot"), "base Firestore reader factory should own cached snapshot loading");
+    assert(baseFirestoreClientJs.includes("publishSnapshot"), "base Firestore reader factory should own snapshot de-duplication and publishing");
+    assert(
+      fs.readFileSync(path.join(root, "background", "panel-runtime-capability-router.js"), "utf8")
+        .includes('if (panel === "hosted")'),
+      "background runtime should support the shared hosted panel auth scope"
+    );
+    assert(
+      fs.readFileSync(path.join(root, "firestore.rules"), "utf8")
+        .includes("function isHostedPanelSessionActive()"),
+      "Firestore rules should explicitly define the shared hosted panel read session"
+    );
+    panelFiles
+      .filter((entry) => !["panel-firestore-session-client.js", "base-firestore-client.js"].includes(entry.fileName))
+      .forEach((entry) => {
+        assert(
+          entry.source.includes("baseFirestoreClient?.createBaseFirestoreClient"),
+          `${entry.fileName} should use the shared Firestore reader lifecycle factory`
+        );
+        assert(
+          entry.source.includes("namespace.panelUtils"),
+          `${entry.fileName} should reuse hosted panel utilities`
+        );
+        [
+          "app: null",
+          "auth: null",
+          "db: null",
+          "firebase.initializeApp",
+          "signInWithCustomToken",
+          "SDK_SOURCES",
+          "FIREBASE_VERSION",
+          "auth.issue-panel-session",
+          "persistencePromise",
+          "runtimeKey",
+          "sdkPromise",
+        ].forEach((forbiddenPattern) => assert(
+          !entry.source.includes(forbiddenPattern),
+          `${entry.fileName} should not recreate Firestore SDK/auth/session ownership`
+        ));
+      });
+    assert(!promptStoreControllerJs.includes('endpointKey: "listPromptStoreEntriesUrl"'), "v2 hosted store list should use Firestore subscription instead of the list Function");
+    assert(promptStoreControllerJs.includes("storeFirestoreClient.ensureSubscribed"), "v2 hosted store controller should subscribe through the Firestore client");
   }
   assert(
     indexJs.includes("확장 업데이트 필요"),
@@ -400,6 +671,7 @@ function loadRuntimeContext(lane) {
     },
   };
 
+  loadScript(path.join("shared", "firestore-collections.js"), context);
   loadScript(path.join("shared", "firebase-config.js"), context);
   loadScript(path.join("background", "functions-runtime-config.js"), context);
   return context.InovaBookmarks;

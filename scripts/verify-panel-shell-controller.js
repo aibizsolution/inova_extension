@@ -8,84 +8,20 @@ const vm = require("vm");
 const root = path.resolve(__dirname, "..");
 
 async function main() {
-  await verifyMeetingAndReleaseToolPersistence();
-  await verifyPromptLibraryPersistence();
-  await verifyStoreAliasPersistence();
   verifyQueryFallbackIsDropped();
-  verifyHandleCountUsesActiveTool();
+  verifyHandleCountMovedToHosted();
   verifyPromptSelectionStaysShellOwned();
-  await verifyHandlePositionAndUiPreferenceLock();
+  await verifyHandlePositionPersistence();
   console.log("[verify-panel-shell-controller] V2 shell bridge shell contract passed");
 }
 
-async function verifyMeetingAndReleaseToolPersistence() {
-  const harness = createHarness({
-    activePromptTab: "store",
-    activeTool: "prompts",
-    uiPreferenceTool: "prompts",
-  });
-
-  await harness.controller.persistActiveTool("meeting");
-  assert.equal(harness.state.uiPreferences.activeTool, "meeting");
-  assert.deepEqual(harness.persistCalls[0], {
-    activePromptTab: "store",
-    activeTool: "meeting",
-  });
-
-  await harness.controller.persistActiveTool("release");
-  assert.equal(harness.state.uiPreferences.activeTool, "release");
-}
-
-async function verifyPromptLibraryPersistence() {
-  const harness = createHarness({
-    activePromptTab: "store",
-    activeTool: "meeting",
-    uiPreferenceTool: "meeting",
-  });
-
-  await harness.controller.persistActiveTool("prompts", "library");
-  assert.equal(harness.state.uiPreferences.activeTool, "prompts");
-  assert.deepEqual(harness.persistCalls[0], {
-    activePromptTab: "library",
-    activeTool: "prompts",
-  });
-}
-
-async function verifyStoreAliasPersistence() {
-  const harness = createHarness();
-
-  await harness.controller.persistActiveTool("store", "store");
-  assert.equal(harness.state.uiPreferences.activeTool, "prompts");
-  assert.deepEqual(harness.persistCalls[0], {
-    activePromptTab: "store",
-    activeTool: "prompts",
-  });
-}
-
-function verifyHandleCountUsesActiveTool() {
-  const harness = createHarness({
-    activeTool: "bookmarks",
-    uiPreferenceTool: "bookmarks",
-  });
-
-  const bookmarkHandleCount = harness.controller.buildHandleCount({
-    bookmarks: 2,
-    meeting: 1,
-    promptTool: 3,
-    prompts: 5,
-    release: 1,
-  });
-  assert.equal(bookmarkHandleCount, 2);
-
-  harness.state.activeTool = "prompts";
-  const promptHandleCount = harness.controller.buildHandleCount({
-    bookmarks: 2,
-    meeting: 1,
-    promptTool: 3,
-    prompts: 5,
-    release: 1,
-  });
-  assert.equal(promptHandleCount, 3);
+function verifyHandleCountMovedToHosted() {
+  const source = fs.readFileSync(path.join(root, "content", "panel-v2-shell-bridge.js"), "utf8");
+  assert.equal(
+    source.includes("buildHandleCount"),
+    false,
+    "v2 shell bridge should not calculate handle counts after hosted panel chrome sync owns them"
+  );
 }
 
 function verifyQueryFallbackIsDropped() {
@@ -116,34 +52,36 @@ function verifyPromptSelectionStaysShellOwned() {
     false,
     "v2 shell bridge should keep prompt/store tool selection inside the shell instead of delegating it back to the prompt controller"
   );
+  [
+    "persistActiveTool",
+    "lockUiPreferenceSelection",
+    "applyUiPreferenceLock",
+    "normalizeToolId",
+    "readActiveTool",
+    "state.activeTool",
+    "uiPreferenceLock",
+  ].forEach((pattern) => assert.equal(
+    source.includes(pattern),
+    false,
+    `v2 shell bridge should not keep hosted-owned tool/tab persistence residue ${pattern}`
+  ));
 }
 
-async function verifyHandlePositionAndUiPreferenceLock() {
+async function verifyHandlePositionPersistence() {
   const harness = createHarness();
-
-  harness.controller.lockUiPreferenceSelection("store", "unknown");
-  assert.equal(harness.state.uiPreferenceLock.activeTool, "prompts");
-  assert.equal(harness.state.uiPreferenceLock.activePromptTab, "library");
-  assert.deepEqual(harness.controller.applyUiPreferenceLock({
-    activePromptTab: "review",
-    activeTool: "meeting",
-  }), {
-    activePromptTab: "library",
-    activeTool: "prompts",
-  });
 
   await harness.controller.updateHandlePosition(0.55);
   assert.equal(harness.renderCalls.length, 1);
   assert.deepEqual(harness.handleUpdates[0], {
-    activeTool: "prompts",
     handleRatios: { desktop: 0.55 },
   });
+  assert.equal("activeTool" in harness.handleUpdates[0], false);
   assert.equal(harness.state.uiPreferences.handleRatios.desktop, 0.55);
+  assert.equal(harness.state.uiPreferences.activeTool, "prompts");
 }
 
 function createHarness(options = {}) {
   const handleUpdates = [];
-  const persistCalls = [];
   const renderCalls = [];
 
   const context = vm.createContext({
@@ -185,8 +123,6 @@ function createHarness(options = {}) {
       async updateUiPreferences(patch = {}) {
         if (patch.handleRatios) {
           handleUpdates.push(cloneValue(patch));
-        } else {
-          persistCalls.push(cloneValue(patch));
         }
         return {
           activePromptTab: "library",
@@ -201,8 +137,6 @@ function createHarness(options = {}) {
   loadScript("content/panel-v2-shell-bridge.js", context);
 
   const state = {
-    activeTool: options.activeTool || "prompts",
-    uiPreferenceLock: null,
     uiPreferences: {
       activePromptTab: options.activePromptTab || "library",
       activeTool: options.uiPreferenceTool || options.activeTool || "prompts",
@@ -211,9 +145,6 @@ function createHarness(options = {}) {
   };
 
   const controller = context.InovaBookmarks.panelV2ShellBridge.createShellController(state, {
-    isExtensionContextInvalidatedError() {
-      return false;
-    },
     render() {
       renderCalls.push(true);
     },
@@ -222,7 +153,6 @@ function createHarness(options = {}) {
   return {
     controller,
     handleUpdates,
-    persistCalls,
     renderCalls,
     state,
   };

@@ -57,6 +57,7 @@
 - `reviewInovaPrompt` 요청에서 `reviewProfile`이 비어 있으면 backend 기본값은 반드시 `legacy-v1`이어야 한다. 0.4.4 사용자는 기존 4축 평가를 그대로 유지하고, 새 확장 버전만 `prompt-telling-v2`를 opt-in 한다.
 - `0.4.5`부터 panel 안의 review UI는 hosted panel iframe이 렌더링한다. legacy lane에서는 composer anchor와 review action/state를 content controller가 계속 소유한다.
 - `1.0.0+` v2 lane에서는 `hosting/extension-v2/panel/prompt-review-controller.js`가 `검토` 탭의 review/copy/apply/placeholder-confirm 상태와 review action 라우팅, escape dismiss까지 hosted 쪽에서 소유한다. extension은 `composer.read-state`, `composer.apply-text`, `clipboard.write-text`, `trace.log` 같은 stable page adapter capability와 `reviewInovaPrompt` runtime broker, `content/panel-v2-prompt-controller.js` 기반 composer review float + external handoff signal만 제공한다. 이 capability 이름은 active lane의 canonical contract로 보고, caller migration이 끝난 뒤 `apply-prompt-text`나 `copy-text` 같은 alias를 계속 남기지 않는다. top-panel snapshot에는 monotonic `requestId` 기반 external review activation signal만 남기고, review result/error/open/pending/placeholder-confirm 상태는 다시 싣지 않는다.
+- v2 composer review float 클릭은 `requestId` 신호만 증가시킨다. `activeTool`, `activePromptTab`, panel open 상태, UI preference 저장은 hosted prompt controllers가 소유하므로 content prompt shell에서 직접 변경하지 않는다.
 - 새 클라이언트는 `prompt-telling-v2` 6축 응답과 `legacy-v1` 4축 응답을 모두 렌더링할 수 있어야 한다.
 - placeholder token 감지는 한 줄 안의 단순 `[...]` 토큰만 대상으로 유지한다. nested bracket이나 줄바꿈이 섞인 텍스트는 placeholder 경고 후보로 넓히지 않는다.
 - composer 선택은 textarea 같은 구체적인 채팅 입력 selector를 우선하고, broad `contenteditable` 후보는 앞선 tier가 없을 때만 고려한다.

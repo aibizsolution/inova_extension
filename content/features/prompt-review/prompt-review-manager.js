@@ -3,7 +3,7 @@
 
   function create(state, hooks = {}) {
     const render = typeof hooks.render === "function" ? hooks.render : () => {};
-    const showPromptTab = typeof hooks.showPromptTab === "function" ? hooks.showPromptTab : () => {};
+    let externalActivationRequestId = 0;
 
     return {
       buildReviewSignalState,
@@ -13,8 +13,7 @@
     };
 
     function buildReviewSignalState() {
-      const requestId = Math.max(0, Number(state?.promptReview?.requestId) || 0);
-      return requestId ? { requestId } : {};
+      return externalActivationRequestId ? { requestId: externalActivationRequestId } : {};
     }
 
     function buildViewState() {
@@ -40,12 +39,7 @@
         render();
         return;
       }
-      const nextRequestId = Math.max(0, Number(state?.promptReview?.requestId) || 0) + 1;
-      state.promptReview = {
-        ...(namespace.constants?.defaults?.promptReview || {}),
-        requestId: nextRequestId,
-      };
-      showPromptTab("review");
+      externalActivationRequestId += 1;
       render();
     }
   }

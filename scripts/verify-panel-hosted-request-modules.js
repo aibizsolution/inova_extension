@@ -109,13 +109,7 @@ function verifyHostedBridgeRequestModuleContract() {
     "handleRuntimeRequest(",
     "namespace.panelPageCapabilityRouter?.handle?.(",
     "handlePanelRequest(",
-    "handlePanelSummaryRequest(",
-    'if (action === "tool-summary-sync")',
-    'typeof callbacks.onToolSummarySync !== "function"',
-    "const toolId = normalizeText(payload?.toolId)",
-    "const toolState = payload?.toolState && typeof payload.toolState === \"object\"",
-    'if (action === "toggle-panel")',
-    'if (action === "escape")',
+    'if (action === "panel-chrome-sync")',
     "global.chrome?.runtime?.sendMessage",
   ].forEach((pattern) => assert(
     bridgeRequestSource.includes(pattern),
@@ -128,19 +122,38 @@ function verifyHostedBridgeRequestModuleContract() {
     'if (action === "search-submit")',
     'if (action === "bookmark-copy")',
     'if (action === "bookmark-jump")',
+    "handlePanelSummaryRequest(",
+    'if (action === "tool-summary-sync")',
+    'typeof callbacks.onToolSummarySync !== "function"',
+    "const toolId = normalizeText(payload?.toolId)",
+    "const toolState = payload?.toolState && typeof payload.toolState === \"object\"",
+    'if (action === "toggle-panel")',
   ].forEach((pattern) => assert(
     !bridgeRequestSource.includes(pattern),
-    `hosted bridge request helper should drop the panel fallback surface ${pattern}`
+    `hosted bridge request helper should drop the removed panel fallback/sync surface ${pattern}`
   ));
   [
     "onHandlePositionChange: panelShellController.updateHandlePosition",
-    "onToolSummarySync: handlePanelToolSummarySync",
-    "onEscape: promptShellController.handleEscape",
-    "onToggle: panelLifecycleController.togglePanel",
+    "onPanelChromeSync(chromeState)",
+    'emitPanelEvent?.("external-toggle")',
   ].forEach((pattern) => assert(
     shellBridgeSource.includes(pattern),
     `v2 shell bridge should keep the compact hosted callback surface ${pattern}`
   ));
+  [
+    "onToolSummarySync",
+    "handlePanelToolSummarySync",
+    "panelLifecycleController.togglePanel",
+    "function togglePanel(",
+  ].forEach((pattern) => assert(
+    !shellBridgeSource.includes(pattern),
+    `v2 shell bridge should drop the removed hosted/content callback or fallback ${pattern}`
+  ));
+  assert(
+    !bridgeRequestSource.includes('if (action === "escape")')
+      && !shellBridgeSource.includes("onEscape:"),
+    "v2 shell bridge should not keep the legacy panel escape callback once hosted review consumes Escape before close"
+  );
   [
     "onCopyBookmark:",
     "onJumpBookmark:",
@@ -165,6 +178,7 @@ function verifyHostedBridgeRequestModuleContract() {
     "hosted panel should keep prompts rail selection pinned to the library tab"
   );
   [
+    /request\("panel",\s*\{\s*action:\s*"escape"/,
     /request\("panel",\s*\{\s*action:\s*"select-tool"/,
     /request\("panel",\s*\{\s*action:\s*"search"/,
     /request\("panel",\s*\{\s*action:\s*"search-submit"/,

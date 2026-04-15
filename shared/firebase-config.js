@@ -27,18 +27,12 @@
   function buildFirebaseConfig(overrideConfig) {
     const override = overrideConfig && typeof overrideConfig === "object" ? overrideConfig : {};
     const activeLane = namespace.productLane?.getActiveLane?.() || "legacy";
+    const defaultPromptCollections = getPromptFirestoreCollections(activeLane);
     const laneConfig = namespace.productLane?.getLaneConfig?.(activeLane) || {
       hosting: { baseUrl: "", originUrl: "" },
       id: activeLane,
       prompt: {
-        firestoreCollections: {
-          accountsCollection: "integration_inova_accounts",
-          promptLibraryChunksCollection: "prompt_library_chunks",
-          promptLibraryOrdersCollection: "prompt_library_orders",
-          storeDetailCollection: "prompt_store_entry_details",
-          storeFeedCollection: "prompt_store_feed_pages",
-          storeSummaryCollection: "prompt_store_meta",
-        },
+        firestoreCollections: defaultPromptCollections,
         panelScope: "prompt-panel",
       },
       storagePrefix: "",
@@ -102,24 +96,22 @@
   }
 
   function buildPromptConfig(defaultPromptConfig = {}, overrideConfig = {}) {
-    const defaultCollections = defaultPromptConfig.firestoreCollections || {};
-    return {
-      firestoreCollections: {
-        accountsCollection: normalizeText(overrideConfig?.firestoreCollections?.accountsCollection || defaultCollections.accountsCollection) || "integration_inova_accounts",
-        promptLibraryChunksCollection:
-          normalizeText(
-            overrideConfig?.firestoreCollections?.promptLibraryChunksCollection
-            || defaultCollections.promptLibraryChunksCollection
-          ) || "prompt_library_chunks",
-        promptLibraryOrdersCollection:
-          normalizeText(
-            overrideConfig?.firestoreCollections?.promptLibraryOrdersCollection
-            || defaultCollections.promptLibraryOrdersCollection
-          ) || "prompt_library_orders",
-        storeDetailCollection: normalizeText(overrideConfig?.firestoreCollections?.storeDetailCollection || defaultCollections.storeDetailCollection) || "prompt_store_entry_details",
-        storeFeedCollection: normalizeText(overrideConfig?.firestoreCollections?.storeFeedCollection || defaultCollections.storeFeedCollection) || "prompt_store_feed_pages",
-        storeSummaryCollection: normalizeText(overrideConfig?.firestoreCollections?.storeSummaryCollection || defaultCollections.storeSummaryCollection) || "prompt_store_meta",
+    const defaultCollections = {
+      ...getPromptFirestoreCollections(),
+      ...(defaultPromptConfig.firestoreCollections || {}),
+    };
+    const overrideCollections = overrideConfig?.firestoreCollections && typeof overrideConfig.firestoreCollections === "object"
+      ? overrideConfig.firestoreCollections
+      : {};
+    const firestoreCollections = namespace.firestoreCollections?.normalizePromptFirestoreCollections?.(
+      {
+        ...defaultCollections,
+        ...overrideCollections,
       },
+      defaultPromptConfig.panelScope === "prompt-panel-v2" ? "v2" : "legacy"
+    ) || {};
+    return {
+      firestoreCollections,
       panelScope: normalizeText(overrideConfig.panelScope || defaultPromptConfig.panelScope) || "prompt-panel",
     };
   }
@@ -185,6 +177,10 @@
         };
       },
     };
+  }
+
+  function getPromptFirestoreCollections(lane = "legacy") {
+    return namespace.firestoreCollections?.getPromptFirestoreCollections?.(lane) || {};
   }
 
   function resolvePromptRuntimeConfig(baseConfig, settings) {

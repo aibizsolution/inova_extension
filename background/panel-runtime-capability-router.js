@@ -55,6 +55,11 @@ async function handle(request) {
   }
   if (action === "auth.issue-panel-session") {
     const panel = namespace.session.normalizeText(request?.panel).toLowerCase();
+    if (panel === "hosted") {
+      return enrichHostedPanelAuth(
+        await issuePromptPanelAuth(request?.providerIdentity)
+      );
+    }
     if (panel === "prompt") {
       return enrichPromptPanelAuth(
         await issuePromptPanelAuth(request?.providerIdentity)
@@ -154,6 +159,15 @@ async function enrichMeetingPanelAuth(payload) {
       ? { ...runtimeConfig.web }
       : { ...(namespace.firebaseConfig?.web || {}) },
     target: namespace.session.normalizeText(runtimeConfig?.target) || "production",
+  };
+}
+
+async function enrichHostedPanelAuth(payload) {
+  const promptAuth = await enrichPromptPanelAuth(payload);
+  const panelScope = namespace.session.normalizeText(promptAuth?.promptPanelScope || promptAuth?.panelScope) || "prompt-panel-v2";
+  return {
+    ...promptAuth,
+    panelScope,
   };
 }
 

@@ -10,6 +10,7 @@ const root = path.resolve(__dirname, "..");
 async function main() {
   await verifyBootstrapWiringAndScheduling();
   await verifyBootstrapSkipsMeetingLifecycleWiring();
+  await verifyExternalToggleDoesNotFallbackToContentOpenState();
   verifyRouteStorageChangeDelegation();
   console.log("[verify-panel-bootstrap-controller] V2 shell bridge bootstrap contract passed");
 }
@@ -27,10 +28,12 @@ async function verifyBootstrapWiringAndScheduling() {
   assert.equal(harness.lifecycleInitializeCalls, 1);
   assert.deepEqual(harness.providerIdentityReasons, ["bootstrap"]);
   assert.equal(typeof harness.callbacks.onHandlePositionChange, "function");
-  assert.equal(typeof harness.callbacks.onToolSummarySync, "function");
-  assert.equal(typeof harness.callbacks.onEscape, "function");
+  assert.equal(typeof harness.callbacks.onPanelChromeSync, "function");
   assert.equal(typeof harness.callbacks.onToggle, "function");
+  assert.equal(harness.callbacks.onToggle(), true);
+  assert.deepEqual(harness.panelEvents, ["external-toggle"]);
   [
+    "onEscape",
     "onCopyBookmark",
     "onJumpBookmark",
     "onMeetingSummarySync",
@@ -46,6 +49,7 @@ async function verifyBootstrapWiringAndScheduling() {
     "onSelectTool",
     "onSelectPromptTab",
     "onStoreAction",
+    "onToolSummarySync",
   ].forEach((callbackKey) => assert.equal(
     callbackKey in harness.callbacks,
     false,
@@ -72,6 +76,22 @@ async function verifyBootstrapSkipsMeetingLifecycleWiring() {
   await harness.flush();
 
   assert.equal(harness.storageListeners.length, 1);
+}
+
+async function verifyExternalToggleDoesNotFallbackToContentOpenState() {
+  const harness = createHarness({
+    emitPanelEventResult: false,
+  });
+  await harness.controller.bootstrap();
+  await harness.flush();
+
+  assert.equal(harness.callbacks.onToggle(), false);
+  assert.deepEqual(harness.panelEvents, ["external-toggle"]);
+  assert.equal(
+    harness.lifecycleToggleCalls,
+    0,
+    "external handle toggle should not mutate content-side open state when hosted event delivery is unavailable"
+  );
 }
 
 function verifyRouteStorageChangeDelegation() {
@@ -129,10 +149,16 @@ function createHarness(options = {}) {
   let routeWatchInstallCalls = 0;
   let surfaceWatchInstallCalls = 0;
   let lifecycleInitializeCalls = 0;
+  let lifecycleToggleCalls = 0;
+  const panelEvents = [];
   const providerIdentityReasons = [];
   const routeSyncCalls = [];
   context.InovaBookmarks = {
     contentPanel: {
+      emitPanelEvent(action) {
+        panelEvents.push(String(action || ""));
+        return options.emitPanelEventResult !== false;
+      },
       ensurePanel(nextCallbacks) {
         callbacks = nextCallbacks;
         return {};
@@ -155,7 +181,6 @@ function createHarness(options = {}) {
 
   const controller = context.InovaBookmarks.panelV2ShellBridge.createBootstrapController(state, {
     handlePanelMeetingAction: async () => {},
-    handlePanelToolSummarySync: async () => {},
     isStoreTabActive() {
       return Boolean(options.storeTabActive);
     },
@@ -172,14 +197,15 @@ function createHarness(options = {}) {
       initializeOpenState() {
         lifecycleInitializeCalls += 1;
       },
-      togglePanel() {},
+      togglePanel() {
+        lifecycleToggleCalls += 1;
+      },
     },
     promptShellController: {
       ensureReviewFloat() {
         reviewFloatEnsureCalls += 1;
       },
       handleDraftChange() {},
-      handleEscape() {},
       handleImportFile() {},
       handlePromptAction() {},
       handleStoreAction() {},
@@ -235,6 +261,12 @@ function createHarness(options = {}) {
     },
     get lifecycleInitializeCalls() {
       return lifecycleInitializeCalls;
+    },
+    get lifecycleToggleCalls() {
+      return lifecycleToggleCalls;
+    },
+    get panelEvents() {
+      return panelEvents;
     },
     get providerIdentityReasons() {
       return providerIdentityReasons;

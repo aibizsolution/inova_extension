@@ -75,6 +75,14 @@
     hostRuntime.render(host, state);
   }
 
+  function syncPanelChrome(chromeState) {
+    const host = getPanelHost();
+    if (!host) {
+      return false;
+    }
+    return hostRuntime.syncPanelChrome(host, chromeState);
+  }
+
   function getPanelHost() {
     if (panelHost?.isConnected) {
       return panelHost;
@@ -102,12 +110,16 @@
         bookmarkId: normalizeText(bookmarkId),
       });
     },
+    emitPanelEvent(action, payload = {}) {
+      return hostBridge.emitPanelEvent(panelHost, normalizeText(action), payload);
+    },
     renderPanel,
     setActiveBookmark(bookmarkId) {
       hostBridge.emitPageEvent(panelHost, "set-active-bookmark", {
         bookmarkId: normalizeText(bookmarkId),
       });
     },
+    syncPanelChrome,
   };
   panelConsoleTrace.buildPanelSnapshotTracePayload = traceController.buildPanelSnapshotTracePayload;
   panelConsoleTrace.log = logConsoleTrace;

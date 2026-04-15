@@ -20,6 +20,7 @@ async function main() {
   verifyHostedPanelImeCompositionGuard();
   verifyHostedMeetingActionCompletionTraceContract();
   verifyHostedStartupStatusCardDelayContract();
+  verifyHostedPanelChromeSyncContract();
   verifyHostedMeetingSummarySyncContract();
   verifyHostedMeetingSnapshotSyncGuardContract();
   verifyHostedMeetingVisibilityRecoveryContract();
@@ -124,6 +125,10 @@ function verifyHostedMeetingSummarySyncContract() {
     path.join(root, "hosting", "extension-v2", "panel", "index.js"),
     "utf8"
   );
+  const meetingControllerSource = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "meeting-hub-controller.js"),
+    "utf8"
+  );
   const bridgeRequestSource = fs.readFileSync(
     path.join(root, "content", "hosted-panel-bridge.js"),
     "utf8"
@@ -134,16 +139,23 @@ function verifyHostedMeetingSummarySyncContract() {
   );
 
   assert(
-    hostedPanelSource.includes('syncTopPanelSummary: (meetingTool = {}) => syncToolSummary("meeting", meetingTool),'),
-    "hosted meeting hub should be able to sync a compact summary back to the top panel"
+    !hostedPanelSource.includes("syncTopPanelSummary")
+      && !hostedPanelSource.includes('syncToolSummary("meeting"'),
+    "hosted meeting hub should not sync hosted-owned counts back through the top panel"
   );
   assert(
-    bridgeRequestSource.includes('if (action === "tool-summary-sync") {'),
-    "top panel bridge should accept hosted meeting summary sync requests through the shared hosted bridge helper"
+    !bridgeRequestSource.includes('if (action === "tool-summary-sync")'),
+    "top panel bridge should not accept removed hosted meeting summary sync requests"
   );
   assert(
-    bootstrapSource.includes("onToolSummarySync: handlePanelToolSummarySync"),
-    "panel bootstrap should forward hosted meeting summary sync callbacks into the top-panel bridge"
+    !bootstrapSource.includes("onToolSummarySync")
+      && !bootstrapSource.includes("handlePanelToolSummarySync"),
+    "panel bootstrap should not forward hosted meeting summary sync callbacks into the top-panel bridge"
+  );
+  assert(
+    !meetingControllerSource.includes("syncTopPanelSummary")
+      && !meetingControllerSource.includes("emitTopPanelSummary"),
+    "hosted meeting controller should keep count state local instead of echoing it through extension"
   );
   assert(
     hostedPanelSource.includes("return meetingHubController.buildViewState();"),
@@ -164,6 +176,64 @@ function verifyHostedPromptTabOwnershipContract() {
   assert(
     !hostedPanelSource.includes('action: "prompt-tab-select"'),
     "v2 hosted prompt tab selection should not fall back to the top-panel prompt-tab-select request path"
+  );
+  assert(
+    hostedPanelSource.includes("function normalizePanelSnapshot(panel)"),
+    "hosted panel should normalize incoming raw panel snapshots before rendering"
+  );
+  assert(
+    hostedPanelSource.includes("activeTool: normalizeHostedToolId(nextPanel.activeTool || uiPreferences.activeTool),"),
+    "hosted panel should derive activeTool from snapshot uiPreferences when the top panel no longer sends it as a view field"
+  );
+}
+
+function verifyHostedPanelChromeSyncContract() {
+  const hostedPanelSource = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "index.js"),
+    "utf8"
+  );
+  const bridgeRequestSource = fs.readFileSync(
+    path.join(root, "content", "hosted-panel-bridge.js"),
+    "utf8"
+  );
+  const shellBridgeSource = fs.readFileSync(
+    path.join(root, "content", "panel-v2-shell-bridge.js"),
+    "utf8"
+  );
+
+  assert(
+    hostedPanelSource.includes("function syncPanelChromeIfNeeded(chromeState = {})"),
+    "hosted panel should own top panel chrome sync decisions"
+  );
+  assert(
+    hostedPanelSource.includes('action: "panel-chrome-sync"'),
+    "hosted panel should send handle count updates through panel-chrome-sync"
+  );
+  assert(
+    hostedPanelSource.includes("handleCount: effectiveToolCount"),
+    "hosted panel should sync the effective active tool count to the top handle"
+  );
+  assert(
+    hostedPanelSource.includes("open: panelState.open")
+      && hostedPanelSource.includes("function setHostedPanelOpen(nextOpen)")
+      && hostedPanelSource.includes("function buildEffectivePanelState(panelSnapshot)"),
+    "hosted panel should own panel open state and sync it to the top host chrome"
+  );
+  assert(
+    hostedPanelSource.includes('action === "external-toggle"'),
+    "hosted panel should own external handle toggle events instead of letting content calculate open state"
+  );
+  assert(
+    bridgeRequestSource.includes('if (action === "panel-chrome-sync")'),
+    "top panel bridge should accept hosted panel chrome sync requests"
+  );
+  assert(
+    shellBridgeSource.includes("onPanelChromeSync(chromeState)"),
+    "v2 shell bridge should expose a compact panel chrome sync callback"
+  );
+  assert(
+    !shellBridgeSource.includes("buildHandleCount"),
+    "v2 shell bridge should not keep hosted-owned handle count calculation"
   );
 }
 
@@ -342,20 +412,22 @@ function verifyHostedReleaseSummarySyncContract() {
   );
 
   assert(
-    hostedPanelSource.includes('syncTopPanelSummary: (releaseTool = {}) => syncToolSummary("release", releaseTool),'),
-    "hosted release controller should be able to sync a compact release summary back to the top panel"
+    !hostedPanelSource.includes("syncTopPanelSummary")
+      && !hostedPanelSource.includes('syncToolSummary("release"'),
+    "hosted release controller should not sync hosted-owned counts back through the top panel"
   );
   assert(
     !hostedPanelSource.includes('action: "release-action"'),
     "v2 hosted release actions should not fall back to the top-panel release-action request path"
   );
   assert(
-    releaseControllerSource.includes("await emitTopPanelSummary();"),
-    "hosted release controller should emit a compact top-panel summary after release checks settle"
+    !releaseControllerSource.includes("emitTopPanelSummary")
+      && !releaseControllerSource.includes("syncTopPanelSummary"),
+    "hosted release controller should keep release summary state local"
   );
   assert(
-    bridgeRequestSource.includes('if (action === "tool-summary-sync") {'),
-    "top panel bridge should accept hosted release summary sync requests through the shared hosted bridge helper"
+    !bridgeRequestSource.includes('if (action === "tool-summary-sync")'),
+    "top panel bridge should not accept removed hosted release summary sync requests"
   );
 }
 

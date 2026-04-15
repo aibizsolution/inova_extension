@@ -318,60 +318,27 @@
       ? helpers.normalizeText
       : (value) => namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
     const action = normalizeText(payload?.action);
-    const handledSummaryRequest = await handlePanelSummaryRequest(action, payload, callbacks, {
-      normalizeText,
-    });
-    if (handledSummaryRequest?.handled) {
-      return handledSummaryRequest;
-    }
-
     return handleShellRequest(action, payload, callbacks);
   }
 
-  function handlePanelSummaryRequest(action, payload, callbacks, helpers = {}) {
-    const normalizeText = typeof helpers.normalizeText === "function"
-      ? helpers.normalizeText
-      : (value) => namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
-    if (action === "tool-summary-sync") {
-      if (typeof callbacks.onToolSummarySync !== "function") {
-        return Promise.resolve({
-          handled: false,
-          result: null,
-        });
+  function handleShellRequest(action, payload, callbacks) {
+    if (action === "panel-chrome-sync") {
+      const chromeState = {
+        handleCount: Math.max(0, Number(payload?.handleCount) || 0),
+      };
+      if (Object.hasOwn(payload || {}, "open")) {
+        chromeState.open = payload.open === true;
       }
-      const toolId = normalizeText(payload?.toolId);
-      const toolState = payload?.toolState && typeof payload.toolState === "object"
-        ? payload.toolState
-        : {};
-      return Promise.resolve(callbacks.onToolSummarySync?.(toolId, toolState)).then(() => ({
+      if (Object.hasOwn(payload || {}, "visible")) {
+        chromeState.visible = payload.visible === true;
+      }
+      if (payload?.persistOpen === true) {
+        chromeState.persistOpen = true;
+      }
+      callbacks.onPanelChromeSync?.(chromeState);
+      return Promise.resolve({
         handled: true,
         result: { handled: true },
-      }));
-    }
-
-    return Promise.resolve({
-      handled: false,
-      result: null,
-    });
-  }
-
-  function handleShellRequest(action, payload, callbacks) {
-    if (action === "toggle-panel") {
-      callbacks.onToggle?.(payload?.open);
-      return Promise.resolve({
-        handled: true,
-        result: { open: payload?.open !== false },
-      });
-    }
-
-    if (action === "escape") {
-      const consumed = Boolean(callbacks.onEscape?.());
-      if (!consumed) {
-        callbacks.onToggle?.(false);
-      }
-      return Promise.resolve({
-        handled: true,
-        result: { consumed },
       });
     }
 

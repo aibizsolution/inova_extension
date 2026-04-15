@@ -51,7 +51,7 @@
 ## 릴리스 메타 경계
 - lane 기본값은 버전 major로 정한다. `0.x`는 legacy lane, `1.x+`는 v2 lane이다.
 - `0.4.5`부터 panel 안의 release UI는 `hosting/extension/panel/release-view.js`가 렌더링하고, legacy release fetch/open-url action reference는 `backup/legacy-panel/release-manager.js`와 `backup/legacy-panel/shared/release-info.js`로 격리해 둔다.
-- `1.0.0+` v2 lane에서는 `hosting/extension-v2/panel/release-controller.js`가 latest/history fetch, 다운로드 액션, compact release summary sync를 소유하고, extension은 브라우저 URL 열기 broker와 count-only top-panel release summary 저장만 유지한다.
+- `1.0.0+` v2 lane에서는 `hosting/extension-v2/panel/release-controller.js`가 latest/history fetch, 다운로드 액션, release count/view state를 소유하고, extension은 브라우저 URL 열기 broker만 유지한다. release summary를 `tool-summary-sync`나 content state로 되돌려 저장하지 않는다.
 - `release:build`는 공개 최신 버전보다 낮은 버전으로는 진행할 수 없지만, 같은 공개 버전으로 로컬 재빌드/최종 배포하는 흐름은 허용한다.
 - `deploy:hosting`과 `deploy:all`은 hosted 검증/운영 배포용이며, 기본적으로 확장 패키지 버전과 사용자 릴리스 메타를 갱신하지 않는다.
 - 실제 사용자 패널에 보일 버전만 `releases/release-notes.json`에 남기고, `release:build`는 그 목록만 `latest.json`, `history.json`, `latest.zip`에 반영하며 공개 목록 밖의 로컬/hosting ZIP도 정리한다.

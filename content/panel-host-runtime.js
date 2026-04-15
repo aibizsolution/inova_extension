@@ -26,6 +26,7 @@
       handleFrameLoad,
       render,
       resolveElements,
+      syncPanelChrome,
       updateStatusBanner,
     };
 
@@ -123,19 +124,17 @@
       host.__lastRenderedState = state;
       const elements = host.__panelElements || resolveElements(host);
       host.__panelElements = elements;
-      const { handleCount, root } = elements;
+      const { root } = elements;
+      const panelState = readPanelSnapshot(state);
+      const visible = Boolean(panelState.visible);
+      const open = Boolean(panelState.open);
 
       if (root) {
-        root.hidden = !state.visible;
-        root.dataset.open = String(Boolean(state.open));
+        root.hidden = !visible;
+        root.dataset.open = String(open);
       }
-      document.body.classList.toggle("inova-bookmark-panel-open", Boolean(state.visible && state.open));
+      document.body.classList.toggle("inova-bookmark-panel-open", Boolean(visible && open));
       applyHandleRatio(host, state.handleRatio);
-
-      const nextHandleCount = String(state.handleCount || 0);
-      if (handleCount?.textContent !== nextHandleCount) {
-        handleCount.textContent = nextHandleCount;
-      }
 
       syncHostedFrame(host, state);
 
@@ -144,13 +143,38 @@
       }
     }
 
+    function syncPanelChrome(host, chromeState = {}) {
+      if (!(host instanceof global.HTMLElement)) {
+        return false;
+      }
+      const elements = host.__panelElements || resolveElements(host);
+      host.__panelElements = elements;
+      const { root } = elements;
+      const hasOpen = Object.hasOwn(chromeState || {}, "open");
+      if (hasOpen && root) {
+        root.dataset.open = String(Boolean(chromeState.open));
+        const visible = Object.hasOwn(chromeState || {}, "visible")
+          ? Boolean(chromeState.visible)
+          : !root.hidden;
+        document.body.classList.toggle("inova-bookmark-panel-open", visible && Boolean(chromeState.open));
+      }
+      const handleCount = elements.handleCount;
+      if (Object.hasOwn(chromeState || {}, "handleCount")) {
+        const nextHandleCount = String(normalizeCount(chromeState?.handleCount));
+        if (handleCount?.textContent !== nextHandleCount) {
+          handleCount.textContent = nextHandleCount;
+        }
+      }
+      return true;
+    }
+
     function syncHostedFrame(host, state) {
       const elements = host.__panelElements || resolveElements(host);
       const frame = elements.frame;
       if (!(frame instanceof global.HTMLIFrameElement)) {
         return;
       }
-      const runtimeConfig = resolvePanelRuntimeConfig(state?.settings);
+      const runtimeConfig = resolvePanelRuntimeConfig(readPanelSettings(state));
       const panelUrl = normalizeText(runtimeConfig?.hosting?.panelAppUrl || namespace.firebaseConfig?.hosting?.panelAppUrl);
       const panelFrameUrl = buildHostedPanelFrameUrl(host, panelUrl, runtimeConfig);
       const frameTarget = namespace.frameProxy?.resolveTarget?.(panelFrameUrl) || {
@@ -251,6 +275,19 @@
       };
     }
 
+    function readPanelSnapshot(state) {
+      return state?.panelSnapshot && typeof state.panelSnapshot === "object"
+        ? state.panelSnapshot
+        : {};
+    }
+
+    function readPanelSettings(state) {
+      const panelSnapshot = readPanelSnapshot(state);
+      return panelSnapshot.settings && typeof panelSnapshot.settings === "object"
+        ? panelSnapshot.settings
+        : {};
+    }
+
     function pushBridgeSnapshotIfChanged(host, state, options = {}) {
       const snapshot = buildBridgeSnapshot(state, host);
       const snapshotKey = serializeRenderState(snapshot);
@@ -312,6 +349,10 @@
       } catch {
         return "";
       }
+    }
+
+    function normalizeCount(value) {
+      return Math.max(0, Number(value) || 0);
     }
   }
 

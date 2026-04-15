@@ -28,17 +28,12 @@ async function verifyRefreshStateLoadsStorageAndBookmarks() {
       settings: { autoBookmark: true, enabled: true, meetingDebug: false },
       uiPreferences: { activePromptTab: "review", activeTool: "store" },
     },
-    uiPreferenceLockResult: {
-      activePromptTab: "store",
-      activeTool: "prompts",
-      handleRatios: {},
-    },
   });
 
   await harness.controller.refreshState();
 
   assert.equal(harness.state.sessionTitle, "테스트 세션");
-  assert.equal(harness.state.activeTool, "prompts");
+  assert.equal("activeTool" in harness.state, false);
   assert.equal(harness.state.uiPreferences.activeTool, "prompts");
   assert.equal(harness.state.uiPreferences.activePromptTab, "store");
   assert.deepEqual(harness.state.bookmarks, [{ id: "bookmark-1", text: "첫 질문" }]);
@@ -48,13 +43,7 @@ async function verifyRefreshStateLoadsStorageAndBookmarks() {
 }
 
 function verifyLaneAwareStorageChangeHandling() {
-  const harness = createHarness({
-    uiPreferenceLockResult: {
-      activePromptTab: "store",
-      activeTool: "store",
-      handleRatios: {},
-    },
-  });
+  const harness = createHarness();
 
   const changed = harness.controller.handleStorageChange({
     "lane:pausedSessionsKey": { newValue: { "session-3": true } },
@@ -64,7 +53,7 @@ function verifyLaneAwareStorageChangeHandling() {
 
   assert.equal(changed, true);
   assert.equal(harness.state.settings.autoBookmark, false);
-  assert.equal(harness.state.activeTool, "prompts");
+  assert.equal("activeTool" in harness.state, false);
   assert.equal(harness.state.uiPreferences.activeTool, "prompts");
   assert.equal(harness.state.uiPreferences.activePromptTab, "store");
   assert.deepEqual(harness.state.pausedSessions, { "session-3": true });
@@ -94,7 +83,11 @@ async function verifyRouteWaitLifecycle() {
   harness.controller.resetRouteState("session-2", "sig-start");
   assert.equal(harness.state.sessionId, "session-2");
   assert.equal(harness.state.sessionTitle, "테스트 세션");
-  assert.equal(harness.state.open, false);
+  assert.equal("open" in harness.state, false);
+  assert.deepEqual(harness.panelOpenCalls.at(-1), {
+    open: false,
+    options: { persist: false, render: false },
+  });
   assert.equal(harness.state.awaitingRouteMessages, true);
   assert.equal(harness.state.routeBaselineSignature, "sig-start");
 
@@ -247,15 +240,10 @@ function createHarness(options = {}) {
   loadScript("content/route-state-controller.js", context);
 
   const state = {
-    activeId: "",
-    activeTool: options.activeTool || "bookmarks",
     awaitingRouteMessages: Boolean(options.awaitingRouteMessages),
     bookmarks: [],
     lastError: "",
-    open: false,
     pausedSessions: options.pausedSessions || {},
-    preferredOpen: true,
-    promptReview: { open: true },
     routeBaselineSignature: options.routeBaselineSignature || "",
     routeLastMutationAt: options.routeLastMutationAt || 0,
     routeWaitStartedAt: options.routeWaitStartedAt || 0,
@@ -271,26 +259,28 @@ function createHarness(options = {}) {
       activeTool: "bookmarks",
     },
   };
+  const preferredOpen = Object.hasOwn(options, "preferredOpen")
+    ? Boolean(options.preferredOpen)
+    : true;
 
   const harness = {
     controller: null,
     debugEvents,
     liveBookmarks: cloneValue(options.liveBookmarks || [{ id: "bookmark-1", text: "첫 질문" }]),
     liveSignature: options.liveSignature || "sig-after",
+    panelOpenCalls: [],
     state,
   };
 
   harness.controller = context.InovaBookmarks.routeStateController.create(state, {
-    applyUiPreferenceLock(uiPreferences) {
-      return cloneValue(options.uiPreferenceLockResult || uiPreferences);
+    applyPanelOpen(open, applyOptions = {}) {
+      harness.panelOpenCalls.push({
+        open: Boolean(open),
+        options: cloneValue(applyOptions),
+      });
+      return Boolean(open);
     },
-    normalizeToolId(toolId) {
-      return toolId === "release" || toolId === "prompts" || toolId === "meeting"
-        ? toolId
-        : toolId === "store"
-            ? "prompts"
-            : "bookmarks";
-    },
+    readPreferredOpen: () => preferredOpen,
   });
 
   return harness;

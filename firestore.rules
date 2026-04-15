@@ -75,8 +75,12 @@ service cloud.firestore {
       return isPromptPanelSessionActive() || isPromptPanelV2SessionActive();
     }
 
+    function isHostedPanelSessionActive() {
+      return isPanelSessionActive() || isPromptPanelV2SessionActive();
+    }
+
     function matchesMeetingPanel(resourceData) {
-      return isPanelSessionActive()
+      return isHostedPanelSessionActive()
         && resourceData.owner.providerUserKey == request.auth.token.providerUserKey;
     }
 
@@ -170,6 +174,16 @@ service cloud.firestore {
       allow get: if isAnyPromptPanelSessionActive()
         && docId.matches('^latest__all__000[0-1]$');
       allow list: if false;
+      allow write: if false;
+    }
+
+    match /prompt_store_entries/{entryId} {
+      allow get: if isAnyPromptPanelSessionActive()
+        && resource.data.status == "published";
+      allow list: if isAnyPromptPanelSessionActive()
+        && request.query.limit != null
+        && request.query.limit <= 1000
+        && resource.data.status == "published";
       allow write: if false;
     }
 

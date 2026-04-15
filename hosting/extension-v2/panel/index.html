@@ -35,7 +35,10 @@
         const assetSuffix = globalThis.__INOVA_HOSTED_PANEL_ASSET_SUFFIX__ || "";
         [
           "./runtime.js",
+          "./panel-utils.js",
           "./extension-capability-client.js",
+          "./panel-firestore-session-client.js",
+          "./base-firestore-client.js",
           "./prompt-library-model.js",
           "./prompt-library-firestore-client.js",
           "./prompt-library-controller.js",
@@ -51,6 +54,7 @@
           "./store-view.js",
           "./prompt-review-view.js",
           "./prompt-review-controller.js",
+          "./prompt-store-firestore-client.js",
           "./prompt-store-controller.js",
           "./prompt-tool-panel.js",
           "./release-view.js",

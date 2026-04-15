@@ -202,8 +202,8 @@ function verifyActiveHostedBridgeRequestSurfaceStaysGeneric() {
   });
 
   assert(
-    bridgeSource.includes('if (action === "tool-summary-sync") {'),
-    "active hosted bridge should keep the shared tool-summary-sync request surface"
+    !bridgeSource.includes('if (action === "tool-summary-sync")'),
+    "active hosted bridge should not keep the removed tool-summary-sync request surface"
   );
 }
 

@@ -83,7 +83,10 @@ async function verifyHostedMeetingFirestoreClientContract() {
   queryState.panelExpiryIso = futureExpiryIso;
   context.firebase = createFakeFirebase(queryState);
 
+  loadScript("hosting/extension-v2/panel/panel-utils.js", context);
   loadScript("hosting/extension-v2/panel/extension-capability-client.js", context);
+  loadScript("hosting/extension-v2/panel/panel-firestore-session-client.js", context);
+  loadScript("hosting/extension-v2/panel/base-firestore-client.js", context);
   loadScript("hosting/extension-v2/panel/meeting-firestore-client.js", context);
 
   const client = context.InovaBookmarks.meetingFirestoreClient.create({
@@ -101,6 +104,8 @@ async function verifyHostedMeetingFirestoreClientContract() {
           projectId: "browser-extension-main",
         },
         firebaseCustomToken: "panel-token-alpha",
+        panelScope: "prompt-panel-v2",
+        promptPanelScope: "prompt-panel-v2",
         providerUserKey: "fixture-user",
         target: "production",
       };
@@ -129,7 +134,7 @@ async function verifyHostedMeetingFirestoreClientContract() {
 
   assert.equal(runtimeCalls.length, 1, "meeting firestore client should request panel auth once for a fresh subscription");
   assert.equal(runtimeCalls[0].action, "auth.issue-panel-session");
-  assert.equal(runtimeCalls[0].panel, "meeting");
+  assert.equal(runtimeCalls[0].panel, "hosted");
   assert.deepEqual(queryState.collectionNames, ["integration_inova_meetings"]);
   assert.equal(firstSnapshot.fromCache, true, "meeting firestore client should return cached Firestore data first when available");
   assert.equal(firstSnapshot.items[0].meetingId, "meeting-alpha");
@@ -176,9 +181,9 @@ async function verifyHostedMeetingFirestoreClientContract() {
   client.disconnect("test");
   assert.equal(queryState.unsubscribeCount, 1, "meeting firestore client should detach its active snapshot listener on disconnect");
   assert(
-    fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "meeting-firestore-client.js"), "utf8")
+    fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "panel-firestore-session-client.js"), "utf8")
       .includes("runWithSuppressedFirestorePersistenceWarning"),
-    "meeting firestore client should suppress the deprecated Firestore persistence warning in the hosted console"
+    "shared firestore session coordinator should suppress the deprecated Firestore persistence warning in the hosted console"
   );
 }
 
@@ -210,9 +215,9 @@ function createFakeFirebase(queryState) {
         async getIdTokenResult() {
           return {
             claims: {
-              panelExpMs: Date.parse(panelExpiryIso) || Date.now() + 10 * 60 * 1000,
+              promptPanelExpMs: Date.parse(panelExpiryIso) || Date.now() + 10 * 60 * 1000,
               providerUserKey: "fixture-user",
-              scope: "meeting-panel",
+              scope: "prompt-panel-v2",
             },
           };
         },
@@ -269,17 +274,19 @@ function createFakeFirebase(queryState) {
     firestore() {
       return fakeDb;
     },
-    name: "inova-hosted-panel-meeting",
+    name: "inova-hosted-panel",
   };
   return {
     apps: [],
     auth: {
       Auth: {
         Persistence: {
+          NONE: "none",
           SESSION: "session",
         },
       },
     },
+    firestore: {},
     initializeApp() {
       this.apps.push(fakeApp);
       return fakeApp;

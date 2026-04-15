@@ -19,9 +19,6 @@
     const scheduleRender = typeof options.scheduleRender === "function"
       ? options.scheduleRender
       : () => {};
-    const syncTopPanelSummary = typeof options.syncTopPanelSummary === "function"
-      ? options.syncTopPanelSummary
-      : async () => false;
     const traceMeeting = typeof options.traceMeeting === "function"
       ? options.traceMeeting
       : () => {};
@@ -339,7 +336,6 @@
           return state.items;
         } catch (error) {
           applyLoadError(error, "meeting-hub-firestore-unavailable");
-          await emitTopPanelSummary();
           return state.items;
         } finally {
           state.loading = false;
@@ -366,7 +362,6 @@
 
     async function handleRealtimeError(error) {
       applyLoadError(error, "meeting-hub-firestore-unavailable");
-      await emitTopPanelSummary();
       scheduleRender();
     }
 
@@ -384,7 +379,6 @@
       state.error = "";
       state.source = fromCache ? "cache" : "realtime";
       scheduleRender();
-      await emitTopPanelSummary();
     }
 
     async function handleLaunchAction(action, input) {
@@ -528,26 +522,6 @@
       }
     }
 
-    async function emitTopPanelSummary() {
-      if (!hasRequiredCapabilities()) {
-        return false;
-      }
-      const summary = buildTopPanelSummary();
-      try {
-        await syncTopPanelSummary(summary);
-        return true;
-      } catch (error) {
-        void error;
-        return false;
-      }
-    }
-
-    function buildTopPanelSummary() {
-      const count = Math.max(0, Array.isArray(state.items) ? state.items.length : 0);
-      return {
-        count,
-      };
-    }
   }
 
   function createPendingState() {

@@ -2,6 +2,7 @@
   "maxLinesPerSourceFile": 900,
   "activeSharedRootFiles": [
     "shared/constants.js",
+    "shared/firestore-collections.js",
     "shared/firebase-config.js",
     "shared/product-lane.js",
     "shared/provider-identity-cache.js",
@@ -80,6 +81,7 @@
     "background/panel-runtime-capability-router.js",
     "background/panel-runtime-invoke.js",
     "shared/constants.js",
+    "shared/firestore-collections.js",
     "shared/product-lane.js",
     "shared/provider-identity-cache.js",
     "backup/legacy-panel/shared/provider-identity.js",
@@ -184,8 +186,9 @@
     "32": "icons/icon-32.png"
   },
   "manifestContentScripts": [
-    "shared/constants.js",
-    "shared/product-lane.js",
+        "shared/constants.js",
+        "shared/firestore-collections.js",
+        "shared/product-lane.js",
     "shared/session.js",
     "shared/firebase-config.js",
     "shared/provider-identity-cache.js",
@@ -213,6 +216,7 @@
   ],
   "popupScripts": [
     "../shared/constants.js",
+    "../shared/firestore-collections.js",
     "../shared/product-lane.js",
     "../shared/firebase-config.js",
     "../shared/session.js",

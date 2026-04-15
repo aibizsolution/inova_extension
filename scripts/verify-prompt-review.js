@@ -92,9 +92,10 @@ async function verifyExtensionReviewHandoff() {
   await flushAsyncWork();
 
   const viewState = harness.manager.buildViewState();
-  assert.deepEqual(harness.showPromptTabs, ["review"]);
   assert.deepEqual(harness.manager.buildReviewSignalState(), { requestId: 1 });
   assert.equal(harness.runtimeMessages.length, 0);
+  assert.equal("activeTool" in harness.state, false);
+  assert.equal(harness.state.uiPreferences.activePromptTab, "library");
   assert.equal(viewState.available, true);
   assert.equal(viewState.hasText, true);
   assert.equal(viewState.pending, false);
@@ -107,7 +108,9 @@ function verifyHostedPromptReviewContract() {
   const hostedIndexSource = fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "index.js"), "utf8");
   const panelTraceSource = fs.readFileSync(path.join(root, "content", "panel-console-trace.js"), "utf8");
   const topPanelSource = fs.readFileSync(path.join(root, "content", "panel.js"), "utf8");
+  const compositionSource = fs.readFileSync(path.join(root, "content", "panel-v2-composition-controller.js"), "utf8");
   const shellBridgeSource = fs.readFileSync(path.join(root, "content", "panel-v2-shell-bridge.js"), "utf8");
+  const promptShellControllerSource = fs.readFileSync(path.join(root, "content", "panel-v2-prompt-controller.js"), "utf8");
   const promptReviewManagerSource = fs.readFileSync(path.join(root, "content", "features", "prompt-review", "prompt-review-manager.js"), "utf8");
 
   assert.equal(
@@ -147,6 +150,13 @@ function verifyHostedPromptReviewContract() {
     "hosted panel should let the hosted prompt review controller consume Escape before delegating to the top panel"
   );
   assert.equal(
+    hostedIndexSource.includes("return callbacks.onToggle(false);")
+      && hostedIndexSource.includes("function setHostedPanelOpen(nextOpen)")
+      && !hostedIndexSource.includes('action: "escape"'),
+    true,
+    "hosted panel should close through hosted-owned panel open state after hosted review declines Escape, not through a separate content escape action"
+  );
+  assert.equal(
     hostedIndexSource.includes("traceReview: traceReviewFlow"),
     true,
     "hosted panel should wire review tracing into prompt review controller"
@@ -157,25 +167,44 @@ function verifyHostedPromptReviewContract() {
     "top panel should keep hosted review request traces visible"
   );
   assert.equal(
-    shellBridgeSource.includes("const panelTrace = buildPanelTracePayload({"),
+    !shellBridgeSource.includes("panelTrace"),
     true,
-    "v2 shell bridge should build a dedicated panelTrace payload for top panel snapshot tracing"
+    "v2 shell bridge should stop shaping a hosted-owned panelTrace payload"
   );
   assert.equal(
-    shellBridgeSource.includes('reviewOpen: activeTool === "prompts" && promptTab === "review"'),
+    panelTraceSource.includes('reviewOpen: activeTool === "prompts" && activePromptTab === "review"'),
     true,
-    "v2 shell bridge should derive prompt review visibility from prompt tab selection instead of snapshot review state"
+    "top panel trace helper should derive prompt review visibility from snapshot uiPreferences instead of snapshot review state"
   );
   assert.equal(
-    panelTraceSource.includes('const panelTrace = state?.panelTrace && typeof state.panelTrace === "object"')
+    panelTraceSource.includes("const activePromptTab = normalizeText(panelSnapshot?.uiPreferences?.activePromptTab);")
       && topPanelSource.includes("const traceController = panelConsoleTrace.create({"),
     true,
-    "top panel trace helper should consume the prebuilt panelTrace payload and the host should wire that helper in"
+    "top panel trace helper should derive trace payload from the snapshot and the host should wire that helper in"
   );
   assert.equal(
     promptReviewManagerSource.includes("buildReviewSignalState"),
     true,
     "content prompt review manager should expose a minimal hosted handoff signal builder"
+  );
+  assert.equal(
+    !promptReviewManagerSource.includes("showPromptTab")
+      && !promptShellControllerSource.includes("state.activeTool = \"prompts\"")
+      && !promptShellControllerSource.includes("state.open = true")
+      && !promptShellControllerSource.includes("persistActiveTool")
+      && !promptShellControllerSource.includes("lockUiPreferenceSelection"),
+    true,
+    "content prompt review handoff should publish only a requestId signal and should not mutate hosted-owned panel/tool/tab state"
+  );
+  assert.equal(
+    !compositionSource.includes("promptReview:"),
+    true,
+    "v2 composition state should not keep a hosted-owned prompt review view bucket"
+  );
+  assert.equal(
+    !promptReviewManagerSource.includes("state.promptReview"),
+    true,
+    "content prompt review manager should keep only a private monotonic handoff signal instead of mutating shared panel state"
   );
   assert.equal(
     !promptReviewManagerSource.includes("chrome.runtime.sendMessage"),
@@ -197,7 +226,6 @@ function verifyHostedPromptReviewContract() {
 function createPromptReviewHarness(options = {}) {
   const runtimeMessages = [];
   const renderCalls = [];
-  const showPromptTabs = [];
   const version = String(options.version || "0.4.4");
   const context = vm.createContext({
     chrome: {
@@ -287,6 +315,10 @@ function createPromptReviewHarness(options = {}) {
       reviewedText: "",
     },
     sessionId: "session-1",
+    uiPreferences: {
+      activePromptTab: "library",
+      activeTool: "bookmarks",
+    },
   };
 
   return {
@@ -295,13 +327,9 @@ function createPromptReviewHarness(options = {}) {
       render() {
         renderCalls.push(true);
       },
-      showPromptTab(promptTabId) {
-        showPromptTabs.push(promptTabId);
-      },
     }),
     renderCalls,
     runtimeMessages,
-    showPromptTabs,
     state,
   };
 }
