@@ -1,5 +1,8 @@
 (function initReleaseController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const normalizeText = namespace.panelUtils?.normalizeText
+    || namespace.session?.normalizeText
+    || ((value) => String(value ?? "").trim());
   const CHECK_INTERVAL_MS = Number(namespace.constants?.limits?.releaseCheckIntervalMs) || 21600000;
   const REQUIRED_EXTENSION_CAPABILITIES = Object.freeze([
     "runtime.invoke.v1",
@@ -302,10 +305,6 @@
     function normalizeEnum(value, allowed, fallback) {
       const normalized = normalizeText(value).toLowerCase();
       return allowed.includes(normalized) ? normalized : fallback;
-    }
-
-    function normalizeText(value) {
-      return namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
     }
 
     function getErrorMessage(error, fallback) {

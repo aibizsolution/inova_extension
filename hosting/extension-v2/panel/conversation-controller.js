@@ -1,5 +1,8 @@
 (function initConversationController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const normalizeText = namespace.panelUtils?.normalizeText
+    || namespace.session?.normalizeText
+    || ((value) => String(value ?? "").trim());
   const SNAPSHOT_REFRESH_DEBOUNCE_MS = 120;
   const REQUIRED_EXTENSION_CAPABILITIES = Object.freeze([
     "page.adapter.v2",
@@ -321,10 +324,6 @@
 
     function cloneValue(value) {
       return value == null ? value : JSON.parse(JSON.stringify(value));
-    }
-
-    function normalizeText(value) {
-      return namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
     }
 
     function getErrorMessage(error, fallback) {

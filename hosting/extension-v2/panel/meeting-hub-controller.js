@@ -1,5 +1,8 @@
 (function initMeetingHubController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const normalizeText = namespace.panelUtils?.normalizeText
+    || namespace.session?.normalizeText
+    || ((value) => String(value ?? "").trim());
   const LIST_LIMIT = 24;
   const SUPPORTED_ACTIONS = new Set([
     "open-result",
@@ -657,10 +660,6 @@
       return "open-result";
     }
     return "open-workspace";
-  }
-
-  function normalizeText(value) {
-    return namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
   }
 
   function resolveBrowserCapabilities(options) {

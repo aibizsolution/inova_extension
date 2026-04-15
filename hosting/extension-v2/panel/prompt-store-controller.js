@@ -1,5 +1,8 @@
 (function initPromptStoreController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const normalizeText = namespace.panelUtils?.normalizeText
+    || namespace.session?.normalizeText
+    || ((value) => String(value ?? "").trim());
   const LOCAL_CACHE_LIMIT = 1000;
   const INITIAL_RENDER_COUNT = 20;
   const RENDER_BATCH_SIZE = 20;
@@ -688,10 +691,6 @@
         state.searchRenderTimerId = 0;
         scheduleRender();
       }, 180);
-    }
-
-    function normalizeText(value) {
-      return namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
     }
 
     function normalizePanelTarget(value) {

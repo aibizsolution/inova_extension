@@ -1,5 +1,8 @@
 (function initPromptLibraryController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const normalizeText = namespace.panelUtils?.normalizeText
+    || namespace.session?.normalizeText
+    || ((value) => String(value ?? "").trim());
   const REQUIRED_EXTENSION_CAPABILITIES = Object.freeze([
     "page.adapter.v2",
     "runtime.invoke.v1",
@@ -1032,10 +1035,6 @@
       invokePage: options?.invokePage,
       invokeRuntime: options?.invokeRuntime,
     }) || {};
-  }
-
-  function normalizeText(value) {
-    return namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
   }
 
   namespace.promptLibraryController = {
