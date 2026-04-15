@@ -220,6 +220,11 @@ function verifyHostedPanelChromeSyncContract() {
     "hosted panel should own panel open state and sync it to the top host chrome"
   );
   assert(
+    hostedPanelSource.includes("if (!panelSnapshot || state.panelOpenHydrated)")
+      && !hostedPanelSource.includes("panelSnapshot.visible === true"),
+    "hosted panel should accept content snapshot open only as the initial hydration seed"
+  );
+  assert(
     hostedPanelSource.includes('action === "external-toggle"'),
     "hosted panel should own external handle toggle events instead of letting content calculate open state"
   );

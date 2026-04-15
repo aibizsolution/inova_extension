@@ -403,11 +403,7 @@
   }
 
   function hydratePanelOpenState(panelSnapshot) {
-    if (!panelSnapshot) {
-      return;
-    }
-    const shouldAcceptSnapshotOpen = !state.panelOpenHydrated || panelSnapshot.visible === true;
-    if (!shouldAcceptSnapshotOpen) {
+    if (!panelSnapshot || state.panelOpenHydrated) {
       return;
     }
     state.panelOpen = panelSnapshot.open === true;
