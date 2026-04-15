@@ -8,6 +8,7 @@ Last updated: 2026-04-15
 - Current local candidate: `1.0.0`
 - Active branch: `codex/hosted-first-extra-reduction`
 - Latest full validation: `npm.cmd run verify` passed on `codex/hosted-first-extra-reduction`
+- Remaining work: user-owned Chrome smoke / release-go validation only
 - Worktree: clean
 - Current architecture direction:
 - `1.0.0` v2 lane is explicitly hosted-first.
@@ -157,6 +158,7 @@ Short version:
 ### Good
 
 - `npm.cmd run verify` is green.
+- no new extension-side cleanup task is currently identified.
 - Worktree is clean.
 - current `1.0.0` lane also passes `npm.cmd run release:build`; lane-local `hosting/extension-v2/releases/latest.json`, `history.json`, `downloads/latest.zip`, version ZIP, and curated `releases/release-notes.json` artifact metadata regenerate together without verify drift.
 - top console now shows the real active v2 read paths again:
@@ -253,12 +255,11 @@ Not blockers:
 - legacy Functions export names such as `listInovaMeetings`, `issueInovaMeetingPanelAuth`, and `createInovaMeetingShareLink`
 - `backup/legacy-panel/*` and other inactive reference files may remain for impact checks as long as active v2 runtime no longer loads them
 
-## Concrete Next Session Targets
+## Remaining Manual Gates
 
-1. Finish real Chrome smoke and rollout evidence for `1.0.0`
-2. Run release rehearsal and confirm lane-local package/metadata output stays coherent
-3. Keep `verify` focused on preventing active bundle regressions back into legacy extension modules/assets
-4. Treat prompt bridge or meeting endpoint renames as separate server-side follow-up only if they are still useful later
+1. User runs real Chrome smoke and rollout evidence for `1.0.0`
+2. User confirms release rehearsal/package readiness when preparing the actual rollout
+3. Engineering only resumes if manual validation finds a regression or if a future change reopens an extension-side legacy reload blocker
 
 ## Local Rehearsal Notes
 
@@ -304,6 +305,7 @@ So real rollout still means:
 - `hosting` deploy for hosted assets/controller changes
 - extension reload or extension package update for `content/background/shared/manifest` changes
 - docs-only changes need neither
+- with the current audit, no additional engineering change is queued before user-owned validation
 
 Long-term target remains:
 

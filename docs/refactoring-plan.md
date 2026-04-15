@@ -77,6 +77,7 @@ ordinary feature 구현 변경, 탭별 hosted ownership 진행도, smoke 이슈 
 - hosted-first ownership 정리만으로는 `1.0.0 done`으로 보지 않는다.
 - 공식 종료 기준은 이렇다: `1.0.0` rollout 후 `0.4.4` 사용자가 0명이 되었을 때, `0.4.4` retirement 때문에 extension patch, ZIP 재배포, `1.0.1` follow-up이 필요하면 아직 완료가 아니다.
 - 반대로 server-side `hosting/functions` cleanup이나 compat alias 유지 자체는 blocker가 아니다. 핵심은 active extension bundle이 나중 retirement 시점에도 새 ZIP 없이 그대로 남을 수 있느냐다.
+- 현재 감사 기준으로는 refactor backlog보다 manual validation/release gate가 남은 상태다. 새 구현 작업은 validation이 실제 이슈를 드러낼 때만 다시 연다.
 
 ### Extension-bundle blockers
 
