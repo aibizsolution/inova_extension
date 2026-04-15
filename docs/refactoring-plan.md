@@ -75,19 +75,19 @@ ordinary feature 구현 변경, 탭별 hosted ownership 진행도, smoke 이슈 
 ## `1.0.0` Done Criteria
 
 - hosted-first ownership 정리만으로는 `1.0.0 done`으로 보지 않는다.
-- 공식 종료 기준은 이렇다: `1.0.0` rollout 후 `0.4.4` 사용자가 0명이 되었을 때, `0.4.4` cleanup은 `hosting + functions`만 걷어내면 끝나야 한다.
-- 그 cleanup에 extension patch, ZIP 재배포, `1.0.1` follow-up이 필요하면 아직 `1.0.0`은 완료가 아니다.
+- 공식 종료 기준은 이렇다: `1.0.0` rollout 후 `0.4.4` 사용자가 0명이 되었을 때, `0.4.4` retirement 때문에 extension patch, ZIP 재배포, `1.0.1` follow-up이 필요하면 아직 완료가 아니다.
+- 반대로 server-side `hosting/functions` cleanup이나 compat alias 유지 자체는 blocker가 아니다. 핵심은 active extension bundle이 나중 retirement 시점에도 새 ZIP 없이 그대로 남을 수 있느냐다.
 
-### Retirement-ready blockers
+### Extension-bundle blockers
 
-- active v2 prompt가 legacy hidden prompt bridge path `extension/prompt-panel-bridge.html`에 기대면 안 된다.
-- active v2 meeting이 legacy endpoint family `listInovaMeetings`, `issueInovaMeetingPanelAuth`, `createInovaMeetingShareLink`에 기대면 안 된다.
-- verify는 active v2가 위 두 의존을 다시 들여오면 실패해야 한다.
+- active `content/background/popup/shared/manifest`가 `0.4.4` 전용 extension module, asset, deprecated extension-side action surface를 다시 싣거나 부팅하면 안 된다.
+- verify는 active v2 bundle이 `backup/legacy-panel/*`, dead legacy hosted panel asset, deprecated extension-side controller path를 다시 로드하면 실패해야 한다.
 
 ### Not blockers
 
 - `backup/legacy-panel/*`와 inactive reference 보관 자체는 blocker가 아니다.
-- 핵심 기준은 repo 안의 legacy 문자열 개수가 아니라, active v2 runtime이 legacy hosting/functions surface에 독립했는지다.
+- server-side compat path, legacy endpoint name, hosting alias처럼 나중에 서버 배포만으로 바꾸거나 유지할 수 있는 표면도 blocker가 아니다.
+- 핵심 기준은 repo 안의 legacy 문자열 개수가 아니라, active v2 extension bundle이 future retirement 시점에 새 ZIP을 요구하는지다.
 
 ## Meeting Legacy Baseline
 
@@ -141,12 +141,12 @@ ordinary feature 구현 변경, 탭별 hosted ownership 진행도, smoke 이슈 
 - 현재 `1.x+` 활성 bundle과 공유 계약이 더 이상 쓰지 않는 legacy extension panel 코드는 `content/*` 안에 섞어 두지 않는다. 기본 정리 방향은 `backup/legacy-panel/*`로 격리해 참고본으로만 남기거나, 더 이상 필요 없으면 삭제하는 것이다.
 - `backup/legacy-panel/*`는 평소 panel migration 경로가 아니라 `0.4.4` 영향 판단용 보관소다. `DB/Functions`나 shared server contract를 손댈 때만 backup legacy와 비교해 기존 사용자 영향이 없는지 확인한다.
 - 문서가 이 ownership 이동을 뒤따르지 못하면, 발견한 같은 작업 안에서 바로 고친다.
-- v2 lane이라고 해서 모든 backend endpoint family를 바로 분리하지 않는다. 현재 backend 분리가 준비된 것은 prompt-library 계열뿐이고, meeting Functions endpoint는 `1.0.0` v2 lane에서도 legacy 이름(`listInovaMeetings`, `issueInovaMeetingPanelAuth` 등)을 계속 사용한다. 이 상태는 temporary compat baseline이며, `1.0.0 done` 기준에서는 retirement-ready blocker로 본다.
+- v2 lane이라고 해서 모든 backend endpoint family를 바로 분리하지 않는다. 현재 backend 분리가 준비된 것은 prompt-library 계열뿐이고, meeting Functions endpoint는 `1.0.0` v2 lane에서도 legacy 이름(`listInovaMeetings`, `issueInovaMeetingPanelAuth` 등)을 계속 사용한다. 이 상태는 server-side compat baseline으로 기록하되, 그 자체만으로 `1.0.0 done` blocker로 보지는 않는다.
 - local rehearsal에서 hosted panel 기본 경로는 `http://127.0.0.1:5000/extension/panel/index.html`이다.
 - local rehearsal에서 `1.x+` v2 lane hosted panel 기본 경로는 `http://127.0.0.1:5000/extension-v2/panel/index.html`이다.
 - local rehearsal에서 page DOM에 삽입되는 hosted panel/meeting bridge/prompt bridge iframe src는 direct loopback URL이 아니라 extension `content/frame-proxy.html?target=...` wrapper를 사용한다. 실제 target URL baseline은 계속 `127.0.0.1:5000/*`로 유지하고, manifest는 이 proxy page와 extension frame-src allowlist를 함께 유지한다.
 - local 작업 산출물 정리는 `prepare`로 설치되는 `.githooks/pre-commit`가 맡는다. 현재 baseline은 `scripts/cleanup-local-artifacts.js`이며, root `*.log`, `tmp-emulators-*.log`, `.codex-local`, `.codex-logs`, `.codex-temp`의 로그, `.playwright-cli`, `.playwright-mcp`의 `page-*.yml`, `output/*` 임시 산출물을 지우고 빈 폴더는 함께 제거한다. 실행 중 프로세스가 잡고 있는 로그는 skip한다.
-- prompt bridge 자산 경로는 현재 temporary compat baseline으로 lane-stable 규칙을 따른다. `1.x+` v2 lane이어도 `panelAppUrl`만 `extension-v2/panel/*`로 이동하고, hidden prompt bridge target은 production/local 모두 계속 `extension/prompt-panel-bridge.html`을 사용한다. 이 의존이 남아 있는 동안 `0.4.4` cleanup은 `hosting/functions-only`로 끝나지 않는다.
+- prompt bridge 자산 경로는 현재 temporary compat baseline으로 lane-stable 규칙을 따른다. `1.x+` v2 lane이어도 `panelAppUrl`만 `extension-v2/panel/*`로 이동하고, hidden prompt bridge target은 production/local 모두 계속 `extension/prompt-panel-bridge.html`을 사용한다. 이 경로 rename/delete 여부는 future hosting cleanup 문제로 보고, 그 자체만으로 `1.0.0 done` blocker로 보지는 않는다.
 - `1.x+` v2 lane의 prompt-library read baseline은 `auth.issue-panel-session(panel=prompt) -> Firestore custom token sign-in -> integration_inova_accounts_v2.promptLibraryMeta onSnapshot -> prompt_library_orders_v2/prompt_library_chunks_v2 direct read`다. hosted v2 `내 요청` 목록 read를 다시 `loadInovaPromptLibraryV2` Functions fetch baseline으로 되돌리지 않는다.
 - local rehearsal에서도 같은 baseline을 유지한다. prompt panel auth는 local Functions base URL을 향하고, hosted v2 panel은 local Auth/Firestore emulator에 붙어 `integration_inova_accounts_v2`, `prompt_library_orders_v2`, `prompt_library_chunks_v2`를 직접 읽을 수 있어야 한다.
 - hosted panel 자산이 더 최신이어도 extension bridge capability가 부족하면 조용히 깨지지 않고 explicit update-needed 상태를 보여줘야 한다.
@@ -155,7 +155,7 @@ ordinary feature 구현 변경, 탭별 hosted ownership 진행도, smoke 이슈 
 
 - hosted workspace: `https://browser-extension-main.web.app/meeting/index.html`
 - hosted panel bridge: `https://browser-extension-main.web.app/meeting/panel-bridge.html`
-- legacy path는 `0.4.4` 지원이 끝나기 전까지 rename/delete 하지 않는다. 대신 `1.0.0 done` 기준에서는 active v2가 그 path에 기대지 않도록 먼저 migration해야 한다.
+- legacy path는 `0.4.4` 지원이 끝나기 전까지 rename/delete 하지 않는다. 나중 cleanup이 필요하면 server-side 일정으로 정리하고, `1.0.0 done` 기준은 그 정리에 extension follow-up 배포가 필요한지 여부로만 판단한다.
 
 ### Local rehearsal boundary
 

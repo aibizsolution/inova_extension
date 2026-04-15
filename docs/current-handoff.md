@@ -231,36 +231,32 @@ Audit conclusion:
 
 - active manifest JS is still mostly browser-only owner code or thin glue/composition
 - normal hosted v2 feature work that stays inside the current page/runtime capability catalog should not require extension deploy
-- this status describes current ownership only; it does not mean `0.4.4` retirement is already `hosting/functions-only`
+- this status describes current ownership only; it does not by itself prove that later `0.4.4` retirement is extension-patch-free
 
 ## `0.4.4` Retirement Readiness
 
 Current status:
 
-- not retirement-ready yet
-- official `1.0.0 done` means that after `0.4.4` users reach zero, removing `hosting/extension/*` and `0.4.4`-only Functions should require `hosting + functions` deploy only
-- if that cleanup still needs an extension `1.0.1` patch or ZIP re-release, `1.0.0` is not done yet
+- the real `1.0.0 done` question is whether `0.4.4` can be retired later without shipping an extension follow-up release or ZIP
+- server-side cleanup of `hosting/*` or Functions aliases is allowed and is not a blocker by itself
+- current active manifest lane has no verified dependency on `backup/legacy-panel/*` or dead legacy panel assets inside the packaged extension path
 
-Current blockers:
+What counts as a blocker:
 
-- active v2 prompt still depends on the legacy hidden prompt bridge path `extension/prompt-panel-bridge.html`
-- active v2 meeting still depends on legacy endpoint names such as `listInovaMeetings`, `issueInovaMeetingPanelAuth`, and `createInovaMeetingShareLink`
-- current verify/docs guard hosted-first ownership, but they do not yet fail on those retirement blockers
+- any active `content/background/popup/shared/manifest` path that still boots `0.4.4`-only extension modules, assets, or deprecated extension-side action surfaces
+- any later `0.4.4` retirement step that would force an extension `1.0.1` patch or ZIP re-release just to remove old support
 
 Not blockers:
 
-- `backup/legacy-panel/*` and other inactive reference files may remain for impact checks as long as active v2 runtime no longer depends on legacy hosting/functions surface
+- server-side compat paths such as `extension/prompt-panel-bridge.html`
+- legacy Functions export names such as `listInovaMeetings`, `issueInovaMeetingPanelAuth`, and `createInovaMeetingShareLink`
+- `backup/legacy-panel/*` and other inactive reference files may remain for impact checks as long as active v2 runtime no longer loads them
 
 ## Concrete Next Session Targets
 
-1. Prompt path migration
-   - move active v2 prompt flow off the legacy hidden prompt bridge path in both production and local rehearsal
-2. Meeting endpoint migration
-   - add v2-only endpoint family or stable server-side aliases, then move active v2 callers off the legacy meeting endpoint names
-3. Guard tightening
-   - make `verify` fail if active v2 refers to the legacy prompt bridge path or legacy meeting endpoint family
-4. After those land
-   - run real Chrome smoke and only then treat `0.4.4` retirement as `hosting/functions-only` cleanup
+1. Finish real Chrome smoke and rollout evidence for `1.0.0`
+2. Keep `verify` focused on preventing active bundle regressions back into legacy extension modules/assets
+3. Treat prompt bridge or meeting endpoint renames as separate server-side follow-up only if they are still useful later
 
 ## Local Rehearsal Notes
 
