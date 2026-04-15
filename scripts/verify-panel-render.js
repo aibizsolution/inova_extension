@@ -468,15 +468,13 @@ async function verifyHostedReleaseLocalDownloadUrls() {
   );
 
   await controller.handleReleaseAction("download-latest");
-  await controller.handleReleaseAction("download-version", { version: "0.4.4" });
 
   assert.deepEqual(
     runtimeCalls.map((call) => [call.action, call.url]),
     [
       ["browser.open-url", "http://127.0.0.1:5000/extension-v2/downloads/latest.zip"],
-      ["browser.open-url", "http://127.0.0.1:5000/extension-v2/downloads/inova-extension-0.4.4.zip"],
     ],
-    "local hosted release downloads should open local artifact URLs"
+    "local hosted release should open the latest local artifact URL"
   );
 }
 

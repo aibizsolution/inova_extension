@@ -8,27 +8,27 @@
   "release": {
     "version": "1.0.0",
     "level": "major",
-    "headline": "호스팅 중심 실험실 패널 1차 전환",
-    "summary": "실험실 패널의 주요 도구 상태와 UI를 hosted panel 중심으로 옮겨, 앞으로는 대부분의 기능과 UI 변경을 호스팅 배포만으로 더 빠르게 반영할 수 있게 준비한 첫 major 업데이트입니다.",
+    "headline": "인크로스 전사 배포",
+    "summary": "0.4.4 이후 안정화와 QA를 거쳐, 일반 사용을 위한 1.0.0 공식 배포 버전을 제공합니다.",
     "changes": [
       {
         "type": "changed",
-        "text": "대화, 프롬프트 보관함, 스토어, 검토, 회의 허브, 릴리스 탭의 상태와 상호작용을 hosted panel 쪽으로 이동해 확장은 page adapter와 runtime broker 중심으로 단순화했습니다."
+        "text": "대화, 프롬프트, 회의, 릴리스 안내 화면을 더 일관되게 정리했습니다."
       },
       {
         "type": "changed",
-        "text": "이제 1.x lane에서는 extension-v2 hosted panel을 기본 경로로 사용해, 로컬 rehearsal과 이후 공개 배포가 같은 구조를 기준으로 동작합니다."
+        "text": "설치 후 주요 동작과 업데이트 흐름을 다듬어 사용 중 혼란을 줄였습니다."
       },
       {
-        "type": "added",
-        "text": "legacy 0.4.4 경로는 보호한 채 mixed-version capability gate를 유지해, 기존 설치본과 새 hosted panel 자산이 조용히 어긋나지 않도록 했습니다."
+        "type": "fixed",
+        "text": "배포 전 검증과 안정화 작업을 거쳐 공식 배포 기준을 맞췄습니다."
       }
     ],
     "publishedAt": "2026-04-14T06:14:16.492Z",
     "fileName": "inova-extension-1.0.0-2026-04-14.zip",
     "downloadUrl": "https://browser-extension-v2.web.app/extension-v2/downloads/latest.zip",
     "versionDownloadUrl": "https://browser-extension-v2.web.app/extension-v2/downloads/inova-extension-1.0.0-2026-04-14.zip",
-    "notes": "호스팅 중심 실험실 패널 1차 전환",
+    "notes": "인크로스 전사 배포",
     "sha256": "ac25bb3724648fcbfa25bcd2dc0c9b9d2e77acaab8c69a9a23f462376d4d7173",
     "sizeBytes": 224702,
     "minSupportedVersion": "1.0.0"

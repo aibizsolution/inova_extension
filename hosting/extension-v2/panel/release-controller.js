@@ -59,11 +59,11 @@
       }
       if (!state.initialized) {
         state.initialized = true;
-        void ensureChecked(false, panelState?.activeTool === "release");
+        void ensureChecked(false, false);
         return;
       }
       if (panelState?.activeTool === "release") {
-        void ensureChecked(false, true);
+        void ensureChecked(false, false);
       }
     }
 
@@ -116,10 +116,6 @@
       const normalizedAction = normalizeText(action);
       if (!normalizedAction) {
         return false;
-      }
-      if (normalizedAction === "refresh") {
-        await ensureChecked(true, true);
-        return true;
       }
       if (normalizedAction === "download-latest") {
         await openDownload(buildViewState().latest?.downloadUrl);
