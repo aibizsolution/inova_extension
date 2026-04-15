@@ -1135,8 +1135,8 @@
                 <span id="inova-tool-total" class="inova-bookmark-badge inova-bookmark-badge--header">0</span>
               </div>
               <button id="inova-tool-close" type="button" aria-label="도구 패널 닫기">닫기</button>
+              <div id="inova-tool-toast-slot" hidden></div>
             </header>
-            <div id="inova-tool-toast-slot" hidden></div>
             <div id="inova-tool-content"></div>
           </section>
         </div>
