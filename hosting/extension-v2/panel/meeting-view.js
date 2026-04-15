@@ -92,20 +92,22 @@
       <article class="inova-meeting-record${isPending ? " is-pending" : ""}">
         <div class="inova-meeting-record__head">
           <div class="inova-meeting-record__content">
-            <strong>${escapeHtml(item.title)}</strong>
+            <div class="inova-meeting-record__title-row">
+              <strong>${escapeHtml(item.title)}</strong>
+            </div>
             ${presentation.meta ? `<div class="inova-tool-meta inova-tool-meta--muted">${escapeHtml(presentation.meta)}</div>` : ""}
+            <div class="inova-meeting-record__status-row">
+              ${renderMeetingStatus(presentation.statusLabel, presentation.statusTone)}
+              ${item.shareActive ? renderMeetingStatus("공유 중", "share") : ""}
+            </div>
             ${presentation.description ? `<p class="inova-meeting-record__summary">${escapeHtml(presentation.description)}</p>` : ""}
-          </div>
-          <div class="inova-meeting-record__chips">
-            ${item.shareActive ? renderMeetingChip("공유 중", "share") : ""}
-            ${renderMeetingChip(presentation.statusLabel, presentation.statusTone)}
           </div>
         </div>
         <div class="inova-meeting-record__actions">
           <div class="inova-meeting-record__primary">
             <button
               type="button"
-              class="inova-tool-button inova-tool-button--compact is-primary"
+              class="inova-tool-button inova-meeting-record__open-button"
               data-meeting-action="open-result"
               data-meeting-id="${escapeHtml(item.meetingId)}"
               data-meeting-job-id="${escapeHtml(item.latestJobId)}"
@@ -120,7 +122,7 @@
           <div class="inova-meeting-record__secondary">
           <button
             type="button"
-            class="inova-tool-button inova-tool-button--compact"
+            class="inova-tool-button inova-tool-button--compact inova-meeting-record__secondary-button"
             data-meeting-action="share"
             data-meeting-id="${escapeHtml(item.meetingId)}"
             data-meeting-job-id="${escapeHtml(item.latestJobId)}"
@@ -133,7 +135,7 @@
           ${item.shareActive || revokePending ? `
           <button
             type="button"
-            class="inova-tool-button inova-tool-button--compact is-danger"
+            class="inova-tool-button inova-tool-button--compact inova-meeting-record__secondary-button is-danger"
             data-meeting-action="revoke-share"
             data-meeting-id="${escapeHtml(item.meetingId)}"
             data-meeting-job-id="${escapeHtml(item.latestJobId)}"
@@ -170,12 +172,12 @@
     `;
   }
 
-  function renderMeetingChip(text, tone = "neutral") {
+  function renderMeetingStatus(text, tone = "neutral") {
     const value = normalizeText(text);
     if (!value) {
       return "";
     }
-    return `<span class="inova-meeting-record__chip is-${escapeHtml(normalizeText(tone) || "neutral")}">${escapeHtml(value)}</span>`;
+    return `<span class="inova-meeting-record__status is-${escapeHtml(normalizeText(tone) || "neutral")}">${escapeHtml(value)}</span>`;
   }
 
   function normalizePending(pending) {

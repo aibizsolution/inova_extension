@@ -438,25 +438,52 @@
 .inova-tool-toolbar--meeting { padding-top: 14px; align-items: stretch; }
 .inova-tool-toolbar__row--meeting { width: 100%; align-items: center; justify-content: flex-end; }
 .inova-tool-section--meeting .inova-tool-toolbar__row--meeting { justify-content: flex-end; }
-.inova-meeting-record-list { display: flex; flex-direction: column; gap: 0; }
+.inova-tool-section--meeting .inova-bookmark-action {
+  min-height: 46px;
+  padding: 0 18px;
+  border-radius: 16px;
+  font-size: 13px;
+}
+.inova-meeting-record-list { display: flex; flex-direction: column; gap: 12px; }
 .inova-meeting-record {
-  position: relative; display: flex; flex-direction: column; gap: 12px; padding: 14px 8px; margin-bottom: 0;
-  border: 0; border-bottom: 1px solid rgba(98, 127, 145, 0.14); border-radius: 0; background: transparent;
-  box-shadow: none;
+  position: relative; display: flex; flex-direction: column; gap: 14px; padding: 16px 14px 14px; margin-bottom: 0;
+  border: 1px solid rgba(98, 127, 145, 0.12); border-radius: 18px; background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 10px 24px rgba(26, 52, 73, 0.04);
 }
 .inova-meeting-record.is-pending {
-  border-bottom-color: rgba(27, 96, 232, 0.18);
-  background: rgba(240, 246, 255, 0.72);
+  border-color: rgba(27, 96, 232, 0.18);
+  background: rgba(241, 246, 255, 0.9);
 }
-.inova-meeting-record:last-child { border-bottom: 0; }
-.inova-meeting-record:hover { background: rgba(248, 251, 255, 0.82); }
+.inova-meeting-record:hover {
+  border-color: rgba(98, 127, 145, 0.18);
+  background: rgba(250, 252, 255, 0.94);
+  box-shadow: 0 14px 28px rgba(26, 52, 73, 0.06);
+}
 .inova-meeting-record__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-.inova-meeting-record__content { display: grid; gap: 4px; min-width: 0; flex: 1 1 auto; }
-.inova-meeting-record__chips,
+.inova-meeting-record__content { display: grid; gap: 6px; min-width: 0; flex: 1 1 auto; }
+.inova-meeting-record__title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
 .inova-meeting-record__primary,
 .inova-meeting-record__secondary { display: flex; flex-wrap: wrap; gap: 6px; }
-.inova-meeting-record__chips { justify-content: flex-end; flex: 0 0 auto; }
-.inova-meeting-record__actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.inova-meeting-record__status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.inova-meeting-record__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+  border-top: 1px solid rgba(52, 81, 100, 0.08);
+}
 .inova-meeting-record__secondary { justify-content: flex-end; }
 .inova-meeting-record__head strong {
   font-size: 14px;
@@ -471,46 +498,67 @@
   font-weight: 500;
   line-height: 1.45;
 }
-.inova-meeting-record__summary { margin: 0; font-size: 12px; line-height: 1.58; color: rgba(16, 33, 43, 0.74); white-space: pre-wrap; }
-.inova-meeting-record__chip {
+.inova-meeting-record__summary {
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 1.58;
+  color: rgba(16, 33, 43, 0.72);
+  white-space: pre-wrap;
+}
+.inova-meeting-record__status {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  min-height: 26px;
-  padding: 0 10px;
-  border: 1px solid rgba(98, 127, 145, 0.16);
-  border-radius: 999px;
-  background: rgba(246, 250, 252, 0.96);
-  color: rgba(16, 33, 43, 0.72);
+  gap: 6px;
+  min-height: 18px;
+  color: rgba(16, 33, 43, 0.64);
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: -0.01em;
   white-space: nowrap;
 }
-.inova-meeting-record__chip.is-neutral {
-  border-color: rgba(98, 127, 145, 0.16);
-  background: rgba(246, 250, 252, 0.96);
+.inova-meeting-record__status::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.9;
+  flex: 0 0 auto;
+}
+.inova-meeting-record__status.is-neutral {
   color: rgba(16, 33, 43, 0.7);
 }
-.inova-meeting-record__chip.is-progress {
-  border-color: rgba(27, 96, 232, 0.18);
-  background: rgba(233, 242, 255, 0.96);
+.inova-meeting-record__status.is-progress {
   color: rgba(24, 86, 182, 0.92);
 }
-.inova-meeting-record__chip.is-success {
-  border-color: rgba(15, 124, 137, 0.18);
-  background: rgba(231, 246, 243, 0.98);
+.inova-meeting-record__status.is-success {
   color: rgba(12, 96, 107, 0.94);
 }
-.inova-meeting-record__chip.is-danger {
-  border-color: rgba(173, 70, 87, 0.2);
-  background: rgba(252, 240, 242, 0.98);
+.inova-meeting-record__status.is-danger {
   color: rgba(146, 46, 65, 0.94);
 }
-.inova-meeting-record__chip.is-share {
-  border-color: rgba(39, 121, 212, 0.18);
-  background: rgba(235, 244, 255, 0.98);
+.inova-meeting-record__status.is-share {
   color: rgba(29, 102, 185, 0.94);
+}
+.inova-meeting-record__open-button {
+  min-height: 38px;
+  padding: 0 14px;
+  border-color: rgba(15, 124, 137, 0.18);
+  border-radius: 14px;
+  background: rgba(232, 246, 244, 0.96);
+  color: #0f5f77;
+  font-size: 12px;
+  font-weight: 800;
+}
+.inova-meeting-record__secondary-button {
+  background: rgba(255, 255, 255, 0.72);
+  color: rgba(16, 33, 43, 0.74);
+  border-color: rgba(98, 127, 145, 0.14);
+}
+.inova-meeting-record__secondary-button.is-danger {
+  background: rgba(252, 246, 247, 0.92);
+  border-color: rgba(173, 70, 87, 0.18);
+  color: #8a3344;
 }
 .inova-meeting-debug-fab-wrap {
   position: fixed;
