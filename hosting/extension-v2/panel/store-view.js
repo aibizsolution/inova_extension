@@ -125,6 +125,7 @@
     const importing = state.actionPending?.type === "import" && state.actionPending.entryId === item.entryId;
     const liking = state.actionPending?.type === "like" && state.actionPending.entryId === item.entryId;
     const unpublishing = state.actionPending?.type === "unpublish" && state.actionPending.entryId === item.entryId;
+    const actionDisabled = importing || liking || unpublishing;
     const ownerLabel = systemOwned
       ? "시스템 에이전트 스타터"
       : item.owner.maskedEmail
@@ -145,11 +146,7 @@
             </div>
           </div>
           <div class="inova-store-item__side">
-            ${expandable
-              ? `<button type="button" class="inova-tool-button inova-tool-button--compact" data-store-action="toggle-expand" data-store-entry-id="${item.entryId}">
-                  ${expanded ? "닫기" : "보기"}
-                </button>`
-              : ""}
+            ${expandable ? renderStoreToggleButton(item.entryId, expanded, actionDisabled) : ""}
           </div>
         </div>
         ${expanded ? renderExpandedContent(item, detailPending) : ""}
@@ -162,26 +159,53 @@
           <div class="inova-prompt-item__actions">
             <button
               type="button"
-              class="inova-tool-button is-primary"
+              class="inova-tool-button inova-tool-button--compact inova-tool-button--with-icon is-primary"
               data-store-action="import"
               data-store-entry-id="${item.entryId}"
-              ${renderDisabled(importing || liking || unpublishing)}
-            >${importing ? "가져오는 중..." : "가져오기"}</button>
-            ${expanded && owned
-              ? `<button type="button" class="inova-tool-button" data-store-action="request-unpublish" data-store-entry-id="${item.entryId}" ${renderDisabled(importing || liking || unpublishing)}>${deleteConfirm ? "닫기" : "스토어 삭제"}</button>`
-              : ""}
-            ${expanded ? `<button
+              ${renderDisabled(actionDisabled)}
+            >
+              <span class="inova-tool-inline-icon is-import" aria-hidden="true"></span>
+              <span>${importing ? "가져오는 중..." : "가져오기"}</span>
+            </button>
+            <button
               type="button"
-              class="inova-tool-button ${item.viewer.liked ? "is-primary" : ""}"
+              class="inova-tool-button inova-tool-button--compact inova-tool-button--with-icon inova-store-item__like-button ${item.viewer.liked ? "is-primary" : ""}"
               data-store-action="toggle-like"
               data-store-entry-id="${item.entryId}"
-              ${renderDisabled(importing || liking || unpublishing)}
-            >${liking ? "처리 중..." : item.viewer.liked ? "좋아요 취소" : "좋아요"}</button>` : ""}
+              aria-pressed="${item.viewer.liked}"
+              ${renderDisabled(actionDisabled)}
+            >
+              <span class="inova-tool-inline-icon is-like" aria-hidden="true"></span>
+              <span aria-hidden="true">${Number(item.metrics.likeCount) || 0}</span>
+              <span class="inova-sr-only">${liking ? "좋아요 처리 중" : item.viewer.liked ? "좋아요 취소" : "좋아요"}</span>
+            </button>
+            ${expanded && owned
+              ? `<button type="button" class="inova-tool-button inova-tool-button--compact ${deleteConfirm ? "" : "is-danger"}" data-store-action="request-unpublish" data-store-entry-id="${item.entryId}" ${renderDisabled(actionDisabled)}>${deleteConfirm ? "삭제 취소" : "삭제"}</button>`
+              : ""}
           </div>
         </div>
         ${itemFeedback ? renderFeedback(itemFeedback) : ""}
         ${deleteConfirm ? renderDeleteConfirm(item.entryId, item.title, unpublishing) : ""}
       </article>
+    `;
+  }
+
+  function renderStoreToggleButton(entryId, expanded, disabled) {
+    const label = expanded ? "상세 접기" : "상세 보기";
+    return `
+      <button
+        type="button"
+        class="inova-tool-button inova-tool-icon-button"
+        data-store-action="toggle-expand"
+        data-store-entry-id="${escapeHtml(entryId)}"
+        aria-label="${escapeHtml(label)}"
+        aria-pressed="${expanded}"
+        title="${escapeHtml(label)}"
+        ${renderDisabled(disabled)}
+      >
+        <span class="inova-tool-inline-icon is-${expanded ? "collapse" : "expand"}" aria-hidden="true"></span>
+        <span class="inova-sr-only">${escapeHtml(label)}</span>
+      </button>
     `;
   }
 

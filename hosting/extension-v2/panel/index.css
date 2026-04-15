@@ -144,6 +144,37 @@
 .inova-tool-action-with-help { display: inline-flex; }
 .inova-tool-button, .inova-tool-pill { padding: 7px 11px; }
 .inova-tool-button--with-help { display: inline-flex; align-items: center; gap: 6px; }
+.inova-tool-button--with-icon { display: inline-flex; align-items: center; gap: 6px; }
+.inova-tool-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 10px;
+}
+.inova-tool-inline-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  color: currentColor;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+.inova-tool-inline-icon.is-edit::before { content: "✎"; }
+.inova-tool-inline-icon.is-publish::before { content: "↗"; }
+.inova-tool-inline-icon.is-delete::before { content: "×"; font-size: 14px; }
+.inova-tool-inline-icon.is-insert::before { content: "→"; }
+.inova-tool-inline-icon.is-import::before { content: "↓"; }
+.inova-tool-inline-icon.is-like::before { content: "♥"; font-size: 11px; }
+.inova-tool-inline-icon.is-expand::before { content: "▾"; }
+.inova-tool-inline-icon.is-collapse::before { content: "▴"; }
 .inova-tool-button__help {
   display: inline-flex;
   align-items: center;
@@ -331,8 +362,14 @@
   flex-wrap: nowrap;
   min-width: fit-content;
   white-space: nowrap;
+  gap: 8px;
 }
 .inova-prompt-item__meta .inova-tool-button { flex: 0 0 auto; white-space: nowrap; }
+.inova-prompt-item__quick-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
 .inova-prompt-item__date { flex: 0 0 auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .inova-prompt-drag-handle {
   border: 0; padding: 0; background: transparent; color: rgba(98, 127, 145, 0.82); font-size: 14px; font-weight: 700;
@@ -344,11 +381,17 @@
   margin: 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
   color: rgba(16, 33, 43, 0.8); font-size: 13px; line-height: 1.55; white-space: pre-wrap;
 }
+.inova-prompt-item__use-button {
+  border-color: rgba(15, 124, 137, 0.16);
+  background: rgba(245, 250, 252, 0.96);
+  color: #0f5f77;
+  font-weight: 700;
+}
 .inova-prompt-item__menu { padding-top: 2px; }
 .inova-store-item__header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: start; }
 .inova-store-item__main, .inova-store-item__footer { display: flex; flex-direction: column; gap: 8px; }
 .inova-store-item__main { min-width: 0; }
-.inova-store-item__side { display: flex; align-items: flex-start; justify-content: flex-end; flex: 0 0 auto; }
+.inova-store-item__side { display: flex; align-items: flex-start; justify-content: flex-end; gap: 4px; flex: 0 0 auto; }
 .inova-store-item__chip, .inova-store-publication .inova-store-item__badge {
   display: inline-flex; align-items: center; justify-content: center; padding: 3px 8px; border-radius: 10px;
   border: 1px solid rgba(15, 124, 137, 0.14); background: rgba(15, 124, 137, 0.05); color: #0f5f77; font-size: 11px; font-weight: 700; white-space: nowrap;
@@ -368,6 +411,10 @@
 .inova-store-item__footer { gap: 10px; padding-top: 10px; border-top: 1px solid rgba(52, 81, 100, 0.08); }
 .inova-store-item .inova-prompt-item__actions { gap: 8px; }
 .inova-store-item .inova-prompt-item__actions .inova-tool-button { padding-inline: 10px; }
+.inova-store-item__like-button {
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
 .inova-store-item.is-expanded .inova-prompt-item__content { -webkit-line-clamp: unset; }
 .inova-store-metric {
   display: inline-flex; align-items: center; gap: 5px; color: rgba(16, 33, 43, 0.72); font-variant-numeric: tabular-nums;

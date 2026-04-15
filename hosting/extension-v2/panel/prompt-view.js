@@ -63,13 +63,13 @@
   }
 
   function renderPromptItem(item, state) {
-    const menuOpen = state.menuPromptId === item.id;
     const deleteConfirm = state.deletePromptId === item.id;
     const pendingInsert = state.pendingInsert?.promptId === item.id;
     const itemFeedback = state.feedback?.promptId === item.id ? state.feedback : null;
     const publishOpen = state.publishPromptId === item.id;
     const deletePending = state.actionPending?.type === "delete" && state.actionPending.promptId === item.id;
     const publishPending = state.actionPending?.type === "publish" && state.actionPending.promptId === item.id;
+    const actionsDisabled = deletePending || publishPending;
 
     return `
       <article class="inova-prompt-item" data-prompt-id="${item.id}">
@@ -86,20 +86,22 @@
           </div>
           <div class="inova-prompt-item__meta">
             <span class="inova-prompt-item__date">${formatDate(item.updatedAt)}</span>
-            <button type="button" class="inova-tool-button inova-tool-button--compact" data-prompt-action="toggle-menu" data-prompt-id="${item.id}" ${renderDisabled(deletePending || publishPending)}>
-              ${menuOpen ? "닫기" : "관리"}
-            </button>
+            <div class="inova-prompt-item__quick-actions">
+              ${renderPromptQuickAction("edit", item.id, "edit", "수정", actionsDisabled)}
+              ${renderPromptQuickAction("open-publish", item.id, "publish", "스토어 등록", actionsDisabled)}
+              ${renderPromptQuickAction("request-delete", item.id, "delete", "삭제", actionsDisabled, true)}
+            </div>
           </div>
         </div>
         <p class="inova-prompt-item__content">${escapeHtml(item.content)}</p>
         <div class="inova-prompt-item__actions">
-          <button type="button" class="inova-tool-button is-primary" data-prompt-action="use" data-prompt-id="${item.id}">
-            입력창에 넣기
+          <button type="button" class="inova-tool-button inova-tool-button--compact inova-tool-button--with-icon inova-prompt-item__use-button" data-prompt-action="use" data-prompt-id="${item.id}">
+            <span class="inova-tool-inline-icon is-insert" aria-hidden="true"></span>
+            <span>넣기</span>
           </button>
         </div>
         ${itemFeedback ? renderFeedback(itemFeedback) : ""}
         ${pendingInsert ? renderPendingInsert() : ""}
-        ${menuOpen ? renderPromptMenu(item.id, deletePending || publishPending) : ""}
         ${publishOpen ? renderPublishForm(
           item.id,
           state.storeCategories,
@@ -115,13 +117,20 @@
     `;
   }
 
-  function renderPromptMenu(promptId, disabled) {
+  function renderPromptQuickAction(action, promptId, icon, label, disabled, danger = false) {
     return `
-      <div class="inova-prompt-item__menu" data-prompt-menu>
-        <button type="button" class="inova-tool-button" data-prompt-action="edit" data-prompt-id="${promptId}" ${renderDisabled(disabled)}>수정</button>
-        <button type="button" class="inova-tool-button" data-prompt-action="open-publish" data-prompt-id="${promptId}" ${renderDisabled(disabled)}>스토어 등록</button>
-        <button type="button" class="inova-tool-button is-danger" data-prompt-action="request-delete" data-prompt-id="${promptId}" ${renderDisabled(disabled)}>삭제</button>
-      </div>
+      <button
+        type="button"
+        class="inova-tool-button inova-tool-icon-button ${danger ? "is-danger" : ""}"
+        data-prompt-action="${escapeHtml(action)}"
+        data-prompt-id="${escapeHtml(promptId)}"
+        aria-label="${escapeHtml(label)}"
+        title="${escapeHtml(label)}"
+        ${renderDisabled(disabled)}
+      >
+        <span class="inova-tool-inline-icon is-${escapeHtml(icon)}" aria-hidden="true"></span>
+        <span class="inova-sr-only">${escapeHtml(label)}</span>
+      </button>
     `;
   }
 
