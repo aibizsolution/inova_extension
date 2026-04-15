@@ -1,15 +1,15 @@
 # Current Handoff
 
-Last updated: 2026-04-15
+Last updated: 2026-04-16
 
 ## Snapshot
 
 - Public deployed baseline: `0.4.4`
 - Current local candidate: `1.0.0`
 - Active branch: `codex/hosted-first-extra-reduction`
-- Latest full validation: `npm.cmd run verify` passed on `codex/hosted-first-extra-reduction` after removing the extension `tool-summary-sync` / `toolSummaries` echo path, the legacy `toggle-panel` panel request path, the content-side external handle open fallback, the content-only `settingsHydrated` snapshot field, top-level `open` / `visible` / `settings` host-runtime fallbacks, top-level `open` / `visible` trace fallbacks, top-level `handleCount` host-runtime fallback, stale host-runtime verification fixture fallbacks, active-tool writes from the handle-position save path, and adding the shell controller guard to the default verify chain
+- Latest full validation: `npm.cmd run verify` passed on `codex/hosted-first-extra-reduction` after the hosted-first state reduction, Firestore session/base reader commonization, prompt-store shared model extraction, open hydration guard, and shared text-normalization cleanup.
 - Remaining work: Chrome smoke / release-go validation plus the hosted-first cleanup backlog captured below
-- Worktree: dirty while hosted panel UI, Firestore session/direct store read, Firestore reader lifecycle commonization, small extension state cleanup, and documentation changes are in progress
+- Worktree: expected clean after the current documentation correction commit
 - Current architecture direction:
 - `1.0.0` v2 lane is explicitly hosted-first.
 - default location for tab UI, view state, action flow, and feature-local controllers is `hosting/*`.
@@ -51,7 +51,7 @@ Valid remaining issues from Review 1:
 
 - `content/features/prompt-review/*` is still active page DOM UI. This is not a simple hosted move because the floating button is anchored to the composer DOM, uses document body/focus/input/scroll behavior, and must survive page layout changes. Treat it as a separate hosted-overlay design, not a quick cleanup.
 - Firestore auth/session and reader lifecycle are now shared by the active hosted readers. The remaining risk is behavioral: Chrome smoke should confirm tab switches reuse one hosted auth session and that each feature keeps only collection/query/snapshot-specific logic.
-- `prompt-store` normalization/scoring/sorting/filtering exists in both backend and hosted frontend. This can drift and should be moved to a shared model only after the current store UI/read path is stable.
+- `prompt-store` normalization/scoring/sorting/filtering now uses hosted/functions deploy-root copies of the same `prompt-store-model.js`; keep `scripts/verify-prompt-store-model.js` as the guard against drift.
 - common hosted reader helpers are centralized in `panel-utils.js`; remaining controller-local helpers should only be extracted when they repeat across active hosted modules.
 - Firestore collection names now resolve through `shared/firestore-collections.js`. Keep the guard that prevents collection names from drifting back into multiple shared config surfaces.
 
@@ -87,12 +87,12 @@ Do not do in the same slice:
 - Do not move page DOM sensors, route watchers, provider identity localStorage reads, iframe host, postMessage bridge, or background privileged runtime broker into hosted.
 - Do not hide backend/rules/schema mismatch with frontend fallback.
 - Do not treat documentation-only `content/features/*/AGENTS.md` folders as active runtime issues.
-- Do not commit automatically at this stage; keep the user-controlled commit boundary.
+- Commit at green verification boundaries when the user explicitly asks to continue/commit; otherwise keep commit boundaries user-controlled.
 
 Current progress in this slice:
 
 - Step 1 is implemented in code through `panel-firestore-session-client.js` and guarded by hosted-panel verification.
-- Step 2 has started with hosted-local `panel-utils.js`; meeting, prompt-library, prompt-store, and the shared Firestore session coordinator now reuse the same hosted panel helper contract.
+- Step 2 is implemented for active hosted controllers/readers through hosted-local `panel-utils.js`; meeting, prompt-library, prompt-store, prompt-review, release, conversation, index, and the shared Firestore session coordinator now reuse the same hosted panel helper contract for common text normalization and related utilities.
 - Step 3 is implemented with hosted-local `base-firestore-client.js`; meeting, prompt-library, and prompt-store now share subscribe/disconnect/cache/first-snapshot/publish/error lifecycle and keep feature-specific query/snapshot logic in their own files.
 - Feature Firestore clients no longer keep dead SDK/app/auth/db/persistence state after the shared session coordinator took ownership; the hosted-panel guard now fails if that state is reintroduced.
 - The shared v2 composition state no longer keeps a `promptReview` view bucket. Content prompt review now keeps only a private monotonic handoff request signal for hosted review activation.
@@ -306,7 +306,6 @@ Classification summary:
   - hosted-level state residue inside `content/panel-v2-composition-controller.js`
   - hosted-level shell decision residue inside `content/panel-v2-shell-bridge.js`
   - prompt review float tab/open handoff residue inside `content/panel-v2-prompt-controller.js`
-  - prompt-store normalization/scoring/filtering duplication across Functions and hosted panel
 
 Audit conclusion:
 
