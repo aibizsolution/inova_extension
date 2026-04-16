@@ -471,6 +471,13 @@ verify 기준:
 - production capability는 disabled default로 둔다.
 - pilot 전까지 read/light-write만 허용한다.
 
+현재 상태:
+
+- `workflow` capability는 sandbox pilot 전까지 disabled 또는 killed 상태만 manifest validation을 통과한다.
+- workflow capability는 top-level `workflowArtifacts` registry에 등록된 `artifactId + artifactVersion`만 참조할 수 있다.
+- workflow artifact는 allowlisted `scriptSlot`, `bundleId`, `integrity` pin을 필수로 가진다.
+- workflow artifact에 raw `code`, `script`, `source`, `url`, `fetchUrl`, `endpointUrl` payload field가 있으면 remote manifest validation에서 fallback으로 떨어진다.
+
 ### Phase 7. Negotiation / Kill Switch / Rollout Guard
 
 목적:
@@ -616,7 +623,8 @@ verify 기준:
 
 4. Workflow artifact registry
    - 기대 효과: remote logic을 versioned artifact 단위로 감사할 수 있다.
-   - 비용: manifest schema, loader, cache, debug UI 필요.
+   - 상태: manifest `workflowArtifacts` registry, artifact version pinning, allowlisted scriptSlot, integrity metadata, raw payload field rejection을 1차 구현함. 실행 loader/cache/debug UI는 아직 열지 않았다.
+   - 비용: sandbox loader, artifact cache, debug UI 필요.
    - 리스크: unsigned/unpinned artifact 실행을 금지해야 한다.
 
 5. Capability catalog 자동 문서 생성

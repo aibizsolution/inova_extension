@@ -15,6 +15,9 @@
     "debug.set-enabled",
     "trace.log",
   ]);
+  const WORKFLOW_SCRIPT_SLOTS = Object.freeze([
+    "remote-workflow",
+  ]);
   const LOCAL_RUNTIME_DEFAULTS = Object.freeze({
     authPort: 9099,
     firestorePort: 8080,
@@ -111,6 +114,7 @@
         functionsBaseUrl: DEFAULT_FUNCTIONS_BASE_URL,
       },
     },
+    workflowArtifacts: {},
   });
   const FUNCTION_ENDPOINTS = Object.freeze(buildFunctionEndpointMap(BUNDLED_FUNCTIONS_MANIFEST.endpointKeys));
   let cachedRemoteManifestRecord = null;
@@ -135,6 +139,7 @@
     normalizeText,
     pageCapabilityIds: PAGE_CAPABILITY_IDS,
     readManifestVersion: () => namespace.productLane?.readManifestVersion?.() || "1.0.0",
+    workflowScriptSlots: WORKFLOW_SCRIPT_SLOTS,
   });
   if (!capabilityManifestValidator?.validateRemoteCapabilityManifest) {
     throw new Error("capability manifest validator is missing");

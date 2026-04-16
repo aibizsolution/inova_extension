@@ -39,6 +39,7 @@ function verifyServedCapabilityManifests() {
   assert.equal(v2Manifest.capabilities["page.composer.read-state"].pageCapabilityId, "composer.read-state");
   assert.equal(v2Manifest.capabilities["release.download.open"].kind, "browser.open-url");
   assert.deepEqual(v2Manifest.capabilities["release.download.open"].templateKeys, ["release.download"]);
+  assert.deepEqual(v2Manifest.workflowArtifacts, {});
   assert.equal(v2Manifest.lanes.v2.endpointOverrides.syncInovaPromptLibraryUrl, "syncInovaPromptLibraryV2");
 }
 
@@ -116,17 +117,50 @@ async function verifyRemoteManifestValidationFailuresAreVisible() {
   );
   await verifyRejectedManifestMutation(
     (manifest) => {
+      addTestWorkflowArtifact(manifest);
       manifest.capabilities["test.workflow.enabled"] = buildTestWorkflowCapability({ enabled: true });
     },
     "enabled workflow capability should fall back visibly before sandbox pilot"
   );
   await verifyRejectedManifestMutation(
     (manifest) => {
+      addTestWorkflowArtifact(manifest);
       manifest.capabilities["test.workflow.no-kill-switch"] = buildTestWorkflowCapability({
         killSwitch: null,
       });
     },
     "workflow capability without kill switch metadata should fall back visibly"
+  );
+  await verifyRejectedManifestMutation(
+    (manifest) => {
+      manifest.capabilities["test.workflow.missing-artifact"] = buildTestWorkflowCapability({
+        artifactId: "missing-workflow",
+        workflowId: "test.workflow.missing-artifact",
+      });
+    },
+    "workflow capability without artifact registry should fall back visibly"
+  );
+  await verifyRejectedManifestMutation(
+    (manifest) => {
+      addTestWorkflowArtifact(manifest, {
+        scriptSlot: "raw-browser-context",
+      });
+      manifest.capabilities["test.workflow.bad-slot"] = buildTestWorkflowCapability({
+        workflowId: "test.workflow.bad-slot",
+      });
+    },
+    "workflow artifact with unknown scriptSlot should fall back visibly"
+  );
+  await verifyRejectedManifestMutation(
+    (manifest) => {
+      addTestWorkflowArtifact(manifest, {
+        artifactVersion: "0.0.2",
+      });
+      manifest.capabilities["test.workflow.version-mismatch"] = buildTestWorkflowCapability({
+        workflowId: "test.workflow.version-mismatch",
+      });
+    },
+    "workflow artifact version mismatch should fall back visibly"
   );
   await verifyRejectedManifestMutation(
     (manifest) => {
@@ -256,6 +290,7 @@ async function verifyBundledRuntimeRouterDispatch() {
     enabled: false,
     testOnly: true,
   };
+  addTestWorkflowArtifact(remoteManifest);
   remoteManifest.capabilities["test.workflow.disabled"] = buildTestWorkflowCapability({ enabled: false });
   const context = createRuntimeContext({
     fetch: async (url, options) => {
@@ -427,6 +462,7 @@ async function verifyBundledRuntimeRouterDispatch() {
   assert.equal(workflowCapability?.enabled, false);
   assert.equal(workflowCapability?.workflowId, "test.workflow.disabled");
   assert.equal(workflowCapability?.artifactId, "test-workflow");
+  assert.equal(workflowCapability?.artifactVersion, "0.0.1");
   assert(!handshake.enabledCapabilityIds.includes("test.workflow.disabled"));
 
   const semanticPreferences = await router.handle({
@@ -735,6 +771,19 @@ function buildTestWorkflowCapability(overrides = {}) {
     testOnly: true,
     workflowId: "test.workflow.disabled",
     ...overrides,
+  };
+}
+
+function addTestWorkflowArtifact(manifest, overrides = {}) {
+  manifest.workflowArtifacts = {
+    ...(manifest.workflowArtifacts || {}),
+    "test-workflow": {
+      artifactVersion: "0.0.1",
+      bundleId: "test-workflow-bundle",
+      integrity: "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+      scriptSlot: "remote-workflow",
+      ...overrides,
+    },
   };
 }
 

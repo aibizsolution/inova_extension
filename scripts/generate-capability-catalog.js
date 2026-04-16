@@ -13,6 +13,8 @@ function buildCapabilityCatalogMarkdown(options = {}) {
     .sort(([left], [right]) => left.localeCompare(right));
   const aliases = Object.entries(manifest.aliases || {})
     .sort(([left], [right]) => left.localeCompare(right));
+  const workflowArtifacts = Object.entries(manifest.workflowArtifacts || {})
+    .sort(([left], [right]) => left.localeCompare(right));
   const rows = capabilities.map(([capabilityId, capability]) => [
     capabilityId,
     capability.kind,
@@ -33,6 +35,13 @@ function buildCapabilityCatalogMarkdown(options = {}) {
     alias.owner,
     alias.removeAfter,
   ]);
+  const workflowArtifactRows = workflowArtifacts.map(([artifactId, artifact]) => [
+    artifactId,
+    artifact.artifactVersion || artifact.version,
+    artifact.bundleId,
+    artifact.scriptSlot,
+    artifact.integrity,
+  ]);
 
   return [
     "# Remote Capability Catalog",
@@ -46,6 +55,7 @@ function buildCapabilityCatalogMarkdown(options = {}) {
     `- expiresAt: \`${manifest.expiresAt || ""}\``,
     `- capabilities: \`${rows.length}\``,
     `- aliases: \`${aliasRows.length}\``,
+    `- workflowArtifacts: \`${workflowArtifactRows.length}\``,
     "",
     "## Capabilities",
     "",
@@ -59,6 +69,14 @@ function buildCapabilityCatalogMarkdown(options = {}) {
     "| --- | --- | --- | --- | --- |",
     ...(aliasRows.length
       ? aliasRows.map((row) => `| ${row.map(escapeCell).join(" | ")} |`)
+      : ["| _none_ |  |  |  |  |"]),
+    "",
+    "## Workflow Artifacts",
+    "",
+    "| artifactId | artifactVersion | bundleId | scriptSlot | integrity |",
+    "| --- | --- | --- | --- | --- |",
+    ...(workflowArtifactRows.length
+      ? workflowArtifactRows.map((row) => `| ${row.map(escapeCell).join(" | ")} |`)
       : ["| _none_ |  |  |  |  |"]),
     "",
   ].join("\n");

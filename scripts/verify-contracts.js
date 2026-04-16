@@ -166,6 +166,7 @@ verifyActiveContentRootCatalog();
 verifyActivePopupRootCatalog();
 verifyHostedCapabilityCatalog();
 verifySandboxBridgeApiCatalog();
+verifySandboxWorkflowScriptSlotCatalog();
 verifyBackgroundMessageCatalog();
 
 assertFileExists("scripts/legacy-panel/verify-prompt-fallbacks.js");
@@ -387,6 +388,28 @@ function verifySandboxBridgeApiCatalog() {
       errors.push(`sandbox bridge API allowlist가 금지 API를 노출합니다: ${forbiddenApi}`);
     }
   });
+}
+
+function verifySandboxWorkflowScriptSlotCatalog() {
+  const contractSlots = new Set(contract.sandboxWorkflowScriptSlots || []);
+  if (!contractSlots.size) {
+    errors.push("sandbox workflow scriptSlot catalog가 비어 있습니다.");
+    return;
+  }
+
+  const configPath = path.join(root, "background", "functions-runtime-config.js");
+  const configSource = fs.existsSync(configPath) ? fs.readFileSync(configPath, "utf8") : "";
+  const slotMatch = configSource.match(/const WORKFLOW_SCRIPT_SLOTS = Object\.freeze\(\[(?<body>[\s\S]*?)\n\s{2}\]\);/);
+  if (!slotMatch?.groups?.body) {
+    errors.push("background/functions-runtime-config.js가 WORKFLOW_SCRIPT_SLOTS allowlist를 선언하지 않습니다.");
+    return;
+  }
+
+  const actualSlots = new Set(
+    Array.from(slotMatch.groups.body.matchAll(/^\s+"([^"]+)",?$/gm), (match) => match[1]).filter(Boolean)
+  );
+  compareCapabilitySet(contractSlots, actualSlots, "sandbox workflow scriptSlot allowlist");
+  compareCapabilitySet(actualSlots, contractSlots, "sandbox workflow scriptSlot contract");
 }
 
 function verifyPageCapabilityRouterManifest(pageCapabilityActions) {

@@ -3,6 +3,7 @@
   "manifestVersion": "2026-04-remote-capability-1",
   "minExtensionVersion": "1.0.0",
   "expiresAt": "2030-01-01T00:00:00.000Z",
+  "workflowArtifacts": {},
   "capabilities": {
     "meeting.list": {
       "auditLevel": "read",

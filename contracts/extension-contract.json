@@ -313,6 +313,9 @@
     "readPanelState",
     "writeUiPreferences"
   ],
+  "sandboxWorkflowScriptSlots": [
+    "remote-workflow"
+  ],
   "backgroundMessageTypes": [
     "inova-meeting:authorize-workspace-access",
     "inova-meeting:probe-workspace-bridge",

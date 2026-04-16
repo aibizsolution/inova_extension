@@ -13,6 +13,11 @@
     const isSafeEndpointPath = typeof options.isSafeEndpointPath === "function" ? options.isSafeEndpointPath : () => false;
     const normalizeText = typeof options.normalizeText === "function" ? options.normalizeText : (value) => String(value || "").trim();
     const readManifestVersion = typeof options.readManifestVersion === "function" ? options.readManifestVersion : () => "1.0.0";
+    const workflowScriptSlots = new Set(
+      (Array.isArray(options.workflowScriptSlots) ? options.workflowScriptSlots : ["remote-workflow"])
+        .map(normalizeText)
+        .filter(Boolean)
+    );
 
     return {
       validateEndpointDefinition,
@@ -38,7 +43,12 @@
         throw new Error("remote capability manifest is expired or missing expiresAt");
       }
       validateEndpointDefinitions(normalizedManifest.endpointKeys);
-      validateCapabilityDefinitions(normalizedManifest.capabilities, normalizedManifest.endpointKeys);
+      validateWorkflowArtifacts(normalizedManifest.workflowArtifacts);
+      validateCapabilityDefinitions(
+        normalizedManifest.capabilities,
+        normalizedManifest.endpointKeys,
+        normalizedManifest.workflowArtifacts
+      );
       validateCapabilityAliases(normalizedManifest.aliases, normalizedManifest.capabilities);
       validateLaneDefinitions(normalizedManifest.lanes);
       validateManifestTargets(normalizedManifest.targets);
@@ -108,7 +118,7 @@
       }
     }
 
-    function validateCapabilityDefinitions(capabilities, endpointDefinitions) {
+    function validateCapabilityDefinitions(capabilities, endpointDefinitions, workflowArtifacts) {
       if (!capabilities || typeof capabilities !== "object") {
         throw new Error("remote capability manifest capabilities are missing");
       }
@@ -119,7 +129,7 @@
       });
       Object.entries(capabilities).forEach(([capabilityId, capability]) => {
         validateCapabilityId(capabilityId);
-        validateCapabilityDefinition(capabilityId, capability, capabilities, endpointDefinitions);
+        validateCapabilityDefinition(capabilityId, capability, capabilities, endpointDefinitions, workflowArtifacts);
       });
     }
 
@@ -129,7 +139,7 @@
       }
     }
 
-    function validateCapabilityDefinition(capabilityId, capability, capabilities, endpointDefinitions) {
+    function validateCapabilityDefinition(capabilityId, capability, capabilities, endpointDefinitions, workflowArtifacts) {
       if (!capability || typeof capability !== "object") {
         throw new Error(`remote capability manifest capability is invalid: ${capabilityId}`);
       }
@@ -138,7 +148,7 @@
       if (!["function", "browser.open-url", "storage.write-ui-preferences", "page.capability", "workflow"].includes(kind)) {
         throw new Error(`remote capability manifest capability kind is not allowed: ${capabilityId}`);
       }
-      validateCapabilityTarget(capabilityId, capability, endpointDefinitions, kind);
+      validateCapabilityTarget(capabilityId, capability, endpointDefinitions, kind, workflowArtifacts);
       const authMode = normalizeText(capability.authMode || capability.auth || "access-token").toLowerCase();
       if (!["access-token", "none"].includes(authMode)) {
         throw new Error(`remote capability manifest capability authMode is not allowed: ${capabilityId}`);
@@ -169,7 +179,7 @@
       }
     }
 
-    function validateCapabilityTarget(capabilityId, capability, endpointDefinitions, kind) {
+    function validateCapabilityTarget(capabilityId, capability, endpointDefinitions, kind, workflowArtifacts) {
       if (kind === "function") {
         const endpointKey = normalizeText(capability.endpointKey);
         const service = normalizeText(capability.service).toLowerCase();
@@ -186,7 +196,7 @@
         if (!pageCapabilityIds.includes(pageCapabilityId)) throw new Error(`remote capability manifest page capability is not allowed: ${capabilityId}`);
         if (normalizeText(capability.service).toLowerCase() !== "page") throw new Error(`remote capability manifest capability service is not allowed: ${capabilityId}`);
       }
-      if (kind === "workflow") validateDisabledWorkflowCapability(capabilityId, capability);
+      if (kind === "workflow") validateDisabledWorkflowCapability(capabilityId, capability, workflowArtifacts);
     }
 
     function validateCapabilityLifecycleMetadata(capabilityId, capability, capabilities) {
@@ -238,7 +248,45 @@
       });
     }
 
-    function validateDisabledWorkflowCapability(capabilityId, capability) {
+    function validateWorkflowArtifacts(workflowArtifacts) {
+      if (workflowArtifacts == null) {
+        return;
+      }
+      if (typeof workflowArtifacts !== "object" || Array.isArray(workflowArtifacts)) {
+        throw new Error("remote workflow artifact registry is invalid");
+      }
+      Object.entries(workflowArtifacts).forEach(([artifactId, artifact]) => {
+        validateCapabilityId(artifactId);
+        if (!artifact || typeof artifact !== "object" || Array.isArray(artifact)) {
+          throw new Error(`remote workflow artifact is invalid: ${artifactId}`);
+        }
+        const explicitArtifactId = normalizeText(artifact.artifactId);
+        if (explicitArtifactId && explicitArtifactId !== artifactId) {
+          throw new Error(`remote workflow artifact id mismatch: ${artifactId}`);
+        }
+        const artifactVersion = normalizeText(artifact.artifactVersion || artifact.version);
+        const bundleId = normalizeText(artifact.bundleId);
+        const scriptSlot = normalizeText(artifact.scriptSlot);
+        const integrity = normalizeText(artifact.integrity);
+        if (!artifactVersion || !bundleId || !scriptSlot || !integrity) {
+          throw new Error(`remote workflow artifact metadata is missing: ${artifactId}`);
+        }
+        validateCapabilityId(bundleId);
+        if (!workflowScriptSlots.has(scriptSlot)) {
+          throw new Error(`remote workflow artifact scriptSlot is not allowed: ${artifactId}`);
+        }
+        if (!/^sha256-[A-Za-z0-9+/=]{32,}$/.test(integrity)) {
+          throw new Error(`remote workflow artifact integrity is invalid: ${artifactId}`);
+        }
+        ["code", "endpointUrl", "fetchUrl", "script", "scriptText", "source", "url"].forEach((field) => {
+          if (Object.prototype.hasOwnProperty.call(artifact, field)) {
+            throw new Error(`remote workflow artifact contains a forbidden payload field: ${artifactId}/${field}`);
+          }
+        });
+      });
+    }
+
+    function validateDisabledWorkflowCapability(capabilityId, capability, workflowArtifacts) {
       if (normalizeText(capability.service).toLowerCase() !== "workflow") {
         throw new Error(`remote capability manifest capability service is not allowed: ${capabilityId}`);
       }
@@ -253,6 +301,16 @@
           throw new Error(`remote workflow capability metadata is missing: ${capabilityId}`);
         }
       });
+      const artifactId = normalizeText(capability.artifactId);
+      const artifactVersion = normalizeText(capability.artifactVersion);
+      const artifact = workflowArtifacts?.[artifactId];
+      if (!artifact || typeof artifact !== "object" || Array.isArray(artifact)) {
+        throw new Error(`remote workflow capability artifact is not registered: ${capabilityId}`);
+      }
+      const registeredVersion = normalizeText(artifact.artifactVersion || artifact.version);
+      if (registeredVersion !== artifactVersion) {
+        throw new Error(`remote workflow capability artifact version is not pinned: ${capabilityId}`);
+      }
     }
 
     function isCapabilityKillSwitchEnabled(capability) {
