@@ -221,6 +221,7 @@ async function verifyExtensionCapabilityClientPageAllowlist() {
             capabilityId: "page.raw.disabled",
             enabled: false,
             kind: "page.capability",
+            minExtensionVersionSupported: true,
             pageCapabilityId: "composer.read-state",
           },
         ],

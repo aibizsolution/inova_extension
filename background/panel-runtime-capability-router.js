@@ -265,6 +265,7 @@ function buildHandshakeCapability(capabilityId, capability, activeLane) {
   const killSwitch = capability?.killSwitch;
   const killSwitchEnabled = capability?.killed === true || killSwitch === true || killSwitch?.enabled === true;
   const laneMatches = !capabilityLane || capabilityLane === "all" || capabilityLane === activeLane;
+  const minExtensionVersionSupported = isCapabilityVersionSupported(capability);
   return {
     auditLevel: namespace.session.normalizeText(capability?.auditLevel),
     artifactId: namespace.session.normalizeText(capability?.artifactId),
@@ -273,12 +274,13 @@ function buildHandshakeCapability(capabilityId, capability, activeLane) {
     capabilityId: normalizedCapabilityId,
     deprecatedAt: namespace.session.normalizeText(capability?.deprecatedAt),
     domain: namespace.session.normalizeText(capability?.domain),
-    enabled: capability?.enabled !== false && !killSwitchEnabled && laneMatches,
+    enabled: capability?.enabled !== false && !killSwitchEnabled && laneMatches && minExtensionVersionSupported,
     inputSchemaVersion: Number(capability?.inputSchemaVersion) || 0,
     killSwitch: killSwitchEnabled,
     kind: namespace.session.normalizeText(capability?.kind),
     lane: capabilityLane || "all",
     minExtensionVersion: namespace.session.normalizeText(capability?.minExtensionVersion),
+    minExtensionVersionSupported,
     outputSchemaVersion: Number(capability?.outputSchemaVersion) || 0,
     owner: namespace.session.normalizeText(capability?.owner),
     pageCapabilityId: namespace.session.normalizeText(capability?.pageCapabilityId),
@@ -470,6 +472,30 @@ function assertCapabilityRunnable(capability, capabilityId) {
   if (capabilityLane && capabilityLane !== "all" && capabilityLane !== activeLane) {
     throw new Error(`현재 lane에서 capability를 사용할 수 없어요: ${capabilityId}`);
   }
+  if (!isCapabilityVersionSupported(capability)) {
+    throw new Error(`현재 확장 버전에서 capability를 사용할 수 없어요: ${capabilityId}`);
+  }
+}
+
+function isCapabilityVersionSupported(capability) {
+  const minExtensionVersion = namespace.session.normalizeText(capability?.minExtensionVersion);
+  if (!minExtensionVersion) {
+    return true;
+  }
+  const required = parseVersionParts(minExtensionVersion);
+  const current = parseVersionParts(namespace.productLane?.readManifestVersion?.() || "1.0.0");
+  for (let index = 0; index < 3; index += 1) {
+    if (current[index] > required[index]) return true;
+    if (current[index] < required[index]) return false;
+  }
+  return true;
+}
+
+function parseVersionParts(version) {
+  return namespace.session.normalizeText(version).split(".").slice(0, 3).map((part) => {
+    const parsed = Number.parseInt(part, 10);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }).concat([0, 0, 0]).slice(0, 3);
 }
 
 async function resolveFunctionEndpointTarget(endpointCapability) {

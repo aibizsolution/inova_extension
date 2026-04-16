@@ -191,6 +191,10 @@ async function verifyBundledRuntimeRouterDispatch() {
   remoteManifest.lanes.v2.endpointOverrides.reviewInovaPromptUrl = "reviewInovaPromptRemoteV2";
   remoteManifest.capabilities["prompt.store.list"].deprecatedAt = "2026-05-31";
   remoteManifest.capabilities["prompt.store.list"].replacementId = "prompt.store.import";
+  remoteManifest.capabilities["test.future.function"] = {
+    ...remoteManifest.capabilities["prompt.review.run"],
+    minExtensionVersion: "99.0.0",
+  };
   remoteManifest.capabilities["test.workflow.disabled"] = buildTestWorkflowCapability({ enabled: false });
   const context = createRuntimeContext({
     fetch: async (url, options) => {
@@ -332,6 +336,11 @@ async function verifyBundledRuntimeRouterDispatch() {
   const deprecatedCapability = handshake.capabilities.find((capability) => capability.capabilityId === "prompt.store.list");
   assert.equal(deprecatedCapability?.deprecatedAt, "2026-05-31");
   assert.equal(deprecatedCapability?.replacementId, "prompt.store.import");
+  const futureCapability = handshake.capabilities.find((capability) => capability.capabilityId === "test.future.function");
+  assert.equal(futureCapability?.enabled, false);
+  assert.equal(futureCapability?.minExtensionVersion, "99.0.0");
+  assert.equal(futureCapability?.minExtensionVersionSupported, false);
+  assert(!handshake.enabledCapabilityIds.includes("test.future.function"));
   const workflowCapability = handshake.capabilities.find((capability) => capability.capabilityId === "test.workflow.disabled");
   assert.equal(workflowCapability?.enabled, false);
   assert.equal(workflowCapability?.workflowId, "test.workflow.disabled");
@@ -408,6 +417,14 @@ async function verifyBundledRuntimeRouterDispatch() {
       input: {},
     }),
     /허용되지 않은 capabilityId예요/
+  );
+  await assert.rejects(
+    router.handle({
+      action: "capabilities.invoke",
+      capabilityId: "test.future.function",
+      input: {},
+    }),
+    /현재 확장 버전에서 capability를 사용할 수 없어요/
   );
   const releaseOpenResult = await router.handle({
     action: "capabilities.invoke",

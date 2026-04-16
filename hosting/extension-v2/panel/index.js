@@ -729,6 +729,7 @@
           kind: normalizeText(capability.kind),
           lane: normalizeText(capability.lane),
           minExtensionVersion: normalizeText(capability.minExtensionVersion),
+          minExtensionVersionSupported: capability.minExtensionVersionSupported === true,
           outputSchemaVersion: Number(capability.outputSchemaVersion) || 0,
           owner: normalizeText(capability.owner),
           pageCapabilityId: normalizeText(capability.pageCapabilityId),

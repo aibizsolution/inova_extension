@@ -154,9 +154,6 @@
       if (!Number.isFinite(Number(capability.inputSchemaVersion)) || !Number.isFinite(Number(capability.outputSchemaVersion))) {
         throw new Error(`remote capability manifest capability schema is missing: ${capabilityId}`);
       }
-      if (!isMinimumExtensionVersionSupported(capability.minExtensionVersion || bundledManifest.minExtensionVersion)) {
-        throw new Error(`remote capability manifest capability requires a newer extension: ${capabilityId}`);
-      }
       validateCapabilityLifecycleMetadata(capabilityId, capability, capabilities);
     }
 
