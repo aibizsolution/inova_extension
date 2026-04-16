@@ -1,6 +1,8 @@
 (function initFunctionsRuntimeConfig(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const DEFAULT_FUNCTIONS_BASE_URL = "https://asia-northeast3-browser-extension-main.cloudfunctions.net";
+  const CAPABILITY_MANIFEST_PATH = "capability-manifest.json";
+  const CAPABILITY_MANIFEST_CACHE_TTL_MS = 5 * 60 * 1000;
   const LOCAL_RUNTIME_DEFAULTS = Object.freeze({
     authPort: 9099,
     firestorePort: 8080,
@@ -142,6 +144,7 @@
     },
   });
   const FUNCTION_ENDPOINTS = Object.freeze(buildFunctionEndpointMap(BUNDLED_FUNCTIONS_MANIFEST.endpointKeys));
+  let cachedRemoteManifestRecord = null;
   const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "localhost"]);
   const LANE_FUNCTION_OVERRIDES = Object.freeze({
     legacy: Object.freeze({
@@ -155,6 +158,7 @@
   });
 
   namespace.functionsRuntimeConfig = {
+    getActiveCapabilityManifest,
     getBundledCapabilityManifest,
     getDefaultFunctionsConfig,
     getMeetingFunctionsConfig,
@@ -164,8 +168,221 @@
     reconcileSettings,
   };
 
+  async function getActiveCapabilityManifest(settings) {
+    const remoteResult = await fetchRemoteCapabilityManifest(settings);
+    if (remoteResult?.manifest) {
+      return remoteResult;
+    }
+    return buildBundledManifestResult(remoteResult?.status || {});
+  }
+
   function getBundledCapabilityManifest() {
     return cloneValue(BUNDLED_FUNCTIONS_MANIFEST);
+  }
+
+  async function fetchRemoteCapabilityManifest(settings) {
+    const manifestUrl = await resolveRemoteCapabilityManifestUrl(settings);
+    const now = Date.now();
+    const cached = cachedRemoteManifestRecord;
+    if (cached?.manifest && cached.manifestUrl === manifestUrl && cached.freshUntilMs > now) {
+      return {
+        degraded: false,
+        manifest: cloneValue(cached.manifest),
+        manifestUrl,
+        source: "remote-cache",
+      };
+    }
+    try {
+      const response = await fetch(manifestUrl, {
+        cache: "no-store",
+      });
+      if (!response?.ok) {
+        throw new Error(`remote capability manifest fetch failed: ${response?.status || "unknown"}`);
+      }
+      const remoteManifest = await response.json();
+      const normalizedManifest = validateRemoteCapabilityManifest(remoteManifest, manifestUrl);
+      cachedRemoteManifestRecord = {
+        freshUntilMs: now + CAPABILITY_MANIFEST_CACHE_TTL_MS,
+        manifest: normalizedManifest,
+        manifestUrl,
+      };
+      return {
+        degraded: false,
+        manifest: cloneValue(normalizedManifest),
+        manifestUrl,
+        source: "remote",
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error || "");
+      if (cached?.manifest && cached.manifestUrl === manifestUrl) {
+        warnCapabilityManifestDegraded("remote-cache-stale", message, manifestUrl);
+        return {
+          degraded: true,
+          degradedReason: message,
+          manifest: cloneValue(cached.manifest),
+          manifestUrl,
+          source: "remote-cache-stale",
+        };
+      }
+      warnCapabilityManifestDegraded("bundled-fallback", message, manifestUrl);
+      return buildBundledManifestResult({
+        degradedReason: message,
+        manifestUrl,
+      });
+    }
+  }
+
+  function buildBundledManifestResult(status = {}) {
+    return {
+      degraded: Boolean(status.degradedReason),
+      degradedReason: normalizeText(status.degradedReason),
+      manifest: getBundledCapabilityManifest(),
+      manifestUrl: normalizeText(status.manifestUrl),
+      source: status.degradedReason ? "bundled-fallback" : "bundled",
+    };
+  }
+
+  async function resolveRemoteCapabilityManifestUrl(settings) {
+    const normalizedSettings = await reconcileSettings(settings);
+    if (normalizedSettings.meetingWorkspaceTarget === "local") {
+      const workspaceUrl = normalizeWorkspaceUrl(normalizedSettings);
+      const workspaceOrigin = normalizeOriginUrl(workspaceUrl);
+      const lane = normalizeText(namespace.productLane?.getActiveLane?.() || "legacy").toLowerCase();
+      return joinUrl(joinUrl(workspaceOrigin, lane === "v2" ? "extension-v2" : "extension"), CAPABILITY_MANIFEST_PATH);
+    }
+    const hostingBaseUrl = normalizeText(namespace.firebaseConfig?.hosting?.baseUrl)
+      || normalizeText(namespace.productLane?.getLaneConfig?.()?.hosting?.baseUrl);
+    return joinUrl(hostingBaseUrl, CAPABILITY_MANIFEST_PATH);
+  }
+
+  function validateRemoteCapabilityManifest(manifest, manifestUrl) {
+    if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) {
+      throw new Error("remote capability manifest is not an object");
+    }
+    assertTrustedManifestUrl(manifestUrl);
+    const normalizedManifest = cloneValue(manifest);
+    if (Number(normalizedManifest.schemaVersion) !== BUNDLED_FUNCTIONS_MANIFEST.schemaVersion) {
+      throw new Error("remote capability manifest schemaVersion mismatch");
+    }
+    if (!normalizeText(normalizedManifest.manifestVersion)) {
+      throw new Error("remote capability manifestVersion is missing");
+    }
+    if (!isMinimumExtensionVersionSupported(normalizedManifest.minExtensionVersion)) {
+      throw new Error("remote capability manifest requires a newer extension");
+    }
+    if (!isFutureIsoTimestamp(normalizedManifest.expiresAt)) {
+      throw new Error("remote capability manifest is expired or missing expiresAt");
+    }
+    validateEndpointDefinitions(normalizedManifest.endpointKeys);
+    validateLaneDefinitions(normalizedManifest.lanes);
+    validateManifestTargets(normalizedManifest.targets);
+    return normalizedManifest;
+  }
+
+  function assertTrustedManifestUrl(manifestUrl) {
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(normalizeText(manifestUrl));
+    } catch (error) {
+      throw new Error("remote capability manifest URL is invalid", { cause: error });
+    }
+    const allowedOrigins = new Set(namespace.productLane?.getKnownHostingOrigins?.() || []);
+    if (!allowedOrigins.has(parsedUrl.origin)) {
+      throw new Error("remote capability manifest origin is not allowed");
+    }
+  }
+
+  function isMinimumExtensionVersionSupported(minVersion) {
+    const required = parseVersionParts(minVersion);
+    const current = parseVersionParts(namespace.productLane?.readManifestVersion?.() || "1.0.0");
+    for (let index = 0; index < 3; index += 1) {
+      if (current[index] > required[index]) return true;
+      if (current[index] < required[index]) return false;
+    }
+    return true;
+  }
+
+  function parseVersionParts(version) {
+    return normalizeText(version).split(".").slice(0, 3).map((part) => {
+      const parsed = Number.parseInt(part, 10);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }).concat([0, 0, 0]).slice(0, 3);
+  }
+
+  function isFutureIsoTimestamp(value) {
+    const timestamp = Date.parse(normalizeText(value));
+    return Number.isFinite(timestamp) && timestamp > Date.now();
+  }
+
+  function validateEndpointDefinitions(endpointDefinitions) {
+    if (!endpointDefinitions || typeof endpointDefinitions !== "object") {
+      throw new Error("remote capability manifest endpointKeys are missing");
+    }
+    Object.keys(BUNDLED_FUNCTIONS_MANIFEST.endpointKeys).forEach((endpointKey) => {
+      const definition = endpointDefinitions[endpointKey];
+      if (!definition || typeof definition !== "object") {
+        throw new Error(`remote capability manifest endpoint is missing: ${endpointKey}`);
+      }
+      if (!normalizeText(definition.endpoint)) {
+        throw new Error(`remote capability manifest endpoint path is missing: ${endpointKey}`);
+      }
+      const method = normalizeText(definition.method || "POST").toUpperCase();
+      if (method !== "POST") {
+        throw new Error(`remote capability manifest endpoint method is not allowed: ${endpointKey}`);
+      }
+    });
+  }
+
+  function validateLaneDefinitions(lanes) {
+    if (!lanes || typeof lanes !== "object") {
+      throw new Error("remote capability manifest lanes are missing");
+    }
+    namespace.productLane?.getKnownLanes?.().forEach((lane) => {
+      const laneConfig = lanes[lane];
+      if (!laneConfig || typeof laneConfig !== "object") {
+        throw new Error(`remote capability manifest lane is missing: ${lane}`);
+      }
+      if (!isAllowedFunctionsBaseUrl(laneConfig.baseUrl)) {
+        throw new Error(`remote capability manifest lane baseUrl is not allowed: ${lane}`);
+      }
+    });
+  }
+
+  function validateManifestTargets(targets) {
+    if (!targets || typeof targets !== "object") {
+      throw new Error("remote capability manifest targets are missing");
+    }
+    if (!isAllowedFunctionsBaseUrl(targets.production?.functionsBaseUrl)) {
+      throw new Error("remote capability manifest production target is not allowed");
+    }
+    if (!isAllowedFunctionsBaseUrl(targets.local?.functionsBaseUrl)) {
+      throw new Error("remote capability manifest local target is not allowed");
+    }
+  }
+
+  function isAllowedFunctionsBaseUrl(value) {
+    const normalized = normalizeBaseUrl(value);
+    if (!normalized) {
+      return false;
+    }
+    try {
+      const parsedUrl = new URL(normalized);
+      return parsedUrl.origin === "https://asia-northeast3-browser-extension-main.cloudfunctions.net"
+        || (
+          ["http://127.0.0.1:5001", "http://localhost:5001"].includes(parsedUrl.origin)
+          && /^\/browser-extension-main\/asia-northeast3$/i.test(parsedUrl.pathname)
+        );
+    } catch {
+      return false;
+    }
+  }
+
+  function warnCapabilityManifestDegraded(source, reason, manifestUrl) {
+    console.warn("[i-Nova Service Worker] capability manifest degraded", {
+      manifestUrl: normalizeText(manifestUrl),
+      reason: normalizeText(reason),
+      source,
+    });
   }
 
   function getDefaultFunctionsConfig() {

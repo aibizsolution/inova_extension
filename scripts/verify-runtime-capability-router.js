@@ -8,14 +8,72 @@ const vm = require("vm");
 const root = path.resolve(__dirname, "..");
 
 async function main() {
+  verifyServedCapabilityManifests();
+  await verifyRemoteManifestBundledFallbackIsVisible();
   await verifyBundledRuntimeRouterDispatch();
   console.log("[verify-runtime-capability-router] Runtime capability router contract passed");
 }
 
+function verifyServedCapabilityManifests() {
+  const legacyManifest = readJson(path.join("hosting", "extension", "capability-manifest.json"));
+  const v2Manifest = readJson(path.join("hosting", "extension-v2", "capability-manifest.json"));
+  assert.deepEqual(v2Manifest, legacyManifest, "served legacy/v2 capability manifests should stay aligned");
+  assert.equal(v2Manifest.schemaVersion, 1);
+  assert.equal(v2Manifest.minExtensionVersion, "1.0.0");
+  assert.equal(
+    v2Manifest.targets.production.functionsBaseUrl,
+    "https://asia-northeast3-browser-extension-main.cloudfunctions.net"
+  );
+  assert.equal(
+    v2Manifest.targets.local.functionsBaseUrl,
+    "http://127.0.0.1:5001/browser-extension-main/asia-northeast3"
+  );
+  assert.equal(v2Manifest.endpointKeys.reviewInovaPromptUrl.endpoint, "reviewInovaPrompt");
+  assert.equal(v2Manifest.lanes.v2.endpointOverrides.syncInovaPromptLibraryUrl, "syncInovaPromptLibraryV2");
+}
+
+async function verifyRemoteManifestBundledFallbackIsVisible() {
+  const warnings = [];
+  const context = createRuntimeContext({
+    console: {
+      warn(message, payload) {
+        warnings.push({
+          message: String(message || ""),
+          payload,
+        });
+      },
+    },
+    fetch: async () => {
+      throw new Error("network unavailable");
+    },
+  });
+  loadScript(path.join("background", "functions-runtime-config.js"), context);
+
+  const result = await context.InovaBookmarks.functionsRuntimeConfig.getActiveCapabilityManifest();
+  assert.equal(result.source, "bundled-fallback");
+  assert.equal(result.degraded, true);
+  assert.equal(result.manifest.endpointKeys.reviewInovaPromptUrl.endpoint, "reviewInovaPrompt");
+  assert(
+    warnings.some((entry) => entry.message.includes("capability manifest degraded")
+      && entry.payload?.source === "bundled-fallback"),
+    "remote manifest fetch failure should be visible before falling back to bundled baseline"
+  );
+}
+
 async function verifyBundledRuntimeRouterDispatch() {
   const fetchCalls = [];
-  const context = vm.createContext({
+  const remoteManifest = readJson(path.join("hosting", "extension-v2", "capability-manifest.json"));
+  const context = createRuntimeContext({
     fetch: async (url, options) => {
+      if (String(url || "").endsWith("/capability-manifest.json")) {
+        return {
+          async json() {
+            return remoteManifest;
+          },
+          ok: true,
+          status: 200,
+        };
+      }
       fetchCalls.push({
         authorization: String(options?.headers?.Authorization || ""),
         method: String(options?.method || ""),
@@ -33,60 +91,8 @@ async function verifyBundledRuntimeRouterDispatch() {
         ok: true,
       };
     },
-    globalThis: null,
+    console,
   });
-  context.globalThis = context;
-  context.InovaBookmarks = {
-    firebaseConfig: {
-      meeting: {
-        resolveRuntime() {
-          return {
-            emulators: {
-              authUrl: "",
-              enabled: false,
-              firestoreHost: "",
-              firestorePort: 0,
-            },
-            target: "production",
-            web: {
-              projectId: "browser-extension-main",
-            },
-          };
-        },
-      },
-      web: {
-        projectId: "browser-extension-main",
-      },
-    },
-    session: {
-      normalizeText(value) {
-        return String(value || "").trim();
-      },
-    },
-    storage: {
-      async getState() {
-        return {
-          pausedSessions: {
-            stale: true,
-          },
-          providerIdentityCache: {
-            providerUserKey: "user-1",
-          },
-          settings: {
-            meetingWorkspaceTarget: "production",
-          },
-          uiPreferences: {
-            activeTool: "prompts",
-          },
-        };
-      },
-      async updateUiPreferences(partial) {
-        return {
-          activeTool: String(partial?.activeTool || ""),
-        };
-      },
-    },
-  };
   context.createMeetingShareLink = async () => ({ ok: true });
   context.getInovaAccessToken = async () => "access-token-1";
   context.getMeetingFunctionsConfig = async () => ({
@@ -198,6 +204,95 @@ async function verifyBundledRuntimeRouterDispatch() {
 function loadScript(relativePath, context) {
   const source = fs.readFileSync(path.join(root, relativePath), "utf8");
   new vm.Script(source, { filename: relativePath }).runInContext(context);
+}
+
+function createRuntimeContext(overrides = {}) {
+  const context = vm.createContext({
+    console: overrides.console || console,
+    Date,
+    fetch: overrides.fetch || (async () => ({ ok: true })),
+    globalThis: null,
+    URL,
+  });
+  context.globalThis = context;
+  context.InovaBookmarks = {
+    firebaseConfig: {
+      hosting: {
+        baseUrl: "https://browser-extension-v2.web.app/extension-v2",
+      },
+      meeting: {
+        resolveRuntime() {
+          return {
+            emulators: {
+              authUrl: "",
+              enabled: false,
+              firestoreHost: "",
+              firestorePort: 0,
+            },
+            target: "production",
+            web: {
+              projectId: "browser-extension-main",
+            },
+          };
+        },
+      },
+      web: {
+        projectId: "browser-extension-main",
+      },
+    },
+    productLane: {
+      getActiveLane() {
+        return "v2";
+      },
+      getKnownHostingOrigins() {
+        return [
+          "https://browser-extension-main.web.app",
+          "https://browser-extension-v2.web.app",
+          "http://127.0.0.1:5000",
+          "http://localhost:5000",
+        ];
+      },
+      getKnownLanes() {
+        return ["legacy", "v2"];
+      },
+      readManifestVersion() {
+        return "1.0.0";
+      },
+    },
+    session: {
+      normalizeText(value) {
+        return String(value || "").trim();
+      },
+    },
+    storage: {
+      async getState() {
+        return {
+          pausedSessions: {
+            stale: true,
+          },
+          providerIdentityCache: {
+            providerUserKey: "user-1",
+          },
+          settings: {
+            meetingWorkspaceTarget: "production",
+          },
+          uiPreferences: {
+            activeTool: "prompts",
+          },
+        };
+      },
+      async updateUiPreferences(partial) {
+        return {
+          activeTool: String(partial?.activeTool || ""),
+        };
+      },
+    },
+  };
+  return context;
+}
+
+function readJson(relativePath) {
+  return JSON.parse(fs.readFileSync(path.join(root, relativePath), "utf8"));
 }
 
 main().catch((error) => {

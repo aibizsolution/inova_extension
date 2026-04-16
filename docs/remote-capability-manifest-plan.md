@@ -114,7 +114,7 @@ extension은 hosted가 넘긴 raw URL을 그대로 실행하지 않는다. exten
 
 - `background/functions-runtime-config.js`는 `getBundledCapabilityManifest()`로 endpoint key, method, lane override, production/local target baseline을 노출한다.
 - `background/panel-runtime-capability-router.js`는 `PANEL_RUNTIME_CAPABILITY_MANIFEST`에서 runtime action과 function endpoint capability를 조회하고 adapter table로 dispatch한다.
-- remote fetch/cache는 아직 없다. hosted panel request는 기존 stable runtime action과 service/endpoint key만 넘기며, raw URL은 여전히 background가 받지 않는다.
+- hosted panel request는 기존 stable runtime action과 service/endpoint key만 넘기며, raw URL은 여전히 background가 받지 않는다.
 
 ### Phase 2. Remote manifest fetch/cache 추가
 
@@ -122,6 +122,15 @@ extension은 hosted가 넘긴 raw URL을 그대로 실행하지 않는다. exten
 - 검증 성공 시 `chrome.storage.local` 또는 background memory cache에 저장한다.
 - fetch 실패 시 bundled manifest 또는 마지막 검증 manifest로 degraded 동작한다.
 - stale cache를 쓸 때는 콘솔 trace와 hosted inline/degraded notice에 stale 상태를 드러낸다.
+
+현재 Phase 2 baseline:
+
+- manifest는 Hosting 정적 JSON으로 시작한다: `hosting/extension/capability-manifest.json`, `hosting/extension-v2/capability-manifest.json`.
+- background는 active lane과 local/prod target에 맞춰 trusted Hosting origin의 `capability-manifest.json`을 가져온다.
+- remote manifest는 schema, version, expiry, trusted source origin, allowed Functions target, lane, endpoint key/method를 검증한다.
+- 검증 성공 manifest는 background memory cache에 보관한다. service worker 재시작 뒤에는 다시 fetch하고, 실패 시 bundled baseline으로 degraded fallback한다.
+- fetch 실패나 stale cache fallback은 service worker console warning과 manifest result status에 `degraded`로 남긴다. 성공처럼 조용히 숨기지 않는다.
+- 아직 endpoint URL 해석은 기존 functions runtime config baseline을 유지한다. remote target/endpoint로 실제 URL을 바꾸는 작업은 Phase 3이다.
 
 ### Phase 3. Functions endpoint를 remote manifest로 이동
 
@@ -158,8 +167,8 @@ extension은 hosted가 넘긴 raw URL을 그대로 실행하지 않는다. exten
 
 ## 다음 세션 시작점
 
-1. Phase 1 bundled manifest baseline이 `npm.cmd run verify` 녹색인지 먼저 확인한다.
-2. manifest를 Hosting 정적 JSON으로 둘지, Functions endpoint로 서빙할지 결정한다.
-3. trusted origin, schema/version 검증, stale cache 허용 시간을 확정한다.
-4. background가 remote manifest를 fetch/cache하되 실패 시 bundled baseline 또는 마지막 검증 cache를 degraded로 드러내게 만든다.
-5. endpoint URL은 hosted request payload가 아니라 검증된 manifest target/capability에서만 해석한다.
+1. Phase 2 remote fetch/cache baseline이 `npm.cmd run verify` 녹색인지 먼저 확인한다.
+2. `functions.invoke-endpoint`가 remote manifest의 target/endpoint를 우선 해석하도록 Phase 3을 시작한다.
+3. local/prod target 전환이 manifest target 설정을 따르되, allowed Functions origin 검증을 유지한다.
+4. 기존 `functions-runtime-config.js` endpoint map은 bundled fallback/compatibility shim으로 줄인다.
+5. 새 endpoint 추가가 extension code 수정 없이 static manifest + Functions/hosting 변경만으로 검증되는 guard를 추가한다.

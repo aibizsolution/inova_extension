@@ -216,7 +216,7 @@ async function issuePanelSession(request, capability) {
 }
 
 async function invokeHostedPanelFunctionFetch(request) {
-  const endpointCapability = resolveFunctionEndpointCapability(request);
+  const endpointCapability = await resolveFunctionEndpointCapability(request);
   const functionsConfig = await resolveFunctionsConfigForService(endpointCapability.service);
   const targetUrl = namespace.session.normalizeText(functionsConfig?.[endpointCapability.endpointKey]);
   if (!targetUrl) {
@@ -254,7 +254,7 @@ async function invokeHostedPanelFunctionFetch(request) {
   return payload?.data || {};
 }
 
-function resolveFunctionEndpointCapability(request) {
+async function resolveFunctionEndpointCapability(request) {
   const service = namespace.session.normalizeText(request?.service).toLowerCase();
   const endpointKey = namespace.session.normalizeText(request?.endpointKey);
   const endpointCapability =
@@ -262,7 +262,7 @@ function resolveFunctionEndpointCapability(request) {
   if (!endpointCapability) {
     throw new Error("허용되지 않은 Functions endpoint 요청이에요.");
   }
-  const endpointDefinition = readBundledFunctionEndpointDefinition(endpointKey);
+  const endpointDefinition = await readFunctionEndpointDefinition(endpointKey);
   return {
     ...endpointDefinition,
     ...endpointCapability,
@@ -271,9 +271,11 @@ function resolveFunctionEndpointCapability(request) {
   };
 }
 
-function readBundledFunctionEndpointDefinition(endpointKey) {
-  const functionsManifest = namespace.functionsRuntimeConfig?.getBundledCapabilityManifest?.();
-  const endpointDefinition = functionsManifest?.endpointKeys?.[endpointKey];
+async function readFunctionEndpointDefinition(endpointKey) {
+  const manifestResult = typeof namespace.functionsRuntimeConfig?.getActiveCapabilityManifest === "function"
+    ? await namespace.functionsRuntimeConfig.getActiveCapabilityManifest()
+    : { manifest: namespace.functionsRuntimeConfig?.getBundledCapabilityManifest?.() };
+  const endpointDefinition = manifestResult?.manifest?.endpointKeys?.[endpointKey];
   if (!endpointDefinition?.endpoint) {
     throw new Error("Functions endpoint manifest를 찾지 못했어요.");
   }

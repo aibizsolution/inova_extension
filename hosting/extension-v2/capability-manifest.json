@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 1,
+  "manifestVersion": "2026-04-remote-capability-1",
+  "minExtensionVersion": "1.0.0",
+  "expiresAt": "2030-01-01T00:00:00.000Z",
+  "targets": {
+    "production": {
+      "functionsBaseUrl": "https://asia-northeast3-browser-extension-main.cloudfunctions.net"
+    },
+    "local": {
+      "functionsBaseUrl": "http://127.0.0.1:5001/browser-extension-main/asia-northeast3"
+    }
+  },
+  "lanes": {
+    "legacy": {
+      "baseUrl": "https://asia-northeast3-browser-extension-main.cloudfunctions.net",
+      "endpointOverrides": {}
+    },
+    "v2": {
+      "baseUrl": "https://asia-northeast3-browser-extension-main.cloudfunctions.net",
+      "endpointOverrides": {
+        "issueInovaPromptPanelAuthUrl": "issueInovaPromptPanelAuthV2",
+        "loadInovaPromptLibraryUrl": "loadInovaPromptLibraryV2",
+        "peekInovaPromptLibraryUrl": "peekInovaPromptLibraryV2",
+        "syncInovaPromptLibraryUrl": "syncInovaPromptLibraryV2"
+      }
+    }
+  },
+  "endpointKeys": {
+    "authorizeInovaMeetingWorkspaceAccessUrl": {
+      "endpoint": "authorizeInovaMeetingWorkspaceAccess",
+      "method": "POST"
+    },
+    "createInovaMeetingShareLinkUrl": {
+      "endpoint": "createInovaMeetingShareLink",
+      "method": "POST"
+    },
+    "deleteInovaMeetingUrl": {
+      "endpoint": "deleteInovaMeeting",
+      "method": "POST"
+    },
+    "deleteInovaMeetingResultUrl": {
+      "endpoint": "deleteInovaMeetingResult",
+      "method": "POST"
+    },
+    "exchangeInovaMeetingLaunchUrl": {
+      "endpoint": "exchangeInovaMeetingLaunch",
+      "method": "POST"
+    },
+    "issueInovaMeetingLaunchUrl": {
+      "endpoint": "issueInovaMeetingLaunch",
+      "method": "POST"
+    },
+    "issueInovaMeetingPanelAuthUrl": {
+      "endpoint": "issueInovaMeetingPanelAuth",
+      "method": "POST"
+    },
+    "issueInovaPromptPanelAuthUrl": {
+      "endpoint": "issueInovaPromptPanelAuth",
+      "method": "POST"
+    },
+    "issueInovaMeetingWorkspaceAuthUrl": {
+      "endpoint": "issueInovaMeetingWorkspaceAuth",
+      "method": "POST"
+    },
+    "listInovaMeetingsUrl": {
+      "endpoint": "listInovaMeetings",
+      "method": "POST"
+    },
+    "moveInovaMeetingResultUrl": {
+      "endpoint": "moveInovaMeetingResult",
+      "method": "POST"
+    },
+    "uploadInovaMeetingSourceUrl": {
+      "endpoint": "uploadInovaMeetingSource",
+      "method": "POST"
+    },
+    "updateInovaMeetingUrl": {
+      "endpoint": "updateInovaMeeting",
+      "method": "POST"
+    },
+    "updateInovaMeetingResultUrl": {
+      "endpoint": "updateInovaMeetingResult",
+      "method": "POST"
+    },
+    "loadInovaPromptLibraryUrl": {
+      "endpoint": "loadInovaPromptLibrary",
+      "method": "POST"
+    },
+    "listPromptStoreEntriesUrl": {
+      "endpoint": "listPromptStoreEntries",
+      "method": "POST"
+    },
+    "peekInovaPromptLibraryUrl": {
+      "endpoint": "peekInovaPromptLibrary",
+      "method": "POST"
+    },
+    "reviewInovaPromptUrl": {
+      "endpoint": "reviewInovaPrompt",
+      "method": "POST"
+    },
+    "publishPromptToStoreUrl": {
+      "endpoint": "publishPromptToStore",
+      "method": "POST"
+    },
+    "unpublishPromptFromStoreUrl": {
+      "endpoint": "unpublishPromptFromStore",
+      "method": "POST"
+    },
+    "importPromptStoreEntryUrl": {
+      "endpoint": "importPromptStoreEntry",
+      "method": "POST"
+    },
+    "revokeInovaMeetingShareLinkUrl": {
+      "endpoint": "revokeInovaMeetingShareLink",
+      "method": "POST"
+    },
+    "togglePromptStoreLikeUrl": {
+      "endpoint": "togglePromptStoreLike",
+      "method": "POST"
+    },
+    "recordPromptStoreViewUrl": {
+      "endpoint": "recordPromptStoreView",
+      "method": "POST"
+    },
+    "syncInovaPromptLibraryUrl": {
+      "endpoint": "syncInovaPromptLibrary",
+      "method": "POST"
+    }
+  }
+}
