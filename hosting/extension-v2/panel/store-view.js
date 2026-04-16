@@ -25,6 +25,7 @@
         <input
           class="inova-tool-search"
           type="search"
+          name="inova-store-search"
           value="${escapeHtml(state.query)}"
           data-search-tool="store"
           placeholder="스토어에서 프롬프트 찾기"
@@ -64,7 +65,7 @@
     return `
       <label class="inova-tool-select-field">
         <span>카테고리</span>
-        <select class="inova-tool-select" data-store-field="category">
+        <select class="inova-tool-select" name="inova-store-category" data-store-field="category">
           ${categories.map((category) => `
             <option value="${category.id}" ${category.id === activeCategoryId ? "selected" : ""}>${escapeHtml(category.label)}</option>
           `).join("")}

@@ -28,6 +28,7 @@
         <input
           class="inova-tool-search"
           type="search"
+          name="inova-prompt-search"
           value="${escapeHtml(state.query)}"
           data-search-tool="prompts"
           placeholder="내 요청 찾기"
@@ -154,6 +155,7 @@
           <span>스토어 제목</span>
           <input
             type="text"
+            name="inova-prompt-publish-title"
             value="${escapeHtml(publishTitle || "")}"
             data-prompt-publish-field="title"
             data-prompt-id="${promptId}"
@@ -163,7 +165,7 @@
         </label>
         <label class="inova-tool-select-field">
           <span>카테고리 선택</span>
-          <select class="inova-tool-select" data-prompt-select="publish-category" data-prompt-id="${promptId}" ${renderDisabled(pending)}>
+          <select class="inova-tool-select" name="inova-prompt-publish-category" data-prompt-select="publish-category" data-prompt-id="${promptId}" ${renderDisabled(pending)}>
             ${storeCategories.map((category) => `
               <option value="${category.id}" ${category.id === activeCategoryId ? "selected" : ""}>${escapeHtml(category.label)}</option>
             `).join("")}
@@ -175,6 +177,7 @@
             <span>새 카테고리 이름</span>
             <input
               type="text"
+              name="inova-prompt-publish-category-label"
               value="${escapeHtml(publishCategoryLabel || "")}"
               data-prompt-publish-field="category-label"
               data-prompt-id="${promptId}"
@@ -229,6 +232,7 @@
             <span>이름</span>
             <input
               type="text"
+              name="inova-prompt-title"
               value="${escapeHtml(editor.title)}"
               data-prompt-field="title"
               placeholder="예: 회의록 정리"
@@ -237,7 +241,7 @@
           </label>
           <label class="inova-prompt-field">
             <span>본문</span>
-            <textarea rows="7" data-prompt-field="content" placeholder="입력창에 바로 넣을 요청을 적어 주세요." ${renderDisabled(pending)}>${escapeHtml(editor.content)}</textarea>
+            <textarea rows="7" name="inova-prompt-content" data-prompt-field="content" placeholder="입력창에 바로 넣을 요청을 적어 주세요." ${renderDisabled(pending)}>${escapeHtml(editor.content)}</textarea>
           </label>
         </div>
         ${editor.error ? `<p class="inova-inline-feedback is-error">${escapeHtml(editor.error)}</p>` : ""}

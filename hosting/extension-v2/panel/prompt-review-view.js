@@ -71,7 +71,7 @@
           <span>보완 프롬프트</span>
           <button type="button" class="inova-tool-button inova-tool-button--compact" data-prompt-action="copy-reviewed-prompt">복사</button>
         </div>
-        <textarea rows="10" readonly>${formattedPrompt}</textarea>
+        <textarea rows="10" name="inova-reviewed-prompt" readonly>${formattedPrompt}</textarea>
       </section>
       ${renderChecks(result)}
     `;

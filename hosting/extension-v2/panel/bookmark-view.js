@@ -12,6 +12,7 @@
           <input
             class="inova-tool-search"
             type="search"
+            name="inova-bookmark-search"
             value="${escapeHtml(state.query)}"
             data-search-tool="bookmarks"
             placeholder="이 대화에서 질문 찾기"
