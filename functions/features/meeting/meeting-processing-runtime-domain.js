@@ -69,17 +69,30 @@ function createMeetingProcessingRuntimeDomain(deps) {
   }
 
   async function transcribeMeetingAudio(audioBuffer, meeting, source) {
-    const file = await OpenAI.toFile(audioBuffer, source.fileName, {
-      type: source.mimeType || "audio/webm",
-    });
-    const request = {
-      file,
-      language: meeting.language,
-      model: getMeetingModel(),
-      response_format: "json",
-    };
-    const response = await getClient().audio.transcriptions.create(request);
-    return normalizeTranscriptionResponse(response, source.durationMs);
+    const maxAttempts = 2;
+    let lastQuality = null;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      const file = await OpenAI.toFile(audioBuffer, source.fileName, {
+        type: source.mimeType || "audio/webm",
+      });
+      const request = {
+        file,
+        language: meeting.language,
+        model: getMeetingModel(),
+        response_format: "json",
+      };
+      const response = await getClient().audio.transcriptions.create(request);
+      const transcript = normalizeTranscriptionResponse(response, source.durationMs);
+      const quality = inspectTranscriptRepetitionQuality(transcript);
+      lastQuality = quality;
+      if (!quality.isDegenerate) {
+        return transcript;
+      }
+    }
+    throw createHttpError(
+      422,
+      `전사 결과가 같은 문장을 비정상적으로 반복해 저장하지 않았어요. 다시 처리해 주세요. 반복률 ${Math.round((lastQuality?.repeatedRatio || 0) * 100)}%`
+    );
   }
 
   async function transcribeMeetingSourcePart(partInput, meeting, sourceInput) {
@@ -335,6 +348,47 @@ function createMeetingProcessingRuntimeDomain(deps) {
 
   function normalizeSegmentComparisonText(value) {
     return normalizeText(value).replace(/\s+/g, " ").toLowerCase();
+  }
+
+  function inspectTranscriptRepetitionQuality(transcript) {
+    const segments = Array.isArray(transcript?.segments) ? transcript.segments : [];
+    const text = normalizeText(
+      buildTranscriptText(segments) || transcript?.text
+    ).replace(/\s+/g, " ");
+    if (text.length < 500) {
+      return {
+        isDegenerate: false,
+        repeatedRatio: 0,
+      };
+    }
+    const sentences = text
+      .split(/[.!?。！？…]+/g)
+      .map((sentence) => normalizeSegmentComparisonText(sentence))
+      .filter((sentence) => sentence.length >= 18);
+    if (sentences.length < 4) {
+      return {
+        isDegenerate: false,
+        repeatedRatio: 0,
+      };
+    }
+    const counts = new Map();
+    for (const sentence of sentences) {
+      counts.set(sentence, (counts.get(sentence) || 0) + 1);
+    }
+    let repeatedChars = 0;
+    let maxRepeatCount = 0;
+    for (const [sentence, count] of counts.entries()) {
+      if (count <= 1) {
+        continue;
+      }
+      maxRepeatCount = Math.max(maxRepeatCount, count);
+      repeatedChars += sentence.length * count;
+    }
+    const repeatedRatio = repeatedChars / Math.max(1, sentences.reduce((sum, sentence) => sum + sentence.length, 0));
+    return {
+      isDegenerate: maxRepeatCount >= 5 && repeatedRatio >= 0.5,
+      repeatedRatio,
+    };
   }
 
   function buildMeetingPartFileName(fileName, partIndex) {

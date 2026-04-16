@@ -14,6 +14,7 @@ function createMeetingCreationDomain(deps) {
     defaultSourcePartOverlapMs,
     deleteTemporarySourceGroup,
     getInlineAudioLimitBytes,
+    getMeetingSingleTranscribeMaxDurationMs,
     getMeetingSourceMaxBytes,
     getMeetingSourceMaxDurationMs,
     getMeetingSourceTargetPartBytes,
@@ -332,6 +333,13 @@ function createMeetingCreationDomain(deps) {
     }
     if (source.durationMs > getMeetingSourceMaxDurationMs()) {
       throw createHttpError(413, "현재 회의 원본은 최대 2시간까지만 지원해요.");
+    }
+    const sourceMode = normalizeMeetingSourceMode(source.mode || (source.parts.length ? "chunked" : "single"));
+    if (sourceMode !== "chunked" && source.durationMs > getMeetingSingleTranscribeMaxDurationMs()) {
+      throw createHttpError(
+        413,
+        `현재 전사 모델은 단일 오디오 ${Math.floor(getMeetingSingleTranscribeMaxDurationMs() / 1000)}초 이하만 지원해요. 더 긴 파일은 분할 업로드로 다시 시도해 주세요.`
+      );
     }
   }
 

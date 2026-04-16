@@ -430,6 +430,7 @@ function verifyHostedPanelFiles(directoryName) {
     assert(indexJs.includes("readCapabilityCatalog"), "v2 hosted panel should negotiate the runtime capability catalog at boot");
     assert(indexJs.includes("remoteWorkflowHost"), "v2 hosted panel should boot the remote workflow sandbox host after negotiation");
     assert(indexJs.includes("invokeWorkflow"), "v2 hosted panel should route workflow capabilities to the sandbox host");
+    assert(indexJs.includes("hasRemoteWorkflowArtifacts(catalog)"), "v2 hosted panel should lazy boot workflow sandbox only when artifacts exist");
     assert(
       indexJs.includes("flushActiveTextInputComposition(host)")
         && indexJs.includes("getStoredCompositionBinding")

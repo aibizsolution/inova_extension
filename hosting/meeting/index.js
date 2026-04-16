@@ -137,6 +137,7 @@
       baseRevisionToken: "",
       instruction: "",
       jobId: "",
+      mode: "ai",
       open: false,
       previewSectionData: null,
       previewSectionKey: "",
@@ -192,10 +193,7 @@
       currentJob: null,
       currentLocalRecord: null,
       debugLocalQueueSandbox: false,
-      debugNotice: createEmptyNotice(),
-      debugNoticeTimer: 0,
       degradedNotices: Object.create(null),
-      debugPanelCollapsed: readDebugPanelCollapsed(),
       isLocalWorkspace: isLocalWorkspaceOrigin(global),
       loading: false,
       loadingReason: "",
@@ -284,12 +282,8 @@
   }
   
   
-  function readDebugPanelCollapsed() {
-    return true;
-  }
-
   function cacheRefs() {
-    for (const id of ["meetingShell", "blockedMessage", "blockedEyebrow", "blockedTitle", "blockedState", "workspace", "pageTitle", "pageSummary", "workspaceBadge", "offlineQueueBadge", "refreshButton", "meetingTitleInput", "saveMeetingTitleButton", "deleteMeetingButton", "meetingStatusChip", "currentBadge", "currentSummary", "currentHint", "currentTimer", "toastNotice", "startButton", "importAudioButton", "importAudioInput", "pauseButton", "resumeButton", "stopButton", "discardButton", "sharedMemoInput", "saveSharedMemoButton", "clearSharedMemoButton", "sharedMemoNotice", "recordCountBadge", "recordList", "detailTitle", "detailBadge", "detailSummary", "recordTitleGroup", "recordTitleInput", "saveRecordTitleButton", "downloadRecordButton", "moveRecordButton", "deleteRecordButton", "detailMeta", "reviewSectionHeader", "copySegmentsButton", "detailMemoInput", "saveRecordMemoButton", "reviewTabSummary", "reviewTabMemo", "reviewTabNotes", "reviewTabSegments", "reviewTabSegmentsCount", "reviewTabActions", "reviewPanelSummary", "summaryStatusPill", "summaryStatusGrid", "summaryActionCard", "reviewPanelMemo", "meetingNotesCard", "reviewPanelSegments", "copyMeetingNotesButton", "meetingNotesTools", "meetingNotesOverview", "meetingNotesSections", "detailNotice", "segmentList", "toggleTermReplacementButton", "termReplacementPanel", "termReplacementDirtyBadge", "termReplacementList", "termReplacementFromInput", "termReplacementToInput", "termReplacementAddButton", "termReplacementResetButton", "termReplacementClearButton", "saveTermReplacementsButton", "sectionEditOverlay", "sectionEditDialog", "sectionEditDialogTitle", "sectionEditDialogBody", "sectionEditTargetLabel", "closeSectionEditButton", "sectionEditInstructionInput", "previewSectionEditButton", "cancelSectionEditButton", "applySectionEditButton", "sectionEditStatus", "sectionEditPreviewCard", "sectionEditPreviewTitle", "sectionEditPreviewBody", "debugPanel", "confirmOverlay", "confirmDialog", "confirmDialogEyebrow", "confirmDialogTitle", "confirmDialogBody", "confirmDialogCancel", "confirmDialogConfirm", "recordMoveOverlay", "recordMoveDialog", "recordMoveDialogTitle", "recordMoveNotice", "recordMoveList", "recordMoveCancel", "recordMoveConfirm"]) {
+    for (const id of ["meetingShell", "blockedMessage", "blockedEyebrow", "blockedTitle", "blockedState", "workspace", "pageTitle", "pageSummary", "workspaceBadge", "offlineQueueBadge", "refreshButton", "meetingTitleInput", "saveMeetingTitleButton", "deleteMeetingButton", "meetingStatusChip", "currentBadge", "currentSummary", "currentHint", "currentTimer", "toastNotice", "startButton", "importAudioButton", "importAudioInput", "pauseButton", "resumeButton", "stopButton", "discardButton", "sharedMemoInput", "saveSharedMemoButton", "clearSharedMemoButton", "sharedMemoNotice", "recordCountBadge", "recordList", "detailTitle", "detailBadge", "detailSummary", "recordTitleGroup", "recordTitleInput", "saveRecordTitleButton", "downloadRecordButton", "moveRecordButton", "deleteRecordButton", "detailMeta", "reviewSectionHeader", "copySegmentsButton", "detailMemoInput", "saveRecordMemoButton", "reviewTabSummary", "reviewTabMemo", "reviewTabNotes", "reviewTabSegments", "reviewTabSegmentsCount", "reviewTabActions", "reviewPanelSummary", "summaryStatusPill", "summaryStatusGrid", "summaryActionCard", "reviewPanelMemo", "meetingNotesCard", "reviewPanelSegments", "copyMeetingNotesButton", "meetingNotesTools", "meetingNotesOverview", "meetingNotesSections", "detailNotice", "segmentList", "toggleTermReplacementButton", "termReplacementPanel", "termReplacementDirtyBadge", "termReplacementList", "termReplacementFromInput", "termReplacementToInput", "termReplacementAddButton", "termReplacementResetButton", "termReplacementClearButton", "saveTermReplacementsButton", "sectionEditOverlay", "sectionEditDialog", "sectionEditDialogEyebrow", "sectionEditDialogTitle", "sectionEditHelpText", "sectionEditDialogBody", "sectionEditTargetLabel", "closeSectionEditButton", "sectionEditInstructionInput", "previewSectionEditButton", "cancelSectionEditButton", "applySectionEditButton", "sectionEditStatus", "sectionEditPreviewCard", "sectionEditPreviewTitle", "sectionEditPreviewBody", "confirmOverlay", "confirmDialog", "confirmDialogEyebrow", "confirmDialogTitle", "confirmDialogBody", "confirmDialogCancel", "confirmDialogConfirm", "recordMoveOverlay", "recordMoveDialog", "recordMoveDialogTitle", "recordMoveNotice", "recordMoveList", "recordMoveCancel", "recordMoveConfirm"]) {
       refs[id] = global.document.getElementById(id);
     }
   }
@@ -589,7 +583,6 @@
     if (refs.blockedEyebrow) refs.blockedEyebrow.textContent = state.blockedEyebrow;
     if (refs.blockedTitle) refs.blockedTitle.textContent = state.blockedTitle;
     refs.blockedMessage.textContent = state.blockedMessage;
-    controllers?.debug?.forceExpand?.();
   }
 
   function buildControllerHelpers() {
@@ -620,7 +613,6 @@
       renderBlocked,
       requestConfirmation,
       resolveConfirmation,
-      setDebugNotice,
       setDegradedNotice,
       setNotice,
       setScopedNotice,
@@ -756,7 +748,6 @@
         controllers.mutations.closeSectionEdit();
       }
     });
-    refs.debugPanel?.addEventListener("click", (event) => controllers.debug.handlePanelClick(event));
     refs.confirmDialogCancel?.addEventListener("click", () => resolveConfirmation(false));
     refs.confirmDialogConfirm?.addEventListener("click", () => resolveConfirmation(true));
     refs.confirmOverlay?.addEventListener("click", (event) => {
@@ -870,10 +861,6 @@
     setScopedNotice("notice", "noticeTimer", text, tone, options);
   }
 
-  function setDebugNotice(text, tone, options = {}) {
-    setScopedNotice("debugNotice", "debugNoticeTimer", text, tone, options);
-  }
-
   function applyRender() {
     if (state.blocked) {
       refs.workspace.hidden = true;
@@ -882,13 +869,11 @@
       if (refs.blockedEyebrow) refs.blockedEyebrow.textContent = state.blockedEyebrow || "회의 룸";
       if (refs.blockedTitle) refs.blockedTitle.textContent = state.blockedTitle || "이 회의 룸은 패널에서 다시 열어야 합니다";
       refs.blockedMessage.textContent = state.blockedMessage || refs.blockedMessage.textContent;
-      controllers?.debug?.render?.();
       return;
     }
     refs.blockedState.hidden = true;
     refs.workspace.hidden = false;
     renderWorkspace(state, refs);
-    controllers?.debug?.render?.();
     refs.confirmOverlay.hidden = !state.confirmation.open;
     if (refs.confirmDialog) {
       refs.confirmDialog.dataset.tone = state.confirmation.tone || "danger";

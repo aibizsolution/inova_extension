@@ -8,7 +8,6 @@ const { JSDOM } = require("jsdom");
 const root = path.resolve(__dirname, "..");
 const hostedMeetingHtmlPath = path.join(root, "hosting", "meeting", "index.html");
 const hostedMeetingCssPath = path.join(root, "hosting", "meeting", "index.css");
-const hostedMeetingIndexPath = path.join(root, "hosting", "meeting", "index.js");
 const hostedMeetingRenderPath = path.join(root, "hosting", "meeting", "render.js");
 const hostedMeetingMutationsPath = path.join(root, "hosting", "meeting", "workspace-mutations.js");
 const hostedMeetingDebugPath = path.join(root, "hosting", "meeting", "workspace-debug.js");
@@ -16,7 +15,6 @@ const hostedMeetingDebugPath = path.join(root, "hosting", "meeting", "workspace-
 function main() {
   const html = fs.readFileSync(hostedMeetingHtmlPath, "utf8");
   const css = fs.readFileSync(hostedMeetingCssPath, "utf8");
-  const indexJs = fs.readFileSync(hostedMeetingIndexPath, "utf8");
   const renderJs = fs.readFileSync(hostedMeetingRenderPath, "utf8");
   const mutationsJs = fs.readFileSync(hostedMeetingMutationsPath, "utf8");
   const debugJs = fs.readFileSync(hostedMeetingDebugPath, "utf8");
@@ -40,6 +38,7 @@ function main() {
   const copySegmentsButton = document.getElementById("copySegmentsButton");
   const copyMeetingNotesButton = document.getElementById("copyMeetingNotesButton");
   const moveRecordButton = document.getElementById("moveRecordButton");
+  const downloadRecordButton = document.getElementById("downloadRecordButton");
   const recordMoveConfirm = document.getElementById("recordMoveConfirm");
   const recordMoveList = document.getElementById("recordMoveList");
   const recordMoveOverlay = document.getElementById("recordMoveOverlay");
@@ -50,6 +49,12 @@ function main() {
   assert(copySegmentsButton, "Hosted workspace should render the transcript copy action");
   assert(copyMeetingNotesButton, "Hosted workspace should render the meeting notes copy action");
   assert(moveRecordButton, "Hosted workspace should render the move record action in the detail action row");
+  assert(downloadRecordButton, "Hosted workspace should render the local source download action in the detail action row");
+  assert.equal(
+    String(downloadRecordButton.textContent || "").trim(),
+    "원본 다운로드",
+    "Hosted workspace download action should make clear it downloads the local original source"
+  );
   assert(recordMoveOverlay, "Hosted workspace should render the dedicated move record overlay");
   assert(recordMoveList, "Hosted workspace should render the move target list");
   assert(recordMoveConfirm, "Hosted workspace should render the move confirm action");
@@ -90,15 +95,37 @@ function main() {
     "Term replacement save flow should close the panel after a successful save"
   );
   assert(
-    indexJs.includes("function readDebugPanelCollapsed() {") && indexJs.includes("return true;"),
-    "Hosted meeting debug panel should default to collapsed on every page load"
+    !html.includes('id="debugPanel"') && !html.includes("debug-console.js"),
+    "Hosted meeting should not load or render the in-page debug console UI"
   );
   assert(
-    !debugJs.includes("safeLocalStorageSet"),
-    "Hosted meeting debug panel should not persist expanded state across refreshes"
+    debugJs.includes('mode: "browser-console"') && debugJs.includes("[inova:${channel} #${traceSequence}]"),
+    "Hosted meeting debug logging should emit extension-style browser console trace lines"
+  );
+  assert(
+    debugJs.includes("same event repeated ${lastTraceEntry.repeatCount} more times"),
+    "Hosted meeting browser console trace should collapse repeated events like the extension panel trace"
   );
 
+  assert(document.getElementById("sectionEditDialogEyebrow"), "Section edit dialog should render a mode eyebrow");
+  assert(document.getElementById("sectionEditHelpText"), "Section edit dialog should render mode-specific help text");
   assert.equal(document.getElementById("sectionEditStatus"), null, "Section edit dialog should not render a separate status strip");
+  assert(
+    renderJs.includes('data-notes-section-action="manual-edit"')
+      && renderJs.includes('data-notes-section-action="ai-edit"')
+      && renderJs.includes('data-notes-section-action="delete"'),
+    "Meeting notes section header should expose manual edit, AI edit, and delete actions"
+  );
+  assert(
+    css.includes(".notes-section__action--danger") && css.includes(".notes-section__action--ai"),
+    "Meeting notes section actions should have distinct AI and delete affordances"
+  );
+  assert(
+    mutationsJs.includes("buildManualSectionPayload")
+      && mutationsJs.includes("deleteMeetingNotesSection")
+      && mutationsJs.includes('editMode: "manual"'),
+    "Meeting notes section actions should support manual save and delete through the hosted mutation controller"
+  );
   assert.equal(document.querySelector("#reviewTabActions #moveRecordButton"), null, "Move record action should not live in the shared review action row");
 
   console.log("[verify-meeting-hosted-ui] Hosted meeting UI contract passed");

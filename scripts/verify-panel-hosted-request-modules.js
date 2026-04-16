@@ -169,6 +169,11 @@ function verifyHostedBridgeRequestModuleContract() {
     "hosted panel should keep tool rail persistence in a dedicated helper"
   );
   assert(
+    hostedPanelSource.includes("resolveRequestTimeoutMs(payload)")
+      && hostedPanelSource.includes("MAX_REQUEST_TIMEOUT_MS"),
+    "hosted panel should honor per-request timeout metadata with a client-side cap"
+  );
+  assert(
     hostedPanelSource.includes("await persistHostedUiPreferences(nextUiPreferences, \"active-tool\");")
       && hostedPanelSource.includes("function canInvokeNegotiatedCapability(capabilityId)")
       && hostedPanelSource.includes("UI_PREFERENCES_WRITE_CAPABILITY_ID"),

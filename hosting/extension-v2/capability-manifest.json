@@ -361,6 +361,7 @@
       "minExtensionVersion": "1.0.0",
       "outputSchemaVersion": 1,
       "owner": "prompt-review",
+      "requestTimeoutMs": 75000,
       "schemaVersion": 1,
       "service": "prompt"
     },

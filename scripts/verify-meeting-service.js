@@ -466,6 +466,57 @@ async function main() {
   assert.equal(summaryEditedArtifact.notes.summary, summaryPreview.jsonBody.data.sectionData.summary);
   assert.equal(summaryEditedJob.meetingNotes.overview, previewedSection.jsonBody.data.sectionData.overview);
 
+  const missingBaseRevisionSection = await invokeHandler(handlers.applyInovaMeetingResultSectionEdit, {
+    body: {
+      clientRequestId: "section-apply-missing-token-1",
+      jobId,
+      meetingId: "meeting-planning-1",
+      owner,
+      sectionData: { summary: "미리보기 없는 AI 적용은 거부되어야 합니다." },
+      sectionKey: "summary",
+    },
+    method: "POST",
+  });
+  assert.equal(missingBaseRevisionSection.statusCode, 400);
+
+  const manuallyAppliedSection = await invokeHandler(handlers.applyInovaMeetingResultSectionEdit, {
+    body: {
+      clientRequestId: "section-manual-summary-1",
+      editMode: "manual",
+      jobId,
+      meetingId: "meeting-planning-1",
+      owner,
+      sectionData: { summary: "직접 고친 핵심 요약" },
+      sectionKey: "summary",
+    },
+    method: "POST",
+  });
+  assert.equal(manuallyAppliedSection.statusCode, 200);
+  const manuallyEditedJob = getDoc(state, JOB_COLLECTION, jobId);
+  const manuallyEditedArtifact = getDoc(state, ARTIFACT_COLLECTION, artifactId);
+  assert.equal(manuallyEditedJob.meetingNotes.summary, "직접 고친 핵심 요약");
+  assert.equal(manuallyEditedArtifact.notes.summary, "직접 고친 핵심 요약");
+  assert.equal(manuallyEditedJob.meetingNotes.overview, previewedSection.jsonBody.data.sectionData.overview);
+
+  const deletedQuestionsSection = await invokeHandler(handlers.applyInovaMeetingResultSectionEdit, {
+    body: {
+      clientRequestId: "section-delete-open-questions-1",
+      editMode: "manual",
+      jobId,
+      meetingId: "meeting-planning-1",
+      owner,
+      sectionData: { deleteSection: true, openQuestions: [] },
+      sectionKey: "openQuestions",
+    },
+    method: "POST",
+  });
+  assert.equal(deletedQuestionsSection.statusCode, 200);
+  const questionDeletedJob = getDoc(state, JOB_COLLECTION, jobId);
+  const questionDeletedArtifact = getDoc(state, ARTIFACT_COLLECTION, artifactId);
+  assert.equal(questionDeletedJob.meetingNotes.openQuestions.length, 0);
+  assert.equal(questionDeletedArtifact.notes.openQuestions.length, 0);
+  assert.equal(questionDeletedJob.meetingNotes.summary, "직접 고친 핵심 요약");
+
   await verifyMoveMeetingResultFlow({
     audioPayload,
     compactArtifactId,

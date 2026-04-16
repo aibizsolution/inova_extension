@@ -7,6 +7,7 @@ const SECTION_LABELS = Object.freeze({
   openQuestions: "추가 결정 필요 사항",
   overview: "회의 개요",
   risksOrDependencies: "리스크 및 제약",
+  summary: "핵심 요약",
 });
 
   ns.workspaceMutations = {
@@ -27,8 +28,10 @@ const SECTION_LABELS = Object.freeze({
         renderNotesSection,
       } = ns.render;
       const { escapeHtml, logDebug, normalizeText, normalizeTextBlock, postJson } = ns.shared;
+      const { normalizeMeetingNotes, normalizeTextArray } = ns.notes;
       const CONFIG = constants.CONFIG || {};
       const MAX_MEETING_SECTION_EDIT_INSTRUCTION_CHARS = constants.MAX_MEETING_SECTION_EDIT_INSTRUCTION_CHARS || 1600;
+      const MAX_MEETING_SECTION_MANUAL_EDIT_CHARS = 12000;
       const MAX_MEETING_TERM_REPLACEMENTS = constants.MAX_MEETING_TERM_REPLACEMENTS || 24;
       const MAX_MEETING_TERM_REPLACEMENT_TEXT_CHARS = constants.MAX_MEETING_TERM_REPLACEMENT_TEXT_CHARS || 120;
       const MAX_SHARED_MEMO_CHARS = constants.MAX_SHARED_MEMO_CHARS || 0;
@@ -323,18 +326,251 @@ const SECTION_LABELS = Object.freeze({
         return !compareTermReplacements(state.termReplacementState.items, state.termReplacementState.saved);
       }
 
+      function normalizeSectionEditMode(value) {
+        return normalizeText(value) === "manual" ? "manual" : "ai";
+      }
+
+      function getSectionEditInstructionLimit(modeInput) {
+        return normalizeSectionEditMode(modeInput) === "manual"
+          ? MAX_MEETING_SECTION_MANUAL_EDIT_CHARS
+          : MAX_MEETING_SECTION_EDIT_INSTRUCTION_CHARS;
+      }
+
       function resetSectionEditPreviewState(options = {}) {
         const nextState = createEmptySectionEditState();
         nextState.recordId = normalizeText(options.recordId ?? state.sectionEdit.recordId);
         nextState.jobId = normalizeText(options.jobId ?? state.sectionEdit.jobId);
+        nextState.mode = normalizeSectionEditMode(options.mode ?? state.sectionEdit.mode);
         nextState.open = Boolean(options.open ?? state.sectionEdit.open);
         nextState.sectionKey = normalizeText(options.sectionKey ?? state.sectionEdit.sectionKey) || "overview";
         nextState.instruction = options.preserveInstruction
-          ? normalizeTextareaDraft(options.instruction ?? state.sectionEdit.instruction).slice(0, MAX_MEETING_SECTION_EDIT_INSTRUCTION_CHARS)
+          ? normalizeTextareaDraft(options.instruction ?? state.sectionEdit.instruction).slice(0, getSectionEditInstructionLimit(nextState.mode))
           : "";
         nextState.statusText = normalizeText(options.statusText);
         nextState.statusTone = normalizeText(options.statusTone);
         state.sectionEdit = nextState;
+      }
+
+      function getCurrentMeetingNotesForEdit() {
+        return normalizeMeetingNotes(state.currentArtifact?.notes || state.currentJob?.meetingNotes);
+      }
+
+      function buildManualSectionDraft(sectionKeyInput, notesInput) {
+        const sectionKey = normalizeText(sectionKeyInput);
+        const notes = normalizeMeetingNotes(notesInput);
+        if (sectionKey === "summary") {
+          return normalizeTextBlock(notes.summary);
+        }
+        if (sectionKey === "overview") {
+          const purpose = normalizeTextBlock(notes.meetingMeta?.purpose);
+          const overview = normalizeTextBlock(notes.overview);
+          return [
+            purpose ? `[목적]\n${purpose}` : "",
+            overview ? `[개요]\n${overview}` : "[개요]\n",
+          ].filter(Boolean).join("\n\n");
+        }
+        if (sectionKey === "discussionFlow") {
+          return (Array.isArray(notes.discussionFlow) ? notes.discussionFlow : [])
+            .map((item) => [
+              normalizeText(item?.heading) ? `## ${normalizeText(item.heading)}` : "## 주요 논의",
+              normalizeTextBlock(item?.narrative),
+              ...normalizeTextArray(item?.keyPoints).map((point) => `- ${point}`),
+            ].filter(Boolean).join("\n"))
+            .join("\n\n");
+        }
+        if (sectionKey === "decisions") {
+          return (Array.isArray(notes.decisions) ? notes.decisions : [])
+            .map((item) => formatManualLine(normalizeText(item?.text), [
+              normalizeText(item?.owner) ? `담당: ${normalizeText(item.owner)}` : "",
+              normalizeText(item?.confidence) ? `확신도: ${normalizeText(item.confidence)}` : "",
+            ]))
+            .filter(Boolean)
+            .join("\n");
+        }
+        if (sectionKey === "openQuestions") {
+          return normalizeTextArray(notes.openQuestions).join("\n");
+        }
+        if (sectionKey === "risksOrDependencies") {
+          return (Array.isArray(notes.risksOrDependencies) ? notes.risksOrDependencies : [])
+            .map((item) => formatManualLine(normalizeText(item?.text), [
+              normalizeText(item?.severity) ? `심각도: ${normalizeText(item.severity)}` : "",
+            ]))
+            .filter(Boolean)
+            .join("\n");
+        }
+        if (sectionKey === "actionItems") {
+          return (Array.isArray(notes.actionItems) ? notes.actionItems : [])
+            .map((item) => formatManualLine(normalizeText(item?.task), [
+              normalizeText(item?.assignee) ? `담당: ${normalizeText(item.assignee)}` : "",
+              normalizeText(item?.dueDate) ? `기한: ${normalizeText(item.dueDate)}` : "",
+              normalizeText(item?.status) ? `상태: ${normalizeText(item.status)}` : "",
+            ]))
+            .filter(Boolean)
+            .join("\n");
+        }
+        return "";
+      }
+
+      function formatManualLine(primary, details) {
+        const normalizedPrimary = normalizeTextBlock(primary).replace(/\s+/g, " ").trim();
+        if (!normalizedPrimary) {
+          return "";
+        }
+        const normalizedDetails = (Array.isArray(details) ? details : []).map((item) => normalizeText(item)).filter(Boolean);
+        return [normalizedPrimary, ...normalizedDetails].join(" | ");
+      }
+
+      function parseManualLine(line) {
+        const parts = normalizeTextBlock(line)
+          .split("|")
+          .map((part) => normalizeText(part))
+          .filter(Boolean);
+        const primary = parts.shift() || "";
+        const details = {};
+        for (const part of parts) {
+          const match = part.match(/^([^:：]+)[:：]\s*(.+)$/);
+          if (!match) {
+            continue;
+          }
+          details[normalizeText(match[1])] = normalizeText(match[2]);
+        }
+        return { details, primary };
+      }
+
+      function splitManualLines(text) {
+        return normalizeTextBlock(text)
+          .split("\n")
+          .map((line) => normalizeTextBlock(line))
+          .filter(Boolean);
+      }
+
+      function buildManualSectionPayload(sectionKeyInput, textInput) {
+        const sectionKey = normalizeText(sectionKeyInput);
+        const text = normalizeTextareaDraft(textInput).slice(0, MAX_MEETING_SECTION_MANUAL_EDIT_CHARS);
+        const notes = getCurrentMeetingNotesForEdit();
+        if (sectionKey === "summary") {
+          return { summary: text };
+        }
+        if (sectionKey === "overview") {
+          const overviewDraft = parseManualOverviewDraft(text, notes);
+          return {
+            meetingMeta: overviewDraft.meetingMeta,
+            overview: overviewDraft.overview,
+          };
+        }
+        if (sectionKey === "discussionFlow") {
+          return {
+            discussionFlow: text
+              .split(/\n{2,}/)
+              .map((block) => parseManualDiscussionFlowBlock(block))
+              .filter((item) => item.heading || item.narrative || item.keyPoints.length),
+          };
+        }
+        if (sectionKey === "decisions") {
+          return {
+            decisions: splitManualLines(text).map((line) => {
+              const parsed = parseManualLine(line);
+              return {
+                confidence: parsed.details["확신도"] || "medium",
+                owner: parsed.details["담당"] || "",
+                text: parsed.primary,
+              };
+            }),
+          };
+        }
+        if (sectionKey === "openQuestions") {
+          return { openQuestions: splitManualLines(text) };
+        }
+        if (sectionKey === "risksOrDependencies") {
+          return {
+            risksOrDependencies: splitManualLines(text).map((line) => {
+              const parsed = parseManualLine(line);
+              return {
+                severity: parsed.details["심각도"] || "medium",
+                text: parsed.primary,
+              };
+            }),
+          };
+        }
+        if (sectionKey === "actionItems") {
+          return {
+            actionItems: splitManualLines(text).map((line) => {
+              const parsed = parseManualLine(line);
+              return {
+                assignee: parsed.details["담당"] || "",
+                dueDate: parsed.details["기한"] || "",
+                source: "manual",
+                status: parsed.details["상태"] || "open",
+                task: parsed.primary,
+              };
+            }),
+          };
+        }
+        return {};
+      }
+
+      function parseManualDiscussionFlowBlock(block) {
+        const lines = splitManualLines(block);
+        if (!lines.length) {
+          return { heading: "", keyPoints: [], narrative: "" };
+        }
+        const firstLine = normalizeText(lines.shift()).replace(/^#+\s*/, "");
+        const keyPoints = [];
+        const narrativeLines = [];
+        for (const line of lines) {
+          if (/^[-*]\s+/.test(line)) {
+            keyPoints.push(normalizeText(line.replace(/^[-*]\s+/, "")));
+          } else {
+            narrativeLines.push(line);
+          }
+        }
+        return {
+          heading: firstLine || "주요 논의",
+          keyPoints: keyPoints.filter(Boolean),
+          narrative: normalizeTextBlock(narrativeLines.join("\n")),
+        };
+      }
+
+      function parseManualOverviewDraft(textInput, notesInput) {
+        const notes = normalizeMeetingNotes(notesInput);
+        const text = normalizeTextareaDraft(textInput);
+        const purposeMatch = text.match(/\[목적\]([\s\S]*?)(?=\n{0,2}\[개요\]|$)/);
+        const overviewMatch = text.match(/\[개요\]([\s\S]*)$/);
+        return {
+          meetingMeta: {
+            ...notes.meetingMeta,
+            purpose: purposeMatch
+              ? normalizeTextBlock(purposeMatch[1])
+              : normalizeTextBlock(notes.meetingMeta?.purpose),
+          },
+          overview: overviewMatch
+            ? normalizeTextBlock(overviewMatch[1])
+            : normalizeTextBlock(text),
+        };
+      }
+
+      function buildDeletedSectionPayload(sectionKeyInput) {
+        const sectionKey = normalizeText(sectionKeyInput);
+        if (sectionKey === "summary") return { deleteSection: true, summary: "" };
+        if (sectionKey === "overview") {
+          const notes = getCurrentMeetingNotesForEdit();
+          return {
+            deleteSection: true,
+            meetingMeta: {
+              datetime: "",
+              participants: [],
+              purpose: "",
+              title: notes.meetingMeta?.title || "",
+            },
+            overview: "",
+          };
+        }
+        if (sectionKey === "discussionFlow") return { deleteSection: true, discussionFlow: [] };
+        if (sectionKey === "decisions") return { decisions: [], deleteSection: true };
+        if (sectionKey === "openQuestions") return { deleteSection: true, openQuestions: [] };
+        if (sectionKey === "risksOrDependencies") return { deleteSection: true, risksOrDependencies: [] };
+        if (sectionKey === "actionItems") return { actionItems: [], deleteSection: true };
+        return { deleteSection: true };
       }
 
       function normalizeRecordMoveTarget(item) {
@@ -735,6 +971,9 @@ const SECTION_LABELS = Object.freeze({
         const changed = nextSectionKey !== normalizeText(state.sectionEdit.sectionKey);
         state.sectionEdit.sectionKey = nextSectionKey;
         if (changed) {
+          if (normalizeSectionEditMode(state.sectionEdit.mode) === "manual") {
+            state.sectionEdit.instruction = buildManualSectionDraft(nextSectionKey, getCurrentMeetingNotesForEdit());
+          }
           state.sectionEdit.baseRevisionToken = "";
           state.sectionEdit.previewSectionData = null;
           state.sectionEdit.previewSectionKey = "";
@@ -745,7 +984,7 @@ const SECTION_LABELS = Object.freeze({
       }
 
       function updateSectionEditInstruction(value) {
-        const nextInstruction = normalizeTextareaDraft(value).slice(0, MAX_MEETING_SECTION_EDIT_INSTRUCTION_CHARS);
+        const nextInstruction = normalizeTextareaDraft(value).slice(0, getSectionEditInstructionLimit(state.sectionEdit.mode));
         const changed = nextInstruction !== normalizeText(state.sectionEdit.instruction);
         state.sectionEdit.instruction = nextInstruction;
         if (changed) {
@@ -763,7 +1002,7 @@ const SECTION_LABELS = Object.freeze({
         applyRender();
       }
 
-      function openSectionEdit(sectionKeyInput) {
+      function openSectionEdit(sectionKeyInput, modeInput = "ai") {
         const entry = findHistoryEntry(state, state.selectedRecordId);
         if (!entry?.remote?.jobId) {
           setNotice("섹션 수정을 하려면 완료된 기록을 선택해 주세요.", "warning");
@@ -771,21 +1010,31 @@ const SECTION_LABELS = Object.freeze({
           return false;
         }
         const nextSectionKey = normalizeText(sectionKeyInput) || "overview";
+        const nextMode = normalizeSectionEditMode(modeInput);
         const sameRecord = normalizeText(state.sectionEdit.recordId) === normalizeText(entry.id);
         const sameSection = normalizeText(state.sectionEdit.sectionKey) === nextSectionKey;
-        if (!sameRecord || !sameSection) {
+        const sameMode = normalizeSectionEditMode(state.sectionEdit.mode) === nextMode;
+        if (!sameRecord || !sameSection || !sameMode) {
           resetSectionEditPreviewState({
+            instruction: nextMode === "manual"
+              ? buildManualSectionDraft(nextSectionKey, getCurrentMeetingNotesForEdit())
+              : "",
             jobId: entry.remote.jobId,
+            mode: nextMode,
             open: true,
-            preserveInstruction: false,
+            preserveInstruction: nextMode === "manual",
             recordId: entry.id,
             sectionKey: nextSectionKey,
           });
         } else {
           state.sectionEdit.open = true;
           state.sectionEdit.jobId = entry.remote.jobId;
+          state.sectionEdit.mode = nextMode;
           state.sectionEdit.recordId = entry.id;
           state.sectionEdit.sectionKey = nextSectionKey;
+          if (nextMode === "manual" && !normalizeText(state.sectionEdit.instruction)) {
+            state.sectionEdit.instruction = buildManualSectionDraft(nextSectionKey, getCurrentMeetingNotesForEdit());
+          }
         }
         state.reviewTab = "notes";
         applyRender();
@@ -805,14 +1054,24 @@ const SECTION_LABELS = Object.freeze({
       }
 
       function handleMeetingNotesSectionAction(event) {
-        const target = event.target?.closest?.("[data-notes-section-action='edit']");
+        const target = event.target?.closest?.("[data-notes-section-action]");
         if (!(target instanceof globalObject.HTMLElement)) {
           return false;
         }
         if (typeof event.preventDefault === "function") {
           event.preventDefault();
         }
-        return openSectionEdit(target.dataset.sectionKey);
+        const action = normalizeText(target.dataset.notesSectionAction);
+        if (action === "manual-edit") {
+          return openSectionEdit(target.dataset.sectionKey, "manual");
+        }
+        if (action === "ai-edit" || action === "edit") {
+          return openSectionEdit(target.dataset.sectionKey, "ai");
+        }
+        if (action === "delete") {
+          return deleteMeetingNotesSection(target.dataset.sectionKey);
+        }
+        return false;
       }
 
       function resetSectionEditPreview() {
@@ -1152,10 +1411,103 @@ const SECTION_LABELS = Object.freeze({
         return saveRecordTitleForEntry(state.selectedRecordId, refs.recordTitleInput.value);
       }
 
+      async function applyMeetingNotesSectionPayloadRequest(options = {}) {
+        const entry = options.entry || findHistoryEntry(state, state.selectedRecordId);
+        if (!entry?.remote?.jobId) {
+          setNotice("섹션 수정을 적용할 완료 기록이 필요합니다.", "warning");
+          applyRender();
+          return false;
+        }
+        const sectionKey = normalizeText(options.sectionKey || state.sectionEdit.sectionKey) || "overview";
+        const requestId = generateClientRequestId(normalizeText(options.requestPrefix) || "section-apply");
+        registerPendingMutation({
+          jobId: entry.remote.jobId,
+          quiet: true,
+          recordId: entry.id,
+          requestId,
+          successMessage: normalizeText(options.successMessage) || "선택한 섹션을 적용했습니다.",
+          type: "applySectionEdit",
+        });
+        state.reviewTab = "notes";
+        applyRender();
+        try {
+          const payload = await postJson(globalObject, CONFIG.applyMeetingResultSectionEditUrl, {
+            baseRevisionToken: normalizeText(options.baseRevisionToken),
+            clientRequestId: requestId,
+            editMode: normalizeSectionEditMode(options.editMode),
+            jobId: entry.remote.jobId,
+            meetingId: state.session.meetingId,
+            sectionData: options.sectionData && typeof options.sectionData === "object"
+              ? JSON.parse(JSON.stringify(options.sectionData))
+              : {},
+            sectionKey,
+          }, state.session.meetingSessionToken);
+          assertAcceptedMutationResponse(payload, requestId, "섹션 수정");
+          patchSelectedRecordNotes(entry.remote.jobId, payload.notes, payload.title, payload.requestId);
+          resetSectionEditPreviewState({
+            jobId: entry.remote.jobId,
+            mode: normalizeSectionEditMode(options.editMode),
+            open: false,
+            preserveInstruction: false,
+            recordId: entry.id,
+            sectionKey: normalizeText(payload.sectionKey || sectionKey) || sectionKey,
+          });
+          setNotice(
+            normalizeText(options.successMessage) || `${resolveSectionLabel(payload.sectionKey || sectionKey)} 섹션을 반영했습니다.`,
+            "highlight"
+          );
+          await finalizePendingMutation(requestId, "succeeded");
+          return true;
+        } catch (error) {
+          await finalizePendingMutation(
+            requestId,
+            "failed",
+            error instanceof Error ? error.message : "섹션 수정을 적용하지 못했어요."
+          );
+          return false;
+        } finally {
+          syncWorkspaceMutationBusyState();
+          applyRender();
+        }
+      }
+
+      async function deleteMeetingNotesSection(sectionKeyInput) {
+        const entry = findHistoryEntry(state, state.selectedRecordId);
+        if (!entry?.remote?.jobId) {
+          setNotice("섹션을 삭제하려면 완료된 기록을 선택해 주세요.", "warning");
+          applyRender();
+          return false;
+        }
+        const sectionKey = normalizeText(sectionKeyInput) || "overview";
+        const sectionLabel = resolveSectionLabel(sectionKey);
+        if (!await requestConfirmation({
+          body: "이 섹션의 내용만 비우고 다른 회의 정리 내용은 유지합니다.",
+          confirmLabel: "섹션 삭제",
+          eyebrow: "섹션 삭제",
+          title: `${sectionLabel} 섹션을 삭제할까요?`,
+          tone: "danger",
+        })) {
+          return false;
+        }
+        return applyMeetingNotesSectionPayloadRequest({
+          editMode: "manual",
+          entry,
+          requestPrefix: "section-delete",
+          sectionData: buildDeletedSectionPayload(sectionKey),
+          sectionKey,
+          successMessage: `${sectionLabel} 섹션을 삭제했습니다.`,
+        });
+      }
+
       async function previewSectionEdit() {
         const entry = findHistoryEntry(state, state.selectedRecordId);
         if (!entry?.remote?.jobId) {
           setNotice("섹션 수정을 하려면 완료된 기록을 선택해 주세요.", "warning");
+          applyRender();
+          return false;
+        }
+        if (normalizeSectionEditMode(state.sectionEdit.mode) === "manual") {
+          setNotice("직접 수정은 미리보기 없이 바로 저장합니다.", "highlight");
           applyRender();
           return false;
         }
@@ -1216,54 +1568,32 @@ const SECTION_LABELS = Object.freeze({
           applyRender();
           return false;
         }
+        const sectionKey = normalizeText(state.sectionEdit.previewSectionKey || state.sectionEdit.sectionKey) || "overview";
+        const sectionLabel = resolveSectionLabel(sectionKey);
+        if (normalizeSectionEditMode(state.sectionEdit.mode) === "manual") {
+          return applyMeetingNotesSectionPayloadRequest({
+            editMode: "manual",
+            entry,
+            requestPrefix: "section-manual",
+            sectionData: buildManualSectionPayload(sectionKey, state.sectionEdit.instruction),
+            sectionKey,
+            successMessage: `${sectionLabel} 섹션을 저장했습니다.`,
+          });
+        }
         if (!state.sectionEdit.baseRevisionToken || !state.sectionEdit.previewSectionData) {
           setNotice("먼저 섹션 미리보기를 만들어 주세요.", "warning");
           applyRender();
           return false;
         }
-        const requestId = generateClientRequestId("section-apply");
-        registerPendingMutation({
-          jobId: entry.remote.jobId,
-          quiet: true,
-          recordId: entry.id,
-          requestId,
-          successMessage: "선택한 섹션을 적용했습니다.",
-          type: "applySectionEdit",
+        return applyMeetingNotesSectionPayloadRequest({
+          baseRevisionToken: state.sectionEdit.baseRevisionToken,
+          editMode: "ai",
+          entry,
+          requestPrefix: "section-apply",
+          sectionData: state.sectionEdit.previewSectionData,
+          sectionKey,
+          successMessage: `${sectionLabel} 섹션을 반영했습니다.`,
         });
-        state.reviewTab = "notes";
-        applyRender();
-        try {
-          const payload = await postJson(globalObject, CONFIG.applyMeetingResultSectionEditUrl, {
-            baseRevisionToken: state.sectionEdit.baseRevisionToken,
-            clientRequestId: requestId,
-            jobId: entry.remote.jobId,
-            meetingId: state.session.meetingId,
-            sectionData: state.sectionEdit.previewSectionData,
-            sectionKey: normalizeText(state.sectionEdit.previewSectionKey || state.sectionEdit.sectionKey),
-          }, state.session.meetingSessionToken);
-          assertAcceptedMutationResponse(payload, requestId, "섹션 수정");
-          patchSelectedRecordNotes(entry.remote.jobId, payload.notes, payload.title, payload.requestId);
-          resetSectionEditPreviewState({
-            jobId: entry.remote.jobId,
-            open: false,
-            preserveInstruction: false,
-            recordId: entry.id,
-            sectionKey: normalizeText(payload.sectionKey || state.sectionEdit.sectionKey),
-          });
-          setNotice(`${resolveSectionLabel(payload.sectionKey || state.sectionEdit.sectionKey)} 섹션을 반영했습니다.`, "highlight");
-          await finalizePendingMutation(requestId, "succeeded");
-          return true;
-        } catch (error) {
-          await finalizePendingMutation(
-            requestId,
-            "failed",
-            error instanceof Error ? error.message : "섹션 수정을 적용하지 못했어요."
-          );
-          return false;
-        } finally {
-          syncWorkspaceMutationBusyState();
-          applyRender();
-        }
       }
 
       async function deleteCurrentRecord(recordId = state.selectedRecordId) {
@@ -1385,6 +1715,12 @@ const SECTION_LABELS = Object.freeze({
         if (!refs.sectionEditPreviewCard || !refs.sectionEditPreviewBody || !refs.sectionEditPreviewTitle) {
           return;
         }
+        if (normalizeSectionEditMode(state.sectionEdit.mode) === "manual") {
+          refs.sectionEditPreviewCard.hidden = true;
+          refs.sectionEditPreviewBody.innerHTML = "";
+          refs.sectionEditPreviewTitle.textContent = "미리보기";
+          return;
+        }
         const sectionKey = normalizeText(state.sectionEdit.previewSectionKey || state.sectionEdit.sectionKey);
         if (!sectionKey || !state.sectionEdit.previewSectionData) {
           refs.sectionEditPreviewCard.hidden = true;
@@ -1428,6 +1764,8 @@ const SECTION_LABELS = Object.freeze({
         );
         const termDirty = isTermReplacementDirty();
         const sectionEditOpen = Boolean(state.sectionEdit.open);
+        const sectionEditMode = normalizeSectionEditMode(state.sectionEdit.mode);
+        const isManualSectionEdit = sectionEditMode === "manual";
 
         if (refs.termReplacementDirtyBadge) refs.termReplacementDirtyBadge.hidden = !termDirty;
         if (refs.termReplacementPanel) refs.termReplacementPanel.hidden = !state.termReplacementState.open;
@@ -1448,16 +1786,32 @@ const SECTION_LABELS = Object.freeze({
 
         if (refs.sectionEditOverlay) refs.sectionEditOverlay.hidden = !sectionEditOpen;
         if (refs.closeSectionEditButton) refs.closeSectionEditButton.disabled = selectedRecordBusy;
+        if (refs.sectionEditDialog) refs.sectionEditDialog.dataset.mode = sectionEditMode;
+        if (refs.sectionEditDialogEyebrow) refs.sectionEditDialogEyebrow.textContent = isManualSectionEdit ? "직접 수정" : "AI 수정";
         if (refs.sectionEditDialogTitle) refs.sectionEditDialogTitle.textContent = resolveSectionLabel(state.sectionEdit.sectionKey);
-        if (refs.sectionEditInstructionInput) refs.sectionEditInstructionInput.disabled = readOnly || selectedRecordBusy;
+        if (refs.sectionEditHelpText) {
+          refs.sectionEditHelpText.textContent = isManualSectionEdit
+            ? "내용을 직접 고치고 저장합니다. 목록형 섹션은 한 줄에 하나씩 입력합니다."
+            : "AI에게 바꿀 방향을 적고 미리보기를 만든 뒤 적용합니다.";
+        }
+        if (refs.sectionEditInstructionInput) {
+          refs.sectionEditInstructionInput.disabled = readOnly || selectedRecordBusy;
+          refs.sectionEditInstructionInput.maxLength = getSectionEditInstructionLimit(sectionEditMode);
+          refs.sectionEditInstructionInput.placeholder = isManualSectionEdit
+            ? "이 섹션에 남길 내용을 직접 입력해 주세요."
+            : "예: 참석자 이름 표기를 통일하고, 결정 배경을 조금 더 명확하게 정리해 주세요.";
+          refs.sectionEditInstructionInput.setAttribute("aria-label", isManualSectionEdit ? "직접 수정 내용" : "AI 수정 요청");
+        }
         if (refs.previewSectionEditButton) {
+          refs.previewSectionEditButton.hidden = isManualSectionEdit;
           refs.previewSectionEditButton.disabled = readOnly
             || selectedRecordBusy
             || !normalizeText(state.sectionEdit.sectionKey)
             || !normalizeText(state.sectionEdit.instruction);
-          refs.previewSectionEditButton.textContent = state.busy.previewSectionEdit ? "미리보기 생성 중" : "미리보기 만들기";
+          refs.previewSectionEditButton.textContent = state.busy.previewSectionEdit ? "AI 미리보기 생성 중" : "AI 미리보기";
         }
         if (refs.cancelSectionEditButton) {
+          refs.cancelSectionEditButton.hidden = isManualSectionEdit;
           const hasAnyPreviewState = Boolean(
             state.sectionEdit.baseRevisionToken
             || state.sectionEdit.previewSectionData
@@ -1466,8 +1820,13 @@ const SECTION_LABELS = Object.freeze({
         }
         if (refs.applySectionEditButton) {
           const hasPreview = Boolean(state.sectionEdit.baseRevisionToken && state.sectionEdit.previewSectionData);
-          refs.applySectionEditButton.disabled = readOnly || selectedRecordBusy || !hasPreview;
-          refs.applySectionEditButton.textContent = state.busy.applySectionEdit ? "적용 중" : "이 섹션만 적용";
+          refs.applySectionEditButton.disabled = readOnly
+            || selectedRecordBusy
+            || !normalizeText(state.sectionEdit.sectionKey)
+            || (!isManualSectionEdit && !hasPreview);
+          refs.applySectionEditButton.textContent = state.busy.applySectionEdit
+            ? (isManualSectionEdit ? "저장 중" : "적용 중")
+            : (isManualSectionEdit ? "저장" : "이 섹션만 적용");
         }
         if (refs.sectionEditStatus) {
           refs.sectionEditStatus.hidden = !normalizeText(state.sectionEdit.statusText);
@@ -1485,6 +1844,7 @@ const SECTION_LABELS = Object.freeze({
         closeSectionEdit,
         deleteCurrentRecord,
         deleteMeeting,
+        deleteMeetingNotesSection,
         finalizePendingMutation,
         handleMeetingNotesSectionAction,
         handleRecordMoveListClick,

@@ -30,9 +30,10 @@ const { createMeetingTranscriptDomain } = require("./meeting-transcript-domain")
 
 const ALLOWED_CAPTURE_MODES = new Set(["tab-audio", "microphone", "mixed-audio"]);
 const DEFAULT_INLINE_AUDIO_LIMIT_BYTES = 25 * 1024 * 1024;
-const DEFAULT_SOURCE_TARGET_PART_BYTES = 28 * 1024 * 1024;
+const DEFAULT_SOURCE_TARGET_PART_BYTES = 24 * 1024 * 1024;
 const DEFAULT_SOURCE_MAX_BYTES = 200 * 1024 * 1024;
 const DEFAULT_SOURCE_MAX_DURATION_MS = 2 * 60 * 60 * 1000;
+const DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS = 23 * 60 * 1000;
 const DEFAULT_SOURCE_PART_OVERLAP_MS = 1500;
 const DEFAULT_MEETING_PROCESS_RETRY_LIMIT = 2;
 const DEFAULT_MODEL = "gpt-4o-transcribe";
@@ -598,6 +599,7 @@ function registerMeetingHandlers(deps) {
     defaultSourcePartOverlapMs: DEFAULT_SOURCE_PART_OVERLAP_MS,
     deleteTemporarySourceGroup: meetingRuntimeArtifactDomain.deleteTemporarySourceGroup,
     getInlineAudioLimitBytes,
+    getMeetingSingleTranscribeMaxDurationMs,
     getMeetingSourceMaxBytes,
     getMeetingSourceMaxDurationMs,
     getMeetingSourceTargetPartBytes,
@@ -1006,7 +1008,7 @@ function registerMeetingHandlers(deps) {
       if (!input.sectionKey) {
         throw createHttpError(400, "수정할 섹션을 확인해 주세요.");
       }
-      if (!input.baseRevisionToken) {
+      if (input.editMode !== "manual" && !input.baseRevisionToken) {
         throw createHttpError(400, "미리보기 기준 버전을 확인해 주세요.");
       }
       assertWorkspaceMeetingAccess(access, input.meetingId, createHttpError);
@@ -1493,6 +1495,14 @@ function getMeetingSourceMaxBytes() {
 
 function getMeetingSourceMaxDurationMs() {
   return Math.max(30 * 1000, Number(process.env.OPENAI_MEETING_SOURCE_MAX_DURATION_MS) || DEFAULT_SOURCE_MAX_DURATION_MS);
+}
+
+function getMeetingSingleTranscribeMaxDurationMs() {
+  return Math.max(
+    30 * 1000,
+    Number(process.env.OPENAI_MEETING_SINGLE_TRANSCRIBE_MAX_DURATION_MS)
+      || DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS
+  );
 }
 
 module.exports = {

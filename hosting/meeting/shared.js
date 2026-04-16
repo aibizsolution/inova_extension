@@ -8,13 +8,16 @@
   const DEBUG_FAULTS_SESSION_STORAGE_KEY = "inova-hosted-meeting-debug-faults";
   const DEFAULT_CREATE_JOB_TIMEOUT_MS = 9 * 60 * 1000;
   const DEFAULT_INLINE_AUDIO_LIMIT_BYTES = 25 * 1024 * 1024;
-  const DEFAULT_SOURCE_TARGET_PART_BYTES = 28 * 1024 * 1024;
+  const DEFAULT_SOURCE_TARGET_PART_BYTES = 24 * 1024 * 1024;
   const DEFAULT_SOURCE_MAX_BYTES = 200 * 1024 * 1024;
   const DEFAULT_SOURCE_MAX_DURATION_MS = 2 * 60 * 60 * 1000;
-  const DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS = 20 * 60 * 1000;
-  const DEFAULT_SOURCE_CHUNK_DURATION_MS = 9 * 60 * 1000;
+  const DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS = 23 * 60 * 1000;
+  const DEFAULT_SOURCE_CHUNK_DURATION_MS = 14 * 60 * 1000;
   const DEFAULT_SOURCE_CHUNK_OVERLAP_MS = 1500;
-  const DEFAULT_SOURCE_CHUNK_SAMPLE_RATE = 16000;
+  const DEFAULT_SOURCE_CHUNK_SAMPLE_RATE = 12000;
+  const DEFAULT_SOURCE_BOUNDARY_SEARCH_WINDOW_MS = 45 * 1000;
+  const DEFAULT_SOURCE_BOUNDARY_ANALYSIS_WINDOW_MS = 500;
+  const DEFAULT_SOURCE_BOUNDARY_ANALYSIS_STEP_MS = 250;
   const DEFAULT_MAX_RECORDING_DURATION_MS = 90 * 60 * 1000;
   const DEFAULT_RECORDING_AUDIO_BITS_PER_SECOND = 30000;
   const DEFAULT_SOURCE_UPLOAD_TIMEOUT_MS = 3 * 60 * 1000;
@@ -138,7 +141,7 @@
     }
   }
 
-  function isDebugPanelEnabled(globalObject) {
+  function isDebugConsoleEnabled(globalObject) {
     try {
       const current = new URL(String(globalObject?.location?.href || ""));
       return normalizeText(current.searchParams.get("debug")) === "1";
@@ -1228,7 +1231,7 @@
     return true;
   }
 
-  debugEnabled = isDebugPanelEnabled(global);
+  debugEnabled = isDebugConsoleEnabled(global);
 
   global.__INOVA_HOSTED_MEETING_DEBUG__ = {
     clear: clearDebugEntries,
@@ -1253,6 +1256,9 @@
     DEFAULT_SOURCE_CHUNK_DURATION_MS,
     DEFAULT_SOURCE_CHUNK_OVERLAP_MS,
     DEFAULT_SOURCE_CHUNK_SAMPLE_RATE,
+    DEFAULT_SOURCE_BOUNDARY_ANALYSIS_STEP_MS,
+    DEFAULT_SOURCE_BOUNDARY_ANALYSIS_WINDOW_MS,
+    DEFAULT_SOURCE_BOUNDARY_SEARCH_WINDOW_MS,
     DEFAULT_SOURCE_MAX_BYTES,
     DEFAULT_SOURCE_MAX_DURATION_MS,
     DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS,
@@ -1288,7 +1294,7 @@
     getDebugStatsSummary,
     getErrorDebugEntries,
     getRetainedErrorDebugEntries,
-    isDebugPanelEnabled,
+    isDebugConsoleEnabled,
     isLikelyNetworkError,
     isLocalWorkspaceOrigin,
     isOnline,

@@ -23,7 +23,7 @@
         DEFAULT_SOURCE_UPLOAD_TIMEOUT_MS,
         buildRemoteSelectionId,
         buildWorkspaceSessionStorageKey,
-        isDebugPanelEnabled,
+        isDebugConsoleEnabled,
         isLikelyNetworkError,
         isOnline,
         logDebug,
@@ -89,7 +89,7 @@
       const saveRecordTitleForEntry = (...args) => controller("mutations")?.saveRecordTitleForEntry?.(...args);
 
       function isDebugLocalQueueSandboxRequested() {
-        if (!state.isLocalWorkspace || !isDebugPanelEnabled(global)) {
+        if (!state.isLocalWorkspace || !isDebugConsoleEnabled(global)) {
           return false;
         }
         try {
@@ -1184,12 +1184,10 @@
           return null;
         }
         const normalizedRequestId = normalizeText(pending?.requestId);
-        const shouldCleanupPending = normalizeText(transition?.outcome) === "succeeded";
-        const nextPending = shouldCleanupPending
-          ? normalizePendingUpload(transition.nextPending)
-          : await upsertPendingUpload(transition.nextPending, {
-            context: options?.queueContext,
-          });
+        const nextPending = await upsertPendingUpload(transition.nextPending, {
+          context: options?.queueContext,
+          preserveUpdatedAt: normalizeText(transition?.outcome) === "succeeded",
+        });
         if (!normalizedRequestId) {
           return nextPending;
         }
@@ -1212,14 +1210,7 @@
         ) {
           state.selectedRecordId = transition.nextSelectedRecordId;
         }
-        if (shouldCleanupPending) {
-          await removePendingUploadQueueEntry(normalizedRequestId, {
-            context: options?.queueContext,
-            nextSelectedRecordId: options?.applySelectedRecordTransition ? transition.nextSelectedRecordId : "",
-            persistSession: false,
-          });
-          persistWorkspaceSession();
-        }
+        persistWorkspaceSession();
         return nextPending;
       }
       
@@ -1240,13 +1231,10 @@
           requestId: transition.nextPending.requestId,
           shouldResetSource: transition.resetChunkCache === "reset-parts",
         };
-        const shouldCleanupPending = normalizeText(transition?.outcome) === "succeeded";
-        const nextPending = shouldCleanupPending
-          ? normalizePendingUpload(transition.nextPending)
-          : await upsertPendingUpload(transition.nextPending, {
-            preserveUpdatedAt: true,
-            context: queueContext,
-          });
+        const nextPending = await upsertPendingUpload(transition.nextPending, {
+          preserveUpdatedAt: true,
+          context: queueContext,
+        });
         if (!normalizedRequestId) {
           return nextPending;
         }
@@ -1268,14 +1256,7 @@
         ) {
           state.selectedRecordId = transition.nextSelectedRecordId;
         }
-        if (shouldCleanupPending) {
-          await removePendingUploadQueueEntry(normalizedRequestId, {
-            context: queueContext,
-            nextSelectedRecordId: transition.nextSelectedRecordId,
-            persistSession: false,
-          });
-          persistWorkspaceSession();
-        }
+        persistWorkspaceSession();
         return nextPending;
       }
       
@@ -1297,12 +1278,10 @@
           requestId: transition.nextPending.requestId,
           shouldResetSource: transition.resyncCacheAction === "reset-parts",
         };
-        const shouldCleanupPending = normalizeText(transition?.outcome) === "succeeded";
-        const nextPending = shouldCleanupPending
-          ? normalizePendingUpload(transition.nextPending)
-          : await upsertPendingUpload(transition.nextPending, {
-            context: queueContext,
-          });
+        const nextPending = await upsertPendingUpload(transition.nextPending, {
+          context: queueContext,
+          preserveUpdatedAt: normalizeText(transition?.outcome) === "succeeded",
+        });
         if (!normalizedRequestId) {
           return nextPending;
         }
@@ -1318,13 +1297,7 @@
             })),
           };
         }
-        if (shouldCleanupPending) {
-          await removePendingUploadQueueEntry(normalizedRequestId, {
-            context: queueContext,
-            persistSession: false,
-          });
-          persistWorkspaceSession();
-        }
+        persistWorkspaceSession();
         return nextPending;
       }
       

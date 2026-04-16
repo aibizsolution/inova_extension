@@ -13,6 +13,9 @@
 - owner-secure hosted 작업실은 authorize 응답에서 받은 `meetingSessionToken`을 세션에 보존해야 하며, 업로드와 작업실 mutation은 이 meeting session 기준으로 인증한다.
 - hosted workspace의 `파일 불러오기`는 로컬 origin 전용 기능이 아니다. 상용/로컬 hosted가 같은 업로드 흐름을 쓴다.
 - imported audio duration은 메타데이터 -> decode fallback 순서로 계산하고, 최종 길이 계산까지 실패했을 때만 사용자 오류를 유지한다.
+- 녹음/불러오기 원본 blob은 원격 처리 성공 후에도 completed record의 pending entry에 로컬 보관한다. 원격 source storage는 처리 후 삭제될 수 있으므로, 사용자가 명시적으로 기록/회의를 삭제하기 전까지 `원본 다운로드`가 가능해야 한다.
+- OpenAI 전사용 source mode는 OpenAI 파일 업로드 제한보다 낮은 24MB target을 초과하거나 `gpt-4o-transcribe` 단일 오디오 제한 1400초보다 낮은 23분 안전선을 넘으면 chunked로 전환한다.
+- chunked source는 12kHz mono WAV, 14분 target, 1.5초 overlap을 기본으로 쓴다. 실제 경계는 14분 지점 주변 45초 안에서 500ms 단위 low-energy 구간을 찾아 조정하되, part WAV는 24MB target 아래에 머물러야 한다.
 - hosted 작업실은 녹음 중이거나 실제 업로드가 진행 중일 때만 브라우저 기본 `beforeunload` 경고를 유지한다.
 
 ## recovery / sync 경계
@@ -33,9 +36,11 @@
 - completed record의 review tab action row가 `회의 정리 복사`, `원문 복사`, `용어 치환`을 함께 소유한다. `원문` 탭 전용 별도 toolbar는 다시 만들지 않는다.
 - `용어 치환` 설명은 버튼 안쪽 `?` tooltip으로만 노출한다. 별도 heading/body 도움말 블록을 notes 상단에 다시 두지 않는다.
 - 섹션 수정 dialog는 preview card와 버튼 상태로만 안내하고, 별도 inline status strip은 두지 않는다.
+- 회의 정리 섹션 헤더의 작업은 `직접 수정`, `AI 수정`, `삭제`를 분리한다. AI 수정은 preview/apply dialog를 쓰고, 직접 수정과 삭제는 manual mutation으로 해당 섹션만 저장하거나 비운다.
 
 ## 디버그 / 증거 수집
-- hosted debug console render contract, `?debug=1` 절차, 로그 확보 helper, boot timing 해석은 `docs/meeting-debug-console-validation.md`에서 관리한다.
+- hosted 작업실은 화면 안에 debug panel/FAB를 렌더하지 않는다. `?debug=1`이면 확장 패널 로그처럼 DevTools 콘솔에 `[inova:meeting #n]`, `[inova:functions #n]`, `[inova:firestore #n]` trace를 출력한다.
+- console trace 절차, 로그 확보 helper, boot timing 해석은 `docs/meeting-debug-console-validation.md`에서 관리한다.
 - 같은 hosted 증상이 1~2회 패치 후에도 남으면 heuristic recovery를 더 추가하지 말고, debug 문서 기준으로 증거를 먼저 확보한다.
 
 ## 범위 제한

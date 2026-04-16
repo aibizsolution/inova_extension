@@ -1,6 +1,6 @@
-# meeting debug 로그 검증 메모
+# meeting browser console trace 검증 메모
 
-이 문서는 `meeting` 디버그 로그를 실제 Chrome에서 빠르게 확인하고, hosted mismatch/stale pending/performance 이슈의 최소 증거를 같은 방식으로 수집할 때 쓰는 기준 문서다.
+이 문서는 `meeting` 디버그 로그를 실제 Chrome DevTools 콘솔에서 빠르게 확인하고, hosted mismatch/stale pending/performance 이슈의 최소 증거를 같은 방식으로 수집할 때 쓰는 기준 문서다.
 
 ## 언제 이 문서를 쓰는지
 
@@ -12,7 +12,14 @@
 
 - localhost 작업실은 `http://127.0.0.1:5000/meeting/index.html?debug=1&debugQueueSandbox=1`로 연다.
 - 상용 hosted 조사도 `?debug=1`을 기준으로 한다.
-- panel에서 `open-workspace` / `open-result`를 눌렀을 때 top 콘솔과 hosted 콘솔의 책임을 섞지 않는다. top 콘솔은 launch dispatch까지만 보고, 새 탭 boot/ready는 hosted debug console에서 본다.
+- 화면 안에 debug panel/FAB는 렌더하지 않는다. 로그는 새 탭 DevTools 콘솔에서 본다.
+- panel에서 `open-workspace` / `open-result`를 눌렀을 때 top 콘솔과 hosted 콘솔의 책임을 섞지 않는다. top 콘솔은 launch dispatch까지만 보고, 새 탭 boot/ready는 hosted DevTools 콘솔 trace에서 본다.
+- 콘솔 필터는 `inova:`로 둔다.
+- hosted trace 기대 형식:
+  - `[inova:meeting #n] workspace.bootstrap | ...`
+  - `[inova:functions #n] http.request | ...`
+  - `[inova:firestore #n] firestore.listener.snapshot | ...`
+  - 같은 이벤트 반복은 `same event repeated N more times | ...`로 합쳐진다.
 - hosted helper:
 
 ```js
@@ -24,25 +31,20 @@ __INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20, entrie
 
 - 최소 증거 세트:
   - 화면 스크린샷
-  - 디버그 패널 일반 로그 복사
-  - `copy-errors` 또는 `errors()` 기준 오류 로그 복사
+  - DevTools 콘솔의 `inova:` trace
+  - `errors()` 기준 오류 로그
   - `printPendingSyncEvidence(...)` 출력
-- expanded 기대 결과:
-  - toolbar가 보인다.
-  - `copy`, `copy-errors`, `clear`, `toggle` 4개 action이 모두 렌더된다.
-  - `segment-cluster` 구조가 유지된다.
-  - status/log text가 비어 있지 않다.
+- 기대 결과:
+  - debug panel/FAB/toolbar가 화면에 보이지 않는다.
+  - `debugConsoleState().mode`가 `browser-console`이다.
+  - `debugConsoleValidation.checkWorkspace().passed`가 `true`다.
   - 오류 버퍼는 일반 로그와 분리되어 유지된다.
-  - 상단 통계는 최근 표시 버퍼가 아니라 누적 기준으로 유지된다.
-  - 상단 라벨은 `함수`, `읽기`, `리스너`, `오류` 4개만 쓴다.
-- collapsed 기대 결과:
-  - fab toggle만 보인다.
-  - 오류가 있으면 fab badge가 보인다.
+  - 누적 통계는 `stats()`와 `debugConsoleState()`에서 확인한다.
 
 ## panel top console
 
 - `https://inova.incross.com/*` 페이지에서 확장프로그램을 켠다.
-- 팝업에서 `meeting debug console`을 켠다.
+- 팝업에서 `콘솔 로그`를 켠다.
 - `top` 콘솔에서 `inova:` 필터를 걸고 새로고침 직후부터 본다.
 - 화면 overlay 패널은 더 이상 렌더하지 않는다. 반복 원인은 콘솔 요약 로그로 본다.
 - 기대 결과:
@@ -68,9 +70,9 @@ window.__INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20,
 - auth, 첫 snapshot 대기, 상세 artifact read를 한 덩어리로 보지 말고 어느 단계가 병목인지부터 분리한다.
 - hosted boot는 회의 룸과 기록 목록을 먼저 그리고, 선택된 기록 상세 artifact는 비차단으로 뒤늦게 채운다.
 - deferred 상세 로딩 로그는 `selection`으로 뭉개지지 않게 `boot`/`boot-deferred` reason을 유지해야 한다.
-- panel launch 뒤 hosted boot가 정상이라면 `workspace.bootstrap` 다음에 `workspace.realtime.connect.success`와 `workspace.ready`를 같은 새 탭 debug console에서 확인한다.
+- panel launch 뒤 hosted boot가 정상이라면 `workspace.bootstrap` 다음에 `workspace.realtime.connect.success`와 `workspace.ready`를 같은 새 탭 DevTools 콘솔에서 확인한다.
 
 ## 메모
 
 - hosted helper는 localhost/hosted script에서 바로 접근 가능하다.
-- 이 문서의 목표는 `meeting` 디버그 로그 검증과 증거 수집 절차를 AGENTS 밖의 durable procedure로 유지하는 것이다.
+- 이 문서의 목표는 `meeting` 브라우저 콘솔 trace 검증과 증거 수집 절차를 AGENTS 밖의 durable procedure로 유지하는 것이다.

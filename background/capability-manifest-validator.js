@@ -177,7 +177,18 @@
       if (!Number.isFinite(Number(capability.inputSchemaVersion)) || !Number.isFinite(Number(capability.outputSchemaVersion))) {
         throw new Error(`remote capability manifest capability schema is missing: ${capabilityId}`);
       }
+      validateCapabilityRequestTimeout(capabilityId, capability);
       validateCapabilityLifecycleMetadata(capabilityId, capability, capabilities);
+    }
+
+    function validateCapabilityRequestTimeout(capabilityId, capability) {
+      if (capability.requestTimeoutMs == null) {
+        return;
+      }
+      const timeoutMs = Number(capability.requestTimeoutMs);
+      if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 120000) {
+        throw new Error(`remote capability manifest requestTimeoutMs is not allowed: ${capabilityId}`);
+      }
     }
 
     function validateTestOnlyCapabilityMetadata(capabilityId, capability) {

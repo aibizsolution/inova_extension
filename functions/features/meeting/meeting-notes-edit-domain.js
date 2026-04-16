@@ -81,8 +81,12 @@ function createMeetingNotesEditDomain(deps) {
 
   async function applyMeetingNotesSectionEdit(input, owner) {
     const source = await loadMeetingNotesSectionEditSource(input, owner);
-    if (input.baseRevisionToken !== source.baseRevisionToken) {
+    const editMode = normalizeText(input.editMode) === "manual" ? "manual" : "ai";
+    if (input.baseRevisionToken && input.baseRevisionToken !== source.baseRevisionToken) {
       throw createHttpError(409, "회의 정리가 바뀌어 미리보기가 오래됐어요. 새 미리보기를 다시 만들어 주세요.");
+    }
+    if (editMode !== "manual" && !input.baseRevisionToken) {
+      throw createHttpError(400, "미리보기 기준 버전을 확인해 주세요.");
     }
     const normalizedPayload = normalizeMeetingNotesSectionPayload(input.sectionKey, input.sectionData);
     const mergedNotes = applyMeetingNotesSectionPayload(source.currentNotes, input.sectionKey, normalizedPayload);
@@ -130,6 +134,7 @@ function createMeetingNotesEditDomain(deps) {
 
     logEvent("meeting.notes.section-edit.apply.success", {
       jobId: source.job.jobId,
+      editMode,
       meetingId: source.job.meetingId,
       providerUserKey: owner.providerUserKey,
       sectionKey: input.sectionKey,
@@ -284,6 +289,7 @@ function createMeetingNotesEditDomain(deps) {
     switch (sectionKey) {
       case "summary":
         return {
+          deleteSection: payload.deleteSection === true,
           summary: normalizeMeetingNotes({ summary: payload.summary }).summary,
         };
       case "overview": {
@@ -292,28 +298,34 @@ function createMeetingNotesEditDomain(deps) {
           overview: payload.overview,
         });
         return {
+          deleteSection: payload.deleteSection === true,
           meetingMeta: normalized.meetingMeta,
           overview: normalized.overview,
         };
       }
       case "discussionFlow":
         return {
+          deleteSection: payload.deleteSection === true,
           discussionFlow: normalizeMeetingNotes({ discussionFlow: payload.discussionFlow }).discussionFlow,
         };
       case "decisions":
         return {
+          deleteSection: payload.deleteSection === true,
           decisions: normalizeMeetingNotes({ decisions: payload.decisions }).decisions,
         };
       case "openQuestions":
         return {
+          deleteSection: payload.deleteSection === true,
           openQuestions: normalizeMeetingNotes({ openQuestions: payload.openQuestions }).openQuestions,
         };
       case "risksOrDependencies":
         return {
+          deleteSection: payload.deleteSection === true,
           risksOrDependencies: normalizeMeetingNotes({ risksOrDependencies: payload.risksOrDependencies }).risksOrDependencies,
         };
       case "actionItems":
         return {
+          deleteSection: payload.deleteSection === true,
           actionItems: normalizeMeetingNotes({ actionItems: payload.actionItems }).actionItems,
         };
       default:
@@ -324,6 +336,53 @@ function createMeetingNotesEditDomain(deps) {
   function applyMeetingNotesSectionPayload(currentNotesInput, sectionKey, sectionPayload) {
     const currentNotes = normalizeMeetingNotes(currentNotesInput);
     const payload = normalizeMeetingNotesSectionPayload(sectionKey, sectionPayload);
+    if (payload.deleteSection === true) {
+      switch (sectionKey) {
+        case "summary":
+          return normalizeMeetingNotes({
+            ...currentNotes,
+            summary: "",
+          });
+        case "overview":
+          return normalizeMeetingNotes({
+            ...currentNotes,
+            meetingMeta: {
+              ...currentNotes.meetingMeta,
+              datetime: "",
+              participants: [],
+              purpose: "",
+            },
+            overview: "",
+          });
+        case "discussionFlow":
+          return normalizeMeetingNotes({
+            ...currentNotes,
+            discussionFlow: [],
+          });
+        case "decisions":
+          return normalizeMeetingNotes({
+            ...currentNotes,
+            decisions: [],
+          });
+        case "openQuestions":
+          return normalizeMeetingNotes({
+            ...currentNotes,
+            openQuestions: [],
+          });
+        case "risksOrDependencies":
+          return normalizeMeetingNotes({
+            ...currentNotes,
+            risksOrDependencies: [],
+          });
+        case "actionItems":
+          return normalizeMeetingNotes({
+            ...currentNotes,
+            actionItems: [],
+          });
+        default:
+          return currentNotes;
+      }
+    }
     switch (sectionKey) {
       case "summary":
         return normalizeMeetingNotes({

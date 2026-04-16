@@ -1,6 +1,8 @@
 (function initExtensionCapabilityClient(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const PANEL_AUTH_CACHE_TTL_MS = 50 * 60 * 1000;
+  const DEFAULT_REQUEST_TIMEOUT_MS = 15000;
+  const MAX_REQUEST_TIMEOUT_MS = 120000;
   const COMPATIBILITY_RUNTIME_ACTIONS = Object.freeze({
     "functions.invoke-endpoint": Object.freeze({
       owner: "runtime-platform",
@@ -94,6 +96,7 @@
         action: "capabilities.invoke",
         capabilityId: normalizedCapabilityId,
         input,
+        ...(capability?.requestTimeoutMs ? { requestTimeoutMs: capability.requestTimeoutMs } : {}),
         trace: options?.trace || null,
       });
     }
@@ -263,6 +266,7 @@
           artifactVersion: normalizeText(capability?.artifactVersion),
           kind: normalizeText(capability?.kind),
           pageCapabilityId: normalizeText(capability?.pageCapabilityId),
+          requestTimeoutMs: normalizeCapabilityRequestTimeoutMs(capability),
           workflowId: normalizeText(capability?.workflowId),
         });
       });
@@ -333,6 +337,17 @@
         }
       });
       return merged;
+    }
+
+    function normalizeCapabilityRequestTimeoutMs(capability) {
+      const timeoutMs = Number(capability?.requestTimeoutMs);
+      if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+        return 0;
+      }
+      return Math.min(
+        MAX_REQUEST_TIMEOUT_MS,
+        Math.max(DEFAULT_REQUEST_TIMEOUT_MS, Math.round(timeoutMs))
+      );
     }
   }
 
