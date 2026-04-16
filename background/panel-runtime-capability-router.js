@@ -9,91 +9,226 @@ const PANEL_RUNTIME_STORAGE_STATE_KEYS = Object.freeze([
   "uiPreferences",
 ]);
 
-const PANEL_ALLOWED_FUNCTION_ENDPOINT_KEYS = Object.freeze({
-  meeting: new Set([
-    "authorizeInovaMeetingWorkspaceAccessUrl",
-    "createInovaMeetingShareLinkUrl",
-    "issueInovaMeetingPanelAuthUrl",
-    "listInovaMeetingsUrl",
-    "revokeInovaMeetingShareLinkUrl",
-  ]),
-  prompt: new Set([
-    "importPromptStoreEntryUrl",
-    "issueInovaPromptPanelAuthUrl",
-    "listPromptStoreEntriesUrl",
-    "publishPromptToStoreUrl",
-    "recordPromptStoreViewUrl",
-    "reviewInovaPromptUrl",
-    "syncInovaPromptLibraryUrl",
-    "togglePromptStoreLikeUrl",
-    "unpublishPromptFromStoreUrl",
-  ]),
+const PANEL_RUNTIME_CAPABILITY_MANIFEST = deepFreeze({
+  functionEndpointCapabilities: {
+    meeting: {
+      authorizeInovaMeetingWorkspaceAccessUrl: {
+        allowedAuthModes: ["access-token", "none"],
+        capabilityId: "meeting.workspace.authorize-access",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
+      createInovaMeetingShareLinkUrl: {
+        allowedAuthModes: ["access-token", "none"],
+        capabilityId: "meeting.share.create-function",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
+      issueInovaMeetingPanelAuthUrl: {
+        allowedAuthModes: ["access-token", "none"],
+        capabilityId: "meeting.panel-auth.issue-function",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
+      listInovaMeetingsUrl: {
+        allowedAuthModes: ["access-token", "none"],
+        capabilityId: "meeting.list",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
+      revokeInovaMeetingShareLinkUrl: {
+        allowedAuthModes: ["access-token", "none"],
+        capabilityId: "meeting.share.revoke-function",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
+    },
+    prompt: {
+      importPromptStoreEntryUrl: {
+        allowedAuthModes: ["access-token", "none"],
+        capabilityId: "prompt.store.import",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
+      issueInovaPromptPanelAuthUrl: {
+        allowedAuthModes: ["access-token", "none"],
+        capabilityId: "prompt.panel-auth.issue-function",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
+      listPromptStoreEntriesUrl: {
+        allowedAuthModes: ["access-token", "none"],
+        capabilityId: "prompt.store.list",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
+      publishPromptToStoreUrl: {
+        allowedAuthModes: ["access-token", "none"],
+        capabilityId: "prompt.store.publish",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
+      recordPromptStoreViewUrl: {
+        allowedAuthModes: ["access-token", "none"],
+        capabilityId: "prompt.store.record-view",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
+      reviewInovaPromptUrl: {
+        allowedAuthModes: ["access-token", "none"],
+        capabilityId: "prompt.review.run",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
+      syncInovaPromptLibraryUrl: {
+        allowedAuthModes: ["access-token", "none"],
+        capabilityId: "prompt.library.sync",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
+      togglePromptStoreLikeUrl: {
+        allowedAuthModes: ["access-token", "none"],
+        capabilityId: "prompt.store.toggle-like",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
+      unpublishPromptFromStoreUrl: {
+        allowedAuthModes: ["access-token", "none"],
+        capabilityId: "prompt.store.unpublish",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
+    },
+  },
+  manifestVersion: "2026-04-bundled-panel-runtime-v1",
+  minExtensionVersion: "1.0.0",
+  runtimeCapabilities: {
+    "auth.issue-panel-session": {
+      adapter: "auth.issue-panel-session",
+      panels: {
+        hosted: {
+          enricher: "hosted",
+          issuer: "prompt",
+        },
+        meeting: {
+          enricher: "meeting",
+          issuer: "meeting",
+        },
+        prompt: {
+          enricher: "prompt",
+          issuer: "prompt",
+        },
+      },
+    },
+    "browser.open-url": {
+      adapter: "browser.open-url",
+    },
+    "functions.invoke-endpoint": {
+      adapter: "functions.invoke-endpoint",
+    },
+    "meeting.result.open": {
+      adapter: "meeting.result.open",
+    },
+    "meeting.share.create": {
+      adapter: "meeting.share.create",
+    },
+    "meeting.share.revoke": {
+      adapter: "meeting.share.revoke",
+    },
+    "meeting.workspace.open": {
+      adapter: "meeting.workspace.open",
+    },
+    "storage.read-panel-state": {
+      adapter: "storage.read-panel-state",
+    },
+    "storage.write-ui-preferences": {
+      adapter: "storage.write-ui-preferences",
+    },
+  },
+  schemaVersion: 1,
+});
+
+const PANEL_RUNTIME_ADAPTERS = Object.freeze({
+  "auth.issue-panel-session": issuePanelSession,
+  "browser.open-url": (request) => openBrowserUrl(request?.url),
+  "functions.invoke-endpoint": invokeHostedPanelFunctionFetch,
+  "meeting.result.open": (request) => openMeetingResult(request?.input, request?.providerIdentity),
+  "meeting.share.create": (request) => createMeetingShareLink(request?.input, request?.providerIdentity),
+  "meeting.share.revoke": (request) => revokeMeetingShareLink(request?.input, request?.providerIdentity),
+  "meeting.workspace.open": (request) => openMeetingWorkspace(request?.input, request?.providerIdentity),
+  "storage.read-panel-state": () => readHostedPanelStorageState(),
+  "storage.write-ui-preferences": (request) => namespace.storage.updateUiPreferences(
+    request?.partial && typeof request.partial === "object" ? request.partial : {}
+  ),
+});
+
+const PANEL_AUTH_ISSUERS = Object.freeze({
+  meeting: (request) => issueMeetingPanelAuth(request?.providerIdentity),
+  prompt: (request) => issuePromptPanelAuth(request?.providerIdentity),
+});
+
+const PANEL_AUTH_ENRICHERS = Object.freeze({
+  hosted: enrichHostedPanelAuth,
+  meeting: enrichMeetingPanelAuth,
+  prompt: enrichPromptPanelAuth,
+});
+
+const PANEL_FUNCTION_CONFIG_RESOLVERS = Object.freeze({
+  meeting: () => getMeetingFunctionsConfig(),
+  prompt: () => getPromptFunctionsConfig(),
 });
 
 async function handle(request) {
   const action = namespace.session.normalizeText(request?.action).toLowerCase();
-  if (action === "storage.read-panel-state") {
-    return readHostedPanelStorageState();
+  const capability = resolveRuntimeCapability(action);
+  return dispatchRuntimeCapability(capability, request);
+}
+
+function resolveRuntimeCapability(action) {
+  const capability = PANEL_RUNTIME_CAPABILITY_MANIFEST.runtimeCapabilities?.[action];
+  if (!capability) {
+    throw new Error("허용되지 않은 hosted panel runtime 요청이에요.");
   }
-  if (action === "storage.write-ui-preferences") {
-    return namespace.storage.updateUiPreferences(request?.partial && typeof request.partial === "object" ? request.partial : {});
+  return capability;
+}
+
+async function dispatchRuntimeCapability(capability, request) {
+  const adapterId = namespace.session.normalizeText(capability?.adapter);
+  const adapter = PANEL_RUNTIME_ADAPTERS[adapterId];
+  if (typeof adapter !== "function") {
+    throw new Error("hosted panel runtime adapter를 찾지 못했어요.");
   }
-  if (action === "browser.open-url") {
-    return openBrowserUrl(request?.url);
-  }
-  if (action === "meeting.workspace.open") {
-    return openMeetingWorkspace(request?.input, request?.providerIdentity);
-  }
-  if (action === "meeting.result.open") {
-    return openMeetingResult(request?.input, request?.providerIdentity);
-  }
-  if (action === "meeting.share.create") {
-    return createMeetingShareLink(request?.input, request?.providerIdentity);
-  }
-  if (action === "meeting.share.revoke") {
-    return revokeMeetingShareLink(request?.input, request?.providerIdentity);
-  }
-  if (action === "auth.issue-panel-session") {
-    const panel = namespace.session.normalizeText(request?.panel).toLowerCase();
-    if (panel === "hosted") {
-      return enrichHostedPanelAuth(
-        await issuePromptPanelAuth(request?.providerIdentity)
-      );
-    }
-    if (panel === "prompt") {
-      return enrichPromptPanelAuth(
-        await issuePromptPanelAuth(request?.providerIdentity)
-      );
-    }
-    if (panel === "meeting") {
-      return enrichMeetingPanelAuth(
-        await issueMeetingPanelAuth(request?.providerIdentity)
-      );
-    }
+  return adapter(request, capability);
+}
+
+async function issuePanelSession(request, capability) {
+  const panel = namespace.session.normalizeText(request?.panel).toLowerCase();
+  const panelCapability = capability?.panels?.[panel];
+  if (!panelCapability) {
     throw new Error("허용되지 않은 hosted panel auth scope예요.");
   }
-  if (action === "functions.invoke-endpoint") {
-    return invokeHostedPanelFunctionFetch(request);
+  const issuer = PANEL_AUTH_ISSUERS[namespace.session.normalizeText(panelCapability.issuer)];
+  const enricher = PANEL_AUTH_ENRICHERS[namespace.session.normalizeText(panelCapability.enricher)];
+  if (typeof issuer !== "function" || typeof enricher !== "function") {
+    throw new Error("hosted panel auth adapter를 찾지 못했어요.");
   }
-  throw new Error("허용되지 않은 hosted panel runtime 요청이에요.");
+  return enricher(await issuer(request));
 }
 
 async function invokeHostedPanelFunctionFetch(request) {
-  const service = namespace.session.normalizeText(request?.service).toLowerCase();
-  const endpointKey = namespace.session.normalizeText(request?.endpointKey);
-  const allowedEndpoints = PANEL_ALLOWED_FUNCTION_ENDPOINT_KEYS[service];
-  if (!allowedEndpoints?.has(endpointKey)) {
-    throw new Error("허용되지 않은 Functions endpoint 요청이에요.");
-  }
-  const functionsConfig = service === "meeting"
-    ? await getMeetingFunctionsConfig()
-    : await getPromptFunctionsConfig();
-  const targetUrl = namespace.session.normalizeText(functionsConfig?.[endpointKey]);
+  const endpointCapability = resolveFunctionEndpointCapability(request);
+  const functionsConfig = await resolveFunctionsConfigForService(endpointCapability.service);
+  const targetUrl = namespace.session.normalizeText(functionsConfig?.[endpointCapability.endpointKey]);
   if (!targetUrl) {
     throw new Error("Functions endpoint를 찾지 못했어요.");
   }
 
-  const authMode = namespace.session.normalizeText(request?.authMode).toLowerCase() || "access-token";
+  const method = namespace.session.normalizeText(endpointCapability.method).toUpperCase() || "POST";
+  if (method !== "POST") {
+    throw new Error("허용되지 않은 Functions method예요.");
+  }
+
+  const authMode = resolveFunctionAuthMode(request, endpointCapability);
   const headers = {
     "Content-Type": "application/json",
   };
@@ -110,13 +245,62 @@ async function invokeHostedPanelFunctionFetch(request) {
   const response = await fetch(namespace.session.normalizeText(targetUrl), {
     body: JSON.stringify(request?.body && typeof request.body === "object" ? request.body : {}),
     headers,
-    method: "POST",
+    method,
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload?.ok) {
     throw new Error(namespace.session.normalizeText(payload?.error || payload?.message) || "Functions 요청에 실패했어요.");
   }
   return payload?.data || {};
+}
+
+function resolveFunctionEndpointCapability(request) {
+  const service = namespace.session.normalizeText(request?.service).toLowerCase();
+  const endpointKey = namespace.session.normalizeText(request?.endpointKey);
+  const endpointCapability =
+    PANEL_RUNTIME_CAPABILITY_MANIFEST.functionEndpointCapabilities?.[service]?.[endpointKey];
+  if (!endpointCapability) {
+    throw new Error("허용되지 않은 Functions endpoint 요청이에요.");
+  }
+  const endpointDefinition = readBundledFunctionEndpointDefinition(endpointKey);
+  return {
+    ...endpointDefinition,
+    ...endpointCapability,
+    endpointKey,
+    service,
+  };
+}
+
+function readBundledFunctionEndpointDefinition(endpointKey) {
+  const functionsManifest = namespace.functionsRuntimeConfig?.getBundledCapabilityManifest?.();
+  const endpointDefinition = functionsManifest?.endpointKeys?.[endpointKey];
+  if (!endpointDefinition?.endpoint) {
+    throw new Error("Functions endpoint manifest를 찾지 못했어요.");
+  }
+  return endpointDefinition;
+}
+
+async function resolveFunctionsConfigForService(service) {
+  const resolver = PANEL_FUNCTION_CONFIG_RESOLVERS[service];
+  if (typeof resolver !== "function") {
+    throw new Error("허용되지 않은 Functions service예요.");
+  }
+  return resolver();
+}
+
+function resolveFunctionAuthMode(request, endpointCapability) {
+  const defaultAuthMode = namespace.session.normalizeText(endpointCapability?.defaultAuthMode).toLowerCase()
+    || "access-token";
+  const authMode = namespace.session.normalizeText(request?.authMode).toLowerCase() || defaultAuthMode;
+  const allowedModes = new Set(
+    Array.isArray(endpointCapability?.allowedAuthModes) && endpointCapability.allowedAuthModes.length
+      ? endpointCapability.allowedAuthModes.map((mode) => namespace.session.normalizeText(mode).toLowerCase())
+      : [defaultAuthMode]
+  );
+  if (!allowedModes.has(authMode)) {
+    throw new Error("허용되지 않은 인증 모드예요.");
+  }
+  return authMode;
 }
 
 async function readHostedPanelStorageState() {
@@ -141,6 +325,15 @@ function cloneHostedPanelStorageValue(value) {
     return value.slice();
   }
   return { ...value };
+}
+
+function deepFreeze(value) {
+  if (!value || typeof value !== "object" || Object.isFrozen(value)) {
+    return value;
+  }
+  Object.freeze(value);
+  Object.values(value).forEach(deepFreeze);
+  return value;
 }
 
 async function enrichMeetingPanelAuth(payload) {

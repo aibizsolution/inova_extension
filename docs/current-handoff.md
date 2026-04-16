@@ -6,7 +6,7 @@ Last updated: 2026-04-16
 
 - Public deployed baseline: `0.4.4`
 - Current local candidate: `1.0.0`
-- Active branch: `codex/hosted-first-extra-reduction`
+- Current merged baseline: `main` at `81af793` / PR #42; start follow-up slices from a fresh `codex/*` branch.
 - Latest full validation: `npm.cmd run verify` passed on `codex/hosted-first-extra-reduction` after the hosted-first state reduction, Firestore session/base reader commonization, prompt-store shared model extraction, open hydration guard, hosted-owned `uiPreferences.panelOpen` persistence, and shared text-normalization cleanup.
 - Remaining work: Chrome smoke / release-go validation plus the hosted-first cleanup backlog captured below
 - Worktree: expected clean after the current documentation correction commit
@@ -122,7 +122,7 @@ Current progress in this slice:
 - active page adapter contract now uses canonical capability-shaped actions (`conversation.read-state`, `conversation.jump-item`, `composer.read-state`, `composer.apply-text`, `clipboard.write-text`, `debug.*`, `trace.log`) so hosted feature work can change without extension-side feature rewrites, and active alias shims are no longer left behind after the caller slice moves
 - active page/runtime capability catalog is now expected to live in `contracts/extension-contract.json` + `scripts/verify-contracts.js`, so future hosted work has to reuse the declared browser capability API before it can add new extension surface
 - active extension browser-only power owners are now expected to live behind `contracts/extension-contract.json` + `scripts/verify-browser-only-boundary.js`, so direct `fetch`, `chrome.tabs`, `chrome.cookies`, `chrome.storage`, `localStorage`, `sessionStorage`, Firebase SDK bootstrap, and raw Functions endpoint-family strings cannot quietly spread back into thin `content/popup/shared` shell files
-- The next architecture slice for "no extension redeploy for backend actions" is documented in `docs/remote-capability-manifest-plan.md`. Treat current `panel-runtime-capability-router.js` and `functions-runtime-config.js` hardcoding as the safe baseline, then migrate through bundled manifest first before adding remote fetch/cache.
+- The next architecture slice for "no extension redeploy for backend actions" is documented in `docs/remote-capability-manifest-plan.md`. The current extension-internal baseline is the bundled manifest model in `panel-runtime-capability-router.js` and `functions-runtime-config.js`; remote fetch/cache is the next phase.
 - Functions endpoint family와 lane-specific endpoint override도 이제 active shared root를 떠나 `background/functions-runtime-config.js`가 소유한다. `shared/firebase-config.js` / `shared/product-lane.js`는 browser-agnostic panel/hosting/storage lane config만 유지하고, Firestore collection names는 `shared/firestore-collections.js`가 소유한다. background runtime modules가 같은 Functions runtime config를 재사용한다
 - active hosted v2 feature controller/Firestore client now route page/runtime transport through `hosting/extension-v2/panel/extension-capability-client.js`, so raw capability action strings stay isolated in one hosted adapter instead of leaking across feature files
 - active extension page adapter now routes `conversation/composer/clipboard/debug/trace` capability handling through `content/page-capability-router.js`, so DOM/clipboard/debug browser power also stays isolated in one extension adapter instead of leaking through the bridge shell

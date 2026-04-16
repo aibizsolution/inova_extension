@@ -574,7 +574,8 @@ const codeChecks = [
     file: path.join("background", "panel-runtime-capability-router.js"),
     patterns: [
       /PANEL_RUNTIME_STORAGE_STATE_KEYS/,
-      /PANEL_ALLOWED_FUNCTION_ENDPOINT_KEYS/,
+      /PANEL_RUNTIME_CAPABILITY_MANIFEST/,
+      /functionEndpointCapabilities/,
       /invokeHostedPanelFunctionFetch/,
     ],
   },

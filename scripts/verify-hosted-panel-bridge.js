@@ -62,6 +62,19 @@ async function verifyV2PanelRuntimeResolution() {
     runtimeContext.functionsRuntimeConfig.getDefaultFunctionsConfig().loadInovaPromptLibraryUrl,
     "https://asia-northeast3-browser-extension-main.cloudfunctions.net/loadInovaPromptLibraryV2"
   );
+  const bundledManifest = runtimeContext.functionsRuntimeConfig.getBundledCapabilityManifest();
+  assert.equal(
+    bundledManifest.targets.production.functionsBaseUrl,
+    "https://asia-northeast3-browser-extension-main.cloudfunctions.net"
+  );
+  assert.equal(
+    bundledManifest.endpointKeys.reviewInovaPromptUrl.endpoint,
+    "reviewInovaPrompt"
+  );
+  assert.equal(
+    bundledManifest.lanes.v2.endpointOverrides.syncInovaPromptLibraryUrl,
+    "syncInovaPromptLibraryV2"
+  );
 }
 
 async function verifyHostedPanelBridgeContract() {
@@ -442,7 +455,9 @@ function verifyHostedPanelFiles(directoryName) {
     assert(baseFirestoreClientJs.includes("publishSnapshot"), "base Firestore reader factory should own snapshot de-duplication and publishing");
     assert(
       fs.readFileSync(path.join(root, "background", "panel-runtime-capability-router.js"), "utf8")
-        .includes('if (panel === "hosted")'),
+        .includes("hosted: {")
+        && fs.readFileSync(path.join(root, "background", "panel-runtime-capability-router.js"), "utf8")
+          .includes('enricher: "hosted"'),
       "background runtime should support the shared hosted panel auth scope"
     );
     assert(
@@ -523,8 +538,16 @@ function verifyBackgroundInvokeWiring() {
     "background runtime capability router should declare the compact hosted storage-state allowlist"
   );
   assert(
-    routerSource.includes("PANEL_ALLOWED_FUNCTION_ENDPOINT_KEYS"),
-    "background runtime capability router should declare the hosted function allowlist"
+    routerSource.includes("PANEL_RUNTIME_CAPABILITY_MANIFEST"),
+    "background runtime capability router should declare the bundled runtime capability manifest"
+  );
+  assert(
+    routerSource.includes("functionEndpointCapabilities"),
+    "background runtime capability router should declare hosted function capabilities inside the bundled manifest"
+  );
+  assert(
+    !routerSource.includes("PANEL_ALLOWED_FUNCTION_ENDPOINT_KEYS"),
+    "background runtime capability router should replace the old endpoint allowlist with manifest lookup"
   );
   [
     '"providerIdentityCache"',
@@ -559,19 +582,24 @@ function verifyBackgroundInvokeWiring() {
     "background should build a dedicated compact hosted storage-state snapshot"
   );
   [
-    'action === "storage.read-panel-state"',
-    'action === "storage.write-ui-preferences"',
-    'action === "auth.issue-panel-session"',
-    'action === "functions.invoke-endpoint"',
-    'action === "browser.open-url"',
-    'action === "meeting.workspace.open"',
-    'action === "meeting.result.open"',
-    'action === "meeting.share.create"',
-    'action === "meeting.share.revoke"',
+    '"storage.read-panel-state"',
+    '"storage.write-ui-preferences"',
+    '"auth.issue-panel-session"',
+    '"functions.invoke-endpoint"',
+    '"browser.open-url"',
+    '"meeting.workspace.open"',
+    '"meeting.result.open"',
+    '"meeting.share.create"',
+    '"meeting.share.revoke"',
   ].forEach((actionSurface) => assert(
     routerSource.includes(actionSurface),
     `background hosted runtime should keep the canonical runtime action ${actionSurface}`
   ));
+  assert(
+    routerSource.includes("resolveRuntimeCapability")
+      && routerSource.includes("dispatchRuntimeCapability"),
+    "background hosted runtime should dispatch through manifest lookup instead of action if/else chains"
+  );
   [
     'action === "storage.get-state"',
     'action === "storage.update-ui-preferences"',

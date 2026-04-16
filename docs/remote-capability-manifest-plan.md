@@ -110,6 +110,12 @@ extension은 hosted가 넘긴 raw URL을 그대로 실행하지 않는다. exten
 - `panel-runtime-capability-router.js`는 if/else 목록이 아니라 manifest lookup + adapter dispatch 형태로 바꾼다.
 - 이 단계는 동작 변경 없이 구조만 바꾸며, extension 재배포 감소 효과는 아직 없다.
 
+현재 Phase 1 baseline:
+
+- `background/functions-runtime-config.js`는 `getBundledCapabilityManifest()`로 endpoint key, method, lane override, production/local target baseline을 노출한다.
+- `background/panel-runtime-capability-router.js`는 `PANEL_RUNTIME_CAPABILITY_MANIFEST`에서 runtime action과 function endpoint capability를 조회하고 adapter table로 dispatch한다.
+- remote fetch/cache는 아직 없다. hosted panel request는 기존 stable runtime action과 service/endpoint key만 넘기며, raw URL은 여전히 background가 받지 않는다.
+
 ### Phase 2. Remote manifest fetch/cache 추가
 
 - extension background가 trusted hosting/functions origin에서 manifest를 가져온다.
@@ -119,7 +125,7 @@ extension은 hosted가 넘긴 raw URL을 그대로 실행하지 않는다. exten
 
 ### Phase 3. Functions endpoint를 remote manifest로 이동
 
-- `functions.invoke-endpoint`가 endpoint key를 `functions-runtime-config.js` 하드코딩 대신 remote manifest에서 해석한다.
+- `functions.invoke-endpoint`가 endpoint key를 bundled manifest baseline 대신 remote manifest에서 해석한다.
 - local/prod target도 manifest target 설정을 우선한다.
 - 기존 `functions-runtime-config.js`는 bootstrap fallback과 compatibility shim으로만 축소한다.
 
@@ -152,8 +158,8 @@ extension은 hosted가 넘긴 raw URL을 그대로 실행하지 않는다. exten
 
 ## 다음 세션 시작점
 
-1. `background/panel-runtime-capability-router.js`와 `background/functions-runtime-config.js`를 읽는다.
-2. 현재 capability id, endpoint key, auth mode, target config를 표로 추출한다.
-3. bundled manifest 객체 초안을 만든다.
-4. router를 manifest lookup 기반으로 바꾸되 remote fetch는 아직 붙이지 않는다.
-5. 기존 `npm.cmd run verify`가 녹색인 상태로 Phase 1만 커밋한다.
+1. Phase 1 bundled manifest baseline이 `npm.cmd run verify` 녹색인지 먼저 확인한다.
+2. manifest를 Hosting 정적 JSON으로 둘지, Functions endpoint로 서빙할지 결정한다.
+3. trusted origin, schema/version 검증, stale cache 허용 시간을 확정한다.
+4. background가 remote manifest를 fetch/cache하되 실패 시 bundled baseline 또는 마지막 검증 cache를 degraded로 드러내게 만든다.
+5. endpoint URL은 hosted request payload가 아니라 검증된 manifest target/capability에서만 해석한다.

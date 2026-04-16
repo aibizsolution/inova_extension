@@ -1,33 +1,6 @@
 (function initFunctionsRuntimeConfig(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const DEFAULT_FUNCTIONS_BASE_URL = "https://asia-northeast3-browser-extension-main.cloudfunctions.net";
-  const FUNCTION_ENDPOINTS = Object.freeze({
-    authorizeInovaMeetingWorkspaceAccessUrl: "authorizeInovaMeetingWorkspaceAccess",
-    createInovaMeetingShareLinkUrl: "createInovaMeetingShareLink",
-    deleteInovaMeetingUrl: "deleteInovaMeeting",
-    deleteInovaMeetingResultUrl: "deleteInovaMeetingResult",
-    exchangeInovaMeetingLaunchUrl: "exchangeInovaMeetingLaunch",
-    issueInovaMeetingLaunchUrl: "issueInovaMeetingLaunch",
-    issueInovaMeetingPanelAuthUrl: "issueInovaMeetingPanelAuth",
-    issueInovaPromptPanelAuthUrl: "issueInovaPromptPanelAuth",
-    issueInovaMeetingWorkspaceAuthUrl: "issueInovaMeetingWorkspaceAuth",
-    listInovaMeetingsUrl: "listInovaMeetings",
-    moveInovaMeetingResultUrl: "moveInovaMeetingResult",
-    uploadInovaMeetingSourceUrl: "uploadInovaMeetingSource",
-    updateInovaMeetingUrl: "updateInovaMeeting",
-    updateInovaMeetingResultUrl: "updateInovaMeetingResult",
-    loadInovaPromptLibraryUrl: "loadInovaPromptLibrary",
-    listPromptStoreEntriesUrl: "listPromptStoreEntries",
-    peekInovaPromptLibraryUrl: "peekInovaPromptLibrary",
-    reviewInovaPromptUrl: "reviewInovaPrompt",
-    publishPromptToStoreUrl: "publishPromptToStore",
-    unpublishPromptFromStoreUrl: "unpublishPromptFromStore",
-    importPromptStoreEntryUrl: "importPromptStoreEntry",
-    revokeInovaMeetingShareLinkUrl: "revokeInovaMeetingShareLink",
-    togglePromptStoreLikeUrl: "togglePromptStoreLike",
-    recordPromptStoreViewUrl: "recordPromptStoreView",
-    syncInovaPromptLibraryUrl: "syncInovaPromptLibrary",
-  });
   const LOCAL_RUNTIME_DEFAULTS = Object.freeze({
     authPort: 9099,
     firestorePort: 8080,
@@ -35,24 +8,154 @@
     host: "127.0.0.1",
     storagePort: 9199,
   });
+  const BUNDLED_FUNCTIONS_MANIFEST = deepFreeze({
+    endpointKeys: {
+      authorizeInovaMeetingWorkspaceAccessUrl: {
+        endpoint: "authorizeInovaMeetingWorkspaceAccess",
+        method: "POST",
+      },
+      createInovaMeetingShareLinkUrl: {
+        endpoint: "createInovaMeetingShareLink",
+        method: "POST",
+      },
+      deleteInovaMeetingUrl: {
+        endpoint: "deleteInovaMeeting",
+        method: "POST",
+      },
+      deleteInovaMeetingResultUrl: {
+        endpoint: "deleteInovaMeetingResult",
+        method: "POST",
+      },
+      exchangeInovaMeetingLaunchUrl: {
+        endpoint: "exchangeInovaMeetingLaunch",
+        method: "POST",
+      },
+      issueInovaMeetingLaunchUrl: {
+        endpoint: "issueInovaMeetingLaunch",
+        method: "POST",
+      },
+      issueInovaMeetingPanelAuthUrl: {
+        endpoint: "issueInovaMeetingPanelAuth",
+        method: "POST",
+      },
+      issueInovaPromptPanelAuthUrl: {
+        endpoint: "issueInovaPromptPanelAuth",
+        method: "POST",
+      },
+      issueInovaMeetingWorkspaceAuthUrl: {
+        endpoint: "issueInovaMeetingWorkspaceAuth",
+        method: "POST",
+      },
+      listInovaMeetingsUrl: {
+        endpoint: "listInovaMeetings",
+        method: "POST",
+      },
+      moveInovaMeetingResultUrl: {
+        endpoint: "moveInovaMeetingResult",
+        method: "POST",
+      },
+      uploadInovaMeetingSourceUrl: {
+        endpoint: "uploadInovaMeetingSource",
+        method: "POST",
+      },
+      updateInovaMeetingUrl: {
+        endpoint: "updateInovaMeeting",
+        method: "POST",
+      },
+      updateInovaMeetingResultUrl: {
+        endpoint: "updateInovaMeetingResult",
+        method: "POST",
+      },
+      loadInovaPromptLibraryUrl: {
+        endpoint: "loadInovaPromptLibrary",
+        method: "POST",
+      },
+      listPromptStoreEntriesUrl: {
+        endpoint: "listPromptStoreEntries",
+        method: "POST",
+      },
+      peekInovaPromptLibraryUrl: {
+        endpoint: "peekInovaPromptLibrary",
+        method: "POST",
+      },
+      reviewInovaPromptUrl: {
+        endpoint: "reviewInovaPrompt",
+        method: "POST",
+      },
+      publishPromptToStoreUrl: {
+        endpoint: "publishPromptToStore",
+        method: "POST",
+      },
+      unpublishPromptFromStoreUrl: {
+        endpoint: "unpublishPromptFromStore",
+        method: "POST",
+      },
+      importPromptStoreEntryUrl: {
+        endpoint: "importPromptStoreEntry",
+        method: "POST",
+      },
+      revokeInovaMeetingShareLinkUrl: {
+        endpoint: "revokeInovaMeetingShareLink",
+        method: "POST",
+      },
+      togglePromptStoreLikeUrl: {
+        endpoint: "togglePromptStoreLike",
+        method: "POST",
+      },
+      recordPromptStoreViewUrl: {
+        endpoint: "recordPromptStoreView",
+        method: "POST",
+      },
+      syncInovaPromptLibraryUrl: {
+        endpoint: "syncInovaPromptLibrary",
+        method: "POST",
+      },
+    },
+    lanes: {
+      legacy: {
+        baseUrl: DEFAULT_FUNCTIONS_BASE_URL,
+        endpointOverrides: {},
+      },
+      v2: {
+        baseUrl: DEFAULT_FUNCTIONS_BASE_URL,
+        endpointOverrides: {
+          issueInovaPromptPanelAuthUrl: "issueInovaPromptPanelAuthV2",
+          loadInovaPromptLibraryUrl: "loadInovaPromptLibraryV2",
+          peekInovaPromptLibraryUrl: "peekInovaPromptLibraryV2",
+          syncInovaPromptLibraryUrl: "syncInovaPromptLibraryV2",
+        },
+      },
+    },
+    manifestVersion: "2026-04-bundled-functions-v1",
+    minExtensionVersion: "1.0.0",
+    schemaVersion: 1,
+    targets: {
+      local: {
+        functionsPort: LOCAL_RUNTIME_DEFAULTS.functionsPort,
+        host: LOCAL_RUNTIME_DEFAULTS.host,
+        projectIdFallback: "browser-extension-main",
+        regionFallback: "asia-northeast3",
+      },
+      production: {
+        functionsBaseUrl: DEFAULT_FUNCTIONS_BASE_URL,
+      },
+    },
+  });
+  const FUNCTION_ENDPOINTS = Object.freeze(buildFunctionEndpointMap(BUNDLED_FUNCTIONS_MANIFEST.endpointKeys));
   const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "localhost"]);
   const LANE_FUNCTION_OVERRIDES = Object.freeze({
     legacy: Object.freeze({
-      baseUrl: DEFAULT_FUNCTIONS_BASE_URL,
-      endpointOverrides: Object.freeze({}),
+      baseUrl: BUNDLED_FUNCTIONS_MANIFEST.lanes.legacy.baseUrl,
+      endpointOverrides: Object.freeze({ ...BUNDLED_FUNCTIONS_MANIFEST.lanes.legacy.endpointOverrides }),
     }),
     v2: Object.freeze({
-      baseUrl: DEFAULT_FUNCTIONS_BASE_URL,
-      endpointOverrides: Object.freeze({
-        issueInovaPromptPanelAuthUrl: "issueInovaPromptPanelAuthV2",
-        loadInovaPromptLibraryUrl: "loadInovaPromptLibraryV2",
-        peekInovaPromptLibraryUrl: "peekInovaPromptLibraryV2",
-        syncInovaPromptLibraryUrl: "syncInovaPromptLibraryV2",
-      }),
+      baseUrl: BUNDLED_FUNCTIONS_MANIFEST.lanes.v2.baseUrl,
+      endpointOverrides: Object.freeze({ ...BUNDLED_FUNCTIONS_MANIFEST.lanes.v2.endpointOverrides }),
     }),
   });
 
   namespace.functionsRuntimeConfig = {
+    getBundledCapabilityManifest,
     getDefaultFunctionsConfig,
     getMeetingFunctionsConfig,
     getMeetingRuntimeConfig,
@@ -60,6 +163,10 @@
     getPromptRuntimeConfig,
     reconcileSettings,
   };
+
+  function getBundledCapabilityManifest() {
+    return cloneValue(BUNDLED_FUNCTIONS_MANIFEST);
+  }
 
   function getDefaultFunctionsConfig() {
     const laneConfig = resolveLaneFunctionsConfig();
@@ -259,6 +366,13 @@
     );
   }
 
+  function buildFunctionEndpointMap(endpointDefinitions) {
+    return Object.entries(endpointDefinitions || {}).reduce((endpointMap, [configKey, definition]) => {
+      endpointMap[configKey] = String(definition?.endpoint || "");
+      return endpointMap;
+    }, {});
+  }
+
   function buildUrlConfig(baseConfig, endpointMap, baseUrl) {
     const config = {
       ...baseConfig,
@@ -306,9 +420,10 @@
 
   function buildLocalFunctionsBaseUrl(hostname, projectId, region) {
     const resolvedHost = resolveLoopbackHost(hostname);
-    const normalizedProjectId = normalizeText(projectId) || "browser-extension-main";
-    const normalizedRegion = normalizeText(region) || "asia-northeast3";
-    return `http://${resolvedHost}:${LOCAL_RUNTIME_DEFAULTS.functionsPort}/${normalizedProjectId}/${normalizedRegion}`;
+    const localTarget = BUNDLED_FUNCTIONS_MANIFEST.targets.local;
+    const normalizedProjectId = normalizeText(projectId) || localTarget.projectIdFallback;
+    const normalizedRegion = normalizeText(region) || localTarget.regionFallback;
+    return `http://${resolvedHost}:${localTarget.functionsPort}/${normalizedProjectId}/${normalizedRegion}`;
   }
 
   function readHostname(value) {
@@ -371,5 +486,14 @@
 
   function cloneValue(value) {
     return value == null ? value : JSON.parse(JSON.stringify(value));
+  }
+
+  function deepFreeze(value) {
+    if (!value || typeof value !== "object" || Object.isFrozen(value)) {
+      return value;
+    }
+    Object.freeze(value);
+    Object.values(value).forEach(deepFreeze);
+    return value;
   }
 })(globalThis);
