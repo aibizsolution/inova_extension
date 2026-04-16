@@ -89,6 +89,7 @@ function verifyOwnerPattern(activeJavaScriptFiles, label, pattern, allowedFiles)
 
   for (const relativePath of activeJavaScriptFiles) {
     const source = fs.readFileSync(path.join(root, relativePath), "utf8");
+    pattern.lastIndex = 0;
     if (!pattern.test(source)) {
       continue;
     }

@@ -8,92 +8,476 @@ const PANEL_RUNTIME_STORAGE_STATE_KEYS = Object.freeze([
   "settings",
   "uiPreferences",
 ]);
+const SANDBOX_BRIDGE_API_ALLOWLIST = Object.freeze([
+  "emitTrace",
+  "invokeCapability",
+  "invokePageCapability",
+  "metrics",
+  "openUrl",
+  "readPanelState",
+  "writeUiPreferences",
+]);
 
-const PANEL_ALLOWED_FUNCTION_ENDPOINT_KEYS = Object.freeze({
-  meeting: new Set([
-    "authorizeInovaMeetingWorkspaceAccessUrl",
-    "createInovaMeetingShareLinkUrl",
-    "issueInovaMeetingPanelAuthUrl",
-    "listInovaMeetingsUrl",
-    "revokeInovaMeetingShareLinkUrl",
-  ]),
-  prompt: new Set([
-    "importPromptStoreEntryUrl",
-    "issueInovaPromptPanelAuthUrl",
-    "listPromptStoreEntriesUrl",
-    "publishPromptToStoreUrl",
-    "recordPromptStoreViewUrl",
-    "reviewInovaPromptUrl",
-    "syncInovaPromptLibraryUrl",
-    "togglePromptStoreLikeUrl",
-    "unpublishPromptFromStoreUrl",
-  ]),
+const PANEL_RUNTIME_CAPABILITY_MANIFEST = deepFreeze({
+  functionEndpointCapabilities: {
+    meeting: {
+      authorizeInovaMeetingWorkspaceAccessUrl: {
+        allowedAuthModes: ["access-token", "none"],
+        capabilityId: "meeting.workspace.authorize-access",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
+      createInovaMeetingShareLinkUrl: {
+        allowedAuthModes: ["access-token", "none"],
+        capabilityId: "meeting.share.create-function",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
+      issueInovaMeetingPanelAuthUrl: {
+        allowedAuthModes: ["access-token", "none"],
+        capabilityId: "meeting.panel-auth.issue-function",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
+      listInovaMeetingsUrl: {
+        allowedAuthModes: ["access-token", "none"],
+        capabilityId: "meeting.list",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
+      revokeInovaMeetingShareLinkUrl: {
+        allowedAuthModes: ["access-token", "none"],
+        capabilityId: "meeting.share.revoke-function",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
+    },
+    prompt: {
+      importPromptStoreEntryUrl: {
+        allowedAuthModes: ["access-token", "none"],
+        capabilityId: "prompt.store.import",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
+      issueInovaPromptPanelAuthUrl: {
+        allowedAuthModes: ["access-token", "none"],
+        capabilityId: "prompt.panel-auth.issue-function",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
+      listPromptStoreEntriesUrl: {
+        allowedAuthModes: ["access-token", "none"],
+        capabilityId: "prompt.store.list",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
+      publishPromptToStoreUrl: {
+        allowedAuthModes: ["access-token", "none"],
+        capabilityId: "prompt.store.publish",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
+      recordPromptStoreViewUrl: {
+        allowedAuthModes: ["access-token", "none"],
+        capabilityId: "prompt.store.record-view",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
+      reviewInovaPromptUrl: {
+        allowedAuthModes: ["access-token", "none"],
+        capabilityId: "prompt.review.run",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
+      syncInovaPromptLibraryUrl: {
+        allowedAuthModes: ["access-token", "none"],
+        capabilityId: "prompt.library.sync",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
+      togglePromptStoreLikeUrl: {
+        allowedAuthModes: ["access-token", "none"],
+        capabilityId: "prompt.store.toggle-like",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
+      unpublishPromptFromStoreUrl: {
+        allowedAuthModes: ["access-token", "none"],
+        capabilityId: "prompt.store.unpublish",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
+    },
+  },
+  manifestVersion: "2026-04-bundled-panel-runtime-v1",
+  minExtensionVersion: "1.0.0",
+  runtimeCapabilities: {
+    "auth.issue-panel-session": {
+      adapter: "auth.issue-panel-session",
+      panels: {
+        hosted: {
+          enricher: "hosted",
+          issuer: "prompt",
+        },
+        meeting: {
+          enricher: "meeting",
+          issuer: "meeting",
+        },
+        prompt: {
+          enricher: "prompt",
+          issuer: "prompt",
+        },
+      },
+    },
+    "browser.open-url": {
+      adapter: "browser.open-url",
+    },
+    "capabilities.handshake": {
+      adapter: "capabilities.handshake",
+    },
+    "capabilities.invoke": {
+      adapter: "capabilities.invoke",
+    },
+    "functions.invoke-endpoint": {
+      adapter: "functions.invoke-endpoint",
+    },
+    "meeting.result.open": {
+      adapter: "meeting.result.open",
+    },
+    "meeting.share.create": {
+      adapter: "meeting.share.create",
+    },
+    "meeting.share.revoke": {
+      adapter: "meeting.share.revoke",
+    },
+    "meeting.workspace.open": {
+      adapter: "meeting.workspace.open",
+    },
+    "storage.read-panel-state": {
+      adapter: "storage.read-panel-state",
+    },
+    "storage.write-ui-preferences": {
+      adapter: "storage.write-ui-preferences",
+    },
+  },
+  schemaVersion: 1,
+});
+
+const PANEL_RUNTIME_ADAPTERS = Object.freeze({
+  "auth.issue-panel-session": issuePanelSession,
+  "browser.open-url": (request) => openBrowserUrl(request?.url),
+  "capabilities.handshake": buildCapabilityHandshake,
+  "capabilities.invoke": invokeManifestCapability,
+  "functions.invoke-endpoint": invokeHostedPanelFunctionFetch,
+  "meeting.result.open": (request) => openMeetingResult(request?.input, request?.providerIdentity),
+  "meeting.share.create": (request) => createMeetingShareLink(request?.input, request?.providerIdentity),
+  "meeting.share.revoke": (request) => revokeMeetingShareLink(request?.input, request?.providerIdentity),
+  "meeting.workspace.open": (request) => openMeetingWorkspace(request?.input, request?.providerIdentity),
+  "storage.read-panel-state": () => readHostedPanelStorageState(),
+  "storage.write-ui-preferences": (request) => namespace.storage.updateUiPreferences(
+    request?.partial && typeof request.partial === "object" ? request.partial : {}
+  ),
+});
+
+const PANEL_AUTH_ISSUERS = Object.freeze({
+  meeting: (request) => issueMeetingPanelAuth(request?.providerIdentity),
+  prompt: (request) => issuePromptPanelAuth(request?.providerIdentity),
+});
+
+const PANEL_AUTH_ENRICHERS = Object.freeze({
+  hosted: enrichHostedPanelAuth,
+  meeting: enrichMeetingPanelAuth,
+  prompt: enrichPromptPanelAuth,
+});
+
+const PANEL_FUNCTION_CONFIG_RESOLVERS = Object.freeze({
+  meeting: () => getMeetingFunctionsConfig(),
+  prompt: () => getPromptFunctionsConfig(),
 });
 
 async function handle(request) {
   const action = namespace.session.normalizeText(request?.action).toLowerCase();
-  if (action === "storage.read-panel-state") {
-    return readHostedPanelStorageState();
+  const capability = resolveRuntimeCapability(action);
+  return dispatchRuntimeCapability(capability, request);
+}
+
+function resolveRuntimeCapability(action) {
+  const capability = PANEL_RUNTIME_CAPABILITY_MANIFEST.runtimeCapabilities?.[action];
+  if (!capability) {
+    throw new Error("허용되지 않은 hosted panel runtime 요청이에요.");
   }
-  if (action === "storage.write-ui-preferences") {
-    return namespace.storage.updateUiPreferences(request?.partial && typeof request.partial === "object" ? request.partial : {});
+  return capability;
+}
+
+async function dispatchRuntimeCapability(capability, request) {
+  const adapterId = namespace.session.normalizeText(capability?.adapter);
+  const adapter = PANEL_RUNTIME_ADAPTERS[adapterId];
+  if (typeof adapter !== "function") {
+    throw new Error("hosted panel runtime adapter를 찾지 못했어요.");
   }
-  if (action === "browser.open-url") {
-    return openBrowserUrl(request?.url);
-  }
-  if (action === "meeting.workspace.open") {
-    return openMeetingWorkspace(request?.input, request?.providerIdentity);
-  }
-  if (action === "meeting.result.open") {
-    return openMeetingResult(request?.input, request?.providerIdentity);
-  }
-  if (action === "meeting.share.create") {
-    return createMeetingShareLink(request?.input, request?.providerIdentity);
-  }
-  if (action === "meeting.share.revoke") {
-    return revokeMeetingShareLink(request?.input, request?.providerIdentity);
-  }
-  if (action === "auth.issue-panel-session") {
-    const panel = namespace.session.normalizeText(request?.panel).toLowerCase();
-    if (panel === "hosted") {
-      return enrichHostedPanelAuth(
-        await issuePromptPanelAuth(request?.providerIdentity)
-      );
-    }
-    if (panel === "prompt") {
-      return enrichPromptPanelAuth(
-        await issuePromptPanelAuth(request?.providerIdentity)
-      );
-    }
-    if (panel === "meeting") {
-      return enrichMeetingPanelAuth(
-        await issueMeetingPanelAuth(request?.providerIdentity)
-      );
-    }
+  return adapter(request, capability);
+}
+
+async function issuePanelSession(request, capability) {
+  const panel = namespace.session.normalizeText(request?.panel).toLowerCase();
+  const panelCapability = capability?.panels?.[panel];
+  if (!panelCapability) {
     throw new Error("허용되지 않은 hosted panel auth scope예요.");
   }
-  if (action === "functions.invoke-endpoint") {
-    return invokeHostedPanelFunctionFetch(request);
+  const issuer = PANEL_AUTH_ISSUERS[namespace.session.normalizeText(panelCapability.issuer)];
+  const enricher = PANEL_AUTH_ENRICHERS[namespace.session.normalizeText(panelCapability.enricher)];
+  if (typeof issuer !== "function" || typeof enricher !== "function") {
+    throw new Error("hosted panel auth adapter를 찾지 못했어요.");
   }
-  throw new Error("허용되지 않은 hosted panel runtime 요청이에요.");
+  return enricher(await issuer(request));
+}
+
+async function buildCapabilityHandshake(request) {
+  const manifestResult = await readActiveCapabilityManifest();
+  const manifest = manifestResult?.manifest || {};
+  const activeLane = namespace.session.normalizeText(namespace.productLane?.getActiveLane?.() || "legacy").toLowerCase();
+  const capabilities = Object.entries(manifest.capabilities || {})
+    .map(([capabilityId, capability]) => buildHandshakeCapability(capabilityId, capability, activeLane))
+    .sort((left, right) => left.capabilityId.localeCompare(right.capabilityId));
+  const requestedCapabilityIds = Array.isArray(request?.requestedCapabilityIds)
+    ? request.requestedCapabilityIds.map((value) => namespace.session.normalizeText(value)).filter(Boolean)
+    : [];
+  return {
+    bridgeApis: SANDBOX_BRIDGE_API_ALLOWLIST.slice(),
+    capabilityAliases: buildHandshakeCapabilityAliases(manifest.aliases, manifest.capabilities || {}),
+    capabilities,
+    degraded: Boolean(manifestResult?.degraded),
+    degradedReason: namespace.session.normalizeText(manifestResult?.degradedReason),
+    enabledCapabilityIds: capabilities
+      .filter((capability) => capability.enabled)
+      .map((capability) => capability.capabilityId),
+    lane: activeLane,
+    manifestUrl: namespace.session.normalizeText(manifestResult?.manifestUrl),
+    manifestVersion: namespace.session.normalizeText(manifest.manifestVersion),
+    requestedCapabilityIds,
+    runtimeActions: Object.keys(PANEL_RUNTIME_CAPABILITY_MANIFEST.runtimeCapabilities).sort(),
+    schemaVersion: Number(manifest.schemaVersion) || 0,
+    source: namespace.session.normalizeText(manifestResult?.source),
+    workflowArtifacts: buildHandshakeWorkflowArtifacts(manifest.workflowArtifacts),
+  };
+}
+
+function buildHandshakeCapabilityAliases(aliases = {}, capabilities = {}) {
+  if (!aliases || typeof aliases !== "object") {
+    return [];
+  }
+  return Object.entries(aliases)
+    .map(([aliasId, alias]) => ({
+      aliasId: namespace.session.normalizeText(aliasId),
+      owner: namespace.session.normalizeText(alias?.owner),
+      removeAfter: namespace.session.normalizeText(alias?.removeAfter),
+      replacementId: namespace.session.normalizeText(alias?.replacementId),
+      replacementKind: namespace.session.normalizeText(capabilities?.[alias?.replacementId]?.kind),
+    }))
+    .filter((alias) => Boolean(alias.aliasId && alias.replacementId))
+    .sort((left, right) => left.aliasId.localeCompare(right.aliasId));
+}
+
+function buildHandshakeWorkflowArtifacts(workflowArtifacts = {}) {
+  if (!workflowArtifacts || typeof workflowArtifacts !== "object") {
+    return [];
+  }
+  return Object.entries(workflowArtifacts)
+    .map(([artifactId, artifact]) => ({
+      artifactId: namespace.session.normalizeText(artifactId),
+      artifactVersion: namespace.session.normalizeText(artifact?.artifactVersion || artifact?.version),
+      bundleId: namespace.session.normalizeText(artifact?.bundleId),
+      integrity: namespace.session.normalizeText(artifact?.integrity),
+      scriptSlot: namespace.session.normalizeText(artifact?.scriptSlot),
+    }))
+    .filter((artifact) => Boolean(
+      artifact.artifactId
+        && artifact.artifactVersion
+        && artifact.bundleId
+        && artifact.integrity
+        && artifact.scriptSlot
+    ))
+    .sort((left, right) => left.artifactId.localeCompare(right.artifactId));
+}
+
+function buildHandshakeCapability(capabilityId, capability, activeLane) {
+  const normalizedCapabilityId = namespace.session.normalizeText(capabilityId);
+  const capabilityLane = namespace.session.normalizeText(capability?.lane).toLowerCase();
+  const killSwitch = capability?.killSwitch;
+  const killSwitchEnabled = capability?.killed === true || killSwitch === true || killSwitch?.enabled === true;
+  const laneMatches = !capabilityLane || capabilityLane === "all" || capabilityLane === activeLane;
+  const minExtensionVersionSupported = isCapabilityVersionSupported(capability);
+  const testOnly = capability?.testOnly === true;
+  return {
+    auditLevel: namespace.session.normalizeText(capability?.auditLevel),
+    artifactId: namespace.session.normalizeText(capability?.artifactId),
+    artifactVersion: namespace.session.normalizeText(capability?.artifactVersion),
+    authMode: namespace.session.normalizeText(capability?.authMode || capability?.auth),
+    capabilityId: normalizedCapabilityId,
+    deprecatedAt: namespace.session.normalizeText(capability?.deprecatedAt),
+    domain: namespace.session.normalizeText(capability?.domain),
+    enabled: capability?.enabled !== false && !testOnly && !killSwitchEnabled && laneMatches && minExtensionVersionSupported,
+    inputSchemaVersion: Number(capability?.inputSchemaVersion) || 0,
+    killSwitch: killSwitchEnabled,
+    kind: namespace.session.normalizeText(capability?.kind),
+    lane: capabilityLane || "all",
+    minExtensionVersion: namespace.session.normalizeText(capability?.minExtensionVersion),
+    minExtensionVersionSupported,
+    outputSchemaVersion: Number(capability?.outputSchemaVersion) || 0,
+    owner: namespace.session.normalizeText(capability?.owner),
+    pageCapabilityId: namespace.session.normalizeText(capability?.pageCapabilityId),
+    pilot: capability?.pilot === true,
+    replacementId: namespace.session.normalizeText(capability?.replacementId),
+    schemaVersion: Number(capability?.schemaVersion) || 0,
+    testOnly,
+    workflowId: namespace.session.normalizeText(capability?.workflowId),
+  };
 }
 
 async function invokeHostedPanelFunctionFetch(request) {
-  const service = namespace.session.normalizeText(request?.service).toLowerCase();
-  const endpointKey = namespace.session.normalizeText(request?.endpointKey);
-  const allowedEndpoints = PANEL_ALLOWED_FUNCTION_ENDPOINT_KEYS[service];
-  if (!allowedEndpoints?.has(endpointKey)) {
-    throw new Error("허용되지 않은 Functions endpoint 요청이에요.");
+  const endpointCapability = await resolveFunctionEndpointCapability(request);
+  return invokeFunctionEndpointFetch(endpointCapability, request?.body, request);
+}
+
+async function invokeManifestCapability(request) {
+  const capabilityId = namespace.session.normalizeText(request?.capabilityId);
+  const capability = await resolveManifestCapability(capabilityId);
+  if (capability.kind === "function") {
+    const endpointCapability = await buildManifestFunctionEndpointCapability(capabilityId, capability);
+    const result = await invokeFunctionEndpointFetch(endpointCapability, request?.input, request);
+    return enrichManifestFunctionCapabilityResult(capabilityId, result, request);
   }
-  const functionsConfig = service === "meeting"
-    ? await getMeetingFunctionsConfig()
-    : await getPromptFunctionsConfig();
-  const targetUrl = namespace.session.normalizeText(functionsConfig?.[endpointKey]);
+  if (capability.kind === "browser.open-url") {
+    return invokeBrowserOpenUrlCapability(capabilityId, capability, request?.input);
+  }
+  if (capability.kind === "storage.write-ui-preferences") {
+    return invokeStorageUiPreferencesCapability(request?.input);
+  }
+  throw new Error("지원하지 않는 remote capability kind예요.");
+}
+
+async function invokeStorageUiPreferencesCapability(input = {}) {
+  return namespace.storage.updateUiPreferences(
+    input?.partial && typeof input.partial === "object" ? input.partial : {}
+  );
+}
+
+async function invokeBrowserOpenUrlCapability(capabilityId, capability, input = {}) {
+  const templateKey = namespace.session.normalizeText(input?.templateKey);
+  const allowedTemplateKeys = Array.isArray(capability?.templateKeys)
+    ? capability.templateKeys.map((value) => namespace.session.normalizeText(value))
+    : [];
+  if (!allowedTemplateKeys.includes(templateKey)) {
+    throw new Error(`허용되지 않은 URL template capability예요: ${capabilityId}`);
+  }
+  const manifestResult = await readActiveCapabilityManifest();
+  const template = manifestResult?.manifest?.urlTemplates?.[templateKey];
+  if (!template) {
+    throw new Error(`지원하지 않는 URL template capability예요: ${capabilityId}`);
+  }
+  return openBrowserUrl(await buildUrlFromTemplate(templateKey, template, input));
+}
+
+async function buildUrlFromTemplate(templateKey, template, input = {}) {
+  const baseUrl = await resolveUrlTemplateBaseUrl(template);
+  const pattern = namespace.session.normalizeText(template?.pattern);
+  const params = {
+    ...(input?.params && typeof input.params === "object" ? input.params : {}),
+    ...(input && typeof input === "object" ? input : {}),
+  };
+  const path = interpolateUrlTemplatePath(templateKey, pattern, params, template?.params);
+  const url = new URL(path, `${baseUrl.replace(/\/+$/, "")}/`).href;
+  assertAllowedTemplateUrl(url, template);
+  return url;
+}
+
+async function resolveUrlTemplateBaseUrl(template) {
+  const origin = namespace.session.normalizeText(template?.origin);
+  if (origin === "runtime.hosting") {
+    const runtimeConfig = await getPromptRuntimeConfig();
+    const hostingBaseUrl = namespace.session.normalizeText(runtimeConfig?.hosting?.baseUrl);
+    if (!hostingBaseUrl) {
+      throw new Error("URL template hosting base URL을 찾지 못했어요.");
+    }
+    return hostingBaseUrl;
+  }
+  return origin;
+}
+
+function interpolateUrlTemplatePath(templateKey, pattern, params, paramTypes = {}) {
+  if (!pattern || /^[a-z][a-z0-9+.-]*:/i.test(pattern) || pattern.startsWith("//") || pattern.includes("..") || /[?#]/.test(pattern)) {
+    throw new Error(`허용되지 않은 URL template pattern이에요: ${templateKey}`);
+  }
+  const output = pattern.replace(/\{([A-Za-z][A-Za-z0-9_]*)\}/g, (_match, key) => {
+    const value = normalizeTemplateParamValue(templateKey, key, params?.[key], paramTypes?.[key]);
+    return encodeURIComponent(value);
+  });
+  if (/[{}]/.test(output)) {
+    throw new Error(`허용되지 않은 URL template pattern이에요: ${templateKey}`);
+  }
+  return output;
+}
+
+function normalizeTemplateParamValue(templateKey, key, value, type = "safe-segment") {
+  const normalized = namespace.session.normalizeText(value);
+  const normalizedType = namespace.session.normalizeText(type) || "safe-segment";
+  if (normalizedType === "zip-file" && !/^[A-Za-z0-9._-]+\.zip$/.test(normalized)) {
+    throw new Error("허용되지 않은 release download 파일명이에요.");
+  }
+  if (!normalized || normalized.includes("/") || normalized.includes("\\") || normalized.includes("..") || /[?#:]/.test(normalized)) {
+    throw new Error(`허용되지 않은 URL template parameter예요: ${templateKey}/${key}`);
+  }
+  if (!/^[A-Za-z0-9._-]+$/.test(normalized)) {
+    throw new Error(`허용되지 않은 URL template parameter예요: ${templateKey}/${key}`);
+  }
+  return normalized;
+}
+
+function assertAllowedTemplateUrl(url, template) {
+  const parsedUrl = new URL(namespace.session.normalizeText(url));
+  const templateOrigin = namespace.session.normalizeText(template?.origin);
+  const allowedOrigins = namespace.productLane?.getKnownHostingOrigins?.() || [];
+  if (templateOrigin !== "runtime.hosting" && parsedUrl.origin !== templateOrigin) {
+    throw new Error("URL template origin이 일치하지 않아요.");
+  }
+  if (!allowedOrigins.includes(parsedUrl.origin)) {
+    throw new Error("허용되지 않은 URL template origin이에요.");
+  }
+}
+
+async function enrichManifestFunctionCapabilityResult(capabilityId, result, request) {
+  const normalizedCapabilityId = namespace.session.normalizeText(capabilityId);
+  const output = result && typeof result === "object" ? { ...result } : {};
+  if (normalizedCapabilityId !== "meeting.share.create-function" || namespace.session.normalizeText(output.shareUrl)) {
+    return output;
+  }
+  const shareToken = namespace.session.normalizeText(output.shareToken);
+  const buildShareUrl = namespace.meetingWorkspaceCapability?.buildShareUrl;
+  if (!shareToken || typeof buildShareUrl !== "function") {
+    return output;
+  }
+  return {
+    ...output,
+    shareUrl: await buildShareUrl({
+      ...(request?.input && typeof request.input === "object" ? request.input : {}),
+      shareToken,
+    }),
+  };
+}
+
+async function invokeFunctionEndpointFetch(endpointCapability, body, request) {
+  const endpointTarget = await resolveFunctionEndpointTarget(endpointCapability);
+  const targetUrl = namespace.session.normalizeText(endpointTarget?.targetUrl);
   if (!targetUrl) {
     throw new Error("Functions endpoint를 찾지 못했어요.");
   }
 
-  const authMode = namespace.session.normalizeText(request?.authMode).toLowerCase() || "access-token";
+  const method = namespace.session.normalizeText(endpointTarget?.method || endpointCapability.method).toUpperCase() || "POST";
+  if (method !== "POST") {
+    throw new Error("허용되지 않은 Functions method예요.");
+  }
+
+  const authMode = resolveFunctionAuthMode(request, endpointCapability);
   const headers = {
     "Content-Type": "application/json",
   };
@@ -108,15 +492,177 @@ async function invokeHostedPanelFunctionFetch(request) {
   }
 
   const response = await fetch(namespace.session.normalizeText(targetUrl), {
-    body: JSON.stringify(request?.body && typeof request.body === "object" ? request.body : {}),
+    body: JSON.stringify(body && typeof body === "object" ? body : {}),
     headers,
-    method: "POST",
+    method,
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload?.ok) {
     throw new Error(namespace.session.normalizeText(payload?.error || payload?.message) || "Functions 요청에 실패했어요.");
   }
   return payload?.data || {};
+}
+
+async function resolveFunctionEndpointCapability(request) {
+  const service = namespace.session.normalizeText(request?.service).toLowerCase();
+  const endpointKey = namespace.session.normalizeText(request?.endpointKey);
+  const endpointCapability =
+    PANEL_RUNTIME_CAPABILITY_MANIFEST.functionEndpointCapabilities?.[service]?.[endpointKey];
+  if (!endpointCapability) {
+    throw new Error("허용되지 않은 Functions endpoint 요청이에요.");
+  }
+  const endpointDefinition = await readFunctionEndpointDefinition(endpointKey);
+  await assertManifestCapabilityRunnable(endpointCapability.capabilityId);
+  return {
+    ...endpointDefinition,
+    ...endpointCapability,
+    endpointKey,
+    service,
+  };
+}
+
+async function resolveManifestCapability(capabilityId) {
+  if (!capabilityId) {
+    throw new Error("capabilityId가 필요해요.");
+  }
+  const manifestResult = await readActiveCapabilityManifest();
+  const manifest = manifestResult?.manifest || {};
+  const alias = manifest.aliases?.[capabilityId];
+  const resolvedCapabilityId = namespace.session.normalizeText(alias?.replacementId) || capabilityId;
+  const capability = manifest.capabilities?.[resolvedCapabilityId];
+  if (!capability || typeof capability !== "object") {
+    throw new Error("허용되지 않은 capabilityId예요.");
+  }
+  assertCapabilityRunnable(capability, resolvedCapabilityId);
+  return {
+    ...capability,
+    aliasId: resolvedCapabilityId === capabilityId ? "" : capabilityId,
+    capabilityId: resolvedCapabilityId,
+    kind: namespace.session.normalizeText(capability.kind).toLowerCase(),
+  };
+}
+
+async function buildManifestFunctionEndpointCapability(capabilityId, capability) {
+  const endpointKey = namespace.session.normalizeText(capability?.endpointKey);
+  const endpointDefinition = await readFunctionEndpointDefinition(endpointKey);
+  const authMode = namespace.session.normalizeText(capability?.authMode || capability?.auth || "access-token").toLowerCase();
+  return {
+    ...endpointDefinition,
+    allowedAuthModes: [authMode],
+    capabilityId,
+    defaultAuthMode: authMode,
+    endpointKey,
+    method: endpointDefinition.method || capability.method || "POST",
+    service: namespace.session.normalizeText(capability?.service).toLowerCase(),
+  };
+}
+
+async function readFunctionEndpointDefinition(endpointKey) {
+  const manifestResult = await readActiveCapabilityManifest();
+  const endpointDefinition = manifestResult?.manifest?.endpointKeys?.[endpointKey];
+  if (!endpointDefinition?.endpoint) {
+    throw new Error("Functions endpoint manifest를 찾지 못했어요.");
+  }
+  return endpointDefinition;
+}
+
+async function assertManifestCapabilityRunnable(capabilityId) {
+  const normalizedCapabilityId = namespace.session.normalizeText(capabilityId);
+  if (!normalizedCapabilityId) {
+    return;
+  }
+  const manifestResult = await readActiveCapabilityManifest();
+  const capability = manifestResult?.manifest?.capabilities?.[normalizedCapabilityId];
+  if (!capability) {
+    return;
+  }
+  assertCapabilityRunnable(capability, normalizedCapabilityId);
+}
+
+function assertCapabilityRunnable(capability, capabilityId) {
+  if (capability?.testOnly === true) {
+    throw new Error(`test-only capability는 실행할 수 없어요: ${capabilityId}`);
+  }
+  if (capability?.enabled === false) {
+    throw new Error(`capability가 비활성화되어 있어요: ${capabilityId}`);
+  }
+  const killSwitch = capability?.killSwitch;
+  if (capability?.killed === true || killSwitch === true || killSwitch?.enabled === true) {
+    throw new Error(`capability kill switch가 켜져 있어요: ${capabilityId}`);
+  }
+  const activeLane = namespace.session.normalizeText(namespace.productLane?.getActiveLane?.() || "legacy").toLowerCase();
+  const capabilityLane = namespace.session.normalizeText(capability?.lane).toLowerCase();
+  if (capabilityLane && capabilityLane !== "all" && capabilityLane !== activeLane) {
+    throw new Error(`현재 lane에서 capability를 사용할 수 없어요: ${capabilityId}`);
+  }
+  if (!isCapabilityVersionSupported(capability)) {
+    throw new Error(`현재 확장 버전에서 capability를 사용할 수 없어요: ${capabilityId}`);
+  }
+}
+
+function isCapabilityVersionSupported(capability) {
+  const minExtensionVersion = namespace.session.normalizeText(capability?.minExtensionVersion);
+  if (!minExtensionVersion) {
+    return true;
+  }
+  const required = parseVersionParts(minExtensionVersion);
+  const current = parseVersionParts(namespace.productLane?.readManifestVersion?.() || "1.0.0");
+  for (let index = 0; index < 3; index += 1) {
+    if (current[index] > required[index]) return true;
+    if (current[index] < required[index]) return false;
+  }
+  return true;
+}
+
+function parseVersionParts(version) {
+  return namespace.session.normalizeText(version).split(".").slice(0, 3).map((part) => {
+    const parsed = Number.parseInt(part, 10);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }).concat([0, 0, 0]).slice(0, 3);
+}
+
+async function resolveFunctionEndpointTarget(endpointCapability) {
+  const resolver = namespace.functionsRuntimeConfig?.resolveCapabilityFunctionEndpoint;
+  if (typeof resolver === "function") {
+    return resolver({
+      endpointKey: endpointCapability.endpointKey,
+      service: endpointCapability.service,
+    });
+  }
+  const functionsConfig = await resolveFunctionsConfigForService(endpointCapability.service);
+  return {
+    method: endpointCapability.method,
+    targetUrl: namespace.session.normalizeText(functionsConfig?.[endpointCapability.endpointKey]),
+  };
+}
+
+async function resolveFunctionsConfigForService(service) {
+  const resolver = PANEL_FUNCTION_CONFIG_RESOLVERS[service];
+  if (typeof resolver !== "function") {
+    throw new Error("허용되지 않은 Functions service예요.");
+  }
+  return resolver();
+}
+
+async function readActiveCapabilityManifest() {
+  return typeof namespace.functionsRuntimeConfig?.getActiveCapabilityManifest === "function"
+    ? namespace.functionsRuntimeConfig.getActiveCapabilityManifest()
+    : { manifest: namespace.functionsRuntimeConfig?.getBundledCapabilityManifest?.() };
+}
+
+function resolveFunctionAuthMode(request, endpointCapability) {
+  const defaultAuthMode = namespace.session.normalizeText(endpointCapability?.defaultAuthMode).toLowerCase()
+    || "access-token";
+  const authMode = namespace.session.normalizeText(request?.authMode).toLowerCase() || defaultAuthMode;
+  const allowedModes = new Set(
+    Array.isArray(endpointCapability?.allowedAuthModes) && endpointCapability.allowedAuthModes.length
+      ? endpointCapability.allowedAuthModes.map((mode) => namespace.session.normalizeText(mode).toLowerCase())
+      : [defaultAuthMode]
+  );
+  if (!allowedModes.has(authMode)) {
+    throw new Error("허용되지 않은 인증 모드예요.");
+  }
+  return authMode;
 }
 
 async function readHostedPanelStorageState() {
@@ -141,6 +687,15 @@ function cloneHostedPanelStorageValue(value) {
     return value.slice();
   }
   return { ...value };
+}
+
+function deepFreeze(value) {
+  if (!value || typeof value !== "object" || Object.isFrozen(value)) {
+    return value;
+  }
+  Object.freeze(value);
+  Object.values(value).forEach(deepFreeze);
+  return value;
 }
 
 async function enrichMeetingPanelAuth(payload) {

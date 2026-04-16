@@ -3,8 +3,12 @@
 
   function render(state) {
     const normalized = normalizeState(state);
+    const actionCapabilities = {
+      canCreateShare: normalized.canCreateShare,
+      canRevokeShare: normalized.canRevokeShare,
+    };
     const listMarkup = normalized.items.length
-      ? normalized.items.map((item) => renderMeetingItem(item, normalized.pending)).join("")
+      ? normalized.items.map((item) => renderMeetingItem(item, normalized.pending, actionCapabilities)).join("")
       : renderEmptyState(normalized);
     const workspacePending = normalized.pending.active && normalized.pending.action === "open-workspace";
     const workspaceButtonLabel = workspacePending ? "작업실 여는 중..." : "새 회의 룸 생성";
@@ -29,6 +33,7 @@
         </div>
         <div class="inova-meeting-stack">
           ${feedbackNotice}
+          ${normalized.capabilityNotice ? `<div class="inova-release-card inova-release-card__notice is-info">${escapeHtml(normalized.capabilityNotice)}</div>` : ""}
           ${normalized.degradedNotice ? `<div class="inova-release-card inova-release-card__notice is-info">${escapeHtml(normalized.degradedNotice)}</div>` : ""}
           ${normalized.error ? `<div class="inova-release-card inova-release-card__notice">${escapeHtml(normalized.error)}</div>` : ""}
           <div class="inova-tool-inline-summary">
@@ -51,6 +56,9 @@
     const degradedReason = normalizeText(state?.degradedReason);
     const source = normalizeSource(state?.source);
     return {
+      canCreateShare: state?.canCreateShare !== false,
+      canRevokeShare: state?.canRevokeShare !== false,
+      capabilityNotice: normalizeText(state?.capabilityNotice),
       degraded,
       degradedNotice: buildDegradedNotice(degraded, degradedReason, dataFreshness, source),
       error: normalizeText(state?.error),
@@ -76,7 +84,7 @@
     };
   }
 
-  function renderMeetingItem(item, pending) {
+  function renderMeetingItem(item, pending, actionCapabilities = {}) {
     const isPending = pending.active
       && pending.action === "open-result"
       && pending.meetingId === item.meetingId
@@ -116,6 +124,7 @@
         </div>
         <div class="inova-meeting-record__actions">
           <div class="inova-meeting-record__secondary">
+          ${actionCapabilities.canCreateShare ? `
           <button
             type="button"
             class="inova-tool-button inova-tool-button--compact inova-meeting-record__secondary-button"
@@ -127,8 +136,8 @@
             aria-busy="${sharePending}"
           >
             ${escapeHtml(presentation.shareLabel)}
-          </button>
-          ${item.shareActive || revokePending ? `
+          </button>` : ""}
+          ${actionCapabilities.canRevokeShare && (item.shareActive || revokePending) ? `
           <button
             type="button"
             class="inova-tool-button inova-tool-button--compact inova-meeting-record__secondary-button is-danger"

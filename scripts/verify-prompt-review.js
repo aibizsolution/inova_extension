@@ -11,6 +11,7 @@ async function main() {
   verifyLegacyReviewContract();
   verifyPromptTellingV2Contract();
   verifyHostedPromptReviewContract();
+  await verifyHostedPromptReviewRerunBehavior();
   await verifyExtensionReviewHandoff();
   console.log("[verify-prompt-review] Prompt review contract passed");
 }
@@ -43,6 +44,10 @@ function verifyLegacyReviewContract() {
     normalized.checks.map((check) => check.id),
     ["context", "goal", "constraints", "output"]
   );
+  assert.deepEqual(
+    normalized.checks.map((check) => check.label),
+    ["상황", "목표", "조건", "형식"]
+  );
   assert.equal(normalized.checks.some((check) => Object.hasOwn(check, "group")), false);
   assert.equal(normalized.totalScore, 82);
 }
@@ -62,7 +67,7 @@ function verifyPromptTellingV2Contract() {
         { feedback: "역할은 잘 설정됐습니다.", id: "persona", label: "역할 지정", status: "good" },
       ],
       quickImprovements: ["역할을 먼저 적어 주세요.", "참고 예시를 붙여 주세요.", "타깃 관점을 써 주세요.", "말투를 써 주세요.", "초과 항목"],
-      refinedPrompt: "당신은 [역할]입니다.",
+      refinedPrompt: "당신은 친절한 선생님입니다.",
       summary: "참고 자료와 타깃 관점을 보완해 주세요.",
       verdict: "revise",
     },
@@ -76,11 +81,36 @@ function verifyPromptTellingV2Contract() {
     ["persona", "reference", "objective", "mode", "pointOfView", "tone"]
   );
   assert.deepEqual(
+    normalized.checks.map((check) => check.label),
+    ["역할", "참고할 내용", "목표", "형식", "읽는 사람", "말투"]
+  );
+  assert.deepEqual(
     normalized.checks.map((check) => check.group),
     ["core", "core", "core", "refinement", "refinement", "refinement"]
   );
   assert.equal(normalized.totalScore, 63);
   assert.deepEqual(normalized.quickImprovements.length, 4);
+
+  const readyNormalized = helpers.normalizeReviewResult(
+    {
+      checks: [
+        { feedback: "역할이 분명합니다.", id: "persona", label: "역할", status: "good" },
+        { feedback: "참고할 내용이 충분합니다.", id: "reference", label: "참고할 내용", status: "good" },
+        { feedback: "목표가 분명합니다.", id: "objective", label: "목표", status: "good" },
+        { feedback: "형식이 분명합니다.", id: "mode", label: "형식", status: "good" },
+        { feedback: "읽는 사람이 분명합니다.", id: "pointOfView", label: "읽는 사람", status: "good" },
+        { feedback: "말투가 분명합니다.", id: "tone", label: "말투", status: "good" },
+      ],
+      quickImprovements: ["추가로 고칠 점을 적어 주세요."],
+      refinedPrompt: "바로 쓸 수 있는 프롬프트입니다.",
+      summary: "바로 사용할 수 있어요.",
+      verdict: "ready",
+    },
+    "카피를 써 줘",
+    v2Profile
+  );
+  assert.equal(readyNormalized.totalScore, 100);
+  assert.deepEqual(readyNormalized.quickImprovements, []);
 }
 
 async function verifyExtensionReviewHandoff() {
@@ -104,6 +134,8 @@ async function verifyExtensionReviewHandoff() {
 
 function verifyHostedPromptReviewContract() {
   const hostedControllerSource = fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "prompt-review-controller.js"), "utf8");
+  const hostedReviewViewSource = fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "prompt-review-view.js"), "utf8");
+  const promptReviewServiceSource = fs.readFileSync(path.join(root, "functions", "features", "prompt-review", "prompt-review-service.js"), "utf8");
   const capabilityClientSource = fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "extension-capability-client.js"), "utf8");
   const hostedIndexSource = fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "index.js"), "utf8");
   const panelTraceSource = fs.readFileSync(path.join(root, "content", "panel-console-trace.js"), "utf8");
@@ -116,7 +148,7 @@ function verifyHostedPromptReviewContract() {
 
   assert.equal(
     hostedControllerSource.includes("const writeClipboardText = typeof browserCapabilities.writeClipboardText === \"function\"")
-      && capabilityClientSource.includes('action: "clipboard.write-text"'),
+      && capabilityClientSource.includes('invokePageCapability("clipboard.write-text"'),
     true,
     "hosted prompt review copy should delegate through the hosted capability client and the stable top page clipboard.write-text capability"
   );
@@ -230,6 +262,147 @@ function verifyHostedPromptReviewContract() {
     !promptReviewManagerSource.includes("applyReviewedPrompt"),
     true,
     "content prompt review manager should stop carrying hosted-owned apply/copy result flows"
+  );
+  assert.equal(
+    hostedControllerSource.includes("hasCapability(PROMPT_REVIEW_RUN_CAPABILITY_ID)")
+      && hostedControllerSource.includes("capability-disabled")
+      && hostedReviewViewSource.includes("review.canReview"),
+    true,
+    "hosted prompt review should hide disabled capability execution behind the negotiated capability id gate"
+  );
+  assert.equal(
+    !hostedReviewViewSource.includes("다시 평가 후 반영")
+      && !hostedReviewViewSource.includes(">다시 평가</button>")
+      && !hostedReviewViewSource.includes("입력창 내용이 바뀌었어요")
+      && !hostedReviewViewSource.includes("대괄호 내용 확인 후 반영")
+      && !hostedReviewViewSource.includes("대괄호 포함 그대로 반영")
+      && !hostedControllerSource.includes("placeholder-confirmation-required"),
+    true,
+    "hosted prompt review should not render stale or placeholder confirmation bottom action buttons"
+  );
+  assert.equal(
+    hostedReviewViewSource.includes("바로 고칠 점")
+      && hostedReviewViewSource.includes("다듬은 프롬프트")
+      && hostedReviewViewSource.includes("inova-prompt-review__score-chip")
+      && hostedControllerSource.includes("totalScoreChipLabel")
+      && hostedControllerSource.includes("getVerdictLabel")
+      && hostedControllerSource.includes('quickImprovements: verdict === "ready" && totalScore >= 90 ? [] : quickImprovements')
+      && hostedControllerSource.includes("점수는 참고용이에요")
+      && hostedReviewViewSource.indexOf("inova-prompt-review__score-chip") < hostedReviewViewSource.indexOf("inova-prompt-review__summary")
+      && !hostedReviewViewSource.includes("lastReviewedAt")
+      && !hostedReviewViewSource.includes("formatDateTime")
+      && !hostedReviewViewSource.includes("총점 ")
+      && !hostedReviewViewSource.includes("평가 점수")
+      && !hostedReviewViewSource.includes("빠른 보완 포인트")
+      && !hostedReviewViewSource.includes("보완 프롬프트")
+      && !hostedControllerSource.includes("핵심 구조 (PRO)")
+      && !hostedControllerSource.includes("정교화 요소 (MPT)"),
+    true,
+    "hosted prompt review should use ordinary user-facing labels instead of internal score/framework labels"
+  );
+  assert.equal(
+    promptReviewServiceSource.includes("비전문가가 바로 이해할 수 있는 쉬운 말")
+      && promptReviewServiceSource.includes("대괄호로 된 빈칸 표시를 만들지 마세요")
+      && promptReviewServiceSource.includes("verdict가 ready이면 quickImprovements는 빈 배열")
+      && !promptReviewServiceSource.includes("PROMPT 공식")
+      && !promptReviewServiceSource.includes("Persona, Reference, Objective")
+      && !promptReviewServiceSource.includes("[역할]")
+      && !promptReviewServiceSource.includes("[대상 독자]")
+      && !promptReviewServiceSource.includes("placeholder를 사용하세요"),
+    true,
+    "prompt review service prompt should produce ordinary Korean guidance without framework jargon or bracket placeholders"
+  );
+  assert.equal(
+    hostedReviewViewSource.includes("inova-prompt-review__field-actions")
+      && hostedReviewViewSource.includes('data-prompt-action="copy-reviewed-prompt">복사</button>')
+      && hostedReviewViewSource.includes("${applyButton}")
+      && hostedReviewViewSource.indexOf('data-prompt-action="copy-reviewed-prompt">복사</button>') < hostedReviewViewSource.lastIndexOf("${applyButton}")
+      && hostedReviewViewSource.lastIndexOf("${applyButton}") < hostedReviewViewSource.indexOf("name=\"inova-reviewed-prompt\""),
+    true,
+    "hosted prompt review should place apply next to copy in the refined prompt field header"
+  );
+  assert.equal(
+    hostedControllerSource.includes("reason: \"same-text\"")
+      && hostedControllerSource.includes("이미 같은 내용으로 검토했어요."),
+    true,
+    "hosted prompt review should toast instead of re-running when the composer text matches the last reviewed text"
+  );
+}
+
+async function verifyHostedPromptReviewRerunBehavior() {
+  let composerText = "초기 프롬프트";
+  const reviewCalls = [];
+  const toasts = [];
+  const context = vm.createContext({
+    clearTimeout,
+    console,
+    globalThis: null,
+    setTimeout,
+  });
+  context.globalThis = context;
+  context.InovaBookmarks = {
+    panelUtils: {
+      normalizeText(value) {
+        return String(value ?? "").replace(/\s+/g, " ").trim();
+      },
+      resolveBrowserCapabilities(options = {}) {
+        return options.browserCapabilities || {};
+      },
+    },
+  };
+  new vm.Script(
+    fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "prompt-review-controller.js"), "utf8"),
+    { filename: "hosting/extension-v2/panel/prompt-review-controller.js" }
+  ).runInContext(context);
+  const controller = context.InovaBookmarks.promptReviewController.create({
+    browserCapabilities: {
+      async applyComposerText() {
+        return { applied: true };
+      },
+      async invokeCapability(_capabilityId, body) {
+        reviewCalls.push(body);
+        return {
+          checks: [],
+          quickImprovements: ["보완"],
+          refinedPrompt: `${body.prompt} 보완`,
+          summary: "요약",
+          totalScore: 75,
+        };
+      },
+      async readComposerState() {
+        return { available: true, text: composerText };
+      },
+      async writeClipboardText() {
+        return { copied: true };
+      },
+    },
+    getProviderIdentity: () => ({ available: true, providerUserKey: "user-1" }),
+    getRuntimeVersion: () => "1.0.0",
+    publishToast: (toast) => {
+      toasts.push(toast);
+      return true;
+    },
+    scheduleRender() {},
+    setActivePromptTab: async () => true,
+    traceReview() {},
+  });
+  controller.syncPanelState({ activeTool: "prompts" }, ["prompt.review.run"]);
+
+  await controller.handlePromptAction("activate-review");
+  assert.equal(reviewCalls.length, 1, "first review activation should run the prompt review capability");
+  assert.equal(reviewCalls[0].prompt, "초기 프롬프트");
+
+  composerText = "수정된 프롬프트";
+  await controller.handlePromptAction("activate-review");
+  assert.equal(reviewCalls.length, 2, "changed composer text should re-run review immediately");
+  assert.equal(reviewCalls[1].prompt, "수정된 프롬프트");
+
+  await controller.handlePromptAction("activate-review");
+  assert.equal(reviewCalls.length, 2, "same composer text should not re-run review");
+  assert.equal(
+    toasts.at(-1)?.message,
+    "이미 같은 내용으로 검토했어요.",
+    "same composer text should show a toast"
   );
 }
 

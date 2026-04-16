@@ -38,7 +38,9 @@
     const nextReview = review && typeof review === "object" ? review : {};
     return {
       available: Boolean(nextReview.available),
+      canReview: nextReview.canReview !== false,
       canApply: Boolean(nextReview.canApply),
+      capabilityError: String(nextReview.capabilityError || ""),
       copyState: String(nextReview.copyState || "idle"),
       error: String(nextReview.error || ""),
       hasText: Boolean(nextReview.hasText),
@@ -65,6 +67,10 @@
       detailPendingEntryId: String(nextStore.detailPendingEntryId || ""),
       emptyText: String(nextStore.emptyText || "스토어를 준비하는 중이에요."),
       error: String(nextStore.error || ""),
+      canImport: nextStore.canImport !== false,
+      canLike: nextStore.canLike !== false,
+      canRecordView: nextStore.canRecordView !== false,
+      canUnpublish: nextStore.canUnpublish !== false,
       expandedEntryId: String(nextStore.expandedEntryId || ""),
       feedback: nextStore.feedback || null,
       hasMore: Boolean(nextStore.hasMore),

@@ -2,6 +2,8 @@
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const { normalizeText, resolveBrowserCapabilities } = namespace.panelUtils;
   const CHECK_INTERVAL_MS = Number(namespace.constants?.limits?.releaseCheckIntervalMs) || 21600000;
+  const RELEASE_DOWNLOAD_CAPABILITY_ID = "release.download.open";
+  const RELEASE_DOWNLOAD_TEMPLATE_KEY = "release.download";
   const REQUIRED_EXTENSION_CAPABILITIES = Object.freeze([
     "runtime.invoke.v1",
   ]);
@@ -11,8 +13,8 @@
     const getRuntimeVersion = typeof options.getRuntimeVersion === "function"
       ? options.getRuntimeVersion
       : () => "";
-    const openBrowserUrl = typeof browserCapabilities.openBrowserUrl === "function"
-      ? browserCapabilities.openBrowserUrl
+    const invokeCapability = typeof browserCapabilities.invokeCapability === "function"
+      ? browserCapabilities.invokeCapability
       : async () => ({});
     const scheduleRender = typeof options.scheduleRender === "function"
       ? options.scheduleRender
@@ -86,6 +88,8 @@
         && compareVersions(currentVersion, latestVersion) < 0
       );
       return {
+        canOpenDownloads: hasCapability(RELEASE_DOWNLOAD_CAPABILITY_ID),
+        capabilityError: hasCapability(RELEASE_DOWNLOAD_CAPABILITY_ID) ? "" : "릴리스 다운로드 열기 기능이 현재 비활성화되어 있어요.",
         checking: Boolean(state.checking),
         currentAheadOfLatest: Boolean(
           latestVersion
@@ -115,12 +119,12 @@
         return false;
       }
       if (normalizedAction === "download-latest") {
-        await openDownload(buildViewState().latest?.downloadUrl);
+        await openDownload(buildViewState().latest?.downloadFileName);
         return true;
       }
       if (normalizedAction === "download-version") {
         await openDownload(
-          state.history.find((item) => normalizeText(item?.version) === normalizeText(detail.version))?.downloadUrl
+          state.history.find((item) => normalizeText(item?.version) === normalizeText(detail.version))?.versionDownloadFileName
         );
         return true;
       }
@@ -179,12 +183,20 @@
       }
     }
 
-    async function openDownload(url) {
-      const nextUrl = normalizeText(url);
-      if (!nextUrl) {
+    async function openDownload(fileName) {
+      const artifactFileName = normalizeText(fileName);
+      if (!artifactFileName) {
         return;
       }
-      await openBrowserUrl(nextUrl);
+      if (!hasCapability(RELEASE_DOWNLOAD_CAPABILITY_ID)) {
+        state.error = "릴리스 다운로드 열기 기능이 현재 비활성화되어 있어요.";
+        scheduleRender();
+        return;
+      }
+      await invokeCapability(RELEASE_DOWNLOAD_CAPABILITY_ID, {
+        fileName: artifactFileName,
+        templateKey: RELEASE_DOWNLOAD_TEMPLATE_KEY,
+      });
     }
 
     async function fetchJson(relativePath) {
@@ -225,10 +237,12 @@
         || normalizeText(release.fileName);
       return {
         ...release,
+        downloadFileName: options.preferLatestAlias ? "latest.zip" : versionFileName,
         downloadUrl: resolveArtifactUrl(
           release.downloadUrl,
           options.preferLatestAlias ? "latest.zip" : versionFileName
         ),
+        versionDownloadFileName: versionFileName,
         versionDownloadUrl: resolveArtifactUrl(
           release.versionDownloadUrl || release.downloadUrl,
           versionFileName
@@ -269,6 +283,10 @@
       } catch {
         return false;
       }
+    }
+
+    function hasCapability(capabilityId) {
+      return state.capabilities.includes(capabilityId);
     }
 
     function getCurrentVersion() {

@@ -5,6 +5,8 @@
 - `hosting/meeting/*`만으로 해결되지 않으면 `shared/meeting-*`, 그다음 `background/service-worker.js`, 마지막에 `functions/features/meeting/*` 순서로 확장한다.
 
 ## auth / session 경계
+- panel의 회의 공유와 작업실 진입은 remote capability catalog와 background runtime이 gate한다. `meeting.share.create-function`, `meeting.share.revoke-function`, `meeting.workspace.authorize-access`가 manifest에서 disabled/killed이면 hosted panel action도 먼저 막혀야 한다.
+- 회의 공유/작업실 기능이 UI에서 사라지면 먼저 `hosting/extension-v2/capability-manifest.json`의 `enabled`, `killSwitch`, `lane`, alias 상태와 capability handshake 결과를 확인한다.
 - hosted workspace Firebase auth claim은 `meetingId` 단위로 달라질 수 있으므로 `hosting/meeting/firebase-client.js`에서는 cross-tab Firestore persistence를 다시 켜지 않는다. 여러 회의 탭은 탭별 auth를 유지하고, persistence는 단일 탭 또는 메모리 fallback으로만 다룬다.
 - loopback origin(`127.0.0.1:5000`, `localhost:5000`)에서 열린 hosted 작업실과 panel bridge는 local hosted만이 아니라 local Functions/Auth/Firestore emulator를 함께 기본값으로 본다. local smoke는 이 경로를 기준으로 확인한다.
 - hosted Firestore read/query는 local auth state만 보고 바로 실행하지 않는다. `ensureWorkspaceAuth()`가 custom-token sign-in 완료를 보장한 뒤에만 진행한다.

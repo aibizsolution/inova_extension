@@ -42,6 +42,11 @@
 - `integration_inova_accounts.promptLibraryMeta`
 - v2 lane은 `prompt_libraries_v2`, `prompt_library_orders_v2`, `prompt_library_chunks_v2`, `integration_inova_accounts_v2.promptLibraryMeta`, `product_lane_migrations_v2`를 사용한다.
 
+## 관련 capabilityId
+- `prompt.library.sync`: 내 요청 write/sync mutation.
+- `prompt.panel-auth.issue-function`: hosted prompt panel session 발급.
+- `page.composer.apply-text`, `page.composer.read-state`, `page.clipboard.write-text`: 입력창 주입/읽기/복사 page primitive.
+
 ## 보통 건드리지 말아야 할 범위
 - meeting
 - prompt-store

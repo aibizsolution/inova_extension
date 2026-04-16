@@ -7,6 +7,12 @@
   const REQUIRED_EXTENSION_CAPABILITIES = Object.freeze([
     "runtime.invoke.v1",
   ]);
+  const STORE_CAPABILITY_IDS = Object.freeze({
+    import: "prompt.store.import",
+    recordView: "prompt.store.record-view",
+    toggleLike: "prompt.store.toggle-like",
+    unpublish: "prompt.store.unpublish",
+  });
 
   function create(options = {}) {
     const browserCapabilities = resolveBrowserCapabilities(options);
@@ -19,8 +25,8 @@
     const importStorePrompt = typeof options.importStorePrompt === "function"
       ? options.importStorePrompt
       : async () => false;
-    const invokeFunctionEndpoint = typeof browserCapabilities.invokeFunctionEndpoint === "function"
-      ? browserCapabilities.invokeFunctionEndpoint
+    const invokeCapability = typeof browserCapabilities.invokeCapability === "function"
+      ? browserCapabilities.invokeCapability
       : async () => ({});
     const traceFirestore = typeof options.traceFirestore === "function"
       ? options.traceFirestore
@@ -148,6 +154,10 @@
 
       return {
         actionPending: state.actionPending,
+        canImport: hasCapability(STORE_CAPABILITY_IDS.import),
+        canLike: hasCapability(STORE_CAPABILITY_IDS.toggleLike),
+        canRecordView: hasCapability(STORE_CAPABILITY_IDS.recordView),
+        canUnpublish: hasCapability(STORE_CAPABILITY_IDS.unpublish),
         categories: buildAvailableCategories(scopedItems),
         categoryId: state.categoryId,
         dataFreshness: normalizeEnum(state.dataFreshness, ["fresh", "stale", "empty"], "fresh"),
@@ -231,14 +241,23 @@
         return true;
       }
       if (normalizedAction === "import") {
+        if (!requireCapability(STORE_CAPABILITY_IDS.import, "스토어 프롬프트 가져오기 기능이 현재 비활성화되어 있어요.", detail.entryId)) {
+          return true;
+        }
         await importEntry(detail.entryId);
         return true;
       }
       if (normalizedAction === "toggle-like") {
+        if (!requireCapability(STORE_CAPABILITY_IDS.toggleLike, "스토어 좋아요 기능이 현재 비활성화되어 있어요.", detail.entryId)) {
+          return true;
+        }
         await toggleLike(detail.entryId);
         return true;
       }
       if (normalizedAction === "request-unpublish") {
+        if (!requireCapability(STORE_CAPABILITY_IDS.unpublish, "스토어 삭제 기능이 현재 비활성화되어 있어요.", detail.entryId)) {
+          return true;
+        }
         requestUnpublish(detail.entryId);
         return true;
       }
@@ -247,6 +266,9 @@
         return true;
       }
       if (normalizedAction === "unpublish") {
+        if (!requireCapability(STORE_CAPABILITY_IDS.unpublish, "스토어 삭제 기능이 현재 비활성화되어 있어요.", detail.entryId)) {
+          return true;
+        }
         await unpublishEntry(detail.entryId);
         return true;
       }
@@ -403,15 +425,15 @@
         scheduleRender();
         return;
       }
+      if (!requireCapability(STORE_CAPABILITY_IDS.recordView, "스토어 상세 읽기 기능이 현재 비활성화되어 있어요.", normalizedEntryId)) {
+        state.detailPendingEntryId = "";
+        scheduleRender();
+        return;
+      }
       try {
-        const result = await invokeFunctionEndpoint({
-          authMode: "access-token",
-          body: {
-            entryId: normalizedEntryId,
-            providerIdentity: getProviderIdentity(),
-          },
-          endpointKey: "recordPromptStoreViewUrl",
-          service: "prompt",
+        const result = await invokeCapability(STORE_CAPABILITY_IDS.recordView, {
+          entryId: normalizedEntryId,
+          providerIdentity: getProviderIdentity(),
         });
         mergeEntry(result?.entry, { viewed: true });
         viewedEntryIds.add(normalizedEntryId);
@@ -432,14 +454,9 @@
       state.actionPending = { entryId: normalizedEntryId, type: "import" };
       scheduleRender();
       try {
-        const result = await invokeFunctionEndpoint({
-          authMode: "access-token",
-          body: {
-            entryId: normalizedEntryId,
-            providerIdentity: getProviderIdentity(),
-          },
-          endpointKey: "importPromptStoreEntryUrl",
-          service: "prompt",
+        const result = await invokeCapability(STORE_CAPABILITY_IDS.import, {
+          entryId: normalizedEntryId,
+          providerIdentity: getProviderIdentity(),
         });
         if (result?.entry) {
           await importStorePrompt(result.entry);
@@ -462,14 +479,9 @@
       state.actionPending = { entryId: normalizedEntryId, type: "like" };
       scheduleRender();
       try {
-        const result = await invokeFunctionEndpoint({
-          authMode: "access-token",
-          body: {
-            entryId: normalizedEntryId,
-            providerIdentity: getProviderIdentity(),
-          },
-          endpointKey: "togglePromptStoreLikeUrl",
-          service: "prompt",
+        const result = await invokeCapability(STORE_CAPABILITY_IDS.toggleLike, {
+          entryId: normalizedEntryId,
+          providerIdentity: getProviderIdentity(),
         });
         if (result?.entry) {
           mergeEntry(result.entry, { liked: Boolean(result.entry?.viewer?.liked) });
@@ -512,14 +524,9 @@
       state.actionPending = { entryId: normalizedEntryId, type: "unpublish" };
       scheduleRender();
       try {
-        await invokeFunctionEndpoint({
-          authMode: "access-token",
-          body: {
-            entryId: normalizedEntryId,
-            providerIdentity: getProviderIdentity(),
-          },
-          endpointKey: "unpublishPromptFromStoreUrl",
-          service: "prompt",
+        await invokeCapability(STORE_CAPABILITY_IDS.unpublish, {
+          entryId: normalizedEntryId,
+          providerIdentity: getProviderIdentity(),
         });
         state.deleteConfirmEntryId = "";
         state.expandedEntryId = state.expandedEntryId === normalizedEntryId ? "" : state.expandedEntryId;
@@ -698,6 +705,18 @@
 
     function getErrorMessage(error, fallback) {
       return normalizeText(error instanceof Error ? error.message : error) || fallback;
+    }
+
+    function hasCapability(capabilityId) {
+      return state.capabilities.includes(capabilityId);
+    }
+
+    function requireCapability(capabilityId, message, entryId = "") {
+      if (hasCapability(capabilityId)) {
+        return true;
+      }
+      setFeedback(message, "error", normalizeText(entryId));
+      return false;
     }
 
   }

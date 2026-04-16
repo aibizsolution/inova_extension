@@ -4,6 +4,7 @@ importScripts("../shared/session.js");
 importScripts("../shared/provider-identity-cache.js");
 importScripts("../shared/storage.js");
 importScripts("../shared/firebase-config.js");
+importScripts("capability-manifest-validator.js");
 importScripts("functions-runtime-config.js");
 importScripts("inova-auth-client.js");
 importScripts("cloud-api-client.js");

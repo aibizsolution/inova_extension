@@ -8,6 +8,8 @@
     "share",
     "revoke-share",
   ]);
+  const MEETING_SHARE_CREATE_CAPABILITY_ID = "meeting.share.create-function";
+  const MEETING_SHARE_REVOKE_CAPABILITY_ID = "meeting.share.revoke-function";
   const REQUIRED_EXTENSION_CAPABILITIES = Object.freeze([
     "runtime.invoke.v1",
   ]);
@@ -26,8 +28,8 @@
     const traceFirestore = typeof options.traceFirestore === "function"
       ? options.traceFirestore
       : () => {};
-    const createMeetingShare = typeof browserCapabilities.createMeetingShare === "function"
-      ? browserCapabilities.createMeetingShare
+    const invokeCapability = typeof browserCapabilities.invokeCapability === "function"
+      ? browserCapabilities.invokeCapability
       : async () => ({});
     const openMeetingResult = typeof browserCapabilities.openMeetingResult === "function"
       ? browserCapabilities.openMeetingResult
@@ -37,9 +39,6 @@
       : async () => ({});
     const readPanelStorageState = typeof browserCapabilities.readPanelStorageState === "function"
       ? browserCapabilities.readPanelStorageState
-      : async () => ({});
-    const revokeMeetingShare = typeof browserCapabilities.revokeMeetingShare === "function"
-      ? browserCapabilities.revokeMeetingShare
       : async () => ({});
     const writeClipboardText = typeof browserCapabilities.writeClipboardText === "function"
       ? browserCapabilities.writeClipboardText
@@ -145,6 +144,9 @@
         };
       }
       return {
+        canCreateShare: hasCapability(MEETING_SHARE_CREATE_CAPABILITY_ID),
+        canRevokeShare: hasCapability(MEETING_SHARE_REVOKE_CAPABILITY_ID),
+        capabilityNotice: buildCapabilityNotice(),
         checkedAt: normalizeText(state.checkedAt),
         count: getMeetingCount(),
         dataFreshness: normalizeEnum(state.dataFreshness, ["fresh", "stale", "empty"], "empty"),
@@ -197,6 +199,11 @@
       const input = buildActionInput(detail);
       const launchAction = resolveLaunchAction(normalizedAction, input);
 
+      if (isShareActionBlocked(normalizedAction)) {
+        setFeedback("회의 공유 기능이 현재 비활성화되어 있어요.", "error", 3600);
+        return true;
+      }
+
       if ((normalizedAction === "share" || normalizedAction === "revoke-share") && !input.meetingId) {
         setFeedback("회의 정보를 찾지 못했어요. 다시 시도해 주세요.", "error", 3600);
         return true;
@@ -217,7 +224,10 @@
       try {
         if (normalizedAction === "share") {
           traceMeeting("63.top.meeting.bridge.share.start", input);
-          const result = await createMeetingShare(input, buildProviderIdentityPayload(state.providerIdentity));
+          const result = await invokeCapability(MEETING_SHARE_CREATE_CAPABILITY_ID, {
+            ...input,
+            providerIdentity: buildProviderIdentityPayload(state.providerIdentity),
+          });
           const shareUrl = normalizeText(result?.shareUrl);
           if (!shareUrl) {
             throw new Error("공유 링크를 만들지 못했어요.");
@@ -242,7 +252,10 @@
         }
 
         traceMeeting("63.top.meeting.bridge.revoke-share.start", input);
-        const result = await revokeMeetingShare(input, buildProviderIdentityPayload(state.providerIdentity));
+        const result = await invokeCapability(MEETING_SHARE_REVOKE_CAPABILITY_ID, {
+          ...input,
+          providerIdentity: buildProviderIdentityPayload(state.providerIdentity),
+        });
         patchShareState(input.meetingId, result?.share);
         traceMeeting("64.top.meeting.bridge.revoke-share.success", {
           meetingId: input.meetingId,
@@ -521,6 +534,30 @@
         void error;
         return false;
       }
+    }
+
+    function hasCapability(capabilityId) {
+      return state.capabilities.includes(normalizeText(capabilityId));
+    }
+
+    function isShareActionBlocked(action) {
+      if (action === "share") {
+        return !hasCapability(MEETING_SHARE_CREATE_CAPABILITY_ID);
+      }
+      if (action === "revoke-share") {
+        return !hasCapability(MEETING_SHARE_REVOKE_CAPABILITY_ID);
+      }
+      return false;
+    }
+
+    function buildCapabilityNotice() {
+      if (
+        hasCapability(MEETING_SHARE_CREATE_CAPABILITY_ID)
+        && hasCapability(MEETING_SHARE_REVOKE_CAPABILITY_ID)
+      ) {
+        return "";
+      }
+      return "회의 공유 기능이 현재 비활성화되어 공유 링크 생성/해제를 표시하지 않습니다.";
     }
 
   }

@@ -2,6 +2,8 @@
 
 `i-Nova 더하기`는 `inova.incross.com` 대화 화면에 실험실 패널과 hosted 회의 작업실을 더하는 크롬 확장프로그램입니다. 현재 제품 축은 `대화`, `회의`, `프롬프트`, `릴리스`이며, 팝업에서는 회의 작업실 연결 대상과 디버그를 조정합니다.
 
+새 Cloud Function 추가나 endpoint path 변경은 먼저 capability manifest 편집과 Hosting 배포로 처리합니다. 새 Chrome permission, host permission, page primitive, privileged adapter, URL template origin이 필요할 때만 확장 재배포 대상입니다.
+
 ## 이 문서의 역할
 
 - `README.md`는 저장소/제품의 상위 개요, 설치/배포, 공통 개발 루프만 다룹니다.
@@ -15,6 +17,10 @@
 - [docs/feature-spec.md](docs/feature-spec.md): 제품 요구사항과 공통 계약
 - [docs/refactoring-plan.md](docs/refactoring-plan.md): version/release decision note, meeting 호환 기준
 - [docs/runtime-architecture.md](docs/runtime-architecture.md): popup, panel, background, hosted runtime 경계
+- [docs/remote-capability-manifest-plan.md](docs/remote-capability-manifest-plan.md): 무배포 기능 확장을 위한 extension runtime platform 설계
+- [docs/capability-authoring.md](docs/capability-authoring.md): 새 capability 추가 절차와 extension 재배포 기준
+- [docs/capability-catalog.md](docs/capability-catalog.md): 현재 served capability catalog generated 문서
+- [docs/current-handoff.md](docs/current-handoff.md): 다음 세션 시작용 현재 작업 handoff
 - [docs/firebase-architecture.md](docs/firebase-architecture.md): Firebase project/data boundary 메모
 - [docs/functions-runtime-guide.md](docs/functions-runtime-guide.md): Firebase Functions runtime 기본값, 예외 프로파일, 운영 점검 기준
 - [docs/lint-workflow.md](docs/lint-workflow.md): lint 범위, 예외, 점진적 확장 원칙
@@ -45,6 +51,8 @@
 - `content/`: i-Nova 페이지 안의 iframe host, DOM/page adapter, feature controller
 - `background/`: 탭/세션 브리지, hosted URL 조립, release fetch
 - `hosting/extension/panel/`: hosting 배포만으로 갱신되는 hosted 실험실 패널 UI
+- `hosting/extension-v2/panel/`: `1.0.0+` hosted panel controller/view와 remote workflow sandbox host
+- `hosting/extension-v2/capability-manifest.json`: v2 remote capability catalog, endpoint, URL template, lane/kill switch 설정
 - `hosting/meeting/`: hosted 회의 작업실
 - `functions/`: 회의와 프롬프트 backend 함수
 - `shared/`: panel, popup, hosted, background가 함께 쓰는 계약과 helper

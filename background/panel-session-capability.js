@@ -4,7 +4,10 @@
   const functionsRuntimeConfig = namespace.functionsRuntimeConfig || {};
   const panelAuthCache = namespace.panelAuthCache?.create?.(getInovaAccessToken);
 
-  async function getInovaAccessToken() {
+  async function getInovaAccessToken(forceRefresh = false) {
+    if (forceRefresh) {
+      return namespace.inovaAuth.getAccessToken(true);
+    }
     const cookie = await chrome.cookies.get({
       name: "accessToken",
       url: INOVA_ORIGIN,

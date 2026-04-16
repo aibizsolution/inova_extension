@@ -1,0 +1,597 @@
+{
+  "schemaVersion": 1,
+  "manifestVersion": "2026-04-remote-capability-1",
+  "minExtensionVersion": "1.0.0",
+  "expiresAt": "2030-01-01T00:00:00.000Z",
+  "workflowArtifacts": {},
+  "workflowPilot": {
+    "enabled": false,
+    "killSwitch": {
+      "enabled": true
+    },
+    "lanes": []
+  },
+  "urlTemplates": {
+    "release.download": {
+      "origin": "runtime.hosting",
+      "params": {
+        "fileName": "zip-file"
+      },
+      "pattern": "downloads/{fileName}"
+    }
+  },
+  "aliases": {
+    "release.download.latest": {
+      "owner": "release",
+      "removeAfter": "2030-01-01T00:00:00.000Z",
+      "replacementId": "release.download.open"
+    }
+  },
+  "capabilities": {
+    "meeting.list": {
+      "auditLevel": "read",
+      "authMode": "access-token",
+      "domain": "meeting",
+      "enabled": true,
+      "endpointKey": "listInovaMeetingsUrl",
+      "inputSchemaVersion": 1,
+      "kind": "function",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "meeting",
+      "schemaVersion": 1,
+      "service": "meeting"
+    },
+    "meeting.panel-auth.issue-function": {
+      "auditLevel": "auth",
+      "authMode": "access-token",
+      "domain": "meeting",
+      "enabled": true,
+      "endpointKey": "issueInovaMeetingPanelAuthUrl",
+      "inputSchemaVersion": 1,
+      "kind": "function",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "meeting",
+      "schemaVersion": 1,
+      "service": "meeting"
+    },
+    "meeting.share.create-function": {
+      "auditLevel": "write",
+      "authMode": "access-token",
+      "domain": "meeting",
+      "enabled": true,
+      "endpointKey": "createInovaMeetingShareLinkUrl",
+      "inputSchemaVersion": 1,
+      "kind": "function",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "meeting",
+      "schemaVersion": 1,
+      "service": "meeting"
+    },
+    "meeting.share.revoke-function": {
+      "auditLevel": "write",
+      "authMode": "access-token",
+      "domain": "meeting",
+      "enabled": true,
+      "endpointKey": "revokeInovaMeetingShareLinkUrl",
+      "inputSchemaVersion": 1,
+      "kind": "function",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "meeting",
+      "schemaVersion": 1,
+      "service": "meeting"
+    },
+    "meeting.workspace.authorize-access": {
+      "auditLevel": "auth",
+      "authMode": "access-token",
+      "domain": "meeting",
+      "enabled": true,
+      "endpointKey": "authorizeInovaMeetingWorkspaceAccessUrl",
+      "inputSchemaVersion": 1,
+      "kind": "function",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "meeting",
+      "schemaVersion": 1,
+      "service": "meeting"
+    },
+    "panel.ui-preferences.write": {
+      "auditLevel": "write",
+      "authMode": "none",
+      "domain": "panel",
+      "enabled": true,
+      "inputSchemaVersion": 1,
+      "kind": "storage.write-ui-preferences",
+      "lane": "v2",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "runtime-platform",
+      "schemaVersion": 1,
+      "service": "storage"
+    },
+    "page.clipboard.write-text": {
+      "auditLevel": "write",
+      "authMode": "none",
+      "domain": "clipboard",
+      "enabled": true,
+      "inputSchemaVersion": 1,
+      "kind": "page.capability",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "runtime-platform",
+      "pageCapabilityId": "clipboard.write-text",
+      "schemaVersion": 1,
+      "service": "page"
+    },
+    "page.composer.apply-text": {
+      "auditLevel": "write",
+      "authMode": "none",
+      "domain": "composer",
+      "enabled": true,
+      "inputSchemaVersion": 1,
+      "kind": "page.capability",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "composer",
+      "pageCapabilityId": "composer.apply-text",
+      "schemaVersion": 1,
+      "service": "page"
+    },
+    "page.composer.read-state": {
+      "auditLevel": "read",
+      "authMode": "none",
+      "domain": "composer",
+      "enabled": true,
+      "inputSchemaVersion": 1,
+      "kind": "page.capability",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "composer",
+      "pageCapabilityId": "composer.read-state",
+      "schemaVersion": 1,
+      "service": "page"
+    },
+    "page.conversation.jump-item": {
+      "auditLevel": "write",
+      "authMode": "none",
+      "domain": "conversation",
+      "enabled": true,
+      "inputSchemaVersion": 1,
+      "kind": "page.capability",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "conversation",
+      "pageCapabilityId": "conversation.jump-item",
+      "schemaVersion": 1,
+      "service": "page"
+    },
+    "page.conversation.read-state": {
+      "auditLevel": "read",
+      "authMode": "none",
+      "domain": "conversation",
+      "enabled": true,
+      "inputSchemaVersion": 1,
+      "kind": "page.capability",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "conversation",
+      "pageCapabilityId": "conversation.read-state",
+      "schemaVersion": 1,
+      "service": "page"
+    },
+    "page.debug.clear-log": {
+      "auditLevel": "write",
+      "authMode": "none",
+      "domain": "debug",
+      "enabled": true,
+      "inputSchemaVersion": 1,
+      "kind": "page.capability",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "debug",
+      "pageCapabilityId": "debug.clear-log",
+      "schemaVersion": 1,
+      "service": "page"
+    },
+    "page.debug.copy-log": {
+      "auditLevel": "read",
+      "authMode": "none",
+      "domain": "debug",
+      "enabled": true,
+      "inputSchemaVersion": 1,
+      "kind": "page.capability",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "debug",
+      "pageCapabilityId": "debug.copy-log",
+      "schemaVersion": 1,
+      "service": "page"
+    },
+    "page.debug.read-state": {
+      "auditLevel": "read",
+      "authMode": "none",
+      "domain": "debug",
+      "enabled": true,
+      "inputSchemaVersion": 1,
+      "kind": "page.capability",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "debug",
+      "pageCapabilityId": "debug.read-state",
+      "schemaVersion": 1,
+      "service": "page"
+    },
+    "page.debug.set-enabled": {
+      "auditLevel": "write",
+      "authMode": "none",
+      "domain": "debug",
+      "enabled": true,
+      "inputSchemaVersion": 1,
+      "kind": "page.capability",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "debug",
+      "pageCapabilityId": "debug.set-enabled",
+      "schemaVersion": 1,
+      "service": "page"
+    },
+    "page.dispatch-named-event": {
+      "auditLevel": "write",
+      "authMode": "none",
+      "domain": "page",
+      "enabled": true,
+      "inputSchemaVersion": 1,
+      "kind": "page.capability",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "runtime-platform",
+      "pageCapabilityId": "page.dispatch-named-event",
+      "schemaVersion": 1,
+      "service": "page"
+    },
+    "page.highlight-range": {
+      "auditLevel": "write",
+      "authMode": "none",
+      "domain": "page",
+      "enabled": true,
+      "inputSchemaVersion": 1,
+      "kind": "page.capability",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "runtime-platform",
+      "pageCapabilityId": "page.highlight-range",
+      "schemaVersion": 1,
+      "service": "page"
+    },
+    "page.read-selection": {
+      "auditLevel": "read",
+      "authMode": "none",
+      "domain": "page",
+      "enabled": true,
+      "inputSchemaVersion": 1,
+      "kind": "page.capability",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "runtime-platform",
+      "pageCapabilityId": "page.read-selection",
+      "schemaVersion": 1,
+      "service": "page"
+    },
+    "page.scroll-to": {
+      "auditLevel": "write",
+      "authMode": "none",
+      "domain": "page",
+      "enabled": true,
+      "inputSchemaVersion": 1,
+      "kind": "page.capability",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "runtime-platform",
+      "pageCapabilityId": "page.scroll-to",
+      "schemaVersion": 1,
+      "service": "page"
+    },
+    "page.show-banner": {
+      "auditLevel": "write",
+      "authMode": "none",
+      "domain": "page",
+      "enabled": true,
+      "inputSchemaVersion": 1,
+      "kind": "page.capability",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "runtime-platform",
+      "pageCapabilityId": "page.show-banner",
+      "schemaVersion": 1,
+      "service": "page"
+    },
+    "page.trace.log": {
+      "auditLevel": "write",
+      "authMode": "none",
+      "domain": "trace",
+      "enabled": true,
+      "inputSchemaVersion": 1,
+      "kind": "page.capability",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "runtime-platform",
+      "pageCapabilityId": "trace.log",
+      "schemaVersion": 1,
+      "service": "page"
+    },
+    "prompt.library.sync": {
+      "auditLevel": "write",
+      "authMode": "access-token",
+      "domain": "prompt-library",
+      "enabled": true,
+      "endpointKey": "syncInovaPromptLibraryUrl",
+      "inputSchemaVersion": 1,
+      "kind": "function",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "prompt-library",
+      "schemaVersion": 1,
+      "service": "prompt"
+    },
+    "prompt.panel-auth.issue-function": {
+      "auditLevel": "auth",
+      "authMode": "access-token",
+      "domain": "prompt",
+      "enabled": true,
+      "endpointKey": "issueInovaPromptPanelAuthUrl",
+      "inputSchemaVersion": 1,
+      "kind": "function",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "prompt",
+      "schemaVersion": 1,
+      "service": "prompt"
+    },
+    "prompt.review.run": {
+      "auditLevel": "write",
+      "authMode": "access-token",
+      "domain": "prompt-review",
+      "enabled": true,
+      "endpointKey": "reviewInovaPromptUrl",
+      "inputSchemaVersion": 1,
+      "kind": "function",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "prompt-review",
+      "schemaVersion": 1,
+      "service": "prompt"
+    },
+    "prompt.store.import": {
+      "auditLevel": "write",
+      "authMode": "access-token",
+      "domain": "prompt-store",
+      "enabled": true,
+      "endpointKey": "importPromptStoreEntryUrl",
+      "inputSchemaVersion": 1,
+      "kind": "function",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "prompt-store",
+      "schemaVersion": 1,
+      "service": "prompt"
+    },
+    "prompt.store.list": {
+      "auditLevel": "read",
+      "authMode": "access-token",
+      "domain": "prompt-store",
+      "enabled": true,
+      "endpointKey": "listPromptStoreEntriesUrl",
+      "inputSchemaVersion": 1,
+      "kind": "function",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "prompt-store",
+      "schemaVersion": 1,
+      "service": "prompt"
+    },
+    "prompt.store.publish": {
+      "auditLevel": "write",
+      "authMode": "access-token",
+      "domain": "prompt-store",
+      "enabled": true,
+      "endpointKey": "publishPromptToStoreUrl",
+      "inputSchemaVersion": 1,
+      "kind": "function",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "prompt-store",
+      "schemaVersion": 1,
+      "service": "prompt"
+    },
+    "prompt.store.record-view": {
+      "auditLevel": "write",
+      "authMode": "access-token",
+      "domain": "prompt-store",
+      "enabled": true,
+      "endpointKey": "recordPromptStoreViewUrl",
+      "inputSchemaVersion": 1,
+      "kind": "function",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "prompt-store",
+      "schemaVersion": 1,
+      "service": "prompt"
+    },
+    "prompt.store.toggle-like": {
+      "auditLevel": "write",
+      "authMode": "access-token",
+      "domain": "prompt-store",
+      "enabled": true,
+      "endpointKey": "togglePromptStoreLikeUrl",
+      "inputSchemaVersion": 1,
+      "kind": "function",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "prompt-store",
+      "schemaVersion": 1,
+      "service": "prompt"
+    },
+    "prompt.store.unpublish": {
+      "auditLevel": "write",
+      "authMode": "access-token",
+      "domain": "prompt-store",
+      "enabled": true,
+      "endpointKey": "unpublishPromptFromStoreUrl",
+      "inputSchemaVersion": 1,
+      "kind": "function",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "prompt-store",
+      "schemaVersion": 1,
+      "service": "prompt"
+    },
+    "release.download.open": {
+      "auditLevel": "write",
+      "authMode": "none",
+      "domain": "release",
+      "enabled": true,
+      "inputSchemaVersion": 1,
+      "kind": "browser.open-url",
+      "killSwitch": {
+        "enabled": false,
+        "reason": "preloaded release download kill drill seed"
+      },
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "release",
+      "schemaVersion": 1,
+      "service": "browser",
+      "templateKeys": [
+        "release.download"
+      ]
+    }
+  },
+  "targets": {
+    "production": {
+      "functionsBaseUrl": "https://asia-northeast3-browser-extension-main.cloudfunctions.net"
+    },
+    "local": {
+      "functionsBaseUrl": "http://127.0.0.1:5001/browser-extension-main/asia-northeast3"
+    }
+  },
+  "lanes": {
+    "legacy": {
+      "baseUrl": "https://asia-northeast3-browser-extension-main.cloudfunctions.net",
+      "endpointOverrides": {}
+    },
+    "v2": {
+      "baseUrl": "https://asia-northeast3-browser-extension-main.cloudfunctions.net",
+      "endpointOverrides": {
+        "issueInovaPromptPanelAuthUrl": "issueInovaPromptPanelAuthV2",
+        "loadInovaPromptLibraryUrl": "loadInovaPromptLibraryV2",
+        "peekInovaPromptLibraryUrl": "peekInovaPromptLibraryV2",
+        "syncInovaPromptLibraryUrl": "syncInovaPromptLibraryV2"
+      }
+    }
+  },
+  "endpointKeys": {
+    "authorizeInovaMeetingWorkspaceAccessUrl": {
+      "endpoint": "authorizeInovaMeetingWorkspaceAccess",
+      "method": "POST"
+    },
+    "createInovaMeetingShareLinkUrl": {
+      "endpoint": "createInovaMeetingShareLink",
+      "method": "POST"
+    },
+    "deleteInovaMeetingUrl": {
+      "endpoint": "deleteInovaMeeting",
+      "method": "POST"
+    },
+    "deleteInovaMeetingResultUrl": {
+      "endpoint": "deleteInovaMeetingResult",
+      "method": "POST"
+    },
+    "exchangeInovaMeetingLaunchUrl": {
+      "endpoint": "exchangeInovaMeetingLaunch",
+      "method": "POST"
+    },
+    "issueInovaMeetingLaunchUrl": {
+      "endpoint": "issueInovaMeetingLaunch",
+      "method": "POST"
+    },
+    "issueInovaMeetingPanelAuthUrl": {
+      "endpoint": "issueInovaMeetingPanelAuth",
+      "method": "POST"
+    },
+    "issueInovaPromptPanelAuthUrl": {
+      "endpoint": "issueInovaPromptPanelAuth",
+      "method": "POST"
+    },
+    "issueInovaMeetingWorkspaceAuthUrl": {
+      "endpoint": "issueInovaMeetingWorkspaceAuth",
+      "method": "POST"
+    },
+    "listInovaMeetingsUrl": {
+      "endpoint": "listInovaMeetings",
+      "method": "POST"
+    },
+    "moveInovaMeetingResultUrl": {
+      "endpoint": "moveInovaMeetingResult",
+      "method": "POST"
+    },
+    "uploadInovaMeetingSourceUrl": {
+      "endpoint": "uploadInovaMeetingSource",
+      "method": "POST"
+    },
+    "updateInovaMeetingUrl": {
+      "endpoint": "updateInovaMeeting",
+      "method": "POST"
+    },
+    "updateInovaMeetingResultUrl": {
+      "endpoint": "updateInovaMeetingResult",
+      "method": "POST"
+    },
+    "loadInovaPromptLibraryUrl": {
+      "endpoint": "loadInovaPromptLibrary",
+      "method": "POST"
+    },
+    "listPromptStoreEntriesUrl": {
+      "endpoint": "listPromptStoreEntries",
+      "method": "POST"
+    },
+    "peekInovaPromptLibraryUrl": {
+      "endpoint": "peekInovaPromptLibrary",
+      "method": "POST"
+    },
+    "reviewInovaPromptUrl": {
+      "endpoint": "reviewInovaPrompt",
+      "method": "POST"
+    },
+    "publishPromptToStoreUrl": {
+      "endpoint": "publishPromptToStore",
+      "method": "POST"
+    },
+    "unpublishPromptFromStoreUrl": {
+      "endpoint": "unpublishPromptFromStore",
+      "method": "POST"
+    },
+    "importPromptStoreEntryUrl": {
+      "endpoint": "importPromptStoreEntry",
+      "method": "POST"
+    },
+    "revokeInovaMeetingShareLinkUrl": {
+      "endpoint": "revokeInovaMeetingShareLink",
+      "method": "POST"
+    },
+    "togglePromptStoreLikeUrl": {
+      "endpoint": "togglePromptStoreLike",
+      "method": "POST"
+    },
+    "recordPromptStoreViewUrl": {
+      "endpoint": "recordPromptStoreView",
+      "method": "POST"
+    },
+    "syncInovaPromptLibraryUrl": {
+      "endpoint": "syncInovaPromptLibrary",
+      "method": "POST"
+    }
+  }
+}

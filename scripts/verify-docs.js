@@ -7,6 +7,7 @@ const root = path.resolve(__dirname, "..");
 const contract = JSON.parse(
   fs.readFileSync(path.join(root, "contracts", "extension-contract.json"), "utf8")
 );
+const { buildCapabilityCatalogMarkdown } = require("./generate-capability-catalog");
 const requiredFiles = [
   "manifest.json",
   "README.md",
@@ -15,6 +16,8 @@ const requiredFiles = [
   path.join("scripts", "verify-refactor-plan-update.js"),
   path.join("docs", "feature-spec.md"),
   path.join("docs", "feature-routing.md"),
+  path.join("docs", "capability-authoring.md"),
+  path.join("docs", "capability-catalog.md"),
   path.join("docs", "lint-workflow.md"),
   "popup/index.html",
   "popup/index.js",
@@ -52,6 +55,7 @@ const requiredFiles = [
   path.join("backup", "legacy-panel", "shared", "legacy-storage-accessors.js"),
   path.join("backup", "legacy-panel", "shared", "prompt-library.js"),
   path.join("scripts", "verify-feature-doc-update.js"),
+  path.join("scripts", "generate-capability-catalog.js"),
   path.join("scripts", "verify-hosted-panel-bridge.js"),
   path.join("scripts", "verify-legacy-isolation.js"),
   path.join("scripts", "legacy-panel", "README.md"),
@@ -241,7 +245,7 @@ const codeChecks = [
   },
   {
     file: path.join("background", "service-worker.js"),
-    patterns: [/panel-runtime-capability-router\.js/, /panel-runtime-invoke\.js/, /invokeHostedPanelRequest/],
+    patterns: [/capability-manifest-validator\.js/, /panel-runtime-capability-router\.js/, /panel-runtime-invoke\.js/, /invokeHostedPanelRequest/],
   },
   {
     file: path.join("background", "panel-runtime-capability-router.js"),
@@ -270,7 +274,7 @@ const codeChecks = [
   },
   {
     file: "popup/index.js",
-    patterns: [/meetingWorkspaceTarget/, /meetingWorkspaceUrlOverride/, /updateSettings/, /workspaceTargetHint/],
+    patterns: [/meetingWorkspaceTarget/, /meetingWorkspaceUrlOverride/, /updateSettings/],
   },
   {
     file: "content/main.js",
@@ -362,6 +366,8 @@ const codeChecks = [
       /conversation\.read-state/,
       /composer\.apply-text/,
       /clipboard\.write-text/,
+      /page\.scroll-to/,
+      /page\.show-banner/,
       /trace\.log/,
     ],
   },
@@ -574,7 +580,8 @@ const codeChecks = [
     file: path.join("background", "panel-runtime-capability-router.js"),
     patterns: [
       /PANEL_RUNTIME_STORAGE_STATE_KEYS/,
-      /PANEL_ALLOWED_FUNCTION_ENDPOINT_KEYS/,
+      /PANEL_RUNTIME_CAPABILITY_MANIFEST/,
+      /functionEndpointCapabilities/,
       /invokeHostedPanelFunctionFetch/,
     ],
   },
@@ -674,6 +681,7 @@ function main() {
     }
   }
 
+  verifyCapabilityCatalogDoc(errors);
   validateFeatureDocs(errors);
 
   for (const keyword of contract.requiredDocKeywords) {
@@ -714,6 +722,15 @@ function readJson(filePath, errors) {
   } catch (error) {
     errors.push(`JSON 파싱 실패: ${path.relative(root, filePath)} (${error.message})`);
     return null;
+  }
+}
+
+function verifyCapabilityCatalogDoc(errors) {
+  const catalogPath = path.join(root, "docs", "capability-catalog.md");
+  const actual = readText(catalogPath, errors).replace(/\r\n/g, "\n");
+  const expected = buildCapabilityCatalogMarkdown({ root }).replace(/\r\n/g, "\n");
+  if (actual && actual !== expected) {
+    errors.push("docs/capability-catalog.md가 hosting/extension-v2/capability-manifest.json과 다릅니다. generator를 다시 실행하세요.");
   }
 }
 

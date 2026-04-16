@@ -200,6 +200,10 @@
     return url.toString();
   }
 
+  function buildShareUrl(input) {
+    return buildHostedMeetingCleanUrl(input);
+  }
+
   async function resolveMeetingWorkspacePageUrl() {
     const runtimeConfig = await getMeetingRuntimeConfig();
     const url = namespace.session.normalizeText(runtimeConfig?.hosting?.meetingWorkspaceUrl) || namespace.firebaseConfig?.hosting?.meetingWorkspaceUrl;
@@ -369,6 +373,7 @@
 
   namespace.meetingWorkspaceCapability = {
     authorizeWorkspaceAccess,
+    buildShareUrl,
     createShareLink,
     getMeetingFunctionsConfig,
     isHostedWorkspaceSender,

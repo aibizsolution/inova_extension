@@ -11,6 +11,7 @@
   ],
   "activeBackgroundRootFiles": [
     "background/browser-capability.js",
+    "background/capability-manifest-validator.js",
     "background/cloud-api-client.js",
     "background/functions-runtime-config.js",
     "background/inova-auth-client.js",
@@ -71,6 +72,7 @@
     "hosting/meeting/render.js",
     "hosting/meeting/shared.js",
     "background/browser-capability.js",
+    "background/capability-manifest-validator.js",
     "background/cloud-api-client.js",
     "background/functions-runtime-config.js",
     "background/inova-auth-client.js",
@@ -143,6 +145,9 @@
     "hosting/extension/panel/index.js",
     "hosting/extension/panel/runtime.js",
     "hosting/extension-v2/panel/extension-capability-client.js",
+    "hosting/extension-v2/panel/remote-workflow-host.js",
+    "hosting/extension-v2/panel/remote-workflow-sandbox.html",
+    "hosting/extension-v2/panel/remote-workflow-sandbox.js",
     "hosting/extension-v2/panel/prompt-text-model.js",
     "hosting/extension-v2/panel/prompt-store-model.js",
     "functions/shared/prompt-text-model.js",
@@ -160,7 +165,9 @@
     "scripts/verify-docs.js",
     "scripts/verify-browser-only-boundary.js",
     "scripts/verify-contracts.js",
+    "scripts/verify-extension-capability-client.js",
     "scripts/verify-hosted-panel-bridge.js",
+    "scripts/verify-remote-workflow-sandbox.js",
     "scripts/verify-prompt-store-model.js",
     "scripts/legacy-panel/verify-legacy-prompt-backup.js",
     "scripts/legacy-panel/verify-meeting-manager.js",
@@ -287,18 +294,37 @@
     "debug.set-enabled",
     "debug.copy-log",
     "debug.clear-log",
+    "page.dispatch-named-event",
+    "page.highlight-range",
+    "page.read-selection",
+    "page.scroll-to",
+    "page.show-banner",
     "trace.log"
   ],
   "runtimeCapabilityActions": [
     "storage.read-panel-state",
     "storage.write-ui-preferences",
     "auth.issue-panel-session",
+    "capabilities.handshake",
+    "capabilities.invoke",
     "functions.invoke-endpoint",
     "browser.open-url",
     "meeting.workspace.open",
     "meeting.result.open",
     "meeting.share.create",
     "meeting.share.revoke"
+  ],
+  "sandboxBridgeApis": [
+    "emitTrace",
+    "invokeCapability",
+    "invokePageCapability",
+    "metrics",
+    "openUrl",
+    "readPanelState",
+    "writeUiPreferences"
+  ],
+  "sandboxWorkflowScriptSlots": [
+    "remote-workflow"
   ],
   "backgroundMessageTypes": [
     "inova-meeting:authorize-workspace-access",

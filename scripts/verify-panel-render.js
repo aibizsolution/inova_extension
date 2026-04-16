@@ -29,6 +29,7 @@ async function main() {
   verifyHostedPromptActionOwnershipContract();
   verifyHostedTraceVisibilityContract();
   verifyHostedConversationSearchDebounceContract();
+  await verifyHostedConversationCapabilityGates();
   verifyHostedStoreSearchDebounceContract();
   verifyBookmarkJumpAccessibilityContract();
   verifyHostedPromptReviewFallbackContract();
@@ -252,7 +253,7 @@ function verifyHostedPanelChromeSyncContract() {
     "hosted panel should own panel open state and sync it to the top host chrome"
   );
   assert(
-    hostedPanelSource.includes("writeUiPreferences({ panelOpen: open === true })")
+    hostedPanelSource.includes('persistHostedUiPreferences({ panelOpen: open === true }, "panel-open")')
       && !hostedPanelSource.includes("persistOpen"),
     "hosted panel should persist open through hosted-owned uiPreferences instead of content chrome sync persistence"
   );
@@ -359,6 +360,125 @@ function verifyHostedConversationSearchDebounceContract() {
   );
 }
 
+async function verifyHostedConversationCapabilityGates() {
+  const pageCalls = [];
+  const context = vm.createContext({
+    clearTimeout() {},
+    console,
+    document: {
+      getElementById() {
+        return null;
+      },
+      querySelector() {
+        return null;
+      },
+    },
+    globalThis: null,
+    setTimeout(callback) {
+      if (typeof callback === "function") {
+        void Promise.resolve().then(callback);
+      }
+      return 1;
+    },
+  });
+  context.globalThis = context;
+  context.InovaBookmarks = {
+    session: {
+      clipPreview(value) {
+        return String(value ?? "");
+      },
+      normalizeText(value) {
+        return String(value ?? "").trim();
+      },
+    },
+  };
+  loadHostedPanelScript("panel-utils.js", context);
+  loadHostedPanelScript("conversation-controller.js", context);
+  loadHostedPanelScript("bookmark-view.js", context);
+
+  const controller = context.InovaBookmarks.conversationController.create({
+    browserCapabilities: {
+      async jumpConversationItem(bookmarkId) {
+        pageCalls.push({ action: "conversation.jump-item", bookmarkId });
+        return { jumped: true };
+      },
+      async readConversationState() {
+        pageCalls.push({ action: "conversation.read-state" });
+        return {
+          items: [
+            {
+              id: "q1",
+              normalizedText: "hello",
+              order: 1,
+              text: "Hello",
+            },
+          ],
+          visibleMessageId: "q1",
+        };
+      },
+      async writeClipboardText(text) {
+        pageCalls.push({ action: "clipboard.write-text", text });
+        return { copied: true };
+      },
+    },
+    scheduleRender() {},
+    traceConversation() {},
+  });
+  const panelState = {
+    activeTool: "bookmarks",
+    bookmarksTool: {
+      count: 1,
+      snapshotFingerprint: "q1|1",
+    },
+  };
+
+  controller.syncPanelState(panelState, ["page.adapter.v2"]);
+  await flushMicrotasks();
+  let viewState = controller.buildViewState({});
+  assert.equal(viewState.count, 0, "conversation view should not expose stale items when read capability is missing");
+  assert.equal(viewState.canJumpBookmark, false, "conversation jump should be disabled when jump capability is missing");
+  assert.equal(viewState.canCopyBookmark, false, "conversation copy should be disabled when clipboard capability is missing");
+  assert.match(viewState.capabilityError, /대화 읽기 기능이 현재 비활성화/);
+  assert.deepEqual(pageCalls, [], "conversation controller should not call page adapter when read capability is missing");
+
+  const gatedMarkup = context.InovaBookmarks.bookmarkView.renderTool({
+    canCopyBookmark: false,
+    canJumpBookmark: false,
+    capabilityError: "대화 이동/복사 기능이 현재 비활성화되어 있어요.",
+    emptyText: "",
+    items: [
+      {
+        id: "q1",
+        order: 1,
+        text: "Hello",
+      },
+    ],
+    query: "",
+  });
+  assert(!gatedMarkup.includes('data-bookmark-id="q1"'), "bookmark view should hide jump targets when jump capability is missing");
+  assert(!gatedMarkup.includes('data-copy-bookmark-id="q1"'), "bookmark view should hide copy targets when clipboard capability is missing");
+  assert(gatedMarkup.includes("대화 이동/복사 기능이 현재 비활성화"), "bookmark view should render capability-disabled copy/jump reason");
+
+  controller.syncPanelState(panelState, [
+    "page.adapter.v2",
+    "page.clipboard.write-text",
+    "page.conversation.jump-item",
+    "page.conversation.read-state",
+  ]);
+  await flushMicrotasks();
+  viewState = controller.buildViewState({});
+  assert.equal(viewState.count, 1, "conversation view should load items when read capability is negotiated");
+  assert.equal(viewState.canJumpBookmark, true);
+  assert.equal(viewState.canCopyBookmark, true);
+  assert.equal(await controller.handleJumpBookmark("q1"), true);
+  assert.equal(await controller.handleCopyBookmark("q1"), true);
+  assert.deepEqual(pageCalls.map((call) => call.action), [
+    "conversation.read-state",
+    "conversation.jump-item",
+    "clipboard.write-text",
+  ]);
+}
+
 function verifyHostedStoreSearchDebounceContract() {
   const promptStoreControllerSource = fs.readFileSync(
     path.join(root, "hosting", "extension-v2", "panel", "prompt-store-controller.js"),
@@ -390,7 +510,8 @@ function verifyBookmarkJumpAccessibilityContract() {
   );
 
   assert(
-    hostedBookmarkSource.includes('<div class="bookmark-jump" data-bookmark-id="${bookmark.id}">'),
+    hostedBookmarkSource.includes('<div class="bookmark-jump"${canJumpBookmark ?')
+      && hostedBookmarkSource.includes('data-bookmark-id="${escapeHtml(bookmark.id)}"'),
     "hosted bookmark list should render a non-focusable bookmark jump container"
   );
   assert(
@@ -574,7 +695,7 @@ async function verifyHostedReleaseLocalDownloadUrls() {
 
   controller.syncPanelState(
     { activeTool: "release" },
-    ["runtime.invoke.v1"]
+    ["runtime.invoke.v1", "release.download.open"]
   );
   await new Promise((resolve) => setTimeout(resolve, 0));
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -594,12 +715,30 @@ async function verifyHostedReleaseLocalDownloadUrls() {
   await controller.handleReleaseAction("download-latest");
 
   assert.deepEqual(
-    runtimeCalls.map((call) => [call.action, call.url]),
+    runtimeCalls.map((call) => [call.action, call.capabilityId, call.input]),
     [
-      ["browser.open-url", "http://127.0.0.1:5000/extension-v2/downloads/latest.zip"],
+      ["capabilities.invoke", "release.download.open", {
+        fileName: "latest.zip",
+        templateKey: "release.download",
+      }],
     ],
-    "local hosted release should open the latest local artifact URL"
+    "hosted release should request download through the release capability without passing a raw URL"
   );
+}
+
+function loadHostedPanelScript(fileName, context) {
+  new vm.Script(
+    fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", fileName), "utf8"),
+    {
+      filename: `hosting/extension-v2/panel/${fileName}`,
+    }
+  ).runInContext(context);
+}
+
+async function flushMicrotasks(turns = 5) {
+  for (let index = 0; index < turns; index += 1) {
+    await Promise.resolve();
+  }
 }
 
 main().catch((error) => {

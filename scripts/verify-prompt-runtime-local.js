@@ -11,6 +11,7 @@ async function main() {
   await verifyPromptRuntimeResolution();
   await verifyPromptRuntimeResolutionForV2Lane();
   verifyPromptLocalWiring();
+  await verifyPanelAuthRetriesAfterStaleAccessToken();
   await verifyLocalPromptBridgeAuthSessionPolicy();
   await verifyEmptyStoreLatestSnapshot();
   console.log("[verify-prompt-runtime-local] Prompt local runtime contract passed");
@@ -94,6 +95,57 @@ function verifyPromptLocalWiring() {
     /db\.useEmulator\(emulatorHost,\s*8080\)/,
     "prompt bridge가 firestore emulator를 연결해야 합니다."
   );
+}
+
+async function verifyPanelAuthRetriesAfterStaleAccessToken() {
+  const issueCalls = [];
+  const forceRefreshFlags = [];
+  const context = vm.createContext({
+    globalThis: null,
+  });
+  context.globalThis = context;
+  context.InovaBookmarks = {
+    cloudApi: {
+      async issueInovaPromptPanelAuth(_providerIdentity, accessToken) {
+        issueCalls.push(accessToken);
+        if (issueCalls.length === 1) {
+          throw new Error("i-Nova 세션 검증에 실패했어요.");
+        }
+        return {
+          expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+          firebaseCustomToken: "custom-token",
+          providerUserKey: "user-1",
+        };
+      },
+    },
+    inovaAuth: {
+      clearCalls: 0,
+      clearAccessToken() {
+        this.clearCalls += 1;
+      },
+    },
+    session: {
+      normalizeText(value) {
+        return String(value ?? "").replace(/\s+/g, " ").trim();
+      },
+    },
+  };
+  loadScript("background/panel-auth-cache.js", context);
+
+  const cache = context.InovaBookmarks.panelAuthCache.create(async (forceRefresh) => {
+    forceRefreshFlags.push(Boolean(forceRefresh));
+    return forceRefresh ? "fresh-token" : "stale-token";
+  });
+  const result = await cache.issuePromptPanelAuth({ providerUserKey: "user-1" }, {
+    functionsConfig: {
+      baseUrl: "http://127.0.0.1:5001/browser-extension-main/asia-northeast3",
+    },
+  });
+
+  assert.equal(result.firebaseCustomToken, "custom-token");
+  assert.deepEqual(issueCalls, ["stale-token", "fresh-token"]);
+  assert.deepEqual(forceRefreshFlags, [false, true]);
+  assert.equal(context.InovaBookmarks.inovaAuth.clearCalls, 1);
 }
 
 async function verifyEmptyStoreLatestSnapshot() {
@@ -504,6 +556,7 @@ function loadRuntimeContext(activeLane = "legacy") {
   loadScript(path.join("shared", "firestore-collections.js"), context);
   loadScript(path.join("shared", "firebase-config.js"), context);
   loadScript(path.join("shared", "session.js"), context);
+  loadScript(path.join("background", "capability-manifest-validator.js"), context);
   loadScript(path.join("background", "functions-runtime-config.js"), context);
   return context.InovaBookmarks;
 }

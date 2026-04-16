@@ -62,6 +62,19 @@ async function verifyV2PanelRuntimeResolution() {
     runtimeContext.functionsRuntimeConfig.getDefaultFunctionsConfig().loadInovaPromptLibraryUrl,
     "https://asia-northeast3-browser-extension-main.cloudfunctions.net/loadInovaPromptLibraryV2"
   );
+  const bundledManifest = runtimeContext.functionsRuntimeConfig.getBundledCapabilityManifest();
+  assert.equal(
+    bundledManifest.targets.production.functionsBaseUrl,
+    "https://asia-northeast3-browser-extension-main.cloudfunctions.net"
+  );
+  assert.equal(
+    bundledManifest.endpointKeys.reviewInovaPromptUrl.endpoint,
+    "reviewInovaPrompt"
+  );
+  assert.equal(
+    bundledManifest.lanes.v2.endpointOverrides.syncInovaPromptLibraryUrl,
+    "syncInovaPromptLibraryV2"
+  );
 }
 
 async function verifyHostedPanelBridgeContract() {
@@ -381,8 +394,31 @@ function verifyHostedPanelFiles(directoryName) {
   const baseFirestoreClientJs = directoryName === "extension-v2"
     ? fs.readFileSync(path.join(baseDir, "base-firestore-client.js"), "utf8")
     : "";
+  const extensionCapabilityClientJs = directoryName === "extension-v2"
+    ? fs.readFileSync(path.join(baseDir, "extension-capability-client.js"), "utf8")
+    : "";
   const promptStoreControllerJs = directoryName === "extension-v2"
     ? fs.readFileSync(path.join(baseDir, "prompt-store-controller.js"), "utf8")
+    : "";
+  const promptLibraryControllerJs = directoryName === "extension-v2"
+    ? fs.readFileSync(path.join(baseDir, "prompt-library-controller.js"), "utf8")
+    : "";
+  const promptReviewControllerJs = directoryName === "extension-v2"
+    ? fs.readFileSync(path.join(baseDir, "prompt-review-controller.js"), "utf8")
+    : "";
+  const hostedControllerFiles = directoryName === "extension-v2"
+    ? fs.readdirSync(baseDir)
+      .filter((fileName) => fileName.endsWith("-controller.js"))
+      .map((fileName) => ({
+        fileName,
+        source: fs.readFileSync(path.join(baseDir, fileName), "utf8"),
+      }))
+    : [];
+  const promptViewJs = directoryName === "extension-v2"
+    ? fs.readFileSync(path.join(baseDir, "prompt-view.js"), "utf8")
+    : "";
+  const storeViewJs = directoryName === "extension-v2"
+    ? fs.readFileSync(path.join(baseDir, "store-view.js"), "utf8")
     : "";
 
   assert(html.includes("./runtime.js"), "hosted panel should load runtime bootstrap");
@@ -390,10 +426,46 @@ function verifyHostedPanelFiles(directoryName) {
     assert(html.includes("./panel-utils.js"), "v2 hosted panel should load shared panel utilities");
     assert(html.includes("./base-firestore-client.js"), "v2 hosted panel should load the shared Firestore reader lifecycle factory");
     assert(html.includes("./extension-capability-client.js"), "v2 hosted panel should load the hosted extension capability client");
+    assert(html.includes("./remote-workflow-host.js"), "v2 hosted panel should load the remote workflow sandbox host");
+    assert(indexJs.includes("readCapabilityCatalog"), "v2 hosted panel should negotiate the runtime capability catalog at boot");
+    assert(indexJs.includes("remoteWorkflowHost"), "v2 hosted panel should boot the remote workflow sandbox host after negotiation");
+    assert(indexJs.includes("invokeWorkflow"), "v2 hosted panel should route workflow capabilities to the sandbox host");
+    assert(
+      indexJs.includes("flushActiveTextInputComposition(host)")
+        && indexJs.includes("getStoredCompositionBinding")
+        && indexJs.indexOf("flushActiveTextInputComposition(host)") < indexJs.indexOf("namespace.promptToolPanel?.handleClick?."),
+      "v2 hosted panel should flush pending IME text composition before prompt/store click actions"
+    );
+    assert(extensionCapabilityClientJs.includes('"capabilities.handshake"'), "v2 hosted panel should request capability handshake through the capability client");
+    assert(
+      extensionCapabilityClientJs.includes("COMPATIBILITY_RUNTIME_ACTIONS")
+        && extensionCapabilityClientJs.includes('"functions.invoke-endpoint"')
+        && extensionCapabilityClientJs.includes('replacementAction: "capabilities.invoke"')
+        && extensionCapabilityClientJs.includes('removeAfter: "2026-05-31"'),
+      "v2 hosted panel should keep endpoint compatibility path documented with a removal date and capability replacement"
+    );
+    assert(
+      extensionCapabilityClientJs.includes('"panel.ui-preferences.write"')
+        && !extensionCapabilityClientJs.includes('action: "storage.write-ui-preferences"'),
+      "v2 hosted panel should persist uiPreferences through the semantic storage capability id"
+    );
+    assert(
+      extensionCapabilityClientJs.includes("invokePageCapability")
+        && extensionCapabilityClientJs.includes('invokePageCapability("composer.apply-text"')
+        && extensionCapabilityClientJs.includes('invokePageCapability("clipboard.write-text"'),
+      "v2 hosted panel should expose page primitive dispatch through invokePageCapability"
+    );
+    assert(
+      !extensionCapabilityClientJs.includes("openBrowserUrl")
+        && !extensionCapabilityClientJs.includes('action: "browser.open-url"'),
+      "v2 hosted panel should not expose a generic raw URL browser-open helper"
+    );
     assert(
       html.indexOf("./panel-utils.js") > html.indexOf("./runtime.js")
         && html.indexOf("./panel-utils.js") < html.indexOf("./panel-firestore-session-client.js")
         && html.indexOf("./panel-firestore-session-client.js") > html.indexOf("./extension-capability-client.js")
+        && html.indexOf("./remote-workflow-host.js") > html.indexOf("./extension-capability-client.js")
+        && html.indexOf("./remote-workflow-host.js") < html.indexOf("./panel-firestore-session-client.js")
         && html.indexOf("./base-firestore-client.js") > html.indexOf("./panel-firestore-session-client.js")
         && html.indexOf("./prompt-text-model.js") > html.indexOf("./base-firestore-client.js")
         && html.indexOf("./prompt-text-model.js") < html.indexOf("./prompt-library-model.js")
@@ -442,7 +514,9 @@ function verifyHostedPanelFiles(directoryName) {
     assert(baseFirestoreClientJs.includes("publishSnapshot"), "base Firestore reader factory should own snapshot de-duplication and publishing");
     assert(
       fs.readFileSync(path.join(root, "background", "panel-runtime-capability-router.js"), "utf8")
-        .includes('if (panel === "hosted")'),
+        .includes("hosted: {")
+        && fs.readFileSync(path.join(root, "background", "panel-runtime-capability-router.js"), "utf8")
+          .includes('enricher: "hosted"'),
       "background runtime should support the shared hosted panel auth scope"
     );
     assert(
@@ -479,7 +553,37 @@ function verifyHostedPanelFiles(directoryName) {
         ));
       });
     assert(!promptStoreControllerJs.includes('endpointKey: "listPromptStoreEntriesUrl"'), "v2 hosted store list should use Firestore subscription instead of the list Function");
+    assert(!promptStoreControllerJs.includes("endpointKey:"), "v2 hosted store controller should use capabilityId instead of endpointKey literals");
+    assert(!promptLibraryControllerJs.includes("endpointKey:"), "v2 hosted library controller should use capabilityId instead of endpointKey literals");
+    assert(!promptReviewControllerJs.includes("endpointKey:"), "v2 hosted review controller should use capabilityId instead of endpointKey literals");
+    hostedControllerFiles.forEach((entry) => {
+      assert(!entry.source.includes("endpointKey:"), `${entry.fileName} should not use endpointKey literals`);
+      assert(!entry.source.includes("functions.invoke-endpoint"), `${entry.fileName} should not use raw function runtime action literals`);
+    });
     assert(promptStoreControllerJs.includes("storeFirestoreClient.ensureSubscribed"), "v2 hosted store controller should subscribe through the Firestore client");
+    assert(
+      promptLibraryControllerJs.includes("requireCapability(PROMPT_LIBRARY_CAPABILITY_IDS.sync")
+        && promptLibraryControllerJs.includes("requireCapability(PROMPT_LIBRARY_CAPABILITY_IDS.publishToStore")
+        && promptViewJs.includes("state.canSync !== false")
+        && promptViewJs.includes("state.canPublishToStore !== false"),
+      "v2 hosted library write/publish actions should be gated by negotiated capability ids before rendering or invoking"
+    );
+    assert(
+      promptStoreControllerJs.includes("requireCapability(STORE_CAPABILITY_IDS.import")
+        && promptStoreControllerJs.includes("requireCapability(STORE_CAPABILITY_IDS.toggleLike")
+        && promptStoreControllerJs.includes("requireCapability(STORE_CAPABILITY_IDS.unpublish")
+        && promptStoreControllerJs.includes("requireCapability(STORE_CAPABILITY_IDS.recordView")
+        && storeViewJs.includes("state.canImport")
+        && storeViewJs.includes("state.canLike")
+        && storeViewJs.includes("state.canRecordView")
+        && storeViewJs.includes("state.canUnpublish"),
+      "v2 hosted store actions should be gated by negotiated store capability ids before rendering or invoking"
+    );
+    assert(
+      promptReviewControllerJs.includes("hasCapability(PROMPT_REVIEW_RUN_CAPABILITY_ID)")
+        && promptReviewControllerJs.includes("capability-disabled"),
+      "v2 hosted prompt review action should be gated by the negotiated prompt review capability id"
+    );
   }
   assert(
     indexJs.includes("확장 업데이트 필요"),
@@ -511,6 +615,12 @@ function verifyBackgroundInvokeWiring() {
     "background service worker should preload the dedicated functions runtime config helper"
   );
   assert(
+    serviceWorkerSource.includes('importScripts("capability-manifest-validator.js");')
+      && serviceWorkerSource.indexOf('importScripts("capability-manifest-validator.js");')
+        < serviceWorkerSource.indexOf('importScripts("functions-runtime-config.js");'),
+    "background service worker should preload the capability manifest validator before functions runtime config"
+  );
+  assert(
     invokeSource.includes("namespace.panelRuntimeCapabilityRouter.handle(request)"),
     "background invoke shim should delegate runtime capability handling through panelRuntimeCapabilityRouter"
   );
@@ -523,8 +633,16 @@ function verifyBackgroundInvokeWiring() {
     "background runtime capability router should declare the compact hosted storage-state allowlist"
   );
   assert(
-    routerSource.includes("PANEL_ALLOWED_FUNCTION_ENDPOINT_KEYS"),
-    "background runtime capability router should declare the hosted function allowlist"
+    routerSource.includes("PANEL_RUNTIME_CAPABILITY_MANIFEST"),
+    "background runtime capability router should declare the bundled runtime capability manifest"
+  );
+  assert(
+    routerSource.includes("functionEndpointCapabilities"),
+    "background runtime capability router should declare hosted function capabilities inside the bundled manifest"
+  );
+  assert(
+    !routerSource.includes("PANEL_ALLOWED_FUNCTION_ENDPOINT_KEYS"),
+    "background runtime capability router should replace the old endpoint allowlist with manifest lookup"
   );
   [
     '"providerIdentityCache"',
@@ -559,19 +677,26 @@ function verifyBackgroundInvokeWiring() {
     "background should build a dedicated compact hosted storage-state snapshot"
   );
   [
-    'action === "storage.read-panel-state"',
-    'action === "storage.write-ui-preferences"',
-    'action === "auth.issue-panel-session"',
-    'action === "functions.invoke-endpoint"',
-    'action === "browser.open-url"',
-    'action === "meeting.workspace.open"',
-    'action === "meeting.result.open"',
-    'action === "meeting.share.create"',
-    'action === "meeting.share.revoke"',
+    '"storage.read-panel-state"',
+    '"storage.write-ui-preferences"',
+    '"auth.issue-panel-session"',
+    '"capabilities.handshake"',
+    '"capabilities.invoke"',
+    '"functions.invoke-endpoint"',
+    '"browser.open-url"',
+    '"meeting.workspace.open"',
+    '"meeting.result.open"',
+    '"meeting.share.create"',
+    '"meeting.share.revoke"',
   ].forEach((actionSurface) => assert(
     routerSource.includes(actionSurface),
     `background hosted runtime should keep the canonical runtime action ${actionSurface}`
   ));
+  assert(
+    routerSource.includes("resolveRuntimeCapability")
+      && routerSource.includes("dispatchRuntimeCapability"),
+    "background hosted runtime should dispatch through manifest lookup instead of action if/else chains"
+  );
   [
     'action === "storage.get-state"',
     'action === "storage.update-ui-preferences"',
@@ -678,6 +803,7 @@ function loadRuntimeContext(lane) {
   loadScript(path.join("shared", "firestore-collections.js"), context);
   loadScript(path.join("shared", "firebase-config.js"), context);
   loadScript(path.join("shared", "session.js"), context);
+  loadScript(path.join("background", "capability-manifest-validator.js"), context);
   loadScript(path.join("background", "functions-runtime-config.js"), context);
   return context.InovaBookmarks;
 }

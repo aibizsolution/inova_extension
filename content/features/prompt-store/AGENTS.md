@@ -41,6 +41,13 @@
 - 하위 likes/imports/views
 - v2 lane에서도 공개 store catalog는 shared read-only data로 유지할 수 있다. 다만 prompt realtime bridge가 같이 읽는 prompt-library meta는 active lane 기준 account collection(`integration_inova_accounts` 또는 `integration_inova_accounts_v2`)을 따라야 한다.
 
+## 관련 capabilityId
+- `prompt.store.import`: 공개 프롬프트 가져오기.
+- `prompt.store.record-view`: 상세 조회/조회수 기록.
+- `prompt.store.toggle-like`: 좋아요 토글.
+- `prompt.store.publish`, `prompt.store.unpublish`: 등록/내리기 mutation.
+- `prompt.store.list`: compatibility catalog에는 남아 있지만 v2 hosted 목록 read는 Firestore direct subscription이 기본이다.
+
 ## 보통 건드리지 말아야 할 범위
 - meeting
 - prompt-library

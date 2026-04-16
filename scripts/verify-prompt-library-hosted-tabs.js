@@ -45,8 +45,8 @@ async function verifyHostedPromptTabPersistenceDedupesWrites() {
       if (request?.action === "storage.read-panel-state") {
         return buildStorageState("library");
       }
-      if (request?.action === "storage.write-ui-preferences") {
-        persistedTabs.push(request?.partial?.activePromptTab || "");
+      if (isUiPreferencesWriteRequest(request)) {
+        persistedTabs.push(readUiPreferencesPartial(request).activePromptTab || "");
         return {};
       }
       return {};
@@ -216,6 +216,15 @@ function buildStorageState(activePromptTab) {
       activePromptTab,
     },
   };
+}
+
+function isUiPreferencesWriteRequest(request) {
+  return request?.action === "storage.write-ui-preferences"
+    || (request?.action === "capabilities.invoke" && request?.capabilityId === "panel.ui-preferences.write");
+}
+
+function readUiPreferencesPartial(request) {
+  return request?.action === "capabilities.invoke" ? request?.input?.partial || {} : request?.partial || {};
 }
 
 function flushAsync() {

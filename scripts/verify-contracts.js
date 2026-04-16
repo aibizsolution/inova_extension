@@ -165,6 +165,8 @@ verifyActiveBackgroundRootCatalog();
 verifyActiveContentRootCatalog();
 verifyActivePopupRootCatalog();
 verifyHostedCapabilityCatalog();
+verifySandboxBridgeApiCatalog();
+verifySandboxWorkflowScriptSlotCatalog();
 verifyBackgroundMessageCatalog();
 
 assertFileExists("scripts/legacy-panel/verify-prompt-fallbacks.js");
@@ -318,6 +320,8 @@ function verifyHostedCapabilityCatalog() {
   if (!runtimeCapabilityActions.size) {
     errors.push("runtime capability catalog가 비어 있습니다.");
   }
+  verifyPageCapabilityRouterManifest(pageCapabilityActions);
+  verifyHostedPageCapabilityClientAllowlist(pageCapabilityActions);
 
   const hostedPanelDir = path.join(root, "hosting", "extension-v2", "panel");
   if (!fs.existsSync(hostedPanelDir)) {
@@ -334,6 +338,104 @@ function verifyHostedCapabilityCatalog() {
     verifyCapabilityCallsInSource(source, relativePath, "invokePage", pageCapabilityActions, "page");
     verifyCapabilityCallsInSource(source, relativePath, "invokeRuntime", runtimeCapabilityActions, "runtime");
     verifyCapabilityTransportIsolation(source, relativePath, entry);
+  }
+}
+
+function verifyHostedPageCapabilityClientAllowlist(pageCapabilityActions) {
+  const clientPath = path.join(root, "hosting", "extension-v2", "panel", "extension-capability-client.js");
+  const clientSource = fs.existsSync(clientPath) ? fs.readFileSync(clientPath, "utf8") : "";
+  const allowlistMatch = clientSource.match(/const PAGE_CAPABILITY_IDS = Object\.freeze\(\[(?<body>[\s\S]*?)\n\s{2}\]\);/);
+  if (!allowlistMatch?.groups?.body) {
+    errors.push("extension-capability-client.js가 PAGE_CAPABILITY_IDS allowlist를 선언하지 않습니다.");
+    return;
+  }
+  const allowlistIds = new Set(
+    Array.from(allowlistMatch.groups.body.matchAll(/^\s+"([^"]+)",?$/gm), (match) => match[1]).filter(Boolean)
+  );
+  compareCapabilitySet(pageCapabilityActions, allowlistIds, "hosted page capability client allowlist");
+}
+
+function verifySandboxBridgeApiCatalog() {
+  const sandboxBridgeApis = new Set(contract.sandboxBridgeApis || []);
+  if (!sandboxBridgeApis.size) {
+    errors.push("sandbox bridge API catalog가 비어 있습니다.");
+    return;
+  }
+
+  const routerPath = path.join(root, "background", "panel-runtime-capability-router.js");
+  const routerSource = fs.existsSync(routerPath) ? fs.readFileSync(routerPath, "utf8") : "";
+  const allowlistMatch = routerSource.match(/const SANDBOX_BRIDGE_API_ALLOWLIST = Object\.freeze\(\[(?<body>[\s\S]*?)\n\]\);/);
+  if (!allowlistMatch?.groups?.body) {
+    errors.push("background/panel-runtime-capability-router.js가 SANDBOX_BRIDGE_API_ALLOWLIST를 선언하지 않습니다.");
+    return;
+  }
+
+  const actualApis = new Set(
+    Array.from(allowlistMatch.groups.body.matchAll(/^\s+"([^"]+)",?$/gm), (match) => match[1]).filter(Boolean)
+  );
+  compareCapabilitySet(sandboxBridgeApis, actualApis, "sandbox bridge API allowlist");
+  [
+    "chrome",
+    "eval",
+    "fetch",
+    "localStorage",
+    "querySelector",
+    "selector",
+    "sessionStorage",
+    "storage",
+  ].forEach((forbiddenApi) => {
+    if (actualApis.has(forbiddenApi)) {
+      errors.push(`sandbox bridge API allowlist가 금지 API를 노출합니다: ${forbiddenApi}`);
+    }
+  });
+}
+
+function verifySandboxWorkflowScriptSlotCatalog() {
+  const contractSlots = new Set(contract.sandboxWorkflowScriptSlots || []);
+  if (!contractSlots.size) {
+    errors.push("sandbox workflow scriptSlot catalog가 비어 있습니다.");
+    return;
+  }
+
+  const configPath = path.join(root, "background", "functions-runtime-config.js");
+  const configSource = fs.existsSync(configPath) ? fs.readFileSync(configPath, "utf8") : "";
+  const slotMatch = configSource.match(/const WORKFLOW_SCRIPT_SLOTS = Object\.freeze\(\[(?<body>[\s\S]*?)\n\s{2}\]\);/);
+  if (!slotMatch?.groups?.body) {
+    errors.push("background/functions-runtime-config.js가 WORKFLOW_SCRIPT_SLOTS allowlist를 선언하지 않습니다.");
+    return;
+  }
+
+  const actualSlots = new Set(
+    Array.from(slotMatch.groups.body.matchAll(/^\s+"([^"]+)",?$/gm), (match) => match[1]).filter(Boolean)
+  );
+  compareCapabilitySet(contractSlots, actualSlots, "sandbox workflow scriptSlot allowlist");
+  compareCapabilitySet(actualSlots, contractSlots, "sandbox workflow scriptSlot contract");
+}
+
+function verifyPageCapabilityRouterManifest(pageCapabilityActions) {
+  const routerPath = path.join(root, "content", "page-capability-router.js");
+  const routerSource = fs.existsSync(routerPath) ? fs.readFileSync(routerPath, "utf8") : "";
+  const manifestMatch = routerSource.match(/const PAGE_CAPABILITY_MANIFEST = deepFreeze\(\{(?<body>[\s\S]*?)\n\s{2}\}\);/);
+  if (!manifestMatch?.groups?.body) {
+    errors.push("content/page-capability-router.js가 PAGE_CAPABILITY_MANIFEST를 선언하지 않습니다.");
+    return;
+  }
+  const manifestIds = new Set(
+    Array.from(manifestMatch.groups.body.matchAll(/^\s+"([^"]+)":\s*\{/gm), (match) => match[1]).filter(Boolean)
+  );
+  compareCapabilitySet(pageCapabilityActions, manifestIds, "page capability router manifest");
+}
+
+function compareCapabilitySet(expectedIds, actualIds, label) {
+  for (const capabilityId of expectedIds) {
+    if (!actualIds.has(capabilityId)) {
+      errors.push(`${label} 누락: ${capabilityId}`);
+    }
+  }
+  for (const capabilityId of actualIds) {
+    if (!expectedIds.has(capabilityId)) {
+      errors.push(`${label}가 계약 밖으로 넓어졌습니다: ${capabilityId}`);
+    }
   }
 }
 

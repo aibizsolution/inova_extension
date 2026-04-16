@@ -9,15 +9,23 @@ const {
   installHostedCapabilityClient,
   installPanelUtils,
 } = require("./verify-prompt-library-test-helpers");
+const { verifyHostedPromptCapabilityActionGates } = require("./verify-prompt-library-capability-gates");
 const { verifyHostedPromptLibraryAvoidsDuplicateReloads } = require("./verify-prompt-library-hosted-controller");
 
 const root = path.resolve(__dirname, "..");
+const HOSTED_PROMPT_CAPABILITIES = Object.freeze([
+  "page.adapter.v2",
+  "runtime.invoke.v1",
+  "prompt.library.sync",
+  "prompt.store.publish",
+]);
 
 function main() {
   verifyPromptLibraryHostedLaneContract();
   verifyPromptLibraryMetadataRoundTripContract();
   return Promise.all([
     verifyHostedPromptEditorViewLabels(),
+    verifyHostedPromptCapabilityActionGates(),
     verifyHostedPromptPublishUsesFunctionsFetch(),
     verifyHostedPromptTabSelectionDoesNotWaitForPersistence(),
     verifyHostedPromptReviewRequestAutofocus(),
@@ -135,7 +143,7 @@ async function verifyHostedPromptEditorViewLabels() {
           },
         };
       }
-      if (request?.action === "functions.invoke-endpoint") {
+      if (request?.action === "functions.invoke-endpoint" || request?.capabilityId === "prompt.library.sync") {
         return {
           promptLibrary: {
             items: [{ id: "prompt-1", title: "Prompt", content: "Body" }],
@@ -150,7 +158,7 @@ async function verifyHostedPromptEditorViewLabels() {
 
   controller.syncPanelState(
     { activeTool: "prompts" },
-    ["page.adapter.v2", "runtime.invoke.v1"]
+    HOSTED_PROMPT_CAPABILITIES
   );
   await flushAsync();
   await flushAsync();
@@ -324,7 +332,8 @@ async function verifyHostedPromptPublishUsesFunctionsFetch() {
     invokeRuntime: async (request) => {
       runtimeCalls.push({
         action: request?.action,
-        body: { ...(request?.body || {}) },
+        body: { ...(request?.body || request?.input || {}) },
+        capabilityId: request?.capabilityId || "",
         endpointKey: request?.endpointKey || "",
         partial: request?.partial ? { ...request.partial } : null,
       });
@@ -360,8 +369,15 @@ async function verifyHostedPromptPublishUsesFunctionsFetch() {
           },
         };
       }
-      if (request?.action === "storage.write-ui-preferences") {
-        persistedTabs.push(request?.partial?.activePromptTab || "");
+      if (request?.action === "capabilities.invoke" && request?.capabilityId === "prompt.store.publish") {
+        return {
+          entry: {
+            entryId: "entry-1",
+          },
+        };
+      }
+      if (isUiPreferencesWriteRequest(request)) {
+        persistedTabs.push(readUiPreferencesPartial(request).activePromptTab || "");
         return {};
       }
       return {};
@@ -371,7 +387,7 @@ async function verifyHostedPromptPublishUsesFunctionsFetch() {
 
   controller.syncPanelState(
     { activeTool: "prompts" },
-    ["page.adapter.v2", "runtime.invoke.v1"]
+    HOSTED_PROMPT_CAPABILITIES
   );
   await flushAsync();
   await flushAsync();
@@ -383,16 +399,16 @@ async function verifyHostedPromptPublishUsesFunctionsFetch() {
   await controller.handlePromptAction("confirm-publish", { promptId: "prompt-1" });
 
   assert.equal(
-    runtimeCalls.filter((call) => call.endpointKey === "publishPromptToStoreUrl").length,
+    runtimeCalls.filter((call) => call.capabilityId === "prompt.store.publish").length,
     1,
-    "hosted prompt publish should call the prompt store publish function endpoint"
+    "hosted prompt publish should call the prompt store publish capability"
   );
   assert.deepEqual(
     ensureStoreLoadedCalls,
     [[false, "open-publish"], [true, "publish"]],
     "hosted prompt publish should refresh the hosted store after publishing"
   );
-  const publishCall = runtimeCalls.find((call) => call.endpointKey === "publishPromptToStoreUrl");
+  const publishCall = runtimeCalls.find((call) => call.capabilityId === "prompt.store.publish");
   assert.equal(publishCall?.body?.categoryId, "document");
   assert.equal(publishCall?.body?.categoryLabel, "문서");
   const viewState = controller.buildPromptToolState({}, { reviewOpen: false });
@@ -413,7 +429,7 @@ async function verifyHostedPromptPublishUsesFunctionsFetch() {
   await controller.handlePromptAction("set-publish-category-label", { categoryLabel: "접근성 검토" });
   await controller.handlePromptAction("confirm-publish", { promptId: "prompt-1" });
 
-  const customPublishCall = runtimeCalls.filter((call) => call.endpointKey === "publishPromptToStoreUrl").at(-1);
+  const customPublishCall = runtimeCalls.filter((call) => call.capabilityId === "prompt.store.publish").at(-1);
   assert.equal(customPublishCall?.body?.categoryId, "", "custom category publish should leave categoryId generation to the backend");
   assert.equal(customPublishCall?.body?.categoryLabel, "접근성 검토");
 }
@@ -478,7 +494,7 @@ async function verifyHostedPromptTabSelectionDoesNotWaitForPersistence() {
   const controller = context.InovaBookmarks.promptLibraryController.create({
     ensureStoreLoaded: async () => {},
     invokeRuntime: async (request) => {
-      if (request?.action === "storage.write-ui-preferences") {
+      if (isUiPreferencesWriteRequest(request)) {
         return persistencePromise;
       }
       return {};
@@ -563,7 +579,7 @@ async function verifyHostedPromptTabSelectionSurvivesLateStorageHydration() {
 
   controller.syncPanelState(
     { activeTool: "prompts" },
-    ["page.adapter.v2", "runtime.invoke.v1"]
+    HOSTED_PROMPT_CAPABILITIES
   );
   await flushAsync();
 
@@ -669,8 +685,8 @@ async function verifyHostedPromptReviewRequestAutofocus() {
           },
         };
       }
-      if (request?.action === "storage.write-ui-preferences") {
-        persistedPreferences.push({ ...(request?.partial || {}) });
+      if (isUiPreferencesWriteRequest(request)) {
+        persistedPreferences.push({ ...readUiPreferencesPartial(request) });
         return {};
       }
       return {};
@@ -690,7 +706,7 @@ async function verifyHostedPromptReviewRequestAutofocus() {
         },
       },
     },
-    ["page.adapter.v2", "runtime.invoke.v1"]
+    HOSTED_PROMPT_CAPABILITIES
   );
 
   await flushAsync();
@@ -805,6 +821,15 @@ async function verifyHostedPromptReviewTabVisibility() {
 
 function read(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), "utf8");
+}
+
+function isUiPreferencesWriteRequest(request) {
+  return request?.action === "storage.write-ui-preferences"
+    || (request?.action === "capabilities.invoke" && request?.capabilityId === "panel.ui-preferences.write");
+}
+
+function readUiPreferencesPartial(request) {
+  return request?.action === "capabilities.invoke" ? request?.input?.partial || {} : request?.partial || {};
 }
 
 function flushAsync() {

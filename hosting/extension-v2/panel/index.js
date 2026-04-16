@@ -22,6 +22,7 @@
     "runtime.invoke.v1",
     "page.adapter.v2",
   ]);
+  const UI_PREFERENCES_WRITE_CAPABILITY_ID = "panel.ui-preferences.write";
   const HOSTED_PANEL_TOOLS = Object.freeze([
     { id: "bookmarks", label: "대화" },
     { id: "meeting", label: "회의 룸" },
@@ -32,6 +33,10 @@
   const root = document.getElementById("inova-hosted-panel-root");
   const state = {
     bridgeReady: false,
+    capabilityCatalog: null,
+    capabilityNegotiationError: "",
+    capabilityNegotiationKey: "",
+    capabilityNegotiationPending: false,
     elements: null,
     extensionCapabilities: [],
     extensionVersion: "",
@@ -48,6 +53,7 @@
     renderDeferred: false,
     renderFrame: 0,
     requestSeq: 0,
+    remoteCapabilityIds: [],
     startupStatusShown: false,
     startupStatusTimerId: 0,
     toast: null,
@@ -63,10 +69,28 @@
     invokeRuntime,
     request,
   };
+  let remoteWorkflowHost = null;
   const browserCapabilities = namespace.extensionCapabilityClient?.create?.({
     invokePage,
     invokeRuntime,
+    invokeWorkflow: (capability, input, options = {}) => {
+      if (!remoteWorkflowHost) {
+        throw new Error("remote workflow sandbox host is not ready");
+      }
+      return remoteWorkflowHost.runWorkflow({
+        artifactId: capability?.artifactId,
+        artifactVersion: capability?.artifactVersion,
+        input,
+        pilotEnabled: options?.pilotEnabled === true,
+        workflowId: capability?.workflowId,
+      });
+    },
   }) || {};
+  remoteWorkflowHost = namespace.remoteWorkflowHost?.create?.({
+    browserCapabilities,
+    document,
+    trace: tracePanelFlow,
+  }) || null;
   const conversationController = namespace.conversationController?.create?.({
     browserCapabilities,
     scheduleRender,
@@ -288,8 +312,12 @@
 
   async function persistHostedPanelOpen(open) {
     try {
-      await browserCapabilities.writeUiPreferences({ panelOpen: open === true });
+      await persistHostedUiPreferences({ panelOpen: open === true }, "panel-open");
     } catch (error) {
+      tracePanelFlow("35.hosted.preferences.write.error", {
+        context: "panel-open",
+        error: readErrorMessage(error, "panel open save failed"),
+      });
       console.error("[i-Nova Hosted Panel] panel open save failed", error);
     }
   }
@@ -303,14 +331,44 @@
       }
       : {
         activeTool: nextTool,
-      };
+    };
     try {
-      await browserCapabilities.writeUiPreferences(nextUiPreferences);
+      await persistHostedUiPreferences(nextUiPreferences, "active-tool");
       return true;
     } catch (error) {
+      const message = readErrorMessage(error, "패널 선택 저장에 실패했어요.");
+      tracePanelFlow("35.hosted.preferences.write.error", {
+        context: "active-tool",
+        error: message,
+      });
+      publishToast({
+        contextId: "panel.ui-preferences.write",
+        message,
+        source: "panel",
+        tone: "error",
+        ttlMs: 3200,
+      });
       console.error("[i-Nova Hosted Panel] active tool save failed", error);
       return false;
     }
+  }
+
+  async function persistHostedUiPreferences(partial, contextLabel = "ui-preferences") {
+    if (!canInvokeNegotiatedCapability(UI_PREFERENCES_WRITE_CAPABILITY_ID)) {
+      tracePanelFlow("35.hosted.preferences.write.blocked", {
+        capabilityId: UI_PREFERENCES_WRITE_CAPABILITY_ID,
+        context: contextLabel,
+      });
+      throw new Error("패널 설정 저장 기능이 현재 비활성화되어 있어요.");
+    }
+    return browserCapabilities.writeUiPreferences(partial);
+  }
+
+  function canInvokeNegotiatedCapability(capabilityId) {
+    if (!state.capabilityCatalog) {
+      return true;
+    }
+    return state.remoteCapabilityIds.includes(normalizeText(capabilityId));
   }
 
   function scheduleReadyPing() {
@@ -401,6 +459,7 @@
     state.extensionVersion = normalizeText(payload.extensionVersion);
     state.panelAppUrl = normalizeText(payload.panelAppUrl);
     state.panelSnapshot = nextPanelSnapshot;
+    void negotiateCapabilityCatalog("snapshot");
     clearStartupStatusCard();
     tracePanelFlow("18.hosted.snapshot.applied", {
       activeTool: normalizeText(state.panelSnapshot?.activeTool),
@@ -408,6 +467,71 @@
       toolTitle: buildHostedToolTitle(state.panelSnapshot?.activeTool),
     });
     scheduleRender();
+  }
+
+  async function negotiateCapabilityCatalog(reason = "manual") {
+    if (!state.extensionCapabilities.includes("runtime.invoke.v1")) {
+      return;
+    }
+    if (typeof browserCapabilities.readCapabilityCatalog !== "function") {
+      return;
+    }
+    const negotiationKey = serializeRenderState({
+      capabilities: state.extensionCapabilities,
+      extensionVersion: state.extensionVersion,
+      target: readRuntimeTargetForTrace(),
+    });
+    if (state.capabilityNegotiationPending || state.capabilityNegotiationKey === negotiationKey) {
+      return;
+    }
+    state.capabilityNegotiationPending = true;
+    try {
+      const catalog = await browserCapabilities.readCapabilityCatalog({
+        appCapabilities: APP_CAPABILITIES.slice(),
+        reason,
+      });
+      const normalizedCatalog = normalizeCapabilityCatalog(catalog);
+      state.capabilityCatalog = normalizedCatalog;
+      state.capabilityNegotiationError = "";
+      state.capabilityNegotiationKey = negotiationKey;
+      state.remoteCapabilityIds = normalizeCapabilities(normalizedCatalog.enabledCapabilityIds);
+      void bootRemoteWorkflowSandbox(normalizedCatalog);
+      tracePanelFlow("18.hosted.capability.handshake.success", {
+        capabilityCount: normalizedCatalog.capabilities.length,
+        degraded: Boolean(normalizedCatalog.degraded),
+        enabledCount: state.remoteCapabilityIds.length,
+        source: normalizedCatalog.source,
+      });
+    } catch (error) {
+      state.capabilityNegotiationError = readErrorMessage(error, "capability catalog negotiation failed");
+      state.remoteCapabilityIds = [];
+      tracePanelFlow("18.hosted.capability.handshake.error", {
+        error: state.capabilityNegotiationError,
+      });
+    } finally {
+      state.capabilityNegotiationPending = false;
+      scheduleRender();
+    }
+  }
+
+  async function bootRemoteWorkflowSandbox(catalog) {
+    if (!remoteWorkflowHost || !catalog) {
+      return;
+    }
+    try {
+      const sandboxState = await remoteWorkflowHost.boot({
+        bridgeApis: catalog.bridgeApis,
+        workflowArtifacts: catalog.workflowArtifacts,
+      });
+      tracePanelFlow("18.hosted.remote.workflow.sandbox.ready", {
+        bridgeApiCount: Array.isArray(sandboxState?.bridgeApis) ? sandboxState.bridgeApis.length : 0,
+        workflowArtifactCount: Array.isArray(sandboxState?.workflowArtifactIds) ? sandboxState.workflowArtifactIds.length : 0,
+      });
+    } catch (error) {
+      tracePanelFlow("18.hosted.remote.workflow.sandbox.error", {
+        error: readErrorMessage(error, "remote workflow sandbox boot failed"),
+      });
+    }
   }
 
   function hydratePanelOpenState(panelSnapshot) {
@@ -660,6 +784,95 @@
       : [];
   }
 
+  function normalizeCapabilityCatalog(value) {
+    const catalog = value && typeof value === "object" ? value : {};
+    const capabilities = Array.isArray(catalog.capabilities)
+      ? catalog.capabilities
+        .filter((capability) => capability && typeof capability === "object")
+        .map((capability) => ({
+          auditLevel: normalizeText(capability.auditLevel),
+          artifactId: normalizeText(capability.artifactId),
+          artifactVersion: normalizeText(capability.artifactVersion),
+          authMode: normalizeText(capability.authMode),
+          capabilityId: normalizeText(capability.capabilityId),
+          deprecatedAt: normalizeText(capability.deprecatedAt),
+          domain: normalizeText(capability.domain),
+          enabled: capability.enabled === true,
+          inputSchemaVersion: Number(capability.inputSchemaVersion) || 0,
+          killSwitch: capability.killSwitch === true,
+          kind: normalizeText(capability.kind),
+          lane: normalizeText(capability.lane),
+          minExtensionVersion: normalizeText(capability.minExtensionVersion),
+          minExtensionVersionSupported: capability.minExtensionVersionSupported === true,
+          outputSchemaVersion: Number(capability.outputSchemaVersion) || 0,
+          owner: normalizeText(capability.owner),
+          pageCapabilityId: normalizeText(capability.pageCapabilityId),
+          pilot: capability.pilot === true,
+          replacementId: normalizeText(capability.replacementId),
+          schemaVersion: Number(capability.schemaVersion) || 0,
+          testOnly: capability.testOnly === true,
+          workflowId: normalizeText(capability.workflowId),
+        }))
+        .filter((capability) => Boolean(capability.capabilityId))
+      : [];
+    return {
+      bridgeApis: normalizeCapabilities(catalog.bridgeApis),
+      capabilityAliases: normalizeCapabilityAliases(catalog.capabilityAliases),
+      capabilities,
+      degraded: catalog.degraded === true,
+      degradedReason: normalizeText(catalog.degradedReason),
+      enabledCapabilityIds: normalizeCapabilities(catalog.enabledCapabilityIds),
+      lane: normalizeText(catalog.lane),
+      manifestUrl: normalizeText(catalog.manifestUrl),
+      manifestVersion: normalizeText(catalog.manifestVersion),
+      pageCapabilityIds: normalizeCapabilities(catalog.pageCapabilityIds),
+      runtimeActions: normalizeCapabilities(catalog.runtimeActions),
+      schemaVersion: Number(catalog.schemaVersion) || 0,
+      source: normalizeText(catalog.source),
+      workflowArtifacts: normalizeWorkflowArtifacts(catalog.workflowArtifacts),
+    };
+  }
+
+  function normalizeCapabilityAliases(value) {
+    return Array.isArray(value)
+      ? value
+        .filter((alias) => alias && typeof alias === "object")
+        .map((alias) => ({
+          aliasId: normalizeText(alias.aliasId),
+          owner: normalizeText(alias.owner),
+          removeAfter: normalizeText(alias.removeAfter),
+          replacementId: normalizeText(alias.replacementId),
+          replacementKind: normalizeText(alias.replacementKind),
+        }))
+        .filter((alias) => Boolean(alias.aliasId && alias.replacementId))
+      : [];
+  }
+
+  function normalizeWorkflowArtifacts(value) {
+    return Array.isArray(value)
+      ? value
+        .filter((artifact) => artifact && typeof artifact === "object")
+        .map((artifact) => ({
+          artifactId: normalizeText(artifact.artifactId),
+          artifactVersion: normalizeText(artifact.artifactVersion),
+          bundleId: normalizeText(artifact.bundleId),
+          integrity: normalizeText(artifact.integrity),
+          scriptSlot: normalizeText(artifact.scriptSlot),
+        }))
+        .filter((artifact) => Boolean(
+          artifact.artifactId
+            && artifact.artifactVersion
+            && artifact.bundleId
+            && artifact.integrity
+            && artifact.scriptSlot
+        ))
+      : [];
+  }
+
+  function readErrorMessage(error, fallbackMessage) {
+    return normalizeText(error instanceof Error ? error.message : error) || normalizeText(fallbackMessage);
+  }
+
   function normalizeHostedToolId(toolId) {
     const normalizedToolId = normalizeText(toolId).toLowerCase();
     return normalizedToolId === "meeting" || normalizedToolId === "prompts" || normalizedToolId === "release"
@@ -831,20 +1044,21 @@
   }
 
   function syncHostedControllersIfNeeded(panelState) {
+    const effectiveCapabilities = readEffectiveExtensionCapabilities();
     const nextControllerSyncKey = serializeRenderState({
-      extensionCapabilities: state.extensionCapabilities,
+      extensionCapabilities: effectiveCapabilities,
       panel: panelState,
     });
     if (state.lastControllerSyncKey === nextControllerSyncKey) {
       return;
     }
     state.lastControllerSyncKey = nextControllerSyncKey;
-    conversationController?.syncPanelState?.(panelState, state.extensionCapabilities);
-    promptLibraryController?.syncPanelState?.(panelState, state.extensionCapabilities);
-    promptReviewController?.syncPanelState?.(panelState, state.extensionCapabilities);
-    promptStoreController?.syncPanelState?.(panelState, state.extensionCapabilities);
-    meetingHubController?.syncPanelState?.(panelState, state.extensionCapabilities);
-    releaseController?.syncPanelState?.(panelState, state.extensionCapabilities);
+    conversationController?.syncPanelState?.(panelState, effectiveCapabilities);
+    promptLibraryController?.syncPanelState?.(panelState, effectiveCapabilities);
+    promptReviewController?.syncPanelState?.(panelState, effectiveCapabilities);
+    promptStoreController?.syncPanelState?.(panelState, effectiveCapabilities);
+    meetingHubController?.syncPanelState?.(panelState, effectiveCapabilities);
+    releaseController?.syncPanelState?.(panelState, effectiveCapabilities);
   }
 
   function createPanelRenderCache() {
@@ -1242,9 +1456,17 @@
   }
 
   function readMissingCapabilities() {
+    const effectiveCapabilities = readEffectiveExtensionCapabilities();
     return REQUIRED_EXTENSION_CAPABILITIES.filter(
-      (capability) => !state.extensionCapabilities.includes(capability)
+      (capability) => !effectiveCapabilities.includes(capability)
     );
+  }
+
+  function readEffectiveExtensionCapabilities() {
+    return Array.from(new Set([
+      ...state.extensionCapabilities,
+      ...state.remoteCapabilityIds,
+    ]));
   }
 
   function handleRootClick(event) {
@@ -1255,6 +1477,9 @@
     const target = getEventElementTarget(event);
     if (!target) {
       return;
+    }
+    if (!getTextInputBinding(target)) {
+      flushActiveTextInputComposition(host);
     }
     const promptMenu = target.closest?.("[data-prompt-menu]");
     const storeMenu = target.closest?.("[data-store-menu]");
@@ -1432,6 +1657,41 @@
     if (!handled && !state.renderFrame) {
       scheduleRender();
     }
+  }
+
+  function flushActiveTextInputComposition(host) {
+    if (!state.inputComposition.active && !state.renderDeferred) {
+      return false;
+    }
+    const activeElement = global.document?.activeElement;
+    const activeBinding = getTextInputBinding(activeElement);
+    const binding = activeBinding || getStoredCompositionBinding(host);
+    const handled = binding ? applyTextInputBinding(binding, { composing: false }) : false;
+    state.inputComposition = createInputCompositionState();
+    if (state.renderDeferred) {
+      state.renderDeferred = false;
+      if (!state.renderFrame) {
+        scheduleRender();
+      }
+    }
+    return handled;
+  }
+
+  function getStoredCompositionBinding(host) {
+    if (!(host instanceof global.HTMLElement)) {
+      return null;
+    }
+    const composition = state.inputComposition || {};
+    const kind = normalizeText(composition.kind);
+    let selector = "";
+    if (kind === "search" && composition.toolId) {
+      selector = `[data-search-tool="${escapeSelector(composition.toolId)}"]`;
+    } else if (kind === "prompt-field" && composition.field) {
+      selector = `[data-prompt-field="${escapeSelector(composition.field)}"]`;
+    } else if (kind === "prompt-publish-field" && composition.field && composition.promptId) {
+      selector = `[data-prompt-publish-field="${escapeSelector(composition.field)}"][data-prompt-id="${escapeSelector(composition.promptId)}"]`;
+    }
+    return selector ? getTextInputBinding(host.querySelector(selector)) : null;
   }
 
   function handleRootInput(event) {
@@ -1929,7 +2189,7 @@
       return null;
     }
     const runtimeAction = normalizeText(payload?.action).toLowerCase();
-    if (runtimeAction === "functions.invoke-endpoint") {
+    if (runtimeAction === "functions.invoke-endpoint" || runtimeAction === "capabilities.invoke") {
       const functionLabel = buildFunctionsFetchLabel(payload);
       const authMode = normalizeText(payload?.authMode) || "access-token";
       return {
@@ -2000,6 +2260,10 @@
   }
 
   function buildFunctionsFetchLabel(payload = {}) {
+    const capabilityId = normalizeText(payload?.capabilityId);
+    if (capabilityId) {
+      return capabilityId;
+    }
     const service = normalizeText(payload?.service) || "service";
     const endpointKey = normalizeText(payload?.endpointKey) || "endpoint";
     return `${service}/${endpointKey}`;

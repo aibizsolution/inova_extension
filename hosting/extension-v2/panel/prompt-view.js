@@ -12,6 +12,7 @@
   }
 
   function renderBody(state) {
+    const canSync = state.canSync !== false;
     const showEmptyState = !state.items.length && !state.editor?.open && !state.importReview;
     const hasInlineFeedback = state.feedback?.promptId && state.items.some((item) => item.id === state.feedback.promptId);
     const showStandaloneEditor = state.editor?.open && state.editor.mode !== "edit";
@@ -35,15 +36,16 @@
         />
         <div class="inova-tool-toolbar__row">
           <div class="inova-tool-actions inova-tool-actions--toolbar">
-            <button type="button" class="inova-tool-button is-primary" data-prompt-action="create">추가</button>
-            ${renderToolbarActionWithHelp("import", "가져오기", IMPORT_GUIDE_TEXT)}
+            ${canSync ? '<button type="button" class="inova-tool-button is-primary" data-prompt-action="create">추가</button>' : ""}
+            ${canSync ? renderToolbarActionWithHelp("import", "가져오기", IMPORT_GUIDE_TEXT) : ""}
             ${renderToolbarActionWithHelp("export", "내보내기", EXPORT_GUIDE_TEXT, !state.totalCount)}
           </div>
         </div>
       </div>
+      ${canSync ? "" : '<p class="inova-inline-feedback is-error">요청 보관함 동기화 기능이 현재 비활성화되어 새 요청 추가, 수정, 삭제, 가져오기를 사용할 수 없어요.</p>'}
       ${renderSyncNotice(state.syncNotice)}
       ${hasInlineFeedback ? "" : renderFeedback(state.feedback)}
-      ${renderImportReview(state.importReview)}
+      ${renderImportReview(state.importReview, canSync)}
       ${showStandaloneEditor ? renderEditor(state.editor) : ""}
       <div class="inova-prompt-list">${itemsHtml}</div>
     `;
@@ -71,6 +73,8 @@
     const deletePending = state.actionPending?.type === "delete" && state.actionPending.promptId === item.id;
     const publishPending = state.actionPending?.type === "publish" && state.actionPending.promptId === item.id;
     const actionsDisabled = deletePending || publishPending;
+    const canSync = state.canSync !== false;
+    const canPublishToStore = state.canPublishToStore !== false;
 
     return `
       <article
@@ -82,15 +86,17 @@
       >
         <div class="inova-prompt-item__head">
           <div class="inova-prompt-item__title-row">
-            <button
-              type="button"
-              class="inova-prompt-drag-handle"
-              data-prompt-drag-handle="${item.id}"
-              aria-label="${escapeHtml(item.title)} 순서 변경"
-              title="드래그해서 순서를 바꿀 수 있어요"
-            >⋮⋮</button>
+            ${canSync ? `
+              <button
+                type="button"
+                class="inova-prompt-drag-handle"
+                data-prompt-drag-handle="${item.id}"
+                aria-label="${escapeHtml(item.title)} 순서 변경"
+                title="드래그해서 순서를 바꿀 수 있어요"
+              >⋮⋮</button>
+            ` : ""}
             <strong class="inova-prompt-item__title">${escapeHtml(item.title)}</strong>
-            ${renderPromptMenu(item.id, actionsDisabled)}
+            ${renderPromptMenu(item.id, { canPublishToStore, canSync, disabled: actionsDisabled })}
           </div>
         </div>
         <p class="inova-prompt-item__content">${escapeHtml(item.content)}</p>
@@ -105,14 +111,23 @@
           state.publishCategoryMode,
           state.publishTitle,
           state.publishError,
-          publishPending
+          publishPending,
+          canPublishToStore
         ) : ""}
-        ${deleteConfirm ? renderDeleteConfirm(item.id, item.title, deletePending) : ""}
+        ${deleteConfirm ? renderDeleteConfirm(item.id, item.title, deletePending, canSync) : ""}
       </article>
     `;
   }
 
-  function renderPromptMenu(promptId, disabled) {
+  function renderPromptMenu(promptId, options = {}) {
+    const items = [
+      options.canSync ? renderPromptMenuItem("edit", promptId, "edit", "수정", options.disabled) : "",
+      options.canPublishToStore ? renderPromptMenuItem("open-publish", promptId, "publish", "스토어 등록", options.disabled) : "",
+      options.canSync ? renderPromptMenuItem("request-delete", promptId, "delete", "삭제", options.disabled, true) : "",
+    ].filter(Boolean);
+    if (!items.length) {
+      return "";
+    }
     return `
       <details class="inova-prompt-item__menu" data-prompt-menu="true">
         <summary class="inova-tool-button inova-tool-icon-button inova-prompt-item__menu-trigger" aria-label="요청 메뉴" title="요청 메뉴">
@@ -120,9 +135,7 @@
           <span class="inova-sr-only">요청 메뉴</span>
         </summary>
         <div class="inova-prompt-item__menu-popover" role="menu" aria-label="요청 작업">
-          ${renderPromptMenuItem("edit", promptId, "edit", "수정", disabled)}
-          ${renderPromptMenuItem("open-publish", promptId, "publish", "스토어 등록", disabled)}
-          ${renderPromptMenuItem("request-delete", promptId, "delete", "삭제", disabled, true)}
+          ${items.join("")}
         </div>
       </details>
     `;
@@ -144,9 +157,10 @@
     `;
   }
 
-  function renderPublishForm(promptId, categories, activeCategoryId, publishCategoryLabel, publishCategoryMode, publishTitle, publishError, pending) {
+  function renderPublishForm(promptId, categories, activeCategoryId, publishCategoryLabel, publishCategoryMode, publishTitle, publishError, pending, canPublishToStore = true) {
     const storeCategories = Array.isArray(categories) ? categories.filter((category) => category.id !== "all") : [];
     const useCustomCategory = publishCategoryMode === "new" || !storeCategories.length;
+    const submitDisabled = pending || !canPublishToStore;
     return `
       <section class="inova-inline-feedback">
         <strong>스토어 등록</strong>
@@ -160,12 +174,12 @@
             data-prompt-publish-field="title"
             data-prompt-id="${promptId}"
             placeholder="스토어에서 보여줄 제목"
-            ${renderDisabled(pending)}
+            ${renderDisabled(submitDisabled)}
           />
         </label>
         <label class="inova-tool-select-field">
           <span>카테고리 선택</span>
-          <select class="inova-tool-select" name="inova-prompt-publish-category" data-prompt-select="publish-category" data-prompt-id="${promptId}" ${renderDisabled(pending)}>
+          <select class="inova-tool-select" name="inova-prompt-publish-category" data-prompt-select="publish-category" data-prompt-id="${promptId}" ${renderDisabled(submitDisabled)}>
             ${storeCategories.map((category) => `
               <option value="${category.id}" ${category.id === activeCategoryId ? "selected" : ""}>${escapeHtml(category.label)}</option>
             `).join("")}
@@ -182,26 +196,26 @@
               data-prompt-publish-field="category-label"
               data-prompt-id="${promptId}"
               placeholder="${storeCategories.length ? "예: 접근성 검토" : "첫 카테고리 이름을 입력해 주세요"}"
-              ${renderDisabled(pending)}
+              ${renderDisabled(submitDisabled)}
             />
           </label>
         ` : ""}
         ${publishError ? `<p class="inova-inline-feedback is-error">${escapeHtml(publishError)}</p>` : ""}
         <div class="inova-tool-actions">
-          <button type="button" class="inova-tool-button is-primary" data-prompt-action="confirm-publish" data-prompt-id="${promptId}" ${renderDisabled(pending)}>${pending ? "등록 중..." : "등록"}</button>
+          <button type="button" class="inova-tool-button is-primary" data-prompt-action="confirm-publish" data-prompt-id="${promptId}" ${renderDisabled(submitDisabled)}>${pending ? "등록 중..." : "등록"}</button>
           <button type="button" class="inova-tool-button" data-prompt-action="cancel-publish" ${renderDisabled(pending)}>취소</button>
         </div>
       </section>
     `;
   }
 
-  function renderDeleteConfirm(promptId, title, pending) {
+  function renderDeleteConfirm(promptId, title, pending, canSync = true) {
     return `
       <section class="inova-inline-feedback is-warning">
         <strong>${escapeHtml(title)}</strong>
         <span>이 요청을 삭제할까요? 삭제 후에는 바로 복구되지 않아요.</span>
         <div class="inova-tool-actions">
-          <button type="button" class="inova-tool-button is-danger" data-prompt-action="confirm-delete" data-prompt-id="${promptId}" ${renderDisabled(pending)}>${pending ? "삭제 중..." : "삭제"}</button>
+          <button type="button" class="inova-tool-button is-danger" data-prompt-action="confirm-delete" data-prompt-id="${promptId}" ${renderDisabled(pending || !canSync)}>${pending ? "삭제 중..." : "삭제"}</button>
           <button type="button" class="inova-tool-button" data-prompt-action="cancel-delete" ${renderDisabled(pending)}>취소</button>
         </div>
       </section>
@@ -213,6 +227,7 @@
       return "";
     }
     const pending = editor.actionPending?.type === "save-editor";
+    const saveDisabled = pending || editor.canSync === false;
 
     return `
       <section class="inova-prompt-editor">
@@ -246,7 +261,7 @@
         </div>
         ${editor.error ? `<p class="inova-inline-feedback is-error">${escapeHtml(editor.error)}</p>` : ""}
         <div class="inova-tool-actions inova-prompt-editor__actions">
-          <button type="button" class="inova-tool-button is-primary" data-prompt-action="save-editor" ${renderDisabled(pending)}>${pending ? "저장 중..." : escapeHtml(editor.submitLabel)}</button>
+          <button type="button" class="inova-tool-button is-primary" data-prompt-action="save-editor" ${renderDisabled(saveDisabled)}>${pending ? "저장 중..." : escapeHtml(editor.submitLabel)}</button>
           <button type="button" class="inova-tool-button" data-prompt-action="cancel-editor" ${renderDisabled(pending)}>취소</button>
         </div>
       </section>
@@ -266,7 +281,7 @@
     `;
   }
 
-  function renderImportReview(review) {
+  function renderImportReview(review, canSync = true) {
     if (!review) {
       return "";
     }
@@ -290,7 +305,7 @@
         <p class="inova-import-review__help">${getImportModeHelp(review.mode)}</p>
         ${review.confirmReplace ? '<p class="inova-inline-feedback is-warning">현재 보관함을 완전히 바꾸려면 한 번 더 확인해 주세요.</p>' : ""}
         <div class="inova-tool-actions">
-          <button type="button" class="inova-tool-button ${review.confirmReplace ? "is-danger" : "is-primary"}" data-prompt-action="apply-import">${review.confirmReplace ? "완전 교체 실행" : "가져오기 적용"}</button>
+          <button type="button" class="inova-tool-button ${review.confirmReplace ? "is-danger" : "is-primary"}" data-prompt-action="apply-import" ${renderDisabled(!canSync)}>${review.confirmReplace ? "완전 교체 실행" : "가져오기 적용"}</button>
           <button type="button" class="inova-tool-button" data-prompt-action="cancel-import">취소</button>
         </div>
       </section>

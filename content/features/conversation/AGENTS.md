@@ -36,6 +36,12 @@
 - 패널 UI 상태
 - v2 lane에서는 질문 기능 자체는 같지만, panel shell이 읽는 local storage key가 `v2.*` prefix로 분리될 수 있다. route sync는 lane별 storage change만 반영해야 한다.
 
+## 관련 capabilityId
+- `page.conversation.read-state`: 현재 대화 snapshot 읽기.
+- `page.conversation.jump-item`: 질문 원문 위치 이동.
+- `page.clipboard.write-text`: 질문 복사.
+- `page.scroll-to`, `page.highlight-range`, `page.read-selection`, `page.show-banner`, `page.dispatch-named-event`: remote workflow가 조합할 수 있는 named page primitive. raw selector/HTML/JS는 금지한다.
+
 ## 보통 건드리지 말아야 할 범위
 - `functions/*`
 - `hosting/meeting/*`
@@ -53,7 +59,7 @@
 ## 구현 경계
 - active `1.0.0` bundle에서는 북마크 검색/복사/점프와 compact snapshot shaping을 `content/panel-v2-composition-controller.js` 안의 conversation bridge가 맡고, `backup/legacy-panel/panel-bookmark-controller.js`는 legacy reference로만 남긴다.
 - 북마크 panel UI 렌더링은 `hosting/extension/panel/bookmark-view.js`와 `hosting/extension-v2/panel/bookmark-view.js`가 맡고, `content/panel.js`는 iframe host와 page adapter만 유지한다. 기존 `content/bookmark-view.js`와 `content/tools.css`는 inactive reference로 `backup/legacy-panel/*`에 격리한다.
-- `1.0.0+` v2 lane에서는 `hosting/extension-v2/panel/conversation-controller.js`가 대화 탭의 검색/복사/점프/view state를 소유하고, extension은 `content/panel.js`의 page adapter로 현재 대화 snapshot 읽기와 jump/copy만 제공한다. v2 top-panel snapshot은 전체 bookmark item list를 싣지 않고 `count`, `activeId`, refresh용 `snapshotFingerprint` 같은 얇은 신호만 전달한다.
+- `1.0.0+` v2 lane에서는 `hosting/extension-v2/panel/conversation-controller.js`가 대화 탭의 검색/복사/점프/view state를 소유하고, extension은 `content/panel.js`의 page adapter로 현재 대화 snapshot 읽기와 jump/copy만 제공한다. v2 top-panel snapshot은 전체 bookmark item list를 싣지 않고 `count`, `activeId`, refresh용 `snapshotFingerprint` 같은 얇은 신호만 전달한다. 대화 읽기/이동/복사는 handshake의 `page.conversation.read-state`, `page.conversation.jump-item`, `page.clipboard.write-text` capability가 enabled일 때만 UI와 실행 경로를 연다.
 - panel shell 초기 state 조립은 active `1.0.0` bundle에서 `content/panel-v2-composition-controller.js`가 맡고, `content/main.js`는 그 createState 진입점만 호출한다.
 - paused/store/tool-surface 판정과 panel debug 로깅 helper는 active `1.0.0` bundle에서 `content/panel-v2-composition-controller.js` 안의 inline runtime/debug bridge가 맡고, `backup/legacy-panel/panel-runtime-controller.js`와 `backup/legacy-panel/panel-debug-controller.js`는 reference로만 남긴다.
 - tool 전환, query 라우팅, handle 위치 저장 같은 공용 panel shell 동작은 active `1.0.0` bundle에서 `content/panel-v2-shell-bridge.js`가 맡는다.

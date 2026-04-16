@@ -2,11 +2,8 @@ const popupRoot = globalThis.InovaBookmarks;
 const popupMeetingConfig = popupRoot.firebaseConfig.meeting;
 const LOCAL_MEETING_WORKSPACE_URL = popupMeetingConfig.normalizeWorkspaceUrlOverride("");
 const SETTINGS_STORAGE_KEY = popupRoot.productLane?.buildStorageKey?.(popupRoot.constants.storageKeys.settings) || popupRoot.constants.storageKeys.settings;
-// verify-docs anchor: workspaceTargetHint
 
 const popupState = {
-  refreshMessage: "",
-  refreshTone: "info",
   settings: { ...popupRoot.constants.defaults.settings },
 };
 
@@ -25,11 +22,8 @@ function cachePopupRefs() {
   for (const id of [
     "debugConsoleOffButton",
     "debugConsoleOnButton",
-    "refreshInovaButton",
     "workspaceTargetProductionButton",
     "workspaceTargetLocalButton",
-    "workspaceTargetHint",
-    "workspaceTargetStatus",
   ]) {
     popupRefs[id] = document.getElementById(id);
   }
@@ -38,7 +32,6 @@ function cachePopupRefs() {
 function bindPopupEvents() {
   popupRefs.workspaceTargetProductionButton.addEventListener("click", () => setMeetingWorkspaceTarget("production"));
   popupRefs.workspaceTargetLocalButton.addEventListener("click", () => setMeetingWorkspaceTarget("local"));
-  popupRefs.refreshInovaButton.addEventListener("click", refreshActiveInovaTab);
   popupRefs.debugConsoleOffButton.addEventListener("click", () => setMeetingDebugConsoleEnabled(false));
   popupRefs.debugConsoleOnButton.addEventListener("click", () => setMeetingDebugConsoleEnabled(true));
 }
@@ -84,13 +77,6 @@ function renderPopup() {
   popupRefs.debugConsoleOnButton.dataset.selected = String(debugEnabled);
   popupRefs.debugConsoleOffButton.setAttribute("aria-pressed", String(!debugEnabled));
   popupRefs.debugConsoleOnButton.setAttribute("aria-pressed", String(debugEnabled));
-  popupRefs.workspaceTargetHint.textContent = target === "local"
-    ? "로컬을 고르면 실험실 패널, 프롬프트, 회의 hosted UI가 127.0.0.1:5000 기준으로 전환돼요. hosting만 보면 emulator:hosting, full-stack이면 emulator:meeting-local 후 i-Nova 탭을 다시 열어 주세요."
-    : "상용을 고르면 실험실 패널과 회의 hosted 화면이 배포된 hosting을 사용해요. target을 바꾼 뒤 i-Nova 탭을 다시 열면 바로 확인할 수 있어요.";
-  popupRefs.refreshInovaButton.textContent = target === "local" ? "로컬 다시 열기" : "i-Nova 열기";
-  popupRefs.workspaceTargetStatus.hidden = !popupState.refreshMessage;
-  popupRefs.workspaceTargetStatus.textContent = popupState.refreshMessage;
-  popupRefs.workspaceTargetStatus.dataset.tone = popupState.refreshTone;
 }
 
 async function setMeetingWorkspaceTarget(target) {
@@ -100,11 +86,6 @@ async function setMeetingWorkspaceTarget(target) {
     meetingWorkspaceUrlOverride: normalizedTarget === "local" ? LOCAL_MEETING_WORKSPACE_URL : "",
   });
   popupState.settings = nextSettings;
-  setRefreshMessage(
-    normalizedTarget === "local"
-      ? "로컬 호스팅으로 바꿨어요. i-Nova 탭을 다시 열면 hosted panel도 로컬 자산을 봅니다."
-      : "상용 호스팅으로 바꿨어요. i-Nova 탭을 다시 열면 배포 자산으로 돌아갑니다."
-  );
   renderPopup();
 }
 
@@ -114,38 +95,6 @@ async function setMeetingDebugConsoleEnabled(enabled) {
   });
   popupState.settings = nextSettings;
   renderPopup();
-}
-
-async function refreshActiveInovaTab() {
-  const target = popupMeetingConfig.normalizeWorkspaceTarget(popupState.settings.meetingWorkspaceTarget);
-  try {
-    const tabs = await chrome.tabs.query({
-      currentWindow: true,
-      url: "https://inova.incross.com/*",
-    });
-    const activeTab = tabs.find((tab) => tab.active) || tabs[0];
-    if (activeTab?.id) {
-      await chrome.tabs.reload(activeTab.id);
-      await chrome.tabs.update(activeTab.id, { active: true });
-      setRefreshMessage(
-        target === "local"
-          ? "현재 i-Nova 탭을 새로고침했어요. 로컬 hosted panel로 다시 붙습니다."
-          : "현재 i-Nova 탭을 새로고침했어요."
-      );
-      renderPopup();
-      return;
-    }
-    await chrome.tabs.create({ url: "https://inova.incross.com/" });
-    setRefreshMessage(
-      target === "local"
-        ? "i-Nova 새 탭을 열었어요. 로컬 hosted panel은 emulator가 켜져 있어야 보여요."
-        : "i-Nova 새 탭을 열었어요."
-    );
-    renderPopup();
-  } catch {
-    setRefreshMessage("i-Nova 탭을 열지 못했어요. Chrome 탭 권한과 현재 창 상태를 확인해 주세요.", "error");
-    renderPopup();
-  }
 }
 
 async function reconcileMeetingWorkspaceSettings(settings) {
@@ -167,9 +116,4 @@ async function reconcileMeetingWorkspaceSettings(settings) {
     });
   }
   return nextSettings;
-}
-
-function setRefreshMessage(message, tone = "info") {
-  popupState.refreshMessage = String(message || "").trim();
-  popupState.refreshTone = String(tone || "").trim() || "info";
 }
