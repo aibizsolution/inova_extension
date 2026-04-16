@@ -122,6 +122,14 @@ async function verifyRemoteManifestValidationFailuresAreVisible() {
   );
   await verifyRejectedManifestMutation(
     (manifest) => {
+      manifest.capabilities["https://example.test/raw"] = {
+        ...manifest.capabilities["prompt.review.run"],
+      };
+    },
+    "raw URL capabilityId should fall back visibly"
+  );
+  await verifyRejectedManifestMutation(
+    (manifest) => {
       manifest.capabilities["prompt.review.run"].deprecatedAt = "2026-05-31";
     },
     "deprecated capability without replacement should fall back visibly"

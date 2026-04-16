@@ -117,8 +117,15 @@
         }
       });
       Object.entries(capabilities).forEach(([capabilityId, capability]) => {
+        validateCapabilityId(capabilityId);
         validateCapabilityDefinition(capabilityId, capability, capabilities, endpointDefinitions);
       });
+    }
+
+    function validateCapabilityId(capabilityId) {
+      if (!/^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/.test(normalizeText(capabilityId))) {
+        throw new Error(`remote capability manifest capabilityId is not allowed: ${capabilityId}`);
+      }
     }
 
     function validateCapabilityDefinition(capabilityId, capability, capabilities, endpointDefinitions) {
