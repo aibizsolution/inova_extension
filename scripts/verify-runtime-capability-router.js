@@ -823,6 +823,7 @@ function createRuntimeContext(overrides = {}) {
         return String(value || "").trim();
       },
     },
+    cloudApi: { fetchCapabilityManifest: async (manifestUrl) => (await context.fetch(manifestUrl, { cache: "no-store" })).json() },
     storage: {
       async getState() {
         return {

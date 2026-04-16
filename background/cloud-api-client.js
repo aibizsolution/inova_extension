@@ -243,6 +243,16 @@
     return payload?.data || {};
   }
 
+  async function fetchCapabilityManifest(manifestUrl) {
+    const response = await global.fetch(manifestUrl, {
+      cache: "no-store",
+    });
+    if (!response?.ok) {
+      throw new Error(`remote capability manifest fetch failed: ${response?.status || "unknown"}`);
+    }
+    return response.json();
+  }
+
   async function exchangeInovaMeetingLaunch(input, requestOptions = {}) {
     const meetingFunctions = resolveFunctionsConfig(requestOptions.functionsConfig);
     const payload = await postJson(
@@ -336,6 +346,7 @@
     authorizeInovaMeetingWorkspaceAccess,
     createInovaMeetingShareLink,
     exchangeInovaMeetingLaunch,
+    fetchCapabilityManifest,
     issueInovaMeetingLaunch,
     issueInovaMeetingPanelAuth,
     issueInovaPromptPanelAuth,

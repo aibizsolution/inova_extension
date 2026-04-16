@@ -216,13 +216,10 @@
       };
     }
     try {
-      const response = await fetch(manifestUrl, {
-        cache: "no-store",
-      });
-      if (!response?.ok) {
-        throw new Error(`remote capability manifest fetch failed: ${response?.status || "unknown"}`);
+      if (typeof namespace.cloudApi?.fetchCapabilityManifest !== "function") {
+        throw new Error("remote capability manifest fetch client is missing");
       }
-      const remoteManifest = await response.json();
+      const remoteManifest = await namespace.cloudApi.fetchCapabilityManifest(manifestUrl);
       const normalizedManifest = capabilityManifestValidator.validateRemoteCapabilityManifest(remoteManifest, manifestUrl);
       cachedRemoteManifestRecord = {
         freshUntilMs: now + CAPABILITY_MANIFEST_CACHE_TTL_MS,
