@@ -11,6 +11,8 @@ function buildCapabilityCatalogMarkdown(options = {}) {
   const manifest = readJson(path.join(repoRoot, MANIFEST_PATH));
   const capabilities = Object.entries(manifest.capabilities || {})
     .sort(([left], [right]) => left.localeCompare(right));
+  const aliases = Object.entries(manifest.aliases || {})
+    .sort(([left], [right]) => left.localeCompare(right));
   const rows = capabilities.map(([capabilityId, capability]) => [
     capabilityId,
     capability.kind,
@@ -24,6 +26,13 @@ function buildCapabilityCatalogMarkdown(options = {}) {
     capability.minExtensionVersion,
     capability.enabled === false ? "no" : "yes",
   ]);
+  const aliasRows = aliases.map(([aliasId, alias]) => [
+    aliasId,
+    alias.replacementId,
+    manifest.capabilities?.[alias.replacementId]?.kind || "",
+    alias.owner,
+    alias.removeAfter,
+  ]);
 
   return [
     "# Remote Capability Catalog",
@@ -36,10 +45,21 @@ function buildCapabilityCatalogMarkdown(options = {}) {
     `- minExtensionVersion: \`${manifest.minExtensionVersion || ""}\``,
     `- expiresAt: \`${manifest.expiresAt || ""}\``,
     `- capabilities: \`${rows.length}\``,
+    `- aliases: \`${aliasRows.length}\``,
+    "",
+    "## Capabilities",
     "",
     "| capabilityId | kind | service | target | owner | domain | authMode | audit | schema | minExtension | enabled |",
     "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ...rows.map((row) => `| ${row.map(escapeCell).join(" | ")} |`),
+    "",
+    "## Aliases",
+    "",
+    "| aliasId | replacementId | replacementKind | owner | removeAfter |",
+    "| --- | --- | --- | --- | --- |",
+    ...(aliasRows.length
+      ? aliasRows.map((row) => `| ${row.map(escapeCell).join(" | ")} |`)
+      : ["| _none_ |  |  |  |  |"]),
     "",
   ].join("\n");
 }
