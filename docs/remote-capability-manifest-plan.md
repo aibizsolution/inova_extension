@@ -173,6 +173,14 @@ panel boot 시 hosted와 background는 capability catalog를 negotiation한다.
 - killed capability는 UI 노출과 실행이 모두 막혀야 한다.
 - degraded reason은 panel trace/debug에 남긴다.
 
+현재 구현 상태:
+
+- `background/panel-runtime-capability-router.js`가 `capabilities.handshake`를 제공한다.
+- handshake 응답은 active manifest catalog, enabled capability ids, runtime actions, bridge API allowlist, source/degraded metadata를 포함한다.
+- `hosting/extension-v2/panel/index.js`는 snapshot boot 직후 handshake를 호출하고, static extension capabilities와 enabled remote capability ids를 합쳐 hosted controllers에 전달한다.
+- killed/disabled capability는 handshake의 `enabledCapabilityIds`에서 제외된다.
+- UI별 capability 노출 차단은 아직 전체 적용 전이다. 다음 단계에서 controller별 required capability를 capabilityId 기준으로 좁힌다.
+
 ## C. 단계별 실행안
 
 ### Phase 3. Remote Endpoint/Target Resolution
@@ -461,15 +469,24 @@ verify 기준:
 - kill switch 동작
 - deprecated alias 동작
 - replacementId 동작
+- hosted boot handshake 동작
 
 verify 기준:
 
 - killed capability는 UI 노출과 실행이 모두 막힌다.
 - degraded reason은 trace/debug에 남는다.
+- disabled capability는 `enabledCapabilityIds`에서 빠진다.
 
 배포/롤아웃 주의점:
 
 - kill switch 없는 remote workflow는 production에 켜지 않는다.
+
+현재 상태:
+
+- 1차 handshake 구현됨.
+- `capabilities.handshake`가 catalog와 bridge API allowlist를 반환한다.
+- hosted boot가 handshake catalog를 읽어 enabled capability ids를 controller capability list에 합친다.
+- 아직 controller별 UI 렌더링 차단은 required capability를 capabilityId로 세분화하는 후속 작업이 필요하다.
 
 ### Phase 7.5. 자동 문서화와 금지 패턴 강화
 

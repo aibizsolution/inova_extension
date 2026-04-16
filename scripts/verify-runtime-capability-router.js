@@ -236,6 +236,21 @@ async function verifyBundledRuntimeRouterDispatch() {
   });
   assert.equal(hostedAuth.panelScope, "prompt-panel-v2");
 
+  const handshake = await router.handle({
+    action: "capabilities.handshake",
+    requestedCapabilityIds: ["prompt.review.run"],
+  });
+  assert.equal(handshake.manifestVersion, remoteManifest.manifestVersion);
+  assert.equal(handshake.source, "remote");
+  assert(handshake.runtimeActions.includes("capabilities.handshake"));
+  assert(handshake.runtimeActions.includes("capabilities.invoke"));
+  assert(handshake.bridgeApis.includes("invokeCapability"));
+  assert(handshake.enabledCapabilityIds.includes("prompt.review.run"));
+  assert.equal(
+    handshake.capabilities.find((capability) => capability.capabilityId === "prompt.review.run")?.enabled,
+    true
+  );
+
   const invokeResult = await router.handle({
     action: "functions.invoke-endpoint",
     authMode: "access-token",
@@ -319,6 +334,14 @@ async function verifyBundledRuntimeRouterDispatch() {
   disabledContext.getInovaAccessToken = async () => "access-token-1";
   loadScript(path.join("background", "functions-runtime-config.js"), disabledContext);
   loadScript(path.join("background", "panel-runtime-capability-router.js"), disabledContext);
+  const disabledHandshake = await disabledContext.InovaBookmarks.panelRuntimeCapabilityRouter.handle({
+    action: "capabilities.handshake",
+  });
+  assert.equal(
+    disabledHandshake.capabilities.find((capability) => capability.capabilityId === "prompt.review.run")?.enabled,
+    false
+  );
+  assert(!disabledHandshake.enabledCapabilityIds.includes("prompt.review.run"));
   await assert.rejects(
     disabledContext.InovaBookmarks.panelRuntimeCapabilityRouter.handle({
       action: "capabilities.invoke",

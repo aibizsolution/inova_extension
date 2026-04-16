@@ -8,6 +8,14 @@ const PANEL_RUNTIME_STORAGE_STATE_KEYS = Object.freeze([
   "settings",
   "uiPreferences",
 ]);
+const SANDBOX_BRIDGE_API_ALLOWLIST = Object.freeze([
+  "emitTrace",
+  "invokeCapability",
+  "invokePageCapability",
+  "openUrl",
+  "readPanelState",
+  "writeUiPreferences",
+]);
 
 const PANEL_RUNTIME_CAPABILITY_MANIFEST = deepFreeze({
   functionEndpointCapabilities: {
@@ -123,6 +131,9 @@ const PANEL_RUNTIME_CAPABILITY_MANIFEST = deepFreeze({
     "browser.open-url": {
       adapter: "browser.open-url",
     },
+    "capabilities.handshake": {
+      adapter: "capabilities.handshake",
+    },
     "capabilities.invoke": {
       adapter: "capabilities.invoke",
     },
@@ -154,6 +165,7 @@ const PANEL_RUNTIME_CAPABILITY_MANIFEST = deepFreeze({
 const PANEL_RUNTIME_ADAPTERS = Object.freeze({
   "auth.issue-panel-session": issuePanelSession,
   "browser.open-url": (request) => openBrowserUrl(request?.url),
+  "capabilities.handshake": buildCapabilityHandshake,
   "capabilities.invoke": invokeManifestCapability,
   "functions.invoke-endpoint": invokeHostedPanelFunctionFetch,
   "meeting.result.open": (request) => openMeetingResult(request?.input, request?.providerIdentity),
@@ -217,6 +229,59 @@ async function issuePanelSession(request, capability) {
     throw new Error("hosted panel auth adapter를 찾지 못했어요.");
   }
   return enricher(await issuer(request));
+}
+
+async function buildCapabilityHandshake(request) {
+  const manifestResult = await readActiveCapabilityManifest();
+  const manifest = manifestResult?.manifest || {};
+  const activeLane = namespace.session.normalizeText(namespace.productLane?.getActiveLane?.() || "legacy").toLowerCase();
+  const capabilities = Object.entries(manifest.capabilities || {})
+    .map(([capabilityId, capability]) => buildHandshakeCapability(capabilityId, capability, activeLane))
+    .sort((left, right) => left.capabilityId.localeCompare(right.capabilityId));
+  const requestedCapabilityIds = Array.isArray(request?.requestedCapabilityIds)
+    ? request.requestedCapabilityIds.map((value) => namespace.session.normalizeText(value)).filter(Boolean)
+    : [];
+  return {
+    bridgeApis: SANDBOX_BRIDGE_API_ALLOWLIST.slice(),
+    capabilities,
+    degraded: Boolean(manifestResult?.degraded),
+    degradedReason: namespace.session.normalizeText(manifestResult?.degradedReason),
+    enabledCapabilityIds: capabilities
+      .filter((capability) => capability.enabled)
+      .map((capability) => capability.capabilityId),
+    lane: activeLane,
+    manifestUrl: namespace.session.normalizeText(manifestResult?.manifestUrl),
+    manifestVersion: namespace.session.normalizeText(manifest.manifestVersion),
+    requestedCapabilityIds,
+    runtimeActions: Object.keys(PANEL_RUNTIME_CAPABILITY_MANIFEST.runtimeCapabilities).sort(),
+    schemaVersion: Number(manifest.schemaVersion) || 0,
+    source: namespace.session.normalizeText(manifestResult?.source),
+  };
+}
+
+function buildHandshakeCapability(capabilityId, capability, activeLane) {
+  const normalizedCapabilityId = namespace.session.normalizeText(capabilityId);
+  const capabilityLane = namespace.session.normalizeText(capability?.lane).toLowerCase();
+  const killSwitch = capability?.killSwitch;
+  const killSwitchEnabled = capability?.killed === true || killSwitch === true || killSwitch?.enabled === true;
+  const laneMatches = !capabilityLane || capabilityLane === "all" || capabilityLane === activeLane;
+  return {
+    auditLevel: namespace.session.normalizeText(capability?.auditLevel),
+    authMode: namespace.session.normalizeText(capability?.authMode || capability?.auth),
+    capabilityId: normalizedCapabilityId,
+    deprecatedAt: namespace.session.normalizeText(capability?.deprecatedAt),
+    domain: namespace.session.normalizeText(capability?.domain),
+    enabled: capability?.enabled !== false && !killSwitchEnabled && laneMatches,
+    inputSchemaVersion: Number(capability?.inputSchemaVersion) || 0,
+    killSwitch: killSwitchEnabled,
+    kind: namespace.session.normalizeText(capability?.kind),
+    lane: capabilityLane || "all",
+    minExtensionVersion: namespace.session.normalizeText(capability?.minExtensionVersion),
+    outputSchemaVersion: Number(capability?.outputSchemaVersion) || 0,
+    owner: namespace.session.normalizeText(capability?.owner),
+    replacementId: namespace.session.normalizeText(capability?.replacementId),
+    schemaVersion: Number(capability?.schemaVersion) || 0,
+  };
 }
 
 async function invokeHostedPanelFunctionFetch(request) {

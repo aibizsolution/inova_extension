@@ -32,6 +32,10 @@
   const root = document.getElementById("inova-hosted-panel-root");
   const state = {
     bridgeReady: false,
+    capabilityCatalog: null,
+    capabilityNegotiationError: "",
+    capabilityNegotiationKey: "",
+    capabilityNegotiationPending: false,
     elements: null,
     extensionCapabilities: [],
     extensionVersion: "",
@@ -48,6 +52,7 @@
     renderDeferred: false,
     renderFrame: 0,
     requestSeq: 0,
+    remoteCapabilityIds: [],
     startupStatusShown: false,
     startupStatusTimerId: 0,
     toast: null,
@@ -401,6 +406,7 @@
     state.extensionVersion = normalizeText(payload.extensionVersion);
     state.panelAppUrl = normalizeText(payload.panelAppUrl);
     state.panelSnapshot = nextPanelSnapshot;
+    void negotiateCapabilityCatalog("snapshot");
     clearStartupStatusCard();
     tracePanelFlow("18.hosted.snapshot.applied", {
       activeTool: normalizeText(state.panelSnapshot?.activeTool),
@@ -408,6 +414,50 @@
       toolTitle: buildHostedToolTitle(state.panelSnapshot?.activeTool),
     });
     scheduleRender();
+  }
+
+  async function negotiateCapabilityCatalog(reason = "manual") {
+    if (!state.extensionCapabilities.includes("runtime.invoke.v1")) {
+      return;
+    }
+    if (typeof browserCapabilities.readCapabilityCatalog !== "function") {
+      return;
+    }
+    const negotiationKey = serializeRenderState({
+      capabilities: state.extensionCapabilities,
+      extensionVersion: state.extensionVersion,
+      target: readRuntimeTargetForTrace(),
+    });
+    if (state.capabilityNegotiationPending || state.capabilityNegotiationKey === negotiationKey) {
+      return;
+    }
+    state.capabilityNegotiationPending = true;
+    try {
+      const catalog = await browserCapabilities.readCapabilityCatalog({
+        appCapabilities: APP_CAPABILITIES.slice(),
+        reason,
+      });
+      const normalizedCatalog = normalizeCapabilityCatalog(catalog);
+      state.capabilityCatalog = normalizedCatalog;
+      state.capabilityNegotiationError = "";
+      state.capabilityNegotiationKey = negotiationKey;
+      state.remoteCapabilityIds = normalizeCapabilities(normalizedCatalog.enabledCapabilityIds);
+      tracePanelFlow("18.hosted.capability.handshake.success", {
+        capabilityCount: normalizedCatalog.capabilities.length,
+        degraded: Boolean(normalizedCatalog.degraded),
+        enabledCount: state.remoteCapabilityIds.length,
+        source: normalizedCatalog.source,
+      });
+    } catch (error) {
+      state.capabilityNegotiationError = readErrorMessage(error, "capability catalog negotiation failed");
+      state.remoteCapabilityIds = [];
+      tracePanelFlow("18.hosted.capability.handshake.error", {
+        error: state.capabilityNegotiationError,
+      });
+    } finally {
+      state.capabilityNegotiationPending = false;
+      scheduleRender();
+    }
   }
 
   function hydratePanelOpenState(panelSnapshot) {
@@ -660,6 +710,49 @@
       : [];
   }
 
+  function normalizeCapabilityCatalog(value) {
+    const catalog = value && typeof value === "object" ? value : {};
+    const capabilities = Array.isArray(catalog.capabilities)
+      ? catalog.capabilities
+        .filter((capability) => capability && typeof capability === "object")
+        .map((capability) => ({
+          auditLevel: normalizeText(capability.auditLevel),
+          authMode: normalizeText(capability.authMode),
+          capabilityId: normalizeText(capability.capabilityId),
+          deprecatedAt: normalizeText(capability.deprecatedAt),
+          domain: normalizeText(capability.domain),
+          enabled: capability.enabled === true,
+          inputSchemaVersion: Number(capability.inputSchemaVersion) || 0,
+          killSwitch: capability.killSwitch === true,
+          kind: normalizeText(capability.kind),
+          lane: normalizeText(capability.lane),
+          minExtensionVersion: normalizeText(capability.minExtensionVersion),
+          outputSchemaVersion: Number(capability.outputSchemaVersion) || 0,
+          owner: normalizeText(capability.owner),
+          replacementId: normalizeText(capability.replacementId),
+          schemaVersion: Number(capability.schemaVersion) || 0,
+        }))
+        .filter((capability) => Boolean(capability.capabilityId))
+      : [];
+    return {
+      bridgeApis: normalizeCapabilities(catalog.bridgeApis),
+      capabilities,
+      degraded: catalog.degraded === true,
+      degradedReason: normalizeText(catalog.degradedReason),
+      enabledCapabilityIds: normalizeCapabilities(catalog.enabledCapabilityIds),
+      lane: normalizeText(catalog.lane),
+      manifestUrl: normalizeText(catalog.manifestUrl),
+      manifestVersion: normalizeText(catalog.manifestVersion),
+      runtimeActions: normalizeCapabilities(catalog.runtimeActions),
+      schemaVersion: Number(catalog.schemaVersion) || 0,
+      source: normalizeText(catalog.source),
+    };
+  }
+
+  function readErrorMessage(error, fallbackMessage) {
+    return normalizeText(error instanceof Error ? error.message : error) || normalizeText(fallbackMessage);
+  }
+
   function normalizeHostedToolId(toolId) {
     const normalizedToolId = normalizeText(toolId).toLowerCase();
     return normalizedToolId === "meeting" || normalizedToolId === "prompts" || normalizedToolId === "release"
@@ -831,20 +924,21 @@
   }
 
   function syncHostedControllersIfNeeded(panelState) {
+    const effectiveCapabilities = readEffectiveExtensionCapabilities();
     const nextControllerSyncKey = serializeRenderState({
-      extensionCapabilities: state.extensionCapabilities,
+      extensionCapabilities: effectiveCapabilities,
       panel: panelState,
     });
     if (state.lastControllerSyncKey === nextControllerSyncKey) {
       return;
     }
     state.lastControllerSyncKey = nextControllerSyncKey;
-    conversationController?.syncPanelState?.(panelState, state.extensionCapabilities);
-    promptLibraryController?.syncPanelState?.(panelState, state.extensionCapabilities);
-    promptReviewController?.syncPanelState?.(panelState, state.extensionCapabilities);
-    promptStoreController?.syncPanelState?.(panelState, state.extensionCapabilities);
-    meetingHubController?.syncPanelState?.(panelState, state.extensionCapabilities);
-    releaseController?.syncPanelState?.(panelState, state.extensionCapabilities);
+    conversationController?.syncPanelState?.(panelState, effectiveCapabilities);
+    promptLibraryController?.syncPanelState?.(panelState, effectiveCapabilities);
+    promptReviewController?.syncPanelState?.(panelState, effectiveCapabilities);
+    promptStoreController?.syncPanelState?.(panelState, effectiveCapabilities);
+    meetingHubController?.syncPanelState?.(panelState, effectiveCapabilities);
+    releaseController?.syncPanelState?.(panelState, effectiveCapabilities);
   }
 
   function createPanelRenderCache() {
@@ -1242,9 +1336,17 @@
   }
 
   function readMissingCapabilities() {
+    const effectiveCapabilities = readEffectiveExtensionCapabilities();
     return REQUIRED_EXTENSION_CAPABILITIES.filter(
-      (capability) => !state.extensionCapabilities.includes(capability)
+      (capability) => !effectiveCapabilities.includes(capability)
     );
+  }
+
+  function readEffectiveExtensionCapabilities() {
+    return Array.from(new Set([
+      ...state.extensionCapabilities,
+      ...state.remoteCapabilityIds,
+    ]));
   }
 
   function handleRootClick(event) {

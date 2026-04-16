@@ -25,6 +25,7 @@
       openBrowserUrl,
       openMeetingResult,
       openMeetingWorkspace,
+      readCapabilityCatalog,
       readComposerState,
       readConversationState,
       readDebugState,
@@ -145,6 +146,13 @@
         action: "meeting.workspace.open",
         input,
         providerIdentity,
+      });
+    }
+
+    function readCapabilityCatalog(request = {}) {
+      return invokeRuntime({
+        ...request,
+        action: "capabilities.handshake",
       });
     }
 

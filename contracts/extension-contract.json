@@ -293,6 +293,7 @@
     "storage.read-panel-state",
     "storage.write-ui-preferences",
     "auth.issue-panel-session",
+    "capabilities.handshake",
     "capabilities.invoke",
     "functions.invoke-endpoint",
     "browser.open-url",

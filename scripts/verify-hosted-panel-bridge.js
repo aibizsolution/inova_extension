@@ -394,6 +394,9 @@ function verifyHostedPanelFiles(directoryName) {
   const baseFirestoreClientJs = directoryName === "extension-v2"
     ? fs.readFileSync(path.join(baseDir, "base-firestore-client.js"), "utf8")
     : "";
+  const extensionCapabilityClientJs = directoryName === "extension-v2"
+    ? fs.readFileSync(path.join(baseDir, "extension-capability-client.js"), "utf8")
+    : "";
   const promptStoreControllerJs = directoryName === "extension-v2"
     ? fs.readFileSync(path.join(baseDir, "prompt-store-controller.js"), "utf8")
     : "";
@@ -409,6 +412,8 @@ function verifyHostedPanelFiles(directoryName) {
     assert(html.includes("./panel-utils.js"), "v2 hosted panel should load shared panel utilities");
     assert(html.includes("./base-firestore-client.js"), "v2 hosted panel should load the shared Firestore reader lifecycle factory");
     assert(html.includes("./extension-capability-client.js"), "v2 hosted panel should load the hosted extension capability client");
+    assert(indexJs.includes("readCapabilityCatalog"), "v2 hosted panel should negotiate the runtime capability catalog at boot");
+    assert(extensionCapabilityClientJs.includes('"capabilities.handshake"'), "v2 hosted panel should request capability handshake through the capability client");
     assert(
       html.indexOf("./panel-utils.js") > html.indexOf("./runtime.js")
         && html.indexOf("./panel-utils.js") < html.indexOf("./panel-firestore-session-client.js")
@@ -594,6 +599,7 @@ function verifyBackgroundInvokeWiring() {
     '"storage.read-panel-state"',
     '"storage.write-ui-preferences"',
     '"auth.issue-panel-session"',
+    '"capabilities.handshake"',
     '"capabilities.invoke"',
     '"functions.invoke-endpoint"',
     '"browser.open-url"',
