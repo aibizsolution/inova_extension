@@ -25,6 +25,9 @@ jobs:
       - name: Install Root Dependencies
         run: npm ci --ignore-scripts
 
+      - name: Install Functions Dependencies
+        run: npm ci --ignore-scripts --prefix functions
+
       - name: Verify Contracts And Docs
         run: npm run verify
 
