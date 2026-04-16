@@ -268,14 +268,15 @@
           <div id="sectionEditDialog" class="confirm-dialog section-edit-dialog" role="dialog" aria-modal="true" aria-labelledby="sectionEditDialogTitle">
             <div class="section-edit-dialog__head">
               <div>
-                <p class="confirm-dialog__eyebrow">섹션 수정</p>
+                <p id="sectionEditDialogEyebrow" class="confirm-dialog__eyebrow">AI 수정</p>
                 <h2 id="sectionEditDialogTitle" class="confirm-dialog__title">회의 개요</h2>
               </div>
               <button id="closeSectionEditButton" class="ghost-button ghost-button--soft" type="button">닫기</button>
             </div>
+            <p id="sectionEditHelpText" class="section-edit-dialog__body">AI에게 바꿀 방향을 적고 미리보기를 만든 뒤 적용합니다.</p>
             <textarea id="sectionEditInstructionInput" class="meeting-textarea review-editor__textarea" rows="6" maxlength="1600" placeholder="예: 참석자 이름 표기를 통일하고, 결정 배경을 조금 더 명확하게 정리해 주세요." aria-label="수정 요청"></textarea>
             <div class="review-editor__actions">
-              <button id="previewSectionEditButton" class="secondary-button" type="button">미리보기 만들기</button>
+              <button id="previewSectionEditButton" class="secondary-button" type="button">AI 미리보기</button>
               <button id="cancelSectionEditButton" class="ghost-button ghost-button--soft" type="button">미리보기 지우기</button>
               <button id="applySectionEditButton" class="primary-button" type="button">이 섹션만 적용</button>
             </div>

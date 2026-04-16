@@ -100,7 +100,25 @@ function main() {
     "Hosted meeting browser console trace should collapse repeated events like the extension panel trace"
   );
 
+  assert(document.getElementById("sectionEditDialogEyebrow"), "Section edit dialog should render a mode eyebrow");
+  assert(document.getElementById("sectionEditHelpText"), "Section edit dialog should render mode-specific help text");
   assert.equal(document.getElementById("sectionEditStatus"), null, "Section edit dialog should not render a separate status strip");
+  assert(
+    renderJs.includes('data-notes-section-action="manual-edit"')
+      && renderJs.includes('data-notes-section-action="ai-edit"')
+      && renderJs.includes('data-notes-section-action="delete"'),
+    "Meeting notes section header should expose manual edit, AI edit, and delete actions"
+  );
+  assert(
+    css.includes(".notes-section__action--danger") && css.includes(".notes-section__action--ai"),
+    "Meeting notes section actions should have distinct AI and delete affordances"
+  );
+  assert(
+    mutationsJs.includes("buildManualSectionPayload")
+      && mutationsJs.includes("deleteMeetingNotesSection")
+      && mutationsJs.includes('editMode: "manual"'),
+    "Meeting notes section actions should support manual save and delete through the hosted mutation controller"
+  );
   assert.equal(document.querySelector("#reviewTabActions #moveRecordButton"), null, "Move record action should not live in the shared review action row");
 
   console.log("[verify-meeting-hosted-ui] Hosted meeting UI contract passed");

@@ -1008,7 +1008,7 @@ function registerMeetingHandlers(deps) {
       if (!input.sectionKey) {
         throw createHttpError(400, "수정할 섹션을 확인해 주세요.");
       }
-      if (!input.baseRevisionToken) {
+      if (input.editMode !== "manual" && !input.baseRevisionToken) {
         throw createHttpError(400, "미리보기 기준 버전을 확인해 주세요.");
       }
       assertWorkspaceMeetingAccess(access, input.meetingId, createHttpError);

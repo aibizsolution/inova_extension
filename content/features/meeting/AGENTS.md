@@ -55,6 +55,7 @@
 - 회의 제목은 UI에서 회의를 구분하는 편집용 라벨이다. 최초 회의 정리 생성 prompt에는 제목이 아니라 전사와 공용 메모만 사용한다.
 - hosted 작업실의 회의록 보정은 전체 재생성이 아니라 `회의별 용어 치환`과 `섹션 단위 preview/apply`로 제한한다.
 - hosted 작업실의 섹션 수정은 transcript-grounded fact checker가 아니라 사용자 요청 우선 rewrite 도구다. 전사는 참고 자료로만 쓰고, 설명 보강이나 형식 변환도 전사 부족을 이유로 먼저 거절하지 않는다.
+- hosted 작업실의 섹션 헤더는 `직접 수정`, `AI 수정`, `삭제`를 분리한다. 직접 수정/삭제는 `editMode: "manual"`로 선택 섹션만 저장하거나 비우고, AI 수정만 미리보기 토큰을 요구한다.
 - hosted notes는 `핵심 요약(summary)`과 `회의 개요(overview)`를 분리해서 다룬다. 두 필드는 각각 수정할 수 있고, 한쪽 섹션 수정이 다른 쪽 카드를 함께 덮어쓰지 않아야 한다.
 - completed record의 notes action은 탭 우측 공용 action row에서만 노출한다. `회의 정리 복사`, `원문 복사`, `용어 치환`은 이 row를 공유하고, 미완료 기록에는 이 action row를 기본 노출하지 않는다.
 - completed remote record는 기록 상세 카드 상단 action row에서만 `기록 이동`을 노출한다. 이동 성공 후에는 현재 회의 룸에 그대로 남고, 옮긴 기록은 현재 룸 목록에서 사라진 뒤 기존 선택 fallback 규칙으로 다음 기록을 고른다.

@@ -77,6 +77,7 @@ function createMeetingMutationDomain(deps) {
     return {
       baseRevisionToken: normalizeText(request.baseRevisionToken),
       clientRequestId: normalizeText(request.clientRequestId),
+      editMode: normalizeText(request.editMode) === "manual" ? "manual" : "ai",
       jobId: normalizeText(request.jobId),
       meetingId: normalizeText(request.meetingId),
       sectionData: request.sectionData && typeof request.sectionData === "object"

@@ -1470,11 +1470,20 @@ select:disabled {
   align-items: flex-start;
 }
 
+.notes-section__actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 7px;
+  align-items: center;
+}
+
 .notes-section__action {
   display: inline-flex;
-  gap: 6px;
+  justify-content: center;
   align-items: center;
-  padding: 7px 11px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
   border: 1px solid #d5dfec;
   border-radius: 999px;
   background: #f8fbff;
@@ -1488,6 +1497,26 @@ select:disabled {
 
 .notes-section__action:hover {
   background: #edf4ff;
+}
+
+.notes-section__action--ai {
+  border-color: #c9d9f9;
+  background: #f3f7ff;
+  color: #255fc8;
+}
+
+.notes-section__action--ai:hover {
+  background: #e8f0ff;
+}
+
+.notes-section__action--danger {
+  border-color: #f1cbc4;
+  background: #fff7f5;
+  color: #b34535;
+}
+
+.notes-section__action--danger:hover {
+  background: #ffede9;
 }
 
 .notes-section__action:disabled {
@@ -1543,6 +1572,13 @@ select:disabled {
   justify-content: space-between;
   gap: 16px;
   align-items: flex-start;
+}
+
+.section-edit-dialog__body {
+  margin: -6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .notes-overview {
@@ -2005,8 +2041,8 @@ select:disabled {
     align-items: stretch;
   }
 
-  .notes-section__action {
-    justify-content: center;
+  .notes-section__actions {
+    align-self: flex-end;
   }
 
   .segment-cluster > *,

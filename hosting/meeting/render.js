@@ -546,14 +546,28 @@
 
   function renderNotesSectionHeader(section, options = {}) {
     const actionKey = normalizeText(section?.key);
-    const actionButton = options.allowSectionEdit && actionKey
-      ? `<button type="button" class="notes-section__action" data-notes-section-action="edit" data-section-key="${escapeHtml(actionKey)}" aria-label="${escapeHtml(section.title)} 섹션 수정">
-          <svg class="notes-section__action-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M11.667 2.667a1.414 1.414 0 0 1 2 2L6 12.333l-2.667.667L4 10.333l7.667-7.666Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.2"/>
-          </svg>
-        </button>`
+    const actionButtons = options.allowSectionEdit && actionKey
+      ? `<div class="notes-section__actions" aria-label="${escapeHtml(section.title)} 섹션 작업">
+          <button type="button" class="notes-section__action" data-notes-section-action="manual-edit" data-section-key="${escapeHtml(actionKey)}" aria-label="${escapeHtml(section.title)} 직접 수정" title="직접 수정">
+            <svg class="notes-section__action-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M11.667 2.667a1.414 1.414 0 0 1 2 2L6 12.333l-2.667.667L4 10.333l7.667-7.666Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.2"/>
+            </svg>
+          </button>
+          <button type="button" class="notes-section__action notes-section__action--ai" data-notes-section-action="ai-edit" data-section-key="${escapeHtml(actionKey)}" aria-label="${escapeHtml(section.title)} AI 수정" title="AI 수정">
+            <svg class="notes-section__action-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M8 1.75 9.24 5.1 12.6 6.33 9.24 7.57 8 10.92 6.76 7.57 3.4 6.33 6.76 5.1 8 1.75Z" stroke="currentColor" stroke-linejoin="round" stroke-width="1.15"/>
+              <path d="M12.35 9.6 12.9 11.1l1.5.55-1.5.55-.55 1.5-.55-1.5-1.5-.55 1.5-.55.55-1.5Z" stroke="currentColor" stroke-linejoin="round" stroke-width="1.1"/>
+            </svg>
+          </button>
+          <button type="button" class="notes-section__action notes-section__action--danger" data-notes-section-action="delete" data-section-key="${escapeHtml(actionKey)}" aria-label="${escapeHtml(section.title)} 삭제" title="삭제">
+            <svg class="notes-section__action-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M3 4.5h10M6.5 2.5h3M5 4.5l.45 8.1c.04.77.68 1.4 1.45 1.4h2.2c.77 0 1.41-.63 1.45-1.4L11 4.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.2"/>
+              <path d="M7 7v4M9 7v4" stroke="currentColor" stroke-linecap="round" stroke-width="1.2"/>
+            </svg>
+          </button>
+        </div>`
       : "";
-    return `<div class="notes-section__head"><h3 class="notes-section__title">${escapeHtml(section.title)}</h3>${actionButton}</div>`;
+    return `<div class="notes-section__head"><h3 class="notes-section__title">${escapeHtml(section.title)}</h3>${actionButtons}</div>`;
   }
 
   function renderNotesSection(section, options = {}) {
