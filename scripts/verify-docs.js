@@ -314,7 +314,7 @@ const codeChecks = [
   },
   {
     file: "hosting/meeting/workspace-debug.js",
-    patterns: [/setup/, /handlePanelClick/, /exposeDebugApi/],
+    patterns: [/setup/, /emitTraceLine/, /exposeDebugApi/],
   },
   {
     file: "content/route-sync.js",

@@ -23,7 +23,7 @@
         DEFAULT_SOURCE_UPLOAD_TIMEOUT_MS,
         buildRemoteSelectionId,
         buildWorkspaceSessionStorageKey,
-        isDebugPanelEnabled,
+        isDebugConsoleEnabled,
         isLikelyNetworkError,
         isOnline,
         logDebug,
@@ -89,7 +89,7 @@
       const saveRecordTitleForEntry = (...args) => controller("mutations")?.saveRecordTitleForEntry?.(...args);
 
       function isDebugLocalQueueSandboxRequested() {
-        if (!state.isLocalWorkspace || !isDebugPanelEnabled(global)) {
+        if (!state.isLocalWorkspace || !isDebugConsoleEnabled(global)) {
           return false;
         }
         try {

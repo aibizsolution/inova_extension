@@ -8,7 +8,6 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png" />
     <link rel="stylesheet" href="index.css" />
     <script src="shared.js" defer></script>
-    <script src="debug-console.js" defer></script>
     <script>
       (function suppressFirestoreDeprecationWarnings() {
         const originalWarn = typeof window.console?.warn === "function"
@@ -265,9 +264,6 @@
           </section>
         </section>
       </section>
-
-        <section id="debugPanel" class="debug-panel" hidden></section>
-
         <section id="sectionEditOverlay" class="confirm-overlay section-edit-overlay" hidden>
           <div id="sectionEditDialog" class="confirm-dialog section-edit-dialog" role="dialog" aria-modal="true" aria-labelledby="sectionEditDialogTitle">
             <div class="section-edit-dialog__head">

@@ -8,7 +8,6 @@ const { JSDOM } = require("jsdom");
 const root = path.resolve(__dirname, "..");
 const hostedMeetingHtmlPath = path.join(root, "hosting", "meeting", "index.html");
 const hostedMeetingCssPath = path.join(root, "hosting", "meeting", "index.css");
-const hostedMeetingIndexPath = path.join(root, "hosting", "meeting", "index.js");
 const hostedMeetingRenderPath = path.join(root, "hosting", "meeting", "render.js");
 const hostedMeetingMutationsPath = path.join(root, "hosting", "meeting", "workspace-mutations.js");
 const hostedMeetingDebugPath = path.join(root, "hosting", "meeting", "workspace-debug.js");
@@ -16,7 +15,6 @@ const hostedMeetingDebugPath = path.join(root, "hosting", "meeting", "workspace-
 function main() {
   const html = fs.readFileSync(hostedMeetingHtmlPath, "utf8");
   const css = fs.readFileSync(hostedMeetingCssPath, "utf8");
-  const indexJs = fs.readFileSync(hostedMeetingIndexPath, "utf8");
   const renderJs = fs.readFileSync(hostedMeetingRenderPath, "utf8");
   const mutationsJs = fs.readFileSync(hostedMeetingMutationsPath, "utf8");
   const debugJs = fs.readFileSync(hostedMeetingDebugPath, "utf8");
@@ -90,12 +88,16 @@ function main() {
     "Term replacement save flow should close the panel after a successful save"
   );
   assert(
-    indexJs.includes("function readDebugPanelCollapsed() {") && indexJs.includes("return true;"),
-    "Hosted meeting debug panel should default to collapsed on every page load"
+    !html.includes('id="debugPanel"') && !html.includes("debug-console.js"),
+    "Hosted meeting should not load or render the in-page debug console UI"
   );
   assert(
-    !debugJs.includes("safeLocalStorageSet"),
-    "Hosted meeting debug panel should not persist expanded state across refreshes"
+    debugJs.includes('mode: "browser-console"') && debugJs.includes("[inova:${channel} #${traceSequence}]"),
+    "Hosted meeting debug logging should emit extension-style browser console trace lines"
+  );
+  assert(
+    debugJs.includes("same event repeated ${lastTraceEntry.repeatCount} more times"),
+    "Hosted meeting browser console trace should collapse repeated events like the extension panel trace"
   );
 
   assert.equal(document.getElementById("sectionEditStatus"), null, "Section edit dialog should not render a separate status strip");

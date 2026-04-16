@@ -7,7 +7,7 @@
 - 이 feature의 entrypoint, hosted/panel 공통 불변식, auth/recovery 경계, 최소 검증 기준이 바뀌면 이 문서를 같은 작업 안에서 갱신한다.
 - `README.md`가 아니라 meeting feature-local 규칙과 계약은 이 문서나 meeting 전용 docs에 문서화한다.
 - meeting endpoint/auth/collection baseline과 version/release 판단 기준은 `docs/refactoring-plan.md`에서 관리한다.
-- hosted debug console 검증과 증거 수집 절차는 `docs/meeting-debug-console-validation.md`에서 관리한다.
+- hosted browser console trace 검증과 증거 수집 절차는 `docs/meeting-debug-console-validation.md`에서 관리한다.
 - Functions runtime sizing과 운영 튜닝 기준은 `docs/functions-runtime-guide.md`에서 관리한다.
 
 ## 먼저 볼 파일
@@ -44,7 +44,7 @@
 - route change는 회의 목록의 정본이 아니다. meeting hub가 이미 로드되었거나 realtime이 붙어 있는 동안에는 route-driven refresh를 다시 예약하지 않고, 회의 동기화는 realtime 연결과 explicit meeting action 중심으로 유지한다.
 - 팝업의 `로컬 호스팅` target은 hosted meeting URL만 바꾸는 모드가 아니다. local target에서는 meeting panel bridge와 meeting HTTP auth/list/share 경로도 함께 local Functions/Auth/Firestore emulator를 보도록 유지한다.
 - local target의 hosted panel iframe과 hidden meeting panel bridge iframe은 page DOM에서 loopback URL을 직접 열지 않는다. 실제 target URL은 `http://127.0.0.1:5000/*`를 유지하되, 페이지에는 extension `content/frame-proxy.html?target=...` wrapper를 꽂아 site CSP로 인한 direct frame block을 피한다.
-- `open-workspace` / `open-result` 진단 로그는 한 콘솔에서 끝까지 닫으려 하지 않는다. top panel 콘솔은 `launch requested/dispatched/accepted`까지만 책임지고, hosted 작업실 boot/ready는 새 탭의 hosted debug console에서 확인한다.
+- `open-workspace` / `open-result` 진단 로그는 한 콘솔에서 끝까지 닫으려 하지 않는다. top panel 콘솔은 `launch requested/dispatched/accepted`까지만 책임지고, hosted 작업실 boot/ready는 새 탭 DevTools의 hosted browser console trace에서 확인한다.
 - hosted Firestore 읽기와 listener 연결은 local state만으로 시작하지 않고 `ensureWorkspaceAuth()`가 custom-token sign-in 완료를 보장한 뒤에만 진행한다.
 - owner-secure hosted 작업실은 `authorizeInovaMeetingWorkspaceAccess`가 돌려주는 `meetingSessionToken`을 세션에 보존해야 하며, 업로드와 작업실 mutation은 이 토큰을 기준으로 인증한다.
 - hosted 작업실의 `파일 불러오기`는 로컬/상용 hosted 모두 같은 업로드 흐름을 쓴다. origin 차이만으로 버튼을 숨기거나 import 실행을 막지 않는다.
@@ -97,7 +97,7 @@
 - 기록 이동 변경이 있으면 완료 기록 1건을 다른 owned 회의 룸으로 옮기고, 현재 룸에서 사라지는지와 대상 회의 룸에서 같은 전사/회의 정리/메모가 유지되는지 확인한다.
 - hosted notes action UI를 건드렸다면 `npm.cmd run verify`와 `node scripts/verify-meeting-hosted-ui.js`를 함께 돌리고, 완료 기록에서만 action row가 보이는지와 `용어 치환` 버튼 내부 tooltip 문구를 함께 확인한다.
 - local full-stack smoke가 필요하면 `npm.cmd run emulator:meeting-local`을 먼저 켜고, 팝업에서 `로컬 호스팅`을 고른 뒤 같은 흐름을 확인한다.
-- hosted 상태 mismatch를 조사할 때는 실제 상용 페이지를 `?debug=1`로 열고, `docs/meeting-debug-console-validation.md` 기준으로 디버그 패널 로그와 helper 출력까지 함께 확보한다.
+- hosted 상태 mismatch를 조사할 때는 실제 상용 페이지를 `?debug=1`로 열고, `docs/meeting-debug-console-validation.md` 기준으로 DevTools 콘솔 로그와 helper 출력까지 함께 확보한다.
 - 상용 회의 데이터 정리 여부를 편하게 볼 때는 `npm run check:meeting-data`를 사용하고, 실제 삭제 전에는 `npm run delete:meeting-data -- --all` 또는 `--meeting-id <id>` dry-run을 먼저 본다.
 
 ## 언제 사용자에게 다시 물을지

@@ -138,7 +138,7 @@
     }
   }
 
-  function isDebugPanelEnabled(globalObject) {
+  function isDebugConsoleEnabled(globalObject) {
     try {
       const current = new URL(String(globalObject?.location?.href || ""));
       return normalizeText(current.searchParams.get("debug")) === "1";
@@ -1228,7 +1228,7 @@
     return true;
   }
 
-  debugEnabled = isDebugPanelEnabled(global);
+  debugEnabled = isDebugConsoleEnabled(global);
 
   global.__INOVA_HOSTED_MEETING_DEBUG__ = {
     clear: clearDebugEntries,
@@ -1288,7 +1288,7 @@
     getDebugStatsSummary,
     getErrorDebugEntries,
     getRetainedErrorDebugEntries,
-    isDebugPanelEnabled,
+    isDebugConsoleEnabled,
     isLikelyNetworkError,
     isLocalWorkspaceOrigin,
     isOnline,

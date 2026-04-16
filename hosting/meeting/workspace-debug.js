@@ -1,5 +1,6 @@
 (function initHostedMeetingWorkspaceDebug(global) {
   const ns = global.__INOVA_HOSTED_MEETING__ = global.__INOVA_HOSTED_MEETING__ || {};
+  const TRACE_REPEAT_IDLE_MS = 1600;
 
   ns.workspaceDebug = {
     createController(deps) {
@@ -7,15 +8,12 @@
       const refs = deps?.refs || {};
       const state = deps?.state || {};
       const helpers = deps?.helpers || {};
-      const debugConsole = ns.debugConsole;
       const {
         buildCopyText,
-        buildErrorCopyText,
-        clearDebugEntries,
         getDebugEntries,
         getDebugStatsSummary,
         getRetainedErrorDebugEntries,
-        isDebugPanelEnabled,
+        isDebugConsoleEnabled,
         logDebug,
         normalizeText,
         setEnabled: setDebugEnabled,
@@ -27,137 +25,64 @@
         buildSegmentCopyText,
         findHistoryEntry,
       } = ns.render;
+      let consoleTraceEnabled = false;
+      let lastPrintedEntryId = 0;
+      let lastTraceEntry = null;
+      let traceRepeatTimer = 0;
+      let traceSequence = 0;
 
       function controller(name) {
         return typeof helpers.controller === "function" ? helpers.controller(name) : null;
       }
 
-      function buildHostedDebugConsoleButtonsSnapshot(panelElement) {
-        const buttons = panelElement?.querySelectorAll?.("[data-debug-action]");
-        return Array.from(buttons || []).map((button) => ({
-          action: normalizeText(button?.dataset?.debugAction),
-          disabled: Boolean(button?.disabled),
-          id: normalizeText(button?.id),
-          label: normalizeText(button?.textContent),
-        }));
-      }
-
-      function buildDebugPanelState(entries = getDebugEntries()) {
-        const normalizedEntries = Array.isArray(entries) ? entries : [];
-        const summary = getDebugStatsSummary();
-        const text = buildDebugConsoleText(normalizedEntries);
-        return debugConsole?.buildState?.({
-          collapsed: state.debugPanelCollapsed,
-          enabled: Boolean(refs.debugPanel && !refs.debugPanel.hidden),
-          feedback: state.debugNotice,
-          statusSummary: summary,
-          text,
-        }) || {
-          collapsed: state.debugPanelCollapsed,
-          enabled: Boolean(refs.debugPanel && !refs.debugPanel.hidden),
-          feedback: state.debugNotice,
-          hasErrors: Math.max(0, Number(summary?.errorCount) || 0) > 0,
-          statusSummary: summary,
-          statusText: "",
-          text: normalizeText(text) || "아직 로그가 없습니다.",
-        };
-      }
-
       function buildHostedDebugConsoleStateSnapshot(entries = getDebugEntries()) {
         const normalizedEntries = Array.isArray(entries) ? entries : [];
-        const panelElement = refs.debugPanel;
-        const stateSnapshot = buildDebugPanelState(normalizedEntries);
-        const buttons = buildHostedDebugConsoleButtonsSnapshot(panelElement);
-        const statusElement = panelElement?.querySelector?.("#debugStatus");
-        const noticeElement = panelElement?.querySelector?.("#debugNotice");
-        const logElement = panelElement?.querySelector?.("#debugLog");
+        const summary = getDebugStatsSummary();
         return {
-          buttons,
-          collapsed: Boolean(stateSnapshot?.collapsed),
-          enabled: Boolean(stateSnapshot?.enabled),
+          buttons: [],
+          collapsed: false,
+          enabled: consoleTraceEnabled,
           entryCount: normalizedEntries.length,
-          feedback: {
-            text: normalizeText(stateSnapshot?.feedback?.text),
-            tone: normalizeText(stateSnapshot?.feedback?.tone) || "info",
-          },
-          hasErrors: Boolean(stateSnapshot?.hasErrors),
-          hasFabBadge: Boolean(panelElement?.querySelector?.("#debugFabBadge")),
-          hasFabButton: Boolean(panelElement?.querySelector?.("#debugFabButton")),
-          hasLog: Boolean(logElement),
-          hasSegmentCluster: Boolean(panelElement?.querySelector?.(".segment-cluster")),
-          hasToolbar: Boolean(panelElement?.querySelector?.(".debug-panel__toolbar")),
-          logText: normalizeText(logElement?.textContent || stateSnapshot?.text),
-          noticeText: normalizeText(noticeElement?.textContent || stateSnapshot?.feedback?.text),
-          rendered: Boolean(panelElement && panelElement.innerHTML),
-          statusText: normalizeText(statusElement?.textContent || stateSnapshot?.statusText),
+          feedback: { text: "", tone: "info" },
+          hasErrors: Math.max(0, Number(summary?.errorCount) || 0) > 0,
+          hasFabBadge: false,
+          hasFabButton: false,
+          hasLog: false,
+          hasSegmentCluster: false,
+          hasToolbar: false,
+          lastPrintedEntryId,
+          logText: buildDebugConsoleText(normalizedEntries),
+          mode: "browser-console",
+          noticeText: "",
+          rendered: false,
+          statusText: buildStatusText(summary),
         };
       }
 
       function buildHostedDebugConsoleValidationChecks(snapshot) {
-        const checks = [
+        const latestEntryId = getLatestEntryId(getDebugEntries());
+        return [
           {
-            label: "hosted debug console이 활성화됨",
+            label: "hosted meeting console trace가 활성화됨",
             passed: Boolean(snapshot?.enabled),
             actual: snapshot?.enabled ? "enabled" : "disabled",
           },
           {
-            label: "debug console markup이 렌더됨",
-            passed: Boolean(snapshot?.rendered),
-            actual: snapshot?.rendered ? "rendered" : "empty",
+            label: "화면 디버그 패널을 렌더하지 않음",
+            passed: !snapshot?.rendered && !snapshot?.hasFabButton && !snapshot?.hasToolbar,
+            actual: snapshot?.rendered ? "rendered" : "browser-console",
+          },
+          {
+            label: "debug helper 로그 버퍼에 접근 가능함",
+            passed: Number.isFinite(Number(snapshot?.entryCount)),
+            actual: String(Math.max(0, Number(snapshot?.entryCount) || 0)),
+          },
+          {
+            label: "콘솔 trace가 최신 로그 id까지 소비함",
+            passed: !snapshot?.enabled || lastPrintedEntryId >= latestEntryId,
+            actual: `${lastPrintedEntryId}/${latestEntryId}`,
           },
         ];
-        const actions = Array.isArray(snapshot?.buttons)
-          ? snapshot.buttons.map((button) => normalizeText(button?.action)).filter(Boolean)
-          : [];
-        if (snapshot?.collapsed) {
-          checks.push(
-            {
-              label: "collapsed 상태에서는 fab toggle이 보임",
-              passed: Boolean(snapshot?.hasFabButton) && actions.includes("toggle"),
-              actual: actions.join(","),
-            },
-            {
-              label: "오류가 있으면 fab badge가 보임",
-              passed: !snapshot?.hasErrors || Boolean(snapshot?.hasFabBadge),
-              actual: snapshot?.hasFabBadge ? "badge" : "no-badge",
-            }
-          );
-          return checks;
-        }
-        const requiredActions = ["copy", "copy-errors", "clear", "toggle"];
-        checks.push(
-          {
-            label: "expanded 상태에서는 auth 상태가 로그 상단에 포함됨",
-            passed: normalizeText(snapshot?.logText).includes("authMode:"),
-            actual: normalizeText(snapshot?.logText).slice(0, 120),
-          },
-          {
-            label: "expanded 상태에서는 toolbar가 보임",
-            passed: Boolean(snapshot?.hasToolbar),
-            actual: snapshot?.hasToolbar ? "toolbar" : "missing",
-          },
-          {
-            label: "segment-cluster 구조가 유지됨",
-            passed: Boolean(snapshot?.hasSegmentCluster),
-            actual: snapshot?.hasSegmentCluster ? "segment-cluster" : "missing",
-          },
-          {
-            label: "expanded 버튼 4종이 모두 렌더됨",
-            passed: requiredActions.every((action) => actions.includes(action)),
-            actual: actions.join(","),
-          },
-          {
-            label: "status text가 비어 있지 않음",
-            passed: Boolean(normalizeText(snapshot?.statusText)),
-            actual: normalizeText(snapshot?.statusText),
-          },
-          {
-            label: "log text가 비어 있지 않음",
-            passed: Boolean(normalizeText(snapshot?.logText)),
-            actual: normalizeText(snapshot?.logText).slice(0, 120),
-          }
-        );
-        return checks;
       }
 
       function buildRecentDebugEntrySnapshot(options = {}) {
@@ -250,10 +175,15 @@
 
       function buildDebugConsoleText(entries = getDebugEntries()) {
         const logText = normalizeText(buildCopyText(Array.isArray(entries) ? entries : [])) || "아직 로그가 없습니다.";
-        if (state.debugPanelCollapsed) {
-          return logText;
-        }
         return `${buildAuthSnapshotText()}\n\n${logText}`;
+      }
+
+      function buildStatusText(summary = getDebugStatsSummary()) {
+        const functionCalls = Math.max(0, Number(summary?.functionCalls) || 0);
+        const readCount = Math.max(0, Number(summary?.readCount) || 0);
+        const snapshotCount = Math.max(0, Number(summary?.snapshotCount) || 0);
+        const errorCount = Math.max(0, Number(summary?.errorCount) || 0);
+        return `함수 ${functionCalls}건 · 읽기 ${readCount}건 · 리스너 ${snapshotCount}건 · 오류 ${errorCount}건`;
       }
 
       function validateHostedDebugConsoleWorkspace(options = {}) {
@@ -261,105 +191,237 @@
         const checks = buildHostedDebugConsoleValidationChecks(snapshot);
         return {
           checks,
-          collapsed: Boolean(snapshot?.collapsed),
+          collapsed: false,
           entryCount: Math.max(0, Number(snapshot?.entryCount) || 0),
           passed: checks.every((check) => Boolean(check?.passed)),
           snapshot,
         };
       }
 
-      function syncDebugPanelCollapsedUi() {
-        render(getDebugEntries());
-      }
-
-      function toggleDebugPanelCollapsed() {
-        state.debugPanelCollapsed = !state.debugPanelCollapsed;
-        syncDebugPanelCollapsedUi();
-      }
-
-      function forceExpand(options = {}) {
-        if (!refs.debugPanel || refs.debugPanel.hidden || !state.debugPanelCollapsed) {
-          render(getDebugEntries());
-          return;
-        }
-        state.debugPanelCollapsed = false;
-        syncDebugPanelCollapsedUi({ persist: options.persist === true });
-      }
-
-      function render(entries = getDebugEntries()) {
-        if (!refs.debugPanel) return;
-        if (refs.debugPanel.hidden) {
-          refs.debugPanel.innerHTML = "";
-          return;
-        }
-        const previousViewport = debugConsole?.captureLogViewport?.(refs.debugPanel.querySelector("#debugLog")) || null;
-        const debugMarkup = debugConsole?.renderWorkspace?.(buildDebugPanelState(entries)) || "";
-        refs.debugPanel.innerHTML = debugMarkup;
-        const nextLog = refs.debugPanel.querySelector("#debugLog");
-        if (!nextLog) return;
-        debugConsole?.restoreLogViewport?.(nextLog, previousViewport);
-      }
-
       function setup() {
-        if (!refs.debugPanel) return;
-        const enabled = isDebugPanelEnabled(globalObject);
+        const enabled = isDebugConsoleEnabled(globalObject);
+        consoleTraceEnabled = enabled;
         setDebugEnabled(enabled);
         if (refs.meetingShell) {
-          refs.meetingShell.dataset.debugPanel = String(enabled);
+          refs.meetingShell.dataset.debugConsole = String(enabled);
         }
         state.unsubscribeDebug?.();
         state.unsubscribeDebug = null;
-        refs.debugPanel.hidden = !enabled;
-        render(getDebugEntries());
-        if (!enabled) return;
-        syncDebugPanelCollapsedUi();
-        state.unsubscribeDebug = subscribeDebugEntries((entries) => render(entries));
-        logDebug("workspace.debug.enabled", {
+        lastPrintedEntryId = 0;
+        lastTraceEntry = null;
+        if (!enabled) {
+          return;
+        }
+        state.unsubscribeDebug = subscribeDebugEntries((entries) => printConsoleEntries(entries));
+        logDebug("workspace.debug.console.enabled", {
           href: globalObject.location.href,
+          mode: "browser-console",
         });
       }
 
-      function clearDebugLogPanel() {
-        clearDebugEntries();
-        logDebug("workspace.debug.cleared", {});
-        helpers.setDebugNotice?.("디버그 로그를 비웠습니다.", "highlight");
-        helpers.applyRender?.();
-      }
-
-      async function copyDebugLog() {
-        const text = normalizeText(buildDebugConsoleText(getDebugEntries()));
-        if (!text) return;
-        try {
-          if (typeof globalObject.navigator?.clipboard?.writeText === "function") {
-            await globalObject.navigator.clipboard.writeText(text);
-            helpers.setDebugNotice?.("디버그 로그를 복사했습니다.", "highlight");
-          } else {
-            throw new Error("Clipboard API unavailable");
-          }
-        } catch {
-          helpers.setDebugNotice?.("클립보드 권한이 없어 로그 복사를 완료하지 못했어요.", "error");
-        }
-        helpers.applyRender?.();
-      }
-
-      async function copyDebugErrors() {
-        const text = normalizeText(buildErrorCopyText(getRetainedErrorDebugEntries()));
-        if (!text) {
-          helpers.setDebugNotice?.("복사할 오류 로그가 없습니다.", "highlight");
-          helpers.applyRender?.();
+      function printConsoleEntries(entries) {
+        if (!consoleTraceEnabled) {
           return;
         }
-        try {
-          if (typeof globalObject.navigator?.clipboard?.writeText === "function") {
-            await globalObject.navigator.clipboard.writeText(text);
-            helpers.setDebugNotice?.("오류 로그를 복사했습니다.", "highlight");
-          } else {
-            throw new Error("Clipboard API unavailable");
+        for (const entry of Array.isArray(entries) ? entries : []) {
+          const entryId = Math.max(0, Number(entry?.id) || 0);
+          if (!entryId || entryId <= lastPrintedEntryId) {
+            continue;
           }
-        } catch {
-          helpers.setDebugNotice?.("클립보드 권한이 없어 오류 로그 복사를 완료하지 못했어요.", "error");
+          lastPrintedEntryId = entryId;
+          emitTraceEntry(entry);
         }
-        helpers.applyRender?.();
+      }
+
+      function emitTraceEntry(entry) {
+        const channel = resolveTraceChannel(entry);
+        const label = normalizeText(entry?.event) || "trace";
+        const summary = buildTraceSummary(entry?.payload);
+        const fingerprint = `${channel}|${label}|${summary}`;
+        if (lastTraceEntry?.fingerprint === fingerprint) {
+          lastTraceEntry.repeatCount += 1;
+          scheduleTraceRepeatFlush();
+          return;
+        }
+        flushRepeatedTraceSummary();
+        lastTraceEntry = {
+          channel,
+          fingerprint,
+          label,
+          repeatCount: 0,
+          summary,
+        };
+        emitTraceLine(channel, formatTraceLine(label, summary), isErrorTraceEntry(entry));
+        scheduleTraceRepeatFlush();
+      }
+
+      function resolveTraceChannel(entry) {
+        const event = normalizeText(entry?.event).toLowerCase();
+        if (event.startsWith("firestore.")) return "firestore";
+        if (event.startsWith("http.") || event.includes("function") || event.includes("source-upload")) return "functions";
+        return "meeting";
+      }
+
+      function buildTraceSummary(payload) {
+        const detail = payload && typeof payload === "object" ? payload : {};
+        const parts = [];
+        [
+          ["meeting", detail.meetingId],
+          ["job", detail.jobId],
+          ["artifact", detail.artifactId],
+          ["record", detail.recordId || detail.selectedRecordId],
+          ["request", detail.requestId],
+          ["count", normalizeTraceCount(detail.count ?? detail.resultCount)],
+          ["pending", normalizeTraceCount(detail.pendingLocalCount)],
+          ["readOnly", normalizeTraceBoolean(detail, "readOnly")],
+          ["ok", normalizeTraceBoolean(detail, "ok")],
+          ["target", detail.target],
+          ["phase", detail.phase],
+          ["status", detail.status],
+          ["source", detail.source],
+          ["reason", detail.reason],
+          ["mode", detail.mode],
+          ["timeout", normalizeTraceCount(detail.timeoutMs)],
+          ["message", detail.message],
+          ["error", summarizeTraceError(detail.error)],
+          ["url", summarizeTraceUrl(detail.url || detail.href)],
+        ].forEach(([key, value]) => appendTracePart(parts, key, value));
+        if (!parts.length && payload && typeof payload !== "object") {
+          appendTracePart(parts, "message", payload);
+        }
+        return parts.filter(Boolean).join(", ");
+      }
+
+      function appendTracePart(parts, key, value) {
+        const normalizedValue = normalizeTraceValue(value);
+        if (normalizedValue) {
+          parts.push(`${key}=${normalizedValue}`);
+        }
+      }
+
+      function normalizeTraceBoolean(payload, key) {
+        return !payload || !Object.prototype.hasOwnProperty.call(payload, key) ? "" : payload[key] ? "yes" : "no";
+      }
+
+      function normalizeTraceCount(value) {
+        if (value == null || value === "") {
+          return "";
+        }
+        const numeric = Number(value);
+        return Number.isFinite(numeric) ? String(numeric) : normalizeText(value);
+      }
+
+      function normalizeTraceValue(value) {
+        if (value == null || value === "") {
+          return "";
+        }
+        if (typeof value === "boolean") {
+          return value ? "yes" : "no";
+        }
+        if (typeof value === "number") {
+          return Number.isFinite(value) ? String(value) : "";
+        }
+        if (typeof value === "string") {
+          return summarizeTraceText(value);
+        }
+        if (Array.isArray(value)) {
+          return `array(${value.length})`;
+        }
+        if (typeof value === "object") {
+          return summarizeTraceError(value) || `object(${Object.keys(value).slice(0, 4).join(",")})`;
+        }
+        return summarizeTraceText(value);
+      }
+
+      function summarizeTraceText(value) {
+        const normalized = normalizeText(value).replace(/\s+/g, " ");
+        return normalized.length > 96 ? `${normalized.slice(0, 72)}...${normalized.slice(-18)}` : normalized;
+      }
+
+      function summarizeTraceError(value) {
+        if (!value) {
+          return "";
+        }
+        if (typeof value === "string") {
+          return summarizeTraceText(value);
+        }
+        const message = normalizeText(value.message);
+        const name = normalizeText(value.name);
+        return summarizeTraceText([name, message].filter(Boolean).join(": "));
+      }
+
+      function summarizeTraceUrl(value) {
+        const normalized = normalizeText(value);
+        if (!normalized) {
+          return "";
+        }
+        try {
+          const parsed = new URL(normalized);
+          const path = `${parsed.host}${parsed.pathname}`;
+          return path.length > 72 ? `${path.slice(0, 48)}...${path.slice(-18)}` : path;
+        } catch {
+          return summarizeTraceText(normalized);
+        }
+      }
+
+      function formatTraceLine(label, summary) {
+        return summary ? `${label} | ${summary}` : label;
+      }
+
+      function emitTraceLine(channel, text, isError = false) {
+        traceSequence += 1;
+        const style = channel === "functions"
+          ? "color:#b45309;font-weight:600"
+          : channel === "meeting"
+            ? "color:#0f766e"
+            : channel === "firestore"
+              ? "color:#1d4ed8;font-weight:600"
+              : "";
+        const line = `%c[inova:${channel} #${traceSequence}] ${text}`;
+        const consoleMethod = isError && typeof globalObject.console?.warn === "function" ? "warn" : "log";
+        if (style) {
+          globalObject.console?.[consoleMethod]?.(line, style);
+        } else {
+          globalObject.console?.[consoleMethod]?.(`[inova:${channel} #${traceSequence}] ${text}`);
+        }
+      }
+
+      function scheduleTraceRepeatFlush() {
+        globalObject.clearTimeout(traceRepeatTimer);
+        traceRepeatTimer = globalObject.setTimeout(() => {
+          traceRepeatTimer = 0;
+          flushRepeatedTraceSummary();
+        }, TRACE_REPEAT_IDLE_MS);
+      }
+
+      function flushRepeatedTraceSummary() {
+        if (!lastTraceEntry) {
+          return;
+        }
+        globalObject.clearTimeout(traceRepeatTimer);
+        traceRepeatTimer = 0;
+        if (lastTraceEntry.repeatCount > 0) {
+          emitTraceLine(
+            lastTraceEntry.channel,
+            `same event repeated ${lastTraceEntry.repeatCount} more times | ${formatTraceLine(lastTraceEntry.label, lastTraceEntry.summary)}`
+          );
+        }
+        lastTraceEntry = null;
+      }
+
+      function getLatestEntryId(entries) {
+        return (Array.isArray(entries) ? entries : []).reduce((max, entry) => Math.max(max, Number(entry?.id) || 0), 0);
+      }
+
+      function isErrorTraceEntry(entry) {
+        const event = normalizeText(entry?.event).toLowerCase();
+        const payload = entry?.payload && typeof entry.payload === "object" ? entry.payload : {};
+        const tone = normalizeText(payload?.tone).toLowerCase();
+        return event.includes("error")
+          || event.includes("failed")
+          || event.includes("timeout")
+          || tone === "error"
+          || Boolean(summarizeTraceError(payload?.error));
       }
 
       async function copyMeetingNotes() {
@@ -406,26 +468,6 @@
         helpers.applyRender?.();
       }
 
-      function handlePanelClick(event) {
-        const action = normalizeText(event.target?.closest?.("[data-debug-action]")?.dataset?.debugAction);
-        if (!action) return;
-        if (action === "copy") {
-          void copyDebugLog();
-          return;
-        }
-        if (action === "copy-errors") {
-          void copyDebugErrors();
-          return;
-        }
-        if (action === "clear") {
-          clearDebugLogPanel();
-          return;
-        }
-        if (action === "toggle") {
-          toggleDebugPanelCollapsed();
-        }
-      }
-
       function exposeDebugApi() {
         const debugApi = globalObject.__INOVA_HOSTED_MEETING_DEBUG__ = globalObject.__INOVA_HOSTED_MEETING_DEBUG__ || {};
         debugApi.debugConsoleState = buildHostedDebugConsoleStateSnapshot;
@@ -452,9 +494,6 @@
         copyMeetingNotes,
         copySegmentsText,
         exposeDebugApi,
-        forceExpand,
-        handlePanelClick,
-        render,
         setup,
       };
     },

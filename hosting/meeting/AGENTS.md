@@ -35,7 +35,8 @@
 - 섹션 수정 dialog는 preview card와 버튼 상태로만 안내하고, 별도 inline status strip은 두지 않는다.
 
 ## 디버그 / 증거 수집
-- hosted debug console render contract, `?debug=1` 절차, 로그 확보 helper, boot timing 해석은 `docs/meeting-debug-console-validation.md`에서 관리한다.
+- hosted 작업실은 화면 안에 debug panel/FAB를 렌더하지 않는다. `?debug=1`이면 확장 패널 로그처럼 DevTools 콘솔에 `[inova:meeting #n]`, `[inova:functions #n]`, `[inova:firestore #n]` trace를 출력한다.
+- console trace 절차, 로그 확보 helper, boot timing 해석은 `docs/meeting-debug-console-validation.md`에서 관리한다.
 - 같은 hosted 증상이 1~2회 패치 후에도 남으면 heuristic recovery를 더 추가하지 말고, debug 문서 기준으로 증거를 먼저 확보한다.
 
 ## 범위 제한
