@@ -11,6 +11,7 @@ const hostedMeetingCssPath = path.join(root, "hosting", "meeting", "index.css");
 const hostedMeetingRenderPath = path.join(root, "hosting", "meeting", "render.js");
 const hostedMeetingMutationsPath = path.join(root, "hosting", "meeting", "workspace-mutations.js");
 const hostedMeetingDebugPath = path.join(root, "hosting", "meeting", "workspace-debug.js");
+const hostedMeetingPendingUploadsPath = path.join(root, "hosting", "meeting", "workspace-pending-uploads.js");
 
 function main() {
   const html = fs.readFileSync(hostedMeetingHtmlPath, "utf8");
@@ -18,6 +19,7 @@ function main() {
   const renderJs = fs.readFileSync(hostedMeetingRenderPath, "utf8");
   const mutationsJs = fs.readFileSync(hostedMeetingMutationsPath, "utf8");
   const debugJs = fs.readFileSync(hostedMeetingDebugPath, "utf8");
+  const pendingUploadsJs = fs.readFileSync(hostedMeetingPendingUploadsPath, "utf8");
   const dom = new JSDOM(html);
   const { document } = dom.window;
 
@@ -131,6 +133,12 @@ function main() {
       && mutationsJs.includes("parseManualOverviewParticipants")
       && mutationsJs.includes("meetingMeta: overviewDraft.meetingMeta"),
     "Manual overview editing should expose and save editable participant metadata"
+  );
+  assert(
+    mutationsJs.includes("moveRecordLocalCopyToMeeting")
+      && pendingUploadsJs.includes("movePendingUploadToMeeting")
+      && pendingUploadsJs.includes("workspace.pending-upload.move-meeting"),
+    "Record move should move the local original copy to the target meeting instead of leaving it in the source room"
   );
   assert.equal(document.querySelector("#reviewTabActions #moveRecordButton"), null, "Move record action should not live in the shared review action row");
 

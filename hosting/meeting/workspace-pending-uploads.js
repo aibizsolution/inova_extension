@@ -2833,6 +2833,49 @@
         return normalized;
       }
 
+
+      async function movePendingUploadToMeeting(requestId, targetMeetingId, options = {}) {
+        const normalizedRequestId = normalizeText(requestId);
+        const normalizedTargetMeetingId = normalizeText(targetMeetingId);
+        if (!normalizedRequestId || !normalizedTargetMeetingId) {
+          return false;
+        }
+        const current = state.pendingUploads.find((item) => item.requestId === normalizedRequestId);
+        if (!current) {
+          return false;
+        }
+        const moved = normalizePendingUpload({
+          ...current,
+          meetingId: normalizedTargetMeetingId,
+          updatedAt: new Date().toISOString(),
+        });
+        await runPendingUploadQueueOperation(
+          () => state.queueStore.put(moved),
+          {
+            context: normalizePendingUploadQueueContext({
+              requestId: normalizedRequestId,
+              targetMeetingId: normalizedTargetMeetingId,
+              ...(options?.context || {}),
+            }),
+            scope: PENDING_UPLOAD_QUEUE_OPERATION_SCOPES.persist,
+          }
+        );
+        delete state.runtimeChunkCache[normalizedRequestId];
+        state.pendingUploads = state.pendingUploads.filter((item) => item.requestId !== normalizedRequestId);
+        if (state.selectedRecordId === ns.shared.buildLocalSelectionId(normalizedRequestId)) {
+          state.selectedRecordId = normalizeText(options?.nextSelectedRecordId) || chooseSelectedRecordId(state);
+        }
+        state.meeting.pendingLocalCount = state.pendingUploads.length;
+        if (options?.persistSession !== false) {
+          persistWorkspaceSession();
+        }
+        logDebug("workspace.pending-upload.move-meeting", {
+          requestId: normalizedRequestId,
+          targetMeetingId: normalizedTargetMeetingId,
+        });
+        return true;
+      }
+
       return {
         activateDebugLocalQueueSandbox,
         attemptPendingUpload,
@@ -2846,6 +2889,7 @@
         isDebugLocalQueueSandboxRequested,
         loadPendingUploads,
         loadSupersededRemoteJobIds,
+        movePendingUploadToMeeting,
         retryPendingUploads,
         reconcileRemoteRecordSummaries,
         runDebugLocalQueueSandboxAction,

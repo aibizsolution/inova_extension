@@ -66,6 +66,12 @@ const SECTION_LABELS = Object.freeze({
       const deletePendingUpload = (...args) => controller("pendingUploads")?.deletePendingUpload?.(...args);
       const handleLocalQueueAction = (...args) => controller("pendingUploads")?.handleLocalQueueAction?.(...args);
       const upsertPendingUpload = (...args) => controller("pendingUploads")?.createOrUpdatePendingUpload?.(...args);
+      const movePendingUploadToMeeting = (...args) => {
+        const pendingUploadsController = controller("pendingUploads");
+        return typeof pendingUploadsController?.movePendingUploadToMeeting === "function"
+          ? pendingUploadsController.movePendingUploadToMeeting(...args)
+          : Promise.resolve(false);
+      };
       const syncWorkspaceLocalState = (...args) => controller("realtime")?.syncWorkspaceLocalState?.(...args);
 
       function resolveSectionLabel(sectionKey) {
@@ -796,8 +802,14 @@ const SECTION_LABELS = Object.freeze({
             targetMeetingId,
           }, state.session.meetingSessionToken);
           assertAcceptedMutationResponse(payload, requestId, "기록 이동");
+          const movedLocalCopy = await moveRecordLocalCopyToMeeting(entry, targetMeetingId);
           closeRecordMoveDialog();
-          setNotice("기록을 다른 회의 룸으로 이동했습니다.", "highlight");
+          setNotice(
+            movedLocalCopy === false
+              ? "기록은 이동했지만 브라우저 원본 보관 위치를 갱신하지 못했어요."
+              : "기록을 다른 회의 룸으로 이동했습니다.",
+            movedLocalCopy === false ? "warning" : "highlight"
+          );
           await refreshWorkspace(false, "move-record");
           await resolvePendingMutationsFromSnapshots();
           return true;
@@ -816,6 +828,31 @@ const SECTION_LABELS = Object.freeze({
         } finally {
           syncWorkspaceMutationBusyState();
           applyRender();
+        }
+      }
+
+      async function moveRecordLocalCopyToMeeting(entry, targetMeetingId) {
+        const pendingRequestId = normalizeText(entry?.pending?.requestId);
+        if (!pendingRequestId) {
+          return null;
+        }
+        try {
+          const moved = await movePendingUploadToMeeting(pendingRequestId, targetMeetingId, {
+            context: {
+              jobId: normalizeText(entry?.remote?.jobId),
+              phase: "move-record-local-copy",
+            },
+            nextSelectedRecordId: "",
+          });
+          return moved === true;
+        } catch (error) {
+          logDebug("workspace.pending-upload.move-meeting.error", {
+            error,
+            requestId: pendingRequestId,
+            targetMeetingId: normalizeText(targetMeetingId),
+          });
+          showPendingUploadQueueOperationError(error, "기록은 이동했지만 브라우저 원본 보관 위치를 갱신하지 못했어요.");
+          return false;
         }
       }
 
