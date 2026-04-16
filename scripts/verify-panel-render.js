@@ -21,6 +21,7 @@ async function main() {
   verifyHostedMeetingActionCompletionTraceContract();
   verifyHostedStartupStatusCardDelayContract();
   verifyHostedPanelChromeSyncContract();
+  verifyHostedNormalizeTextUsesPanelUtils();
   verifyHostedMeetingSummarySyncContract();
   verifyHostedMeetingSnapshotSyncGuardContract();
   verifyHostedMeetingVisibilityRecoveryContract();
@@ -185,6 +186,37 @@ function verifyHostedPromptTabOwnershipContract() {
     hostedPanelSource.includes("activeTool: normalizeHostedToolId(nextPanel.activeTool || uiPreferences.activeTool),"),
     "hosted panel should derive activeTool from snapshot uiPreferences when the top panel no longer sends it as a view field"
   );
+}
+
+function verifyHostedNormalizeTextUsesPanelUtils() {
+  [
+    "base-firestore-client.js",
+    "conversation-controller.js",
+    "extension-capability-client.js",
+    "index.js",
+    "meeting-firestore-client.js",
+    "meeting-hub-controller.js",
+    "panel-firestore-session-client.js",
+    "panel-utils.js",
+    "prompt-library-controller.js",
+    "prompt-library-firestore-client.js",
+    "prompt-library-model.js",
+    "prompt-review-controller.js",
+    "prompt-store-controller.js",
+    "prompt-store-firestore-client.js",
+    "release-controller.js",
+  ].forEach((fileName) => {
+    const source = fs.readFileSync(
+      path.join(root, "hosting", "extension-v2", "panel", fileName),
+      "utf8"
+    );
+    assert(
+      !source.includes("namespace.panelUtils?.normalizeText")
+        && !source.includes("namespace.session?.normalizeText")
+        && !source.includes('String(value ?? "").trim()'),
+      `${fileName} should use the shared hosted/session normalizeText contract instead of redefining the fallback`
+    );
+  });
 }
 
 function verifyHostedPanelChromeSyncContract() {
@@ -509,6 +541,12 @@ async function verifyHostedReleaseLocalDownloadUrls() {
     },
   };
 
+  new vm.Script(
+    fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "panel-utils.js"), "utf8"),
+    {
+      filename: "hosting/extension-v2/panel/panel-utils.js",
+    }
+  ).runInContext(context);
   new vm.Script(
     fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "extension-capability-client.js"), "utf8"),
     {

@@ -3,7 +3,7 @@
   const utils = namespace.panelUtils || {};
   const normalizeText = typeof utils.normalizeText === "function"
     ? utils.normalizeText
-    : (value) => namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
+    : namespace.session.normalizeText;
   const READER = "prompt-library";
 
   const client = namespace.baseFirestoreClient?.createBaseFirestoreClient?.({

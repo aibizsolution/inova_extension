@@ -1,8 +1,6 @@
 (function initConversationController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const normalizeText = namespace.panelUtils?.normalizeText
-    || namespace.session?.normalizeText
-    || ((value) => String(value ?? "").trim());
+  const normalizeText = (namespace.panelUtils || namespace.session).normalizeText;
   const SNAPSHOT_REFRESH_DEBOUNCE_MS = 120;
   const REQUIRED_EXTENSION_CAPABILITIES = Object.freeze([
     "page.adapter.v2",

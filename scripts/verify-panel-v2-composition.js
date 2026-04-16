@@ -26,6 +26,7 @@ function main() {
     path.join(root, "content", "panel-v2-shell-bridge.js"),
     "utf8"
   );
+  verifyContentNormalizeTextUsesSharedSession();
 
   const mainContentScript = manifest.content_scripts.find((entry) =>
     Array.isArray(entry?.matches) && entry.matches.includes("https://inova.incross.com/*")
@@ -447,6 +448,27 @@ function main() {
   );
 
   console.log("[verify-panel-v2-composition] V2 panel composition contract passed");
+}
+
+function verifyContentNormalizeTextUsesSharedSession() {
+  [
+    "content/composer.js",
+    "content/features/prompt-review/prompt-review-manager.js",
+    "content/frame-proxy-helper.js",
+    "content/hosted-panel-bridge.js",
+    "content/page-capability-router.js",
+    "content/panel-host-runtime.js",
+    "content/panel-v2-composition-controller.js",
+    "content/panel.js",
+    "content/route-state-controller.js",
+  ].forEach((relativePath) => {
+    const source = fs.readFileSync(path.join(root, relativePath), "utf8");
+    assert(
+      !source.includes("namespace.session?.normalizeText")
+        && !source.includes('String(value ?? "").trim()'),
+      `${relativePath} should use shared/session normalizeText instead of redefining the fallback`
+    );
+  });
 }
 
 main();

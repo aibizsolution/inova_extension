@@ -1,8 +1,6 @@
 (function initReleaseController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const normalizeText = namespace.panelUtils?.normalizeText
-    || namespace.session?.normalizeText
-    || ((value) => String(value ?? "").trim());
+  const normalizeText = (namespace.panelUtils || namespace.session).normalizeText;
   const CHECK_INTERVAL_MS = Number(namespace.constants?.limits?.releaseCheckIntervalMs) || 21600000;
   const REQUIRED_EXTENSION_CAPABILITIES = Object.freeze([
     "runtime.invoke.v1",

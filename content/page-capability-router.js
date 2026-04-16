@@ -1,6 +1,6 @@
 (function initPanelPageCapabilityRouter(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const normalizeText = namespace.session?.normalizeText || ((value) => String(value ?? "").trim());
+  const normalizeText = namespace.session.normalizeText;
 
   function handle(payload, helpers = {}) {
     const action = normalizeText(payload?.action);

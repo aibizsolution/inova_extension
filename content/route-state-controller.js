@@ -1,6 +1,6 @@
 (function initRouteStateController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const normalizeText = namespace.session?.normalizeText || ((value) => String(value ?? "").trim());
+  const normalizeText = namespace.session.normalizeText;
   const ROUTE_FALLBACK_MS = 1600;
   const ROUTE_SETTLE_MS = 260;
 

@@ -12,7 +12,7 @@
     : (value) => (normalizeText(value).toLowerCase() === "local" ? "local" : "production");
   const normalizeText = typeof utils.normalizeText === "function"
     ? utils.normalizeText
-    : (value) => namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
+    : namespace.session.normalizeText;
   const readErrorMessage = typeof utils.readErrorMessage === "function"
     ? utils.readErrorMessage
     : (error, fallbackMessage) => normalizeText(error instanceof Error ? error.message : error) || fallbackMessage;

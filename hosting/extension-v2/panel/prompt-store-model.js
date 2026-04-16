@@ -284,7 +284,10 @@
   }
 
   function defaultNormalizeText(value) {
-    return namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
+    return String(value ?? "")
+      .replace(/\s+/g, " ")
+      .replace(/\u00a0/g, " ")
+      .trim();
   }
 
   function cloneValue(value) {

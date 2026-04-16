@@ -226,7 +226,7 @@
     }
 
     function normalizeText(value) {
-      return namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
+      return namespace.session.normalizeText(value);
     }
   }
 

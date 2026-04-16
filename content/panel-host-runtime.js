@@ -1,6 +1,6 @@
 (function initPanelHostRuntime(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const defaultNormalizeText = namespace.session?.normalizeText || ((value) => String(value ?? "").trim());
+  const defaultNormalizeText = namespace.session.normalizeText;
 
   function create(deps = {}) {
     const applyHandleRatio = typeof deps.applyHandleRatio === "function"

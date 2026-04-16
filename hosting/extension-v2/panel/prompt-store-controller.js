@@ -1,8 +1,6 @@
 (function initPromptStoreController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const normalizeText = namespace.panelUtils?.normalizeText
-    || namespace.session?.normalizeText
-    || ((value) => String(value ?? "").trim());
+  const normalizeText = (namespace.panelUtils || namespace.session).normalizeText;
   const LOCAL_CACHE_LIMIT = 1000;
   const INITIAL_RENDER_COUNT = 20;
   const RENDER_BATCH_SIZE = 20;

@@ -1,8 +1,6 @@
 (function initHostedPanelApp(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const normalizeText = namespace.panelUtils?.normalizeText
-    || namespace.session?.normalizeText
-    || ((value) => String(value ?? "").trim());
+  const normalizeText = (namespace.panelUtils || namespace.session).normalizeText;
   const BRIDGE_VERSION = 1;
   const APP_SOURCE = "inova-hosted-panel-app";
   const EXTENSION_SOURCE = "inova-hosted-panel-extension";

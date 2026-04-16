@@ -233,7 +233,7 @@
   async function handle(request, helpers = {}) {
     const normalizeText = typeof helpers.normalizeText === "function"
       ? helpers.normalizeText
-      : (value) => namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
+      : namespace.session.normalizeText;
     const callbacks = helpers.callbacks && typeof helpers.callbacks === "object"
       ? helpers.callbacks
       : {};
@@ -295,7 +295,7 @@
   async function handleRuntimeRequest(payload, helpers = {}) {
     const normalizeText = typeof helpers.normalizeText === "function"
       ? helpers.normalizeText
-      : (value) => namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
+      : namespace.session.normalizeText;
 
     if (!global.chrome?.runtime?.sendMessage) {
       throw new Error("확장 런타임에 연결할 수 없어요.");
@@ -316,7 +316,7 @@
   async function handlePanelRequest(payload, callbacks, helpers = {}) {
     const normalizeText = typeof helpers.normalizeText === "function"
       ? helpers.normalizeText
-      : (value) => namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
+      : namespace.session.normalizeText;
     const action = normalizeText(payload?.action);
     return handleShellRequest(action, payload, callbacks);
   }

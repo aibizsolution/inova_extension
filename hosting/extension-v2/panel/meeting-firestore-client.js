@@ -6,7 +6,7 @@
     : (value) => (value == null ? value : JSON.parse(JSON.stringify(value)));
   const normalizeText = typeof utils.normalizeText === "function"
     ? utils.normalizeText
-    : (value) => namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
+    : namespace.session.normalizeText;
   const READER = "meeting";
 
   const client = namespace.baseFirestoreClient?.createBaseFirestoreClient?.({

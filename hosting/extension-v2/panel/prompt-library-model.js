@@ -2,7 +2,7 @@
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
 
   function normalizeText(value) {
-    return namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
+    return namespace.session.normalizeText(value);
   }
 
   function normalizePromptContent(value) {
