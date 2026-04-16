@@ -126,6 +126,12 @@ function main() {
       && mutationsJs.includes('editMode: "manual"'),
     "Meeting notes section actions should support manual save and delete through the hosted mutation controller"
   );
+  assert(
+    mutationsJs.includes("[참여자]\\n")
+      && mutationsJs.includes("parseManualOverviewParticipants")
+      && mutationsJs.includes("meetingMeta: overviewDraft.meetingMeta"),
+    "Manual overview editing should expose and save editable participant metadata"
+  );
   assert.equal(document.querySelector("#reviewTabActions #moveRecordButton"), null, "Move record action should not live in the shared review action row");
 
   console.log("[verify-meeting-hosted-ui] Hosted meeting UI contract passed");

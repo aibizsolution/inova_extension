@@ -498,6 +498,24 @@ async function main() {
   assert.equal(manuallyEditedArtifact.notes.summary, "직접 고친 핵심 요약");
   assert.equal(manuallyEditedJob.meetingNotes.overview, previewedSection.jsonBody.data.sectionData.overview);
 
+  const manualOverviewSectionData = {
+    meetingMeta: { datetime: "", participants: [], purpose: "직접 고친 회의 목적" },
+    overview: "참여자를 직접 비운 회의 개요",
+  };
+  const manualOverviewAppliedSection = await invokeHandler(handlers.applyInovaMeetingResultSectionEdit, {
+    body: { clientRequestId: "section-manual-overview-participants-1", editMode: "manual", jobId, meetingId: "meeting-planning-1", owner, sectionData: manualOverviewSectionData, sectionKey: "overview" },
+    method: "POST",
+  });
+  assert.equal(manualOverviewAppliedSection.statusCode, 200);
+  const manualOverviewEditedJob = getDoc(state, JOB_COLLECTION, jobId);
+  const manualOverviewEditedArtifact = getDoc(state, ARTIFACT_COLLECTION, artifactId);
+  for (const notes of [manualOverviewEditedJob.meetingNotes, manualOverviewEditedArtifact.notes]) {
+    assert.equal(notes.overview, manualOverviewSectionData.overview);
+    assert.equal(notes.meetingMeta.datetime, "");
+    assert.deepEqual(notes.meetingMeta.participants, []);
+    assert.equal(notes.meetingMeta.purpose, manualOverviewSectionData.meetingMeta.purpose);
+  }
+
   const deletedQuestionsSection = await invokeHandler(handlers.applyInovaMeetingResultSectionEdit, {
     body: {
       clientRequestId: "section-delete-open-questions-1",
