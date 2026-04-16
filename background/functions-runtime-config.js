@@ -28,6 +28,7 @@
       ["prompt.store.toggle-like", "togglePromptStoreLikeUrl", "prompt", "prompt-store", "prompt-store", "write"],
       ["prompt.store.unpublish", "unpublishPromptFromStoreUrl", "prompt", "prompt-store", "prompt-store", "write"],
       ]),
+      "panel.ui-preferences.write": { auditLevel: "write", authMode: "none", domain: "panel", enabled: true, inputSchemaVersion: 1, kind: "storage.write-ui-preferences", minExtensionVersion: "1.0.0", outputSchemaVersion: 1, owner: "runtime-platform", schemaVersion: 1, service: "storage" },
       "release.download.open": { auditLevel: "write", authMode: "none", domain: "release", enabled: true, inputSchemaVersion: 1, kind: "browser.open-url", minExtensionVersion: "1.0.0", outputSchemaVersion: 1, owner: "release", schemaVersion: 1, service: "browser", templateKeys: ["release.download"] },
     },
     endpointKeys: {
@@ -377,7 +378,7 @@
         throw new Error(`remote capability manifest capability is invalid: ${capabilityId}`);
       }
       const kind = normalizeText(capability.kind);
-      if (kind !== "function" && kind !== "browser.open-url") {
+      if (kind !== "function" && kind !== "browser.open-url" && kind !== "storage.write-ui-preferences") {
         throw new Error(`remote capability manifest capability kind is not allowed: ${capabilityId}`);
       }
       if (kind === "function") {
@@ -390,6 +391,7 @@
         const templateKeys = Array.isArray(capability.templateKeys) ? capability.templateKeys.map(normalizeText) : [];
         if (!templateKeys.length || templateKeys.some((templateKey) => templateKey !== "release.download")) throw new Error(`remote capability manifest capability templateKey is not allowed: ${capabilityId}`);
       }
+      if (kind === "storage.write-ui-preferences" && normalizeText(capability.service).toLowerCase() !== "storage") throw new Error(`remote capability manifest capability service is not allowed: ${capabilityId}`);
       const authMode = normalizeText(capability.authMode || capability.auth || "access-token").toLowerCase();
       if (!["access-token", "none"].includes(authMode)) {
         throw new Error(`remote capability manifest capability authMode is not allowed: ${capabilityId}`);

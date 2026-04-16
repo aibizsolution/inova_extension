@@ -299,7 +299,16 @@ async function invokeManifestCapability(request) {
   if (capability.kind === "browser.open-url") {
     return invokeBrowserOpenUrlCapability(capabilityId, capability, request?.input);
   }
+  if (capability.kind === "storage.write-ui-preferences") {
+    return invokeStorageUiPreferencesCapability(request?.input);
+  }
   throw new Error("지원하지 않는 remote capability kind예요.");
+}
+
+async function invokeStorageUiPreferencesCapability(input = {}) {
+  return namespace.storage.updateUiPreferences(
+    input?.partial && typeof input.partial === "object" ? input.partial : {}
+  );
 }
 
 async function invokeBrowserOpenUrlCapability(capabilityId, capability, input = {}) {

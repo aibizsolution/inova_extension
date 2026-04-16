@@ -311,7 +311,8 @@ verify 기준:
 
 - `kind=function` catalog와 dispatch가 구현됨.
 - `kind=browser.open-url`은 `release.download.open` capability로 1차 구현됨. hosted는 `templateKey + fileName`만 넘기고 background가 allowed template으로 실제 URL을 조립한다.
-- `storage.write-ui-preferences`, `page.capability`, `workflow` kind는 아직 pilot 전이다.
+- `kind=storage.write-ui-preferences`는 `panel.ui-preferences.write` capability로 1차 구현됨. hosted는 `writeUiPreferences(partial)` helper를 유지하되 내부 dispatch는 capabilityId 기반이다.
+- `page.capability`, `workflow` kind는 아직 pilot 전이다.
 
 ### Phase 5. Page Primitive 선탑재
 

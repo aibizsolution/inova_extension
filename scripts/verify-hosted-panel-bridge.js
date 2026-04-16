@@ -428,6 +428,11 @@ function verifyHostedPanelFiles(directoryName) {
       "v2 hosted panel should keep endpoint compatibility path documented with a removal date and capability replacement"
     );
     assert(
+      extensionCapabilityClientJs.includes('"panel.ui-preferences.write"')
+        && !extensionCapabilityClientJs.includes('action: "storage.write-ui-preferences"'),
+      "v2 hosted panel should persist uiPreferences through the semantic storage capability id"
+    );
+    assert(
       html.indexOf("./panel-utils.js") > html.indexOf("./runtime.js")
         && html.indexOf("./panel-utils.js") < html.indexOf("./panel-firestore-session-client.js")
         && html.indexOf("./panel-firestore-session-client.js") > html.indexOf("./extension-capability-client.js")

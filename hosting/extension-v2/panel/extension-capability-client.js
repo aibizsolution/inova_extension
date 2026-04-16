@@ -215,10 +215,7 @@
     }
 
     function writeUiPreferences(partial = {}) {
-      return invokeRuntime({
-        action: "storage.write-ui-preferences",
-        partial,
-      });
+      return invokeCapability("panel.ui-preferences.write", { partial });
     }
 
     function buildPanelAuthCacheKey(panel, providerIdentity, requestOptions = {}) {

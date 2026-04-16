@@ -74,6 +74,19 @@
       "schemaVersion": 1,
       "service": "meeting"
     },
+    "panel.ui-preferences.write": {
+      "auditLevel": "write",
+      "authMode": "none",
+      "domain": "panel",
+      "enabled": true,
+      "inputSchemaVersion": 1,
+      "kind": "storage.write-ui-preferences",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "runtime-platform",
+      "schemaVersion": 1,
+      "service": "storage"
+    },
     "prompt.library.sync": {
       "auditLevel": "write",
       "authMode": "access-token",

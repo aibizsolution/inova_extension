@@ -143,7 +143,7 @@ async function verifyHostedPromptEditorViewLabels() {
           },
         };
       }
-      if (request?.action === "functions.invoke-endpoint" || request?.action === "capabilities.invoke") {
+      if (request?.action === "functions.invoke-endpoint" || request?.capabilityId === "prompt.library.sync") {
         return {
           promptLibrary: {
             items: [{ id: "prompt-1", title: "Prompt", content: "Body" }],
@@ -376,8 +376,8 @@ async function verifyHostedPromptPublishUsesFunctionsFetch() {
           },
         };
       }
-      if (request?.action === "storage.write-ui-preferences") {
-        persistedTabs.push(request?.partial?.activePromptTab || "");
+      if (isUiPreferencesWriteRequest(request)) {
+        persistedTabs.push(readUiPreferencesPartial(request).activePromptTab || "");
         return {};
       }
       return {};
@@ -494,7 +494,7 @@ async function verifyHostedPromptTabSelectionDoesNotWaitForPersistence() {
   const controller = context.InovaBookmarks.promptLibraryController.create({
     ensureStoreLoaded: async () => {},
     invokeRuntime: async (request) => {
-      if (request?.action === "storage.write-ui-preferences") {
+      if (isUiPreferencesWriteRequest(request)) {
         return persistencePromise;
       }
       return {};
@@ -685,8 +685,8 @@ async function verifyHostedPromptReviewRequestAutofocus() {
           },
         };
       }
-      if (request?.action === "storage.write-ui-preferences") {
-        persistedPreferences.push({ ...(request?.partial || {}) });
+      if (isUiPreferencesWriteRequest(request)) {
+        persistedPreferences.push({ ...readUiPreferencesPartial(request) });
         return {};
       }
       return {};
@@ -821,6 +821,15 @@ async function verifyHostedPromptReviewTabVisibility() {
 
 function read(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), "utf8");
+}
+
+function isUiPreferencesWriteRequest(request) {
+  return request?.action === "storage.write-ui-preferences"
+    || (request?.action === "capabilities.invoke" && request?.capabilityId === "panel.ui-preferences.write");
+}
+
+function readUiPreferencesPartial(request) {
+  return request?.action === "capabilities.invoke" ? request?.input?.partial || {} : request?.partial || {};
 }
 
 function flushAsync() {

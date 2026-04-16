@@ -33,6 +33,8 @@ function verifyServedCapabilityManifests() {
   assert.equal(v2Manifest.capabilities["prompt.review.run"].endpointKey, "reviewInovaPromptUrl");
   assert.equal(v2Manifest.capabilities["prompt.review.run"].kind, "function");
   assert.equal(v2Manifest.capabilities["prompt.review.run"].inputSchemaVersion, 1);
+  assert.equal(v2Manifest.capabilities["panel.ui-preferences.write"].kind, "storage.write-ui-preferences");
+  assert.equal(v2Manifest.capabilities["panel.ui-preferences.write"].service, "storage");
   assert.equal(v2Manifest.capabilities["release.download.open"].kind, "browser.open-url");
   assert.deepEqual(v2Manifest.capabilities["release.download.open"].templateKeys, ["release.download"]);
   assert.equal(v2Manifest.lanes.v2.endpointOverrides.syncInovaPromptLibraryUrl, "syncInovaPromptLibraryV2");
@@ -244,7 +246,6 @@ async function verifyBundledRuntimeRouterDispatch() {
   assert.deepEqual(nextPreferences, {
     activeTool: "release",
   });
-
   const hostedAuth = await router.handle({
     action: "auth.issue-panel-session",
     panel: "hosted",
@@ -264,11 +265,25 @@ async function verifyBundledRuntimeRouterDispatch() {
   assert(handshake.runtimeActions.includes("capabilities.invoke"));
   assert(handshake.bridgeApis.includes("invokeCapability"));
   assert(handshake.enabledCapabilityIds.includes("prompt.review.run"));
+  assert(handshake.enabledCapabilityIds.includes("panel.ui-preferences.write"));
   assert(handshake.enabledCapabilityIds.includes("release.download.open"));
   assert.equal(
     handshake.capabilities.find((capability) => capability.capabilityId === "prompt.review.run")?.enabled,
     true
   );
+
+  const semanticPreferences = await router.handle({
+    action: "capabilities.invoke",
+    capabilityId: "panel.ui-preferences.write",
+    input: {
+      partial: {
+        activeTool: "meeting",
+      },
+    },
+  });
+  assert.deepEqual(semanticPreferences, {
+    activeTool: "meeting",
+  });
 
   const invokeResult = await router.handle({
     action: "functions.invoke-endpoint",
