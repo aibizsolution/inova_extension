@@ -1478,6 +1478,9 @@
     if (!target) {
       return;
     }
+    if (!getTextInputBinding(target)) {
+      flushActiveTextInputComposition(host);
+    }
     const promptMenu = target.closest?.("[data-prompt-menu]");
     const storeMenu = target.closest?.("[data-store-menu]");
     if (!promptMenu && !target.closest?.('[data-prompt-action="toggle-menu"]')) {
@@ -1654,6 +1657,41 @@
     if (!handled && !state.renderFrame) {
       scheduleRender();
     }
+  }
+
+  function flushActiveTextInputComposition(host) {
+    if (!state.inputComposition.active && !state.renderDeferred) {
+      return false;
+    }
+    const activeElement = global.document?.activeElement;
+    const activeBinding = getTextInputBinding(activeElement);
+    const binding = activeBinding || getStoredCompositionBinding(host);
+    const handled = binding ? applyTextInputBinding(binding, { composing: false }) : false;
+    state.inputComposition = createInputCompositionState();
+    if (state.renderDeferred) {
+      state.renderDeferred = false;
+      if (!state.renderFrame) {
+        scheduleRender();
+      }
+    }
+    return handled;
+  }
+
+  function getStoredCompositionBinding(host) {
+    if (!(host instanceof global.HTMLElement)) {
+      return null;
+    }
+    const composition = state.inputComposition || {};
+    const kind = normalizeText(composition.kind);
+    let selector = "";
+    if (kind === "search" && composition.toolId) {
+      selector = `[data-search-tool="${escapeSelector(composition.toolId)}"]`;
+    } else if (kind === "prompt-field" && composition.field) {
+      selector = `[data-prompt-field="${escapeSelector(composition.field)}"]`;
+    } else if (kind === "prompt-publish-field" && composition.field && composition.promptId) {
+      selector = `[data-prompt-publish-field="${escapeSelector(composition.field)}"][data-prompt-id="${escapeSelector(composition.promptId)}"]`;
+    }
+    return selector ? getTextInputBinding(host.querySelector(selector)) : null;
   }
 
   function handleRootInput(event) {

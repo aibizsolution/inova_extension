@@ -430,6 +430,12 @@ function verifyHostedPanelFiles(directoryName) {
     assert(indexJs.includes("readCapabilityCatalog"), "v2 hosted panel should negotiate the runtime capability catalog at boot");
     assert(indexJs.includes("remoteWorkflowHost"), "v2 hosted panel should boot the remote workflow sandbox host after negotiation");
     assert(indexJs.includes("invokeWorkflow"), "v2 hosted panel should route workflow capabilities to the sandbox host");
+    assert(
+      indexJs.includes("flushActiveTextInputComposition(host)")
+        && indexJs.includes("getStoredCompositionBinding")
+        && indexJs.indexOf("flushActiveTextInputComposition(host)") < indexJs.indexOf("namespace.promptToolPanel?.handleClick?."),
+      "v2 hosted panel should flush pending IME text composition before prompt/store click actions"
+    );
     assert(extensionCapabilityClientJs.includes('"capabilities.handshake"'), "v2 hosted panel should request capability handshake through the capability client");
     assert(
       extensionCapabilityClientJs.includes("COMPATIBILITY_RUNTIME_ACTIONS")
