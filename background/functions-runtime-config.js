@@ -31,108 +31,33 @@
       "panel.ui-preferences.write": { auditLevel: "write", authMode: "none", domain: "panel", enabled: true, inputSchemaVersion: 1, kind: "storage.write-ui-preferences", minExtensionVersion: "1.0.0", outputSchemaVersion: 1, owner: "runtime-platform", schemaVersion: 1, service: "storage" },
       "release.download.open": { auditLevel: "write", authMode: "none", domain: "release", enabled: true, inputSchemaVersion: 1, kind: "browser.open-url", minExtensionVersion: "1.0.0", outputSchemaVersion: 1, owner: "release", schemaVersion: 1, service: "browser", templateKeys: ["release.download"] },
     },
-    endpointKeys: {
-      authorizeInovaMeetingWorkspaceAccessUrl: {
-        endpoint: "authorizeInovaMeetingWorkspaceAccess",
-        method: "POST",
-      },
-      createInovaMeetingShareLinkUrl: {
-        endpoint: "createInovaMeetingShareLink",
-        method: "POST",
-      },
-      deleteInovaMeetingUrl: {
-        endpoint: "deleteInovaMeeting",
-        method: "POST",
-      },
-      deleteInovaMeetingResultUrl: {
-        endpoint: "deleteInovaMeetingResult",
-        method: "POST",
-      },
-      exchangeInovaMeetingLaunchUrl: {
-        endpoint: "exchangeInovaMeetingLaunch",
-        method: "POST",
-      },
-      issueInovaMeetingLaunchUrl: {
-        endpoint: "issueInovaMeetingLaunch",
-        method: "POST",
-      },
-      issueInovaMeetingPanelAuthUrl: {
-        endpoint: "issueInovaMeetingPanelAuth",
-        method: "POST",
-      },
-      issueInovaPromptPanelAuthUrl: {
-        endpoint: "issueInovaPromptPanelAuth",
-        method: "POST",
-      },
-      issueInovaMeetingWorkspaceAuthUrl: {
-        endpoint: "issueInovaMeetingWorkspaceAuth",
-        method: "POST",
-      },
-      listInovaMeetingsUrl: {
-        endpoint: "listInovaMeetings",
-        method: "POST",
-      },
-      moveInovaMeetingResultUrl: {
-        endpoint: "moveInovaMeetingResult",
-        method: "POST",
-      },
-      uploadInovaMeetingSourceUrl: {
-        endpoint: "uploadInovaMeetingSource",
-        method: "POST",
-      },
-      updateInovaMeetingUrl: {
-        endpoint: "updateInovaMeeting",
-        method: "POST",
-      },
-      updateInovaMeetingResultUrl: {
-        endpoint: "updateInovaMeetingResult",
-        method: "POST",
-      },
-      loadInovaPromptLibraryUrl: {
-        endpoint: "loadInovaPromptLibrary",
-        method: "POST",
-      },
-      listPromptStoreEntriesUrl: {
-        endpoint: "listPromptStoreEntries",
-        method: "POST",
-      },
-      peekInovaPromptLibraryUrl: {
-        endpoint: "peekInovaPromptLibrary",
-        method: "POST",
-      },
-      reviewInovaPromptUrl: {
-        endpoint: "reviewInovaPrompt",
-        method: "POST",
-      },
-      publishPromptToStoreUrl: {
-        endpoint: "publishPromptToStore",
-        method: "POST",
-      },
-      unpublishPromptFromStoreUrl: {
-        endpoint: "unpublishPromptFromStore",
-        method: "POST",
-      },
-      importPromptStoreEntryUrl: {
-        endpoint: "importPromptStoreEntry",
-        method: "POST",
-      },
-      revokeInovaMeetingShareLinkUrl: {
-        endpoint: "revokeInovaMeetingShareLink",
-        method: "POST",
-      },
-      togglePromptStoreLikeUrl: {
-        endpoint: "togglePromptStoreLike",
-        method: "POST",
-      },
-      recordPromptStoreViewUrl: {
-        endpoint: "recordPromptStoreView",
-        method: "POST",
-      },
-      syncInovaPromptLibraryUrl: {
-        endpoint: "syncInovaPromptLibrary",
-        method: "POST",
-      },
-    },
+    endpointKeys: buildFunctionEndpointDefinitions([
+      "authorizeInovaMeetingWorkspaceAccessUrl",
+      "createInovaMeetingShareLinkUrl",
+      "deleteInovaMeetingResultUrl",
+      "deleteInovaMeetingUrl",
+      "exchangeInovaMeetingLaunchUrl",
+      "importPromptStoreEntryUrl",
+      "issueInovaMeetingLaunchUrl",
+      "issueInovaMeetingPanelAuthUrl",
+      "issueInovaMeetingWorkspaceAuthUrl",
+      "issueInovaPromptPanelAuthUrl",
+      "listInovaMeetingsUrl",
+      "listPromptStoreEntriesUrl",
+      "loadInovaPromptLibraryUrl",
+      "moveInovaMeetingResultUrl",
+      "peekInovaPromptLibraryUrl",
+      "publishPromptToStoreUrl",
+      "recordPromptStoreViewUrl",
+      "reviewInovaPromptUrl",
+      "revokeInovaMeetingShareLinkUrl",
+      "syncInovaPromptLibraryUrl",
+      "togglePromptStoreLikeUrl",
+      "unpublishPromptFromStoreUrl",
+      "updateInovaMeetingResultUrl",
+      "updateInovaMeetingUrl",
+      "uploadInovaMeetingSourceUrl",
+    ]),
     lanes: {
       legacy: {
         baseUrl: DEFAULT_FUNCTIONS_BASE_URL,
@@ -735,6 +660,14 @@
     return Object.entries(endpointDefinitions || {}).reduce((endpointMap, [configKey, definition]) => {
       endpointMap[configKey] = String(definition?.endpoint || "");
       return endpointMap;
+    }, {});
+  }
+
+  function buildFunctionEndpointDefinitions(endpointKeys) {
+    return (endpointKeys || []).reduce((definitions, endpointKey) => {
+      const normalizedKey = String(endpointKey || "").trim();
+      if (normalizedKey) definitions[normalizedKey] = { endpoint: normalizedKey.replace(/Url$/, ""), method: "POST" };
+      return definitions;
     }, {});
   }
 
