@@ -164,11 +164,6 @@
         action: "activate-review",
       });
       await setActivePromptTab("review");
-      const viewState = buildViewState();
-      if (viewState.result && !viewState.stale && !viewState.error) {
-        updateState({ open: true });
-        return;
-      }
       await reviewComposer();
     }
 
@@ -226,6 +221,21 @@
           requestId: 0,
           result: null,
           reviewedText: "",
+        });
+        return;
+      }
+      if (isSameReviewedPrompt(prompt)) {
+        updateState({
+          copyState: "idle",
+          error: "",
+          open: true,
+          pending: false,
+          placeholderConfirmation: false,
+        });
+        publishActionToast("이미 같은 내용으로 검토했어요.");
+        traceReview("51.hosted.review.request.skip", {
+          action: "review-composer",
+          reason: "same-text",
         });
         return;
       }
@@ -438,6 +448,15 @@
 
     function hasCapability(capabilityId) {
       return state.capabilities.includes(capabilityId);
+    }
+
+    function isSameReviewedPrompt(prompt) {
+      return Boolean(
+        state.result
+        && normalizeText(state.reviewedText)
+        && normalizeText(prompt) === normalizeText(state.reviewedText)
+        && !state.error
+      );
     }
 
     function handleExternalReviewActivation(reviewState) {

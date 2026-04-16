@@ -11,6 +11,7 @@ async function main() {
   verifyLegacyReviewContract();
   verifyPromptTellingV2Contract();
   verifyHostedPromptReviewContract();
+  await verifyHostedPromptReviewRerunBehavior();
   await verifyExtensionReviewHandoff();
   console.log("[verify-prompt-review] Prompt review contract passed");
 }
@@ -238,6 +239,95 @@ function verifyHostedPromptReviewContract() {
       && hostedReviewViewSource.includes("review.canReview"),
     true,
     "hosted prompt review should hide disabled capability execution behind the negotiated capability id gate"
+  );
+  assert.equal(
+    !hostedReviewViewSource.includes("다시 평가 후 반영")
+      && !hostedReviewViewSource.includes(">다시 평가</button>"),
+    true,
+    "hosted prompt review should not render stale bottom action buttons for rerun flows"
+  );
+  assert.equal(
+    hostedControllerSource.includes("reason: \"same-text\"")
+      && hostedControllerSource.includes("이미 같은 내용으로 검토했어요."),
+    true,
+    "hosted prompt review should toast instead of re-running when the composer text matches the last reviewed text"
+  );
+}
+
+async function verifyHostedPromptReviewRerunBehavior() {
+  let composerText = "초기 프롬프트";
+  const reviewCalls = [];
+  const toasts = [];
+  const context = vm.createContext({
+    clearTimeout,
+    console,
+    globalThis: null,
+    setTimeout,
+  });
+  context.globalThis = context;
+  context.InovaBookmarks = {
+    panelUtils: {
+      normalizeText(value) {
+        return String(value ?? "").replace(/\s+/g, " ").trim();
+      },
+      resolveBrowserCapabilities(options = {}) {
+        return options.browserCapabilities || {};
+      },
+    },
+  };
+  new vm.Script(
+    fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "prompt-review-controller.js"), "utf8"),
+    { filename: "hosting/extension-v2/panel/prompt-review-controller.js" }
+  ).runInContext(context);
+  const controller = context.InovaBookmarks.promptReviewController.create({
+    browserCapabilities: {
+      async applyComposerText() {
+        return { applied: true };
+      },
+      async invokeCapability(_capabilityId, body) {
+        reviewCalls.push(body);
+        return {
+          checks: [],
+          quickImprovements: ["보완"],
+          refinedPrompt: `${body.prompt} 보완`,
+          summary: "요약",
+          totalScore: 75,
+        };
+      },
+      async readComposerState() {
+        return { available: true, text: composerText };
+      },
+      async writeClipboardText() {
+        return { copied: true };
+      },
+    },
+    getProviderIdentity: () => ({ available: true, providerUserKey: "user-1" }),
+    getRuntimeVersion: () => "1.0.0",
+    publishToast: (toast) => {
+      toasts.push(toast);
+      return true;
+    },
+    scheduleRender() {},
+    setActivePromptTab: async () => true,
+    traceReview() {},
+  });
+  controller.syncPanelState({ activeTool: "prompts" }, ["prompt.review.run"]);
+
+  await controller.handlePromptAction("activate-review");
+  assert.equal(reviewCalls.length, 1, "first review activation should run the prompt review capability");
+  assert.equal(reviewCalls[0].prompt, "초기 프롬프트");
+
+  composerText = "수정된 프롬프트";
+  await controller.handlePromptAction("activate-review");
+  assert.equal(reviewCalls.length, 2, "changed composer text should re-run review immediately");
+  assert.equal(reviewCalls[1].prompt, "수정된 프롬프트");
+
+  await controller.handlePromptAction("activate-review");
+  assert.equal(reviewCalls.length, 2, "same composer text should not re-run review");
+  assert.equal(
+    toasts.at(-1)?.message,
+    "이미 같은 내용으로 검토했어요.",
+    "same composer text should show a toast"
   );
 }
 

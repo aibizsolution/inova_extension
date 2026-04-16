@@ -3,20 +3,21 @@
 
   function render(review) {
     const result = review.result;
-    const applyLabel = review.stale
-      ? "다시 평가 후 반영"
-      : review.requiresPlaceholderConfirm && !review.placeholderConfirmation
+    const applyLabel = review.requiresPlaceholderConfirm && !review.placeholderConfirmation
       ? "대괄호 내용 확인 후 반영"
       : review.requiresPlaceholderConfirm
       ? "대괄호 포함 그대로 반영"
       : "입력창에 반영";
-    const applyButton = result
+    const applyButton = result && !review.stale
       ? `<button type="button" class="inova-tool-button is-primary" data-prompt-action="apply-reviewed-prompt"${review.canApply ? "" : ' disabled aria-disabled="true"'}>${applyLabel}</button>`
       : "";
+    const reviewButton = result
+      ? ""
+      : `<button type="button" class="inova-tool-button" data-prompt-action="review-composer"${review.canReview ? "" : ' disabled aria-disabled="true"'}>검토</button>`;
     const notices = [
       !review.canReview && review.capabilityError ? `<p class="inova-inline-feedback is-error">${escapeHtml(review.capabilityError)}</p>` : "",
       review.error ? `<p class="inova-inline-feedback is-error">${escapeHtml(review.error)}</p>` : "",
-      review.stale ? '<p class="inova-inline-feedback is-warning">입력창 내용이 바뀌었어요. 다시 평가하면 현재 문장 기준으로 보완안을 새로 만들어요.</p>' : "",
+      review.stale ? '<p class="inova-inline-feedback is-warning">입력창 내용이 바뀌었어요. 검토 버튼을 누르면 현재 문장 기준으로 바로 다시 평가해요.</p>' : "",
       review.placeholderConfirmation ? `<p class="inova-inline-feedback is-warning">보완 프롬프트에 ${renderTokenList(result?.placeholderTokens || [])}처럼 대괄호로 표시된 항목이 남아 있어요. 그대로 반영하면 대괄호 안 내용도 함께 들어갑니다. 그대로 반영하려면 버튼을 한 번 더 눌러 주세요.</p>` : "",
       review.pending ? '<div class="inova-inline-feedback">프롬프트를 검토하고 있어요.</div>' : "",
       result?.placeholderTokens?.length ? `<p class="inova-inline-feedback is-warning">보완 프롬프트에 ${renderTokenList(result.placeholderTokens)}처럼 대괄호로 표시된 항목이 남아 있어요. 입력창에 반영한 뒤 대괄호([]) 안의 내용을 실제 데이터로 직접 수정해 주세요.</p>` : "",
@@ -36,7 +37,7 @@
         </div>
         <div class="inova-tool-actions inova-prompt-review__actions">
           ${applyButton}
-          <button type="button" class="inova-tool-button" data-prompt-action="review-composer"${review.canReview ? "" : ' disabled aria-disabled="true"'}>다시 평가</button>
+          ${reviewButton}
         </div>
       </section>
     `;
