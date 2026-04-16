@@ -318,6 +318,7 @@ function verifyHostedCapabilityCatalog() {
   if (!runtimeCapabilityActions.size) {
     errors.push("runtime capability catalog가 비어 있습니다.");
   }
+  verifyPageCapabilityRouterManifest(pageCapabilityActions);
 
   const hostedPanelDir = path.join(root, "hosting", "extension-v2", "panel");
   if (!fs.existsSync(hostedPanelDir)) {
@@ -334,6 +335,29 @@ function verifyHostedCapabilityCatalog() {
     verifyCapabilityCallsInSource(source, relativePath, "invokePage", pageCapabilityActions, "page");
     verifyCapabilityCallsInSource(source, relativePath, "invokeRuntime", runtimeCapabilityActions, "runtime");
     verifyCapabilityTransportIsolation(source, relativePath, entry);
+  }
+}
+
+function verifyPageCapabilityRouterManifest(pageCapabilityActions) {
+  const routerPath = path.join(root, "content", "page-capability-router.js");
+  const routerSource = fs.existsSync(routerPath) ? fs.readFileSync(routerPath, "utf8") : "";
+  const manifestMatch = routerSource.match(/const PAGE_CAPABILITY_MANIFEST = deepFreeze\(\{(?<body>[\s\S]*?)\n\s{2}\}\);/);
+  if (!manifestMatch?.groups?.body) {
+    errors.push("content/page-capability-router.js가 PAGE_CAPABILITY_MANIFEST를 선언하지 않습니다.");
+    return;
+  }
+  const manifestIds = new Set(
+    Array.from(manifestMatch.groups.body.matchAll(/^\s+"([^"]+)":\s*\{/gm), (match) => match[1]).filter(Boolean)
+  );
+  for (const capabilityId of pageCapabilityActions) {
+    if (!manifestIds.has(capabilityId)) {
+      errors.push(`page capability router manifest 누락: ${capabilityId}`);
+    }
+  }
+  for (const capabilityId of manifestIds) {
+    if (!pageCapabilityActions.has(capabilityId)) {
+      errors.push(`page capability router manifest가 계약 밖으로 넓어졌습니다: ${capabilityId}`);
+    }
   }
 }
 
