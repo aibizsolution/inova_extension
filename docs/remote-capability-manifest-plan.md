@@ -516,6 +516,7 @@ verify 기준:
 - remote manifest의 `capabilityId`는 lower-case semantic id 형식만 허용한다. URL, runtime action string처럼 transport를 드러내는 identifier는 manifest validation에서 실패한다.
 - capability별 `minExtensionVersion`은 remote manifest 전체 fallback 사유가 아니다. handshake에서 `enabled=false`와 `minExtensionVersionSupported=false`로 내려가고, invoke 시 명시적으로 실패한다.
 - `deprecatedAt`가 있는 capability는 같은 manifest 안의 유효한 `replacementId`를 가져야 한다. `replacementId`만 있는 vague compatibility path도 manifest validation에서 실패한다.
+- killed, lane mismatch, minExtensionVersion mismatch capability는 handshake의 `enabledCapabilityIds`에서 빠지고 invoke도 명시적으로 실패하도록 verify가 고정한다.
 - hosted boot가 handshake catalog를 읽어 enabled capability ids를 controller capability list에 합친다.
 - prompt review, prompt library, prompt store는 missing/killed capability의 UI action 노출과 실행을 1차 차단한다.
 - `workflow` kind는 manifest 검증에서 kill switch metadata를 필수로 요구하고, disabled 또는 killed 상태만 허용한다. sandbox pilot 전에는 enabled workflow manifest가 fallback으로 떨어진다.

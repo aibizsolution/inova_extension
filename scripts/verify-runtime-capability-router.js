@@ -195,6 +195,16 @@ async function verifyBundledRuntimeRouterDispatch() {
     ...remoteManifest.capabilities["prompt.review.run"],
     minExtensionVersion: "99.0.0",
   };
+  remoteManifest.capabilities["test.killed.function"] = {
+    ...remoteManifest.capabilities["prompt.review.run"],
+    killSwitch: {
+      enabled: true,
+    },
+  };
+  remoteManifest.capabilities["test.lane.function"] = {
+    ...remoteManifest.capabilities["prompt.review.run"],
+    lane: "legacy",
+  };
   remoteManifest.capabilities["test.workflow.disabled"] = buildTestWorkflowCapability({ enabled: false });
   const context = createRuntimeContext({
     fetch: async (url, options) => {
@@ -341,6 +351,14 @@ async function verifyBundledRuntimeRouterDispatch() {
   assert.equal(futureCapability?.minExtensionVersion, "99.0.0");
   assert.equal(futureCapability?.minExtensionVersionSupported, false);
   assert(!handshake.enabledCapabilityIds.includes("test.future.function"));
+  const killedCapability = handshake.capabilities.find((capability) => capability.capabilityId === "test.killed.function");
+  assert.equal(killedCapability?.enabled, false);
+  assert.equal(killedCapability?.killSwitch, true);
+  assert(!handshake.enabledCapabilityIds.includes("test.killed.function"));
+  const laneCapability = handshake.capabilities.find((capability) => capability.capabilityId === "test.lane.function");
+  assert.equal(laneCapability?.enabled, false);
+  assert.equal(laneCapability?.lane, "legacy");
+  assert(!handshake.enabledCapabilityIds.includes("test.lane.function"));
   const workflowCapability = handshake.capabilities.find((capability) => capability.capabilityId === "test.workflow.disabled");
   assert.equal(workflowCapability?.enabled, false);
   assert.equal(workflowCapability?.workflowId, "test.workflow.disabled");
@@ -425,6 +443,22 @@ async function verifyBundledRuntimeRouterDispatch() {
       input: {},
     }),
     /현재 확장 버전에서 capability를 사용할 수 없어요/
+  );
+  await assert.rejects(
+    router.handle({
+      action: "capabilities.invoke",
+      capabilityId: "test.killed.function",
+      input: {},
+    }),
+    /capability kill switch가 켜져 있어요/
+  );
+  await assert.rejects(
+    router.handle({
+      action: "capabilities.invoke",
+      capabilityId: "test.lane.function",
+      input: {},
+    }),
+    /현재 lane에서 capability를 사용할 수 없어요/
   );
   const releaseOpenResult = await router.handle({
     action: "capabilities.invoke",
