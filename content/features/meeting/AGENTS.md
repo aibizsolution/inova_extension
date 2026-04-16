@@ -94,6 +94,7 @@
 - v2 meeting hub ownership을 건드렸다면 `node scripts/verify-meeting-hub-controller.js`로 hosted controller가 Firestore subscription/open/share/revoke 경로를 직접 처리하는지도 함께 확인한다.
 - 새 녹음 또는 파일 import 1회와 제목/메모/결과 수정 또는 삭제 1회를 확인한다.
 - 회의록 보정 변경이 있으면 `용어 치환 적용하기 1회`, `섹션 수정 preview/apply 1회`, stale preview 재적용 거절을 함께 확인한다.
+- 자동 회의록 생성 품질 규칙을 바꾸면 `npm.cmd run verify:meeting-notes-generation`과 `npm.cmd run verify:meeting-service`를 함께 돌려 항목 수 채우기 방지와 같은 안건 재논의 보존 가드를 확인한다.
 - 기록 이동 변경이 있으면 완료 기록 1건을 다른 owned 회의 룸으로 옮기고, 현재 룸에서 사라지는지와 대상 회의 룸에서 같은 전사/회의 정리/메모가 유지되는지 확인한다.
 - hosted notes action UI를 건드렸다면 `npm.cmd run verify`와 `node scripts/verify-meeting-hosted-ui.js`를 함께 돌리고, 완료 기록에서만 action row가 보이는지와 `용어 치환` 버튼 내부 tooltip 문구를 함께 확인한다.
 - local full-stack smoke가 필요하면 `npm.cmd run emulator:meeting-local`을 먼저 켜고, 팝업에서 `로컬 호스팅`을 고른 뒤 같은 흐름을 확인한다.

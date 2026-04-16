@@ -245,7 +245,11 @@ function createMeetingNotesDocumentDomain(deps) {
       .filter((item) => item.heading || item.narrative || item.keyPoints.length);
     return dedupeMeetingItems(
       normalized,
-      (item) => normalizeMeetingComparisonText(item.heading || item.narrative || item.keyPoints[0]),
+      (item) => normalizeMeetingComparisonText([
+        item.heading,
+        item.narrative,
+        ...item.keyPoints,
+      ].filter(Boolean).join(" ")),
       maxItems
     );
   }
