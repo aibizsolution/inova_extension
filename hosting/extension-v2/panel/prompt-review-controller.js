@@ -113,7 +113,6 @@
       const reviewedText = normalizeText(state.reviewedText);
       const result = normalizeResult(state.result);
       const stale = Boolean(result && reviewedText && reviewedText !== currentText);
-      const requiresPlaceholderConfirm = Boolean(result?.placeholderTokens?.length);
       const canReview = hasCapability(PROMPT_REVIEW_RUN_CAPABILITY_ID);
       return {
         available: Boolean(state.composerState.available),
@@ -126,9 +125,9 @@
         lastReviewedAt: state.lastReviewedAt,
         open: Boolean(state.open && state.composerState.available),
         pending: Boolean(state.pending),
-        placeholderConfirmation: Boolean(state.placeholderConfirmation && requiresPlaceholderConfirm && !stale),
+        placeholderConfirmation: false,
         result,
-        requiresPlaceholderConfirm,
+        requiresPlaceholderConfirm: false,
         stale,
         textLength: currentText.length,
       };
@@ -341,18 +340,6 @@
         });
         return;
       }
-      if (viewState.requiresPlaceholderConfirm && !viewState.placeholderConfirmation) {
-        updateState({
-          error: "",
-          placeholderConfirmation: true,
-        });
-        traceReview("57.hosted.review.apply.error", {
-          action: "apply-reviewed-prompt",
-          error: "placeholder-confirmation-required",
-        });
-        return;
-      }
-
       const refinedPrompt = String(viewState.result?.refinedPrompt || "").trim();
       if (!refinedPrompt) {
         updateState({ error: "반영할 보완 프롬프트가 없어요." });

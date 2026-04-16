@@ -242,9 +242,12 @@ function verifyHostedPromptReviewContract() {
   );
   assert.equal(
     !hostedReviewViewSource.includes("다시 평가 후 반영")
-      && !hostedReviewViewSource.includes(">다시 평가</button>"),
+      && !hostedReviewViewSource.includes(">다시 평가</button>")
+      && !hostedReviewViewSource.includes("대괄호 내용 확인 후 반영")
+      && !hostedReviewViewSource.includes("대괄호 포함 그대로 반영")
+      && !hostedControllerSource.includes("placeholder-confirmation-required"),
     true,
-    "hosted prompt review should not render stale bottom action buttons for rerun flows"
+    "hosted prompt review should not render stale or placeholder confirmation bottom action buttons"
   );
   assert.equal(
     hostedControllerSource.includes("reason: \"same-text\"")
