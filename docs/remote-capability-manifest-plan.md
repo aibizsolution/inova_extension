@@ -352,6 +352,12 @@ verify 기준:
 - 데이터 추출 범위는 좁게 고정한다.
 - 새 primitive는 extension 재배포 대상이다.
 
+현재 상태:
+
+- `content/page-capability-router.js`는 canonical page primitive를 `PAGE_CAPABILITY_MANIFEST`와 adapter table로 dispatch한다.
+- 기존 primitive 실행 결과는 유지한다.
+- arbitrary selector/DOM script primitive는 추가하지 않았다.
+
 ### Phase 5.5. Schema Registry 강화
 
 목적:

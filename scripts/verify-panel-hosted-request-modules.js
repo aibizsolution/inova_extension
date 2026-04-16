@@ -188,20 +188,26 @@ function verifyHostedBridgeRequestModuleContract() {
     !pattern.test(hostedPanelSource),
     `hosted panel should stop routing hosted-owned actions through the panel request fallback ${pattern}`
   ));
+  assert(
+    pageCapabilityRouterSource.includes("PAGE_CAPABILITY_MANIFEST")
+      && pageCapabilityRouterSource.includes("PAGE_CAPABILITY_ADAPTERS")
+      && pageCapabilityRouterSource.includes("buildPageCapabilityContext"),
+    "page capability router should dispatch through a manifest lookup and adapter table"
+  );
   [
-    'if (action === "clipboard.write-text")',
-    'if (action === "debug.copy-log")',
-    'if (action === "debug.clear-log")',
-    'if (action === "trace.log")',
-    'if (action === "composer.read-state")',
-    'if (action === "composer.apply-text")',
-    'if (action === "conversation.read-state")',
-    'if (action === "conversation.jump-item")',
-    'if (action === "debug.read-state")',
-    'if (action === "debug.set-enabled")',
-  ].forEach((pattern) => assert(
-    pageCapabilityRouterSource.includes(pattern),
-    `page capability router should keep the canonical page capability contract for ${pattern}`
+    "clipboard.write-text",
+    "debug.copy-log",
+    "debug.clear-log",
+    "trace.log",
+    "composer.read-state",
+    "composer.apply-text",
+    "conversation.read-state",
+    "conversation.jump-item",
+    "debug.read-state",
+    "debug.set-enabled",
+  ].forEach((capabilityId) => assert(
+    pageCapabilityRouterSource.includes(`"${capabilityId}"`),
+    `page capability router should keep the canonical page capability contract for ${capabilityId}`
   ));
   [
     "function handlePageRequest(",
