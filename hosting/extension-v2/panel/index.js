@@ -22,6 +22,7 @@
     "runtime.invoke.v1",
     "page.adapter.v2",
   ]);
+  const UI_PREFERENCES_WRITE_CAPABILITY_ID = "panel.ui-preferences.write";
   const HOSTED_PANEL_TOOLS = Object.freeze([
     { id: "bookmarks", label: "대화" },
     { id: "meeting", label: "회의 룸" },
@@ -311,8 +312,12 @@
 
   async function persistHostedPanelOpen(open) {
     try {
-      await browserCapabilities.writeUiPreferences({ panelOpen: open === true });
+      await persistHostedUiPreferences({ panelOpen: open === true }, "panel-open");
     } catch (error) {
+      tracePanelFlow("35.hosted.preferences.write.error", {
+        context: "panel-open",
+        error: readErrorMessage(error, "panel open save failed"),
+      });
       console.error("[i-Nova Hosted Panel] panel open save failed", error);
     }
   }
@@ -326,14 +331,44 @@
       }
       : {
         activeTool: nextTool,
-      };
+    };
     try {
-      await browserCapabilities.writeUiPreferences(nextUiPreferences);
+      await persistHostedUiPreferences(nextUiPreferences, "active-tool");
       return true;
     } catch (error) {
+      const message = readErrorMessage(error, "패널 선택 저장에 실패했어요.");
+      tracePanelFlow("35.hosted.preferences.write.error", {
+        context: "active-tool",
+        error: message,
+      });
+      publishToast({
+        contextId: "panel.ui-preferences.write",
+        message,
+        source: "panel",
+        tone: "error",
+        ttlMs: 3200,
+      });
       console.error("[i-Nova Hosted Panel] active tool save failed", error);
       return false;
     }
+  }
+
+  async function persistHostedUiPreferences(partial, contextLabel = "ui-preferences") {
+    if (!canInvokeNegotiatedCapability(UI_PREFERENCES_WRITE_CAPABILITY_ID)) {
+      tracePanelFlow("35.hosted.preferences.write.blocked", {
+        capabilityId: UI_PREFERENCES_WRITE_CAPABILITY_ID,
+        context: contextLabel,
+      });
+      throw new Error("패널 설정 저장 기능이 현재 비활성화되어 있어요.");
+    }
+    return browserCapabilities.writeUiPreferences(partial);
+  }
+
+  function canInvokeNegotiatedCapability(capabilityId) {
+    if (!state.capabilityCatalog) {
+      return true;
+    }
+    return state.remoteCapabilityIds.includes(normalizeText(capabilityId));
   }
 
   function scheduleReadyPing() {

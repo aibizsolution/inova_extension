@@ -253,7 +253,7 @@ function verifyHostedPanelChromeSyncContract() {
     "hosted panel should own panel open state and sync it to the top host chrome"
   );
   assert(
-    hostedPanelSource.includes("writeUiPreferences({ panelOpen: open === true })")
+    hostedPanelSource.includes('persistHostedUiPreferences({ panelOpen: open === true }, "panel-open")')
       && !hostedPanelSource.includes("persistOpen"),
     "hosted panel should persist open through hosted-owned uiPreferences instead of content chrome sync persistence"
   );

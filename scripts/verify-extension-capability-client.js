@@ -70,6 +70,11 @@ async function verifyExtensionCapabilityClientPageAllowlist() {
             kind: "workflow",
             workflowId: "test.workflow.disabled",
           },
+          {
+            capabilityId: "panel.ui-preferences.write",
+            enabled: false,
+            kind: "storage.write-ui-preferences",
+          },
         ],
         capabilityAliases: [
           {
@@ -147,6 +152,16 @@ async function verifyExtensionCapabilityClientPageAllowlist() {
   await assert.rejects(
     async () => browserCapabilities.invokeCapability("test.workflow.disabled", {}),
     /capability가 비활성화되어 있어요/
+  );
+  const runtimeCallCountBeforeDisabledStorage = runtimeCalls.length;
+  await assert.rejects(
+    async () => browserCapabilities.writeUiPreferences({ activeTool: "meeting" }),
+    /capability가 비활성화되어 있어요/
+  );
+  assert.equal(
+    runtimeCalls.length,
+    runtimeCallCountBeforeDisabledStorage,
+    "disabled non-page capabilities should be blocked by the hosted client before runtime dispatch"
   );
 }
 

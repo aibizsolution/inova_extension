@@ -88,6 +88,7 @@
     function invokeCapability(capabilityId, input = {}, options = {}) {
       const normalizedCapabilityId = normalizeText(capabilityId);
       const capability = capabilityDefinitionsById.get(normalizedCapabilityId);
+      assertCapabilityEnabled(capability);
       if (capability?.kind === "page.capability") {
         return invokeManifestPageCapability(capability, input);
       }
@@ -100,6 +101,12 @@
         input,
         trace: options?.trace || null,
       });
+    }
+
+    function assertCapabilityEnabled(capability) {
+      if (capability?.enabled === false) {
+        throw new Error("capability가 비활성화되어 있어요.");
+      }
     }
 
     function invokeFunctionEndpoint(request = {}) {
@@ -125,16 +132,10 @@
     }
 
     function invokeManifestPageCapability(capability, input = {}) {
-      if (capability.enabled === false) {
-        throw new Error("capability가 비활성화되어 있어요.");
-      }
       return invokePageCapability(capability.pageCapabilityId || capability.capabilityId, input);
     }
 
     function invokeManifestWorkflowCapability(capability, input = {}, requestOptions = {}) {
-      if (capability.enabled === false) {
-        throw new Error("capability가 비활성화되어 있어요.");
-      }
       if (typeof invokeWorkflow !== "function") {
         throw new Error("remote workflow host가 준비되지 않았어요.");
       }

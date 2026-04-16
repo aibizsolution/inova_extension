@@ -169,8 +169,10 @@ function verifyHostedBridgeRequestModuleContract() {
     "hosted panel should keep tool rail persistence in a dedicated helper"
   );
   assert(
-    hostedPanelSource.includes("await browserCapabilities.writeUiPreferences(nextUiPreferences);"),
-    "hosted panel should persist tool rail selection through storage.write-ui-preferences"
+    hostedPanelSource.includes("await persistHostedUiPreferences(nextUiPreferences, \"active-tool\");")
+      && hostedPanelSource.includes("function canInvokeNegotiatedCapability(capabilityId)")
+      && hostedPanelSource.includes("UI_PREFERENCES_WRITE_CAPABILITY_ID"),
+    "hosted panel should persist tool rail selection through negotiated storage.write-ui-preferences"
   );
   assert(
     hostedPanelSource.includes('activePromptTab: "library"')

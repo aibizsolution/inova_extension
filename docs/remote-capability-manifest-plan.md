@@ -186,7 +186,8 @@ panel boot 시 hosted와 background는 capability catalog를 negotiation한다.
 - prompt review, prompt library, prompt store는 negotiated capabilityId 기준으로 write/action UI 노출과 실행을 1차 차단한다.
 - meeting hub는 `meeting.share.create-function`, `meeting.share.revoke-function` handshake capability가 enabled일 때만 공유 생성/해제 UI와 실행을 연다.
 - conversation controller는 `page.conversation.read-state`, `page.conversation.jump-item`, `page.clipboard.write-text` handshake capability가 enabled일 때만 읽기/이동/복사 UI와 실행을 연다.
-- controller-level action gating 1차는 완료됐다. 남은 후보는 panel shell의 preference write 같은 cross-controller helper다.
+- controller-level action gating 1차는 완료됐다.
+- hosted panel shell의 `panel.ui-preferences.write`도 handshake 이후에는 enabled capability일 때만 실행한다. disabled 상태에서는 runtime dispatch 전에 explicit error/trace/toast로 멈춘다.
 
 ## C. 단계별 실행안
 
@@ -543,7 +544,8 @@ verify 기준:
 - meeting hub는 missing/killed share function capability의 UI action 노출과 실행을 차단하고 explicit capability-disabled reason을 남긴다.
 - conversation controller는 missing/killed page read/jump/clipboard capability의 UI action 노출과 실행을 차단하고 explicit capability-disabled reason을 남긴다.
 - `workflow` kind는 manifest 검증에서 kill switch metadata를 필수로 요구한다. enabled workflow는 `workflowPilot` gate와 capability `pilot=true`를 모두 만족해야 한다.
-- controller-level required extension capability와 remote action capability 분리는 1차 완료됐다. 다음 후보는 hosted panel shell의 cross-controller preference write 경로다.
+- controller-level required extension capability와 remote action capability 분리는 1차 완료됐다.
+- hosted panel shell의 cross-controller preference write 경로도 `panel.ui-preferences.write` capability gate를 탄다.
 
 ### Phase 7.5. 자동 문서화와 금지 패턴 강화
 
