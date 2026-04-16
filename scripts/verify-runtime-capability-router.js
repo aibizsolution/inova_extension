@@ -122,6 +122,14 @@ async function verifyRemoteManifestValidationFailuresAreVisible() {
   );
   await verifyRejectedManifestMutation(
     (manifest) => {
+      manifest.capabilities["test.workflow.no-kill-switch"] = buildTestWorkflowCapability({
+        killSwitch: null,
+      });
+    },
+    "workflow capability without kill switch metadata should fall back visibly"
+  );
+  await verifyRejectedManifestMutation(
+    (manifest) => {
       manifest.capabilities["https://example.test/raw"] = {
         ...manifest.capabilities["prompt.review.run"],
       };
@@ -575,6 +583,9 @@ function buildTestWorkflowCapability(overrides = {}) {
     enabled: false,
     inputSchemaVersion: 1,
     kind: "workflow",
+    killSwitch: {
+      enabled: false,
+    },
     minExtensionVersion: "1.0.0",
     outputSchemaVersion: 1,
     owner: "runtime-platform",

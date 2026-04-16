@@ -204,6 +204,9 @@
       if (normalizeText(capability.service).toLowerCase() !== "workflow") {
         throw new Error(`remote capability manifest capability service is not allowed: ${capabilityId}`);
       }
+      if (!capability.killSwitch || typeof capability.killSwitch !== "object" || typeof capability.killSwitch.enabled !== "boolean") {
+        throw new Error(`remote workflow capability kill switch metadata is missing: ${capabilityId}`);
+      }
       if (capability.enabled !== false && !isCapabilityKillSwitchEnabled(capability)) {
         throw new Error(`remote workflow capability must stay disabled before sandbox pilot: ${capabilityId}`);
       }
