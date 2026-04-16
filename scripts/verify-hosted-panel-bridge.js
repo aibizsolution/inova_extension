@@ -484,6 +484,14 @@ function verifyHostedPanelFiles(directoryName) {
   const promptReviewControllerJs = directoryName === "extension-v2"
     ? fs.readFileSync(path.join(baseDir, "prompt-review-controller.js"), "utf8")
     : "";
+  const hostedControllerFiles = directoryName === "extension-v2"
+    ? fs.readdirSync(baseDir)
+      .filter((fileName) => fileName.endsWith("-controller.js"))
+      .map((fileName) => ({
+        fileName,
+        source: fs.readFileSync(path.join(baseDir, fileName), "utf8"),
+      }))
+    : [];
   const promptViewJs = directoryName === "extension-v2"
     ? fs.readFileSync(path.join(baseDir, "prompt-view.js"), "utf8")
     : "";
@@ -615,6 +623,10 @@ function verifyHostedPanelFiles(directoryName) {
     assert(!promptStoreControllerJs.includes("endpointKey:"), "v2 hosted store controller should use capabilityId instead of endpointKey literals");
     assert(!promptLibraryControllerJs.includes("endpointKey:"), "v2 hosted library controller should use capabilityId instead of endpointKey literals");
     assert(!promptReviewControllerJs.includes("endpointKey:"), "v2 hosted review controller should use capabilityId instead of endpointKey literals");
+    hostedControllerFiles.forEach((entry) => {
+      assert(!entry.source.includes("endpointKey:"), `${entry.fileName} should not use endpointKey literals`);
+      assert(!entry.source.includes("functions.invoke-endpoint"), `${entry.fileName} should not use raw function runtime action literals`);
+    });
     assert(promptStoreControllerJs.includes("storeFirestoreClient.ensureSubscribed"), "v2 hosted store controller should subscribe through the Firestore client");
     assert(
       promptLibraryControllerJs.includes("requireCapability(PROMPT_LIBRARY_CAPABILITY_IDS.sync")
