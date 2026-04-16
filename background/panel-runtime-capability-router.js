@@ -12,6 +12,7 @@ const SANDBOX_BRIDGE_API_ALLOWLIST = Object.freeze([
   "emitTrace",
   "invokeCapability",
   "invokePageCapability",
+  "metrics",
   "openUrl",
   "readPanelState",
   "writeUiPreferences",
@@ -257,6 +258,7 @@ async function buildCapabilityHandshake(request) {
     runtimeActions: Object.keys(PANEL_RUNTIME_CAPABILITY_MANIFEST.runtimeCapabilities).sort(),
     schemaVersion: Number(manifest.schemaVersion) || 0,
     source: namespace.session.normalizeText(manifestResult?.source),
+    workflowArtifacts: buildHandshakeWorkflowArtifacts(manifest.workflowArtifacts),
   };
 }
 
@@ -274,6 +276,28 @@ function buildHandshakeCapabilityAliases(aliases = {}, capabilities = {}) {
     }))
     .filter((alias) => Boolean(alias.aliasId && alias.replacementId))
     .sort((left, right) => left.aliasId.localeCompare(right.aliasId));
+}
+
+function buildHandshakeWorkflowArtifacts(workflowArtifacts = {}) {
+  if (!workflowArtifacts || typeof workflowArtifacts !== "object") {
+    return [];
+  }
+  return Object.entries(workflowArtifacts)
+    .map(([artifactId, artifact]) => ({
+      artifactId: namespace.session.normalizeText(artifactId),
+      artifactVersion: namespace.session.normalizeText(artifact?.artifactVersion || artifact?.version),
+      bundleId: namespace.session.normalizeText(artifact?.bundleId),
+      integrity: namespace.session.normalizeText(artifact?.integrity),
+      scriptSlot: namespace.session.normalizeText(artifact?.scriptSlot),
+    }))
+    .filter((artifact) => Boolean(
+      artifact.artifactId
+        && artifact.artifactVersion
+        && artifact.bundleId
+        && artifact.integrity
+        && artifact.scriptSlot
+    ))
+    .sort((left, right) => left.artifactId.localeCompare(right.artifactId));
 }
 
 function buildHandshakeCapability(capabilityId, capability, activeLane) {

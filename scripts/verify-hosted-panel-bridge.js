@@ -426,7 +426,9 @@ function verifyHostedPanelFiles(directoryName) {
     assert(html.includes("./panel-utils.js"), "v2 hosted panel should load shared panel utilities");
     assert(html.includes("./base-firestore-client.js"), "v2 hosted panel should load the shared Firestore reader lifecycle factory");
     assert(html.includes("./extension-capability-client.js"), "v2 hosted panel should load the hosted extension capability client");
+    assert(html.includes("./remote-workflow-host.js"), "v2 hosted panel should load the remote workflow sandbox host");
     assert(indexJs.includes("readCapabilityCatalog"), "v2 hosted panel should negotiate the runtime capability catalog at boot");
+    assert(indexJs.includes("remoteWorkflowHost"), "v2 hosted panel should boot the remote workflow sandbox host after negotiation");
     assert(extensionCapabilityClientJs.includes('"capabilities.handshake"'), "v2 hosted panel should request capability handshake through the capability client");
     assert(
       extensionCapabilityClientJs.includes("COMPATIBILITY_RUNTIME_ACTIONS")
@@ -455,6 +457,8 @@ function verifyHostedPanelFiles(directoryName) {
       html.indexOf("./panel-utils.js") > html.indexOf("./runtime.js")
         && html.indexOf("./panel-utils.js") < html.indexOf("./panel-firestore-session-client.js")
         && html.indexOf("./panel-firestore-session-client.js") > html.indexOf("./extension-capability-client.js")
+        && html.indexOf("./remote-workflow-host.js") > html.indexOf("./extension-capability-client.js")
+        && html.indexOf("./remote-workflow-host.js") < html.indexOf("./panel-firestore-session-client.js")
         && html.indexOf("./base-firestore-client.js") > html.indexOf("./panel-firestore-session-client.js")
         && html.indexOf("./prompt-text-model.js") > html.indexOf("./base-firestore-client.js")
         && html.indexOf("./prompt-text-model.js") < html.indexOf("./prompt-library-model.js")

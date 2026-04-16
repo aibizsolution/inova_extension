@@ -426,6 +426,15 @@ async function verifyBundledRuntimeRouterDispatch() {
       replacementKind: "function",
     },
   ]);
+  assert.deepEqual(handshake.workflowArtifacts, [
+    {
+      artifactId: "test-workflow",
+      artifactVersion: "0.0.1",
+      bundleId: "test-workflow-bundle",
+      integrity: "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+      scriptSlot: "remote-workflow",
+    },
+  ]);
   assert(handshake.enabledCapabilityIds.includes("prompt.review.run"));
   assert(handshake.enabledCapabilityIds.includes("panel.ui-preferences.write"));
   assert(handshake.enabledCapabilityIds.includes("page.composer.read-state"));

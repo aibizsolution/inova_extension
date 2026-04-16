@@ -72,6 +72,11 @@
     invokePage,
     invokeRuntime,
   }) || {};
+  const remoteWorkflowHost = namespace.remoteWorkflowHost?.create?.({
+    browserCapabilities,
+    document,
+    trace: tracePanelFlow,
+  }) || null;
   const conversationController = namespace.conversationController?.create?.({
     browserCapabilities,
     scheduleRender,
@@ -442,6 +447,7 @@
       state.capabilityNegotiationError = "";
       state.capabilityNegotiationKey = negotiationKey;
       state.remoteCapabilityIds = normalizeCapabilities(normalizedCatalog.enabledCapabilityIds);
+      void bootRemoteWorkflowSandbox(normalizedCatalog);
       tracePanelFlow("18.hosted.capability.handshake.success", {
         capabilityCount: normalizedCatalog.capabilities.length,
         degraded: Boolean(normalizedCatalog.degraded),
@@ -457,6 +463,26 @@
     } finally {
       state.capabilityNegotiationPending = false;
       scheduleRender();
+    }
+  }
+
+  async function bootRemoteWorkflowSandbox(catalog) {
+    if (!remoteWorkflowHost || !catalog) {
+      return;
+    }
+    try {
+      const sandboxState = await remoteWorkflowHost.boot({
+        bridgeApis: catalog.bridgeApis,
+        workflowArtifacts: catalog.workflowArtifacts,
+      });
+      tracePanelFlow("18.hosted.remote.workflow.sandbox.ready", {
+        bridgeApiCount: Array.isArray(sandboxState?.bridgeApis) ? sandboxState.bridgeApis.length : 0,
+        workflowArtifactCount: Array.isArray(sandboxState?.workflowArtifactIds) ? sandboxState.workflowArtifactIds.length : 0,
+      });
+    } catch (error) {
+      tracePanelFlow("18.hosted.remote.workflow.sandbox.error", {
+        error: readErrorMessage(error, "remote workflow sandbox boot failed"),
+      });
     }
   }
 
@@ -754,6 +780,7 @@
       runtimeActions: normalizeCapabilities(catalog.runtimeActions),
       schemaVersion: Number(catalog.schemaVersion) || 0,
       source: normalizeText(catalog.source),
+      workflowArtifacts: normalizeWorkflowArtifacts(catalog.workflowArtifacts),
     };
   }
 
@@ -769,6 +796,27 @@
           replacementKind: normalizeText(alias.replacementKind),
         }))
         .filter((alias) => Boolean(alias.aliasId && alias.replacementId))
+      : [];
+  }
+
+  function normalizeWorkflowArtifacts(value) {
+    return Array.isArray(value)
+      ? value
+        .filter((artifact) => artifact && typeof artifact === "object")
+        .map((artifact) => ({
+          artifactId: normalizeText(artifact.artifactId),
+          artifactVersion: normalizeText(artifact.artifactVersion),
+          bundleId: normalizeText(artifact.bundleId),
+          integrity: normalizeText(artifact.integrity),
+          scriptSlot: normalizeText(artifact.scriptSlot),
+        }))
+        .filter((artifact) => Boolean(
+          artifact.artifactId
+            && artifact.artifactVersion
+            && artifact.bundleId
+            && artifact.integrity
+            && artifact.scriptSlot
+        ))
       : [];
   }
 

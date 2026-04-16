@@ -454,6 +454,7 @@ verify 기준:
 
 완료 기준:
 
+- hosted panel이 sandbox iframe host를 boot한다.
 - sandbox가 privileged API 없이 boot된다.
 - sandbox는 allowlisted bridge만 호출한다.
 - registry된 workflow/script artifact만 실행한다.
@@ -477,6 +478,10 @@ verify 기준:
 - workflow capability는 top-level `workflowArtifacts` registry에 등록된 `artifactId + artifactVersion`만 참조할 수 있다.
 - workflow artifact는 allowlisted `scriptSlot`, `bundleId`, `integrity` pin을 필수로 가진다.
 - workflow artifact에 raw `code`, `script`, `source`, `url`, `fetchUrl`, `endpointUrl` payload field가 있으면 remote manifest validation에서 fallback으로 떨어진다.
+- hosted v2 panel은 `remote-workflow-host.js`로 hidden sandbox iframe을 만들고, iframe은 `sandbox="allow-scripts"`만 받는다. `allow-same-origin`은 주지 않는다.
+- sandbox HTML은 `connect-src 'none'` CSP를 가진다. sandbox runtime은 `chrome`, `fetch`, storage, arbitrary network globals를 blocked global로 취급한다.
+- sandbox bridge host는 handshake의 `bridgeApis` allowlist 안에 있는 API만 처리한다. allowlist 밖 API 요청은 explicit error로 반환한다.
+- `workflow.run`은 아직 disabled 상태다. sandbox pilot 전에는 실행 요청이 성공처럼 처리되지 않는다.
 
 ### Phase 7. Negotiation / Kill Switch / Rollout Guard
 
@@ -518,7 +523,7 @@ verify 기준:
 
 - 1차 handshake 구현됨.
 - `capabilities.handshake`가 catalog와 bridge API allowlist를 반환한다.
-- bridge API allowlist는 `emitTrace`, `invokeCapability`, `invokePageCapability`, `openUrl`, `readPanelState`, `writeUiPreferences`만 허용하도록 contract/verify로 고정됨.
+- bridge API allowlist는 `emitTrace`, `invokeCapability`, `invokePageCapability`, `metrics`, `openUrl`, `readPanelState`, `writeUiPreferences`만 허용하도록 contract/verify로 고정됨.
 - remote manifest의 `capabilityId`는 lower-case semantic id 형식만 허용한다. URL, runtime action string처럼 transport를 드러내는 identifier는 manifest validation에서 실패한다.
 - capability별 `minExtensionVersion`은 remote manifest 전체 fallback 사유가 아니다. handshake에서 `enabled=false`와 `minExtensionVersionSupported=false`로 내려가고, invoke 시 명시적으로 실패한다.
 - `deprecatedAt`가 있는 capability는 같은 manifest 안의 유효한 `replacementId`를 가져야 한다. `replacementId`만 있는 vague compatibility path도 manifest validation에서 실패한다.
