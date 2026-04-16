@@ -25,6 +25,7 @@ function buildCapabilityCatalogMarkdown(options = {}) {
     capability.authMode,
     capability.auditLevel,
     formatSchemaVersion(capability),
+    capability.requestTimeoutMs || "",
     capability.minExtensionVersion,
     capability.enabled === false ? "no" : "yes",
   ]);
@@ -60,8 +61,8 @@ function buildCapabilityCatalogMarkdown(options = {}) {
     "",
     "## Capabilities",
     "",
-    "| capabilityId | kind | service | target | owner | domain | authMode | audit | schema | minExtension | enabled |",
-    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    "| capabilityId | kind | service | target | owner | domain | authMode | audit | schema | timeoutMs | minExtension | enabled |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ...rows.map((row) => `| ${row.map(escapeCell).join(" | ")} |`),
     "",
     "## Aliases",

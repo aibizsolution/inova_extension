@@ -4,7 +4,8 @@
   const BRIDGE_VERSION = 1;
   const APP_SOURCE = "inova-hosted-panel-app";
   const EXTENSION_SOURCE = "inova-hosted-panel-extension";
-  const REQUEST_TIMEOUT_MS = 15000;
+  const DEFAULT_REQUEST_TIMEOUT_MS = 15000;
+  const MAX_REQUEST_TIMEOUT_MS = 120000;
   const STARTUP_STATUS_CARD_DELAY_MS = 450;
   const APP_CAPABILITIES = Object.freeze([
     "panel.snapshot.v1",
@@ -627,6 +628,8 @@
       type: "request",
     });
     return new Promise((resolve, reject) => {
+      const startedAtMs = Date.now();
+      const timeoutMs = resolveRequestTimeoutMs(payload);
       const timeoutId = global.setTimeout(() => {
         state.pendingRequests.delete(requestId);
         if (traceSpec) {
@@ -643,8 +646,7 @@
           });
         }
         reject(new Error("호스팅 패널 요청 시간이 초과되었어요."));
-      }, REQUEST_TIMEOUT_MS);
-      const startedAtMs = Date.now();
+      }, timeoutMs);
       state.pendingRequests.set(requestId, {
         action: traceAction,
         domain,
@@ -655,6 +657,17 @@
         timeoutId,
       });
     });
+  }
+
+  function resolveRequestTimeoutMs(payload = {}) {
+    const requestedTimeoutMs = Number(payload?.requestTimeoutMs);
+    if (!Number.isFinite(requestedTimeoutMs) || requestedTimeoutMs <= 0) {
+      return DEFAULT_REQUEST_TIMEOUT_MS;
+    }
+    return Math.min(
+      MAX_REQUEST_TIMEOUT_MS,
+      Math.max(DEFAULT_REQUEST_TIMEOUT_MS, Math.round(requestedTimeoutMs))
+    );
   }
 
   function syncPanelChromeIfNeeded(chromeState = {}) {

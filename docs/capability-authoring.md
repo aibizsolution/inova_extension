@@ -19,6 +19,7 @@
    - `workflow`: Phase 8 pilot 전용. production은 disabled default다.
 2. `hosting/extension-v2/capability-manifest.json`과 `hosting/extension/capability-manifest.json`을 같은 내용으로 편집한다.
 3. capability에는 `owner`, `domain`, `authMode`, `auditLevel`, `inputSchemaVersion`, `outputSchemaVersion`, `minExtensionVersion`을 채운다.
+   느린 Functions capability는 `requestTimeoutMs`를 둘 수 있다. client cap은 120000ms다.
 4. 새 endpoint면 `endpointKeys`에 safe relative endpoint path를 추가한다. 새 URL이면 `urlTemplates`에 `origin`과 `pattern`을 추가한다.
 5. 필요하면 `killSwitch`, `lane`, `deprecatedAt`, `replacementId`, top-level `aliases`를 같이 추가한다.
 6. `node scripts/generate-capability-catalog.js > docs/capability-catalog.md`로 catalog를 재생성한다.

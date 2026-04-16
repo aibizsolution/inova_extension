@@ -32,7 +32,7 @@ function verifyServedCapabilityManifests() {
   assert.equal(v2Manifest.endpointKeys.reviewInovaPromptUrl.endpoint, "reviewInovaPrompt");
   assert.equal(v2Manifest.capabilities["prompt.review.run"].endpointKey, "reviewInovaPromptUrl");
   assert.equal(v2Manifest.capabilities["prompt.review.run"].kind, "function");
-  assert.equal(v2Manifest.capabilities["prompt.review.run"].inputSchemaVersion, 1);
+  assert.equal(v2Manifest.capabilities["prompt.review.run"].inputSchemaVersion, 1); assert.equal(v2Manifest.capabilities["prompt.review.run"].requestTimeoutMs, 75000);
   assert.equal(v2Manifest.capabilities["panel.ui-preferences.write"].kind, "storage.write-ui-preferences");
   assert.equal(v2Manifest.capabilities["panel.ui-preferences.write"].lane, "v2");
   assert.equal(v2Manifest.capabilities["panel.ui-preferences.write"].service, "storage");
@@ -124,6 +124,7 @@ async function verifyRemoteManifestValidationFailuresAreVisible() {
     },
     "write capability without auth should fall back visibly"
   );
+  await verifyRejectedManifestMutation((manifest) => { manifest.capabilities["prompt.review.run"].requestTimeoutMs = 120001; }, "too large requestTimeout should fall back visibly");
   await verifyRejectedManifestMutation(
     (manifest) => {
       manifest.capabilities["page.composer.read-state"].pageCapabilityId = "raw.dom-script";
@@ -517,10 +518,9 @@ async function verifyBundledRuntimeRouterDispatch() {
   assert(handshake.enabledCapabilityIds.includes("page.composer.read-state"));
   assert(handshake.enabledCapabilityIds.includes("release.download.open"));
   assert(handshake.enabledCapabilityIds.includes("fixture.release.notes.open"));
-  assert.equal(
-    handshake.capabilities.find((capability) => capability.capabilityId === "prompt.review.run")?.enabled,
-    true
-  );
+  const promptReviewCapability = handshake.capabilities.find((capability) => capability.capabilityId === "prompt.review.run");
+  assert.equal(promptReviewCapability?.enabled, true);
+  assert.equal(promptReviewCapability?.requestTimeoutMs, 75000);
   assert.equal(
     handshake.capabilities.find((capability) => capability.capabilityId === "page.composer.read-state")?.pageCapabilityId,
     "composer.read-state"

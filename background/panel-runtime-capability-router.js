@@ -328,10 +328,19 @@ function buildHandshakeCapability(capabilityId, capability, activeLane) {
     pageCapabilityId: namespace.session.normalizeText(capability?.pageCapabilityId),
     pilot: capability?.pilot === true,
     replacementId: namespace.session.normalizeText(capability?.replacementId),
+    requestTimeoutMs: normalizeCapabilityRequestTimeoutMs(capability),
     schemaVersion: Number(capability?.schemaVersion) || 0,
     testOnly,
     workflowId: namespace.session.normalizeText(capability?.workflowId),
   };
+}
+
+function normalizeCapabilityRequestTimeoutMs(capability) {
+  const timeoutMs = Number(capability?.requestTimeoutMs);
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return 0;
+  }
+  return Math.min(120000, Math.max(15000, Math.round(timeoutMs)));
 }
 
 async function invokeHostedPanelFunctionFetch(request) {

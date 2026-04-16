@@ -55,6 +55,12 @@ async function verifyExtensionCapabilityClientPageAllowlist() {
             pageCapabilityId: "composer.read-state",
           },
           {
+            capabilityId: "prompt.review.run",
+            enabled: true,
+            kind: "function",
+            requestTimeoutMs: 75000,
+          },
+          {
             artifactId: "test-workflow",
             artifactVersion: "0.0.1",
             capabilityId: "test.workflow.run",
@@ -117,6 +123,14 @@ async function verifyExtensionCapabilityClientPageAllowlist() {
   assert(catalog.bridgeApis.includes("invokePageCapability"));
   assert(catalog.pageCapabilityIds.includes("composer.read-state"));
   assert(catalog.pageCapabilityIds.includes("clipboard.write-text"));
+  await browserCapabilities.invokeCapability("prompt.review.run", { prompt: "검토" });
+  assert.deepEqual(runtimeCalls.at(-1), {
+    action: "capabilities.invoke",
+    capabilityId: "prompt.review.run",
+    input: { prompt: "검토" },
+    requestTimeoutMs: 75000,
+    trace: null,
+  });
 
   await browserCapabilities.invokeCapability("page.composer.read-state", {
     extra: "semantic",
