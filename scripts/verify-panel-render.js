@@ -34,7 +34,7 @@ async function main() {
   verifyBookmarkJumpAccessibilityContract();
   verifyHostedPromptReviewFallbackContract();
   verifyHostedReleaseSummarySyncContract();
-  verifyHostedMemberInfoWorkflowPilotContract();
+  await verifyHostedMemberInfoWorkflowPilotContract();
   await verifyHostedReleaseLocalDownloadUrls();
   console.log("[verify-panel-render] Hosted panel host contract passed");
 }
@@ -480,7 +480,7 @@ function verifyHostedReleaseSummarySyncContract() {
   );
 }
 
-function verifyHostedMemberInfoWorkflowPilotContract() {
+async function verifyHostedMemberInfoWorkflowPilotContract() {
   const hostedPanelHtml = fs.readFileSync(
     path.join(root, "hosting", "extension-v2", "panel", "index.html"),
     "utf8"
@@ -527,6 +527,8 @@ function verifyHostedMemberInfoWorkflowPilotContract() {
     memberControllerSource.includes('const MEMBER_INFO_CAPABILITY_ID = "member.info.show"')
       && memberControllerSource.includes("invokeCapability(")
       && memberControllerSource.includes("pilotEnabled: true")
+      && memberControllerSource.includes("getCapabilities")
+      && memberControllerSource.includes("state.initialized = true;")
       && !memberControllerSource.includes("invokeRuntime")
       && !memberControllerSource.includes("endpointKey:")
       && !memberControllerSource.includes("functions.invoke-endpoint"),
@@ -561,10 +563,73 @@ function verifyHostedMemberInfoWorkflowPilotContract() {
       && workflow.steps.every((step) => step.type === "bridge"),
     "member info workflow should read member data through the allowlisted sandbox bridge"
   );
+  await verifyHostedMemberInfoFailureSurface();
 }
 
 function buildSha256Integrity(source) {
   return `sha256-${crypto.createHash("sha256").update(source).digest("base64")}`;
+}
+
+async function verifyHostedMemberInfoFailureSurface() {
+  const renderEvents = [];
+  const traceEvents = [];
+  const context = vm.createContext({
+    console,
+    Date,
+    globalThis: null,
+  });
+  context.globalThis = context;
+  context.InovaBookmarks = {
+    session: {
+      normalizeText(value) {
+        return String(value ?? "").trim();
+      },
+    },
+  };
+
+  new vm.Script(
+    fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "panel-utils.js"), "utf8"),
+    {
+      filename: "hosting/extension-v2/panel/panel-utils.js",
+    }
+  ).runInContext(context);
+  new vm.Script(
+    fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "member-info-controller.js"), "utf8"),
+    {
+      filename: "hosting/extension-v2/panel/member-info-controller.js",
+    }
+  ).runInContext(context);
+
+  const controller = context.InovaBookmarks.memberInfoController.create({
+    browserCapabilities: {
+      invokeCapability: async () => {
+        throw new Error("sandbox not ready");
+      },
+    },
+    getCapabilities() {
+      return ["runtime.invoke.v1", "member.info.show"];
+    },
+    scheduleRender() {
+      renderEvents.push("render");
+    },
+    traceMember(step, payload) {
+      traceEvents.push({ payload, step });
+    },
+  });
+  controller.syncPanelState({}, ["runtime.invoke.v1"]);
+  await controller.handleMemberAction("show");
+
+  const viewState = controller.buildViewState();
+  assert.equal(viewState.initialized, true, "member info workflow failures should leave the initial state");
+  assert.equal(viewState.degraded, true, "member info workflow failures should render a degraded state");
+  assert.equal(viewState.degradedReason, "member-info-workflow-failed");
+  assert.equal(viewState.error, "sandbox not ready");
+  assert(renderEvents.length >= 2, "member info workflow failure should schedule visible rerenders");
+  assert(
+    traceEvents.some((event) => event.step === "34.hosted.member.workflow.request")
+      && traceEvents.some((event) => event.step === "35.hosted.member.workflow.error"),
+    "member info workflow failure should emit request and error traces"
+  );
 }
 
 async function verifyHostedReleaseLocalDownloadUrls() {
