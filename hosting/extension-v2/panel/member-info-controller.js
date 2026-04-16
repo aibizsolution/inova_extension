@@ -14,9 +14,6 @@
     const scheduleRender = typeof options.scheduleRender === "function"
       ? options.scheduleRender
       : () => {};
-    const getCapabilities = typeof options.getCapabilities === "function"
-      ? options.getCapabilities
-      : () => [];
     const traceMember = typeof options.traceMember === "function"
       ? options.traceMember
       : () => {};
@@ -49,8 +46,7 @@
     }
 
     function hasRequiredCapabilities() {
-      const capabilities = readCapabilities();
-      return REQUIRED_EXTENSION_CAPABILITIES.every((capability) => capabilities.includes(capability));
+      return REQUIRED_EXTENSION_CAPABILITIES.every((capability) => state.capabilities.includes(capability));
     }
 
     function getMemberInfoCount() {
@@ -84,11 +80,6 @@
       if (normalizedAction !== "refresh" && normalizedAction !== "show") {
         return false;
       }
-      traceMember("33.hosted.member.action.start", {
-        action: normalizedAction,
-        hasCapability: hasCapability(MEMBER_INFO_CAPABILITY_ID),
-        hasRuntime: hasRequiredCapabilities(),
-      });
       await loadMemberInfo();
       return true;
     }
@@ -98,12 +89,16 @@
         return state.data;
       }
       if (!hasRequiredCapabilities()) {
-        applyLoadError("확장 런타임 연결이 필요해요.", "runtime-capability-missing");
+        state.error = "확장 런타임 연결이 필요해요.";
+        state.degraded = true;
+        state.degradedReason = "runtime-capability-missing";
         scheduleRender();
         return state.data;
       }
       if (!hasCapability(MEMBER_INFO_CAPABILITY_ID)) {
-        applyLoadError("회원 정보 기능이 현재 capability catalog에 없거나 비활성화되어 있어요.", "capability-disabled");
+        state.error = "회원 정보 기능이 현재 capability catalog에 없거나 비활성화되어 있어요.";
+        state.degraded = true;
+        state.degradedReason = "capability-disabled";
         scheduleRender();
         return state.data;
       }
@@ -134,7 +129,10 @@
           workflowId: memberInfo.workflowId,
         });
       } catch (error) {
-        applyLoadError(error, "member-info-workflow-failed");
+        state.degraded = true;
+        state.degradedReason = "member-info-workflow-failed";
+        state.error = readErrorMessage(error, "회원 정보를 불러오지 못했어요.");
+        state.source = "none";
         traceMember("35.hosted.member.workflow.error", {
           error: state.error,
         });
@@ -143,14 +141,6 @@
         scheduleRender();
       }
       return state.data;
-    }
-
-    function applyLoadError(error, degradedReason) {
-      state.degraded = true;
-      state.degradedReason = normalizeText(degradedReason);
-      state.error = normalizeErrorMessage(readErrorMessage(error, "회원 정보를 불러오지 못했어요."));
-      state.initialized = true;
-      state.source = state.data ? "cache" : "none";
     }
 
     function normalizeWorkflowResult(result) {
@@ -202,22 +192,8 @@
       };
     }
 
-    function normalizeErrorMessage(message) {
-      return normalizeText(message).replace(/^Error:\s*/, "");
-    }
-
     function hasCapability(capabilityId) {
-      return readCapabilities().includes(capabilityId);
-    }
-
-    function readCapabilities() {
-      const syncedCapabilities = Array.isArray(state.capabilities) ? state.capabilities : [];
-      const liveCapabilityList = getCapabilities();
-      const liveCapabilities = Array.isArray(liveCapabilityList) ? liveCapabilityList : [];
-      return Array.from(new Set([
-        ...syncedCapabilities,
-        ...liveCapabilities.map((value) => normalizeText(value)).filter(Boolean),
-      ]));
+      return state.capabilities.includes(capabilityId);
     }
   }
 

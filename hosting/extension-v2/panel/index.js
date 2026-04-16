@@ -135,7 +135,6 @@
   }) || null;
   const memberInfoController = namespace.memberInfoController?.create?.({
     browserCapabilities,
-    getCapabilities: readEffectiveExtensionCapabilities,
     scheduleRender,
     traceMember: traceMemberFlow,
   }) || null;
