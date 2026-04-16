@@ -6,10 +6,12 @@ Last updated: 2026-04-16
 
 - Public deployed baseline: `0.4.4`
 - Current local candidate: `1.0.0`
-- Current merged baseline: `main` at `81af793` / PR #42; start follow-up slices from a fresh `codex/*` branch.
-- Latest full validation: `npm.cmd run verify` passed on `codex/hosted-first-extra-reduction` after the hosted-first state reduction, Firestore session/base reader commonization, prompt-store shared model extraction, open hydration guard, hosted-owned `uiPreferences.panelOpen` persistence, and shared text-normalization cleanup.
-- Remaining work: Chrome smoke / release-go validation plus the hosted-first cleanup backlog captured below
-- Worktree: expected clean after the current documentation correction commit
+- Current merged baseline: `main` at `81af793` / PR #42.
+- Current working branch: `codex/bundled-capability-manifest`.
+- Latest full validation: `npm.cmd run verify` passed on `codex/bundled-capability-manifest` after the remote capability manifest, sandboxed workflow foundation, controller capability gating, and panel preference-write gating slices.
+- Remote workflow member-info pilot was validated and then reverted by commits `0c4075a` and `821265d`; do not treat member-info UI/workflow files as active.
+- Remaining remote-platform work: no new engineering slice is queued before choosing a new pilot. Phase 8 production workflow remains gated behind explicit pilot selection, kill switch, lane gating, and read/light-write scope.
+- Worktree: expected clean after the latest green commit.
 - Current architecture direction:
 - `1.0.0` v2 lane is explicitly hosted-first.
 - default location for tab UI, view state, action flow, and feature-local controllers is `hosting/*`.
