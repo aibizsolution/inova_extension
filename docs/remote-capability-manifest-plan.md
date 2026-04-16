@@ -515,6 +515,7 @@ verify 기준:
 - remote manifest의 `capabilityId`는 lower-case semantic id 형식만 허용한다. URL, runtime action string처럼 transport를 드러내는 identifier는 manifest validation에서 실패한다.
 - capability별 `minExtensionVersion`은 remote manifest 전체 fallback 사유가 아니다. handshake에서 `enabled=false`와 `minExtensionVersionSupported=false`로 내려가고, invoke 시 명시적으로 실패한다.
 - `deprecatedAt`가 있는 capability는 같은 manifest 안의 유효한 `replacementId`를 가져야 한다. `replacementId`만 있는 vague compatibility path도 manifest validation에서 실패한다.
+- top-level `aliases` map은 `aliasId -> replacementId`와 `removeAfter`를 필수로 가진다. alias는 기존 capabilityId와 충돌할 수 없고, router는 alias invoke를 replacement capability로 해석한다.
 - killed, lane mismatch, minExtensionVersion mismatch capability는 handshake의 `enabledCapabilityIds`에서 빠지고 invoke도 명시적으로 실패하도록 verify가 고정한다.
 - `test.*` capability는 `testOnly=true`가 필수이며, test-only capability는 production manifest에서 enabled 상태로 둘 수 없다. handshake에는 노출되더라도 `enabledCapabilityIds`에 들어가지 않고 invoke는 실패한다.
 - hosted boot가 handshake catalog를 읽어 enabled capability ids를 controller capability list에 합친다.
@@ -599,8 +600,9 @@ verify 기준:
 
 1. Capability alias/deprecation registry
    - 기대 효과: capability 이름 변경을 서버 manifest만으로 흡수한다.
-   - 비용: schema와 verify 추가.
-   - 리스크: alias가 오래 남으면 복잡해진다. 제거 기한을 필수화한다.
+   - 상태: top-level alias map, `removeAfter`, replacement validation, runtime alias invoke, hosted page alias cache까지 1차 구현됨.
+   - 남은 일: generated catalog 문서에 alias section을 추가한다.
+   - 리스크: alias가 오래 남으면 복잡해진다. 제거 기한을 계속 필수화한다.
 
 2. Test-only capability 표준
    - 기대 효과: 새 endpoint/action을 production 노출 없이 검증한다.

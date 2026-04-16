@@ -237,6 +237,7 @@
       const nextCatalog = catalog && typeof catalog === "object" ? { ...catalog } : {};
       nextCatalog.bridgeApis = mergeCapabilityList(nextCatalog.bridgeApis, ["invokePageCapability"]);
       nextCatalog.pageCapabilityIds = PAGE_CAPABILITY_IDS.slice();
+      nextCatalog.capabilityAliases = Array.isArray(nextCatalog.capabilityAliases) ? nextCatalog.capabilityAliases.slice() : [];
       cacheCapabilityCatalog(nextCatalog);
       return nextCatalog;
     }
@@ -256,6 +257,23 @@
           enabled: capability?.enabled === true,
           kind: normalizeText(capability?.kind),
           pageCapabilityId: normalizeText(capability?.pageCapabilityId),
+        });
+      });
+      if (!Array.isArray(catalog?.capabilityAliases)) {
+        return;
+      }
+      catalog.capabilityAliases.forEach((alias) => {
+        const aliasId = normalizeText(alias?.aliasId);
+        const replacementId = normalizeText(alias?.replacementId);
+        const replacementCapability = capabilityDefinitionsById.get(replacementId);
+        if (!aliasId || !replacementCapability) {
+          return;
+        }
+        capabilityDefinitionsById.set(aliasId, {
+          ...replacementCapability,
+          aliasId,
+          capabilityId: aliasId,
+          replacementId,
         });
       });
     }

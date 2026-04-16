@@ -162,6 +162,7 @@
     "scripts/verify-docs.js",
     "scripts/verify-browser-only-boundary.js",
     "scripts/verify-contracts.js",
+    "scripts/verify-extension-capability-client.js",
     "scripts/verify-hosted-panel-bridge.js",
     "scripts/verify-prompt-store-model.js",
     "scripts/legacy-panel/verify-legacy-prompt-backup.js",

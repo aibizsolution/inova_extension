@@ -11,7 +11,6 @@ async function main() {
   await verifyPanelRuntimeResolution();
   await verifyV2PanelRuntimeResolution();
   await verifyHostedPanelBridgeContract();
-  await verifyExtensionCapabilityClientPageAllowlist();
   await verifySharedFirestoreSessionAuthReuse();
   verifyHostedPanelFiles("extension");
   verifyHostedPanelFiles("extension-v2");
@@ -183,84 +182,6 @@ async function verifyHostedPanelBridgeContract() {
   assert.equal(responseMessage?.message?.type, "response");
   assert.equal(responseMessage?.message?.payload?.handled, true);
   assert.deepEqual(responseMessage?.message?.payload?.result, { ok: true });
-}
-
-async function verifyExtensionCapabilityClientPageAllowlist() {
-  const pageCalls = [];
-  const runtimeCalls = [];
-  const context = vm.createContext({
-    console,
-    globalThis: null,
-  });
-  context.globalThis = context;
-  context.InovaBookmarks = {
-    session: {
-      normalizeText(value) {
-        return String(value ?? "").trim();
-      },
-    },
-  };
-  loadScript(path.join("hosting", "extension-v2", "panel", "extension-capability-client.js"), context);
-  const browserCapabilities = context.InovaBookmarks.extensionCapabilityClient.create({
-    invokePage: async (request) => {
-      pageCalls.push(cloneValue(request));
-      return { ok: true };
-    },
-    invokeRuntime: async (request) => {
-      runtimeCalls.push(cloneValue(request));
-      return {
-        bridgeApis: ["invokeCapability"],
-        capabilities: [
-          {
-            capabilityId: "page.composer.read-state",
-            enabled: true,
-            kind: "page.capability",
-            pageCapabilityId: "composer.read-state",
-          },
-          {
-            capabilityId: "page.raw.disabled",
-            enabled: false,
-            kind: "page.capability",
-            minExtensionVersionSupported: true,
-            pageCapabilityId: "composer.read-state",
-          },
-        ],
-        enabledCapabilityIds: ["prompt.review.run", "page.composer.read-state"],
-      };
-    },
-  });
-  await browserCapabilities.invokePageCapability("composer.read-state", {
-    action: "trace.log",
-    extra: "kept",
-  });
-  assert.deepEqual(pageCalls.at(-1), {
-    action: "composer.read-state",
-    extra: "kept",
-  });
-  await assert.rejects(
-    async () => browserCapabilities.invokePageCapability("raw.dom-script", {}),
-    /허용되지 않은 page capability예요/
-  );
-  const catalog = await browserCapabilities.readCapabilityCatalog({ reason: "test" });
-  assert.deepEqual(runtimeCalls.at(-1), {
-    action: "capabilities.handshake",
-    reason: "test",
-  });
-  assert(catalog.bridgeApis.includes("invokeCapability"));
-  assert(catalog.bridgeApis.includes("invokePageCapability"));
-  assert(catalog.pageCapabilityIds.includes("composer.read-state"));
-  assert(catalog.pageCapabilityIds.includes("clipboard.write-text"));
-  await browserCapabilities.invokeCapability("page.composer.read-state", {
-    extra: "semantic",
-  });
-  assert.deepEqual(pageCalls.at(-1), {
-    action: "composer.read-state",
-    extra: "semantic",
-  });
-  await assert.rejects(
-    async () => browserCapabilities.invokeCapability("page.raw.disabled", {}),
-    /capability가 비활성화되어 있어요/
-  );
 }
 
 async function verifySharedFirestoreSessionAuthReuse() {

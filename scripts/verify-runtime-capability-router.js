@@ -167,6 +167,27 @@ async function verifyRemoteManifestValidationFailuresAreVisible() {
     },
     "deprecated capability with unknown replacement should fall back visibly"
   );
+  await verifyRejectedManifestMutation(
+    (manifest) => {
+      manifest.aliases = {
+        "prompt.review.old": {
+          replacementId: "prompt.review.missing",
+          removeAfter: "2030-01-01T00:00:00.000Z",
+        },
+      };
+    },
+    "alias with unknown replacement should fall back visibly"
+  );
+  await verifyRejectedManifestMutation(
+    (manifest) => {
+      manifest.aliases = {
+        "prompt.review.old": {
+          replacementId: "prompt.review.run",
+        },
+      };
+    },
+    "alias without removeAfter should fall back visibly"
+  );
 }
 
 async function verifyRejectedManifestMutation(mutator, message) {
@@ -206,6 +227,13 @@ async function verifyBundledRuntimeRouterDispatch() {
   const fetchCalls = [];
   const openedUrls = [];
   const remoteManifest = readJson(path.join("hosting", "extension-v2", "capability-manifest.json"));
+  remoteManifest.aliases = {
+    "prompt.review.old": {
+      owner: "runtime-platform",
+      replacementId: "prompt.review.run",
+      removeAfter: "2030-01-01T00:00:00.000Z",
+    },
+  };
   remoteManifest.lanes.v2.endpointOverrides.reviewInovaPromptUrl = "reviewInovaPromptRemoteV2";
   remoteManifest.capabilities["prompt.store.list"].deprecatedAt = "2026-05-31";
   remoteManifest.capabilities["prompt.store.list"].replacementId = "prompt.store.import";
@@ -354,6 +382,15 @@ async function verifyBundledRuntimeRouterDispatch() {
     readJson(path.join("contracts", "extension-contract.json")).sandboxBridgeApis,
     "handshake should expose only the contracted sandbox bridge API allowlist"
   );
+  assert.deepEqual(handshake.capabilityAliases, [
+    {
+      aliasId: "prompt.review.old",
+      owner: "runtime-platform",
+      removeAfter: "2030-01-01T00:00:00.000Z",
+      replacementId: "prompt.review.run",
+      replacementKind: "function",
+    },
+  ]);
   assert(handshake.enabledCapabilityIds.includes("prompt.review.run"));
   assert(handshake.enabledCapabilityIds.includes("panel.ui-preferences.write"));
   assert(handshake.enabledCapabilityIds.includes("page.composer.read-state"));
@@ -442,6 +479,24 @@ async function verifyBundledRuntimeRouterDispatch() {
     authorization: "Bearer access-token-1",
     body: {
       prompt: "capability-id",
+    },
+    method: "POST",
+    url: "https://asia-northeast3-browser-extension-main.cloudfunctions.net/reviewInovaPromptRemoteV2",
+  });
+  const aliasInvokeResult = await router.handle({
+    action: "capabilities.invoke",
+    capabilityId: "prompt.review.old",
+    input: {
+      prompt: "alias",
+    },
+  });
+  assert.deepEqual(aliasInvokeResult, {
+    echoed: true,
+  });
+  assert.deepEqual(fetchCalls.at(-1), {
+    authorization: "Bearer access-token-1",
+    body: {
+      prompt: "alias",
     },
     method: "POST",
     url: "https://asia-northeast3-browser-extension-main.cloudfunctions.net/reviewInovaPromptRemoteV2",

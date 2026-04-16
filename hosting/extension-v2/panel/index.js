@@ -742,6 +742,7 @@
       : [];
     return {
       bridgeApis: normalizeCapabilities(catalog.bridgeApis),
+      capabilityAliases: normalizeCapabilityAliases(catalog.capabilityAliases),
       capabilities,
       degraded: catalog.degraded === true,
       degradedReason: normalizeText(catalog.degradedReason),
@@ -754,6 +755,21 @@
       schemaVersion: Number(catalog.schemaVersion) || 0,
       source: normalizeText(catalog.source),
     };
+  }
+
+  function normalizeCapabilityAliases(value) {
+    return Array.isArray(value)
+      ? value
+        .filter((alias) => alias && typeof alias === "object")
+        .map((alias) => ({
+          aliasId: normalizeText(alias.aliasId),
+          owner: normalizeText(alias.owner),
+          removeAfter: normalizeText(alias.removeAfter),
+          replacementId: normalizeText(alias.replacementId),
+          replacementKind: normalizeText(alias.replacementKind),
+        }))
+        .filter((alias) => Boolean(alias.aliasId && alias.replacementId))
+      : [];
   }
 
   function readErrorMessage(error, fallbackMessage) {

@@ -39,6 +39,7 @@
       }
       validateEndpointDefinitions(normalizedManifest.endpointKeys);
       validateCapabilityDefinitions(normalizedManifest.capabilities, normalizedManifest.endpointKeys);
+      validateCapabilityAliases(normalizedManifest.aliases, normalizedManifest.capabilities);
       validateLaneDefinitions(normalizedManifest.lanes);
       validateManifestTargets(normalizedManifest.targets);
       return normalizedManifest;
@@ -206,6 +207,35 @@
       if (replacementId && !capabilities?.[replacementId]) {
         throw new Error(`remote capability manifest replacementId is unknown: ${capabilityId}`);
       }
+    }
+
+    function validateCapabilityAliases(aliases, capabilities) {
+      if (aliases == null) {
+        return;
+      }
+      if (typeof aliases !== "object" || Array.isArray(aliases)) {
+        throw new Error("remote capability manifest aliases are invalid");
+      }
+      Object.entries(aliases).forEach(([aliasId, alias]) => {
+        validateCapabilityId(aliasId);
+        if (capabilities?.[aliasId]) {
+          throw new Error(`remote capability alias collides with capabilityId: ${aliasId}`);
+        }
+        if (!alias || typeof alias !== "object" || Array.isArray(alias)) {
+          throw new Error(`remote capability alias is invalid: ${aliasId}`);
+        }
+        const replacementId = normalizeText(alias.replacementId);
+        const removeAfter = normalizeText(alias.removeAfter);
+        if (!replacementId || !capabilities?.[replacementId]) {
+          throw new Error(`remote capability alias replacementId is unknown: ${aliasId}`);
+        }
+        if (replacementId === aliasId) {
+          throw new Error(`remote capability alias points to itself: ${aliasId}`);
+        }
+        if (!removeAfter || !Number.isFinite(Date.parse(removeAfter)) || Date.parse(removeAfter) <= Date.now()) {
+          throw new Error(`remote capability alias removeAfter is invalid: ${aliasId}`);
+        }
+      });
     }
 
     function validateDisabledWorkflowCapability(capabilityId, capability) {

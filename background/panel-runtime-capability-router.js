@@ -243,6 +243,7 @@ async function buildCapabilityHandshake(request) {
     : [];
   return {
     bridgeApis: SANDBOX_BRIDGE_API_ALLOWLIST.slice(),
+    capabilityAliases: buildHandshakeCapabilityAliases(manifest.aliases, manifest.capabilities || {}),
     capabilities,
     degraded: Boolean(manifestResult?.degraded),
     degradedReason: namespace.session.normalizeText(manifestResult?.degradedReason),
@@ -257,6 +258,22 @@ async function buildCapabilityHandshake(request) {
     schemaVersion: Number(manifest.schemaVersion) || 0,
     source: namespace.session.normalizeText(manifestResult?.source),
   };
+}
+
+function buildHandshakeCapabilityAliases(aliases = {}, capabilities = {}) {
+  if (!aliases || typeof aliases !== "object") {
+    return [];
+  }
+  return Object.entries(aliases)
+    .map(([aliasId, alias]) => ({
+      aliasId: namespace.session.normalizeText(aliasId),
+      owner: namespace.session.normalizeText(alias?.owner),
+      removeAfter: namespace.session.normalizeText(alias?.removeAfter),
+      replacementId: namespace.session.normalizeText(alias?.replacementId),
+      replacementKind: namespace.session.normalizeText(capabilities?.[alias?.replacementId]?.kind),
+    }))
+    .filter((alias) => Boolean(alias.aliasId && alias.replacementId))
+    .sort((left, right) => left.aliasId.localeCompare(right.aliasId));
 }
 
 function buildHandshakeCapability(capabilityId, capability, activeLane) {
@@ -412,14 +429,18 @@ async function resolveManifestCapability(capabilityId) {
     throw new Error("capabilityId가 필요해요.");
   }
   const manifestResult = await readActiveCapabilityManifest();
-  const capability = manifestResult?.manifest?.capabilities?.[capabilityId];
+  const manifest = manifestResult?.manifest || {};
+  const alias = manifest.aliases?.[capabilityId];
+  const resolvedCapabilityId = namespace.session.normalizeText(alias?.replacementId) || capabilityId;
+  const capability = manifest.capabilities?.[resolvedCapabilityId];
   if (!capability || typeof capability !== "object") {
     throw new Error("허용되지 않은 capabilityId예요.");
   }
-  assertCapabilityRunnable(capability, capabilityId);
+  assertCapabilityRunnable(capability, resolvedCapabilityId);
   return {
     ...capability,
-    capabilityId,
+    aliasId: resolvedCapabilityId === capabilityId ? "" : capabilityId,
+    capabilityId: resolvedCapabilityId,
     kind: namespace.session.normalizeText(capability.kind).toLowerCase(),
   };
 }
