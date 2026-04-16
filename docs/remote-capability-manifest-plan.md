@@ -100,10 +100,11 @@
 
 소유 위치:
 
-- hosted sandbox iframe 또는 동등한 권한 없는 execution context
-- future sandbox host module
-- future workflow/script registry manifest
-- future bridge client
+- `hosting/extension-v2/panel/remote-workflow-sandbox.html`
+- `hosting/extension-v2/panel/remote-workflow-sandbox.js`
+- `hosting/extension-v2/panel/remote-workflow-host.js`
+- `hosting/extension-v2/panel/extension-capability-client.js`
+- `hosting/extension*/capability-manifest.json`의 `workflowArtifacts` / `workflowPilot` / `workflow` capability metadata
 
 책임:
 
@@ -450,11 +451,15 @@ verify 기준:
 
 실제 변경 파일:
 
-- future sandbox host module
-- future hosted sandbox entry
-- manifest schema
-- bridge client
-- verify scripts
+- `hosting/extension-v2/panel/remote-workflow-host.js`
+- `hosting/extension-v2/panel/remote-workflow-sandbox.html`
+- `hosting/extension-v2/panel/remote-workflow-sandbox.js`
+- `hosting/extension-v2/panel/extension-capability-client.js`
+- `hosting/extension-v2/panel/index.js`
+- `background/capability-manifest-validator.js`
+- `background/panel-runtime-capability-router.js`
+- `scripts/verify-remote-workflow-sandbox.js`
+- `scripts/verify-runtime-capability-router.js`
 
 완료 기준:
 
@@ -665,41 +670,68 @@ verify 기준:
 
 ## F. 에이전트 실행용 TODO
 
-먼저 볼 파일:
+현재 상태:
 
+- Phase 3~7.5의 platform foundation은 1차 구현됨.
+- member-info workflow pilot은 검증 후 원복됨.
+- 새 engineering slice는 Phase 8 pilot을 명시적으로 고른 뒤 시작한다.
+
+다음에 먼저 볼 파일:
+
+- `docs/current-handoff.md`
 - `docs/remote-capability-manifest-plan.md`
+- `docs/capability-catalog.md`
 - `background/functions-runtime-config.js`
+- `background/capability-manifest-validator.js`
 - `background/panel-runtime-capability-router.js`
 - `hosting/extension-v2/panel/extension-capability-client.js`
+- `hosting/extension-v2/panel/remote-workflow-host.js`
+- `hosting/extension-v2/panel/remote-workflow-sandbox.js`
 - `scripts/verify-runtime-capability-router.js`
+- `scripts/verify-remote-workflow-sandbox.js`
 
-먼저 수정할 파일:
+새 pilot을 고른 뒤 수정할 후보:
 
 - `hosting/extension*/capability-manifest.json`
-- `background/functions-runtime-config.js`
-- `background/panel-runtime-capability-router.js`
-- `hosting/extension-v2/panel/extension-capability-client.js`
+- `hosting/extension-v2/panel/workflows/<bundleId>/<artifactVersion>.json`
+- `hosting/extension-v2/panel/<pilot-controller-or-view>.js`
+- `scripts/verify-remote-workflow-sandbox.js`
 - `scripts/verify-runtime-capability-router.js`
+- `docs/capability-catalog.md` via generator
+- pilot feature 문서
 
-verify에 추가할 것:
+pilot 시작 전 확인할 것:
 
-- capability negotiation handshake 테스트
-- killed/minVersion/lane mismatch UI 노출 차단 테스트
-- unknown non-function kind 실패 테스트
-- hosted controller endpointKey 신규 사용 차단 범위 확대
-- catalog docs drift 테스트
+- 현재 primitive catalog 조합만으로 가능한가?
+- 새 Chrome permission, host permission, content DOM primitive, privileged bridge가 필요한가?
+- 필요한 경우 extension redeploy 대상임을 먼저 문서화했는가?
+- workflow가 read/light-write 범위를 넘지 않는가?
+- kill switch, lane gate, `pilot=true`, version pin, integrity pin, audit/debug metadata, degraded reason이 모두 있는가?
+
+verify에 유지할 것:
+
+- remote endpoint URL 우선 해석
+- capabilityId 실행
+- killed/disabled/minVersion/lane mismatch UI 노출 및 실행 차단
+- unknown kind와 missing schema 실패
+- raw URL/raw runtime action string 금지
+- workflow artifact version/integrity/slot validation
+- sandbox bridge allowlist
+- generated catalog docs drift
 
 pilot으로만 열어야 할 것:
 
-- sandboxed remote workflow
-- script-slot/bundle artifact loader
+- enabled `workflow` capability
+- script-slot/bundle artifact loader의 실제 production use
 - bridge 기반 UI 행동 변경
 - page primitive 조합 workflow
 
-이번 턴에서 절대 하지 말아야 할 것:
+절대 하지 말아야 할 것:
 
 - privileged background/content에서 remote JS 실행
 - arbitrary selector/DOM script 허용
 - raw endpoint URL을 hosted request에 넣기
 - unrestricted fetch bridge 열기
+- unsigned/unversioned artifact 실행
+- kill switch 없는 workflow를 production에 켜기
 - verify 없이 새 adapter kind 추가
