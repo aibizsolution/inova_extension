@@ -392,6 +392,13 @@
       if (!normalizeText(capability.owner) || !normalizeText(capability.domain)) {
         throw new Error(`remote capability manifest capability metadata is missing: ${capabilityId}`);
       }
+      const auditLevel = normalizeText(capability.auditLevel).toLowerCase();
+      if (!["read", "write", "auth"].includes(auditLevel)) {
+        throw new Error(`remote capability manifest capability auditLevel is not allowed: ${capabilityId}`);
+      }
+      if ((auditLevel === "write" || auditLevel === "auth") && authMode === "none") {
+        throw new Error(`remote capability manifest capability authMode is too weak: ${capabilityId}`);
+      }
       if (!Number.isFinite(Number(capability.inputSchemaVersion)) || !Number.isFinite(Number(capability.outputSchemaVersion))) {
         throw new Error(`remote capability manifest capability schema is missing: ${capabilityId}`);
       }

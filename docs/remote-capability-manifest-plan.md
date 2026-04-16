@@ -374,11 +374,18 @@ verify 기준:
 verify 기준:
 
 - schema 없는 write/destructive capability 실패
+- auditLevel 없는 capability 실패
+- write/auth capability가 `authMode=none`이면 실패
 - response schema drift 감지
 
 배포/롤아웃 주의점:
 
 - schema 변경은 additive default를 우선한다.
+
+현재 상태:
+
+- active manifest validation은 `inputSchemaVersion`, `outputSchemaVersion`, `authMode`, `auditLevel`을 필수로 본다.
+- write/auth capability는 `authMode=none`을 허용하지 않는다.
 
 ### Phase 6. Hosted Abstraction 완료
 

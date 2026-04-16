@@ -89,6 +89,18 @@ async function verifyRemoteManifestValidationFailuresAreVisible() {
     },
     "missing capability schema should fall back visibly"
   );
+  await verifyRejectedManifestMutation(
+    (manifest) => {
+      delete manifest.capabilities["prompt.review.run"].auditLevel;
+    },
+    "missing capability audit metadata should fall back visibly"
+  );
+  await verifyRejectedManifestMutation(
+    (manifest) => {
+      manifest.capabilities["prompt.review.run"].authMode = "none";
+    },
+    "write capability without auth should fall back visibly"
+  );
 }
 
 async function verifyRejectedManifestMutation(mutator, message) {
