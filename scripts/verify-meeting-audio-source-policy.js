@@ -9,7 +9,7 @@ const repoRoot = path.resolve(__dirname, "..");
 const MB = 1024 * 1024;
 const EXPECTED_OPENAI_SAFE_PART_BYTES = 24 * MB;
 const EXPECTED_OPENAI_SAFE_SINGLE_DURATION_MS = 23 * 60 * 1000;
-const EXPECTED_CHUNK_DURATION_MS = 17 * 60 * 1000;
+const EXPECTED_CHUNK_DURATION_MS = 14 * 60 * 1000;
 const EXPECTED_CHUNK_OVERLAP_MS = 1500;
 const EXPECTED_CHUNK_SAMPLE_RATE = 12000;
 
@@ -36,7 +36,7 @@ function main() {
     "hosted single transcription duration must stay below the gpt-4o-transcribe 1400 second limit"
   );
   assert(
-    sharedSource.includes("DEFAULT_SOURCE_CHUNK_DURATION_MS = 17 * 60 * 1000"),
+    sharedSource.includes("DEFAULT_SOURCE_CHUNK_DURATION_MS = 14 * 60 * 1000"),
     "hosted chunk duration should avoid over-splitting long-but-small meeting audio"
   );
   assert(
@@ -67,6 +67,11 @@ function main() {
     estimateChunkPartCount(1591698, EXPECTED_CHUNK_DURATION_MS, EXPECTED_CHUNK_OVERLAP_MS),
     2,
     "a 26m31s meeting should split into two OpenAI-safe chunks, not three"
+  );
+  assert.equal(
+    estimateChunkPartCount(30 * 60 * 1000, EXPECTED_CHUNK_DURATION_MS, EXPECTED_CHUNK_OVERLAP_MS),
+    3,
+    "a 30 minute meeting should not force oversized two-part chunks"
   );
 
   installPendingUploadControllerStubs(ns);
