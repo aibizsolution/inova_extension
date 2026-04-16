@@ -18,20 +18,20 @@ const STATUS_SCORE_VALUES = {
 const REVIEW_PROFILE_CONFIGS = {
   [REVIEW_PROFILES.LEGACY_V1]: {
     dimensions: [
-      { id: "context", label: "맥락" },
+      { id: "context", label: "상황" },
       { id: "goal", label: "목표" },
-      { id: "constraints", label: "제약" },
-      { id: "output", label: "산출물 형식" },
+      { id: "constraints", label: "조건" },
+      { id: "output", label: "형식" },
     ],
     includeModelTotalScore: true,
   },
   [REVIEW_PROFILES.PROMPT_TELLING_V2]: {
     dimensions: [
-      { group: "core", id: "persona", label: "역할 지정" },
-      { group: "core", id: "reference", label: "참고 자료" },
-      { group: "core", id: "objective", label: "목표 설정" },
-      { group: "refinement", id: "mode", label: "결과 형식" },
-      { group: "refinement", id: "pointOfView", label: "타깃 관점" },
+      { group: "core", id: "persona", label: "역할" },
+      { group: "core", id: "reference", label: "참고할 내용" },
+      { group: "core", id: "objective", label: "목표" },
+      { group: "refinement", id: "mode", label: "형식" },
+      { group: "refinement", id: "pointOfView", label: "읽는 사람" },
       { group: "refinement", id: "tone", label: "말투" },
     ],
     includeModelTotalScore: false,
@@ -172,37 +172,43 @@ function registerPromptReviewHandlers(deps) {
   function buildSystemPrompt(reviewProfile) {
     if (normalizeReviewProfile(reviewProfile) === REVIEW_PROFILES.PROMPT_TELLING_V2) {
       return [
-        "당신은 사용자가 입력한 프롬프트를 PROMPT 공식 6축으로 평가하고 보완하는 리뷰어입니다.",
-        "반드시 한국어로 평가 요약과 피드백을 작성하세요.",
+        "당신은 일반 사용자가 입력한 프롬프트를 쉽게 평가하고 바로 쓸 수 있게 다듬는 리뷰어입니다.",
+        "반드시 한국어로 평가 요약과 피드백을 작성하세요. 설명은 비전문가가 바로 이해할 수 있는 쉬운 말로 씁니다.",
         "다만 refinedPrompt는 원문 언어와 의도를 최대한 유지하면서 바로 재사용 가능한 형태로 다시 써야 합니다.",
-        "아래 여섯 기준만 평가하세요: persona, reference, objective, mode, pointOfView, tone.",
-        "persona는 AI가 맡아야 할 역할, 전문성, 직무 시점을 뜻합니다.",
-        "reference는 참고 자료, 예시, 기준, 배경 정보, 입력 데이터입니다.",
-        "objective는 사용자가 원하는 최종 결과와 성공 기준입니다.",
+        "아래 여섯 기준만 평가하되 기준 id는 JSON의 id 필드에만 사용하세요: persona, reference, objective, mode, pointOfView, tone.",
+        "persona는 AI가 맡을 역할이나 시점입니다.",
+        "reference는 참고할 내용, 예시, 기준, 배경 정보, 입력 데이터입니다.",
+        "objective는 사용자가 원하는 결과와 성공 기준입니다.",
         "mode는 결과물 형식, 구조, 분량, 포맷 요구입니다.",
-        "pointOfView는 누구의 관점이나 어떤 타깃 눈높이에서 쓸지입니다.",
-        "tone은 전문성, 친근함, 설득력, 차분함 같은 말투와 분위기입니다.",
-        "summary에는 Persona, Reference, Objective 중 가장 먼저 보완할 핵심 부족점 1~2개를 짧게 적으세요.",
-        "checks.feedback에는 왜 점수가 깎였는지와 무엇을 보완하면 좋은지 같이 적으세요.",
-        "세부 정보가 비어 있으면 없는 사실을 지어내지 말고 [역할], [참고 자료], [목표], [결과 형식], [타깃 관점], [말투] 같은 짧은 placeholder를 사용하세요.",
-        "quickImprovements에는 바로 적용 가능한 문장만 1~4개 작성하세요.",
-        "refinedPrompt는 장황한 설명 없이 실제 입력창에 바로 넣을 수 있는 프롬프트 본문만 반환하세요.",
+        "pointOfView는 누구에게 맞춰 쓸지, 어떤 눈높이로 쓸지입니다.",
+        "tone은 친절함, 전문성, 차분함 같은 말투와 분위기입니다.",
+        "summary는 가장 중요한 판단을 한 문장으로 씁니다. 60자 안팎으로 쓰고 점수 설명부터 시작하지 마세요.",
+        "checks.feedback는 한 문장으로 씁니다. 무엇이 부족한지보다 무엇을 어떻게 고치면 되는지를 먼저 말하세요.",
+        "quickImprovements에는 실제로 고쳐야 할 점이 있을 때만 사용자가 그대로 붙여 넣을 수 있는 수정 문장 1~4개를 작성하세요.",
+        "verdict가 ready이면 quickImprovements는 빈 배열로 반환하세요.",
+        "refinedPrompt는 실제 입력창에 바로 넣을 수 있는 프롬프트 본문만 반환하세요.",
+        "summary, checks.feedback, quickImprovements, refinedPrompt에는 영문 기준명이나 내부 약어를 쓰지 마세요.",
+        "대괄호로 된 빈칸 표시를 만들지 마세요. 정보가 부족하면 refinedPrompt 안에 자연스러운 문장으로 '필요하면 ...을 추가해 주세요'처럼 적으세요.",
+        "없는 사실을 지어내지 마세요.",
       ].join("\n");
     }
     return [
-      "당신은 사용자가 입력한 프롬프트를 평가하고 보완하는 리뷰어입니다.",
-      "반드시 한국어로 평가 요약과 피드백을 작성하세요.",
+      "당신은 일반 사용자가 입력한 프롬프트를 쉽게 평가하고 바로 쓸 수 있게 다듬는 리뷰어입니다.",
+      "반드시 한국어로 평가 요약과 피드백을 작성하세요. 설명은 비전문가가 바로 이해할 수 있는 쉬운 말로 씁니다.",
       "다만 refinedPrompt는 원문 언어와 의도를 최대한 유지하면서 바로 재사용 가능한 형태로 다시 써야 합니다.",
-      "아래 네 기준만 평가하세요: context, goal, constraints, output.",
+      "아래 네 기준만 평가하되 기준 id는 JSON의 id 필드에만 사용하세요: context, goal, constraints, output.",
       "context는 배경, 대상 독자, 현재 상황 같은 맥락입니다.",
       "goal은 사용자가 원하는 결과와 성공 기준입니다.",
       "constraints는 길이, 금지사항, 톤, 포함/제외 요소입니다.",
       "output은 표, 보고서, 메일, 리스트 같은 결과물 형식입니다.",
-      "summary에는 점수보다 먼저 확인해야 할 핵심 부족점 1~2개를 짧게 적으세요.",
-      "checks.feedback에는 왜 점수가 깎였는지와 무엇을 보완하면 좋은지 같이 적으세요.",
-      "세부 정보가 비어 있으면 없는 사실을 지어내지 말고 [대상 독자], [분량], [금지 사항] 같은 짧은 placeholder를 사용하세요.",
-      "quickImprovements에는 바로 적용 가능한 문장만 1~4개 작성하세요.",
-      "refinedPrompt는 장황한 설명 없이 실제 입력창에 바로 넣을 수 있는 프롬프트 본문만 반환하세요.",
+      "summary는 가장 중요한 판단을 한 문장으로 씁니다. 60자 안팎으로 쓰고 점수 설명부터 시작하지 마세요.",
+      "checks.feedback는 한 문장으로 씁니다. 무엇이 부족한지보다 무엇을 어떻게 고치면 되는지를 먼저 말하세요.",
+      "quickImprovements에는 실제로 고쳐야 할 점이 있을 때만 사용자가 그대로 붙여 넣을 수 있는 수정 문장 1~4개를 작성하세요.",
+      "verdict가 ready이면 quickImprovements는 빈 배열로 반환하세요.",
+      "refinedPrompt는 실제 입력창에 바로 넣을 수 있는 프롬프트 본문만 반환하세요.",
+      "summary, checks.feedback, quickImprovements, refinedPrompt에는 영문 기준명이나 내부 id를 쓰지 마세요.",
+      "대괄호로 된 빈칸 표시를 만들지 마세요. 정보가 부족하면 refinedPrompt 안에 자연스러운 문장으로 '필요하면 ...을 추가해 주세요'처럼 적으세요.",
+      "없는 사실을 지어내지 마세요.",
     ].join("\n");
   }
 
@@ -283,7 +289,7 @@ function normalizeReviewResult(payload, originalPrompt, reviewProfile) {
     const normalizedCheck = {
       feedback: normalizeText(match?.feedback) || `${dimension.label} 정보를 한 번 더 보완해 주세요.`,
       id: dimension.id,
-      label: normalizeText(match?.label) || dimension.label,
+      label: dimension.label,
       status: normalizeEnum(match?.status, ["good", "partial", "missing"], "partial"),
     };
     if (dimension.group) {
@@ -291,17 +297,19 @@ function normalizeReviewResult(payload, originalPrompt, reviewProfile) {
     }
     return normalizedCheck;
   });
+  const totalScore = profileConfig.includeModelTotalScore
+    ? Math.max(0, Math.min(100, Number(payload?.totalScore) || 0))
+    : computePromptTellingV2TotalScore(checks, profileConfig.dimensions);
+  const quickImprovements = (Array.isArray(payload?.quickImprovements) ? payload.quickImprovements : [])
+    .map((item) => normalizeText(item))
+    .filter(Boolean)
+    .slice(0, 4);
   return {
     checks,
-    quickImprovements: (Array.isArray(payload?.quickImprovements) ? payload.quickImprovements : [])
-      .map((item) => normalizeText(item))
-      .filter(Boolean)
-      .slice(0, 4),
+    quickImprovements: verdict === "ready" && totalScore >= 90 ? [] : quickImprovements,
     refinedPrompt: normalizePromptText(payload?.refinedPrompt) || normalizePromptText(originalPrompt),
     summary: normalizeText(payload?.summary) || "프롬프트를 더 구체적으로 다듬으면 답변 품질을 높일 수 있어요.",
-    totalScore: profileConfig.includeModelTotalScore
-      ? Math.max(0, Math.min(100, Number(payload?.totalScore) || 0))
-      : computePromptTellingV2TotalScore(checks, profileConfig.dimensions),
+    totalScore,
     verdict,
   };
 }

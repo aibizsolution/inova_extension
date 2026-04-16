@@ -44,6 +44,10 @@ function verifyLegacyReviewContract() {
     normalized.checks.map((check) => check.id),
     ["context", "goal", "constraints", "output"]
   );
+  assert.deepEqual(
+    normalized.checks.map((check) => check.label),
+    ["상황", "목표", "조건", "형식"]
+  );
   assert.equal(normalized.checks.some((check) => Object.hasOwn(check, "group")), false);
   assert.equal(normalized.totalScore, 82);
 }
@@ -63,7 +67,7 @@ function verifyPromptTellingV2Contract() {
         { feedback: "역할은 잘 설정됐습니다.", id: "persona", label: "역할 지정", status: "good" },
       ],
       quickImprovements: ["역할을 먼저 적어 주세요.", "참고 예시를 붙여 주세요.", "타깃 관점을 써 주세요.", "말투를 써 주세요.", "초과 항목"],
-      refinedPrompt: "당신은 [역할]입니다.",
+      refinedPrompt: "당신은 친절한 선생님입니다.",
       summary: "참고 자료와 타깃 관점을 보완해 주세요.",
       verdict: "revise",
     },
@@ -77,11 +81,36 @@ function verifyPromptTellingV2Contract() {
     ["persona", "reference", "objective", "mode", "pointOfView", "tone"]
   );
   assert.deepEqual(
+    normalized.checks.map((check) => check.label),
+    ["역할", "참고할 내용", "목표", "형식", "읽는 사람", "말투"]
+  );
+  assert.deepEqual(
     normalized.checks.map((check) => check.group),
     ["core", "core", "core", "refinement", "refinement", "refinement"]
   );
   assert.equal(normalized.totalScore, 63);
   assert.deepEqual(normalized.quickImprovements.length, 4);
+
+  const readyNormalized = helpers.normalizeReviewResult(
+    {
+      checks: [
+        { feedback: "역할이 분명합니다.", id: "persona", label: "역할", status: "good" },
+        { feedback: "참고할 내용이 충분합니다.", id: "reference", label: "참고할 내용", status: "good" },
+        { feedback: "목표가 분명합니다.", id: "objective", label: "목표", status: "good" },
+        { feedback: "형식이 분명합니다.", id: "mode", label: "형식", status: "good" },
+        { feedback: "읽는 사람이 분명합니다.", id: "pointOfView", label: "읽는 사람", status: "good" },
+        { feedback: "말투가 분명합니다.", id: "tone", label: "말투", status: "good" },
+      ],
+      quickImprovements: ["추가로 고칠 점을 적어 주세요."],
+      refinedPrompt: "바로 쓸 수 있는 프롬프트입니다.",
+      summary: "바로 사용할 수 있어요.",
+      verdict: "ready",
+    },
+    "카피를 써 줘",
+    v2Profile
+  );
+  assert.equal(readyNormalized.totalScore, 100);
+  assert.deepEqual(readyNormalized.quickImprovements, []);
 }
 
 async function verifyExtensionReviewHandoff() {
@@ -106,6 +135,7 @@ async function verifyExtensionReviewHandoff() {
 function verifyHostedPromptReviewContract() {
   const hostedControllerSource = fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "prompt-review-controller.js"), "utf8");
   const hostedReviewViewSource = fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "prompt-review-view.js"), "utf8");
+  const promptReviewServiceSource = fs.readFileSync(path.join(root, "functions", "features", "prompt-review", "prompt-review-service.js"), "utf8");
   const capabilityClientSource = fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "extension-capability-client.js"), "utf8");
   const hostedIndexSource = fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "index.js"), "utf8");
   const panelTraceSource = fs.readFileSync(path.join(root, "content", "panel-console-trace.js"), "utf8");
@@ -243,11 +273,44 @@ function verifyHostedPromptReviewContract() {
   assert.equal(
     !hostedReviewViewSource.includes("다시 평가 후 반영")
       && !hostedReviewViewSource.includes(">다시 평가</button>")
+      && !hostedReviewViewSource.includes("입력창 내용이 바뀌었어요")
       && !hostedReviewViewSource.includes("대괄호 내용 확인 후 반영")
       && !hostedReviewViewSource.includes("대괄호 포함 그대로 반영")
       && !hostedControllerSource.includes("placeholder-confirmation-required"),
     true,
     "hosted prompt review should not render stale or placeholder confirmation bottom action buttons"
+  );
+  assert.equal(
+    hostedReviewViewSource.includes("바로 고칠 점")
+      && hostedReviewViewSource.includes("다듬은 프롬프트")
+      && hostedReviewViewSource.includes("inova-prompt-review__score-chip")
+      && hostedControllerSource.includes("totalScoreChipLabel")
+      && hostedControllerSource.includes("getVerdictLabel")
+      && hostedControllerSource.includes('quickImprovements: verdict === "ready" && totalScore >= 90 ? [] : quickImprovements')
+      && hostedControllerSource.includes("점수는 참고용이에요")
+      && hostedReviewViewSource.indexOf("inova-prompt-review__score-chip") < hostedReviewViewSource.indexOf("inova-prompt-review__summary")
+      && !hostedReviewViewSource.includes("lastReviewedAt")
+      && !hostedReviewViewSource.includes("formatDateTime")
+      && !hostedReviewViewSource.includes("총점 ")
+      && !hostedReviewViewSource.includes("평가 점수")
+      && !hostedReviewViewSource.includes("빠른 보완 포인트")
+      && !hostedReviewViewSource.includes("보완 프롬프트")
+      && !hostedControllerSource.includes("핵심 구조 (PRO)")
+      && !hostedControllerSource.includes("정교화 요소 (MPT)"),
+    true,
+    "hosted prompt review should use ordinary user-facing labels instead of internal score/framework labels"
+  );
+  assert.equal(
+    promptReviewServiceSource.includes("비전문가가 바로 이해할 수 있는 쉬운 말")
+      && promptReviewServiceSource.includes("대괄호로 된 빈칸 표시를 만들지 마세요")
+      && promptReviewServiceSource.includes("verdict가 ready이면 quickImprovements는 빈 배열")
+      && !promptReviewServiceSource.includes("PROMPT 공식")
+      && !promptReviewServiceSource.includes("Persona, Reference, Objective")
+      && !promptReviewServiceSource.includes("[역할]")
+      && !promptReviewServiceSource.includes("[대상 독자]")
+      && !promptReviewServiceSource.includes("placeholder를 사용하세요"),
+    true,
+    "prompt review service prompt should produce ordinary Korean guidance without framework jargon or bracket placeholders"
   );
   assert.equal(
     hostedReviewViewSource.includes("inova-prompt-review__field-actions")

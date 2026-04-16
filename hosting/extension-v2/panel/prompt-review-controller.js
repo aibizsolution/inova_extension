@@ -4,28 +4,27 @@
   const PROMPT_REVIEW_PROFILE_V2 = "prompt-telling-v2";
   const PROMPT_REVIEW_V2_MIN_VERSION = "0.4.5";
   const PROMPT_REVIEW_RUN_CAPABILITY_ID = "prompt.review.run";
-  const LEGACY_SCORE_GUIDE_TEXT = "점수는 프롬프트의 핵심 정보 충족도를 보는 참고값이에요.";
-  const PROMPT_TELLING_SCORE_GUIDE_TEXT = "점수는 역할 지정·참고 자료·목표 설정(PRO)을 중심으로, 결과 형식·타깃 관점·말투(MPT)를 보조로 반영한 참고값이에요.";
+  const SCORE_GUIDE_TEXT = "점수는 참고용이에요. 아래 고칠 점과 다듬은 프롬프트를 같이 보세요.";
   const STATUS_LABELS = {
-    good: "충족",
+    good: "좋음",
     missing: "부족",
-    partial: "보완 필요",
+    partial: "조금 보완",
   };
   const CHECK_DEFINITIONS = {
-    constraints: { id: "constraints", label: "제약사항", order: 30 },
-    context: { id: "context", label: "배경/대상/상황", order: 10 },
-    goal: { id: "goal", label: "원하는 결과", order: 20 },
-    mode: { group: "refinement", id: "mode", label: "결과 형식", order: 40 },
-    objective: { group: "core", id: "objective", label: "목표 설정", order: 30 },
-    output: { id: "output", label: "출력 형식", order: 40 },
-    persona: { group: "core", id: "persona", label: "역할 지정", order: 10 },
-    pointofview: { group: "refinement", id: "pointOfView", label: "타깃 관점", order: 50 },
-    reference: { group: "core", id: "reference", label: "참고 자료", order: 20 },
+    constraints: { id: "constraints", label: "조건", order: 30 },
+    context: { id: "context", label: "상황", order: 10 },
+    goal: { id: "goal", label: "목표", order: 20 },
+    mode: { group: "refinement", id: "mode", label: "형식", order: 40 },
+    objective: { group: "core", id: "objective", label: "목표", order: 30 },
+    output: { id: "output", label: "형식", order: 40 },
+    persona: { group: "core", id: "persona", label: "역할", order: 10 },
+    pointofview: { group: "refinement", id: "pointOfView", label: "읽는 사람", order: 50 },
+    reference: { group: "core", id: "reference", label: "참고할 내용", order: 20 },
     tone: { group: "refinement", id: "tone", label: "말투", order: 60 },
   };
   const CHECK_GROUP_DEFINITIONS = {
-    core: { label: "핵심 구조 (PRO)", order: 10 },
-    refinement: { label: "정교화 요소 (MPT)", order: 20 },
+    core: { label: "기본 정보", order: 10 },
+    refinement: { label: "표현 방식", order: 20 },
   };
 
   function create(options = {}) {
@@ -333,7 +332,7 @@
         return;
       }
       if (viewState.stale) {
-        updateState({ error: "입력창 내용이 바뀌어서 이전 보완안을 바로 반영할 수 없어요. 다시 평가해 주세요." });
+        updateState({ error: "입력창 내용이 바뀌어서 이전 다듬은 문장을 바로 반영할 수 없어요. 검토를 다시 실행해 주세요." });
         traceReview("57.hosted.review.apply.error", {
           action: "apply-reviewed-prompt",
           error: "stale",
@@ -342,7 +341,7 @@
       }
       const refinedPrompt = String(viewState.result?.refinedPrompt || "").trim();
       if (!refinedPrompt) {
-        updateState({ error: "반영할 보완 프롬프트가 없어요." });
+        updateState({ error: "반영할 다듬은 프롬프트가 없어요." });
         traceReview("57.hosted.review.apply.error", {
           action: "apply-reviewed-prompt",
           error: "missing-refined-prompt",
@@ -354,7 +353,7 @@
       });
       const result = await applyComposerText(refinedPrompt, "replace");
       if (!result?.applied) {
-        updateState({ error: "입력창에 보완 프롬프트를 반영하지 못했어요." });
+        updateState({ error: "입력창에 다듬은 프롬프트를 반영하지 못했어요." });
         traceReview("57.hosted.review.apply.error", {
           action: "apply-reviewed-prompt",
           error: "apply-failed",
@@ -378,7 +377,7 @@
         updateState({
           copyState: "failed",
         });
-        publishActionToast("복사할 보완 프롬프트가 없어요.", "error");
+        publishActionToast("복사할 다듬은 프롬프트가 없어요.", "error");
         traceReview("58.hosted.review.copy.error", {
           action: "copy-reviewed-prompt",
           error: "missing-refined-prompt",
@@ -398,7 +397,7 @@
           copyState: "copied",
           error: "",
         });
-        publishActionToast("보완 프롬프트를 복사했어요.");
+        publishActionToast("다듬은 프롬프트를 복사했어요.");
         traceReview("58.hosted.review.copy.success", {
           action: "copy-reviewed-prompt",
         });
@@ -406,7 +405,7 @@
         updateState({
           copyState: "failed",
         });
-        publishActionToast("보완 프롬프트를 복사하지 못했어요.", "error");
+        publishActionToast("다듬은 프롬프트를 복사하지 못했어요.", "error");
         traceReview("58.hosted.review.copy.error", {
           action: "copy-reviewed-prompt",
           error: "copy-failed",
@@ -510,16 +509,24 @@
     const checks = normalizeChecks(result.checks);
     const sections = buildCheckSections(checks);
     const refinedPrompt = String(result.refinedPrompt || "").trim();
+    const verdict = normalizeEnum(result.verdict, ["ready", "revise", "insufficient"], "revise");
+    const totalScore = Math.max(0, Math.min(100, Number(result.totalScore) || 0));
+    const quickImprovements = Array.isArray(result.quickImprovements)
+      ? result.quickImprovements.filter(Boolean).map(String)
+      : [];
     return {
       checks,
       formattedPrompt: formatRefinedPrompt(refinedPrompt),
       placeholderTokens: detectPlaceholderTokens(refinedPrompt),
-      quickImprovements: Array.isArray(result.quickImprovements) ? result.quickImprovements.filter(Boolean).map(String) : [],
+      quickImprovements: verdict === "ready" && totalScore >= 90 ? [] : quickImprovements,
       refinedPrompt,
-      scoreGuideText: sections.length ? PROMPT_TELLING_SCORE_GUIDE_TEXT : LEGACY_SCORE_GUIDE_TEXT,
+      scoreGuideText: SCORE_GUIDE_TEXT,
       sections,
       summary: String(result.summary || "").trim(),
-      totalScoreLabel: `${Math.max(0, Math.min(100, Number(result.totalScore) || 0))}점`,
+      totalScoreChipLabel: `${totalScore}/100`,
+      totalScoreLabel: `${totalScore}점`,
+      verdict,
+      verdictLabel: getVerdictLabel(verdict),
     };
   }
 
@@ -589,6 +596,16 @@
   function normalizeEnum(value, allowed, fallback) {
     const normalized = normalizeText(value).toLowerCase();
     return allowed.includes(normalized) ? normalized : fallback;
+  }
+
+  function getVerdictLabel(verdict) {
+    if (verdict === "ready") {
+      return "바로 써도 좋아요";
+    }
+    if (verdict === "insufficient") {
+      return "내용을 더 적어 주세요";
+    }
+    return "조금만 다듬으면 좋아요";
   }
 
   function detectPlaceholderTokens(text) {
