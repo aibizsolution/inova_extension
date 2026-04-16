@@ -4,6 +4,7 @@
   const BRIDGE_VERSION = 1;
   const APP_SOURCE = "inova-hosted-panel-app";
   const EXTENSION_SOURCE = "inova-hosted-panel-extension";
+  const MEMBER_INFO_CAPABILITY_ID = "member.info.show";
   const REQUEST_TIMEOUT_MS = 15000;
   const STARTUP_STATUS_CARD_DELAY_MS = 450;
   const APP_CAPABILITIES = Object.freeze([
@@ -26,6 +27,7 @@
     { id: "bookmarks", label: "대화" },
     { id: "meeting", label: "회의 룸" },
     { id: "prompts", label: "프롬프트" },
+    { id: "member", label: "회원" },
     { id: "release", label: "릴리스" },
   ]);
 
@@ -131,6 +133,11 @@
     traceFirestore: traceFirestoreFlow,
     traceMeeting: traceMeetingFlow,
   }) || null;
+  const memberInfoController = namespace.memberInfoController?.create?.({
+    browserCapabilities,
+    scheduleRender,
+    traceMember: traceMemberFlow,
+  }) || null;
   const releaseController = namespace.releaseController?.create?.({
     browserCapabilities,
     getRuntimeVersion: () => state.extensionVersion || "",
@@ -217,6 +224,12 @@
             });
             return handled;
           });
+        }
+        return Promise.resolve(false);
+      },
+      onMemberAction(memberAction) {
+        if (memberInfoController?.handleMemberAction) {
+          return Promise.resolve(memberInfoController.handleMemberAction(memberAction));
         }
         return Promise.resolve(false);
       },
@@ -840,7 +853,7 @@
 
   function normalizeHostedToolId(toolId) {
     const normalizedToolId = normalizeText(toolId).toLowerCase();
-    return normalizedToolId === "meeting" || normalizedToolId === "prompts" || normalizedToolId === "release"
+    return normalizedToolId === "meeting" || normalizedToolId === "prompts" || normalizedToolId === "member" || normalizedToolId === "release"
       ? normalizedToolId
       : normalizedToolId === "store"
         ? "prompts"
@@ -918,15 +931,19 @@
     const effectivePromptCount = readEffectivePromptCount(panelState, effectivePromptTool);
     const effectiveMeetingTool = buildEffectiveMeetingToolState(panelState);
     const effectiveMeetingCount = readEffectiveMeetingCount(panelState, effectiveMeetingTool);
+    const effectiveMemberTool = buildEffectiveMemberInfoToolState(panelState);
+    const effectiveMemberCount = readEffectiveMemberCount(panelState, effectiveMemberTool);
     const effectiveReleaseTool = buildEffectiveReleaseToolState(panelState);
     const effectiveReleaseCount = readEffectiveReleaseCount(panelState, effectiveReleaseTool);
     const effectiveToolCount = panelState.activeTool === "prompts"
       ? readEffectivePromptToolCount(effectivePromptTool, effectivePromptCount)
       : panelState.activeTool === "meeting"
         ? effectiveMeetingCount
-        : panelState.activeTool === "release"
-          ? effectiveReleaseCount
-          : effectiveConversationCount;
+        : panelState.activeTool === "member"
+          ? effectiveMemberCount
+          : panelState.activeTool === "release"
+            ? effectiveReleaseCount
+            : effectiveConversationCount;
     syncPanelChromeIfNeeded({
       handleCount: effectiveToolCount,
       open: panelState.open,
@@ -942,6 +959,7 @@
         effectiveConversationCount,
         effectivePromptCount,
         effectiveMeetingCount,
+        effectiveMemberCount,
         effectiveReleaseCount
       ),
       panelState.activeTool
@@ -980,8 +998,12 @@
     if (!panelSnapshot) {
       return null;
     }
+    const activeTool = panelSnapshot.activeTool === "member" && !hasEffectiveCapability(MEMBER_INFO_CAPABILITY_ID)
+      ? "bookmarks"
+      : panelSnapshot.activeTool;
     return {
       ...panelSnapshot,
+      activeTool,
       open: state.panelOpenHydrated ? state.panelOpen : panelSnapshot.open === true,
     };
   }
@@ -1023,6 +1045,7 @@
     promptReviewController?.syncPanelState?.(panelState, effectiveCapabilities);
     promptStoreController?.syncPanelState?.(panelState, effectiveCapabilities);
     meetingHubController?.syncPanelState?.(panelState, effectiveCapabilities);
+    memberInfoController?.syncPanelState?.(panelState, effectiveCapabilities);
     releaseController?.syncPanelState?.(panelState, effectiveCapabilities);
   }
 
@@ -1083,6 +1106,9 @@
     if (panelState.activeTool === "meeting") {
       return buildEffectiveMeetingToolState(panelState);
     }
+    if (panelState.activeTool === "member") {
+      return buildEffectiveMemberInfoToolState(panelState);
+    }
     if (panelState.activeTool === "release") {
       return buildEffectiveReleaseToolState(panelState);
     }
@@ -1099,6 +1125,9 @@
       }
       if (panelState.activeTool === "meeting") {
         return namespace.meetingView?.render?.(buildEffectiveMeetingToolState(panelState)) || renderToolFailure();
+      }
+      if (panelState.activeTool === "member") {
+        return namespace.memberInfoView?.render?.(buildEffectiveMemberInfoToolState(panelState)) || renderToolFailure();
       }
       if (panelState.activeTool === "release") {
         return namespace.releaseView?.render?.(buildEffectiveReleaseToolState(panelState)) || renderToolFailure();
@@ -1134,8 +1163,8 @@
     `).join("");
   }
 
-  function buildHostedToolItems(conversationCount, promptCount, meetingCount, releaseCount) {
-    return HOSTED_PANEL_TOOLS.map((tool) => ({
+  function buildHostedToolItems(conversationCount, promptCount, meetingCount, memberCount, releaseCount) {
+    return HOSTED_PANEL_TOOLS.filter((tool) => tool.id !== "member" || hasEffectiveCapability(MEMBER_INFO_CAPABILITY_ID)).map((tool) => ({
       ...tool,
       count: tool.id === "bookmarks"
         ? conversationCount
@@ -1143,7 +1172,9 @@
           ? promptCount
           : tool.id === "meeting"
             ? meetingCount
-            : releaseCount,
+            : tool.id === "member"
+              ? memberCount
+              : releaseCount,
     }));
   }
 
@@ -1154,6 +1185,9 @@
     }
     if (normalizedTool === "meeting") {
       return "회의 룸";
+    }
+    if (normalizedTool === "member") {
+      return "회원 정보";
     }
     if (normalizedTool === "release") {
       return "릴리스 안내";
@@ -1276,6 +1310,13 @@
     return panelState.meetingTool || {};
   }
 
+  function buildEffectiveMemberInfoToolState(panelState) {
+    if (memberInfoController?.hasRequiredCapabilities?.()) {
+      return memberInfoController.buildViewState(panelState.memberTool || {});
+    }
+    return panelState.memberTool || memberInfoController?.buildViewState?.({}) || {};
+  }
+
   function buildEffectiveReleaseToolState(panelState) {
     if (releaseController?.hasRequiredCapabilities?.()) {
       return releaseController.buildViewState(panelState.releaseTool || {});
@@ -1334,6 +1375,16 @@
       Number(effectiveMeetingTool?.count)
         || Number(panelState.meetingTool?.count)
         || (Array.isArray(effectiveMeetingTool?.items) ? effectiveMeetingTool.items.length : 0)
+    );
+  }
+
+  function readEffectiveMemberCount(panelState, effectiveMemberTool) {
+    return Math.max(
+      0,
+      Number(memberInfoController?.getMemberInfoCount?.() || 0)
+        || Number(effectiveMemberTool?.member?.providerIdentity?.available ? 1 : 0)
+        || Number(panelState.memberTool?.count)
+        || 0
     );
   }
 
@@ -1432,6 +1483,10 @@
       ...state.extensionCapabilities,
       ...state.remoteCapabilityIds,
     ]));
+  }
+
+  function hasEffectiveCapability(capabilityId) {
+    return readEffectiveExtensionCapabilities().includes(normalizeText(capabilityId));
   }
 
   function handleRootClick(event) {
@@ -1547,6 +1602,17 @@
         meetingId: meetingAction.dataset.meetingId || "",
         title: meetingAction.dataset.meetingTitle || "",
       });
+      return;
+    }
+    const memberAction = target.closest?.("[data-member-action]");
+    if (memberAction) {
+      if (memberAction.getAttribute?.("aria-disabled") === "true") {
+        return;
+      }
+      traceMemberFlow("40.hosted.click.detected", {
+        action: memberAction.dataset.memberAction || "",
+      });
+      void callbacks.onMemberAction(memberAction.dataset.memberAction || "");
       return;
     }
     const releaseAction = event.target.closest?.("[data-release-action]");
@@ -2047,6 +2113,10 @@
 
   function traceMeetingFlow(step, payload = {}) {
     postTrace("meeting", step, payload);
+  }
+
+  function traceMemberFlow(step, payload = {}) {
+    postTrace("member", step, payload);
   }
 
   function traceConversationFlow(step, payload = {}) {

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const assert = require("assert");
+const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
@@ -33,6 +34,7 @@ async function main() {
   verifyBookmarkJumpAccessibilityContract();
   verifyHostedPromptReviewFallbackContract();
   verifyHostedReleaseSummarySyncContract();
+  verifyHostedMemberInfoWorkflowPilotContract();
   await verifyHostedReleaseLocalDownloadUrls();
   console.log("[verify-panel-render] Hosted panel host contract passed");
 }
@@ -196,6 +198,7 @@ function verifyHostedNormalizeTextUsesPanelUtils() {
     "index.js",
     "meeting-firestore-client.js",
     "meeting-hub-controller.js",
+    "member-info-controller.js",
     "panel-firestore-session-client.js",
     "panel-utils.js",
     "prompt-library-controller.js",
@@ -475,6 +478,93 @@ function verifyHostedReleaseSummarySyncContract() {
     !bridgeRequestSource.includes('if (action === "tool-summary-sync")'),
     "top panel bridge should not accept removed hosted release summary sync requests"
   );
+}
+
+function verifyHostedMemberInfoWorkflowPilotContract() {
+  const hostedPanelHtml = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "index.html"),
+    "utf8"
+  );
+  const hostedPanelSource = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "index.js"),
+    "utf8"
+  );
+  const memberControllerSource = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "member-info-controller.js"),
+    "utf8"
+  );
+  const memberViewSource = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "member-info-view.js"),
+    "utf8"
+  );
+  const manifest = JSON.parse(fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "capability-manifest.json"),
+    "utf8"
+  ));
+  const workflowArtifactPath = path.join(root, "hosting", "extension-v2", "panel", "workflows", "member-info-card", "0.0.1.json");
+  const workflowArtifactSource = fs.readFileSync(workflowArtifactPath, "utf8");
+  const legacyWorkflowArtifactSource = fs.readFileSync(
+    path.join(root, "hosting", "extension", "panel", "workflows", "member-info-card", "0.0.1.json"),
+    "utf8"
+  );
+  const workflow = JSON.parse(workflowArtifactSource);
+
+  assert(
+    hostedPanelHtml.includes("./member-info-view.js")
+      && hostedPanelHtml.includes("./member-info-controller.js")
+      && hostedPanelHtml.indexOf("./member-info-view.js") < hostedPanelHtml.indexOf("./member-info-controller.js")
+      && hostedPanelHtml.indexOf("./member-info-controller.js") < hostedPanelHtml.indexOf("./index.js"),
+    "hosted member info scripts should load before the hosted panel app"
+  );
+  assert(
+    hostedPanelSource.includes('{ id: "member", label: "회원" }')
+      && hostedPanelSource.includes("memberInfoController")
+      && hostedPanelSource.includes("[data-member-action]")
+      && hostedPanelSource.includes("hasEffectiveCapability(MEMBER_INFO_CAPABILITY_ID)"),
+    "hosted panel should expose member info as a capability-gated hosted-owned tool"
+  );
+  assert(
+    memberControllerSource.includes('const MEMBER_INFO_CAPABILITY_ID = "member.info.show"')
+      && memberControllerSource.includes("invokeCapability(")
+      && memberControllerSource.includes("pilotEnabled: true")
+      && !memberControllerSource.includes("invokeRuntime")
+      && !memberControllerSource.includes("endpointKey:")
+      && !memberControllerSource.includes("functions.invoke-endpoint"),
+    "member info controller should invoke only the workflow capability id"
+  );
+  assert(
+    memberViewSource.includes('data-member-action="show"')
+      && memberViewSource.includes('data-member-action="refresh"'),
+    "member info view should expose explicit show/refresh actions"
+  );
+  assert.equal(manifest.workflowPilot?.enabled, true, "member workflow pilot should be enabled in served manifest");
+  assert.equal(manifest.workflowPilot?.killSwitch?.enabled, false, "member workflow pilot kill switch should be off");
+  assert.deepEqual(manifest.workflowPilot?.lanes, ["v2"], "member workflow pilot should stay lane-gated to v2");
+  assert.equal(manifest.capabilities?.["member.info.show"]?.kind, "workflow");
+  assert.equal(manifest.capabilities?.["member.info.show"]?.artifactId, "member-info-card");
+  assert.equal(manifest.capabilities?.["member.info.show"]?.pilot, true);
+  assert.equal(manifest.workflowArtifacts?.["member-info-card"]?.scriptSlot, "remote-workflow");
+  assert.equal(
+    legacyWorkflowArtifactSource,
+    workflowArtifactSource,
+    "legacy and v2 served member workflow artifacts should stay byte-for-byte aligned"
+  );
+  assert.equal(
+    manifest.workflowArtifacts?.["member-info-card"]?.integrity,
+    buildSha256Integrity(workflowArtifactSource),
+    "member info workflow artifact integrity should match the hosted artifact bytes"
+  );
+  assert.equal(workflow.workflowId, "member.info.show");
+  assert.equal(workflow.artifactId, "member-info-card");
+  assert(
+    workflow.steps.some((step) => step.bridgeApi === "readPanelState")
+      && workflow.steps.every((step) => step.type === "bridge"),
+    "member info workflow should read member data through the allowlisted sandbox bridge"
+  );
+}
+
+function buildSha256Integrity(source) {
+  return `sha256-${crypto.createHash("sha256").update(source).digest("base64")}`;
 }
 
 async function verifyHostedReleaseLocalDownloadUrls() {

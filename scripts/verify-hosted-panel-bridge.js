@@ -406,6 +406,9 @@ function verifyHostedPanelFiles(directoryName) {
   const promptReviewControllerJs = directoryName === "extension-v2"
     ? fs.readFileSync(path.join(baseDir, "prompt-review-controller.js"), "utf8")
     : "";
+  const memberInfoControllerJs = directoryName === "extension-v2"
+    ? fs.readFileSync(path.join(baseDir, "member-info-controller.js"), "utf8")
+    : "";
   const hostedControllerFiles = directoryName === "extension-v2"
     ? fs.readdirSync(baseDir)
       .filter((fileName) => fileName.endsWith("-controller.js"))
@@ -488,12 +491,15 @@ function verifyHostedPanelFiles(directoryName) {
     assert(html.includes("./prompt-review-controller.js"), "v2 hosted panel should load prompt review controller");
     assert(html.includes("./prompt-store-controller.js"), "v2 hosted panel should load prompt store controller");
     assert(html.includes("./meeting-hub-controller.js"), "v2 hosted panel should load meeting hub controller");
+    assert(html.includes("./member-info-view.js"), "v2 hosted panel should load member info view");
+    assert(html.includes("./member-info-controller.js"), "v2 hosted panel should load member info controller");
     assert(html.includes("./release-controller.js"), "v2 hosted panel should load release controller");
     assert(indexJs.includes("conversationController"), "v2 hosted panel should wire hosted conversation ownership");
     assert(indexJs.includes("promptLibraryController"), "v2 hosted panel should wire hosted prompt library ownership");
     assert(indexJs.includes("promptReviewController"), "v2 hosted panel should wire hosted prompt review ownership");
     assert(indexJs.includes("promptStoreController"), "v2 hosted panel should wire hosted prompt store ownership");
     assert(indexJs.includes("meetingHubController"), "v2 hosted panel should wire hosted meeting ownership");
+    assert(indexJs.includes("memberInfoController"), "v2 hosted panel should wire hosted member info ownership");
     assert(indexJs.includes("releaseController"), "v2 hosted panel should wire hosted release ownership");
     assert(indexJs.includes("const browserCapabilities = namespace.extensionCapabilityClient?.create?.({"), "v2 hosted panel should create a shared browser capability client");
     assert(sharedFirestoreSessionJs.includes("firebase.initializeApp"), "shared Firestore session coordinator should own Firebase app creation");
@@ -577,6 +583,14 @@ function verifyHostedPanelFiles(directoryName) {
       promptReviewControllerJs.includes("hasCapability(PROMPT_REVIEW_RUN_CAPABILITY_ID)")
         && promptReviewControllerJs.includes("capability-disabled"),
       "v2 hosted prompt review action should be gated by the negotiated prompt review capability id"
+    );
+    assert(
+      memberInfoControllerJs.includes('const MEMBER_INFO_CAPABILITY_ID = "member.info.show"')
+        && memberInfoControllerJs.includes("invokeCapability(")
+        && memberInfoControllerJs.includes("pilotEnabled: true")
+        && !memberInfoControllerJs.includes("readPanelStorageState")
+        && !memberInfoControllerJs.includes("storage.read-panel-state"),
+      "v2 hosted member info should run through the negotiated workflow capability instead of raw storage/runtime actions"
     );
   }
   assert(

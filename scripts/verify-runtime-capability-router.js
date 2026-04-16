@@ -39,13 +39,22 @@ function verifyServedCapabilityManifests() {
   assert.equal(v2Manifest.capabilities["page.composer.read-state"].pageCapabilityId, "composer.read-state");
   assert.equal(v2Manifest.capabilities["release.download.open"].kind, "browser.open-url");
   assert.deepEqual(v2Manifest.capabilities["release.download.open"].templateKeys, ["release.download"]);
-  assert.deepEqual(v2Manifest.workflowArtifacts, {});
+  assert.equal(v2Manifest.capabilities["member.info.show"].kind, "workflow");
+  assert.equal(v2Manifest.capabilities["member.info.show"].workflowId, "member.info.show");
+  assert.equal(v2Manifest.capabilities["member.info.show"].artifactId, "member-info-card");
+  assert.equal(v2Manifest.capabilities["member.info.show"].pilot, true);
+  assert.deepEqual(v2Manifest.workflowArtifacts["member-info-card"], {
+    artifactVersion: "0.0.1",
+    bundleId: "member-info-card",
+    integrity: "sha256-osRBIMfdYEMCn2iZSacTpAMXjmlQ78bEnoy6Sv/yX3I=",
+    scriptSlot: "remote-workflow",
+  });
   assert.deepEqual(v2Manifest.workflowPilot, {
-    enabled: false,
+    enabled: true,
     killSwitch: {
-      enabled: true,
+      enabled: false,
     },
-    lanes: [],
+    lanes: ["v2"],
   });
   assert.equal(v2Manifest.lanes.v2.endpointOverrides.syncInovaPromptLibraryUrl, "syncInovaPromptLibraryV2");
 }
@@ -474,6 +483,13 @@ async function verifyBundledRuntimeRouterDispatch() {
   ]);
   assert.deepEqual(handshake.workflowArtifacts, [
     {
+      artifactId: "member-info-card",
+      artifactVersion: "0.0.1",
+      bundleId: "member-info-card",
+      integrity: "sha256-osRBIMfdYEMCn2iZSacTpAMXjmlQ78bEnoy6Sv/yX3I=",
+      scriptSlot: "remote-workflow",
+    },
+    {
       artifactId: "test-workflow",
       artifactVersion: "0.0.1",
       bundleId: "test-workflow-bundle",
@@ -485,6 +501,7 @@ async function verifyBundledRuntimeRouterDispatch() {
   assert(handshake.enabledCapabilityIds.includes("panel.ui-preferences.write"));
   assert(handshake.enabledCapabilityIds.includes("page.composer.read-state"));
   assert(handshake.enabledCapabilityIds.includes("release.download.open"));
+  assert(handshake.enabledCapabilityIds.includes("member.info.show"));
   assert.equal(
     handshake.capabilities.find((capability) => capability.capabilityId === "prompt.review.run")?.enabled,
     true
@@ -513,6 +530,13 @@ async function verifyBundledRuntimeRouterDispatch() {
   assert.equal(testOnlyCapability?.enabled, false);
   assert.equal(testOnlyCapability?.testOnly, true);
   assert(!handshake.enabledCapabilityIds.includes("test.function.disabled"));
+  const memberWorkflowCapability = handshake.capabilities.find((capability) => capability.capabilityId === "member.info.show");
+  assert.equal(memberWorkflowCapability?.enabled, true);
+  assert.equal(memberWorkflowCapability?.workflowId, "member.info.show");
+  assert.equal(memberWorkflowCapability?.artifactId, "member-info-card");
+  assert.equal(memberWorkflowCapability?.artifactVersion, "0.0.1");
+  assert.equal(memberWorkflowCapability?.pilot, true);
+  assert.equal(memberWorkflowCapability?.lane, "v2");
   const workflowCapability = handshake.capabilities.find((capability) => capability.capabilityId === "test.workflow.disabled");
   assert.equal(workflowCapability?.enabled, false);
   assert.equal(workflowCapability?.workflowId, "test.workflow.disabled");
