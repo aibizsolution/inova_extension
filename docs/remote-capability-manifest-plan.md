@@ -508,10 +508,12 @@ verify 기준:
 - docs generator
 - verify scripts
 - `docs/remote-capability-manifest-plan.md`
+- `docs/capability-catalog.md`
 
 완료 기준:
 
 - manifest에서 capability catalog 문서가 생성된다.
+- generated catalog가 manifest와 drift 없이 유지된다.
 - docs drift를 verify가 잡는다.
 
 verify 기준:
@@ -525,6 +527,11 @@ verify 기준:
 배포/롤아웃 주의점:
 
 - test-only capability와 production capability를 분리한다.
+
+현재 상태:
+
+- `scripts/generate-capability-catalog.js`가 `hosting/extension-v2/capability-manifest.json`에서 `docs/capability-catalog.md`를 생성한다.
+- `scripts/verify-docs.js`가 generated catalog drift를 실패 처리한다.
 
 ### Phase 8. Sandboxed Remote Workflow Pilot
 

@@ -7,6 +7,7 @@ const root = path.resolve(__dirname, "..");
 const contract = JSON.parse(
   fs.readFileSync(path.join(root, "contracts", "extension-contract.json"), "utf8")
 );
+const { buildCapabilityCatalogMarkdown } = require("./generate-capability-catalog");
 const requiredFiles = [
   "manifest.json",
   "README.md",
@@ -15,6 +16,7 @@ const requiredFiles = [
   path.join("scripts", "verify-refactor-plan-update.js"),
   path.join("docs", "feature-spec.md"),
   path.join("docs", "feature-routing.md"),
+  path.join("docs", "capability-catalog.md"),
   path.join("docs", "lint-workflow.md"),
   "popup/index.html",
   "popup/index.js",
@@ -52,6 +54,7 @@ const requiredFiles = [
   path.join("backup", "legacy-panel", "shared", "legacy-storage-accessors.js"),
   path.join("backup", "legacy-panel", "shared", "prompt-library.js"),
   path.join("scripts", "verify-feature-doc-update.js"),
+  path.join("scripts", "generate-capability-catalog.js"),
   path.join("scripts", "verify-hosted-panel-bridge.js"),
   path.join("scripts", "verify-legacy-isolation.js"),
   path.join("scripts", "legacy-panel", "README.md"),
@@ -675,6 +678,7 @@ function main() {
     }
   }
 
+  verifyCapabilityCatalogDoc(errors);
   validateFeatureDocs(errors);
 
   for (const keyword of contract.requiredDocKeywords) {
@@ -715,6 +719,15 @@ function readJson(filePath, errors) {
   } catch (error) {
     errors.push(`JSON 파싱 실패: ${path.relative(root, filePath)} (${error.message})`);
     return null;
+  }
+}
+
+function verifyCapabilityCatalogDoc(errors) {
+  const catalogPath = path.join(root, "docs", "capability-catalog.md");
+  const actual = readText(catalogPath, errors).replace(/\r\n/g, "\n");
+  const expected = buildCapabilityCatalogMarkdown({ root }).replace(/\r\n/g, "\n");
+  if (actual && actual !== expected) {
+    errors.push("docs/capability-catalog.md가 hosting/extension-v2/capability-manifest.json과 다릅니다. generator를 다시 실행하세요.");
   }
 }
 
