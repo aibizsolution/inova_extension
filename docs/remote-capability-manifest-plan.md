@@ -600,8 +600,8 @@ verify 기준:
 
 1. Capability alias/deprecation registry
    - 기대 효과: capability 이름 변경을 서버 manifest만으로 흡수한다.
-   - 상태: top-level alias map, `removeAfter`, replacement validation, runtime alias invoke, hosted page alias cache까지 1차 구현됨.
-   - 남은 일: generated catalog 문서에 alias section을 추가한다.
+   - 상태: top-level alias map, `removeAfter`, replacement validation, runtime alias invoke, hosted page alias cache, generated catalog alias section까지 1차 구현됨.
+   - 다음 확장: 실제 manifest alias를 추가할 때 `removeAfter`와 catalog drift guard를 같이 유지한다.
    - 리스크: alias가 오래 남으면 복잡해진다. 제거 기한을 계속 필수화한다.
 
 2. Test-only capability 표준
