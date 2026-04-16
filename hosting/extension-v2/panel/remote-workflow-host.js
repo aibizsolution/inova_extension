@@ -27,6 +27,8 @@
     let booted = false;
     let activeBridgeApis = [];
     let attached = false;
+    let workflowArtifactsById = {};
+    const workflowArtifactCache = new Map();
 
     return {
       boot,
@@ -38,9 +40,10 @@
     function boot(request = {}) {
       ensureFrame();
       const bridgeApis = normalizeBridgeApis(request.bridgeApis);
+      workflowArtifactsById = normalizeWorkflowArtifacts(request.workflowArtifacts);
       return postSandboxRequest("remote-workflow.boot", {
         bridgeApis,
-        workflowArtifacts: normalizeWorkflowArtifacts(request.workflowArtifacts),
+        workflowArtifacts: workflowArtifactsById,
       }).then((result) => {
         activeBridgeApis = normalizeBridgeApis(result?.bridgeApis);
         booted = true;
@@ -56,7 +59,8 @@
       if (!booted) {
         throw new Error("remote workflow sandbox is not ready");
       }
-      return postSandboxRequest("remote-workflow.run", sanitizeWorkflowRunRequest(request));
+      return resolveWorkflowRunRequest(request)
+        .then((payload) => postSandboxRequest("remote-workflow.run", payload));
     }
 
     function getState() {
@@ -80,6 +84,8 @@
       frameWindow = null;
       booted = false;
       activeBridgeApis = [];
+      workflowArtifactsById = {};
+      workflowArtifactCache.clear();
     }
 
     function ensureFrame() {
@@ -240,81 +246,184 @@
       const suffix = normalizeText(global.__INOVA_HOSTED_PANEL_ASSET_SUFFIX__);
       return `${SANDBOX_PATH}${suffix}`;
     }
-  }
 
-  function sanitizeWorkflowRunRequest(request) {
-    return {
-      artifactId: normalizeText(request?.artifactId),
-      artifactVersion: normalizeText(request?.artifactVersion),
-      input: request?.input && typeof request.input === "object" ? request.input : {},
-      pilotEnabled: request?.pilotEnabled === true,
-      workflow: sanitizeWorkflowDefinition(request?.workflow),
-      workflowId: normalizeText(request?.workflowId),
-      workflowVersion: normalizeText(request?.workflowVersion),
-    };
-  }
-
-  function sanitizeWorkflowDefinition(workflow) {
-    if (!workflow || typeof workflow !== "object" || Array.isArray(workflow)) {
-      return null;
+    async function resolveWorkflowRunRequest(request) {
+      const payload = sanitizeWorkflowRunRequest(request);
+      if (!payload.workflow) {
+        payload.workflow = await loadWorkflowArtifact(payload.artifactId);
+      }
+      return payload;
     }
-    return {
-      artifactId: normalizeText(workflow.artifactId),
-      artifactVersion: normalizeText(workflow.artifactVersion),
-      output: cloneJsonValue(workflow.output),
-      steps: Array.isArray(workflow.steps)
-        ? workflow.steps.slice(0, 20).map((step) => ({
-          bridgeApi: normalizeText(step?.bridgeApi),
-          id: normalizeText(step?.id),
-          input: cloneJsonValue(step?.input),
-          type: normalizeText(step?.type || "bridge"),
-        }))
-        : [],
-      workflowId: normalizeText(workflow.workflowId),
-    };
-  }
 
-  function cloneJsonValue(value) {
-    return value == null ? null : JSON.parse(JSON.stringify(value));
-  }
-
-  function normalizeBridgeApis(value) {
-    const allowed = new Set(BRIDGE_API_ALLOWLIST);
-    return Array.isArray(value)
-      ? Array.from(new Set(value.map(normalizeText).filter((api) => allowed.has(api)))).sort()
-      : [];
-  }
-
-  function normalizeWorkflowArtifacts(value) {
-    if (!value || typeof value !== "object") {
-      return {};
+    async function loadWorkflowArtifact(artifactId) {
+      const normalizedArtifactId = normalizeText(artifactId);
+      const artifact = workflowArtifactsById[normalizedArtifactId];
+      if (!artifact) {
+        throw new Error(`remote workflow artifact is not registered: ${normalizedArtifactId}`);
+      }
+      const cacheKey = `${normalizedArtifactId}@${artifact.artifactVersion}`;
+      if (workflowArtifactCache.has(cacheKey)) {
+        return workflowArtifactCache.get(cacheKey);
+      }
+      const artifactUrl = buildWorkflowArtifactUrl(artifact);
+      if (typeof global.fetch !== "function") {
+        throw new Error("remote workflow artifact fetch is unavailable");
+      }
+      const response = await global.fetch(artifactUrl, {
+        cache: "no-store",
+        credentials: "same-origin",
+        method: "GET",
+      });
+      if (!response?.ok || typeof response.text !== "function") {
+        throw new Error(`remote workflow artifact fetch failed: ${normalizedArtifactId}`);
+      }
+      const source = await response.text();
+      await assertArtifactIntegrity(source, artifact.integrity);
+      const workflow = parseWorkflowArtifact(source, artifact);
+      workflowArtifactCache.set(cacheKey, workflow);
+      return workflow;
     }
-    const entries = Array.isArray(value)
-      ? value.map((artifact) => [artifact?.artifactId, artifact])
-      : Object.entries(value);
-    return Object.fromEntries(
-      entries
-        .map(([artifactId, artifact]) => [
+
+    function buildWorkflowArtifactUrl(artifact) {
+      const bundleId = normalizeArtifactPathPart(artifact.bundleId, "bundleId");
+      const artifactVersion = normalizeArtifactPathPart(artifact.artifactVersion, "artifactVersion");
+      return `./workflows/${encodeURIComponent(bundleId)}/${encodeURIComponent(artifactVersion)}.json`;
+    }
+
+    function normalizeArtifactPathPart(value, label) {
+      const normalized = normalizeText(value);
+      if (!/^[a-z0-9][a-z0-9.-]*$/.test(normalized)) {
+        throw new Error(`remote workflow artifact ${label} is not allowed`);
+      }
+      return normalized;
+    }
+
+    async function assertArtifactIntegrity(source, integrity) {
+      const expected = normalizeText(integrity);
+      if (!expected.startsWith("sha256-")) {
+        throw new Error("remote workflow artifact integrity is invalid");
+      }
+      const actual = `sha256-${await sha256Base64(source)}`;
+      if (actual !== expected) {
+        throw new Error("remote workflow artifact integrity mismatch");
+      }
+    }
+
+    async function sha256Base64(source) {
+      if (!global.crypto?.subtle || typeof global.TextEncoder !== "function") {
+        throw new Error("remote workflow artifact integrity verifier is unavailable");
+      }
+      const bytes = new global.TextEncoder().encode(source);
+      const digest = await global.crypto.subtle.digest("SHA-256", bytes);
+      return base64Encode(new Uint8Array(digest));
+    }
+
+    function base64Encode(bytes) {
+      let binary = "";
+      bytes.forEach((byte) => {
+        binary += String.fromCharCode(byte);
+      });
+      if (typeof global.btoa !== "function") {
+        throw new Error("remote workflow artifact base64 encoder is unavailable");
+      }
+      return global.btoa(binary);
+    }
+
+    function parseWorkflowArtifact(source, artifact) {
+      let workflow;
+      try {
+        workflow = JSON.parse(source);
+      } catch (error) {
+        throw new Error("remote workflow artifact JSON is invalid", { cause: error });
+      }
+      const normalizedWorkflow = sanitizeWorkflowDefinition(workflow);
+      if (!normalizedWorkflow?.workflowId) {
+        throw new Error("remote workflow artifact definition is invalid");
+      }
+      if (
+        normalizedWorkflow.artifactId !== artifact.artifactId
+        || normalizedWorkflow.artifactVersion !== artifact.artifactVersion
+      ) {
+        throw new Error("remote workflow artifact metadata mismatch");
+      }
+      return normalizedWorkflow;
+    }
+
+    function sanitizeWorkflowRunRequest(request) {
+      return {
+        artifactId: normalizeText(request?.artifactId),
+        artifactVersion: normalizeText(request?.artifactVersion),
+        input: request?.input && typeof request.input === "object" ? request.input : {},
+        pilotEnabled: request?.pilotEnabled === true,
+        workflow: sanitizeWorkflowDefinition(request?.workflow),
+        workflowId: normalizeText(request?.workflowId),
+        workflowVersion: normalizeText(request?.workflowVersion),
+      };
+    }
+
+    function sanitizeWorkflowDefinition(workflow) {
+      if (!workflow || typeof workflow !== "object" || Array.isArray(workflow)) {
+        return null;
+      }
+      return {
+        artifactId: normalizeText(workflow.artifactId),
+        artifactVersion: normalizeText(workflow.artifactVersion),
+        output: cloneJsonValue(workflow.output),
+        steps: Array.isArray(workflow.steps)
+          ? workflow.steps.slice(0, 20).map((step) => ({
+            bridgeApi: normalizeText(step?.bridgeApi),
+            id: normalizeText(step?.id),
+            input: cloneJsonValue(step?.input),
+            type: normalizeText(step?.type || "bridge"),
+          }))
+          : [],
+        workflowId: normalizeText(workflow.workflowId),
+      };
+    }
+
+    function cloneJsonValue(value) {
+      return value == null ? null : JSON.parse(JSON.stringify(value));
+    }
+
+    function normalizeBridgeApis(value) {
+      const allowed = new Set(BRIDGE_API_ALLOWLIST);
+      return Array.isArray(value)
+        ? Array.from(new Set(value.map(normalizeText).filter((api) => allowed.has(api)))).sort()
+        : [];
+    }
+
+    function normalizeWorkflowArtifacts(value) {
+      if (!value || typeof value !== "object") {
+        return {};
+      }
+      const entries = Array.isArray(value)
+        ? value.map((artifact) => [artifact?.artifactId, artifact])
+        : Object.entries(value);
+      return Object.fromEntries(
+        entries
+          .map(([artifactId, artifact]) => [
           normalizeText(artifactId),
           {
+            artifactId: normalizeText(artifactId),
             artifactVersion: normalizeText(artifact?.artifactVersion || artifact?.version),
             bundleId: normalizeText(artifact?.bundleId),
-            integrity: normalizeText(artifact?.integrity),
-            scriptSlot: normalizeText(artifact?.scriptSlot),
-          },
-        ])
-        .filter(([artifactId, artifact]) => Boolean(
-          artifactId
-            && artifact.artifactVersion
-            && artifact.bundleId
-            && artifact.integrity
-            && artifact.scriptSlot
-        ))
-    );
-  }
+              integrity: normalizeText(artifact?.integrity),
+              scriptSlot: normalizeText(artifact?.scriptSlot),
+            },
+          ])
+          .filter(([artifactId, artifact]) => Boolean(
+            artifactId
+              && artifact.artifactVersion
+              && artifact.bundleId
+              && artifact.integrity
+              && artifact.scriptSlot
+          ))
+      );
+    }
 
-  function readErrorMessage(error) {
-    return normalizeText(error instanceof Error ? error.message : error) || "remote workflow host failed";
+    function readErrorMessage(error) {
+      return normalizeText(error instanceof Error ? error.message : error) || "remote workflow host failed";
+    }
   }
 
   namespace.remoteWorkflowHost = Object.freeze({

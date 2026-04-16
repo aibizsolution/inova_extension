@@ -482,6 +482,8 @@ verify 기준:
 - sandbox HTML은 `connect-src 'none'` CSP를 가진다. sandbox runtime은 `chrome`, `fetch`, storage, arbitrary network globals를 blocked global로 취급한다.
 - sandbox bridge host는 handshake의 `bridgeApis` allowlist 안에 있는 API만 처리한다. allowlist 밖 API 요청은 explicit error로 반환한다.
 - sandbox runtime은 raw JS가 아니라 declarative workflow step만 해석한다. 현재 허용 step은 allowlisted bridge call뿐이다.
+- hosted sandbox host는 artifact registry의 `bundleId + artifactVersion`으로 same-origin `./workflows/<bundleId>/<artifactVersion>.json`만 fetch한다.
+- workflow artifact는 `sha256-*` integrity를 통과해야 sandbox에 전달된다. integrity verifier가 없거나 mismatch이면 explicit error다.
 - `workflow.run`은 `pilotEnabled=true`가 없으면 disabled 상태다. production manifest는 아직 enabled workflow를 통과시키지 않는다.
 
 ### Phase 7. Negotiation / Kill Switch / Rollout Guard
@@ -629,8 +631,8 @@ verify 기준:
 
 4. Workflow artifact registry
    - 기대 효과: remote logic을 versioned artifact 단위로 감사할 수 있다.
-   - 상태: manifest `workflowArtifacts` registry, artifact version pinning, allowlisted scriptSlot, integrity metadata, raw payload field rejection을 1차 구현함. 실행 loader/cache/debug UI는 아직 열지 않았다.
-   - 비용: sandbox loader, artifact cache, debug UI 필요.
+   - 상태: manifest `workflowArtifacts` registry, artifact version pinning, allowlisted scriptSlot, integrity metadata, raw payload field rejection, same-origin artifact loader/cache를 1차 구현함. debug UI는 아직 열지 않았다.
+   - 비용: pilot workflow artifact, rollout/debug UI 필요.
    - 리스크: unsigned/unpinned artifact 실행을 금지해야 한다.
 
 5. Capability catalog 자동 문서 생성

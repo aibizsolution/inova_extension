@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const assert = require("assert");
+const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
@@ -162,6 +163,28 @@ async function verifyHostedWorkflowHostBridge() {
   const postedMessages = [];
   const traceEvents = [];
   const browserCalls = [];
+  const fetchCalls = [];
+  const artifactWorkflow = {
+    artifactId: "test-workflow",
+    artifactVersion: "0.0.1",
+    output: "$steps.invokeReview",
+    steps: [
+      {
+        bridgeApi: "invokeCapability",
+        id: "invokeReview",
+        input: {
+          capabilityId: "prompt.review.run",
+          input: {
+            prompt: "$input.prompt",
+          },
+        },
+        type: "bridge",
+      },
+    ],
+    workflowId: "test.workflow.disabled",
+  };
+  const artifactSource = JSON.stringify(artifactWorkflow);
+  const artifactIntegrity = `sha256-${crypto.createHash("sha256").update(artifactSource).digest("base64")}`;
   const frameWindow = {
     postMessage(message, targetOrigin) {
       postedMessages.push({ message, targetOrigin });
@@ -200,8 +223,20 @@ async function verifyHostedWorkflowHostBridge() {
     },
     clearTimeout,
     console,
+    crypto: globalThis.crypto,
+    fetch: async (url, options) => {
+      fetchCalls.push({ options, url });
+      return {
+        ok: true,
+        text: async () => artifactSource,
+      };
+    },
     globalThis: null,
     setTimeout,
+    TextEncoder,
+    btoa(value) {
+      return Buffer.from(value, "binary").toString("base64");
+    },
   });
   context.globalThis = context;
   context.InovaBookmarks = {
@@ -239,7 +274,7 @@ async function verifyHostedWorkflowHostBridge() {
         artifactId: "test-workflow",
         artifactVersion: "0.0.1",
         bundleId: "test-workflow-bundle",
-        integrity: "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        integrity: artifactIntegrity,
         scriptSlot: "remote-workflow",
       },
     ],
@@ -272,6 +307,50 @@ async function verifyHostedWorkflowHostBridge() {
   });
   assert(traceEvents.some((event) => event.step === "remote.workflow.sandbox.ready"));
 
+  const artifactRunStartIndex = postedMessages.length;
+  const artifactRunPromise = host.runWorkflow({
+    artifactId: "test-workflow",
+    input: {
+      prompt: "artifact-test",
+    },
+    pilotEnabled: true,
+  });
+  await waitForNextPostedMessageType(postedMessages, artifactRunStartIndex, "remote-workflow.run");
+  assert.deepEqual(fetchCalls, [
+    {
+      options: {
+        cache: "no-store",
+        credentials: "same-origin",
+        method: "GET",
+      },
+      url: "./workflows/test-workflow-bundle/0.0.1.json",
+    },
+  ]);
+  const artifactRunRequest = postedMessages.at(-1)?.message;
+  assert.equal(artifactRunRequest?.type, "remote-workflow.run");
+  assert.equal(artifactRunRequest?.payload?.workflow?.workflowId, "test.workflow.disabled");
+  assert.equal(artifactRunRequest?.payload?.workflow?.steps?.[0]?.input?.input?.prompt, "$input.prompt");
+  messageListener({
+    data: {
+      ok: true,
+      payload: {
+        output: {
+          reviewed: true,
+        },
+      },
+      requestId: artifactRunRequest.requestId,
+      source: "inova-remote-workflow-sandbox",
+      type: "remote-workflow.response",
+    },
+    source: frameWindow,
+  });
+  assert.deepEqual(await artifactRunPromise, {
+    output: {
+      reviewed: true,
+    },
+  });
+
+  const workflowRunStartIndex = postedMessages.length;
   const workflowRunPromise = host.runWorkflow({
     input: {
       prompt: "host-test",
@@ -297,6 +376,7 @@ async function verifyHostedWorkflowHostBridge() {
       workflowId: "test.workflow.disabled",
     },
   });
+  await waitForNextPostedMessageType(postedMessages, workflowRunStartIndex, "remote-workflow.run");
   const workflowRunRequest = postedMessages.at(-1)?.message;
   assert.equal(workflowRunRequest?.type, "remote-workflow.run");
   assert.equal(workflowRunRequest?.payload?.pilotEnabled, true);
@@ -364,6 +444,19 @@ async function verifyHostedWorkflowHostBridge() {
 async function waitForBridgeResponse() {
   await Promise.resolve();
   await Promise.resolve();
+}
+
+function waitForAsyncTurn() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+async function waitForNextPostedMessageType(messages, startIndex, type) {
+  for (let index = 0; index < 20; index += 1) {
+    if (messages.length > startIndex && messages.at(-1)?.message?.type === type) {
+      return;
+    }
+    await waitForAsyncTurn();
+  }
 }
 
 function loadScript(relativePath, context) {
