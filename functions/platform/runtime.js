@@ -27,12 +27,13 @@ const bucket = resolveStorageBucket(admin);
 const REGION = "asia-northeast3";
 const INOVA_ORIGIN = "https://inova.incross.com";
 const HOSTING_ORIGIN = "https://browser-extension-main.web.app";
+const V2_HOSTING_ORIGIN = "https://browser-extension-v2.web.app";
 const LOCAL_HOSTING_ORIGINS = [
   "http://127.0.0.1:5000",
   "http://localhost:5000",
 ];
 const HOSTED_MEETING_PAGE_URL = `${HOSTING_ORIGIN}/meeting/index.html`;
-const CORS_ORIGINS = [INOVA_ORIGIN, HOSTING_ORIGIN, ...LOCAL_HOSTING_ORIGINS];
+const CORS_ORIGINS = [INOVA_ORIGIN, HOSTING_ORIGIN, V2_HOSTING_ORIGIN, ...LOCAL_HOSTING_ORIGINS];
 const STORE_CATEGORIES = promptStoreModel.getDefaultStoreCategories();
 const MAX_TITLE_LENGTH = 120;
 const MAX_CONTENT_LENGTH = 12000;

@@ -8,9 +8,20 @@ const vm = require("vm");
 const root = path.resolve(__dirname, "..");
 
 async function main() {
+  verifyCorsOrigins();
   await verifyIdentityReuseCache();
   await verifyIdentityPendingRequestDeduplication();
   console.log("[verify-functions-runtime] Functions runtime identity cache contract passed");
+}
+
+function verifyCorsOrigins() {
+  const runtime = loadRuntime();
+  assert(
+    runtime.CORS_ORIGINS.includes("https://browser-extension-main.web.app")
+      && runtime.CORS_ORIGINS.includes("https://browser-extension-v2.web.app")
+      && runtime.CORS_ORIGINS.includes("http://127.0.0.1:5000"),
+    "Functions CORS should allow legacy hosting, v2 hosting, and local hosted workspace origins"
+  );
 }
 
 async function verifyIdentityReuseCache() {

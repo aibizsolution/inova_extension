@@ -66,6 +66,12 @@ const SECTION_LABELS = Object.freeze({
       const deletePendingUpload = (...args) => controller("pendingUploads")?.deletePendingUpload?.(...args);
       const handleLocalQueueAction = (...args) => controller("pendingUploads")?.handleLocalQueueAction?.(...args);
       const upsertPendingUpload = (...args) => controller("pendingUploads")?.createOrUpdatePendingUpload?.(...args);
+      const movePendingUploadToMeeting = (...args) => {
+        const pendingUploadsController = controller("pendingUploads");
+        return typeof pendingUploadsController?.movePendingUploadToMeeting === "function"
+          ? pendingUploadsController.movePendingUploadToMeeting(...args)
+          : Promise.resolve(false);
+      };
       const syncWorkspaceLocalState = (...args) => controller("realtime")?.syncWorkspaceLocalState?.(...args);
 
       function resolveSectionLabel(sectionKey) {
@@ -362,9 +368,13 @@ const SECTION_LABELS = Object.freeze({
           return normalizeTextBlock(notes.summary);
         }
         if (sectionKey === "overview") {
+          const datetime = normalizeText(notes.meetingMeta?.datetime);
+          const participants = normalizeTextArray(notes.meetingMeta?.participants);
           const purpose = normalizeTextBlock(notes.meetingMeta?.purpose);
           const overview = normalizeTextBlock(notes.overview);
           return [
+            datetime ? `[일시]\n${datetime}` : "",
+            `[참여자]\n${participants.join("\n")}`,
             purpose ? `[목적]\n${purpose}` : "",
             overview ? `[개요]\n${overview}` : "[개요]\n",
           ].filter(Boolean).join("\n\n");
@@ -531,20 +541,42 @@ const SECTION_LABELS = Object.freeze({
         };
       }
 
+      function readManualOverviewBlock(textInput, label) {
+        const text = normalizeTextareaDraft(textInput);
+        const labels = "일시|참여자|목적|개요";
+        const match = text.match(new RegExp(`\\[${label}\\]([\\s\\S]*?)(?=\\n{0,2}\\[(?:${labels})\\]|$)`));
+        return match ? normalizeTextareaDraft(match[1]) : null;
+      }
+
+      function parseManualOverviewParticipants(textInput) {
+        return normalizeTextareaDraft(textInput)
+          .split(/[\n,，]+/)
+          .map((item) => normalizeText(item))
+          .filter(Boolean);
+      }
+
       function parseManualOverviewDraft(textInput, notesInput) {
         const notes = normalizeMeetingNotes(notesInput);
         const text = normalizeTextareaDraft(textInput);
-        const purposeMatch = text.match(/\[목적\]([\s\S]*?)(?=\n{0,2}\[개요\]|$)/);
-        const overviewMatch = text.match(/\[개요\]([\s\S]*)$/);
+        const datetimeBlock = readManualOverviewBlock(text, "일시");
+        const participantsBlock = readManualOverviewBlock(text, "참여자");
+        const purposeBlock = readManualOverviewBlock(text, "목적");
+        const overviewBlock = readManualOverviewBlock(text, "개요");
         return {
           meetingMeta: {
             ...notes.meetingMeta,
-            purpose: purposeMatch
-              ? normalizeTextBlock(purposeMatch[1])
+            datetime: datetimeBlock !== null
+              ? normalizeText(datetimeBlock)
+              : normalizeText(notes.meetingMeta?.datetime),
+            participants: participantsBlock !== null
+              ? parseManualOverviewParticipants(participantsBlock)
+              : normalizeTextArray(notes.meetingMeta?.participants),
+            purpose: purposeBlock !== null
+              ? normalizeTextBlock(purposeBlock)
               : normalizeTextBlock(notes.meetingMeta?.purpose),
           },
-          overview: overviewMatch
-            ? normalizeTextBlock(overviewMatch[1])
+          overview: overviewBlock !== null
+            ? normalizeTextBlock(overviewBlock)
             : normalizeTextBlock(text),
         };
       }
@@ -770,8 +802,14 @@ const SECTION_LABELS = Object.freeze({
             targetMeetingId,
           }, state.session.meetingSessionToken);
           assertAcceptedMutationResponse(payload, requestId, "기록 이동");
+          const movedLocalCopy = await moveRecordLocalCopyToMeeting(entry, targetMeetingId);
           closeRecordMoveDialog();
-          setNotice("기록을 다른 회의 룸으로 이동했습니다.", "highlight");
+          setNotice(
+            movedLocalCopy === false
+              ? "기록은 이동했지만 브라우저 원본 보관 위치를 갱신하지 못했어요."
+              : "기록을 다른 회의 룸으로 이동했습니다.",
+            movedLocalCopy === false ? "warning" : "highlight"
+          );
           await refreshWorkspace(false, "move-record");
           await resolvePendingMutationsFromSnapshots();
           return true;
@@ -790,6 +828,31 @@ const SECTION_LABELS = Object.freeze({
         } finally {
           syncWorkspaceMutationBusyState();
           applyRender();
+        }
+      }
+
+      async function moveRecordLocalCopyToMeeting(entry, targetMeetingId) {
+        const pendingRequestId = normalizeText(entry?.pending?.requestId);
+        if (!pendingRequestId) {
+          return null;
+        }
+        try {
+          const moved = await movePendingUploadToMeeting(pendingRequestId, targetMeetingId, {
+            context: {
+              jobId: normalizeText(entry?.remote?.jobId),
+              phase: "move-record-local-copy",
+            },
+            nextSelectedRecordId: "",
+          });
+          return moved === true;
+        } catch (error) {
+          logDebug("workspace.pending-upload.move-meeting.error", {
+            error,
+            requestId: pendingRequestId,
+            targetMeetingId: normalizeText(targetMeetingId),
+          });
+          showPendingUploadQueueOperationError(error, "기록은 이동했지만 브라우저 원본 보관 위치를 갱신하지 못했어요.");
+          return false;
         }
       }
 
@@ -1791,7 +1854,7 @@ const SECTION_LABELS = Object.freeze({
         if (refs.sectionEditDialogTitle) refs.sectionEditDialogTitle.textContent = resolveSectionLabel(state.sectionEdit.sectionKey);
         if (refs.sectionEditHelpText) {
           refs.sectionEditHelpText.textContent = isManualSectionEdit
-            ? "내용을 직접 고치고 저장합니다. 목록형 섹션은 한 줄에 하나씩 입력합니다."
+            ? "내용을 직접 고치고 저장합니다. 회의 개요의 [참여자]는 한 줄 또는 쉼표로 구분합니다."
             : "AI에게 바꿀 방향을 적고 미리보기를 만든 뒤 적용합니다.";
         }
         if (refs.sectionEditInstructionInput) {

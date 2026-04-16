@@ -335,6 +335,9 @@ function createMeetingNotesEditDomain(deps) {
 
   function applyMeetingNotesSectionPayload(currentNotesInput, sectionKey, sectionPayload) {
     const currentNotes = normalizeMeetingNotes(currentNotesInput);
+    const rawPayload = sectionPayload && typeof sectionPayload === "object" ? sectionPayload : {};
+    const rawMeetingMeta = rawPayload.meetingMeta && typeof rawPayload.meetingMeta === "object" ? rawPayload.meetingMeta : {};
+    const hasRawMeetingMetaField = (field) => Object.prototype.hasOwnProperty.call(rawMeetingMeta, field);
     const payload = normalizeMeetingNotesSectionPayload(sectionKey, sectionPayload);
     if (payload.deleteSection === true) {
       switch (sectionKey) {
@@ -395,8 +398,10 @@ function createMeetingNotesEditDomain(deps) {
           meetingMeta: {
             ...currentNotes.meetingMeta,
             title: normalizeText(payload.meetingMeta?.title) || currentNotes.meetingMeta.title,
-            datetime: normalizeText(payload.meetingMeta?.datetime) || currentNotes.meetingMeta.datetime,
-            participants: Array.isArray(payload.meetingMeta?.participants) && payload.meetingMeta.participants.length
+            datetime: hasRawMeetingMetaField("datetime")
+              ? normalizeText(payload.meetingMeta?.datetime)
+              : currentNotes.meetingMeta.datetime,
+            participants: hasRawMeetingMetaField("participants") && Array.isArray(payload.meetingMeta?.participants)
               ? payload.meetingMeta.participants
               : currentNotes.meetingMeta.participants,
             purpose: normalizeTextBlock(payload.meetingMeta?.purpose),
