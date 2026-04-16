@@ -165,6 +165,7 @@ verifyActiveBackgroundRootCatalog();
 verifyActiveContentRootCatalog();
 verifyActivePopupRootCatalog();
 verifyHostedCapabilityCatalog();
+verifySandboxBridgeApiCatalog();
 verifyBackgroundMessageCatalog();
 
 assertFileExists("scripts/legacy-panel/verify-prompt-fallbacks.js");
@@ -351,6 +352,41 @@ function verifyHostedPageCapabilityClientAllowlist(pageCapabilityActions) {
     Array.from(allowlistMatch.groups.body.matchAll(/^\s+"([^"]+)",?$/gm), (match) => match[1]).filter(Boolean)
   );
   compareCapabilitySet(pageCapabilityActions, allowlistIds, "hosted page capability client allowlist");
+}
+
+function verifySandboxBridgeApiCatalog() {
+  const sandboxBridgeApis = new Set(contract.sandboxBridgeApis || []);
+  if (!sandboxBridgeApis.size) {
+    errors.push("sandbox bridge API catalog가 비어 있습니다.");
+    return;
+  }
+
+  const routerPath = path.join(root, "background", "panel-runtime-capability-router.js");
+  const routerSource = fs.existsSync(routerPath) ? fs.readFileSync(routerPath, "utf8") : "";
+  const allowlistMatch = routerSource.match(/const SANDBOX_BRIDGE_API_ALLOWLIST = Object\.freeze\(\[(?<body>[\s\S]*?)\n\]\);/);
+  if (!allowlistMatch?.groups?.body) {
+    errors.push("background/panel-runtime-capability-router.js가 SANDBOX_BRIDGE_API_ALLOWLIST를 선언하지 않습니다.");
+    return;
+  }
+
+  const actualApis = new Set(
+    Array.from(allowlistMatch.groups.body.matchAll(/^\s+"([^"]+)",?$/gm), (match) => match[1]).filter(Boolean)
+  );
+  compareCapabilitySet(sandboxBridgeApis, actualApis, "sandbox bridge API allowlist");
+  [
+    "chrome",
+    "eval",
+    "fetch",
+    "localStorage",
+    "querySelector",
+    "selector",
+    "sessionStorage",
+    "storage",
+  ].forEach((forbiddenApi) => {
+    if (actualApis.has(forbiddenApi)) {
+      errors.push(`sandbox bridge API allowlist가 금지 API를 노출합니다: ${forbiddenApi}`);
+    }
+  });
 }
 
 function verifyPageCapabilityRouterManifest(pageCapabilityActions) {

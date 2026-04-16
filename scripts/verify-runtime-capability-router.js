@@ -278,7 +278,11 @@ async function verifyBundledRuntimeRouterDispatch() {
   assert.equal(handshake.source, "remote");
   assert(handshake.runtimeActions.includes("capabilities.handshake"));
   assert(handshake.runtimeActions.includes("capabilities.invoke"));
-  assert(handshake.bridgeApis.includes("invokeCapability"));
+  assert.deepEqual(
+    handshake.bridgeApis,
+    readJson(path.join("contracts", "extension-contract.json")).sandboxBridgeApis,
+    "handshake should expose only the contracted sandbox bridge API allowlist"
+  );
   assert(handshake.enabledCapabilityIds.includes("prompt.review.run"));
   assert(handshake.enabledCapabilityIds.includes("panel.ui-preferences.write"));
   assert(handshake.enabledCapabilityIds.includes("page.composer.read-state"));

@@ -178,6 +178,7 @@ panel boot 시 hosted와 background는 capability catalog를 negotiation한다.
 
 - `background/panel-runtime-capability-router.js`가 `capabilities.handshake`를 제공한다.
 - handshake 응답은 active manifest catalog, enabled capability ids, runtime actions, bridge API allowlist, source/degraded metadata를 포함한다.
+- sandbox bridge API allowlist는 `contracts/extension-contract.json`의 `sandboxBridgeApis`와 `scripts/verify-contracts.js`로 고정한다.
 - `hosting/extension-v2/panel/index.js`는 snapshot boot 직후 handshake를 호출하고, static extension capabilities와 enabled remote capability ids를 합쳐 hosted controllers에 전달한다.
 - killed/disabled capability는 handshake의 `enabledCapabilityIds`에서 제외된다.
 - prompt review, prompt library, prompt store는 negotiated capabilityId 기준으로 write/action UI 노출과 실행을 1차 차단한다.
@@ -508,6 +509,7 @@ verify 기준:
 
 - 1차 handshake 구현됨.
 - `capabilities.handshake`가 catalog와 bridge API allowlist를 반환한다.
+- bridge API allowlist는 `emitTrace`, `invokeCapability`, `invokePageCapability`, `openUrl`, `readPanelState`, `writeUiPreferences`만 허용하도록 contract/verify로 고정됨.
 - hosted boot가 handshake catalog를 읽어 enabled capability ids를 controller capability list에 합친다.
 - prompt review, prompt library, prompt store는 missing/killed capability의 UI action 노출과 실행을 1차 차단한다.
 - `workflow` kind는 manifest 검증에서 disabled 또는 killed 상태만 허용한다. sandbox pilot 전에는 enabled workflow manifest가 fallback으로 떨어진다.

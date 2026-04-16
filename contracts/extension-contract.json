@@ -302,6 +302,14 @@
     "meeting.share.create",
     "meeting.share.revoke"
   ],
+  "sandboxBridgeApis": [
+    "emitTrace",
+    "invokeCapability",
+    "invokePageCapability",
+    "openUrl",
+    "readPanelState",
+    "writeUiPreferences"
+  ],
   "backgroundMessageTypes": [
     "inova-meeting:authorize-workspace-access",
     "inova-meeting:probe-workspace-bridge",
