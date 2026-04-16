@@ -14,6 +14,7 @@
 - hosted workspace의 `파일 불러오기`는 로컬 origin 전용 기능이 아니다. 상용/로컬 hosted가 같은 업로드 흐름을 쓴다.
 - imported audio duration은 메타데이터 -> decode fallback 순서로 계산하고, 최종 길이 계산까지 실패했을 때만 사용자 오류를 유지한다.
 - OpenAI 전사용 source mode는 OpenAI 파일 업로드 제한보다 낮은 24MB target을 초과하거나 `gpt-4o-transcribe` 단일 오디오 제한 1400초보다 낮은 23분 안전선을 넘으면 chunked로 전환한다.
+- chunked source는 12kHz mono WAV, 17분 chunk, 1.5초 overlap을 기본으로 쓴다. 이 값은 OpenAI 업로드 제한 아래에서 26분대 회의를 2개 part로 처리하기 위한 기준이다.
 - hosted 작업실은 녹음 중이거나 실제 업로드가 진행 중일 때만 브라우저 기본 `beforeunload` 경고를 유지한다.
 
 ## recovery / sync 경계

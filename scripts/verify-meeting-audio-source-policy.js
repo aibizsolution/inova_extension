@@ -9,6 +9,9 @@ const repoRoot = path.resolve(__dirname, "..");
 const MB = 1024 * 1024;
 const EXPECTED_OPENAI_SAFE_PART_BYTES = 24 * MB;
 const EXPECTED_OPENAI_SAFE_SINGLE_DURATION_MS = 23 * 60 * 1000;
+const EXPECTED_CHUNK_DURATION_MS = 17 * 60 * 1000;
+const EXPECTED_CHUNK_OVERLAP_MS = 1500;
+const EXPECTED_CHUNK_SAMPLE_RATE = 12000;
 
 function readRepoFile(...segments) {
   return fs.readFileSync(path.join(repoRoot, ...segments), "utf8");
@@ -33,6 +36,14 @@ function main() {
     "hosted single transcription duration must stay below the gpt-4o-transcribe 1400 second limit"
   );
   assert(
+    sharedSource.includes("DEFAULT_SOURCE_CHUNK_DURATION_MS = 17 * 60 * 1000"),
+    "hosted chunk duration should avoid over-splitting long-but-small meeting audio"
+  );
+  assert(
+    sharedSource.includes("DEFAULT_SOURCE_CHUNK_SAMPLE_RATE = 12000"),
+    "hosted chunk sample rate should keep 17 minute WAV chunks below OpenAI's 25MB upload limit"
+  );
+  assert(
     meetingServiceSource.includes("DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS = 23 * 60 * 1000"),
     "functions single transcription duration must stay below the gpt-4o-transcribe 1400 second limit"
   );
@@ -46,6 +57,17 @@ function main() {
   const ns = context.__INOVA_HOSTED_MEETING__;
   assert.equal(ns.shared.DEFAULT_SOURCE_TARGET_PART_BYTES, EXPECTED_OPENAI_SAFE_PART_BYTES);
   assert.equal(ns.shared.DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS, EXPECTED_OPENAI_SAFE_SINGLE_DURATION_MS);
+  assert.equal(ns.shared.DEFAULT_SOURCE_CHUNK_DURATION_MS, EXPECTED_CHUNK_DURATION_MS);
+  assert.equal(ns.shared.DEFAULT_SOURCE_CHUNK_SAMPLE_RATE, EXPECTED_CHUNK_SAMPLE_RATE);
+  assert(
+    estimateMonoWav16Bytes(EXPECTED_CHUNK_DURATION_MS, EXPECTED_CHUNK_SAMPLE_RATE) <= EXPECTED_OPENAI_SAFE_PART_BYTES,
+    "default chunk WAV size must stay below the source part target"
+  );
+  assert.equal(
+    estimateChunkPartCount(1591698, EXPECTED_CHUNK_DURATION_MS, EXPECTED_CHUNK_OVERLAP_MS),
+    2,
+    "a 26m31s meeting should split into two OpenAI-safe chunks, not three"
+  );
 
   installPendingUploadControllerStubs(ns);
   vm.runInNewContext(pendingUploadsSource, context, { filename: "hosting/meeting/workspace-pending-uploads.js" });
@@ -118,6 +140,28 @@ function createMemoryStorage() {
       values.set(String(key), String(value));
     },
   };
+}
+
+function estimateMonoWav16Bytes(durationMs, sampleRate) {
+  const sampleCount = Math.ceil((Math.max(0, Number(durationMs) || 0) / 1000) * Math.max(1, Number(sampleRate) || 1));
+  return 44 + sampleCount * 2;
+}
+
+function estimateChunkPartCount(durationMs, chunkDurationMs, overlapMs) {
+  const duration = Math.max(0, Number(durationMs) || 0);
+  const chunk = Math.max(1, Number(chunkDurationMs) || 1);
+  if (duration <= chunk) {
+    return duration > 0 ? 1 : 0;
+  }
+  const step = Math.max(1, chunk - Math.max(0, Number(overlapMs) || 0));
+  let count = 0;
+  for (let startMs = 0; startMs < duration; startMs += step) {
+    count += 1;
+    if (startMs + chunk >= duration) {
+      break;
+    }
+  }
+  return count;
 }
 
 function installPendingUploadControllerStubs(ns) {
