@@ -1,6 +1,6 @@
 (function initConversationController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const { normalizeText } = namespace.panelUtils;
+  const { cloneValue, normalizeText, resolveBrowserCapabilities } = namespace.panelUtils;
   const SNAPSHOT_REFRESH_DEBOUNCE_MS = 120;
   const REQUIRED_EXTENSION_CAPABILITIES = Object.freeze([
     "page.adapter.v2",
@@ -320,23 +320,8 @@
       }, 180);
     }
 
-    function cloneValue(value) {
-      return value == null ? value : JSON.parse(JSON.stringify(value));
-    }
-
     function getErrorMessage(error, fallback) {
       return normalizeText(error instanceof Error ? error.message : error) || fallback;
-    }
-
-    function resolveBrowserCapabilities(createOptions) {
-      const providedCapabilities = createOptions?.browserCapabilities;
-      if (providedCapabilities && typeof providedCapabilities === "object") {
-        return providedCapabilities;
-      }
-      return namespace.extensionCapabilityClient?.create?.({
-        invokePage: createOptions?.invokePage,
-        invokeRuntime: createOptions?.invokeRuntime,
-      }) || {};
     }
   }
 

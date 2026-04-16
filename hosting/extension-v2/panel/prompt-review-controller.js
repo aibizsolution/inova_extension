@@ -1,6 +1,6 @@
 (function initPromptReviewController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const { normalizeText } = namespace.panelUtils;
+  const { normalizeText, resolveBrowserCapabilities } = namespace.panelUtils;
   const PROMPT_REVIEW_PROFILE_V2 = "prompt-telling-v2";
   const PROMPT_REVIEW_V2_MIN_VERSION = "0.4.5";
   const LEGACY_SCORE_GUIDE_TEXT = "점수는 프롬프트의 핵심 정보 충족도를 보는 참고값이에요.";
@@ -623,17 +623,6 @@
       }
     }
     return 0;
-  }
-
-  function resolveBrowserCapabilities(options) {
-    const providedCapabilities = options?.browserCapabilities;
-    if (providedCapabilities && typeof providedCapabilities === "object") {
-      return providedCapabilities;
-    }
-    return namespace.extensionCapabilityClient?.create?.({
-      invokePage: options?.invokePage,
-      invokeRuntime: options?.invokeRuntime,
-    }) || {};
   }
 
   namespace.promptReviewController = { create };

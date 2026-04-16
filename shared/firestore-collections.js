@@ -31,21 +31,21 @@
     const source = input && typeof input === "object" ? input : {};
     const fallback = getPromptFirestoreCollections(fallbackLane);
     return {
-      accountsCollection: normalizeText(source.accountsCollection) || fallback.accountsCollection,
-      promptLibraryChunksCollection: normalizeText(source.promptLibraryChunksCollection) || fallback.promptLibraryChunksCollection,
-      promptLibraryOrdersCollection: normalizeText(source.promptLibraryOrdersCollection) || fallback.promptLibraryOrdersCollection,
-      storeDetailCollection: normalizeText(source.storeDetailCollection) || fallback.storeDetailCollection,
-      storeEntriesCollection: normalizeText(source.storeEntriesCollection) || fallback.storeEntriesCollection,
-      storeFeedCollection: normalizeText(source.storeFeedCollection) || fallback.storeFeedCollection,
-      storeSummaryCollection: normalizeText(source.storeSummaryCollection) || fallback.storeSummaryCollection,
+      accountsCollection: trimString(source.accountsCollection) || fallback.accountsCollection,
+      promptLibraryChunksCollection: trimString(source.promptLibraryChunksCollection) || fallback.promptLibraryChunksCollection,
+      promptLibraryOrdersCollection: trimString(source.promptLibraryOrdersCollection) || fallback.promptLibraryOrdersCollection,
+      storeDetailCollection: trimString(source.storeDetailCollection) || fallback.storeDetailCollection,
+      storeEntriesCollection: trimString(source.storeEntriesCollection) || fallback.storeEntriesCollection,
+      storeFeedCollection: trimString(source.storeFeedCollection) || fallback.storeFeedCollection,
+      storeSummaryCollection: trimString(source.storeSummaryCollection) || fallback.storeSummaryCollection,
     };
   }
 
   function normalizeLane(value) {
-    return normalizeText(value).toLowerCase() === V2_LANE ? V2_LANE : LEGACY_LANE;
+    return trimString(value).toLowerCase() === V2_LANE ? V2_LANE : LEGACY_LANE;
   }
 
-  function normalizeText(value) {
+  function trimString(value) {
     return String(value || "").trim();
   }
 

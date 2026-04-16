@@ -1,6 +1,6 @@
 (function initPromptLibraryController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const { normalizeText } = namespace.panelUtils;
+  const { normalizeText, resolveBrowserCapabilities } = namespace.panelUtils;
   const REQUIRED_EXTENSION_CAPABILITIES = Object.freeze([
     "page.adapter.v2",
     "runtime.invoke.v1",
@@ -1022,17 +1022,6 @@
 
   function readErrorMessage(error, fallbackMessage) {
     return normalizeText(error instanceof Error ? error.message : error) || normalizeText(fallbackMessage);
-  }
-
-  function resolveBrowserCapabilities(options) {
-    const providedCapabilities = options?.browserCapabilities;
-    if (providedCapabilities && typeof providedCapabilities === "object") {
-      return providedCapabilities;
-    }
-    return namespace.extensionCapabilityClient?.create?.({
-      invokePage: options?.invokePage,
-      invokeRuntime: options?.invokeRuntime,
-    }) || {};
   }
 
   namespace.promptLibraryController = {

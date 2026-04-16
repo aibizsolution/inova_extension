@@ -1,6 +1,6 @@
 (function initReleaseController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const { normalizeText } = namespace.panelUtils;
+  const { normalizeText, resolveBrowserCapabilities } = namespace.panelUtils;
   const CHECK_INTERVAL_MS = Number(namespace.constants?.limits?.releaseCheckIntervalMs) || 21600000;
   const REQUIRED_EXTENSION_CAPABILITIES = Object.freeze([
     "runtime.invoke.v1",
@@ -309,16 +309,6 @@
       return normalizeText(error instanceof Error ? error.message : error) || fallback;
     }
 
-    function resolveBrowserCapabilities(createOptions) {
-      const providedCapabilities = createOptions?.browserCapabilities;
-      if (providedCapabilities && typeof providedCapabilities === "object") {
-        return providedCapabilities;
-      }
-      return namespace.extensionCapabilityClient?.create?.({
-        invokePage: createOptions?.invokePage,
-        invokeRuntime: createOptions?.invokeRuntime,
-      }) || {};
-    }
   }
 
   namespace.releaseController = { create };

@@ -1,6 +1,6 @@
 (function initPromptStoreController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const { normalizeText } = namespace.panelUtils;
+  const { normalizePanelTarget, normalizeText, resolveBrowserCapabilities } = namespace.panelUtils;
   const LOCAL_CACHE_LIMIT = 1000;
   const INITIAL_RENDER_COUNT = 20;
   const RENDER_BATCH_SIZE = 20;
@@ -691,10 +691,6 @@
       }, 180);
     }
 
-    function normalizePanelTarget(value) {
-      return normalizeText(value).toLowerCase() === "local" ? "local" : "production";
-    }
-
     function normalizeEnum(value, allowed, fallback) {
       const normalized = normalizeText(value);
       return allowed.includes(normalized) ? normalized : fallback;
@@ -704,16 +700,6 @@
       return normalizeText(error instanceof Error ? error.message : error) || fallback;
     }
 
-    function resolveBrowserCapabilities(createOptions) {
-      const providedCapabilities = createOptions?.browserCapabilities;
-      if (providedCapabilities && typeof providedCapabilities === "object") {
-        return providedCapabilities;
-      }
-      return namespace.extensionCapabilityClient?.create?.({
-        invokePage: createOptions?.invokePage,
-        invokeRuntime: createOptions?.invokeRuntime,
-      }) || {};
-    }
   }
 
   namespace.promptStoreController = { create };

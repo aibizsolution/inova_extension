@@ -1,6 +1,6 @@
 (function initHostedPanelApp(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const { normalizeText } = namespace.panelUtils;
+  const { cloneValue, normalizeText } = namespace.panelUtils;
   const BRIDGE_VERSION = 1;
   const APP_SOURCE = "inova-hosted-panel-app";
   const EXTENSION_SOURCE = "inova-hosted-panel-extension";
@@ -1774,10 +1774,6 @@
     } catch {
       return normalized;
     }
-  }
-
-  function cloneValue(value) {
-    return value == null ? value : JSON.parse(JSON.stringify(value));
   }
 
   function getEventElementTarget(event) {

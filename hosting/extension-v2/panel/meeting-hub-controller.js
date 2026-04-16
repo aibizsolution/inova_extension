@@ -1,6 +1,6 @@
 (function initMeetingHubController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const { normalizeText } = namespace.panelUtils;
+  const { normalizeText, resolveBrowserCapabilities } = namespace.panelUtils;
   const LIST_LIMIT = 24;
   const SUPPORTED_ACTIONS = new Set([
     "open-result",
@@ -658,17 +658,6 @@
       return "open-result";
     }
     return "open-workspace";
-  }
-
-  function resolveBrowserCapabilities(options) {
-    const providedCapabilities = options?.browserCapabilities;
-    if (providedCapabilities && typeof providedCapabilities === "object") {
-      return providedCapabilities;
-    }
-    return namespace.extensionCapabilityClient?.create?.({
-      invokePage: options?.invokePage,
-      invokeRuntime: options?.invokeRuntime,
-    }) || {};
   }
 
   namespace.meetingHubController = { create };

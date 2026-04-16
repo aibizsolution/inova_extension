@@ -53,7 +53,7 @@
       ),
       prompt: buildPromptConfig(laneConfig.prompt, override.prompt || {}),
       storage: {
-        prefix: normalizeText(laneConfig.storagePrefix),
+        prefix: trimString(laneConfig.storagePrefix),
       },
       web: buildWebConfig(laneConfig.web || {}, override.web || {}),
     };
@@ -67,7 +67,7 @@
     const baseUrl = normalizeBaseUrl(overrideConfig.baseUrl || defaultBaseUrl);
     const originUrl = normalizeOriginUrl(overrideConfig.originUrl || defaultOriginUrl || baseUrl);
     const promptPanelBridgeBaseUrl = buildPromptPanelBridgeBaseUrl(originUrl);
-    const promptPanelBridgeAssetVersion = normalizeText(
+    const promptPanelBridgeAssetVersion = trimString(
       overrideConfig.promptPanelBridgeAssetVersion
       || [readRuntimeManifestVersion(), PROMPT_PANEL_BRIDGE_CACHE_TOKEN].filter(Boolean).join("-")
     );
@@ -112,7 +112,7 @@
     ) || {};
     return {
       firestoreCollections,
-      panelScope: normalizeText(overrideConfig.panelScope || defaultPromptConfig.panelScope) || "prompt-panel",
+      panelScope: trimString(overrideConfig.panelScope || defaultPromptConfig.panelScope) || "prompt-panel",
     };
   }
 
@@ -292,11 +292,11 @@
   }
 
   function normalizeWorkspaceTarget(value) {
-    return normalizeText(value).toLowerCase() === "local" ? "local" : "production";
+    return trimString(value).toLowerCase() === "local" ? "local" : "production";
   }
 
   function normalizeWorkspaceUrlOverride(value) {
-    const normalized = normalizeText(value);
+    const normalized = trimString(value);
     if (!normalized) {
       return buildDefaultLocalMeetingWorkspaceUrl(LOCAL_MEETING_DEFAULTS.host);
     }
@@ -318,7 +318,7 @@
     return `${normalizeBaseUrl(baseUrl)}/${String(pathName || "").replace(/^\/+/, "")}`;
   }
 
-  function normalizeText(value) {
+  function trimString(value) {
     return String(value || "").trim();
   }
 
@@ -337,7 +337,7 @@
 
   function readRuntimeManifestVersion() {
     try {
-      return normalizeText(global.chrome?.runtime?.getManifest?.()?.version);
+      return trimString(global.chrome?.runtime?.getManifest?.()?.version);
     } catch {
       return "";
     }
@@ -345,8 +345,8 @@
 
   function appendQueryParam(url, key, value) {
     const normalizedUrl = String(url || "");
-    const normalizedKey = String(key || "").trim();
-    const normalizedValue = String(value || "").trim();
+    const normalizedKey = trimString(key);
+    const normalizedValue = trimString(value);
     if (!normalizedUrl || !normalizedKey || !normalizedValue) {
       return normalizedUrl;
     }
@@ -360,7 +360,7 @@
   }
 
   function buildLocalExtensionBaseUrl(originUrl, lane = "legacy") {
-    const panelBasePath = normalizeText(lane).toLowerCase() === "v2" ? "extension-v2" : "extension";
+    const panelBasePath = trimString(lane).toLowerCase() === "v2" ? "extension-v2" : "extension";
     return joinUrl(normalizeOriginUrl(originUrl), panelBasePath);
   }
 
@@ -369,7 +369,7 @@
   }
 
   function resolveLoopbackHost(value) {
-    const normalized = normalizeText(value).toLowerCase();
+    const normalized = trimString(value).toLowerCase();
     return LOOPBACK_HOSTNAMES.has(normalized) ? normalized : LOCAL_MEETING_DEFAULTS.host;
   }
 
@@ -385,7 +385,7 @@
     if (typeof value === "boolean") {
       return value;
     }
-    const normalized = normalizeText(value).toLowerCase();
+    const normalized = trimString(value).toLowerCase();
     return normalized === "1" || normalized === "true" || normalized === "on" || normalized === "yes";
   }
 
