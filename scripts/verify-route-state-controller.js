@@ -8,6 +8,7 @@ const vm = require("vm");
 const root = path.resolve(__dirname, "..");
 
 async function main() {
+  verifyRouteStateDoesNotOwnPanelOpen();
   await verifyRefreshStateLoadsStorageAndBookmarks();
   verifyLaneAwareStorageChangeHandling();
   verifyPromptLibraryStorageChangesAreIgnored();
@@ -15,6 +16,18 @@ async function main() {
   await verifyRouteWaitLifecycle();
   await verifyRouteWaitSettlesAfterMutationQuiet();
   console.log("[verify-route-state-controller] Route state controller contract passed");
+}
+
+function verifyRouteStateDoesNotOwnPanelOpen() {
+  const source = fs.readFileSync(path.join(root, "content", "route-state-controller.js"), "utf8");
+  [
+    "applyPanelOpen",
+    "readPreferredOpen",
+  ].forEach((pattern) => assert.equal(
+    source.includes(pattern),
+    false,
+    `route state should not own panel open state through ${pattern}`
+  ));
 }
 
 async function verifyRefreshStateLoadsStorageAndBookmarks() {
@@ -84,10 +97,6 @@ async function verifyRouteWaitLifecycle() {
   assert.equal(harness.state.sessionId, "session-2");
   assert.equal(harness.state.sessionTitle, "테스트 세션");
   assert.equal("open" in harness.state, false);
-  assert.deepEqual(harness.panelOpenCalls.at(-1), {
-    open: false,
-    options: { persist: false, render: false },
-  });
   assert.equal(harness.state.awaitingRouteMessages, true);
   assert.equal(harness.state.routeBaselineSignature, "sig-start");
 
@@ -259,29 +268,16 @@ function createHarness(options = {}) {
       activeTool: "bookmarks",
     },
   };
-  const preferredOpen = Object.hasOwn(options, "preferredOpen")
-    ? Boolean(options.preferredOpen)
-    : true;
 
   const harness = {
     controller: null,
     debugEvents,
     liveBookmarks: cloneValue(options.liveBookmarks || [{ id: "bookmark-1", text: "첫 질문" }]),
     liveSignature: options.liveSignature || "sig-after",
-    panelOpenCalls: [],
     state,
   };
 
-  harness.controller = context.InovaBookmarks.routeStateController.create(state, {
-    applyPanelOpen(open, applyOptions = {}) {
-      harness.panelOpenCalls.push({
-        open: Boolean(open),
-        options: cloneValue(applyOptions),
-      });
-      return Boolean(open);
-    },
-    readPreferredOpen: () => preferredOpen,
-  });
+  harness.controller = context.InovaBookmarks.routeStateController.create(state);
 
   return harness;
 }

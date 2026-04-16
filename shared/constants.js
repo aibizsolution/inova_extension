@@ -53,6 +53,7 @@
       uiPreferences: {
         activeTool: "bookmarks",
         activePromptTab: "library",
+        panelOpen: false,
         handleRatios: {
           wide: 0.38,
           compact: 0.46,

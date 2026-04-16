@@ -332,9 +332,6 @@
       if (Object.hasOwn(payload || {}, "visible")) {
         chromeState.visible = payload.visible === true;
       }
-      if (payload?.persistOpen === true) {
-        chromeState.persistOpen = true;
-      }
       callbacks.onPanelChromeSync?.(chromeState);
       return Promise.resolve({
         handled: true,

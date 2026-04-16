@@ -41,30 +41,23 @@
   function createPanelLifecycleBridge(state, deps = {}) {
     const logPanelDebug = typeof deps.logPanelDebug === "function" ? deps.logPanelDebug : () => {};
     const render = typeof deps.render === "function" ? deps.render : () => {};
-    const PANEL_OPEN_KEY = "inova-plus.panel-open";
-    let panelOpen = false;
-    let preferredOpen = false;
 
     return {
       applyPanelOpen,
       initializeOpenState,
       readPanelOpen,
-      readPreferredOpen,
     };
 
     function initializeOpenState() {
-      preferredOpen = readPanelOpenPreference();
-      panelOpen = preferredOpen;
+      state.uiPreferences = namespace.storage.mergeUiPreferences(state.uiPreferences);
     }
 
     function applyPanelOpen(nextOpen, options = {}) {
-      const shouldPersist = options.persist !== false;
       const shouldRender = options.render !== false;
-      panelOpen = typeof nextOpen === "boolean" ? nextOpen : !panelOpen;
-      if (shouldPersist) {
-        preferredOpen = panelOpen;
-        writePanelOpenPreference(panelOpen);
-      }
+      const panelOpen = typeof nextOpen === "boolean" ? nextOpen : !readPanelOpen();
+      state.uiPreferences = namespace.storage.mergeUiPreferences(state.uiPreferences, {
+        panelOpen,
+      });
       logPanelDebug("panel.ui.toggle", {
         open: panelOpen,
         scope: "panel-ui",
@@ -77,29 +70,7 @@
     }
 
     function readPanelOpen() {
-      return Boolean(panelOpen);
-    }
-
-    function readPreferredOpen() {
-      return Boolean(preferredOpen);
-    }
-
-    function readPanelOpenPreference() {
-      try {
-        const saved = global.sessionStorage?.getItem(PANEL_OPEN_KEY);
-        return saved == null ? false : saved === "true";
-      } catch (error) {
-        console.warn("[i-Nova Bookmarks] panel open preference read failed", error);
-        return false;
-      }
-    }
-
-    function writePanelOpenPreference(open) {
-      try {
-        global.sessionStorage?.setItem(PANEL_OPEN_KEY, String(Boolean(open)));
-      } catch (error) {
-        console.warn("[i-Nova Bookmarks] panel open preference write failed", error);
-      }
+      return namespace.storage.mergeUiPreferences(state.uiPreferences).panelOpen === true;
     }
   }
 
@@ -108,12 +79,6 @@
       ? deps.logPanelDebug
       : () => {};
     const render = typeof deps.render === "function" ? deps.render : () => {};
-    const readPreferredOpen = typeof deps.readPreferredOpen === "function"
-      ? deps.readPreferredOpen
-      : () => false;
-    const applyPanelOpen = typeof deps.applyPanelOpen === "function"
-      ? deps.applyPanelOpen
-      : () => false;
 
     return {
       installSurfaceWatchers,
@@ -134,12 +99,6 @@
         const hadComposer = previousSurface.hasComposer;
         const hasComposer = nextSurface.hasComposer;
         state.surfaceSignature = nextSignature;
-        if (!hadComposer && hasComposer && readPreferredOpen()) {
-          applyPanelOpen(true, {
-            persist: false,
-            render: false,
-          });
-        }
         if (previousSurface.hasComposer !== nextSurface.hasComposer || previousSurface.hasChatLog !== nextSurface.hasChatLog) {
           logPanelDebug("panel.ui.surface.changed", {
             hadChatLog: previousSurface.hasChatLog,
@@ -247,7 +206,6 @@
       onPanelChromeSync(chromeState) {
         if (Object.hasOwn(chromeState || {}, "open")) {
           panelLifecycleController.applyPanelOpen?.(Boolean(chromeState.open), {
-            persist: chromeState.persistOpen === true,
             render: false,
           });
         }

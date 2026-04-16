@@ -44,7 +44,6 @@
     panelOpenHydrated: false,
     panelSnapshot: null,
     parentOrigin: readParentOrigin(),
-    pendingPanelOpenPersist: false,
     pendingRequests: new Map(),
     readyPingCount: 0,
     renderCache: createPanelRenderCache(),
@@ -284,9 +283,17 @@
     const open = typeof nextOpen === "boolean" ? nextOpen : !state.panelOpen;
     state.panelOpen = open;
     state.panelOpenHydrated = true;
-    state.pendingPanelOpenPersist = true;
     scheduleRender();
+    void persistHostedPanelOpen(open);
     return Promise.resolve(true);
+  }
+
+  async function persistHostedPanelOpen(open) {
+    try {
+      await browserCapabilities.writeUiPreferences({ panelOpen: open === true });
+    } catch (error) {
+      console.error("[i-Nova Hosted Panel] panel open save failed", error);
+    }
   }
 
   async function persistHostedToolSelection(toolId) {
@@ -442,6 +449,7 @@
       ...nextUiPreferences,
       activePromptTab,
       activeTool: normalizeHostedToolId(rawActiveTool),
+      panelOpen: nextUiPreferences.panelOpen === true,
     };
   }
 
@@ -533,9 +541,6 @@
       open: chromeState.open === true,
       visible: chromeState.visible === true,
     };
-    if (chromeState.persistOpen === true) {
-      nextChromeState.persistOpen = true;
-    }
     const nextChromeSyncKey = serializeRenderState(nextChromeState);
     if (state.lastPanelChromeSyncKey === nextChromeSyncKey) {
       return;
@@ -749,7 +754,6 @@
     syncPanelChromeIfNeeded({
       handleCount: effectiveToolCount,
       open: panelState.open,
-      persistOpen: consumePendingPanelOpenPersist(),
       visible: panelState.visible,
     });
     const focusedControl = captureFocusedControl(elements.app);
@@ -804,14 +808,6 @@
       ...panelSnapshot,
       open: state.panelOpenHydrated ? state.panelOpen : panelSnapshot.open === true,
     };
-  }
-
-  function consumePendingPanelOpenPersist() {
-    if (!state.pendingPanelOpenPersist) {
-      return false;
-    }
-    state.pendingPanelOpenPersist = false;
-    return true;
   }
 
   function ensureShell() {

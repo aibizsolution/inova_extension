@@ -4,14 +4,7 @@
   const ROUTE_FALLBACK_MS = 1600;
   const ROUTE_SETTLE_MS = 260;
 
-  function create(state, deps = {}) {
-    const readPreferredOpen = typeof deps.readPreferredOpen === "function"
-      ? deps.readPreferredOpen
-      : () => false;
-    const applyPanelOpen = typeof deps.applyPanelOpen === "function"
-      ? deps.applyPanelOpen
-      : () => false;
-
+  function create(state) {
     return {
       handleStorageChange,
       refreshState,
@@ -60,10 +53,6 @@
     function resetRouteState(nextSessionId, previousSignature) {
       state.sessionId = nextSessionId || "";
       state.sessionTitle = nextSessionId ? namespace.contentDom.getSessionTitle() : "";
-      applyPanelOpen(namespace.contentDom.getConversationState().hasComposer ? readPreferredOpen() : false, {
-        persist: false,
-        render: false,
-      });
       state.bookmarks = [];
       state.lastError = "";
       state.routeBaselineSignature = nextSessionId ? previousSignature : "";

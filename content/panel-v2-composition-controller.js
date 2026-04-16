@@ -42,19 +42,14 @@
       logPanelDebug: runtimeDiagnostics.logPanelDebug,
       render,
     });
-    const routeStateController = namespace.routeStateController.create(state, {
-      applyPanelOpen: panelLifecycleController.applyPanelOpen,
-      readPreferredOpen: panelLifecycleController.readPreferredOpen,
-    });
+    const routeStateController = namespace.routeStateController.create(state);
     const panelActivityController = panelV2ShellBridge.createPanelActivityBridge(state, {
       logPanelDebug: runtimeDiagnostics.logPanelDebug,
       providerIdentitySync,
       render,
     });
     const panelSurfaceController = panelV2ShellBridge.createPanelSurfaceBridge(state, {
-      applyPanelOpen: panelLifecycleController.applyPanelOpen,
       logPanelDebug: runtimeDiagnostics.logPanelDebug,
-      readPreferredOpen: panelLifecycleController.readPreferredOpen,
       render,
     });
     const routeSync = namespace.routeSync.create(state, {

@@ -156,6 +156,7 @@
     if (merged.activePromptTab !== "store" && merged.activePromptTab !== "review") {
       merged.activePromptTab = "library";
     }
+    merged.panelOpen = merged.panelOpen === true;
     return merged;
   }
 

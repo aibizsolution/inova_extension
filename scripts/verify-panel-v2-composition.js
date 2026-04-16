@@ -22,6 +22,10 @@ function main() {
     path.join(root, "content", "route-state-controller.js"),
     "utf8"
   );
+  const shellBridgeSource = fs.readFileSync(
+    path.join(root, "content", "panel-v2-shell-bridge.js"),
+    "utf8"
+  );
 
   const mainContentScript = manifest.content_scripts.find((entry) =>
     Array.isArray(entry?.matches) && entry.matches.includes("https://inova.incross.com/*")
@@ -141,6 +145,22 @@ function main() {
     !routeStateSource.includes("state.activeId ="),
     "route state reset should not keep clearing hosted-owned activeId residue"
   );
+  [
+    "PANEL_OPEN_KEY",
+    "sessionStorage",
+    "preferredOpen",
+    "persistOpen",
+  ].forEach((pattern) => assert(
+    !shellBridgeSource.includes(pattern),
+    `v2 shell bridge should not keep extension-side panel open persistence residue ${pattern}`
+  ));
+  [
+    "applyPanelOpen",
+    "readPreferredOpen",
+  ].forEach((pattern) => assert(
+    !routeStateSource.includes(pattern),
+    `route state reset should not own panel open state through ${pattern}`
+  ));
   assert(
     !v2CompositionSource.includes("namespace.meetingManager.create"),
     "v2 composition should not instantiate the legacy meeting manager once hosted meeting actions and lifecycle are detached"

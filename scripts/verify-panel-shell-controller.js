@@ -10,7 +10,9 @@ const root = path.resolve(__dirname, "..");
 async function main() {
   verifyQueryFallbackIsDropped();
   verifyHandleCountMovedToHosted();
+  verifyPanelOpenStorageMovedToHosted();
   verifyPromptSelectionStaysShellOwned();
+  verifyPanelLifecycleUsesUiPreferences();
   await verifyHandlePositionPersistence();
   console.log("[verify-panel-shell-controller] V2 shell bridge shell contract passed");
 }
@@ -22,6 +24,22 @@ function verifyHandleCountMovedToHosted() {
     false,
     "v2 shell bridge should not calculate handle counts after hosted panel chrome sync owns them"
   );
+}
+
+function verifyPanelOpenStorageMovedToHosted() {
+  const source = fs.readFileSync(path.join(root, "content", "panel-v2-shell-bridge.js"), "utf8");
+  [
+    "PANEL_OPEN_KEY",
+    "sessionStorage",
+    "preferredOpen",
+    "readPanelOpenPreference",
+    "writePanelOpenPreference",
+    "persistOpen",
+  ].forEach((pattern) => assert.equal(
+    source.includes(pattern),
+    false,
+    `v2 shell bridge should not keep extension-side panel open persistence residue ${pattern}`
+  ));
 }
 
 function verifyQueryFallbackIsDropped() {
@@ -80,7 +98,32 @@ async function verifyHandlePositionPersistence() {
   assert.equal(harness.state.uiPreferences.activeTool, "prompts");
 }
 
+function verifyPanelLifecycleUsesUiPreferences() {
+  const harness = createHarness({ panelOpen: true });
+  const lifecycle = harness.context.InovaBookmarks.panelV2ShellBridge.createPanelLifecycleBridge(
+    harness.state,
+    {
+      logPanelDebug(event, payload) {
+        harness.debugEvents.push({ event, payload: cloneValue(payload) });
+      },
+      render() {
+        harness.renderCalls.push(true);
+      },
+    }
+  );
+
+  lifecycle.initializeOpenState();
+  assert.equal(lifecycle.readPanelOpen(), true);
+
+  lifecycle.applyPanelOpen(false);
+  assert.equal(lifecycle.readPanelOpen(), false);
+  assert.equal(harness.state.uiPreferences.panelOpen, false);
+  assert.equal(harness.renderCalls.length, 1);
+  assert.equal(harness.debugEvents.at(-1)?.payload?.open, false);
+}
+
 function createHarness(options = {}) {
+  const debugEvents = [];
   const handleUpdates = [];
   const renderCalls = [];
 
@@ -105,6 +148,7 @@ function createHarness(options = {}) {
           activePromptTab: "library",
           activeTool: "bookmarks",
           handleRatios: {},
+          panelOpen: false,
           ...cloneValue(current),
           ...cloneValue(patch),
         };
@@ -128,6 +172,7 @@ function createHarness(options = {}) {
           activePromptTab: "library",
           activeTool: "bookmarks",
           handleRatios: {},
+          panelOpen: false,
           ...context.InovaBookmarks.storage.mergeUiPreferences(patch),
         };
       },
@@ -141,6 +186,7 @@ function createHarness(options = {}) {
       activePromptTab: options.activePromptTab || "library",
       activeTool: options.uiPreferenceTool || options.activeTool || "prompts",
       handleRatios: {},
+      panelOpen: options.panelOpen === true,
     },
   };
 
@@ -151,7 +197,9 @@ function createHarness(options = {}) {
   });
 
   return {
+    context,
     controller,
+    debugEvents,
     handleUpdates,
     renderCalls,
     state,

@@ -220,6 +220,11 @@ function verifyHostedPanelChromeSyncContract() {
     "hosted panel should own panel open state and sync it to the top host chrome"
   );
   assert(
+    hostedPanelSource.includes("writeUiPreferences({ panelOpen: open === true })")
+      && !hostedPanelSource.includes("persistOpen"),
+    "hosted panel should persist open through hosted-owned uiPreferences instead of content chrome sync persistence"
+  );
+  assert(
     hostedPanelSource.includes("if (!panelSnapshot || state.panelOpenHydrated)")
       && !hostedPanelSource.includes("panelSnapshot.visible === true"),
     "hosted panel should accept content snapshot open only as the initial hydration seed"
@@ -231,6 +236,10 @@ function verifyHostedPanelChromeSyncContract() {
   assert(
     bridgeRequestSource.includes('if (action === "panel-chrome-sync")'),
     "top panel bridge should accept hosted panel chrome sync requests"
+  );
+  assert(
+    !bridgeRequestSource.includes("persistOpen"),
+    "top panel bridge should not carry panel open persistence flags after hosted owns uiPreferences persistence"
   );
   assert(
     shellBridgeSource.includes("onPanelChromeSync(chromeState)"),
