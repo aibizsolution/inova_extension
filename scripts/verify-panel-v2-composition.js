@@ -26,7 +26,10 @@ function main() {
     path.join(root, "content", "panel-v2-shell-bridge.js"),
     "utf8"
   );
+  const hostedPanelHtmlPath = path.join(root, "hosting", "extension-v2", "panel", "index.html");
+  const hostedPanelHtml = fs.readFileSync(hostedPanelHtmlPath, "utf8");
   verifyContentNormalizeTextUsesSharedSession();
+  verifyHostedPanelScriptSourcesExist(hostedPanelHtml, hostedPanelHtmlPath);
 
   const mainContentScript = manifest.content_scripts.find((entry) =>
     Array.isArray(entry?.matches) && entry.matches.includes("https://inova.incross.com/*")
@@ -466,6 +469,23 @@ function verifyContentNormalizeTextUsesSharedSession() {
       !source.includes("namespace.session?.normalizeText")
         && !source.includes('String(value ?? "").trim()'),
       `${relativePath} should use shared/session normalizeText instead of redefining the fallback`
+    );
+  });
+}
+
+function verifyHostedPanelScriptSourcesExist(html, htmlPath) {
+  const baseDir = path.dirname(htmlPath);
+  const scriptSources = Array.from(html.matchAll(/"([^"]+\.js)"/g))
+    .map((match) => match[1])
+    .filter((source) => !/^https?:\/\//i.test(source));
+
+  assert(scriptSources.length > 0, "hosted v2 panel should declare its script sources");
+
+  scriptSources.forEach((source) => {
+    const resolved = path.resolve(baseDir, source);
+    assert(
+      fs.existsSync(resolved),
+      `hosted v2 panel should not load a missing script source: ${source}`
     );
   });
 }
