@@ -274,7 +274,7 @@ const codeChecks = [
   },
   {
     file: "popup/index.js",
-    patterns: [/meetingWorkspaceTarget/, /meetingWorkspaceUrlOverride/, /updateSettings/, /workspaceTargetHint/],
+    patterns: [/meetingWorkspaceTarget/, /meetingWorkspaceUrlOverride/, /updateSettings/],
   },
   {
     file: "content/main.js",
