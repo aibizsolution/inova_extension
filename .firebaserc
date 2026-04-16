@@ -1,5 +1,18 @@
 {
   "projects": {
     "default": "browser-extension-main"
-  }
+  },
+  "targets": {
+    "browser-extension-main": {
+      "hosting": {
+        "main": [
+          "browser-extension-main"
+        ],
+        "v2": [
+          "browser-extension-v2"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }
