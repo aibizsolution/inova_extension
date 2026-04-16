@@ -33,6 +33,8 @@ function verifyServedCapabilityManifests() {
   assert.equal(v2Manifest.capabilities["prompt.review.run"].endpointKey, "reviewInovaPromptUrl");
   assert.equal(v2Manifest.capabilities["prompt.review.run"].kind, "function");
   assert.equal(v2Manifest.capabilities["prompt.review.run"].inputSchemaVersion, 1);
+  assert.equal(v2Manifest.capabilities["release.download.open"].kind, "browser.open-url");
+  assert.deepEqual(v2Manifest.capabilities["release.download.open"].templateKeys, ["release.download"]);
   assert.equal(v2Manifest.lanes.v2.endpointOverrides.syncInovaPromptLibraryUrl, "syncInovaPromptLibraryV2");
 }
 
@@ -137,6 +139,7 @@ async function verifyRejectedManifestMutation(mutator, message) {
 
 async function verifyBundledRuntimeRouterDispatch() {
   const fetchCalls = [];
+  const openedUrls = [];
   const remoteManifest = readJson(path.join("hosting", "extension-v2", "capability-manifest.json"));
   remoteManifest.lanes.v2.endpointOverrides.reviewInovaPromptUrl = "reviewInovaPromptRemoteV2";
   const context = createRuntimeContext({
@@ -188,11 +191,18 @@ async function verifyBundledRuntimeRouterDispatch() {
     prompt: {
       firestoreCollections: {},
     },
+    hosting: {
+      baseUrl: "https://browser-extension-v2.web.app/extension-v2",
+    },
     target: "production",
     web: {
       projectId: "browser-extension-main",
     },
   });
+  context.openBrowserUrl = async (url) => {
+    openedUrls.push(String(url || ""));
+    return { opened: true, url: String(url || "") };
+  };
   context.issueMeetingPanelAuth = async () => ({
     expiresAt: new Date(Date.now() + 60000).toISOString(),
     panelScope: "meeting-panel",
@@ -201,10 +211,6 @@ async function verifyBundledRuntimeRouterDispatch() {
     expiresAt: new Date(Date.now() + 60000).toISOString(),
     panelScope: "prompt-panel-v2",
     promptPanelScope: "prompt-panel-v2",
-  });
-  context.openBrowserUrl = async (url) => ({
-    opened: true,
-    url,
   });
   context.openMeetingResult = async () => ({ opened: true });
   context.openMeetingWorkspace = async () => ({ opened: true });
@@ -258,6 +264,7 @@ async function verifyBundledRuntimeRouterDispatch() {
   assert(handshake.runtimeActions.includes("capabilities.invoke"));
   assert(handshake.bridgeApis.includes("invokeCapability"));
   assert(handshake.enabledCapabilityIds.includes("prompt.review.run"));
+  assert(handshake.enabledCapabilityIds.includes("release.download.open"));
   assert.equal(
     handshake.capabilities.find((capability) => capability.capabilityId === "prompt.review.run")?.enabled,
     true
@@ -320,6 +327,32 @@ async function verifyBundledRuntimeRouterDispatch() {
       input: {},
     }),
     /허용되지 않은 capabilityId예요/
+  );
+  const releaseOpenResult = await router.handle({
+    action: "capabilities.invoke",
+    capabilityId: "release.download.open",
+    input: {
+      fileName: "latest.zip",
+      templateKey: "release.download",
+    },
+  });
+  assert.deepEqual(releaseOpenResult, {
+    opened: true,
+    url: "https://browser-extension-v2.web.app/extension-v2/downloads/latest.zip",
+  });
+  assert.deepEqual(openedUrls, [
+    "https://browser-extension-v2.web.app/extension-v2/downloads/latest.zip",
+  ]);
+  await assert.rejects(
+    router.handle({
+      action: "capabilities.invoke",
+      capabilityId: "release.download.open",
+      input: {
+        fileName: "https://example.test/raw.zip",
+        templateKey: "release.download",
+      },
+    }),
+    /허용되지 않은 release download 파일명이에요/
   );
 
   const disabledContext = createRuntimeContext({

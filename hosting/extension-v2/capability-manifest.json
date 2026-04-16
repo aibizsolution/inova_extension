@@ -199,6 +199,22 @@
       "owner": "prompt-store",
       "schemaVersion": 1,
       "service": "prompt"
+    },
+    "release.download.open": {
+      "auditLevel": "write",
+      "authMode": "none",
+      "domain": "release",
+      "enabled": true,
+      "inputSchemaVersion": 1,
+      "kind": "browser.open-url",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "release",
+      "schemaVersion": 1,
+      "service": "browser",
+      "templateKeys": [
+        "release.download"
+      ]
     }
   },
   "targets": {

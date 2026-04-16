@@ -64,6 +64,14 @@
         </article>
       `;
     }
+    if (!state.canOpenDownloads && state.capabilityError) {
+      return `
+        <article class="inova-release-card is-muted">
+          <strong>릴리스 다운로드를 열 수 없어요.</strong>
+          <p>${escapeHtml(state.capabilityError)}</p>
+        </article>
+      `;
+    }
     if (state.versionRefreshPending || (state.checking && !state.latest)) {
       return `
         <article class="inova-release-card is-muted">
@@ -110,7 +118,7 @@
       <article class="inova-release-card inova-release-card--compact">
         <div class="inova-release-card__head">
           <strong class="inova-release-card__headline">${escapeHtml(latest.version)} · ${escapeHtml(latest.headline || latest.notes || "최신 릴리스")}</strong>
-          <button type="button" class="inova-tool-button inova-tool-button--compact ${state.updateAvailable ? "is-primary" : ""}" data-release-action="download-latest">받기</button>
+          <button type="button" class="inova-tool-button inova-tool-button--compact ${state.updateAvailable ? "is-primary" : ""}" data-release-action="download-latest" ${state.canOpenDownloads ? "" : 'disabled aria-disabled="true"'}>받기</button>
         </div>
         ${details}
       </article>

@@ -11,7 +11,8 @@
     storagePort: 9199,
   });
   const BUNDLED_FUNCTIONS_MANIFEST = deepFreeze({
-    capabilities: buildFunctionCapabilityCatalog([
+    capabilities: {
+      ...buildFunctionCapabilityCatalog([
       ["meeting.list", "listInovaMeetingsUrl", "meeting", "meeting", "meeting", "read"],
       ["meeting.panel-auth.issue-function", "issueInovaMeetingPanelAuthUrl", "meeting", "meeting", "meeting", "auth"],
       ["meeting.share.create-function", "createInovaMeetingShareLinkUrl", "meeting", "meeting", "meeting", "write"],
@@ -26,7 +27,9 @@
       ["prompt.store.record-view", "recordPromptStoreViewUrl", "prompt", "prompt-store", "prompt-store", "write"],
       ["prompt.store.toggle-like", "togglePromptStoreLikeUrl", "prompt", "prompt-store", "prompt-store", "write"],
       ["prompt.store.unpublish", "unpublishPromptFromStoreUrl", "prompt", "prompt-store", "prompt-store", "write"],
-    ]),
+      ]),
+      "release.download.open": { auditLevel: "write", authMode: "none", domain: "release", enabled: true, inputSchemaVersion: 1, kind: "browser.open-url", minExtensionVersion: "1.0.0", outputSchemaVersion: 1, owner: "release", schemaVersion: 1, service: "browser", templateKeys: ["release.download"] },
+    },
     endpointKeys: {
       authorizeInovaMeetingWorkspaceAccessUrl: {
         endpoint: "authorizeInovaMeetingWorkspaceAccess",
@@ -374,16 +377,18 @@
         throw new Error(`remote capability manifest capability is invalid: ${capabilityId}`);
       }
       const kind = normalizeText(capability.kind);
-      if (kind !== "function") {
+      if (kind !== "function" && kind !== "browser.open-url") {
         throw new Error(`remote capability manifest capability kind is not allowed: ${capabilityId}`);
       }
-      const endpointKey = normalizeText(capability.endpointKey);
-      if (!endpointKey || !endpointDefinitions?.[endpointKey]) {
-        throw new Error(`remote capability manifest capability endpointKey is missing: ${capabilityId}`);
+      if (kind === "function") {
+        const endpointKey = normalizeText(capability.endpointKey);
+        const service = normalizeText(capability.service).toLowerCase();
+        if (!endpointKey || !endpointDefinitions?.[endpointKey]) throw new Error(`remote capability manifest capability endpointKey is missing: ${capabilityId}`);
+        if (!["meeting", "prompt"].includes(service)) throw new Error(`remote capability manifest capability service is not allowed: ${capabilityId}`);
       }
-      const service = normalizeText(capability.service).toLowerCase();
-      if (!["meeting", "prompt"].includes(service)) {
-        throw new Error(`remote capability manifest capability service is not allowed: ${capabilityId}`);
+      if (kind === "browser.open-url") {
+        const templateKeys = Array.isArray(capability.templateKeys) ? capability.templateKeys.map(normalizeText) : [];
+        if (!templateKeys.length || templateKeys.some((templateKey) => templateKey !== "release.download")) throw new Error(`remote capability manifest capability templateKey is not allowed: ${capabilityId}`);
       }
       const authMode = normalizeText(capability.authMode || capability.auth || "access-token").toLowerCase();
       if (!["access-token", "none"].includes(authMode)) {
@@ -396,7 +401,7 @@
       if (!["read", "write", "auth"].includes(auditLevel)) {
         throw new Error(`remote capability manifest capability auditLevel is not allowed: ${capabilityId}`);
       }
-      if ((auditLevel === "write" || auditLevel === "auth") && authMode === "none") {
+      if (kind === "function" && (auditLevel === "write" || auditLevel === "auth") && authMode === "none") {
         throw new Error(`remote capability manifest capability authMode is too weak: ${capabilityId}`);
       }
       if (!Number.isFinite(Number(capability.inputSchemaVersion)) || !Number.isFinite(Number(capability.outputSchemaVersion))) {

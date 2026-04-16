@@ -574,7 +574,7 @@ async function verifyHostedReleaseLocalDownloadUrls() {
 
   controller.syncPanelState(
     { activeTool: "release" },
-    ["runtime.invoke.v1"]
+    ["runtime.invoke.v1", "release.download.open"]
   );
   await new Promise((resolve) => setTimeout(resolve, 0));
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -594,11 +594,14 @@ async function verifyHostedReleaseLocalDownloadUrls() {
   await controller.handleReleaseAction("download-latest");
 
   assert.deepEqual(
-    runtimeCalls.map((call) => [call.action, call.url]),
+    runtimeCalls.map((call) => [call.action, call.capabilityId, call.input]),
     [
-      ["browser.open-url", "http://127.0.0.1:5000/extension-v2/downloads/latest.zip"],
+      ["capabilities.invoke", "release.download.open", {
+        fileName: "latest.zip",
+        templateKey: "release.download",
+      }],
     ],
-    "local hosted release should open the latest local artifact URL"
+    "hosted release should request download through the release capability without passing a raw URL"
   );
 }
 

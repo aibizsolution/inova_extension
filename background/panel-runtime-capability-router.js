@@ -292,11 +292,46 @@ async function invokeHostedPanelFunctionFetch(request) {
 async function invokeManifestCapability(request) {
   const capabilityId = namespace.session.normalizeText(request?.capabilityId);
   const capability = await resolveManifestCapability(capabilityId);
-  if (capability.kind !== "function") {
-    throw new Error("지원하지 않는 remote capability kind예요.");
+  if (capability.kind === "function") {
+    const endpointCapability = await buildManifestFunctionEndpointCapability(capabilityId, capability);
+    return invokeFunctionEndpointFetch(endpointCapability, request?.input, request);
   }
-  const endpointCapability = await buildManifestFunctionEndpointCapability(capabilityId, capability);
-  return invokeFunctionEndpointFetch(endpointCapability, request?.input, request);
+  if (capability.kind === "browser.open-url") {
+    return invokeBrowserOpenUrlCapability(capabilityId, capability, request?.input);
+  }
+  throw new Error("지원하지 않는 remote capability kind예요.");
+}
+
+async function invokeBrowserOpenUrlCapability(capabilityId, capability, input = {}) {
+  const templateKey = namespace.session.normalizeText(input?.templateKey);
+  const allowedTemplateKeys = Array.isArray(capability?.templateKeys)
+    ? capability.templateKeys.map((value) => namespace.session.normalizeText(value))
+    : [];
+  if (!allowedTemplateKeys.includes(templateKey)) {
+    throw new Error(`허용되지 않은 URL template capability예요: ${capabilityId}`);
+  }
+  if (templateKey === "release.download") {
+    return openBrowserUrl(await buildReleaseDownloadUrl(input?.fileName));
+  }
+  throw new Error(`지원하지 않는 URL template capability예요: ${capabilityId}`);
+}
+
+async function buildReleaseDownloadUrl(fileName) {
+  const artifactFileName = normalizeArtifactFileName(fileName);
+  const runtimeConfig = await getPromptRuntimeConfig();
+  const hostingBaseUrl = namespace.session.normalizeText(runtimeConfig?.hosting?.baseUrl);
+  if (!hostingBaseUrl) {
+    throw new Error("release download base URL을 찾지 못했어요.");
+  }
+  return new URL(`downloads/${encodeURIComponent(artifactFileName)}`, `${hostingBaseUrl.replace(/\/+$/, "")}/`).href;
+}
+
+function normalizeArtifactFileName(fileName) {
+  const artifactFileName = namespace.session.normalizeText(fileName);
+  if (!/^[A-Za-z0-9._-]+\.zip$/.test(artifactFileName)) {
+    throw new Error("허용되지 않은 release download 파일명이에요.");
+  }
+  return artifactFileName;
 }
 
 async function invokeFunctionEndpointFetch(endpointCapability, body, request) {

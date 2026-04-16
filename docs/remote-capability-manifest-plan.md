@@ -310,7 +310,8 @@ verify 기준:
 현재 상태:
 
 - `kind=function` catalog와 dispatch가 구현됨.
-- `browser.open-url`, `storage.write-ui-preferences`, `page.capability`, `workflow` kind는 아직 pilot 전이다.
+- `kind=browser.open-url`은 `release.download.open` capability로 1차 구현됨. hosted는 `templateKey + fileName`만 넘기고 background가 allowed template으로 실제 URL을 조립한다.
+- `storage.write-ui-preferences`, `page.capability`, `workflow` kind는 아직 pilot 전이다.
 
 ### Phase 5. Page Primitive 선탑재
 
@@ -375,7 +376,7 @@ verify 기준:
 
 - schema 없는 write/destructive capability 실패
 - auditLevel 없는 capability 실패
-- write/auth capability가 `authMode=none`이면 실패
+- function write/auth capability가 `authMode=none`이면 실패
 - response schema drift 감지
 
 배포/롤아웃 주의점:
@@ -385,7 +386,7 @@ verify 기준:
 현재 상태:
 
 - active manifest validation은 `inputSchemaVersion`, `outputSchemaVersion`, `authMode`, `auditLevel`을 필수로 본다.
-- write/auth capability는 `authMode=none`을 허용하지 않는다.
+- function write/auth capability는 `authMode=none`을 허용하지 않는다.
 
 ### Phase 6. Hosted Abstraction 완료
 
