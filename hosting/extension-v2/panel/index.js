@@ -519,6 +519,10 @@
     if (!remoteWorkflowHost || !catalog) {
       return;
     }
+    if (!hasRemoteWorkflowArtifacts(catalog)) {
+      remoteWorkflowHost.dispose?.();
+      return;
+    }
     try {
       const sandboxState = await remoteWorkflowHost.boot({
         bridgeApis: catalog.bridgeApis,
@@ -533,6 +537,10 @@
         error: readErrorMessage(error, "remote workflow sandbox boot failed"),
       });
     }
+  }
+
+  function hasRemoteWorkflowArtifacts(catalog) {
+    return Array.isArray(catalog?.workflowArtifacts) && catalog.workflowArtifacts.length > 0;
   }
 
   function hydratePanelOpenState(panelSnapshot) {
