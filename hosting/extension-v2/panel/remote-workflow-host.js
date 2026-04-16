@@ -244,10 +244,38 @@
 
   function sanitizeWorkflowRunRequest(request) {
     return {
+      artifactId: normalizeText(request?.artifactId),
+      artifactVersion: normalizeText(request?.artifactVersion),
       input: request?.input && typeof request.input === "object" ? request.input : {},
+      pilotEnabled: request?.pilotEnabled === true,
+      workflow: sanitizeWorkflowDefinition(request?.workflow),
       workflowId: normalizeText(request?.workflowId),
       workflowVersion: normalizeText(request?.workflowVersion),
     };
+  }
+
+  function sanitizeWorkflowDefinition(workflow) {
+    if (!workflow || typeof workflow !== "object" || Array.isArray(workflow)) {
+      return null;
+    }
+    return {
+      artifactId: normalizeText(workflow.artifactId),
+      artifactVersion: normalizeText(workflow.artifactVersion),
+      output: cloneJsonValue(workflow.output),
+      steps: Array.isArray(workflow.steps)
+        ? workflow.steps.slice(0, 20).map((step) => ({
+          bridgeApi: normalizeText(step?.bridgeApi),
+          id: normalizeText(step?.id),
+          input: cloneJsonValue(step?.input),
+          type: normalizeText(step?.type || "bridge"),
+        }))
+        : [],
+      workflowId: normalizeText(workflow.workflowId),
+    };
+  }
+
+  function cloneJsonValue(value) {
+    return value == null ? null : JSON.parse(JSON.stringify(value));
   }
 
   function normalizeBridgeApis(value) {

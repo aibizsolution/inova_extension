@@ -481,7 +481,8 @@ verify 기준:
 - hosted v2 panel은 `remote-workflow-host.js`로 hidden sandbox iframe을 만들고, iframe은 `sandbox="allow-scripts"`만 받는다. `allow-same-origin`은 주지 않는다.
 - sandbox HTML은 `connect-src 'none'` CSP를 가진다. sandbox runtime은 `chrome`, `fetch`, storage, arbitrary network globals를 blocked global로 취급한다.
 - sandbox bridge host는 handshake의 `bridgeApis` allowlist 안에 있는 API만 처리한다. allowlist 밖 API 요청은 explicit error로 반환한다.
-- `workflow.run`은 아직 disabled 상태다. sandbox pilot 전에는 실행 요청이 성공처럼 처리되지 않는다.
+- sandbox runtime은 raw JS가 아니라 declarative workflow step만 해석한다. 현재 허용 step은 allowlisted bridge call뿐이다.
+- `workflow.run`은 `pilotEnabled=true`가 없으면 disabled 상태다. production manifest는 아직 enabled workflow를 통과시키지 않는다.
 
 ### Phase 7. Negotiation / Kill Switch / Rollout Guard
 

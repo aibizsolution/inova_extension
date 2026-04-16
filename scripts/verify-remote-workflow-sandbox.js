@@ -9,7 +9,7 @@ const root = path.resolve(__dirname, "..");
 
 async function main() {
   verifySandboxHtmlPolicy();
-  verifySandboxRuntimeBoundary();
+  await verifySandboxRuntimeBoundary();
   await verifyHostedWorkflowHostBridge();
   console.log("[verify-remote-workflow-sandbox] Remote workflow sandbox contract passed");
 }
@@ -26,7 +26,7 @@ function verifySandboxHtmlPolicy() {
   assert(!html.includes("https://"), "remote workflow sandbox should not reference raw remote URLs");
 }
 
-function verifySandboxRuntimeBoundary() {
+async function verifySandboxRuntimeBoundary() {
   let messageListener = null;
   const postedMessages = [];
   const context = vm.createContext({
@@ -46,6 +46,8 @@ function verifySandboxRuntimeBoundary() {
       },
     },
     sessionStorage: {},
+    clearTimeout,
+    setTimeout,
   });
   context.globalThis = context;
 
@@ -90,8 +92,69 @@ function verifySandboxRuntimeBoundary() {
       type: "remote-workflow.run",
     },
   });
+  await waitForBridgeResponse();
   assert.equal(postedMessages.at(-1)?.message?.ok, false);
   assert.match(postedMessages.at(-1)?.message?.error || "", /disabled until sandbox pilot/);
+
+  messageListener({
+    data: {
+      payload: {
+        input: {
+          capabilityId: "prompt.review.run",
+          prompt: "test",
+        },
+        pilotEnabled: true,
+        workflow: {
+          artifactId: "test-workflow",
+          artifactVersion: "0.0.1",
+          output: "$steps.invokeReview",
+          steps: [
+            {
+              bridgeApi: "invokeCapability",
+              id: "invokeReview",
+              input: {
+                capabilityId: "$input.capabilityId",
+                input: {
+                  prompt: "$input.prompt",
+                },
+              },
+              type: "bridge",
+            },
+          ],
+          workflowId: "test.workflow.disabled",
+        },
+      },
+      requestId: "run-2",
+      source: "inova-remote-workflow-host",
+      type: "remote-workflow.run",
+    },
+  });
+  const bridgeRequest = postedMessages.at(-1)?.message;
+  assert.equal(bridgeRequest?.type, "remote-workflow.bridge.request");
+  assert.equal(bridgeRequest?.api, "invokeCapability");
+  assert.deepEqual(bridgeRequest?.input, {
+    capabilityId: "prompt.review.run",
+    input: {
+      prompt: "test",
+    },
+  });
+  messageListener({
+    data: {
+      ok: true,
+      payload: {
+        reviewed: true,
+      },
+      requestId: bridgeRequest.requestId,
+      source: "inova-remote-workflow-host",
+      type: "remote-workflow.bridge.response",
+    },
+  });
+  await waitForBridgeResponse();
+  assert.equal(postedMessages.at(-1)?.message?.type, "remote-workflow.response");
+  assert.equal(postedMessages.at(-1)?.message?.ok, true);
+  assert.deepEqual(postedMessages.at(-1)?.message?.payload?.output, {
+    reviewed: true,
+  });
 }
 
 async function verifyHostedWorkflowHostBridge() {
@@ -208,6 +271,55 @@ async function verifyHostedWorkflowHostBridge() {
     mounted: true,
   });
   assert(traceEvents.some((event) => event.step === "remote.workflow.sandbox.ready"));
+
+  const workflowRunPromise = host.runWorkflow({
+    input: {
+      prompt: "host-test",
+    },
+    pilotEnabled: true,
+    workflow: {
+      artifactId: "test-workflow",
+      artifactVersion: "0.0.1",
+      output: "$steps.invokeReview",
+      steps: [
+        {
+          bridgeApi: "invokeCapability",
+          id: "invokeReview",
+          input: {
+            capabilityId: "prompt.review.run",
+            input: {
+              prompt: "$input.prompt",
+            },
+          },
+          type: "bridge",
+        },
+      ],
+      workflowId: "test.workflow.disabled",
+    },
+  });
+  const workflowRunRequest = postedMessages.at(-1)?.message;
+  assert.equal(workflowRunRequest?.type, "remote-workflow.run");
+  assert.equal(workflowRunRequest?.payload?.pilotEnabled, true);
+  assert.equal(workflowRunRequest?.payload?.workflow?.steps?.[0]?.bridgeApi, "invokeCapability");
+  messageListener({
+    data: {
+      ok: true,
+      payload: {
+        output: {
+          reviewed: true,
+        },
+      },
+      requestId: workflowRunRequest.requestId,
+      source: "inova-remote-workflow-sandbox",
+      type: "remote-workflow.response",
+    },
+    source: frameWindow,
+  });
+  assert.deepEqual(await workflowRunPromise, {
+    output: {
+      reviewed: true,
+    },
+  });
 
   messageListener({
     data: {

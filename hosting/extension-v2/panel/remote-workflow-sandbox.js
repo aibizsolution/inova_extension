@@ -27,6 +27,7 @@
   function createRuntime(options = {}) {
     const runtimeGlobal = options.global || global;
     const parentWindow = options.parentWindow || runtimeGlobal.parent;
+    const pendingBridgeRequests = new Map();
     let activeBridgeApis = [];
     let workflowArtifacts = {};
     let attached = false;
@@ -55,6 +56,10 @@
     function handleEnvelope(envelope = {}) {
       const requestId = normalizeText(envelope.requestId);
       const type = normalizeText(envelope.type);
+      if (type === "remote-workflow.bridge.response") {
+        resolveBridgeResponse(envelope);
+        return;
+      }
       try {
         if (type === "remote-workflow.boot") {
           const payload = envelope.payload && typeof envelope.payload === "object" ? envelope.payload : {};
@@ -68,11 +73,99 @@
           return;
         }
         if (type === "remote-workflow.run") {
-          throw new Error("remote workflow execution is disabled until sandbox pilot");
+          void executeWorkflow(envelope.payload || {})
+            .then((result) => postResponse(requestId, result))
+            .catch((error) => postError(requestId, readErrorMessage(error)));
+          return;
         }
         throw new Error(`unsupported remote workflow message: ${type}`);
       } catch (error) {
         postError(requestId, readErrorMessage(error));
+      }
+    }
+
+    async function executeWorkflow(payload) {
+      if (payload?.pilotEnabled !== true) {
+        throw new Error("remote workflow execution is disabled until sandbox pilot");
+      }
+      const workflow = payload.workflow && typeof payload.workflow === "object" ? payload.workflow : {};
+      const workflowId = normalizeText(workflow.workflowId || payload.workflowId);
+      const artifactId = normalizeText(workflow.artifactId || payload.artifactId);
+      const artifactVersion = normalizeText(workflow.artifactVersion || payload.artifactVersion);
+      const steps = Array.isArray(workflow.steps) ? workflow.steps.slice(0, 20) : [];
+      if (!workflowId || !artifactId || !artifactVersion || !steps.length) {
+        throw new Error("remote workflow definition is incomplete");
+      }
+      if (workflowArtifacts[artifactId]?.artifactVersion !== artifactVersion) {
+        throw new Error("remote workflow artifact version is not pinned");
+      }
+      const runContext = {
+        input: cloneJsonObject(payload.input),
+        steps: {},
+      };
+      const stepResults = [];
+      for (let index = 0; index < steps.length; index += 1) {
+        const step = steps[index] && typeof steps[index] === "object" ? steps[index] : {};
+        const stepId = normalizeText(step.id) || `step-${index + 1}`;
+        const type = normalizeText(step.type || "bridge");
+        const bridgeApi = normalizeText(step.bridgeApi);
+        if (type !== "bridge" || !bridgeApi) {
+          throw new Error(`remote workflow step is not allowed: ${stepId}`);
+        }
+        if (!activeBridgeApis.includes(bridgeApi) || !BRIDGE_API_ALLOWLIST.includes(bridgeApi)) {
+          throw new Error(`remote workflow bridge API is not allowed: ${bridgeApi}`);
+        }
+        const output = await invokeBridgeApi(bridgeApi, resolveTemplate(step.input || {}, runContext));
+        runContext.steps[stepId] = output || {};
+        stepResults.push({
+          bridgeApi,
+          output: output || {},
+          stepId,
+        });
+      }
+      const lastStepId = stepResults.at(-1)?.stepId || "";
+      return {
+        output: resolveTemplate(workflow.output || `$steps.${lastStepId}`, runContext),
+        stepCount: stepResults.length,
+        steps: stepResults,
+        workflowId,
+      };
+    }
+
+    function invokeBridgeApi(api, input) {
+      const requestId = `remote-workflow-bridge-${Date.now()}-${pendingBridgeRequests.size + 1}`;
+      return new Promise((resolve, reject) => {
+        const timerId = typeof runtimeGlobal.setTimeout === "function"
+          ? runtimeGlobal.setTimeout(() => {
+            pendingBridgeRequests.delete(requestId);
+            reject(new Error(`remote workflow bridge timed out: ${api}`));
+          }, 5000)
+          : 0;
+        pendingBridgeRequests.set(requestId, { reject, resolve, timerId });
+        postToParent({
+          api,
+          input,
+          requestId,
+          source: SANDBOX_SOURCE,
+          type: "remote-workflow.bridge.request",
+        });
+      });
+    }
+
+    function resolveBridgeResponse(envelope) {
+      const requestId = normalizeText(envelope.requestId);
+      const pending = pendingBridgeRequests.get(requestId);
+      if (!pending) {
+        return;
+      }
+      pendingBridgeRequests.delete(requestId);
+      if (pending.timerId && typeof runtimeGlobal.clearTimeout === "function") {
+        runtimeGlobal.clearTimeout(pending.timerId);
+      }
+      if (envelope.ok === true) {
+        pending.resolve(envelope.payload || {});
+      } else {
+        pending.reject(new Error(normalizeText(envelope.error) || "remote workflow bridge failed"));
       }
     }
 
@@ -133,6 +226,37 @@
             && artifact.scriptSlot
         ))
     );
+  }
+
+  function resolveTemplate(value, context) {
+    if (typeof value === "string" && value.startsWith("$")) {
+      return readTemplatePath(value, context);
+    }
+    if (Array.isArray(value)) {
+      return value.map((entry) => resolveTemplate(entry, context));
+    }
+    if (value && typeof value === "object") {
+      return Object.fromEntries(
+        Object.entries(value).map(([key, entry]) => [key, resolveTemplate(entry, context)])
+      );
+    }
+    return value;
+  }
+
+  function readTemplatePath(expression, context) {
+    const parts = normalizeText(expression).slice(1).split(".");
+    if (!parts.length || parts.some((part) => !/^[A-Za-z0-9_-]+$/.test(part))) {
+      throw new Error(`remote workflow template path is not allowed: ${expression}`);
+    }
+    let cursor = context;
+    parts.forEach((part) => {
+      cursor = cursor && typeof cursor === "object" ? cursor[part] : undefined;
+    });
+    return cloneJsonObject(cursor);
+  }
+
+  function cloneJsonObject(value) {
+    return value == null ? {} : JSON.parse(JSON.stringify(value));
   }
 
   function blockForbiddenGlobals(targetGlobal) {
