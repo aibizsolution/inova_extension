@@ -15,6 +15,7 @@ async function main() {
 async function verifyExtensionCapabilityClientPageAllowlist() {
   const pageCalls = [];
   const runtimeCalls = [];
+  const workflowCalls = [];
   const context = vm.createContext({
     console,
     globalThis: null,
@@ -38,7 +39,7 @@ async function verifyExtensionCapabilityClientPageAllowlist() {
     invokeRuntime: async (request) => {
       runtimeCalls.push(cloneValue(request));
       return {
-        bridgeApis: ["invokeCapability"],
+        bridgeApis: ["invokeCapability", "metrics"],
         capabilities: [
           {
             capabilityId: "page.composer.read-state",
@@ -53,6 +54,22 @@ async function verifyExtensionCapabilityClientPageAllowlist() {
             minExtensionVersionSupported: true,
             pageCapabilityId: "composer.read-state",
           },
+          {
+            artifactId: "test-workflow",
+            artifactVersion: "0.0.1",
+            capabilityId: "test.workflow.run",
+            enabled: true,
+            kind: "workflow",
+            workflowId: "test.workflow.run",
+          },
+          {
+            artifactId: "test-workflow",
+            artifactVersion: "0.0.1",
+            capabilityId: "test.workflow.disabled",
+            enabled: false,
+            kind: "workflow",
+            workflowId: "test.workflow.disabled",
+          },
         ],
         capabilityAliases: [
           {
@@ -62,6 +79,14 @@ async function verifyExtensionCapabilityClientPageAllowlist() {
         ],
         enabledCapabilityIds: ["prompt.review.run", "page.composer.read-state"],
       };
+    },
+    invokeWorkflow: async (capability, input, options) => {
+      workflowCalls.push({
+        capability: cloneValue(capability),
+        input: cloneValue(input),
+        options: cloneValue(options),
+      });
+      return { workflow: true };
     },
   });
 
@@ -106,6 +131,21 @@ async function verifyExtensionCapabilityClientPageAllowlist() {
 
   await assert.rejects(
     async () => browserCapabilities.invokeCapability("page.raw.disabled", {}),
+    /capability가 비활성화되어 있어요/
+  );
+
+  const workflowResult = await browserCapabilities.invokeCapability(
+    "test.workflow.run",
+    { prompt: "workflow" },
+    { pilotEnabled: true }
+  );
+  assert.deepEqual(workflowResult, { workflow: true });
+  assert.equal(workflowCalls.at(-1)?.capability?.workflowId, "test.workflow.run");
+  assert.equal(workflowCalls.at(-1)?.capability?.artifactId, "test-workflow");
+  assert.deepEqual(workflowCalls.at(-1)?.input, { prompt: "workflow" });
+  assert.deepEqual(workflowCalls.at(-1)?.options, { pilotEnabled: true });
+  await assert.rejects(
+    async () => browserCapabilities.invokeCapability("test.workflow.disabled", {}),
     /capability가 비활성화되어 있어요/
   );
 }

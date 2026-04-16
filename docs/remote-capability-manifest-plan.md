@@ -484,6 +484,7 @@ verify 기준:
 - sandbox runtime은 raw JS가 아니라 declarative workflow step만 해석한다. 현재 허용 step은 allowlisted bridge call뿐이다.
 - hosted sandbox host는 artifact registry의 `bundleId + artifactVersion`으로 same-origin `./workflows/<bundleId>/<artifactVersion>.json`만 fetch한다.
 - workflow artifact는 `sha256-*` integrity를 통과해야 sandbox에 전달된다. integrity verifier가 없거나 mismatch이면 explicit error다.
+- hosted capability client는 `kind=workflow` capability를 보면 background로 보내지 않고 sandbox host로 dispatch한다.
 - `workflow.run`은 `pilotEnabled=true`가 없으면 disabled 상태다. production manifest는 아직 enabled workflow를 통과시키지 않는다.
 
 ### Phase 7. Negotiation / Kill Switch / Rollout Guard

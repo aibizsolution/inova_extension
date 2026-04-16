@@ -29,6 +29,9 @@
     const invokeRuntime = typeof options.invokeRuntime === "function"
       ? options.invokeRuntime
       : async () => ({});
+    const invokeWorkflow = typeof options.invokeWorkflow === "function"
+      ? options.invokeWorkflow
+      : null;
     let capabilityDefinitionsById = new Map();
     const recentPanelAuthResults = new Map();
     const pendingPanelAuthRequests = new Map();
@@ -88,6 +91,9 @@
       if (capability?.kind === "page.capability") {
         return invokeManifestPageCapability(capability, input);
       }
+      if (capability?.kind === "workflow") {
+        return invokeManifestWorkflowCapability(capability, input, options);
+      }
       return invokeRuntime({
         action: "capabilities.invoke",
         capabilityId: normalizedCapabilityId,
@@ -123,6 +129,16 @@
         throw new Error("capability가 비활성화되어 있어요.");
       }
       return invokePageCapability(capability.pageCapabilityId || capability.capabilityId, input);
+    }
+
+    function invokeManifestWorkflowCapability(capability, input = {}, requestOptions = {}) {
+      if (capability.enabled === false) {
+        throw new Error("capability가 비활성화되어 있어요.");
+      }
+      if (typeof invokeWorkflow !== "function") {
+        throw new Error("remote workflow host가 준비되지 않았어요.");
+      }
+      return invokeWorkflow(capability, input, requestOptions);
     }
 
     function issuePanelSession(panel, providerIdentity, options = {}) {
@@ -255,8 +271,11 @@
         capabilityDefinitionsById.set(capabilityId, {
           capabilityId,
           enabled: capability?.enabled === true,
+          artifactId: normalizeText(capability?.artifactId),
+          artifactVersion: normalizeText(capability?.artifactVersion),
           kind: normalizeText(capability?.kind),
           pageCapabilityId: normalizeText(capability?.pageCapabilityId),
+          workflowId: normalizeText(capability?.workflowId),
         });
       });
       if (!Array.isArray(catalog?.capabilityAliases)) {

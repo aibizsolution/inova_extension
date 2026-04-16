@@ -68,11 +68,24 @@
     invokeRuntime,
     request,
   };
+  let remoteWorkflowHost = null;
   const browserCapabilities = namespace.extensionCapabilityClient?.create?.({
     invokePage,
     invokeRuntime,
+    invokeWorkflow: (capability, input, options = {}) => {
+      if (!remoteWorkflowHost) {
+        throw new Error("remote workflow sandbox host is not ready");
+      }
+      return remoteWorkflowHost.runWorkflow({
+        artifactId: capability?.artifactId,
+        artifactVersion: capability?.artifactVersion,
+        input,
+        pilotEnabled: options?.pilotEnabled === true,
+        workflowId: capability?.workflowId,
+      });
+    },
   }) || {};
-  const remoteWorkflowHost = namespace.remoteWorkflowHost?.create?.({
+  remoteWorkflowHost = namespace.remoteWorkflowHost?.create?.({
     browserCapabilities,
     document,
     trace: tracePanelFlow,

@@ -429,6 +429,7 @@ function verifyHostedPanelFiles(directoryName) {
     assert(html.includes("./remote-workflow-host.js"), "v2 hosted panel should load the remote workflow sandbox host");
     assert(indexJs.includes("readCapabilityCatalog"), "v2 hosted panel should negotiate the runtime capability catalog at boot");
     assert(indexJs.includes("remoteWorkflowHost"), "v2 hosted panel should boot the remote workflow sandbox host after negotiation");
+    assert(indexJs.includes("invokeWorkflow"), "v2 hosted panel should route workflow capabilities to the sandbox host");
     assert(extensionCapabilityClientJs.includes('"capabilities.handshake"'), "v2 hosted panel should request capability handshake through the capability client");
     assert(
       extensionCapabilityClientJs.includes("COMPATIBILITY_RUNTIME_ACTIONS")
