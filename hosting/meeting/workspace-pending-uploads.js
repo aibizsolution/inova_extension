@@ -18,6 +18,7 @@
         DEFAULT_SOURCE_CHUNK_OVERLAP_MS,
         DEFAULT_SOURCE_MAX_DURATION_MS,
         DEFAULT_SOURCE_MAX_BYTES,
+        DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS,
         DEFAULT_SOURCE_TARGET_PART_BYTES,
         DEFAULT_SOURCE_UPLOAD_TIMEOUT_MS,
         buildRemoteSelectionId,
@@ -2600,13 +2601,14 @@
       }
       
       
-      function inferSourceMode(sizeBytes) {
-        return requiresChunkedSource(sizeBytes) ? "chunked" : "single";
+      function inferSourceMode(sizeBytes, durationMs) {
+        return requiresChunkedSource(sizeBytes, durationMs) ? "chunked" : "single";
       }
       
       
-      function requiresChunkedSource(sizeBytes) {
-        return Math.max(0, Number(sizeBytes) || 0) > DEFAULT_SOURCE_TARGET_PART_BYTES;
+      function requiresChunkedSource(sizeBytes, durationMs) {
+        return Math.max(0, Number(sizeBytes) || 0) > DEFAULT_SOURCE_TARGET_PART_BYTES
+          || Math.max(0, Number(durationMs) || 0) > DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS;
       }
       
       
@@ -2614,7 +2616,8 @@
         const pending = normalizePendingUpload(item);
         return normalizeText(pending.sourceMode) === "chunked"
           || requiresChunkedSource(
-            Number(pending.originalSizeBytes) || Number(pending.sizeBytes) || Number(pending.blob?.size) || 0
+            Number(pending.originalSizeBytes) || Number(pending.sizeBytes) || Number(pending.blob?.size) || 0,
+            Number(pending.durationMs) || 0
           );
       }
       

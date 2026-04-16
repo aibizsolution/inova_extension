@@ -33,6 +33,7 @@ const DEFAULT_INLINE_AUDIO_LIMIT_BYTES = 25 * 1024 * 1024;
 const DEFAULT_SOURCE_TARGET_PART_BYTES = 24 * 1024 * 1024;
 const DEFAULT_SOURCE_MAX_BYTES = 200 * 1024 * 1024;
 const DEFAULT_SOURCE_MAX_DURATION_MS = 2 * 60 * 60 * 1000;
+const DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS = 23 * 60 * 1000;
 const DEFAULT_SOURCE_PART_OVERLAP_MS = 1500;
 const DEFAULT_MEETING_PROCESS_RETRY_LIMIT = 2;
 const DEFAULT_MODEL = "gpt-4o-transcribe";
@@ -598,6 +599,7 @@ function registerMeetingHandlers(deps) {
     defaultSourcePartOverlapMs: DEFAULT_SOURCE_PART_OVERLAP_MS,
     deleteTemporarySourceGroup: meetingRuntimeArtifactDomain.deleteTemporarySourceGroup,
     getInlineAudioLimitBytes,
+    getMeetingSingleTranscribeMaxDurationMs,
     getMeetingSourceMaxBytes,
     getMeetingSourceMaxDurationMs,
     getMeetingSourceTargetPartBytes,
@@ -1493,6 +1495,14 @@ function getMeetingSourceMaxBytes() {
 
 function getMeetingSourceMaxDurationMs() {
   return Math.max(30 * 1000, Number(process.env.OPENAI_MEETING_SOURCE_MAX_DURATION_MS) || DEFAULT_SOURCE_MAX_DURATION_MS);
+}
+
+function getMeetingSingleTranscribeMaxDurationMs() {
+  return Math.max(
+    30 * 1000,
+    Number(process.env.OPENAI_MEETING_SINGLE_TRANSCRIBE_MAX_DURATION_MS)
+      || DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS
+  );
 }
 
 module.exports = {

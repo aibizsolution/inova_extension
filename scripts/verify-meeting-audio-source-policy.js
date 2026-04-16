@@ -8,6 +8,7 @@ const vm = require("vm");
 const repoRoot = path.resolve(__dirname, "..");
 const MB = 1024 * 1024;
 const EXPECTED_OPENAI_SAFE_PART_BYTES = 24 * MB;
+const EXPECTED_OPENAI_SAFE_SINGLE_DURATION_MS = 23 * 60 * 1000;
 
 function readRepoFile(...segments) {
   return fs.readFileSync(path.join(repoRoot, ...segments), "utf8");
@@ -16,6 +17,7 @@ function readRepoFile(...segments) {
 function main() {
   const sharedSource = readRepoFile("hosting", "meeting", "shared.js");
   const pendingUploadsSource = readRepoFile("hosting", "meeting", "workspace-pending-uploads.js");
+  const meetingCreationSource = readRepoFile("functions", "features", "meeting", "meeting-creation-domain.js");
   const meetingServiceSource = readRepoFile("functions", "features", "meeting", "meeting-service.js");
 
   assert(
@@ -27,22 +29,23 @@ function main() {
     "functions meeting source part target must stay below OpenAI's 25MB upload limit"
   );
   assert(
-    !sharedSource.includes("DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS"),
-    "hosted source mode must not chunk only because a recording is longer than 20 minutes"
+    sharedSource.includes("DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS = 23 * 60 * 1000"),
+    "hosted single transcription duration must stay below the gpt-4o-transcribe 1400 second limit"
   );
   assert(
-    !pendingUploadsSource.includes("DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS"),
-    "pending upload source mode must not depend on the removed duration-only chunk threshold"
+    meetingServiceSource.includes("DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS = 23 * 60 * 1000"),
+    "functions single transcription duration must stay below the gpt-4o-transcribe 1400 second limit"
+  );
+  assert(
+    meetingCreationSource.includes("sourceMode !== \"chunked\" && source.durationMs > getMeetingSingleTranscribeMaxDurationMs()"),
+    "functions must reject oversized single-source audio before sending it to OpenAI"
   );
 
   const context = buildHostedMeetingVmContext();
   vm.runInNewContext(sharedSource, context, { filename: "hosting/meeting/shared.js" });
   const ns = context.__INOVA_HOSTED_MEETING__;
   assert.equal(ns.shared.DEFAULT_SOURCE_TARGET_PART_BYTES, EXPECTED_OPENAI_SAFE_PART_BYTES);
-  assert.equal(
-    Object.prototype.hasOwnProperty.call(ns.shared, "DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS"),
-    false
-  );
+  assert.equal(ns.shared.DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS, EXPECTED_OPENAI_SAFE_SINGLE_DURATION_MS);
 
   installPendingUploadControllerStubs(ns);
   vm.runInNewContext(pendingUploadsSource, context, { filename: "hosting/meeting/workspace-pending-uploads.js" });
@@ -59,9 +62,14 @@ function main() {
   });
 
   assert.equal(
-    controller.inferSourceMode(EXPECTED_OPENAI_SAFE_PART_BYTES, 90 * 60 * 1000),
+    controller.inferSourceMode(EXPECTED_OPENAI_SAFE_PART_BYTES, EXPECTED_OPENAI_SAFE_SINGLE_DURATION_MS),
     "single",
-    "duration alone should not force chunking when the file is within the OpenAI-safe upload limit"
+    "small files at the OpenAI-safe single duration should stay in single source mode"
+  );
+  assert.equal(
+    controller.inferSourceMode(EXPECTED_OPENAI_SAFE_PART_BYTES, EXPECTED_OPENAI_SAFE_SINGLE_DURATION_MS + 1),
+    "chunked",
+    "small files above the gpt-4o-transcribe single-audio duration limit must use chunked source mode"
   );
   assert.equal(
     controller.inferSourceMode(EXPECTED_OPENAI_SAFE_PART_BYTES + 1, 60 * 1000),
