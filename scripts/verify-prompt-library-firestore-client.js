@@ -97,7 +97,10 @@ async function verifyHostedPromptLibraryFirestoreClientContract() {
   };
   context.firebase = createFakeFirebase(queryState);
 
+  loadScript("hosting/extension-v2/panel/panel-utils.js", context);
   loadScript("hosting/extension-v2/panel/extension-capability-client.js", context);
+  loadScript("hosting/extension-v2/panel/panel-firestore-session-client.js", context);
+  loadScript("hosting/extension-v2/panel/base-firestore-client.js", context);
   loadScript("hosting/extension-v2/panel/prompt-library-firestore-client.js", context);
 
   const client = context.InovaBookmarks.promptLibraryFirestoreClient.create({
@@ -149,7 +152,7 @@ async function verifyHostedPromptLibraryFirestoreClientContract() {
 
   assert.equal(runtimeCalls.length, 1, "prompt firestore client should request panel auth once for a fresh subscription");
   assert.equal(runtimeCalls[0].action, "auth.issue-panel-session");
-  assert.equal(runtimeCalls[0].panel, "prompt");
+  assert.equal(runtimeCalls[0].panel, "hosted");
   assert.deepEqual(queryState.collectionNames, [
     "integration_inova_accounts_v2",
     "prompt_library_orders_v2",
@@ -219,10 +222,10 @@ async function verifyLocalPromptLibraryAuthSessionPolicy() {
   const traces = [];
   const apiKey = "AIzaSyDnVS7MmQs7wWjVPihr1MNmcALxJ0a1qPM";
   const localStorage = createFakeStorage({
-    [`firebase:authUser:${apiKey}:inova-hosted-panel-prompt-library`]: "{\"stale\":true}",
+    [`firebase:authUser:${apiKey}:inova-hosted-panel`]: "{\"stale\":true}",
   });
   const sessionStorage = createFakeStorage({
-    [`firebase:redirectUser:${apiKey}:inova-hosted-panel-prompt-library`]: "{\"stale\":true}",
+    [`firebase:redirectUser:${apiKey}:inova-hosted-panel`]: "{\"stale\":true}",
   });
   const queryState = {
     accountOnSnapshot: null,
@@ -282,7 +285,10 @@ async function verifyLocalPromptLibraryAuthSessionPolicy() {
   };
   context.firebase = createFakeFirebase(queryState);
 
+  loadScript("hosting/extension-v2/panel/panel-utils.js", context);
   loadScript("hosting/extension-v2/panel/extension-capability-client.js", context);
+  loadScript("hosting/extension-v2/panel/panel-firestore-session-client.js", context);
+  loadScript("hosting/extension-v2/panel/base-firestore-client.js", context);
   loadScript("hosting/extension-v2/panel/prompt-library-firestore-client.js", context);
 
   const client = context.InovaBookmarks.promptLibraryFirestoreClient.create({
@@ -334,12 +340,12 @@ async function verifyLocalPromptLibraryAuthSessionPolicy() {
     "local hosted prompt firestore client는 stale emulator session 복원을 피하기 위해 NONE persistence를 사용해야 합니다."
   );
   assert.equal(
-    localStorage.getItem(`firebase:authUser:${apiKey}:inova-hosted-panel-prompt-library`),
+    localStorage.getItem(`firebase:authUser:${apiKey}:inova-hosted-panel`),
     null,
     "local hosted prompt firestore client는 stale auth user cache를 먼저 지워야 합니다."
   );
   assert.equal(
-    sessionStorage.getItem(`firebase:redirectUser:${apiKey}:inova-hosted-panel-prompt-library`),
+    sessionStorage.getItem(`firebase:redirectUser:${apiKey}:inova-hosted-panel`),
     null,
     "local hosted prompt firestore client는 stale redirect auth state도 같이 지워야 합니다."
   );
@@ -445,7 +451,7 @@ function createFakeFirebase(queryState) {
     firestore() {
       return fakeDb;
     },
-    name: "inova-hosted-panel-prompt-library",
+    name: "inova-hosted-panel",
   };
   return {
     apps: [],
@@ -457,6 +463,7 @@ function createFakeFirebase(queryState) {
         },
       },
     },
+    firestore: {},
     initializeApp() {
       this.apps.push(fakeApp);
       return fakeApp;

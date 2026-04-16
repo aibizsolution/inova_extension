@@ -7,6 +7,7 @@ const vm = require("vm");
 const {
   createPromptLibraryFirestoreNamespace,
   installHostedCapabilityClient,
+  installPanelUtils,
 } = require("./verify-prompt-library-test-helpers");
 const { verifyHostedPromptLibraryFirestoreClientContract } = require("./verify-prompt-library-firestore-client");
 
@@ -192,6 +193,7 @@ function createController(options = {}) {
       },
     },
   };
+  installPanelUtils(context);
   installHostedCapabilityClient(context);
   new vm.Script(controllerSource, {
     filename: "hosting/extension-v2/panel/prompt-library-controller.js",

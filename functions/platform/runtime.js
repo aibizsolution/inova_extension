@@ -3,6 +3,10 @@ const admin = require("firebase-admin");
 const { onRequest } = require("firebase-functions/v2/https");
 const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
+require("../shared/prompt-text-model");
+require("../shared/prompt-store-model");
+const promptTextModel = globalThis.InovaBookmarks.promptTextModel;
+const promptStoreModel = globalThis.InovaBookmarks.promptStoreModel;
 
 const FIREBASE_AUTH_SIGNING_SERVICE_ACCOUNT = process.env.FIREBASE_AUTH_SIGNING_SERVICE_ACCOUNT
   || "1027279095019-compute@developer.gserviceaccount.com";
@@ -29,33 +33,7 @@ const LOCAL_HOSTING_ORIGINS = [
 ];
 const HOSTED_MEETING_PAGE_URL = `${HOSTING_ORIGIN}/meeting/index.html`;
 const CORS_ORIGINS = [INOVA_ORIGIN, HOSTING_ORIGIN, ...LOCAL_HOSTING_ORIGINS];
-const STORE_CATEGORIES = [
-  { id: "document", label: "문서 작성" },
-  { id: "summary", label: "요약/정리" },
-  { id: "analysis", label: "분석/리서치" },
-  { id: "meeting", label: "회의/업무" },
-  { id: "translation", label: "번역" },
-  { id: "advertising", label: "광고/퍼포먼스" },
-  { id: "marketing", label: "마케팅" },
-  { id: "commerce", label: "커머스" },
-  { id: "sales", label: "세일즈" },
-  { id: "customer-success", label: "고객 성공/CS" },
-  { id: "hr", label: "HR/피플" },
-  { id: "finance", label: "재무/경영관리" },
-  { id: "code", label: "코딩" },
-  { id: "core-dev", label: "코어 개발" },
-  { id: "language-specialists", label: "언어/프레임워크" },
-  { id: "infrastructure", label: "인프라" },
-  { id: "quality-security", label: "품질/보안" },
-  { id: "data-ai", label: "데이터/AI" },
-  { id: "developer-experience", label: "개발 경험" },
-  { id: "specialized-domains", label: "전문 도메인" },
-  { id: "business-product", label: "비즈니스/프로덕트" },
-  { id: "meta-orchestration", label: "오케스트레이션" },
-  { id: "research-analysis", label: "리서치/분석" },
-  { id: "other", label: "기타" },
-];
-const STORE_CATEGORY_IDS = STORE_CATEGORIES.map((category) => category.id);
+const STORE_CATEGORIES = promptStoreModel.getDefaultStoreCategories();
 const MAX_TITLE_LENGTH = 120;
 const MAX_CONTENT_LENGTH = 12000;
 const VERIFIED_INOVA_IDENTITY_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -84,7 +62,6 @@ module.exports = {
   REGION,
   sendError,
   STORE_CATEGORIES,
-  STORE_CATEGORY_IDS,
   verifyInovaIdentity,
 };
 
@@ -191,10 +168,7 @@ function normalizeIdentity(identity) {
 }
 
 function normalizePromptContent(text) {
-  return String(text || "")
-    .replace(/\r\n/g, "\n")
-    .replace(/\u00a0/g, " ")
-    .trim();
+  return promptTextModel.normalizePromptContent(text);
 }
 
 function normalizeText(value) {

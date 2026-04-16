@@ -41,13 +41,8 @@
     `;
   }
 
-  function renderResult(result, review) {
+  function renderResult(result) {
     const scoreGuide = escapeHtml(result.scoreGuideText || "점수는 프롬프트 검토 결과를 요약한 참고값이에요.");
-    const copyLabel = review.copyState === "copied"
-      ? "복사됨"
-      : review.copyState === "failed"
-      ? "다시 시도"
-      : "복사";
     const formattedPrompt = escapeHtml(result.formattedPrompt || result.refinedPrompt);
     return `
       <div class="inova-prompt-review__summary">
@@ -74,9 +69,9 @@
       <section class="inova-prompt-review__field">
         <div class="inova-prompt-review__field-head">
           <span>보완 프롬프트</span>
-          <button type="button" class="inova-tool-button inova-tool-button--compact" data-prompt-action="copy-reviewed-prompt">${escapeHtml(copyLabel)}</button>
+          <button type="button" class="inova-tool-button inova-tool-button--compact" data-prompt-action="copy-reviewed-prompt">복사</button>
         </div>
-        <textarea rows="10" readonly>${formattedPrompt}</textarea>
+        <textarea rows="10" name="inova-reviewed-prompt" readonly>${formattedPrompt}</textarea>
       </section>
       ${renderChecks(result)}
     `;

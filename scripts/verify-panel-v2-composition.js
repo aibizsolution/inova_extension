@@ -18,6 +18,15 @@ function main() {
     path.join(root, "content", "panel-v2-composition-controller.js"),
     "utf8"
   );
+  const routeStateSource = fs.readFileSync(
+    path.join(root, "content", "route-state-controller.js"),
+    "utf8"
+  );
+  const shellBridgeSource = fs.readFileSync(
+    path.join(root, "content", "panel-v2-shell-bridge.js"),
+    "utf8"
+  );
+  verifyContentNormalizeTextUsesSharedSession();
 
   const mainContentScript = manifest.content_scripts.find((entry) =>
     Array.isArray(entry?.matches) && entry.matches.includes("https://inova.incross.com/*")
@@ -118,6 +127,41 @@ function main() {
     v2CompositionSource.includes("namespace.panelV2CompositionController = { create, createState };"),
     "v2 composition should export createState for the active bundle bootstrap"
   );
+  [
+    "activeId: \"\",",
+    "state.activeId =",
+    "panelDebugUi:",
+    "feedbackTimer:",
+    "uiPreferenceLock:",
+    "open: false,",
+    "preferredOpen:",
+    "activeTool:",
+    "getPromptCounts:",
+    "normalizeToolId:",
+  ].forEach((pattern) => assert(
+    !v2CompositionSource.includes(pattern),
+    `v2 composition state should drop unused hosted-owned/dead residue ${pattern}`
+  ));
+  assert(
+    !routeStateSource.includes("state.activeId ="),
+    "route state reset should not keep clearing hosted-owned activeId residue"
+  );
+  [
+    "PANEL_OPEN_KEY",
+    "sessionStorage",
+    "preferredOpen",
+    "persistOpen",
+  ].forEach((pattern) => assert(
+    !shellBridgeSource.includes(pattern),
+    `v2 shell bridge should not keep extension-side panel open persistence residue ${pattern}`
+  ));
+  [
+    "applyPanelOpen",
+    "readPreferredOpen",
+  ].forEach((pattern) => assert(
+    !routeStateSource.includes(pattern),
+    `route state reset should not own panel open state through ${pattern}`
+  ));
   assert(
     !v2CompositionSource.includes("namespace.meetingManager.create"),
     "v2 composition should not instantiate the legacy meeting manager once hosted meeting actions and lifecycle are detached"
@@ -188,6 +232,10 @@ function main() {
     "v2 composition should keep the active v2 prompt shell controller local once shell prompt sync sidecars are gone"
   );
   assert(
+    !/namespace\.panelV2PromptController\.create\(state,\s*\{[\s\S]*?(lockUiPreferenceSelection|persistActiveTool):/.test(v2CompositionSource),
+    "v2 prompt shell should not receive hosted-owned tool/tab persistence callbacks from extension composition"
+  );
+  assert(
     v2CompositionSource.includes("namespace.panelV2PromptController.create"),
     "v2 composition should wire the v2-only prompt controller instead of the legacy prompt runtime"
   );
@@ -204,16 +252,16 @@ function main() {
     "v2 composition should drop the idle release bridge once hosted release checks stay inside hosted ownership"
   );
   assert(
-    v2CompositionSource.includes("handlePanelToolSummarySync: handleToolSummarySync"),
-    "v2 bootstrap wiring should accept compact hosted tool summary sync callbacks"
+    !v2CompositionSource.includes("handlePanelToolSummarySync"),
+    "v2 bootstrap wiring should not accept hosted tool summary sync callbacks once hosted owns meeting/release counts"
   );
   assert(
-    v2CompositionSource.includes('const releaseToolSummarySnapshot = createReleaseToolSummarySnapshotBridge('),
-    "v2 render wiring should shape release state from the shared compact hosted tool summary helper"
+    !v2CompositionSource.includes("createReleaseToolSummarySnapshotBridge"),
+    "v2 composition should not shape hosted release state through an extension-side summary helper"
   );
   assert(
-    v2CompositionSource.includes("state.toolSummaries"),
-    "v2 composition should keep hosted-owned compact tool residue in a shared toolSummaries state bucket"
+    !v2CompositionSource.includes("state.toolSummaries"),
+    "v2 composition should not keep hosted-owned meeting/release residue in extension state"
   );
   assert(
     !v2CompositionSource.includes("state.releaseInfo"),
@@ -252,20 +300,48 @@ function main() {
     "v2 composition should not instantiate the legacy bookmark controller once the active bundle keeps conversation glue inline"
   );
   assert(
-    v2CompositionSource.includes("const conversationBridge = createConversationBridge(state, { render });"),
+    v2CompositionSource.includes("const conversationBridge = createConversationBridge(state);"),
     "v2 composition should keep the active conversation bridge inline instead of loading the legacy bookmark controller file"
   );
   assert(
     v2CompositionSource.includes("buildConversationSnapshot: conversationBridge.buildConversationSnapshot"),
     "v2 render wiring should pass the hosted-owned conversation snapshot bridge"
   );
+  [
+    "count: getConversationCount(),",
+    "snapshotFingerprint: buildSnapshotFingerprint(),",
+    "visibleMessageId: normalizeText(namespace.contentDom?.getVisibleMessageId?.(state.bookmarks)),",
+    "function getConversationCount(conversationSnapshot = null)",
+    "normalizeText(state.sessionId),",
+    "normalizeText(items[0]?.id),",
+    "normalizeText(items.at?.(-1)?.id),",
+  ].forEach((pattern) => assert(
+    v2CompositionSource.includes(pattern),
+    `v2 conversation bridge should keep compact snapshot residue for ${pattern}`
+  ));
+  [
+    "queries: { bookmarks: \"\" },",
+    "copyBookmarkText(bookmarkId)",
+    "jumpToBookmark(bookmarkId)",
+    "submitQuery(toolId, value)",
+    "updateQuery(toolId, value, options = {})",
+    "function getFilteredBookmarks()",
+    "query: state.queries.bookmarks,",
+    "items: getFilteredBookmarks(),",
+    "emptyText: buildEmptyText(filteredBookmarks),",
+    "metaText: buildStatusText(filteredBookmarks),",
+    "activeId: normalizeText(bookmarkTool.activeId)",
+  ].forEach((pattern) => assert(
+    !v2CompositionSource.includes(pattern),
+    `v2 conversation bridge should drop the hosted-owned extension residue ${pattern}`
+  ));
   assert(
-    v2CompositionSource.includes("createCountToolSummarySnapshotBridge"),
-    "v2 composition should wrap count-only hosted tool summary shaping for meeting state"
+    !v2CompositionSource.includes("createCountToolSummarySnapshotBridge"),
+    "v2 composition should not keep an extension-side count summary helper for hosted meeting state"
   );
   assert(
-    v2CompositionSource.includes('const meetingToolSummarySnapshot = createCountToolSummarySnapshotBridge('),
-    "v2 meeting snapshot bridge should derive snapshot state from the shared hosted tool summary helper without the legacy meeting manager"
+    !v2CompositionSource.includes("meetingToolSummarySnapshot"),
+    "v2 meeting snapshot bridge should be removed once hosted meeting count is owned by hosted"
   );
   assert(
     !v2CompositionSource.includes("state.meetingHub"),
@@ -284,24 +360,20 @@ function main() {
     "v2 composition should stop keeping hosted-owned meeting residue in a dedicated meetingSummary bucket"
   );
   assert(
-    v2CompositionSource.includes("toolSummaries: {"),
-    "v2 composition state should keep hosted-owned compact tool residue in a shared toolSummaries bucket"
+    !v2CompositionSource.includes("toolSummaries: {"),
+    "v2 composition state should not keep hosted-owned meeting/release residue in a shared toolSummaries bucket"
   );
   assert(
-    v2CompositionSource.includes('meeting: { count: 0 },'),
-    "v2 composition should keep hosted-owned meeting residue count-only inside toolSummaries.meeting"
-  );
-  assert(
-    v2CompositionSource.includes('release: { count: 0 },'),
-    "v2 composition should keep hosted-owned release residue count-only inside toolSummaries.release"
+    !v2CompositionSource.includes("tool-summary-sync"),
+    "v2 composition should not reference the removed tool-summary-sync bridge action"
   );
   assert(
     !v2CompositionSource.includes("function buildReleaseSnapshotFingerprint("),
     "v2 release summary bridge should stop carrying hosted release fingerprints once extension residue is count-only"
   );
   assert(
-    v2CompositionSource.includes("function normalizeToolSummaryCount(value)"),
-    "v2 composition should normalize compact hosted tool summary counts locally"
+    !v2CompositionSource.includes("function normalizeToolSummaryCount(value)"),
+    "v2 composition should not normalize hosted-owned meeting/release summary counts locally"
   );
   assert(
     !v2CompositionSource.includes("dataFreshness: normalizedMeetingTool.dataFreshness"),
@@ -312,24 +384,21 @@ function main() {
     "v2 meeting snapshot bridge should stop carrying hosted-owned meeting fingerprints once extension residue is count-only"
   );
   assert(
-    v2CompositionSource.includes("const toolSummarySnapshotBridges = {"),
-    "v2 composition should keep compact meeting/release render summary helpers in a shared tool summary bridge map"
+    !v2CompositionSource.includes("const toolSummarySnapshotBridges = {"),
+    "v2 composition should not keep compact meeting/release render summary helpers in extension"
   );
   assert(
-    v2CompositionSource.includes("buildToolSummarySnapshot(toolId) {"),
-    "v2 render wiring should request meeting/release snapshots through a shared tool summary callback"
+    !v2CompositionSource.includes("buildToolSummarySnapshot"),
+    "v2 render wiring should not request meeting/release snapshots from extension callbacks"
   );
   assert(
-    v2CompositionSource.includes("getToolSummaryCount(toolId, toolSummary) {"),
-    "v2 render wiring should request meeting/release rail counts through a shared tool summary callback"
+    !v2CompositionSource.includes("normalizeToolSummaryId"),
+    "v2 render wiring should not resolve removed tool summary bridge IDs"
   );
   assert(
-    v2CompositionSource.includes("toolSummarySnapshotBridges[normalizeToolSummaryId(toolId)]?.buildSnapshot?.() || {}"),
-    "v2 render wiring should resolve compact meeting/release snapshots from the shared tool summary bridge map"
-  );
-  assert(
-    v2CompositionSource.includes("toolSummarySnapshotBridges[normalizeToolSummaryId(toolId)]?.getCount?.(toolSummary) || 0"),
-    "v2 render wiring should resolve compact meeting/release rail counts from the shared tool summary bridge map"
+    !v2CompositionSource.includes("getToolSummaryCount(toolId, toolSummary)")
+      && !v2CompositionSource.includes("toolSummarySnapshotBridges[normalizeToolSummaryId(toolId)]?.getCount"),
+    "v2 composition should not pass hosted-owned rail count callbacks into extension shell render"
   );
   assert(
     !v2CompositionSource.includes("panelMeetingController.buildToolState?.(meetingHub)"),
@@ -346,16 +415,16 @@ function main() {
     `v2 composition should drop dead prompt shell sidecar residue ${pattern}`
   ));
   assert(
-    v2CompositionSource.includes("function handleToolSummarySync(toolId, toolState = {})"),
-    "v2 composition should route compact hosted tool summary sync callbacks through a shared dispatcher"
+    !v2CompositionSource.includes("function handleToolSummarySync("),
+    "v2 composition should not route hosted tool summary sync callbacks"
   );
   assert(
-    v2CompositionSource.includes("function normalizeToolSummary(toolId, toolSummary = {})"),
-    "v2 composition should normalize compact hosted meeting/release residue through a shared tool summary helper"
+    !v2CompositionSource.includes("function normalizeToolSummary("),
+    "v2 composition should not normalize hosted meeting/release residue"
   );
   assert(
-    v2CompositionSource.includes("function shouldUpdateToolSummary(toolSummaries, toolId, nextSummary)"),
-    "v2 composition should diff compact hosted meeting/release residue through a shared tool summary helper"
+    !v2CompositionSource.includes("function shouldUpdateToolSummary("),
+    "v2 composition should not diff hosted meeting/release residue in extension"
   );
   assert(
     !v2CompositionSource.includes("function buildHostedOwnedPanelCallbacks(deps = {})"),
@@ -379,6 +448,27 @@ function main() {
   );
 
   console.log("[verify-panel-v2-composition] V2 panel composition contract passed");
+}
+
+function verifyContentNormalizeTextUsesSharedSession() {
+  [
+    "content/composer.js",
+    "content/features/prompt-review/prompt-review-manager.js",
+    "content/frame-proxy-helper.js",
+    "content/hosted-panel-bridge.js",
+    "content/page-capability-router.js",
+    "content/panel-host-runtime.js",
+    "content/panel-v2-composition-controller.js",
+    "content/panel.js",
+    "content/route-state-controller.js",
+  ].forEach((relativePath) => {
+    const source = fs.readFileSync(path.join(root, relativePath), "utf8");
+    assert(
+      !source.includes("namespace.session?.normalizeText")
+        && !source.includes('String(value ?? "").trim()'),
+      `${relativePath} should use shared/session normalizeText instead of redefining the fallback`
+    );
+  });
 }
 
 main();

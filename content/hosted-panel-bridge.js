@@ -233,7 +233,7 @@
   async function handle(request, helpers = {}) {
     const normalizeText = typeof helpers.normalizeText === "function"
       ? helpers.normalizeText
-      : (value) => namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
+      : namespace.session.normalizeText;
     const callbacks = helpers.callbacks && typeof helpers.callbacks === "object"
       ? helpers.callbacks
       : {};
@@ -295,7 +295,7 @@
   async function handleRuntimeRequest(payload, helpers = {}) {
     const normalizeText = typeof helpers.normalizeText === "function"
       ? helpers.normalizeText
-      : (value) => namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
+      : namespace.session.normalizeText;
 
     if (!global.chrome?.runtime?.sendMessage) {
       throw new Error("확장 런타임에 연결할 수 없어요.");
@@ -316,124 +316,26 @@
   async function handlePanelRequest(payload, callbacks, helpers = {}) {
     const normalizeText = typeof helpers.normalizeText === "function"
       ? helpers.normalizeText
-      : (value) => namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
+      : namespace.session.normalizeText;
     const action = normalizeText(payload?.action);
-    const handledSummaryRequest = await handlePanelSummaryRequest(action, payload, callbacks, {
-      normalizeText,
-    });
-    if (handledSummaryRequest?.handled) {
-      return handledSummaryRequest;
-    }
-
-    const handledConversationRequest = await handleConversationRequest(action, payload, callbacks, {
-      normalizeText,
-    });
-    if (handledConversationRequest?.handled) {
-      return handledConversationRequest;
-    }
-
-    return handleShellRequest(action, payload, callbacks, {
-      normalizeText,
-    });
+    return handleShellRequest(action, payload, callbacks);
   }
 
-  function handlePanelSummaryRequest(action, payload, callbacks, helpers = {}) {
-    const normalizeText = typeof helpers.normalizeText === "function"
-      ? helpers.normalizeText
-      : (value) => namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
-    if (action === "tool-summary-sync") {
-      if (typeof callbacks.onToolSummarySync !== "function") {
-        return Promise.resolve({
-          handled: false,
-          result: null,
-        });
+  function handleShellRequest(action, payload, callbacks) {
+    if (action === "panel-chrome-sync") {
+      const chromeState = {
+        handleCount: Math.max(0, Number(payload?.handleCount) || 0),
+      };
+      if (Object.hasOwn(payload || {}, "open")) {
+        chromeState.open = payload.open === true;
       }
-      const toolId = normalizeText(payload?.toolId);
-      const toolState = payload?.toolState && typeof payload.toolState === "object"
-        ? payload.toolState
-        : {};
-      return Promise.resolve(callbacks.onToolSummarySync?.(toolId, toolState)).then(() => ({
+      if (Object.hasOwn(payload || {}, "visible")) {
+        chromeState.visible = payload.visible === true;
+      }
+      callbacks.onPanelChromeSync?.(chromeState);
+      return Promise.resolve({
         handled: true,
         result: { handled: true },
-      }));
-    }
-
-    return Promise.resolve({
-      handled: false,
-      result: null,
-    });
-  }
-
-  function handleConversationRequest(action, payload, callbacks, helpers = {}) {
-    const normalizeText = typeof helpers.normalizeText === "function"
-      ? helpers.normalizeText
-      : (value) => namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
-
-    if (action === "bookmark-copy") {
-      return Promise.resolve(callbacks.onCopyBookmark?.(normalizeText(payload?.bookmarkId))).then((copied) => ({
-        handled: true,
-        result: { copied: Boolean(copied) },
-      }));
-    }
-
-    if (action === "bookmark-jump") {
-      callbacks.onJumpBookmark?.(normalizeText(payload?.bookmarkId));
-      return Promise.resolve({
-        handled: true,
-        result: { jumped: true },
-      });
-    }
-
-    return Promise.resolve({
-      handled: false,
-      result: null,
-    });
-  }
-
-  function handleShellRequest(action, payload, callbacks, helpers = {}) {
-    const normalizeText = typeof helpers.normalizeText === "function"
-      ? helpers.normalizeText
-      : (value) => namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
-
-    if (action === "toggle-panel") {
-      callbacks.onToggle?.(payload?.open);
-      return Promise.resolve({
-        handled: true,
-        result: { open: payload?.open !== false },
-      });
-    }
-
-    if (action === "escape") {
-      const consumed = Boolean(callbacks.onEscape?.());
-      if (!consumed) {
-        callbacks.onToggle?.(false);
-      }
-      return Promise.resolve({
-        handled: true,
-        result: { consumed },
-      });
-    }
-
-    if (action === "select-tool") {
-      return Promise.resolve(callbacks.onSelectTool?.(normalizeText(payload?.toolId))).then((selected) => ({
-        handled: true,
-        result: { selected: Boolean(selected) },
-      }));
-    }
-
-    if (action === "search") {
-      callbacks.onSearch?.(normalizeText(payload?.toolId), String(payload?.value || ""), payload?.options || {});
-      return Promise.resolve({
-        handled: true,
-        result: { searched: true },
-      });
-    }
-
-    if (action === "search-submit") {
-      callbacks.onSearchSubmit?.(normalizeText(payload?.toolId), String(payload?.value || ""));
-      return Promise.resolve({
-        handled: true,
-        result: { submitted: true },
       });
     }
 

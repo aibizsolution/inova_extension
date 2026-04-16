@@ -14,7 +14,7 @@
   function renderBody(state) {
     const showEmptyState = !state.items.length && !state.editor?.open && !state.importReview;
     const hasInlineFeedback = state.feedback?.promptId && state.items.some((item) => item.id === state.feedback.promptId);
-    const metaText = state.loading ? "불러오는 중" : `총 ${state.totalCount}개`;
+    const showStandaloneEditor = state.editor?.open && state.editor.mode !== "edit";
     const itemsHtml = state.items.length
       ? state.items.map((item) => renderPromptItem(item, state)).join("")
       : state.loading
@@ -28,12 +28,12 @@
         <input
           class="inova-tool-search"
           type="search"
+          name="inova-prompt-search"
           value="${escapeHtml(state.query)}"
           data-search-tool="prompts"
           placeholder="내 요청 찾기"
         />
         <div class="inova-tool-toolbar__row">
-          <div class="inova-tool-meta">${metaText}</div>
           <div class="inova-tool-actions inova-tool-actions--toolbar">
             <button type="button" class="inova-tool-button is-primary" data-prompt-action="create">추가</button>
             ${renderToolbarActionWithHelp("import", "가져오기", IMPORT_GUIDE_TEXT)}
@@ -44,7 +44,7 @@
       ${renderSyncNotice(state.syncNotice)}
       ${hasInlineFeedback ? "" : renderFeedback(state.feedback)}
       ${renderImportReview(state.importReview)}
-      ${renderEditor(state.editor)}
+      ${showStandaloneEditor ? renderEditor(state.editor) : ""}
       <div class="inova-prompt-list">${itemsHtml}</div>
     `;
   }
@@ -63,16 +63,23 @@
   }
 
   function renderPromptItem(item, state) {
-    const menuOpen = state.menuPromptId === item.id;
     const deleteConfirm = state.deletePromptId === item.id;
     const pendingInsert = state.pendingInsert?.promptId === item.id;
     const itemFeedback = state.feedback?.promptId === item.id ? state.feedback : null;
+    const editorOpen = state.editor?.open && state.editor.mode === "edit" && state.editor.id === item.id;
     const publishOpen = state.publishPromptId === item.id;
     const deletePending = state.actionPending?.type === "delete" && state.actionPending.promptId === item.id;
     const publishPending = state.actionPending?.type === "publish" && state.actionPending.promptId === item.id;
+    const actionsDisabled = deletePending || publishPending;
 
     return `
-      <article class="inova-prompt-item" data-prompt-id="${item.id}">
+      <article
+        class="inova-prompt-item"
+        data-prompt-card="true"
+        data-prompt-id="${item.id}"
+        tabindex="0"
+        aria-label="${escapeHtml(`${item.title} 입력창에 넣기`)}"
+      >
         <div class="inova-prompt-item__head">
           <div class="inova-prompt-item__title-row">
             <button
@@ -83,23 +90,13 @@
               title="드래그해서 순서를 바꿀 수 있어요"
             >⋮⋮</button>
             <strong class="inova-prompt-item__title">${escapeHtml(item.title)}</strong>
-          </div>
-          <div class="inova-prompt-item__meta">
-            <span class="inova-prompt-item__date">${formatDate(item.updatedAt)}</span>
-            <button type="button" class="inova-tool-button inova-tool-button--compact" data-prompt-action="toggle-menu" data-prompt-id="${item.id}" ${renderDisabled(deletePending || publishPending)}>
-              ${menuOpen ? "닫기" : "관리"}
-            </button>
+            ${renderPromptMenu(item.id, actionsDisabled)}
           </div>
         </div>
         <p class="inova-prompt-item__content">${escapeHtml(item.content)}</p>
-        <div class="inova-prompt-item__actions">
-          <button type="button" class="inova-tool-button is-primary" data-prompt-action="use" data-prompt-id="${item.id}">
-            입력창에 넣기
-          </button>
-        </div>
+        ${editorOpen ? renderEditor(state.editor) : ""}
         ${itemFeedback ? renderFeedback(itemFeedback) : ""}
         ${pendingInsert ? renderPendingInsert() : ""}
-        ${menuOpen ? renderPromptMenu(item.id, deletePending || publishPending) : ""}
         ${publishOpen ? renderPublishForm(
           item.id,
           state.storeCategories,
@@ -117,11 +114,33 @@
 
   function renderPromptMenu(promptId, disabled) {
     return `
-      <div class="inova-prompt-item__menu" data-prompt-menu>
-        <button type="button" class="inova-tool-button" data-prompt-action="edit" data-prompt-id="${promptId}" ${renderDisabled(disabled)}>수정</button>
-        <button type="button" class="inova-tool-button" data-prompt-action="open-publish" data-prompt-id="${promptId}" ${renderDisabled(disabled)}>스토어 등록</button>
-        <button type="button" class="inova-tool-button is-danger" data-prompt-action="request-delete" data-prompt-id="${promptId}" ${renderDisabled(disabled)}>삭제</button>
-      </div>
+      <details class="inova-prompt-item__menu" data-prompt-menu="true">
+        <summary class="inova-tool-button inova-tool-icon-button inova-prompt-item__menu-trigger" aria-label="요청 메뉴" title="요청 메뉴">
+          <span aria-hidden="true">…</span>
+          <span class="inova-sr-only">요청 메뉴</span>
+        </summary>
+        <div class="inova-prompt-item__menu-popover" role="menu" aria-label="요청 작업">
+          ${renderPromptMenuItem("edit", promptId, "edit", "수정", disabled)}
+          ${renderPromptMenuItem("open-publish", promptId, "publish", "스토어 등록", disabled)}
+          ${renderPromptMenuItem("request-delete", promptId, "delete", "삭제", disabled, true)}
+        </div>
+      </details>
+    `;
+  }
+
+  function renderPromptMenuItem(action, promptId, icon, label, disabled, danger = false) {
+    return `
+      <button
+        type="button"
+        class="inova-prompt-item__menu-item ${danger ? "is-danger" : ""}"
+        data-prompt-action="${escapeHtml(action)}"
+        data-prompt-id="${escapeHtml(promptId)}"
+        role="menuitem"
+        ${renderDisabled(disabled)}
+      >
+        <span class="inova-tool-inline-icon is-${escapeHtml(icon)}" aria-hidden="true"></span>
+        <span>${escapeHtml(label)}</span>
+      </button>
     `;
   }
 
@@ -136,6 +155,7 @@
           <span>스토어 제목</span>
           <input
             type="text"
+            name="inova-prompt-publish-title"
             value="${escapeHtml(publishTitle || "")}"
             data-prompt-publish-field="title"
             data-prompt-id="${promptId}"
@@ -145,7 +165,7 @@
         </label>
         <label class="inova-tool-select-field">
           <span>카테고리 선택</span>
-          <select class="inova-tool-select" data-prompt-select="publish-category" data-prompt-id="${promptId}" ${renderDisabled(pending)}>
+          <select class="inova-tool-select" name="inova-prompt-publish-category" data-prompt-select="publish-category" data-prompt-id="${promptId}" ${renderDisabled(pending)}>
             ${storeCategories.map((category) => `
               <option value="${category.id}" ${category.id === activeCategoryId ? "selected" : ""}>${escapeHtml(category.label)}</option>
             `).join("")}
@@ -157,6 +177,7 @@
             <span>새 카테고리 이름</span>
             <input
               type="text"
+              name="inova-prompt-publish-category-label"
               value="${escapeHtml(publishCategoryLabel || "")}"
               data-prompt-publish-field="category-label"
               data-prompt-id="${promptId}"
@@ -211,6 +232,7 @@
             <span>이름</span>
             <input
               type="text"
+              name="inova-prompt-title"
               value="${escapeHtml(editor.title)}"
               data-prompt-field="title"
               placeholder="예: 회의록 정리"
@@ -219,7 +241,7 @@
           </label>
           <label class="inova-prompt-field">
             <span>본문</span>
-            <textarea rows="7" data-prompt-field="content" placeholder="입력창에 바로 넣을 요청을 적어 주세요." ${renderDisabled(pending)}>${escapeHtml(editor.content)}</textarea>
+            <textarea rows="7" name="inova-prompt-content" data-prompt-field="content" placeholder="입력창에 바로 넣을 요청을 적어 주세요." ${renderDisabled(pending)}>${escapeHtml(editor.content)}</textarea>
           </label>
         </div>
         ${editor.error ? `<p class="inova-inline-feedback is-error">${escapeHtml(editor.error)}</p>` : ""}
@@ -234,7 +256,7 @@
   function renderPendingInsert() {
     return `
       <section class="inova-inline-feedback">
-        <span>입력창에 내용이 이미 있어요. 어떻게 넣을지 선택해 주세요.</span>
+        <span>입력창에 내용이 이미 있어요. 어떻게 할까요?</span>
         <div class="inova-tool-actions">
           <button type="button" class="inova-tool-button is-primary" data-prompt-action="confirm-insert" data-insert-mode="replace">덮어쓰기</button>
           <button type="button" class="inova-tool-button" data-prompt-action="confirm-insert" data-insert-mode="append">이어붙이기</button>
@@ -325,18 +347,6 @@
     if (mode === "add") return "겹치는 항목은 건너뛰고 새로운 요청만 추가해요.";
     if (mode === "merge") return "같은 요청은 덮어쓰고, 없는 요청은 새로 추가해요.";
     return "현재 보관함을 비우고 가져온 요청 묶음으로 바꿔요.";
-  }
-
-  function formatDate(value) {
-    const time = Date.parse(value || "");
-    if (!time) {
-      return "";
-    }
-
-    return new Intl.DateTimeFormat("ko-KR", {
-      month: "numeric",
-      day: "numeric",
-    }).format(time);
   }
 
   function escapeHtml(text) {

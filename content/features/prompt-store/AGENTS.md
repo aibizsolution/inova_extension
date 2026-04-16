@@ -19,6 +19,8 @@
 - `content/panel-v2-prompt-controller.js` - v2 prompt review handoff + minimal prompt snapshot shell
 - `content/main.js` - panel shell composition root, prompt shell 직접 구현 금지
 - `hosting/extension-v2/panel/prompt-store-controller.js` - hosted panel store state/action ownership
+- `hosting/extension-v2/panel/prompt-store-model.js` - hosted deploy copy of the shared store model
+- `functions/shared/prompt-store-model.js` - functions deploy copy of the same store model; must stay byte-for-byte aligned with hosted copy
 - `hosting/extension-v2/panel/store-view.js` - hosted panel store view
 - `hosting/extension-v2/panel/prompt-tool-view.js` - hosted panel prompt tool shell view
 - `backup/legacy-panel/prompt-hub-state.js` - inactive legacy prompt shell reference
@@ -65,3 +67,5 @@
 - popup의 `settings.meetingWorkspaceTarget=local`을 고르면 prompt-store도 local full-stack rehearsal로 같이 전환돼야 한다. local target은 계속 `http://127.0.0.1:5000/extension/prompt-panel-bridge.html`을 향하지만, 실제 페이지 DOM의 hidden prompt bridge iframe은 `content/frame-proxy.html?target=...` wrapper를 거쳐 page CSP를 우회한다. prompt panel auth/read/write는 local Functions/Auth/Firestore emulator 경로를 써야 한다.
 - local Firestore에 공개 스토어 문서가 아직 없어도 `store-latest` 최초 스냅샷은 빈 목록으로 한 번 전달돼야 한다. 빈 로컬 스토어를 perpetual loading으로 숨기지 않는다.
 - `내 요청으로 가져오기`는 local-first helper로 성공처럼 처리하면 안 된다. prompt-library가 DB 정본일 때는 remote prompt-library mutation이 server-ack 되고 remote reload가 끝난 뒤에만 prompt 탭 state를 갱신한다.
+- hosted v2 스토어 목록 read path는 Functions list가 아니라 Firestore direct read/subscription이 기본이다. 조회수, 좋아요, 가져오기 수 같은 metrics mutation은 `prompt_store_entries`를 갱신하므로 목록 UI도 published entry 문서를 직접 읽어 최신 metrics를 표시해야 한다.
+- prompt-store entry/category/metrics/score/sort 정규화는 `prompt-store-model.js` deploy copy가 소유한다. Firebase 배포 루트가 `hosting`과 `functions`로 분리되어 있으므로 hosted copy와 functions copy를 둘 다 두되, `scripts/verify-prompt-store-model.js`가 byte-for-byte 동일성과 Functions 위임을 검증한다.

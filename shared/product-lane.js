@@ -24,14 +24,7 @@
         originUrl: DEFAULT_LEGACY_HOSTING_ORIGIN,
       }),
       prompt: Object.freeze({
-        firestoreCollections: Object.freeze({
-          accountsCollection: "integration_inova_accounts",
-          promptLibraryChunksCollection: "prompt_library_chunks",
-          promptLibraryOrdersCollection: "prompt_library_orders",
-          storeDetailCollection: "prompt_store_entry_details",
-          storeFeedCollection: "prompt_store_feed_pages",
-          storeSummaryCollection: "prompt_store_meta",
-        }),
+        firestoreCollections: Object.freeze(getPromptFirestoreCollections(LEGACY_LANE)),
         panelScope: "prompt-panel",
       }),
       storagePrefix: STORAGE_PREFIX_BY_LANE[LEGACY_LANE],
@@ -42,14 +35,7 @@
         originUrl: DEFAULT_V2_HOSTING_ORIGIN,
       }),
       prompt: Object.freeze({
-        firestoreCollections: Object.freeze({
-          accountsCollection: "integration_inova_accounts_v2",
-          promptLibraryChunksCollection: "prompt_library_chunks_v2",
-          promptLibraryOrdersCollection: "prompt_library_orders_v2",
-          storeDetailCollection: "prompt_store_entry_details",
-          storeFeedCollection: "prompt_store_feed_pages",
-          storeSummaryCollection: "prompt_store_meta",
-        }),
+        firestoreCollections: Object.freeze(getPromptFirestoreCollections(V2_LANE)),
         panelScope: "prompt-panel-v2",
       }),
       storagePrefix: STORAGE_PREFIX_BY_LANE[V2_LANE],
@@ -141,6 +127,10 @@
 
   function getKnownLanes() {
     return KNOWN_LANES.slice();
+  }
+
+  function getPromptFirestoreCollections(lane) {
+    return namespace.firestoreCollections?.getPromptFirestoreCollections?.(lane) || {};
   }
 
   function cloneValue(value) {

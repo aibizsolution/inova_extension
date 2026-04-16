@@ -54,11 +54,18 @@
 
 - 현재 공개 기준선은 `0.4.4`, 다음 공개 릴리스 목표는 hosted-first `1.0.0`이다.
 - 구조 migration이 거의 끝난 뒤에는 작은 shell refactor보다 실제 Chrome smoke와 release rehearsal이 우선이다.
-- `1.0.0` 공개 직전 최소 기준은 아래다.
+- active extension bundle에서 새 legacy reload blocker가 보이지 않으면, 추가 cleanup refactor를 늘리기보다 검증과 release rehearsal을 진행한다.
+- 이 단계의 Chrome smoke와 release-go 판단은 수동 운영 게이트로 봐도 된다. 새 코드 작업은 그 검증에서 실제 이슈가 나올 때만 다시 연다.
+- `1.0.0 공개 ready` 최소 기준은 아래다.
   - `npm.cmd run verify` green
   - 실제 Chrome에서 hosted v2 panel boot, prompt library/store/review, meeting hub/workspace launch, release latest/history/download smoke 기록 확보
   - `release:build` 또는 동등한 release rehearsal에서 lane-local `latest.json`, `history.json`, `downloads/latest.zip`, version ZIP, `releases/release-notes.json` curated metadata가 함께 맞는지 확인
   - 사용자 공지에 `hosting 반영`, `새 ZIP 배포`, `확장 reload 필요 여부`, `rollback ZIP`이 함께 정리됨
+- `0.4.4 retirement extension-patch risk`는 별도 체크다.
+  - 나중에 `0.4.4` 사용자가 0명이 되면, `0.4.4` retirement 때문에 extension patch나 새 ZIP이 필요하지 않아야 한다.
+  - 이 체크는 active extension bundle이 `0.4.4` 전용 module/asset/runtime surface를 다시 싣는지만 본다.
+  - server-side hosting/functions compat cleanup은 별도 follow-up으로 남아 있어도 된다.
+  - 공개 시점에 이 조건이 아직 미완료면, 배포 보고와 handoff에 extension-side blocker만 남긴다.
 
 ## 배포 보고 형식
 
@@ -66,6 +73,7 @@
 - `hosting 반영 여부`
 - `새 ZIP 배포 여부`
 - `사용자/개발자 reload 필요 여부`
+- `0.4.4 retirement extension-patch risk`
 - `rollback 시 사용할 이전 ZIP`
 - `혼재 버전 허용 기간 또는 주의사항`
 
@@ -74,6 +82,7 @@
 - `hosting만 반영됨. 회의 작업실 새로고침 필요, ZIP 재배포는 없음`
 - `functions만 반영됨. 새 요청부터 backend 반영, ZIP 재배포는 없음`
 - `확장 번들 변경 포함. release:build/release:deploy 필요, 사용자 reload와 새 ZIP 안내 필요`
+- `1.0.0 공개는 ready지만 extension-patch risk audit은 아직 미완료. active bundle legacy reload 여부를 handoff에 남김`
 
 ## 명령
 

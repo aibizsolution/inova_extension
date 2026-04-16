@@ -20,6 +20,8 @@ async function main() {
   verifyHostedPanelImeCompositionGuard();
   verifyHostedMeetingActionCompletionTraceContract();
   verifyHostedStartupStatusCardDelayContract();
+  verifyHostedPanelChromeSyncContract();
+  verifyHostedNormalizeTextUsesPanelUtils();
   verifyHostedMeetingSummarySyncContract();
   verifyHostedMeetingSnapshotSyncGuardContract();
   verifyHostedMeetingVisibilityRecoveryContract();
@@ -124,6 +126,10 @@ function verifyHostedMeetingSummarySyncContract() {
     path.join(root, "hosting", "extension-v2", "panel", "index.js"),
     "utf8"
   );
+  const meetingControllerSource = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "meeting-hub-controller.js"),
+    "utf8"
+  );
   const bridgeRequestSource = fs.readFileSync(
     path.join(root, "content", "hosted-panel-bridge.js"),
     "utf8"
@@ -134,16 +140,23 @@ function verifyHostedMeetingSummarySyncContract() {
   );
 
   assert(
-    hostedPanelSource.includes('syncTopPanelSummary: (meetingTool = {}) => syncToolSummary("meeting", meetingTool),'),
-    "hosted meeting hub should be able to sync a compact summary back to the top panel"
+    !hostedPanelSource.includes("syncTopPanelSummary")
+      && !hostedPanelSource.includes('syncToolSummary("meeting"'),
+    "hosted meeting hub should not sync hosted-owned counts back through the top panel"
   );
   assert(
-    bridgeRequestSource.includes('if (action === "tool-summary-sync") {'),
-    "top panel bridge should accept hosted meeting summary sync requests through the shared hosted bridge helper"
+    !bridgeRequestSource.includes('if (action === "tool-summary-sync")'),
+    "top panel bridge should not accept removed hosted meeting summary sync requests"
   );
   assert(
-    bootstrapSource.includes("onToolSummarySync: handlePanelToolSummarySync"),
-    "panel bootstrap should forward hosted meeting summary sync callbacks into the top-panel bridge"
+    !bootstrapSource.includes("onToolSummarySync")
+      && !bootstrapSource.includes("handlePanelToolSummarySync"),
+    "panel bootstrap should not forward hosted meeting summary sync callbacks into the top-panel bridge"
+  );
+  assert(
+    !meetingControllerSource.includes("syncTopPanelSummary")
+      && !meetingControllerSource.includes("emitTopPanelSummary"),
+    "hosted meeting controller should keep count state local instead of echoing it through extension"
   );
   assert(
     hostedPanelSource.includes("return meetingHubController.buildViewState();"),
@@ -164,6 +177,109 @@ function verifyHostedPromptTabOwnershipContract() {
   assert(
     !hostedPanelSource.includes('action: "prompt-tab-select"'),
     "v2 hosted prompt tab selection should not fall back to the top-panel prompt-tab-select request path"
+  );
+  assert(
+    hostedPanelSource.includes("function normalizePanelSnapshot(panel)"),
+    "hosted panel should normalize incoming raw panel snapshots before rendering"
+  );
+  assert(
+    hostedPanelSource.includes("activeTool: normalizeHostedToolId(nextPanel.activeTool || uiPreferences.activeTool),"),
+    "hosted panel should derive activeTool from snapshot uiPreferences when the top panel no longer sends it as a view field"
+  );
+}
+
+function verifyHostedNormalizeTextUsesPanelUtils() {
+  [
+    "base-firestore-client.js",
+    "conversation-controller.js",
+    "extension-capability-client.js",
+    "index.js",
+    "meeting-firestore-client.js",
+    "meeting-hub-controller.js",
+    "panel-firestore-session-client.js",
+    "panel-utils.js",
+    "prompt-library-controller.js",
+    "prompt-library-firestore-client.js",
+    "prompt-library-model.js",
+    "prompt-review-controller.js",
+    "prompt-store-controller.js",
+    "prompt-store-firestore-client.js",
+    "release-controller.js",
+  ].forEach((fileName) => {
+    const source = fs.readFileSync(
+      path.join(root, "hosting", "extension-v2", "panel", fileName),
+      "utf8"
+    );
+    assert(
+      !source.includes("namespace.panelUtils?.normalizeText")
+        && !source.includes("namespace.session?.normalizeText")
+        && !source.includes('String(value ?? "").trim()'),
+      `${fileName} should use the shared hosted/session normalizeText contract instead of redefining the fallback`
+    );
+  });
+}
+
+function verifyHostedPanelChromeSyncContract() {
+  const hostedPanelSource = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "index.js"),
+    "utf8"
+  );
+  const bridgeRequestSource = fs.readFileSync(
+    path.join(root, "content", "hosted-panel-bridge.js"),
+    "utf8"
+  );
+  const shellBridgeSource = fs.readFileSync(
+    path.join(root, "content", "panel-v2-shell-bridge.js"),
+    "utf8"
+  );
+
+  assert(
+    hostedPanelSource.includes("function syncPanelChromeIfNeeded(chromeState = {})"),
+    "hosted panel should own top panel chrome sync decisions"
+  );
+  assert(
+    hostedPanelSource.includes('action: "panel-chrome-sync"'),
+    "hosted panel should send handle count updates through panel-chrome-sync"
+  );
+  assert(
+    hostedPanelSource.includes("handleCount: effectiveToolCount"),
+    "hosted panel should sync the effective active tool count to the top handle"
+  );
+  assert(
+    hostedPanelSource.includes("open: panelState.open")
+      && hostedPanelSource.includes("function setHostedPanelOpen(nextOpen)")
+      && hostedPanelSource.includes("function buildEffectivePanelState(panelSnapshot)"),
+    "hosted panel should own panel open state and sync it to the top host chrome"
+  );
+  assert(
+    hostedPanelSource.includes("writeUiPreferences({ panelOpen: open === true })")
+      && !hostedPanelSource.includes("persistOpen"),
+    "hosted panel should persist open through hosted-owned uiPreferences instead of content chrome sync persistence"
+  );
+  assert(
+    hostedPanelSource.includes("if (!panelSnapshot || state.panelOpenHydrated)")
+      && !hostedPanelSource.includes("panelSnapshot.visible === true"),
+    "hosted panel should accept content snapshot open only as the initial hydration seed"
+  );
+  assert(
+    hostedPanelSource.includes('action === "external-toggle"'),
+    "hosted panel should own external handle toggle events instead of letting content calculate open state"
+  );
+  assert(
+    bridgeRequestSource.includes('if (action === "panel-chrome-sync")'),
+    "top panel bridge should accept hosted panel chrome sync requests"
+  );
+  assert(
+    !bridgeRequestSource.includes("persistOpen"),
+    "top panel bridge should not carry panel open persistence flags after hosted owns uiPreferences persistence"
+  );
+  assert(
+    shellBridgeSource.includes("onPanelChromeSync(chromeState)"),
+    "v2 shell bridge should expose a compact panel chrome sync callback"
+  );
+  assert(
+    !shellBridgeSource.includes("buildHandleCount"),
+    "v2 shell bridge should not keep hosted-owned handle count calculation"
   );
 }
 
@@ -224,6 +340,22 @@ function verifyHostedConversationSearchDebounceContract() {
   assert(
     conversationControllerSource.includes("const explicitFingerprint = normalizeText(bookmarksTool?.snapshotFingerprint);"),
     "hosted conversation controller should accept a compact snapshot fingerprint from the top panel"
+  );
+  assert(
+    !conversationControllerSource.includes("SNAPSHOT_REFRESH_INTERVAL_MS = 10000"),
+    "hosted conversation controller should not keep the old 10s snapshot refresh throttle"
+  );
+  assert(
+    conversationControllerSource.includes("SNAPSHOT_REFRESH_DEBOUNCE_MS = 120"),
+    "hosted conversation controller should coalesce snapshot changes through a short debounce"
+  );
+  assert(
+    conversationControllerSource.includes("pendingRefreshAfterLoad: false"),
+    "hosted conversation controller should track a queued refresh while a snapshot read is in flight"
+  );
+  assert(
+    conversationControllerSource.includes("state.pendingRefreshAfterLoad = true;"),
+    "hosted conversation controller should queue a follow-up read instead of dropping snapshot changes during an active load"
   );
 }
 
@@ -326,20 +458,22 @@ function verifyHostedReleaseSummarySyncContract() {
   );
 
   assert(
-    hostedPanelSource.includes('syncTopPanelSummary: (releaseTool = {}) => syncToolSummary("release", releaseTool),'),
-    "hosted release controller should be able to sync a compact release summary back to the top panel"
+    !hostedPanelSource.includes("syncTopPanelSummary")
+      && !hostedPanelSource.includes('syncToolSummary("release"'),
+    "hosted release controller should not sync hosted-owned counts back through the top panel"
   );
   assert(
     !hostedPanelSource.includes('action: "release-action"'),
     "v2 hosted release actions should not fall back to the top-panel release-action request path"
   );
   assert(
-    releaseControllerSource.includes("await emitTopPanelSummary();"),
-    "hosted release controller should emit a compact top-panel summary after release checks settle"
+    !releaseControllerSource.includes("emitTopPanelSummary")
+      && !releaseControllerSource.includes("syncTopPanelSummary"),
+    "hosted release controller should keep release summary state local"
   );
   assert(
-    bridgeRequestSource.includes('if (action === "tool-summary-sync") {'),
-    "top panel bridge should accept hosted release summary sync requests through the shared hosted bridge helper"
+    !bridgeRequestSource.includes('if (action === "tool-summary-sync")'),
+    "top panel bridge should not accept removed hosted release summary sync requests"
   );
 }
 
@@ -408,6 +542,12 @@ async function verifyHostedReleaseLocalDownloadUrls() {
   };
 
   new vm.Script(
+    fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "panel-utils.js"), "utf8"),
+    {
+      filename: "hosting/extension-v2/panel/panel-utils.js",
+    }
+  ).runInContext(context);
+  new vm.Script(
     fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "extension-capability-client.js"), "utf8"),
     {
       filename: "hosting/extension-v2/panel/extension-capability-client.js",
@@ -452,15 +592,13 @@ async function verifyHostedReleaseLocalDownloadUrls() {
   );
 
   await controller.handleReleaseAction("download-latest");
-  await controller.handleReleaseAction("download-version", { version: "0.4.4" });
 
   assert.deepEqual(
     runtimeCalls.map((call) => [call.action, call.url]),
     [
       ["browser.open-url", "http://127.0.0.1:5000/extension-v2/downloads/latest.zip"],
-      ["browser.open-url", "http://127.0.0.1:5000/extension-v2/downloads/inova-extension-0.4.4.zip"],
     ],
-    "local hosted release downloads should open local artifact URLs"
+    "local hosted release should open the latest local artifact URL"
   );
 }
 

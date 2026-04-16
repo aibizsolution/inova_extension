@@ -40,6 +40,11 @@ const requiredFiles = [
   path.join("hosting", "extension", "panel", "index.js"),
   path.join("hosting", "extension", "panel", "runtime.js"),
   path.join("hosting", "extension", "panel", "prompt-hub-panel.js"),
+  path.join("hosting", "extension-v2", "panel", "base-firestore-client.js"),
+  path.join("hosting", "extension-v2", "panel", "prompt-text-model.js"),
+  path.join("hosting", "extension-v2", "panel", "prompt-store-model.js"),
+  path.join("functions", "shared", "prompt-text-model.js"),
+  path.join("functions", "shared", "prompt-store-model.js"),
   path.join("hosting", "extension-v2", "panel", "prompt-tool-panel.js"),
   path.join("scripts", "install-git-hooks.js"),
   path.join("backup", "legacy-panel", "shared", "prompt-cloud-sync.js"),
@@ -66,6 +71,7 @@ const requiredFiles = [
   path.join("scripts", "legacy-panel", "verify-meeting-manager.js"),
   path.join("scripts", "legacy-panel", "verify-meeting-state.js"),
   path.join("scripts", "verify-prompt-library-remote-first.js"),
+  path.join("scripts", "verify-prompt-store-model.js"),
   path.join("scripts", "verify-prompt-runtime-local.js"),
   path.join("scripts", "verify-prompt-review.js"),
   path.join("scripts", "verify-route-state-controller.js"),
@@ -77,6 +83,7 @@ const requiredFiles = [
   "content/panel-host-bridge.js",
   "content/panel-host-view.js",
   "content/hosted-panel-bridge.js",
+  "shared/firestore-collections.js",
   "shared/product-lane.js",
   "backup/legacy-panel/panel-bookmark-controller.js",
   "backup/legacy-panel/panel-debug-controller.js",
@@ -254,6 +261,7 @@ const codeChecks = [
     patterns: [
       /"default_popup"\s*:\s*"popup\/index\.html"/,
       /"shared\/constants\.js"/,
+      /"shared\/firestore-collections\.js"/,
       /"content\/hosted-panel-bridge\.js"/,
       /"content\/main\.js"/,
       /"content\/panel\.css"/,
@@ -394,6 +402,25 @@ const codeChecks = [
     patterns: [
       /panelAppUrl/,
       /joinUrl\(baseUrl,\s*"panel\/index\.html"\)/,
+      /normalizePromptFirestoreCollections/,
+    ],
+  },
+  {
+    file: "shared/firestore-collections.js",
+    patterns: [
+      /integration_inova_accounts_v2/,
+      /prompt_library_chunks_v2/,
+      /prompt_store_entries/,
+      /normalizePromptFirestoreCollections/,
+    ],
+  },
+  {
+    file: "hosting/extension-v2/panel/base-firestore-client.js",
+    patterns: [
+      /createBaseFirestoreClient/,
+      /panelFirestoreSessionClient\.ensureSession/,
+      /loadCachedSnapshot/,
+      /publishSnapshot/,
     ],
   },
   {
@@ -467,9 +494,9 @@ const codeChecks = [
     patterns: [
       /createShellController/,
       /createRenderController/,
-      /buildHandleCount/,
       /renderPanel/,
       /buildReviewFloatState/,
+      /onPanelChromeSync/,
     ],
   },
   {

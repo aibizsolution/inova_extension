@@ -32,7 +32,7 @@
           ${normalized.degradedNotice ? `<div class="inova-release-card inova-release-card__notice is-info">${escapeHtml(normalized.degradedNotice)}</div>` : ""}
           ${normalized.error ? `<div class="inova-release-card inova-release-card__notice">${escapeHtml(normalized.error)}</div>` : ""}
           <div class="inova-tool-inline-summary">
-            <strong>회의 룸 목록</strong>
+            <strong>목록</strong>
             <span class="inova-tool-inline-summary__meta">총 ${escapeHtml(String(normalized.items.length))}건</span>
           </div>
           <div class="inova-meeting-record-list">
@@ -89,38 +89,36 @@
       sharePending,
     });
     return `
-      <article class="inova-meeting-record${isPending ? " is-pending" : ""}">
+      <article
+        class="inova-meeting-record${isPending ? " is-pending" : ""}${pending.active ? " is-disabled" : ""}"
+        data-meeting-action="open-result"
+        data-meeting-card="true"
+        data-meeting-id="${escapeHtml(item.meetingId)}"
+        data-meeting-job-id="${escapeHtml(item.latestJobId)}"
+        data-meeting-artifact-id="${escapeHtml(item.latestArtifactId)}"
+        data-meeting-title="${escapeHtml(item.title)}"
+        tabindex="${pending.active ? "-1" : "0"}"
+        aria-busy="${isPending}"
+        aria-disabled="${pending.active}"
+        aria-label="${escapeHtml(`${item.title} ${presentation.openLabel}`)}"
+      >
         <div class="inova-meeting-record__head">
           <div class="inova-meeting-record__content">
-            <strong>${escapeHtml(item.title)}</strong>
+            <div class="inova-meeting-record__title-row">
+              <strong>${escapeHtml(item.title)}</strong>
+            </div>
             ${presentation.meta ? `<div class="inova-tool-meta inova-tool-meta--muted">${escapeHtml(presentation.meta)}</div>` : ""}
             ${presentation.description ? `<p class="inova-meeting-record__summary">${escapeHtml(presentation.description)}</p>` : ""}
           </div>
           <div class="inova-meeting-record__chips">
-            ${item.shareActive ? renderMeetingChip("공유 중", "share") : ""}
-            ${renderMeetingChip(presentation.statusLabel, presentation.statusTone)}
+            ${renderMeetingStatus(presentation.statusLabel, presentation.statusTone)}
           </div>
         </div>
         <div class="inova-meeting-record__actions">
-          <div class="inova-meeting-record__primary">
-            <button
-              type="button"
-              class="inova-tool-button inova-tool-button--compact is-primary"
-              data-meeting-action="open-result"
-              data-meeting-id="${escapeHtml(item.meetingId)}"
-              data-meeting-job-id="${escapeHtml(item.latestJobId)}"
-              data-meeting-artifact-id="${escapeHtml(item.latestArtifactId)}"
-              data-meeting-title="${escapeHtml(item.title)}"
-              ${pending.active ? "disabled" : ""}
-              aria-busy="${isPending}"
-            >
-              ${escapeHtml(presentation.openLabel)}
-            </button>
-          </div>
           <div class="inova-meeting-record__secondary">
           <button
             type="button"
-            class="inova-tool-button inova-tool-button--compact"
+            class="inova-tool-button inova-tool-button--compact inova-meeting-record__secondary-button"
             data-meeting-action="share"
             data-meeting-id="${escapeHtml(item.meetingId)}"
             data-meeting-job-id="${escapeHtml(item.latestJobId)}"
@@ -133,7 +131,7 @@
           ${item.shareActive || revokePending ? `
           <button
             type="button"
-            class="inova-tool-button inova-tool-button--compact is-danger"
+            class="inova-tool-button inova-tool-button--compact inova-meeting-record__secondary-button is-danger"
             data-meeting-action="revoke-share"
             data-meeting-id="${escapeHtml(item.meetingId)}"
             data-meeting-job-id="${escapeHtml(item.latestJobId)}"
@@ -170,12 +168,12 @@
     `;
   }
 
-  function renderMeetingChip(text, tone = "neutral") {
+  function renderMeetingStatus(text, tone = "neutral") {
     const value = normalizeText(text);
     if (!value) {
       return "";
     }
-    return `<span class="inova-meeting-record__chip is-${escapeHtml(normalizeText(tone) || "neutral")}">${escapeHtml(value)}</span>`;
+    return `<span class="inova-meeting-record__status is-${escapeHtml(normalizeText(tone) || "neutral")}">${escapeHtml(value)}</span>`;
   }
 
   function normalizePending(pending) {
@@ -221,7 +219,7 @@
     const meta = timestamp ? `${metaPrefix} ${timestamp}` : "";
     if (options.isPending) {
       return {
-        description: "회의 작업실을 여는 중입니다.",
+        description: "",
         meta,
         openLabel: "작업실 여는 중...",
         shareLabel: options.sharePending ? "링크 준비 중..." : item.shareActive ? "링크 복사" : "공유 링크",
@@ -231,7 +229,7 @@
     }
     if (normalizedStatus === "processing") {
       return {
-        description: "업로드한 내용을 정리하고 있어요. 잠시 뒤 다시 열면 최신 기록이 반영됩니다.",
+        description: "",
         meta,
         openLabel: "작업실 열기",
         shareLabel: options.sharePending ? "링크 준비 중..." : item.shareActive ? "링크 복사" : "공유 링크",
@@ -241,7 +239,7 @@
     }
     if (normalizedStatus === "queued") {
       return {
-        description: "회의 작업이 대기 중입니다. 작업실에서 진행 상태를 확인할 수 있어요.",
+        description: "",
         meta,
         openLabel: "작업실 열기",
         shareLabel: options.sharePending ? "링크 준비 중..." : item.shareActive ? "링크 복사" : "공유 링크",
@@ -251,7 +249,7 @@
     }
     if (normalizedStatus === "failed") {
       return {
-        description: "최근 기록 생성에 문제가 있었어요. 작업실에서 다시 시도하거나 상태를 확인해 주세요.",
+        description: "",
         meta,
         openLabel: "작업실 열기",
         shareLabel: options.sharePending ? "링크 준비 중..." : item.shareActive ? "링크 복사" : "공유 링크",

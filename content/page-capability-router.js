@@ -1,5 +1,6 @@
 (function initPanelPageCapabilityRouter(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const normalizeText = namespace.session.normalizeText;
 
   function handle(payload, helpers = {}) {
     const action = normalizeText(payload?.action);
@@ -170,10 +171,6 @@
 
   function cloneValue(value) {
     return value == null ? value : JSON.parse(JSON.stringify(value));
-  }
-
-  function normalizeText(value) {
-    return namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
   }
 
   namespace.panelPageCapabilityRouter = { handle };

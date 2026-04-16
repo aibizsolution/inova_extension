@@ -8,11 +8,12 @@ const vm = require("vm");
 const root = path.resolve(__dirname, "..");
 
 function main() {
+  verifySnapshotCarriesUiPreferencesNotActiveTool();
+  verifyRenderPayloadDoesNotCarryHandleCount();
+  verifyRenderPayloadDoesNotCarryToolSummaries();
   verifyCustomConversationSnapshotBridge();
   verifyCustomPromptSnapshotBridge();
-  verifyCustomMeetingSnapshotBridge();
   verifyRenderPayloadAndReviewFloat();
-  verifyCustomReleaseSnapshotBridge();
   verifyVisibleStateCalculation();
   console.log("[verify-panel-render-controller] V2 shell bridge render contract passed");
 }
@@ -27,14 +28,11 @@ function verifyCustomConversationSnapshotBridge() {
         snapshotFingerprint: "bookmark-hosted|4|first|last",
       };
     },
-    getConversationCount() {
-      return 4;
-    },
   });
 
   harness.controller.render();
 
-  assert.equal(harness.renderPayloads[0].handleCount, 4);
+  assert.equal("handleCount" in harness.renderPayloads[0], false);
   assert.deepEqual(harness.renderPayloads[0].panelSnapshot.bookmarksTool, {
     activeId: "bookmark-hosted",
     count: 4,
@@ -46,9 +44,6 @@ function verifyCustomConversationSnapshotBridge() {
 function verifyRenderPayloadAndReviewFloat() {
   const harness = createHarness({
     activeTool: "meeting",
-    toolSummaries: {
-      meeting: { count: 2 },
-    },
     open: true,
     settings: { enabled: true },
   });
@@ -57,16 +52,18 @@ function verifyRenderPayloadAndReviewFloat() {
 
   assert.equal(harness.debugSyncCalls, 1);
   assert.equal(harness.renderPayloads.length, 1);
-  assert.equal(harness.renderPayloads[0].panelSnapshot.activeTool, "meeting");
-  assert.equal(harness.renderPayloads[0].handleCount, 2);
-  assert.equal(harness.renderPayloads[0].panelSnapshot.meetingTool.count, 2);
-  assert.deepEqual(harness.renderPayloads[0].panelTrace, {
-    activeTool: "meeting",
-    open: true,
-    reviewOpen: false,
-    visible: true,
-  });
-  assert.equal(harness.renderPayloads[0].visible, true);
+  assert.equal("activeTool" in harness.renderPayloads[0].panelSnapshot, false);
+  assert.equal(harness.renderPayloads[0].panelSnapshot.uiPreferences.activeTool, "meeting");
+  assert.equal("handleCount" in harness.renderPayloads[0], false);
+  assert.equal("open" in harness.renderPayloads[0], false);
+  assert.equal("settings" in harness.renderPayloads[0], false);
+  assert.equal("visible" in harness.renderPayloads[0], false);
+  assert.equal("settingsHydrated" in harness.renderPayloads[0].panelSnapshot, false);
+  assert.equal("meetingTool" in harness.renderPayloads[0].panelSnapshot, false);
+  assert.equal("releaseTool" in harness.renderPayloads[0].panelSnapshot, false);
+  assert.equal("panelTrace" in harness.renderPayloads[0], false);
+  assert.equal(harness.renderPayloads[0].panelSnapshot.open, true);
+  assert.equal(harness.renderPayloads[0].panelSnapshot.visible, true);
   assert.deepEqual(harness.reviewFloatStates, [{ visible: true }]);
 }
 
@@ -83,49 +80,18 @@ function verifyCustomPromptSnapshotBridge() {
         },
       };
     },
-    getPromptCounts() {
-      return {
-        promptCount: 7,
-        promptToolCount: 5,
-      };
-    },
   });
 
   harness.controller.render();
 
-  assert.equal(harness.renderPayloads[0].handleCount, 5);
+  assert.equal("handleCount" in harness.renderPayloads[0], false);
   assert.deepEqual(harness.renderPayloads[0].panelSnapshot.promptTool, {
     review: {
       requestId: 7,
     },
   });
-  assert.equal(harness.renderPayloads[0].panelTrace.reviewOpen, true);
-}
-
-function verifyCustomMeetingSnapshotBridge() {
-  const harness = createHarness({
-    activeTool: "meeting",
-    buildToolSummarySnapshot(toolId) {
-      if (toolId === "meeting") {
-        return {
-          count: 9,
-          snapshotFingerprint: "meeting-alpha|9|fresh",
-        };
-      }
-      return {};
-    },
-    getToolSummaryCount(toolId) {
-      return toolId === "meeting" ? 9 : 0;
-    },
-  });
-
-  harness.controller.render();
-
-  assert.equal(harness.renderPayloads[0].handleCount, 9);
-  assert.deepEqual(harness.renderPayloads[0].panelSnapshot.meetingTool, {
-    count: 9,
-    snapshotFingerprint: "meeting-alpha|9|fresh",
-  });
+  assert.equal("panelTrace" in harness.renderPayloads[0], false);
+  assert.equal(harness.renderPayloads[0].panelSnapshot.uiPreferences.activePromptTab, "review");
 }
 
 function verifyVisibleStateCalculation() {
@@ -135,34 +101,9 @@ function verifyVisibleStateCalculation() {
 
   harness.controller.render();
 
-  assert.equal(harness.renderPayloads[0].visible, false);
+  assert.equal(harness.renderPayloads[0].panelSnapshot.visible, false);
+  assert.equal("visible" in harness.renderPayloads[0], false);
   assert.deepEqual(harness.reviewFloatStates, [{ visible: false }]);
-}
-
-function verifyCustomReleaseSnapshotBridge() {
-  const harness = createHarness({
-    activeTool: "release",
-    buildToolSummarySnapshot(toolId) {
-      if (toolId === "release") {
-        return {
-          count: 1,
-          updateAvailable: true,
-        };
-      }
-      return {};
-    },
-    getToolSummaryCount(toolId) {
-      return toolId === "release" ? 1 : 0;
-    },
-  });
-
-  harness.controller.render();
-
-  assert.equal(harness.renderPayloads[0].handleCount, 1);
-  assert.deepEqual(harness.renderPayloads[0].panelSnapshot.releaseTool, {
-    count: 1,
-    updateAvailable: true,
-  });
 }
 
 function createHarness(options = {}) {
@@ -191,24 +132,37 @@ function createHarness(options = {}) {
       getHandleRatio() {
         return 0.42;
       },
+      mergeUiPreferences(value = {}) {
+        const merged = {
+          activePromptTab: "library",
+          activeTool: "bookmarks",
+          handleRatios: {},
+          ...cloneValue(value),
+        };
+        if (merged.activeTool === "store") {
+          merged.activeTool = "prompts";
+          merged.activePromptTab = "store";
+        }
+        if (merged.activePromptTab !== "store" && merged.activePromptTab !== "review") {
+          merged.activePromptTab = "library";
+        }
+        return merged;
+      },
     },
   };
 
   loadScript("content/panel-v2-shell-bridge.js", context);
 
   const state = {
-    activeTool: options.activeTool || "bookmarks",
-    open: Boolean(options.open),
     settings: {
       enabled: true,
       ...(options.settings || {}),
     },
     settingsHydrated: options.settingsHydrated !== false,
-    toolSummaries: cloneValue(options.toolSummaries || {
-      meeting: { count: 0 },
-      release: { count: 0 },
+    uiPreferences: cloneValue({
+      ...(options.uiPreferences || {}),
+      activeTool: options.activeTool || options.uiPreferences?.activeTool || "bookmarks",
     }),
-    uiPreferences: cloneValue(options.uiPreferences || {}),
   };
 
   const controller = context.InovaBookmarks.panelV2ShellBridge.createRenderController(state, {
@@ -236,42 +190,22 @@ function createHarness(options = {}) {
         debugSyncCalls += 1;
       },
     },
-    buildToolSummarySnapshot: options.buildToolSummarySnapshot || ((toolId) => cloneValue(state.toolSummaries?.[toolId] || {})),
-    getToolSummaryCount: options.getToolSummaryCount,
     buildConversationSnapshot: options.buildConversationSnapshot,
-    getConversationCount: options.getConversationCount,
     promptShellController: {
       buildReviewFloatState(visible) {
         return { visible };
       },
       buildToolState() {
         return {
-          promptCount: 3,
           promptTool: {
             activeTab: "library",
           },
-          promptToolCount: 3,
         };
       },
     },
     buildPromptSnapshot: options.buildPromptSnapshot,
-    getPromptCounts: options.getPromptCounts,
-    panelShellController: {
-      buildHandleCount(counts) {
-        if (state.activeTool === "bookmarks") {
-          return counts.bookmarks || counts.prompts || counts.meeting || counts.release;
-        }
-        if (state.activeTool === "prompts") {
-          return counts.promptTool || counts.prompts;
-        }
-        if (state.activeTool === "meeting") {
-          return counts.meeting;
-        }
-        if (state.activeTool === "release") {
-          return counts.release;
-        }
-        return 0;
-      },
+    readPanelOpen() {
+      return Boolean(options.open);
     },
     releaseManager: {
       buildViewState() {
@@ -290,6 +224,59 @@ function createHarness(options = {}) {
     renderPayloads,
     reviewFloatStates,
   };
+}
+
+function verifySnapshotCarriesUiPreferencesNotActiveTool() {
+  const source = fs.readFileSync(path.join(root, "content", "panel-v2-shell-bridge.js"), "utf8");
+  assert(
+    source.includes("uiPreferences: namespace.storage.mergeUiPreferences(state.uiPreferences),"),
+    "top panel snapshot should carry raw uiPreferences for hosted active-tool derivation"
+  );
+  assert(
+    !/panelSnapshot:\s*\{[\s\S]*?activeTool:/.test(source),
+    "top panel snapshot should not send activeTool as a prebuilt hosted view field"
+  );
+}
+
+function verifyRenderPayloadDoesNotCarryHandleCount() {
+  const source = fs.readFileSync(path.join(root, "content", "panel-v2-shell-bridge.js"), "utf8");
+  assert(
+    !source.includes("buildHandleCount"),
+    "v2 shell bridge should not calculate hosted-owned handle counts"
+  );
+  assert(
+    !/renderPanel\(\{[\s\S]*?handleCount/.test(source),
+    "v2 shell bridge render payload should not carry handleCount once hosted sync owns the value"
+  );
+  assert(
+    !/renderPanel\(\{[\s\S]*?panelTrace/.test(source),
+    "v2 shell bridge render payload should not carry panelTrace once top trace derives from raw snapshot"
+  );
+  assert(
+    !source.includes("        open: state.open,\n        panelSnapshot:")
+      && !source.includes("        settings: state.settings,\n        visible,"),
+    "v2 shell bridge render payload should keep open/settings/visible inside the raw panel snapshot"
+  );
+  assert(
+    !/panelSnapshot:\s*\{[\s\S]*?settingsHydrated:/.test(source),
+    "v2 shell bridge render payload should not send the content-only settingsHydrated render gate"
+  );
+}
+
+function verifyRenderPayloadDoesNotCarryToolSummaries() {
+  const source = fs.readFileSync(path.join(root, "content", "panel-v2-shell-bridge.js"), "utf8");
+  assert(
+    !source.includes("buildToolSummarySnapshot"),
+    "v2 shell bridge render payload should not request hosted-owned meeting/release summaries from extension callbacks"
+  );
+  assert(
+    !/panelSnapshot:\s*\{[\s\S]*?meetingTool:/.test(source),
+    "v2 shell bridge render payload should not carry hosted-owned meetingTool state"
+  );
+  assert(
+    !/panelSnapshot:\s*\{[\s\S]*?releaseTool:/.test(source),
+    "v2 shell bridge render payload should not carry hosted-owned releaseTool state"
+  );
 }
 
 function loadScript(relativePath, context) {

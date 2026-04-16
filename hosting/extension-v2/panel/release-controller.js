@@ -1,5 +1,6 @@
 (function initReleaseController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const { normalizeText, resolveBrowserCapabilities } = namespace.panelUtils;
   const CHECK_INTERVAL_MS = Number(namespace.constants?.limits?.releaseCheckIntervalMs) || 21600000;
   const REQUIRED_EXTENSION_CAPABILITIES = Object.freeze([
     "runtime.invoke.v1",
@@ -16,9 +17,6 @@
     const scheduleRender = typeof options.scheduleRender === "function"
       ? options.scheduleRender
       : () => {};
-    const syncTopPanelSummary = typeof options.syncTopPanelSummary === "function"
-      ? options.syncTopPanelSummary
-      : async () => false;
     const traceRelease = typeof options.traceRelease === "function"
       ? options.traceRelease
       : () => {};
@@ -37,7 +35,6 @@
       historyCheckedForVersion: "",
       historyLoading: false,
       initialized: false,
-      lastSyncedSummaryKey: "",
       latest: null,
       source: "none",
     };
@@ -59,11 +56,11 @@
       }
       if (!state.initialized) {
         state.initialized = true;
-        void ensureChecked(false, panelState?.activeTool === "release");
+        void ensureChecked(false, false);
         return;
       }
       if (panelState?.activeTool === "release") {
-        void ensureChecked(false, true);
+        void ensureChecked(false, false);
       }
     }
 
@@ -116,10 +113,6 @@
       const normalizedAction = normalizeText(action);
       if (!normalizedAction) {
         return false;
-      }
-      if (normalizedAction === "refresh") {
-        await ensureChecked(true, true);
-        return true;
       }
       if (normalizedAction === "download-latest") {
         await openDownload(buildViewState().latest?.downloadUrl);
@@ -183,7 +176,6 @@
         state.checking = false;
         state.historyLoading = false;
         scheduleRender();
-        await emitTopPanelSummary();
       }
     }
 
@@ -283,32 +275,6 @@
       return normalizeText(getRuntimeVersion()) || "알 수 없음";
     }
 
-    async function emitTopPanelSummary() {
-      if (!hasRequiredCapabilities()) {
-        return false;
-      }
-      const summary = buildTopPanelSummary();
-      const summaryKey = JSON.stringify(summary);
-      if (summaryKey === state.lastSyncedSummaryKey) {
-        return false;
-      }
-      try {
-        await syncTopPanelSummary(summary);
-        state.lastSyncedSummaryKey = summaryKey;
-        return true;
-      } catch (error) {
-        void error;
-        return false;
-      }
-    }
-
-    function buildTopPanelSummary() {
-      const count = getReleaseCount();
-      return {
-        count,
-      };
-    }
-
     function isFresh(checkedAt, ttlMs) {
       const time = Date.parse(checkedAt || "");
       return Boolean(time && time > Date.now() - ttlMs);
@@ -339,24 +305,10 @@
       return allowed.includes(normalized) ? normalized : fallback;
     }
 
-    function normalizeText(value) {
-      return namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
-    }
-
     function getErrorMessage(error, fallback) {
       return normalizeText(error instanceof Error ? error.message : error) || fallback;
     }
 
-    function resolveBrowserCapabilities(createOptions) {
-      const providedCapabilities = createOptions?.browserCapabilities;
-      if (providedCapabilities && typeof providedCapabilities === "object") {
-        return providedCapabilities;
-      }
-      return namespace.extensionCapabilityClient?.create?.({
-        invokePage: createOptions?.invokePage,
-        invokeRuntime: createOptions?.invokeRuntime,
-      }) || {};
-    }
   }
 
   namespace.releaseController = { create };

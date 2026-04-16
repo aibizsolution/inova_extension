@@ -1,5 +1,6 @@
 (function initContentPanel(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const normalizeText = namespace.session.normalizeText;
   const HANDSHAKE_TIMEOUT_MS = 4000;
   let panelHost = null;
   const panelConsoleTrace = namespace.panelConsoleTrace;
@@ -75,6 +76,14 @@
     hostRuntime.render(host, state);
   }
 
+  function syncPanelChrome(chromeState) {
+    const host = getPanelHost();
+    if (!host) {
+      return false;
+    }
+    return hostRuntime.syncPanelChrome(host, chromeState);
+  }
+
   function getPanelHost() {
     if (panelHost?.isConnected) {
       return panelHost;
@@ -91,10 +100,6 @@
     }
   }
 
-  function normalizeText(value) {
-    return namespace.session?.normalizeText?.(value) || String(value || "").trim();
-  }
-
   namespace.contentPanel = {
     ensurePanel,
     focusBookmark(bookmarkId) {
@@ -102,12 +107,16 @@
         bookmarkId: normalizeText(bookmarkId),
       });
     },
+    emitPanelEvent(action, payload = {}) {
+      return hostBridge.emitPanelEvent(panelHost, normalizeText(action), payload);
+    },
     renderPanel,
     setActiveBookmark(bookmarkId) {
       hostBridge.emitPageEvent(panelHost, "set-active-bookmark", {
         bookmarkId: normalizeText(bookmarkId),
       });
     },
+    syncPanelChrome,
   };
   panelConsoleTrace.buildPanelSnapshotTracePayload = traceController.buildPanelSnapshotTracePayload;
   panelConsoleTrace.log = logConsoleTrace;

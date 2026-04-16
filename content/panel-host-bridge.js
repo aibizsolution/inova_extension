@@ -15,6 +15,7 @@
 
     return {
       createHostedBridge,
+      emitPanelEvent,
       emitPageEvent,
     };
 
@@ -78,11 +79,19 @@
     }
 
     function emitPageEvent(host, action, payload = {}) {
+      return emitHostedEvent(host, "page", action, payload);
+    }
+
+    function emitPanelEvent(host, action, payload = {}) {
+      return emitHostedEvent(host, "panel", action, payload);
+    }
+
+    function emitHostedEvent(host, domain, action, payload = {}) {
       const normalizedAction = normalizeText(action);
       if (!host?.__bridge || !normalizedAction) {
         return false;
       }
-      return Boolean(host.__bridge.emitEvent?.("page", {
+      return Boolean(host.__bridge.emitEvent?.(domain, {
         ...payload,
         action: normalizedAction,
       }));

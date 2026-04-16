@@ -31,6 +31,14 @@ function verifyHostedBridgeRequestModuleContract() {
     path.join(root, "content", "hosted-panel-bridge.js"),
     "utf8"
   );
+  const shellBridgeSource = fs.readFileSync(
+    path.join(root, "content", "panel-v2-shell-bridge.js"),
+    "utf8"
+  );
+  const hostedPanelSource = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "index.js"),
+    "utf8"
+  );
 
   const mainContentScript = manifest.content_scripts.find((entry) =>
     Array.isArray(entry?.matches) && entry.matches.includes("https://inova.incross.com/*")
@@ -101,23 +109,84 @@ function verifyHostedBridgeRequestModuleContract() {
     "handleRuntimeRequest(",
     "namespace.panelPageCapabilityRouter?.handle?.(",
     "handlePanelRequest(",
-    "handlePanelSummaryRequest(",
+    'if (action === "panel-chrome-sync")',
+    "global.chrome?.runtime?.sendMessage",
+  ].forEach((pattern) => assert(
+    bridgeRequestSource.includes(pattern),
+    `hosted bridge request helper should keep the inline contract for ${pattern}`
+  ));
+  [
     "handleConversationRequest(",
-    'if (action === "tool-summary-sync")',
-    'typeof callbacks.onToolSummarySync !== "function"',
-    "const toolId = normalizeText(payload?.toolId)",
-    "const toolState = payload?.toolState && typeof payload.toolState === \"object\"",
-    'if (action === "toggle-panel")',
-    'if (action === "escape")',
     'if (action === "select-tool")',
     'if (action === "search")',
     'if (action === "search-submit")',
     'if (action === "bookmark-copy")',
     'if (action === "bookmark-jump")',
-    "global.chrome?.runtime?.sendMessage",
+    "handlePanelSummaryRequest(",
+    'if (action === "tool-summary-sync")',
+    'typeof callbacks.onToolSummarySync !== "function"',
+    "const toolId = normalizeText(payload?.toolId)",
+    "const toolState = payload?.toolState && typeof payload.toolState === \"object\"",
+    'if (action === "toggle-panel")',
   ].forEach((pattern) => assert(
-    bridgeRequestSource.includes(pattern),
-    `hosted bridge request helper should keep the inline contract for ${pattern}`
+    !bridgeRequestSource.includes(pattern),
+    `hosted bridge request helper should drop the removed panel fallback/sync surface ${pattern}`
+  ));
+  [
+    "onHandlePositionChange: panelShellController.updateHandlePosition",
+    "onPanelChromeSync(chromeState)",
+    'emitPanelEvent?.("external-toggle")',
+  ].forEach((pattern) => assert(
+    shellBridgeSource.includes(pattern),
+    `v2 shell bridge should keep the compact hosted callback surface ${pattern}`
+  ));
+  [
+    "onToolSummarySync",
+    "handlePanelToolSummarySync",
+    "panelLifecycleController.togglePanel",
+    "function togglePanel(",
+  ].forEach((pattern) => assert(
+    !shellBridgeSource.includes(pattern),
+    `v2 shell bridge should drop the removed hosted/content callback or fallback ${pattern}`
+  ));
+  assert(
+    !bridgeRequestSource.includes('if (action === "escape")')
+      && !shellBridgeSource.includes("onEscape:"),
+    "v2 shell bridge should not keep the legacy panel escape callback once hosted review consumes Escape before close"
+  );
+  [
+    "onCopyBookmark:",
+    "onJumpBookmark:",
+    "onSearch:",
+    "onSearchSubmit:",
+    "onSelectTool:",
+  ].forEach((pattern) => assert(
+    !shellBridgeSource.includes(pattern),
+    `v2 shell bridge should drop the removed hosted callback ${pattern}`
+  ));
+  assert(
+    hostedPanelSource.includes("async function persistHostedToolSelection(toolId)"),
+    "hosted panel should keep tool rail persistence in a dedicated helper"
+  );
+  assert(
+    hostedPanelSource.includes("await browserCapabilities.writeUiPreferences(nextUiPreferences);"),
+    "hosted panel should persist tool rail selection through storage.write-ui-preferences"
+  );
+  assert(
+    hostedPanelSource.includes('activePromptTab: "library"')
+      && hostedPanelSource.includes('activeTool: "prompts"'),
+    "hosted panel should keep prompts rail selection pinned to the library tab"
+  );
+  [
+    /request\("panel",\s*\{\s*action:\s*"escape"/,
+    /request\("panel",\s*\{\s*action:\s*"select-tool"/,
+    /request\("panel",\s*\{\s*action:\s*"search"/,
+    /request\("panel",\s*\{\s*action:\s*"search-submit"/,
+    /request\("panel",\s*\{\s*action:\s*"bookmark-copy"/,
+    /request\("panel",\s*\{\s*action:\s*"bookmark-jump"/,
+  ].forEach((pattern) => assert(
+    !pattern.test(hostedPanelSource),
+    `hosted panel should stop routing hosted-owned actions through the panel request fallback ${pattern}`
   ));
   [
     'if (action === "clipboard.write-text")',

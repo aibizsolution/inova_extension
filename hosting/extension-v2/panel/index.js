@@ -1,5 +1,6 @@
 (function initHostedPanelApp(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const { cloneValue, normalizeText } = namespace.panelUtils;
   const BRIDGE_VERSION = 1;
   const APP_SOURCE = "inova-hosted-panel-app";
   const EXTENSION_SOURCE = "inova-hosted-panel-extension";
@@ -35,7 +36,10 @@
     extensionCapabilities: [],
     extensionVersion: "",
     lastControllerSyncKey: "",
+    lastPanelChromeSyncKey: "",
     panelAppUrl: "",
+    panelOpen: false,
+    panelOpenHydrated: false,
     panelSnapshot: null,
     parentOrigin: readParentOrigin(),
     pendingRequests: new Map(),
@@ -46,6 +50,9 @@
     requestSeq: 0,
     startupStatusShown: false,
     startupStatusTimerId: 0,
+    toast: null,
+    toastSeq: 0,
+    toastTimerId: 0,
     traceRequestIds: new Set(),
     inputComposition: createInputCompositionState(),
     storeRenderKey: 0,
@@ -70,6 +77,7 @@
     browserCapabilities,
     getStoreCategories: () => promptStoreController?.getPublishCategories?.() || [],
     ensureStoreLoaded: (...args) => promptStoreController?.ensureLoaded?.(...args) || Promise.resolve(),
+    publishToast,
     scheduleRender,
     traceFirestore: traceFirestoreFlow,
     traceReview: traceReviewFlow,
@@ -79,6 +87,7 @@
     getActivePromptTab: () => promptLibraryController?.getActiveTab?.() || "library",
     getProviderIdentity: () => promptLibraryController?.getProviderIdentity?.() || { available: false },
     getRuntimeVersion: () => state.extensionVersion || "",
+    publishToast,
     scheduleRender,
     traceReview: traceReviewFlow,
     setActivePromptTab: (promptTabId) => promptLibraryController?.handleSelectPromptTab?.(promptTabId) || Promise.resolve(false),
@@ -88,12 +97,14 @@
     getActivePromptTab: () => promptLibraryController?.getActiveTab?.() || "library",
     getProviderIdentity: () => promptLibraryController?.getProviderIdentity?.() || { available: false },
     importStorePrompt: (storeEntry) => promptLibraryController?.importStorePrompt?.(storeEntry) || Promise.resolve(false),
+    publishToast,
     scheduleRender,
+    traceFirestore: traceFirestoreFlow,
   }) || null;
   const meetingHubController = namespace.meetingHubController?.create?.({
     browserCapabilities,
+    publishToast,
     scheduleRender,
-    syncTopPanelSummary: (meetingTool = {}) => syncToolSummary("meeting", meetingTool),
     traceFirestore: traceFirestoreFlow,
     traceMeeting: traceMeetingFlow,
   }) || null;
@@ -101,7 +112,6 @@
     browserCapabilities,
     getRuntimeVersion: () => state.extensionVersion || "",
     scheduleRender,
-    syncTopPanelSummary: (releaseTool = {}) => syncToolSummary("release", releaseTool),
     traceRelease: traceReleaseFlow,
   }) || null;
   const callbacks = createCallbacks();
@@ -142,25 +152,23 @@
   function createCallbacks() {
     return {
       async onCopyBookmark(bookmarkId) {
-        if (conversationController?.handleCopyBookmark) {
-          const handled = await conversationController.handleCopyBookmark(bookmarkId);
-          if (handled !== false) {
-            return handled;
-          }
-        }
-        const response = await request("panel", {
-          action: "bookmark-copy",
-          bookmarkId,
+        const copied = conversationController?.handleCopyBookmark
+          ? await conversationController.handleCopyBookmark(bookmarkId)
+          : false;
+        publishToast({
+          contextId: normalizeText(bookmarkId),
+          message: copied ? "질문을 복사했어요." : "질문을 복사하지 못했어요.",
+          source: "conversation",
+          tone: copied ? "success" : "error",
+          ttlMs: copied ? 1800 : 3600,
         });
-        return Boolean(response?.copied);
+        return copied;
       },
       onEscape() {
         if (promptReviewController?.consumeEscape?.()) {
           return Promise.resolve(true);
         }
-        return request("panel", {
-          action: "escape",
-        });
+        return callbacks.onToggle(false);
       },
       onImportFile(file) {
         if (promptLibraryController?.handleImportFile) {
@@ -169,21 +177,9 @@
         return Promise.resolve(false);
       },
       onJumpBookmark(bookmarkId) {
-        if (conversationController?.handleJumpBookmark) {
-          return conversationController.handleJumpBookmark(bookmarkId).then((handled) => {
-            if (handled !== false) {
-              return handled;
-            }
-            return request("panel", {
-              action: "bookmark-jump",
-              bookmarkId,
-            });
-          });
-        }
-        return request("panel", {
-          action: "bookmark-jump",
-          bookmarkId,
-        });
+        return conversationController?.handleJumpBookmark
+          ? conversationController.handleJumpBookmark(bookmarkId)
+          : Promise.resolve(false);
       },
       onMeetingAction(meetingAction, detail = {}) {
         traceMeetingFlow("41.hosted.callback.enter", {
@@ -246,12 +242,7 @@
         if (promptLibraryController?.handleSearch?.(toolId, value, options) !== false) {
           return Promise.resolve(true);
         }
-        return request("panel", {
-          action: "search",
-          options,
-          toolId,
-          value,
-        });
+        return Promise.resolve(false);
       },
       onSearchSubmit(toolId, value) {
         if (conversationController?.handleSearch?.(toolId, value, { submit: true }) !== false) {
@@ -263,11 +254,7 @@
         if (promptLibraryController?.handleSearch?.(toolId, value, { submit: true }) !== false) {
           return Promise.resolve(true);
         }
-        return request("panel", {
-          action: "search-submit",
-          toolId,
-          value,
-        });
+        return Promise.resolve(false);
       },
       onSelectPromptTab(promptTabId) {
         if (promptLibraryController?.handleSelectPromptTab) {
@@ -276,10 +263,7 @@
         return Promise.resolve(false);
       },
       onSelectTool(toolId) {
-        return request("panel", {
-          action: "select-tool",
-          toolId,
-        });
+        return persistHostedToolSelection(toolId);
       },
       onStoreAction(storeAction, detail = {}) {
         if (promptStoreController?.handleStoreAction) {
@@ -288,12 +272,45 @@
         return Promise.resolve(false);
       },
       onToggle(open) {
-        return request("panel", {
-          action: "toggle-panel",
-          open,
-        });
+        return setHostedPanelOpen(open);
       },
     };
+  }
+
+  function setHostedPanelOpen(nextOpen) {
+    const open = typeof nextOpen === "boolean" ? nextOpen : !state.panelOpen;
+    state.panelOpen = open;
+    state.panelOpenHydrated = true;
+    scheduleRender();
+    void persistHostedPanelOpen(open);
+    return Promise.resolve(true);
+  }
+
+  async function persistHostedPanelOpen(open) {
+    try {
+      await browserCapabilities.writeUiPreferences({ panelOpen: open === true });
+    } catch (error) {
+      console.error("[i-Nova Hosted Panel] panel open save failed", error);
+    }
+  }
+
+  async function persistHostedToolSelection(toolId) {
+    const nextTool = normalizeHostedToolId(toolId);
+    const nextUiPreferences = nextTool === "prompts"
+      ? {
+        activePromptTab: "library",
+        activeTool: "prompts",
+      }
+      : {
+        activeTool: nextTool,
+      };
+    try {
+      await browserCapabilities.writeUiPreferences(nextUiPreferences);
+      return true;
+    } catch (error) {
+      console.error("[i-Nova Hosted Panel] active tool save failed", error);
+      return false;
+    }
   }
 
   function scheduleReadyPing() {
@@ -370,8 +387,10 @@
     const payload = envelope.payload && typeof envelope.payload === "object"
       ? envelope.payload
       : {};
+    const nextPanelSnapshot = normalizePanelSnapshot(payload.panel);
+    hydratePanelOpenState(nextPanelSnapshot);
     tracePanelFlow("17.hosted.snapshot.received", {
-      activeTool: normalizeText(payload?.panel?.activeTool),
+      activeTool: normalizeText(nextPanelSnapshot?.activeTool),
       extensionVersion: normalizeText(payload.extensionVersion),
       panelAppUrl: normalizeText(payload.panelAppUrl),
     });
@@ -381,9 +400,7 @@
     );
     state.extensionVersion = normalizeText(payload.extensionVersion);
     state.panelAppUrl = normalizeText(payload.panelAppUrl);
-    state.panelSnapshot = payload.panel && typeof payload.panel === "object"
-      ? cloneValue(payload.panel)
-      : null;
+    state.panelSnapshot = nextPanelSnapshot;
     clearStartupStatusCard();
     tracePanelFlow("18.hosted.snapshot.applied", {
       activeTool: normalizeText(state.panelSnapshot?.activeTool),
@@ -393,7 +410,52 @@
     scheduleRender();
   }
 
+  function hydratePanelOpenState(panelSnapshot) {
+    if (!panelSnapshot || state.panelOpenHydrated) {
+      return;
+    }
+    state.panelOpen = panelSnapshot.open === true;
+    state.panelOpenHydrated = true;
+  }
+
+  function normalizePanelSnapshot(panel) {
+    if (!panel || typeof panel !== "object") {
+      return null;
+    }
+    const nextPanel = cloneValue(panel);
+    const uiPreferences = normalizePanelUiPreferences(nextPanel.uiPreferences);
+    return {
+      ...nextPanel,
+      activeTool: normalizeHostedToolId(nextPanel.activeTool || uiPreferences.activeTool),
+      uiPreferences,
+    };
+  }
+
+  function normalizePanelUiPreferences(uiPreferences) {
+    const nextUiPreferences = uiPreferences && typeof uiPreferences === "object"
+      ? { ...uiPreferences }
+      : {};
+    const rawActiveTool = normalizeText(nextUiPreferences.activeTool).toLowerCase();
+    let activePromptTab = normalizeText(nextUiPreferences.activePromptTab).toLowerCase();
+    if (rawActiveTool === "store") {
+      activePromptTab = "store";
+    }
+    if (activePromptTab !== "store" && activePromptTab !== "review") {
+      activePromptTab = "library";
+    }
+    return {
+      ...nextUiPreferences,
+      activePromptTab,
+      activeTool: normalizeHostedToolId(rawActiveTool),
+      panelOpen: nextUiPreferences.panelOpen === true,
+    };
+  }
+
   function handleEventEnvelope(envelope) {
+    if (envelope.domain === "panel") {
+      handlePanelEventEnvelope(envelope);
+      return;
+    }
     if (envelope.domain !== "page") {
       return;
     }
@@ -405,6 +467,16 @@
     if (action === "set-active-bookmark") {
       conversationController?.setActiveBookmark?.(normalizeText(envelope.payload?.bookmarkId));
       namespace.bookmarkView?.setActive?.(normalizeText(envelope.payload?.bookmarkId));
+    }
+  }
+
+  function handlePanelEventEnvelope(envelope) {
+    const action = normalizeText(envelope.payload?.action);
+    if (action === "external-toggle") {
+      tracePanelFlow("23.hosted.panel.event.external-toggle", {
+        open: !state.panelOpen,
+      });
+      void setHostedPanelOpen();
     }
   }
 
@@ -461,11 +533,22 @@
     });
   }
 
-  function syncToolSummary(toolId, toolState = {}) {
-    return request("panel", {
-      action: "tool-summary-sync",
-      toolId: normalizeText(toolId),
-      toolState,
+  function syncPanelChromeIfNeeded(chromeState = {}) {
+    const nextChromeState = {
+      handleCount: Math.max(0, Number(chromeState.handleCount) || 0),
+      open: chromeState.open === true,
+      visible: chromeState.visible === true,
+    };
+    const nextChromeSyncKey = serializeRenderState(nextChromeState);
+    if (state.lastPanelChromeSyncKey === nextChromeSyncKey) {
+      return;
+    }
+    state.lastPanelChromeSyncKey = nextChromeSyncKey;
+    request("panel", {
+      action: "panel-chrome-sync",
+      ...nextChromeState,
+    }).catch((error) => {
+      console.error("[i-Nova Hosted Panel] panel chrome sync failed", error);
     });
   }
 
@@ -577,6 +660,15 @@
       : [];
   }
 
+  function normalizeHostedToolId(toolId) {
+    const normalizedToolId = normalizeText(toolId).toLowerCase();
+    return normalizedToolId === "meeting" || normalizedToolId === "prompts" || normalizedToolId === "release"
+      ? normalizedToolId
+      : normalizedToolId === "store"
+        ? "prompts"
+        : "bookmarks";
+  }
+
   function isParentOrigin(origin) {
     const normalizedOrigin = normalizeOrigin(origin);
     if (!state.parentOrigin) {
@@ -607,7 +699,7 @@
   }
 
   function flushRender() {
-    const panelState = state.panelSnapshot;
+    const panelState = buildEffectivePanelState(state.panelSnapshot);
     if (!panelState) {
       tracePanelFlow("19.hosted.render.waiting-snapshot", {
         bridgeReady: Boolean(state.bridgeReady),
@@ -657,6 +749,11 @@
         : panelState.activeTool === "release"
           ? effectiveReleaseCount
           : effectiveConversationCount;
+    syncPanelChromeIfNeeded({
+      handleCount: effectiveToolCount,
+      open: panelState.open,
+      visible: panelState.visible,
+    });
     const focusedControl = captureFocusedControl(elements.app);
     const previousStoreScrollTop = panelState.activeTool === "prompts" && effectivePromptTool?.activeTab === "store"
       ? elements.app.querySelector(".inova-store-list")?.scrollTop || state.storeScrollTop || 0
@@ -688,6 +785,7 @@
       state.renderCache.toolTotal = nextToolTotal;
     }
 
+    renderToastIfNeeded(elements.toolToast);
     renderToolContentIfNeeded(elements.toolContent, panelState);
 
     if (panelState.activeTool === "prompts" && effectivePromptTool?.activeTab === "store") {
@@ -698,6 +796,16 @@
     }
     namespace.bookmarkView?.setActive?.(effectiveConversationTool?.activeId);
     restoreFocusedControl(elements.app, focusedControl);
+  }
+
+  function buildEffectivePanelState(panelSnapshot) {
+    if (!panelSnapshot) {
+      return null;
+    }
+    return {
+      ...panelSnapshot,
+      open: state.panelOpenHydrated ? state.panelOpen : panelSnapshot.open === true,
+    };
   }
 
   function ensureShell() {
@@ -716,6 +824,7 @@
       fileInput: root.querySelector("#inova-prompt-import-file"),
       toolContent: root.querySelector("#inova-tool-content"),
       toolRail: root.querySelector("#inova-tool-rail"),
+      toolToast: root.querySelector("#inova-tool-toast-slot"),
       toolTitle: root.querySelector("#inova-tool-title"),
       toolTotal: root.querySelector("#inova-tool-total"),
     };
@@ -740,12 +849,31 @@
 
   function createPanelRenderCache() {
     return {
+      toolToastKey: "",
       toolContentHtml: "",
       toolContentKey: "",
       toolRailHtml: "",
       toolTitle: "",
       toolTotal: "",
     };
+  }
+
+  function renderToastIfNeeded(toolToast) {
+    if (!(toolToast instanceof global.HTMLElement)) {
+      return;
+    }
+    const nextToastKey = state.toast ? serializeRenderState(state.toast) : "";
+    if (state.renderCache.toolToastKey === nextToastKey) {
+      return;
+    }
+    state.renderCache.toolToastKey = nextToastKey;
+    if (!state.toast?.message) {
+      toolToast.hidden = true;
+      toolToast.innerHTML = "";
+      return;
+    }
+    toolToast.hidden = false;
+    toolToast.innerHTML = renderToastMarkup(state.toast);
   }
 
   function renderToolContentIfNeeded(toolContent, panelState) {
@@ -805,6 +933,17 @@
 
   function renderToolFailure() {
     return '<section class="inova-tool-section"><div class="inova-bookmark-empty">화면을 불러오지 못했어요. 페이지를 새로고침하거나 확장을 다시 로드해 주세요.</div></section>';
+  }
+
+  function renderToastMarkup(toast) {
+    const tone = normalizeToastTone(toast?.tone);
+    const role = normalizeText(toast?.role) || (tone === "error" ? "alert" : "status");
+    const live = role === "alert" ? "assertive" : "polite";
+    return `
+      <div class="inova-tool-toast is-${escapeHtml(tone)}" role="${escapeHtml(role)}" aria-live="${escapeHtml(live)}" aria-atomic="true">
+        <span class="inova-tool-toast__message">${escapeHtml(toast?.message)}</span>
+      </div>
+    `;
   }
 
   function renderToolRail(tools, activeTool) {
@@ -955,14 +1094,14 @@
     if (meetingHubController?.hasRequiredCapabilities?.()) {
       return meetingHubController.buildViewState();
     }
-    return panelState.meetingTool;
+    return panelState.meetingTool || {};
   }
 
   function buildEffectiveReleaseToolState(panelState) {
     if (releaseController?.hasRequiredCapabilities?.()) {
       return releaseController.buildViewState(panelState.releaseTool || {});
     }
-    return panelState.releaseTool;
+    return panelState.releaseTool || {};
   }
 
   function readEffectivePromptCount(panelState, effectivePromptTool) {
@@ -1092,11 +1231,12 @@
                 <span id="inova-tool-total" class="inova-bookmark-badge inova-bookmark-badge--header">0</span>
               </div>
               <button id="inova-tool-close" type="button" aria-label="도구 패널 닫기">닫기</button>
+              <div id="inova-tool-toast-slot" hidden></div>
             </header>
             <div id="inova-tool-content"></div>
           </section>
         </div>
-        <input id="inova-prompt-import-file" type="file" accept="application/json,.json" hidden />
+        <input id="inova-prompt-import-file" name="inova-prompt-import-file" type="file" accept="application/json,.json" hidden />
       </div>
     `;
   }
@@ -1116,8 +1256,30 @@
     if (!target) {
       return;
     }
-    if (!target.closest?.('[data-prompt-menu], [data-prompt-action="toggle-menu"]')) {
+    const promptMenu = target.closest?.("[data-prompt-menu]");
+    const storeMenu = target.closest?.("[data-store-menu]");
+    if (!promptMenu && !target.closest?.('[data-prompt-action="toggle-menu"]')) {
       void callbacks.onPromptAction("dismiss-menu");
+      host.querySelectorAll("[data-prompt-menu][open]").forEach((menu) => {
+        menu.removeAttribute("open");
+      });
+    } else if (promptMenu instanceof global.HTMLElement) {
+      host.querySelectorAll("[data-prompt-menu][open]").forEach((menu) => {
+        if (menu !== promptMenu) {
+          menu.removeAttribute("open");
+        }
+      });
+    }
+    if (!storeMenu) {
+      host.querySelectorAll("[data-store-menu][open]").forEach((menu) => {
+        menu.removeAttribute("open");
+      });
+    } else if (storeMenu instanceof global.HTMLElement) {
+      host.querySelectorAll("[data-store-menu][open]").forEach((menu) => {
+        if (menu !== storeMenu) {
+          menu.removeAttribute("open");
+        }
+      });
     }
     const toolButton = target.closest?.("[data-tool-id]");
     if (toolButton) {
@@ -1159,9 +1321,15 @@
         message: copyButton.dataset.copyBookmarkId || "",
         reason: "click",
       });
-      callbacks.onCopyBookmark(copyButton.dataset.copyBookmarkId || "")
-        .then((copied) => namespace.bookmarkView?.flashCopyState?.(copyButton, copied))
-        .catch(() => namespace.bookmarkView?.flashCopyState?.(copyButton, false));
+      void callbacks.onCopyBookmark(copyButton.dataset.copyBookmarkId || "").catch(() => {
+        publishToast({
+          contextId: normalizeText(copyButton.dataset.copyBookmarkId),
+          message: "질문을 복사하지 못했어요.",
+          source: "conversation",
+          tone: "error",
+          ttlMs: 3600,
+        });
+      });
       return;
     }
     const bookmarkButton = target.closest?.("[data-bookmark-id]");
@@ -1177,6 +1345,9 @@
     }
     const meetingAction = target.closest?.("[data-meeting-action]");
     if (meetingAction) {
+      if (meetingAction.getAttribute?.("aria-disabled") === "true") {
+        return;
+      }
       traceMeetingFlow("40.hosted.click.detected", {
         action: meetingAction.dataset.meetingAction || "",
         artifactId: meetingAction.dataset.meetingArtifactId || "",
@@ -1325,6 +1496,61 @@
       return;
     }
     if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+    const meetingCard = target.closest?.('[data-meeting-card="true"]');
+    if (meetingCard instanceof global.HTMLElement) {
+      const closestMeetingAction = target.closest?.("[data-meeting-action]");
+      if (closestMeetingAction === meetingCard && meetingCard.getAttribute("aria-disabled") !== "true") {
+        event.preventDefault();
+        traceMeetingFlow("41.hosted.key.detected", {
+          action: meetingCard.dataset.meetingAction || "",
+          artifactId: meetingCard.dataset.meetingArtifactId || "",
+          jobId: meetingCard.dataset.meetingJobId || "",
+          meetingId: meetingCard.dataset.meetingId || "",
+          reason: event.key === " " ? "space" : "enter",
+        });
+        void callbacks.onMeetingAction(meetingCard.dataset.meetingAction || "", {
+          artifactId: meetingCard.dataset.meetingArtifactId || "",
+          jobId: meetingCard.dataset.meetingJobId || "",
+          meetingId: meetingCard.dataset.meetingId || "",
+          title: meetingCard.dataset.meetingTitle || "",
+        });
+      }
+      return;
+    }
+    const promptCard = target.closest?.('[data-prompt-card="true"]');
+    if (promptCard instanceof global.HTMLElement) {
+      const interactivePromptChild = target.closest?.('button, input, textarea, select, label, summary, details, [data-prompt-menu], [data-prompt-action], [data-prompt-field], [data-prompt-publish-field], [data-prompt-select], [data-import-mode]');
+      const blockedPromptRegion = target.closest?.(".inova-inline-feedback, .inova-prompt-editor, .inova-import-review");
+      if ((!interactivePromptChild || interactivePromptChild === promptCard) && !(blockedPromptRegion instanceof global.HTMLElement)) {
+        event.preventDefault();
+        tracePanelFlow("41.hosted.key.detected", {
+          action: "use",
+          message: promptCard.dataset.promptId || "",
+          reason: event.key === " " ? "space" : "enter",
+        });
+        void callbacks.onPromptAction("use", {
+          promptId: promptCard.dataset.promptId || "",
+        });
+      }
+      return;
+    }
+    const storeCard = target.closest?.('[data-store-card="true"]');
+    if (storeCard instanceof global.HTMLElement) {
+      const interactiveStoreChild = target.closest?.('button, input, textarea, select, label, summary, details, [data-store-menu], [data-store-action], [data-store-field], [data-store-owner-info]');
+      const blockedStoreRegion = target.closest?.(".inova-inline-feedback");
+      if ((!interactiveStoreChild || interactiveStoreChild === storeCard) && !(blockedStoreRegion instanceof global.HTMLElement)) {
+        event.preventDefault();
+        tracePanelFlow("41.hosted.key.detected", {
+          action: "toggle-expand",
+          message: storeCard.dataset.storeEntryId || "",
+          reason: event.key === " " ? "space" : "enter",
+        });
+        void callbacks.onStoreAction("toggle-expand", {
+          entryId: storeCard.dataset.storeEntryId || "",
+        });
+      }
       return;
     }
     const item = target.closest("[data-bookmark-id]");
@@ -1550,10 +1776,6 @@
     }
   }
 
-  function cloneValue(value) {
-    return value == null ? value : JSON.parse(JSON.stringify(value));
-  }
-
   function getEventElementTarget(event) {
     const target = event?.target;
     if (target instanceof global.HTMLElement) {
@@ -1565,8 +1787,67 @@
     return null;
   }
 
-  function normalizeText(value) {
-    return namespace.session?.normalizeText?.(value) || String(value || "").trim();
+  function publishToast(payload = {}) {
+    const nextToast = normalizeToastPayload(payload);
+    clearToastTimer();
+    state.toast = nextToast;
+    scheduleRender();
+    if (!nextToast || nextToast.ttlMs <= 0) {
+      return Boolean(nextToast);
+    }
+    const toastId = nextToast.id;
+    state.toastTimerId = global.setTimeout(() => {
+      dismissToast(toastId);
+    }, nextToast.ttlMs);
+    return true;
+  }
+
+  function dismissToast(toastId = "") {
+    if (!state.toast) {
+      return false;
+    }
+    if (toastId && toastId !== state.toast.id) {
+      return false;
+    }
+    clearToastTimer();
+    state.toast = null;
+    scheduleRender();
+    return true;
+  }
+
+  function clearToastTimer() {
+    if (!state.toastTimerId) {
+      return;
+    }
+    global.clearTimeout(state.toastTimerId);
+    state.toastTimerId = 0;
+  }
+
+  function normalizeToastPayload(payload = {}) {
+    const message = normalizeText(payload?.message);
+    if (!message) {
+      return null;
+    }
+    state.toastSeq += 1;
+    const tone = normalizeToastTone(payload?.tone);
+    const ttlMs = Math.max(0, Number(payload?.ttlMs) || 0);
+    return {
+      contextId: normalizeText(payload?.contextId),
+      id: normalizeText(payload?.id) || `toast-${Date.now()}-${state.toastSeq}`,
+      message,
+      role: normalizeText(payload?.role) || (tone === "error" ? "alert" : "status"),
+      source: normalizeText(payload?.source),
+      tone,
+      ttlMs,
+    };
+  }
+
+  function normalizeToastTone(value) {
+    const normalized = normalizeText(value).toLowerCase();
+    if (normalized === "success" || normalized === "error") {
+      return normalized;
+    }
+    return "info";
   }
 
   function isPageTraceAction(action) {
@@ -1682,11 +1963,13 @@
     }
     if (runtimeAction === "auth.issue-panel-session") {
       const panel = normalizeText(payload?.panel).toLowerCase();
-      const scope = panel === "prompt" ? "prompt-panel" : panel === "meeting" ? "meeting-panel" : "panel-session";
+      const purpose = normalizeText(payload?.purpose);
+      const scope = panel === "hosted" ? "hosted-panel" : panel === "prompt" ? "prompt-panel" : panel === "meeting" ? "meeting-panel" : "panel-session";
       return {
         buildResultPayload(durationMs) {
           return {
             message: scope,
+            purpose,
             reason: `${Math.max(0, Number(durationMs) || 0)}ms`,
             target: readRuntimeTargetForTrace(),
           };
@@ -1694,12 +1977,14 @@
         buildStartPayload() {
           return {
             message: scope,
+            purpose,
             target: readRuntimeTargetForTrace(),
           };
         },
         buildTimeoutPayload(durationMs) {
           return {
             message: scope,
+            purpose,
             reason: `${Math.max(0, Number(durationMs) || 0)}ms`,
             target: readRuntimeTargetForTrace(),
           };

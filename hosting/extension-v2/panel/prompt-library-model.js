@@ -1,22 +1,17 @@
 (function initPromptLibraryModel(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const promptTextModel = namespace.promptTextModel;
 
   function normalizeText(value) {
-    return namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
+    return namespace.session.normalizeText(value);
   }
 
   function normalizePromptContent(value) {
-    return String(value || "")
-      .replace(/\r\n/g, "\n")
-      .replace(/\u00a0/g, " ")
-      .trim();
+    return promptTextModel.normalizePromptContent(value);
   }
 
   function createPromptId() {
-    if (global.crypto?.randomUUID) {
-      return global.crypto.randomUUID();
-    }
-    return `prompt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    return promptTextModel.createPromptId();
   }
 
   function normalizeImportedFrom(importedFrom) {

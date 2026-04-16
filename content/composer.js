@@ -382,7 +382,7 @@
   }
 
   function normalizeDebugText(value) {
-    return namespace.session?.normalizeText?.(value) || String(value || "").trim();
+    return namespace.session.normalizeText(value);
   }
 
   function logComposerDebug(event, payload) {

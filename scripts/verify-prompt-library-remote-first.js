@@ -7,6 +7,7 @@ const vm = require("vm");
 const {
   createPromptLibraryFirestoreNamespace,
   installHostedCapabilityClient,
+  installPanelUtils,
 } = require("./verify-prompt-library-test-helpers");
 const { verifyHostedPromptLibraryAvoidsDuplicateReloads } = require("./verify-prompt-library-hosted-controller");
 
@@ -105,6 +106,7 @@ async function verifyHostedPromptEditorViewLabels() {
     },
   };
 
+  installPanelUtils(context);
   installHostedCapabilityClient(context);
   const source = fs.readFileSync(
     path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),
@@ -209,6 +211,7 @@ async function verifyHostedPromptTextInputDebouncesRender() {
     },
   };
 
+  installPanelUtils(context);
   installHostedCapabilityClient(context);
   const source = fs.readFileSync(
     path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),
@@ -242,6 +245,7 @@ async function verifyHostedPromptPublishUsesFunctionsFetch() {
   const runtimeCalls = [];
   const ensureStoreLoadedCalls = [];
   const persistedTabs = [];
+  const toastCalls = [];
   let storeCategories = [
     { id: "document", label: "문서" },
     { id: "other", label: "기타" },
@@ -295,6 +299,7 @@ async function verifyHostedPromptPublishUsesFunctionsFetch() {
     },
   };
 
+  installPanelUtils(context);
   installHostedCapabilityClient(context);
   const source = fs.readFileSync(
     path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),
@@ -311,6 +316,10 @@ async function verifyHostedPromptPublishUsesFunctionsFetch() {
     },
     getStoreCategories() {
       return storeCategories;
+    },
+    publishToast(payload) {
+      toastCalls.push(JSON.parse(JSON.stringify(payload)));
+      return true;
     },
     invokeRuntime: async (request) => {
       runtimeCalls.push({
@@ -389,7 +398,14 @@ async function verifyHostedPromptPublishUsesFunctionsFetch() {
   const viewState = controller.buildPromptToolState({}, { reviewOpen: false });
   assert.equal(viewState.activeTab, "store");
   assert.equal(viewState.prompt.publishPromptId, "");
-  assert.equal(viewState.prompt.feedback?.message, "스토어에 별도 복사본으로 등록했어요.");
+  assert.equal(viewState.prompt.feedback, null, "hosted prompt publish should keep short action feedback out of inline prompt state");
+  assert.deepEqual(toastCalls.at(-1), {
+    contextId: "prompt-1",
+    message: "스토어에 별도 복사본으로 등록했어요.",
+    source: "prompt-library",
+    tone: "success",
+    ttlMs: 2200,
+  });
   assert(persistedTabs.includes("store"), "hosted prompt publish should persist the store tab after success");
   storeCategories = [];
   await controller.handlePromptAction("open-publish", { promptId: "prompt-1" });
@@ -449,6 +465,7 @@ async function verifyHostedPromptTabSelectionDoesNotWaitForPersistence() {
     },
   };
 
+  installPanelUtils(context);
   installHostedCapabilityClient(context);
   const source = fs.readFileSync(
     path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),
@@ -524,6 +541,7 @@ async function verifyHostedPromptTabSelectionSurvivesLateStorageHydration() {
       },
     },
   };
+  installPanelUtils(context);
   installHostedCapabilityClient(context);
   const source = fs.readFileSync(
     path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),
@@ -580,6 +598,7 @@ async function verifyHostedPromptTabSelectionSurvivesLateStorageHydration() {
 
 async function verifyHostedPromptReviewRequestAutofocus() {
   const reviewTraces = [];
+  const persistedPreferences = [];
   const context = vm.createContext({
     Blob: class Blob {},
     File: class File {},
@@ -621,6 +640,7 @@ async function verifyHostedPromptReviewRequestAutofocus() {
     },
   };
 
+  installPanelUtils(context);
   installHostedCapabilityClient(context);
   const source = fs.readFileSync(
     path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),
@@ -649,6 +669,10 @@ async function verifyHostedPromptReviewRequestAutofocus() {
           },
         };
       }
+      if (request?.action === "storage.write-ui-preferences") {
+        persistedPreferences.push({ ...(request?.partial || {}) });
+        return {};
+      }
       return {};
     },
     scheduleRender() {},
@@ -659,7 +683,7 @@ async function verifyHostedPromptReviewRequestAutofocus() {
 
   controller.syncPanelState(
     {
-      activeTool: "prompts",
+      activeTool: "bookmarks",
       promptTool: {
         review: {
           requestId: 3,
@@ -681,6 +705,14 @@ async function verifyHostedPromptReviewRequestAutofocus() {
   assert.equal(reviewTraces[0]?.step, "71.hosted.review.autofocus");
   assert.equal(reviewTraces[0]?.payload?.reason, "external-review-request");
   assert.equal(reviewTraces[0]?.payload?.requestId, 3);
+  assert.deepEqual(
+    persistedPreferences.at(-1),
+    {
+      activePromptTab: "review",
+      activeTool: "prompts",
+    },
+    "external review handoff should let hosted persist prompt tab/tool activation even when the top snapshot is not already on prompts"
+  );
 }
 
 async function verifyHostedPromptReviewTabVisibility() {
@@ -725,6 +757,7 @@ async function verifyHostedPromptReviewTabVisibility() {
     },
   };
 
+  installPanelUtils(context);
   installHostedCapabilityClient(context);
   const source = fs.readFileSync(
     path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),

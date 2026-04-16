@@ -1,5 +1,6 @@
 (function initMeetingHubController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const { normalizeText, resolveBrowserCapabilities } = namespace.panelUtils;
   const LIST_LIMIT = 24;
   const SUPPORTED_ACTIONS = new Set([
     "open-result",
@@ -13,12 +14,12 @@
 
   function create(options = {}) {
     const browserCapabilities = resolveBrowserCapabilities(options);
+    const publishToast = typeof options.publishToast === "function"
+      ? options.publishToast
+      : () => false;
     const scheduleRender = typeof options.scheduleRender === "function"
       ? options.scheduleRender
       : () => {};
-    const syncTopPanelSummary = typeof options.syncTopPanelSummary === "function"
-      ? options.syncTopPanelSummary
-      : async () => false;
     const traceMeeting = typeof options.traceMeeting === "function"
       ? options.traceMeeting
       : () => {};
@@ -336,7 +337,6 @@
           return state.items;
         } catch (error) {
           applyLoadError(error, "meeting-hub-firestore-unavailable");
-          await emitTopPanelSummary();
           return state.items;
         } finally {
           state.loading = false;
@@ -363,7 +363,6 @@
 
     async function handleRealtimeError(error) {
       applyLoadError(error, "meeting-hub-firestore-unavailable");
-      await emitTopPanelSummary();
       scheduleRender();
     }
 
@@ -381,7 +380,6 @@
       state.error = "";
       state.source = fromCache ? "cache" : "realtime";
       scheduleRender();
-      await emitTopPanelSummary();
     }
 
     async function handleLaunchAction(action, input) {
@@ -480,22 +478,19 @@
     function setFeedback(text, tone = "info", timeoutMs = 2200) {
       global.clearTimeout(state.feedbackTimer);
       const nextText = normalizeText(text);
-      state.feedback = nextText
-        ? {
-            text: nextText,
-            tone: normalizeText(tone) || "info",
-          }
-        : null;
+      state.feedback = null;
+      state.feedbackTimer = 0;
       scheduleRender();
-      if (!nextText || timeoutMs <= 0) {
-        state.feedbackTimer = 0;
+      if (!nextText) {
         return;
       }
-      state.feedbackTimer = global.setTimeout(() => {
-        state.feedback = null;
-        state.feedbackTimer = 0;
-        scheduleRender();
-      }, timeoutMs);
+      publishToast({
+        contextId: normalizeText(state.pending.meetingId || state.pending.jobId || text),
+        message: nextText,
+        source: "meeting",
+        tone: normalizeText(tone) === "error" ? "error" : "success",
+        ttlMs: Math.max(0, Number(timeoutMs) || 0),
+      });
     }
 
     function setPending(pending) {
@@ -528,26 +523,6 @@
       }
     }
 
-    async function emitTopPanelSummary() {
-      if (!hasRequiredCapabilities()) {
-        return false;
-      }
-      const summary = buildTopPanelSummary();
-      try {
-        await syncTopPanelSummary(summary);
-        return true;
-      } catch (error) {
-        void error;
-        return false;
-      }
-    }
-
-    function buildTopPanelSummary() {
-      const count = Math.max(0, Array.isArray(state.items) ? state.items.length : 0);
-      return {
-        count,
-      };
-    }
   }
 
   function createPendingState() {
@@ -683,21 +658,6 @@
       return "open-result";
     }
     return "open-workspace";
-  }
-
-  function normalizeText(value) {
-    return namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
-  }
-
-  function resolveBrowserCapabilities(options) {
-    const providedCapabilities = options?.browserCapabilities;
-    if (providedCapabilities && typeof providedCapabilities === "object") {
-      return providedCapabilities;
-    }
-    return namespace.extensionCapabilityClient?.create?.({
-      invokePage: options?.invokePage,
-      invokeRuntime: options?.invokeRuntime,
-    }) || {};
   }
 
   namespace.meetingHubController = { create };

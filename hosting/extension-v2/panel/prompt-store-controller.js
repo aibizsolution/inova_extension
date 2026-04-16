@@ -1,5 +1,6 @@
 (function initPromptStoreController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const { normalizePanelTarget, normalizeText, resolveBrowserCapabilities } = namespace.panelUtils;
   const LOCAL_CACHE_LIMIT = 1000;
   const INITIAL_RENDER_COUNT = 20;
   const RENDER_BATCH_SIZE = 20;
@@ -21,9 +22,30 @@
     const invokeFunctionEndpoint = typeof browserCapabilities.invokeFunctionEndpoint === "function"
       ? browserCapabilities.invokeFunctionEndpoint
       : async () => ({});
+    const traceFirestore = typeof options.traceFirestore === "function"
+      ? options.traceFirestore
+      : () => {};
+    const storeFirestoreClient = namespace.promptStoreFirestoreClient?.create?.({
+      browserCapabilities,
+      onError: async (error) => {
+        state.loading = false;
+        state.loaded = state.items.length > 0;
+        state.error = getErrorMessage(error, "스토어를 불러오지 못했어요.");
+        state.source = state.items.length > 0 ? "cache" : "none";
+        state.dataFreshness = state.items.length > 0 ? "stale" : "empty";
+        scheduleRender();
+      },
+      onSnapshot: async (snapshot) => {
+        applyStoreSnapshot(snapshot);
+      },
+      traceFirestore,
+    }) || null;
     const scheduleRender = typeof options.scheduleRender === "function"
       ? options.scheduleRender
       : () => {};
+    const publishToast = typeof options.publishToast === "function"
+      ? options.publishToast
+      : () => false;
 
     const viewedEntryIds = new Set();
     const state = {
@@ -49,8 +71,10 @@
       renderKey: 0,
       renderLimit: INITIAL_RENDER_COUNT,
       scope: "all",
+      settingsTarget: "production",
       sortBy: "latest",
       source: "none",
+      settings: {},
       totalCount: 0,
       updateSequence: 0,
     };
@@ -70,6 +94,21 @@
       state.capabilities = Array.isArray(extensionCapabilities)
         ? extensionCapabilities.map((value) => normalizeText(value)).filter(Boolean)
         : [];
+      const nextSettings = panelState?.settings && typeof panelState.settings === "object"
+        ? { ...panelState.settings }
+        : {};
+      const nextSettingsTarget = normalizePanelTarget(nextSettings.meetingWorkspaceTarget);
+      if (state.settingsTarget && state.settingsTarget !== nextSettingsTarget) {
+        storeFirestoreClient?.disconnect?.("settings-target-change");
+        state.availableCategories = [{ id: "all", label: "전체" }];
+        state.dataFreshness = "fresh";
+        state.items = [];
+        state.loaded = false;
+        state.source = "none";
+        state.totalCount = 0;
+      }
+      state.settings = nextSettings;
+      state.settingsTarget = nextSettingsTarget;
       if (!hasRequiredCapabilities()) {
         return;
       }
@@ -93,13 +132,14 @@
     function buildViewState() {
       const appliedQuery = normalizeText(state.appliedQuery);
       const normalizedQuery = appliedQuery.toLowerCase();
-      const categoryFilteredItems = namespace.promptStoreModel?.filterEntries?.(state.items, "", state.categoryId) || [];
+      const providerUserKey = normalizeText(getProviderIdentity()?.providerUserKey);
+      const scopedItems = filterItemsByScope(state.items, providerUserKey);
+      const categoryFilteredItems = namespace.promptStoreModel?.filterEntries?.(scopedItems, "", state.categoryId) || [];
       const sortedItems = namespace.promptStoreModel?.sortEntries?.(
-        namespace.promptStoreModel?.filterEntries?.(state.items, normalizedQuery, state.categoryId) || [],
+        namespace.promptStoreModel?.filterEntries?.(scopedItems, normalizedQuery, state.categoryId) || [],
         state.sortBy
       ) || [];
       const renderedCount = Math.min(sortedItems.length, state.renderLimit);
-      const providerUserKey = normalizeText(getProviderIdentity()?.providerUserKey);
       const emptyText = appliedQuery
         ? "검색 결과가 없어요. 다른 표현으로 다시 찾아보세요."
         : state.scope === "mine"
@@ -108,7 +148,7 @@
 
       return {
         actionPending: state.actionPending,
-        categories: buildAvailableCategories(),
+        categories: buildAvailableCategories(scopedItems),
         categoryId: state.categoryId,
         dataFreshness: normalizeEnum(state.dataFreshness, ["fresh", "stale", "empty"], "fresh"),
         degraded: state.dataFreshness === "stale" || state.dataFreshness === "empty",
@@ -218,7 +258,7 @@
       if (state.loading && !force) {
         return;
       }
-      if (!force && state.loaded && state.loadedScope === state.scope) {
+      if (!force && state.loaded && storeFirestoreClient?.hasActiveSubscription?.()) {
         return;
       }
       const providerIdentity = getProviderIdentity();
@@ -236,36 +276,18 @@
       state.identityPending = false;
       scheduleRender();
       try {
-        const result = await invokeFunctionEndpoint({
-          authMode: "access-token",
-          body: {
-            filter: {
-              categoryId: "all",
-              limit: LOCAL_CACHE_LIMIT,
-              ownerOnly: state.scope === "mine",
-              query: "",
-              sortBy: "latest",
-            },
-            providerIdentity,
-          },
-          endpointKey: "listPromptStoreEntriesUrl",
-          service: "prompt",
+        if (!storeFirestoreClient) {
+          throw new Error("스토어 Firestore reader를 준비하지 못했어요.");
+        }
+        const snapshot = await storeFirestoreClient.ensureSubscribed({
+          providerIdentity,
+          queryLimit: LOCAL_CACHE_LIMIT,
+          settings: state.settings,
         });
         if (sequence !== state.updateSequence) {
           return;
         }
-        state.items = namespace.promptStoreModel?.normalizeStoreEntries?.(result?.items) || [];
-        state.availableCategories = normalizeAvailableCategories(result?.availableCategories, state.categoryId);
-        state.totalCount = Math.max(0, Number(result?.totalCount) || state.items.length);
-        state.loaded = true;
-        state.loadedScope = state.scope;
-        state.loading = false;
-        state.error = "";
-        state.source = "runtime-read";
-        state.dataFreshness = "fresh";
-        if (state.categoryId !== "all" && !state.availableCategories.some((category) => category.id === state.categoryId)) {
-          state.categoryId = "all";
-        }
+        applyStoreSnapshot(snapshot, { render: false });
       } catch (error) {
         if (sequence !== state.updateSequence) {
           return;
@@ -280,6 +302,48 @@
           scheduleRender();
         }
       }
+    }
+
+    function applyStoreSnapshot(snapshot, options = {}) {
+      const previousById = new Map(
+        (Array.isArray(state.items) ? state.items : [])
+          .map((item) => [normalizeText(item.entryId), item])
+          .filter(([entryId]) => Boolean(entryId))
+      );
+      const normalizedItems = namespace.promptStoreModel?.normalizeStoreEntries?.(snapshot?.items) || [];
+      state.items = normalizedItems.map((item) => mergeSnapshotEntry(item, previousById.get(item.entryId)));
+      state.availableCategories = normalizeAvailableCategories(snapshot?.availableCategories, state.categoryId);
+      state.totalCount = Math.max(0, Number(snapshot?.totalCount) || state.items.length);
+      state.loaded = true;
+      state.loadedScope = "all";
+      state.loading = false;
+      state.identityPending = false;
+      state.error = "";
+      state.source = snapshot?.fromCache ? "cache" : "runtime-read";
+      state.dataFreshness = "fresh";
+      if (state.categoryId !== "all" && !buildAvailableCategories(filterItemsByScope(state.items, normalizeText(getProviderIdentity()?.providerUserKey))).some((category) => category.id === state.categoryId)) {
+        state.categoryId = "all";
+      }
+      if (options.render !== false) {
+        scheduleRender();
+      }
+    }
+
+    function mergeSnapshotEntry(entry, previous) {
+      if (!previous) {
+        return entry;
+      }
+      return {
+        ...entry,
+        content: entry.content || previous.content || "",
+        hasDetail: Boolean(entry.hasDetail || previous.hasDetail || previous.content),
+        viewer: {
+          ...entry.viewer,
+          imported: Boolean(previous.viewer?.imported || entry.viewer?.imported),
+          liked: Boolean(previous.viewer?.liked || entry.viewer?.liked),
+          viewed: Boolean(previous.viewer?.viewed || entry.viewer?.viewed),
+        },
+      };
     }
 
     function setCategory(categoryId) {
@@ -304,9 +368,8 @@
       state.scope = nextScope;
       clearTransientState();
       resetWindow();
-      state.loaded = false;
       scheduleRender();
-      await ensureLoaded(true, "scope-change");
+      await ensureLoaded(false, "scope-change");
     }
 
     function setSort(sortBy) {
@@ -514,8 +577,11 @@
       state.renderKey += 1;
     }
 
-    function buildAvailableCategories() {
-      const categories = Array.isArray(state.availableCategories) && state.availableCategories.length
+    function buildAvailableCategories(items = state.items) {
+      const scopedCategories = buildCategoriesFromItems(items);
+      const categories = scopedCategories.length > 1
+        ? scopedCategories
+        : Array.isArray(state.availableCategories) && state.availableCategories.length
         ? state.availableCategories
         : [{ id: "all", label: "전체" }];
       if (categories.some((category) => category.id === state.categoryId)) {
@@ -523,6 +589,35 @@
       }
       const fallbackLabel = namespace.promptStoreModel?.getCategoryLabel?.(state.categoryId) || "기타";
       return categories.concat([{ id: state.categoryId, label: fallbackLabel }]);
+    }
+
+    function buildCategoriesFromItems(items) {
+      const categories = [{ id: "all", label: "전체" }];
+      const seen = new Set(["all"]);
+      for (const item of Array.isArray(items) ? items : []) {
+        const id = normalizeText(item?.categoryId).toLowerCase();
+        if (!id || seen.has(id)) {
+          continue;
+        }
+        seen.add(id);
+        categories.push({
+          id,
+          label: normalizeText(item?.categoryLabel)
+            || namespace.promptStoreModel?.getCategoryLabel?.(id)
+            || "기타",
+        });
+      }
+      return categories;
+    }
+
+    function filterItemsByScope(items, providerUserKey) {
+      if (state.scope !== "mine") {
+        return Array.isArray(items) ? items : [];
+      }
+      const normalizedProviderUserKey = normalizeText(providerUserKey);
+      return (Array.isArray(items) ? items : []).filter(
+        (item) => normalizeText(item?.owner?.providerUserKey) === normalizedProviderUserKey
+      );
     }
 
     function normalizeAvailableCategories(categories, activeCategoryId) {
@@ -570,14 +665,20 @@
 
     function setFeedback(message, tone = "info", entryId = "") {
       global.clearTimeout(state.feedbackTimer);
-      state.feedback = message ? { entryId, message, tone } : null;
-      if (!message) {
+      const nextMessage = normalizeText(message);
+      state.feedback = null;
+      state.feedbackTimer = 0;
+      scheduleRender();
+      if (!nextMessage) {
         return;
       }
-      state.feedbackTimer = global.setTimeout(() => {
-        state.feedback = null;
-        scheduleRender();
-      }, 2600);
+      publishToast({
+        contextId: normalizeText(entryId),
+        message: nextMessage,
+        source: "prompt-store",
+        tone: normalizeText(tone) === "error" ? "error" : "success",
+        ttlMs: normalizeText(tone) === "error" ? 3600 : 2200,
+      });
     }
 
     function scheduleSearchRender() {
@@ -590,10 +691,6 @@
       }, 180);
     }
 
-    function normalizeText(value) {
-      return namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
-    }
-
     function normalizeEnum(value, allowed, fallback) {
       const normalized = normalizeText(value);
       return allowed.includes(normalized) ? normalized : fallback;
@@ -603,16 +700,6 @@
       return normalizeText(error instanceof Error ? error.message : error) || fallback;
     }
 
-    function resolveBrowserCapabilities(createOptions) {
-      const providedCapabilities = createOptions?.browserCapabilities;
-      if (providedCapabilities && typeof providedCapabilities === "object") {
-        return providedCapabilities;
-      }
-      return namespace.extensionCapabilityClient?.create?.({
-        invokePage: createOptions?.invokePage,
-        invokeRuntime: createOptions?.invokeRuntime,
-      }) || {};
-    }
   }
 
   namespace.promptStoreController = { create };

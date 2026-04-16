@@ -11,13 +11,7 @@
 
   function renderBody(state) {
     const globalFeedback = state.feedback?.entryId ? null : state.feedback;
-    const metaText = state.loading
-      ? "불러오는 중"
-      : state.queryDirty
-        ? "엔터를 눌러 검색"
-        : state.totalCount > state.renderedCount
-          ? `총 ${state.totalCount}개 · ${state.renderedCount}개 표시`
-          : `총 ${state.totalCount}개`;
+    const statusText = state.queryDirty ? "엔터를 눌러 검색" : "";
     const itemsHtml = state.items.length
       ? state.items.map((item) => renderItem(item, state)).join("")
       : state.loading
@@ -31,13 +25,12 @@
         <input
           class="inova-tool-search"
           type="search"
+          name="inova-store-search"
           value="${escapeHtml(state.query)}"
           data-search-tool="store"
           placeholder="스토어에서 프롬프트 찾기"
         />
-        <div class="inova-tool-toolbar__row">
-          <div class="inova-tool-meta">${metaText}</div>
-        </div>
+        ${statusText ? `<div class="inova-tool-toolbar__row"><div class="inova-tool-meta">${statusText}</div></div>` : ""}
         <div class="inova-store-controls">
           ${renderScopeToggle(state.ownerScope)}
           ${renderCategorySelect(state.categories, state.categoryId)}
@@ -72,7 +65,7 @@
     return `
       <label class="inova-tool-select-field">
         <span>카테고리</span>
-        <select class="inova-tool-select" data-store-field="category">
+        <select class="inova-tool-select" name="inova-store-category" data-store-field="category">
           ${categories.map((category) => `
             <option value="${category.id}" ${category.id === activeCategoryId ? "selected" : ""}>${escapeHtml(category.label)}</option>
           `).join("")}
@@ -125,63 +118,119 @@
     const importing = state.actionPending?.type === "import" && state.actionPending.entryId === item.entryId;
     const liking = state.actionPending?.type === "like" && state.actionPending.entryId === item.entryId;
     const unpublishing = state.actionPending?.type === "unpublish" && state.actionPending.entryId === item.entryId;
+    const actionDisabled = importing || liking || unpublishing;
     const ownerLabel = systemOwned
       ? "시스템 에이전트 스타터"
       : item.owner.maskedEmail
         ? `${item.owner.displayName} · ${item.owner.maskedEmail}`
         : item.owner.displayName;
     return `
-      <article class="inova-prompt-item inova-store-item ${expanded ? "is-expanded" : ""}">
+      <article
+        class="inova-prompt-item inova-store-item ${expanded ? "is-expanded" : ""}"
+        data-store-card="${expandable ? "true" : "false"}"
+        data-store-entry-id="${escapeHtml(item.entryId)}"
+        ${expandable ? `tabindex="0" aria-label="${escapeHtml(`${item.title} 상세 ${expanded ? "접기" : "보기"}`)}"` : ""}
+      >
         <div class="inova-store-item__header">
           <div class="inova-store-item__main">
             <div class="inova-store-item__eyebrow">
-              <span class="inova-store-item__chip">${escapeHtml(getCompactCategoryLabel(item.categoryId, item.categoryLabel))}</span>
-              ${systemOwned ? '<span class="inova-store-item__chip is-muted">시스템</span>' : ""}
+              <span class="inova-store-item__category">${escapeHtml(getCompactCategoryLabel(item.categoryId, item.categoryLabel))}</span>
+              ${systemOwned ? '<span class="inova-store-item__source">시스템</span>' : ""}
+              ${renderOwnerInfo(ownerLabel, item.publishedAt)}
             </div>
             <strong class="inova-prompt-item__title inova-store-item__title">${escapeHtml(item.title)}</strong>
-            <div class="inova-store-item__submeta">
-              <span>${escapeHtml(ownerLabel)}</span>
-              <span>${formatDate(item.publishedAt)}</span>
-            </div>
           </div>
           <div class="inova-store-item__side">
-            ${expandable
-              ? `<button type="button" class="inova-tool-button inova-tool-button--compact" data-store-action="toggle-expand" data-store-entry-id="${item.entryId}">
-                  ${expanded ? "닫기" : "보기"}
-                </button>`
-              : ""}
+            ${renderStoreMenu(item, { actionDisabled, deleteConfirm, liking, owned })}
           </div>
         </div>
-        ${expanded ? renderExpandedContent(item, detailPending) : ""}
-        <div class="inova-store-item__footer">
+        <div class="inova-store-item__summary-row" aria-label="스토어 통계">
           <div class="inova-store-item__metrics">
             ${renderMetric("views", "조회수", item.metrics.viewCount)}
             ${renderMetric("imports", "가져오기 수", item.metrics.importCount)}
             ${renderMetric("likes", "좋아요 수", item.metrics.likeCount)}
           </div>
-          <div class="inova-prompt-item__actions">
-            <button
-              type="button"
-              class="inova-tool-button is-primary"
-              data-store-action="import"
-              data-store-entry-id="${item.entryId}"
-              ${renderDisabled(importing || liking || unpublishing)}
-            >${importing ? "가져오는 중..." : "가져오기"}</button>
-            ${expanded && owned
-              ? `<button type="button" class="inova-tool-button" data-store-action="request-unpublish" data-store-entry-id="${item.entryId}" ${renderDisabled(importing || liking || unpublishing)}>${deleteConfirm ? "닫기" : "스토어 삭제"}</button>`
-              : ""}
-            ${expanded ? `<button
-              type="button"
-              class="inova-tool-button ${item.viewer.liked ? "is-primary" : ""}"
-              data-store-action="toggle-like"
-              data-store-entry-id="${item.entryId}"
-              ${renderDisabled(importing || liking || unpublishing)}
-            >${liking ? "처리 중..." : item.viewer.liked ? "좋아요 취소" : "좋아요"}</button>` : ""}
-          </div>
         </div>
+        ${expanded ? renderExpandedContent(item, detailPending) : ""}
+        ${expanded ? renderStoreItemActions(item, { actionDisabled, importing, liking }) : ""}
         ${itemFeedback ? renderFeedback(itemFeedback) : ""}
         ${deleteConfirm ? renderDeleteConfirm(item.entryId, item.title, unpublishing) : ""}
       </article>
+    `;
+  }
+
+  function renderStoreItemActions(item, options = {}) {
+    return `
+      <div class="inova-prompt-item__actions inova-store-item__detail-actions">
+        <button
+          type="button"
+          class="inova-tool-button inova-tool-button--compact inova-tool-button--with-icon is-primary"
+          data-store-action="import"
+          data-store-entry-id="${item.entryId}"
+          ${renderDisabled(options.actionDisabled)}
+        >
+          <span class="inova-tool-inline-icon is-import" aria-hidden="true"></span>
+          <span>${options.importing ? "가져오는 중..." : "가져오기"}</span>
+        </button>
+        <button
+          type="button"
+          class="inova-tool-button inova-tool-button--compact inova-tool-button--with-icon inova-store-item__like-button ${item.viewer.liked ? "is-primary" : ""}"
+          data-store-action="toggle-like"
+          data-store-entry-id="${item.entryId}"
+          aria-pressed="${item.viewer.liked}"
+          ${renderDisabled(options.actionDisabled)}
+        >
+          <span class="inova-tool-inline-icon is-like" aria-hidden="true"></span>
+          <span aria-hidden="true">${Number(item.metrics.likeCount) || 0}</span>
+          <span class="inova-sr-only">${options.liking ? "좋아요 처리 중" : item.viewer.liked ? "좋아요 취소" : "좋아요"}</span>
+        </button>
+      </div>
+    `;
+  }
+
+  function renderStoreMenu(item, options = {}) {
+    if (!options.owned) {
+      return "";
+    }
+    return `
+      <details class="inova-prompt-item__menu inova-store-item__menu" data-store-menu="true">
+        <summary class="inova-tool-button inova-tool-icon-button inova-prompt-item__menu-trigger" aria-label="스토어 항목 메뉴" title="스토어 항목 메뉴">
+          <span aria-hidden="true">…</span>
+          <span class="inova-sr-only">스토어 항목 메뉴</span>
+        </summary>
+        <div class="inova-prompt-item__menu-popover inova-store-item__menu-popover" role="menu" aria-label="스토어 항목 작업">
+          ${renderStoreMenuItem("request-unpublish", item.entryId, "delete", options.deleteConfirm ? "삭제 취소" : "스토어 삭제", options.actionDisabled, !options.deleteConfirm)}
+        </div>
+      </details>
+    `;
+  }
+
+  function renderStoreMenuItem(action, entryId, icon, label, disabled, danger = false, pressed = null) {
+    return `
+      <button
+        type="button"
+        class="inova-prompt-item__menu-item ${danger ? "is-danger" : ""}"
+        data-store-action="${escapeHtml(action)}"
+        data-store-entry-id="${escapeHtml(entryId)}"
+        role="menuitem"
+        ${pressed === null ? "" : `aria-pressed="${pressed ? "true" : "false"}"`}
+        ${renderDisabled(disabled)}
+      >
+        <span class="inova-tool-inline-icon is-${escapeHtml(icon)}" aria-hidden="true"></span>
+        <span>${escapeHtml(label)}</span>
+      </button>
+    `;
+  }
+
+  function renderOwnerInfo(ownerLabel, publishedAt) {
+    const dateText = formatDate(publishedAt);
+    const tooltip = dateText
+      ? `등록자: ${ownerLabel}\n등록일: ${dateText}`
+      : `등록자: ${ownerLabel}`;
+    return `
+      <span class="inova-store-item__owner-info" data-store-owner-info="true" tabindex="0" title="${escapeHtml(tooltip)}" aria-label="${escapeHtml(tooltip)}">
+        <span aria-hidden="true">i</span>
+      </span>
     `;
   }
 

@@ -1,5 +1,6 @@
 (function initExtensionCapabilityClient(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const PANEL_AUTH_CACHE_TTL_MS = 50 * 60 * 1000;
 
   function create(options = {}) {
     const invokePage = typeof options.invokePage === "function"
@@ -8,6 +9,8 @@
     const invokeRuntime = typeof options.invokeRuntime === "function"
       ? options.invokeRuntime
       : async () => ({});
+    const recentPanelAuthResults = new Map();
+    const pendingPanelAuthRequests = new Map();
 
     return {
       applyComposerText,
@@ -67,11 +70,32 @@
       });
     }
 
-    function issuePanelSession(panel, providerIdentity) {
-      return invokeRuntime({
+    function issuePanelSession(panel, providerIdentity, options = {}) {
+      const cacheKey = buildPanelAuthCacheKey(panel, providerIdentity, options);
+      const recent = readRecentPanelAuthResult(cacheKey);
+      if (recent) {
+        return Promise.resolve(recent);
+      }
+      if (cacheKey && pendingPanelAuthRequests.has(cacheKey)) {
+        return pendingPanelAuthRequests.get(cacheKey);
+      }
+      const request = invokeRuntime({
         action: "auth.issue-panel-session",
         panel,
+        purpose: options?.purpose || "",
         providerIdentity,
+        target: options?.target || "",
+      }).then((result) => {
+        cachePanelAuthResult(cacheKey, result);
+        return result;
+      });
+      if (cacheKey) {
+        pendingPanelAuthRequests.set(cacheKey, request);
+      }
+      return request.finally(() => {
+        if (cacheKey) {
+          pendingPanelAuthRequests.delete(cacheKey);
+        }
       });
     }
 
@@ -165,6 +189,44 @@
         action: "storage.write-ui-preferences",
         partial,
       });
+    }
+
+    function buildPanelAuthCacheKey(panel, providerIdentity, requestOptions = {}) {
+      const normalizedPanel = normalizeText(panel).toLowerCase();
+      const providerUserKey = normalizeText(providerIdentity?.providerUserKey);
+      const target = normalizeText(requestOptions?.target).toLowerCase() || "production";
+      return normalizedPanel && providerUserKey ? `${normalizedPanel}::${providerUserKey}::${target}` : "";
+    }
+
+    function readRecentPanelAuthResult(cacheKey) {
+      const key = normalizeText(cacheKey);
+      const entry = key ? recentPanelAuthResults.get(key) : null;
+      if (!entry || entry.expiresAt <= Date.now()) {
+        if (key) {
+          recentPanelAuthResults.delete(key);
+        }
+        return null;
+      }
+      return entry.result;
+    }
+
+    function cachePanelAuthResult(cacheKey, result) {
+      const key = normalizeText(cacheKey);
+      const expiresAt = Math.min(
+        Date.parse(normalizeText(result?.expiresAt)) - 60000,
+        Date.now() + PANEL_AUTH_CACHE_TTL_MS
+      );
+      if (!key || !result || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+        if (key) {
+          recentPanelAuthResults.delete(key);
+        }
+        return;
+      }
+      recentPanelAuthResults.set(key, { expiresAt, result });
+    }
+
+    function normalizeText(value) {
+      return namespace.session.normalizeText(value);
     }
   }
 

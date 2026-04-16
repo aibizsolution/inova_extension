@@ -139,10 +139,10 @@
 
   function updateMarkup(root, state, compact) {
     const button = root.querySelector(".inova-composer-review__button") || createButton(root);
-    const buttonLabel = state.pending ? "검토 중..." : compact ? "검토" : "프롬프트 검토";
-    button.className = `inova-composer-review__button ${state.pending ? "is-pending" : ""}`.trim();
-    button.dataset.composerReviewAction = state.pending ? "" : "activate-review";
-    button.disabled = Boolean(state.pending || !state.available || (!state.hasText && !state.result));
+    const buttonLabel = compact ? "검토" : "프롬프트 검토";
+    button.className = "inova-composer-review__button";
+    button.dataset.composerReviewAction = "activate-review";
+    button.disabled = Boolean(!state.available || !state.hasText);
     button.setAttribute("aria-disabled", String(button.disabled));
     button.querySelector(".inova-composer-review__button-text").textContent = buttonLabel;
   }

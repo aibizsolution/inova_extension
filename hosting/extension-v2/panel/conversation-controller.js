@@ -1,6 +1,7 @@
 (function initConversationController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const SNAPSHOT_REFRESH_INTERVAL_MS = 10000;
+  const { cloneValue, normalizeText, resolveBrowserCapabilities } = namespace.panelUtils;
+  const SNAPSHOT_REFRESH_DEBOUNCE_MS = 120;
   const REQUIRED_EXTENSION_CAPABILITIES = Object.freeze([
     "page.adapter.v2",
   ]);
@@ -36,8 +37,8 @@
       initialized: false,
       items: [],
       lastLoadedAt: 0,
-      lastRequestedAt: 0,
       loadPromise: null,
+      pendingRefreshAfterLoad: false,
       refreshTimerId: 0,
       loading: false,
       query: "",
@@ -149,15 +150,15 @@
       state.activeId = normalizeText(bookmarkId);
     }
 
-    async function ensureLoaded(force = false) {
-      void force;
+    async function ensureLoaded() {
       global.clearTimeout(state.refreshTimerId);
       state.refreshTimerId = 0;
       if (state.loadPromise) {
         return state.loadPromise;
       }
+      state.pendingRefreshAfterLoad = false;
+      const requestedFingerprint = state.snapshotFingerprint;
       const run = (async () => {
-        state.lastRequestedAt = Date.now();
         state.loading = true;
         traceConversation("34.hosted.conversation.snapshot.start", {});
         scheduleRender();
@@ -188,22 +189,25 @@
         if (state.loadPromise === run) {
           state.loadPromise = null;
         }
+        if (state.pendingRefreshAfterLoad || state.snapshotFingerprint !== requestedFingerprint) {
+          state.pendingRefreshAfterLoad = false;
+          requestLoad();
+        }
       }
     }
 
     function requestLoad() {
-      if (state.loadPromise || state.refreshTimerId) {
+      if (state.loadPromise) {
+        state.pendingRefreshAfterLoad = true;
         return false;
       }
-      const remaining = Math.max(0, SNAPSHOT_REFRESH_INTERVAL_MS - (Date.now() - state.lastRequestedAt));
-      if (remaining > 0) {
-        state.refreshTimerId = global.setTimeout(() => {
-          state.refreshTimerId = 0;
-          void ensureLoaded(true);
-        }, remaining);
-        return true;
+      if (state.refreshTimerId) {
+        return false;
       }
-      void ensureLoaded(true);
+      state.refreshTimerId = global.setTimeout(() => {
+        state.refreshTimerId = 0;
+        void ensureLoaded();
+      }, SNAPSHOT_REFRESH_DEBOUNCE_MS);
       return true;
     }
 
@@ -224,6 +228,10 @@
       const nextActiveId = normalizeText(fallbackBookmarksTool?.activeId);
       if (nextActiveId) {
         state.activeId = nextActiveId;
+      }
+      const nextVisibleMessageId = normalizeText(fallbackBookmarksTool?.visibleMessageId);
+      if (nextVisibleMessageId) {
+        state.visibleMessageId = nextVisibleMessageId;
       }
     }
 
@@ -312,27 +320,8 @@
       }, 180);
     }
 
-    function cloneValue(value) {
-      return value == null ? value : JSON.parse(JSON.stringify(value));
-    }
-
-    function normalizeText(value) {
-      return namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
-    }
-
     function getErrorMessage(error, fallback) {
       return normalizeText(error instanceof Error ? error.message : error) || fallback;
-    }
-
-    function resolveBrowserCapabilities(createOptions) {
-      const providedCapabilities = createOptions?.browserCapabilities;
-      if (providedCapabilities && typeof providedCapabilities === "object") {
-        return providedCapabilities;
-      }
-      return namespace.extensionCapabilityClient?.create?.({
-        invokePage: createOptions?.invokePage,
-        invokeRuntime: createOptions?.invokeRuntime,
-      }) || {};
     }
   }
 

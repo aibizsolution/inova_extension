@@ -1,5 +1,6 @@
 (function initPanelV2CompositionController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const normalizeText = namespace.session.normalizeText;
   const RUNTIME_PROVIDER_IDENTITY_REQUEST = "inova-meeting:get-provider-identity";
 
   function create(state) {
@@ -20,41 +21,28 @@
       isExtensionContextInvalidatedError: panelRuntimeController.isExtensionContextInvalidatedError,
       logPanelDebug: panelRuntimeController.logPanelDebug,
     };
-    const releaseToolSummarySnapshot = createReleaseToolSummarySnapshotBridge(
-      () => getToolSummary(state.toolSummaries, "release")
-    );
     const providerIdentitySync = createProviderIdentitySync(state, {
       ...runtimeDiagnostics,
       render,
     });
-    const meetingToolSummarySnapshot = createCountToolSummarySnapshotBridge(
-      () => getToolSummary(state.toolSummaries, "meeting")
-    );
     const panelDebugController = createPanelDebugBridge(state, {
       ...runtimeFlags,
     });
-    const conversationBridge = createConversationBridge(state, { render });
+    const conversationBridge = createConversationBridge(state);
     const panelShellController = panelV2ShellBridge.createShellController(state, {
-      bookmarkController: conversationBridge,
-      isExtensionContextInvalidatedError: runtimeDiagnostics.isExtensionContextInvalidatedError,
       render,
     });
     const promptShellController = namespace.panelV2PromptController.create(state, {
       ...runtimeFlags,
-      lockUiPreferenceSelection: panelShellController.lockUiPreferenceSelection,
-      persistActiveTool: panelShellController.persistActiveTool,
       render,
     });
     const promptSnapshotBridge = createPromptSnapshotBridge();
 
-    const routeStateController = namespace.routeStateController.create(state, {
-      applyUiPreferenceLock: panelShellController.applyUiPreferenceLock,
-      normalizeToolId: panelShellController.normalizeToolId,
-    });
     const panelLifecycleController = panelV2ShellBridge.createPanelLifecycleBridge(state, {
       logPanelDebug: runtimeDiagnostics.logPanelDebug,
       render,
     });
+    const routeStateController = namespace.routeStateController.create(state);
     const panelActivityController = panelV2ShellBridge.createPanelActivityBridge(state, {
       logPanelDebug: runtimeDiagnostics.logPanelDebug,
       providerIdentitySync,
@@ -74,32 +62,17 @@
       scheduleRouteSync: routeSync.scheduleRouteSync,
     });
 
-    const toolSummarySnapshotBridges = {
-      meeting: meetingToolSummarySnapshot,
-      release: releaseToolSummarySnapshot,
-    };
-
     renderController = panelV2ShellBridge.createRenderController(state, {
       isPaused: runtimeFlags.isPaused,
       isToolSurface: runtimeFlags.isToolSurface,
       buildConversationSnapshot: conversationBridge.buildConversationSnapshot,
-      getConversationCount: conversationBridge.getConversationCount,
       buildPromptSnapshot: promptSnapshotBridge.buildPromptSnapshot,
-      getPromptCounts: promptSnapshotBridge.getPromptCounts,
-      buildToolSummarySnapshot(toolId) {
-        return toolSummarySnapshotBridges[normalizeToolSummaryId(toolId)]?.buildSnapshot?.() || {};
-      },
-      getToolSummaryCount(toolId, toolSummary) {
-        return toolSummarySnapshotBridges[normalizeToolSummaryId(toolId)]?.getCount?.(toolSummary) || 0;
-      },
       panelDebugController,
       promptShellController,
-      panelShellController,
+      readPanelOpen: panelLifecycleController.readPanelOpen,
     });
     const panelBootstrapController = panelV2ShellBridge.createBootstrapController(state, {
-      handlePanelToolSummarySync: handleToolSummarySync,
       panelActivityController,
-      panelBookmarkController: conversationBridge,
       panelDebugController,
       panelLifecycleController,
       promptShellController,
@@ -118,48 +91,16 @@
       },
     };
 
-    function handleToolSummarySync(toolId, toolState = {}) {
-      const normalizedToolId = normalizeToolSummaryId(toolId);
-      if (!normalizedToolId) {
-        return false;
-      }
-      const nextSummary = normalizeToolSummary(normalizedToolId, toolState);
-      if (!shouldUpdateToolSummary(state.toolSummaries, normalizedToolId, nextSummary)) {
-        return false;
-      }
-      state.toolSummaries = {
-        ...state.toolSummaries,
-        [normalizedToolId]: nextSummary,
-      };
-      render();
-      return true;
-    }
   }
 
   function createState() {
     return {
       sessionId: "",
       sessionTitle: "",
-      open: false,
-      preferredOpen: false,
-      activeId: "",
-      activeTool: namespace.constants.defaults.uiPreferences.activeTool,
-      queries: { bookmarks: "" },
       settings: { ...namespace.constants.defaults.settings },
       settingsHydrated: false,
       pausedSessions: {},
-      toolSummaries: {
-        meeting: { count: 0 },
-        release: { count: 0 },
-      },
-      panelDebugUi: {
-        collapsed: true,
-        feedback: null,
-        feedbackTimer: 0,
-      },
       uiPreferences: namespace.storage.mergeUiPreferences(),
-      promptReview: { ...namespace.constants.defaults.promptReview },
-      feedbackTimer: 0,
       bookmarks: [],
       observer: null,
       surfacePollTimer: 0,
@@ -170,9 +111,9 @@
       routeRetryTimers: [],
       lastRouteKey: "",
       routeBaselineSignature: "",
+      routeLastMutationAt: 0,
       routeWaitStartedAt: 0,
       awaitingRouteMessages: false,
-      uiPreferenceLock: null,
       lastError: "",
     };
   }
@@ -376,21 +317,6 @@
     return normalize(identity || null);
   }
 
-  function createCountToolSummarySnapshotBridge(getToolSummary = () => ({})) {
-    return {
-      buildSnapshot() {
-        return {
-          count: getCount(getToolSummary()),
-        };
-      },
-      getCount,
-    };
-
-    function getCount(toolSummary = {}) {
-      return normalizeToolSummaryCount(toolSummary?.count);
-    }
-  }
-
   function createPromptSnapshotBridge() {
     return {
       buildPromptSnapshot(promptToolState = {}) {
@@ -401,155 +327,36 @@
           review: normalizePromptReviewSnapshot(promptTool.review),
         };
       },
-      getPromptCounts(promptToolState = {}) {
-        return {
-          promptCount: Math.max(0, Number(promptToolState.promptCount) || 0),
-          promptToolCount: Math.max(0, Number(promptToolState.promptToolCount) || 0),
-        };
-      },
     };
   }
 
-  function createConversationBridge(state, deps = {}) {
-    const render = typeof deps.render === "function" ? deps.render : () => {};
-
+  function createConversationBridge(state) {
     return {
-      buildToolState,
       buildConversationSnapshot() {
-        const bookmarkTool = buildToolState();
         return {
-          activeId: normalizeText(bookmarkTool.activeId),
-          count: getConversationCount(bookmarkTool),
-          snapshotFingerprint: buildSnapshotFingerprint(bookmarkTool),
+          count: getConversationCount(),
+          snapshotFingerprint: buildSnapshotFingerprint(),
+          visibleMessageId: normalizeText(namespace.contentDom?.getVisibleMessageId?.(state.bookmarks)),
         };
       },
-      copyBookmarkText,
-      getConversationCount,
-      jumpToBookmark,
-      submitQuery,
-      updateQuery,
     };
 
-    function buildToolState() {
-      const items = getFilteredBookmarks();
-      return {
-        activeId: state.activeId,
-        count: Array.isArray(state.bookmarks) ? state.bookmarks.length : 0,
-        emptyText: buildEmptyText(),
-        items,
-        metaText: state.queries.bookmarks ? `검색 결과 ${items.length}개` : buildStatusText(),
-        query: state.queries.bookmarks,
-      };
-    }
-
-    async function copyBookmarkText(bookmarkId) {
-      const bookmark = Array.isArray(state.bookmarks)
-        ? state.bookmarks.find((entry) => normalizeText(entry?.id) === normalizeText(bookmarkId))
-        : null;
-      const writeText = global.navigator?.clipboard?.writeText;
-      if (!bookmark?.text) {
-        return false;
+    function getConversationCount(conversationSnapshot = null) {
+      if (conversationSnapshot && typeof conversationSnapshot === "object") {
+        return Math.max(0, Number(conversationSnapshot.count) || 0);
       }
-      if (typeof writeText !== "function") {
-        return false;
-      }
-      try {
-        await writeText.call(global.navigator.clipboard, bookmark.text);
-        return true;
-      } catch (error) {
-        console.error("[i-Nova Bookmarks] copy failed", error);
-        return false;
-      }
+      return Array.isArray(state.bookmarks) ? state.bookmarks.length : 0;
     }
 
-    function getConversationCount(bookmarkTool = {}) {
-      return Math.max(
-        0,
-        Number(bookmarkTool.count) || (Array.isArray(bookmarkTool.items) ? bookmarkTool.items.length : 0)
-      );
-    }
-
-    function jumpToBookmark(bookmarkId) {
-      const normalizedBookmarkId = normalizeText(bookmarkId);
-      state.activeId = normalizedBookmarkId;
-      namespace.contentPanel?.setActiveBookmark?.(normalizedBookmarkId);
-      namespace.contentPanel?.focusBookmark?.(normalizedBookmarkId);
-      namespace.contentDom?.scrollToMessage?.(normalizedBookmarkId, { behavior: "smooth", block: "start" });
-      return true;
-    }
-
-    function submitQuery(value) {
-      state.queries.bookmarks = value || "";
-      render();
-      return true;
-    }
-
-    function updateQuery(value) {
-      state.queries.bookmarks = value || "";
-      render();
-      return true;
-    }
-
-    function buildSnapshotFingerprint(bookmarkTool = {}) {
-      const items = Array.isArray(bookmarkTool.items) ? bookmarkTool.items : [];
+    function buildSnapshotFingerprint() {
+      const items = Array.isArray(state.bookmarks) ? state.bookmarks : [];
       return [
-        normalizeText(bookmarkTool.activeId),
-        String(getConversationCount(bookmarkTool)),
+        normalizeText(state.sessionId),
+        String(getConversationCount()),
         normalizeText(items[0]?.id),
         normalizeText(items.at?.(-1)?.id),
       ].join("|");
     }
-
-    function buildEmptyText() {
-      return state.queries.bookmarks
-        ? "검색 결과가 없어요. 다른 표현으로 다시 찾아보세요."
-        : !state.settings.autoBookmark
-            ? "팝업에서 대화 자동 모으기를 켜면 대화 탭을 사용할 수 있어요."
-            : state.awaitingRouteMessages
-                ? "이 대화의 흐름을 불러오는 중이에요."
-                : "아직 대화가 없어요.";
-    }
-
-    function buildStatusText() {
-      return state.lastError
-        ? "표시에 문제가 있어요. 새로고침 후 다시 시도해 주세요."
-        : !state.settings.autoBookmark
-            ? "대화 자동 모으기가 꺼져 있어요."
-            : state.awaitingRouteMessages
-                ? "대화를 불러오는 중"
-                : !state.bookmarks.length
-                    ? "아직 대화가 없어요"
-                    : "";
-    }
-
-    function getFilteredBookmarks() {
-      const query = normalizeText(state.queries.bookmarks).toLowerCase();
-      return query
-        ? state.bookmarks.filter((bookmark) => normalizeText(bookmark?.normalizedText || bookmark?.text).toLowerCase().includes(query))
-        : state.bookmarks;
-    }
-  }
-
-  function createReleaseToolSummarySnapshotBridge(getReleaseSummary = () => ({})) {
-    return {
-      buildSnapshot() {
-        const releaseTool = normalizeToolSummary("release", getReleaseSummary());
-        const count = getCount(releaseTool);
-        return {
-          count,
-          updateAvailable: count > 0,
-        };
-      },
-      getCount,
-    };
-
-    function getCount(releaseTool = normalizeToolSummary("release", getReleaseSummary())) {
-      return normalizeToolSummaryCount(releaseTool.count);
-    }
-  }
-
-  function normalizeText(value) {
-    return namespace.session?.normalizeText?.(value) || String(value ?? "").trim();
   }
 
   function normalizePromptReviewSnapshot(reviewState) {
@@ -560,46 +367,6 @@
     return {
       ...(requestId ? { requestId } : {}),
     };
-  }
-
-  function normalizeToolSummaryCount(value) {
-    return Math.max(0, Number(value) || 0);
-  }
-
-  function normalizeToolSummaryId(value) {
-    const normalizedToolId = normalizeText(value);
-    return normalizedToolId === "meeting" || normalizedToolId === "release"
-      ? normalizedToolId
-      : "";
-  }
-
-  function getToolSummary(toolSummaries, toolId) {
-    const normalizedToolId = normalizeToolSummaryId(toolId);
-    if (!normalizedToolId) {
-      return {};
-    }
-    const summaries = toolSummaries && typeof toolSummaries === "object" ? toolSummaries : {};
-    const summary = summaries[normalizedToolId];
-    return summary && typeof summary === "object" ? summary : {};
-  }
-
-  function shouldUpdateToolSummary(toolSummaries, toolId, nextSummary) {
-    return buildToolSummaryKey(toolId, getToolSummary(toolSummaries, toolId))
-      !== buildToolSummaryKey(toolId, nextSummary);
-  }
-
-  function buildToolSummaryKey(toolId, toolSummary) {
-    return JSON.stringify(normalizeToolSummary(toolId, toolSummary));
-  }
-
-  function normalizeToolSummary(toolId, toolSummary = {}) {
-    const normalizedToolId = normalizeToolSummaryId(toolId);
-    if (normalizedToolId === "meeting" || normalizedToolId === "release") {
-      return {
-        count: normalizeToolSummaryCount(toolSummary?.count),
-      };
-    }
-    return {};
   }
 
   namespace.panelV2CompositionController = { create, createState };

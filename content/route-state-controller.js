@@ -1,15 +1,10 @@
 (function initRouteStateController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
+  const normalizeText = namespace.session.normalizeText;
   const ROUTE_FALLBACK_MS = 1600;
+  const ROUTE_SETTLE_MS = 260;
 
-  function create(state, deps = {}) {
-    const applyUiPreferenceLock = typeof deps.applyUiPreferenceLock === "function"
-      ? deps.applyUiPreferenceLock
-      : (uiPreferences) => uiPreferences;
-    const normalizeToolId = typeof deps.normalizeToolId === "function"
-      ? deps.normalizeToolId
-      : defaultNormalizeToolId;
-
+  function create(state) {
     return {
       handleStorageChange,
       refreshState,
@@ -30,7 +25,7 @@
         state.bookmarks = readLiveBookmarks();
         state.lastError = "";
         logDebug("route.refresh.success", {
-          activeTool: state.activeTool,
+          activeTool: readActiveTool(),
           bookmarkCount: state.bookmarks.length,
           scope: "route",
           sessionId: state.sessionId,
@@ -58,12 +53,10 @@
     function resetRouteState(nextSessionId, previousSignature) {
       state.sessionId = nextSessionId || "";
       state.sessionTitle = nextSessionId ? namespace.contentDom.getSessionTitle() : "";
-      state.open = namespace.contentDom.getConversationState().hasComposer ? state.preferredOpen : false;
-      state.activeId = "";
       state.bookmarks = [];
-      state.promptReview = { ...namespace.constants.defaults.promptReview };
       state.lastError = "";
       state.routeBaselineSignature = nextSessionId ? previousSignature : "";
+      state.routeLastMutationAt = nextSessionId ? Date.now() : 0;
       state.awaitingRouteMessages = Boolean(nextSessionId);
       state.routeWaitStartedAt = nextSessionId ? Date.now() : 0;
     }
@@ -92,7 +85,6 @@
       }
       if (uiPreferencesChange) {
         state.uiPreferences = readUiPreferences(uiPreferencesChange.newValue);
-        state.activeTool = normalizeToolId(state.uiPreferences.activeTool || state.activeTool);
         changed = true;
       }
 
@@ -104,14 +96,12 @@
       state.settingsHydrated = true;
       state.pausedSessions = storageState.pausedSessions || {};
       state.uiPreferences = readUiPreferences(storageState.uiPreferences);
-      state.activeTool = normalizeToolId(state.uiPreferences.activeTool || state.activeTool);
     }
 
     function readUiPreferences(value) {
       const merged = namespace.storage.mergeUiPreferences(value);
-      const locked = applyUiPreferenceLock(merged);
-      return namespace.storage.mergeUiPreferences(locked, {
-        activePromptTab: normalizePromptTab(locked.activePromptTab),
+      return namespace.storage.mergeUiPreferences(merged, {
+        activePromptTab: normalizePromptTab(merged.activePromptTab),
       });
     }
 
@@ -123,6 +113,7 @@
       }
 
       const liveBookmarks = namespace.contentDom.collectUserMessages(state.sessionId);
+      const mergedBookmarks = mergeLiveBookmarks(state.bookmarks, liveBookmarks);
       const liveSignature = namespace.contentDom.getUserMessageSignature();
       if (shouldKeepWaiting(liveBookmarks, liveSignature)) {
         return [];
@@ -130,7 +121,43 @@
 
       state.awaitingRouteMessages = false;
       state.routeBaselineSignature = liveSignature;
-      return liveBookmarks;
+      return mergedBookmarks;
+    }
+
+    function mergeLiveBookmarks(previousBookmarks, liveBookmarks) {
+      const previous = Array.isArray(previousBookmarks) ? previousBookmarks : [];
+      const next = Array.isArray(liveBookmarks) ? liveBookmarks : [];
+      if (!previous.length) {
+        return next.slice();
+      }
+      if (!next.length) {
+        return previous.slice();
+      }
+
+      const merged = new Map();
+      previous.forEach((bookmark) => {
+        const bookmarkId = normalizeText(bookmark?.id);
+        if (!bookmarkId) {
+          return;
+        }
+        merged.set(bookmarkId, cloneValue(bookmark));
+      });
+      next.forEach((bookmark) => {
+        const bookmarkId = normalizeText(bookmark?.id);
+        if (!bookmarkId) {
+          return;
+        }
+        merged.set(bookmarkId, {
+          ...(merged.get(bookmarkId) || {}),
+          ...cloneValue(bookmark),
+        });
+      });
+
+      return Array.from(merged.values()).sort((left, right) => {
+        const leftOrder = Math.max(0, Number(left?.order) || 0);
+        const rightOrder = Math.max(0, Number(right?.order) || 0);
+        return leftOrder - rightOrder;
+      });
     }
 
     function shouldCollectLiveMessages() {
@@ -148,7 +175,14 @@
       const readyWithoutBaseline = !state.routeBaselineSignature && liveBookmarks.length > 0;
       const becameEmpty = !liveBookmarks.length && !liveSignature && emptyConversationReady;
       const waitedLongEnough = Date.now() - state.routeWaitStartedAt > ROUTE_FALLBACK_MS;
-      return !(routeLoaded || readyWithoutBaseline || becameEmpty || waitedLongEnough);
+      const transitionDetected = routeLoaded || readyWithoutBaseline || becameEmpty;
+      if (waitedLongEnough) {
+        return false;
+      }
+      if (!transitionDetected) {
+        return true;
+      }
+      return Date.now() - Math.max(0, Number(state.routeLastMutationAt) || 0) < ROUTE_SETTLE_MS;
     }
 
     function isPaused() {
@@ -163,9 +197,14 @@
       return namespace.productLane?.getStorageChange?.(changes, storageKey) || changes[fallbackKey];
     }
 
-    function defaultNormalizeToolId(toolId) {
-      return toolId === "release" || toolId === "prompts" || toolId === "meeting"
-        ? toolId
+    function cloneValue(value) {
+      return value == null ? value : JSON.parse(JSON.stringify(value));
+    }
+
+    function readActiveTool() {
+      const activeTool = normalizeText(readUiPreferences(state.uiPreferences).activeTool);
+      return activeTool === "release" || activeTool === "prompts" || activeTool === "meeting"
+        ? activeTool
         : "bookmarks";
     }
 

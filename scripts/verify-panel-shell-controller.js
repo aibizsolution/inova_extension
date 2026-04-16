@@ -8,97 +8,53 @@ const vm = require("vm");
 const root = path.resolve(__dirname, "..");
 
 async function main() {
-  await verifyMeetingAndReleaseToolSelection();
-  await verifyPromptLibrarySelection();
-  await verifyStoreAliasSelection();
-  await verifyBookmarkQueryRoutingAndHandleCount();
-  verifyPromptQueryFallbackIsDropped();
+  verifyQueryFallbackIsDropped();
+  verifyHandleCountMovedToHosted();
+  verifyPanelOpenStorageMovedToHosted();
   verifyPromptSelectionStaysShellOwned();
-  await verifyHandlePositionAndUiPreferenceLock();
+  verifyPanelLifecycleUsesUiPreferences();
+  await verifyHandlePositionPersistence();
   console.log("[verify-panel-shell-controller] V2 shell bridge shell contract passed");
 }
 
-async function verifyMeetingAndReleaseToolSelection() {
-  const harness = createHarness({
-    activePromptTab: "store",
-    activeTool: "prompts",
-    uiPreferenceTool: "prompts",
-  });
-
-  await harness.controller.selectTool("meeting");
-  assert.equal(harness.state.activeTool, "meeting");
-  assert.deepEqual(harness.persistCalls[0], {
-    activePromptTab: "store",
-    activeTool: "meeting",
-  });
-
-  await harness.controller.selectTool("release");
-  assert.equal(harness.state.activeTool, "release");
+function verifyHandleCountMovedToHosted() {
+  const source = fs.readFileSync(path.join(root, "content", "panel-v2-shell-bridge.js"), "utf8");
+  assert.equal(
+    source.includes("buildHandleCount"),
+    false,
+    "v2 shell bridge should not calculate handle counts after hosted panel chrome sync owns them"
+  );
 }
 
-async function verifyPromptLibrarySelection() {
-  const harness = createHarness({
-    activePromptTab: "store",
-    activeTool: "meeting",
-    uiPreferenceTool: "meeting",
-  });
-
-  assert.equal(await harness.controller.selectTool("prompts"), true);
-  assert.equal(harness.state.activeTool, "prompts");
-  assert.deepEqual(harness.persistCalls[0], {
-    activePromptTab: "library",
-    activeTool: "prompts",
-  });
+function verifyPanelOpenStorageMovedToHosted() {
+  const source = fs.readFileSync(path.join(root, "content", "panel-v2-shell-bridge.js"), "utf8");
+  [
+    "PANEL_OPEN_KEY",
+    "sessionStorage",
+    "preferredOpen",
+    "readPanelOpenPreference",
+    "writePanelOpenPreference",
+    "persistOpen",
+  ].forEach((pattern) => assert.equal(
+    source.includes(pattern),
+    false,
+    `v2 shell bridge should not keep extension-side panel open persistence residue ${pattern}`
+  ));
 }
 
-async function verifyStoreAliasSelection() {
-  const harness = createHarness();
+function verifyQueryFallbackIsDropped() {
+  const source = fs.readFileSync(path.join(root, "content", "panel-v2-shell-bridge.js"), "utf8");
 
-  assert.equal(await harness.controller.selectTool("store"), true);
-  assert.equal(harness.state.activeTool, "prompts");
-  assert.deepEqual(harness.persistCalls[0], {
-    activePromptTab: "store",
-    activeTool: "prompts",
-  });
-}
-
-async function verifyBookmarkQueryRoutingAndHandleCount() {
-  const harness = createHarness({
-    activeTool: "bookmarks",
-    uiPreferenceTool: "bookmarks",
-  });
-
-  assert.equal(harness.controller.updateQuery("bookmarks", "대화"), true);
-  assert.deepEqual(harness.bookmarkQueryCalls, ["대화"]);
-
-  assert.equal(harness.controller.submitQuery("bookmarks", "질문"), true);
-  assert.deepEqual(harness.bookmarkSubmitCalls, ["질문"]);
-
-  const bookmarkHandleCount = harness.controller.buildHandleCount({
-    bookmarks: 2,
-    meeting: 1,
-    promptTool: 3,
-    prompts: 5,
-    release: 1,
-  });
-  assert.equal(bookmarkHandleCount, 2);
-
-  harness.state.activeTool = "prompts";
-  const promptHandleCount = harness.controller.buildHandleCount({
-    bookmarks: 2,
-    meeting: 1,
-    promptTool: 3,
-    prompts: 5,
-    release: 1,
-  });
-  assert.equal(promptHandleCount, 3);
-}
-
-function verifyPromptQueryFallbackIsDropped() {
-  const harness = createHarness();
-
-  assert.equal(harness.controller.updateQuery("prompts", "회의", { composing: true }), false);
-  assert.equal(harness.controller.submitQuery("store", "공개"), false);
+  [
+    "async selectTool(",
+    "submitQuery(toolId, value)",
+    "updateQuery(toolId, value, options = {})",
+    "const bookmarkController = deps.bookmarkController",
+  ].forEach((pattern) => assert.equal(
+    source.includes(pattern),
+    false,
+    `v2 shell bridge should drop the removed shell helper ${pattern}`
+  ));
 }
 
 function verifyPromptSelectionStaysShellOwned() {
@@ -114,36 +70,61 @@ function verifyPromptSelectionStaysShellOwned() {
     false,
     "v2 shell bridge should keep prompt/store tool selection inside the shell instead of delegating it back to the prompt controller"
   );
+  [
+    "persistActiveTool",
+    "lockUiPreferenceSelection",
+    "applyUiPreferenceLock",
+    "normalizeToolId",
+    "readActiveTool",
+    "state.activeTool",
+    "uiPreferenceLock",
+  ].forEach((pattern) => assert.equal(
+    source.includes(pattern),
+    false,
+    `v2 shell bridge should not keep hosted-owned tool/tab persistence residue ${pattern}`
+  ));
 }
 
-async function verifyHandlePositionAndUiPreferenceLock() {
+async function verifyHandlePositionPersistence() {
   const harness = createHarness();
-
-  harness.controller.lockUiPreferenceSelection("store", "unknown");
-  assert.equal(harness.state.uiPreferenceLock.activeTool, "prompts");
-  assert.equal(harness.state.uiPreferenceLock.activePromptTab, "library");
-  assert.deepEqual(harness.controller.applyUiPreferenceLock({
-    activePromptTab: "review",
-    activeTool: "meeting",
-  }), {
-    activePromptTab: "library",
-    activeTool: "prompts",
-  });
 
   await harness.controller.updateHandlePosition(0.55);
   assert.equal(harness.renderCalls.length, 1);
   assert.deepEqual(harness.handleUpdates[0], {
-    activeTool: "prompts",
     handleRatios: { desktop: 0.55 },
   });
+  assert.equal("activeTool" in harness.handleUpdates[0], false);
   assert.equal(harness.state.uiPreferences.handleRatios.desktop, 0.55);
+  assert.equal(harness.state.uiPreferences.activeTool, "prompts");
+}
+
+function verifyPanelLifecycleUsesUiPreferences() {
+  const harness = createHarness({ panelOpen: true });
+  const lifecycle = harness.context.InovaBookmarks.panelV2ShellBridge.createPanelLifecycleBridge(
+    harness.state,
+    {
+      logPanelDebug(event, payload) {
+        harness.debugEvents.push({ event, payload: cloneValue(payload) });
+      },
+      render() {
+        harness.renderCalls.push(true);
+      },
+    }
+  );
+
+  lifecycle.initializeOpenState();
+  assert.equal(lifecycle.readPanelOpen(), true);
+
+  lifecycle.applyPanelOpen(false);
+  assert.equal(lifecycle.readPanelOpen(), false);
+  assert.equal(harness.state.uiPreferences.panelOpen, false);
+  assert.equal(harness.renderCalls.length, 1);
+  assert.equal(harness.debugEvents.at(-1)?.payload?.open, false);
 }
 
 function createHarness(options = {}) {
-  const bookmarkQueryCalls = [];
-  const bookmarkSubmitCalls = [];
+  const debugEvents = [];
   const handleUpdates = [];
-  const persistCalls = [];
   const renderCalls = [];
 
   const context = vm.createContext({
@@ -167,6 +148,7 @@ function createHarness(options = {}) {
           activePromptTab: "library",
           activeTool: "bookmarks",
           handleRatios: {},
+          panelOpen: false,
           ...cloneValue(current),
           ...cloneValue(patch),
         };
@@ -185,13 +167,12 @@ function createHarness(options = {}) {
       async updateUiPreferences(patch = {}) {
         if (patch.handleRatios) {
           handleUpdates.push(cloneValue(patch));
-        } else {
-          persistCalls.push(cloneValue(patch));
         }
         return {
           activePromptTab: "library",
           activeTool: "bookmarks",
           handleRatios: {},
+          panelOpen: false,
           ...context.InovaBookmarks.storage.mergeUiPreferences(patch),
         };
       },
@@ -201,41 +182,25 @@ function createHarness(options = {}) {
   loadScript("content/panel-v2-shell-bridge.js", context);
 
   const state = {
-    activeTool: options.activeTool || "prompts",
-    queries: { bookmarks: "" },
-    uiPreferenceLock: null,
     uiPreferences: {
       activePromptTab: options.activePromptTab || "library",
       activeTool: options.uiPreferenceTool || options.activeTool || "prompts",
       handleRatios: {},
+      panelOpen: options.panelOpen === true,
     },
   };
 
   const controller = context.InovaBookmarks.panelV2ShellBridge.createShellController(state, {
-    bookmarkController: {
-      submitQuery(value) {
-        bookmarkSubmitCalls.push(value);
-        return true;
-      },
-      updateQuery(value) {
-        bookmarkQueryCalls.push(value);
-        return true;
-      },
-    },
-    isExtensionContextInvalidatedError() {
-      return false;
-    },
     render() {
       renderCalls.push(true);
     },
   });
 
   return {
-    bookmarkQueryCalls,
-    bookmarkSubmitCalls,
+    context,
     controller,
+    debugEvents,
     handleUpdates,
-    persistCalls,
     renderCalls,
     state,
   };

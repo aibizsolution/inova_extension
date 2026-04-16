@@ -27,18 +27,12 @@
   function buildFirebaseConfig(overrideConfig) {
     const override = overrideConfig && typeof overrideConfig === "object" ? overrideConfig : {};
     const activeLane = namespace.productLane?.getActiveLane?.() || "legacy";
+    const defaultPromptCollections = getPromptFirestoreCollections(activeLane);
     const laneConfig = namespace.productLane?.getLaneConfig?.(activeLane) || {
       hosting: { baseUrl: "", originUrl: "" },
       id: activeLane,
       prompt: {
-        firestoreCollections: {
-          accountsCollection: "integration_inova_accounts",
-          promptLibraryChunksCollection: "prompt_library_chunks",
-          promptLibraryOrdersCollection: "prompt_library_orders",
-          storeDetailCollection: "prompt_store_entry_details",
-          storeFeedCollection: "prompt_store_feed_pages",
-          storeSummaryCollection: "prompt_store_meta",
-        },
+        firestoreCollections: defaultPromptCollections,
         panelScope: "prompt-panel",
       },
       storagePrefix: "",
@@ -59,7 +53,7 @@
       ),
       prompt: buildPromptConfig(laneConfig.prompt, override.prompt || {}),
       storage: {
-        prefix: normalizeText(laneConfig.storagePrefix),
+        prefix: trimString(laneConfig.storagePrefix),
       },
       web: buildWebConfig(laneConfig.web || {}, override.web || {}),
     };
@@ -73,7 +67,7 @@
     const baseUrl = normalizeBaseUrl(overrideConfig.baseUrl || defaultBaseUrl);
     const originUrl = normalizeOriginUrl(overrideConfig.originUrl || defaultOriginUrl || baseUrl);
     const promptPanelBridgeBaseUrl = buildPromptPanelBridgeBaseUrl(originUrl);
-    const promptPanelBridgeAssetVersion = normalizeText(
+    const promptPanelBridgeAssetVersion = trimString(
       overrideConfig.promptPanelBridgeAssetVersion
       || [readRuntimeManifestVersion(), PROMPT_PANEL_BRIDGE_CACHE_TOKEN].filter(Boolean).join("-")
     );
@@ -102,25 +96,23 @@
   }
 
   function buildPromptConfig(defaultPromptConfig = {}, overrideConfig = {}) {
-    const defaultCollections = defaultPromptConfig.firestoreCollections || {};
-    return {
-      firestoreCollections: {
-        accountsCollection: normalizeText(overrideConfig?.firestoreCollections?.accountsCollection || defaultCollections.accountsCollection) || "integration_inova_accounts",
-        promptLibraryChunksCollection:
-          normalizeText(
-            overrideConfig?.firestoreCollections?.promptLibraryChunksCollection
-            || defaultCollections.promptLibraryChunksCollection
-          ) || "prompt_library_chunks",
-        promptLibraryOrdersCollection:
-          normalizeText(
-            overrideConfig?.firestoreCollections?.promptLibraryOrdersCollection
-            || defaultCollections.promptLibraryOrdersCollection
-          ) || "prompt_library_orders",
-        storeDetailCollection: normalizeText(overrideConfig?.firestoreCollections?.storeDetailCollection || defaultCollections.storeDetailCollection) || "prompt_store_entry_details",
-        storeFeedCollection: normalizeText(overrideConfig?.firestoreCollections?.storeFeedCollection || defaultCollections.storeFeedCollection) || "prompt_store_feed_pages",
-        storeSummaryCollection: normalizeText(overrideConfig?.firestoreCollections?.storeSummaryCollection || defaultCollections.storeSummaryCollection) || "prompt_store_meta",
+    const defaultCollections = {
+      ...getPromptFirestoreCollections(),
+      ...(defaultPromptConfig.firestoreCollections || {}),
+    };
+    const overrideCollections = overrideConfig?.firestoreCollections && typeof overrideConfig.firestoreCollections === "object"
+      ? overrideConfig.firestoreCollections
+      : {};
+    const firestoreCollections = namespace.firestoreCollections?.normalizePromptFirestoreCollections?.(
+      {
+        ...defaultCollections,
+        ...overrideCollections,
       },
-      panelScope: normalizeText(overrideConfig.panelScope || defaultPromptConfig.panelScope) || "prompt-panel",
+      defaultPromptConfig.panelScope === "prompt-panel-v2" ? "v2" : "legacy"
+    ) || {};
+    return {
+      firestoreCollections,
+      panelScope: trimString(overrideConfig.panelScope || defaultPromptConfig.panelScope) || "prompt-panel",
     };
   }
 
@@ -185,6 +177,10 @@
         };
       },
     };
+  }
+
+  function getPromptFirestoreCollections(lane = "legacy") {
+    return namespace.firestoreCollections?.getPromptFirestoreCollections?.(lane) || {};
   }
 
   function resolvePromptRuntimeConfig(baseConfig, settings) {
@@ -296,11 +292,11 @@
   }
 
   function normalizeWorkspaceTarget(value) {
-    return normalizeText(value).toLowerCase() === "local" ? "local" : "production";
+    return trimString(value).toLowerCase() === "local" ? "local" : "production";
   }
 
   function normalizeWorkspaceUrlOverride(value) {
-    const normalized = normalizeText(value);
+    const normalized = trimString(value);
     if (!normalized) {
       return buildDefaultLocalMeetingWorkspaceUrl(LOCAL_MEETING_DEFAULTS.host);
     }
@@ -322,7 +318,7 @@
     return `${normalizeBaseUrl(baseUrl)}/${String(pathName || "").replace(/^\/+/, "")}`;
   }
 
-  function normalizeText(value) {
+  function trimString(value) {
     return String(value || "").trim();
   }
 
@@ -341,7 +337,7 @@
 
   function readRuntimeManifestVersion() {
     try {
-      return normalizeText(global.chrome?.runtime?.getManifest?.()?.version);
+      return trimString(global.chrome?.runtime?.getManifest?.()?.version);
     } catch {
       return "";
     }
@@ -349,8 +345,8 @@
 
   function appendQueryParam(url, key, value) {
     const normalizedUrl = String(url || "");
-    const normalizedKey = String(key || "").trim();
-    const normalizedValue = String(value || "").trim();
+    const normalizedKey = trimString(key);
+    const normalizedValue = trimString(value);
     if (!normalizedUrl || !normalizedKey || !normalizedValue) {
       return normalizedUrl;
     }
@@ -364,7 +360,7 @@
   }
 
   function buildLocalExtensionBaseUrl(originUrl, lane = "legacy") {
-    const panelBasePath = normalizeText(lane).toLowerCase() === "v2" ? "extension-v2" : "extension";
+    const panelBasePath = trimString(lane).toLowerCase() === "v2" ? "extension-v2" : "extension";
     return joinUrl(normalizeOriginUrl(originUrl), panelBasePath);
   }
 
@@ -373,7 +369,7 @@
   }
 
   function resolveLoopbackHost(value) {
-    const normalized = normalizeText(value).toLowerCase();
+    const normalized = trimString(value).toLowerCase();
     return LOOPBACK_HOSTNAMES.has(normalized) ? normalized : LOCAL_MEETING_DEFAULTS.host;
   }
 
@@ -389,7 +385,7 @@
     if (typeof value === "boolean") {
       return value;
     }
-    const normalized = normalizeText(value).toLowerCase();
+    const normalized = trimString(value).toLowerCase();
     return normalized === "1" || normalized === "true" || normalized === "on" || normalized === "yes";
   }
 

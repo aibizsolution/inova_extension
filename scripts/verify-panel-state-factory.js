@@ -14,25 +14,28 @@ function main() {
 
   assert.equal(harness.mergeUiPreferencesCalls, 2);
 
-  assert.equal(stateA.activeTool, "meeting");
-  assert.equal(stateA.panelDebugUi.collapsed, true);
-  assert.equal(stateA.toolSummaries.release.count, 0);
-  assert.equal("snapshotFingerprint" in stateA.toolSummaries.release, false);
   assert.equal(stateA.uiPreferences.activePromptTab, "library");
-  assert.deepEqual(Object.keys(stateA.queries), ["bookmarks"]);
-  assert.equal(stateA.promptReview.open, false);
+  assert.equal(stateA.uiPreferences.activeTool, "meeting");
+  assert.equal(stateA.settings.enabled, true);
+  assert.deepEqual(stateA.bookmarks, []);
   assert.equal(stateA.routeWatchInstalled, false);
+  assert.equal(stateA.awaitingRouteMessages, false);
+  assert.equal(stateA.lastError, "");
   assert.equal("cloudSync" in stateA, false);
   assert.equal("providerIdentityCache" in stateA, false);
+  assert.equal("activeTool" in stateA, false);
+  assert.equal("open" in stateA, false);
+  assert.equal("panelDebugUi" in stateA, false);
+  assert.equal("toolSummaries" in stateA, false);
+  assert.equal("promptReview" in stateA, false);
+  assert.equal("queries" in stateA, false);
 
   assert.notStrictEqual(stateA, stateB);
   assert.notStrictEqual(stateA.settings, stateB.settings);
-  assert.notStrictEqual(stateA.toolSummaries, stateB.toolSummaries);
-  assert.notStrictEqual(stateA.toolSummaries.meeting, stateB.toolSummaries.meeting);
-  assert.notStrictEqual(stateA.toolSummaries.release, stateB.toolSummaries.release);
-  assert.notStrictEqual(stateA.panelDebugUi, stateB.panelDebugUi);
-  assert.notStrictEqual(stateA.promptReview, stateB.promptReview);
-  assert.notStrictEqual(stateA.queries, stateB.queries);
+  assert.notStrictEqual(stateA.uiPreferences, stateB.uiPreferences);
+  assert.notStrictEqual(stateA.bookmarks, stateB.bookmarks);
+  assert.notStrictEqual(stateA.pausedSessions, stateB.pausedSessions);
+  assert.notStrictEqual(stateA.routeRetryTimers, stateB.routeRetryTimers);
   assert.equal("meetingHub" in stateA, false);
   assert.equal("meetingUi" in stateA, false);
   [
@@ -54,18 +57,16 @@ function main() {
   ].forEach((key) => assert.equal(key in stateA, false, `state should drop dead hosted-owned prompt residue ${key}`));
 
   stateA.settings.enabled = false;
-  stateA.toolSummaries.meeting.count = 7;
-  stateA.toolSummaries.release.count = 1;
-  stateA.promptReview.open = true;
-  stateA.queries.bookmarks = "alpha";
+  stateA.uiPreferences.activeTool = "release";
+  stateA.bookmarks.push({ id: "alpha" });
+  stateA.pausedSessions.alpha = true;
+  stateA.routeRetryTimers.push(1);
 
   assert.equal(stateB.settings.enabled, true);
-  assert.equal(stateB.toolSummaries.meeting.count, 0);
-  assert.equal(stateB.toolSummaries.release.count, 0);
-  assert.equal(stateB.promptReview.open, false);
-  assert.equal(stateB.queries.bookmarks, "");
-  assert.equal("prompts" in stateB.queries, false);
-  assert.equal("store" in stateB.queries, false);
+  assert.equal(stateB.uiPreferences.activeTool, "meeting");
+  assert.deepEqual(stateB.bookmarks, []);
+  assert.deepEqual(stateB.pausedSessions, {});
+  assert.deepEqual(stateB.routeRetryTimers, []);
 
   console.log("[verify-panel-state-factory] V2 composition state factory contract passed");
 }

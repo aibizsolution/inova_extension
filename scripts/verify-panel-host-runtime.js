@@ -64,6 +64,23 @@ function verifyPanelHostRuntimeModuleSplit() {
     "content/panel-host-runtime.js should own hosted frame sync once panel.js delegates host runtime work"
   );
   assert(
+    !/readRenderBoolean/.test(hostRuntimeSource)
+      && !/state\?\.settings/.test(hostRuntimeSource),
+    "content/panel-host-runtime.js should derive open/visible/settings from panelSnapshot only"
+  );
+  assert(
+    !/Object\.hasOwn\(state,\s*"handleCount"\)/.test(hostRuntimeSource),
+    "content/panel-host-runtime.js should not read hosted-owned handle counts from top-level render payloads"
+  );
+  assert(
+    /function syncPanelChrome/.test(hostRuntimeSource) && /syncPanelChrome/.test(panelSource),
+    "content panel host runtime should expose panel chrome sync for hosted-owned handle counts/open state"
+  );
+  assert(
+    /emitPanelEvent/.test(hostBridgeSource) && /emitPanelEvent/.test(panelSource),
+    "content panel host bridge should expose panel-domain events for hosted-owned external handle toggles"
+  );
+  assert(
     /function createHostedBridge/.test(hostBridgeSource),
     "content/panel-host-bridge.js should own hosted bridge endpoint creation once panel.js delegates it"
   );
@@ -119,8 +136,9 @@ function verifyPanelHostRuntimeModuleSplit() {
 function verifyHostedPanelHostBatching() {
   const harness = createHarness();
   const stateA = createPanelState({
-    handleCount: 1,
-    open: true,
+    panelSnapshot: {
+      open: true,
+    },
   });
   const stateB = createPanelState({
     panelSnapshot: {
@@ -128,9 +146,8 @@ function verifyHostedPanelHostBatching() {
         activeId: "bookmark-2",
         count: 2,
       },
+      open: false,
     },
-    handleCount: 2,
-    open: false,
   });
 
   harness.render(stateA);
@@ -140,7 +157,9 @@ function verifyHostedPanelHostBatching() {
 
   harness.flushFrame();
 
-  assert.equal(harness.handleCount.textContent, "2");
+  assert.equal(harness.handleCount.textContent, "0");
+  harness.context.InovaBookmarks.contentPanel.syncPanelChrome({ handleCount: 7 });
+  assert.equal(harness.handleCount.textContent, "7");
   assert.equal(harness.root.dataset.open, "false");
   assert.equal(
     harness.frame.getAttribute("src"),
@@ -159,9 +178,11 @@ function verifyHostedPanelHostBatching() {
 function verifyLocalPanelRuntimeSwitch() {
   const harness = createHarness();
   harness.render(createPanelState({
-    settings: {
-      meetingWorkspaceTarget: "local",
-      meetingWorkspaceUrlOverride: "http://127.0.0.1:5000/meeting/index.html",
+    panelSnapshot: {
+      settings: {
+        meetingWorkspaceTarget: "local",
+        meetingWorkspaceUrlOverride: "http://127.0.0.1:5000/meeting/index.html",
+      },
     },
   }));
   harness.flushFrame();
@@ -179,6 +200,7 @@ function verifyPageBridgeEvents() {
 
   harness.context.InovaBookmarks.contentPanel.setActiveBookmark("bookmark-alpha");
   harness.context.InovaBookmarks.contentPanel.focusBookmark("bookmark-alpha");
+  harness.context.InovaBookmarks.contentPanel.emitPanelEvent("external-toggle");
 
   assert.deepEqual(harness.bridge.events, [
     {
@@ -193,6 +215,12 @@ function verifyPageBridgeEvents() {
       payload: {
         action: "focus-bookmark",
         bookmarkId: "bookmark-alpha",
+      },
+    },
+    {
+      domain: "panel",
+      payload: {
+        action: "external-toggle",
       },
     },
   ]);
@@ -441,13 +469,7 @@ function createHarness() {
 
 function createPanelState(overrides = {}) {
   const state = {
-    handleCount: 0,
     handleRatio: 0.4,
-    open: true,
-    settings: {
-      meetingWorkspaceTarget: "production",
-      meetingWorkspaceUrlOverride: "",
-    },
     panelSnapshot: {
       activeTool: "bookmarks",
       bookmarksTool: {
@@ -492,18 +514,10 @@ function createPanelState(overrides = {}) {
         meetingWorkspaceTarget: "production",
         meetingWorkspaceUrlOverride: "",
       },
-      settingsHydrated: true,
       visible: true,
     },
-    visible: true,
   };
-  const merged = mergeObjects(state, overrides);
-  merged.panelSnapshot = mergeObjects(merged.panelSnapshot, {
-    open: merged.open,
-    settings: merged.settings,
-    visible: merged.visible,
-  });
-  return merged;
+  return mergeObjects(state, overrides);
 }
 
 function buildFirebaseConfig() {

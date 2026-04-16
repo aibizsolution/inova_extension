@@ -46,6 +46,7 @@
       ],
       "js": [
         "shared/constants.js",
+        "shared/firestore-collections.js",
         "shared/product-lane.js",
         "shared/session.js",
         "shared/firebase-config.js",

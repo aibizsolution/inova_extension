@@ -358,7 +358,7 @@
   }
 
   function normalizeText(value) {
-    return String(value || "").trim();
+    return namespace.session.normalizeText(value);
   }
 
   function normalizeBoolean(value) {

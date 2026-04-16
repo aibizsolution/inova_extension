@@ -51,7 +51,18 @@ function installHostedCapabilityClient(context) {
   }).runInContext(context);
 }
 
+function installPanelUtils(context) {
+  const source = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "panel-utils.js"),
+    "utf8"
+  );
+  new vm.Script(source, {
+    filename: "hosting/extension-v2/panel/panel-utils.js",
+  }).runInContext(context);
+}
+
 module.exports = {
   createPromptLibraryFirestoreNamespace,
   installHostedCapabilityClient,
+  installPanelUtils,
 };

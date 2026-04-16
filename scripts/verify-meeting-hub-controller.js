@@ -16,8 +16,8 @@ async function main() {
   await verifyHostedMeetingHubActivityRefreshOwnership();
   await verifyHostedMeetingHubDoesNotPrefetchWhileClosed();
   await verifyHostedMeetingHubIgnoresWindowFocusWhileActive();
-  await verifyHostedMeetingHubIgnoresOwnSummaryEchoWhileLoading();
-  await verifyHostedMeetingHubSummarySyncStaysCountOnly();
+  await verifyHostedMeetingHubKeepsRealtimeCountLocal();
+  verifyHostedMeetingHubDropsSummaryEchoContract();
   console.log("[verify-meeting-hub-controller] Hosted meeting hub controller contract passed");
 }
 
@@ -44,8 +44,7 @@ async function verifyHostedMeetingHubOwnership() {
   let viewState = controller.buildViewState();
   assert.equal(viewState.items.length, 1, "hosted meeting hub should load meeting items directly");
   assert.equal(viewState.items[0].meetingId, "meeting-alpha");
-  assert.equal(harness.summarySyncCalls.length, 1, "hosted meeting hub should sync a compact summary back to the top panel after load");
-  assert.deepEqual(harness.summarySyncCalls[0], { count: 1 });
+  assert.equal(viewState.feedback, null, "hosted meeting hub should not expose legacy inline feedback after load");
 
   const shareHandled = await controller.handleMeetingAction("share", {
     meetingId: "meeting-alpha",
@@ -55,7 +54,14 @@ async function verifyHostedMeetingHubOwnership() {
   assert.equal(shareHandled, true, "hosted meeting hub should fully handle share actions");
   viewState = controller.buildViewState();
   assert.equal(viewState.items[0].share.active, true, "hosted meeting hub should patch local share state after create");
-  assert.equal(viewState.feedback?.text, "공유 링크를 복사했습니다.");
+  assert.equal(viewState.feedback, null, "hosted meeting hub should keep short action feedback out of inline state");
+  assert.deepEqual(harness.toastCalls.at(-1), {
+    contextId: "meeting-alpha",
+    message: "공유 링크를 복사했습니다.",
+    source: "meeting",
+    tone: "success",
+    ttlMs: 2200,
+  });
   assert.deepEqual(harness.pageCalls[0], {
     action: "clipboard.write-text",
     text: "https://share.example/meeting-alpha",
@@ -68,7 +74,14 @@ async function verifyHostedMeetingHubOwnership() {
   });
   assert.equal(openHandled, true, "hosted meeting hub should fully handle open-result actions");
   viewState = controller.buildViewState();
-  assert.equal(viewState.feedback?.text, "결과 탭을 열었습니다.");
+  assert.equal(viewState.feedback, null, "hosted meeting hub should not duplicate launch feedback inline");
+  assert.deepEqual(harness.toastCalls.at(-1), {
+    contextId: "meeting-alpha",
+    message: "결과 탭을 열었습니다.",
+    source: "meeting",
+    tone: "success",
+    ttlMs: 1800,
+  });
   assert.equal(viewState.pending?.active, false, "hosted meeting hub should clear pending state after launch");
 
   assert(
@@ -114,8 +127,14 @@ async function verifyHostedMeetingHubShareCopyFailure() {
   assert.equal(handled, true, "hosted meeting hub should still finish share actions when clipboard copy fails");
   const viewState = controller.buildViewState();
   assert.equal(viewState.items[0].share.active, true, "share state should stay active even when auto-copy fails");
-  assert.equal(viewState.feedback?.text, "공유 링크는 만들었지만 자동 복사는 실패했어요.");
-  assert.equal(viewState.feedback?.tone, "error");
+  assert.equal(viewState.feedback, null, "hosted meeting hub should not surface short copy failures inline");
+  assert.deepEqual(harness.toastCalls.at(-1), {
+    contextId: "meeting-alpha",
+    message: "공유 링크는 만들었지만 자동 복사는 실패했어요.",
+    source: "meeting",
+    tone: "error",
+    ttlMs: 3600,
+  });
   assert.deepEqual(harness.pageCalls[0], {
     action: "clipboard.write-text",
     text: "https://share.example/meeting-alpha",
@@ -365,7 +384,7 @@ async function verifyHostedMeetingHubIgnoresWindowFocusWhileActive() {
   );
 }
 
-async function verifyHostedMeetingHubIgnoresOwnSummaryEchoWhileLoading() {
+async function verifyHostedMeetingHubKeepsRealtimeCountLocal() {
   const runtimeCalls = [];
   const realtimeSubscribeCalls = [];
   const context = vm.createContext({
@@ -385,11 +404,11 @@ async function verifyHostedMeetingHubIgnoresOwnSummaryEchoWhileLoading() {
     },
   };
 
+  loadScript("hosting/extension-v2/panel/panel-utils.js", context);
   loadScript("hosting/extension-v2/panel/extension-capability-client.js", context);
   loadScript("hosting/extension-v2/panel/meeting-hub-controller.js", context);
 
-  let controller = null;
-  controller = context.InovaBookmarks.meetingHubController.create({
+  const controller = context.InovaBookmarks.meetingHubController.create({
     invokePage: async () => ({ copied: true }),
     invokeRuntime: async (request) => {
       runtimeCalls.push(cloneValue(request));
@@ -417,22 +436,6 @@ async function verifyHostedMeetingHubIgnoresOwnSummaryEchoWhileLoading() {
       },
     },
     scheduleRender() {},
-    syncTopPanelSummary: async (meetingTool) => {
-      controller.syncPanelState(
-        {
-          activeTool: "meeting",
-          meetingTool: {
-            count: meetingTool.count + 8,
-          },
-          open: true,
-          settings: {
-            meetingWorkspaceTarget: "production",
-          },
-        },
-        ["runtime.invoke.v1"]
-      );
-      return { handled: true };
-    },
     traceMeeting() {},
   });
 
@@ -460,55 +463,25 @@ async function verifyHostedMeetingHubIgnoresOwnSummaryEchoWhileLoading() {
   assert.equal(
     realtimeSubscribeCalls.length,
     1,
-    "hosted meeting hub should not re-subscribe when its own tool-summary-sync snapshot echoes back during the first load"
+    "hosted meeting hub should subscribe once while loading local realtime data"
   );
   assert.equal(
     controller.buildViewState().count,
     1,
-    "hosted meeting hub should keep hosted realtime count as the source of truth instead of reusing its echoed top-panel summary count"
+    "hosted meeting hub should keep hosted realtime count as the source of truth instead of reusing top-panel snapshot counts"
   );
 }
 
-async function verifyHostedMeetingHubSummarySyncStaysCountOnly() {
-  const harness = createHarness({
-    checkedAtSequence: [
-      "2026-04-13T01:02:03.000Z",
-      "2026-04-13T01:05:09.000Z",
-    ],
-  });
-  const controller = harness.controller;
-
-  controller.syncPanelState(
-    {
-      activeTool: "meeting",
-      open: true,
-      meetingTool: {
-        count: 1,
-        snapshotFingerprint: "meeting-alpha|1|seed",
-      },
-      settings: {
-        meetingWorkspaceTarget: "production",
-      },
-    },
-    ["runtime.invoke.v1"]
+function verifyHostedMeetingHubDropsSummaryEchoContract() {
+  const controllerSource = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "meeting-hub-controller.js"),
+    "utf8"
   );
-  await flushAsyncTurns();
-
-  assert.deepEqual(
-    harness.summarySyncCalls[0],
-    { count: 1 },
-    "hosted meeting hub should sync a count-only summary after the first load"
-  );
-
-  const visibleHandled = controller.handleHostActivity("visibility-visible");
-  await flushAsyncTurns();
-
-  assert.equal(visibleHandled, true, "hosted meeting hub should accept hosted activity refresh triggers while active");
-  assert.equal(harness.summarySyncCalls.length, 2, "hosted meeting hub should emit another summary after a forced refresh");
-  assert.deepEqual(
-    harness.summarySyncCalls[1],
-    { count: 1 },
-    "meeting summary sync should stay count-only even when checkedAt changes across identical meeting data"
+  assert(
+    !controllerSource.includes("syncTopPanelSummary")
+      && !controllerSource.includes("emitTopPanelSummary")
+      && !controllerSource.includes("buildTopPanelSummary"),
+    "hosted meeting hub should not echo hosted-owned counts through the top panel"
   );
 }
 
@@ -532,7 +505,7 @@ function createHarnessWithOptions(options = {}) {
   const realtimeDisconnectCalls = [];
   const realtimeSubscribeCalls = [];
   const pageCalls = [];
-  const summarySyncCalls = [];
+  const toastCalls = [];
   const checkedAtSequence = Array.isArray(options.checkedAtSequence) && options.checkedAtSequence.length
     ? options.checkedAtSequence.slice()
     : null;
@@ -553,6 +526,7 @@ function createHarnessWithOptions(options = {}) {
     },
   };
 
+  loadScript("hosting/extension-v2/panel/panel-utils.js", context);
   loadScript("hosting/extension-v2/panel/extension-capability-client.js", context);
   loadScript("hosting/extension-v2/panel/meeting-hub-controller.js", context);
 
@@ -625,11 +599,11 @@ function createHarnessWithOptions(options = {}) {
         });
       },
     },
-    scheduleRender() {},
-    syncTopPanelSummary: async (meetingTool) => {
-      summarySyncCalls.push(cloneValue(meetingTool));
-      return { handled: true };
+    publishToast(payload) {
+      toastCalls.push(cloneValue(payload));
+      return true;
     },
+    scheduleRender() {},
     traceMeeting() {},
   });
 
@@ -639,7 +613,7 @@ function createHarnessWithOptions(options = {}) {
     realtimeDisconnectCalls,
     realtimeSubscribeCalls,
     runtimeCalls,
-    summarySyncCalls,
+    toastCalls,
   };
 }
 
