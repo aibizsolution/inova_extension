@@ -30,7 +30,7 @@ const { createMeetingTranscriptDomain } = require("./meeting-transcript-domain")
 
 const ALLOWED_CAPTURE_MODES = new Set(["tab-audio", "microphone", "mixed-audio"]);
 const DEFAULT_INLINE_AUDIO_LIMIT_BYTES = 25 * 1024 * 1024;
-const DEFAULT_SOURCE_TARGET_PART_BYTES = 28 * 1024 * 1024;
+const DEFAULT_SOURCE_TARGET_PART_BYTES = 24 * 1024 * 1024;
 const DEFAULT_SOURCE_MAX_BYTES = 200 * 1024 * 1024;
 const DEFAULT_SOURCE_MAX_DURATION_MS = 2 * 60 * 60 * 1000;
 const DEFAULT_SOURCE_PART_OVERLAP_MS = 1500;

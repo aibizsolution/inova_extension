@@ -58,6 +58,7 @@
 - 회의록 자동 생성은 `skip`만이 아니라 `full`과 `compact` 두 출력 프로필을 가질 수 있다. 짧은 테스트성/저신호 전사는 `compact`로 정리하되, 정식 회의처럼 서사를 부풀리지 않는다.
 - 회의록 자동 생성은 항목 수를 채우기 위해 결정/리스크/미결정 사항을 만들지 않는다. 각 배열은 근거가 없으면 0개가 정상이며, 근거가 많을 때만 상한까지 분리한다.
 - `discussionFlow`는 단순 주제 목록이 아니라 회의 진행 흐름을 보존한다. 같은 안건이 뒤에서 다시 등장해 새 결정, 조건, 반론, 리스크를 만들면 같은 heading이어도 별도 항목으로 남긴다.
+- OpenAI 전사 source part target은 OpenAI 25MB 업로드 제한보다 낮은 24MB를 기준으로 유지한다. duration만으로 single 전사를 chunked로 바꾸지 않고, 긴 입력은 파일 크기 제한 또는 앱의 2시간 max duration 정책으로만 판단한다.
 - 전사 결과가 같은 문장을 비정상적으로 반복하면 성공 저장하지 않는다. `meeting-processing-runtime-domain.js`는 반복 전사를 한 번 재시도하고, 재시도 후에도 반복이면 명시적 실패로 드러낸다.
 
 ## 관련 데이터 경계
@@ -82,7 +83,7 @@
 - `termReplacements`는 회의 단위 순서 보존 배열이며, `from` 중복/빈 값이 거부되고 기존 notes와 이후 notes 결과에 모두 deterministic pass가 적용되는지 확인한다.
 - `previewInovaMeetingResultSectionEdit`와 `applyInovaMeetingResultSectionEdit`는 editable section key, `baseRevisionToken`, stale preview 거절 계약을 유지해야 한다.
 - persisted meeting notes는 `summary`와 `overview`를 독립 필드로 유지한다. `summary`는 핵심 요약 카드용 짧은 요약이고, `summary`/`overview` 모두 섹션 preview/apply 대상이지만 서로를 덮어쓰지 않아야 한다.
-- 전사 품질 가드를 바꾸면 `npm.cmd run verify:meeting-transcription-quality`를 함께 돌려 반복 전사 재시도와 명시적 실패 경계를 확인한다.
+- 전사 source mode, chunk 크기, 품질 가드를 바꾸면 `npm.cmd run verify:meeting-audio-source-policy`와 `npm.cmd run verify:meeting-transcription-quality`를 함께 돌려 OpenAI-safe part 크기, duration-only single 유지, 반복 전사 재시도와 명시적 실패 경계를 확인한다.
 - 섹션 preview는 사용자 요청 우선 rewrite prompt로 한 번 생성하고, 전사/현재 섹션은 참고로만 사용한다. 형식이 맞지 않으면 같은 요청으로 한 번 더 재시도하고, `warning` 필드는 호환용으로 유지한다.
 - compact 회의록은 `overview` 중심의 짧은 기록 메모를 기본으로 하고, `decisions/actionItems/risks`는 전사에 직접 근거가 없으면 비워 둔다.
 - 상용 회의 데이터 잔존 여부를 편하게 볼 때는 `npm run check:meeting-data`를 사용한다.

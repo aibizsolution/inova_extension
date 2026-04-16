@@ -13,6 +13,7 @@
 - owner-secure hosted 작업실은 authorize 응답에서 받은 `meetingSessionToken`을 세션에 보존해야 하며, 업로드와 작업실 mutation은 이 meeting session 기준으로 인증한다.
 - hosted workspace의 `파일 불러오기`는 로컬 origin 전용 기능이 아니다. 상용/로컬 hosted가 같은 업로드 흐름을 쓴다.
 - imported audio duration은 메타데이터 -> decode fallback 순서로 계산하고, 최종 길이 계산까지 실패했을 때만 사용자 오류를 유지한다.
+- OpenAI 전사용 source mode는 duration만으로 chunked로 바꾸지 않는다. OpenAI 파일 업로드 제한보다 낮은 24MB target을 초과할 때만 chunked로 전환한다.
 - hosted 작업실은 녹음 중이거나 실제 업로드가 진행 중일 때만 브라우저 기본 `beforeunload` 경고를 유지한다.
 
 ## recovery / sync 경계

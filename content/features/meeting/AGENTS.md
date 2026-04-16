@@ -49,6 +49,7 @@
 - owner-secure hosted 작업실은 `authorizeInovaMeetingWorkspaceAccess`가 돌려주는 `meetingSessionToken`을 세션에 보존해야 하며, 업로드와 작업실 mutation은 이 토큰을 기준으로 인증한다.
 - hosted 작업실의 `파일 불러오기`는 로컬/상용 hosted 모두 같은 업로드 흐름을 쓴다. origin 차이만으로 버튼을 숨기거나 import 실행을 막지 않는다.
 - 오디오 import 길이는 메타데이터를 먼저 읽고, 실패하면 실제 decode로 다시 계산한다. 두 경로가 모두 실패할 때만 사용자 오류를 유지한다.
+- OpenAI 전사용 source mode는 duration만으로 chunked 전환하지 않는다. `gpt-4o-transcribe` 경로는 OpenAI 파일 업로드 제한보다 낮은 24MB target을 넘을 때만 chunked로 전환하고, 2시간 max duration은 별도 입력 제한으로만 유지한다.
 - hosted 작업실은 녹음 중이거나 실제 업로드가 진행 중일 때만 브라우저 기본 이탈 경고를 유지하고, 원격 처리만 남은 상태는 과하게 막지 않는다.
 - 회의 제목은 UI에서 회의를 구분하는 편집용 라벨이다. 최초 회의 정리 생성 prompt에는 제목이 아니라 전사와 공용 메모만 사용한다.
 - hosted 작업실의 회의록 보정은 전체 재생성이 아니라 `회의별 용어 치환`과 `섹션 단위 preview/apply`로 제한한다.
@@ -95,7 +96,7 @@
 - 새 녹음 또는 파일 import 1회와 제목/메모/결과 수정 또는 삭제 1회를 확인한다.
 - 회의록 보정 변경이 있으면 `용어 치환 적용하기 1회`, `섹션 수정 preview/apply 1회`, stale preview 재적용 거절을 함께 확인한다.
 - 자동 회의록 생성 품질 규칙을 바꾸면 `npm.cmd run verify:meeting-notes-generation`과 `npm.cmd run verify:meeting-service`를 함께 돌려 항목 수 채우기 방지와 같은 안건 재논의 보존 가드를 확인한다.
-- 전사 품질/반복 감지 규칙을 바꾸면 `npm.cmd run verify:meeting-transcription-quality`와 `npm.cmd run verify:meeting-service`를 함께 돌린다.
+- 전사 source mode, chunk 크기, 품질/반복 감지 규칙을 바꾸면 `npm.cmd run verify:meeting-audio-source-policy`, `npm.cmd run verify:meeting-transcription-quality`, `npm.cmd run verify:meeting-service`를 함께 돌린다.
 - 기록 이동 변경이 있으면 완료 기록 1건을 다른 owned 회의 룸으로 옮기고, 현재 룸에서 사라지는지와 대상 회의 룸에서 같은 전사/회의 정리/메모가 유지되는지 확인한다.
 - hosted notes action UI를 건드렸다면 `npm.cmd run verify`와 `node scripts/verify-meeting-hosted-ui.js`를 함께 돌리고, 완료 기록에서만 action row가 보이는지와 `용어 치환` 버튼 내부 tooltip 문구를 함께 확인한다.
 - local full-stack smoke가 필요하면 `npm.cmd run emulator:meeting-local`을 먼저 켜고, 팝업에서 `로컬 호스팅`을 고른 뒤 같은 흐름을 확인한다.
