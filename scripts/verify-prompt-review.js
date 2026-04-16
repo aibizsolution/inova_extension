@@ -250,6 +250,15 @@ function verifyHostedPromptReviewContract() {
     "hosted prompt review should not render stale or placeholder confirmation bottom action buttons"
   );
   assert.equal(
+    hostedReviewViewSource.includes("inova-prompt-review__field-actions")
+      && hostedReviewViewSource.includes('data-prompt-action="copy-reviewed-prompt">복사</button>')
+      && hostedReviewViewSource.includes("${applyButton}")
+      && hostedReviewViewSource.indexOf('data-prompt-action="copy-reviewed-prompt">복사</button>') < hostedReviewViewSource.lastIndexOf("${applyButton}")
+      && hostedReviewViewSource.lastIndexOf("${applyButton}") < hostedReviewViewSource.indexOf("name=\"inova-reviewed-prompt\""),
+    true,
+    "hosted prompt review should place apply next to copy in the refined prompt field header"
+  );
+  assert.equal(
     hostedControllerSource.includes("reason: \"same-text\"")
       && hostedControllerSource.includes("이미 같은 내용으로 검토했어요."),
     true,

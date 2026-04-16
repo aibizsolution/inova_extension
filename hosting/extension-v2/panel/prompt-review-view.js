@@ -3,9 +3,6 @@
 
   function render(review) {
     const result = review.result;
-    const applyButton = result && !review.stale
-      ? `<button type="button" class="inova-tool-button is-primary" data-prompt-action="apply-reviewed-prompt"${review.canApply ? "" : ' disabled aria-disabled="true"'}>입력창에 반영</button>`
-      : "";
     const reviewButton = result
       ? ""
       : `<button type="button" class="inova-tool-button" data-prompt-action="review-composer"${review.canReview ? "" : ' disabled aria-disabled="true"'}>검토</button>`;
@@ -30,16 +27,18 @@
           ${result ? renderResult(result, review) : ""}
         </div>
         <div class="inova-tool-actions inova-prompt-review__actions">
-          ${applyButton}
           ${reviewButton}
         </div>
       </section>
     `;
   }
 
-  function renderResult(result) {
+  function renderResult(result, review) {
     const scoreGuide = escapeHtml(result.scoreGuideText || "점수는 프롬프트 검토 결과를 요약한 참고값이에요.");
     const formattedPrompt = escapeHtml(result.formattedPrompt || result.refinedPrompt);
+    const applyButton = !review.stale
+      ? `<button type="button" class="inova-tool-button inova-tool-button--compact is-primary" data-prompt-action="apply-reviewed-prompt"${review.canApply ? "" : ' disabled aria-disabled="true"'}>입력창에 반영</button>`
+      : "";
     return `
       <div class="inova-prompt-review__summary">
         <div class="inova-prompt-review__score">
@@ -65,7 +64,10 @@
       <section class="inova-prompt-review__field">
         <div class="inova-prompt-review__field-head">
           <span>보완 프롬프트</span>
-          <button type="button" class="inova-tool-button inova-tool-button--compact" data-prompt-action="copy-reviewed-prompt">복사</button>
+          <div class="inova-prompt-review__field-actions">
+            <button type="button" class="inova-tool-button inova-tool-button--compact" data-prompt-action="copy-reviewed-prompt">복사</button>
+            ${applyButton}
+          </div>
         </div>
         <textarea rows="10" name="inova-reviewed-prompt" readonly>${formattedPrompt}</textarea>
       </section>
