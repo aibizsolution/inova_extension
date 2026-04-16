@@ -277,10 +277,7 @@
   }
 
   function defaultNormalizePromptContent(text) {
-    return String(text || "")
-      .replace(/\r\n/g, "\n")
-      .replace(/\u00a0/g, " ")
-      .trim();
+    return namespace.promptTextModel.normalizePromptContent(text);
   }
 
   function defaultNormalizeText(value) {

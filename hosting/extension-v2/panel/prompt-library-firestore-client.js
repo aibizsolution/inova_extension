@@ -1,9 +1,6 @@
 (function initPromptLibraryFirestoreClient(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const utils = namespace.panelUtils || {};
-  const normalizeText = typeof utils.normalizeText === "function"
-    ? utils.normalizeText
-    : namespace.session.normalizeText;
+  const { normalizeText } = namespace.panelUtils;
   const READER = "prompt-library";
 
   const client = namespace.baseFirestoreClient?.createBaseFirestoreClient?.({

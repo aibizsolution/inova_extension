@@ -1,27 +1,11 @@
 (function initPanelFirestoreSessionClient(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const utils = namespace.panelUtils || {};
-  const isAuthExpiring = typeof utils.isAuthExpiring === "function"
-    ? utils.isAuthExpiring
-    : (expiresAt) => !(Date.parse(normalizeText(expiresAt)) > Date.now() + 60000);
-  const normalizePanelTarget = typeof utils.normalizePanelTarget === "function"
-    ? utils.normalizePanelTarget
-    : (value) => (normalizeText(value).toLowerCase() === "local" ? "local" : "production");
-  const normalizeText = typeof utils.normalizeText === "function"
-    ? utils.normalizeText
-    : namespace.session.normalizeText;
-  const resolveBrowserCapabilities = typeof utils.resolveBrowserCapabilities === "function"
-    ? utils.resolveBrowserCapabilities
-    : (options) => {
-      const providedCapabilities = options?.browserCapabilities;
-      if (providedCapabilities && typeof providedCapabilities === "object") {
-        return providedCapabilities;
-      }
-      return namespace.extensionCapabilityClient?.create?.({
-        invokePage: options?.invokePage,
-        invokeRuntime: options?.invokeRuntime,
-      }) || {};
-    };
+  const {
+    isAuthExpiring,
+    normalizePanelTarget,
+    normalizeText,
+    resolveBrowserCapabilities,
+  } = namespace.panelUtils;
   const AUTH_PANEL = "hosted";
   const HOSTED_APP_NAME = "inova-hosted-panel";
   const APP_NAME_BY_PANEL = Object.freeze({

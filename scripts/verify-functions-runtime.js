@@ -129,6 +129,13 @@ function loadRuntime(overrides = {}) {
           },
         };
       }
+      if (moduleId === "../shared/prompt-text-model") {
+        const source = fs.readFileSync(path.join(root, "functions", "shared", "prompt-text-model.js"), "utf8");
+        new vm.Script(source, {
+          filename: "functions/shared/prompt-text-model.js",
+        }).runInContext(context);
+        return {};
+      }
       if (moduleId === "../shared/prompt-store-model") {
         const source = fs.readFileSync(path.join(root, "functions", "shared", "prompt-store-model.js"), "utf8");
         new vm.Script(source, {

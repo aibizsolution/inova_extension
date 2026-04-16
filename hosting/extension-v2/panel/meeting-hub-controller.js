@@ -1,6 +1,6 @@
 (function initMeetingHubController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const normalizeText = (namespace.panelUtils || namespace.session).normalizeText;
+  const { normalizeText } = namespace.panelUtils;
   const LIST_LIMIT = 24;
   const SUPPORTED_ACTIONS = new Set([
     "open-result",

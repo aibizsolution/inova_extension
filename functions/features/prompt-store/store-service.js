@@ -1,4 +1,5 @@
 const { FieldValue } = require("firebase-admin/firestore");
+require("../../shared/prompt-text-model");
 require("../../shared/prompt-store-model");
 const promptStoreModel = globalThis.InovaBookmarks.promptStoreModel;
 

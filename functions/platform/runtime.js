@@ -3,7 +3,9 @@ const admin = require("firebase-admin");
 const { onRequest } = require("firebase-functions/v2/https");
 const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
+require("../shared/prompt-text-model");
 require("../shared/prompt-store-model");
+const promptTextModel = globalThis.InovaBookmarks.promptTextModel;
 const promptStoreModel = globalThis.InovaBookmarks.promptStoreModel;
 
 const FIREBASE_AUTH_SIGNING_SERVICE_ACCOUNT = process.env.FIREBASE_AUTH_SIGNING_SERVICE_ACCOUNT
@@ -166,10 +168,7 @@ function normalizeIdentity(identity) {
 }
 
 function normalizePromptContent(text) {
-  return String(text || "")
-    .replace(/\r\n/g, "\n")
-    .replace(/\u00a0/g, " ")
-    .trim();
+  return promptTextModel.normalizePromptContent(text);
 }
 
 function normalizeText(value) {

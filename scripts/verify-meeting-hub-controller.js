@@ -404,6 +404,7 @@ async function verifyHostedMeetingHubKeepsRealtimeCountLocal() {
     },
   };
 
+  loadScript("hosting/extension-v2/panel/panel-utils.js", context);
   loadScript("hosting/extension-v2/panel/extension-capability-client.js", context);
   loadScript("hosting/extension-v2/panel/meeting-hub-controller.js", context);
 
@@ -525,6 +526,7 @@ function createHarnessWithOptions(options = {}) {
     },
   };
 
+  loadScript("hosting/extension-v2/panel/panel-utils.js", context);
   loadScript("hosting/extension-v2/panel/extension-capability-client.js", context);
   loadScript("hosting/extension-v2/panel/meeting-hub-controller.js", context);
 

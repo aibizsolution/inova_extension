@@ -395,10 +395,13 @@ function verifyHostedPanelFiles(directoryName) {
         && html.indexOf("./panel-utils.js") < html.indexOf("./panel-firestore-session-client.js")
         && html.indexOf("./panel-firestore-session-client.js") > html.indexOf("./extension-capability-client.js")
         && html.indexOf("./base-firestore-client.js") > html.indexOf("./panel-firestore-session-client.js")
+        && html.indexOf("./prompt-text-model.js") > html.indexOf("./base-firestore-client.js")
+        && html.indexOf("./prompt-text-model.js") < html.indexOf("./prompt-library-model.js")
+        && html.indexOf("./prompt-text-model.js") < html.indexOf("./prompt-store-model.js")
         && html.indexOf("./base-firestore-client.js") < html.indexOf("./prompt-library-firestore-client.js")
         && html.indexOf("./base-firestore-client.js") < html.indexOf("./meeting-firestore-client.js")
         && html.indexOf("./base-firestore-client.js") < html.indexOf("./prompt-store-firestore-client.js"),
-      "v2 hosted panel should load panel utilities, the shared Firestore session coordinator, and the base reader factory before feature Firestore clients"
+      "v2 hosted panel should load panel utilities, shared Firestore helpers, and prompt text model before feature clients"
     );
     assert(html.includes("./prompt-tool-panel.js"), "v2 hosted panel should load prompt tool interaction helpers");
   } else {
@@ -409,6 +412,7 @@ function verifyHostedPanelFiles(directoryName) {
     assert(!html.includes("./legacy-tools.css"), "v2 hosted panel should not load the dead legacy tools stylesheet");
     assert(html.includes("./conversation-controller.js"), "v2 hosted panel should load conversation controller");
     assert(html.includes("./panel-firestore-session-client.js"), "v2 hosted panel should load the shared Firestore session coordinator");
+    assert(html.includes("./prompt-text-model.js"), "v2 hosted panel should load the shared prompt text model");
     assert(html.includes("./prompt-library-model.js"), "v2 hosted panel should load prompt library model");
     assert(html.includes("./prompt-library-controller.js"), "v2 hosted panel should load prompt library controller");
     assert(html.includes("./prompt-store-model.js"), "v2 hosted panel should load prompt store model");
@@ -673,6 +677,7 @@ function loadRuntimeContext(lane) {
 
   loadScript(path.join("shared", "firestore-collections.js"), context);
   loadScript(path.join("shared", "firebase-config.js"), context);
+  loadScript(path.join("shared", "session.js"), context);
   loadScript(path.join("background", "functions-runtime-config.js"), context);
   return context.InovaBookmarks;
 }

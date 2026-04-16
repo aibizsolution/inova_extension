@@ -9,6 +9,7 @@ const root = path.resolve(__dirname, "..");
 
 function main() {
   verifyDeployCopiesMatch();
+  verifyPromptTextCopiesMatch();
   verifySharedModelBehavior();
   verifyPromptStoreServiceDelegates();
   console.log("[verify-prompt-store-model] Prompt store shared model contract passed");
@@ -21,6 +22,16 @@ function verifyDeployCopiesMatch() {
     functionsSource,
     hostedSource,
     "functions/shared/prompt-store-model.js must stay byte-for-byte aligned with the hosted prompt store model"
+  );
+}
+
+function verifyPromptTextCopiesMatch() {
+  const hostedSource = read("hosting/extension-v2/panel/prompt-text-model.js");
+  const functionsSource = read("functions/shared/prompt-text-model.js");
+  assert.equal(
+    functionsSource,
+    hostedSource,
+    "functions/shared/prompt-text-model.js must stay byte-for-byte aligned with the hosted prompt text model"
   );
 }
 
@@ -65,14 +76,17 @@ function verifyPromptStoreServiceDelegates() {
   const runtimeSource = read("functions/platform/runtime.js");
   assert(
     storeServiceSource.includes('require("../../shared/prompt-store-model")')
+      && storeServiceSource.includes('require("../../shared/prompt-text-model")')
       && storeServiceSource.includes("globalThis.InovaBookmarks.promptStoreModel"),
     "Functions prompt store service should use the deploy-local shared prompt store model"
   );
   assert(
-    runtimeSource.includes('require("../shared/prompt-store-model")')
+    runtimeSource.includes('require("../shared/prompt-text-model")')
+      && runtimeSource.includes('require("../shared/prompt-store-model")')
+      && runtimeSource.includes("globalThis.InovaBookmarks.promptTextModel")
       && runtimeSource.includes("globalThis.InovaBookmarks.promptStoreModel")
       && runtimeSource.includes("promptStoreModel.getDefaultStoreCategories()"),
-    "Functions runtime should get store categories from the shared prompt store model"
+    "Functions runtime should get prompt text normalization and store categories from shared prompt models"
   );
   [
     "likeCount * 3",
@@ -99,6 +113,9 @@ function loadHostedModel() {
       },
     },
   };
+  new vm.Script(read("hosting/extension-v2/panel/prompt-text-model.js"), {
+    filename: "hosting/extension-v2/panel/prompt-text-model.js",
+  }).runInContext(context);
   new vm.Script(read("hosting/extension-v2/panel/prompt-store-model.js"), {
     filename: "hosting/extension-v2/panel/prompt-store-model.js",
   }).runInContext(context);
@@ -111,6 +128,9 @@ function loadFunctionsModel() {
     globalThis: null,
   });
   context.globalThis = context;
+  new vm.Script(read("functions/shared/prompt-text-model.js"), {
+    filename: "functions/shared/prompt-text-model.js",
+  }).runInContext(context);
   new vm.Script(read("functions/shared/prompt-store-model.js"), {
     filename: "functions/shared/prompt-store-model.js",
   }).runInContext(context);

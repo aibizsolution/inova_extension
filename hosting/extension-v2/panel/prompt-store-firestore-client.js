@@ -1,12 +1,6 @@
 (function initPromptStoreFirestoreClient(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const utils = namespace.panelUtils || {};
-  const cloneValue = typeof utils.cloneValue === "function"
-    ? utils.cloneValue
-    : (value) => (value == null ? value : JSON.parse(JSON.stringify(value)));
-  const normalizeText = typeof utils.normalizeText === "function"
-    ? utils.normalizeText
-    : namespace.session.normalizeText;
+  const { cloneValue, normalizeText } = namespace.panelUtils;
   const ENTRY_COLLECTION = "prompt_store_entries";
   const READER = "prompt-store";
 

@@ -7,6 +7,7 @@ const vm = require("vm");
 const {
   createPromptLibraryFirestoreNamespace,
   installHostedCapabilityClient,
+  installPanelUtils,
 } = require("./verify-prompt-library-test-helpers");
 const { verifyHostedPromptLibraryAvoidsDuplicateReloads } = require("./verify-prompt-library-hosted-controller");
 
@@ -105,6 +106,7 @@ async function verifyHostedPromptEditorViewLabels() {
     },
   };
 
+  installPanelUtils(context);
   installHostedCapabilityClient(context);
   const source = fs.readFileSync(
     path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),
@@ -209,6 +211,7 @@ async function verifyHostedPromptTextInputDebouncesRender() {
     },
   };
 
+  installPanelUtils(context);
   installHostedCapabilityClient(context);
   const source = fs.readFileSync(
     path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),
@@ -296,6 +299,7 @@ async function verifyHostedPromptPublishUsesFunctionsFetch() {
     },
   };
 
+  installPanelUtils(context);
   installHostedCapabilityClient(context);
   const source = fs.readFileSync(
     path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),
@@ -461,6 +465,7 @@ async function verifyHostedPromptTabSelectionDoesNotWaitForPersistence() {
     },
   };
 
+  installPanelUtils(context);
   installHostedCapabilityClient(context);
   const source = fs.readFileSync(
     path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),
@@ -536,6 +541,7 @@ async function verifyHostedPromptTabSelectionSurvivesLateStorageHydration() {
       },
     },
   };
+  installPanelUtils(context);
   installHostedCapabilityClient(context);
   const source = fs.readFileSync(
     path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),
@@ -634,6 +640,7 @@ async function verifyHostedPromptReviewRequestAutofocus() {
     },
   };
 
+  installPanelUtils(context);
   installHostedCapabilityClient(context);
   const source = fs.readFileSync(
     path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),
@@ -750,6 +757,7 @@ async function verifyHostedPromptReviewTabVisibility() {
     },
   };
 
+  installPanelUtils(context);
   installHostedCapabilityClient(context);
   const source = fs.readFileSync(
     path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"),

@@ -1,12 +1,6 @@
 (function initMeetingFirestoreClient(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const utils = namespace.panelUtils || {};
-  const cloneValue = typeof utils.cloneValue === "function"
-    ? utils.cloneValue
-    : (value) => (value == null ? value : JSON.parse(JSON.stringify(value)));
-  const normalizeText = typeof utils.normalizeText === "function"
-    ? utils.normalizeText
-    : namespace.session.normalizeText;
+  const { cloneValue, normalizeText } = namespace.panelUtils;
   const READER = "meeting";
 
   const client = namespace.baseFirestoreClient?.createBaseFirestoreClient?.({

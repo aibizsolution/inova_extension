@@ -1,6 +1,6 @@
 (function initPromptLibraryController(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const normalizeText = (namespace.panelUtils || namespace.session).normalizeText;
+  const { normalizeText } = namespace.panelUtils;
   const REQUIRED_EXTENSION_CAPABILITIES = Object.freeze([
     "page.adapter.v2",
     "runtime.invoke.v1",

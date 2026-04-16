@@ -405,14 +405,12 @@
   }
 
   function isExtensionContextInvalidatedError(error) {
-    const message = namespace.session?.normalizeText
-      ? namespace.session.normalizeText(error instanceof Error ? error.message : String(error || ""))
-      : String(error || "").trim();
+    const message = namespace.session.normalizeText(error instanceof Error ? error.message : String(error || ""));
     return message.toLowerCase().includes("extension context invalidated");
   }
 
   function normalizeText(value) {
-    return String(value || "").trim();
+    return namespace.session.normalizeText(value);
   }
 
   function cloneValue(value) {

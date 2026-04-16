@@ -1,9 +1,7 @@
 (function initProviderIdentityCache(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const defaults = namespace.constants.defaults.providerIdentityCache;
-  const normalizeText = typeof namespace.session?.normalizeText === "function"
-    ? namespace.session.normalizeText
-    : (value) => String(value || "").trim();
+  const normalizeText = namespace.session.normalizeText;
 
   function mergeProviderIdentityCacheState(...states) {
     return states.reduce(

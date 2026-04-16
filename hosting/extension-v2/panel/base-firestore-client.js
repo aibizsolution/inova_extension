@@ -1,33 +1,13 @@
 (function initBaseFirestoreClient(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const utils = namespace.panelUtils || {};
-  const cloneValue = typeof utils.cloneValue === "function"
-    ? utils.cloneValue
-    : (value) => (value == null ? value : JSON.parse(JSON.stringify(value)));
-  const isAuthExpiring = typeof utils.isAuthExpiring === "function"
-    ? utils.isAuthExpiring
-    : (expiresAt) => !(Date.parse(normalizeText(expiresAt)) > Date.now() + 60000);
-  const normalizePanelTarget = typeof utils.normalizePanelTarget === "function"
-    ? utils.normalizePanelTarget
-    : (value) => (normalizeText(value).toLowerCase() === "local" ? "local" : "production");
-  const normalizeText = typeof utils.normalizeText === "function"
-    ? utils.normalizeText
-    : namespace.session.normalizeText;
-  const readErrorMessage = typeof utils.readErrorMessage === "function"
-    ? utils.readErrorMessage
-    : (error, fallbackMessage) => normalizeText(error instanceof Error ? error.message : error) || fallbackMessage;
-  const resolveBrowserCapabilities = typeof utils.resolveBrowserCapabilities === "function"
-    ? utils.resolveBrowserCapabilities
-    : (options) => {
-      const providedCapabilities = options?.browserCapabilities;
-      if (providedCapabilities && typeof providedCapabilities === "object") {
-        return providedCapabilities;
-      }
-      return namespace.extensionCapabilityClient?.create?.({
-        invokePage: options?.invokePage,
-        invokeRuntime: options?.invokeRuntime,
-      }) || {};
-    };
+  const {
+    cloneValue,
+    isAuthExpiring,
+    normalizePanelTarget,
+    normalizeText,
+    readErrorMessage,
+    resolveBrowserCapabilities,
+  } = namespace.panelUtils;
 
   function createBaseFirestoreClient(config = {}) {
     const reader = normalizeText(config.reader);

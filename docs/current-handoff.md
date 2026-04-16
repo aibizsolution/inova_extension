@@ -92,7 +92,7 @@ Do not do in the same slice:
 Current progress in this slice:
 
 - Step 1 is implemented in code through `panel-firestore-session-client.js` and guarded by hosted-panel verification.
-- Step 2 is implemented for active hosted controllers/readers through hosted-local `panel-utils.js`; meeting, prompt-library, prompt-store, prompt-review, release, conversation, index, and the shared Firestore session coordinator now reuse the same hosted panel helper contract for common text normalization and related utilities.
+- Step 2 is implemented for active hosted controllers/readers through hosted-local `panel-utils.js`; meeting, prompt-library, prompt-store, prompt-review, release, conversation, index, and the shared Firestore session coordinator now reuse the same hosted panel helper contract for common text normalization and related utilities. Hosted v2 panel scripts now assume the `index.html` order where `panel-utils.js` loads before controllers/readers; feature clients should not keep local resolver fallbacks for `cloneValue`, `normalizeText`, `isAuthExpiring`, or browser capability resolution.
 - Step 3 is implemented with hosted-local `base-firestore-client.js`; meeting, prompt-library, and prompt-store now share subscribe/disconnect/cache/first-snapshot/publish/error lifecycle and keep feature-specific query/snapshot logic in their own files.
 - Feature Firestore clients no longer keep dead SDK/app/auth/db/persistence state after the shared session coordinator took ownership; the hosted-panel guard now fails if that state is reintroduced.
 - The shared v2 composition state no longer keeps a `promptReview` view bucket. Content prompt review now keeps only a private monotonic handoff request signal for hosted review activation.
@@ -112,7 +112,8 @@ Current progress in this slice:
 - Top-panel snapshot trace payloads now also read `open` and `visible` from `panelSnapshot` only; removed top-level render payload fields are no longer accepted as trace fallback inputs.
 - Content host runtime no longer reads top-level `handleCount` from render payloads; hosted-owned counts reach the parent DOM only through `panel-chrome-sync`.
 - Active v2 composition state no longer carries `open`; route reset and surface restore call the private lifecycle adapter instead of mutating shared hosted-level open state.
-- Step 4 has started with `shared/firestore-collections.js`; `shared/product-lane.js` and `shared/firebase-config.js` now consume the same browser-agnostic collection catalog instead of repeating prompt collection names.
+- Step 4 has started with `shared/firestore-collections.js`; `shared/product-lane.js` and `shared/firebase-config.js` now consume the same browser-agnostic collection catalog instead of repeating prompt collection names. `shared/firestore-collections.js` and `shared/firebase-config.js` intentionally keep their tiny local text/base-url normalizers because popup loads them before `shared/session.js`; do not replace those with `namespace.session.normalizeText` unless the browser load order and corresponding verification are changed first.
+- Prompt text normalization now uses deploy-root `prompt-text-model.js` copies in hosted and functions. Hosted `prompt-library-model.js`, hosted/functions `prompt-store-model.js`, and Functions runtime all consume that prompt text contract instead of carrying independent prompt content normalization.
 
 ## What Was Stabilized In This Session
 
