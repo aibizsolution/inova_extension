@@ -35,6 +35,12 @@
 - Functions `reviewInovaPrompt`
 - 검토 rate-limit 기록
 
+## 관련 capabilityId
+- `prompt.review.run`: prompt review Functions 호출.
+- `page.composer.read-state`: 현재 입력창 읽기.
+- `page.composer.apply-text`: 보완 프롬프트 입력창 반영.
+- `page.clipboard.write-text`, `page.trace.log`: 복사와 trace page primitive.
+
 ## 보통 건드리지 말아야 할 범위
 - meeting
 - prompt-library

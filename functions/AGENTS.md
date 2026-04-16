@@ -9,4 +9,7 @@
 - functions에서는 파일 길이보다 `외부 계약`, `persisted 문서 shape`, `queue/worker lifecycle`, `독립 테스트 가치`를 먼저 경계로 본다.
 - 단일 handler 흐름에서만 쓰이고 항상 함께 로드/수정되는 얇은 helper는 같은 파일이나 기존 domain module에 둔다.
 - 새 파일은 재사용, 독립 workflow/data boundary, 분리된 검증 가치가 있을 때만 추가한다.
+- 새 HTTP Function을 hosted panel에서 호출해야 하면 먼저 `hosting/extension-v2/capability-manifest.json`과 `hosting/extension/capability-manifest.json`에 `kind=function` capability와 `endpointKeys` entry를 추가한다.
+- function capabilityId는 기본적으로 `<domain>.<action>-function` 또는 이미 정착된 semantic id를 쓴다. `endpointKey`는 hosted controller가 아니라 manifest와 background runtime만 알아야 한다.
+- 새 Functions origin이 필요하면 extension host permission/contract 변경이므로 extension 재배포 대상으로 보고, 같은 작업에서 `docs/capability-authoring.md` 기준을 갱신한다.
 

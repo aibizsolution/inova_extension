@@ -11,6 +11,22 @@
     },
     "lanes": []
   },
+  "urlTemplates": {
+    "release.download": {
+      "origin": "runtime.hosting",
+      "params": {
+        "fileName": "zip-file"
+      },
+      "pattern": "downloads/{fileName}"
+    }
+  },
+  "aliases": {
+    "release.download.latest": {
+      "owner": "release",
+      "removeAfter": "2030-01-01T00:00:00.000Z",
+      "replacementId": "release.download.open"
+    }
+  },
   "capabilities": {
     "meeting.list": {
       "auditLevel": "read",
@@ -89,6 +105,7 @@
       "enabled": true,
       "inputSchemaVersion": 1,
       "kind": "storage.write-ui-preferences",
+      "lane": "v2",
       "minExtensionVersion": "1.0.0",
       "outputSchemaVersion": 1,
       "owner": "runtime-platform",
@@ -218,6 +235,76 @@
       "outputSchemaVersion": 1,
       "owner": "debug",
       "pageCapabilityId": "debug.set-enabled",
+      "schemaVersion": 1,
+      "service": "page"
+    },
+    "page.dispatch-named-event": {
+      "auditLevel": "write",
+      "authMode": "none",
+      "domain": "page",
+      "enabled": true,
+      "inputSchemaVersion": 1,
+      "kind": "page.capability",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "runtime-platform",
+      "pageCapabilityId": "page.dispatch-named-event",
+      "schemaVersion": 1,
+      "service": "page"
+    },
+    "page.highlight-range": {
+      "auditLevel": "write",
+      "authMode": "none",
+      "domain": "page",
+      "enabled": true,
+      "inputSchemaVersion": 1,
+      "kind": "page.capability",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "runtime-platform",
+      "pageCapabilityId": "page.highlight-range",
+      "schemaVersion": 1,
+      "service": "page"
+    },
+    "page.read-selection": {
+      "auditLevel": "read",
+      "authMode": "none",
+      "domain": "page",
+      "enabled": true,
+      "inputSchemaVersion": 1,
+      "kind": "page.capability",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "runtime-platform",
+      "pageCapabilityId": "page.read-selection",
+      "schemaVersion": 1,
+      "service": "page"
+    },
+    "page.scroll-to": {
+      "auditLevel": "write",
+      "authMode": "none",
+      "domain": "page",
+      "enabled": true,
+      "inputSchemaVersion": 1,
+      "kind": "page.capability",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "runtime-platform",
+      "pageCapabilityId": "page.scroll-to",
+      "schemaVersion": 1,
+      "service": "page"
+    },
+    "page.show-banner": {
+      "auditLevel": "write",
+      "authMode": "none",
+      "domain": "page",
+      "enabled": true,
+      "inputSchemaVersion": 1,
+      "kind": "page.capability",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "runtime-platform",
+      "pageCapabilityId": "page.show-banner",
       "schemaVersion": 1,
       "service": "page"
     },
@@ -368,6 +455,10 @@
       "enabled": true,
       "inputSchemaVersion": 1,
       "kind": "browser.open-url",
+      "killSwitch": {
+        "enabled": false,
+        "reason": "preloaded release download kill drill seed"
+      },
       "minExtensionVersion": "1.0.0",
       "outputSchemaVersion": 1,
       "owner": "release",

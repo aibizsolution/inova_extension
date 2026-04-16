@@ -344,7 +344,8 @@ async function invokeManifestCapability(request) {
   const capability = await resolveManifestCapability(capabilityId);
   if (capability.kind === "function") {
     const endpointCapability = await buildManifestFunctionEndpointCapability(capabilityId, capability);
-    return invokeFunctionEndpointFetch(endpointCapability, request?.input, request);
+    const result = await invokeFunctionEndpointFetch(endpointCapability, request?.input, request);
+    return enrichManifestFunctionCapabilityResult(capabilityId, result, request);
   }
   if (capability.kind === "browser.open-url") {
     return invokeBrowserOpenUrlCapability(capabilityId, capability, request?.input);
@@ -369,28 +370,99 @@ async function invokeBrowserOpenUrlCapability(capabilityId, capability, input = 
   if (!allowedTemplateKeys.includes(templateKey)) {
     throw new Error(`허용되지 않은 URL template capability예요: ${capabilityId}`);
   }
-  if (templateKey === "release.download") {
-    return openBrowserUrl(await buildReleaseDownloadUrl(input?.fileName));
+  const manifestResult = await readActiveCapabilityManifest();
+  const template = manifestResult?.manifest?.urlTemplates?.[templateKey];
+  if (!template) {
+    throw new Error(`지원하지 않는 URL template capability예요: ${capabilityId}`);
   }
-  throw new Error(`지원하지 않는 URL template capability예요: ${capabilityId}`);
+  return openBrowserUrl(await buildUrlFromTemplate(templateKey, template, input));
 }
 
-async function buildReleaseDownloadUrl(fileName) {
-  const artifactFileName = normalizeArtifactFileName(fileName);
-  const runtimeConfig = await getPromptRuntimeConfig();
-  const hostingBaseUrl = namespace.session.normalizeText(runtimeConfig?.hosting?.baseUrl);
-  if (!hostingBaseUrl) {
-    throw new Error("release download base URL을 찾지 못했어요.");
-  }
-  return new URL(`downloads/${encodeURIComponent(artifactFileName)}`, `${hostingBaseUrl.replace(/\/+$/, "")}/`).href;
+async function buildUrlFromTemplate(templateKey, template, input = {}) {
+  const baseUrl = await resolveUrlTemplateBaseUrl(template);
+  const pattern = namespace.session.normalizeText(template?.pattern);
+  const params = {
+    ...(input?.params && typeof input.params === "object" ? input.params : {}),
+    ...(input && typeof input === "object" ? input : {}),
+  };
+  const path = interpolateUrlTemplatePath(templateKey, pattern, params, template?.params);
+  const url = new URL(path, `${baseUrl.replace(/\/+$/, "")}/`).href;
+  assertAllowedTemplateUrl(url, template);
+  return url;
 }
 
-function normalizeArtifactFileName(fileName) {
-  const artifactFileName = namespace.session.normalizeText(fileName);
-  if (!/^[A-Za-z0-9._-]+\.zip$/.test(artifactFileName)) {
+async function resolveUrlTemplateBaseUrl(template) {
+  const origin = namespace.session.normalizeText(template?.origin);
+  if (origin === "runtime.hosting") {
+    const runtimeConfig = await getPromptRuntimeConfig();
+    const hostingBaseUrl = namespace.session.normalizeText(runtimeConfig?.hosting?.baseUrl);
+    if (!hostingBaseUrl) {
+      throw new Error("URL template hosting base URL을 찾지 못했어요.");
+    }
+    return hostingBaseUrl;
+  }
+  return origin;
+}
+
+function interpolateUrlTemplatePath(templateKey, pattern, params, paramTypes = {}) {
+  if (!pattern || /^[a-z][a-z0-9+.-]*:/i.test(pattern) || pattern.startsWith("//") || pattern.includes("..") || /[?#]/.test(pattern)) {
+    throw new Error(`허용되지 않은 URL template pattern이에요: ${templateKey}`);
+  }
+  const output = pattern.replace(/\{([A-Za-z][A-Za-z0-9_]*)\}/g, (_match, key) => {
+    const value = normalizeTemplateParamValue(templateKey, key, params?.[key], paramTypes?.[key]);
+    return encodeURIComponent(value);
+  });
+  if (/[{}]/.test(output)) {
+    throw new Error(`허용되지 않은 URL template pattern이에요: ${templateKey}`);
+  }
+  return output;
+}
+
+function normalizeTemplateParamValue(templateKey, key, value, type = "safe-segment") {
+  const normalized = namespace.session.normalizeText(value);
+  const normalizedType = namespace.session.normalizeText(type) || "safe-segment";
+  if (normalizedType === "zip-file" && !/^[A-Za-z0-9._-]+\.zip$/.test(normalized)) {
     throw new Error("허용되지 않은 release download 파일명이에요.");
   }
-  return artifactFileName;
+  if (!normalized || normalized.includes("/") || normalized.includes("\\") || normalized.includes("..") || /[?#:]/.test(normalized)) {
+    throw new Error(`허용되지 않은 URL template parameter예요: ${templateKey}/${key}`);
+  }
+  if (!/^[A-Za-z0-9._-]+$/.test(normalized)) {
+    throw new Error(`허용되지 않은 URL template parameter예요: ${templateKey}/${key}`);
+  }
+  return normalized;
+}
+
+function assertAllowedTemplateUrl(url, template) {
+  const parsedUrl = new URL(namespace.session.normalizeText(url));
+  const templateOrigin = namespace.session.normalizeText(template?.origin);
+  const allowedOrigins = namespace.productLane?.getKnownHostingOrigins?.() || [];
+  if (templateOrigin !== "runtime.hosting" && parsedUrl.origin !== templateOrigin) {
+    throw new Error("URL template origin이 일치하지 않아요.");
+  }
+  if (!allowedOrigins.includes(parsedUrl.origin)) {
+    throw new Error("허용되지 않은 URL template origin이에요.");
+  }
+}
+
+async function enrichManifestFunctionCapabilityResult(capabilityId, result, request) {
+  const normalizedCapabilityId = namespace.session.normalizeText(capabilityId);
+  const output = result && typeof result === "object" ? { ...result } : {};
+  if (normalizedCapabilityId !== "meeting.share.create-function" || namespace.session.normalizeText(output.shareUrl)) {
+    return output;
+  }
+  const shareToken = namespace.session.normalizeText(output.shareToken);
+  const buildShareUrl = namespace.meetingWorkspaceCapability?.buildShareUrl;
+  if (!shareToken || typeof buildShareUrl !== "function") {
+    return output;
+  }
+  return {
+    ...output,
+    shareUrl: await buildShareUrl({
+      ...(request?.input && typeof request.input === "object" ? request.input : {}),
+      shareToken,
+    }),
+  };
 }
 
 async function invokeFunctionEndpointFetch(endpointCapability, body, request) {

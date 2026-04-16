@@ -50,7 +50,7 @@
 
 - 위치: `content/`, `shared/`, `manifest.json`
 - 역할: `inova.incross.com` 안에 실험실 패널을 삽입하고, 질문 탐색/회의록/프롬프트/스토어/릴리스 UI와 회의 허브 진입 흐름을 조립한다.
-- 특징: `content/main.js`는 composition root, `content/panel-v2-composition-controller.js`는 browser-only composition/runtime/provider-identity bridge와 hosted-owned controller graph 조립, `content/panel-v2-shell-bridge.js`는 activity/surface/lifecycle/bootstrap/render bridge를 맡는다. 현재 이 두 파일에는 panel snapshot assembly migration residue가 남아 있으므로 목표 상태로 보지 않는다. active tool derivation, handle count 계산, hosted close/Escape/external-handle open state는 hosted 쪽으로 이동했고, 외부 handle/container DOM 반영만 `panel-chrome-sync`로 content host가 수행한다. 다음 cleanup은 extension이 raw page/capability facts만 보내고 hosted가 view state를 계산하게 줄이는 것이다. `content/panel.js`는 host element lifecycle과 helper wiring만 남기고, iframe target/status/handshake/render batching은 `content/panel-host-runtime.js`, hosted bridge endpoint와 page/panel event emit은 `content/panel-host-bridge.js`, host markup과 handle drag/click은 `content/panel-host-view.js`가 맡는다. active `content/hosted-panel-bridge.js`는 `panel-chrome-sync`, runtime/page contract dispatch만 유지하고, conversation copy/jump/search는 hosted controller가 `page.adapter.v2` capability로 직접 처리한다. top-level tool rail 선택도 hosted panel이 `storage.write-ui-preferences`로 직접 기록하고, extension conversation residue는 count/fingerprint snapshot bridge만 남긴다. 실제 page capability 구현은 `content/page-capability-router.js`, page localStorage 기반 사용자 식별 센서는 `content/provider-identity-sensor.js`, local hosted panel frame proxy resolver는 `content/frame-proxy-helper.js`가 맡는다. `1.0.0+` v2 lane의 extension에는 shell/runtime/route/page adapter 같은 browser-only 책임만 남기고, tool rail/header/content state는 hosted `extension-v2/panel/*` controller가 소유한다. active page adapter capability는 `conversation.read-state`, `conversation.jump-item`, `composer.read-state`, `composer.apply-text`, `clipboard.write-text`, `debug.read-state`, `debug.set-enabled`, `debug.copy-log`, `debug.clear-log`, `trace.log`를 canonical contract로 보고, caller migration이 끝난 alias는 active lane에 남겨 두지 않는다. 이 active page/runtime capability 카탈로그는 문서 설명만이 아니라 `contracts/extension-contract.json`과 `scripts/verify-contracts.js`로도 같이 고정한다.
+- 특징: `content/main.js`는 composition root, `content/panel-v2-composition-controller.js`는 browser-only composition/runtime/provider-identity bridge와 hosted-owned controller graph 조립, `content/panel-v2-shell-bridge.js`는 activity/surface/lifecycle/bootstrap/render bridge를 맡는다. 현재 이 두 파일에는 panel snapshot assembly migration residue가 남아 있으므로 목표 상태로 보지 않는다. active tool derivation, handle count 계산, hosted close/Escape/external-handle open state는 hosted 쪽으로 이동했고, 외부 handle/container DOM 반영만 `panel-chrome-sync`로 content host가 수행한다. 다음 cleanup은 extension이 raw page/capability facts만 보내고 hosted가 view state를 계산하게 줄이는 것이다. `content/panel.js`는 host element lifecycle과 helper wiring만 남기고, iframe target/status/handshake/render batching은 `content/panel-host-runtime.js`, hosted bridge endpoint와 page/panel event emit은 `content/panel-host-bridge.js`, host markup과 handle drag/click은 `content/panel-host-view.js`가 맡는다. active `content/hosted-panel-bridge.js`는 `panel-chrome-sync`, runtime/page contract dispatch만 유지하고, conversation copy/jump/search는 hosted controller가 `page.adapter.v2` capability로 직접 처리한다. top-level tool rail 선택도 hosted panel이 `storage.write-ui-preferences`로 직접 기록하고, extension conversation residue는 count/fingerprint snapshot bridge만 남긴다. 실제 page capability 구현은 `content/page-capability-router.js`, page localStorage 기반 사용자 식별 센서는 `content/provider-identity-sensor.js`, local hosted panel frame proxy resolver는 `content/frame-proxy-helper.js`가 맡는다. `1.0.0+` v2 lane의 extension에는 shell/runtime/route/page adapter 같은 browser-only 책임만 남기고, tool rail/header/content state는 hosted `extension-v2/panel/*` controller가 소유한다. active page adapter capability는 `conversation.read-state`, `conversation.jump-item`, `composer.read-state`, `composer.apply-text`, `clipboard.write-text`, `debug.read-state`, `debug.set-enabled`, `debug.copy-log`, `debug.clear-log`, `trace.log`, `page.scroll-to`, `page.highlight-range`, `page.show-banner`, `page.read-selection`, `page.dispatch-named-event`를 canonical contract로 보고, caller migration이 끝난 alias는 active lane에 남겨 두지 않는다. 이 active page/runtime capability 카탈로그는 문서 설명만이 아니라 `contracts/extension-contract.json`과 `scripts/verify-contracts.js`로도 같이 고정한다.
 - 특징: `shared/storage.js`는 active lane에서 generic local state/settings/ui-preferences/provider-identity-cache/product-lane migration core만 유지한다. inactive release/meeting storage accessor는 active shared core에 남기지 않고 `backup/legacy-panel/shared/legacy-storage-accessors.js` 같은 backup-only helper에서만 유지한다.
 - 특징: `shared/constants.js`도 active lane의 live browser shell 기본값만 유지한다. inactive release/meeting storage key/default schema는 active shared constants에 남기지 않고 backup helper가 직접 가진다.
 - 특징: `meetingWorkspaceTarget`, `meetingWorkspaceUrlOverride`, `meetingDebugConsoleEnabled` 같은 hosted/local target 설정 정규화는 `shared/firebase-config.js`의 `firebaseConfig.meeting.normalizeSettings()`를 정본으로 쓴다. popup과 background meeting workspace capability가 이 shared helper를 같이 재사용하고, 표면별 임시 normalize 함수를 다시 복제하지 않는다.
@@ -70,6 +70,21 @@
 - 특징: Functions endpoint family와 lane-aware local/prod runtime resolution은 active shared root가 아니라 `background/functions-runtime-config.js`가 소유하고, remote manifest schema/endpoint/capability/lifecycle validation은 `background/capability-manifest-validator.js`가 소유한다. `background/cloud-api-client.js`, `background/panel-session-capability.js`, `background/meeting-workspace-capability.js`는 이 background-only runtime config를 재사용하고, `shared/product-lane.js`나 `shared/firebase-config.js`가 endpoint family 이름을 다시 들지 않는다.
 - 특징: 장기 운영 목표는 backend action과 lightweight 기능 흐름 추가 때문에 extension ZIP을 재배포하지 않는 것이다. 현재 `background/panel-runtime-capability-router.js`와 `background/functions-runtime-config.js`는 bundled manifest baseline을 extension 내부에 두고, trusted Hosting `capability-manifest.json`을 fetch/cache한다. `functions-runtime-config.js`의 active manifest resolver는 remote target/lane/endpoint override를 실제 Functions fetch URL 해석에 사용하고, `panel-runtime-capability-router.js`는 `capabilities.invoke`를 받아 capabilityId 기반으로 function adapter를 실행한다. fetch/cache 검증 실패는 warning/degraded로 드러내고 bundled baseline으로 돌아간다. 단, 새 browser permission, 새 host permission, 새 page DOM adapter, 새 web-accessible asset, 새 privileged bridge처럼 extension 권한 자체가 바뀌는 경우는 계속 extension 재배포 대상이다.
 - 특징: active background/browser adapter가 아닌 파일은 direct browser/network power를 새로 열지 않는다. `background/cloud-api-client.js`, `background/inova-auth-client.js`, `background/panel-runtime-capability-router.js`, `background/browser-capability.js`, `background/meeting-workspace-capability.js`, `background/panel-session-capability.js`, `popup/index.js`, `shared/storage.js`, `content/provider-identity-sensor.js`, `content/panel-v2-shell-bridge.js`만 각각 선언된 `fetch/chrome.tabs/chrome.cookies/chrome.storage/localStorage/sessionStorage` owner로 유지하고, widening은 contract + `scripts/verify-browser-only-boundary.js`를 함께 갱신할 때만 허용한다.
+
+### Remote Capability Platform
+
+- 위치: `hosting/extension*/capability-manifest.json`, `background/functions-runtime-config.js`, `background/capability-manifest-validator.js`, `background/panel-runtime-capability-router.js`, `hosting/extension-v2/panel/extension-capability-client.js`
+- 역할: hosted 기능의 public entrypoint를 `capabilityId`로 통일하고, endpoint/URL template/lane/kill switch/alias를 Hosting 배포로 바꾼다.
+
+| kind | 처리 위치 | manifest만으로 바꿀 수 있는 것 | extension 재배포가 필요한 것 |
+| --- | --- | --- | --- |
+| `function` | background Functions fetch adapter | endpoint path, lane override, enable/kill, alias | 새 Functions origin, 새 auth primitive |
+| `browser.open-url` | background browser tab adapter | 기존 Hosting origin의 `urlTemplates` path | 새 URL template origin, 새 browser primitive |
+| `storage.write-ui-preferences` | background storage adapter | capability gate, lane/kill, alias | 새 privileged storage field/operation |
+| `page.capability` | content page router | semantic capabilityId, lane/kill, alias | 새 named page primitive |
+| `workflow` | hosted sandbox | disabled/pilot workflow artifact metadata | 새 bridge API, sandbox primitive |
+
+Remote manifest fetch나 validation이 실패하면 service worker는 warning/degraded reason을 남기고 bundled manifest baseline으로 돌아간다. fallback은 성공처럼 숨기지 않는다.
 
 ### Firebase Functions
 
@@ -147,6 +162,15 @@
 4. hosted 회의 작업실은 이미 붙어 있는 Firestore `meeting/job/artifact` 구독으로 결과 리스트와 상세 transcript를 실시간 반영한다.
 5. content 패널의 `회의` 도구는 전체 회의 허브만 보여 주고, 상세 transcript는 hosted 작업실이 렌더링한다.
 
+### I. Capability handshake boot
+
+1. hosted panel이 snapshot을 받은 뒤 `capabilities.handshake`를 runtime에 요청한다.
+2. background는 active manifest를 remote-cache 또는 bundled fallback에서 읽는다.
+3. background는 capability catalog, enabled capability ids, aliases, workflow artifacts, bridge API allowlist, degraded reason을 반환한다.
+4. hosted는 `enabledCapabilityIds`에 없는 버튼과 action path를 숨기거나 explicit disabled reason으로 막는다.
+5. hosted `invokeCapability(capabilityId, input)`은 kind에 따라 page primitive, runtime manifest adapter, sandbox workflow 중 하나로만 dispatch한다.
+6. workflow는 handshake catalog에 없는 bridge API를 호출할 수 없다.
+
 ## 4. 책임 경계 요약
 
 ### Content Script가 해도 되는 일
@@ -212,6 +236,7 @@
 - 핵심 UI 흐름은 여전히 실사이트 의존성이 남아 있고, 실제 Chrome에서만 드러나는 opener/session 문제를 정적 검증만으로는 잡을 수 없다.
 - 로컬 Hosting + 상용 Functions 조합은 빠르지만, 브라우저 확장과 hosted page 사이의 실제 세션 흐름을 항상 함께 봐야 한다.
 - Functions, Firestore, hosted page, service worker 경계가 모두 이어진 기능은 결국 실제 브라우저 점검이 가장 신뢰도가 높다.
+- remote manifest fetch 실패나 validation 실패 시 bundled fallback으로 동작하지만, panel/debug trace에는 degraded reason을 남겨야 한다.
 
 ## 7. 다음 확장 원칙
 

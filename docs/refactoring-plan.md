@@ -3,7 +3,7 @@
 이 문서는 구조 진행 일지나 세션 handoff가 아니라, `버전 결정`, `version lane`, `meeting legacy baseline`, `release decision boundary`만 빠르게 확인하기 위한 기준 문서다.  
 ordinary feature 구현 변경, 탭별 hosted ownership 진행도, smoke 이슈 목록, git chronology는 이 문서의 대상이 아니다. 그런 내용은 `docs/current-handoff.md`, `docs/runtime-architecture.md`, feature `AGENTS.md`에서 관리한다.
 
-마지막 상태 갱신: 2026-04-14  
+마지막 상태 갱신: 2026-04-16
 현재 공개 사용자 기준선: `0.4.4`
 
 ## 현재 결정 요약
@@ -135,6 +135,7 @@ ordinary feature 구현 변경, 탭별 hosted ownership 진행도, smoke 이슈 
 - `1.x+` active lane의 Functions endpoint family와 lane-aware local/prod runtime resolution은 `background/functions-runtime-config.js` 한 곳으로 모은다. `shared/firebase-config.js`와 `shared/product-lane.js`는 endpoint name/override를 다시 들지 않고, `background/cloud-api-client.js`, `background/panel-session-capability.js`, `background/meeting-workspace-capability.js`가 이 background-only runtime config를 재사용한다.
 - 다음 구조 목표는 새 backend action 추가가 extension 재배포로 이어지지 않게 하는 것이다. `background/panel-runtime-capability-router.js`와 `background/functions-runtime-config.js`는 bundled manifest 모델과 trusted Hosting `capability-manifest.json` fetch/cache를 현재 baseline으로 두고, 후속 작업은 `docs/remote-capability-manifest-plan.md` 순서대로 endpoint/runtime config 원격화로 진행한다. 이 작업은 보안 경계 변경이므로 hosted가 raw URL을 background에 넘기는 방식으로 해결하지 않는다.
 - remote capability alias, hosted page capability dispatch, remote workflow sandbox shell은 active `npm.cmd run verify` baseline에 포함한다. `scripts/verify-runtime-capability-router.js`는 background manifest alias/artifact 해석을, `scripts/verify-extension-capability-client.js`는 hosted capability client의 page/alias dispatch allowlist를, `scripts/verify-remote-workflow-sandbox.js`는 hosted sandbox iframe/bridge boundary를 고정한다.
+- active page primitive catalog도 같은 verify baseline에 포함한다. `scripts/verify-page-capability-router.js`는 `content/page-capability-router.js`의 named primitive 호출, unknown key 거부, raw HTML/script param 거부를 고정한다.
 - `1.x+` active lane의 generic tab/open-url browser adapter는 `background/browser-capability.js` 한 곳으로 모은다. service worker나 meeting workspace capability가 `chrome.tabs.create()`와 open-url payload shaping을 각자 다시 구현하지 않는다.
 - `1.x+` active lane의 panel auth/access-token/prompt runtime config wrapper는 `background/panel-session-capability.js` 한 곳으로 모은다. service worker가 `getInovaAccessToken`, `issuePromptPanelAuth`, `issueMeetingPanelAuth`, `getPromptFunctionsConfig`, `getPromptRuntimeConfig`를 다시 직접 구현하지 않는다.
 - `1.x+` active lane의 meeting workspace target/debug setting normalization도 표면별 임시 helper로 다시 복제하지 않는다. `shared/firebase-config.js`의 `firebaseConfig.meeting.normalizeSettings()`를 정본으로 두고, popup과 background meeting workspace capability가 같은 helper를 재사용한다.

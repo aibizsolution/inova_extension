@@ -33,6 +33,11 @@
 - 버전별 ZIP
 - `1.0.0+` v2 lane은 `hosting/extension-v2/releases/latest.json`, `hosting/extension-v2/releases/history.json`, `hosting/extension-v2/downloads/*`를 사용한다.
 
+## 관련 capabilityId
+- `release.download.open`: `browser.open-url` kind로 다운로드 ZIP을 연다.
+- `release.download.latest`: `release.download.open` alias seed. 제거 기한은 manifest `aliases`의 `removeAfter`를 따른다.
+- 새 release URL path는 기존 Hosting origin이면 `urlTemplates` 추가와 Hosting 배포만으로 처리한다. 새 origin은 extension 재배포 대상이다.
+
 ## 보통 건드리지 말아야 할 범위
 - meeting
 - prompt-library

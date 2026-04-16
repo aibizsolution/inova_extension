@@ -89,6 +89,7 @@
 현재 구현 상태:
 
 - `hosting/extension*/capability-manifest.json`에 semantic `capabilities` map을 추가했다.
+- `hosting/extension*/capability-manifest.json`에 `urlTemplates` map을 추가했다. `browser.open-url` capability는 capability별 `templateKeys`와 top-level `urlTemplates`를 둘 다 통과해야 실행된다.
 - `background/functions-runtime-config.js`는 `resolveCapabilityFunctionEndpoint()`로 active manifest의 target/lane/endpoint override를 실제 fetch URL로 해석한다.
 - `background/capability-manifest-validator.js`는 remote manifest의 endpoint/capability/schema/workflow/lifecycle validation을 소유한다.
 - `background/panel-runtime-capability-router.js`는 `capabilities.invoke`를 받아 manifest capability lookup 후 function adapter로 dispatch한다.
@@ -185,7 +186,7 @@ panel boot 시 hosted와 background는 capability catalog를 negotiation한다.
 - `hosting/extension-v2/panel/index.js`는 snapshot boot 직후 handshake를 호출하고, static extension capabilities와 enabled remote capability ids를 합쳐 hosted controllers에 전달한다.
 - killed/disabled capability는 handshake의 `enabledCapabilityIds`에서 제외된다.
 - prompt review, prompt library, prompt store는 negotiated capabilityId 기준으로 write/action UI 노출과 실행을 1차 차단한다.
-- meeting hub는 `meeting.share.create-function`, `meeting.share.revoke-function` handshake capability가 enabled일 때만 공유 생성/해제 UI와 실행을 연다.
+- meeting hub는 `meeting.share.create-function`, `meeting.share.revoke-function` handshake capability가 enabled일 때만 공유 생성/해제 UI와 실행을 열고, 실행도 `invokeCapability()`를 통해 manifest function endpoint resolution을 따른다.
 - conversation controller는 `page.conversation.read-state`, `page.conversation.jump-item`, `page.clipboard.write-text` handshake capability가 enabled일 때만 읽기/이동/복사 UI와 실행을 연다.
 - controller-level action gating 1차는 완료됐다.
 - hosted panel shell의 `panel.ui-preferences.write`도 handshake 이후에는 enabled capability일 때만 실행한다. disabled 상태에서는 runtime dispatch 전에 explicit error/trace/toast로 멈춘다.
@@ -317,10 +318,20 @@ verify 기준:
 현재 상태:
 
 - `kind=function` catalog와 dispatch가 구현됨.
-- `kind=browser.open-url`은 `release.download.open` capability로 1차 구현됨. hosted는 `templateKey + fileName`만 넘기고 background가 allowed template으로 실제 URL을 조립한다.
+- `kind=browser.open-url`은 `urlTemplates` 데이터 기반으로 동작한다. hosted는 `templateKey + params`만 넘기고 background가 manifest `origin/pattern/params`로 실제 URL을 조립한다. 기존 Hosting origin 안의 새 URL template은 Hosting 배포만으로 추가할 수 있고, 새 origin은 extension 재배포 대상이다.
 - `kind=storage.write-ui-preferences`는 `panel.ui-preferences.write` capability로 1차 구현됨. hosted는 `writeUiPreferences(partial)` helper를 유지하되 내부 dispatch는 capabilityId 기반이다.
 - `kind=page.capability`는 `page.*` semantic capability로 1차 구현됨. hosted `invokeCapability(capabilityId, input)`은 handshake catalog에서 `page.capability` kind를 보면 allowlisted `invokePageCapability(pageCapabilityId, input)`로 dispatch한다.
 - `workflow` kind는 아직 pilot 전이다.
+
+현재 허용 adapter kind:
+
+| kind | extension adapter | manifest만 변경 가능 | extension 재배포 필요 |
+| --- | --- | --- | --- |
+| `function` | Functions fetch | endpoint path, lane override, enable/kill/alias | 새 Functions origin 또는 새 auth primitive |
+| `browser.open-url` | tab open URL template | 기존 Hosting origin의 새 path template | 새 URL origin 또는 새 browser primitive |
+| `storage.write-ui-preferences` | UI preference write | gate/lane/kill/alias | 새 privileged storage operation |
+| `page.capability` | named page primitive | semantic id/gate/lane/kill/alias | 새 page primitive |
+| `workflow` | sandbox workflow host | pilot artifact metadata | 새 bridge/sandbox primitive |
 
 ### Phase 5. Page Primitive 선탑재
 
@@ -369,6 +380,8 @@ verify 기준:
 - hosted conversation controller는 `page.conversation.read-state`, `page.conversation.jump-item`, `page.clipboard.write-text`가 handshake에서 enabled일 때만 읽기/이동/복사 UI와 실행 경로를 연다.
 - 기존 primitive 실행 결과는 유지한다.
 - arbitrary selector/DOM script primitive는 추가하지 않았다.
+- reviewer cleanup에서 `page.scroll-to(targetKey)`, `page.highlight-range(selectionKey)`, `page.show-banner(templateKey, params)`, `page.read-selection()`, `page.dispatch-named-event(eventKey)`를 추가했다.
+- 새 primitive는 모두 allowlisted key만 받는다. raw selector, raw HTML, raw JS, raw event name은 받지 않는다.
 
 ### Phase 5.5. Schema Registry 강화
 
@@ -438,6 +451,9 @@ verify 기준:
 배포/롤아웃 주의점:
 
 - compatibility path 제거 날짜는 `2026-05-31`이며 문서와 guard가 함께 확인한다.
+- `2026-04-30`까지 v2 hosted에서 `invokeFunctionEndpoint` 사용 grep 0을 유지한다.
+- `2026-05-31` 이후 첫 릴리스에서 `invokeFunctionEndpoint` helper, router의 `functions.invoke-endpoint` branch, 해당 compatibility verify를 삭제한다.
+- 삭제 PR에는 hosted 코드에 `endpointKey:` 또는 `functions.invoke-endpoint` literal이 남으면 실패하는 grep/lint guard를 추가한다.
 
 ### Phase 6.5. Sandboxed Remote Logic 기반
 
@@ -567,6 +583,7 @@ verify 기준:
 - docs generator
 - verify scripts
 - `docs/remote-capability-manifest-plan.md`
+- `docs/capability-authoring.md`
 - `docs/capability-catalog.md`
 
 완료 기준:
@@ -591,6 +608,7 @@ verify 기준:
 
 - `scripts/generate-capability-catalog.js`가 `hosting/extension-v2/capability-manifest.json`에서 `docs/capability-catalog.md`를 생성한다.
 - `scripts/verify-docs.js`가 generated catalog drift를 실패 처리한다.
+- `docs/capability-authoring.md`가 새 capability 추가 절차와 extension 재배포 기준을 고정한다.
 - test-only capability는 validator와 runtime router verify에서 production enabled 노출을 차단한다.
 
 ### Phase 8. Sandboxed Remote Workflow Pilot
@@ -673,14 +691,16 @@ verify 기준:
 현재 상태:
 
 - Phase 3~7.5의 platform foundation은 1차 구현됨.
+- reviewer cleanup에서 Phase 5 page primitive 확장, meeting share `invokeCapability` 이관, data-driven `urlTemplates`, manifest kill/lane/alias seed, authoring docs가 반영됨.
 - member-info workflow pilot은 검증 후 원복됨.
-- 새 engineering slice는 Phase 8 pilot을 명시적으로 고른 뒤 시작한다.
+- 다음 새 engineering slice는 Phase 8 pilot을 명시적으로 고른 뒤 시작한다.
 
 다음에 먼저 볼 파일:
 
 - `docs/current-handoff.md`
 - `docs/remote-capability-manifest-plan.md`
 - `docs/capability-catalog.md`
+- `docs/capability-authoring.md`
 - `background/functions-runtime-config.js`
 - `background/capability-manifest-validator.js`
 - `background/panel-runtime-capability-router.js`

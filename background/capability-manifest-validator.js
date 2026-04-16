@@ -44,11 +44,13 @@
         throw new Error("remote capability manifest is expired or missing expiresAt");
       }
       validateEndpointDefinitions(normalizedManifest.endpointKeys);
+      validateUrlTemplates(normalizedManifest.urlTemplates);
       validateWorkflowArtifacts(normalizedManifest.workflowArtifacts);
       const workflowPilot = validateWorkflowPilot(normalizedManifest.workflowPilot);
       validateCapabilityDefinitions(
         normalizedManifest.capabilities,
         normalizedManifest.endpointKeys,
+        normalizedManifest.urlTemplates,
         normalizedManifest.workflowArtifacts,
         workflowPilot
       );
@@ -121,7 +123,7 @@
       }
     }
 
-    function validateCapabilityDefinitions(capabilities, endpointDefinitions, workflowArtifacts, workflowPilot) {
+    function validateCapabilityDefinitions(capabilities, endpointDefinitions, urlTemplates, workflowArtifacts, workflowPilot) {
       if (!capabilities || typeof capabilities !== "object") {
         throw new Error("remote capability manifest capabilities are missing");
       }
@@ -132,7 +134,7 @@
       });
       Object.entries(capabilities).forEach(([capabilityId, capability]) => {
         validateCapabilityId(capabilityId);
-        validateCapabilityDefinition(capabilityId, capability, capabilities, endpointDefinitions, workflowArtifacts, workflowPilot);
+        validateCapabilityDefinition(capabilityId, capability, capabilities, endpointDefinitions, urlTemplates, workflowArtifacts, workflowPilot);
       });
     }
 
@@ -142,7 +144,7 @@
       }
     }
 
-    function validateCapabilityDefinition(capabilityId, capability, capabilities, endpointDefinitions, workflowArtifacts, workflowPilot) {
+    function validateCapabilityDefinition(capabilityId, capability, capabilities, endpointDefinitions, urlTemplates, workflowArtifacts, workflowPilot) {
       if (!capability || typeof capability !== "object") {
         throw new Error(`remote capability manifest capability is invalid: ${capabilityId}`);
       }
@@ -151,7 +153,7 @@
       if (!["function", "browser.open-url", "storage.write-ui-preferences", "page.capability", "workflow"].includes(kind)) {
         throw new Error(`remote capability manifest capability kind is not allowed: ${capabilityId}`);
       }
-      validateCapabilityTarget(capabilityId, capability, endpointDefinitions, kind, workflowArtifacts, workflowPilot);
+      validateCapabilityTarget(capabilityId, capability, endpointDefinitions, urlTemplates, kind, workflowArtifacts, workflowPilot);
       const authMode = normalizeText(capability.authMode || capability.auth || "access-token").toLowerCase();
       if (!["access-token", "none"].includes(authMode)) {
         throw new Error(`remote capability manifest capability authMode is not allowed: ${capabilityId}`);
@@ -188,7 +190,7 @@
       }
     }
 
-    function validateCapabilityTarget(capabilityId, capability, endpointDefinitions, kind, workflowArtifacts, workflowPilot) {
+    function validateCapabilityTarget(capabilityId, capability, endpointDefinitions, urlTemplates, kind, workflowArtifacts, workflowPilot) {
       if (kind === "function") {
         const endpointKey = normalizeText(capability.endpointKey);
         const service = normalizeText(capability.service).toLowerCase();
@@ -197,7 +199,7 @@
       }
       if (kind === "browser.open-url") {
         const templateKeys = Array.isArray(capability.templateKeys) ? capability.templateKeys.map(normalizeText) : [];
-        if (!templateKeys.length || templateKeys.some((templateKey) => templateKey !== "release.download")) throw new Error(`remote capability manifest capability templateKey is not allowed: ${capabilityId}`);
+        if (!templateKeys.length || templateKeys.some((templateKey) => !urlTemplates?.[templateKey])) throw new Error(`remote capability manifest capability templateKey is not allowed: ${capabilityId}`);
       }
       if (kind === "storage.write-ui-preferences" && normalizeText(capability.service).toLowerCase() !== "storage") throw new Error(`remote capability manifest capability service is not allowed: ${capabilityId}`);
       if (kind === "page.capability") {
@@ -206,6 +208,62 @@
         if (normalizeText(capability.service).toLowerCase() !== "page") throw new Error(`remote capability manifest capability service is not allowed: ${capabilityId}`);
       }
       if (kind === "workflow") validateWorkflowCapability(capabilityId, capability, workflowArtifacts, workflowPilot);
+    }
+
+    function validateUrlTemplates(urlTemplates) {
+      if (!urlTemplates || typeof urlTemplates !== "object" || Array.isArray(urlTemplates)) {
+        throw new Error("remote capability manifest urlTemplates are missing");
+      }
+      Object.entries(urlTemplates).forEach(([templateKey, template]) => {
+        validateCapabilityId(templateKey);
+        if (!template || typeof template !== "object" || Array.isArray(template)) {
+          throw new Error(`remote capability manifest urlTemplate is invalid: ${templateKey}`);
+        }
+        const origin = normalizeText(template.origin);
+        const pattern = normalizeText(template.pattern);
+        if (!isAllowedUrlTemplateOrigin(origin)) {
+          throw new Error(`remote capability manifest urlTemplate origin is not allowed: ${templateKey}`);
+        }
+        if (!isSafeUrlTemplatePattern(pattern)) {
+          throw new Error(`remote capability manifest urlTemplate pattern is not allowed: ${templateKey}`);
+        }
+        validateUrlTemplateParams(templateKey, template.params);
+      });
+    }
+
+    function validateUrlTemplateParams(templateKey, params) {
+      if (params == null) {
+        return;
+      }
+      if (typeof params !== "object" || Array.isArray(params)) {
+        throw new Error(`remote capability manifest urlTemplate params are invalid: ${templateKey}`);
+      }
+      Object.entries(params).forEach(([paramKey, paramType]) => {
+        if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(normalizeText(paramKey))) {
+          throw new Error(`remote capability manifest urlTemplate param key is not allowed: ${templateKey}`);
+        }
+        if (!["safe-segment", "zip-file"].includes(normalizeText(paramType))) {
+          throw new Error(`remote capability manifest urlTemplate param type is not allowed: ${templateKey}`);
+        }
+      });
+    }
+
+    function isAllowedUrlTemplateOrigin(origin) {
+      if (origin === "runtime.hosting") {
+        return true;
+      }
+      return getKnownHostingOrigins().includes(origin);
+    }
+
+    function isSafeUrlTemplatePattern(pattern) {
+      return Boolean(pattern)
+        && !/^[a-z][a-z0-9+.-]*:/i.test(pattern)
+        && !pattern.startsWith("//")
+        && !pattern.includes("..")
+        && !/[?#]/.test(pattern)
+        && /^[A-Za-z0-9/_{}.-]+$/.test(pattern)
+        && !/\{[^A-Za-z0-9_]/.test(pattern)
+        && !/[^A-Za-z0-9_]\}/.test(pattern);
     }
 
     function validateCapabilityLifecycleMetadata(capabilityId, capability, capabilities) {

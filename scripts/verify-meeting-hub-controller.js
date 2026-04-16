@@ -92,8 +92,10 @@ async function verifyHostedMeetingHubOwnership() {
   assert.equal(viewState.pending?.active, false, "hosted meeting hub should clear pending state after launch");
 
   assert(
-    harness.runtimeCalls.some((request) => request.action === "meeting.share.create"),
-    "hosted meeting hub should call runtime share actions directly"
+    harness.runtimeCalls.some((request) =>
+      request.action === "capabilities.invoke"
+        && request.capabilityId === "meeting.share.create-function"),
+    "hosted meeting hub should call meeting share create through semantic capability invoke"
   );
   assert(
     harness.runtimeCalls.some((request) => request.action === "meeting.result.open"),
@@ -184,8 +186,8 @@ async function verifyHostedMeetingHubGatesShareCapabilities() {
   });
   assert.equal(handled, true, "disabled share actions should be handled as explicit user-visible failures");
   assert(
-    !harness.runtimeCalls.some((request) => request.action === "meeting.share.create"),
-    "disabled share capability should not call the privileged share runtime action"
+    !harness.runtimeCalls.some((request) => request.capabilityId === "meeting.share.create-function"),
+    "disabled share capability should not call the privileged share runtime capability"
   );
   assert.equal(harness.pageCalls.length, 0, "disabled share capability should not copy a stale share URL");
   assert.deepEqual(harness.toastCalls.at(-1), {
@@ -654,7 +656,7 @@ function createHarnessWithOptions(options = {}) {
           },
         };
       }
-      if (request?.action === "meeting.share.create") {
+      if (request?.action === "capabilities.invoke" && request?.capabilityId === "meeting.share.create-function") {
         return {
           share: {
             active: true,
@@ -664,7 +666,7 @@ function createHarnessWithOptions(options = {}) {
           shareUrl: "https://share.example/meeting-alpha",
         };
       }
-      if (request?.action === "meeting.share.revoke") {
+      if (request?.action === "capabilities.invoke" && request?.capabilityId === "meeting.share.revoke-function") {
         return {
           share: {
             active: false,

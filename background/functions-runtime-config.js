@@ -13,6 +13,11 @@
     "debug.copy-log",
     "debug.read-state",
     "debug.set-enabled",
+    "page.dispatch-named-event",
+    "page.highlight-range",
+    "page.read-selection",
+    "page.scroll-to",
+    "page.show-banner",
     "trace.log",
   ]);
   const WORKFLOW_SCRIPT_SLOTS = Object.freeze([
@@ -26,6 +31,13 @@
     storagePort: 9199,
   });
   const BUNDLED_FUNCTIONS_MANIFEST = deepFreeze({
+    aliases: {
+      "release.download.latest": {
+        owner: "release",
+        removeAfter: "2030-01-01T00:00:00.000Z",
+        replacementId: "release.download.open",
+      },
+    },
     capabilities: {
       ...buildFunctionCapabilityCatalog([
       ["meeting.list", "listInovaMeetingsUrl", "meeting", "meeting", "meeting", "read"],
@@ -53,10 +65,15 @@
       ["page.debug.copy-log", "debug.copy-log", "debug", "debug", "read"],
       ["page.debug.read-state", "debug.read-state", "debug", "debug", "read"],
       ["page.debug.set-enabled", "debug.set-enabled", "debug", "debug", "write"],
+      ["page.dispatch-named-event", "page.dispatch-named-event", "runtime-platform", "page", "write"],
+      ["page.highlight-range", "page.highlight-range", "runtime-platform", "page", "write"],
+      ["page.read-selection", "page.read-selection", "runtime-platform", "page", "read"],
+      ["page.scroll-to", "page.scroll-to", "runtime-platform", "page", "write"],
+      ["page.show-banner", "page.show-banner", "runtime-platform", "page", "write"],
       ["page.trace.log", "trace.log", "runtime-platform", "trace", "write"],
       ]),
-      "panel.ui-preferences.write": { auditLevel: "write", authMode: "none", domain: "panel", enabled: true, inputSchemaVersion: 1, kind: "storage.write-ui-preferences", minExtensionVersion: "1.0.0", outputSchemaVersion: 1, owner: "runtime-platform", schemaVersion: 1, service: "storage" },
-      "release.download.open": { auditLevel: "write", authMode: "none", domain: "release", enabled: true, inputSchemaVersion: 1, kind: "browser.open-url", minExtensionVersion: "1.0.0", outputSchemaVersion: 1, owner: "release", schemaVersion: 1, service: "browser", templateKeys: ["release.download"] },
+      "panel.ui-preferences.write": { auditLevel: "write", authMode: "none", domain: "panel", enabled: true, inputSchemaVersion: 1, kind: "storage.write-ui-preferences", lane: "v2", minExtensionVersion: "1.0.0", outputSchemaVersion: 1, owner: "runtime-platform", schemaVersion: 1, service: "storage" },
+      "release.download.open": { auditLevel: "write", authMode: "none", domain: "release", enabled: true, inputSchemaVersion: 1, kind: "browser.open-url", killSwitch: { enabled: false, reason: "preloaded release download kill drill seed" }, minExtensionVersion: "1.0.0", outputSchemaVersion: 1, owner: "release", schemaVersion: 1, service: "browser", templateKeys: ["release.download"] },
     },
     endpointKeys: buildFunctionEndpointDefinitions([
       "authorizeInovaMeetingWorkspaceAccessUrl",
@@ -112,6 +129,15 @@
       },
       production: {
         functionsBaseUrl: DEFAULT_FUNCTIONS_BASE_URL,
+      },
+    },
+    urlTemplates: {
+      "release.download": {
+        origin: "runtime.hosting",
+        params: {
+          fileName: "zip-file",
+        },
+        pattern: "downloads/{fileName}",
       },
     },
     workflowArtifacts: {},

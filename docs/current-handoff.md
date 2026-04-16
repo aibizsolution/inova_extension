@@ -8,8 +8,8 @@ Last updated: 2026-04-16
 - Current local candidate: `1.0.0`
 - Current merged baseline: `main` at `81af793` / PR #42.
 - Current working branch: `codex/bundled-capability-manifest`.
-- Latest full validation: `npm.cmd run verify` passed after the remote capability manifest, sandboxed workflow foundation, hosted action capability gating, panel preference-write gating, and this handoff cleanup.
-- Worktree should be clean after the latest green commit.
+- Latest targeted validation: page capability router, runtime capability router, meeting hub, and contracts passed after the reviewer cleanup code changes. Run full `npm.cmd run verify` before commit.
+- Worktree may be dirty during the reviewer cleanup slice.
 
 ## Current Goal
 
@@ -48,6 +48,10 @@ Implemented:
 - workflow artifact registry with same-origin artifact fetch, integrity check, script slot allowlist, and raw code/url payload rejection.
 - sandbox bridge allowlist: `emitTrace`, `invokeCapability`, `invokePageCapability`, `metrics`, `openUrl`, `readPanelState`, `writeUiPreferences`.
 - hosted controller capability gating for prompt review, prompt library, prompt store, release download, meeting share, conversation read/jump/copy, and panel preference writes.
+- named page primitives for `page.scroll-to`, `page.highlight-range`, `page.show-banner`, `page.read-selection`, and `page.dispatch-named-event`.
+- data-driven `urlTemplates` for `browser.open-url` capabilities.
+- production manifest seed entries for kill switch, v2 lane gate, and alias handling.
+- meeting share create/revoke execution moved to `invokeCapability()` and manifest function endpoint resolution.
 
 Still intentionally closed:
 
@@ -95,9 +99,9 @@ Known hosted-first nuance:
 
 ## Next Engineering Work
 
-No new engineering slice is queued before choosing a new pilot.
+Reviewer cleanup is active. Finish docs/catalog regeneration, full verify, and commit.
 
-If continuing remote platform work, pick one:
+After that, no new engineering slice is queued before choosing a new pilot. If continuing remote platform work, pick one:
 
 1. Choose and implement a Phase 8 sandboxed workflow pilot.
 2. Expand named page primitives only if a real pilot cannot be expressed with the current catalog.
@@ -125,6 +129,7 @@ Remote platform:
 - `scripts/verify-runtime-capability-router.js`
 - `scripts/verify-remote-workflow-sandbox.js`
 - `scripts/verify-extension-capability-client.js`
+- `scripts/verify-page-capability-router.js`
 
 Hosted controller gating:
 

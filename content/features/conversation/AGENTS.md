@@ -36,6 +36,12 @@
 - 패널 UI 상태
 - v2 lane에서는 질문 기능 자체는 같지만, panel shell이 읽는 local storage key가 `v2.*` prefix로 분리될 수 있다. route sync는 lane별 storage change만 반영해야 한다.
 
+## 관련 capabilityId
+- `page.conversation.read-state`: 현재 대화 snapshot 읽기.
+- `page.conversation.jump-item`: 질문 원문 위치 이동.
+- `page.clipboard.write-text`: 질문 복사.
+- `page.scroll-to`, `page.highlight-range`, `page.read-selection`, `page.show-banner`, `page.dispatch-named-event`: remote workflow가 조합할 수 있는 named page primitive. raw selector/HTML/JS는 금지한다.
+
 ## 보통 건드리지 말아야 할 범위
 - `functions/*`
 - `hosting/meeting/*`

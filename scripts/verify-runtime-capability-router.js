@@ -34,11 +34,19 @@ function verifyServedCapabilityManifests() {
   assert.equal(v2Manifest.capabilities["prompt.review.run"].kind, "function");
   assert.equal(v2Manifest.capabilities["prompt.review.run"].inputSchemaVersion, 1);
   assert.equal(v2Manifest.capabilities["panel.ui-preferences.write"].kind, "storage.write-ui-preferences");
+  assert.equal(v2Manifest.capabilities["panel.ui-preferences.write"].lane, "v2");
   assert.equal(v2Manifest.capabilities["panel.ui-preferences.write"].service, "storage");
   assert.equal(v2Manifest.capabilities["page.composer.read-state"].kind, "page.capability");
   assert.equal(v2Manifest.capabilities["page.composer.read-state"].pageCapabilityId, "composer.read-state");
+  assert.equal(v2Manifest.capabilities["page.scroll-to"].pageCapabilityId, "page.scroll-to");
+  assert.equal(v2Manifest.capabilities["page.show-banner"].pageCapabilityId, "page.show-banner");
   assert.equal(v2Manifest.capabilities["release.download.open"].kind, "browser.open-url");
   assert.deepEqual(v2Manifest.capabilities["release.download.open"].templateKeys, ["release.download"]);
+  assert.equal(v2Manifest.urlTemplates["release.download"].origin, "runtime.hosting");
+  assert.equal(v2Manifest.urlTemplates["release.download"].params.fileName, "zip-file");
+  assert.equal(v2Manifest.urlTemplates["release.download"].pattern, "downloads/{fileName}");
+  assert.equal(v2Manifest.capabilities["release.download.open"].killSwitch.enabled, false);
+  assert.equal(v2Manifest.aliases["release.download.latest"].replacementId, "release.download.open");
   assert.deepEqual(v2Manifest.workflowArtifacts, {});
   assert.deepEqual(v2Manifest.workflowPilot, {
     enabled: false,
@@ -121,6 +129,18 @@ async function verifyRemoteManifestValidationFailuresAreVisible() {
       manifest.capabilities["page.composer.read-state"].pageCapabilityId = "raw.dom-script";
     },
     "unknown page capability should fall back visibly"
+  );
+  await verifyRejectedManifestMutation(
+    (manifest) => {
+      manifest.capabilities["release.download.open"].templateKeys = ["release.missing"];
+    },
+    "unregistered URL template should fall back visibly"
+  );
+  await verifyRejectedManifestMutation(
+    (manifest) => {
+      manifest.urlTemplates["release.download"].origin = "https://example.invalid";
+    },
+    "unknown URL template origin should fall back visibly"
   );
   await verifyRejectedManifestMutation(
     (manifest) => {
@@ -301,6 +321,17 @@ async function verifyBundledRuntimeRouterDispatch() {
     },
   };
   remoteManifest.lanes.v2.endpointOverrides.reviewInovaPromptUrl = "reviewInovaPromptRemoteV2";
+  remoteManifest.urlTemplates["release.notes"] = {
+    origin: "runtime.hosting",
+    pattern: "releases/{fileName}",
+  };
+  remoteManifest.capabilities["fixture.release.notes.open"] = {
+    ...remoteManifest.capabilities["release.download.open"],
+    killSwitch: {
+      enabled: false,
+    },
+    templateKeys: ["release.notes"],
+  };
   remoteManifest.capabilities["prompt.store.list"].deprecatedAt = "2026-05-31";
   remoteManifest.capabilities["prompt.store.list"].replacementId = "prompt.store.import";
   remoteManifest.capabilities["fixture.future.function"] = {
@@ -485,6 +516,7 @@ async function verifyBundledRuntimeRouterDispatch() {
   assert(handshake.enabledCapabilityIds.includes("panel.ui-preferences.write"));
   assert(handshake.enabledCapabilityIds.includes("page.composer.read-state"));
   assert(handshake.enabledCapabilityIds.includes("release.download.open"));
+  assert(handshake.enabledCapabilityIds.includes("fixture.release.notes.open"));
   assert.equal(
     handshake.capabilities.find((capability) => capability.capabilityId === "prompt.review.run")?.enabled,
     true
@@ -672,6 +704,18 @@ async function verifyBundledRuntimeRouterDispatch() {
     }),
     /허용되지 않은 release download 파일명이에요/
   );
+  const releaseNotesOpenResult = await router.handle({
+    action: "capabilities.invoke",
+    capabilityId: "fixture.release.notes.open",
+    input: {
+      fileName: "history.json",
+      templateKey: "release.notes",
+    },
+  });
+  assert.deepEqual(releaseNotesOpenResult, {
+    opened: true,
+    url: "https://browser-extension-v2.web.app/extension-v2/releases/history.json",
+  });
 
   const disabledContext = createRuntimeContext({
     fetch: async (url) => {

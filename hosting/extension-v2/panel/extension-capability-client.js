@@ -19,6 +19,11 @@
     "debug.copy-log",
     "debug.read-state",
     "debug.set-enabled",
+    "page.dispatch-named-event",
+    "page.highlight-range",
+    "page.read-selection",
+    "page.scroll-to",
+    "page.show-banner",
     "trace.log",
   ]);
 
@@ -40,7 +45,6 @@
       applyComposerText,
       clearDebugLog,
       copyDebugLog,
-      createMeetingShare,
       invokeCapability,
       invokeFunctionEndpoint,
       invokePageCapability,
@@ -54,7 +58,6 @@
       readConversationState,
       readDebugState,
       readPanelStorageState,
-      revokeMeetingShare,
       setDebugEnabled,
       writeClipboardText,
       writeUiPreferences,
@@ -74,14 +77,6 @@
     function copyDebugLog(errorsOnly = false) {
       return invokePageCapability("debug.copy-log", {
         errorsOnly,
-      });
-    }
-
-    function createMeetingShare(input, providerIdentity) {
-      return invokeRuntime({
-        action: "meeting.share.create",
-        input,
-        providerIdentity,
       });
     }
 
@@ -223,14 +218,6 @@
     function readPanelStorageState() {
       return invokeRuntime({
         action: "storage.read-panel-state",
-      });
-    }
-
-    function revokeMeetingShare(input, providerIdentity) {
-      return invokeRuntime({
-        action: "meeting.share.revoke",
-        input,
-        providerIdentity,
       });
     }
 

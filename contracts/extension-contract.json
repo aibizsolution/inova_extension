@@ -294,6 +294,11 @@
     "debug.set-enabled",
     "debug.copy-log",
     "debug.clear-log",
+    "page.dispatch-named-event",
+    "page.highlight-range",
+    "page.read-selection",
+    "page.scroll-to",
+    "page.show-banner",
     "trace.log"
   ],
   "runtimeCapabilityActions": [

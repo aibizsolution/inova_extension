@@ -28,8 +28,8 @@
     const traceFirestore = typeof options.traceFirestore === "function"
       ? options.traceFirestore
       : () => {};
-    const createMeetingShare = typeof browserCapabilities.createMeetingShare === "function"
-      ? browserCapabilities.createMeetingShare
+    const invokeCapability = typeof browserCapabilities.invokeCapability === "function"
+      ? browserCapabilities.invokeCapability
       : async () => ({});
     const openMeetingResult = typeof browserCapabilities.openMeetingResult === "function"
       ? browserCapabilities.openMeetingResult
@@ -39,9 +39,6 @@
       : async () => ({});
     const readPanelStorageState = typeof browserCapabilities.readPanelStorageState === "function"
       ? browserCapabilities.readPanelStorageState
-      : async () => ({});
-    const revokeMeetingShare = typeof browserCapabilities.revokeMeetingShare === "function"
-      ? browserCapabilities.revokeMeetingShare
       : async () => ({});
     const writeClipboardText = typeof browserCapabilities.writeClipboardText === "function"
       ? browserCapabilities.writeClipboardText
@@ -227,7 +224,10 @@
       try {
         if (normalizedAction === "share") {
           traceMeeting("63.top.meeting.bridge.share.start", input);
-          const result = await createMeetingShare(input, buildProviderIdentityPayload(state.providerIdentity));
+          const result = await invokeCapability(MEETING_SHARE_CREATE_CAPABILITY_ID, {
+            ...input,
+            providerIdentity: buildProviderIdentityPayload(state.providerIdentity),
+          });
           const shareUrl = normalizeText(result?.shareUrl);
           if (!shareUrl) {
             throw new Error("공유 링크를 만들지 못했어요.");
@@ -252,7 +252,10 @@
         }
 
         traceMeeting("63.top.meeting.bridge.revoke-share.start", input);
-        const result = await revokeMeetingShare(input, buildProviderIdentityPayload(state.providerIdentity));
+        const result = await invokeCapability(MEETING_SHARE_REVOKE_CAPABILITY_ID, {
+          ...input,
+          providerIdentity: buildProviderIdentityPayload(state.providerIdentity),
+        });
         patchShareState(input.meetingId, result?.share);
         traceMeeting("64.top.meeting.bridge.revoke-share.success", {
           meetingId: input.meetingId,
