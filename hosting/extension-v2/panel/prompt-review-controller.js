@@ -66,6 +66,7 @@
 
     let copyStateTimer = 0;
     const state = {
+      capabilities: [],
       composerState: { available: false, text: "" },
       copyState: "idle",
       error: "",
@@ -87,7 +88,10 @@
       syncPanelState,
     };
 
-    function syncPanelState(panelState) {
+    function syncPanelState(panelState, extensionCapabilities = []) {
+      state.capabilities = Array.isArray(extensionCapabilities)
+        ? extensionCapabilities.map((value) => normalizeText(value)).filter(Boolean)
+        : [];
       handleExternalReviewActivation(panelState?.promptTool?.review);
       const activeTool = normalizeText(panelState?.activeTool);
       const activePromptTab = getActivePromptTab();
@@ -110,9 +114,12 @@
       const result = normalizeResult(state.result);
       const stale = Boolean(result && reviewedText && reviewedText !== currentText);
       const requiresPlaceholderConfirm = Boolean(result?.placeholderTokens?.length);
+      const canReview = hasCapability(PROMPT_REVIEW_RUN_CAPABILITY_ID);
       return {
         available: Boolean(state.composerState.available),
+        canReview,
         canApply: Boolean(result?.refinedPrompt && !state.pending && !stale),
+        capabilityError: canReview ? "" : "프롬프트 검토 기능이 현재 비활성화되어 있어요.",
         copyState: normalizeEnum(state.copyState, ["idle", "copied", "failed"], "idle"),
         error: state.error,
         hasText: Boolean(currentText),
@@ -173,6 +180,23 @@
         traceReview("51.hosted.review.request.skip", {
           action: "review-composer",
           reason: "pending",
+        });
+        return;
+      }
+      if (!hasCapability(PROMPT_REVIEW_RUN_CAPABILITY_ID)) {
+        updateState({
+          error: "프롬프트 검토 기능이 현재 비활성화되어 있어요.",
+          lastReviewedAt: "",
+          open: true,
+          pending: false,
+          placeholderConfirmation: false,
+          requestId: 0,
+          result: null,
+          reviewedText: "",
+        });
+        traceReview("55.hosted.review.request.error", {
+          action: "review-composer",
+          error: "capability-disabled",
         });
         return;
       }
@@ -410,6 +434,10 @@
     function updateState(patch) {
       Object.assign(state, patch || {});
       scheduleRender();
+    }
+
+    function hasCapability(capabilityId) {
+      return state.capabilities.includes(capabilityId);
     }
 
     function handleExternalReviewActivation(reviewState) {

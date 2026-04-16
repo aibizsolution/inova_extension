@@ -14,6 +14,7 @@
       ? `<button type="button" class="inova-tool-button is-primary" data-prompt-action="apply-reviewed-prompt"${review.canApply ? "" : ' disabled aria-disabled="true"'}>${applyLabel}</button>`
       : "";
     const notices = [
+      !review.canReview && review.capabilityError ? `<p class="inova-inline-feedback is-error">${escapeHtml(review.capabilityError)}</p>` : "",
       review.error ? `<p class="inova-inline-feedback is-error">${escapeHtml(review.error)}</p>` : "",
       review.stale ? '<p class="inova-inline-feedback is-warning">입력창 내용이 바뀌었어요. 다시 평가하면 현재 문장 기준으로 보완안을 새로 만들어요.</p>' : "",
       review.placeholderConfirmation ? `<p class="inova-inline-feedback is-warning">보완 프롬프트에 ${renderTokenList(result?.placeholderTokens || [])}처럼 대괄호로 표시된 항목이 남아 있어요. 그대로 반영하면 대괄호 안 내용도 함께 들어갑니다. 그대로 반영하려면 버튼을 한 번 더 눌러 주세요.</p>` : "",
@@ -35,7 +36,7 @@
         </div>
         <div class="inova-tool-actions inova-prompt-review__actions">
           ${applyButton}
-          <button type="button" class="inova-tool-button" data-prompt-action="review-composer">다시 평가</button>
+          <button type="button" class="inova-tool-button" data-prompt-action="review-composer"${review.canReview ? "" : ' disabled aria-disabled="true"'}>다시 평가</button>
         </div>
       </section>
     `;

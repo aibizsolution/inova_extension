@@ -406,6 +406,12 @@ function verifyHostedPanelFiles(directoryName) {
   const promptReviewControllerJs = directoryName === "extension-v2"
     ? fs.readFileSync(path.join(baseDir, "prompt-review-controller.js"), "utf8")
     : "";
+  const promptViewJs = directoryName === "extension-v2"
+    ? fs.readFileSync(path.join(baseDir, "prompt-view.js"), "utf8")
+    : "";
+  const storeViewJs = directoryName === "extension-v2"
+    ? fs.readFileSync(path.join(baseDir, "store-view.js"), "utf8")
+    : "";
 
   assert(html.includes("./runtime.js"), "hosted panel should load runtime bootstrap");
   if (directoryName === "extension-v2") {
@@ -509,6 +515,29 @@ function verifyHostedPanelFiles(directoryName) {
     assert(!promptLibraryControllerJs.includes("endpointKey:"), "v2 hosted library controller should use capabilityId instead of endpointKey literals");
     assert(!promptReviewControllerJs.includes("endpointKey:"), "v2 hosted review controller should use capabilityId instead of endpointKey literals");
     assert(promptStoreControllerJs.includes("storeFirestoreClient.ensureSubscribed"), "v2 hosted store controller should subscribe through the Firestore client");
+    assert(
+      promptLibraryControllerJs.includes("requireCapability(PROMPT_LIBRARY_CAPABILITY_IDS.sync")
+        && promptLibraryControllerJs.includes("requireCapability(PROMPT_LIBRARY_CAPABILITY_IDS.publishToStore")
+        && promptViewJs.includes("state.canSync !== false")
+        && promptViewJs.includes("state.canPublishToStore !== false"),
+      "v2 hosted library write/publish actions should be gated by negotiated capability ids before rendering or invoking"
+    );
+    assert(
+      promptStoreControllerJs.includes("requireCapability(STORE_CAPABILITY_IDS.import")
+        && promptStoreControllerJs.includes("requireCapability(STORE_CAPABILITY_IDS.toggleLike")
+        && promptStoreControllerJs.includes("requireCapability(STORE_CAPABILITY_IDS.unpublish")
+        && promptStoreControllerJs.includes("requireCapability(STORE_CAPABILITY_IDS.recordView")
+        && storeViewJs.includes("state.canImport")
+        && storeViewJs.includes("state.canLike")
+        && storeViewJs.includes("state.canRecordView")
+        && storeViewJs.includes("state.canUnpublish"),
+      "v2 hosted store actions should be gated by negotiated store capability ids before rendering or invoking"
+    );
+    assert(
+      promptReviewControllerJs.includes("hasCapability(PROMPT_REVIEW_RUN_CAPABILITY_ID)")
+        && promptReviewControllerJs.includes("capability-disabled"),
+      "v2 hosted prompt review action should be gated by the negotiated prompt review capability id"
+    );
   }
   assert(
     indexJs.includes("확장 업데이트 필요"),

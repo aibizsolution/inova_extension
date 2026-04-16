@@ -108,7 +108,8 @@
   }
 
   function renderItem(item, state) {
-    const expandable = Boolean(item?.hasDetail || String(item?.content || item?.summary || "").trim());
+    const expandable = state.canRecordView !== false
+      && Boolean(item?.hasDetail || String(item?.content || item?.summary || "").trim());
     const expanded = expandable && state.expandedEntryId === item.entryId;
     const detailPending = expanded && state.detailPendingEntryId === item.entryId && !item.content;
     const owned = item.owner.providerUserKey && item.owner.providerUserKey === state.providerUserKey;
@@ -141,7 +142,7 @@
             <strong class="inova-prompt-item__title inova-store-item__title">${escapeHtml(item.title)}</strong>
           </div>
           <div class="inova-store-item__side">
-            ${renderStoreMenu(item, { actionDisabled, deleteConfirm, liking, owned })}
+            ${renderStoreMenu(item, { actionDisabled, canUnpublish: state.canUnpublish, deleteConfirm, liking, owned })}
           </div>
         </div>
         <div class="inova-store-item__summary-row" aria-label="스토어 통계">
@@ -152,9 +153,9 @@
           </div>
         </div>
         ${expanded ? renderExpandedContent(item, detailPending) : ""}
-        ${expanded ? renderStoreItemActions(item, { actionDisabled, importing, liking }) : ""}
+        ${expanded ? renderStoreItemActions(item, { actionDisabled, canImport: state.canImport, canLike: state.canLike, importing, liking }) : ""}
         ${itemFeedback ? renderFeedback(itemFeedback) : ""}
-        ${deleteConfirm ? renderDeleteConfirm(item.entryId, item.title, unpublishing) : ""}
+        ${deleteConfirm ? renderDeleteConfirm(item.entryId, item.title, unpublishing, state.canUnpublish) : ""}
       </article>
     `;
   }
@@ -167,7 +168,7 @@
           class="inova-tool-button inova-tool-button--compact inova-tool-button--with-icon is-primary"
           data-store-action="import"
           data-store-entry-id="${item.entryId}"
-          ${renderDisabled(options.actionDisabled)}
+          ${renderDisabled(options.actionDisabled || !options.canImport)}
         >
           <span class="inova-tool-inline-icon is-import" aria-hidden="true"></span>
           <span>${options.importing ? "가져오는 중..." : "가져오기"}</span>
@@ -178,7 +179,7 @@
           data-store-action="toggle-like"
           data-store-entry-id="${item.entryId}"
           aria-pressed="${item.viewer.liked}"
-          ${renderDisabled(options.actionDisabled)}
+          ${renderDisabled(options.actionDisabled || !options.canLike)}
         >
           <span class="inova-tool-inline-icon is-like" aria-hidden="true"></span>
           <span aria-hidden="true">${Number(item.metrics.likeCount) || 0}</span>
@@ -189,7 +190,7 @@
   }
 
   function renderStoreMenu(item, options = {}) {
-    if (!options.owned) {
+    if (!options.owned || !options.canUnpublish) {
       return "";
     }
     return `
@@ -254,13 +255,13 @@
     return "스토어 목록을 제한 모드로 표시 중이에요.";
   }
 
-  function renderDeleteConfirm(entryId, title, pending) {
+  function renderDeleteConfirm(entryId, title, pending, canUnpublish = true) {
     return `
       <section class="inova-inline-feedback is-warning">
         <strong>${escapeHtml(title)}</strong>
         <span>이 스토어 항목을 내릴까요? 이미 가져간 사용자 요청은 그대로 유지돼요.</span>
         <div class="inova-tool-actions">
-          <button type="button" class="inova-tool-button is-danger" data-store-action="unpublish" data-store-entry-id="${entryId}" ${renderDisabled(pending)}>${pending ? "삭제 중..." : "정말 삭제"}</button>
+          <button type="button" class="inova-tool-button is-danger" data-store-action="unpublish" data-store-entry-id="${entryId}" ${renderDisabled(pending || !canUnpublish)}>${pending ? "삭제 중..." : "정말 삭제"}</button>
           <button type="button" class="inova-tool-button" data-store-action="cancel-unpublish" data-store-entry-id="${entryId}" ${renderDisabled(pending)}>취소</button>
         </div>
       </section>

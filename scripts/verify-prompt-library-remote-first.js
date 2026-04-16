@@ -9,15 +9,23 @@ const {
   installHostedCapabilityClient,
   installPanelUtils,
 } = require("./verify-prompt-library-test-helpers");
+const { verifyHostedPromptCapabilityActionGates } = require("./verify-prompt-library-capability-gates");
 const { verifyHostedPromptLibraryAvoidsDuplicateReloads } = require("./verify-prompt-library-hosted-controller");
 
 const root = path.resolve(__dirname, "..");
+const HOSTED_PROMPT_CAPABILITIES = Object.freeze([
+  "page.adapter.v2",
+  "runtime.invoke.v1",
+  "prompt.library.sync",
+  "prompt.store.publish",
+]);
 
 function main() {
   verifyPromptLibraryHostedLaneContract();
   verifyPromptLibraryMetadataRoundTripContract();
   return Promise.all([
     verifyHostedPromptEditorViewLabels(),
+    verifyHostedPromptCapabilityActionGates(),
     verifyHostedPromptPublishUsesFunctionsFetch(),
     verifyHostedPromptTabSelectionDoesNotWaitForPersistence(),
     verifyHostedPromptReviewRequestAutofocus(),
@@ -150,7 +158,7 @@ async function verifyHostedPromptEditorViewLabels() {
 
   controller.syncPanelState(
     { activeTool: "prompts" },
-    ["page.adapter.v2", "runtime.invoke.v1"]
+    HOSTED_PROMPT_CAPABILITIES
   );
   await flushAsync();
   await flushAsync();
@@ -379,7 +387,7 @@ async function verifyHostedPromptPublishUsesFunctionsFetch() {
 
   controller.syncPanelState(
     { activeTool: "prompts" },
-    ["page.adapter.v2", "runtime.invoke.v1"]
+    HOSTED_PROMPT_CAPABILITIES
   );
   await flushAsync();
   await flushAsync();
@@ -571,7 +579,7 @@ async function verifyHostedPromptTabSelectionSurvivesLateStorageHydration() {
 
   controller.syncPanelState(
     { activeTool: "prompts" },
-    ["page.adapter.v2", "runtime.invoke.v1"]
+    HOSTED_PROMPT_CAPABILITIES
   );
   await flushAsync();
 
@@ -698,7 +706,7 @@ async function verifyHostedPromptReviewRequestAutofocus() {
         },
       },
     },
-    ["page.adapter.v2", "runtime.invoke.v1"]
+    HOSTED_PROMPT_CAPABILITIES
   );
 
   await flushAsync();

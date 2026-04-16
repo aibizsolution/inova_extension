@@ -171,6 +171,8 @@
       const items = filterPromptItems(state.promptLibrary?.items || [], state.query);
       return {
         actionPending: state.actionPending,
+        canPublishToStore: hasCapability(PROMPT_LIBRARY_CAPABILITY_IDS.publishToStore),
+        canSync: hasCapability(PROMPT_LIBRARY_CAPABILITY_IDS.sync),
         deletePromptId: state.deletePromptId,
         editor: buildEditorView(),
         emptyText: state.query
@@ -202,6 +204,7 @@
       return {
         ...state.editor,
         actionPending: state.actionPending,
+        canSync: hasCapability(PROMPT_LIBRARY_CAPABILITY_IDS.sync),
         description: state.editor.mode === "edit"
           ? "저장 후 바로 다시 사용할 수 있어요."
           : "반복해서 쓰는 요청을 저장해 두세요.",
@@ -263,6 +266,9 @@
       if (!(file instanceof global.File)) {
         return false;
       }
+      if (!requireCapability(PROMPT_LIBRARY_CAPABILITY_IDS.sync, "요청 보관함 동기화 기능이 현재 비활성화되어 있어요.")) {
+        return true;
+      }
       try {
         await ensurePromptLibraryLoaded(true, "import-file");
         const text = await file.text();
@@ -280,6 +286,9 @@
     }
 
     async function importStorePrompt(storeEntry) {
+      if (!hasCapability(PROMPT_LIBRARY_CAPABILITY_IDS.sync)) {
+        throw new Error("요청 보관함 동기화 기능이 현재 비활성화되어 있어요.");
+      }
       await ensurePromptLibraryLoaded(true, "import-store-prompt");
       const nextPromptLibrary = namespace.promptLibraryModel.importStoreEntry(state.promptLibrary, storeEntry);
       await syncPromptLibrary(nextPromptLibrary, "import-store-prompt");
@@ -289,6 +298,9 @@
     async function handleMovePrompt(dragPromptId, targetPromptId, placement) {
       if (state.activeTab !== "library") {
         return false;
+      }
+      if (!requireCapability(PROMPT_LIBRARY_CAPABILITY_IDS.sync, "요청 보관함 동기화 기능이 현재 비활성화되어 있어요.")) {
+        return true;
       }
       try {
         await ensurePromptLibraryLoaded(true, "move-prompt");
@@ -312,6 +324,9 @@
         return false;
       }
       if (normalizedAction === "create") {
+        if (!requireCapability(PROMPT_LIBRARY_CAPABILITY_IDS.sync, "요청 보관함 동기화 기능이 현재 비활성화되어 있어요.")) {
+          return true;
+        }
         state.editor = createEditor();
         state.editor.open = true;
         clearMenuState();
@@ -319,6 +334,9 @@
         return true;
       }
       if (normalizedAction === "edit") {
+        if (!requireCapability(PROMPT_LIBRARY_CAPABILITY_IDS.sync, "요청 보관함 동기화 기능이 현재 비활성화되어 있어요.", detail.promptId)) {
+          return true;
+        }
         const item = findPromptById(detail.promptId);
         if (!item) {
           return true;
@@ -350,6 +368,9 @@
         return true;
       }
       if (normalizedAction === "request-delete" || normalizedAction === "delete") {
+        if (!requireCapability(PROMPT_LIBRARY_CAPABILITY_IDS.sync, "요청 보관함 동기화 기능이 현재 비활성화되어 있어요.", detail.promptId)) {
+          return true;
+        }
         state.menuPromptId = "";
         state.deletePromptId = normalizeText(detail.promptId);
         scheduleRender();
@@ -361,6 +382,9 @@
         return true;
       }
       if (normalizedAction === "confirm-delete") {
+        if (!requireCapability(PROMPT_LIBRARY_CAPABILITY_IDS.sync, "요청 보관함 동기화 기능이 현재 비활성화되어 있어요.", detail.promptId)) {
+          return true;
+        }
         await confirmDelete(normalizeText(detail.promptId));
         return true;
       }
@@ -370,6 +394,9 @@
         return true;
       }
       if (normalizedAction === "save-editor") {
+        if (!requireCapability(PROMPT_LIBRARY_CAPABILITY_IDS.sync, "요청 보관함 동기화 기능이 현재 비활성화되어 있어요.")) {
+          return true;
+        }
         await saveEditor();
         return true;
       }
@@ -401,11 +428,17 @@
         return true;
       }
       if (normalizedAction === "apply-import" || normalizedAction === "cancel-import" || normalizedAction === "set-import-mode") {
+        if (normalizedAction === "apply-import" && !requireCapability(PROMPT_LIBRARY_CAPABILITY_IDS.sync, "요청 보관함 동기화 기능이 현재 비활성화되어 있어요.")) {
+          return true;
+        }
         state.importReview = null;
         scheduleRender();
         return true;
       }
       if (normalizedAction === "open-publish") {
+        if (!requireCapability(PROMPT_LIBRARY_CAPABILITY_IDS.publishToStore, "스토어 등록 기능이 현재 비활성화되어 있어요.", detail.promptId)) {
+          return true;
+        }
         openPublish(normalizeText(detail.promptId));
         return true;
       }
@@ -426,6 +459,9 @@
         return true;
       }
       if (normalizedAction === "confirm-publish") {
+        if (!requireCapability(PROMPT_LIBRARY_CAPABILITY_IDS.publishToStore, "스토어 등록 기능이 현재 비활성화되어 있어요.", detail.promptId)) {
+          return true;
+        }
         await confirmPublish(normalizeText(detail.promptId));
         return true;
       }
@@ -779,6 +815,9 @@
       if (!state.providerIdentity.available) {
         throw new Error("사용자 정보를 확인하지 못했어요.");
       }
+      if (!hasCapability(PROMPT_LIBRARY_CAPABILITY_IDS.sync)) {
+        throw new Error("요청 보관함 동기화 기능이 현재 비활성화되어 있어요.");
+      }
       state.syncing = true;
       state.lastMutationError = "";
       state.syncNotice = null;
@@ -932,6 +971,18 @@
         id: "",
         label: customCategoryLabel,
       };
+    }
+
+    function hasCapability(capabilityId) {
+      return state.capabilities.includes(capabilityId);
+    }
+
+    function requireCapability(capabilityId, message, promptId = "") {
+      if (hasCapability(capabilityId)) {
+        return true;
+      }
+      publishActionToast(message, "error", normalizeText(promptId), 3600);
+      return false;
     }
 
     function publishActionToast(message, tone = "success", promptId = "", ttlMs = tone === "error" ? 3600 : 2200) {

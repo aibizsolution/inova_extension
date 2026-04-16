@@ -104,6 +104,7 @@ async function verifyExtensionReviewHandoff() {
 
 function verifyHostedPromptReviewContract() {
   const hostedControllerSource = fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "prompt-review-controller.js"), "utf8");
+  const hostedReviewViewSource = fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "prompt-review-view.js"), "utf8");
   const capabilityClientSource = fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "extension-capability-client.js"), "utf8");
   const hostedIndexSource = fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "index.js"), "utf8");
   const panelTraceSource = fs.readFileSync(path.join(root, "content", "panel-console-trace.js"), "utf8");
@@ -230,6 +231,13 @@ function verifyHostedPromptReviewContract() {
     !promptReviewManagerSource.includes("applyReviewedPrompt"),
     true,
     "content prompt review manager should stop carrying hosted-owned apply/copy result flows"
+  );
+  assert.equal(
+    hostedControllerSource.includes("hasCapability(PROMPT_REVIEW_RUN_CAPABILITY_ID)")
+      && hostedControllerSource.includes("capability-disabled")
+      && hostedReviewViewSource.includes("review.canReview"),
+    true,
+    "hosted prompt review should hide disabled capability execution behind the negotiated capability id gate"
   );
 }
 
