@@ -2,9 +2,17 @@
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
 
   function renderTool(state) {
+    const canCopyBookmark = state?.canCopyBookmark !== false;
+    const canJumpBookmark = state?.canJumpBookmark !== false;
     const listHtml = state.items.length
-      ? state.items.map((bookmark) => renderBookmark(bookmark, state.query)).join("")
+      ? state.items.map((bookmark) => renderBookmark(bookmark, state.query, {
+        canCopyBookmark,
+        canJumpBookmark,
+      })).join("")
       : `<div class="inova-bookmark-empty">${escapeHtml(state.emptyText)}</div>`;
+    const capabilityNotice = state?.capabilityError
+      ? `<div class="inova-bookmark-empty">${escapeHtml(state.capabilityError)}</div>`
+      : "";
 
     return `
       <section class="inova-tool-section">
@@ -19,31 +27,35 @@
           />
           ${state.metaText ? `<div class="inova-tool-meta">${escapeHtml(state.metaText)}</div>` : ""}
         </div>
+        ${capabilityNotice}
         <div id="inova-bookmark-results">${listHtml}</div>
       </section>
     `;
   }
 
-  function renderBookmark(bookmark, query) {
+  function renderBookmark(bookmark, query, options = {}) {
+    const canJumpBookmark = options.canJumpBookmark !== false;
+    const canCopyBookmark = options.canCopyBookmark !== false;
     return `
       <article
         class="inova-bookmark-item"
-        data-bookmark-id="${bookmark.id}"
-        tabindex="0"
+        ${canJumpBookmark ? `data-bookmark-id="${escapeHtml(bookmark.id)}"` : 'aria-disabled="true"'}
+        tabindex="${canJumpBookmark ? "0" : "-1"}"
         title="${escapeHtml(bookmark.text)}"
-        aria-label="${bookmark.order}번 질문으로 이동"
+        aria-label="${escapeHtml(canJumpBookmark ? `${bookmark.order}번 질문으로 이동` : `${bookmark.order}번 질문`)}"
       >
-        <div class="bookmark-jump" data-bookmark-id="${bookmark.id}">
+        <div class="bookmark-jump"${canJumpBookmark ? ` data-bookmark-id="${escapeHtml(bookmark.id)}"` : ""}>
           <span class="bookmark-index">${bookmark.order}</span>
           <span class="bookmark-text">${renderQuestionText(bookmark.text, query)}</span>
         </div>
+        ${canCopyBookmark ? `
         <button
           class="bookmark-copy"
           type="button"
-          data-copy-bookmark-id="${bookmark.id}"
+          data-copy-bookmark-id="${escapeHtml(bookmark.id)}"
           aria-label="${bookmark.order}번 질문 복사"
           title="질문 복사"
-        >${renderCopyIcon()}</button>
+        >${renderCopyIcon()}</button>` : ""}
       </article>
     `;
   }

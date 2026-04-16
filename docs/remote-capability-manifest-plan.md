@@ -184,7 +184,9 @@ panel boot 시 hosted와 background는 capability catalog를 negotiation한다.
 - `hosting/extension-v2/panel/index.js`는 snapshot boot 직후 handshake를 호출하고, static extension capabilities와 enabled remote capability ids를 합쳐 hosted controllers에 전달한다.
 - killed/disabled capability는 handshake의 `enabledCapabilityIds`에서 제외된다.
 - prompt review, prompt library, prompt store는 negotiated capabilityId 기준으로 write/action UI 노출과 실행을 1차 차단한다.
-- 남은 controller는 다음 단계에서 같은 방식으로 required capability와 action capability를 분리한다.
+- meeting hub는 `meeting.share.create-function`, `meeting.share.revoke-function` handshake capability가 enabled일 때만 공유 생성/해제 UI와 실행을 연다.
+- conversation controller는 `page.conversation.read-state`, `page.conversation.jump-item`, `page.clipboard.write-text` handshake capability가 enabled일 때만 읽기/이동/복사 UI와 실행을 연다.
+- controller-level action gating 1차는 완료됐다. 남은 후보는 panel shell의 preference write 같은 cross-controller helper다.
 
 ## C. 단계별 실행안
 
@@ -362,6 +364,7 @@ verify 기준:
 - `hosting/extension-v2/panel/extension-capability-client.js`는 `invokePageCapability(pageCapabilityId, input)` bridge를 제공하고 기존 page helper도 이 경로를 사용한다.
 - `invokePageCapability`는 `PAGE_CAPABILITY_IDS` allowlist에 없는 page capability를 content로 전달하지 않는다.
 - hosted capability handshake 결과는 `pageCapabilityIds`를 포함해 remote workflow 준비 단계에서 page primitive catalog를 함께 볼 수 있게 한다.
+- hosted conversation controller는 `page.conversation.read-state`, `page.conversation.jump-item`, `page.clipboard.write-text`가 handshake에서 enabled일 때만 읽기/이동/복사 UI와 실행 경로를 연다.
 - 기존 primitive 실행 결과는 유지한다.
 - arbitrary selector/DOM script primitive는 추가하지 않았다.
 
@@ -537,8 +540,10 @@ verify 기준:
 - `test.*` capability는 `testOnly=true`가 필수이며, test-only capability는 production manifest에서 enabled 상태로 둘 수 없다. handshake에는 노출되더라도 `enabledCapabilityIds`에 들어가지 않고 invoke는 실패한다.
 - hosted boot가 handshake catalog를 읽어 enabled capability ids를 controller capability list에 합친다.
 - prompt review, prompt library, prompt store는 missing/killed capability의 UI action 노출과 실행을 1차 차단한다.
+- meeting hub는 missing/killed share function capability의 UI action 노출과 실행을 차단하고 explicit capability-disabled reason을 남긴다.
+- conversation controller는 missing/killed page read/jump/clipboard capability의 UI action 노출과 실행을 차단하고 explicit capability-disabled reason을 남긴다.
 - `workflow` kind는 manifest 검증에서 kill switch metadata를 필수로 요구한다. enabled workflow는 `workflowPilot` gate와 capability `pilot=true`를 모두 만족해야 한다.
-- 남은 controller는 required extension capability와 remote action capability 분리를 계속 적용해야 한다.
+- controller-level required extension capability와 remote action capability 분리는 1차 완료됐다. 다음 후보는 hosted panel shell의 cross-controller preference write 경로다.
 
 ### Phase 7.5. 자동 문서화와 금지 패턴 강화
 

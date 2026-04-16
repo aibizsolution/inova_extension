@@ -8,6 +8,8 @@
     "share",
     "revoke-share",
   ]);
+  const MEETING_SHARE_CREATE_CAPABILITY_ID = "meeting.share.create-function";
+  const MEETING_SHARE_REVOKE_CAPABILITY_ID = "meeting.share.revoke-function";
   const REQUIRED_EXTENSION_CAPABILITIES = Object.freeze([
     "runtime.invoke.v1",
   ]);
@@ -145,6 +147,9 @@
         };
       }
       return {
+        canCreateShare: hasCapability(MEETING_SHARE_CREATE_CAPABILITY_ID),
+        canRevokeShare: hasCapability(MEETING_SHARE_REVOKE_CAPABILITY_ID),
+        capabilityNotice: buildCapabilityNotice(),
         checkedAt: normalizeText(state.checkedAt),
         count: getMeetingCount(),
         dataFreshness: normalizeEnum(state.dataFreshness, ["fresh", "stale", "empty"], "empty"),
@@ -196,6 +201,11 @@
       await refreshStorageState();
       const input = buildActionInput(detail);
       const launchAction = resolveLaunchAction(normalizedAction, input);
+
+      if (isShareActionBlocked(normalizedAction)) {
+        setFeedback("회의 공유 기능이 현재 비활성화되어 있어요.", "error", 3600);
+        return true;
+      }
 
       if ((normalizedAction === "share" || normalizedAction === "revoke-share") && !input.meetingId) {
         setFeedback("회의 정보를 찾지 못했어요. 다시 시도해 주세요.", "error", 3600);
@@ -521,6 +531,30 @@
         void error;
         return false;
       }
+    }
+
+    function hasCapability(capabilityId) {
+      return state.capabilities.includes(normalizeText(capabilityId));
+    }
+
+    function isShareActionBlocked(action) {
+      if (action === "share") {
+        return !hasCapability(MEETING_SHARE_CREATE_CAPABILITY_ID);
+      }
+      if (action === "revoke-share") {
+        return !hasCapability(MEETING_SHARE_REVOKE_CAPABILITY_ID);
+      }
+      return false;
+    }
+
+    function buildCapabilityNotice() {
+      if (
+        hasCapability(MEETING_SHARE_CREATE_CAPABILITY_ID)
+        && hasCapability(MEETING_SHARE_REVOKE_CAPABILITY_ID)
+      ) {
+        return "";
+      }
+      return "회의 공유 기능이 현재 비활성화되어 공유 링크 생성/해제를 표시하지 않습니다.";
     }
 
   }

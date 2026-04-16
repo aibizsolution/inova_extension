@@ -7,17 +7,24 @@ const vm = require("vm");
 const { verifyHostedMeetingFirestoreClientContract } = require("./verify-meeting-firestore-client");
 
 const root = path.resolve(__dirname, "..");
+const MEETING_TEST_CAPABILITIES = Object.freeze([
+  "runtime.invoke.v1",
+  "meeting.share.create-function",
+  "meeting.share.revoke-function",
+]);
 
 async function main() {
   await verifyHostedMeetingFirestoreClientContract();
   await verifyHostedMeetingHubOwnership();
   await verifyHostedMeetingHubShareCopyFailure();
+  await verifyHostedMeetingHubGatesShareCapabilities();
   await verifyHostedMeetingHubLifecycleRefreshOwnership();
   await verifyHostedMeetingHubActivityRefreshOwnership();
   await verifyHostedMeetingHubDoesNotPrefetchWhileClosed();
   await verifyHostedMeetingHubIgnoresWindowFocusWhileActive();
   await verifyHostedMeetingHubKeepsRealtimeCountLocal();
   verifyHostedMeetingHubDropsSummaryEchoContract();
+  verifyHostedMeetingViewGatesShareButtons();
   console.log("[verify-meeting-hub-controller] Hosted meeting hub controller contract passed");
 }
 
@@ -37,7 +44,7 @@ async function verifyHostedMeetingHubOwnership() {
         meetingWorkspaceTarget: "production",
       },
     },
-    ["runtime.invoke.v1"]
+    MEETING_TEST_CAPABILITIES
   );
   await flushAsyncTurns();
 
@@ -114,7 +121,7 @@ async function verifyHostedMeetingHubShareCopyFailure() {
         meetingWorkspaceTarget: "production",
       },
     },
-    ["runtime.invoke.v1"]
+    MEETING_TEST_CAPABILITIES
   );
   await flushAsyncTurns();
 
@@ -141,7 +148,7 @@ async function verifyHostedMeetingHubShareCopyFailure() {
   });
 }
 
-async function verifyHostedMeetingHubLifecycleRefreshOwnership() {
+async function verifyHostedMeetingHubGatesShareCapabilities() {
   const harness = createHarness();
   const controller = harness.controller;
 
@@ -161,6 +168,55 @@ async function verifyHostedMeetingHubLifecycleRefreshOwnership() {
   );
   await flushAsyncTurns();
 
+  const viewState = controller.buildViewState();
+  assert.equal(viewState.canCreateShare, false, "share create should be gated by negotiated remote capability");
+  assert.equal(viewState.canRevokeShare, false, "share revoke should be gated by negotiated remote capability");
+  assert.match(
+    viewState.capabilityNotice,
+    /공유 기능이 현재 비활성화/,
+    "meeting hub should surface an explicit capability-disabled reason"
+  );
+
+  const handled = await controller.handleMeetingAction("share", {
+    meetingId: "meeting-alpha",
+    jobId: "job-alpha",
+    title: "Alpha",
+  });
+  assert.equal(handled, true, "disabled share actions should be handled as explicit user-visible failures");
+  assert(
+    !harness.runtimeCalls.some((request) => request.action === "meeting.share.create"),
+    "disabled share capability should not call the privileged share runtime action"
+  );
+  assert.equal(harness.pageCalls.length, 0, "disabled share capability should not copy a stale share URL");
+  assert.deepEqual(harness.toastCalls.at(-1), {
+    contextId: "회의 공유 기능이 현재 비활성화되어 있어요.",
+    message: "회의 공유 기능이 현재 비활성화되어 있어요.",
+    source: "meeting",
+    tone: "error",
+    ttlMs: 3600,
+  });
+}
+
+async function verifyHostedMeetingHubLifecycleRefreshOwnership() {
+  const harness = createHarness();
+  const controller = harness.controller;
+
+  controller.syncPanelState(
+    {
+      activeTool: "meeting",
+      open: true,
+      meetingTool: {
+        count: 1,
+        snapshotFingerprint: "meeting-alpha|1|seed",
+      },
+      settings: {
+        meetingWorkspaceTarget: "production",
+      },
+    },
+    MEETING_TEST_CAPABILITIES
+  );
+  await flushAsyncTurns();
+
   assert.equal(harness.realtimeSubscribeCalls.length, 1);
 
   controller.syncPanelState(
@@ -175,7 +231,7 @@ async function verifyHostedMeetingHubLifecycleRefreshOwnership() {
         meetingWorkspaceTarget: "production",
       },
     },
-    ["runtime.invoke.v1"]
+    MEETING_TEST_CAPABILITIES
   );
   await flushAsyncTurns();
   assert(
@@ -197,7 +253,7 @@ async function verifyHostedMeetingHubLifecycleRefreshOwnership() {
         meetingWorkspaceTarget: "production",
       },
     },
-    ["runtime.invoke.v1"]
+    MEETING_TEST_CAPABILITIES
   );
   await flushAsyncTurns();
 
@@ -219,7 +275,7 @@ async function verifyHostedMeetingHubLifecycleRefreshOwnership() {
         meetingWorkspaceTarget: "production",
       },
     },
-    ["runtime.invoke.v1"]
+    MEETING_TEST_CAPABILITIES
   );
   await flushAsyncTurns();
 
@@ -237,7 +293,7 @@ async function verifyHostedMeetingHubLifecycleRefreshOwnership() {
         meetingWorkspaceTarget: "production",
       },
     },
-    ["runtime.invoke.v1"]
+    MEETING_TEST_CAPABILITIES
   );
   await flushAsyncTurns();
 
@@ -264,7 +320,7 @@ async function verifyHostedMeetingHubActivityRefreshOwnership() {
         meetingWorkspaceTarget: "production",
       },
     },
-    ["runtime.invoke.v1"]
+    MEETING_TEST_CAPABILITIES
   );
   await flushAsyncTurns();
 
@@ -290,7 +346,7 @@ async function verifyHostedMeetingHubActivityRefreshOwnership() {
         meetingWorkspaceTarget: "production",
       },
     },
-    ["runtime.invoke.v1"]
+    MEETING_TEST_CAPABILITIES
   );
   await flushAsyncTurns();
 
@@ -315,7 +371,7 @@ async function verifyHostedMeetingHubDoesNotPrefetchWhileClosed() {
         meetingWorkspaceTarget: "production",
       },
     },
-    ["runtime.invoke.v1"]
+    MEETING_TEST_CAPABILITIES
   );
   await flushAsyncTurns();
 
@@ -337,7 +393,7 @@ async function verifyHostedMeetingHubDoesNotPrefetchWhileClosed() {
         meetingWorkspaceTarget: "production",
       },
     },
-    ["runtime.invoke.v1"]
+    MEETING_TEST_CAPABILITIES
   );
   await flushAsyncTurns();
 
@@ -364,7 +420,7 @@ async function verifyHostedMeetingHubIgnoresWindowFocusWhileActive() {
         meetingWorkspaceTarget: "production",
       },
     },
-    ["runtime.invoke.v1"]
+    MEETING_TEST_CAPABILITIES
   );
   await flushAsyncTurns();
 
@@ -451,7 +507,7 @@ async function verifyHostedMeetingHubKeepsRealtimeCountLocal() {
         meetingWorkspaceTarget: "production",
       },
     },
-    ["runtime.invoke.v1"]
+    MEETING_TEST_CAPABILITIES
   );
   assert.equal(
     controller.buildViewState().count,
@@ -482,6 +538,47 @@ function verifyHostedMeetingHubDropsSummaryEchoContract() {
       && !controllerSource.includes("emitTopPanelSummary")
       && !controllerSource.includes("buildTopPanelSummary"),
     "hosted meeting hub should not echo hosted-owned counts through the top panel"
+  );
+}
+
+function verifyHostedMeetingViewGatesShareButtons() {
+  const context = vm.createContext({
+    console,
+    globalThis: null,
+    Intl,
+  });
+  context.globalThis = context;
+  context.InovaBookmarks = {};
+  loadScript("hosting/extension-v2/panel/meeting-view.js", context);
+
+  const markup = context.InovaBookmarks.meetingView.render({
+    canCreateShare: false,
+    canRevokeShare: false,
+    capabilityNotice: "회의 공유 기능이 현재 비활성화되어 공유 링크 생성/해제를 표시하지 않습니다.",
+    checkedAt: "2026-04-13T01:02:03.000Z",
+    items: [
+      {
+        latestArtifactId: "artifact-alpha",
+        latestJobId: "job-alpha",
+        meetingId: "meeting-alpha",
+        share: {
+          active: true,
+          shareId: "share-alpha",
+          status: "active",
+        },
+        status: "succeeded",
+        title: "Alpha",
+        updatedAt: "2026-04-13T01:01:00.000Z",
+      },
+    ],
+    pending: {},
+  });
+
+  assert(!markup.includes('data-meeting-action="share"'), "meeting view should hide share button when share create capability is missing");
+  assert(!markup.includes('data-meeting-action="revoke-share"'), "meeting view should hide revoke button when share revoke capability is missing");
+  assert(
+    markup.includes("회의 공유 기능이 현재 비활성화"),
+    "meeting view should render the capability-disabled notice"
   );
 }
 

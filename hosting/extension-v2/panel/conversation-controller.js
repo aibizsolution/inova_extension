@@ -5,6 +5,9 @@
   const REQUIRED_EXTENSION_CAPABILITIES = Object.freeze([
     "page.adapter.v2",
   ]);
+  const CONVERSATION_READ_CAPABILITY_ID = "page.conversation.read-state";
+  const CONVERSATION_JUMP_CAPABILITY_ID = "page.conversation.jump-item";
+  const CLIPBOARD_WRITE_CAPABILITY_ID = "page.clipboard.write-text";
 
   function create(options = {}) {
     const browserCapabilities = resolveBrowserCapabilities(options);
@@ -82,7 +85,7 @@
       const shouldRefresh = activeConversationTool && (
         state.snapshotFingerprint !== nextFingerprint
         || !state.lastLoadedAt
-      );
+      ) && hasCapability(CONVERSATION_READ_CAPABILITY_ID);
 
       state.snapshotFingerprint = nextFingerprint;
       if (shouldRefresh) {
@@ -102,9 +105,25 @@
       if (!hasRequiredCapabilities()) {
         return fallbackBookmarksTool;
       }
+      if (!hasCapability(CONVERSATION_READ_CAPABILITY_ID)) {
+        return {
+          activeId: "",
+          canCopyBookmark: false,
+          canJumpBookmark: false,
+          capabilityError: "대화 읽기 기능이 현재 비활성화되어 있어요.",
+          count: 0,
+          emptyText: "대화 읽기 기능이 현재 비활성화되어 있어요.",
+          items: [],
+          metaText: "",
+          query: state.query,
+        };
+      }
       const items = getFilteredItems();
       return {
         activeId: normalizeText(state.activeId || state.visibleMessageId),
+        canCopyBookmark: hasCapability(CLIPBOARD_WRITE_CAPABILITY_ID),
+        canJumpBookmark: hasCapability(CONVERSATION_JUMP_CAPABILITY_ID),
+        capabilityError: buildCapabilityError(),
         count: getConversationCount(),
         emptyText: buildEmptyText(items.length),
         items,
@@ -114,6 +133,9 @@
     }
 
     async function handleCopyBookmark(bookmarkId) {
+      if (!hasCapability(CLIPBOARD_WRITE_CAPABILITY_ID)) {
+        return false;
+      }
       const bookmark = state.items.find((entry) => normalizeText(entry?.id) === normalizeText(bookmarkId));
       if (!bookmark?.text) {
         return false;
@@ -124,7 +146,7 @@
 
     async function handleJumpBookmark(bookmarkId) {
       const normalizedBookmarkId = normalizeText(bookmarkId);
-      if (!normalizedBookmarkId) {
+      if (!normalizedBookmarkId || !hasCapability(CONVERSATION_JUMP_CAPABILITY_ID)) {
         return false;
       }
       state.activeId = normalizedBookmarkId;
@@ -157,6 +179,12 @@
         return state.loadPromise;
       }
       state.pendingRefreshAfterLoad = false;
+      if (!hasCapability(CONVERSATION_READ_CAPABILITY_ID)) {
+        state.error = "대화 읽기 기능이 현재 비활성화되어 있어요.";
+        state.items = [];
+        scheduleRender();
+        return state.items;
+      }
       const requestedFingerprint = state.snapshotFingerprint;
       const run = (async () => {
         state.loading = true;
@@ -318,6 +346,23 @@
         state.searchRenderTimerId = 0;
         scheduleRender();
       }, 180);
+    }
+
+    function hasCapability(capabilityId) {
+      return state.capabilities.includes(normalizeText(capabilityId));
+    }
+
+    function buildCapabilityError() {
+      const missing = [];
+      if (!hasCapability(CONVERSATION_JUMP_CAPABILITY_ID)) {
+        missing.push("이동");
+      }
+      if (!hasCapability(CLIPBOARD_WRITE_CAPABILITY_ID)) {
+        missing.push("복사");
+      }
+      return missing.length
+        ? `대화 ${missing.join("/")} 기능이 현재 비활성화되어 있어요.`
+        : "";
     }
 
     function getErrorMessage(error, fallback) {
