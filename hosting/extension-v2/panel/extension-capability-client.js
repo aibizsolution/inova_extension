@@ -175,7 +175,7 @@
       return invokeRuntime({
         ...request,
         action: "capabilities.handshake",
-      });
+      }).then(appendHostedBridgeCapabilities);
     }
 
     function readComposerState() {
@@ -220,6 +220,13 @@
       return invokeCapability("panel.ui-preferences.write", { partial });
     }
 
+    function appendHostedBridgeCapabilities(catalog) {
+      const nextCatalog = catalog && typeof catalog === "object" ? { ...catalog } : {};
+      nextCatalog.bridgeApis = mergeCapabilityList(nextCatalog.bridgeApis, ["invokePageCapability"]);
+      nextCatalog.pageCapabilityIds = PAGE_CAPABILITY_IDS.slice();
+      return nextCatalog;
+    }
+
     function buildPanelAuthCacheKey(panel, providerIdentity, requestOptions = {}) {
       const normalizedPanel = normalizeText(panel).toLowerCase();
       const providerUserKey = normalizeText(providerIdentity?.providerUserKey);
@@ -256,6 +263,18 @@
 
     function normalizeText(value) {
       return namespace.session.normalizeText(value);
+    }
+
+    function mergeCapabilityList(values, requiredValues = []) {
+      const merged = Array.isArray(values)
+        ? values.map(normalizeText).filter(Boolean)
+        : [];
+      requiredValues.map(normalizeText).filter(Boolean).forEach((value) => {
+        if (!merged.includes(value)) {
+          merged.push(value);
+        }
+      });
+      return merged;
     }
   }
 

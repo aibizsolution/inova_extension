@@ -187,6 +187,7 @@ async function verifyHostedPanelBridgeContract() {
 
 async function verifyExtensionCapabilityClientPageAllowlist() {
   const pageCalls = [];
+  const runtimeCalls = [];
   const context = vm.createContext({
     console,
     globalThis: null,
@@ -205,6 +206,13 @@ async function verifyExtensionCapabilityClientPageAllowlist() {
       pageCalls.push(cloneValue(request));
       return { ok: true };
     },
+    invokeRuntime: async (request) => {
+      runtimeCalls.push(cloneValue(request));
+      return {
+        bridgeApis: ["invokeCapability"],
+        enabledCapabilityIds: ["prompt.review.run"],
+      };
+    },
   });
   await browserCapabilities.invokePageCapability("composer.read-state", {
     action: "trace.log",
@@ -218,6 +226,15 @@ async function verifyExtensionCapabilityClientPageAllowlist() {
     async () => browserCapabilities.invokePageCapability("raw.dom-script", {}),
     /허용되지 않은 page capability예요/
   );
+  const catalog = await browserCapabilities.readCapabilityCatalog({ reason: "test" });
+  assert.deepEqual(runtimeCalls.at(-1), {
+    action: "capabilities.handshake",
+    reason: "test",
+  });
+  assert(catalog.bridgeApis.includes("invokeCapability"));
+  assert(catalog.bridgeApis.includes("invokePageCapability"));
+  assert(catalog.pageCapabilityIds.includes("composer.read-state"));
+  assert(catalog.pageCapabilityIds.includes("clipboard.write-text"));
 }
 
 async function verifySharedFirestoreSessionAuthReuse() {

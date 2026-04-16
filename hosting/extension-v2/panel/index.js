@@ -743,6 +743,7 @@
       lane: normalizeText(catalog.lane),
       manifestUrl: normalizeText(catalog.manifestUrl),
       manifestVersion: normalizeText(catalog.manifestVersion),
+      pageCapabilityIds: normalizeCapabilities(catalog.pageCapabilityIds),
       runtimeActions: normalizeCapabilities(catalog.runtimeActions),
       schemaVersion: Number(catalog.schemaVersion) || 0,
       source: normalizeText(catalog.source),
