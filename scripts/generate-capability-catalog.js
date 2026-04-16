@@ -58,6 +58,11 @@ function formatCapabilityTarget(capability) {
   if (Array.isArray(capability?.templateKeys)) {
     return capability.templateKeys.join(",");
   }
+  if (capability?.artifactId || capability?.workflowId) {
+    return [capability.workflowId, capability.artifactId, capability.artifactVersion]
+      .filter(Boolean)
+      .join("@");
+  }
   return "";
 }
 

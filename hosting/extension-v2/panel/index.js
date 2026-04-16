@@ -717,6 +717,8 @@
         .filter((capability) => capability && typeof capability === "object")
         .map((capability) => ({
           auditLevel: normalizeText(capability.auditLevel),
+          artifactId: normalizeText(capability.artifactId),
+          artifactVersion: normalizeText(capability.artifactVersion),
           authMode: normalizeText(capability.authMode),
           capabilityId: normalizeText(capability.capabilityId),
           deprecatedAt: normalizeText(capability.deprecatedAt),
@@ -732,6 +734,7 @@
           pageCapabilityId: normalizeText(capability.pageCapabilityId),
           replacementId: normalizeText(capability.replacementId),
           schemaVersion: Number(capability.schemaVersion) || 0,
+          workflowId: normalizeText(capability.workflowId),
         }))
         .filter((capability) => Boolean(capability.capabilityId))
       : [];

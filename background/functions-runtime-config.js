@@ -327,7 +327,7 @@
         throw new Error(`remote capability manifest capability is invalid: ${capabilityId}`);
       }
       const kind = normalizeText(capability.kind);
-      if (kind !== "function" && kind !== "browser.open-url" && kind !== "storage.write-ui-preferences" && kind !== "page.capability") {
+      if (kind !== "function" && kind !== "browser.open-url" && kind !== "storage.write-ui-preferences" && kind !== "page.capability" && kind !== "workflow") {
         throw new Error(`remote capability manifest capability kind is not allowed: ${capabilityId}`);
       }
       if (kind === "function") {
@@ -346,6 +346,7 @@
         if (!PAGE_CAPABILITY_IDS.includes(pageCapabilityId)) throw new Error(`remote capability manifest page capability is not allowed: ${capabilityId}`);
         if (normalizeText(capability.service).toLowerCase() !== "page") throw new Error(`remote capability manifest capability service is not allowed: ${capabilityId}`);
       }
+      if (kind === "workflow") validateDisabledWorkflowCapability(capabilityId, capability);
       const authMode = normalizeText(capability.authMode || capability.auth || "access-token").toLowerCase();
       if (!["access-token", "none"].includes(authMode)) {
         throw new Error(`remote capability manifest capability authMode is not allowed: ${capabilityId}`);
@@ -367,6 +368,25 @@
         throw new Error(`remote capability manifest capability requires a newer extension: ${capabilityId}`);
       }
     });
+  }
+
+  function validateDisabledWorkflowCapability(capabilityId, capability) {
+    if (normalizeText(capability.service).toLowerCase() !== "workflow") {
+      throw new Error(`remote capability manifest capability service is not allowed: ${capabilityId}`);
+    }
+    if (capability.enabled !== false && !isCapabilityKillSwitchEnabled(capability)) {
+      throw new Error(`remote workflow capability must stay disabled before sandbox pilot: ${capabilityId}`);
+    }
+    ["workflowId", "artifactId", "artifactVersion"].forEach((field) => {
+      if (!normalizeText(capability[field])) {
+        throw new Error(`remote workflow capability metadata is missing: ${capabilityId}`);
+      }
+    });
+  }
+
+  function isCapabilityKillSwitchEnabled(capability) {
+    const killSwitch = capability?.killSwitch;
+    return capability?.killed === true || killSwitch === true || killSwitch?.enabled === true;
   }
 
   function validateLaneDefinitions(lanes) {

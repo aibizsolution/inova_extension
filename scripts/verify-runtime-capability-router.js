@@ -113,6 +113,12 @@ async function verifyRemoteManifestValidationFailuresAreVisible() {
     },
     "unknown page capability should fall back visibly"
   );
+  await verifyRejectedManifestMutation(
+    (manifest) => {
+      manifest.capabilities["test.workflow.enabled"] = buildTestWorkflowCapability({ enabled: true });
+    },
+    "enabled workflow capability should fall back visibly before sandbox pilot"
+  );
 }
 
 async function verifyRejectedManifestMutation(mutator, message) {
@@ -152,6 +158,7 @@ async function verifyBundledRuntimeRouterDispatch() {
   const openedUrls = [];
   const remoteManifest = readJson(path.join("hosting", "extension-v2", "capability-manifest.json"));
   remoteManifest.lanes.v2.endpointOverrides.reviewInovaPromptUrl = "reviewInovaPromptRemoteV2";
+  remoteManifest.capabilities["test.workflow.disabled"] = buildTestWorkflowCapability({ enabled: false });
   const context = createRuntimeContext({
     fetch: async (url, options) => {
       if (String(url || "").endsWith("/capability-manifest.json")) {
@@ -284,6 +291,11 @@ async function verifyBundledRuntimeRouterDispatch() {
     handshake.capabilities.find((capability) => capability.capabilityId === "page.composer.read-state")?.pageCapabilityId,
     "composer.read-state"
   );
+  const workflowCapability = handshake.capabilities.find((capability) => capability.capabilityId === "test.workflow.disabled");
+  assert.equal(workflowCapability?.enabled, false);
+  assert.equal(workflowCapability?.workflowId, "test.workflow.disabled");
+  assert.equal(workflowCapability?.artifactId, "test-workflow");
+  assert(!handshake.enabledCapabilityIds.includes("test.workflow.disabled"));
 
   const semanticPreferences = await router.handle({
     action: "capabilities.invoke",
@@ -517,6 +529,26 @@ function createRuntimeContext(overrides = {}) {
 
 function readJson(relativePath) {
   return JSON.parse(fs.readFileSync(path.join(root, relativePath), "utf8"));
+}
+
+function buildTestWorkflowCapability(overrides = {}) {
+  return {
+    artifactId: "test-workflow",
+    artifactVersion: "0.0.1",
+    auditLevel: "read",
+    authMode: "none",
+    domain: "test",
+    enabled: false,
+    inputSchemaVersion: 1,
+    kind: "workflow",
+    minExtensionVersion: "1.0.0",
+    outputSchemaVersion: 1,
+    owner: "runtime-platform",
+    schemaVersion: 1,
+    service: "workflow",
+    workflowId: "test.workflow.disabled",
+    ...overrides,
+  };
 }
 
 main().catch((error) => {

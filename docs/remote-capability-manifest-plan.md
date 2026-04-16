@@ -510,6 +510,7 @@ verify 기준:
 - `capabilities.handshake`가 catalog와 bridge API allowlist를 반환한다.
 - hosted boot가 handshake catalog를 읽어 enabled capability ids를 controller capability list에 합친다.
 - prompt review, prompt library, prompt store는 missing/killed capability의 UI action 노출과 실행을 1차 차단한다.
+- `workflow` kind는 manifest 검증에서 disabled 또는 killed 상태만 허용한다. sandbox pilot 전에는 enabled workflow manifest가 fallback으로 떨어진다.
 - 남은 controller는 required extension capability와 remote action capability 분리를 계속 적용해야 한다.
 
 ### Phase 7.5. 자동 문서화와 금지 패턴 강화

@@ -267,6 +267,8 @@ function buildHandshakeCapability(capabilityId, capability, activeLane) {
   const laneMatches = !capabilityLane || capabilityLane === "all" || capabilityLane === activeLane;
   return {
     auditLevel: namespace.session.normalizeText(capability?.auditLevel),
+    artifactId: namespace.session.normalizeText(capability?.artifactId),
+    artifactVersion: namespace.session.normalizeText(capability?.artifactVersion),
     authMode: namespace.session.normalizeText(capability?.authMode || capability?.auth),
     capabilityId: normalizedCapabilityId,
     deprecatedAt: namespace.session.normalizeText(capability?.deprecatedAt),
@@ -282,6 +284,7 @@ function buildHandshakeCapability(capabilityId, capability, activeLane) {
     pageCapabilityId: namespace.session.normalizeText(capability?.pageCapabilityId),
     replacementId: namespace.session.normalizeText(capability?.replacementId),
     schemaVersion: Number(capability?.schemaVersion) || 0,
+    workflowId: namespace.session.normalizeText(capability?.workflowId),
   };
 }
 
