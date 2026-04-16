@@ -1236,7 +1236,7 @@
             <div id="inova-tool-content"></div>
           </section>
         </div>
-        <input id="inova-prompt-import-file" type="file" accept="application/json,.json" hidden />
+        <input id="inova-prompt-import-file" name="inova-prompt-import-file" type="file" accept="application/json,.json" hidden />
       </div>
     `;
   }
