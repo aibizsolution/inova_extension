@@ -271,9 +271,8 @@ verify 기준:
 현재 상태:
 
 - 1차 구현됨.
-- hosted controller endpointKey 제거 guard는 prompt review/library/store부터 적용됨.
+- hosted controller endpointKey/raw function runtime action 제거 guard는 전체 v2 hosted controller 파일로 확대됨.
 - `functions.invoke-endpoint` compatibility path는 client metadata와 verify에서 `2026-05-31` 제거 목표를 확인한다.
-- 남은 hosted controller endpointKey guard는 다음 Phase에서 더 넓힌다.
 
 ### Phase 4. Semantic Capability Catalog
 
