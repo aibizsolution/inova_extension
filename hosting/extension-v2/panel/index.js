@@ -1929,7 +1929,7 @@
       return null;
     }
     const runtimeAction = normalizeText(payload?.action).toLowerCase();
-    if (runtimeAction === "functions.invoke-endpoint") {
+    if (runtimeAction === "functions.invoke-endpoint" || runtimeAction === "capabilities.invoke") {
       const functionLabel = buildFunctionsFetchLabel(payload);
       const authMode = normalizeText(payload?.authMode) || "access-token";
       return {
@@ -2000,6 +2000,10 @@
   }
 
   function buildFunctionsFetchLabel(payload = {}) {
+    const capabilityId = normalizeText(payload?.capabilityId);
+    if (capabilityId) {
+      return capabilityId;
+    }
     const service = normalizeText(payload?.service) || "service";
     const endpointKey = normalizeText(payload?.endpointKey) || "endpoint";
     return `${service}/${endpointKey}`;

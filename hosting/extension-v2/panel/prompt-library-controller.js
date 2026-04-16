@@ -5,6 +5,10 @@
     "page.adapter.v2",
     "runtime.invoke.v1",
   ]);
+  const PROMPT_LIBRARY_CAPABILITY_IDS = Object.freeze({
+    publishToStore: "prompt.store.publish",
+    sync: "prompt.library.sync",
+  });
 
   function create(options = {}) {
     const browserCapabilities = resolveBrowserCapabilities(options);
@@ -29,8 +33,8 @@
     const applyComposerText = typeof browserCapabilities.applyComposerText === "function"
       ? browserCapabilities.applyComposerText
       : async () => ({});
-    const invokeFunctionEndpoint = typeof browserCapabilities.invokeFunctionEndpoint === "function"
-      ? browserCapabilities.invokeFunctionEndpoint
+    const invokeCapability = typeof browserCapabilities.invokeCapability === "function"
+      ? browserCapabilities.invokeCapability
       : async () => ({});
     const promptLibraryFirestoreClient = namespace.promptLibraryFirestoreClient?.create?.({
       browserCapabilities,
@@ -576,26 +580,21 @@
       state.actionPending = { type: "publish", promptId: normalizedPromptId };
       scheduleRender();
       try {
-        await invokeFunctionEndpoint({
-          authMode: "access-token",
-          body: {
-            categoryId: publishCategory.id,
-            categoryLabel: publishCategory.label,
-            prompt: {
-              content: prompt.content,
-              title: publishTitle,
-            },
-            providerIdentity: {
-              available: state.providerIdentity.available,
-              displayName: state.providerIdentity.displayName,
-              email: state.providerIdentity.email,
-              numericUserId: state.providerIdentity.numericUserId,
-              provider: state.providerIdentity.provider,
-              providerUserKey: state.providerIdentity.providerUserKey,
-            },
+        await invokeCapability(PROMPT_LIBRARY_CAPABILITY_IDS.publishToStore, {
+          categoryId: publishCategory.id,
+          categoryLabel: publishCategory.label,
+          prompt: {
+            content: prompt.content,
+            title: publishTitle,
           },
-          endpointKey: "publishPromptToStoreUrl",
-          service: "prompt",
+          providerIdentity: {
+            available: state.providerIdentity.available,
+            displayName: state.providerIdentity.displayName,
+            email: state.providerIdentity.email,
+            numericUserId: state.providerIdentity.numericUserId,
+            provider: state.providerIdentity.provider,
+            providerUserKey: state.providerIdentity.providerUserKey,
+          },
         });
         state.publishPromptId = "";
         state.publishTitle = "";
@@ -790,12 +789,7 @@
           state.providerIdentity
         );
         syncDocument.sync.reason = normalizeText(reason) || "manual";
-        await invokeFunctionEndpoint({
-          authMode: "access-token",
-          body: syncDocument,
-          endpointKey: "syncInovaPromptLibraryUrl",
-          service: "prompt",
-        });
+        await invokeCapability(PROMPT_LIBRARY_CAPABILITY_IDS.sync, syncDocument);
         state.promptLibrary = namespace.promptLibraryModel.mergePromptLibrary(nextPromptLibrary);
         await ensurePromptLibraryLoaded(true, `${normalizeText(reason) || "manual"}-reload`);
       } catch (error) {

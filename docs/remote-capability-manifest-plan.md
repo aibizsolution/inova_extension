@@ -1,174 +1,619 @@
-# Remote Capability Manifest Plan
+# Extension Runtime Platform Plan
 
-이 문서는 `새 backend action / 새 Cloud Function / endpoint URL 변경 때문에 확장 프로그램을 다시 배포하지 않는다`는 운영 철학을 구현하기 위한 후속 설계 기준이다.
+이 문서는 `새 backend action / 새 Cloud Function / 새 기능 흐름 때문에 확장 프로그램을 다시 배포하지 않는다`는 목표를 구현하기 위한 기준이다.
 
-## 결정
+핵심 전제는 바뀌었다.
 
-- 장기 목표는 `remote capability manifest` 방식이다.
-- extension은 browser-only 권한 실행기와 검증된 capability dispatcher만 맡는다.
-- hosted/functions가 제품 기능, endpoint 목록, URL/runtime config의 변경 속도를 소유한다.
-- 새 서버 기능이나 hosted UI 기능 추가는 기본적으로 `hosting/functions 배포 + remote manifest 갱신`으로 끝내고, extension ZIP 재배포를 요구하지 않는다.
+- extension은 권한을 가진 런타임 셸이다.
+- 서버는 기능 정의를 manifest, workflow, 제한된 remote logic 형태로 배포할 수 있다.
+- 원격 로직은 샌드박스에서 실행된다.
+- 권한 경계는 extension이 강제한다.
+- 신규 기능의 상당 부분은 확장 재배포 없이 서버 배포만으로 적용된다.
 
-## 왜 필요한가
+## A. 최종 방향 요약
 
-현재 active v2 구조는 대부분 hosted-first로 정리되었지만, 아래 두 파일은 아직 extension bundle 안에서 runtime capability와 endpoint/runtime config를 고정한다.
+- 기존 `서버는 데이터만 준다` 원칙은 목표에 비해 너무 보수적이다.
+- 목표는 endpoint 변경만이 아니다. 신규 기능, 기능 조합, 기능 흐름, 일부 UI 동작까지 서버 배포만으로 바꾸는 것이다.
+- 기본 경로는 `capabilityId -> manifest lookup -> adapter dispatch`다.
+- manifest routing으로 부족한 기능은 `sandboxed remote logic layer`에서 처리한다.
+- remote logic은 raw `chrome.*`, privileged storage, page DOM adapter, unrestricted fetch에 직접 접근하지 않는다.
+- remote logic은 extension이 제공한 allowlisted bridge만 호출한다.
+- hosted는 function/page/storage/browser 구분을 몰라야 한다.
+- 새 Chrome permission, 새 host permission, 새 privileged primitive, 새 native integration이 필요할 때만 extension 재배포한다.
+- 새 Cloud Function endpoint, hosted action, 기능 조합, lightweight workflow는 서버 배포만으로 처리하는 방향을 기본값으로 둔다.
+- 원격 로직 허용은 무제한 원격 JS 실행 허용이 아니다.
 
-- `background/panel-runtime-capability-router.js`
+## B. 최종 권장 아키텍처
+
+### 1. Static Privileged Core
+
+소유 위치:
+
+- `background/*`
+- `content/*`
+- `manifest.json`
+- 권한 경계를 다루는 일부 `shared/*`
+
+책임:
+
+- Chrome permissions
+- host permissions
+- privileged `chrome.*` API access
+- token/storage boundary
+- content/page privileged primitive
+- background bridge implementation
+- sandbox host/runtime loader
+- security policy, allowlist, verify enforcement
+
+결정:
+
+- extension은 raw 제품 기능 구현체가 아니다.
+- extension은 권한 런타임이다.
+- 새 권한, 새 content DOM primitive, 새 privileged bridge kind, 새 sandbox host primitive는 extension 재배포 대상이다.
+- remote logic은 이 core가 공개한 bridge API만 호출한다.
+- privileged context에서 arbitrary remote JS를 직접 실행하지 않는다.
+
+### 2. Remote Capability Layer
+
+소유 위치:
+
+- `hosting/extension/capability-manifest.json`
+- `hosting/extension-v2/capability-manifest.json`
 - `background/functions-runtime-config.js`
+- `background/panel-runtime-capability-router.js`
+- `hosting/extension-v2/panel/extension-capability-client.js`
 
-이 상태에서는 hosted panel이 새 Cloud Function endpoint를 호출해야 할 때 extension router/config도 함께 바뀔 수 있다. 사용자는 최신 hosted UI를 보더라도, 오래된 extension bundle이 새 endpoint를 모르면 기능 호출이 막힌다.
+책임:
 
-## 확장 재배포가 필요한 경우
+- capabilityId catalog
+- endpoint/target/lane resolution
+- capability routing
+- feature flag
+- kill switch
+- minExtensionVersion gating
+- owner/domain tagging
+- deprecation/replacement metadata
+- request/response schema version
+- hosted controller behavior mapping
 
-아래처럼 브라우저 확장 권한 자체가 바뀌는 경우만 extension 재배포가 필요하다.
+결정:
 
-- 새 `chrome.*` 권한이 필요하다.
-- 새 `host_permissions` origin이 필요하다.
-- 새 content script DOM adapter가 필요하다.
-- 새 `web_accessible_resources` asset이 필요하다.
-- postMessage/runtime bridge protocol 자체가 호환 불가능하게 바뀐다.
-- 보안 정책상 extension 안의 trust root를 바꿔야 한다.
+- capabilityId를 hosted 기능의 유일한 public identifier로 만든다.
+- hosted는 raw endpoint URL을 보유하지 않는다.
+- hosted controller는 raw runtime action string을 직접 조립하지 않는다.
+- endpointKey는 compatibility path로만 남긴다.
+- compatibility path는 영구 유지하지 않는다.
+- 새 function capability는 remote manifest에 `kind=function`, `endpointKey`, `service`, `authMode`, `owner`, `domain`, `inputSchemaVersion`, `outputSchemaVersion`을 등록해야 한다.
 
-반대로 아래 변경은 remote manifest 목표 구조에서는 extension 재배포 없이 처리해야 한다.
+현재 구현 상태:
 
-- 새 Cloud Function endpoint 추가
-- 기존 endpoint URL/path 변경
-- hosted panel action 추가
-- local/prod runtime endpoint config 변경
-- 특정 capability의 minimum hosted/functions version 변경
+- `hosting/extension*/capability-manifest.json`에 semantic `capabilities` map을 추가했다.
+- `background/functions-runtime-config.js`는 `resolveCapabilityFunctionEndpoint()`로 active manifest의 target/lane/endpoint override를 실제 fetch URL로 해석한다.
+- `background/panel-runtime-capability-router.js`는 `capabilities.invoke`를 받아 manifest capability lookup 후 function adapter로 dispatch한다.
+- v2 hosted prompt controllers는 prompt review/store/publish/sync mutation을 `invokeCapability(capabilityId, input)`로 호출한다.
+- `functions.invoke-endpoint`는 compatibility path로 유지한다.
 
-## 목표 구조
+### 3. Sandboxed Remote Logic Layer
 
-```text
-hosted panel
-  -> semantic capability id 요청
+소유 위치:
 
-extension background
-  -> remote capability manifest 조회/검증/캐시
-  -> 허용된 capability id만 실행
-  -> Functions/cloud/browser adapter 호출
+- hosted sandbox iframe 또는 동등한 권한 없는 execution context
+- future sandbox host module
+- future workflow/script registry manifest
+- future bridge client
 
-functions/hosting
-  -> manifest 서빙
-  -> 실제 endpoint 구현
-```
+책임:
 
-extension은 hosted가 넘긴 raw URL을 그대로 실행하지 않는다. extension이 신뢰된 origin에서 manifest를 직접 가져오고, 검증된 capability id만 실행한다.
+- manifest routing만으로 부족한 신규 기능 흐름 실행
+- registry 기반 workflow/script 실행
+- lightweight conditional flow
+- feature composition
+- 일부 UI behavior orchestration
 
-## Manifest 초안
+실행 단위:
 
-초기 manifest는 JSON으로 시작한다. 필드명은 구현 시 조정할 수 있지만, 최소 의미는 유지한다.
+- raw arbitrary JS string이 아니다.
+- registry된 `workflowId`, `scriptSlot`, `bundleId`, `versionedArtifact`만 허용한다.
+- artifact는 version pinned 상태로 manifest에 기록한다.
+- artifact는 audit/debug metadata를 가져야 한다.
 
-```json
-{
-  "schemaVersion": 1,
-  "manifestVersion": "2026-04-remote-capability-1",
-  "minExtensionVersion": "1.0.0",
-  "expiresAt": "2026-05-01T00:00:00.000Z",
-  "targets": {
-    "production": {
-      "functionsBaseUrl": "https://asia-northeast3-browser-extension-main.cloudfunctions.net"
-    },
-    "local": {
-      "functionsBaseUrl": "http://127.0.0.1:5001/browser-extension-main/asia-northeast3"
-    }
-  },
-  "capabilities": {
-    "prompt.store.import": {
-      "kind": "function",
-      "endpoint": "importInovaPromptStoreEntry",
-      "method": "POST",
-      "auth": "inova-access-token",
-      "inputSchemaVersion": 1
-    }
-  }
-}
-```
+허용 bridge 예시:
 
-## 보안 원칙
+- `invokeCapability(capabilityId, input)`
+- `readPanelState()`
+- `writeUiPreferences(partial)`
+- `openUrl(templateKey, input)`
+- `invokePageCapability(pageCapabilityId, input)`
+- `emitTrace(channel, step, payload)`
+- `metrics(eventName, payload)`
 
-- remote manifest가 있어도 extension의 browser 권한은 늘어나지 않는다.
-- manifest는 허용된 origin에서만 가져온다.
-- hosted 요청 payload에 포함된 URL, method, endpoint를 직접 신뢰하지 않는다.
-- capability id가 manifest에 없으면 명시적 error/degraded로 실패한다.
-- manifest 검증 실패를 성공처럼 fallback하지 않는다.
-- fallback은 마지막으로 검증된 캐시 또는 bundled baseline으로만 가능하며, 사용자/로그에 stale/degraded 상태를 남긴다.
-- endpoint origin은 manifest 안에서도 허용된 Functions/Hosting 계열로 제한한다.
-- destructive/write action은 capability별 auth mode, input schema version, audit logging 요구사항을 manifest나 router contract에 남긴다.
+금지:
 
-## 단계별 진행
+- raw `chrome.*`
+- privileged storage 직접 접근
+- arbitrary selector 기반 page 조작
+- arbitrary DOM script
+- unrestricted fetch
+- `eval` 성격의 임의 문자열 실행
+- unsigned/unversioned/anonymous script payload 실행
 
-### Phase 0. 현재 capability inventory 고정
+운영 조건:
 
-- `background/panel-runtime-capability-router.js`의 현재 capability 목록을 문서/테스트에서 다시 열거한다.
-- `background/functions-runtime-config.js`의 endpoint family와 local/prod target을 정리한다.
-- 기존 동작을 바꾸지 않고, 무엇을 remote manifest로 옮길지 범위를 확정한다.
+- lane gating 필수
+- kill switch 필수
+- manifest/script version pinning 필수
+- audit/debug metadata 필수
+- degraded fallback reason 필수
+- production pilot 전까지 disabled default
 
-### Phase 1. Bundled manifest 모델 도입
+### 4. Capability Handshake
 
-- 현재 하드코딩된 router/config를 extension 내부의 bundled manifest 객체로 먼저 모델링한다.
-- `panel-runtime-capability-router.js`는 if/else 목록이 아니라 manifest lookup + adapter dispatch 형태로 바꾼다.
-- 이 단계는 동작 변경 없이 구조만 바꾸며, extension 재배포 감소 효과는 아직 없다.
+panel boot 시 hosted와 background는 capability catalog를 negotiation한다.
 
-현재 Phase 1 baseline:
+응답 catalog 필드:
 
-- `background/functions-runtime-config.js`는 `getBundledCapabilityManifest()`로 endpoint key, method, lane override, production/local target baseline을 노출한다.
-- `background/panel-runtime-capability-router.js`는 `PANEL_RUNTIME_CAPABILITY_MANIFEST`에서 runtime action과 function endpoint capability를 조회하고 adapter table로 dispatch한다.
-- hosted panel request는 기존 stable runtime action과 service/endpoint key만 넘기며, raw URL은 여전히 background가 받지 않는다.
+- `capabilityId`
+- `kind`
+- `schemaVersion`
+- `owner`
+- `domain`
+- `lane`
+- `enabled`
+- `deprecatedAt`
+- `replacementId`
+- `killSwitch`
+- `minExtensionVersion`
+- `inputSchemaVersion`
+- `outputSchemaVersion`
 
-### Phase 2. Remote manifest fetch/cache 추가
+결정:
 
-- extension background가 trusted hosting/functions origin에서 manifest를 가져온다.
-- 검증 성공 시 `chrome.storage.local` 또는 background memory cache에 저장한다.
-- fetch 실패 시 bundled manifest 또는 마지막 검증 manifest로 degraded 동작한다.
-- stale cache를 쓸 때는 콘솔 trace와 hosted inline/degraded notice에 stale 상태를 드러낸다.
+- hosted는 handshake 결과에 없는 기능을 렌더링하지 않는다.
+- remote workflow도 handshake catalog에 없는 bridge API를 호출할 수 없다.
+- killed capability는 UI 노출과 실행이 모두 막혀야 한다.
+- degraded reason은 panel trace/debug에 남긴다.
 
-현재 Phase 2 baseline:
+## C. 단계별 실행안
 
-- manifest는 Hosting 정적 JSON으로 시작한다: `hosting/extension/capability-manifest.json`, `hosting/extension-v2/capability-manifest.json`.
-- background는 active lane과 local/prod target에 맞춰 trusted Hosting origin의 `capability-manifest.json`을 가져온다.
-- remote manifest는 schema, version, expiry, trusted source origin, allowed Functions target, lane, endpoint key/method를 검증한다.
-- 검증 성공 manifest는 background memory cache에 보관한다. service worker 재시작 뒤에는 다시 fetch하고, 실패 시 bundled baseline으로 degraded fallback한다.
-- fetch 실패나 stale cache fallback은 service worker console warning과 manifest result status에 `degraded`로 남긴다. 성공처럼 조용히 숨기지 않는다.
-- 아직 endpoint URL 해석은 기존 functions runtime config baseline을 유지한다. remote target/endpoint로 실제 URL을 바꾸는 작업은 Phase 3이다.
+### Phase 3. Remote Endpoint/Target Resolution
 
-### Phase 3. Functions endpoint를 remote manifest로 이동
+목적:
 
-- `functions.invoke-endpoint`가 endpoint key를 bundled manifest baseline 대신 remote manifest에서 해석한다.
-- local/prod target도 manifest target 설정을 우선한다.
-- 기존 `functions-runtime-config.js`는 bootstrap fallback과 compatibility shim으로만 축소한다.
+- `functions.invoke-endpoint`와 `capabilities.invoke`가 remote manifest의 endpoint/target/lane을 실제 URL 해석에 사용한다.
 
-### Phase 4. 새 endpoint 추가 경로 잠금
+왜 필요한지:
 
-- 새 Cloud Function action 추가 시 extension code 수정 없이 manifest/functions/hosting 변경만으로 통과하는 verify를 만든다.
-- `scripts/verify-contracts.js` 또는 별도 `scripts/verify-remote-capability-manifest.js`가 아래를 검사한다.
-- 검사 항목: manifest schema, minExtensionVersion, expiresAt, allowed origin, capability id 중복, unknown adapter kind, missing auth mode, local/prod target 일관성.
+- 새 Cloud Function endpoint/path 변경을 extension 재배포 없이 처리하기 위해서다.
 
-### Phase 5. 운영 정책 반영
+실제 변경 파일:
 
-- release note와 배포 보고에서 `extension ZIP 필요 여부`를 capability manifest 기준으로 판단한다.
-- backend action만 바뀐 배포는 `functions/hosting/manifest 갱신, extension redeploy 없음`으로 보고한다.
-- extension 재배포가 필요한 변경은 `새 browser permission 또는 page adapter 필요`처럼 명시적 사유를 남긴다.
+- `background/functions-runtime-config.js`
+- `background/panel-runtime-capability-router.js`
+- `hosting/extension/capability-manifest.json`
+- `hosting/extension-v2/capability-manifest.json`
+- `scripts/verify-runtime-capability-router.js`
 
-## 구현 전 확인 질문
+완료 기준:
 
-- manifest를 Hosting 정적 JSON으로 둘지, Functions endpoint로 서빙할지 결정한다.
-- manifest의 서명/해시 검증을 처음부터 넣을지, HTTPS trusted origin + schema/version 검증으로 시작할지 결정한다.
-- local emulator에서는 manifest를 어디서 서빙할지 정한다.
-- cached stale manifest 허용 시간을 정한다.
-- capability별 input schema를 JSON schema로 둘지, router-local validator 함수 이름으로 둘지 정한다.
+- remote manifest의 endpoint override가 실제 fetch URL에 반영된다.
+- production/local target은 allowed Functions origin만 통과한다.
+- manifest fetch/validation 실패는 degraded fallback으로 드러난다.
 
-## 하지 말아야 할 것
+verify 기준:
 
-- hosted panel이 임의 URL을 background에 넘기고 extension이 그대로 fetch하게 만들지 않는다.
-- 보안 검증 없이 remote manifest만 믿고 새 origin이나 새 browser permission을 우회하지 않는다.
-- manifest fetch 실패를 성공처럼 숨기지 않는다.
-- extension router를 줄인다는 이유로 hosted feature controller가 raw runtime action string을 직접 들고 다니게 하지 않는다.
+- remote endpoint URL override 테스트
+- expired manifest fallback 테스트
+- unknown origin fallback 테스트
+- unsupported method fallback 테스트
+- missing schema fallback 테스트
+- fetch failure fallback 테스트
 
-## 다음 세션 시작점
+배포/롤아웃 주의점:
 
-1. Phase 2 remote fetch/cache baseline이 `npm.cmd run verify` 녹색인지 먼저 확인한다.
-2. `functions.invoke-endpoint`가 remote manifest의 target/endpoint를 우선 해석하도록 Phase 3을 시작한다.
-3. local/prod target 전환이 manifest target 설정을 따르되, allowed Functions origin 검증을 유지한다.
-4. 기존 `functions-runtime-config.js` endpoint map은 bundled fallback/compatibility shim으로 줄인다.
-5. 새 endpoint 추가가 extension code 수정 없이 static manifest + Functions/hosting 변경만으로 검증되는 guard를 추가한다.
+- remote manifest target은 허용된 Functions origin만 쓴다.
+- fallback은 성공처럼 숨기지 않는다.
+- 이 Phase의 변경은 extension background 코드 변경이므로 현재 bundle에는 extension 새로고침/재배포가 필요하다.
+
+현재 상태:
+
+- 구현됨.
+
+### Phase 3.5. CapabilityId를 Public Identifier로 고정
+
+목적:
+
+- hosted가 endpointKey/runtime action을 직접 알지 못하게 한다.
+
+왜 필요한지:
+
+- transport 구분을 숨겨야 서버 manifest만으로 기능 ownership을 바꿀 수 있다.
+
+실제 변경 파일:
+
+- `hosting/extension-v2/panel/extension-capability-client.js`
+- `hosting/extension-v2/panel/prompt-review-controller.js`
+- `hosting/extension-v2/panel/prompt-store-controller.js`
+- `hosting/extension-v2/panel/prompt-library-controller.js`
+- `contracts/extension-contract.json`
+- `scripts/verify-hosted-panel-bridge.js`
+
+완료 기준:
+
+- 신규 hosted feature 호출은 `invokeCapability(capabilityId, input)`만 사용한다.
+- prompt review/store/publish/sync mutation은 capabilityId 기반으로 호출한다.
+- `functions.invoke-endpoint`는 compatibility path로만 남는다.
+
+verify 기준:
+
+- hosted controller raw runtime action literal 차단
+- prompt store controller endpointKey literal 차단
+- runtime action catalog에 `capabilities.invoke` 포함
+
+배포/롤아웃 주의점:
+
+- endpointKey 호출 path는 제거 기한을 따로 잡는다.
+- 오래된 hosted bundle과의 호환을 위해 `invokeFunctionEndpoint`는 당장 삭제하지 않는다.
+
+현재 상태:
+
+- 1차 구현됨.
+- 전체 hosted controller endpointKey 제거 guard는 다음 Phase에서 더 넓힌다.
+
+### Phase 4. Semantic Capability Catalog
+
+목적:
+
+- manifest에 `capabilities` map을 둔다.
+
+왜 필요한지:
+
+- endpoint 호출뿐 아니라 browser/page/storage/workflow 기능 조합까지 서버 배포로 바꾸기 위해서다.
+
+실제 변경 파일:
+
+- `hosting/extension*/capability-manifest.json`
+- `background/functions-runtime-config.js`
+- `background/panel-runtime-capability-router.js`
+- `scripts/verify-runtime-capability-router.js`
+
+완료 기준:
+
+- `kind=function` capability가 capabilityId로 실행된다.
+- capability마다 `owner`, `domain`, `authMode`, `inputSchemaVersion`, `outputSchemaVersion`, `minExtensionVersion`을 가진다.
+- disabled/killed capability는 실행되지 않는다.
+
+verify 기준:
+
+- unknown capabilityId 실패
+- disabled capability 실패
+- raw URL 형태 capabilityId 실패
+- missing schema 실패
+- unknown/unsupported kind 실패
+
+배포/롤아웃 주의점:
+
+- destructive/write capability는 `authMode`와 audit metadata를 필수로 둔다.
+- 새 capability kind는 verify/docs/guard 없이 추가하지 않는다.
+
+현재 상태:
+
+- `kind=function` catalog와 dispatch가 구현됨.
+- `browser.open-url`, `storage.write-ui-preferences`, `page.capability`, `workflow` kind는 아직 pilot 전이다.
+
+### Phase 5. Page Primitive 선탑재
+
+목적:
+
+- remote capability와 remote workflow가 조합할 수 있는 page primitive를 넉넉히 준비한다.
+
+왜 필요한지:
+
+- page DOM adapter가 부족하면 신규 기능마다 extension 재배포가 필요해진다.
+
+실제 변경 파일:
+
+- `content/page-capability-router.js`
+- `contracts/extension-contract.json`
+- page verify scripts
+
+완료 기준:
+
+- composer read/apply
+- selection read
+- current conversation facts
+- safe focus/scroll
+- clipboard
+- trace primitive
+- named primitive catalog
+
+verify 기준:
+
+- arbitrary selector 금지
+- arbitrary DOM script 금지
+- named primitive만 허용
+
+배포/롤아웃 주의점:
+
+- primitive는 넓게 준비한다.
+- 데이터 추출 범위는 좁게 고정한다.
+- 새 primitive는 extension 재배포 대상이다.
+
+### Phase 5.5. Schema Registry 강화
+
+목적:
+
+- request/response schema를 capability별로 고정한다.
+
+왜 필요한지:
+
+- remote logic이 늘어나면 payload drift가 장애 원인이 된다.
+
+실제 변경 파일:
+
+- `contracts/extension-contract.json`
+- future capability schema JSON
+- verify scripts
+
+완료 기준:
+
+- capability마다 `inputSchemaVersion`, `outputSchemaVersion`, `authMode`, `auditLevel`을 가진다.
+- write/destructive capability는 schema 없으면 실패한다.
+
+verify 기준:
+
+- schema 없는 write/destructive capability 실패
+- response schema drift 감지
+
+배포/롤아웃 주의점:
+
+- schema 변경은 additive default를 우선한다.
+
+### Phase 6. Hosted Abstraction 완료
+
+목적:
+
+- hosted panel이 transport/runtime/page/storage/browser를 모르게 만든다.
+
+왜 필요한지:
+
+- hosted JS는 제품 UI와 흐름만 소유해야 한다.
+- 권한 실행은 extension runtime shell이 소유해야 한다.
+
+실제 변경 파일:
+
+- `hosting/extension-v2/panel/extension-capability-client.js`
+- hosted controllers
+- hosted verify scripts
+
+완료 기준:
+
+- hosted feature controller는 capabilityId와 input만 전달한다.
+- endpointKey와 raw runtime action string은 extension capability client 내부 compatibility path로만 남는다.
+
+verify 기준:
+
+- hosted controller에서 `functions.invoke-endpoint` 직접 조립 차단
+- hosted controller에서 endpointKey 신규 사용 차단
+- raw URL 전달 차단
+
+배포/롤아웃 주의점:
+
+- compatibility path 제거 날짜를 문서와 guard에 기록한다.
+
+### Phase 6.5. Sandboxed Remote Logic 기반
+
+목적:
+
+- registry 기반 remote workflow/script 실행 환경을 준비한다.
+
+왜 필요한지:
+
+- manifest routing만으로는 신규 기능 흐름, 조건 분기, 작은 UI 행동까지 무배포로 확장하기 어렵다.
+
+실제 변경 파일:
+
+- future sandbox host module
+- future hosted sandbox entry
+- manifest schema
+- bridge client
+- verify scripts
+
+완료 기준:
+
+- sandbox가 privileged API 없이 boot된다.
+- sandbox는 allowlisted bridge만 호출한다.
+- registry된 workflow/script artifact만 실행한다.
+
+verify 기준:
+
+- sandbox에서 `chrome` 접근 실패
+- privileged storage 접근 실패
+- raw page DOM 접근 실패
+- unrestricted fetch 접근 실패
+- eval 문자열 실행 실패
+
+배포/롤아웃 주의점:
+
+- production capability는 disabled default로 둔다.
+- pilot 전까지 read/light-write만 허용한다.
+
+### Phase 7. Negotiation / Kill Switch / Rollout Guard
+
+목적:
+
+- capability와 workflow를 안전하게 켜고 끄는 운영 체계를 만든다.
+
+왜 필요한지:
+
+- 서버 배포만으로 기능이 바뀌면 빠른 차단 장치가 필요하다.
+
+실제 변경 파일:
+
+- manifest schema
+- router handshake
+- hosted boot logic
+- verify scripts
+
+완료 기준:
+
+- lane gating 동작
+- minExtensionVersion 동작
+- kill switch 동작
+- deprecated alias 동작
+- replacementId 동작
+
+verify 기준:
+
+- killed capability는 UI 노출과 실행이 모두 막힌다.
+- degraded reason은 trace/debug에 남는다.
+
+배포/롤아웃 주의점:
+
+- kill switch 없는 remote workflow는 production에 켜지 않는다.
+
+### Phase 7.5. 자동 문서화와 금지 패턴 강화
+
+목적:
+
+- capability catalog를 사람이 읽는 문서와 guard로 자동 유지한다.
+
+왜 필요한지:
+
+- remote platform은 catalog drift가 가장 큰 위험이다.
+
+실제 변경 파일:
+
+- docs generator
+- verify scripts
+- `docs/remote-capability-manifest-plan.md`
+
+완료 기준:
+
+- manifest에서 capability catalog 문서가 생성된다.
+- docs drift를 verify가 잡는다.
+
+verify 기준:
+
+- docs drift 실패
+- raw URL 실패
+- raw runtime action 실패
+- unknown adapter 실패
+- permanent compatibility path 실패
+
+배포/롤아웃 주의점:
+
+- test-only capability와 production capability를 분리한다.
+
+### Phase 8. Sandboxed Remote Workflow Pilot
+
+목적:
+
+- 실제 신규 기능 하나를 extension 재배포 없이 remote workflow로 배포한다.
+
+왜 필요한지:
+
+- 설계가 실제 무배포 기능 확장에 충분한지 확인해야 한다.
+
+pilot 후보:
+
+- release help/open flow
+- prompt store import confirmation flow
+- prompt review post-action flow
+
+완료 기준:
+
+- workflow artifact 교체만으로 기능 흐름이 바뀐다.
+- workflow는 allowlisted bridge만 호출한다.
+
+verify 기준:
+
+- workflow version pinning
+- kill switch
+- degraded fallback
+- bridge audit log
+
+배포/롤아웃 주의점:
+
+- 처음에는 read/light-write workflow만 허용한다.
+
+## D. 더 밀어붙일 수 있는 추가 보강안
+
+1. Capability alias/deprecation registry
+   - 기대 효과: capability 이름 변경을 서버 manifest만으로 흡수한다.
+   - 비용: schema와 verify 추가.
+   - 리스크: alias가 오래 남으면 복잡해진다. 제거 기한을 필수화한다.
+
+2. Test-only capability 표준
+   - 기대 효과: 새 endpoint/action을 production 노출 없이 검증한다.
+   - 비용: manifest lane/test flag 추가.
+   - 리스크: test capability가 production에 노출되지 않도록 guard가 필요하다.
+
+3. Page primitive inventory 확대
+   - 기대 효과: remote workflow가 extension 재배포 없이 더 많은 기능을 조합한다.
+   - 비용: content adapter와 contract 증가.
+   - 리스크: arbitrary DOM 접근으로 번지지 않게 named primitive만 허용한다.
+
+4. Workflow artifact registry
+   - 기대 효과: remote logic을 versioned artifact 단위로 감사할 수 있다.
+   - 비용: manifest schema, loader, cache, debug UI 필요.
+   - 리스크: unsigned/unpinned artifact 실행을 금지해야 한다.
+
+5. Capability catalog 자동 문서 생성
+   - 기대 효과: 팀이 현재 서버 배포 가능 범위를 즉시 파악한다.
+   - 비용: generator script 추가.
+   - 리스크: generated doc drift guard 필요.
+
+## E. 명시적 금지선
+
+- privileged context에서 arbitrary remote JS를 직접 실행하지 않는다.
+- hosted가 raw endpoint URL을 보유하지 않는다.
+- hosted/controller가 raw runtime action string을 직접 조립하지 않는다.
+- remote logic이 `chrome.*`, content/page privileged API, privileged storage에 직접 접근하지 않는다.
+- arbitrary selector 기반 page 조작을 허용하지 않는다.
+- arbitrary DOM script를 허용하지 않는다.
+- unrestricted fetch를 허용하지 않는다.
+- unsigned, unversioned, anonymous script payload를 실행하지 않는다.
+- 새 privileged bridge는 verify/docs/guard 없이 추가하지 않는다.
+- compatibility path는 영구 유지하지 않는다.
+- kill switch 없는 remote workflow는 production에 켜지 않는다.
+
+## F. 에이전트 실행용 TODO
+
+먼저 볼 파일:
+
+- `docs/remote-capability-manifest-plan.md`
+- `background/functions-runtime-config.js`
+- `background/panel-runtime-capability-router.js`
+- `hosting/extension-v2/panel/extension-capability-client.js`
+- `scripts/verify-runtime-capability-router.js`
+
+먼저 수정할 파일:
+
+- `hosting/extension*/capability-manifest.json`
+- `background/functions-runtime-config.js`
+- `background/panel-runtime-capability-router.js`
+- `hosting/extension-v2/panel/extension-capability-client.js`
+- `scripts/verify-runtime-capability-router.js`
+
+verify에 추가할 것:
+
+- capability negotiation handshake 테스트
+- killed/minVersion/lane mismatch UI 노출 차단 테스트
+- unknown non-function kind 실패 테스트
+- hosted controller endpointKey 신규 사용 차단 범위 확대
+- catalog docs drift 테스트
+
+pilot으로만 열어야 할 것:
+
+- sandboxed remote workflow
+- script-slot/bundle artifact loader
+- bridge 기반 UI 행동 변경
+- page primitive 조합 workflow
+
+이번 턴에서 절대 하지 말아야 할 것:
+
+- privileged background/content에서 remote JS 실행
+- arbitrary selector/DOM script 허용
+- raw endpoint URL을 hosted request에 넣기
+- unrestricted fetch bridge 열기
+- verify 없이 새 adapter kind 추가

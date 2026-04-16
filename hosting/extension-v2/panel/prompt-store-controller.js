@@ -7,6 +7,12 @@
   const REQUIRED_EXTENSION_CAPABILITIES = Object.freeze([
     "runtime.invoke.v1",
   ]);
+  const STORE_CAPABILITY_IDS = Object.freeze({
+    import: "prompt.store.import",
+    recordView: "prompt.store.record-view",
+    toggleLike: "prompt.store.toggle-like",
+    unpublish: "prompt.store.unpublish",
+  });
 
   function create(options = {}) {
     const browserCapabilities = resolveBrowserCapabilities(options);
@@ -19,8 +25,8 @@
     const importStorePrompt = typeof options.importStorePrompt === "function"
       ? options.importStorePrompt
       : async () => false;
-    const invokeFunctionEndpoint = typeof browserCapabilities.invokeFunctionEndpoint === "function"
-      ? browserCapabilities.invokeFunctionEndpoint
+    const invokeCapability = typeof browserCapabilities.invokeCapability === "function"
+      ? browserCapabilities.invokeCapability
       : async () => ({});
     const traceFirestore = typeof options.traceFirestore === "function"
       ? options.traceFirestore
@@ -404,14 +410,9 @@
         return;
       }
       try {
-        const result = await invokeFunctionEndpoint({
-          authMode: "access-token",
-          body: {
-            entryId: normalizedEntryId,
-            providerIdentity: getProviderIdentity(),
-          },
-          endpointKey: "recordPromptStoreViewUrl",
-          service: "prompt",
+        const result = await invokeCapability(STORE_CAPABILITY_IDS.recordView, {
+          entryId: normalizedEntryId,
+          providerIdentity: getProviderIdentity(),
         });
         mergeEntry(result?.entry, { viewed: true });
         viewedEntryIds.add(normalizedEntryId);
@@ -432,14 +433,9 @@
       state.actionPending = { entryId: normalizedEntryId, type: "import" };
       scheduleRender();
       try {
-        const result = await invokeFunctionEndpoint({
-          authMode: "access-token",
-          body: {
-            entryId: normalizedEntryId,
-            providerIdentity: getProviderIdentity(),
-          },
-          endpointKey: "importPromptStoreEntryUrl",
-          service: "prompt",
+        const result = await invokeCapability(STORE_CAPABILITY_IDS.import, {
+          entryId: normalizedEntryId,
+          providerIdentity: getProviderIdentity(),
         });
         if (result?.entry) {
           await importStorePrompt(result.entry);
@@ -462,14 +458,9 @@
       state.actionPending = { entryId: normalizedEntryId, type: "like" };
       scheduleRender();
       try {
-        const result = await invokeFunctionEndpoint({
-          authMode: "access-token",
-          body: {
-            entryId: normalizedEntryId,
-            providerIdentity: getProviderIdentity(),
-          },
-          endpointKey: "togglePromptStoreLikeUrl",
-          service: "prompt",
+        const result = await invokeCapability(STORE_CAPABILITY_IDS.toggleLike, {
+          entryId: normalizedEntryId,
+          providerIdentity: getProviderIdentity(),
         });
         if (result?.entry) {
           mergeEntry(result.entry, { liked: Boolean(result.entry?.viewer?.liked) });
@@ -512,14 +503,9 @@
       state.actionPending = { entryId: normalizedEntryId, type: "unpublish" };
       scheduleRender();
       try {
-        await invokeFunctionEndpoint({
-          authMode: "access-token",
-          body: {
-            entryId: normalizedEntryId,
-            providerIdentity: getProviderIdentity(),
-          },
-          endpointKey: "unpublishPromptFromStoreUrl",
-          service: "prompt",
+        await invokeCapability(STORE_CAPABILITY_IDS.unpublish, {
+          entryId: normalizedEntryId,
+          providerIdentity: getProviderIdentity(),
         });
         state.deleteConfirmEntryId = "";
         state.expandedEntryId = state.expandedEntryId === normalizedEntryId ? "" : state.expandedEntryId;

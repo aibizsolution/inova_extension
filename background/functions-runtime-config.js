@@ -11,6 +11,22 @@
     storagePort: 9199,
   });
   const BUNDLED_FUNCTIONS_MANIFEST = deepFreeze({
+    capabilities: buildFunctionCapabilityCatalog([
+      ["meeting.list", "listInovaMeetingsUrl", "meeting", "meeting", "meeting", "read"],
+      ["meeting.panel-auth.issue-function", "issueInovaMeetingPanelAuthUrl", "meeting", "meeting", "meeting", "auth"],
+      ["meeting.share.create-function", "createInovaMeetingShareLinkUrl", "meeting", "meeting", "meeting", "write"],
+      ["meeting.share.revoke-function", "revokeInovaMeetingShareLinkUrl", "meeting", "meeting", "meeting", "write"],
+      ["meeting.workspace.authorize-access", "authorizeInovaMeetingWorkspaceAccessUrl", "meeting", "meeting", "meeting", "auth"],
+      ["prompt.library.sync", "syncInovaPromptLibraryUrl", "prompt", "prompt-library", "prompt-library", "write"],
+      ["prompt.panel-auth.issue-function", "issueInovaPromptPanelAuthUrl", "prompt", "prompt", "prompt", "auth"],
+      ["prompt.review.run", "reviewInovaPromptUrl", "prompt", "prompt-review", "prompt-review", "write"],
+      ["prompt.store.import", "importPromptStoreEntryUrl", "prompt", "prompt-store", "prompt-store", "write"],
+      ["prompt.store.list", "listPromptStoreEntriesUrl", "prompt", "prompt-store", "prompt-store", "read"],
+      ["prompt.store.publish", "publishPromptToStoreUrl", "prompt", "prompt-store", "prompt-store", "write"],
+      ["prompt.store.record-view", "recordPromptStoreViewUrl", "prompt", "prompt-store", "prompt-store", "write"],
+      ["prompt.store.toggle-like", "togglePromptStoreLikeUrl", "prompt", "prompt-store", "prompt-store", "write"],
+      ["prompt.store.unpublish", "unpublishPromptFromStoreUrl", "prompt", "prompt-store", "prompt-store", "write"],
+    ]),
     endpointKeys: {
       authorizeInovaMeetingWorkspaceAccessUrl: {
         endpoint: "authorizeInovaMeetingWorkspaceAccess",
@@ -166,6 +182,7 @@
     getPromptFunctionsConfig,
     getPromptRuntimeConfig,
     reconcileSettings,
+    resolveCapabilityFunctionEndpoint,
   };
 
   async function getActiveCapabilityManifest(settings) {
@@ -274,6 +291,7 @@
       throw new Error("remote capability manifest is expired or missing expiresAt");
     }
     validateEndpointDefinitions(normalizedManifest.endpointKeys);
+    validateCapabilityDefinitions(normalizedManifest.capabilities, normalizedManifest.endpointKeys);
     validateLaneDefinitions(normalizedManifest.lanes);
     validateManifestTargets(normalizedManifest.targets);
     return normalizedManifest;
@@ -323,12 +341,62 @@
       if (!definition || typeof definition !== "object") {
         throw new Error(`remote capability manifest endpoint is missing: ${endpointKey}`);
       }
-      if (!normalizeText(definition.endpoint)) {
-        throw new Error(`remote capability manifest endpoint path is missing: ${endpointKey}`);
+    });
+    Object.entries(endpointDefinitions).forEach(([endpointKey, definition]) => {
+      validateEndpointDefinition(endpointKey, definition);
+    });
+  }
+
+  function validateEndpointDefinition(endpointKey, definition) {
+    if (!normalizeText(definition?.endpoint)) {
+      throw new Error(`remote capability manifest endpoint path is missing: ${endpointKey}`);
+    }
+    if (!isSafeEndpointPath(definition.endpoint)) {
+      throw new Error(`remote capability manifest endpoint path is not allowed: ${endpointKey}`);
+    }
+    const method = normalizeText(definition.method || "POST").toUpperCase();
+    if (method !== "POST") {
+      throw new Error(`remote capability manifest endpoint method is not allowed: ${endpointKey}`);
+    }
+  }
+
+  function validateCapabilityDefinitions(capabilities, endpointDefinitions) {
+    if (!capabilities || typeof capabilities !== "object") {
+      throw new Error("remote capability manifest capabilities are missing");
+    }
+    Object.keys(BUNDLED_FUNCTIONS_MANIFEST.capabilities).forEach((capabilityId) => {
+      if (!capabilities[capabilityId]) {
+        throw new Error(`remote capability manifest capability is missing: ${capabilityId}`);
       }
-      const method = normalizeText(definition.method || "POST").toUpperCase();
-      if (method !== "POST") {
-        throw new Error(`remote capability manifest endpoint method is not allowed: ${endpointKey}`);
+    });
+    Object.entries(capabilities).forEach(([capabilityId, capability]) => {
+      if (!capability || typeof capability !== "object") {
+        throw new Error(`remote capability manifest capability is invalid: ${capabilityId}`);
+      }
+      const kind = normalizeText(capability.kind);
+      if (kind !== "function") {
+        throw new Error(`remote capability manifest capability kind is not allowed: ${capabilityId}`);
+      }
+      const endpointKey = normalizeText(capability.endpointKey);
+      if (!endpointKey || !endpointDefinitions?.[endpointKey]) {
+        throw new Error(`remote capability manifest capability endpointKey is missing: ${capabilityId}`);
+      }
+      const service = normalizeText(capability.service).toLowerCase();
+      if (!["meeting", "prompt"].includes(service)) {
+        throw new Error(`remote capability manifest capability service is not allowed: ${capabilityId}`);
+      }
+      const authMode = normalizeText(capability.authMode || capability.auth || "access-token").toLowerCase();
+      if (!["access-token", "none"].includes(authMode)) {
+        throw new Error(`remote capability manifest capability authMode is not allowed: ${capabilityId}`);
+      }
+      if (!normalizeText(capability.owner) || !normalizeText(capability.domain)) {
+        throw new Error(`remote capability manifest capability metadata is missing: ${capabilityId}`);
+      }
+      if (!Number.isFinite(Number(capability.inputSchemaVersion)) || !Number.isFinite(Number(capability.outputSchemaVersion))) {
+        throw new Error(`remote capability manifest capability schema is missing: ${capabilityId}`);
+      }
+      if (!isMinimumExtensionVersionSupported(capability.minExtensionVersion || BUNDLED_FUNCTIONS_MANIFEST.minExtensionVersion)) {
+        throw new Error(`remote capability manifest capability requires a newer extension: ${capabilityId}`);
       }
     });
   }
@@ -345,6 +413,11 @@
       if (!isAllowedFunctionsBaseUrl(laneConfig.baseUrl)) {
         throw new Error(`remote capability manifest lane baseUrl is not allowed: ${lane}`);
       }
+      Object.entries(laneConfig.endpointOverrides || {}).forEach(([endpointKey, endpointPath]) => {
+        if (!isSafeEndpointPath(endpointPath)) {
+          throw new Error(`remote capability manifest lane endpoint override is not allowed: ${lane}/${endpointKey}`);
+        }
+      });
     });
   }
 
@@ -388,6 +461,40 @@
   function getDefaultFunctionsConfig() {
     const laneConfig = resolveLaneFunctionsConfig();
     return buildFunctionsConfig(laneConfig.baseUrl, laneConfig.endpointOverrides);
+  }
+
+  async function resolveCapabilityFunctionEndpoint(request = {}) {
+    const endpointKey = normalizeText(request?.endpointKey);
+    if (!endpointKey) {
+      throw new Error("Functions endpoint key is missing");
+    }
+    const normalizedSettings = await reconcileSettings(request?.settings);
+    const target = normalizeWorkspaceTarget(request?.target || normalizedSettings.meetingWorkspaceTarget);
+    const manifestResult = await getActiveCapabilityManifest(normalizedSettings);
+    const manifest = manifestResult?.manifest || getBundledCapabilityManifest();
+    const endpointDefinition = manifest.endpointKeys?.[endpointKey];
+    if (!endpointDefinition?.endpoint) {
+      throw new Error(`Functions endpoint manifest is missing: ${endpointKey}`);
+    }
+    validateEndpointDefinition(endpointKey, endpointDefinition);
+    const lane = normalizeText(namespace.productLane?.getActiveLane?.() || "legacy").toLowerCase();
+    const baseUrl = resolveManifestFunctionsBaseUrl(manifest, target, lane);
+    const endpointPath = resolveManifestEndpointPath(manifest, endpointKey, endpointDefinition, lane);
+    const targetUrl = joinUrl(baseUrl, endpointPath);
+    return {
+      baseUrl,
+      degraded: Boolean(manifestResult?.degraded),
+      degradedReason: normalizeText(manifestResult?.degradedReason),
+      endpointKey,
+      endpointPath,
+      lane,
+      manifestUrl: normalizeText(manifestResult?.manifestUrl),
+      method: normalizeText(endpointDefinition.method || "POST").toUpperCase(),
+      service: normalizeText(request?.service).toLowerCase(),
+      source: normalizeText(manifestResult?.source),
+      target,
+      targetUrl,
+    };
   }
 
   async function getMeetingFunctionsConfig(settings) {
@@ -583,10 +690,58 @@
     );
   }
 
+  function resolveManifestFunctionsBaseUrl(manifest, target, lane) {
+    const normalizedTarget = normalizeWorkspaceTarget(target);
+    if (normalizedTarget === "local") {
+      const localBaseUrl = normalizeBaseUrl(manifest?.targets?.local?.functionsBaseUrl);
+      if (!isAllowedFunctionsBaseUrl(localBaseUrl)) {
+        throw new Error("remote capability manifest local Functions target is not allowed");
+      }
+      return localBaseUrl;
+    }
+    const laneBaseUrl = normalizeBaseUrl(manifest?.lanes?.[lane]?.baseUrl);
+    const productionBaseUrl = normalizeBaseUrl(manifest?.targets?.production?.functionsBaseUrl);
+    const baseUrl = laneBaseUrl || productionBaseUrl;
+    if (!isAllowedFunctionsBaseUrl(baseUrl)) {
+      throw new Error("remote capability manifest production Functions target is not allowed");
+    }
+    return baseUrl;
+  }
+
+  function resolveManifestEndpointPath(manifest, endpointKey, endpointDefinition, lane) {
+    const laneOverride = normalizeText(manifest?.lanes?.[lane]?.endpointOverrides?.[endpointKey]);
+    const endpointPath = laneOverride || normalizeText(endpointDefinition?.endpoint);
+    if (!isSafeEndpointPath(endpointPath)) {
+      throw new Error(`remote capability manifest endpoint path is not allowed: ${endpointKey}`);
+    }
+    return endpointPath;
+  }
+
   function buildFunctionEndpointMap(endpointDefinitions) {
     return Object.entries(endpointDefinitions || {}).reduce((endpointMap, [configKey, definition]) => {
       endpointMap[configKey] = String(definition?.endpoint || "");
       return endpointMap;
+    }, {});
+  }
+
+  function buildFunctionCapabilityCatalog(capabilityDefinitions) {
+    return (capabilityDefinitions || []).reduce((catalog, entry) => {
+      const [capabilityId, endpointKey, service, owner, domain, auditLevel] = entry;
+      catalog[capabilityId] = {
+        auditLevel: auditLevel || "read",
+        authMode: "access-token",
+        domain: domain || owner || "runtime",
+        enabled: true,
+        endpointKey,
+        inputSchemaVersion: 1,
+        kind: "function",
+        minExtensionVersion: "1.0.0",
+        outputSchemaVersion: 1,
+        owner: owner || domain || "runtime",
+        schemaVersion: 1,
+        service,
+      };
+      return catalog;
     }, {});
   }
 
@@ -683,6 +838,14 @@
 
   function joinUrl(baseUrl, pathName) {
     return `${normalizeBaseUrl(baseUrl)}/${String(pathName || "").replace(/^\/+/, "")}`;
+  }
+
+  function isSafeEndpointPath(value) {
+    const normalized = normalizeText(value);
+    return Boolean(normalized)
+      && !/^[a-z][a-z0-9+.-]*:/i.test(normalized)
+      && !normalized.startsWith("//")
+      && !/[?#]/.test(normalized);
   }
 
   function normalizeBaseUrl(value) {

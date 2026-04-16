@@ -123,6 +123,9 @@ const PANEL_RUNTIME_CAPABILITY_MANIFEST = deepFreeze({
     "browser.open-url": {
       adapter: "browser.open-url",
     },
+    "capabilities.invoke": {
+      adapter: "capabilities.invoke",
+    },
     "functions.invoke-endpoint": {
       adapter: "functions.invoke-endpoint",
     },
@@ -151,6 +154,7 @@ const PANEL_RUNTIME_CAPABILITY_MANIFEST = deepFreeze({
 const PANEL_RUNTIME_ADAPTERS = Object.freeze({
   "auth.issue-panel-session": issuePanelSession,
   "browser.open-url": (request) => openBrowserUrl(request?.url),
+  "capabilities.invoke": invokeManifestCapability,
   "functions.invoke-endpoint": invokeHostedPanelFunctionFetch,
   "meeting.result.open": (request) => openMeetingResult(request?.input, request?.providerIdentity),
   "meeting.share.create": (request) => createMeetingShareLink(request?.input, request?.providerIdentity),
@@ -217,13 +221,27 @@ async function issuePanelSession(request, capability) {
 
 async function invokeHostedPanelFunctionFetch(request) {
   const endpointCapability = await resolveFunctionEndpointCapability(request);
-  const functionsConfig = await resolveFunctionsConfigForService(endpointCapability.service);
-  const targetUrl = namespace.session.normalizeText(functionsConfig?.[endpointCapability.endpointKey]);
+  return invokeFunctionEndpointFetch(endpointCapability, request?.body, request);
+}
+
+async function invokeManifestCapability(request) {
+  const capabilityId = namespace.session.normalizeText(request?.capabilityId);
+  const capability = await resolveManifestCapability(capabilityId);
+  if (capability.kind !== "function") {
+    throw new Error("지원하지 않는 remote capability kind예요.");
+  }
+  const endpointCapability = await buildManifestFunctionEndpointCapability(capabilityId, capability);
+  return invokeFunctionEndpointFetch(endpointCapability, request?.input, request);
+}
+
+async function invokeFunctionEndpointFetch(endpointCapability, body, request) {
+  const endpointTarget = await resolveFunctionEndpointTarget(endpointCapability);
+  const targetUrl = namespace.session.normalizeText(endpointTarget?.targetUrl);
   if (!targetUrl) {
     throw new Error("Functions endpoint를 찾지 못했어요.");
   }
 
-  const method = namespace.session.normalizeText(endpointCapability.method).toUpperCase() || "POST";
+  const method = namespace.session.normalizeText(endpointTarget?.method || endpointCapability.method).toUpperCase() || "POST";
   if (method !== "POST") {
     throw new Error("허용되지 않은 Functions method예요.");
   }
@@ -243,7 +261,7 @@ async function invokeHostedPanelFunctionFetch(request) {
   }
 
   const response = await fetch(namespace.session.normalizeText(targetUrl), {
-    body: JSON.stringify(request?.body && typeof request.body === "object" ? request.body : {}),
+    body: JSON.stringify(body && typeof body === "object" ? body : {}),
     headers,
     method,
   });
@@ -263,6 +281,7 @@ async function resolveFunctionEndpointCapability(request) {
     throw new Error("허용되지 않은 Functions endpoint 요청이에요.");
   }
   const endpointDefinition = await readFunctionEndpointDefinition(endpointKey);
+  await assertManifestCapabilityRunnable(endpointCapability.capabilityId);
   return {
     ...endpointDefinition,
     ...endpointCapability,
@@ -271,15 +290,88 @@ async function resolveFunctionEndpointCapability(request) {
   };
 }
 
+async function resolveManifestCapability(capabilityId) {
+  if (!capabilityId) {
+    throw new Error("capabilityId가 필요해요.");
+  }
+  const manifestResult = await readActiveCapabilityManifest();
+  const capability = manifestResult?.manifest?.capabilities?.[capabilityId];
+  if (!capability || typeof capability !== "object") {
+    throw new Error("허용되지 않은 capabilityId예요.");
+  }
+  assertCapabilityRunnable(capability, capabilityId);
+  return {
+    ...capability,
+    capabilityId,
+    kind: namespace.session.normalizeText(capability.kind).toLowerCase(),
+  };
+}
+
+async function buildManifestFunctionEndpointCapability(capabilityId, capability) {
+  const endpointKey = namespace.session.normalizeText(capability?.endpointKey);
+  const endpointDefinition = await readFunctionEndpointDefinition(endpointKey);
+  const authMode = namespace.session.normalizeText(capability?.authMode || capability?.auth || "access-token").toLowerCase();
+  return {
+    ...endpointDefinition,
+    allowedAuthModes: [authMode],
+    capabilityId,
+    defaultAuthMode: authMode,
+    endpointKey,
+    method: endpointDefinition.method || capability.method || "POST",
+    service: namespace.session.normalizeText(capability?.service).toLowerCase(),
+  };
+}
+
 async function readFunctionEndpointDefinition(endpointKey) {
-  const manifestResult = typeof namespace.functionsRuntimeConfig?.getActiveCapabilityManifest === "function"
-    ? await namespace.functionsRuntimeConfig.getActiveCapabilityManifest()
-    : { manifest: namespace.functionsRuntimeConfig?.getBundledCapabilityManifest?.() };
+  const manifestResult = await readActiveCapabilityManifest();
   const endpointDefinition = manifestResult?.manifest?.endpointKeys?.[endpointKey];
   if (!endpointDefinition?.endpoint) {
     throw new Error("Functions endpoint manifest를 찾지 못했어요.");
   }
   return endpointDefinition;
+}
+
+async function assertManifestCapabilityRunnable(capabilityId) {
+  const normalizedCapabilityId = namespace.session.normalizeText(capabilityId);
+  if (!normalizedCapabilityId) {
+    return;
+  }
+  const manifestResult = await readActiveCapabilityManifest();
+  const capability = manifestResult?.manifest?.capabilities?.[normalizedCapabilityId];
+  if (!capability) {
+    return;
+  }
+  assertCapabilityRunnable(capability, normalizedCapabilityId);
+}
+
+function assertCapabilityRunnable(capability, capabilityId) {
+  if (capability?.enabled === false) {
+    throw new Error(`capability가 비활성화되어 있어요: ${capabilityId}`);
+  }
+  const killSwitch = capability?.killSwitch;
+  if (capability?.killed === true || killSwitch === true || killSwitch?.enabled === true) {
+    throw new Error(`capability kill switch가 켜져 있어요: ${capabilityId}`);
+  }
+  const activeLane = namespace.session.normalizeText(namespace.productLane?.getActiveLane?.() || "legacy").toLowerCase();
+  const capabilityLane = namespace.session.normalizeText(capability?.lane).toLowerCase();
+  if (capabilityLane && capabilityLane !== "all" && capabilityLane !== activeLane) {
+    throw new Error(`현재 lane에서 capability를 사용할 수 없어요: ${capabilityId}`);
+  }
+}
+
+async function resolveFunctionEndpointTarget(endpointCapability) {
+  const resolver = namespace.functionsRuntimeConfig?.resolveCapabilityFunctionEndpoint;
+  if (typeof resolver === "function") {
+    return resolver({
+      endpointKey: endpointCapability.endpointKey,
+      service: endpointCapability.service,
+    });
+  }
+  const functionsConfig = await resolveFunctionsConfigForService(endpointCapability.service);
+  return {
+    method: endpointCapability.method,
+    targetUrl: namespace.session.normalizeText(functionsConfig?.[endpointCapability.endpointKey]),
+  };
 }
 
 async function resolveFunctionsConfigForService(service) {
@@ -288,6 +380,12 @@ async function resolveFunctionsConfigForService(service) {
     throw new Error("허용되지 않은 Functions service예요.");
   }
   return resolver();
+}
+
+async function readActiveCapabilityManifest() {
+  return typeof namespace.functionsRuntimeConfig?.getActiveCapabilityManifest === "function"
+    ? namespace.functionsRuntimeConfig.getActiveCapabilityManifest()
+    : { manifest: namespace.functionsRuntimeConfig?.getBundledCapabilityManifest?.() };
 }
 
 function resolveFunctionAuthMode(request, endpointCapability) {

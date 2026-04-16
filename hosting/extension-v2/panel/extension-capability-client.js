@@ -17,6 +17,7 @@
       clearDebugLog,
       copyDebugLog,
       createMeetingShare,
+      invokeCapability,
       invokeFunctionEndpoint,
       issuePanelSession,
       jumpConversationItem,
@@ -60,6 +61,15 @@
         action: "meeting.share.create",
         input,
         providerIdentity,
+      });
+    }
+
+    function invokeCapability(capabilityId, input = {}, options = {}) {
+      return invokeRuntime({
+        action: "capabilities.invoke",
+        capabilityId,
+        input,
+        trace: options?.trace || null,
       });
     }
 

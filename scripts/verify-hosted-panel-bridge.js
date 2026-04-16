@@ -397,6 +397,12 @@ function verifyHostedPanelFiles(directoryName) {
   const promptStoreControllerJs = directoryName === "extension-v2"
     ? fs.readFileSync(path.join(baseDir, "prompt-store-controller.js"), "utf8")
     : "";
+  const promptLibraryControllerJs = directoryName === "extension-v2"
+    ? fs.readFileSync(path.join(baseDir, "prompt-library-controller.js"), "utf8")
+    : "";
+  const promptReviewControllerJs = directoryName === "extension-v2"
+    ? fs.readFileSync(path.join(baseDir, "prompt-review-controller.js"), "utf8")
+    : "";
 
   assert(html.includes("./runtime.js"), "hosted panel should load runtime bootstrap");
   if (directoryName === "extension-v2") {
@@ -494,6 +500,9 @@ function verifyHostedPanelFiles(directoryName) {
         ));
       });
     assert(!promptStoreControllerJs.includes('endpointKey: "listPromptStoreEntriesUrl"'), "v2 hosted store list should use Firestore subscription instead of the list Function");
+    assert(!promptStoreControllerJs.includes("endpointKey:"), "v2 hosted store controller should use capabilityId instead of endpointKey literals");
+    assert(!promptLibraryControllerJs.includes("endpointKey:"), "v2 hosted library controller should use capabilityId instead of endpointKey literals");
+    assert(!promptReviewControllerJs.includes("endpointKey:"), "v2 hosted review controller should use capabilityId instead of endpointKey literals");
     assert(promptStoreControllerJs.includes("storeFirestoreClient.ensureSubscribed"), "v2 hosted store controller should subscribe through the Firestore client");
   }
   assert(
@@ -585,6 +594,7 @@ function verifyBackgroundInvokeWiring() {
     '"storage.read-panel-state"',
     '"storage.write-ui-preferences"',
     '"auth.issue-panel-session"',
+    '"capabilities.invoke"',
     '"functions.invoke-endpoint"',
     '"browser.open-url"',
     '"meeting.workspace.open"',

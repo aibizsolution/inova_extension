@@ -3,6 +3,7 @@
   const { normalizeText, resolveBrowserCapabilities } = namespace.panelUtils;
   const PROMPT_REVIEW_PROFILE_V2 = "prompt-telling-v2";
   const PROMPT_REVIEW_V2_MIN_VERSION = "0.4.5";
+  const PROMPT_REVIEW_RUN_CAPABILITY_ID = "prompt.review.run";
   const LEGACY_SCORE_GUIDE_TEXT = "점수는 프롬프트의 핵심 정보 충족도를 보는 참고값이에요.";
   const PROMPT_TELLING_SCORE_GUIDE_TEXT = "점수는 역할 지정·참고 자료·목표 설정(PRO)을 중심으로, 결과 형식·타깃 관점·말투(MPT)를 보조로 반영한 참고값이에요.";
   const STATUS_LABELS = {
@@ -47,8 +48,8 @@
     const applyComposerText = typeof browserCapabilities.applyComposerText === "function"
       ? browserCapabilities.applyComposerText
       : async () => ({});
-    const invokeFunctionEndpoint = typeof browserCapabilities.invokeFunctionEndpoint === "function"
-      ? browserCapabilities.invokeFunctionEndpoint
+    const invokeCapability = typeof browserCapabilities.invokeCapability === "function"
+      ? browserCapabilities.invokeCapability
       : async () => ({});
     const readComposerState = typeof browserCapabilities.readComposerState === "function"
       ? browserCapabilities.readComposerState
@@ -244,12 +245,7 @@
         if (reviewProfile) {
           body.reviewProfile = reviewProfile;
         }
-        const result = await invokeFunctionEndpoint({
-          authMode: "access-token",
-          body,
-          endpointKey: "reviewInovaPromptUrl",
-          service: "prompt",
-        });
+        const result = await invokeCapability(PROMPT_REVIEW_RUN_CAPABILITY_ID, body);
         if (requestId !== Number(state.requestId || 0)) {
           return;
         }

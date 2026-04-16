@@ -10,6 +10,7 @@ const root = path.resolve(__dirname, "..");
 async function main() {
   verifyServedCapabilityManifests();
   await verifyRemoteManifestBundledFallbackIsVisible();
+  await verifyRemoteManifestValidationFailuresAreVisible();
   await verifyBundledRuntimeRouterDispatch();
   console.log("[verify-runtime-capability-router] Runtime capability router contract passed");
 }
@@ -29,6 +30,9 @@ function verifyServedCapabilityManifests() {
     "http://127.0.0.1:5001/browser-extension-main/asia-northeast3"
   );
   assert.equal(v2Manifest.endpointKeys.reviewInovaPromptUrl.endpoint, "reviewInovaPrompt");
+  assert.equal(v2Manifest.capabilities["prompt.review.run"].endpointKey, "reviewInovaPromptUrl");
+  assert.equal(v2Manifest.capabilities["prompt.review.run"].kind, "function");
+  assert.equal(v2Manifest.capabilities["prompt.review.run"].inputSchemaVersion, 1);
   assert.equal(v2Manifest.lanes.v2.endpointOverrides.syncInovaPromptLibraryUrl, "syncInovaPromptLibraryV2");
 }
 
@@ -60,9 +64,69 @@ async function verifyRemoteManifestBundledFallbackIsVisible() {
   );
 }
 
+async function verifyRemoteManifestValidationFailuresAreVisible() {
+  await verifyRejectedManifestMutation(
+    (manifest) => {
+      manifest.expiresAt = "2020-01-01T00:00:00.000Z";
+    },
+    "expired manifest should fall back visibly"
+  );
+  await verifyRejectedManifestMutation(
+    (manifest) => {
+      manifest.targets.production.functionsBaseUrl = "https://example.invalid/functions";
+    },
+    "unknown Functions origin should fall back visibly"
+  );
+  await verifyRejectedManifestMutation(
+    (manifest) => {
+      manifest.endpointKeys.reviewInovaPromptUrl.method = "GET";
+    },
+    "unsupported endpoint method should fall back visibly"
+  );
+  await verifyRejectedManifestMutation(
+    (manifest) => {
+      delete manifest.capabilities["prompt.review.run"].inputSchemaVersion;
+    },
+    "missing capability schema should fall back visibly"
+  );
+}
+
+async function verifyRejectedManifestMutation(mutator, message) {
+  const warnings = [];
+  const remoteManifest = readJson(path.join("hosting", "extension-v2", "capability-manifest.json"));
+  mutator(remoteManifest);
+  const context = createRuntimeContext({
+    console: {
+      warn(warningMessage, payload) {
+        warnings.push({
+          message: String(warningMessage || ""),
+          payload,
+        });
+      },
+    },
+    fetch: async () => ({
+      async json() {
+        return remoteManifest;
+      },
+      ok: true,
+      status: 200,
+    }),
+  });
+  loadScript(path.join("background", "functions-runtime-config.js"), context);
+  const result = await context.InovaBookmarks.functionsRuntimeConfig.getActiveCapabilityManifest();
+  assert.equal(result.source, "bundled-fallback", message);
+  assert.equal(result.degraded, true, message);
+  assert(
+    warnings.some((entry) => entry.message.includes("capability manifest degraded")
+      && entry.payload?.source === "bundled-fallback"),
+    message
+  );
+}
+
 async function verifyBundledRuntimeRouterDispatch() {
   const fetchCalls = [];
   const remoteManifest = readJson(path.join("hosting", "extension-v2", "capability-manifest.json"));
+  remoteManifest.lanes.v2.endpointOverrides.reviewInovaPromptUrl = "reviewInovaPromptRemoteV2";
   const context = createRuntimeContext({
     fetch: async (url, options) => {
       if (String(url || "").endsWith("/capability-manifest.json")) {
@@ -76,6 +140,7 @@ async function verifyBundledRuntimeRouterDispatch() {
       }
       fetchCalls.push({
         authorization: String(options?.headers?.Authorization || ""),
+        body: JSON.parse(String(options?.body || "{}")),
         method: String(options?.method || ""),
         url: String(url || ""),
       });
@@ -186,10 +251,32 @@ async function verifyBundledRuntimeRouterDispatch() {
   assert.deepEqual(fetchCalls, [
     {
       authorization: "Bearer access-token-1",
+      body: {
+        prompt: "test",
+      },
       method: "POST",
-      url: "https://example.test/reviewInovaPrompt",
+      url: "https://asia-northeast3-browser-extension-main.cloudfunctions.net/reviewInovaPromptRemoteV2",
     },
   ]);
+
+  const capabilityInvokeResult = await router.handle({
+    action: "capabilities.invoke",
+    capabilityId: "prompt.review.run",
+    input: {
+      prompt: "capability-id",
+    },
+  });
+  assert.deepEqual(capabilityInvokeResult, {
+    echoed: true,
+  });
+  assert.deepEqual(fetchCalls.at(-1), {
+    authorization: "Bearer access-token-1",
+    body: {
+      prompt: "capability-id",
+    },
+    method: "POST",
+    url: "https://asia-northeast3-browser-extension-main.cloudfunctions.net/reviewInovaPromptRemoteV2",
+  });
 
   await assert.rejects(
     router.handle({
@@ -198,6 +285,47 @@ async function verifyBundledRuntimeRouterDispatch() {
       service: "prompt",
     }),
     /허용되지 않은 Functions endpoint 요청이에요/
+  );
+  await assert.rejects(
+    router.handle({
+      action: "capabilities.invoke",
+      capabilityId: "https://example.test/raw",
+      input: {},
+    }),
+    /허용되지 않은 capabilityId예요/
+  );
+
+  const disabledContext = createRuntimeContext({
+    fetch: async (url) => {
+      if (String(url || "").endsWith("/capability-manifest.json")) {
+        const disabledManifest = readJson(path.join("hosting", "extension-v2", "capability-manifest.json"));
+        disabledManifest.capabilities["prompt.review.run"].enabled = false;
+        return {
+          async json() {
+            return disabledManifest;
+          },
+          ok: true,
+          status: 200,
+        };
+      }
+      return {
+        async json() {
+          return { data: {}, ok: true };
+        },
+        ok: true,
+      };
+    },
+  });
+  disabledContext.getInovaAccessToken = async () => "access-token-1";
+  loadScript(path.join("background", "functions-runtime-config.js"), disabledContext);
+  loadScript(path.join("background", "panel-runtime-capability-router.js"), disabledContext);
+  await assert.rejects(
+    disabledContext.InovaBookmarks.panelRuntimeCapabilityRouter.handle({
+      action: "capabilities.invoke",
+      capabilityId: "prompt.review.run",
+      input: {},
+    }),
+    /capability가 비활성화되어 있어요/
   );
 }
 
