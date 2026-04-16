@@ -30,7 +30,6 @@
       issuePanelSession,
       jumpConversationItem,
       logTrace,
-      openBrowserUrl,
       openMeetingResult,
       openMeetingWorkspace,
       readCapabilityCatalog,
@@ -135,13 +134,6 @@
         channel,
         payload,
         step,
-      });
-    }
-
-    function openBrowserUrl(url) {
-      return invokeRuntime({
-        action: "browser.open-url",
-        url,
       });
     }
 
