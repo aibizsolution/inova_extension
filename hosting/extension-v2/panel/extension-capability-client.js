@@ -1,6 +1,14 @@
 (function initExtensionCapabilityClient(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const PANEL_AUTH_CACHE_TTL_MS = 50 * 60 * 1000;
+  const COMPATIBILITY_RUNTIME_ACTIONS = Object.freeze({
+    "functions.invoke-endpoint": Object.freeze({
+      owner: "runtime-platform",
+      reason: "legacy hosted bundles that still send endpointKey requests",
+      removeAfter: "2026-05-31",
+      replacementAction: "capabilities.invoke",
+    }),
+  });
 
   function create(options = {}) {
     const invokePage = typeof options.invokePage === "function"
@@ -75,6 +83,10 @@
     }
 
     function invokeFunctionEndpoint(request = {}) {
+      const compatibility = COMPATIBILITY_RUNTIME_ACTIONS["functions.invoke-endpoint"];
+      if (!compatibility?.replacementAction || !compatibility?.removeAfter) {
+        throw new Error("functions.invoke-endpoint compatibility metadata is missing");
+      }
       return invokeRuntime({
         ...request,
         action: "functions.invoke-endpoint",

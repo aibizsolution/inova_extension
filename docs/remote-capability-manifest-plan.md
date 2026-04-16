@@ -91,7 +91,8 @@
 - `background/functions-runtime-config.js`는 `resolveCapabilityFunctionEndpoint()`로 active manifest의 target/lane/endpoint override를 실제 fetch URL로 해석한다.
 - `background/panel-runtime-capability-router.js`는 `capabilities.invoke`를 받아 manifest capability lookup 후 function adapter로 dispatch한다.
 - v2 hosted prompt controllers는 prompt review/store/publish/sync mutation을 `invokeCapability(capabilityId, input)`로 호출한다.
-- `functions.invoke-endpoint`는 compatibility path로 유지한다.
+- `functions.invoke-endpoint`는 legacy hosted bundle compatibility path로만 유지한다.
+- `hosting/extension-v2/panel/extension-capability-client.js`의 compatibility metadata 기준 제거 목표는 `2026-05-31`이며 replacement는 `capabilities.invoke`다.
 
 ### 3. Sandboxed Remote Logic Layer
 
@@ -260,13 +261,15 @@ verify 기준:
 
 배포/롤아웃 주의점:
 
-- endpointKey 호출 path는 제거 기한을 따로 잡는다.
+- endpointKey 호출 path 제거 목표는 `2026-05-31`로 둔다.
 - 오래된 hosted bundle과의 호환을 위해 `invokeFunctionEndpoint`는 당장 삭제하지 않는다.
 
 현재 상태:
 
 - 1차 구현됨.
-- 전체 hosted controller endpointKey 제거 guard는 다음 Phase에서 더 넓힌다.
+- hosted controller endpointKey 제거 guard는 prompt review/library/store부터 적용됨.
+- `functions.invoke-endpoint` compatibility path는 client metadata와 verify에서 `2026-05-31` 제거 목표를 확인한다.
+- 남은 hosted controller endpointKey guard는 다음 Phase에서 더 넓힌다.
 
 ### Phase 4. Semantic Capability Catalog
 
@@ -407,7 +410,7 @@ verify 기준:
 
 배포/롤아웃 주의점:
 
-- compatibility path 제거 날짜를 문서와 guard에 기록한다.
+- compatibility path 제거 날짜는 `2026-05-31`이며 문서와 guard가 함께 확인한다.
 
 ### Phase 6.5. Sandboxed Remote Logic 기반
 

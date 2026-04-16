@@ -421,6 +421,13 @@ function verifyHostedPanelFiles(directoryName) {
     assert(indexJs.includes("readCapabilityCatalog"), "v2 hosted panel should negotiate the runtime capability catalog at boot");
     assert(extensionCapabilityClientJs.includes('"capabilities.handshake"'), "v2 hosted panel should request capability handshake through the capability client");
     assert(
+      extensionCapabilityClientJs.includes("COMPATIBILITY_RUNTIME_ACTIONS")
+        && extensionCapabilityClientJs.includes('"functions.invoke-endpoint"')
+        && extensionCapabilityClientJs.includes('replacementAction: "capabilities.invoke"')
+        && extensionCapabilityClientJs.includes('removeAfter: "2026-05-31"'),
+      "v2 hosted panel should keep endpoint compatibility path documented with a removal date and capability replacement"
+    );
+    assert(
       html.indexOf("./panel-utils.js") > html.indexOf("./runtime.js")
         && html.indexOf("./panel-utils.js") < html.indexOf("./panel-firestore-session-client.js")
         && html.indexOf("./panel-firestore-session-client.js") > html.indexOf("./extension-capability-client.js")
