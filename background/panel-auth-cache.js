@@ -38,7 +38,7 @@
       }
       const request = (async () => {
         const accessToken = await getAccessToken();
-        const result = await issueAuth(providerIdentity, accessToken, requestOptions);
+        const result = await issuePanelAuthWithTokenRetry(issueAuth, providerIdentity, accessToken, requestOptions);
         cacheRecentPanelAuthResult(cache, cacheKey, result);
         return result;
       })();
@@ -47,6 +47,21 @@
         return await request;
       } finally {
         if (cacheKey) pending.delete(cacheKey);
+      }
+    }
+
+    async function issuePanelAuthWithTokenRetry(issueAuth, providerIdentity, accessToken, requestOptions) {
+      try {
+        return await issueAuth(providerIdentity, accessToken, requestOptions);
+      } catch (error) {
+        if (!shouldRetryPanelAuthWithFreshToken(error)) {
+          throw error;
+        }
+        if (typeof namespace.inovaAuth?.clearAccessToken === "function") {
+          namespace.inovaAuth.clearAccessToken();
+        }
+        const freshAccessToken = await getAccessToken(true);
+        return issueAuth(providerIdentity, freshAccessToken, requestOptions);
       }
     }
 
@@ -82,6 +97,13 @@
     function resolvePanelAuthCacheExpiry(expiresAt) {
       const panelExpiry = Date.parse(namespace.session.normalizeText(expiresAt) || "") || Number.POSITIVE_INFINITY;
       return Math.min(panelExpiry - 60000, Date.now() + RECENT_PANEL_AUTH_TTL_MS);
+    }
+
+    function shouldRetryPanelAuthWithFreshToken(error) {
+      const message = namespace.session.normalizeText(error?.message || error);
+      return message.includes("i-Nova 세션 검증에 실패")
+        || message.includes("i-Nova access token")
+        || message.includes("i-Nova 인증 갱신");
     }
   }
 
