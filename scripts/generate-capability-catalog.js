@@ -15,7 +15,7 @@ function buildCapabilityCatalogMarkdown(options = {}) {
     capabilityId,
     capability.kind,
     capability.service,
-    capability.endpointKey,
+    formatCapabilityTarget(capability),
     capability.owner,
     capability.domain,
     capability.authMode,
@@ -37,7 +37,7 @@ function buildCapabilityCatalogMarkdown(options = {}) {
     `- expiresAt: \`${manifest.expiresAt || ""}\``,
     `- capabilities: \`${rows.length}\``,
     "",
-    "| capabilityId | kind | service | endpointKey | owner | domain | authMode | audit | schema | minExtension | enabled |",
+    "| capabilityId | kind | service | target | owner | domain | authMode | audit | schema | minExtension | enabled |",
     "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ...rows.map((row) => `| ${row.map(escapeCell).join(" | ")} |`),
     "",
@@ -46,6 +46,19 @@ function buildCapabilityCatalogMarkdown(options = {}) {
 
 function formatSchemaVersion(capability) {
   return `in:${Number(capability.inputSchemaVersion) || 0}/out:${Number(capability.outputSchemaVersion) || 0}`;
+}
+
+function formatCapabilityTarget(capability) {
+  if (capability?.endpointKey) {
+    return capability.endpointKey;
+  }
+  if (capability?.pageCapabilityId) {
+    return capability.pageCapabilityId;
+  }
+  if (Array.isArray(capability?.templateKeys)) {
+    return capability.templateKeys.join(",");
+  }
+  return "";
 }
 
 function escapeCell(value) {
