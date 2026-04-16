@@ -3,22 +3,13 @@
   "manifestVersion": "2026-04-remote-capability-1",
   "minExtensionVersion": "1.0.0",
   "expiresAt": "2030-01-01T00:00:00.000Z",
-  "workflowArtifacts": {
-    "member-info-card": {
-      "artifactVersion": "0.0.1",
-      "bundleId": "member-info-card",
-      "integrity": "sha256-osRBIMfdYEMCn2iZSacTpAMXjmlQ78bEnoy6Sv/yX3I=",
-      "scriptSlot": "remote-workflow"
-    }
-  },
+  "workflowArtifacts": {},
   "workflowPilot": {
-    "enabled": true,
+    "enabled": false,
     "killSwitch": {
-      "enabled": false
+      "enabled": true
     },
-    "lanes": [
-      "v2"
-    ]
+    "lanes": []
   },
   "capabilities": {
     "meeting.list": {
@@ -90,27 +81,6 @@
       "owner": "meeting",
       "schemaVersion": 1,
       "service": "meeting"
-    },
-    "member.info.show": {
-      "artifactId": "member-info-card",
-      "artifactVersion": "0.0.1",
-      "auditLevel": "read",
-      "authMode": "none",
-      "domain": "member",
-      "enabled": true,
-      "inputSchemaVersion": 1,
-      "kind": "workflow",
-      "killSwitch": {
-        "enabled": false
-      },
-      "lane": "v2",
-      "minExtensionVersion": "1.0.0",
-      "outputSchemaVersion": 1,
-      "owner": "member",
-      "pilot": true,
-      "schemaVersion": 1,
-      "service": "workflow",
-      "workflowId": "member.info.show"
     },
     "panel.ui-preferences.write": {
       "auditLevel": "write",

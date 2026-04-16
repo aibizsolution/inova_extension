@@ -926,7 +926,6 @@
   word-break: break-word;
 }
 .inova-release-stack { display: flex; flex-direction: column; gap: 12px; padding: 2px 14px 14px; overflow-y: auto; overflow-x: hidden; }
-.inova-member-stack { display: flex; flex-direction: column; gap: 12px; padding: 2px 14px 14px; overflow-y: auto; overflow-x: hidden; }
 .inova-release-section { display: flex; flex-direction: column; gap: 10px; }
 .inova-release-section__body { display: flex; flex-direction: column; gap: 8px; }
 .inova-release-card {
@@ -942,27 +941,6 @@
 .inova-release-card p, .inova-release-card strong { margin: 0; }
 .inova-release-card p, .inova-release-card__meta, .inova-release-card__empty, .inova-release-history__item span {
   font-size: 12px; line-height: 1.5; color: rgba(16, 33, 43, 0.68);
-}
-.inova-member-card { gap: 10px; }
-.inova-member-card__head {
-  display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
-}
-.inova-member-status {
-  flex: 0 0 auto; padding: 3px 7px; border-radius: 999px; background: rgba(15, 124, 137, 0.1);
-  color: #0f5f77; font-size: 11px; font-weight: 800; line-height: 1.4;
-}
-.inova-member-grid {
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0;
-}
-.inova-member-field {
-  min-width: 0; padding: 8px; border: 1px solid rgba(98, 127, 145, 0.12); border-radius: 12px;
-  background: rgba(248, 251, 255, 0.74);
-}
-.inova-member-field dt {
-  margin: 0 0 3px; font-size: 11px; font-weight: 800; color: rgba(16, 33, 43, 0.56);
-}
-.inova-member-field dd {
-  margin: 0; min-width: 0; overflow-wrap: anywhere; font-size: 12px; font-weight: 700; line-height: 1.45; color: rgba(16, 33, 43, 0.84);
 }
 .inova-release-card__notice {
   padding: 9px 10px; border-radius: 12px; background: rgba(255, 249, 239, 0.94); border: 1px solid rgba(173, 125, 51, 0.18);
@@ -1102,8 +1080,6 @@
   .inova-store-item__header { grid-template-columns: minmax(0, 1fr) auto; }
   .inova-store-item__side { justify-content: flex-end; }
   .inova-prompt-review__check-head { flex-direction: column; align-items: flex-start; }
-  .inova-member-grid { grid-template-columns: 1fr; }
-  .inova-member-card__head { flex-direction: column; align-items: flex-start; }
   .inova-release-card__head,
   .inova-release-history__item {
     flex-direction: column;

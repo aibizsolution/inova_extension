@@ -593,7 +593,6 @@ verify 기준:
 
 pilot 후보:
 
-- member info card/read flow
 - release help/open flow
 - prompt store import confirmation flow
 - prompt review post-action flow
@@ -613,16 +612,6 @@ verify 기준:
 배포/롤아웃 주의점:
 
 - 처음에는 read/light-write workflow만 허용한다.
-
-현재 상태:
-
-- 첫 pilot은 `member.info.show`다.
-- 기능은 hosted v2 `회원` 탭에서만 노출한다.
-- capability는 `kind=workflow`, `pilot=true`, `lane=v2`, `killSwitch.enabled=false`로 등록한다.
-- workflow artifact는 `member-info-card@0.0.1`이며 `readPanelState`와 `emitTrace` bridge만 호출한다.
-- raw endpoint URL, raw runtime action string, raw storage action은 hosted controller에 두지 않는다.
-- 새 Chrome permission, 새 host permission, 새 content DOM primitive, 새 privileged bridge는 추가하지 않는다.
-- 이 pilot의 상용 반영은 hosting manifest/panel/workflow artifact 배포만으로 가능해야 한다.
 
 ## D. 더 밀어붙일 수 있는 추가 보강안
 
