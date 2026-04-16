@@ -279,6 +279,7 @@ function buildHandshakeCapability(capabilityId, capability, activeLane) {
     minExtensionVersion: namespace.session.normalizeText(capability?.minExtensionVersion),
     outputSchemaVersion: Number(capability?.outputSchemaVersion) || 0,
     owner: namespace.session.normalizeText(capability?.owner),
+    pageCapabilityId: namespace.session.normalizeText(capability?.pageCapabilityId),
     replacementId: namespace.session.normalizeText(capability?.replacementId),
     schemaVersion: Number(capability?.schemaVersion) || 0,
   };

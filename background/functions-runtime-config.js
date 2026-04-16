@@ -3,6 +3,18 @@
   const DEFAULT_FUNCTIONS_BASE_URL = "https://asia-northeast3-browser-extension-main.cloudfunctions.net";
   const CAPABILITY_MANIFEST_PATH = "capability-manifest.json";
   const CAPABILITY_MANIFEST_CACHE_TTL_MS = 5 * 60 * 1000;
+  const PAGE_CAPABILITY_IDS = Object.freeze([
+    "clipboard.write-text",
+    "composer.apply-text",
+    "composer.read-state",
+    "conversation.jump-item",
+    "conversation.read-state",
+    "debug.clear-log",
+    "debug.copy-log",
+    "debug.read-state",
+    "debug.set-enabled",
+    "trace.log",
+  ]);
   const LOCAL_RUNTIME_DEFAULTS = Object.freeze({
     authPort: 9099,
     firestorePort: 8080,
@@ -27,6 +39,18 @@
       ["prompt.store.record-view", "recordPromptStoreViewUrl", "prompt", "prompt-store", "prompt-store", "write"],
       ["prompt.store.toggle-like", "togglePromptStoreLikeUrl", "prompt", "prompt-store", "prompt-store", "write"],
       ["prompt.store.unpublish", "unpublishPromptFromStoreUrl", "prompt", "prompt-store", "prompt-store", "write"],
+      ]),
+      ...buildPageCapabilityCatalog([
+      ["page.clipboard.write-text", "clipboard.write-text", "runtime-platform", "clipboard", "write"],
+      ["page.composer.apply-text", "composer.apply-text", "composer", "composer", "write"],
+      ["page.composer.read-state", "composer.read-state", "composer", "composer", "read"],
+      ["page.conversation.jump-item", "conversation.jump-item", "conversation", "conversation", "write"],
+      ["page.conversation.read-state", "conversation.read-state", "conversation", "conversation", "read"],
+      ["page.debug.clear-log", "debug.clear-log", "debug", "debug", "write"],
+      ["page.debug.copy-log", "debug.copy-log", "debug", "debug", "read"],
+      ["page.debug.read-state", "debug.read-state", "debug", "debug", "read"],
+      ["page.debug.set-enabled", "debug.set-enabled", "debug", "debug", "write"],
+      ["page.trace.log", "trace.log", "runtime-platform", "trace", "write"],
       ]),
       "panel.ui-preferences.write": { auditLevel: "write", authMode: "none", domain: "panel", enabled: true, inputSchemaVersion: 1, kind: "storage.write-ui-preferences", minExtensionVersion: "1.0.0", outputSchemaVersion: 1, owner: "runtime-platform", schemaVersion: 1, service: "storage" },
       "release.download.open": { auditLevel: "write", authMode: "none", domain: "release", enabled: true, inputSchemaVersion: 1, kind: "browser.open-url", minExtensionVersion: "1.0.0", outputSchemaVersion: 1, owner: "release", schemaVersion: 1, service: "browser", templateKeys: ["release.download"] },
@@ -303,7 +327,7 @@
         throw new Error(`remote capability manifest capability is invalid: ${capabilityId}`);
       }
       const kind = normalizeText(capability.kind);
-      if (kind !== "function" && kind !== "browser.open-url" && kind !== "storage.write-ui-preferences") {
+      if (kind !== "function" && kind !== "browser.open-url" && kind !== "storage.write-ui-preferences" && kind !== "page.capability") {
         throw new Error(`remote capability manifest capability kind is not allowed: ${capabilityId}`);
       }
       if (kind === "function") {
@@ -317,6 +341,11 @@
         if (!templateKeys.length || templateKeys.some((templateKey) => templateKey !== "release.download")) throw new Error(`remote capability manifest capability templateKey is not allowed: ${capabilityId}`);
       }
       if (kind === "storage.write-ui-preferences" && normalizeText(capability.service).toLowerCase() !== "storage") throw new Error(`remote capability manifest capability service is not allowed: ${capabilityId}`);
+      if (kind === "page.capability") {
+        const pageCapabilityId = normalizeText(capability.pageCapabilityId);
+        if (!PAGE_CAPABILITY_IDS.includes(pageCapabilityId)) throw new Error(`remote capability manifest page capability is not allowed: ${capabilityId}`);
+        if (normalizeText(capability.service).toLowerCase() !== "page") throw new Error(`remote capability manifest capability service is not allowed: ${capabilityId}`);
+      }
       const authMode = normalizeText(capability.authMode || capability.auth || "access-token").toLowerCase();
       if (!["access-token", "none"].includes(authMode)) {
         throw new Error(`remote capability manifest capability authMode is not allowed: ${capabilityId}`);
@@ -687,6 +716,27 @@
         owner: owner || domain || "runtime",
         schemaVersion: 1,
         service,
+      };
+      return catalog;
+    }, {});
+  }
+
+  function buildPageCapabilityCatalog(capabilityDefinitions) {
+    return (capabilityDefinitions || []).reduce((catalog, entry) => {
+      const [capabilityId, pageCapabilityId, owner, domain, auditLevel] = entry;
+      catalog[capabilityId] = {
+        auditLevel: auditLevel || "read",
+        authMode: "none",
+        domain: domain || owner || "page",
+        enabled: true,
+        inputSchemaVersion: 1,
+        kind: "page.capability",
+        minExtensionVersion: "1.0.0",
+        outputSchemaVersion: 1,
+        owner: owner || domain || "page",
+        pageCapabilityId,
+        schemaVersion: 1,
+        service: "page",
       };
       return catalog;
     }, {});

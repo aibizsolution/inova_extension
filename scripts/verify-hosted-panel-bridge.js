@@ -210,7 +210,21 @@ async function verifyExtensionCapabilityClientPageAllowlist() {
       runtimeCalls.push(cloneValue(request));
       return {
         bridgeApis: ["invokeCapability"],
-        enabledCapabilityIds: ["prompt.review.run"],
+        capabilities: [
+          {
+            capabilityId: "page.composer.read-state",
+            enabled: true,
+            kind: "page.capability",
+            pageCapabilityId: "composer.read-state",
+          },
+          {
+            capabilityId: "page.raw.disabled",
+            enabled: false,
+            kind: "page.capability",
+            pageCapabilityId: "composer.read-state",
+          },
+        ],
+        enabledCapabilityIds: ["prompt.review.run", "page.composer.read-state"],
       };
     },
   });
@@ -235,6 +249,17 @@ async function verifyExtensionCapabilityClientPageAllowlist() {
   assert(catalog.bridgeApis.includes("invokePageCapability"));
   assert(catalog.pageCapabilityIds.includes("composer.read-state"));
   assert(catalog.pageCapabilityIds.includes("clipboard.write-text"));
+  await browserCapabilities.invokeCapability("page.composer.read-state", {
+    extra: "semantic",
+  });
+  assert.deepEqual(pageCalls.at(-1), {
+    action: "composer.read-state",
+    extra: "semantic",
+  });
+  await assert.rejects(
+    async () => browserCapabilities.invokeCapability("page.raw.disabled", {}),
+    /capability가 비활성화되어 있어요/
+  );
 }
 
 async function verifySharedFirestoreSessionAuthReuse() {

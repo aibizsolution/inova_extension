@@ -35,6 +35,8 @@ function verifyServedCapabilityManifests() {
   assert.equal(v2Manifest.capabilities["prompt.review.run"].inputSchemaVersion, 1);
   assert.equal(v2Manifest.capabilities["panel.ui-preferences.write"].kind, "storage.write-ui-preferences");
   assert.equal(v2Manifest.capabilities["panel.ui-preferences.write"].service, "storage");
+  assert.equal(v2Manifest.capabilities["page.composer.read-state"].kind, "page.capability");
+  assert.equal(v2Manifest.capabilities["page.composer.read-state"].pageCapabilityId, "composer.read-state");
   assert.equal(v2Manifest.capabilities["release.download.open"].kind, "browser.open-url");
   assert.deepEqual(v2Manifest.capabilities["release.download.open"].templateKeys, ["release.download"]);
   assert.equal(v2Manifest.lanes.v2.endpointOverrides.syncInovaPromptLibraryUrl, "syncInovaPromptLibraryV2");
@@ -104,6 +106,12 @@ async function verifyRemoteManifestValidationFailuresAreVisible() {
       manifest.capabilities["prompt.review.run"].authMode = "none";
     },
     "write capability without auth should fall back visibly"
+  );
+  await verifyRejectedManifestMutation(
+    (manifest) => {
+      manifest.capabilities["page.composer.read-state"].pageCapabilityId = "raw.dom-script";
+    },
+    "unknown page capability should fall back visibly"
   );
 }
 
@@ -266,10 +274,15 @@ async function verifyBundledRuntimeRouterDispatch() {
   assert(handshake.bridgeApis.includes("invokeCapability"));
   assert(handshake.enabledCapabilityIds.includes("prompt.review.run"));
   assert(handshake.enabledCapabilityIds.includes("panel.ui-preferences.write"));
+  assert(handshake.enabledCapabilityIds.includes("page.composer.read-state"));
   assert(handshake.enabledCapabilityIds.includes("release.download.open"));
   assert.equal(
     handshake.capabilities.find((capability) => capability.capabilityId === "prompt.review.run")?.enabled,
     true
+  );
+  assert.equal(
+    handshake.capabilities.find((capability) => capability.capabilityId === "page.composer.read-state")?.pageCapabilityId,
+    "composer.read-state"
   );
 
   const semanticPreferences = await router.handle({

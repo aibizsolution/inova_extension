@@ -29,6 +29,7 @@
     const invokeRuntime = typeof options.invokeRuntime === "function"
       ? options.invokeRuntime
       : async () => ({});
+    let capabilityDefinitionsById = new Map();
     const recentPanelAuthResults = new Map();
     const pendingPanelAuthRequests = new Map();
 
@@ -82,9 +83,14 @@
     }
 
     function invokeCapability(capabilityId, input = {}, options = {}) {
+      const normalizedCapabilityId = normalizeText(capabilityId);
+      const capability = capabilityDefinitionsById.get(normalizedCapabilityId);
+      if (capability?.kind === "page.capability") {
+        return invokeManifestPageCapability(capability, input);
+      }
       return invokeRuntime({
         action: "capabilities.invoke",
-        capabilityId,
+        capabilityId: normalizedCapabilityId,
         input,
         trace: options?.trace || null,
       });
@@ -110,6 +116,13 @@
         ...(input && typeof input === "object" ? input : {}),
         action: capabilityId,
       });
+    }
+
+    function invokeManifestPageCapability(capability, input = {}) {
+      if (capability.enabled === false) {
+        throw new Error("capability가 비활성화되어 있어요.");
+      }
+      return invokePageCapability(capability.pageCapabilityId || capability.capabilityId, input);
     }
 
     function issuePanelSession(panel, providerIdentity, options = {}) {
@@ -224,7 +237,27 @@
       const nextCatalog = catalog && typeof catalog === "object" ? { ...catalog } : {};
       nextCatalog.bridgeApis = mergeCapabilityList(nextCatalog.bridgeApis, ["invokePageCapability"]);
       nextCatalog.pageCapabilityIds = PAGE_CAPABILITY_IDS.slice();
+      cacheCapabilityCatalog(nextCatalog);
       return nextCatalog;
+    }
+
+    function cacheCapabilityCatalog(catalog) {
+      capabilityDefinitionsById = new Map();
+      if (!Array.isArray(catalog?.capabilities)) {
+        return;
+      }
+      catalog.capabilities.forEach((capability) => {
+        const capabilityId = normalizeText(capability?.capabilityId);
+        if (!capabilityId) {
+          return;
+        }
+        capabilityDefinitionsById.set(capabilityId, {
+          capabilityId,
+          enabled: capability?.enabled === true,
+          kind: normalizeText(capability?.kind),
+          pageCapabilityId: normalizeText(capability?.pageCapabilityId),
+        });
+      });
     }
 
     function buildPanelAuthCacheKey(panel, providerIdentity, requestOptions = {}) {

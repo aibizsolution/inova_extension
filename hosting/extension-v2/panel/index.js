@@ -729,6 +729,7 @@
           minExtensionVersion: normalizeText(capability.minExtensionVersion),
           outputSchemaVersion: Number(capability.outputSchemaVersion) || 0,
           owner: normalizeText(capability.owner),
+          pageCapabilityId: normalizeText(capability.pageCapabilityId),
           replacementId: normalizeText(capability.replacementId),
           schemaVersion: Number(capability.schemaVersion) || 0,
         }))
