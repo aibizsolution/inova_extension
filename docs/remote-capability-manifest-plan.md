@@ -59,6 +59,7 @@
 
 - `hosting/extension/capability-manifest.json`
 - `hosting/extension-v2/capability-manifest.json`
+- `background/capability-manifest-validator.js`
 - `background/functions-runtime-config.js`
 - `background/panel-runtime-capability-router.js`
 - `hosting/extension-v2/panel/extension-capability-client.js`
@@ -89,6 +90,7 @@
 
 - `hosting/extension*/capability-manifest.json`에 semantic `capabilities` map을 추가했다.
 - `background/functions-runtime-config.js`는 `resolveCapabilityFunctionEndpoint()`로 active manifest의 target/lane/endpoint override를 실제 fetch URL로 해석한다.
+- `background/capability-manifest-validator.js`는 remote manifest의 endpoint/capability/schema/workflow/lifecycle validation을 소유한다.
 - `background/panel-runtime-capability-router.js`는 `capabilities.invoke`를 받아 manifest capability lookup 후 function adapter로 dispatch한다.
 - v2 hosted prompt controllers는 prompt review/store/publish/sync mutation을 `invokeCapability(capabilityId, input)`로 호출한다.
 - `functions.invoke-endpoint`는 legacy hosted bundle compatibility path로만 유지한다.
@@ -199,6 +201,7 @@ panel boot 시 hosted와 background는 capability catalog를 negotiation한다.
 실제 변경 파일:
 
 - `background/functions-runtime-config.js`
+- `background/capability-manifest-validator.js`
 - `background/panel-runtime-capability-router.js`
 - `hosting/extension/capability-manifest.json`
 - `hosting/extension-v2/capability-manifest.json`
@@ -510,6 +513,7 @@ verify 기준:
 - 1차 handshake 구현됨.
 - `capabilities.handshake`가 catalog와 bridge API allowlist를 반환한다.
 - bridge API allowlist는 `emitTrace`, `invokeCapability`, `invokePageCapability`, `openUrl`, `readPanelState`, `writeUiPreferences`만 허용하도록 contract/verify로 고정됨.
+- `deprecatedAt`가 있는 capability는 같은 manifest 안의 유효한 `replacementId`를 가져야 한다. `replacementId`만 있는 vague compatibility path도 manifest validation에서 실패한다.
 - hosted boot가 handshake catalog를 읽어 enabled capability ids를 controller capability list에 합친다.
 - prompt review, prompt library, prompt store는 missing/killed capability의 UI action 노출과 실행을 1차 차단한다.
 - `workflow` kind는 manifest 검증에서 disabled 또는 killed 상태만 허용한다. sandbox pilot 전에는 enabled workflow manifest가 fallback으로 떨어진다.

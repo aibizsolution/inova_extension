@@ -504,6 +504,7 @@ function loadRuntimeContext(activeLane = "legacy") {
   loadScript(path.join("shared", "firestore-collections.js"), context);
   loadScript(path.join("shared", "firebase-config.js"), context);
   loadScript(path.join("shared", "session.js"), context);
+  loadScript(path.join("background", "capability-manifest-validator.js"), context);
   loadScript(path.join("background", "functions-runtime-config.js"), context);
   return context.InovaBookmarks;
 }

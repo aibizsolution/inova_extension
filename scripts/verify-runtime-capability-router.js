@@ -57,6 +57,7 @@ async function verifyRemoteManifestBundledFallbackIsVisible() {
       throw new Error("network unavailable");
     },
   });
+  loadScript(path.join("background", "capability-manifest-validator.js"), context);
   loadScript(path.join("background", "functions-runtime-config.js"), context);
 
   const result = await context.InovaBookmarks.functionsRuntimeConfig.getActiveCapabilityManifest();
@@ -119,6 +120,19 @@ async function verifyRemoteManifestValidationFailuresAreVisible() {
     },
     "enabled workflow capability should fall back visibly before sandbox pilot"
   );
+  await verifyRejectedManifestMutation(
+    (manifest) => {
+      manifest.capabilities["prompt.review.run"].deprecatedAt = "2026-05-31";
+    },
+    "deprecated capability without replacement should fall back visibly"
+  );
+  await verifyRejectedManifestMutation(
+    (manifest) => {
+      manifest.capabilities["prompt.review.run"].deprecatedAt = "2026-05-31";
+      manifest.capabilities["prompt.review.run"].replacementId = "prompt.review.missing";
+    },
+    "deprecated capability with unknown replacement should fall back visibly"
+  );
 }
 
 async function verifyRejectedManifestMutation(mutator, message) {
@@ -142,6 +156,7 @@ async function verifyRejectedManifestMutation(mutator, message) {
       status: 200,
     }),
   });
+  loadScript(path.join("background", "capability-manifest-validator.js"), context);
   loadScript(path.join("background", "functions-runtime-config.js"), context);
   const result = await context.InovaBookmarks.functionsRuntimeConfig.getActiveCapabilityManifest();
   assert.equal(result.source, "bundled-fallback", message);
@@ -158,6 +173,8 @@ async function verifyBundledRuntimeRouterDispatch() {
   const openedUrls = [];
   const remoteManifest = readJson(path.join("hosting", "extension-v2", "capability-manifest.json"));
   remoteManifest.lanes.v2.endpointOverrides.reviewInovaPromptUrl = "reviewInovaPromptRemoteV2";
+  remoteManifest.capabilities["prompt.store.list"].deprecatedAt = "2026-05-31";
+  remoteManifest.capabilities["prompt.store.list"].replacementId = "prompt.store.import";
   remoteManifest.capabilities["test.workflow.disabled"] = buildTestWorkflowCapability({ enabled: false });
   const context = createRuntimeContext({
     fetch: async (url, options) => {
@@ -233,6 +250,7 @@ async function verifyBundledRuntimeRouterDispatch() {
   context.openMeetingWorkspace = async () => ({ opened: true });
   context.revokeMeetingShareLink = async () => ({ ok: true });
 
+  loadScript(path.join("background", "capability-manifest-validator.js"), context);
   loadScript(path.join("background", "functions-runtime-config.js"), context);
   loadScript(path.join("background", "panel-runtime-capability-router.js"), context);
 
@@ -295,6 +313,9 @@ async function verifyBundledRuntimeRouterDispatch() {
     handshake.capabilities.find((capability) => capability.capabilityId === "page.composer.read-state")?.pageCapabilityId,
     "composer.read-state"
   );
+  const deprecatedCapability = handshake.capabilities.find((capability) => capability.capabilityId === "prompt.store.list");
+  assert.equal(deprecatedCapability?.deprecatedAt, "2026-05-31");
+  assert.equal(deprecatedCapability?.replacementId, "prompt.store.import");
   const workflowCapability = handshake.capabilities.find((capability) => capability.capabilityId === "test.workflow.disabled");
   assert.equal(workflowCapability?.enabled, false);
   assert.equal(workflowCapability?.workflowId, "test.workflow.disabled");
@@ -421,6 +442,7 @@ async function verifyBundledRuntimeRouterDispatch() {
     },
   });
   disabledContext.getInovaAccessToken = async () => "access-token-1";
+  loadScript(path.join("background", "capability-manifest-validator.js"), disabledContext);
   loadScript(path.join("background", "functions-runtime-config.js"), disabledContext);
   loadScript(path.join("background", "panel-runtime-capability-router.js"), disabledContext);
   const disabledHandshake = await disabledContext.InovaBookmarks.panelRuntimeCapabilityRouter.handle({

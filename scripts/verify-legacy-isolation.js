@@ -250,6 +250,7 @@ function verifyActiveBackgroundMessageSurfaceStaysNarrow() {
   const serviceWorkerSource = fs.readFileSync(path.join(root, "background", "service-worker.js"), "utf8");
   const browserCapabilitySource = fs.readFileSync(path.join(root, "background", "browser-capability.js"), "utf8");
   const cloudApiClientSource = fs.readFileSync(path.join(root, "background", "cloud-api-client.js"), "utf8");
+  const capabilityManifestValidatorSource = fs.readFileSync(path.join(root, "background", "capability-manifest-validator.js"), "utf8");
   const functionsRuntimeSource = fs.readFileSync(path.join(root, "background", "functions-runtime-config.js"), "utf8");
   const inovaAuthClientSource = fs.readFileSync(path.join(root, "background", "inova-auth-client.js"), "utf8");
   const panelSessionCapabilitySource = fs.readFileSync(path.join(root, "background", "panel-session-capability.js"), "utf8");
@@ -279,6 +280,12 @@ function verifyActiveBackgroundMessageSurfaceStaysNarrow() {
     "background service worker should preload the dedicated functions runtime config module"
   );
   assert(
+    serviceWorkerSource.includes('importScripts("capability-manifest-validator.js");')
+      && serviceWorkerSource.indexOf('importScripts("capability-manifest-validator.js");')
+        < serviceWorkerSource.indexOf('importScripts("functions-runtime-config.js");'),
+    "background service worker should preload the capability manifest validator before functions runtime config"
+  );
+  assert(
     inovaAuthClientSource.includes("namespace.inovaAuth = {"),
     "background i-Nova auth client should expose the shared auth namespace"
   );
@@ -289,6 +296,10 @@ function verifyActiveBackgroundMessageSurfaceStaysNarrow() {
   assert(
     functionsRuntimeSource.includes("namespace.functionsRuntimeConfig = {"),
     "background functions runtime config should expose the shared runtime config namespace"
+  );
+  assert(
+    capabilityManifestValidatorSource.includes("namespace.capabilityManifestValidator = {"),
+    "background capability manifest validator should expose the shared validator namespace"
   );
   assert(
     browserCapabilitySource.includes("chrome.tabs.create({ url: nextUrl }"),

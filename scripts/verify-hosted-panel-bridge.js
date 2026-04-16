@@ -670,6 +670,12 @@ function verifyBackgroundInvokeWiring() {
     "background service worker should preload the dedicated functions runtime config helper"
   );
   assert(
+    serviceWorkerSource.includes('importScripts("capability-manifest-validator.js");')
+      && serviceWorkerSource.indexOf('importScripts("capability-manifest-validator.js");')
+        < serviceWorkerSource.indexOf('importScripts("functions-runtime-config.js");'),
+    "background service worker should preload the capability manifest validator before functions runtime config"
+  );
+  assert(
     invokeSource.includes("namespace.panelRuntimeCapabilityRouter.handle(request)"),
     "background invoke shim should delegate runtime capability handling through panelRuntimeCapabilityRouter"
   );
@@ -852,6 +858,7 @@ function loadRuntimeContext(lane) {
   loadScript(path.join("shared", "firestore-collections.js"), context);
   loadScript(path.join("shared", "firebase-config.js"), context);
   loadScript(path.join("shared", "session.js"), context);
+  loadScript(path.join("background", "capability-manifest-validator.js"), context);
   loadScript(path.join("background", "functions-runtime-config.js"), context);
   return context.InovaBookmarks;
 }

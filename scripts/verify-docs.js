@@ -244,7 +244,7 @@ const codeChecks = [
   },
   {
     file: path.join("background", "service-worker.js"),
-    patterns: [/panel-runtime-capability-router\.js/, /panel-runtime-invoke\.js/, /invokeHostedPanelRequest/],
+    patterns: [/capability-manifest-validator\.js/, /panel-runtime-capability-router\.js/, /panel-runtime-invoke\.js/, /invokeHostedPanelRequest/],
   },
   {
     file: path.join("background", "panel-runtime-capability-router.js"),

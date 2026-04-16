@@ -11,6 +11,7 @@
   ],
   "activeBackgroundRootFiles": [
     "background/browser-capability.js",
+    "background/capability-manifest-validator.js",
     "background/cloud-api-client.js",
     "background/functions-runtime-config.js",
     "background/inova-auth-client.js",
@@ -71,6 +72,7 @@
     "hosting/meeting/render.js",
     "hosting/meeting/shared.js",
     "background/browser-capability.js",
+    "background/capability-manifest-validator.js",
     "background/cloud-api-client.js",
     "background/functions-runtime-config.js",
     "background/inova-auth-client.js",
