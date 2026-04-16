@@ -4,6 +4,13 @@
   "minExtensionVersion": "1.0.0",
   "expiresAt": "2030-01-01T00:00:00.000Z",
   "workflowArtifacts": {},
+  "workflowPilot": {
+    "enabled": false,
+    "killSwitch": {
+      "enabled": true
+    },
+    "lanes": []
+  },
   "capabilities": {
     "meeting.list": {
       "auditLevel": "read",

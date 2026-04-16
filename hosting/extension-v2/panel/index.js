@@ -772,6 +772,7 @@
           outputSchemaVersion: Number(capability.outputSchemaVersion) || 0,
           owner: normalizeText(capability.owner),
           pageCapabilityId: normalizeText(capability.pageCapabilityId),
+          pilot: capability.pilot === true,
           replacementId: normalizeText(capability.replacementId),
           schemaVersion: Number(capability.schemaVersion) || 0,
           testOnly: capability.testOnly === true,

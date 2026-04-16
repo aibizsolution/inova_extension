@@ -12,6 +12,7 @@
     const isAllowedFunctionsBaseUrl = typeof options.isAllowedFunctionsBaseUrl === "function" ? options.isAllowedFunctionsBaseUrl : () => false;
     const isSafeEndpointPath = typeof options.isSafeEndpointPath === "function" ? options.isSafeEndpointPath : () => false;
     const normalizeText = typeof options.normalizeText === "function" ? options.normalizeText : (value) => String(value || "").trim();
+    const readActiveLane = typeof options.readActiveLane === "function" ? options.readActiveLane : () => "legacy";
     const readManifestVersion = typeof options.readManifestVersion === "function" ? options.readManifestVersion : () => "1.0.0";
     const workflowScriptSlots = new Set(
       (Array.isArray(options.workflowScriptSlots) ? options.workflowScriptSlots : ["remote-workflow"])
@@ -44,10 +45,12 @@
       }
       validateEndpointDefinitions(normalizedManifest.endpointKeys);
       validateWorkflowArtifacts(normalizedManifest.workflowArtifacts);
+      const workflowPilot = validateWorkflowPilot(normalizedManifest.workflowPilot);
       validateCapabilityDefinitions(
         normalizedManifest.capabilities,
         normalizedManifest.endpointKeys,
-        normalizedManifest.workflowArtifacts
+        normalizedManifest.workflowArtifacts,
+        workflowPilot
       );
       validateCapabilityAliases(normalizedManifest.aliases, normalizedManifest.capabilities);
       validateLaneDefinitions(normalizedManifest.lanes);
@@ -118,7 +121,7 @@
       }
     }
 
-    function validateCapabilityDefinitions(capabilities, endpointDefinitions, workflowArtifacts) {
+    function validateCapabilityDefinitions(capabilities, endpointDefinitions, workflowArtifacts, workflowPilot) {
       if (!capabilities || typeof capabilities !== "object") {
         throw new Error("remote capability manifest capabilities are missing");
       }
@@ -129,7 +132,7 @@
       });
       Object.entries(capabilities).forEach(([capabilityId, capability]) => {
         validateCapabilityId(capabilityId);
-        validateCapabilityDefinition(capabilityId, capability, capabilities, endpointDefinitions, workflowArtifacts);
+        validateCapabilityDefinition(capabilityId, capability, capabilities, endpointDefinitions, workflowArtifacts, workflowPilot);
       });
     }
 
@@ -139,7 +142,7 @@
       }
     }
 
-    function validateCapabilityDefinition(capabilityId, capability, capabilities, endpointDefinitions, workflowArtifacts) {
+    function validateCapabilityDefinition(capabilityId, capability, capabilities, endpointDefinitions, workflowArtifacts, workflowPilot) {
       if (!capability || typeof capability !== "object") {
         throw new Error(`remote capability manifest capability is invalid: ${capabilityId}`);
       }
@@ -148,7 +151,7 @@
       if (!["function", "browser.open-url", "storage.write-ui-preferences", "page.capability", "workflow"].includes(kind)) {
         throw new Error(`remote capability manifest capability kind is not allowed: ${capabilityId}`);
       }
-      validateCapabilityTarget(capabilityId, capability, endpointDefinitions, kind, workflowArtifacts);
+      validateCapabilityTarget(capabilityId, capability, endpointDefinitions, kind, workflowArtifacts, workflowPilot);
       const authMode = normalizeText(capability.authMode || capability.auth || "access-token").toLowerCase();
       if (!["access-token", "none"].includes(authMode)) {
         throw new Error(`remote capability manifest capability authMode is not allowed: ${capabilityId}`);
@@ -162,6 +165,12 @@
       }
       if (kind === "function" && (auditLevel === "write" || auditLevel === "auth") && authMode === "none") {
         throw new Error(`remote capability manifest capability authMode is too weak: ${capabilityId}`);
+      }
+      if (kind === "workflow" && authMode !== "none") {
+        throw new Error(`remote workflow capability authMode is not allowed: ${capabilityId}`);
+      }
+      if (kind === "workflow" && auditLevel === "auth") {
+        throw new Error(`remote workflow capability auditLevel is not allowed: ${capabilityId}`);
       }
       if (!Number.isFinite(Number(capability.inputSchemaVersion)) || !Number.isFinite(Number(capability.outputSchemaVersion))) {
         throw new Error(`remote capability manifest capability schema is missing: ${capabilityId}`);
@@ -179,7 +188,7 @@
       }
     }
 
-    function validateCapabilityTarget(capabilityId, capability, endpointDefinitions, kind, workflowArtifacts) {
+    function validateCapabilityTarget(capabilityId, capability, endpointDefinitions, kind, workflowArtifacts, workflowPilot) {
       if (kind === "function") {
         const endpointKey = normalizeText(capability.endpointKey);
         const service = normalizeText(capability.service).toLowerCase();
@@ -196,7 +205,7 @@
         if (!pageCapabilityIds.includes(pageCapabilityId)) throw new Error(`remote capability manifest page capability is not allowed: ${capabilityId}`);
         if (normalizeText(capability.service).toLowerCase() !== "page") throw new Error(`remote capability manifest capability service is not allowed: ${capabilityId}`);
       }
-      if (kind === "workflow") validateDisabledWorkflowCapability(capabilityId, capability, workflowArtifacts);
+      if (kind === "workflow") validateWorkflowCapability(capabilityId, capability, workflowArtifacts, workflowPilot);
     }
 
     function validateCapabilityLifecycleMetadata(capabilityId, capability, capabilities) {
@@ -286,14 +295,48 @@
       });
     }
 
-    function validateDisabledWorkflowCapability(capabilityId, capability, workflowArtifacts) {
+    function validateWorkflowPilot(workflowPilot) {
+      if (workflowPilot == null) {
+        return { enabled: false, lanes: [] };
+      }
+      if (!workflowPilot || typeof workflowPilot !== "object" || Array.isArray(workflowPilot)) {
+        throw new Error("remote workflow pilot metadata is invalid");
+      }
+      const enabled = workflowPilot.enabled === true;
+      const lanes = Array.isArray(workflowPilot.lanes)
+        ? workflowPilot.lanes.map((lane) => normalizeText(lane).toLowerCase()).filter(Boolean)
+        : [];
+      const knownLanes = new Set(getKnownLanes().map((lane) => normalizeText(lane).toLowerCase()));
+      if (lanes.some((lane) => !knownLanes.has(lane))) {
+        throw new Error("remote workflow pilot lane is not allowed");
+      }
+      if (enabled) {
+        if (!workflowPilot.killSwitch || typeof workflowPilot.killSwitch !== "object" || typeof workflowPilot.killSwitch.enabled !== "boolean") {
+          throw new Error("remote workflow pilot kill switch metadata is missing");
+        }
+        if (!lanes.length) {
+          throw new Error("remote workflow pilot lanes are missing");
+        }
+      }
+      return {
+        enabled,
+        killSwitchEnabled: workflowPilot.killSwitch === true || workflowPilot.killSwitch?.enabled === true,
+        lanes,
+      };
+    }
+
+    function validateWorkflowCapability(capabilityId, capability, workflowArtifacts, workflowPilot) {
       if (normalizeText(capability.service).toLowerCase() !== "workflow") {
         throw new Error(`remote capability manifest capability service is not allowed: ${capabilityId}`);
       }
       if (!capability.killSwitch || typeof capability.killSwitch !== "object" || typeof capability.killSwitch.enabled !== "boolean") {
         throw new Error(`remote workflow capability kill switch metadata is missing: ${capabilityId}`);
       }
-      if (capability.enabled !== false && !isCapabilityKillSwitchEnabled(capability)) {
+      if (
+        capability.enabled !== false
+        && !isCapabilityKillSwitchEnabled(capability)
+        && !isWorkflowPilotAllowed(capability, workflowPilot)
+      ) {
         throw new Error(`remote workflow capability must stay disabled before sandbox pilot: ${capabilityId}`);
       }
       ["workflowId", "artifactId", "artifactVersion"].forEach((field) => {
@@ -311,6 +354,18 @@
       if (registeredVersion !== artifactVersion) {
         throw new Error(`remote workflow capability artifact version is not pinned: ${capabilityId}`);
       }
+    }
+
+    function isWorkflowPilotAllowed(capability, workflowPilot) {
+      if (workflowPilot?.enabled !== true || workflowPilot.killSwitchEnabled || capability?.pilot !== true) {
+        return false;
+      }
+      const activeLane = normalizeText(readActiveLane()).toLowerCase();
+      const capabilityLane = normalizeText(capability?.lane).toLowerCase();
+      if (capabilityLane && capabilityLane !== "all" && capabilityLane !== activeLane) {
+        return false;
+      }
+      return workflowPilot.lanes.includes(activeLane);
     }
 
     function isCapabilityKillSwitchEnabled(capability) {

@@ -326,6 +326,7 @@ function buildHandshakeCapability(capabilityId, capability, activeLane) {
     outputSchemaVersion: Number(capability?.outputSchemaVersion) || 0,
     owner: namespace.session.normalizeText(capability?.owner),
     pageCapabilityId: namespace.session.normalizeText(capability?.pageCapabilityId),
+    pilot: capability?.pilot === true,
     replacementId: namespace.session.normalizeText(capability?.replacementId),
     schemaVersion: Number(capability?.schemaVersion) || 0,
     testOnly,

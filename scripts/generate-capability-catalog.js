@@ -55,6 +55,7 @@ function buildCapabilityCatalogMarkdown(options = {}) {
     `- expiresAt: \`${manifest.expiresAt || ""}\``,
     `- capabilities: \`${rows.length}\``,
     `- aliases: \`${aliasRows.length}\``,
+    `- workflowPilot: \`${manifest.workflowPilot?.enabled === true ? "enabled" : "disabled"}\``,
     `- workflowArtifacts: \`${workflowArtifactRows.length}\``,
     "",
     "## Capabilities",

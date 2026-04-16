@@ -474,7 +474,8 @@ verify 기준:
 
 현재 상태:
 
-- `workflow` capability는 sandbox pilot 전까지 disabled 또는 killed 상태만 manifest validation을 통과한다.
+- `workflow` capability는 기본적으로 disabled 또는 killed 상태만 manifest validation을 통과한다.
+- enabled workflow는 top-level `workflowPilot.enabled=true`, `workflowPilot.killSwitch.enabled=false`, active lane allowlist, capability `pilot=true`, capability kill switch metadata, artifact pin을 모두 만족해야만 통과한다.
 - workflow capability는 top-level `workflowArtifacts` registry에 등록된 `artifactId + artifactVersion`만 참조할 수 있다.
 - workflow artifact는 allowlisted `scriptSlot`, `bundleId`, `integrity` pin을 필수로 가진다.
 - workflow artifact에 raw `code`, `script`, `source`, `url`, `fetchUrl`, `endpointUrl` payload field가 있으면 remote manifest validation에서 fallback으로 떨어진다.
@@ -485,7 +486,7 @@ verify 기준:
 - hosted sandbox host는 artifact registry의 `bundleId + artifactVersion`으로 same-origin `./workflows/<bundleId>/<artifactVersion>.json`만 fetch한다.
 - workflow artifact는 `sha256-*` integrity를 통과해야 sandbox에 전달된다. integrity verifier가 없거나 mismatch이면 explicit error다.
 - hosted capability client는 `kind=workflow` capability를 보면 background로 보내지 않고 sandbox host로 dispatch한다.
-- `workflow.run`은 `pilotEnabled=true`가 없으면 disabled 상태다. production manifest는 아직 enabled workflow를 통과시키지 않는다.
+- `workflow.run`은 `pilotEnabled=true`가 없으면 disabled 상태다. production manifest의 workflow는 별도 pilot gate 없이는 enabled 상태로 통과하지 않는다.
 
 ### Phase 7. Negotiation / Kill Switch / Rollout Guard
 
@@ -536,7 +537,7 @@ verify 기준:
 - `test.*` capability는 `testOnly=true`가 필수이며, test-only capability는 production manifest에서 enabled 상태로 둘 수 없다. handshake에는 노출되더라도 `enabledCapabilityIds`에 들어가지 않고 invoke는 실패한다.
 - hosted boot가 handshake catalog를 읽어 enabled capability ids를 controller capability list에 합친다.
 - prompt review, prompt library, prompt store는 missing/killed capability의 UI action 노출과 실행을 1차 차단한다.
-- `workflow` kind는 manifest 검증에서 kill switch metadata를 필수로 요구하고, disabled 또는 killed 상태만 허용한다. sandbox pilot 전에는 enabled workflow manifest가 fallback으로 떨어진다.
+- `workflow` kind는 manifest 검증에서 kill switch metadata를 필수로 요구한다. enabled workflow는 `workflowPilot` gate와 capability `pilot=true`를 모두 만족해야 한다.
 - 남은 controller는 required extension capability와 remote action capability 분리를 계속 적용해야 한다.
 
 ### Phase 7.5. 자동 문서화와 금지 패턴 강화

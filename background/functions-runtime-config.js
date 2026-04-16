@@ -115,6 +115,13 @@
       },
     },
     workflowArtifacts: {},
+    workflowPilot: {
+      enabled: false,
+      killSwitch: {
+        enabled: true,
+      },
+      lanes: [],
+    },
   });
   const FUNCTION_ENDPOINTS = Object.freeze(buildFunctionEndpointMap(BUNDLED_FUNCTIONS_MANIFEST.endpointKeys));
   let cachedRemoteManifestRecord = null;
@@ -138,6 +145,7 @@
     isSafeEndpointPath,
     normalizeText,
     pageCapabilityIds: PAGE_CAPABILITY_IDS,
+    readActiveLane: () => namespace.productLane?.getActiveLane?.() || "legacy",
     readManifestVersion: () => namespace.productLane?.readManifestVersion?.() || "1.0.0",
     workflowScriptSlots: WORKFLOW_SCRIPT_SLOTS,
   });
