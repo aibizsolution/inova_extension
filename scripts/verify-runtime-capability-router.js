@@ -138,6 +138,24 @@ async function verifyRemoteManifestValidationFailuresAreVisible() {
   );
   await verifyRejectedManifestMutation(
     (manifest) => {
+      manifest.capabilities["test.function.missing-flag"] = {
+        ...manifest.capabilities["prompt.review.run"],
+        enabled: false,
+      };
+    },
+    "test capability without testOnly metadata should fall back visibly"
+  );
+  await verifyRejectedManifestMutation(
+    (manifest) => {
+      manifest.capabilities["fixture.test-only.enabled"] = {
+        ...manifest.capabilities["prompt.review.run"],
+        testOnly: true,
+      };
+    },
+    "testOnly capability enabled in production should fall back visibly"
+  );
+  await verifyRejectedManifestMutation(
+    (manifest) => {
       manifest.capabilities["prompt.review.run"].deprecatedAt = "2026-05-31";
     },
     "deprecated capability without replacement should fall back visibly"
@@ -191,19 +209,24 @@ async function verifyBundledRuntimeRouterDispatch() {
   remoteManifest.lanes.v2.endpointOverrides.reviewInovaPromptUrl = "reviewInovaPromptRemoteV2";
   remoteManifest.capabilities["prompt.store.list"].deprecatedAt = "2026-05-31";
   remoteManifest.capabilities["prompt.store.list"].replacementId = "prompt.store.import";
-  remoteManifest.capabilities["test.future.function"] = {
+  remoteManifest.capabilities["fixture.future.function"] = {
     ...remoteManifest.capabilities["prompt.review.run"],
     minExtensionVersion: "99.0.0",
   };
-  remoteManifest.capabilities["test.killed.function"] = {
+  remoteManifest.capabilities["fixture.killed.function"] = {
     ...remoteManifest.capabilities["prompt.review.run"],
     killSwitch: {
       enabled: true,
     },
   };
-  remoteManifest.capabilities["test.lane.function"] = {
+  remoteManifest.capabilities["fixture.lane.function"] = {
     ...remoteManifest.capabilities["prompt.review.run"],
     lane: "legacy",
+  };
+  remoteManifest.capabilities["test.function.disabled"] = {
+    ...remoteManifest.capabilities["prompt.review.run"],
+    enabled: false,
+    testOnly: true,
   };
   remoteManifest.capabilities["test.workflow.disabled"] = buildTestWorkflowCapability({ enabled: false });
   const context = createRuntimeContext({
@@ -346,19 +369,23 @@ async function verifyBundledRuntimeRouterDispatch() {
   const deprecatedCapability = handshake.capabilities.find((capability) => capability.capabilityId === "prompt.store.list");
   assert.equal(deprecatedCapability?.deprecatedAt, "2026-05-31");
   assert.equal(deprecatedCapability?.replacementId, "prompt.store.import");
-  const futureCapability = handshake.capabilities.find((capability) => capability.capabilityId === "test.future.function");
+  const futureCapability = handshake.capabilities.find((capability) => capability.capabilityId === "fixture.future.function");
   assert.equal(futureCapability?.enabled, false);
   assert.equal(futureCapability?.minExtensionVersion, "99.0.0");
   assert.equal(futureCapability?.minExtensionVersionSupported, false);
-  assert(!handshake.enabledCapabilityIds.includes("test.future.function"));
-  const killedCapability = handshake.capabilities.find((capability) => capability.capabilityId === "test.killed.function");
+  assert(!handshake.enabledCapabilityIds.includes("fixture.future.function"));
+  const killedCapability = handshake.capabilities.find((capability) => capability.capabilityId === "fixture.killed.function");
   assert.equal(killedCapability?.enabled, false);
   assert.equal(killedCapability?.killSwitch, true);
-  assert(!handshake.enabledCapabilityIds.includes("test.killed.function"));
-  const laneCapability = handshake.capabilities.find((capability) => capability.capabilityId === "test.lane.function");
+  assert(!handshake.enabledCapabilityIds.includes("fixture.killed.function"));
+  const laneCapability = handshake.capabilities.find((capability) => capability.capabilityId === "fixture.lane.function");
   assert.equal(laneCapability?.enabled, false);
   assert.equal(laneCapability?.lane, "legacy");
-  assert(!handshake.enabledCapabilityIds.includes("test.lane.function"));
+  assert(!handshake.enabledCapabilityIds.includes("fixture.lane.function"));
+  const testOnlyCapability = handshake.capabilities.find((capability) => capability.capabilityId === "test.function.disabled");
+  assert.equal(testOnlyCapability?.enabled, false);
+  assert.equal(testOnlyCapability?.testOnly, true);
+  assert(!handshake.enabledCapabilityIds.includes("test.function.disabled"));
   const workflowCapability = handshake.capabilities.find((capability) => capability.capabilityId === "test.workflow.disabled");
   assert.equal(workflowCapability?.enabled, false);
   assert.equal(workflowCapability?.workflowId, "test.workflow.disabled");
@@ -439,7 +466,7 @@ async function verifyBundledRuntimeRouterDispatch() {
   await assert.rejects(
     router.handle({
       action: "capabilities.invoke",
-      capabilityId: "test.future.function",
+      capabilityId: "fixture.future.function",
       input: {},
     }),
     /현재 확장 버전에서 capability를 사용할 수 없어요/
@@ -447,7 +474,7 @@ async function verifyBundledRuntimeRouterDispatch() {
   await assert.rejects(
     router.handle({
       action: "capabilities.invoke",
-      capabilityId: "test.killed.function",
+      capabilityId: "fixture.killed.function",
       input: {},
     }),
     /capability kill switch가 켜져 있어요/
@@ -455,10 +482,18 @@ async function verifyBundledRuntimeRouterDispatch() {
   await assert.rejects(
     router.handle({
       action: "capabilities.invoke",
-      capabilityId: "test.lane.function",
+      capabilityId: "fixture.lane.function",
       input: {},
     }),
     /현재 lane에서 capability를 사용할 수 없어요/
+  );
+  await assert.rejects(
+    router.handle({
+      action: "capabilities.invoke",
+      capabilityId: "test.function.disabled",
+      input: {},
+    }),
+    /test-only capability는 실행할 수 없어요/
   );
   const releaseOpenResult = await router.handle({
     action: "capabilities.invoke",
@@ -642,6 +677,7 @@ function buildTestWorkflowCapability(overrides = {}) {
     owner: "runtime-platform",
     schemaVersion: 1,
     service: "workflow",
+    testOnly: true,
     workflowId: "test.workflow.disabled",
     ...overrides,
   };

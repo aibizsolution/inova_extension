@@ -516,6 +516,7 @@ verify 기준:
 - capability별 `minExtensionVersion`은 remote manifest 전체 fallback 사유가 아니다. handshake에서 `enabled=false`와 `minExtensionVersionSupported=false`로 내려가고, invoke 시 명시적으로 실패한다.
 - `deprecatedAt`가 있는 capability는 같은 manifest 안의 유효한 `replacementId`를 가져야 한다. `replacementId`만 있는 vague compatibility path도 manifest validation에서 실패한다.
 - killed, lane mismatch, minExtensionVersion mismatch capability는 handshake의 `enabledCapabilityIds`에서 빠지고 invoke도 명시적으로 실패하도록 verify가 고정한다.
+- `test.*` capability는 `testOnly=true`가 필수이며, test-only capability는 production manifest에서 enabled 상태로 둘 수 없다. handshake에는 노출되더라도 `enabledCapabilityIds`에 들어가지 않고 invoke는 실패한다.
 - hosted boot가 handshake catalog를 읽어 enabled capability ids를 controller capability list에 합친다.
 - prompt review, prompt library, prompt store는 missing/killed capability의 UI action 노출과 실행을 1차 차단한다.
 - `workflow` kind는 manifest 검증에서 kill switch metadata를 필수로 요구하고, disabled 또는 killed 상태만 허용한다. sandbox pilot 전에는 enabled workflow manifest가 fallback으로 떨어진다.
@@ -560,6 +561,7 @@ verify 기준:
 
 - `scripts/generate-capability-catalog.js`가 `hosting/extension-v2/capability-manifest.json`에서 `docs/capability-catalog.md`를 생성한다.
 - `scripts/verify-docs.js`가 generated catalog drift를 실패 처리한다.
+- test-only capability는 validator와 runtime router verify에서 production enabled 노출을 차단한다.
 
 ### Phase 8. Sandboxed Remote Workflow Pilot
 

@@ -266,6 +266,7 @@ function buildHandshakeCapability(capabilityId, capability, activeLane) {
   const killSwitchEnabled = capability?.killed === true || killSwitch === true || killSwitch?.enabled === true;
   const laneMatches = !capabilityLane || capabilityLane === "all" || capabilityLane === activeLane;
   const minExtensionVersionSupported = isCapabilityVersionSupported(capability);
+  const testOnly = capability?.testOnly === true;
   return {
     auditLevel: namespace.session.normalizeText(capability?.auditLevel),
     artifactId: namespace.session.normalizeText(capability?.artifactId),
@@ -274,7 +275,7 @@ function buildHandshakeCapability(capabilityId, capability, activeLane) {
     capabilityId: normalizedCapabilityId,
     deprecatedAt: namespace.session.normalizeText(capability?.deprecatedAt),
     domain: namespace.session.normalizeText(capability?.domain),
-    enabled: capability?.enabled !== false && !killSwitchEnabled && laneMatches && minExtensionVersionSupported,
+    enabled: capability?.enabled !== false && !testOnly && !killSwitchEnabled && laneMatches && minExtensionVersionSupported,
     inputSchemaVersion: Number(capability?.inputSchemaVersion) || 0,
     killSwitch: killSwitchEnabled,
     kind: namespace.session.normalizeText(capability?.kind),
@@ -286,6 +287,7 @@ function buildHandshakeCapability(capabilityId, capability, activeLane) {
     pageCapabilityId: namespace.session.normalizeText(capability?.pageCapabilityId),
     replacementId: namespace.session.normalizeText(capability?.replacementId),
     schemaVersion: Number(capability?.schemaVersion) || 0,
+    testOnly,
     workflowId: namespace.session.normalizeText(capability?.workflowId),
   };
 }
@@ -460,6 +462,9 @@ async function assertManifestCapabilityRunnable(capabilityId) {
 }
 
 function assertCapabilityRunnable(capability, capabilityId) {
+  if (capability?.testOnly === true) {
+    throw new Error(`test-only capability는 실행할 수 없어요: ${capabilityId}`);
+  }
   if (capability?.enabled === false) {
     throw new Error(`capability가 비활성화되어 있어요: ${capabilityId}`);
   }

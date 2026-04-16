@@ -735,6 +735,7 @@
           pageCapabilityId: normalizeText(capability.pageCapabilityId),
           replacementId: normalizeText(capability.replacementId),
           schemaVersion: Number(capability.schemaVersion) || 0,
+          testOnly: capability.testOnly === true,
           workflowId: normalizeText(capability.workflowId),
         }))
         .filter((capability) => Boolean(capability.capabilityId))

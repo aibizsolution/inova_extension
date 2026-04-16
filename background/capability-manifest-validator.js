@@ -132,6 +132,7 @@
       if (!capability || typeof capability !== "object") {
         throw new Error(`remote capability manifest capability is invalid: ${capabilityId}`);
       }
+      validateTestOnlyCapabilityMetadata(capabilityId, capability);
       const kind = normalizeText(capability.kind);
       if (!["function", "browser.open-url", "storage.write-ui-preferences", "page.capability", "workflow"].includes(kind)) {
         throw new Error(`remote capability manifest capability kind is not allowed: ${capabilityId}`);
@@ -155,6 +156,16 @@
         throw new Error(`remote capability manifest capability schema is missing: ${capabilityId}`);
       }
       validateCapabilityLifecycleMetadata(capabilityId, capability, capabilities);
+    }
+
+    function validateTestOnlyCapabilityMetadata(capabilityId, capability) {
+      const testOnly = capability.testOnly === true;
+      if (normalizeText(capabilityId).startsWith("test.") && !testOnly) {
+        throw new Error(`remote capability manifest test capability metadata is missing: ${capabilityId}`);
+      }
+      if (testOnly && capability.enabled !== false) {
+        throw new Error(`remote capability manifest test capability must stay disabled: ${capabilityId}`);
+      }
     }
 
     function validateCapabilityTarget(capabilityId, capability, endpointDefinitions, kind) {
