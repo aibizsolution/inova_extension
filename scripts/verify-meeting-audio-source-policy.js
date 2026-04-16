@@ -28,6 +28,14 @@ function main() {
   const meetingServiceSource = readRepoFile("functions", "features", "meeting", "meeting-service.js");
 
   assert(
+    !pendingUploadsSource.includes("shouldCleanupPending"),
+    "successful remote meeting uploads must keep the local original source pending entry for original download"
+  );
+  assert(
+    pendingUploadsSource.includes('preserveUpdatedAt: normalizeText(transition?.outcome) === "succeeded"'),
+    "successful remote meeting upload transitions should persist the completed local source copy"
+  );
+  assert(
     sharedSource.includes("DEFAULT_SOURCE_TARGET_PART_BYTES = 24 * 1024 * 1024"),
     "hosted meeting source part target must stay below OpenAI's 25MB upload limit"
   );

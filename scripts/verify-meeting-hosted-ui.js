@@ -38,6 +38,7 @@ function main() {
   const copySegmentsButton = document.getElementById("copySegmentsButton");
   const copyMeetingNotesButton = document.getElementById("copyMeetingNotesButton");
   const moveRecordButton = document.getElementById("moveRecordButton");
+  const downloadRecordButton = document.getElementById("downloadRecordButton");
   const recordMoveConfirm = document.getElementById("recordMoveConfirm");
   const recordMoveList = document.getElementById("recordMoveList");
   const recordMoveOverlay = document.getElementById("recordMoveOverlay");
@@ -48,6 +49,12 @@ function main() {
   assert(copySegmentsButton, "Hosted workspace should render the transcript copy action");
   assert(copyMeetingNotesButton, "Hosted workspace should render the meeting notes copy action");
   assert(moveRecordButton, "Hosted workspace should render the move record action in the detail action row");
+  assert(downloadRecordButton, "Hosted workspace should render the local source download action in the detail action row");
+  assert.equal(
+    String(downloadRecordButton.textContent || "").trim(),
+    "원본 다운로드",
+    "Hosted workspace download action should make clear it downloads the local original source"
+  );
   assert(recordMoveOverlay, "Hosted workspace should render the dedicated move record overlay");
   assert(recordMoveList, "Hosted workspace should render the move target list");
   assert(recordMoveConfirm, "Hosted workspace should render the move confirm action");

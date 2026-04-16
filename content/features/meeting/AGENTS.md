@@ -48,6 +48,7 @@
 - hosted Firestore 읽기와 listener 연결은 local state만으로 시작하지 않고 `ensureWorkspaceAuth()`가 custom-token sign-in 완료를 보장한 뒤에만 진행한다.
 - owner-secure hosted 작업실은 `authorizeInovaMeetingWorkspaceAccess`가 돌려주는 `meetingSessionToken`을 세션에 보존해야 하며, 업로드와 작업실 mutation은 이 토큰을 기준으로 인증한다.
 - hosted 작업실의 `파일 불러오기`는 로컬/상용 hosted 모두 같은 업로드 흐름을 쓴다. origin 차이만으로 버튼을 숨기거나 import 실행을 막지 않는다.
+- 녹음/불러오기 원본 blob은 원격 전사 성공 후에도 completed record에 연결된 로컬 pending entry로 보관한다. 서버 임시 source는 삭제될 수 있으므로, 사용자가 기록/회의를 삭제하기 전에는 `원본 다운로드` 버튼이 남아야 한다.
 - 오디오 import 길이는 메타데이터를 먼저 읽고, 실패하면 실제 decode로 다시 계산한다. 두 경로가 모두 실패할 때만 사용자 오류를 유지한다.
 - OpenAI 전사용 source mode는 `gpt-4o-transcribe`의 실제 제한을 따른다. OpenAI 25MB 업로드 제한보다 낮은 24MB target을 넘거나, 모델 단일 오디오 제한 1400초보다 낮은 23분 안전선을 넘으면 chunked로 전환한다.
 - chunked source는 12kHz mono WAV, 14분 target, 1.5초 overlap을 기본으로 쓴다. 14분 target은 24MB target 아래에 머무르면서 26분대 회의가 3개가 아니라 2개 part로 나뉘는 최소선에 가깝게 잡은 값이다. 실제 경계는 target 주변 45초 안에서 500ms low-energy 구간을 찾아 조정한다.
