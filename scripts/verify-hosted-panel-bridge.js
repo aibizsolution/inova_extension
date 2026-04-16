@@ -11,6 +11,7 @@ async function main() {
   await verifyPanelRuntimeResolution();
   await verifyV2PanelRuntimeResolution();
   await verifyHostedPanelBridgeContract();
+  await verifyExtensionCapabilityClientPageAllowlist();
   await verifySharedFirestoreSessionAuthReuse();
   verifyHostedPanelFiles("extension");
   verifyHostedPanelFiles("extension-v2");
@@ -182,6 +183,41 @@ async function verifyHostedPanelBridgeContract() {
   assert.equal(responseMessage?.message?.type, "response");
   assert.equal(responseMessage?.message?.payload?.handled, true);
   assert.deepEqual(responseMessage?.message?.payload?.result, { ok: true });
+}
+
+async function verifyExtensionCapabilityClientPageAllowlist() {
+  const pageCalls = [];
+  const context = vm.createContext({
+    console,
+    globalThis: null,
+  });
+  context.globalThis = context;
+  context.InovaBookmarks = {
+    session: {
+      normalizeText(value) {
+        return String(value ?? "").trim();
+      },
+    },
+  };
+  loadScript(path.join("hosting", "extension-v2", "panel", "extension-capability-client.js"), context);
+  const browserCapabilities = context.InovaBookmarks.extensionCapabilityClient.create({
+    invokePage: async (request) => {
+      pageCalls.push(cloneValue(request));
+      return { ok: true };
+    },
+  });
+  await browserCapabilities.invokePageCapability("composer.read-state", {
+    action: "trace.log",
+    extra: "kept",
+  });
+  assert.deepEqual(pageCalls.at(-1), {
+    action: "composer.read-state",
+    extra: "kept",
+  });
+  await assert.rejects(
+    async () => browserCapabilities.invokePageCapability("raw.dom-script", {}),
+    /허용되지 않은 page capability예요/
+  );
 }
 
 async function verifySharedFirestoreSessionAuthReuse() {

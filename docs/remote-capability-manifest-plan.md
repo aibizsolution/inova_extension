@@ -356,6 +356,7 @@ verify 기준:
 
 - `content/page-capability-router.js`는 canonical page primitive를 `PAGE_CAPABILITY_MANIFEST`와 adapter table로 dispatch한다.
 - `hosting/extension-v2/panel/extension-capability-client.js`는 `invokePageCapability(pageCapabilityId, input)` bridge를 제공하고 기존 page helper도 이 경로를 사용한다.
+- `invokePageCapability`는 `PAGE_CAPABILITY_IDS` allowlist에 없는 page capability를 content로 전달하지 않는다.
 - 기존 primitive 실행 결과는 유지한다.
 - arbitrary selector/DOM script primitive는 추가하지 않았다.
 

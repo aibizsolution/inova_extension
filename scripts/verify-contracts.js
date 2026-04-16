@@ -319,6 +319,7 @@ function verifyHostedCapabilityCatalog() {
     errors.push("runtime capability catalog가 비어 있습니다.");
   }
   verifyPageCapabilityRouterManifest(pageCapabilityActions);
+  verifyHostedPageCapabilityClientAllowlist(pageCapabilityActions);
 
   const hostedPanelDir = path.join(root, "hosting", "extension-v2", "panel");
   if (!fs.existsSync(hostedPanelDir)) {
@@ -338,6 +339,20 @@ function verifyHostedCapabilityCatalog() {
   }
 }
 
+function verifyHostedPageCapabilityClientAllowlist(pageCapabilityActions) {
+  const clientPath = path.join(root, "hosting", "extension-v2", "panel", "extension-capability-client.js");
+  const clientSource = fs.existsSync(clientPath) ? fs.readFileSync(clientPath, "utf8") : "";
+  const allowlistMatch = clientSource.match(/const PAGE_CAPABILITY_IDS = Object\.freeze\(\[(?<body>[\s\S]*?)\n\s{2}\]\);/);
+  if (!allowlistMatch?.groups?.body) {
+    errors.push("extension-capability-client.js가 PAGE_CAPABILITY_IDS allowlist를 선언하지 않습니다.");
+    return;
+  }
+  const allowlistIds = new Set(
+    Array.from(allowlistMatch.groups.body.matchAll(/^\s+"([^"]+)",?$/gm), (match) => match[1]).filter(Boolean)
+  );
+  compareCapabilitySet(pageCapabilityActions, allowlistIds, "hosted page capability client allowlist");
+}
+
 function verifyPageCapabilityRouterManifest(pageCapabilityActions) {
   const routerPath = path.join(root, "content", "page-capability-router.js");
   const routerSource = fs.existsSync(routerPath) ? fs.readFileSync(routerPath, "utf8") : "";
@@ -349,14 +364,18 @@ function verifyPageCapabilityRouterManifest(pageCapabilityActions) {
   const manifestIds = new Set(
     Array.from(manifestMatch.groups.body.matchAll(/^\s+"([^"]+)":\s*\{/gm), (match) => match[1]).filter(Boolean)
   );
-  for (const capabilityId of pageCapabilityActions) {
-    if (!manifestIds.has(capabilityId)) {
-      errors.push(`page capability router manifest 누락: ${capabilityId}`);
+  compareCapabilitySet(pageCapabilityActions, manifestIds, "page capability router manifest");
+}
+
+function compareCapabilitySet(expectedIds, actualIds, label) {
+  for (const capabilityId of expectedIds) {
+    if (!actualIds.has(capabilityId)) {
+      errors.push(`${label} 누락: ${capabilityId}`);
     }
   }
-  for (const capabilityId of manifestIds) {
-    if (!pageCapabilityActions.has(capabilityId)) {
-      errors.push(`page capability router manifest가 계약 밖으로 넓어졌습니다: ${capabilityId}`);
+  for (const capabilityId of actualIds) {
+    if (!expectedIds.has(capabilityId)) {
+      errors.push(`${label}가 계약 밖으로 넓어졌습니다: ${capabilityId}`);
     }
   }
 }

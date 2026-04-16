@@ -9,6 +9,18 @@
       replacementAction: "capabilities.invoke",
     }),
   });
+  const PAGE_CAPABILITY_IDS = Object.freeze([
+    "clipboard.write-text",
+    "composer.apply-text",
+    "composer.read-state",
+    "conversation.jump-item",
+    "conversation.read-state",
+    "debug.clear-log",
+    "debug.copy-log",
+    "debug.read-state",
+    "debug.set-enabled",
+    "trace.log",
+  ]);
 
   function create(options = {}) {
     const invokePage = typeof options.invokePage === "function"
@@ -90,9 +102,13 @@
     }
 
     function invokePageCapability(pageCapabilityId, input = {}) {
+      const capabilityId = normalizeText(pageCapabilityId);
+      if (!PAGE_CAPABILITY_IDS.includes(capabilityId)) {
+        throw new Error("허용되지 않은 page capability예요.");
+      }
       return invokePage({
         ...(input && typeof input === "object" ? input : {}),
-        action: normalizeText(pageCapabilityId),
+        action: capabilityId,
       });
     }
 
