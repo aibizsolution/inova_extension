@@ -27,6 +27,7 @@
       createMeetingShare,
       invokeCapability,
       invokeFunctionEndpoint,
+      invokePageCapability,
       issuePanelSession,
       jumpConversationItem,
       logTrace,
@@ -44,22 +45,18 @@
     };
 
     function applyComposerText(text, mode = "replace") {
-      return invokePage({
-        action: "composer.apply-text",
+      return invokePageCapability("composer.apply-text", {
         mode,
         text,
       });
     }
 
     function clearDebugLog() {
-      return invokePage({
-        action: "debug.clear-log",
-      });
+      return invokePageCapability("debug.clear-log");
     }
 
     function copyDebugLog(errorsOnly = false) {
-      return invokePage({
-        action: "debug.copy-log",
+      return invokePageCapability("debug.copy-log", {
         errorsOnly,
       });
     }
@@ -89,6 +86,13 @@
       return invokeRuntime({
         ...request,
         action: "functions.invoke-endpoint",
+      });
+    }
+
+    function invokePageCapability(pageCapabilityId, input = {}) {
+      return invokePage({
+        ...(input && typeof input === "object" ? input : {}),
+        action: normalizeText(pageCapabilityId),
       });
     }
 
@@ -122,15 +126,13 @@
     }
 
     function jumpConversationItem(bookmarkId) {
-      return invokePage({
-        action: "conversation.jump-item",
+      return invokePageCapability("conversation.jump-item", {
         bookmarkId,
       });
     }
 
     function logTrace(channel, step, payload = {}) {
-      return invokePage({
-        action: "trace.log",
+      return invokePageCapability("trace.log", {
         channel,
         payload,
         step,
@@ -161,21 +163,15 @@
     }
 
     function readComposerState() {
-      return invokePage({
-        action: "composer.read-state",
-      });
+      return invokePageCapability("composer.read-state");
     }
 
     function readConversationState() {
-      return invokePage({
-        action: "conversation.read-state",
-      });
+      return invokePageCapability("conversation.read-state");
     }
 
     function readDebugState() {
-      return invokePage({
-        action: "debug.read-state",
-      });
+      return invokePageCapability("debug.read-state");
     }
 
     function readPanelStorageState() {
@@ -193,15 +189,13 @@
     }
 
     function setDebugEnabled(enabled) {
-      return invokePage({
-        action: "debug.set-enabled",
+      return invokePageCapability("debug.set-enabled", {
         enabled,
       });
     }
 
     function writeClipboardText(text) {
-      return invokePage({
-        action: "clipboard.write-text",
+      return invokePageCapability("clipboard.write-text", {
         text,
       });
     }

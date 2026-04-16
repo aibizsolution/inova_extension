@@ -433,6 +433,12 @@ function verifyHostedPanelFiles(directoryName) {
       "v2 hosted panel should persist uiPreferences through the semantic storage capability id"
     );
     assert(
+      extensionCapabilityClientJs.includes("invokePageCapability")
+        && extensionCapabilityClientJs.includes('invokePageCapability("composer.apply-text"')
+        && extensionCapabilityClientJs.includes('invokePageCapability("clipboard.write-text"'),
+      "v2 hosted panel should expose page primitive dispatch through invokePageCapability"
+    );
+    assert(
       !extensionCapabilityClientJs.includes("openBrowserUrl")
         && !extensionCapabilityClientJs.includes('action: "browser.open-url"'),
       "v2 hosted panel should not expose a generic raw URL browser-open helper"

@@ -117,7 +117,7 @@ function verifyHostedPromptReviewContract() {
 
   assert.equal(
     hostedControllerSource.includes("const writeClipboardText = typeof browserCapabilities.writeClipboardText === \"function\"")
-      && capabilityClientSource.includes('action: "clipboard.write-text"'),
+      && capabilityClientSource.includes('invokePageCapability("clipboard.write-text"'),
     true,
     "hosted prompt review copy should delegate through the hosted capability client and the stable top page clipboard.write-text capability"
   );
