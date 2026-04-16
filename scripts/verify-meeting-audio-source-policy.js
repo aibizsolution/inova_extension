@@ -12,6 +12,9 @@ const EXPECTED_OPENAI_SAFE_SINGLE_DURATION_MS = 23 * 60 * 1000;
 const EXPECTED_CHUNK_DURATION_MS = 14 * 60 * 1000;
 const EXPECTED_CHUNK_OVERLAP_MS = 1500;
 const EXPECTED_CHUNK_SAMPLE_RATE = 12000;
+const EXPECTED_BOUNDARY_SEARCH_WINDOW_MS = 45 * 1000;
+const EXPECTED_BOUNDARY_ANALYSIS_WINDOW_MS = 500;
+const EXPECTED_BOUNDARY_ANALYSIS_STEP_MS = 250;
 
 function readRepoFile(...segments) {
   return fs.readFileSync(path.join(repoRoot, ...segments), "utf8");
@@ -19,6 +22,7 @@ function readRepoFile(...segments) {
 
 function main() {
   const sharedSource = readRepoFile("hosting", "meeting", "shared.js");
+  const audioChunkerSource = readRepoFile("hosting", "meeting", "audio-chunker.js");
   const pendingUploadsSource = readRepoFile("hosting", "meeting", "workspace-pending-uploads.js");
   const meetingCreationSource = readRepoFile("functions", "features", "meeting", "meeting-creation-domain.js");
   const meetingServiceSource = readRepoFile("functions", "features", "meeting", "meeting-service.js");
@@ -41,7 +45,15 @@ function main() {
   );
   assert(
     sharedSource.includes("DEFAULT_SOURCE_CHUNK_SAMPLE_RATE = 12000"),
-    "hosted chunk sample rate should keep 17 minute WAV chunks below OpenAI's 25MB upload limit"
+    "hosted chunk sample rate should keep default WAV chunks below OpenAI's 25MB upload limit"
+  );
+  assert(
+    sharedSource.includes("DEFAULT_SOURCE_BOUNDARY_SEARCH_WINDOW_MS = 45 * 1000"),
+    "hosted chunking should search around the target boundary instead of cutting only on fixed duration"
+  );
+  assert(
+    audioChunkerSource.includes("chooseLowEnergyBoundary"),
+    "hosted audio chunker must choose low-energy boundaries near the target chunk duration"
   );
   assert(
     meetingServiceSource.includes("DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS = 23 * 60 * 1000"),
@@ -59,6 +71,9 @@ function main() {
   assert.equal(ns.shared.DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS, EXPECTED_OPENAI_SAFE_SINGLE_DURATION_MS);
   assert.equal(ns.shared.DEFAULT_SOURCE_CHUNK_DURATION_MS, EXPECTED_CHUNK_DURATION_MS);
   assert.equal(ns.shared.DEFAULT_SOURCE_CHUNK_SAMPLE_RATE, EXPECTED_CHUNK_SAMPLE_RATE);
+  assert.equal(ns.shared.DEFAULT_SOURCE_BOUNDARY_SEARCH_WINDOW_MS, EXPECTED_BOUNDARY_SEARCH_WINDOW_MS);
+  assert.equal(ns.shared.DEFAULT_SOURCE_BOUNDARY_ANALYSIS_WINDOW_MS, EXPECTED_BOUNDARY_ANALYSIS_WINDOW_MS);
+  assert.equal(ns.shared.DEFAULT_SOURCE_BOUNDARY_ANALYSIS_STEP_MS, EXPECTED_BOUNDARY_ANALYSIS_STEP_MS);
   assert(
     estimateMonoWav16Bytes(EXPECTED_CHUNK_DURATION_MS, EXPECTED_CHUNK_SAMPLE_RATE) <= EXPECTED_OPENAI_SAFE_PART_BYTES,
     "default chunk WAV size must stay below the source part target"
@@ -72,6 +87,43 @@ function main() {
     estimateChunkPartCount(30 * 60 * 1000, EXPECTED_CHUNK_DURATION_MS, EXPECTED_CHUNK_OVERLAP_MS),
     3,
     "a 30 minute meeting should not force oversized two-part chunks"
+  );
+
+  vm.runInNewContext(audioChunkerSource, context, { filename: "hosting/meeting/audio-chunker.js" });
+  assert.equal(typeof ns.audioChunker.planAudioChunkRanges, "function");
+  const quietBoundarySamples = new Float32Array(80 * 1000);
+  quietBoundarySamples.fill(0.2);
+  quietBoundarySamples.fill(0.0001, 31000, 31600);
+  const quietBoundaryRanges = ns.audioChunker.planAudioChunkRanges(quietBoundarySamples, 1000, {
+    boundaryAnalysisStepMs: 250,
+    boundaryAnalysisWindowMs: 500,
+    boundarySearchWindowMs: 2000,
+    chunkDurationMs: 30 * 1000,
+    overlapMs: 1000,
+    targetPartBytes: 100 * MB,
+  });
+  assert(
+    quietBoundaryRanges[0].endMs >= 30800 && quietBoundaryRanges[0].endMs <= 31800,
+    "chunker should move the first boundary to the quiet window near the target duration"
+  );
+  assert.equal(
+    quietBoundaryRanges[1].startMs,
+    quietBoundaryRanges[0].endMs - 1000,
+    "chunker must keep overlap when it moves a boundary"
+  );
+  const flatSamples = new Float32Array(80 * 1000);
+  flatSamples.fill(0.2);
+  const flatRanges = ns.audioChunker.planAudioChunkRanges(flatSamples, 1000, {
+    boundaryAnalysisStepMs: 250,
+    boundaryAnalysisWindowMs: 500,
+    boundarySearchWindowMs: 2000,
+    chunkDurationMs: 30 * 1000,
+    overlapMs: 1000,
+    targetPartBytes: 100 * MB,
+  });
+  assert(
+    Math.abs(flatRanges[0].endMs - 30000) <= 250,
+    "chunker should stay near the target boundary when no quieter nearby boundary exists"
   );
 
   installPendingUploadControllerStubs(ns);
