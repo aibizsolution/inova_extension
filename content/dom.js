@@ -144,14 +144,22 @@
   }
 
   function summarizeTokenEstimate(messages = collectConversationMessages()) {
+    const selectedModelLabel = readSelectedModelLabel();
     const summary = {
       answer: 0,
       basis: TOKEN_ESTIMATE_VERSION,
       messageCount: 0,
+      modelLabel: "",
+      modelLabelSource: "",
       question: 0,
       total: 0,
       visibleMessageCount: 0,
     };
+
+    if (selectedModelLabel) {
+      summary.modelLabel = selectedModelLabel;
+      summary.modelLabelSource = "selected-model";
+    }
 
     messages.forEach((message) => {
       const tokenCount = Math.max(0, Number(message?.tokenEstimate) || 0);
@@ -159,6 +167,10 @@
         summary.question += tokenCount;
       } else if (message.role === "assistant") {
         summary.answer += tokenCount;
+        if (!summary.modelLabel && message.providerLabel) {
+          summary.modelLabel = message.providerLabel;
+          summary.modelLabelSource = "latest-assistant";
+        }
       }
       summary.messageCount += 1;
       summary.visibleMessageCount += 1;
@@ -166,6 +178,49 @@
 
     summary.total = summary.question + summary.answer;
     return summary;
+  }
+
+  function readSelectedModelLabel() {
+    const chatRoot = getChatLogElement(false);
+    const candidates = Array.from(document.querySelectorAll(selectors.currentModelButton || "button"));
+    for (const element of candidates) {
+      if (!(element instanceof HTMLElement) || chatRoot?.contains(element) || !isVisibleElement(element)) {
+        continue;
+      }
+      const label = readProviderLabelFromElement(element);
+      if (label) {
+        return label;
+      }
+    }
+    return "";
+  }
+
+  function readProviderLabelFromElement(element) {
+    const values = [
+      element.getAttribute("aria-label"),
+      element.getAttribute("title"),
+      element.textContent,
+    ];
+
+    for (const value of values) {
+      const normalized = namespace.session.normalizeText(value || "");
+      const match = normalized.match(/\b(Anthropic|Google|OpenAI|Perplexity)\s*:\s*[^·\n]{2,80}/i);
+      const label = namespace.session.normalizeText(match?.[0] || "");
+      if (label && isAssistantProviderLabel(label)) {
+        return label;
+      }
+    }
+    return "";
+  }
+
+  function isVisibleElement(element) {
+    const rect = element.getBoundingClientRect();
+    const style = global.getComputedStyle(element);
+    return rect.width > 0
+      && rect.height > 0
+      && style.display !== "none"
+      && style.visibility !== "hidden"
+      && Number(style.opacity || 1) !== 0;
   }
 
   function observeMessages(onChange) {

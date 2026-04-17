@@ -38,6 +38,7 @@
     capabilityNegotiationError: "",
     capabilityNegotiationKey: "",
     capabilityNegotiationPending: false,
+    conversationContextConfig: createEmptyConversationContextConfig(),
     elements: null,
     extensionCapabilities: [],
     extensionVersion: "",
@@ -169,9 +170,138 @@
     global.addEventListener("message", handleWindowMessage);
     global.document.addEventListener("visibilitychange", handleDocumentVisibilityChange, { passive: true });
     tracePanelFlow("12.hosted.listeners.bound", {});
+    void loadConversationContextConfig();
     scheduleStartupStatusCard();
     sendReady();
     scheduleReadyPing();
+  }
+
+  async function loadConversationContextConfig() {
+    if (typeof global.fetch !== "function") {
+      state.conversationContextConfig = {
+        ...createEmptyConversationContextConfig(),
+        error: "fetch-unavailable",
+      };
+      return;
+    }
+    const assetSuffix = global.__INOVA_HOSTED_PANEL_ASSET_SUFFIX__ || "";
+    const configUrl = new URL(`./conversation-context-profiles.json${assetSuffix}`, global.location.href);
+    try {
+      const response = await global.fetch(configUrl, {
+        cache: "no-store",
+        credentials: "same-origin",
+      });
+      if (!response?.ok) {
+        throw new Error(`context profile config fetch failed: ${response?.status || 0}`);
+      }
+      const payload = await response.json();
+      state.conversationContextConfig = normalizeConversationContextConfig(payload);
+      tracePanelFlow("20.hosted.conversation.context-config.loaded", {
+        profileCount: state.conversationContextConfig.profiles.length,
+        version: state.conversationContextConfig.version,
+      });
+    } catch (error) {
+      state.conversationContextConfig = {
+        ...createEmptyConversationContextConfig(),
+        error: readErrorMessage(error, "context profile config failed"),
+      };
+      tracePanelFlow("20.hosted.conversation.context-config.error", {
+        error: state.conversationContextConfig.error,
+      });
+    } finally {
+      scheduleRender();
+    }
+  }
+
+  function normalizeConversationContextConfig(payload = {}) {
+    const config = payload && typeof payload === "object" ? payload : {};
+    const defaultProfile = config.defaultProfile && typeof config.defaultProfile === "object"
+      ? config.defaultProfile
+      : {};
+    return {
+      defaultProfile: {
+        availability: normalizeConversationContextAvailability(defaultProfile.availability, "fallback"),
+        extendedLimit: readPositiveInteger(defaultProfile.extendedLimit),
+        label: normalizeText(defaultProfile.label),
+        limit: readPositiveInteger(defaultProfile.limit),
+      },
+      error: "",
+      loaded: true,
+      profiles: (Array.isArray(config.profiles) ? config.profiles : [])
+        .map(normalizeConversationContextProfile)
+        .filter(Boolean),
+      signals: {
+        growingRatio: readRatio(config.signals?.growingRatio, 0.25),
+        heavyRatio: readRatio(config.signals?.heavyRatio, 0.75),
+        longRatio: readRatio(config.signals?.longRatio, 0.5),
+      },
+      version: normalizeText(config.version),
+    };
+  }
+
+  function normalizeConversationContextProfile(profile) {
+    if (!profile || typeof profile !== "object") {
+      return null;
+    }
+    const patterns = Array.isArray(profile.patterns)
+      ? profile.patterns.map((pattern) => normalizeText(pattern)).filter(Boolean)
+      : [];
+    const limit = readPositiveInteger(profile.limit);
+    if (!limit || !patterns.length) {
+      return null;
+    }
+    return {
+      availability: normalizeConversationContextAvailability(profile.availability, "standard"),
+      extendedLimit: readPositiveInteger(profile.extendedLimit),
+      id: normalizeText(profile.id),
+      label: normalizeText(profile.label),
+      limit,
+      patterns,
+      source: normalizeText(profile.source),
+    };
+  }
+
+  function createEmptyConversationContextConfig() {
+    return {
+      defaultProfile: {
+        availability: "fallback",
+        extendedLimit: 0,
+        label: "",
+        limit: 0,
+      },
+      error: "",
+      loaded: false,
+      profiles: [],
+      signals: {
+        growingRatio: 0.25,
+        heavyRatio: 0.75,
+        longRatio: 0.5,
+      },
+      version: "",
+    };
+  }
+
+  function readPositiveInteger(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number) || number <= 0) {
+      return 0;
+    }
+    return Math.floor(number);
+  }
+
+  function normalizeConversationContextAvailability(value, fallback) {
+    const normalized = normalizeText(value).toLowerCase();
+    return ["fallback", "optional", "standard"].includes(normalized)
+      ? normalized
+      : fallback;
+  }
+
+  function readRatio(value, fallback) {
+    const number = Number(value);
+    if (!Number.isFinite(number) || number <= 0 || number >= 1) {
+      return fallback;
+    }
+    return number;
   }
 
   function createCallbacks() {
@@ -1218,10 +1348,17 @@
   }
 
   function buildEffectiveConversationToolState(panelState) {
+    const contextProfileConfig = state.conversationContextConfig;
     if (conversationController?.hasRequiredCapabilities?.()) {
-      return conversationController.buildViewState(panelState.bookmarksTool || {});
+      return {
+        ...conversationController.buildViewState(panelState.bookmarksTool || {}),
+        contextProfileConfig,
+      };
     }
-    return panelState.bookmarksTool;
+    return {
+      ...(panelState.bookmarksTool || {}),
+      contextProfileConfig,
+    };
   }
 
   function buildEffectivePromptToolState(panelState) {
@@ -2061,6 +2198,11 @@
     const target = event?.target;
     if (target instanceof global.HTMLElement) {
       return target;
+    }
+    const path = typeof event?.composedPath === "function" ? event.composedPath() : [];
+    const pathElement = path.find((entry) => entry instanceof global.HTMLElement);
+    if (pathElement) {
+      return pathElement;
     }
     if (target?.parentElement instanceof global.HTMLElement) {
       return target.parentElement;

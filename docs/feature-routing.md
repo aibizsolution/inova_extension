@@ -24,15 +24,15 @@
 
 | 항목 | 내용 |
 | --- | --- |
-| 기능 목적 | 현재 대화 화면의 질문/응답 수집, 예상 토큰 표시, 탐색, 이동 |
-| 요청 cue | 질문 모아보기, 대화 안에서 찾기, 북마크, route sync, 질문 이동, 토큰량, 대화 길이 |
+| 기능 목적 | 현재 대화 화면의 질문/응답 수집, 예상 컨텍스트와 길이 신호 표시, 탐색, 이동 |
+| 요청 cue | 질문 모아보기, 대화 안에서 찾기, 북마크, route sync, 질문 이동, 컨텍스트 길이, 대화 길이 |
 | 먼저 볼 파일 | `content/dom.js`, `content/route-state-controller.js`, `content/route-watch-controller.js`, `content/panel-v2-composition-controller.js`, `content/panel-v2-shell-bridge.js`, `content/route-sync.js`, `backup/legacy-panel/bookmark-view.js`, `backup/legacy-panel/panel-bookmark-controller.js` |
 | 관련 프론트 경로 | `content/main.js`, `content/panel.js`, `content/panel-v2-composition-controller.js`, `content/panel-v2-shell-bridge.js`, `hosting/extension/panel/bookmark-view.js`, `hosting/extension-v2/panel/conversation-controller.js`, `hosting/extension-v2/panel/bookmark-view.js`, `backup/legacy-panel/bookmark-view.js` (inactive content view reference), `backup/legacy-panel/panel-bookmark-controller.js` (inactive bookmark runtime reference) |
 | 관련 functions 경로 | 없음 |
 | feature-owned shared | `shared/session.js`, `shared/constants.js` |
-| 관련 데이터 경계 | DOM 수집 결과, Q/A 예상 토큰, `sid`, UI 상태 |
+| 관련 데이터 경계 | DOM 수집 결과, Q/A 예상 컨텍스트, 선택 모델 라벨, hosted 모델 컨텍스트 프로필 설정, `sid`, UI 상태 |
 | 보통 건드리지 말 범위 | `functions/*`, `hosting/meeting/*`, prompt/release 관련 파일 |
-| 최소 검증 | i-Nova 대화 탭에서 질문이 수집되고 예상 토큰이 표시되며 항목 클릭으로 원문 위치 이동 |
+| 최소 검증 | i-Nova 대화 탭에서 질문이 수집되고 예상 컨텍스트/길이 신호가 표시되며 항목 클릭으로 원문 위치 이동 |
 | 언제 다시 물을지 | 질문 수집인지 프롬프트 주입인지, 대화 탭인지 패널 shell인지 구분이 모호할 때 |
 | 언제 범위를 확장할지 | 질문 UI 자체가 아니라 패널 shell 동작이나 storage 상태와 연결될 때만 platform/shell로 확장 |
 

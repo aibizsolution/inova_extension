@@ -62,6 +62,7 @@
     },
     selectors: {
       chatMessageLog: '[aria-label="채팅 메시지 목록"]',
+      currentModelButton: "button",
       messageArticle: "article",
       userMessage: ".chat-message--user",
       userText: ".chat-message__text",
