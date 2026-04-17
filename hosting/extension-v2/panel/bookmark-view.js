@@ -112,8 +112,9 @@
       return "";
     }
     const status = normalizeFocusSignalStatus(signal.status);
-    const tooltip = namespace.session.normalizeText(signal.tooltip)
+    const baseTooltip = namespace.session.normalizeText(signal.tooltip)
       || buildDefaultFocusSignalTooltip(status, signal.userMessageCount);
+    const tooltip = buildFocusSignalTooltip(status, baseTooltip);
     return `
       <span
         class="inova-focus-signal is-${escapeHtml(status)}"
@@ -132,6 +133,29 @@
     return ["pending", "split", "steady", "unavailable", "waiting"].includes(normalized)
       ? normalized
       : "waiting";
+  }
+
+  function buildFocusSignalTooltip(status, baseTooltip) {
+    return [
+      buildFocusSignalLegend(status),
+      namespace.session.normalizeText(baseTooltip),
+    ].filter(Boolean).join(" ");
+  }
+
+  function buildFocusSignalLegend(status) {
+    if (status === "pending") {
+      return "노란 톤 아이콘은 대화 흐름을 평가 중이라는 뜻입니다.";
+    }
+    if (status === "steady") {
+      return "청록 톤 체크 아이콘은 최근 질문이 기존 흐름 안에서 이어진다는 뜻입니다.";
+    }
+    if (status === "split") {
+      return "붉은 톤 분기 아이콘은 새 대화 세션을 고려하라는 뜻입니다.";
+    }
+    if (status === "unavailable") {
+      return "회색 X 아이콘은 대화 흐름 평가를 지금 사용할 수 없다는 뜻입니다.";
+    }
+    return "회색 아이콘은 평가 대기 상태라는 뜻입니다.";
   }
 
   function buildDefaultFocusSignalTooltip(status, userMessageCount) {

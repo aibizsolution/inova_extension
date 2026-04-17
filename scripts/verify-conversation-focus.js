@@ -102,7 +102,7 @@ function verifyConversationFocusHostedRendering() {
   });
   assert(markup.includes("inova-focus-signal"), "bookmark view should render the focus signal as a compact icon when visible");
   assert(markup.includes("inova-focus-signal is-split"), "bookmark view should render a stateful focus visualization");
-  assert(markup.includes("aria-label=\"최근 질문이 이전 흐름과 분리된 새 주제일 가능성이 높아요.\""), "focus signal explanation should live in an accessible tooltip");
+  assert(markup.includes("aria-label=\"붉은 톤 분기 아이콘은 새 대화 세션을 고려하라는 뜻입니다. 최근 질문이 이전 흐름과 분리된 새 주제일 가능성이 높아요.\""), "focus signal explanation should live in an accessible tooltip");
   assert(!markup.includes("새 대화로 이동"), "focus signal should not add a disruptive action label to the conversation tab");
 
   const waitingMarkup = context.InovaBookmarks.bookmarkView.renderTool({
@@ -131,6 +131,7 @@ function verifyConversationFocusHostedRendering() {
     },
   });
   assert(waitingMarkup.includes("inova-focus-signal is-waiting"), "bookmark view should keep the focus visualization visible before five user questions");
+  assert(waitingMarkup.includes("회색 아이콘은 평가 대기 상태라는 뜻입니다."), "waiting focus tooltip should explain the icon color");
 
   const focusOnlyMarkup = context.InovaBookmarks.bookmarkView.renderTool({
     canCopyBookmark: true,
