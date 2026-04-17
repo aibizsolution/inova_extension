@@ -131,6 +131,22 @@ function verifyConversationFocusHostedRendering() {
     },
   });
   assert(waitingMarkup.includes("inova-focus-signal is-waiting"), "bookmark view should keep the focus visualization visible before five user questions");
+
+  const focusOnlyMarkup = context.InovaBookmarks.bookmarkView.renderTool({
+    canCopyBookmark: true,
+    canJumpBookmark: true,
+    emptyText: "",
+    focusSignal: {
+      status: "waiting",
+      tooltip: "사용자 질문 2/5개. 5개 이상이면 대화 흐름을 자동 평가해요.",
+      userMessageCount: 2,
+      visible: true,
+    },
+    items: [],
+    query: "",
+    tokenEstimate: {},
+  });
+  assert(focusOnlyMarkup.includes("inova-focus-signal is-waiting"), "bookmark view should keep focus visualization visible even before context estimates are ready");
 }
 
 async function verifyConversationFocusHostedController() {

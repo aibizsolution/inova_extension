@@ -66,7 +66,8 @@
 
   function renderTokenSummary(tokenEstimate = {}, contextProfileConfig = {}, focusSignal = {}) {
     const total = readTokenCount(tokenEstimate.total);
-    if (!total) {
+    const hasFocusSignal = focusSignal?.visible === true;
+    if (!total && !hasFocusSignal) {
       return "";
     }
     const question = readTokenCount(tokenEstimate.question);
