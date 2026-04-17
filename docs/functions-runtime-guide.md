@@ -83,7 +83,6 @@ feature `AGENTS.md`에는 per-session runtime 변경 기록을 누적하지 않�
 - `previewInovaMeetingResultSectionEdit`
 - `applyInovaMeetingResultSectionEdit`
 - `reviewInovaPrompt`
-- `evaluateConversationFocus`
 - `issueInovaPromptPanelAuth`
 - `loadInovaPromptLibrary`
 - `peekInovaPromptLibrary`

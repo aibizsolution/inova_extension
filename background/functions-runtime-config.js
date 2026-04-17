@@ -41,7 +41,6 @@
     },
     capabilities: {
       ...buildFunctionCapabilityCatalog([
-      ["conversation.focus.evaluate", "evaluateConversationFocusUrl", "prompt", "conversation", "conversation", "read", 60000],
       ["meeting.list", "listInovaMeetingsUrl", "meeting", "meeting", "meeting", "read"],
       ["meeting.panel-auth.issue-function", "issueInovaMeetingPanelAuthUrl", "meeting", "meeting", "meeting", "auth"],
       ["meeting.share.create-function", "createInovaMeetingShareLinkUrl", "meeting", "meeting", "meeting", "write"],
@@ -83,7 +82,6 @@
       "createInovaMeetingShareLinkUrl",
       "deleteInovaMeetingResultUrl",
       "deleteInovaMeetingUrl",
-      "evaluateConversationFocusUrl",
       "exchangeInovaMeetingLaunchUrl",
       "importPromptStoreEntryUrl",
       "issueInovaMeetingLaunchUrl",

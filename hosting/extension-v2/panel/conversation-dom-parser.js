@@ -21,7 +21,6 @@
       sessionTitle,
       source: "hosted-dom-parser",
       tokenEstimate: summarizeTokenEstimate(messages, normalizedSnapshot.modelCandidates),
-      userMessages: buildUserMessages(messages),
       visibleMessageId: normalizeText(normalizedSnapshot.visibleMessageId),
     };
   }
@@ -108,23 +107,6 @@
       }
     });
     return items;
-  }
-
-  function buildUserMessages(messages) {
-    return (Array.isArray(messages) ? messages : [])
-      .filter((message) => message?.role === "user")
-      .map((message, index) => {
-        const text = normalizeText(message.text);
-        return {
-          charLen: text.length,
-          id: normalizeText(message.id),
-          messageOrder: Math.max(1, Number(message.order) || index + 1),
-          text,
-          tokenEstimate: Math.max(0, Number(message.tokenEstimate) || 0),
-          turnIndex: index + 1,
-        };
-      })
-      .filter((message) => message.text);
   }
 
   function buildConversationState(rawConversation, messages, articles) {

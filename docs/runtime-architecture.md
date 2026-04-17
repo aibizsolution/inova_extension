@@ -104,9 +104,9 @@ Remote manifest fetch나 validation이 실패하면 service worker는 warning/de
 ### A. 질문 탐색
 
 1. content script가 대화 DOM에서 최소 article snapshot과 선택 모델 후보를 읽는다.
-2. hosted parser가 사용자 질문, Q/A 예상 컨텍스트, 새 대화 분리 평가용 `userMessages[]`를 만든다.
+2. hosted parser가 사용자 질문과 Q/A 예상 컨텍스트를 만든다.
 3. 세션 키는 URL의 `sid`로 정규화한다.
-4. 패널에서 검색/이동은 현재 페이지 DOM을 기준으로 처리하고, 새 대화 분리 신호는 `conversation.focus.evaluate` Functions capability가 사용자 입력만 받아 보수적으로 평가한다.
+4. 패널에서 검색/이동은 현재 페이지 DOM을 기준으로 처리하고, 별도 LLM 평가 없이 컨텍스트 길이 신호만 표시한다.
 
 ### B. 브라우저 로컬 상태
 

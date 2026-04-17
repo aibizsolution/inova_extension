@@ -25,7 +25,7 @@
             data-search-tool="bookmarks"
             placeholder="이 대화에서 질문 찾기"
           />
-          ${renderTokenSummary(state.tokenEstimate, state.contextProfileConfig, state.focusSignal)}
+          ${renderTokenSummary(state.tokenEstimate, state.contextProfileConfig)}
           ${state.metaText ? `<div class="inova-tool-meta">${escapeHtml(state.metaText)}</div>` : ""}
         </div>
         ${capabilityNotice}
@@ -64,10 +64,9 @@
     `;
   }
 
-  function renderTokenSummary(tokenEstimate = {}, contextProfileConfig = {}, focusSignal = {}) {
+  function renderTokenSummary(tokenEstimate = {}, contextProfileConfig = {}) {
     const total = readTokenCount(tokenEstimate.total);
-    const hasFocusSignal = focusSignal?.visible === true;
-    if (!total && !hasFocusSignal) {
+    if (!total) {
       return "";
     }
     const question = readTokenCount(tokenEstimate.question);
@@ -90,7 +89,6 @@
             <span class="inova-context-help" tabindex="0" aria-label="${escapeHtml(helpText)}" title="${escapeHtml(helpText)}">?</span>
           </span>
           <span class="inova-token-meter__value">
-            ${renderFocusSignal(focusSignal)}
             <strong>${escapeHtml(formatTokenCount(total))}</strong>
           </span>
         </div>
@@ -104,75 +102,6 @@
         </div>
       </div>
     `;
-  }
-
-  function renderFocusSignal(focusSignal = {}) {
-    const signal = focusSignal && typeof focusSignal === "object" ? focusSignal : {};
-    if (signal.visible !== true) {
-      return "";
-    }
-    const status = normalizeFocusSignalStatus(signal.status);
-    const baseTooltip = namespace.session.normalizeText(signal.tooltip)
-      || buildDefaultFocusSignalTooltip(status, signal.userMessageCount);
-    const tooltip = buildFocusSignalTooltip(status, baseTooltip);
-    return `
-      <span
-        class="inova-focus-signal is-${escapeHtml(status)}"
-        tabindex="0"
-        role="img"
-        aria-label="${escapeHtml(tooltip)}"
-        title="${escapeHtml(tooltip)}"
-      >
-        <span class="inova-focus-signal__icon" aria-hidden="true"></span>
-      </span>
-    `;
-  }
-
-  function normalizeFocusSignalStatus(status) {
-    const normalized = namespace.session.normalizeText(status).toLowerCase();
-    return ["pending", "split", "steady", "unavailable", "waiting"].includes(normalized)
-      ? normalized
-      : "waiting";
-  }
-
-  function buildFocusSignalTooltip(status, baseTooltip) {
-    return [
-      buildFocusSignalLegend(status),
-      namespace.session.normalizeText(baseTooltip),
-    ].filter(Boolean).join(" ");
-  }
-
-  function buildFocusSignalLegend(status) {
-    if (status === "pending") {
-      return "노란 톤 아이콘은 대화 흐름을 평가 중이라는 뜻입니다.";
-    }
-    if (status === "steady") {
-      return "청록 톤 체크 아이콘은 최근 질문이 기존 흐름 안에서 이어진다는 뜻입니다.";
-    }
-    if (status === "split") {
-      return "붉은 톤 분기 아이콘은 새 대화 세션을 고려하라는 뜻입니다.";
-    }
-    if (status === "unavailable") {
-      return "회색 X 아이콘은 대화 흐름 평가를 지금 사용할 수 없다는 뜻입니다.";
-    }
-    return "회색 아이콘은 평가 대기 상태라는 뜻입니다.";
-  }
-
-  function buildDefaultFocusSignalTooltip(status, userMessageCount) {
-    const count = Math.max(0, Number(userMessageCount) || 0);
-    if (status === "pending") {
-      return "대화 흐름을 평가 중이에요.";
-    }
-    if (status === "steady") {
-      return "최근 질문은 기존 대화 흐름 안에서 이어지는 것으로 보입니다.";
-    }
-    if (status === "split") {
-      return "최근 질문이 이전 흐름과 분리된 새 주제일 가능성이 높아요.";
-    }
-    if (status === "unavailable") {
-      return "대화 흐름 평가를 지금 사용할 수 없어요.";
-    }
-    return `사용자 질문 ${count}/5개. 5개 이상이면 대화 흐름을 자동 평가해요.`;
   }
 
   function normalizeContextProfileConfig(config = {}) {

@@ -1,7 +1,6 @@
 const { registerMeetingLaunchHandlers } = require("./features/meeting/meeting-launch-service");
 const { registerMeetingWorkspaceAuthHandlers } = require("./features/meeting/meeting-workspace-auth-service");
 const { registerMeetingHandlers } = require("./features/meeting/meeting-service");
-const { registerConversationHandlers } = require("./features/conversation/conversation-focus-service");
 const { registerPromptLibraryHandlers } = require("./features/prompt-library/register");
 const { registerPromptReviewHandlers } = require("./features/prompt-review/prompt-review-service");
 const { registerStoreHandlers } = require("./features/prompt-store/store-service");
@@ -52,11 +51,6 @@ const storeHandlers = registerStoreHandlers({
 });
 
 const promptReviewHandlers = registerPromptReviewHandlers({
-  ...sharedHttpDeps,
-  admin,
-});
-
-const conversationHandlers = registerConversationHandlers({
   ...sharedHttpDeps,
   admin,
 });
@@ -121,7 +115,6 @@ exports.togglePromptStoreLike = storeHandlers.togglePromptStoreLike;
 exports.recordPromptStoreView = storeHandlers.recordPromptStoreView;
 
 exports.reviewInovaPrompt = promptReviewHandlers.reviewInovaPrompt;
-exports.evaluateConversationFocus = conversationHandlers.evaluateConversationFocus;
 
 exports.issueInovaPromptPanelAuth = promptLibraryHandlers.issueInovaPromptPanelAuth;
 exports.issueInovaPromptPanelAuthV2 = promptLibraryV2Handlers.issueInovaPromptPanelAuth;

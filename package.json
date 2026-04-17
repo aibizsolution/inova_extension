@@ -36,7 +36,6 @@
     "verify:browser-boundary": "node scripts/verify-browser-only-boundary.js",
     "verify:branch-guard": "node scripts/verify-branch-workflow.js --pre-commit",
     "verify:contracts": "node scripts/verify-contracts.js",
-    "verify:conversation-focus": "node scripts/verify-conversation-focus.js",
     "verify:docs": "node scripts/verify-docs.js",
     "verify:functions-runtime": "node scripts/verify-functions-runtime.js",
     "verify:extension-capability-client": "node scripts/verify-extension-capability-client.js",

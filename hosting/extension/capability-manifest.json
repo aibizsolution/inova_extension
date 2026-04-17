@@ -28,21 +28,6 @@
     }
   },
   "capabilities": {
-    "conversation.focus.evaluate": {
-      "auditLevel": "read",
-      "authMode": "access-token",
-      "domain": "conversation",
-      "enabled": true,
-      "endpointKey": "evaluateConversationFocusUrl",
-      "inputSchemaVersion": 1,
-      "kind": "function",
-      "minExtensionVersion": "1.0.0",
-      "outputSchemaVersion": 1,
-      "owner": "conversation",
-      "requestTimeoutMs": 60000,
-      "schemaVersion": 1,
-      "service": "prompt"
-    },
     "meeting.list": {
       "auditLevel": "read",
       "authMode": "access-token",
@@ -537,10 +522,6 @@
     },
     "deleteInovaMeetingResultUrl": {
       "endpoint": "deleteInovaMeetingResult",
-      "method": "POST"
-    },
-    "evaluateConversationFocusUrl": {
-      "endpoint": "evaluateConversationFocus",
       "method": "POST"
     },
     "exchangeInovaMeetingLaunchUrl": {

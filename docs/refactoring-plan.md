@@ -11,7 +11,7 @@ ordinary feature 구현 변경, 탭별 hosted ownership 진행도, smoke 이슈 
 - 기본 전략은 `major`다.
 - 다음 공개 릴리스 목표는 `1.0.0`이다.
 - 현재 구조 작업은 계속 진행 중이지만, 그 진행 현황 자체는 이 문서가 아니라 handoff/architecture 문서에서 추적한다.
-- `conversation.focus.evaluate`와 hosted localStorage 평가 캐시는 conversation 탭의 additive capability/UI 정책이며, version lane이나 meeting legacy baseline을 바꾸지 않는다.
+- conversation 탭은 현재 질문/응답 수집과 예상 컨텍스트 길이 신호만 제공하며, 사용자 입력 기반 새 대화 분리 평가는 유지하지 않는다.
 - green 선언 권한은 유지보수자에게 있고, 구현자는 판단 근거와 candidate 상태까지만 갱신한다.
 
 ## 이 문서에 남길 것

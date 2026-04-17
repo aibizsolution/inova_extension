@@ -188,7 +188,7 @@ panel boot 시 hosted와 background는 capability catalog를 negotiation한다.
 - killed/disabled capability는 handshake의 `enabledCapabilityIds`에서 제외된다.
 - prompt review, prompt library, prompt store는 negotiated capabilityId 기준으로 write/action UI 노출과 실행을 1차 차단한다.
 - meeting hub는 `meeting.share.create-function`, `meeting.share.revoke-function` handshake capability가 enabled일 때만 공유 생성/해제 UI와 실행을 열고, 실행도 `invokeCapability()`를 통해 manifest function endpoint resolution을 따른다.
-- conversation controller는 `page.conversation.read-dom-snapshot` 또는 fallback `page.conversation.read-state`, `page.conversation.jump-item`, `page.clipboard.write-text`, `conversation.focus.evaluate` handshake capability가 enabled일 때만 읽기/이동/복사/흐름 평가 UI와 실행을 연다.
+- conversation controller는 `page.conversation.read-dom-snapshot` 또는 fallback `page.conversation.read-state`, `page.conversation.jump-item`, `page.clipboard.write-text` handshake capability가 enabled일 때만 읽기/이동/복사 UI와 실행을 연다.
 - controller-level action gating 1차는 완료됐다.
 - hosted panel shell의 `panel.ui-preferences.write`도 handshake 이후에는 enabled capability일 때만 실행한다. disabled 상태에서는 runtime dispatch 전에 explicit error/trace/toast로 멈춘다.
 
@@ -379,7 +379,7 @@ verify 기준:
 - `invokePageCapability`는 `PAGE_CAPABILITY_IDS` allowlist에 없는 page capability를 content로 전달하지 않는다.
 - hosted capability handshake 결과는 `pageCapabilityIds`를 포함해 remote workflow 준비 단계에서 page primitive catalog를 함께 볼 수 있게 한다.
 - hosted conversation controller는 `page.conversation.read-dom-snapshot`을 우선 사용해 content가 읽은 최소 DOM fact를 hosted `conversation-dom-parser.js`에서 해석한다. `page.conversation.read-state`는 기존 bundle과 parser 실패 시 fallback으로 남긴다.
-- hosted conversation controller는 `page.conversation.read-dom-snapshot` 또는 `page.conversation.read-state`, `page.conversation.jump-item`, `page.clipboard.write-text`, `conversation.focus.evaluate`가 handshake에서 enabled일 때만 읽기/이동/복사/흐름 평가 UI와 실행 경로를 연다.
+- hosted conversation controller는 `page.conversation.read-dom-snapshot` 또는 `page.conversation.read-state`, `page.conversation.jump-item`, `page.clipboard.write-text`가 handshake에서 enabled일 때만 읽기/이동/복사 UI와 실행 경로를 연다.
 - 기존 primitive 실행 결과는 유지한다.
 - arbitrary selector/DOM script primitive는 추가하지 않았다.
 - reviewer cleanup에서 `page.scroll-to(targetKey)`, `page.highlight-range(selectionKey)`, `page.show-banner(templateKey, params)`, `page.read-selection()`, `page.dispatch-named-event(eventKey)`를 추가했다.

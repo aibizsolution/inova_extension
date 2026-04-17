@@ -95,7 +95,6 @@
   }) || null;
   const conversationController = namespace.conversationController?.create?.({
     browserCapabilities,
-    getProviderIdentity: () => promptLibraryController?.getProviderIdentity?.() || { available: false },
     scheduleRender,
     traceConversation: traceConversationFlow,
   }) || null;
