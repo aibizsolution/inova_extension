@@ -241,10 +241,15 @@
 
   function getEventElementTarget(event) {
     const target = event?.target;
-    if (target instanceof HTMLElement) {
+    if (target instanceof global.HTMLElement) {
       return target;
     }
-    if (target?.parentElement instanceof HTMLElement) {
+    const path = typeof event?.composedPath === "function" ? event.composedPath() : [];
+    const pathElement = path.find((entry) => entry instanceof global.HTMLElement);
+    if (pathElement) {
+      return pathElement;
+    }
+    if (target?.parentElement instanceof global.HTMLElement) {
       return target.parentElement;
     }
     return null;

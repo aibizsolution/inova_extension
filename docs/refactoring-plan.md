@@ -3,7 +3,7 @@
 이 문서는 구조 진행 일지나 세션 handoff가 아니라, `버전 결정`, `version lane`, `meeting legacy baseline`, `release decision boundary`만 빠르게 확인하기 위한 기준 문서다.  
 ordinary feature 구현 변경, 탭별 hosted ownership 진행도, smoke 이슈 목록, git chronology는 이 문서의 대상이 아니다. 그런 내용은 `docs/current-handoff.md`, `docs/runtime-architecture.md`, feature `AGENTS.md`에서 관리한다.
 
-마지막 상태 갱신: 2026-04-16
+마지막 상태 갱신: 2026-04-17
 현재 공개 사용자 기준선: `0.4.4`
 
 ## 현재 결정 요약
@@ -11,6 +11,7 @@ ordinary feature 구현 변경, 탭별 hosted ownership 진행도, smoke 이슈 
 - 기본 전략은 `major`다.
 - 다음 공개 릴리스 목표는 `1.0.0`이다.
 - 현재 구조 작업은 계속 진행 중이지만, 그 진행 현황 자체는 이 문서가 아니라 handoff/architecture 문서에서 추적한다.
+- conversation 탭은 현재 질문/응답 수집과 예상 컨텍스트 길이 신호만 제공하며, 사용자 입력 기반 새 대화 분리 평가는 유지하지 않는다.
 - green 선언 권한은 유지보수자에게 있고, 구현자는 판단 근거와 candidate 상태까지만 갱신한다.
 
 ## 이 문서에 남길 것
@@ -121,6 +122,7 @@ ordinary feature 구현 변경, 탭별 hosted ownership 진행도, smoke 이슈 
 - 현재 `1.x+` extension bundle은 release legacy runtime/helper도 활성 manifest에 싣지 않는다. `backup/legacy-panel/release-manager.js`, `backup/legacy-panel/shared/release-info.js`는 `0.4.4` 영향 판단용 reference로만 남고, active v2 bundle은 release count/view state를 hosted release controller 안에만 유지한다.
 - 현재 `1.x+` extension bundle은 legacy content bookmark view/style도 활성 manifest에 싣지 않는다. `backup/legacy-panel/bookmark-view.js`, `backup/legacy-panel/tools.css`는 reference/source로만 남고, active conversation UI는 hosted `hosting/extension-v2/panel/bookmark-view.js`가 맡는다.
 - 현재 `1.x+` extension bundle은 legacy bookmark runtime도 활성 manifest에 싣지 않는다. `backup/legacy-panel/panel-bookmark-controller.js`는 `0.4.4` 영향 판단용 reference로만 남고, active conversation glue는 `content/panel-v2-composition-controller.js` 안의 inline bridge가 맡는다.
+- 현재 `1.x+` active conversation DOM 수집은 `[aria-label="채팅 메시지 목록"]` 아래 `article` 순회, 현재 선택 모델 버튼 텍스트, assistant provider `aria-label` 판별을 기준으로 삼는다. 우선 경로는 `page.conversation.read-dom-snapshot`이 최소 DOM fact만 extension에서 읽고 hosted `conversation-dom-parser.js`가 Q/A와 예상 컨텍스트를 해석하는 구조다. 기존 `page.conversation.read-state` snapshot은 compatibility fallback으로 남긴다. 컨텍스트 길이 신호의 모델별 기준은 hosted `conversation-context-profiles.json`에서 관리한다.
 - 현재 `1.x+` extension bundle은 standalone runtime/debug helper도 활성 manifest에 싣지 않는다. `backup/legacy-panel/panel-runtime-controller.js`, `backup/legacy-panel/panel-debug-controller.js`는 inactive reference로만 남고, active runtime/debug glue는 `content/panel-v2-composition-controller.js` 안으로 합친다.
 - 현재 `1.x+` extension bundle은 standalone state/provider-identity helper도 활성 manifest에 싣지 않는다. active state initialization과 panel-local provider identity sync는 `content/panel-v2-composition-controller.js` 안에서 직접 처리한다.
 - 현재 `1.x+` extension bundle은 browser-only provider identity sensor를 `shared/*`에 싣지 않는다. active lane은 `content/provider-identity-sensor.js`가 page localStorage 읽기만 맡고, legacy reference만 `backup/legacy-panel/shared/provider-identity.js`에 남긴다.
@@ -146,6 +148,7 @@ ordinary feature 구현 변경, 탭별 hosted ownership 진행도, smoke 이슈 
 - `content/panel.js`는 hosted panel iframe target을 feature별 helper에서 직접 고르지 않는다. lane/local target 판단은 `shared/firebase-config.js`의 `firebaseConfig.panel.resolveRuntime()`가 맡고, shell host는 그 generic panel runtime만 소비한다.
 - `1.x+`에서 `release:build`는 `hosting/extension-v2/releases/*`와 `hosting/extension-v2/downloads/*`를 실제 served artifact 기준으로 채워야 한다. hosted v2 release panel은 이 lane-local 경로를 직접 읽으므로, curated history에 남긴 이전 공개 버전 ZIP도 현재 lane download 디렉터리에서 404 없이 열리도록 함께 복사한다. 같은 build는 current version ZIP의 `artifact` 메타도 `releases/release-notes.json` 현재 버전 엔트리에 즉시 backfill해야 한다.
 - 기본 `npm.cmd run verify`와 `node scripts/verify-release-package.js`는 현재 lane의 `hosting/*/releases/latest.json`, `history.json`, `downloads/latest.zip`, version ZIP들, 그리고 curated `releases/release-notes.json`이 서로 같은 공개 baseline을 가리키는지 함께 검증해야 한다. history/latest에 노출된 공개 버전은 현재 버전까지 포함해 curated notes에도 반드시 artifact 메타가 있어야 한다.
+- release/deploy 보고는 lane-local 자산과 runtime target 혼동을 막기 위해 사용자가 확인해야 할 대상이 `로컬 호스팅/에뮬레이터`, `상용 Hosting`, `새 ZIP/확장 새로고침` 중 무엇인지 명시해야 한다. 로컬 rehearsal 결과를 상용 반영처럼 말하지 않고, 상용 배포 후에도 로컬 target을 볼 수 있는 경우 확인 URL 또는 패널 target을 함께 적는다.
 - `1.x+` v2 lane은 hosted-first를 기본값으로 쓴다. 탭 UI/state/action flow의 기본 위치는 hosted이고, extension은 page DOM adapter + iframe host + runtime broker 같은 browser-only capability를 유지한다.
 - `DB/Functions 계약을 바꾸지 않는 순수 panel v2 migration`은 현재 `1.x+` bundle이 정상 동작하는지만 먼저 확인한다. 이런 작업에서 legacy extension panel 코드는 활성 bundle 안에 계속 보존할 대상으로 보지 않는다.
 - 현재 `1.x+` 활성 bundle과 공유 계약이 더 이상 쓰지 않는 legacy extension panel 코드는 `content/*` 안에 섞어 두지 않는다. 기본 정리 방향은 `backup/legacy-panel/*`로 격리해 참고본으로만 남기거나, 더 이상 필요 없으면 삭제하는 것이다.

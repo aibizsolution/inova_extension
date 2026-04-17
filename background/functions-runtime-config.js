@@ -8,6 +8,7 @@
     "composer.apply-text",
     "composer.read-state",
     "conversation.jump-item",
+    "conversation.read-dom-snapshot",
     "conversation.read-state",
     "debug.clear-log",
     "debug.copy-log",
@@ -60,6 +61,7 @@
       ["page.composer.apply-text", "composer.apply-text", "composer", "composer", "write"],
       ["page.composer.read-state", "composer.read-state", "composer", "composer", "read"],
       ["page.conversation.jump-item", "conversation.jump-item", "conversation", "conversation", "write"],
+      ["page.conversation.read-dom-snapshot", "conversation.read-dom-snapshot", "conversation", "conversation", "read"],
       ["page.conversation.read-state", "conversation.read-state", "conversation", "conversation", "read"],
       ["page.debug.clear-log", "debug.clear-log", "debug", "debug", "write"],
       ["page.debug.copy-log", "debug.copy-log", "debug", "debug", "read"],
@@ -576,7 +578,7 @@
 
   function buildFunctionCapabilityCatalog(capabilityDefinitions) {
     return (capabilityDefinitions || []).reduce((catalog, entry) => {
-      const [capabilityId, endpointKey, service, owner, domain, auditLevel] = entry;
+      const [capabilityId, endpointKey, service, owner, domain, auditLevel, requestTimeoutMs] = entry;
       catalog[capabilityId] = {
         auditLevel: auditLevel || "read",
         authMode: "access-token",
@@ -591,6 +593,9 @@
         schemaVersion: 1,
         service,
       };
+      if (requestTimeoutMs) {
+        catalog[capabilityId].requestTimeoutMs = requestTimeoutMs;
+      }
       return catalog;
     }, {});
   }

@@ -57,6 +57,15 @@ async function main() {
       },
     },
     contentDom: {
+      collectConversationDomSnapshot() {
+        return {
+          articles: [{ id: "article-1", text: "first question" }],
+          basis: "conversation-dom-snapshot-v1",
+          modelCandidates: [{ label: "OpenAI: GPT-5.4" }],
+          sessionId: "session-1",
+          sessionTitle: "현재 세션",
+        };
+      },
       collectUserMessages() {
         return [{ id: "visible-message" }];
       },
@@ -129,6 +138,10 @@ async function main() {
     async () => router.handle({ action: "page.dispatch-named-event", eventKey: "raw-event" }),
     /허용되지 않은 page eventKey/
   );
+
+  const domSnapshot = await router.handle({ action: "conversation.read-dom-snapshot" });
+  assert.equal(domSnapshot.result.basis, "conversation-dom-snapshot-v1");
+  assert.equal(domSnapshot.result.articles.length, 1);
 
   console.log("[verify-page-capability-router] Page capability router contract passed");
 }

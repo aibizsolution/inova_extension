@@ -16,6 +16,7 @@
 - 같은 시점에 여러 ZIP 버전이 공존할 수 있으므로 mixed-version 기간을 전제로 backend/hosting 호환성을 잡는다.
 - 기본 지원 범위는 `현재 minor + 이전 minor`다.
 - 배포 보고에는 항상 `새 ZIP 배포 여부`, `hosting 반영 여부`, `functions 반영 여부`, `reload 필요 여부`를 함께 적는다.
+- 보고할 때는 사용자가 확인해야 할 대상이 `로컬 호스팅/에뮬레이터`인지 `상용 Hosting`인지 `새 ZIP을 설치한 확장`인지 먼저 밝힌다. 로컬 확인만 끝난 상태를 상용 반영처럼 말하지 않고, 상용 배포 후에도 사용자가 로컬 target을 보고 있을 수 있으면 확인해야 할 URL 또는 패널 target을 함께 적는다.
 
 ## 릴리스 메타 규칙
 
@@ -72,6 +73,7 @@
 - `functions 반영 여부`
 - `hosting 반영 여부`
 - `새 ZIP 배포 여부`
+- `사용자가 확인해야 할 대상: 로컬 호스팅/에뮬레이터, 상용 Hosting, 새 ZIP/확장 새로고침 중 무엇인지`
 - `사용자/개발자 reload 필요 여부`
 - `0.4.4 retirement extension-patch risk`
 - `rollback 시 사용할 이전 ZIP`

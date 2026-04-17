@@ -139,6 +139,162 @@
 }
 .inova-tool-meta { font-size: 12px; font-weight: 600; color: #0f5f77; }
 .inova-tool-meta--muted { color: rgba(16, 33, 43, 0.62); }
+.inova-token-meter {
+  display: grid;
+  gap: 8px;
+  padding: 11px 12px;
+  border: 1px solid rgba(98, 127, 145, 0.16);
+  border-radius: 12px;
+  background: rgba(248, 251, 255, 0.86);
+  color: rgba(16, 33, 43, 0.74);
+}
+.inova-token-meter.is-growing {
+  border-color: rgba(35, 123, 149, 0.2);
+  background: rgba(240, 249, 252, 0.9);
+}
+.inova-token-meter.is-long {
+  border-color: rgba(173, 125, 51, 0.2);
+  background: rgba(255, 249, 239, 0.9);
+}
+.inova-token-meter.is-heavy {
+  border-color: rgba(173, 70, 87, 0.22);
+  background: rgba(252, 242, 245, 0.9);
+}
+.inova-token-meter__main,
+.inova-token-meter__detail {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+.inova-token-meter__main strong {
+  color: #0f5f77;
+  font-size: 20px;
+  line-height: 1;
+  white-space: nowrap;
+}
+.inova-token-meter__value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  min-width: 0;
+  flex: 0 0 auto;
+}
+.inova-token-meter.is-growing .inova-token-meter__main strong { color: #126b84; }
+.inova-token-meter.is-long .inova-token-meter__main strong { color: #865d1e; }
+.inova-token-meter.is-heavy .inova-token-meter__main strong { color: #8a3344; }
+.inova-token-meter__label {
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(16, 33, 43, 0.7);
+}
+.inova-token-meter__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.inova-context-help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid rgba(98, 127, 145, 0.24);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: rgba(15, 95, 119, 0.88);
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: help;
+  flex: 0 0 auto;
+}
+.inova-context-help:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 3px rgba(15, 124, 137, 0.12);
+}
+.inova-token-meter__gauge {
+  position: relative;
+  width: 100%;
+  height: 12px;
+  padding: 3px 0;
+}
+.inova-token-meter__gauge-track {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 6px;
+  overflow: visible;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(15, 124, 137, 0.13), rgba(173, 125, 51, 0.13) 58%, rgba(173, 70, 87, 0.14));
+}
+.inova-token-meter__gauge-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(var(--context-fill, 0) * 100%);
+  min-width: 6px;
+  max-width: 100%;
+  border-radius: inherit;
+  background: #0f7c89;
+  transition: width 160ms ease;
+}
+.inova-token-meter.is-growing .inova-token-meter__gauge-fill {
+  background: #237b95;
+}
+.inova-token-meter.is-long .inova-token-meter__gauge-fill {
+  background: #ad7d33;
+}
+.inova-token-meter.is-heavy .inova-token-meter__gauge-fill {
+  background: #ad4657;
+}
+.inova-token-meter__gauge-marker {
+  position: absolute;
+  top: -3px;
+  left: calc(var(--context-marker, 0) * 100%);
+  width: 1px;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(16, 33, 43, 0.24);
+}
+.inova-token-meter__gauge-marker.is-growing { background: rgba(35, 123, 149, 0.36); }
+.inova-token-meter__gauge-marker.is-long { background: rgba(173, 125, 51, 0.38); }
+.inova-token-meter__gauge-marker.is-heavy { background: rgba(173, 70, 87, 0.4); }
+.inova-token-meter__detail {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: rgba(16, 33, 43, 0.58);
+}
+.inova-token-meter__detail span {
+  display: inline-flex;
+  min-width: 0;
+  white-space: nowrap;
+}
+.inova-token-meter__status {
+  align-items: center;
+  min-height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(15, 124, 137, 0.09);
+  color: #0f5f77;
+}
+.inova-token-meter.is-growing .inova-token-meter__status {
+  background: rgba(35, 123, 149, 0.11);
+  color: #126b84;
+}
+.inova-token-meter.is-long .inova-token-meter__status {
+  background: rgba(173, 125, 51, 0.12);
+  color: #865d1e;
+}
+.inova-token-meter.is-heavy .inova-token-meter__status {
+  background: rgba(173, 70, 87, 0.12);
+  color: #8a3344;
+}
 .inova-tool-actions, .inova-import-review__summary, .inova-import-review__modes { display: flex; flex-wrap: wrap; gap: 6px; }
 .inova-tool-actions--toolbar { justify-content: flex-end; }
 .inova-tool-action-with-help { display: inline-flex; }
@@ -1365,6 +1521,21 @@ body {
   cursor: pointer;
 }
 
+.bookmark-side {
+  display: flex;
+  flex: 0 0 48px;
+  min-width: 48px;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.bookmark-side .bookmark-copy {
+  margin-left: 0;
+}
+
 .bookmark-copy:hover {
   border-color: rgba(15, 124, 137, 0.2);
   background: rgba(240, 251, 252, 0.92);
@@ -1402,9 +1573,30 @@ body {
   font-size: 14px;
   font-weight: 400;
   line-height: 1.56;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   overflow-wrap: anywhere;
   word-break: keep-all;
+}
+
+.bookmark-context-meta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 38px;
+  max-width: 48px;
+  min-height: 21px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(15, 124, 137, 0.08);
+  color: rgba(15, 95, 119, 0.86);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  flex: 0 0 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .bookmark-highlight {

@@ -5,6 +5,7 @@
   const REQUIRED_EXTENSION_CAPABILITIES = Object.freeze([
     "page.adapter.v2",
   ]);
+  const CONVERSATION_DOM_SNAPSHOT_CAPABILITY_ID = "page.conversation.read-dom-snapshot";
   const CONVERSATION_READ_CAPABILITY_ID = "page.conversation.read-state";
   const CONVERSATION_JUMP_CAPABILITY_ID = "page.conversation.jump-item";
   const CLIPBOARD_WRITE_CAPABILITY_ID = "page.clipboard.write-text";
@@ -13,6 +14,9 @@
     const browserCapabilities = resolveBrowserCapabilities(options);
     const readConversationState = typeof browserCapabilities.readConversationState === "function"
       ? browserCapabilities.readConversationState
+      : async () => ({});
+    const readConversationDomSnapshot = typeof browserCapabilities.readConversationDomSnapshot === "function"
+      ? browserCapabilities.readConversationDomSnapshot
       : async () => ({});
     const jumpConversationItem = typeof browserCapabilities.jumpConversationItem === "function"
       ? browserCapabilities.jumpConversationItem
@@ -49,6 +53,7 @@
       sessionId: "",
       sessionTitle: "",
       snapshotFingerprint: "",
+      tokenEstimate: createEmptyTokenEstimate(),
       visibleMessageId: "",
     };
 
@@ -85,7 +90,7 @@
       const shouldRefresh = activeConversationTool && (
         state.snapshotFingerprint !== nextFingerprint
         || !state.lastLoadedAt
-      ) && hasCapability(CONVERSATION_READ_CAPABILITY_ID);
+      ) && hasConversationReadCapability();
 
       state.snapshotFingerprint = nextFingerprint;
       if (shouldRefresh) {
@@ -105,7 +110,7 @@
       if (!hasRequiredCapabilities()) {
         return fallbackBookmarksTool;
       }
-      if (!hasCapability(CONVERSATION_READ_CAPABILITY_ID)) {
+      if (!hasConversationReadCapability()) {
         return {
           activeId: "",
           canCopyBookmark: false,
@@ -116,6 +121,7 @@
           items: [],
           metaText: "",
           query: state.query,
+          tokenEstimate: createEmptyTokenEstimate(),
         };
       }
       const items = getFilteredItems();
@@ -129,6 +135,7 @@
         items,
         metaText: state.query ? `검색 결과 ${items.length}개` : buildStatusText(),
         query: state.query,
+        tokenEstimate: buildEffectiveTokenEstimate(),
       };
     }
 
@@ -179,7 +186,7 @@
         return state.loadPromise;
       }
       state.pendingRefreshAfterLoad = false;
-      if (!hasCapability(CONVERSATION_READ_CAPABILITY_ID)) {
+      if (!hasConversationReadCapability()) {
         state.error = "대화 읽기 기능이 현재 비활성화되어 있어요.";
         state.items = [];
         scheduleRender();
@@ -191,7 +198,7 @@
         traceConversation("34.hosted.conversation.snapshot.start", {});
         scheduleRender();
         try {
-          const snapshot = await readConversationState();
+          const snapshot = await readConversationSnapshot();
           hydrateSnapshot(snapshot);
           state.error = "";
           state.lastLoadedAt = Date.now();
@@ -248,6 +255,7 @@
         : [];
       if (nextItems.length) {
         state.items = nextItems;
+        state.tokenEstimate = summarizeItemsTokenEstimate(state.items);
       }
       const nextQuery = String(fallbackBookmarksTool?.query ?? "");
       if (nextQuery || !state.query) {
@@ -277,6 +285,7 @@
       state.items = Array.isArray(normalizedSnapshot.items)
         ? normalizedSnapshot.items.map(cloneValue)
         : [];
+      state.tokenEstimate = normalizeTokenEstimate(normalizedSnapshot.tokenEstimate, state.items);
       state.sessionId = normalizeText(normalizedSnapshot.sessionId);
       state.sessionTitle = normalizeText(normalizedSnapshot.sessionTitle);
       state.visibleMessageId = normalizeText(normalizedSnapshot.visibleMessageId);
@@ -321,6 +330,68 @@
       );
     }
 
+    function buildEffectiveTokenEstimate() {
+      const estimate = normalizeTokenEstimate(state.tokenEstimate, state.items);
+      if (state.query) {
+        estimate.filtered = summarizeItemsTokenEstimate(getFilteredItems());
+      }
+      return estimate;
+    }
+
+    function normalizeTokenEstimate(rawEstimate, fallbackItems = []) {
+      const estimate = rawEstimate && typeof rawEstimate === "object" ? rawEstimate : {};
+      const fallback = summarizeItemsTokenEstimate(fallbackItems);
+      const question = readNonNegativeNumber(estimate.question, fallback.question);
+      const answer = readNonNegativeNumber(estimate.answer, fallback.answer);
+      const total = readNonNegativeNumber(estimate.total, question + answer);
+      return {
+        answer,
+        basis: normalizeText(estimate.basis) || fallback.basis,
+        messageCount: readNonNegativeNumber(estimate.messageCount, fallback.messageCount),
+        modelLabel: normalizeText(estimate.modelLabel || fallback.modelLabel),
+        modelLabelSource: normalizeText(estimate.modelLabelSource || fallback.modelLabelSource),
+        question,
+        total,
+        visibleMessageCount: readNonNegativeNumber(estimate.visibleMessageCount, fallback.visibleMessageCount),
+      };
+    }
+
+    function summarizeItemsTokenEstimate(items) {
+      const summary = createEmptyTokenEstimate();
+      (Array.isArray(items) ? items : []).forEach((item) => {
+        const itemEstimate = item?.tokenEstimate && typeof item.tokenEstimate === "object" ? item.tokenEstimate : {};
+        const question = readNonNegativeNumber(itemEstimate.question, 0);
+        const answer = readNonNegativeNumber(itemEstimate.answer, 0);
+        summary.question += question;
+        summary.answer += answer;
+        summary.total += readNonNegativeNumber(itemEstimate.total, question + answer);
+        summary.messageCount += answer > 0 ? 2 : 1;
+        summary.visibleMessageCount = summary.messageCount;
+      });
+      return summary;
+    }
+
+    function createEmptyTokenEstimate() {
+      return {
+        answer: 0,
+        basis: "dom-estimate-v1",
+        messageCount: 0,
+        modelLabel: "",
+        modelLabelSource: "",
+        question: 0,
+        total: 0,
+        visibleMessageCount: 0,
+      };
+    }
+
+    function readNonNegativeNumber(value, fallback) {
+      const number = Number(value);
+      if (!Number.isFinite(number) || number < 0) {
+        return Math.max(0, Number(fallback) || 0);
+      }
+      return Math.floor(number);
+    }
+
     function buildSnapshotFingerprint(bookmarksTool) {
       const explicitFingerprint = normalizeText(bookmarksTool?.snapshotFingerprint);
       if (explicitFingerprint) {
@@ -350,6 +421,33 @@
 
     function hasCapability(capabilityId) {
       return state.capabilities.includes(normalizeText(capabilityId));
+    }
+
+    function hasConversationReadCapability() {
+      return hasCapability(CONVERSATION_DOM_SNAPSHOT_CAPABILITY_ID) || hasCapability(CONVERSATION_READ_CAPABILITY_ID);
+    }
+
+    async function readConversationSnapshot() {
+      const parser = namespace.conversationDomParser;
+      if (hasCapability(CONVERSATION_DOM_SNAPSHOT_CAPABILITY_ID) && typeof parser?.parse === "function") {
+        try {
+          const domSnapshot = await readConversationDomSnapshot();
+          const snapshot = parser.parse(domSnapshot);
+          traceConversation("34.hosted.conversation.dom-snapshot.parsed", {
+            articleCount: Array.isArray(domSnapshot?.articles) ? domSnapshot.articles.length : 0,
+            count: Array.isArray(snapshot?.items) ? snapshot.items.length : 0,
+          });
+          return snapshot;
+        } catch (error) {
+          traceConversation("34.hosted.conversation.dom-snapshot.error", {
+            error: getErrorMessage(error, "DOM snapshot parsing failed"),
+          });
+          if (!hasCapability(CONVERSATION_READ_CAPABILITY_ID)) {
+            throw error;
+          }
+        }
+      }
+      return readConversationState();
     }
 
     function buildCapabilityError() {

@@ -1,6 +1,8 @@
 (function initContentDom(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const { selectors } = namespace.constants;
+  const DOM_SNAPSHOT_VERSION = "conversation-dom-snapshot-v1";
+  const TOKEN_ESTIMATE_VERSION = "dom-estimate-v1";
   let pendingScrollId = "";
   let pendingRetryTimer = 0;
 
@@ -10,61 +12,316 @@
   }
 
   function collectUserMessages(sessionId) {
-    const nodes = Array.from(document.querySelectorAll(selectors.userMessage));
-    return nodes
-      .map((element, index) => buildMessage(sessionId, index, element))
+    return buildBookmarkRecords(sessionId, collectConversationMessages());
+  }
+
+  function collectConversationSnapshot(sessionId) {
+    const messages = collectConversationMessages();
+    const items = buildBookmarkRecords(sessionId, messages);
+    return {
+      conversation: buildConversationState(messages),
+      items,
+      tokenEstimate: summarizeTokenEstimate(messages),
+      visibleMessageId: namespace.session.normalizeText(getVisibleMessageId(items)),
+    };
+  }
+
+  function collectConversationDomSnapshot(sessionId) {
+    const articles = [];
+    let userOrder = 0;
+    getMessageArticles().forEach((element, index) => {
+      const article = buildConversationArticleSnapshot(element, index, sessionId, userOrder + 1);
+      if (!article) {
+        return;
+      }
+      if (article.roleHint === "user") {
+        userOrder += 1;
+      }
+      articles.push(article);
+    });
+    return {
+      articles,
+      basis: DOM_SNAPSHOT_VERSION,
+      conversation: buildDomSnapshotConversationState(articles),
+      modelCandidates: collectModelLabelCandidates(),
+      sessionId,
+      sessionTitle: getSessionTitle(),
+      visibleMessageId: namespace.session.normalizeText(getVisibleMessageId(articles)),
+    };
+  }
+
+  function collectConversationMessages() {
+    return getMessageArticles()
+      .map((element, index) => buildConversationMessage(element, index))
       .filter(Boolean);
   }
 
-  function getUserMessageText(element) {
-    const textNodes = Array.from(element.querySelectorAll(selectors.userText))
+  function getMessageText(element, options = {}) {
+    const role = namespace.session.normalizeText(options.role);
+    const providerLabel = namespace.session.normalizeText(options.providerLabel);
+    const textSelector = role === "assistant" ? selectors.assistantText : selectors.userText;
+    const textNodes = Array.from(element.querySelectorAll(textSelector))
       .map((node) => namespace.session.normalizeText(node.textContent || ""))
       .filter(Boolean);
 
-    if (textNodes.length) {
-      return textNodes.join(" ");
-    }
+    const text = textNodes.length
+      ? textNodes.join(" ")
+      : namespace.session.normalizeText(element.innerText || element.textContent || "");
 
-    return namespace.session.normalizeText(element.innerText || "");
+    return stripLeadingProviderLabel(text, providerLabel);
   }
 
   function getUserMessageSignature() {
-    return Array.from(document.querySelectorAll(selectors.userMessage))
-      .map((element) => getUserMessageText(element))
+    return collectConversationMessages()
+      .filter((message) => message.role === "user")
+      .map((message) => message.text)
       .filter(Boolean)
       .slice(0, 6)
       .join("||");
   }
 
   function getConversationState() {
+    const messages = collectConversationMessages();
+    const counts = countMessages(messages);
     return {
-      hasChatLog: Boolean(document.querySelector(selectors.chatLog)),
+      hasChatLog: Boolean(getChatLogElement(false)),
       hasComposer: Boolean(document.querySelector(selectors.composer)),
-      articleCount: document.querySelectorAll(selectors.messageItem).length,
-      userCount: document.querySelectorAll(selectors.userMessage).length,
+      articleCount: messages.length,
+      assistantCount: counts.assistant,
+      messageCount: messages.length,
+      userCount: counts.user,
     };
   }
 
-  function buildMessage(sessionId, index, element) {
-    const text = getUserMessageText(element);
+  function buildConversationMessage(element, index) {
+    const providerLabel = readAssistantProviderLabel(element);
+    const role = detectMessageRole(element, providerLabel, index);
+    if (role !== "user" && role !== "assistant") {
+      return null;
+    }
+    const text = getMessageText(element, {
+      providerLabel,
+      role,
+    });
     if (!text) {
       return null;
     }
 
-    const bookmark = namespace.session.buildBookmarkRecord({
-      sessionId,
+    return {
+      element,
       order: index + 1,
+      providerLabel,
+      role,
       text,
-      title: getSessionTitle(),
+      tokenEstimate: estimateTokenCount(text),
+    };
+  }
+
+  function buildConversationArticleSnapshot(element, index, sessionId, userOrder) {
+    const text = namespace.session.normalizeText(element.innerText || element.textContent || "");
+    if (!text) {
+      return null;
+    }
+    const firstChildAriaLabel = namespace.session.normalizeText(element.firstElementChild?.getAttribute("aria-label"));
+    const providerLabel = readAssistantProviderLabel(element);
+    const roleHint = detectMessageRole(element, providerLabel, index);
+    const id = ensureConversationArticleId(element, sessionId, index, text, roleHint, userOrder);
+    return {
+      firstChildAriaLabel,
+      id,
+      index,
+      order: index + 1,
+      providerLabel,
+      roleHint,
+      tagName: namespace.session.normalizeText(element.tagName).toLowerCase() || "article",
+      text,
+      textLength: text.length,
+    };
+  }
+
+  function ensureConversationArticleId(element, sessionId, index, text, roleHint, userOrder) {
+    if (roleHint === "user") {
+      const userId = namespace.session.buildMessageId(sessionId || "current", Math.max(1, Number(userOrder) || index + 1), text);
+      element.dataset.inovaBookmarkId = userId;
+      return userId;
+    }
+    const existingId = namespace.session.normalizeText(element.dataset.inovaBookmarkId);
+    if (existingId) {
+      return existingId;
+    }
+    const articleId = namespace.session.buildMessageId(sessionId || "current", index + 1, text);
+    element.dataset.inovaBookmarkId = articleId;
+    return articleId;
+  }
+
+  function buildBookmarkRecords(sessionId, messages) {
+    const bookmarks = [];
+    let pendingBookmark = null;
+
+    messages.forEach((message) => {
+      if (message.role === "user") {
+        const bookmark = namespace.session.buildBookmarkRecord({
+          sessionId,
+          order: bookmarks.length + 1,
+          text: message.text,
+          title: getSessionTitle(),
+        });
+        bookmark.tokenEstimate = {
+          answer: 0,
+          hasAnswer: false,
+          question: message.tokenEstimate,
+          total: message.tokenEstimate,
+        };
+        bookmark.messageOrder = message.order;
+        message.element.dataset.inovaBookmarkId = bookmark.id;
+        bookmarks.push(bookmark);
+        pendingBookmark = bookmark;
+        return;
+      }
+
+      if (message.role === "assistant" && pendingBookmark) {
+        pendingBookmark.tokenEstimate = {
+          answer: message.tokenEstimate,
+          hasAnswer: true,
+          question: pendingBookmark.tokenEstimate.question,
+          total: pendingBookmark.tokenEstimate.question + message.tokenEstimate,
+        };
+        pendingBookmark = null;
+      }
     });
 
-    element.dataset.inovaBookmarkId = bookmark.id;
+    return bookmarks;
+  }
 
-    return bookmark;
+  function buildConversationState(messages = collectConversationMessages()) {
+    const counts = countMessages(messages);
+    return {
+      hasChatLog: Boolean(getChatLogElement(false)),
+      hasComposer: Boolean(document.querySelector(selectors.composer)),
+      articleCount: messages.length,
+      assistantCount: counts.assistant,
+      messageCount: messages.length,
+      userCount: counts.user,
+    };
+  }
+
+  function buildDomSnapshotConversationState(articles) {
+    const counts = countMessages((Array.isArray(articles) ? articles : []).map((article) => ({
+      role: namespace.session.normalizeText(article?.roleHint),
+    })));
+    return {
+      hasChatLog: Boolean(getChatLogElement(false)),
+      hasComposer: Boolean(document.querySelector(selectors.composer)),
+      articleCount: Array.isArray(articles) ? articles.length : 0,
+      assistantCount: counts.assistant,
+      messageCount: Array.isArray(articles) ? articles.length : 0,
+      userCount: counts.user,
+    };
+  }
+
+  function summarizeTokenEstimate(messages = collectConversationMessages()) {
+    const selectedModelLabel = readSelectedModelLabel();
+    const summary = {
+      answer: 0,
+      basis: TOKEN_ESTIMATE_VERSION,
+      messageCount: 0,
+      modelLabel: "",
+      modelLabelSource: "",
+      question: 0,
+      total: 0,
+      visibleMessageCount: 0,
+    };
+
+    if (selectedModelLabel) {
+      summary.modelLabel = selectedModelLabel;
+      summary.modelLabelSource = "selected-model";
+    }
+
+    messages.forEach((message) => {
+      const tokenCount = Math.max(0, Number(message?.tokenEstimate) || 0);
+      if (message.role === "user") {
+        summary.question += tokenCount;
+      } else if (message.role === "assistant") {
+        summary.answer += tokenCount;
+        if (!summary.modelLabel && message.providerLabel) {
+          summary.modelLabel = message.providerLabel;
+          summary.modelLabelSource = "latest-assistant";
+        }
+      }
+      summary.messageCount += 1;
+      summary.visibleMessageCount += 1;
+    });
+
+    summary.total = summary.question + summary.answer;
+    return summary;
+  }
+
+  function readSelectedModelLabel() {
+    const chatRoot = getChatLogElement(false);
+    const candidates = Array.from(document.querySelectorAll(selectors.currentModelButton || "button"));
+    for (const element of candidates) {
+      if (!(element instanceof HTMLElement) || chatRoot?.contains(element) || !isVisibleElement(element)) {
+        continue;
+      }
+      const label = readProviderLabelFromElement(element);
+      if (label) {
+        return label;
+      }
+    }
+    return "";
+  }
+
+  function collectModelLabelCandidates() {
+    const chatRoot = getChatLogElement(false);
+    return Array.from(document.querySelectorAll(selectors.currentModelButton || "button"))
+      .filter((element) => element instanceof HTMLElement && !chatRoot?.contains(element) && isVisibleElement(element))
+      .slice(0, 12)
+      .map((element, index) => {
+        const text = namespace.session.normalizeText(element.textContent || "");
+        const ariaLabel = namespace.session.normalizeText(element.getAttribute("aria-label"));
+        const title = namespace.session.normalizeText(element.getAttribute("title"));
+        return {
+          ariaLabel,
+          id: `model-candidate-${index + 1}`,
+          label: readProviderLabelFromElement(element),
+          tagName: namespace.session.normalizeText(element.tagName).toLowerCase() || "button",
+          text,
+          title,
+        };
+      })
+      .filter((candidate) => candidate.text || candidate.ariaLabel || candidate.title || candidate.label);
+  }
+
+  function readProviderLabelFromElement(element) {
+    const values = [
+      element.getAttribute("aria-label"),
+      element.getAttribute("title"),
+      element.textContent,
+    ];
+
+    for (const value of values) {
+      const normalized = namespace.session.normalizeText(value || "");
+      const match = normalized.match(/\b(Anthropic|Google|OpenAI|Perplexity)\s*:\s*[^·\n]{2,80}/i);
+      const label = namespace.session.normalizeText(match?.[0] || "");
+      if (label && isAssistantProviderLabel(label)) {
+        return label;
+      }
+    }
+    return "";
+  }
+
+  function isVisibleElement(element) {
+    const rect = element.getBoundingClientRect();
+    const style = global.getComputedStyle(element);
+    return rect.width > 0
+      && rect.height > 0
+      && style.display !== "none"
+      && style.visibility !== "hidden"
+      && Number(style.opacity || 1) !== 0;
   }
 
   function observeMessages(onChange) {
-    const target = document.querySelector(selectors.chatLog) || document.body;
+    const target = getChatLogElement() || document.body;
     const observer = new MutationObserver((mutations) => {
       if (mutations.some(hasMessageChange)) {
         onChange();
@@ -87,6 +344,8 @@
       }
 
       return Boolean(
+        node.matches?.(selectors.messageArticle) ||
+        node.querySelector?.(selectors.messageArticle) ||
         node.matches?.(selectors.userMessage) ||
         node.querySelector?.(selectors.userMessage) ||
         node.closest?.(selectors.userMessage)
@@ -102,6 +361,9 @@
     }
 
     return Boolean(
+      mutation.target.matches?.(selectors.messageArticle) ||
+      mutation.target.closest?.(selectors.messageArticle) ||
+      mutation.target.querySelector?.(selectors.messageArticle) ||
       mutation.target.matches?.(selectors.userMessage) ||
       mutation.target.closest?.(selectors.userMessage) ||
       mutation.target.querySelector?.(selectors.userMessage)
@@ -233,11 +495,99 @@
     return nearest.id;
   }
 
+  function getChatLogElement(fallbackToBody = true) {
+    return document.querySelector(selectors.chatMessageLog)
+      || document.querySelector(selectors.chatLog)
+      || document.querySelector(selectors.chatScroller)
+      || (fallbackToBody ? document.body : null);
+  }
+
+  function getMessageArticles() {
+    const root = getChatLogElement();
+    const articles = root
+      ? Array.from(root.querySelectorAll(selectors.messageArticle))
+      : Array.from(document.querySelectorAll(selectors.messageArticle));
+    return articles.filter((element) => namespace.session.normalizeText(element.innerText || element.textContent || ""));
+  }
+
+  function detectMessageRole(element, providerLabel, index) {
+    if (matchesSelector(element, selectors.userMessage) || Boolean(element.querySelector(selectors.userMessage))) {
+      return "user";
+    }
+    if (matchesSelector(element, selectors.assistantMessage) || Boolean(element.querySelector(selectors.assistantMessage))) {
+      return "assistant";
+    }
+    if (isAssistantProviderLabel(providerLabel)) {
+      return "assistant";
+    }
+
+    return index % 2 === 0 ? "user" : "assistant";
+  }
+
+  function readAssistantProviderLabel(element) {
+    const label = namespace.session.normalizeText(element.firstElementChild?.getAttribute("aria-label"));
+    return isAssistantProviderLabel(label) ? label : "";
+  }
+
+  function isAssistantProviderLabel(label) {
+    const normalized = namespace.session.normalizeText(label);
+    if (!normalized || !normalized.includes(":")) {
+      return false;
+    }
+    return /^(Anthropic|Google|OpenAI|Microsoft|Meta|Mistral|Perplexity|xAI|Amazon|Cohere|AI21|Naver|Kakao)\s*:/i.test(normalized)
+      || /^[A-Za-z][A-Za-z0-9 ._-]{1,40}\s*:\s*[A-Za-z0-9가-힣]/.test(normalized);
+  }
+
+  function stripLeadingProviderLabel(text, providerLabel) {
+    const normalizedText = namespace.session.normalizeText(text);
+    const normalizedLabel = namespace.session.normalizeText(providerLabel);
+    if (!normalizedLabel || !normalizedText.startsWith(normalizedLabel)) {
+      return normalizedText;
+    }
+    return namespace.session.normalizeText(normalizedText.slice(normalizedLabel.length));
+  }
+
+  function countMessages(messages) {
+    return messages.reduce((counts, message) => {
+      if (message.role === "user") {
+        counts.user += 1;
+      } else if (message.role === "assistant") {
+        counts.assistant += 1;
+      }
+      return counts;
+    }, { assistant: 0, user: 0 });
+  }
+
+  function estimateTokenCount(text) {
+    const normalized = namespace.session.normalizeText(text);
+    if (!normalized) {
+      return 0;
+    }
+    const koreanChars = (normalized.match(/[\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]/g) || []).length;
+    const latinTokenEstimate = (normalized.match(/[A-Za-z0-9_]+/g) || [])
+      .reduce((total, token) => total + Math.max(1, Math.ceil(token.length / 4)), 0);
+    const remainingChars = normalized
+      .replace(/[\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]/g, "")
+      .replace(/[A-Za-z0-9_]+/g, "")
+      .replace(/\s+/g, "")
+      .length;
+    return Math.max(1, Math.ceil((koreanChars * 0.8) + latinTokenEstimate + (remainingChars * 0.55)));
+  }
+
+  function matchesSelector(element, selector) {
+    return Boolean(namespace.session.normalizeText(selector) && element.matches?.(selector));
+  }
+
   namespace.contentDom = {
+    collectConversationDomSnapshot,
+    collectConversationMessages,
+    collectConversationSnapshot,
     collectUserMessages,
+    estimateTokenCount,
     getConversationState,
     getSessionTitle,
     getUserMessageSignature,
+    summarizeTokenEstimate,
     getVisibleMessageId,
     observeMessages,
     scrollToMessage,

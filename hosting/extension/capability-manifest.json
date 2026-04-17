@@ -168,6 +168,20 @@
       "schemaVersion": 1,
       "service": "page"
     },
+    "page.conversation.read-dom-snapshot": {
+      "auditLevel": "read",
+      "authMode": "none",
+      "domain": "conversation",
+      "enabled": true,
+      "inputSchemaVersion": 1,
+      "kind": "page.capability",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "conversation",
+      "pageCapabilityId": "conversation.read-dom-snapshot",
+      "schemaVersion": 1,
+      "service": "page"
+    },
     "page.conversation.read-state": {
       "auditLevel": "read",
       "authMode": "none",

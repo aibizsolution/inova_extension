@@ -47,7 +47,9 @@ function main() {
   const state = namespace.contentDom.getConversationState();
   assert.equal(state.hasChatLog, true);
   assert.equal(state.hasComposer, true);
-  assert.equal(state.articleCount, 5);
+  assert.equal(state.articleCount, 6);
+  assert.equal(state.assistantCount, 3);
+  assert.equal(state.messageCount, 6);
   assert.equal(state.userCount, 3);
 
   const sessionTitle = namespace.contentDom.getSessionTitle();
@@ -66,6 +68,12 @@ function main() {
     const expectedText = expectedTexts[index];
     assert.equal(message.order, index + 1);
     assert.equal(message.text, expectedText);
+    assert(Number(message.tokenEstimate?.question) > 0, "question token estimate should be attached to each bookmark");
+    assert(Number(message.tokenEstimate?.answer) > 0, "answer token estimate should be paired from the following assistant article");
+    assert.equal(
+      message.tokenEstimate.total,
+      message.tokenEstimate.question + message.tokenEstimate.answer
+    );
     assert.equal(
       message.id,
       namespace.session.buildMessageId(sessionId, index + 1, expectedText)
@@ -75,10 +83,24 @@ function main() {
   const signature = namespace.contentDom.getUserMessageSignature();
   assert.equal(signature, expectedTexts.join("||"));
 
-  const messageNodes = Array.from(window.document.querySelectorAll(".chat-message--user"));
+  const messageNodes = Array.from(window.document.querySelectorAll('[aria-label="채팅 메시지 목록"] > article'))
+    .filter((node) => !node.firstElementChild?.getAttribute("aria-label"));
   messageNodes.forEach((node, index) => {
     assert.equal(node.dataset.inovaBookmarkId, messages[index].id);
   });
+
+  const snapshot = namespace.contentDom.collectConversationSnapshot(sessionId);
+  assert.equal(snapshot.items.length, 3);
+  assert.equal(snapshot.conversation.assistantCount, 3);
+  assert(snapshot.tokenEstimate.total > snapshot.tokenEstimate.question);
+  assert.equal(snapshot.tokenEstimate.basis, "dom-estimate-v1");
+
+  const domSnapshot = namespace.contentDom.collectConversationDomSnapshot(sessionId);
+  assert.equal(domSnapshot.basis, "conversation-dom-snapshot-v1");
+  assert.equal(domSnapshot.articles.length, 6);
+  assert.equal(domSnapshot.articles[0].id, messages[0].id);
+  assert.equal(domSnapshot.articles[1].firstChildAriaLabel, "Google: Gemini 3 Pro");
+  assert.equal(domSnapshot.articles[1].roleHint, "assistant");
 
   console.log("[verify-content-smoke] DOM smoke check passed");
 }

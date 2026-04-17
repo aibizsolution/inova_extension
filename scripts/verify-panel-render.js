@@ -11,6 +11,7 @@ const {
 const { verifyPanelRuntimeResolverOwnershipContract } = require("./verify-panel-runtime-config");
 const { verifyPanelHostRuntimeContract } = require("./verify-panel-host-runtime");
 const { verifyHostedTraceVisibilityContract } = require("./verify-hosted-trace-visibility");
+const { verifyConversationContextMeterContract } = require("./verify-conversation-context-meter");
 
 const root = path.resolve(__dirname, "..");
 
@@ -30,6 +31,7 @@ async function main() {
   verifyHostedTraceVisibilityContract();
   verifyHostedConversationSearchDebounceContract();
   await verifyHostedConversationCapabilityGates();
+  verifyConversationContextMeterContract();
   verifyHostedStoreSearchDebounceContract();
   verifyBookmarkJumpAccessibilityContract();
   verifyHostedPromptReviewFallbackContract();
@@ -393,6 +395,7 @@ async function verifyHostedConversationCapabilityGates() {
     },
   };
   loadHostedPanelScript("panel-utils.js", context);
+  loadHostedPanelScript("conversation-dom-parser.js", context);
   loadHostedPanelScript("conversation-controller.js", context);
   loadHostedPanelScript("bookmark-view.js", context);
 
@@ -411,8 +414,55 @@ async function verifyHostedConversationCapabilityGates() {
               normalizedText: "hello",
               order: 1,
               text: "Hello",
+              tokenEstimate: {
+                answer: 34,
+                hasAnswer: true,
+                question: 2,
+                total: 36,
+              },
             },
           ],
+          tokenEstimate: {
+            answer: 34,
+            basis: "dom-estimate-v1",
+            messageCount: 2,
+            modelLabel: "OpenAI: GPT-5.4",
+            modelLabelSource: "selected-model",
+            question: 2,
+            total: 36,
+            visibleMessageCount: 2,
+          },
+          visibleMessageId: "q1",
+        };
+      },
+      async readConversationDomSnapshot() {
+        pageCalls.push({ action: "conversation.read-dom-snapshot" });
+        return {
+          articles: [
+            {
+              id: "q1",
+              order: 1,
+              roleHint: "user",
+              text: "Hello",
+            },
+            {
+              firstChildAriaLabel: "OpenAI: GPT-5.4",
+              id: "a1",
+              order: 2,
+              text: "OpenAI: GPT-5.4 response",
+            },
+          ],
+          basis: "conversation-dom-snapshot-v1",
+          conversation: {
+            articleCount: 2,
+            hasChatLog: true,
+            hasComposer: true,
+          },
+          modelCandidates: [
+            { label: "OpenAI: GPT-5.4", text: "OpenAI: GPT-5.4" },
+          ],
+          sessionId: "session-1",
+          sessionTitle: "현재 세션",
           visibleMessageId: "q1",
         };
       },
@@ -463,17 +513,28 @@ async function verifyHostedConversationCapabilityGates() {
     "page.adapter.v2",
     "page.clipboard.write-text",
     "page.conversation.jump-item",
+    "page.conversation.read-dom-snapshot",
     "page.conversation.read-state",
   ]);
   await flushMicrotasks();
   viewState = controller.buildViewState({});
   assert.equal(viewState.count, 1, "conversation view should load items when read capability is negotiated");
+  assert.equal(viewState.tokenEstimate.total, 4, "conversation view should expose hosted parser estimates from the DOM snapshot");
+  assert.equal(viewState.tokenEstimate.modelLabel, "OpenAI: GPT-5.4", "conversation view should preserve the selected model label from the page snapshot");
+  assert.equal(viewState.tokenEstimate.modelLabelSource, "selected-model", "conversation view should preserve the selected model label source");
   assert.equal(viewState.canJumpBookmark, true);
   assert.equal(viewState.canCopyBookmark, true);
+  const tokenMarkup = context.InovaBookmarks.bookmarkView.renderTool(viewState);
+  assert(tokenMarkup.includes("예상 컨텍스트"), "bookmark view should render a conversation context meter when estimates are available");
+  assert(tokenMarkup.includes("inova-context-help"), "bookmark view should render the context explanation in a help tooltip");
+  assert(tokenMarkup.includes("inova-token-meter__gauge"), "bookmark view should render a compact context length signal");
+  assert(!tokenMarkup.includes("현재 DOM 기준"), "bookmark view should keep DOM-basis explanation inside the tooltip instead of inline copy");
+  assert(tokenMarkup.includes("bookmark-context-meta"), "bookmark view should render compact per-bookmark context estimates");
+  assert(!tokenMarkup.includes("Q 2"), "bookmark view should not add a visible Q/A metadata row to each bookmark");
   assert.equal(await controller.handleJumpBookmark("q1"), true);
   assert.equal(await controller.handleCopyBookmark("q1"), true);
   assert.deepEqual(pageCalls.map((call) => call.action), [
-    "conversation.read-state",
+    "conversation.read-dom-snapshot",
     "conversation.jump-item",
     "clipboard.write-text",
   ]);
@@ -508,6 +569,14 @@ function verifyBookmarkJumpAccessibilityContract() {
     path.join(root, "hosting", "extension-v2", "panel", "bookmark-view.js"),
     "utf8"
   );
+  const hostedPanelSource = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "index.js"),
+    "utf8"
+  );
+  const promptToolPanelSource = fs.readFileSync(
+    path.join(root, "hosting", "extension-v2", "panel", "prompt-tool-panel.js"),
+    "utf8"
+  );
 
   assert(
     hostedBookmarkSource.includes('<div class="bookmark-jump"${canJumpBookmark ?')
@@ -517,6 +586,22 @@ function verifyBookmarkJumpAccessibilityContract() {
   assert(
     !hostedBookmarkSource.includes('class="bookmark-jump" type="button"'),
     "hosted bookmark list should not render a hidden/focusable bookmark jump button"
+  );
+  assert(
+    hostedBookmarkSource.includes("bookmark-context-meta")
+      && !hostedBookmarkSource.includes("bookmark-content"),
+    "hosted bookmark list should keep per-bookmark context metadata compact instead of adding a third visual row"
+  );
+  assert(
+    hostedPanelSource.includes("conversation-context-profiles.json")
+      && hostedBookmarkSource.includes("contextProfileConfig")
+      && !hostedBookmarkSource.includes("MODEL_CONTEXT_PROFILES"),
+    "hosted conversation context thresholds should load from a hosted config file instead of hardcoding model limits in the view"
+  );
+  assert(
+    hostedPanelSource.includes("event.composedPath()")
+      && promptToolPanelSource.includes("event.composedPath()"),
+    "hosted click delegation should resolve SVG icon click targets through composedPath before checking data attributes"
   );
 }
 

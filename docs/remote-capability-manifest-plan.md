@@ -4,6 +4,7 @@
 
 핵심 전제는 바뀌었다.
 
+- 이 확장은 Chrome Web Store 배포물이 아니라 내부 전사 프로그램이다. 스토어 정책은 remote/hosted logic 설계의 차단 사유가 아니다.
 - extension은 권한을 가진 런타임 셸이다.
 - 서버는 기능 정의를 manifest, workflow, 제한된 remote logic 형태로 배포할 수 있다.
 - 원격 로직은 샌드박스에서 실행된다.
@@ -51,7 +52,7 @@
 - extension은 권한 런타임이다.
 - 새 권한, 새 content DOM primitive, 새 privileged bridge kind, 새 sandbox host primitive는 extension 재배포 대상이다.
 - remote logic은 이 core가 공개한 bridge API만 호출한다.
-- privileged context에서 arbitrary remote JS를 직접 실행하지 않는다.
+- privileged context에서 arbitrary remote JS를 직접 실행하지 않는다. 이 제한은 스토어 정책 때문이 아니라 내부 배포에서도 유지할 신뢰 경계다. 내부 승인 artifact, 버전/kill switch, 제한된 입력/출력 계약을 갖춘 hosted logic은 가능한 한 hosted/sandbox 쪽에 두고 extension은 최소 primitive만 공개한다.
 
 ### 2. Remote Capability Layer
 
@@ -187,7 +188,7 @@ panel boot 시 hosted와 background는 capability catalog를 negotiation한다.
 - killed/disabled capability는 handshake의 `enabledCapabilityIds`에서 제외된다.
 - prompt review, prompt library, prompt store는 negotiated capabilityId 기준으로 write/action UI 노출과 실행을 1차 차단한다.
 - meeting hub는 `meeting.share.create-function`, `meeting.share.revoke-function` handshake capability가 enabled일 때만 공유 생성/해제 UI와 실행을 열고, 실행도 `invokeCapability()`를 통해 manifest function endpoint resolution을 따른다.
-- conversation controller는 `page.conversation.read-state`, `page.conversation.jump-item`, `page.clipboard.write-text` handshake capability가 enabled일 때만 읽기/이동/복사 UI와 실행을 연다.
+- conversation controller는 `page.conversation.read-dom-snapshot` 또는 fallback `page.conversation.read-state`, `page.conversation.jump-item`, `page.clipboard.write-text` handshake capability가 enabled일 때만 읽기/이동/복사 UI와 실행을 연다.
 - controller-level action gating 1차는 완료됐다.
 - hosted panel shell의 `panel.ui-preferences.write`도 handshake 이후에는 enabled capability일 때만 실행한다. disabled 상태에서는 runtime dispatch 전에 explicit error/trace/toast로 멈춘다.
 
@@ -377,7 +378,8 @@ verify 기준:
 - `hosting/extension-v2/panel/extension-capability-client.js`는 `invokePageCapability(pageCapabilityId, input)` bridge를 제공하고 기존 page helper도 이 경로를 사용한다.
 - `invokePageCapability`는 `PAGE_CAPABILITY_IDS` allowlist에 없는 page capability를 content로 전달하지 않는다.
 - hosted capability handshake 결과는 `pageCapabilityIds`를 포함해 remote workflow 준비 단계에서 page primitive catalog를 함께 볼 수 있게 한다.
-- hosted conversation controller는 `page.conversation.read-state`, `page.conversation.jump-item`, `page.clipboard.write-text`가 handshake에서 enabled일 때만 읽기/이동/복사 UI와 실행 경로를 연다.
+- hosted conversation controller는 `page.conversation.read-dom-snapshot`을 우선 사용해 content가 읽은 최소 DOM fact를 hosted `conversation-dom-parser.js`에서 해석한다. `page.conversation.read-state`는 기존 bundle과 parser 실패 시 fallback으로 남긴다.
+- hosted conversation controller는 `page.conversation.read-dom-snapshot` 또는 `page.conversation.read-state`, `page.conversation.jump-item`, `page.clipboard.write-text`가 handshake에서 enabled일 때만 읽기/이동/복사 UI와 실행 경로를 연다.
 - 기존 primitive 실행 결과는 유지한다.
 - arbitrary selector/DOM script primitive는 추가하지 않았다.
 - reviewer cleanup에서 `page.scroll-to(targetKey)`, `page.highlight-range(selectionKey)`, `page.show-banner(templateKey, params)`, `page.read-selection()`, `page.dispatch-named-event(eventKey)`를 추가했다.

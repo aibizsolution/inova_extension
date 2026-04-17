@@ -16,6 +16,7 @@
     "composer.apply-text",
     "composer.read-state",
     "conversation.jump-item",
+    "conversation.read-dom-snapshot",
     "conversation.read-state",
     "debug.clear-log",
     "debug.copy-log",
@@ -57,6 +58,7 @@
       openMeetingWorkspace,
       readCapabilityCatalog,
       readComposerState,
+      readConversationDomSnapshot,
       readConversationState,
       readDebugState,
       readPanelStorageState,
@@ -212,6 +214,10 @@
 
     function readConversationState() {
       return invokePageCapability("conversation.read-state");
+    }
+
+    function readConversationDomSnapshot() {
+      return invokePageCapability("conversation.read-dom-snapshot");
     }
 
     function readDebugState() {

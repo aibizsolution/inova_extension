@@ -6,6 +6,7 @@
     "composer.apply-text": { adapter: "composer.apply-text" },
     "composer.read-state": { adapter: "composer.read-state" },
     "conversation.jump-item": { adapter: "conversation.jump-item" },
+    "conversation.read-dom-snapshot": { adapter: "conversation.read-dom-snapshot" },
     "conversation.read-state": { adapter: "conversation.read-state" },
     "debug.clear-log": { adapter: "debug.clear-log" },
     "debug.copy-log": { adapter: "debug.copy-log" },
@@ -23,6 +24,7 @@
     "composer.apply-text": applyComposerText,
     "composer.read-state": readComposerState,
     "conversation.jump-item": jumpConversationItem,
+    "conversation.read-dom-snapshot": readConversationDomSnapshot,
     "conversation.read-state": readConversationState,
     "debug.clear-log": clearDebugLog,
     "debug.copy-log": copyDebugLog,
@@ -82,6 +84,9 @@
     const buildConversationSnapshot = typeof helpers.buildConversationSnapshot === "function"
       ? helpers.buildConversationSnapshot
       : defaultBuildConversationSnapshot;
+    const buildConversationDomSnapshot = typeof helpers.buildConversationDomSnapshot === "function"
+      ? helpers.buildConversationDomSnapshot
+      : defaultBuildConversationDomSnapshot;
     const buildDebugState = typeof helpers.buildDebugState === "function"
       ? helpers.buildDebugState
       : defaultBuildDebugState;
@@ -93,6 +98,7 @@
       : () => {};
     return {
       buildConversationSnapshot,
+      buildConversationDomSnapshot,
       buildDebugState,
       copyDebugLog,
       logConsoleTrace,
@@ -137,6 +143,10 @@
 
   function readConversationState(_payload, context) {
     return context.buildConversationSnapshot();
+  }
+
+  function readConversationDomSnapshot(_payload, context) {
+    return context.buildConversationDomSnapshot();
   }
 
   function jumpConversationItem(payload) {
@@ -353,15 +363,34 @@
 
   function defaultBuildConversationSnapshot() {
     const sessionId = namespace.session?.getSessionId?.() || "";
-    const items = namespace.contentDom?.collectUserMessages?.(sessionId) || [];
+    const conversationSnapshot = namespace.contentDom?.collectConversationSnapshot?.(sessionId) || null;
+    const items = Array.isArray(conversationSnapshot?.items)
+      ? conversationSnapshot.items
+      : namespace.contentDom?.collectUserMessages?.(sessionId) || [];
     return {
-      conversation: cloneValue(namespace.contentDom?.getConversationState?.() || {}),
+      conversation: cloneValue(conversationSnapshot?.conversation || namespace.contentDom?.getConversationState?.() || {}),
       items: cloneValue(items),
       sessionId,
       sessionTitle: normalizeText(namespace.contentDom?.getSessionTitle?.())
         || namespace.session?.formatSessionLabel?.(sessionId)
         || "현재 세션",
-      visibleMessageId: normalizeText(namespace.contentDom?.getVisibleMessageId?.(items)),
+      tokenEstimate: cloneValue(conversationSnapshot?.tokenEstimate || namespace.contentDom?.summarizeTokenEstimate?.() || {}),
+      visibleMessageId: normalizeText(conversationSnapshot?.visibleMessageId || namespace.contentDom?.getVisibleMessageId?.(items)),
+    };
+  }
+
+  function defaultBuildConversationDomSnapshot() {
+    const sessionId = namespace.session?.getSessionId?.() || "";
+    return namespace.contentDom?.collectConversationDomSnapshot?.(sessionId) || {
+      articles: [],
+      basis: "conversation-dom-snapshot-v1",
+      conversation: cloneValue(namespace.contentDom?.getConversationState?.() || {}),
+      modelCandidates: [],
+      sessionId,
+      sessionTitle: normalizeText(namespace.contentDom?.getSessionTitle?.())
+        || namespace.session?.formatSessionLabel?.(sessionId)
+        || "현재 세션",
+      visibleMessageId: "",
     };
   }
 
