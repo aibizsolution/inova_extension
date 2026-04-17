@@ -3,6 +3,9 @@
   const TRACE_REPEAT_IDLE_MS = 1600;
   const ALWAYS_VISIBLE_TRACE_LABELS = [
     "hosted.click.detected",
+    "hosted.conversation.focus.error",
+    "hosted.conversation.focus.start",
+    "hosted.conversation.focus.success",
     "hosted.conversation.snapshot.error",
     "hosted.conversation.snapshot.start",
     "hosted.conversation.snapshot.success",

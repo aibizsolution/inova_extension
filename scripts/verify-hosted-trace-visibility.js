@@ -39,6 +39,12 @@ function verifyHostedTraceVisibilityContract() {
     "conversation controller should trace snapshot requests"
   );
   assert(
+    conversationSource.includes('traceConversation("36.hosted.conversation.focus.start"')
+      && conversationSource.includes('traceConversation("37.hosted.conversation.focus.success"')
+      && conversationSource.includes('traceConversation("37.hosted.conversation.focus.error"'),
+    "conversation controller should trace focus evaluation lifecycle"
+  );
+  assert(
     releaseSource.includes('traceRelease("34.hosted.release.fetch.start"'),
     "release controller should trace release fetch requests"
   );
@@ -53,6 +59,12 @@ function verifyHostedTraceVisibilityContract() {
   assert(
     panelTraceSource.includes('"hosted.conversation.snapshot.start"'),
     "top panel should keep conversation snapshot traces visible"
+  );
+  assert(
+    panelTraceSource.includes('"hosted.conversation.focus.start"')
+      && panelTraceSource.includes('"hosted.conversation.focus.success"')
+      && panelTraceSource.includes('"hosted.conversation.focus.error"'),
+    "top panel should keep conversation focus evaluation traces visible"
   );
   assert(
     panelTraceSource.includes('"hosted.release.fetch.start"'),
