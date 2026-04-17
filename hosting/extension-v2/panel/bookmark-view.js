@@ -110,11 +110,12 @@
     if (signal.visible !== true) {
       return "";
     }
+    const status = normalizeFocusSignalStatus(signal.status);
     const tooltip = namespace.session.normalizeText(signal.tooltip)
-      || "최근 질문이 이전 흐름과 분리된 새 주제일 가능성이 높아요. 새 대화로 나누면 답변 품질을 유지하기 쉬울 수 있어요.";
+      || buildDefaultFocusSignalTooltip(status, signal.userMessageCount);
     return `
       <span
-        class="inova-focus-signal"
+        class="inova-focus-signal is-${escapeHtml(status)}"
         tabindex="0"
         role="img"
         aria-label="${escapeHtml(tooltip)}"
@@ -123,6 +124,30 @@
         <span class="inova-focus-signal__icon" aria-hidden="true"></span>
       </span>
     `;
+  }
+
+  function normalizeFocusSignalStatus(status) {
+    const normalized = namespace.session.normalizeText(status).toLowerCase();
+    return ["pending", "split", "steady", "unavailable", "waiting"].includes(normalized)
+      ? normalized
+      : "waiting";
+  }
+
+  function buildDefaultFocusSignalTooltip(status, userMessageCount) {
+    const count = Math.max(0, Number(userMessageCount) || 0);
+    if (status === "pending") {
+      return "대화 흐름을 평가 중이에요.";
+    }
+    if (status === "steady") {
+      return "최근 질문은 기존 대화 흐름 안에서 이어지는 것으로 보입니다.";
+    }
+    if (status === "split") {
+      return "최근 질문이 이전 흐름과 분리된 새 주제일 가능성이 높아요.";
+    }
+    if (status === "unavailable") {
+      return "대화 흐름 평가를 지금 사용할 수 없어요.";
+    }
+    return `사용자 질문 ${count}/5개. 5개 이상이면 대화 흐름을 자동 평가해요.`;
   }
 
   function normalizeContextProfileConfig(config = {}) {

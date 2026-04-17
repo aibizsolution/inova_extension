@@ -9,7 +9,7 @@ const MAX_MESSAGE_CHARS = 2400;
 const MAX_TOTAL_CHARS = 18000;
 const MAX_USER_MESSAGES = 32;
 const MIN_LATEST_CHARS = 12;
-const MIN_USER_MESSAGES = 3;
+const MIN_USER_MESSAGES = 5;
 const REASON_CODES = [
   "ambiguous",
   "continuation",

@@ -30,7 +30,7 @@
 
 ## 최소 검증 방법
 - `evaluateConversationFocus` export 이름을 유지한다.
-- 사용자 입력 3개 미만 또는 최신 입력이 짧은 경우 LLM 호출 없이 `splitRecommended=false`로 내려오는지 확인한다.
+- 사용자 입력 5개 미만 또는 최신 입력이 짧은 경우 LLM 호출 없이 `splitRecommended=false`로 내려오는지 확인한다.
 - `confidence < 0.75`는 모델이 split을 제안해도 UI 표시 대상으로 승격하지 않는다.
 
 ## 구현 경계

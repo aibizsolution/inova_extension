@@ -12,7 +12,7 @@
   const CLIPBOARD_WRITE_CAPABILITY_ID = "page.clipboard.write-text";
   const FOCUS_EVALUATION_USER_MESSAGE_LIMIT = 32;
   const FOCUS_MIN_LATEST_CHARS = 12;
-  const FOCUS_MIN_USER_MESSAGES = 3;
+  const FOCUS_MIN_USER_MESSAGES = 5;
 
   function create(options = {}) {
     const browserCapabilities = resolveBrowserCapabilities(options);
@@ -37,6 +37,7 @@
     const getProviderIdentity = typeof options.getProviderIdentity === "function"
       ? options.getProviderIdentity
       : () => ({ available: false });
+    const focusCache = namespace.conversationFocusCache?.create?.({ storage: global.localStorage }) || createNoopFocusCache();
     const writeClipboardText = typeof browserCapabilities.writeClipboardText === "function"
       ? browserCapabilities.writeClipboardText
       : async () => ({});
@@ -471,22 +472,54 @@
     }
 
     function requestFocusEvaluation() {
-      const request = buildFocusEvaluationRequest();
-      if (!request) {
-        clearFocusSignal();
+      const userMessages = normalizeUserMessages(state.userMessages, state.items);
+      if (!userMessages.length) {
+        cancelPendingFocusEvaluation();
+        applyFocusSignal(createEmptyFocusSignal());
         return false;
       }
-      if (state.focusEvaluationPendingKey === request.key || state.focusSignal.key === request.key) {
+
+      const focusKey = buildFocusEvaluationKey(userMessages);
+      if (userMessages.length < FOCUS_MIN_USER_MESSAGES) {
+        cancelPendingFocusEvaluation();
+        applyFocusSignal(createWaitingFocusSignal(userMessages.length, focusKey));
+        return false;
+      }
+
+      const latestMessage = userMessages[userMessages.length - 1];
+      if (!latestMessage || latestMessage.text.length < FOCUS_MIN_LATEST_CHARS || isLowSignalFocusText(latestMessage.text)) {
+        cancelPendingFocusEvaluation();
+        applyFocusSignal(createFocusSignal("waiting", {
+          key: focusKey,
+          tooltip: `사용자 질문 ${userMessages.length}개를 확인했지만 최신 입력이 짧아 흐름 평가는 보류했어요.`,
+          userMessageCount: userMessages.length,
+        }));
+        return false;
+      }
+
+      const cachedSignal = readCachedFocusSignal(focusKey);
+      if (cachedSignal) {
+        cancelPendingFocusEvaluation();
+        applyFocusSignal(cachedSignal);
+        return false;
+      }
+
+      const request = buildFocusEvaluationRequest(userMessages, focusKey);
+      if (!request) {
+        return false;
+      }
+      if (state.focusEvaluationPendingKey === request.key) {
         return false;
       }
 
       const requestId = state.focusEvaluationRequestId + 1;
       state.focusEvaluationRequestId = requestId;
       state.focusEvaluationPendingKey = request.key;
-      if (state.focusSignal.visible) {
-        state.focusSignal = createEmptyFocusSignal();
-        scheduleRender();
-      }
+      applyFocusSignal(createFocusSignal("pending", {
+        key: request.key,
+        tooltip: `사용자 질문 ${userMessages.length}개 기준으로 대화 흐름을 평가 중이에요.`,
+        userMessageCount: userMessages.length,
+      }));
       traceConversation("36.hosted.conversation.focus.start", {
         userMessageCount: request.input.userMessages.length,
       });
@@ -499,16 +532,22 @@
         if (state.focusEvaluationRequestId !== requestId) {
           return;
         }
-        state.focusSignal = normalizeFocusSignal(result, request.key);
+        const nextSignal = normalizeFocusSignal(result, request.key, userMessages.length);
+        writeCachedFocusSignal(nextSignal);
+        applyFocusSignal(nextSignal);
         traceConversation("37.hosted.conversation.focus.success", {
-          confidence: state.focusSignal.confidence,
-          visible: state.focusSignal.visible,
+          confidence: nextSignal.confidence,
+          status: nextSignal.status,
         });
       }).catch((error) => {
         if (state.focusEvaluationRequestId !== requestId) {
           return;
         }
-        state.focusSignal = createEmptyFocusSignal();
+        applyFocusSignal(createFocusSignal("unavailable", {
+          key: request.key,
+          tooltip: "대화 흐름 평가에 실패했어요. 다음 대화 변화 때 다시 시도합니다.",
+          userMessageCount: userMessages.length,
+        }));
         traceConversation("37.hosted.conversation.focus.error", {
           error: getErrorMessage(error, "conversation focus evaluation failed"),
         });
@@ -522,20 +561,24 @@
       return true;
     }
 
-    function buildFocusEvaluationRequest() {
+    function buildFocusEvaluationRequest(userMessages, focusKey) {
       if (!hasCapability(CONVERSATION_FOCUS_EVALUATE_CAPABILITY_ID) || typeof invokeCapability !== "function") {
+        cancelPendingFocusEvaluation();
+        applyFocusSignal(createFocusSignal("unavailable", {
+          key: focusKey,
+          tooltip: "대화 흐름 평가 기능이 현재 비활성화되어 있어요.",
+          userMessageCount: userMessages.length,
+        }));
         return null;
       }
       const providerIdentity = normalizeProviderIdentity(getProviderIdentity());
       if (!providerIdentity.available || !providerIdentity.providerUserKey) {
-        return null;
-      }
-      const userMessages = normalizeUserMessages(state.userMessages, state.items);
-      if (userMessages.length < FOCUS_MIN_USER_MESSAGES) {
-        return null;
-      }
-      const latestMessage = userMessages[userMessages.length - 1];
-      if (!latestMessage || latestMessage.text.length < FOCUS_MIN_LATEST_CHARS || isLowSignalFocusText(latestMessage.text)) {
+        cancelPendingFocusEvaluation();
+        applyFocusSignal(createFocusSignal("unavailable", {
+          key: focusKey,
+          tooltip: "로그인 정보를 확인한 뒤 대화 흐름 평가를 사용할 수 있어요.",
+          userMessageCount: userMessages.length,
+        }));
         return null;
       }
       return {
@@ -547,8 +590,17 @@
             turnIndex: Math.max(1, Number(message.turnIndex) || (userMessages.length - slicedMessages.length + index + 1)),
           })),
         },
-        key: buildFocusEvaluationKey(userMessages),
+        key: focusKey,
       };
+    }
+
+    function cancelPendingFocusEvaluation() {
+      if (!state.focusEvaluationPendingKey) {
+        return false;
+      }
+      state.focusEvaluationRequestId += 1;
+      state.focusEvaluationPendingKey = "";
+      return true;
     }
 
     function normalizeProviderIdentity(providerIdentity) {
@@ -563,41 +615,27 @@
       };
     }
 
-    function clearFocusSignal() {
-      if (!state.focusSignal.visible && !state.focusEvaluationPendingKey) {
-        return;
-      }
-      state.focusEvaluationRequestId += 1;
-      state.focusEvaluationPendingKey = "";
-      state.focusSignal = createEmptyFocusSignal();
-      scheduleRender();
-    }
-
-    function normalizeFocusSignal(result, key) {
+    function normalizeFocusSignal(result, key, userMessageCount) {
       const payload = result && typeof result === "object" ? result : {};
       const confidence = readRatio(payload.confidence, 0);
       const splitRecommended = payload.splitRecommended === true
         && confidence >= 0.75
         && normalizeText(payload.nextAction).toLowerCase() === "split";
-      if (!splitRecommended) {
-        return {
-          ...createEmptyFocusSignal(),
-          key,
-        };
-      }
       const reasonCodes = Array.isArray(payload.decisionReasonCodes)
         ? payload.decisionReasonCodes.map((code) => normalizeText(code)).filter(Boolean).slice(0, 4)
         : [];
-      return {
+      return createFocusSignal(splitRecommended ? "split" : "steady", {
         confidence,
         key,
         reasonCodes,
-        tooltip: buildFocusSignalTooltip(confidence, reasonCodes),
-        visible: true,
-      };
+        tooltip: splitRecommended
+          ? buildSplitFocusSignalTooltip(confidence, reasonCodes)
+          : buildSteadyFocusSignalTooltip(confidence, reasonCodes),
+        userMessageCount,
+      });
     }
 
-    function buildFocusSignalTooltip(confidence, reasonCodes) {
+    function buildSplitFocusSignalTooltip(confidence, reasonCodes) {
       const reasonText = formatFocusReasonText(reasonCodes);
       const confidenceText = Math.round(confidence * 100);
       return [
@@ -605,6 +643,17 @@
         "사용자 질문만 기준으로 보수적으로 판단했으며, 새 대화로 나누면 답변 품질을 유지하기 쉬울 수 있어요.",
         reasonText ? `근거: ${reasonText}.` : "",
         `신뢰도 ${confidenceText}%.`,
+      ].filter(Boolean).join(" ");
+    }
+
+    function buildSteadyFocusSignalTooltip(confidence, reasonCodes) {
+      const reasonText = formatFocusReasonText(reasonCodes);
+      const confidenceText = Math.round(confidence * 100);
+      return [
+        "최근 질문은 기존 대화 흐름 안에서 이어지는 것으로 보입니다.",
+        "사용자 질문만 기준으로 보수적으로 평가했어요.",
+        reasonText ? `근거: ${reasonText}.` : "",
+        confidence ? `신뢰도 ${confidenceText}%.` : "",
       ].filter(Boolean).join(" ");
     }
 
@@ -623,19 +672,109 @@
     }
 
     function getVisibleFocusSignal() {
-      return state.focusSignal.visible
-        ? cloneValue(state.focusSignal)
-        : createEmptyFocusSignal();
+      if (state.focusSignal.visible) {
+        return cloneValue(state.focusSignal);
+      }
+      const userMessageCount = normalizeUserMessages(state.userMessages, state.items).length;
+      return userMessageCount ? createWaitingFocusSignal(userMessageCount) : createEmptyFocusSignal();
     }
 
     function createEmptyFocusSignal() {
+      return createFocusSignal("hidden");
+    }
+
+    function createWaitingFocusSignal(userMessageCount, key = "") {
+      return createFocusSignal("waiting", {
+        key,
+        tooltip: `사용자 질문 ${Math.max(0, Number(userMessageCount) || 0)}/${FOCUS_MIN_USER_MESSAGES}개. ${FOCUS_MIN_USER_MESSAGES}개 이상이면 대화 흐름을 자동 평가해요.`,
+        userMessageCount,
+      });
+    }
+
+    function createFocusSignal(status = "hidden", options = {}) {
+      const normalizedStatus = normalizeFocusStatus(status);
+      const userMessageCount = Math.max(0, Number(options.userMessageCount) || 0);
       return {
-        confidence: 0,
-        key: "",
-        reasonCodes: [],
-        tooltip: "",
-        visible: false,
+        cached: options.cached === true,
+        confidence: readRatio(options.confidence, 0),
+        key: normalizeText(options.key),
+        reasonCodes: Array.isArray(options.reasonCodes)
+          ? options.reasonCodes.map((code) => normalizeText(code)).filter(Boolean).slice(0, 4)
+          : [],
+        status: normalizedStatus,
+        tooltip: normalizeText(options.tooltip) || buildDefaultFocusTooltip(normalizedStatus, userMessageCount),
+        userMessageCount,
+        visible: normalizedStatus !== "hidden",
       };
+    }
+
+    function applyFocusSignal(nextSignal) {
+      const normalizedSignal = normalizeFocusDisplaySignal(nextSignal);
+      if (serializeFocusSignal(state.focusSignal) === serializeFocusSignal(normalizedSignal)) {
+        return false;
+      }
+      state.focusSignal = normalizedSignal;
+      scheduleRender();
+      return true;
+    }
+
+    function normalizeFocusDisplaySignal(signal) {
+      if (!signal || typeof signal !== "object") {
+        return createEmptyFocusSignal();
+      }
+      return createFocusSignal(signal.status, signal);
+    }
+
+    function normalizeFocusStatus(status) {
+      const normalized = normalizeText(status).toLowerCase();
+      return ["hidden", "pending", "split", "steady", "unavailable", "waiting"].includes(normalized)
+        ? normalized
+        : "hidden";
+    }
+
+    function buildDefaultFocusTooltip(status, userMessageCount) {
+      if (status === "waiting") {
+        return `사용자 질문 ${userMessageCount}/${FOCUS_MIN_USER_MESSAGES}개. ${FOCUS_MIN_USER_MESSAGES}개 이상이면 대화 흐름을 자동 평가해요.`;
+      }
+      if (status === "pending") {
+        return "대화 흐름을 평가 중이에요.";
+      }
+      if (status === "steady") {
+        return "최근 질문은 기존 대화 흐름 안에서 이어지는 것으로 보입니다.";
+      }
+      if (status === "split") {
+        return "최근 질문이 이전 흐름과 분리된 새 주제일 가능성이 높아요.";
+      }
+      if (status === "unavailable") {
+        return "대화 흐름 평가를 지금 사용할 수 없어요.";
+      }
+      return "";
+    }
+
+    function serializeFocusSignal(signal) {
+      const normalized = signal && typeof signal === "object" ? signal : {};
+      return JSON.stringify({
+        cached: normalized.cached === true,
+        confidence: readRatio(normalized.confidence, 0),
+        key: normalizeText(normalized.key),
+        reasonCodes: Array.isArray(normalized.reasonCodes) ? normalized.reasonCodes.map(normalizeText).filter(Boolean) : [],
+        status: normalizeFocusStatus(normalized.status),
+        tooltip: normalizeText(normalized.tooltip),
+        userMessageCount: Math.max(0, Number(normalized.userMessageCount) || 0),
+        visible: normalized.visible === true,
+      });
+    }
+
+    function readCachedFocusSignal(key) {
+      const cachedSignal = focusCache.readSignal(key);
+      if (!cachedSignal) {
+        return null;
+      }
+      return createFocusSignal(cachedSignal.status, cachedSignal);
+    }
+
+    function writeCachedFocusSignal(signal) {
+      return focusCache.writeSignal(normalizeFocusDisplaySignal(signal));
     }
 
     function normalizeUserMessages(messages, fallbackItems = []) {
@@ -711,6 +850,17 @@
         hash |= 0;
       }
       return Math.abs(hash).toString(36);
+    }
+
+    function createNoopFocusCache() {
+      return {
+        readSignal() {
+          return null;
+        },
+        writeSignal() {
+          return false;
+        },
+      };
     }
 
     function buildCapabilityError() {

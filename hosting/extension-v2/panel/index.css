@@ -223,12 +223,32 @@
   justify-content: center;
   width: 18px;
   height: 18px;
-  border: 1px solid rgba(173, 70, 87, 0.26);
+  border: 1px solid rgba(98, 127, 145, 0.22);
   border-radius: 999px;
-  background: rgba(255, 244, 238, 0.95);
-  color: #8a3344;
+  background: rgba(255, 255, 255, 0.78);
+  color: rgba(98, 127, 145, 0.82);
   cursor: help;
   flex: 0 0 auto;
+}
+.inova-focus-signal.is-pending {
+  border-color: rgba(173, 125, 51, 0.26);
+  background: rgba(255, 249, 239, 0.95);
+  color: #865d1e;
+}
+.inova-focus-signal.is-steady {
+  border-color: rgba(15, 124, 137, 0.24);
+  background: rgba(240, 251, 252, 0.95);
+  color: #0f5f77;
+}
+.inova-focus-signal.is-split {
+  border-color: rgba(173, 70, 87, 0.26);
+  background: rgba(255, 244, 238, 0.95);
+  color: #8a3344;
+}
+.inova-focus-signal.is-unavailable {
+  border-color: rgba(98, 127, 145, 0.18);
+  background: rgba(248, 251, 255, 0.72);
+  color: rgba(98, 127, 145, 0.68);
 }
 .inova-focus-signal::after {
   content: "";
@@ -238,7 +258,14 @@
   width: 4px;
   height: 4px;
   border-radius: 999px;
-  background: #ad4657;
+  background: currentColor;
+  opacity: 0.48;
+}
+.inova-focus-signal.is-pending::after {
+  animation: inova-focus-pulse 1.15s ease-in-out infinite;
+}
+.inova-focus-signal.is-split::after {
+  opacity: 1;
 }
 .inova-focus-signal__icon {
   position: relative;
@@ -253,22 +280,87 @@
   border-radius: 999px;
 }
 .inova-focus-signal__icon::before {
+  left: 3px;
+  top: 5px;
+  width: 2px;
+  height: 2px;
+  box-shadow: 4px 0 0 currentColor;
+  opacity: 0.84;
+}
+.inova-focus-signal__icon::after {
+  right: 1px;
+  top: 5px;
+  width: 2px;
+  height: 2px;
+  opacity: 0.84;
+}
+.inova-focus-signal.is-pending .inova-focus-signal__icon::before {
+  left: 1px;
+  top: 5px;
+  width: 8px;
+  height: 2px;
+  box-shadow: none;
+  transform: rotate(0deg);
+}
+.inova-focus-signal.is-pending .inova-focus-signal__icon::after {
+  right: 1px;
+  top: 5px;
+  width: 4px;
+  height: 2px;
+  transform: rotate(42deg);
+  transform-origin: right center;
+}
+.inova-focus-signal.is-steady .inova-focus-signal__icon::before {
+  left: 2px;
+  top: 6px;
+  width: 4px;
+  height: 2px;
+  box-shadow: none;
+  transform: rotate(43deg);
+}
+.inova-focus-signal.is-steady .inova-focus-signal__icon::after {
+  right: 1px;
+  top: 4px;
+  width: 7px;
+  height: 2px;
+  transform: rotate(-45deg);
+}
+.inova-focus-signal.is-split .inova-focus-signal__icon::before {
   left: 1px;
   top: 5px;
   width: 9px;
   height: 2px;
+  box-shadow: none;
   transform: rotate(-32deg);
 }
-.inova-focus-signal__icon::after {
+.inova-focus-signal.is-split .inova-focus-signal__icon::after {
   right: 0;
   top: 1px;
   width: 2px;
   height: 7px;
   transform: rotate(35deg);
 }
+.inova-focus-signal.is-unavailable .inova-focus-signal__icon::before,
+.inova-focus-signal.is-unavailable .inova-focus-signal__icon::after {
+  left: 1px;
+  top: 5px;
+  width: 9px;
+  height: 2px;
+  box-shadow: none;
+}
+.inova-focus-signal.is-unavailable .inova-focus-signal__icon::before {
+  transform: rotate(45deg);
+}
+.inova-focus-signal.is-unavailable .inova-focus-signal__icon::after {
+  transform: rotate(-45deg);
+}
 .inova-focus-signal:focus-visible {
   outline: 0;
   box-shadow: 0 0 0 3px rgba(173, 70, 87, 0.16);
+}
+@keyframes inova-focus-pulse {
+  0%, 100% { opacity: 0.32; transform: scale(0.9); }
+  50% { opacity: 0.92; transform: scale(1.22); }
 }
 .inova-token-meter__gauge {
   position: relative;
