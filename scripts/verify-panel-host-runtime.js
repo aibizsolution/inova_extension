@@ -102,6 +102,7 @@ function verifyPanelHostRuntimeModuleSplit() {
   );
   [
     "conversation.read-state",
+    "conversation.read-dom-snapshot",
     "conversation.jump-item",
     "composer.read-state",
     "composer.apply-text",

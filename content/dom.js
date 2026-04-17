@@ -1,6 +1,7 @@
 (function initContentDom(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const { selectors } = namespace.constants;
+  const DOM_SNAPSHOT_VERSION = "conversation-dom-snapshot-v1";
   const TOKEN_ESTIMATE_VERSION = "dom-estimate-v1";
   let pendingScrollId = "";
   let pendingRetryTimer = 0;
@@ -22,6 +23,30 @@
       items,
       tokenEstimate: summarizeTokenEstimate(messages),
       visibleMessageId: namespace.session.normalizeText(getVisibleMessageId(items)),
+    };
+  }
+
+  function collectConversationDomSnapshot(sessionId) {
+    const articles = [];
+    let userOrder = 0;
+    getMessageArticles().forEach((element, index) => {
+      const article = buildConversationArticleSnapshot(element, index, sessionId, userOrder + 1);
+      if (!article) {
+        return;
+      }
+      if (article.roleHint === "user") {
+        userOrder += 1;
+      }
+      articles.push(article);
+    });
+    return {
+      articles,
+      basis: DOM_SNAPSHOT_VERSION,
+      conversation: buildDomSnapshotConversationState(articles),
+      modelCandidates: collectModelLabelCandidates(),
+      sessionId,
+      sessionTitle: getSessionTitle(),
+      visibleMessageId: namespace.session.normalizeText(getVisibleMessageId(articles)),
     };
   }
 
@@ -92,6 +117,43 @@
     };
   }
 
+  function buildConversationArticleSnapshot(element, index, sessionId, userOrder) {
+    const text = namespace.session.normalizeText(element.innerText || element.textContent || "");
+    if (!text) {
+      return null;
+    }
+    const firstChildAriaLabel = namespace.session.normalizeText(element.firstElementChild?.getAttribute("aria-label"));
+    const providerLabel = readAssistantProviderLabel(element);
+    const roleHint = detectMessageRole(element, providerLabel, index);
+    const id = ensureConversationArticleId(element, sessionId, index, text, roleHint, userOrder);
+    return {
+      firstChildAriaLabel,
+      id,
+      index,
+      order: index + 1,
+      providerLabel,
+      roleHint,
+      tagName: namespace.session.normalizeText(element.tagName).toLowerCase() || "article",
+      text,
+      textLength: text.length,
+    };
+  }
+
+  function ensureConversationArticleId(element, sessionId, index, text, roleHint, userOrder) {
+    if (roleHint === "user") {
+      const userId = namespace.session.buildMessageId(sessionId || "current", Math.max(1, Number(userOrder) || index + 1), text);
+      element.dataset.inovaBookmarkId = userId;
+      return userId;
+    }
+    const existingId = namespace.session.normalizeText(element.dataset.inovaBookmarkId);
+    if (existingId) {
+      return existingId;
+    }
+    const articleId = namespace.session.buildMessageId(sessionId || "current", index + 1, text);
+    element.dataset.inovaBookmarkId = articleId;
+    return articleId;
+  }
+
   function buildBookmarkRecords(sessionId, messages) {
     const bookmarks = [];
     let pendingBookmark = null;
@@ -139,6 +201,20 @@
       articleCount: messages.length,
       assistantCount: counts.assistant,
       messageCount: messages.length,
+      userCount: counts.user,
+    };
+  }
+
+  function buildDomSnapshotConversationState(articles) {
+    const counts = countMessages((Array.isArray(articles) ? articles : []).map((article) => ({
+      role: namespace.session.normalizeText(article?.roleHint),
+    })));
+    return {
+      hasChatLog: Boolean(getChatLogElement(false)),
+      hasComposer: Boolean(document.querySelector(selectors.composer)),
+      articleCount: Array.isArray(articles) ? articles.length : 0,
+      assistantCount: counts.assistant,
+      messageCount: Array.isArray(articles) ? articles.length : 0,
       userCount: counts.user,
     };
   }
@@ -193,6 +269,27 @@
       }
     }
     return "";
+  }
+
+  function collectModelLabelCandidates() {
+    const chatRoot = getChatLogElement(false);
+    return Array.from(document.querySelectorAll(selectors.currentModelButton || "button"))
+      .filter((element) => element instanceof HTMLElement && !chatRoot?.contains(element) && isVisibleElement(element))
+      .slice(0, 12)
+      .map((element, index) => {
+        const text = namespace.session.normalizeText(element.textContent || "");
+        const ariaLabel = namespace.session.normalizeText(element.getAttribute("aria-label"));
+        const title = namespace.session.normalizeText(element.getAttribute("title"));
+        return {
+          ariaLabel,
+          id: `model-candidate-${index + 1}`,
+          label: readProviderLabelFromElement(element),
+          tagName: namespace.session.normalizeText(element.tagName).toLowerCase() || "button",
+          text,
+          title,
+        };
+      })
+      .filter((candidate) => candidate.text || candidate.ariaLabel || candidate.title || candidate.label);
   }
 
   function readProviderLabelFromElement(element) {
@@ -482,6 +579,7 @@
   }
 
   namespace.contentDom = {
+    collectConversationDomSnapshot,
     collectConversationMessages,
     collectConversationSnapshot,
     collectUserMessages,

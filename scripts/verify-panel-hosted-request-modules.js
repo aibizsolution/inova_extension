@@ -209,6 +209,7 @@ function verifyHostedBridgeRequestModuleContract() {
     "composer.read-state",
     "composer.apply-text",
     "conversation.read-state",
+    "conversation.read-dom-snapshot",
     "conversation.jump-item",
     "debug.read-state",
     "debug.set-enabled",

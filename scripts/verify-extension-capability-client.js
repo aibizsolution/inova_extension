@@ -122,7 +122,12 @@ async function verifyExtensionCapabilityClientPageAllowlist() {
   assert(catalog.bridgeApis.includes("invokeCapability"));
   assert(catalog.bridgeApis.includes("invokePageCapability"));
   assert(catalog.pageCapabilityIds.includes("composer.read-state"));
+  assert(catalog.pageCapabilityIds.includes("conversation.read-dom-snapshot"));
   assert(catalog.pageCapabilityIds.includes("clipboard.write-text"));
+  await browserCapabilities.readConversationDomSnapshot();
+  assert.deepEqual(pageCalls.at(-1), {
+    action: "conversation.read-dom-snapshot",
+  });
   await browserCapabilities.invokeCapability("prompt.review.run", { prompt: "검토" });
   assert.deepEqual(runtimeCalls.at(-1), {
     action: "capabilities.invoke",

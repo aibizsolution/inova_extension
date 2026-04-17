@@ -95,6 +95,13 @@ function main() {
   assert(snapshot.tokenEstimate.total > snapshot.tokenEstimate.question);
   assert.equal(snapshot.tokenEstimate.basis, "dom-estimate-v1");
 
+  const domSnapshot = namespace.contentDom.collectConversationDomSnapshot(sessionId);
+  assert.equal(domSnapshot.basis, "conversation-dom-snapshot-v1");
+  assert.equal(domSnapshot.articles.length, 6);
+  assert.equal(domSnapshot.articles[0].id, messages[0].id);
+  assert.equal(domSnapshot.articles[1].firstChildAriaLabel, "Google: Gemini 3 Pro");
+  assert.equal(domSnapshot.articles[1].roleHint, "assistant");
+
   console.log("[verify-content-smoke] DOM smoke check passed");
 }
 

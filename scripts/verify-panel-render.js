@@ -395,6 +395,7 @@ async function verifyHostedConversationCapabilityGates() {
     },
   };
   loadHostedPanelScript("panel-utils.js", context);
+  loadHostedPanelScript("conversation-dom-parser.js", context);
   loadHostedPanelScript("conversation-controller.js", context);
   loadHostedPanelScript("bookmark-view.js", context);
 
@@ -431,6 +432,37 @@ async function verifyHostedConversationCapabilityGates() {
             total: 36,
             visibleMessageCount: 2,
           },
+          visibleMessageId: "q1",
+        };
+      },
+      async readConversationDomSnapshot() {
+        pageCalls.push({ action: "conversation.read-dom-snapshot" });
+        return {
+          articles: [
+            {
+              id: "q1",
+              order: 1,
+              roleHint: "user",
+              text: "Hello",
+            },
+            {
+              firstChildAriaLabel: "OpenAI: GPT-5.4",
+              id: "a1",
+              order: 2,
+              text: "OpenAI: GPT-5.4 response",
+            },
+          ],
+          basis: "conversation-dom-snapshot-v1",
+          conversation: {
+            articleCount: 2,
+            hasChatLog: true,
+            hasComposer: true,
+          },
+          modelCandidates: [
+            { label: "OpenAI: GPT-5.4", text: "OpenAI: GPT-5.4" },
+          ],
+          sessionId: "session-1",
+          sessionTitle: "현재 세션",
           visibleMessageId: "q1",
         };
       },
@@ -481,12 +513,13 @@ async function verifyHostedConversationCapabilityGates() {
     "page.adapter.v2",
     "page.clipboard.write-text",
     "page.conversation.jump-item",
+    "page.conversation.read-dom-snapshot",
     "page.conversation.read-state",
   ]);
   await flushMicrotasks();
   viewState = controller.buildViewState({});
   assert.equal(viewState.count, 1, "conversation view should load items when read capability is negotiated");
-  assert.equal(viewState.tokenEstimate.total, 36, "conversation view should expose DOM token estimates from the page snapshot");
+  assert.equal(viewState.tokenEstimate.total, 4, "conversation view should expose hosted parser estimates from the DOM snapshot");
   assert.equal(viewState.tokenEstimate.modelLabel, "OpenAI: GPT-5.4", "conversation view should preserve the selected model label from the page snapshot");
   assert.equal(viewState.tokenEstimate.modelLabelSource, "selected-model", "conversation view should preserve the selected model label source");
   assert.equal(viewState.canJumpBookmark, true);
@@ -501,7 +534,7 @@ async function verifyHostedConversationCapabilityGates() {
   assert.equal(await controller.handleJumpBookmark("q1"), true);
   assert.equal(await controller.handleCopyBookmark("q1"), true);
   assert.deepEqual(pageCalls.map((call) => call.action), [
-    "conversation.read-state",
+    "conversation.read-dom-snapshot",
     "conversation.jump-item",
     "clipboard.write-text",
   ]);

@@ -483,6 +483,7 @@ function verifyHostedPanelFiles(directoryName) {
   if (directoryName === "extension-v2") {
     assert(!html.includes("./legacy-panel.css"), "v2 hosted panel should not load the dead legacy panel shell stylesheet");
     assert(!html.includes("./legacy-tools.css"), "v2 hosted panel should not load the dead legacy tools stylesheet");
+    assert(html.includes("./conversation-dom-parser.js"), "v2 hosted panel should load hosted conversation DOM parser");
     assert(html.includes("./conversation-controller.js"), "v2 hosted panel should load conversation controller");
     assert(html.includes("./panel-firestore-session-client.js"), "v2 hosted panel should load the shared Firestore session coordinator");
     assert(html.includes("./prompt-text-model.js"), "v2 hosted panel should load the shared prompt text model");
