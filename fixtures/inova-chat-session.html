@@ -10,25 +10,34 @@
       <h1>신규 프로모션 회의</h1>
 
       <section aria-label="채팅 기록">
-        <article class="chat-message chat-message--assistant">
-          <div class="chat-message__text">안녕하세요. 오늘 안건을 정리해 볼게요.</div>
-        </article>
+        <div aria-label="채팅 메시지 목록" role="log">
+          <article>
+            <div>이번 분기 런칭 일정 다시 정리해 주세요.</div>
+          </article>
 
-        <article class="chat-message chat-message--user">
-          <div class="chat-message__text">이번 분기 런칭 일정 다시 정리해 주세요.</div>
-        </article>
+          <article>
+            <div aria-label="Google: Gemini 3 Pro"></div>
+            <div>런칭 일정은 기획 확정, 제작, 검수, 배포 순서로 정리하면 됩니다.</div>
+          </article>
 
-        <article class="chat-message chat-message--user">
-          <div class="chat-message__text">오프라인 행사 예산은 얼마까지 가능한가요?</div>
-        </article>
+          <article>
+            <div>오프라인 행사 예산은 얼마까지 가능한가요?</div>
+          </article>
 
-        <article class="chat-message chat-message--assistant">
-          <div class="chat-message__text">현재 예산 초안을 먼저 확인해 보겠습니다.</div>
-        </article>
+          <article>
+            <div aria-label="Anthropic: Claude Opus 4"></div>
+            <div>현재 예산 초안을 기준으로 장소, 장비, 운영 인력을 나눠 확인해야 합니다.</div>
+          </article>
 
-        <article class="chat-message chat-message--user">
-          <div class="chat-message__text">다음 주까지 필요한 액션 아이템만 추려 주세요.</div>
-        </article>
+          <article>
+            <div>다음 주까지 필요한 액션 아이템만 추려 주세요.</div>
+          </article>
+
+          <article>
+            <div aria-label="Google: Gemini 3 Pro"></div>
+            <div>다음 주까지는 일정 확정, 예산 승인, 담당자 지정 세 가지만 우선 처리하세요.</div>
+          </article>
+        </div>
       </section>
 
       <section class="chat-composer">

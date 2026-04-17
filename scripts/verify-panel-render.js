@@ -411,8 +411,22 @@ async function verifyHostedConversationCapabilityGates() {
               normalizedText: "hello",
               order: 1,
               text: "Hello",
+              tokenEstimate: {
+                answer: 34,
+                hasAnswer: true,
+                question: 2,
+                total: 36,
+              },
             },
           ],
+          tokenEstimate: {
+            answer: 34,
+            basis: "dom-estimate-v1",
+            messageCount: 2,
+            question: 2,
+            total: 36,
+            visibleMessageCount: 2,
+          },
           visibleMessageId: "q1",
         };
       },
@@ -468,8 +482,13 @@ async function verifyHostedConversationCapabilityGates() {
   await flushMicrotasks();
   viewState = controller.buildViewState({});
   assert.equal(viewState.count, 1, "conversation view should load items when read capability is negotiated");
+  assert.equal(viewState.tokenEstimate.total, 36, "conversation view should expose DOM token estimates from the page snapshot");
   assert.equal(viewState.canJumpBookmark, true);
   assert.equal(viewState.canCopyBookmark, true);
+  const tokenMarkup = context.InovaBookmarks.bookmarkView.renderTool(viewState);
+  assert(tokenMarkup.includes("예상 토큰"), "bookmark view should render a conversation token meter when estimates are available");
+  assert(tokenMarkup.includes("Q 2"), "bookmark view should render per-question token estimates");
+  assert(tokenMarkup.includes("A 34"), "bookmark view should render per-answer token estimates");
   assert.equal(await controller.handleJumpBookmark("q1"), true);
   assert.equal(await controller.handleCopyBookmark("q1"), true);
   assert.deepEqual(pageCalls.map((call) => call.action), [

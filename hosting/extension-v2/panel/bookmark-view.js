@@ -25,6 +25,7 @@
             data-search-tool="bookmarks"
             placeholder="이 대화에서 질문 찾기"
           />
+          ${renderTokenSummary(state.tokenEstimate)}
           ${state.metaText ? `<div class="inova-tool-meta">${escapeHtml(state.metaText)}</div>` : ""}
         </div>
         ${capabilityNotice}
@@ -46,7 +47,10 @@
       >
         <div class="bookmark-jump"${canJumpBookmark ? ` data-bookmark-id="${escapeHtml(bookmark.id)}"` : ""}>
           <span class="bookmark-index">${bookmark.order}</span>
-          <span class="bookmark-text">${renderQuestionText(bookmark.text, query)}</span>
+          <span class="bookmark-content">
+            <span class="bookmark-text">${renderQuestionText(bookmark.text, query)}</span>
+            ${renderBookmarkTokenMeta(bookmark.tokenEstimate)}
+          </span>
         </div>
         ${canCopyBookmark ? `
         <button
@@ -58,6 +62,60 @@
         >${renderCopyIcon()}</button>` : ""}
       </article>
     `;
+  }
+
+  function renderTokenSummary(tokenEstimate = {}) {
+    const total = readTokenCount(tokenEstimate.total);
+    if (!total) {
+      return "";
+    }
+    const question = readTokenCount(tokenEstimate.question);
+    const answer = readTokenCount(tokenEstimate.answer);
+    const tone = total >= 24000 ? "heavy" : total >= 12000 ? "long" : "normal";
+    return `
+      <div class="inova-token-meter is-${tone}" title="현재 DOM 기준 예상 토큰">
+        <div class="inova-token-meter__main">
+          <span class="inova-token-meter__label">예상 토큰</span>
+          <strong>${escapeHtml(formatTokenCount(total))}</strong>
+        </div>
+        <div class="inova-token-meter__detail">
+          <span>질문 ${escapeHtml(formatTokenCount(question))}</span>
+          <span>응답 ${escapeHtml(formatTokenCount(answer))}</span>
+          <span>현재 DOM 기준</span>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderBookmarkTokenMeta(tokenEstimate = {}) {
+    const question = readTokenCount(tokenEstimate.question);
+    const answer = readTokenCount(tokenEstimate.answer);
+    if (!question && !answer) {
+      return "";
+    }
+    const total = readTokenCount(tokenEstimate.total) || question + answer;
+    const parts = [`Q ${formatTokenCount(question)}`];
+    if (answer) {
+      parts.push(`A ${formatTokenCount(answer)}`);
+    }
+    return `<span class="bookmark-token-meta" title="이 문답 예상 토큰">${escapeHtml(parts.join(" · "))}<span>${escapeHtml(formatTokenCount(total))}</span></span>`;
+  }
+
+  function readTokenCount(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number) || number < 0) {
+      return 0;
+    }
+    return Math.floor(number);
+  }
+
+  function formatTokenCount(value) {
+    const count = readTokenCount(value);
+    if (count >= 1000) {
+      const compact = Math.round(count / 100) / 10;
+      return `${compact.toFixed(compact >= 10 ? 0 : 1)}K`;
+    }
+    return String(count);
   }
 
   function renderCopyIcon(state = "default") {

@@ -88,10 +88,12 @@
 - active hosted-first lane은 회의 브라우저 상태를 별도 `meetingStateByMeetingId` storage key로 유지하지 않습니다. 이 키는 `0.4.4` 영향 판단용 backup/legacy reference에서만 남깁니다.
 - 회의 허브 목록은 `chrome.storage.local.meetingHub`에 별도 저장하지 않고, hosted bridge의 Firestore persistence와 현재 메모리 상태를 우선합니다.
 
-## 6. 질문 모으기 규칙
+## 6. 질문/응답 수집 규칙
 
-- 대상은 `.chat-message--user`로 잡힌 사용자 질문입니다.
-- assistant 응답, 시스템 메시지, 아티팩트 설명은 포함하지 않습니다.
+- 현재 i-Nova 대화 DOM에서는 `[aria-label="채팅 메시지 목록"]` 아래 `article` 순서를 기준으로 질문/응답을 읽습니다.
+- assistant 응답 article은 첫 번째 직계 자식의 `aria-label`이 `Provider: 모델명` 형태일 때 우선 판별하고, legacy class selector는 fallback으로만 유지합니다.
+- 북마크 목록의 주 대상은 사용자 질문이며, 응답 전문은 hosted panel로 넘기지 않고 현재 DOM 기준 예상 토큰 수로만 요약합니다.
+- 토큰 표시는 서버가 실제 모델에 전달한 전체 컨텍스트가 아니라 현재 DOM에 렌더된 질문/응답 기준의 추정치임을 UI에서 드러냅니다.
 - 패널에는 현재 대화에 보이는 질문만 보여야 합니다.
 - 세션 이동 중 이전 대화의 질문이 잠깐이라도 섞여 보이지 않도록 대기 상태를 둡니다.
 - 좁은 화면에서 항목 클릭 후 원문 확인이 필요하면 패널을 잠시 접어 가림을 줄입니다.

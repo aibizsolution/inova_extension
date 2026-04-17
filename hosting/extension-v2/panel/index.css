@@ -139,6 +139,57 @@
 }
 .inova-tool-meta { font-size: 12px; font-weight: 600; color: #0f5f77; }
 .inova-tool-meta--muted { color: rgba(16, 33, 43, 0.62); }
+.inova-token-meter {
+  display: grid;
+  gap: 7px;
+  padding: 11px 12px;
+  border: 1px solid rgba(98, 127, 145, 0.16);
+  border-radius: 12px;
+  background: rgba(248, 251, 255, 0.86);
+  color: rgba(16, 33, 43, 0.74);
+}
+.inova-token-meter.is-long {
+  border-color: rgba(173, 125, 51, 0.2);
+  background: rgba(255, 249, 239, 0.9);
+}
+.inova-token-meter.is-heavy {
+  border-color: rgba(173, 70, 87, 0.22);
+  background: rgba(252, 242, 245, 0.9);
+}
+.inova-token-meter__main,
+.inova-token-meter__detail {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+.inova-token-meter__main strong {
+  color: #0f5f77;
+  font-size: 20px;
+  line-height: 1;
+  white-space: nowrap;
+}
+.inova-token-meter.is-long .inova-token-meter__main strong { color: #865d1e; }
+.inova-token-meter.is-heavy .inova-token-meter__main strong { color: #8a3344; }
+.inova-token-meter__label {
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(16, 33, 43, 0.7);
+}
+.inova-token-meter__detail {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: rgba(16, 33, 43, 0.58);
+}
+.inova-token-meter__detail span {
+  display: inline-flex;
+  min-width: 0;
+  white-space: nowrap;
+}
 .inova-tool-actions, .inova-import-review__summary, .inova-import-review__modes { display: flex; flex-wrap: wrap; gap: 6px; }
 .inova-tool-actions--toolbar { justify-content: flex-end; }
 .inova-tool-action-with-help { display: inline-flex; }
@@ -1405,6 +1456,35 @@ body {
   letter-spacing: -0.01em;
   overflow-wrap: anywhere;
   word-break: keep-all;
+}
+
+.bookmark-content {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.bookmark-token-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: rgba(15, 124, 137, 0.08);
+  color: rgba(15, 95, 119, 0.86);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.bookmark-token-meta span {
+  color: rgba(16, 33, 43, 0.54);
+  font-weight: 700;
 }
 
 .bookmark-highlight {

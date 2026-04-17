@@ -353,15 +353,19 @@
 
   function defaultBuildConversationSnapshot() {
     const sessionId = namespace.session?.getSessionId?.() || "";
-    const items = namespace.contentDom?.collectUserMessages?.(sessionId) || [];
+    const conversationSnapshot = namespace.contentDom?.collectConversationSnapshot?.(sessionId) || null;
+    const items = Array.isArray(conversationSnapshot?.items)
+      ? conversationSnapshot.items
+      : namespace.contentDom?.collectUserMessages?.(sessionId) || [];
     return {
-      conversation: cloneValue(namespace.contentDom?.getConversationState?.() || {}),
+      conversation: cloneValue(conversationSnapshot?.conversation || namespace.contentDom?.getConversationState?.() || {}),
       items: cloneValue(items),
       sessionId,
       sessionTitle: normalizeText(namespace.contentDom?.getSessionTitle?.())
         || namespace.session?.formatSessionLabel?.(sessionId)
         || "현재 세션",
-      visibleMessageId: normalizeText(namespace.contentDom?.getVisibleMessageId?.(items)),
+      tokenEstimate: cloneValue(conversationSnapshot?.tokenEstimate || namespace.contentDom?.summarizeTokenEstimate?.() || {}),
+      visibleMessageId: normalizeText(conversationSnapshot?.visibleMessageId || namespace.contentDom?.getVisibleMessageId?.(items)),
     };
   }
 

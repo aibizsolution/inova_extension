@@ -61,8 +61,12 @@
       },
     },
     selectors: {
+      chatMessageLog: '[aria-label="채팅 메시지 목록"]',
+      messageArticle: "article",
       userMessage: ".chat-message--user",
       userText: ".chat-message__text",
+      assistantMessage: ".chat-message--assistant, .chat-message--ai, .chat-message--bot",
+      assistantText: ".chat-message__text",
       chatLog: '[aria-label="채팅 기록"]',
       chatScroller: "main.chat-history__content, .chat-history__content, .chat-history",
       mainHeading: "h1",

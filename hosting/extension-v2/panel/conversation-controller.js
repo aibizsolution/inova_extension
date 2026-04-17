@@ -49,6 +49,7 @@
       sessionId: "",
       sessionTitle: "",
       snapshotFingerprint: "",
+      tokenEstimate: createEmptyTokenEstimate(),
       visibleMessageId: "",
     };
 
@@ -116,6 +117,7 @@
           items: [],
           metaText: "",
           query: state.query,
+          tokenEstimate: createEmptyTokenEstimate(),
         };
       }
       const items = getFilteredItems();
@@ -129,6 +131,7 @@
         items,
         metaText: state.query ? `검색 결과 ${items.length}개` : buildStatusText(),
         query: state.query,
+        tokenEstimate: buildEffectiveTokenEstimate(),
       };
     }
 
@@ -248,6 +251,7 @@
         : [];
       if (nextItems.length) {
         state.items = nextItems;
+        state.tokenEstimate = summarizeItemsTokenEstimate(state.items);
       }
       const nextQuery = String(fallbackBookmarksTool?.query ?? "");
       if (nextQuery || !state.query) {
@@ -277,6 +281,7 @@
       state.items = Array.isArray(normalizedSnapshot.items)
         ? normalizedSnapshot.items.map(cloneValue)
         : [];
+      state.tokenEstimate = normalizeTokenEstimate(normalizedSnapshot.tokenEstimate, state.items);
       state.sessionId = normalizeText(normalizedSnapshot.sessionId);
       state.sessionTitle = normalizeText(normalizedSnapshot.sessionTitle);
       state.visibleMessageId = normalizeText(normalizedSnapshot.visibleMessageId);
@@ -319,6 +324,64 @@
       return state.items.filter((bookmark) =>
         normalizeText(bookmark?.normalizedText || bookmark?.text).toLowerCase().includes(normalizedQuery)
       );
+    }
+
+    function buildEffectiveTokenEstimate() {
+      const estimate = normalizeTokenEstimate(state.tokenEstimate, state.items);
+      if (state.query) {
+        estimate.filtered = summarizeItemsTokenEstimate(getFilteredItems());
+      }
+      return estimate;
+    }
+
+    function normalizeTokenEstimate(rawEstimate, fallbackItems = []) {
+      const estimate = rawEstimate && typeof rawEstimate === "object" ? rawEstimate : {};
+      const fallback = summarizeItemsTokenEstimate(fallbackItems);
+      const question = readNonNegativeNumber(estimate.question, fallback.question);
+      const answer = readNonNegativeNumber(estimate.answer, fallback.answer);
+      const total = readNonNegativeNumber(estimate.total, question + answer);
+      return {
+        answer,
+        basis: normalizeText(estimate.basis) || fallback.basis,
+        messageCount: readNonNegativeNumber(estimate.messageCount, fallback.messageCount),
+        question,
+        total,
+        visibleMessageCount: readNonNegativeNumber(estimate.visibleMessageCount, fallback.visibleMessageCount),
+      };
+    }
+
+    function summarizeItemsTokenEstimate(items) {
+      const summary = createEmptyTokenEstimate();
+      (Array.isArray(items) ? items : []).forEach((item) => {
+        const itemEstimate = item?.tokenEstimate && typeof item.tokenEstimate === "object" ? item.tokenEstimate : {};
+        const question = readNonNegativeNumber(itemEstimate.question, 0);
+        const answer = readNonNegativeNumber(itemEstimate.answer, 0);
+        summary.question += question;
+        summary.answer += answer;
+        summary.total += readNonNegativeNumber(itemEstimate.total, question + answer);
+        summary.messageCount += answer > 0 ? 2 : 1;
+        summary.visibleMessageCount = summary.messageCount;
+      });
+      return summary;
+    }
+
+    function createEmptyTokenEstimate() {
+      return {
+        answer: 0,
+        basis: "dom-estimate-v1",
+        messageCount: 0,
+        question: 0,
+        total: 0,
+        visibleMessageCount: 0,
+      };
+    }
+
+    function readNonNegativeNumber(value, fallback) {
+      const number = Number(value);
+      if (!Number.isFinite(number) || number < 0) {
+        return Math.max(0, Number(fallback) || 0);
+      }
+      return Math.floor(number);
     }
 
     function buildSnapshotFingerprint(bookmarksTool) {
