@@ -41,6 +41,7 @@
     },
     capabilities: {
       ...buildFunctionCapabilityCatalog([
+      ["conversation.focus.evaluate", "evaluateConversationFocusUrl", "prompt", "conversation", "conversation", "read", 60000],
       ["meeting.list", "listInovaMeetingsUrl", "meeting", "meeting", "meeting", "read"],
       ["meeting.panel-auth.issue-function", "issueInovaMeetingPanelAuthUrl", "meeting", "meeting", "meeting", "auth"],
       ["meeting.share.create-function", "createInovaMeetingShareLinkUrl", "meeting", "meeting", "meeting", "write"],
@@ -82,6 +83,7 @@
       "createInovaMeetingShareLinkUrl",
       "deleteInovaMeetingResultUrl",
       "deleteInovaMeetingUrl",
+      "evaluateConversationFocusUrl",
       "exchangeInovaMeetingLaunchUrl",
       "importPromptStoreEntryUrl",
       "issueInovaMeetingLaunchUrl",
@@ -578,7 +580,7 @@
 
   function buildFunctionCapabilityCatalog(capabilityDefinitions) {
     return (capabilityDefinitions || []).reduce((catalog, entry) => {
-      const [capabilityId, endpointKey, service, owner, domain, auditLevel] = entry;
+      const [capabilityId, endpointKey, service, owner, domain, auditLevel, requestTimeoutMs] = entry;
       catalog[capabilityId] = {
         auditLevel: auditLevel || "read",
         authMode: "access-token",
@@ -593,6 +595,9 @@
         schemaVersion: 1,
         service,
       };
+      if (requestTimeoutMs) {
+        catalog[capabilityId].requestTimeoutMs = requestTimeoutMs;
+      }
       return catalog;
     }, {});
   }

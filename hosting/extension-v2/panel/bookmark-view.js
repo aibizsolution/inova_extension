@@ -25,7 +25,7 @@
             data-search-tool="bookmarks"
             placeholder="이 대화에서 질문 찾기"
           />
-          ${renderTokenSummary(state.tokenEstimate, state.contextProfileConfig)}
+          ${renderTokenSummary(state.tokenEstimate, state.contextProfileConfig, state.focusSignal)}
           ${state.metaText ? `<div class="inova-tool-meta">${escapeHtml(state.metaText)}</div>` : ""}
         </div>
         ${capabilityNotice}
@@ -64,7 +64,7 @@
     `;
   }
 
-  function renderTokenSummary(tokenEstimate = {}, contextProfileConfig = {}) {
+  function renderTokenSummary(tokenEstimate = {}, contextProfileConfig = {}, focusSignal = {}) {
     const total = readTokenCount(tokenEstimate.total);
     if (!total) {
       return "";
@@ -88,7 +88,10 @@
             <span class="inova-token-meter__label">예상 컨텍스트</span>
             <span class="inova-context-help" tabindex="0" aria-label="${escapeHtml(helpText)}" title="${escapeHtml(helpText)}">?</span>
           </span>
-          <strong>${escapeHtml(formatTokenCount(total))}</strong>
+          <span class="inova-token-meter__value">
+            ${renderFocusSignal(focusSignal)}
+            <strong>${escapeHtml(formatTokenCount(total))}</strong>
+          </span>
         </div>
         <div class="inova-token-meter__gauge" aria-label="대화 길이 신호: ${escapeHtml(risk.label)}">
           ${renderContextGauge(risk, normalizedConfig.signals)}
@@ -99,6 +102,26 @@
           <span>응답 ${escapeHtml(formatTokenCount(answer))}</span>
         </div>
       </div>
+    `;
+  }
+
+  function renderFocusSignal(focusSignal = {}) {
+    const signal = focusSignal && typeof focusSignal === "object" ? focusSignal : {};
+    if (signal.visible !== true) {
+      return "";
+    }
+    const tooltip = namespace.session.normalizeText(signal.tooltip)
+      || "최근 질문이 이전 흐름과 분리된 새 주제일 가능성이 높아요. 새 대화로 나누면 답변 품질을 유지하기 쉬울 수 있어요.";
+    return `
+      <span
+        class="inova-focus-signal"
+        tabindex="0"
+        role="img"
+        aria-label="${escapeHtml(tooltip)}"
+        title="${escapeHtml(tooltip)}"
+      >
+        <span class="inova-focus-signal__icon" aria-hidden="true"></span>
+      </span>
     `;
   }
 

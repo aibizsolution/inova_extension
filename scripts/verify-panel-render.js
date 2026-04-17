@@ -12,6 +12,7 @@ const { verifyPanelRuntimeResolverOwnershipContract } = require("./verify-panel-
 const { verifyPanelHostRuntimeContract } = require("./verify-panel-host-runtime");
 const { verifyHostedTraceVisibilityContract } = require("./verify-hosted-trace-visibility");
 const { verifyConversationContextMeterContract } = require("./verify-conversation-context-meter");
+const { verifyConversationFocusContract } = require("./verify-conversation-focus");
 
 const root = path.resolve(__dirname, "..");
 
@@ -32,6 +33,7 @@ async function main() {
   verifyHostedConversationSearchDebounceContract();
   await verifyHostedConversationCapabilityGates();
   verifyConversationContextMeterContract();
+  await verifyConversationFocusContract();
   verifyHostedStoreSearchDebounceContract();
   verifyBookmarkJumpAccessibilityContract();
   verifyHostedPromptReviewFallbackContract();

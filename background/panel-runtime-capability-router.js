@@ -53,6 +53,12 @@ const PANEL_RUNTIME_CAPABILITY_MANIFEST = deepFreeze({
       },
     },
     prompt: {
+      evaluateConversationFocusUrl: {
+        allowedAuthModes: ["access-token", "none"],
+        capabilityId: "conversation.focus.evaluate",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
       importPromptStoreEntryUrl: {
         allowedAuthModes: ["access-token", "none"],
         capabilityId: "prompt.store.import",

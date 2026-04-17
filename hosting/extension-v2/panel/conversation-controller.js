@@ -8,10 +8,17 @@
   const CONVERSATION_DOM_SNAPSHOT_CAPABILITY_ID = "page.conversation.read-dom-snapshot";
   const CONVERSATION_READ_CAPABILITY_ID = "page.conversation.read-state";
   const CONVERSATION_JUMP_CAPABILITY_ID = "page.conversation.jump-item";
+  const CONVERSATION_FOCUS_EVALUATE_CAPABILITY_ID = "conversation.focus.evaluate";
   const CLIPBOARD_WRITE_CAPABILITY_ID = "page.clipboard.write-text";
+  const FOCUS_EVALUATION_USER_MESSAGE_LIMIT = 32;
+  const FOCUS_MIN_LATEST_CHARS = 12;
+  const FOCUS_MIN_USER_MESSAGES = 3;
 
   function create(options = {}) {
     const browserCapabilities = resolveBrowserCapabilities(options);
+    const invokeCapability = typeof browserCapabilities.invokeCapability === "function"
+      ? browserCapabilities.invokeCapability
+      : null;
     const readConversationState = typeof browserCapabilities.readConversationState === "function"
       ? browserCapabilities.readConversationState
       : async () => ({});
@@ -27,6 +34,9 @@
     const traceConversation = typeof options.traceConversation === "function"
       ? options.traceConversation
       : () => {};
+    const getProviderIdentity = typeof options.getProviderIdentity === "function"
+      ? options.getProviderIdentity
+      : () => ({ available: false });
     const writeClipboardText = typeof browserCapabilities.writeClipboardText === "function"
       ? browserCapabilities.writeClipboardText
       : async () => ({});
@@ -41,6 +51,9 @@
         userCount: 0,
       },
       error: "",
+      focusEvaluationPendingKey: "",
+      focusEvaluationRequestId: 0,
+      focusSignal: createEmptyFocusSignal(),
       initialized: false,
       items: [],
       lastLoadedAt: 0,
@@ -54,6 +67,7 @@
       sessionTitle: "",
       snapshotFingerprint: "",
       tokenEstimate: createEmptyTokenEstimate(),
+      userMessages: [],
       visibleMessageId: "",
     };
 
@@ -118,6 +132,7 @@
           capabilityError: "대화 읽기 기능이 현재 비활성화되어 있어요.",
           count: 0,
           emptyText: "대화 읽기 기능이 현재 비활성화되어 있어요.",
+          focusSignal: createEmptyFocusSignal(),
           items: [],
           metaText: "",
           query: state.query,
@@ -132,6 +147,7 @@
         capabilityError: buildCapabilityError(),
         count: getConversationCount(),
         emptyText: buildEmptyText(items.length),
+        focusSignal: getVisibleFocusSignal(),
         items,
         metaText: state.query ? `검색 결과 ${items.length}개` : buildStatusText(),
         query: state.query,
@@ -256,6 +272,8 @@
       if (nextItems.length) {
         state.items = nextItems;
         state.tokenEstimate = summarizeItemsTokenEstimate(state.items);
+        state.userMessages = buildUserMessagesFromItems(state.items);
+        requestFocusEvaluation();
       }
       const nextQuery = String(fallbackBookmarksTool?.query ?? "");
       if (nextQuery || !state.query) {
@@ -286,12 +304,14 @@
         ? normalizedSnapshot.items.map(cloneValue)
         : [];
       state.tokenEstimate = normalizeTokenEstimate(normalizedSnapshot.tokenEstimate, state.items);
+      state.userMessages = normalizeUserMessages(normalizedSnapshot.userMessages, state.items);
       state.sessionId = normalizeText(normalizedSnapshot.sessionId);
       state.sessionTitle = normalizeText(normalizedSnapshot.sessionTitle);
       state.visibleMessageId = normalizeText(normalizedSnapshot.visibleMessageId);
       if (!state.items.some((item) => normalizeText(item?.id) === state.activeId)) {
         state.activeId = state.visibleMessageId || normalizeText(state.items[0]?.id);
       }
+      requestFocusEvaluation();
     }
 
     function buildStatusText() {
@@ -448,6 +468,249 @@
         }
       }
       return readConversationState();
+    }
+
+    function requestFocusEvaluation() {
+      const request = buildFocusEvaluationRequest();
+      if (!request) {
+        clearFocusSignal();
+        return false;
+      }
+      if (state.focusEvaluationPendingKey === request.key || state.focusSignal.key === request.key) {
+        return false;
+      }
+
+      const requestId = state.focusEvaluationRequestId + 1;
+      state.focusEvaluationRequestId = requestId;
+      state.focusEvaluationPendingKey = request.key;
+      if (state.focusSignal.visible) {
+        state.focusSignal = createEmptyFocusSignal();
+        scheduleRender();
+      }
+      traceConversation("36.hosted.conversation.focus.start", {
+        userMessageCount: request.input.userMessages.length,
+      });
+      invokeCapability(CONVERSATION_FOCUS_EVALUATE_CAPABILITY_ID, request.input, {
+        trace: {
+          reason: "conversation-focus",
+          source: "conversation-controller",
+        },
+      }).then((result) => {
+        if (state.focusEvaluationRequestId !== requestId) {
+          return;
+        }
+        state.focusSignal = normalizeFocusSignal(result, request.key);
+        traceConversation("37.hosted.conversation.focus.success", {
+          confidence: state.focusSignal.confidence,
+          visible: state.focusSignal.visible,
+        });
+      }).catch((error) => {
+        if (state.focusEvaluationRequestId !== requestId) {
+          return;
+        }
+        state.focusSignal = createEmptyFocusSignal();
+        traceConversation("37.hosted.conversation.focus.error", {
+          error: getErrorMessage(error, "conversation focus evaluation failed"),
+        });
+      }).finally(() => {
+        if (state.focusEvaluationRequestId !== requestId) {
+          return;
+        }
+        state.focusEvaluationPendingKey = "";
+        scheduleRender();
+      });
+      return true;
+    }
+
+    function buildFocusEvaluationRequest() {
+      if (!hasCapability(CONVERSATION_FOCUS_EVALUATE_CAPABILITY_ID) || typeof invokeCapability !== "function") {
+        return null;
+      }
+      const providerIdentity = normalizeProviderIdentity(getProviderIdentity());
+      if (!providerIdentity.available || !providerIdentity.providerUserKey) {
+        return null;
+      }
+      const userMessages = normalizeUserMessages(state.userMessages, state.items);
+      if (userMessages.length < FOCUS_MIN_USER_MESSAGES) {
+        return null;
+      }
+      const latestMessage = userMessages[userMessages.length - 1];
+      if (!latestMessage || latestMessage.text.length < FOCUS_MIN_LATEST_CHARS || isLowSignalFocusText(latestMessage.text)) {
+        return null;
+      }
+      return {
+        input: {
+          providerIdentity,
+          userMessages: userMessages.slice(-FOCUS_EVALUATION_USER_MESSAGE_LIMIT).map((message, index, slicedMessages) => ({
+            charLen: message.text.length,
+            text: message.text,
+            turnIndex: Math.max(1, Number(message.turnIndex) || (userMessages.length - slicedMessages.length + index + 1)),
+          })),
+        },
+        key: buildFocusEvaluationKey(userMessages),
+      };
+    }
+
+    function normalizeProviderIdentity(providerIdentity) {
+      const identity = providerIdentity && typeof providerIdentity === "object" ? providerIdentity : {};
+      return {
+        available: Boolean(identity.available),
+        displayName: normalizeText(identity.displayName),
+        email: normalizeText(identity.email),
+        numericUserId: Number.isFinite(Number(identity.numericUserId)) ? Number(identity.numericUserId) : 0,
+        provider: normalizeText(identity.provider || "inova") || "inova",
+        providerUserKey: normalizeText(identity.providerUserKey),
+      };
+    }
+
+    function clearFocusSignal() {
+      if (!state.focusSignal.visible && !state.focusEvaluationPendingKey) {
+        return;
+      }
+      state.focusEvaluationRequestId += 1;
+      state.focusEvaluationPendingKey = "";
+      state.focusSignal = createEmptyFocusSignal();
+      scheduleRender();
+    }
+
+    function normalizeFocusSignal(result, key) {
+      const payload = result && typeof result === "object" ? result : {};
+      const confidence = readRatio(payload.confidence, 0);
+      const splitRecommended = payload.splitRecommended === true
+        && confidence >= 0.75
+        && normalizeText(payload.nextAction).toLowerCase() === "split";
+      if (!splitRecommended) {
+        return {
+          ...createEmptyFocusSignal(),
+          key,
+        };
+      }
+      const reasonCodes = Array.isArray(payload.decisionReasonCodes)
+        ? payload.decisionReasonCodes.map((code) => normalizeText(code)).filter(Boolean).slice(0, 4)
+        : [];
+      return {
+        confidence,
+        key,
+        reasonCodes,
+        tooltip: buildFocusSignalTooltip(confidence, reasonCodes),
+        visible: true,
+      };
+    }
+
+    function buildFocusSignalTooltip(confidence, reasonCodes) {
+      const reasonText = formatFocusReasonText(reasonCodes);
+      const confidenceText = Math.round(confidence * 100);
+      return [
+        "최근 질문이 이전 흐름과 분리된 새 주제일 가능성이 높아요.",
+        "사용자 질문만 기준으로 보수적으로 판단했으며, 새 대화로 나누면 답변 품질을 유지하기 쉬울 수 있어요.",
+        reasonText ? `근거: ${reasonText}.` : "",
+        `신뢰도 ${confidenceText}%.`,
+      ].filter(Boolean).join(" ");
+    }
+
+    function formatFocusReasonText(reasonCodes) {
+      const labels = {
+        high_reexplanation_cost: "다시 설명해야 할 정보가 많음",
+        independent_goal: "독립된 목표",
+        low_context_dependency: "이전 문맥 의존이 낮음",
+        topic_shift: "주제 전환",
+      };
+      return (Array.isArray(reasonCodes) ? reasonCodes : [])
+        .map((code) => labels[code] || "")
+        .filter(Boolean)
+        .slice(0, 2)
+        .join(", ");
+    }
+
+    function getVisibleFocusSignal() {
+      return state.focusSignal.visible
+        ? cloneValue(state.focusSignal)
+        : createEmptyFocusSignal();
+    }
+
+    function createEmptyFocusSignal() {
+      return {
+        confidence: 0,
+        key: "",
+        reasonCodes: [],
+        tooltip: "",
+        visible: false,
+      };
+    }
+
+    function normalizeUserMessages(messages, fallbackItems = []) {
+      const source = Array.isArray(messages) && messages.length
+        ? messages
+        : buildUserMessagesFromItems(fallbackItems);
+      return source.map((message, index) => {
+        const text = normalizeText(message?.text);
+        if (!text) {
+          return null;
+        }
+        return {
+          charLen: text.length,
+          id: normalizeText(message?.id),
+          messageOrder: Math.max(1, Number(message?.messageOrder) || Number(message?.order) || index + 1),
+          text,
+          tokenEstimate: readNonNegativeNumber(message?.tokenEstimate, 0),
+          turnIndex: Math.max(1, Number(message?.turnIndex) || index + 1),
+        };
+      }).filter(Boolean);
+    }
+
+    function buildUserMessagesFromItems(items = []) {
+      return (Array.isArray(items) ? items : []).map((item, index) => {
+        const text = normalizeText(item?.text);
+        return {
+          charLen: text.length,
+          id: normalizeText(item?.id),
+          messageOrder: Math.max(1, Number(item?.messageOrder) || index + 1),
+          text,
+          tokenEstimate: readNonNegativeNumber(item?.tokenEstimate?.question, 0),
+          turnIndex: index + 1,
+        };
+      }).filter((message) => message.text);
+    }
+
+    function buildFocusEvaluationKey(userMessages) {
+      const compact = (Array.isArray(userMessages) ? userMessages : [])
+        .map((message) => [
+          Math.max(1, Number(message?.turnIndex) || 0),
+          normalizeText(message?.id),
+          normalizeText(message?.text).length,
+          hashText(message?.text),
+        ].join(":"))
+        .join("|");
+      return [
+        normalizeText(state.sessionId) || "current",
+        String((Array.isArray(userMessages) ? userMessages : []).length),
+        hashText(compact),
+      ].join("|");
+    }
+
+    function isLowSignalFocusText(text) {
+      const compact = normalizeText(text)
+        .replace(/[ㅋㅎㅠㅜ\s\d_]+/g, "")
+        .replace(/[^\p{L}\p{N}]+/gu, "")
+        .trim();
+      return compact.length < 4;
+    }
+
+    function readRatio(value, fallback) {
+      const number = Number(value);
+      if (!Number.isFinite(number) || number < 0 || number > 1) {
+        return fallback;
+      }
+      return Math.round(number * 1000) / 1000;
+    }
+
+    function hashText(text) {
+      let hash = 0;
+      for (const char of normalizeText(text)) {
+        hash = ((hash << 5) - hash) + char.charCodeAt(0);
+        hash |= 0;
+      }
+      return Math.abs(hash).toString(36);
     }
 
     function buildCapabilityError() {

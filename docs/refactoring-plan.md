@@ -3,7 +3,7 @@
 이 문서는 구조 진행 일지나 세션 handoff가 아니라, `버전 결정`, `version lane`, `meeting legacy baseline`, `release decision boundary`만 빠르게 확인하기 위한 기준 문서다.  
 ordinary feature 구현 변경, 탭별 hosted ownership 진행도, smoke 이슈 목록, git chronology는 이 문서의 대상이 아니다. 그런 내용은 `docs/current-handoff.md`, `docs/runtime-architecture.md`, feature `AGENTS.md`에서 관리한다.
 
-마지막 상태 갱신: 2026-04-16
+마지막 상태 갱신: 2026-04-17
 현재 공개 사용자 기준선: `0.4.4`
 
 ## 현재 결정 요약
@@ -11,6 +11,7 @@ ordinary feature 구현 변경, 탭별 hosted ownership 진행도, smoke 이슈 
 - 기본 전략은 `major`다.
 - 다음 공개 릴리스 목표는 `1.0.0`이다.
 - 현재 구조 작업은 계속 진행 중이지만, 그 진행 현황 자체는 이 문서가 아니라 handoff/architecture 문서에서 추적한다.
+- `conversation.focus.evaluate`는 hosted conversation 탭의 additive Functions capability이며, version lane이나 meeting legacy baseline을 바꾸지 않는다.
 - green 선언 권한은 유지보수자에게 있고, 구현자는 판단 근거와 candidate 상태까지만 갱신한다.
 
 ## 이 문서에 남길 것

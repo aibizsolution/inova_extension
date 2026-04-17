@@ -29,7 +29,7 @@
 
 ## Feature 문서
 
-- [content/features/conversation/AGENTS.md](content/features/conversation/AGENTS.md): 현재 대화 질문 수집, 이동, route sync
+- [content/features/conversation/AGENTS.md](content/features/conversation/AGENTS.md): 현재 대화 질문 수집, 예상 컨텍스트, 새 대화 분리 신호, 이동, route sync
 - [content/features/meeting/AGENTS.md](content/features/meeting/AGENTS.md): 회의 허브, hosted 작업실, 녹음/전사, session auth
 - [content/features/prompt-library/AGENTS.md](content/features/prompt-library/AGENTS.md): 자주 쓰는 요청, 가져오기/내보내기, DB 정본 동기화
 - [content/features/prompt-store/AGENTS.md](content/features/prompt-store/AGENTS.md): 프롬프트 스토어 목록, 상세, 좋아요, 가져오기
@@ -40,7 +40,7 @@
 
 - `팝업 작업실 연결 설정`: 팝업에서 `상용 호스팅`과 `로컬 호스팅`을 고르고 `settings.meetingWorkspaceTarget`을 관리합니다.
 - `우측 슬라이드 패널`: i-Nova 대화 화면 오른쪽에서 `대화`, `회의`, `프롬프트`, `릴리스`를 전환합니다.
-- `대화`: 현재 대화 기준 `질문 자동 모으기`, `대화 안에서 찾기`, 현재 화면 기준 예상 컨텍스트와 선택 모델 기준의 길이 신호를 제공합니다.
+- `대화`: 현재 대화 기준 `질문 자동 모으기`, `대화 안에서 찾기`, 현재 화면 기준 예상 컨텍스트와 선택 모델 기준의 길이 신호, 사용자 입력 기반 새 대화 분리 신호를 제공합니다.
 - `프롬프트`: `자주 쓰는 요청`, `요청 가져오기/내보내기`, `프롬프트 스토어`, 평가/보완 흐름을 제공합니다.
 - `회의`: 패널의 회의 허브와 Firebase Hosting 기반 hosted 회의 작업실을 함께 사용합니다.
 - `릴리스`: 현재 버전, 최신 배포 안내, 다운로드 링크와 업데이트 절차를 제공합니다.
@@ -54,7 +54,7 @@
 - `hosting/extension-v2/panel/`: `1.0.0+` hosted panel controller/view와 remote workflow sandbox host
 - `hosting/extension-v2/capability-manifest.json`: v2 remote capability catalog, endpoint, URL template, lane/kill switch 설정
 - `hosting/meeting/`: hosted 회의 작업실
-- `functions/`: 회의와 프롬프트 backend 함수
+- `functions/`: 회의, 프롬프트, 대화 흐름 평가 backend 함수
 - `shared/`: panel, popup, hosted, background가 함께 쓰는 계약과 helper
 
 ## 빠른 시작
