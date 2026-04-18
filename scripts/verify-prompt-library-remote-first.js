@@ -10,7 +10,10 @@ const {
   installPanelUtils,
 } = require("./verify-prompt-library-test-helpers");
 const { verifyHostedPromptCapabilityActionGates } = require("./verify-prompt-library-capability-gates");
-const { verifyHostedPromptLibraryAvoidsDuplicateReloads } = require("./verify-prompt-library-hosted-controller");
+const {
+  verifyHostedPromptLibraryAvoidsDuplicateReloads,
+  verifyHostedPromptLibraryRefreshesLateProviderIdentity,
+} = require("./verify-prompt-library-hosted-controller");
 
 const root = path.resolve(__dirname, "..");
 const HOSTED_PROMPT_CAPABILITIES = Object.freeze([
@@ -33,6 +36,7 @@ function main() {
     verifyHostedPromptReviewTabVisibility(),
     verifyHostedPromptTextInputDebouncesRender(),
     verifyHostedPromptLibraryAvoidsDuplicateReloads(),
+    verifyHostedPromptLibraryRefreshesLateProviderIdentity(),
   ]).then(() => {
     console.log("[verify-prompt-library-remote-first] Prompt library remote-first contract passed");
   });

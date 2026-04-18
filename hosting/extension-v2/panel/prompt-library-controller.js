@@ -730,8 +730,7 @@
       }
       state.initializing = true;
       try {
-        const storageState = await readPanelStorageState();
-        hydrateStorageState(storageState);
+        await refreshStorageState();
         state.initialized = true;
         if (shouldActivateLibrary || state.pendingLibraryLoadAfterInit) {
           state.pendingLibraryLoadAfterInit = false;
@@ -746,12 +745,26 @@
       }
     }
 
+    async function refreshStorageState() {
+      const storageState = await readPanelStorageState();
+      hydrateStorageState(storageState);
+      return storageState;
+    }
+
     async function ensurePromptLibraryLoaded(force) {
       if (!promptLibraryFirestoreClient) {
         throw new Error("프롬프트 보관함 Firestore reader를 준비하지 못했어요.");
       }
       if (state.loadPromise && !force) {
         return state.loadPromise;
+      }
+      if (!state.providerIdentity.available || !normalizeText(state.providerIdentity?.providerUserKey)) {
+        try {
+          await refreshStorageState();
+        } catch (error) {
+          handlePromptLibraryError(error);
+          scheduleRender();
+        }
       }
       const providerUserKey = normalizeText(state.providerIdentity?.providerUserKey);
       if (
@@ -764,7 +777,7 @@
       ) {
         return state.promptLibrary;
       }
-      if (!state.providerIdentity.available) {
+      if (!state.providerIdentity.available || !providerUserKey) {
         state.syncNotice = buildLoadNotice("사용자 정보를 확인하지 못했어요.", getPromptCount());
         scheduleRender();
         return state.promptLibrary;
