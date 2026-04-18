@@ -657,6 +657,7 @@ function createMeetingProcessingDomain(deps) {
     const artifactId = getMeetingArtifactId(currentJob.jobId, owner.providerUserKey, meeting.meetingId, source.requestId, db);
     const artifactRef = db.collection(artifactCollection).doc(artifactId);
     const meetingRef = db.collection(meetingCollection).doc(buildMeetingDocId(owner.providerUserKey, meeting.meetingId));
+    let partDocs = [];
     const persistJobPatch = async (patch, artifact) => {
       currentJob = await persistMeetingJobPatch(
         jobRef,
@@ -688,7 +689,7 @@ function createMeetingProcessingDomain(deps) {
         updatedAt: startedAt,
       });
 
-      const partDocs = await loadMeetingJobPartDocs(currentJob.jobId);
+      partDocs = await loadMeetingJobPartDocs(currentJob.jobId);
       if (!partDocs.length || partDocs.some((part) => part.status !== "succeeded" || !normalizeText(part.transcript?.storageObject))) {
         throw createHttpError(409, "청크 전사 결과가 아직 모두 준비되지 않았어요.");
       }
@@ -806,6 +807,19 @@ function createMeetingProcessingDomain(deps) {
         return;
       }
 
+      const deletion = await deleteTemporarySourceGroup(
+        bucket,
+        [
+          ...collectMeetingSourceStorageObjects(source),
+          ...collectMeetingChunkTranscriptStorageObjects(partDocs),
+        ]
+      );
+      logMeetingCleanupWarning("meeting.finalize.cleanup.warning", deletion, {
+        jobId: currentJob.jobId,
+        meetingId: meeting.meetingId,
+        providerUserKey: owner.providerUserKey,
+      });
+
       await finalizerRef.set({
         error: errorMessage,
         retry: {
@@ -817,6 +831,10 @@ function createMeetingProcessingDomain(deps) {
         updatedAt: new Date().toISOString(),
       }, { merge: true });
       await persistJobPatch({
+        cleanup: {
+          deletedAt: deletion.deletedAt,
+          sourceAudioDeleted: Boolean(deletion.deletedAt),
+        },
         error: errorMessage,
         progress: {
           currentPart: Math.max(0, Number(currentJob.progress?.currentPart) || 0),
@@ -830,6 +848,7 @@ function createMeetingProcessingDomain(deps) {
           lastError: errorMessage,
           lastRetriedAt: normalizeText(currentJob.retry?.lastRetriedAt),
         },
+        source: markMeetingSourceDeleted(source, deletion.deletedStorageObjects),
         status: "failed",
         updatedAt: new Date().toISOString(),
       });

@@ -795,6 +795,7 @@ module.exports = {
   drainChunkedMeetingPipeline,
   invokeCommandWriteTrigger,
   invokeDeletionWriteTrigger,
+  invokeFinalizerWriteTrigger,
   invokeHandler,
   invokeJobWriteTrigger,
   invokePartWriteTrigger,

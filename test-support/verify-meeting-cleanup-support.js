@@ -2,13 +2,18 @@ const assert = require("assert");
 const { registerMeetingLaunchHandlers } = require("../functions/features/meeting/meeting-launch-service");
 const { registerMeetingHandlers } = require("../functions/features/meeting/meeting-service");
 const {
+  ARTIFACT_COLLECTION,
   DELETION_COLLECTION,
+  JOB_FINALIZER_COLLECTION,
   JOB_COLLECTION,
+  JOB_PART_COLLECTION,
   createDeps,
   createMemoryState,
   invokeDeletionWriteTrigger,
+  invokeFinalizerWriteTrigger,
   invokeHandler,
   invokeJobWriteTrigger,
+  invokePartWriteTrigger,
 } = require("./verify-meeting-service-support");
 
 async function verifyMeetingCleanupFailureGuards({ audioPayload, owner }) {
@@ -128,6 +133,134 @@ async function verifyMeetingCleanupFailureGuards({ audioPayload, owner }) {
     ),
     true
   );
+
+  await verifyChunkedFinalizerFailureCleansStorage(owner);
+}
+
+async function verifyChunkedFinalizerFailureCleansStorage(owner) {
+  const state = createMemoryState();
+  const deps = createDeps(state);
+  const launchHandlers = registerMeetingLaunchHandlers(deps);
+  const handlers = registerMeetingHandlers({
+    ...deps,
+    authorizeMeetingRequest: launchHandlers.authorizeMeetingRequest,
+  });
+  const partA = await invokeHandler(handlers.uploadInovaMeetingSource, {
+    headers: { "content-type": "audio/wav" },
+    method: "POST",
+    query: {
+      captureMode: "microphone",
+      channelCount: "1",
+      durationMs: "120000",
+      endMs: "61000",
+      fileName: "failed-finalizer-part-a.wav",
+      meetingId: "meeting-finalizer-failure-1",
+      overlapMs: "1500",
+      parentRequestId: "capture-finalizer-failure-1",
+      partCount: "2",
+      partIndex: "0",
+      requestId: "capture-finalizer-failure-1-part-0000",
+      sizeBytes: "24",
+      startMs: "0",
+    },
+    rawBody: Buffer.from("finalizer-failure-part-a"),
+  });
+  const partB = await invokeHandler(handlers.uploadInovaMeetingSource, {
+    headers: { "content-type": "audio/wav" },
+    method: "POST",
+    query: {
+      captureMode: "microphone",
+      channelCount: "1",
+      durationMs: "120000",
+      endMs: "120000",
+      fileName: "failed-finalizer-part-b.wav",
+      meetingId: "meeting-finalizer-failure-1",
+      overlapMs: "1500",
+      parentRequestId: "capture-finalizer-failure-1",
+      partCount: "2",
+      partIndex: "1",
+      requestId: "capture-finalizer-failure-1-part-0001",
+      sizeBytes: "24",
+      startMs: "58500",
+    },
+    rawBody: Buffer.from("finalizer-failure-part-b"),
+  });
+  assert.equal(partA.statusCode, 200);
+  assert.equal(partB.statusCode, 200);
+
+  const created = await invokeHandler(handlers.createInovaMeetingJob, {
+    body: {
+      meeting: {
+        endedAt: "2026-03-30T11:31:00.000Z",
+        language: "ko",
+        meetingId: "meeting-finalizer-failure-1",
+        startedAt: "2026-03-30T11:20:00.000Z",
+        title: "최종 정리 실패 회의",
+      },
+      options: { redaction: "none", summary: true },
+      owner,
+      source: {
+        captureMode: "microphone",
+        channelCount: 1,
+        durationMs: 120000,
+        fileName: "failed-finalizer-source.wav",
+        mimeType: "audio/wav",
+        mode: "chunked",
+        originalSizeBytes: 30 * 1024 * 1024,
+        parts: [
+          { ...partA.jsonBody.data, mimeType: "audio/wav" },
+          { ...partB.jsonBody.data, mimeType: "audio/wav" },
+        ],
+        requestId: "capture-finalizer-failure-1",
+        sizeBytes: 30 * 1024 * 1024,
+      },
+    },
+    method: "POST",
+  });
+  assert.equal(created.statusCode, 200);
+
+  const jobId = created.jsonBody.data.job.jobId;
+  await invokeJobWriteTrigger(handlers, state, jobId);
+  const queuedPartIds = Array.from(getCollection(state, JOB_PART_COLLECTION).entries())
+    .filter(([, part]) => part.jobId === jobId && part.status === "queued")
+    .map(([docId]) => docId);
+  assert.equal(queuedPartIds.length, 2);
+  for (const docId of queuedPartIds) {
+    await invokePartWriteTrigger(handlers, state, docId);
+  }
+  const completedPartDocs = Array.from(getCollection(state, JOB_PART_COLLECTION).values())
+    .filter((part) => part.jobId === jobId);
+  assert.equal(completedPartDocs.length, 2);
+  for (const partDoc of completedPartDocs) {
+    const transcriptStorageObject = partDoc.transcript?.storageObject;
+    assert(transcriptStorageObject);
+    const currentUpload = state.uploads.get(transcriptStorageObject);
+    state.uploads.set(transcriptStorageObject, {
+      ...(currentUpload || {}),
+      buffer: Buffer.from("{"),
+      deleted: false,
+    });
+  }
+
+  assert.equal(getDoc(state, JOB_FINALIZER_COLLECTION, jobId)?.status, "queued");
+  await invokeFinalizerWriteTrigger(handlers, state, jobId);
+
+  const failedJob = getDoc(state, JOB_COLLECTION, jobId);
+  assert(failedJob);
+  assert.equal(failedJob.status, "failed");
+  assert.equal(failedJob.cleanup.sourceAudioDeleted, true);
+  assert.equal(getCollection(state, ARTIFACT_COLLECTION).has(failedJob.transcript?.artifactId), false);
+  assert((failedJob.source.parts || []).every((part) => part.uploadStatus === "deleted"));
+  for (const part of failedJob.source.parts || []) {
+    assert.equal(state.uploads.get(part.storageObject)?.deleted, true);
+  }
+  const partDocs = Array.from(getCollection(state, JOB_PART_COLLECTION).values())
+    .filter((part) => part.jobId === jobId);
+  assert.equal(partDocs.length, 2);
+  for (const partDoc of partDocs) {
+    assert.equal(state.uploads.get(partDoc.transcript?.storageObject)?.deleted, true);
+  }
+  assert.equal(getDoc(state, JOB_FINALIZER_COLLECTION, jobId)?.status, "failed");
 }
 
 function getCollection(state, collectionName) {
