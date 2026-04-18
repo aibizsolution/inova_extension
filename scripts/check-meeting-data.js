@@ -3,7 +3,9 @@
 const {
   DEFAULT_STORAGE_PREFIX,
   MEETING_COLLECTIONS,
+  documentMatchesMeeting,
   formatScalar,
+  filterStorageObjectsByMeetingId,
   getGcloudAccessToken,
   listCollectionDocuments,
   listStorageObjects,
@@ -14,6 +16,7 @@ const {
 
 const defaults = {
   bucketNames: [],
+  meetingId: "",
   prefix: DEFAULT_STORAGE_PREFIX,
   projectId: "browser-extension-main",
   sampleSize: 3,
@@ -25,13 +28,15 @@ async function main() {
   const bucketNames = await resolveBucketNames(accessToken, options.projectId, options.bucketNames);
 
   console.log(`[meeting-data] project=${options.projectId}`);
+  console.log(`[meeting-data] meetingId=${options.meetingId || "-"}`);
   console.log(`[meeting-data] prefix=${options.prefix}`);
   console.log(`[meeting-data] sampleSize=${options.sampleSize}`);
   console.log(`[meeting-data] buckets=${bucketNames.length ? bucketNames.join(", ") : "-"}`);
 
   const collectionResults = [];
   for (const collection of MEETING_COLLECTIONS) {
-    const documents = await listCollectionDocuments(accessToken, options.projectId, collection.id);
+    const documents = (await listCollectionDocuments(accessToken, options.projectId, collection.id))
+      .filter((document) => documentMatchesMeeting(document, collection, options.meetingId));
     const samples = documents.slice(0, options.sampleSize).map((document) => summarizeDocument(document, collection.samplePaths));
     const result = {
       collectionId: collection.id,
@@ -47,6 +52,7 @@ async function main() {
   const storageResults = [];
   for (const bucketName of bucketNames) {
     const storage = await listStorageObjects(accessToken, bucketName, options.prefix);
+    storage.items = filterStorageObjectsByMeetingId(storage.items, options.meetingId);
     const result = {
       bucketName,
       items: storage.items,
@@ -70,6 +76,11 @@ function parseArgs(args) {
     const value = normalizeText(args[index]);
     if (value === "--project") {
       options.projectId = normalizeText(args[index + 1]) || defaults.projectId;
+      index += 1;
+      continue;
+    }
+    if (value === "--meeting-id" || value === "--meetingId") {
+      options.meetingId = normalizeText(args[index + 1]);
       index += 1;
       continue;
     }

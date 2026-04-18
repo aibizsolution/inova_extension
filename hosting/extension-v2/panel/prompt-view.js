@@ -227,7 +227,9 @@
       return "";
     }
     const pending = editor.actionPending?.type === "save-editor";
-    const saveDisabled = pending || editor.canSync === false;
+    const title = String(editor.title || "").trim();
+    const content = String(editor.content || "").trim();
+    const saveDisabled = pending || editor.canSync === false || !title || !content;
 
     return `
       <section class="inova-prompt-editor">

@@ -2,7 +2,6 @@
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const normalizeText = namespace.session.normalizeText;
   const INVALIDATED_CONTEXT_MESSAGE = "확장프로그램이 갱신됐어요. 페이지를 새로고침해 주세요.";
-  const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "localhost"]);
   const PROXY_PATH = "content/frame-proxy.html";
 
   function resolveTarget(targetUrl) {
@@ -28,7 +27,8 @@
   }
 
   function shouldWrap(targetUrl) {
-    return LOOPBACK_HOSTNAMES.has(readHostname(targetUrl));
+    void targetUrl;
+    return global.__INOVA_FORCE_FRAME_PROXY__ === true;
   }
 
   function buildProxyUrl(targetUrl) {
@@ -60,14 +60,6 @@
           : normalizeText(error?.message || "프록시 iframe 주소를 만들지 못했어요."),
         url: "",
       };
-    }
-  }
-
-  function readHostname(value) {
-    try {
-      return new URL(String(value || "")).hostname.toLowerCase();
-    } catch {
-      return "";
     }
   }
 

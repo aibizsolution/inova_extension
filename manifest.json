@@ -6,7 +6,8 @@
   "permissions": [
     "storage",
     "tabs",
-    "cookies"
+    "cookies",
+    "declarativeNetRequest"
   ],
   "host_permissions": [
     "https://inova.incross.com/*",

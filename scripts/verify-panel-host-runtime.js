@@ -10,6 +10,7 @@ const root = path.resolve(__dirname, "..");
 
 async function verifyPanelHostRuntimeContract() {
   verifyPanelHostRuntimeModuleSplit();
+  verifyFrameProxyDefaultsToDirectLocalTargets();
   verifyHostedPanelHostBatching();
   verifyLocalPanelRuntimeSwitch();
   verifyPageBridgeEvents();
@@ -21,6 +22,8 @@ function verifyPanelHostRuntimeModuleSplit() {
   const hostBridgeSource = fs.readFileSync(path.join(root, "content", "panel-host-bridge.js"), "utf8");
   const hostViewSource = fs.readFileSync(path.join(root, "content", "panel-host-view.js"), "utf8");
   const hostRuntimeSource = fs.readFileSync(path.join(root, "content", "panel-host-runtime.js"), "utf8");
+  const browserCapabilitySource = fs.readFileSync(path.join(root, "background", "browser-capability.js"), "utf8");
+  const serviceWorkerSource = fs.readFileSync(path.join(root, "background", "service-worker.js"), "utf8");
   const pageCapabilityRouterSource = fs.readFileSync(
     path.join(root, "content", "page-capability-router.js"),
     "utf8"
@@ -62,6 +65,16 @@ function verifyPanelHostRuntimeModuleSplit() {
   assert(
     /function syncHostedFrame/.test(hostRuntimeSource),
     "content/panel-host-runtime.js should own hosted frame sync once panel.js delegates host runtime work"
+  );
+  assert(
+    /declarativeNetRequest\.updateDynamicRules/.test(browserCapabilitySource)
+      && /frame-src 'self' http:\/\/127\.0\.0\.1:5000 http:\/\/localhost:5000/.test(browserCapabilitySource),
+    "background/browser-capability.js should own the local panel CSP relaxation rule for direct local iframes"
+  );
+  assert(
+    /installLocalPanelCspRuleSync/.test(browserCapabilitySource)
+      && /installLocalPanelCspRuleSync/.test(serviceWorkerSource),
+    "background/browser-capability.js should own local panel CSP storage sync and service-worker.js should only install it"
   );
   assert(
     !/readRenderBoolean/.test(hostRuntimeSource)
@@ -132,6 +145,53 @@ function verifyPanelHostRuntimeModuleSplit() {
     !hostedIndexSource.includes(legacyPattern),
     `hosting/extension-v2/panel/index.js should not keep the legacy page alias residue ${legacyPattern}`
   ));
+}
+
+function verifyFrameProxyDefaultsToDirectLocalTargets() {
+  const context = vm.createContext({
+    chrome: {
+      runtime: {
+        getURL(pathName) {
+          return `chrome-extension://extension-id/${pathName}`;
+        },
+      },
+    },
+    globalThis: null,
+    InovaBookmarks: {
+      session: {
+        normalizeText(value) {
+          return String(value ?? "").trim();
+        },
+      },
+    },
+    URL,
+  });
+  context.globalThis = context;
+  new vm.Script(
+    fs.readFileSync(path.join(root, "content", "frame-proxy-helper.js"), "utf8"),
+    { filename: "content/frame-proxy-helper.js" }
+  ).runInContext(context);
+
+  const directTarget = context.InovaBookmarks.frameProxy.resolveTarget(
+    "http://127.0.0.1:5000/extension-v2/panel/index.html"
+  );
+  assert.equal(
+    directTarget.src,
+    "http://127.0.0.1:5000/extension-v2/panel/index.html",
+    "local hosted panel should default to direct iframe src so Playwright Bridge does not see an extension proxy target"
+  );
+  assert.equal(directTarget.wrapped, false);
+  assert.equal(directTarget.origin, "http://127.0.0.1:5000");
+
+  context.__INOVA_FORCE_FRAME_PROXY__ = true;
+  const forcedProxyTarget = context.InovaBookmarks.frameProxy.resolveTarget(
+    "http://127.0.0.1:5000/extension-v2/panel/index.html"
+  );
+  assert.equal(forcedProxyTarget.wrapped, true);
+  assert(
+    forcedProxyTarget.src.startsWith("chrome-extension://extension-id/content/frame-proxy.html?target="),
+    "frame proxy should remain available only as an explicit emergency fallback"
+  );
 }
 
 function verifyHostedPanelHostBatching() {
