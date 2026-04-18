@@ -154,6 +154,7 @@ ordinary feature 구현 변경, 탭별 hosted ownership 진행도, smoke 이슈 
 - Storage Rules 변경은 hosted 정적 자산이나 functions runtime 변경과 별도 배포 표면이다. `deploy:all`과 `release:deploy:all`은 Storage를 포함하지 않으므로, 운영 반영 보고에서는 Firebase Storage가 실제로 켜진 프로젝트에 `deploy:storage`가 필요한지 functions/hosting 배포와 구분해 적는다.
 - 상용 회의 임시 오디오 Storage는 Firebase Storage default bucket을 기준으로 한다. Functions는 기본적으로 `FIREBASE_CONFIG.storageBucket`을 쓰고, `STORAGE_BUCKET_URL`은 앱용 bucket override에만 허용한다. `gcf-v2-*` 또는 `*.cloudfunctions.appspot.com` 같은 Cloud Functions 내부 bucket은 회의 원본 임시 저장소로 쓰지 않는다.
 - 상용 OpenAI API 키는 Functions Secret Manager secret으로 관리한다. `.env`는 비밀값이 아닌 모델/튜닝 설정만 담고, 로컬 에뮬레이터 secret은 ignored `functions/.secret.local`에 둔다.
+- 기존 성공 회의 job의 사용량 보정은 local ops script `npm.cmd run backfill:meeting-usage`로 처리한다. 기본은 dry-run이며, `--execute`를 붙였을 때만 `processed__jobId` 원장과 aggregate를 쓴다. 이 스크립트 추가 자체는 hosted/functions release lane 변경이 아니다.
 - `1.x+` v2 lane은 hosted-first를 기본값으로 쓴다. 탭 UI/state/action flow의 기본 위치는 hosted이고, extension은 page DOM adapter + iframe host + runtime broker 같은 browser-only capability를 유지한다.
 - `DB/Functions 계약을 바꾸지 않는 순수 panel v2 migration`은 현재 `1.x+` bundle이 정상 동작하는지만 먼저 확인한다. 이런 작업에서 legacy extension panel 코드는 활성 bundle 안에 계속 보존할 대상으로 보지 않는다.
 - 현재 `1.x+` 활성 bundle과 공유 계약이 더 이상 쓰지 않는 legacy extension panel 코드는 `content/*` 안에 섞어 두지 않는다. 기본 정리 방향은 `backup/legacy-panel/*`로 격리해 참고본으로만 남기거나, 더 이상 필요 없으면 삭제하는 것이다.

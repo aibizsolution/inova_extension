@@ -20,6 +20,7 @@
     "version:bump": "node scripts/bump-version.js",
     "check:cloud-sync": "node scripts/check-cloud-sync.js",
     "check:meeting-data": "node scripts/check-meeting-data.js",
+    "backfill:meeting-usage": "node scripts/backfill-meeting-usage.js",
     "check:prompt-data": "node scripts/check-prompt-data.js",
     "delete:meeting-data": "node scripts/delete-meeting-data.js",
     "check:function-logs": "node scripts/check-function-logs.js",
