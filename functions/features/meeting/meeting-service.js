@@ -50,6 +50,7 @@ const WORKSPACE_SESSION_COLLECTION = "integration_inova_meeting_workspace_sessio
 const TEMP_UPLOAD_TTL_MS = 60 * 60 * 1000;
 const DELETION_RETRY_DELAY_MS = 60 * 60 * 1000;
 const DELETION_PROCESSING_STALE_MS = 15 * 60 * 1000;
+const DEFAULT_DELETION_MAX_ATTEMPTS = 5;
 const MAX_MEETING_RECENT_RESULTS = 12;
 const MAX_MEETING_LIST_LIMIT = 24;
 const MAX_SUMMARY_TRANSCRIPT_CHARS = 12000;
@@ -86,7 +87,7 @@ const SUPPORTED_NOTES_STATUSES = new Set(["pending", "disabled", "skipped", "deg
 const SUPPORTED_MEETING_COMMAND_STATUSES = new Set(["queued", "processing", "succeeded", "failed"]);
 const SUPPORTED_MEETING_COMMAND_TYPES = new Set(["regenerate_notes"]);
 const SUPPORTED_DELETION_SCOPES = new Set(["meeting", "result"]);
-const SUPPORTED_DELETION_STATUSES = new Set(["queued", "processing", "retry"]);
+const SUPPORTED_DELETION_STATUSES = new Set(["abandoned", "queued", "processing", "retry"]);
 const SUPPORTED_WORKSPACE_MUTATION_STATUSES = new Set(["queued", "processing", "succeeded", "failed"]);
 const SUPPORTED_WORKSPACE_MUTATION_TYPES = new Set([
   "applySectionEdit",
@@ -504,6 +505,7 @@ function registerMeetingHandlers(deps) {
     deleteMeetingJobRuntimeArtifacts: meetingRuntimeArtifactDomain.deleteMeetingJobRuntimeArtifacts,
     deleteMeetingScopedRuntimeArtifacts: meetingRuntimeArtifactDomain.deleteMeetingScopedRuntimeArtifacts,
     deletionCollection: DELETION_COLLECTION,
+    deletionMaxAttempts: DEFAULT_DELETION_MAX_ATTEMPTS,
     deletionProcessingStaleMs: DELETION_PROCESSING_STALE_MS,
     deletionRetryDelayMs: DELETION_RETRY_DELAY_MS,
     jobCollection: JOB_COLLECTION,
@@ -717,12 +719,25 @@ function registerMeetingHandlers(deps) {
       if (!normalizeText(uploaded?.storageObject)) {
         throw createHttpError(500, "임시 오디오 업로드를 준비하지 못했어요.");
       }
-      const syncedJob = await persistUploadedMeetingSourceToExistingJob(
-        jobId,
-        owner,
-        input,
-        normalizeText(uploaded?.storageObject)
-      );
+      const uploadedStorageObject = normalizeText(uploaded.storageObject);
+      let syncedJob;
+      try {
+        syncedJob = await persistUploadedMeetingSourceToExistingJob(
+          jobId,
+          owner,
+          input,
+          uploadedStorageObject
+        );
+      } catch (error) {
+        const cleanup = await meetingRuntimeArtifactDomain.deleteTemporarySourceGroup(bucket, [uploadedStorageObject]);
+        meetingRuntimeArtifactDomain.logMeetingCleanupWarning("meeting.source-upload.persist-cleanup.warning", cleanup, {
+          jobId,
+          meetingId: input.meetingId,
+          providerUserKey: owner.providerUserKey,
+          requestId: input.requestId,
+        });
+        throw error;
+      }
 
       logEvent("meeting.source-upload.success", {
         bytes: audioBuffer.length,

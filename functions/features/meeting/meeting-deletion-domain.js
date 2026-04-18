@@ -9,6 +9,7 @@ function createMeetingDeletionDomain(deps) {
     deleteMeetingJobRuntimeArtifacts,
     deleteMeetingScopedRuntimeArtifacts,
     deletionCollection,
+    deletionMaxAttempts,
     deletionProcessingStaleMs,
     deletionRetryDelayMs,
     jobCollection,
@@ -30,6 +31,7 @@ function createMeetingDeletionDomain(deps) {
     normalizeText,
     collectMeetingArtifactIds,
   } = deps;
+  const maxDeletionAttempts = Math.max(1, Number(deletionMaxAttempts) || 5);
 
   function shouldProcessMeetingDeletionTask(task, previousTask) {
     const normalizedTask = normalizeMeetingDeletionTask(task);
@@ -163,6 +165,8 @@ function createMeetingDeletionDomain(deps) {
       if (completed) {
         await hardDeleteMeetingDeletionTombstones(claimedTask);
         await deleteDocumentIfExists(taskRef);
+      } else if (shouldAbandonMeetingDeletionTask(claimedTask)) {
+        await markMeetingDeletionTaskAbandoned(taskRef, claimedTask, "cleanup-incomplete");
       } else {
         const nextRetryAt = new Date(Date.now() + deletionRetryDelayMs).toISOString();
         await taskRef.set({
@@ -185,6 +189,10 @@ function createMeetingDeletionDomain(deps) {
     } catch (error) {
       const retryAt = new Date(Date.now() + deletionRetryDelayMs).toISOString();
       const updatedAt = new Date().toISOString();
+      if (shouldAbandonMeetingDeletionTask(claimedTask)) {
+        await markMeetingDeletionTaskAbandoned(taskRef, claimedTask, normalizeText(error?.message) || "cleanup-failed");
+        return false;
+      }
       await taskRef.set({
         lastError: normalizeText(error?.message),
         nextRetryAt: retryAt,
@@ -231,6 +239,28 @@ function createMeetingDeletionDomain(deps) {
         updatedAt,
       }, { merge: true });
       return nextTask;
+    });
+  }
+
+  function shouldAbandonMeetingDeletionTask(task) {
+    return Math.max(0, Number(task?.attemptCount) || 0) >= maxDeletionAttempts;
+  }
+
+  async function markMeetingDeletionTaskAbandoned(taskRef, task, reason) {
+    const updatedAt = new Date().toISOString();
+    await taskRef.set({
+      abandonedAt: updatedAt,
+      lastError: normalizeText(reason) || "cleanup-incomplete",
+      nextRetryAt: "",
+      status: "abandoned",
+      updatedAt,
+    }, { merge: true });
+    logEvent("meeting.deletion.process.abandoned", {
+      attemptCount: Math.max(0, Number(task?.attemptCount) || 0),
+      maxAttempts: maxDeletionAttempts,
+      reason: normalizeText(reason),
+      scope: normalizeText(task?.scope),
+      taskId: normalizeText(task?.taskId),
     });
   }
 

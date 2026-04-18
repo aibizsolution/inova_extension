@@ -17,6 +17,7 @@ const {
   invokeHandler,
   invokeJobWriteTrigger,
 } = require("../test-support/verify-meeting-service-support");
+const { verifyMeetingCleanupFailureGuards } = require("../test-support/verify-meeting-cleanup-support");
 const { verifyMoveMeetingResultFlow } = require("../test-support/verify-meeting-record-move-support");
 
 async function main() {
@@ -647,86 +648,7 @@ async function main() {
   assert.equal(bucketlessLocalJob.source.uploadStatus, "inline-only");
   assert.equal(bucketlessLocalJob.cleanup.sourceAudioDeleted, false);
 
-  const uploadFailureState = createMemoryState();
-  const uploadFailureDeps = createDeps(uploadFailureState, { bucket: createSaveFailingBucket(uploadFailureState, "forced-upload-failure") });
-  const uploadFailureLaunchHandlers = registerMeetingLaunchHandlers(uploadFailureDeps);
-  const uploadFailureHandlers = registerMeetingHandlers({
-    ...uploadFailureDeps,
-    authorizeMeetingRequest: uploadFailureLaunchHandlers.authorizeMeetingRequest,
-  });
-  const uploadFailureCreate = await invokeHandler(uploadFailureHandlers.createInovaMeetingJob, {
-    body: {
-      meeting: {
-        endedAt: "2026-03-30T09:15:00.000Z",
-        language: "ko",
-        meetingId: "meeting-upload-failure-1",
-        startedAt: "2026-03-30T09:10:00.000Z",
-        title: "업로드 실패 회의",
-      },
-      options: { redaction: "none", summary: true },
-      owner,
-      source: {
-        captureMode: "microphone",
-        channelCount: 1,
-        durationMs: 12000,
-        fileName: "upload-failure.webm",
-        inlineAudioBase64: audioPayload,
-        mimeType: "audio/webm;codecs=opus",
-        requestId: "capture-upload-failure-1",
-        sizeBytes: Buffer.from(audioPayload, "base64").length,
-      },
-    },
-    method: "POST",
-  });
-  assert.equal(uploadFailureCreate.statusCode, 500);
-  assert.equal(uploadFailureCreate.jsonBody.error, "회의 임시 오디오 업로드를 저장하지 못했어요.");
-
-  const cleanupWarningState = createMemoryState();
-  const cleanupWarningDeps = createDeps(cleanupWarningState, { bucket: createDeleteFailingBucket(cleanupWarningState, "forced-delete-failure") });
-  const cleanupWarningLaunchHandlers = registerMeetingLaunchHandlers(cleanupWarningDeps);
-  const cleanupWarningHandlers = registerMeetingHandlers({
-    ...cleanupWarningDeps,
-    authorizeMeetingRequest: cleanupWarningLaunchHandlers.authorizeMeetingRequest,
-  });
-  const cleanupWarningCreate = await invokeHandler(cleanupWarningHandlers.createInovaMeetingJob, {
-    body: {
-      meeting: {
-        endedAt: "2026-03-30T09:25:00.000Z",
-        language: "ko",
-        meetingId: "meeting-cleanup-warning-1",
-        startedAt: "2026-03-30T09:20:00.000Z",
-        title: "정리 경고 회의",
-      },
-      options: { redaction: "none", summary: true },
-      owner,
-      source: {
-        captureMode: "microphone",
-        channelCount: 1,
-        durationMs: 12000,
-        fileName: "cleanup-warning.webm",
-        inlineAudioBase64: audioPayload,
-        mimeType: "audio/webm;codecs=opus",
-        requestId: "capture-cleanup-warning-1",
-        sizeBytes: Buffer.from(audioPayload, "base64").length,
-      },
-    },
-    method: "POST",
-  });
-  assert.equal(cleanupWarningCreate.statusCode, 200);
-  await invokeJobWriteTrigger(cleanupWarningHandlers, cleanupWarningState, cleanupWarningCreate.jsonBody.data.job.jobId);
-  const cleanupWarningJob = getDoc(cleanupWarningState, JOB_COLLECTION, cleanupWarningCreate.jsonBody.data.job.jobId);
-  assert(cleanupWarningJob);
-  assert.equal(cleanupWarningJob.status, "succeeded");
-  assert.equal(cleanupWarningJob.cleanup.sourceAudioDeleted, false);
-  assert.equal(cleanupWarningJob.source.uploadStatus, "uploaded");
-  assert.equal(
-    cleanupWarningState.events.some((event) =>
-      event.name === "meeting.process.cleanup.warning"
-      && event.payload.jobId === cleanupWarningJob.jobId
-      && Number(event.payload.failedStorageObjectCount) === 1
-    ),
-    true
-  );
+  await verifyMeetingCleanupFailureGuards({ audioPayload, owner });
 
   const chunkedPartA = await invokeHandler(handlers.uploadInovaMeetingSource, {
     headers: { "content-type": "audio/wav" },
@@ -839,52 +761,6 @@ function getDoc(state, collectionName, docId) {
   const collection = getCollection(state, collectionName);
   const value = collection.get(docId);
   return value == null ? null : cloneValue(value);
-}
-
-function createSaveFailingBucket(state, message) {
-  return {
-    file(storageObject) {
-      const normalizedStorageObject = String(storageObject || "").trim();
-      return {
-        async delete() {
-          const current = state.uploads.get(normalizedStorageObject) || {};
-          state.uploads.set(normalizedStorageObject, { ...current, deleted: true });
-        },
-        async download() {
-          const current = state.uploads.get(normalizedStorageObject);
-          return [Buffer.from(current?.buffer || Buffer.alloc(0))];
-        },
-        async save() {
-          throw new Error(message);
-        },
-      };
-    },
-  };
-}
-
-function createDeleteFailingBucket(state, message) {
-  return {
-    file(storageObject) {
-      const normalizedStorageObject = String(storageObject || "").trim();
-      return {
-        async delete() {
-          throw new Error(message);
-        },
-        async download() {
-          const current = state.uploads.get(normalizedStorageObject);
-          return [Buffer.from(current?.buffer || Buffer.alloc(0))];
-        },
-        async save(buffer, options = {}) {
-          state.uploads.set(normalizedStorageObject, {
-            buffer: Buffer.from(buffer),
-            contentType: options.contentType || "",
-            deleted: false,
-            metadata: cloneValue(options.metadata || {}),
-          });
-        },
-      };
-    },
-  };
 }
 
 function cloneValue(value) {
