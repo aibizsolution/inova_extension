@@ -2,6 +2,16 @@
 
 이 문서는 `i-Nova 더하기`를 실제 사용자의 Chrome 확장프로그램 환경에서 확인할 때 쓰는 단일 E2E 기준 문서다. feature별 세부 계약은 각 `AGENTS.md`에 남기되, 실제로 무엇을 어떤 순서로 테스트할지는 이 문서에서 끝낸다. Playwright MCP로 실제 Chrome을 검증하는 모든 작업은 `playwright-mcp-bridge` 스킬을 먼저 읽고 그 절차를 따르는 것을 필수 선행 조건으로 둔다.
 
+## 검증 기준선
+
+- 마지막 반영 PR: `#53 Polish hosted panel and usage metrics` (`#51`, `#52` 포함)
+- 이 문서를 고칠 때는 최근 merged PR 기준으로 이 항목을 함께 갱신한다.
+- 최근 merged PR이 있는데 이 기준선보다 번호가 높으면, 풀 테스트 전에 PR diff를 먼저 보고 필요한 feature 섹션과 운영 점검 항목을 추가한다.
+- 현재 기준선의 추가 검증 범위는 아래와 같다.
+  - `#51`: 회의 debug auth bypass는 상용에서 local Origin/Referer spoof로 열리면 안 된다. 회의 workspace launch trace는 debug mode 없이도 top panel 콘솔에서 보여야 한다. 브라우저/hosted client가 Firebase Storage SDK로 직접 bucket을 읽거나 쓰면 안 된다.
+  - `#52`: `deploy:all`/`release:deploy:all`은 Storage Rules를 포함하지 않는다. Firebase Storage가 실제로 켜진 프로젝트에서만 `deploy:storage`를 별도 운영 표면으로 본다.
+  - `#53`: feature usage aggregate, 회의 사용량 미니 통계/accounting, hosted auth/Firestore retry recovery, 릴리스 메타와 ZIP 정합성을 본다.
+
 ## 문서 사용 원칙
 
 - 실제 사용자가 보는 Chrome, 설치된 unpacked extension, 로그인 세션, hosted panel iframe을 기준으로 확인한다.
@@ -64,6 +74,17 @@
 - 실제 Chrome 콘솔 warning/error가 새로 생기면 실패 또는 추가 조사 대상으로 기록한다.
 - `hosting/*` 변경은 Hosting 배포와 페이지 새로고침 대상이고, `content/*`, `background/*`, `popup/*`, `manifest.json`, 확장 번들에 포함되는 `shared/*` 변경은 확장 Reload 또는 확장 배포 대상이다.
 - `풀 테스트`나 feature usage 변경 검증에서는 의미 있는 사용자 action 1회가 Firestore aggregate에 남았는지까지 확인한다. 화면 동작만 보고 사용량 계측을 통과시키지 않는다.
+
+## 상용 보안/배포 경계
+
+이 섹션은 최근 PR이 auth, Storage, Functions 배포, release metadata를 건드렸거나 `풀 테스트`를 상용 기준으로 수행할 때 함께 본다.
+
+1. 상용 workspace auth endpoint에 `debugAuthBypass`를 넣은 local Origin/Referer spoof 요청은 실패해야 한다.
+   - 기대값: HTTP 400/401/403 계열, Firebase custom token 없음, `meetingSessionToken` 없음
+2. 회의 workspace launch는 debug mode가 아니어도 top panel 콘솔에서 launch requested/dispatched/accepted 수준의 trace가 남아야 한다.
+3. 브라우저/hosted client는 Firebase Storage SDK로 직접 bucket을 읽거나 쓰지 않아야 한다. 이 경계는 `npm.cmd run verify:storage-rules`와 실제 import/upload flow의 Functions 경유 여부를 함께 본다.
+4. 상용 배포 보고에서는 Storage Rules가 실제 배포 대상인지 `hosting/functions/firestore`와 분리해서 적는다. `browser-extension-main`처럼 Firebase Storage가 아직 없는 프로젝트는 `deploy:storage` 미실행이 정상일 수 있다.
+5. 릴리스 메타는 `hosting/extension-v2/releases/latest.json`, `history.json`, `downloads/latest.zip`, `releases/release-notes.json`이 같은 공개 버전을 가리켜야 한다.
 
 ## 사용량 계측
 
@@ -156,10 +177,13 @@ npm.cmd run check:feature-usage -- --days 1 --limit 20
 3. 회의 목록이 로드되는지 본다.
    - 목록은 `integration_inova_meetings` 기반 최신순, 최대 24건 기준이다.
    - 로딩 실패 시 cached/stale/degraded/empty 문구가 숨겨지지 않아야 한다.
-4. 기존 회의 카드 1건에서 `작업실 열기` 또는 `결과 열기`를 실행한다.
-5. 새 탭 또는 결과 탭이 열리고, panel 쪽 콘솔은 launch requested/dispatched/accepted 수준까지 확인한다.
-6. 새 탭은 확장 백그라운드가 `chrome.tabs.create`로 열 수 있다. 현재 Bridge `browser_tabs list`에 새 URL이 안 보이면 제품 launch 실패로 보지 않는다. 새 탭 lifecycle이 목적이면 해당 Chrome 새 탭을 Bridge selector로 다시 선택하고, 작업실 내부 테스트가 목적이면 열린 URL을 Bridge-controlled tab에 직접 이동해 이어서 확인한다.
-7. hosted 작업실에서 session 허용 상태면 workspace가 렌더링되고, 미허용 상태면 blocked 화면이 보여야 한다.
+4. 회의 사용량 미니 통계가 로드되는지 본다.
+   - 본인 현재 월 집계와 전체 집계가 있으면 숫자가 표시되어야 한다.
+   - 권한, 네트워크, 집계 없음 상태는 빈 화면이 아니라 empty/degraded/제한 문구로 드러나야 한다.
+5. 기존 회의 카드 1건에서 `작업실 열기` 또는 `결과 열기`를 실행한다.
+6. 새 탭 또는 결과 탭이 열리고, panel 쪽 콘솔은 launch requested/dispatched/accepted 수준까지 확인한다.
+7. 새 탭은 확장 백그라운드가 `chrome.tabs.create`로 열 수 있다. 현재 Bridge `browser_tabs list`에 새 URL이 안 보이면 제품 launch 실패로 보지 않는다. 새 탭 lifecycle이 목적이면 해당 Chrome 새 탭을 Bridge selector로 다시 선택하고, 작업실 내부 테스트가 목적이면 열린 URL을 Bridge-controlled tab에 직접 이동해 이어서 확인한다.
+8. hosted 작업실에서 session 허용 상태면 workspace가 렌더링되고, 미허용 상태면 blocked 화면이 보여야 한다.
 
 ### P1 Regression
 
@@ -168,14 +192,15 @@ npm.cmd run check:feature-usage -- --days 1 --limit 20
 2. 공유 생성/공유 해제 버튼은 capability와 권한이 있을 때만 보여야 한다.
    - `meeting.share.create-function`
    - `meeting.share.revoke-function`
-3. popup에서 `로컬 호스팅`과 `상용 호스팅`을 전환한다.
+3. 회의 사용량 통계는 현재 사용자 월별 doc 1개와 전체 doc 1개 기준이어야 하고, 회의 탭을 벗어나거나 패널을 닫으면 listener가 남지 않아야 한다.
+4. popup에서 `로컬 호스팅`과 `상용 호스팅`을 전환한다.
    - 선택 상태와 local override가 즉시 반영되어야 한다.
    - 열린 workspace URL이 이전 origin에 묶여 있으면 실패다.
-4. hosted 작업실에서 기존 완료 기록 1건을 열고 결과 상세를 확인한다.
-5. 녹음 또는 파일 import 흐름을 1회 확인한다.
+5. hosted 작업실에서 기존 완료 기록 1건을 열고 결과 상세를 확인한다.
+6. 녹음 또는 파일 import 흐름을 1회 확인한다.
    - 마이크 권한, 업로드 진행 상태, 완료/오류 문구가 맞아야 한다.
-6. `visibilitychange`, focus 복귀, 탭 전환 중 녹음이 끊기지 않는지 확인한다.
-7. `beforeunload` 경고는 녹음 중, 일시정지, 중지 처리 중, 실제 업로드 진행 중일 때만 떠야 한다.
+7. `visibilitychange`, focus 복귀, 탭 전환 중 녹음이 끊기지 않는지 확인한다.
+8. `beforeunload` 경고는 녹음 중, 일시정지, 중지 처리 중, 실제 업로드 진행 중일 때만 떠야 한다.
 
 ### P2 Deep
 
@@ -357,7 +382,7 @@ __INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20, entrie
 1. 공통 준비와 iframe/console baseline 확인
 2. 대화 탭 빈 상태
 3. 대화가 있는 세션의 질문 수집, 검색, 실제 이동
-4. 회의 룸 목록과 기존 결과/작업실 열기
+4. 회의 룸 목록, 회의 사용량 미니 통계, 기존 결과/작업실 열기
 5. 회의 작업실 shell, 기존 완료 record, 상태/회의 정리/메모/원문 탭 확인
 6. 회의 작업실 녹음 또는 파일 import 중 하나를 짧은 P1 범위로 확인
 7. 프롬프트 `내 요청` 렌더링과 입력창 주입
@@ -416,6 +441,12 @@ npm.cmd run check:function-logs -- --since 10 --limit 100
 ```bash
 npm.cmd run check:meeting-data
 npm.cmd run check:meeting-data -- --meeting-id <meetingId>
+```
+
+회의 사용량 accounting 또는 backfill 경계를 바꿨다면 dry-run으로 보정 대상도 확인한다. 상용 aggregate를 쓰는 `--execute`는 별도 운영 승인 없이 실행하지 않는다.
+
+```bash
+npm.cmd run backfill:meeting-usage -- --limit 20
 ```
 
 실제 삭제 전에는 dry-run을 먼저 본다.
