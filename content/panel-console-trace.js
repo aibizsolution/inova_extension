@@ -14,6 +14,8 @@
     "hosted.firestore.listen.start",
     "hosted.firestore.reuse",
     "hosted.firestore.snapshot",
+    "hosted.callback.enter",
+    "hosted.controller.result",
     "hosted.panel-auth.error",
     "hosted.panel-auth.start",
     "hosted.panel-auth.success",
@@ -49,6 +51,10 @@
     "top.panel.handshake.timeout",
     "top.panel.host.created",
     "top.panel.snapshot.push",
+    "top.meeting.launch.accepted",
+    "top.meeting.launch.dispatched",
+    "top.meeting.launch.error",
+    "top.meeting.launch.requested",
   ];
   const QUIET_TRACE_LABELS = new Set([
     "hosted.listeners.bound",

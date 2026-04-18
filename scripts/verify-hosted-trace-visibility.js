@@ -55,6 +55,13 @@ function verifyHostedTraceVisibilityContract() {
     "top panel should keep hosted firestore traces visible"
   );
   assert(
+    panelTraceSource.includes('"hosted.callback.enter"')
+      && panelTraceSource.includes('"hosted.controller.result"')
+      && panelTraceSource.includes('"top.meeting.launch.requested"')
+      && panelTraceSource.includes('"top.meeting.launch.accepted"'),
+    "top panel should keep hosted meeting workspace launch traces visible without requiring debug mode"
+  );
+  assert(
     panelTraceSource.includes('"hosted.conversation.snapshot.start"'),
     "top panel should keep conversation snapshot traces visible"
   );
