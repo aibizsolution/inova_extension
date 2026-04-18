@@ -69,7 +69,7 @@ Object.assign(globalThis, {
 });
 
 function isAllowedSender(message, sender) {
-  return String(sender?.url || "").startsWith(INOVA_ORIGIN)
+  return isInovaPageSender(sender)
     || (
       [
         "inova-meeting:authorize-workspace-access",
@@ -77,4 +77,13 @@ function isAllowedSender(message, sender) {
       ].includes(message.type)
       && meetingWorkspaceCapability.isHostedWorkspaceSender(sender)
     );
+}
+
+function isInovaPageSender(sender) {
+  try {
+    return new URL(String(sender?.url || "")).origin === INOVA_ORIGIN;
+  } catch (error) {
+    void error;
+    return false;
+  }
 }

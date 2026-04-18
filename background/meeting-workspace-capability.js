@@ -286,6 +286,14 @@
     });
   }
 
+  function warnMeetingProviderIdentityFallback(operation, error, extra = {}) {
+    console.warn("[i-Nova Service Worker] meeting provider identity fallback degraded", {
+      ...extra,
+      error: error instanceof Error ? error.message : String(error || ""),
+      operation: namespace.session.normalizeText(operation),
+    });
+  }
+
   async function resolveMeetingProviderIdentity(providerIdentity) {
     const normalized = normalizeProviderIdentity(providerIdentity);
     if (normalized.providerUserKey) {
@@ -350,15 +358,17 @@
 
   async function requestMeetingProviderIdentityFromInovaTabs() {
     if (!chrome.tabs?.query || !chrome.tabs?.sendMessage) {
+      warnMeetingProviderIdentityFallback("inova-tabs-unavailable", new Error("chrome.tabs API is unavailable"));
       return normalizeProviderIdentity(null);
     }
     let tabs;
     try {
       tabs = await chrome.tabs.query({ url: `${INOVA_ORIGIN}/*` });
     } catch (error) {
-      void error;
+      warnMeetingProviderIdentityFallback("inova-tabs-query", error);
       return normalizeProviderIdentity(null);
     }
+    let failedTabCount = 0;
     for (const tab of Array.isArray(tabs) ? tabs : []) {
       const tabId = Number(tab?.id) || 0;
       if (!tabId) continue;
@@ -372,8 +382,18 @@
           return normalized;
         }
       } catch (error) {
-        void error;
+        failedTabCount += 1;
+        warnMeetingProviderIdentityFallback("inova-tab-message", error, {
+          tabId,
+          tabUrl: namespace.session.normalizeText(tab?.url),
+        });
       }
+    }
+    if (failedTabCount || (Array.isArray(tabs) && tabs.length)) {
+      warnMeetingProviderIdentityFallback("inova-tabs-empty-identity", new Error("provider identity was not available from active i-Nova tabs"), {
+        failedTabCount,
+        tabCount: Array.isArray(tabs) ? tabs.length : 0,
+      });
     }
     return normalizeProviderIdentity(null);
   }

@@ -53,7 +53,7 @@
     for (const range of ranges) {
       const startSample = Math.max(0, Number(range.startSample) || 0);
       const endSample = Math.max(startSample, Number(range.endSample) || startSample);
-      const pcm = resampled.subarray(startSample, endSample);
+      const pcm = resampled.slice(startSample, endSample);
       const wavBuffer = encodeMonoWav16(pcm, targetSampleRate);
       parts.push({
         blob: new global.Blob([wavBuffer], { type: "audio/wav" }),

@@ -196,6 +196,7 @@
     const payload = await postJson(
       meetingFunctions.createInovaMeetingShareLinkUrl,
       {
+        clientRequestId: input?.clientRequestId || "",
         jobId: input?.jobId || "",
         meetingId: input?.meetingId || "",
         owner: toProviderIdentityPayload(providerIdentity),
@@ -210,6 +211,7 @@
     const payload = await postJson(
       meetingFunctions.revokeInovaMeetingShareLinkUrl,
       {
+        clientRequestId: input?.clientRequestId || "",
         jobId: input?.jobId || "",
         meetingId: input?.meetingId || "",
         owner: toProviderIdentityPayload(providerIdentity),

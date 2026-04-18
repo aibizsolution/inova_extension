@@ -39,7 +39,15 @@ function createMeetingNotesGenerationDomain(deps) {
       try {
         const meetingRecord = await loadMeetingSummaryRecord(owner, { meetingId: meeting.meetingId }, createHttpError);
         termReplacements = normalizeMeetingTermReplacements(meetingRecord?.meeting?.termReplacements);
-      } catch {}
+      } catch (error) {
+        logEvent("meeting.notes.term-replacements.load.error", {
+          error: normalizeText(error?.message),
+          jobId,
+          meetingId: meeting.meetingId,
+          providerUserKey: owner.providerUserKey,
+        });
+        throw createHttpError(500, "회의 용어 치환 목록을 불러오지 못해 회의록 자동 정리를 중단했어요.");
+      }
       const gateDecision = await classifyMeetingNotesSignal(transcript);
       logEvent("meeting.notes.gate", {
         decision: gateDecision.decision,

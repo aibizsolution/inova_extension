@@ -1,6 +1,7 @@
 (function initPanelSessionCapability(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const INOVA_ORIGIN = "https://inova.incross.com";
+  const COOKIE_EXPIRY_BUFFER_SECONDS = 30;
   const functionsRuntimeConfig = namespace.functionsRuntimeConfig || {};
   const panelAuthCache = namespace.panelAuthCache?.create?.(getInovaAccessToken);
 
@@ -12,10 +13,24 @@
       name: "accessToken",
       url: INOVA_ORIGIN,
     });
-    if (cookie?.value) {
+    if (isUsableAccessTokenCookie(cookie)) {
       return cookie.value;
     }
+    if (cookie?.value && typeof namespace.inovaAuth?.clearAccessToken === "function") {
+      namespace.inovaAuth.clearAccessToken();
+    }
     return namespace.inovaAuth.getAccessToken(true);
+  }
+
+  function isUsableAccessTokenCookie(cookie) {
+    if (!namespace.session.normalizeText(cookie?.value)) {
+      return false;
+    }
+    const expirationDate = Number(cookie?.expirationDate) || 0;
+    if (!expirationDate) {
+      return true;
+    }
+    return expirationDate > (Date.now() / 1000) + COOKIE_EXPIRY_BUFFER_SECONDS;
   }
 
   async function issuePromptPanelAuth(providerIdentity) {

@@ -1,6 +1,8 @@
 (function initMeetingPanelBridge(global) {
   const ALLOWED_PARENT_ORIGINS = buildAllowedParentOrigins();
-  const FIRESTORE_PERSISTENCE_OPTIONS = { synchronizeTabs: true };
+  // Meeting panel auth is scoped to the current runtime target/user; keep
+  // Firestore persistence single-tab so another meeting panel cannot reuse it.
+  const FIRESTORE_PERSISTENCE_OPTIONS = null;
   const LOCAL_BRIDGE_ORIGINS = new Set([
     "http://127.0.0.1:5000",
     "http://localhost:5000",
@@ -226,9 +228,11 @@
     if (firestorePersistencePromise) {
       return firestorePersistencePromise;
     }
-    firestorePersistencePromise = runWithSuppressedFirestorePersistenceWarning(() =>
-      db.enablePersistence(FIRESTORE_PERSISTENCE_OPTIONS)
-    ).catch((error) => {
+    firestorePersistencePromise = runWithSuppressedFirestorePersistenceWarning(() => (
+      FIRESTORE_PERSISTENCE_OPTIONS
+        ? db.enablePersistence(FIRESTORE_PERSISTENCE_OPTIONS)
+        : db.enablePersistence()
+    )).catch((error) => {
       const code = normalizeText(error?.code);
       if (code !== "failed-precondition" && code !== "unimplemented") {
         throw error;

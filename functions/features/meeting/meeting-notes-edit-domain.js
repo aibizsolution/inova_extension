@@ -82,69 +82,101 @@ function createMeetingNotesEditDomain(deps) {
   async function applyMeetingNotesSectionEdit(input, owner) {
     const source = await loadMeetingNotesSectionEditSource(input, owner);
     const editMode = normalizeText(input.editMode) === "manual" ? "manual" : "ai";
-    if (input.baseRevisionToken && input.baseRevisionToken !== source.baseRevisionToken) {
-      throw createHttpError(409, "회의 정리가 바뀌어 미리보기가 오래됐어요. 새 미리보기를 다시 만들어 주세요.");
-    }
     if (editMode !== "manual" && !input.baseRevisionToken) {
       throw createHttpError(400, "미리보기 기준 버전을 확인해 주세요.");
     }
     const normalizedPayload = normalizeMeetingNotesSectionPayload(input.sectionKey, input.sectionData);
-    const mergedNotes = applyMeetingNotesSectionPayload(source.currentNotes, input.sectionKey, normalizedPayload);
-    const nextNotes = applyMeetingTermReplacements(mergedNotes, source.termReplacements);
     const requestId = normalizeText(input.clientRequestId) || db.collection(jobCollection).doc().id;
-    const updatedAt = new Date().toISOString();
-    const shouldSyncTitle = shouldAutoSyncResultTitleFromNotes(source.job, source.currentNotes);
-    const nextTitle = shouldSyncTitle
-      ? resolveMeetingResultTitle({ notes: nextNotes }, source.job.title)
-      : source.job.title;
-    const workspaceMutation = buildWorkspaceMutation({
-      completedAt: updatedAt,
-      requestId,
-      requestedAt: updatedAt,
-      status: "succeeded",
-      type: "applySectionEdit",
-    });
-    const jobPatch = {
-      meetingNotes: nextNotes,
-      updatedAt,
-      workspaceMutation,
-    };
-    if (normalizeText(nextTitle) !== normalizeText(source.job.title)) {
-      jobPatch.title = nextTitle;
-    }
-    const artifactPatch = {
-      notes: nextNotes,
-    };
+    const applied = await db.runTransaction(async (transaction) => {
+      const jobSnapshot = await transaction.get(source.jobRef);
+      if (!jobSnapshot.exists) {
+        throw createHttpError(404, "수정할 회의 결과를 찾지 못했어요.");
+      }
+      const currentJob = normalizeMeetingJob(jobSnapshot.data());
+      if (currentJob.deletedAt) {
+        throw createHttpError(404, "이미 삭제된 회의 결과예요.");
+      }
+      assertJobOwnership(currentJob, owner, createHttpError);
+      if (currentJob.meetingId !== input.meetingId) {
+        throw createHttpError(404, "현재 회의와 맞지 않는 결과예요.");
+      }
+      const artifactSnapshot = source.artifactRef
+        ? await transaction.get(source.artifactRef)
+        : null;
+      const currentArtifact = artifactSnapshot?.exists
+        ? normalizeMeetingArtifact(artifactSnapshot.data())
+        : null;
+      const currentNotes = normalizeMeetingNotes(currentArtifact?.notes || currentJob.meetingNotes);
+      if (!hasMeetingNotes(currentNotes)) {
+        throw createHttpError(409, "수정할 회의 정리가 아직 준비되지 않았어요.");
+      }
+      const currentRevisionToken = buildMeetingNotesRevisionToken(currentJob, currentArtifact, currentNotes);
+      if (input.baseRevisionToken && input.baseRevisionToken !== currentRevisionToken) {
+        throw createHttpError(409, "회의 정리가 바뀌어 미리보기가 오래됐어요. 새 미리보기를 다시 만들어 주세요.");
+      }
 
-    const nextJob = normalizeMeetingJob({
-      ...source.job,
-      ...jobPatch,
+      const mergedNotes = applyMeetingNotesSectionPayload(currentNotes, input.sectionKey, normalizedPayload);
+      const nextNotes = applyMeetingTermReplacements(mergedNotes, source.termReplacements);
+      const updatedAt = new Date().toISOString();
+      const shouldSyncTitle = shouldAutoSyncResultTitleFromNotes(currentJob, currentNotes);
+      const nextTitle = shouldSyncTitle
+        ? resolveMeetingResultTitle({ notes: nextNotes }, currentJob.title)
+        : currentJob.title;
+      const workspaceMutation = buildWorkspaceMutation({
+        completedAt: updatedAt,
+        requestId,
+        requestedAt: updatedAt,
+        status: "succeeded",
+        type: "applySectionEdit",
+      });
+      const jobPatch = {
+        meetingNotes: nextNotes,
+        updatedAt,
+        workspaceMutation,
+      };
+      if (normalizeText(nextTitle) !== normalizeText(currentJob.title)) {
+        jobPatch.title = nextTitle;
+      }
+      const artifactPatch = {
+        notes: nextNotes,
+      };
+      const nextJob = normalizeMeetingJob({
+        ...currentJob,
+        ...jobPatch,
+      });
+      const nextArtifact = currentArtifact
+        ? normalizeMeetingArtifact({
+            ...currentArtifact,
+            ...artifactPatch,
+          })
+        : null;
+      transaction.set(source.jobRef, jobPatch, { merge: true });
+      if (source.artifactRef) {
+        transaction.set(source.artifactRef, artifactPatch, { merge: true });
+      }
+      return {
+        nextArtifact,
+        nextJob,
+        nextNotes,
+        nextTitle,
+        updatedAt,
+      };
     });
-    const nextArtifact = source.artifact
-      ? normalizeMeetingArtifact({
-          ...source.artifact,
-          ...artifactPatch,
-        })
-      : null;
-    await Promise.all([
-      source.jobRef.set(jobPatch, { merge: true }),
-      source.artifactRef ? source.artifactRef.set(artifactPatch, { merge: true }) : Promise.resolve(),
-    ]);
-    await updateMeetingSummaryRecordResult(owner, nextJob, nextArtifact, updatedAt);
+    await updateMeetingSummaryRecordResult(owner, applied.nextJob, applied.nextArtifact, applied.updatedAt);
 
     logEvent("meeting.notes.section-edit.apply.success", {
-      jobId: source.job.jobId,
+      jobId: applied.nextJob.jobId,
       editMode,
-      meetingId: source.job.meetingId,
+      meetingId: applied.nextJob.meetingId,
       providerUserKey: owner.providerUserKey,
       sectionKey: input.sectionKey,
     });
 
     return {
-      notes: nextNotes,
+      notes: applied.nextNotes,
       requestId,
       sectionKey: input.sectionKey,
-      title: nextTitle,
+      title: applied.nextTitle,
     };
   }
 

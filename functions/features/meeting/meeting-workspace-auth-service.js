@@ -68,40 +68,10 @@ function registerMeetingWorkspaceAuthHandlers(deps) {
         throw createHttpError(400, "공유 링크를 만들 회의 ID가 없어요.");
       }
 
-      const resolvedMeeting = await loadOwnedMeetingRecord(owner, input.meetingId);
-      if (!resolvedMeeting?.meeting?.meetingId) {
-        throw createHttpError(404, "공유할 회의를 찾지 못했어요.");
-      }
-
-      const meetingRef = resolvedMeeting.ref;
-      const currentShare = normalizeShareMetadata(resolvedMeeting.meeting.share);
-      const createdAt = new Date().toISOString();
-      let nextShare = currentShare;
-      if (!currentShare.active || !currentShare.shareId) {
-        const shareId = db.collection(MEETING_COLLECTION).doc().id;
-        const secret = buildShareSecret(shareId, input.meetingId, owner.providerUserKey);
-        nextShare = {
-          active: true,
-          createdAt,
-          createdBy: owner ? { ...owner } : {},
-          revokedAt: "",
-          secretHash: hashSecret(secret),
-          shareId,
-          status: SHARE_ACTIVE_STATUS,
-        };
-        await meetingRef.set({
-          share: {
-            createdAt: nextShare.createdAt,
-            createdBy: nextShare.createdBy,
-            revokedAt: "",
-            secretHash: nextShare.secretHash,
-            shareId: nextShare.shareId,
-            status: nextShare.status,
-          },
-        }, { merge: true });
-      }
+      const { currentShare, nextShare } = await createMeetingShareLinkTransaction(owner, input);
 
       logEvent?.("meeting.share-link.create.success", {
+        clientRequestId: input.clientRequestId,
         meetingId: input.meetingId,
         providerUserKey: owner.providerUserKey,
         reused: Boolean(currentShare.active && currentShare.shareId),
@@ -134,30 +104,10 @@ function registerMeetingWorkspaceAuthHandlers(deps) {
         throw createHttpError(400, "공유 링크를 해제할 회의 ID가 없어요.");
       }
 
-      const resolvedMeeting = await loadOwnedMeetingRecord(owner, input.meetingId);
-      if (!resolvedMeeting?.meeting?.meetingId) {
-        throw createHttpError(404, "공유 해제할 회의를 찾지 못했어요.");
-      }
-      const currentShare = normalizeShareMetadata(resolvedMeeting.meeting.share);
-      const revokedAt = new Date().toISOString();
-      const nextShare = {
-        ...currentShare,
-        active: false,
-        revokedAt,
-        status: SHARE_REVOKED_STATUS,
-      };
-      await resolvedMeeting.ref.set({
-        share: {
-          createdAt: currentShare.createdAt,
-          createdBy: currentShare.createdBy,
-          revokedAt,
-          secretHash: currentShare.secretHash,
-          shareId: currentShare.shareId,
-          status: SHARE_REVOKED_STATUS,
-        },
-      }, { merge: true });
+      const { currentShare, nextShare } = await revokeMeetingShareLinkTransaction(owner, input);
 
       logEvent?.("meeting.share-link.revoke.success", {
+        clientRequestId: input.clientRequestId,
         meetingId: input.meetingId,
         providerUserKey: owner.providerUserKey,
         shareId: currentShare.shareId,
@@ -508,6 +458,11 @@ function registerMeetingWorkspaceAuthHandlers(deps) {
     }
     const ref = db.collection(MEETING_COLLECTION).doc(buildMeetingDocId(owner.providerUserKey, normalizedMeetingId));
     const snapshot = await ref.get();
+    const meeting = readOwnedMeetingRecordFromSnapshot(owner, snapshot);
+    return meeting ? { meeting, ref } : null;
+  }
+
+  function readOwnedMeetingRecordFromSnapshot(owner, snapshot) {
     if (!snapshot.exists) {
       return null;
     }
@@ -518,7 +473,73 @@ function registerMeetingWorkspaceAuthHandlers(deps) {
     if (normalizeText(meeting.owner?.providerUserKey) && normalizeText(meeting.owner?.providerUserKey) !== owner.providerUserKey) {
       throw createHttpError(403, "다른 사용자의 회의 기록에는 접근할 수 없어요.");
     }
-    return { meeting, ref };
+    return meeting;
+  }
+
+  async function createMeetingShareLinkTransaction(owner, input) {
+    const meetingRef = db.collection(MEETING_COLLECTION).doc(buildMeetingDocId(owner.providerUserKey, input.meetingId));
+    return db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(meetingRef);
+      const meeting = readOwnedMeetingRecordFromSnapshot(owner, snapshot);
+      if (!meeting?.meetingId) {
+        throw createHttpError(404, "공유할 회의를 찾지 못했어요.");
+      }
+      const currentShare = normalizeShareMetadata(meeting.share);
+      if (currentShare.active && currentShare.shareId) {
+        return { currentShare, nextShare: currentShare };
+      }
+      const shareId = db.collection(MEETING_COLLECTION).doc().id;
+      const secret = buildShareSecret(shareId, input.meetingId, owner.providerUserKey);
+      const nextShare = {
+        active: true,
+        createdAt: new Date().toISOString(),
+        createdBy: owner ? { ...owner } : {},
+        revokedAt: "",
+        secretHash: hashSecret(secret),
+        shareId,
+        status: SHARE_ACTIVE_STATUS,
+      };
+      transaction.set(meetingRef, {
+        share: {
+          createdAt: nextShare.createdAt,
+          createdBy: nextShare.createdBy,
+          revokedAt: "",
+          secretHash: nextShare.secretHash,
+          shareId: nextShare.shareId,
+          status: nextShare.status,
+        },
+      }, { merge: true });
+      return { currentShare, nextShare };
+    });
+  }
+
+  async function revokeMeetingShareLinkTransaction(owner, input) {
+    const meetingRef = db.collection(MEETING_COLLECTION).doc(buildMeetingDocId(owner.providerUserKey, input.meetingId));
+    return db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(meetingRef);
+      const meeting = readOwnedMeetingRecordFromSnapshot(owner, snapshot);
+      if (!meeting?.meetingId) {
+        throw createHttpError(404, "공유 해제할 회의를 찾지 못했어요.");
+      }
+      const currentShare = normalizeShareMetadata(meeting.share);
+      const nextShare = {
+        ...currentShare,
+        active: false,
+        revokedAt: new Date().toISOString(),
+        status: SHARE_REVOKED_STATUS,
+      };
+      transaction.set(meetingRef, {
+        share: {
+          createdAt: currentShare.createdAt,
+          createdBy: currentShare.createdBy,
+          revokedAt: nextShare.revokedAt,
+          secretHash: currentShare.secretHash,
+          shareId: currentShare.shareId,
+          status: SHARE_REVOKED_STATUS,
+        },
+      }, { merge: true });
+      return { currentShare, nextShare };
+    });
   }
 
   async function loadMeetingRecordByMeetingId(meetingId) {
@@ -567,6 +588,7 @@ function registerMeetingWorkspaceAuthHandlers(deps) {
   function normalizeShareLinkRequest(input) {
     const nextInput = input && typeof input === "object" ? input : {};
     return {
+      clientRequestId: normalizeText(nextInput.clientRequestId),
       jobId: normalizeText(nextInput.jobId),
       meetingId: normalizeText(nextInput.meetingId),
     };

@@ -34,9 +34,8 @@
       }
       postResponse({
         ...baseResponse,
-        ...runtimeResponse,
         ok: true,
-        data: runtimeResponse.data || {},
+        data: runtimeResponse.data && typeof runtimeResponse.data === "object" ? runtimeResponse.data : {},
       }, requestType);
     } catch (error) {
       postResponse({
