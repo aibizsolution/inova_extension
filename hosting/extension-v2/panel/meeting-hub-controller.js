@@ -46,6 +46,9 @@
     let meetingRealtime = options.meetingRealtime && typeof options.meetingRealtime === "object"
       ? options.meetingRealtime
       : null;
+    let meetingUsageRealtime = options.meetingUsageRealtime && typeof options.meetingUsageRealtime === "object"
+      ? options.meetingUsageRealtime
+      : null;
     const state = {
       activeTool: "",
       capabilities: [],
@@ -71,6 +74,9 @@
         meetingWorkspaceUrlOverride: "",
       },
       source: "none",
+      usage: createUsageState(),
+      usageLoadPromise: null,
+      usagePendingReload: false,
     };
     if (!meetingRealtime && namespace.meetingFirestoreClient?.create) {
       meetingRealtime = namespace.meetingFirestoreClient.create({
@@ -89,6 +95,20 @@
           hasPendingWrites: false,
           items: [],
         }),
+      };
+    }
+    if (!meetingUsageRealtime && namespace.meetingUsageFirestoreClient?.create) {
+      meetingUsageRealtime = namespace.meetingUsageFirestoreClient.create({
+        browserCapabilities,
+        onError: handleUsageRealtimeError,
+        onSnapshot: handleUsageRealtimeSnapshot,
+        traceFirestore,
+      });
+    }
+    if (!meetingUsageRealtime) {
+      meetingUsageRealtime = {
+        disconnect() {},
+        ensureSubscribed: async () => createUsageState(),
       };
     }
 
@@ -117,15 +137,18 @@
       };
       if (!hasRequiredCapabilities()) {
         meetingRealtime?.disconnect?.("capabilities-missing");
+        meetingUsageRealtime?.disconnect?.("capabilities-missing");
         return;
       }
       if (nextActiveTool !== "meeting" || !nextPanelOpen) {
         meetingRealtime?.disconnect?.("panel-inactive");
+        meetingUsageRealtime?.disconnect?.("panel-inactive");
         return;
       }
       const shouldForceReload = meetingToolBecameActive || panelReopenedIntoMeeting;
       if (shouldForceReload || !state.initialized) {
         void ensureLoaded(shouldForceReload);
+        void ensureUsageLoaded(shouldForceReload);
       }
     }
 
@@ -157,6 +180,7 @@
         items: state.items.slice(),
         pending: normalizePending(state.pending),
         source: normalizeEnum(state.source, ["realtime", "cache", "none"], "none"),
+        usage: cloneUsageState(state.usage),
       };
     }
 
@@ -184,6 +208,7 @@
         reason: normalizedReason,
       });
       void ensureLoaded(true);
+      void ensureUsageLoaded(true);
       return true;
     }
 
@@ -379,6 +404,71 @@
       scheduleRender();
     }
 
+    async function ensureUsageLoaded(force = false) {
+      if (!hasRequiredCapabilities()) {
+        return state.usage;
+      }
+      const initialized = await ensureInitialized();
+      if (!initialized) {
+        return state.usage;
+      }
+      if (state.usageLoadPromise) {
+        if (force) {
+          state.usagePendingReload = true;
+        }
+        return state.usageLoadPromise;
+      }
+      if (!state.providerIdentity.available || !normalizeText(state.providerIdentity.providerUserKey)) {
+        state.usage = {
+          ...createUsageState(state.usage),
+          dataFreshness: state.usage.checkedAt ? "stale" : "empty",
+          degraded: false,
+          degradedReason: "",
+          error: "",
+          source: state.usage.checkedAt ? "cache" : "none",
+        };
+        scheduleRender();
+        return state.usage;
+      }
+
+      const run = (async () => {
+        try {
+          const snapshot = await meetingUsageRealtime.ensureSubscribed({
+            forceRefresh: force,
+            providerIdentity: buildProviderIdentityPayload(state.providerIdentity),
+            settings: state.settings,
+          });
+          await applyUsageSnapshotPayload(snapshot);
+          return state.usage;
+        } catch (error) {
+          applyUsageLoadError(error, "meeting-usage-firestore-unavailable");
+          scheduleRender();
+          return state.usage;
+        }
+      })();
+      state.usageLoadPromise = run;
+      try {
+        return await run;
+      } finally {
+        if (state.usageLoadPromise === run) {
+          state.usageLoadPromise = null;
+        }
+        if (state.usagePendingReload) {
+          state.usagePendingReload = false;
+          void ensureUsageLoaded(true);
+        }
+      }
+    }
+
+    async function handleUsageRealtimeSnapshot(snapshot) {
+      await applyUsageSnapshotPayload(snapshot);
+    }
+
+    async function handleUsageRealtimeError(error) {
+      applyUsageLoadError(error, "meeting-usage-firestore-unavailable");
+      scheduleRender();
+    }
+
     async function applySnapshotPayload(snapshot) {
       const normalizedSnapshot = snapshot && typeof snapshot === "object" ? snapshot : {};
       const items = normalizeMeetingItems(normalizedSnapshot.items);
@@ -392,6 +482,19 @@
         : (items.length ? "fresh" : "empty");
       state.error = "";
       state.source = fromCache ? "cache" : "realtime";
+      scheduleRender();
+    }
+
+    async function applyUsageSnapshotPayload(snapshot) {
+      const normalizedUsage = normalizeUsageSnapshot(snapshot);
+      state.usage = {
+        ...normalizedUsage,
+        dataFreshness: normalizedUsage.fromCache ? "stale" : "fresh",
+        degraded: false,
+        degradedReason: "",
+        error: "",
+        source: normalizedUsage.fromCache ? "cache" : "realtime",
+      };
       scheduleRender();
     }
 
@@ -463,6 +566,19 @@
       state.dataFreshness = hasCachedItems ? "stale" : "empty";
       state.error = readErrorMessage(error, "회의 목록을 불러오지 못했어요.");
       state.source = hasCachedItems ? "cache" : "none";
+    }
+
+    function applyUsageLoadError(error, degradedReason = "") {
+      const currentUsage = createUsageState(state.usage);
+      state.usage = {
+        ...currentUsage,
+        checkedAt: currentUsage.checkedAt || new Date().toISOString(),
+        dataFreshness: currentUsage.checkedAt ? "stale" : "empty",
+        degraded: true,
+        degradedReason: normalizeText(degradedReason) || "meeting-usage-empty",
+        error: readErrorMessage(error, "회의 사용량을 불러오지 못했어요."),
+        source: currentUsage.checkedAt ? (currentUsage.source || "cache") : "none",
+      };
     }
 
     function patchShareState(meetingId, share) {
@@ -580,6 +696,50 @@
       numericUserId: null,
       provider: "inova",
       providerUserKey: "",
+    };
+  }
+
+  function createUsageState(input = {}) {
+    const usage = input && typeof input === "object" ? input : {};
+    return {
+      checkedAt: normalizeText(usage.checkedAt),
+      dataFreshness: normalizeEnum(usage.dataFreshness, ["fresh", "stale", "empty"], "empty"),
+      degraded: Boolean(usage.degraded),
+      degradedReason: normalizeText(usage.degradedReason),
+      error: normalizeText(usage.error),
+      fromCache: Boolean(usage.fromCache),
+      hasPendingWrites: Boolean(usage.hasPendingWrites),
+      month: normalizeUsageMetric(usage.month),
+      source: normalizeEnum(usage.source, ["realtime", "cache", "none"], "none"),
+      total: normalizeUsageMetric(usage.total),
+    };
+  }
+
+  function cloneUsageState(input) {
+    return createUsageState(input);
+  }
+
+  function normalizeUsageSnapshot(snapshot) {
+    const source = snapshot && typeof snapshot === "object" ? snapshot : {};
+    return {
+      checkedAt: normalizeText(source.checkedAt) || new Date().toISOString(),
+      fromCache: Boolean(source.fromCache),
+      hasPendingWrites: Boolean(source.hasPendingWrites),
+      month: normalizeUsageMetric(source.month),
+      total: normalizeUsageMetric(source.total),
+    };
+  }
+
+  function normalizeUsageMetric(input) {
+    const metric = input && typeof input === "object" ? input : {};
+    return {
+      firstProcessedAt: normalizeText(metric.firstProcessedAt),
+      lastProcessedAt: normalizeText(metric.lastProcessedAt),
+      monthKey: normalizeText(metric.monthKey),
+      processedCount: Math.max(0, Math.round(Number(metric.processedCount) || 0)),
+      processedMs: Math.max(0, Math.round(Number(metric.processedMs) || 0)),
+      providerUserKey: normalizeText(metric.providerUserKey),
+      updatedAt: normalizeText(metric.updatedAt),
     };
   }
 

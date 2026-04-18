@@ -370,6 +370,22 @@ function cloneValue(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
 }
 
+function hasFirestoreIndex(indexes, collectionGroup, fields) {
+  return (Array.isArray(indexes) ? indexes : []).some((index) => {
+    if (index?.collectionGroup !== collectionGroup) {
+      return false;
+    }
+    const indexFields = Array.isArray(index.fields) ? index.fields : [];
+    if (indexFields.length !== fields.length) {
+      return false;
+    }
+    return fields.every(([fieldPath, order], indexOfField) =>
+      indexFields[indexOfField]?.fieldPath === fieldPath
+        && indexFields[indexOfField]?.order === order
+    );
+  });
+}
+
 function verifyHostedPanelFiles(directoryName) {
   const baseDir = path.join(root, "hosting", directoryName, "panel");
   const html = fs.readFileSync(
@@ -525,6 +541,49 @@ function verifyHostedPanelFiles(directoryName) {
       fs.readFileSync(path.join(root, "firestore.rules"), "utf8")
         .includes("function isHostedPanelSessionActive()"),
       "Firestore rules should explicitly define the shared hosted panel read session"
+    );
+    const firestoreRulesSource = fs.readFileSync(path.join(root, "firestore.rules"), "utf8");
+    assert(
+      firestoreRulesSource.includes("match /integration_inova_meeting_usage_user_months/{docId}")
+        && firestoreRulesSource.includes("allow get: if matchesOwnUsageMonthDoc(docId);")
+        && firestoreRulesSource.includes("match /integration_inova_meeting_usage_user_totals/{providerUserKey}")
+        && firestoreRulesSource.includes("request.auth.token.providerUserKey == providerUserKey"),
+      "Firestore rules should allow hosted panel users to get only their own usage aggregate docs"
+    );
+    [
+      "match /integration_inova_meeting_usage_events/{docId}",
+      "match /integration_inova_meeting_usage_admin_months/{docId}",
+      "match /integration_inova_meeting_usage_admin_days/{docId}",
+    ].forEach((rulePattern) => assert(
+      firestoreRulesSource.includes(rulePattern),
+      `Firestore rules should define ${rulePattern}`
+    ));
+    assert(
+      (firestoreRulesSource.match(/allow list: if false;/g) || []).length >= 1
+        && firestoreRulesSource.includes("allow read, write: if false;"),
+      "Firestore rules should deny usage collection list and private ledger/admin reads"
+    );
+    const firestoreIndexes = JSON.parse(fs.readFileSync(path.join(root, "firestore.indexes.json"), "utf8")).indexes || [];
+    assert(
+      hasFirestoreIndex(firestoreIndexes, "integration_inova_meeting_usage_user_months", [
+        ["monthKey", "ASCENDING"],
+        ["processedMs", "DESCENDING"],
+      ]),
+      "Firestore indexes should support monthly admin top-user usage queries"
+    );
+    assert(
+      hasFirestoreIndex(firestoreIndexes, "integration_inova_meeting_usage_user_months", [
+        ["providerUserKey", "ASCENDING"],
+        ["monthKey", "DESCENDING"],
+      ]),
+      "Firestore indexes should support user usage month drill-down queries"
+    );
+    assert(
+      hasFirestoreIndex(firestoreIndexes, "integration_inova_meeting_usage_events", [
+        ["providerUserKey", "ASCENDING"],
+        ["createdAt", "DESCENDING"],
+      ]),
+      "Firestore indexes should support usage event audit queries"
     );
     panelFiles
       .filter((entry) => !["panel-firestore-session-client.js", "base-firestore-client.js"].includes(entry.fileName))

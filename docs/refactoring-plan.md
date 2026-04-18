@@ -234,6 +234,13 @@ ordinary feature 구현 변경, 탭별 hosted ownership 진행도, smoke 이슈 
 - `integration_inova_meeting_artifacts`
 - `integration_inova_meeting_commands`
 - `integration_inova_meeting_deletions`
+- `integration_inova_meeting_usage_events`
+- `integration_inova_meeting_usage_user_months`
+- `integration_inova_meeting_usage_user_totals`
+- `integration_inova_meeting_usage_admin_months`
+- `integration_inova_meeting_usage_admin_days`
+
+사용량 accounting namespace는 기존 meeting namespace에 더하는 성공 처리 원장/집계 baseline이다. 이 추가는 version lane 분리나 quota enforcement가 아니며, 삭제 후에도 처리 성공 사용량을 차감하지 않는 서버 측 compat 기준으로 유지한다.
 
 ## 문서 갱신 규칙
 

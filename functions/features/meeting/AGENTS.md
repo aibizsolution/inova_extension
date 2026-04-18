@@ -26,6 +26,7 @@
 - `functions/features/meeting/meeting-state-domain.js`
 - `functions/features/meeting/meeting-service.js`
 - `functions/features/meeting/meeting-transcript-domain.js`
+- `functions/features/meeting/meeting-usage-accounting-domain.js`
 
 ## 관련 프론트 경로
 - `content/meeting-manager.js`
@@ -53,6 +54,7 @@
 - `meeting-notes-edit-domain.js`는 `termReplacements` 저장 이후 결과 notes 재적용과 section preview/apply, notes 기반 제목 sync를 묶는 workflow boundary다.
 - `meeting-notes-generation-domain.js`는 signal gate, full/compact notes 생성, section/reducer prompt builder, compact notes 후처리를 묶는 workflow boundary다.
 - `meeting-result-domain.js`는 결과 title/sharedMemo 수정과 record move transaction, recentJobs sync를 묶는 workflow boundary다.
+- `meeting-usage-accounting-domain.js`는 성공 처리된 회의 녹음 사용량 원장과 aggregate 갱신을 묶는 accounting boundary다. quota 차단은 이 모듈의 현재 책임이 아니며, job/artifact/summary 저장 성공 후 best-effort로 호출되어 실패해도 회의 결과 생성을 실패시키지 않는다.
 - `updateInovaMeeting`는 mutation accepted만이 아니라 수정된 `meeting` payload도 계속 돌려준다. hosted-only service harness와 response envelope 회귀 점검에서 이 계약을 유지한다.
 - 회의록 보정은 `termReplacements` 저장과 `preview/apply section edit` 두 경로로만 확장한다. 추가 맥락 기반 전체 재생성 경로는 다시 도입하지 않는다.
 - 회의록 자동 생성은 `skip`만이 아니라 `full`과 `compact` 두 출력 프로필을 가질 수 있다. 짧은 테스트성/저신호 전사는 `compact`로 정리하되, 정식 회의처럼 서사를 부풀리지 않는다.
@@ -68,6 +70,11 @@
 - `integration_inova_meeting_job_parts`
 - `integration_inova_meeting_job_finalizers`
 - `integration_inova_meeting_artifacts`
+- `integration_inova_meeting_usage_events` - 처리 성공 job별 idempotency 원장, 클라이언트 읽기 금지
+- `integration_inova_meeting_usage_user_months` - 사용자별 월 집계, 패널은 본인 현재 월 doc `get`만 허용
+- `integration_inova_meeting_usage_user_totals` - 사용자별 전체 집계, 패널은 본인 doc `get`만 허용
+- `integration_inova_meeting_usage_admin_months`
+- `integration_inova_meeting_usage_admin_days`
 - launch/session 컬렉션
 
 ## 보통 건드리지 말아야 할 범위
@@ -78,6 +85,7 @@
 
 ## 최소 검증 방법
 - meeting 관련 export 이름, Firestore trigger 문서 경로, hosted meeting auth 흐름이 그대로 유지되는지 확인한다.
+- 사용량 accounting을 바꾸면 `verify-meeting-service`에서 single job, chunked finalizer, duplicate commit, 삭제 후 aggregate 유지가 모두 통과해야 한다. 과거 데이터 backfill과 삭제 차감은 기본 동작이 아니다.
 - chunk worker 기본값은 per-job staged queue가 아니라 full fan-out이다. `OPENAI_MEETING_CHUNK_TRANSCRIPTION_CONCURRENCY`를 넣었을 때만 waiting/queued 제한이 다시 걸리는지 확인한다.
 - runtime sizing, `check:function-runtime`, chunk/finalize 운영 기준은 `docs/functions-runtime-guide.md`를 기준으로 확인한다.
 - version gate와 호환 판단 기준은 `docs/refactoring-plan.md`를 기준으로 확인한다.

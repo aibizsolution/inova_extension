@@ -20,6 +20,12 @@ const {
 } = require("../test-support/verify-meeting-service-support");
 const { verifyMeetingCleanupFailureGuards } = require("../test-support/verify-meeting-cleanup-support");
 const { verifyMoveMeetingResultFlow } = require("../test-support/verify-meeting-record-move-support");
+const {
+  assertUsageCommitted,
+  assertUsageEvent,
+  readUsageAggregateSnapshot,
+  verifyUsageAccountingDomainIdempotency,
+} = require("../test-support/verify-meeting-usage-support");
 
 async function main() {
   const owner = {
@@ -188,6 +194,12 @@ async function main() {
   assert(storedArtifact.segments.length >= 1);
   assert(storedArtifact.notes.overview.length > 0);
   assert(storedArtifact.notes.discussionFlow.length > 0);
+  const initialUsageEvent = assertUsageCommitted(state, {
+    expectedDurationMs: 65000,
+    jobId,
+    meetingId: "meeting-planning-1",
+    providerUserKey: owner.providerUserKey,
+  });
 
   const storedMeeting = getDoc(state, MEETING_COLLECTION, "fixture-user__meeting-planning-1");
   assert(storedMeeting);
@@ -549,6 +561,12 @@ async function main() {
     state,
   });
 
+  const usageBeforeDeletion = readUsageAggregateSnapshot(state, {
+    dayKey: initialUsageEvent.dayKey,
+    monthKey: initialUsageEvent.monthKey,
+    providerUserKey: owner.providerUserKey,
+  });
+
   const deletedResult = await invokeHandler(handlers.deleteInovaMeetingResult, {
     body: {
       jobId,
@@ -574,6 +592,15 @@ async function main() {
   assert.equal(deletedMeeting.jsonBody.data.cleanupQueued, true);
   await invokeDeletionWriteTrigger(handlers, state, deletedMeeting.jsonBody.data.queueTaskId);
   assert.equal(getDoc(state, MEETING_COLLECTION, "fixture-user__meeting-planning-1"), null);
+  assert.deepEqual(
+    readUsageAggregateSnapshot(state, {
+      dayKey: initialUsageEvent.dayKey,
+      monthKey: initialUsageEvent.monthKey,
+      providerUserKey: owner.providerUserKey,
+    }),
+    usageBeforeDeletion,
+    "meeting/result deletion should not decrement committed usage aggregates"
+  );
 
   const bucketlessState = createMemoryState();
   const bucketlessDeps = createDeps(bucketlessState, { bucket: null });
@@ -746,6 +773,14 @@ async function main() {
     0
   );
   assert.equal(getCollection(state, JOB_FINALIZER_COLLECTION).has(chunkedJob.jobId), false);
+  assertUsageEvent(state, {
+    expectedDurationMs: 120000,
+    jobId: chunkedJob.jobId,
+    meetingId: "meeting-chunked-1",
+    providerUserKey: owner.providerUserKey,
+  });
+
+  await verifyUsageAccountingDomainIdempotency();
 
   console.log("[verify-meeting-service] hosted-only meeting service flow passed");
 }

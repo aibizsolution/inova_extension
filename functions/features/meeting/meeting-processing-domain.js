@@ -9,6 +9,7 @@ function createMeetingProcessingDomain(deps) {
     buildQueuedMeetingJobPart,
     buildSucceededJobPatch,
     buildTranscriptArtifact,
+    commitProcessedMeetingUsage,
     collectMeetingChunkTranscriptStorageObjects,
     collectMeetingSourceStorageObjects,
     createHttpError,
@@ -378,6 +379,7 @@ function createMeetingProcessingDomain(deps) {
         jobRef.set(succeededPatch, { merge: true }),
         upsertMeetingJobSummary(meetingRef, meeting, owner, currentJob, artifact),
       ]);
+      await safelyCommitProcessedUsage(currentJob, artifact, completedAt);
 
       logEvent("meeting.process.success", {
         artifactId,
@@ -756,6 +758,7 @@ function createMeetingProcessingDomain(deps) {
         deleteDocumentIfExists(finalizerRef),
         ...partDocs.map((partDoc) => deleteDocumentIfExists(db.collection(jobPartCollection).doc(partDoc.docId))),
       ]);
+      await safelyCommitProcessedUsage(currentJob, artifact, completedAt);
       logEvent("meeting.process.success", {
         artifactId,
         chunked: true,
@@ -857,6 +860,22 @@ function createMeetingProcessingDomain(deps) {
         jobId: currentJob.jobId,
         meetingId: meeting.meetingId,
         providerUserKey: owner.providerUserKey,
+      });
+    }
+  }
+
+  async function safelyCommitProcessedUsage(job, artifact, processedAt) {
+    if (typeof commitProcessedMeetingUsage !== "function") {
+      return;
+    }
+    try {
+      await commitProcessedMeetingUsage({ artifact, job, processedAt });
+    } catch (error) {
+      logEvent("meeting.usage.commit.error", {
+        error: normalizeText(error?.message) || "usage-commit-failed",
+        jobId: normalizeText(job?.jobId),
+        meetingId: normalizeText(job?.meetingId || job?.meeting?.meetingId || artifact?.meetingId),
+        providerUserKey: normalizeText(job?.owner?.providerUserKey || artifact?.owner?.providerUserKey),
       });
     }
   }

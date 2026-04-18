@@ -90,11 +90,11 @@
 | --- | --- |
 | 기능 목적 | 회의 허브, hosted 작업실, 녹음, 전사, 결과 검토 |
 | 요청 cue | 회의 허브, 새 회의하기, 작업실, launch/session auth, 녹음, 전사, chunk |
-| 먼저 볼 파일 | `hosting/extension-v2/panel/meeting-hub-controller.js`, `hosting/extension-v2/panel/meeting-firestore-client.js`, `content/panel-v2-composition-controller.js`, `hosting/meeting/index.js`, `hosting/meeting/workspace-*.js`, `popup/index.js`, `backup/legacy-panel/meeting-manager.js`(legacy reference), `backup/legacy-panel/panel-meeting-controller.js`(legacy reference), `backup/legacy-panel/meeting-view.js`(legacy reference) |
-| 관련 프론트 경로 | `background/service-worker.js`, `hosting/meeting/*`, `hosting/extension-v2/panel/meeting-hub-controller.js`, `hosting/extension-v2/panel/meeting-firestore-client.js`, `hosting/extension/panel/meeting-view.js`, `popup/index.js` |
+| 먼저 볼 파일 | `hosting/extension-v2/panel/meeting-hub-controller.js`, `hosting/extension-v2/panel/meeting-firestore-client.js`, `hosting/extension-v2/panel/meeting-usage-firestore-client.js`, `content/panel-v2-composition-controller.js`, `hosting/meeting/index.js`, `hosting/meeting/workspace-*.js`, `popup/index.js`, `backup/legacy-panel/meeting-manager.js`(legacy reference), `backup/legacy-panel/panel-meeting-controller.js`(legacy reference), `backup/legacy-panel/meeting-view.js`(legacy reference) |
+| 관련 프론트 경로 | `background/service-worker.js`, `hosting/meeting/*`, `hosting/extension-v2/panel/meeting-hub-controller.js`, `hosting/extension-v2/panel/meeting-firestore-client.js`, `hosting/extension-v2/panel/meeting-usage-firestore-client.js`, `hosting/extension/panel/meeting-view.js`, `popup/index.js` |
 | 관련 functions 경로 | `functions/features/meeting/meeting-launch-service.js`, `functions/features/meeting/meeting-service.js` |
 | feature-owned shared | `shared/firebase-config.js`, `shared/storage.js`, `backup/legacy-panel/shared/meeting-bridge.js` (inactive reference), `backup/legacy-panel/shared/meeting-debug.js` (inactive reference) |
-| 관련 데이터 경계 | `integration_inova_meetings`, `integration_inova_meeting_jobs`, `integration_inova_meeting_job_parts`, `integration_inova_meeting_job_finalizers`, `integration_inova_meeting_artifacts`, launch/session 컬렉션 |
+| 관련 데이터 경계 | `integration_inova_meetings`, `integration_inova_meeting_jobs`, `integration_inova_meeting_job_parts`, `integration_inova_meeting_job_finalizers`, `integration_inova_meeting_artifacts`, `integration_inova_meeting_usage_events`, `integration_inova_meeting_usage_user_months`, `integration_inova_meeting_usage_user_totals`, `integration_inova_meeting_usage_admin_months`, `integration_inova_meeting_usage_admin_days`, launch/session 컬렉션 |
 | 보통 건드리지 말 범위 | prompt-library, prompt-store, prompt-review, release |
 | 최소 검증 | 팝업 target 설정, 회의 탭 목록, hosted meeting 진입, 최소 1개 결과 조회 |
 | 언제 다시 물을지 | 패널 회의 허브 문제인지 hosted 작업실 문제인지, 회의 auth인지 전사 backend인지 모호할 때 |

@@ -792,6 +792,38 @@
   font-weight: 600;
   color: rgba(16, 33, 43, 0.58);
 }
+.inova-meeting-usage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  border: 1px solid rgba(98, 127, 145, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 6px 16px rgba(26, 52, 73, 0.028);
+}
+.inova-meeting-usage__item {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.inova-meeting-usage__label {
+  color: rgba(16, 33, 43, 0.52);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.inova-meeting-usage__value {
+  overflow: hidden;
+  color: rgba(16, 33, 43, 0.88);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .inova-meeting-gateway { display: flex; flex-direction: column; gap: 10px; }
 .inova-bookmark-action {
   min-height: 38px; padding: 0 13px; border: 1px solid rgba(19, 73, 181, 0.12); border-radius: 12px;

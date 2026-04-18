@@ -19,6 +19,7 @@ async function main() {
   await verifyHostedMeetingHubShareCopyFailure();
   await verifyHostedMeetingHubGatesShareCapabilities();
   await verifyHostedMeetingHubLifecycleRefreshOwnership();
+  await verifyHostedMeetingHubUsageSubscriptionOwnership();
   await verifyHostedMeetingHubActivityRefreshOwnership();
   await verifyHostedMeetingHubDoesNotPrefetchWhileClosed();
   await verifyHostedMeetingHubIgnoresWindowFocusWhileActive();
@@ -26,6 +27,66 @@ async function main() {
   verifyHostedMeetingHubDropsSummaryEchoContract();
   verifyHostedMeetingViewGatesShareButtons();
   console.log("[verify-meeting-hub-controller] Hosted meeting hub controller contract passed");
+}
+
+async function verifyHostedMeetingHubUsageSubscriptionOwnership() {
+  const harness = createHarness({
+    usageSnapshot: {
+      checkedAt: "2026-04-13T01:02:03.000Z",
+      fromCache: false,
+      hasPendingWrites: false,
+      month: {
+        processedCount: 23,
+        processedMs: 428 * 60000,
+      },
+      total: {
+        processedCount: 148,
+        processedMs: 3039 * 60000,
+      },
+    },
+  });
+  const controller = harness.controller;
+
+  controller.syncPanelState(
+    {
+      activeTool: "meeting",
+      open: true,
+      settings: {
+        meetingWorkspaceTarget: "production",
+      },
+    },
+    MEETING_TEST_CAPABILITIES
+  );
+  await flushAsyncTurns();
+
+  const viewState = controller.buildViewState();
+  assert.equal(viewState.usage.month.processedMs, 428 * 60000);
+  assert.equal(viewState.usage.month.processedCount, 23);
+  assert.equal(viewState.usage.total.processedMs, 3039 * 60000);
+  assert.equal(viewState.usage.total.processedCount, 148);
+  assert.equal(harness.usageSubscribeCalls.length, 1, "meeting hub should subscribe to usage only when meeting tab is active");
+  assert.equal(
+    harness.usageSubscribeCalls[0].providerIdentity.providerUserKey,
+    "fixture-user",
+    "meeting hub should scope usage reads to the current provider user"
+  );
+
+  controller.syncPanelState(
+    {
+      activeTool: "prompts",
+      open: true,
+      settings: {
+        meetingWorkspaceTarget: "production",
+      },
+    },
+    MEETING_TEST_CAPABILITIES
+  );
+  await flushAsyncTurns();
+
+  assert(
+    harness.usageDisconnectCalls.includes("panel-inactive"),
+    "meeting hub should detach usage subscription when the meeting tab is no longer active"
+  );
 }
 
 async function verifyHostedMeetingHubOwnership() {
@@ -574,6 +635,16 @@ function verifyHostedMeetingViewGatesShareButtons() {
       },
     ],
     pending: {},
+    usage: {
+      month: {
+        processedCount: 23,
+        processedMs: 428 * 60000,
+      },
+      total: {
+        processedCount: 148,
+        processedMs: 3039 * 60000,
+      },
+    },
   });
 
   assert(!markup.includes('data-meeting-action="share"'), "meeting view should hide share button when share create capability is missing");
@@ -582,6 +653,11 @@ function verifyHostedMeetingViewGatesShareButtons() {
     markup.includes("회의 공유 기능이 현재 비활성화"),
     "meeting view should render the capability-disabled notice"
   );
+  assert(markup.includes("이번 달"), "meeting view should render monthly usage");
+  assert(markup.includes("7시간 8분 · 23건"), "meeting view should format monthly usage with adaptive duration units");
+  assert(markup.includes("전체"), "meeting view should render total usage");
+  assert(markup.includes("2일 2시간 · 148건"), "meeting view should keep long total usage compact");
+  assert(!markup.includes("삭제 포함"), "meeting view should not show deletion accounting copy in the compact usage strip");
 }
 
 async function flushAsyncTurns(turns = 20) {
@@ -603,6 +679,8 @@ function createHarnessWithOptions(options = {}) {
   const runtimeCalls = [];
   const realtimeDisconnectCalls = [];
   const realtimeSubscribeCalls = [];
+  const usageDisconnectCalls = [];
+  const usageSubscribeCalls = [];
   const pageCalls = [];
   const toastCalls = [];
   const checkedAtSequence = Array.isArray(options.checkedAtSequence) && options.checkedAtSequence.length
@@ -698,6 +776,15 @@ function createHarnessWithOptions(options = {}) {
         });
       },
     },
+    meetingUsageRealtime: {
+      disconnect(reason) {
+        usageDisconnectCalls.push(String(reason || ""));
+      },
+      async ensureSubscribed(request) {
+        usageSubscribeCalls.push(cloneValue(request));
+        return buildUsageSnapshot(options.usageSnapshot);
+      },
+    },
     publishToast(payload) {
       toastCalls.push(cloneValue(payload));
       return true;
@@ -713,6 +800,8 @@ function createHarnessWithOptions(options = {}) {
     realtimeSubscribeCalls,
     runtimeCalls,
     toastCalls,
+    usageDisconnectCalls,
+    usageSubscribeCalls,
   };
 }
 
@@ -740,6 +829,23 @@ function buildRealtimeSnapshot(overrides = {}) {
         updatedAt: "2026-04-13T01:01:00.000Z",
       },
     ],
+    ...cloneValue(overrides),
+  };
+}
+
+function buildUsageSnapshot(overrides = {}) {
+  return {
+    checkedAt: "2026-04-13T01:02:03.000Z",
+    fromCache: false,
+    hasPendingWrites: false,
+    month: {
+      processedCount: 0,
+      processedMs: 0,
+    },
+    total: {
+      processedCount: 0,
+      processedMs: 0,
+    },
     ...cloneValue(overrides),
   };
 }
