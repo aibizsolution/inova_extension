@@ -226,12 +226,13 @@
     const timestamp = formatDateTime(item.updatedAt, "");
     const metaPrefix = hasRecord ? "최근 기록" : "최근 업데이트";
     const meta = timestamp ? `${metaPrefix} ${timestamp}` : "";
+    const shareLabel = buildShareLabel(item, options);
     if (options.isPending) {
       return {
         description: "",
         meta,
         openLabel: "작업실 여는 중...",
-        shareLabel: options.sharePending ? "링크 준비 중..." : item.shareActive ? "링크 복사" : "공유 링크",
+        shareLabel,
         statusLabel: "여는 중",
         statusTone: "progress",
       };
@@ -241,7 +242,7 @@
         description: "",
         meta,
         openLabel: "작업실 열기",
-        shareLabel: options.sharePending ? "링크 준비 중..." : item.shareActive ? "링크 복사" : "공유 링크",
+        shareLabel,
         statusLabel: "기록 생성 중",
         statusTone: "progress",
       };
@@ -251,7 +252,7 @@
         description: "",
         meta,
         openLabel: "작업실 열기",
-        shareLabel: options.sharePending ? "링크 준비 중..." : item.shareActive ? "링크 복사" : "공유 링크",
+        shareLabel,
         statusLabel: "기록 대기",
         statusTone: "progress",
       };
@@ -261,7 +262,7 @@
         description: "",
         meta,
         openLabel: "작업실 열기",
-        shareLabel: options.sharePending ? "링크 준비 중..." : item.shareActive ? "링크 복사" : "공유 링크",
+        shareLabel,
         statusLabel: "확인 필요",
         statusTone: "danger",
       };
@@ -271,19 +272,26 @@
         description: "",
         meta,
         openLabel: "작업실 열기",
-        shareLabel: options.sharePending ? "링크 준비 중..." : item.shareActive ? "링크 복사" : "공유 링크",
-        statusLabel: "기록 있음",
-        statusTone: "success",
+        shareLabel,
+        statusLabel: item.shareActive ? "공유 중" : "",
+        statusTone: item.shareActive ? "share" : "success",
       };
     }
     return {
       description: "",
       meta,
       openLabel: "작업실 열기",
-      shareLabel: options.sharePending ? "링크 준비 중..." : item.shareActive ? "링크 복사" : "공유 링크",
+      shareLabel,
       statusLabel: "기록 없음",
       statusTone: "neutral",
     };
+  }
+
+  function buildShareLabel(item, options = {}) {
+    if (options.sharePending) {
+      return "준비 중";
+    }
+    return item.shareActive ? "링크 복사" : "공유";
   }
 
   function formatDateTime(value, fallback = "아직 없음") {

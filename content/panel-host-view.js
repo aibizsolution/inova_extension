@@ -83,7 +83,7 @@
     return `
       <div id="inova-bookmark-root" data-open="false" aria-live="polite">
         <button id="inova-bookmark-handle" type="button" aria-label="실험실 패널 열기" title="드래그해서 위치를 바꿀 수 있어요">
-          <span class="handle-count">0</span>
+          <span class="handle-count" hidden>0</span>
           <span class="handle-label"><span>실</span><span>험</span><span>실</span></span>
         </button>
         <div id="inova-bookmark-panel">

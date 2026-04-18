@@ -25,7 +25,7 @@
               aria-pressed="${tab.id === activeTab}"
             >
               <span>${escapeHtml(tab.label)}</span>
-              ${tab.count == null ? "" : `<span class="inova-tool-subtab__count">${Number(tab.count) || 0}</span>`}
+              ${Number(tab.count) > 0 ? `<span class="inova-tool-subtab__count">${Number(tab.count)}</span>` : ""}
             </button>
           `).join("")}
         </div>

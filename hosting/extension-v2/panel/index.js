@@ -1123,15 +1123,7 @@
       ? elements.app.querySelector(".inova-store-list")?.scrollTop || state.storeScrollTop || 0
       : 0;
 
-    const nextToolRailHtml = renderToolRail(
-      buildHostedToolItems(
-        effectiveConversationCount,
-        effectivePromptCount,
-        effectiveMeetingCount,
-        effectiveReleaseCount
-      ),
-      panelState.activeTool
-    );
+    const nextToolRailHtml = renderToolRail(buildHostedToolItems(), panelState.activeTool);
     if (state.renderCache.toolRailHtml !== nextToolRailHtml) {
       elements.toolRail.innerHTML = nextToolRailHtml;
       state.renderCache.toolRailHtml = nextToolRailHtml;
@@ -1143,10 +1135,13 @@
       state.renderCache.toolTitle = nextToolTitle;
     }
 
-    const nextToolTotal = String(effectiveToolCount || 0);
-    if (state.renderCache.toolTotal !== nextToolTotal) {
+    const shouldShowToolTotal = Number(effectiveToolCount) > 0;
+    const nextToolTotal = shouldShowToolTotal ? String(effectiveToolCount) : "";
+    const nextToolTotalKey = `${shouldShowToolTotal ? "visible" : "hidden"}:${nextToolTotal}`;
+    if (state.renderCache.toolTotal !== nextToolTotalKey) {
       elements.toolTotal.textContent = nextToolTotal;
-      state.renderCache.toolTotal = nextToolTotal;
+      elements.toolTotal.hidden = !shouldShowToolTotal;
+      state.renderCache.toolTotal = nextToolTotalKey;
     }
 
     renderToastIfNeeded(elements.toolToast);
@@ -1312,25 +1307,62 @@
   }
 
   function renderToolRail(tools, activeTool) {
-    return (Array.isArray(tools) ? tools : []).map((tool) => `
-      <button type="button" class="inova-tool-rail__button ${tool.id === activeTool ? "is-active" : ""}" data-tool-id="${escapeHtml(tool.id)}" aria-pressed="${tool.id === activeTool}">
+    return (Array.isArray(tools) ? tools : []).map((tool) => {
+      return `
+      <button type="button" class="inova-tool-rail__button ${tool.id === activeTool ? "is-active" : ""}" data-tool-id="${escapeHtml(tool.id)}" aria-pressed="${tool.id === activeTool}" aria-label="${escapeHtml(tool.label)}">
+        <span class="inova-tool-rail__icon" aria-hidden="true">${renderToolRailIcon(tool.id)}</span>
         <span class="inova-tool-rail__label">${escapeHtml(tool.label)}</span>
-        <span class="inova-tool-rail__count">${Number(tool.count) || 0}</span>
       </button>
-    `).join("");
+    `;
+    }).join("");
   }
 
-  function buildHostedToolItems(conversationCount, promptCount, meetingCount, releaseCount) {
-    return HOSTED_PANEL_TOOLS.map((tool) => ({
-      ...tool,
-      count: tool.id === "bookmarks"
-        ? conversationCount
-        : tool.id === "prompts"
-          ? promptCount
-          : tool.id === "meeting"
-            ? meetingCount
-            : releaseCount,
-    }));
+  function renderToolRailIcon(toolId) {
+    const normalizedTool = normalizeText(toolId);
+    // Lucide icon paths are inlined to keep the hosted panel CDN-free.
+    if (normalizedTool === "meeting") {
+      return `
+        <svg viewBox="0 0 24 24" focusable="false">
+          <path d="M16 10a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 14.286V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+          <path d="M20 9a2 2 0 0 1 2 2v10.286a.71.71 0 0 1-1.212.502l-2.202-2.202A2 2 0 0 0 17.172 19H10a2 2 0 0 1-2-2v-1"></path>
+        </svg>
+      `;
+    }
+    if (normalizedTool === "prompts") {
+      return `
+        <svg viewBox="0 0 24 24" focusable="false">
+          <path d="M2 6h4"></path>
+          <path d="M2 10h4"></path>
+          <path d="M2 14h4"></path>
+          <path d="M2 18h4"></path>
+          <rect width="16" height="20" x="4" y="2" rx="2"></rect>
+          <path d="M9.5 8h5"></path>
+          <path d="M9.5 12H16"></path>
+          <path d="M9.5 16H14"></path>
+        </svg>
+      `;
+    }
+    if (normalizedTool === "release") {
+      return `
+        <svg viewBox="0 0 24 24" focusable="false">
+          <path d="M12 15V3"></path>
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <path d="m7 10 5 5 5-5"></path>
+        </svg>
+      `;
+    }
+    return `
+      <svg viewBox="0 0 24 24" focusable="false">
+        <path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"></path>
+        <path d="M7 11h10"></path>
+        <path d="M7 15h6"></path>
+        <path d="M7 7h8"></path>
+      </svg>
+    `;
+  }
+
+  function buildHostedToolItems() {
+    return HOSTED_PANEL_TOOLS.map((tool) => ({ ...tool }));
   }
 
   function buildHostedToolTitle(activeTool) {

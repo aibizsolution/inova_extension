@@ -4,15 +4,10 @@
   function render(state) {
     return `
       <section class="inova-tool-section inova-tool-section--release">
-        <div class="inova-tool-toolbar is-stacked">
-          <div class="inova-tool-toolbar__row inova-tool-toolbar__row--release">
-            <div class="inova-tool-meta">설치 버전 ${escapeHtml(state.currentVersion)}</div>
-          </div>
-        </div>
         <div class="inova-release-stack">
           ${renderUpdateSection(state)}
-          ${renderGuideSection()}
           ${renderLatestSection(state)}
+          ${renderGuideSection()}
         </div>
       </section>
     `;
@@ -20,8 +15,8 @@
 
   function renderUpdateSection(state) {
     return `
-      <section class="inova-release-section">
-        ${renderSectionSummary("릴리스 상태")}
+      <section class="inova-release-section inova-release-section--status">
+        ${renderSectionSummary("현재 상태")}
         <div class="inova-release-section__body">
           ${renderStatusCard(state)}
         </div>
@@ -35,7 +30,7 @@
     }
     return `
       <section class="inova-release-section">
-        ${renderSectionSummary("배포 버전")}
+        ${renderSectionSummary("배포 상세")}
         <div class="inova-release-section__body">
           ${renderLatestCard(state)}
         </div>
@@ -53,7 +48,7 @@
           || state.lastCheckedAt
         );
       return `
-        <article class="inova-release-card is-muted">
+        <article class="inova-release-card inova-release-card--status is-muted">
           <strong>${hasCachedData ? "릴리스 정보를 제한적으로 표시 중이에요." : "릴리스 정보를 확인하지 못했어요."}</strong>
           <p>${hasCachedData
             ? "최근 확인이 실패해 이전에 확인한 배포 정보만 보여주고 있습니다. 최신 버전 여부는 아직 확정되지 않았어요."
@@ -66,7 +61,7 @@
     }
     if (!state.canOpenDownloads && state.capabilityError) {
       return `
-        <article class="inova-release-card is-muted">
+        <article class="inova-release-card inova-release-card--status is-muted">
           <strong>릴리스 다운로드를 열 수 없어요.</strong>
           <p>${escapeHtml(state.capabilityError)}</p>
         </article>
@@ -74,7 +69,7 @@
     }
     if (state.versionRefreshPending || (state.checking && !state.latest)) {
       return `
-        <article class="inova-release-card is-muted">
+        <article class="inova-release-card inova-release-card--status is-muted">
           <strong>릴리스 정보를 확인하고 있어요.</strong>
           <p>${state.versionRefreshPending ? `설치한 ${escapeHtml(state.currentVersion)} 버전에 맞춰 다시 불러오는 중입니다.` : "잠시만 기다려 주세요."}</p>
         </article>
@@ -82,22 +77,21 @@
     }
     if (state.updateAvailable) {
       return `
-        <article class="inova-release-card is-highlight">
-          <strong>${escapeHtml(state.latestVersion)} 버전이 준비되어 있어요.</strong>
-          <p>지금은 ${escapeHtml(state.currentVersion)} 버전을 사용 중입니다.</p>
+        <article class="inova-release-card inova-release-card--status is-highlight">
+          <strong>새 버전이 준비되어 있어요.</strong>
         </article>
       `;
     }
     if (state.currentAheadOfLatest) {
       return `
-        <article class="inova-release-card is-muted">
+        <article class="inova-release-card inova-release-card--status is-muted">
           <strong>설치 버전이 최신 배포 안내보다 앞서 있어요.</strong>
           <p>배포 안내 기준은 ${escapeHtml(state.latestVersion)} 입니다. 로컬 테스트 중이면 정상이에요.</p>
         </article>
       `;
     }
     return `
-      <article class="inova-release-card is-muted">
+      <article class="inova-release-card inova-release-card--status is-muted">
         <strong>최신 버전을 사용 중이에요.</strong>
       </article>
     `;

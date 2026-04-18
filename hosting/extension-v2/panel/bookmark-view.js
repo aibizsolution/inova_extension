@@ -9,7 +9,7 @@
         canCopyBookmark,
         canJumpBookmark,
       })).join("")
-      : `<div class="inova-bookmark-empty">${escapeHtml(state.emptyText)}</div>`;
+      : renderConversationEmptyState(state);
     const capabilityNotice = state?.capabilityError
       ? `<div class="inova-bookmark-empty">${escapeHtml(state.capabilityError)}</div>`
       : "";
@@ -31,6 +31,21 @@
         ${capabilityNotice}
         <div id="inova-bookmark-results">${listHtml}</div>
       </section>
+    `;
+  }
+
+  function renderConversationEmptyState(state) {
+    if (state.query) {
+      return `<div class="inova-bookmark-empty">${escapeHtml(state.emptyText)}</div>`;
+    }
+    return `
+      <div class="inova-bookmark-empty inova-bookmark-empty--actionable">
+        <strong>${escapeHtml(state.emptyText || "아직 대화가 없어요.")}</strong>
+        <div class="inova-empty-actions" aria-label="다음 작업">
+          <button type="button" class="inova-tool-button" data-tool-id="meeting">회의 룸 보기</button>
+          <button type="button" class="inova-tool-button" data-tool-id="prompts">프롬프트 찾기</button>
+        </div>
+      </div>
     `;
   }
 
