@@ -7,3 +7,4 @@
 - 집계는 client/day snapshot 대비 `max(0, incoming - stored)` delta만 반영한다. duplicate, lower replay, cross-device snapshot은 이 규칙으로 처리한다.
 - 새 action은 hosted tracker와 서버 allowlist에 함께 추가한다. 확장 ZIP 배포가 반복되지 않게 새 browser/runtime capability를 만들지 말고 기존 `metrics.feature-usage.commit` capability를 재사용한다.
 - 새 action을 추가할 때도 Firestore client read/write는 열지 않는다. 관리자 조회는 Admin SDK script 또는 admin-only Function 뒤에 둔다.
+- 실제 Chrome 풀 테스트에서는 의미 있는 action 1회를 실행한 뒤 flush를 기다리고 `npm.cmd run check:feature-usage -- --days 1 --limit 20`로 user/day aggregate 반영을 확인한다. 상용에서 이 검증은 실제 운영 count 1건을 남기는 절차다.

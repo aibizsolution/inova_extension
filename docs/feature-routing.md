@@ -129,6 +129,6 @@
 | feature-owned shared | 없음 |
 | 관련 데이터 경계 | `integration_inova_feature_usage_client_days`, `integration_inova_feature_usage_user_days`, `integration_inova_feature_usage_user_months`, `integration_inova_feature_usage_admin_days`, `integration_inova_feature_usage_admin_months` |
 | 보통 건드리지 말 범위 | Firebase Storage, Firestore client rules read/list, raw event ledger |
-| 최소 검증 | `npm.cmd run verify:feature-usage-service`, `npm.cmd run verify:feature-usage-tracker`, `npm.cmd run check:feature-usage -- --fixture --days 30` |
+| 최소 검증 | `npm.cmd run verify:feature-usage-service`, `npm.cmd run verify:feature-usage-tracker`, `npm.cmd run check:feature-usage -- --fixture --days 30`; 실제 Chrome 풀 테스트에서는 meaningful action 1회 후 `npm.cmd run check:feature-usage -- --days 1 --limit 20`로 aggregate 반영 확인 |
 | 언제 다시 물을지 | 계측 대상이 meaningful action인지 비용성 처리량 accounting인지 구분이 모호할 때 |
 | 언제 범위를 확장할지 | 새 브라우저 권한이나 새 runtime capability가 꼭 필요한 경우에만 platform/shell로 확장 |

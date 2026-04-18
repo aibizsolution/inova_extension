@@ -62,6 +62,7 @@
 - `1.0.0 공개 ready` 최소 기준은 아래다.
   - `npm.cmd run verify` green
   - 실제 Chrome에서 hosted v2 panel boot, prompt library/store/review, meeting hub/workspace launch, release latest/history/download smoke 기록 확보
+  - feature usage 변경이 포함됐거나 상용 풀 테스트를 수행하면 meaningful action 1회 후 `check:feature-usage`로 사용자별 aggregate 반영 확인
   - `release:build` 또는 동등한 release rehearsal에서 lane-local `latest.json`, `history.json`, `downloads/latest.zip`, version ZIP, `releases/release-notes.json` curated metadata가 함께 맞는지 확인
   - 사용자 공지에 `hosting 반영`, `새 ZIP 배포`, `확장 reload 필요 여부`, `rollback ZIP`이 함께 정리됨
 - `0.4.4 retirement extension-patch risk`는 별도 체크다.
