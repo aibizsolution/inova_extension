@@ -48,7 +48,7 @@
 4. 실제 기능 변경이 있으면 해당 feature `AGENTS.md` 또는 feature 전용 docs를 갱신한다.
 5. `npm run verify`, `npm run verify:feature-doc-guard`, `npm run verify:release-guard`를 확인한다.
 6. 공개 릴리스가 필요하면 `npm run release:build` 후 `npm run release:deploy` 또는 `npm run release:deploy:all`을 수행한다.
-7. hosted-only 또는 functions-only 운영 배포면 `deploy:hosting`, `deploy:functions`, `deploy:all` 중 필요한 범위만 수행한다.
+7. hosted-only, functions-only, Storage Rules-only 운영 배포면 `deploy:hosting`, `deploy:functions`, `deploy:storage`, `deploy:all` 중 필요한 범위만 수행한다.
 8. 배포 후에는 기존 ZIP 사용자가 업그레이드하는 경로와 reload 필요 여부를 먼저 공지한다.
 
 ## 1.0.0 Final Readiness

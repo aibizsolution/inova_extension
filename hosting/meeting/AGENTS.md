@@ -12,6 +12,7 @@
 - hosted Firestore read/query는 local auth state만 보고 바로 실행하지 않는다. `ensureWorkspaceAuth()`가 custom-token sign-in 완료를 보장한 뒤에만 진행한다.
 - owner-secure hosted 작업실은 authorize 응답에서 받은 `meetingSessionToken`을 세션에 보존해야 하며, 업로드와 작업실 mutation은 이 meeting session 기준으로 인증한다.
 - hosted workspace의 `파일 불러오기`는 로컬 origin 전용 기능이 아니다. 상용/로컬 hosted가 같은 업로드 흐름을 쓴다.
+- meeting source audio와 chunk transcript의 원격 Storage 접근은 Functions Admin SDK가 맡는다. 브라우저/hosted client가 Firebase Storage SDK로 bucket을 직접 read/write하는 흐름을 추가하지 않는다.
 - imported audio duration은 메타데이터 -> decode fallback 순서로 계산하고, 최종 길이 계산까지 실패했을 때만 사용자 오류를 유지한다.
 - 녹음/불러오기 원본 blob은 원격 처리 성공 후에도 completed record의 pending entry에 로컬 보관한다. 원격 source storage는 처리 후 삭제될 수 있으므로, 사용자가 명시적으로 기록/회의를 삭제하기 전까지 `원본 다운로드`가 가능해야 한다.
 - OpenAI 전사용 source mode는 OpenAI 파일 업로드 제한보다 낮은 24MB target을 초과하거나 `gpt-4o-transcribe` 단일 오디오 제한 1400초보다 낮은 23분 안전선을 넘으면 chunked로 전환한다.
