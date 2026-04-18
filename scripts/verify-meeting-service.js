@@ -2,6 +2,7 @@
 
 const assert = require("assert");
 const { registerMeetingLaunchHandlers } = require("../functions/features/meeting/meeting-launch-service");
+const { registerMeetingWorkspaceAuthHandlers } = require("../functions/features/meeting/meeting-workspace-auth-service");
 const { registerMeetingHandlers } = require("../functions/features/meeting/meeting-service");
 const {
   ARTIFACT_COLLECTION,
@@ -44,6 +45,8 @@ async function main() {
   assert.equal(typeof handlers[removedJobHandlerName], "undefined");
   assert.equal(typeof handlers[removedArtifactHandlerName], "undefined");
   assert.equal(typeof handlers[removedResultsHandlerName], "undefined");
+
+  await verifyDebugAuthBypassGate();
 
   const issuedLaunch = await invokeHandler(launchHandlers.issueInovaMeetingLaunch, {
     body: {
@@ -745,6 +748,87 @@ async function main() {
   assert.equal(getCollection(state, JOB_FINALIZER_COLLECTION).has(chunkedJob.jobId), false);
 
   console.log("[verify-meeting-service] hosted-only meeting service flow passed");
+}
+
+async function verifyDebugAuthBypassGate() {
+  const previousFunctionsEmulator = process.env.FUNCTIONS_EMULATOR;
+  const previousAuthEmulatorHost = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+  const previousFirestoreEmulatorHost = process.env.FIRESTORE_EMULATOR_HOST;
+  const previousStorageEmulatorHost = process.env.FIREBASE_STORAGE_EMULATOR_HOST;
+
+  try {
+    delete process.env.FUNCTIONS_EMULATOR;
+    delete process.env.FIREBASE_AUTH_EMULATOR_HOST;
+    delete process.env.FIRESTORE_EMULATOR_HOST;
+    delete process.env.FIREBASE_STORAGE_EMULATOR_HOST;
+
+    const productionState = createMemoryState();
+    const productionDeps = createDeps(productionState);
+    productionDeps.verifyInovaIdentity = async () => {
+      const error = new Error("strict auth required");
+      error.status = 401;
+      throw error;
+    };
+    const productionHandlers = registerMeetingWorkspaceAuthHandlers(productionDeps);
+    const spoofedProductionBypass = await invokeHandler(productionHandlers.authorizeInovaMeetingWorkspaceAccess, {
+      body: {
+        debugAuthBypass: "owner",
+        meetingId: "meeting-debug-bypass-1",
+      },
+      get: createHeaderGetter({
+        origin: "http://127.0.0.1:5000",
+        referer: "http://127.0.0.1:5000/meeting/index.html?debugAuthBypass=owner",
+      }),
+      headers: {},
+      method: "POST",
+    });
+    assert.equal(spoofedProductionBypass.statusCode, 401);
+    assert.equal(productionState.customTokens.length, 0);
+
+    process.env.FUNCTIONS_EMULATOR = "true";
+    const emulatorState = createMemoryState();
+    const emulatorDeps = createDeps(emulatorState);
+    emulatorDeps.verifyInovaIdentity = async () => {
+      throw new Error("debug bypass should not verify bearer identity in emulator");
+    };
+    const emulatorHandlers = registerMeetingWorkspaceAuthHandlers(emulatorDeps);
+    const emulatorBypass = await invokeHandler(emulatorHandlers.authorizeInovaMeetingWorkspaceAccess, {
+      body: {
+        debugAuthBypass: "owner",
+        meetingId: "meeting-debug-bypass-1",
+      },
+      get: createHeaderGetter({
+        origin: "http://127.0.0.1:5000",
+        referer: "http://127.0.0.1:5000/meeting/index.html?debugAuthBypass=owner",
+      }),
+      headers: {},
+      method: "POST",
+    });
+    assert.equal(emulatorBypass.statusCode, 200);
+    assert.equal(emulatorBypass.jsonBody.data.bypassApplied, true);
+    assert.equal(emulatorBypass.jsonBody.data.accessMode, "owner-secure");
+    assert.equal(emulatorState.customTokens.length, 1);
+  } finally {
+    restoreProcessEnv("FUNCTIONS_EMULATOR", previousFunctionsEmulator);
+    restoreProcessEnv("FIREBASE_AUTH_EMULATOR_HOST", previousAuthEmulatorHost);
+    restoreProcessEnv("FIRESTORE_EMULATOR_HOST", previousFirestoreEmulatorHost);
+    restoreProcessEnv("FIREBASE_STORAGE_EMULATOR_HOST", previousStorageEmulatorHost);
+  }
+}
+
+function createHeaderGetter(headers = {}) {
+  const normalized = Object.fromEntries(
+    Object.entries(headers).map(([key, value]) => [String(key || "").toLowerCase(), String(value || "")])
+  );
+  return (name) => normalized[String(name || "").toLowerCase()] || "";
+}
+
+function restoreProcessEnv(name, value) {
+  if (value === undefined) {
+    delete process.env[name];
+    return;
+  }
+  process.env[name] = value;
 }
 
 function getCollection(state, collectionName) {
