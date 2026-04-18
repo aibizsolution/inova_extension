@@ -279,6 +279,13 @@
     return;
   }
 
+  function warnMeetingProviderIdentityStorage(operation, error) {
+    console.warn("[i-Nova Service Worker] meeting provider identity storage failed", {
+      error: error instanceof Error ? error.message : String(error || ""),
+      operation: namespace.session.normalizeText(operation),
+    });
+  }
+
   async function resolveMeetingProviderIdentity(providerIdentity) {
     const normalized = normalizeProviderIdentity(providerIdentity);
     if (normalized.providerUserKey) {
@@ -302,7 +309,7 @@
       const storageState = await namespace.storage.getState();
       return normalizeProviderIdentity(storageState?.providerIdentityCache?.providerIdentity);
     } catch (error) {
-      void error;
+      warnMeetingProviderIdentityStorage("load", error);
       return normalizeProviderIdentity(null);
     }
   }
@@ -336,7 +343,7 @@
         },
       });
     } catch (error) {
-      void error;
+      warnMeetingProviderIdentityStorage("persist", error);
     }
     return normalized;
   }

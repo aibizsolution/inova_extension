@@ -104,7 +104,6 @@
     ],
     limits: {
       queryPreviewLength: 120,
-      releaseCheckIntervalMs: 21600000,
     },
   };
 })(globalThis);

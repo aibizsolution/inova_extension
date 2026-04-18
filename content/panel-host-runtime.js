@@ -230,6 +230,10 @@
       host.__bridge.reset("frame-src-change");
       clearHandshakeTimeout(host);
       host.__handshakeTimeout = global.setTimeout(() => {
+        host.__handshakeTimeout = 0;
+        if (!host.isConnected) {
+          return;
+        }
         if (!host.__bridgeReady) {
           logConsoleTrace("panel", "07.top.panel.handshake.timeout", {
             frameSrc: normalizeText(host.__panelFrameSrc),
@@ -292,6 +296,13 @@
     function pushBridgeSnapshotIfChanged(host, state, options = {}) {
       const snapshot = buildBridgeSnapshot(state, host);
       const snapshotKey = serializeRenderState(snapshot);
+      if (!snapshotKey) {
+        updateStatusBanner(host, {
+          text: "호스팅 패널 상태를 전송하지 못했어요. 페이지를 새로고침해 주세요.",
+          tone: "warning",
+        });
+        return false;
+      }
       const force = Boolean(options?.force);
       if (!force && host.__lastBridgeSnapshotKey === snapshotKey) {
         return false;
@@ -347,7 +358,14 @@
           }
           return current;
         }) || "";
-      } catch {
+      } catch (error) {
+        const message = normalizeText(error instanceof Error ? error.message : String(error || ""));
+        console.warn("[i-Nova Bookmarks] hosted panel snapshot serialization failed", {
+          message,
+        });
+        logConsoleTrace("panel", "10.top.panel.snapshot.serialize.error", {
+          error: message,
+        });
         return "";
       }
     }
