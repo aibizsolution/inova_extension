@@ -27,6 +27,7 @@ const { createMeetingSourceDomain } = require("./meeting-source-domain");
 const { createMeetingSummarySyncDomain } = require("./meeting-summary-sync-domain");
 const { createMeetingStateDomain } = require("./meeting-state-domain");
 const { createMeetingTranscriptDomain } = require("./meeting-transcript-domain");
+const { createMeetingUsageAccountingDomain } = require("./meeting-usage-accounting-domain");
 
 const ALLOWED_CAPTURE_MODES = new Set(["tab-audio", "microphone", "mixed-audio"]);
 const DEFAULT_INLINE_AUDIO_LIMIT_BYTES = 25 * 1024 * 1024;
@@ -47,6 +48,11 @@ const ARTIFACT_COLLECTION = "integration_inova_meeting_artifacts";
 const LAUNCH_COLLECTION = "integration_inova_meeting_launches";
 const MEETING_COLLECTION = "integration_inova_meetings";
 const WORKSPACE_SESSION_COLLECTION = "integration_inova_meeting_workspace_sessions";
+const USAGE_EVENT_COLLECTION = "integration_inova_meeting_usage_events";
+const USAGE_USER_MONTH_COLLECTION = "integration_inova_meeting_usage_user_months";
+const USAGE_USER_TOTAL_COLLECTION = "integration_inova_meeting_usage_user_totals";
+const USAGE_ADMIN_MONTH_COLLECTION = "integration_inova_meeting_usage_admin_months";
+const USAGE_ADMIN_DAY_COLLECTION = "integration_inova_meeting_usage_admin_days";
 const TEMP_UPLOAD_TTL_MS = 60 * 60 * 1000;
 const DELETION_RETRY_DELAY_MS = 60 * 60 * 1000;
 const DELETION_PROCESSING_STALE_MS = 15 * 60 * 1000;
@@ -314,6 +320,7 @@ function registerMeetingHandlers(deps) {
     normalizeIdentity,
     normalizeText,
     onRequest,
+    onOpenAIRequest = onRequest,
     sendError,
     verifyInovaIdentity,
   } = deps;
@@ -354,6 +361,23 @@ function registerMeetingHandlers(deps) {
     normalizeMeetingJob,
     normalizeMeetingSummary,
     normalizeText,
+  });
+
+  const {
+    commitProcessedMeetingUsage,
+  } = createMeetingUsageAccountingDomain({
+    db,
+    logEvent,
+    normalizeMeetingArtifact,
+    normalizeMeetingJob,
+    normalizeText,
+    usageCollections: {
+      adminDays: USAGE_ADMIN_DAY_COLLECTION,
+      adminMonths: USAGE_ADMIN_MONTH_COLLECTION,
+      events: USAGE_EVENT_COLLECTION,
+      userMonths: USAGE_USER_MONTH_COLLECTION,
+      userTotals: USAGE_USER_TOTAL_COLLECTION,
+    },
   });
 
   const meetingOwnedQueryDomain = createMeetingOwnedQueryDomain({
@@ -545,6 +569,7 @@ function registerMeetingHandlers(deps) {
     buildQueuedMeetingJobPart,
     buildSucceededJobPatch,
     buildTranscriptArtifact,
+    commitProcessedMeetingUsage,
     collectMeetingChunkTranscriptStorageObjects: meetingRuntimeArtifactDomain.collectMeetingChunkTranscriptStorageObjects,
     collectMeetingSourceStorageObjects: meetingRuntimeArtifactDomain.collectMeetingSourceStorageObjects,
     createHttpError,
@@ -974,7 +999,7 @@ function registerMeetingHandlers(deps) {
     }
   });
 
-  const previewInovaMeetingResultSectionEdit = onRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
+  const previewInovaMeetingResultSectionEdit = onOpenAIRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
     try {
       assertMethod(request);
       const input = normalizeMeetingSectionEditPreviewRequest(request.body);

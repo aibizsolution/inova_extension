@@ -19,11 +19,24 @@
 
         function readAssetSuffix() {
           try {
-            const version = new URL(globalThis.location.href).searchParams.get("v");
-            return version ? `?v=${encodeURIComponent(version)}` : "";
+            const url = new URL(globalThis.location.href);
+            const params = new URLSearchParams();
+            const version = url.searchParams.get("v");
+            if (version) {
+              params.set("v", version);
+            }
+            if (isLocalHost(url.hostname)) {
+              params.set("localAssetTs", String(Date.now()));
+            }
+            const query = params.toString();
+            return query ? `?${query}` : "";
           } catch {
             return "";
           }
+        }
+
+        function isLocalHost(hostname) {
+          return hostname === "127.0.0.1" || hostname === "localhost";
         }
       })(document);
     </script>
@@ -37,6 +50,7 @@
           "./runtime.js",
           "./panel-utils.js",
           "./extension-capability-client.js",
+          "./feature-usage-tracker.js",
           "./remote-workflow-host.js",
           "./panel-firestore-session-client.js",
           "./base-firestore-client.js",
@@ -50,6 +64,7 @@
           "./bookmark-view.js",
           "./meeting-view.js",
           "./meeting-firestore-client.js",
+          "./meeting-usage-firestore-client.js",
           "./meeting-hub-controller.js",
           "./prompt-view.js",
           "./prompt-tool-view.js",

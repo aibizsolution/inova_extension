@@ -63,6 +63,48 @@
 - route 변경, 탭 전환, 페이지 새로고침 뒤 이전 feature의 검색어, active 상태, pending 상태가 새 feature를 오염시키면 실패다.
 - 실제 Chrome 콘솔 warning/error가 새로 생기면 실패 또는 추가 조사 대상으로 기록한다.
 - `hosting/*` 변경은 Hosting 배포와 페이지 새로고침 대상이고, `content/*`, `background/*`, `popup/*`, `manifest.json`, 확장 번들에 포함되는 `shared/*` 변경은 확장 Reload 또는 확장 배포 대상이다.
+- `풀 테스트`나 feature usage 변경 검증에서는 의미 있는 사용자 action 1회가 Firestore aggregate에 남았는지까지 확인한다. 화면 동작만 보고 사용량 계측을 통과시키지 않는다.
+
+## 사용량 계측
+
+이 섹션은 `feature-usage` pipeline 자체를 바꿨거나, 새 feature action을 `featureUsageTracker.record(...)`에 추가했거나, 상용 풀 테스트에서 "누가 얼마나 썼는지" 운영 증거가 필요한 경우에 실행한다.
+
+### P0 Smoke
+
+1. 패널 iframe이 현재 target으로 로드됐는지 확인한다.
+   - 로컬: `http://127.0.0.1:5000/extension-v2/panel/index.html?...`
+   - 상용: `https://browser-extension-v2.web.app/extension-v2/panel/index.html?...`
+2. iframe 안에서 `InovaBookmarks.featureUsageTracker.create`와 `extensionCapabilityClient.commitFeatureUsageBatch`가 존재하는지 확인한다.
+3. capability handshake에서 `metrics.feature-usage.commit`이 enabled이고, auth가 `access-token`, service가 `metrics`인지 확인한다.
+4. 상용 검증이면 새 배포 직후 stale hosted bundle이 남을 수 있으므로, top page를 정상 새로고침한 뒤 다시 1-3을 확인한다. iframe src를 임의 cache-bust URL로 바꾸는 방식은 CSP에 막힐 수 있다.
+
+### P1 Aggregate
+
+1. 테스트에 쓸 `providerUserKey`를 확인한다.
+2. 저비용 action 하나를 실제 UI에서 실행한다.
+   - pipeline 자체 검증이면 `대화` 탭의 질문 카드 클릭으로 `conversation.jumped.success` 1회를 우선 쓴다.
+   - 특정 feature action을 추가한 변경이면 해당 action을 실제 UI에서 1회 실행한다.
+3. flush가 일어나게 한다.
+   - 기본은 첫 action 후 60초 이상 대기한다.
+   - 빠르게 끝내야 하면 탭 전환, page hide, 페이지 새로고침처럼 iframe `visibilitychange` 또는 `pagehide`가 발생하는 흐름을 쓴다.
+4. iframe localStorage의 `inova.featureUsage.outbox.v1::` record를 확인한다.
+   - `counters`에는 allowlist action과 count만 있어야 한다.
+   - 프롬프트 원문, 대화 원문, URL, token, IP, browser fingerprint 같은 raw content가 없어야 한다.
+   - 성공 flush 뒤에는 `dirtyCount=0`, `lastCommittedAt`, `lastDeltaTotal`이 남아야 한다.
+5. Firestore aggregate를 Admin SDK script로 확인한다.
+
+```bash
+npm.cmd run check:feature-usage -- --days 1 --limit 20
+```
+
+합격 기준:
+
+- 현재 `providerUserKey`가 사용자 랭킹에 보이고, 가능한 경우 `email`, `displayName`, `numericUserId` snapshot이 함께 보인다.
+- 실행한 feature의 `success/error/degraded` count가 기대 action 수만큼 증가한다.
+- 같은 화면을 다시 새로고침하거나 같은 snapshot을 재전송해도 중복 delta가 생기지 않는다.
+- `integration_inova_feature_usage_*` 컬렉션은 client에서 직접 읽거나 쓰지 않는다.
+
+상용에서 이 검증은 실제 운영 count 1건을 남긴다. 테스트용 raw event 삭제 대상은 없고, aggregate를 수동 보정할 필요가 있으면 별도 운영 작업으로 다룬다.
 
 ## 대화 탭
 
@@ -322,12 +364,27 @@ __INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20, entrie
 8. 프롬프트 `스토어` 목록과 상세 1건
 9. 프롬프트 `검토` 실행과 입력창 반영
 10. 릴리스 버전/다운로드 표시
-11. 다른 대화 또는 다른 탭으로 이동 후 route/tab 상태가 오염되지 않는지 확인
-12. console warning/error 최종 확인
+11. 사용량 계측 P1 Aggregate 확인
+12. 다른 대화 또는 다른 탭으로 이동 후 route/tab 상태가 오염되지 않는지 확인
+13. console warning/error 최종 확인
 
 ## 로컬 데이터와 로그 점검
 
 프롬프트 저장/동기화나 회의 데이터처럼 브라우저만으로 성공 판단이 부족한 흐름은 아래 명령을 보조 증거로 쓴다.
+
+### Feature Usage 점검
+
+상용 풀 테스트에서 meaningful action을 실행했으면 aggregate 반영까지 본다.
+
+```bash
+npm.cmd run check:feature-usage -- --days 1 --limit 20
+```
+
+해석 기준:
+
+- `users=0`이면 아직 실제 delta가 commit되지 않은 상태다. 60초 flush, tab hide/pagehide, provider identity, `metrics.feature-usage.commit` capability를 다시 본다.
+- 기대 user가 보이지만 count가 늘지 않으면 duplicate snapshot no-op인지, allowlist 밖 action인지, lower counter replay인지 확인한다.
+- 사용량 집계는 raw click 로그가 아니라 client/day cumulative snapshot delta이므로, 상용 테스트 후 삭제할 raw log 파일은 없다.
 
 ### Firestore 빠른 점검
 

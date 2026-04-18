@@ -1,7 +1,7 @@
 # Version And Release Decision Note
 
-이 문서는 구조 진행 일지나 세션 handoff가 아니라, `버전 결정`, `version lane`, `meeting legacy baseline`, `release decision boundary`만 빠르게 확인하기 위한 기준 문서다.  
-ordinary feature 구현 변경, 탭별 hosted ownership 진행도, smoke 이슈 목록, git chronology는 이 문서의 대상이 아니다. 그런 내용은 `docs/current-handoff.md`, `docs/runtime-architecture.md`, feature `AGENTS.md`에서 관리한다.
+이 문서는 현재 운영 기준을 계속 갱신하는 문서가 아니라, 이전 `버전 결정`, `version lane`, `meeting legacy baseline`, `release decision boundary` 판단을 보존하는 참고 문서다.  
+ordinary feature 구현 변경, 탭별 hosted ownership 진행도, smoke 이슈 목록, git chronology는 이 문서의 대상이 아니다. 현재 운영 기준은 `docs/release-workflow.md`, `docs/runtime-architecture.md`, feature `AGENTS.md`에서 관리한다.
 
 마지막 상태 갱신: 2026-04-18
 현재 공개 사용자 기준선: `0.4.4`
@@ -152,6 +152,9 @@ ordinary feature 구현 변경, 탭별 hosted ownership 진행도, smoke 이슈 
 - 기본 `npm.cmd run verify`와 `node scripts/verify-release-package.js`는 현재 lane의 `hosting/*/releases/latest.json`, `history.json`, `downloads/latest.zip`, version ZIP들, 그리고 curated `releases/release-notes.json`이 서로 같은 공개 baseline을 가리키는지 함께 검증해야 한다. history/latest에 노출된 공개 버전은 현재 버전까지 포함해 curated notes에도 반드시 artifact 메타가 있어야 한다.
 - release/deploy 보고는 lane-local 자산과 runtime target 혼동을 막기 위해 사용자가 확인해야 할 대상이 `로컬 호스팅/에뮬레이터`, `상용 Hosting`, `새 ZIP/확장 새로고침` 중 무엇인지 명시해야 한다. 로컬 rehearsal 결과를 상용 반영처럼 말하지 않고, 상용 배포 후에도 로컬 target을 볼 수 있는 경우 확인 URL 또는 패널 target을 함께 적는다.
 - Storage Rules 변경은 hosted 정적 자산이나 functions runtime 변경과 별도 배포 표면이다. `deploy:all`과 `release:deploy:all`은 Storage를 포함하지 않으므로, 운영 반영 보고에서는 Firebase Storage가 실제로 켜진 프로젝트에 `deploy:storage`가 필요한지 functions/hosting 배포와 구분해 적는다.
+- 상용 회의 임시 오디오 Storage는 Firebase Storage default bucket을 기준으로 한다. Functions는 기본적으로 `FIREBASE_CONFIG.storageBucket`을 쓰고, `STORAGE_BUCKET_URL`은 앱용 bucket override에만 허용한다. `gcf-v2-*` 또는 `*.cloudfunctions.appspot.com` 같은 Cloud Functions 내부 bucket은 회의 원본 임시 저장소로 쓰지 않는다.
+- 상용 OpenAI API 키는 Functions Secret Manager secret으로 관리한다. `.env`는 비밀값이 아닌 모델/튜닝 설정만 담고, 로컬 에뮬레이터 secret은 ignored `functions/.secret.local`에 둔다.
+- 기존 성공 회의 job의 사용량 보정은 local ops script `npm.cmd run backfill:meeting-usage`로 처리한다. 기본은 dry-run이며, `--execute`를 붙였을 때만 `processed__jobId` 원장과 aggregate를 쓴다. 이 스크립트 추가 자체는 hosted/functions release lane 변경이 아니다.
 - `1.x+` v2 lane은 hosted-first를 기본값으로 쓴다. 탭 UI/state/action flow의 기본 위치는 hosted이고, extension은 page DOM adapter + iframe host + runtime broker 같은 browser-only capability를 유지한다.
 - `DB/Functions 계약을 바꾸지 않는 순수 panel v2 migration`은 현재 `1.x+` bundle이 정상 동작하는지만 먼저 확인한다. 이런 작업에서 legacy extension panel 코드는 활성 bundle 안에 계속 보존할 대상으로 보지 않는다.
 - 현재 `1.x+` 활성 bundle과 공유 계약이 더 이상 쓰지 않는 legacy extension panel 코드는 `content/*` 안에 섞어 두지 않는다. 기본 정리 방향은 `backup/legacy-panel/*`로 격리해 참고본으로만 남기거나, 더 이상 필요 없으면 삭제하는 것이다.
@@ -234,12 +237,17 @@ ordinary feature 구현 변경, 탭별 hosted ownership 진행도, smoke 이슈 
 - `integration_inova_meeting_artifacts`
 - `integration_inova_meeting_commands`
 - `integration_inova_meeting_deletions`
+- `integration_inova_meeting_usage_events`
+- `integration_inova_meeting_usage_user_months`
+- `integration_inova_meeting_usage_user_totals`
+- `integration_inova_meeting_usage_admin_months`
+- `integration_inova_meeting_usage_admin_days`
 
-## 문서 갱신 규칙
+사용량 accounting namespace는 기존 meeting namespace에 더하는 성공 처리 원장/집계 baseline이다. 이 추가는 version lane 분리나 quota enforcement가 아니며, 삭제 후에도 처리 성공 사용량을 차감하지 않는 서버 측 compat 기준으로 유지한다.
 
-- 아래 범위가 바뀌면 이 문서를 같은 작업 안에서 갱신한다.
-  - version lane 정책
-  - meeting legacy baseline
-  - release decision 기준
+## 문서 보존 규칙
+
+- 이 문서는 일반 작업의 갱신 대상이 아니다.
+- version lane, release decision, meeting runtime 기준이 바뀌면 이 문서가 아니라 `docs/release-workflow.md`, `docs/runtime-architecture.md`, feature `AGENTS.md` 같은 현재 계약 문서를 갱신한다.
 - ordinary feature 구현이나 git으로 복구 가능한 작업 이력은 이 문서에 누적하지 않는다.
 - 세션 인계 로그, split chronology, milestone diary는 이 문서 범위 밖이다.

@@ -36,12 +36,15 @@
           ${normalized.capabilityNotice ? `<div class="inova-release-card inova-release-card__notice is-info">${escapeHtml(normalized.capabilityNotice)}</div>` : ""}
           ${normalized.degradedNotice ? `<div class="inova-release-card inova-release-card__notice is-info">${escapeHtml(normalized.degradedNotice)}</div>` : ""}
           ${normalized.error ? `<div class="inova-release-card inova-release-card__notice">${escapeHtml(normalized.error)}</div>` : ""}
-          <div class="inova-tool-inline-summary">
-            <strong>목록</strong>
-            <span class="inova-tool-inline-summary__meta">총 ${escapeHtml(String(normalized.items.length))}건</span>
-          </div>
-          <div class="inova-meeting-record-list">
-            ${listMarkup}
+          ${renderUsageStrip(normalized.usage)}
+          <div class="inova-meeting-list-section">
+            <div class="inova-tool-inline-summary">
+              <strong>목록</strong>
+              <span class="inova-tool-inline-summary__meta">총 ${escapeHtml(String(normalized.items.length))}건</span>
+            </div>
+            <div class="inova-meeting-record-list">
+              ${listMarkup}
+            </div>
           </div>
         </div>
       </section>
@@ -66,6 +69,7 @@
       hasCheckedAt: Boolean(checkedAtText),
       items,
       pending: normalizePending(state?.pending),
+      usage: normalizeUsage(state?.usage),
     };
   }
 
@@ -185,6 +189,23 @@
     return `<span class="inova-meeting-record__status is-${escapeHtml(normalizeText(tone) || "neutral")}">${escapeHtml(value)}</span>`;
   }
 
+  function renderUsageStrip(usage) {
+    const month = normalizeUsageMetric(usage?.month);
+    const total = normalizeUsageMetric(usage?.total);
+    return `
+      <div class="inova-meeting-usage" aria-label="회의 녹음 사용량">
+        <div class="inova-meeting-usage__item">
+          <span class="inova-meeting-usage__label">이번 달</span>
+          <strong class="inova-meeting-usage__value">${escapeHtml(formatUsageDuration(month.processedMs))} · ${escapeHtml(formatUsageCount(month.processedCount))}</strong>
+        </div>
+        <div class="inova-meeting-usage__item">
+          <span class="inova-meeting-usage__label">전체</span>
+          <strong class="inova-meeting-usage__value">${escapeHtml(formatUsageDuration(total.processedMs))} · ${escapeHtml(formatUsageCount(total.processedCount))}</strong>
+        </div>
+      </div>
+    `;
+  }
+
   function normalizePending(pending) {
     const action = normalizeText(pending?.action);
     return {
@@ -226,12 +247,13 @@
     const timestamp = formatDateTime(item.updatedAt, "");
     const metaPrefix = hasRecord ? "최근 기록" : "최근 업데이트";
     const meta = timestamp ? `${metaPrefix} ${timestamp}` : "";
+    const shareLabel = buildShareLabel(item, options);
     if (options.isPending) {
       return {
         description: "",
         meta,
         openLabel: "작업실 여는 중...",
-        shareLabel: options.sharePending ? "링크 준비 중..." : item.shareActive ? "링크 복사" : "공유 링크",
+        shareLabel,
         statusLabel: "여는 중",
         statusTone: "progress",
       };
@@ -241,7 +263,7 @@
         description: "",
         meta,
         openLabel: "작업실 열기",
-        shareLabel: options.sharePending ? "링크 준비 중..." : item.shareActive ? "링크 복사" : "공유 링크",
+        shareLabel,
         statusLabel: "기록 생성 중",
         statusTone: "progress",
       };
@@ -251,7 +273,7 @@
         description: "",
         meta,
         openLabel: "작업실 열기",
-        shareLabel: options.sharePending ? "링크 준비 중..." : item.shareActive ? "링크 복사" : "공유 링크",
+        shareLabel,
         statusLabel: "기록 대기",
         statusTone: "progress",
       };
@@ -261,7 +283,7 @@
         description: "",
         meta,
         openLabel: "작업실 열기",
-        shareLabel: options.sharePending ? "링크 준비 중..." : item.shareActive ? "링크 복사" : "공유 링크",
+        shareLabel,
         statusLabel: "확인 필요",
         statusTone: "danger",
       };
@@ -271,19 +293,44 @@
         description: "",
         meta,
         openLabel: "작업실 열기",
-        shareLabel: options.sharePending ? "링크 준비 중..." : item.shareActive ? "링크 복사" : "공유 링크",
-        statusLabel: "기록 있음",
-        statusTone: "success",
+        shareLabel,
+        statusLabel: item.shareActive ? "공유 중" : "",
+        statusTone: item.shareActive ? "share" : "success",
       };
     }
     return {
       description: "",
       meta,
       openLabel: "작업실 열기",
-      shareLabel: options.sharePending ? "링크 준비 중..." : item.shareActive ? "링크 복사" : "공유 링크",
+      shareLabel,
       statusLabel: "기록 없음",
       statusTone: "neutral",
     };
+  }
+
+  function normalizeUsage(input) {
+    const usage = input && typeof input === "object" ? input : {};
+    return {
+      degraded: Boolean(usage.degraded),
+      error: normalizeText(usage.error),
+      month: normalizeUsageMetric(usage.month),
+      total: normalizeUsageMetric(usage.total),
+    };
+  }
+
+  function normalizeUsageMetric(input) {
+    const metric = input && typeof input === "object" ? input : {};
+    return {
+      processedCount: Math.max(0, Math.round(Number(metric.processedCount) || 0)),
+      processedMs: Math.max(0, Math.round(Number(metric.processedMs) || 0)),
+    };
+  }
+
+  function buildShareLabel(item, options = {}) {
+    if (options.sharePending) {
+      return "준비 중";
+    }
+    return item.shareActive ? "링크 복사" : "공유";
   }
 
   function formatDateTime(value, fallback = "아직 없음") {
@@ -297,6 +344,37 @@
       hour: "numeric",
       minute: "2-digit",
     }).format(time);
+  }
+
+  function formatUsageDuration(processedMs) {
+    const totalMinutes = Math.max(0, Math.round(Number(processedMs) / 60000) || 0);
+    if (totalMinutes === 0 && Number(processedMs) > 0) {
+      return "1분";
+    }
+    const formatter = new Intl.NumberFormat("ko-KR");
+    if (totalMinutes < 60) {
+      return `${formatter.format(totalMinutes)}분`;
+    }
+    const totalHours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if (totalHours < 24) {
+      return minutes > 0
+        ? `${formatter.format(totalHours)}시간 ${formatter.format(minutes)}분`
+        : `${formatter.format(totalHours)}시간`;
+    }
+    const days = Math.floor(totalHours / 24);
+    const hours = totalHours % 24;
+    if (hours > 0) {
+      return `${formatter.format(days)}일 ${formatter.format(hours)}시간`;
+    }
+    if (minutes > 0) {
+      return `${formatter.format(days)}일 ${formatter.format(minutes)}분`;
+    }
+    return `${formatter.format(days)}일`;
+  }
+
+  function formatUsageCount(processedCount) {
+    return `${new Intl.NumberFormat("ko-KR").format(Math.max(0, Math.round(Number(processedCount) || 0)))}건`;
   }
 
   function normalizeText(value) {

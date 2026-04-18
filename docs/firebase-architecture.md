@@ -78,4 +78,4 @@
 
 - 제품/기능 라우팅: `README.md`, `docs/feature-routing.md`
 - 런타임 경계: `docs/runtime-architecture.md`
-- meeting/version 판단: `docs/refactoring-plan.md`
+- 릴리스/version 판단: `docs/release-workflow.md`

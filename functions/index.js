@@ -1,9 +1,11 @@
 const { registerMeetingLaunchHandlers } = require("./features/meeting/meeting-launch-service");
 const { registerMeetingWorkspaceAuthHandlers } = require("./features/meeting/meeting-workspace-auth-service");
 const { registerMeetingHandlers } = require("./features/meeting/meeting-service");
+const { registerFeatureUsageHandlers } = require("./features/feature-usage/feature-usage-service");
 const { registerPromptLibraryHandlers } = require("./features/prompt-library/register");
 const { registerPromptReviewHandlers } = require("./features/prompt-review/prompt-review-service");
 const { registerStoreHandlers } = require("./features/prompt-store/store-service");
+const { defineSecret } = require("firebase-functions/params");
 const {
   admin,
   bucket,
@@ -27,6 +29,22 @@ const {
   STORE_CATEGORIES,
   verifyInovaIdentity,
 } = require("./platform/runtime");
+
+const OPENAI_API_KEY_SECRET = defineSecret("OPENAI_API_KEY");
+
+function withOpenAISecret(options = {}) {
+  const existingSecrets = Array.isArray(options.secrets) ? options.secrets : [];
+  return {
+    ...options,
+    secrets: existingSecrets.includes(OPENAI_API_KEY_SECRET)
+      ? existingSecrets
+      : [...existingSecrets, OPENAI_API_KEY_SECRET],
+  };
+}
+
+function onOpenAIRequest(options, handler) {
+  return onRequest(withOpenAISecret(options), handler);
+}
 
 const sharedHttpDeps = {
   CORS_ORIGINS,
@@ -53,6 +71,7 @@ const storeHandlers = registerStoreHandlers({
 const promptReviewHandlers = registerPromptReviewHandlers({
   ...sharedHttpDeps,
   admin,
+  onRequest: onOpenAIRequest,
 });
 
 const meetingLaunchHandlers = registerMeetingLaunchHandlers({
@@ -72,6 +91,12 @@ const meetingHandlers = registerMeetingHandlers({
   admin,
   authorizeMeetingRequest: meetingWorkspaceAuthHandlers.authorizeMeetingRequest,
   bucket,
+  onOpenAIRequest,
+});
+
+const featureUsageHandlers = registerFeatureUsageHandlers({
+  ...sharedHttpDeps,
+  FieldValue: admin.firestore.FieldValue,
 });
 
 const promptLibraryHandlers = registerPromptLibraryHandlers({
@@ -115,6 +140,7 @@ exports.togglePromptStoreLike = storeHandlers.togglePromptStoreLike;
 exports.recordPromptStoreView = storeHandlers.recordPromptStoreView;
 
 exports.reviewInovaPrompt = promptReviewHandlers.reviewInovaPrompt;
+exports.commitInovaFeatureUsageBatch = featureUsageHandlers.commitInovaFeatureUsageBatch;
 
 exports.issueInovaPromptPanelAuth = promptLibraryHandlers.issueInovaPromptPanelAuth;
 exports.issueInovaPromptPanelAuthV2 = promptLibraryV2Handlers.issueInovaPromptPanelAuth;
@@ -127,18 +153,18 @@ exports.syncInovaPromptLibraryV2 = promptLibraryV2Handlers.syncInovaPromptLibrar
 
 exports.createInovaMeetingJob = meetingHandlers.createInovaMeetingJob;
 exports.processQueuedInovaMeetingJob = onDocumentWritten(
-  {
+  withOpenAISecret({
     concurrency: 1,
     document: "integration_inova_meeting_jobs/{jobId}",
     maxInstances: 80,
     memory: "1GiB",
     region: REGION,
     timeoutSeconds: 120,
-  },
+  }),
   meetingHandlers.processQueuedMeetingJobWrite
 );
 exports.processQueuedInovaMeetingJobPart = onDocumentWritten(
-  {
+  withOpenAISecret({
     document: "integration_inova_meeting_job_parts/{partId}",
     concurrency: 2,
     cpu: 1,
@@ -146,29 +172,29 @@ exports.processQueuedInovaMeetingJobPart = onDocumentWritten(
     memory: "2GiB",
     region: REGION,
     timeoutSeconds: 180,
-  },
+  }),
   meetingHandlers.processQueuedMeetingJobPartWrite
 );
 exports.finalizeChunkedInovaMeetingJob = onDocumentWritten(
-  {
+  withOpenAISecret({
     concurrency: 1,
     document: "integration_inova_meeting_job_finalizers/{jobId}",
     maxInstances: 80,
     memory: "1GiB",
     region: REGION,
     timeoutSeconds: 180,
-  },
+  }),
   meetingHandlers.finalizeChunkedMeetingJobWrite
 );
 exports.processQueuedInovaMeetingCommand = onDocumentWritten(
-  {
+  withOpenAISecret({
     concurrency: 1,
     document: "integration_inova_meeting_commands/{commandId}",
     maxInstances: 20,
     memory: "512MiB",
     region: REGION,
     timeoutSeconds: 120,
-  },
+  }),
   meetingHandlers.processQueuedMeetingCommandWrite
 );
 exports.processQueuedInovaMeetingDeletion = onDocumentWritten(

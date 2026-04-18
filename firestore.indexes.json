@@ -9,6 +9,30 @@
       ]
     },
     {
+      "collectionGroup": "integration_inova_meeting_usage_user_months",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "monthKey", "order": "ASCENDING" },
+        { "fieldPath": "processedMs", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "integration_inova_meeting_usage_user_months",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "providerUserKey", "order": "ASCENDING" },
+        { "fieldPath": "monthKey", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "integration_inova_meeting_usage_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "providerUserKey", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "prompt_store_entries",
       "queryScope": "COLLECTION",
       "fields": [

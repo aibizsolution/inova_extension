@@ -61,6 +61,11 @@ async function verifyExtensionCapabilityClientPageAllowlist() {
             requestTimeoutMs: 75000,
           },
           {
+            capabilityId: "metrics.feature-usage.commit",
+            enabled: true,
+            kind: "function",
+          },
+          {
             artifactId: "test-workflow",
             artifactVersion: "0.0.1",
             capabilityId: "test.workflow.run",
@@ -117,6 +122,7 @@ async function verifyExtensionCapabilityClientPageAllowlist() {
   const catalog = await browserCapabilities.readCapabilityCatalog({ reason: "test" });
   assert.deepEqual(runtimeCalls.at(-1), {
     action: "capabilities.handshake",
+    requestTimeoutMs: 60000,
     reason: "test",
   });
   assert(catalog.bridgeApis.includes("invokeCapability"));
@@ -134,6 +140,15 @@ async function verifyExtensionCapabilityClientPageAllowlist() {
     capabilityId: "prompt.review.run",
     input: { prompt: "검토" },
     requestTimeoutMs: 75000,
+    trace: null,
+  });
+  await browserCapabilities.commitFeatureUsageBatch({
+    dayKey: "2026-04-18",
+  });
+  assert.deepEqual(runtimeCalls.at(-1), {
+    action: "capabilities.invoke",
+    capabilityId: "metrics.feature-usage.commit",
+    input: { dayKey: "2026-04-18" },
     trace: null,
   });
 
@@ -182,6 +197,23 @@ async function verifyExtensionCapabilityClientPageAllowlist() {
     runtimeCallCountBeforeDisabledStorage,
     "disabled non-page capabilities should be blocked by the hosted client before runtime dispatch"
   );
+
+  await browserCapabilities.issuePanelSession("hosted", {
+    providerUserKey: "prompt-user-1",
+  }, {
+    purpose: "prompt-library",
+    target: "production",
+  });
+  assert.deepEqual(runtimeCalls.at(-1), {
+    action: "auth.issue-panel-session",
+    panel: "hosted",
+    providerIdentity: {
+      providerUserKey: "prompt-user-1",
+    },
+    purpose: "prompt-library",
+    requestTimeoutMs: 60000,
+    target: "production",
+  });
 }
 
 function cloneValue(value) {

@@ -259,6 +259,7 @@
           bookmarksTool: bookmarkTool,
           open: panelOpen,
           promptTool: promptSnapshot,
+          providerIdentity: normalizeProviderIdentity(namespace.providerIdentity?.getCurrent?.()),
           settings: state.settings,
           uiPreferences: namespace.storage.mergeUiPreferences(state.uiPreferences),
           visible,
@@ -273,6 +274,13 @@
 
     function normalizePromptSnapshot(value) {
       return value && typeof value === "object" ? value : {};
+    }
+
+    function normalizeProviderIdentity(value) {
+      const normalize = typeof namespace.providerIdentityCache?.normalizeProviderIdentity === "function"
+        ? namespace.providerIdentityCache.normalizeProviderIdentity
+        : (identity) => identity && typeof identity === "object" ? identity : {};
+      return normalize(value);
     }
 
   }

@@ -140,6 +140,7 @@
               ${renderOwnerInfo(ownerLabel, item.publishedAt)}
             </div>
             <strong class="inova-prompt-item__title inova-store-item__title">${escapeHtml(item.title)}</strong>
+            ${renderStoreItemUseCase(item)}
           </div>
           <div class="inova-store-item__side">
             ${renderStoreMenu(item, { actionDisabled, canUnpublish: state.canUnpublish, deleteConfirm, liking, owned })}
@@ -147,9 +148,9 @@
         </div>
         <div class="inova-store-item__summary-row" aria-label="스토어 통계">
           <div class="inova-store-item__metrics">
-            ${renderMetric("views", "조회수", item.metrics.viewCount)}
-            ${renderMetric("imports", "가져오기 수", item.metrics.importCount)}
-            ${renderMetric("likes", "좋아요 수", item.metrics.likeCount)}
+            ${renderMetric("views", "조회수", item.metrics.viewCount, "조회")}
+            ${renderMetric("imports", "가져오기 수", item.metrics.importCount, "가져오기")}
+            ${renderMetric("likes", "좋아요 수", item.metrics.likeCount, "좋아요")}
           </div>
         </div>
         ${expanded ? renderExpandedContent(item, detailPending) : ""}
@@ -158,6 +159,29 @@
         ${deleteConfirm ? renderDeleteConfirm(item.entryId, item.title, unpublishing, state.canUnpublish) : ""}
       </article>
     `;
+  }
+
+  function renderStoreItemUseCase(item) {
+    const preview = buildStoreItemPreview(item);
+    if (!preview) {
+      return "";
+    }
+    return `<p class="inova-store-item__use-case">${escapeHtml(preview)}</p>`;
+  }
+
+  function buildStoreItemPreview(item) {
+    const source = normalizePreviewText(item?.summary || item?.content || "");
+    if (!source) {
+      return "";
+    }
+    return source.length > 84 ? `${source.slice(0, 84).trim()}...` : source;
+  }
+
+  function normalizePreviewText(value) {
+    return String(value || "")
+      .replace(/\s+/g, " ")
+      .replace(/^[-*•#\d.)\s]+/, "")
+      .trim();
   }
 
   function renderStoreItemActions(item, options = {}) {
@@ -287,11 +311,12 @@
     return `<p class="inova-prompt-item__content">${escapeHtmlWithLineBreaks(detailText)}</p>`;
   }
 
-  function renderMetric(icon, label, value) {
+  function renderMetric(icon, label, value, visibleLabel = "") {
     return `
       <span class="inova-store-metric" title="${escapeHtml(label)}">
         <span class="inova-store-metric__icon" data-icon="${icon}" aria-hidden="true"></span>
         <span class="inova-sr-only">${escapeHtml(label)} </span>
+        ${visibleLabel ? `<span class="inova-store-metric__label" aria-hidden="true">${escapeHtml(visibleLabel)}</span>` : ""}
         <span>${Number(value) || 0}</span>
       </span>
     `;

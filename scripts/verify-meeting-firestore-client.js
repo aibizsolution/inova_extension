@@ -4,6 +4,8 @@ const path = require("path");
 const vm = require("vm");
 
 const root = path.resolve(__dirname, "..");
+const USAGE_USER_MONTH_COLLECTION = "integration_inova_meeting_usage_user_months";
+const USAGE_USER_TOTAL_COLLECTION = "integration_inova_meeting_usage_user_totals";
 
 async function verifyHostedMeetingFirestoreClientContract() {
   const futureExpiryIso = new Date(Date.now() + 10 * 60 * 1000).toISOString();
@@ -42,10 +44,28 @@ async function verifyHostedMeetingFirestoreClientContract() {
   const queryState = {
     cacheReads: [],
     collectionNames: [],
+    docRefs: [],
     emulatorAuthUrls: [],
     emulatorFirestoreHosts: [],
+    onDocSnapshotHandlers: [],
     onSnapshotHandler: null,
+    usageDocUnsubscribeCount: 0,
     unsubscribeCount: 0,
+    usageDocs: {
+      [`${USAGE_USER_MONTH_COLLECTION}/fixture-user__2026-04`]: {
+        monthKey: "2026-04",
+        processedCount: 23,
+        processedMs: 428 * 60000,
+        providerUserKey: "fixture-user",
+        updatedAt: "2026-04-13T01:02:03.000Z",
+      },
+      [`${USAGE_USER_TOTAL_COLLECTION}/fixture-user`]: {
+        processedCount: 148,
+        processedMs: 3039 * 60000,
+        providerUserKey: "fixture-user",
+        updatedAt: "2026-04-13T01:02:03.000Z",
+      },
+    },
   };
   const context = vm.createContext({
     console,
@@ -88,6 +108,7 @@ async function verifyHostedMeetingFirestoreClientContract() {
   loadScript("hosting/extension-v2/panel/panel-firestore-session-client.js", context);
   loadScript("hosting/extension-v2/panel/base-firestore-client.js", context);
   loadScript("hosting/extension-v2/panel/meeting-firestore-client.js", context);
+  loadScript("hosting/extension-v2/panel/meeting-usage-firestore-client.js", context);
 
   const client = context.InovaBookmarks.meetingFirestoreClient.create({
     invokeRuntime: async (request) => {
@@ -185,6 +206,71 @@ async function verifyHostedMeetingFirestoreClientContract() {
       .includes("runWithSuppressedFirestorePersistenceWarning"),
     "shared firestore session coordinator should suppress the deprecated Firestore persistence warning in the hosted console"
   );
+
+  const usageSnapshotPayloads = [];
+  const usageClient = context.InovaBookmarks.meetingUsageFirestoreClient.create({
+    invokeRuntime: async (request) => {
+      runtimeCalls.push(cloneValue(request));
+      return {
+        emulators: {
+          authUrl: "",
+          enabled: false,
+          firestoreHost: "",
+          firestorePort: 0,
+        },
+        expiresAt: futureExpiryIso,
+        firebaseConfig: {
+          projectId: "browser-extension-main",
+        },
+        firebaseCustomToken: "panel-token-alpha",
+        panelScope: "prompt-panel-v2",
+        promptPanelScope: "prompt-panel-v2",
+        providerUserKey: "fixture-user",
+        target: "production",
+      };
+    },
+    onError: async () => {},
+    onSnapshot: async (snapshot) => {
+      usageSnapshotPayloads.push(cloneValue(snapshot));
+    },
+    traceFirestore(step, payload) {
+      traces.push({
+        payload: cloneValue(payload),
+        step,
+      });
+    },
+  });
+
+  const usageSnapshot = await usageClient.ensureSubscribed({
+    monthKey: "2026-04",
+    providerIdentity: {
+      providerUserKey: "fixture-user",
+    },
+    settings: {
+      meetingWorkspaceTarget: "production",
+    },
+  });
+
+  assert.deepEqual(
+    queryState.collectionNames.slice(-2),
+    [USAGE_USER_MONTH_COLLECTION, USAGE_USER_TOTAL_COLLECTION],
+    "meeting usage client should open only the two usage aggregate collections"
+  );
+  assert.deepEqual(
+    queryState.docRefs,
+    [
+      { collectionName: USAGE_USER_MONTH_COLLECTION, id: "fixture-user__2026-04" },
+      { collectionName: USAGE_USER_TOTAL_COLLECTION, id: "fixture-user" },
+    ],
+    "meeting usage client should subscribe to exact month and total docs"
+  );
+  assert.equal(usageSnapshot.month.processedMs, 428 * 60000);
+  assert.equal(usageSnapshot.month.processedCount, 23);
+  assert.equal(usageSnapshot.total.processedMs, 3039 * 60000);
+  assert.equal(usageSnapshot.total.processedCount, 148);
+  assert.equal(usageSnapshotPayloads.length >= 1, true, "meeting usage client should forward usage snapshots");
+  usageClient.disconnect("test");
+  assert.equal(queryState.usageDocUnsubscribeCount, 2, "meeting usage client should detach both doc listeners on disconnect");
 
   await verifyDisconnectCancelsInFlightMeetingFirestoreSubscription(futureExpiryIso);
 }
@@ -383,7 +469,11 @@ function createFakeFirebase(queryState) {
   };
   const fakeDb = {
     collection(name) {
-      queryState.collectionNames.push(String(name || ""));
+      const collectionName = String(name || "");
+      queryState.collectionNames.push(collectionName);
+      if (collectionName === USAGE_USER_MONTH_COLLECTION || collectionName === USAGE_USER_TOTAL_COLLECTION) {
+        return createFakeDocCollection(queryState, collectionName);
+      }
       return fakeQuery;
     },
     enablePersistence() {
@@ -417,6 +507,49 @@ function createFakeFirebase(queryState) {
     initializeApp() {
       this.apps.push(fakeApp);
       return fakeApp;
+    },
+  };
+}
+
+function createFakeDocCollection(queryState, collectionName) {
+  return {
+    doc(id) {
+      const docId = String(id || "");
+      queryState.docRefs.push({ collectionName, id: docId });
+      return {
+        id: docId,
+        get(options = {}) {
+          queryState.cacheReads.push({
+            collectionName,
+            id: docId,
+            options: cloneValue(options),
+          });
+          return Promise.resolve(createUsageFirestoreDoc(queryState, collectionName, docId));
+        },
+        onSnapshot(_options, next) {
+          queryState.onDocSnapshotHandlers.push({ collectionName, id: docId, next });
+          next(createUsageFirestoreDoc(queryState, collectionName, docId));
+          return () => {
+            queryState.unsubscribeCount += 1;
+            queryState.usageDocUnsubscribeCount += 1;
+          };
+        },
+      };
+    },
+  };
+}
+
+function createUsageFirestoreDoc(queryState, collectionName, docId) {
+  const data = queryState.usageDocs?.[`${collectionName}/${docId}`];
+  return {
+    data() {
+      return cloneValue(data || {});
+    },
+    exists: Boolean(data),
+    id: docId,
+    metadata: {
+      fromCache: true,
+      hasPendingWrites: false,
     },
   };
 }

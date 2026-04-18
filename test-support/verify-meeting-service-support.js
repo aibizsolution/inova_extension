@@ -5,6 +5,11 @@ const DELETION_COLLECTION = "integration_inova_meeting_deletions";
 const JOB_FINALIZER_COLLECTION = "integration_inova_meeting_job_finalizers";
 const JOB_PART_COLLECTION = "integration_inova_meeting_job_parts";
 const MEETING_COLLECTION = "integration_inova_meetings";
+const USAGE_ADMIN_DAY_COLLECTION = "integration_inova_meeting_usage_admin_days";
+const USAGE_ADMIN_MONTH_COLLECTION = "integration_inova_meeting_usage_admin_months";
+const USAGE_EVENT_COLLECTION = "integration_inova_meeting_usage_events";
+const USAGE_USER_MONTH_COLLECTION = "integration_inova_meeting_usage_user_months";
+const USAGE_USER_TOTAL_COLLECTION = "integration_inova_meeting_usage_user_totals";
 const WORKSPACE_SESSION_COLLECTION = "integration_inova_meeting_workspace_sessions";
 function createDeps(state, overrides = {}) {
   return {
@@ -789,6 +794,11 @@ module.exports = {
   JOB_FINALIZER_COLLECTION,
   JOB_PART_COLLECTION,
   MEETING_COLLECTION,
+  USAGE_ADMIN_DAY_COLLECTION,
+  USAGE_ADMIN_MONTH_COLLECTION,
+  USAGE_EVENT_COLLECTION,
+  USAGE_USER_MONTH_COLLECTION,
+  USAGE_USER_TOTAL_COLLECTION,
   WORKSPACE_SESSION_COLLECTION,
   createDeps,
   createMemoryState,

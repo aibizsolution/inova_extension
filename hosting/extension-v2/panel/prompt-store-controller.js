@@ -52,6 +52,9 @@
     const publishToast = typeof options.publishToast === "function"
       ? options.publishToast
       : () => false;
+    const recordFeatureUsage = typeof options.featureUsageTracker?.record === "function"
+      ? options.featureUsageTracker.record
+      : () => {};
 
     const viewedEntryIds = new Set();
     const state = {
@@ -462,9 +465,11 @@
           await importStorePrompt(result.entry);
           mergeEntry(result.entry, { imported: true });
           setFeedback("스토어 프롬프트를 내 요청으로 가져왔어요.", "info", normalizedEntryId);
+          void recordFeatureUsage("prompt_store", "imported", "success", { providerIdentity: getProviderIdentity() });
         }
       } catch (error) {
         setFeedback(getErrorMessage(error, "스토어 프롬프트를 가져오지 못했어요."), "error", normalizedEntryId);
+        void recordFeatureUsage("prompt_store", "imported", "error", { providerIdentity: getProviderIdentity() });
       } finally {
         state.actionPending = null;
         scheduleRender();
@@ -490,9 +495,13 @@
             "info",
             normalizedEntryId
           );
+          if (result.entry?.viewer?.liked) {
+            void recordFeatureUsage("prompt_store", "liked", "success", { providerIdentity: getProviderIdentity() });
+          }
         }
       } catch (error) {
         setFeedback(getErrorMessage(error, "좋아요를 바꾸지 못했어요."), "error", normalizedEntryId);
+        void recordFeatureUsage("prompt_store", "liked", "error", { providerIdentity: getProviderIdentity() });
       } finally {
         state.actionPending = null;
         scheduleRender();
@@ -534,9 +543,11 @@
         state.items = state.items.filter((item) => item.entryId !== normalizedEntryId);
         state.totalCount = Math.max(0, getStoreCount() - 1);
         setFeedback("스토어에서 내렸어요.", "info", normalizedEntryId);
+        void recordFeatureUsage("prompt_store", "unpublished", "success", { providerIdentity: getProviderIdentity() });
         await ensureLoaded(true, "unpublish");
       } catch (error) {
         setFeedback(getErrorMessage(error, "스토어에서 내리지 못했어요."), "error", normalizedEntryId);
+        void recordFeatureUsage("prompt_store", "unpublished", "error", { providerIdentity: getProviderIdentity() });
       } finally {
         state.actionPending = null;
         scheduleRender();

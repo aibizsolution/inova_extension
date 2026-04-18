@@ -36,6 +36,7 @@
     readSnapshotCount(snapshot) {
       return Array.isArray(snapshot?.items) ? snapshot.items.length : 0;
     },
+    resetSubscriptionOnError: true,
     shouldUseCachedSnapshot(snapshot) {
       const docs = Array.isArray(snapshot?.docs) ? snapshot.docs : [];
       return docs.length > 0;

@@ -21,6 +21,9 @@
     const publishToast = typeof options.publishToast === "function"
       ? options.publishToast
       : () => false;
+    const recordFeatureUsage = typeof options.featureUsageTracker?.record === "function"
+      ? options.featureUsageTracker.record
+      : () => {};
     const scheduleRender = typeof options.scheduleRender === "function"
       ? options.scheduleRender
       : () => {};
@@ -125,6 +128,7 @@
       state.capabilities = Array.isArray(extensionCapabilities)
         ? extensionCapabilities.map((value) => normalizeText(value)).filter(Boolean)
         : [];
+      hydrateProviderIdentityFromPanel(panelState);
       syncExternalReviewActivation(panelState?.promptTool?.review);
       if (panelState?.activeTool !== "prompts") {
         promptLibraryFirestoreClient?.disconnect?.("panel-inactive");
@@ -493,8 +497,10 @@
         state.editor = createEditor();
         clearMenuState();
         publishActionToast(wasEdit ? "요청을 수정했어요." : "요청을 추가했어요.");
+        void recordFeatureUsage("prompt_library", wasEdit ? "updated" : "saved", "success", { providerIdentity: getProviderIdentity() });
       } catch (error) {
         publishActionToast(readErrorMessage(error, "요청을 저장하지 못했어요."), "error");
+        void recordFeatureUsage("prompt_library", wasEdit ? "updated" : "saved", "error", { providerIdentity: getProviderIdentity() });
       } finally {
         state.actionPending = null;
         scheduleRender();
@@ -517,8 +523,10 @@
         }
         clearMenuState();
         publishActionToast("요청을 삭제했어요.");
+        void recordFeatureUsage("prompt_library", "deleted", "success", { providerIdentity: getProviderIdentity() });
       } catch (error) {
         publishActionToast(readErrorMessage(error, "요청을 삭제하지 못했어요."), "error");
+        void recordFeatureUsage("prompt_library", "deleted", "error", { providerIdentity: getProviderIdentity() });
       } finally {
         state.actionPending = null;
         state.deletePromptId = "";
@@ -641,11 +649,13 @@
         state.activeTab = "store";
         state.activeTabUserSelected = true;
         publishActionToast("스토어에 별도 복사본으로 등록했어요.", "success", normalizedPromptId);
+        void recordFeatureUsage("prompt_store", "published", "success", { providerIdentity: getProviderIdentity() });
         scheduleRender();
         void persistActivePromptTab("store");
         await ensureStoreLoaded(true, "publish");
       } catch (error) {
         publishActionToast(readErrorMessage(error, "스토어에 등록하지 못했어요."), "error", normalizedPromptId);
+        void recordFeatureUsage("prompt_store", "published", "error", { providerIdentity: getProviderIdentity() });
       } finally {
         state.actionPending = null;
         scheduleRender();
@@ -688,6 +698,7 @@
         result?.applied ? "success" : "error",
         prompt.id
       );
+      void recordFeatureUsage("prompt_library", "applied", result?.applied ? "success" : "error", { providerIdentity: getProviderIdentity() });
       scheduleRender();
     }
 
@@ -886,21 +897,30 @@
       const uiPreferences = storageState?.uiPreferences && typeof storageState.uiPreferences === "object"
         ? storageState.uiPreferences
         : {};
-      const providerUserKey = normalizeText(providerIdentity.providerUserKey);
+      const storageProviderUserKey = normalizeText(providerIdentity.providerUserKey);
+      const providerUserKey = storageProviderUserKey || normalizeText(state.providerIdentity.providerUserKey);
       if (state.loadedProviderUserKey && state.loadedProviderUserKey !== providerUserKey) {
         state.promptLibraryRemoteReady = false;
         promptLibraryFirestoreClient?.disconnect?.("provider-change");
       }
-      state.providerIdentity = {
-        available: Boolean(providerIdentity.available),
-        displayName: normalizeText(providerIdentity.displayName),
-        email: normalizeText(providerIdentity.email),
-        numericUserId: Number.isFinite(Number(providerIdentity.numericUserId))
-          ? Number(providerIdentity.numericUserId)
-          : null,
-        provider: normalizeText(providerIdentity.provider || "inova") || "inova",
-        providerUserKey,
-      };
+      const normalizedProviderIdentity = storageProviderUserKey
+        ? {
+            available: Boolean(providerIdentity.available),
+            displayName: normalizeText(providerIdentity.displayName),
+            email: normalizeText(providerIdentity.email),
+            numericUserId: Number.isFinite(Number(providerIdentity.numericUserId))
+              ? Number(providerIdentity.numericUserId)
+              : null,
+            provider: normalizeText(providerIdentity.provider || "inova") || "inova",
+            providerUserKey,
+          }
+        : {
+            ...state.providerIdentity,
+            providerUserKey,
+          };
+      if (normalizedProviderIdentity.providerUserKey || !normalizeText(state.providerIdentity.providerUserKey)) {
+        state.providerIdentity = normalizedProviderIdentity;
+      }
       if (!state.activeTabUserSelected) {
         state.activeTab = normalizePromptTab(uiPreferences.activePromptTab);
       }
@@ -908,6 +928,35 @@
       state.settings = storageState?.settings && typeof storageState.settings === "object"
         ? { ...storageState.settings }
         : {};
+    }
+
+    function hydrateProviderIdentityFromPanel(panelState) {
+      const providerIdentity = panelState?.providerIdentity && typeof panelState.providerIdentity === "object"
+        ? panelState.providerIdentity
+        : {};
+      const normalizedProviderIdentity = {
+        available: Boolean(providerIdentity.available),
+        displayName: normalizeText(providerIdentity.displayName),
+        email: normalizeText(providerIdentity.email),
+        numericUserId: Number.isFinite(Number(providerIdentity.numericUserId))
+          ? Number(providerIdentity.numericUserId)
+          : null,
+        provider: normalizeText(providerIdentity.provider || "inova") || "inova",
+        providerUserKey: normalizeText(providerIdentity.providerUserKey),
+      };
+      if (!normalizedProviderIdentity.providerUserKey) {
+        return false;
+      }
+      if (
+        state.providerIdentity.providerUserKey === normalizedProviderIdentity.providerUserKey
+        && state.providerIdentity.email === normalizedProviderIdentity.email
+        && state.providerIdentity.displayName === normalizedProviderIdentity.displayName
+        && state.providerIdentity.numericUserId === normalizedProviderIdentity.numericUserId
+      ) {
+        return false;
+      }
+      state.providerIdentity = normalizedProviderIdentity;
+      return true;
     }
 
     function applyRemoteSnapshot(snapshot, fallbackProviderUserKey = normalizeText(state.providerIdentity?.providerUserKey)) {

@@ -64,6 +64,8 @@
 - `README.md`는 저장소/제품 개요, 설치/배포, 상위 feature 축이 바뀔 때만 갱신한다.
 - feature-local 규칙, 계약, 최소 검증 기준은 해당 feature `AGENTS.md` 또는 feature 전용 docs에 문서화한다.
 - feature-local 변경 때문에 `README.md`를 기능 변경 일지처럼 누적하지 않는다.
+- `docs/refactoring-plan.md`처럼 과거 계획, migration 판단, 완료된 phase 기준을 담은 문서는 기본 갱신 대상이 아니다. 사용자가 그 문서 자체의 정리를 명시하거나, 같은 변경 안에서 문서를 보존/폐기 대상으로 전환하는 경우에만 건드린다.
+- 현재 운영 기준이 바뀌면 과거 계획 문서가 아니라 `docs/release-workflow.md`, `docs/runtime-architecture.md`, feature `AGENTS.md`, feature 전용 docs처럼 살아있는 계약 문서에 반영한다.
 - 문서는 완벽하지 않다고 가정하고, 작업 중 문서와 실제 코드/함수/파일 경계가 다르면 코드를 기준으로 같은 작업 안에서 문서를 갱신한다.
 - hosted-first 기준으로 이미 옮겨진 책임을 문서가 아직 extension-owned처럼 설명하면, 발견한 같은 작업 안에서 바로 고친다.
 - 문서 정리는 `언젠가 한 번에` 하지 않는다. 관련 문서를 읽다가 낡은 ownership 설명이나 경계 서술을 찾으면 그 자리에서 계속 바로잡는다.

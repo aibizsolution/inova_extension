@@ -206,7 +206,7 @@
         const endpointKey = normalizeText(capability.endpointKey);
         const service = normalizeText(capability.service).toLowerCase();
         if (!endpointKey || !endpointDefinitions?.[endpointKey]) throw new Error(`remote capability manifest capability endpointKey is missing: ${capabilityId}`);
-        if (!["meeting", "prompt"].includes(service)) throw new Error(`remote capability manifest capability service is not allowed: ${capabilityId}`);
+        if (!["meeting", "metrics", "prompt"].includes(service)) throw new Error(`remote capability manifest capability service is not allowed: ${capabilityId}`);
       }
       if (kind === "browser.open-url") {
         const templateKeys = Array.isArray(capability.templateKeys) ? capability.templateKeys.map(normalizeText) : [];

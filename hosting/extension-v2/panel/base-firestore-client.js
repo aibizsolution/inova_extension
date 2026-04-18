@@ -8,6 +8,8 @@
     readErrorMessage,
     resolveBrowserCapabilities,
   } = namespace.panelUtils;
+  const RETRY_BASE_DELAY_MS = 5000;
+  const RETRY_MAX_DELAY_MS = 30000;
 
   function createBaseFirestoreClient(config = {}) {
     const reader = normalizeText(config.reader);
@@ -41,6 +43,8 @@
         lastSnapshotSignature: "",
         panelAuth: null,
         refreshSerial: 0,
+        retryAttempt: 0,
+        retryTimerId: 0,
         settleFirstSnapshot: null,
         subscribePromise: null,
         subscriptionKey: "",
@@ -58,7 +62,11 @@
         if (state.subscribePromise) {
           await state.subscribePromise.catch(() => null);
         }
-        const run = subscribe(request);
+        const retryRequest = cloneValue(request);
+        const run = subscribe(request).catch((error) => {
+          scheduleRetry(error, retryRequest);
+          throw error;
+        });
         const tracked = run.finally(() => {
           if (state.subscribePromise === tracked) {
             state.subscribePromise = null;
@@ -81,6 +89,7 @@
 
         const currentSnapshot = cloneValue(state.lastSnapshot);
         if (canReuseSubscription(providerUserKey, requestedTarget, currentSnapshot)) {
+          clearRetry();
           traceFirestore("34.hosted.firestore.reuse", {
             count: readSnapshotCount(currentSnapshot),
             fromCache: Boolean(currentSnapshot.fromCache),
@@ -205,8 +214,12 @@
               return;
             }
             if (resetSubscriptionOnError) {
+              const unsubscribe = state.unsubscribe;
               state.unsubscribe = null;
               state.subscriptionKey = "";
+              if (typeof unsubscribe === "function") {
+                unsubscribe();
+              }
             }
             const nextError = error instanceof Error
               ? error
@@ -217,6 +230,7 @@
               reader,
               target: panelAuth.target,
             });
+            scheduleRetry(nextError, request);
             settleFirstSnapshot(null, nextError);
           }
         );
@@ -229,6 +243,7 @@
       }
 
       function disconnect(reason, options = {}) {
+        clearRetry();
         if (!options.preserveSubscriptionAttempt) {
           state.subscriptionSerial += 1;
           const settleFirstSnapshot = state.settleFirstSnapshot;
@@ -314,6 +329,7 @@
         if (nextSignature && nextSignature === state.lastSnapshotSignature) {
           return;
         }
+        clearRetry();
         state.lastSnapshot = cloneValue(snapshot);
         state.lastSnapshotSignature = nextSignature;
         traceFirestore("35.hosted.firestore.snapshot", {
@@ -339,6 +355,48 @@
             reader,
           });
         });
+      }
+
+      function scheduleRetry(error, request = {}) {
+        if (state.retryTimerId || hasActiveSubscription() || typeof global.setTimeout !== "function") {
+          return;
+        }
+        const providerIdentity = request?.providerIdentity && typeof request.providerIdentity === "object"
+          ? request.providerIdentity
+          : {};
+        if (!normalizeText(providerIdentity.providerUserKey)) {
+          return;
+        }
+        state.retryAttempt = Math.max(0, Number(state.retryAttempt) || 0) + 1;
+        const delayMs = Math.min(
+          RETRY_MAX_DELAY_MS,
+          RETRY_BASE_DELAY_MS * (2 ** Math.min(2, state.retryAttempt - 1))
+        );
+        const retryRequest = cloneValue(request);
+        traceFirestore("35.hosted.firestore.retry.scheduled", {
+          delayMs,
+          error: readErrorMessage(error, subscriptionErrorMessage),
+          reader,
+          retryAttempt: state.retryAttempt,
+        });
+        state.retryTimerId = global.setTimeout(() => {
+          state.retryTimerId = 0;
+          const retryProviderIdentity = retryRequest?.providerIdentity && typeof retryRequest.providerIdentity === "object"
+            ? retryRequest.providerIdentity
+            : {};
+          if (!normalizeText(retryProviderIdentity.providerUserKey) || hasActiveSubscription()) {
+            return;
+          }
+          void ensureSubscribed(retryRequest).catch(() => null);
+        }, delayMs);
+      }
+
+      function clearRetry() {
+        if (state.retryTimerId && typeof global.clearTimeout === "function") {
+          global.clearTimeout(state.retryTimerId);
+        }
+        state.retryTimerId = 0;
+        state.retryAttempt = 0;
       }
     }
 

@@ -161,9 +161,13 @@
       }
       const handleCount = elements.handleCount;
       if (Object.hasOwn(chromeState || {}, "handleCount")) {
-        const nextHandleCount = String(normalizeCount(chromeState?.handleCount));
+        const nextCount = normalizeCount(chromeState?.handleCount);
+        const nextHandleCount = String(nextCount);
         if (handleCount?.textContent !== nextHandleCount) {
           handleCount.textContent = nextHandleCount;
+        }
+        if (handleCount) {
+          handleCount.hidden = nextCount <= 0;
         }
       }
       return true;

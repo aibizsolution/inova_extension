@@ -15,6 +15,7 @@
 - 브라우저 확장이라서만 가능한 책임이 아니면, 기본 수정 위치는 extension보다 hosted 쪽으로 본다.
 - `popup`, `background/service-worker.js`, `content/main.js`, `content/panel.js`, `content/hosted-panel-bridge.js`, `hosting/extension/panel/*`, `functions/index.js`, `manifest.json`, `shared/*`는 platform/shell이다.
 - prompt 계열의 active v2 extension shell은 `content/panel-v2-prompt-controller.js`가 맡고, `backup/legacy-panel/prompt-hub-state.js`, `backup/legacy-panel/prompt-hub-panel.js`, `backup/legacy-panel/prompt-hub-controller.js`, `backup/legacy-panel/prompt-hub-runtime.js`, `backup/legacy-panel/prompt-hub-view.js`는 legacy reference로만 취급한다.
+- 여러 실험실 feature의 사용량 계측은 `feature-usage` 공통 feature로 본다. 새 action을 추가할 때는 확장 ZIP 배포를 반복하지 않도록 기존 `metrics.feature-usage.commit` capability와 hosted tracker를 재사용한다.
 - 두 번째 primary feature를 읽어야 하거나 `content + functions + hosting` 3축을 함께 수정해야 하면 먼저 커밋 또는 다음 세션 분리를 제안한다.
 - 이유: 내부 ZIP 배포 환경에서는 세 축이 서로 다른 시점에 섞여 적용될 수 있어 mixed-version 검증 매트릭스와 rollback 범위가 급격히 커진다.
 
@@ -90,11 +91,11 @@
 | --- | --- |
 | 기능 목적 | 회의 허브, hosted 작업실, 녹음, 전사, 결과 검토 |
 | 요청 cue | 회의 허브, 새 회의하기, 작업실, launch/session auth, 녹음, 전사, chunk |
-| 먼저 볼 파일 | `hosting/extension-v2/panel/meeting-hub-controller.js`, `hosting/extension-v2/panel/meeting-firestore-client.js`, `content/panel-v2-composition-controller.js`, `hosting/meeting/index.js`, `hosting/meeting/workspace-*.js`, `popup/index.js`, `backup/legacy-panel/meeting-manager.js`(legacy reference), `backup/legacy-panel/panel-meeting-controller.js`(legacy reference), `backup/legacy-panel/meeting-view.js`(legacy reference) |
-| 관련 프론트 경로 | `background/service-worker.js`, `hosting/meeting/*`, `hosting/extension-v2/panel/meeting-hub-controller.js`, `hosting/extension-v2/panel/meeting-firestore-client.js`, `hosting/extension/panel/meeting-view.js`, `popup/index.js` |
+| 먼저 볼 파일 | `hosting/extension-v2/panel/meeting-hub-controller.js`, `hosting/extension-v2/panel/meeting-firestore-client.js`, `hosting/extension-v2/panel/meeting-usage-firestore-client.js`, `content/panel-v2-composition-controller.js`, `hosting/meeting/index.js`, `hosting/meeting/workspace-*.js`, `popup/index.js`, `backup/legacy-panel/meeting-manager.js`(legacy reference), `backup/legacy-panel/panel-meeting-controller.js`(legacy reference), `backup/legacy-panel/meeting-view.js`(legacy reference) |
+| 관련 프론트 경로 | `background/service-worker.js`, `hosting/meeting/*`, `hosting/extension-v2/panel/meeting-hub-controller.js`, `hosting/extension-v2/panel/meeting-firestore-client.js`, `hosting/extension-v2/panel/meeting-usage-firestore-client.js`, `hosting/extension/panel/meeting-view.js`, `popup/index.js` |
 | 관련 functions 경로 | `functions/features/meeting/meeting-launch-service.js`, `functions/features/meeting/meeting-service.js` |
 | feature-owned shared | `shared/firebase-config.js`, `shared/storage.js`, `backup/legacy-panel/shared/meeting-bridge.js` (inactive reference), `backup/legacy-panel/shared/meeting-debug.js` (inactive reference) |
-| 관련 데이터 경계 | `integration_inova_meetings`, `integration_inova_meeting_jobs`, `integration_inova_meeting_job_parts`, `integration_inova_meeting_job_finalizers`, `integration_inova_meeting_artifacts`, launch/session 컬렉션 |
+| 관련 데이터 경계 | `integration_inova_meetings`, `integration_inova_meeting_jobs`, `integration_inova_meeting_job_parts`, `integration_inova_meeting_job_finalizers`, `integration_inova_meeting_artifacts`, `integration_inova_meeting_usage_events`, `integration_inova_meeting_usage_user_months`, `integration_inova_meeting_usage_user_totals`, `integration_inova_meeting_usage_admin_months`, `integration_inova_meeting_usage_admin_days`, launch/session 컬렉션 |
 | 보통 건드리지 말 범위 | prompt-library, prompt-store, prompt-review, release |
 | 최소 검증 | 팝업 target 설정, 회의 탭 목록, hosted meeting 진입, 최소 1개 결과 조회 |
 | 언제 다시 물을지 | 패널 회의 허브 문제인지 hosted 작업실 문제인지, 회의 auth인지 전사 backend인지 모호할 때 |
@@ -115,3 +116,19 @@
 | 최소 검증 | 릴리스 탭에서 현재 버전, 최신 버전, ZIP 링크 표시 |
 | 언제 다시 물을지 | 릴리스 UI 문제인지 실제 배포 메타 생성 문제인지 구분이 모호할 때 |
 | 언제 범위를 확장할지 | 정적 메타만으로 해결되지 않고 background fetch나 배포 스크립트가 얽힐 때만 platform/shell로 확장 |
+
+### `feature-usage`
+
+| 항목 | 내용 |
+| --- | --- |
+| 기능 목적 | 실험실/후보 기능의 meaningful action 사용량을 비용 최적화된 cumulative snapshot으로 집계 |
+| 요청 cue | 사용량 계측, 실험실 통계, 누가 얼마나 썼는지, 인터뷰 대상, feature usage, metrics |
+| 먼저 볼 파일 | `hosting/extension-v2/panel/feature-usage-tracker.js`, `functions/features/feature-usage/feature-usage-service.js`, `functions/features/feature-usage/AGENTS.md`, `scripts/check-feature-usage.js` |
+| 관련 프론트 경로 | `hosting/extension-v2/panel/index.js`, 각 hosted feature controller의 `featureUsageTracker.record(...)` 호출부 |
+| 관련 functions 경로 | `functions/features/feature-usage/feature-usage-service.js`, `functions/index.js` |
+| feature-owned shared | 없음 |
+| 관련 데이터 경계 | `integration_inova_feature_usage_client_days`, `integration_inova_feature_usage_user_days`, `integration_inova_feature_usage_user_months`, `integration_inova_feature_usage_admin_days`, `integration_inova_feature_usage_admin_months` |
+| 보통 건드리지 말 범위 | Firebase Storage, Firestore client rules read/list, raw event ledger |
+| 최소 검증 | `npm.cmd run verify:feature-usage-service`, `npm.cmd run verify:feature-usage-tracker`, `npm.cmd run check:feature-usage -- --fixture --days 30`; 실제 Chrome 풀 테스트에서는 meaningful action 1회 후 `npm.cmd run check:feature-usage -- --days 1 --limit 20`로 aggregate 반영 확인 |
+| 언제 다시 물을지 | 계측 대상이 meaningful action인지 비용성 처리량 accounting인지 구분이 모호할 때 |
+| 언제 범위를 확장할지 | 새 브라우저 권한이나 새 runtime capability가 꼭 필요한 경우에만 platform/shell로 확장 |

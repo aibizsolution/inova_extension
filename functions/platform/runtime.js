@@ -73,7 +73,7 @@ function resolveStorageBucket(adminSdk) {
 
 function resolveStorageBucketName() {
   const explicitBucket = normalizeStorageBucketName(process.env.STORAGE_BUCKET_URL);
-  if (explicitBucket) {
+  if (explicitBucket && !isReservedCloudFunctionsStorageBucket(explicitBucket)) {
     return explicitBucket;
   }
 
@@ -83,6 +83,13 @@ function resolveStorageBucketName() {
     return configBucket;
   }
   return "";
+}
+
+function isReservedCloudFunctionsStorageBucket(bucketName) {
+  const normalizedBucketName = normalizeStorageBucketName(bucketName).toLowerCase();
+  return normalizedBucketName.startsWith("gcf-v2-")
+    || normalizedBucketName.startsWith("gcf-sources-")
+    || normalizedBucketName.endsWith(".cloudfunctions.appspot.com");
 }
 
 function normalizeStorageBucketName(value) {

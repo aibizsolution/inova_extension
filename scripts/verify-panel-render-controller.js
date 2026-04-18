@@ -61,6 +61,8 @@ function verifyRenderPayloadAndReviewFloat() {
   assert.equal("settingsHydrated" in harness.renderPayloads[0].panelSnapshot, false);
   assert.equal("meetingTool" in harness.renderPayloads[0].panelSnapshot, false);
   assert.equal("releaseTool" in harness.renderPayloads[0].panelSnapshot, false);
+  assert.equal(harness.renderPayloads[0].panelSnapshot.providerIdentity.providerUserKey, "fixture-user");
+  assert.equal(harness.renderPayloads[0].panelSnapshot.providerIdentity.email, "fixture@example.com");
   assert.equal("panelTrace" in harness.renderPayloads[0], false);
   assert.equal(harness.renderPayloads[0].panelSnapshot.open, true);
   assert.equal(harness.renderPayloads[0].panelSnapshot.visible, true);
@@ -147,6 +149,31 @@ function createHarness(options = {}) {
           merged.activePromptTab = "library";
         }
         return merged;
+      },
+    },
+    providerIdentity: {
+      getCurrent() {
+        return {
+          available: true,
+          displayName: "Fixture User",
+          email: "fixture@example.com",
+          numericUserId: 7,
+          provider: "inova",
+          providerUserKey: "fixture-user",
+          rawSecret: "must-not-copy",
+        };
+      },
+    },
+    providerIdentityCache: {
+      normalizeProviderIdentity(identity = {}) {
+        return {
+          available: Boolean(identity.available || identity.providerUserKey),
+          displayName: String(identity.displayName || "").trim(),
+          email: String(identity.email || "").trim().toLowerCase(),
+          numericUserId: Number.isFinite(Number(identity.numericUserId)) ? Number(identity.numericUserId) : null,
+          provider: String(identity.provider || "inova").trim() || "inova",
+          providerUserKey: String(identity.providerUserKey || "").trim(),
+        };
       },
     },
   };

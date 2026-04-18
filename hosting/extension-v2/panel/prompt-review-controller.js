@@ -41,6 +41,9 @@
     const publishToast = typeof options.publishToast === "function"
       ? options.publishToast
       : () => false;
+    const recordFeatureUsage = typeof options.featureUsageTracker?.record === "function"
+      ? options.featureUsageTracker.record
+      : () => {};
     const traceReview = typeof options.traceReview === "function"
       ? options.traceReview
       : () => {};
@@ -296,6 +299,7 @@
           action: "review-composer",
           reviewProfile: reviewProfile || "legacy-v1",
         });
+        void recordFeatureUsage("prompt_review", "completed", "success", { providerIdentity });
       } catch (error) {
         if (requestId !== Number(state.requestId || 0)) {
           return;
@@ -315,6 +319,7 @@
           error: getErrorMessage(error),
           reviewProfile: reviewProfile || "legacy-v1",
         });
+        void recordFeatureUsage("prompt_review", "completed", "error", { providerIdentity });
       }
     }
 
@@ -358,12 +363,14 @@
           action: "apply-reviewed-prompt",
           error: "apply-failed",
         });
+        void recordFeatureUsage("prompt_review", "applied", "error", { providerIdentity: getProviderIdentity() });
         return;
       }
       updateState({ copyState: "idle", error: "", placeholderConfirmation: false });
       traceReview("56.hosted.review.apply.success", {
         action: "apply-reviewed-prompt",
       });
+      void recordFeatureUsage("prompt_review", "applied", "success", { providerIdentity: getProviderIdentity() });
       await refreshComposerState(true);
     }
 

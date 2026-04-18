@@ -98,6 +98,20 @@
       "schemaVersion": 1,
       "service": "meeting"
     },
+    "metrics.feature-usage.commit": {
+      "auditLevel": "write",
+      "authMode": "access-token",
+      "domain": "feature-usage",
+      "enabled": true,
+      "endpointKey": "commitInovaFeatureUsageBatchUrl",
+      "inputSchemaVersion": 1,
+      "kind": "function",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "metrics",
+      "schemaVersion": 1,
+      "service": "metrics"
+    },
     "panel.ui-preferences.write": {
       "auditLevel": "write",
       "authMode": "none",
@@ -510,6 +524,10 @@
   "endpointKeys": {
     "authorizeInovaMeetingWorkspaceAccessUrl": {
       "endpoint": "authorizeInovaMeetingWorkspaceAccess",
+      "method": "POST"
+    },
+    "commitInovaFeatureUsageBatchUrl": {
+      "endpoint": "commitInovaFeatureUsageBatch",
       "method": "POST"
     },
     "createInovaMeetingShareLinkUrl": {

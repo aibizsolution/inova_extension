@@ -370,6 +370,22 @@ function cloneValue(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
 }
 
+function hasFirestoreIndex(indexes, collectionGroup, fields) {
+  return (Array.isArray(indexes) ? indexes : []).some((index) => {
+    if (index?.collectionGroup !== collectionGroup) {
+      return false;
+    }
+    const indexFields = Array.isArray(index.fields) ? index.fields : [];
+    if (indexFields.length !== fields.length) {
+      return false;
+    }
+    return fields.every(([fieldPath, order], indexOfField) =>
+      indexFields[indexOfField]?.fieldPath === fieldPath
+        && indexFields[indexOfField]?.order === order
+    );
+  });
+}
+
 function verifyHostedPanelFiles(directoryName) {
   const baseDir = path.join(root, "hosting", directoryName, "panel");
   const html = fs.readFileSync(
@@ -426,8 +442,12 @@ function verifyHostedPanelFiles(directoryName) {
     assert(html.includes("./panel-utils.js"), "v2 hosted panel should load shared panel utilities");
     assert(html.includes("./base-firestore-client.js"), "v2 hosted panel should load the shared Firestore reader lifecycle factory");
     assert(html.includes("./extension-capability-client.js"), "v2 hosted panel should load the hosted extension capability client");
+    assert(html.includes("./feature-usage-tracker.js"), "v2 hosted panel should load the local feature usage tracker");
     assert(html.includes("./remote-workflow-host.js"), "v2 hosted panel should load the remote workflow sandbox host");
     assert(indexJs.includes("readCapabilityCatalog"), "v2 hosted panel should negotiate the runtime capability catalog at boot");
+    assert(indexJs.includes("requestTimeoutMs: Math.max"), "v2 hosted panel should preserve negotiated capability request timeouts");
+    assert(indexJs.includes("scheduleCapabilityNegotiationRetry"), "v2 hosted panel should retry transient capability handshake failures");
+    assert(indexJs.includes("featureUsageTracker"), "v2 hosted panel should wire feature usage tracking through the composition root");
     assert(indexJs.includes("remoteWorkflowHost"), "v2 hosted panel should boot the remote workflow sandbox host after negotiation");
     assert(indexJs.includes("invokeWorkflow"), "v2 hosted panel should route workflow capabilities to the sandbox host");
     assert(indexJs.includes("hasRemoteWorkflowArtifacts(catalog)"), "v2 hosted panel should lazy boot workflow sandbox only when artifacts exist");
@@ -451,6 +471,10 @@ function verifyHostedPanelFiles(directoryName) {
       "v2 hosted panel should persist uiPreferences through the semantic storage capability id"
     );
     assert(
+      extensionCapabilityClientJs.includes('"metrics.feature-usage.commit"'),
+      "v2 hosted panel should commit feature usage through a semantic metrics capability id"
+    );
+    assert(
       extensionCapabilityClientJs.includes("invokePageCapability")
         && extensionCapabilityClientJs.includes('invokePageCapability("composer.apply-text"')
         && extensionCapabilityClientJs.includes('invokePageCapability("clipboard.write-text"'),
@@ -465,6 +489,8 @@ function verifyHostedPanelFiles(directoryName) {
       html.indexOf("./panel-utils.js") > html.indexOf("./runtime.js")
         && html.indexOf("./panel-utils.js") < html.indexOf("./panel-firestore-session-client.js")
         && html.indexOf("./panel-firestore-session-client.js") > html.indexOf("./extension-capability-client.js")
+        && html.indexOf("./feature-usage-tracker.js") > html.indexOf("./extension-capability-client.js")
+        && html.indexOf("./feature-usage-tracker.js") < html.indexOf("./remote-workflow-host.js")
         && html.indexOf("./remote-workflow-host.js") > html.indexOf("./extension-capability-client.js")
         && html.indexOf("./remote-workflow-host.js") < html.indexOf("./panel-firestore-session-client.js")
         && html.indexOf("./base-firestore-client.js") > html.indexOf("./panel-firestore-session-client.js")
@@ -514,6 +540,7 @@ function verifyHostedPanelFiles(directoryName) {
     assert(baseFirestoreClientJs.includes("namespace.panelUtils"), "base Firestore reader factory should reuse hosted panel utilities");
     assert(baseFirestoreClientJs.includes("loadCachedSnapshot"), "base Firestore reader factory should own cached snapshot loading");
     assert(baseFirestoreClientJs.includes("publishSnapshot"), "base Firestore reader factory should own snapshot de-duplication and publishing");
+    assert(baseFirestoreClientJs.includes("scheduleRetry"), "base Firestore reader factory should retry transient hosted auth/listener failures");
     assert(
       fs.readFileSync(path.join(root, "background", "panel-runtime-capability-router.js"), "utf8")
         .includes("hosted: {")
@@ -526,6 +553,49 @@ function verifyHostedPanelFiles(directoryName) {
         .includes("function isHostedPanelSessionActive()"),
       "Firestore rules should explicitly define the shared hosted panel read session"
     );
+    const firestoreRulesSource = fs.readFileSync(path.join(root, "firestore.rules"), "utf8");
+    assert(
+      firestoreRulesSource.includes("match /integration_inova_meeting_usage_user_months/{docId}")
+        && firestoreRulesSource.includes("allow get: if matchesOwnUsageMonthDoc(docId);")
+        && firestoreRulesSource.includes("match /integration_inova_meeting_usage_user_totals/{providerUserKey}")
+        && firestoreRulesSource.includes("request.auth.token.providerUserKey == providerUserKey"),
+      "Firestore rules should allow hosted panel users to get only their own usage aggregate docs"
+    );
+    [
+      "match /integration_inova_meeting_usage_events/{docId}",
+      "match /integration_inova_meeting_usage_admin_months/{docId}",
+      "match /integration_inova_meeting_usage_admin_days/{docId}",
+    ].forEach((rulePattern) => assert(
+      firestoreRulesSource.includes(rulePattern),
+      `Firestore rules should define ${rulePattern}`
+    ));
+    assert(
+      (firestoreRulesSource.match(/allow list: if false;/g) || []).length >= 1
+        && firestoreRulesSource.includes("allow read, write: if false;"),
+      "Firestore rules should deny usage collection list and private ledger/admin reads"
+    );
+    const firestoreIndexes = JSON.parse(fs.readFileSync(path.join(root, "firestore.indexes.json"), "utf8")).indexes || [];
+    assert(
+      hasFirestoreIndex(firestoreIndexes, "integration_inova_meeting_usage_user_months", [
+        ["monthKey", "ASCENDING"],
+        ["processedMs", "DESCENDING"],
+      ]),
+      "Firestore indexes should support monthly admin top-user usage queries"
+    );
+    assert(
+      hasFirestoreIndex(firestoreIndexes, "integration_inova_meeting_usage_user_months", [
+        ["providerUserKey", "ASCENDING"],
+        ["monthKey", "DESCENDING"],
+      ]),
+      "Firestore indexes should support user usage month drill-down queries"
+    );
+    assert(
+      hasFirestoreIndex(firestoreIndexes, "integration_inova_meeting_usage_events", [
+        ["providerUserKey", "ASCENDING"],
+        ["createdAt", "DESCENDING"],
+      ]),
+      "Firestore indexes should support usage event audit queries"
+    );
     panelFiles
       .filter((entry) => !["panel-firestore-session-client.js", "base-firestore-client.js"].includes(entry.fileName))
       .forEach((entry) => {
@@ -536,6 +606,10 @@ function verifyHostedPanelFiles(directoryName) {
         assert(
           entry.source.includes("namespace.panelUtils"),
           `${entry.fileName} should reuse hosted panel utilities`
+        );
+        assert(
+          entry.source.includes("resetSubscriptionOnError: true"),
+          `${entry.fileName} should reset dead listeners so the shared retry path can recover`
         );
         [
           "app: null",
