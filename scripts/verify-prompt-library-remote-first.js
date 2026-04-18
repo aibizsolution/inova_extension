@@ -13,6 +13,7 @@ const { verifyHostedPromptCapabilityActionGates } = require("./verify-prompt-lib
 const {
   verifyHostedPromptLibraryAvoidsDuplicateReloads,
   verifyHostedPromptLibraryRefreshesLateProviderIdentity,
+  verifyHostedPromptLibraryRetriesAfterInitialAuthTimeout,
 } = require("./verify-prompt-library-hosted-controller");
 
 const root = path.resolve(__dirname, "..");
@@ -37,6 +38,7 @@ function main() {
     verifyHostedPromptTextInputDebouncesRender(),
     verifyHostedPromptLibraryAvoidsDuplicateReloads(),
     verifyHostedPromptLibraryRefreshesLateProviderIdentity(),
+    verifyHostedPromptLibraryRetriesAfterInitialAuthTimeout(),
   ]).then(() => {
     console.log("[verify-prompt-library-remote-first] Prompt library remote-first contract passed");
   });

@@ -122,6 +122,7 @@ async function verifyExtensionCapabilityClientPageAllowlist() {
   const catalog = await browserCapabilities.readCapabilityCatalog({ reason: "test" });
   assert.deepEqual(runtimeCalls.at(-1), {
     action: "capabilities.handshake",
+    requestTimeoutMs: 60000,
     reason: "test",
   });
   assert(catalog.bridgeApis.includes("invokeCapability"));
@@ -196,6 +197,23 @@ async function verifyExtensionCapabilityClientPageAllowlist() {
     runtimeCallCountBeforeDisabledStorage,
     "disabled non-page capabilities should be blocked by the hosted client before runtime dispatch"
   );
+
+  await browserCapabilities.issuePanelSession("hosted", {
+    providerUserKey: "prompt-user-1",
+  }, {
+    purpose: "prompt-library",
+    target: "production",
+  });
+  assert.deepEqual(runtimeCalls.at(-1), {
+    action: "auth.issue-panel-session",
+    panel: "hosted",
+    providerIdentity: {
+      providerUserKey: "prompt-user-1",
+    },
+    purpose: "prompt-library",
+    requestTimeoutMs: 60000,
+    target: "production",
+  });
 }
 
 function cloneValue(value) {

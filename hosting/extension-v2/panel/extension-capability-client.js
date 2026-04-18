@@ -2,6 +2,7 @@
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const PANEL_AUTH_CACHE_TTL_MS = 50 * 60 * 1000;
   const DEFAULT_REQUEST_TIMEOUT_MS = 15000;
+  const CONTROL_REQUEST_TIMEOUT_MS = 60000;
   const MAX_REQUEST_TIMEOUT_MS = 120000;
   const COMPATIBILITY_RUNTIME_ACTIONS = Object.freeze({
     "functions.invoke-endpoint": Object.freeze({
@@ -161,6 +162,7 @@
         panel,
         purpose: options?.purpose || "",
         providerIdentity,
+        requestTimeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
         target: options?.target || "",
       }).then((result) => {
         cachePanelAuthResult(cacheKey, result);
@@ -210,6 +212,7 @@
       return invokeRuntime({
         ...request,
         action: "capabilities.handshake",
+        requestTimeoutMs: Math.max(CONTROL_REQUEST_TIMEOUT_MS, Number(request?.requestTimeoutMs) || 0),
       }).then(appendHostedBridgeCapabilities);
     }
 

@@ -445,6 +445,8 @@ function verifyHostedPanelFiles(directoryName) {
     assert(html.includes("./feature-usage-tracker.js"), "v2 hosted panel should load the local feature usage tracker");
     assert(html.includes("./remote-workflow-host.js"), "v2 hosted panel should load the remote workflow sandbox host");
     assert(indexJs.includes("readCapabilityCatalog"), "v2 hosted panel should negotiate the runtime capability catalog at boot");
+    assert(indexJs.includes("requestTimeoutMs: Math.max"), "v2 hosted panel should preserve negotiated capability request timeouts");
+    assert(indexJs.includes("scheduleCapabilityNegotiationRetry"), "v2 hosted panel should retry transient capability handshake failures");
     assert(indexJs.includes("featureUsageTracker"), "v2 hosted panel should wire feature usage tracking through the composition root");
     assert(indexJs.includes("remoteWorkflowHost"), "v2 hosted panel should boot the remote workflow sandbox host after negotiation");
     assert(indexJs.includes("invokeWorkflow"), "v2 hosted panel should route workflow capabilities to the sandbox host");

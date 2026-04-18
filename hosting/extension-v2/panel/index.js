@@ -6,6 +6,8 @@
   const EXTENSION_SOURCE = "inova-hosted-panel-extension";
   const DEFAULT_REQUEST_TIMEOUT_MS = 15000;
   const MAX_REQUEST_TIMEOUT_MS = 120000;
+  const CAPABILITY_RETRY_BASE_DELAY_MS = 5000;
+  const CAPABILITY_RETRY_MAX_DELAY_MS = 30000;
   const STARTUP_STATUS_CARD_DELAY_MS = 450;
   const APP_CAPABILITIES = Object.freeze([
     "panel.snapshot.v1",
@@ -38,6 +40,8 @@
     capabilityNegotiationError: "",
     capabilityNegotiationKey: "",
     capabilityNegotiationPending: false,
+    capabilityNegotiationRetryAttempt: 0,
+    capabilityNegotiationRetryTimerId: 0,
     conversationContextConfig: createEmptyConversationContextConfig(),
     elements: null,
     extensionCapabilities: [],
@@ -640,6 +644,7 @@
       state.capabilityCatalog = normalizedCatalog;
       state.capabilityNegotiationError = "";
       state.capabilityNegotiationKey = negotiationKey;
+      clearCapabilityNegotiationRetry();
       state.remoteCapabilityIds = normalizeCapabilities(normalizedCatalog.enabledCapabilityIds);
       void bootRemoteWorkflowSandbox(normalizedCatalog);
       tracePanelFlow("18.hosted.capability.handshake.success", {
@@ -650,7 +655,10 @@
       });
     } catch (error) {
       state.capabilityNegotiationError = readErrorMessage(error, "capability catalog negotiation failed");
-      state.remoteCapabilityIds = [];
+      if (!state.capabilityCatalog) {
+        state.remoteCapabilityIds = [];
+      }
+      scheduleCapabilityNegotiationRetry("handshake-error");
       tracePanelFlow("18.hosted.capability.handshake.error", {
         error: state.capabilityNegotiationError,
       });
@@ -658,6 +666,32 @@
       state.capabilityNegotiationPending = false;
       scheduleRender();
     }
+  }
+
+  function scheduleCapabilityNegotiationRetry(reason = "handshake-error") {
+    if (state.capabilityNegotiationRetryTimerId || !state.extensionCapabilities.includes("runtime.invoke.v1")) {
+      return;
+    }
+    state.capabilityNegotiationRetryAttempt = Math.max(0, Number(state.capabilityNegotiationRetryAttempt) || 0) + 1;
+    const delayMs = Math.min(
+      CAPABILITY_RETRY_MAX_DELAY_MS,
+      CAPABILITY_RETRY_BASE_DELAY_MS * (2 ** Math.min(2, state.capabilityNegotiationRetryAttempt - 1))
+    );
+    state.capabilityNegotiationRetryTimerId = global.setTimeout(() => {
+      state.capabilityNegotiationRetryTimerId = 0;
+      if (!state.extensionCapabilities.includes("runtime.invoke.v1")) {
+        return;
+      }
+      void negotiateCapabilityCatalog(`retry-${normalizeText(reason) || "handshake"}`);
+    }, delayMs);
+  }
+
+  function clearCapabilityNegotiationRetry() {
+    if (state.capabilityNegotiationRetryTimerId) {
+      global.clearTimeout(state.capabilityNegotiationRetryTimerId);
+      state.capabilityNegotiationRetryTimerId = 0;
+    }
+    state.capabilityNegotiationRetryAttempt = 0;
   }
 
   async function bootRemoteWorkflowSandbox(catalog) {
@@ -975,6 +1009,7 @@
           pageCapabilityId: normalizeText(capability.pageCapabilityId),
           pilot: capability.pilot === true,
           replacementId: normalizeText(capability.replacementId),
+          requestTimeoutMs: Math.max(0, Number(capability.requestTimeoutMs) || 0),
           schemaVersion: Number(capability.schemaVersion) || 0,
           testOnly: capability.testOnly === true,
           workflowId: normalizeText(capability.workflowId),
