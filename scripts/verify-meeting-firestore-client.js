@@ -185,11 +185,138 @@ async function verifyHostedMeetingFirestoreClientContract() {
       .includes("runWithSuppressedFirestorePersistenceWarning"),
     "shared firestore session coordinator should suppress the deprecated Firestore persistence warning in the hosted console"
   );
+
+  await verifyDisconnectCancelsInFlightMeetingFirestoreSubscription(futureExpiryIso);
 }
 
 async function flushAsyncTurns(turns = 20) {
   for (let index = 0; index < turns; index += 1) {
     await Promise.resolve();
+  }
+}
+
+async function verifyDisconnectCancelsInFlightMeetingFirestoreSubscription(futureExpiryIso) {
+  const runtimeCalls = [];
+  const traces = [];
+  const queryState = {
+    cacheReads: [],
+    collectionNames: [],
+    emulatorAuthUrls: [],
+    emulatorFirestoreHosts: [],
+    onSnapshotHandler: null,
+    unsubscribeCount: 0,
+  };
+  const context = vm.createContext({
+    console,
+    globalThis: null,
+    document: {
+      createElement() {
+        return {
+          async: false,
+          onerror: null,
+          onload: null,
+          set src(value) {
+            this._src = value;
+          },
+          get src() {
+            return this._src || "";
+          },
+        };
+      },
+      head: {
+        appendChild(node) {
+          node.onload?.();
+          return node;
+        },
+      },
+    },
+  });
+  context.globalThis = context;
+  context.InovaBookmarks = {
+    session: {
+      normalizeText(value) {
+        return String(value ?? "").trim();
+      },
+    },
+  };
+  queryState.panelExpiryIso = futureExpiryIso;
+  context.firebase = createFakeFirebase(queryState);
+
+  loadScript("hosting/extension-v2/panel/panel-utils.js", context);
+  loadScript("hosting/extension-v2/panel/extension-capability-client.js", context);
+  loadScript("hosting/extension-v2/panel/panel-firestore-session-client.js", context);
+  loadScript("hosting/extension-v2/panel/base-firestore-client.js", context);
+  loadScript("hosting/extension-v2/panel/meeting-firestore-client.js", context);
+
+  let resolveRuntimeAuth;
+  const runtimeAuth = new Promise((resolve) => {
+    resolveRuntimeAuth = resolve;
+  });
+  const client = context.InovaBookmarks.meetingFirestoreClient.create({
+    invokeRuntime: async (request) => {
+      runtimeCalls.push(cloneValue(request));
+      return runtimeAuth;
+    },
+    onError: async () => {},
+    onSnapshot: async () => {},
+    traceFirestore(step, payload) {
+      traces.push({
+        payload: cloneValue(payload),
+        step,
+      });
+    },
+  });
+
+  const pendingSubscription = client.ensureSubscribed({
+    providerIdentity: {
+      providerUserKey: "fixture-user",
+    },
+    queryLimit: 24,
+    settings: {
+      meetingWorkspaceTarget: "production",
+    },
+  });
+  await flushAsyncTurns();
+  assert.equal(runtimeCalls.length, 1, "meeting firestore client should begin panel auth before opening a listener");
+
+  client.disconnect("room-switch");
+  resolveRuntimeAuth({
+    emulators: {
+      authUrl: "",
+      enabled: false,
+      firestoreHost: "",
+      firestorePort: 0,
+    },
+    expiresAt: futureExpiryIso,
+    firebaseConfig: {
+      projectId: "browser-extension-main",
+    },
+    firebaseCustomToken: "panel-token-delayed",
+    panelScope: "prompt-panel-v2",
+    promptPanelScope: "prompt-panel-v2",
+    providerUserKey: "fixture-user",
+    target: "production",
+  });
+
+  const disconnectedSnapshot = await withTimeout(pendingSubscription, 1000);
+  assert.equal(disconnectedSnapshot, null, "disconnect should settle an in-flight subscription without publishing stale data");
+  assert.deepEqual(queryState.collectionNames, [], "disconnect should prevent stale in-flight subscriptions from opening Firestore listeners");
+  assert.equal(queryState.unsubscribeCount, 0, "disconnect before listener creation should not leave a dangling listener");
+}
+
+async function withTimeout(promise, timeoutMs) {
+  let timerId = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((resolve, reject) => {
+        timerId = setTimeout(() => reject(new Error("Timed out waiting for in-flight subscription to settle")), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timerId) {
+      clearTimeout(timerId);
+    }
   }
 }
 

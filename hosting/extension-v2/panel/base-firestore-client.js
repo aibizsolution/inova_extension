@@ -41,7 +41,10 @@
         lastSnapshotSignature: "",
         panelAuth: null,
         refreshSerial: 0,
+        settleFirstSnapshot: null,
+        subscribePromise: null,
         subscriptionKey: "",
+        subscriptionSerial: 0,
         unsubscribe: null,
       };
 
@@ -52,6 +55,20 @@
       };
 
       async function ensureSubscribed(request = {}) {
+        if (state.subscribePromise) {
+          await state.subscribePromise.catch(() => null);
+        }
+        const run = subscribe(request);
+        const tracked = run.finally(() => {
+          if (state.subscribePromise === tracked) {
+            state.subscribePromise = null;
+          }
+        });
+        state.subscribePromise = tracked;
+        return tracked;
+      }
+
+      async function subscribe(request = {}) {
         const providerIdentity = request?.providerIdentity && typeof request.providerIdentity === "object"
           ? request.providerIdentity
           : {};
@@ -73,6 +90,8 @@
           return currentSnapshot;
         }
 
+        const subscriptionSerial = state.subscriptionSerial + 1;
+        state.subscriptionSerial = subscriptionSerial;
         const session = await ensureFirestoreSession({
           browserCapabilities,
           providerIdentity,
@@ -81,11 +100,17 @@
           target: requestedTarget,
           traceFirestore,
         });
+        if (!isActiveSubscriptionAttempt(subscriptionSerial)) {
+          return cloneValue(state.lastSnapshot || currentSnapshot || null);
+        }
         const panelAuth = normalizePanelAuth(session.panelAuth, requestContext);
         const nextSubscriptionKey = buildSubscriptionKey(panelAuth, requestContext);
         state.panelAuth = panelAuth;
 
-        disconnect("subscription-change");
+        disconnect("subscription-change", { preserveSubscriptionAttempt: true });
+        if (!isActiveSubscriptionAttempt(subscriptionSerial)) {
+          return cloneValue(state.lastSnapshot || currentSnapshot || null);
+        }
         const target = config.createTarget?.({
           context: requestContext,
           panelAuth,
@@ -122,9 +147,13 @@
           }
           resolveFirstSnapshot(cloneValue(value));
         };
+        state.settleFirstSnapshot = settleFirstSnapshot;
 
         try {
           const cacheSnapshot = await loadCachedSnapshot(target);
+          if (!isActiveSubscriptionAttempt(subscriptionSerial)) {
+            return cloneValue(state.lastSnapshot || currentSnapshot || null);
+          }
           if (cacheSnapshot) {
             const normalizedSnapshot = await normalizeSnapshot(cacheSnapshot, {
               context: requestContext,
@@ -132,6 +161,9 @@
               session,
               state,
             });
+            if (!isActiveSubscriptionAttempt(subscriptionSerial)) {
+              return cloneValue(state.lastSnapshot || currentSnapshot || null);
+            }
             if (normalizedSnapshot) {
               publishSnapshot(normalizedSnapshot);
               settleFirstSnapshot(normalizedSnapshot);
@@ -144,6 +176,9 @@
         state.unsubscribe = target.onSnapshot(
           { includeMetadataChanges: true },
           (snapshot) => {
+            if (!isActiveSubscription(subscriptionSerial, nextSubscriptionKey)) {
+              return;
+            }
             const liveContext = buildLiveContext(state);
             handleAsync((async () => {
               const normalizedSnapshot = await normalizeSnapshot(snapshot, {
@@ -153,6 +188,9 @@
                 session,
                 state,
               });
+              if (!isActiveSubscription(subscriptionSerial, nextSubscriptionKey)) {
+                return;
+              }
               if (!normalizedSnapshot) {
                 return;
               }
@@ -163,6 +201,9 @@
             });
           },
           (error) => {
+            if (!isActiveSubscription(subscriptionSerial, nextSubscriptionKey)) {
+              return;
+            }
             if (resetSubscriptionOnError) {
               state.unsubscribe = null;
               state.subscriptionKey = "";
@@ -180,10 +221,22 @@
           }
         );
 
-        return firstSnapshotPromise;
+        return firstSnapshotPromise.finally(() => {
+          if (state.settleFirstSnapshot === settleFirstSnapshot) {
+            state.settleFirstSnapshot = null;
+          }
+        });
       }
 
-      function disconnect(reason) {
+      function disconnect(reason, options = {}) {
+        if (!options.preserveSubscriptionAttempt) {
+          state.subscriptionSerial += 1;
+          const settleFirstSnapshot = state.settleFirstSnapshot;
+          state.settleFirstSnapshot = null;
+          if (typeof settleFirstSnapshot === "function") {
+            settleFirstSnapshot(cloneValue(state.lastSnapshot), null);
+          }
+        }
         const hadConnection = typeof state.unsubscribe === "function"
           || Boolean(state.subscriptionKey)
           || Boolean(state.lastSnapshotSignature);
@@ -204,6 +257,17 @@
 
       function hasActiveSubscription() {
         return typeof state.unsubscribe === "function" && Boolean(state.subscriptionKey);
+      }
+
+      function isActiveSubscriptionAttempt(subscriptionSerial) {
+        return subscriptionSerial === state.subscriptionSerial;
+      }
+
+      function isActiveSubscription(subscriptionSerial, subscriptionKey) {
+        return Boolean(
+          isActiveSubscriptionAttempt(subscriptionSerial)
+          && state.subscriptionKey === subscriptionKey
+        );
       }
 
       function canReuseSubscription(providerUserKey, requestedTarget, currentSnapshot) {
