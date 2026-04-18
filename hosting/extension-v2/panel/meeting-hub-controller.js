@@ -138,6 +138,7 @@
         ...state.settings,
         ...(panelState?.settings && typeof panelState.settings === "object" ? panelState.settings : {}),
       };
+      hydrateProviderIdentityFromPanel(panelState);
       if (!hasRequiredCapabilities()) {
         meetingRealtime?.disconnect?.("capabilities-missing");
         meetingUsageRealtime?.disconnect?.("capabilities-missing");
@@ -566,11 +567,31 @@
       const providerIdentityCache = storageState?.providerIdentityCache && typeof storageState.providerIdentityCache === "object"
         ? storageState.providerIdentityCache
         : {};
-      state.providerIdentity = normalizeProviderIdentity(providerIdentityCache.providerIdentity);
+      const providerIdentity = normalizeProviderIdentity(providerIdentityCache.providerIdentity);
+      if (providerIdentity.providerUserKey || !normalizeText(state.providerIdentity.providerUserKey)) {
+        state.providerIdentity = providerIdentity;
+      }
       state.settings = {
         ...state.settings,
         ...(storageState?.settings && typeof storageState.settings === "object" ? storageState.settings : {}),
       };
+    }
+
+    function hydrateProviderIdentityFromPanel(panelState) {
+      const providerIdentity = normalizeProviderIdentity(panelState?.providerIdentity);
+      if (!providerIdentity.providerUserKey) {
+        return false;
+      }
+      if (
+        state.providerIdentity.providerUserKey === providerIdentity.providerUserKey
+        && state.providerIdentity.email === providerIdentity.email
+        && state.providerIdentity.displayName === providerIdentity.displayName
+        && state.providerIdentity.numericUserId === providerIdentity.numericUserId
+      ) {
+        return false;
+      }
+      state.providerIdentity = providerIdentity;
+      return true;
     }
 
     function applyLoadError(error, degradedReason = "") {

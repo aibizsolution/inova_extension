@@ -10,6 +10,7 @@ const NOW_MS = Date.parse("2026-04-18T03:00:00.000Z");
 
 async function main() {
   await verifyFirstUsageCreatesDurableSnapshot();
+  await verifyProviderIdentityCallbackFallback();
   await verifyFlushFailureRetriesOnNextFlush();
   await verifyThresholdFlushAndSanitization();
   console.log("[verify-feature-usage-tracker] Feature usage tracker contract passed");
@@ -41,6 +42,31 @@ async function verifyFirstUsageCreatesDurableSnapshot() {
   assert.equal(JSON.stringify(outbox).includes("should-not-store"), false);
   assert.equal(JSON.stringify(outbox).includes("example.invalid"), false);
   assert.equal(Array.isArray(outbox.events), false);
+}
+
+async function verifyProviderIdentityCallbackFallback() {
+  const storage = createLocalStorage();
+  const { tracker } = createTrackerHarness({
+    readPanelStorageState: async () => ({}),
+    readProviderIdentity: () => ({
+      available: true,
+      displayName: "Snapshot User",
+      email: "snapshot@example.com",
+      numericUserId: 99,
+      provider: "inova",
+      providerUserKey: "snapshot-user",
+    }),
+    storage,
+  });
+
+  const recorded = await tracker.record("conversation", "jumped", "success");
+
+  assert.equal(recorded, true);
+  const outbox = readSingleOutbox(storage);
+  assert.equal(outbox.providerIdentity.providerUserKey, "snapshot-user");
+  assert.equal(outbox.providerIdentity.email, "snapshot@example.com");
+  assert.equal(outbox.providerIdentity.numericUserId, 99);
+  assert.equal(outbox.counters.conversation.jumped.success, 1);
 }
 
 async function verifyFlushFailureRetriesOnNextFlush() {
@@ -148,7 +174,7 @@ function createTrackerHarness(overrides = {}) {
       resolveBrowserCapabilities() {
         return {
           commitFeatureUsageBatch: overrides.commitFeatureUsageBatch || (async () => ({ committed: true, deltaTotal: 1 })),
-          readPanelStorageState: async () => ({
+          readPanelStorageState: overrides.readPanelStorageState || (async () => ({
             providerIdentityCache: {
               providerIdentity: {
                 available: true,
@@ -158,7 +184,7 @@ function createTrackerHarness(overrides = {}) {
                 providerUserKey: "user-1",
               },
             },
-          }),
+          })),
         };
       },
     },
@@ -166,6 +192,7 @@ function createTrackerHarness(overrides = {}) {
   loadScript(path.join("hosting", "extension-v2", "panel", "feature-usage-tracker.js"), context);
   const tracker = context.InovaBookmarks.featureUsageTracker.create({
     browserCapabilities: context.InovaBookmarks.panelUtils.resolveBrowserCapabilities(),
+    readProviderIdentity: overrides.readProviderIdentity,
     readSource: () => ({
       extensionVersion: "1.0.0",
       lane: "v2",

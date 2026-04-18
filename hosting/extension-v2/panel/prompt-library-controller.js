@@ -128,6 +128,7 @@
       state.capabilities = Array.isArray(extensionCapabilities)
         ? extensionCapabilities.map((value) => normalizeText(value)).filter(Boolean)
         : [];
+      hydrateProviderIdentityFromPanel(panelState);
       syncExternalReviewActivation(panelState?.promptTool?.review);
       if (panelState?.activeTool !== "prompts") {
         promptLibraryFirestoreClient?.disconnect?.("panel-inactive");
@@ -896,21 +897,30 @@
       const uiPreferences = storageState?.uiPreferences && typeof storageState.uiPreferences === "object"
         ? storageState.uiPreferences
         : {};
-      const providerUserKey = normalizeText(providerIdentity.providerUserKey);
+      const storageProviderUserKey = normalizeText(providerIdentity.providerUserKey);
+      const providerUserKey = storageProviderUserKey || normalizeText(state.providerIdentity.providerUserKey);
       if (state.loadedProviderUserKey && state.loadedProviderUserKey !== providerUserKey) {
         state.promptLibraryRemoteReady = false;
         promptLibraryFirestoreClient?.disconnect?.("provider-change");
       }
-      state.providerIdentity = {
-        available: Boolean(providerIdentity.available),
-        displayName: normalizeText(providerIdentity.displayName),
-        email: normalizeText(providerIdentity.email),
-        numericUserId: Number.isFinite(Number(providerIdentity.numericUserId))
-          ? Number(providerIdentity.numericUserId)
-          : null,
-        provider: normalizeText(providerIdentity.provider || "inova") || "inova",
-        providerUserKey,
-      };
+      const normalizedProviderIdentity = storageProviderUserKey
+        ? {
+            available: Boolean(providerIdentity.available),
+            displayName: normalizeText(providerIdentity.displayName),
+            email: normalizeText(providerIdentity.email),
+            numericUserId: Number.isFinite(Number(providerIdentity.numericUserId))
+              ? Number(providerIdentity.numericUserId)
+              : null,
+            provider: normalizeText(providerIdentity.provider || "inova") || "inova",
+            providerUserKey,
+          }
+        : {
+            ...state.providerIdentity,
+            providerUserKey,
+          };
+      if (normalizedProviderIdentity.providerUserKey || !normalizeText(state.providerIdentity.providerUserKey)) {
+        state.providerIdentity = normalizedProviderIdentity;
+      }
       if (!state.activeTabUserSelected) {
         state.activeTab = normalizePromptTab(uiPreferences.activePromptTab);
       }
@@ -918,6 +928,35 @@
       state.settings = storageState?.settings && typeof storageState.settings === "object"
         ? { ...storageState.settings }
         : {};
+    }
+
+    function hydrateProviderIdentityFromPanel(panelState) {
+      const providerIdentity = panelState?.providerIdentity && typeof panelState.providerIdentity === "object"
+        ? panelState.providerIdentity
+        : {};
+      const normalizedProviderIdentity = {
+        available: Boolean(providerIdentity.available),
+        displayName: normalizeText(providerIdentity.displayName),
+        email: normalizeText(providerIdentity.email),
+        numericUserId: Number.isFinite(Number(providerIdentity.numericUserId))
+          ? Number(providerIdentity.numericUserId)
+          : null,
+        provider: normalizeText(providerIdentity.provider || "inova") || "inova",
+        providerUserKey: normalizeText(providerIdentity.providerUserKey),
+      };
+      if (!normalizedProviderIdentity.providerUserKey) {
+        return false;
+      }
+      if (
+        state.providerIdentity.providerUserKey === normalizedProviderIdentity.providerUserKey
+        && state.providerIdentity.email === normalizedProviderIdentity.email
+        && state.providerIdentity.displayName === normalizedProviderIdentity.displayName
+        && state.providerIdentity.numericUserId === normalizedProviderIdentity.numericUserId
+      ) {
+        return false;
+      }
+      state.providerIdentity = normalizedProviderIdentity;
+      return true;
     }
 
     function applyRemoteSnapshot(snapshot, fallbackProviderUserKey = normalizeText(state.providerIdentity?.providerUserKey)) {

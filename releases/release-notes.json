@@ -32,9 +32,9 @@
       },
       "artifact": {
         "fileName": "inova-extension-1.0.0-2026-04-18.zip",
-        "publishedAt": "2026-04-18T13:49:37.293Z",
-        "sha256": "92b71c29723e7f7eb3c82179a7a93c2a6ce4d041ce4fffb86262652a096bbe50",
-        "sizeBytes": 239585,
+        "publishedAt": "2026-04-18T14:21:56.936Z",
+        "sha256": "49dc39022c64d8ad6e21b1c357a61263e02c70e399c39f4374ac98ee602e0092",
+        "sizeBytes": 239684,
         "minSupportedVersion": "1.0.0"
       }
     },

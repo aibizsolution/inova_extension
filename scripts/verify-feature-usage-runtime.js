@@ -9,6 +9,7 @@ const root = path.resolve(__dirname, "..");
 
 async function main() {
   verifyServedManifestMetricsCapability();
+  verifyHostedIdentityFallbackWiring();
   await verifyBundledMetricsEndpointResolution();
   console.log("[verify-feature-usage-runtime] Feature usage runtime capability contract passed");
 }
@@ -30,6 +31,37 @@ function verifyServedManifestMetricsCapability() {
   assert(
     validatorSource.includes('["meeting", "metrics", "prompt"]'),
     "capability manifest validator should allow only the known function services including metrics"
+  );
+}
+
+function verifyHostedIdentityFallbackWiring() {
+  const topPanelSource = fs.readFileSync(path.join(root, "content", "panel-v2-shell-bridge.js"), "utf8");
+  const hostedIndexSource = fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "index.js"), "utf8");
+  const meetingSource = fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "meeting-hub-controller.js"), "utf8");
+  const promptLibrarySource = fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "prompt-library-controller.js"), "utf8");
+
+  assert(
+    topPanelSource.includes("providerIdentity: normalizeProviderIdentity(namespace.providerIdentity?.getCurrent?.()),"),
+    "top panel snapshot must carry sanitized provider identity so feature usage does not depend only on extension storage"
+  );
+  assert(
+    topPanelSource.includes("namespace.providerIdentityCache.normalizeProviderIdentity"),
+    "top panel provider identity snapshot must use the shared sanitizer"
+  );
+  assert(
+    hostedIndexSource.includes("readProviderIdentity: () => state.panelSnapshot?.providerIdentity || null,"),
+    "hosted feature usage tracker must fall back to snapshot provider identity when storage read is empty"
+  );
+  assert(
+    meetingSource.includes("hydrateProviderIdentityFromPanel(panelState);")
+      && meetingSource.includes("if (providerIdentity.providerUserKey || !normalizeText(state.providerIdentity.providerUserKey))"),
+    "meeting usage actions must keep snapshot provider identity when storage read is empty"
+  );
+  assert(
+    promptLibrarySource.includes("hydrateProviderIdentityFromPanel(panelState);")
+      && promptLibrarySource.includes("const storageProviderUserKey = normalizeText(providerIdentity.providerUserKey);")
+      && promptLibrarySource.includes("const providerUserKey = storageProviderUserKey || normalizeText(state.providerIdentity.providerUserKey);"),
+    "prompt usage actions must keep snapshot provider identity when storage read is empty"
   );
 }
 

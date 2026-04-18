@@ -95,6 +95,7 @@
   }) || null;
   const featureUsageTracker = namespace.featureUsageTracker?.create?.({
     browserCapabilities,
+    readProviderIdentity: () => state.panelSnapshot?.providerIdentity || null,
     readSource: () => ({
       extensionVersion: state.extensionVersion || "",
       surface: "hosted-panel",
