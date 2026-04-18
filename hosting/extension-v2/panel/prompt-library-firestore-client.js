@@ -47,6 +47,7 @@
     readSnapshotCount(snapshot) {
       return Array.isArray(snapshot?.promptLibrary?.items) ? snapshot.promptLibrary.items.length : 0;
     },
+    resetSubscriptionOnError: true,
     subscriptionErrorMessage: "프롬프트 보관함 Firestore 구독이 끊겼어요.",
   });
 

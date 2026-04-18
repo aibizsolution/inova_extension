@@ -200,7 +200,164 @@ async function verifyHostedPromptLibraryFirestoreClientContract() {
   client.disconnect("test");
   assert.equal(queryState.unsubscribeCount, 1, "prompt firestore client should detach its account listener on disconnect");
 
+  await verifyBaseFirestoreRetryAfterInitialAuthTimeout(futureExpiryIso);
   await verifyLocalPromptLibraryAuthSessionPolicy();
+}
+
+async function verifyBaseFirestoreRetryAfterInitialAuthTimeout(futureExpiryIso) {
+  let nextTimerId = 1;
+  let runtimeCallCount = 0;
+  const timers = [];
+  const traces = [];
+  const snapshotPayloads = [];
+  const queryState = {
+    accountOnSnapshot: null,
+    collectionNames: [],
+    emulatorAuthUrls: [],
+    emulatorFirestoreHosts: [],
+    orderDocs: new Map([
+      ["prompt-library-fixture", { orderedIds: ["prompt-retry"] }],
+    ]),
+    chunkDocs: new Map([
+      ["prompt-library-fixture__b00", { items: [{ id: "prompt-retry", title: "Retry Prompt", content: "Body", updatedAt: "2026-04-13T02:00:00.000Z" }] }],
+    ]),
+    promptPanelExpiryIso: futureExpiryIso,
+  };
+  const context = vm.createContext({
+    clearTimeout(timerId) {
+      const timer = timers.find((entry) => entry.id === timerId);
+      if (timer) {
+        timer.cleared = true;
+      }
+    },
+    console,
+    document: {
+      createElement() {
+        return {
+          async: false,
+          onerror: null,
+          onload: null,
+          set src(value) {
+            this._src = value;
+          },
+          get src() {
+            return this._src || "";
+          },
+        };
+      },
+      head: {
+        appendChild(node) {
+          node.onload?.();
+          return node;
+        },
+      },
+    },
+    globalThis: null,
+    setTimeout(callback, delayMs) {
+      const timer = {
+        callback,
+        cleared: false,
+        delayMs,
+        id: nextTimerId,
+      };
+      nextTimerId += 1;
+      timers.push(timer);
+      return timer.id;
+    },
+  });
+  context.globalThis = context;
+  context.InovaBookmarks = {
+    promptLibraryModel: {
+      mergePromptLibrary(promptLibrary) {
+        const items = Array.isArray(promptLibrary?.items) ? promptLibrary.items.map((item) => ({ ...item })) : [];
+        return {
+          items,
+          version: Number(promptLibrary?.version) || 1,
+        };
+      },
+    },
+    session: {
+      normalizeText(value) {
+        return String(value ?? "").trim();
+      },
+    },
+  };
+  context.firebase = createFakeFirebase(queryState);
+
+  loadScript("hosting/extension-v2/panel/panel-utils.js", context);
+  loadScript("hosting/extension-v2/panel/extension-capability-client.js", context);
+  loadScript("hosting/extension-v2/panel/panel-firestore-session-client.js", context);
+  loadScript("hosting/extension-v2/panel/base-firestore-client.js", context);
+  loadScript("hosting/extension-v2/panel/prompt-library-firestore-client.js", context);
+
+  const client = context.InovaBookmarks.promptLibraryFirestoreClient.create({
+    invokeRuntime: async () => {
+      runtimeCallCount += 1;
+      if (runtimeCallCount === 1) {
+        throw new Error("호스팅 패널 요청 시간이 초과되었어요.");
+      }
+      return {
+        emulators: {
+          authUrl: "",
+          enabled: false,
+          firestoreHost: "",
+          firestorePort: 0,
+        },
+        expiresAt: futureExpiryIso,
+        firebaseConfig: {
+          projectId: "browser-extension-main",
+        },
+        firebaseCustomToken: "prompt-panel-token",
+        promptFirestoreCollections: {
+          accountsCollection: "integration_inova_accounts_v2",
+          promptLibraryChunksCollection: "prompt_library_chunks_v2",
+          promptLibraryOrdersCollection: "prompt_library_orders_v2",
+        },
+        promptLibraryId: "prompt-library-fixture",
+        promptPanelScope: "prompt-panel-v2",
+        providerUserKey: "fixture-user",
+        target: "production",
+      };
+    },
+    onError: async () => {},
+    onSnapshot: async (snapshot) => {
+      snapshotPayloads.push(cloneValue(snapshot));
+    },
+    traceFirestore(step, payload) {
+      traces.push({
+        payload: cloneValue(payload),
+        step,
+      });
+    },
+  });
+
+  await assert.rejects(
+    () => client.ensureSubscribed({
+      providerIdentity: {
+        providerUserKey: "fixture-user",
+      },
+      settings: {
+        meetingWorkspaceTarget: "production",
+      },
+    }),
+    /호스팅 패널 요청 시간이 초과/,
+    "first transient hosted auth timeout should still surface to the active UI"
+  );
+  assert.equal(runtimeCallCount, 1, "first subscribe attempt should request hosted panel auth once");
+  assert.equal(timers.length, 1, "shared Firestore client should schedule one retry after initial hosted auth timeout");
+  assert.equal(timers[0].delayMs, 5000, "first shared Firestore retry should run quickly enough to recover without reload");
+  assert(
+    traces.some((entry) => entry.step === "35.hosted.firestore.retry.scheduled"),
+    "shared Firestore client should trace retry scheduling"
+  );
+
+  timers[0].callback();
+  await flushAsyncTurns(80);
+
+  assert.equal(runtimeCallCount, 2, "shared Firestore retry should request hosted panel auth again");
+  assert.equal(snapshotPayloads.length, 1, "shared Firestore retry should publish the recovered snapshot");
+  assert.equal(snapshotPayloads[0].promptLibrary.items[0].id, "prompt-retry");
+  assert.equal(client.hasActiveSubscription(), true, "shared Firestore retry should leave a live subscription");
 }
 
 async function flushAsyncTurns(turns = 20) {

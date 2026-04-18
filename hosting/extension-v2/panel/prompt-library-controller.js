@@ -9,8 +9,6 @@
     publishToStore: "prompt.store.publish",
     sync: "prompt.library.sync",
   });
-  const LOAD_RETRY_BASE_DELAY_MS = 5000;
-  const LOAD_RETRY_MAX_DELAY_MS = 30000;
 
   function create(options = {}) {
     const browserCapabilities = resolveBrowserCapabilities(options);
@@ -68,7 +66,6 @@
       actionPending: null,
       activeTab: "library",
       activeTabUserSelected: false,
-      activeTool: "",
       capabilities: [],
       deletePromptId: "",
       editor: createEditor(),
@@ -77,8 +74,6 @@
       initialized: false,
       initializing: false,
       lastError: "",
-      loadRetryAttempt: 0,
-      loadRetryTimerId: 0,
       lastMutationError: "",
       loadPromise: null,
       loading: false,
@@ -133,12 +128,10 @@
       state.capabilities = Array.isArray(extensionCapabilities)
         ? extensionCapabilities.map((value) => normalizeText(value)).filter(Boolean)
         : [];
-      state.activeTool = normalizeText(panelState?.activeTool);
       hydrateProviderIdentityFromPanel(panelState);
       syncExternalReviewActivation(panelState?.promptTool?.review);
       if (panelState?.activeTool !== "prompts") {
         promptLibraryFirestoreClient?.disconnect?.("panel-inactive");
-        clearPromptLibraryRetry();
       }
       if (!hasRequiredCapabilities()) {
         return;
@@ -245,10 +238,8 @@
       scheduleRender();
       void persistActivePromptTab(nextTab);
       if (nextTab === "library") {
-        clearPromptLibraryRetry();
         void ensurePromptLibraryLoaded(false, "prompt-tab-select");
       } else if (nextTab === "store") {
-        clearPromptLibraryRetry();
         void ensureStoreLoaded(false, "prompt-tab-select");
       }
       return true;
@@ -973,7 +964,6 @@
       state.promptLibraryRemoteReady = true;
       state.loadedProviderUserKey = normalizeText(fallbackProviderUserKey);
       state.lastError = "";
-      clearPromptLibraryRetry();
       if (!state.lastMutationError) {
         state.syncNotice = null;
       }
@@ -982,33 +972,6 @@
     function handlePromptLibraryError(error) {
       state.lastError = readErrorMessage(error, "요청 보관함을 불러오지 못했어요.");
       state.syncNotice = buildLoadNotice(state.lastError, getPromptCount());
-      schedulePromptLibraryRetry("load-error");
-    }
-
-    function schedulePromptLibraryRetry(reason = "load-error") {
-      if (state.loadRetryTimerId || state.activeTool !== "prompts" || state.activeTab !== "library") {
-        return;
-      }
-      state.loadRetryAttempt = Math.max(0, Number(state.loadRetryAttempt) || 0) + 1;
-      const delayMs = Math.min(
-        LOAD_RETRY_MAX_DELAY_MS,
-        LOAD_RETRY_BASE_DELAY_MS * (2 ** Math.min(2, state.loadRetryAttempt - 1))
-      );
-      state.loadRetryTimerId = global.setTimeout(() => {
-        state.loadRetryTimerId = 0;
-        if (state.activeTool !== "prompts" || state.activeTab !== "library") {
-          return;
-        }
-        void ensurePromptLibraryLoaded(false, `retry-${normalizeText(reason) || "load"}`);
-      }, delayMs);
-    }
-
-    function clearPromptLibraryRetry() {
-      if (state.loadRetryTimerId) {
-        global.clearTimeout(state.loadRetryTimerId);
-        state.loadRetryTimerId = 0;
-      }
-      state.loadRetryAttempt = 0;
     }
 
     function syncExternalReviewActivation(reviewState) {

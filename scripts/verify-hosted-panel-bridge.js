@@ -540,6 +540,7 @@ function verifyHostedPanelFiles(directoryName) {
     assert(baseFirestoreClientJs.includes("namespace.panelUtils"), "base Firestore reader factory should reuse hosted panel utilities");
     assert(baseFirestoreClientJs.includes("loadCachedSnapshot"), "base Firestore reader factory should own cached snapshot loading");
     assert(baseFirestoreClientJs.includes("publishSnapshot"), "base Firestore reader factory should own snapshot de-duplication and publishing");
+    assert(baseFirestoreClientJs.includes("scheduleRetry"), "base Firestore reader factory should retry transient hosted auth/listener failures");
     assert(
       fs.readFileSync(path.join(root, "background", "panel-runtime-capability-router.js"), "utf8")
         .includes("hosted: {")
@@ -605,6 +606,10 @@ function verifyHostedPanelFiles(directoryName) {
         assert(
           entry.source.includes("namespace.panelUtils"),
           `${entry.fileName} should reuse hosted panel utilities`
+        );
+        assert(
+          entry.source.includes("resetSubscriptionOnError: true"),
+          `${entry.fileName} should reset dead listeners so the shared retry path can recover`
         );
         [
           "app: null",
