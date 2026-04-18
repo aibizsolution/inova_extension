@@ -771,7 +771,7 @@
   padding-bottom: 10px;
   border-bottom: 1px solid rgba(52, 81, 100, 0.08);
 }
-.inova-meeting-stack { display: flex; flex-direction: column; gap: 8px; padding: 2px 14px 14px; overflow-y: auto; overflow-x: hidden; }
+.inova-meeting-stack { display: flex; flex-direction: column; gap: 12px; padding: 2px 14px 14px; overflow-y: auto; overflow-x: hidden; }
 .inova-tool-inline-summary {
   display: flex;
   align-items: center;
@@ -798,7 +798,6 @@
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  margin-bottom: 6px;
   border: 1px solid rgba(98, 127, 145, 0.12);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.86);
@@ -825,6 +824,12 @@
   white-space: nowrap;
 }
 .inova-meeting-gateway { display: flex; flex-direction: column; gap: 10px; }
+.inova-meeting-list-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
 .inova-bookmark-action {
   min-height: 38px; padding: 0 13px; border: 1px solid rgba(19, 73, 181, 0.12); border-radius: 12px;
   background: linear-gradient(135deg, rgba(27, 96, 232, 0.96), rgba(15, 124, 137, 0.92)); color: #fff;

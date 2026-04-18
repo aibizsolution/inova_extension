@@ -37,12 +37,14 @@
           ${normalized.degradedNotice ? `<div class="inova-release-card inova-release-card__notice is-info">${escapeHtml(normalized.degradedNotice)}</div>` : ""}
           ${normalized.error ? `<div class="inova-release-card inova-release-card__notice">${escapeHtml(normalized.error)}</div>` : ""}
           ${renderUsageStrip(normalized.usage)}
-          <div class="inova-tool-inline-summary">
-            <strong>목록</strong>
-            <span class="inova-tool-inline-summary__meta">총 ${escapeHtml(String(normalized.items.length))}건</span>
-          </div>
-          <div class="inova-meeting-record-list">
-            ${listMarkup}
+          <div class="inova-meeting-list-section">
+            <div class="inova-tool-inline-summary">
+              <strong>목록</strong>
+              <span class="inova-tool-inline-summary__meta">총 ${escapeHtml(String(normalized.items.length))}건</span>
+            </div>
+            <div class="inova-meeting-record-list">
+              ${listMarkup}
+            </div>
           </div>
         </div>
       </section>
