@@ -189,6 +189,8 @@ function registerStoreHandlers(deps) {
         const entryRef = db.collection("prompt_store_entries").doc(entryId);
         const detailRef = getStoreDetailRef(entryId);
         const importRef = entryRef.collection("imports").doc(owner.providerUserKey);
+        const likeRef = entryRef.collection("likes").doc(owner.providerUserKey);
+        const viewRef = entryRef.collection("views").doc(owner.providerUserKey);
         const entrySnapshot = await transaction.get(entryRef);
         if (!entrySnapshot.exists || normalizeText(entrySnapshot.data()?.status) !== "published") {
           throw createHttpError(404, "스토어 요청을 찾지 못했어요.");
@@ -198,6 +200,8 @@ function registerStoreHandlers(deps) {
         const detailSnapshot = await transaction.get(detailRef);
         const content = normalizePromptContent(detailSnapshot.data()?.content || entry.content);
         const importSnapshot = await transaction.get(importRef);
+        const likeSnapshot = await transaction.get(likeRef);
+        const viewSnapshot = await transaction.get(viewRef);
         const metrics = normalizeMetrics(entry.metrics);
         metrics.importCount += 1;
         transaction.set(importRef, {
@@ -206,7 +210,10 @@ function registerStoreHandlers(deps) {
           providerUserKey: owner.providerUserKey,
         });
         transaction.set(entryRef, buildMetricsPatch(metrics), { merge: true });
-        return attachViewerFlags({ ...entry, content, metrics, updatedAt: entry.updatedAt }, { imported: true, liked: false, viewed: false });
+        return attachViewerFlags(
+          { ...entry, content, metrics, updatedAt: entry.updatedAt },
+          { imported: true, liked: Boolean(likeSnapshot.exists), viewed: Boolean(viewSnapshot.exists) }
+        );
       });
 
       logEvent("store.import.success", { entryId, providerUserKey: owner.providerUserKey });
@@ -228,13 +235,17 @@ function registerStoreHandlers(deps) {
 
       const result = await db.runTransaction(async (transaction) => {
         const entryRef = db.collection("prompt_store_entries").doc(entryId);
+        const importRef = entryRef.collection("imports").doc(owner.providerUserKey);
         const likeRef = entryRef.collection("likes").doc(owner.providerUserKey);
+        const viewRef = entryRef.collection("views").doc(owner.providerUserKey);
         const entrySnapshot = await transaction.get(entryRef);
         if (!entrySnapshot.exists || normalizeText(entrySnapshot.data()?.status) !== "published") {
           throw createHttpError(404, "스토어 요청을 찾지 못했어요.");
         }
 
+        const importSnapshot = await transaction.get(importRef);
         const likeSnapshot = await transaction.get(likeRef);
+        const viewSnapshot = await transaction.get(viewRef);
         const liked = likeSnapshot.exists;
         const entry = entrySnapshot.data();
         const metrics = normalizeMetrics(entry.metrics);
@@ -250,7 +261,10 @@ function registerStoreHandlers(deps) {
         }
         transaction.set(entryRef, buildMetricsPatch(metrics), { merge: true });
         return {
-          entry: attachViewerFlags({ ...entry, metrics, updatedAt: entry.updatedAt }, { imported: false, liked: !liked, viewed: false }),
+          entry: attachViewerFlags(
+            { ...entry, metrics, updatedAt: entry.updatedAt },
+            { imported: Boolean(importSnapshot.exists), liked: !liked, viewed: Boolean(viewSnapshot.exists) }
+          ),
           liked: !liked,
         };
       });
