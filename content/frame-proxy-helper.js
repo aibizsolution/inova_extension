@@ -80,7 +80,24 @@
   }
 
   function isInvalidatedContextError(error) {
-    return normalizeText(error?.message || error).includes("Extension context invalidated");
+    const message = normalizeText(error?.message || error);
+    return hasInvalidatedRuntimeSignal()
+      || message.includes("Extension context invalidated")
+      || message.includes("확장프로그램이 갱신");
+  }
+
+  function hasInvalidatedRuntimeSignal() {
+    try {
+      const runtime = global.chrome?.runtime;
+      if (!runtime) {
+        return false;
+      }
+      const runtimeIdMissing = Object.prototype.hasOwnProperty.call(runtime, "id") && !normalizeText(runtime.id);
+      const lastErrorMessage = normalizeText(runtime.lastError?.message).toLowerCase();
+      return runtimeIdMissing || lastErrorMessage.includes("extension context invalidated");
+    } catch {
+      return true;
+    }
   }
 
   namespace.frameProxy = {

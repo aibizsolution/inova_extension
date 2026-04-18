@@ -136,7 +136,7 @@
 
     function isExtensionContextInvalidatedError(error) {
       const message = normalizeText(error instanceof Error ? error.message : String(error || "")).toLowerCase();
-      return message.includes("extension context invalidated");
+      return hasInvalidatedRuntimeSignal() || message.includes("extension context invalidated");
     }
 
     function logPanelDebug(event, payload) {
@@ -201,6 +201,20 @@
           errorsOnly: Boolean(errorsOnly),
         });
       }
+    }
+  }
+
+  function hasInvalidatedRuntimeSignal() {
+    try {
+      const runtime = global.chrome?.runtime;
+      if (!runtime) {
+        return false;
+      }
+      const runtimeIdMissing = Object.prototype.hasOwnProperty.call(runtime, "id") && !normalizeText(runtime.id);
+      const lastErrorMessage = normalizeText(runtime.lastError?.message).toLowerCase();
+      return runtimeIdMissing || lastErrorMessage.includes("extension context invalidated");
+    } catch {
+      return true;
     }
   }
 
