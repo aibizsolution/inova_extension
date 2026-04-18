@@ -13,7 +13,6 @@ const requiredFiles = [
   "README.md",
   "backup/legacy-panel/README.md",
   path.join(".githooks", "pre-push"),
-  path.join("scripts", "verify-refactor-plan-update.js"),
   path.join("docs", "feature-spec.md"),
   path.join("docs", "feature-routing.md"),
   path.join("docs", "capability-authoring.md"),
@@ -237,11 +236,11 @@ const featureDocContracts = [
 const codeChecks = [
   {
     file: path.join(".githooks", "pre-commit"),
-    patterns: [/verify-refactor-plan-update\.js/, /verify-feature-doc-update\.js/, /verify-release-metadata\.js/],
+    patterns: [/verify-feature-doc-update\.js/, /verify-release-metadata\.js/],
   },
   {
     file: path.join(".githooks", "pre-push"),
-    patterns: [/verify-refactor-plan-update\.js/, /verify-feature-doc-update\.js/, /verify-release-metadata\.js/],
+    patterns: [/verify-feature-doc-update\.js/, /verify-release-metadata\.js/],
   },
   {
     file: path.join("background", "service-worker.js"),

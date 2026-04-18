@@ -1,7 +1,7 @@
 # Version And Release Decision Note
 
-이 문서는 구조 진행 일지나 세션 handoff가 아니라, `버전 결정`, `version lane`, `meeting legacy baseline`, `release decision boundary`만 빠르게 확인하기 위한 기준 문서다.  
-ordinary feature 구현 변경, 탭별 hosted ownership 진행도, smoke 이슈 목록, git chronology는 이 문서의 대상이 아니다. 그런 내용은 `docs/current-handoff.md`, `docs/runtime-architecture.md`, feature `AGENTS.md`에서 관리한다.
+이 문서는 현재 운영 기준을 계속 갱신하는 문서가 아니라, 이전 `버전 결정`, `version lane`, `meeting legacy baseline`, `release decision boundary` 판단을 보존하는 참고 문서다.  
+ordinary feature 구현 변경, 탭별 hosted ownership 진행도, smoke 이슈 목록, git chronology는 이 문서의 대상이 아니다. 현재 운영 기준은 `docs/release-workflow.md`, `docs/runtime-architecture.md`, feature `AGENTS.md`에서 관리한다.
 
 마지막 상태 갱신: 2026-04-18
 현재 공개 사용자 기준선: `0.4.4`
@@ -245,11 +245,9 @@ ordinary feature 구현 변경, 탭별 hosted ownership 진행도, smoke 이슈 
 
 사용량 accounting namespace는 기존 meeting namespace에 더하는 성공 처리 원장/집계 baseline이다. 이 추가는 version lane 분리나 quota enforcement가 아니며, 삭제 후에도 처리 성공 사용량을 차감하지 않는 서버 측 compat 기준으로 유지한다.
 
-## 문서 갱신 규칙
+## 문서 보존 규칙
 
-- 아래 범위가 바뀌면 이 문서를 같은 작업 안에서 갱신한다.
-  - version lane 정책
-  - meeting legacy baseline
-  - release decision 기준
+- 이 문서는 일반 작업의 갱신 대상이 아니다.
+- version lane, release decision, meeting runtime 기준이 바뀌면 이 문서가 아니라 `docs/release-workflow.md`, `docs/runtime-architecture.md`, feature `AGENTS.md` 같은 현재 계약 문서를 갱신한다.
 - ordinary feature 구현이나 git으로 복구 가능한 작업 이력은 이 문서에 누적하지 않는다.
 - 세션 인계 로그, split chronology, milestone diary는 이 문서 범위 밖이다.

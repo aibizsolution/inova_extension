@@ -67,7 +67,6 @@
     "verify:meeting-service": "node scripts/verify-meeting-service.js",
     "verify:meeting-transcription-quality": "node scripts/verify-meeting-transcription-quality.js",
     "verify:feature-doc-guard": "node scripts/verify-feature-doc-update.js --staged",
-    "verify:refactor-plan-guard": "node scripts/verify-refactor-plan-update.js --staged",
     "verify:release-guard": "node scripts/verify-release-metadata.js --staged"
   },
   "devDependencies": {

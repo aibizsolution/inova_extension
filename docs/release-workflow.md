@@ -1,14 +1,14 @@
 # 릴리스 배포 흐름
 
 이 문서는 Chrome Web Store가 아니라 `내부 ZIP 배포 + 수동 재설치/리로드` 환경을 기준으로 한다.  
-그래서 이 문서는 `무엇을 배포하고 어떤 재로딩이 필요한지`를 정하고, version lane 판단 자체는 `docs/refactoring-plan.md`에 맡긴다.
+그래서 이 문서는 `무엇을 배포하고 어떤 재로딩이 필요한지`와 version lane 판단 기준을 함께 정한다.
 
 ## 버전 선택 규칙
 
 - `patch`: 버그 수정, 작은 UX 보정, 안정성/운영 보완
 - `minor`: 새 기능 추가, 내부 구조 정리, 기존 계약을 유지한 확장
 - `major`: 별도 hosted/backend/data 경계가 필요하거나 기존 계약을 compat shim 없이 유지할 수 없는 변화
-- 실제 `minor`/`major` 선택은 먼저 `docs/refactoring-plan.md`의 `Version Decision Gate`를 확인한 뒤에 결정한다.
+- 실제 `minor`/`major` 선택은 변경의 사용자 영향, 데이터/호스팅/함수 호환성, 기존 ZIP 사용자의 upgrade 경로를 기준으로 결정한다.
 
 ## 내부 ZIP 배포 모델
 
@@ -42,7 +42,7 @@
 
 ## 권장 순서
 
-1. `docs/refactoring-plan.md`의 `Version Decision Gate`로 `minor`인지 `major`인지 먼저 확인한다.
+1. 위 버전 선택 규칙으로 `patch`, `minor`, `major` 중 필요한 수준을 먼저 결정한다.
 2. 필요할 때만 `npm run version:bump -- <patch|minor|major>`로 버전을 올린다.
 3. `releases/release-notes.json`에서 공개 버전 목록과 현재 버전의 사용자용 메타를 채운다.
 4. 실제 기능 변경이 있으면 해당 feature `AGENTS.md` 또는 feature 전용 docs를 갱신한다.
