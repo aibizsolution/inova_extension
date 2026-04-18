@@ -1,6 +1,6 @@
 (function initReleaseManager(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
-  const CHECK_INTERVAL_MS = namespace.constants.limits.releaseCheckIntervalMs;
+  const CHECK_INTERVAL_MS = 21600000;
   const RELEASE_INFO_STORAGE_KEY = "releaseInfo";
 
   function create(state, hooks) {

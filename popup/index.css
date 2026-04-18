@@ -2,6 +2,9 @@
   --bg: #f4f7fd;
   --card: rgba(255, 255, 255, 0.95);
   --card-border: rgba(160, 177, 206, 0.24);
+  --danger: #b42318;
+  --danger-bg: #fff1f0;
+  --danger-border: rgba(180, 35, 24, 0.22);
   --text: #13233d;
   --muted: #67758d;
   --accent: #2563eb;
@@ -104,4 +107,16 @@ button {
   background: linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(79, 140, 255, 0.2));
   color: var(--accent-strong);
   box-shadow: 0 8px 18px rgba(37, 99, 235, 0.12);
+}
+
+.status-message {
+  margin: 2px 0 0;
+  border: 1px solid var(--danger-border);
+  border-radius: 8px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  padding: 8px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.45;
 }

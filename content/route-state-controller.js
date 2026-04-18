@@ -215,8 +215,23 @@
 
   function isInvalidatedContextError(error) {
     const message = namespace.session.normalizeText(error instanceof Error ? error.message : String(error || ""));
-    return message.includes("Extension context invalidated")
+    return hasInvalidatedRuntimeSignal()
+      || message.includes("Extension context invalidated")
       || message.includes("확장프로그램이 갱신");
+  }
+
+  function hasInvalidatedRuntimeSignal() {
+    try {
+      const runtime = global.chrome?.runtime;
+      if (!runtime) {
+        return false;
+      }
+      const runtimeIdMissing = Object.prototype.hasOwnProperty.call(runtime, "id") && !normalizeText(runtime.id);
+      const lastErrorMessage = normalizeText(runtime.lastError?.message).toLowerCase();
+      return runtimeIdMissing || lastErrorMessage.includes("extension context invalidated");
+    } catch {
+      return true;
+    }
   }
 
   namespace.routeStateController = { create };

@@ -2,6 +2,7 @@
 
 (() => {
 const namespace = globalThis.InovaBookmarks || {};
+const normalizeText = namespace.session.normalizeText;
 
 const PANEL_RUNTIME_STORAGE_STATE_KEYS = Object.freeze([
   "providerIdentityCache",
@@ -196,7 +197,7 @@ const PANEL_FUNCTION_CONFIG_RESOLVERS = Object.freeze({
 });
 
 async function handle(request) {
-  const action = namespace.session.normalizeText(request?.action).toLowerCase();
+  const action = normalizeText(request?.action).toLowerCase();
   const capability = resolveRuntimeCapability(action);
   return dispatchRuntimeCapability(capability, request);
 }
@@ -210,7 +211,7 @@ function resolveRuntimeCapability(action) {
 }
 
 async function dispatchRuntimeCapability(capability, request) {
-  const adapterId = namespace.session.normalizeText(capability?.adapter);
+  const adapterId = normalizeText(capability?.adapter);
   const adapter = PANEL_RUNTIME_ADAPTERS[adapterId];
   if (typeof adapter !== "function") {
     throw new Error("hosted panel runtime adapter를 찾지 못했어요.");
@@ -219,13 +220,13 @@ async function dispatchRuntimeCapability(capability, request) {
 }
 
 async function issuePanelSession(request, capability) {
-  const panel = namespace.session.normalizeText(request?.panel).toLowerCase();
+  const panel = normalizeText(request?.panel).toLowerCase();
   const panelCapability = capability?.panels?.[panel];
   if (!panelCapability) {
     throw new Error("허용되지 않은 hosted panel auth scope예요.");
   }
-  const issuer = PANEL_AUTH_ISSUERS[namespace.session.normalizeText(panelCapability.issuer)];
-  const enricher = PANEL_AUTH_ENRICHERS[namespace.session.normalizeText(panelCapability.enricher)];
+  const issuer = PANEL_AUTH_ISSUERS[normalizeText(panelCapability.issuer)];
+  const enricher = PANEL_AUTH_ENRICHERS[normalizeText(panelCapability.enricher)];
   if (typeof issuer !== "function" || typeof enricher !== "function") {
     throw new Error("hosted panel auth adapter를 찾지 못했어요.");
   }
@@ -235,29 +236,29 @@ async function issuePanelSession(request, capability) {
 async function buildCapabilityHandshake(request) {
   const manifestResult = await readActiveCapabilityManifest();
   const manifest = manifestResult?.manifest || {};
-  const activeLane = namespace.session.normalizeText(namespace.productLane?.getActiveLane?.() || "legacy").toLowerCase();
+  const activeLane = normalizeText(namespace.productLane?.getActiveLane?.() || "legacy").toLowerCase();
   const capabilities = Object.entries(manifest.capabilities || {})
     .map(([capabilityId, capability]) => buildHandshakeCapability(capabilityId, capability, activeLane))
     .sort((left, right) => left.capabilityId.localeCompare(right.capabilityId));
   const requestedCapabilityIds = Array.isArray(request?.requestedCapabilityIds)
-    ? request.requestedCapabilityIds.map((value) => namespace.session.normalizeText(value)).filter(Boolean)
+    ? request.requestedCapabilityIds.map((value) => normalizeText(value)).filter(Boolean)
     : [];
   return {
     bridgeApis: SANDBOX_BRIDGE_API_ALLOWLIST.slice(),
     capabilityAliases: buildHandshakeCapabilityAliases(manifest.aliases, manifest.capabilities || {}),
     capabilities,
     degraded: Boolean(manifestResult?.degraded),
-    degradedReason: namespace.session.normalizeText(manifestResult?.degradedReason),
+    degradedReason: normalizeText(manifestResult?.degradedReason),
     enabledCapabilityIds: capabilities
       .filter((capability) => capability.enabled)
       .map((capability) => capability.capabilityId),
     lane: activeLane,
-    manifestUrl: namespace.session.normalizeText(manifestResult?.manifestUrl),
-    manifestVersion: namespace.session.normalizeText(manifest.manifestVersion),
+    manifestUrl: normalizeText(manifestResult?.manifestUrl),
+    manifestVersion: normalizeText(manifest.manifestVersion),
     requestedCapabilityIds,
     runtimeActions: Object.keys(PANEL_RUNTIME_CAPABILITY_MANIFEST.runtimeCapabilities).sort(),
     schemaVersion: Number(manifest.schemaVersion) || 0,
-    source: namespace.session.normalizeText(manifestResult?.source),
+    source: normalizeText(manifestResult?.source),
     workflowArtifacts: buildHandshakeWorkflowArtifacts(manifest.workflowArtifacts),
   };
 }
@@ -268,11 +269,11 @@ function buildHandshakeCapabilityAliases(aliases = {}, capabilities = {}) {
   }
   return Object.entries(aliases)
     .map(([aliasId, alias]) => ({
-      aliasId: namespace.session.normalizeText(aliasId),
-      owner: namespace.session.normalizeText(alias?.owner),
-      removeAfter: namespace.session.normalizeText(alias?.removeAfter),
-      replacementId: namespace.session.normalizeText(alias?.replacementId),
-      replacementKind: namespace.session.normalizeText(capabilities?.[alias?.replacementId]?.kind),
+      aliasId: normalizeText(aliasId),
+      owner: normalizeText(alias?.owner),
+      removeAfter: normalizeText(alias?.removeAfter),
+      replacementId: normalizeText(alias?.replacementId),
+      replacementKind: normalizeText(capabilities?.[alias?.replacementId]?.kind),
     }))
     .filter((alias) => Boolean(alias.aliasId && alias.replacementId))
     .sort((left, right) => left.aliasId.localeCompare(right.aliasId));
@@ -284,11 +285,11 @@ function buildHandshakeWorkflowArtifacts(workflowArtifacts = {}) {
   }
   return Object.entries(workflowArtifacts)
     .map(([artifactId, artifact]) => ({
-      artifactId: namespace.session.normalizeText(artifactId),
-      artifactVersion: namespace.session.normalizeText(artifact?.artifactVersion || artifact?.version),
-      bundleId: namespace.session.normalizeText(artifact?.bundleId),
-      integrity: namespace.session.normalizeText(artifact?.integrity),
-      scriptSlot: namespace.session.normalizeText(artifact?.scriptSlot),
+      artifactId: normalizeText(artifactId),
+      artifactVersion: normalizeText(artifact?.artifactVersion || artifact?.version),
+      bundleId: normalizeText(artifact?.bundleId),
+      integrity: normalizeText(artifact?.integrity),
+      scriptSlot: normalizeText(artifact?.scriptSlot),
     }))
     .filter((artifact) => Boolean(
       artifact.artifactId
@@ -301,37 +302,37 @@ function buildHandshakeWorkflowArtifacts(workflowArtifacts = {}) {
 }
 
 function buildHandshakeCapability(capabilityId, capability, activeLane) {
-  const normalizedCapabilityId = namespace.session.normalizeText(capabilityId);
-  const capabilityLane = namespace.session.normalizeText(capability?.lane).toLowerCase();
+  const normalizedCapabilityId = normalizeText(capabilityId);
+  const capabilityLane = normalizeText(capability?.lane).toLowerCase();
   const killSwitch = capability?.killSwitch;
   const killSwitchEnabled = capability?.killed === true || killSwitch === true || killSwitch?.enabled === true;
   const laneMatches = !capabilityLane || capabilityLane === "all" || capabilityLane === activeLane;
   const minExtensionVersionSupported = isCapabilityVersionSupported(capability);
   const testOnly = capability?.testOnly === true;
   return {
-    auditLevel: namespace.session.normalizeText(capability?.auditLevel),
-    artifactId: namespace.session.normalizeText(capability?.artifactId),
-    artifactVersion: namespace.session.normalizeText(capability?.artifactVersion),
-    authMode: namespace.session.normalizeText(capability?.authMode || capability?.auth),
+    auditLevel: normalizeText(capability?.auditLevel),
+    artifactId: normalizeText(capability?.artifactId),
+    artifactVersion: normalizeText(capability?.artifactVersion),
+    authMode: normalizeText(capability?.authMode || capability?.auth),
     capabilityId: normalizedCapabilityId,
-    deprecatedAt: namespace.session.normalizeText(capability?.deprecatedAt),
-    domain: namespace.session.normalizeText(capability?.domain),
+    deprecatedAt: normalizeText(capability?.deprecatedAt),
+    domain: normalizeText(capability?.domain),
     enabled: capability?.enabled !== false && !testOnly && !killSwitchEnabled && laneMatches && minExtensionVersionSupported,
     inputSchemaVersion: Number(capability?.inputSchemaVersion) || 0,
     killSwitch: killSwitchEnabled,
-    kind: namespace.session.normalizeText(capability?.kind),
+    kind: normalizeText(capability?.kind),
     lane: capabilityLane || "all",
-    minExtensionVersion: namespace.session.normalizeText(capability?.minExtensionVersion),
+    minExtensionVersion: normalizeText(capability?.minExtensionVersion),
     minExtensionVersionSupported,
     outputSchemaVersion: Number(capability?.outputSchemaVersion) || 0,
-    owner: namespace.session.normalizeText(capability?.owner),
-    pageCapabilityId: namespace.session.normalizeText(capability?.pageCapabilityId),
+    owner: normalizeText(capability?.owner),
+    pageCapabilityId: normalizeText(capability?.pageCapabilityId),
     pilot: capability?.pilot === true,
-    replacementId: namespace.session.normalizeText(capability?.replacementId),
+    replacementId: normalizeText(capability?.replacementId),
     requestTimeoutMs: normalizeCapabilityRequestTimeoutMs(capability),
     schemaVersion: Number(capability?.schemaVersion) || 0,
     testOnly,
-    workflowId: namespace.session.normalizeText(capability?.workflowId),
+    workflowId: normalizeText(capability?.workflowId),
   };
 }
 
@@ -349,7 +350,7 @@ async function invokeHostedPanelFunctionFetch(request) {
 }
 
 async function invokeManifestCapability(request) {
-  const capabilityId = namespace.session.normalizeText(request?.capabilityId);
+  const capabilityId = normalizeText(request?.capabilityId);
   const capability = await resolveManifestCapability(capabilityId);
   if (capability.kind === "function") {
     const endpointCapability = await buildManifestFunctionEndpointCapability(capabilityId, capability);
@@ -372,9 +373,9 @@ async function invokeStorageUiPreferencesCapability(input = {}) {
 }
 
 async function invokeBrowserOpenUrlCapability(capabilityId, capability, input = {}) {
-  const templateKey = namespace.session.normalizeText(input?.templateKey);
+  const templateKey = normalizeText(input?.templateKey);
   const allowedTemplateKeys = Array.isArray(capability?.templateKeys)
-    ? capability.templateKeys.map((value) => namespace.session.normalizeText(value))
+    ? capability.templateKeys.map((value) => normalizeText(value))
     : [];
   if (!allowedTemplateKeys.includes(templateKey)) {
     throw new Error(`허용되지 않은 URL template capability예요: ${capabilityId}`);
@@ -389,7 +390,7 @@ async function invokeBrowserOpenUrlCapability(capabilityId, capability, input = 
 
 async function buildUrlFromTemplate(templateKey, template, input = {}) {
   const baseUrl = await resolveUrlTemplateBaseUrl(template);
-  const pattern = namespace.session.normalizeText(template?.pattern);
+  const pattern = normalizeText(template?.pattern);
   const params = {
     ...(input?.params && typeof input.params === "object" ? input.params : {}),
     ...(input && typeof input === "object" ? input : {}),
@@ -401,10 +402,10 @@ async function buildUrlFromTemplate(templateKey, template, input = {}) {
 }
 
 async function resolveUrlTemplateBaseUrl(template) {
-  const origin = namespace.session.normalizeText(template?.origin);
+  const origin = normalizeText(template?.origin);
   if (origin === "runtime.hosting") {
     const runtimeConfig = await getPromptRuntimeConfig();
-    const hostingBaseUrl = namespace.session.normalizeText(runtimeConfig?.hosting?.baseUrl);
+    const hostingBaseUrl = normalizeText(runtimeConfig?.hosting?.baseUrl);
     if (!hostingBaseUrl) {
       throw new Error("URL template hosting base URL을 찾지 못했어요.");
     }
@@ -428,8 +429,8 @@ function interpolateUrlTemplatePath(templateKey, pattern, params, paramTypes = {
 }
 
 function normalizeTemplateParamValue(templateKey, key, value, type = "safe-segment") {
-  const normalized = namespace.session.normalizeText(value);
-  const normalizedType = namespace.session.normalizeText(type) || "safe-segment";
+  const normalized = normalizeText(value);
+  const normalizedType = normalizeText(type) || "safe-segment";
   if (normalizedType === "zip-file" && !/^[A-Za-z0-9._-]+\.zip$/.test(normalized)) {
     throw new Error("허용되지 않은 release download 파일명이에요.");
   }
@@ -443,8 +444,8 @@ function normalizeTemplateParamValue(templateKey, key, value, type = "safe-segme
 }
 
 function assertAllowedTemplateUrl(url, template) {
-  const parsedUrl = new URL(namespace.session.normalizeText(url));
-  const templateOrigin = namespace.session.normalizeText(template?.origin);
+  const parsedUrl = new URL(normalizeText(url));
+  const templateOrigin = normalizeText(template?.origin);
   const allowedOrigins = namespace.productLane?.getKnownHostingOrigins?.() || [];
   if (templateOrigin !== "runtime.hosting" && parsedUrl.origin !== templateOrigin) {
     throw new Error("URL template origin이 일치하지 않아요.");
@@ -455,12 +456,12 @@ function assertAllowedTemplateUrl(url, template) {
 }
 
 async function enrichManifestFunctionCapabilityResult(capabilityId, result, request) {
-  const normalizedCapabilityId = namespace.session.normalizeText(capabilityId);
+  const normalizedCapabilityId = normalizeText(capabilityId);
   const output = result && typeof result === "object" ? { ...result } : {};
-  if (normalizedCapabilityId !== "meeting.share.create-function" || namespace.session.normalizeText(output.shareUrl)) {
+  if (normalizedCapabilityId !== "meeting.share.create-function" || normalizeText(output.shareUrl)) {
     return output;
   }
-  const shareToken = namespace.session.normalizeText(output.shareToken);
+  const shareToken = normalizeText(output.shareToken);
   const buildShareUrl = namespace.meetingWorkspaceCapability?.buildShareUrl;
   if (!shareToken || typeof buildShareUrl !== "function") {
     return output;
@@ -476,12 +477,12 @@ async function enrichManifestFunctionCapabilityResult(capabilityId, result, requ
 
 async function invokeFunctionEndpointFetch(endpointCapability, body, request) {
   const endpointTarget = await resolveFunctionEndpointTarget(endpointCapability);
-  const targetUrl = namespace.session.normalizeText(endpointTarget?.targetUrl);
+  const targetUrl = normalizeText(endpointTarget?.targetUrl);
   if (!targetUrl) {
     throw new Error("Functions endpoint를 찾지 못했어요.");
   }
 
-  const method = namespace.session.normalizeText(endpointTarget?.method || endpointCapability.method).toUpperCase() || "POST";
+  const method = normalizeText(endpointTarget?.method || endpointCapability.method).toUpperCase() || "POST";
   if (method !== "POST") {
     throw new Error("허용되지 않은 Functions method예요.");
   }
@@ -492,7 +493,7 @@ async function invokeFunctionEndpointFetch(endpointCapability, body, request) {
   };
   if (authMode === "access-token") {
     const accessToken = await getInovaAccessToken();
-    if (!namespace.session.normalizeText(accessToken)) {
+    if (!normalizeText(accessToken)) {
       throw new Error("로그인 토큰을 확인하지 못했어요.");
     }
     headers.Authorization = `Bearer ${accessToken}`;
@@ -500,21 +501,21 @@ async function invokeFunctionEndpointFetch(endpointCapability, body, request) {
     throw new Error("허용되지 않은 인증 모드예요.");
   }
 
-  const response = await fetch(namespace.session.normalizeText(targetUrl), {
+  const response = await fetch(normalizeText(targetUrl), {
     body: JSON.stringify(body && typeof body === "object" ? body : {}),
     headers,
     method,
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload?.ok) {
-    throw new Error(namespace.session.normalizeText(payload?.error || payload?.message) || "Functions 요청에 실패했어요.");
+    throw new Error(normalizeText(payload?.error || payload?.message) || "Functions 요청에 실패했어요.");
   }
   return payload?.data || {};
 }
 
 async function resolveFunctionEndpointCapability(request) {
-  const service = namespace.session.normalizeText(request?.service).toLowerCase();
-  const endpointKey = namespace.session.normalizeText(request?.endpointKey);
+  const service = normalizeText(request?.service).toLowerCase();
+  const endpointKey = normalizeText(request?.endpointKey);
   const endpointCapability =
     PANEL_RUNTIME_CAPABILITY_MANIFEST.functionEndpointCapabilities?.[service]?.[endpointKey];
   if (!endpointCapability) {
@@ -537,7 +538,7 @@ async function resolveManifestCapability(capabilityId) {
   const manifestResult = await readActiveCapabilityManifest();
   const manifest = manifestResult?.manifest || {};
   const alias = manifest.aliases?.[capabilityId];
-  const resolvedCapabilityId = namespace.session.normalizeText(alias?.replacementId) || capabilityId;
+  const resolvedCapabilityId = normalizeText(alias?.replacementId) || capabilityId;
   const capability = manifest.capabilities?.[resolvedCapabilityId];
   if (!capability || typeof capability !== "object") {
     throw new Error("허용되지 않은 capabilityId예요.");
@@ -547,14 +548,14 @@ async function resolveManifestCapability(capabilityId) {
     ...capability,
     aliasId: resolvedCapabilityId === capabilityId ? "" : capabilityId,
     capabilityId: resolvedCapabilityId,
-    kind: namespace.session.normalizeText(capability.kind).toLowerCase(),
+    kind: normalizeText(capability.kind).toLowerCase(),
   };
 }
 
 async function buildManifestFunctionEndpointCapability(capabilityId, capability) {
-  const endpointKey = namespace.session.normalizeText(capability?.endpointKey);
+  const endpointKey = normalizeText(capability?.endpointKey);
   const endpointDefinition = await readFunctionEndpointDefinition(endpointKey);
-  const authMode = namespace.session.normalizeText(capability?.authMode || capability?.auth || "access-token").toLowerCase();
+  const authMode = normalizeText(capability?.authMode || capability?.auth || "access-token").toLowerCase();
   return {
     ...endpointDefinition,
     allowedAuthModes: [authMode],
@@ -562,7 +563,7 @@ async function buildManifestFunctionEndpointCapability(capabilityId, capability)
     defaultAuthMode: authMode,
     endpointKey,
     method: endpointDefinition.method || capability.method || "POST",
-    service: namespace.session.normalizeText(capability?.service).toLowerCase(),
+    service: normalizeText(capability?.service).toLowerCase(),
   };
 }
 
@@ -576,7 +577,7 @@ async function readFunctionEndpointDefinition(endpointKey) {
 }
 
 async function assertManifestCapabilityRunnable(capabilityId) {
-  const normalizedCapabilityId = namespace.session.normalizeText(capabilityId);
+  const normalizedCapabilityId = normalizeText(capabilityId);
   if (!normalizedCapabilityId) {
     return;
   }
@@ -599,8 +600,8 @@ function assertCapabilityRunnable(capability, capabilityId) {
   if (capability?.killed === true || killSwitch === true || killSwitch?.enabled === true) {
     throw new Error(`capability kill switch가 켜져 있어요: ${capabilityId}`);
   }
-  const activeLane = namespace.session.normalizeText(namespace.productLane?.getActiveLane?.() || "legacy").toLowerCase();
-  const capabilityLane = namespace.session.normalizeText(capability?.lane).toLowerCase();
+  const activeLane = normalizeText(namespace.productLane?.getActiveLane?.() || "legacy").toLowerCase();
+  const capabilityLane = normalizeText(capability?.lane).toLowerCase();
   if (capabilityLane && capabilityLane !== "all" && capabilityLane !== activeLane) {
     throw new Error(`현재 lane에서 capability를 사용할 수 없어요: ${capabilityId}`);
   }
@@ -610,7 +611,7 @@ function assertCapabilityRunnable(capability, capabilityId) {
 }
 
 function isCapabilityVersionSupported(capability) {
-  const minExtensionVersion = namespace.session.normalizeText(capability?.minExtensionVersion);
+  const minExtensionVersion = normalizeText(capability?.minExtensionVersion);
   if (!minExtensionVersion) {
     return true;
   }
@@ -624,7 +625,7 @@ function isCapabilityVersionSupported(capability) {
 }
 
 function parseVersionParts(version) {
-  return namespace.session.normalizeText(version).split(".").slice(0, 3).map((part) => {
+  return normalizeText(version).split(".").slice(0, 3).map((part) => {
     const parsed = Number.parseInt(part, 10);
     return Number.isFinite(parsed) ? parsed : 0;
   }).concat([0, 0, 0]).slice(0, 3);
@@ -641,7 +642,7 @@ async function resolveFunctionEndpointTarget(endpointCapability) {
   const functionsConfig = await resolveFunctionsConfigForService(endpointCapability.service);
   return {
     method: endpointCapability.method,
-    targetUrl: namespace.session.normalizeText(functionsConfig?.[endpointCapability.endpointKey]),
+    targetUrl: normalizeText(functionsConfig?.[endpointCapability.endpointKey]),
   };
 }
 
@@ -660,12 +661,12 @@ async function readActiveCapabilityManifest() {
 }
 
 function resolveFunctionAuthMode(request, endpointCapability) {
-  const defaultAuthMode = namespace.session.normalizeText(endpointCapability?.defaultAuthMode).toLowerCase()
+  const defaultAuthMode = normalizeText(endpointCapability?.defaultAuthMode).toLowerCase()
     || "access-token";
-  const authMode = namespace.session.normalizeText(request?.authMode).toLowerCase() || defaultAuthMode;
+  const authMode = normalizeText(request?.authMode).toLowerCase() || defaultAuthMode;
   const allowedModes = new Set(
     Array.isArray(endpointCapability?.allowedAuthModes) && endpointCapability.allowedAuthModes.length
-      ? endpointCapability.allowedAuthModes.map((mode) => namespace.session.normalizeText(mode).toLowerCase())
+      ? endpointCapability.allowedAuthModes.map((mode) => normalizeText(mode).toLowerCase())
       : [defaultAuthMode]
   );
   if (!allowedModes.has(authMode)) {
@@ -722,13 +723,13 @@ async function enrichMeetingPanelAuth(payload) {
     firebaseConfig: runtimeConfig?.web && typeof runtimeConfig.web === "object"
       ? { ...runtimeConfig.web }
       : { ...(namespace.firebaseConfig?.web || {}) },
-    target: namespace.session.normalizeText(runtimeConfig?.target) || "production",
+    target: normalizeText(runtimeConfig?.target) || "production",
   };
 }
 
 async function enrichHostedPanelAuth(payload) {
   const promptAuth = await enrichPromptPanelAuth(payload);
-  const panelScope = namespace.session.normalizeText(promptAuth?.promptPanelScope || promptAuth?.panelScope) || "prompt-panel-v2";
+  const panelScope = normalizeText(promptAuth?.promptPanelScope || promptAuth?.panelScope) || "prompt-panel-v2";
   return {
     ...promptAuth,
     panelScope,
@@ -759,7 +760,7 @@ async function enrichPromptPanelAuth(payload) {
       ? { ...runtimeConfig.web }
       : { ...(namespace.firebaseConfig?.web || {}) },
     promptFirestoreCollections,
-    target: namespace.session.normalizeText(runtimeConfig?.target) || "production",
+    target: normalizeText(runtimeConfig?.target) || "production",
   };
 }
 

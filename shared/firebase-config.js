@@ -1,10 +1,6 @@
 (function initFirebaseConfig(global) {
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const PROMPT_PANEL_BRIDGE_CACHE_TOKEN = "20260402-1";
-  const HOSTING_ENDPOINTS = {
-    latestReleaseUrl: "releases/latest.json",
-    releaseHistoryUrl: "releases/history.json",
-  };
   const LOCAL_MEETING_DEFAULTS = {
     authPort: 9099,
     firestorePort: 8080,
@@ -72,7 +68,6 @@
       || [readRuntimeManifestVersion(), PROMPT_PANEL_BRIDGE_CACHE_TOKEN].filter(Boolean).join("-")
     );
     const endpointMap = {
-      ...HOSTING_ENDPOINTS,
       ...(overrideConfig.endpointPaths && typeof overrideConfig.endpointPaths === "object" ? overrideConfig.endpointPaths : {}),
     };
     return buildUrlConfig(

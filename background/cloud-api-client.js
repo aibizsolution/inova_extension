@@ -196,6 +196,7 @@
     const payload = await postJson(
       meetingFunctions.createInovaMeetingShareLinkUrl,
       {
+        clientRequestId: input?.clientRequestId || "",
         jobId: input?.jobId || "",
         meetingId: input?.meetingId || "",
         owner: toProviderIdentityPayload(providerIdentity),
@@ -210,6 +211,7 @@
     const payload = await postJson(
       meetingFunctions.revokeInovaMeetingShareLinkUrl,
       {
+        clientRequestId: input?.clientRequestId || "",
         jobId: input?.jobId || "",
         meetingId: input?.meetingId || "",
         owner: toProviderIdentityPayload(providerIdentity),
@@ -244,7 +246,7 @@
   }
 
   async function fetchCapabilityManifest(manifestUrl) {
-    const response = await global.fetch(manifestUrl, {
+    const response = await fetchWithTimeout(manifestUrl, {
       cache: "no-store",
     });
     if (!response?.ok) {
@@ -271,28 +273,12 @@
   }
 
   async function postJson(url, body, auth) {
-    const controller = typeof AbortController === "function" ? new AbortController() : null;
-    const timeoutId = controller ? global.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS) : 0;
-    let response;
     const headers = buildAuthHeaders(auth);
-
-    try {
-      response = await global.fetch(url, {
-        body: JSON.stringify(body || {}),
-        headers,
-        method: "POST",
-        signal: controller?.signal,
-      });
-    } catch (error) {
-      if (error?.name === "AbortError") {
-        throw new Error("클라우드 응답이 늦어지고 있어요. 잠시 후 다시 시도해 주세요.", { cause: error });
-      }
-      throw error;
-    } finally {
-      if (timeoutId) {
-        global.clearTimeout(timeoutId);
-      }
-    }
+    const response = await fetchWithTimeout(url, {
+      body: JSON.stringify(body || {}),
+      headers,
+      method: "POST",
+    });
 
     const payload = await response.json().catch(() => null);
     if (!response.ok || !payload?.ok) {
@@ -300,6 +286,51 @@
     }
 
     return payload;
+  }
+
+  async function fetchWithTimeout(url, options = {}) {
+    const controller = typeof AbortController === "function" ? new AbortController() : null;
+    const timeout = createRequestTimeout(controller);
+    try {
+      return await Promise.race([
+        global.fetch(url, {
+          ...options,
+          signal: controller?.signal,
+        }),
+        timeout.promise,
+      ]);
+    } catch (error) {
+      if (error?.name === "AbortError" || error?.code === "cloud-request-timeout") {
+        throw new Error("클라우드 응답이 늦어지고 있어요. 잠시 후 다시 시도해 주세요.", { cause: error });
+      }
+      throw error;
+    } finally {
+      timeout.clear();
+    }
+  }
+
+  function createRequestTimeout(controller) {
+    let timeoutId = 0;
+    const promise = new Promise((_, reject) => {
+      timeoutId = global.setTimeout(() => {
+        if (controller) {
+          controller.abort();
+          return;
+        }
+        const error = new Error("cloud request timed out");
+        error.code = "cloud-request-timeout";
+        reject(error);
+      }, REQUEST_TIMEOUT_MS);
+    });
+    return {
+      clear() {
+        if (timeoutId) {
+          global.clearTimeout(timeoutId);
+          timeoutId = 0;
+        }
+      },
+      promise,
+    };
   }
 
   function buildAuthHeaders(auth) {

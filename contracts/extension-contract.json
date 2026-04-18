@@ -264,7 +264,6 @@
   ],
   "requiredPermissions": [
     "storage",
-    "activeTab",
     "tabs",
     "cookies"
   ],

@@ -31,10 +31,11 @@
     async function issuePanelAuth(cache, pending, providerIdentity, issueAuth, requestOptions) {
       const providerUserKey = namespace.session.normalizeText(providerIdentity?.providerUserKey);
       const cacheKey = buildPanelAuthCacheKey(providerUserKey, requestOptions);
+      const pendingKey = cacheKey || buildPanelAuthPendingKey(providerIdentity, requestOptions);
       const recent = getRecentPanelAuthResult(cache, cacheKey);
       if (recent) return recent;
-      if (cacheKey && pending.has(cacheKey)) {
-        return pending.get(cacheKey);
+      if (pendingKey && pending.has(pendingKey)) {
+        return pending.get(pendingKey);
       }
       const request = (async () => {
         const accessToken = await getAccessToken();
@@ -42,11 +43,11 @@
         cacheRecentPanelAuthResult(cache, cacheKey, result);
         return result;
       })();
-      if (cacheKey) pending.set(cacheKey, request);
+      if (pendingKey) pending.set(pendingKey, request);
       try {
         return await request;
       } finally {
-        if (cacheKey) pending.delete(cacheKey);
+        if (pendingKey) pending.delete(pendingKey);
       }
     }
 
@@ -92,6 +93,17 @@
       }
       const functionsBaseUrl = namespace.session.normalizeText(requestOptions?.functionsConfig?.baseUrl);
       return `${normalizedProviderUserKey}::${functionsBaseUrl}`;
+    }
+
+    function buildPanelAuthPendingKey(providerIdentity, requestOptions) {
+      const identityKey = namespace.session.normalizeText(
+        providerIdentity?.providerUserKey
+        || providerIdentity?.email
+        || providerIdentity?.numericUserId
+        || "anonymous"
+      );
+      const functionsBaseUrl = namespace.session.normalizeText(requestOptions?.functionsConfig?.baseUrl);
+      return `${identityKey}::${functionsBaseUrl}`;
     }
 
     function resolvePanelAuthCacheExpiry(expiresAt) {

@@ -60,6 +60,16 @@ function createMeetingRuntimeArtifactDomain(deps) {
         uploadStatus: "uploaded",
       };
     } catch (error) {
+      const deletion = await deleteTemporarySource(targetBucket, storageObject);
+      if (deletion.error) {
+        logEvent("meeting.source-upload.cleanup.warning", {
+          error: deletion.error,
+          jobId,
+          meetingId: meeting.meetingId,
+          providerUserKey: owner.providerUserKey,
+          storageObject: deletion.storageObject,
+        });
+      }
       logEvent("meeting.source-upload.skipped", {
         error: normalizeText(error?.message),
         jobId,

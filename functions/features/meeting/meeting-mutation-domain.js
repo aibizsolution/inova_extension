@@ -154,6 +154,7 @@ function createMeetingMutationDomain(deps) {
     const status = normalizeText(task.status).toLowerCase();
     return {
       attemptCount: Math.max(0, Number(task.attemptCount) || 0),
+      abandonedAt: normalizeText(task.abandonedAt),
       deletedAt: normalizeText(task.deletedAt),
       jobId: normalizeText(task.jobId),
       jobIds: Array.from(new Set(

@@ -14,7 +14,9 @@ function main() {
 
 function verifyRouteWatcherInstallationAndTriggers() {
   const documentListeners = new Map();
+  const documentListenerRegistrations = [];
   const globalListeners = new Map();
+  const globalListenerRegistrations = [];
   const scheduledReasons = [];
   const scheduledTimeouts = [];
   const scheduledIntervals = [];
@@ -35,6 +37,7 @@ function verifyRouteWatcherInstallationAndTriggers() {
     },
     document: {
       addEventListener(type, handler) {
+        documentListenerRegistrations.push(type);
         documentListeners.set(type, handler);
       },
       visibilityState: "hidden",
@@ -48,6 +51,7 @@ function verifyRouteWatcherInstallationAndTriggers() {
       },
     },
     addEventListener(type, handler) {
+      globalListenerRegistrations.push(type);
       globalListeners.set(type, handler);
     },
     clearInterval() {},
@@ -82,6 +86,8 @@ function verifyRouteWatcherInstallationAndTriggers() {
   assert.equal(state.lastRouteKey, "/chat?sid=alpha");
   assert.equal(scheduledIntervals.length, 1);
   assert.equal(scheduledIntervals[0].delay, 400);
+  assert.deepEqual(globalListenerRegistrations, ["popstate", "visibilitychange"]);
+  assert.deepEqual(documentListenerRegistrations, ["click"]);
   assert.equal(typeof globalListeners.get("popstate"), "function");
   assert.equal(typeof globalListeners.get("visibilitychange"), "function");
   assert.equal(typeof documentListeners.get("click"), "function");
@@ -115,6 +121,35 @@ function verifyRouteWatcherInstallationAndTriggers() {
 
   controller.installRouteWatchers();
   assert.equal(scheduledIntervals.length, 1, "Watcher install should be idempotent");
+
+  const secondState = {
+    lastRouteKey: "",
+    routePollTimer: 0,
+    routeWatchInstalled: false,
+  };
+  const secondScheduledReasons = [];
+  const secondController = context.InovaBookmarks.routeWatchController.create(secondState, {
+    scheduleRouteSync(reason) {
+      secondScheduledReasons.push(reason);
+    },
+  });
+
+  secondController.installRouteWatchers();
+  assert.equal(secondState.routeWatchInstalled, true);
+  assert.equal(secondState.lastRouteKey, "/chat?sid=delta");
+  assert.equal(scheduledIntervals.length, 1, "Global route polling should not be duplicated across controller instances");
+  assert.deepEqual(globalListenerRegistrations, ["popstate", "visibilitychange"]);
+  assert.deepEqual(documentListenerRegistrations, ["click"]);
+
+  const previousReasonCount = scheduledReasons.length;
+  context.history.pushState({}, "", "/chat?sid=epsilon");
+  assert.equal(scheduledReasons.length, previousReasonCount, "Reinstalled history wrapper should dispatch only to the latest route watcher");
+  assert.deepEqual(secondScheduledReasons, ["history.pushState"]);
+
+  context.location.search = "?sid=epsilon";
+  scheduledIntervals[0].callback();
+  assert.equal(secondState.lastRouteKey, "/chat?sid=epsilon");
+  assert.equal(secondScheduledReasons.at(-1), "poll");
 }
 
 function loadScript(relativePath, context) {

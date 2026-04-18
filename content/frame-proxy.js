@@ -8,7 +8,7 @@
   const PARENT_ORIGIN_PARAM = "inovaParentOrigin";
   const state = {
     innerLoaded: false,
-    parentOrigin: readReferrerOrigin(),
+    parentOrigin: readParentOrigin(),
     pendingMessages: [],
     targetOrigin: "",
     targetUrl: "",
@@ -75,10 +75,16 @@
     if (readOrigin(event.origin) !== state.targetOrigin) {
       return;
     }
+    const parentOrigin = state.parentOrigin || readParentOrigin();
+    if (!parentOrigin) {
+      console.warn("[i-Nova Frame Proxy] parent origin is unresolved; dropping hosted panel message.");
+      return;
+    }
+    state.parentOrigin = parentOrigin;
     const ports = Array.isArray(event.ports) ? event.ports : [];
     global.parent.postMessage(
       event.data,
-      state.parentOrigin || "*",
+      parentOrigin,
       ports
     );
   }
@@ -139,9 +145,22 @@
     body.dataset.status = String(value || "loading");
   }
 
-  function readReferrerOrigin() {
+  function readParentOrigin() {
+    const ancestorOrigin = readAncestorOrigin();
+    if (ancestorOrigin) {
+      return ancestorOrigin;
+    }
     try {
       return new URL(global.document.referrer || "").origin;
+    } catch {
+      return "";
+    }
+  }
+
+  function readAncestorOrigin() {
+    try {
+      const ancestorOrigins = global.location?.ancestorOrigins;
+      return readOrigin(ancestorOrigins?.[0]);
     } catch {
       return "";
     }
