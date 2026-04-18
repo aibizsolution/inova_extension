@@ -176,6 +176,7 @@
     "scripts/legacy-panel/verify-panel-prompt-controller.js",
     "scripts/legacy-panel/verify-panel-bookmark-controller.js",
     "scripts/verify-panel-shell-controller.js",
+    "scripts/verify-panel-host-runtime.js",
     "scripts/verify-panel-activity-controller.js",
     "scripts/verify-panel-surface-controller.js",
     "scripts/verify-panel-render-controller.js",
@@ -265,7 +266,8 @@
   "requiredPermissions": [
     "storage",
     "tabs",
-    "cookies"
+    "cookies",
+    "declarativeNetRequest"
   ],
   "requiredHostPermissions": [
     "https://inova.incross.com/*",
@@ -347,6 +349,7 @@
       "background/panel-session-capability.js"
     ],
     "chromeStorage": [
+      "background/browser-capability.js",
       "popup/index.js",
       "shared/storage.js"
     ],

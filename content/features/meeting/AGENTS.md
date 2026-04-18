@@ -43,7 +43,7 @@
 - v2 bootstrap도 legacy처럼 무조건 meeting sync를 prime하지 않는다. 시작 tool이 `meeting`일 때만 bootstrap prime을 남기고, meeting storage listener는 등록하지 않는다.
 - route change는 회의 목록의 정본이 아니다. meeting hub가 이미 로드되었거나 realtime이 붙어 있는 동안에는 route-driven refresh를 다시 예약하지 않고, 회의 동기화는 realtime 연결과 explicit meeting action 중심으로 유지한다.
 - 팝업의 `로컬 호스팅` target은 hosted meeting URL만 바꾸는 모드가 아니다. local target에서는 meeting panel bridge와 meeting HTTP auth/list/share 경로도 함께 local Functions/Auth/Firestore emulator를 보도록 유지한다.
-- local target의 hosted panel iframe과 hidden meeting panel bridge iframe은 page DOM에서 loopback URL을 직접 열지 않는다. 실제 target URL은 `http://127.0.0.1:5000/*`를 유지하되, 페이지에는 extension `content/frame-proxy.html?target=...` wrapper를 꽂아 site CSP로 인한 direct frame block을 피한다.
+- local target의 hosted panel iframe은 page DOM에서 `http://127.0.0.1:5000/*` / `http://localhost:5000/*`를 직접 연다. i-Nova page CSP의 local `frame-src` 허용은 background `declarativeNetRequest` rule이 맡고, extension `content/frame-proxy.html?target=...` wrapper는 Playwright Bridge attach를 깨므로 emergency-only fallback으로만 둔다.
 - `open-workspace` / `open-result` 진단 로그는 한 콘솔에서 끝까지 닫으려 하지 않는다. top panel 콘솔은 `launch requested/dispatched/accepted`까지만 책임지고, hosted 작업실 boot/ready는 새 탭 DevTools의 hosted browser console trace에서 확인한다.
 - hosted Firestore 읽기와 listener 연결은 local state만으로 시작하지 않고 `ensureWorkspaceAuth()`가 custom-token sign-in 완료를 보장한 뒤에만 진행한다.
 - owner-secure hosted 작업실은 `authorizeInovaMeetingWorkspaceAccess`가 돌려주는 `meetingSessionToken`을 세션에 보존해야 하며, 업로드와 작업실 mutation은 이 토큰을 기준으로 인증한다.

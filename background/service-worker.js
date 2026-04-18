@@ -27,6 +27,8 @@ const functionsRuntimeConfig = namespace.functionsRuntimeConfig || {};
 const meetingWorkspaceCapability = namespace.meetingWorkspaceCapability || {};
 const panelSessionCapability = namespace.panelSessionCapability || {};
 
+browserCapability.installLocalPanelCspRuleSync?.();
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const type = String(message?.type || "");
   if (!ACTIVE_BACKGROUND_MESSAGE_TYPES.includes(type)) {
