@@ -133,7 +133,7 @@
         count: getConversationCount(),
         emptyText: buildEmptyText(items.length),
         items,
-        metaText: state.query ? `검색 결과 ${items.length}개` : buildStatusText(),
+        metaText: state.query || items.length ? buildStatusText(items) : "",
         query: state.query,
         tokenEstimate: buildEffectiveTokenEstimate(),
       };
@@ -294,14 +294,18 @@
       }
     }
 
-    function buildStatusText() {
+    function buildStatusText(items = state.items) {
+      const itemCount = Math.max(0, Number(items.length) || 0);
+      if (state.query) {
+        return `검색 결과 ${itemCount}개`;
+      }
       if (state.error) {
         return "표시에 문제가 있어요. 새로고침 후 다시 시도해 주세요.";
       }
-      if (state.loading && !state.items.length) {
+      if (state.loading && !itemCount) {
         return "이 대화의 흐름을 불러오는 중";
       }
-      if (!state.items.length) {
+      if (!itemCount) {
         return "아직 대화가 없어요";
       }
       return "";

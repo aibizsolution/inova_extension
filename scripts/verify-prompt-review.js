@@ -12,6 +12,7 @@ async function main() {
   verifyPromptTellingV2Contract();
   verifyHostedPromptReviewContract();
   await verifyHostedPromptReviewRerunBehavior();
+  await verifyHostedPromptReviewApplyUsesFormattedPrompt();
   await verifyExtensionReviewHandoff();
   console.log("[verify-prompt-review] Prompt review contract passed");
 }
@@ -403,6 +404,81 @@ async function verifyHostedPromptReviewRerunBehavior() {
     toasts.at(-1)?.message,
     "이미 같은 내용으로 검토했어요.",
     "same composer text should show a toast"
+  );
+}
+
+async function verifyHostedPromptReviewApplyUsesFormattedPrompt() {
+  let composerText = "원본 프롬프트";
+  const appliedTexts = [];
+  const context = vm.createContext({
+    clearTimeout,
+    console,
+    globalThis: null,
+    setTimeout,
+  });
+  context.globalThis = context;
+  context.InovaBookmarks = {
+    panelUtils: {
+      normalizeText(value) {
+        return String(value ?? "").replace(/\s+/g, " ").trim();
+      },
+      resolveBrowserCapabilities(options = {}) {
+        return options.browserCapabilities || {};
+      },
+    },
+  };
+  new vm.Script(
+    fs.readFileSync(path.join(root, "hosting", "extension-v2", "panel", "prompt-review-controller.js"), "utf8"),
+    { filename: "hosting/extension-v2/panel/prompt-review-controller.js" }
+  ).runInContext(context);
+  const controller = context.InovaBookmarks.promptReviewController.create({
+    browserCapabilities: {
+      async applyComposerText(text, mode) {
+        appliedTexts.push({ mode, text });
+        composerText = text;
+        return { applied: true };
+      },
+      async invokeCapability() {
+        return {
+          checks: [],
+          quickImprovements: [],
+          refinedPrompt: "첫 문장입니다. 둘째 문장입니다. 셋째 문장입니다.",
+          summary: "요약",
+          totalScore: 75,
+        };
+      },
+      async readComposerState() {
+        return { available: true, text: composerText };
+      },
+      async writeClipboardText() {
+        return { copied: true };
+      },
+    },
+    getProviderIdentity: () => ({ available: true, providerUserKey: "user-1" }),
+    getRuntimeVersion: () => "1.0.0",
+    publishToast: () => true,
+    scheduleRender() {},
+    setActivePromptTab: async () => true,
+    traceReview() {},
+  });
+  controller.syncPanelState({ activeTool: "prompts" }, ["prompt.review.run"]);
+
+  await controller.handlePromptAction("review-composer");
+  const formattedPrompt = controller.buildViewState().result?.formattedPrompt;
+  assert.equal(
+    formattedPrompt,
+    "첫 문장입니다.\n둘째 문장입니다.\n셋째 문장입니다.",
+    "review result should expose the same formatted prompt shown in the hosted review UI"
+  );
+
+  await controller.handlePromptAction("apply-reviewed-prompt");
+  assert.deepEqual(
+    appliedTexts,
+    [{
+      mode: "replace",
+      text: "첫 문장입니다.\n둘째 문장입니다.\n셋째 문장입니다.",
+    }],
+    "apply should preserve the formatted prompt line breaks instead of applying the raw one-line refinedPrompt"
   );
 }
 

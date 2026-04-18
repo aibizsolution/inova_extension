@@ -509,6 +509,41 @@ async function verifyHostedConversationCapabilityGates() {
   assert(!gatedMarkup.includes('data-copy-bookmark-id="q1"'), "bookmark view should hide copy targets when clipboard capability is missing");
   assert(gatedMarkup.includes("대화 이동/복사 기능이 현재 비활성화"), "bookmark view should render capability-disabled copy/jump reason");
 
+  const emptyController = context.InovaBookmarks.conversationController.create({
+    browserCapabilities: {
+      async readConversationDomSnapshot() {
+        return {
+          articles: [],
+          basis: "conversation-dom-snapshot-v1",
+          conversation: {
+            articleCount: 0,
+            hasChatLog: true,
+            hasComposer: true,
+          },
+          modelCandidates: [],
+          sessionId: "empty-session",
+          sessionTitle: "새 대화",
+          visibleMessageId: "",
+        };
+      },
+    },
+    scheduleRender() {},
+    traceConversation() {},
+  });
+  emptyController.syncPanelState(
+    { activeTool: "bookmarks", bookmarksTool: { count: 0, snapshotFingerprint: "empty|0" } },
+    ["page.adapter.v2", "page.conversation.read-dom-snapshot"]
+  );
+  await flushMicrotasks();
+  const emptyViewState = emptyController.buildViewState({});
+  assert.equal(emptyViewState.metaText, "", "conversation empty state should not duplicate the empty message in toolbar meta");
+  const emptyMarkup = context.InovaBookmarks.bookmarkView.renderTool(emptyViewState);
+  assert.equal(
+    (emptyMarkup.match(/아직 대화가 없어요/g) || []).length,
+    1,
+    "conversation empty state should render the empty message once"
+  );
+
   controller.syncPanelState(panelState, [
     "page.adapter.v2",
     "page.clipboard.write-text",

@@ -339,7 +339,7 @@
         });
         return;
       }
-      const refinedPrompt = String(viewState.result?.refinedPrompt || "").trim();
+      const refinedPrompt = String(viewState.result?.formattedPrompt || viewState.result?.refinedPrompt || "").trim();
       if (!refinedPrompt) {
         updateState({ error: "반영할 다듬은 프롬프트가 없어요." });
         traceReview("57.hosted.review.apply.error", {

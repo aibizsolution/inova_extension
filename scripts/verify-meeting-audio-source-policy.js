@@ -15,6 +15,7 @@ const EXPECTED_CHUNK_SAMPLE_RATE = 12000;
 const EXPECTED_BOUNDARY_SEARCH_WINDOW_MS = 45 * 1000;
 const EXPECTED_BOUNDARY_ANALYSIS_WINDOW_MS = 500;
 const EXPECTED_BOUNDARY_ANALYSIS_STEP_MS = 250;
+const EXPECTED_RECORDING_AUDIO_BITS_PER_SECOND = 64000;
 
 function readRepoFile(...segments) {
   return fs.readFileSync(path.join(repoRoot, ...segments), "utf8");
@@ -82,6 +83,12 @@ function main() {
   assert.equal(ns.shared.DEFAULT_SOURCE_BOUNDARY_SEARCH_WINDOW_MS, EXPECTED_BOUNDARY_SEARCH_WINDOW_MS);
   assert.equal(ns.shared.DEFAULT_SOURCE_BOUNDARY_ANALYSIS_WINDOW_MS, EXPECTED_BOUNDARY_ANALYSIS_WINDOW_MS);
   assert.equal(ns.shared.DEFAULT_SOURCE_BOUNDARY_ANALYSIS_STEP_MS, EXPECTED_BOUNDARY_ANALYSIS_STEP_MS);
+  assert.equal(ns.shared.DEFAULT_RECORDING_AUDIO_BITS_PER_SECOND, EXPECTED_RECORDING_AUDIO_BITS_PER_SECOND);
+  assert.equal(
+    ns.shared.resolveRecordingProfile(context).audioBitsPerSecond,
+    EXPECTED_RECORDING_AUDIO_BITS_PER_SECOND,
+    "hosted meeting default recorder bitrate must stay at 64kbps"
+  );
   assert(
     estimateMonoWav16Bytes(EXPECTED_CHUNK_DURATION_MS, EXPECTED_CHUNK_SAMPLE_RATE) <= EXPECTED_OPENAI_SAFE_PART_BYTES,
     "default chunk WAV size must stay below the source part target"
