@@ -61,6 +61,11 @@ async function verifyExtensionCapabilityClientPageAllowlist() {
             requestTimeoutMs: 75000,
           },
           {
+            capabilityId: "metrics.feature-usage.commit",
+            enabled: true,
+            kind: "function",
+          },
+          {
             artifactId: "test-workflow",
             artifactVersion: "0.0.1",
             capabilityId: "test.workflow.run",
@@ -134,6 +139,15 @@ async function verifyExtensionCapabilityClientPageAllowlist() {
     capabilityId: "prompt.review.run",
     input: { prompt: "검토" },
     requestTimeoutMs: 75000,
+    trace: null,
+  });
+  await browserCapabilities.commitFeatureUsageBatch({
+    dayKey: "2026-04-18",
+  });
+  assert.deepEqual(runtimeCalls.at(-1), {
+    action: "capabilities.invoke",
+    capabilityId: "metrics.feature-usage.commit",
+    input: { dayKey: "2026-04-18" },
     trace: null,
   });
 

@@ -47,6 +47,7 @@
     return {
       applyComposerText,
       clearDebugLog,
+      commitFeatureUsageBatch,
       copyDebugLog,
       invokeCapability,
       invokeFunctionEndpoint,
@@ -76,6 +77,10 @@
 
     function clearDebugLog() {
       return invokePageCapability("debug.clear-log");
+    }
+
+    function commitFeatureUsageBatch(input = {}, options = {}) {
+      return invokeCapability("metrics.feature-usage.commit", input, options);
     }
 
     function copyDebugLog(errorsOnly = false) {

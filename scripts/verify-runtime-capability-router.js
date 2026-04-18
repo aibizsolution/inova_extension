@@ -629,7 +629,6 @@ async function verifyBundledRuntimeRouterDispatch() {
     method: "POST",
     url: "https://asia-northeast3-browser-extension-main.cloudfunctions.net/reviewInovaPromptRemoteV2",
   });
-
   await assert.rejects(
     router.handle({
       action: "functions.invoke-endpoint",

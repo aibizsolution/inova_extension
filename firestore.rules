@@ -132,6 +132,26 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /integration_inova_feature_usage_client_days/{docId} {
+      allow read, write: if false;
+    }
+
+    match /integration_inova_feature_usage_user_days/{docId} {
+      allow read, write: if false;
+    }
+
+    match /integration_inova_feature_usage_user_months/{docId} {
+      allow read, write: if false;
+    }
+
+    match /integration_inova_feature_usage_admin_days/{docId} {
+      allow read, write: if false;
+    }
+
+    match /integration_inova_feature_usage_admin_months/{docId} {
+      allow read, write: if false;
+    }
+
     match /integration_inova_accounts/{providerUserKey} {
       allow get: if isPromptPanelSessionActive()
         && request.auth.token.providerUserKey == providerUserKey;

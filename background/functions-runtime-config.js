@@ -46,6 +46,7 @@
       ["meeting.share.create-function", "createInovaMeetingShareLinkUrl", "meeting", "meeting", "meeting", "write"],
       ["meeting.share.revoke-function", "revokeInovaMeetingShareLinkUrl", "meeting", "meeting", "meeting", "write"],
       ["meeting.workspace.authorize-access", "authorizeInovaMeetingWorkspaceAccessUrl", "meeting", "meeting", "meeting", "auth"],
+      ["metrics.feature-usage.commit", "commitInovaFeatureUsageBatchUrl", "metrics", "metrics", "feature-usage", "write"],
       ["prompt.library.sync", "syncInovaPromptLibraryUrl", "prompt", "prompt-library", "prompt-library", "write"],
       ["prompt.panel-auth.issue-function", "issueInovaPromptPanelAuthUrl", "prompt", "prompt", "prompt", "auth"],
       ["prompt.review.run", "reviewInovaPromptUrl", "prompt", "prompt-review", "prompt-review", "write"],
@@ -79,6 +80,7 @@
     },
     endpointKeys: buildFunctionEndpointDefinitions([
       "authorizeInovaMeetingWorkspaceAccessUrl",
+      "commitInovaFeatureUsageBatchUrl",
       "createInovaMeetingShareLinkUrl",
       "deleteInovaMeetingResultUrl",
       "deleteInovaMeetingUrl",

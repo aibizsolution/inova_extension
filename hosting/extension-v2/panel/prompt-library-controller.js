@@ -21,6 +21,9 @@
     const publishToast = typeof options.publishToast === "function"
       ? options.publishToast
       : () => false;
+    const recordFeatureUsage = typeof options.featureUsageTracker?.record === "function"
+      ? options.featureUsageTracker.record
+      : () => {};
     const scheduleRender = typeof options.scheduleRender === "function"
       ? options.scheduleRender
       : () => {};
@@ -493,8 +496,10 @@
         state.editor = createEditor();
         clearMenuState();
         publishActionToast(wasEdit ? "요청을 수정했어요." : "요청을 추가했어요.");
+        void recordFeatureUsage("prompt_library", wasEdit ? "updated" : "saved", "success", { providerIdentity: getProviderIdentity() });
       } catch (error) {
         publishActionToast(readErrorMessage(error, "요청을 저장하지 못했어요."), "error");
+        void recordFeatureUsage("prompt_library", wasEdit ? "updated" : "saved", "error", { providerIdentity: getProviderIdentity() });
       } finally {
         state.actionPending = null;
         scheduleRender();
@@ -517,8 +522,10 @@
         }
         clearMenuState();
         publishActionToast("요청을 삭제했어요.");
+        void recordFeatureUsage("prompt_library", "deleted", "success", { providerIdentity: getProviderIdentity() });
       } catch (error) {
         publishActionToast(readErrorMessage(error, "요청을 삭제하지 못했어요."), "error");
+        void recordFeatureUsage("prompt_library", "deleted", "error", { providerIdentity: getProviderIdentity() });
       } finally {
         state.actionPending = null;
         state.deletePromptId = "";
@@ -641,11 +648,13 @@
         state.activeTab = "store";
         state.activeTabUserSelected = true;
         publishActionToast("스토어에 별도 복사본으로 등록했어요.", "success", normalizedPromptId);
+        void recordFeatureUsage("prompt_store", "published", "success", { providerIdentity: getProviderIdentity() });
         scheduleRender();
         void persistActivePromptTab("store");
         await ensureStoreLoaded(true, "publish");
       } catch (error) {
         publishActionToast(readErrorMessage(error, "스토어에 등록하지 못했어요."), "error", normalizedPromptId);
+        void recordFeatureUsage("prompt_store", "published", "error", { providerIdentity: getProviderIdentity() });
       } finally {
         state.actionPending = null;
         scheduleRender();
@@ -688,6 +697,7 @@
         result?.applied ? "success" : "error",
         prompt.id
       );
+      void recordFeatureUsage("prompt_library", "applied", result?.applied ? "success" : "error", { providerIdentity: getProviderIdentity() });
       scheduleRender();
     }
 

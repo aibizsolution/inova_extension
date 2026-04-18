@@ -16,6 +16,9 @@
     const invokeCapability = typeof browserCapabilities.invokeCapability === "function"
       ? browserCapabilities.invokeCapability
       : async () => ({});
+    const recordFeatureUsage = typeof options.featureUsageTracker?.record === "function"
+      ? options.featureUsageTracker.record
+      : () => {};
     const scheduleRender = typeof options.scheduleRender === "function"
       ? options.scheduleRender
       : () => {};
@@ -193,10 +196,16 @@
         scheduleRender();
         return;
       }
-      await invokeCapability(RELEASE_DOWNLOAD_CAPABILITY_ID, {
-        fileName: artifactFileName,
-        templateKey: RELEASE_DOWNLOAD_TEMPLATE_KEY,
-      });
+      try {
+        await invokeCapability(RELEASE_DOWNLOAD_CAPABILITY_ID, {
+          fileName: artifactFileName,
+          templateKey: RELEASE_DOWNLOAD_TEMPLATE_KEY,
+        });
+        void recordFeatureUsage("release", "download_opened", "success");
+      } catch (error) {
+        void recordFeatureUsage("release", "download_opened", "error");
+        throw error;
+      }
     }
 
     async function fetchJson(relativePath) {

@@ -27,6 +27,9 @@
     const traceConversation = typeof options.traceConversation === "function"
       ? options.traceConversation
       : () => {};
+    const recordFeatureUsage = typeof options.featureUsageTracker?.record === "function"
+      ? options.featureUsageTracker.record
+      : () => {};
     const writeClipboardText = typeof browserCapabilities.writeClipboardText === "function"
       ? browserCapabilities.writeClipboardText
       : async () => ({});
@@ -159,7 +162,9 @@
       state.activeId = normalizedBookmarkId;
       scheduleRender();
       const result = await jumpConversationItem(normalizedBookmarkId);
-      return Boolean(result?.jumped);
+      const jumped = Boolean(result?.jumped);
+      void recordFeatureUsage("conversation", "jumped", jumped ? "success" : "error");
+      return jumped;
     }
 
     function handleSearch(toolId, value) {

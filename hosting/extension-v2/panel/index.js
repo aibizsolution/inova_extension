@@ -93,8 +93,17 @@
     document,
     trace: tracePanelFlow,
   }) || null;
+  const featureUsageTracker = namespace.featureUsageTracker?.create?.({
+    browserCapabilities,
+    readSource: () => ({
+      extensionVersion: state.extensionVersion || "",
+      surface: "hosted-panel",
+    }),
+  }) || null;
+  featureUsageTracker?.start?.();
   const conversationController = namespace.conversationController?.create?.({
     browserCapabilities,
+    featureUsageTracker,
     scheduleRender,
     traceConversation: traceConversationFlow,
   }) || null;
@@ -103,6 +112,7 @@
     browserCapabilities,
     getStoreCategories: () => promptStoreController?.getPublishCategories?.() || [],
     ensureStoreLoaded: (...args) => promptStoreController?.ensureLoaded?.(...args) || Promise.resolve(),
+    featureUsageTracker,
     publishToast,
     scheduleRender,
     traceFirestore: traceFirestoreFlow,
@@ -113,6 +123,7 @@
     getActivePromptTab: () => promptLibraryController?.getActiveTab?.() || "library",
     getProviderIdentity: () => promptLibraryController?.getProviderIdentity?.() || { available: false },
     getRuntimeVersion: () => state.extensionVersion || "",
+    featureUsageTracker,
     publishToast,
     scheduleRender,
     traceReview: traceReviewFlow,
@@ -122,6 +133,7 @@
     browserCapabilities,
     getActivePromptTab: () => promptLibraryController?.getActiveTab?.() || "library",
     getProviderIdentity: () => promptLibraryController?.getProviderIdentity?.() || { available: false },
+    featureUsageTracker,
     importStorePrompt: (storeEntry) => promptLibraryController?.importStorePrompt?.(storeEntry) || Promise.resolve(false),
     publishToast,
     scheduleRender,
@@ -129,6 +141,7 @@
   }) || null;
   const meetingHubController = namespace.meetingHubController?.create?.({
     browserCapabilities,
+    featureUsageTracker,
     publishToast,
     scheduleRender,
     traceFirestore: traceFirestoreFlow,
@@ -136,6 +149,7 @@
   }) || null;
   const releaseController = namespace.releaseController?.create?.({
     browserCapabilities,
+    featureUsageTracker,
     getRuntimeVersion: () => state.extensionVersion || "",
     scheduleRender,
     traceRelease: traceReleaseFlow,

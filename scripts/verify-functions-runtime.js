@@ -96,6 +96,11 @@ function verifySecretManagerWiring() {
     /registerMeetingHandlers\(\{[\s\S]*onOpenAIRequest/.test(source),
     "Meeting OpenAI HTTP handlers must receive an OpenAI-secret onRequest wrapper"
   );
+  assert(
+    source.includes('require("./features/feature-usage/feature-usage-service")')
+      && source.includes("exports.commitInovaFeatureUsageBatch"),
+    "Feature usage commit endpoint must be registered and exported from functions/index.js"
+  );
 }
 
 async function verifyIdentityReuseCache() {

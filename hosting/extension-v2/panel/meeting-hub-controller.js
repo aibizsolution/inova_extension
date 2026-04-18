@@ -19,6 +19,9 @@
     const publishToast = typeof options.publishToast === "function"
       ? options.publishToast
       : () => false;
+    const recordFeatureUsage = typeof options.featureUsageTracker?.record === "function"
+      ? options.featureUsageTracker.record
+      : () => {};
     const scheduleRender = typeof options.scheduleRender === "function"
       ? options.scheduleRender
       : () => {};
@@ -531,6 +534,12 @@
           title: input.title,
           url: normalizeText(result?.url),
         });
+        void recordFeatureUsage(
+          "meeting",
+          action === "open-result" ? "result_opened" : "workspace_opened",
+          result?.opened ? "success" : "error",
+          { providerIdentity }
+        );
         setFeedback(action === "open-result" ? "결과 탭을 열었습니다." : "작업실 탭을 열었습니다.", "info", 1800);
       } catch (error) {
         traceMeeting("65.top.meeting.launch.error", {
@@ -540,6 +549,12 @@
           meetingId: input.meetingId,
           title: input.title,
         });
+        void recordFeatureUsage(
+          "meeting",
+          action === "open-result" ? "result_opened" : "workspace_opened",
+          "error",
+          { providerIdentity: buildProviderIdentityPayload(state.providerIdentity) }
+        );
         setFeedback(readErrorMessage(error, "작업실을 열지 못했어요. 다시 시도해 주세요."), "error", 3600);
       } finally {
         clearPending();
