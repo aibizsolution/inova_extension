@@ -93,6 +93,8 @@ npm run deploy:all
 - 일반적으로 `배포해줘`는 `hosting` 배포를 뜻합니다.
 - `함수 배포`를 명시했을 때만 `deploy:functions`를 사용합니다.
 - `deploy:hosting`과 `deploy:all`은 hosted 검증/운영 배포용이며, 기본적으로 확장 패키지 버전이나 릴리스 패널 메타를 건드리지 않습니다. `deploy:all`은 Storage를 포함하지 않으므로, Firebase Storage를 실제로 켠 프로젝트에서만 `deploy:storage`로 Rules를 별도 반영합니다.
+- 상용 Functions의 `OPENAI_API_KEY`는 일반 `.env`가 아니라 Firebase Functions Secret Manager secret으로 관리합니다. 로컬 에뮬레이터는 ignored `functions/.secret.local`을 사용합니다.
+- 회의 임시 오디오 bucket은 기본적으로 `FIREBASE_CONFIG.storageBucket`을 사용합니다. `STORAGE_BUCKET_URL`은 앱용 Storage bucket을 명시해야 할 때만 쓰고, `gcf-v2-*` Cloud Functions 내부 bucket을 넣지 않습니다.
 - 실제 사용자용 확장 릴리스를 함께 갱신할 때만 `release:deploy` 또는 `release:deploy:all`을 사용합니다.
 - `releases/release-notes.json`에는 패널에 보여줄 사용자용 릴리스만 남기고, build는 그 목록만 `latest.json`, `history.json`, `latest.zip`에 반영합니다.
 - 확장 코드와 hosted 계약이 함께 바뀐 배포라면 Firebase 배포 뒤 Chrome의 압축해제된 확장도 새로고침해야 합니다.

@@ -49,7 +49,9 @@
 5. `npm run verify`, `npm run verify:feature-doc-guard`, `npm run verify:release-guard`를 확인한다.
 6. 공개 릴리스가 필요하면 `npm run release:build` 후 `npm run release:deploy` 또는 `npm run release:deploy:all`을 수행한다.
 7. hosted-only, functions-only, Firestore 포함 운영 배포면 `deploy:hosting`, `deploy:functions`, `deploy:all` 중 필요한 범위만 수행한다. Storage Rules는 Firebase Storage를 실제로 켠 프로젝트에서만 `deploy:storage`로 별도 반영한다.
-8. 배포 후에는 기존 ZIP 사용자가 업그레이드하는 경로와 reload 필요 여부를 먼저 공지한다.
+8. 상용 `OPENAI_API_KEY`는 Firebase Functions Secret Manager secret으로 관리한다. `.env`에 평문 키를 넣어 배포하지 않는다.
+9. 회의 임시 오디오 Storage 설정은 `FIREBASE_CONFIG.storageBucket`을 기본으로 둔다. `STORAGE_BUCKET_URL`을 쓸 때도 앱용 bucket만 지정하고 Cloud Functions 내부 `gcf-v2-*` bucket은 지정하지 않는다.
+10. 배포 후에는 기존 ZIP 사용자가 업그레이드하는 경로와 reload 필요 여부를 먼저 공지한다.
 
 ## 1.0.0 Final Readiness
 

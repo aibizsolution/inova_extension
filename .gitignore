@@ -2,6 +2,9 @@ node_modules/
 functions/.env
 functions/.env.*
 !functions/.env.example
+functions/.secret.local
+functions/.secret.*
+!functions/.secret.local.example
 .DS_Store
 Thumbs.db
 firebase-debug.log

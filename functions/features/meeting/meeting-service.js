@@ -320,6 +320,7 @@ function registerMeetingHandlers(deps) {
     normalizeIdentity,
     normalizeText,
     onRequest,
+    onOpenAIRequest = onRequest,
     sendError,
     verifyInovaIdentity,
   } = deps;
@@ -998,7 +999,7 @@ function registerMeetingHandlers(deps) {
     }
   });
 
-  const previewInovaMeetingResultSectionEdit = onRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
+  const previewInovaMeetingResultSectionEdit = onOpenAIRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
     try {
       assertMethod(request);
       const input = normalizeMeetingSectionEditPreviewRequest(request.body);

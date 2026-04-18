@@ -9,6 +9,8 @@ const root = path.resolve(__dirname, "..");
 
 async function main() {
   verifyCorsOrigins();
+  verifyStorageBucketResolution();
+  verifySecretManagerWiring();
   await verifyIdentityReuseCache();
   await verifyIdentityPendingRequestDeduplication();
   console.log("[verify-functions-runtime] Functions runtime identity cache contract passed");
@@ -21,6 +23,78 @@ function verifyCorsOrigins() {
       && runtime.CORS_ORIGINS.includes("https://browser-extension-v2.web.app")
       && runtime.CORS_ORIGINS.includes("http://127.0.0.1:5000"),
     "Functions CORS should allow legacy hosting, v2 hosting, and local hosted workspace origins"
+  );
+}
+
+function verifyStorageBucketResolution() {
+  const configBucketRuntime = loadRuntime({
+    env: {
+      FIREBASE_CONFIG: JSON.stringify({
+        projectId: "browser-extension-main",
+        storageBucket: "browser-extension-main.firebasestorage.app",
+      }),
+    },
+  });
+  assert.equal(
+    configBucketRuntime.bucket?.name,
+    "browser-extension-main.firebasestorage.app",
+    "Functions should use FIREBASE_CONFIG.storageBucket for meeting temporary audio by default"
+  );
+
+  const reservedOverrideRuntime = loadRuntime({
+    env: {
+      FIREBASE_CONFIG: JSON.stringify({
+        projectId: "browser-extension-main",
+        storageBucket: "browser-extension-main.firebasestorage.app",
+      }),
+      STORAGE_BUCKET_URL: "gcf-v2-uploads-1027279095019.asia-northeast3.cloudfunctions.appspot.com",
+    },
+  });
+  assert.equal(
+    reservedOverrideRuntime.bucket?.name,
+    "browser-extension-main.firebasestorage.app",
+    "Functions must not use Cloud Functions deployment buckets as meeting temporary audio storage"
+  );
+
+  const explicitBucketRuntime = loadRuntime({
+    env: {
+      FIREBASE_CONFIG: JSON.stringify({
+        projectId: "browser-extension-main",
+        storageBucket: "browser-extension-main.firebasestorage.app",
+      }),
+      STORAGE_BUCKET_URL: "gs://custom-meeting-temp-bucket/",
+    },
+  });
+  assert.equal(
+    explicitBucketRuntime.bucket?.name,
+    "custom-meeting-temp-bucket",
+    "Functions should still allow explicit app storage bucket overrides"
+  );
+}
+
+function verifySecretManagerWiring() {
+  const indexPath = path.join(root, "functions", "index.js");
+  const source = fs.readFileSync(indexPath, "utf8");
+  assert(
+    /defineSecret\("OPENAI_API_KEY"\)/.test(source),
+    "OPENAI_API_KEY must be declared as a Firebase Functions Secret Manager secret"
+  );
+  for (const exportName of [
+    "processQueuedInovaMeetingJob",
+    "processQueuedInovaMeetingJobPart",
+    "finalizeChunkedInovaMeetingJob",
+    "processQueuedInovaMeetingCommand",
+  ]) {
+    const pattern = new RegExp(`exports\\.${exportName}\\s*=\\s*onDocumentWritten\\(\\s*withOpenAISecret\\(`);
+    assert(pattern.test(source), `${exportName} must mount OPENAI_API_KEY from Secret Manager`);
+  }
+  assert(
+    /registerPromptReviewHandlers\(\{[\s\S]*onRequest:\s*onOpenAIRequest/.test(source),
+    "Prompt review function must mount OPENAI_API_KEY from Secret Manager"
+  );
+  assert(
+    /registerMeetingHandlers\(\{[\s\S]*onOpenAIRequest/.test(source),
+    "Meeting OpenAI HTTP handlers must receive an OpenAI-secret onRequest wrapper"
   );
 }
 
@@ -97,7 +171,7 @@ function loadRuntime(overrides = {}) {
     module: { exports: {} },
     exports: {},
     process: {
-      env: {},
+      env: { ...(overrides.env || {}) },
     },
     require(moduleId) {
       if (moduleId === "crypto") {
@@ -112,8 +186,8 @@ function loadRuntime(overrides = {}) {
           initializeApp() {},
           storage() {
             return {
-              bucket() {
-                return {};
+              bucket(name) {
+                return { name };
               },
             };
           },
