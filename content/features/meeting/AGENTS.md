@@ -47,6 +47,7 @@
 - `open-workspace` / `open-result` 진단 로그는 한 콘솔에서 끝까지 닫으려 하지 않는다. top panel 콘솔은 `launch requested/dispatched/accepted`까지만 책임지고, hosted 작업실 boot/ready는 새 탭 DevTools의 hosted browser console trace에서 확인한다.
 - hosted Firestore 읽기와 listener 연결은 local state만으로 시작하지 않고 `ensureWorkspaceAuth()`가 custom-token sign-in 완료를 보장한 뒤에만 진행한다.
 - owner-secure hosted 작업실은 `authorizeInovaMeetingWorkspaceAccess`가 돌려주는 `meetingSessionToken`을 세션에 보존해야 하며, 업로드와 작업실 mutation은 이 토큰을 기준으로 인증한다.
+- hosted 작업실의 `debugAuthBypass`는 서버가 Firebase emulator runtime임을 확인한 경우에만 허용한다. local origin/referer만으로는 우회 인증을 열지 않는다.
 - hosted 작업실의 `파일 불러오기`는 로컬/상용 hosted 모두 같은 업로드 흐름을 쓴다. origin 차이만으로 버튼을 숨기거나 import 실행을 막지 않는다.
 - 녹음/불러오기 원본 blob은 원격 전사 성공 후에도 completed record에 연결된 로컬 pending entry로 보관한다. 서버 임시 source는 삭제될 수 있으므로, 사용자가 기록/회의를 삭제하기 전에는 `원본 다운로드` 버튼이 남아야 한다.
 - 오디오 import 길이는 메타데이터를 먼저 읽고, 실패하면 실제 decode로 다시 계산한다. 두 경로가 모두 실패할 때만 사용자 오류를 유지한다.

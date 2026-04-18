@@ -599,6 +599,9 @@ function registerMeetingWorkspaceAuthHandlers(deps) {
     if (!["owner", "readonly"].includes(normalizedMode)) {
       return "";
     }
+    if (!isTrustedDebugBypassRuntime()) {
+      return "";
+    }
     return isLocalWorkspaceRequest(request) ? normalizedMode : "";
   }
 
@@ -615,6 +618,13 @@ function registerMeetingWorkspaceAuthHandlers(deps) {
     }
     return false;
   }
+}
+
+function isTrustedDebugBypassRuntime() {
+  return ["1", "true", "yes", "on"].includes(normalizeString(process.env.FUNCTIONS_EMULATOR).toLowerCase())
+    || Boolean(normalizeString(process.env.FIREBASE_AUTH_EMULATOR_HOST))
+    || Boolean(normalizeString(process.env.FIRESTORE_EMULATOR_HOST))
+    || Boolean(normalizeString(process.env.FIREBASE_STORAGE_EMULATOR_HOST));
 }
 
 function assertMethod(request, createHttpError) {
