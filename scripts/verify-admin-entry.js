@@ -118,9 +118,10 @@ function verifyAdminPageContract() {
       && html.includes('id="contentPanel"')
       && html.includes('class="admin-page-layout"')
       && html.includes('id="pageOutlet"')
-      && html.includes('id="sideAccessState"')
-      && html.includes('id="sideSessionExpiresAt"'),
-    "hosted admin page should expose a menu-driven shell with session, content outlet, side context, and blocked regions"
+      && !html.includes("세션 컨텍스트")
+      && !html.includes('id="sideAccessState"')
+      && !html.includes('id="sideSessionExpiresAt"'),
+    "hosted admin page should expose a menu-driven shell without duplicating session context inside the content layout"
   );
   assert(
     css.includes(".admin-sidebar")
@@ -128,10 +129,11 @@ function verifyAdminPageContract() {
       && css.includes(".admin-main")
       && css.includes(".admin-page-layout")
       && css.includes(".admin-page-outlet")
-      && css.includes(".admin-side-context")
+      && css.includes(".admin-notice-secondary")
+      && !css.includes(".admin-side-context")
       && css.includes("min-width: 1120px")
       && css.includes('.admin-shell[data-view="loading"]'),
-    "hosted admin styles should keep a PC-width menu/outlet layout and explicit view state primitives"
+    "hosted admin styles should keep a PC-width menu/outlet layout without a duplicate side context panel"
   );
   assert(
     !html.includes('id="moduleGrid"')
@@ -151,6 +153,7 @@ function verifyAdminPageContract() {
       && pageSource.includes("readInovaAdminBootstrap")
       && pageSource.includes("AdminSession")
       && pageSource.includes("sessionStorage")
+      && pageSource.includes('typeof payload?.error === "string"')
       && pageSource.includes('url.searchParams.delete("launch")'),
     "hosted admin page should exchange launch tokens, remove query secrets, and verify AdminSession"
   );
@@ -198,6 +201,9 @@ function verifyAdminPageContract() {
       && pageSource.includes("publishInovaAdminPanelNotice")
       && pageSource.includes("archiveInovaAdminPanelNotice")
       && pageSource.includes("renderAdminNoticeMarkdownPreview")
+      && pageSource.includes("validateNoticeForm")
+      && pageSource.includes("normalizeCtaUrlInput")
+      && pageSource.includes("data-notice-feedback-for=\"cta.url\"")
       && pageSource.includes("data-notice-action=\"save\"")
       && pageSource.includes("data-notice-action=\"publish\"")
       && pageSource.includes("data-notice-action=\"archive\""),

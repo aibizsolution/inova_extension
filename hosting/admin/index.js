@@ -207,7 +207,8 @@
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || payload?.ok === false) {
-      throw new Error(normalizeText(payload?.error?.message || payload?.message) || "관리자 요청에 실패했어요.");
+      const payloadError = typeof payload?.error === "string" ? payload.error : payload?.error?.message;
+      throw new Error(normalizeText(payloadError || payload?.message) || "관리자 요청에 실패했어요.");
     }
     return payload?.data || {};
   }
@@ -288,8 +289,6 @@
       "sectionTitle",
       "sessionExpiresAt",
       "sessionPanel",
-      "sideAccessState",
-      "sideSessionExpiresAt",
       "statusBadge",
       "statusSummary",
       "viewerEmail",
@@ -328,8 +327,6 @@
     setText(elements.viewerEmail, state.viewer?.email || "-");
     setText(elements.viewerRole, state.role || "-");
     setText(elements.sessionExpiresAt, formatDateTime(state.sessionExpiresAt));
-    setText(elements.sideAccessState, state.role || "-");
-    setText(elements.sideSessionExpiresAt, formatDateTime(state.sessionExpiresAt));
     renderNavigation();
     renderActiveSection();
   }
@@ -472,10 +469,15 @@
     const noticeState = state.notice;
     const wrapper = global.document.createElement("div");
     wrapper.className = "admin-notice-workbench";
-    wrapper.append(
+    const secondary = global.document.createElement("div");
+    secondary.className = "admin-notice-secondary";
+    secondary.append(
       createNoticeStatusPanel(),
-      createNoticeEditorPanel(),
       createNoticeListPanel()
+    );
+    wrapper.append(
+      createNoticeEditorPanel(),
+      secondary
     );
     wrapper.addEventListener("input", handleNoticeInput);
     wrapper.addEventListener("click", handleNoticeClick);
@@ -556,19 +558,25 @@
           <textarea id="panelNoticeBody" data-notice-field="bodyMarkdown" maxlength="${MAX_NOTICE_BODY_LENGTH}" rows="9" required></textarea>
         </label>
         <div class="admin-notice-form__row">
+          <label class="admin-notice-field" for="panelNoticeCtaLabel">
+            <span>CTA 라벨</span>
+            <input id="panelNoticeCtaLabel" data-notice-field="cta.label" maxlength="${MAX_NOTICE_CTA_LABEL_LENGTH}" placeholder="자세히" />
+            <small class="admin-notice-field__hint">링크가 없으면 비워 두세요.</small>
+          </label>
+          <label class="admin-notice-field" for="panelNoticeCtaUrl">
+            <span>CTA URL</span>
+            <input id="panelNoticeCtaUrl" data-notice-field="cta.url" inputmode="url" placeholder="https://www.naver.com" />
+            <small class="admin-notice-field__hint" data-notice-feedback-for="cta.url">https 링크만 사용할 수 있습니다.</small>
+          </label>
+        </div>
+        <details class="admin-notice-advanced">
+          <summary>예약 노출 옵션</summary>
           <label class="admin-notice-field" for="panelNoticeStartsAt">
             <span>노출 시작</span>
             <input id="panelNoticeStartsAt" data-notice-field="startsAt" type="datetime-local" />
+            <small class="admin-notice-field__hint">비워 두면 발행 즉시 노출됩니다.</small>
           </label>
-          <label class="admin-notice-field" for="panelNoticeCtaLabel">
-            <span>CTA 라벨</span>
-            <input id="panelNoticeCtaLabel" data-notice-field="cta.label" maxlength="${MAX_NOTICE_CTA_LABEL_LENGTH}" />
-          </label>
-        </div>
-        <label class="admin-notice-field" for="panelNoticeCtaUrl">
-          <span>CTA URL</span>
-          <input id="panelNoticeCtaUrl" data-notice-field="cta.url" inputmode="url" />
-        </label>
+        </details>
         <div class="admin-notice-form__actions">
           <button type="button" class="admin-primary-button" data-notice-action="save">저장</button>
           <button type="button" class="admin-primary-button is-strong" data-notice-action="publish">발행</button>
@@ -591,6 +599,7 @@
     setNoticeInputValue(section, "endsAt", form.endsAt);
     setNoticeInputValue(section, "cta.label", form.cta.label);
     setNoticeInputValue(section, "cta.url", form.cta.url);
+    renderNoticeFieldFeedback(section);
     updateNoticePreview(section);
     const saving = Boolean(state.notice.savingAction);
     section.querySelectorAll("button, input, textarea").forEach((control) => {
@@ -726,6 +735,10 @@
   }
 
   async function savePanelNotice() {
+    if (!validateNoticeForm({ requireFutureEnd: false })) {
+      renderActiveSection();
+      return;
+    }
     await runNoticeMutation("save", async () => {
       const result = await postAdminFunction("saveInovaAdminPanelNotice", {
         notice: buildNoticePayloadFromForm(),
@@ -740,6 +753,10 @@
   }
 
   async function publishPanelNotice() {
+    if (!validateNoticeForm({ requireFutureEnd: true })) {
+      renderActiveSection();
+      return;
+    }
     await runNoticeMutation("publish", async () => {
       const result = await postAdminFunction("publishInovaAdminPanelNotice", {
         notice: buildNoticePayloadFromForm(),
@@ -773,6 +790,7 @@
     renderActiveSection();
     try {
       await task();
+      state.notice.fieldErrors = {};
     } catch (error) {
       state.notice.error = readErrorMessage(error);
     } finally {
@@ -787,6 +805,7 @@
       return;
     }
     state.notice.error = "";
+    state.notice.fieldErrors = {};
     state.notice.feedback = "";
     state.notice.form = createNoticeFormFromNotice(notice, {
       keepNoticeId: normalizeText(notice.status) === "draft",
@@ -798,6 +817,7 @@
     return {
       activeNoticeId: "",
       error: "",
+      fieldErrors: {},
       feedback: "",
       form: createNoticeForm(),
       loaded: false,
@@ -850,12 +870,14 @@
 
   function buildNoticePayloadFromForm() {
     const form = state.notice.form;
+    const ctaLabel = normalizeText(form.cta.label);
+    const ctaUrl = normalizeCtaUrlInput(form.cta.url);
     return {
       bodyMarkdown: normalizeText(form.bodyMarkdown),
-      cta: normalizeText(form.cta.label) || normalizeText(form.cta.url)
+      cta: ctaLabel || ctaUrl
         ? {
-            label: normalizeText(form.cta.label),
-            url: normalizeText(form.cta.url),
+            label: ctaLabel,
+            url: ctaUrl,
           }
         : null,
       endsAt: fromDatetimeLocalInput(form.endsAt),
@@ -867,6 +889,12 @@
 
   function writeNoticeFormField(field, value) {
     const nextValue = String(value || "");
+    state.notice.fieldErrors = {
+      ...state.notice.fieldErrors,
+      [field]: "",
+    };
+    state.notice.error = "";
+    state.notice.feedback = "";
     if (field === "cta.label") {
       state.notice.form.cta.label = normalizeText(nextValue);
       return;
@@ -878,6 +906,53 @@
     if (Object.prototype.hasOwnProperty.call(state.notice.form, field)) {
       state.notice.form[field] = nextValue;
     }
+  }
+
+  function validateNoticeForm(options = {}) {
+    const form = state.notice.form;
+    const fieldErrors = {};
+    const title = normalizeText(form.title);
+    const bodyMarkdown = normalizeText(form.bodyMarkdown);
+    const endsAtIso = fromDatetimeLocalInput(form.endsAt);
+    const startsAtIso = fromDatetimeLocalInput(form.startsAt);
+    const ctaLabel = normalizeText(form.cta.label);
+    const ctaUrlRaw = normalizeText(form.cta.url);
+    const ctaUrl = normalizeCtaUrlInput(ctaUrlRaw);
+
+    if (!title) {
+      fieldErrors.title = "제목을 입력해 주세요.";
+    } else if (title.length > MAX_NOTICE_TITLE_LENGTH) {
+      fieldErrors.title = `제목은 ${MAX_NOTICE_TITLE_LENGTH}자 이하로 입력해 주세요.`;
+    }
+    if (!bodyMarkdown) {
+      fieldErrors.bodyMarkdown = "본문을 입력해 주세요.";
+    } else if (bodyMarkdown.length > MAX_NOTICE_BODY_LENGTH) {
+      fieldErrors.bodyMarkdown = `본문은 ${MAX_NOTICE_BODY_LENGTH}자 이하로 입력해 주세요.`;
+    }
+    if (!endsAtIso) {
+      fieldErrors.endsAt = "노출 종료 시간을 입력해 주세요.";
+    } else if (options.requireFutureEnd === true && Date.parse(endsAtIso) <= Date.now()) {
+      fieldErrors.endsAt = "노출 종료 시간은 현재보다 이후여야 합니다.";
+    }
+    if (startsAtIso && endsAtIso && Date.parse(startsAtIso) >= Date.parse(endsAtIso)) {
+      fieldErrors.startsAt = "노출 시작 시간은 종료 시간보다 빨라야 합니다.";
+    }
+    if (ctaLabel || ctaUrlRaw) {
+      if (!ctaLabel) {
+        fieldErrors["cta.label"] = "CTA 라벨을 입력하거나 URL을 비워 주세요.";
+      }
+      if (!ctaUrlRaw) {
+        fieldErrors["cta.url"] = "CTA URL을 입력하거나 라벨을 비워 주세요.";
+      } else if (!isHttpsUrl(ctaUrl)) {
+        fieldErrors["cta.url"] = "CTA URL은 https://로 시작해야 합니다. 예: https://www.naver.com";
+      } else {
+        state.notice.form.cta.url = ctaUrl;
+      }
+    }
+    state.notice.fieldErrors = fieldErrors;
+    const firstError = Object.values(fieldErrors).find(Boolean) || "";
+    state.notice.error = firstError;
+    return !firstError;
   }
 
   function normalizeAdminNotice(noticeInput) {
@@ -913,6 +988,29 @@
     if (input) {
       input.value = normalizeText(value);
     }
+  }
+
+  function renderNoticeFieldFeedback(host) {
+    if (!host) {
+      return;
+    }
+    const fieldErrors = state.notice.fieldErrors || {};
+    host.querySelectorAll("[data-notice-field]").forEach((input) => {
+      const field = normalizeText(input.dataset.noticeField);
+      const error = normalizeText(fieldErrors[field]);
+      input.toggleAttribute("aria-invalid", Boolean(error));
+      input.closest(".admin-notice-field")?.classList.toggle("is-invalid", Boolean(error));
+    });
+    host.querySelectorAll("[data-notice-feedback-for]").forEach((feedback) => {
+      const field = normalizeText(feedback.dataset.noticeFeedbackFor);
+      const error = normalizeText(fieldErrors[field]);
+      if (error) {
+        feedback.textContent = error;
+      } else if (field === "cta.url") {
+        feedback.textContent = "https 링크만 사용할 수 있습니다.";
+      }
+      feedback.classList.toggle("is-error", Boolean(error));
+    });
   }
 
   function updateNoticePreview(host) {
@@ -1003,11 +1101,19 @@
   function normalizeHttpsCta(ctaInput) {
     const cta = ctaInput && typeof ctaInput === "object" ? ctaInput : {};
     const label = normalizeText(cta.label);
-    const url = normalizeText(cta.url);
+    const url = normalizeCtaUrlInput(cta.url);
     if (!label || !url || !isHttpsUrl(url)) {
       return null;
     }
     return { label, url };
+  }
+
+  function normalizeCtaUrlInput(value) {
+    const url = normalizeText(value);
+    if (!url || /^[a-z][a-z0-9+.-]*:/i.test(url)) {
+      return url;
+    }
+    return `https://${url}`;
   }
 
   function isHttpsUrl(value) {

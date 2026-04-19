@@ -165,8 +165,9 @@ npm.cmd run check:feature-usage -- --days 1 --limit 20
    - 새 탭 URL은 현재 hosting target의 `/admin/index.html?launch=...`로 열려야 한다.
 7. 관리자 페이지가 launch token을 교환한 뒤 URL에서 `launch` query를 제거하는지 확인한다.
 8. 관리자 페이지에서 verified 상태, 사용자, 계정, 권한, 세션 만료 정보가 표시되어야 한다.
-9. 같은 launch URL을 다시 열거나 launch 없이 직접 진입하면 blocked 상태가 보여야 한다.
-10. 상용 배포 직후에는 `browser-extension-v2.web.app`의 panel/admin 정적 자산 200 응답과 릴리스 ZIP metadata 정합성을 함께 확인한 뒤 패널을 새로고침한다.
+9. 선택한 기능 화면 안에는 별도 `세션 컨텍스트` 카드처럼 상단 인증 정보를 반복하는 UI가 없어야 한다.
+10. 같은 launch URL을 다시 열거나 launch 없이 직접 진입하면 blocked 상태가 보여야 한다.
+11. 상용 배포 직후에는 `browser-extension-v2.web.app`의 panel/admin 정적 자산 200 응답과 릴리스 ZIP metadata 정합성을 함께 확인한 뒤 패널을 새로고침한다.
 
 ### 소식 팝업
 
@@ -175,14 +176,15 @@ npm.cmd run check:feature-usage -- --days 1 --limit 20
 1. 관리자 페이지에서 `소식 팝업` 메뉴를 연다.
 2. editor가 제목, 본문 Markdown, CTA label/URL, 노출 시작/종료 시간을 표시하고, 버튼은 `저장`, `발행`, `노출 중지`만 있어야 한다.
 3. Markdown preview에서 raw HTML은 escape되고, 문단/줄바꿈, `**굵게**`, `*기울임*`, `-` bullet, `https://` 링크만 렌더링되는지 본다.
-4. 종료 시간이 현재보다 과거인 공지는 `발행`이 실패해야 하고, `http://` CTA나 Markdown 링크도 저장/발행되지 않아야 한다.
-5. 공지를 발행하면 Firestore `ops_panel_notice_state/current.activeNoticeId`가 새 공지를 가리키고, 기존 활성 공지는 `archived`로 바뀌어야 한다.
-6. 일반 패널 사용자 iframe의 capability handshake에서 `panel.notice.read-active`가 enabled이고, auth가 `access-token`, service가 `admin`인지 확인한다.
-7. 패널 하단에 slim popup이 뜨고 본문 스크롤 영역과 겹치지 않아야 한다.
-8. `닫기`는 현재 패널 세션에서만 숨긴다. 페이지 새로고침 후 같은 공지가 다시 보여야 한다.
-9. `하루동안 안보기`는 클릭 즉시 popup을 숨기고, iframe localStorage의 `inova-panel-notice-hide:<noticeId>:<version>` 키가 24시간 만료값으로 저장되어야 한다. 새로고침 후에도 숨김이 유지되어야 한다.
-10. 같은 공지를 새 version 또는 새 noticeId로 다시 발행하면 이전 숨김 키가 새 공지 노출을 막으면 안 된다.
-11. 검증용 공지를 만들었다면 마지막에 `노출 중지`하거나 emulator 데이터를 정리하고, localStorage의 검증용 hide key를 지운다.
+4. CTA URL을 `www.naver.com`처럼 입력하면 저장/발행 전 `https://www.naver.com`으로 보정되거나 필드 바로 아래에서 `https://` 요구사항을 알려야 한다. generic `관리자 요청 실패`만 보여주면 실패다.
+5. 종료 시간이 현재보다 과거인 공지는 `발행`이 실패해야 하고, `http://` CTA나 Markdown 링크도 저장/발행되지 않아야 한다.
+6. 공지를 발행하면 Firestore `ops_panel_notice_state/current.activeNoticeId`가 새 공지를 가리키고, 기존 활성 공지는 `archived`로 바뀌어야 한다.
+7. 일반 패널 사용자 iframe의 capability handshake에서 `panel.notice.read-active`가 enabled이고, auth가 `access-token`, service가 `admin`인지 확인한다.
+8. 패널 하단에 slim popup이 뜨고 본문 스크롤 영역과 겹치지 않아야 한다.
+9. `닫기`는 현재 패널 세션에서만 숨긴다. 페이지 새로고침 후 같은 공지가 다시 보여야 한다.
+10. `하루동안 안보기`는 클릭 즉시 popup을 숨기고, iframe localStorage의 `inova-panel-notice-hide:<noticeId>:<version>` 키가 24시간 만료값으로 저장되어야 한다. 새로고침 후에도 숨김이 유지되어야 한다.
+11. 같은 공지를 새 version 또는 새 noticeId로 다시 발행하면 이전 숨김 키가 새 공지 노출을 막으면 안 된다.
+12. 검증용 공지를 만들었다면 마지막에 `노출 중지`하거나 emulator 데이터를 정리하고, localStorage의 검증용 hide key를 지운다.
 
 ### P1 Regression
 
