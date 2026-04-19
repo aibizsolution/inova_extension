@@ -7,7 +7,6 @@
   const MAX_NOTICE_TITLE_LENGTH = 80;
   const MAX_NOTICE_BODY_LENGTH = 800;
   const MAX_NOTICE_CTA_LABEL_LENGTH = 32;
-  const LOCAL_DEFAULT_ADMIN_EMAIL = "youngtack.park@incross.com";
   const ACCESS_FILTERS = Object.freeze([
     { id: "all", label: "전체" },
     { id: "active", label: "관리자" },
@@ -476,13 +475,14 @@
     }
     if (section.id === "access") {
       elements.pageOutlet?.replaceChildren(createAccessWorkbench());
+      void ensureAccessUsersLoaded();
       return;
     }
     elements.pageOutlet?.replaceChildren(createSectionPlaceholder(section));
   }
 
   function createAccessWorkbench() {
-    const entries = readAccessPreviewEntries();
+    const entries = readAccessEntries();
     const visibleEntries = filterAccessEntries(entries);
     const selectedEntry = readSelectedAccessEntry(entries, visibleEntries);
     const wrapper = global.document.createElement("div");
@@ -508,6 +508,9 @@
         </button>`;
     }).join("");
     const rows = visibleEntries.map((entry) => createAccessListItem(entry, selectedEntry)).join("");
+    const listBody = state.access.loading && !state.access.loaded
+      ? '<p class="admin-access-empty">불러오는 중입니다.</p>'
+      : rows || '<p class="admin-access-empty">조건에 맞는 회원이 없습니다.</p>';
 
     panel.innerHTML = `
       <div class="inova-section-head admin-access-panel-head">
@@ -522,7 +525,7 @@
         ${filterButtons}
       </div>
       <div class="admin-access-list__items">
-        ${rows || '<p class="admin-access-empty">조건에 맞는 계정이 없습니다.</p>'}
+        ${listBody}
       </div>
     `;
     return panel;
@@ -530,6 +533,7 @@
 
   function createAccessListItem(entry, selectedEntry) {
     const isSelected = entry.id === selectedEntry?.id;
+    const status = readAccessDraftStatus(entry);
     return `
       <button type="button" class="admin-access-list__item${isSelected ? " is-selected" : ""}" data-access-select="${escapeHtmlAttribute(entry.id)}" aria-current="${isSelected ? "true" : "false"}">
         <span class="admin-access-avatar" aria-hidden="true">${escapeHtml(readAccessInitial(entry))}</span>
@@ -537,14 +541,29 @@
           <strong>${escapeHtml(entry.displayName)}</strong>
           <span>${escapeHtml(entry.email || entry.providerUserKey)}</span>
         </span>
-        <span class="inova-badge ${escapeHtmlAttribute(readAccessStatusClass(entry.status))}">${escapeHtml(readAccessStatusLabel(entry.status))}</span>
+        <span class="inova-badge ${escapeHtmlAttribute(readAccessStatusClass(status))}">${escapeHtml(readAccessStatusLabel(status))}</span>
       </button>
     `;
   }
 
   function createAccessDetailPanel(entry) {
-    const selectedEntry = entry || readAccessPreviewEntries()[0];
-    const isAdmin = selectedEntry?.status === "active";
+    const selectedEntry = entry || readAccessEntries()[0];
+    if (!selectedEntry) {
+      const panel = global.document.createElement("section");
+      panel.className = "admin-access-detail";
+      panel.innerHTML = `
+        <div class="inova-section-head admin-access-panel-head">
+          <h3 class="inova-section-head__title">권한 설정</h3>
+        </div>
+        <p class="admin-access-empty">선택할 회원이 없습니다.</p>
+      `;
+      return panel;
+    }
+    const draftStatus = readAccessDraftStatus(selectedEntry);
+    const isAdmin = draftStatus === "active";
+    const isDirty = isAccessDraftDirty(selectedEntry);
+    const isSaving = state.access.savingId === selectedEntry.id;
+    const canEdit = selectedEntry.canEdit !== false && !state.access.savingId;
     const detailEmail = selectedEntry?.email || "-";
     const detailName = selectedEntry?.displayName || "-";
 
@@ -565,12 +584,12 @@
       <div class="admin-access-permission">
         <span>관리자 권한</span>
         <div class="admin-access-permission__toggle inova-segmented" aria-label="관리자 권한 설정">
-          <button type="button" disabled aria-pressed="${isAdmin ? "false" : "true"}">일반 사용자</button>
-          <button type="button" disabled aria-pressed="${isAdmin ? "true" : "false"}">관리자</button>
+          <button type="button" data-access-role="inactive" ${canEdit ? "" : "disabled"} aria-pressed="${isAdmin ? "false" : "true"}">일반 사용자</button>
+          <button type="button" data-access-role="active" ${canEdit ? "" : "disabled"} aria-pressed="${isAdmin ? "true" : "false"}">관리자</button>
         </div>
       </div>
       <div class="admin-access-actions">
-        <button type="button" class="admin-primary-button is-strong" disabled>저장</button>
+        <button type="button" class="admin-primary-button is-strong" data-access-action="save" ${canEdit && isDirty ? "" : "disabled"}>${isSaving ? "저장 중" : "저장"}</button>
       </div>
     `;
     return panel;
@@ -586,6 +605,20 @@
   }
 
   function handleAccessClick(event) {
+    const actionButton = event.target?.closest?.("[data-access-action]");
+    if (actionButton) {
+      const action = normalizeText(actionButton.dataset.accessAction);
+      if (action === "save") {
+        void saveAccessUser();
+      }
+      return;
+    }
+    const roleButton = event.target?.closest?.("[data-access-role]");
+    if (roleButton) {
+      writeAccessDraftStatus(state.access.selectedId, roleButton.dataset.accessRole);
+      renderActiveSection();
+      return;
+    }
     const filterButton = event.target?.closest?.("[data-access-filter]");
     if (filterButton) {
       state.access.statusFilter = normalizeText(filterButton.dataset.accessFilter) || "all";
@@ -1027,53 +1060,103 @@
     renderActiveSection();
   }
 
+  async function ensureAccessUsersLoaded() {
+    if (state.access.loaded || state.access.loading) {
+      return;
+    }
+    await loadAccessUsers();
+  }
+
+  async function loadAccessUsers() {
+    state.access.loading = true;
+    state.access.error = "";
+    if (state.activeSectionId === "access") {
+      renderActiveSection();
+    }
+    try {
+      const result = await postAdminFunction("listInovaAdminAccessUsers");
+      const users = Array.isArray(result.users)
+        ? result.users.map(normalizeAccessUser).filter(Boolean)
+        : [];
+      state.access.entries = users;
+      state.access.loaded = true;
+      state.access.draftStatusById = {};
+      if (!users.some((entry) => entry.id === state.access.selectedId)) {
+        state.access.selectedId = users[0]?.id || "";
+      }
+    } catch (error) {
+      state.access.error = readErrorMessage(error);
+      showAdminToast(state.access.error, "error");
+    } finally {
+      state.access.loading = false;
+      if (state.activeSectionId === "access") {
+        renderActiveSection();
+      }
+    }
+  }
+
+  async function saveAccessUser() {
+    if (state.access.savingId) {
+      return;
+    }
+    const selectedEntry = readAccessEntries().find((entry) => entry.id === state.access.selectedId);
+    if (!selectedEntry || selectedEntry.canEdit === false || !isAccessDraftDirty(selectedEntry)) {
+      return;
+    }
+    const nextStatus = readAccessDraftStatus(selectedEntry);
+    state.access.savingId = selectedEntry.id;
+    state.access.error = "";
+    renderActiveSection();
+    try {
+      const result = await postAdminFunction("saveInovaAdminAccessUser", {
+        isAdmin: nextStatus === "active",
+        providerUserKey: selectedEntry.providerUserKey,
+        status: nextStatus,
+      });
+      const updatedUser = normalizeAccessUser(result.user);
+      if (updatedUser) {
+        state.access.entries = readAccessEntries().map((entry) => (
+          entry.id === updatedUser.id ? updatedUser : entry
+        ));
+        delete state.access.draftStatusById[updatedUser.id];
+      }
+      showAdminToast("저장되었습니다.", "success");
+    } catch (error) {
+      state.access.error = readErrorMessage(error);
+      showAdminToast(state.access.error, "error");
+    } finally {
+      state.access.savingId = "";
+      renderActiveSection();
+    }
+  }
+
   function createAccessState() {
     return {
+      draftStatusById: {},
+      entries: [],
+      error: "",
+      loaded: false,
+      loading: false,
       query: "",
-      selectedId: "current-session",
+      savingId: "",
+      selectedId: "",
       statusFilter: "all",
     };
   }
 
-  function readAccessPreviewEntries() {
-    const viewer = normalizeViewer(state.viewer);
-    const viewerEmail = normalizeText(viewer.email).toLowerCase();
-    const viewerKey = normalizeText(viewer.providerUserKey);
-    const entries = [{
-      displayName: viewer.displayName || viewerKey || "현재 관리자",
-      email: viewerEmail,
-      id: "current-session",
-      providerUserKey: viewerKey || "session-provider",
-      role: "admin",
-      scope: "전체 회의 보기",
-      status: "active",
-    }];
-
-    if (viewerEmail !== LOCAL_DEFAULT_ADMIN_EMAIL) {
-      entries.push({
-        displayName: "박영탁",
-        email: LOCAL_DEFAULT_ADMIN_EMAIL,
-        id: "local-default",
-        providerUserKey: "email allowlist",
-        role: "admin",
-        scope: "전체 회의 보기",
-        status: "active",
-      });
-    }
-
-    return entries;
+  function readAccessEntries() {
+    return Array.isArray(state.access.entries) ? state.access.entries : [];
   }
 
   function filterAccessEntries(entries) {
     const query = normalizeText(state.access.query).toLowerCase();
     const statusFilter = normalizeText(state.access.statusFilter) || "all";
     return entries.filter((entry) => {
-      const matchesStatus = statusFilter === "all" || entry.status === statusFilter;
+      const matchesStatus = statusFilter === "all" || readAccessDraftStatus(entry) === statusFilter;
       const haystack = [
         entry.displayName,
         entry.email,
-        entry.role,
-        entry.scope,
+        entry.providerUserKey,
       ].join(" ").toLowerCase();
       return matchesStatus && (!query || haystack.includes(query));
     });
@@ -1095,16 +1178,69 @@
     return source.slice(0, 1).toUpperCase() || "A";
   }
 
+  function readAccessDraftStatus(entry) {
+    const entryId = normalizeText(entry?.id);
+    const draftStatus = normalizeText(state.access.draftStatusById?.[entryId]).toLowerCase();
+    if (draftStatus === "active" || draftStatus === "inactive") {
+      return draftStatus;
+    }
+    return normalizeText(entry?.status).toLowerCase() === "active" ? "active" : "inactive";
+  }
+
+  function writeAccessDraftStatus(entryIdInput, statusInput) {
+    const entryId = normalizeText(entryIdInput);
+    const status = normalizeText(statusInput).toLowerCase();
+    if (!entryId || (status !== "active" && status !== "inactive")) {
+      return;
+    }
+    const entry = readAccessEntries().find((candidate) => candidate.id === entryId);
+    if (!entry || entry.canEdit === false) {
+      return;
+    }
+    if (normalizeText(entry.status).toLowerCase() === status) {
+      delete state.access.draftStatusById[entryId];
+      return;
+    }
+    state.access.draftStatusById[entryId] = status;
+  }
+
+  function isAccessDraftDirty(entry) {
+    return readAccessDraftStatus(entry) !== (normalizeText(entry?.status).toLowerCase() === "active" ? "active" : "inactive");
+  }
+
+  function normalizeAccessUser(input = {}) {
+    if (!input || typeof input !== "object") {
+      return null;
+    }
+    const providerUserKey = normalizeText(input.providerUserKey);
+    if (!providerUserKey) {
+      return null;
+    }
+    const numericUserId = input.numericUserId;
+    const status = normalizeText(input.status).toLowerCase() === "active" ? "active" : "inactive";
+    return {
+      canEdit: input.canEdit !== false,
+      displayName: normalizeText(input.displayName) || normalizeText(input.email) || providerUserKey,
+      email: normalizeText(input.email).toLowerCase(),
+      id: providerUserKey,
+      numericUserId: numericUserId === null || numericUserId === undefined || numericUserId === ""
+        ? null
+        : Number.isFinite(Number(numericUserId))
+          ? Number(numericUserId)
+          : null,
+      provider: normalizeText(input.provider) || "inova",
+      providerUserKey,
+      status,
+    };
+  }
+
   function readAccessStatusLabel(statusInput) {
     const status = normalizeText(statusInput).toLowerCase();
     if (status === "active") {
       return "관리자";
     }
     if (status === "inactive") {
-      return "권한 없음";
-    }
-    if (status === "pending") {
-      return "등록 대기";
+      return "일반 사용자";
     }
     return "확인 필요";
   }
@@ -1116,9 +1252,6 @@
     }
     if (status === "inactive") {
       return "inova-badge--muted";
-    }
-    if (status === "pending") {
-      return "inova-badge--warning";
     }
     return "inova-badge--muted";
   }

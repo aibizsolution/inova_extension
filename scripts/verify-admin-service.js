@@ -6,6 +6,7 @@ const { createAdminDomain } = require("../functions/features/admin/admin-service
 async function main() {
   await verifyConfigAllowlistAccess();
   await verifyFirestoreAdminAccessAndSessionFlow();
+  await verifyAdminAccessUserManagement();
   await verifyDeniedUserCannotIssueLaunch();
   console.log("[verify-admin-service] Admin service contract passed");
 }
@@ -140,6 +141,78 @@ async function verifyDeniedUserCannotIssueLaunch() {
   );
 }
 
+async function verifyAdminAccessUserManagement() {
+  const db = createFakeDb();
+  await db.collection("ops_admin_users").doc("admin-1").set({
+    displayName: "Admin",
+    email: "admin@example.com",
+    providerUserKey: "admin-1",
+    role: "admin",
+    status: "active",
+    updatedAt: "2026-04-19T01:00:00.000Z",
+  });
+  await db.collection("integration_inova_accounts_v2").doc("member-1").set({
+    displayName: "Member One",
+    email: "member1@example.com",
+    providerUserKey: "member-1",
+    updatedAt: "2026-04-19T01:10:00.000Z",
+  });
+  await db.collection("integration_inova_feature_usage_user_months").doc("member-2__2026-04").set({
+    lastUsedAt: "2026-04-19T01:20:00.000Z",
+    owner: {
+      displayName: "Member Two",
+      email: "member2@example.com",
+      providerUserKey: "member-2",
+    },
+  });
+  await db.collection("ops_admin_users").doc("member-2").set({
+    displayName: "Member Two",
+    email: "member2@example.com",
+    providerUserKey: "member-2",
+    role: "admin",
+    status: "active",
+    updatedAt: "2026-04-19T01:30:00.000Z",
+  });
+
+  const domain = createAdminDomain({
+    db,
+    now: () => Date.parse("2026-04-19T02:00:00.000Z"),
+  });
+  const launch = await domain.issueAdminLaunch({
+    displayName: "Admin",
+    email: "admin@example.com",
+    providerUserKey: "admin-1",
+  });
+  const session = await domain.exchangeAdminLaunch(launch.launchToken);
+
+  const list = await domain.listAdminAccessUsers(session.adminSessionToken);
+  assert(list.users.some((user) => user.providerUserKey === "member-1" && user.status === "inactive"));
+  assert(list.users.some((user) => user.providerUserKey === "member-2" && user.status === "active"));
+  assert(list.users.some((user) => user.providerUserKey === "member-2" && user.displayName === "Member Two"));
+
+  const promoted = await domain.saveAdminAccessUser(session.adminSessionToken, {
+    isAdmin: true,
+    providerUserKey: "member-1",
+  });
+  assert.equal(promoted.user.status, "active");
+  assert.equal(db.readDocument("ops_admin_users", "member-1").status, "active");
+
+  const demoted = await domain.saveAdminAccessUser(session.adminSessionToken, {
+    isAdmin: false,
+    providerUserKey: "member-2",
+  });
+  assert.equal(demoted.user.status, "inactive");
+  assert.equal(db.readDocument("ops_admin_users", "member-2").status, "inactive");
+
+  await assert.rejects(
+    () => domain.saveAdminAccessUser(session.adminSessionToken, {
+      isAdmin: true,
+      providerUserKey: "missing-user",
+    }),
+    (error) => Number(error.status) === 404 && /회원 목록/.test(error.message)
+  );
+}
+
 function createFakeDb() {
   const collections = new Map();
   let sequence = 0;
@@ -150,6 +223,28 @@ function createFakeDb() {
       collections.set(name, new Map());
     }
     return collections.get(name);
+  }
+
+  function buildSnapshot(collectionName, entries) {
+    return {
+      docs: entries.map(([id, data]) => ({
+        id,
+        data() {
+          return cloneValue(data);
+        },
+      })),
+    };
+  }
+
+  function readOrderedEntries(collectionName, field, direction) {
+    const entries = Array.from(readCollection(collectionName).entries());
+    return entries.sort((left, right) => {
+      const leftValue = String(left[1]?.[field] || "");
+      const rightValue = String(right[1]?.[field] || "");
+      return direction === "desc"
+        ? rightValue.localeCompare(leftValue)
+        : leftValue.localeCompare(rightValue);
+    });
   }
 
   return {
@@ -176,6 +271,23 @@ function createFakeDb() {
                 ...previous,
                 ...(value || {}),
               }));
+            },
+          };
+        },
+        async get() {
+          return buildSnapshot(collectionName, Array.from(readCollection(collectionName).entries()));
+        },
+        orderBy(field, direction = "asc") {
+          return {
+            limit(count) {
+              return {
+                async get() {
+                  return buildSnapshot(
+                    collectionName,
+                    readOrderedEntries(collectionName, field, direction).slice(0, Number(count) || 0)
+                  );
+                },
+              };
             },
           };
         },

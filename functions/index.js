@@ -151,11 +151,13 @@ exports.deleteInovaAdminPanelNotice = adminHandlers.deleteInovaAdminPanelNotice;
 exports.exchangeInovaAdminLaunch = adminHandlers.exchangeInovaAdminLaunch;
 exports.issueInovaAdminLaunch = adminHandlers.issueInovaAdminLaunch;
 exports.archiveInovaAdminPanelNotice = adminHandlers.archiveInovaAdminPanelNotice;
+exports.listInovaAdminAccessUsers = adminHandlers.listInovaAdminAccessUsers;
 exports.listInovaAdminPanelNotices = adminHandlers.listInovaAdminPanelNotices;
 exports.moveInovaAdminPanelNotice = adminHandlers.moveInovaAdminPanelNotice;
 exports.publishInovaAdminPanelNotice = adminHandlers.publishInovaAdminPanelNotice;
 exports.readInovaAdminBootstrap = adminHandlers.readInovaAdminBootstrap;
 exports.readInovaPanelNotice = adminHandlers.readInovaPanelNotice;
+exports.saveInovaAdminAccessUser = adminHandlers.saveInovaAdminAccessUser;
 exports.saveInovaAdminPanelNotice = adminHandlers.saveInovaAdminPanelNotice;
 
 exports.issueInovaPromptPanelAuth = promptLibraryHandlers.issueInovaPromptPanelAuth;

@@ -177,7 +177,7 @@ Remote manifest fetch나 validation이 실패하면 service worker는 warning/de
 4. 권한이 있으면 `관리` 항목이 추가되고, 클릭 시 `admin.launch.issue-function` capability가 one-time launch token을 발급한다.
 5. background의 `admin.console.open` runtime capability가 현재 hosting target의 `/admin/index.html?launch=...` URL을 새 탭으로 연다.
 6. hosted admin page는 launch token을 `exchangeInovaAdminLaunch`로 AdminSession token으로 교환하고, query string에서 launch 값을 제거한 뒤 `readInovaAdminBootstrap`으로 다시 검증한다.
-7. 실제 관리자 기능은 이후 AdminSession을 요구하는 read-only API부터 붙인다.
+7. `사용자 및 권한`은 AdminSession으로 `listInovaAdminAccessUsers`를 호출해 기존 회원 후보를 읽고, 저장 시 `saveInovaAdminAccessUser`가 `ops_admin_users/{providerUserKey}`의 `status`만 갱신한다.
 
 ### J. Capability handshake boot
 

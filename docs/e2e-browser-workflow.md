@@ -170,8 +170,9 @@ npm.cmd run check:feature-usage -- --days 1 --limit 20
 7. 관리자 페이지가 launch token을 교환한 뒤 URL에서 `launch` query를 제거하는지 확인한다.
 8. 관리자 페이지에서 verified 상태, 사용자, 계정, 권한, 세션 만료 정보가 표시되어야 한다.
 9. 선택한 기능 화면 안에는 별도 `세션 컨텍스트` 카드처럼 상단 인증 정보를 반복하는 UI가 없어야 한다.
-10. 같은 launch URL을 다시 열거나 launch 없이 직접 진입하면 blocked 상태가 보여야 한다.
-11. 상용 배포 직후에는 `browser-extension-v2.web.app`의 panel/admin 정적 자산 200 응답과 릴리스 ZIP metadata 정합성을 함께 확인한 뒤 패널을 새로고침한다.
+10. `사용자 및 권한`은 기존 회원 목록을 읽고, 선택한 회원의 `일반 사용자 / 관리자` 권한 선택과 `저장`만 제공해야 한다. 이메일 직접 입력이나 별도 권한 설명 필드가 보이면 실패다.
+11. 같은 launch URL을 다시 열거나 launch 없이 직접 진입하면 blocked 상태가 보여야 한다.
+12. 상용 배포 직후에는 `browser-extension-v2.web.app`의 panel/admin 정적 자산 200 응답과 릴리스 ZIP metadata 정합성을 함께 확인한 뒤 패널을 새로고침한다.
 
 ### 소식 팝업
 
@@ -196,9 +197,10 @@ npm.cmd run check:feature-usage -- --days 1 --limit 20
 
 1. `ops_admin_users/{providerUserKey}`를 inactive로 바꾼 뒤 기존 AdminSession으로 새로고침한다.
    - 기대값: verified 상태가 유지되지 않고 blocked 상태로 전환된다.
-2. 관리자 항목이 보이는 상태에서 capability manifest의 admin capability를 비활성화한 rehearsal bundle이면 항목이 사라져야 한다.
-3. 관리자 페이지 console에 launch token 원문이나 AdminSession token 원문을 직접 출력하면 실패다.
-4. 배포 보고에는 Functions 배포, Hosting 배포, 확장 Reload 또는 확장 패키지 갱신 필요 여부를 분리해서 적는다.
+2. `사용자 및 권한`에서 비관리자 회원을 `관리자`로 저장하면 `ops_admin_users/{providerUserKey}.status`가 `active`가 되고, 다시 `일반 사용자`로 저장하면 `inactive`가 되어야 한다.
+3. 관리자 항목이 보이는 상태에서 capability manifest의 admin capability를 비활성화한 rehearsal bundle이면 항목이 사라져야 한다.
+4. 관리자 페이지 console에 launch token 원문이나 AdminSession token 원문을 직접 출력하면 실패다.
+5. 배포 보고에는 Functions 배포, Hosting 배포, 확장 Reload 또는 확장 패키지 갱신 필요 여부를 분리해서 적는다.
 
 ## 대화 탭
 
