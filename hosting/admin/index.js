@@ -16,15 +16,6 @@
   ]);
   const ADMIN_SECTIONS = Object.freeze([
     {
-      eyebrow: "Overview",
-      group: "Console",
-      icon: "dashboard",
-      id: "overview",
-      label: "개요",
-      summary: "관리자 세션과 메뉴 구조를 확인하는 기본 화면입니다.",
-      title: "관리자 홈",
-    },
-    {
       eyebrow: "Access",
       group: "Operations",
       icon: "users",
@@ -43,15 +34,6 @@
       title: "소식 팝업",
     },
     {
-      eyebrow: "Runtime",
-      group: "Operations",
-      icon: "system",
-      id: "runtime",
-      label: "시스템 운영",
-      summary: "Functions, Hosting, capability manifest 운영 상태 화면이 들어갈 자리입니다.",
-      title: "시스템 운영",
-    },
-    {
       eyebrow: "Insights",
       group: "Insights",
       icon: "chart",
@@ -60,37 +42,16 @@
       summary: "기능 사용량과 운영 지표 화면이 들어갈 자리입니다.",
       title: "사용량",
     },
-    {
-      eyebrow: "Audit",
-      group: "Insights",
-      icon: "audit",
-      id: "audit",
-      label: "감사 로그",
-      summary: "관리자 작업 이력과 감사 로그 화면이 들어갈 자리입니다.",
-      title: "감사 로그",
-    },
-    {
-      eyebrow: "Release",
-      group: "Release",
-      icon: "release",
-      id: "release",
-      label: "배포 및 릴리스",
-      summary: "배포 상태와 릴리스 운영 화면이 들어갈 자리입니다.",
-      title: "배포 및 릴리스",
-    },
   ]);
   const NAV_ICON_PATHS = Object.freeze({
-    audit: ["M12 3l7 3v6c0 4.2-2.7 7.5-7 9-4.3-1.5-7-4.8-7-9V6l7-3z", "M9.5 12l1.7 1.7 3.3-3.9"],
     chart: ["M4 19V5", "M4 19h16", "M8 16v-4", "M12 16V8", "M16 16v-7"],
     dashboard: ["M4 5h7v6H4z", "M13 5h7v4h-7z", "M13 11h7v8h-7z", "M4 13h7v6H4z"],
     notice: ["M4 5h16v11H7l-3 3z", "M8 9h8", "M8 12h5"],
-    release: ["M12 3v10", "M8 7l4-4 4 4", "M5 13v5h14v-5"],
-    system: ["M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z", "M12 2v3", "M12 19v3", "M4.9 4.9l2.1 2.1", "M17 17l2.1 2.1", "M2 12h3", "M19 12h3", "M4.9 19.1 7 17", "M17 7l2.1-2.1"],
     users: ["M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", "M15 10a2.5 2.5 0 1 0 0-5", "M3 19a6 6 0 0 1 12 0", "M14 14a5 5 0 0 1 7 5"],
   });
 
   const state = {
-    activeSectionId: "overview",
+    activeSectionId: "access",
     adminSessionToken: "",
     access: createAccessState(),
     error: "",
@@ -699,9 +660,7 @@
     title.textContent = section.title;
 
     const body = global.document.createElement("p");
-    body.textContent = section.id === "overview"
-      ? "기능을 한 화면에 누적하지 않고, 왼쪽 메뉴에서 선택한 운영 화면을 이 본문 영역에 연결합니다."
-      : "이 메뉴의 운영 화면은 아직 연결되지 않았습니다. 기능을 붙일 때는 이 outlet 안에서 독립적으로 확장합니다.";
+    body.textContent = "이 메뉴의 운영 화면은 아직 연결되지 않았습니다. 기능을 붙일 때는 이 outlet 안에서 독립적으로 확장합니다.";
 
     placeholder.append(title, body);
     return placeholder;

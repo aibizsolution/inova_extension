@@ -240,8 +240,18 @@ function verifyAdminPageContract() {
   );
   assert(
     pageSource.includes("const ADMIN_SECTIONS = Object.freeze")
+      && pageSource.includes('activeSectionId: "access"')
+      && pageSource.includes('id: "access"')
       && pageSource.includes('id: "notice"')
       && pageSource.includes("소식 팝업")
+      && !pageSource.includes('id: "overview"')
+      && !pageSource.includes('id: "audit"')
+      && !pageSource.includes('id: "release"')
+      && !pageSource.includes('id: "runtime"')
+      && !pageSource.includes("개요")
+      && !pageSource.includes("감사 로그")
+      && !pageSource.includes("배포 및 릴리스")
+      && !pageSource.includes("시스템 운영")
       && pageSource.includes("function setView")
       && pageSource.includes("createAccessWorkbench")
       && pageSource.includes("createAccessDetailPanel")
