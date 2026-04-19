@@ -7,6 +7,7 @@
   const MAX_NOTICE_TITLE_LENGTH = 80;
   const MAX_NOTICE_BODY_LENGTH = 800;
   const MAX_NOTICE_CTA_LABEL_LENGTH = 32;
+  const MAX_ACCESS_ORGANIZATION_LENGTH = 80;
   const ACCESS_FILTERS = Object.freeze([
     { id: "all", label: "전체" },
     { id: "active", label: "관리자" },
@@ -547,6 +548,7 @@
         <span class="admin-access-list__body">
           <strong>${escapeHtml(entry.displayName)}</strong>
           <span>${escapeHtml(entry.email || entry.providerUserKey)}</span>
+          ${entry.organization ? `<span>${escapeHtml(entry.organization)}</span>` : ""}
         </span>
         <span class="inova-badge ${escapeHtmlAttribute(readAccessStatusClass(status))}">${escapeHtml(readAccessStatusLabel(status))}</span>
       </button>
@@ -568,11 +570,12 @@
     }
     const draftStatus = readAccessDraftStatus(selectedEntry);
     const isAdmin = draftStatus === "active";
-    const isDirty = isAccessDraftDirty(selectedEntry);
     const isSaving = state.access.savingId === selectedEntry.id;
-    const canEdit = selectedEntry.canEdit !== false && !state.access.savingId;
+    const canEditRole = selectedEntry.canEdit !== false && !state.access.savingId;
+    const canEditOrganization = !state.access.savingId;
     const detailEmail = selectedEntry?.email || "-";
     const detailName = selectedEntry?.displayName || "-";
+    const detailOrganization = readAccessDraftOrganization(selectedEntry);
 
     const panel = global.document.createElement("section");
     panel.className = "admin-access-detail";
@@ -591,12 +594,16 @@
       <div class="admin-access-permission">
         <span>관리자 권한</span>
         <div class="admin-access-permission__toggle inova-segmented" aria-label="관리자 권한 설정">
-          <button type="button" data-access-role="inactive" ${canEdit ? "" : "disabled"} aria-pressed="${isAdmin ? "false" : "true"}">일반 사용자</button>
-          <button type="button" data-access-role="active" ${canEdit ? "" : "disabled"} aria-pressed="${isAdmin ? "true" : "false"}">관리자</button>
+          <button type="button" data-access-role="inactive" ${canEditRole ? "" : "disabled"} aria-pressed="${isAdmin ? "false" : "true"}">일반 사용자</button>
+          <button type="button" data-access-role="active" ${canEditRole ? "" : "disabled"} aria-pressed="${isAdmin ? "true" : "false"}">관리자</button>
         </div>
       </div>
+      <label class="admin-access-field">
+        <span>조직</span>
+        <input type="text" data-access-organization maxlength="${MAX_ACCESS_ORGANIZATION_LENGTH}" value="${escapeHtmlAttribute(detailOrganization)}" placeholder="팀명 또는 본부명" ${canEditOrganization ? "" : "disabled"} />
+      </label>
       <div class="admin-access-actions">
-        <button type="button" class="admin-primary-button is-strong" data-access-action="save" ${canEdit && isDirty ? "" : "disabled"}>${isSaving ? "저장 중" : "저장"}</button>
+        <button type="button" class="admin-primary-button is-strong" data-access-action="save" ${canSaveAccessUser(selectedEntry) ? "" : "disabled"}>${isSaving ? "저장 중" : "저장"}</button>
       </div>
     `;
     return panel;
@@ -604,13 +611,17 @@
 
   function handleAccessInput(event) {
     const target = event.target;
-    if (!target?.matches?.("[data-access-search]")) {
+    if (target?.matches?.("[data-access-search]")) {
+      state.access.searchDraft = String(target.value || "");
+      accessSearchController?.handleInput?.(target.value, {
+        composing: Boolean(event.isComposing),
+      });
       return;
     }
-    state.access.searchDraft = String(target.value || "");
-    accessSearchController?.handleInput?.(target.value, {
-      composing: Boolean(event.isComposing),
-    });
+    if (target?.matches?.("[data-access-organization]")) {
+      writeAccessDraftOrganization(state.access.selectedId, target.value);
+      updateAccessSaveButton(event.currentTarget);
+    }
   }
 
   function handleAccessCompositionStart(event) {
@@ -1119,6 +1130,7 @@
       state.access.entries = users;
       state.access.loaded = true;
       state.access.draftStatusById = {};
+      state.access.draftOrganizationById = {};
       if (!users.some((entry) => entry.id === state.access.selectedId)) {
         state.access.selectedId = users[0]?.id || "";
       }
@@ -1138,7 +1150,7 @@
       return;
     }
     const selectedEntry = readAccessEntries().find((entry) => entry.id === state.access.selectedId);
-    if (!selectedEntry || selectedEntry.canEdit === false || !isAccessDraftDirty(selectedEntry)) {
+    if (!canSaveAccessUser(selectedEntry)) {
       return;
     }
     const nextStatus = readAccessDraftStatus(selectedEntry);
@@ -1148,6 +1160,7 @@
     try {
       const result = await postAdminFunction("saveInovaAdminAccessUser", {
         isAdmin: nextStatus === "active",
+        organization: readAccessDraftOrganization(selectedEntry),
         providerUserKey: selectedEntry.providerUserKey,
         status: nextStatus,
       });
@@ -1157,6 +1170,7 @@
           entry.id === updatedUser.id ? updatedUser : entry
         ));
         delete state.access.draftStatusById[updatedUser.id];
+        delete state.access.draftOrganizationById[updatedUser.id];
       }
       showAdminToast("저장되었습니다.", "success");
     } catch (error) {
@@ -1171,6 +1185,7 @@
   function createAccessState() {
     return {
       draftStatusById: {},
+      draftOrganizationById: {},
       entries: [],
       error: "",
       loaded: false,
@@ -1237,6 +1252,7 @@
       const haystack = [
         entry.displayName,
         entry.email,
+        entry.organization,
         entry.providerUserKey,
       ].join(" ").toLowerCase();
       return matchesStatus && (!query || haystack.includes(query));
@@ -1268,6 +1284,17 @@
     return normalizeText(entry?.status).toLowerCase() === "active" ? "active" : "inactive";
   }
 
+  function readAccessDraftOrganization(entry) {
+    const entryId = normalizeText(entry?.id);
+    if (!entryId) {
+      return "";
+    }
+    if (Object.prototype.hasOwnProperty.call(state.access.draftOrganizationById, entryId)) {
+      return String(state.access.draftOrganizationById[entryId] || "");
+    }
+    return normalizeText(entry?.organization);
+  }
+
   function writeAccessDraftStatus(entryIdInput, statusInput) {
     const entryId = normalizeText(entryIdInput);
     const status = normalizeText(statusInput).toLowerCase();
@@ -1285,8 +1312,47 @@
     state.access.draftStatusById[entryId] = status;
   }
 
-  function isAccessDraftDirty(entry) {
+  function writeAccessDraftOrganization(entryIdInput, organizationInput) {
+    const entryId = normalizeText(entryIdInput);
+    if (!entryId) {
+      return;
+    }
+    const entry = readAccessEntries().find((candidate) => candidate.id === entryId);
+    if (!entry) {
+      return;
+    }
+    const nextOrganization = String(organizationInput || "").slice(0, MAX_ACCESS_ORGANIZATION_LENGTH);
+    if (normalizeText(entry.organization) === normalizeText(nextOrganization)) {
+      delete state.access.draftOrganizationById[entryId];
+      return;
+    }
+    state.access.draftOrganizationById[entryId] = nextOrganization;
+  }
+
+  function isAccessRoleDraftDirty(entry) {
     return readAccessDraftStatus(entry) !== (normalizeText(entry?.status).toLowerCase() === "active" ? "active" : "inactive");
+  }
+
+  function isAccessOrganizationDraftDirty(entry) {
+    return normalizeText(readAccessDraftOrganization(entry)) !== normalizeText(entry?.organization);
+  }
+
+  function canSaveAccessUser(entry) {
+    if (!entry || state.access.savingId) {
+      return false;
+    }
+    if (isAccessOrganizationDraftDirty(entry)) {
+      return true;
+    }
+    return entry.canEdit !== false && isAccessRoleDraftDirty(entry);
+  }
+
+  function updateAccessSaveButton(host) {
+    const button = host?.querySelector?.("[data-access-action=\"save\"]");
+    const entry = readAccessEntries().find((candidate) => candidate.id === state.access.selectedId);
+    if (button) {
+      button.disabled = !canSaveAccessUser(entry);
+    }
   }
 
   function normalizeAccessUser(input = {}) {
@@ -1311,6 +1377,7 @@
           : null,
       provider: normalizeText(input.provider) || "inova",
       providerUserKey,
+      organization: normalizeText(input.organization),
       status,
     };
   }

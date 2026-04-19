@@ -478,6 +478,38 @@ h3 {
   width: 100%;
 }
 
+.admin-access-field {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  padding: 14px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.admin-access-field input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 10px 11px;
+}
+
+.admin-access-field input:focus {
+  outline: 0;
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px rgba(12, 122, 166, 0.12);
+}
+
 .admin-access-selected-label {
   min-width: 0;
   color: var(--muted);

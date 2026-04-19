@@ -152,6 +152,7 @@ async function verifyAdminAccessUserManagement() {
     updatedAt: "2026-04-19T01:00:00.000Z",
   });
   await db.collection("integration_inova_accounts_v2").doc("member-1").set({
+    departmentName: "AI비즈솔루션팀",
     displayName: "Member One",
     email: "member1@example.com",
     providerUserKey: "member-1",
@@ -163,11 +164,13 @@ async function verifyAdminAccessUserManagement() {
       displayName: "Member Two",
       email: "member2@example.com",
       providerUserKey: "member-2",
+      teamName: "성장본부",
     },
   });
   await db.collection("ops_admin_users").doc("member-2").set({
     displayName: "Member Two",
     email: "member2@example.com",
+    organization: "플랫폼팀",
     providerUserKey: "member-2",
     role: "admin",
     status: "active",
@@ -187,22 +190,39 @@ async function verifyAdminAccessUserManagement() {
 
   const list = await domain.listAdminAccessUsers(session.adminSessionToken);
   assert(list.users.some((user) => user.providerUserKey === "member-1" && user.status === "inactive"));
+  assert(list.users.some((user) => user.providerUserKey === "member-1" && user.organization === "AI비즈솔루션팀"));
   assert(list.users.some((user) => user.providerUserKey === "member-2" && user.status === "active"));
   assert(list.users.some((user) => user.providerUserKey === "member-2" && user.displayName === "Member Two"));
+  assert(list.users.some((user) => user.providerUserKey === "member-2" && user.organization === "플랫폼팀"));
 
   const promoted = await domain.saveAdminAccessUser(session.adminSessionToken, {
     isAdmin: true,
+    organization: "신규사업본부",
     providerUserKey: "member-1",
   });
   assert.equal(promoted.user.status, "active");
+  assert.equal(promoted.user.organization, "신규사업본부");
   assert.equal(db.readDocument("ops_admin_users", "member-1").status, "active");
+  assert.equal(db.readDocument("ops_admin_users", "member-1").organization, "신규사업본부");
 
   const demoted = await domain.saveAdminAccessUser(session.adminSessionToken, {
     isAdmin: false,
+    organization: "AI Lab",
     providerUserKey: "member-2",
   });
   assert.equal(demoted.user.status, "inactive");
+  assert.equal(demoted.user.organization, "AI Lab");
   assert.equal(db.readDocument("ops_admin_users", "member-2").status, "inactive");
+  assert.equal(db.readDocument("ops_admin_users", "member-2").organization, "AI Lab");
+
+  await assert.rejects(
+    () => domain.saveAdminAccessUser(session.adminSessionToken, {
+      isAdmin: true,
+      organization: "x".repeat(81),
+      providerUserKey: "member-1",
+    }),
+    (error) => Number(error.status) === 400 && /조직은 80자 이하/.test(error.message)
+  );
 
   await assert.rejects(
     () => domain.saveAdminAccessUser(session.adminSessionToken, {

@@ -18,6 +18,7 @@ const ADMIN_SESSION_AUTH_SCHEME = "adminsession";
 const MAX_NOTICE_TITLE_LENGTH = 80;
 const MAX_NOTICE_BODY_LENGTH = 800;
 const MAX_NOTICE_CTA_LABEL_LENGTH = 32;
+const MAX_ADMIN_ACCESS_ORGANIZATION_LENGTH = 80;
 const ADMIN_ACCESS_USER_LIST_LIMIT = 120;
 const ADMIN_NOTICE_LIST_LIMIT = 20;
 
@@ -503,6 +504,9 @@ function createAdminDomain(deps) {
     if (target.canEdit === false && nextStatus !== "active") {
       throw createHttpError(400, "환경 설정으로 부여된 관리자 권한은 이 화면에서 해제할 수 없어요.");
     }
+    const nextOrganization = Object.prototype.hasOwnProperty.call(input, "organization")
+      ? normalizeAdminAccessOrganization(input.organization, { strict: true })
+      : target.organization;
 
     const nowIso = new Date(now()).toISOString();
     const userRef = db.collection(collections.users).doc(providerUserKey);
@@ -513,6 +517,7 @@ function createAdminDomain(deps) {
       displayName: target.displayName,
       email: target.email,
       numericUserId: target.numericUserId,
+      organization: nextOrganization,
       provider: target.provider,
       providerUserKey,
       role: "admin",
@@ -880,6 +885,7 @@ function createAdminDomain(deps) {
       displayName,
       email: identity.email || existing.email || "",
       numericUserId: identity.numericUserId !== null ? identity.numericUserId : existing.numericUserId ?? null,
+      organization: identity.organization || existing.organization || "",
       provider: identity.provider || existing.provider || "inova",
       providerUserKey: identity.providerUserKey,
     });
@@ -897,6 +903,7 @@ function createAdminDomain(deps) {
     return {
       ...normalized,
       displayName: normalized.displayName || normalized.email || normalized.providerUserKey,
+      organization: normalizeAdminAccessOrganization(readAdminAccessOrganizationSource(source)),
     };
   }
 
@@ -910,10 +917,36 @@ function createAdminDomain(deps) {
       displayName: member.displayName,
       email: member.email,
       numericUserId: member.numericUserId,
+      organization: normalizeAdminAccessOrganization(adminDoc.organization) || member.organization,
       provider: member.provider,
       providerUserKey: member.providerUserKey,
       status: isActiveAdmin ? "active" : "inactive",
     };
+  }
+
+  function readAdminAccessOrganizationSource(source = {}) {
+    return source.organization
+      || source.organizationName
+      || source.departmentName
+      || source.department
+      || source.teamName
+      || source.team
+      || source.divisionName
+      || source.division
+      || source.headquartersName
+      || source.headquarters
+      || "";
+  }
+
+  function normalizeAdminAccessOrganization(value, options = {}) {
+    const organization = normalizeText(value);
+    if (organization.length <= MAX_ADMIN_ACCESS_ORGANIZATION_LENGTH) {
+      return organization;
+    }
+    if (options.strict === true) {
+      throw createHttpError(400, `조직은 ${MAX_ADMIN_ACCESS_ORGANIZATION_LENGTH}자 이하로 입력해 주세요.`);
+    }
+    return organization.slice(0, MAX_ADMIN_ACCESS_ORGANIZATION_LENGTH);
   }
 
   function compareAdminAccessUsers(left, right) {
