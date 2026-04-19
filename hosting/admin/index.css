@@ -484,10 +484,38 @@ h3 {
   padding: 14px;
 }
 
-.admin-access-meta span {
+.admin-access-meta__label {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.admin-access-meta__label-text {
   color: var(--muted);
   font-size: 12px;
   font-weight: 800;
+}
+
+.admin-help-chip {
+  width: 18px;
+  height: 18px;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid #bdd0f3;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  cursor: help;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.admin-help-chip:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 3px rgba(12, 122, 166, 0.14);
 }
 
 .admin-access-meta strong {
