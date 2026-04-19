@@ -100,11 +100,15 @@
   };
 
   const elements = {};
+  let accessSearchController = null;
   let confirmController = null;
   let toastController = null;
 
   global.addEventListener("DOMContentLoaded", () => {
     bindElements();
+    accessSearchController = createAdminDeferredSearchController({
+      onSearch: applyAccessSearch,
+    });
     confirmController = createAdminConfirmController();
     toastController = createAdminToastController();
     bindEvents();
@@ -492,6 +496,9 @@
       createAccessDetailPanel(selectedEntry)
     );
     wrapper.addEventListener("input", handleAccessInput);
+    wrapper.addEventListener("compositionstart", handleAccessCompositionStart);
+    wrapper.addEventListener("compositionend", handleAccessCompositionEnd);
+    wrapper.addEventListener("search", handleAccessSearch);
     wrapper.addEventListener("click", handleAccessClick);
     return wrapper;
   }
@@ -519,7 +526,7 @@
       </div>
       <label class="admin-access-search">
         <span>검색</span>
-        <input type="search" data-access-search value="${escapeHtmlAttribute(state.access.query)}" placeholder="이름 또는 이메일 검색" />
+        <input type="search" data-access-search value="${escapeHtmlAttribute(state.access.searchDraft)}" placeholder="이름 또는 이메일 검색" />
       </label>
       <div class="admin-access-filter inova-segmented" aria-label="회원 권한 필터">
         ${filterButtons}
@@ -600,11 +607,42 @@
     if (!target?.matches?.("[data-access-search]")) {
       return;
     }
-    state.access.query = normalizeText(target.value);
-    renderActiveSection();
+    state.access.searchDraft = String(target.value || "");
+    accessSearchController?.handleInput?.(target.value, {
+      composing: Boolean(event.isComposing),
+    });
+  }
+
+  function handleAccessCompositionStart(event) {
+    if (!event.target?.matches?.("[data-access-search]")) {
+      return;
+    }
+    accessSearchController?.handleCompositionStart?.();
+  }
+
+  function handleAccessCompositionEnd(event) {
+    const target = event.target;
+    if (!target?.matches?.("[data-access-search]")) {
+      return;
+    }
+    state.access.searchDraft = String(target.value || "");
+    accessSearchController?.handleCompositionEnd?.(target.value);
+  }
+
+  function handleAccessSearch(event) {
+    const target = event.target;
+    if (!target?.matches?.("[data-access-search]")) {
+      return;
+    }
+    state.access.searchDraft = String(target.value || "");
+    accessSearchController?.flush?.(target.value);
   }
 
   function handleAccessClick(event) {
+    if (event.target?.closest?.("[data-access-search]")) {
+      return;
+    }
+    accessSearchController?.flush?.(state.access.searchDraft);
     const actionButton = event.target?.closest?.("[data-access-action]");
     if (actionButton) {
       const action = normalizeText(actionButton.dataset.accessAction);
@@ -1139,9 +1177,52 @@
       loading: false,
       query: "",
       savingId: "",
+      searchDraft: "",
       selectedId: "",
       statusFilter: "all",
     };
+  }
+
+  function applyAccessSearch(query, details = {}) {
+    const focusState = readAccessSearchFocusState();
+    const nextQuery = normalizeText(query);
+    const nextDraft = typeof details.rawValue === "string" ? details.rawValue : nextQuery;
+    state.access.query = nextQuery;
+    state.access.searchDraft = nextDraft;
+    if (state.activeSectionId === "access") {
+      renderActiveSection();
+      restoreAccessSearchFocus(focusState);
+    }
+  }
+
+  function readAccessSearchFocusState() {
+    const activeElement = global.document?.activeElement;
+    if (!activeElement?.matches?.("[data-access-search]")) {
+      return null;
+    }
+    return {
+      selectionDirection: activeElement.selectionDirection || "none",
+      selectionEnd: Number(activeElement.selectionEnd),
+      selectionStart: Number(activeElement.selectionStart),
+    };
+  }
+
+  function restoreAccessSearchFocus(focusState) {
+    if (!focusState) {
+      return;
+    }
+    const input = elements.pageOutlet?.querySelector?.("[data-access-search]");
+    if (!input) {
+      return;
+    }
+    input.focus({ preventScroll: true });
+    if (typeof input.setSelectionRange !== "function") {
+      return;
+    }
+    const valueLength = String(input.value || "").length;
+    const selectionStart = clampNumber(focusState.selectionStart, 0, valueLength);
+    const selectionEnd = clampNumber(focusState.selectionEnd, selectionStart, valueLength);
+    input.setSelectionRange(selectionStart, selectionEnd, focusState.selectionDirection);
   }
 
   function readAccessEntries() {
@@ -1716,6 +1797,29 @@
     });
   }
 
+  function createAdminDeferredSearchController(options = {}) {
+    const designSystem = global.InovaDesignSystem;
+    if (designSystem && typeof designSystem.createDeferredSearchController === "function") {
+      return designSystem.createDeferredSearchController(options);
+    }
+    return Object.freeze({
+      cancel: () => false,
+      flush: (value) => {
+        options.onSearch?.(normalizeText(value));
+        return true;
+      },
+      handleCompositionEnd: (value) => {
+        options.onSearch?.(normalizeText(value));
+        return true;
+      },
+      handleCompositionStart: () => true,
+      handleInput: (value) => {
+        options.onSearch?.(normalizeText(value));
+        return true;
+      },
+    });
+  }
+
   function createAdminConfirmController() {
     const designSystem = global.InovaDesignSystem;
     if (designSystem && typeof designSystem.createConfirmController === "function") {
@@ -1747,6 +1851,14 @@
 
   function normalizeText(value) {
     return String(value || "").trim();
+  }
+
+  function clampNumber(value, min, max) {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) {
+      return min;
+    }
+    return Math.min(max, Math.max(min, numericValue));
   }
 
   function cssEscape(value) {
