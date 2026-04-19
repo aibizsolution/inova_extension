@@ -2,12 +2,18 @@
   const namespace = (global.InovaBookmarks = global.InovaBookmarks || {});
   const { normalizeText, resolveBrowserCapabilities } = namespace.panelUtils;
   const LIST_LIMIT = 24;
+  const MEETING_SCOPE_IDS = Object.freeze(["all", "owned", "participating"]);
   const SUPPORTED_ACTIONS = new Set([
     "open-result",
     "open-workspace",
+    "cancel-revoke-share",
+    "confirm-revoke-share",
+    "remove-participation",
+    "set-scope",
     "share",
     "revoke-share",
   ]);
+  const MEETING_PARTICIPATION_HIDE_CAPABILITY_ID = "meeting.participation.hide-function";
   const MEETING_SHARE_CREATE_CAPABILITY_ID = "meeting.share.create-function";
   const MEETING_SHARE_REVOKE_CAPABILITY_ID = "meeting.share.revoke-function";
   const REQUIRED_EXTENSION_CAPABILITIES = Object.freeze([
@@ -49,10 +55,14 @@
     let meetingRealtime = options.meetingRealtime && typeof options.meetingRealtime === "object"
       ? options.meetingRealtime
       : null;
+    let meetingParticipationRealtime = options.meetingParticipationRealtime && typeof options.meetingParticipationRealtime === "object"
+      ? options.meetingParticipationRealtime
+      : null;
     let meetingUsageRealtime = options.meetingUsageRealtime && typeof options.meetingUsageRealtime === "object"
       ? options.meetingUsageRealtime
       : null;
     const state = {
+      activeScope: "all",
       activeTool: "",
       capabilities: [],
       checkedAt: "",
@@ -67,10 +77,14 @@
       items: [],
       loadPromise: null,
       loading: false,
+      ownedItems: [],
       panelOpen: false,
+      participationItems: [],
       pending: createPendingState(),
       pendingReload: false,
       providerIdentity: createProviderIdentity(),
+      query: "",
+      revokeConfirmation: createRevokeConfirmationState(),
       settings: {
         meetingDebugConsoleEnabled: false,
         meetingWorkspaceTarget: "production",
@@ -100,6 +114,25 @@
         }),
       };
     }
+    if (!meetingParticipationRealtime && namespace.meetingParticipationFirestoreClient?.create) {
+      meetingParticipationRealtime = namespace.meetingParticipationFirestoreClient.create({
+        browserCapabilities,
+        onError: handleParticipationRealtimeError,
+        onSnapshot: handleParticipationRealtimeSnapshot,
+        traceFirestore,
+      });
+    }
+    if (!meetingParticipationRealtime) {
+      meetingParticipationRealtime = {
+        disconnect() {},
+        ensureSubscribed: async () => ({
+          checkedAt: "",
+          fromCache: false,
+          hasPendingWrites: false,
+          items: [],
+        }),
+      };
+    }
     if (!meetingUsageRealtime && namespace.meetingUsageFirestoreClient?.create) {
       meetingUsageRealtime = namespace.meetingUsageFirestoreClient.create({
         browserCapabilities,
@@ -120,6 +153,7 @@
       getMeetingCount,
       handleHostActivity,
       handleMeetingAction,
+      handleSearch,
       hasRequiredCapabilities,
       syncPanelState,
     };
@@ -141,11 +175,13 @@
       hydrateProviderIdentityFromPanel(panelState);
       if (!hasRequiredCapabilities()) {
         meetingRealtime?.disconnect?.("capabilities-missing");
+        meetingParticipationRealtime?.disconnect?.("capabilities-missing");
         meetingUsageRealtime?.disconnect?.("capabilities-missing");
         return;
       }
       if (nextActiveTool !== "meeting" || !nextPanelOpen) {
         meetingRealtime?.disconnect?.("panel-inactive");
+        meetingParticipationRealtime?.disconnect?.("panel-inactive");
         meetingUsageRealtime?.disconnect?.("panel-inactive");
         return;
       }
@@ -161,7 +197,7 @@
     }
 
     function getMeetingCount() {
-      return Math.max(0, Array.isArray(state.items) ? state.items.length : 0);
+      return getMeetingCounts().all;
     }
 
     function buildViewState() {
@@ -172,17 +208,22 @@
       }
       return {
         canCreateShare: hasCapability(MEETING_SHARE_CREATE_CAPABILITY_ID),
+        canHideParticipation: hasCapability(MEETING_PARTICIPATION_HIDE_CAPABILITY_ID),
         canRevokeShare: hasCapability(MEETING_SHARE_REVOKE_CAPABILITY_ID),
         capabilityNotice: buildCapabilityNotice(),
         checkedAt: normalizeText(state.checkedAt),
         count: getMeetingCount(),
+        counts: getMeetingCounts(),
         dataFreshness: normalizeEnum(state.dataFreshness, ["fresh", "stale", "empty"], "empty"),
         degraded: Boolean(state.degraded),
         degradedReason: normalizeText(state.degradedReason),
         error: normalizeText(state.error),
         feedback: normalizeFeedback(state.feedback),
-        items: state.items.slice(),
+        activeScope: normalizeMeetingScope(state.activeScope),
+        items: getVisibleMeetingItems(),
         pending: normalizePending(state.pending),
+        query: normalizeText(state.query),
+        revokeConfirmation: { ...state.revokeConfirmation },
         source: normalizeEnum(state.source, ["realtime", "cache", "none"], "none"),
         usage: cloneUsageState(state.usage),
       };
@@ -221,6 +262,11 @@
       if (!SUPPORTED_ACTIONS.has(normalizedAction) || !hasRequiredCapabilities()) {
         return false;
       }
+      if (normalizedAction === "set-scope") {
+        clearRevokeConfirmation();
+        setScope(detail?.scope);
+        return true;
+      }
       if (state.pending.active) {
         return true;
       }
@@ -233,18 +279,29 @@
         return true;
       }
 
-      if ((normalizedAction === "share" || normalizedAction === "revoke-share") && !input.meetingId) {
+      if ((normalizedAction === "share" || normalizedAction === "revoke-share" || normalizedAction === "confirm-revoke-share" || normalizedAction === "remove-participation") && !input.meetingId) {
         setFeedback("회의 정보를 찾지 못했어요. 다시 시도해 주세요.", "error", 3600);
         return true;
       }
 
       if (launchAction) {
+        clearRevokeConfirmation();
         await handleLaunchAction(launchAction, input);
         return true;
       }
 
+      if (normalizedAction === "revoke-share") {
+        setRevokeConfirmation(input);
+        return true;
+      }
+
+      if (normalizedAction === "cancel-revoke-share") {
+        clearRevokeConfirmation();
+        return true;
+      }
+
       setPending({
-        action: normalizedAction,
+        action: normalizedAction === "confirm-revoke-share" ? "revoke-share" : normalizedAction,
         jobId: input.jobId,
         meetingId: input.meetingId,
         title: input.title,
@@ -252,6 +309,7 @@
 
       try {
         if (normalizedAction === "share") {
+          clearRevokeConfirmation();
           traceMeeting("63.top.meeting.bridge.share.start", input);
           const result = await invokeCapability(MEETING_SHARE_CREATE_CAPABILITY_ID, {
             ...input,
@@ -280,16 +338,47 @@
           return true;
         }
 
+        if (normalizedAction === "remove-participation") {
+          if (!hasCapability(MEETING_PARTICIPATION_HIDE_CAPABILITY_ID)) {
+            setFeedback("참여 회의룸 목록 관리 기능이 현재 비활성화되어 있어요.", "error", 3600);
+            return true;
+          }
+          traceMeeting("63.top.meeting.bridge.participation-hide.start", input);
+          await invokeCapability(MEETING_PARTICIPATION_HIDE_CAPABILITY_ID, {
+            meetingId: input.meetingId,
+            participationId: input.participationId,
+            providerIdentity: buildProviderIdentityPayload(state.providerIdentity),
+          });
+          state.participationItems = state.participationItems.filter((item) =>
+            normalizeText(item.participationId) !== input.participationId
+          );
+          state.items = getVisibleMeetingItems();
+          traceMeeting("64.top.meeting.bridge.participation-hide.success", {
+            meetingId: input.meetingId,
+            participationId: input.participationId,
+          });
+          setFeedback("목록에서 제거했습니다.", "info", 1800);
+          void ensureLoaded(true);
+          return true;
+        }
+
+        const revokedCount = state.revokeConfirmation.meetingId === input.meetingId
+          ? state.revokeConfirmation.shareParticipantCount
+          : getShareParticipantCount(input.meetingId);
         traceMeeting("63.top.meeting.bridge.revoke-share.start", input);
         const result = await invokeCapability(MEETING_SHARE_REVOKE_CAPABILITY_ID, {
           ...input,
           providerIdentity: buildProviderIdentityPayload(state.providerIdentity),
         });
         patchShareState(input.meetingId, result?.share);
+        clearRevokeConfirmation();
         traceMeeting("64.top.meeting.bridge.revoke-share.success", {
           meetingId: input.meetingId,
         });
-        setFeedback("공유 링크를 해제했습니다.", "info", 2200);
+        const revokedMessage = revokedCount > 0
+          ? `공유 링크를 해제했습니다. 기존 열람자 ${revokedCount}명은 더 이상 접근할 수 없습니다.`
+          : "공유 링크를 해제했습니다.";
+        setFeedback(revokedMessage, "info", 2600);
         void ensureLoaded(true);
         return true;
       } catch (error) {
@@ -304,6 +393,20 @@
       } finally {
         clearPending();
       }
+    }
+
+    function handleSearch(toolId, value) {
+      if (normalizeText(toolId) !== "meeting") {
+        return false;
+      }
+      const nextQuery = String(value || "");
+      if (state.query === nextQuery) {
+        return true;
+      }
+      state.query = nextQuery;
+      state.items = getVisibleMeetingItems();
+      scheduleRender();
+      return true;
     }
 
     async function ensureInitialized() {
@@ -368,28 +471,44 @@
       state.loading = true;
       scheduleRender();
       const run = (async () => {
-        try {
-          const snapshot = await meetingRealtime.ensureSubscribed({
-            forceRefresh: force,
-            providerIdentity: buildProviderIdentityPayload(state.providerIdentity),
-            queryLimit: LIST_LIMIT,
-            settings: state.settings,
-          });
-          await applySnapshotPayload(snapshot);
-          return state.items;
-        } catch (error) {
-          applyLoadError(error, "meeting-hub-firestore-unavailable");
-          return state.items;
-        } finally {
-          state.loading = false;
+        const request = {
+          forceRefresh: force,
+          providerIdentity: buildProviderIdentityPayload(state.providerIdentity),
+          queryLimit: LIST_LIMIT,
+          settings: state.settings,
+        };
+        const results = await Promise.allSettled([
+          meetingRealtime.ensureSubscribed(request),
+          meetingParticipationRealtime.ensureSubscribed(request),
+        ]);
+        let loaded = false;
+        if (results[0].status === "fulfilled") {
+          await applyOwnedSnapshotPayload(results[0].value);
+          loaded = true;
+        } else {
+          applyLoadError(results[0].reason, "meeting-hub-firestore-unavailable");
+        }
+        if (results[1].status === "fulfilled") {
+          await applyParticipationSnapshotPayload(results[1].value);
+          loaded = true;
+        } else {
+          applyLoadError(results[1].reason, "meeting-participation-firestore-unavailable");
+        }
+        if (loaded) {
+          state.items = getVisibleMeetingItems();
           scheduleRender();
         }
+        return state.items;
       })();
-      state.loadPromise = run;
+      const tracked = run.finally(() => {
+        state.loading = false;
+        scheduleRender();
+      });
+      state.loadPromise = tracked;
       try {
-        return await run;
+        return await tracked;
       } finally {
-        if (state.loadPromise === run) {
+        if (state.loadPromise === tracked) {
           state.loadPromise = null;
         }
         if (state.pendingReload) {
@@ -400,11 +519,24 @@
     }
 
     async function handleRealtimeSnapshot(snapshot) {
-      await applySnapshotPayload(snapshot);
+      await applyOwnedSnapshotPayload(snapshot);
+      state.items = getVisibleMeetingItems();
+      scheduleRender();
     }
 
     async function handleRealtimeError(error) {
       applyLoadError(error, "meeting-hub-firestore-unavailable");
+      scheduleRender();
+    }
+
+    async function handleParticipationRealtimeSnapshot(snapshot) {
+      await applyParticipationSnapshotPayload(snapshot);
+      state.items = getVisibleMeetingItems();
+      scheduleRender();
+    }
+
+    async function handleParticipationRealtimeError(error) {
+      applyLoadError(error, "meeting-participation-firestore-unavailable");
       scheduleRender();
     }
 
@@ -473,19 +605,31 @@
       scheduleRender();
     }
 
-    async function applySnapshotPayload(snapshot) {
+    async function applyOwnedSnapshotPayload(snapshot) {
       const normalizedSnapshot = snapshot && typeof snapshot === "object" ? snapshot : {};
       const items = normalizeMeetingItems(normalizedSnapshot.items);
       const fromCache = Boolean(normalizedSnapshot.fromCache);
-      state.items = items;
+      state.ownedItems = items;
       state.checkedAt = normalizeText(normalizedSnapshot.checkedAt) || new Date().toISOString();
       state.degraded = false;
       state.degradedReason = "";
-      state.dataFreshness = fromCache
-        ? (items.length ? "stale" : "empty")
-        : (items.length ? "fresh" : "empty");
+      state.dataFreshness = fromCache ? "stale" : "fresh";
       state.error = "";
       state.source = fromCache ? "cache" : "realtime";
+      scheduleRender();
+    }
+
+    async function applyParticipationSnapshotPayload(snapshot) {
+      const normalizedSnapshot = snapshot && typeof snapshot === "object" ? snapshot : {};
+      const items = normalizeParticipationItems(normalizedSnapshot.items);
+      const fromCache = Boolean(normalizedSnapshot.fromCache);
+      state.participationItems = items;
+      state.checkedAt = normalizeText(normalizedSnapshot.checkedAt) || state.checkedAt || new Date().toISOString();
+      state.degraded = false;
+      state.degradedReason = "";
+      state.dataFreshness = fromCache || state.source === "cache" ? "stale" : "fresh";
+      state.error = "";
+      state.source = fromCache || state.source === "cache" ? "cache" : "realtime";
       scheduleRender();
     }
 
@@ -619,12 +763,12 @@
 
     function patchShareState(meetingId, share) {
       const normalizedMeetingId = normalizeText(meetingId);
-      if (!normalizedMeetingId || !Array.isArray(state.items) || !state.items.length) {
+      if (!normalizedMeetingId || !Array.isArray(state.ownedItems) || !state.ownedItems.length) {
         return false;
       }
       const nextShare = normalizeShare(share);
       let changed = false;
-      state.items = state.items.map((item) => {
+      state.ownedItems = state.ownedItems.map((item) => {
         if (normalizeText(item?.meetingId) !== normalizedMeetingId) {
           return item;
         }
@@ -635,6 +779,7 @@
         };
       });
       if (changed) {
+        state.items = getVisibleMeetingItems();
         scheduleRender();
       }
       return changed;
@@ -692,11 +837,88 @@
       return state.capabilities.includes(normalizeText(capabilityId));
     }
 
+    function setScope(scope) {
+      const nextScope = normalizeMeetingScope(scope);
+      if (state.activeScope === nextScope) {
+        return false;
+      }
+      state.activeScope = nextScope;
+      state.items = getVisibleMeetingItems();
+      scheduleRender();
+      return true;
+    }
+
+    function getMeetingCounts() {
+      const ownedCount = Array.isArray(state.ownedItems) ? state.ownedItems.length : 0;
+      const participatingCount = Array.isArray(state.participationItems) ? state.participationItems.length : 0;
+      return {
+        all: ownedCount + participatingCount,
+        owned: ownedCount,
+        participating: participatingCount,
+      };
+    }
+
+    function getVisibleMeetingItems() {
+      const scopedItems = resolveScopedItems();
+      const query = normalizeText(state.query).toLowerCase();
+      const filteredItems = query
+        ? scopedItems.filter((item) => buildSearchText(item).includes(query))
+        : scopedItems;
+      return filteredItems
+        .slice()
+        .sort((left, right) =>
+          Date.parse(normalizeText(right.updatedAt || right.createdAt)) - Date.parse(normalizeText(left.updatedAt || left.createdAt))
+        )
+        .slice(0, LIST_LIMIT);
+    }
+
+    function resolveScopedItems() {
+      if (state.activeScope === "owned") {
+        return state.ownedItems.slice();
+      }
+      if (state.activeScope === "participating") {
+        return state.participationItems.slice();
+      }
+      return [...state.ownedItems, ...state.participationItems];
+    }
+
+    function buildSearchText(item) {
+      return [
+        item?.title,
+        item?.owner?.displayName,
+        item?.owner?.email,
+      ].map((value) => normalizeText(value).toLowerCase()).filter(Boolean).join(" ");
+    }
+
+    function getShareParticipantCount(meetingId) {
+      const normalizedMeetingId = normalizeText(meetingId);
+      const item = state.ownedItems.find((candidate) => candidate.meetingId === normalizedMeetingId);
+      return Math.max(0, Math.floor(Number(item?.share?.participantCount) || 0));
+    }
+
+    function setRevokeConfirmation(input = {}) {
+      state.revokeConfirmation = {
+        meetingId: normalizeText(input.meetingId),
+        shareParticipantCount: getShareParticipantCount(input.meetingId),
+        title: normalizeText(input.title),
+      };
+      scheduleRender();
+    }
+
+    function clearRevokeConfirmation() {
+      if (!state.revokeConfirmation.meetingId) {
+        return false;
+      }
+      state.revokeConfirmation = createRevokeConfirmationState();
+      scheduleRender();
+      return true;
+    }
+
     function isShareActionBlocked(action) {
       if (action === "share") {
         return !hasCapability(MEETING_SHARE_CREATE_CAPABILITY_ID);
       }
-      if (action === "revoke-share") {
+      if (action === "revoke-share" || action === "confirm-revoke-share") {
         return !hasCapability(MEETING_SHARE_REVOKE_CAPABILITY_ID);
       }
       return false;
@@ -706,10 +928,11 @@
       if (
         hasCapability(MEETING_SHARE_CREATE_CAPABILITY_ID)
         && hasCapability(MEETING_SHARE_REVOKE_CAPABILITY_ID)
+        && hasCapability(MEETING_PARTICIPATION_HIDE_CAPABILITY_ID)
       ) {
         return "";
       }
-      return "회의 공유 기능이 현재 비활성화되어 공유 링크 생성/해제를 표시하지 않습니다.";
+      return "회의 공유 또는 참여 목록 관리 기능이 현재 비활성화되어 일부 버튼을 표시하지 않습니다.";
     }
 
   }
@@ -720,6 +943,14 @@
       active: false,
       jobId: "",
       meetingId: "",
+      title: "",
+    };
+  }
+
+  function createRevokeConfirmationState() {
+    return {
+      meetingId: "",
+      shareParticipantCount: 0,
       title: "",
     };
   }
@@ -785,6 +1016,8 @@
       artifactId: normalizeText(normalizedDetail.artifactId),
       jobId: normalizeText(normalizedDetail.jobId),
       meetingId: normalizeText(normalizedDetail.meetingId),
+      participationId: normalizeText(normalizedDetail.participationId),
+      sourceKind: normalizeText(normalizedDetail.sourceKind),
       title: normalizeText(normalizedDetail.title),
     };
   }
@@ -818,11 +1051,15 @@
     return (Array.isArray(items) ? items : [])
       .filter((item) => !normalizeText(item?.deletedAt))
       .map((item) => ({
+        accessState: "active",
         createdAt: normalizeText(item?.createdAt),
         latestArtifactId: normalizeText(item?.latestArtifactId || item?.artifactId),
         latestJobId: normalizeText(item?.latestJobId || item?.jobId),
         meetingId: normalizeText(item?.meetingId),
+        owner: normalizeIdentitySummary(item?.owner),
+        participationId: "",
         share: normalizeShare(item?.share),
+        sourceKind: "owned",
         status: normalizeText(item?.status) || "idle",
         title: normalizeText(item?.title) || "이름 없는 회의",
         updatedAt: normalizeText(item?.updatedAt || item?.createdAt),
@@ -832,6 +1069,50 @@
         Date.parse(normalizeText(right.updatedAt || right.createdAt)) - Date.parse(normalizeText(left.updatedAt || left.createdAt))
       )
       .slice(0, LIST_LIMIT);
+  }
+
+  function normalizeParticipationItems(items) {
+    return (Array.isArray(items) ? items : [])
+      .map((item) => {
+        const owner = normalizeIdentitySummary(item?.owner);
+        const accessState = normalizeEnum(item?.accessState, ["active", "revoked", "deleted", "domain-mismatch"], "active");
+        return {
+          accessState,
+          createdAt: normalizeDateTimeText(item?.firstOpenedAt || item?.createdAt),
+          latestArtifactId: "",
+          latestJobId: "",
+          meetingDocumentId: normalizeText(item?.meetingDocumentId),
+          meetingId: normalizeText(item?.meetingId),
+          owner,
+          participationId: normalizeText(item?.participationId || item?.docId),
+          share: {
+            active: accessState === "active",
+            createdAt: "",
+            createdBy: {},
+            revokedAt: accessState === "revoked" ? normalizeDateTimeText(item?.updatedAt) : "",
+            shareId: normalizeText(item?.shareId),
+            status: accessState === "active" ? "active" : accessState,
+          },
+          sourceKind: "participating",
+          status: accessState === "active" ? "readonly" : "unavailable",
+          title: normalizeText(item?.titleSnapshot || item?.title) || "이름 없는 회의",
+          updatedAt: normalizeDateTimeText(item?.lastRefreshAt || item?.updatedAt || item?.firstOpenedAt),
+        };
+      })
+      .filter((item) => item.meetingId && item.participationId)
+      .sort((left, right) =>
+        Date.parse(normalizeText(right.updatedAt || right.createdAt)) - Date.parse(normalizeText(left.updatedAt || left.createdAt))
+      )
+      .slice(0, LIST_LIMIT);
+  }
+
+  function normalizeIdentitySummary(identity) {
+    const source = identity && typeof identity === "object" ? identity : {};
+    return {
+      displayName: normalizeText(source.displayName),
+      email: normalizeText(source.email),
+      providerUserKey: normalizeText(source.providerUserKey),
+    };
   }
 
   function normalizeShare(share) {
@@ -845,6 +1126,9 @@
         ? { ...nextShare.createdBy }
         : {},
       revokedAt: normalizeText(nextShare.revokedAt),
+      participantCount: Math.max(0, Math.floor(Number(nextShare.participantCount) || 0)),
+      lastParticipantAt: normalizeDateTimeText(nextShare.lastParticipantAt),
+      participantCountUpdatedAt: normalizeDateTimeText(nextShare.participantCountUpdatedAt),
       shareId,
       status,
     };
@@ -871,11 +1155,35 @@
       : null;
   }
 
+  function normalizeMeetingScope(value) {
+    const normalized = normalizeText(value).toLowerCase();
+    return MEETING_SCOPE_IDS.includes(normalized) ? normalized : "all";
+  }
+
   function normalizeEnum(value, allowedValues, fallback) {
     const normalized = normalizeText(value).toLowerCase();
     return Array.isArray(allowedValues) && allowedValues.includes(normalized)
       ? normalized
       : fallback;
+  }
+
+  function normalizeDateTimeText(value) {
+    if (!value) {
+      return "";
+    }
+    if (typeof value === "string") {
+      return normalizeText(value);
+    }
+    if (typeof value.toDate === "function") {
+      const date = value.toDate();
+      return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+    }
+    const seconds = Number(value.seconds ?? value._seconds);
+    if (Number.isFinite(seconds)) {
+      const nanos = Number(value.nanoseconds ?? value._nanoseconds) || 0;
+      return new Date((seconds * 1000) + Math.floor(nanos / 1000000)).toISOString();
+    }
+    return normalizeText(value);
   }
 
   function readErrorMessage(error, fallbackMessage) {
@@ -884,7 +1192,7 @@
   }
 
   function resolveLaunchAction(action, input) {
-    if (action === "share" || action === "revoke-share") {
+    if (action === "share" || action === "revoke-share" || action === "confirm-revoke-share" || action === "cancel-revoke-share" || action === "remove-participation" || action === "set-scope") {
       return "";
     }
     if (action === "open-result" && (input?.meetingId || input?.jobId)) {

@@ -43,6 +43,8 @@
         debugAuthBypass: namespace.session.normalizeText(input?.debugAuthBypass),
         jobId: namespace.session.normalizeText(input?.jobId),
         meetingId: namespace.session.normalizeText(input?.meetingId),
+        participationCache: input?.participationCache && typeof input.participationCache === "object" ? input.participationCache : {},
+        participationId: namespace.session.normalizeText(input?.participationId),
         shareToken: namespace.session.normalizeText(input?.shareToken || input?.share),
       }, owner, accessToken, { functionsConfig });
       return {
@@ -146,6 +148,7 @@
       const finalUrl = await buildHostedMeetingCleanUrl({
         jobId,
         meetingId,
+        participationId: namespace.session.normalizeText(input?.participationId),
       });
       logMeetingDebug("open.start", {
         input: input || {},
@@ -193,9 +196,11 @@
     if (normalizedSettings.meetingDebugConsoleEnabled) url.searchParams.set("debug", "1");
     const meetingId = namespace.session.normalizeText(input?.meetingId);
     const jobId = namespace.session.normalizeText(input?.jobId);
+    const participationId = namespace.session.normalizeText(input?.participationId);
     const shareToken = namespace.session.normalizeText(input?.shareToken || input?.share);
     if (meetingId) url.searchParams.set("meetingId", meetingId);
     if (jobId) url.searchParams.set("jobId", jobId);
+    if (participationId) url.searchParams.set("participationId", participationId);
     if (shareToken) url.searchParams.set("share", shareToken);
     return url.toString();
   }
@@ -247,6 +252,7 @@
       inovaLogin: options?.inovaLogin !== false,
       meetingDocumentId: "",
       meetingId: namespace.session.normalizeText(input?.meetingId),
+      participationId: namespace.session.normalizeText(input?.participationId),
       readOnly: false,
       reason: namespace.session.normalizeText(reason),
       shareId: "",

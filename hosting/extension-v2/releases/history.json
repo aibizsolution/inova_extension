@@ -25,13 +25,13 @@
           "text": "배포 전 검증과 안정화 작업을 거쳐 공식 배포 기준을 맞췄습니다."
         }
       ],
-      "publishedAt": "2026-04-18T15:11:59.074Z",
-      "fileName": "inova-extension-1.0.0-2026-04-18.zip",
-      "downloadUrl": "https://browser-extension-v2.web.app/extension-v2/downloads/inova-extension-1.0.0-2026-04-18.zip",
-      "versionDownloadUrl": "https://browser-extension-v2.web.app/extension-v2/downloads/inova-extension-1.0.0-2026-04-18.zip",
+      "publishedAt": "2026-04-19T02:43:23.665Z",
+      "fileName": "inova-extension-1.0.0-2026-04-19.zip",
+      "downloadUrl": "https://browser-extension-v2.web.app/extension-v2/downloads/inova-extension-1.0.0-2026-04-19.zip",
+      "versionDownloadUrl": "https://browser-extension-v2.web.app/extension-v2/downloads/inova-extension-1.0.0-2026-04-19.zip",
       "notes": "인크로스 전사 배포",
-      "sha256": "49dc39022c64d8ad6e21b1c357a61263e02c70e399c39f4374ac98ee602e0092",
-      "sizeBytes": 239684,
+      "sha256": "38cd81160596f2bfb50196409417a9b32bf4c2a3a46482c95b81f6d236b5b1f9",
+      "sizeBytes": 240785,
       "minSupportedVersion": "1.0.0"
     },
     {

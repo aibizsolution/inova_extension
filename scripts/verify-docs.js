@@ -15,6 +15,9 @@ const requiredFiles = [
   path.join(".githooks", "pre-push"),
   path.join("docs", "feature-spec.md"),
   path.join("docs", "feature-routing.md"),
+  path.join("docs", "e2e-browser-workflow.md"),
+  path.join("docs", "e2e", "README.md"),
+  path.join("docs", "e2e", "features", "meeting.md"),
   path.join("docs", "capability-authoring.md"),
   path.join("docs", "capability-catalog.md"),
   path.join("docs", "lint-workflow.md"),
@@ -54,6 +57,7 @@ const requiredFiles = [
   path.join("backup", "legacy-panel", "shared", "legacy-storage-accessors.js"),
   path.join("backup", "legacy-panel", "shared", "prompt-library.js"),
   path.join("scripts", "verify-feature-doc-update.js"),
+  path.join("scripts", "verify-e2e-doc-update.js"),
   path.join("scripts", "generate-capability-catalog.js"),
   path.join("scripts", "verify-hosted-panel-bridge.js"),
   path.join("scripts", "verify-legacy-isolation.js"),
@@ -236,11 +240,25 @@ const featureDocContracts = [
 const codeChecks = [
   {
     file: path.join(".githooks", "pre-commit"),
-    patterns: [/verify-feature-doc-update\.js/, /verify-release-metadata\.js/],
+    patterns: [/verify-feature-doc-update\.js/, /verify-e2e-doc-update\.js/, /verify-release-metadata\.js/],
   },
   {
     file: path.join(".githooks", "pre-push"),
-    patterns: [/verify-feature-doc-update\.js/, /verify-release-metadata\.js/],
+    patterns: [/verify-feature-doc-update\.js/, /verify-e2e-doc-update\.js/, /verify-release-metadata\.js/],
+  },
+  {
+    file: path.join("docs", "e2e-browser-workflow.md"),
+    patterns: [/PR 문서 게이트/, /docs\/e2e\/features\/meeting\.md/, /Codex Windows 앱 재시작/],
+  },
+  {
+    file: path.join("docs", "e2e", "features", "meeting.md"),
+    patterns: [
+      /integration_inova_meeting_participations/,
+      /participationId/,
+      /반복 접속.*write가 없어야 한다/s,
+      /목록에서 제거/,
+      /hidden: true/,
+    ],
   },
   {
     file: path.join("background", "service-worker.js"),

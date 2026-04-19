@@ -167,8 +167,24 @@
         debugAuthBypass: input?.debugAuthBypass || "",
         jobId: input?.jobId || "",
         meetingId: input?.meetingId || "",
+        participationCache: input?.participationCache && typeof input.participationCache === "object" ? input.participationCache : {},
+        participationId: input?.participationId || "",
         providerIdentity: toProviderIdentityPayload(providerIdentity),
         shareToken: input?.shareToken || input?.share || "",
+      },
+      accessToken
+    );
+    return payload?.data || {};
+  }
+
+  async function hideInovaMeetingParticipation(input, providerIdentity, accessToken, requestOptions = {}) {
+    const meetingFunctions = resolveFunctionsConfig(requestOptions.functionsConfig);
+    const payload = await postJson(
+      meetingFunctions.hideInovaMeetingParticipationUrl,
+      {
+        meetingId: input?.meetingId || "",
+        participationId: input?.participationId || "",
+        viewer: toProviderIdentityPayload(providerIdentity),
       },
       accessToken
     );
@@ -378,6 +394,7 @@
     createInovaMeetingShareLink,
     exchangeInovaMeetingLaunch,
     fetchCapabilityManifest,
+    hideInovaMeetingParticipation,
     issueInovaMeetingLaunch,
     issueInovaMeetingPanelAuth,
     issueInovaPromptPanelAuth,

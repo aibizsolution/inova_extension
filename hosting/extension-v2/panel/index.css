@@ -124,6 +124,10 @@
 .inova-tool-subtab {
   display: inline-flex; align-items: center; gap: 6px; padding: 13px 12px 11px; border: 0; border-bottom: 2px solid transparent;
   background: transparent; color: rgba(16, 33, 43, 0.68); font-size: 12px; font-weight: 800; cursor: pointer;
+  flex: 0 0 auto; white-space: nowrap;
+}
+.inova-tool-subtab > span {
+  white-space: nowrap;
 }
 .inova-tool-subtab.is-active { color: #0f5f77; border-bottom-color: #0f7c89; }
 .inova-tool-subtab__count {
@@ -755,6 +759,14 @@
 .inova-tool-section--store .inova-bookmark-empty { margin: 4px 14px 12px; padding: 12px 13px; }
 .inova-tool-section--prompts .inova-bookmark-empty { margin: 4px 14px 12px; padding: 12px 13px; }
 .inova-tool-section--meeting { position: relative; }
+.inova-tool-section--meeting .inova-meeting-empty {
+  margin: 6px 0 0;
+  padding: 14px 16px;
+  border-radius: 8px;
+}
+.inova-tool-section--meeting .inova-meeting-empty p {
+  margin: 0;
+}
 .inova-tool-section--meeting .inova-tool-toolbar { align-items: flex-start; justify-content: space-between; gap: 12px; }
 .inova-tool-section--meeting .inova-tool-toolbar__row { flex: 1 1 auto; min-width: 0; justify-content: flex-start; }
 .inova-tool-section--meeting .inova-tool-toolbar,
@@ -772,6 +784,9 @@
   border-bottom: 1px solid rgba(52, 81, 100, 0.08);
 }
 .inova-meeting-stack { display: flex; flex-direction: column; gap: 12px; padding: 2px 14px 14px; overflow-y: auto; overflow-x: hidden; }
+.inova-meeting-search {
+  display: block;
+}
 .inova-tool-inline-summary {
   display: flex;
   align-items: center;
@@ -876,22 +891,38 @@
   border-color: rgba(15, 124, 137, 0.36);
   box-shadow: 0 0 0 3px rgba(15, 124, 137, 0.12), 0 10px 22px rgba(26, 52, 73, 0.05);
 }
-.inova-meeting-record__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.inova-meeting-record__head { display: flex; align-items: flex-start; gap: 8px; }
 .inova-meeting-record__content { display: grid; gap: 4px; min-width: 0; flex: 1 1 auto; }
 .inova-meeting-record__title-row {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
-}
-.inova-meeting-record__chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
   align-items: center;
-  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+.inova-meeting-record__badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 7px;
+  border: 1px solid rgba(15, 124, 137, 0.18);
+  border-radius: 999px;
+  background: rgba(236, 248, 245, 0.94);
+  color: #0f5f77;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
   flex: 0 0 auto;
-  padding-top: 2px;
+}
+.inova-meeting-record__badge.is-participating {
+  border-color: rgba(27, 96, 232, 0.16);
+  background: rgba(235, 244, 255, 0.96);
+  color: #1f5cba;
+}
+.inova-meeting-record__badge.is-danger {
+  border-color: rgba(173, 70, 87, 0.18);
+  background: rgba(252, 242, 245, 0.96);
+  color: #8a3344;
 }
 .inova-meeting-record__secondary { display: flex; flex-wrap: wrap; gap: 6px; }
 .inova-meeting-record__actions {
@@ -904,6 +935,31 @@
   border-top: 1px solid rgba(52, 81, 100, 0.08);
 }
 .inova-meeting-record__secondary { justify-content: flex-end; }
+.inova-meeting-record__owner,
+.inova-meeting-record__share-count {
+  min-width: 0;
+  margin-right: auto;
+  color: rgba(16, 33, 43, 0.56);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.inova-meeting-record__confirm {
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 1px solid rgba(173, 70, 87, 0.16);
+  border-radius: 10px;
+  background: rgba(252, 246, 247, 0.9);
+  color: rgba(88, 44, 54, 0.92);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.inova-meeting-record__confirm strong {
+  color: rgba(122, 38, 54, 0.95);
+  font-size: 11px;
+  font-weight: 800;
+}
 .inova-meeting-record__head strong {
   font-size: 14px;
   font-weight: 700;
@@ -916,6 +972,25 @@
   font-size: 11px;
   font-weight: 500;
   line-height: 1.35;
+  min-width: 0;
+}
+.inova-meeting-record__meta-label {
+  color: rgba(16, 33, 43, 0.48);
+}
+.inova-meeting-record__meta-value {
+  color: rgba(16, 33, 43, 0.48);
+  font-weight: 500;
+}
+.inova-meeting-record__meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+.inova-meeting-record__title {
+  min-width: 0;
+  flex: 1 1 auto;
 }
 .inova-meeting-record__summary {
   margin: 0;
@@ -932,8 +1007,10 @@
   color: rgba(16, 33, 43, 0.64);
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   white-space: nowrap;
+  margin-left: auto;
+  flex: 0 0 auto;
 }
 .inova-meeting-record__status::before {
   content: "";

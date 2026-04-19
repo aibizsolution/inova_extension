@@ -6,6 +6,8 @@
 
 ## auth / session 경계
 - panel의 회의 공유와 작업실 진입은 remote capability catalog와 background runtime이 gate한다. `meeting.share.create-function`, `meeting.share.revoke-function`, `meeting.workspace.authorize-access`가 manifest에서 disabled/killed이면 hosted panel action도 먼저 막혀야 한다.
+- 공유 링크로 타인 회의룸에 최초 정상 접속하면 서버가 `integration_inova_meeting_participations` shortcut을 만들 수 있다. 반복 접속은 기본적으로 write하지 않고, hosted localStorage participation cache는 24시간 refresh throttle 힌트로만 사용한다.
+- participation 기반 재접속은 raw share token을 저장하지 않는다. hosted URL/session의 `participationId`를 `authorizeInovaMeetingWorkspaceAccess`에 전달하고, 서버가 participation 문서와 현재 meeting share 상태를 함께 검증한 뒤 readonly token을 발급한다.
 - 회의 공유/작업실 기능이 UI에서 사라지면 먼저 `hosting/extension-v2/capability-manifest.json`의 `enabled`, `killSwitch`, `lane`, alias 상태와 capability handshake 결과를 확인한다.
 - hosted workspace Firebase auth claim은 `meetingId` 단위로 달라질 수 있으므로 `hosting/meeting/firebase-client.js`에서는 cross-tab Firestore persistence를 다시 켜지 않는다. 여러 회의 탭은 탭별 auth를 유지하고, persistence는 단일 탭 또는 메모리 fallback으로만 다룬다.
 - loopback origin(`127.0.0.1:5000`, `localhost:5000`)에서 열린 hosted 작업실과 panel bridge는 local hosted만이 아니라 local Functions/Auth/Firestore emulator를 함께 기본값으로 본다. local smoke는 이 경로를 기준으로 확인한다.

@@ -5,7 +5,10 @@ const path = require("path");
 
 const root = path.resolve(__dirname, "..");
 const fixturePath = path.join(root, "fixtures", "audio", "meeting-smoke-ko.wav");
-const e2eDocPath = path.join(root, "docs", "e2e-browser-workflow.md");
+const e2eDocPaths = [
+  path.join(root, "docs", "e2e-browser-workflow.md"),
+  path.join(root, "docs", "e2e", "features", "meeting.md"),
+];
 
 function assert(condition, message) {
   if (!condition) {
@@ -76,10 +79,12 @@ function main() {
   assert(wav.durationSeconds >= 3, "meeting audio fixture is too short for import smoke");
   assert(wav.durationSeconds <= 30, "meeting audio fixture must stay under 30 seconds");
 
-  const e2eDoc = fs.readFileSync(e2eDocPath, "utf8");
+  const e2eDoc = e2eDocPaths
+    .map((docPath) => fs.readFileSync(docPath, "utf8"))
+    .join("\n");
   assert(
     e2eDoc.includes("fixtures/audio/meeting-smoke-ko.wav"),
-    "e2e browser workflow must reference the meeting audio fixture"
+    "e2e meeting workflow must reference the meeting audio fixture"
   );
 
   console.log(

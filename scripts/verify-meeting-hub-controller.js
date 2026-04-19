@@ -9,6 +9,7 @@ const { verifyHostedMeetingFirestoreClientContract } = require("./verify-meeting
 const root = path.resolve(__dirname, "..");
 const MEETING_TEST_CAPABILITIES = Object.freeze([
   "runtime.invoke.v1",
+  "meeting.participation.hide-function",
   "meeting.share.create-function",
   "meeting.share.revoke-function",
 ]);
@@ -17,6 +18,7 @@ async function main() {
   await verifyHostedMeetingFirestoreClientContract();
   await verifyHostedMeetingHubOwnership();
   await verifyHostedMeetingHubShareCopyFailure();
+  await verifyHostedMeetingHubRevokeShareWarning();
   await verifyHostedMeetingHubGatesShareCapabilities();
   await verifyHostedMeetingHubLifecycleRefreshOwnership();
   await verifyHostedMeetingHubUsageSubscriptionOwnership();
@@ -211,6 +213,39 @@ async function verifyHostedMeetingHubShareCopyFailure() {
   });
 }
 
+async function verifyHostedMeetingHubRevokeShareWarning() {
+  const harness = createHarness({
+    realtimeSnapshot: { items: [{
+      artifactId: "artifact-alpha", jobId: "job-alpha", meetingId: "meeting-alpha",
+      share: { active: true, participantCount: 3, shareId: "share-alpha", status: "active" },
+      status: "succeeded", title: "Alpha", updatedAt: "2026-04-13T01:01:00.000Z",
+    }] },
+  });
+  const controller = harness.controller;
+
+  controller.syncPanelState({ activeTool: "meeting", open: true, settings: { meetingWorkspaceTarget: "production" } }, MEETING_TEST_CAPABILITIES);
+  await flushAsyncTurns();
+
+  const handled = await controller.handleMeetingAction("revoke-share", {
+    meetingId: "meeting-alpha",
+    jobId: "job-alpha",
+    title: "Alpha",
+  });
+
+  assert.equal(handled, true, "hosted meeting hub should handle revoke share actions");
+  assert.equal(controller.buildViewState().revokeConfirmation.shareParticipantCount, 3, "revoke share should show an in-panel confirmation with the participant count");
+  assert(
+    !harness.runtimeCalls.some((request) => request.action === "capabilities.invoke" && request.capabilityId === "meeting.share.revoke-function"),
+    "first revoke click should not call the share revoke function"
+  );
+  await controller.handleMeetingAction("confirm-revoke-share", { meetingId: "meeting-alpha", jobId: "job-alpha", title: "Alpha" });
+  assert(
+    harness.runtimeCalls.some((request) => request.action === "capabilities.invoke" && request.capabilityId === "meeting.share.revoke-function"),
+    "in-panel confirmed revoke should call the share revoke function"
+  );
+  assert.equal(harness.toastCalls.at(-1).message, "공유 링크를 해제했습니다. 기존 열람자 3명은 더 이상 접근할 수 없습니다.");
+}
+
 async function verifyHostedMeetingHubGatesShareCapabilities() {
   const harness = createHarness();
   const controller = harness.controller;
@@ -236,7 +271,7 @@ async function verifyHostedMeetingHubGatesShareCapabilities() {
   assert.equal(viewState.canRevokeShare, false, "share revoke should be gated by negotiated remote capability");
   assert.match(
     viewState.capabilityNotice,
-    /공유 기능이 현재 비활성화/,
+    /공유 또는 참여 목록 관리 기능이 현재 비활성화/,
     "meeting hub should surface an explicit capability-disabled reason"
   );
 
@@ -745,13 +780,13 @@ function createHarnessWithOptions(options = {}) {
         };
       }
       if (request?.action === "capabilities.invoke" && request?.capabilityId === "meeting.share.revoke-function") {
-        return {
+        return cloneValue(options.revokeShareResult || {
           share: {
             active: false,
             shareId: "",
             status: "revoked",
           },
-        };
+        });
       }
       if (request?.action === "meeting.result.open") {
         return {
@@ -771,6 +806,7 @@ function createHarnessWithOptions(options = {}) {
           ? checkedAtSequence.shift()
           : "2026-04-13T01:02:03.000Z";
         return buildRealtimeSnapshot({
+          ...cloneValue(options.realtimeSnapshot),
           checkedAt: nextCheckedAt,
           fromCache: Boolean(options.firstSnapshotFromCache),
         });

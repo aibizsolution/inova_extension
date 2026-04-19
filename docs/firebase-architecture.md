@@ -49,6 +49,7 @@
 ### meeting
 
 - `integration_inova_meetings`
+- `integration_inova_meeting_participations`
 - `integration_inova_meeting_jobs`
 - `integration_inova_meeting_job_parts`
 - `integration_inova_meeting_job_finalizers`
@@ -65,6 +66,12 @@
 - 프롬프트 스토어 문서: `prompt_store_entries/inova__{providerUserKey}__{promptId}`
 - 프롬프트 스토어 리스트 page 문서: `prompt_store_feed_pages/{sortBy}__{categoryId}__{pageNumber}`
 - i-Nova 계정 매핑 메타: `integration_inova_accounts/{providerUserKey}`
+- 회의 참여 shortcut 문서: `integration_inova_meeting_participations/{viewerProviderUserKey}__{ownerProviderUserKey}__{meetingId}`
+- 회의 공유 열람 집계: `integration_inova_meetings/{ownerProviderUserKey}__{meetingId}.share.participantCount`
+  - 현재 `shareId` 기준 최초 정상 열람 때만 증가한다.
+  - 공유 해제 후 새 링크를 만들면 새 `shareId`와 함께 0부터 다시 시작한다.
+  - 목록 렌더링에서 참여 문서를 집계해서 읽지 않는다.
+  - 공유 해제 함수는 현재 `shareId`의 참여 shortcut을 `accessState: revoked`, `hidden: false`로 비활성화하고, 사용자의 `목록에서 제거`만 `hidden: true`를 만든다.
 
 ## 설계 금지 사항
 

@@ -9,6 +9,25 @@
       ]
     },
     {
+      "collectionGroup": "integration_inova_meeting_participations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "viewer.providerUserKey", "order": "ASCENDING" },
+        { "fieldPath": "hidden", "order": "ASCENDING" },
+        { "fieldPath": "lastRefreshAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "integration_inova_meeting_participations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "owner.providerUserKey", "order": "ASCENDING" },
+        { "fieldPath": "meetingId", "order": "ASCENDING" },
+        { "fieldPath": "shareId", "order": "ASCENDING" },
+        { "fieldPath": "hidden", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "integration_inova_meeting_usage_user_months",
       "queryScope": "COLLECTION",
       "fields": [

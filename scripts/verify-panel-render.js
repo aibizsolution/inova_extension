@@ -199,6 +199,7 @@ function verifyHostedNormalizeTextUsesPanelUtils() {
     "index.js",
     "meeting-firestore-client.js",
     "meeting-hub-controller.js",
+    "meeting-participation-firestore-client.js",
     "panel-firestore-session-client.js",
     "panel-utils.js",
     "prompt-library-controller.js",

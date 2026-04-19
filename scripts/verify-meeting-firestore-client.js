@@ -4,6 +4,7 @@ const path = require("path");
 const vm = require("vm");
 
 const root = path.resolve(__dirname, "..");
+const PARTICIPATION_COLLECTION = "integration_inova_meeting_participations";
 const USAGE_USER_MONTH_COLLECTION = "integration_inova_meeting_usage_user_months";
 const USAGE_USER_TOTAL_COLLECTION = "integration_inova_meeting_usage_user_totals";
 
@@ -26,8 +27,16 @@ async function verifyHostedMeetingFirestoreClientContract() {
     "v2 hosted panel should load the dedicated meeting firestore client module"
   );
   assert(
+    hostedMeetingIndexHtml.includes("./meeting-participation-firestore-client.js"),
+    "v2 hosted panel should load the dedicated meeting participation firestore client module"
+  );
+  assert(
     hostedMeetingSource.includes("namespace.meetingFirestoreClient.create"),
     "v2 hosted meeting hub should create its own firestore subscription client"
+  );
+  assert(
+    hostedMeetingSource.includes("namespace.meetingParticipationFirestoreClient.create"),
+    "v2 hosted meeting hub should create its own participation firestore subscription client"
   );
   assert(
     !hostedMeetingSource.includes('action: "functions.fetch"'),
@@ -48,7 +57,10 @@ async function verifyHostedMeetingFirestoreClientContract() {
     emulatorAuthUrls: [],
     emulatorFirestoreHosts: [],
     onDocSnapshotHandlers: [],
+    onParticipationSnapshotHandler: null,
     onSnapshotHandler: null,
+    participationUnsubscribeCount: 0,
+    queryStates: [],
     usageDocUnsubscribeCount: 0,
     unsubscribeCount: 0,
     usageDocs: {
@@ -108,6 +120,7 @@ async function verifyHostedMeetingFirestoreClientContract() {
   loadScript("hosting/extension-v2/panel/panel-firestore-session-client.js", context);
   loadScript("hosting/extension-v2/panel/base-firestore-client.js", context);
   loadScript("hosting/extension-v2/panel/meeting-firestore-client.js", context);
+  loadScript("hosting/extension-v2/panel/meeting-participation-firestore-client.js", context);
   loadScript("hosting/extension-v2/panel/meeting-usage-firestore-client.js", context);
 
   const client = context.InovaBookmarks.meetingFirestoreClient.create({
@@ -206,6 +219,77 @@ async function verifyHostedMeetingFirestoreClientContract() {
       .includes("runWithSuppressedFirestorePersistenceWarning"),
     "shared firestore session coordinator should suppress the deprecated Firestore persistence warning in the hosted console"
   );
+
+  const participationSnapshotPayloads = [];
+  const collectionCountBeforeParticipation = queryState.collectionNames.length;
+  const participationClient = context.InovaBookmarks.meetingParticipationFirestoreClient.create({
+    invokeRuntime: async (request) => {
+      runtimeCalls.push(cloneValue(request));
+      return {
+        emulators: {
+          authUrl: "",
+          enabled: false,
+          firestoreHost: "",
+          firestorePort: 0,
+        },
+        expiresAt: futureExpiryIso,
+        firebaseConfig: {
+          projectId: "browser-extension-main",
+        },
+        firebaseCustomToken: "panel-token-alpha",
+        panelScope: "prompt-panel-v2",
+        promptPanelScope: "prompt-panel-v2",
+        providerUserKey: "fixture-user",
+        target: "production",
+      };
+    },
+    onError: async () => {},
+    onSnapshot: async (snapshot) => {
+      participationSnapshotPayloads.push(cloneValue(snapshot));
+    },
+    traceFirestore(step, payload) {
+      traces.push({
+        payload: cloneValue(payload),
+        step,
+      });
+    },
+  });
+
+  const participationSnapshot = await participationClient.ensureSubscribed({
+    providerIdentity: {
+      providerUserKey: "fixture-user",
+    },
+    queryLimit: 24,
+    settings: {
+      meetingWorkspaceTarget: "production",
+    },
+  });
+  const participationCollectionNames = queryState.collectionNames.slice(collectionCountBeforeParticipation);
+  assert.deepEqual(
+    participationCollectionNames,
+    [PARTICIPATION_COLLECTION],
+    "participation list should read only the lightweight participation index collection"
+  );
+  assert.equal(participationSnapshot.items[0].participationId, "fixture-user__owner-user__meeting-shared");
+  assert.equal(participationSnapshot.items[0].meetingId, "meeting-shared");
+  assert.equal(participationSnapshotPayloads.length, 1, "participation firestore client should forward the initial snapshot");
+  const participationQuery = queryState.queryStates.find((entry) => entry.collectionName === PARTICIPATION_COLLECTION);
+  assert.deepEqual(
+    participationQuery?.filters,
+    [
+      { field: "viewer.providerUserKey", operator: "==", value: "fixture-user" },
+      { field: "hidden", operator: "==", value: false },
+    ],
+    "participation list should query the current viewer and hidden=false"
+  );
+  assert.deepEqual(
+    participationQuery?.orderBy,
+    { direction: "desc", field: "lastRefreshAt" },
+    "participation list should order by lastRefreshAt desc"
+  );
+  assert.equal(participationQuery?.limitCount, 24);
+  participationClient.disconnect("test");
+  assert.equal(queryState.participationUnsubscribeCount, 1, "participation firestore client should detach its listener on disconnect");
 
   const usageSnapshotPayloads = [];
   const usageClient = context.InovaBookmarks.meetingUsageFirestoreClient.create({
@@ -440,33 +524,66 @@ function createFakeFirebase(queryState) {
       queryState.emulatorAuthUrls.push(String(url || ""));
     },
   };
-  const fakeQuery = {
-    get(options = {}) {
-      queryState.cacheReads.push(cloneValue(options));
-      return Promise.resolve({
-        docs: [createFirestoreDoc()],
-        metadata: {
-          fromCache: true,
-          hasPendingWrites: false,
-        },
-      });
-    },
-    limit() {
-      return this;
-    },
-    onSnapshot(_options, next) {
-      queryState.onSnapshotHandler = next;
-      return () => {
-        queryState.unsubscribeCount += 1;
-      };
-    },
-    orderBy() {
-      return this;
-    },
-    where() {
-      return this;
-    },
-  };
+  function createFakeQuery(collectionName, state = {}) {
+    const query = {
+      filters: Array.isArray(state.filters) ? state.filters : [],
+      limitCount: Number.isFinite(state.limitCount) ? state.limitCount : null,
+      orderBy: state.orderBy || null,
+    };
+    return {
+      get(options = {}) {
+        queryState.cacheReads.push(cloneValue(options));
+        return Promise.resolve({
+          docs: [collectionName === PARTICIPATION_COLLECTION ? createParticipationFirestoreDoc() : createFirestoreDoc()],
+          metadata: {
+            fromCache: true,
+            hasPendingWrites: false,
+          },
+        });
+      },
+      limit(limitCount) {
+        return createFakeQuery(collectionName, {
+          ...query,
+          limitCount: Math.max(0, Number(limitCount) || 0),
+        });
+      },
+      onSnapshot(_options, next) {
+        queryState.queryStates.push(cloneValue({
+          collectionName,
+          filters: query.filters,
+          limitCount: query.limitCount,
+          orderBy: query.orderBy,
+        }));
+        if (collectionName === PARTICIPATION_COLLECTION) {
+          queryState.onParticipationSnapshotHandler = next;
+        } else {
+          queryState.onSnapshotHandler = next;
+        }
+        return () => {
+          if (collectionName === PARTICIPATION_COLLECTION) {
+            queryState.participationUnsubscribeCount += 1;
+          } else {
+            queryState.unsubscribeCount += 1;
+          }
+        };
+      },
+      orderBy(field, direction = "asc") {
+        return createFakeQuery(collectionName, {
+          ...query,
+          orderBy: {
+            direction: String(direction || "").toLowerCase() === "desc" ? "desc" : "asc",
+            field: String(field || ""),
+          },
+        });
+      },
+      where(field, operator, value) {
+        return createFakeQuery(collectionName, {
+          ...query,
+          filters: [...query.filters, { field, operator, value }],
+        });
+      },
+    };
+  }
   const fakeDb = {
     collection(name) {
       const collectionName = String(name || "");
@@ -474,7 +591,7 @@ function createFakeFirebase(queryState) {
       if (collectionName === USAGE_USER_MONTH_COLLECTION || collectionName === USAGE_USER_TOTAL_COLLECTION) {
         return createFakeDocCollection(queryState, collectionName);
       }
-      return fakeQuery;
+      return createFakeQuery(collectionName);
     },
     enablePersistence() {
       return Promise.resolve();
@@ -575,6 +692,37 @@ function createFirestoreDoc(overrides = {}) {
       return cloneValue(data);
     },
     id: data.meetingId,
+  };
+}
+
+function createParticipationFirestoreDoc(overrides = {}) {
+  const data = {
+    accessState: "active",
+    hidden: false,
+    lastRefreshAt: "2026-04-13T02:01:00.000Z",
+    meetingDocumentId: "owner-user__meeting-shared",
+    meetingId: "meeting-shared",
+    owner: {
+      displayName: "Owner User",
+      email: "owner@example.com",
+      providerUserKey: "owner-user",
+    },
+    participationId: "fixture-user__owner-user__meeting-shared",
+    shareId: "share-shared",
+    titleSnapshot: "Shared Alpha",
+    titleSnapshotHash: "title-hash-alpha",
+    viewer: {
+      displayName: "Fixture User",
+      email: "fixture@example.com",
+      providerUserKey: "fixture-user",
+    },
+    ...cloneValue(overrides),
+  };
+  return {
+    data() {
+      return cloneValue(data);
+    },
+    id: data.participationId,
   };
 }
 

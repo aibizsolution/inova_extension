@@ -8,11 +8,13 @@
 - `README.md`가 아니라 meeting feature-local 규칙과 계약은 이 문서나 meeting 전용 docs에 문서화한다.
 - meeting endpoint/auth/collection baseline과 version/release 판단 기준은 `docs/refactoring-plan.md`에서 관리한다.
 - hosted browser console trace 검증과 증거 수집 절차는 `docs/meeting-debug-console-validation.md`에서 관리한다.
+- 실제 Chrome 회의 룸/작업실/공유 참여 E2E 항목은 `docs/e2e/features/meeting.md`에서 관리한다.
 - Functions runtime sizing과 운영 튜닝 기준은 `docs/functions-runtime-guide.md`에서 관리한다.
 
 ## 먼저 볼 파일
 - `hosting/extension-v2/panel/meeting-hub-controller.js`
 - `hosting/extension-v2/panel/meeting-firestore-client.js`
+- `hosting/extension-v2/panel/meeting-participation-firestore-client.js`
 - `hosting/extension-v2/panel/meeting-usage-firestore-client.js`
 - `content/panel-v2-composition-controller.js`
 - `hosting/meeting/index.js`
@@ -27,6 +29,7 @@
 - `hosting/meeting/*`
 - `hosting/extension-v2/panel/meeting-hub-controller.js`
 - `hosting/extension-v2/panel/meeting-firestore-client.js`
+- `hosting/extension-v2/panel/meeting-participation-firestore-client.js`
 - `hosting/extension-v2/panel/meeting-usage-firestore-client.js`
 - `hosting/extension/panel/meeting-view.js`
 - `popup/index.js`
@@ -36,10 +39,16 @@
 - legacy lane은 현재 `browser-extension-main` hosted meeting 경로를 유지한다. separate hosted origin/site 판단은 `docs/refactoring-plan.md`의 version decision gate에서 관리한다.
 - `0.4.5`부터 panel 안의 회의 허브 UI는 `hosting/extension/panel/meeting-view.js`가 렌더링하고, 회의 목록 state와 action routing은 기존 `backup/legacy-panel/meeting-manager.js`/`backup/legacy-panel/panel-meeting-controller.js`가 계속 소유한다.
 - `1.0.0+` v2 lane에서는 `hosting/extension-v2/panel/meeting-hub-controller.js`가 회의 허브 목록 렌더 상태(`items`, `error/degraded`, `freshness`), 사용량 미니 통계(`usage`), action UI 상태(`pending`, `feedback`, share patch`)를 직접 소유한다. 목록 읽기는 hosted `meeting-firestore-client.js`가 `auth.issue-panel-session(panel=meeting) -> Firestore onSnapshot` 경로로 맡는다. 사용량 읽기는 hosted `meeting-usage-firestore-client.js`가 회의 탭 active 동안 사용자 월별 집계 doc 1개와 전체 집계 doc 1개만 구독하고, tab inactive/close 때 즉시 해제한다. 작업실/결과 열기는 static runtime capability `meeting.workspace.open`, `meeting.result.open`을 탄다. 공유 생성/해제 UI와 실행은 handshake의 `meeting.share.create-function`, `meeting.share.revoke-function` capability가 enabled일 때만 열리고, 실행도 `invokeCapability()` 경로로 Functions endpoint manifest를 따른다. v2 hosted panel은 더 이상 `meeting-action` top-panel fallback request를 쓰지 않는다. extension은 runtime broker와 브라우저 탭 열기만 맡고, handle/rail count는 hosted가 회의 컨트롤러 state로 계산한 뒤 `panel-chrome-sync`로 parent DOM에 반영한다.
-- meeting capabilityId: `meeting.list`, `meeting.panel-auth.issue-function`, `meeting.share.create-function`, `meeting.share.revoke-function`, `meeting.workspace.authorize-access`, `meeting.workspace.open`, `meeting.result.open`.
+- meeting capabilityId: `meeting.list`, `meeting.panel-auth.issue-function`, `meeting.participation.hide-function`, `meeting.share.create-function`, `meeting.share.revoke-function`, `meeting.workspace.authorize-access`, `meeting.workspace.open`, `meeting.result.open`.
 - v2 meeting snapshot shaping은 `panelMeetingController`의 action UI state나 `backup/legacy-panel/meeting-manager.js` merge helper를 거치지 않는다. active v2 createState는 더 이상 legacy `meetingHub`/`meetingUi` bucket이나 interim `toolSummaries.meeting` bucket을 들지 않고, 현재 `1.0.0` 활성 bundle은 legacy `panelMeetingController`/`panelActionController`/`meetingManager` path를 로드하지 않는다.
 - compact `meeting` / `release` residue 정규화는 content에 남기지 않는다. hosted meeting/release 컨트롤러가 각 count/view state를 직접 소유하고, content render payload는 meeting/release snapshot state를 싣지 않는다.
 - hosted meeting hub는 top-panel `meeting` summary sync나 echo된 `panelState.meetingTool` count를 lifecycle/state 정본으로 쓰지 않는다. hosted count는 Firestore snapshot과 현재 hub memory가 정본이다.
+- v2 meeting hub의 `참여한 회의룸` 목록은 `integration_inova_meeting_participations` 사용자별 경량 index만 읽는다. 참여 카드 렌더링을 위해 `integration_inova_meetings` 원본 문서를 카드마다 추가 get하지 않는다.
+- `전체` 탭은 owned meeting snapshot과 participation snapshot을 hosted controller memory에서 병합한다. 전체 탭, 탭 전환, 검색 때문에 추가 Firestore query를 만들지 않는다.
+- 공유 링크로 정상 접속한 타인 회의룸 shortcut은 서버 participation 문서가 정본이다. 브라우저 localStorage throttle cache는 write 생략 힌트일 뿐이고 권한 판단에는 쓰지 않는다.
+- participation 문서는 접근 권한의 단독 근거가 아니다. `authorizeInovaMeetingWorkspaceAccess`가 participation과 현재 meeting share 상태를 함께 검증한 뒤 readonly workspace token을 발급한다.
+- 공유 중인 owned 회의룸의 `열람 N명`은 현재 shareId 기준 최초 정상 열람 때만 증가하는 `integration_inova_meetings.share.participantCount` snapshot을 사용한다. 목록 렌더링 중 participation 문서를 집계해서 읽지 않는다.
+- owner가 공유를 해제하면 함수가 현재 shareId의 visible participation shortcut을 `accessState: revoked`, `hidden: false`로 비활성화한다. 참여자 목록에는 접근 불가 카드와 `목록에서 제거`만 남고, 사용자가 직접 제거할 때만 `hidden: true`가 된다.
 - hosted meeting hub는 bootstrap 중에도 top-panel `meeting` count를 빌려 오지 않는다. 초기 count는 `0`으로 시작하고, 실제 count는 Firestore snapshot과 현재 hub memory로만 올라간다.
 - 같은 이유로 v2 panel shell은 `route`, `storage`, `prompt tab`, `surface`, `bootstrap`, 브라우저 sidecar/lifecycle 이벤트로는 더 이상 `backup/legacy-panel/meeting-manager.js` sync를 직접 깨우지 않는다. hosted meeting hub는 top-panel fingerprint echo 없이 meeting tool 재진입, hosted 문서 `visibility-visible`, explicit action 결과를 기준으로 자체 load/refresh를 이어받고, extension은 parent chrome adapter만 남긴다.
 - v2 bootstrap도 legacy처럼 무조건 meeting sync를 prime하지 않는다. 시작 tool이 `meeting`일 때만 bootstrap prime을 남기고, meeting storage listener는 등록하지 않는다.
@@ -84,7 +93,8 @@
 - `functions/features/meeting/meeting-notes-source-domain.js`
 
 ## 관련 데이터 경계
-- `integration_inova_meetings`
+- `integration_inova_meetings` - owned 회의룸 정본. 현재 shareId 기준 열람자 집계는 `share.participantCount` snapshot으로 유지한다.
+- `integration_inova_meeting_participations` - 공유 링크로 한 번 검증된 참여 회의룸 shortcut index, viewer 본인만 list/get, client write 금지
 - `integration_inova_meeting_jobs`
 - `integration_inova_meeting_job_parts`
 - `integration_inova_meeting_job_finalizers`
@@ -105,7 +115,9 @@
 
 ## 최소 검증 방법
 - 팝업 target 설정, 회의 탭 목록, hosted meeting 진입, 기존 결과 1건 조회를 확인한다.
-- v2 meeting hub ownership을 건드렸다면 `node scripts/verify-meeting-hub-controller.js`로 hosted controller가 Firestore subscription/open/share/revoke 경로와 사용량 doc 2개 구독/해제를 직접 처리하는지도 함께 확인한다.
+- v2 meeting hub ownership을 건드렸다면 `npm.cmd run verify:meeting-hub`로 hosted controller가 owned/participation Firestore subscription, 탭/검색, open/share/revoke/remove 경로와 사용량 doc 2개 구독/해제를 직접 처리하는지도 함께 확인한다.
+- 회의 패널, hosted 작업실, 공유 참여 shortcut, meeting capability/Firestore 경계를 바꾸면 `docs/e2e/features/meeting.md`의 실제 Chrome 체크리스트도 같은 PR에서 갱신하고 `npm.cmd run verify:e2e-doc-guard`를 확인한다.
+- 공유 참여 shortcut, share-token workspace auth, participation-based 재접속, 목록 제거 경계를 바꾸면 `npm.cmd run verify:meeting-service`로 최초 등록, 반복 접속 write 생략, 24시간 refresh throttle, hidden 복구, share revoke 상태 갱신을 확인한다.
 - 새 녹음 또는 파일 import 1회와 제목/메모/결과 수정 또는 삭제 1회를 확인한다.
 - 회의록 보정 변경이 있으면 `용어 치환 적용하기 1회`, `섹션 수정 preview/apply 1회`, stale preview 재적용 거절을 함께 확인한다.
 - 자동 회의록 생성 품질 규칙을 바꾸면 `npm.cmd run verify:meeting-notes-generation`과 `npm.cmd run verify:meeting-service`를 함께 돌려 항목 수 채우기 방지와 같은 안건 재논의 보존 가드를 확인한다.
