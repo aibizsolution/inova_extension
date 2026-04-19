@@ -60,6 +60,34 @@
 11. 새 탭의 실제 URL을 알고 있고 내부 화면 테스트가 목적이면, Bridge가 이미 잡고 있는 탭을 그 URL로 직접 이동해 테스트할 수 있다. 이 경우 결과에는 `URL 기반 직접 이동으로 내부 테스트`라고 적고, 실제 새 탭 자동 승계 검증과 섞어 말하지 않는다.
 12. 현재 Bridge 기준선에서는 `browser_tabs new`, `page.context().newPage()`, `_blank` 자동 승계를 테스트 계획의 전제로 두지 않는다. 새 버전에서 다시 쓰려면 먼저 `playwright-mcp-bridge` 스킬의 버전/source check와 작은 probe로 동작을 재확인한다.
 
+## 화면 캡처 증거
+
+UI/UX 판단은 DOM 텍스트나 접근성 snapshot만으로 끝내지 않는다. 실제 사용자가 보는 Chrome 화면을 각 제품 view별로 캡처한 뒤 판단한다.
+
+1. 탭/segmented control이 있는 화면은 각 탭을 전환한 뒤 별도 캡처를 남긴다.
+   - 예: 관리자 `이용 현황`은 `사용자별`, `기능별`, `회의 사용량` 3장을 각각 캡처한다.
+2. 캡처 전에는 해당 view의 핵심 문구를 DOM으로 먼저 확인한다. 캡처 파일명에는 feature와 view를 넣는다.
+   - 예: `tmp/admin-usage-users.png`, `tmp/admin-usage-features.png`, `tmp/admin-usage-meeting.png`
+3. `browser_take_screenshot` 또는 `page.screenshot()`이 성공하면 그 결과를 우선 증거로 쓴다.
+4. Bridge 권한/폰트 대기 문제로 Playwright screenshot이 timeout 나거나 CDP가 `Not allowed`로 막히면 Windows 실제 화면 캡처 fallback을 사용한다. 이때 결과에는 `Windows screen capture fallback`이라고 적고, 캡처에 Codex UI나 주변 Chrome UI가 같이 들어갔으면 대상 Chrome 영역만 판단했다고 남긴다.
+
+Windows 실제 화면 캡처 fallback:
+
+```powershell
+New-Item -ItemType Directory -Force -Path .\tmp | Out-Null
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+$bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+$bmp = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
+$graphics = [System.Drawing.Graphics]::FromImage($bmp)
+$graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+$path = Join-Path (Resolve-Path .\tmp) "e2e-screen.png"
+$bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
+$graphics.Dispose()
+$bmp.Dispose()
+Get-Item $path
+```
+
 ## Bridge 새 탭 판정
 
 Playwright MCP Bridge로 새 탭 flow를 검증할 때는 증거를 둘로 나눈다.
@@ -196,8 +224,10 @@ npm.cmd run check:feature-usage -- --days 1 --limit 20
 8. 관리자 페이지에서 verified 상태, 사용자, 계정, 권한, 세션 만료 정보가 표시되어야 한다.
 9. 선택한 기능 화면 안에는 별도 `세션 컨텍스트` 카드처럼 상단 인증 정보를 반복하는 UI가 없어야 한다.
 10. `사용자 및 권한`은 기존 회원 목록을 읽고, 선택한 회원의 `일반 사용자 / 관리자` 권한 선택과 `저장`만 제공해야 한다. 이메일 직접 입력이나 별도 권한 설명 필드가 보이면 실패다. `마지막 활동` 옆 `?` 도움말은 feature usage에 기록되는 기능 사용 이벤트가 기준임을 설명해야 한다.
-11. 같은 launch URL을 다시 열거나 launch 없이 직접 진입하면 blocked 상태가 보여야 한다.
-12. 상용 배포 직후에는 `browser-extension-v2.web.app`의 panel/admin 정적 자산 200 응답과 릴리스 ZIP metadata 정합성을 함께 확인한 뒤 패널을 새로고침한다.
+11. 관리자 HTML은 `index.css`, `index.js`, shared design-system CSS/JS를 `admin=<timestamp>` query로 로드해야 한다. 같은 탭에서 새로고침했는데 이전 JS 문구가 남으면 실패다.
+12. `이용 현황`은 초기 샘플 데이터 상태에서도 `사용자별`, `기능별`, `회의 사용량` 보기를 전환할 수 있어야 하고, 기간/검색/팀 필터가 화면 안에서 즉시 반영되어야 한다. 화면에는 실제 수집 통계 기반의 `이용 공백`이 표시되어야 하며, raw event count, token, providerUserKey, 내부 로그, `활발`/`정착 중` 같은 해석성 상태 라벨, `화면 샘플`/`화면 검토용`처럼 구현 검토용 표식이 노출되면 실패다.
+13. 같은 launch URL을 다시 열거나 launch 없이 직접 진입하면 blocked 상태가 보여야 한다.
+14. 상용 배포 직후에는 `browser-extension-v2.web.app`의 panel/admin 정적 자산 200 응답과 릴리스 ZIP metadata 정합성을 함께 확인한 뒤 패널을 새로고침한다.
 
 ### 소식 팝업
 

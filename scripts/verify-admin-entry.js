@@ -122,12 +122,15 @@ function verifyAdminPageContract() {
   const functionsIndexSource = readText(path.join("functions", "index.js"));
 
   assert(
-    html.includes('<link rel="stylesheet" href="/shared/design-system.css" />')
-      && html.includes('<script src="/shared/design-system.js" defer></script>')
-      && html.includes('<script src="index.js" defer></script>')
+    html.includes('const assetVersion = `admin=${Date.now().toString(36)}`')
+      && html.includes('href="/shared/design-system.css?${assetVersion}"')
+      && html.includes('href="index.css?${assetVersion}"')
+      && html.includes('src="/shared/design-system.js?${assetVersion}" defer')
+      && html.includes('src="index.js?${assetVersion}" defer')
+      && !html.includes('<script src="index.js" defer></script>')
       && html.includes('id="adminToastSlot"')
       && html.includes("data-inova-toast-slot"),
-    "hosted admin page should load the shared design system before its controller and expose a toast slot"
+    "hosted admin page should cache-bust admin assets, load the shared design system before its controller, and expose a toast slot"
   );
   assert(
     html.includes('id="adminShell"')
@@ -243,7 +246,9 @@ function verifyAdminPageContract() {
       && pageSource.includes('activeSectionId: "access"')
       && pageSource.includes('id: "access"')
       && pageSource.includes('id: "notice"')
+      && pageSource.includes('id: "usage"')
       && pageSource.includes("소식 팝업")
+      && pageSource.includes("이용 현황")
       && !pageSource.includes('id: "overview"')
       && !pageSource.includes('id: "audit"')
       && !pageSource.includes('id: "release"')
@@ -316,6 +321,53 @@ function verifyAdminPageContract() {
       && pageSource.includes("function setActiveSection")
       && pageSource.includes("function applyVerifiedSession"),
     "hosted admin page should centralize view state and render future admin sections through a stable menu/outlet slot"
+  );
+  assert(
+    pageSource.includes("const USAGE_SAMPLE_USERS = Object.freeze")
+      && pageSource.includes("const USAGE_PERIODS = Object.freeze")
+      && pageSource.includes("const USAGE_VIEWS = Object.freeze")
+      && pageSource.includes("createUsageWorkbench")
+      && pageSource.includes("createUsageHeaderPanel")
+      && pageSource.includes("createUsageControls")
+      && pageSource.includes("createUsageUserDetailPanel")
+      && pageSource.includes("createUsageFeaturePanel")
+      && pageSource.includes("createUsageMeetingPanel")
+      && pageSource.includes("data-usage-view")
+      && pageSource.includes("data-usage-period")
+      && pageSource.includes("data-usage-search")
+      && pageSource.includes("data-usage-team")
+      && pageSource.includes("사용자별")
+      && pageSource.includes("기능별")
+      && pageSource.includes("회의 사용량")
+      && pageSource.includes("이용 공백")
+      && pageSource.includes("createUsageGapSummary")
+      && pageSource.includes("hasUsageActivity")
+      && pageSource.includes("이용 요약")
+      && pageSource.includes("기능별 활용 현황")
+      && pageSource.includes("회의 처리 현황")
+      && pageSource.includes("미사용 사용자")
+      && !pageSource.includes("활발")
+      && !pageSource.includes("정착 중")
+      && !pageSource.includes("지원 필요")
+      && !pageSource.includes("시작 전")
+      && !pageSource.includes("추천 액션")
+      && !pageSource.includes("온보딩 후보")
+      && !pageSource.includes("온보딩 메시지")
+      && !pageSource.includes("화면 샘플")
+      && !pageSource.includes("화면 검토용")
+      && pageSource.includes("restoreUsageSearchFocus")
+      && !pageSource.includes("request count")
+      && !pageSource.includes("debug log")
+      && css.includes(".admin-usage-workbench")
+      && css.includes(".admin-usage-summary")
+      && css.includes(".admin-usage-controls")
+      && css.includes(".admin-usage-priority-panel")
+      && css.includes(".admin-usage-priority-item")
+      && css.includes(".admin-usage-user-grid")
+      && css.includes(".admin-usage-feature-row")
+      && css.includes(".admin-usage-meeting-panel")
+      && css.includes("@media (max-width: 1180px)"),
+    "hosted admin usage screen should render a manager-facing sample dashboard before data APIs are connected"
   );
   assert(
     firebaseConfig.includes('"source": "admin/**"')

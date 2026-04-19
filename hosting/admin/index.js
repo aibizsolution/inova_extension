@@ -14,6 +14,84 @@
     { id: "active", label: "관리자" },
     { id: "inactive", label: "일반 사용자" },
   ]);
+  const USAGE_PERIODS = Object.freeze([
+    { id: "7d", label: "최근 7일" },
+    { id: "30d", label: "최근 30일" },
+    { id: "month", label: "이번 달" },
+  ]);
+  const USAGE_VIEWS = Object.freeze([
+    { id: "users", label: "사용자별" },
+    { id: "features", label: "기능별" },
+    { id: "meeting", label: "회의 사용량" },
+  ]);
+  const USAGE_SAMPLE_USERS = Object.freeze([
+    {
+      displayName: "이유진",
+      email: "yujin.lee@incross.com",
+      featureCount: 86,
+      id: "sample-yujin",
+      lastActiveLabel: "오늘 10:42",
+      meetingCount: 14,
+      meetingMinutes: 428,
+      organization: "AI비즈솔루션팀",
+      status: "active",
+      topFeatures: ["회의 결과 열기", "프롬프트 검토", "스토어 가져오기"],
+    },
+    {
+      displayName: "김민석",
+      email: "minseok.kim@incross.com",
+      featureCount: 42,
+      id: "sample-minseok",
+      lastActiveLabel: "어제 18:12",
+      meetingCount: 7,
+      meetingMinutes: 215,
+      organization: "전략기획팀",
+      status: "settling",
+      topFeatures: ["회의 작업실", "회의 결과 열기"],
+    },
+    {
+      displayName: "박서연",
+      email: "seoyeon.park@incross.com",
+      featureCount: 29,
+      id: "sample-seoyeon",
+      lastActiveLabel: "3일 전",
+      meetingCount: 3,
+      meetingMinutes: 92,
+      organization: "마케팅솔루션팀",
+      status: "settling",
+      topFeatures: ["프롬프트 검토", "내 요청 저장"],
+    },
+    {
+      displayName: "정현우",
+      email: "hyunwoo.jung@incross.com",
+      featureCount: 11,
+      id: "sample-hyunwoo",
+      lastActiveLabel: "9일 전",
+      meetingCount: 0,
+      meetingMinutes: 0,
+      organization: "세일즈팀",
+      status: "attention",
+      topFeatures: ["스토어 조회"],
+    },
+    {
+      displayName: "최가은",
+      email: "gaeun.choi@incross.com",
+      featureCount: 0,
+      id: "sample-gaeun",
+      lastActiveLabel: "기록 없음",
+      meetingCount: 0,
+      meetingMinutes: 0,
+      organization: "브랜드전략팀",
+      status: "empty",
+      topFeatures: [],
+    },
+  ]);
+  const USAGE_FEATURE_SUMMARY = Object.freeze([
+    { activeUsers: 18, adoption: 72, label: "회의 결과 열기", momentum: "꾸준히 증가", tone: "success" },
+    { activeUsers: 14, adoption: 56, label: "프롬프트 검토", momentum: "꾸준한 사용", tone: "info" },
+    { activeUsers: 11, adoption: 44, label: "스토어 가져오기", momentum: "소개 필요", tone: "warning" },
+    { activeUsers: 8, adoption: 32, label: "내 요청 저장", momentum: "낮은 활용", tone: "muted" },
+  ]);
   const ADMIN_SECTIONS = Object.freeze([
     {
       eyebrow: "Access",
@@ -38,9 +116,9 @@
       group: "Insights",
       icon: "chart",
       id: "usage",
-      label: "사용량",
-      summary: "기능 사용량과 운영 지표 화면이 들어갈 자리입니다.",
-      title: "사용량",
+      label: "이용 현황",
+      summary: "기능 사용량과 회의 처리량을 사용자별로 확인합니다.",
+      title: "사용자별 이용 현황",
     },
   ]);
   const NAV_ICON_PATHS = Object.freeze({
@@ -58,6 +136,7 @@
     notice: createNoticeState(),
     role: "",
     sessionExpiresAt: "",
+    usage: createUsageState(),
     view: "loading",
     viewer: null,
   };
@@ -66,11 +145,15 @@
   let accessSearchController = null;
   let confirmController = null;
   let toastController = null;
+  let usageSearchController = null;
 
   global.addEventListener("DOMContentLoaded", () => {
     bindElements();
     accessSearchController = createAdminDeferredSearchController({
       onSearch: applyAccessSearch,
+    });
+    usageSearchController = createAdminDeferredSearchController({
+      onSearch: applyUsageSearch,
     });
     confirmController = createAdminConfirmController();
     toastController = createAdminToastController();
@@ -445,6 +528,10 @@
       void ensureAccessUsersLoaded();
       return;
     }
+    if (section.id === "usage") {
+      elements.pageOutlet?.replaceChildren(createUsageWorkbench());
+      return;
+    }
     elements.pageOutlet?.replaceChildren(createSectionPlaceholder(section));
   }
 
@@ -647,6 +734,375 @@
     const selectButton = event.target?.closest?.("[data-access-select]");
     if (selectButton) {
       state.access.selectedId = normalizeText(selectButton.dataset.accessSelect);
+      renderActiveSection();
+    }
+  }
+
+  function createUsageWorkbench() {
+    const users = readUsageUsers();
+    const visibleUsers = filterUsageUsers(users);
+    const selectedUser = readSelectedUsageUser(visibleUsers);
+    const wrapper = global.document.createElement("div");
+    wrapper.className = "admin-usage-workbench";
+    wrapper.append(
+      createUsageHeaderPanel(visibleUsers),
+      createUsageControls()
+    );
+    if (state.usage.view === "users") {
+      wrapper.append(createUsagePriorityPanel(visibleUsers));
+    }
+    wrapper.append(createUsageBody(visibleUsers, selectedUser));
+    wrapper.addEventListener("input", handleUsageInput);
+    wrapper.addEventListener("compositionstart", handleUsageCompositionStart);
+    wrapper.addEventListener("compositionend", handleUsageCompositionEnd);
+    wrapper.addEventListener("search", handleUsageSearch);
+    wrapper.addEventListener("change", handleUsageChange);
+    wrapper.addEventListener("click", handleUsageClick);
+    return wrapper;
+  }
+
+  function createUsageHeaderPanel(visibleUsers) {
+    const summary = buildUsageSummary(visibleUsers);
+    const panel = global.document.createElement("section");
+    panel.className = "admin-usage-summary";
+    panel.setAttribute("aria-label", "이용 현황 요약");
+    panel.innerHTML = `
+      <div class="admin-usage-summary__intro">
+        <div>
+          <p class="admin-eyebrow">운영 요약</p>
+          <h3>이용 요약</h3>
+        </div>
+      </div>
+      <div class="admin-usage-kpis">
+        ${createUsageKpi("활성 사용자", `${summary.activeUsers}명`, "최근 활동이 있는 사용자")}
+        ${createUsageKpi("기능 활용", `${formatUsageNumber(summary.featureCount)}회`, "선택 기간 내 활동")}
+        ${createUsageKpi("회의 처리", `${formatUsageDuration(summary.meetingMinutes)}`, `${summary.meetingCount}건`)}
+        ${createUsageKpi("미사용 사용자", `${summary.emptyUsers}명`, "기록이 없는 사용자")}
+      </div>
+    `;
+    return panel;
+  }
+
+  function createUsagePriorityPanel(visibleUsers) {
+    const priorityUsers = visibleUsers.filter(hasUsageGap);
+    const rows = priorityUsers.map((user) => {
+      return `
+        <button type="button" class="admin-usage-priority-item" data-usage-user="${escapeHtmlAttribute(user.id)}">
+          <span>
+            <strong>${escapeHtml(user.displayName)}</strong>
+            <small>${escapeHtml(user.organization)}</small>
+          </span>
+          <span>${escapeHtml(createUsageGapSummary(user))}</span>
+          <span>${escapeHtml(`마지막 활동 ${user.lastActiveLabel}`)}</span>
+        </button>
+      `;
+    }).join("");
+    const panel = global.document.createElement("section");
+    panel.className = "admin-usage-priority-panel";
+    panel.setAttribute("aria-label", "이용 공백");
+    panel.innerHTML = `
+      <div class="inova-section-head admin-usage-panel-head">
+        <div>
+          <h3 class="inova-section-head__title">이용 공백</h3>
+          <small class="admin-usage-panel-note">최근 활동, 기능 사용, 회의 기록 중 비어 있는 항목만 표시합니다.</small>
+        </div>
+        <span class="admin-access-count">${priorityUsers.length}명</span>
+      </div>
+      <div class="admin-usage-priority-list">
+        ${rows || '<p class="admin-access-empty">현재 조건에서 비어 있는 이용 기록이 없습니다.</p>'}
+      </div>
+    `;
+    return panel;
+  }
+
+  function createUsageKpi(label, value, hint) {
+    return `
+      <article class="admin-usage-kpi">
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(value)}</strong>
+        <small>${escapeHtml(hint)}</small>
+      </article>
+    `;
+  }
+
+  function createUsageControls() {
+    const periodButtons = USAGE_PERIODS.map((period) => {
+      const isSelected = state.usage.period === period.id;
+      return `
+        <button type="button" data-usage-period="${escapeHtmlAttribute(period.id)}" aria-pressed="${isSelected ? "true" : "false"}">
+          ${escapeHtml(period.label)}
+        </button>
+      `;
+    }).join("");
+    const viewButtons = USAGE_VIEWS.map((view) => {
+      const isSelected = state.usage.view === view.id;
+      return `
+        <button type="button" data-usage-view="${escapeHtmlAttribute(view.id)}" aria-pressed="${isSelected ? "true" : "false"}">
+          ${escapeHtml(view.label)}
+        </button>
+      `;
+    }).join("");
+    const teamOptions = readUsageTeamOptions().map((team) => `
+      <option value="${escapeHtmlAttribute(team.id)}" ${state.usage.team === team.id ? "selected" : ""}>${escapeHtml(team.label)}</option>
+    `).join("");
+    const controls = global.document.createElement("section");
+    controls.className = "admin-usage-controls";
+    controls.setAttribute("aria-label", "이용 현황 필터");
+    controls.innerHTML = `
+      <div class="admin-usage-controls__row">
+        <div class="admin-usage-view-tabs inova-segmented" aria-label="이용 현황 보기">
+          ${viewButtons}
+        </div>
+        <div class="admin-usage-period inova-segmented" aria-label="기간 선택">
+          ${periodButtons}
+        </div>
+      </div>
+      <div class="admin-usage-controls__row">
+        <label class="admin-usage-search">
+          <span>검색</span>
+          <input type="search" data-usage-search value="${escapeHtmlAttribute(state.usage.searchDraft)}" placeholder="이름, 이메일, 팀 검색" />
+        </label>
+        <label class="admin-usage-select">
+          <span>팀</span>
+          <select data-usage-team>${teamOptions}</select>
+        </label>
+      </div>
+    `;
+    return controls;
+  }
+
+  function createUsageBody(visibleUsers, selectedUser) {
+    if (state.usage.view === "features") {
+      return createUsageFeaturePanel(visibleUsers);
+    }
+    if (state.usage.view === "meeting") {
+      return createUsageMeetingPanel(visibleUsers);
+    }
+    return createUsageUserPanel(visibleUsers, selectedUser);
+  }
+
+  function createUsageUserPanel(visibleUsers, selectedUser) {
+    const panel = global.document.createElement("section");
+    panel.className = "admin-usage-user-grid";
+    panel.setAttribute("aria-label", "사용자별 이용 현황");
+    panel.append(
+      createUsageUserListPanel(visibleUsers, selectedUser),
+      createUsageUserDetailPanel(selectedUser)
+    );
+    return panel;
+  }
+
+  function createUsageUserListPanel(visibleUsers, selectedUser) {
+    const panel = global.document.createElement("section");
+    panel.className = "admin-usage-user-list";
+    const rows = visibleUsers.map((user) => createUsageUserRow(user, selectedUser)).join("");
+    panel.innerHTML = `
+      <div class="inova-section-head admin-usage-panel-head">
+        <h3 class="inova-section-head__title">사용자 현황</h3>
+        <span class="admin-access-count">${visibleUsers.length}명</span>
+      </div>
+      <div class="admin-usage-user-list__items">
+        ${rows || '<p class="admin-access-empty">조건에 맞는 사용자가 없습니다.</p>'}
+      </div>
+    `;
+    return panel;
+  }
+
+  function createUsageUserRow(user, selectedUser) {
+    const isSelected = user.id === selectedUser?.id;
+    return `
+      <button type="button" class="admin-usage-user-row${isSelected ? " is-selected" : ""}" data-usage-user="${escapeHtmlAttribute(user.id)}" aria-current="${isSelected ? "true" : "false"}">
+        <span class="admin-access-avatar" aria-hidden="true">${escapeHtml(readAccessInitial(user))}</span>
+        <span class="admin-usage-user-row__body">
+          <strong>${escapeHtml(user.displayName)}</strong>
+          <span>${escapeHtml(user.organization)}</span>
+          <small>${escapeHtml(user.lastActiveLabel)}</small>
+        </span>
+        <span class="admin-usage-user-row__metrics">
+          <strong>${escapeHtml(`기능 ${formatUsageNumber(user.featureCount)}회`)}</strong>
+          <small>${escapeHtml(`회의 ${formatUsageDuration(user.meetingMinutes)}`)}</small>
+        </span>
+      </button>
+    `;
+  }
+
+  function createUsageUserDetailPanel(user) {
+    const panel = global.document.createElement("section");
+    panel.className = "admin-usage-user-detail";
+    if (!user) {
+      panel.innerHTML = `
+        <div class="inova-section-head admin-usage-panel-head">
+          <h3 class="inova-section-head__title">사용자 상세</h3>
+        </div>
+        <p class="admin-access-empty">선택할 사용자가 없습니다.</p>
+      `;
+      return panel;
+    }
+    const featureTags = user.topFeatures.length
+      ? user.topFeatures.map((feature) => `<span>${escapeHtml(feature)}</span>`).join("")
+      : "<span>활용 전</span>";
+    panel.innerHTML = `
+      <div class="inova-section-head admin-usage-panel-head">
+        <h3 class="inova-section-head__title">사용자 상세</h3>
+      </div>
+      <div class="admin-usage-profile">
+        <span class="admin-access-avatar is-large" aria-hidden="true">${escapeHtml(readAccessInitial(user))}</span>
+        <div>
+          <strong>${escapeHtml(user.displayName)}</strong>
+          <span>${escapeHtml(user.email)}</span>
+          <small>${escapeHtml(user.organization)}</small>
+        </div>
+      </div>
+      <div class="admin-usage-detail-metrics" aria-label="선택 사용자 이용 요약">
+        ${createUsageDetailMetric("최근 활동", user.lastActiveLabel)}
+        ${createUsageDetailMetric("기능 활용", `${formatUsageNumber(user.featureCount)}회`)}
+        ${createUsageDetailMetric("회의 처리", `${formatUsageDuration(user.meetingMinutes)} · ${formatUsageNumber(user.meetingCount)}건`)}
+      </div>
+      <div class="admin-usage-feature-tags" aria-label="주요 활용 기능">
+        ${featureTags}
+      </div>
+    `;
+    return panel;
+  }
+
+  function createUsageDetailMetric(label, value) {
+    return `
+      <div>
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(value)}</strong>
+      </div>
+    `;
+  }
+
+  function createUsageFeaturePanel(visibleUsers) {
+    const panel = global.document.createElement("section");
+    panel.className = "admin-usage-feature-panel";
+    panel.setAttribute("aria-label", "기능별 이용 현황");
+    const rows = USAGE_FEATURE_SUMMARY.map((feature) => createUsageFeatureRow(feature)).join("");
+    panel.innerHTML = `
+      <div class="inova-section-head admin-usage-panel-head">
+        <h3 class="inova-section-head__title">기능별 활용 현황</h3>
+        <span class="admin-access-count">${visibleUsers.length}명 기준</span>
+      </div>
+      <div class="admin-usage-feature-list">
+        ${rows}
+      </div>
+    `;
+    return panel;
+  }
+
+  function createUsageFeatureRow(feature) {
+    const badgeClass = readUsageFeatureToneClass(feature.tone);
+    const adoption = clampNumber(feature.adoption, 0, 100);
+    return `
+      <article class="admin-usage-feature-row">
+        <div>
+          <strong>${escapeHtml(feature.label)}</strong>
+          <span>${escapeHtml(feature.activeUsers)}명 활용 · ${escapeHtml(feature.momentum)}</span>
+        </div>
+        <div class="admin-usage-bar" aria-label="${escapeHtmlAttribute(`${feature.label} 활용률 ${adoption}%`)}">
+          <span style="width: ${adoption}%"></span>
+        </div>
+        <span class="inova-badge ${escapeHtmlAttribute(badgeClass)}">${adoption}%</span>
+      </article>
+    `;
+  }
+
+  function createUsageMeetingPanel(visibleUsers) {
+    const sortedUsers = [...visibleUsers].sort((left, right) => right.meetingMinutes - left.meetingMinutes);
+    const totalMinutes = sortedUsers.reduce((total, user) => total + user.meetingMinutes, 0);
+    const totalCount = sortedUsers.reduce((total, user) => total + user.meetingCount, 0);
+    const rows = sortedUsers.map((user) => `
+      <div class="admin-usage-meeting-row">
+        <span>${escapeHtml(user.displayName)}</span>
+        <strong>${escapeHtml(formatUsageDuration(user.meetingMinutes))}</strong>
+        <small>${escapeHtml(formatUsageNumber(user.meetingCount))}건</small>
+      </div>
+    `).join("");
+    const panel = global.document.createElement("section");
+    panel.className = "admin-usage-meeting-panel";
+    panel.setAttribute("aria-label", "회의 사용량");
+    panel.innerHTML = `
+      <div class="inova-section-head admin-usage-panel-head">
+        <h3 class="inova-section-head__title">회의 처리 현황</h3>
+        <span class="admin-access-count">선택 기간</span>
+      </div>
+      <div class="admin-usage-meeting-total">
+        ${createUsageDetailMetric("처리 시간", formatUsageDuration(totalMinutes))}
+        ${createUsageDetailMetric("완료 기록", `${formatUsageNumber(totalCount)}건`)}
+        ${createUsageDetailMetric("활용 사용자", `${sortedUsers.filter((user) => user.meetingMinutes > 0).length}명`)}
+      </div>
+      <div class="admin-usage-meeting-list">
+        ${rows || '<p class="admin-access-empty">회의 사용량 샘플이 없습니다.</p>'}
+      </div>
+    `;
+    return panel;
+  }
+
+  function handleUsageInput(event) {
+    const target = event.target;
+    if (!target?.matches?.("[data-usage-search]")) {
+      return;
+    }
+    state.usage.searchDraft = String(target.value || "");
+    usageSearchController?.handleInput?.(target.value, {
+      composing: Boolean(event.isComposing),
+    });
+  }
+
+  function handleUsageCompositionStart(event) {
+    if (event.target?.matches?.("[data-usage-search]")) {
+      usageSearchController?.handleCompositionStart?.();
+    }
+  }
+
+  function handleUsageCompositionEnd(event) {
+    const target = event.target;
+    if (!target?.matches?.("[data-usage-search]")) {
+      return;
+    }
+    state.usage.searchDraft = String(target.value || "");
+    usageSearchController?.handleCompositionEnd?.(target.value);
+  }
+
+  function handleUsageSearch(event) {
+    const target = event.target;
+    if (!target?.matches?.("[data-usage-search]")) {
+      return;
+    }
+    state.usage.searchDraft = String(target.value || "");
+    usageSearchController?.flush?.(target.value);
+  }
+
+  function handleUsageChange(event) {
+    const target = event.target;
+    if (!target?.matches?.("[data-usage-team]")) {
+      return;
+    }
+    state.usage.team = normalizeText(target.value) || "all";
+    renderActiveSection();
+  }
+
+  function handleUsageClick(event) {
+    if (event.target?.closest?.("[data-usage-search]")) {
+      return;
+    }
+    usageSearchController?.flush?.(state.usage.searchDraft);
+    const periodButton = event.target?.closest?.("[data-usage-period]");
+    if (periodButton) {
+      state.usage.period = normalizeText(periodButton.dataset.usagePeriod) || "30d";
+      renderActiveSection();
+      return;
+    }
+    const viewButton = event.target?.closest?.("[data-usage-view]");
+    if (viewButton) {
+      state.usage.view = normalizeText(viewButton.dataset.usageView) || "users";
+      renderActiveSection();
+      return;
+    }
+    const userButton = event.target?.closest?.("[data-usage-user]");
+    if (userButton) {
+      state.usage.selectedUserId = normalizeText(userButton.dataset.usageUser);
       renderActiveSection();
     }
   }
@@ -1166,6 +1622,17 @@
     };
   }
 
+  function createUsageState() {
+    return {
+      period: "30d",
+      query: "",
+      searchDraft: "",
+      selectedUserId: USAGE_SAMPLE_USERS[0]?.id || "",
+      team: "all",
+      view: "users",
+    };
+  }
+
   function applyAccessSearch(query, details = {}) {
     const focusState = readAccessSearchFocusState();
     const nextQuery = normalizeText(query);
@@ -1208,8 +1675,167 @@
     input.setSelectionRange(selectionStart, selectionEnd, focusState.selectionDirection);
   }
 
+  function applyUsageSearch(query, details = {}) {
+    const focusState = readUsageSearchFocusState();
+    const nextQuery = normalizeText(query);
+    const nextDraft = typeof details.rawValue === "string" ? details.rawValue : nextQuery;
+    state.usage.query = nextQuery;
+    state.usage.searchDraft = nextDraft;
+    if (state.activeSectionId === "usage") {
+      renderActiveSection();
+      restoreUsageSearchFocus(focusState);
+    }
+  }
+
+  function readUsageSearchFocusState() {
+    const activeElement = global.document?.activeElement;
+    if (!activeElement?.matches?.("[data-usage-search]")) {
+      return null;
+    }
+    return {
+      selectionDirection: activeElement.selectionDirection || "none",
+      selectionEnd: Number(activeElement.selectionEnd),
+      selectionStart: Number(activeElement.selectionStart),
+    };
+  }
+
+  function restoreUsageSearchFocus(focusState) {
+    if (!focusState) {
+      return;
+    }
+    const input = elements.pageOutlet?.querySelector?.("[data-usage-search]");
+    if (!input) {
+      return;
+    }
+    input.focus({ preventScroll: true });
+    if (typeof input.setSelectionRange !== "function") {
+      return;
+    }
+    const valueLength = String(input.value || "").length;
+    const selectionStart = clampNumber(focusState.selectionStart, 0, valueLength);
+    const selectionEnd = clampNumber(focusState.selectionEnd, selectionStart, valueLength);
+    input.setSelectionRange(selectionStart, selectionEnd, focusState.selectionDirection);
+  }
+
   function readAccessEntries() {
     return Array.isArray(state.access.entries) ? state.access.entries : [];
+  }
+
+  function readUsageUsers() {
+    return USAGE_SAMPLE_USERS.map((user) => ({
+      ...user,
+      topFeatures: Array.isArray(user.topFeatures) ? user.topFeatures : [],
+    }));
+  }
+
+  function filterUsageUsers(users) {
+    const query = normalizeText(state.usage.query).toLowerCase();
+    const team = normalizeText(state.usage.team) || "all";
+    return users.filter((user) => {
+      const matchesTeam = team === "all" || user.organization === team;
+      const haystack = [
+        user.displayName,
+        user.email,
+        user.organization,
+        user.lastActiveLabel,
+        ...user.topFeatures,
+      ].join(" ").toLowerCase();
+      return matchesTeam && (!query || haystack.includes(query));
+    });
+  }
+
+  function readSelectedUsageUser(visibleUsers) {
+    if (!visibleUsers.length) {
+      state.usage.selectedUserId = "";
+      return null;
+    }
+    const selectedId = normalizeText(state.usage.selectedUserId);
+    const selected = visibleUsers.find((user) => user.id === selectedId);
+    if (selected) {
+      return selected;
+    }
+    const fallback = visibleUsers[0] || null;
+    state.usage.selectedUserId = normalizeText(fallback?.id) || "";
+    return fallback;
+  }
+
+  function readUsageTeamOptions() {
+    const teams = Array.from(new Set(readUsageUsers().map((user) => user.organization).filter(Boolean)));
+    return [
+      { id: "all", label: "전체 팀" },
+      ...teams.map((team) => ({ id: team, label: team })),
+    ];
+  }
+
+  function buildUsageSummary(users) {
+    return users.reduce((summary, user) => {
+      summary.featureCount += Number(user.featureCount) || 0;
+      summary.meetingCount += Number(user.meetingCount) || 0;
+      summary.meetingMinutes += Number(user.meetingMinutes) || 0;
+      if (hasUsageActivity(user)) {
+        summary.activeUsers += 1;
+      }
+      if (!hasUsageActivity(user)) {
+        summary.emptyUsers += 1;
+      }
+      return summary;
+    }, {
+      activeUsers: 0,
+      emptyUsers: 0,
+      featureCount: 0,
+      meetingCount: 0,
+      meetingMinutes: 0,
+    });
+  }
+
+  function hasUsageActivity(user) {
+    return (Number(user.featureCount) || 0) > 0 || (Number(user.meetingCount) || 0) > 0;
+  }
+
+  function hasUsageGap(user) {
+    return !hasUsageActivity(user) || (Number(user.meetingCount) || 0) === 0;
+  }
+
+  function createUsageGapSummary(user) {
+    const reasons = [];
+    if (!normalizeText(user.lastActiveLabel) || normalizeText(user.lastActiveLabel) === "기록 없음") {
+      reasons.push("최근 활동 기록 없음");
+    }
+    if ((Number(user.featureCount) || 0) === 0) {
+      reasons.push("기능 0회");
+    }
+    if ((Number(user.meetingCount) || 0) === 0) {
+      reasons.push("회의 0건");
+    }
+    return reasons.join(" · ") || "이용 공백 없음";
+  }
+
+  function readUsageFeatureToneClass(toneInput) {
+    const tone = normalizeText(toneInput).toLowerCase();
+    if (tone === "success") {
+      return "inova-badge--success";
+    }
+    if (tone === "info") {
+      return "inova-badge--info";
+    }
+    if (tone === "warning") {
+      return "inova-badge--warning";
+    }
+    return "inova-badge--muted";
+  }
+
+  function formatUsageNumber(value) {
+    return new Intl.NumberFormat("ko-KR").format(Math.max(0, Number(value) || 0));
+  }
+
+  function formatUsageDuration(minutesInput) {
+    const minutes = Math.max(0, Math.round(Number(minutesInput) || 0));
+    if (minutes >= 60) {
+      const hours = Math.floor(minutes / 60);
+      const remainder = minutes % 60;
+      return remainder ? `${hours}시간 ${remainder}분` : `${hours}시간`;
+    }
+    return `${minutes}분`;
   }
 
   function filterAccessEntries(entries) {

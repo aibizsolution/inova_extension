@@ -6,10 +6,15 @@
     <title>아이노바 실험실</title>
     <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png" />
-    <link rel="stylesheet" href="/shared/design-system.css" />
-    <link rel="stylesheet" href="index.css" />
-    <script src="/shared/design-system.js" defer></script>
-    <script src="index.js" defer></script>
+    <script>
+      (() => {
+        const assetVersion = `admin=${Date.now().toString(36)}`;
+        document.write(`<link rel="stylesheet" href="/shared/design-system.css?${assetVersion}" />`);
+        document.write(`<link rel="stylesheet" href="index.css?${assetVersion}" />`);
+        document.write(`<script src="/shared/design-system.js?${assetVersion}" defer><\/script>`);
+        document.write(`<script src="index.js?${assetVersion}" defer><\/script>`);
+      })();
+    </script>
   </head>
   <body>
     <div id="adminToastSlot" class="inova-toast-slot" data-inova-toast-slot hidden></div>
