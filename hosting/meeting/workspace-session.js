@@ -6,6 +6,7 @@
   const AUTHORIZE_REQUEST_TYPE = "authorize-workspace-access";
   const AUTHORIZE_RESPONSE_TYPE = "authorize-workspace-access-result";
   const AUTHORIZE_TIMEOUT_MS = 12000;
+  const PARTICIPATION_THROTTLE_KEY_PREFIX = "meetingParticipationThrottle:";
 
   function createController(deps) {
     const shared = ns.shared;
@@ -166,13 +167,13 @@
     }
 
     function restoreWorkspaceSession() {
-      if (normalizeText(state.params.shareToken)) {
+      if (normalizeText(state.params.shareToken || state.params.participationId)) {
         state.sessionRestore = {
           degradedReason: "",
           hasBlockingIssue: false,
           hasWarningIssue: false,
           issueCodes: [],
-          source: "share-link-bypassed",
+          source: normalizeText(state.params.participationId) ? "participation-link-bypassed" : "share-link-bypassed",
         };
         logDebug("workspace.session.restore", {
           degradedReason: "",
@@ -180,7 +181,7 @@
           issueCodes: [],
           issueCount: 0,
           meetingId: state.params.meetingId,
-          source: "share-link-bypassed",
+          source: normalizeText(state.params.participationId) ? "participation-link-bypassed" : "share-link-bypassed",
           workspaceToken: Boolean(state.params.workspaceToken),
         });
         return;
@@ -214,6 +215,7 @@
         meetingId: normalizeText(parsed?.meetingId),
         meetingSessionToken: normalizeText(parsed?.meetingSessionToken),
         mode: state.mode,
+        participationId: normalizeText(parsed?.participationId),
         sharedMemo: normalizeTextBlock(parsed?.sharedMemo),
         shareToken: normalizeText(parsed?.shareToken),
         title: normalizeText(parsed?.title),
@@ -285,6 +287,70 @@
       return `${providerUserKey.slice(0, 6)}...`;
     }
 
+    function buildParticipationThrottleKey(participation) {
+      const normalized = participation && typeof participation === "object" ? participation : {};
+      const viewerKey = normalizeText(normalized?.viewer?.providerUserKey);
+      const ownerKey = normalizeText(normalized?.owner?.providerUserKey);
+      const meetingId = normalizeText(normalized.meetingId);
+      return viewerKey && ownerKey && meetingId
+        ? `${PARTICIPATION_THROTTLE_KEY_PREFIX}${viewerKey}:${ownerKey}:${meetingId}`
+        : "";
+    }
+
+    function normalizeParticipationCacheEntry(entry) {
+      const normalized = entry && typeof entry === "object" ? entry : {};
+      return {
+        lastKnownServerRegisteredAt: normalizeText(normalized.lastKnownServerRegisteredAt),
+        lastRefreshAt: normalizeText(normalized.lastRefreshAt),
+        lastWriteAttemptAt: normalizeText(normalized.lastWriteAttemptAt),
+        participationId: normalizeText(normalized.participationId),
+        titleSnapshotHash: normalizeText(normalized.titleSnapshotHash),
+      };
+    }
+
+    function readParticipationCache() {
+      const participationId = normalizeText(state.params.participationId || state.session.participationId);
+      if (!participationId) {
+        return {};
+      }
+      try {
+        const storage = global.localStorage;
+        if (!storage || typeof storage.length !== "number") {
+          return {};
+        }
+        for (let index = 0; index < storage.length; index += 1) {
+          const key = normalizeText(storage.key(index));
+          if (!key.startsWith(PARTICIPATION_THROTTLE_KEY_PREFIX)) {
+            continue;
+          }
+          const parsed = JSON.parse(storage.getItem(key) || "{}");
+          const cache = normalizeParticipationCacheEntry(parsed);
+          if (cache.participationId === participationId) {
+            return cache;
+          }
+        }
+      } catch {}
+      return {};
+    }
+
+    function persistParticipationCache(participation) {
+      const key = buildParticipationThrottleKey(participation);
+      if (!key) {
+        return;
+      }
+      const now = new Date().toISOString();
+      const cache = normalizeParticipationCacheEntry({
+        lastKnownServerRegisteredAt: now,
+        lastRefreshAt: participation.lastRefreshAt || now,
+        lastWriteAttemptAt: now,
+        participationId: participation.participationId,
+        titleSnapshotHash: participation.titleSnapshotHash,
+      });
+      try {
+        global.localStorage?.setItem?.(key, JSON.stringify(cache));
+      } catch {}
+    }
+
     function applyAccessState(accessPayload) {
       const payload = accessPayload && typeof accessPayload === "object" ? accessPayload : {};
       const accessMode = normalizeText(payload.accessMode);
@@ -316,10 +382,14 @@
         meetingId,
         meetingSessionToken: resolvedMeetingSessionToken,
         mode: state.mode,
+        participationId: normalizeText(payload.participationId || payload.participation?.participationId || state.params.participationId || state.session.participationId),
         sharedMemo: normalizeTextBlock(state.session.sharedMemo),
         shareToken: normalizeText(state.params.shareToken),
         title: normalizeText(state.session.title),
       };
+      if (payload.participation?.participationId) {
+        persistParticipationCache(payload.participation);
+      }
       state.meeting.meetingId = meetingId;
       state.meeting.sharedMemo = normalizeTextBlock(state.session.sharedMemo);
       state.meeting.title = normalizeText(state.session.title);
@@ -334,6 +404,8 @@
         debugAuthBypass: normalizeText(state.params.debugAuthBypass),
         jobId: normalizeText(state.params.jobId),
         meetingId: normalizeText(state.params.meetingId || state.session.meetingId),
+        participationCache: readParticipationCache(),
+        participationId: normalizeText(state.params.participationId || state.session.participationId),
         shareToken: normalizeText(state.params.shareToken),
       };
     }
@@ -416,6 +488,7 @@
         meetingId: state.session.meetingId,
         meetingSessionToken: normalizeText(state.session.meetingSessionToken),
         mode: state.mode,
+        participationId: normalizeText(state.session.participationId),
         readOnly: Boolean(state.auth.readOnly),
         sharedMemo: normalizeTextBlock(state.recordMemoDraft || state.recordMemoSaved || state.session.sharedMemo),
         shareToken: normalizeText(state.params.shareToken || state.session.shareToken),
@@ -453,8 +526,10 @@
       const entry = findHistoryEntry(state, state.selectedRecordId);
       const jobId = normalizeText(entry?.remote?.jobId || entry?.pending?.jobId || state.params.jobId);
       if (jobId) nextUrl.searchParams.set("jobId", jobId);
+      const participationId = normalizeText(state.params.participationId || state.session.participationId);
+      if (participationId) nextUrl.searchParams.set("participationId", participationId);
       const shareToken = normalizeText(state.params.shareToken || state.session.shareToken);
-      if (shareToken) nextUrl.searchParams.set("share", shareToken);
+      if (shareToken && !participationId) nextUrl.searchParams.set("share", shareToken);
       if (preserveDebug && isLocalWorkspaceOrigin(global) && normalizeText(state.auth.bypassMode)) {
         nextUrl.searchParams.set("debugAuthBypass", normalizeText(state.auth.bypassMode));
       }
@@ -492,6 +567,7 @@
       }
 
       state.session.meetingId = meetingId;
+      state.session.participationId = normalizeText(state.params.participationId);
       state.session.shareToken = normalizeText(state.params.shareToken);
       state.mode = normalizeText(state.params.jobId) ? "detail" : "create";
       state.session.mode = state.mode;

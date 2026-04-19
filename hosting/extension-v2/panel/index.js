@@ -407,6 +407,9 @@
         return Promise.resolve(false);
       },
       onSearch(toolId, value, options = {}) {
+        if (meetingHubController?.handleSearch?.(toolId, value, options) !== false) {
+          return Promise.resolve(true);
+        }
         if (conversationController?.handleSearch?.(toolId, value, options) !== false) {
           return Promise.resolve(true);
         }
@@ -419,6 +422,9 @@
         return Promise.resolve(false);
       },
       onSearchSubmit(toolId, value) {
+        if (meetingHubController?.handleSearch?.(toolId, value, { submit: true }) !== false) {
+          return Promise.resolve(true);
+        }
         if (conversationController?.handleSearch?.(toolId, value, { submit: true }) !== false) {
           return Promise.resolve(true);
         }
@@ -1818,11 +1824,17 @@
         artifactId: meetingAction.dataset.meetingArtifactId || "",
         jobId: meetingAction.dataset.meetingJobId || "",
         meetingId: meetingAction.dataset.meetingId || "",
+        participationId: meetingAction.dataset.meetingParticipationId || "",
+        scope: meetingAction.dataset.meetingScope || "",
+        sourceKind: meetingAction.dataset.meetingSourceKind || "",
       });
       void callbacks.onMeetingAction(meetingAction.dataset.meetingAction || "", {
         artifactId: meetingAction.dataset.meetingArtifactId || "",
         jobId: meetingAction.dataset.meetingJobId || "",
         meetingId: meetingAction.dataset.meetingId || "",
+        participationId: meetingAction.dataset.meetingParticipationId || "",
+        scope: meetingAction.dataset.meetingScope || "",
+        sourceKind: meetingAction.dataset.meetingSourceKind || "",
         title: meetingAction.dataset.meetingTitle || "",
       });
       return;
@@ -2008,12 +2020,16 @@
           artifactId: meetingCard.dataset.meetingArtifactId || "",
           jobId: meetingCard.dataset.meetingJobId || "",
           meetingId: meetingCard.dataset.meetingId || "",
+          participationId: meetingCard.dataset.meetingParticipationId || "",
+          sourceKind: meetingCard.dataset.meetingSourceKind || "",
           reason: event.key === " " ? "space" : "enter",
         });
         void callbacks.onMeetingAction(meetingCard.dataset.meetingAction || "", {
           artifactId: meetingCard.dataset.meetingArtifactId || "",
           jobId: meetingCard.dataset.meetingJobId || "",
           meetingId: meetingCard.dataset.meetingId || "",
+          participationId: meetingCard.dataset.meetingParticipationId || "",
+          sourceKind: meetingCard.dataset.meetingSourceKind || "",
           title: meetingCard.dataset.meetingTitle || "",
         });
       }

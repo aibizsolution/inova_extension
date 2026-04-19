@@ -219,7 +219,7 @@ Remote manifest fetch나 validation이 실패하면 service worker는 warning/de
 - `npm run check:cloud-sync -- --userKey <providerUserKey>`
 - `npm run check:function-logs -- --since 10`
 - `docs/functions-runtime-guide.md`
-- 실제 브라우저 E2E 절차의 단일 기준: `docs/e2e-browser-workflow.md`
+- 실제 브라우저 E2E PR/전체 기준: `docs/e2e-browser-workflow.md`; 기능별 세부 체크리스트는 `docs/e2e/features/*.md`
 - prompt local rehearsal: popup에서 `로컬 호스팅` 선택 후 hidden prompt bridge가 `http://127.0.0.1:5000/extension/prompt-panel-bridge.html`을 쓰고, prompt read/write/review/panel auth가 local Functions base URL로 전환되는지 본다.
 - backup legacy conversation/runtime reference가 필요할 때만 `npm run verify:legacy-backup` 안의 `node scripts/legacy-panel/verify-panel-bookmark-controller.js`, `node scripts/legacy-panel/verify-panel-runtime-controller.js`로 `backup/legacy-panel/panel-bookmark-controller.js`, `backup/legacy-panel/panel-runtime-controller.js` 계약을 다시 본다.
 - panel local rehearsal: popup에서 `로컬 호스팅` 선택 후 hosted panel iframe이 `http://127.0.0.1:5000/extension/panel/index.html`을 바라보는지, hosted UI 자체가 hosting 배포만으로 갱신되는지 본다.

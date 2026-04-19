@@ -84,6 +84,11 @@ service cloud.firestore {
         && resourceData.owner.providerUserKey == request.auth.token.providerUserKey;
     }
 
+    function matchesMeetingParticipationPanel(resourceData) {
+      return isHostedPanelSessionActive()
+        && resourceData.viewer.providerUserKey == request.auth.token.providerUserKey;
+    }
+
     function matchesOwnUsageMonthDoc(docId) {
       return isHostedPanelSessionActive()
         && docId.matches('^' + request.auth.token.providerUserKey + '__[0-9]{4}-[0-9]{2}$');
@@ -92,6 +97,12 @@ service cloud.firestore {
     match /integration_inova_meetings/{docId} {
       allow get: if matchesMeetingWorkspaceDoc(docId) || (resource != null && matchesMeetingPanel(resource.data));
       allow list: if matchesMeetingPanel(resource.data);
+      allow write: if false;
+    }
+
+    match /integration_inova_meeting_participations/{docId} {
+      allow get: if matchesMeetingParticipationPanel(resource.data);
+      allow list: if matchesMeetingParticipationPanel(resource.data);
       allow write: if false;
     }
 

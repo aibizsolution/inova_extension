@@ -12,6 +12,7 @@ function main() {
   verifyPromptTextCopiesMatch();
   verifySharedModelBehavior();
   verifyPromptStoreServiceDelegates();
+  verifyPromptStoreServiceViewerFlags();
   console.log("[verify-prompt-store-model] Prompt store shared model contract passed");
 }
 
@@ -98,6 +99,26 @@ function verifyPromptStoreServiceDelegates() {
     !storeServiceSource.includes(pattern),
     `Functions prompt store service should not keep duplicated prompt store model logic: ${pattern}`
   ));
+}
+
+function verifyPromptStoreServiceViewerFlags() {
+  const storeServiceSource = read("functions/features/prompt-store/store-service.js");
+  assert(
+    storeServiceSource.includes("{ imported: true, liked: Boolean(likeSnapshot.exists), viewed: Boolean(viewSnapshot.exists) }"),
+    "Store import response must preserve the viewer like/view state so the UI does not lose an existing like after import"
+  );
+  assert(
+    storeServiceSource.includes("{ imported: Boolean(importSnapshot.exists), liked: !liked, viewed: Boolean(viewSnapshot.exists) }"),
+    "Store like response must preserve viewer import/view state so one action does not clear another action flag"
+  );
+  assert(
+    !storeServiceSource.includes("{ imported: true, liked: false, viewed: false }"),
+    "Store import response must not hard-code unrelated viewer flags to false"
+  );
+  assert(
+    !storeServiceSource.includes("{ imported: false, liked: !liked, viewed: false }"),
+    "Store like response must not hard-code unrelated viewer flags to false"
+  );
 }
 
 function loadHostedModel() {

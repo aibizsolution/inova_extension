@@ -273,6 +273,7 @@
         jobId: normalizeText(current.searchParams.get("jobId")),
         launchToken: normalizeText(current.searchParams.get("launch")),
         meetingId: normalizeText(current.searchParams.get("meetingId")),
+        participationId: normalizeText(current.searchParams.get("participationId")),
         shareToken: normalizeText(current.searchParams.get("share")),
         workspaceToken: readHashParam(current.hash, WORKSPACE_HASH_PARAM),
       };
@@ -282,6 +283,7 @@
         jobId: "",
         launchToken: "",
         meetingId: "",
+        participationId: "",
         shareToken: "",
         workspaceToken: "",
       };

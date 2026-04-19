@@ -45,8 +45,8 @@
 1. 위 버전 선택 규칙으로 `patch`, `minor`, `major` 중 필요한 수준을 먼저 결정한다.
 2. 필요할 때만 `npm run version:bump -- <patch|minor|major>`로 버전을 올린다.
 3. `releases/release-notes.json`에서 공개 버전 목록과 현재 버전의 사용자용 메타를 채운다.
-4. 실제 기능 변경이 있으면 해당 feature `AGENTS.md` 또는 feature 전용 docs를 갱신한다.
-5. `npm run verify`, `npm run verify:feature-doc-guard`, `npm run verify:release-guard`를 확인한다.
+4. 실제 기능 변경이 있으면 해당 feature `AGENTS.md` 또는 feature 전용 docs와 `docs/e2e-browser-workflow.md`/`docs/e2e/features/*`의 브라우저 테스트 항목을 먼저 갱신한다.
+5. 상용 배포나 `release:build` 전에 `npm run verify`, `npm run verify:feature-doc-guard`, `npm run verify:e2e-doc-guard`, `npm run verify:release-guard`를 확인한다.
 6. 공개 릴리스가 필요하면 `npm run release:build` 후 `npm run release:deploy` 또는 `npm run release:deploy:all`을 수행한다.
 7. hosted-only, functions-only, Firestore 포함 운영 배포면 `deploy:hosting`, `deploy:functions`, `deploy:all` 중 필요한 범위만 수행한다. Storage Rules는 Firebase Storage를 실제로 켠 프로젝트에서만 `deploy:storage`로 별도 반영한다.
 8. 상용 `OPENAI_API_KEY`는 Firebase Functions Secret Manager secret으로 관리한다. `.env`에 평문 키를 넣어 배포하지 않는다.
@@ -94,6 +94,7 @@
 ```bash
 npm run version:bump -- minor
 npm run verify:feature-doc-guard
+npm run verify:e2e-doc-guard
 npm run verify:release-guard
 npm run deploy:hosting
 npm run release:build

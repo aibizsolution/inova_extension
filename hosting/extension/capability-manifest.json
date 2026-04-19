@@ -56,6 +56,20 @@
       "schemaVersion": 1,
       "service": "meeting"
     },
+    "meeting.participation.hide-function": {
+      "auditLevel": "write",
+      "authMode": "access-token",
+      "domain": "meeting",
+      "enabled": true,
+      "endpointKey": "hideInovaMeetingParticipationUrl",
+      "inputSchemaVersion": 1,
+      "kind": "function",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "meeting",
+      "schemaVersion": 1,
+      "service": "meeting"
+    },
     "meeting.share.create-function": {
       "auditLevel": "write",
       "authMode": "access-token",
@@ -544,6 +558,10 @@
     },
     "exchangeInovaMeetingLaunchUrl": {
       "endpoint": "exchangeInovaMeetingLaunch",
+      "method": "POST"
+    },
+    "hideInovaMeetingParticipationUrl": {
+      "endpoint": "hideInovaMeetingParticipation",
       "method": "POST"
     },
     "issueInovaMeetingLaunchUrl": {

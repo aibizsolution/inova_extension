@@ -274,7 +274,7 @@
       selectedDetailHydrateReason: "",
       selectedDetailHydrateVersion: 0,
       selectedDetailHydrating: false,
-      session: { accessMode: "", expiresAt: "", meetingId: "", meetingSessionToken: "", mode: "create", shareToken: "", sharedMemo: "", title: "" },
+      session: { accessMode: "", expiresAt: "", meetingId: "", meetingSessionToken: "", mode: "create", participationId: "", shareToken: "", sharedMemo: "", title: "" },
       supersededRemoteJobIds: [],
       termReplacementState: createEmptyTermReplacementState(),
       unsubscribeDebug: null,

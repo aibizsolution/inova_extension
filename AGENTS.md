@@ -24,6 +24,12 @@
 - 세션 중 반복해서 걸린 환경/도구 실패 패턴은 `실패한 명령`, `원인`, `바로 쓸 대안`을 이 문서나 해당 feature 문서에 같은 작업 안에서 남겨 다음 세션에 재사용한다.
 - 새 세션에서도 이 메모는 선택 사항이 아니라 시작 절차 일부로 취급한다. 같은 환경에서 이미 기록된 실패 패턴은 첫 시도부터 우회 경로를 기본값으로 쓴다.
 
+## 브라우저 검증 규칙
+- Playwright MCP 브라우저 검증은 항상 `playwright-mcp-bridge` 스킬을 먼저 읽고 시작한다.
+- 살아 있는 Chrome/확장/로그인 세션을 임의로 끊지 않는다. 사용자가 닫아도 된다고 명시하기 전까지 `browser_close`를 호출하지 않는다.
+- Codex Windows 내장 MCP Bridge만 사용한다. 별도 `npx @playwright/mcp` 서버를 띄우거나 살아 있는 MCP/Bridge 프로세스를 임의 종료하지 않는다.
+- Bridge 호출이 `Target page, context or browser has been closed`, `Transport closed`, page/context/browser closed 계열 오류로 끊기면 추가 브라우저 조작을 멈춘다. 이때는 사용자에게 Codex Windows 앱을 재시작해 달라고 요청하고, 재시작 전에는 버튼 클릭 여부나 실제 Chrome 검증 완료처럼 보고하지 않는다.
+
 ## Feature-First 규칙
 - 새 요청이 오면 먼저 primary feature를 고른다. 기본 feature는 `conversation`, `prompt-library`, `prompt-store`, `prompt-review`, `meeting`, `release`다.
 - cue가 2개 이상 섞이면 전체 탐색 대신 짧게 `이 기능이 맞나요?`라고 확인한 뒤 해당 feature부터 읽는다.
@@ -118,6 +124,8 @@
 - 기본 검증은 `npm run verify`부터 수행한다.
 - `verify`에는 lint가 포함되므로, lint 범위나 규칙을 바꿨다면 `npm.cmd run lint` 또는 `npm.cmd run verify`로 실제 통과를 확인한다.
 - UI 체감과 opener, 세션 복원, 배포 경계는 실제 Chrome 확인을 우선한다.
+- 기능 구현 후 실제 Chrome 검증의 기본 범위는 이번 변경 파일과 직접 연결된 feature 흐름이다. 사용자가 `풀 테스트`, `전체 버튼`, `회의 작업실까지`, `녹음까지`처럼 명시하지 않으면 인접 feature나 긴/파괴적 workflow로 확장하지 않는다.
+- 회의 허브만 바꾼 경우 기본 브라우저 검증은 회의 룸 패널의 탭/검색/카드/action/DB 확인까지다. hosted 회의 작업실의 녹음, 파일 import, 기록 삭제/이동, 회의록 편집은 별도 명시가 있을 때만 실행한다.
 - 작업 결과를 보고할 때는 이 변경이 실제 상용 반영에 무엇을 배포해야 하는지도 함께 적는다. `hosting/*`나 hosted 정적 자산 변경은 hosting 배포, `functions/*` 변경은 functions 배포, 둘 다 바뀌면 둘 다라고 명시하고, 확장 `content/background/popup/shared`만 바뀐 경우는 Firebase 배포 대상이 아니라 확장 새로고침 또는 별도 확장 배포가 필요하다고 구분해서 설명한다.
 - 배포/검증 보고에서는 사용자가 지금 확인해야 할 실행 대상을 `로컬 호스팅/에뮬레이터`, `상용 Hosting`, `새 ZIP/확장 새로고침` 중 하나로 명확히 구분한다. `배포됨`, `확인됨`, `새로고침하면 보임`처럼 대상이 빠진 표현만 쓰지 않고, 로컬과 상용이 동시에 가능하면 이번 작업에서 실제로 갱신된 대상과 사용자가 봐야 할 URL 또는 패널 target을 함께 적는다.
 - 작업 보고는 `다음 액션 판단에 필요한 핵심` 위주로 짧게 적는다. 이미 커밋된 내용은 장황하게 다시 풀지 말고 `이번 판단`, `검증 결과`, `커밋`, `다음 액션` 중심으로 빠르게 이해되게 정리한다.

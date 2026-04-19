@@ -43,6 +43,7 @@
       ...buildFunctionCapabilityCatalog([
       ["meeting.list", "listInovaMeetingsUrl", "meeting", "meeting", "meeting", "read"],
       ["meeting.panel-auth.issue-function", "issueInovaMeetingPanelAuthUrl", "meeting", "meeting", "meeting", "auth"],
+      ["meeting.participation.hide-function", "hideInovaMeetingParticipationUrl", "meeting", "meeting", "meeting", "write"],
       ["meeting.share.create-function", "createInovaMeetingShareLinkUrl", "meeting", "meeting", "meeting", "write"],
       ["meeting.share.revoke-function", "revokeInovaMeetingShareLinkUrl", "meeting", "meeting", "meeting", "write"],
       ["meeting.workspace.authorize-access", "authorizeInovaMeetingWorkspaceAccessUrl", "meeting", "meeting", "meeting", "auth"],
@@ -85,6 +86,7 @@
       "deleteInovaMeetingResultUrl",
       "deleteInovaMeetingUrl",
       "exchangeInovaMeetingLaunchUrl",
+      "hideInovaMeetingParticipationUrl",
       "importPromptStoreEntryUrl",
       "issueInovaMeetingLaunchUrl",
       "issueInovaMeetingPanelAuthUrl",

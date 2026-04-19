@@ -8,6 +8,9 @@ const LOCAL_WORKSPACE_ORIGINS = new Set([
 const MEETING_COLLECTION = "integration_inova_meetings";
 const OWNER_ACCESS_MODE = "owner-secure";
 const OWNER_SCOPE = "meeting-workspace-owner";
+const PARTICIPATION_COLLECTION = "integration_inova_meeting_participations";
+const PARTICIPATION_REFRESH_THROTTLE_MS = 24 * 60 * 60 * 1000;
+const PARTICIPATION_SOURCE_SHARE_LINK = "share-link";
 const SHARE_ACTIVE_STATUS = "active";
 const SHARE_ACCESS_MODE = "share-readonly";
 const SHARE_REVOKED_STATUS = "revoked";
@@ -48,7 +51,9 @@ function registerMeetingWorkspaceAuthHandlers(deps) {
       const viewer = await verifyBearerViewer(request, request.body?.providerIdentity || request.body?.owner);
       const payload = input.shareToken
         ? await buildShareAccessPayload(input, viewer)
-        : await buildOwnerAccessPayload(input, viewer);
+        : input.participationId
+          ? await buildParticipationAccessPayload(input, viewer)
+          : await buildOwnerAccessPayload(input, viewer);
       response.json({ ok: true, data: payload });
     } catch (error) {
       logEvent?.("meeting.workspace-authorize.error", {
@@ -105,11 +110,13 @@ function registerMeetingWorkspaceAuthHandlers(deps) {
       }
 
       const { currentShare, nextShare } = await revokeMeetingShareLinkTransaction(owner, input);
+      const revokedParticipationCount = await markParticipationsForRevokedShare(owner, input, currentShare);
 
       logEvent?.("meeting.share-link.revoke.success", {
         clientRequestId: input.clientRequestId,
         meetingId: input.meetingId,
         providerUserKey: owner.providerUserKey,
+        revokedParticipationCount,
         shareId: currentShare.shareId,
       });
 
@@ -118,6 +125,7 @@ function registerMeetingWorkspaceAuthHandlers(deps) {
         data: {
           meetingId: input.meetingId,
           revoked: true,
+          revokedParticipationCount,
           share: buildShareResponse(nextShare),
         },
       });
@@ -130,10 +138,58 @@ function registerMeetingWorkspaceAuthHandlers(deps) {
     }
   });
 
+  const hideInovaMeetingParticipation = onRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
+    try {
+      assertMethod(request, createHttpError);
+      const viewer = await verifyBearerViewer(request, request.body?.viewer || request.body?.providerIdentity);
+      const input = normalizeParticipationRequest(request.body);
+      if (!input.participationId) {
+        throw createHttpError(400, "목록에서 제거할 참여 회의룸 정보가 없어요.");
+      }
+
+      const participationRef = db.collection(PARTICIPATION_COLLECTION).doc(input.participationId);
+      const participationSnapshot = await participationRef.get();
+      const participation = readParticipationRecord(participationSnapshot);
+      if (!participation?.participationId || participation.viewer.providerUserKey !== viewer.providerUserKey) {
+        throw createHttpError(404, "참여 회의룸을 찾지 못했어요.");
+      }
+
+      const hiddenAt = new Date().toISOString();
+      await participationRef.set({
+        hidden: true,
+        hiddenAt,
+        updatedAt: hiddenAt,
+      }, { merge: true });
+
+      logEvent?.("meeting.participation.hide.success", {
+        meetingId: participation.meetingId,
+        participationId: participation.participationId,
+        viewerProviderUserKey: viewer.providerUserKey,
+      });
+
+      response.json({
+        ok: true,
+        data: {
+          hidden: true,
+          hiddenAt,
+          meetingId: participation.meetingId,
+          participationId: participation.participationId,
+        },
+      });
+    } catch (error) {
+      logEvent?.("meeting.participation.hide.error", {
+        error: normalizeText(error?.message),
+        status: Number(error?.status) || 500,
+      });
+      sendError(response, error);
+    }
+  });
+
   return {
     authorizeInovaMeetingWorkspaceAccess,
     authorizeMeetingRequest,
     createInovaMeetingShareLink,
+    hideInovaMeetingParticipation,
     revokeInovaMeetingShareLink,
   };
 
@@ -288,6 +344,7 @@ function registerMeetingWorkspaceAuthHandlers(deps) {
     const tokenParts = safeSplitShareToken(input.shareToken);
     const expectedSecret = buildShareSecret(share.shareId, input.meetingId, owner.providerUserKey);
     const providedSecretHash = hashSecret(tokenParts.secret);
+    const participationId = buildParticipationId(viewer.providerUserKey, owner.providerUserKey, input.meetingId);
     if (!share.shareId || tokenParts.id !== share.shareId) {
       return buildBlockedAccessPayload(input, "share-invalid", {
         inovaLogin: true,
@@ -295,6 +352,7 @@ function registerMeetingWorkspaceAuthHandlers(deps) {
       });
     }
     if (share.status === SHARE_REVOKED_STATUS) {
+      await updateParticipationAccessStateIfPresent(participationId, viewer, "revoked");
       return buildBlockedAccessPayload(input, "share-revoked", {
         inovaLogin: true,
         viewer,
@@ -307,16 +365,100 @@ function registerMeetingWorkspaceAuthHandlers(deps) {
       });
     }
     if (!hasSameEmailDomain(owner?.email, viewer?.email)) {
+      await updateParticipationAccessStateIfPresent(participationId, viewer, "domain-mismatch");
       return buildBlockedAccessPayload(input, "share-domain-mismatch", {
         inovaLogin: true,
         viewer,
       });
     }
+    const participation = await upsertParticipationForShareAccess({
+      input,
+      meeting: meetingRecord.meeting,
+      owner,
+      share,
+      viewer,
+    });
     return buildAllowedAccessPayload({
       accessMode: SHARE_ACCESS_MODE,
       bypassMode: "",
       input,
       owner,
+      participation,
+      readOnly: true,
+      shareId: share.shareId,
+      viewer,
+    });
+  }
+
+  async function buildParticipationAccessPayload(input, viewer) {
+    const participationRecord = await loadParticipationRecord(input.participationId);
+    if (!participationRecord?.participation?.participationId) {
+      return buildBlockedAccessPayload(input, "share-invalid", {
+        inovaLogin: true,
+        viewer,
+      });
+    }
+    const participation = participationRecord.participation;
+    if (participation.viewer.providerUserKey !== viewer.providerUserKey) {
+      return buildBlockedAccessPayload(input, "share-invalid", {
+        inovaLogin: true,
+        viewer,
+      });
+    }
+    if (participation.hidden) {
+      return buildBlockedAccessPayload(input, participation.accessState === "revoked" ? "share-revoked" : "share-invalid", {
+        inovaLogin: true,
+        viewer,
+      });
+    }
+    if (input.meetingId && input.meetingId !== participation.meetingId) {
+      return buildBlockedAccessPayload(input, "share-invalid", {
+        inovaLogin: true,
+        viewer,
+      });
+    }
+    const meetingRecord = await loadMeetingRecordByParticipation(participation);
+    if (!meetingRecord?.meeting?.meetingId || meetingRecord.meeting.deletedAt) {
+      await updateParticipationAccessState(participationRecord.ref, participation, "deleted");
+      return buildBlockedAccessPayload(input, "share-invalid", {
+        inovaLogin: true,
+        viewer,
+      });
+    }
+    const owner = normalizeIdentity(meetingRecord.meeting.owner);
+    const share = normalizeShareMetadata(meetingRecord.meeting.share);
+    if (!share.shareId || share.shareId !== participation.shareId || share.status === SHARE_REVOKED_STATUS || !share.active) {
+      await updateParticipationAccessState(participationRecord.ref, participation, "revoked");
+      return buildBlockedAccessPayload(input, "share-revoked", {
+        inovaLogin: true,
+        viewer,
+      });
+    }
+    if (!hasSameEmailDomain(owner?.email, viewer?.email)) {
+      await updateParticipationAccessState(participationRecord.ref, participation, "domain-mismatch");
+      return buildBlockedAccessPayload(input, "share-domain-mismatch", {
+        inovaLogin: true,
+        viewer,
+      });
+    }
+    const refreshedParticipation = await maybeRefreshParticipationSnapshot({
+      current: participation,
+      input,
+      meeting: meetingRecord.meeting,
+      owner,
+      ref: participationRecord.ref,
+      share,
+      viewer,
+    });
+    return buildAllowedAccessPayload({
+      accessMode: SHARE_ACCESS_MODE,
+      bypassMode: "",
+      input: {
+        ...input,
+        meetingId: participation.meetingId,
+      },
+      owner,
+      participation: refreshedParticipation || participation,
       readOnly: true,
       shareId: share.shareId,
       viewer,
@@ -355,6 +497,7 @@ function registerMeetingWorkspaceAuthHandlers(deps) {
     const readOnly = Boolean(options.readOnly);
     const shareId = normalizeText(options.shareId);
     const bypassMode = normalizeText(options.bypassMode);
+    const participation = normalizeParticipationRecord(options.participation);
     const meetingDocumentId = buildMeetingDocId(owner.providerUserKey, meetingId);
     const workspaceSession = readOnly
       ? null
@@ -393,6 +536,10 @@ function registerMeetingWorkspaceAuthHandlers(deps) {
       meetingDocumentId,
       meetingId,
       meetingSessionToken: normalizeText(workspaceSession?.meetingSessionToken),
+      participation: participation.participationId
+        ? buildParticipationResponse(participation)
+        : null,
+      participationId: participation.participationId,
       readOnly,
       reason: "",
       shareId,
@@ -451,6 +598,240 @@ function registerMeetingWorkspaceAuthHandlers(deps) {
     };
   }
 
+  async function upsertParticipationForShareAccess(options = {}) {
+    const viewer = normalizeIdentity(options.viewer);
+    const owner = normalizeIdentity(options.owner);
+    const meeting = normalizeMeetingRecord(options.meeting);
+    const share = normalizeShareMetadata(options.share);
+    if (!viewer.providerUserKey || !owner.providerUserKey || viewer.providerUserKey === owner.providerUserKey) {
+      return null;
+    }
+    const participationId = buildParticipationId(viewer.providerUserKey, owner.providerUserKey, meeting.meetingId);
+    if (!participationId || !meeting.meetingId || !share.shareId) {
+      return null;
+    }
+    const participationRef = db.collection(PARTICIPATION_COLLECTION).doc(participationId);
+    const meetingRef = db.collection(MEETING_COLLECTION).doc(buildMeetingDocId(owner.providerUserKey, meeting.meetingId));
+    const now = new Date().toISOString();
+    return db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(participationRef);
+      const current = readParticipationRecord(snapshot);
+      const meetingSnapshot = await transaction.get(meetingRef);
+      const transactionMeeting = readOwnedMeetingRecordFromSnapshot(owner, meetingSnapshot) || meeting;
+      const next = buildParticipationDocument({
+        current,
+        meeting: transactionMeeting,
+        now,
+        owner,
+        participationId,
+        share,
+        viewer,
+      });
+      if (!shouldWriteParticipation(current, next, options.input?.participationCache)) {
+        return current;
+      }
+      transaction.set(participationRef, next, { merge: Boolean(current?.participationId) });
+      if (shouldIncrementShareParticipantCount(current, next)) {
+        const currentShare = normalizeShareMetadata(transactionMeeting.share);
+        transaction.set(meetingRef, {
+          share: {
+            lastParticipantAt: now,
+            participantCount: currentShare.participantCount + 1,
+            participantCountUpdatedAt: now,
+          },
+        }, { merge: true });
+      }
+      return {
+        ...current,
+        ...next,
+      };
+    });
+  }
+
+  async function maybeRefreshParticipationSnapshot(options = {}) {
+    const current = normalizeParticipationRecord(options.current);
+    const ref = options.ref;
+    if (!current.participationId || !ref) {
+      return null;
+    }
+    const now = new Date().toISOString();
+    const next = buildParticipationDocument({
+      current,
+      meeting: options.meeting,
+      now,
+      owner: options.owner,
+      participationId: current.participationId,
+      share: options.share,
+      viewer: options.viewer,
+    });
+    if (!shouldWriteParticipation(current, next, options.input?.participationCache)) {
+      return current;
+    }
+    await ref.set(next, { merge: true });
+    return {
+      ...current,
+      ...next,
+    };
+  }
+
+  function buildParticipationDocument(options = {}) {
+    const current = normalizeParticipationRecord(options.current);
+    const meeting = normalizeMeetingRecord(options.meeting);
+    const owner = normalizeIdentity(options.owner || meeting.owner);
+    const viewer = normalizeIdentity(options.viewer);
+    const share = normalizeShareMetadata(options.share || meeting.share);
+    const now = normalizeText(options.now) || new Date().toISOString();
+    const titleSnapshot = normalizeText(meeting.title) || "이름 없는 회의";
+    const meetingDocumentId = buildMeetingDocId(owner.providerUserKey, meeting.meetingId);
+    return {
+      accessState: "active",
+      firstOpenedAt: current.firstOpenedAt || now,
+      hidden: false,
+      hiddenAt: "",
+      lastRefreshAt: now,
+      meetingDocumentId,
+      meetingId: meeting.meetingId,
+      owner: buildViewerSummary(owner),
+      participationId: normalizeText(options.participationId) || buildParticipationId(viewer.providerUserKey, owner.providerUserKey, meeting.meetingId),
+      shareId: share.shareId,
+      source: PARTICIPATION_SOURCE_SHARE_LINK,
+      titleSnapshot,
+      titleSnapshotHash: hashTitleSnapshot(titleSnapshot),
+      updatedAt: now,
+      viewer: buildViewerSummary(viewer),
+    };
+  }
+
+  function shouldWriteParticipation(currentInput, nextInput, clientCacheInput) {
+    const current = normalizeParticipationRecord(currentInput);
+    const next = normalizeParticipationRecord(nextInput);
+    if (!current.participationId) {
+      return true;
+    }
+    if (current.hidden) {
+      return true;
+    }
+    if (current.accessState !== "active") {
+      return true;
+    }
+    if (current.shareId !== next.shareId) {
+      return true;
+    }
+    const titleHashChanged = current.titleSnapshotHash !== next.titleSnapshotHash;
+    if (!titleHashChanged) {
+      return false;
+    }
+    const lastRefreshMs = Date.parse(current.lastRefreshAt || current.updatedAt || "");
+    const nextRefreshMs = Date.parse(next.lastRefreshAt || "");
+    const clientCache = normalizeParticipationCache(clientCacheInput);
+    const clientRecentlyRefreshed = clientCache.participationId === current.participationId
+      && clientCache.titleSnapshotHash === current.titleSnapshotHash
+      && nextRefreshMs - Date.parse(clientCache.lastRefreshAt || "") < PARTICIPATION_REFRESH_THROTTLE_MS;
+    if (clientRecentlyRefreshed) {
+      return false;
+    }
+    return !lastRefreshMs || nextRefreshMs - lastRefreshMs >= PARTICIPATION_REFRESH_THROTTLE_MS;
+  }
+
+  function shouldIncrementShareParticipantCount(currentInput, nextInput) {
+    const current = normalizeParticipationRecord(currentInput);
+    const next = normalizeParticipationRecord(nextInput);
+    return Boolean(next.participationId && next.shareId && current.shareId !== next.shareId);
+  }
+
+  async function markParticipationsForRevokedShare(ownerInput, input = {}, shareInput = {}) {
+    const owner = normalizeIdentity(ownerInput);
+    const meetingId = normalizeText(input.meetingId);
+    const share = normalizeShareMetadata(shareInput);
+    if (!owner.providerUserKey || !meetingId || !share.shareId) {
+      return 0;
+    }
+    const snapshot = await db.collection(PARTICIPATION_COLLECTION)
+      .where("owner.providerUserKey", "==", owner.providerUserKey)
+      .where("meetingId", "==", meetingId)
+      .where("shareId", "==", share.shareId)
+      .where("hidden", "==", false)
+      .get();
+    const docs = Array.isArray(snapshot?.docs) ? snapshot.docs : [];
+    if (!docs.length) {
+      return 0;
+    }
+    const now = new Date().toISOString();
+    const batch = db.batch();
+    docs.forEach((doc) => {
+      batch.update(doc.ref, {
+        accessState: "revoked",
+        hidden: false,
+        updatedAt: now,
+      });
+    });
+    await batch.commit();
+    return docs.length;
+  }
+
+  async function updateParticipationAccessStateIfPresent(participationId, viewer, accessState) {
+    const normalizedParticipationId = normalizeText(participationId);
+    if (!normalizedParticipationId || !viewer?.providerUserKey) {
+      return false;
+    }
+    const ref = db.collection(PARTICIPATION_COLLECTION).doc(normalizedParticipationId);
+    const snapshot = await ref.get();
+    const participation = readParticipationRecord(snapshot);
+    if (!participation?.participationId || participation.viewer.providerUserKey !== viewer.providerUserKey) {
+      return false;
+    }
+    return updateParticipationAccessState(ref, participation, accessState);
+  }
+
+  async function updateParticipationAccessState(ref, participationInput, accessStateInput) {
+    const participation = normalizeParticipationRecord(participationInput);
+    const accessState = normalizeParticipationAccessState(accessStateInput);
+    if (!ref || !participation.participationId || participation.accessState === accessState) {
+      return false;
+    }
+    await ref.set({
+      accessState,
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+    return true;
+  }
+
+  async function loadParticipationRecord(participationId) {
+    const normalizedParticipationId = normalizeText(participationId);
+    if (!normalizedParticipationId) {
+      return null;
+    }
+    const ref = db.collection(PARTICIPATION_COLLECTION).doc(normalizedParticipationId);
+    const snapshot = await ref.get();
+    const participation = readParticipationRecord(snapshot);
+    return participation?.participationId ? { participation, ref } : null;
+  }
+
+  function readParticipationRecord(snapshot) {
+    if (!snapshot?.exists) {
+      return null;
+    }
+    return normalizeParticipationRecord(snapshot.data());
+  }
+
+  async function loadMeetingRecordByParticipation(participation) {
+    const normalized = normalizeParticipationRecord(participation);
+    const meetingDocumentId = normalizeText(normalized.meetingDocumentId)
+      || buildMeetingDocId(normalized.owner.providerUserKey, normalized.meetingId);
+    if (!meetingDocumentId) {
+      return null;
+    }
+    const ref = db.collection(MEETING_COLLECTION).doc(meetingDocumentId);
+    const snapshot = await ref.get();
+    if (!snapshot.exists) {
+      return null;
+    }
+    return {
+      meeting: normalizeMeetingRecord(snapshot.data()),
+      ref,
+    };
+  }
+
   async function loadOwnedMeetingRecord(owner, meetingId) {
     const normalizedMeetingId = normalizeText(meetingId);
     if (!normalizedMeetingId || !owner?.providerUserKey) {
@@ -494,6 +875,9 @@ function registerMeetingWorkspaceAuthHandlers(deps) {
         active: true,
         createdAt: new Date().toISOString(),
         createdBy: owner ? { ...owner } : {},
+        lastParticipantAt: "",
+        participantCount: 0,
+        participantCountUpdatedAt: "",
         revokedAt: "",
         secretHash: hashSecret(secret),
         shareId,
@@ -503,6 +887,9 @@ function registerMeetingWorkspaceAuthHandlers(deps) {
         share: {
           createdAt: nextShare.createdAt,
           createdBy: nextShare.createdBy,
+          lastParticipantAt: "",
+          participantCount: 0,
+          participantCountUpdatedAt: "",
           revokedAt: "",
           secretHash: nextShare.secretHash,
           shareId: nextShare.shareId,
@@ -532,6 +919,9 @@ function registerMeetingWorkspaceAuthHandlers(deps) {
         share: {
           createdAt: currentShare.createdAt,
           createdBy: currentShare.createdBy,
+          lastParticipantAt: currentShare.lastParticipantAt,
+          participantCount: currentShare.participantCount,
+          participantCountUpdatedAt: currentShare.participantCountUpdatedAt,
           revokedAt: nextShare.revokedAt,
           secretHash: currentShare.secretHash,
           shareId: currentShare.shareId,
@@ -581,6 +971,8 @@ function registerMeetingWorkspaceAuthHandlers(deps) {
       debugAuthBypass: normalizeText(nextInput.debugAuthBypass),
       jobId: normalizeText(nextInput.jobId),
       meetingId: normalizeText(nextInput.meetingId),
+      participationCache: normalizeParticipationCache(nextInput.participationCache),
+      participationId: normalizeText(nextInput.participationId),
       shareToken: normalizeText(nextInput.shareToken || nextInput.share),
     };
   }
@@ -591,6 +983,14 @@ function registerMeetingWorkspaceAuthHandlers(deps) {
       clientRequestId: normalizeText(nextInput.clientRequestId),
       jobId: normalizeText(nextInput.jobId),
       meetingId: normalizeText(nextInput.meetingId),
+    };
+  }
+
+  function normalizeParticipationRequest(input) {
+    const nextInput = input && typeof input === "object" ? input : {};
+    return {
+      meetingId: normalizeText(nextInput.meetingId),
+      participationId: normalizeText(nextInput.participationId),
     };
   }
 
@@ -651,6 +1051,9 @@ function normalizeShareMetadata(input) {
     active: status === SHARE_ACTIVE_STATUS && Boolean(normalizeString(share.shareId)),
     createdAt: normalizeString(share.createdAt),
     createdBy: normalizeIdentityLike(share.createdBy),
+    lastParticipantAt: normalizeString(share.lastParticipantAt),
+    participantCount: normalizeNonNegativeInteger(share.participantCount),
+    participantCountUpdatedAt: normalizeString(share.participantCountUpdatedAt),
     revokedAt: normalizeString(share.revokedAt),
     secretHash: normalizeString(share.secretHash),
     shareId: normalizeString(share.shareId),
@@ -664,6 +1067,9 @@ function buildShareResponse(share) {
     active: normalized.active,
     createdAt: normalized.createdAt,
     createdBy: buildViewerSummary(normalized.createdBy),
+    lastParticipantAt: normalized.lastParticipantAt,
+    participantCount: normalized.participantCount,
+    participantCountUpdatedAt: normalized.participantCountUpdatedAt,
     revokedAt: normalized.revokedAt,
     shareId: normalized.shareId,
     status: normalized.status,
@@ -679,8 +1085,77 @@ function buildViewerSummary(identity) {
   };
 }
 
+function normalizeParticipationRecord(input) {
+  const participation = input && typeof input === "object" ? input : {};
+  return {
+    accessState: normalizeParticipationAccessState(participation.accessState),
+    firstOpenedAt: normalizeString(participation.firstOpenedAt),
+    hidden: Boolean(participation.hidden),
+    hiddenAt: normalizeString(participation.hiddenAt),
+    lastRefreshAt: normalizeString(participation.lastRefreshAt),
+    meetingDocumentId: normalizeString(participation.meetingDocumentId),
+    meetingId: normalizeString(participation.meetingId),
+    owner: normalizeIdentityLike(participation.owner),
+    participationId: normalizeString(participation.participationId),
+    shareId: normalizeString(participation.shareId),
+    source: normalizeString(participation.source) || PARTICIPATION_SOURCE_SHARE_LINK,
+    titleSnapshot: normalizeString(participation.titleSnapshot),
+    titleSnapshotHash: normalizeString(participation.titleSnapshotHash),
+    updatedAt: normalizeString(participation.updatedAt),
+    viewer: normalizeIdentityLike(participation.viewer),
+  };
+}
+
+function normalizeParticipationAccessState(value) {
+  const normalized = normalizeString(value).toLowerCase();
+  return ["active", "revoked", "deleted", "domain-mismatch"].includes(normalized)
+    ? normalized
+    : "active";
+}
+
+function normalizeNonNegativeInteger(value) {
+  return Math.max(0, Math.floor(Number(value) || 0));
+}
+
+function normalizeParticipationCache(input) {
+  const cache = input && typeof input === "object" ? input : {};
+  return {
+    lastKnownServerRegisteredAt: normalizeString(cache.lastKnownServerRegisteredAt),
+    lastRefreshAt: normalizeString(cache.lastRefreshAt),
+    lastWriteAttemptAt: normalizeString(cache.lastWriteAttemptAt),
+    participationId: normalizeString(cache.participationId),
+    titleSnapshotHash: normalizeString(cache.titleSnapshotHash),
+  };
+}
+
+function buildParticipationResponse(participationInput) {
+  const participation = normalizeParticipationRecord(participationInput);
+  return {
+    accessState: participation.accessState,
+    lastRefreshAt: participation.lastRefreshAt,
+    meetingDocumentId: participation.meetingDocumentId,
+    meetingId: participation.meetingId,
+    owner: buildViewerSummary(participation.owner),
+    participationId: participation.participationId,
+    shareId: participation.shareId,
+    titleSnapshotHash: participation.titleSnapshotHash,
+    viewer: buildViewerSummary(participation.viewer),
+  };
+}
+
 function buildMeetingDocId(providerUserKey, meetingId) {
   return `${normalizeString(providerUserKey)}__${normalizeString(meetingId)}`;
+}
+
+function buildParticipationId(viewerProviderUserKey, ownerProviderUserKey, meetingId) {
+  const viewer = normalizeString(viewerProviderUserKey);
+  const owner = normalizeString(ownerProviderUserKey);
+  const meeting = normalizeString(meetingId);
+  return viewer && owner && meeting ? `${viewer}__${owner}__${meeting}` : "";
+}
+
+function hashTitleSnapshot(title) {
+  return hashSecret(`meeting-participation-title:${normalizeString(title)}`).slice(0, 24);
 }
 
 function buildWorkspaceFirebaseUid(ownerProviderUserKey, viewerProviderUserKey, readOnly) {

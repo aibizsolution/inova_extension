@@ -34,6 +34,12 @@ const PANEL_RUNTIME_CAPABILITY_MANIFEST = deepFreeze({
         defaultAuthMode: "access-token",
         method: "POST",
       },
+      hideInovaMeetingParticipationUrl: {
+        allowedAuthModes: ["access-token", "none"],
+        capabilityId: "meeting.participation.hide-function",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
       issueInovaMeetingPanelAuthUrl: {
         allowedAuthModes: ["access-token", "none"],
         capabilityId: "meeting.panel-auth.issue-function",
