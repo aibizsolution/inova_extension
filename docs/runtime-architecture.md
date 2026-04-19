@@ -147,9 +147,9 @@ Remote manifest fetch나 validation이 실패하면 service worker는 warning/de
 
 ### F. 회의 작업실 진입
 
-1. popup은 `settings.meetingWorkspaceTarget`을 저장하고, hosted/content 패널은 `새 회의하기` 또는 결과 리스트 항목에서 먼저 빈 새 탭을 만든 뒤 `inova-panel:invoke -> meeting.workspace.prepare-open` / `meeting.result.prepare-open` runtime capability로 최종 URL을 준비한다.
-2. background는 popup 설정의 호스팅 타깃에 맞는 clean hosted 작업실 URL(`meetingId`, optional `jobId`, optional `share`)을 만든다.
-3. hosted panel이 준비된 URL로 빈 새 탭을 이동시킨다. 이 web-open 경로가 실패한 경우에만 background가 `meeting.workspace.open` / `meeting.result.open` fallback에서 hosted `meeting/index.html?meetingId=...&jobId=...` 또는 로컬 `http://127.0.0.1:5000/meeting/index.html?...` URL을 연다.
+1. popup은 `settings.meetingWorkspaceTarget`을 저장하고, hosted/content 패널은 `새 회의하기` 또는 결과 리스트 항목에서 먼저 현재 hosting origin의 clean `/meeting/index.html` URL을 web-open으로 연다. 새 회의룸은 이 시점에 client meetingId를 생성하고, 기존 회의룸은 전달받은 `meetingId`, optional `jobId`, optional `participationId`를 URL에 붙인다.
+2. hosted panel은 이어서 `inova-panel:invoke -> meeting.workspace.prepare-open` / `meeting.result.prepare-open` runtime capability로 popup 설정의 호스팅 타깃에 맞는 최종 URL을 준비한다.
+3. hosted panel이 web-open 탭을 준비된 URL로 보정한다. 이 web-open 경로가 실패한 경우에만 background가 `meeting.workspace.open` / `meeting.result.open` fallback에서 hosted `meeting/index.html?meetingId=...&jobId=...` 또는 로컬 `http://127.0.0.1:5000/meeting/index.html?...` URL을 연다.
 4. hosted 회의 작업실은 부팅 직후 확장 bridge와 handshake하고, background가 현재 i-Nova 로그인 상태와 접근 권한을 확인한다.
 5. background는 `authorizeInovaMeetingWorkspaceAccess`를 호출해 `owner-secure` 또는 `share-readonly` 접근을 판정하고, 허용 시에만 Firebase custom token을 돌려준다.
 6. hosted 회의 작업실은 그 custom token으로 Firebase Auth에 로그인한 뒤 `meeting` 문서 구독을 붙이고, 선택된 기록에 따라 `job`, `artifact` 문서를 추가 구독한다. 확장 미설치, 로그인 안 됨, owner-only 위반, 무효한 share 링크는 모두 blocked 상태로 남긴다.

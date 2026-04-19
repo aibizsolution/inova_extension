@@ -51,7 +51,7 @@
    - 로컬 기대값: `#inova-hosted-panel-frame`의 `src`가 `http://127.0.0.1:5000/extension-v2/panel/index.html?...`
    - `chrome-extension://.../frame-proxy.html?...`이면 Bridge 검증이 꼬일 수 있으므로 extension Reload와 페이지 새로고침을 먼저 한다.
 8. 콘솔 baseline을 잡는다. 테스트 전후 warning/error가 새로 생기면 해당 feature 결과에 함께 기록한다.
-9. hosted panel에서 새 탭을 여는 flow는 web-open 우선 경로를 기대한다. 사용자 action 안에서 `window.open("about:blank", "_blank")`로 탭을 확보하고, async launch token 또는 prepared URL이 준비되면 그 탭을 이동시키는 구조여야 한다.
+9. hosted panel에서 새 탭을 여는 flow는 web-open 우선 경로를 기대한다. secret 없는 hosted URL을 즉시 만들 수 있으면 사용자 action 안에서 그 URL을 바로 열고, launch token이나 원격 prepared URL처럼 async 준비가 필요하면 `window.open("about:blank", "_blank")`로 탭을 확보한 뒤 준비된 URL로 이동시킨다.
 10. `chrome.tabs.create` background open은 fallback이다. Bridge가 열린 새 탭을 자동 상속하지 않을 수 있으므로, 새 탭 lifecycle 자체가 목적이면 Bridge selector를 다시 열어 해당 새 탭을 선택한다.
 11. 새 탭의 실제 URL을 알고 있고 내부 화면 테스트가 목적이면, Bridge가 이미 잡고 있는 탭을 그 URL로 직접 이동해 테스트할 수 있다. 이 경우 결과에는 `URL 기반 직접 이동으로 내부 테스트`라고 적고, 실제 새 탭 자동 승계 검증과 섞어 말하지 않는다.
 

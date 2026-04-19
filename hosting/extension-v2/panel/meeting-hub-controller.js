@@ -276,11 +276,13 @@
       if (state.pending.active) {
         return true;
       }
-      const preliminaryInput = buildActionInput(detail);
+      const preliminaryInput = buildPreliminaryLaunchInput(normalizedAction, buildActionInput(detail));
       const launchAction = resolveLaunchAction(normalizedAction, preliminaryInput);
-      const preparedWindow = launchAction ? openBlankMeetingWindow() : null;
+      const preparedWindow = launchAction ? openInitialMeetingWindow(preliminaryInput) : null;
       await refreshStorageState();
-      const input = buildActionInput(detail);
+      const input = launchAction
+        ? reconcileLaunchInput(buildActionInput(detail), preliminaryInput)
+        : buildActionInput(detail);
 
       if (isShareActionBlocked(normalizedAction)) {
         closePreparedMeetingWindow(preparedWindow);
@@ -764,6 +766,17 @@
       }
     }
 
+    function openInitialMeetingWindow(input) {
+      const hostedUrl = buildHostedMeetingUrl(input);
+      if (hostedUrl && typeof global.open === "function") {
+        const openedWindow = global.open(hostedUrl, "_blank");
+        if (openedWindow) {
+          return openedWindow;
+        }
+      }
+      return openBlankMeetingWindow();
+    }
+
     function openBlankMeetingWindow() {
       if (typeof global.open !== "function") {
         return null;
@@ -777,7 +790,10 @@
         return false;
       }
       if (openedWindow && !openedWindow.closed) {
-        openedWindow.location.href = nextUrl;
+        const currentUrl = normalizeText(openedWindow.location?.href);
+        if (currentUrl !== nextUrl) {
+          openedWindow.location.href = nextUrl;
+        }
         return detachOpenedWindow(openedWindow);
       }
       if (typeof global.open !== "function") {
@@ -814,6 +830,41 @@
         });
       }
       return true;
+    }
+
+    function buildHostedMeetingUrl(input) {
+      if (!canBuildHostedMeetingUrl()) {
+        return "";
+      }
+      try {
+        const url = new URL("/meeting/index.html", global.location.origin);
+        if (state.settings.meetingDebugConsoleEnabled) {
+          url.searchParams.set("debug", "1");
+        }
+        const meetingId = normalizeText(input?.meetingId);
+        const jobId = normalizeText(input?.jobId);
+        const participationId = normalizeText(input?.participationId);
+        if (meetingId) {
+          url.searchParams.set("meetingId", meetingId);
+        }
+        if (jobId) {
+          url.searchParams.set("jobId", jobId);
+        }
+        if (participationId) {
+          url.searchParams.set("participationId", participationId);
+        }
+        return meetingId ? url.toString() : "";
+      } catch (error) {
+        traceMeeting("64.top.meeting.launch.hosted-url-skip", {
+          error: readErrorMessage(error, "hosted meeting URL unavailable"),
+        });
+        return "";
+      }
+    }
+
+    function canBuildHostedMeetingUrl() {
+      return typeof global.URL === "function"
+        && Boolean(normalizeText(global.location?.origin));
     }
 
     function hydrateStorageState(storageState) {
@@ -1131,6 +1182,29 @@
     };
   }
 
+  function buildPreliminaryLaunchInput(action, input) {
+    const normalizedInput = input && typeof input === "object" ? input : {};
+    if (action !== "open-workspace" || normalizeText(normalizedInput.meetingId)) {
+      return normalizedInput;
+    }
+    return {
+      ...normalizedInput,
+      meetingId: buildMeetingId(),
+    };
+  }
+
+  function reconcileLaunchInput(input, preliminaryInput) {
+    const normalizedInput = input && typeof input === "object" ? input : {};
+    const normalizedPreliminary = preliminaryInput && typeof preliminaryInput === "object" ? preliminaryInput : {};
+    if (normalizeText(normalizedInput.meetingId) || !normalizeText(normalizedPreliminary.meetingId)) {
+      return normalizedInput;
+    }
+    return {
+      ...normalizedInput,
+      meetingId: normalizeText(normalizedPreliminary.meetingId),
+    };
+  }
+
   function buildProviderIdentityPayload(providerIdentity) {
     const normalized = normalizeProviderIdentity(providerIdentity);
     return {
@@ -1308,6 +1382,12 @@
       return "open-result";
     }
     return "open-workspace";
+  }
+
+  function buildMeetingId() {
+    const partA = Date.now().toString(36);
+    const partB = Math.random().toString(36).slice(2, 8);
+    return `meeting-${partA}-${partB}`;
   }
 
   namespace.meetingHubController = { create };

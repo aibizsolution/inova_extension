@@ -30,7 +30,10 @@
    - 본인 현재 월 집계 doc 1개와 전체 집계 doc 1개만 읽는다.
    - 탭 전환이나 검색으로 사용량 listener가 다시 붙으면 실패다.
 7. 기존 회의 카드 1건에서 `작업실 열기` 또는 `결과 열기`를 실행한다.
-8. hosted panel은 사용자 action 안에서 `about:blank` 새 탭을 먼저 확보하고, `meeting.workspace.prepare-open` 또는 `meeting.result.prepare-open`으로 준비한 URL을 그 탭에 넣어야 한다.
+8. hosted panel은 사용자 action 안에서 새 탭을 web-open으로 먼저 확보해야 한다.
+   - 새 회의룸은 client meetingId를 생성한 뒤 현재 hosting origin의 `/meeting/index.html?meetingId=...` URL을 바로 연다.
+   - 기존 회의룸이나 결과는 전달받은 `meetingId`, optional `jobId`, optional `participationId`를 붙인 clean hosted URL을 바로 연다.
+   - 그 다음 `meeting.workspace.prepare-open` 또는 `meeting.result.prepare-open`으로 준비한 최종 URL이 다르면 같은 탭을 그 URL로 이동시킨다.
    - web-open이 성공하면 `meeting.workspace.open` / `meeting.result.open` background fallback이 실행되지 않아야 한다.
    - panel 쪽 콘솔은 launch requested/prepared/dispatched/accepted 수준까지 확인한다.
 9. Playwright Bridge가 열린 새 탭을 자동으로 목록에 보여주지 않을 수 있다. 이 경우 제품 실패로 보지 말고, `window.open` 호출 또는 prepared URL을 확인한 뒤 내부 작업실 검증은 Bridge-controlled tab을 해당 URL로 직접 이동해 수행한다.
@@ -109,7 +112,7 @@
 
 ## 회의 작업실 P0
 
-1. 회의 허브에서 작업실을 열거나, 승인된 meeting session URL로 작업실을 연다. 회의 허브는 web-open 우선 경로로 빈 새 탭을 만들고 prepared URL로 이동시켜야 한다. 열린 실제 Chrome 새 탭을 확인하려면 기존 패널 탭이 아니라 새 탭을 Bridge selector로 다시 선택한다. URL을 알고 있고 내부 shell만 확인하면 Bridge-controlled tab을 같은 URL로 직접 이동해 테스트할 수 있다.
+1. 회의 허브에서 작업실을 열거나, 승인된 meeting session URL로 작업실을 연다. 회의 허브는 web-open 우선 경로로 현재 hosting origin의 clean 작업실 URL을 먼저 열고 prepared URL로 보정해야 한다. 열린 실제 Chrome 새 탭을 확인하려면 기존 패널 탭이 아니라 새 탭을 Bridge selector로 다시 선택한다. URL을 알고 있고 내부 shell만 확인하면 Bridge-controlled tab을 같은 URL로 직접 이동해 테스트할 수 있다.
 2. 작업실이 blocked 화면이 아니라 실제 shell로 뜨는지 확인한다.
    - 직접 clean URL만 붙여 넣어 세션이 없으면 blocked 화면이 정상이다.
    - 패널에서 연 owner workspace는 `meetingSessionToken`을 받아 실제 shell로 들어가야 한다.
