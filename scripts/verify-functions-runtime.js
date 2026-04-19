@@ -101,6 +101,14 @@ function verifySecretManagerWiring() {
       && source.includes("exports.commitInovaFeatureUsageBatch"),
     "Feature usage commit endpoint must be registered and exported from functions/index.js"
   );
+  assert(
+    source.includes('require("./features/admin/admin-service")')
+      && source.includes("exports.checkInovaAdminAccess")
+      && source.includes("exports.issueInovaAdminLaunch")
+      && source.includes("exports.exchangeInovaAdminLaunch")
+      && source.includes("exports.readInovaAdminBootstrap"),
+    "Admin access, launch, exchange, and bootstrap endpoints must be registered and exported from functions/index.js"
+  );
 }
 
 async function verifyIdentityReuseCache() {

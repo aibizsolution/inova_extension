@@ -29,8 +29,8 @@ function verifyServedManifestMetricsCapability() {
 
   const validatorSource = fs.readFileSync(path.join(root, "background", "capability-manifest-validator.js"), "utf8");
   assert(
-    validatorSource.includes('["meeting", "metrics", "prompt"]'),
-    "capability manifest validator should allow only the known function services including metrics"
+    validatorSource.includes('["admin", "meeting", "metrics", "prompt"]'),
+    "capability manifest validator should allow only the known function services including admin and metrics"
   );
 }
 

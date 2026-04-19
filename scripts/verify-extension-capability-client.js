@@ -214,6 +214,21 @@ async function verifyExtensionCapabilityClientPageAllowlist() {
     requestTimeoutMs: 60000,
     target: "production",
   });
+
+  await browserCapabilities.openAdminConsole({
+    launchToken: "launch.fixture",
+  }, {
+    providerUserKey: "admin-user-1",
+  });
+  assert.deepEqual(runtimeCalls.at(-1), {
+    action: "admin.console.open",
+    input: {
+      launchToken: "launch.fixture",
+    },
+    providerIdentity: {
+      providerUserKey: "admin-user-1",
+    },
+  });
 }
 
 function cloneValue(value) {

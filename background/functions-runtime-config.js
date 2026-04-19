@@ -41,6 +41,8 @@
     },
     capabilities: {
       ...buildFunctionCapabilityCatalog([
+      ["admin.access.check", "checkInovaAdminAccessUrl", "admin", "admin", "admin", "read"],
+      ["admin.launch.issue-function", "issueInovaAdminLaunchUrl", "admin", "admin", "admin", "auth"],
       ["meeting.list", "listInovaMeetingsUrl", "meeting", "meeting", "meeting", "read"],
       ["meeting.panel-auth.issue-function", "issueInovaMeetingPanelAuthUrl", "meeting", "meeting", "meeting", "auth"],
       ["meeting.participation.hide-function", "hideInovaMeetingParticipationUrl", "meeting", "meeting", "meeting", "write"],
@@ -81,13 +83,16 @@
     },
     endpointKeys: buildFunctionEndpointDefinitions([
       "authorizeInovaMeetingWorkspaceAccessUrl",
+      "checkInovaAdminAccessUrl",
       "commitInovaFeatureUsageBatchUrl",
       "createInovaMeetingShareLinkUrl",
       "deleteInovaMeetingResultUrl",
       "deleteInovaMeetingUrl",
       "exchangeInovaMeetingLaunchUrl",
+      "exchangeInovaAdminLaunchUrl",
       "hideInovaMeetingParticipationUrl",
       "importPromptStoreEntryUrl",
+      "issueInovaAdminLaunchUrl",
       "issueInovaMeetingLaunchUrl",
       "issueInovaMeetingPanelAuthUrl",
       "issueInovaMeetingWorkspaceAuthUrl",
@@ -101,6 +106,7 @@
       "recordPromptStoreViewUrl",
       "reviewInovaPromptUrl",
       "revokeInovaMeetingShareLinkUrl",
+      "readInovaAdminBootstrapUrl",
       "syncInovaPromptLibraryUrl",
       "togglePromptStoreLikeUrl",
       "unpublishPromptFromStoreUrl",

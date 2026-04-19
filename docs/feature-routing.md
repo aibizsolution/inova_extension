@@ -117,6 +117,22 @@
 | 언제 다시 물을지 | 릴리스 UI 문제인지 실제 배포 메타 생성 문제인지 구분이 모호할 때 |
 | 언제 범위를 확장할지 | 정적 메타만으로 해결되지 않고 background fetch나 배포 스크립트가 얽힐 때만 platform/shell로 확장 |
 
+### `admin`
+
+| 항목 | 내용 |
+| --- | --- |
+| 기능 목적 | 권한이 확인된 사용자에게만 관리자 콘솔 진입점을 제공하고, 별도 hosted 관리자 페이지에서 운영 기능을 붙이는 기반 |
+| 요청 cue | 관리자, admin, 운영자, 권한 확인, 관리자 페이지, 관리자 메뉴 |
+| 먼저 볼 파일 | `functions/features/admin/AGENTS.md`, `hosting/extension-v2/panel/admin-entry-controller.js`, `hosting/admin/index.js`, `background/admin-console-capability.js`, `functions/features/admin/admin-service.js` |
+| 관련 프론트 경로 | `hosting/extension-v2/panel/index.js`, `hosting/extension-v2/panel/admin-entry-controller.js`, `hosting/extension-v2/panel/extension-capability-client.js`, `hosting/admin/*`, `background/panel-runtime-capability-router.js`, `background/admin-console-capability.js` |
+| 관련 functions 경로 | `functions/features/admin/admin-service.js`, `functions/index.js` |
+| feature-owned shared | 없음. 클라이언트 role/admin flag는 신뢰하지 않고 서버 allowlist 또는 `ops_admin_users/{providerUserKey}`만 기준으로 본다. |
+| 관련 데이터 경계 | `ops_admin_users`, `ops_admin_launches`, `ops_admin_sessions` |
+| 보통 건드리지 말 범위 | 회의 녹음/전사, prompt-library/store/review의 feature-local 구현, content page adapter |
+| 최소 검증 | `npm.cmd run verify:admin-service`, `npm.cmd run verify:admin-entry`, `npm.cmd run verify:runtime-capability-router`, `npm.cmd run verify:hosted-panel`, `npm.cmd run verify:panel-render` |
+| 언제 다시 물을지 | 관리자 페이지의 실제 운영 기능 범위가 회의/프롬프트/사용량 중 어디인지 모호할 때 |
+| 언제 범위를 확장할지 | 새 관리자 기능이 특정 feature 데이터에 접근해야 할 때만 해당 feature의 read-only summary API부터 별도 endpoint로 확장 |
+
 ### `feature-usage`
 
 | 항목 | 내용 |

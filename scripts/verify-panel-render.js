@@ -194,6 +194,7 @@ function verifyHostedPromptTabOwnershipContract() {
 function verifyHostedNormalizeTextUsesPanelUtils() {
   [
     "base-firestore-client.js",
+    "admin-entry-controller.js",
     "conversation-controller.js",
     "extension-capability-client.js",
     "index.js",

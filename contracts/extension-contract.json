@@ -10,6 +10,7 @@
     "shared/storage.js"
   ],
   "activeBackgroundRootFiles": [
+    "background/admin-console-capability.js",
     "background/browser-capability.js",
     "background/capability-manifest-validator.js",
     "background/cloud-api-client.js",
@@ -71,6 +72,10 @@
     "hosting/meeting/index.js",
     "hosting/meeting/render.js",
     "hosting/meeting/shared.js",
+    "hosting/admin/index.html",
+    "hosting/admin/index.css",
+    "hosting/admin/index.js",
+    "background/admin-console-capability.js",
     "background/browser-capability.js",
     "background/capability-manifest-validator.js",
     "background/cloud-api-client.js",
@@ -163,6 +168,8 @@
     "README.md",
     "docs/feature-spec.md",
     "scripts/verify-docs.js",
+    "scripts/verify-admin-entry.js",
+    "scripts/verify-admin-service.js",
     "scripts/verify-browser-only-boundary.js",
     "scripts/verify-contracts.js",
     "scripts/verify-extension-capability-client.js",
@@ -304,6 +311,7 @@
     "trace.log"
   ],
   "runtimeCapabilityActions": [
+    "admin.console.open",
     "storage.read-panel-state",
     "storage.write-ui-preferences",
     "auth.issue-panel-session",

@@ -1,4 +1,4 @@
-/* global createMeetingShareLink, getInovaAccessToken, getMeetingFunctionsConfig, getPromptFunctionsConfig, getPromptRuntimeConfig, issueMeetingPanelAuth, issuePromptPanelAuth, openBrowserUrl, openMeetingResult, openMeetingWorkspace, revokeMeetingShareLink */
+/* global createMeetingShareLink, getInovaAccessToken, getMeetingFunctionsConfig, getPromptFunctionsConfig, getPromptRuntimeConfig, issueMeetingPanelAuth, issuePromptPanelAuth, openAdminConsole, openBrowserUrl, openMeetingResult, openMeetingWorkspace, revokeMeetingShareLink */
 
 (() => {
 const namespace = globalThis.InovaBookmarks || {};
@@ -136,6 +136,9 @@ const PANEL_RUNTIME_CAPABILITY_MANIFEST = deepFreeze({
         },
       },
     },
+    "admin.console.open": {
+      adapter: "admin.console.open",
+    },
     "browser.open-url": {
       adapter: "browser.open-url",
     },
@@ -171,6 +174,7 @@ const PANEL_RUNTIME_CAPABILITY_MANIFEST = deepFreeze({
 });
 
 const PANEL_RUNTIME_ADAPTERS = Object.freeze({
+  "admin.console.open": (request) => openAdminConsole(request?.input, request?.providerIdentity),
   "auth.issue-panel-session": issuePanelSession,
   "browser.open-url": (request) => openBrowserUrl(request?.url),
   "capabilities.handshake": buildCapabilityHandshake,

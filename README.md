@@ -1,6 +1,6 @@
 # i-Nova 더하기
 
-`i-Nova 더하기`는 `inova.incross.com` 대화 화면에 실험실 패널과 hosted 회의 작업실을 더하는 크롬 확장프로그램입니다. 현재 제품 축은 `대화`, `회의`, `프롬프트`, `릴리스`이며, 팝업에서는 회의 작업실 연결 대상과 디버그를 조정합니다.
+`i-Nova 더하기`는 `inova.incross.com` 대화 화면에 실험실 패널과 hosted 회의 작업실을 더하는 크롬 확장프로그램입니다. 현재 제품 축은 `대화`, `회의`, `프롬프트`, `릴리스`, `관리`이며, 팝업에서는 회의 작업실 연결 대상과 디버그를 조정합니다.
 
 새 Cloud Function 추가나 endpoint path 변경은 먼저 capability manifest 편집과 Hosting 배포로 처리합니다. 새 Chrome permission, host permission, page primitive, privileged adapter, URL template origin이 필요할 때만 확장 재배포 대상입니다.
 
@@ -36,15 +36,17 @@
 - [content/features/prompt-store/AGENTS.md](content/features/prompt-store/AGENTS.md): 프롬프트 스토어 목록, 상세, 좋아요, 가져오기
 - [content/features/prompt-review/AGENTS.md](content/features/prompt-review/AGENTS.md): 입력 프롬프트 평가와 보완안
 - [content/features/release/AGENTS.md](content/features/release/AGENTS.md): 릴리스 패널, 최신 버전 확인, 정적 메타/ZIP
+- [functions/features/admin/AGENTS.md](functions/features/admin/AGENTS.md): 관리자 진입점, 권한 확인, hosted 관리자 콘솔
 
 ## 제품 개요
 
 - `팝업 작업실 연결 설정`: 팝업에서 `상용 호스팅`과 `로컬 호스팅`을 고르고 `settings.meetingWorkspaceTarget`을 관리합니다.
-- `우측 슬라이드 패널`: i-Nova 대화 화면 오른쪽에서 `대화`, `회의`, `프롬프트`, `릴리스`를 전환합니다.
+- `우측 슬라이드 패널`: i-Nova 대화 화면 오른쪽에서 `대화`, `회의`, `프롬프트`, `릴리스`를 전환하고, 권한이 확인된 사용자에게만 `관리` 진입점을 추가합니다.
 - `대화`: 현재 대화 기준 `질문 자동 모으기`, `대화 안에서 찾기`, 현재 화면 기준 예상 컨텍스트와 선택 모델 기준의 길이 신호를 제공합니다.
 - `프롬프트`: `자주 쓰는 요청`, `요청 가져오기/내보내기`, `프롬프트 스토어`, 평가/보완 흐름을 제공합니다.
 - `회의`: 패널의 회의 허브와 Firebase Hosting 기반 hosted 회의 작업실을 함께 사용합니다.
 - `릴리스`: 현재 버전, 최신 배포 안내, 다운로드 링크와 업데이트 절차를 제공합니다.
+- `관리`: 서버 권한 확인 뒤 별도 hosted 관리자 콘솔을 새 탭으로 엽니다.
 
 ## 저장소 구조
 
@@ -55,7 +57,8 @@
 - `hosting/extension-v2/panel/`: `1.0.0+` hosted panel controller/view와 remote workflow sandbox host
 - `hosting/extension-v2/capability-manifest.json`: v2 remote capability catalog, endpoint, URL template, lane/kill switch 설정
 - `hosting/meeting/`: hosted 회의 작업실
-- `functions/`: 회의, 프롬프트 backend 함수
+- `hosting/admin/`: hosted 관리자 콘솔
+- `functions/`: 회의, 프롬프트, 관리자 backend 함수
 - `shared/`: panel, popup, hosted, background가 함께 쓰는 계약과 helper
 
 ## 빠른 시작
@@ -72,6 +75,8 @@
 npm run lint
 npm run verify
 npm run verify:docs
+npm run verify:admin-entry
+npm run verify:admin-service
 npm run verify:feature-doc-guard
 npm run verify:release-guard
 npm run emulator:hosting

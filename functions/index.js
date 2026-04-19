@@ -1,3 +1,4 @@
+const { registerAdminHandlers } = require("./features/admin/admin-service");
 const { registerMeetingLaunchHandlers } = require("./features/meeting/meeting-launch-service");
 const { registerMeetingWorkspaceAuthHandlers } = require("./features/meeting/meeting-workspace-auth-service");
 const { registerMeetingHandlers } = require("./features/meeting/meeting-service");
@@ -99,6 +100,10 @@ const featureUsageHandlers = registerFeatureUsageHandlers({
   FieldValue: admin.firestore.FieldValue,
 });
 
+const adminHandlers = registerAdminHandlers({
+  ...sharedHttpDeps,
+});
+
 const promptLibraryHandlers = registerPromptLibraryHandlers({
   ...sharedHttpDeps,
   admin,
@@ -141,6 +146,10 @@ exports.recordPromptStoreView = storeHandlers.recordPromptStoreView;
 
 exports.reviewInovaPrompt = promptReviewHandlers.reviewInovaPrompt;
 exports.commitInovaFeatureUsageBatch = featureUsageHandlers.commitInovaFeatureUsageBatch;
+exports.checkInovaAdminAccess = adminHandlers.checkInovaAdminAccess;
+exports.exchangeInovaAdminLaunch = adminHandlers.exchangeInovaAdminLaunch;
+exports.issueInovaAdminLaunch = adminHandlers.issueInovaAdminLaunch;
+exports.readInovaAdminBootstrap = adminHandlers.readInovaAdminBootstrap;
 
 exports.issueInovaPromptPanelAuth = promptLibraryHandlers.issueInovaPromptPanelAuth;
 exports.issueInovaPromptPanelAuthV2 = promptLibraryV2Handlers.issueInovaPromptPanelAuth;

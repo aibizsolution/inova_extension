@@ -28,6 +28,34 @@
     }
   },
   "capabilities": {
+    "admin.access.check": {
+      "auditLevel": "read",
+      "authMode": "access-token",
+      "domain": "admin",
+      "enabled": true,
+      "endpointKey": "checkInovaAdminAccessUrl",
+      "inputSchemaVersion": 1,
+      "kind": "function",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "admin",
+      "schemaVersion": 1,
+      "service": "admin"
+    },
+    "admin.launch.issue-function": {
+      "auditLevel": "auth",
+      "authMode": "access-token",
+      "domain": "admin",
+      "enabled": true,
+      "endpointKey": "issueInovaAdminLaunchUrl",
+      "inputSchemaVersion": 1,
+      "kind": "function",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "admin",
+      "schemaVersion": 1,
+      "service": "admin"
+    },
     "meeting.list": {
       "auditLevel": "read",
       "authMode": "access-token",
@@ -540,6 +568,10 @@
       "endpoint": "authorizeInovaMeetingWorkspaceAccess",
       "method": "POST"
     },
+    "checkInovaAdminAccessUrl": {
+      "endpoint": "checkInovaAdminAccess",
+      "method": "POST"
+    },
     "commitInovaFeatureUsageBatchUrl": {
       "endpoint": "commitInovaFeatureUsageBatch",
       "method": "POST"
@@ -560,8 +592,16 @@
       "endpoint": "exchangeInovaMeetingLaunch",
       "method": "POST"
     },
+    "exchangeInovaAdminLaunchUrl": {
+      "endpoint": "exchangeInovaAdminLaunch",
+      "method": "POST"
+    },
     "hideInovaMeetingParticipationUrl": {
       "endpoint": "hideInovaMeetingParticipation",
+      "method": "POST"
+    },
+    "issueInovaAdminLaunchUrl": {
+      "endpoint": "issueInovaAdminLaunch",
       "method": "POST"
     },
     "issueInovaMeetingLaunchUrl": {
@@ -638,6 +678,10 @@
     },
     "recordPromptStoreViewUrl": {
       "endpoint": "recordPromptStoreView",
+      "method": "POST"
+    },
+    "readInovaAdminBootstrapUrl": {
+      "endpoint": "readInovaAdminBootstrap",
       "method": "POST"
     },
     "syncInovaPromptLibraryUrl": {

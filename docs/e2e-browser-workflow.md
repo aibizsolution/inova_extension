@@ -24,7 +24,7 @@
 ## 기능별 문서
 
 - 회의: `docs/e2e/features/meeting.md`
-- 대화, 프롬프트, 릴리스는 아직 이 문서의 feature 섹션을 기준으로 한다. 해당 기능의 큰 UI/계약 변경 PR에서 feature 문서로 분리한다.
+- 대화, 프롬프트, 릴리스, 관리는 아직 이 문서의 feature 섹션을 기준으로 한다. 해당 기능의 큰 UI/계약 변경 PR에서 feature 문서로 분리한다.
 
 ## 문서 사용 원칙
 
@@ -143,6 +143,36 @@ npm.cmd run check:feature-usage -- --days 1 --limit 20
 - `integration_inova_feature_usage_*` 컬렉션은 client에서 직접 읽거나 쓰지 않는다.
 
 상용에서 이 검증은 실제 운영 count 1건을 남긴다. 테스트용 raw event 삭제 대상은 없고, aggregate를 수동 보정할 필요가 있으면 별도 운영 작업으로 다룬다.
+
+## 관리자 콘솔
+
+이 섹션은 관리자 진입점, 관리자 권한 확인, hosted admin page, admin capability 또는 admin Functions 계약을 바꿨을 때 실행한다.
+
+### P0 Smoke
+
+1. 검증 대상 계정을 정한다.
+   - 비관리자 계정: `ops_admin_users/{providerUserKey}` 문서가 없고 `INOVA_ADMIN_PROVIDER_USER_KEYS` / `INOVA_ADMIN_EMAILS`에도 없어야 한다.
+   - 관리자 계정: 환경 allowlist 또는 `ops_admin_users/{providerUserKey}` active 문서가 있어야 한다.
+2. 패널 iframe이 현재 target으로 로드됐는지 확인한다.
+   - 로컬: `http://127.0.0.1:5000/extension-v2/panel/index.html?...`
+   - 상용: `https://browser-extension-v2.web.app/extension-v2/panel/index.html?...`
+3. capability handshake에서 `admin.access.check`와 `admin.launch.issue-function`이 enabled이고, auth가 `access-token`, service가 `admin`인지 확인한다.
+4. 비관리자 계정에서는 tool rail에 `관리` 항목이 없어야 한다.
+5. 관리자 계정에서는 서버 권한 확인이 끝난 뒤 tool rail에 `관리` 항목이 추가되어야 한다.
+6. `관리` 항목을 클릭한다.
+   - background runtime action은 `admin.console.open`이어야 한다.
+   - 새 탭 URL은 현재 hosting target의 `/admin/index.html?launch=...`로 열려야 한다.
+7. 관리자 페이지가 launch token을 교환한 뒤 URL에서 `launch` query를 제거하는지 확인한다.
+8. 관리자 페이지에서 verified 상태, 사용자, 계정, 권한, 세션 만료 정보가 표시되어야 한다.
+9. 같은 launch URL을 다시 열거나 launch 없이 직접 진입하면 blocked 상태가 보여야 한다.
+
+### P1 Regression
+
+1. `ops_admin_users/{providerUserKey}`를 inactive로 바꾼 뒤 기존 AdminSession으로 새로고침한다.
+   - 기대값: verified 상태가 유지되지 않고 blocked 상태로 전환된다.
+2. 관리자 항목이 보이는 상태에서 capability manifest의 admin capability를 비활성화한 rehearsal bundle이면 항목이 사라져야 한다.
+3. 관리자 페이지 console에 launch token 원문이나 AdminSession token 원문을 직접 출력하면 실패다.
+4. 배포 보고에는 Functions 배포, Hosting 배포, 확장 Reload 또는 확장 패키지 갱신 필요 여부를 분리해서 적는다.
 
 ## 대화 탭
 
