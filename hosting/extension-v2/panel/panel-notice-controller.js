@@ -105,7 +105,7 @@
             <div class="inova-panel-notice__body">${notice.bodyHtml}</div>
             <div class="inova-panel-notice__actions">
               ${cta ? `<a class="inova-panel-notice__cta" href="${escapeHtmlAttribute(cta.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(cta.label)}</a>` : ""}
-              <button type="button" class="inova-panel-notice__button" data-panel-notice-action="hide-day" aria-label="하루동안 안보기">오늘 안보기</button>
+              <button type="button" class="inova-panel-notice__button" data-panel-notice-action="hide-day" aria-label="하루동안 안보기">하루동안 안보기</button>
             </div>
             ${hasMultiple ? `<div class="inova-panel-notice__pager">${renderNoticeDots(notices, state.activeIndex)}</div>` : ""}
           </div>

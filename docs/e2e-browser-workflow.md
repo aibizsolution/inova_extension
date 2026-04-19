@@ -53,6 +53,7 @@
 8. 콘솔 baseline을 잡는다. 테스트 전후 warning/error가 새로 생기면 해당 feature 결과에 함께 기록한다.
 9. hosted panel에서 새 탭을 여는 flow는 web-open 우선 경로를 기대한다. secret 없는 hosted URL을 즉시 만들 수 있으면 사용자 action 안에서 그 URL을 바로 열고, launch token이나 원격 prepared URL처럼 async 준비가 필요하면 `window.open("about:blank", "_blank")`로 탭을 확보한 뒤 준비된 URL로 이동시킨다.
 10. `chrome.tabs.create` background open은 fallback이다. Bridge가 열린 새 탭을 자동 상속하지 않을 수 있으므로, 새 탭 lifecycle 자체가 목적이면 Bridge selector를 다시 열어 해당 새 탭을 선택한다.
+   - 2026-04-19 상용 Chrome 검증에서는 i-Nova 제품 코드를 거치지 않고 top-level 페이지에 임시 버튼을 만들어 `window.open(..., "_blank")`을 호출해도 새 탭은 Chrome에 열리지만 현재 MCP `browser_tabs list`와 `page.context().pages()`에는 추가되지 않았다. 이 상태는 `openedWindow.opener = null` 여부와 무관한 Bridge grant 경계로 보고, 제품 실패로 판정하지 않는다.
 11. 새 탭의 실제 URL을 알고 있고 내부 화면 테스트가 목적이면, Bridge가 이미 잡고 있는 탭을 그 URL로 직접 이동해 테스트할 수 있다. 이 경우 결과에는 `URL 기반 직접 이동으로 내부 테스트`라고 적고, 실제 새 탭 자동 승계 검증과 섞어 말하지 않는다.
 
 ## 테스트 강도

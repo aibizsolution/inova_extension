@@ -778,7 +778,7 @@
             <div class="admin-notice-preview__body"></div>
             <div class="admin-notice-panel-popup__actions">
               <div class="admin-notice-preview__cta"></div>
-              <button type="button" tabindex="-1">오늘 안보기</button>
+              <button type="button" tabindex="-1">하루동안 안보기</button>
             </div>
             <div class="admin-notice-panel-popup__pager">
               <div class="admin-notice-panel-popup__dots">
@@ -1595,7 +1595,11 @@
     host.querySelectorAll("[data-notice-field]").forEach((input) => {
       const field = normalizeText(input.dataset.noticeField);
       const error = normalizeText(fieldErrors[field]);
-      input.toggleAttribute("aria-invalid", Boolean(error));
+      if (error) {
+        input.setAttribute("aria-invalid", "true");
+      } else {
+        input.removeAttribute("aria-invalid");
+      }
       input.closest(".admin-notice-field")?.classList.toggle("is-invalid", Boolean(error));
     });
     host.querySelectorAll("[data-notice-feedback-for]").forEach((feedback) => {
