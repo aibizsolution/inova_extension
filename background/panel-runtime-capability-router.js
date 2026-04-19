@@ -1,4 +1,4 @@
-/* global createMeetingShareLink, getInovaAccessToken, getMeetingFunctionsConfig, getPromptFunctionsConfig, getPromptRuntimeConfig, issueMeetingPanelAuth, issuePromptPanelAuth, openAdminConsole, openBrowserUrl, openMeetingResult, openMeetingWorkspace, revokeMeetingShareLink */
+/* global createMeetingShareLink, getInovaAccessToken, getMeetingFunctionsConfig, getPromptFunctionsConfig, getPromptRuntimeConfig, issueMeetingPanelAuth, issuePromptPanelAuth, openAdminConsole, openBrowserUrl, openMeetingResult, openMeetingWorkspace, prepareMeetingResultOpen, prepareMeetingWorkspaceOpen, revokeMeetingShareLink */
 
 (() => {
 const namespace = globalThis.InovaBookmarks || {};
@@ -21,6 +21,14 @@ const SANDBOX_BRIDGE_API_ALLOWLIST = Object.freeze([
 
 const PANEL_RUNTIME_CAPABILITY_MANIFEST = deepFreeze({
   functionEndpointCapabilities: {
+    admin: {
+      readInovaPanelNoticeUrl: {
+        allowedAuthModes: ["access-token"],
+        capabilityId: "panel.notice.read-active",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
+    },
     meeting: {
       authorizeInovaMeetingWorkspaceAccessUrl: {
         allowedAuthModes: ["access-token", "none"],
@@ -154,6 +162,9 @@ const PANEL_RUNTIME_CAPABILITY_MANIFEST = deepFreeze({
     "meeting.result.open": {
       adapter: "meeting.result.open",
     },
+    "meeting.result.prepare-open": {
+      adapter: "meeting.result.prepare-open",
+    },
     "meeting.share.create": {
       adapter: "meeting.share.create",
     },
@@ -162,6 +173,9 @@ const PANEL_RUNTIME_CAPABILITY_MANIFEST = deepFreeze({
     },
     "meeting.workspace.open": {
       adapter: "meeting.workspace.open",
+    },
+    "meeting.workspace.prepare-open": {
+      adapter: "meeting.workspace.prepare-open",
     },
     "storage.read-panel-state": {
       adapter: "storage.read-panel-state",
@@ -181,9 +195,11 @@ const PANEL_RUNTIME_ADAPTERS = Object.freeze({
   "capabilities.invoke": invokeManifestCapability,
   "functions.invoke-endpoint": invokeHostedPanelFunctionFetch,
   "meeting.result.open": (request) => openMeetingResult(request?.input, request?.providerIdentity),
+  "meeting.result.prepare-open": (request) => prepareMeetingResultOpen(request?.input, request?.providerIdentity),
   "meeting.share.create": (request) => createMeetingShareLink(request?.input, request?.providerIdentity),
   "meeting.share.revoke": (request) => revokeMeetingShareLink(request?.input, request?.providerIdentity),
   "meeting.workspace.open": (request) => openMeetingWorkspace(request?.input, request?.providerIdentity),
+  "meeting.workspace.prepare-open": (request) => prepareMeetingWorkspaceOpen(request?.input, request?.providerIdentity),
   "storage.read-panel-state": () => readHostedPanelStorageState(),
   "storage.write-ui-preferences": (request) => namespace.storage.updateUiPreferences(
     request?.partial && typeof request.partial === "object" ? request.partial : {}
@@ -202,6 +218,7 @@ const PANEL_AUTH_ENRICHERS = Object.freeze({
 });
 
 const PANEL_FUNCTION_CONFIG_RESOLVERS = Object.freeze({
+  admin: () => namespace.functionsRuntimeConfig?.getDefaultFunctionsConfig?.() || getPromptFunctionsConfig(),
   meeting: () => getMeetingFunctionsConfig(),
   prompt: () => getPromptFunctionsConfig(),
 });

@@ -51,8 +51,9 @@
    - 로컬 기대값: `#inova-hosted-panel-frame`의 `src`가 `http://127.0.0.1:5000/extension-v2/panel/index.html?...`
    - `chrome-extension://.../frame-proxy.html?...`이면 Bridge 검증이 꼬일 수 있으므로 extension Reload와 페이지 새로고침을 먼저 한다.
 8. 콘솔 baseline을 잡는다. 테스트 전후 warning/error가 새로 생기면 해당 feature 결과에 함께 기록한다.
-9. 확장/백그라운드가 새 탭을 여는 flow는 Playwright `popup`으로 기다리지 않는다. `chrome.tabs.create`로 열린 탭은 현재 Bridge 세션이 자동 상속하지 않을 수 있으므로, 새 탭 자체의 lifecycle을 검증할 때는 Bridge selector를 다시 열어 해당 새 탭을 선택한다.
-10. 새 탭의 실제 URL을 알고 있고 내부 화면 테스트가 목적이면, Bridge가 이미 잡고 있는 탭을 그 URL로 직접 이동해 테스트할 수 있다. 이 경우 결과에는 `URL 기반 직접 이동으로 내부 테스트`라고 적고, 실제 새 탭 자동 승계 검증과 섞어 말하지 않는다.
+9. hosted panel에서 새 탭을 여는 flow는 web-open 우선 경로를 기대한다. 사용자 action 안에서 `window.open("about:blank", "_blank")`로 탭을 확보하고, async launch token 또는 prepared URL이 준비되면 그 탭을 이동시키는 구조여야 한다.
+10. `chrome.tabs.create` background open은 fallback이다. Bridge가 열린 새 탭을 자동 상속하지 않을 수 있으므로, 새 탭 lifecycle 자체가 목적이면 Bridge selector를 다시 열어 해당 새 탭을 선택한다.
+11. 새 탭의 실제 URL을 알고 있고 내부 화면 테스트가 목적이면, Bridge가 이미 잡고 있는 탭을 그 URL로 직접 이동해 테스트할 수 있다. 이 경우 결과에는 `URL 기반 직접 이동으로 내부 테스트`라고 적고, 실제 새 탭 자동 승계 검증과 섞어 말하지 않는다.
 
 ## 테스트 강도
 
@@ -161,12 +162,34 @@ npm.cmd run check:feature-usage -- --days 1 --limit 20
 4. 비관리자 계정에서는 tool rail에 `관리` 항목이 없어야 한다.
 5. 관리자 계정에서는 서버 권한 확인이 끝난 뒤 tool rail에 `관리` 항목이 추가되어야 한다.
 6. `관리` 항목을 클릭한다.
-   - background runtime action은 `admin.console.open`이어야 한다.
+   - 기본 경로는 hosted panel의 `window.open` web-open이어야 한다.
+   - fresh launch token이 있으면 바로 `/admin/index.html?launch=...`를 열고, 없으면 `about:blank`를 먼저 만든 뒤 token 발급 후 이동시킨다.
+   - `admin.console.open` background runtime action은 web-open이 실패했을 때의 fallback이다.
    - 새 탭 URL은 현재 hosting target의 `/admin/index.html?launch=...`로 열려야 한다.
 7. 관리자 페이지가 launch token을 교환한 뒤 URL에서 `launch` query를 제거하는지 확인한다.
 8. 관리자 페이지에서 verified 상태, 사용자, 계정, 권한, 세션 만료 정보가 표시되어야 한다.
-9. 같은 launch URL을 다시 열거나 launch 없이 직접 진입하면 blocked 상태가 보여야 한다.
-10. 상용 배포 직후에는 `browser-extension-v2.web.app`의 panel/admin 정적 자산 200 응답과 릴리스 ZIP metadata 정합성을 함께 확인한 뒤 패널을 새로고침한다.
+9. 선택한 기능 화면 안에는 별도 `세션 컨텍스트` 카드처럼 상단 인증 정보를 반복하는 UI가 없어야 한다.
+10. 같은 launch URL을 다시 열거나 launch 없이 직접 진입하면 blocked 상태가 보여야 한다.
+11. 상용 배포 직후에는 `browser-extension-v2.web.app`의 panel/admin 정적 자산 200 응답과 릴리스 ZIP metadata 정합성을 함께 확인한 뒤 패널을 새로고침한다.
+
+### 소식 팝업
+
+이 항목은 관리자 `소식 팝업` 메뉴, `readInovaPanelNotice` capability, `ops_panel_notices`/`ops_panel_notice_state` 계약을 바꿨을 때 실행한다.
+
+1. 관리자 페이지에서 `소식 팝업` 메뉴를 연다.
+2. 화면은 `등록된 소식`, `소식 작성`, `미리보기` 3단 구성이어야 한다. 등록된 소식은 왼쪽 고정 폭, 작성 영역은 가운데 가변 폭, 미리보기는 오른쪽 패널 폭 기준으로 둔다.
+3. editor가 제목, 본문 Markdown, CTA label/URL, 노출 시작/종료 시간을 표시하고, 버튼은 `저장`, `삭제`, `새 소식`만 있어야 한다.
+4. 노출 여부는 토글이 아니라 현재 시각이 노출 시작/종료 범위 안인지로 계산한다. 여러 소식이 동시에 노출되면 패널은 목록 위 순서대로 자동 전환해야 한다.
+5. Markdown preview에서 raw HTML은 escape되고, 문단/줄바꿈, `**굵게**`, `*기울임*`, `-` bullet, `https://` 링크만 렌더링되는지 본다.
+6. CTA URL을 `www.naver.com`처럼 입력하면 저장 전 `https://www.naver.com`으로 보정되거나 필드 바로 아래에서 `https://` 요구사항을 알려야 한다. generic `관리자 요청 실패`만 보여주면 실패다.
+7. 종료 시간이 현재보다 과거인 공지는 저장되어도 패널 노출 대상으로 계산되면 안 되고, `http://` CTA나 Markdown 링크는 저장되지 않아야 한다.
+8. 소식을 저장하면 Firestore `ops_panel_notices/{noticeId}`와 panel invalidation signal이 갱신되어야 한다.
+9. 일반 패널 사용자 iframe의 capability handshake에서 `panel.notice.read-active`가 enabled이고, auth가 `access-token`, service가 `admin`인지 확인한다.
+10. 패널 하단에 slim popup이 뜨고 본문 스크롤 영역과 겹치지 않아야 한다.
+11. `닫기`는 현재 패널 세션에서만 숨긴다. 페이지 새로고침 후 같은 공지가 다시 보여야 한다.
+12. `하루동안 안보기`는 클릭 즉시 popup을 숨기고, iframe localStorage의 `inova-panel-notice-hide:<noticeId>:<version>` 키가 24시간 만료값으로 저장되어야 한다. 새로고침 후에도 숨김이 유지되어야 한다.
+13. 같은 공지를 새 version 또는 새 noticeId로 다시 저장하면 이전 숨김 키가 새 공지 노출을 막으면 안 된다.
+14. 검증용 공지를 만들었다면 마지막에 삭제하거나 emulator 데이터를 정리하고, localStorage의 검증용 hide key를 지운다.
 
 ### P1 Regression
 
@@ -233,8 +256,9 @@ npm.cmd run check:feature-usage -- --days 1 --limit 20
    - 권한, 네트워크, 집계 없음 상태는 빈 화면이 아니라 empty/degraded/제한 문구로 드러나야 한다.
 5. 기존 회의 카드 1건에서 `작업실 열기` 또는 `결과 열기`를 실행한다.
 6. 새 탭 또는 결과 탭이 열리고, panel 쪽 콘솔은 launch requested/dispatched/accepted 수준까지 확인한다.
-7. 새 탭은 확장 백그라운드가 `chrome.tabs.create`로 열 수 있다. 현재 Bridge `browser_tabs list`에 새 URL이 안 보이면 제품 launch 실패로 보지 않는다. 새 탭 lifecycle이 목적이면 해당 Chrome 새 탭을 Bridge selector로 다시 선택하고, 작업실 내부 테스트가 목적이면 열린 URL을 Bridge-controlled tab에 직접 이동해 이어서 확인한다.
-8. hosted 작업실에서 session 허용 상태면 workspace가 렌더링되고, 미허용 상태면 blocked 화면이 보여야 한다.
+7. 새 탭은 hosted panel의 web-open 우선 경로로 열려야 한다. current Bridge가 새 탭을 자동 상속하지 못하면 제품 launch 실패로 보지 않고, `window.open` 호출 또는 prepared URL을 확인한다.
+8. 새 탭 lifecycle이 목적이면 해당 Chrome 새 탭을 Bridge selector로 다시 선택하고, 작업실 내부 테스트가 목적이면 opened/prepared URL을 Bridge-controlled tab에 직접 이동해 이어서 확인한다.
+9. hosted 작업실에서 session 허용 상태면 workspace가 렌더링되고, 미허용 상태면 blocked 화면이 보여야 한다.
 
 ### P1 Regression
 
@@ -278,7 +302,7 @@ npm.cmd run check:feature-usage -- --days 1 --limit 20
 
 ### P0 Smoke
 
-1. 회의 허브에서 작업실을 열거나, 승인된 meeting session URL로 작업실을 연다. 회의 허브에서 열린 실제 Chrome 새 탭을 확인하려면 기존 패널 탭이 아니라 새 탭을 Bridge selector로 다시 선택한다. URL을 알고 있고 내부 shell만 확인하면 Bridge-controlled tab을 같은 URL로 직접 이동해 테스트할 수 있다.
+1. 회의 허브에서 작업실을 열거나, 승인된 meeting session URL로 작업실을 연다. 회의 허브는 web-open 우선 경로로 새 탭을 열어야 한다. 열린 실제 Chrome 새 탭을 확인하려면 기존 패널 탭이 아니라 새 탭을 Bridge selector로 다시 선택한다. URL을 알고 있고 내부 shell만 확인하면 Bridge-controlled tab을 같은 URL로 직접 이동해 테스트할 수 있다.
 2. 작업실이 blocked 화면이 아니라 실제 shell로 뜨는지 확인한다.
    - 직접 clean URL만 붙여 넣어 세션이 없으면 blocked 화면이 정상이다.
    - 패널에서 연 owner workspace는 `meetingSessionToken`을 받아 실제 shell로 들어가야 한다.

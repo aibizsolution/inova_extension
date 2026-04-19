@@ -22,6 +22,14 @@
     return openHostedMeetingPage("detail", input, providerIdentity, sender);
   }
 
+  async function prepareWorkspaceOpen(input, providerIdentity, sender) {
+    return prepareHostedMeetingPage("create", input, providerIdentity, sender);
+  }
+
+  async function prepareResultOpen(input, providerIdentity, sender) {
+    return prepareHostedMeetingPage("detail", input, providerIdentity, sender);
+  }
+
   async function authorizeWorkspaceAccess(input, providerIdentity, sender) {
     try {
       const owner = await resolveMeetingProviderIdentity(providerIdentity);
@@ -142,44 +150,24 @@
 
   async function openHostedMeetingPage(mode, input, providerIdentity, sender) {
     try {
-      const owner = await resolveMeetingProviderIdentity(providerIdentity);
-      const meetingId = namespace.session.normalizeText(input?.meetingId) || buildMeetingId();
-      const jobId = namespace.session.normalizeText(input?.jobId);
-      const finalUrl = await buildHostedMeetingCleanUrl({
-        jobId,
-        meetingId,
-        participationId: namespace.session.normalizeText(input?.participationId),
-      });
-      logMeetingDebug("open.start", {
-        input: input || {},
-        mode,
-        providerUserKey: owner.providerUserKey,
-        senderTabId: Number(sender?.tab?.id) || 0,
-        senderTitle: namespace.session.normalizeText(sender?.tab?.title),
-        senderUrl: namespace.session.normalizeText(sender?.url),
-      });
+      const prepared = await prepareHostedMeetingPage(mode, input, providerIdentity, sender);
       logMeetingDebug("tabs.create", {
-        finalUrl,
-        hasWorkspaceHash: String(finalUrl || "").includes("#ws="),
-        meetingId,
+        finalUrl: prepared.url,
+        hasWorkspaceHash: String(prepared.url || "").includes("#ws="),
+        meetingId: prepared.meeting.meetingId,
         mode,
       });
-      const opened = await browserCapability.openUrl(finalUrl);
+      const opened = await browserCapability.openUrl(prepared.url);
       logMeetingDebug("open.success", {
-        finalUrl,
-        meetingId,
+        finalUrl: prepared.url,
+        meetingId: prepared.meeting.meetingId,
         mode,
         tabId: Number(opened?.tabId) || 0,
       });
       return {
-        expiresAt: "",
-        meeting: {
-          meetingId,
-          title: namespace.session.normalizeText(input?.title || sender?.tab?.title) || "새 회의 룸",
-        },
+        ...prepared,
         opened: true,
         tabId: Number(opened?.tabId) || 0,
-        url: finalUrl,
       };
     } catch (error) {
       logMeetingDebug("open.error", {
@@ -188,6 +176,37 @@
       });
       throw error;
     }
+  }
+
+  async function prepareHostedMeetingPage(mode, input, providerIdentity, sender) {
+    const owner = await resolveMeetingProviderIdentity(providerIdentity);
+    const meetingId = namespace.session.normalizeText(input?.meetingId) || buildMeetingId();
+    const jobId = namespace.session.normalizeText(input?.jobId);
+    const finalUrl = await buildHostedMeetingCleanUrl({
+      jobId,
+      meetingId,
+      participationId: namespace.session.normalizeText(input?.participationId),
+    });
+    logMeetingDebug("prepare.success", {
+      hasWorkspaceHash: String(finalUrl || "").includes("#ws="),
+      input: input || {},
+      meetingId,
+      mode,
+      providerUserKey: owner.providerUserKey,
+      senderTabId: Number(sender?.tab?.id) || 0,
+      senderTitle: namespace.session.normalizeText(sender?.tab?.title),
+      senderUrl: namespace.session.normalizeText(sender?.url),
+    });
+    return {
+      expiresAt: "",
+      meeting: {
+        meetingId,
+        title: namespace.session.normalizeText(input?.title || sender?.tab?.title) || "새 회의 룸",
+      },
+      opened: false,
+      tabId: 0,
+      url: finalUrl,
+    };
   }
 
   async function buildHostedMeetingCleanUrl(input) {
@@ -412,6 +431,8 @@
     isHostedWorkspaceSender,
     openResult,
     openWorkspace,
+    prepareResultOpen,
+    prepareWorkspaceOpen,
     probeWorkspaceBridge,
     reconcileSettings: reconcileMeetingWorkspaceSettings,
     revokeShareLink,

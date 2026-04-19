@@ -256,6 +256,20 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /ops_panel_notice_signals/{docId} {
+      allow get: if isHostedPanelSessionActive() && docId == "current";
+      allow list: if false;
+      allow write: if false;
+    }
+
+    match /ops_panel_notice_state/{docId} {
+      allow read, write: if false;
+    }
+
+    match /ops_panel_notices/{noticeId} {
+      allow read, write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

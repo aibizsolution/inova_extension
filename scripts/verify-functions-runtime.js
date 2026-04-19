@@ -106,8 +106,13 @@ function verifySecretManagerWiring() {
       && source.includes("exports.checkInovaAdminAccess")
       && source.includes("exports.issueInovaAdminLaunch")
       && source.includes("exports.exchangeInovaAdminLaunch")
-      && source.includes("exports.readInovaAdminBootstrap"),
-    "Admin access, launch, exchange, and bootstrap endpoints must be registered and exported from functions/index.js"
+      && source.includes("exports.readInovaAdminBootstrap")
+      && source.includes("exports.readInovaPanelNotice")
+      && source.includes("exports.listInovaAdminPanelNotices")
+      && source.includes("exports.saveInovaAdminPanelNotice")
+      && source.includes("exports.publishInovaAdminPanelNotice")
+      && source.includes("exports.archiveInovaAdminPanelNotice"),
+    "Admin access, launch, exchange, bootstrap, and panel notice endpoints must be registered and exported from functions/index.js"
   );
 }
 

@@ -8,6 +8,7 @@ const { JSDOM } = require("jsdom");
 const root = path.resolve(__dirname, "..");
 const hostedMeetingHtmlPath = path.join(root, "hosting", "meeting", "index.html");
 const hostedMeetingCssPath = path.join(root, "hosting", "meeting", "index.css");
+const hostedDesignSystemCssPath = path.join(root, "hosting", "shared", "design-system.css");
 const hostedMeetingRenderPath = path.join(root, "hosting", "meeting", "render.js");
 const hostedMeetingMutationsPath = path.join(root, "hosting", "meeting", "workspace-mutations.js");
 const hostedMeetingDebugPath = path.join(root, "hosting", "meeting", "workspace-debug.js");
@@ -16,6 +17,7 @@ const hostedMeetingPendingUploadsPath = path.join(root, "hosting", "meeting", "w
 function main() {
   const html = fs.readFileSync(hostedMeetingHtmlPath, "utf8");
   const css = fs.readFileSync(hostedMeetingCssPath, "utf8");
+  const designSystemCss = fs.readFileSync(hostedDesignSystemCssPath, "utf8");
   const renderJs = fs.readFileSync(hostedMeetingRenderPath, "utf8");
   const mutationsJs = fs.readFileSync(hostedMeetingMutationsPath, "utf8");
   const debugJs = fs.readFileSync(hostedMeetingDebugPath, "utf8");
@@ -25,6 +27,7 @@ function main() {
 
   const toastNotice = document.getElementById("toastNotice");
   assert(toastNotice, "Hosted workspace should render a header toast notice slot");
+  assert(html.includes('/shared/design-system.css'), "Hosted workspace should load shared design system styles");
   assert.equal(document.getElementById("currentNotice"), null, "Legacy inline recorder notice should be removed");
 
   const headerEditorRow = document.querySelector(".workspace-header__editor-row");
@@ -81,8 +84,8 @@ function main() {
     "Term replacement help tooltip should describe meeting-wide application"
   );
   assert(
-    /\.toast-notice\s*\{[\s\S]*position:\s*fixed;/.test(css),
-    "Hosted workspace toast notice should use fixed positioning so mutation feedback stays visible while scrolling"
+    !css.includes(".toast-notice") && /\.toast-notice\s*\{[\s\S]*position:\s*fixed;/.test(designSystemCss),
+    "Hosted workspace toast notice should use the shared fixed-position design system style"
   );
   assert(
     renderJs.includes("이 기록은 회의 정리가 없는 기록입니다. 원문 탭에서 전사를 확인할 수 있습니다."),

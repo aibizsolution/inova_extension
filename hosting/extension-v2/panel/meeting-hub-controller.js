@@ -46,6 +46,12 @@
     const openMeetingWorkspace = typeof browserCapabilities.openMeetingWorkspace === "function"
       ? browserCapabilities.openMeetingWorkspace
       : async () => ({});
+    const prepareMeetingResultOpen = typeof browserCapabilities.prepareMeetingResultOpen === "function"
+      ? browserCapabilities.prepareMeetingResultOpen
+      : null;
+    const prepareMeetingWorkspaceOpen = typeof browserCapabilities.prepareMeetingWorkspaceOpen === "function"
+      ? browserCapabilities.prepareMeetingWorkspaceOpen
+      : null;
     const readPanelStorageState = typeof browserCapabilities.readPanelStorageState === "function"
       ? browserCapabilities.readPanelStorageState
       : async () => ({});
@@ -270,25 +276,31 @@
       if (state.pending.active) {
         return true;
       }
+      const preliminaryInput = buildActionInput(detail);
+      const launchAction = resolveLaunchAction(normalizedAction, preliminaryInput);
+      const preparedWindow = launchAction ? openBlankMeetingWindow() : null;
       await refreshStorageState();
       const input = buildActionInput(detail);
-      const launchAction = resolveLaunchAction(normalizedAction, input);
 
       if (isShareActionBlocked(normalizedAction)) {
+        closePreparedMeetingWindow(preparedWindow);
         setFeedback("회의 공유 기능이 현재 비활성화되어 있어요.", "error", 3600);
         return true;
       }
 
       if ((normalizedAction === "share" || normalizedAction === "revoke-share" || normalizedAction === "confirm-revoke-share" || normalizedAction === "remove-participation") && !input.meetingId) {
+        closePreparedMeetingWindow(preparedWindow);
         setFeedback("회의 정보를 찾지 못했어요. 다시 시도해 주세요.", "error", 3600);
         return true;
       }
 
       if (launchAction) {
         clearRevokeConfirmation();
-        await handleLaunchAction(launchAction, input);
+        await handleLaunchAction(launchAction, input, { preparedWindow });
         return true;
       }
+
+      closePreparedMeetingWindow(preparedWindow);
 
       if (normalizedAction === "revoke-share") {
         setRevokeConfirmation(input);
@@ -646,7 +658,8 @@
       scheduleRender();
     }
 
-    async function handleLaunchAction(action, input) {
+    async function handleLaunchAction(action, input, options = {}) {
+      let preparedWindow = options?.preparedWindow || null;
       setPending({
         action,
         jobId: input.jobId,
@@ -661,20 +674,36 @@
           title: input.title,
         });
         const providerIdentity = buildProviderIdentityPayload(state.providerIdentity);
-        const openPromise = action === "open-result"
-          ? openMeetingResult(input, providerIdentity)
-          : openMeetingWorkspace(input, providerIdentity);
+        const preparedOpen = await prepareMeetingLaunchOpen(action, input, providerIdentity);
+        let openMode = "runtime-broker";
+        let result = null;
+        if (preparedOpen?.url && openPreparedMeetingWindow(preparedWindow, preparedOpen.url)) {
+          preparedWindow = null;
+          openMode = "web-window";
+          result = {
+            ...preparedOpen,
+            opened: true,
+          };
+        } else {
+          closePreparedMeetingWindow(preparedWindow);
+          preparedWindow = null;
+          const openPromise = action === "open-result"
+            ? openMeetingResult(input, providerIdentity)
+            : openMeetingWorkspace(input, providerIdentity);
+          result = await openPromise;
+        }
         traceMeeting("64.top.meeting.launch.dispatched", {
           action,
           jobId: input.jobId,
           meetingId: input.meetingId,
+          mode: openMode,
           title: input.title,
         });
-        const result = await openPromise;
         traceMeeting("65.top.meeting.launch.accepted", {
           action,
           jobId: input.jobId,
           meetingId: input.meetingId,
+          mode: openMode,
           opened: Boolean(result?.opened),
           title: input.title,
           url: normalizeText(result?.url),
@@ -687,6 +716,7 @@
         );
         setFeedback(action === "open-result" ? "결과 탭을 열었습니다." : "작업실 탭을 열었습니다.", "info", 1800);
       } catch (error) {
+        closePreparedMeetingWindow(preparedWindow);
         traceMeeting("65.top.meeting.launch.error", {
           action,
           error: readErrorMessage(error, "작업실을 열지 못했어요. 다시 시도해 주세요."),
@@ -703,6 +733,85 @@
         setFeedback(readErrorMessage(error, "작업실을 열지 못했어요. 다시 시도해 주세요."), "error", 3600);
       } finally {
         clearPending();
+      }
+      return true;
+    }
+
+    async function prepareMeetingLaunchOpen(action, input, providerIdentity) {
+      const prepareOpen = action === "open-result"
+        ? prepareMeetingResultOpen
+        : prepareMeetingWorkspaceOpen;
+      if (typeof prepareOpen !== "function") {
+        return null;
+      }
+      try {
+        const result = await prepareOpen(input, providerIdentity);
+        traceMeeting("64.top.meeting.launch.prepared", {
+          action,
+          jobId: input.jobId,
+          meetingId: input.meetingId,
+          url: normalizeText(result?.url),
+        });
+        return result;
+      } catch (error) {
+        traceMeeting("64.top.meeting.launch.prepare-error", {
+          action,
+          error: readErrorMessage(error, "회의 탭 URL을 준비하지 못했어요."),
+          jobId: input.jobId,
+          meetingId: input.meetingId,
+        });
+        return null;
+      }
+    }
+
+    function openBlankMeetingWindow() {
+      if (typeof global.open !== "function") {
+        return null;
+      }
+      return global.open("about:blank", "_blank");
+    }
+
+    function openPreparedMeetingWindow(openedWindow, url) {
+      const nextUrl = normalizeText(url);
+      if (!nextUrl) {
+        return false;
+      }
+      if (openedWindow && !openedWindow.closed) {
+        openedWindow.location.href = nextUrl;
+        return detachOpenedWindow(openedWindow);
+      }
+      if (typeof global.open !== "function") {
+        return false;
+      }
+      const nextWindow = global.open(nextUrl, "_blank");
+      return detachOpenedWindow(nextWindow);
+    }
+
+    function closePreparedMeetingWindow(openedWindow) {
+      if (!openedWindow || openedWindow.closed || typeof openedWindow.close !== "function") {
+        return false;
+      }
+      try {
+        openedWindow.close();
+        return true;
+      } catch (error) {
+        traceMeeting("64.top.meeting.launch.blank-close-skip", {
+          error: readErrorMessage(error, "blank tab close skipped"),
+        });
+        return false;
+      }
+    }
+
+    function detachOpenedWindow(openedWindow) {
+      if (!openedWindow) {
+        return false;
+      }
+      try {
+        openedWindow.opener = null;
+      } catch (error) {
+        traceMeeting("64.top.meeting.launch.detach-skip", {
+          error: readErrorMessage(error, "opener detach skipped"),
+        });
       }
       return true;
     }

@@ -229,6 +229,38 @@ async function verifyExtensionCapabilityClientPageAllowlist() {
       providerUserKey: "admin-user-1",
     },
   });
+
+  await browserCapabilities.prepareMeetingWorkspaceOpen({
+    meetingId: "meeting-alpha",
+  }, {
+    providerUserKey: "meeting-user-1",
+  });
+  assert.deepEqual(runtimeCalls.at(-1), {
+    action: "meeting.workspace.prepare-open",
+    input: {
+      meetingId: "meeting-alpha",
+    },
+    providerIdentity: {
+      providerUserKey: "meeting-user-1",
+    },
+  });
+
+  await browserCapabilities.prepareMeetingResultOpen({
+    jobId: "job-alpha",
+    meetingId: "meeting-alpha",
+  }, {
+    providerUserKey: "meeting-user-1",
+  });
+  assert.deepEqual(runtimeCalls.at(-1), {
+    action: "meeting.result.prepare-open",
+    input: {
+      jobId: "job-alpha",
+      meetingId: "meeting-alpha",
+    },
+    providerIdentity: {
+      providerUserKey: "meeting-user-1",
+    },
+  });
 }
 
 function cloneValue(value) {

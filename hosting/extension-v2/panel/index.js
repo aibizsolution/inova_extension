@@ -112,6 +112,12 @@
     scheduleRender,
     traceAdmin: traceAdminFlow,
   }) || null;
+  const panelNoticeController = namespace.panelNoticeController?.create?.({
+    browserCapabilities,
+    scheduleRender,
+    traceFirestore: traceFirestoreFlow,
+    traceNotice: traceNoticeFlow,
+  }) || null;
   const conversationController = namespace.conversationController?.create?.({
     browserCapabilities,
     featureUsageTracker,
@@ -184,6 +190,10 @@
     root.addEventListener("pointermove", handleRootPointerMove);
     root.addEventListener("pointerup", handleRootPointerEnd);
     root.addEventListener("pointercancel", handleRootPointerEnd);
+    root.addEventListener("pointerover", handleRootPointerOver);
+    root.addEventListener("pointerout", handleRootPointerOut);
+    root.addEventListener("focusin", handleRootFocusIn);
+    root.addEventListener("focusout", handleRootFocusOut);
     root.addEventListener("compositionstart", handleRootCompositionStart);
     root.addEventListener("compositionend", handleRootCompositionEnd);
     root.addEventListener("search", handleRootSearch, true);
@@ -1211,6 +1221,7 @@
 
     renderToastIfNeeded(elements.toolToast);
     renderToolContentIfNeeded(elements.toolContent, panelState);
+    renderPanelNoticeIfNeeded(elements.panelNotice);
 
     if (panelState.activeTool === "prompts" && effectivePromptTool?.activeTab === "store") {
       namespace.promptToolPanel?.syncStoreList?.(elements.app, callbacks, {
@@ -1246,6 +1257,7 @@
     return {
       app: root.querySelector(".inova-hosted-panel-app"),
       fileInput: root.querySelector("#inova-prompt-import-file"),
+      panelNotice: root.querySelector("#inova-panel-notice-slot"),
       toolContent: root.querySelector("#inova-tool-content"),
       toolRail: root.querySelector("#inova-tool-rail"),
       toolToast: root.querySelector("#inova-tool-toast-slot"),
@@ -1271,10 +1283,12 @@
     meetingHubController?.syncPanelState?.(panelState, effectiveCapabilities);
     releaseController?.syncPanelState?.(panelState, effectiveCapabilities);
     adminEntryController?.syncPanelState?.(panelState, effectiveCapabilities);
+    panelNoticeController?.syncPanelState?.(panelState, effectiveCapabilities);
   }
 
   function createPanelRenderCache() {
     return {
+      panelNoticeHtml: "",
       toolToastKey: "",
       toolContentHtml: "",
       toolContentKey: "",
@@ -1314,6 +1328,20 @@
     if (toolContent.innerHTML !== state.renderCache.toolContentHtml) {
       toolContent.innerHTML = state.renderCache.toolContentHtml;
     }
+  }
+
+  function renderPanelNoticeIfNeeded(panelNotice) {
+    if (!(panelNotice instanceof global.HTMLElement)) {
+      return;
+    }
+    const nextNoticeHtml = panelNoticeController?.render?.() || "";
+    if (state.renderCache.panelNoticeHtml === nextNoticeHtml) {
+      return;
+    }
+    state.renderCache.panelNoticeHtml = nextNoticeHtml;
+    panelNotice.hidden = !nextNoticeHtml;
+    panelNotice.innerHTML = nextNoticeHtml;
+    state.elements?.app?.classList.toggle("has-panel-notice", Boolean(nextNoticeHtml));
   }
 
   function buildToolContentKey(panelState) {
@@ -1385,54 +1413,7 @@
 
   function renderToolRailIcon(toolId) {
     const normalizedTool = normalizeText(toolId);
-    // Lucide icon paths are inlined to keep the hosted panel CDN-free.
-    if (normalizedTool === "admin") {
-      return `
-        <svg viewBox="0 0 24 24" focusable="false">
-          <path d="M12 3 4 6v5c0 5 3.4 8.8 8 10 4.6-1.2 8-5 8-10V6z"></path>
-          <path d="M9.5 12.5 11 14l3.5-4"></path>
-        </svg>
-      `;
-    }
-    if (normalizedTool === "meeting") {
-      return `
-        <svg viewBox="0 0 24 24" focusable="false">
-          <path d="M16 10a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 14.286V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
-          <path d="M20 9a2 2 0 0 1 2 2v10.286a.71.71 0 0 1-1.212.502l-2.202-2.202A2 2 0 0 0 17.172 19H10a2 2 0 0 1-2-2v-1"></path>
-        </svg>
-      `;
-    }
-    if (normalizedTool === "prompts") {
-      return `
-        <svg viewBox="0 0 24 24" focusable="false">
-          <path d="M2 6h4"></path>
-          <path d="M2 10h4"></path>
-          <path d="M2 14h4"></path>
-          <path d="M2 18h4"></path>
-          <rect width="16" height="20" x="4" y="2" rx="2"></rect>
-          <path d="M9.5 8h5"></path>
-          <path d="M9.5 12H16"></path>
-          <path d="M9.5 16H14"></path>
-        </svg>
-      `;
-    }
-    if (normalizedTool === "release") {
-      return `
-        <svg viewBox="0 0 24 24" focusable="false">
-          <path d="M12 15V3"></path>
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-          <path d="m7 10 5 5 5-5"></path>
-        </svg>
-      `;
-    }
-    return `
-      <svg viewBox="0 0 24 24" focusable="false">
-        <path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"></path>
-        <path d="M7 11h10"></path>
-        <path d="M7 15h6"></path>
-        <path d="M7 7h8"></path>
-      </svg>
-    `;
+    return global.InovaDesignSystem?.renderIcon?.(normalizedTool) || "";
   }
 
   function buildHostedToolItems() {
@@ -1716,6 +1697,7 @@
               <div id="inova-tool-toast-slot" hidden></div>
             </header>
             <div id="inova-tool-content"></div>
+            <div id="inova-panel-notice-slot" hidden></div>
           </section>
         </div>
         <input id="inova-prompt-import-file" name="inova-prompt-import-file" type="file" accept="application/json,.json" hidden />
@@ -1773,6 +1755,10 @@
           menu.removeAttribute("open");
         }
       });
+    }
+    if (panelNoticeController?.handleClick?.(event)) {
+      renderPanelNoticeIfNeeded(state.elements?.panelNotice);
+      return;
     }
     const toolButton = target.closest?.("[data-tool-id]");
     if (toolButton) {
@@ -1899,6 +1885,44 @@
       return;
     }
     namespace.promptToolPanel?.handlePointerEnd?.(event, host, callbacks);
+  }
+
+  function handleRootPointerOver(event) {
+    handlePanelNoticePauseBoundary(event, true);
+  }
+
+  function handleRootPointerOut(event) {
+    handlePanelNoticePauseBoundary(event, false);
+  }
+
+  function handleRootFocusIn(event) {
+    handlePanelNoticeFocusBoundary(event, true);
+  }
+
+  function handleRootFocusOut(event) {
+    handlePanelNoticeFocusBoundary(event, false);
+  }
+
+  function handlePanelNoticePauseBoundary(event, paused) {
+    const notice = state.elements?.panelNotice;
+    if (!(notice instanceof global.HTMLElement) || !event.target?.closest?.(".inova-panel-notice")) {
+      return;
+    }
+    if (!paused && notice.contains(event.relatedTarget)) {
+      return;
+    }
+    panelNoticeController?.handlePause?.(paused);
+  }
+
+  function handlePanelNoticeFocusBoundary(event, paused) {
+    const notice = state.elements?.panelNotice;
+    if (!(notice instanceof global.HTMLElement) || !event.target?.closest?.(".inova-panel-notice")) {
+      return;
+    }
+    if (!paused && notice.contains(event.relatedTarget)) {
+      return;
+    }
+    panelNoticeController?.handlePause?.(paused);
   }
 
   function handleRootCompositionStart(event) {
@@ -2427,6 +2451,10 @@
 
   function traceReleaseFlow(step, payload = {}) {
     postTrace("release", step, payload);
+  }
+
+  function traceNoticeFlow(step, payload = {}) {
+    postTrace("notice", step, payload);
   }
 
   function postTrace(channel, step, payload = {}) {

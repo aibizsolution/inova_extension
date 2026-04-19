@@ -147,9 +147,16 @@ exports.recordPromptStoreView = storeHandlers.recordPromptStoreView;
 exports.reviewInovaPrompt = promptReviewHandlers.reviewInovaPrompt;
 exports.commitInovaFeatureUsageBatch = featureUsageHandlers.commitInovaFeatureUsageBatch;
 exports.checkInovaAdminAccess = adminHandlers.checkInovaAdminAccess;
+exports.deleteInovaAdminPanelNotice = adminHandlers.deleteInovaAdminPanelNotice;
 exports.exchangeInovaAdminLaunch = adminHandlers.exchangeInovaAdminLaunch;
 exports.issueInovaAdminLaunch = adminHandlers.issueInovaAdminLaunch;
+exports.archiveInovaAdminPanelNotice = adminHandlers.archiveInovaAdminPanelNotice;
+exports.listInovaAdminPanelNotices = adminHandlers.listInovaAdminPanelNotices;
+exports.moveInovaAdminPanelNotice = adminHandlers.moveInovaAdminPanelNotice;
+exports.publishInovaAdminPanelNotice = adminHandlers.publishInovaAdminPanelNotice;
 exports.readInovaAdminBootstrap = adminHandlers.readInovaAdminBootstrap;
+exports.readInovaPanelNotice = adminHandlers.readInovaPanelNotice;
+exports.saveInovaAdminPanelNotice = adminHandlers.saveInovaAdminPanelNotice;
 
 exports.issueInovaPromptPanelAuth = promptLibraryHandlers.issueInovaPromptPanelAuth;
 exports.issueInovaPromptPanelAuthV2 = promptLibraryV2Handlers.issueInovaPromptPanelAuth;

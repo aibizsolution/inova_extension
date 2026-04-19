@@ -43,6 +43,7 @@
       ...buildFunctionCapabilityCatalog([
       ["admin.access.check", "checkInovaAdminAccessUrl", "admin", "admin", "admin", "read"],
       ["admin.launch.issue-function", "issueInovaAdminLaunchUrl", "admin", "admin", "admin", "auth"],
+      ["panel.notice.read-active", "readInovaPanelNoticeUrl", "admin", "admin", "panel", "read"],
       ["meeting.list", "listInovaMeetingsUrl", "meeting", "meeting", "meeting", "read"],
       ["meeting.panel-auth.issue-function", "issueInovaMeetingPanelAuthUrl", "meeting", "meeting", "meeting", "auth"],
       ["meeting.participation.hide-function", "hideInovaMeetingParticipationUrl", "meeting", "meeting", "meeting", "write"],
@@ -107,6 +108,7 @@
       "reviewInovaPromptUrl",
       "revokeInovaMeetingShareLinkUrl",
       "readInovaAdminBootstrapUrl",
+      "readInovaPanelNoticeUrl",
       "syncInovaPromptLibraryUrl",
       "togglePromptStoreLikeUrl",
       "unpublishPromptFromStoreUrl",

@@ -440,6 +440,7 @@ function verifyHostedPanelFiles(directoryName) {
   assert(html.includes("./runtime.js"), "hosted panel should load runtime bootstrap");
   if (directoryName === "extension-v2") {
     assert(html.includes("./panel-utils.js"), "v2 hosted panel should load shared panel utilities");
+    assert(html.includes("../../shared/design-system.js"), "v2 hosted panel should load shared design system primitives");
     assert(html.includes("./base-firestore-client.js"), "v2 hosted panel should load the shared Firestore reader lifecycle factory");
     assert(html.includes("./extension-capability-client.js"), "v2 hosted panel should load the hosted extension capability client");
     assert(html.includes("./feature-usage-tracker.js"), "v2 hosted panel should load the local feature usage tracker");
@@ -487,6 +488,8 @@ function verifyHostedPanelFiles(directoryName) {
     );
     assert(
       html.indexOf("./panel-utils.js") > html.indexOf("./runtime.js")
+        && html.indexOf("../../shared/design-system.js") > html.indexOf("./panel-utils.js")
+        && html.indexOf("../../shared/design-system.js") < html.indexOf("./extension-capability-client.js")
         && html.indexOf("./panel-utils.js") < html.indexOf("./panel-firestore-session-client.js")
         && html.indexOf("./panel-firestore-session-client.js") > html.indexOf("./extension-capability-client.js")
         && html.indexOf("./feature-usage-tracker.js") > html.indexOf("./extension-capability-client.js")

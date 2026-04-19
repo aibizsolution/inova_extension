@@ -35,6 +35,21 @@
 - 현재 활성 `1.0.0` bundle과 공유 계약에서 빠진 legacy extension panel 코드는 활성 경로에 계속 섞어 두지 않는다. 이런 코드는 `backup/legacy-panel/*` 같은 격리 위치로 보내 `참고본`으로만 남기거나, 참고 가치가 끝나면 삭제하는 쪽을 기본 선택으로 삼는다.
 - 격리된 legacy panel 코드는 `0.4.4` 사용자 영향 판단이 필요할 때만 본다. 즉 `DB/Functions`나 shared server contract를 바꾸는 작업에서는 backup legacy를 비교 기준으로 삼되, 그 외 순수 panel v2 migration에서는 활성 v2 bundle 정상 동작 여부를 우선 기준으로 삼는다.
 
+## 상태 동기화 기본값
+
+- 상태 변경 감지는 polling이 아니라 subscription, push event, explicit user action, invalidation signal을 기본값으로 삼는다.
+- 서버/DB/API를 주기적으로 읽어 변경 여부를 확인하는 코드는 비용과 부하를 계속 만든다. 따라서 기본 구현으로 선택하지 않는다.
+- polling이 필요한 예외는 먼저 `왜 event/subscription 방식이 불가능한지`, `비용과 호출 주기`, `백오프와 중단 조건`을 설명하고 사용자 허락을 받은 뒤에만 구현한다.
+- 로컬 UI 타이머는 허용되지만 네트워크나 저장소 read를 반복시키는 순간 polling으로 취급한다.
+
+## 검증 가능한 새 탭 기본값
+
+- hosted 화면에서 새 탭을 여는 기능은 먼저 web platform으로 열 수 있는지 본다.
+- launch token, session, workspace URL처럼 async 준비가 필요한 경우에도 사용자 activation 안에서 빈 탭을 먼저 만들고 준비된 URL로 이동시키는 구조를 우선한다.
+- background의 `chrome.tabs.create`는 hosted에서 직접 열 수 없는 경우의 fallback 또는 extension-only 책임으로 제한한다.
+- 새 탭 대상의 내부 화면 검증이 필요한 기능은 최종 URL을 controller 결과와 trace에서 확인할 수 있게 두어야 한다. 단, secret token은 보고나 로그에 원문으로 노출하지 않는다.
+- 같은 기능이 사용자에게 새 탭을 열어야 한다면, 검증 경로 때문에 같은 탭 전환으로 UX를 바꾸지 않는다. 사용자 UX는 새 탭으로 유지하고, 구현 경로만 Bridge가 추적 가능한 web-open 우선으로 둔다.
+
 ## 모듈화 판단 질문
 
 새 기능을 넣거나 기존 구조를 바꿀 때는 먼저 아래 질문으로 책임 경계를 판단한다.
@@ -68,6 +83,13 @@
 - fallback은 핵심 실패를 성공처럼 보이게 만드는 장치가 아니라, 제한된 상태를 드러내는 장치여야 한다.
 - 같은 구조 문제나 tradeoff가 여러 곳에서 반복되면, 개별 함수 분리나 조건문 추가만 반복하지 않는다.
 - 이 경우는 빌드 구조, 공용 contract, recovery layer, adapter 경계 같은 시스템 차원의 해법을 먼저 검토한다.
+
+## Design System 우선 원칙
+
+- hosted 화면 UI를 만들거나 수정할 때는 먼저 `docs/design-system.md`와 `hosting/shared/design-system.*`를 확인한다.
+- 이미 있는 primitive는 화면별 CSS/JS로 다시 만들지 않고 공용 계약을 사용한다.
+- 아직 primitive가 없고 두 화면 이상에서 반복될 가능성이 있으면, feature-local 구현보다 design system primitive 추가를 우선한다.
+- 짧은 action feedback은 공용 toast를 기본으로 쓰고, inline feedback은 field validation이나 지속적으로 보여야 하는 degraded/error 상태에만 둔다.
 
 ## 문서 계층
 
