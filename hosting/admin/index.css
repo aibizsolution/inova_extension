@@ -281,14 +281,13 @@ h3 {
   min-height: 0;
   height: 100%;
   display: grid;
-  grid-template-columns: 340px minmax(420px, 1fr) 320px;
+  grid-template-columns: 340px minmax(520px, 1fr);
   gap: 16px;
   align-items: stretch;
 }
 
 .admin-access-list,
-.admin-access-profile,
-.admin-access-policy {
+.admin-access-detail {
   min-width: 0;
   min-height: 0;
   border: 1px solid var(--line);
@@ -297,14 +296,13 @@ h3 {
   padding: 18px;
 }
 
-.admin-access-list,
-.admin-access-policy {
+.admin-access-list {
   display: grid;
   align-content: start;
   gap: 14px;
 }
 
-.admin-access-profile {
+.admin-access-detail {
   display: grid;
   align-content: start;
   gap: 18px;
@@ -353,8 +351,7 @@ h3 {
   box-shadow: 0 0 0 3px rgba(12, 122, 166, 0.12);
 }
 
-.admin-access-filter,
-.admin-access-segmented {
+.admin-access-filter {
   width: 100%;
 }
 
@@ -464,8 +461,7 @@ h3 {
   font-weight: 700;
 }
 
-.admin-access-fields,
-.admin-access-compact-fields {
+.admin-access-fields {
   display: grid;
   gap: 1px;
   overflow: hidden;
@@ -478,8 +474,7 @@ h3 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.admin-access-fields div,
-.admin-access-compact-fields div {
+.admin-access-fields div {
   min-width: 0;
   display: grid;
   gap: 5px;
@@ -487,15 +482,13 @@ h3 {
   padding: 13px;
 }
 
-.admin-access-fields dt,
-.admin-access-compact-fields dt {
+.admin-access-fields dt {
   color: var(--muted);
   font-size: 12px;
   font-weight: 800;
 }
 
-.admin-access-fields dd,
-.admin-access-compact-fields dd {
+.admin-access-fields dd {
   min-width: 0;
   overflow: hidden;
   margin: 0;
@@ -506,104 +499,29 @@ h3 {
   white-space: nowrap;
 }
 
-.admin-access-control-group {
-  display: grid;
-  gap: 8px;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.admin-access-form-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.admin-access-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.admin-access-policy__block {
+.admin-access-grant {
   min-width: 0;
   display: grid;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface-raised);
   padding: 14px;
 }
 
-.admin-access-policy__block > strong {
-  font-size: 14px;
-}
-
-.admin-access-checklist,
-.admin-access-flow {
-  display: grid;
-  gap: 9px;
-  margin: 0;
-  padding: 0;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.45;
-}
-
-.admin-access-checklist li,
-.admin-access-flow li {
+.admin-access-selected-label {
   min-width: 0;
-  display: grid;
-  grid-template-columns: 18px minmax(0, 1fr);
-  gap: 8px;
-  align-items: start;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
 }
 
-.admin-access-checklist li {
-  list-style: none;
-}
-
-.admin-access-checklist span {
-  width: 18px;
-  height: 18px;
-  display: inline-grid;
-  place-items: center;
-  border: 1px solid #afdcbf;
-  border-radius: 999px;
-  background: var(--success-soft);
-}
-
-.admin-access-checklist span::after {
-  content: "";
-  width: 6px;
-  height: 9px;
-  border-right: 2px solid var(--success);
-  border-bottom: 2px solid var(--success);
-  transform: rotate(45deg) translate(-1px, -1px);
-}
-
-.admin-access-flow {
-  counter-reset: access-flow;
-}
-
-.admin-access-flow li {
-  list-style: none;
-  counter-increment: access-flow;
-}
-
-.admin-access-flow li::before {
-  width: 18px;
-  height: 18px;
-  display: inline-grid;
-  place-items: center;
-  border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  content: counter(access-flow);
-  font-size: 11px;
-  font-weight: 900;
+.admin-access-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .admin-access-empty {

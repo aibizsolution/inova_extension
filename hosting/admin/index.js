@@ -10,14 +10,9 @@
   const LOCAL_DEFAULT_ADMIN_EMAIL = "youngtack.park@incross.com";
   const ACCESS_FILTERS = Object.freeze([
     { id: "all", label: "전체" },
-    { id: "active", label: "활성" },
-    { id: "draft", label: "초안" },
-    { id: "inactive", label: "비활성" },
-  ]);
-  const ACCESS_ROLE_OPTIONS = Object.freeze([
-    { id: "owner", label: "Owner" },
-    { id: "admin", label: "Admin" },
-    { id: "viewer", label: "Viewer" },
+    { id: "active", label: "관리자" },
+    { id: "pending", label: "등록 대기" },
+    { id: "inactive", label: "권한 없음" },
   ]);
   const ADMIN_SECTIONS = Object.freeze([
     {
@@ -35,7 +30,7 @@
       icon: "users",
       id: "access",
       label: "사용자 및 권한",
-      summary: "관리자 계정과 접근 상태를 검토합니다.",
+      summary: "전체 회의 리스트 접근 권한과 관리자 계정을 관리합니다.",
       title: "사용자 및 권한",
     },
     {
@@ -495,8 +490,7 @@
     wrapper.className = "admin-access-workbench";
     wrapper.append(
       createAccessListPanel(entries, visibleEntries, selectedEntry),
-      createAccessProfilePanel(selectedEntry),
-      createAccessPolicyPanel()
+      createAccessDetailPanel(selectedEntry)
     );
     wrapper.addEventListener("input", handleAccessInput);
     wrapper.addEventListener("click", handleAccessClick);
@@ -518,14 +512,14 @@
 
     panel.innerHTML = `
       <div class="inova-section-head admin-access-panel-head">
-        <h3 class="inova-section-head__title">관리자 계정</h3>
-        <span class="admin-access-count">${visibleEntries.length}/${entries.length}</span>
+        <h3 class="inova-section-head__title">사용자</h3>
+        <span class="admin-access-count">${visibleEntries.length}명</span>
       </div>
       <label class="admin-access-search">
         <span>검색</span>
-        <input type="search" data-access-search value="${escapeHtmlAttribute(state.access.query)}" placeholder="이름, 이메일, provider key" />
+        <input type="search" data-access-search value="${escapeHtmlAttribute(state.access.query)}" placeholder="이름 또는 이메일 검색" />
       </label>
-      <div class="admin-access-filter inova-segmented" aria-label="권한 상태 필터">
+      <div class="admin-access-filter inova-segmented" aria-label="관리자 상태 필터">
         ${filterButtons}
       </div>
       <div class="admin-access-list__items">
@@ -549,113 +543,55 @@
     `;
   }
 
-  function createAccessProfilePanel(entry) {
+  function createAccessDetailPanel(entry) {
     const selectedEntry = entry || readAccessPreviewEntries()[0];
-    const roleButtons = ACCESS_ROLE_OPTIONS.map((role) => {
-      const isSelected = normalizeText(selectedEntry?.role).toLowerCase() === role.id;
-      return `
-        <button type="button" disabled aria-pressed="${isSelected ? "true" : "false"}">
-          ${escapeHtml(role.label)}
-        </button>`;
-    }).join("");
     const statusLabel = readAccessStatusLabel(selectedEntry?.status);
-    const sourceLabel = readAccessSourceLabel(selectedEntry?.source);
-    const sourceBadgeClass = selectedEntry?.source === "local" ? "inova-badge--info" : "inova-badge--muted";
+    const detailEmail = selectedEntry?.email || "-";
+    const detailName = selectedEntry?.displayName || "-";
 
     const panel = global.document.createElement("section");
-    panel.className = "admin-access-profile";
+    panel.className = "admin-access-detail";
     panel.innerHTML = `
       <div class="inova-section-head admin-access-panel-head">
-        <h3 class="inova-section-head__title">권한 프로필</h3>
-        <span class="inova-badge ${escapeHtmlAttribute(sourceBadgeClass)}">${escapeHtml(sourceLabel)}</span>
+        <h3 class="inova-section-head__title">권한 설정</h3>
+        <span class="inova-badge inova-badge--info">전체 회의 보기 가능</span>
       </div>
+      <div class="admin-access-grant">
+        <label class="admin-notice-field">
+          <span>관리자 이메일</span>
+          <input placeholder="name@incross.com" disabled />
+        </label>
+        <button type="button" class="admin-primary-button is-strong" title="아직 연결되지 않은 기능입니다." disabled>관리자 권한 부여</button>
+      </div>
+      <div class="admin-access-selected-label">선택한 사용자</div>
       <div class="admin-access-profile__hero">
         <span class="admin-access-avatar is-large" aria-hidden="true">${escapeHtml(readAccessInitial(selectedEntry))}</span>
         <div>
-          <strong>${escapeHtml(selectedEntry?.displayName || "-")}</strong>
-          <span>${escapeHtml(selectedEntry?.email || "-")}</span>
+          <strong>${escapeHtml(detailName)}</strong>
+          <span>${escapeHtml(detailEmail)}</span>
         </div>
         <span class="inova-badge ${escapeHtmlAttribute(readAccessStatusClass(selectedEntry?.status))}">${escapeHtml(statusLabel)}</span>
       </div>
       <dl class="admin-access-fields">
         <div>
-          <dt>Provider Key</dt>
-          <dd>${escapeHtml(selectedEntry?.providerUserKey || "-")}</dd>
+          <dt>전체 회의 보기</dt>
+          <dd>허용</dd>
         </div>
         <div>
-          <dt>권한</dt>
-          <dd>${escapeHtml(normalizeAdminRole(selectedEntry?.role) || "admin")}</dd>
+          <dt>관리자 권한</dt>
+          <dd>보유</dd>
         </div>
         <div>
-          <dt>범위</dt>
-          <dd>${escapeHtml(selectedEntry?.scope || "-")}</dd>
+          <dt>권한 상태</dt>
+          <dd>${escapeHtml(statusLabel)}</dd>
         </div>
         <div>
-          <dt>최근 확인</dt>
-          <dd>${escapeHtml(selectedEntry?.lastCheckedAt || "-")}</dd>
+          <dt>변경 기능</dt>
+          <dd>준비 중</dd>
         </div>
       </dl>
-      <div class="admin-access-control-group">
-        <span>역할</span>
-        <div class="admin-access-segmented inova-segmented" aria-label="관리자 역할">
-          ${roleButtons}
-        </div>
-      </div>
-      <div class="admin-access-form-grid">
-        <label class="admin-notice-field">
-          <span>표시 이름</span>
-          <input value="${escapeHtmlAttribute(selectedEntry?.displayName || "")}" disabled />
-        </label>
-        <label class="admin-notice-field">
-          <span>이메일</span>
-          <input value="${escapeHtmlAttribute(selectedEntry?.email || "")}" disabled />
-        </label>
-      </div>
       <div class="admin-access-actions">
-        <button type="button" class="admin-primary-button is-strong" disabled>변경 저장</button>
-        <button type="button" class="admin-secondary-button" disabled>권한 회수</button>
-      </div>
-    `;
-    return panel;
-  }
-
-  function createAccessPolicyPanel() {
-    const sessionExpiresAt = formatDateTime(state.sessionExpiresAt);
-    const panel = global.document.createElement("section");
-    panel.className = "admin-access-policy";
-    panel.innerHTML = `
-      <div class="inova-section-head admin-access-panel-head">
-        <h3 class="inova-section-head__title">접근 정책</h3>
-      </div>
-      <div class="admin-access-policy__block">
-        <strong>권한 소스</strong>
-        <ul class="admin-access-checklist">
-          <li><span></span>환경 allowlist 이메일</li>
-          <li><span></span>Firestore 관리자 문서</li>
-          <li><span></span>AdminSession 재검증</li>
-        </ul>
-      </div>
-      <div class="admin-access-policy__block">
-        <strong>세션 흐름</strong>
-        <ol class="admin-access-flow">
-          <li>패널 권한 확인</li>
-          <li>Launch token 발급</li>
-          <li>AdminSession 교환</li>
-          <li>관리 API 호출</li>
-        </ol>
-      </div>
-      <div class="admin-access-policy__block">
-        <strong>현재 세션</strong>
-        <dl class="admin-access-compact-fields">
-          <div>
-            <dt>권한</dt>
-            <dd>${escapeHtml(state.role || "admin")}</dd>
-          </div>
-          <div>
-            <dt>만료</dt>
-            <dd>${escapeHtml(sessionExpiresAt)}</dd>
-          </div>
-        </dl>
+        <button type="button" class="admin-secondary-button" title="아직 연결되지 않은 기능입니다." disabled>관리자 권한 회수</button>
       </div>
     `;
     return panel;
@@ -1128,11 +1064,9 @@
       displayName: viewer.displayName || viewerKey || "현재 관리자",
       email: viewerEmail,
       id: "current-session",
-      lastCheckedAt: "현재 세션",
       providerUserKey: viewerKey || "session-provider",
-      role: normalizeAdminRole(state.role) || "admin",
-      scope: "관리자 콘솔",
-      source: viewerEmail === LOCAL_DEFAULT_ADMIN_EMAIL ? "local" : "session",
+      role: "admin",
+      scope: "전체 회의 보기",
       status: "active",
     }];
 
@@ -1141,26 +1075,12 @@
         displayName: "박영탁",
         email: LOCAL_DEFAULT_ADMIN_EMAIL,
         id: "local-default",
-        lastCheckedAt: "로컬 에뮬레이터",
         providerUserKey: "email allowlist",
         role: "admin",
-        scope: "로컬 관리자",
-        source: "local",
+        scope: "전체 회의 보기",
         status: "active",
       });
     }
-
-    entries.push({
-      displayName: "신규 관리자",
-      email: "new.admin@incross.com",
-      id: "draft-access",
-      lastCheckedAt: "작성 전",
-      providerUserKey: "미등록",
-      role: "viewer",
-      scope: "초안",
-      source: "draft",
-      status: "draft",
-    });
 
     return entries;
   }
@@ -1173,7 +1093,6 @@
       const haystack = [
         entry.displayName,
         entry.email,
-        entry.providerUserKey,
         entry.role,
         entry.scope,
       ].join(" ").toLowerCase();
@@ -1200,13 +1119,13 @@
   function readAccessStatusLabel(statusInput) {
     const status = normalizeText(statusInput).toLowerCase();
     if (status === "active") {
-      return "활성";
+      return "관리자";
     }
     if (status === "inactive") {
-      return "비활성";
+      return "권한 없음";
     }
-    if (status === "draft") {
-      return "초안";
+    if (status === "pending") {
+      return "등록 대기";
     }
     return "확인 필요";
   }
@@ -1219,29 +1138,10 @@
     if (status === "inactive") {
       return "inova-badge--muted";
     }
-    if (status === "draft") {
+    if (status === "pending") {
       return "inova-badge--warning";
     }
     return "inova-badge--muted";
-  }
-
-  function readAccessSourceLabel(sourceInput) {
-    const source = normalizeText(sourceInput).toLowerCase();
-    if (source === "local") {
-      return "로컬 allowlist";
-    }
-    if (source === "draft") {
-      return "초안";
-    }
-    return "현재 세션";
-  }
-
-  function normalizeAdminRole(roleInput) {
-    const role = normalizeText(roleInput).toLowerCase();
-    if (role === "owner" || role === "admin" || role === "viewer") {
-      return role;
-    }
-    return role || "admin";
   }
 
   function createNoticeState() {
