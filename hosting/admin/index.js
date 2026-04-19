@@ -11,8 +11,7 @@
   const ACCESS_FILTERS = Object.freeze([
     { id: "all", label: "전체" },
     { id: "active", label: "관리자" },
-    { id: "pending", label: "등록 대기" },
-    { id: "inactive", label: "권한 없음" },
+    { id: "inactive", label: "일반 사용자" },
   ]);
   const ADMIN_SECTIONS = Object.freeze([
     {
@@ -512,14 +511,14 @@
 
     panel.innerHTML = `
       <div class="inova-section-head admin-access-panel-head">
-        <h3 class="inova-section-head__title">사용자</h3>
+        <h3 class="inova-section-head__title">회원 목록</h3>
         <span class="admin-access-count">${visibleEntries.length}명</span>
       </div>
       <label class="admin-access-search">
         <span>검색</span>
         <input type="search" data-access-search value="${escapeHtmlAttribute(state.access.query)}" placeholder="이름 또는 이메일 검색" />
       </label>
-      <div class="admin-access-filter inova-segmented" aria-label="관리자 상태 필터">
+      <div class="admin-access-filter inova-segmented" aria-label="회원 권한 필터">
         ${filterButtons}
       </div>
       <div class="admin-access-list__items">
@@ -546,6 +545,7 @@
   function createAccessDetailPanel(entry) {
     const selectedEntry = entry || readAccessPreviewEntries()[0];
     const statusLabel = readAccessStatusLabel(selectedEntry?.status);
+    const isAdmin = selectedEntry?.status === "active";
     const detailEmail = selectedEntry?.email || "-";
     const detailName = selectedEntry?.displayName || "-";
 
@@ -554,16 +554,8 @@
     panel.innerHTML = `
       <div class="inova-section-head admin-access-panel-head">
         <h3 class="inova-section-head__title">권한 설정</h3>
-        <span class="inova-badge inova-badge--info">전체 회의 보기 가능</span>
       </div>
-      <div class="admin-access-grant">
-        <label class="admin-notice-field">
-          <span>관리자 이메일</span>
-          <input placeholder="name@incross.com" disabled />
-        </label>
-        <button type="button" class="admin-primary-button is-strong" title="아직 연결되지 않은 기능입니다." disabled>관리자 권한 부여</button>
-      </div>
-      <div class="admin-access-selected-label">선택한 사용자</div>
+      <div class="admin-access-selected-label">선택한 회원</div>
       <div class="admin-access-profile__hero">
         <span class="admin-access-avatar is-large" aria-hidden="true">${escapeHtml(readAccessInitial(selectedEntry))}</span>
         <div>
@@ -572,18 +564,21 @@
         </div>
         <span class="inova-badge ${escapeHtmlAttribute(readAccessStatusClass(selectedEntry?.status))}">${escapeHtml(statusLabel)}</span>
       </div>
+      <div class="admin-access-permission">
+        <span>관리자 권한</span>
+        <div class="admin-access-permission__toggle inova-segmented" aria-label="관리자 권한 설정">
+          <button type="button" disabled aria-pressed="${isAdmin ? "false" : "true"}">일반 사용자</button>
+          <button type="button" disabled aria-pressed="${isAdmin ? "true" : "false"}">관리자</button>
+        </div>
+      </div>
       <dl class="admin-access-fields">
         <div>
-          <dt>전체 회의 보기</dt>
-          <dd>허용</dd>
-        </div>
-        <div>
           <dt>관리자 권한</dt>
-          <dd>보유</dd>
+          <dd>${isAdmin ? "보유" : "없음"}</dd>
         </div>
         <div>
-          <dt>권한 상태</dt>
-          <dd>${escapeHtml(statusLabel)}</dd>
+          <dt>전체 회의 리스트</dt>
+          <dd>${isAdmin ? "보기 가능" : "보기 불가"}</dd>
         </div>
         <div>
           <dt>변경 기능</dt>
@@ -591,7 +586,7 @@
         </div>
       </dl>
       <div class="admin-access-actions">
-        <button type="button" class="admin-secondary-button" title="아직 연결되지 않은 기능입니다." disabled>관리자 권한 회수</button>
+        <button type="button" class="admin-primary-button is-strong" title="아직 연결되지 않은 기능입니다." disabled>변경 저장</button>
       </div>
     `;
     return panel;
