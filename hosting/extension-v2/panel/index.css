@@ -47,6 +47,103 @@
   width: 100%; font-size: 12px; font-weight: 700; line-height: 1.25; text-align: center; white-space: nowrap; word-break: keep-all;
 }
 .inova-tool-body { position: relative; min-width: 0; }
+#inova-panel-notice-slot {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  left: 12px;
+  z-index: 5;
+  pointer-events: auto;
+}
+#inova-panel-notice-slot[hidden] {
+  display: none;
+}
+.inova-hosted-panel-app.has-panel-notice #inova-tool-content {
+  padding-bottom: 112px;
+}
+.inova-panel-notice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 76px;
+  padding: 12px 13px;
+  border: 1px solid rgba(15, 124, 137, 0.2);
+  border-radius: 14px;
+  background: rgba(248, 253, 252, 0.985);
+  box-shadow: 0 14px 34px rgba(16, 33, 43, 0.16);
+  color: #10212b;
+}
+.inova-panel-notice__main {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+.inova-panel-notice__title {
+  display: block;
+  overflow: hidden;
+  color: #0b5667;
+  font-size: 13px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inova-panel-notice__body {
+  max-height: 56px;
+  overflow: auto;
+  color: rgba(16, 33, 43, 0.72);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.inova-panel-notice__body p,
+.inova-panel-notice__body ul {
+  margin: 0;
+}
+.inova-panel-notice__body ul {
+  padding-left: 17px;
+}
+.inova-panel-notice__body a {
+  color: #1558c8;
+  font-weight: 800;
+  text-decoration: none;
+}
+.inova-panel-notice__body a:hover {
+  text-decoration: underline;
+}
+.inova-panel-notice__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.inova-panel-notice__cta,
+.inova-panel-notice__button {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(98, 127, 145, 0.18);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.88);
+  color: rgba(16, 33, 43, 0.76);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  padding: 0 10px;
+}
+.inova-panel-notice__cta {
+  border-color: rgba(21, 88, 200, 0.22);
+  background: rgba(231, 240, 255, 0.94);
+  color: #1558c8;
+}
+.inova-panel-notice__button:hover,
+.inova-panel-notice__cta:hover {
+  border-color: rgba(15, 124, 137, 0.32);
+  background: rgba(240, 251, 252, 0.96);
+  color: #0f5f77;
+}
 #inova-tool-header {
   position: relative;
   z-index: 2;

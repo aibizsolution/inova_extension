@@ -24,12 +24,17 @@ function verifyManifestAdminCapabilities() {
   assert.equal(v2Manifest.endpointKeys.issueInovaAdminLaunchUrl.endpoint, "issueInovaAdminLaunch");
   assert.equal(v2Manifest.endpointKeys.exchangeInovaAdminLaunchUrl.endpoint, "exchangeInovaAdminLaunch");
   assert.equal(v2Manifest.endpointKeys.readInovaAdminBootstrapUrl.endpoint, "readInovaAdminBootstrap");
+  assert.equal(v2Manifest.endpointKeys.readInovaPanelNoticeUrl.endpoint, "readInovaPanelNotice");
   assert.equal(v2Manifest.capabilities["admin.access.check"].kind, "function");
   assert.equal(v2Manifest.capabilities["admin.access.check"].authMode, "access-token");
   assert.equal(v2Manifest.capabilities["admin.access.check"].endpointKey, "checkInovaAdminAccessUrl");
   assert.equal(v2Manifest.capabilities["admin.launch.issue-function"].kind, "function");
   assert.equal(v2Manifest.capabilities["admin.launch.issue-function"].authMode, "access-token");
   assert.equal(v2Manifest.capabilities["admin.launch.issue-function"].endpointKey, "issueInovaAdminLaunchUrl");
+  assert.equal(v2Manifest.capabilities["panel.notice.read-active"].kind, "function");
+  assert.equal(v2Manifest.capabilities["panel.notice.read-active"].service, "admin");
+  assert.equal(v2Manifest.capabilities["panel.notice.read-active"].authMode, "access-token");
+  assert.equal(v2Manifest.capabilities["panel.notice.read-active"].endpointKey, "readInovaPanelNoticeUrl");
 }
 
 function verifyHostedPanelAdminGate() {
@@ -80,7 +85,9 @@ function verifyHostedPanelAdminGate() {
   assert(
     functionsRuntimeSource.includes('"admin.access.check"')
       && functionsRuntimeSource.includes('"admin.launch.issue-function"')
+      && functionsRuntimeSource.includes('"panel.notice.read-active"')
       && functionsRuntimeSource.includes('"checkInovaAdminAccessUrl"')
+      && functionsRuntimeSource.includes('"readInovaPanelNoticeUrl"')
       && functionsRuntimeSource.includes('"readInovaAdminBootstrapUrl"'),
     "background bundled functions config should include admin endpoints and capabilities"
   );
@@ -149,6 +156,8 @@ function verifyAdminPageContract() {
   );
   assert(
     pageSource.includes("const ADMIN_SECTIONS = Object.freeze")
+      && pageSource.includes('id: "notice"')
+      && pageSource.includes("소식 팝업")
       && pageSource.includes("function setView")
       && pageSource.includes("function renderNavigation")
       && pageSource.includes("function renderActiveSection")
@@ -165,6 +174,8 @@ function verifyAdminPageContract() {
     adminServiceSource.includes('const ADMIN_USER_COLLECTION = "ops_admin_users"')
       && adminServiceSource.includes('const ADMIN_LAUNCH_COLLECTION = "ops_admin_launches"')
       && adminServiceSource.includes('const ADMIN_SESSION_COLLECTION = "ops_admin_sessions"')
+      && adminServiceSource.includes('const PANEL_NOTICE_COLLECTION = "ops_panel_notices"')
+      && adminServiceSource.includes('const PANEL_NOTICE_STATE_COLLECTION = "ops_panel_notice_state"')
       && adminServiceSource.includes("hashSecret")
       && adminServiceSource.includes("관리자 권한이 더 이상 유효하지 않아요."),
     "admin service should own server-side access checks, hashed token storage, and revocation checks"
@@ -174,8 +185,23 @@ function verifyAdminPageContract() {
       && functionsIndexSource.includes("exports.checkInovaAdminAccess")
       && functionsIndexSource.includes("exports.issueInovaAdminLaunch")
       && functionsIndexSource.includes("exports.exchangeInovaAdminLaunch")
-      && functionsIndexSource.includes("exports.readInovaAdminBootstrap"),
-    "functions/index.js should export the admin access and session endpoints"
+      && functionsIndexSource.includes("exports.readInovaAdminBootstrap")
+      && functionsIndexSource.includes("exports.readInovaPanelNotice")
+      && functionsIndexSource.includes("exports.saveInovaAdminPanelNotice")
+      && functionsIndexSource.includes("exports.publishInovaAdminPanelNotice")
+      && functionsIndexSource.includes("exports.archiveInovaAdminPanelNotice"),
+    "functions/index.js should export the admin access, session, and panel notice endpoints"
+  );
+  assert(
+    pageSource.includes("listInovaAdminPanelNotices")
+      && pageSource.includes("saveInovaAdminPanelNotice")
+      && pageSource.includes("publishInovaAdminPanelNotice")
+      && pageSource.includes("archiveInovaAdminPanelNotice")
+      && pageSource.includes("renderAdminNoticeMarkdownPreview")
+      && pageSource.includes("data-notice-action=\"save\"")
+      && pageSource.includes("data-notice-action=\"publish\"")
+      && pageSource.includes("data-notice-action=\"archive\""),
+    "hosted admin page should expose the panel notice editor, preview, and save/publish/archive actions through the notice outlet"
   );
 }
 

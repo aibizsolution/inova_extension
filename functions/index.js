@@ -149,7 +149,12 @@ exports.commitInovaFeatureUsageBatch = featureUsageHandlers.commitInovaFeatureUs
 exports.checkInovaAdminAccess = adminHandlers.checkInovaAdminAccess;
 exports.exchangeInovaAdminLaunch = adminHandlers.exchangeInovaAdminLaunch;
 exports.issueInovaAdminLaunch = adminHandlers.issueInovaAdminLaunch;
+exports.archiveInovaAdminPanelNotice = adminHandlers.archiveInovaAdminPanelNotice;
+exports.listInovaAdminPanelNotices = adminHandlers.listInovaAdminPanelNotices;
+exports.publishInovaAdminPanelNotice = adminHandlers.publishInovaAdminPanelNotice;
 exports.readInovaAdminBootstrap = adminHandlers.readInovaAdminBootstrap;
+exports.readInovaPanelNotice = adminHandlers.readInovaPanelNotice;
+exports.saveInovaAdminPanelNotice = adminHandlers.saveInovaAdminPanelNotice;
 
 exports.issueInovaPromptPanelAuth = promptLibraryHandlers.issueInovaPromptPanelAuth;
 exports.issueInovaPromptPanelAuthV2 = promptLibraryV2Handlers.issueInovaPromptPanelAuth;

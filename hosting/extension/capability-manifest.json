@@ -56,6 +56,20 @@
       "schemaVersion": 1,
       "service": "admin"
     },
+    "panel.notice.read-active": {
+      "auditLevel": "read",
+      "authMode": "access-token",
+      "domain": "panel",
+      "enabled": true,
+      "endpointKey": "readInovaPanelNoticeUrl",
+      "inputSchemaVersion": 1,
+      "kind": "function",
+      "minExtensionVersion": "1.0.0",
+      "outputSchemaVersion": 1,
+      "owner": "admin",
+      "schemaVersion": 1,
+      "service": "admin"
+    },
     "meeting.list": {
       "auditLevel": "read",
       "authMode": "access-token",
@@ -682,6 +696,10 @@
     },
     "readInovaAdminBootstrapUrl": {
       "endpoint": "readInovaAdminBootstrap",
+      "method": "POST"
+    },
+    "readInovaPanelNoticeUrl": {
+      "endpoint": "readInovaPanelNotice",
       "method": "POST"
     },
     "syncInovaPromptLibraryUrl": {

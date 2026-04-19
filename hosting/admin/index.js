@@ -3,6 +3,9 @@
   const PROJECT_ID = "browser-extension-main";
   const REGION = "asia-northeast3";
   const PRODUCTION_FUNCTIONS_BASE_URL = `https://${REGION}-${PROJECT_ID}.cloudfunctions.net`;
+  const MAX_NOTICE_TITLE_LENGTH = 80;
+  const MAX_NOTICE_BODY_LENGTH = 800;
+  const MAX_NOTICE_CTA_LABEL_LENGTH = 32;
   const ADMIN_SECTIONS = Object.freeze([
     {
       eyebrow: "Overview",
@@ -21,6 +24,15 @@
       label: "사용자 및 권한",
       summary: "관리자 계정, 권한, 접근 정책 화면이 들어갈 자리입니다.",
       title: "사용자 및 권한",
+    },
+    {
+      eyebrow: "Notice",
+      group: "Operations",
+      icon: "notice",
+      id: "notice",
+      label: "소식 팝업",
+      summary: "확장 패널 하단에 노출할 전사 단일 소식을 편집하고 발행합니다.",
+      title: "소식 팝업",
     },
     {
       eyebrow: "Runtime",
@@ -63,6 +75,7 @@
     audit: ["M12 3l7 3v6c0 4.2-2.7 7.5-7 9-4.3-1.5-7-4.8-7-9V6l7-3z", "M9.5 12l1.7 1.7 3.3-3.9"],
     chart: ["M4 19V5", "M4 19h16", "M8 16v-4", "M12 16V8", "M16 16v-7"],
     dashboard: ["M4 5h7v6H4z", "M13 5h7v4h-7z", "M13 11h7v8h-7z", "M4 13h7v6H4z"],
+    notice: ["M4 5h16v11H7l-3 3z", "M8 9h8", "M8 12h5"],
     release: ["M12 3v10", "M8 7l4-4 4 4", "M5 13v5h14v-5"],
     system: ["M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z", "M12 2v3", "M12 19v3", "M4.9 4.9l2.1 2.1", "M17 17l2.1 2.1", "M2 12h3", "M19 12h3", "M4.9 19.1 7 17", "M17 7l2.1-2.1"],
     users: ["M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", "M15 10a2.5 2.5 0 1 0 0-5", "M3 19a6 6 0 0 1 12 0", "M14 14a5 5 0 0 1 7 5"],
@@ -70,8 +83,10 @@
 
   const state = {
     activeSectionId: "overview",
+    adminSessionToken: "",
     busy: false,
     error: "",
+    notice: createNoticeState(),
     role: "",
     sessionExpiresAt: "",
     view: "loading",
@@ -145,6 +160,7 @@
 
   function applyVerifiedSession(session) {
     storeSession(session);
+    state.adminSessionToken = normalizeText(session.adminSessionToken);
     state.error = "";
     state.role = normalizeText(session.role) || "admin";
     state.sessionExpiresAt = normalizeText(session.sessionExpiresAt);
@@ -166,6 +182,16 @@
 
   function readBootstrap(adminSessionToken) {
     return postFunction("readInovaAdminBootstrap", {}, {
+      Authorization: `AdminSession ${adminSessionToken}`,
+    });
+  }
+
+  function postAdminFunction(functionName, body = {}) {
+    const adminSessionToken = normalizeText(state.adminSessionToken || loadStoredSession()?.adminSessionToken);
+    if (!adminSessionToken) {
+      throw new Error("관리자 콘솔 세션이 없습니다. 확장 패널에서 다시 열어 주세요.");
+    }
+    return postFunction(functionName, body, {
       Authorization: `AdminSession ${adminSessionToken}`,
     });
   }
@@ -309,6 +335,7 @@
   }
 
   function renderBlocked(message) {
+    state.adminSessionToken = "";
     setView("blocked");
     setText(elements.sectionEyebrow, "Blocked");
     setText(elements.sectionTitle, "관리자 권한 차단");
@@ -416,6 +443,11 @@
     setText(elements.contentEyebrow, section.eyebrow);
     setText(elements.contentTitle, section.title);
     setText(elements.contentSummary, section.summary);
+    if (section.id === "notice") {
+      elements.pageOutlet?.replaceChildren(createNoticeWorkbench());
+      void ensurePanelNoticesLoaded();
+      return;
+    }
     elements.pageOutlet?.replaceChildren(createSectionPlaceholder(section));
   }
 
@@ -434,6 +466,608 @@
 
     placeholder.append(title, body);
     return placeholder;
+  }
+
+  function createNoticeWorkbench() {
+    const noticeState = state.notice;
+    const wrapper = global.document.createElement("div");
+    wrapper.className = "admin-notice-workbench";
+    wrapper.append(
+      createNoticeStatusPanel(),
+      createNoticeEditorPanel(),
+      createNoticeListPanel()
+    );
+    wrapper.addEventListener("input", handleNoticeInput);
+    wrapper.addEventListener("click", handleNoticeClick);
+    wrapper.addEventListener("keydown", handleNoticeKeydown);
+    if (noticeState.loading && !noticeState.loaded) {
+      wrapper.dataset.loading = "true";
+    }
+    return wrapper;
+  }
+
+  function createNoticeStatusPanel() {
+    const noticeState = state.notice;
+    const activeNotice = findNoticeById(noticeState.activeNoticeId);
+    const panel = global.document.createElement("section");
+    panel.className = "admin-notice-status";
+
+    const title = global.document.createElement("strong");
+    title.textContent = activeNotice ? "현재 노출 중" : "현재 노출 없음";
+
+    const summary = global.document.createElement("p");
+    summary.textContent = noticeState.loading && !noticeState.loaded
+      ? "소식 상태를 불러오는 중입니다."
+      : activeNotice
+        ? activeNotice.title
+        : "발행된 소식이 없습니다.";
+
+    const badge = global.document.createElement("span");
+    badge.className = `admin-notice-badge ${activeNotice ? "is-active" : "is-muted"}`;
+    badge.textContent = activeNotice ? "노출 중" : "중지됨";
+
+    const meta = global.document.createElement("dl");
+    meta.className = "admin-notice-status__meta";
+    [
+      ["시작", activeNotice?.startsAt ? formatDateTime(activeNotice.startsAt) : "즉시"],
+      ["종료", activeNotice?.endsAt ? formatDateTime(activeNotice.endsAt) : "-"],
+      ["버전", activeNotice?.version ? String(activeNotice.version) : "-"],
+    ].forEach(([label, value]) => {
+      const item = global.document.createElement("div");
+      const dt = global.document.createElement("dt");
+      const dd = global.document.createElement("dd");
+      dt.textContent = label;
+      dd.textContent = value;
+      item.append(dt, dd);
+      meta.append(item);
+    });
+
+    const header = global.document.createElement("div");
+    header.className = "admin-notice-status__head";
+    header.append(title, badge);
+    panel.append(header, summary, meta);
+    if (noticeState.error || noticeState.feedback) {
+      const feedback = global.document.createElement("p");
+      feedback.className = `admin-notice-feedback ${noticeState.error ? "is-error" : "is-success"}`;
+      feedback.textContent = noticeState.error || noticeState.feedback;
+      panel.append(feedback);
+    }
+    return panel;
+  }
+
+  function createNoticeEditorPanel() {
+    const form = state.notice.form;
+    const section = global.document.createElement("section");
+    section.className = "admin-notice-editor";
+    section.innerHTML = `
+      <form class="admin-notice-form" novalidate>
+        <div class="admin-notice-form__row">
+          <label class="admin-notice-field" for="panelNoticeTitle">
+            <span>제목</span>
+            <input id="panelNoticeTitle" data-notice-field="title" maxlength="${MAX_NOTICE_TITLE_LENGTH}" required />
+          </label>
+          <label class="admin-notice-field" for="panelNoticeEndsAt">
+            <span>노출 종료</span>
+            <input id="panelNoticeEndsAt" data-notice-field="endsAt" type="datetime-local" required />
+          </label>
+        </div>
+        <label class="admin-notice-field" for="panelNoticeBody">
+          <span>본문 Markdown</span>
+          <textarea id="panelNoticeBody" data-notice-field="bodyMarkdown" maxlength="${MAX_NOTICE_BODY_LENGTH}" rows="9" required></textarea>
+        </label>
+        <div class="admin-notice-form__row">
+          <label class="admin-notice-field" for="panelNoticeStartsAt">
+            <span>노출 시작</span>
+            <input id="panelNoticeStartsAt" data-notice-field="startsAt" type="datetime-local" />
+          </label>
+          <label class="admin-notice-field" for="panelNoticeCtaLabel">
+            <span>CTA 라벨</span>
+            <input id="panelNoticeCtaLabel" data-notice-field="cta.label" maxlength="${MAX_NOTICE_CTA_LABEL_LENGTH}" />
+          </label>
+        </div>
+        <label class="admin-notice-field" for="panelNoticeCtaUrl">
+          <span>CTA URL</span>
+          <input id="panelNoticeCtaUrl" data-notice-field="cta.url" inputmode="url" />
+        </label>
+        <div class="admin-notice-form__actions">
+          <button type="button" class="admin-primary-button" data-notice-action="save">저장</button>
+          <button type="button" class="admin-primary-button is-strong" data-notice-action="publish">발행</button>
+          <button type="button" class="admin-secondary-button" data-notice-action="archive">노출 중지</button>
+        </div>
+      </form>
+      <section class="admin-notice-preview" aria-label="소식 미리보기">
+        <div class="admin-notice-preview__head">
+          <span>Preview</span>
+          <strong></strong>
+        </div>
+        <div class="admin-notice-preview__body"></div>
+        <div class="admin-notice-preview__cta"></div>
+      </section>
+    `;
+    section.querySelector("form")?.addEventListener("submit", (event) => event.preventDefault());
+    setNoticeInputValue(section, "title", form.title);
+    setNoticeInputValue(section, "bodyMarkdown", form.bodyMarkdown);
+    setNoticeInputValue(section, "startsAt", form.startsAt);
+    setNoticeInputValue(section, "endsAt", form.endsAt);
+    setNoticeInputValue(section, "cta.label", form.cta.label);
+    setNoticeInputValue(section, "cta.url", form.cta.url);
+    updateNoticePreview(section);
+    const saving = Boolean(state.notice.savingAction);
+    section.querySelectorAll("button, input, textarea").forEach((control) => {
+      if (saving) {
+        control.disabled = true;
+      }
+    });
+    const archiveButton = section.querySelector('[data-notice-action="archive"]');
+    if (archiveButton) {
+      archiveButton.disabled = saving || !state.notice.activeNoticeId;
+    }
+    return section;
+  }
+
+  function createNoticeListPanel() {
+    const section = global.document.createElement("section");
+    section.className = "admin-notice-list";
+    const title = global.document.createElement("h3");
+    title.textContent = "최근 공지";
+    section.append(title);
+
+    if (state.notice.loading && !state.notice.loaded) {
+      const loading = global.document.createElement("p");
+      loading.className = "admin-notice-list__empty";
+      loading.textContent = "불러오는 중입니다.";
+      section.append(loading);
+      return section;
+    }
+
+    if (!state.notice.notices.length) {
+      const empty = global.document.createElement("p");
+      empty.className = "admin-notice-list__empty";
+      empty.textContent = "저장된 소식이 없습니다.";
+      section.append(empty);
+      return section;
+    }
+
+    const list = global.document.createElement("div");
+    list.className = "admin-notice-list__items";
+    state.notice.notices.forEach((notice) => {
+      const item = global.document.createElement("article");
+      const isActive = notice.noticeId === state.notice.activeNoticeId;
+      item.className = `admin-notice-list__item ${isActive ? "is-active" : ""}`;
+      item.dataset.noticeLoadId = notice.noticeId;
+      item.tabIndex = 0;
+      item.setAttribute("role", "button");
+      item.setAttribute("aria-label", `${notice.title} 편집`);
+      item.innerHTML = `
+        <div>
+          <strong>${escapeHtml(notice.title)}</strong>
+          <span>${escapeHtml(formatNoticeWindow(notice))}</span>
+        </div>
+        <span class="admin-notice-badge ${isActive ? "is-active" : getNoticeStatusTone(notice.status)}">${escapeHtml(isActive ? "노출 중" : getNoticeStatusLabel(notice.status))}</span>
+      `;
+      list.append(item);
+    });
+    section.append(list);
+    return section;
+  }
+
+  function handleNoticeInput(event) {
+    const field = normalizeText(event.target?.dataset?.noticeField);
+    if (!field) {
+      return;
+    }
+    writeNoticeFormField(field, event.target.value);
+    updateNoticePreview(event.currentTarget);
+  }
+
+  function handleNoticeClick(event) {
+    const actionButton = event.target?.closest?.("[data-notice-action]");
+    if (actionButton) {
+      const action = normalizeText(actionButton.dataset.noticeAction);
+      if (action === "save") {
+        void savePanelNotice();
+      } else if (action === "publish") {
+        void publishPanelNotice();
+      } else if (action === "archive") {
+        void archivePanelNotice();
+      }
+      return;
+    }
+    const row = event.target?.closest?.("[data-notice-load-id]");
+    if (row) {
+      loadNoticeIntoForm(row.dataset.noticeLoadId);
+    }
+  }
+
+  function handleNoticeKeydown(event) {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+    const row = event.target?.closest?.("[data-notice-load-id]");
+    if (!row) {
+      return;
+    }
+    event.preventDefault();
+    loadNoticeIntoForm(row.dataset.noticeLoadId);
+  }
+
+  async function ensurePanelNoticesLoaded() {
+    if (state.notice.loaded || state.notice.loading) {
+      return;
+    }
+    await loadPanelNotices({ preserveForm: false });
+  }
+
+  async function loadPanelNotices(options = {}) {
+    state.notice.loading = true;
+    state.notice.error = "";
+    if (state.activeSectionId === "notice") {
+      renderActiveSection();
+    }
+    try {
+      const result = await postAdminFunction("listInovaAdminPanelNotices");
+      const notices = Array.isArray(result.notices)
+        ? result.notices.map(normalizeAdminNotice).filter(Boolean)
+        : [];
+      state.notice.activeNoticeId = normalizeText(result.activeNoticeId);
+      state.notice.loaded = true;
+      state.notice.notices = notices;
+      if (!options.preserveForm) {
+        state.notice.form = createPreferredNoticeForm();
+      }
+    } catch (error) {
+      state.notice.error = readErrorMessage(error);
+    } finally {
+      state.notice.loading = false;
+      if (state.activeSectionId === "notice") {
+        renderActiveSection();
+      }
+    }
+  }
+
+  async function savePanelNotice() {
+    await runNoticeMutation("save", async () => {
+      const result = await postAdminFunction("saveInovaAdminPanelNotice", {
+        notice: buildNoticePayloadFromForm(),
+      });
+      const savedNotice = normalizeAdminNotice(result.notice);
+      await loadPanelNotices({ preserveForm: true });
+      if (savedNotice) {
+        state.notice.form = createNoticeFormFromNotice(savedNotice, { keepNoticeId: true });
+      }
+      state.notice.feedback = "저장되었습니다.";
+    });
+  }
+
+  async function publishPanelNotice() {
+    await runNoticeMutation("publish", async () => {
+      const result = await postAdminFunction("publishInovaAdminPanelNotice", {
+        notice: buildNoticePayloadFromForm(),
+      });
+      const publishedNotice = normalizeAdminNotice(result.notice);
+      await loadPanelNotices({ preserveForm: true });
+      if (publishedNotice) {
+        state.notice.form = createNoticeFormFromNotice(publishedNotice, { keepNoticeId: false });
+      }
+      state.notice.feedback = "발행되었습니다.";
+    });
+  }
+
+  async function archivePanelNotice() {
+    await runNoticeMutation("archive", async () => {
+      await postAdminFunction("archiveInovaAdminPanelNotice", {
+        noticeId: state.notice.activeNoticeId,
+      });
+      await loadPanelNotices({ preserveForm: false });
+      state.notice.feedback = "노출을 중지했습니다.";
+    });
+  }
+
+  async function runNoticeMutation(action, task) {
+    if (state.notice.savingAction) {
+      return;
+    }
+    state.notice.savingAction = action;
+    state.notice.error = "";
+    state.notice.feedback = "";
+    renderActiveSection();
+    try {
+      await task();
+    } catch (error) {
+      state.notice.error = readErrorMessage(error);
+    } finally {
+      state.notice.savingAction = "";
+      renderActiveSection();
+    }
+  }
+
+  function loadNoticeIntoForm(noticeId) {
+    const notice = findNoticeById(noticeId);
+    if (!notice) {
+      return;
+    }
+    state.notice.error = "";
+    state.notice.feedback = "";
+    state.notice.form = createNoticeFormFromNotice(notice, {
+      keepNoticeId: normalizeText(notice.status) === "draft",
+    });
+    renderActiveSection();
+  }
+
+  function createNoticeState() {
+    return {
+      activeNoticeId: "",
+      error: "",
+      feedback: "",
+      form: createNoticeForm(),
+      loaded: false,
+      loading: false,
+      notices: [],
+      savingAction: "",
+    };
+  }
+
+  function createNoticeForm(overrides = {}) {
+    const overrideCta = overrides.cta && typeof overrides.cta === "object" ? overrides.cta : {};
+    return {
+      bodyMarkdown: "",
+      endsAt: toDatetimeLocalInput(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      noticeId: "",
+      startsAt: "",
+      title: "",
+      ...overrides,
+      cta: {
+        label: normalizeText(overrideCta.label),
+        url: normalizeText(overrideCta.url),
+      },
+    };
+  }
+
+  function createPreferredNoticeForm() {
+    const activeNotice = findNoticeById(state.notice.activeNoticeId);
+    if (activeNotice) {
+      return createNoticeFormFromNotice(activeNotice, { keepNoticeId: false });
+    }
+    const draftNotice = state.notice.notices.find((notice) => normalizeText(notice.status) === "draft");
+    return draftNotice
+      ? createNoticeFormFromNotice(draftNotice, { keepNoticeId: true })
+      : createNoticeForm();
+  }
+
+  function createNoticeFormFromNotice(notice, options = {}) {
+    return createNoticeForm({
+      bodyMarkdown: normalizeText(notice?.bodyMarkdown),
+      cta: {
+        label: normalizeText(notice?.cta?.label),
+        url: normalizeText(notice?.cta?.url),
+      },
+      endsAt: toDatetimeLocalInput(notice?.endsAt),
+      noticeId: options.keepNoticeId ? normalizeText(notice?.noticeId) : "",
+      startsAt: toDatetimeLocalInput(notice?.startsAt),
+      title: normalizeText(notice?.title),
+    });
+  }
+
+  function buildNoticePayloadFromForm() {
+    const form = state.notice.form;
+    return {
+      bodyMarkdown: normalizeText(form.bodyMarkdown),
+      cta: normalizeText(form.cta.label) || normalizeText(form.cta.url)
+        ? {
+            label: normalizeText(form.cta.label),
+            url: normalizeText(form.cta.url),
+          }
+        : null,
+      endsAt: fromDatetimeLocalInput(form.endsAt),
+      noticeId: normalizeText(form.noticeId),
+      startsAt: fromDatetimeLocalInput(form.startsAt),
+      title: normalizeText(form.title),
+    };
+  }
+
+  function writeNoticeFormField(field, value) {
+    const nextValue = String(value || "");
+    if (field === "cta.label") {
+      state.notice.form.cta.label = normalizeText(nextValue);
+      return;
+    }
+    if (field === "cta.url") {
+      state.notice.form.cta.url = normalizeText(nextValue);
+      return;
+    }
+    if (Object.prototype.hasOwnProperty.call(state.notice.form, field)) {
+      state.notice.form[field] = nextValue;
+    }
+  }
+
+  function normalizeAdminNotice(noticeInput) {
+    const notice = noticeInput && typeof noticeInput === "object" ? noticeInput : {};
+    const noticeId = normalizeText(notice.noticeId);
+    if (!noticeId) {
+      return null;
+    }
+    return {
+      archivedAt: normalizeText(notice.archivedAt),
+      bodyHtml: normalizeText(notice.bodyHtml),
+      bodyMarkdown: normalizeText(notice.bodyMarkdown),
+      createdAt: normalizeText(notice.createdAt),
+      cta: normalizeHttpsCta(notice.cta),
+      endsAt: normalizeText(notice.endsAt),
+      noticeId,
+      publishedAt: normalizeText(notice.publishedAt),
+      startsAt: normalizeText(notice.startsAt),
+      status: normalizeText(notice.status) || "draft",
+      title: normalizeText(notice.title),
+      updatedAt: normalizeText(notice.updatedAt),
+      version: readPositiveInteger(notice.version) || 1,
+    };
+  }
+
+  function findNoticeById(noticeId) {
+    const normalizedId = normalizeText(noticeId);
+    return state.notice.notices.find((notice) => notice.noticeId === normalizedId) || null;
+  }
+
+  function setNoticeInputValue(host, field, value) {
+    const input = host.querySelector(`[data-notice-field="${cssEscape(field)}"]`);
+    if (input) {
+      input.value = normalizeText(value);
+    }
+  }
+
+  function updateNoticePreview(host) {
+    if (!host) {
+      return;
+    }
+    const form = state.notice.form;
+    const previewTitle = host.querySelector(".admin-notice-preview__head strong");
+    const previewBody = host.querySelector(".admin-notice-preview__body");
+    const previewCta = host.querySelector(".admin-notice-preview__cta");
+    if (previewTitle) {
+      previewTitle.textContent = form.title || "제목 없음";
+    }
+    if (previewBody) {
+      previewBody.innerHTML = renderAdminNoticeMarkdownPreview(form.bodyMarkdown);
+    }
+    if (previewCta) {
+      const cta = normalizeHttpsCta(form.cta);
+      previewCta.innerHTML = cta
+        ? `<a href="${escapeHtmlAttribute(cta.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(cta.label)}</a>`
+        : "";
+    }
+  }
+
+  function renderAdminNoticeMarkdownPreview(markdown) {
+    const blocks = [];
+    let paragraphLines = [];
+    let listItems = [];
+    normalizeText(markdown).split(/\r?\n/).forEach((line) => {
+      const trimmed = normalizeText(line);
+      if (!trimmed) {
+        flushParagraph();
+        flushList();
+        return;
+      }
+      const listMatch = line.match(/^\s*-\s+(.+)$/);
+      if (listMatch) {
+        flushParagraph();
+        listItems.push(`<li>${renderInlineAdminNoticeMarkdown(listMatch[1])}</li>`);
+        return;
+      }
+      flushList();
+      paragraphLines.push(renderInlineAdminNoticeMarkdown(line));
+    });
+    flushParagraph();
+    flushList();
+    return blocks.join("") || '<p class="admin-notice-preview__empty">본문 미리보기</p>';
+
+    function flushParagraph() {
+      if (!paragraphLines.length) {
+        return;
+      }
+      blocks.push(`<p>${paragraphLines.join("<br>")}</p>`);
+      paragraphLines = [];
+    }
+
+    function flushList() {
+      if (!listItems.length) {
+        return;
+      }
+      blocks.push(`<ul>${listItems.join("")}</ul>`);
+      listItems = [];
+    }
+  }
+
+  function renderInlineAdminNoticeMarkdown(value) {
+    const source = String(value || "");
+    const linkPattern = /\[([^\]\n]+)\]\((https:\/\/[^)\s]+)\)/g;
+    let html = "";
+    let lastIndex = 0;
+    let match = linkPattern.exec(source);
+    while (match) {
+      html += renderInlineAdminNoticeText(source.slice(lastIndex, match.index));
+      html += `<a href="${escapeHtmlAttribute(match[2])}" target="_blank" rel="noopener noreferrer">${renderInlineAdminNoticeText(match[1])}</a>`;
+      lastIndex = match.index + match[0].length;
+      match = linkPattern.exec(source);
+    }
+    html += renderInlineAdminNoticeText(source.slice(lastIndex));
+    return html;
+  }
+
+  function renderInlineAdminNoticeText(value) {
+    return escapeHtml(value)
+      .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
+  }
+
+  function normalizeHttpsCta(ctaInput) {
+    const cta = ctaInput && typeof ctaInput === "object" ? ctaInput : {};
+    const label = normalizeText(cta.label);
+    const url = normalizeText(cta.url);
+    if (!label || !url || !isHttpsUrl(url)) {
+      return null;
+    }
+    return { label, url };
+  }
+
+  function isHttpsUrl(value) {
+    try {
+      return new URL(normalizeText(value)).protocol === "https:";
+    } catch {
+      return false;
+    }
+  }
+
+  function formatNoticeWindow(notice) {
+    const startsAt = notice?.startsAt ? formatDateTime(notice.startsAt) : "즉시";
+    const endsAt = notice?.endsAt ? formatDateTime(notice.endsAt) : "-";
+    return `${startsAt} - ${endsAt}`;
+  }
+
+  function getNoticeStatusLabel(status) {
+    const normalized = normalizeText(status);
+    if (normalized === "published") {
+      return "발행됨";
+    }
+    if (normalized === "archived") {
+      return "중지됨";
+    }
+    return "임시 저장";
+  }
+
+  function getNoticeStatusTone(status) {
+    const normalized = normalizeText(status);
+    if (normalized === "published") {
+      return "is-active";
+    }
+    if (normalized === "archived") {
+      return "is-muted";
+    }
+    return "is-draft";
+  }
+
+  function toDatetimeLocalInput(value) {
+    const timestamp = typeof value === "number" ? value : Date.parse(normalizeText(value));
+    if (!Number.isFinite(timestamp)) {
+      return "";
+    }
+    const date = new Date(timestamp);
+    const localDate = new Date(timestamp - date.getTimezoneOffset() * 60000);
+    return localDate.toISOString().slice(0, 16);
+  }
+
+  function fromDatetimeLocalInput(value) {
+    const normalized = normalizeText(value);
+    if (!normalized) {
+      return "";
+    }
+    const timestamp = Date.parse(normalized);
+    return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : normalized;
+  }
+
+  function readPositiveInteger(value) {
+    const number = Number(value);
+    return Number.isInteger(number) && number > 0 ? number : 0;
   }
 
   function findSection(sectionId) {
@@ -490,5 +1124,26 @@
 
   function normalizeText(value) {
     return String(value || "").trim();
+  }
+
+  function cssEscape(value) {
+    const text = String(value || "");
+    if (global.CSS?.escape) {
+      return global.CSS.escape(text);
+    }
+    return text.replace(/["\\]/g, "\\$&");
+  }
+
+  function escapeHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function escapeHtmlAttribute(value) {
+    return escapeHtml(value).replace(/`/g, "&#96;");
   }
 })(globalThis);

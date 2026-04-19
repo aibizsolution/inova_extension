@@ -21,6 +21,14 @@ const SANDBOX_BRIDGE_API_ALLOWLIST = Object.freeze([
 
 const PANEL_RUNTIME_CAPABILITY_MANIFEST = deepFreeze({
   functionEndpointCapabilities: {
+    admin: {
+      readInovaPanelNoticeUrl: {
+        allowedAuthModes: ["access-token"],
+        capabilityId: "panel.notice.read-active",
+        defaultAuthMode: "access-token",
+        method: "POST",
+      },
+    },
     meeting: {
       authorizeInovaMeetingWorkspaceAccessUrl: {
         allowedAuthModes: ["access-token", "none"],
@@ -202,6 +210,7 @@ const PANEL_AUTH_ENRICHERS = Object.freeze({
 });
 
 const PANEL_FUNCTION_CONFIG_RESOLVERS = Object.freeze({
+  admin: () => namespace.functionsRuntimeConfig?.getDefaultFunctionsConfig?.() || getPromptFunctionsConfig(),
   meeting: () => getMeetingFunctionsConfig(),
   prompt: () => getPromptFunctionsConfig(),
 });
