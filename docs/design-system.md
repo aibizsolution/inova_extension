@@ -36,6 +36,14 @@
 
 삭제처럼 되돌리기 어려운 작업은 브라우저 기본 `window.confirm`을 쓰지 않는다. design system confirm dialog를 띄우고, 화면별 파일에는 제목/본문/버튼 문구만 넘긴다.
 
+## Deferred Search
+
+- JS: `/shared/design-system.js`
+- controller: `InovaDesignSystem.createDeferredSearchController({ onSearch })`
+- default delay: 260ms
+
+검색 입력은 `input` 이벤트마다 화면 전체를 즉시 다시 그리지 않는다. 화면별 파일은 입력 중 draft value와 실제 적용 query를 분리하고, 이 controller의 `handleInput`, `handleCompositionStart`, `handleCompositionEnd`, `flush`로 debounce와 IME 조합 입력을 처리한다. 검색 적용 때문에 화면을 다시 그릴 때는 기존 검색 input의 focus와 caret을 복원한다.
+
 ## Section Header
 
 - CSS: `/shared/design-system.css`
@@ -43,3 +51,19 @@
 - title: `.inova-section-head__title`
 
 관리 화면 컬럼이나 카드 상단 제목처럼 반복되는 섹션 타이틀은 화면 전용 heading 클래스를 새로 만들지 말고 이 primitive를 쓴다.
+
+## Badge
+
+- CSS: `/shared/design-system.css`
+- base: `.inova-badge`
+- tones: `.inova-badge--success`, `.inova-badge--warning`, `.inova-badge--info`, `.inova-badge--danger`, `.inova-badge--muted`
+
+상태, 권한, 소스처럼 짧은 metadata label은 화면별 badge 클래스를 새로 만들지 말고 이 primitive를 쓴다.
+
+## Segmented Control
+
+- CSS: `/shared/design-system.css`
+- wrapper: `.inova-segmented`
+- selected state: child `button[aria-pressed="true"]`
+
+필터나 역할 선택처럼 2~4개의 상호 배타 옵션을 같은 줄에서 고르는 컨트롤은 화면별 segmented 스타일을 새로 만들지 말고 이 primitive를 쓴다.

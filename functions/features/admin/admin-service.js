@@ -3,6 +3,9 @@ const crypto = require("crypto");
 const ADMIN_USER_COLLECTION = "ops_admin_users";
 const ADMIN_LAUNCH_COLLECTION = "ops_admin_launches";
 const ADMIN_SESSION_COLLECTION = "ops_admin_sessions";
+const ACCOUNT_COLLECTION = "integration_inova_accounts";
+const ACCOUNT_COLLECTION_V2 = "integration_inova_accounts_v2";
+const FEATURE_USAGE_USER_MONTH_COLLECTION = "integration_inova_feature_usage_user_months";
 const PANEL_NOTICE_COLLECTION = "ops_panel_notices";
 const PANEL_NOTICE_SIGNAL_COLLECTION = "ops_panel_notice_signals";
 const PANEL_NOTICE_STATE_COLLECTION = "ops_panel_notice_state";
@@ -15,9 +18,14 @@ const ADMIN_SESSION_AUTH_SCHEME = "adminsession";
 const MAX_NOTICE_TITLE_LENGTH = 80;
 const MAX_NOTICE_BODY_LENGTH = 800;
 const MAX_NOTICE_CTA_LABEL_LENGTH = 32;
+const MAX_ADMIN_ACCESS_ORGANIZATION_LENGTH = 80;
+const ADMIN_ACCESS_USER_LIST_LIMIT = 120;
 const ADMIN_NOTICE_LIST_LIMIT = 20;
 
 const ADMIN_COLLECTIONS = Object.freeze({
+  accounts: ACCOUNT_COLLECTION,
+  accountsV2: ACCOUNT_COLLECTION_V2,
+  featureUsageUserMonths: FEATURE_USAGE_USER_MONTH_COLLECTION,
   launches: ADMIN_LAUNCH_COLLECTION,
   panelNoticeState: PANEL_NOTICE_STATE_COLLECTION,
   panelNoticeSignals: PANEL_NOTICE_SIGNAL_COLLECTION,
@@ -126,6 +134,51 @@ function registerAdminHandlers(deps) {
       });
     } catch (error) {
       logEvent?.("admin.bootstrap.read.error", {
+        error: normalizeText(error?.message),
+        status: Number(error?.status) || 500,
+      });
+      sendError(response, error);
+    }
+  });
+
+  const listInovaAdminAccessUsers = onRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
+    try {
+      assertPostRequest(request, createHttpError);
+      const adminSessionToken = readAdminSessionToken(request, normalizeText);
+      const result = await domain.listAdminAccessUsers(adminSessionToken);
+      logEvent?.("admin.access-users.list.success", {
+        count: Array.isArray(result.users) ? result.users.length : 0,
+        providerUserKey: result.viewer.providerUserKey,
+      });
+      response.json({
+        ok: true,
+        data: result,
+      });
+    } catch (error) {
+      logEvent?.("admin.access-users.list.error", {
+        error: normalizeText(error?.message),
+        status: Number(error?.status) || 500,
+      });
+      sendError(response, error);
+    }
+  });
+
+  const saveInovaAdminAccessUser = onRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
+    try {
+      assertPostRequest(request, createHttpError);
+      const adminSessionToken = readAdminSessionToken(request, normalizeText);
+      const result = await domain.saveAdminAccessUser(adminSessionToken, request.body || {});
+      logEvent?.("admin.access-users.save.success", {
+        providerUserKey: result.user.providerUserKey,
+        status: result.user.status,
+        updatedBy: result.viewer.providerUserKey,
+      });
+      response.json({
+        ok: true,
+        data: result,
+      });
+    } catch (error) {
+      logEvent?.("admin.access-users.save.error", {
         error: normalizeText(error?.message),
         status: Number(error?.status) || 500,
       });
@@ -300,11 +353,13 @@ function registerAdminHandlers(deps) {
     exchangeInovaAdminLaunch,
     issueInovaAdminLaunch,
     listInovaAdminPanelNotices,
+    listInovaAdminAccessUsers,
     moveInovaAdminPanelNotice,
     readInovaAdminBootstrap,
     readInovaPanelNotice,
     publishInovaAdminPanelNotice,
     saveInovaAdminPanelNotice,
+    saveInovaAdminAccessUser,
   };
 }
 
@@ -417,6 +472,64 @@ function createAdminDomain(deps) {
       checkedAt: new Date(now()).toISOString(),
       role: normalizeText(session.role) || "admin",
       sessionExpiresAt: normalizeText(session.expiresAt),
+      viewer: normalizeOwner(session.owner),
+    };
+  }
+
+  async function listAdminAccessUsers(adminSessionToken) {
+    const session = await verifyAdminSession(adminSessionToken);
+    const users = await readAdminAccessUsers(session);
+    return {
+      checkedAt: new Date(now()).toISOString(),
+      users,
+      viewer: normalizeOwner(session.owner),
+    };
+  }
+
+  async function saveAdminAccessUser(adminSessionToken, input = {}) {
+    const session = await verifyAdminSession(adminSessionToken);
+    const providerUserKey = normalizeText(input.providerUserKey);
+    if (!providerUserKey) {
+      throw createHttpError(400, "권한을 변경할 회원을 선택해 주세요.");
+    }
+    const nextStatus = normalizeAccessUserStatus(input.status || (input.isAdmin === true ? "active" : "inactive"));
+    if (!nextStatus) {
+      throw createHttpError(400, "관리자 권한 값이 올바르지 않아요.");
+    }
+    const users = await readAdminAccessUsers(session);
+    const target = users.find((user) => user.providerUserKey === providerUserKey);
+    if (!target) {
+      throw createHttpError(404, "회원 목록에서 사용자를 찾지 못했어요.");
+    }
+    if (target.canEdit === false && nextStatus !== "active") {
+      throw createHttpError(400, "환경 설정으로 부여된 관리자 권한은 이 화면에서 해제할 수 없어요.");
+    }
+    const nextOrganization = Object.prototype.hasOwnProperty.call(input, "organization")
+      ? normalizeAdminAccessOrganization(input.organization, { strict: true })
+      : target.organization;
+
+    const nowIso = new Date(now()).toISOString();
+    const userRef = db.collection(collections.users).doc(providerUserKey);
+    const currentSnapshot = await userRef.get();
+    const currentData = currentSnapshot.exists ? currentSnapshot.data() || {} : {};
+    await userRef.set({
+      createdAt: normalizeText(currentData.createdAt) || nowIso,
+      displayName: target.displayName,
+      email: target.email,
+      numericUserId: target.numericUserId,
+      organization: nextOrganization,
+      provider: target.provider,
+      providerUserKey,
+      role: "admin",
+      status: nextStatus,
+      updatedAt: nowIso,
+      updatedBy: buildAdminAccessActor(session),
+    }, { merge: true });
+
+    const updatedUsers = await readAdminAccessUsers(session);
+    return {
+      checkedAt: nowIso,
+      user: updatedUsers.find((user) => user.providerUserKey === providerUserKey) || target,
       viewer: normalizeOwner(session.owner),
     };
   }
@@ -698,6 +811,186 @@ function createAdminDomain(deps) {
       role: normalizeAdminRole(data.role),
       source: "firestore",
     };
+  }
+
+  async function readAdminAccessUsers(session) {
+    assertDbReady();
+    const candidateMap = new Map();
+    const adminDocs = new Map();
+
+    addAdminAccessCandidate(candidateMap, normalizeOwner(session.owner));
+
+    const [
+      accountV2Docs,
+      accountDocs,
+      usageMonthDocs,
+      adminUserDocs,
+    ] = await Promise.all([
+      readCollectionDocuments(collections.accountsV2, { orderBy: "updatedAt", direction: "desc" }),
+      readCollectionDocuments(collections.accounts, { orderBy: "updatedAt", direction: "desc" }),
+      readCollectionDocuments(collections.featureUsageUserMonths, { orderBy: "lastUsedAt", direction: "desc" }),
+      readCollectionDocuments(collections.users),
+    ]);
+
+    accountV2Docs.forEach((entry) => {
+      addAdminAccessCandidate(candidateMap, normalizeAdminAccessIdentity(entry.data, entry.id));
+    });
+    accountDocs.forEach((entry) => {
+      addAdminAccessCandidate(candidateMap, normalizeAdminAccessIdentity(entry.data, entry.id));
+    });
+    usageMonthDocs.forEach((entry) => {
+      const usageData = entry.data || {};
+      addAdminAccessCandidate(candidateMap, normalizeAdminAccessIdentity({
+        ...(usageData.owner || usageData),
+        lastActivityAt: usageData.lastUsedAt,
+      }, entry.id));
+    });
+    adminUserDocs.forEach((entry) => {
+      const adminIdentity = normalizeAdminAccessIdentity(entry.data, entry.id);
+      if (adminIdentity.providerUserKey) {
+        adminDocs.set(adminIdentity.providerUserKey, entry.data || {});
+        addAdminAccessCandidate(candidateMap, adminIdentity);
+      }
+    });
+
+    return Array.from(candidateMap.values())
+      .map((member) => toAdminAccessUser(member, adminDocs.get(member.providerUserKey)))
+      .filter((member) => member.providerUserKey)
+      .sort(compareAdminAccessUsers)
+      .slice(0, ADMIN_ACCESS_USER_LIST_LIMIT);
+  }
+
+  async function readCollectionDocuments(collectionName, options = {}) {
+    const collectionRef = db.collection(collectionName);
+    let queryRef = collectionRef;
+    if (options.orderBy && typeof collectionRef.orderBy === "function") {
+      queryRef = collectionRef.orderBy(options.orderBy, options.direction || "asc");
+    }
+    if (typeof queryRef.limit === "function") {
+      queryRef = queryRef.limit(ADMIN_ACCESS_USER_LIST_LIMIT);
+    }
+    const snapshot = typeof queryRef.get === "function"
+      ? await queryRef.get()
+      : await collectionRef.get();
+    return readSnapshotDocs(snapshot);
+  }
+
+  function addAdminAccessCandidate(candidateMap, identityInput) {
+    const identity = normalizeAdminAccessIdentity(identityInput);
+    if (!identity.providerUserKey) {
+      return;
+    }
+    const existing = candidateMap.get(identity.providerUserKey) || {};
+    const displayName = identity.displayName === identity.providerUserKey && existing.displayName
+      ? existing.displayName
+      : identity.displayName || existing.displayName || identity.providerUserKey;
+    candidateMap.set(identity.providerUserKey, {
+      ...existing,
+      displayName,
+      email: identity.email || existing.email || "",
+      lastActivityAt: pickLaterAdminAccessActivityAt(identity.lastActivityAt, existing.lastActivityAt),
+      numericUserId: identity.numericUserId !== null ? identity.numericUserId : existing.numericUserId ?? null,
+      organization: identity.organization || existing.organization || "",
+      provider: identity.provider || existing.provider || "inova",
+      providerUserKey: identity.providerUserKey,
+    });
+  }
+
+  function normalizeAdminAccessIdentity(input = {}, docId = "") {
+    const source = input && typeof input === "object" ? input : {};
+    const normalized = normalizeOwner({
+      displayName: source.displayName,
+      email: source.email,
+      numericUserId: source.numericUserId,
+      provider: source.provider,
+      providerUserKey: source.providerUserKey || docId,
+    });
+    return {
+      ...normalized,
+      displayName: normalized.displayName || normalized.email || normalized.providerUserKey,
+      lastActivityAt: normalizeAdminAccessActivityAt(source.lastActivityAt),
+      organization: normalizeAdminAccessOrganization(readAdminAccessOrganizationSource(source)),
+    };
+  }
+
+  function toAdminAccessUser(memberInput, adminDoc = {}) {
+    const member = normalizeAdminAccessIdentity(memberInput);
+    const envAccess = readEnvAdminAccess(member);
+    const adminStatus = normalizeAccessUserStatus(adminDoc.status || adminDoc.accessState);
+    const isActiveAdmin = envAccess.allowed || adminStatus === "active";
+    return {
+      canEdit: !envAccess.allowed,
+      displayName: member.displayName,
+      email: member.email,
+      lastActivityAt: member.lastActivityAt,
+      numericUserId: member.numericUserId,
+      organization: normalizeAdminAccessOrganization(adminDoc.organization) || member.organization,
+      provider: member.provider,
+      providerUserKey: member.providerUserKey,
+      status: isActiveAdmin ? "active" : "inactive",
+    };
+  }
+
+  function readAdminAccessOrganizationSource(source = {}) {
+    return source.organization
+      || source.organizationName
+      || source.departmentName
+      || source.department
+      || source.teamName
+      || source.team
+      || source.divisionName
+      || source.division
+      || source.headquartersName
+      || source.headquarters
+      || "";
+  }
+
+  function normalizeAdminAccessOrganization(value, options = {}) {
+    const organization = normalizeText(value);
+    if (organization.length <= MAX_ADMIN_ACCESS_ORGANIZATION_LENGTH) {
+      return organization;
+    }
+    if (options.strict === true) {
+      throw createHttpError(400, `조직은 ${MAX_ADMIN_ACCESS_ORGANIZATION_LENGTH}자 이하로 입력해 주세요.`);
+    }
+    return organization.slice(0, MAX_ADMIN_ACCESS_ORGANIZATION_LENGTH);
+  }
+
+  function normalizeAdminAccessActivityAt(value) {
+    const timestamp = Date.parse(normalizeText(value));
+    return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : "";
+  }
+
+  function pickLaterAdminAccessActivityAt(leftInput, rightInput) {
+    const left = normalizeAdminAccessActivityAt(leftInput);
+    const right = normalizeAdminAccessActivityAt(rightInput);
+    if (!left) {
+      return right;
+    }
+    if (!right) {
+      return left;
+    }
+    return Date.parse(left) >= Date.parse(right) ? left : right;
+  }
+
+  function compareAdminAccessUsers(left, right) {
+    if (left.status !== right.status) {
+      return left.status === "active" ? -1 : 1;
+    }
+    const leftName = normalizeText(left.displayName || left.email || left.providerUserKey).toLowerCase();
+    const rightName = normalizeText(right.displayName || right.email || right.providerUserKey).toLowerCase();
+    return leftName.localeCompare(rightName);
+  }
+
+  function normalizeAccessUserStatus(statusInput) {
+    const status = normalizeText(statusInput).toLowerCase();
+    if (status === "active" || status === "admin") {
+      return "active";
+    }
+    if (status === "inactive" || status === "user" || status === "member") {
+      return "inactive";
+    }
+    return "";
   }
 
   async function readPanelNoticeState() {
@@ -995,6 +1288,10 @@ function createAdminDomain(deps) {
     };
   }
 
+  function buildAdminAccessActor(session) {
+    return buildAdminNoticeActor(session);
+  }
+
   function normalizeAdminNoticeActor(actorInput = {}) {
     const actor = actorInput && typeof actorInput === "object" ? actorInput : {};
     return {
@@ -1110,12 +1407,14 @@ function createAdminDomain(deps) {
     deleteAdminPanelNotice,
     exchangeAdminLaunch,
     issueAdminLaunch,
+    listAdminAccessUsers,
     listAdminPanelNotices,
     moveAdminPanelNotice,
     publishAdminPanelNotice,
     readAdminBootstrap,
     readPanelNotice,
     saveAdminPanelNotice,
+    saveAdminAccessUser,
     verifyAdminSession,
   };
 }

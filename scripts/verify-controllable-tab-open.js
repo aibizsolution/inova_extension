@@ -53,6 +53,9 @@ async function verifyMeetingHubWebOpenFirst() {
     clearTimeout() {},
     console,
     globalThis: null,
+    location: {
+      origin: "https://panel.example",
+    },
     open(url, target) {
       const openedWindow = {
         closed: false,
@@ -71,6 +74,7 @@ async function verifyMeetingHubWebOpenFirst() {
     setTimeout() {
       return 1;
     },
+    URL,
   });
   context.globalThis = context;
   context.InovaBookmarks = {
@@ -116,7 +120,21 @@ async function verifyMeetingHubWebOpenFirst() {
           url: "https://meeting.example/result",
         };
       }
+      if (request?.action === "meeting.workspace.prepare-open") {
+        return {
+          meeting: {
+            meetingId: request?.input?.meetingId || "meeting-generated",
+            title: request?.input?.title || "새 회의 룸",
+          },
+          opened: false,
+          tabId: 0,
+          url: `https://meeting.example/workspace?meetingId=${encodeURIComponent(request?.input?.meetingId || "")}`,
+        };
+      }
       if (request?.action === "meeting.result.open") {
+        throw new Error("background tab open fallback should not run when web-open succeeds");
+      }
+      if (request?.action === "meeting.workspace.open") {
         throw new Error("background tab open fallback should not run when web-open succeeds");
       }
       throw new Error(`Unexpected runtime action: ${request?.action}`);
@@ -163,9 +181,25 @@ async function verifyMeetingHubWebOpenFirst() {
   assert(runtimeCalls.some((request) => request.action === "meeting.result.prepare-open"));
   assert(!runtimeCalls.some((request) => request.action === "meeting.result.open"));
   assert.equal(openedWindows.length, 1);
-  assert.equal(openedWindows[0].initialUrl, "about:blank");
+  assert.equal(openedWindows[0].initialUrl, "https://panel.example/meeting/index.html?meetingId=meeting-alpha&jobId=job-alpha");
   assert.equal(openedWindows[0].target, "_blank");
   assert.equal(openedWindows[0].location.href, "https://meeting.example/result");
+
+  const workspaceHandled = await controller.handleMeetingAction("open-workspace", {});
+  assert.equal(workspaceHandled, true);
+  const workspacePrepare = runtimeCalls.find((request) => request.action === "meeting.workspace.prepare-open");
+  assert(workspacePrepare, "workspace launch should prepare the final URL before using any runtime tab-open fallback");
+  assert(!runtimeCalls.some((request) => request.action === "meeting.workspace.open"));
+  assert.equal(openedWindows.length, 2);
+  const workspaceInitialUrl = new URL(openedWindows[1].initialUrl);
+  assert.equal(`${workspaceInitialUrl.origin}${workspaceInitialUrl.pathname}`, "https://panel.example/meeting/index.html");
+  assert(/^meeting-[a-z0-9]+-[a-z0-9]+$/.test(workspaceInitialUrl.searchParams.get("meetingId") || ""));
+  assert.equal(workspacePrepare.input.meetingId, workspaceInitialUrl.searchParams.get("meetingId"));
+  assert.equal(openedWindows[1].target, "_blank");
+  assert.equal(
+    openedWindows[1].location.href,
+    `https://meeting.example/workspace?meetingId=${encodeURIComponent(workspacePrepare.input.meetingId)}`
+  );
 }
 
 async function flushAsyncTurns(turns = 20) {

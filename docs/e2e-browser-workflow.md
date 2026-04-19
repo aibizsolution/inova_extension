@@ -51,7 +51,7 @@
    - 로컬 기대값: `#inova-hosted-panel-frame`의 `src`가 `http://127.0.0.1:5000/extension-v2/panel/index.html?...`
    - `chrome-extension://.../frame-proxy.html?...`이면 Bridge 검증이 꼬일 수 있으므로 extension Reload와 페이지 새로고침을 먼저 한다.
 8. 콘솔 baseline을 잡는다. 테스트 전후 warning/error가 새로 생기면 해당 feature 결과에 함께 기록한다.
-9. hosted panel에서 새 탭을 여는 flow는 web-open 우선 경로를 기대한다. 사용자 action 안에서 `window.open("about:blank", "_blank")`로 탭을 확보하고, async launch token 또는 prepared URL이 준비되면 그 탭을 이동시키는 구조여야 한다.
+9. hosted panel에서 새 탭을 여는 flow는 web-open 우선 경로를 기대한다. secret 없는 hosted URL을 즉시 만들 수 있으면 사용자 action 안에서 그 URL을 바로 열고, launch token이나 원격 prepared URL처럼 async 준비가 필요하면 `window.open("about:blank", "_blank")`로 탭을 확보한 뒤 준비된 URL로 이동시킨다.
 10. `chrome.tabs.create` background open은 fallback이다. Bridge가 열린 새 탭을 자동 상속하지 않을 수 있으므로, 새 탭 lifecycle 자체가 목적이면 Bridge selector를 다시 열어 해당 새 탭을 선택한다.
 11. 새 탭의 실제 URL을 알고 있고 내부 화면 테스트가 목적이면, Bridge가 이미 잡고 있는 탭을 그 URL로 직접 이동해 테스트할 수 있다. 이 경우 결과에는 `URL 기반 직접 이동으로 내부 테스트`라고 적고, 실제 새 탭 자동 승계 검증과 섞어 말하지 않는다.
 
@@ -155,6 +155,7 @@ npm.cmd run check:feature-usage -- --days 1 --limit 20
 1. 검증 대상 계정을 정한다.
    - 비관리자 계정: `ops_admin_users/{providerUserKey}` 문서가 없고 `INOVA_ADMIN_PROVIDER_USER_KEYS` / `INOVA_ADMIN_EMAILS`에도 없어야 한다.
    - 관리자 계정: 환경 allowlist 또는 `ops_admin_users/{providerUserKey}` active 문서가 있어야 한다.
+   - 로컬 기본값: `npm.cmd run emulator:meeting-local`은 `youngtack.park@incross.com`을 `INOVA_ADMIN_EMAILS`에 자동 포함한다. 로컬 임시 관리자를 더 넣을 때는 실행 전 `INOVA_LOCAL_ADMIN_EMAILS`에 쉼표로 추가한다.
 2. 패널 iframe이 현재 target으로 로드됐는지 확인한다.
    - 로컬: `http://127.0.0.1:5000/extension-v2/panel/index.html?...`
    - 상용: `https://browser-extension-v2.web.app/extension-v2/panel/index.html?...`
@@ -169,8 +170,9 @@ npm.cmd run check:feature-usage -- --days 1 --limit 20
 7. 관리자 페이지가 launch token을 교환한 뒤 URL에서 `launch` query를 제거하는지 확인한다.
 8. 관리자 페이지에서 verified 상태, 사용자, 계정, 권한, 세션 만료 정보가 표시되어야 한다.
 9. 선택한 기능 화면 안에는 별도 `세션 컨텍스트` 카드처럼 상단 인증 정보를 반복하는 UI가 없어야 한다.
-10. 같은 launch URL을 다시 열거나 launch 없이 직접 진입하면 blocked 상태가 보여야 한다.
-11. 상용 배포 직후에는 `browser-extension-v2.web.app`의 panel/admin 정적 자산 200 응답과 릴리스 ZIP metadata 정합성을 함께 확인한 뒤 패널을 새로고침한다.
+10. `사용자 및 권한`은 기존 회원 목록을 읽고, 선택한 회원의 `일반 사용자 / 관리자` 권한 선택과 `저장`만 제공해야 한다. 이메일 직접 입력이나 별도 권한 설명 필드가 보이면 실패다. `마지막 활동` 옆 `?` 도움말은 feature usage에 기록되는 기능 사용 이벤트가 기준임을 설명해야 한다.
+11. 같은 launch URL을 다시 열거나 launch 없이 직접 진입하면 blocked 상태가 보여야 한다.
+12. 상용 배포 직후에는 `browser-extension-v2.web.app`의 panel/admin 정적 자산 200 응답과 릴리스 ZIP metadata 정합성을 함께 확인한 뒤 패널을 새로고침한다.
 
 ### 소식 팝업
 
@@ -181,7 +183,7 @@ npm.cmd run check:feature-usage -- --days 1 --limit 20
 3. editor가 제목, 본문 Markdown, CTA label/URL, 노출 시작/종료 시간을 표시하고, 버튼은 `저장`, `삭제`, `새 소식`만 있어야 한다.
 4. 노출 여부는 토글이 아니라 현재 시각이 노출 시작/종료 범위 안인지로 계산한다. 여러 소식이 동시에 노출되면 패널은 목록 위 순서대로 자동 전환해야 한다.
 5. Markdown preview에서 raw HTML은 escape되고, 문단/줄바꿈, `**굵게**`, `*기울임*`, `-` bullet, `https://` 링크만 렌더링되는지 본다.
-6. CTA URL을 `www.naver.com`처럼 입력하면 저장 전 `https://www.naver.com`으로 보정되거나 필드 바로 아래에서 `https://` 요구사항을 알려야 한다. generic `관리자 요청 실패`만 보여주면 실패다.
+6. CTA URL을 `inova.incross.com`처럼 입력하면 저장 전 `https://inova.incross.com/`으로 보정되거나 필드 바로 아래에서 `https://` 요구사항을 알려야 한다. generic `관리자 요청 실패`만 보여주면 실패다.
 7. 종료 시간이 현재보다 과거인 공지는 저장되어도 패널 노출 대상으로 계산되면 안 되고, `http://` CTA나 Markdown 링크는 저장되지 않아야 한다.
 8. 소식을 저장하면 Firestore `ops_panel_notices/{noticeId}`와 panel invalidation signal이 갱신되어야 한다.
 9. 일반 패널 사용자 iframe의 capability handshake에서 `panel.notice.read-active`가 enabled이고, auth가 `access-token`, service가 `admin`인지 확인한다.
@@ -195,9 +197,10 @@ npm.cmd run check:feature-usage -- --days 1 --limit 20
 
 1. `ops_admin_users/{providerUserKey}`를 inactive로 바꾼 뒤 기존 AdminSession으로 새로고침한다.
    - 기대값: verified 상태가 유지되지 않고 blocked 상태로 전환된다.
-2. 관리자 항목이 보이는 상태에서 capability manifest의 admin capability를 비활성화한 rehearsal bundle이면 항목이 사라져야 한다.
-3. 관리자 페이지 console에 launch token 원문이나 AdminSession token 원문을 직접 출력하면 실패다.
-4. 배포 보고에는 Functions 배포, Hosting 배포, 확장 Reload 또는 확장 패키지 갱신 필요 여부를 분리해서 적는다.
+2. `사용자 및 권한`에서 비관리자 회원을 `관리자`로 저장하면 `ops_admin_users/{providerUserKey}.status`가 `active`가 되고, 다시 `일반 사용자`로 저장하면 `inactive`가 되어야 한다.
+3. 관리자 항목이 보이는 상태에서 capability manifest의 admin capability를 비활성화한 rehearsal bundle이면 항목이 사라져야 한다.
+4. 관리자 페이지 console에 launch token 원문이나 AdminSession token 원문을 직접 출력하면 실패다.
+5. 배포 보고에는 Functions 배포, Hosting 배포, 확장 Reload 또는 확장 패키지 갱신 필요 여부를 분리해서 적는다.
 
 ## 대화 탭
 

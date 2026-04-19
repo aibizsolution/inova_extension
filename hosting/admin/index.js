@@ -7,23 +7,21 @@
   const MAX_NOTICE_TITLE_LENGTH = 80;
   const MAX_NOTICE_BODY_LENGTH = 800;
   const MAX_NOTICE_CTA_LABEL_LENGTH = 32;
+  const MAX_ACCESS_ORGANIZATION_LENGTH = 80;
+  const ADMIN_ACCESS_LAST_ACTIVITY_HELP_TEXT = "마지막 활동은 실험실 기능 사용량 집계의 최근 기록 기준입니다. 대화 이동, 프롬프트 저장/적용/삭제, 프롬프트 검토/적용, 스토어 가져오기/좋아요/게시/삭제, 회의 작업실/결과 열기, 릴리스 다운로드 열기 같은 기능 사용 이벤트가 성공/오류/제한 상태로 기록되면 갱신됩니다.";
+  const ACCESS_FILTERS = Object.freeze([
+    { id: "all", label: "전체" },
+    { id: "active", label: "관리자" },
+    { id: "inactive", label: "일반 사용자" },
+  ]);
   const ADMIN_SECTIONS = Object.freeze([
-    {
-      eyebrow: "Overview",
-      group: "Console",
-      icon: "dashboard",
-      id: "overview",
-      label: "개요",
-      summary: "관리자 세션과 메뉴 구조를 확인하는 기본 화면입니다.",
-      title: "관리자 홈",
-    },
     {
       eyebrow: "Access",
       group: "Operations",
       icon: "users",
       id: "access",
       label: "사용자 및 권한",
-      summary: "관리자 계정, 권한, 접근 정책 화면이 들어갈 자리입니다.",
+      summary: "회원별 관리자 권한을 관리합니다.",
       title: "사용자 및 권한",
     },
     {
@@ -36,15 +34,6 @@
       title: "소식 팝업",
     },
     {
-      eyebrow: "Runtime",
-      group: "Operations",
-      icon: "system",
-      id: "runtime",
-      label: "시스템 운영",
-      summary: "Functions, Hosting, capability manifest 운영 상태 화면이 들어갈 자리입니다.",
-      title: "시스템 운영",
-    },
-    {
       eyebrow: "Insights",
       group: "Insights",
       icon: "chart",
@@ -53,38 +42,18 @@
       summary: "기능 사용량과 운영 지표 화면이 들어갈 자리입니다.",
       title: "사용량",
     },
-    {
-      eyebrow: "Audit",
-      group: "Insights",
-      icon: "audit",
-      id: "audit",
-      label: "감사 로그",
-      summary: "관리자 작업 이력과 감사 로그 화면이 들어갈 자리입니다.",
-      title: "감사 로그",
-    },
-    {
-      eyebrow: "Release",
-      group: "Release",
-      icon: "release",
-      id: "release",
-      label: "배포 및 릴리스",
-      summary: "배포 상태와 릴리스 운영 화면이 들어갈 자리입니다.",
-      title: "배포 및 릴리스",
-    },
   ]);
   const NAV_ICON_PATHS = Object.freeze({
-    audit: ["M12 3l7 3v6c0 4.2-2.7 7.5-7 9-4.3-1.5-7-4.8-7-9V6l7-3z", "M9.5 12l1.7 1.7 3.3-3.9"],
     chart: ["M4 19V5", "M4 19h16", "M8 16v-4", "M12 16V8", "M16 16v-7"],
     dashboard: ["M4 5h7v6H4z", "M13 5h7v4h-7z", "M13 11h7v8h-7z", "M4 13h7v6H4z"],
     notice: ["M4 5h16v11H7l-3 3z", "M8 9h8", "M8 12h5"],
-    release: ["M12 3v10", "M8 7l4-4 4 4", "M5 13v5h14v-5"],
-    system: ["M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z", "M12 2v3", "M12 19v3", "M4.9 4.9l2.1 2.1", "M17 17l2.1 2.1", "M2 12h3", "M19 12h3", "M4.9 19.1 7 17", "M17 7l2.1-2.1"],
     users: ["M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", "M15 10a2.5 2.5 0 1 0 0-5", "M3 19a6 6 0 0 1 12 0", "M14 14a5 5 0 0 1 7 5"],
   });
 
   const state = {
-    activeSectionId: "overview",
+    activeSectionId: "access",
     adminSessionToken: "",
+    access: createAccessState(),
     error: "",
     notice: createNoticeState(),
     role: "",
@@ -94,11 +63,15 @@
   };
 
   const elements = {};
+  let accessSearchController = null;
   let confirmController = null;
   let toastController = null;
 
   global.addEventListener("DOMContentLoaded", () => {
     bindElements();
+    accessSearchController = createAdminDeferredSearchController({
+      onSearch: applyAccessSearch,
+    });
     confirmController = createAdminConfirmController();
     toastController = createAdminToastController();
     bindEvents();
@@ -293,6 +266,10 @@
       "blockedTitle",
       "blockedIcon",
       "contentPanel",
+      "loadingIcon",
+      "loadingMessage",
+      "loadingPanel",
+      "loadingTitle",
       "navGroups",
       "pageOutlet",
       "sectionEyebrow",
@@ -322,6 +299,13 @@
     setText(elements.sectionEyebrow, "Loading");
     setText(elements.sectionTitle, "관리자 권한 확인");
     setText(elements.statusSummary, message);
+    setText(elements.loadingTitle, "관리자 권한 확인");
+    setText(elements.loadingMessage, normalizeText(message) || "관리자 권한을 확인하고 있습니다.");
+    if (elements.loadingIcon) {
+      elements.loadingIcon.innerHTML = renderAdminIcon("admin", {
+        className: "inova-status-state__svg",
+      });
+    }
   }
 
   function renderVerified() {
@@ -355,6 +339,7 @@
     setHidden(elements.adminSidebar, state.view !== "verified");
     setHidden(elements.sessionPanel, state.view !== "verified");
     setHidden(elements.contentPanel, state.view !== "verified");
+    setHidden(elements.loadingPanel, state.view !== "loading");
     setHidden(elements.blockedPanel, state.view !== "blocked");
   }
 
@@ -455,7 +440,215 @@
       void ensurePanelNoticesLoaded();
       return;
     }
+    if (section.id === "access") {
+      elements.pageOutlet?.replaceChildren(createAccessWorkbench());
+      void ensureAccessUsersLoaded();
+      return;
+    }
     elements.pageOutlet?.replaceChildren(createSectionPlaceholder(section));
+  }
+
+  function createAccessWorkbench() {
+    const entries = readAccessEntries();
+    const visibleEntries = filterAccessEntries(entries);
+    const selectedEntry = readSelectedAccessEntry(entries, visibleEntries);
+    const wrapper = global.document.createElement("div");
+    wrapper.className = "admin-access-workbench";
+    wrapper.append(
+      createAccessListPanel(entries, visibleEntries, selectedEntry),
+      createAccessDetailPanel(selectedEntry)
+    );
+    wrapper.addEventListener("input", handleAccessInput);
+    wrapper.addEventListener("compositionstart", handleAccessCompositionStart);
+    wrapper.addEventListener("compositionend", handleAccessCompositionEnd);
+    wrapper.addEventListener("search", handleAccessSearch);
+    wrapper.addEventListener("click", handleAccessClick);
+    return wrapper;
+  }
+
+  function createAccessListPanel(entries, visibleEntries, selectedEntry) {
+    const panel = global.document.createElement("section");
+    panel.className = "admin-access-list";
+
+    const filterButtons = ACCESS_FILTERS.map((filter) => {
+      const isSelected = state.access.statusFilter === filter.id;
+      return `
+        <button type="button" data-access-filter="${escapeHtmlAttribute(filter.id)}" aria-pressed="${isSelected ? "true" : "false"}">
+          ${escapeHtml(filter.label)}
+        </button>`;
+    }).join("");
+    const rows = visibleEntries.map((entry) => createAccessListItem(entry, selectedEntry)).join("");
+    const listBody = state.access.loading && !state.access.loaded
+      ? '<p class="admin-access-empty">불러오는 중입니다.</p>'
+      : rows || '<p class="admin-access-empty">조건에 맞는 회원이 없습니다.</p>';
+
+    panel.innerHTML = `
+      <div class="inova-section-head admin-access-panel-head">
+        <h3 class="inova-section-head__title">회원 목록</h3>
+        <span class="admin-access-count">${visibleEntries.length}명</span>
+      </div>
+      <label class="admin-access-search">
+        <span>검색</span>
+        <input type="search" data-access-search value="${escapeHtmlAttribute(state.access.searchDraft)}" placeholder="이름 또는 이메일 검색" />
+      </label>
+      <div class="admin-access-filter inova-segmented" aria-label="회원 권한 필터">
+        ${filterButtons}
+      </div>
+      <div class="admin-access-list__items">
+        ${listBody}
+      </div>
+    `;
+    return panel;
+  }
+
+  function createAccessListItem(entry, selectedEntry) {
+    const isSelected = entry.id === selectedEntry?.id;
+    const status = readAccessDraftStatus(entry);
+    return `
+      <button type="button" class="admin-access-list__item${isSelected ? " is-selected" : ""}" data-access-select="${escapeHtmlAttribute(entry.id)}" aria-current="${isSelected ? "true" : "false"}">
+        <span class="admin-access-avatar" aria-hidden="true">${escapeHtml(readAccessInitial(entry))}</span>
+        <span class="admin-access-list__body">
+          <strong>${escapeHtml(entry.displayName)}</strong>
+          <span>${escapeHtml(entry.email || entry.providerUserKey)}</span>
+          ${entry.organization ? `<span>${escapeHtml(entry.organization)}</span>` : ""}
+        </span>
+        <span class="inova-badge ${escapeHtmlAttribute(readAccessStatusClass(status))}">${escapeHtml(readAccessStatusLabel(status))}</span>
+      </button>
+    `;
+  }
+
+  function createAccessDetailPanel(entry) {
+    const selectedEntry = entry || readAccessEntries()[0];
+    if (!selectedEntry) {
+      const panel = global.document.createElement("section");
+      panel.className = "admin-access-detail";
+      panel.innerHTML = `
+        <div class="inova-section-head admin-access-panel-head">
+          <h3 class="inova-section-head__title">권한 설정</h3>
+        </div>
+        <p class="admin-access-empty">선택할 회원이 없습니다.</p>
+      `;
+      return panel;
+    }
+    const draftStatus = readAccessDraftStatus(selectedEntry);
+    const isAdmin = draftStatus === "active";
+    const isSaving = state.access.savingId === selectedEntry.id;
+    const canEditRole = selectedEntry.canEdit !== false && !state.access.savingId;
+    const canEditOrganization = !state.access.savingId;
+    const detailEmail = selectedEntry?.email || "-";
+    const detailName = selectedEntry?.displayName || "-";
+    const detailOrganization = readAccessDraftOrganization(selectedEntry);
+    const detailLastActivity = readAccessLastActivityLabel(selectedEntry);
+
+    const panel = global.document.createElement("section");
+    panel.className = "admin-access-detail";
+    panel.innerHTML = `
+      <div class="inova-section-head admin-access-panel-head">
+        <h3 class="inova-section-head__title">권한 설정</h3>
+      </div>
+      <div class="admin-access-selected-label">선택한 회원</div>
+      <div class="admin-access-profile__hero">
+        <span class="admin-access-avatar is-large" aria-hidden="true">${escapeHtml(readAccessInitial(selectedEntry))}</span>
+        <div>
+          <strong>${escapeHtml(detailName)}</strong>
+          <span>${escapeHtml(detailEmail)}</span>
+        </div>
+      </div>
+      <div class="admin-access-meta" aria-label="회원 활동 정보">
+        <div class="admin-access-meta__label">
+          <span class="admin-access-meta__label-text">마지막 활동</span>
+          <span class="admin-help-chip" tabindex="0" aria-label="${escapeHtmlAttribute(ADMIN_ACCESS_LAST_ACTIVITY_HELP_TEXT)}" title="${escapeHtmlAttribute(ADMIN_ACCESS_LAST_ACTIVITY_HELP_TEXT)}">?</span>
+        </div>
+        <strong>${escapeHtml(detailLastActivity)}</strong>
+      </div>
+      <div class="admin-access-permission">
+        <span>관리자 권한</span>
+        <div class="admin-access-permission__toggle inova-segmented" aria-label="관리자 권한 설정">
+          <button type="button" data-access-role="inactive" ${canEditRole ? "" : "disabled"} aria-pressed="${isAdmin ? "false" : "true"}">일반 사용자</button>
+          <button type="button" data-access-role="active" ${canEditRole ? "" : "disabled"} aria-pressed="${isAdmin ? "true" : "false"}">관리자</button>
+        </div>
+      </div>
+      <label class="admin-access-field">
+        <span>조직</span>
+        <input type="text" data-access-organization maxlength="${MAX_ACCESS_ORGANIZATION_LENGTH}" value="${escapeHtmlAttribute(detailOrganization)}" placeholder="팀명 또는 본부명" ${canEditOrganization ? "" : "disabled"} />
+      </label>
+      <div class="admin-access-actions">
+        <button type="button" class="admin-primary-button is-strong" data-access-action="save" ${canSaveAccessUser(selectedEntry) ? "" : "disabled"}>${isSaving ? "저장 중" : "저장"}</button>
+      </div>
+    `;
+    return panel;
+  }
+
+  function handleAccessInput(event) {
+    const target = event.target;
+    if (target?.matches?.("[data-access-search]")) {
+      state.access.searchDraft = String(target.value || "");
+      accessSearchController?.handleInput?.(target.value, {
+        composing: Boolean(event.isComposing),
+      });
+      return;
+    }
+    if (target?.matches?.("[data-access-organization]")) {
+      writeAccessDraftOrganization(state.access.selectedId, target.value);
+      updateAccessSaveButton(event.currentTarget);
+    }
+  }
+
+  function handleAccessCompositionStart(event) {
+    if (!event.target?.matches?.("[data-access-search]")) {
+      return;
+    }
+    accessSearchController?.handleCompositionStart?.();
+  }
+
+  function handleAccessCompositionEnd(event) {
+    const target = event.target;
+    if (!target?.matches?.("[data-access-search]")) {
+      return;
+    }
+    state.access.searchDraft = String(target.value || "");
+    accessSearchController?.handleCompositionEnd?.(target.value);
+  }
+
+  function handleAccessSearch(event) {
+    const target = event.target;
+    if (!target?.matches?.("[data-access-search]")) {
+      return;
+    }
+    state.access.searchDraft = String(target.value || "");
+    accessSearchController?.flush?.(target.value);
+  }
+
+  function handleAccessClick(event) {
+    if (event.target?.closest?.("[data-access-search]")) {
+      return;
+    }
+    accessSearchController?.flush?.(state.access.searchDraft);
+    const actionButton = event.target?.closest?.("[data-access-action]");
+    if (actionButton) {
+      const action = normalizeText(actionButton.dataset.accessAction);
+      if (action === "save") {
+        void saveAccessUser();
+      }
+      return;
+    }
+    const roleButton = event.target?.closest?.("[data-access-role]");
+    if (roleButton) {
+      writeAccessDraftStatus(state.access.selectedId, roleButton.dataset.accessRole);
+      renderActiveSection();
+      return;
+    }
+    const filterButton = event.target?.closest?.("[data-access-filter]");
+    if (filterButton) {
+      state.access.statusFilter = normalizeText(filterButton.dataset.accessFilter) || "all";
+      renderActiveSection();
+      return;
+    }
+    const selectButton = event.target?.closest?.("[data-access-select]");
+    if (selectButton) {
+      state.access.selectedId = normalizeText(selectButton.dataset.accessSelect);
+      renderActiveSection();
+    }
   }
 
   function createSectionPlaceholder(section) {
@@ -467,9 +660,7 @@
     title.textContent = section.title;
 
     const body = global.document.createElement("p");
-    body.textContent = section.id === "overview"
-      ? "기능을 한 화면에 누적하지 않고, 왼쪽 메뉴에서 선택한 운영 화면을 이 본문 영역에 연결합니다."
-      : "이 메뉴의 운영 화면은 아직 연결되지 않았습니다. 기능을 붙일 때는 이 outlet 안에서 독립적으로 확장합니다.";
+    body.textContent = "이 메뉴의 운영 화면은 아직 연결되지 않았습니다. 기능을 붙일 때는 이 outlet 안에서 독립적으로 확장합니다.";
 
     placeholder.append(title, body);
     return placeholder;
@@ -518,7 +709,7 @@
           </label>
           <label class="admin-notice-field" for="panelNoticeCtaUrl">
             <span>CTA URL</span>
-            <input id="panelNoticeCtaUrl" data-notice-field="cta.url" inputmode="url" placeholder="https://www.naver.com" />
+            <input id="panelNoticeCtaUrl" data-notice-field="cta.url" inputmode="url" placeholder="https://inova.incross.com/" />
             <small class="admin-notice-field__hint" data-notice-feedback-for="cta.url">https 링크만 사용할 수 있습니다.</small>
           </label>
         </div>
@@ -886,6 +1077,307 @@
     renderActiveSection();
   }
 
+  async function ensureAccessUsersLoaded() {
+    if (state.access.loaded || state.access.loading) {
+      return;
+    }
+    await loadAccessUsers();
+  }
+
+  async function loadAccessUsers() {
+    state.access.loading = true;
+    state.access.error = "";
+    if (state.activeSectionId === "access") {
+      renderActiveSection();
+    }
+    try {
+      const result = await postAdminFunction("listInovaAdminAccessUsers");
+      const users = Array.isArray(result.users)
+        ? result.users.map(normalizeAccessUser).filter(Boolean)
+        : [];
+      state.access.entries = users;
+      state.access.loaded = true;
+      state.access.draftStatusById = {};
+      state.access.draftOrganizationById = {};
+      if (!users.some((entry) => entry.id === state.access.selectedId)) {
+        state.access.selectedId = users[0]?.id || "";
+      }
+    } catch (error) {
+      state.access.error = readErrorMessage(error);
+      showAdminToast(state.access.error, "error");
+    } finally {
+      state.access.loading = false;
+      if (state.activeSectionId === "access") {
+        renderActiveSection();
+      }
+    }
+  }
+
+  async function saveAccessUser() {
+    if (state.access.savingId) {
+      return;
+    }
+    const selectedEntry = readAccessEntries().find((entry) => entry.id === state.access.selectedId);
+    if (!canSaveAccessUser(selectedEntry)) {
+      return;
+    }
+    const nextStatus = readAccessDraftStatus(selectedEntry);
+    state.access.savingId = selectedEntry.id;
+    state.access.error = "";
+    renderActiveSection();
+    try {
+      const result = await postAdminFunction("saveInovaAdminAccessUser", {
+        isAdmin: nextStatus === "active",
+        organization: readAccessDraftOrganization(selectedEntry),
+        providerUserKey: selectedEntry.providerUserKey,
+        status: nextStatus,
+      });
+      const updatedUser = normalizeAccessUser(result.user);
+      if (updatedUser) {
+        state.access.entries = readAccessEntries().map((entry) => (
+          entry.id === updatedUser.id ? updatedUser : entry
+        ));
+        delete state.access.draftStatusById[updatedUser.id];
+        delete state.access.draftOrganizationById[updatedUser.id];
+      }
+      showAdminToast("저장되었습니다.", "success");
+    } catch (error) {
+      state.access.error = readErrorMessage(error);
+      showAdminToast(state.access.error, "error");
+    } finally {
+      state.access.savingId = "";
+      renderActiveSection();
+    }
+  }
+
+  function createAccessState() {
+    return {
+      draftStatusById: {},
+      draftOrganizationById: {},
+      entries: [],
+      error: "",
+      loaded: false,
+      loading: false,
+      query: "",
+      savingId: "",
+      searchDraft: "",
+      selectedId: "",
+      statusFilter: "all",
+    };
+  }
+
+  function applyAccessSearch(query, details = {}) {
+    const focusState = readAccessSearchFocusState();
+    const nextQuery = normalizeText(query);
+    const nextDraft = typeof details.rawValue === "string" ? details.rawValue : nextQuery;
+    state.access.query = nextQuery;
+    state.access.searchDraft = nextDraft;
+    if (state.activeSectionId === "access") {
+      renderActiveSection();
+      restoreAccessSearchFocus(focusState);
+    }
+  }
+
+  function readAccessSearchFocusState() {
+    const activeElement = global.document?.activeElement;
+    if (!activeElement?.matches?.("[data-access-search]")) {
+      return null;
+    }
+    return {
+      selectionDirection: activeElement.selectionDirection || "none",
+      selectionEnd: Number(activeElement.selectionEnd),
+      selectionStart: Number(activeElement.selectionStart),
+    };
+  }
+
+  function restoreAccessSearchFocus(focusState) {
+    if (!focusState) {
+      return;
+    }
+    const input = elements.pageOutlet?.querySelector?.("[data-access-search]");
+    if (!input) {
+      return;
+    }
+    input.focus({ preventScroll: true });
+    if (typeof input.setSelectionRange !== "function") {
+      return;
+    }
+    const valueLength = String(input.value || "").length;
+    const selectionStart = clampNumber(focusState.selectionStart, 0, valueLength);
+    const selectionEnd = clampNumber(focusState.selectionEnd, selectionStart, valueLength);
+    input.setSelectionRange(selectionStart, selectionEnd, focusState.selectionDirection);
+  }
+
+  function readAccessEntries() {
+    return Array.isArray(state.access.entries) ? state.access.entries : [];
+  }
+
+  function filterAccessEntries(entries) {
+    const query = normalizeText(state.access.query).toLowerCase();
+    const statusFilter = normalizeText(state.access.statusFilter) || "all";
+    return entries.filter((entry) => {
+      const matchesStatus = statusFilter === "all" || readAccessDraftStatus(entry) === statusFilter;
+      const haystack = [
+        entry.displayName,
+        entry.email,
+        entry.organization,
+        entry.providerUserKey,
+      ].join(" ").toLowerCase();
+      return matchesStatus && (!query || haystack.includes(query));
+    });
+  }
+
+  function readSelectedAccessEntry(entries, visibleEntries) {
+    const selectedId = normalizeText(state.access.selectedId);
+    const selected = entries.find((entry) => entry.id === selectedId);
+    if (selected && visibleEntries.some((entry) => entry.id === selected.id)) {
+      return selected;
+    }
+    const fallback = visibleEntries[0] || entries[0] || null;
+    state.access.selectedId = normalizeText(fallback?.id) || "";
+    return fallback;
+  }
+
+  function readAccessInitial(entry) {
+    const source = normalizeText(entry?.displayName || entry?.email || entry?.providerUserKey);
+    return source.slice(0, 1).toUpperCase() || "A";
+  }
+
+  function readAccessDraftStatus(entry) {
+    const entryId = normalizeText(entry?.id);
+    const draftStatus = normalizeText(state.access.draftStatusById?.[entryId]).toLowerCase();
+    if (draftStatus === "active" || draftStatus === "inactive") {
+      return draftStatus;
+    }
+    return normalizeText(entry?.status).toLowerCase() === "active" ? "active" : "inactive";
+  }
+
+  function readAccessDraftOrganization(entry) {
+    const entryId = normalizeText(entry?.id);
+    if (!entryId) {
+      return "";
+    }
+    if (Object.prototype.hasOwnProperty.call(state.access.draftOrganizationById, entryId)) {
+      return String(state.access.draftOrganizationById[entryId] || "");
+    }
+    return normalizeText(entry?.organization);
+  }
+
+  function writeAccessDraftStatus(entryIdInput, statusInput) {
+    const entryId = normalizeText(entryIdInput);
+    const status = normalizeText(statusInput).toLowerCase();
+    if (!entryId || (status !== "active" && status !== "inactive")) {
+      return;
+    }
+    const entry = readAccessEntries().find((candidate) => candidate.id === entryId);
+    if (!entry || entry.canEdit === false) {
+      return;
+    }
+    if (normalizeText(entry.status).toLowerCase() === status) {
+      delete state.access.draftStatusById[entryId];
+      return;
+    }
+    state.access.draftStatusById[entryId] = status;
+  }
+
+  function writeAccessDraftOrganization(entryIdInput, organizationInput) {
+    const entryId = normalizeText(entryIdInput);
+    if (!entryId) {
+      return;
+    }
+    const entry = readAccessEntries().find((candidate) => candidate.id === entryId);
+    if (!entry) {
+      return;
+    }
+    const nextOrganization = String(organizationInput || "").slice(0, MAX_ACCESS_ORGANIZATION_LENGTH);
+    if (normalizeText(entry.organization) === normalizeText(nextOrganization)) {
+      delete state.access.draftOrganizationById[entryId];
+      return;
+    }
+    state.access.draftOrganizationById[entryId] = nextOrganization;
+  }
+
+  function isAccessRoleDraftDirty(entry) {
+    return readAccessDraftStatus(entry) !== (normalizeText(entry?.status).toLowerCase() === "active" ? "active" : "inactive");
+  }
+
+  function isAccessOrganizationDraftDirty(entry) {
+    return normalizeText(readAccessDraftOrganization(entry)) !== normalizeText(entry?.organization);
+  }
+
+  function canSaveAccessUser(entry) {
+    if (!entry || state.access.savingId) {
+      return false;
+    }
+    if (isAccessOrganizationDraftDirty(entry)) {
+      return true;
+    }
+    return entry.canEdit !== false && isAccessRoleDraftDirty(entry);
+  }
+
+  function updateAccessSaveButton(host) {
+    const button = host?.querySelector?.("[data-access-action=\"save\"]");
+    const entry = readAccessEntries().find((candidate) => candidate.id === state.access.selectedId);
+    if (button) {
+      button.disabled = !canSaveAccessUser(entry);
+    }
+  }
+
+  function normalizeAccessUser(input = {}) {
+    if (!input || typeof input !== "object") {
+      return null;
+    }
+    const providerUserKey = normalizeText(input.providerUserKey);
+    if (!providerUserKey) {
+      return null;
+    }
+    const numericUserId = input.numericUserId;
+    const status = normalizeText(input.status).toLowerCase() === "active" ? "active" : "inactive";
+    return {
+      canEdit: input.canEdit !== false,
+      displayName: normalizeText(input.displayName) || normalizeText(input.email) || providerUserKey,
+      email: normalizeText(input.email).toLowerCase(),
+      id: providerUserKey,
+      lastActivityAt: normalizeText(input.lastActivityAt),
+      numericUserId: numericUserId === null || numericUserId === undefined || numericUserId === ""
+        ? null
+        : Number.isFinite(Number(numericUserId))
+          ? Number(numericUserId)
+          : null,
+      provider: normalizeText(input.provider) || "inova",
+      providerUserKey,
+      organization: normalizeText(input.organization),
+      status,
+    };
+  }
+
+  function readAccessLastActivityLabel(entry) {
+    const formatted = formatDateTime(entry?.lastActivityAt);
+    return formatted === "-" ? "기록 없음" : formatted;
+  }
+
+  function readAccessStatusLabel(statusInput) {
+    const status = normalizeText(statusInput).toLowerCase();
+    if (status === "active") {
+      return "관리자";
+    }
+    if (status === "inactive") {
+      return "일반 사용자";
+    }
+    return "확인 필요";
+  }
+
+  function readAccessStatusClass(statusInput) {
+    const status = normalizeText(statusInput).toLowerCase();
+    if (status === "active") {
+      return "inova-badge--success";
+    }
+    if (status === "inactive") {
+      return "inova-badge--muted";
+    }
+    return "inova-badge--muted";
+  }
+
   function createNoticeState() {
     return {
       activeNoticeId: "",
@@ -1029,7 +1521,7 @@
       if (!ctaUrlRaw) {
         fieldErrors["cta.url"] = "CTA URL을 입력하거나 라벨을 비워 주세요.";
       } else if (!isHttpsUrl(ctaUrl)) {
-        fieldErrors["cta.url"] = "CTA URL은 https://로 시작해야 합니다. 예: https://www.naver.com";
+        fieldErrors["cta.url"] = "CTA URL은 https://로 시작해야 합니다. 예: https://inova.incross.com/";
       } else {
         state.notice.form.cta.url = ctaUrl;
       }
@@ -1346,6 +1838,29 @@
     });
   }
 
+  function createAdminDeferredSearchController(options = {}) {
+    const designSystem = global.InovaDesignSystem;
+    if (designSystem && typeof designSystem.createDeferredSearchController === "function") {
+      return designSystem.createDeferredSearchController(options);
+    }
+    return Object.freeze({
+      cancel: () => false,
+      flush: (value) => {
+        options.onSearch?.(normalizeText(value));
+        return true;
+      },
+      handleCompositionEnd: (value) => {
+        options.onSearch?.(normalizeText(value));
+        return true;
+      },
+      handleCompositionStart: () => true,
+      handleInput: (value) => {
+        options.onSearch?.(normalizeText(value));
+        return true;
+      },
+    });
+  }
+
   function createAdminConfirmController() {
     const designSystem = global.InovaDesignSystem;
     if (designSystem && typeof designSystem.createConfirmController === "function") {
@@ -1377,6 +1892,14 @@
 
   function normalizeText(value) {
     return String(value || "").trim();
+  }
+
+  function clampNumber(value, min, max) {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) {
+      return min;
+    }
+    return Math.min(max, Math.max(min, numericValue));
   }
 
   function cssEscape(value) {

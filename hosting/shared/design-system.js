@@ -1,4 +1,5 @@
 (function initInovaDesignSystem(global) {
+  const DEFAULT_SEARCH_DELAY_MS = 260;
   const DEFAULT_TOAST_TTL_MS = 2400;
   const ERROR_TOAST_TTL_MS = 3600;
   const ICON_PATHS = Object.freeze({
@@ -36,6 +37,88 @@
     ],
   });
   const TOAST_TONES = new Set(["error", "highlight", "info", "success", "warning"]);
+
+  function createDeferredSearchController(options = {}) {
+    const delayMs = Math.max(0, Number(options.delayMs) || DEFAULT_SEARCH_DELAY_MS);
+    const normalizeValue = typeof options.normalize === "function" ? options.normalize : normalizeText;
+    const onSearch = typeof options.onSearch === "function" ? options.onSearch : () => false;
+    let composing = false;
+    let pendingValue = String(options.initialValue || "");
+    let committedValue = normalizeValue(pendingValue);
+    let timerId = 0;
+
+    function handleInput(value, inputOptions = {}) {
+      pendingValue = String(value || "");
+      if (composing || inputOptions.composing === true) {
+        clearTimer();
+        return false;
+      }
+      scheduleCommit();
+      return true;
+    }
+
+    function handleCompositionStart() {
+      composing = true;
+      clearTimer();
+      return true;
+    }
+
+    function handleCompositionEnd(value) {
+      composing = false;
+      pendingValue = String(value || "");
+      scheduleCommit(0);
+      return true;
+    }
+
+    function flush(value) {
+      if (arguments.length > 0) {
+        pendingValue = String(value || "");
+      }
+      clearTimer();
+      return commit();
+    }
+
+    function cancel() {
+      clearTimer();
+      pendingValue = committedValue;
+      composing = false;
+    }
+
+    function scheduleCommit(delayOverride) {
+      clearTimer();
+      const nextDelayMs = Number.isFinite(Number(delayOverride)) ? Math.max(0, Number(delayOverride)) : delayMs;
+      timerId = global.setTimeout(commit, nextDelayMs);
+    }
+
+    function clearTimer() {
+      if (!timerId) {
+        return;
+      }
+      global.clearTimeout(timerId);
+      timerId = 0;
+    }
+
+    function commit() {
+      timerId = 0;
+      const nextValue = normalizeValue(pendingValue);
+      if (nextValue === committedValue) {
+        return false;
+      }
+      committedValue = nextValue;
+      onSearch(nextValue, {
+        rawValue: pendingValue,
+      });
+      return true;
+    }
+
+    return Object.freeze({
+      cancel,
+      flush,
+      handleCompositionEnd,
+      handleCompositionStart,
+      handleInput,
+    });
+  }
 
   function createToastController(options = {}) {
     const slot = resolveElement(options.slot || options.slotSelector || "[data-inova-toast-slot]");
@@ -282,6 +365,7 @@
   global.InovaDesignSystem = Object.freeze({
     ...existing,
     createConfirmController,
+    createDeferredSearchController,
     createToastController,
     normalizeToastTone,
     renderIcon,

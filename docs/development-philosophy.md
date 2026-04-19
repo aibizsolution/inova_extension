@@ -45,7 +45,7 @@
 ## 검증 가능한 새 탭 기본값
 
 - hosted 화면에서 새 탭을 여는 기능은 먼저 web platform으로 열 수 있는지 본다.
-- launch token, session, workspace URL처럼 async 준비가 필요한 경우에도 사용자 activation 안에서 빈 탭을 먼저 만들고 준비된 URL로 이동시키는 구조를 우선한다.
+- secret이 없는 hosted URL을 사용자 action 안에서 바로 계산할 수 있으면 그 URL을 먼저 열고, launch token, session, 원격 workspace URL처럼 async 준비가 필요한 경우에는 사용자 activation 안에서 빈 탭을 먼저 만든 뒤 준비된 URL로 이동시키는 구조를 우선한다.
 - background의 `chrome.tabs.create`는 hosted에서 직접 열 수 없는 경우의 fallback 또는 extension-only 책임으로 제한한다.
 - 새 탭 대상의 내부 화면 검증이 필요한 기능은 최종 URL을 controller 결과와 trace에서 확인할 수 있게 두어야 한다. 단, secret token은 보고나 로그에 원문으로 노출하지 않는다.
 - 같은 기능이 사용자에게 새 탭을 열어야 한다면, 검증 경로 때문에 같은 탭 전환으로 UX를 바꾸지 않는다. 사용자 UX는 새 탭으로 유지하고, 구현 경로만 Bridge가 추적 가능한 web-open 우선으로 둔다.
