@@ -94,6 +94,7 @@ function verifyHostedPanelAdminGate() {
 
 function verifyAdminPageContract() {
   const html = readText(path.join("hosting", "admin", "index.html"));
+  const css = readText(path.join("hosting", "admin", "index.css"));
   const pageSource = readText(path.join("hosting", "admin", "index.js"));
   const firebaseConfig = readText("firebase.json");
   const adminServiceSource = readText(path.join("functions", "features", "admin", "admin-service.js"));
@@ -101,12 +102,59 @@ function verifyAdminPageContract() {
 
   assert(html.includes('<script src="index.js" defer></script>'), "hosted admin page should load its controller");
   assert(
+    html.includes('id="adminShell"')
+      && html.includes('data-view="loading"')
+      && html.includes('id="adminSidebar"')
+      && html.includes('aria-label="관리자 메뉴"')
+      && html.includes('id="navGroups"')
+      && html.includes('id="sessionPanel"')
+      && html.includes('id="contentPanel"')
+      && html.includes('class="admin-page-layout"')
+      && html.includes('id="pageOutlet"')
+      && html.includes('id="sideAccessState"')
+      && html.includes('id="sideSessionExpiresAt"'),
+    "hosted admin page should expose a menu-driven shell with session, content outlet, side context, and blocked regions"
+  );
+  assert(
+    css.includes(".admin-sidebar")
+      && css.includes(".admin-nav__item")
+      && css.includes(".admin-main")
+      && css.includes(".admin-page-layout")
+      && css.includes(".admin-page-outlet")
+      && css.includes(".admin-side-context")
+      && css.includes("min-width: 1120px")
+      && css.includes('.admin-shell[data-view="loading"]'),
+    "hosted admin styles should keep a PC-width menu/outlet layout and explicit view state primitives"
+  );
+  assert(
+    !html.includes('id="moduleGrid"')
+      && !css.includes(".admin-module-card")
+      && !pageSource.includes("ADMIN_MODULES"),
+    "hosted admin page should not use the old one-page module-card shell"
+  );
+  assert(
+    !html.includes("admin-sidebar-session")
+      && !html.includes("sidebarViewerEmail")
+      && !html.includes("접속 계정")
+      && !pageSource.includes("sidebarViewerEmail"),
+    "hosted admin sidebar should stay navigation-only and avoid duplicating session identity"
+  );
+  assert(
     pageSource.includes("exchangeInovaAdminLaunch")
       && pageSource.includes("readInovaAdminBootstrap")
       && pageSource.includes("AdminSession")
       && pageSource.includes("sessionStorage")
       && pageSource.includes('url.searchParams.delete("launch")'),
     "hosted admin page should exchange launch tokens, remove query secrets, and verify AdminSession"
+  );
+  assert(
+    pageSource.includes("const ADMIN_SECTIONS = Object.freeze")
+      && pageSource.includes("function setView")
+      && pageSource.includes("function renderNavigation")
+      && pageSource.includes("function renderActiveSection")
+      && pageSource.includes("function setActiveSection")
+      && pageSource.includes("function applyVerifiedSession"),
+    "hosted admin page should centralize view state and render future admin sections through a stable menu/outlet slot"
   );
   assert(
     firebaseConfig.includes('"source": "admin/**"')
