@@ -6,6 +6,7 @@ const ADMIN_SESSION_COLLECTION = "ops_admin_sessions";
 const ACCOUNT_COLLECTION = "integration_inova_accounts";
 const ACCOUNT_COLLECTION_V2 = "integration_inova_accounts_v2";
 const FEATURE_USAGE_USER_MONTH_COLLECTION = "integration_inova_feature_usage_user_months";
+const MEETING_USAGE_USER_TOTAL_COLLECTION = "integration_inova_meeting_usage_user_totals";
 const PANEL_NOTICE_COLLECTION = "ops_panel_notices";
 const PANEL_NOTICE_SIGNAL_COLLECTION = "ops_panel_notice_signals";
 const PANEL_NOTICE_STATE_COLLECTION = "ops_panel_notice_state";
@@ -26,6 +27,7 @@ const ADMIN_COLLECTIONS = Object.freeze({
   accounts: ACCOUNT_COLLECTION,
   accountsV2: ACCOUNT_COLLECTION_V2,
   featureUsageUserMonths: FEATURE_USAGE_USER_MONTH_COLLECTION,
+  meetingUsageUserTotals: MEETING_USAGE_USER_TOTAL_COLLECTION,
   launches: ADMIN_LAUNCH_COLLECTION,
   panelNoticeState: PANEL_NOTICE_STATE_COLLECTION,
   panelNoticeSignals: PANEL_NOTICE_SIGNAL_COLLECTION,
@@ -817,6 +819,8 @@ function createAdminDomain(deps) {
     assertDbReady();
     const candidateMap = new Map();
     const adminDocs = new Map();
+    const featureUsageByUser = new Map();
+    const meetingUsageByUser = new Map();
 
     addAdminAccessCandidate(candidateMap, normalizeOwner(session.owner));
 
@@ -824,11 +828,13 @@ function createAdminDomain(deps) {
       accountV2Docs,
       accountDocs,
       usageMonthDocs,
+      meetingUsageTotalDocs,
       adminUserDocs,
     ] = await Promise.all([
       readCollectionDocuments(collections.accountsV2, { orderBy: "updatedAt", direction: "desc" }),
       readCollectionDocuments(collections.accounts, { orderBy: "updatedAt", direction: "desc" }),
       readCollectionDocuments(collections.featureUsageUserMonths, { orderBy: "lastUsedAt", direction: "desc" }),
+      readCollectionDocuments(collections.meetingUsageUserTotals, { orderBy: "lastProcessedAt", direction: "desc" }),
       readCollectionDocuments(collections.users),
     ]);
 
@@ -840,9 +846,20 @@ function createAdminDomain(deps) {
     });
     usageMonthDocs.forEach((entry) => {
       const usageData = entry.data || {};
+      mergeFeatureUsageSummary(featureUsageByUser, usageData, entry.id);
       addAdminAccessCandidate(candidateMap, normalizeAdminAccessIdentity({
         ...(usageData.owner || usageData),
         lastActivityAt: usageData.lastUsedAt,
+        providerUserKey: readUsageProviderUserKey(usageData, entry.id),
+      }, entry.id));
+    });
+    meetingUsageTotalDocs.forEach((entry) => {
+      const usageData = entry.data || {};
+      mergeMeetingUsageSummary(meetingUsageByUser, usageData, entry.id);
+      addAdminAccessCandidate(candidateMap, normalizeAdminAccessIdentity({
+        ...(usageData.owner || usageData),
+        lastActivityAt: usageData.lastProcessedAt || usageData.updatedAt,
+        providerUserKey: readUsageProviderUserKey(usageData, entry.id),
       }, entry.id));
     });
     adminUserDocs.forEach((entry) => {
@@ -854,7 +871,10 @@ function createAdminDomain(deps) {
     });
 
     return Array.from(candidateMap.values())
-      .map((member) => toAdminAccessUser(member, adminDocs.get(member.providerUserKey)))
+      .map((member) => toAdminAccessUser(member, adminDocs.get(member.providerUserKey), {
+        featureUsage: featureUsageByUser.get(member.providerUserKey),
+        meetingUsage: meetingUsageByUser.get(member.providerUserKey),
+      }))
       .filter((member) => member.providerUserKey)
       .sort(compareAdminAccessUsers)
       .slice(0, ADMIN_ACCESS_USER_LIST_LIMIT);
@@ -913,22 +933,110 @@ function createAdminDomain(deps) {
     };
   }
 
-  function toAdminAccessUser(memberInput, adminDoc = {}) {
+  function toAdminAccessUser(memberInput, adminDoc = {}, usageSummary = {}) {
     const member = normalizeAdminAccessIdentity(memberInput);
     const envAccess = readEnvAdminAccess(member);
     const adminStatus = normalizeAccessUserStatus(adminDoc.status || adminDoc.accessState);
     const isActiveAdmin = envAccess.allowed || adminStatus === "active";
+    const featureUsage = normalizeFeatureUsageTotals(usageSummary.featureUsage?.featureTotals);
+    const featureCount = readNonNegativeNumber(usageSummary.featureUsage?.totalCount);
+    const meetingProcessedMs = readNonNegativeNumber(usageSummary.meetingUsage?.processedMs);
+    const meetingCount = readNonNegativeNumber(usageSummary.meetingUsage?.processedCount);
     return {
       canEdit: !envAccess.allowed,
       displayName: member.displayName,
       email: member.email,
-      lastActivityAt: member.lastActivityAt,
+      featureCount,
+      featureUsage,
+      lastActivityAt: pickLaterAdminAccessActivityAt(
+        member.lastActivityAt,
+        pickLaterAdminAccessActivityAt(
+          usageSummary.featureUsage?.lastUsedAt,
+          usageSummary.meetingUsage?.lastProcessedAt
+        )
+      ),
+      meetingCount,
+      meetingMinutes: Math.round(meetingProcessedMs / 60000),
       numericUserId: member.numericUserId,
       organization: normalizeAdminAccessOrganization(adminDoc.organization) || member.organization,
       provider: member.provider,
       providerUserKey: member.providerUserKey,
       status: isActiveAdmin ? "active" : "inactive",
     };
+  }
+
+  function mergeFeatureUsageSummary(summaryByUser, usageData = {}, docId = "") {
+    const providerUserKey = readUsageProviderUserKey(usageData, docId);
+    if (!providerUserKey) {
+      return;
+    }
+    const current = summaryByUser.get(providerUserKey) || {
+      featureTotals: {},
+      lastUsedAt: "",
+      totalCount: 0,
+    };
+    const nextFeatureTotals = normalizeFeatureUsageTotals(usageData.featureTotals);
+    summaryByUser.set(providerUserKey, {
+      featureTotals: mergeFeatureUsageTotals(current.featureTotals, nextFeatureTotals),
+      lastUsedAt: pickLaterAdminAccessActivityAt(current.lastUsedAt, usageData.lastUsedAt || usageData.updatedAt),
+      totalCount: current.totalCount + readNonNegativeNumber(usageData.totalCount),
+    });
+  }
+
+  function mergeMeetingUsageSummary(summaryByUser, usageData = {}, docId = "") {
+    const providerUserKey = readUsageProviderUserKey(usageData, docId);
+    if (!providerUserKey) {
+      return;
+    }
+    const current = summaryByUser.get(providerUserKey) || {
+      lastProcessedAt: "",
+      processedCount: 0,
+      processedMs: 0,
+    };
+    summaryByUser.set(providerUserKey, {
+      lastProcessedAt: pickLaterAdminAccessActivityAt(
+        current.lastProcessedAt,
+        usageData.lastProcessedAt || usageData.updatedAt
+      ),
+      processedCount: current.processedCount + readNonNegativeNumber(usageData.processedCount),
+      processedMs: current.processedMs + readNonNegativeNumber(usageData.processedMs),
+    });
+  }
+
+  function readUsageProviderUserKey(usageData = {}, docId = "") {
+    const providerUserKey = normalizeText(
+      usageData.providerUserKey
+      || usageData.owner?.providerUserKey
+      || usageData.user?.providerUserKey
+    );
+    if (providerUserKey) {
+      return providerUserKey;
+    }
+    const normalizedDocId = normalizeText(docId);
+    const monthSuffixMatch = normalizedDocId.match(/^(.+)__\d{4}-\d{2}$/);
+    return normalizeText(monthSuffixMatch?.[1] || normalizedDocId);
+  }
+
+  function normalizeFeatureUsageTotals(input = {}) {
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      return {};
+    }
+    return Object.fromEntries(Object.entries(input)
+      .map(([feature, count]) => [normalizeText(feature), readNonNegativeNumber(count)])
+      .filter(([feature, count]) => feature && count > 0));
+  }
+
+  function mergeFeatureUsageTotals(leftInput = {}, rightInput = {}) {
+    const merged = { ...normalizeFeatureUsageTotals(leftInput) };
+    Object.entries(normalizeFeatureUsageTotals(rightInput)).forEach(([feature, count]) => {
+      merged[feature] = readNonNegativeNumber(merged[feature]) + count;
+    });
+    return merged;
+  }
+
+  function readNonNegativeNumber(value) {
+    const number = Number(value);
+    return Number.isFinite(number) && number > 0 ? number : 0;
   }
 
   function readAdminAccessOrganizationSource(source = {}) {

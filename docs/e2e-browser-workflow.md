@@ -65,9 +65,9 @@
 UI/UX 판단은 DOM 텍스트나 접근성 snapshot만으로 끝내지 않는다. 실제 사용자가 보는 Chrome 화면을 각 제품 view별로 캡처한 뒤 판단한다.
 
 1. 탭/segmented control이 있는 화면은 각 탭을 전환한 뒤 별도 캡처를 남긴다.
-   - 예: 관리자 `이용 현황`은 `사용자별`, `기능별`, `회의 사용량` 3장을 각각 캡처한다.
+   - 예: 관리자 `사용자 및 권한`은 회원 목록과 선택 회원 상세가 함께 보이는 화면 1장을 캡처한다.
 2. 캡처 전에는 해당 view의 핵심 문구를 DOM으로 먼저 확인한다. 캡처 파일명에는 feature와 view를 넣는다.
-   - 예: `tmp/admin-usage-users.png`, `tmp/admin-usage-features.png`, `tmp/admin-usage-meeting.png`
+   - 예: `tmp/admin-access-users.png`
 3. `browser_take_screenshot` 또는 `page.screenshot()`이 성공하면 그 결과를 우선 증거로 쓴다.
 4. Bridge 권한/폰트 대기 문제로 Playwright screenshot이 timeout 나거나 CDP가 `Not allowed`로 막히면 Windows 실제 화면 캡처 fallback을 사용한다. 이때 결과에는 `Windows screen capture fallback`이라고 적고, 캡처에 Codex UI나 주변 Chrome UI가 같이 들어갔으면 대상 Chrome 영역만 판단했다고 남긴다.
 
@@ -223,9 +223,9 @@ npm.cmd run check:feature-usage -- --days 1 --limit 20
 7. 관리자 페이지가 launch token을 교환한 뒤 URL에서 `launch` query를 제거하는지 확인한다.
 8. 관리자 페이지에서 verified 상태, 사용자, 계정, 권한, 세션 만료 정보가 표시되어야 한다.
 9. 선택한 기능 화면 안에는 별도 `세션 컨텍스트` 카드처럼 상단 인증 정보를 반복하는 UI가 없어야 한다.
-10. `사용자 및 권한`은 기존 회원 목록을 읽고, 선택한 회원의 `일반 사용자 / 관리자` 권한 선택과 `저장`만 제공해야 한다. 이메일 직접 입력이나 별도 권한 설명 필드가 보이면 실패다. `마지막 활동` 옆 `?` 도움말은 feature usage에 기록되는 기능 사용 이벤트가 기준임을 설명해야 한다.
+10. `사용자 및 권한`은 기존 회원 목록을 읽고, 선택한 회원의 `일반 사용자 / 관리자` 권한 선택과 `저장`만 제공해야 한다. 선택 회원 상세 안에는 read-only `이용 기록`이 함께 보여야 한다. 이메일 직접 입력이나 별도 권한 설명 필드가 보이면 실패다. `마지막 활동` 옆 `?` 도움말은 feature usage에 기록되는 기능 사용 이벤트가 기준임을 설명해야 한다.
 11. 관리자 HTML은 `index.css`, `index.js`, shared design-system CSS/JS를 `admin=<timestamp>` query로 로드해야 한다. 같은 탭에서 새로고침했는데 이전 JS 문구가 남으면 실패다.
-12. `이용 현황`은 초기 샘플 데이터 상태에서도 `사용자별`, `기능별`, `회의 사용량` 보기를 전환할 수 있어야 하고, 기간/검색/팀 필터가 화면 안에서 즉시 반영되어야 한다. 화면에는 실제 수집 통계 기반의 `이용 공백`이 표시되어야 하며, raw event count, token, providerUserKey, 내부 로그, `활발`/`정착 중` 같은 해석성 상태 라벨, `화면 샘플`/`화면 검토용`처럼 구현 검토용 표식이 노출되면 실패다.
+12. 집계 테이블/쿼리 구조가 붙기 전에는 별도 `사용자별 이용 현황` 메뉴, 기간 필터, `기능별` 집계 탭, 별도 `회의 사용량` 탭, `이용 공백` 운영 액션 섹션, raw event count, token, providerUserKey, 내부 로그, `활발`/`정착 중` 같은 해석성 상태 라벨, `화면 샘플`/`화면 검토용`처럼 구현 검토용 표식이 노출되면 실패다.
 13. 같은 launch URL을 다시 열거나 launch 없이 직접 진입하면 blocked 상태가 보여야 한다.
 14. 상용 배포 직후에는 `browser-extension-v2.web.app`의 panel/admin 정적 자산 200 응답과 릴리스 ZIP metadata 정합성을 함께 확인한 뒤 패널을 새로고침한다.
 

@@ -159,6 +159,10 @@ async function verifyAdminAccessUserManagement() {
     updatedAt: "2026-04-19T01:10:00.000Z",
   });
   await db.collection("integration_inova_feature_usage_user_months").doc("member-2__2026-04").set({
+    featureTotals: {
+      prompt_review: 2,
+      prompt_store: 3,
+    },
     lastUsedAt: "2026-04-19T01:20:00.000Z",
     owner: {
       displayName: "Member Two",
@@ -166,14 +170,25 @@ async function verifyAdminAccessUserManagement() {
       providerUserKey: "member-2",
       teamName: "성장본부",
     },
+    totalCount: 5,
   });
   await db.collection("integration_inova_feature_usage_user_months").doc("member-2__2026-03").set({
+    featureTotals: {
+      prompt_review: 1,
+    },
     lastUsedAt: "2026-03-31T08:00:00.000Z",
     owner: {
       displayName: "Member Two",
       email: "member2@example.com",
       providerUserKey: "member-2",
     },
+    totalCount: 1,
+  });
+  await db.collection("integration_inova_meeting_usage_user_totals").doc("member-2").set({
+    lastProcessedAt: "2026-04-19T01:40:00.000Z",
+    processedCount: 2,
+    processedMs: 4200000,
+    providerUserKey: "member-2",
   });
   await db.collection("ops_admin_users").doc("member-2").set({
     displayName: "Member Two",
@@ -202,7 +217,15 @@ async function verifyAdminAccessUserManagement() {
   assert(list.users.some((user) => user.providerUserKey === "member-2" && user.status === "active"));
   assert(list.users.some((user) => user.providerUserKey === "member-2" && user.displayName === "Member Two"));
   assert(list.users.some((user) => user.providerUserKey === "member-2" && user.organization === "플랫폼팀"));
-  assert(list.users.some((user) => user.providerUserKey === "member-2" && user.lastActivityAt === "2026-04-19T01:20:00.000Z"));
+  const memberTwo = list.users.find((user) => user.providerUserKey === "member-2");
+  assert.equal(memberTwo.lastActivityAt, "2026-04-19T01:40:00.000Z");
+  assert.equal(memberTwo.featureCount, 6);
+  assert.deepEqual(memberTwo.featureUsage, {
+    prompt_review: 3,
+    prompt_store: 3,
+  });
+  assert.equal(memberTwo.meetingCount, 2);
+  assert.equal(memberTwo.meetingMinutes, 70);
 
   const promoted = await domain.saveAdminAccessUser(session.adminSessionToken, {
     isAdmin: true,
@@ -221,7 +244,9 @@ async function verifyAdminAccessUserManagement() {
   });
   assert.equal(demoted.user.status, "inactive");
   assert.equal(demoted.user.organization, "AI Lab");
-  assert.equal(demoted.user.lastActivityAt, "2026-04-19T01:20:00.000Z");
+  assert.equal(demoted.user.lastActivityAt, "2026-04-19T01:40:00.000Z");
+  assert.equal(demoted.user.featureCount, 6);
+  assert.equal(demoted.user.meetingMinutes, 70);
   assert.equal(db.readDocument("ops_admin_users", "member-2").status, "inactive");
   assert.equal(db.readDocument("ops_admin_users", "member-2").organization, "AI Lab");
   assert.equal(db.readDocument("ops_admin_users", "member-2").lastActivityAt, undefined);
