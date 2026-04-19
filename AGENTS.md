@@ -55,6 +55,21 @@
 - 현재 `1.0.0` 활성 bundle과 공유 계약이 더 이상 쓰지 않는 legacy extension panel 코드는 `content/*` 안에 섞어 두지 않는다. 기본 방향은 `backup/legacy-panel/*`로 격리하거나 바로 삭제 후보로 분류하는 것이다.
 - 격리된 legacy panel 코드는 평소 panel v2 migration 판단 기준이 아니다. `DB/Functions`나 shared server contract를 수정할 때만 `0.4.4` 영향 판단용 참고본으로 보고, 그 외 순수 panel migration에서는 현재 v2 bundle 정상 동작만 우선 확인한다.
 
+## 검증 가능한 새 탭 원칙
+- hosted panel에서 새 탭을 여는 기능은 Codex/Playwright Bridge 검증이 가능한 web-open 경로를 기본 구현으로 둔다.
+- 기본 패턴은 사용자 클릭/키 입력의 동기 구간에서 `window.open("about:blank", "_blank")`로 빈 탭을 먼저 만들고, async 권한/launch URL 준비가 끝나면 그 탭을 최종 URL로 이동시키는 것이다.
+- 관리자 콘솔, 회의 룸 작업실/결과처럼 launch token 또는 URL 준비가 필요한 기능은 background가 직접 `chrome.tabs.create`로 열기 전에 `prepare URL/session/token` 경로를 별도로 제공한다.
+- extension/background의 `chrome.tabs.create`는 hosted web-open이 실패했거나 브라우저 API가 꼭 필요한 경우의 fallback으로만 둔다.
+- 새 기능에서 background-only tab open을 추가하려면 구현 전에 왜 hosted web-open/prepare URL 방식이 불가능한지, Codex가 어떤 방식으로 새 탭을 검증할 수 있는지 문서화한다.
+- 검증용 URL이나 launch token을 로그/최종 보고에 원문으로 노출하지 않는다. 필요하면 redaction된 URL 또는 origin/path만 기록한다.
+
+## 폴링 금지 원칙
+- 서버 상태, Firestore/Functions/API 결과, 배포 상태, 권한 상태, 알림/공지 변경 감지를 위해 주기적으로 요청하는 폴링은 기본 금지다.
+- `setInterval`, 재귀 `setTimeout`, visibility/focus 이벤트에 붙인 반복 fetch/read처럼 비용을 계속 발생시키는 구현은 먼저 구독, push event, explicit user action, invalidation signal, cached snapshot 재사용으로 바꿀 수 있는지 검토한다.
+- 폴링이 정말 필요하다고 판단되면 구현 전에 사용자에게 `왜 구독/event 방식이 불가능한지`, `호출 주기와 예상 비용`, `백오프와 중단 조건`, `실패 시 사용자에게 보일 상태`를 설명하고 명시적 허락을 받아야 한다.
+- 사용자 허락 없이 폴링을 임시 fallback이나 빠른 우회로 넣지 않는다. 허락받은 경우에도 관련 feature `AGENTS.md`나 feature 문서에 예외 사유와 제한 조건을 남긴다.
+- 로컬 UI만 움직이는 debounce, animation, carousel 자동 이동 같은 타이머는 허용되지만, 그 타이머가 네트워크/Firestore/Functions/storage read를 반복 호출하면 폴링으로 본다.
+
 ## 설계와 모듈화 적용 규칙
 - 구현 전에 먼저 책임 경계를 정하고, 파일 길이만을 이유로 분리하지 않는다.
 - 책임 분리와 파일 분리를 같은 의미로 보지 않는다. 항상 함께 로드되고, 함께 수정되고, 함께 이해되는 코드는 같은 파일이나 같은 모듈에 남길 수 있다.
@@ -90,6 +105,9 @@
 - 같은 feature 안에서 panel, hosted, popup 같은 여러 표면이 비슷한 markup/helper/state contract를 반복하면 먼저 shared module 또는 render contract로 묶을 수 있는지 검토한다.
 - 공통화는 꼭 다른 프로젝트 재사용을 목표로 하지 않아도 된다. 현재 저장소 안에서 반복 구현을 줄이고 표면별 adapter만 얇게 남기는 방향을 우선한다.
 - 공통화 후보가 보이면 각 표면에서 조금씩 비슷하게 맞추는 방식보다 공용 JS로 올리고 표면별 진입부만 연결하는 리팩터링을 우선 검토한다.
+- UI를 만들거나 수정할 때는 먼저 `docs/design-system.md`와 `hosting/shared/design-system.*`를 확인한다. 이미 있는 primitive가 있으면 화면별 CSS/JS를 새로 만들지 말고 그 계약을 사용한다.
+- 같은 피드백/toast, 버튼, badge, empty state, overlay, form helper가 두 화면 이상에서 반복될 가능성이 있으면 feature-local 구현 전에 design system primitive로 올린다.
+- 짧은 저장/삭제/복사/이동 결과를 화면 안쪽 inline box로 반복 구현하지 않는다. 기본은 design system toast이고, inline feedback은 field validation이나 장시간 유지해야 하는 degraded/error 상태에만 둔다.
 
 ## Fallback 원칙
 - fallback은 서비스를 완전히 멈추지 않게 하는 장치로만 쓰고, 핵심 기능 실패를 성공처럼 보이게 만드는 용도로 쓰지 않는다.

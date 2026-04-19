@@ -1,5 +1,6 @@
 (function initAdminConsole(global) {
   const SESSION_STORAGE_KEY = "inova-admin-console-session";
+  const ACTIVE_SECTION_QUERY_KEY = "section";
   const PROJECT_ID = "browser-extension-main";
   const REGION = "asia-northeast3";
   const PRODUCTION_FUNCTIONS_BASE_URL = `https://${REGION}-${PROJECT_ID}.cloudfunctions.net`;
@@ -31,7 +32,7 @@
       icon: "notice",
       id: "notice",
       label: "소식 팝업",
-      summary: "확장 패널 하단에 노출할 전사 단일 소식을 편집하고 발행합니다.",
+      summary: "확장 패널 하단 소식을 작성합니다.",
       title: "소식 팝업",
     },
     {
@@ -84,7 +85,6 @@
   const state = {
     activeSectionId: "overview",
     adminSessionToken: "",
-    busy: false,
     error: "",
     notice: createNoticeState(),
     role: "",
@@ -94,9 +94,13 @@
   };
 
   const elements = {};
+  let confirmController = null;
+  let toastController = null;
 
   global.addEventListener("DOMContentLoaded", () => {
     bindElements();
+    confirmController = createAdminConfirmController();
+    toastController = createAdminToastController();
     bindEvents();
     renderNavigation();
     void boot();
@@ -104,17 +108,24 @@
 
   async function boot() {
     renderLoading("관리자 권한을 확인하고 있습니다.");
+    state.activeSectionId = readActiveSectionFromUrl();
     try {
       const params = new URLSearchParams(global.location.search);
       const launchToken = normalizeText(params.get("launch"));
       let session = loadStoredSession();
+      let exchangedLaunch = false;
       if (launchToken) {
         session = await exchangeLaunchToken(launchToken);
         storeSession(session);
         removeLaunchParam();
+        exchangedLaunch = true;
       }
       if (!session?.adminSessionToken) {
         throw new Error("관리자 콘솔 세션이 없습니다. 확장 패널에서 다시 열어 주세요.");
+      }
+      if (exchangedLaunch) {
+        applyVerifiedSession(session);
+        return;
       }
       const bootstrap = await readBootstrap(session.adminSessionToken);
       applyVerifiedSession({
@@ -127,34 +138,6 @@
       clearStoredSession();
       state.error = readErrorMessage(error);
       renderBlocked(state.error);
-    }
-  }
-
-  async function refreshSession() {
-    if (state.busy) {
-      return;
-    }
-    state.busy = true;
-    setRefreshBusy(true);
-    try {
-      const session = loadStoredSession();
-      if (!session?.adminSessionToken) {
-        throw new Error("관리자 콘솔 세션이 없습니다. 확장 패널에서 다시 열어 주세요.");
-      }
-      const bootstrap = await readBootstrap(session.adminSessionToken);
-      applyVerifiedSession({
-        ...session,
-        role: bootstrap.role,
-        sessionExpiresAt: bootstrap.sessionExpiresAt,
-        viewer: bootstrap.viewer,
-      });
-    } catch (error) {
-      clearStoredSession();
-      state.error = readErrorMessage(error);
-      renderBlocked(state.error);
-    } finally {
-      state.busy = false;
-      setRefreshBusy(false);
     }
   }
 
@@ -271,25 +254,51 @@
     global.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
   }
 
+  function readActiveSectionFromUrl() {
+    try {
+      const url = new URL(global.location.href);
+      const sectionId = normalizeText(url.searchParams.get(ACTIVE_SECTION_QUERY_KEY));
+      return findSection(sectionId)?.id || ADMIN_SECTIONS[0].id;
+    } catch (error) {
+      console.warn("[i-Nova admin] active section read failed", error);
+      return ADMIN_SECTIONS[0].id;
+    }
+  }
+
+  function writeActiveSectionToUrl(sectionId) {
+    const section = findSection(sectionId);
+    if (!section) {
+      return;
+    }
+    try {
+      const url = new URL(global.location.href);
+      if (section.id === ADMIN_SECTIONS[0].id) {
+        url.searchParams.delete(ACTIVE_SECTION_QUERY_KEY);
+      } else {
+        url.searchParams.set(ACTIVE_SECTION_QUERY_KEY, section.id);
+      }
+      global.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    } catch (error) {
+      console.warn("[i-Nova admin] active section write failed", error);
+    }
+  }
+
   function bindElements() {
     [
       "adminShell",
       "adminSidebar",
+      "adminToastSlot",
       "blockedMessage",
       "blockedPanel",
       "blockedTitle",
-      "contentEyebrow",
+      "blockedIcon",
       "contentPanel",
-      "contentSummary",
-      "contentTitle",
       "navGroups",
       "pageOutlet",
-      "refreshButton",
       "sectionEyebrow",
       "sectionTitle",
       "sessionExpiresAt",
       "sessionPanel",
-      "statusBadge",
       "statusSummary",
       "viewerEmail",
       "viewerName",
@@ -300,9 +309,6 @@
   }
 
   function bindEvents() {
-    elements.refreshButton?.addEventListener("click", () => {
-      void refreshSession();
-    });
     elements.navGroups?.addEventListener("click", (event) => {
       const button = event.target?.closest?.("[data-section-id]");
       if (button) {
@@ -316,13 +322,10 @@
     setText(elements.sectionEyebrow, "Loading");
     setText(elements.sectionTitle, "관리자 권한 확인");
     setText(elements.statusSummary, message);
-    setBadge("loading", "확인 중");
   }
 
   function renderVerified() {
     setView("verified");
-    setText(elements.statusSummary, "권한 확인이 완료되었습니다.");
-    setBadge("verified", "확인됨");
     setText(elements.viewerName, state.viewer?.displayName || state.viewer?.providerUserKey || "-");
     setText(elements.viewerEmail, state.viewer?.email || "-");
     setText(elements.viewerRole, state.role || "-");
@@ -337,9 +340,13 @@
     setText(elements.sectionEyebrow, "Blocked");
     setText(elements.sectionTitle, "관리자 권한 차단");
     setText(elements.statusSummary, "관리자 권한 확인이 중단되었습니다.");
-    setBadge("blocked", "차단됨");
     setText(elements.blockedTitle, "관리자 권한을 확인할 수 없습니다");
     setText(elements.blockedMessage, normalizeText(message) || "확장 패널에서 관리자 메뉴를 다시 열어 주세요.");
+    if (elements.blockedIcon) {
+      elements.blockedIcon.innerHTML = renderAdminIcon("admin", {
+        className: "inova-status-state__svg",
+      });
+    }
   }
 
   function setView(view) {
@@ -425,10 +432,15 @@
 
   function setActiveSection(sectionId) {
     const nextSection = findSection(sectionId);
-    if (!nextSection || nextSection.id === state.activeSectionId) {
+    if (!nextSection) {
+      return;
+    }
+    if (nextSection.id === state.activeSectionId) {
+      writeActiveSectionToUrl(nextSection.id);
       return;
     }
     state.activeSectionId = nextSection.id;
+    writeActiveSectionToUrl(nextSection.id);
     renderNavigation();
     renderActiveSection();
   }
@@ -437,9 +449,7 @@
     const section = findSection(state.activeSectionId) || ADMIN_SECTIONS[0];
     setText(elements.sectionEyebrow, section.eyebrow);
     setText(elements.sectionTitle, section.title);
-    setText(elements.contentEyebrow, section.eyebrow);
-    setText(elements.contentTitle, section.title);
-    setText(elements.contentSummary, section.summary);
+    setText(elements.statusSummary, section.summary);
     if (section.id === "notice") {
       elements.pageOutlet?.replaceChildren(createNoticeWorkbench());
       void ensurePanelNoticesLoaded();
@@ -469,15 +479,10 @@
     const noticeState = state.notice;
     const wrapper = global.document.createElement("div");
     wrapper.className = "admin-notice-workbench";
-    const secondary = global.document.createElement("div");
-    secondary.className = "admin-notice-secondary";
-    secondary.append(
-      createNoticeStatusPanel(),
-      createNoticeListPanel()
-    );
     wrapper.append(
+      createNoticeListPanel(),
       createNoticeEditorPanel(),
-      secondary
+      createNoticePreviewPanel()
     );
     wrapper.addEventListener("input", handleNoticeInput);
     wrapper.addEventListener("click", handleNoticeClick);
@@ -488,73 +493,21 @@
     return wrapper;
   }
 
-  function createNoticeStatusPanel() {
-    const noticeState = state.notice;
-    const activeNotice = findNoticeById(noticeState.activeNoticeId);
-    const panel = global.document.createElement("section");
-    panel.className = "admin-notice-status";
-
-    const title = global.document.createElement("strong");
-    title.textContent = activeNotice ? "현재 노출 중" : "현재 노출 없음";
-
-    const summary = global.document.createElement("p");
-    summary.textContent = noticeState.loading && !noticeState.loaded
-      ? "소식 상태를 불러오는 중입니다."
-      : activeNotice
-        ? activeNotice.title
-        : "발행된 소식이 없습니다.";
-
-    const badge = global.document.createElement("span");
-    badge.className = `admin-notice-badge ${activeNotice ? "is-active" : "is-muted"}`;
-    badge.textContent = activeNotice ? "노출 중" : "중지됨";
-
-    const meta = global.document.createElement("dl");
-    meta.className = "admin-notice-status__meta";
-    [
-      ["시작", activeNotice?.startsAt ? formatDateTime(activeNotice.startsAt) : "즉시"],
-      ["종료", activeNotice?.endsAt ? formatDateTime(activeNotice.endsAt) : "-"],
-      ["버전", activeNotice?.version ? String(activeNotice.version) : "-"],
-    ].forEach(([label, value]) => {
-      const item = global.document.createElement("div");
-      const dt = global.document.createElement("dt");
-      const dd = global.document.createElement("dd");
-      dt.textContent = label;
-      dd.textContent = value;
-      item.append(dt, dd);
-      meta.append(item);
-    });
-
-    const header = global.document.createElement("div");
-    header.className = "admin-notice-status__head";
-    header.append(title, badge);
-    panel.append(header, summary, meta);
-    if (noticeState.error || noticeState.feedback) {
-      const feedback = global.document.createElement("p");
-      feedback.className = `admin-notice-feedback ${noticeState.error ? "is-error" : "is-success"}`;
-      feedback.textContent = noticeState.error || noticeState.feedback;
-      panel.append(feedback);
-    }
-    return panel;
-  }
-
   function createNoticeEditorPanel() {
     const form = state.notice.form;
     const section = global.document.createElement("section");
     section.className = "admin-notice-editor";
     section.innerHTML = `
+      <div class="inova-section-head admin-notice-column-head">
+        <h3 class="inova-section-head__title">소식 작성</h3>
+      </div>
       <form class="admin-notice-form" novalidate>
-        <div class="admin-notice-form__row">
-          <label class="admin-notice-field" for="panelNoticeTitle">
-            <span>제목</span>
-            <input id="panelNoticeTitle" data-notice-field="title" maxlength="${MAX_NOTICE_TITLE_LENGTH}" required />
-          </label>
-          <label class="admin-notice-field" for="panelNoticeEndsAt">
-            <span>노출 종료</span>
-            <input id="panelNoticeEndsAt" data-notice-field="endsAt" type="datetime-local" required />
-          </label>
-        </div>
+        <label class="admin-notice-field" for="panelNoticeTitle">
+          <span>제목</span>
+          <input id="panelNoticeTitle" data-notice-field="title" maxlength="${MAX_NOTICE_TITLE_LENGTH}" required />
+        </label>
         <label class="admin-notice-field" for="panelNoticeBody">
-          <span>본문 Markdown</span>
+          <span>본문 (Markdown 문법)</span>
           <textarea id="panelNoticeBody" data-notice-field="bodyMarkdown" maxlength="${MAX_NOTICE_BODY_LENGTH}" rows="9" required></textarea>
         </label>
         <div class="admin-notice-form__row">
@@ -569,28 +522,29 @@
             <small class="admin-notice-field__hint" data-notice-feedback-for="cta.url">https 링크만 사용할 수 있습니다.</small>
           </label>
         </div>
-        <details class="admin-notice-advanced">
-          <summary>예약 노출 옵션</summary>
+        <div class="admin-notice-form__date-group">
           <label class="admin-notice-field" for="panelNoticeStartsAt">
             <span>노출 시작</span>
-            <input id="panelNoticeStartsAt" data-notice-field="startsAt" type="datetime-local" />
-            <small class="admin-notice-field__hint">비워 두면 발행 즉시 노출됩니다.</small>
+            <div class="admin-notice-date-stepper">
+              <button type="button" data-notice-action="shift-start-date" data-notice-days="-1" aria-label="노출 시작 하루 앞으로">-1일</button>
+              <input id="panelNoticeStartsAt" data-notice-field="startsAt" type="text" inputmode="numeric" maxlength="16" placeholder="YYYY-MM-DD 00:00" />
+              <button type="button" data-notice-action="shift-start-date" data-notice-days="1" aria-label="노출 시작 하루 뒤로">+1일</button>
+            </div>
           </label>
-        </details>
+          <label class="admin-notice-field" for="panelNoticeEndsAt">
+            <span>노출 종료</span>
+            <div class="admin-notice-date-stepper">
+              <button type="button" data-notice-action="shift-end-date" data-notice-days="-1" aria-label="노출 종료 하루 앞으로">-1일</button>
+              <input id="panelNoticeEndsAt" data-notice-field="endsAt" type="text" inputmode="numeric" maxlength="16" placeholder="YYYY-MM-DD 00:00" required />
+              <button type="button" data-notice-action="shift-end-date" data-notice-days="1" aria-label="노출 종료 하루 뒤로">+1일</button>
+            </div>
+          </label>
+        </div>
         <div class="admin-notice-form__actions">
           <button type="button" class="admin-primary-button" data-notice-action="save">저장</button>
-          <button type="button" class="admin-primary-button is-strong" data-notice-action="publish">발행</button>
-          <button type="button" class="admin-secondary-button" data-notice-action="archive">노출 중지</button>
+          <button type="button" class="admin-secondary-button" data-notice-action="delete" ${form.noticeId ? "" : "disabled"}>삭제</button>
         </div>
       </form>
-      <section class="admin-notice-preview" aria-label="소식 미리보기">
-        <div class="admin-notice-preview__head">
-          <span>Preview</span>
-          <strong></strong>
-        </div>
-        <div class="admin-notice-preview__body"></div>
-        <div class="admin-notice-preview__cta"></div>
-      </section>
     `;
     section.querySelector("form")?.addEventListener("submit", (event) => event.preventDefault());
     setNoticeInputValue(section, "title", form.title);
@@ -600,26 +554,71 @@
     setNoticeInputValue(section, "cta.label", form.cta.label);
     setNoticeInputValue(section, "cta.url", form.cta.url);
     renderNoticeFieldFeedback(section);
-    updateNoticePreview(section);
     const saving = Boolean(state.notice.savingAction);
     section.querySelectorAll("button, input, textarea").forEach((control) => {
       if (saving) {
         control.disabled = true;
       }
     });
-    const archiveButton = section.querySelector('[data-notice-action="archive"]');
-    if (archiveButton) {
-      archiveButton.disabled = saving || !state.notice.activeNoticeId;
-    }
+    return section;
+  }
+
+  function createNoticePreviewPanel() {
+    const section = global.document.createElement("section");
+    section.className = "admin-notice-preview";
+    section.setAttribute("aria-label", "패널 미리보기");
+    section.innerHTML = `
+      <div class="inova-section-head admin-notice-column-head">
+        <h3 class="inova-section-head__title">미리보기</h3>
+      </div>
+      <div class="admin-notice-preview__frame" aria-hidden="true">
+        <div class="admin-notice-preview__rail"></div>
+        <div class="admin-notice-preview__canvas">
+          <div class="admin-notice-preview__content">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <article class="admin-notice-panel-popup">
+            <div class="admin-notice-panel-popup__head">
+              <strong data-notice-preview-title></strong>
+              <button type="button" tabindex="-1" aria-label="소식 닫기">${renderAdminIcon("close")}</button>
+            </div>
+            <div class="admin-notice-preview__body"></div>
+            <div class="admin-notice-panel-popup__actions">
+              <div class="admin-notice-preview__cta"></div>
+              <button type="button" tabindex="-1">오늘 안보기</button>
+            </div>
+            <div class="admin-notice-panel-popup__pager">
+              <div class="admin-notice-panel-popup__dots">
+                <span class="is-active"></span>
+                <span></span>
+                <span></span>
+              </div>
+            </div>
+          </article>
+        </div>
+      </div>
+    `;
+    updateNoticePreview(section);
     return section;
   }
 
   function createNoticeListPanel() {
     const section = global.document.createElement("section");
     section.className = "admin-notice-list";
+    const header = global.document.createElement("div");
+    header.className = "inova-section-head admin-notice-column-head admin-notice-list__head";
     const title = global.document.createElement("h3");
-    title.textContent = "최근 공지";
-    section.append(title);
+    title.className = "inova-section-head__title";
+    title.textContent = "등록된 소식";
+    const createButton = global.document.createElement("button");
+    createButton.type = "button";
+    createButton.className = "admin-primary-button";
+    createButton.dataset.noticeAction = "new";
+    createButton.textContent = "새 소식";
+    header.append(title, createButton);
+    section.append(header);
 
     if (state.notice.loading && !state.notice.loaded) {
       const loading = global.document.createElement("p");
@@ -639,20 +638,31 @@
 
     const list = global.document.createElement("div");
     list.className = "admin-notice-list__items";
-    state.notice.notices.forEach((notice) => {
+    state.notice.notices.forEach((notice, index) => {
       const item = global.document.createElement("article");
-      const isActive = notice.noticeId === state.notice.activeNoticeId;
-      item.className = `admin-notice-list__item ${isActive ? "is-active" : ""}`;
+      const displayState = readNoticeDisplayState(notice);
+      const isVisible = displayState.key === "visible";
+      const isPrimary = isVisible && notice.noticeId === state.notice.activeNoticeId;
+      const isSelected = notice.noticeId === normalizeText(state.notice.form.noticeId);
+      const isFirst = index === 0;
+      const isLast = index === state.notice.notices.length - 1;
+      item.className = `admin-notice-list__item ${isVisible ? "is-visible" : ""} ${isPrimary ? "is-primary" : ""} ${isSelected ? "is-selected" : ""}`;
       item.dataset.noticeLoadId = notice.noticeId;
       item.tabIndex = 0;
+      item.setAttribute("aria-current", isSelected ? "true" : "false");
       item.setAttribute("role", "button");
       item.setAttribute("aria-label", `${notice.title} 편집`);
       item.innerHTML = `
         <div>
           <strong>${escapeHtml(notice.title)}</strong>
-          <span>${escapeHtml(formatNoticeWindow(notice))}</span>
         </div>
-        <span class="admin-notice-badge ${isActive ? "is-active" : getNoticeStatusTone(notice.status)}">${escapeHtml(isActive ? "노출 중" : getNoticeStatusLabel(notice.status))}</span>
+        <div class="admin-notice-list__meta">
+          <span class="admin-notice-badge ${displayState.className}">${displayState.label}</span>
+          <span class="admin-notice-order-controls">
+            <button type="button" data-notice-action="move-up" data-notice-id="${escapeHtmlAttribute(notice.noticeId)}" aria-label="${escapeHtmlAttribute(notice.title)} 위로 이동" ${isFirst ? "disabled" : ""}>↑</button>
+            <button type="button" data-notice-action="move-down" data-notice-id="${escapeHtmlAttribute(notice.noticeId)}" aria-label="${escapeHtmlAttribute(notice.title)} 아래로 이동" ${isLast ? "disabled" : ""}>↓</button>
+          </span>
+        </div>
       `;
       list.append(item);
     });
@@ -675,10 +685,18 @@
       const action = normalizeText(actionButton.dataset.noticeAction);
       if (action === "save") {
         void savePanelNotice();
-      } else if (action === "publish") {
-        void publishPanelNotice();
-      } else if (action === "archive") {
-        void archivePanelNotice();
+      } else if (action === "new") {
+        createNewNoticeForm();
+      } else if (action === "delete") {
+        void deletePanelNotice();
+      } else if (action === "shift-start-date") {
+        shiftNoticeDate("startsAt", actionButton.dataset.noticeDays, event.currentTarget);
+      } else if (action === "shift-end-date") {
+        shiftNoticeDate("endsAt", actionButton.dataset.noticeDays, event.currentTarget);
+      } else if (action === "move-up" || action === "move-down") {
+        event.preventDefault();
+        event.stopPropagation();
+        void movePanelNotice(actionButton.dataset.noticeId, action === "move-up" ? "up" : "down");
       }
       return;
     }
@@ -686,6 +704,40 @@
     if (row) {
       loadNoticeIntoForm(row.dataset.noticeLoadId);
     }
+  }
+
+  function shiftNoticeDate(field, daysInput, host) {
+    const days = Number(daysInput);
+    if (!Number.isInteger(days) || days === 0) {
+      return;
+    }
+    const normalizedField = normalizeText(field);
+    if (normalizedField !== "startsAt" && normalizedField !== "endsAt") {
+      return;
+    }
+    const baseDate = readNoticeDateBase(normalizedField);
+    baseDate.setDate(baseDate.getDate() + days);
+    if (normalizedField === "endsAt") {
+      baseDate.setHours(23, 59, 0, 0);
+    } else {
+      baseDate.setHours(0, 0, 0, 0);
+    }
+    state.notice.form[normalizedField] = toDatetimeLocalInput(baseDate.getTime());
+    state.notice.fieldErrors = {
+      ...state.notice.fieldErrors,
+      [normalizedField]: "",
+    };
+    state.notice.error = "";
+    setNoticeInputValue(host, normalizedField, state.notice.form[normalizedField]);
+    renderNoticeFieldFeedback(host);
+  }
+
+  function readNoticeDateBase(field) {
+    const date = parseDatetimeInputToDate(state.notice.form[field]);
+    if (date) {
+      return date;
+    }
+    return new Date();
   }
 
   function handleNoticeKeydown(event) {
@@ -726,6 +778,7 @@
       }
     } catch (error) {
       state.notice.error = readErrorMessage(error);
+      showAdminToast(state.notice.error, "error");
     } finally {
       state.notice.loading = false;
       if (state.activeSectionId === "notice") {
@@ -736,6 +789,7 @@
 
   async function savePanelNotice() {
     if (!validateNoticeForm({ requireFutureEnd: false })) {
+      showAdminToast(state.notice.error, "error");
       renderActiveSection();
       return;
     }
@@ -748,35 +802,48 @@
       if (savedNotice) {
         state.notice.form = createNoticeFormFromNotice(savedNotice, { keepNoticeId: true });
       }
-      state.notice.feedback = "저장되었습니다.";
+      showAdminToast("저장되었습니다.", "success");
     });
   }
 
-  async function publishPanelNotice() {
-    if (!validateNoticeForm({ requireFutureEnd: true })) {
-      renderActiveSection();
+  async function deletePanelNotice() {
+    const noticeId = normalizeText(state.notice.form.noticeId);
+    if (!noticeId) {
       return;
     }
-    await runNoticeMutation("publish", async () => {
-      const result = await postAdminFunction("publishInovaAdminPanelNotice", {
-        notice: buildNoticePayloadFromForm(),
+    const confirmed = await confirmAdminAction({
+      body: "삭제한 소식은 목록에서 제거됩니다.",
+      confirmLabel: "삭제",
+      eyebrow: "삭제 확인",
+      title: "이 소식을 삭제할까요?",
+      tone: "danger",
+    });
+    if (!confirmed) {
+      return;
+    }
+    await runNoticeMutation("delete", async () => {
+      await postAdminFunction("deleteInovaAdminPanelNotice", {
+        noticeId,
       });
-      const publishedNotice = normalizeAdminNotice(result.notice);
       await loadPanelNotices({ preserveForm: true });
-      if (publishedNotice) {
-        state.notice.form = createNoticeFormFromNotice(publishedNotice, { keepNoticeId: false });
-      }
-      state.notice.feedback = "발행되었습니다.";
+      state.notice.form = createPreferredNoticeForm();
+      showAdminToast("삭제되었습니다.", "success");
     });
   }
 
-  async function archivePanelNotice() {
-    await runNoticeMutation("archive", async () => {
-      await postAdminFunction("archiveInovaAdminPanelNotice", {
-        noticeId: state.notice.activeNoticeId,
+  async function movePanelNotice(noticeIdInput, directionInput) {
+    const noticeId = normalizeText(noticeIdInput);
+    const direction = normalizeText(directionInput);
+    if (!noticeId || !direction) {
+      return;
+    }
+    await runNoticeMutation("move", async () => {
+      await postAdminFunction("moveInovaAdminPanelNotice", {
+        direction,
+        noticeId,
       });
-      await loadPanelNotices({ preserveForm: false });
-      state.notice.feedback = "노출을 중지했습니다.";
+      await loadPanelNotices({ preserveForm: true });
+      showAdminToast("순서를 변경했습니다.", "success", { ttlMs: 1800 });
     });
   }
 
@@ -786,13 +853,13 @@
     }
     state.notice.savingAction = action;
     state.notice.error = "";
-    state.notice.feedback = "";
     renderActiveSection();
     try {
       await task();
       state.notice.fieldErrors = {};
     } catch (error) {
       state.notice.error = readErrorMessage(error);
+      showAdminToast(state.notice.error, "error");
     } finally {
       state.notice.savingAction = "";
       renderActiveSection();
@@ -806,10 +873,16 @@
     }
     state.notice.error = "";
     state.notice.fieldErrors = {};
-    state.notice.feedback = "";
     state.notice.form = createNoticeFormFromNotice(notice, {
-      keepNoticeId: normalizeText(notice.status) === "draft",
+      keepNoticeId: true,
     });
+    renderActiveSection();
+  }
+
+  function createNewNoticeForm() {
+    state.notice.error = "";
+    state.notice.fieldErrors = {};
+    state.notice.form = createNoticeForm();
     renderActiveSection();
   }
 
@@ -818,7 +891,6 @@
       activeNoticeId: "",
       error: "",
       fieldErrors: {},
-      feedback: "",
       form: createNoticeForm(),
       loaded: false,
       loading: false,
@@ -829,11 +901,12 @@
 
   function createNoticeForm(overrides = {}) {
     const overrideCta = overrides.cta && typeof overrides.cta === "object" ? overrides.cta : {};
+    const defaultWindow = createDefaultNoticeWindow();
     return {
       bodyMarkdown: "",
-      endsAt: toDatetimeLocalInput(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      endsAt: toDatetimeLocalInput(defaultWindow.endsAt),
       noticeId: "",
-      startsAt: "",
+      startsAt: toDatetimeLocalInput(defaultWindow.startsAt),
       title: "",
       ...overrides,
       cta: {
@@ -843,14 +916,22 @@
     };
   }
 
+  function createDefaultNoticeWindow() {
+    const startsAt = new Date();
+    startsAt.setHours(0, 0, 0, 0);
+    const endsAt = new Date(startsAt.getTime());
+    endsAt.setDate(endsAt.getDate() + 7);
+    endsAt.setHours(23, 59, 0, 0);
+    return {
+      endsAt: endsAt.getTime(),
+      startsAt: startsAt.getTime(),
+    };
+  }
+
   function createPreferredNoticeForm() {
-    const activeNotice = findNoticeById(state.notice.activeNoticeId);
-    if (activeNotice) {
-      return createNoticeFormFromNotice(activeNotice, { keepNoticeId: false });
-    }
-    const draftNotice = state.notice.notices.find((notice) => normalizeText(notice.status) === "draft");
-    return draftNotice
-      ? createNoticeFormFromNotice(draftNotice, { keepNoticeId: true })
+    const notice = state.notice.notices[0];
+    return notice
+      ? createNoticeFormFromNotice(notice, { keepNoticeId: true })
       : createNoticeForm();
   }
 
@@ -894,7 +975,6 @@
       [field]: "",
     };
     state.notice.error = "";
-    state.notice.feedback = "";
     if (field === "cta.label") {
       state.notice.form.cta.label = normalizeText(nextValue);
       return;
@@ -931,8 +1011,13 @@
     }
     if (!endsAtIso) {
       fieldErrors.endsAt = "노출 종료 시간을 입력해 주세요.";
+    } else if (!Number.isFinite(Date.parse(endsAtIso))) {
+      fieldErrors.endsAt = "노출 종료는 YYYY-MM-DD HH:mm 형식으로 입력해 주세요.";
     } else if (options.requireFutureEnd === true && Date.parse(endsAtIso) <= Date.now()) {
       fieldErrors.endsAt = "노출 종료 시간은 현재보다 이후여야 합니다.";
+    }
+    if (startsAtIso && !Number.isFinite(Date.parse(startsAtIso))) {
+      fieldErrors.startsAt = "노출 시작은 YYYY-MM-DD HH:mm 형식으로 입력해 주세요.";
     }
     if (startsAtIso && endsAtIso && Date.parse(startsAtIso) >= Date.parse(endsAtIso)) {
       fieldErrors.startsAt = "노출 시작 시간은 종료 시간보다 빨라야 합니다.";
@@ -970,6 +1055,7 @@
       endsAt: normalizeText(notice.endsAt),
       noticeId,
       publishedAt: normalizeText(notice.publishedAt),
+      sortOrder: Number(notice.sortOrder),
       startsAt: normalizeText(notice.startsAt),
       status: normalizeText(notice.status) || "draft",
       title: normalizeText(notice.title),
@@ -981,6 +1067,25 @@
   function findNoticeById(noticeId) {
     const normalizedId = normalizeText(noticeId);
     return state.notice.notices.find((notice) => notice.noticeId === normalizedId) || null;
+  }
+
+  function readNoticeDisplayState(notice) {
+    if (normalizeText(notice?.status) === "archived") {
+      return { className: "is-muted", key: "hidden", label: "비노출" };
+    }
+    const startsAtMs = Date.parse(normalizeText(notice?.startsAt));
+    const endsAtMs = Date.parse(normalizeText(notice?.endsAt));
+    const nowMs = Date.now();
+    if (!Number.isFinite(endsAtMs)) {
+      return { className: "is-muted", key: "hidden", label: "비노출" };
+    }
+    if (Number.isFinite(startsAtMs) && startsAtMs > nowMs) {
+      return { className: "is-draft", key: "scheduled", label: "예정" };
+    }
+    if (endsAtMs <= nowMs) {
+      return { className: "is-muted", key: "expired", label: "종료" };
+    }
+    return { className: "is-active", key: "visible", label: "노출 중" };
   }
 
   function setNoticeInputValue(host, field, value) {
@@ -1018,7 +1123,7 @@
       return;
     }
     const form = state.notice.form;
-    const previewTitle = host.querySelector(".admin-notice-preview__head strong");
+    const previewTitle = host.querySelector("[data-notice-preview-title]");
     const previewBody = host.querySelector(".admin-notice-preview__body");
     const previewCta = host.querySelector(".admin-notice-preview__cta");
     if (previewTitle) {
@@ -1124,42 +1229,17 @@
     }
   }
 
-  function formatNoticeWindow(notice) {
-    const startsAt = notice?.startsAt ? formatDateTime(notice.startsAt) : "즉시";
-    const endsAt = notice?.endsAt ? formatDateTime(notice.endsAt) : "-";
-    return `${startsAt} - ${endsAt}`;
-  }
-
-  function getNoticeStatusLabel(status) {
-    const normalized = normalizeText(status);
-    if (normalized === "published") {
-      return "발행됨";
-    }
-    if (normalized === "archived") {
-      return "중지됨";
-    }
-    return "임시 저장";
-  }
-
-  function getNoticeStatusTone(status) {
-    const normalized = normalizeText(status);
-    if (normalized === "published") {
-      return "is-active";
-    }
-    if (normalized === "archived") {
-      return "is-muted";
-    }
-    return "is-draft";
-  }
-
   function toDatetimeLocalInput(value) {
     const timestamp = typeof value === "number" ? value : Date.parse(normalizeText(value));
     if (!Number.isFinite(timestamp)) {
       return "";
     }
     const date = new Date(timestamp);
-    const localDate = new Date(timestamp - date.getTimezoneOffset() * 60000);
-    return localDate.toISOString().slice(0, 16);
+    return [
+      date.getFullYear(),
+      padDatePart(date.getMonth() + 1),
+      padDatePart(date.getDate()),
+    ].join("-") + ` ${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}`;
   }
 
   function fromDatetimeLocalInput(value) {
@@ -1167,8 +1247,44 @@
     if (!normalized) {
       return "";
     }
+    const localDate = parseDatetimeInputToDate(normalized);
+    if (localDate) {
+      return localDate.toISOString();
+    }
     const timestamp = Date.parse(normalized);
     return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : normalized;
+  }
+
+  function parseDatetimeInputToDate(value) {
+    const match = normalizeText(value).match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})$/);
+    if (!match) {
+      return null;
+    }
+    const [, year, month, day, hour, minute] = match;
+    const date = new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      0,
+      0
+    );
+    if (
+      !Number.isFinite(date.getTime())
+      || date.getFullYear() !== Number(year)
+      || date.getMonth() !== Number(month) - 1
+      || date.getDate() !== Number(day)
+      || date.getHours() !== Number(hour)
+      || date.getMinutes() !== Number(minute)
+    ) {
+      return null;
+    }
+    return date;
+  }
+
+  function padDatePart(value) {
+    return String(value).padStart(2, "0");
   }
 
   function readPositiveInteger(value) {
@@ -1178,17 +1294,6 @@
 
   function findSection(sectionId) {
     return ADMIN_SECTIONS.find((section) => section.id === normalizeText(sectionId));
-  }
-
-  function setBadge(tone, text) {
-    elements.statusBadge?.setAttribute("data-tone", tone);
-    setText(elements.statusBadge, text);
-  }
-
-  function setRefreshBusy(busy) {
-    if (elements.refreshButton) {
-      elements.refreshButton.disabled = busy;
-    }
   }
 
   function setHidden(element, hidden) {
@@ -1226,6 +1331,48 @@
 
   function readErrorMessage(error) {
     return normalizeText(error instanceof Error ? error.message : error) || "관리자 요청에 실패했어요.";
+  }
+
+  function createAdminToastController() {
+    const designSystem = global.InovaDesignSystem;
+    if (designSystem && typeof designSystem.createToastController === "function") {
+      return designSystem.createToastController({
+        slot: elements.adminToastSlot,
+      });
+    }
+    return Object.freeze({
+      hideToast: () => false,
+      showToast: () => false,
+    });
+  }
+
+  function createAdminConfirmController() {
+    const designSystem = global.InovaDesignSystem;
+    if (designSystem && typeof designSystem.createConfirmController === "function") {
+      return designSystem.createConfirmController({
+        root: global.document.body,
+      });
+    }
+    return Object.freeze({
+      close: () => false,
+      confirm: () => Promise.resolve(false),
+    });
+  }
+
+  function confirmAdminAction(options = {}) {
+    return Promise.resolve(confirmController?.confirm?.(options)).then(Boolean);
+  }
+
+  function renderAdminIcon(iconName, options) {
+    return global.InovaDesignSystem?.renderIcon?.(iconName, options) || "";
+  }
+
+  function showAdminToast(message, tone = "success", options = {}) {
+    return Boolean(toastController?.showToast?.({
+      message,
+      tone,
+      ...options,
+    }));
   }
 
   function normalizeText(value) {

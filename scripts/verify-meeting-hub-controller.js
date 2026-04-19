@@ -162,7 +162,7 @@ async function verifyHostedMeetingHubOwnership() {
   );
   assert(
     harness.runtimeCalls.some((request) => request.action === "meeting.result.open"),
-    "hosted meeting hub should call runtime open actions directly"
+    "hosted meeting hub should keep runtime open fallback when a web-open window is not available"
   );
 }
 

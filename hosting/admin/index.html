@@ -6,10 +6,13 @@
     <title>i-Nova 관리자</title>
     <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png" />
+    <link rel="stylesheet" href="/shared/design-system.css" />
     <link rel="stylesheet" href="index.css" />
+    <script src="/shared/design-system.js" defer></script>
     <script src="index.js" defer></script>
   </head>
   <body>
+    <div id="adminToastSlot" class="inova-toast-slot" data-inova-toast-slot hidden></div>
     <main id="adminShell" class="admin-shell" data-view="loading">
       <aside id="adminSidebar" class="admin-sidebar" hidden>
         <div class="admin-brand">
@@ -23,23 +26,6 @@
       </aside>
 
       <section class="admin-main" aria-label="관리자 본문">
-        <header class="admin-topbar">
-          <div class="admin-topbar__title">
-            <p id="sectionEyebrow" class="admin-eyebrow">Loading</p>
-            <h2 id="sectionTitle">관리자 권한 확인</h2>
-            <p id="statusSummary" class="admin-summary">관리자 권한을 확인하고 있습니다.</p>
-          </div>
-          <div class="admin-topbar__actions" aria-live="polite">
-            <span id="statusBadge" class="admin-badge" data-tone="loading">확인 중</span>
-            <button id="refreshButton" class="admin-icon-button" type="button" aria-label="세션 다시 확인">
-              <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
-                <path d="M21 4v6h-6"></path>
-              </svg>
-            </button>
-          </div>
-        </header>
-
         <section id="sessionPanel" class="admin-context-strip" aria-label="관리자 세션" hidden>
           <div>
             <span>사용자</span>
@@ -59,22 +45,26 @@
           </div>
         </section>
 
-        <section id="contentPanel" class="admin-content" hidden>
-          <div class="admin-page-heading">
-            <p id="contentEyebrow" class="admin-eyebrow">Overview</p>
-            <h2 id="contentTitle">관리자 홈</h2>
-            <p id="contentSummary" class="admin-summary">관리자 페이지의 기본 구조가 준비되었습니다.</p>
+        <header class="admin-topbar">
+          <div class="admin-topbar__title">
+            <p id="sectionEyebrow" class="admin-eyebrow">Loading</p>
+            <h2 id="sectionTitle">관리자 권한 확인</h2>
+            <p id="statusSummary" class="admin-summary">관리자 권한을 확인하고 있습니다.</p>
           </div>
+        </header>
 
+        <section id="contentPanel" class="admin-content" hidden>
           <div class="admin-page-layout">
             <section id="pageOutlet" class="admin-page-outlet" aria-label="선택된 관리자 메뉴"></section>
           </div>
         </section>
 
-        <section id="blockedPanel" class="admin-blocked" hidden>
-          <p class="admin-eyebrow">Blocked</p>
-          <h2 id="blockedTitle">관리자 권한을 확인할 수 없습니다</h2>
-          <p id="blockedMessage">확장 패널에서 관리자 메뉴를 다시 열어 주세요.</p>
+        <section id="blockedPanel" class="admin-blocked inova-status-state" data-tone="danger" hidden>
+          <div id="blockedIcon" class="inova-status-state__icon" aria-hidden="true"></div>
+          <p class="inova-status-state__eyebrow">Blocked</p>
+          <h2 id="blockedTitle" class="inova-status-state__title">관리자 권한을 확인할 수 없습니다</h2>
+          <p id="blockedMessage" class="inova-status-state__body">확장 패널에서 관리자 메뉴를 다시 열어 주세요.</p>
+          <p class="inova-status-state__hint">권한 확인은 확장 패널의 관리자 메뉴에서 시작됩니다.</p>
         </section>
       </section>
     </main>

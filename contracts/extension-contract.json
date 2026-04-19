@@ -320,7 +320,9 @@
     "functions.invoke-endpoint",
     "browser.open-url",
     "meeting.workspace.open",
+    "meeting.workspace.prepare-open",
     "meeting.result.open",
+    "meeting.result.prepare-open",
     "meeting.share.create",
     "meeting.share.revoke"
   ],

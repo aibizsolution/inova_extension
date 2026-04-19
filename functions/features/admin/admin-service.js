@@ -4,7 +4,9 @@ const ADMIN_USER_COLLECTION = "ops_admin_users";
 const ADMIN_LAUNCH_COLLECTION = "ops_admin_launches";
 const ADMIN_SESSION_COLLECTION = "ops_admin_sessions";
 const PANEL_NOTICE_COLLECTION = "ops_panel_notices";
+const PANEL_NOTICE_SIGNAL_COLLECTION = "ops_panel_notice_signals";
 const PANEL_NOTICE_STATE_COLLECTION = "ops_panel_notice_state";
+const PANEL_NOTICE_SIGNAL_DOC_ID = "current";
 const PANEL_NOTICE_STATE_DOC_ID = "current";
 const PANEL_NOTICE_SCHEMA_VERSION = 1;
 const DEFAULT_LAUNCH_TTL_MS = 5 * 60 * 1000;
@@ -18,6 +20,7 @@ const ADMIN_NOTICE_LIST_LIMIT = 20;
 const ADMIN_COLLECTIONS = Object.freeze({
   launches: ADMIN_LAUNCH_COLLECTION,
   panelNoticeState: PANEL_NOTICE_STATE_COLLECTION,
+  panelNoticeSignals: PANEL_NOTICE_SIGNAL_COLLECTION,
   panelNotices: PANEL_NOTICE_COLLECTION,
   sessions: ADMIN_SESSION_COLLECTION,
   users: ADMIN_USER_COLLECTION,
@@ -245,12 +248,59 @@ function registerAdminHandlers(deps) {
     }
   });
 
+  const deleteInovaAdminPanelNotice = onRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
+    try {
+      assertPostRequest(request, createHttpError);
+      const adminSessionToken = readAdminSessionToken(request, normalizeText);
+      const result = await domain.deleteAdminPanelNotice(adminSessionToken, request.body || {});
+      logEvent?.("admin.panel-notice.delete.success", {
+        noticeId: result.notice?.noticeId || "",
+        providerUserKey: result.viewer.providerUserKey,
+      });
+      response.json({
+        ok: true,
+        data: result,
+      });
+    } catch (error) {
+      logEvent?.("admin.panel-notice.delete.error", {
+        error: normalizeText(error?.message),
+        status: Number(error?.status) || 500,
+      });
+      sendError(response, error);
+    }
+  });
+
+  const moveInovaAdminPanelNotice = onRequest({ cors: CORS_ORIGINS, region: REGION }, async (request, response) => {
+    try {
+      assertPostRequest(request, createHttpError);
+      const adminSessionToken = readAdminSessionToken(request, normalizeText);
+      const result = await domain.moveAdminPanelNotice(adminSessionToken, request.body || {});
+      logEvent?.("admin.panel-notice.move.success", {
+        direction: normalizeText(request.body?.direction),
+        noticeId: result.notice?.noticeId || "",
+        providerUserKey: result.viewer.providerUserKey,
+      });
+      response.json({
+        ok: true,
+        data: result,
+      });
+    } catch (error) {
+      logEvent?.("admin.panel-notice.move.error", {
+        error: normalizeText(error?.message),
+        status: Number(error?.status) || 500,
+      });
+      sendError(response, error);
+    }
+  });
+
   return {
     archiveInovaAdminPanelNotice,
     checkInovaAdminAccess,
+    deleteInovaAdminPanelNotice,
     exchangeInovaAdminLaunch,
     issueInovaAdminLaunch,
     listInovaAdminPanelNotices,
+    moveInovaAdminPanelNotice,
     readInovaAdminBootstrap,
     readInovaPanelNotice,
     publishInovaAdminPanelNotice,
@@ -377,18 +427,13 @@ function createAdminDomain(deps) {
     if (!owner.providerUserKey) {
       throw createHttpError(401, "소식 확인에 필요한 i-Nova 사용자 정보가 없어요.");
     }
-    const stateDoc = await readPanelNoticeState();
-    const activeNoticeId = normalizeText(stateDoc.activeNoticeId);
-    const notice = activeNoticeId ? await readPanelNoticeById(activeNoticeId) : null;
-    if (!notice || !isPanelNoticeVisible(notice)) {
-      return {
-        checkedAt: new Date(now()).toISOString(),
-        notice: null,
-      };
-    }
+    const notices = (await readRecentPanelNotices())
+      .filter(isPanelNoticeVisible)
+      .map(toPublicPanelNotice);
     return {
       checkedAt: new Date(now()).toISOString(),
-      notice: toPublicPanelNotice(notice),
+      notice: notices[0] || null,
+      notices,
     };
   }
 
@@ -398,10 +443,12 @@ function createAdminDomain(deps) {
       readPanelNoticeState(),
       readRecentPanelNotices(),
     ]);
+    const visibleNoticeIds = notices.filter(isPanelNoticeVisible).map((notice) => notice.noticeId);
     return {
-      activeNoticeId: normalizeText(stateDoc.activeNoticeId),
+      activeNoticeId: visibleNoticeIds[0] || normalizeText(stateDoc.activeNoticeId),
       checkedAt: new Date(now()).toISOString(),
       notices: notices.map(toAdminPanelNotice),
+      visibleNoticeIds,
       viewer: normalizeOwner(session.owner),
     };
   }
@@ -411,25 +458,29 @@ function createAdminDomain(deps) {
     const nowIso = new Date(now()).toISOString();
     const normalized = normalizePanelNoticeInput(input, { requireFutureEnd: false });
     const existing = await readPanelNoticeById(normalized.noticeId);
-    const shouldUpdateDraft = existing && normalizeText(existing.status) === "draft";
-    const noticeId = shouldUpdateDraft ? existing.noticeId : createDocumentId(collections.panelNotices);
+    const noticeId = existing ? existing.noticeId : createDocumentId(collections.panelNotices);
+    const existingVersion = normalizeNoticeVersion(existing?.version) || 0;
     const nextNotice = {
-      ...(shouldUpdateDraft ? existing : {}),
+      ...(existing || {}),
       ...normalized,
       archivedAt: "",
       createdAt: normalizeText(existing?.createdAt) || nowIso,
       noticeId,
-      publishedAt: shouldUpdateDraft ? normalizeText(existing.publishedAt) : "",
+      publishedAt: normalizeText(existing?.publishedAt) || nowIso,
       schemaVersion: PANEL_NOTICE_SCHEMA_VERSION,
-      status: "draft",
+      sortOrder: Number.isFinite(Number(existing?.sortOrder))
+        ? Number(existing.sortOrder)
+        : await readNextPanelNoticeSortOrder(),
+      status: "published",
       updatedAt: nowIso,
       updatedBy: buildAdminNoticeActor(session),
-      version: normalizeNoticeVersion(existing?.version) || 1,
+      version: existingVersion ? existingVersion + 1 : 1,
     };
     await db.collection(collections.panelNotices).doc(noticeId).set(nextNotice);
-    const stateDoc = await readPanelNoticeState();
+    const nextActiveNotice = (await readRecentPanelNotices()).find(isPanelNoticeVisible);
+    await writePanelNoticeState(session, nowIso, normalizeText(nextActiveNotice?.noticeId), "save");
     return {
-      activeNoticeId: normalizeText(stateDoc.activeNoticeId),
+      activeNoticeId: normalizeText(nextActiveNotice?.noticeId),
       notice: toAdminPanelNotice(nextNotice),
       viewer: normalizeOwner(session.owner),
     };
@@ -440,24 +491,9 @@ function createAdminDomain(deps) {
     const nowIso = new Date(now()).toISOString();
     const normalized = normalizePanelNoticeInput(input, { requireFutureEnd: true });
     const existing = await readPanelNoticeById(normalized.noticeId);
-    const shouldPublishDraft = existing && normalizeText(existing.status) === "draft";
-    const noticeId = shouldPublishDraft ? existing.noticeId : createDocumentId(collections.panelNotices);
-    const stateDoc = await readPanelNoticeState();
-    const previousActiveId = normalizeText(stateDoc.activeNoticeId);
-    if (previousActiveId && previousActiveId !== noticeId) {
-      const previousActiveNotice = await readPanelNoticeById(previousActiveId);
-      if (previousActiveNotice) {
-        await db.collection(collections.panelNotices).doc(previousActiveId).set({
-          ...previousActiveNotice,
-          archivedAt: nowIso,
-          status: "archived",
-          updatedAt: nowIso,
-          updatedBy: buildAdminNoticeActor(session),
-        });
-      }
-    }
+    const noticeId = existing ? existing.noticeId : createDocumentId(collections.panelNotices);
     const nextNotice = {
-      ...(shouldPublishDraft ? existing : {}),
+      ...(existing || {}),
       ...normalized,
       archivedAt: "",
       createdAt: normalizeText(existing?.createdAt) || nowIso,
@@ -467,14 +503,10 @@ function createAdminDomain(deps) {
       status: "published",
       updatedAt: nowIso,
       updatedBy: buildAdminNoticeActor(session),
-      version: shouldPublishDraft ? normalizeNoticeVersion(existing.version) || 1 : 1,
+      version: normalizeNoticeVersion(existing?.version) || 1,
     };
     await db.collection(collections.panelNotices).doc(noticeId).set(nextNotice);
-    await db.collection(collections.panelNoticeState).doc(PANEL_NOTICE_STATE_DOC_ID).set({
-      activeNoticeId: noticeId,
-      updatedAt: nowIso,
-      updatedBy: buildAdminNoticeActor(session),
-    });
+    await writePanelNoticeState(session, nowIso, noticeId, "publish");
     return {
       activeNoticeId: noticeId,
       notice: toAdminPanelNotice(nextNotice),
@@ -503,19 +535,103 @@ function createAdminDomain(deps) {
       updatedBy: buildAdminNoticeActor(session),
     };
     await db.collection(collections.panelNotices).doc(noticeId).set(archivedNotice);
-    if (normalizeText(stateDoc.activeNoticeId) === noticeId) {
-      await db.collection(collections.panelNoticeState).doc(PANEL_NOTICE_STATE_DOC_ID).set({
-        activeNoticeId: "",
-        updatedAt: nowIso,
-        updatedBy: buildAdminNoticeActor(session),
-      });
-    }
-    const nextState = await readPanelNoticeState();
+    const nextActiveNotice = (await readRecentPanelNotices()).find(isPanelNoticeVisible);
+    await writePanelNoticeState(session, nowIso, normalizeText(nextActiveNotice?.noticeId), "archive");
     return {
-      activeNoticeId: normalizeText(nextState.activeNoticeId),
+      activeNoticeId: normalizeText(nextActiveNotice?.noticeId),
       notice: toAdminPanelNotice(archivedNotice),
       viewer: normalizeOwner(session.owner),
     };
+  }
+
+  async function deleteAdminPanelNotice(adminSessionToken, input = {}) {
+    const session = await verifyAdminSession(adminSessionToken);
+    const nowIso = new Date(now()).toISOString();
+    const noticeId = normalizeText(input.noticeId);
+    if (!noticeId) {
+      throw createHttpError(400, "삭제할 소식을 선택해 주세요.");
+    }
+    const notice = await readPanelNoticeById(noticeId);
+    if (!notice) {
+      return {
+        activeNoticeId: normalizeText((await readPanelNoticeState()).activeNoticeId),
+        notice: null,
+        viewer: normalizeOwner(session.owner),
+      };
+    }
+    await db.collection(collections.panelNotices).doc(noticeId).delete();
+    const nextActiveNotice = (await readRecentPanelNotices()).find(isPanelNoticeVisible);
+    await writePanelNoticeState(session, nowIso, normalizeText(nextActiveNotice?.noticeId), "delete");
+    return {
+      activeNoticeId: normalizeText(nextActiveNotice?.noticeId),
+      notice: toAdminPanelNotice(notice),
+      viewer: normalizeOwner(session.owner),
+    };
+  }
+
+  async function moveAdminPanelNotice(adminSessionToken, input = {}) {
+    const session = await verifyAdminSession(adminSessionToken);
+    const nowIso = new Date(now()).toISOString();
+    const noticeId = normalizeText(input.noticeId);
+    const direction = normalizeText(input.direction).toLowerCase();
+    if (!noticeId) {
+      throw createHttpError(400, "이동할 소식을 선택해 주세요.");
+    }
+    if (direction !== "up" && direction !== "down") {
+      throw createHttpError(400, "소식 이동 방향이 올바르지 않아요.");
+    }
+    const notices = await readRecentPanelNotices();
+    const normalizedNotices = normalizeNoticeSortOrders(notices);
+    const currentIndex = normalizedNotices.findIndex((notice) => notice.noticeId === noticeId);
+    if (currentIndex < 0) {
+      throw createHttpError(404, "이동할 소식을 찾지 못했어요.");
+    }
+    const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= normalizedNotices.length) {
+      return {
+        activeNoticeId: normalizeText((await readPanelNoticeState()).activeNoticeId),
+        notice: toAdminPanelNotice(normalizedNotices[currentIndex]),
+        notices: normalizedNotices.map(toAdminPanelNotice),
+        viewer: normalizeOwner(session.owner),
+      };
+    }
+    const currentNotice = normalizedNotices[currentIndex];
+    const targetNotice = normalizedNotices[targetIndex];
+    const currentSortOrder = currentNotice.sortOrder;
+    currentNotice.sortOrder = targetNotice.sortOrder;
+    targetNotice.sortOrder = currentSortOrder;
+    await Promise.all([currentNotice, targetNotice].map((notice) => db.collection(collections.panelNotices).doc(notice.noticeId).set({
+      sortOrder: notice.sortOrder,
+      updatedAt: nowIso,
+      updatedBy: buildAdminNoticeActor(session),
+    }, { merge: true })));
+    const nextActiveNotice = (await readRecentPanelNotices()).find(isPanelNoticeVisible);
+    await writePanelNoticeState(session, nowIso, normalizeText(nextActiveNotice?.noticeId), "move");
+    const movedNotice = await readPanelNoticeById(noticeId);
+    return {
+      activeNoticeId: normalizeText(nextActiveNotice?.noticeId),
+      notice: toAdminPanelNotice(movedNotice || currentNotice),
+      notices: (await readRecentPanelNotices()).map(toAdminPanelNotice),
+      viewer: normalizeOwner(session.owner),
+    };
+  }
+
+  async function writePanelNoticeState(session, nowIso, activeNoticeIdInput, reasonInput) {
+    const activeNoticeId = normalizeText(activeNoticeIdInput);
+    const reason = normalizeText(reasonInput) || "change";
+    await Promise.all([
+      db.collection(collections.panelNoticeState).doc(PANEL_NOTICE_STATE_DOC_ID).set({
+        activeNoticeId,
+        updatedAt: nowIso,
+        updatedBy: buildAdminNoticeActor(session),
+      }),
+      db.collection(collections.panelNoticeSignals).doc(PANEL_NOTICE_SIGNAL_DOC_ID).set({
+        reason,
+        revision: createPanelNoticeSignalRevision(nowIso),
+        schemaVersion: PANEL_NOTICE_SCHEMA_VERSION,
+        updatedAt: nowIso,
+      }),
+    ]);
   }
 
   async function verifyAdminSession(adminSessionToken) {
@@ -604,18 +720,17 @@ function createAdminDomain(deps) {
 
   async function readRecentPanelNotices() {
     const collectionRef = db.collection(collections.panelNotices);
+    let notices = [];
     if (typeof collectionRef.orderBy === "function") {
       const snapshot = await collectionRef.orderBy("updatedAt", "desc").limit(ADMIN_NOTICE_LIST_LIMIT).get();
-      return readSnapshotDocs(snapshot).map((entry) => normalizeStoredPanelNotice(entry.data, entry.id));
-    }
-    if (typeof collectionRef.get === "function") {
+      notices = readSnapshotDocs(snapshot).map((entry) => normalizeStoredPanelNotice(entry.data, entry.id));
+    } else if (typeof collectionRef.get === "function") {
       const snapshot = await collectionRef.get();
-      return readSnapshotDocs(snapshot)
-        .map((entry) => normalizeStoredPanelNotice(entry.data, entry.id))
-        .sort((left, right) => normalizeText(right.updatedAt).localeCompare(normalizeText(left.updatedAt)))
-        .slice(0, ADMIN_NOTICE_LIST_LIMIT);
+      notices = readSnapshotDocs(snapshot).map((entry) => normalizeStoredPanelNotice(entry.data, entry.id));
     }
-    return [];
+    return normalizeNoticeSortOrders(notices)
+      .sort(comparePanelNoticeOrder)
+      .slice(0, ADMIN_NOTICE_LIST_LIMIT);
   }
 
   function normalizeStoredPanelNotice(data, noticeId) {
@@ -628,6 +743,7 @@ function createAdminDomain(deps) {
       noticeId: normalizeText(data.noticeId) || normalizeText(noticeId),
       publishedAt: normalizeText(data.publishedAt),
       schemaVersion: Number(data.schemaVersion) || PANEL_NOTICE_SCHEMA_VERSION,
+      sortOrder: readPanelNoticeSortOrder(data),
       startsAt: normalizeText(data.startsAt),
       status: normalizeText(data.status) || "draft",
       title: normalizeText(data.title),
@@ -669,6 +785,41 @@ function createAdminDomain(deps) {
       startsAt,
       title,
     };
+  }
+
+  async function readNextPanelNoticeSortOrder() {
+    const notices = await readRecentPanelNotices();
+    if (!notices.length) {
+      return 1000;
+    }
+    return Math.min(...notices.map((notice) => readPanelNoticeSortOrder(notice))) - 1000;
+  }
+
+  function normalizeNoticeSortOrders(notices) {
+    return (Array.isArray(notices) ? notices : []).map((notice, index) => ({
+      ...notice,
+      sortOrder: Number.isFinite(Number(notice.sortOrder))
+        ? Number(notice.sortOrder)
+        : readFallbackPanelNoticeSortOrder(notice, index),
+    }));
+  }
+
+  function comparePanelNoticeOrder(left, right) {
+    const sortDelta = readPanelNoticeSortOrder(left) - readPanelNoticeSortOrder(right);
+    if (sortDelta !== 0) {
+      return sortDelta;
+    }
+    return normalizeText(right.updatedAt).localeCompare(normalizeText(left.updatedAt));
+  }
+
+  function readPanelNoticeSortOrder(notice) {
+    const sortOrder = Number(notice?.sortOrder);
+    return Number.isFinite(sortOrder) ? sortOrder : readFallbackPanelNoticeSortOrder(notice);
+  }
+
+  function readFallbackPanelNoticeSortOrder(notice, index = 0) {
+    const timestamp = Date.parse(normalizeText(notice?.updatedAt || notice?.createdAt));
+    return Number.isFinite(timestamp) ? -timestamp : Number(index) || 0;
   }
 
   function normalizePanelNoticeCta(ctaInput = {}, options = {}) {
@@ -726,7 +877,7 @@ function createAdminDomain(deps) {
   }
 
   function isPanelNoticeVisible(notice) {
-    if (normalizeText(notice.status) !== "published") {
+    if (normalizeText(notice.status) === "archived") {
       return false;
     }
     const nowMs = now();
@@ -744,6 +895,7 @@ function createAdminDomain(deps) {
       endsAt: normalizeText(notice.endsAt),
       noticeId: normalizeText(notice.noticeId),
       publishedAt: normalizeText(notice.publishedAt),
+      sortOrder: readPanelNoticeSortOrder(notice),
       startsAt: normalizeText(notice.startsAt),
       title: normalizeText(notice.title),
       version: normalizeNoticeVersion(notice.version),
@@ -760,6 +912,7 @@ function createAdminDomain(deps) {
       endsAt: normalizeText(notice.endsAt),
       noticeId: normalizeText(notice.noticeId),
       publishedAt: normalizeText(notice.publishedAt),
+      sortOrder: readPanelNoticeSortOrder(notice),
       startsAt: normalizeText(notice.startsAt),
       status: normalizeText(notice.status) || "draft",
       title: normalizeText(notice.title),
@@ -920,6 +1073,10 @@ function createAdminDomain(deps) {
     return normalizeText(ref.id) || crypto.randomBytes(12).toString("hex");
   }
 
+  function createPanelNoticeSignalRevision(nowIso) {
+    return `${normalizeText(nowIso) || new Date(now()).toISOString()}-${crypto.randomBytes(6).toString("hex")}`;
+  }
+
   function assertDbReady() {
     if (!db?.collection) {
       throw createHttpError(500, "관리자 저장소가 준비되지 않았어요.");
@@ -950,9 +1107,11 @@ function createAdminDomain(deps) {
   return {
     archiveAdminPanelNotice,
     checkAdminAccess,
+    deleteAdminPanelNotice,
     exchangeAdminLaunch,
     issueAdminLaunch,
     listAdminPanelNotices,
+    moveAdminPanelNotice,
     publishAdminPanelNotice,
     readAdminBootstrap,
     readPanelNotice,

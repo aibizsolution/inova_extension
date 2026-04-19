@@ -5,7 +5,7 @@ const { createAdminDomain } = require("../functions/features/admin/admin-service
 
 async function main() {
   await verifyPanelNoticeReadStates();
-  await verifySingleActiveNoticePublishing();
+  await verifyMultipleVisibleNoticePublishing();
   await verifyAdminSessionAndValidationGuards();
   console.log("[verify-panel-notice-service] Panel notice service contract passed");
 }
@@ -18,6 +18,23 @@ async function verifyPanelNoticeReadStates() {
 
   const empty = await domain.readPanelNotice({ providerUserKey: "viewer-1" });
   assert.equal(empty.notice, null, "panel read should return null when no active notice exists");
+
+  const savedNotice = await domain.saveAdminPanelNotice(adminSessionToken, {
+    bodyMarkdown: "저장 즉시 기간 조건으로 노출",
+    endsAt: "2026-04-19T02:00:00.000Z",
+    startsAt: "2026-04-19T00:30:00.000Z",
+    title: "저장 공지",
+  });
+  assert.equal(savedNotice.notice.status, "published", "saved notices should be eligible for time-window visibility");
+  const savedRead = await domain.readPanelNotice({ providerUserKey: "viewer-1" });
+  assert.equal(savedRead.notice.noticeId, savedNotice.notice.noticeId, "panel read should expose a saved notice inside its display window");
+
+  await domain.archiveAdminPanelNotice(adminSessionToken, { noticeId: savedNotice.notice.noticeId });
+  assert.equal(
+    (await domain.readPanelNotice({ providerUserKey: "viewer-1" })).notice,
+    null,
+    "panel read should hide an archived notice even when the display window matches"
+  );
 
   const futureNotice = await domain.publishAdminPanelNotice(adminSessionToken, {
     bodyMarkdown: "아직 시작 전",
@@ -44,9 +61,10 @@ async function verifyPanelNoticeReadStates() {
   );
 }
 
-async function verifySingleActiveNoticePublishing() {
+async function verifyMultipleVisibleNoticePublishing() {
   const db = createFakeDb();
-  const domain = createDomain(db, () => Date.parse("2026-04-19T04:00:00.000Z"));
+  let nowMs = Date.parse("2026-04-19T04:00:00.000Z");
+  const domain = createDomain(db, () => nowMs);
   const adminSessionToken = await issueAdminSession(domain);
 
   const first = await domain.publishAdminPanelNotice(adminSessionToken, {
@@ -60,6 +78,7 @@ async function verifySingleActiveNoticePublishing() {
   });
   const publicNotice = await domain.readPanelNotice({ providerUserKey: "viewer-1" });
   assert.equal(publicNotice.notice.noticeId, first.notice.noticeId);
+  assert.equal(publicNotice.notices.length, 1, "panel read should expose visible notices as an ordered list");
   assert(publicNotice.notice.bodyHtml.includes("&lt;b&gt;원문 HTML&lt;/b&gt;"), "raw HTML should be escaped in public notice HTML");
   assert(publicNotice.notice.bodyHtml.includes("<strong>중요</strong>"), "limited Markdown bold should render");
   assert(publicNotice.notice.bodyHtml.includes('<a href="https://example.com/docs?a=1&amp;b=2"'), "https Markdown links should render escaped href attributes once");
@@ -67,6 +86,7 @@ async function verifySingleActiveNoticePublishing() {
   assert(!hasOwn(publicNotice.notice, "status"), "panel read should not expose internal notice status");
   assert(!hasOwn(publicNotice.notice, "bodyMarkdown"), "panel read should not expose authoring Markdown");
 
+  nowMs = Date.parse("2026-04-19T04:01:00.000Z");
   const second = await domain.publishAdminPanelNotice(adminSessionToken, {
     bodyMarkdown: "두 번째 공지",
     endsAt: "2026-04-23T00:00:00.000Z",
@@ -74,8 +94,32 @@ async function verifySingleActiveNoticePublishing() {
   });
   const firstStored = db.readDocument("ops_panel_notices", first.notice.noticeId);
   const currentState = db.readDocument("ops_panel_notice_state", "current");
-  assert.equal(firstStored.status, "archived", "publishing a new notice should archive the previous active notice");
+  const currentSignal = db.readDocument("ops_panel_notice_signals", "current");
+  const publicNotices = await domain.readPanelNotice({ providerUserKey: "viewer-1" });
+  assert.equal(firstStored.status, "published", "publishing a new notice should keep previous visible notices published");
+  assert.equal(publicNotices.notices.length, 2, "panel read should return multiple visible notices");
+  assert.equal(publicNotices.notice.noticeId, second.notice.noticeId, "panel read should keep the newest visible notice as the compatibility notice");
   assert.equal(currentState.activeNoticeId, second.notice.noticeId, "current state should point to the latest published notice");
+  assert.equal(currentSignal.reason, "publish", "notice mutations should write a public realtime invalidation signal");
+  assert(currentSignal.revision, "notice invalidation signals should carry a revision key for Firestore subscribers");
+  assert(!hasOwn(currentSignal, "updatedBy"), "public notice invalidation signals should not expose admin actor metadata");
+
+  await domain.moveAdminPanelNotice(adminSessionToken, { direction: "up", noticeId: first.notice.noticeId });
+  assert.equal(db.readDocument("ops_panel_notice_signals", "current").reason, "move");
+  const afterMove = await domain.readPanelNotice({ providerUserKey: "viewer-1" });
+  assert.equal(afterMove.notice.noticeId, first.notice.noticeId, "moving a notice up should make it the first panel notice");
+
+  await domain.archiveAdminPanelNotice(adminSessionToken, { noticeId: second.notice.noticeId });
+  assert.equal(db.readDocument("ops_panel_notice_signals", "current").reason, "archive");
+  const afterArchive = await domain.readPanelNotice({ providerUserKey: "viewer-1" });
+  assert.equal(afterArchive.notices.length, 1, "archiving one notice should keep the remaining visible notice");
+  assert.equal(afterArchive.notice.noticeId, first.notice.noticeId);
+
+  await domain.deleteAdminPanelNotice(adminSessionToken, { noticeId: first.notice.noticeId });
+  assert.equal(db.readDocument("ops_panel_notice_signals", "current").reason, "delete");
+  const afterDelete = await domain.readPanelNotice({ providerUserKey: "viewer-1" });
+  assert.equal(afterDelete.notice, null, "deleting the remaining visible notice should remove it from panel reads");
+  assert.equal(db.readDocument("ops_panel_notices", first.notice.noticeId), undefined, "deleted notices should be removed from storage");
 }
 
 async function verifyAdminSessionAndValidationGuards() {
@@ -199,6 +243,9 @@ function createFakeDb() {
                 ...previous,
                 ...(value || {}),
               }));
+            },
+            async delete() {
+              readCollection(collectionName).delete(docId);
             },
           };
         },

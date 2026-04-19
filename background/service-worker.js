@@ -69,6 +69,8 @@ Object.assign(globalThis, {
   openAdminConsole: adminConsoleCapability.openConsole,
   openMeetingResult: meetingWorkspaceCapability.openResult,
   openMeetingWorkspace: meetingWorkspaceCapability.openWorkspace,
+  prepareMeetingResultOpen: meetingWorkspaceCapability.prepareResultOpen,
+  prepareMeetingWorkspaceOpen: meetingWorkspaceCapability.prepareWorkspaceOpen,
   openBrowserUrl: browserCapability.openUrl,
   revokeMeetingShareLink: meetingWorkspaceCapability.revokeShareLink,
 });

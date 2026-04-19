@@ -61,8 +61,15 @@ function verifyPanelNoticeHostedContract() {
   const hostedHtml = readText(path.join("hosting", "extension-v2", "panel", "index.html"));
   const hostedPanelSource = readText(path.join("hosting", "extension-v2", "panel", "index.js"));
   const noticeControllerSource = readText(path.join("hosting", "extension-v2", "panel", "panel-notice-controller.js"));
+  const noticeSignalSource = readText(path.join("hosting", "extension-v2", "panel", "panel-notice-signal-firestore-client.js"));
+  const firestoreRulesSource = readText("firestore.rules");
 
-  assert(hostedHtml.includes("./panel-notice-controller.js"), "hosted panel should load the panel notice controller before index.js");
+  assert(
+    hostedHtml.includes("./panel-notice-signal-firestore-client.js")
+      && hostedHtml.indexOf("./base-firestore-client.js") < hostedHtml.indexOf("./panel-notice-signal-firestore-client.js")
+      && hostedHtml.indexOf("./panel-notice-signal-firestore-client.js") < hostedHtml.indexOf("./panel-notice-controller.js"),
+    "hosted panel should load the realtime notice signal client before the notice controller"
+  );
   assert(
     hostedPanelSource.includes("panelNoticeController?.syncPanelState?.(panelState, effectiveCapabilities)")
       && hostedPanelSource.includes("renderPanelNoticeIfNeeded(elements.panelNotice)")
@@ -76,13 +83,33 @@ function verifyPanelNoticeHostedContract() {
   );
   assert(
     noticeControllerSource.includes('const PANEL_NOTICE_READ_CAPABILITY_ID = "panel.notice.read-active"')
+      && noticeControllerSource.includes("ensureNoticeSignalSubscription")
+      && noticeControllerSource.includes("panelNoticeSignalFirestoreClient")
+      && noticeControllerSource.includes('refreshNotice("firestore")')
+      && !noticeControllerSource.includes("NOTICE_REFRESH_INTERVAL_MS")
+      && !noticeControllerSource.includes("setInterval")
       && noticeControllerSource.includes('traceNotice("hosted.notice.read.error"')
       && noticeControllerSource.includes("NOTICE_HIDE_DURATION_MS = 24 * 60 * 60 * 1000")
       && noticeControllerSource.includes("buildDismissKey(notice)")
       && !noticeControllerSource.includes("namespace.panelUtils?.normalizeText")
       && !noticeControllerSource.includes("namespace.session?.normalizeText")
       && !noticeControllerSource.includes('String(value ?? "").trim()'),
-    "panel notice controller should use the active notice capability, hide read failures, persist one-day dismissal by noticeId:version, and use panelUtils"
+    "panel notice controller should use the active notice capability, subscribe to notice invalidation signals, avoid polling, hide read failures, persist one-day dismissal by noticeId:version, and use panelUtils"
+  );
+  assert(
+    noticeSignalSource.includes('const SIGNAL_COLLECTION = "ops_panel_notice_signals"')
+      && noticeSignalSource.includes("baseFirestoreClient")
+      && noticeSignalSource.includes("createTarget")
+      && !noticeSignalSource.includes("ops_panel_notices")
+      && !noticeSignalSource.includes("ops_panel_notice_state"),
+    "panel notice realtime client should subscribe only to the public invalidation signal doc"
+  );
+  assert(
+    firestoreRulesSource.includes("match /ops_panel_notice_signals/{docId}")
+      && firestoreRulesSource.includes('allow get: if isHostedPanelSessionActive() && docId == "current";')
+      && firestoreRulesSource.includes("match /ops_panel_notices/{noticeId}")
+      && firestoreRulesSource.includes("allow read, write: if false;"),
+    "Firestore rules should allow hosted panels to subscribe only to the public notice invalidation signal"
   );
 }
 

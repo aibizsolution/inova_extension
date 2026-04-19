@@ -59,6 +59,8 @@
       openAdminConsole,
       openMeetingResult,
       openMeetingWorkspace,
+      prepareMeetingResultOpen,
+      prepareMeetingWorkspaceOpen,
       readCapabilityCatalog,
       readComposerState,
       readConversationDomSnapshot,
@@ -212,6 +214,22 @@
     function openMeetingWorkspace(input, providerIdentity) {
       return invokeRuntime({
         action: "meeting.workspace.open",
+        input,
+        providerIdentity,
+      });
+    }
+
+    function prepareMeetingResultOpen(input, providerIdentity) {
+      return invokeRuntime({
+        action: "meeting.result.prepare-open",
+        input,
+        providerIdentity,
+      });
+    }
+
+    function prepareMeetingWorkspaceOpen(input, providerIdentity) {
+      return invokeRuntime({
+        action: "meeting.workspace.prepare-open",
         input,
         providerIdentity,
       });

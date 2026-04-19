@@ -64,8 +64,19 @@ function verifyHostedPanelAdminGate() {
       && adminControllerSource.includes('const ADMIN_LAUNCH_ISSUE_CAPABILITY_ID = "admin.launch.issue-function"')
       && adminControllerSource.includes("browserCapabilities.openAdminConsole")
       && adminControllerSource.includes("state.status === \"allowed\"")
-      && adminControllerSource.includes("state.accessPendingKey"),
-    "admin entry controller should gate rendering on current server capability checks"
+      && adminControllerSource.includes("state.accessPendingKey")
+      && adminControllerSource.includes("ensureLaunchPrepared")
+      && adminControllerSource.includes("readLaunchTokenForOpen")
+      && adminControllerSource.includes("admin.launch.prefetch.hit")
+      && adminControllerSource.includes("function openAdminUrl")
+      && adminControllerSource.includes("function openBlankAdminWindow")
+      && adminControllerSource.includes("function navigatePreparedAdminWindow")
+      && adminControllerSource.includes('global.open(adminUrl, "_blank")')
+      && adminControllerSource.includes('global.open("about:blank", "_blank")')
+      && adminControllerSource.includes('mode: "web-window"')
+      && adminControllerSource.includes('mode: "runtime-broker"')
+      && adminControllerSource.includes("clearPreparedLaunch"),
+    "admin entry controller should gate rendering on server capability checks, prefetch launch tokens, and prefer controllable web-open before runtime fallback"
   );
   assert(
     extensionCapabilityClientSource.includes("function openAdminConsole")
@@ -102,12 +113,22 @@ function verifyHostedPanelAdminGate() {
 function verifyAdminPageContract() {
   const html = readText(path.join("hosting", "admin", "index.html"));
   const css = readText(path.join("hosting", "admin", "index.css"));
+  const designSystemCss = readText(path.join("hosting", "shared", "design-system.css"));
+  const designSystemJs = readText(path.join("hosting", "shared", "design-system.js"));
+  const designSystemDoc = readText(path.join("docs", "design-system.md"));
   const pageSource = readText(path.join("hosting", "admin", "index.js"));
   const firebaseConfig = readText("firebase.json");
   const adminServiceSource = readText(path.join("functions", "features", "admin", "admin-service.js"));
   const functionsIndexSource = readText(path.join("functions", "index.js"));
 
-  assert(html.includes('<script src="index.js" defer></script>'), "hosted admin page should load its controller");
+  assert(
+    html.includes('<link rel="stylesheet" href="/shared/design-system.css" />')
+      && html.includes('<script src="/shared/design-system.js" defer></script>')
+      && html.includes('<script src="index.js" defer></script>')
+      && html.includes('id="adminToastSlot"')
+      && html.includes("data-inova-toast-slot"),
+    "hosted admin page should load the shared design system before its controller and expose a toast slot"
+  );
   assert(
     html.includes('id="adminShell"')
       && html.includes('data-view="loading"')
@@ -119,9 +140,12 @@ function verifyAdminPageContract() {
       && html.includes('class="admin-page-layout"')
       && html.includes('id="pageOutlet"')
       && !html.includes("세션 컨텍스트")
+      && !html.includes('id="statusBadge"')
+      && !html.includes('id="refreshButton"')
       && !html.includes('id="sideAccessState"')
-      && !html.includes('id="sideSessionExpiresAt"'),
-    "hosted admin page should expose a menu-driven shell without duplicating session context inside the content layout"
+      && !html.includes('id="sideSessionExpiresAt"')
+      && html.indexOf('id="sessionPanel"') < html.indexOf('class="admin-topbar"'),
+    "hosted admin page should expose a menu-driven shell with the session context as the first main content block"
   );
   assert(
     css.includes(".admin-sidebar")
@@ -129,11 +153,45 @@ function verifyAdminPageContract() {
       && css.includes(".admin-main")
       && css.includes(".admin-page-layout")
       && css.includes(".admin-page-outlet")
-      && css.includes(".admin-notice-secondary")
+      && css.includes(".admin-notice-badge")
+      && css.includes("grid-template-columns: 360px minmax(440px, 1fr) 458px")
+      && css.includes("overflow: hidden")
+      && css.includes(".admin-notice-preview__frame")
+      && css.includes(".admin-notice-panel-popup")
+      && !css.includes(".admin-notice-feedback")
+      && !css.includes(".admin-notice-secondary")
+      && !css.includes(".admin-notice-toggle")
+      && !css.includes(".admin-topbar__actions")
+      && !css.includes(".admin-badge")
+      && !css.includes(".admin-icon-button")
       && !css.includes(".admin-side-context")
+      && css.includes('.admin-shell[data-view="verified"] .admin-topbar')
       && css.includes("min-width: 1120px")
       && css.includes('.admin-shell[data-view="loading"]'),
     "hosted admin styles should keep a PC-width menu/outlet layout without a duplicate side context panel"
+  );
+  assert(
+    designSystemCss.includes(".inova-toast-slot")
+      && designSystemCss.includes(".inova-toast")
+      && designSystemCss.includes(".inova-dialog-overlay")
+      && designSystemCss.includes(".inova-dialog")
+      && designSystemCss.includes(".inova-section-head")
+      && designSystemCss.includes(".inova-section-head__title")
+      && designSystemCss.includes(".toast-notice")
+      && designSystemCss.includes("position: fixed")
+      && designSystemJs.includes("function createConfirmController")
+      && designSystemJs.includes("function createToastController")
+      && designSystemJs.includes("function renderIcon")
+      && designSystemJs.includes("chevron-left")
+      && designSystemJs.includes("chevron-right")
+      && designSystemJs.includes("showToast")
+      && designSystemDoc.includes("짧은 저장/삭제/복사/이동 결과")
+      && designSystemDoc.includes("window.confirm")
+      && designSystemDoc.includes("createConfirmController")
+      && designSystemDoc.includes("renderIcon")
+      && designSystemDoc.includes("Section Header")
+      && designSystemDoc.includes("design system toast"),
+    "shared design system should own reusable hosted toast/icon/dialog primitives and usage guidance"
   );
   assert(
     !html.includes('id="moduleGrid"')
@@ -153,9 +211,17 @@ function verifyAdminPageContract() {
       && pageSource.includes("readInovaAdminBootstrap")
       && pageSource.includes("AdminSession")
       && pageSource.includes("sessionStorage")
+      && pageSource.includes("let exchangedLaunch = false")
+      && pageSource.includes("if (exchangedLaunch)")
+      && pageSource.includes('const ACTIVE_SECTION_QUERY_KEY = "section"')
+      && pageSource.includes("readActiveSectionFromUrl")
+      && pageSource.includes("writeActiveSectionToUrl")
+      && pageSource.includes("url.searchParams.set(ACTIVE_SECTION_QUERY_KEY, section.id)")
       && pageSource.includes('typeof payload?.error === "string"')
-      && pageSource.includes('url.searchParams.delete("launch")'),
-    "hosted admin page should exchange launch tokens, remove query secrets, and verify AdminSession"
+      && pageSource.includes('url.searchParams.delete("launch")')
+      && !pageSource.includes("refreshSession")
+      && !pageSource.includes("setBadge"),
+    "hosted admin page should exchange launch tokens, remove query secrets, skip redundant bootstrap after fresh exchange, and verify restored AdminSession"
   );
   assert(
     pageSource.includes("const ADMIN_SECTIONS = Object.freeze")
@@ -178,7 +244,10 @@ function verifyAdminPageContract() {
       && adminServiceSource.includes('const ADMIN_LAUNCH_COLLECTION = "ops_admin_launches"')
       && adminServiceSource.includes('const ADMIN_SESSION_COLLECTION = "ops_admin_sessions"')
       && adminServiceSource.includes('const PANEL_NOTICE_COLLECTION = "ops_panel_notices"')
+      && adminServiceSource.includes('const PANEL_NOTICE_SIGNAL_COLLECTION = "ops_panel_notice_signals"')
       && adminServiceSource.includes('const PANEL_NOTICE_STATE_COLLECTION = "ops_panel_notice_state"')
+      && adminServiceSource.includes("writePanelNoticeState")
+      && adminServiceSource.includes("createPanelNoticeSignalRevision")
       && adminServiceSource.includes("hashSecret")
       && adminServiceSource.includes("관리자 권한이 더 이상 유효하지 않아요."),
     "admin service should own server-side access checks, hashed token storage, and revocation checks"
@@ -190,6 +259,8 @@ function verifyAdminPageContract() {
       && functionsIndexSource.includes("exports.exchangeInovaAdminLaunch")
       && functionsIndexSource.includes("exports.readInovaAdminBootstrap")
       && functionsIndexSource.includes("exports.readInovaPanelNotice")
+      && functionsIndexSource.includes("exports.deleteInovaAdminPanelNotice")
+      && functionsIndexSource.includes("exports.moveInovaAdminPanelNotice")
       && functionsIndexSource.includes("exports.saveInovaAdminPanelNotice")
       && functionsIndexSource.includes("exports.publishInovaAdminPanelNotice")
       && functionsIndexSource.includes("exports.archiveInovaAdminPanelNotice"),
@@ -198,16 +269,62 @@ function verifyAdminPageContract() {
   assert(
     pageSource.includes("listInovaAdminPanelNotices")
       && pageSource.includes("saveInovaAdminPanelNotice")
-      && pageSource.includes("publishInovaAdminPanelNotice")
-      && pageSource.includes("archiveInovaAdminPanelNotice")
+      && pageSource.includes("deleteInovaAdminPanelNotice")
+      && pageSource.includes("moveInovaAdminPanelNotice")
       && pageSource.includes("renderAdminNoticeMarkdownPreview")
+      && pageSource.includes("readNoticeDisplayState")
+      && pageSource.includes("createNoticePreviewPanel")
+      && pageSource.includes("inova-section-head")
+      && pageSource.includes("inova-section-head__title")
+      && pageSource.includes("소식 작성")
+      && pageSource.includes("미리보기")
+      && pageSource.includes("data-notice-preview-title")
+      && !pageSource.includes("admin-notice-preview__head")
+      && !pageSource.includes(">Preview<")
       && pageSource.includes("validateNoticeForm")
       && pageSource.includes("normalizeCtaUrlInput")
       && pageSource.includes("data-notice-feedback-for=\"cta.url\"")
+      && pageSource.includes("data-notice-field=\"startsAt\"")
+      && pageSource.includes("data-notice-field=\"endsAt\"")
+      && pageSource.includes('type="text" inputmode="numeric" maxlength="16" placeholder="YYYY-MM-DD 00:00"')
+      && !pageSource.includes('type="datetime-local"')
+      && pageSource.includes("data-notice-action=\"shift-start-date\"")
+      && pageSource.includes("data-notice-action=\"shift-end-date\"")
+      && pageSource.includes("function shiftNoticeDate")
+      && pageSource.includes("function createDefaultNoticeWindow")
+      && pageSource.includes("setHours(23, 59, 0, 0)")
+      && pageSource.includes('normalizedField === "endsAt"')
+      && pageSource.includes("function parseDatetimeInputToDate")
+      && pageSource.includes("function padDatePart")
+      && pageSource.includes("setHours(0, 0, 0, 0)")
+      && pageSource.includes('createButton.dataset.noticeAction = "new"')
+      && pageSource.includes("data-notice-action=\"delete\"")
+      && pageSource.includes("data-notice-action=\"move-up\"")
+      && pageSource.includes("data-notice-action=\"move-down\"")
       && pageSource.includes("data-notice-action=\"save\"")
-      && pageSource.includes("data-notice-action=\"publish\"")
-      && pageSource.includes("data-notice-action=\"archive\""),
-    "hosted admin page should expose the panel notice editor, preview, and save/publish/archive actions through the notice outlet"
+      && pageSource.includes("createAdminConfirmController")
+      && pageSource.includes("confirmAdminAction")
+      && pageSource.includes("createAdminToastController")
+      && pageSource.includes("showAdminToast")
+      && pageSource.includes("InovaDesignSystem")
+      && pageSource.includes("renderAdminIcon(\"admin\"")
+      && html.includes("inova-status-state")
+      && html.includes("inova-status-state__icon")
+      && designSystemCss.includes(".inova-status-state")
+      && designSystemCss.includes("white-space: nowrap")
+      && !pageSource.includes("function publishPanelNoticeChange")
+      && !pageSource.includes("BroadcastChannel")
+      && !pageSource.includes("inova-panel-notice-signal")
+      && !pageSource.includes("panel-notice.changed")
+      && pageSource.includes("is-selected")
+      && pageSource.includes('item.setAttribute("aria-current", isSelected ? "true" : "false")')
+      && !pageSource.includes("admin-notice-feedback")
+      && !pageSource.includes("global.confirm")
+      && !pageSource.includes("togglePanelNoticeVisibility")
+      && !pageSource.includes("data-notice-action=\"toggle-visibility\"")
+      && !pageSource.includes("예약 노출 옵션")
+      && !pageSource.includes("현재 노출 중"),
+    "hosted admin page should expose a simple period-based panel notice editor without manual visibility toggles"
   );
 }
 
