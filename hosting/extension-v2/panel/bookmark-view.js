@@ -17,6 +17,7 @@
     return `
       <section class="inova-tool-section">
         <div class="inova-tool-toolbar is-stacked">
+          ${renderTokenSummary(state.tokenEstimate, state.contextProfileConfig)}
           <input
             class="inova-tool-search"
             type="search"
@@ -25,7 +26,6 @@
             data-search-tool="bookmarks"
             placeholder="이 대화에서 질문 찾기"
           />
-          ${renderTokenSummary(state.tokenEstimate, state.contextProfileConfig)}
           ${state.metaText ? `<div class="inova-tool-meta">${escapeHtml(state.metaText)}</div>` : ""}
         </div>
         ${capabilityNotice}
