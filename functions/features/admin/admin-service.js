@@ -839,7 +839,11 @@ function createAdminDomain(deps) {
       addAdminAccessCandidate(candidateMap, normalizeAdminAccessIdentity(entry.data, entry.id));
     });
     usageMonthDocs.forEach((entry) => {
-      addAdminAccessCandidate(candidateMap, normalizeAdminAccessIdentity(entry.data?.owner || entry.data, entry.id));
+      const usageData = entry.data || {};
+      addAdminAccessCandidate(candidateMap, normalizeAdminAccessIdentity({
+        ...(usageData.owner || usageData),
+        lastActivityAt: usageData.lastUsedAt,
+      }, entry.id));
     });
     adminUserDocs.forEach((entry) => {
       const adminIdentity = normalizeAdminAccessIdentity(entry.data, entry.id);
@@ -884,6 +888,7 @@ function createAdminDomain(deps) {
       ...existing,
       displayName,
       email: identity.email || existing.email || "",
+      lastActivityAt: pickLaterAdminAccessActivityAt(identity.lastActivityAt, existing.lastActivityAt),
       numericUserId: identity.numericUserId !== null ? identity.numericUserId : existing.numericUserId ?? null,
       organization: identity.organization || existing.organization || "",
       provider: identity.provider || existing.provider || "inova",
@@ -903,6 +908,7 @@ function createAdminDomain(deps) {
     return {
       ...normalized,
       displayName: normalized.displayName || normalized.email || normalized.providerUserKey,
+      lastActivityAt: normalizeAdminAccessActivityAt(source.lastActivityAt),
       organization: normalizeAdminAccessOrganization(readAdminAccessOrganizationSource(source)),
     };
   }
@@ -916,6 +922,7 @@ function createAdminDomain(deps) {
       canEdit: !envAccess.allowed,
       displayName: member.displayName,
       email: member.email,
+      lastActivityAt: member.lastActivityAt,
       numericUserId: member.numericUserId,
       organization: normalizeAdminAccessOrganization(adminDoc.organization) || member.organization,
       provider: member.provider,
@@ -947,6 +954,23 @@ function createAdminDomain(deps) {
       throw createHttpError(400, `조직은 ${MAX_ADMIN_ACCESS_ORGANIZATION_LENGTH}자 이하로 입력해 주세요.`);
     }
     return organization.slice(0, MAX_ADMIN_ACCESS_ORGANIZATION_LENGTH);
+  }
+
+  function normalizeAdminAccessActivityAt(value) {
+    const timestamp = Date.parse(normalizeText(value));
+    return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : "";
+  }
+
+  function pickLaterAdminAccessActivityAt(leftInput, rightInput) {
+    const left = normalizeAdminAccessActivityAt(leftInput);
+    const right = normalizeAdminAccessActivityAt(rightInput);
+    if (!left) {
+      return right;
+    }
+    if (!right) {
+      return left;
+    }
+    return Date.parse(left) >= Date.parse(right) ? left : right;
   }
 
   function compareAdminAccessUsers(left, right) {

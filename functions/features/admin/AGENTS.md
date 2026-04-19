@@ -9,7 +9,7 @@
 - 새 관리자 API는 raw 데이터/토큰/원문 prompt/대화 원문을 반환하지 않는다. 기능별 운영 데이터가 필요해질 때는 read-only summary부터 별도 endpoint로 추가한다.
 - 관리자 페이지 기능을 붙일 때도 먼저 `AdminSession` 검증을 통과한 read-only API로 시작하고, 삭제/재처리/차단 같은 mutation은 별도 capability와 감사 로그 기준을 둔다.
 - `사용자 및 권한`은 기존 회원 후보를 서버에서 읽고 `ops_admin_users/{providerUserKey}`의 `status: active|inactive`와 `organization` 메타데이터만 변경한다. 이메일 직접 입력으로 새 관리자를 만드는 흐름은 기본 경로가 아니다.
-- 회원 후보 목록은 `integration_inova_accounts_v2`, `integration_inova_accounts`, `integration_inova_feature_usage_user_months`, 기존 `ops_admin_users`의 identity snapshot을 합쳐 만든다. 화면은 이 후보 안에서 선택한 회원의 관리자 권한과 조직 메타데이터만 저장한다.
+- 회원 후보 목록은 `integration_inova_accounts_v2`, `integration_inova_accounts`, `integration_inova_feature_usage_user_months`, 기존 `ops_admin_users`의 identity snapshot을 합쳐 만든다. `integration_inova_feature_usage_user_months.lastUsedAt`은 읽기 전용 `lastActivityAt`으로만 보여주고, 화면은 이 후보 안에서 선택한 회원의 관리자 권한과 조직 메타데이터만 저장한다.
 - `hosting/admin/*`의 기본 shell은 PC/태블릿 폭을 기준으로 한 좌측 관리자 메뉴, 상단 권한 상태, 세션 요약, 본문 outlet, 보조 context, blocked view를 고정 영역으로 본다. 새 기능은 메뉴 항목과 본문 outlet section으로 하나씩 연결하고, 한 화면에 카드만 누적하지 않는다.
 - 패널 소식 팝업은 `ops_panel_notice_state/current`와 `ops_panel_notices/{noticeId}`를 관리자 기능 소유 데이터로 본다. 공지 본문과 관리자 작성 데이터는 panel/admin 모두 Functions API만 사용한다. 열린 패널 자동 반영은 `ops_panel_notice_signals/current`의 공개 invalidation 신호만 Firestore `onSnapshot`으로 구독하고, 신호 수신 후 실제 공지 내용은 다시 `readInovaPanelNotice` Functions API로 읽는다.
 - 관리자 기능에서 열린 패널 자동 반영이 필요할 때도 주기 refresh/polling을 쓰지 않는다. 서버 변경 감지는 구독 가능한 공개 invalidation signal 또는 명시적 사용자 action으로 처리한다. 예외적으로 polling이 필요하면 구현 전에 사용자에게 사유, 주기, 비용, 백오프, 중단 조건을 설명하고 허락을 받아야 한다.

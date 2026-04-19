@@ -576,6 +576,7 @@
     const detailEmail = selectedEntry?.email || "-";
     const detailName = selectedEntry?.displayName || "-";
     const detailOrganization = readAccessDraftOrganization(selectedEntry);
+    const detailLastActivity = readAccessLastActivityLabel(selectedEntry);
 
     const panel = global.document.createElement("section");
     panel.className = "admin-access-detail";
@@ -590,6 +591,10 @@
           <strong>${escapeHtml(detailName)}</strong>
           <span>${escapeHtml(detailEmail)}</span>
         </div>
+      </div>
+      <div class="admin-access-meta" aria-label="회원 활동 정보">
+        <span>마지막 활동</span>
+        <strong>${escapeHtml(detailLastActivity)}</strong>
       </div>
       <div class="admin-access-permission">
         <span>관리자 권한</span>
@@ -1370,6 +1375,7 @@
       displayName: normalizeText(input.displayName) || normalizeText(input.email) || providerUserKey,
       email: normalizeText(input.email).toLowerCase(),
       id: providerUserKey,
+      lastActivityAt: normalizeText(input.lastActivityAt),
       numericUserId: numericUserId === null || numericUserId === undefined || numericUserId === ""
         ? null
         : Number.isFinite(Number(numericUserId))
@@ -1380,6 +1386,11 @@
       organization: normalizeText(input.organization),
       status,
     };
+  }
+
+  function readAccessLastActivityLabel(entry) {
+    const formatted = formatDateTime(entry?.lastActivityAt);
+    return formatted === "-" ? "기록 없음" : formatted;
   }
 
   function readAccessStatusLabel(statusInput) {
