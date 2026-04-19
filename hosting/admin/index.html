@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>i-Nova 관리자</title>
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png" />
+    <link rel="stylesheet" href="index.css" />
+    <script src="index.js" defer></script>
+  </head>
+  <body>
+    <main class="admin-shell" data-state="loading">
+      <header class="admin-header">
+        <div class="admin-header__identity">
+          <p class="admin-eyebrow">Admin Console</p>
+          <h1>i-Nova 관리자</h1>
+          <p id="statusSummary" class="admin-summary">관리자 권한을 확인하고 있습니다.</p>
+        </div>
+        <span id="statusBadge" class="status-badge" data-tone="loading">확인 중</span>
+      </header>
+
+      <section id="verifiedPanel" class="admin-panel" hidden>
+        <div class="admin-panel__header">
+          <div>
+            <p class="admin-eyebrow">Verified</p>
+            <h2>관리자 권한 확인됨</h2>
+          </div>
+          <button id="refreshButton" class="icon-button" type="button" aria-label="다시 확인">
+            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+              <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
+              <path d="M21 4v6h-6"></path>
+            </svg>
+          </button>
+        </div>
+
+        <dl class="identity-list">
+          <div>
+            <dt>사용자</dt>
+            <dd id="viewerName">-</dd>
+          </div>
+          <div>
+            <dt>계정</dt>
+            <dd id="viewerEmail">-</dd>
+          </div>
+          <div>
+            <dt>권한</dt>
+            <dd id="viewerRole">-</dd>
+          </div>
+          <div>
+            <dt>세션</dt>
+            <dd id="sessionExpiresAt">-</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section id="placeholderPanel" class="admin-panel admin-panel--muted" hidden>
+        <p class="admin-eyebrow">Next</p>
+        <h2>운영 기능 준비 중</h2>
+        <p>권한 확인 흐름이 먼저 고정되었습니다.</p>
+      </section>
+
+      <section id="blockedPanel" class="admin-panel admin-panel--blocked" hidden>
+        <p class="admin-eyebrow">Blocked</p>
+        <h2 id="blockedTitle">관리자 권한을 확인할 수 없습니다</h2>
+        <p id="blockedMessage">확장 패널에서 관리자 메뉴를 다시 열어 주세요.</p>
+      </section>
+    </main>
+  </body>
+</html>

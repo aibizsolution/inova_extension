@@ -56,6 +56,7 @@
       issuePanelSession,
       jumpConversationItem,
       logTrace,
+      openAdminConsole,
       openMeetingResult,
       openMeetingWorkspace,
       readCapabilityCatalog,
@@ -189,6 +190,14 @@
         channel,
         payload,
         step,
+      });
+    }
+
+    function openAdminConsole(input = {}, providerIdentity) {
+      return invokeRuntime({
+        action: "admin.console.open",
+        input,
+        providerIdentity,
       });
     }
 

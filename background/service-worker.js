@@ -10,6 +10,7 @@ importScripts("inova-auth-client.js");
 importScripts("cloud-api-client.js");
 importScripts("browser-capability.js");
 importScripts("meeting-workspace-capability.js");
+importScripts("admin-console-capability.js");
 importScripts("panel-auth-cache.js");
 importScripts("panel-session-capability.js");
 importScripts("panel-runtime-capability-router.js");
@@ -25,6 +26,7 @@ const ACTIVE_BACKGROUND_MESSAGE_TYPES = Object.freeze([
 const browserCapability = namespace.browserCapability || {};
 const functionsRuntimeConfig = namespace.functionsRuntimeConfig || {};
 const meetingWorkspaceCapability = namespace.meetingWorkspaceCapability || {};
+const adminConsoleCapability = namespace.adminConsoleCapability || {};
 const panelSessionCapability = namespace.panelSessionCapability || {};
 
 browserCapability.installLocalPanelCspRuleSync?.();
@@ -64,6 +66,7 @@ Object.assign(globalThis, {
   getPromptRuntimeConfig: functionsRuntimeConfig.getPromptRuntimeConfig,
   issueMeetingPanelAuth: panelSessionCapability.issueMeetingPanelAuth,
   issuePromptPanelAuth: panelSessionCapability.issuePromptPanelAuth,
+  openAdminConsole: adminConsoleCapability.openConsole,
   openMeetingResult: meetingWorkspaceCapability.openResult,
   openMeetingWorkspace: meetingWorkspaceCapability.openWorkspace,
   openBrowserUrl: browserCapability.openUrl,

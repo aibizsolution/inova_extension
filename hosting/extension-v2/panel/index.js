@@ -106,6 +106,12 @@
     }),
   }) || null;
   featureUsageTracker?.start?.();
+  const adminEntryController = namespace.adminEntryController?.create?.({
+    browserCapabilities,
+    publishToast,
+    scheduleRender,
+    traceAdmin: traceAdminFlow,
+  }) || null;
   const conversationController = namespace.conversationController?.create?.({
     browserCapabilities,
     featureUsageTracker,
@@ -443,6 +449,9 @@
         return Promise.resolve(false);
       },
       onSelectTool(toolId) {
+        if (normalizeText(toolId) === "admin") {
+          return adminEntryController?.handleOpen?.() || Promise.resolve(false);
+        }
         return persistHostedToolSelection(toolId);
       },
       onStoreAction(storeAction, detail = {}) {
@@ -1261,6 +1270,7 @@
     promptStoreController?.syncPanelState?.(panelState, effectiveCapabilities);
     meetingHubController?.syncPanelState?.(panelState, effectiveCapabilities);
     releaseController?.syncPanelState?.(panelState, effectiveCapabilities);
+    adminEntryController?.syncPanelState?.(panelState, effectiveCapabilities);
   }
 
   function createPanelRenderCache() {
@@ -1376,6 +1386,14 @@
   function renderToolRailIcon(toolId) {
     const normalizedTool = normalizeText(toolId);
     // Lucide icon paths are inlined to keep the hosted panel CDN-free.
+    if (normalizedTool === "admin") {
+      return `
+        <svg viewBox="0 0 24 24" focusable="false">
+          <path d="M12 3 4 6v5c0 5 3.4 8.8 8 10 4.6-1.2 8-5 8-10V6z"></path>
+          <path d="M9.5 12.5 11 14l3.5-4"></path>
+        </svg>
+      `;
+    }
     if (normalizedTool === "meeting") {
       return `
         <svg viewBox="0 0 24 24" focusable="false">
@@ -1418,7 +1436,11 @@
   }
 
   function buildHostedToolItems() {
-    return HOSTED_PANEL_TOOLS.map((tool) => ({ ...tool }));
+    const tools = HOSTED_PANEL_TOOLS.map((tool) => ({ ...tool }));
+    if (adminEntryController?.shouldShowEntry?.()) {
+      tools.push(adminEntryController.buildToolItem());
+    }
+    return tools;
   }
 
   function buildHostedToolTitle(activeTool) {
@@ -2381,6 +2403,10 @@
 
   function traceMeetingFlow(step, payload = {}) {
     postTrace("meeting", step, payload);
+  }
+
+  function traceAdminFlow(step, payload = {}) {
+    postTrace("admin", step, payload);
   }
 
   function traceConversationFlow(step, payload = {}) {

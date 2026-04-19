@@ -57,6 +57,15 @@
           ]
         },
         {
+          "source": "admin/**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate"
+            }
+          ]
+        },
+        {
           "source": "extension/**",
           "headers": [
             {
@@ -123,6 +132,15 @@
         },
         {
           "source": "meeting/**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "admin/**",
           "headers": [
             {
               "key": "Cache-Control",

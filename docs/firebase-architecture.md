@@ -29,6 +29,9 @@
 - `integration_external_connections`
 - `ops_migrations`
 - `ops_audit_logs`
+- `ops_admin_users`
+- `ops_admin_launches`
+- `ops_admin_sessions`
 
 ### prompt-library
 
@@ -58,6 +61,12 @@
 - `integration_inova_meeting_deletions`
 - launch/session 컬렉션
 
+### admin
+
+- `ops_admin_users`: 관리자 허용 사용자. 문서 키는 `providerUserKey`, `status: active`일 때만 허용한다.
+- `ops_admin_launches`: 패널에서 관리자 페이지를 새 탭으로 여는 short-lived one-time launch token grant. 원문 secret은 저장하지 않고 hash만 저장한다.
+- `ops_admin_sessions`: 관리자 페이지가 launch token을 교환한 뒤 쓰는 AdminSession token grant. 원문 secret은 저장하지 않고 hash만 저장한다.
+
 ## 현재 문서 키 규칙
 
 - 프롬프트 백업 문서: `prompt_libraries/inova__{providerUserKey}`
@@ -72,6 +81,8 @@
   - 공유 해제 후 새 링크를 만들면 새 `shareId`와 함께 0부터 다시 시작한다.
   - 목록 렌더링에서 참여 문서를 집계해서 읽지 않는다.
   - 공유 해제 함수는 현재 `shareId`의 참여 shortcut을 `accessState: revoked`, `hidden: false`로 비활성화하고, 사용자의 `목록에서 제거`만 `hidden: true`를 만든다.
+- 관리자 허용 사용자 문서: `ops_admin_users/{providerUserKey}`
+- 관리자 launch/session token 문서: id와 secret을 분리하고, 문서에는 id와 `secretHash`만 저장한다.
 
 ## 설계 금지 사항
 
