@@ -43,3 +43,19 @@
 - title: `.inova-section-head__title`
 
 관리 화면 컬럼이나 카드 상단 제목처럼 반복되는 섹션 타이틀은 화면 전용 heading 클래스를 새로 만들지 말고 이 primitive를 쓴다.
+
+## Badge
+
+- CSS: `/shared/design-system.css`
+- base: `.inova-badge`
+- tones: `.inova-badge--success`, `.inova-badge--warning`, `.inova-badge--info`, `.inova-badge--danger`, `.inova-badge--muted`
+
+상태, 권한, 소스처럼 짧은 metadata label은 화면별 badge 클래스를 새로 만들지 말고 이 primitive를 쓴다.
+
+## Segmented Control
+
+- CSS: `/shared/design-system.css`
+- wrapper: `.inova-segmented`
+- selected state: child `button[aria-pressed="true"]`
+
+필터나 역할 선택처럼 2~4개의 상호 배타 옵션을 같은 줄에서 고르는 컨트롤은 화면별 segmented 스타일을 새로 만들지 말고 이 primitive를 쓴다.

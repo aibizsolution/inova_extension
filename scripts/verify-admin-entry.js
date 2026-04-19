@@ -139,6 +139,8 @@ function verifyAdminPageContract() {
       && html.includes('id="contentPanel"')
       && html.includes('class="admin-page-layout"')
       && html.includes('id="pageOutlet"')
+      && html.includes('id="loadingPanel"')
+      && html.includes('class="admin-loading inova-status-state"')
       && !html.includes("세션 컨텍스트")
       && !html.includes('id="statusBadge"')
       && !html.includes('id="refreshButton"')
@@ -167,7 +169,11 @@ function verifyAdminPageContract() {
       && !css.includes(".admin-side-context")
       && css.includes('.admin-shell[data-view="verified"] .admin-topbar')
       && css.includes("min-width: 1120px")
-      && css.includes('.admin-shell[data-view="loading"]'),
+      && css.includes('.admin-shell[data-view="loading"]')
+      && css.includes('.admin-shell[data-view="loading"] .admin-main')
+      && css.includes('.admin-shell[data-view="loading"] .admin-topbar')
+      && css.includes(".admin-loading")
+      && css.includes("place-items: center"),
     "hosted admin styles should keep a PC-width menu/outlet layout without a duplicate side context panel"
   );
   assert(
@@ -177,6 +183,9 @@ function verifyAdminPageContract() {
       && designSystemCss.includes(".inova-dialog")
       && designSystemCss.includes(".inova-section-head")
       && designSystemCss.includes(".inova-section-head__title")
+      && designSystemCss.includes(".inova-badge")
+      && designSystemCss.includes(".inova-badge--success")
+      && designSystemCss.includes(".inova-segmented")
       && designSystemCss.includes(".toast-notice")
       && designSystemCss.includes("position: fixed")
       && designSystemJs.includes("function createConfirmController")
@@ -190,6 +199,8 @@ function verifyAdminPageContract() {
       && designSystemDoc.includes("createConfirmController")
       && designSystemDoc.includes("renderIcon")
       && designSystemDoc.includes("Section Header")
+      && designSystemDoc.includes("Badge")
+      && designSystemDoc.includes("Segmented Control")
       && designSystemDoc.includes("design system toast"),
     "shared design system should own reusable hosted toast/icon/dialog primitives and usage guidance"
   );
@@ -228,6 +239,11 @@ function verifyAdminPageContract() {
       && pageSource.includes('id: "notice"')
       && pageSource.includes("소식 팝업")
       && pageSource.includes("function setView")
+      && pageSource.includes("createAccessWorkbench")
+      && pageSource.includes("admin-access-filter inova-segmented")
+      && pageSource.includes("inova-badge")
+      && pageSource.includes("loadingPanel")
+      && pageSource.includes("loadingIcon")
       && pageSource.includes("function renderNavigation")
       && pageSource.includes("function renderActiveSection")
       && pageSource.includes("function setActiveSection")

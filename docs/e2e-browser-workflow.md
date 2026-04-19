@@ -155,6 +155,7 @@ npm.cmd run check:feature-usage -- --days 1 --limit 20
 1. 검증 대상 계정을 정한다.
    - 비관리자 계정: `ops_admin_users/{providerUserKey}` 문서가 없고 `INOVA_ADMIN_PROVIDER_USER_KEYS` / `INOVA_ADMIN_EMAILS`에도 없어야 한다.
    - 관리자 계정: 환경 allowlist 또는 `ops_admin_users/{providerUserKey}` active 문서가 있어야 한다.
+   - 로컬 기본값: `npm.cmd run emulator:meeting-local`은 `youngtack.park@incross.com`을 `INOVA_ADMIN_EMAILS`에 자동 포함한다. 로컬 임시 관리자를 더 넣을 때는 실행 전 `INOVA_LOCAL_ADMIN_EMAILS`에 쉼표로 추가한다.
 2. 패널 iframe이 현재 target으로 로드됐는지 확인한다.
    - 로컬: `http://127.0.0.1:5000/extension-v2/panel/index.html?...`
    - 상용: `https://browser-extension-v2.web.app/extension-v2/panel/index.html?...`
@@ -181,7 +182,7 @@ npm.cmd run check:feature-usage -- --days 1 --limit 20
 3. editor가 제목, 본문 Markdown, CTA label/URL, 노출 시작/종료 시간을 표시하고, 버튼은 `저장`, `삭제`, `새 소식`만 있어야 한다.
 4. 노출 여부는 토글이 아니라 현재 시각이 노출 시작/종료 범위 안인지로 계산한다. 여러 소식이 동시에 노출되면 패널은 목록 위 순서대로 자동 전환해야 한다.
 5. Markdown preview에서 raw HTML은 escape되고, 문단/줄바꿈, `**굵게**`, `*기울임*`, `-` bullet, `https://` 링크만 렌더링되는지 본다.
-6. CTA URL을 `www.naver.com`처럼 입력하면 저장 전 `https://www.naver.com`으로 보정되거나 필드 바로 아래에서 `https://` 요구사항을 알려야 한다. generic `관리자 요청 실패`만 보여주면 실패다.
+6. CTA URL을 `inova.incross.com`처럼 입력하면 저장 전 `https://inova.incross.com/`으로 보정되거나 필드 바로 아래에서 `https://` 요구사항을 알려야 한다. generic `관리자 요청 실패`만 보여주면 실패다.
 7. 종료 시간이 현재보다 과거인 공지는 저장되어도 패널 노출 대상으로 계산되면 안 되고, `http://` CTA나 Markdown 링크는 저장되지 않아야 한다.
 8. 소식을 저장하면 Firestore `ops_panel_notices/{noticeId}`와 panel invalidation signal이 갱신되어야 한다.
 9. 일반 패널 사용자 iframe의 capability handshake에서 `panel.notice.read-active`가 enabled이고, auth가 `access-token`, service가 `admin`인지 확인한다.

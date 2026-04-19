@@ -7,6 +7,18 @@
   const MAX_NOTICE_TITLE_LENGTH = 80;
   const MAX_NOTICE_BODY_LENGTH = 800;
   const MAX_NOTICE_CTA_LABEL_LENGTH = 32;
+  const LOCAL_DEFAULT_ADMIN_EMAIL = "youngtack.park@incross.com";
+  const ACCESS_FILTERS = Object.freeze([
+    { id: "all", label: "전체" },
+    { id: "active", label: "활성" },
+    { id: "draft", label: "초안" },
+    { id: "inactive", label: "비활성" },
+  ]);
+  const ACCESS_ROLE_OPTIONS = Object.freeze([
+    { id: "owner", label: "Owner" },
+    { id: "admin", label: "Admin" },
+    { id: "viewer", label: "Viewer" },
+  ]);
   const ADMIN_SECTIONS = Object.freeze([
     {
       eyebrow: "Overview",
@@ -23,7 +35,7 @@
       icon: "users",
       id: "access",
       label: "사용자 및 권한",
-      summary: "관리자 계정, 권한, 접근 정책 화면이 들어갈 자리입니다.",
+      summary: "관리자 계정과 접근 상태를 검토합니다.",
       title: "사용자 및 권한",
     },
     {
@@ -85,6 +97,7 @@
   const state = {
     activeSectionId: "overview",
     adminSessionToken: "",
+    access: createAccessState(),
     error: "",
     notice: createNoticeState(),
     role: "",
@@ -293,6 +306,10 @@
       "blockedTitle",
       "blockedIcon",
       "contentPanel",
+      "loadingIcon",
+      "loadingMessage",
+      "loadingPanel",
+      "loadingTitle",
       "navGroups",
       "pageOutlet",
       "sectionEyebrow",
@@ -322,6 +339,13 @@
     setText(elements.sectionEyebrow, "Loading");
     setText(elements.sectionTitle, "관리자 권한 확인");
     setText(elements.statusSummary, message);
+    setText(elements.loadingTitle, "관리자 권한 확인");
+    setText(elements.loadingMessage, normalizeText(message) || "관리자 권한을 확인하고 있습니다.");
+    if (elements.loadingIcon) {
+      elements.loadingIcon.innerHTML = renderAdminIcon("admin", {
+        className: "inova-status-state__svg",
+      });
+    }
   }
 
   function renderVerified() {
@@ -355,6 +379,7 @@
     setHidden(elements.adminSidebar, state.view !== "verified");
     setHidden(elements.sessionPanel, state.view !== "verified");
     setHidden(elements.contentPanel, state.view !== "verified");
+    setHidden(elements.loadingPanel, state.view !== "loading");
     setHidden(elements.blockedPanel, state.view !== "blocked");
   }
 
@@ -455,7 +480,208 @@
       void ensurePanelNoticesLoaded();
       return;
     }
+    if (section.id === "access") {
+      elements.pageOutlet?.replaceChildren(createAccessWorkbench());
+      return;
+    }
     elements.pageOutlet?.replaceChildren(createSectionPlaceholder(section));
+  }
+
+  function createAccessWorkbench() {
+    const entries = readAccessPreviewEntries();
+    const visibleEntries = filterAccessEntries(entries);
+    const selectedEntry = readSelectedAccessEntry(entries, visibleEntries);
+    const wrapper = global.document.createElement("div");
+    wrapper.className = "admin-access-workbench";
+    wrapper.append(
+      createAccessListPanel(entries, visibleEntries, selectedEntry),
+      createAccessProfilePanel(selectedEntry),
+      createAccessPolicyPanel()
+    );
+    wrapper.addEventListener("input", handleAccessInput);
+    wrapper.addEventListener("click", handleAccessClick);
+    return wrapper;
+  }
+
+  function createAccessListPanel(entries, visibleEntries, selectedEntry) {
+    const panel = global.document.createElement("section");
+    panel.className = "admin-access-list";
+
+    const filterButtons = ACCESS_FILTERS.map((filter) => {
+      const isSelected = state.access.statusFilter === filter.id;
+      return `
+        <button type="button" data-access-filter="${escapeHtmlAttribute(filter.id)}" aria-pressed="${isSelected ? "true" : "false"}">
+          ${escapeHtml(filter.label)}
+        </button>`;
+    }).join("");
+    const rows = visibleEntries.map((entry) => createAccessListItem(entry, selectedEntry)).join("");
+
+    panel.innerHTML = `
+      <div class="inova-section-head admin-access-panel-head">
+        <h3 class="inova-section-head__title">관리자 계정</h3>
+        <span class="admin-access-count">${visibleEntries.length}/${entries.length}</span>
+      </div>
+      <label class="admin-access-search">
+        <span>검색</span>
+        <input type="search" data-access-search value="${escapeHtmlAttribute(state.access.query)}" placeholder="이름, 이메일, provider key" />
+      </label>
+      <div class="admin-access-filter inova-segmented" aria-label="권한 상태 필터">
+        ${filterButtons}
+      </div>
+      <div class="admin-access-list__items">
+        ${rows || '<p class="admin-access-empty">조건에 맞는 계정이 없습니다.</p>'}
+      </div>
+    `;
+    return panel;
+  }
+
+  function createAccessListItem(entry, selectedEntry) {
+    const isSelected = entry.id === selectedEntry?.id;
+    return `
+      <button type="button" class="admin-access-list__item${isSelected ? " is-selected" : ""}" data-access-select="${escapeHtmlAttribute(entry.id)}" aria-current="${isSelected ? "true" : "false"}">
+        <span class="admin-access-avatar" aria-hidden="true">${escapeHtml(readAccessInitial(entry))}</span>
+        <span class="admin-access-list__body">
+          <strong>${escapeHtml(entry.displayName)}</strong>
+          <span>${escapeHtml(entry.email || entry.providerUserKey)}</span>
+        </span>
+        <span class="inova-badge ${escapeHtmlAttribute(readAccessStatusClass(entry.status))}">${escapeHtml(readAccessStatusLabel(entry.status))}</span>
+      </button>
+    `;
+  }
+
+  function createAccessProfilePanel(entry) {
+    const selectedEntry = entry || readAccessPreviewEntries()[0];
+    const roleButtons = ACCESS_ROLE_OPTIONS.map((role) => {
+      const isSelected = normalizeText(selectedEntry?.role).toLowerCase() === role.id;
+      return `
+        <button type="button" disabled aria-pressed="${isSelected ? "true" : "false"}">
+          ${escapeHtml(role.label)}
+        </button>`;
+    }).join("");
+    const statusLabel = readAccessStatusLabel(selectedEntry?.status);
+    const sourceLabel = readAccessSourceLabel(selectedEntry?.source);
+    const sourceBadgeClass = selectedEntry?.source === "local" ? "inova-badge--info" : "inova-badge--muted";
+
+    const panel = global.document.createElement("section");
+    panel.className = "admin-access-profile";
+    panel.innerHTML = `
+      <div class="inova-section-head admin-access-panel-head">
+        <h3 class="inova-section-head__title">권한 프로필</h3>
+        <span class="inova-badge ${escapeHtmlAttribute(sourceBadgeClass)}">${escapeHtml(sourceLabel)}</span>
+      </div>
+      <div class="admin-access-profile__hero">
+        <span class="admin-access-avatar is-large" aria-hidden="true">${escapeHtml(readAccessInitial(selectedEntry))}</span>
+        <div>
+          <strong>${escapeHtml(selectedEntry?.displayName || "-")}</strong>
+          <span>${escapeHtml(selectedEntry?.email || "-")}</span>
+        </div>
+        <span class="inova-badge ${escapeHtmlAttribute(readAccessStatusClass(selectedEntry?.status))}">${escapeHtml(statusLabel)}</span>
+      </div>
+      <dl class="admin-access-fields">
+        <div>
+          <dt>Provider Key</dt>
+          <dd>${escapeHtml(selectedEntry?.providerUserKey || "-")}</dd>
+        </div>
+        <div>
+          <dt>권한</dt>
+          <dd>${escapeHtml(normalizeAdminRole(selectedEntry?.role) || "admin")}</dd>
+        </div>
+        <div>
+          <dt>범위</dt>
+          <dd>${escapeHtml(selectedEntry?.scope || "-")}</dd>
+        </div>
+        <div>
+          <dt>최근 확인</dt>
+          <dd>${escapeHtml(selectedEntry?.lastCheckedAt || "-")}</dd>
+        </div>
+      </dl>
+      <div class="admin-access-control-group">
+        <span>역할</span>
+        <div class="admin-access-segmented inova-segmented" aria-label="관리자 역할">
+          ${roleButtons}
+        </div>
+      </div>
+      <div class="admin-access-form-grid">
+        <label class="admin-notice-field">
+          <span>표시 이름</span>
+          <input value="${escapeHtmlAttribute(selectedEntry?.displayName || "")}" disabled />
+        </label>
+        <label class="admin-notice-field">
+          <span>이메일</span>
+          <input value="${escapeHtmlAttribute(selectedEntry?.email || "")}" disabled />
+        </label>
+      </div>
+      <div class="admin-access-actions">
+        <button type="button" class="admin-primary-button is-strong" disabled>변경 저장</button>
+        <button type="button" class="admin-secondary-button" disabled>권한 회수</button>
+      </div>
+    `;
+    return panel;
+  }
+
+  function createAccessPolicyPanel() {
+    const sessionExpiresAt = formatDateTime(state.sessionExpiresAt);
+    const panel = global.document.createElement("section");
+    panel.className = "admin-access-policy";
+    panel.innerHTML = `
+      <div class="inova-section-head admin-access-panel-head">
+        <h3 class="inova-section-head__title">접근 정책</h3>
+      </div>
+      <div class="admin-access-policy__block">
+        <strong>권한 소스</strong>
+        <ul class="admin-access-checklist">
+          <li><span></span>환경 allowlist 이메일</li>
+          <li><span></span>Firestore 관리자 문서</li>
+          <li><span></span>AdminSession 재검증</li>
+        </ul>
+      </div>
+      <div class="admin-access-policy__block">
+        <strong>세션 흐름</strong>
+        <ol class="admin-access-flow">
+          <li>패널 권한 확인</li>
+          <li>Launch token 발급</li>
+          <li>AdminSession 교환</li>
+          <li>관리 API 호출</li>
+        </ol>
+      </div>
+      <div class="admin-access-policy__block">
+        <strong>현재 세션</strong>
+        <dl class="admin-access-compact-fields">
+          <div>
+            <dt>권한</dt>
+            <dd>${escapeHtml(state.role || "admin")}</dd>
+          </div>
+          <div>
+            <dt>만료</dt>
+            <dd>${escapeHtml(sessionExpiresAt)}</dd>
+          </div>
+        </dl>
+      </div>
+    `;
+    return panel;
+  }
+
+  function handleAccessInput(event) {
+    const target = event.target;
+    if (!target?.matches?.("[data-access-search]")) {
+      return;
+    }
+    state.access.query = normalizeText(target.value);
+    renderActiveSection();
+  }
+
+  function handleAccessClick(event) {
+    const filterButton = event.target?.closest?.("[data-access-filter]");
+    if (filterButton) {
+      state.access.statusFilter = normalizeText(filterButton.dataset.accessFilter) || "all";
+      renderActiveSection();
+      return;
+    }
+    const selectButton = event.target?.closest?.("[data-access-select]");
+    if (selectButton) {
+      state.access.selectedId = normalizeText(selectButton.dataset.accessSelect);
+      renderActiveSection();
+    }
   }
 
   function createSectionPlaceholder(section) {
@@ -518,7 +744,7 @@
           </label>
           <label class="admin-notice-field" for="panelNoticeCtaUrl">
             <span>CTA URL</span>
-            <input id="panelNoticeCtaUrl" data-notice-field="cta.url" inputmode="url" placeholder="https://www.naver.com" />
+            <input id="panelNoticeCtaUrl" data-notice-field="cta.url" inputmode="url" placeholder="https://inova.incross.com/" />
             <small class="admin-notice-field__hint" data-notice-feedback-for="cta.url">https 링크만 사용할 수 있습니다.</small>
           </label>
         </div>
@@ -886,6 +1112,138 @@
     renderActiveSection();
   }
 
+  function createAccessState() {
+    return {
+      query: "",
+      selectedId: "current-session",
+      statusFilter: "all",
+    };
+  }
+
+  function readAccessPreviewEntries() {
+    const viewer = normalizeViewer(state.viewer);
+    const viewerEmail = normalizeText(viewer.email).toLowerCase();
+    const viewerKey = normalizeText(viewer.providerUserKey);
+    const entries = [{
+      displayName: viewer.displayName || viewerKey || "현재 관리자",
+      email: viewerEmail,
+      id: "current-session",
+      lastCheckedAt: "현재 세션",
+      providerUserKey: viewerKey || "session-provider",
+      role: normalizeAdminRole(state.role) || "admin",
+      scope: "관리자 콘솔",
+      source: viewerEmail === LOCAL_DEFAULT_ADMIN_EMAIL ? "local" : "session",
+      status: "active",
+    }];
+
+    if (viewerEmail !== LOCAL_DEFAULT_ADMIN_EMAIL) {
+      entries.push({
+        displayName: "박영탁",
+        email: LOCAL_DEFAULT_ADMIN_EMAIL,
+        id: "local-default",
+        lastCheckedAt: "로컬 에뮬레이터",
+        providerUserKey: "email allowlist",
+        role: "admin",
+        scope: "로컬 관리자",
+        source: "local",
+        status: "active",
+      });
+    }
+
+    entries.push({
+      displayName: "신규 관리자",
+      email: "new.admin@incross.com",
+      id: "draft-access",
+      lastCheckedAt: "작성 전",
+      providerUserKey: "미등록",
+      role: "viewer",
+      scope: "초안",
+      source: "draft",
+      status: "draft",
+    });
+
+    return entries;
+  }
+
+  function filterAccessEntries(entries) {
+    const query = normalizeText(state.access.query).toLowerCase();
+    const statusFilter = normalizeText(state.access.statusFilter) || "all";
+    return entries.filter((entry) => {
+      const matchesStatus = statusFilter === "all" || entry.status === statusFilter;
+      const haystack = [
+        entry.displayName,
+        entry.email,
+        entry.providerUserKey,
+        entry.role,
+        entry.scope,
+      ].join(" ").toLowerCase();
+      return matchesStatus && (!query || haystack.includes(query));
+    });
+  }
+
+  function readSelectedAccessEntry(entries, visibleEntries) {
+    const selectedId = normalizeText(state.access.selectedId);
+    const selected = entries.find((entry) => entry.id === selectedId);
+    if (selected && visibleEntries.some((entry) => entry.id === selected.id)) {
+      return selected;
+    }
+    const fallback = visibleEntries[0] || entries[0] || null;
+    state.access.selectedId = normalizeText(fallback?.id) || "";
+    return fallback;
+  }
+
+  function readAccessInitial(entry) {
+    const source = normalizeText(entry?.displayName || entry?.email || entry?.providerUserKey);
+    return source.slice(0, 1).toUpperCase() || "A";
+  }
+
+  function readAccessStatusLabel(statusInput) {
+    const status = normalizeText(statusInput).toLowerCase();
+    if (status === "active") {
+      return "활성";
+    }
+    if (status === "inactive") {
+      return "비활성";
+    }
+    if (status === "draft") {
+      return "초안";
+    }
+    return "확인 필요";
+  }
+
+  function readAccessStatusClass(statusInput) {
+    const status = normalizeText(statusInput).toLowerCase();
+    if (status === "active") {
+      return "inova-badge--success";
+    }
+    if (status === "inactive") {
+      return "inova-badge--muted";
+    }
+    if (status === "draft") {
+      return "inova-badge--warning";
+    }
+    return "inova-badge--muted";
+  }
+
+  function readAccessSourceLabel(sourceInput) {
+    const source = normalizeText(sourceInput).toLowerCase();
+    if (source === "local") {
+      return "로컬 allowlist";
+    }
+    if (source === "draft") {
+      return "초안";
+    }
+    return "현재 세션";
+  }
+
+  function normalizeAdminRole(roleInput) {
+    const role = normalizeText(roleInput).toLowerCase();
+    if (role === "owner" || role === "admin" || role === "viewer") {
+      return role;
+    }
+    return role || "admin";
+  }
+
   function createNoticeState() {
     return {
       activeNoticeId: "",
@@ -1029,7 +1387,7 @@
       if (!ctaUrlRaw) {
         fieldErrors["cta.url"] = "CTA URL을 입력하거나 라벨을 비워 주세요.";
       } else if (!isHttpsUrl(ctaUrl)) {
-        fieldErrors["cta.url"] = "CTA URL은 https://로 시작해야 합니다. 예: https://www.naver.com";
+        fieldErrors["cta.url"] = "CTA URL은 https://로 시작해야 합니다. 예: https://inova.incross.com/";
       } else {
         state.notice.form.cta.url = ctaUrl;
       }
