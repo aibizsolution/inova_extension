@@ -1,5 +1,7 @@
 # Current Handoff
 
+> Archived reference. 이 문서는 기본 작업 시작 시 읽지 않으며, 최신 운영 기준으로 유지보수하지 않는다. 현재 기준은 루트 `README.md`, `AGENTS.md`, `docs/feature-routing.md`, `docs/runtime-architecture.md`, `docs/release-workflow.md`, feature별 `AGENTS.md`를 우선한다.
+
 Last updated: 2026-04-16
 
 ## Snapshot
@@ -22,9 +24,9 @@ The active architecture goal is no-deploy feature expansion for the extension ru
 - new Chrome permission, host permission, content DOM primitive, privileged bridge, or native integration still requires extension redeploy.
 - new Cloud Function endpoint, endpoint path, capability routing, UI action exposure, and lightweight workflow should be server/hosting deploy whenever the existing primitive catalog can cover it.
 
-Primary design doc:
+Archived primary design doc at the time:
 
-- `docs/remote-capability-manifest-plan.md`
+- `docs/archive/remote-capability-manifest-plan.md`
 
 Generated/runtime catalog:
 
@@ -118,7 +120,7 @@ Do not start these by default:
 
 Remote platform:
 
-- `docs/remote-capability-manifest-plan.md`
+- `docs/archive/remote-capability-manifest-plan.md`
 - `docs/capability-catalog.md`
 - `background/functions-runtime-config.js`
 - `background/capability-manifest-validator.js`

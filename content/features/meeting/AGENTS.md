@@ -6,7 +6,7 @@
 ## 문서 갱신 규칙
 - 이 feature의 entrypoint, hosted/panel 공통 불변식, auth/recovery 경계, 최소 검증 기준이 바뀌면 이 문서를 같은 작업 안에서 갱신한다.
 - `README.md`가 아니라 meeting feature-local 규칙과 계약은 이 문서나 meeting 전용 docs에 문서화한다.
-- meeting endpoint/auth/collection baseline과 version/release 판단 기준은 `docs/refactoring-plan.md`에서 관리한다.
+- meeting endpoint/auth/collection baseline과 version/release 판단의 과거 배경은 필요할 때만 `docs/archive/refactoring-plan.md`에서 참고한다. 현재 운영 기준은 `docs/runtime-architecture.md`와 `docs/release-workflow.md`를 우선한다.
 - hosted browser console trace 검증과 증거 수집 절차는 `docs/meeting-debug-console-validation.md`에서 관리한다.
 - 실제 Chrome 회의 룸/작업실/공유 참여 E2E 항목은 `docs/e2e/features/meeting.md`에서 관리한다.
 - Functions runtime sizing과 운영 튜닝 기준은 `docs/functions-runtime-guide.md`에서 관리한다.
@@ -36,7 +36,7 @@
 - hosted recovery/self-healing 경로는 `hosting/meeting/workspace-recovery.js`를 먼저 본다.
 
 ## hosted/panel 공통 경계
-- legacy lane은 현재 `browser-extension-main` hosted meeting 경로를 유지한다. separate hosted origin/site 판단은 `docs/refactoring-plan.md`의 version decision gate에서 관리한다.
+- legacy lane은 현재 `browser-extension-main` hosted meeting 경로를 유지한다. separate hosted origin/site 판단의 과거 배경은 `docs/archive/refactoring-plan.md`의 version decision gate를 필요할 때만 참고한다.
 - `0.4.5`부터 panel 안의 회의 허브 UI는 `hosting/extension/panel/meeting-view.js`가 렌더링하고, 회의 목록 state와 action routing은 기존 `backup/legacy-panel/meeting-manager.js`/`backup/legacy-panel/panel-meeting-controller.js`가 계속 소유한다.
 - `1.0.0+` v2 lane에서는 `hosting/extension-v2/panel/meeting-hub-controller.js`가 회의 허브 목록 렌더 상태(`items`, `error/degraded`, `freshness`), 사용량 미니 통계(`usage`), action UI 상태(`pending`, `feedback`, share patch`)를 직접 소유한다. 목록 읽기는 hosted `meeting-firestore-client.js`가 `auth.issue-panel-session(panel=meeting) -> Firestore onSnapshot` 경로로 맡는다. 사용량 읽기는 hosted `meeting-usage-firestore-client.js`가 회의 탭 active 동안 사용자 월별 집계 doc 1개와 전체 집계 doc 1개만 구독하고, tab inactive/close 때 즉시 해제한다. 작업실/결과 열기는 static runtime capability `meeting.workspace.open`, `meeting.result.open`을 탄다. 공유 생성/해제 UI와 실행은 handshake의 `meeting.share.create-function`, `meeting.share.revoke-function` capability가 enabled일 때만 열리고, 실행도 `invokeCapability()` 경로로 Functions endpoint manifest를 따른다. v2 hosted panel은 더 이상 `meeting-action` top-panel fallback request를 쓰지 않는다. extension은 runtime broker와 브라우저 탭 열기만 맡고, handle/rail count는 hosted가 회의 컨트롤러 state로 계산한 뒤 `panel-chrome-sync`로 parent DOM에 반영한다.
 - meeting capabilityId: `meeting.list`, `meeting.panel-auth.issue-function`, `meeting.participation.hide-function`, `meeting.share.create-function`, `meeting.share.revoke-function`, `meeting.workspace.authorize-access`, `meeting.workspace.open`, `meeting.result.open`.

@@ -1,5 +1,7 @@
 # Extension Runtime Platform Plan
 
+> Archived reference. 이 문서는 기본 작업 시작 시 읽지 않으며, 최신 운영 기준으로 유지보수하지 않는다. Remote capability 설계 배경이 필요할 때만 참조한다.
+
 이 문서는 `새 backend action / 새 Cloud Function / 새 기능 흐름 때문에 확장 프로그램을 다시 배포하지 않는다`는 목표를 구현하기 위한 기준이다.
 
 핵심 전제는 바뀌었다.
@@ -584,7 +586,7 @@ verify 기준:
 
 - docs generator
 - verify scripts
-- `docs/remote-capability-manifest-plan.md`
+- `docs/archive/remote-capability-manifest-plan.md`
 - `docs/capability-authoring.md`
 - `docs/capability-catalog.md`
 
@@ -699,8 +701,8 @@ verify 기준:
 
 다음에 먼저 볼 파일:
 
-- `docs/current-handoff.md`
-- `docs/remote-capability-manifest-plan.md`
+- `docs/archive/current-handoff-2026-04-16.md`
+- `docs/archive/remote-capability-manifest-plan.md`
 - `docs/capability-catalog.md`
 - `docs/capability-authoring.md`
 - `background/functions-runtime-config.js`

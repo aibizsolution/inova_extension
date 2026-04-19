@@ -6,6 +6,7 @@
 - 작업 시작 시 `cwd`, Git 상태, 셸 환경을 먼저 확인한다.
 - 작업 시작 직후 첫 셸 명령을 실행하기 전에 아래 `셸/도구 환경 메모`를 다시 보고, 현재 세션에 해당하는 known workaround를 먼저 적용한다.
 - 기본 최소 읽기 세트는 `docs/development-philosophy.md`, 루트 `AGENTS.md`, `README.md`, `package.json`, `manifest.json`, `docs/feature-routing.md`, 그리고 요청과 일치하는 environment `AGENTS.md` 1개와 feature `AGENTS.md` 1개다.
+- `docs/archive/*`는 기본 읽기 세트에서 제외한다. 과거 판단 배경이 꼭 필요할 때만 참조하고, archive 문서와 현재 코드/운영 문서가 충돌하면 현재 코드와 운영 문서를 우선한다.
 - `content/`, `functions/`, `hosting/meeting/`, `shared/`를 처음부터 넓게 읽지 않는다.
 - 단순 실행/운영 요청(`로컬 에뮬레이터 켜기`, `dev server 실행`, `lint/test/build/verify 실행`, `로그/상태 확인`)은 feature 구현 요청처럼 취급하지 않는다. 이 경우 `cwd`/Git/셸 확인 뒤 바로 `package.json` 스크립트, 관련 워크플로 문서, 필요한 환경 메모만 읽고 명령부터 실행한다.
 - 위 fast path에서는 feature `AGENTS.md`와 세부 docs를 선행 필수로 읽지 않는다. 실행이 실패했거나 어떤 스크립트를 써야 할지 모호할 때만 해당 feature 또는 environment 문서로 좁혀 들어간다.
@@ -70,7 +71,7 @@
 - `README.md`는 저장소/제품 개요, 설치/배포, 상위 feature 축이 바뀔 때만 갱신한다.
 - feature-local 규칙, 계약, 최소 검증 기준은 해당 feature `AGENTS.md` 또는 feature 전용 docs에 문서화한다.
 - feature-local 변경 때문에 `README.md`를 기능 변경 일지처럼 누적하지 않는다.
-- `docs/refactoring-plan.md`처럼 과거 계획, migration 판단, 완료된 phase 기준을 담은 문서는 기본 갱신 대상이 아니다. 사용자가 그 문서 자체의 정리를 명시하거나, 같은 변경 안에서 문서를 보존/폐기 대상으로 전환하는 경우에만 건드린다.
+- `docs/archive/*`처럼 과거 계획, migration 판단, 완료된 phase 기준을 담은 문서는 기본 갱신 대상이 아니다. 사용자가 그 문서 자체의 정리를 명시하거나, 같은 변경 안에서 문서를 보존/폐기 대상으로 전환하는 경우에만 건드린다.
 - 현재 운영 기준이 바뀌면 과거 계획 문서가 아니라 `docs/release-workflow.md`, `docs/runtime-architecture.md`, feature `AGENTS.md`, feature 전용 docs처럼 살아있는 계약 문서에 반영한다.
 - 문서는 완벽하지 않다고 가정하고, 작업 중 문서와 실제 코드/함수/파일 경계가 다르면 코드를 기준으로 같은 작업 안에서 문서를 갱신한다.
 - hosted-first 기준으로 이미 옮겨진 책임을 문서가 아직 extension-owned처럼 설명하면, 발견한 같은 작업 안에서 바로 고친다.
