@@ -12,20 +12,21 @@
 
 ## 문서 맵
 
-- [docs/feature-routing.md](docs/feature-routing.md): primary feature 선택, 시작 파일, 범위 확장 규칙
+기본 작업 시작 시에는 아래 운영 문서만 우선 읽습니다.
+
 - [AGENTS.md](AGENTS.md): 전역 작업 규칙, 검증 기본값, 세션 분리 기준
-- [docs/feature-spec.md](docs/feature-spec.md): 제품 요구사항과 공통 계약
-- [docs/refactoring-plan.md](docs/refactoring-plan.md): 이전 version/release 판단 기준 참고용 보존 문서. 일반 작업의 갱신 대상이 아닙니다.
+- [docs/feature-routing.md](docs/feature-routing.md): primary feature 선택, 시작 파일, 범위 확장 규칙
 - [docs/runtime-architecture.md](docs/runtime-architecture.md): popup, panel, background, hosted runtime 경계
-- [docs/remote-capability-manifest-plan.md](docs/remote-capability-manifest-plan.md): 무배포 기능 확장을 위한 extension runtime platform 설계
+- [docs/release-workflow.md](docs/release-workflow.md): 버전 상승, 릴리스 메타, hosting 배포 순서
+- [docs/feature-spec.md](docs/feature-spec.md): 제품 요구사항과 공통 계약
 - [docs/capability-authoring.md](docs/capability-authoring.md): 새 capability 추가 절차와 extension 재배포 기준
 - [docs/capability-catalog.md](docs/capability-catalog.md): 현재 served capability catalog generated 문서
-- [docs/current-handoff.md](docs/current-handoff.md): 다음 세션 시작용 현재 작업 handoff
 - [docs/firebase-architecture.md](docs/firebase-architecture.md): Firebase project/data boundary 메모
 - [docs/functions-runtime-guide.md](docs/functions-runtime-guide.md): Firebase Functions runtime 기본값, 예외 프로파일, 운영 점검 기준
 - [docs/lint-workflow.md](docs/lint-workflow.md): lint 범위, 예외, 점진적 확장 원칙
 - [docs/e2e-browser-workflow.md](docs/e2e-browser-workflow.md): 실제 Chrome 기준 수동 검증 흐름
-- [docs/release-workflow.md](docs/release-workflow.md): 버전 상승, 릴리스 메타, hosting 배포 순서
+
+보존 참고 문서는 [docs/archive/README.md](docs/archive/README.md)를 기준으로 필요할 때만 읽습니다. Archive 문서는 최신 운영 기준으로 계속 유지보수하지 않습니다.
 
 ## Feature 문서
 
@@ -111,7 +112,7 @@ npm run deploy:all
 - `verify:feature-doc-guard`는 feature-owned 파일 변경 시 `AGENTS.md` 갱신을 강제하지 않고, 문서 검토 후보만 audit로 보여 줍니다.
 - `README.md`는 상위 개요용이므로, feature-local 변경 때문에 기능 변경 일지처럼 누적하지 않습니다.
 - entrypoint, 데이터 경계, 최소 검증, durable invariant가 실제 코드와 달라지면 같은 작업 안에서 feature 문서나 관련 docs를 갱신합니다.
-- `docs/refactoring-plan.md`처럼 과거 계획/판단 이력을 담은 문서는 사용자가 명시적으로 요청하지 않는 한 갱신하지 않습니다. 현재 운영 기준은 release workflow, runtime architecture, feature `AGENTS.md`처럼 살아있는 계약 문서에 둡니다.
+- `docs/archive/*`처럼 과거 계획/판단 이력을 담은 문서는 사용자가 명시적으로 요청하지 않는 한 갱신하지 않습니다. 현재 운영 기준은 release workflow, runtime architecture, feature `AGENTS.md`처럼 살아있는 계약 문서에 둡니다.
 - 최근 작업 순서나 세션별 변경 요약처럼 git으로 복구 가능한 정보는 문서에 중복 기록하지 않습니다.
 
 ## 검증 기준
