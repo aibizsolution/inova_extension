@@ -461,44 +461,6 @@ h3 {
   font-weight: 700;
 }
 
-.admin-access-fields {
-  display: grid;
-  gap: 1px;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--line);
-}
-
-.admin-access-fields {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.admin-access-fields div {
-  min-width: 0;
-  display: grid;
-  gap: 5px;
-  background: var(--surface-raised);
-  padding: 13px;
-}
-
-.admin-access-fields dt {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.admin-access-fields dd {
-  min-width: 0;
-  overflow: hidden;
-  margin: 0;
-  color: var(--text);
-  font-size: 14px;
-  font-weight: 800;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .admin-access-permission {
   min-width: 0;
   display: grid;

@@ -29,7 +29,7 @@
       icon: "users",
       id: "access",
       label: "사용자 및 권한",
-      summary: "전체 회의 리스트 접근 권한과 관리자 계정을 관리합니다.",
+      summary: "회원별 관리자 권한을 관리합니다.",
       title: "사용자 및 권한",
     },
     {
@@ -544,7 +544,6 @@
 
   function createAccessDetailPanel(entry) {
     const selectedEntry = entry || readAccessPreviewEntries()[0];
-    const statusLabel = readAccessStatusLabel(selectedEntry?.status);
     const isAdmin = selectedEntry?.status === "active";
     const detailEmail = selectedEntry?.email || "-";
     const detailName = selectedEntry?.displayName || "-";
@@ -562,7 +561,6 @@
           <strong>${escapeHtml(detailName)}</strong>
           <span>${escapeHtml(detailEmail)}</span>
         </div>
-        <span class="inova-badge ${escapeHtmlAttribute(readAccessStatusClass(selectedEntry?.status))}">${escapeHtml(statusLabel)}</span>
       </div>
       <div class="admin-access-permission">
         <span>관리자 권한</span>
@@ -571,22 +569,8 @@
           <button type="button" disabled aria-pressed="${isAdmin ? "true" : "false"}">관리자</button>
         </div>
       </div>
-      <dl class="admin-access-fields">
-        <div>
-          <dt>관리자 권한</dt>
-          <dd>${isAdmin ? "보유" : "없음"}</dd>
-        </div>
-        <div>
-          <dt>전체 회의 리스트</dt>
-          <dd>${isAdmin ? "보기 가능" : "보기 불가"}</dd>
-        </div>
-        <div>
-          <dt>변경 기능</dt>
-          <dd>준비 중</dd>
-        </div>
-      </dl>
       <div class="admin-access-actions">
-        <button type="button" class="admin-primary-button is-strong" title="아직 연결되지 않은 기능입니다." disabled>변경 저장</button>
+        <button type="button" class="admin-primary-button is-strong" disabled>저장</button>
       </div>
     `;
     return panel;
