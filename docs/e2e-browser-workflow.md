@@ -102,6 +102,7 @@
 3. 브라우저/hosted client는 Firebase Storage SDK로 직접 bucket을 읽거나 쓰지 않아야 한다. 이 경계는 `npm.cmd run verify:storage-rules`와 실제 import/upload flow의 Functions 경유 여부를 함께 본다.
 4. 상용 배포 보고에서는 Storage Rules가 실제 배포 대상인지 `hosting/functions/firestore`와 분리해서 적는다. `browser-extension-main`처럼 Firebase Storage가 아직 없는 프로젝트는 `deploy:storage` 미실행이 정상일 수 있다.
 5. 릴리스 메타는 `hosting/extension-v2/releases/latest.json`, `history.json`, `downloads/latest.zip`, `releases/release-notes.json`이 같은 공개 버전을 가리켜야 한다.
+6. 관리자 콘솔 배포를 포함한 릴리스면 상용 Hosting에서 `/extension-v2/panel/admin-entry-controller.js`와 `/admin/index.html`이 200으로 응답하고, 상용 패널 HTML이 관리자 entry script를 포함하는지 먼저 확인한다.
 
 ## 사용량 계측
 
@@ -165,6 +166,7 @@ npm.cmd run check:feature-usage -- --days 1 --limit 20
 7. 관리자 페이지가 launch token을 교환한 뒤 URL에서 `launch` query를 제거하는지 확인한다.
 8. 관리자 페이지에서 verified 상태, 사용자, 계정, 권한, 세션 만료 정보가 표시되어야 한다.
 9. 같은 launch URL을 다시 열거나 launch 없이 직접 진입하면 blocked 상태가 보여야 한다.
+10. 상용 배포 직후에는 `browser-extension-v2.web.app`의 panel/admin 정적 자산 200 응답과 릴리스 ZIP metadata 정합성을 함께 확인한 뒤 패널을 새로고침한다.
 
 ### P1 Regression
 
