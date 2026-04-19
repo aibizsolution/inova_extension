@@ -4,7 +4,7 @@
 
 ## 검증 기준선
 
-- 마지막 반영 PR: `#53 Polish hosted panel and usage metrics` (`#51`, `#52` 포함)
+- 마지막 반영 PR: `#59 [codex] Admin access UI and controllable meeting tabs` (`#57`, `#58` 포함, 이전 기준선 `#53` 유지)
 - 이 문서를 고칠 때는 최근 merged PR 기준으로 이 항목을 함께 갱신한다.
 - 최근 merged PR이 있는데 이 기준선보다 번호가 높으면, 풀 테스트 전에 PR diff를 먼저 보고 필요한 feature 섹션과 운영 점검 항목을 추가한다.
 - 마지막 반영 PR 번호는 이 문서에만 관리한다. 기능별 테스트 문서에는 PR 번호 이력을 누적하지 않고, 최신 기능 동작과 확인 항목만 유지한다.
@@ -12,6 +12,9 @@
   - `#51`: 회의 debug auth bypass는 상용에서 local Origin/Referer spoof로 열리면 안 된다. 회의 workspace launch trace는 debug mode 없이도 top panel 콘솔에서 보여야 한다. 브라우저/hosted client가 Firebase Storage SDK로 직접 bucket을 읽거나 쓰면 안 된다.
   - `#52`: `deploy:all`/`release:deploy:all`은 Storage Rules를 포함하지 않는다. Firebase Storage가 실제로 켜진 프로젝트에서만 `deploy:storage`를 별도 운영 표면으로 본다.
   - `#53`: feature usage aggregate, 회의 사용량 미니 통계/accounting, hosted auth/Firestore retry recovery, 릴리스 메타와 ZIP 정합성을 본다.
+  - `#57`: 관리자 콘솔 entry가 관리자 계정에서만 보이고, launch token 교환 뒤 `/admin/index.html`이 URL에서 token을 제거하며 verified session 정보를 보여야 한다.
+  - `#58`: 관리자 `소식 팝업` 작성/미리보기/검증과 일반 패널의 active notice 읽기/표시/하루 숨김 상태를 확인한다.
+  - `#59`: 관리자 권한 UI는 기존 회원 목록 기반이어야 하고, 관리자/회의 새 탭 열기는 Bridge가 검증할 수 있도록 web-open/prepare URL 경로와 console trace를 남겨야 한다.
 
 ## PR 문서 게이트
 
@@ -53,7 +56,27 @@
 8. 콘솔 baseline을 잡는다. 테스트 전후 warning/error가 새로 생기면 해당 feature 결과에 함께 기록한다.
 9. hosted panel에서 새 탭을 여는 flow는 web-open 우선 경로를 기대한다. secret 없는 hosted URL을 즉시 만들 수 있으면 사용자 action 안에서 그 URL을 바로 열고, launch token이나 원격 prepared URL처럼 async 준비가 필요하면 `window.open("about:blank", "_blank")`로 탭을 확보한 뒤 준비된 URL로 이동시킨다.
 10. `chrome.tabs.create` background open은 fallback이다. Bridge가 열린 새 탭을 자동 상속하지 않을 수 있으므로, 새 탭 lifecycle 자체가 목적이면 Bridge selector를 다시 열어 해당 새 탭을 선택한다.
+   - 2026-04-19 상용 Chrome 검증에서는 i-Nova 제품 코드를 거치지 않고 top-level 페이지에 임시 버튼을 만들어 `window.open(..., "_blank")`을 호출해도 새 탭은 Chrome에 열리지만 현재 MCP `browser_tabs list`와 `page.context().pages()`에는 추가되지 않았다. 이 상태는 `openedWindow.opener = null` 여부와 무관한 Bridge grant 경계로 보고, 제품 실패로 판정하지 않는다.
 11. 새 탭의 실제 URL을 알고 있고 내부 화면 테스트가 목적이면, Bridge가 이미 잡고 있는 탭을 그 URL로 직접 이동해 테스트할 수 있다. 이 경우 결과에는 `URL 기반 직접 이동으로 내부 테스트`라고 적고, 실제 새 탭 자동 승계 검증과 섞어 말하지 않는다.
+12. 현재 Bridge 기준선에서는 `browser_tabs new`, `page.context().newPage()`, `_blank` 자동 승계를 테스트 계획의 전제로 두지 않는다. 새 버전에서 다시 쓰려면 먼저 `playwright-mcp-bridge` 스킬의 버전/source check와 작은 probe로 동작을 재확인한다.
+
+## Bridge 새 탭 판정
+
+Playwright MCP Bridge로 새 탭 flow를 검증할 때는 증거를 둘로 나눈다.
+
+1. Source tab launch evidence
+   - 실제 UI 버튼을 클릭한다.
+   - panel/top console에서 launch requested/prepared/dispatched/accepted 또는 동등 trace를 확인한다.
+   - Chrome 화면에 실제 새 탭이 열리는지 확인한다.
+   - `browser_tabs list`에 새 탭이 안 보여도 이것만으로 제품 실패로 판정하지 않는다.
+2. Destination page evidence
+   - 정확히 열린 물리적 Chrome 새 탭이 검증 목적이면 Bridge selector를 다시 열어 사용자가 그 새 탭을 선택한다.
+   - 내부 화면/콘솔/권한/session 검증이 목적이고 prepared URL 또는 launch URL이 있으면 현재 Bridge-controlled tab을 그 URL로 이동해 확인한다.
+   - 이 결과는 반드시 `URL 기반 직접 이동으로 내부 테스트`라고 기록한다.
+3. 금지 판정
+   - `page.waitForEvent("popup")` 미발생만으로 `chrome.tabs.create` 또는 extension runtime broker flow를 실패 처리하지 않는다.
+   - `browser_tabs list` 미노출만으로 새 탭이 안 열렸다고 보고하지 않는다.
+   - launch token, session token, 원문 URL query는 보고서와 로그에 원문으로 남기지 않는다.
 
 ## 테스트 강도
 
@@ -167,6 +190,8 @@ npm.cmd run check:feature-usage -- --days 1 --limit 20
    - fresh launch token이 있으면 바로 `/admin/index.html?launch=...`를 열고, 없으면 `about:blank`를 먼저 만든 뒤 token 발급 후 이동시킨다.
    - `admin.console.open` background runtime action은 web-open이 실패했을 때의 fallback이다.
    - 새 탭 URL은 현재 hosting target의 `/admin/index.html?launch=...`로 열려야 한다.
+   - Bridge가 열린 관리자 탭을 자동 상속하지 못하면 `Bridge 새 탭 판정`에 따라 source tab launch evidence와 destination page evidence를 분리한다.
+   - 관리자 내부 화면 검증은 launch URL을 준비한 뒤 Bridge-controlled tab을 `/admin/index.html?launch=...`로 직접 이동해 수행할 수 있지만, 이 경우 실제 새 탭 자동 승계 검증으로 보고하지 않는다.
 7. 관리자 페이지가 launch token을 교환한 뒤 URL에서 `launch` query를 제거하는지 확인한다.
 8. 관리자 페이지에서 verified 상태, 사용자, 계정, 권한, 세션 만료 정보가 표시되어야 한다.
 9. 선택한 기능 화면 안에는 별도 `세션 컨텍스트` 카드처럼 상단 인증 정보를 반복하는 UI가 없어야 한다.
@@ -260,7 +285,7 @@ npm.cmd run check:feature-usage -- --days 1 --limit 20
 5. 기존 회의 카드 1건에서 `작업실 열기` 또는 `결과 열기`를 실행한다.
 6. 새 탭 또는 결과 탭이 열리고, panel 쪽 콘솔은 launch requested/dispatched/accepted 수준까지 확인한다.
 7. 새 탭은 hosted panel의 web-open 우선 경로로 열려야 한다. current Bridge가 새 탭을 자동 상속하지 못하면 제품 launch 실패로 보지 않고, `window.open` 호출 또는 prepared URL을 확인한다.
-8. 새 탭 lifecycle이 목적이면 해당 Chrome 새 탭을 Bridge selector로 다시 선택하고, 작업실 내부 테스트가 목적이면 opened/prepared URL을 Bridge-controlled tab에 직접 이동해 이어서 확인한다.
+8. 새 탭 lifecycle이 목적이면 해당 Chrome 새 탭을 Bridge selector로 다시 선택하고, 작업실 내부 테스트가 목적이면 opened/prepared URL을 Bridge-controlled tab에 직접 이동해 이어서 확인한다. 이 경우 결과에는 `URL 기반 직접 이동으로 내부 테스트`라고 적는다.
 9. hosted 작업실에서 session 허용 상태면 workspace가 렌더링되고, 미허용 상태면 blocked 화면이 보여야 한다.
 
 ### P1 Regression

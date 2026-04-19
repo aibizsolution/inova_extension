@@ -59,6 +59,8 @@ async function verifyPanelNoticeRenderAndDismissal() {
 
   const hideButton = renderIntoSlot(dom, nextSessionController.render()).querySelector('[data-panel-notice-action="hide-day"]');
   assert(hideButton, "notice popup should expose a one-day hide action");
+  assert.equal(hideButton.textContent.trim(), "하루동안 안보기", "one-day hide action should use the documented label");
+  assert.equal(hideButton.getAttribute("aria-label"), "하루동안 안보기", "one-day hide action aria label should match the visible label");
   assert.equal(nextSessionController.handleClick(createClickEvent(hideButton)), true);
   assert.equal(nextSessionController.render(), "", "one-day hide should hide the current notice version");
 
