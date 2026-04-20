@@ -7,9 +7,8 @@
 - `functions/features/prompt-store/store-service.js`
 
 ## 관련 프론트 경로
-- `backup/legacy-panel/features/prompt-store/store-manager.js`
-- `backup/legacy-panel/features/prompt-store/prompt-realtime-manager.js`
-- `backup/legacy-panel/shared/prompt-store.js`
+- `hosting/extension-v2/panel/prompt-store-controller.js`
+- `hosting/extension-v2/panel/store-view.js`
 
 ## 관련 functions 경로
 - `functions/index.js`

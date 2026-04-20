@@ -190,5 +190,5 @@ feature `AGENTS.md`에는 per-session runtime 변경 기록을 누적하지 않�
 3. 예외 함수라면 memory, timeout, `maxInstances`, `concurrency` 중 무엇이 진짜 원인인지 분리한다.
 4. 문제가 사용자 데이터나 로컬 queue 상태에 흔적을 남기는 유형이면, 원인 수정과 함께 자동 복구 패치 또는 admin 정리 스크립트 필요 여부를 판단한다.
 5. 코드 수정 후 `npm run verify`를 실행한다.
-6. `npm run deploy:functions` 후 `check:function-runtime`으로 실제 반영값을 확인한다.
+6. `npm run deploy:functions`로 `functions:inova-extension-api` codebase만 배포한 뒤 `check:function-runtime`으로 실제 반영값을 확인한다.
 7. feature 문서 또는 이 문서를 함께 갱신한다.

@@ -12,11 +12,30 @@
 
 ## 운영 원칙
 
-- 이 프로젝트는 단일 기능용이 아니라 브라우저 확장 공용 플랫폼으로 사용한다.
+- 이 프로젝트는 단일 기능용이 아니라 여러 저장소/기능이 붙을 수 있는 공용 Firebase project로 사용한다.
+- Auth만 공유 리소스로 허용한다. Functions, Firestore, Hosting, Storage는 각 저장소/기능 전용 경계로 분리한다.
 - 기능이 늘어나더라도 컬렉션과 보안 규칙 경계를 기능별로 분리한다.
 - 공통 문서는 최소 식별자와 최소 메타데이터만 공유한다.
 - i-Nova는 플랫폼 안의 한 integration으로 취급하고 다른 서비스와 직접 섞지 않는다.
 - 사용자 기본 키는 raw email이 아니라 안정적인 내부 식별자를 우선 사용한다.
+
+## 배포 경계
+
+- Functions codebase: `inova-extension-api`
+  - 이 저장소의 Functions 배포는 `functions:inova-extension-api`만 대상으로 한다.
+  - 다른 저장소/기능은 별도 codebase를 써야 하며, 이 저장소에서 broad `functions` 배포를 실행하지 않는다.
+- Firestore database: `(default)`
+  - 현재 운영 데이터가 이미 `(default)`에 있으므로 이 database를 i-Nova extension 전용 DB로 예약한다.
+  - 다른 저장소/기능은 named database를 새로 만들고, 자체 rules/indexes 파일과 `firestore:<databaseId>` 배포만 사용한다.
+  - 이 저장소의 DB 배포는 `deploy:firestore:inova-db`로만 수행한다.
+- Hosting targets: `main`, `v2`
+  - 이 저장소의 Hosting 배포는 `hosting:main,hosting:v2`만 대상으로 한다.
+  - 다른 저장소/기능은 별도 Hosting site와 target을 만든 뒤 `hosting:<target>`만 배포한다.
+- Storage
+  - broad Storage Rules 배포는 이 저장소 기본 스크립트에 두지 않는다.
+  - Storage Rules를 운영에 반영해야 하면 먼저 전용 bucket target을 적용하고 `storage:<target>` 배포로만 추가한다.
+- 금지 명령: `firebase deploy`, `firebase deploy --only functions`, `firebase deploy --only hosting`, `firebase deploy --only firestore`, `firebase deploy --only storage`.
+- `npm run verify:firebase-deploy-boundary`가 위 경계를 정적 검증한다.
 
 ## 현재 컬렉션 경계
 

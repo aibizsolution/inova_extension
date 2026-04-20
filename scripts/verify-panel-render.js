@@ -751,10 +751,10 @@ async function verifyHostedReleaseLocalDownloadUrls() {
             return {
               releases: [
                 {
-                  downloadUrl: "https://browser-extension-v2.web.app/extension-v2/downloads/inova-extension-0.4.4.zip",
-                  fileName: "inova-extension-0.4.4.zip",
-                  version: "0.4.4",
-                  versionDownloadUrl: "https://browser-extension-v2.web.app/extension-v2/downloads/inova-extension-0.4.4.zip",
+                  downloadUrl: "https://browser-extension-v2.web.app/extension-v2/downloads/inova-extension-0.4.5.zip",
+                  fileName: "inova-extension-0.4.5.zip",
+                  version: "0.4.5",
+                  versionDownloadUrl: "https://browser-extension-v2.web.app/extension-v2/downloads/inova-extension-0.4.5.zip",
                 },
               ],
             };

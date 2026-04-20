@@ -9,6 +9,14 @@
   const MAX_NOTICE_CTA_LABEL_LENGTH = 32;
   const MAX_ACCESS_ORGANIZATION_LENGTH = 80;
   const ADMIN_ACCESS_LAST_ACTIVITY_HELP_TEXT = "마지막 활동은 실험실 기능 사용량 집계의 최근 기록 기준입니다. 대화 이동, 프롬프트 저장/적용/삭제, 프롬프트 검토/적용, 스토어 가져오기/좋아요/게시/삭제, 회의 작업실/결과 열기, 릴리스 다운로드 열기 같은 기능 사용 이벤트가 성공/오류/제한 상태로 기록되면 갱신됩니다.";
+  const ACCESS_USAGE_FEATURE_LABELS = Object.freeze({
+    conversation: "대화 기능",
+    meeting: "회의 룸",
+    prompt_library: "프롬프트 보관함",
+    prompt_review: "프롬프트 검토",
+    prompt_store: "스토어",
+    release: "릴리스",
+  });
   const ACCESS_FILTERS = Object.freeze([
     { id: "all", label: "전체" },
     { id: "active", label: "관리자" },
@@ -32,15 +40,6 @@
       label: "소식 팝업",
       summary: "확장 패널 하단 소식을 작성합니다.",
       title: "소식 팝업",
-    },
-    {
-      eyebrow: "Insights",
-      group: "Insights",
-      icon: "chart",
-      id: "usage",
-      label: "사용량",
-      summary: "기능 사용량과 운영 지표 화면이 들어갈 자리입니다.",
-      title: "사용량",
     },
   ]);
   const NAV_ICON_PATHS = Object.freeze({
@@ -539,6 +538,7 @@
     const detailName = selectedEntry?.displayName || "-";
     const detailOrganization = readAccessDraftOrganization(selectedEntry);
     const detailLastActivity = readAccessLastActivityLabel(selectedEntry);
+    const detailExtensionVersion = readAccessExtensionVersionLabel(selectedEntry);
 
     const panel = global.document.createElement("section");
     panel.className = "admin-access-detail";
@@ -554,13 +554,6 @@
           <span>${escapeHtml(detailEmail)}</span>
         </div>
       </div>
-      <div class="admin-access-meta" aria-label="회원 활동 정보">
-        <div class="admin-access-meta__label">
-          <span class="admin-access-meta__label-text">마지막 활동</span>
-          <span class="admin-help-chip" tabindex="0" aria-label="${escapeHtmlAttribute(ADMIN_ACCESS_LAST_ACTIVITY_HELP_TEXT)}" title="${escapeHtmlAttribute(ADMIN_ACCESS_LAST_ACTIVITY_HELP_TEXT)}">?</span>
-        </div>
-        <strong>${escapeHtml(detailLastActivity)}</strong>
-      </div>
       <div class="admin-access-permission">
         <span>관리자 권한</span>
         <div class="admin-access-permission__toggle inova-segmented" aria-label="관리자 권한 설정">
@@ -575,8 +568,77 @@
       <div class="admin-access-actions">
         <button type="button" class="admin-primary-button is-strong" data-access-action="save" ${canSaveAccessUser(selectedEntry) ? "" : "disabled"}>${isSaving ? "저장 중" : "저장"}</button>
       </div>
+      <div class="admin-access-meta" aria-label="회원 활동 정보">
+        <div class="admin-access-meta__label">
+          <span class="admin-access-meta__label-text">마지막 활동</span>
+          <span class="admin-help-chip" tabindex="0" aria-label="${escapeHtmlAttribute(ADMIN_ACCESS_LAST_ACTIVITY_HELP_TEXT)}" title="${escapeHtmlAttribute(ADMIN_ACCESS_LAST_ACTIVITY_HELP_TEXT)}">?</span>
+        </div>
+        <strong>${escapeHtml(detailLastActivity)}</strong>
+        <span class="admin-access-meta__sub">마지막 이용 버전 ${escapeHtml(detailExtensionVersion)}</span>
+      </div>
+      ${createAccessUsagePanel(selectedEntry)}
     `;
     return panel;
+  }
+
+  function createAccessUsagePanel(entry) {
+    const featureCount = readAccessUsageFeatureTotal(entry);
+    const meetingMonthMinutes = readAccessUsageMeetingMonthMinutes(entry);
+    const meetingMonthCount = readAccessUsageMeetingMonthCount(entry);
+    const meetingMinutes = readAccessUsageMeetingMinutes(entry);
+    const meetingCount = readAccessUsageMeetingCount(entry);
+    const featureUsage = normalizeAccessUsageFeatureUsage(entry?.featureUsage);
+    const featureRecordCount = Object.keys(featureUsage).length;
+    return `
+      <section class="admin-access-usage" aria-label="선택 회원 이용 기록">
+        <div class="admin-access-usage__head">
+          <span>이용 기록</span>
+          <small>${escapeHtml(featureRecordCount ? `${formatUsageNumber(featureRecordCount)}개 기능` : "기록 없음")}</small>
+        </div>
+        <div class="admin-access-usage__metrics">
+          ${createAccessUsageMetric("기능 사용", `${formatUsageNumber(featureCount)}회`)}
+          ${createAccessUsageMetric("회의 처리", `
+            <span class="admin-access-usage__split">
+              <span>이번 달 <strong>${escapeHtml(`${formatUsageDuration(meetingMonthMinutes)} · ${formatUsageNumber(meetingMonthCount)}건`)}</strong></span>
+              <span>전체 <strong>${escapeHtml(`${formatUsageDuration(meetingMinutes)} · ${formatUsageNumber(meetingCount)}건`)}</strong></span>
+            </span>
+          `, { htmlValue: true })}
+        </div>
+        <div class="admin-access-usage__records">
+          <div class="admin-access-usage__record-head" aria-hidden="true">
+            <span>기능</span>
+            <span>사용 횟수</span>
+          </div>
+          ${createAccessUsageRecordRows(featureUsage)}
+        </div>
+      </section>
+    `;
+  }
+
+  function createAccessUsageMetric(label, value, options = {}) {
+    return `
+      <div>
+        <span>${escapeHtml(label)}</span>
+        ${options.htmlValue === true ? value : `<strong>${escapeHtml(value)}</strong>`}
+      </div>
+    `;
+  }
+
+  function createAccessUsageRecordRows(featureUsage) {
+    const rows = Object.entries(normalizeAccessUsageFeatureUsage(featureUsage))
+      .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0], "ko-KR"))
+      .map(([label, count]) => `
+        <div class="admin-access-usage__record-row">
+          <span>${escapeHtml(formatAccessUsageFeatureLabel(label))}</span>
+          <strong>${escapeHtml(`${formatUsageNumber(count)}회`)}</strong>
+        </div>
+      `);
+    return rows.join("") || '<p class="admin-access-empty">기능 사용 기록이 없습니다.</p>';
+  }
+
+  function formatAccessUsageFeatureLabel(featureId) {
+    const normalizedFeatureId = normalizeText(featureId);
+    return ACCESS_USAGE_FEATURE_LABELS[normalizedFeatureId] || normalizedFeatureId;
   }
 
   function handleAccessInput(event) {
@@ -1212,6 +1274,55 @@
     return Array.isArray(state.access.entries) ? state.access.entries : [];
   }
 
+  function normalizeAccessUsageFeatureUsage(input) {
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      return {};
+    }
+    return Object.fromEntries(Object.entries(input)
+      .map(([label, count]) => [normalizeText(label), Math.max(0, Number(count) || 0)])
+      .filter(([label, count]) => label && count > 0));
+  }
+
+  function readAccessUsageFeatureTotal(entry) {
+    const explicitCount = Number(entry?.featureCount);
+    const featureUsageTotal = Object.values(normalizeAccessUsageFeatureUsage(entry?.featureUsage))
+      .reduce((total, count) => total + count, 0);
+    if (featureUsageTotal > 0) {
+      return featureUsageTotal;
+    }
+    return Math.max(0, Number.isFinite(explicitCount) ? explicitCount : 0);
+  }
+
+  function readAccessUsageMeetingMinutes(entry) {
+    return Math.max(0, Math.round(Number(entry?.meetingMinutes) || 0));
+  }
+
+  function readAccessUsageMeetingCount(entry) {
+    return Math.max(0, Math.round(Number(entry?.meetingCount) || 0));
+  }
+
+  function readAccessUsageMeetingMonthMinutes(entry) {
+    return Math.max(0, Math.round(Number(entry?.meetingMonthMinutes) || 0));
+  }
+
+  function readAccessUsageMeetingMonthCount(entry) {
+    return Math.max(0, Math.round(Number(entry?.meetingMonthCount) || 0));
+  }
+
+  function formatUsageNumber(value) {
+    return new Intl.NumberFormat("ko-KR").format(Math.max(0, Number(value) || 0));
+  }
+
+  function formatUsageDuration(minutesInput) {
+    const minutes = Math.max(0, Math.round(Number(minutesInput) || 0));
+    if (minutes >= 60) {
+      const hours = Math.floor(minutes / 60);
+      const remainder = minutes % 60;
+      return remainder ? `${hours}시간 ${remainder}분` : `${hours}시간`;
+    }
+    return `${minutes}분`;
+  }
+
   function filterAccessEntries(entries) {
     const query = normalizeText(state.access.query).toLowerCase();
     const statusFilter = normalizeText(state.access.statusFilter) || "all";
@@ -1333,12 +1444,25 @@
     }
     const numericUserId = input.numericUserId;
     const status = normalizeText(input.status).toLowerCase() === "active" ? "active" : "inactive";
+    const featureUsage = normalizeAccessUsageFeatureUsage(input.featureUsage || input.featureTotals);
+    const featureCount = readAccessUsageFeatureTotal({
+      featureCount: input.featureCount,
+      featureUsage,
+    });
     return {
       canEdit: input.canEdit !== false,
       displayName: normalizeText(input.displayName) || normalizeText(input.email) || providerUserKey,
       email: normalizeText(input.email).toLowerCase(),
+      extensionVersion: normalizeAccessExtensionVersion(input.extensionVersion || input.lastExtensionVersion),
+      extensionVersionCheckedAt: normalizeText(input.extensionVersionCheckedAt || input.lastExtensionVersionAt),
+      featureCount,
+      featureUsage,
       id: providerUserKey,
       lastActivityAt: normalizeText(input.lastActivityAt),
+      meetingMonthCount: readAccessUsageMeetingMonthCount(input),
+      meetingMonthMinutes: readAccessUsageMeetingMonthMinutes(input),
+      meetingCount: readAccessUsageMeetingCount(input),
+      meetingMinutes: readAccessUsageMeetingMinutes(input),
       numericUserId: numericUserId === null || numericUserId === undefined || numericUserId === ""
         ? null
         : Number.isFinite(Number(numericUserId))
@@ -1354,6 +1478,15 @@
   function readAccessLastActivityLabel(entry) {
     const formatted = formatDateTime(entry?.lastActivityAt);
     return formatted === "-" ? "기록 없음" : formatted;
+  }
+
+  function readAccessExtensionVersionLabel(entry) {
+    const version = normalizeAccessExtensionVersion(entry?.extensionVersion);
+    return version ? `v${version}` : "기록 없음";
+  }
+
+  function normalizeAccessExtensionVersion(value) {
+    return normalizeText(value).replace(/^v/i, "").slice(0, 40);
   }
 
   function readAccessStatusLabel(statusInput) {

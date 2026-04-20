@@ -9,7 +9,6 @@
 ## 관련 프론트 경로
 - `content/features/prompt-review/prompt-review-manager.js`
 - `hosting/extension-v2/panel/prompt-review-view.js`
-- `backup/legacy-panel/prompt-review-view.js`
 
 ## 관련 functions 경로
 - `functions/index.js`

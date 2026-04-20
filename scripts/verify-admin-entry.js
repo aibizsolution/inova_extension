@@ -122,12 +122,15 @@ function verifyAdminPageContract() {
   const functionsIndexSource = readText(path.join("functions", "index.js"));
 
   assert(
-    html.includes('<link rel="stylesheet" href="/shared/design-system.css" />')
-      && html.includes('<script src="/shared/design-system.js" defer></script>')
-      && html.includes('<script src="index.js" defer></script>')
+    html.includes('const assetVersion = `admin=${Date.now().toString(36)}`')
+      && html.includes('href="/shared/design-system.css?${assetVersion}"')
+      && html.includes('href="index.css?${assetVersion}"')
+      && html.includes('src="/shared/design-system.js?${assetVersion}" defer')
+      && html.includes('src="index.js?${assetVersion}" defer')
+      && !html.includes('<script src="index.js" defer></script>')
       && html.includes('id="adminToastSlot"')
       && html.includes("data-inova-toast-slot"),
-    "hosted admin page should load the shared design system before its controller and expose a toast slot"
+    "hosted admin page should cache-bust admin assets, load the shared design system before its controller, and expose a toast slot"
   );
   assert(
     html.includes('id="adminShell"')
@@ -244,6 +247,8 @@ function verifyAdminPageContract() {
       && pageSource.includes('id: "access"')
       && pageSource.includes('id: "notice"')
       && pageSource.includes("소식 팝업")
+      && !pageSource.includes('id: "usage"')
+      && !pageSource.includes("사용자별 이용 현황")
       && !pageSource.includes('id: "overview"')
       && !pageSource.includes('id: "audit"')
       && !pageSource.includes('id: "release"')
@@ -278,13 +283,34 @@ function verifyAdminPageContract() {
       && pageSource.includes("조직")
       && pageSource.includes("lastActivityAt")
       && pageSource.includes("readAccessLastActivityLabel")
+      && pageSource.includes("extensionVersion")
+      && pageSource.includes("readAccessExtensionVersionLabel")
+      && pageSource.includes("마지막 이용 버전")
       && pageSource.includes("admin-access-meta")
       && pageSource.includes("마지막 활동")
+      && pageSource.includes("createAccessUsagePanel")
+      && pageSource.includes("createAccessUsageRecordRows")
+      && pageSource.includes("normalizeAccessUsageFeatureUsage")
+      && pageSource.includes("readAccessUsageFeatureTotal")
+      && pageSource.includes("featureUsage")
+      && pageSource.includes("meetingMonthMinutes")
+      && pageSource.includes("meetingMonthCount")
+      && pageSource.includes("meetingMinutes")
+      && pageSource.includes("meetingCount")
+      && pageSource.includes("이용 기록")
+      && pageSource.includes("기능 사용")
+      && pageSource.includes("회의 처리")
+      && pageSource.includes("이번 달")
+      && pageSource.includes("전체")
       && pageSource.includes("ADMIN_ACCESS_LAST_ACTIVITY_HELP_TEXT")
       && pageSource.includes("실험실 기능 사용량 집계의 최근 기록")
       && pageSource.includes("admin-help-chip")
       && css.includes(".admin-access-meta")
       && css.includes(".admin-access-meta__label")
+      && css.includes(".admin-access-meta__sub")
+      && css.includes(".admin-access-usage")
+      && css.includes(".admin-access-usage__metrics")
+      && css.includes(".admin-access-usage__record-row")
       && css.includes(".admin-help-chip")
       && css.includes(".admin-access-field")
       && pageSource.includes("data-access-action=\"save\"")
@@ -318,6 +344,66 @@ function verifyAdminPageContract() {
     "hosted admin page should centralize view state and render future admin sections through a stable menu/outlet slot"
   );
   assert(
+    pageSource.indexOf("admin-access-profile__hero") < pageSource.indexOf("admin-access-permission")
+      && pageSource.indexOf("admin-access-permission") < pageSource.indexOf("admin-access-field")
+      && pageSource.indexOf("admin-access-field") < pageSource.indexOf("admin-access-actions")
+      && pageSource.indexOf("admin-access-actions") < pageSource.indexOf("admin-access-meta")
+      && pageSource.indexOf("admin-access-meta") < pageSource.indexOf("createAccessUsagePanel(selectedEntry)"),
+    "access detail should order member info, editable permission fields, last activity, and usage records"
+  );
+  assert(
+    css.includes(".admin-access-usage__split"),
+    "access detail should style split meeting usage for this month and all time"
+  );
+  assert(
+    !pageSource.includes("const USAGE_SAMPLE_USERS = Object.freeze")
+      && !pageSource.includes("createUsageWorkbench")
+      && !pageSource.includes("createUsageControls")
+      && !pageSource.includes("createUsageUserDetailPanel")
+      && !pageSource.includes("const USAGE_PERIODS = Object.freeze")
+      && !pageSource.includes("const USAGE_VIEWS = Object.freeze")
+      && !pageSource.includes("createUsageHeaderPanel")
+      && !pageSource.includes("createUsageFeaturePanel")
+      && !pageSource.includes("buildUsageFeatureRows")
+      && !pageSource.includes("data-usage-search")
+      && !pageSource.includes("data-usage-team")
+      && !pageSource.includes("data-usage-view")
+      && !pageSource.includes("data-usage-period")
+      && !pageSource.includes("최근 7일")
+      && !pageSource.includes("최근 30일")
+      && !pageSource.includes("회의 사용량")
+      && !pageSource.includes("이용 공백")
+      && !pageSource.includes("createUsageMeetingPanel")
+      && !pageSource.includes("createUsageGapSummary")
+      && !pageSource.includes("hasUsageActivity")
+      && !pageSource.includes("이용 요약")
+      && !pageSource.includes("기능별 활용 현황")
+      && !pageSource.includes("미사용 사용자")
+      && !pageSource.includes("활발")
+      && !pageSource.includes("정착 중")
+      && !pageSource.includes("지원 필요")
+      && !pageSource.includes("시작 전")
+      && !pageSource.includes("추천 액션")
+      && !pageSource.includes("온보딩 후보")
+      && !pageSource.includes("온보딩 메시지")
+      && !pageSource.includes("화면 샘플")
+      && !pageSource.includes("화면 검토용")
+      && !pageSource.includes("restoreUsageSearchFocus")
+      && !pageSource.includes("request count")
+      && !pageSource.includes("debug log")
+      && !css.includes(".admin-usage-workbench")
+      && !css.includes(".admin-usage-controls")
+      && !css.includes(".admin-usage-user-grid")
+      && !css.includes(".admin-usage-table-head")
+      && !css.includes(".admin-usage-record-row")
+      && !css.includes(".admin-usage-summary")
+      && !css.includes(".admin-usage-feature-row")
+      && !css.includes(".admin-usage-priority-panel")
+      && !css.includes(".admin-usage-meeting-panel")
+      && css.includes("@media (max-width: 1180px)"),
+    "hosted admin should keep usage records inside the selected access-user detail until aggregate APIs exist"
+  );
+  assert(
     firebaseConfig.includes('"source": "admin/**"')
       && firebaseConfig.match(/"source": "admin\/\*\*"/g)?.length === 2,
     "hosting should serve admin assets with no-cache headers on both targets"
@@ -328,6 +414,8 @@ function verifyAdminPageContract() {
       && adminServiceSource.includes('const ADMIN_SESSION_COLLECTION = "ops_admin_sessions"')
       && adminServiceSource.includes('const ACCOUNT_COLLECTION_V2 = "integration_inova_accounts_v2"')
       && adminServiceSource.includes('const FEATURE_USAGE_USER_MONTH_COLLECTION = "integration_inova_feature_usage_user_months"')
+      && adminServiceSource.includes('const MEETING_USAGE_USER_MONTH_COLLECTION = "integration_inova_meeting_usage_user_months"')
+      && adminServiceSource.includes('const MEETING_USAGE_USER_TOTAL_COLLECTION = "integration_inova_meeting_usage_user_totals"')
       && adminServiceSource.includes("MAX_ADMIN_ACCESS_ORGANIZATION_LENGTH")
       && adminServiceSource.includes('const PANEL_NOTICE_COLLECTION = "ops_panel_notices"')
       && adminServiceSource.includes('const PANEL_NOTICE_SIGNAL_COLLECTION = "ops_panel_notice_signals"')

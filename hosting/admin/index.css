@@ -527,6 +527,16 @@ h3 {
   white-space: nowrap;
 }
 
+.admin-access-meta__sub {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .admin-access-permission__toggle {
   width: 100%;
 }
@@ -580,6 +590,100 @@ h3 {
   margin: 0;
   color: var(--muted);
   line-height: 1.6;
+}
+
+.admin-access-usage {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  padding: 14px;
+}
+
+.admin-access-usage__head,
+.admin-access-usage__record-head,
+.admin-access-usage__record-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-access-usage__head span {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.admin-access-usage__head small,
+.admin-access-usage__record-head,
+.admin-access-usage__record-row span,
+.admin-access-usage__metrics span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.admin-access-usage__metrics {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-access-usage__metrics div,
+.admin-access-usage__record-row {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 12px;
+}
+
+.admin-access-usage__metrics div {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-access-usage__split {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.admin-access-usage__split span {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.admin-access-usage__split strong {
+  font-weight: 800;
+  color: var(--text);
+}
+
+.admin-access-usage__metrics strong,
+.admin-access-usage__record-row span,
+.admin-access-usage__record-row strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-access-usage__records {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.admin-access-usage__record-head {
+  padding: 0 2px;
 }
 
 .admin-notice-workbench {
@@ -1155,5 +1259,9 @@ h3 {
 
   .admin-context-strip {
     grid-template-columns: 1.1fr 1.6fr 0.8fr 1.1fr;
+  }
+
+  .admin-access-usage__metrics {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

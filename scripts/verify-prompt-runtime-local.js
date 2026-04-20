@@ -500,7 +500,7 @@ function loadRuntimeContext(activeLane = "legacy") {
     chrome: {
       runtime: {
         getManifest() {
-          return { version: normalizedLane === "v2" ? "1.0.0" : "0.4.4" };
+          return { version: normalizedLane === "v2" ? "1.0.0" : "0.4.5" };
         },
       },
     },

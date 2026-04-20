@@ -17,15 +17,9 @@
 - `content/panel-v2-prompt-controller.js` - v2 review handoff + composer review float shell
 - `content/main.js` - panel shell composition root, prompt shell 직접 구현 금지
 - `content/composer.js`
-- `backup/legacy-panel/prompt-hub-state.js` - inactive legacy prompt shell reference
-- `backup/legacy-panel/prompt-hub-panel.js` - inactive legacy prompt shell reference
-- `backup/legacy-panel/prompt-hub-controller.js` - inactive legacy prompt shell reference
-- `backup/legacy-panel/prompt-hub-runtime.js` - inactive legacy prompt shell reference
 - `hosting/extension-v2/panel/prompt-review-controller.js` - hosted panel review state/action ownership
 - `hosting/extension-v2/panel/prompt-review-view.js` - hosted panel review view
 - `hosting/extension-v2/panel/prompt-tool-view.js` - hosted panel prompt tool shell view
-- `backup/legacy-panel/prompt-review-view.js` - inactive legacy content view reference
-- `backup/legacy-panel/prompt-hub-view.js` - inactive legacy prompt tool shell view reference
 
 ## 관련 functions 경로
 - `functions/features/prompt-review/prompt-review-service.js`
@@ -60,7 +54,7 @@
 - 입력창 주입, prompt tool shell, panel shell 상태와 충돌할 때만 platform/shell로 넓힌다.
 
 ## 구현 경계
-- `reviewInovaPrompt` 요청에서 `reviewProfile`이 비어 있으면 backend 기본값은 반드시 `legacy-v1`이어야 한다. 0.4.4 사용자는 기존 4축 평가를 그대로 유지하고, 새 확장 버전만 `prompt-telling-v2`를 opt-in 한다.
+- `reviewInovaPrompt` 요청에서 `reviewProfile`이 비어 있으면 backend 기본값은 반드시 `legacy-v1`이어야 한다. 새 확장 버전만 `prompt-telling-v2`를 opt-in 한다.
 - `prompt.review.run`은 LLM 호출이라 기본 hosted bridge timeout 15초보다 길 수 있다. manifest의 `requestTimeoutMs`를 통해 75초로 열고, client cap 120초를 넘기지 않는다.
 - `0.4.5`부터 panel 안의 review UI는 hosted panel iframe이 렌더링한다. legacy lane에서는 composer anchor와 review action/state를 content controller가 계속 소유한다.
 - `1.0.0+` v2 lane에서는 `hosting/extension-v2/panel/prompt-review-controller.js`가 `검토` 탭의 review/copy/apply 상태와 review action 라우팅, escape dismiss까지 hosted 쪽에서 소유한다. extension은 `composer.read-state`, `composer.apply-text`, `clipboard.write-text`, `trace.log` 같은 stable page adapter capability와 `reviewInovaPrompt` runtime broker, `content/panel-v2-prompt-controller.js` 기반 composer review float + external handoff signal만 제공한다. 이 capability 이름은 active lane의 canonical contract로 보고, caller migration이 끝난 뒤 `apply-prompt-text`나 `copy-text` 같은 alias를 계속 남기지 않는다. top-panel snapshot에는 monotonic `requestId` 기반 external review activation signal만 남기고, review result/error/open/pending 상태는 다시 싣지 않는다.
