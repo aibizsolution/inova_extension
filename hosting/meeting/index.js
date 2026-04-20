@@ -170,7 +170,7 @@
       blocked: false,
       blockedEyebrow: "회의 룸",
       blockedTitle: "이 회의 룸은 패널에서 다시 열어야 합니다",
-      blockedTone: "blocked",
+      blockedTone: "warning",
       blockedMessage: "",
       autoFocusRecordRequestId: "",
       busy: {
@@ -283,7 +283,7 @@
   
   
   function cacheRefs() {
-    for (const id of ["meetingShell", "blockedMessage", "blockedEyebrow", "blockedTitle", "blockedState", "workspace", "pageTitle", "pageSummary", "workspaceBadge", "offlineQueueBadge", "refreshButton", "meetingTitleInput", "saveMeetingTitleButton", "deleteMeetingButton", "meetingStatusChip", "currentBadge", "currentSummary", "currentHint", "currentTimer", "toastNotice", "startButton", "importAudioButton", "importAudioInput", "pauseButton", "resumeButton", "stopButton", "discardButton", "sharedMemoInput", "saveSharedMemoButton", "clearSharedMemoButton", "sharedMemoNotice", "recordCountBadge", "recordList", "detailTitle", "detailBadge", "detailSummary", "recordTitleGroup", "recordTitleInput", "saveRecordTitleButton", "downloadRecordButton", "moveRecordButton", "deleteRecordButton", "detailMeta", "reviewSectionHeader", "copySegmentsButton", "detailMemoInput", "saveRecordMemoButton", "reviewTabSummary", "reviewTabMemo", "reviewTabNotes", "reviewTabSegments", "reviewTabSegmentsCount", "reviewTabActions", "reviewPanelSummary", "summaryStatusPill", "summaryStatusGrid", "summaryActionCard", "reviewPanelMemo", "meetingNotesCard", "reviewPanelSegments", "copyMeetingNotesButton", "meetingNotesTools", "meetingNotesOverview", "meetingNotesSections", "detailNotice", "segmentList", "toggleTermReplacementButton", "termReplacementPanel", "termReplacementDirtyBadge", "termReplacementList", "termReplacementFromInput", "termReplacementToInput", "termReplacementAddButton", "termReplacementResetButton", "termReplacementClearButton", "saveTermReplacementsButton", "sectionEditOverlay", "sectionEditDialog", "sectionEditDialogEyebrow", "sectionEditDialogTitle", "sectionEditHelpText", "sectionEditDialogBody", "sectionEditTargetLabel", "closeSectionEditButton", "sectionEditInstructionInput", "previewSectionEditButton", "cancelSectionEditButton", "applySectionEditButton", "sectionEditStatus", "sectionEditPreviewCard", "sectionEditPreviewTitle", "sectionEditPreviewBody", "confirmOverlay", "confirmDialog", "confirmDialogEyebrow", "confirmDialogTitle", "confirmDialogBody", "confirmDialogCancel", "confirmDialogConfirm", "recordMoveOverlay", "recordMoveDialog", "recordMoveDialogTitle", "recordMoveNotice", "recordMoveList", "recordMoveCancel", "recordMoveConfirm"]) {
+    for (const id of ["meetingShell", "blockedIcon", "blockedMessage", "blockedEyebrow", "blockedTitle", "blockedState", "workspace", "pageTitle", "pageSummary", "workspaceBadge", "offlineQueueBadge", "refreshButton", "meetingTitleInput", "saveMeetingTitleButton", "deleteMeetingButton", "meetingStatusChip", "currentBadge", "currentSummary", "currentHint", "currentTimer", "toastNotice", "startButton", "importAudioButton", "importAudioInput", "pauseButton", "resumeButton", "stopButton", "discardButton", "sharedMemoInput", "saveSharedMemoButton", "clearSharedMemoButton", "sharedMemoNotice", "recordCountBadge", "recordList", "detailTitle", "detailBadge", "detailSummary", "recordTitleGroup", "recordTitleInput", "saveRecordTitleButton", "downloadRecordButton", "moveRecordButton", "deleteRecordButton", "detailMeta", "reviewSectionHeader", "copySegmentsButton", "detailMemoInput", "saveRecordMemoButton", "reviewTabSummary", "reviewTabMemo", "reviewTabNotes", "reviewTabSegments", "reviewTabSegmentsCount", "reviewTabActions", "reviewPanelSummary", "summaryStatusPill", "summaryStatusGrid", "summaryActionCard", "reviewPanelMemo", "meetingNotesCard", "reviewPanelSegments", "copyMeetingNotesButton", "meetingNotesTools", "meetingNotesOverview", "meetingNotesSections", "detailNotice", "segmentList", "toggleTermReplacementButton", "termReplacementPanel", "termReplacementDirtyBadge", "termReplacementList", "termReplacementFromInput", "termReplacementToInput", "termReplacementAddButton", "termReplacementResetButton", "termReplacementClearButton", "saveTermReplacementsButton", "sectionEditOverlay", "sectionEditDialog", "sectionEditDialogEyebrow", "sectionEditDialogTitle", "sectionEditHelpText", "sectionEditDialogBody", "sectionEditTargetLabel", "closeSectionEditButton", "sectionEditInstructionInput", "previewSectionEditButton", "cancelSectionEditButton", "applySectionEditButton", "sectionEditStatus", "sectionEditPreviewCard", "sectionEditPreviewTitle", "sectionEditPreviewBody", "confirmOverlay", "confirmDialog", "confirmDialogEyebrow", "confirmDialogTitle", "confirmDialogBody", "confirmDialogCancel", "confirmDialogConfirm", "recordMoveOverlay", "recordMoveDialog", "recordMoveDialogTitle", "recordMoveNotice", "recordMoveList", "recordMoveCancel", "recordMoveConfirm"]) {
       refs[id] = global.document.getElementById(id);
     }
   }
@@ -575,14 +575,24 @@
     state.blocked = true;
     state.blockedEyebrow = normalizeText(options?.eyebrow) || "회의 룸";
     state.blockedTitle = normalizeText(options?.title) || "이 회의 룸은 패널에서 다시 열어야 합니다";
-    state.blockedTone = normalizeText(options?.tone) || "blocked";
+    state.blockedTone = normalizeText(options?.tone) || "warning";
     state.blockedMessage = normalizeText(message);
     refs.workspace.hidden = true;
     refs.blockedState.hidden = false;
     refs.blockedState.dataset.tone = state.blockedTone;
+    renderBlockedIcon();
     if (refs.blockedEyebrow) refs.blockedEyebrow.textContent = state.blockedEyebrow;
     if (refs.blockedTitle) refs.blockedTitle.textContent = state.blockedTitle;
     refs.blockedMessage.textContent = state.blockedMessage;
+  }
+
+  function renderBlockedIcon() {
+    if (!refs.blockedIcon) {
+      return;
+    }
+    refs.blockedIcon.innerHTML = global.InovaDesignSystem?.renderIcon?.("meeting", {
+      className: "inova-status-state__svg",
+    }) || "";
   }
 
   function buildControllerHelpers() {
@@ -865,7 +875,8 @@
     if (state.blocked) {
       refs.workspace.hidden = true;
       refs.blockedState.hidden = false;
-      refs.blockedState.dataset.tone = state.blockedTone || "blocked";
+      refs.blockedState.dataset.tone = state.blockedTone || "warning";
+      renderBlockedIcon();
       if (refs.blockedEyebrow) refs.blockedEyebrow.textContent = state.blockedEyebrow || "회의 룸";
       if (refs.blockedTitle) refs.blockedTitle.textContent = state.blockedTitle || "이 회의 룸은 패널에서 다시 열어야 합니다";
       refs.blockedMessage.textContent = state.blockedMessage || refs.blockedMessage.textContent;

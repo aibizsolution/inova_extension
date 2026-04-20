@@ -53,6 +53,7 @@
 - local target의 hosted panel iframe은 page DOM에서 `http://127.0.0.1:5000/*` / `http://localhost:5000/*`를 직접 연다. i-Nova page CSP의 local `frame-src` 허용은 background `declarativeNetRequest` rule이 맡고, extension `content/frame-proxy.html?target=...` wrapper는 Playwright Bridge attach를 깨므로 emergency-only fallback으로만 둔다.
 - `open-workspace` / `open-result` 진단 로그는 한 콘솔에서 끝까지 닫으려 하지 않는다. top panel 콘솔은 `launch requested/dispatched/accepted`까지만 책임지고, hosted 작업실 boot/ready는 새 탭 DevTools의 hosted browser console trace에서 확인한다.
 - hosted Firestore 읽기와 listener 연결은 local state만으로 시작하지 않고 `ensureWorkspaceAuth()`가 custom-token sign-in 완료를 보장한 뒤에만 진행한다.
+- hosted 작업실 blocked 화면은 독자 card가 아니라 `inova-status-state` 디자인 시스템 primitive를 사용하고, session 미허용/확장 연결 필요/작업실 종료 상태를 viewport 정중앙에 표시한다.
 - owner-secure hosted 작업실은 `authorizeInovaMeetingWorkspaceAccess`가 돌려주는 `meetingSessionToken`을 세션에 보존해야 하며, 업로드와 작업실 mutation은 이 토큰을 기준으로 인증한다.
 - hosted 작업실의 `debugAuthBypass`는 서버가 Firebase emulator runtime임을 확인한 경우에만 허용한다. local origin/referer만으로는 우회 인증을 열지 않는다.
 - hosted 작업실의 `파일 불러오기`는 로컬/상용 hosted 모두 같은 업로드 흐름을 쓴다. origin 차이만으로 버튼을 숨기거나 import 실행을 막지 않는다.
@@ -111,6 +112,7 @@
 
 ## 최소 검증 방법
 - 팝업 target 설정, 회의 탭 목록, hosted meeting 진입, 기존 결과 1건 조회를 확인한다.
+- hosted 작업실 UI shell이나 blocked 상태를 바꾸면 `npm.cmd run verify:meeting-hosted-ui`를 실행한다.
 - v2 meeting hub ownership을 건드렸다면 `npm.cmd run verify:meeting-hub`로 hosted controller가 owned/participation Firestore subscription, 탭/검색, open/share/revoke/remove 경로와 사용량 doc 2개 구독/해제를 직접 처리하는지도 함께 확인한다.
 - 회의 패널, hosted 작업실, 공유 참여 shortcut, meeting capability/Firestore 경계를 바꾸면 `docs/e2e/features/meeting.md`의 실제 Chrome 체크리스트도 같은 PR에서 갱신하고 `npm.cmd run verify:e2e-doc-guard`를 확인한다.
 - 공유 참여 shortcut, share-token workspace auth, participation-based 재접속, 목록 제거 경계를 바꾸면 `npm.cmd run verify:meeting-service`로 최초 등록, 반복 접속 write 생략, 24시간 refresh throttle, hidden 복구, share revoke 상태 갱신을 확인한다.

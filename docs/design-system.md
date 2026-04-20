@@ -60,6 +60,15 @@
 
 상태, 권한, 소스처럼 짧은 metadata label은 화면별 badge 클래스를 새로 만들지 말고 이 primitive를 쓴다.
 
+## Status State
+
+- CSS: `/shared/design-system.css`
+- wrapper: `.inova-status-state`
+- children: `.inova-status-state__icon`, `.inova-status-state__eyebrow`, `.inova-status-state__title`, `.inova-status-state__body`, `.inova-status-state__hint`
+- tones: `data-tone="danger"`, `data-tone="warning"`, `data-tone="complete"` 또는 `data-tone="success"`
+
+확장 연결 필요, 관리자 권한 차단, 회의 작업실 종료처럼 전체 화면을 막는 상태는 화면별 blocked/error card를 새로 만들지 말고 이 primitive를 쓴다. icon은 `/shared/design-system.js`의 `InovaDesignSystem.renderIcon(...)`을 사용한다.
+
 ## Segmented Control
 
 - CSS: `/shared/design-system.css`

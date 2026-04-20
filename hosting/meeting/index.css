@@ -69,21 +69,15 @@ button {
 }
 
 .blocked-state {
-  display: grid;
-  min-height: calc(100vh - 120px);
-  place-items: center;
+  width: min(600px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  overflow: auto;
+  transform: translate(-50%, -50%);
 }
 
-.blocked-state__card {
-  width: min(560px, 100%);
-  padding: 32px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-xl);
-  background: var(--surface);
-  box-shadow: var(--shadow);
-}
-
-.blocked-state__eyebrow,
 .workspace-header__eyebrow,
 .panel-card__eyebrow {
   margin: 0 0 8px;
@@ -94,22 +88,6 @@ button {
   text-transform: uppercase;
 }
 
-.blocked-state__title {
-  margin: 0;
-  font-size: clamp(28px, 4vw, 40px);
-  line-height: 1.16;
-  letter-spacing: -0.03em;
-}
-
-.blocked-state[data-tone="complete"] .blocked-state__card {
-  border-color: #c0e3ce;
-}
-
-.blocked-state[data-tone="complete"] .blocked-state__eyebrow {
-  color: var(--success);
-}
-
-.blocked-state__body,
 .workspace-header__summary,
 .panel-card__summary,
 .panel-card__hint,
@@ -1997,9 +1975,13 @@ select:disabled {
     padding: 14px 12px 82px;
   }
 
+  .blocked-state {
+    width: min(600px, calc(100vw - 24px));
+    max-height: calc(100vh - 28px);
+  }
+
   .workspace-header,
-  .panel-card,
-  .blocked-state__card {
+  .panel-card {
     border-radius: 16px;
     padding: 16px;
   }

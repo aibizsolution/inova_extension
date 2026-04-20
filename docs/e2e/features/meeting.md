@@ -114,7 +114,7 @@
 
 1. 회의 허브에서 작업실을 열거나, 승인된 meeting session URL로 작업실을 연다. 회의 허브는 web-open 우선 경로로 현재 hosting origin의 clean 작업실 URL을 먼저 열고 prepared URL로 보정해야 한다. 열린 실제 Chrome 새 탭을 확인하려면 기존 패널 탭이 아니라 새 탭을 Bridge selector로 다시 선택한다. URL을 알고 있고 내부 shell만 확인하면 Bridge-controlled tab을 같은 URL로 직접 이동해 테스트할 수 있으며, 이 결과는 `URL 기반 직접 이동으로 내부 테스트`로 기록한다.
 2. 작업실이 blocked 화면이 아니라 실제 shell로 뜨는지 확인한다.
-   - 직접 clean URL만 붙여 넣어 세션이 없으면 blocked 화면이 정상이다.
+   - 직접 clean URL만 붙여 넣어 세션이 없으면 blocked 화면이 정상이다. 이 화면은 `inova-status-state` 디자인 시스템 primitive를 써야 하고, icon/eyebrow/title/body/hint가 viewport 정중앙에 있어야 한다.
    - 패널에서 연 owner workspace는 `meetingSessionToken`을 받아 실제 shell로 들어가야 한다.
 3. hosted 작업실 URL에 필요하면 `?debug=1`을 붙이고 새 탭 DevTools 콘솔 필터를 `inova:`로 둔다.
 4. hosted 콘솔에서 아래 순서를 확인한다.
