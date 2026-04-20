@@ -298,6 +298,17 @@
   background: linear-gradient(180deg, var(--surface, #ffffff) 0%, var(--danger-soft, #fee9e5) 160%);
 }
 
+.inova-status-state[data-tone="warning"] {
+  border-color: #f2d39a;
+  background: linear-gradient(180deg, var(--surface, #ffffff) 0%, var(--warn-soft, #fff1d7) 160%);
+}
+
+.inova-status-state[data-tone="complete"],
+.inova-status-state[data-tone="success"] {
+  border-color: #c0e3ce;
+  background: linear-gradient(180deg, var(--surface, #ffffff) 0%, var(--success-soft, #e7f6ed) 160%);
+}
+
 .inova-status-state__icon {
   width: 48px;
   height: 48px;
@@ -313,6 +324,19 @@
   border-color: #f2c7be;
   background: var(--danger-soft, #fee9e5);
   color: var(--danger, #bf4636);
+}
+
+.inova-status-state[data-tone="warning"] .inova-status-state__icon {
+  border-color: #f2d39a;
+  background: var(--warn-soft, #fff1d7);
+  color: var(--warn, #9b6500);
+}
+
+.inova-status-state[data-tone="complete"] .inova-status-state__icon,
+.inova-status-state[data-tone="success"] .inova-status-state__icon {
+  border-color: #c0e3ce;
+  background: var(--success-soft, #e7f6ed);
+  color: var(--success, #1f7a48);
 }
 
 .inova-status-state__icon svg {
@@ -338,6 +362,15 @@
   color: var(--danger, #bf4636);
 }
 
+.inova-status-state[data-tone="warning"] .inova-status-state__eyebrow {
+  color: var(--warn, #9b6500);
+}
+
+.inova-status-state[data-tone="complete"] .inova-status-state__eyebrow,
+.inova-status-state[data-tone="success"] .inova-status-state__eyebrow {
+  color: var(--success, #1f7a48);
+}
+
 .inova-status-state__title {
   max-width: 520px;
   margin: 0;
@@ -345,7 +378,8 @@
   font-size: 27px;
   font-weight: 900;
   line-height: 1.28;
-  white-space: nowrap;
+  text-wrap: balance;
+  white-space: normal;
 }
 
 .inova-status-state__body,

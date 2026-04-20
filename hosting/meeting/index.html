@@ -8,6 +8,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png" />
     <link rel="stylesheet" href="/shared/design-system.css" />
     <link rel="stylesheet" href="index.css" />
+    <script src="/shared/design-system.js" defer></script>
     <script src="shared.js" defer></script>
     <script>
       (function suppressFirestoreDeprecationWarnings() {
@@ -52,12 +53,12 @@
   </head>
   <body>
     <main id="meetingShell" class="meeting-shell">
-      <section id="blockedState" class="blocked-state" hidden>
-        <div class="blocked-state__card">
-          <p id="blockedEyebrow" class="blocked-state__eyebrow">회의 룸</p>
-          <h1 id="blockedTitle" class="blocked-state__title">이 회의 룸은 패널에서 다시 열어야 합니다</h1>
-          <p id="blockedMessage" class="blocked-state__body">직접 주소를 붙여 넣어 열면 회의 룸 세션을 확인할 수 없습니다. i-Nova 패널의 회의 허브에서 다시 열어 주세요.</p>
-        </div>
+      <section id="blockedState" class="blocked-state inova-status-state" data-tone="warning" hidden>
+        <div id="blockedIcon" class="inova-status-state__icon" aria-hidden="true"></div>
+        <p id="blockedEyebrow" class="inova-status-state__eyebrow">회의 룸</p>
+        <h1 id="blockedTitle" class="inova-status-state__title">이 회의 룸은 패널에서 다시 열어야 합니다</h1>
+        <p id="blockedMessage" class="inova-status-state__body">직접 주소를 붙여 넣어 열면 회의 룸 세션을 확인할 수 없습니다. i-Nova 패널의 회의 허브에서 다시 열어 주세요.</p>
+        <p class="inova-status-state__hint">권한 확인은 i-Nova 패널의 회의 허브에서 시작됩니다.</p>
       </section>
 
       <section id="workspace" class="workspace" hidden>

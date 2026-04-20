@@ -621,6 +621,7 @@ npm.cmd run check:meeting-data -- --meeting-id <meetingId>
 - PR/feature E2E 문서 가드를 확인하려면 `npm.cmd run verify:e2e-doc-guard`
 - 대화 탭 렌더/컨텍스트/검색 변경이면 `npm.cmd run verify:panel-render`
 - 회의 허브 변경이면 `node scripts/verify-meeting-hub-controller.js`
+- 회의 작업실 UI 변경이면 `npm.cmd run verify:meeting-hosted-ui`
 - 회의 notes/service/audio 정책 변경이면 `npm.cmd run verify:meeting-notes-generation`, `npm.cmd run verify:meeting-service`, `npm.cmd run verify:meeting-audio-source-policy`, `npm.cmd run verify:meeting-transcription-quality`
 - prompt store model 변경이면 `npm.cmd run verify:prompt-store-model`
 - prompt library/review/store 전체 영향이면 `npm.cmd run verify:prompt-runtime-local`, `npm.cmd run verify:prompt-library-remote-first`, `npm.cmd run verify:prompt-hosted-tabs`, `npm.cmd run verify:prompt-review`

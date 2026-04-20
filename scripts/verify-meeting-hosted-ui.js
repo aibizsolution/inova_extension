@@ -26,9 +26,34 @@ function main() {
   const { document } = dom.window;
 
   const toastNotice = document.getElementById("toastNotice");
+  const blockedState = document.getElementById("blockedState");
   assert(toastNotice, "Hosted workspace should render a header toast notice slot");
   assert(html.includes('/shared/design-system.css'), "Hosted workspace should load shared design system styles");
+  assert(html.includes('/shared/design-system.js'), "Hosted workspace should load shared design system behavior");
   assert.equal(document.getElementById("currentNotice"), null, "Legacy inline recorder notice should be removed");
+  assert(blockedState, "Hosted workspace should render a blocked state");
+  assert(
+    blockedState.classList.contains("inova-status-state"),
+    "Hosted workspace blocked state should use the shared status-state design system primitive"
+  );
+  assert.equal(
+    document.querySelector(".blocked-state__card"),
+    null,
+    "Hosted workspace blocked state should not use a private blocked card wrapper"
+  );
+  assert(
+    document.getElementById("blockedIcon")?.classList.contains("inova-status-state__icon"),
+    "Hosted workspace blocked state should render the shared status icon slot"
+  );
+  assert(
+    designSystemCss.includes('.inova-status-state[data-tone="warning"]')
+      && designSystemCss.includes('.inova-status-state[data-tone="complete"]'),
+    "Shared status state should support warning and complete meeting tones"
+  );
+  assert(
+    /\.blocked-state\s*\{[\s\S]*position:\s*fixed;[\s\S]*top:\s*50%;[\s\S]*left:\s*50%;[\s\S]*transform:\s*translate\(-50%,\s*-50%\);/.test(css),
+    "Hosted workspace blocked state should be centered in the viewport"
+  );
 
   const headerEditorRow = document.querySelector(".workspace-header__editor-row");
   const deleteMeetingButton = document.getElementById("deleteMeetingButton");
