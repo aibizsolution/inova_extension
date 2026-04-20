@@ -6,6 +6,7 @@ const ADMIN_SESSION_COLLECTION = "ops_admin_sessions";
 const ACCOUNT_COLLECTION = "integration_inova_accounts";
 const ACCOUNT_COLLECTION_V2 = "integration_inova_accounts_v2";
 const FEATURE_USAGE_USER_MONTH_COLLECTION = "integration_inova_feature_usage_user_months";
+const MEETING_USAGE_USER_MONTH_COLLECTION = "integration_inova_meeting_usage_user_months";
 const MEETING_USAGE_USER_TOTAL_COLLECTION = "integration_inova_meeting_usage_user_totals";
 const PANEL_NOTICE_COLLECTION = "ops_panel_notices";
 const PANEL_NOTICE_SIGNAL_COLLECTION = "ops_panel_notice_signals";
@@ -27,6 +28,7 @@ const ADMIN_COLLECTIONS = Object.freeze({
   accounts: ACCOUNT_COLLECTION,
   accountsV2: ACCOUNT_COLLECTION_V2,
   featureUsageUserMonths: FEATURE_USAGE_USER_MONTH_COLLECTION,
+  meetingUsageUserMonths: MEETING_USAGE_USER_MONTH_COLLECTION,
   meetingUsageUserTotals: MEETING_USAGE_USER_TOTAL_COLLECTION,
   launches: ADMIN_LAUNCH_COLLECTION,
   panelNoticeState: PANEL_NOTICE_STATE_COLLECTION,
@@ -820,7 +822,9 @@ function createAdminDomain(deps) {
     const candidateMap = new Map();
     const adminDocs = new Map();
     const featureUsageByUser = new Map();
+    const meetingMonthUsageByUser = new Map();
     const meetingUsageByUser = new Map();
+    const currentMonthKey = new Date(now()).toISOString().slice(0, 7);
 
     addAdminAccessCandidate(candidateMap, normalizeOwner(session.owner));
 
@@ -828,12 +832,14 @@ function createAdminDomain(deps) {
       accountV2Docs,
       accountDocs,
       usageMonthDocs,
+      meetingUsageMonthDocs,
       meetingUsageTotalDocs,
       adminUserDocs,
     ] = await Promise.all([
       readCollectionDocuments(collections.accountsV2, { orderBy: "updatedAt", direction: "desc" }),
       readCollectionDocuments(collections.accounts, { orderBy: "updatedAt", direction: "desc" }),
       readCollectionDocuments(collections.featureUsageUserMonths, { orderBy: "lastUsedAt", direction: "desc" }),
+      readCollectionDocuments(collections.meetingUsageUserMonths, { orderBy: "lastProcessedAt", direction: "desc" }),
       readCollectionDocuments(collections.meetingUsageUserTotals, { orderBy: "lastProcessedAt", direction: "desc" }),
       readCollectionDocuments(collections.users),
     ]);
@@ -850,6 +856,17 @@ function createAdminDomain(deps) {
       addAdminAccessCandidate(candidateMap, normalizeAdminAccessIdentity({
         ...(usageData.owner || usageData),
         lastActivityAt: usageData.lastUsedAt,
+        providerUserKey: readUsageProviderUserKey(usageData, entry.id),
+      }, entry.id));
+    });
+    meetingUsageMonthDocs.forEach((entry) => {
+      const usageData = entry.data || {};
+      if (normalizeText(usageData.monthKey) === currentMonthKey) {
+        mergeMeetingUsageSummary(meetingMonthUsageByUser, usageData, entry.id);
+      }
+      addAdminAccessCandidate(candidateMap, normalizeAdminAccessIdentity({
+        ...(usageData.owner || usageData),
+        lastActivityAt: usageData.lastProcessedAt || usageData.updatedAt,
         providerUserKey: readUsageProviderUserKey(usageData, entry.id),
       }, entry.id));
     });
@@ -873,6 +890,7 @@ function createAdminDomain(deps) {
     return Array.from(candidateMap.values())
       .map((member) => toAdminAccessUser(member, adminDocs.get(member.providerUserKey), {
         featureUsage: featureUsageByUser.get(member.providerUserKey),
+        meetingMonthUsage: meetingMonthUsageByUser.get(member.providerUserKey),
         meetingUsage: meetingUsageByUser.get(member.providerUserKey),
       }))
       .filter((member) => member.providerUserKey)
@@ -940,6 +958,8 @@ function createAdminDomain(deps) {
     const isActiveAdmin = envAccess.allowed || adminStatus === "active";
     const featureUsage = normalizeFeatureUsageTotals(usageSummary.featureUsage?.featureTotals);
     const featureCount = readNonNegativeNumber(usageSummary.featureUsage?.totalCount);
+    const meetingMonthProcessedMs = readNonNegativeNumber(usageSummary.meetingMonthUsage?.processedMs);
+    const meetingMonthCount = readNonNegativeNumber(usageSummary.meetingMonthUsage?.processedCount);
     const meetingProcessedMs = readNonNegativeNumber(usageSummary.meetingUsage?.processedMs);
     const meetingCount = readNonNegativeNumber(usageSummary.meetingUsage?.processedCount);
     return {
@@ -955,6 +975,8 @@ function createAdminDomain(deps) {
           usageSummary.meetingUsage?.lastProcessedAt
         )
       ),
+      meetingMonthCount,
+      meetingMonthMinutes: Math.round(meetingMonthProcessedMs / 60000),
       meetingCount,
       meetingMinutes: Math.round(meetingProcessedMs / 60000),
       numericUserId: member.numericUserId,

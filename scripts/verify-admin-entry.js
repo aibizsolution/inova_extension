@@ -290,11 +290,15 @@ function verifyAdminPageContract() {
       && pageSource.includes("normalizeAccessUsageFeatureUsage")
       && pageSource.includes("readAccessUsageFeatureTotal")
       && pageSource.includes("featureUsage")
+      && pageSource.includes("meetingMonthMinutes")
+      && pageSource.includes("meetingMonthCount")
       && pageSource.includes("meetingMinutes")
       && pageSource.includes("meetingCount")
       && pageSource.includes("이용 기록")
       && pageSource.includes("기능 사용")
       && pageSource.includes("회의 처리")
+      && pageSource.includes("이번 달")
+      && pageSource.includes("전체")
       && pageSource.includes("ADMIN_ACCESS_LAST_ACTIVITY_HELP_TEXT")
       && pageSource.includes("실험실 기능 사용량 집계의 최근 기록")
       && pageSource.includes("admin-help-chip")
@@ -336,6 +340,18 @@ function verifyAdminPageContract() {
     "hosted admin page should centralize view state and render future admin sections through a stable menu/outlet slot"
   );
   assert(
+    pageSource.indexOf("admin-access-profile__hero") < pageSource.indexOf("admin-access-permission")
+      && pageSource.indexOf("admin-access-permission") < pageSource.indexOf("admin-access-field")
+      && pageSource.indexOf("admin-access-field") < pageSource.indexOf("admin-access-actions")
+      && pageSource.indexOf("admin-access-actions") < pageSource.indexOf("admin-access-meta")
+      && pageSource.indexOf("admin-access-meta") < pageSource.indexOf("createAccessUsagePanel(selectedEntry)"),
+    "access detail should order member info, editable permission fields, last activity, and usage records"
+  );
+  assert(
+    css.includes(".admin-access-usage__split"),
+    "access detail should style split meeting usage for this month and all time"
+  );
+  assert(
     !pageSource.includes("const USAGE_SAMPLE_USERS = Object.freeze")
       && !pageSource.includes("createUsageWorkbench")
       && !pageSource.includes("createUsageControls")
@@ -351,7 +367,6 @@ function verifyAdminPageContract() {
       && !pageSource.includes("data-usage-period")
       && !pageSource.includes("최근 7일")
       && !pageSource.includes("최근 30일")
-      && !pageSource.includes("이번 달")
       && !pageSource.includes("회의 사용량")
       && !pageSource.includes("이용 공백")
       && !pageSource.includes("createUsageMeetingPanel")
@@ -395,6 +410,7 @@ function verifyAdminPageContract() {
       && adminServiceSource.includes('const ADMIN_SESSION_COLLECTION = "ops_admin_sessions"')
       && adminServiceSource.includes('const ACCOUNT_COLLECTION_V2 = "integration_inova_accounts_v2"')
       && adminServiceSource.includes('const FEATURE_USAGE_USER_MONTH_COLLECTION = "integration_inova_feature_usage_user_months"')
+      && adminServiceSource.includes('const MEETING_USAGE_USER_MONTH_COLLECTION = "integration_inova_meeting_usage_user_months"')
       && adminServiceSource.includes('const MEETING_USAGE_USER_TOTAL_COLLECTION = "integration_inova_meeting_usage_user_totals"')
       && adminServiceSource.includes("MAX_ADMIN_ACCESS_ORGANIZATION_LENGTH")
       && adminServiceSource.includes('const PANEL_NOTICE_COLLECTION = "ops_panel_notices"')

@@ -553,14 +553,6 @@
           <span>${escapeHtml(detailEmail)}</span>
         </div>
       </div>
-      <div class="admin-access-meta" aria-label="회원 활동 정보">
-        <div class="admin-access-meta__label">
-          <span class="admin-access-meta__label-text">마지막 활동</span>
-          <span class="admin-help-chip" tabindex="0" aria-label="${escapeHtmlAttribute(ADMIN_ACCESS_LAST_ACTIVITY_HELP_TEXT)}" title="${escapeHtmlAttribute(ADMIN_ACCESS_LAST_ACTIVITY_HELP_TEXT)}">?</span>
-        </div>
-        <strong>${escapeHtml(detailLastActivity)}</strong>
-      </div>
-      ${createAccessUsagePanel(selectedEntry)}
       <div class="admin-access-permission">
         <span>관리자 권한</span>
         <div class="admin-access-permission__toggle inova-segmented" aria-label="관리자 권한 설정">
@@ -575,12 +567,22 @@
       <div class="admin-access-actions">
         <button type="button" class="admin-primary-button is-strong" data-access-action="save" ${canSaveAccessUser(selectedEntry) ? "" : "disabled"}>${isSaving ? "저장 중" : "저장"}</button>
       </div>
+      <div class="admin-access-meta" aria-label="회원 활동 정보">
+        <div class="admin-access-meta__label">
+          <span class="admin-access-meta__label-text">마지막 활동</span>
+          <span class="admin-help-chip" tabindex="0" aria-label="${escapeHtmlAttribute(ADMIN_ACCESS_LAST_ACTIVITY_HELP_TEXT)}" title="${escapeHtmlAttribute(ADMIN_ACCESS_LAST_ACTIVITY_HELP_TEXT)}">?</span>
+        </div>
+        <strong>${escapeHtml(detailLastActivity)}</strong>
+      </div>
+      ${createAccessUsagePanel(selectedEntry)}
     `;
     return panel;
   }
 
   function createAccessUsagePanel(entry) {
     const featureCount = readAccessUsageFeatureTotal(entry);
+    const meetingMonthMinutes = readAccessUsageMeetingMonthMinutes(entry);
+    const meetingMonthCount = readAccessUsageMeetingMonthCount(entry);
     const meetingMinutes = readAccessUsageMeetingMinutes(entry);
     const meetingCount = readAccessUsageMeetingCount(entry);
     const featureUsage = normalizeAccessUsageFeatureUsage(entry?.featureUsage);
@@ -593,7 +595,12 @@
         </div>
         <div class="admin-access-usage__metrics">
           ${createAccessUsageMetric("기능 사용", `${formatUsageNumber(featureCount)}회`)}
-          ${createAccessUsageMetric("회의 처리", `${formatUsageDuration(meetingMinutes)} · ${formatUsageNumber(meetingCount)}건`)}
+          ${createAccessUsageMetric("회의 처리", `
+            <span class="admin-access-usage__split">
+              <span>이번 달 <strong>${escapeHtml(`${formatUsageDuration(meetingMonthMinutes)} · ${formatUsageNumber(meetingMonthCount)}건`)}</strong></span>
+              <span>전체 <strong>${escapeHtml(`${formatUsageDuration(meetingMinutes)} · ${formatUsageNumber(meetingCount)}건`)}</strong></span>
+            </span>
+          `, { htmlValue: true })}
         </div>
         <div class="admin-access-usage__records">
           <div class="admin-access-usage__record-head" aria-hidden="true">
@@ -606,11 +613,11 @@
     `;
   }
 
-  function createAccessUsageMetric(label, value) {
+  function createAccessUsageMetric(label, value, options = {}) {
     return `
       <div>
         <span>${escapeHtml(label)}</span>
-        <strong>${escapeHtml(value)}</strong>
+        ${options.htmlValue === true ? value : `<strong>${escapeHtml(value)}</strong>`}
       </div>
     `;
   }
@@ -1292,6 +1299,14 @@
     return Math.max(0, Math.round(Number(entry?.meetingCount) || 0));
   }
 
+  function readAccessUsageMeetingMonthMinutes(entry) {
+    return Math.max(0, Math.round(Number(entry?.meetingMonthMinutes) || 0));
+  }
+
+  function readAccessUsageMeetingMonthCount(entry) {
+    return Math.max(0, Math.round(Number(entry?.meetingMonthCount) || 0));
+  }
+
   function formatUsageNumber(value) {
     return new Intl.NumberFormat("ko-KR").format(Math.max(0, Number(value) || 0));
   }
@@ -1440,6 +1455,8 @@
       featureUsage,
       id: providerUserKey,
       lastActivityAt: normalizeText(input.lastActivityAt),
+      meetingMonthCount: readAccessUsageMeetingMonthCount(input),
+      meetingMonthMinutes: readAccessUsageMeetingMonthMinutes(input),
       meetingCount: readAccessUsageMeetingCount(input),
       meetingMinutes: readAccessUsageMeetingMinutes(input),
       numericUserId: numericUserId === null || numericUserId === undefined || numericUserId === ""

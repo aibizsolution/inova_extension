@@ -190,6 +190,20 @@ async function verifyAdminAccessUserManagement() {
     processedMs: 4200000,
     providerUserKey: "member-2",
   });
+  await db.collection("integration_inova_meeting_usage_user_months").doc("member-2__2026-04").set({
+    lastProcessedAt: "2026-04-19T01:40:00.000Z",
+    monthKey: "2026-04",
+    processedCount: 1,
+    processedMs: 1800000,
+    providerUserKey: "member-2",
+  });
+  await db.collection("integration_inova_meeting_usage_user_months").doc("member-2__2026-03").set({
+    lastProcessedAt: "2026-03-19T01:40:00.000Z",
+    monthKey: "2026-03",
+    processedCount: 9,
+    processedMs: 99900000,
+    providerUserKey: "member-2",
+  });
   await db.collection("ops_admin_users").doc("member-2").set({
     displayName: "Member Two",
     email: "member2@example.com",
@@ -226,6 +240,8 @@ async function verifyAdminAccessUserManagement() {
   });
   assert.equal(memberTwo.meetingCount, 2);
   assert.equal(memberTwo.meetingMinutes, 70);
+  assert.equal(memberTwo.meetingMonthCount, 1);
+  assert.equal(memberTwo.meetingMonthMinutes, 30);
 
   const promoted = await domain.saveAdminAccessUser(session.adminSessionToken, {
     isAdmin: true,
@@ -247,6 +263,7 @@ async function verifyAdminAccessUserManagement() {
   assert.equal(demoted.user.lastActivityAt, "2026-04-19T01:40:00.000Z");
   assert.equal(demoted.user.featureCount, 6);
   assert.equal(demoted.user.meetingMinutes, 70);
+  assert.equal(demoted.user.meetingMonthMinutes, 30);
   assert.equal(db.readDocument("ops_admin_users", "member-2").status, "inactive");
   assert.equal(db.readDocument("ops_admin_users", "member-2").organization, "AI Lab");
   assert.equal(db.readDocument("ops_admin_users", "member-2").lastActivityAt, undefined);
