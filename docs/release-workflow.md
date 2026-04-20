@@ -34,8 +34,12 @@
 
 ## 배포 범위 규칙
 
-- `hosting/*`만 바뀌면 보통 `deploy:hosting`으로 충분하다.
-- `functions/*`만 바뀌면 `deploy:functions`로 충분하다.
+- 이 Firebase 프로젝트에서 Auth만 공유 리소스로 보고, Functions/Firestore/Hosting/Storage는 기능별 경계만 배포한다.
+- `hosting/*`만 바뀌면 `deploy:hosting`으로 충분하다. 이 명령은 `hosting:main,hosting:v2` target만 배포한다.
+- `functions/*`만 바뀌면 `deploy:functions`로 충분하다. 이 명령은 `functions:inova-extension-api` codebase만 배포한다.
+- Firestore Rules/Indexes는 운영 데이터 경계가 바뀐 경우에만 `deploy:firestore:inova-db`로 `(default)` database에 명시적으로 반영한다. `(default)`는 i-Nova extension 전용 DB로 예약한다.
+- Storage Rules는 기본 배포 표면에서 제외한다. Storage를 운영 배포하려면 먼저 전용 bucket target을 만든 뒤 `storage:<target>` 배포 스크립트를 별도 추가한다.
+- `firebase deploy`, `firebase deploy --only functions`, `firebase deploy --only hosting`, `firebase deploy --only firestore`, `firebase deploy --only storage` 같은 broad deploy는 금지한다.
 - `content/*`, `background/*`, `popup/*`, `manifest.json`, 확장 번들에 포함되는 `shared/*`가 바뀌면 Firebase 배포만으로 끝나지 않는다.
 - hosted와 확장 코드가 함께 바뀌면 `Firebase 배포 + 실제 ZIP 배포`를 둘 다 해야 한다.
 - hosted만 바뀐 경우 사용자는 페이지 새로고침이 필요하고, 확장 코드가 바뀐 경우는 새 ZIP 안내와 확장 reload가 필요하다.
@@ -48,7 +52,7 @@
 4. 실제 기능 변경이 있으면 해당 feature `AGENTS.md` 또는 feature 전용 docs와 `docs/e2e-browser-workflow.md`/`docs/e2e/features/*`의 브라우저 테스트 항목을 먼저 갱신한다.
 5. 상용 배포나 `release:build` 전에 `npm run verify`, `npm run verify:feature-doc-guard`, `npm run verify:e2e-doc-guard`, `npm run verify:release-guard`를 확인한다.
 6. 공개 릴리스가 필요하면 `npm run release:build` 후 `npm run release:deploy` 또는 `npm run release:deploy:all`을 수행한다.
-7. hosted-only, functions-only, Firestore 포함 운영 배포면 `deploy:hosting`, `deploy:functions`, `deploy:all` 중 필요한 범위만 수행한다. Storage Rules는 Firebase Storage를 실제로 켠 프로젝트에서만 `deploy:storage`로 별도 반영한다.
+7. hosted-only, functions-only 운영 배포면 `deploy:hosting`, `deploy:functions`, `deploy:all` 중 필요한 범위만 수행한다. Firestore는 DB 경계 변경이 있을 때만 `deploy:firestore:inova-db`로 별도 반영하고, Storage Rules는 전용 target이 생기기 전까지 운영 배포 대상에서 제외한다.
 8. 상용 `OPENAI_API_KEY`는 Firebase Functions Secret Manager secret으로 관리한다. `.env`에 평문 키를 넣어 배포하지 않는다.
 9. 회의 임시 오디오 Storage 설정은 `FIREBASE_CONFIG.storageBucket`을 기본으로 둔다. `STORAGE_BUCKET_URL`을 쓸 때도 앱용 bucket만 지정하고 Cloud Functions 내부 `gcf-v2-*` bucket은 지정하지 않는다.
 10. 배포 후에는 기존 ZIP 사용자가 업그레이드하는 경로와 reload 필요 여부를 먼저 공지한다.
@@ -97,11 +101,11 @@ npm run verify:feature-doc-guard
 npm run verify:e2e-doc-guard
 npm run verify:release-guard
 npm run deploy:hosting
+npm run deploy:functions
+npm run deploy:firestore:inova-db
 npm run release:build
 npm run release:deploy
 npm run release:deploy:all
-npm run deploy:functions
-npm run deploy:storage
 gh pr view 18 --json state,mergedAt,url
 git branch -d codex/example-task
 ```

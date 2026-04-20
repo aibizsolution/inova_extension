@@ -10,7 +10,7 @@
 - 마지막 반영 PR 번호는 이 문서에만 관리한다. 기능별 테스트 문서에는 PR 번호 이력을 누적하지 않고, 최신 기능 동작과 확인 항목만 유지한다.
 - 현재 기준선의 추가 검증 범위는 아래와 같다.
   - `#51`: 회의 debug auth bypass는 상용에서 local Origin/Referer spoof로 열리면 안 된다. 회의 workspace launch trace는 debug mode 없이도 top panel 콘솔에서 보여야 한다. 브라우저/hosted client가 Firebase Storage SDK로 직접 bucket을 읽거나 쓰면 안 된다.
-  - `#52`: `deploy:all`/`release:deploy:all`은 Storage Rules를 포함하지 않는다. Firebase Storage가 실제로 켜진 프로젝트에서만 `deploy:storage`를 별도 운영 표면으로 본다.
+  - `#52`: `deploy:all`/`release:deploy:all`은 `hosting:main,hosting:v2`와 `functions:inova-extension-api`만 포함한다. DB는 `deploy:firestore:inova-db`, Storage는 전용 target이 생긴 뒤 별도 운영 표면으로 본다.
   - `#53`: feature usage aggregate, 회의 사용량 미니 통계/accounting, hosted auth/Firestore retry recovery, 릴리스 메타와 ZIP 정합성을 본다.
   - `#57`: 관리자 콘솔 entry가 관리자 계정에서만 보이고, launch token 교환 뒤 `/admin/index.html`이 URL에서 token을 제거하며 verified session 정보를 보여야 한다.
   - `#58`: 관리자 `소식 팝업` 작성/미리보기/검증과 일반 패널의 active notice 읽기/표시/하루 숨김 상태를 확인한다.
@@ -152,7 +152,7 @@ Playwright MCP Bridge로 새 탭 flow를 검증할 때는 증거를 둘로 나�
    - 기대값: HTTP 400/401/403 계열, Firebase custom token 없음, `meetingSessionToken` 없음
 2. 회의 workspace launch는 debug mode가 아니어도 top panel 콘솔에서 launch requested/dispatched/accepted 수준의 trace가 남아야 한다.
 3. 브라우저/hosted client는 Firebase Storage SDK로 직접 bucket을 읽거나 쓰지 않아야 한다. 이 경계는 `npm.cmd run verify:storage-rules`와 실제 import/upload flow의 Functions 경유 여부를 함께 본다.
-4. 상용 배포 보고에서는 Storage Rules가 실제 배포 대상인지 `hosting/functions/firestore`와 분리해서 적는다. `browser-extension-main`처럼 Firebase Storage가 아직 없는 프로젝트는 `deploy:storage` 미실행이 정상일 수 있다.
+4. 상용 배포 보고에서는 Auth 외 공유 리소스를 건드렸는지 분리해서 적는다. 기본 배포는 `hosting:main,hosting:v2`와 `functions:inova-extension-api`만 대상이며, Firestore는 `(default)` database 전용 배포(`deploy:firestore:inova-db`)가 필요한 경우에만, Storage는 전용 target이 생긴 경우에만 별도 반영한다.
 5. 릴리스 메타는 `hosting/extension-v2/releases/latest.json`, `history.json`, `downloads/latest.zip`, `releases/release-notes.json`이 같은 공개 버전을 가리켜야 한다.
 6. 관리자 콘솔 배포를 포함한 릴리스면 상용 Hosting에서 `/extension-v2/panel/admin-entry-controller.js`와 `/admin/index.html`이 200으로 응답하고, 상용 패널 HTML이 관리자 entry script를 포함하는지 먼저 확인한다.
 
