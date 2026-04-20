@@ -32,8 +32,8 @@
 - ownership migration에서는 legacy 구현을 `정답 코드`가 아니라 `행동/spec 참고본`으로 취급한다.
 - legacy 코드를 살리기 위해 adapter, fallback, mixed ownership glue가 늘어나면 재사용을 고집하지 않는다.
 - 새 ownership 위치에 더 짧고 명확하게 다시 구현할 수 있다면, 기존 코드를 참고만 하고 직접 구현하는 편을 기본 선택으로 삼는다.
-- 현재 활성 `1.0.0` bundle과 공유 계약에서 빠진 legacy extension panel 코드는 활성 경로에 계속 섞어 두지 않는다. 이런 코드는 `backup/legacy-panel/*` 같은 격리 위치로 보내 `참고본`으로만 남기거나, 참고 가치가 끝나면 삭제하는 쪽을 기본 선택으로 삼는다.
-- 격리된 legacy panel 코드는 `0.4.4` 사용자 영향 판단이 필요할 때만 본다. 즉 `DB/Functions`나 shared server contract를 바꾸는 작업에서는 backup legacy를 비교 기준으로 삼되, 그 외 순수 panel v2 migration에서는 활성 v2 bundle 정상 동작 여부를 우선 기준으로 삼는다.
+- 현재 활성 `1.0.0` bundle과 공유 계약에서 빠진 legacy extension panel 코드는 활성 경로에 계속 섞어 두지 않고 삭제 상태를 유지한다. 과거 구현 확인이 필요하면 git history나 archive 문서를 참고한다.
+- `0.4.4` 사용자 영향 판단용으로 남겨 두던 backup legacy reference는 retirement 후 제거되었다. `DB/Functions`나 shared server contract를 바꾸는 작업에서도 활성 v2 bundle 정상 동작 여부와 현재 compat 검증을 우선 기준으로 삼는다.
 
 ## 상태 동기화 기본값
 

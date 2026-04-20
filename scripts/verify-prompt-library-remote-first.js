@@ -47,8 +47,6 @@ function verifyPromptLibraryHostedLaneContract() {
   const routeStateController = read(path.join("content", "route-state-controller.js"));
   const sharedProviderIdentityCache = read(path.join("shared", "provider-identity-cache.js"));
   const sharedStorage = read(path.join("shared", "storage.js"));
-  const backupPromptCloudSync = read(path.join("backup", "legacy-panel", "shared", "prompt-cloud-sync.js"));
-  const backupPromptStorage = read(path.join("backup", "legacy-panel", "shared", "prompt-storage.js"));
   assert(!/\bpromptLibraryLoading\b/.test(stateFactory), "active v2 panel state는 dead prompt library loading mirror를 유지하면 안 됩니다.");
   assert(!/\bpromptLibraryRemoteReady\b/.test(stateFactory), "active v2 panel state는 dead prompt library ready mirror를 유지하면 안 됩니다.");
   assert(!/\bpromptLibrary:\s/.test(stateFactory), "active v2 panel state는 hosted-owned prompt library cache를 직접 들지 않아야 합니다.");
@@ -59,8 +57,6 @@ function verifyPromptLibraryHostedLaneContract() {
   assert(!/\bcreateReplaceLibraryOperation\b/.test(sharedProviderIdentityCache), "active shared/provider-identity-cache.js는 dormant prompt library replace helper를 다시 들지 않아야 합니다.");
   assert(!/\bfunction getPromptLibrary\b/.test(sharedStorage), "active shared/storage.js는 dormant prompt library CRUD helper를 다시 들지 않아야 합니다.");
   assert(!/\bfunction savePromptItem\b/.test(sharedStorage), "active shared/storage.js는 dormant prompt save helper를 다시 들지 않아야 합니다.");
-  assert(/\bqueuePromptLibrarySyncOperation\b/.test(backupPromptCloudSync), "legacy prompt sync operation helper는 backup shared lane에 남아 있어야 합니다.");
-  assert(/\bfunction getPromptLibrary\b/.test(backupPromptStorage), "legacy prompt storage helper는 backup shared lane에 남아 있어야 합니다.");
 
   const promptFeatureDoc = read(path.join("content", "features", "prompt-library", "AGENTS.md"));
   assert(/DB 정본/.test(promptFeatureDoc), "prompt-library AGENTS에 DB 정본 invariant가 필요합니다.");

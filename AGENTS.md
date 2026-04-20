@@ -52,8 +52,8 @@
 - 기존 구현을 그대로 끌고 오기 위해 adapter, bridge glue, mixed ownership이 늘어나면 재사용을 멈추고 대상 ownership 위치에 직접 다시 구현한다.
 - 재사용은 `실제로 더 빨라질 때만` 선택한다. 같은 계약을 새 ownership 위치에 짧고 명확하게 다시 쓰는 편이 더 빠르면 그쪽을 기본값으로 삼는다.
 - `DB/Functions 계약을 바꾸지 않는 순수 panel v2 migration`에서는 현재 `1.0.0` v2 bundle이 정상 동작하는지만 우선 확인한다. 이런 작업에서 legacy extension 코드는 호환 이유로 활성 bundle 안에 계속 남겨 둘 대상으로 보지 않는다.
-- 현재 `1.0.0` 활성 bundle과 공유 계약이 더 이상 쓰지 않는 legacy extension panel 코드는 `content/*` 안에 섞어 두지 않는다. 기본 방향은 `backup/legacy-panel/*`로 격리하거나 바로 삭제 후보로 분류하는 것이다.
-- 격리된 legacy panel 코드는 평소 panel v2 migration 판단 기준이 아니다. `DB/Functions`나 shared server contract를 수정할 때만 `0.4.4` 영향 판단용 참고본으로 보고, 그 외 순수 panel migration에서는 현재 v2 bundle 정상 동작만 우선 확인한다.
+- 현재 `1.0.0` 활성 bundle과 공유 계약이 더 이상 쓰지 않는 legacy extension panel 코드는 `content/*` 안에 섞어 두지 않고 삭제 상태를 유지한다. 과거 동작 확인은 필요한 경우 git history나 `docs/archive/*`에서만 한다.
+- `0.4.4` retirement 이후에는 `backup/legacy-panel/*` 보관소를 다시 만들지 않는다. `DB/Functions`나 shared server contract를 수정할 때도 현재 v2 bundle 정상 동작과 살아 있는 compat 검증을 우선 기준으로 삼는다.
 
 ## Firebase 공유 프로젝트 경계
 - Firebase project `browser-extension-main`은 다른 저장소/기능과 공유될 수 있는 공용 프로젝트로 본다.

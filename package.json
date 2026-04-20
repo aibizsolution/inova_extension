@@ -72,8 +72,6 @@
     "verify:prompt-store-model": "node scripts/verify-prompt-store-model.js",
     "verify:prompt-runtime-local": "node scripts/verify-prompt-runtime-local.js",
     "verify:prompt-review": "node scripts/verify-prompt-review.js",
-    "verify:prompt-fallbacks": "node scripts/legacy-panel/verify-prompt-fallbacks.js",
-    "verify:legacy-backup": "node scripts/legacy-panel/verify-legacy-prompt-backup.js && node scripts/legacy-panel/verify-panel-prompt-controller.js && node scripts/legacy-panel/verify-panel-bookmark-controller.js && node scripts/legacy-panel/verify-panel-runtime-controller.js && node scripts/legacy-panel/verify-meeting-state.js && node scripts/legacy-panel/verify-prompt-fallbacks.js && node scripts/legacy-panel/verify-store-render-window.js",
     "verify:meeting-notes-generation": "node scripts/verify-meeting-notes-generation.js",
     "verify:meeting-audio-source-policy": "node scripts/verify-meeting-audio-source-policy.js",
     "verify:meeting-audio-fixture": "node scripts/verify-meeting-audio-fixture.js",

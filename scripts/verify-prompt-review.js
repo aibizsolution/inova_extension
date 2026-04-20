@@ -485,7 +485,7 @@ async function verifyHostedPromptReviewApplyUsesFormattedPrompt() {
 function createPromptReviewHarness(options = {}) {
   const runtimeMessages = [];
   const renderCalls = [];
-  const version = String(options.version || "0.4.4");
+  const version = String(options.version || "1.0.0");
   const context = vm.createContext({
     chrome: {
       runtime: {

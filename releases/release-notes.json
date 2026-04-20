@@ -6,7 +6,7 @@
       "level": "major",
       "public": {
         "headline": "인크로스 전사 배포",
-        "summary": "0.4.4 이후 안정화와 QA를 거쳐, 일반 사용을 위한 1.0.0 공식 배포 버전을 제공합니다.",
+        "summary": "공식 배포 전 안정화와 QA를 거쳐, 일반 사용을 위한 1.0.0 공식 배포 버전을 제공합니다.",
         "changes": [
           {
             "type": "changed",
@@ -73,64 +73,6 @@
         "sha256": "6621f3b835b671d39b598b628af1a0fa9d13a14d59f420de8b5bad3ce777c730",
         "sizeBytes": 283238,
         "minSupportedVersion": "0.4.5"
-      }
-    },
-    {
-      "version": "0.4.4",
-      "level": "patch",
-      "public": {
-        "headline": "회의록 기능 추가와 초기 안정화",
-        "summary": "회의 작업실과 회의록 정리 기능을 추가한 0.4 계열에서, 회의 사용 흐름과 프롬프트 도구 UX를 함께 다듬은 안정화 업데이트입니다.",
-        "changes": [
-          {
-            "type": "added",
-            "text": "회의 작업실과 회의록 정리 기능을 추가해 녹음, 전사, 회의 내용 검토를 한곳에서 이어갈 수 있게 했습니다."
-          },
-          {
-            "type": "changed",
-            "text": "회의 룸과 기록 흐름 문구를 정리하고, 발화가 거의 없거나 불분명한 전사는 자동 회의 정리를 만들지 않도록 보강했습니다."
-          },
-          {
-            "type": "changed",
-            "text": "프롬프트 검토 버튼 위치, 결과 안내 문구, 보완 프롬프트 가독성과 복사 동선을 함께 다듬었습니다."
-          }
-        ]
-      },
-      "internal": {
-        "changes": [
-          {
-            "type": "changed",
-            "text": "회의 작업실 QA 반영과 프롬프트 검토 UX 보강을 포함한 0.4.4 공개 릴리스 메타로 최신 사용자용 요약을 갱신했습니다."
-          }
-        ]
-      },
-      "artifact": {
-        "fileName": "inova-extension-0.4.4-2026-04-06.zip",
-        "publishedAt": "2026-04-06T07:59:48.703Z",
-        "sha256": "26928b3ec8b49c46261ed5a1e809408a56f6c705b0ffc218e07f70fb2b042037",
-        "sizeBytes": 255326,
-        "minSupportedVersion": "0.4.4"
-      }
-    },
-    {
-      "version": "0.3.2",
-      "level": "patch",
-      "public": {
-        "headline": "프롬프트 검토 초기 안정화",
-        "summary": "프롬프트 검토와 프롬프트 스토어 초기 동작을 다듬은 안정화 배포입니다.",
-        "changes": [
-          {
-            "type": "changed",
-            "text": "프롬프트 검토와 스토어 구성을 정리해 초기 사용 흐름을 다듬었습니다."
-          }
-        ]
-      },
-      "artifact": {
-        "fileName": "inova-extension-0.3.2-2026-03-26.zip",
-        "publishedAt": "2026-03-26T07:52:36.444Z",
-        "sha256": "d77aaed60259418ed3a47912cb5c432ef694eca4207dcfcb6dc9a67634813dfc",
-        "sizeBytes": 192549,
-        "minSupportedVersion": "0.3.2"
       }
     }
   ]

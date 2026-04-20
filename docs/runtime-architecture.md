@@ -57,7 +57,7 @@
 - 위치: `content/`, `shared/`, `manifest.json`
 - 역할: `inova.incross.com` 안에 실험실 패널을 삽입하고, 질문 탐색/회의록/프롬프트/스토어/릴리스 UI와 회의 허브 진입 흐름을 조립한다.
 - 특징: `content/main.js`는 composition root, `content/panel-v2-composition-controller.js`는 browser-only composition/runtime/provider-identity bridge와 hosted-owned controller graph 조립, `content/panel-v2-shell-bridge.js`는 activity/surface/lifecycle/bootstrap/render bridge를 맡는다. 현재 이 두 파일에는 panel snapshot assembly migration residue가 남아 있으므로 목표 상태로 보지 않는다. active tool derivation, handle count 계산, hosted close/Escape/external-handle open state는 hosted 쪽으로 이동했고, 외부 handle/container DOM 반영만 `panel-chrome-sync`로 content host가 수행한다. 다음 cleanup은 extension이 raw page/capability facts만 보내고 hosted가 view state를 계산하게 줄이는 것이다. `content/panel.js`는 host element lifecycle과 helper wiring만 남기고, iframe target/status/handshake/render batching은 `content/panel-host-runtime.js`, hosted bridge endpoint와 page/panel event emit은 `content/panel-host-bridge.js`, host markup과 handle drag/click은 `content/panel-host-view.js`가 맡는다. active `content/hosted-panel-bridge.js`는 `panel-chrome-sync`, runtime/page contract dispatch만 유지하고, conversation copy/jump/search는 hosted controller가 `page.adapter.v2` capability로 직접 처리한다. top-level tool rail 선택도 hosted panel이 `storage.write-ui-preferences`로 직접 기록하고, extension conversation residue는 count/fingerprint snapshot bridge만 남긴다. 실제 page capability 구현은 `content/page-capability-router.js`, page localStorage 기반 사용자 식별 센서는 `content/provider-identity-sensor.js`, local hosted panel frame proxy resolver는 `content/frame-proxy-helper.js`가 맡는다. `1.0.0+` v2 lane의 extension에는 shell/runtime/route/page adapter 같은 browser-only 책임만 남기고, tool rail/header/content state는 hosted `extension-v2/panel/*` controller가 소유한다. active page adapter capability는 `conversation.read-dom-snapshot`, fallback `conversation.read-state`, `conversation.jump-item`, `composer.read-state`, `composer.apply-text`, `clipboard.write-text`, `debug.read-state`, `debug.set-enabled`, `debug.copy-log`, `debug.clear-log`, `trace.log`, `page.scroll-to`, `page.highlight-range`, `page.show-banner`, `page.read-selection`, `page.dispatch-named-event`를 canonical contract로 보고, caller migration이 끝난 alias는 active lane에 남겨 두지 않는다. 이 active page/runtime capability 카탈로그는 문서 설명만이 아니라 `contracts/extension-contract.json`과 `scripts/verify-contracts.js`로도 같이 고정한다.
-- 특징: `shared/storage.js`는 active lane에서 generic local state/settings/ui-preferences/provider-identity-cache/product-lane migration core만 유지한다. inactive release/meeting storage accessor는 active shared core에 남기지 않고 `backup/legacy-panel/shared/legacy-storage-accessors.js` 같은 backup-only helper에서만 유지한다.
+- 특징: `shared/storage.js`는 active lane에서 generic local state/settings/ui-preferences/provider-identity-cache/product-lane migration core만 유지한다. inactive release/meeting storage accessor는 active shared core나 backup helper로 다시 추가하지 않는다.
 - 특징: `shared/constants.js`도 active lane의 live browser shell 기본값만 유지한다. inactive release/meeting storage key/default schema는 active shared constants에 남기지 않고 backup helper가 직접 가진다.
 - 특징: `meetingWorkspaceTarget`, `meetingWorkspaceUrlOverride`, `meetingDebugConsoleEnabled` 같은 hosted/local target 설정 정규화는 `shared/firebase-config.js`의 `firebaseConfig.meeting.normalizeSettings()`를 정본으로 쓴다. popup과 background meeting workspace capability가 이 shared helper를 같이 재사용하고, 표면별 임시 normalize 함수를 다시 복제하지 않는다.
 - 특징: active prompt lane도 `chrome.storage.local.promptLibrary`를 정본으로 취급하지 않는다. active `shared/constants.js` / `shared/storage.js`는 dormant prompt local cache schema를 더 이상 들고 있지 않고, backup prompt helper/reference가 그 캐시 계약을 직접 가진다.
@@ -231,8 +231,6 @@ Remote manifest fetch나 validation이 실패하면 service worker는 warning/de
 - `node scripts/verify-legacy-isolation.js`
 - `node scripts/verify-route-state-controller.js`
 - `node scripts/verify-route-watch-controller.js`
-- backup legacy reference가 필요할 때만 `npm run verify:legacy-backup`
-- backup legacy 개별 계약은 `scripts/legacy-panel/*` 아래에 격리해 둔다.
 
 ### 운영/런타임 점검
 
@@ -241,7 +239,7 @@ Remote manifest fetch나 validation이 실패하면 service worker는 warning/de
 - `docs/functions-runtime-guide.md`
 - 실제 브라우저 E2E PR/전체 기준: `docs/e2e-browser-workflow.md`; 기능별 세부 체크리스트는 `docs/e2e/features/*.md`
 - prompt local rehearsal: popup에서 `로컬 호스팅` 선택 후 hidden prompt bridge가 `http://127.0.0.1:5000/extension/prompt-panel-bridge.html`을 쓰고, prompt read/write/review/panel auth가 local Functions base URL로 전환되는지 본다.
-- backup legacy conversation/runtime reference가 필요할 때만 `npm run verify:legacy-backup` 안의 `node scripts/legacy-panel/verify-panel-bookmark-controller.js`, `node scripts/legacy-panel/verify-panel-runtime-controller.js`로 `backup/legacy-panel/panel-bookmark-controller.js`, `backup/legacy-panel/panel-runtime-controller.js` 계약을 다시 본다.
+- retired legacy conversation/runtime reference는 repo에 보존하지 않는다. 과거 계약 확인이 필요하면 git history나 archive 문서를 참고한다.
 - panel local rehearsal: popup에서 `로컬 호스팅` 선택 후 hosted panel iframe이 `http://127.0.0.1:5000/extension/panel/index.html`을 바라보는지, hosted UI 자체가 hosting 배포만으로 갱신되는지 본다.
 - 로컬 회의 작업실: `npm run emulator:hosting` -> `http://127.0.0.1:5000/meeting/index.html`
 - 로컬 관리자 페이지: `npm run emulator:meeting-local` 후 패널의 관리자 항목에서 `http://127.0.0.1:5000/admin/index.html` 진입 흐름을 본다.

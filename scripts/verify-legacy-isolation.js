@@ -8,6 +8,7 @@ const root = path.resolve(__dirname, "..");
 
 function main() {
   verifyDefaultVerifyKeepsLegacyChecksSeparate();
+  verifyRetiredBackupDirectoriesStayAbsent();
   verifyActiveManifestStaysOutOfBackupLegacyFiles();
   verifyActiveManifestDropsDormantPromptLibraryHelper();
   verifyActiveSharedRootDropsLegacyCloudSyncHelper();
@@ -17,26 +18,38 @@ function main() {
   verifyActiveHostedRuntimeStorageSurfaceStaysCompact();
   verifyActiveBackgroundMessageSurfaceStaysNarrow();
   verifyActivePromptShellContractDropsLegacyName();
-  console.log("[verify-legacy-isolation] Active v2 legacy isolation contract passed");
+  console.log("[verify-legacy-isolation] Active v2 legacy retirement contract passed");
 }
 
 function verifyDefaultVerifyKeepsLegacyChecksSeparate() {
   const packageJson = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
   const defaultVerify = String(packageJson.scripts?.verify || "");
-  const legacyVerify = String(packageJson.scripts?.["verify:legacy-backup"] || "");
+  const scriptValues = Object.values(packageJson.scripts || {}).map((value) => String(value || ""));
 
   assert(
     defaultVerify.includes("node scripts/verify-legacy-isolation.js"),
     "default verify should include the active legacy isolation guard"
   );
   assert(
-    !defaultVerify.includes("scripts/legacy-panel/"),
-    "default verify should keep backup legacy checks out of the active v2 lane"
+    !scriptValues.some((script) => script.includes("scripts/legacy-panel/")),
+    "package scripts should not keep retired legacy-panel checks"
   );
   assert(
-    legacyVerify.includes("scripts/legacy-panel/"),
-    "backup legacy checks should stay behind verify:legacy-backup"
+    !Object.prototype.hasOwnProperty.call(packageJson.scripts || {}, "verify:legacy-backup"),
+    "verify:legacy-backup should be removed after 0.4.4 retirement"
   );
+}
+
+function verifyRetiredBackupDirectoriesStayAbsent() {
+  [
+    "backup/legacy-panel",
+    "scripts/legacy-panel",
+  ].forEach((relativePath) => {
+    assert(
+      !fs.existsSync(path.join(root, relativePath)),
+      `${relativePath} should stay removed after 0.4.4 retirement`
+    );
+  });
 }
 
 function verifyActiveManifestStaysOutOfBackupLegacyFiles() {
@@ -92,10 +105,6 @@ function verifyActiveSharedRootDropsLegacyCloudSyncHelper() {
     "active shared root should not keep the legacy cloud-sync helper"
   );
   assert(
-    fs.existsSync(path.join(root, "backup", "legacy-panel", "shared", "cloud-sync.js")),
-    "backup legacy shared lane should keep the legacy cloud-sync helper"
-  );
-  assert(
     !fs.existsSync(path.join(root, "shared", "prompt-library.js")),
     "active shared root should not keep the dormant prompt library helper"
   );
@@ -118,18 +127,6 @@ function verifyActiveSharedRootDropsLegacyCloudSyncHelper() {
   assert(
     !fs.existsSync(path.join(root, "shared", "inova-auth.js")),
     "active shared root should not keep the background-only i-Nova auth helper"
-  );
-  assert(
-    fs.existsSync(path.join(root, "backup", "legacy-panel", "shared", "provider-identity.js")),
-    "backup legacy shared lane should keep the legacy provider identity sensor"
-  );
-  assert(
-    fs.existsSync(path.join(root, "backup", "legacy-panel", "shared", "prompt-library.js")),
-    "backup legacy shared lane should keep the dormant prompt library helper"
-  );
-  assert(
-    fs.existsSync(path.join(root, "backup", "legacy-panel", "shared", "prompt-store.js")),
-    "backup legacy shared lane should keep the dormant prompt store helper"
   );
 }
 
@@ -390,10 +387,6 @@ function verifyActiveBackgroundMessageSurfaceStaysNarrow() {
   assert(
     !fs.existsSync(path.join(root, "background", "meeting-list-cache.js")),
     "active background root should not keep the dormant meeting-list-cache helper"
-  );
-  assert(
-    fs.existsSync(path.join(root, "backup", "legacy-panel", "background", "meeting-list-cache.js")),
-    "backup legacy lane should keep the dormant meeting-list-cache helper"
   );
   assert(
     meetingWorkspaceCapabilitySource.includes("namespace.providerIdentityCache?.normalizeProviderIdentity"),

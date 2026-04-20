@@ -489,6 +489,7 @@ __INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20, entrie
 - store의 identityPending, cache/stale, empty가 모두 빈 화면처럼 보여 성공으로 오판하기 쉽다.
 - review 요청과 store publish가 같은 패널에서 섞이면 tab focus와 자동 활성화가 꼬일 수 있다.
 - import/export 파일 왕복, clipboard, composer apply는 실제 Chrome 실동작으로 확인해야 한다.
+- retired reference 문서나 보조 스크립트만 정리했고 활성 hosted prompt bundle, content runtime, Functions 계약이 바뀌지 않았으면 새 prompt 브라우저 항목을 추가하지 않는다. 이때는 변경 보고에 prompt UI 동작 변경 없음과 실행한 정적 검증을 분리해서 적고, 활성 prompt 파일이 함께 바뀐 경우에만 위 P0/P1 범위를 다시 실행한다.
 
 ## 릴리스
 
@@ -499,6 +500,7 @@ __INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20, entrie
 3. 최신 릴리스 카드와 다운로드 버튼이 보이는지 확인한다.
 4. `hosting/extension-v2/releases/latest.json`, `history.json`, `releases/release-notes.json`의 버전 정보가 화면과 맞는지 본다.
 5. 상용 배포 직후에는 `downloads/latest.zip`과 버전별 ZIP 경로가 같은 release metadata를 가리키는지 확인한다.
+6. retired 버전 정리 후에는 `history.json`과 화면의 이전 릴리스 목록에 retired 버전 카드나 버전별 다운로드 링크가 다시 노출되지 않아야 한다. 이 정리만으로 `manifest.json`, `content/*`, `background/*`, `popup/*`, 확장 번들 `shared/*`가 바뀌지 않았다면 확장 재배포가 아니라 Hosting metadata 반영 범위로 보고한다.
 
 ### P1 Regression
 

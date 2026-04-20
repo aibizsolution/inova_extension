@@ -11,7 +11,6 @@ const { buildCapabilityCatalogMarkdown } = require("./generate-capability-catalo
 const requiredFiles = [
   "manifest.json",
   "README.md",
-  "backup/legacy-panel/README.md",
   path.join(".githooks", "pre-push"),
   path.join("docs", "feature-spec.md"),
   path.join("docs", "feature-routing.md"),
@@ -52,31 +51,17 @@ const requiredFiles = [
   path.join("functions", "shared", "prompt-store-model.js"),
   path.join("hosting", "extension-v2", "panel", "prompt-tool-panel.js"),
   path.join("scripts", "install-git-hooks.js"),
-  path.join("backup", "legacy-panel", "shared", "prompt-cloud-sync.js"),
-  path.join("backup", "legacy-panel", "shared", "prompt-storage.js"),
-  path.join("backup", "legacy-panel", "shared", "legacy-storage-accessors.js"),
-  path.join("backup", "legacy-panel", "shared", "prompt-library.js"),
   path.join("scripts", "verify-feature-doc-update.js"),
   path.join("scripts", "verify-e2e-doc-update.js"),
   path.join("scripts", "generate-capability-catalog.js"),
   path.join("scripts", "verify-hosted-panel-bridge.js"),
   path.join("scripts", "verify-legacy-isolation.js"),
-  path.join("scripts", "legacy-panel", "README.md"),
-  path.join("scripts", "legacy-panel", "verify-legacy-prompt-backup.js"),
-  path.join("scripts", "legacy-panel", "verify-panel-bookmark-controller.js"),
-  path.join("scripts", "legacy-panel", "verify-panel-prompt-controller.js"),
   path.join("scripts", "verify-panel-shell-controller.js"),
   path.join("scripts", "verify-panel-activity-controller.js"),
   path.join("scripts", "verify-panel-surface-controller.js"),
   path.join("scripts", "verify-panel-render-controller.js"),
   path.join("scripts", "verify-panel-bootstrap-controller.js"),
   path.join("scripts", "verify-panel-state-factory.js"),
-  path.join("scripts", "legacy-panel", "verify-panel-runtime-controller.js"),
-  path.join("scripts", "legacy-panel", "verify-panel-action-controller.js"),
-  path.join("scripts", "legacy-panel", "verify-panel-meeting-controller.js"),
-  path.join("scripts", "legacy-panel", "verify-panel-shell.js"),
-  path.join("scripts", "legacy-panel", "verify-meeting-manager.js"),
-  path.join("scripts", "legacy-panel", "verify-meeting-state.js"),
   path.join("scripts", "verify-prompt-library-remote-first.js"),
   path.join("scripts", "verify-prompt-store-model.js"),
   path.join("scripts", "verify-prompt-runtime-local.js"),
@@ -92,30 +77,10 @@ const requiredFiles = [
   "content/hosted-panel-bridge.js",
   "shared/firestore-collections.js",
   "shared/product-lane.js",
-  "backup/legacy-panel/panel-bookmark-controller.js",
-  "backup/legacy-panel/panel-debug-controller.js",
-  "backup/legacy-panel/panel-prompt-controller.js",
   "content/panel-v2-prompt-controller.js",
   "content/panel-v2-composition-controller.js",
-  "backup/legacy-panel/panel-runtime-controller.js",
-  "backup/legacy-panel/panel-action-controller.js",
-  "backup/legacy-panel/panel-composition-controller.js",
-  "backup/legacy-panel/panel-meeting-controller.js",
-  "backup/legacy-panel/meeting-manager.js",
-  "backup/legacy-panel/shared/meeting-bridge.js",
-  "backup/legacy-panel/shared/meeting-debug.js",
   "content/route-state-controller.js",
   "content/route-watch-controller.js",
-  "backup/legacy-panel/prompt-hub-state.js",
-  "backup/legacy-panel/prompt-hub-panel.js",
-  "backup/legacy-panel/prompt-hub-controller.js",
-  "backup/legacy-panel/prompt-hub-runtime.js",
-  "backup/legacy-panel/features/prompt-library/files.js",
-  "backup/legacy-panel/features/prompt-library/cloud-sync-manager.js",
-  "backup/legacy-panel/features/prompt-library/prompt-manager.js",
-  "backup/legacy-panel/features/prompt-store/prompt-realtime-manager.js",
-  "backup/legacy-panel/bookmark-view.js",
-  "backup/legacy-panel/tools.css",
   "content/panel.css",
 ];
 
@@ -171,35 +136,27 @@ const featureDocContracts = [
     doc: path.join("content", "features", "conversation", "AGENTS.md"),
     expectedFiles: [
       "content/dom.js",
-      "backup/legacy-panel/bookmark-view.js",
       "content/route-sync.js",
       "content/route-state-controller.js",
       "content/route-watch-controller.js",
       "content/panel-v2-composition-controller.js",
       "content/panel-v2-shell-bridge.js",
-      "backup/legacy-panel/panel-bookmark-controller.js",
     ],
   },
   {
     feature: "prompt-library",
     doc: path.join("content", "features", "prompt-library", "AGENTS.md"),
     expectedFiles: [
-      "backup/legacy-panel/features/prompt-library/prompt-manager.js",
       "hosting/extension-v2/panel/prompt-library-controller.js",
       "hosting/extension-v2/panel/prompt-view.js",
-      "backup/legacy-panel/features/prompt-library/files.js",
-      "backup/legacy-panel/shared/prompt-library.js",
     ],
   },
   {
     feature: "prompt-store",
     doc: path.join("content", "features", "prompt-store", "AGENTS.md"),
     expectedFiles: [
-      "backup/legacy-panel/features/prompt-store/store-manager.js",
       "hosting/extension-v2/panel/prompt-store-controller.js",
       "hosting/extension-v2/panel/store-view.js",
-      "backup/legacy-panel/features/prompt-store/prompt-realtime-manager.js",
-      "backup/legacy-panel/shared/prompt-store.js",
     ],
   },
   {
@@ -216,11 +173,6 @@ const featureDocContracts = [
     feature: "meeting",
     doc: path.join("content", "features", "meeting", "AGENTS.md"),
     expectedFiles: [
-      "backup/legacy-panel/meeting-manager.js",
-      "backup/legacy-panel/panel-meeting-controller.js",
-      "backup/legacy-panel/meeting-view.js",
-      "backup/legacy-panel/shared/meeting-bridge.js",
-      "backup/legacy-panel/shared/meeting-debug.js",
       "hosting/meeting/index.js",
       "popup/index.js",
     ],
@@ -231,8 +183,6 @@ const featureDocContracts = [
     expectedFiles: [
       "hosting/extension-v2/panel/release-controller.js",
       "hosting/extension-v2/panel/release-view.js",
-      "backup/legacy-panel/release-manager.js",
-      "backup/legacy-panel/shared/release-info.js",
     ],
   },
 ];
@@ -471,48 +421,6 @@ const codeChecks = [
     ],
   },
   {
-    file: "backup/legacy-panel/panel-runtime-controller.js",
-    patterns: [
-      /isPaused/,
-      /isStoreTabActive/,
-      /isExtensionContextInvalidatedError/,
-      /logPanelDebug/,
-    ],
-  },
-  {
-    file: "backup/legacy-panel/panel-action-controller.js",
-    patterns: [
-      /handlePanelMeetingAction/,
-      /handlesAction/,
-      /handleAction/,
-    ],
-  },
-  {
-    file: "backup/legacy-panel/panel-composition-controller.js",
-    patterns: [
-      /panelRuntimeController/,
-      /panelPromptController/,
-      /panelRenderController/,
-      /panelBootstrapController/,
-    ],
-  },
-  {
-    file: "backup/legacy-panel/shared/meeting-bridge.js",
-    patterns: [
-      /namespace\.meetingBridge/,
-      /inova-meeting:list-meetings/,
-      /inova-meeting:open-workspace/,
-    ],
-  },
-  {
-    file: "backup/legacy-panel/shared/meeting-debug.js",
-    patterns: [
-      /namespace\.meetingDebug/,
-      /namespace\.panelDebug/,
-      /buildErrorCopyText/,
-    ],
-  },
-  {
     file: "content/panel-v2-shell-bridge.js",
     patterns: [
       /createShellController/,
@@ -569,22 +477,6 @@ const codeChecks = [
     ],
   },
   {
-    file: "backup/legacy-panel/shared/prompt-cloud-sync.js",
-    patterns: [
-      /queuePromptLibrarySyncOperation/,
-      /createReplaceLibraryOperation/,
-      /setPromptSyncDegraded/,
-    ],
-  },
-  {
-    file: "backup/legacy-panel/shared/prompt-storage.js",
-    patterns: [
-      /getPromptLibrary/,
-      /savePromptItem/,
-      /buildPromptSyncDocument/,
-    ],
-  },
-  {
     file: "background/service-worker.js",
     patterns: [
       /inova-panel:invoke/,
@@ -607,30 +499,6 @@ const codeChecks = [
     patterns: [
       /panelRuntimeCapabilityRouter\.handle/,
       /invokeHostedPanelRequest/,
-    ],
-  },
-  {
-    file: path.join("backup", "legacy-panel", "shared", "legacy-storage-accessors.js"),
-    patterns: [/getMeetingStateByMeetingId/, /setReleaseInfo/, /LEGACY_RELEASE_INFO_DEFAULTS/, /LEGACY_MEETING_HUB_DEFAULTS/],
-  },
-  {
-    file: path.join("backup", "legacy-panel", "shared", "prompt-storage.js"),
-    patterns: [/PROMPT_LIBRARY_STORAGE_KEY/, /readLegacyPromptLibraryState/, /writeLegacyPromptLibraryState/],
-  },
-  {
-    file: "backup/legacy-panel/shared/prompt-library.js",
-    patterns: [
-      /parseImportText/,
-      /buildExportPayload/,
-      /applyImport/,
-    ],
-  },
-  {
-    file: "backup/legacy-panel/features/prompt-library/prompt-manager.js",
-    patterns: [
-      /handleImportFile/,
-      /applyPromptText/,
-      /downloadJson/,
     ],
   },
 ];

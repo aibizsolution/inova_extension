@@ -19,10 +19,6 @@
 - `content/panel-v2-composition-controller.js`
 - `hosting/meeting/index.js`
 - `popup/index.js`
-- `backup/legacy-panel/meeting-manager.js`는 현재 `1.0.0` 활성 bundle이 아니라 legacy reference/source로 본다. pure panel v2 migration에서는 이 파일을 먼저 손대지 않는다.
-- `backup/legacy-panel/meeting-view.js`도 같은 이유로 legacy reference/source로만 본다.
-- `backup/legacy-panel/shared/meeting-bridge.js`, `backup/legacy-panel/shared/meeting-debug.js`도 active `1.0.0` content bundle이 아니라 inactive reference/source로 본다.
-- `backup/legacy-panel/meeting-manager.js`는 현재 `ensurePanelAuth`, `ensureBridgePort`/`handleBridgeMessage`/`disconnectRealtime`, `fallbackRefresh`/`warmRefresh`/`mergeMeetingHub` 세 workflow로 읽는다. 파일 길이만으로 바로 분리하지 말고, bridge lifecycle에 실제 bug pressure가 반복될 때만 다음 split 후보로 올린다.
 
 ## 관련 프론트 경로
 - `background/service-worker.js`
@@ -37,10 +33,10 @@
 
 ## hosted/panel 공통 경계
 - legacy lane은 현재 `browser-extension-main` hosted meeting 경로를 유지한다. separate hosted origin/site 판단의 과거 배경은 `docs/archive/refactoring-plan.md`의 version decision gate를 필요할 때만 참고한다.
-- `0.4.5`부터 panel 안의 회의 허브 UI는 `hosting/extension/panel/meeting-view.js`가 렌더링하고, 회의 목록 state와 action routing은 기존 `backup/legacy-panel/meeting-manager.js`/`backup/legacy-panel/panel-meeting-controller.js`가 계속 소유한다.
+- `0.4.4` retirement 이후 legacy meeting reference source는 보존하지 않는다. 과거 동작 확인이 필요하면 git history를 사용한다.
 - `1.0.0+` v2 lane에서는 `hosting/extension-v2/panel/meeting-hub-controller.js`가 회의 허브 목록 렌더 상태(`items`, `error/degraded`, `freshness`), 사용량 미니 통계(`usage`), action UI 상태(`pending`, `feedback`, share patch`)를 직접 소유한다. 목록 읽기는 hosted `meeting-firestore-client.js`가 `auth.issue-panel-session(panel=meeting) -> Firestore onSnapshot` 경로로 맡는다. 사용량 읽기는 hosted `meeting-usage-firestore-client.js`가 회의 탭 active 동안 사용자 월별 집계 doc 1개와 전체 집계 doc 1개만 구독하고, tab inactive/close 때 즉시 해제한다. 작업실/결과 열기는 static runtime capability `meeting.workspace.open`, `meeting.result.open`을 탄다. 공유 생성/해제 UI와 실행은 handshake의 `meeting.share.create-function`, `meeting.share.revoke-function` capability가 enabled일 때만 열리고, 실행도 `invokeCapability()` 경로로 Functions endpoint manifest를 따른다. v2 hosted panel은 더 이상 `meeting-action` top-panel fallback request를 쓰지 않는다. extension은 runtime broker와 브라우저 탭 열기만 맡고, handle/rail count는 hosted가 회의 컨트롤러 state로 계산한 뒤 `panel-chrome-sync`로 parent DOM에 반영한다.
 - meeting capabilityId: `meeting.list`, `meeting.panel-auth.issue-function`, `meeting.participation.hide-function`, `meeting.share.create-function`, `meeting.share.revoke-function`, `meeting.workspace.authorize-access`, `meeting.workspace.open`, `meeting.result.open`.
-- v2 meeting snapshot shaping은 `panelMeetingController`의 action UI state나 `backup/legacy-panel/meeting-manager.js` merge helper를 거치지 않는다. active v2 createState는 더 이상 legacy `meetingHub`/`meetingUi` bucket이나 interim `toolSummaries.meeting` bucket을 들지 않고, 현재 `1.0.0` 활성 bundle은 legacy `panelMeetingController`/`panelActionController`/`meetingManager` path를 로드하지 않는다.
+- v2 meeting snapshot shaping은 legacy meeting manager merge helper를 거치지 않는다. active v2 createState는 더 이상 legacy `meetingHub`/`meetingUi` bucket이나 interim `toolSummaries.meeting` bucket을 들지 않고, 현재 `1.0.0` 활성 bundle은 legacy `panelMeetingController`/`panelActionController`/`meetingManager` path를 로드하지 않는다.
 - compact `meeting` / `release` residue 정규화는 content에 남기지 않는다. hosted meeting/release 컨트롤러가 각 count/view state를 직접 소유하고, content render payload는 meeting/release snapshot state를 싣지 않는다.
 - hosted meeting hub는 top-panel `meeting` summary sync나 echo된 `panelState.meetingTool` count를 lifecycle/state 정본으로 쓰지 않는다. hosted count는 Firestore snapshot과 현재 hub memory가 정본이다.
 - v2 meeting hub의 `참여한 회의룸` 목록은 `integration_inova_meeting_participations` 사용자별 경량 index만 읽는다. 참여 카드 렌더링을 위해 `integration_inova_meetings` 원본 문서를 카드마다 추가 get하지 않는다.
@@ -50,7 +46,7 @@
 - 공유 중인 owned 회의룸의 `열람 N명`은 현재 shareId 기준 최초 정상 열람 때만 증가하는 `integration_inova_meetings.share.participantCount` snapshot을 사용한다. 목록 렌더링 중 participation 문서를 집계해서 읽지 않는다.
 - owner가 공유를 해제하면 함수가 현재 shareId의 visible participation shortcut을 `accessState: revoked`, `hidden: false`로 비활성화한다. 참여자 목록에는 접근 불가 카드와 `목록에서 제거`만 남고, 사용자가 직접 제거할 때만 `hidden: true`가 된다.
 - hosted meeting hub는 bootstrap 중에도 top-panel `meeting` count를 빌려 오지 않는다. 초기 count는 `0`으로 시작하고, 실제 count는 Firestore snapshot과 현재 hub memory로만 올라간다.
-- 같은 이유로 v2 panel shell은 `route`, `storage`, `prompt tab`, `surface`, `bootstrap`, 브라우저 sidecar/lifecycle 이벤트로는 더 이상 `backup/legacy-panel/meeting-manager.js` sync를 직접 깨우지 않는다. hosted meeting hub는 top-panel fingerprint echo 없이 meeting tool 재진입, hosted 문서 `visibility-visible`, explicit action 결과를 기준으로 자체 load/refresh를 이어받고, extension은 parent chrome adapter만 남긴다.
+- 같은 이유로 v2 panel shell은 `route`, `storage`, `prompt tab`, `surface`, `bootstrap`, 브라우저 sidecar/lifecycle 이벤트로 meeting sync를 직접 깨우지 않는다. hosted meeting hub는 top-panel fingerprint echo 없이 meeting tool 재진입, hosted 문서 `visibility-visible`, explicit action 결과를 기준으로 자체 load/refresh를 이어받고, extension은 parent chrome adapter만 남긴다.
 - v2 bootstrap도 legacy처럼 무조건 meeting sync를 prime하지 않는다. 시작 tool이 `meeting`일 때만 bootstrap prime을 남기고, meeting storage listener는 등록하지 않는다.
 - route change는 회의 목록의 정본이 아니다. meeting hub가 이미 로드되었거나 realtime이 붙어 있는 동안에는 route-driven refresh를 다시 예약하지 않고, 회의 동기화는 realtime 연결과 explicit meeting action 중심으로 유지한다.
 - 팝업의 `로컬 호스팅` target은 hosted meeting URL만 바꾸는 모드가 아니다. local target에서는 meeting panel bridge와 meeting HTTP auth/list/share 경로도 함께 local Functions/Auth/Firestore emulator를 보도록 유지한다.
