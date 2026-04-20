@@ -527,6 +527,16 @@ h3 {
   white-space: nowrap;
 }
 
+.admin-access-meta__sub {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .admin-access-permission__toggle {
   width: 100%;
 }

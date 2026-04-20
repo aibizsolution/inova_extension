@@ -538,6 +538,7 @@
     const detailName = selectedEntry?.displayName || "-";
     const detailOrganization = readAccessDraftOrganization(selectedEntry);
     const detailLastActivity = readAccessLastActivityLabel(selectedEntry);
+    const detailExtensionVersion = readAccessExtensionVersionLabel(selectedEntry);
 
     const panel = global.document.createElement("section");
     panel.className = "admin-access-detail";
@@ -573,6 +574,7 @@
           <span class="admin-help-chip" tabindex="0" aria-label="${escapeHtmlAttribute(ADMIN_ACCESS_LAST_ACTIVITY_HELP_TEXT)}" title="${escapeHtmlAttribute(ADMIN_ACCESS_LAST_ACTIVITY_HELP_TEXT)}">?</span>
         </div>
         <strong>${escapeHtml(detailLastActivity)}</strong>
+        <span class="admin-access-meta__sub">마지막 이용 버전 ${escapeHtml(detailExtensionVersion)}</span>
       </div>
       ${createAccessUsagePanel(selectedEntry)}
     `;
@@ -1451,6 +1453,8 @@
       canEdit: input.canEdit !== false,
       displayName: normalizeText(input.displayName) || normalizeText(input.email) || providerUserKey,
       email: normalizeText(input.email).toLowerCase(),
+      extensionVersion: normalizeAccessExtensionVersion(input.extensionVersion || input.lastExtensionVersion),
+      extensionVersionCheckedAt: normalizeText(input.extensionVersionCheckedAt || input.lastExtensionVersionAt),
       featureCount,
       featureUsage,
       id: providerUserKey,
@@ -1474,6 +1478,15 @@
   function readAccessLastActivityLabel(entry) {
     const formatted = formatDateTime(entry?.lastActivityAt);
     return formatted === "-" ? "기록 없음" : formatted;
+  }
+
+  function readAccessExtensionVersionLabel(entry) {
+    const version = normalizeAccessExtensionVersion(entry?.extensionVersion);
+    return version ? `v${version}` : "기록 없음";
+  }
+
+  function normalizeAccessExtensionVersion(value) {
+    return normalizeText(value).replace(/^v/i, "").slice(0, 40);
   }
 
   function readAccessStatusLabel(statusInput) {

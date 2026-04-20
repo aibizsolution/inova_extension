@@ -170,6 +170,7 @@ function createFeatureUsageDomain(deps) {
           nowIso,
           owner: batch.owner,
           providerUserKey: batch.providerUserKey,
+          source: batch.source,
         }),
         { merge: true }
       );
@@ -187,6 +188,7 @@ function createFeatureUsageDomain(deps) {
           nowIso,
           owner: batch.owner,
           providerUserKey: batch.providerUserKey,
+          source: batch.source,
         }),
         { merge: true }
       );
@@ -359,6 +361,7 @@ function createFeatureUsageDomain(deps) {
       nowIso,
       owner = null,
       providerUserKey = "",
+      source = null,
     } = options;
     const mutation = {
       aggregateScope,
@@ -376,6 +379,14 @@ function createFeatureUsageDomain(deps) {
       mutation.providerUserKey = providerUserKey;
       mutation.owner = owner;
     }
+    const sourceSummary = buildSourceSummary(source);
+    if (sourceSummary) {
+      mutation.lastSource = sourceSummary;
+      if (sourceSummary.extensionVersion) {
+        mutation.lastExtensionVersion = sourceSummary.extensionVersion;
+        mutation.lastExtensionVersionAt = nowIso;
+      }
+    }
     if (activeDayIncrement > 0 && dayKey) {
       mutation.activeDayCount = increment(activeDayIncrement);
       mutation.activeDayKeys = {
@@ -387,6 +398,17 @@ function createFeatureUsageDomain(deps) {
     }
     Object.assign(mutation, buildCounterIncrementFields(deltaCounters));
     return mutation;
+  }
+
+  function buildSourceSummary(source) {
+    if (!source || typeof source !== "object" || Array.isArray(source)) {
+      return null;
+    }
+    const normalized = normalizeSource(source);
+    if (!normalized.extensionVersion && !normalized.lane && !normalized.target && !normalized.surface) {
+      return null;
+    }
+    return normalized;
   }
 
   function buildCounterIncrementFields(deltaCounters) {

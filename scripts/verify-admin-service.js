@@ -163,7 +163,15 @@ async function verifyAdminAccessUserManagement() {
       prompt_review: 2,
       prompt_store: 3,
     },
+    lastExtensionVersion: "1.0.0",
+    lastExtensionVersionAt: "2026-04-19T01:20:00.000Z",
     lastUsedAt: "2026-04-19T01:20:00.000Z",
+    lastSource: {
+      extensionVersion: "1.0.0",
+      lane: "v2",
+      surface: "hosted-panel",
+      target: "production",
+    },
     owner: {
       displayName: "Member Two",
       email: "member2@example.com",
@@ -176,6 +184,8 @@ async function verifyAdminAccessUserManagement() {
     featureTotals: {
       prompt_review: 1,
     },
+    lastExtensionVersion: "0.4.5",
+    lastExtensionVersionAt: "2026-03-31T08:00:00.000Z",
     lastUsedAt: "2026-03-31T08:00:00.000Z",
     owner: {
       displayName: "Member Two",
@@ -233,6 +243,8 @@ async function verifyAdminAccessUserManagement() {
   assert(list.users.some((user) => user.providerUserKey === "member-2" && user.organization === "플랫폼팀"));
   const memberTwo = list.users.find((user) => user.providerUserKey === "member-2");
   assert.equal(memberTwo.lastActivityAt, "2026-04-19T01:40:00.000Z");
+  assert.equal(memberTwo.extensionVersion, "1.0.0");
+  assert.equal(memberTwo.extensionVersionCheckedAt, "2026-04-19T01:20:00.000Z");
   assert.equal(memberTwo.featureCount, 6);
   assert.deepEqual(memberTwo.featureUsage, {
     prompt_review: 3,
@@ -261,6 +273,7 @@ async function verifyAdminAccessUserManagement() {
   assert.equal(demoted.user.status, "inactive");
   assert.equal(demoted.user.organization, "AI Lab");
   assert.equal(demoted.user.lastActivityAt, "2026-04-19T01:40:00.000Z");
+  assert.equal(demoted.user.extensionVersion, "1.0.0");
   assert.equal(demoted.user.featureCount, 6);
   assert.equal(demoted.user.meetingMinutes, 70);
   assert.equal(demoted.user.meetingMonthMinutes, 30);

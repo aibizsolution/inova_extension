@@ -966,6 +966,8 @@ function createAdminDomain(deps) {
       canEdit: !envAccess.allowed,
       displayName: member.displayName,
       email: member.email,
+      extensionVersion: normalizeText(usageSummary.featureUsage?.lastExtensionVersion),
+      extensionVersionCheckedAt: normalizeAdminAccessActivityAt(usageSummary.featureUsage?.lastExtensionVersionAt),
       featureCount,
       featureUsage,
       lastActivityAt: pickLaterAdminAccessActivityAt(
@@ -994,13 +996,31 @@ function createAdminDomain(deps) {
     }
     const current = summaryByUser.get(providerUserKey) || {
       featureTotals: {},
+      lastExtensionVersion: "",
+      lastExtensionVersionAt: "",
       lastUsedAt: "",
       totalCount: 0,
     };
     const nextFeatureTotals = normalizeFeatureUsageTotals(usageData.featureTotals);
+    const lastUsedAt = pickLaterAdminAccessActivityAt(current.lastUsedAt, usageData.lastUsedAt || usageData.updatedAt);
+    const extensionVersion = normalizeText(
+      usageData.lastExtensionVersion
+      || usageData.lastSource?.extensionVersion
+      || usageData.source?.extensionVersion
+    );
+    const extensionVersionAt = normalizeAdminAccessActivityAt(
+      usageData.lastExtensionVersionAt
+      || usageData.lastUsedAt
+      || usageData.updatedAt
+    );
+    const shouldUseVersion = Boolean(extensionVersion)
+      && (!current.lastExtensionVersionAt
+        || pickLaterAdminAccessActivityAt(current.lastExtensionVersionAt, extensionVersionAt) === extensionVersionAt);
     summaryByUser.set(providerUserKey, {
       featureTotals: mergeFeatureUsageTotals(current.featureTotals, nextFeatureTotals),
-      lastUsedAt: pickLaterAdminAccessActivityAt(current.lastUsedAt, usageData.lastUsedAt || usageData.updatedAt),
+      lastExtensionVersion: shouldUseVersion ? extensionVersion : current.lastExtensionVersion,
+      lastExtensionVersionAt: shouldUseVersion ? extensionVersionAt : current.lastExtensionVersionAt,
+      lastUsedAt,
       totalCount: current.totalCount + readNonNegativeNumber(usageData.totalCount),
     });
   }

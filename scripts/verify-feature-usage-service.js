@@ -38,6 +38,7 @@ async function verifyDuplicateSnapshotNoop() {
   assert.equal(second.reason, "no-delta");
   assert.equal(readDoc(db, FEATURE_USAGE_COLLECTIONS.userDays, "user-1__2026-04-18").totalCount, 3);
   assert.equal(readDoc(db, FEATURE_USAGE_COLLECTIONS.adminDays, "2026-04-18").totalCount, 3);
+  assert.equal(readDoc(db, FEATURE_USAGE_COLLECTIONS.adminDays, "2026-04-18").lastSource, undefined);
 }
 
 async function verifyMultiDeviceDeltaAggregation() {
@@ -59,7 +60,11 @@ async function verifyMultiDeviceDeltaAggregation() {
   const userMonth = readDoc(db, FEATURE_USAGE_COLLECTIONS.userMonths, "user-1__2026-04");
   assert.equal(userDay.totalCount, 7);
   assert.equal(userDay.counters.prompt_review.completed.success, 7);
+  assert.equal(userDay.lastExtensionVersion, "1.0.0");
+  assert.equal(userDay.lastSource.lane, "v2");
   assert.equal(userMonth.activeDayCount, 1);
+  assert.equal(userMonth.lastExtensionVersion, "1.0.0");
+  assert.equal(userMonth.lastSource.target, "production");
   assert.equal(userMonth.totalCount, 7);
   assert.equal(readDoc(db, FEATURE_USAGE_COLLECTIONS.adminDays, "2026-04-18").activeUserCount, 1);
 }
