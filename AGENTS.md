@@ -55,6 +55,17 @@
 - 현재 `1.0.0` 활성 bundle과 공유 계약이 더 이상 쓰지 않는 legacy extension panel 코드는 `content/*` 안에 섞어 두지 않는다. 기본 방향은 `backup/legacy-panel/*`로 격리하거나 바로 삭제 후보로 분류하는 것이다.
 - 격리된 legacy panel 코드는 평소 panel v2 migration 판단 기준이 아니다. `DB/Functions`나 shared server contract를 수정할 때만 `0.4.4` 영향 판단용 참고본으로 보고, 그 외 순수 panel migration에서는 현재 v2 bundle 정상 동작만 우선 확인한다.
 
+## Firebase 공유 프로젝트 경계
+- Firebase project `browser-extension-main`은 다른 저장소/기능과 공유될 수 있는 공용 프로젝트로 본다.
+- 공유 리소스는 Auth만 허용한다. Functions, Firestore, Hosting, Storage는 저장소/기능별 전용 경계로 분리한다.
+- 이 저장소의 Functions 배포 경계는 `functions:inova-extension-api` codebase다. broad `functions` 배포나 default codebase 추가는 금지한다.
+- 이 저장소의 Hosting 배포 경계는 `hosting:main,hosting:v2` target이다. raw site id나 전체 `hosting` 배포를 기본 스크립트로 추가하지 않는다.
+- Firestore `(default)` database는 현재 i-Nova extension 전용 DB로 예약한다. 다른 저장소/기능은 named database를 써야 하며, 이 저장소의 Firestore 배포는 `deploy:firestore:inova-db`로만 수행한다.
+- Storage는 기본 배포 표면에서 제외한다. Storage Rules를 운영 반영해야 하면 먼저 전용 bucket target을 만들고 `storage:<target>` 스크립트와 `scripts/verify-firebase-deploy-boundary.js`를 함께 갱신한다.
+- `firebase deploy`, `firebase deploy --only functions`, `firebase deploy --only hosting`, `firebase deploy --only firestore`, `firebase deploy --only storage` 같은 broad deploy는 금지한다.
+- Firebase 배포 경계를 바꾸면 `docs/firebase-architecture.md`, `docs/release-workflow.md`, `README.md`, `package.json`, `firebase.json`, `scripts/verify-firebase-deploy-boundary.js`를 같은 변경 안에서 함께 갱신한다.
+- Firebase 관련 변경 후에는 최소 `npm.cmd run verify:firebase-deploy-boundary`와 `npm.cmd run verify:docs`를 실행한다. 운영 배포 전에는 필요한 실제 배포 target을 보고서에 명시한다.
+
 ## 검증 가능한 새 탭 원칙
 - hosted panel에서 새 탭을 여는 기능은 Codex/Playwright Bridge 검증이 가능한 web-open 경로를 기본 구현으로 둔다.
 - 기본 패턴은 사용자 클릭/키 입력의 동기 구간에서 `window.open("about:blank", "_blank")`로 빈 탭을 먼저 만들고, async 권한/launch URL 준비가 끝나면 그 탭을 최종 URL로 이동시키는 것이다.
