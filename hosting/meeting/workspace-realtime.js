@@ -506,6 +506,17 @@
           || pendingMutationJustCompleted
         );
         if (!shouldRefreshRemoteSelection) {
+          if (shouldHydrateSelectedArtifact(entry)) {
+            await refreshSelectedRemoteDetail(entry, {
+              expectedSelectionId: normalizeText(entry.id),
+              forceArtifactRead: false,
+              requestVersion,
+              skipJobRead: true,
+              reason: requestedReason || "hydrate-artifact",
+            });
+            restartSelectedDetailPolling(entry);
+            return;
+          }
           ensureSelectedDetailPolling(entry);
           return;
         }
@@ -549,6 +560,15 @@
           reason: requestedReason || (selectionChanged ? "selection" : forceRefresh ? "force-refresh" : "hydrate"),
         });
         restartSelectedDetailPolling(entry);
+      }
+
+      function shouldHydrateSelectedArtifact(entry) {
+        const currentStatus = normalizeText(state.currentJob?.status || entry?.remote?.status);
+        const artifactId = normalizeText(state.currentJob?.artifactId || entry?.remote?.artifactId);
+        if (!TERMINAL_REMOTE_STATUSES.has(currentStatus) || !artifactId || state.currentArtifact) {
+          return false;
+        }
+        return true;
       }
       
       

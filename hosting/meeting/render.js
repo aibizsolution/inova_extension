@@ -845,11 +845,28 @@
 
     const normalizedJob = state.currentJob || normalizeJob(remote, detailTitle);
     const normalizedArtifact = state.currentArtifact;
+    const selectedEntryId = normalizeText(activeEntry.id);
+    const currentDetailSelectionId = normalizeText(state.currentDetailSelectionId);
+    const selectedRecordId = normalizeText(state.selectedRecordId);
+    const terminalStatus = normalizeText(normalizedJob?.status || remote?.status);
+    const expectedArtifactId = normalizeText(normalizedJob?.artifactId || remote?.artifactId);
+    const currentArtifactId = normalizeText(normalizedArtifact?.artifactId);
+    const attemptedArtifactId = normalizeText(state.realtime?.artifactDocId);
+    const isCurrentSelectedEntry = Boolean(
+      selectedEntryId
+      && (currentDetailSelectionId === selectedEntryId || selectedRecordId === selectedEntryId)
+    );
+    const isWaitingForArtifactRead = Boolean(
+      isCurrentSelectedEntry
+      && expectedArtifactId
+      && !currentArtifactId
+      && attemptedArtifactId !== expectedArtifactId
+    );
     const isHydratingDetail = Boolean(
-      state.selectedDetailHydrating
-      && normalizeText(state.currentDetailSelectionId) === normalizeText(activeEntry.id)
+      isCurrentSelectedEntry
       && !normalizedArtifact
-      && TERMINAL_REMOTE_STATUSES.has(normalizeText(normalizedJob?.status || remote?.status))
+      && TERMINAL_REMOTE_STATUSES.has(terminalStatus)
+      && (state.selectedDetailHydrating || isWaitingForArtifactRead)
     );
     const workspaceMutation = normalizedJob?.workspaceMutation || remote?.workspaceMutation;
     const meetingNotes = normalizeMeetingNotes(normalizedArtifact?.notes || normalizedJob?.meetingNotes);

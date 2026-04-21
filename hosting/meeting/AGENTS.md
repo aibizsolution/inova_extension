@@ -47,5 +47,9 @@
 - console trace 절차, 로그 확보 helper, boot timing 해석은 `docs/meeting-debug-console-validation.md`에서 관리한다.
 - 같은 hosted 증상이 1~2회 패치 후에도 남으면 heuristic recovery를 더 추가하지 말고, debug 문서 기준으로 증거를 먼저 확보한다.
 
+## detail loading 경계
+- 완료 record가 `artifactId`를 갖고 있지만 상세 artifact read를 아직 시도하지 않은 상태에서는 회의 정리 empty/degraded 문구를 먼저 보여주지 않는다.
+- 이때는 선택 상세 로딩 상태를 유지하고, artifact read가 실제로 시도된 뒤에도 notes/segments가 없을 때만 empty/degraded 문구를 보여준다.
+
 ## 범위 제한
 - prompt/release/conversation 영역은 기본적으로 읽지 않는다.
