@@ -123,6 +123,8 @@
    - `workspace.ready`
 5. 회의 룸 header, 기록 추가 카드, 기록 선택 목록, 기록 상세 영역이 렌더링되는지 본다.
 6. 기록 목록이 먼저 보이고, 선택된 record detail은 뒤늦게 비차단으로 채워지는지 본다.
+   - 완료 record에 `artifactId`가 있는데 상세 artifact가 아직 로드되지 않은 순간에는 `회의 정리 없음`/degraded 문구가 먼저 보이면 실패다.
+   - 이 구간은 상세 로딩 상태로 보여야 하며, artifact read 이후 실제 notes/segments가 없을 때만 empty/degraded 문구가 보여야 한다.
 7. 완료된 기존 record 1건을 선택한다.
 8. `상태`, `회의 정리`, `메모`, `원문` 탭 전환이 정상인지 본다.
 9. 완료 record에서만 `회의 정리 복사`, `원문 복사`, `용어 치환` action row가 보여야 한다.
