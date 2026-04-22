@@ -37,6 +37,26 @@
 - 금지 명령: `firebase deploy`, `firebase deploy --only functions`, `firebase deploy --only hosting`, `firebase deploy --only firestore`, `firebase deploy --only storage`.
 - `npm run verify:firebase-deploy-boundary`가 위 경계를 정적 검증한다.
 
+## 공유 프로젝트 내 sibling 경계
+
+아래 리소스는 같은 Firebase project 안에 있지만 `inova_extension` 배포/에뮬레이터/검증 스크립트가 건드리지 않는 별도 앱 경계다.
+
+### Stellaize Team
+
+- Repository: `C:\Users\parkyoungtack\Documents\code\Stellaize Team`
+- Production URL: `https://stellaize-team.web.app`
+- Hosting site/target: `stellaize-team`
+- Firebase Web App display name: `stellaize-team`
+- Firebase Web App ID: `1:1027279095019:web:74fed1b9f4c7c75d262aae`
+- Functions codebase: `stellaize-team-api`
+- Function: `api`
+- Region: `asia-northeast3`
+- Firestore database: `stellaize-team`
+- Storage bucket: `browser-extension-main-stellaize-team`
+- Secret Manager secret: `APIFY_TOKEN`
+
+Auth는 project-level 공유 리소스이므로 provider/domain 변경은 양쪽 영향 범위를 함께 확인한다. 다만 `inova_extension` 배포에서는 위 Stellaize Hosting, Functions codebase, named database, Storage bucket, secret을 target으로 잡지 않는다.
+
 ## 현재 컬렉션 경계
 
 ### 공통/계정

@@ -2,9 +2,32 @@ const fs = require("fs");
 const path = require("path");
 
 const ROOT_DIR = path.resolve(__dirname, "..");
+const FIREBASE_PROJECT_ID = "browser-extension-main";
 const FUNCTION_CODEBASE = "inova-extension-api";
 const FIRESTORE_DATABASE = "(default)";
 const HOSTING_TARGETS = ["main", "v2"];
+const HOSTING_TARGET_SITES = {
+  main: ["browser-extension-main"],
+  v2: ["browser-extension-v2"],
+};
+const RESERVED_SIBLING_IDENTIFIERS = [
+  "stellaize-team",
+  "stellaize-team-api",
+  "1:1027279095019:web:74fed1b9f4c7c75d262aae",
+  "browser-extension-main-stellaize-team",
+  "APIFY_TOKEN",
+];
+const RESERVED_IDENTIFIER_FILES = [
+  ".firebaserc",
+  "firebase.json",
+  "package.json",
+  "manifest.json",
+  "shared/firebase-config.js",
+  "background/functions-runtime-config.js",
+  "functions/index.js",
+  "functions/.env.example",
+  "functions/.secret.local.example",
+];
 const EXPECTED_DEPLOY_SCRIPTS = {
   "deploy:hosting": "firebase deploy --only hosting:main,hosting:v2",
   "deploy:functions": "firebase deploy --only functions:inova-extension-api",
@@ -58,7 +81,35 @@ function extractFirebaseDeployOnlyValues(command) {
 }
 
 const firebaseConfig = readJson("firebase.json");
+const firebaseRc = readJson(".firebaserc");
 const packageJson = readJson("package.json");
+
+if (firebaseRc.projects?.default !== FIREBASE_PROJECT_ID) {
+  fail(`.firebaserc projects.default must remain ${FIREBASE_PROJECT_ID}.`);
+}
+
+const firebaseRcTargets = firebaseRc.targets?.[FIREBASE_PROJECT_ID] || {};
+const firebaseRcTargetTypes = Object.keys(firebaseRcTargets);
+for (const targetType of firebaseRcTargetTypes) {
+  if (targetType !== "hosting") {
+    fail(`.firebaserc must not define ${targetType} targets for this repository.`);
+  }
+}
+
+const firebaseRcHostingTargets = firebaseRcTargets.hosting || {};
+for (const target of Object.keys(firebaseRcHostingTargets)) {
+  if (!HOSTING_TARGETS.includes(target)) {
+    fail(`.firebaserc hosting target ${target} is outside the inova_extension boundary.`);
+  }
+}
+
+for (const target of HOSTING_TARGETS) {
+  const actualSites = firebaseRcHostingTargets[target] || [];
+  const expectedSites = HOSTING_TARGET_SITES[target];
+  if (JSON.stringify(actualSites) !== JSON.stringify(expectedSites)) {
+    fail(`.firebaserc hosting target ${target} must map to ${expectedSites.join(",")}.`);
+  }
+}
 
 const functionConfigs = toArray(firebaseConfig.functions);
 if (functionConfigs.length !== 1) {
@@ -80,6 +131,9 @@ for (const hostingConfig of hostingConfigs) {
     fail("firebase.json hosting configs must use deploy targets, not raw site ids.");
   }
   if (hostingConfig.target) {
+    if (!HOSTING_TARGETS.includes(hostingConfig.target)) {
+      fail(`firebase.json hosting target ${hostingConfig.target} is outside the inova_extension boundary.`);
+    }
     hostingTargets.add(hostingConfig.target);
   }
 }
@@ -166,6 +220,7 @@ const docNeedles = [
   ["README.md", FUNCTION_CODEBASE],
   ["docs/firebase-architecture.md", FUNCTION_CODEBASE],
   ["docs/firebase-architecture.md", "Auth만 공유"],
+  ["docs/firebase-architecture.md", "stellaize-team"],
   ["docs/release-workflow.md", "hosting:main,hosting:v2"],
   ["docs/runtime-architecture.md", FUNCTION_CODEBASE],
   ["docs/runtime-architecture.md", FIRESTORE_DATABASE],
@@ -175,6 +230,20 @@ for (const [relativePath, needle] of docNeedles) {
   const text = fs.readFileSync(path.join(ROOT_DIR, relativePath), "utf8");
   if (!text.includes(needle)) {
     fail(`${relativePath} must document ${needle}.`);
+  }
+}
+
+for (const relativePath of RESERVED_IDENTIFIER_FILES) {
+  const absolutePath = path.join(ROOT_DIR, relativePath);
+  if (!fs.existsSync(absolutePath)) {
+    continue;
+  }
+
+  const text = fs.readFileSync(absolutePath, "utf8");
+  for (const identifier of RESERVED_SIBLING_IDENTIFIERS) {
+    if (text.includes(identifier)) {
+      fail(`${relativePath} must not reference reserved sibling Firebase resource ${identifier}.`);
+    }
   }
 }
 
