@@ -27,4 +27,4 @@
 
 | 항목 | 상태 | 다음 판단 |
 | --- | --- | --- |
-| [Hosted tools portal](backlog/hosted-tools-portal.md) | `idea` | 내부 업무 도구 포털의 첫 MVP slice를 고른다. |
+| [Hosted tools portal](backlog/hosted-tools-portal.md) | `needs-research` | 레퍼런스 비교를 바탕으로 `Text-first`, `Image-first`, `PDF-first` 중 첫 MVP slice를 고른다. |
