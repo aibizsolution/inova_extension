@@ -39,6 +39,7 @@
 - `functions/*`만 바뀌면 `deploy:functions`로 충분하다. 이 명령은 `functions:inova-extension-api` codebase만 배포한다.
 - Firestore Rules/Indexes는 운영 데이터 경계가 바뀐 경우에만 `deploy:firestore:inova-db`로 `(default)` database에 명시적으로 반영한다. `(default)`는 i-Nova extension 전용 DB로 예약한다.
 - Storage Rules는 기본 배포 표면에서 제외한다. Storage를 운영 배포하려면 먼저 전용 bucket target을 만든 뒤 `storage:<target>` 배포 스크립트를 별도 추가한다.
+- 같은 Firebase project에 공존하는 Stellaize Team 리소스(`stellaize-team` Hosting, `stellaize-team-api` Functions codebase, `stellaize-team` Firestore database, `browser-extension-main-stellaize-team` Storage bucket, `APIFY_TOKEN` secret)는 이 저장소의 배포 target으로 잡지 않는다.
 - `firebase deploy`, `firebase deploy --only functions`, `firebase deploy --only hosting`, `firebase deploy --only firestore`, `firebase deploy --only storage` 같은 broad deploy는 금지한다.
 - `content/*`, `background/*`, `popup/*`, `manifest.json`, 확장 번들에 포함되는 `shared/*`가 바뀌면 Firebase 배포만으로 끝나지 않는다.
 - hosted와 확장 코드가 함께 바뀌면 `Firebase 배포 + 실제 ZIP 배포`를 둘 다 해야 한다.

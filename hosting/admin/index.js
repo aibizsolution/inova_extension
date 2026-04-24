@@ -1157,7 +1157,7 @@
       const users = Array.isArray(result.users)
         ? result.users.map(normalizeAccessUser).filter(Boolean)
         : [];
-      state.access.entries = users;
+      state.access.entries = users.sort(compareAccessEntries);
       state.access.loaded = true;
       state.access.draftStatusById = {};
       state.access.draftOrganizationById = {};
@@ -1473,6 +1473,32 @@
       organization: normalizeText(input.organization),
       status,
     };
+  }
+
+  function compareAccessEntries(left, right) {
+    const leftActivity = Date.parse(normalizeText(left?.lastActivityAt));
+    const rightActivity = Date.parse(normalizeText(right?.lastActivityAt));
+    const leftHasActivity = Number.isFinite(leftActivity);
+    const rightHasActivity = Number.isFinite(rightActivity);
+    if (leftHasActivity || rightHasActivity) {
+      if (!leftHasActivity) {
+        return 1;
+      }
+      if (!rightHasActivity) {
+        return -1;
+      }
+      if (leftActivity !== rightActivity) {
+        return rightActivity - leftActivity;
+      }
+    }
+    const leftStatus = normalizeText(left?.status).toLowerCase();
+    const rightStatus = normalizeText(right?.status).toLowerCase();
+    if (leftStatus !== rightStatus) {
+      return leftStatus === "active" ? -1 : 1;
+    }
+    const leftName = normalizeText(left?.displayName || left?.email || left?.providerUserKey).toLowerCase();
+    const rightName = normalizeText(right?.displayName || right?.email || right?.providerUserKey).toLowerCase();
+    return leftName.localeCompare(rightName, "ko-KR");
   }
 
   function readAccessLastActivityLabel(entry) {

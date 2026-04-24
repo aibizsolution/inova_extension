@@ -127,7 +127,7 @@
 | 관련 프론트 경로 | `hosting/extension-v2/panel/index.js`, `hosting/extension-v2/panel/admin-entry-controller.js`, `hosting/extension-v2/panel/extension-capability-client.js`, `hosting/admin/*`, `background/panel-runtime-capability-router.js`, `background/admin-console-capability.js` |
 | 관련 functions 경로 | `functions/features/admin/admin-service.js`, `functions/index.js` |
 | feature-owned shared | 없음. 클라이언트 role/admin flag는 신뢰하지 않고 서버 allowlist 또는 `ops_admin_users/{providerUserKey}`만 기준으로 본다. |
-| 관련 데이터 경계 | `ops_admin_users`, `ops_admin_launches`, `ops_admin_sessions`; `사용자 및 권한` 회원 후보 read는 `integration_inova_accounts_v2`, `integration_inova_accounts`, `integration_inova_feature_usage_user_months` identity snapshot을 합쳐 쓰고, `lastUsedAt`은 읽기 전용 `lastActivityAt`으로만 보여준다. 저장은 `status`와 `organization` 메타데이터만 다룬다. |
+| 관련 데이터 경계 | `ops_admin_users`, `ops_admin_launches`, `ops_admin_sessions`; `사용자 및 권한` 회원 후보 read는 `integration_inova_accounts_v2`, `integration_inova_accounts`, `integration_inova_feature_usage_user_months` identity snapshot을 합쳐 쓰고, `lastUsedAt`은 읽기 전용 `lastActivityAt`으로만 보여준다. 목록 기본 정렬은 `lastActivityAt` 최신순이며 저장은 `status`와 `organization` 메타데이터만 다룬다. |
 | 보통 건드리지 말 범위 | 회의 녹음/전사, prompt-library/store/review의 feature-local 구현, content page adapter |
 | 최소 검증 | `npm.cmd run verify:admin-service`, `npm.cmd run verify:admin-entry`, `npm.cmd run verify:runtime-capability-router`, `npm.cmd run verify:hosted-panel`, `npm.cmd run verify:panel-render` |
 | 언제 다시 물을지 | 관리자 페이지의 실제 운영 기능 범위가 회의/프롬프트/사용량 중 어디인지 모호할 때 |

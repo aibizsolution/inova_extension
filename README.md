@@ -103,6 +103,7 @@ npm run deploy:all
 - `deploy:all`은 `hosting:main,hosting:v2`와 `functions:inova-extension-api`만 함께 배포합니다. Firestore/Storage Rules는 포함하지 않습니다.
 - Firestore Rules/Indexes는 `deploy:firestore:inova-db`로 `(default)` database에만 명시적으로 반영합니다. `(default)` database는 i-Nova extension 전용으로 예약하고, 다른 저장소/기능은 별도 named database를 사용합니다.
 - Storage Rules는 broad deploy 스크립트를 두지 않습니다. Storage를 운영 배포해야 하면 먼저 전용 bucket target을 `.firebaserc`에 적용하고 `storage:<target>` 배포 스크립트를 별도로 추가합니다.
+- 같은 project의 Stellaize Team 경계(`stellaize-team`, `stellaize-team-api`, `stellaize-team` Firestore database, `browser-extension-main-stellaize-team` bucket, `APIFY_TOKEN`)는 이 저장소의 배포/에뮬레이터 target에 포함하지 않습니다.
 - `firebase deploy`, `firebase deploy --only functions`, `firebase deploy --only hosting`, `firebase deploy --only firestore`, `firebase deploy --only storage`처럼 프로젝트 전체나 서비스 전체를 잡는 명령은 금지합니다.
 - 상용 Functions의 `OPENAI_API_KEY`는 일반 `.env`가 아니라 Firebase Functions Secret Manager secret으로 관리합니다. 로컬 에뮬레이터는 ignored `functions/.secret.local`을 사용합니다.
 - 회의 임시 오디오 bucket은 기본적으로 `FIREBASE_CONFIG.storageBucket`을 사용합니다. `STORAGE_BUCKET_URL`은 앱용 Storage bucket을 명시해야 할 때만 쓰고, `gcf-v2-*` Cloud Functions 내부 bucket을 넣지 않습니다.
