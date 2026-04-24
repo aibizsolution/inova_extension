@@ -40,6 +40,8 @@
 ## Hosted-First 원칙
 - 이 확장은 Chrome Web Store에 배포하지 않는 내부 전사 프로그램이다. Chrome Web Store 정책은 설계 차단 사유로 쓰지 않는다.
 - 원격/hosted 로직을 검토할 때도 스토어 정책 때문에 불가하다고 결론내리지 않는다. 대신 내부 배포 신뢰 경계, 버전/호환성, kill switch, degraded 상태, 최소 권한 DOM read contract를 기준으로 판단한다.
+- 어떤 수정이 실제 확장 프로그램 재배포, 새 ZIP 배포, Chrome 확장 새로고침 또는 `manifest.json`/`content/*`/`background/*`/`popup/*`/확장 번들 포함 `shared/*` 변경을 필요로 하면, 구현 전에 왜 확장 배포가 필요한지와 hosting/functions만으로는 왜 해결할 수 없는지 설명하고 사용자 허락을 받는다.
+- 사용자가 확장 업데이트 없이 고치라고 명시한 문제는 먼저 `hosting/*`와 `functions/*` 배포만으로 해결 가능한 경로를 찾고, 확장 배포가 필요한 방향으로 임의 전환하지 않는다.
 - `1.0.0+` v2 lane의 기본 목표는 `탭 기능의 기본 소유권을 hosting으로 옮기는 것`이다.
 - 새 기능이나 기존 기능 수정은 먼저 `hosting/*`에서 해결할 수 있는지 본다. 특별한 이유가 없으면 UI, view state, action flow, feature controller는 hosted가 기본 위치다.
 - extension에는 `page DOM adapter`, `iframe host`, `postMessage bridge`, `chrome/background runtime broker`, `popup/settings`처럼 브라우저 확장이라서만 가능한 책임만 남긴다.

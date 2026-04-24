@@ -180,6 +180,20 @@ async function verifyAdminAccessUserManagement() {
     },
     totalCount: 5,
   });
+  await db.collection("integration_inova_feature_usage_user_months").doc("member-1__2026-04").set({
+    featureTotals: {
+      conversation: 1,
+    },
+    lastExtensionVersion: "1.0.0",
+    lastExtensionVersionAt: "2026-04-19T01:50:00.000Z",
+    lastUsedAt: "2026-04-19T01:50:00.000Z",
+    owner: {
+      displayName: "Member One",
+      email: "member1@example.com",
+      providerUserKey: "member-1",
+    },
+    totalCount: 1,
+  });
   await db.collection("integration_inova_feature_usage_user_months").doc("member-2__2026-03").set({
     featureTotals: {
       prompt_review: 1,
@@ -236,6 +250,8 @@ async function verifyAdminAccessUserManagement() {
   const session = await domain.exchangeAdminLaunch(launch.launchToken);
 
   const list = await domain.listAdminAccessUsers(session.adminSessionToken);
+  assert.equal(list.users[0].providerUserKey, "member-1");
+  assert.equal(list.users[1].providerUserKey, "member-2");
   assert(list.users.some((user) => user.providerUserKey === "member-1" && user.status === "inactive"));
   assert(list.users.some((user) => user.providerUserKey === "member-1" && user.organization === "AI비즈솔루션팀"));
   assert(list.users.some((user) => user.providerUserKey === "member-2" && user.status === "active"));

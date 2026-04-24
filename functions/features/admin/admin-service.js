@@ -1124,6 +1124,21 @@ function createAdminDomain(deps) {
   }
 
   function compareAdminAccessUsers(left, right) {
+    const leftActivity = Date.parse(normalizeAdminAccessActivityAt(left?.lastActivityAt));
+    const rightActivity = Date.parse(normalizeAdminAccessActivityAt(right?.lastActivityAt));
+    const leftHasActivity = Number.isFinite(leftActivity);
+    const rightHasActivity = Number.isFinite(rightActivity);
+    if (leftHasActivity || rightHasActivity) {
+      if (!leftHasActivity) {
+        return 1;
+      }
+      if (!rightHasActivity) {
+        return -1;
+      }
+      if (leftActivity !== rightActivity) {
+        return rightActivity - leftActivity;
+      }
+    }
     if (left.status !== right.status) {
       return left.status === "active" ? -1 : 1;
     }
