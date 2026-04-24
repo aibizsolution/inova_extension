@@ -27,6 +27,7 @@
 - `hosting/extension/releases/history.json`
 - 버전별 ZIP
 - `1.0.0+` v2 lane은 `hosting/extension-v2/releases/latest.json`, `hosting/extension-v2/releases/history.json`, `hosting/extension-v2/downloads/*`를 사용한다.
+- `1.0.0+` 공개 이후 legacy `hosting/extension/releases/*`와 `hosting/extension/downloads/latest.zip`는 정본이 아니라 v2 최신 ZIP으로 보내는 compatibility alias다. direct v1 latest URL이 0.x ZIP을 내려주면 회귀로 본다.
 
 ## 관련 capabilityId
 - `release.download.open`: `browser.open-url` kind로 다운로드 ZIP을 연다.
@@ -56,6 +57,7 @@
 - `deploy:hosting`과 `deploy:all`은 hosted 검증/운영 배포용이며, 기본적으로 확장 패키지 버전과 사용자 릴리스 메타를 갱신하지 않는다.
 - 실제 사용자 패널에 보일 버전만 `releases/release-notes.json`에 남기고, `release:build`는 그 목록만 `latest.json`, `history.json`, `latest.zip`에 반영하며 공개 목록 밖의 로컬/hosting ZIP도 정리한다.
 - `release:build` 산출 경로는 lane에 따라 다르다. `0.x`는 `hosting/extension/*`, `1.x+`는 `hosting/extension-v2/*`를 갱신한다.
+- `1.x+` v2 build는 canonical `hosting/extension-v2/*`를 만든 뒤 legacy direct install URL 호환을 위해 `hosting/extension/downloads/latest.zip`, 같은 버전 ZIP, `hosting/extension/releases/latest.json`, `history.json`도 v2 최신 메타로 갱신한다. 이전 0.x 버전별 ZIP은 rollback/history artifact로만 남길 수 있다.
 - 공개 목록에 남길 현재/이전 버전은 `releases/release-notes.json`에 artifact 메타를 유지해, CI나 새 환경에서도 history 메타를 다시 생성할 수 있게 관리한다.
 - `release:build`는 현재 버전 ZIP을 만든 뒤 같은 current version 엔트리의 `artifact` 메타도 `releases/release-notes.json`에 backfill해야 한다.
 - 기본 `npm.cmd run verify`와 `node scripts/verify-release-package.js`는 현재 lane의 `latest.json`, `history.json`, `downloads/latest.zip`, version ZIP, `releases/release-notes.json` curated 목록이 서로 어긋나지 않는지도 함께 확인해야 한다. history/latest에 올라온 공개 버전은 current version까지 포함해 curated notes에도 artifact 메타가 있어야 한다.

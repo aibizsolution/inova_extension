@@ -19,6 +19,7 @@ const {
   findMissingPaths,
   resolveReleaseRuntimeItems,
 } = require("./release-package-runtime");
+const { syncLegacyLatestCompatibilityAliasFromCanonical } = require("./release-compat-alias");
 
 const root = path.resolve(__dirname, "..");
 const packageJson = readJson("package.json");
@@ -153,11 +154,17 @@ pruneCuratedReleaseArtifacts({
   latestDownloadFileName,
   releasesDir,
 });
+if (productLane === "v2") {
+  syncLegacyLatestCompatibilityAliasFromCanonical({ root });
+}
 
 console.log(`[release-build] version=${version}`);
 console.log(`[release-build] lane=${productLane}`);
 console.log(`[release-build] zip=${zipPath}`);
 console.log(`[release-build] latest-zip=${hostingLatestZipPath}`);
+if (productLane === "v2") {
+  console.log(`[release-build] legacy-latest-alias=${path.join(legacyHostingDownloadDir, latestDownloadFileName)}`);
+}
 console.log(`[release-build] latest=${latestPath}`);
 console.log(`[release-build] history=${historyPath}`);
 

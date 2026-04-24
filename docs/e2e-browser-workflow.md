@@ -153,7 +153,7 @@ Playwright MCP Bridge로 새 탭 flow를 검증할 때는 증거를 둘로 나�
 2. 회의 workspace launch는 debug mode가 아니어도 top panel 콘솔에서 launch requested/dispatched/accepted 수준의 trace가 남아야 한다.
 3. 브라우저/hosted client는 Firebase Storage SDK로 직접 bucket을 읽거나 쓰지 않아야 한다. 이 경계는 `npm.cmd run verify:storage-rules`와 실제 import/upload flow의 Functions 경유 여부를 함께 본다.
 4. 상용 배포 보고에서는 Auth 외 공유 리소스를 건드렸는지 분리해서 적는다. 기본 배포는 `hosting:main,hosting:v2`와 `functions:inova-extension-api`만 대상이며, Firestore는 `(default)` database 전용 배포(`deploy:firestore:inova-db`)가 필요한 경우에만, Storage는 전용 target이 생긴 경우에만 별도 반영한다.
-5. 릴리스 메타는 `hosting/extension-v2/releases/latest.json`, `history.json`, `downloads/latest.zip`, `releases/release-notes.json`이 같은 공개 버전을 가리켜야 한다.
+5. 릴리스 메타는 `hosting/extension-v2/releases/latest.json`, `history.json`, `downloads/latest.zip`, `releases/release-notes.json`이 같은 공개 버전을 가리켜야 한다. v2 공개 이후 legacy direct install URL인 `/extension/downloads/latest.zip`과 `/extension/releases/latest.json`도 같은 v2 최신 artifact를 가리켜야 한다.
 6. 관리자 콘솔 배포를 포함한 릴리스면 상용 Hosting에서 `/extension-v2/panel/admin-entry-controller.js`와 `/admin/index.html`이 200으로 응답하고, 상용 패널 HTML이 관리자 entry script를 포함하는지 먼저 확인한다.
 
 ## 사용량 계측
@@ -499,7 +499,7 @@ __INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20, entrie
 2. 현재 버전과 최신 버전이 표시되는지 확인한다.
 3. 최신 릴리스 카드와 다운로드 버튼이 보이는지 확인한다.
 4. `hosting/extension-v2/releases/latest.json`, `history.json`, `releases/release-notes.json`의 버전 정보가 화면과 맞는지 본다.
-5. 상용 배포 직후에는 `downloads/latest.zip`과 버전별 ZIP 경로가 같은 release metadata를 가리키는지 확인한다.
+5. 상용 배포 직후에는 `extension-v2/downloads/latest.zip`과 버전별 ZIP 경로가 같은 release metadata를 가리키는지 확인한다. 추가로 `browser-extension-main.web.app/extension/downloads/latest.zip` 해시가 v2 `latest.zip` 해시와 같은지 확인한다.
 6. retired 버전 정리 후에는 `history.json`과 화면의 이전 릴리스 목록에 retired 버전 카드나 버전별 다운로드 링크가 다시 노출되지 않아야 한다. 이 정리만으로 `manifest.json`, `content/*`, `background/*`, `popup/*`, 확장 번들 `shared/*`가 바뀌지 않았다면 확장 재배포가 아니라 Hosting metadata 반영 범위로 보고한다.
 
 ### P1 Regression
@@ -625,5 +625,5 @@ npm.cmd run check:meeting-data -- --meeting-id <meetingId>
 - 회의 notes/service/audio 정책 변경이면 `npm.cmd run verify:meeting-notes-generation`, `npm.cmd run verify:meeting-service`, `npm.cmd run verify:meeting-audio-source-policy`, `npm.cmd run verify:meeting-transcription-quality`
 - prompt store model 변경이면 `npm.cmd run verify:prompt-store-model`
 - prompt library/review/store 전체 영향이면 `npm.cmd run verify:prompt-runtime-local`, `npm.cmd run verify:prompt-library-remote-first`, `npm.cmd run verify:prompt-hosted-tabs`, `npm.cmd run verify:prompt-review`
-- 릴리스 산출물 변경이면 `npm.cmd run release:build` 후 `node scripts/verify-release-package.js`
+- 릴리스 산출물 변경이면 `npm.cmd run release:build` 후 `node scripts/verify-release-package.js`; 새 ZIP 없이 legacy latest alias만 맞추는 경우는 `npm.cmd run release:sync-compat` 후 `node scripts/verify-release-package.js`
 - 범위가 넓거나 배포 전이면 `npm.cmd run verify`

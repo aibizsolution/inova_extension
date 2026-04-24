@@ -15,6 +15,7 @@
 - 사용자 배포는 Hosting의 `latest.zip` 또는 버전별 ZIP을 내려받아 수동으로 교체/리로드하는 방식이다.
 - 같은 시점에 여러 ZIP 버전이 공존할 수 있으므로 mixed-version 기간을 전제로 backend/hosting 호환성을 잡는다.
 - 기본 지원 범위는 `현재 minor + 이전 minor`다.
+- `1.0.0+` 공개 이후 canonical 배포 경로는 `extension-v2/*`지만, legacy direct URL인 `browser-extension-main.web.app/extension/downloads/latest.zip`도 v2 최신 ZIP compatibility alias로 유지한다. 이 URL이 0.x ZIP을 내려주면 stale release 회귀다.
 - 배포 보고에는 항상 `새 ZIP 배포 여부`, `hosting 반영 여부`, `functions 반영 여부`, `reload 필요 여부`를 함께 적는다.
 - 보고할 때는 사용자가 확인해야 할 대상이 `로컬 호스팅/에뮬레이터`인지 `상용 Hosting`인지 `새 ZIP을 설치한 확장`인지 먼저 밝힌다. 로컬 확인만 끝난 상태를 상용 반영처럼 말하지 않고, 상용 배포 후에도 사용자가 로컬 target을 보고 있을 수 있으면 확인해야 할 URL 또는 패널 target을 함께 적는다.
 
@@ -29,13 +30,14 @@
   - `public.changes[]`
 - 공개 목록에 남길 현재/이전 버전은 모두 `artifact.fileName`, `artifact.publishedAt`, `artifact.sha256`, `artifact.sizeBytes`, `artifact.minSupportedVersion`을 유지한다.
 - `release:build`는 현재 버전 ZIP을 만든 뒤 `releases/release-notes.json` 현재 버전 엔트리에도 그 artifact 메타를 backfill한다.
-- 기본 `npm.cmd run verify`와 `node scripts/verify-release-package.js`는 현재 lane의 `latest.json`, `history.json`, `downloads/latest.zip`, version ZIP, `releases/release-notes.json` curated 목록이 서로 일치하는지, 그리고 history에 올라온 모든 공개 버전이 curated notes에도 artifact를 갖고 있는지도 함께 본다.
+- 기본 `npm.cmd run verify`와 `node scripts/verify-release-package.js`는 현재 lane의 `latest.json`, `history.json`, `downloads/latest.zip`, version ZIP, `releases/release-notes.json` curated 목록이 서로 일치하는지, 그리고 history에 올라온 모든 공개 버전이 curated notes에도 artifact를 갖고 있는지도 함께 본다. 현재 lane이 v2이면 legacy compatibility alias의 `latest.zip` 해시와 latest/history 메타도 v2 최신과 일치해야 한다.
 - `TODO`가 남은 공개 메타는 `pre-push`와 `release:build`가 막는다.
 
 ## 배포 범위 규칙
 
 - 이 Firebase 프로젝트에서 Auth만 공유 리소스로 보고, Functions/Firestore/Hosting/Storage는 기능별 경계만 배포한다.
 - `hosting/*`만 바뀌면 `deploy:hosting`으로 충분하다. 이 명령은 `hosting:main,hosting:v2` target만 배포한다.
+- `release:build`는 v2 build 뒤 legacy latest compatibility alias를 함께 재생성한다. 새 ZIP 없이 hosting만 배포하면서 alias가 필요하면 `npm.cmd run release:sync-compat`를 먼저 실행한다. 이 명령은 tracked v2 release 메타/ZIP에서 legacy alias만 만들고 canonical v2 release 메타나 새 ZIP은 만들지 않는다.
 - `functions/*`만 바뀌면 `deploy:functions`로 충분하다. 이 명령은 `functions:inova-extension-api` codebase만 배포한다.
 - Firestore Rules/Indexes는 운영 데이터 경계가 바뀐 경우에만 `deploy:firestore:inova-db`로 `(default)` database에 명시적으로 반영한다. `(default)`는 i-Nova extension 전용 DB로 예약한다.
 - Storage Rules는 기본 배포 표면에서 제외한다. Storage를 운영 배포하려면 먼저 전용 bucket target을 만든 뒤 `storage:<target>` 배포 스크립트를 별도 추가한다.
@@ -68,7 +70,7 @@
   - `npm.cmd run verify` green
   - 실제 Chrome에서 hosted v2 panel boot, prompt library/store/review, meeting hub/workspace launch, release latest/history/download smoke 기록 확보
   - feature usage 변경이 포함됐거나 상용 풀 테스트를 수행하면 meaningful action 1회 후 `check:feature-usage`로 사용자별 aggregate 반영 확인
-  - `release:build` 또는 동등한 release rehearsal에서 lane-local `latest.json`, `history.json`, `downloads/latest.zip`, version ZIP, `releases/release-notes.json` curated metadata가 함께 맞는지 확인
+  - `release:build` 또는 동등한 release rehearsal에서 lane-local `latest.json`, `history.json`, `downloads/latest.zip`, version ZIP, `releases/release-notes.json` curated metadata와 legacy latest compatibility alias가 함께 맞는지 확인
   - 사용자 공지에 `hosting 반영`, `새 ZIP 배포`, `확장 reload 필요 여부`, `rollback ZIP`이 함께 정리됨
 - 0.4.4 retirement 자체는 extension patch나 새 ZIP을 요구하지 않는 repo cleanup으로 닫혔다. 이후 배포 보고에서는 변경 파일이 실제 runtime bundle에 포함되는지 기준으로 ZIP 필요 여부를 판단한다.
 
@@ -115,11 +117,13 @@ git branch -d codex/example-task
 - `hosting/extension/releases/latest.json`
 - `hosting/extension/releases/history.json`
 - `hosting/extension/downloads/<zip>`
-- `hosting/extension-v2/*` 결과물은 `1.x+` lane에서만 생성한다.
+- `hosting/extension-v2/*` 결과물은 `1.x+` lane의 canonical 산출물이다.
+- `1.x+` lane에서 `hosting/extension/*`의 latest JSON/ZIP은 legacy direct install URL용 compatibility alias로 함께 갱신한다.
 
 ## 운영 원칙
 
 - ZIP은 덮어쓰지 않고 버전별로 누적한다.
 - 고정 최신 링크 `downloads/latest.zip`은 공개 목록에 남아 있는 최신 사용자 릴리스 ZIP으로만 교체한다.
+- v2 공개 이후 legacy 고정 최신 링크 `/extension/downloads/latest.zip`도 같은 v2 최신 ZIP으로 교체한다. 단, legacy 0.x 버전별 ZIP은 rollback을 위해 남길 수 있다.
 - `latest.json`과 `history.json`도 공개 버전 목록 기준으로 다시 생성한다.
 - 문제 발생 시 이전 ZIP을 다시 배포하는 방식으로 rollback할 수 있어야 한다.
