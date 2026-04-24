@@ -19,6 +19,7 @@
 - [docs/runtime-architecture.md](docs/runtime-architecture.md): popup, panel, background, hosted runtime 경계
 - [docs/release-workflow.md](docs/release-workflow.md): 버전 상승, 릴리스 메타, hosting 배포 순서
 - [docs/feature-spec.md](docs/feature-spec.md): 제품 요구사항과 공통 계약
+- [docs/BACKLOG.md](docs/BACKLOG.md): 아직 구현하지 않을 아이디어와 후보 기능 인덱스
 - [docs/capability-authoring.md](docs/capability-authoring.md): 새 capability 추가 절차와 extension 재배포 기준
 - [docs/capability-catalog.md](docs/capability-catalog.md): 현재 served capability catalog generated 문서
 - [docs/firebase-architecture.md](docs/firebase-architecture.md): Firebase project/data boundary 메모
