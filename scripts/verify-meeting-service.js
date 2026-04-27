@@ -211,6 +211,13 @@ async function main() {
     state.openaiSummaryRequests.some((request) => request.kind === "notes" && request.model === "gpt-5.5"),
     true
   );
+  assert.equal(
+    state.openaiSummaryRequests
+      .filter((request) => request.model === "gpt-5.5")
+      .every((request) => request.temperature === undefined),
+    true,
+    "GPT-5.5 meeting notes requests must omit temperature because the model only supports the default value"
+  );
 
   const compactCreated = await invokeHandler(handlers.createInovaMeetingJob, {
     body: {

@@ -544,7 +544,6 @@ function createMeetingNotesEditDomain(deps) {
           ],
           model: getMeetingSummaryModel(),
           response_format: { type: "json_object" },
-          temperature: 0.2,
         });
         content = normalizeCompletionContent(completion?.choices?.[0]?.message?.content);
       } catch (error) {

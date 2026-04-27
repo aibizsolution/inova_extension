@@ -103,7 +103,7 @@ function createDeps(state, overrides = {}) {
               const firstSystemMessage = Array.isArray(request.messages) ? String(request.messages[0]?.content || "") : "";
               const userPrompt = Array.isArray(request.messages) ? String(request.messages[1]?.content || "") : "";
               if (firstSystemMessage.includes("회의 전사 요약 프로필 분류기")) {
-                state.openaiSummaryRequests.push({ kind: "classifier", model: request.model || "", prompt: userPrompt, systemPrompt: firstSystemMessage });
+                state.openaiSummaryRequests.push({ kind: "classifier", model: request.model || "", prompt: userPrompt, systemPrompt: firstSystemMessage, temperature: request.temperature });
                 const profile = /테스트|마이크|장비|점검/.test(userPrompt) ? "compact" : "full";
                 return {
                   choices: [
@@ -118,7 +118,7 @@ function createDeps(state, overrides = {}) {
                   ],
                 };
               }
-              state.openaiSummaryRequests.push({ kind: "notes", model: request.model || "", prompt: userPrompt, systemPrompt: firstSystemMessage });
+              state.openaiSummaryRequests.push({ kind: "notes", model: request.model || "", prompt: userPrompt, systemPrompt: firstSystemMessage, temperature: request.temperature });
               const mode = userPrompt.includes("정리 형식(내부 판단): interview")
                 ? "interview"
                 : userPrompt.includes("정리 형식(내부 판단): review")
