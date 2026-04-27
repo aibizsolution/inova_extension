@@ -208,7 +208,7 @@ async function main() {
   assert.equal(storedMeeting.recentJobs[0].meetingId, "meeting-planning-1");
   assert.equal(state.collections.has(removedSessionCollectionName), false);
   assert.equal(
-    state.openaiSummaryRequests.some((request) => request.kind === "notes" && request.model === "gpt-5.4"),
+    state.openaiSummaryRequests.some((request) => request.kind === "notes" && request.model === "gpt-5.5"),
     true
   );
 
@@ -357,7 +357,7 @@ async function main() {
   assert.equal(
     state.openaiSummaryRequests
       .slice(summaryRequestsBeforePreview)
-      .some((request) => request.kind === "notes" && request.model === "gpt-5.4"),
+      .some((request) => request.kind === "notes" && request.model === "gpt-5.5"),
     true
   );
   const shortPreviewRequestsBefore = state.openaiSummaryRequests.length;

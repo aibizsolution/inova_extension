@@ -1,7 +1,7 @@
 const { FieldValue } = require("firebase-admin/firestore");
 const OpenAI = require("openai");
 
-const DEFAULT_MODEL = "gpt-5.4-mini";
+const DEFAULT_MODEL = "gpt-5.5";
 const MAX_PROMPT_LENGTH = 12000;
 const PROMPT_REVIEW_RATE_LIMIT_WINDOW_MS = 60000;
 const PROMPT_REVIEW_RATE_LIMIT_MAX_REQUESTS = 6;
