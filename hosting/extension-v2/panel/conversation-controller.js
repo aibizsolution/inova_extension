@@ -30,6 +30,9 @@
     const recordFeatureUsage = typeof options.featureUsageTracker?.record === "function"
       ? options.featureUsageTracker.record
       : () => {};
+    const recordFeatureUsageOncePerDay = typeof options.featureUsageTracker?.recordOncePerDay === "function"
+      ? options.featureUsageTracker.recordOncePerDay
+      : recordFeatureUsage;
     const writeClipboardText = typeof browserCapabilities.writeClipboardText === "function"
       ? browserCapabilities.writeClipboardText
       : async () => ({});
@@ -57,6 +60,7 @@
       sessionTitle: "",
       snapshotFingerprint: "",
       tokenEstimate: createEmptyTokenEstimate(),
+      openedUsagePending: false,
       visibleMessageId: "",
     };
 
@@ -90,6 +94,9 @@
 
       const nextFingerprint = buildSnapshotFingerprint(fallbackBookmarksTool);
       const activeConversationTool = normalizeText(panelState?.activeTool) === "bookmarks";
+      if (activeConversationTool && panelState?.open === true) {
+        requestConversationOpenedUsage();
+      }
       const shouldRefresh = activeConversationTool && (
         state.snapshotFingerprint !== nextFingerprint
         || !state.lastLoadedAt
@@ -165,6 +172,18 @@
       const jumped = Boolean(result?.jumped);
       void recordFeatureUsage("conversation", "jumped", jumped ? "success" : "error");
       return jumped;
+    }
+
+    function requestConversationOpenedUsage() {
+      if (state.openedUsagePending) {
+        return;
+      }
+      state.openedUsagePending = true;
+      Promise.resolve(recordFeatureUsageOncePerDay("conversation", "opened", "success"))
+        .catch(() => {})
+        .finally(() => {
+          state.openedUsagePending = false;
+        });
     }
 
     function handleSearch(toolId, value) {

@@ -173,7 +173,7 @@ Playwright MCP Bridge로 새 탭 flow를 검증할 때는 증거를 둘로 나�
 
 1. 테스트에 쓸 `providerUserKey`를 확인한다.
 2. 저비용 action 하나를 실제 UI에서 실행한다.
-   - pipeline 자체 검증이면 `대화` 탭의 질문 카드 클릭으로 `conversation.jumped.success` 1회를 우선 쓴다.
+   - pipeline 자체 검증이면 `대화` 탭을 열어 `conversation.opened.success` 1회를 우선 쓴다. 같은 사용자/브라우저에서 이미 오늘 기록했다면 질문 카드 클릭으로 `conversation.jumped.success` 1회를 쓴다.
    - 특정 feature action을 추가한 변경이면 해당 action을 실제 UI에서 1회 실행한다.
 3. flush가 일어나게 한다.
    - 기본은 첫 action 후 60초 이상 대기한다.
@@ -223,7 +223,7 @@ npm.cmd run check:feature-usage -- --days 1 --limit 20
 7. 관리자 페이지가 launch token을 교환한 뒤 URL에서 `launch` query를 제거하는지 확인한다.
 8. 관리자 페이지에서 verified 상태, 사용자, 계정, 권한, 세션 만료 정보가 표시되어야 한다.
 9. 선택한 기능 화면 안에는 별도 `세션 컨텍스트` 카드처럼 상단 인증 정보를 반복하는 UI가 없어야 한다.
-10. `사용자 및 권한`은 기존 회원 목록을 읽고, 선택한 회원의 `일반 사용자 / 관리자` 권한 선택과 `저장`만 제공해야 한다. 선택 회원 상세 안에는 read-only `이용 기록`이 함께 보여야 한다. 이메일 직접 입력이나 별도 권한 설명 필드가 보이면 실패다. `마지막 활동` 옆 `?` 도움말은 feature usage에 기록되는 기능 사용 이벤트가 기준임을 설명해야 한다.
+10. `사용자 및 권한`은 기존 회원 목록을 읽고, 선택한 회원의 `일반 사용자 / 관리자` 권한 선택과 `저장`만 제공해야 한다. 선택 회원 상세 안에는 read-only `이용 기록`이 함께 보여야 한다. 이메일 직접 입력이나 별도 권한 설명 필드가 보이면 실패다. `마지막 활동` 옆 `?` 도움말은 대화 패널 열기 같은 feature usage 이벤트가 기준임을 설명해야 한다.
 11. 관리자 HTML은 `index.css`, `index.js`, shared design-system CSS/JS를 `admin=<timestamp>` query로 로드해야 한다. 같은 탭에서 새로고침했는데 이전 JS 문구가 남으면 실패다.
 12. 집계 테이블/쿼리 구조가 붙기 전에는 별도 `사용자별 이용 현황` 메뉴, 기간 필터, `기능별` 집계 탭, 별도 `회의 사용량` 탭, `이용 공백` 운영 액션 섹션, raw event count, token, providerUserKey, 내부 로그, `활발`/`정착 중` 같은 해석성 상태 라벨, `화면 샘플`/`화면 검토용`처럼 구현 검토용 표식이 노출되면 실패다.
 13. 같은 launch URL을 다시 열거나 launch 없이 직접 진입하면 blocked 상태가 보여야 한다.

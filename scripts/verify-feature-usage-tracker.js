@@ -11,6 +11,7 @@ const NOW_MS = Date.parse("2026-04-18T03:00:00.000Z");
 async function main() {
   await verifyFirstUsageCreatesDurableSnapshot();
   await verifyProviderIdentityCallbackFallback();
+  await verifyConversationOpenedOncePerDay();
   await verifyFlushFailureRetriesOnNextFlush();
   await verifyThresholdFlushAndSanitization();
   console.log("[verify-feature-usage-tracker] Feature usage tracker contract passed");
@@ -67,6 +68,22 @@ async function verifyProviderIdentityCallbackFallback() {
   assert.equal(outbox.providerIdentity.email, "snapshot@example.com");
   assert.equal(outbox.providerIdentity.numericUserId, 99);
   assert.equal(outbox.counters.conversation.jumped.success, 1);
+}
+
+async function verifyConversationOpenedOncePerDay() {
+  const storage = createLocalStorage();
+  const { tracker } = createTrackerHarness({
+    storage,
+  });
+
+  const first = await tracker.recordOncePerDay("conversation", "opened", "success");
+  const second = await tracker.recordOncePerDay("conversation", "opened", "success");
+
+  assert.equal(first, true);
+  assert.equal(second, false);
+  const outbox = readSingleOutbox(storage);
+  assert.equal(outbox.counters.conversation.opened.success, 1);
+  assert.equal(outbox.counters.conversation.jumped, undefined);
 }
 
 async function verifyFlushFailureRetriesOnNextFlush() {

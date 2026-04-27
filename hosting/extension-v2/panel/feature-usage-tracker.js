@@ -3,6 +3,7 @@
   const { normalizeText, resolveBrowserCapabilities } = namespace.panelUtils;
   const CLIENT_ID_STORAGE_KEY = "inova.featureUsage.clientInstanceId.v1";
   const OUTBOX_PREFIX = "inova.featureUsage.outbox.v1::";
+  const ONCE_PER_DAY_PREFIX = "inova.featureUsage.oncePerDay.v1::";
   const FIRST_FLUSH_DELAY_MS = 60 * 1000;
   const FLUSH_AFTER_DIRTY_COUNT = 20;
   const MAX_FLUSH_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -10,7 +11,7 @@
   const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
   const RESULT_KEYS = Object.freeze(["success", "error", "degraded"]);
   const ALLOWED_COUNTERS = Object.freeze({
-    conversation: Object.freeze(["jumped"]),
+    conversation: Object.freeze(["opened", "jumped"]),
     meeting: Object.freeze(["workspace_opened", "result_opened"]),
     prompt_library: Object.freeze(["saved", "updated", "deleted", "applied"]),
     prompt_review: Object.freeze(["completed", "applied"]),
@@ -44,6 +45,7 @@
     return {
       flush,
       record,
+      recordOncePerDay,
       start,
     };
 
@@ -53,6 +55,7 @@
       }
       state.started = true;
       cleanupExpiredOutbox();
+      cleanupExpiredOncePerDayMarkers();
       scheduleFlush(FIRST_FLUSH_DELAY_MS, "startup");
       global.document?.addEventListener?.("visibilitychange", () => {
         if (global.document?.visibilityState === "hidden") {
@@ -92,6 +95,32 @@
         scheduleFlush(FIRST_FLUSH_DELAY_MS, "first-action");
       }
       return true;
+    }
+
+    async function recordOncePerDay(feature, action, result = "success", options = {}) {
+      const normalizedFeature = normalizeUsageToken(feature);
+      const normalizedAction = normalizeUsageToken(action);
+      const normalizedResult = RESULT_KEYS.includes(normalizeUsageToken(result)) ? normalizeUsageToken(result) : "success";
+      if (!isAllowedCounter(normalizedFeature, normalizedAction)) {
+        return false;
+      }
+      const providerIdentity = await resolveProviderIdentity(options.providerIdentity);
+      if (!providerIdentity.providerUserKey || !storage) {
+        return false;
+      }
+      const dayKey = formatKstDayKey();
+      const onceKey = buildOncePerDayKey(providerIdentity.providerUserKey, dayKey, normalizedFeature, normalizedAction, normalizedResult);
+      if (storage.getItem(onceKey)) {
+        return false;
+      }
+      const recorded = await record(normalizedFeature, normalizedAction, normalizedResult, {
+        ...options,
+        providerIdentity,
+      });
+      if (recorded) {
+        storage.setItem(onceKey, new Date().toISOString());
+      }
+      return recorded;
     }
 
     async function flush(reason = "manual") {
@@ -141,6 +170,7 @@
         }
       }
       cleanupExpiredOutbox();
+      cleanupExpiredOncePerDayMarkers();
       return { committed, failed };
     }
 
@@ -279,6 +309,29 @@
       }
     }
 
+    function listOncePerDayKeys() {
+      const keys = [];
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index);
+        if (normalizeText(key).startsWith(ONCE_PER_DAY_PREFIX)) {
+          keys.push(key);
+        }
+      }
+      return keys;
+    }
+
+    function cleanupExpiredOncePerDayMarkers() {
+      if (!storage) {
+        return;
+      }
+      for (const markerKey of listOncePerDayKeys()) {
+        const dayKey = normalizeText(markerKey).match(/::([0-9]{4}-[0-9]{2}-[0-9]{2})::/)?.[1] || "";
+        if (dayKey && isExpiredDay(dayKey)) {
+          storage.removeItem(markerKey);
+        }
+      }
+    }
+
     function scheduleFlush(delayMs) {
       if (state.flushTimerId || !global.setTimeout) {
         return;
@@ -355,6 +408,10 @@
 
   function buildOutboxKey(providerUserKey, dayKey, clientInstanceId) {
     return `${OUTBOX_PREFIX}${encodeURIComponent(providerUserKey)}::${dayKey}::${clientInstanceId}`;
+  }
+
+  function buildOncePerDayKey(providerUserKey, dayKey, feature, action, resultKey) {
+    return `${ONCE_PER_DAY_PREFIX}${encodeURIComponent(providerUserKey)}::${dayKey}::${feature}::${action}::${resultKey}`;
   }
 
   function formatKstDayKey(timestampMs = Date.now()) {
