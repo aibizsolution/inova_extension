@@ -14,6 +14,7 @@
     "emulator:hosting": "firebase emulators:start --only hosting --project browser-extension-main",
     "emulator:meeting-local": "node scripts/run-meeting-local-emulator.js",
     "release:build": "node scripts/build-release-package.js",
+    "release:sync-compat": "node scripts/sync-release-compat-alias.js",
     "release:deploy": "npm run release:build && firebase deploy --only hosting:main,hosting:v2",
     "release:deploy:all": "npm run release:build && firebase deploy --only hosting:main,hosting:v2,functions:inova-extension-api",
     "version:bump": "node scripts/bump-version.js",

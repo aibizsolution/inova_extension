@@ -7,7 +7,7 @@ const ACCEPTED_DAY_WINDOW_DAYS = 7;
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const RESULT_KEYS = Object.freeze(["success", "error", "degraded"]);
 const ALLOWED_COUNTERS = Object.freeze({
-  conversation: Object.freeze(["jumped"]),
+  conversation: Object.freeze(["opened", "jumped"]),
   meeting: Object.freeze(["workspace_opened", "result_opened"]),
   prompt_library: Object.freeze(["saved", "updated", "deleted", "applied"]),
   prompt_review: Object.freeze(["completed", "applied"]),

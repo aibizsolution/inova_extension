@@ -98,7 +98,7 @@ npm run deploy:all
 ## 배포 기본값
 
 - 이 Firebase 프로젝트에서 Auth만 공유 리소스로 본다. Functions, Firestore, Hosting, Storage는 저장소/기능별 전용 경계를 둔 뒤 그 경계만 배포한다.
-- 일반적으로 `배포해줘`는 `deploy:hosting`을 뜻하며, 이 명령은 `hosting:main,hosting:v2` target만 배포합니다.
+- 일반적으로 `배포해줘`는 `deploy:hosting`을 뜻하며, 이 명령은 `hosting:main,hosting:v2` target만 배포합니다. 새 ZIP 없이 legacy latest compatibility alias만 맞출 때는 배포 전에 `release:sync-compat`를 실행합니다.
 - `함수 배포`를 명시했을 때만 `deploy:functions`를 사용합니다. 이 명령은 `functions:inova-extension-api` codebase만 배포합니다.
 - `deploy:all`은 `hosting:main,hosting:v2`와 `functions:inova-extension-api`만 함께 배포합니다. Firestore/Storage Rules는 포함하지 않습니다.
 - Firestore Rules/Indexes는 `deploy:firestore:inova-db`로 `(default)` database에만 명시적으로 반영합니다. `(default)` database는 i-Nova extension 전용으로 예약하고, 다른 저장소/기능은 별도 named database를 사용합니다.

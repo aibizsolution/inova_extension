@@ -153,7 +153,7 @@ Playwright MCP Bridge로 새 탭 flow를 검증할 때는 증거를 둘로 나�
 2. 회의 workspace launch는 debug mode가 아니어도 top panel 콘솔에서 launch requested/dispatched/accepted 수준의 trace가 남아야 한다.
 3. 브라우저/hosted client는 Firebase Storage SDK로 직접 bucket을 읽거나 쓰지 않아야 한다. 이 경계는 `npm.cmd run verify:storage-rules`와 실제 import/upload flow의 Functions 경유 여부를 함께 본다.
 4. 상용 배포 보고에서는 Auth 외 공유 리소스를 건드렸는지 분리해서 적는다. 기본 배포는 `hosting:main,hosting:v2`와 `functions:inova-extension-api`만 대상이며, Firestore는 `(default)` database 전용 배포(`deploy:firestore:inova-db`)가 필요한 경우에만, Storage는 전용 target이 생긴 경우에만 별도 반영한다.
-5. 릴리스 메타는 `hosting/extension-v2/releases/latest.json`, `history.json`, `downloads/latest.zip`, `releases/release-notes.json`이 같은 공개 버전을 가리켜야 한다.
+5. 릴리스 메타는 `hosting/extension-v2/releases/latest.json`, `history.json`, `downloads/latest.zip`, `releases/release-notes.json`이 같은 공개 버전을 가리켜야 한다. v2 공개 이후 legacy direct install URL인 `/extension/downloads/latest.zip`과 `/extension/releases/latest.json`도 같은 v2 최신 artifact를 가리켜야 한다.
 6. 관리자 콘솔 배포를 포함한 릴리스면 상용 Hosting에서 `/extension-v2/panel/admin-entry-controller.js`와 `/admin/index.html`이 200으로 응답하고, 상용 패널 HTML이 관리자 entry script를 포함하는지 먼저 확인한다.
 
 ## 사용량 계측
@@ -173,7 +173,7 @@ Playwright MCP Bridge로 새 탭 flow를 검증할 때는 증거를 둘로 나�
 
 1. 테스트에 쓸 `providerUserKey`를 확인한다.
 2. 저비용 action 하나를 실제 UI에서 실행한다.
-   - pipeline 자체 검증이면 `대화` 탭의 질문 카드 클릭으로 `conversation.jumped.success` 1회를 우선 쓴다.
+   - pipeline 자체 검증이면 `대화` 탭을 열어 `conversation.opened.success` 1회를 우선 쓴다. 같은 사용자/브라우저에서 이미 오늘 기록했다면 질문 카드 클릭으로 `conversation.jumped.success` 1회를 쓴다.
    - 특정 feature action을 추가한 변경이면 해당 action을 실제 UI에서 1회 실행한다.
 3. flush가 일어나게 한다.
    - 기본은 첫 action 후 60초 이상 대기한다.
@@ -223,7 +223,7 @@ npm.cmd run check:feature-usage -- --days 1 --limit 20
 7. 관리자 페이지가 launch token을 교환한 뒤 URL에서 `launch` query를 제거하는지 확인한다.
 8. 관리자 페이지에서 verified 상태, 사용자, 계정, 권한, 세션 만료 정보가 표시되어야 한다.
 9. 선택한 기능 화면 안에는 별도 `세션 컨텍스트` 카드처럼 상단 인증 정보를 반복하는 UI가 없어야 한다.
-10. `사용자 및 권한`은 기존 회원 목록을 읽고, 선택한 회원의 `일반 사용자 / 관리자` 권한 선택과 `저장`만 제공해야 한다. 선택 회원 상세 안에는 read-only `이용 기록`이 함께 보여야 한다. 이메일 직접 입력이나 별도 권한 설명 필드가 보이면 실패다. `마지막 활동` 옆 `?` 도움말은 feature usage에 기록되는 기능 사용 이벤트가 기준임을 설명해야 한다.
+10. `사용자 및 권한`은 기존 회원 목록을 읽고, 선택한 회원의 `일반 사용자 / 관리자` 권한 선택과 `저장`만 제공해야 한다. 선택 회원 상세 안에는 read-only `이용 기록`이 함께 보여야 한다. 이메일 직접 입력이나 별도 권한 설명 필드가 보이면 실패다. `마지막 활동` 옆 `?` 도움말은 대화 패널 열기 같은 feature usage 이벤트가 기준임을 설명해야 한다.
 11. 관리자 HTML은 `index.css`, `index.js`, shared design-system CSS/JS를 `admin=<timestamp>` query로 로드해야 한다. 같은 탭에서 새로고침했는데 이전 JS 문구가 남으면 실패다.
 12. 집계 테이블/쿼리 구조가 붙기 전에는 별도 `사용자별 이용 현황` 메뉴, 기간 필터, `기능별` 집계 탭, 별도 `회의 사용량` 탭, `이용 공백` 운영 액션 섹션, raw event count, token, providerUserKey, 내부 로그, `활발`/`정착 중` 같은 해석성 상태 라벨, `화면 샘플`/`화면 검토용`처럼 구현 검토용 표식이 노출되면 실패다.
 13. 같은 launch URL을 다시 열거나 launch 없이 직접 진입하면 blocked 상태가 보여야 한다.
@@ -499,7 +499,7 @@ __INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20, entrie
 2. 현재 버전과 최신 버전이 표시되는지 확인한다.
 3. 최신 릴리스 카드와 다운로드 버튼이 보이는지 확인한다.
 4. `hosting/extension-v2/releases/latest.json`, `history.json`, `releases/release-notes.json`의 버전 정보가 화면과 맞는지 본다.
-5. 상용 배포 직후에는 `downloads/latest.zip`과 버전별 ZIP 경로가 같은 release metadata를 가리키는지 확인한다.
+5. 상용 배포 직후에는 `extension-v2/downloads/latest.zip`과 버전별 ZIP 경로가 같은 release metadata를 가리키는지 확인한다. 추가로 `browser-extension-main.web.app/extension/downloads/latest.zip` 해시가 v2 `latest.zip` 해시와 같은지 확인한다.
 6. retired 버전 정리 후에는 `history.json`과 화면의 이전 릴리스 목록에 retired 버전 카드나 버전별 다운로드 링크가 다시 노출되지 않아야 한다. 이 정리만으로 `manifest.json`, `content/*`, `background/*`, `popup/*`, 확장 번들 `shared/*`가 바뀌지 않았다면 확장 재배포가 아니라 Hosting metadata 반영 범위로 보고한다.
 
 ### P1 Regression
@@ -625,5 +625,5 @@ npm.cmd run check:meeting-data -- --meeting-id <meetingId>
 - 회의 notes/service/audio 정책 변경이면 `npm.cmd run verify:meeting-notes-generation`, `npm.cmd run verify:meeting-service`, `npm.cmd run verify:meeting-audio-source-policy`, `npm.cmd run verify:meeting-transcription-quality`
 - prompt store model 변경이면 `npm.cmd run verify:prompt-store-model`
 - prompt library/review/store 전체 영향이면 `npm.cmd run verify:prompt-runtime-local`, `npm.cmd run verify:prompt-library-remote-first`, `npm.cmd run verify:prompt-hosted-tabs`, `npm.cmd run verify:prompt-review`
-- 릴리스 산출물 변경이면 `npm.cmd run release:build` 후 `node scripts/verify-release-package.js`
+- 릴리스 산출물 변경이면 `npm.cmd run release:build` 후 `node scripts/verify-release-package.js`; 새 ZIP 없이 legacy latest alias만 맞추는 경우는 `npm.cmd run release:sync-compat` 후 `node scripts/verify-release-package.js`
 - 범위가 넓거나 배포 전이면 `npm.cmd run verify`

@@ -111,6 +111,11 @@ async function verifyAllowlistAndCaps() {
           success: 900,
         },
       },
+      conversation: {
+        opened: {
+          success: 2,
+        },
+      },
       prompt_store: {
         liked: {
           degraded: 1,
@@ -125,7 +130,8 @@ async function verifyAllowlistAndCaps() {
     },
   }));
   const userDay = readDoc(db, FEATURE_USAGE_COLLECTIONS.userDays, "user-1__2026-04-18");
-  assert.equal(userDay.totalCount, 505);
+  assert.equal(userDay.totalCount, 507);
+  assert.equal(userDay.counters.conversation.opened.success, 2);
   assert.equal(userDay.counters.meeting.result_opened.success, 500);
   assert.equal(userDay.counters.prompt_store.liked.success, 4);
   assert.equal(userDay.counters.prompt_store.liked.degraded, 1);

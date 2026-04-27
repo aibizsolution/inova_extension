@@ -8,7 +8,7 @@
   const MAX_NOTICE_BODY_LENGTH = 800;
   const MAX_NOTICE_CTA_LABEL_LENGTH = 32;
   const MAX_ACCESS_ORGANIZATION_LENGTH = 80;
-  const ADMIN_ACCESS_LAST_ACTIVITY_HELP_TEXT = "마지막 활동은 실험실 기능 사용량 집계의 최근 기록 기준입니다. 대화 이동, 프롬프트 저장/적용/삭제, 프롬프트 검토/적용, 스토어 가져오기/좋아요/게시/삭제, 회의 작업실/결과 열기, 릴리스 다운로드 열기 같은 기능 사용 이벤트가 성공/오류/제한 상태로 기록되면 갱신됩니다.";
+  const ADMIN_ACCESS_LAST_ACTIVITY_HELP_TEXT = "마지막 활동은 실험실 기능 사용량 집계의 최근 기록 기준입니다. 대화 패널 열기/이동, 프롬프트 저장/적용/삭제, 프롬프트 검토/적용, 스토어 가져오기/좋아요/게시/삭제, 회의 작업실/결과 열기, 릴리스 다운로드 열기 같은 기능 사용 이벤트가 성공/오류/제한 상태로 기록되면 갱신됩니다.";
   const ACCESS_USAGE_FEATURE_LABELS = Object.freeze({
     conversation: "대화 기능",
     meeting: "회의 룸",
