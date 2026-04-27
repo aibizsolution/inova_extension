@@ -134,7 +134,6 @@ function createMeetingNotesGenerationDomain(deps) {
       ],
       model: getMeetingSummaryModel(),
       response_format: { type: "json_object" },
-      temperature: 0.2,
     });
     const content = normalizeCompletionContent(completion?.choices?.[0]?.message?.content);
     if (!content) {
@@ -161,7 +160,6 @@ function createMeetingNotesGenerationDomain(deps) {
       ],
       model: getMeetingSummaryModel(),
       response_format: { type: "json_object" },
-      temperature: 0.1,
     });
     const content = normalizeCompletionContent(completion?.choices?.[0]?.message?.content);
     if (!content) {
@@ -192,7 +190,6 @@ function createMeetingNotesGenerationDomain(deps) {
       ],
       model: getMeetingSummaryModel(),
       response_format: { type: "json_object" },
-      temperature: 0.2,
     });
     const content = normalizeCompletionContent(completion?.choices?.[0]?.message?.content);
     if (!content) {
@@ -222,7 +219,6 @@ function createMeetingNotesGenerationDomain(deps) {
       ],
       model: getMeetingSummaryModel(),
       response_format: { type: "json_object" },
-      temperature: 0.2,
     });
     return normalizeMeetingNotesSectionSummary(
       parseMeetingNotesJson(normalizeCompletionContent(completion?.choices?.[0]?.message?.content))
@@ -267,7 +263,6 @@ function createMeetingNotesGenerationDomain(deps) {
         ],
         model: getMeetingClassifierModel(),
         response_format: { type: "json_object" },
-        temperature: 0,
       });
       const gate = parseMeetingNotesGateResult(
         normalizeCompletionContent(completion?.choices?.[0]?.message?.content)
