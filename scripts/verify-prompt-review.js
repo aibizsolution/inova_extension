@@ -148,6 +148,11 @@ function verifyHostedPromptReviewContract() {
   const promptReviewManagerSource = fs.readFileSync(path.join(root, "content", "features", "prompt-review", "prompt-review-manager.js"), "utf8");
 
   assert.equal(
+    promptReviewServiceSource.includes('const DEFAULT_MODEL = "gpt-5.5";'),
+    true,
+    "prompt review service should default to the current performance-first model"
+  );
+  assert.equal(
     hostedControllerSource.includes("const writeClipboardText = typeof browserCapabilities.writeClipboardText === \"function\"")
       && capabilityClientSource.includes('invokePageCapability("clipboard.write-text"'),
     true,

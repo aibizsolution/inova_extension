@@ -22,7 +22,7 @@
 - 유지되는 HTTP 진입점은 `createInovaMeetingJob`, `uploadInovaMeetingSource`, `updateInovaMeeting`, `updateInovaMeetingResult`, `previewInovaMeetingResultSectionEdit`, `applyInovaMeetingResultSectionEdit`, `deleteInovaMeetingResult`, `deleteInovaMeeting`, `listInovaMeetings`입니다.
 - 회의 summary/read 정본은 `integration_inova_meetings` 문서 하나입니다.
 - `sessionId`는 보조 메타로 남을 수 있지만 조회 키나 summary 정본으로 쓰지 않습니다.
-- 회의록 생성과 섹션 수정 preview는 모두 `gpt-5.4`를 사용하고, 전사 모델과 파이프라인은 그대로 유지합니다.
+- 회의록 생성과 섹션 수정 preview는 모두 `gpt-5.5`를 사용하고, 전사 모델과 파이프라인은 그대로 유지합니다.
 
 ## 2. 최소 데이터 모델
 
