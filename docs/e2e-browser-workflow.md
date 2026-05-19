@@ -33,6 +33,9 @@
 
 - 실제 사용자가 보는 Chrome, 설치된 unpacked extension, 로그인 세션, hosted panel iframe을 기준으로 확인한다.
 - Playwright MCP로 확인할 때는 반드시 먼저 `playwright-mcp-bridge` 스킬을 읽고, 살아 있는 Chrome 세션과 로컬 패널 상태를 유지한다.
+- Codex Browser/Chrome 연결에서 `Chrome` surface가 보이면 actual Chrome 검증은 내장 브라우저가 아니라 그 surface를 우선 사용한다.
+- 이미 사용자가 열어 둔 `https://inova.incross.com/` 탭이 `openTabs`에는 보이지만 자동화 탭으로 attach되지 않을 수 있다. 이 경우 기존 탭 attach 실패를 제품 실패로 보지 말고, 같은 Chrome surface에서 새 탭을 열어 `https://inova.incross.com/`으로 이동한 뒤 DOM/콘솔/네트워크 검증을 계속한다.
+- 위 방식으로 연 새 탭은 같은 Chrome 프로필의 로그인 세션과 설치된 extension을 쓰는 검증 탭이다. 결과 보고에는 `새 Chrome 탭 기반 actual Chrome 검증`이라고 적고, 사용자가 이미 열어 둔 물리적 탭을 직접 조작한 것처럼 말하지 않는다.
 - 별도 자동화 브라우저나 새 MCP 서버를 실제 Chrome 검증의 대체물로 보지 않는다.
 - Bridge 호출이 `Target page, context or browser has been closed`, `Transport closed`, page/context/browser closed 계열 오류로 끊기면 추가 브라우저 조작을 멈춘다. 이 경우 사용자에게 Codex Windows 앱 재시작을 요청하고, 재시작 전에는 실제 버튼 클릭 E2E를 완료했다고 보고하지 않는다.
 - 기능 성공처럼 보이는 fallback을 통과로 처리하지 않는다. 실패, stale, degraded 상태는 화면과 콘솔에서 드러나야 한다.
