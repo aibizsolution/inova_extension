@@ -1,7 +1,0 @@
-interface:
-  display_name: "i-Nova Actual Chrome Verification"
-  short_description: "Verify i-Nova flows in real Chrome."
-  default_prompt: "Use $inova-actual-chrome-verification to verify the installed i-Nova extension in real Chrome and report concise DOM, console, network, and tab evidence."
-
-policy:
-  allow_implicit_invocation: true
