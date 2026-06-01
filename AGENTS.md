@@ -27,6 +27,7 @@
 
 ## 브라우저 검증 규칙
 - Playwright MCP 브라우저 검증은 항상 `playwright-mcp-bridge` 스킬을 먼저 읽고 시작한다.
+- 설치된 확장프로그램이나 `https://inova.incross.com/` 실제 Chrome 상태를 검증할 때는 `docs/e2e-browser-workflow.md`의 actual Chrome 절차를 따른다. `Chrome` surface가 있으면 이 저장소 검증 표면으로 우선 쓰고, 기존 탭 attach가 안 되면 같은 Chrome surface에서 새 탭으로 열어 검증한 뒤 그 한계를 보고한다.
 - 살아 있는 Chrome/확장/로그인 세션을 임의로 끊지 않는다. 사용자가 닫아도 된다고 명시하기 전까지 `browser_close`를 호출하지 않는다.
 - Codex Windows 내장 MCP Bridge만 사용한다. 별도 `npx @playwright/mcp` 서버를 띄우거나 살아 있는 MCP/Bridge 프로세스를 임의 종료하지 않는다.
 - Bridge 호출이 `Target page, context or browser has been closed`, `Transport closed`, page/context/browser closed 계열 오류로 끊기면 추가 브라우저 조작을 멈춘다. 이때는 사용자에게 Codex Windows 앱을 재시작해 달라고 요청하고, 재시작 전에는 버튼 클릭 여부나 실제 Chrome 검증 완료처럼 보고하지 않는다.
