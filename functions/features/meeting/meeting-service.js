@@ -1470,21 +1470,7 @@ function registerMeetingHandlers(deps) {
   }
 
   function getInovaOpenAIApiKey() {
-    const dedicatedApiKey = normalizeText(process.env.INOVA_EXTENSION_OPENAI_API_KEY);
-    if (dedicatedApiKey) {
-      return dedicatedApiKey;
-    }
-    if (isLocalOrTestRuntime()) {
-      return normalizeText(process.env.OPENAI_API_KEY);
-    }
-    return "";
-  }
-
-  function isLocalOrTestRuntime() {
-    return normalizeText(process.env.NODE_ENV).toLowerCase() === "test"
-      || normalizeText(process.env.FUNCTIONS_EMULATOR).toLowerCase() === "true"
-      || Boolean(normalizeText(process.env.FIRESTORE_EMULATOR_HOST))
-      || Boolean(normalizeText(process.env.FIREBASE_AUTH_EMULATOR_HOST));
+    return normalizeText(process.env.INOVA_EXTENSION_OPENAI_API_KEY);
   }
 
   function getMeetingModel() {
