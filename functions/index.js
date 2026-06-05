@@ -31,15 +31,15 @@ const {
   verifyInovaIdentity,
 } = require("./platform/runtime");
 
-const OPENAI_API_KEY_SECRET = defineSecret("OPENAI_API_KEY");
+const INOVA_EXTENSION_OPENAI_API_KEY_SECRET = defineSecret("INOVA_EXTENSION_OPENAI_API_KEY");
 
 function withOpenAISecret(options = {}) {
   const existingSecrets = Array.isArray(options.secrets) ? options.secrets : [];
   return {
     ...options,
-    secrets: existingSecrets.includes(OPENAI_API_KEY_SECRET)
+    secrets: existingSecrets.includes(INOVA_EXTENSION_OPENAI_API_KEY_SECRET)
       ? existingSecrets
-      : [...existingSecrets, OPENAI_API_KEY_SECRET],
+      : [...existingSecrets, INOVA_EXTENSION_OPENAI_API_KEY_SECRET],
   };
 }
 
