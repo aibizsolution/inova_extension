@@ -108,12 +108,30 @@ function registerPromptReviewHandlers(deps) {
 
   function getClient() {
     if (client) return client;
-    const apiKey = normalizeText(process.env.OPENAI_API_KEY);
+    const apiKey = getInovaOpenAIApiKey();
     if (!apiKey) {
-      throw createHttpError(412, "OPENAI_API_KEY가 설정되지 않았어요.");
+      throw createHttpError(412, "INOVA_EXTENSION_OPENAI_API_KEY가 설정되지 않았어요.");
     }
     client = new OpenAI({ apiKey });
     return client;
+  }
+
+  function getInovaOpenAIApiKey() {
+    const dedicatedApiKey = normalizeText(process.env.INOVA_EXTENSION_OPENAI_API_KEY);
+    if (dedicatedApiKey) {
+      return dedicatedApiKey;
+    }
+    if (isLocalOrTestRuntime()) {
+      return normalizeText(process.env.OPENAI_API_KEY);
+    }
+    return "";
+  }
+
+  function isLocalOrTestRuntime() {
+    return normalizeText(process.env.NODE_ENV).toLowerCase() === "test"
+      || normalizeText(process.env.FUNCTIONS_EMULATOR).toLowerCase() === "true"
+      || Boolean(normalizeText(process.env.FIRESTORE_EMULATOR_HOST))
+      || Boolean(normalizeText(process.env.FIREBASE_AUTH_EMULATOR_HOST));
   }
 
   function getModel() {

@@ -76,8 +76,8 @@ function verifySecretManagerWiring() {
   const indexPath = path.join(root, "functions", "index.js");
   const source = fs.readFileSync(indexPath, "utf8");
   assert(
-    /defineSecret\("OPENAI_API_KEY"\)/.test(source),
-    "OPENAI_API_KEY must be declared as a Firebase Functions Secret Manager secret"
+    /defineSecret\("INOVA_EXTENSION_OPENAI_API_KEY"\)/.test(source),
+    "INOVA_EXTENSION_OPENAI_API_KEY must be declared as the i-Nova-only Firebase Functions Secret Manager secret"
   );
   for (const exportName of [
     "processQueuedInovaMeetingJob",
@@ -86,11 +86,11 @@ function verifySecretManagerWiring() {
     "processQueuedInovaMeetingCommand",
   ]) {
     const pattern = new RegExp(`exports\\.${exportName}\\s*=\\s*onDocumentWritten\\(\\s*withOpenAISecret\\(`);
-    assert(pattern.test(source), `${exportName} must mount OPENAI_API_KEY from Secret Manager`);
+    assert(pattern.test(source), `${exportName} must mount INOVA_EXTENSION_OPENAI_API_KEY from Secret Manager`);
   }
   assert(
     /registerPromptReviewHandlers\(\{[\s\S]*onRequest:\s*onOpenAIRequest/.test(source),
-    "Prompt review function must mount OPENAI_API_KEY from Secret Manager"
+    "Prompt review function must mount INOVA_EXTENSION_OPENAI_API_KEY from Secret Manager"
   );
   assert(
     /registerMeetingHandlers\(\{[\s\S]*onOpenAIRequest/.test(source),
