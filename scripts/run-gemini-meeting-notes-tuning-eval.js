@@ -410,7 +410,11 @@ function aggregateScores(cases) {
 
 function writeReport(report) {
   const safeLabel = normalizeText(report.label).replace(/[^a-zA-Z0-9._-]+/g, "-") || "report";
-  const prefix = report.successNumber ? `success-${String(report.successNumber).padStart(2, "0")}` : "baseline";
+  const prefix = report.successNumber && report.improvement.improved
+    ? `success-${String(report.successNumber).padStart(2, "0")}`
+    : report.previousReport
+      ? "candidate"
+      : "baseline";
   const fileName = `${prefix}-${safeLabel}-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
   const outputPath = path.join(OUTPUT_DIR, fileName);
   report.reportFile = outputPath;

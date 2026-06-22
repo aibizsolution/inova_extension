@@ -111,6 +111,20 @@ function verifyWeakDecisionProseSoftening() {
     "웹 API와 스튜디오를 활용한 기능 테스트 진행 방안이 논의됐다.",
     "meeting notes discussion narrative should soften weak decision prose"
   );
+  const extended = notesDomain.normalizeMeetingNotes({
+    overview: "핵심 논리를 보고 장표에 담기로 했습니다. PER 비교표를 전면에 포함하기로 했습니다.",
+    summary: "기존 어드민 기능과 중복되어 별도 구축 여부를 재검토하기로 했다.",
+  });
+  assert.equal(
+    extended.summary,
+    "기존 어드민 기능과 중복되어 별도 구축 여부 재검토 필요가 남았다.",
+    "meeting notes summary should soften recheck prose"
+  );
+  assert.equal(
+    extended.overview,
+    "핵심 논리를 보고 장표에 담는 방안이 논의됐다. PER 비교표를 전면에 포함하는 방안이 논의됐다.",
+    "meeting notes overview should soften include/contain prose"
+  );
 }
 
 function createFixtureMeetingNotesDocumentDomain() {
