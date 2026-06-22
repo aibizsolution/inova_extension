@@ -519,6 +519,7 @@ __INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20, entrie
 - `versionRefreshPending` 중 최신 섹션이 숨겨져 릴리스 누락을 놓칠 수 있다.
 - 로컬 캐시가 stale 상태를 가리면 실제 최신성 검증을 놓친다.
 - `hosting/*`만 바뀐 경우와 확장 번들 변경이 있는 경우의 배포 안내가 달라야 한다.
+- 릴리스 ZIP staging/검증 스크립트만 바뀌고 화면 bundle, release metadata 내용, 다운로드 URL 계약이 바뀌지 않았으면 새 Chrome 버튼 테스트를 추가하지 않는다. 이 경우 `node scripts/verify-release-package.js`와 `npm.cmd run verify` 통과를 릴리스 산출물 정합성 증거로 보고, 실제 Chrome 릴리스 탭 P0는 metadata나 화면 변경이 있을 때 실행한다.
 
 ## 전체 회귀 순서
 

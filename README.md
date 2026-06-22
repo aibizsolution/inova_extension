@@ -64,7 +64,8 @@
 
 ## 빠른 시작
 
-1. `npm install`을 실행합니다.
+1. 루트 의존성과 Functions 의존성을 각각 설치합니다.
+   - PowerShell에서는 `npm.cmd install` 후 `npm.cmd install --prefix functions`를 사용합니다.
 2. 필요하면 `npm run hooks:install`로 Git 훅을 연결합니다.
 3. Chrome의 `압축해제된 확장 프로그램 로드`로 이 폴더를 등록합니다.
 4. `https://inova.incross.com/`을 열고 팝업에서 `상용 호스팅` 또는 `로컬 호스팅`을 고릅니다.
