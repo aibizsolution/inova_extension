@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const OpenAI = require("openai");
+const { createAiProviderRuntime } = require("../../platform/ai-provider-runtime");
 const {
   buildDefaultFileName,
   buildTranscriptExcerpt,
@@ -325,7 +326,14 @@ function registerMeetingHandlers(deps) {
     verifyInovaIdentity,
   } = deps;
 
-  let client = null;
+  const aiProviderRuntime = createAiProviderRuntime({
+    OpenAI,
+    createHttpError,
+    logEvent,
+    normalizeText,
+    openaiFactory: deps.openaiFactory,
+  });
+  const client = aiProviderRuntime.createClient();
 
   const {
     loadMeetingArtifactSource,
@@ -1454,23 +1462,7 @@ function registerMeetingHandlers(deps) {
   }
 
   function getClient() {
-    if (client) {
-      return client;
-    }
-    const openaiFactory = typeof deps.openaiFactory === "function"
-      ? deps.openaiFactory
-      : (options) => new OpenAI(options);
-    const apiKey = getInovaOpenAIApiKey()
-      || (typeof deps.openaiFactory === "function" ? "fixture-openai-key" : "");
-    if (!apiKey) {
-      throw createHttpError(412, "INOVA_EXTENSION_OPENAI_API_KEY가 설정되지 않았어요.");
-    }
-    client = openaiFactory({ apiKey });
     return client;
-  }
-
-  function getInovaOpenAIApiKey() {
-    return normalizeText(process.env.INOVA_EXTENSION_OPENAI_API_KEY);
   }
 
   function getMeetingModel() {

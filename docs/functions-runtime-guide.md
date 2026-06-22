@@ -7,7 +7,7 @@ feature `AGENTS.md`에는 per-session runtime 변경 기록을 누적하지 않�
 
 - 새 HTTP 함수는 특별한 근거가 없으면 기본 HTTP 프로파일을 그대로 쓴다.
 - 새 scheduler 함수는 특별한 근거가 없으면 기본 scheduler 프로파일을 그대로 쓴다.
-- raw binary 업로드, OpenAI 전사/정리, 대량 cleanup처럼 실제로 무거운 함수만 예외 프로파일로 분리한다.
+- raw binary 업로드, AI provider 전사/정리, 대량 cleanup처럼 실제로 무거운 함수만 예외 프로파일로 분리한다.
 - runtime 값은 감으로 자주 바꾸지 않는다. 기능 구조가 바뀌었거나, 최근 로그에 OOM/429/timeout이 보일 때만 조정한다.
 - 배포된 Cloud Run 설정이 코드와 어긋나지 않도록, 배포 후에는 `check:function-runtime`으로 실제 반영값을 확인한다.
 - 반복되는 운영 오류는 `한 번 수동 정리하고 끝`으로 관리하지 않는다. 같은 유형이 다시 나올 수 있으면 재발 방지와 기존 오류 복구 경로를 함께 만든다.
@@ -58,7 +58,7 @@ feature `AGENTS.md`에는 per-session runtime 변경 기록을 누적하지 않�
 
 - 대상: part 단위 오디오 전사와 chunk transcript 저장
 - 기준값: `2GiB`, `180s`, `cpu 1`, `concurrency 2`, 높은 `maxInstances`
-- 메모: 사용자 수가 늘 때 가장 먼저 병목이 생길 가능성이 큰 축이다. 기본값은 part 수만큼 fan-out하고, 필요할 때만 `OPENAI_MEETING_CHUNK_TRANSCRIPTION_CONCURRENCY`로 긴급 throttle을 건다. `concurrency 3` 이상은 fresh OOM/429 없이 48-72시간 관찰한 뒤에만 올린다.
+- 메모: 사용자 수가 늘 때 가장 먼저 병목이 생길 가능성이 큰 축이다. 기본값은 part 수만큼 fan-out하고, 필요할 때만 `OPENAI_MEETING_CHUNK_TRANSCRIPTION_CONCURRENCY`로 긴급 throttle을 건다. 기본 provider가 OpenRouter여도 같은 queue/concurrency 기준을 유지한다. `concurrency 3` 이상은 fresh OOM/429 없이 48-72시간 관찰한 뒤에만 올린다.
 
 ### Finalize
 
@@ -122,7 +122,7 @@ feature `AGENTS.md`에는 per-session runtime 변경 기록을 누적하지 않�
 - 구조: 이 worker는 part 오디오를 통째로 내려받아 메모리에 올리고 외부 전사 API 응답을 기다린다. CPU-only worker보다 `memory`와 in-flight 요청 수 영향이 크다.
 - 선택: 1차 운영값은 `2GiB / cpu 1 / concurrency 2 / maxInstances 200`이다.
 - 이유: `concurrency 1`로 되돌리면 인스턴스 수를 더 빨리 소모해 ceiling에 먼저 닿고, `4GiB/2CPU`처럼 올리면 quota 상 인스턴스 상한이 다시 줄 수 있다.
-- 유지 기준: fresh `OOM`, OpenAI `429`, retry 급증이 없으면 `concurrency 2`를 유지한다.
+- 유지 기준: fresh `OOM`, AI provider `429`, retry 급증이 없으면 `concurrency 2`를 유지한다.
 - 하향 기준: fresh `OOM`이나 retry 폭증이 다시 보이면 `concurrency 1` 복귀 또는 `OPENAI_MEETING_CHUNK_TRANSCRIPTION_CONCURRENCY` throttle을 먼저 검토한다.
 - 상향 기준: `48-72시간` 이상 안정적이고 backlog 감소가 확인될 때만 `concurrency 3`을 다음 단계로 검토한다.
 - 배포 확인 메모: 배포 직후 `check:function-runtime`가 이전 revision 값을 잠깐 보여줄 수 있으니, 값이 엇갈리면 `gcloud functions describe --project browser-extension-main --gen2 --region asia-northeast3`를 최종 기준으로 본다.
@@ -169,7 +169,7 @@ feature `AGENTS.md`에는 per-session runtime 변경 기록을 누적하지 않�
 ### 언제 다시 조정할지
 
 - 전사/notes/upload 구조가 바뀌었을 때
-- OpenAI 모델이나 chunk 전략이 바뀌었을 때
+- OpenAI/OpenRouter 모델이나 chunk 전략이 바뀌었을 때
 - 사용자 수나 동시 처리량 목표가 올라갔을 때
 - OOM/429/timeout이 실제로 보였을 때
 - 그 외에는 주 1회 짧게 확인하는 정도로 충분하다

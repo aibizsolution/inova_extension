@@ -56,7 +56,7 @@
 5. 상용 배포나 `release:build` 전에 `npm run verify`, `npm run verify:feature-doc-guard`, `npm run verify:e2e-doc-guard`, `npm run verify:release-guard`를 확인한다.
 6. 공개 릴리스가 필요하면 `npm run release:build` 후 `npm run release:deploy` 또는 `npm run release:deploy:all`을 수행한다.
 7. hosted-only, functions-only 운영 배포면 `deploy:hosting`, `deploy:functions`, `deploy:all` 중 필요한 범위만 수행한다. Firestore는 DB 경계 변경이 있을 때만 `deploy:firestore:inova-db`로 별도 반영하고, Storage Rules는 전용 target이 생기기 전까지 운영 배포 대상에서 제외한다.
-8. 상용 OpenAI 키는 i-Nova 전용 Firebase Functions Secret Manager secret `INOVA_EXTENSION_OPENAI_API_KEY`로 관리한다. 공용 `OPENAI_API_KEY` secret이나 `.env`에 i-Nova 키를 넣어 배포하지 않는다.
+8. 상용 AI provider 우선순위는 OpenRouter first, OpenAI second다. Secret Manager에는 provider별 개별 키를 만들지 않고 저장소 전용 JSON secret `INOVA_EXTENSION_AI_PROVIDER_CONFIG` 하나만 관리한다. JSON 안의 `openrouter.apiKey`가 1순위이고, `openai.apiKey`는 보조 provider가 필요할 때만 둔다. 공용 `OPENAI_API_KEY` secret이나 `.env`에 i-Nova/OpenRouter 키를 넣어 배포하지 않는다.
 9. 회의 임시 오디오 Storage 설정은 `FIREBASE_CONFIG.storageBucket`을 기본으로 둔다. `STORAGE_BUCKET_URL`을 쓸 때도 앱용 bucket만 지정하고 Cloud Functions 내부 `gcf-v2-*` bucket은 지정하지 않는다.
 10. 배포 후에는 기존 ZIP 사용자가 업그레이드하는 경로와 reload 필요 여부를 먼저 공지한다.
 

@@ -146,6 +146,8 @@
    - 2시간 초과 또는 원본 크기 제한 초과 차단은 실제 긴 파일을 기다리지 않고, fixture나 metadata stub이 있을 때만 확인한다.
 8. chunk 준비/업로드 진행 표시는 작은 샘플로 자연스럽게 보일 때만 확인한다. 큰 원본이나 긴 원본을 새로 만들어 시간을 쓰지 않는다.
 9. 원격 처리 성공 후 completed record 검증은 기존 완료 record를 우선 사용하고, 새 녹음의 전사 완료까지 오래 기다리지 않는다.
+   - AI provider 우선순위 변경 PR에서는 `INOVA_EXTENSION_AI_PROVIDER_CONFIG` JSON secret에 `openrouter.apiKey`가 포함되어 Functions에 mount된 상태에서 짧은 샘플 import 또는 기존 완료 record 기반 재처리를 확인한다. OpenRouter가 먼저 호출되어야 하며, 실패하면 성공 토스트로 숨기지 말고 record 상태/콘솔/Firestore `notesStatus` 또는 job error에 provider 오류가 드러나야 한다.
+   - 실패 후 재시도 또는 운영 복구로 completed가 된 record는 Firestore job의 `status`와 `notesStatus`가 성공 상태이고, 이전 실패의 `error`와 `retry.lastError`가 completed 화면에 남지 않아야 한다.
 10. completed record에서 `원본 다운로드`가 가능해야 한다. Bridge에서 blob anchor 다운로드가 `download` 이벤트로 잡히지 않을 수 있으므로, 이 경우 버튼 click handler, 성공 토스트, 로컬 pending blob 존재를 함께 보고 실패 여부를 판단한다.
 
 ## Notes/Edit/Recovery P1
@@ -159,6 +161,7 @@
 5. `AI 수정`은 `AI 미리보기 -> 적용` 순서여야 하고, preview 없는 apply는 막혀야 한다.
    - 회의록 요약/수정 모델 기본값이 바뀐 PR에서는 기존 완료 record에서 AI 미리보기 1회를 실행해 응답 품질, timeout/degraded 표면, preview 적용 흐름을 함께 확인한다.
    - 회의록 생성 모델 또는 요청 파라미터가 바뀐 PR에서는 최신 completed job의 `notesStatus`가 `succeeded`인지 확인하고, `notesDegradedReason`에 모델 파라미터 오류가 남지 않는지 Firestore에서 함께 확인한다.
+   - OpenRouter provider 경로를 바꾼 PR에서는 AI 미리보기 1회가 OpenRouter 모델로 먼저 완료되는지 보고, 실패 시 `degraded` 또는 explicit error가 남는지 확인한다.
 6. `직접 수정`은 미리보기 없이 해당 섹션만 저장해야 한다.
 7. `메모` 탭에서 기록 메모 저장이 completed record에만 가능해야 한다.
 8. read-only 또는 공유 링크 모드라면 저장/삭제/이동/용어 치환 같은 mutation 버튼이 숨겨지거나 비활성화되어야 한다.

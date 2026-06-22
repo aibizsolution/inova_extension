@@ -76,8 +76,13 @@ function verifySecretManagerWiring() {
   const indexPath = path.join(root, "functions", "index.js");
   const source = fs.readFileSync(indexPath, "utf8");
   assert(
-    /defineSecret\("INOVA_EXTENSION_OPENAI_API_KEY"\)/.test(source),
-    "INOVA_EXTENSION_OPENAI_API_KEY must be declared as the i-Nova-only Firebase Functions Secret Manager secret"
+    /defineSecret\("INOVA_EXTENSION_AI_PROVIDER_CONFIG"\)/.test(source),
+    "INOVA_EXTENSION_AI_PROVIDER_CONFIG must be declared as the single i-Nova AI provider Secret Manager secret"
+  );
+  assert(
+    !/defineSecret\("INOVA_EXTENSION_OPENAI_API_KEY"\)/.test(source)
+      && !/defineSecret\("INOVA_EXTENSION_OPENROUTER_API_KEY"\)/.test(source),
+    "AI provider keys must not be mounted as separate Secret Manager secrets"
   );
   for (const exportName of [
     "processQueuedInovaMeetingJob",
@@ -85,16 +90,16 @@ function verifySecretManagerWiring() {
     "finalizeChunkedInovaMeetingJob",
     "processQueuedInovaMeetingCommand",
   ]) {
-    const pattern = new RegExp(`exports\\.${exportName}\\s*=\\s*onDocumentWritten\\(\\s*withOpenAISecret\\(`);
-    assert(pattern.test(source), `${exportName} must mount INOVA_EXTENSION_OPENAI_API_KEY from Secret Manager`);
+    const pattern = new RegExp(`exports\\.${exportName}\\s*=\\s*onDocumentWritten\\(\\s*withAIProviderSecret\\(`);
+    assert(pattern.test(source), `${exportName} must mount the single AI provider config secret from Secret Manager`);
   }
   assert(
-    /registerPromptReviewHandlers\(\{[\s\S]*onRequest:\s*onOpenAIRequest/.test(source),
-    "Prompt review function must mount INOVA_EXTENSION_OPENAI_API_KEY from Secret Manager"
+    /registerPromptReviewHandlers\(\{[\s\S]*onRequest:\s*onAIProviderRequest/.test(source),
+    "Prompt review function must mount INOVA_EXTENSION_AI_PROVIDER_CONFIG from Secret Manager"
   );
   assert(
-    /registerMeetingHandlers\(\{[\s\S]*onOpenAIRequest/.test(source),
-    "Meeting OpenAI HTTP handlers must receive an OpenAI-secret onRequest wrapper"
+    /registerMeetingHandlers\(\{[\s\S]*onOpenAIRequest:\s*onAIProviderRequest/.test(source),
+    "Meeting AI HTTP handlers must receive the AI provider secret onRequest wrapper"
   );
   assert(
     source.includes('require("./features/feature-usage/feature-usage-service")')

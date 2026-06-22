@@ -594,6 +594,17 @@ function loadPromptReviewServiceHelpers() {
       if (name === "openai") {
         return class FakeOpenAI {};
       }
+      if (name === "../../platform/ai-provider-runtime") {
+        return {
+          createAiProviderRuntime() {
+            return {
+              createClient() {
+                return {};
+              },
+            };
+          },
+        };
+      }
       return require(name);
     },
   });

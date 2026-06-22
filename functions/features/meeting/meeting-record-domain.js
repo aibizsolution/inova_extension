@@ -96,6 +96,7 @@ function createMeetingRecordDomain(deps) {
         lastError: "",
         lastRetriedAt: normalizeText(retryInput?.lastRetriedAt),
       },
+      error: "",
       source: {
         ...source,
         uploadStatus: deletedAt ? "deleted" : source.uploadStatus,
