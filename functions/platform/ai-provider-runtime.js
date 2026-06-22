@@ -2,6 +2,9 @@ const DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const DEFAULT_OPENROUTER_REFERER = "https://browser-extension-v2.web.app";
 const DEFAULT_OPENROUTER_TITLE = "i-Nova Extension";
 const DEFAULT_OPENROUTER_TRANSCRIBE_MODEL = "openai/gpt-4o-transcribe";
+const DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com";
+const DEFAULT_GEMINI_TRANSCRIBE_MODEL = "gemini-3.5-flash";
+const DEFAULT_GEMINI_TRANSCRIBE_THINKING_LEVEL = "minimal";
 
 function createAiProviderRuntime(deps) {
   const {
@@ -15,7 +18,8 @@ function createAiProviderRuntime(deps) {
 
   let openAIClient = null;
   let openRouterClient = null;
-  let openRouterPrimaryFailed = false;
+  const openRouterPrimaryFailedKinds = new Set();
+  const geminiSecondaryFailedKinds = new Set();
   let providerConfig = null;
 
   function createClient() {
@@ -68,6 +72,7 @@ function createAiProviderRuntime(deps) {
   async function createAudioTranscription(request) {
     return runWithProviderOrder({
       kind: "audio.transcriptions",
+      geminiCall: () => createGeminiAudioTranscription(request),
       openaiCall: () => getOpenAIClient().audio.transcriptions.create(request),
       openrouterCall: async () => {
         const fileBuffer = await readAudioFileBuffer(request?.file);
@@ -99,21 +104,33 @@ function createAiProviderRuntime(deps) {
     });
   }
 
-  async function runWithProviderOrder({ kind, openaiCall, openrouterCall }) {
+  async function runWithProviderOrder({ kind, geminiCall, openaiCall, openrouterCall }) {
     const hasOpenAI = Boolean(getOpenAIApiKey()) || typeof openaiFactory === "function";
+    const hasGemini = Boolean(getGeminiApiKey()) && typeof geminiCall === "function";
     const hasOpenRouter = Boolean(getOpenRouterApiKey());
-    if (!hasOpenAI && !hasOpenRouter) {
-      throw createHttpError(412, "INOVA_EXTENSION_AI_PROVIDER_CONFIG에 OpenRouter 또는 OpenAI API 키가 설정되지 않았어요.");
+    if (!hasOpenAI && !hasGemini && !hasOpenRouter) {
+      throw createHttpError(412, "INOVA_EXTENSION_AI_PROVIDER_CONFIG에 OpenRouter, Gemini 또는 OpenAI API 키가 설정되지 않았어요.");
     }
-    if (hasOpenRouter && !openRouterPrimaryFailed) {
+    if (hasOpenRouter && !openRouterPrimaryFailedKinds.has(kind)) {
       try {
         return await openrouterCall();
+      } catch (error) {
+        if ((!hasGemini && !hasOpenAI) || !isProviderFallbackableError(error)) {
+          throw error;
+        }
+        openRouterPrimaryFailedKinds.add(kind);
+        logProviderSecondary(kind, error, hasGemini ? "gemini" : "openai");
+      }
+    }
+    if (hasGemini && !geminiSecondaryFailedKinds.has(kind)) {
+      try {
+        return await geminiCall();
       } catch (error) {
         if (!hasOpenAI || !isProviderFallbackableError(error)) {
           throw error;
         }
-        openRouterPrimaryFailed = true;
-        logProviderSecondary(kind, error);
+        geminiSecondaryFailedKinds.add(kind);
+        logProviderSecondary(kind, error, "openai", "gemini");
       }
     }
     return openaiCall();
@@ -200,6 +217,59 @@ function createAiProviderRuntime(deps) {
         || process.env.OPENROUTER_TITLE
       ) || DEFAULT_OPENROUTER_TITLE,
     };
+  }
+
+  function getGeminiApiKey() {
+    const config = getProviderConfig();
+    return normalizeText(
+      config.gemini?.apiKey
+      || config.google?.apiKey
+      || config.googleAi?.apiKey
+      || config.geminiApiKey
+      || config.googleApiKey
+      || process.env.INOVA_EXTENSION_GEMINI_API_KEY
+    );
+  }
+
+  function getGeminiBaseUrl() {
+    const config = getProviderConfig();
+    return normalizeText(
+      config.gemini?.baseUrl
+      || config.google?.baseUrl
+      || config.googleAi?.baseUrl
+      || config.geminiBaseUrl
+      || process.env.GEMINI_BASE_URL
+    ) || DEFAULT_GEMINI_BASE_URL;
+  }
+
+  function resolveGeminiTranscribeModel(modelInput) {
+    const config = getProviderConfig();
+    return normalizeText(
+      config.gemini?.meetingTranscribeModel
+      || config.google?.meetingTranscribeModel
+      || config.googleAi?.meetingTranscribeModel
+      || config.geminiMeetingTranscribeModel
+      || process.env.GEMINI_MEETING_TRANSCRIBE_MODEL
+    )
+      || normalizeText(modelInput)
+      || DEFAULT_GEMINI_TRANSCRIBE_MODEL;
+  }
+
+  function resolveGeminiTranscribeThinkingLevel(model) {
+    const config = getProviderConfig();
+    const configured = normalizeText(
+      config.gemini?.meetingTranscribeThinkingLevel
+      || config.google?.meetingTranscribeThinkingLevel
+      || config.googleAi?.meetingTranscribeThinkingLevel
+      || config.geminiMeetingTranscribeThinkingLevel
+      || process.env.GEMINI_MEETING_TRANSCRIBE_THINKING_LEVEL
+    );
+    if (configured) {
+      return configured;
+    }
+    return /^gemini-3(?:\.|$|-)/i.test(normalizeText(model))
+      ? DEFAULT_GEMINI_TRANSCRIBE_THINKING_LEVEL
+      : "";
   }
 
   function resolveOpenRouterModel(modelInput, kind) {
@@ -324,14 +394,142 @@ function createAiProviderRuntime(deps) {
     return { type: format.type || "json_object" };
   }
 
-  async function readAudioFileBuffer(file) {
+  async function createGeminiAudioTranscription(request) {
+    const fileBuffer = await readAudioFileBuffer(request?.file, "Gemini 전사용 오디오 파일을 읽지 못했어요.");
+    const model = resolveGeminiTranscribeModel(request?.model);
+    const mimeType = resolveAudioMimeType(request?.file);
+    let uploadedFile = null;
+    try {
+      uploadedFile = await uploadGeminiFile({
+        fileBuffer,
+        fileName: normalizeText(request?.file?.name || request?.file?.filename) || "meeting-audio",
+        mimeType,
+      });
+      const payload = await generateGeminiTranscription({
+        file: uploadedFile,
+        language: request?.language,
+        mimeType,
+        model,
+      });
+      const text = extractGeminiText(payload);
+      if (!text) {
+        throw buildProviderError(502, {
+          error: { message: "Gemini 전사 결과가 비어 있어요.", code: "empty_transcription" },
+        });
+      }
+      return {
+        duration: request?.duration,
+        text,
+      };
+    } finally {
+      if (uploadedFile?.name) {
+        await deleteGeminiFile(uploadedFile.name).catch(() => {});
+      }
+    }
+  }
+
+  async function uploadGeminiFile({ fileBuffer, fileName, mimeType }) {
+    const displayName = normalizeGeminiDisplayName(fileName);
+    const startResponse = await fetchImpl(`${getGeminiBaseUrl()}/upload/v1beta/files`, {
+      body: JSON.stringify({ file: { display_name: displayName } }),
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Upload-Command": "start",
+        "X-Goog-Upload-Header-Content-Length": String(fileBuffer.length),
+        "X-Goog-Upload-Header-Content-Type": mimeType,
+        "X-Goog-Upload-Protocol": "resumable",
+        "x-goog-api-key": getGeminiApiKey(),
+      },
+      method: "POST",
+    });
+    const startPayload = await parseJsonResponse(startResponse);
+    if (!startResponse.ok) {
+      throw buildProviderError(startResponse.status, startPayload);
+    }
+    const uploadUrl = getHeaderValue(startResponse.headers, "x-goog-upload-url");
+    if (!uploadUrl) {
+      throw buildProviderError(502, {
+        error: { message: "Gemini Files API 업로드 URL을 받지 못했어요.", code: "missing_upload_url" },
+      });
+    }
+    const finalizeResponse = await fetchImpl(uploadUrl, {
+      body: fileBuffer,
+      headers: {
+        "Content-Length": String(fileBuffer.length),
+        "X-Goog-Upload-Command": "upload, finalize",
+        "X-Goog-Upload-Offset": "0",
+      },
+      method: "POST",
+    });
+    const finalizePayload = await parseJsonResponse(finalizeResponse);
+    if (!finalizeResponse.ok) {
+      throw buildProviderError(finalizeResponse.status, finalizePayload);
+    }
+    return finalizePayload?.file || finalizePayload;
+  }
+
+  async function generateGeminiTranscription({ file, language, mimeType, model }) {
+    const generationConfig = { temperature: 0 };
+    const thinkingLevel = resolveGeminiTranscribeThinkingLevel(model);
+    if (thinkingLevel) {
+      generationConfig.thinkingConfig = { thinkingLevel };
+    }
+    const response = await fetchImpl(`${getGeminiBaseUrl()}/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: buildGeminiTranscriptionPrompt(language) },
+            {
+              file_data: {
+                file_uri: file?.uri,
+                mime_type: normalizeText(file?.mimeType || file?.mime_type) || mimeType,
+              },
+            },
+          ],
+        }],
+        generationConfig,
+      }),
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": getGeminiApiKey(),
+      },
+      method: "POST",
+    });
+    const payload = await parseJsonResponse(response);
+    if (!response.ok) {
+      throw buildProviderError(response.status, payload);
+    }
+    return payload;
+  }
+
+  async function deleteGeminiFile(name) {
+    const normalizedName = normalizeText(name);
+    if (!normalizedName) {
+      return false;
+    }
+    const response = await fetchImpl(`${getGeminiBaseUrl()}/v1beta/${normalizedName}`, {
+      headers: { "x-goog-api-key": getGeminiApiKey() },
+      method: "DELETE",
+    });
+    return response.ok;
+  }
+
+  async function readAudioFileBuffer(file, errorMessage = "OpenRouter 전사용 오디오 파일을 읽지 못했어요.") {
     if (Buffer.isBuffer(file)) {
       return file;
     }
     if (file && typeof file.arrayBuffer === "function") {
       return Buffer.from(await file.arrayBuffer());
     }
-    throw createHttpError(400, "OpenRouter 전사용 오디오 파일을 읽지 못했어요.");
+    throw createHttpError(400, errorMessage);
+  }
+
+  function resolveAudioMimeType(file) {
+    const mimeType = normalizeText(file?.type).toLowerCase().split(";")[0];
+    if (mimeType) {
+      return mimeType;
+    }
+    return `audio/${resolveAudioFormat(file)}`;
   }
 
   function resolveAudioFormat(file) {
@@ -351,6 +549,43 @@ function createAiProviderRuntime(deps) {
     } catch {
       return {};
     }
+  }
+
+  function getHeaderValue(headers, name) {
+    if (!headers) {
+      return "";
+    }
+    if (typeof headers.get === "function") {
+      return normalizeText(headers.get(name));
+    }
+    return normalizeText(headers[name] || headers[name.toLowerCase()]);
+  }
+
+  function extractGeminiText(payload) {
+    return normalizeText(
+      (Array.isArray(payload?.candidates) ? payload.candidates : [])
+        .flatMap((candidate) => Array.isArray(candidate?.content?.parts) ? candidate.content.parts : [])
+        .map((part) => part?.text)
+        .filter(Boolean)
+        .join("\n")
+    );
+  }
+
+  function buildGeminiTranscriptionPrompt(language) {
+    const languageHint = normalizeText(language) || "ko";
+    return [
+      `Transcribe this ${languageHint} meeting audio as accurately as possible.`,
+      "Return only the spoken transcript text in chronological order.",
+      "Do not add summaries, speaker labels, markdown, translations, or explanations.",
+      "If speech is unclear, omit uncertain words instead of inventing content.",
+    ].join(" ");
+  }
+
+  function normalizeGeminiDisplayName(fileName) {
+    return `inova-meeting-${normalizeText(fileName) || "audio"}`
+      .replace(/[^a-zA-Z0-9_.-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 120) || "inova-meeting-audio";
   }
 
   function buildProviderError(status, payload) {
@@ -386,18 +621,19 @@ function createAiProviderRuntime(deps) {
       || message.includes("timeout");
   }
 
-  function logProviderSecondary(kind, error) {
+  function logProviderSecondary(kind, error, to, from = "openrouter") {
     logEvent("ai.provider.secondary", {
-      from: "openrouter",
+      from,
       kind,
       reason: normalizeText(error?.code || error?.type || error?.message).slice(0, 120),
-      to: "openai",
+      to,
     });
   }
 
   return {
     createClient,
     parseProviderConfig,
+    resolveGeminiTranscribeModel,
     resolveOpenRouterModel,
     resolveOpenRouterTranscribeModel,
   };

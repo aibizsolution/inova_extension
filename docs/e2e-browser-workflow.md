@@ -481,7 +481,7 @@ __INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20, entrie
 2. 입력창 바깥 우측 상단 `프롬프트 검토` 버튼이 composer에 anchor되는지 확인한다.
 3. 검토를 실행한다.
    - 프롬프트 검토 모델 기본값이 바뀐 PR에서는 실제 검토 1회를 실행해 응답 품질, JSON 파싱 오류 없음, timeout/degraded 표면을 함께 확인한다.
-   - AI provider 우선순위 변경 PR에서는 `INOVA_EXTENSION_AI_PROVIDER_CONFIG` JSON secret에 `openrouter.apiKey`가 포함되어 Functions에 mount된 상태에서 실제 검토 1회를 실행한다. OpenRouter가 먼저 호출되어야 하고 응답이 JSON 파싱까지 통과해야 하며, 실패하면 빈 결과나 성공 토스트가 아니라 explicit error/degraded 표면으로 보여야 한다.
+   - AI provider 우선순위 변경 PR에서는 `INOVA_EXTENSION_AI_PROVIDER_CONFIG` JSON secret에 `openrouter.apiKey`가 포함되어 Functions에 mount된 상태에서 실제 검토 1회를 실행한다. 회의 전사 fallback을 바꾼 경우 `gemini.apiKey`도 같은 JSON 안에서만 관리한다. OpenRouter가 먼저 호출되어야 하고, 회의 전사에서 OpenRouter가 실패하면 Gemini Files API fallback이 빈 전사를 성공으로 저장하지 않아야 하며, 모든 provider가 실패하면 빈 결과나 성공 토스트가 아니라 explicit error/degraded 표면으로 보여야 한다.
 4. 결과 헤더 우측에 `n/100` 점수 칩과 `?` 도움말이 보여야 한다.
 5. 결과는 `바로 고칠 점 -> 다듬은 프롬프트 -> 기준 항목 평가` 순서로 열려야 한다.
 6. 다듬은 프롬프트가 문장 단위 줄바꿈으로 읽히는지 확인한다.

@@ -47,7 +47,7 @@
 - `meeting-common-domain.js`는 `meeting-service.js`, `meeting-launch-service.js`, `meeting-workspace-auth-service.js`가 함께 쓰는 shared normalization boundary다.
 - ownership assert와 제목 동기화 helper는 service-local workflow에 가까우므로 `meeting-service.js` 안에 남긴다.
 - `meeting-creation-domain.js`, `meeting-processing-domain.js`, `meeting-summary-sync-domain.js`, `meeting-deletion-domain.js`, `meeting-notes-source-domain.js`처럼 설명 가능한 workflow/data boundary만 독립 모듈로 유지한다.
-- `meeting-processing-runtime-domain.js`는 AI provider 전사 호출(OpenRouter 우선, OpenAI 보조), retry/error 분류, chunk 병렬 처리, transcript merge/dedupe를 묶는 runtime boundary다. `meeting-processing-domain.js`는 queue/finalizer workflow를 유지하고 runtime 세부 정책은 이 모듈에 위임한다.
+- `meeting-processing-runtime-domain.js`는 AI provider 전사 호출(OpenRouter 우선, Gemini Files API 보조, OpenAI optional fallback), retry/error 분류, chunk 병렬 처리, transcript merge/dedupe를 묶는 runtime boundary다. `meeting-processing-domain.js`는 queue/finalizer workflow를 유지하고 runtime 세부 정책은 이 모듈에 위임한다.
 - `meeting-runtime-artifact-domain.js`는 temp source 업로드/정리, chunk transcript 저장/로드, runtime artifact cleanup을 묶는 storage lifecycle boundary다. `meeting-creation-domain.js`, `meeting-processing-domain.js`, `meeting-deletion-domain.js`가 같은 runtime artifact 규칙을 공유할 때 이 모듈을 우선 본다.
 - `meeting-owned-query-domain.js`는 owner-scoped meeting/job 조회를 묶는 Firestore query boundary다. `meeting-notes-edit-domain.js`, meeting hub list, delete request handler가 같은 owner filter와 emulator fallback 규칙을 공유할 때 이 모듈을 우선 본다.
 - `meeting-deletion-domain.js`는 queue/sweep뿐 아니라 soft delete 시작 단계도 포함한 deletion workflow boundary다. 회의 결과/회의 삭제 handler는 tombstone patch를 직접 만들기보다 이 모듈에 위임한다.
@@ -62,6 +62,7 @@
 - `discussionFlow`는 단순 주제 목록이 아니라 회의 진행 흐름을 보존한다. 같은 안건이 뒤에서 다시 등장해 새 결정, 조건, 반론, 리스크를 만들면 같은 heading이어도 별도 항목으로 남긴다.
 - Functions 전사 source part 검증 상한은 OpenAI 25MB 업로드 제한보다 낮은 24MB를 기준으로 유지한다. `gpt-4o-transcribe` 단일 오디오 제한 1400초보다 낮은 23분 안전선을 넘으면 파일이 작아도 chunked로 전환한다.
 - hosted chunked source는 OpenRouter 전사 502를 줄이되 전사 품질을 과하게 해치지 않기 위해 12kHz mono WAV, 10분 chunk, 1.5초 overlap으로 올라온다는 전제를 둔다. Functions는 각 part가 24MB 검증 상한 아래인지 확인하고, part 자체를 다시 재분할하지 않는다.
+- Gemini 전사 fallback은 Gemini 전용 STT endpoint가 아니라 Files API 업로드 후 `generateContent` 오디오 입력으로 처리한다. `gemini-3.5-flash`는 전사에서 `thinkingLevel: "minimal"`을 기본으로 써야 긴 회의 chunk에서 빈 응답/지연을 줄일 수 있으며, 빈 전사는 성공으로 저장하지 않는다. 업로드한 Gemini file은 성공/실패와 관계없이 best-effort 삭제한다.
 - 전사 결과가 같은 문장을 비정상적으로 반복하면 성공 저장하지 않는다. `meeting-processing-runtime-domain.js`는 반복 전사를 한 번 재시도하고, 재시도 후에도 반복이면 명시적 실패로 드러낸다.
 
 ## 관련 데이터 경계
