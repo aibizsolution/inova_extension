@@ -3,9 +3,11 @@ const DEFAULT_OPENROUTER_REFERER = "https://browser-extension-v2.web.app";
 const DEFAULT_OPENROUTER_TITLE = "i-Nova Extension";
 const DEFAULT_OPENROUTER_TRANSCRIBE_MODEL = "openai/gpt-4o-transcribe";
 const DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com";
+const DEFAULT_GEMINI_OPENAI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai";
 const DEFAULT_GEMINI_TRANSCRIBE_MODEL = "gemini-3.5-flash";
 const DEFAULT_GEMINI_TRANSCRIBE_THINKING_LEVEL = "minimal";
 const DEFAULT_GEMINI_TRANSCRIBE_MAX_OUTPUT_TOKENS = 16384;
+const DEFAULT_GEMINI_MEETING_SUMMARY_MODEL = "gemini-3.1-pro-preview";
 
 function createAiProviderRuntime(deps) {
   const {
@@ -19,6 +21,7 @@ function createAiProviderRuntime(deps) {
 
   let openAIClient = null;
   let openRouterClient = null;
+  let geminiOpenAIClient = null;
   const openRouterPrimaryFailedKinds = new Set();
   const geminiSecondaryFailedKinds = new Set();
   let providerConfig = null;
@@ -44,11 +47,16 @@ function createAiProviderRuntime(deps) {
   async function createChatCompletion(request) {
     return runWithProviderOrder({
       kind: "chat",
+      geminiCall: () => getGeminiOpenAIClient().chat.completions.create({
+        ...request,
+        model: resolveGeminiMeetingSummaryModel(request?.model),
+      }),
       openaiCall: () => getOpenAIClient().chat.completions.create(request),
       openrouterCall: () => getOpenRouterClient().chat.completions.create({
         ...request,
         model: resolveOpenRouterModel(request?.model, "chat"),
       }),
+      preferGemini: Boolean(getGeminiMeetingSummaryModel()),
     });
   }
 
@@ -181,6 +189,21 @@ function createAiProviderRuntime(deps) {
     return openRouterClient;
   }
 
+  function getGeminiOpenAIClient() {
+    if (geminiOpenAIClient) {
+      return geminiOpenAIClient;
+    }
+    const apiKey = getGeminiApiKey();
+    if (!apiKey) {
+      throw createHttpError(412, "INOVA_EXTENSION_AI_PROVIDER_CONFIG.gemini.apiKey가 설정되지 않았어요.");
+    }
+    geminiOpenAIClient = new OpenAI({
+      apiKey,
+      baseURL: getGeminiOpenAIBaseUrl(),
+    });
+    return geminiOpenAIClient;
+  }
+
   function getOpenAIApiKey() {
     const config = getProviderConfig();
     return normalizeText(
@@ -253,6 +276,34 @@ function createAiProviderRuntime(deps) {
       || config.geminiBaseUrl
       || process.env.GEMINI_BASE_URL
     ) || DEFAULT_GEMINI_BASE_URL;
+  }
+
+  function getGeminiOpenAIBaseUrl() {
+    const config = getProviderConfig();
+    return normalizeText(
+      config.gemini?.openaiBaseUrl
+      || config.google?.openaiBaseUrl
+      || config.googleAi?.openaiBaseUrl
+      || config.geminiOpenAIBaseUrl
+      || process.env.GEMINI_OPENAI_BASE_URL
+    ) || DEFAULT_GEMINI_OPENAI_BASE_URL;
+  }
+
+  function getGeminiMeetingSummaryModel() {
+    const config = getProviderConfig();
+    return normalizeText(
+      config.gemini?.meetingSummaryModel
+      || config.google?.meetingSummaryModel
+      || config.googleAi?.meetingSummaryModel
+      || config.geminiMeetingSummaryModel
+      || process.env.GEMINI_MEETING_SUMMARY_MODEL
+    );
+  }
+
+  function resolveGeminiMeetingSummaryModel(modelInput) {
+    return getGeminiMeetingSummaryModel()
+      || normalizeText(modelInput)
+      || DEFAULT_GEMINI_MEETING_SUMMARY_MODEL;
   }
 
   function resolveGeminiTranscribeModel(modelInput) {

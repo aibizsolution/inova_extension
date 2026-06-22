@@ -8,6 +8,8 @@ async function main() {
   await verifyOpenAIUsedWhenOpenRouterMissing();
   await verifyLocalOpenRouterEnvCompatibility();
   await verifyOpenAISecondaryAfterOpenRouterFailure();
+  await verifyGeminiPreferredForMeetingSummaryWhenConfigured();
+  await verifyOpenRouterMeetingSummaryFallbackAfterGeminiFailure();
   await verifyResponsesFallbackMapsJsonSchema();
   await verifyOpenRouterTranscriptionRequest();
   await verifyGeminiPreferredForTranscriptionWhenConfigured();
@@ -134,6 +136,99 @@ async function verifyOpenAISecondaryAfterOpenRouterFailure() {
     assert.equal(events[0].payload.kind, "chat");
     assert.equal(events[0].payload.from, "openrouter");
     assert.equal(events[0].payload.to, "openai");
+  } finally {
+    restoreEnv("INOVA_EXTENSION_AI_PROVIDER_CONFIG", previousConfig);
+    restoreEnv("INOVA_EXTENSION_OPENAI_API_KEY", previousOpenAIKey);
+    restoreEnv("INOVA_EXTENSION_OPENROUTER_API_KEY", previousOpenRouterKey);
+  }
+}
+
+async function verifyGeminiPreferredForMeetingSummaryWhenConfigured() {
+  const previousConfig = process.env.INOVA_EXTENSION_AI_PROVIDER_CONFIG;
+  const previousOpenAIKey = process.env.INOVA_EXTENSION_OPENAI_API_KEY;
+  const previousOpenRouterKey = process.env.INOVA_EXTENSION_OPENROUTER_API_KEY;
+  try {
+    process.env.INOVA_EXTENSION_AI_PROVIDER_CONFIG = JSON.stringify({
+      gemini: {
+        apiKey: "fixture-gemini-key",
+        meetingSummaryModel: "gemini-3.1-pro-preview",
+      },
+      openrouter: {
+        apiKey: "fixture-openrouter-key",
+        meetingSummaryModel: "openai/gpt-5.5",
+      },
+    });
+    process.env.INOVA_EXTENSION_OPENAI_API_KEY = "";
+    process.env.INOVA_EXTENSION_OPENROUTER_API_KEY = "";
+    const calls = [];
+    const events = [];
+    const runtime = createAiProviderRuntime({
+      OpenAI: createFakeOpenAIClass({ calls }),
+      createHttpError,
+      logEvent(name, payload) {
+        events.push({ name, payload });
+      },
+    });
+    const completion = await runtime.createClient().chat.completions.create({
+      messages: [{ role: "user", content: "meeting transcript" }],
+      model: "gpt-5.5",
+      response_format: { type: "json_object" },
+    });
+    assert.equal(completion.choices[0].message.content, "{\"gemini\":true}");
+    assert.equal(events.length, 0);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].baseURL, "https://generativelanguage.googleapis.com/v1beta/openai");
+    assert.equal(calls[0].request.model, "gemini-3.1-pro-preview");
+    assert.equal(calls[0].request.response_format.type, "json_object");
+  } finally {
+    restoreEnv("INOVA_EXTENSION_AI_PROVIDER_CONFIG", previousConfig);
+    restoreEnv("INOVA_EXTENSION_OPENAI_API_KEY", previousOpenAIKey);
+    restoreEnv("INOVA_EXTENSION_OPENROUTER_API_KEY", previousOpenRouterKey);
+  }
+}
+
+async function verifyOpenRouterMeetingSummaryFallbackAfterGeminiFailure() {
+  const previousConfig = process.env.INOVA_EXTENSION_AI_PROVIDER_CONFIG;
+  const previousOpenAIKey = process.env.INOVA_EXTENSION_OPENAI_API_KEY;
+  const previousOpenRouterKey = process.env.INOVA_EXTENSION_OPENROUTER_API_KEY;
+  try {
+    process.env.INOVA_EXTENSION_AI_PROVIDER_CONFIG = JSON.stringify({
+      gemini: {
+        apiKey: "fixture-gemini-key",
+        meetingSummaryModel: "gemini-3.1-pro-preview",
+      },
+      openrouter: {
+        apiKey: "fixture-openrouter-key",
+        meetingSummaryModel: "openai/gpt-5.5",
+      },
+    });
+    process.env.INOVA_EXTENSION_OPENAI_API_KEY = "";
+    process.env.INOVA_EXTENSION_OPENROUTER_API_KEY = "";
+    const calls = [];
+    const events = [];
+    const runtime = createAiProviderRuntime({
+      OpenAI: createFakeOpenAIClass({
+        calls,
+        geminiChatError: createAuthError(),
+      }),
+      createHttpError,
+      logEvent(name, payload) {
+        events.push({ name, payload });
+      },
+    });
+    const completion = await runtime.createClient().chat.completions.create({
+      messages: [{ role: "user", content: "meeting transcript" }],
+      model: "gpt-5.5",
+      response_format: { type: "json_object" },
+    });
+    assert.equal(completion.choices[0].message.content, "{\"ok\":true}");
+    assert.equal(calls.length, 2);
+    assert.equal(calls[0].baseURL, "https://generativelanguage.googleapis.com/v1beta/openai");
+    assert.equal(calls[1].baseURL, "https://openrouter.ai/api/v1");
+    assert.equal(calls[1].request.model, "openai/gpt-5.5");
+    assert.equal(events.length, 1);
+    assert.equal(events[0].payload.from, "gemini");
+    assert.equal(events[0].payload.to, "openrouter");
   } finally {
     restoreEnv("INOVA_EXTENSION_AI_PROVIDER_CONFIG", previousConfig);
     restoreEnv("INOVA_EXTENSION_OPENAI_API_KEY", previousOpenAIKey);
@@ -400,10 +495,17 @@ function createFakeOpenAIClass(options = {}) {
         completions: {
           create: async (request) => {
             if (config.baseURL) {
+              if (String(config.baseURL).includes("generativelanguage.googleapis.com")) {
+                options.calls?.push({ baseURL: config.baseURL, request });
+                if (options.geminiChatError) {
+                  throw options.geminiChatError;
+                }
+                return { choices: [{ message: { content: "{\"gemini\":true}" } }] };
+              }
+              options.calls?.push({ baseURL: config.baseURL, request });
               if (options.openRouterChatError) {
                 throw options.openRouterChatError;
               }
-              options.calls?.push({ baseURL: config.baseURL, request });
               return { choices: [{ message: { content: "{\"ok\":true}" } }] };
             }
             options.calls?.push({ baseURL: "", request });

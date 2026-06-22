@@ -147,7 +147,7 @@
 8. chunk 준비/업로드 진행 표시는 작은 샘플로 자연스럽게 보일 때만 확인한다. 큰 원본이나 긴 원본을 새로 만들어 시간을 쓰지 않는다.
    - chunk 정책 변경 PR에서는 hosted 기본값이 OpenRouter-safe 기준인 10분 target, 14MB target, 1.5초 overlap인지 source policy 검증으로 확인한다. 실제 긴 파일을 기다리는 대신 fixture/stub 또는 기존 운영 evidence로 part 수와 part size 상한을 확인한다.
 9. 원격 처리 성공 후 completed record 검증은 기존 완료 record를 우선 사용하고, 새 녹음의 전사 완료까지 오래 기다리지 않는다.
-   - AI provider 우선순위 변경 PR에서는 `INOVA_EXTENSION_AI_PROVIDER_CONFIG` JSON secret에 `openrouter.apiKey`가 포함되어 Functions에 mount된 상태에서 짧은 샘플 import 또는 기존 완료 record 기반 재처리를 확인한다. 회의 전사는 비용 정책상 `gemini.apiKey`도 같은 JSON 안에서만 관리하고 Gemini Files API가 먼저 호출되어야 한다. Gemini 빈 전사/truncation/timeout은 성공으로 저장하지 않고 OpenRouter fallback 또는 explicit error로 드러나야 한다.
+   - AI provider 우선순위 변경 PR에서는 `INOVA_EXTENSION_AI_PROVIDER_CONFIG` JSON secret에 `openrouter.apiKey`가 포함되어 Functions에 mount된 상태에서 짧은 샘플 import 또는 기존 완료 record 기반 재처리를 확인한다. 회의 전사와 회의록 생성은 `gemini.apiKey`도 같은 JSON 안에서만 관리한다. 전사는 Gemini Files API, 회의록 생성/섹션 AI 수정은 Gemini OpenAI-compatible chat completion이 먼저 호출되어야 한다. Gemini 빈 전사/truncation/timeout 또는 JSON shape 실패는 성공으로 저장하지 않고 OpenRouter fallback, explicit error, 또는 degraded 상태로 드러나야 한다.
    - 실패 후 재시도 또는 운영 복구로 completed가 된 record는 Firestore job의 `status`와 `notesStatus`가 성공 상태이고, 이전 실패의 `error`와 `retry.lastError`가 completed 화면에 남지 않아야 한다.
 10. completed record에서 `원본 다운로드`가 가능해야 한다. Bridge에서 blob anchor 다운로드가 `download` 이벤트로 잡히지 않을 수 있으므로, 이 경우 버튼 click handler, 성공 토스트, 로컬 pending blob 존재를 함께 보고 실패 여부를 판단한다.
 
