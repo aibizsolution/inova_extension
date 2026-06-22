@@ -26,6 +26,7 @@
     "check:function-logs": "node scripts/check-function-logs.js",
     "check:function-runtime": "node scripts/check-function-runtime.js",
     "check:feature-usage": "node scripts/check-feature-usage.js",
+    "eval:gemini-meeting-notes": "node scripts/run-gemini-meeting-notes-tuning-eval.js",
     "cleanup:artifacts": "node scripts/cleanup-local-artifacts.js",
     "cleanup:logs": "node scripts/cleanup-local-artifacts.js",
     "cleanup:branches": "node scripts/cleanup-local-branches.js",
