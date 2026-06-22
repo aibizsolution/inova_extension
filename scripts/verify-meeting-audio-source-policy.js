@@ -7,12 +7,13 @@ const vm = require("vm");
 
 const repoRoot = path.resolve(__dirname, "..");
 const MB = 1024 * 1024;
-const EXPECTED_OPENAI_SAFE_PART_BYTES = 24 * MB;
+const EXPECTED_OPENROUTER_SAFE_PART_BYTES = 14 * MB;
+const EXPECTED_FUNCTIONS_MAX_PART_BYTES = 24 * MB;
 const EXPECTED_OPENAI_SAFE_SINGLE_DURATION_MS = 23 * 60 * 1000;
-const EXPECTED_CHUNK_DURATION_MS = 14 * 60 * 1000;
+const EXPECTED_CHUNK_DURATION_MS = 10 * 60 * 1000;
 const EXPECTED_CHUNK_OVERLAP_MS = 1500;
 const EXPECTED_CHUNK_SAMPLE_RATE = 12000;
-const EXPECTED_BOUNDARY_SEARCH_WINDOW_MS = 45 * 1000;
+const EXPECTED_BOUNDARY_SEARCH_WINDOW_MS = 30 * 1000;
 const EXPECTED_BOUNDARY_ANALYSIS_WINDOW_MS = 500;
 const EXPECTED_BOUNDARY_ANALYSIS_STEP_MS = 250;
 const EXPECTED_RECORDING_AUDIO_BITS_PER_SECOND = 64000;
@@ -37,28 +38,28 @@ function main() {
     "successful remote meeting upload transitions should persist the completed local source copy"
   );
   assert(
-    sharedSource.includes("DEFAULT_SOURCE_TARGET_PART_BYTES = 24 * 1024 * 1024"),
-    "hosted meeting source part target must stay below OpenAI's 25MB upload limit"
+    sharedSource.includes("DEFAULT_SOURCE_TARGET_PART_BYTES = 14 * 1024 * 1024"),
+    "hosted meeting source part target must stay below the measured OpenRouter 502 boundary"
   );
   assert(
     meetingServiceSource.includes("DEFAULT_SOURCE_TARGET_PART_BYTES = 24 * 1024 * 1024"),
-    "functions meeting source part target must stay below OpenAI's 25MB upload limit"
+    "functions meeting source part validation must keep the OpenAI-compatible 25MB upper bound"
   );
   assert(
     sharedSource.includes("DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS = 23 * 60 * 1000"),
     "hosted single transcription duration must stay below the gpt-4o-transcribe 1400 second limit"
   );
   assert(
-    sharedSource.includes("DEFAULT_SOURCE_CHUNK_DURATION_MS = 14 * 60 * 1000"),
-    "hosted chunk duration should avoid over-splitting long-but-small meeting audio"
+    sharedSource.includes("DEFAULT_SOURCE_CHUNK_DURATION_MS = 10 * 60 * 1000"),
+    "hosted chunk duration should use the largest measured OpenRouter-safe transcription window"
   );
   assert(
     sharedSource.includes("DEFAULT_SOURCE_CHUNK_SAMPLE_RATE = 12000"),
     "hosted chunk sample rate should keep default WAV chunks below OpenAI's 25MB upload limit"
   );
   assert(
-    sharedSource.includes("DEFAULT_SOURCE_BOUNDARY_SEARCH_WINDOW_MS = 45 * 1000"),
-    "hosted chunking should search around the target boundary instead of cutting only on fixed duration"
+    sharedSource.includes("DEFAULT_SOURCE_BOUNDARY_SEARCH_WINDOW_MS = 30 * 1000"),
+    "hosted chunking should search near the smaller OpenRouter-safe target boundary"
   );
   assert(
     audioChunkerSource.includes("chooseLowEnergyBoundary"),
@@ -76,7 +77,7 @@ function main() {
   const context = buildHostedMeetingVmContext();
   vm.runInNewContext(sharedSource, context, { filename: "hosting/meeting/shared.js" });
   const ns = context.__INOVA_HOSTED_MEETING__;
-  assert.equal(ns.shared.DEFAULT_SOURCE_TARGET_PART_BYTES, EXPECTED_OPENAI_SAFE_PART_BYTES);
+  assert.equal(ns.shared.DEFAULT_SOURCE_TARGET_PART_BYTES, EXPECTED_OPENROUTER_SAFE_PART_BYTES);
   assert.equal(ns.shared.DEFAULT_SOURCE_SINGLE_TRANSCRIBE_MAX_DURATION_MS, EXPECTED_OPENAI_SAFE_SINGLE_DURATION_MS);
   assert.equal(ns.shared.DEFAULT_SOURCE_CHUNK_DURATION_MS, EXPECTED_CHUNK_DURATION_MS);
   assert.equal(ns.shared.DEFAULT_SOURCE_CHUNK_SAMPLE_RATE, EXPECTED_CHUNK_SAMPLE_RATE);
@@ -90,18 +91,18 @@ function main() {
     "hosted meeting default recorder bitrate must stay at 64kbps"
   );
   assert(
-    estimateMonoWav16Bytes(EXPECTED_CHUNK_DURATION_MS, EXPECTED_CHUNK_SAMPLE_RATE) <= EXPECTED_OPENAI_SAFE_PART_BYTES,
+    estimateMonoWav16Bytes(EXPECTED_CHUNK_DURATION_MS, EXPECTED_CHUNK_SAMPLE_RATE) <= EXPECTED_OPENROUTER_SAFE_PART_BYTES,
     "default chunk WAV size must stay below the source part target"
   );
   assert.equal(
     estimateChunkPartCount(1591698, EXPECTED_CHUNK_DURATION_MS, EXPECTED_CHUNK_OVERLAP_MS),
-    2,
-    "a 26m31s meeting should split into two OpenAI-safe chunks, not three"
+    3,
+    "a 26m31s meeting should split into a few large OpenRouter-safe chunks"
   );
   assert.equal(
     estimateChunkPartCount(30 * 60 * 1000, EXPECTED_CHUNK_DURATION_MS, EXPECTED_CHUNK_OVERLAP_MS),
-    3,
-    "a 30 minute meeting should not force oversized two-part chunks"
+    4,
+    "a 30 minute meeting should avoid excessive fragmentation while staying OpenRouter-safe"
   );
 
   vm.runInNewContext(audioChunkerSource, context, { filename: "hosting/meeting/audio-chunker.js" });
@@ -156,22 +157,27 @@ function main() {
   });
 
   assert.equal(
-    controller.inferSourceMode(EXPECTED_OPENAI_SAFE_PART_BYTES, EXPECTED_OPENAI_SAFE_SINGLE_DURATION_MS),
+    controller.inferSourceMode(EXPECTED_OPENROUTER_SAFE_PART_BYTES, EXPECTED_OPENAI_SAFE_SINGLE_DURATION_MS),
     "single",
-    "small files at the OpenAI-safe single duration should stay in single source mode"
+    "small files at the OpenRouter-safe target and OpenAI-safe single duration should stay in single source mode"
   );
   assert.equal(
-    controller.inferSourceMode(EXPECTED_OPENAI_SAFE_PART_BYTES, EXPECTED_OPENAI_SAFE_SINGLE_DURATION_MS + 1),
+    controller.inferSourceMode(EXPECTED_OPENROUTER_SAFE_PART_BYTES, EXPECTED_OPENAI_SAFE_SINGLE_DURATION_MS + 1),
     "chunked",
     "small files above the gpt-4o-transcribe single-audio duration limit must use chunked source mode"
   );
   assert.equal(
-    controller.inferSourceMode(EXPECTED_OPENAI_SAFE_PART_BYTES + 1, 60 * 1000),
+    controller.inferSourceMode(EXPECTED_OPENROUTER_SAFE_PART_BYTES + 1, 60 * 1000),
     "chunked",
-    "files above the OpenAI-safe upload limit must use chunked source mode"
+    "files above the OpenRouter-safe hosted target must use chunked source mode"
   );
 
-  console.log("[verify-meeting-audio-source-policy] OpenAI-safe meeting source policy passed");
+  assert(
+    EXPECTED_FUNCTIONS_MAX_PART_BYTES > EXPECTED_OPENROUTER_SAFE_PART_BYTES,
+    "functions validation ceiling should remain above the hosted OpenRouter-safe target"
+  );
+
+  console.log("[verify-meeting-audio-source-policy] OpenRouter-safe meeting source policy passed");
 }
 
 function buildHostedMeetingVmContext() {

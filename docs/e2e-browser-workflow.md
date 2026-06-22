@@ -394,6 +394,7 @@ npm.cmd run check:feature-usage -- --days 1 --limit 20
    - 길이를 끝내 확인하지 못하면 사용자 오류가 남아야 한다.
    - 2시간 초과 또는 원본 크기 제한 초과 차단은 실제 긴 파일을 기다리지 않고, fixture나 metadata stub이 있을 때만 확인한다.
 8. chunk 준비/업로드 진행 표시는 작은 샘플로 자연스럽게 보일 때만 확인한다. 큰 원본이나 긴 원본을 새로 만들어 시간을 쓰지 않는다.
+   - chunk 정책 변경 PR에서는 hosted 기본값이 OpenRouter-safe 기준인 10분 target, 14MB target, 1.5초 overlap인지 source policy 검증으로 확인한다.
 9. 원격 처리 성공 후 completed record 검증은 기존 완료 record를 우선 사용하고, 새 녹음의 전사 완료까지 오래 기다리지 않는다.
 10. completed record에서 `원본 다운로드`가 가능해야 한다. Bridge에서 blob anchor 다운로드가 `download` 이벤트로 잡히지 않을 수 있으므로, 이 경우 버튼 click handler, 성공 토스트, 로컬 pending blob 존재를 함께 보고 실패 여부를 판단한다.
 

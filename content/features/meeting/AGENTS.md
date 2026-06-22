@@ -60,8 +60,8 @@
 - 녹음/불러오기 원본 blob은 원격 전사 성공 후에도 completed record에 연결된 로컬 pending entry로 보관한다. 서버 임시 source는 삭제될 수 있으므로, 사용자가 기록/회의를 삭제하기 전에는 `원본 다운로드` 버튼이 남아야 한다.
 - 서버 임시 source는 Firebase Storage default bucket의 `tmp/` prefix에만 둔다. 클라이언트는 Storage를 직접 읽고 쓰지 않고, Functions가 처리 후 삭제하며 bucket lifecycle이 잔존 임시 object를 정리한다.
 - 오디오 import 길이는 메타데이터를 먼저 읽고, 실패하면 실제 decode로 다시 계산한다. 두 경로가 모두 실패할 때만 사용자 오류를 유지한다.
-- OpenAI 전사용 source mode는 `gpt-4o-transcribe`의 실제 제한을 따른다. OpenAI 25MB 업로드 제한보다 낮은 24MB target을 넘거나, 모델 단일 오디오 제한 1400초보다 낮은 23분 안전선을 넘으면 chunked로 전환한다.
-- chunked source는 12kHz mono WAV, 14분 target, 1.5초 overlap을 기본으로 쓴다. 14분 target은 24MB target 아래에 머무르면서 26분대 회의가 3개가 아니라 2개 part로 나뉘는 최소선에 가깝게 잡은 값이다. 실제 경계는 target 주변 45초 안에서 500ms low-energy 구간을 찾아 조정한다.
+- Hosted 전사 source mode는 OpenRouter first 운영을 기준으로 한다. 14MB target을 넘거나, `gpt-4o-transcribe` 단일 오디오 제한 1400초보다 낮은 23분 안전선을 넘으면 chunked로 전환한다. Functions의 수용 상한은 구버전/호환 입력을 위해 OpenAI 25MB 업로드 제한보다 낮은 24MB로 유지한다.
+- chunked source는 12kHz mono WAV, 10분 target, 1.5초 overlap을 기본으로 쓴다. OpenRouter 공식 STT 문서는 very large audio가 upstream 60초 timeout에 걸릴 수 있어 smaller segment를 권장하지만 정확한 MB 상한은 제시하지 않는다. 현재 값은 운영 실패 오디오로 10.5분/14.42MB까지 성공하고 11분/15.11MB부터 502가 재현된 결과를 기준으로 한다. 실제 경계는 target 주변 30초 안에서 500ms low-energy 구간을 찾아 조정한다.
 - hosted 작업실은 녹음 중이거나 실제 업로드가 진행 중일 때만 브라우저 기본 이탈 경고를 유지하고, 원격 처리만 남은 상태는 과하게 막지 않는다.
 - 회의 제목은 UI에서 회의를 구분하는 편집용 라벨이다. 최초 회의 정리 생성 prompt에는 제목이 아니라 전사와 공용 메모만 사용한다.
 - hosted 작업실의 회의록 보정은 전체 재생성이 아니라 `회의별 용어 치환`과 `섹션 단위 preview/apply`로 제한한다.

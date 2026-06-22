@@ -17,8 +17,8 @@
 - meeting source audio와 chunk transcript의 원격 Storage 접근은 Functions Admin SDK가 맡는다. 브라우저/hosted client가 Firebase Storage SDK로 bucket을 직접 read/write하는 흐름을 추가하지 않는다.
 - imported audio duration은 메타데이터 -> decode fallback 순서로 계산하고, 최종 길이 계산까지 실패했을 때만 사용자 오류를 유지한다.
 - 녹음/불러오기 원본 blob은 원격 처리 성공 후에도 completed record의 pending entry에 로컬 보관한다. 원격 source storage는 처리 후 삭제될 수 있으므로, 사용자가 명시적으로 기록/회의를 삭제하기 전까지 `원본 다운로드`가 가능해야 한다.
-- OpenAI 전사용 source mode는 OpenAI 파일 업로드 제한보다 낮은 24MB target을 초과하거나 `gpt-4o-transcribe` 단일 오디오 제한 1400초보다 낮은 23분 안전선을 넘으면 chunked로 전환한다.
-- chunked source는 12kHz mono WAV, 14분 target, 1.5초 overlap을 기본으로 쓴다. 실제 경계는 14분 지점 주변 45초 안에서 500ms 단위 low-energy 구간을 찾아 조정하되, part WAV는 24MB target 아래에 머물러야 한다.
+- Hosted source mode는 OpenRouter 전사 안정성을 우선해 14MB target을 초과하거나 `gpt-4o-transcribe` 단일 오디오 제한 1400초보다 낮은 23분 안전선을 넘으면 chunked로 전환한다. Functions 쪽 검증 상한은 구버전/호환 입력을 위해 OpenAI 25MB 제한보다 낮은 24MB로 유지한다.
+- chunked source는 12kHz mono WAV, 10분 target, 1.5초 overlap을 기본으로 쓴다. OpenRouter 공식 STT 문서는 very large audio가 upstream 60초 timeout에 걸릴 수 있어 smaller segment를 권장하지만 정확한 MB 상한은 제시하지 않는다. 현재 값은 20MB 안팎 WAV가 502로 실패하고, 같은 실제 오디오에서 10.5분/14.42MB까지 성공, 11분/15.11MB부터 502가 재현된 결과를 기준으로 한다. 실제 경계는 10분 지점 주변 30초 안에서 500ms 단위 low-energy 구간을 찾아 조정하되, part WAV는 14MB target 아래에 머물러야 한다.
 - hosted 작업실은 녹음 중이거나 실제 업로드가 진행 중일 때만 브라우저 기본 `beforeunload` 경고를 유지한다.
 
 ## recovery / sync 경계

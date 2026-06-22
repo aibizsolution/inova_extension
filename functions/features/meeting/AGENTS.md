@@ -60,8 +60,8 @@
 - 회의록 자동 생성은 `skip`만이 아니라 `full`과 `compact` 두 출력 프로필을 가질 수 있다. 짧은 테스트성/저신호 전사는 `compact`로 정리하되, 정식 회의처럼 서사를 부풀리지 않는다.
 - 회의록 자동 생성은 항목 수를 채우기 위해 결정/리스크/미결정 사항을 만들지 않는다. 각 배열은 근거가 없으면 0개가 정상이며, 근거가 많을 때만 상한까지 분리한다.
 - `discussionFlow`는 단순 주제 목록이 아니라 회의 진행 흐름을 보존한다. 같은 안건이 뒤에서 다시 등장해 새 결정, 조건, 반론, 리스크를 만들면 같은 heading이어도 별도 항목으로 남긴다.
-- OpenAI 전사 source part target은 OpenAI 25MB 업로드 제한보다 낮은 24MB를 기준으로 유지한다. `gpt-4o-transcribe` 단일 오디오 제한 1400초보다 낮은 23분 안전선을 넘으면 파일이 작아도 chunked로 전환한다.
-- hosted chunked source는 12kHz mono WAV, 14분 chunk, 1.5초 overlap으로 올라온다는 전제를 둔다. Functions는 각 part가 24MB target 아래인지 검증하고, part 자체를 다시 재분할하지 않는다.
+- Functions 전사 source part 검증 상한은 OpenAI 25MB 업로드 제한보다 낮은 24MB를 기준으로 유지한다. `gpt-4o-transcribe` 단일 오디오 제한 1400초보다 낮은 23분 안전선을 넘으면 파일이 작아도 chunked로 전환한다.
+- hosted chunked source는 OpenRouter 전사 502를 줄이되 전사 품질을 과하게 해치지 않기 위해 12kHz mono WAV, 10분 chunk, 1.5초 overlap으로 올라온다는 전제를 둔다. Functions는 각 part가 24MB 검증 상한 아래인지 확인하고, part 자체를 다시 재분할하지 않는다.
 - 전사 결과가 같은 문장을 비정상적으로 반복하면 성공 저장하지 않는다. `meeting-processing-runtime-domain.js`는 반복 전사를 한 번 재시도하고, 재시도 후에도 반복이면 명시적 실패로 드러낸다.
 
 ## 관련 데이터 경계
