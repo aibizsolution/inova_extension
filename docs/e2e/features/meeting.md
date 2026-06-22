@@ -162,6 +162,7 @@
 5. `AI 수정`은 `AI 미리보기 -> 적용` 순서여야 하고, preview 없는 apply는 막혀야 한다.
    - 회의록 요약/수정 모델 기본값이 바뀐 PR에서는 기존 완료 record에서 AI 미리보기 1회를 실행해 응답 품질, timeout/degraded 표면, preview 적용 흐름을 함께 확인한다.
    - 회의록 생성 모델 또는 요청 파라미터가 바뀐 PR에서는 최신 completed job의 `notesStatus`가 `succeeded`인지 확인하고, `notesDegradedReason`에 모델 파라미터 오류가 남지 않는지 Firestore에서 함께 확인한다.
+   - 자동 회의록 prompt 품질 가드가 바뀐 PR에서는 기존 완료 record의 전사 1건으로 재생성 비교를 수행한다. 검토, 재확인, 제안, 테스트 가능성이 `decisions`로 승격되지 않고 `actionItems`, `openQuestions`, `risksOrDependencies` 중 맞는 곳에 남는지 확인한다. 같은 사안이 핵심 요약이나 개요에서 하기로 했다, 추진하기로 했다 같은 확정 표현으로 보이지 않는지도 함께 확인한다. 모델이 약한 결정을 반환해도 Functions normalizer가 `decisions`에서 제거하는지 `verify:meeting-notes-generation`으로 확인한다.
    - OpenRouter provider 경로를 바꾼 PR에서는 AI 미리보기 1회가 OpenRouter 모델로 먼저 완료되는지 보고, 실패 시 `degraded` 또는 explicit error가 남는지 확인한다.
 6. `직접 수정`은 미리보기 없이 해당 섹션만 저장해야 한다.
 7. `메모` 탭에서 기록 메모 저장이 completed record에만 가능해야 한다.

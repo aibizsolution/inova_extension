@@ -113,23 +113,23 @@ function createMeetingNotesDocumentDomain(deps) {
   function normalizeMeetingOverviewText(primary, fallback) {
     const direct = normalizeTextBlock(primary);
     if (direct) {
-      return direct;
+      return softenWeakDecisionProse(direct);
     }
     const fallbackParagraphs = normalizeTextList(fallback)
       .map((item) => normalizeTextBlock(item))
       .filter(Boolean);
-    return fallbackParagraphs.join("\n\n");
+    return softenWeakDecisionProse(fallbackParagraphs.join("\n\n"));
   }
 
   function normalizeMeetingSummaryText(primary, fallback) {
     const direct = normalizeTextBlock(primary);
     if (direct) {
-      return direct;
+      return softenWeakDecisionProse(direct);
     }
-    return normalizeTextList(fallback)
+    return softenWeakDecisionProse(normalizeTextList(fallback)
       .map((item) => normalizeTextBlock(item))
       .filter(Boolean)
-      .join(" ");
+      .join(" "));
   }
 
   function normalizeMeetingOpenQuestions(input, maxItems = MAX_MEETING_NOTES_OPEN_QUESTIONS) {
@@ -146,6 +146,26 @@ function createMeetingNotesDocumentDomain(deps) {
       return true;
     }
     return /(검토가 필요|논의가 필요|추가 확인이 필요|추가 논의가 필요|결정이 필요|추가 검토 필요|추가 논의 필요)$/i.test(normalizedTask);
+  }
+
+  function softenWeakDecisionProse(input) {
+    return normalizeTextBlock(input)
+      .replace(/([^.!?\n。！？…]*?테스트[^.!?\n。！？…]*?)(?:을|를)?\s*진행하기로\s*(?:했다|했습니다|하였다|하였습니다)/g, "$1 진행 방안이 논의됐다")
+      .replace(/([^.!?\n。！？…]*?)(?:을|를)\s*진행하기로\s*(?:했다|했습니다|하였다|하였습니다)/g, "$1 진행 방안이 논의됐다")
+      .replace(/([^.!?\n。！？…]*?)(?:을|를)\s*추진하기로\s*(?:했다|했습니다|하였다|하였습니다)/g, "$1 추진 방안이 논의됐다")
+      .replace(/([^.!?\n。！？…]*?)(?:을|를)\s*확인하기로\s*(?:했다|했습니다|하였다|하였습니다)/g, "$1 확인 필요가 논의됐다")
+      .replace(/의견을\s*모았(?:다|습니다)/g, "의견이 나왔다");
+  }
+
+  function isWeakMeetingDecisionText(text) {
+    const normalizedText = normalizeText(text);
+    if (!normalizedText) {
+      return true;
+    }
+    if (/(확정|승인|합의|최종\s*결정|결론\s*내)/.test(normalizedText)) {
+      return false;
+    }
+    return /(검토|재확인|확인|테스트|시도|제안|논의|협의|가능|필요|알아보|추진|진행\s*여부)/.test(normalizedText);
   }
 
   function normalizeMeetingActionItems(input, maxItems = MAX_MEETING_NOTES_ACTION_ITEMS) {
@@ -189,7 +209,8 @@ function createMeetingNotesDocumentDomain(deps) {
           text: normalizeText(item?.text || item?.decision),
         };
       })
-      .filter((item) => item.text);
+      .filter((item) => item.text)
+      .filter((item) => !isWeakMeetingDecisionText(item.text));
     return dedupeMeetingItems(normalized, (item) => normalizeMeetingComparisonText(item.text), maxItems);
   }
 
@@ -230,7 +251,7 @@ function createMeetingNotesDocumentDomain(deps) {
     const normalized = (Array.isArray(input) ? input : [])
       .map((item) => {
         const heading = normalizeText(item?.heading || item?.title || item?.topic);
-        const narrative = normalizeTextBlock(item?.narrative || item?.summary || item?.text);
+        const narrative = softenWeakDecisionProse(item?.narrative || item?.summary || item?.text);
         const keyPoints = dedupeMeetingItems(
           normalizeTextList(item?.keyPoints),
           (value) => normalizeMeetingComparisonText(value),

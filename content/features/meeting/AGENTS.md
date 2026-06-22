@@ -64,6 +64,9 @@
 - chunked source는 12kHz mono WAV, 10분 target, 1.5초 overlap을 기본으로 쓴다. OpenRouter 공식 STT 문서는 very large audio가 upstream 60초 timeout에 걸릴 수 있어 smaller segment를 권장하지만 정확한 MB 상한은 제시하지 않는다. 현재 값은 운영 실패 오디오로 10.5분/14.42MB까지 성공하고 11분/15.11MB부터 502가 재현된 결과를 기준으로 한다. 실제 경계는 target 주변 30초 안에서 500ms low-energy 구간을 찾아 조정한다.
 - 회의 전사 provider 순서는 Functions 책임이다. hosted/content는 현재 OpenRouter-safe이면서 Gemini 검증을 통과한 10분 chunk를 만들고, Functions는 같은 JSON secret의 Gemini Files API 전사를 먼저 사용한다. Gemini 빈 전사, truncation, timeout은 성공 처리하지 않고 OpenRouter fallback으로 넘긴다.
 - 전사된 텍스트를 회의록으로 만드는 품질 우선 경로도 Functions 책임이다. 회의록 생성/섹션 AI 수정은 Gemini Pro급 meeting summary model을 먼저 사용하고, JSON shape 실패나 provider 오류는 OpenRouter/OpenAI fallback 또는 degraded 상태로 드러나야 한다.
+- 자동 회의록의 결정 항목은 전사에 명시적인 확정/합의/승인/하기로 했다가 있을 때만 보여야 한다. 단순 검토, 재확인, 제안, 테스트 가능성은 decision이 아니라 후속 작업, 미결정 질문, 리스크로 보여야 한다.
+- decision 근거가 약한 사안은 핵심 요약이나 개요에서도 하기로 했다, 추진하기로 했다 같은 확정 표현으로 보이면 안 된다. 논의, 검토, 확인 필요처럼 근거 수준에 맞는 표현을 쓴다.
+- 모델이 약한 결정을 반환해도 Functions notes normalizer가 테스트, 검토, 재확인, 제안, 협의, 가능성 항목을 `decisions`에서 제거한다.
 - hosted 작업실은 녹음 중이거나 실제 업로드가 진행 중일 때만 브라우저 기본 이탈 경고를 유지하고, 원격 처리만 남은 상태는 과하게 막지 않는다.
 - 회의 제목은 UI에서 회의를 구분하는 편집용 라벨이다. 최초 회의 정리 생성 prompt에는 제목이 아니라 전사와 공용 메모만 사용한다.
 - hosted 작업실의 회의록 보정은 전체 재생성이 아니라 `회의별 용어 치환`과 `섹션 단위 preview/apply`로 제한한다.
