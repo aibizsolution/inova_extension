@@ -10,8 +10,9 @@ async function main() {
   await verifyOpenAISecondaryAfterOpenRouterFailure();
   await verifyResponsesFallbackMapsJsonSchema();
   await verifyOpenRouterTranscriptionRequest();
-  await verifyGeminiTranscriptionFallbackAfterOpenRouterFailure();
-  await verifyGeminiEmptyTranscriptionIsFailure();
+  await verifyGeminiPreferredForTranscriptionWhenConfigured();
+  await verifyOpenRouterTranscriptionFallbackAfterGeminiFailure();
+  await verifyGeminiEmptyTranscriptionFailsWithoutFallback();
   console.log("[verify-ai-provider-runtime] AI provider priority contract passed");
 }
 
@@ -140,7 +141,7 @@ async function verifyOpenAISecondaryAfterOpenRouterFailure() {
   }
 }
 
-async function verifyGeminiTranscriptionFallbackAfterOpenRouterFailure() {
+async function verifyGeminiPreferredForTranscriptionWhenConfigured() {
   const previousConfig = process.env.INOVA_EXTENSION_AI_PROVIDER_CONFIG;
   const previousOpenAIKey = process.env.INOVA_EXTENSION_OPENAI_API_KEY;
   const previousOpenRouterKey = process.env.INOVA_EXTENSION_OPENROUTER_API_KEY;
@@ -164,7 +165,6 @@ async function verifyGeminiTranscriptionFallbackAfterOpenRouterFailure() {
       createHttpError,
       fetchImpl: createGeminiFallbackFetch({
         calls,
-        openRouterResponse: createJsonResponse(502, { error: { message: "upstream timeout" } }),
       }),
       logEvent(name, payload) {
         events.push({ name, payload });
@@ -177,17 +177,17 @@ async function verifyGeminiTranscriptionFallbackAfterOpenRouterFailure() {
       model: "gpt-4o-transcribe",
     });
     assert.equal(response.text, "Gemini 전사 결과");
-    assert.equal(events.length, 1);
-    assert.equal(events[0].payload.from, "openrouter");
-    assert.equal(events[0].payload.to, "gemini");
-    assert.equal(calls[0].url, "https://openrouter.ai/api/v1/audio/transcriptions");
-    assert.equal(calls[1].url, "https://generativelanguage.googleapis.com/upload/v1beta/files");
-    assert.equal(calls[1].headers["x-goog-api-key"], "fixture-gemini-key");
-    assert.equal(calls[2].url, "https://upload.example.test/session");
-    assert.equal(calls[3].url, "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent");
-    assert.equal(calls[3].body.generationConfig.thinkingConfig.thinkingLevel, "minimal");
-    assert.equal(calls[3].body.contents[0].parts[1].file_data.file_uri, "gemini://uploaded-file");
-    assert.equal(calls[4].url, "https://generativelanguage.googleapis.com/v1beta/files/fixture-upload");
+    assert.equal(events.length, 0);
+    assert.equal(calls[0].url, "https://generativelanguage.googleapis.com/upload/v1beta/files");
+    assert.equal(calls[0].headers["x-goog-api-key"], "fixture-gemini-key");
+    assert.equal(calls[1].url, "https://upload.example.test/session");
+    assert.equal(calls[2].url, "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent");
+    assert.equal(calls[2].body.generationConfig.thinkingConfig.thinkingLevel, "minimal");
+    assert.equal(calls[2].body.generationConfig.maxOutputTokens, 16384);
+    assert.match(calls[2].body.contents[0].parts[0].text, /business meeting audio/);
+    assert.equal(calls[2].body.contents[0].parts[1].file_data.file_uri, "gemini://uploaded-file");
+    assert.equal(calls[3].url, "https://generativelanguage.googleapis.com/v1beta/files/fixture-upload");
+    assert.equal(calls.some((call) => call.url === "https://openrouter.ai/api/v1/audio/transcriptions"), false);
   } finally {
     restoreEnv("INOVA_EXTENSION_AI_PROVIDER_CONFIG", previousConfig);
     restoreEnv("INOVA_EXTENSION_OPENAI_API_KEY", previousOpenAIKey);
@@ -195,7 +195,7 @@ async function verifyGeminiTranscriptionFallbackAfterOpenRouterFailure() {
   }
 }
 
-async function verifyGeminiEmptyTranscriptionIsFailure() {
+async function verifyOpenRouterTranscriptionFallbackAfterGeminiFailure() {
   const previousConfig = process.env.INOVA_EXTENSION_AI_PROVIDER_CONFIG;
   const previousOpenAIKey = process.env.INOVA_EXTENSION_OPENAI_API_KEY;
   const previousOpenRouterKey = process.env.INOVA_EXTENSION_OPENROUTER_API_KEY;
@@ -212,6 +212,7 @@ async function verifyGeminiEmptyTranscriptionIsFailure() {
     process.env.INOVA_EXTENSION_OPENAI_API_KEY = "";
     process.env.INOVA_EXTENSION_OPENROUTER_API_KEY = "";
     const calls = [];
+    const events = [];
     const runtime = createAiProviderRuntime({
       OpenAI: createFakeOpenAIClass({ calls }),
       createHttpError,
@@ -220,7 +221,48 @@ async function verifyGeminiEmptyTranscriptionIsFailure() {
         geminiGeneratePayload: {
           candidates: [{ content: { parts: [{ text: "" }] }, finishReason: "STOP" }],
         },
-        openRouterResponse: createJsonResponse(502, { error: { message: "upstream timeout" } }),
+      }),
+      logEvent(name, payload) {
+        events.push({ name, payload });
+      },
+    });
+    const file = new File([Buffer.from("audio")], "meeting.wav", { type: "audio/wav" });
+    const response = await runtime.createClient().audio.transcriptions.create({ file, language: "ko" });
+    assert.equal(response.text, "OpenRouter 전사 결과");
+    assert.equal(calls.some((call) => call.url === "https://generativelanguage.googleapis.com/v1beta/files/fixture-upload"), true);
+    assert.equal(calls[calls.length - 1].url, "https://openrouter.ai/api/v1/audio/transcriptions");
+    assert.equal(events.length, 1);
+    assert.equal(events[0].payload.from, "gemini");
+    assert.equal(events[0].payload.to, "openrouter");
+  } finally {
+    restoreEnv("INOVA_EXTENSION_AI_PROVIDER_CONFIG", previousConfig);
+    restoreEnv("INOVA_EXTENSION_OPENAI_API_KEY", previousOpenAIKey);
+    restoreEnv("INOVA_EXTENSION_OPENROUTER_API_KEY", previousOpenRouterKey);
+  }
+}
+
+async function verifyGeminiEmptyTranscriptionFailsWithoutFallback() {
+  const previousConfig = process.env.INOVA_EXTENSION_AI_PROVIDER_CONFIG;
+  const previousOpenAIKey = process.env.INOVA_EXTENSION_OPENAI_API_KEY;
+  const previousOpenRouterKey = process.env.INOVA_EXTENSION_OPENROUTER_API_KEY;
+  try {
+    process.env.INOVA_EXTENSION_AI_PROVIDER_CONFIG = JSON.stringify({
+      gemini: {
+        apiKey: "fixture-gemini-key",
+        meetingTranscribeModel: "gemini-3.5-flash",
+      },
+    });
+    process.env.INOVA_EXTENSION_OPENAI_API_KEY = "";
+    process.env.INOVA_EXTENSION_OPENROUTER_API_KEY = "";
+    const calls = [];
+    const runtime = createAiProviderRuntime({
+      OpenAI: createFakeOpenAIClass({ calls }),
+      createHttpError,
+      fetchImpl: createGeminiFallbackFetch({
+        calls,
+        geminiGeneratePayload: {
+          candidates: [{ content: { parts: [{ text: "" }] }, finishReason: "STOP" }],
+        },
       }),
     });
     const file = new File([Buffer.from("audio")], "meeting.wav", { type: "audio/wav" });
@@ -229,6 +271,7 @@ async function verifyGeminiEmptyTranscriptionIsFailure() {
       /Gemini 전사 결과가 비어/
     );
     assert.equal(calls.some((call) => call.url === "https://generativelanguage.googleapis.com/v1beta/files/fixture-upload"), true);
+    assert.equal(calls.some((call) => call.url === "https://openrouter.ai/api/v1/audio/transcriptions"), false);
   } finally {
     restoreEnv("INOVA_EXTENSION_AI_PROVIDER_CONFIG", previousConfig);
     restoreEnv("INOVA_EXTENSION_OPENAI_API_KEY", previousOpenAIKey);

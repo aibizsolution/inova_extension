@@ -5,6 +5,7 @@ const DEFAULT_OPENROUTER_TRANSCRIBE_MODEL = "openai/gpt-4o-transcribe";
 const DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com";
 const DEFAULT_GEMINI_TRANSCRIBE_MODEL = "gemini-3.5-flash";
 const DEFAULT_GEMINI_TRANSCRIBE_THINKING_LEVEL = "minimal";
+const DEFAULT_GEMINI_TRANSCRIBE_MAX_OUTPUT_TOKENS = 16384;
 
 function createAiProviderRuntime(deps) {
   const {
@@ -101,15 +102,27 @@ function createAiProviderRuntime(deps) {
           text: normalizeText(payload?.text),
         };
       },
+      preferGemini: true,
     });
   }
 
-  async function runWithProviderOrder({ kind, geminiCall, openaiCall, openrouterCall }) {
+  async function runWithProviderOrder({ kind, geminiCall, openaiCall, openrouterCall, preferGemini = false }) {
     const hasOpenAI = Boolean(getOpenAIApiKey()) || typeof openaiFactory === "function";
     const hasGemini = Boolean(getGeminiApiKey()) && typeof geminiCall === "function";
     const hasOpenRouter = Boolean(getOpenRouterApiKey());
     if (!hasOpenAI && !hasGemini && !hasOpenRouter) {
       throw createHttpError(412, "INOVA_EXTENSION_AI_PROVIDER_CONFIG에 OpenRouter, Gemini 또는 OpenAI API 키가 설정되지 않았어요.");
+    }
+    if (preferGemini && hasGemini && !geminiSecondaryFailedKinds.has(kind)) {
+      try {
+        return await geminiCall();
+      } catch (error) {
+        if ((!hasOpenRouter && !hasOpenAI) || !isProviderFallbackableError(error)) {
+          throw error;
+        }
+        geminiSecondaryFailedKinds.add(kind);
+        logProviderSecondary(kind, error, hasOpenRouter ? "openrouter" : "openai", "gemini");
+      }
     }
     if (hasOpenRouter && !openRouterPrimaryFailedKinds.has(kind)) {
       try {
@@ -122,7 +135,7 @@ function createAiProviderRuntime(deps) {
         logProviderSecondary(kind, error, hasGemini ? "gemini" : "openai");
       }
     }
-    if (hasGemini && !geminiSecondaryFailedKinds.has(kind)) {
+    if (!preferGemini && hasGemini && !geminiSecondaryFailedKinds.has(kind)) {
       try {
         return await geminiCall();
       } catch (error) {
@@ -270,6 +283,24 @@ function createAiProviderRuntime(deps) {
     return /^gemini-3(?:\.|$|-)/i.test(normalizeText(model))
       ? DEFAULT_GEMINI_TRANSCRIBE_THINKING_LEVEL
       : "";
+  }
+
+  function resolveGeminiTranscribeMaxOutputTokens() {
+    const config = getProviderConfig();
+    const configured = Number.parseInt(
+      normalizeText(
+        config.gemini?.meetingTranscribeMaxOutputTokens
+        || config.google?.meetingTranscribeMaxOutputTokens
+        || config.googleAi?.meetingTranscribeMaxOutputTokens
+        || config.geminiMeetingTranscribeMaxOutputTokens
+        || process.env.GEMINI_MEETING_TRANSCRIBE_MAX_OUTPUT_TOKENS
+      ),
+      10
+    );
+    if (Number.isFinite(configured) && configured > 0) {
+      return Math.max(1024, Math.min(65536, configured));
+    }
+    return DEFAULT_GEMINI_TRANSCRIBE_MAX_OUTPUT_TOKENS;
   }
 
   function resolveOpenRouterModel(modelInput, kind) {
@@ -474,6 +505,7 @@ function createAiProviderRuntime(deps) {
     if (thinkingLevel) {
       generationConfig.thinkingConfig = { thinkingLevel };
     }
+    generationConfig.maxOutputTokens = resolveGeminiTranscribeMaxOutputTokens();
     const response = await fetchImpl(`${getGeminiBaseUrl()}/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
       body: JSON.stringify({
         contents: [{
@@ -574,9 +606,10 @@ function createAiProviderRuntime(deps) {
   function buildGeminiTranscriptionPrompt(language) {
     const languageHint = normalizeText(language) || "ko";
     return [
-      `Transcribe this ${languageHint} meeting audio as accurately as possible.`,
+      `Transcribe this ${languageHint} business meeting audio as accurately as possible.`,
       "Return only the spoken transcript text in chronological order.",
-      "Do not add summaries, speaker labels, markdown, translations, or explanations.",
+      "Do not add summaries, speaker labels, markdown, translations, timestamps, or explanations.",
+      "Preserve Korean product names, company terms, and numbers when audible.",
       "If speech is unclear, omit uncertain words instead of inventing content.",
     ].join(" ");
   }
