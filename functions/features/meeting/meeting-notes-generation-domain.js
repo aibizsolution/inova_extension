@@ -369,6 +369,7 @@ function createMeetingNotesGenerationDomain(deps) {
       "전사와 메모가 충돌하면 단정하지 말고 openQuestions 또는 risksOrDependencies에 남긴다.",
       "전문가 자문, 전략 평가, 타당성 판단처럼 들리는 표현은 피하고 회의에서 실제 언급된 내용만 중립적으로 정리한다.",
       "전사에 없는 결론, 추천, 당위, 우선순위 판단을 새로 만들지 않는다.",
+      "권장했다/필수다/반드시 해야 한다 같은 평가형 표현보다, 회의에서 나온 수준에 맞춰 대안으로 제시했다, 필요성이 언급됐다, 검토 대상으로 남았다처럼 쓴다.",
       "항목 수를 맞추기 위해 내용을 만들지 않는다. 각 배열은 0개일 수 있고, 근거가 없으면 빈 배열로 둔다.",
       "근거가 1개면 1개만 작성하고, 실제로 서로 다른 항목이 많을 때만 상한까지 분리한다.",
       "문장은 단순히 '논의되었다'를 반복하지 말고, 왜 이 논의가 나왔는지, 어떤 쟁점이 있었는지, 그래서 무엇이 정리되었는지가 짧게 이어지도록 쓴다.",
@@ -387,6 +388,7 @@ function createMeetingNotesGenerationDomain(deps) {
       "회의가 안건 A -> B -> 다시 A처럼 진행되면, 다시 나온 A가 새 결정, 조건, 반론, 리스크를 만들었을 때 별도 discussionFlow 항목으로 남긴다.",
       "같은 주제라는 이유만으로 서로 다른 결정, 서로 다른 미결정 사항, 서로 다른 리스크를 하나로 합치지 않는다.",
       "다음 숫자는 목표 개수가 아니라 안전 상한이다: discussionFlow 최대 4개, decisions 최대 5개, actionItems 최대 5개, openQuestions 최대 3개, risksOrDependencies 최대 3개. 상한보다 적거나 0개여도 정상이다.",
+      "단, 실제로 서로 다른 근거가 충분한 full 회의록이면 sourceTrace는 summary, 주요 discussionFlow, actionItems/openQuestions/risksOrDependencies 근거를 합쳐 4~6개까지 적극적으로 남긴다.",
       "decisions는 회의에서 확정된 선택, 승인, 합의만 포함한다. 제안, 가능성, 우려, 검토 필요는 decisions에 넣지 않는다.",
       "decisions는 전사에 '확정', '합의', '승인', '하기로 했다'처럼 명시적인 확정 표현이 있을 때만 작성한다.",
       "단순히 테스트를 해볼 수 있다, 검토한다, 필요하다, 재확인한다, 제안했다는 수준이면 decisions가 아니라 actionItems, openQuestions, risksOrDependencies 중 맞는 곳에 둔다.",
@@ -396,6 +398,7 @@ function createMeetingNotesGenerationDomain(deps) {
       "confidence, status, severity 값은 한국어로 쓴다. 예: confidence는 높음/중간/낮음, status는 요청됨/진행 예정/미정, severity는 높음/중간/낮음.",
       "openQuestions는 실제로 미결정된 승인, 의사결정, 외부 확인, 의존성 문제만 포함하고, 없으면 빈 배열로 둔다.",
       "risksOrDependencies는 실행을 막거나 지연시킬 수 있는 현실적 제약, 선행조건, 외부 의존성만 포함한다. 단순한 보완 제안은 넣지 않는다.",
+      "전사에 API 반환 규격, 일정, 장비 수급, 외부 파트너, 데이터 준비처럼 아직 확인해야 할 후속 쟁점이나 실행 제약이 나오면 openQuestions 또는 risksOrDependencies에 빠뜨리지 않는다.",
       "반드시 JSON만 반환한다.",
       "스키마는 summary, meetingMeta, overview, discussionFlow, decisions, actionItems, openQuestions, risksOrDependencies, sourceTrace 이다.",
       "meetingMeta는 {title, datetime, participants, purpose} 형식이다.",
@@ -409,6 +412,7 @@ function createMeetingNotesGenerationDomain(deps) {
       "meetingMeta.participants는 전사와 메모에서 확인 가능한 참여자만 적고, 확실하지 않으면 비워 둔다.",
       "sourceTrace[]는 {itemType, itemRef, evidence} 형식이다.",
       "sourceTrace[] itemType은 transcript, sharedMemo 중 근거에 맞게 적는다.",
+      "sourceTrace[] itemRef는 summary, overview, discussionFlow[0], actionItems[0]처럼 어떤 회의록 항목의 근거인지 식별 가능하게 적는다.",
     ].join(" ");
   }
 

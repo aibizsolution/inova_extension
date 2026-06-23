@@ -20,17 +20,21 @@ function verifyMeetingNotesPromptGuards() {
     "utf8"
   );
   for (const requiredPrompt of [
+    "권장했다/필수다/반드시 해야 한다 같은 평가형 표현보다",
     "항목 수를 맞추기 위해 내용을 만들지 않는다.",
     "근거가 1개면 1개만 작성하고",
     "discussionFlow는 단순 토픽 목록이 아니라 실제 논의 흐름을 보존한다.",
     "다시 나온 A가 새 결정, 조건, 반론, 리스크를 만들었을 때 별도 discussionFlow 항목으로 남긴다.",
     "같은 주제라는 이유만으로 서로 다른 결정, 서로 다른 미결정 사항, 서로 다른 리스크를 하나로 합치지 않는다.",
     "다음 숫자는 목표 개수가 아니라 안전 상한이다",
+    "full 회의록이면 sourceTrace는 summary, 주요 discussionFlow, actionItems/openQuestions/risksOrDependencies 근거를 합쳐 4~6개까지 적극적으로 남긴다.",
     "decisions는 전사에 '확정', '합의', '승인', '하기로 했다'처럼 명시적인 확정 표현이 있을 때만 작성한다.",
     "단순히 테스트를 해볼 수 있다, 검토한다, 필요하다, 재확인한다, 제안했다는 수준이면 decisions가 아니라 actionItems, openQuestions, risksOrDependencies 중 맞는 곳에 둔다.",
     "decisions에 넣을 근거가 약한 사안은 summary, overview, discussionFlow에서도 '하기로 했다', '추진하기로 했다', '진행하기로 했다', '의견을 모았다'가 아니라",
     "금지 예: '웹 API를 테스트해 보기로 했다'.",
     "confidence, status, severity 값은 한국어로 쓴다.",
+    "아직 확인해야 할 후속 쟁점이나 실행 제약이 나오면 openQuestions 또는 risksOrDependencies에 빠뜨리지 않는다.",
+    "sourceTrace[] itemRef는 summary, overview, discussionFlow[0], actionItems[0]처럼 어떤 회의록 항목의 근거인지 식별 가능하게 적는다.",
     "의미가 같은 토픽/결정/액션만 합친다.",
   ]) {
     assert(
@@ -130,7 +134,7 @@ function verifyWeakDecisionProseSoftening() {
   });
   assert.equal(
     testPlan.overview,
-    "업스테이지 스튜디오의 웹 API를 우선 테스트 방안이 논의됐다. 다른 방식도 시도 방안이 논의됐다.",
+    "업스테이지 스튜디오의 웹 API를 우선 테스트하는 방안이 논의됐다. 다른 방식도 시도하는 방안이 논의됐다.",
     "meeting notes overview should soften test/try prose"
   );
   const sentenceShape = notesDomain.normalizeMeetingNotes({
@@ -138,8 +142,16 @@ function verifyWeakDecisionProseSoftening() {
   });
   assert.equal(
     sentenceShape.overview,
-    "웹 API 테스트를 우선 진행 방안이 정리됐다. 구축 여부를 내부적으로 재확인 필요가 남았으며, API를 우선 테스트 방안이 논의됐으며, 업스테이지가 지원 방안이 논의됐으며, 자료 조사를 즉시 진행 방안이 논의됨. 필요한 장비 수급도 언급됐다.",
+    "웹 API 테스트를 우선 진행하는 방안이 정리됐다. 구축 여부를 내부적으로 재확인할 필요가 남았으며, API를 우선 테스트하는 방안이 논의됐으며, 업스테이지의 지원 방안이 논의됐으며, 자료 조사를 즉시 진행하는 방안이 논의됨. 필요한 장비 수급도 언급됐다.",
     "meeting notes overview should soften direction/recheck/required prose"
+  );
+  const recommendationTone = notesDomain.normalizeMeetingNotes({
+    summary: "파인튜닝은 권장하지 않았으며, RAG를 권장했다.",
+  });
+  assert.equal(
+    recommendationTone.summary,
+    "파인튜닝은 적합하지 않다는 의견을 냈으며, RAG를 대안으로 제시했다.",
+    "meeting notes summary should avoid recommendation-style overclaim prose"
   );
 }
 

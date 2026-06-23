@@ -149,9 +149,14 @@ function createMeetingNotesDocumentDomain(deps) {
   }
 
   function softenWeakDecisionProse(input) {
-    return normalizeTextBlock(input)
+    const softened = normalizeTextBlock(input)
       .replace(/필수적인/g, "필요한")
       .replace(/필수적/g, "필요")
+      .replace(/권장하지\s*않았으며/g, "적합하지 않다는 의견을 냈으며")
+      .replace(/권장하지\s*않았다/g, "적합하지 않다는 의견을 냈다")
+      .replace(/권장하지\s*않았습니다/g, "적합하지 않다는 의견을 냈습니다")
+      .replace(/권장했다/g, "대안으로 제시했다")
+      .replace(/권장했습니다/g, "대안으로 제시했습니다")
       .replace(/([^.!?\n。！？…]*?테스트[^.!?\n。！？…]*?)(?:을|를)?\s*진행하기로\s*(?:했다|했습니다|하였다|하였습니다)/g, "$1 진행 방안이 논의됐다")
       .replace(/([^.!?\n。！？…]*?테스트[^.!?\n。！？…]*?)(?:을|를)?\s*진행하기로\s*의견이\s*나왔(?:다|습니다)/g, "$1 진행 방안이 논의됐다")
       .replace(/([^.!?\n。！？…]*?)(?:을|를)?\s*테스트하기로\s*(?:했다|했습니다|하였다|하였습니다)/g, "$1 테스트 방안이 논의됐다")
@@ -178,6 +183,24 @@ function createMeetingNotesDocumentDomain(deps) {
       .replace(/([^.!?\n。！？…]*?)(?:을|를)\s*확인하기로\s*(?:했다|했습니다|하였다|하였습니다)/g, "$1 확인 필요가 논의됐다")
       .replace(/([^.!?\n。！？…]*?)\s*확인하기로\s*(?:했다|했습니다|하였다|하였습니다)/g, "$1 확인 필요가 논의됐다")
       .replace(/의견을\s*모았(?:다|습니다)/g, "의견이 나왔다");
+    return polishSoftenedDecisionProse(softened);
+  }
+
+  function polishSoftenedDecisionProse(input) {
+    return normalizeTextBlock(input)
+      .replace(/([^.!?\n。！？…]*?)(?:을|를)\s*(우선|즉시|내부적으로)?\s*(테스트|진행|시도|지원)\s*방안이/g, (_match, target, modifier, verb) => {
+        const modifierText = normalizeText(modifier);
+        return `${normalizeText(target)}를 ${modifierText ? `${modifierText} ` : ""}${verb}하는 방안이`;
+      })
+      .replace(/([^.!?\n。！？…]*?)(이|가)\s*지원\s*방안이/g, (_match, target) => `${normalizeText(target)}의 지원 방안이`)
+      .replace(/([^.!?\n。！？…]*?)(?:을|를)\s*(내부적으로)?\s*(재검토|재확인)\s*필요가/g, (_match, target, modifier, verb) => {
+        const modifierText = normalizeText(modifier);
+        return `${normalizeText(target)}를 ${modifierText ? `${modifierText} ` : ""}${verb}할 필요가`;
+      })
+      .replace(/(방안이|필요가)(논의|남)/g, "$1 $2")
+      .replace(/([가-힣A-Za-z0-9)])(방안이|필요가)(논의|남)/g, "$1$2 $3")
+      .replace(/([.?!。！？…])([가-힣A-Za-z0-9])/g, "$1 $2")
+      .replace(/([^.!?\n。！？…]*?\S)\s*시도\s*방안이/g, "$1 시도하는 방안이");
   }
 
   function isWeakMeetingDecisionText(text) {

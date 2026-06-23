@@ -61,6 +61,7 @@
 - 회의록 자동 생성은 항목 수를 채우기 위해 결정/리스크/미결정 사항을 만들지 않는다. 각 배열은 근거가 없으면 0개가 정상이며, 근거가 많을 때만 상한까지 분리한다.
 - 회의록 자동 생성의 `decisions`는 전사에 확정, 합의, 승인, 하기로 했다 같은 명시적 결정 근거가 있을 때만 채운다. 검토, 재확인, 제안, 테스트 가능성은 decision으로 승격하지 않고 actionItems/openQuestions/risksOrDependencies에 둔다.
 - decision 근거가 약한 사안은 `summary`, `overview`, `discussionFlow`에서도 하기로 했다, 추진하기로 했다 같은 확정 표현으로 쓰지 않는다. 논의했다, 검토했다, 확인 필요로 남았다처럼 근거 수준에 맞춰 쓴다.
+- 권장했다, 필수다, 반드시 해야 한다처럼 회의록 작성자가 평가·자문하는 듯한 표현은 피하고, 전사 근거 수준에 맞춰 대안으로 제시했다, 필요성이 언급됐다, 검토 대상으로 남았다처럼 중립화한다.
 - notes normalizer는 모델이 약한 결정을 반환해도 테스트, 검토, 재확인, 제안, 협의, 가능성 같은 항목을 `decisions`에서 제거한다. 확정, 승인, 합의, 최종 결정처럼 강한 근거가 있는 결정만 보존한다.
 - Gemini 회의록 튜닝은 `run-gemini-meeting-notes-tuning-eval.js` 리포트로 같은 evaluator version의 이전 평균 점수보다 개선된 경우만 성공으로 센다. v2 평가는 weak decision/prose뿐 아니라 weak consensus 표현, 어색한 deterministic 완화 문장, sourceTrace/follow-up coverage 부족도 함께 본다.
 - 하기로/진행하기로/담기로/포함하기로 같은 약한 확정형 prose는 normalizer에서 논의/방안 표현으로 낮추되, 결과 문장이 `테스트를 우선 진행 방안`처럼 어색하면 다음 튜닝 대상으로 본다.
