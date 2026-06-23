@@ -164,6 +164,7 @@
    - 회의록 생성 모델 또는 요청 파라미터가 바뀐 PR에서는 최신 completed job의 `notesStatus`가 `succeeded`인지 확인하고, `notesDegradedReason`에 모델 파라미터 오류가 남지 않는지 Firestore에서 함께 확인한다.
    - 자동 회의록 prompt 품질 가드가 바뀐 PR에서는 기존 완료 record의 전사 1건으로 재생성 비교를 수행한다. 검토, 재확인, 제안, 테스트 가능성이 `decisions`로 승격되지 않고 `actionItems`, `openQuestions`, `risksOrDependencies` 중 맞는 곳에 남는지 확인한다. 같은 사안이 핵심 요약이나 개요에서 하기로 했다, 추진하기로 했다 같은 확정 표현으로 보이지 않는지도 함께 확인한다. 모델이 약한 결정을 반환해도 Functions normalizer가 `decisions`에서 제거하는지 `verify:meeting-notes-generation`으로 확인한다.
    - Gemini 회의록 튜닝 PR에서는 `npm.cmd run eval:gemini-meeting-notes` 리포트의 평균 점수가 이전 성공/기준 리포트보다 올라간 경우만 성공으로 본다. 리포트에는 최소 1개 이상의 기존 completed record 재생성 결과와 weak commitment prose 패널티가 남아 있는지 포함되어야 한다.
+   - 튜닝 리포트에서 테스트하기로, 해보기로, 지원하기로 같은 문장이 남아 weak commitment prose 패널티를 만들면, 다음 튜닝은 해당 표현이 테스트/시도/지원 방안 논의로 낮아지는지 확인한다.
    - OpenRouter provider 경로를 바꾼 PR에서는 AI 미리보기 1회가 OpenRouter 모델로 먼저 완료되는지 보고, 실패 시 `degraded` 또는 explicit error가 남는지 확인한다.
 6. `직접 수정`은 미리보기 없이 해당 섹션만 저장해야 한다.
 7. `메모` 탭에서 기록 메모 저장이 completed record에만 가능해야 한다.

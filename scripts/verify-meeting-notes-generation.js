@@ -125,6 +125,22 @@ function verifyWeakDecisionProseSoftening() {
     "핵심 논리를 보고 장표에 담는 방안이 논의됐다. PER 비교표를 전면에 포함하는 방안이 논의됐다.",
     "meeting notes overview should soften include/contain prose"
   );
+  const testPlan = notesDomain.normalizeMeetingNotes({
+    overview: "업스테이지 스튜디오의 웹 API를 우선 테스트하기로 했다. 다른 방식도 해보기로 했다.",
+  });
+  assert.equal(
+    testPlan.overview,
+    "업스테이지 스튜디오의 웹 API를 우선 테스트 방안이 논의됐다. 다른 방식도 시도 방안이 논의됐다.",
+    "meeting notes overview should soften test/try prose"
+  );
+  const sentenceShape = notesDomain.normalizeMeetingNotes({
+    overview: "웹 API 테스트를 우선 진행하기로 방향이 정리되었습니다. 구축 여부를 내부적으로 재확인하기로 했으며, API를 우선 테스트하기로 했으며, 업스테이지가 지원하기로 했으며, 자료 조사를 즉시 진행하기로 함. 필수적인 장비 수급도 언급됐다.",
+  });
+  assert.equal(
+    sentenceShape.overview,
+    "웹 API 테스트를 우선 진행 방안이 정리됐다. 구축 여부를 내부적으로 재확인 필요가 남았으며, API를 우선 테스트 방안이 논의됐으며, 업스테이지가 지원 방안이 논의됐으며, 자료 조사를 즉시 진행 방안이 논의됨. 필요한 장비 수급도 언급됐다.",
+    "meeting notes overview should soften direction/recheck/required prose"
+  );
 }
 
 function createFixtureMeetingNotesDocumentDomain() {

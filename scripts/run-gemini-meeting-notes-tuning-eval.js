@@ -26,6 +26,35 @@ const DEFAULT_CASE_IDS = [
   "meeting-job-ce4d21cbe882e7b469bdb60fb6372657",
 ];
 const OUTPUT_DIR = path.join(__dirname, "..", ".codex", "gemini-meeting-notes-tuning");
+const EVALUATION_METHODOLOGY = {
+  evaluatorVersion: "meeting-notes-heuristic-v1",
+  basis: "Product-specific rubric inspired by summarization factuality checks, structured rubric evaluation, and pairwise preference evaluation. It is not a public benchmark score.",
+  successRule: "A tuning attempt counts as success only when the aggregate score is higher than the previous report under the same evaluator version.",
+  dimensions: [
+    "faithfulness: avoid unsupported decisions, recommendations, and overclaims",
+    "structure: keep meeting notes fields populated only when evidence supports them",
+    "decision hygiene: do not promote tests, rechecks, proposals, or possibilities into decisions",
+    "tone safety: soften weak commitment prose such as 진행하기로 or 추진하기로 into discussion-level prose",
+    "operability: preserve Korean enum values and valid persisted notes shape",
+  ],
+  references: [
+    {
+      label: "G-Eval",
+      note: "Structured form-filling/rubric evaluation for NLG and summarization",
+      url: "https://arxiv.org/abs/2303.16634",
+    },
+    {
+      label: "LLM-as-a-Judge / MT-Bench",
+      note: "Pairwise/judge-style evaluation and known bias cautions",
+      url: "https://arxiv.org/abs/2306.05685",
+    },
+    {
+      label: "QAGS",
+      note: "Factual consistency framing for generated summaries",
+      url: "https://arxiv.org/abs/2004.04228",
+    },
+  ],
+};
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
@@ -385,6 +414,7 @@ function buildReport({ cases, label, previousReport, successNumber }) {
   return {
     aggregate,
     cases,
+    methodology: EVALUATION_METHODOLOGY,
     improvement,
     label,
     previousReport: previousReport?.reportFile || previousReport?.label || "",
