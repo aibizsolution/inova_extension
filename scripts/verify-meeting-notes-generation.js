@@ -23,16 +23,18 @@ function verifyMeetingNotesPromptGuards() {
     "권장했다/필수다/반드시 해야 한다 같은 평가형 표현보다",
     "항목 수를 맞추기 위해 내용을 만들지 않는다.",
     "근거가 1개면 1개만 작성하고",
+    "담당자나 기한이 없어도 기존 기능 재확인, API 규격 협의, 데이터 조사, 자료 작성 요청, 보고처럼 실제 후속 행동이 명시되었으면 actionItems에 남기고",
     "discussionFlow는 단순 토픽 목록이 아니라 실제 논의 흐름을 보존한다.",
     "다시 나온 A가 새 결정, 조건, 반론, 리스크를 만들었을 때 별도 discussionFlow 항목으로 남긴다.",
     "같은 주제라는 이유만으로 서로 다른 결정, 서로 다른 미결정 사항, 서로 다른 리스크를 하나로 합치지 않는다.",
     "다음 숫자는 목표 개수가 아니라 안전 상한이다",
-    "full 회의록이면 sourceTrace는 summary, 주요 discussionFlow, actionItems/openQuestions/risksOrDependencies 근거를 합쳐 4~6개까지 적극적으로 남긴다.",
+    "네 개 이상 주요 항목이 있으면 4개에서 멈추지 말고 6개에 가깝게 작성한다.",
     "decisions는 전사에 '확정', '합의', '승인', '하기로 했다'처럼 명시적인 확정 표현이 있을 때만 작성한다.",
     "단순히 테스트를 해볼 수 있다, 검토한다, 필요하다, 재확인한다, 제안했다는 수준이면 decisions가 아니라 actionItems, openQuestions, risksOrDependencies 중 맞는 곳에 둔다.",
     "decisions에 넣을 근거가 약한 사안은 summary, overview, discussionFlow에서도 '하기로 했다', '추진하기로 했다', '진행하기로 했다', '의견을 모았다'가 아니라",
     "금지 예: '웹 API를 테스트해 보기로 했다'.",
     "confidence, status, severity 값은 한국어로 쓴다.",
+    "구체적인 후속 행동과 미결정 질문/리스크가 함께 있으면 하나를 다른 하나로 대체하지 말고",
     "아직 확인해야 할 후속 쟁점이나 실행 제약이 나오면 openQuestions 또는 risksOrDependencies에 빠뜨리지 않는다.",
     "sourceTrace[] itemRef는 summary, overview, discussionFlow[0], actionItems[0]처럼 어떤 회의록 항목의 근거인지 식별 가능하게 적는다.",
     "의미가 같은 토픽/결정/액션만 합친다.",
@@ -152,6 +154,14 @@ function verifyWeakDecisionProseSoftening() {
     recommendationTone.summary,
     "파인튜닝은 적합하지 않다는 의견을 냈으며, RAG를 대안으로 제시했다.",
     "meeting notes summary should avoid recommendation-style overclaim prose"
+  );
+  const consensusTone = notesDomain.normalizeMeetingNotes({
+    overview: "스튜디오 API 테스트를 진행하기로 논의했다. 파트너사 연계를 검토하는 방향으로 의견이 모였다. 기존 사업의 연장선상에 있음을 보여주어야 한다는 데 의견이 모였다.",
+  });
+  assert.equal(
+    consensusTone.overview,
+    "스튜디오 API 테스트 진행 방안이 논의됐다. 파트너사 연계를 검토하는 방향이 논의됐다. 기존 사업의 연장선상에 있음을 보여주어야 한다는 논의가 있었다.",
+    "meeting notes overview should soften weak consensus prose"
   );
 }
 

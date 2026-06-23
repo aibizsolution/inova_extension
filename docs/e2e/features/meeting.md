@@ -166,6 +166,7 @@
    - Gemini 회의록 튜닝 PR에서는 `npm.cmd run eval:gemini-meeting-notes` 리포트의 평균 점수가 같은 evaluator version의 이전 성공/기준 리포트보다 올라간 경우만 성공으로 본다. 리포트에는 최소 1개 이상의 기존 completed record 재생성 결과와 weak commitment prose, weak consensus prose, awkward softened prose, sourceTrace/follow-up coverage 패널티가 남아 있는지 포함되어야 한다.
    - 튜닝 리포트에서 테스트하기로, 해보기로, 지원하기로 같은 문장이 남아 weak commitment prose 패널티를 만들거나, 테스트를 우선 진행 방안 같은 어색한 완화 문장이 남으면 다음 튜닝은 해당 표현이 자연스러운 논의/검토 문장으로 낮아지는지 확인한다.
    - sourceTrace/follow-up coverage 튜닝에서는 실제 completed record 재생성 리포트에서 sourceTrace 4~6개가 주요 summary/discussion/action/open/risk 근거를 가리키는지, 권장했다/필수다 같은 평가형 표현이 중립 문장으로 낮아졌는지 함께 본다.
+   - actionItems coverage 튜닝에서는 기존 기능 재확인, API 규격 협의, 데이터 조사, 자료 작성 요청, 보고처럼 전사에 나온 실제 후속 행동이 담당자/기한이 비어도 actionItems로 남는지 리포트와 화면에서 확인한다.
    - OpenRouter provider 경로를 바꾼 PR에서는 AI 미리보기 1회가 OpenRouter 모델로 먼저 완료되는지 보고, 실패 시 `degraded` 또는 explicit error가 남는지 확인한다.
 6. `직접 수정`은 미리보기 없이 해당 섹션만 저장해야 한다.
 7. `메모` 탭에서 기록 메모 저장이 completed record에만 가능해야 한다.

@@ -65,6 +65,7 @@
 - 회의 전사 provider 순서는 Functions 책임이다. hosted/content는 현재 OpenRouter-safe이면서 Gemini 검증을 통과한 10분 chunk를 만들고, Functions는 같은 JSON secret의 Gemini Files API 전사를 먼저 사용한다. Gemini 빈 전사, truncation, timeout은 성공 처리하지 않고 OpenRouter fallback으로 넘긴다.
 - 전사된 텍스트를 회의록으로 만드는 품질 우선 경로도 Functions 책임이다. 회의록 생성/섹션 AI 수정은 Gemini Pro급 meeting summary model을 먼저 사용하고, JSON shape 실패나 provider 오류는 OpenRouter/OpenAI fallback 또는 degraded 상태로 드러나야 한다.
 - 자동 회의록의 결정 항목은 전사에 명시적인 확정/합의/승인/하기로 했다가 있을 때만 보여야 한다. 단순 검토, 재확인, 제안, 테스트 가능성은 decision이 아니라 후속 작업, 미결정 질문, 리스크로 보여야 한다.
+- 기존 기능 재확인, API 규격 협의, 데이터 조사, 자료 작성 요청, 보고처럼 실제 후속 행동이 전사에 나오면 담당자/기한이 비어도 후속 작업으로 보여야 한다.
 - decision 근거가 약한 사안은 핵심 요약이나 개요에서도 하기로 했다, 추진하기로 했다 같은 확정 표현으로 보이면 안 된다. 논의, 검토, 확인 필요처럼 근거 수준에 맞는 표현을 쓴다.
 - 권장했다, 필수다, 반드시 해야 한다처럼 회의록 작성자가 평가·자문하는 듯한 표현은 피하고, 대안 제시나 검토 필요처럼 회의에서 확인된 수준으로 낮춘다.
 - 모델이 약한 결정을 반환해도 Functions notes normalizer가 테스트, 검토, 재확인, 제안, 협의, 가능성 항목을 `decisions`에서 제거한다.
