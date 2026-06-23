@@ -27,7 +27,7 @@ const DEFAULT_CASE_IDS = [
 ];
 const OUTPUT_DIR = path.join(__dirname, "..", ".codex", "gemini-meeting-notes-tuning");
 const EVALUATION_METHODOLOGY = {
-  evaluatorVersion: "meeting-notes-heuristic-v1",
+  evaluatorVersion: "meeting-notes-heuristic-v2.1",
   basis: "Product-specific rubric inspired by summarization factuality checks, structured rubric evaluation, and pairwise preference evaluation. It is not a public benchmark score.",
   successRule: "A tuning attempt counts as success only when the aggregate score is higher than the previous report under the same evaluator version.",
   dimensions: [
@@ -35,6 +35,9 @@ const EVALUATION_METHODOLOGY = {
     "structure: keep meeting notes fields populated only when evidence supports them",
     "decision hygiene: do not promote tests, rechecks, proposals, or possibilities into decisions",
     "tone safety: soften weak commitment prose such as 진행하기로 or 추진하기로 into discussion-level prose",
+    "consensus safety: do not describe weak agreement as 의견이 모였다 unless the transcript strongly supports it",
+    "readability: avoid awkward Korean created by deterministic prose softening",
+    "coverage: preserve enough sourceTrace and follow-up items compared with the stored reference notes",
     "operability: preserve Korean enum values and valid persisted notes shape",
   ],
   references: [
@@ -305,9 +308,13 @@ function scoreNotes(notes, storedNotes) {
   const penalties = [];
   addPenalty(penalties, "weakDecisions", metrics.weakDecisions * 15);
   addPenalty(penalties, "weakCommitmentProse", metrics.weakCommitmentProse * 10);
+  addPenalty(penalties, "weakConsensusProse", metrics.weakConsensusProse * 8);
+  addPenalty(penalties, "awkwardSoftenedProse", metrics.awkwardSoftenedProse * 7);
   addPenalty(penalties, "nonKoreanEnums", metrics.nonKoreanEnums * 6);
   addPenalty(penalties, "overclaimPhrases", metrics.overclaimPhrases * 5);
   addPenalty(penalties, "missingSourceTrace", metrics.sourceTrace ? 0 : 8);
+  addPenalty(penalties, "sourceTraceUnderrun", Math.max(0, Math.min(6, storedMetrics.sourceTrace || 6) - metrics.sourceTrace) * 2);
+  addPenalty(penalties, "followupCoverageUnderrun", Math.max(0, (storedMetrics.followupCount || 0) - metrics.followupCount - 1) * 2);
   addPenalty(penalties, "emptySummary", metrics.summaryChars ? 0 : 12);
   addPenalty(penalties, "thinOverview", metrics.overviewChars >= 120 ? 0 : 6);
   addPenalty(penalties, "topicOverrun", Math.max(0, metrics.topics - 4) * 4);
@@ -352,6 +359,10 @@ function buildMetrics(notes) {
       + (notes.risksOrDependencies || []).length,
     nonKoreanEnums,
     overclaimPhrases: countMatches(prose, /(필수|권장|반드시|확실히|분명히|최종\s*확정)/g),
+    awkwardSoftenedProse: countMatches(
+      prose,
+      /((?:을|를)\s*(?:우선|즉시|내부적으로)?\s*(?:테스트|진행|시도|지원)\s*방안이|(?:이|가)\s*지원\s*방안이|(?:을|를)\s*(?:재검토|재확인)\s*필요가)/g
+    ),
     overviewChars: overview.length,
     questions: (notes.openQuestions || []).length,
     risks: (notes.risksOrDependencies || []).length,
@@ -359,6 +370,7 @@ function buildMetrics(notes) {
     summaryChars: summary.length,
     topics: (notes.discussionFlow || []).length,
     weakCommitmentProse: countMatches(prose, /(진행하기로|추진하기로|확인하기로|테스트하기로|해보기로|의견을\s*모았)/g),
+    weakConsensusProse: countMatches(prose, /(의견이\s*모였|의견을\s*모았|공감대가\s*형성|합의\s*분위기)/g),
     weakDecisions: (notes.decisions || [])
       .filter((item) => /(검토|재확인|확인|테스트|시도|제안|논의|협의|가능|필요|알아보|추진|진행\s*여부)/.test(normalizeText(item.text)))
       .length,
@@ -402,6 +414,12 @@ function summarizeNotes(notes) {
 function buildReport({ cases, label, previousReport, successNumber }) {
   const aggregate = aggregateScores(cases);
   const previousAggregate = previousReport?.aggregate || null;
+  const previousEvaluatorVersion = normalizeText(previousReport?.methodology?.evaluatorVersion);
+  if (previousReport && previousEvaluatorVersion !== EVALUATION_METHODOLOGY.evaluatorVersion) {
+    throw new Error(
+      `평가 버전이 다릅니다. previous=${previousEvaluatorVersion || "unknown"}, current=${EVALUATION_METHODOLOGY.evaluatorVersion}`
+    );
+  }
   const improvement = previousAggregate
     ? {
         improved: aggregate.score > previousAggregate.score,

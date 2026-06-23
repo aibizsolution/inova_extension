@@ -62,7 +62,8 @@
 - 회의록 자동 생성의 `decisions`는 전사에 확정, 합의, 승인, 하기로 했다 같은 명시적 결정 근거가 있을 때만 채운다. 검토, 재확인, 제안, 테스트 가능성은 decision으로 승격하지 않고 actionItems/openQuestions/risksOrDependencies에 둔다.
 - decision 근거가 약한 사안은 `summary`, `overview`, `discussionFlow`에서도 하기로 했다, 추진하기로 했다 같은 확정 표현으로 쓰지 않는다. 논의했다, 검토했다, 확인 필요로 남았다처럼 근거 수준에 맞춰 쓴다.
 - notes normalizer는 모델이 약한 결정을 반환해도 테스트, 검토, 재확인, 제안, 협의, 가능성 같은 항목을 `decisions`에서 제거한다. 확정, 승인, 합의, 최종 결정처럼 강한 근거가 있는 결정만 보존한다.
-- Gemini 회의록 튜닝은 `run-gemini-meeting-notes-tuning-eval.js` 리포트로 이전 평균 점수보다 개선된 경우만 성공으로 센다. 하기로/진행하기로/담기로/포함하기로 같은 약한 확정형 prose는 normalizer에서 논의/방안 표현으로 낮춘다.
+- Gemini 회의록 튜닝은 `run-gemini-meeting-notes-tuning-eval.js` 리포트로 같은 evaluator version의 이전 평균 점수보다 개선된 경우만 성공으로 센다. v2 평가는 weak decision/prose뿐 아니라 weak consensus 표현, 어색한 deterministic 완화 문장, sourceTrace/follow-up coverage 부족도 함께 본다.
+- 하기로/진행하기로/담기로/포함하기로 같은 약한 확정형 prose는 normalizer에서 논의/방안 표현으로 낮추되, 결과 문장이 `테스트를 우선 진행 방안`처럼 어색하면 다음 튜닝 대상으로 본다.
 - 테스트하기로, 해보기로, 지원하기로처럼 실행 확정과 검토/지원 논의가 섞일 수 있는 표현도 normalizer에서 테스트/시도/지원 방안이 논의된 것으로 낮춘다.
 - `discussionFlow`는 단순 주제 목록이 아니라 회의 진행 흐름을 보존한다. 같은 안건이 뒤에서 다시 등장해 새 결정, 조건, 반론, 리스크를 만들면 같은 heading이어도 별도 항목으로 남긴다.
 - Functions 전사 source part 검증 상한은 OpenAI 25MB 업로드 제한보다 낮은 24MB를 기준으로 유지한다. `gpt-4o-transcribe` 단일 오디오 제한 1400초보다 낮은 23분 안전선을 넘으면 파일이 작아도 chunked로 전환한다.
