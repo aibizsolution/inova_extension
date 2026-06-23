@@ -389,7 +389,7 @@ function createMeetingNotesGenerationDomain(deps) {
       "회의가 안건 A -> B -> 다시 A처럼 진행되면, 다시 나온 A가 새 결정, 조건, 반론, 리스크를 만들었을 때 별도 discussionFlow 항목으로 남긴다.",
       "같은 주제라는 이유만으로 서로 다른 결정, 서로 다른 미결정 사항, 서로 다른 리스크를 하나로 합치지 않는다.",
       "다음 숫자는 목표 개수가 아니라 안전 상한이다: discussionFlow 최대 4개, decisions 최대 5개, actionItems 최대 5개, openQuestions 최대 3개, risksOrDependencies 최대 3개. 상한보다 적거나 0개여도 정상이다.",
-      "단, 실제로 서로 다른 근거가 충분한 full 회의록이면 sourceTrace는 summary, 주요 discussionFlow, actionItems/openQuestions/risksOrDependencies 근거를 합쳐 4~6개까지 적극적으로 남기고, 네 개 이상 주요 항목이 있으면 4개에서 멈추지 말고 6개에 가깝게 작성한다.",
+      "단, 실제로 서로 다른 근거가 충분한 full 회의록이면 sourceTrace는 summary, 주요 discussionFlow, actionItems/openQuestions/risksOrDependencies 근거를 합쳐 정확히 6개 작성한다. 근거가 부족할 때만 6개보다 적게 쓰고, 네 개에서 멈추지 않는다.",
       "decisions는 회의에서 확정된 선택, 승인, 합의만 포함한다. 제안, 가능성, 우려, 검토 필요는 decisions에 넣지 않는다.",
       "decisions는 전사에 '확정', '합의', '승인', '하기로 했다'처럼 명시적인 확정 표현이 있을 때만 작성한다.",
       "단순히 테스트를 해볼 수 있다, 검토한다, 필요하다, 재확인한다, 제안했다는 수준이면 decisions가 아니라 actionItems, openQuestions, risksOrDependencies 중 맞는 곳에 둔다.",

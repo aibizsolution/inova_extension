@@ -65,6 +65,7 @@
 - 권장했다, 필수다, 반드시 해야 한다처럼 회의록 작성자가 평가·자문하는 듯한 표현은 피하고, 전사 근거 수준에 맞춰 대안으로 제시했다, 필요성이 언급됐다, 검토 대상으로 남았다처럼 중립화한다.
 - notes normalizer는 모델이 약한 결정을 반환해도 테스트, 검토, 재확인, 제안, 협의, 가능성 같은 항목을 `decisions`에서 제거한다. 확정, 승인, 합의, 최종 결정처럼 강한 근거가 있는 결정만 보존한다.
 - Gemini 회의록 튜닝은 `run-gemini-meeting-notes-tuning-eval.js` 리포트로 같은 evaluator version의 이전 평균 점수보다 개선된 경우만 성공으로 센다. v2 평가는 weak decision/prose뿐 아니라 weak consensus 표현, 어색한 deterministic 완화 문장, sourceTrace/follow-up coverage 부족도 함께 본다.
+- full 회의록에서 서로 다른 근거가 충분하면 `sourceTrace`는 summary, 주요 discussionFlow, actionItems/openQuestions/risksOrDependencies 근거를 합쳐 6개를 채운다. 근거 부족 때만 6개보다 적게 둔다.
 - 하기로/진행하기로/담기로/포함하기로 같은 약한 확정형 prose는 normalizer에서 논의/방안 표현으로 낮추되, 결과 문장이 `테스트를 우선 진행 방안`처럼 어색하면 다음 튜닝 대상으로 본다.
 - 테스트하기로, 해보기로, 지원하기로처럼 실행 확정과 검토/지원 논의가 섞일 수 있는 표현도 normalizer에서 테스트/시도/지원 방안이 논의된 것으로 낮춘다.
 - `discussionFlow`는 단순 주제 목록이 아니라 회의 진행 흐름을 보존한다. 같은 안건이 뒤에서 다시 등장해 새 결정, 조건, 반론, 리스크를 만들면 같은 heading이어도 별도 항목으로 남긴다.
