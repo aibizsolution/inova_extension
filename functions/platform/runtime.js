@@ -8,7 +8,7 @@ require("../shared/prompt-store-model");
 const promptTextModel = globalThis.InovaBookmarks.promptTextModel;
 const promptStoreModel = globalThis.InovaBookmarks.promptStoreModel;
 
-const FIREBASE_AUTH_SIGNING_SERVICE_ACCOUNT = process.env.FIREBASE_AUTH_SIGNING_SERVICE_ACCOUNT
+const INOVA_AUTH_SIGNING_SERVICE_ACCOUNT = process.env.INOVA_AUTH_SIGNING_SERVICE_ACCOUNT
   || "1027279095019-compute@developer.gserviceaccount.com";
 const RUNNING_IN_FIREBASE_EMULATOR = isFirebaseEmulatorRuntime();
 
@@ -17,7 +17,7 @@ if (!admin.apps.length) {
     admin.initializeApp();
   } else {
     admin.initializeApp({
-      serviceAccountId: FIREBASE_AUTH_SIGNING_SERVICE_ACCOUNT,
+      serviceAccountId: INOVA_AUTH_SIGNING_SERVICE_ACCOUNT,
     });
   }
 }
