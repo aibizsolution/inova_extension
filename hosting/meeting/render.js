@@ -30,7 +30,7 @@
   const DISPLAY_REVIEW_SEGMENT_TARGET_DURATION_MS = 90 * 1000;
   const DISPLAY_REVIEW_SEGMENT_MAX_DURATION_MS = 150 * 1000;
   const DISPLAY_REVIEW_SEGMENT_MIN_DURATION_MS = 25 * 1000;
-  const LOW_QUALITY_TRANSCRIPT_FILLERS = new Set(["네", "예", "응", "음", "어", "아", "넵"]);
+  const LOW_QUALITY_TRANSCRIPT_FILLERS = new Set(["네", "예", "응", "음", "어", "아", "하", "넵"]);
   const LOW_QUALITY_TRANSCRIPT_MIN_TOKENS = 30;
   const LOW_QUALITY_TRANSCRIPT_MIN_FILLER_RATIO = 0.9;
   const LOW_QUALITY_TRANSCRIPT_MIN_RUN = 20;
@@ -293,24 +293,36 @@
   }
 
   function tokenizeTranscriptForQuality(text) {
-    return normalizeTextBlock(text).match(/[가-힣A-Za-z0-9]+/g) || [];
+    return normalizeTextBlock(text).match(/[가-힣A-Za-z0-9ㅋㅎ]+/g) || [];
+  }
+
+  function getTranscriptFillerTokenWeight(token) {
+    const normalized = normalizeText(token);
+    if (!normalized) return 0;
+    if (LOW_QUALITY_TRANSCRIPT_FILLERS.has(normalized)) return 1;
+    if (/^[ㅋㅎ]+$/.test(normalized)) return normalized.length;
+    if (/^하{2,}$/.test(normalized)) return normalized.length;
+    return 0;
   }
 
   function classifyTranscriptQuality(text) {
     const tokens = tokenizeTranscriptForQuality(text);
     let fillerCount = 0;
+    let tokenCount = 0;
     let maxFillerRun = 0;
     let currentFillerRun = 0;
     for (const token of tokens) {
-      if (LOW_QUALITY_TRANSCRIPT_FILLERS.has(token)) {
-        fillerCount += 1;
-        currentFillerRun += 1;
+      const fillerWeight = getTranscriptFillerTokenWeight(token);
+      if (fillerWeight > 0) {
+        fillerCount += fillerWeight;
+        tokenCount += fillerWeight;
+        currentFillerRun += fillerWeight;
         maxFillerRun = Math.max(maxFillerRun, currentFillerRun);
       } else {
+        tokenCount += 1;
         currentFillerRun = 0;
       }
     }
-    const tokenCount = tokens.length;
     const meaningfulCount = Math.max(0, tokenCount - fillerCount);
     const fillerRatio = tokenCount ? fillerCount / tokenCount : 0;
     const isLowQuality = tokenCount >= LOW_QUALITY_TRANSCRIPT_MIN_TOKENS

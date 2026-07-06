@@ -156,27 +156,35 @@ function verifyLowQualityTranscriptDisplay() {
   const runtime = loadHostedMeetingRuntime();
   const ns = runtime.__INOVA_HOSTED_MEETING__;
   const pureNoise = Array.from({ length: 80 }, () => "네").join(" ");
+  const pureLaughNoise = "하".repeat(80);
   const meaningfulWithTail = `저희는 제품 생성보다는 생성 쪽에 관심이 있습니다. ${Array.from({ length: 50 }, () => "네").join(" ")}`;
+  const meaningfulWithLaughTail = `저희는 제품 생성보다는 생성 쪽에 관심이 있습니다. ${"하".repeat(50)}`;
   const pureResult = ns.render.classifyTranscriptQuality(pureNoise);
+  const pureLaughResult = ns.render.classifyTranscriptQuality(pureLaughNoise);
   const mixedResult = ns.render.classifyTranscriptQuality(meaningfulWithTail);
+  const mixedLaughResult = ns.render.classifyTranscriptQuality(meaningfulWithLaughTail);
 
   assert.equal(pureResult.isLowQuality, true, "Pure repeated filler transcript should be classified as low quality");
+  assert.equal(pureLaughResult.isLowQuality, true, "Pure repeated laugh transcript should be classified as low quality");
   assert.equal(mixedResult.isLowQuality, false, "Meaningful transcript with a noisy tail should stay visible by default");
+  assert.equal(mixedLaughResult.isLowQuality, false, "Meaningful transcript with a laugh tail should stay visible by default");
 
   const display = ns.render.buildSegmentDisplayItems([
     { startMs: 0, endMs: 5000, text: pureNoise },
     { startMs: 5000, endMs: 10000, text: meaningfulWithTail },
+    { startMs: 10000, endMs: 15000, text: pureLaughNoise },
   ]);
-  assert.equal(display.totalCount, 2, "Segment display model should keep the original segment total");
-  assert.equal(display.hiddenCount, 1, "Segment display model should hide pure low-quality repetitions by default");
+  assert.equal(display.totalCount, 3, "Segment display model should keep the original segment total");
+  assert.equal(display.hiddenCount, 2, "Segment display model should hide pure low-quality repetitions by default");
   assert.equal(display.visibleItems.length, 1, "Segment display model should keep meaningful segments visible");
 
   const expanded = ns.render.buildSegmentDisplayItems([
     { startMs: 0, endMs: 5000, text: pureNoise },
     { startMs: 5000, endMs: 10000, text: meaningfulWithTail },
+    { startMs: 10000, endMs: 15000, text: pureLaughNoise },
   ], { showLowQualitySegments: true });
   assert.equal(expanded.hiddenCount, 0, "Expanded segment display should not hide low-quality segments");
-  assert.equal(expanded.visibleItems.length, 2, "Expanded segment display should show all segments");
+  assert.equal(expanded.visibleItems.length, 3, "Expanded segment display should show all segments");
 }
 
 async function main() {
