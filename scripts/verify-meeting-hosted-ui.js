@@ -3,6 +3,7 @@
 const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
+const vm = require("vm");
 const { JSDOM } = require("jsdom");
 
 const root = path.resolve(__dirname, "..");
@@ -10,12 +11,148 @@ const hostedMeetingHtmlPath = path.join(root, "hosting", "meeting", "index.html"
 const hostedMeetingCssPath = path.join(root, "hosting", "meeting", "index.css");
 const hostedDesignSystemCssPath = path.join(root, "hosting", "shared", "design-system.css");
 const hostedMeetingRenderPath = path.join(root, "hosting", "meeting", "render.js");
+const hostedMeetingRenderStatePath = path.join(root, "hosting", "meeting", "render-state.js");
 const hostedMeetingMutationsPath = path.join(root, "hosting", "meeting", "workspace-mutations.js");
 const hostedMeetingNotesPath = path.join(root, "hosting", "meeting", "notes.js");
 const hostedMeetingDebugPath = path.join(root, "hosting", "meeting", "workspace-debug.js");
 const hostedMeetingPendingUploadsPath = path.join(root, "hosting", "meeting", "workspace-pending-uploads.js");
 
-function main() {
+function createEmptySectionEditState() {
+  return {
+    baseRevisionToken: "",
+    instruction: "",
+    jobId: "",
+    mode: "ai",
+    open: false,
+    previewSectionData: null,
+    previewSectionKey: "",
+    recordId: "",
+    sectionKey: "",
+    statusText: "",
+    statusTone: "",
+  };
+}
+
+function loadHostedMeetingRuntime() {
+  const context = {
+    console,
+    crypto: {
+      randomUUID: () => "verify-random-id",
+    },
+    document: {},
+    location: { origin: "https://browser-extension-v2.web.app" },
+  };
+  context.globalThis = context;
+  context.window = context;
+  context.__INOVA_HOSTED_MEETING__ = {
+    storage: {
+      comparePendingUploads: () => 0,
+    },
+  };
+  for (const filePath of [
+    path.join(root, "hosting", "meeting", "shared.js"),
+    hostedMeetingNotesPath,
+    hostedMeetingRenderStatePath,
+    hostedMeetingRenderPath,
+    hostedMeetingMutationsPath,
+  ]) {
+    vm.runInNewContext(fs.readFileSync(filePath, "utf8"), context, { filename: filePath });
+  }
+  return context;
+}
+
+async function verifyManualOverviewEditPayload() {
+  const runtime = loadHostedMeetingRuntime();
+  const ns = runtime.__INOVA_HOSTED_MEETING__;
+  const originalNotes = ns.notes.normalizeMeetingNotes({
+    meetingMeta: {
+      datetime: "2026-07-06 10:00",
+      participants: ["홍길동", "김코덱스"],
+      purpose: "기존 회의 목적",
+      title: "기존 제목",
+    },
+    overview: "기존 회의 개요",
+    summary: "기존 핵심 요약",
+  });
+  let postedBody = null;
+  ns.shared.postJson = async (_globalObject, _url, body) => {
+    postedBody = body;
+    return {
+      accepted: true,
+      notes: ns.notes.normalizeMeetingNotes({
+        ...originalNotes,
+        ...body.sectionData,
+      }),
+      requestId: body.clientRequestId,
+      sectionKey: body.sectionKey,
+      title: "기존 제목",
+    };
+  };
+
+  const state = {
+    auth: {},
+    busy: { queue: Object.create(null) },
+    currentArtifact: { notes: originalNotes },
+    currentJob: {
+      jobId: "job-1",
+      meetingNotes: originalNotes,
+      status: "succeeded",
+      title: "기존 제목",
+    },
+    meeting: { title: "기존 회의", termReplacements: [] },
+    meetingTitleDraft: "기존 회의",
+    pendingMutations: Object.create(null),
+    pendingUploads: [],
+    records: [{
+      jobId: "job-1",
+      meetingId: "meeting-1",
+      resultTitle: "기존 제목",
+      status: "succeeded",
+      updatedAt: "2026-07-06T00:00:00.000Z",
+    }],
+    reviewTab: "notes",
+    sectionEdit: createEmptySectionEditState(),
+    selectedRecordId: "job:job-1",
+    session: { meetingId: "meeting-1", meetingSessionToken: "session-token" },
+    termReplacementState: { draftFrom: "", draftTo: "", items: [], open: false, saved: [] },
+  };
+  const notices = [];
+  const controller = ns.workspaceMutations.createController({
+    constants: {
+      CONFIG: {
+        applyMeetingResultSectionEditUrl: "/apply-section",
+      },
+    },
+    helpers: {
+      applyRender: () => {},
+      cloneTermReplacements: (items) => JSON.parse(JSON.stringify(Array.isArray(items) ? items : [])),
+      createEmptySectionEditState,
+      setNotice: (message, tone) => notices.push({ message, tone }),
+    },
+    state,
+  });
+
+  assert.equal(controller.openSectionEdit("overview", "manual"), true);
+  controller.updateSectionEditInstruction("일시\n2026-07-06 11:00\n\n참여자\n홍길동\n\n목적\n새 회의 목적\n\n개요\n대괄호를 지운 새 회의 개요");
+  assert.equal(await controller.applySectionEdit(), true);
+  assert(postedBody, "Manual overview save should post a section edit payload");
+  assert.equal(postedBody.sectionKey, "overview");
+  assert.equal(postedBody.editMode, "manual");
+  assert.equal(postedBody.sectionData.meetingMeta.datetime, "2026-07-06 11:00");
+  assert.deepEqual(postedBody.sectionData.meetingMeta.participants, ["홍길동"]);
+  assert.equal(postedBody.sectionData.meetingMeta.purpose, "새 회의 목적");
+  assert.equal(postedBody.sectionData.overview, "대괄호를 지운 새 회의 개요");
+
+  postedBody = null;
+  assert.equal(controller.openSectionEdit("overview", "manual"), true);
+  controller.updateSectionEditInstruction("표식 없이 통째로 바꾼 회의 개요");
+  assert.equal(await controller.applySectionEdit(), true);
+  assert(postedBody, "Plain manual overview save should post a section edit payload");
+  assert.equal(postedBody.sectionData.meetingMeta.purpose, "새 회의 목적");
+  assert.equal(postedBody.sectionData.overview, "표식 없이 통째로 바꾼 회의 개요");
+}
+
+async function main() {
   const html = fs.readFileSync(hostedMeetingHtmlPath, "utf8");
   const css = fs.readFileSync(hostedMeetingCssPath, "utf8");
   const designSystemCss = fs.readFileSync(hostedDesignSystemCssPath, "utf8");
@@ -165,6 +302,11 @@ function main() {
     "Manual overview editing should expose and save editable participant metadata"
   );
   assert(
+    mutationsJs.includes("const marker = `(?:\\\\[${label}\\\\]|${label})`;")
+      && mutationsJs.includes("normalizeTextBlock(text)"),
+    "Manual overview editing should save both bracketless overview blocks and plain overview text"
+  );
+  assert(
     notesJs.includes("const MAX_DISCUSSION_FLOW_COUNT = 12")
       && notesJs.includes("const MAX_ACTION_COUNT = 12")
       && notesJs.includes("const MAX_OPEN_QUESTION_COUNT = 12")
@@ -179,7 +321,11 @@ function main() {
   );
   assert.equal(document.querySelector("#reviewTabActions #moveRecordButton"), null, "Move record action should not live in the shared review action row");
 
+  await verifyManualOverviewEditPayload();
   console.log("[verify-meeting-hosted-ui] Hosted meeting UI contract passed");
 }
 
-main();
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

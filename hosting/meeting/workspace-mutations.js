@@ -544,7 +544,9 @@ const SECTION_LABELS = Object.freeze({
       function readManualOverviewBlock(textInput, label) {
         const text = normalizeTextareaDraft(textInput);
         const labels = "일시|참여자|목적|개요";
-        const match = text.match(new RegExp(`\\[${label}\\]([\\s\\S]*?)(?=\\n{0,2}\\[(?:${labels})\\]|$)`));
+        const marker = `(?:\\[${label}\\]|${label})`;
+        const nextMarker = `(?:\\[(?:${labels})\\]|(?:${labels}))`;
+        const match = text.match(new RegExp(`(?:^|\\n)\\s*${marker}\\s*(?:\\n|$)([\\s\\S]*?)(?=\\n\\s*${nextMarker}\\s*(?:\\n|$)|$)`));
         return match ? normalizeTextareaDraft(match[1]) : null;
       }
 

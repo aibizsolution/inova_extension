@@ -170,6 +170,7 @@
    - OpenRouter provider 경로를 바꾼 PR에서는 AI 미리보기 1회가 OpenRouter 모델로 먼저 완료되는지 보고, 실패 시 `degraded` 또는 explicit error가 남는지 확인한다.
 6. `직접 수정`은 미리보기 없이 해당 섹션만 저장해야 한다.
    - 긴 업무 회의록 보정 PR에서는 `논의 흐름` 10개, `추가 결정 필요 사항` 7개, `리스크 및 제약` 6개, `후속 실행 항목` 8개 수준의 긴 섹션을 저장해도 화면과 Firestore notes에서 잘리지 않는지 확인한다. 현재 안전 상한은 discussionFlow 12개, keyPoints 6개, decisions 8개, actionItems 12개, openQuestions 12개, risksOrDependencies 10개다.
+   - `회의 개요` 직접 수정에서는 `[일시]`, `[참여자]`, `[목적]`, `[개요]`의 대괄호를 지우고 `일시`, `참여자`, `목적`, `개요` 제목 줄만 남겨도 각 필드가 저장되어야 한다. 표식 없이 본문만 입력한 경우에는 입력 전체가 `overview` 본문으로 저장되어야 한다.
 7. `메모` 탭에서 기록 메모 저장이 completed record에만 가능해야 한다.
 8. read-only 또는 공유 링크 모드라면 저장/삭제/이동/용어 치환 같은 mutation 버튼이 숨겨지거나 비활성화되어야 한다.
 9. pending upload queue가 degraded면 warning notice와 hosted console trace가 함께 남아야 한다.
