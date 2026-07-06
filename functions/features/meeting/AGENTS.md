@@ -69,6 +69,7 @@
 - 하기로/진행하기로/담기로/포함하기로 같은 약한 확정형 prose는 normalizer에서 논의/방안 표현으로 낮추되, 결과 문장이 `테스트를 우선 진행 방안`처럼 어색하면 다음 튜닝 대상으로 본다.
 - 테스트하기로, 해보기로, 지원하기로처럼 실행 확정과 검토/지원 논의가 섞일 수 있는 표현도 normalizer에서 테스트/시도/지원 방안이 논의된 것으로 낮춘다.
 - `discussionFlow`는 단순 주제 목록이 아니라 회의 진행 흐름을 보존한다. 같은 안건이 뒤에서 다시 등장해 새 결정, 조건, 반론, 리스크를 만들면 같은 heading이어도 별도 항목으로 남긴다.
+- full 회의록과 직접 수정 저장은 긴 업무 회의록을 보존할 수 있어야 한다. 현재 상한은 discussionFlow 12개, keyPoints 6개, decisions 8개, actionItems 12개, openQuestions 12개, risksOrDependencies 10개이며, 이 값은 목표 개수가 아니라 truncation 방지용 안전 상한이다.
 - Functions 전사 source part 검증 상한은 OpenAI 25MB 업로드 제한보다 낮은 24MB를 기준으로 유지한다. `gpt-4o-transcribe` 단일 오디오 제한 1400초보다 낮은 23분 안전선을 넘으면 파일이 작아도 chunked로 전환한다.
 - hosted chunked source는 OpenRouter 전사 502를 줄이되 전사 품질을 과하게 해치지 않기 위해 12kHz mono WAV, 10분 chunk, 1.5초 overlap으로 올라온다는 전제를 둔다. Functions는 각 part가 24MB 검증 상한 아래인지 확인하고, part 자체를 다시 재분할하지 않는다.
 - Gemini 전사 primary는 Gemini 전용 STT endpoint가 아니라 Files API 업로드 후 `generateContent` 오디오 입력으로 처리한다. `gemini-3.5-flash`는 전사에서 `thinkingLevel: "minimal"`과 `maxOutputTokens: 16384`를 기본으로 써야 긴 회의 chunk에서 빈 응답/지연/truncation을 줄일 수 있으며, 빈 전사는 성공으로 저장하지 않는다. 업로드한 Gemini file은 성공/실패와 관계없이 best-effort 삭제한다.

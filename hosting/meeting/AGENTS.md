@@ -41,6 +41,7 @@
 - `용어 치환` 설명은 버튼 안쪽 `?` tooltip으로만 노출한다. 별도 heading/body 도움말 블록을 notes 상단에 다시 두지 않는다.
 - 섹션 수정 dialog는 preview card와 버튼 상태로만 안내하고, 별도 inline status strip은 두지 않는다.
 - 회의 정리 섹션 헤더의 작업은 `직접 수정`, `AI 수정`, `삭제`를 분리한다. AI 수정은 preview/apply dialog를 쓰고, 직접 수정과 삭제는 manual mutation으로 해당 섹션만 저장하거나 비운다.
+- full 회의록과 직접 수정 저장은 긴 업무 회의록을 보존할 수 있어야 한다. 현재 상한은 discussionFlow 12개, keyPoints 6개, decisions 8개, actionItems 12개, openQuestions 12개, risksOrDependencies 10개이며, 이 값은 목표 개수가 아니라 truncation 방지용 안전 상한이다.
 
 ## 디버그 / 증거 수집
 - hosted 작업실은 화면 안에 debug panel/FAB를 렌더하지 않는다. `?debug=1`이면 확장 패널 로그처럼 DevTools 콘솔에 `[inova:meeting #n]`, `[inova:functions #n]`, `[inova:firestore #n]` trace를 출력한다.

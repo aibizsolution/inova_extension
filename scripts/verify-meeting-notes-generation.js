@@ -9,6 +9,7 @@ const { createMeetingNotesDocumentDomain } = require("../functions/features/meet
 function main() {
   verifyMeetingNotesPromptGuards();
   verifyRevisitedAgendaNormalization();
+  verifyLongMeetingNotesSectionsArePreserved();
   verifyWeakDecisionNormalization();
   verifyWeakDecisionProseSoftening();
   console.log("[verify-meeting-notes-generation] prompt and normalizer guards passed");
@@ -28,6 +29,9 @@ function verifyMeetingNotesPromptGuards() {
     "다시 나온 A가 새 결정, 조건, 반론, 리스크를 만들었을 때 별도 discussionFlow 항목으로 남긴다.",
     "같은 주제라는 이유만으로 서로 다른 결정, 서로 다른 미결정 사항, 서로 다른 리스크를 하나로 합치지 않는다.",
     "다음 숫자는 목표 개수가 아니라 안전 상한이다",
+    "discussionFlow 최대 12개",
+    "actionItems 최대 12개",
+    "openQuestions 최대 12개",
     "sourceTrace는 summary, 주요 discussionFlow, actionItems/openQuestions/risksOrDependencies 근거를 합쳐 정확히 6개 작성한다.",
     "decisions는 전사에 '확정', '합의', '승인', '하기로 했다'처럼 명시적인 확정 표현이 있을 때만 작성한다.",
     "단순히 테스트를 해볼 수 있다, 검토한다, 필요하다, 재확인한다, 제안했다는 수준이면 decisions가 아니라 actionItems, openQuestions, risksOrDependencies 중 맞는 곳에 둔다.",
@@ -72,6 +76,38 @@ function verifyRevisitedAgendaNormalization() {
     2,
     "meeting notes should preserve revisited agenda rounds while deduping exact duplicates"
   );
+}
+
+function verifyLongMeetingNotesSectionsArePreserved() {
+  const notesDomain = createFixtureMeetingNotesDocumentDomain();
+  const normalized = notesDomain.normalizeMeetingNotes({
+    actionItems: Array.from({ length: 8 }, (_, index) => ({
+      source: "manual",
+      status: "요청됨",
+      task: `BytePlus 후속 실행 항목 ${index + 1}`,
+    })),
+    discussionFlow: Array.from({ length: 10 }, (_, index) => ({
+      heading: `BytePlus 논의 흐름 ${index + 1}`,
+      keyPoints: [
+        `Seedream 확인 포인트 ${index + 1}-1`,
+        `Seedance 확인 포인트 ${index + 1}-2`,
+        `보안 확인 포인트 ${index + 1}-3`,
+        `가격 확인 포인트 ${index + 1}-4`,
+        `레퍼런스 확인 포인트 ${index + 1}-5`,
+      ],
+      narrative: `BytePlus Seed 계열 소개 중 서로 다른 논의 흐름 ${index + 1}이 다뤄졌다.`,
+    })),
+    openQuestions: Array.from({ length: 7 }, (_, index) => `BytePlus 추가 결정 필요 사항 ${index + 1}`),
+    risksOrDependencies: Array.from({ length: 6 }, (_, index) => ({
+      severity: "중간",
+      text: `BytePlus 리스크 및 제약 ${index + 1}`,
+    })),
+  });
+  assert.equal(normalized.discussionFlow.length, 10, "meeting notes should preserve long discussion flow sections");
+  assert.equal(normalized.discussionFlow[0].keyPoints.length, 5, "meeting notes should preserve detailed discussion key points");
+  assert.equal(normalized.openQuestions.length, 7, "meeting notes should preserve long open question sections");
+  assert.equal(normalized.risksOrDependencies.length, 6, "meeting notes should preserve long risk sections");
+  assert.equal(normalized.actionItems.length, 8, "meeting notes should preserve long action sections");
 }
 
 function verifyWeakDecisionNormalization() {
@@ -172,13 +208,13 @@ function createFixtureMeetingNotesDocumentDomain() {
     },
     crypto: nodeCrypto,
     limits: {
-      MAX_MEETING_NOTES_ACTION_ITEMS: 5,
-      MAX_MEETING_NOTES_DECISIONS: 5,
-      MAX_MEETING_NOTES_OPEN_QUESTIONS: 3,
-      MAX_MEETING_NOTES_RISKS: 3,
+      MAX_MEETING_NOTES_ACTION_ITEMS: 12,
+      MAX_MEETING_NOTES_DECISIONS: 8,
+      MAX_MEETING_NOTES_OPEN_QUESTIONS: 12,
+      MAX_MEETING_NOTES_RISKS: 10,
       MAX_MEETING_NOTES_SOURCE_TRACE: 6,
-      MAX_MEETING_NOTES_TOPIC_COUNT: 4,
-      MAX_MEETING_NOTES_TOPIC_KEY_POINTS: 4,
+      MAX_MEETING_NOTES_TOPIC_COUNT: 12,
+      MAX_MEETING_NOTES_TOPIC_KEY_POINTS: 6,
     },
     normalizeText: normalizeFixtureText,
     normalizeTextBlock: normalizeFixtureTextBlock,

@@ -11,6 +11,7 @@ const hostedMeetingCssPath = path.join(root, "hosting", "meeting", "index.css");
 const hostedDesignSystemCssPath = path.join(root, "hosting", "shared", "design-system.css");
 const hostedMeetingRenderPath = path.join(root, "hosting", "meeting", "render.js");
 const hostedMeetingMutationsPath = path.join(root, "hosting", "meeting", "workspace-mutations.js");
+const hostedMeetingNotesPath = path.join(root, "hosting", "meeting", "notes.js");
 const hostedMeetingDebugPath = path.join(root, "hosting", "meeting", "workspace-debug.js");
 const hostedMeetingPendingUploadsPath = path.join(root, "hosting", "meeting", "workspace-pending-uploads.js");
 
@@ -20,6 +21,7 @@ function main() {
   const designSystemCss = fs.readFileSync(hostedDesignSystemCssPath, "utf8");
   const renderJs = fs.readFileSync(hostedMeetingRenderPath, "utf8");
   const mutationsJs = fs.readFileSync(hostedMeetingMutationsPath, "utf8");
+  const notesJs = fs.readFileSync(hostedMeetingNotesPath, "utf8");
   const debugJs = fs.readFileSync(hostedMeetingDebugPath, "utf8");
   const pendingUploadsJs = fs.readFileSync(hostedMeetingPendingUploadsPath, "utf8");
   const dom = new JSDOM(html);
@@ -161,6 +163,13 @@ function main() {
       && mutationsJs.includes("parseManualOverviewParticipants")
       && mutationsJs.includes("meetingMeta: overviewDraft.meetingMeta"),
     "Manual overview editing should expose and save editable participant metadata"
+  );
+  assert(
+    notesJs.includes("const MAX_DISCUSSION_FLOW_COUNT = 12")
+      && notesJs.includes("const MAX_ACTION_COUNT = 12")
+      && notesJs.includes("const MAX_OPEN_QUESTION_COUNT = 12")
+      && notesJs.includes("const MAX_RISK_COUNT = 10"),
+    "Hosted notes normalizer should preserve long manual meeting-note sections"
   );
   assert(
     mutationsJs.includes("moveRecordLocalCopyToMeeting")
