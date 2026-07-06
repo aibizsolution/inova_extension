@@ -23,6 +23,7 @@
         buildDetailView,
         buildMeetingNotesCopyText,
         buildSegmentCopyText,
+        buildSegmentDisplayItems,
         findHistoryEntry,
       } = ns.render;
       let consoleTraceEnabled = false;
@@ -449,7 +450,16 @@
       async function copySegmentsText() {
         const entry = findHistoryEntry(state, state.selectedRecordId);
         const detailView = buildDetailView(state, entry);
-        const text = buildSegmentCopyText(detailView.segments, detailView.transcriptText);
+        const segmentDisplay = buildSegmentDisplayItems(detailView.segments, {
+          showLowQualitySegments: state.showLowQualitySegments,
+        });
+        const visibleSegments = segmentDisplay.totalCount
+          ? segmentDisplay.visibleItems.map((item) => item.segment)
+          : detailView.segments;
+        const text = buildSegmentCopyText(
+          visibleSegments,
+          segmentDisplay.totalCount ? "" : detailView.transcriptText
+        );
         if (!text) {
           helpers.setNotice?.("복사할 전사가 아직 없습니다.", "warning");
           helpers.applyRender?.();

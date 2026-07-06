@@ -30,6 +30,11 @@
   const DISPLAY_REVIEW_SEGMENT_TARGET_DURATION_MS = 90 * 1000;
   const DISPLAY_REVIEW_SEGMENT_MAX_DURATION_MS = 150 * 1000;
   const DISPLAY_REVIEW_SEGMENT_MIN_DURATION_MS = 25 * 1000;
+  const LOW_QUALITY_TRANSCRIPT_FILLERS = new Set(["네", "예", "응", "음", "어", "아", "넵"]);
+  const LOW_QUALITY_TRANSCRIPT_MIN_TOKENS = 30;
+  const LOW_QUALITY_TRANSCRIPT_MIN_FILLER_RATIO = 0.9;
+  const LOW_QUALITY_TRANSCRIPT_MIN_RUN = 20;
+  const LOW_QUALITY_TRANSCRIPT_MAX_MEANINGFUL_TOKENS = 6;
 
   function renderChunkProgress(model) {
     if (!model) return "";
@@ -285,6 +290,41 @@
       })
       .filter(Boolean);
     return normalizeTextBlock(lines.join("\n") || fallbackText);
+  }
+
+  function tokenizeTranscriptForQuality(text) {
+    return normalizeTextBlock(text).match(/[가-힣A-Za-z0-9]+/g) || [];
+  }
+
+  function classifyTranscriptQuality(text) {
+    const tokens = tokenizeTranscriptForQuality(text);
+    let fillerCount = 0;
+    let maxFillerRun = 0;
+    let currentFillerRun = 0;
+    for (const token of tokens) {
+      if (LOW_QUALITY_TRANSCRIPT_FILLERS.has(token)) {
+        fillerCount += 1;
+        currentFillerRun += 1;
+        maxFillerRun = Math.max(maxFillerRun, currentFillerRun);
+      } else {
+        currentFillerRun = 0;
+      }
+    }
+    const tokenCount = tokens.length;
+    const meaningfulCount = Math.max(0, tokenCount - fillerCount);
+    const fillerRatio = tokenCount ? fillerCount / tokenCount : 0;
+    const isLowQuality = tokenCount >= LOW_QUALITY_TRANSCRIPT_MIN_TOKENS
+      && fillerRatio >= LOW_QUALITY_TRANSCRIPT_MIN_FILLER_RATIO
+      && maxFillerRun >= LOW_QUALITY_TRANSCRIPT_MIN_RUN
+      && meaningfulCount <= LOW_QUALITY_TRANSCRIPT_MAX_MEANINGFUL_TOKENS;
+    return {
+      fillerCount,
+      fillerRatio,
+      isLowQuality,
+      maxFillerRun,
+      meaningfulCount,
+      tokenCount,
+    };
   }
 
   function formatCaptureTimer(durationMs) {
@@ -992,10 +1032,32 @@
     return paragraphs.length ? paragraphs : [normalized];
   }
 
-  function renderSegment(segment, index) {
+  function buildSegmentDisplayItems(segments, options = {}) {
+    const showLowQualitySegments = Boolean(options.showLowQualitySegments);
+    const items = (Array.isArray(segments) ? segments : [])
+      .map((segment, index) => ({
+        index,
+        quality: classifyTranscriptQuality(segment?.text),
+        segment,
+      }));
+    const hiddenCount = showLowQualitySegments ? 0 : items.filter((item) => item.quality.isLowQuality).length;
+    const visibleItems = showLowQualitySegments ? items : items.filter((item) => !item.quality.isLowQuality);
+    return {
+      hiddenCount,
+      lowQualityCount: items.filter((item) => item.quality.isLowQuality).length,
+      totalCount: items.length,
+      visibleItems,
+    };
+  }
+
+  function renderSegment(segment, index, options = {}) {
     const paragraphs = splitSegmentParagraphs(segment.text);
     const label = Number.isFinite(index) ? `원문 ${index + 1}` : "";
-    return `<article class="segment-item"><div class="segment-item__head"><span>${escapeHtml(formatSegmentRange(segment.startMs, segment.endMs))}</span>${label ? `<span class="segment-item__index">${escapeHtml(label)}</span>` : ""}</div><div class="segment-item__body">${paragraphs.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("")}</div></article>`;
+    const lowQualityBadge = options.lowQuality
+      ? `<span class="segment-item__quality inova-badge inova-badge--muted">저품질 반복</span>`
+      : "";
+    const classes = ["segment-item", options.lowQuality ? "segment-item--low-quality" : ""].filter(Boolean).join(" ");
+    return `<article class="${classes}"><div class="segment-item__head"><span>${escapeHtml(formatSegmentRange(segment.startMs, segment.endMs))}</span><span class="segment-item__meta">${lowQualityBadge}${label ? `<span class="segment-item__index">${escapeHtml(label)}</span>` : ""}</span></div><div class="segment-item__body">${paragraphs.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("")}</div></article>`;
   }
 
   function renderTranscriptFallback(transcriptText) {
@@ -1224,6 +1286,9 @@
     const hasTranscriptValue = Boolean(normalizeText(detailView.transcriptText));
     const hasSegmentsValue = Array.isArray(detailView.segments) && detailView.segments.length > 0;
     const hasSegmentContent = hasSegmentsValue || hasTranscriptValue;
+    const segmentDisplay = buildSegmentDisplayItems(detailView.segments, {
+      showLowQualitySegments: state.showLowQualitySegments,
+    });
     const showSummaryReviewTab = !isCompletedRecord;
     const showMemoReviewTab = isCompletedRecord || hasMemoValue;
     const showNotesReviewTab = isCompletedRecord || hasNotesValue;
@@ -1258,6 +1323,13 @@
     }
     refs.copySegmentsButton.hidden = activeReviewTab !== "segments" || !hasSegmentContent;
     refs.copySegmentsButton.disabled = activeReviewTab !== "segments" || !hasSegmentContent;
+    refs.segmentQualityBadge.hidden = activeReviewTab !== "segments" || !segmentDisplay.hiddenCount;
+    refs.segmentQualityBadge.textContent = segmentDisplay.hiddenCount
+      ? `저품질 원문 ${segmentDisplay.hiddenCount}개 숨김`
+      : "";
+    refs.toggleLowQualitySegmentsButton.hidden = activeReviewTab !== "segments" || !segmentDisplay.lowQualityCount;
+    refs.toggleLowQualitySegmentsButton.textContent = state.showLowQualitySegments ? "저품질 원문 숨기기" : "숨긴 원문 보기";
+    refs.toggleLowQualitySegmentsButton.setAttribute("aria-pressed", state.showLowQualitySegments ? "true" : "false");
     refs.summaryStatusGrid.hidden = !summaryFlow.steps.length;
     refs.summaryStatusGrid.innerHTML = renderStatusFlow(summaryFlow);
     const summaryActionMessage = buildStatusActionMessage(detailView, {
@@ -1304,7 +1376,11 @@
     refs.segmentList.innerHTML = !hasSegmentContent
       ? ""
       : hasSegmentsValue
-        ? detailView.segments.map((segment, index) => renderSegment(segment, index)).join("")
+        ? segmentDisplay.visibleItems.length
+          ? segmentDisplay.visibleItems
+            .map((item) => renderSegment(item.segment, item.index, { lowQuality: item.quality.isLowQuality }))
+            .join("")
+          : `<div class="notice-box">저품질 반복 원문 ${segmentDisplay.hiddenCount}개를 숨겼습니다. 숨긴 원문 보기를 누르면 전체 원문을 확인할 수 있습니다.</div>`
         : renderTranscriptFallback(detailView.transcriptText);
     return { activeEntry, historyEntries };
   }
@@ -1313,6 +1389,8 @@
     buildDetailView,
     buildMeetingNotesCopyText,
     buildSegmentCopyText,
+    buildSegmentDisplayItems,
+    classifyTranscriptQuality,
     TERMINAL_REMOTE_STATUSES,
     buildRecorderView,
     buildHistoryEntries,

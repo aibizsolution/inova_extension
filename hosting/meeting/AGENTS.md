@@ -38,6 +38,7 @@
 - hosted boot에서는 회의 룸과 기록 목록을 먼저 그리고, 선택된 기록 상세 artifact는 비차단으로 뒤늦게 채운다.
 - 회의 룸 header 상단 우측은 destructive action 영역이 아니라 짧은 toast notice 슬롯으로 쓴다. `회의 룸 삭제`는 제목 저장 row에 둔다.
 - completed record의 review tab action row가 `회의 정리 복사`, `원문 복사`, `용어 치환`을 함께 소유한다. `원문` 탭 전용 별도 toolbar는 다시 만들지 않는다.
+- 원문 탭은 순수 filler 반복에 가까운 저품질 원문을 기본 숨김 처리하고, 같은 review tab action row에서 숨긴 개수와 `숨긴 원문 보기` 토글을 제공한다. 원문 데이터 삭제나 DB mutation으로 처리하지 않는다.
 - `용어 치환` 설명은 버튼 안쪽 `?` tooltip으로만 노출한다. 별도 heading/body 도움말 블록을 notes 상단에 다시 두지 않는다.
 - 섹션 수정 dialog는 preview card와 버튼 상태로만 안내하고, 별도 inline status strip은 두지 않는다.
 - 회의 정리 섹션 헤더의 작업은 `직접 수정`, `AI 수정`, `삭제`를 분리한다. AI 수정은 preview/apply dialog를 쓰고, 직접 수정과 삭제는 manual mutation으로 해당 섹션만 저장하거나 비운다.

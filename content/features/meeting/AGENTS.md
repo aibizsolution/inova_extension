@@ -80,6 +80,7 @@
 - full 회의록과 직접 수정 저장은 긴 업무 회의록을 보존할 수 있어야 한다. 현재 상한은 discussionFlow 12개, keyPoints 6개, decisions 8개, actionItems 12개, openQuestions 12개, risksOrDependencies 10개이며, 이 값은 목표 개수가 아니라 truncation 방지용 안전 상한이다.
 - hosted notes는 `핵심 요약(summary)`과 `회의 개요(overview)`를 분리해서 다룬다. 두 필드는 각각 수정할 수 있고, 한쪽 섹션 수정이 다른 쪽 카드를 함께 덮어쓰지 않아야 한다.
 - completed record의 notes action은 탭 우측 공용 action row에서만 노출한다. `회의 정리 복사`, `원문 복사`, `용어 치환`은 이 row를 공유하고, 미완료 기록에는 이 action row를 기본 노출하지 않는다.
+- completed record의 `원문` 탭은 순수 filler 반복에 가까운 저품질 원문을 기본 숨김 처리하고, 같은 action row에서 숨긴 개수와 `숨긴 원문 보기` 토글을 제공한다. 실제 문장과 반복 꼬리가 섞인 원문은 기본 숨김 대상이 아니며, 원문 데이터 자체를 삭제하거나 DB mutation으로 처리하지 않는다.
 - completed remote record는 기록 상세 카드 상단 action row에서만 `기록 이동`을 노출한다. 이동 성공 후에는 현재 회의 룸에 그대로 남고, 옮긴 기록은 현재 룸 목록에서 사라진 뒤 기존 선택 fallback 규칙으로 다음 기록을 고른다.
 - 기록 이동은 서버 record뿐 아니라 브라우저에 보관한 원본 local copy도 target 회의 룸으로 함께 재배정해야 한다. source 회의 룸에 원본 보관 entry가 남아 이동한 기록처럼 다시 보이면 안 된다.
 - `용어 치환` 토글은 별도 라벨/설명 블록 대신 버튼 안의 `?` tooltip으로 meeting-wide 적용 범위를 설명한다.
