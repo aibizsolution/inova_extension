@@ -12,7 +12,7 @@
 
 ## 문서 맵
 
-기본 작업 시작 시에는 아래 운영 문서만 우선 읽습니다.
+아래는 작업별 운영 문서 지도입니다. 시작할 때 모두 읽지 말고, `docs/feature-routing.md`에서 고른 primary feature와 직접 관련된 문서만 엽니다.
 
 - [AGENTS.md](AGENTS.md): 전역 작업 규칙, 검증 기본값, 세션 분리 기준
 - [docs/feature-routing.md](docs/feature-routing.md): primary feature 선택, 시작 파일, 범위 확장 규칙

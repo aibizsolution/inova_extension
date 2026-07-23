@@ -1,15 +1,14 @@
 # inova_extension 작업 규칙
 
-이 문서는 저장소별 운영 규칙만 다룬다. 저장소를 넘어 반복해서 쓸 설계/모듈화 철학은 `docs/development-philosophy.md`에 둔다. feature 상세 규칙은 각 feature 하위 `AGENTS.md`와 `docs/feature-routing.md`로 분산한다.
+이 문서는 저장소별 운영 규칙만 다룬다. 저장소를 넘어 반복해서 쓸 설계/모듈화 철학은 `docs/development-philosophy.md`에 둔다. feature 상세 규칙은 각 feature 하위 `AGENTS.md`와 `docs/feature-routing.md`로 분산한다. 같은 규칙은 가장 가까운 정본에 한 번만 두고, 모델 일반 행동이나 응답 스타일은 상위 지침과 중복하지 않는다.
 
 ## 시작 순서
 - 작업 시작 시 `cwd`, Git 상태, 셸 환경을 먼저 확인한다.
 - 작업 시작 직후 첫 셸 명령을 실행하기 전에 아래 `셸/도구 환경 메모`를 다시 보고, 현재 세션에 해당하는 known workaround를 먼저 적용한다.
-- 기본 최소 읽기 세트는 `docs/development-philosophy.md`, 루트 `AGENTS.md`, `README.md`, `package.json`, `manifest.json`, `docs/feature-routing.md`, 그리고 요청과 일치하는 environment `AGENTS.md` 1개와 feature `AGENTS.md` 1개다.
+- 루트 `AGENTS.md`와 `docs/feature-routing.md`에서 primary feature와 시작 파일을 고른 뒤, 요청에 직접 필요한 environment/feature `AGENTS.md`와 코드만 읽는다. `README.md`, `package.json`, `manifest.json`은 해당 계약이나 명령이 필요할 때만 보고, ownership·모듈 경계·상태 동기화·새 탭·UI primitive·fallback 판단에는 `docs/development-philosophy.md`를 추가한다.
 - `docs/archive/*`는 기본 읽기 세트에서 제외한다. 과거 판단 배경이 꼭 필요할 때만 참조하고, archive 문서와 현재 코드/운영 문서가 충돌하면 현재 코드와 운영 문서를 우선한다.
 - `content/`, `functions/`, `hosting/meeting/`, `shared/`를 처음부터 넓게 읽지 않는다.
-- 단순 실행/운영 요청(`로컬 에뮬레이터 켜기`, `dev server 실행`, `lint/test/build/verify 실행`, `로그/상태 확인`)은 feature 구현 요청처럼 취급하지 않는다. 이 경우 `cwd`/Git/셸 확인 뒤 바로 `package.json` 스크립트, 관련 워크플로 문서, 필요한 환경 메모만 읽고 명령부터 실행한다.
-- 위 fast path에서는 feature `AGENTS.md`와 세부 docs를 선행 필수로 읽지 않는다. 실행이 실패했거나 어떤 스크립트를 써야 할지 모호할 때만 해당 feature 또는 environment 문서로 좁혀 들어간다.
+- 단순 실행/운영 요청은 `docs/feature-routing.md`의 fast path를 따라 관련 명령부터 실행하고, 실패나 스크립트 선택 ambiguity가 있을 때만 feature 문서로 좁혀 들어간다.
 - 사용자가 `로컬 에뮬레이터`만 말하고 범위를 좁히지 않았으면 기본값은 `npm.cmd run emulator:meeting-local`로 본다. `hosting only`, `빠른 hosted smoke`, `meeting 제외` 같은 명시가 있을 때만 `npm.cmd run emulator:hosting`으로 낮춘다.
 
 ## 문서 계층
@@ -27,37 +26,22 @@
 - 새 세션에서도 이 메모는 선택 사항이 아니라 시작 절차 일부로 취급한다. 같은 환경에서 이미 기록된 실패 패턴은 첫 시도부터 우회 경로를 기본값으로 쓴다.
 
 ## 브라우저 검증 규칙
-- Playwright MCP 브라우저 검증은 항상 `playwright-mcp-bridge` 스킬을 먼저 읽고 시작한다.
-- 설치된 확장프로그램이나 `https://inova.incross.com/` 실제 Chrome 상태를 검증할 때는 `docs/e2e-browser-workflow.md`의 actual Chrome 절차를 따른다. `Chrome` surface가 있으면 이 저장소 검증 표면으로 우선 쓰고, 기존 탭 attach가 안 되면 같은 Chrome surface에서 새 탭으로 열어 검증한 뒤 그 한계를 보고한다.
-- 살아 있는 Chrome/확장/로그인 세션을 임의로 끊지 않는다. 사용자가 닫아도 된다고 명시하기 전까지 `browser_close`를 호출하지 않는다.
-- Codex Windows 내장 MCP Bridge만 사용한다. 별도 `npx @playwright/mcp` 서버를 띄우거나 살아 있는 MCP/Bridge 프로세스를 임의 종료하지 않는다.
-- Bridge 호출이 `Target page, context or browser has been closed`, `Transport closed`, page/context/browser closed 계열 오류로 끊기면 추가 브라우저 조작을 멈춘다. 이때는 사용자에게 Codex Windows 앱을 재시작해 달라고 요청하고, 재시작 전에는 버튼 클릭 여부나 실제 Chrome 검증 완료처럼 보고하지 않는다.
+- 로컬과 상용 화면 검증은 `browser:control-in-app-browser` 스킬과 기존 인앱 브라우저 탭을 우선한다.
+- 설치된 확장프로그램, 실제 Chrome 프로필이나 로그인 세션이 꼭 필요할 때만 `chrome:control-chrome` 스킬과 `docs/e2e-browser-workflow.md`의 actual Chrome 절차를 사용한다. 살아 있는 Chrome/확장/로그인 세션은 사용자가 허락하기 전까지 닫지 않는다.
+- 브라우저 transport나 tab claim이 끊기면 해당 스킬의 복구 절차까지만 수행하고, 실패 상태를 구분해 보고한다. 실제 클릭이나 화면 검증을 확인하지 못했다면 완료로 보고하지 않는다.
 
 ## Feature-First 규칙
-- 새 요청이 오면 먼저 primary feature를 고른다. 기본 feature는 `conversation`, `prompt-library`, `prompt-store`, `prompt-review`, `meeting`, `release`, `admin`이다.
-- cue가 2개 이상 섞이면 전체 탐색 대신 짧게 `이 기능이 맞나요?`라고 확인한 뒤 해당 feature부터 읽는다.
+- 새 요청은 `docs/feature-routing.md`에서 primary feature를 고르고, 그 문서의 ambiguity 기준과 feature map을 따른다.
 - 읽기 범위는 `feature-local -> feature-owned shared -> platform/shell -> 인접 feature` 순서로만 확장한다.
 - `popup`, `background/service-worker.js`, `content/main.js`, `content/panel.js`, `functions/index.js`, `manifest.json`, `shared/*`는 platform/shell로 취급하고 필요할 때만 본다.
 
 ## Hosted-First 원칙
 - 이 확장은 Chrome Web Store에 배포하지 않는 내부 전사 프로그램이다. Chrome Web Store 정책은 설계 차단 사유로 쓰지 않는다.
 - 원격/hosted 로직을 검토할 때도 스토어 정책 때문에 불가하다고 결론내리지 않는다. 대신 내부 배포 신뢰 경계, 버전/호환성, kill switch, degraded 상태, 최소 권한 DOM read contract를 기준으로 판단한다.
-- 어떤 수정이 실제 확장 프로그램 재배포, 새 ZIP 배포, Chrome 확장 새로고침 또는 `manifest.json`/`content/*`/`background/*`/`popup/*`/확장 번들 포함 `shared/*` 변경을 필요로 하면, 구현 전에 왜 확장 배포가 필요한지와 hosting/functions만으로는 왜 해결할 수 없는지 설명하고 사용자 허락을 받는다.
+- `1.0.0+` v2 lane의 UI, view state, action flow, feature controller는 hosted가 기본 위치다. extension에는 page DOM adapter, iframe host, postMessage bridge, Chrome/background runtime broker, popup/settings처럼 브라우저 확장이라서만 가능한 책임만 남긴다. 상세 판단은 `docs/development-philosophy.md`를 따른다.
+- 실제 확장 프로그램 재배포나 `manifest.json`/`content/*`/`background/*`/`popup/*`/확장 번들 포함 `shared/*` 변경이 요청 범위를 실질적으로 넓히고 사용자가 아직 확장 변경을 승인하지 않았다면, hosting/functions만으로 해결할 수 없는 이유와 배포 영향을 설명한 뒤 확인한다. 사용자가 확장 변경을 이미 명시했다면 같은 승인을 반복해서 받지 않는다.
 - 사용자가 확장 업데이트 없이 고치라고 명시한 문제는 먼저 `hosting/*`와 `functions/*` 배포만으로 해결 가능한 경로를 찾고, 확장 배포가 필요한 방향으로 임의 전환하지 않는다.
-- `1.0.0+` v2 lane의 기본 목표는 `탭 기능의 기본 소유권을 hosting으로 옮기는 것`이다.
-- 새 기능이나 기존 기능 수정은 먼저 `hosting/*`에서 해결할 수 있는지 본다. 특별한 이유가 없으면 UI, view state, action flow, feature controller는 hosted가 기본 위치다.
-- extension에는 `page DOM adapter`, `iframe host`, `postMessage bridge`, `chrome/background runtime broker`, `popup/settings`처럼 브라우저 확장이라서만 가능한 책임만 남긴다.
-- 어떤 책임이 `Chrome API`, `background`, `현재 페이지 DOM` 없이도 성립하면 extension에 새로 싣지 않는다. hosted 쪽으로 옮기거나 hosted에서 시작하는 설계를 우선한다.
-- 리팩터링 중에는 `이 수정이 extension 책임을 실제로 줄였는가`를 기본 판단 질문으로 삼는다.
-- hosted-first 이전 중 이슈를 만나면 먼저 `이미 hosted로 옮겨진 lane의 문제인가`, `곧 제거할 legacy extension residue만의 문제인가`를 구분한다.
-- 이미 hosted ownership에서 재현되거나 hosted 이전 자체를 막는 문제는 바로 고친다.
-- legacy residue에만 머무르고 현재 hosted 이전을 막지 않는 문제는 임시 보강보다 ownership 이전을 먼저 진행한다.
-- ownership 이전 작업에서는 기존 extension 구현을 `보존 대상`보다 `참조용 baseline`으로 본다.
-- 기존 구현을 그대로 끌고 오기 위해 adapter, bridge glue, mixed ownership이 늘어나면 재사용을 멈추고 대상 ownership 위치에 직접 다시 구현한다.
-- 재사용은 `실제로 더 빨라질 때만` 선택한다. 같은 계약을 새 ownership 위치에 짧고 명확하게 다시 쓰는 편이 더 빠르면 그쪽을 기본값으로 삼는다.
-- `DB/Functions 계약을 바꾸지 않는 순수 panel v2 migration`에서는 현재 `1.0.0` v2 bundle이 정상 동작하는지만 우선 확인한다. 이런 작업에서 legacy extension 코드는 호환 이유로 활성 bundle 안에 계속 남겨 둘 대상으로 보지 않는다.
-- 현재 `1.0.0` 활성 bundle과 공유 계약이 더 이상 쓰지 않는 legacy extension panel 코드는 `content/*` 안에 섞어 두지 않고 삭제 상태를 유지한다. 과거 동작 확인은 필요한 경우 git history나 `docs/archive/*`에서만 한다.
-- `0.4.4` retirement 이후에는 `backup/legacy-panel/*` 보관소를 다시 만들지 않는다. `DB/Functions`나 shared server contract를 수정할 때도 현재 v2 bundle 정상 동작과 살아 있는 compat 검증을 우선 기준으로 삼는다.
+- hosted-first 이전에서는 현재 v2 ownership을 막는 문제만 바로 고치고, retired legacy 코드는 활성 bundle이나 별도 backup source로 되살리지 않는다. 과거 동작은 git history나 필요한 archive 문서에서만 확인한다.
 
 ## Firebase 공유 프로젝트 경계
 - Firebase project `browser-extension-main`은 다른 저장소/기능과 공유될 수 있는 공용 프로젝트로 본다.
@@ -71,42 +55,13 @@
 - Firebase 배포 경계를 바꾸면 `docs/firebase-architecture.md`, `docs/release-workflow.md`, `README.md`, `package.json`, `firebase.json`, `scripts/verify-firebase-deploy-boundary.js`를 같은 변경 안에서 함께 갱신한다.
 - Firebase 관련 변경 후에는 최소 `npm.cmd run verify:firebase-deploy-boundary`와 `npm.cmd run verify:docs`를 실행한다. 운영 배포 전에는 필요한 실제 배포 target을 보고서에 명시한다.
 
-## 검증 가능한 새 탭 원칙
-- hosted panel에서 새 탭을 여는 기능은 Codex/Playwright Bridge 검증이 가능한 web-open 경로를 기본 구현으로 둔다.
-- 기본 패턴은 사용자 클릭/키 입력의 동기 구간에서 `window.open("about:blank", "_blank")`로 빈 탭을 먼저 만들고, async 권한/launch URL 준비가 끝나면 그 탭을 최종 URL로 이동시키는 것이다.
-- 관리자 콘솔, 회의 룸 작업실/결과처럼 launch token 또는 URL 준비가 필요한 기능은 background가 직접 `chrome.tabs.create`로 열기 전에 `prepare URL/session/token` 경로를 별도로 제공한다.
-- extension/background의 `chrome.tabs.create`는 hosted web-open이 실패했거나 브라우저 API가 꼭 필요한 경우의 fallback으로만 둔다.
-- 새 기능에서 background-only tab open을 추가하려면 구현 전에 왜 hosted web-open/prepare URL 방식이 불가능한지, Codex가 어떤 방식으로 새 탭을 검증할 수 있는지 문서화한다.
-- 검증용 URL이나 launch token을 로그/최종 보고에 원문으로 노출하지 않는다. 필요하면 redaction된 URL 또는 origin/path만 기록한다.
-
-## 폴링 금지 원칙
-- 서버 상태, Firestore/Functions/API 결과, 배포 상태, 권한 상태, 알림/공지 변경 감지를 위해 주기적으로 요청하는 폴링은 기본 금지다.
-- `setInterval`, 재귀 `setTimeout`, visibility/focus 이벤트에 붙인 반복 fetch/read처럼 비용을 계속 발생시키는 구현은 먼저 구독, push event, explicit user action, invalidation signal, cached snapshot 재사용으로 바꿀 수 있는지 검토한다.
-- 폴링이 정말 필요하다고 판단되면 구현 전에 사용자에게 `왜 구독/event 방식이 불가능한지`, `호출 주기와 예상 비용`, `백오프와 중단 조건`, `실패 시 사용자에게 보일 상태`를 설명하고 명시적 허락을 받아야 한다.
-- 사용자 허락 없이 폴링을 임시 fallback이나 빠른 우회로 넣지 않는다. 허락받은 경우에도 관련 feature `AGENTS.md`나 feature 문서에 예외 사유와 제한 조건을 남긴다.
-- 로컬 UI만 움직이는 debounce, animation, carousel 자동 이동 같은 타이머는 허용되지만, 그 타이머가 네트워크/Firestore/Functions/storage read를 반복 호출하면 폴링으로 본다.
-
-## 설계와 모듈화 적용 규칙
-- 구현 전에 먼저 책임 경계를 정하고, 파일 길이만을 이유로 분리하지 않는다.
-- 책임 분리와 파일 분리를 같은 의미로 보지 않는다. 항상 함께 로드되고, 함께 수정되고, 함께 이해되는 코드는 같은 파일이나 같은 모듈에 남길 수 있다.
-- 여러 곳 재사용, 독립 상태/생명주기, 독립 테스트/교체 가치가 큰 코드만 새 파일 또는 새 진입점으로 분리한다.
-- 같은 구조 문제나 tradeoff가 반복되면 개별 helper 분리만 누적하지 말고 시스템 차원의 해법을 검토한다.
-- 구조/길이 가드는 `이 파일에 책임을 더 싣지 말고 경계를 다시 보라`는 신호로 해석한다.
-- 가드를 피하려고 관련 없는 파일에 임시 state, 분기, 우회 render, 진단 helper를 옮겨 싣지 않는다. 새 책임이 생겼다면 해당 책임을 가진 모듈로 분리하거나 새 모듈을 만든다.
-
 ## 문서와 구조
-- feature 진입점과 데이터 경계는 항상 `docs/feature-routing.md`를 먼저 기준으로 삼는다.
-- 기능 상세 규칙은 루트 문서에 다시 길게 적지 말고 feature 하위 `AGENTS.md`에 추가한다.
-- `AGENTS.md`는 entrypoint, 데이터 경계, 최소 검증, durable invariant 같은 `지속 규칙`을 맡고, feature 전용 docs는 운영/검증/판단 기준을 맡는다.
+- feature 진입점과 데이터 경계는 `docs/feature-routing.md`, entrypoint·최소 검증·durable invariant는 feature `AGENTS.md`, 세부 운영/검증 절차는 feature 전용 docs에 둔다. 같은 내용을 루트나 `README.md`에 다시 풀어 쓰지 않는다.
 - 최근 변경 이력, split 순서, 이번 세션에서 무엇을 했는지처럼 `git log`, `diff`, 커밋 메시지로 복구 가능한 정보는 `AGENTS.md`의 의무 기록 대상이 아니다.
 - `README.md`는 저장소/제품 개요, 설치/배포, 상위 feature 축이 바뀔 때만 갱신한다.
-- feature-local 규칙, 계약, 최소 검증 기준은 해당 feature `AGENTS.md` 또는 feature 전용 docs에 문서화한다.
-- feature-local 변경 때문에 `README.md`를 기능 변경 일지처럼 누적하지 않는다.
 - `docs/archive/*`처럼 과거 계획, migration 판단, 완료된 phase 기준을 담은 문서는 기본 갱신 대상이 아니다. 사용자가 그 문서 자체의 정리를 명시하거나, 같은 변경 안에서 문서를 보존/폐기 대상으로 전환하는 경우에만 건드린다.
 - 현재 운영 기준이 바뀌면 과거 계획 문서가 아니라 `docs/release-workflow.md`, `docs/runtime-architecture.md`, feature `AGENTS.md`, feature 전용 docs처럼 살아있는 계약 문서에 반영한다.
-- 문서는 완벽하지 않다고 가정하고, 작업 중 문서와 실제 코드/함수/파일 경계가 다르면 코드를 기준으로 같은 작업 안에서 문서를 갱신한다.
-- hosted-first 기준으로 이미 옮겨진 책임을 문서가 아직 extension-owned처럼 설명하면, 발견한 같은 작업 안에서 바로 고친다.
-- 문서 정리는 `언젠가 한 번에` 하지 않는다. 관련 문서를 읽다가 낡은 ownership 설명이나 경계 서술을 찾으면 그 자리에서 계속 바로잡는다.
+- 작업 중 문서와 실제 코드/함수/ownership 경계가 다르면 현재 코드를 기준으로 관련 살아 있는 문서만 같은 작업에서 바로잡는다.
 - feature 문서가 실제 파일 경로나 진입점과 어긋나기 시작하면 검증 스크립트와 문서를 함께 보강해 다음 작업자가 좁은 범위만 읽고도 시작할 수 있게 유지한다.
 - 문서는 결과 설명서보다 다음 구조 판단을 더 잘하게 만드는 기준 문서가 되어야 한다.
 
@@ -126,23 +81,6 @@
 - lint 오류를 잠재우기 위해 전역 ignore나 넓은 disable을 먼저 넣지 않는다. 우선순위는 `코드 수정 -> 좁은 범위 예외 -> 문서화`다.
 - 구조/계약 가드 메시지가 뜻하는 바가 불명확하면 스크립트 메시지부터 바로 고친다. 사람이 `회피`가 아니라 `책임 분리`를 읽게 만드는 쪽을 우선한다.
 
-## 공통화 원칙
-- 같은 feature 안에서 panel, hosted, popup 같은 여러 표면이 비슷한 markup/helper/state contract를 반복하면 먼저 shared module 또는 render contract로 묶을 수 있는지 검토한다.
-- 공통화는 꼭 다른 프로젝트 재사용을 목표로 하지 않아도 된다. 현재 저장소 안에서 반복 구현을 줄이고 표면별 adapter만 얇게 남기는 방향을 우선한다.
-- 공통화 후보가 보이면 각 표면에서 조금씩 비슷하게 맞추는 방식보다 공용 JS로 올리고 표면별 진입부만 연결하는 리팩터링을 우선 검토한다.
-- UI를 만들거나 수정할 때는 먼저 `docs/design-system.md`와 `hosting/shared/design-system.*`를 확인한다. 이미 있는 primitive가 있으면 화면별 CSS/JS를 새로 만들지 말고 그 계약을 사용한다.
-- 같은 피드백/toast, 버튼, badge, empty state, overlay, form helper가 두 화면 이상에서 반복될 가능성이 있으면 feature-local 구현 전에 design system primitive로 올린다.
-- 짧은 저장/삭제/복사/이동 결과를 화면 안쪽 inline box로 반복 구현하지 않는다. 기본은 design system toast이고, inline feedback은 field validation이나 장시간 유지해야 하는 degraded/error 상태에만 둔다.
-
-## Fallback 원칙
-- fallback은 서비스를 완전히 멈추지 않게 하는 장치로만 쓰고, 핵심 기능 실패를 성공처럼 보이게 만드는 용도로 쓰지 않는다.
-- fallback이나 cached/stale data를 보여줄 때는 반드시 degraded 상태를 드러낸다. 무엇이 실패했고 어떤 데이터가 최신이 아닐 수 있는지 사용자와 로그에 함께 남긴다.
-- try/catch 뒤에 빈 값, 기본값, 이전 값으로 조용히 대체하지 않는다. 대체가 필요하면 실패 원인과 제한 범위를 명시한다.
-- 저장, 전송, 생성, 분석, 동기화처럼 성공 여부가 중요한 작업은 fallback을 성공 완료처럼 처리하지 않는다.
-- 재시도 가능한 오류는 retry 후에도 실패하면 degraded 또는 explicit error로 남기고, retry 불가 오류는 바로 명시적 실패로 보여준다.
-- 배포 누락, 함수 계약 불일치, 스키마 mismatch, 권한 문제처럼 근본 원인이 따로 있는 실패를 프런트 fallback으로 숨기지 않는다. 먼저 원인 자체를 수정하거나, 즉시 수정이 불가능하면 배포/계약 문제임을 명시적으로 드러낸다.
-- 작업 중 이런 숨김성 fallback이나 `성공처럼 보이는 임시 우회`를 발견하면 요청 범위를 벗어나지 않는 선에서 자동으로 개선한다. 우선순위는 `원인 수정 -> 명시적 degraded/error surface로 전환 -> 불가 사유 보고` 순서다.
-
 ## 간헐 이슈 원칙
 - 재현률이 낮거나 원인이 불명확한 간헐 이슈는 추측만으로 수정하지 않는다.
 - 먼저 재현 절차, 영향 범위, 이벤트 흐름, 콘솔/네트워크/패널 debug 로그 같은 근거를 확보한다.
@@ -154,18 +92,12 @@
 - 콘솔 로그로 실제 중단 지점이 확인되기 전에는 fallback 추가나 로직 변경으로 증상을 가리려 하지 않는다.
 
 ## Subagent 규칙
-- 저장소 전반 read-only 탐색, 후보 파일 수집, 테스트 실행은 서브에이전트를 우선 검토한다.
-- primary feature 분류, 범위 확장 판단, 위험한 diff 리뷰, 최종 판단과 결과 통합은 메인 에이전트가 맡는다.
-- 서브에이전트 결과가 약하거나 서로 어긋나면 메인 에이전트가 해당 범위만 다시 읽고 결론을 정한다.
-- 서브에이전트에는 먼저 `질문 1개 또는 작업 1개`, `읽을 파일 범위`, `건드리면 안 되는 범위`, `코드 수정 가능 여부`, `출력 형식`을 함께 고정한다.
-- 탐색형 서브에이전트는 기본적으로 저장소 전체를 읽게 두지 말고, 시작 파일/함수 1~3개와 필요한 검색 패턴만 지정한다.
-- 브라우저 검증이나 테스트도 서브에이전트에 맡길 때는 URL, 기대 로그, 확인할 상태를 함께 적어 불필요한 재탐색을 줄인다.
-- 결과 형식은 가능하면 `핵심 원인`, `근거 파일/라인`, `다음 액션`처럼 짧고 강한 포맷으로 제한해 장문 탐색 보고를 막는다.
-- 작업이 끝난 서브에이전트는 바로 닫아 agent slot을 회수하고, 같은 문맥 후속이 아니면 오래 열어 두지 않는다.
-- 서브에이전트 운용에서 반복되는 비효율이나 좋은 패턴을 발견하면 다음 세션부터 바로 쓰도록 이 문서 규칙에 누적한다.
+- 저장소 전반의 read-only 탐색, 후보 파일 수집, 독립 테스트는 병렬화 가치가 있을 때만 서브에이전트에 맡긴다. 같은 파일을 동시에 수정시키지 않는다.
+- 각 위임에는 `작업 1개`, 시작 파일/검색 패턴 1~3개, 제외 범위, 수정 가능 여부, 짧은 결과 형식을 고정한다.
+- primary feature와 범위 판단, 충돌/누락 확인, 위험한 diff 리뷰, 최종 검증과 통합은 메인 에이전트가 맡는다.
 
 ## 검증과 세션 분리
-- 기본 검증은 `npm run verify`부터 수행한다.
+- 기본 검증은 `npm.cmd run verify`부터 수행한다.
 - `verify`에는 lint가 포함되므로, lint 범위나 규칙을 바꿨다면 `npm.cmd run lint` 또는 `npm.cmd run verify`로 실제 통과를 확인한다.
 - UI 체감과 opener, 세션 복원, 배포 경계는 실제 Chrome 확인을 우선한다.
 - 기능 구현 후 실제 Chrome 검증의 기본 범위는 이번 변경 파일과 직접 연결된 feature 흐름이다. 사용자가 `풀 테스트`, `전체 버튼`, `회의 작업실까지`, `녹음까지`처럼 명시하지 않으면 인접 feature나 긴/파괴적 workflow로 확장하지 않는다.
@@ -181,5 +113,5 @@
 - PR 머지가 확인되면 사용자가 별도 보존을 요청하지 않는 한, 같은 턴 안에서 `main` 동기화, 로컬 작업 브랜치 정리, 남아 있는 원격 작업 브랜치 정리까지 기본 마무리한다.
 - 로컬 작업 브랜치 정리는 `git branch --merged` 같은 local-only 기준으로 판정하지 않는다. cleanup 스크립트와 수동 정리 모두 `origin/main` 동기화 확인 후, 삭제 대상 브랜치 tip이 `origin/main`의 ancestor이거나 `origin/main`과 tree가 동일한 경우(예: squash/rebase merge 반영) 에만 진행한다.
 - 커밋 보류는 미검증, 남은 known issue, 같은 턴 안의 추가 구조 의도처럼 분명한 이유가 있을 때만 허용한다.
-- 두 번째 primary feature를 읽어야 하거나 `content + functions + hosting` 3축에 동시에 손대려는 순간, 먼저 커밋 경계 또는 다음 세션 분리를 제안한다.
+- 두 번째 primary feature까지 실제 구현 범위가 넓어지거나 `content + functions + hosting` 3축을 함께 수정해야 하면 변경을 검증 가능한 커밋 경계로 나눈다. 사용자 선택에 따라 범위가 실질적으로 달라질 때만 다음 세션 분리를 확인한다.
 - 검증을 못 했으면 성공처럼 말하지 말고 미실행 항목과 이유를 남긴다.
