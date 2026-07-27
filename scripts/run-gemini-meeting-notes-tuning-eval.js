@@ -191,6 +191,7 @@ function createGenerationRuntime() {
     createEmptyMeetingNotes: notesDomain.createEmptyMeetingNotes,
     hasMeetingNotes: notesDomain.hasMeetingNotes,
     normalizeMeetingNotes: notesDomain.normalizeMeetingNotes,
+    normalizeMeetingNotesFailure: (value) => value && typeof value === "object" ? { ...value } : {},
     normalizeMeetingNotesStatus: notesDomain.normalizeMeetingNotesStatus,
     normalizeText,
     notesSchemaVersion: 3,
