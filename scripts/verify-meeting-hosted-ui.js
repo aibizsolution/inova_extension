@@ -12,6 +12,7 @@ const hostedMeetingCssPath = path.join(root, "hosting", "meeting", "index.css");
 const hostedDesignSystemCssPath = path.join(root, "hosting", "shared", "design-system.css");
 const hostedMeetingRenderPath = path.join(root, "hosting", "meeting", "render.js");
 const hostedMeetingRenderStatePath = path.join(root, "hosting", "meeting", "render-state.js");
+const hostedMeetingRealtimePath = path.join(root, "hosting", "meeting", "workspace-realtime.js");
 const hostedMeetingMutationsPath = path.join(root, "hosting", "meeting", "workspace-mutations.js");
 const hostedMeetingNotesPath = path.join(root, "hosting", "meeting", "notes.js");
 const hostedMeetingDebugPath = path.join(root, "hosting", "meeting", "workspace-debug.js");
@@ -247,6 +248,7 @@ async function main() {
   const css = fs.readFileSync(hostedMeetingCssPath, "utf8");
   const designSystemCss = fs.readFileSync(hostedDesignSystemCssPath, "utf8");
   const renderJs = fs.readFileSync(hostedMeetingRenderPath, "utf8");
+  const realtimeJs = fs.readFileSync(hostedMeetingRealtimePath, "utf8");
   const mutationsJs = fs.readFileSync(hostedMeetingMutationsPath, "utf8");
   const notesJs = fs.readFileSync(hostedMeetingNotesPath, "utf8");
   const debugJs = fs.readFileSync(hostedMeetingDebugPath, "utf8");
@@ -313,6 +315,10 @@ async function main() {
   assert(toggleLowQualitySegmentsButton, "Hosted workspace should render the low-quality transcript visibility toggle");
   assert(copyMeetingNotesButton, "Hosted workspace should render the meeting notes copy action");
   assert(retryMeetingNotesButton, "Hosted workspace should render the meeting notes retry action");
+  assert(
+    realtimeJs.includes("selectionChanged || forceRefresh || pendingMutationJustCompleted"),
+    "Completed meeting mutations should refresh same-id artifacts without a page reload"
+  );
   assert(moveRecordButton, "Hosted workspace should render the move record action in the detail action row");
   assert(downloadRecordButton, "Hosted workspace should render the local source download action in the detail action row");
   assert.equal(
