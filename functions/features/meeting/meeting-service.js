@@ -92,7 +92,7 @@ const NOTES_SCHEMA_VERSION = 3;
 const RETRYABLE_MEETING_PROCESS_STATUSES = new Set([408, 409, 429, 500, 502, 503, 504]);
 const SUPPORTED_NOTES_STATUSES = new Set(["pending", "disabled", "skipped", "degraded", "succeeded"]);
 const SUPPORTED_MEETING_COMMAND_STATUSES = new Set(["queued", "processing", "succeeded", "failed"]);
-const SUPPORTED_MEETING_COMMAND_TYPES = new Set(["regenerate_notes"]);
+const SUPPORTED_MEETING_COMMAND_TYPES = new Set(["retry_notes"]);
 const SUPPORTED_DELETION_SCOPES = new Set(["meeting", "result"]);
 const SUPPORTED_DELETION_STATUSES = new Set(["abandoned", "queued", "processing", "retry"]);
 const SUPPORTED_WORKSPACE_MUTATION_STATUSES = new Set(["queued", "processing", "succeeded", "failed"]);
@@ -101,6 +101,7 @@ const SUPPORTED_WORKSPACE_MUTATION_TYPES = new Set([
   "deleteMeeting",
   "deleteRecord",
   "moveRecord",
+  "retryNotes",
   "saveMeetingMemo",
   "saveMeetingTermReplacements",
   "saveMeetingTitle",
@@ -166,6 +167,7 @@ const {
   createEmptyMeetingNotes,
   hasMeetingNotes,
   normalizeMeetingNotes,
+  normalizeMeetingNotesFailure,
   normalizeMeetingNotesStatus,
   normalizeText,
   notesSchemaVersion: NOTES_SCHEMA_VERSION,
@@ -261,6 +263,7 @@ const {
   getMeetingNotesPreviewText,
   normalizeMeetingContext,
   normalizeMeetingNotes,
+  normalizeMeetingNotesFailure,
   normalizeMeetingNotesInputSnapshot,
   normalizeMeetingNotesStatus,
   normalizeMeetingSource,
@@ -295,6 +298,7 @@ const {
   mergeRecentJobs,
   normalizeMeetingContext,
   normalizeMeetingNotes,
+  normalizeMeetingNotesFailure,
   normalizeMeetingNotesInputSnapshot,
   normalizeMeetingNotesStatus,
   normalizeMeetingResultSummary,
@@ -977,6 +981,20 @@ function registerMeetingHandlers(deps) {
       if (!input.meetingId || !input.jobId) {
         throw createHttpError(400, "회의 결과를 수정할 ID가 비어 있어요.");
       }
+      if (input.action === "retry_notes") {
+        const accepted = await queueMeetingNotesRetry(input, owner);
+        logEvent("meeting.notes.retry.accepted", {
+          jobId: input.jobId,
+          meetingId: input.meetingId,
+          providerUserKey: owner.providerUserKey,
+          requestId: accepted.requestId,
+        });
+        response.status(202).json({
+          ok: true,
+          data: accepted,
+        });
+        return;
+      }
       if (!input.titleProvided && !input.sharedMemoProvided) {
         throw createHttpError(400, "수정할 회의 결과 내용이 비어 있어요.");
       }
@@ -1276,6 +1294,164 @@ function registerMeetingHandlers(deps) {
     }
   });
 
+  async function queueMeetingNotesRetry(input, owner) {
+    if (!input.clientRequestId || !input.meetingId || !input.jobId) {
+      throw createHttpError(400, "회의 정리를 다시 만들 요청 정보가 비어 있어요.");
+    }
+    const jobRef = db.collection(JOB_COLLECTION).doc(input.jobId);
+    const jobSnapshot = await jobRef.get();
+    if (!jobSnapshot.exists) {
+      throw createHttpError(404, "다시 정리할 회의 결과를 찾지 못했어요.");
+    }
+    const job = normalizeMeetingJob(jobSnapshot.data());
+    assertJobOwnership(job, owner, createHttpError);
+    await assertMeetingIsActive(owner, input.meetingId, createHttpError);
+    if (job.deletedAt || job.meetingId !== input.meetingId) {
+      throw createHttpError(404, "현재 회의와 맞지 않는 결과예요.");
+    }
+    if (job.status !== "succeeded" || job.notesStatus !== "degraded") {
+      throw createHttpError(409, "실패한 회의 정리만 다시 만들 수 있어요.");
+    }
+    const transcriptSource = await loadMeetingTranscriptForNotes(job, createHttpError);
+    const commandRef = db.collection(COMMAND_COLLECTION).doc(input.clientRequestId);
+    const existingSnapshot = await commandRef.get();
+    const existingCommand = existingSnapshot.exists ? normalizeMeetingCommand(existingSnapshot.data()) : null;
+    if (
+      existingCommand?.clientRequestId === input.clientRequestId
+      && existingCommand.jobId === input.jobId
+      && ["queued", "processing", "succeeded"].includes(existingCommand.status)
+    ) {
+      return {
+        accepted: true,
+        requestId: input.clientRequestId,
+      };
+    }
+    const requestedAt = new Date().toISOString();
+    const workspaceMutation = buildWorkspaceMutation({
+      requestId: input.clientRequestId,
+      requestedAt,
+      status: "queued",
+      type: "retryNotes",
+    });
+    const nextJob = normalizeMeetingJob({
+      ...job,
+      updatedAt: requestedAt,
+      workspaceMutation,
+    });
+    await Promise.all([
+      jobRef.set({ updatedAt: requestedAt, workspaceMutation }, { merge: true }),
+      updateMeetingSummaryRecordResult(owner, nextJob, transcriptSource.artifact, requestedAt),
+    ]);
+    await commandRef.set({
+      clientRequestId: input.clientRequestId,
+      completedAt: "",
+      error: "",
+      jobId: input.jobId,
+      meetingId: input.meetingId,
+      owner,
+      requestedAt,
+      startedAt: "",
+      status: "queued",
+      type: "retry_notes",
+      updatedAt: requestedAt,
+    });
+    return {
+      accepted: true,
+      requestId: input.clientRequestId,
+    };
+  }
+
+  async function processMeetingNotesRetry(command, commandRef) {
+    const jobRef = db.collection(JOB_COLLECTION).doc(command.jobId);
+    const jobSnapshot = await jobRef.get();
+    if (!jobSnapshot.exists) {
+      throw createHttpError(404, "다시 정리할 회의 결과를 찾지 못했어요.");
+    }
+    const job = normalizeMeetingJob(jobSnapshot.data());
+    const owner = normalizeIdentity(command.owner?.providerUserKey ? command.owner : job.owner);
+    if (job.deletedAt || job.status !== "succeeded") {
+      throw createHttpError(409, "현재 상태에서는 회의 정리를 다시 만들 수 없어요.");
+    }
+    await assertMeetingIsActive(owner, job.meetingId, createHttpError);
+    const transcriptSource = await loadMeetingTranscriptForNotes(job, createHttpError);
+    const meetingNotes = await meetingNotesGenerationDomain.maybeGenerateMeetingNotes(
+      transcriptSource.transcript,
+      { ...job.meeting, meetingId: job.meetingId },
+      { ...job.options, summary: true },
+      job.context,
+      logEvent,
+      owner,
+      job.jobId
+    );
+    const completedAt = new Date().toISOString();
+    const succeeded = meetingNotes.notesStatus === "succeeded";
+    const previousAttemptCount = Math.max(0, Number(job.notesFailure?.attemptCount) || 0);
+    const notesFailure = succeeded
+      ? {}
+      : normalizeMeetingNotesFailure({
+          ...(meetingNotes.notesFailure || {}),
+          attemptCount: previousAttemptCount + 1,
+          code: meetingNotes.notesFailure?.code || "retry_not_generated",
+          failedAt: completedAt,
+          stage: "retry",
+        });
+    const errorMessage = succeeded
+      ? ""
+      : normalizeText(meetingNotes.notesDegradedReason) || "회의 정리를 다시 만들지 못했어요.";
+    const workspaceMutation = buildWorkspaceMutation({
+      completedAt,
+      error: errorMessage,
+      requestId: command.clientRequestId,
+      requestedAt: command.requestedAt,
+      status: succeeded ? "succeeded" : "failed",
+      type: "retryNotes",
+    });
+    const jobPatch = {
+      meetingNotes: normalizeMeetingNotes(meetingNotes.notes),
+      notesDegradedReason: errorMessage,
+      notesFailure: succeeded ? null : notesFailure,
+      notesGeneratedAt: normalizeText(meetingNotes.notesGeneratedAt),
+      notesStatus: succeeded ? "succeeded" : "degraded",
+      notesSchemaVersion: Math.max(1, Number(meetingNotes.notesSchemaVersion) || NOTES_SCHEMA_VERSION),
+      updatedAt: completedAt,
+      workspaceMutation,
+    };
+    const artifactPatch = {
+      notes: normalizeMeetingNotes(meetingNotes.notes),
+      notesDegradedReason: errorMessage,
+      notesFailure: succeeded ? null : notesFailure,
+      notesGeneratedAt: normalizeText(meetingNotes.notesGeneratedAt),
+      notesStatus: succeeded ? "succeeded" : "degraded",
+      notesSchemaVersion: Math.max(1, Number(meetingNotes.notesSchemaVersion) || NOTES_SCHEMA_VERSION),
+    };
+    const latestJob = await meetingRuntimeArtifactDomain.loadStoredMeetingJob(jobRef);
+    if (!latestJob?.jobId || latestJob.deletedAt) {
+      throw createHttpError(404, "이미 삭제된 회의 결과예요.");
+    }
+    const nextJob = normalizeMeetingJob({ ...latestJob, ...jobPatch });
+    const nextArtifact = normalizeMeetingArtifact({ ...transcriptSource.artifact, ...artifactPatch });
+    await Promise.all([
+      jobRef.set(jobPatch, { merge: true }),
+      transcriptSource.artifactRef
+        ? transcriptSource.artifactRef.set(artifactPatch, { merge: true })
+        : Promise.resolve(),
+      commandRef.set({
+        completedAt,
+        error: errorMessage,
+        status: succeeded ? "succeeded" : "failed",
+        updatedAt: completedAt,
+      }, { merge: true }),
+      updateMeetingSummaryRecordResult(owner, nextJob, nextArtifact, completedAt),
+    ]);
+    logEvent(succeeded ? "meeting.notes.retry.success" : "meeting.notes.retry.failed", {
+      failure: notesFailure,
+      jobId: job.jobId,
+      meetingId: job.meetingId,
+      providerUserKey: owner.providerUserKey,
+      requestId: command.clientRequestId,
+    });
+  }
+
   const processQueuedMeetingCommandWrite = async (event) => {
     const beforeSnapshot = event?.data?.before || null;
     const afterSnapshot = event?.data?.after || null;
@@ -1284,19 +1460,99 @@ function registerMeetingHandlers(deps) {
     }
     const previousCommand = beforeSnapshot?.exists ? normalizeMeetingCommand(beforeSnapshot.data()) : null;
     const queuedCommand = normalizeMeetingCommand(afterSnapshot.data());
-    if (!queuedCommand.clientRequestId) {
+    if (!queuedCommand.clientRequestId || queuedCommand.type !== "retry_notes") {
       return;
     }
     if (queuedCommand.status !== "queued" || normalizeText(previousCommand?.status) === "queued") {
       return;
     }
-    const completedAt = new Date().toISOString();
-    await afterSnapshot.ref.set({
-      completedAt,
-      error: "지원이 종료된 회의 명령입니다.",
-      status: "failed",
-      updatedAt: completedAt,
-    }, { merge: true });
+    let command = null;
+    await db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(afterSnapshot.ref);
+      if (!snapshot.exists) {
+        return;
+      }
+      const current = normalizeMeetingCommand(snapshot.data());
+      if (current.status !== "queued" || current.type !== "retry_notes") {
+        return;
+      }
+      const startedAt = new Date().toISOString();
+      transaction.set(afterSnapshot.ref, {
+        startedAt,
+        status: "processing",
+        updatedAt: startedAt,
+      }, { merge: true });
+      command = { ...current, startedAt, status: "processing", updatedAt: startedAt };
+    });
+    if (!command) {
+      return;
+    }
+    try {
+      await processMeetingNotesRetry(command, afterSnapshot.ref);
+    } catch (error) {
+      const completedAt = new Date().toISOString();
+      const errorMessage = normalizeText(error?.message) || "회의 정리를 다시 만들지 못했어요.";
+      const jobRef = db.collection(JOB_COLLECTION).doc(command.jobId);
+      const jobSnapshot = await jobRef.get();
+      const failedJob = jobSnapshot.exists ? normalizeMeetingJob(jobSnapshot.data()) : null;
+      const notesFailure = normalizeMeetingNotesFailure({
+        ...(error?.notesFailure || {}),
+        attemptCount: Math.max(0, Number(failedJob?.notesFailure?.attemptCount) || 0) + 1,
+        code: error?.notesFailure?.code || "retry_error",
+        failedAt: completedAt,
+        model: error?.notesFailure?.model || getMeetingSummaryModel(),
+        stage: "retry",
+      });
+      const workspaceMutation = buildWorkspaceMutation({
+        completedAt,
+        error: errorMessage,
+        requestId: command.clientRequestId,
+        requestedAt: command.requestedAt,
+        status: "failed",
+        type: "retryNotes",
+      });
+      await Promise.all([
+        afterSnapshot.ref.set({
+          completedAt,
+          error: errorMessage,
+          status: "failed",
+          updatedAt: completedAt,
+        }, { merge: true }),
+        failedJob?.jobId
+          ? jobRef.set({
+              notesDegradedReason: errorMessage,
+              notesFailure,
+              notesStatus: "degraded",
+              updatedAt: completedAt,
+              workspaceMutation,
+            }, { merge: true })
+          : Promise.resolve(),
+      ]);
+      if (failedJob?.jobId) {
+        const { artifact, artifactRef } = await loadMeetingArtifactSource(failedJob);
+        const failurePatch = {
+          notesDegradedReason: errorMessage,
+          notesFailure,
+          notesStatus: "degraded",
+        };
+        if (artifactRef) {
+          await artifactRef.set(failurePatch, { merge: true });
+        }
+        await updateMeetingSummaryRecordResult(
+          normalizeIdentity(command.owner?.providerUserKey ? command.owner : failedJob.owner),
+          normalizeMeetingJob({ ...failedJob, ...failurePatch, updatedAt: completedAt, workspaceMutation }),
+          artifact ? normalizeMeetingArtifact({ ...artifact, ...failurePatch }) : null,
+          completedAt
+        );
+      }
+      logEvent("meeting.notes.retry.error", {
+        error: errorMessage,
+        failure: notesFailure,
+        jobId: command.jobId,
+        meetingId: command.meetingId,
+        requestId: command.clientRequestId,
+      });
+    }
   };
 
   const processMeetingDeletionWrite = async (event) => {
@@ -1482,6 +1738,22 @@ function registerMeetingHandlers(deps) {
       || getMeetingSummaryModel();
   }
 
+}
+
+function normalizeMeetingNotesFailure(input) {
+  const failure = input && typeof input === "object" ? input : {};
+  const code = normalizeText(failure.code);
+  if (!code) {
+    return {};
+  }
+  return {
+    attemptCount: Math.max(1, Number(failure.attemptCount) || 1),
+    code,
+    failedAt: normalizeText(failure.failedAt),
+    finishReason: normalizeText(failure.finishReason),
+    model: normalizeText(failure.model),
+    stage: normalizeText(failure.stage),
+  };
 }
 
 function shouldSyncMeetingTitleToResult(item, previousTitle) {

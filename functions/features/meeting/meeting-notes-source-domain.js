@@ -95,6 +95,7 @@ function createMeetingNotesSourceDomain(deps) {
           kind: "transcript",
           meetingId: job.meetingId,
           notesDegradedReason: job.notesDegradedReason,
+          notesFailure: job.notesFailure,
           notes: job.meetingNotes,
           notesGeneratedAt: job.notesGeneratedAt,
           notesInputSnapshot: job.notesInputSnapshot,

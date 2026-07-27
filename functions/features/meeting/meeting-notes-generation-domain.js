@@ -75,15 +75,27 @@ function createMeetingNotesGenerationDomain(deps) {
         notes: applyMeetingTermReplacements(notesBundle.notes, termReplacements),
       };
     } catch (error) {
+      const failure = error?.notesFailure && typeof error.notesFailure === "object"
+        ? error.notesFailure
+        : {
+            attemptCount: 1,
+            code: "provider_error",
+            failedAt: new Date().toISOString(),
+            finishReason: "",
+            model: getMeetingSummaryModel(),
+            stage: "generation",
+          };
       logEvent("meeting.notes.skipped", {
         error: normalizeText(error?.message),
+        failure,
         jobId,
         meetingId: meeting.meetingId,
         providerUserKey: owner.providerUserKey,
       });
       return createEmptyMeetingNotesBundle(
         "degraded",
-        normalizeText(error?.message) || "회의록 자동 정리에 실패했어요."
+        normalizeText(error?.message) || "회의록 자동 정리에 실패했어요.",
+        failure
       );
     }
   }
@@ -135,11 +147,7 @@ function createMeetingNotesGenerationDomain(deps) {
       model: getMeetingSummaryModel(),
       response_format: { type: "json_object" },
     });
-    const content = normalizeCompletionContent(completion?.choices?.[0]?.message?.content);
-    if (!content) {
-      return createEmptyMeetingNotesBundle("skipped");
-    }
-    return createMeetingNotesBundleFromNotes(parseMeetingNotesJson(content), context);
+    return createMeetingNotesBundleFromCompletion(completion, context);
   }
 
   async function generateCompactMeetingNotesBundle(transcript, meeting, context) {
@@ -161,13 +169,10 @@ function createMeetingNotesGenerationDomain(deps) {
       model: getMeetingSummaryModel(),
       response_format: { type: "json_object" },
     });
-    const content = normalizeCompletionContent(completion?.choices?.[0]?.message?.content);
-    if (!content) {
-      return createEmptyMeetingNotesBundle("skipped");
-    }
-    return createMeetingNotesBundleFromNotes(
-      normalizeCompactMeetingNotes(parseMeetingNotesJson(content), transcript),
-      context
+    return createMeetingNotesBundleFromCompletion(
+      completion,
+      context,
+      (notes) => normalizeCompactMeetingNotes(notes, transcript)
     );
   }
 
@@ -191,11 +196,37 @@ function createMeetingNotesGenerationDomain(deps) {
       model: getMeetingSummaryModel(),
       response_format: { type: "json_object" },
     });
+    return createMeetingNotesBundleFromCompletion(completion, context);
+  }
+
+  function createMeetingNotesBundleFromCompletion(completion, context, normalizeNotesInput) {
     const content = normalizeCompletionContent(completion?.choices?.[0]?.message?.content);
+    const failureBase = {
+      attemptCount: 1,
+      failedAt: new Date().toISOString(),
+      finishReason: normalizeText(completion?.choices?.[0]?.finish_reason),
+      model: normalizeText(completion?.model) || getMeetingSummaryModel(),
+      stage: "generation",
+    };
     if (!content) {
-      return createEmptyMeetingNotesBundle("skipped");
+      const error = new Error("회의 정리 모델 응답이 비어 있어요.");
+      error.notesFailure = { ...failureBase, code: "empty_response" };
+      throw error;
     }
-    return createMeetingNotesBundleFromNotes(parseMeetingNotesJson(content), context);
+    try {
+      return createMeetingNotesBundleFromNotes(
+        typeof normalizeNotesInput === "function"
+          ? normalizeNotesInput(parseMeetingNotesJson(content))
+          : parseMeetingNotesJson(content),
+        context
+      );
+    } catch (error) {
+      error.notesFailure = {
+        ...failureBase,
+        code: "empty_or_invalid_notes",
+      };
+      throw error;
+    }
   }
 
   async function summarizeMeetingNotesSection(transcript, meeting, context, transcriptPrompt, sectionIndex, totalSections) {

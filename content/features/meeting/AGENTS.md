@@ -75,6 +75,8 @@
 - hosted 작업실은 녹음 중이거나 실제 업로드가 진행 중일 때만 브라우저 기본 이탈 경고를 유지하고, 원격 처리만 남은 상태는 과하게 막지 않는다.
 - 회의 제목은 UI에서 회의를 구분하는 편집용 라벨이다. 최초 회의 정리 생성 prompt에는 제목이 아니라 전사와 공용 메모만 사용한다.
 - hosted 작업실의 회의록 보정은 전체 재생성이 아니라 `회의별 용어 치환`과 `섹션 단위 preview/apply`로 제한한다.
+- 최초 생성이 `notesStatus: degraded`로 끝났고 전사가 남아 있는 owner 결과만 `회의 정리 다시 만들기`를 허용한다. 이 경로는 사용자 맥락을 더해 전체 회의록을 재작성하는 기능이 아니라, 저장된 전사로 실패한 최초 생성을 복구하는 1건의 비동기 retry다.
+- 회의 정리 실패는 `notesDegradedReason`만 남기지 않고 `notesFailure.code/model/finishReason/attemptCount/failedAt/stage`를 job과 artifact에 함께 저장한다. 원문 모델 응답은 저장하지 않는다.
 - hosted 작업실의 섹션 수정은 transcript-grounded fact checker가 아니라 사용자 요청 우선 rewrite 도구다. 전사는 참고 자료로만 쓰고, 설명 보강이나 형식 변환도 전사 부족을 이유로 먼저 거절하지 않는다.
 - hosted 작업실의 섹션 헤더는 `직접 수정`, `AI 수정`, `삭제`를 분리한다. 직접 수정/삭제는 `editMode: "manual"`로 선택 섹션만 저장하거나 비우고, AI 수정만 미리보기 토큰을 요구한다.
 - full 회의록과 직접 수정 저장은 긴 업무 회의록을 보존할 수 있어야 한다. 현재 상한은 discussionFlow 12개, keyPoints 6개, decisions 8개, actionItems 12개, openQuestions 12개, risksOrDependencies 10개이며, 이 값은 목표 개수가 아니라 truncation 방지용 안전 상한이다.

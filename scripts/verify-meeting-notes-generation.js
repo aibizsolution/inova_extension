@@ -5,6 +5,7 @@ const nodeCrypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { createMeetingNotesDocumentDomain } = require("../functions/features/meeting/meeting-notes-document-domain");
+const { createMeetingNotesRuntimeDomain } = require("../functions/features/meeting/meeting-notes-runtime-domain");
 
 function main() {
   verifyMeetingNotesPromptGuards();
@@ -12,7 +13,35 @@ function main() {
   verifyLongMeetingNotesSectionsArePreserved();
   verifyWeakDecisionNormalization();
   verifyWeakDecisionProseSoftening();
+  verifyMeetingNotesFailureMetadata();
   console.log("[verify-meeting-notes-generation] prompt and normalizer guards passed");
+}
+
+function verifyMeetingNotesFailureMetadata() {
+  const runtime = createMeetingNotesRuntimeDomain({
+    createEmptyMeetingNotes: () => ({}),
+    hasMeetingNotes: () => false,
+    normalizeMeetingNotes: (value) => value || {},
+    normalizeMeetingNotesFailure: (value) => value || {},
+    normalizeMeetingNotesStatus: (value) => value,
+    normalizeText: normalizeFixtureText,
+    notesSchemaVersion: 4,
+  });
+  const bundle = runtime.createEmptyMeetingNotesBundle(
+    "degraded",
+    "회의 정리 모델 응답이 비어 있어요.",
+    {
+      attemptCount: 1,
+      code: "empty_response",
+      failedAt: "2026-07-27T00:00:00.000Z",
+      finishReason: "stop",
+      model: "fixture-model",
+      stage: "generation",
+    }
+  );
+  assert.equal(bundle.notesStatus, "degraded");
+  assert.equal(bundle.notesFailure.code, "empty_response");
+  assert.equal(bundle.notesFailure.model, "fixture-model");
 }
 
 function verifyMeetingNotesPromptGuards() {

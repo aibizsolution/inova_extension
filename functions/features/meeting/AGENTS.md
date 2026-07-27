@@ -57,6 +57,7 @@
 - `meeting-usage-accounting-domain.js`는 성공 처리된 회의 녹음 사용량 원장과 aggregate 갱신을 묶는 accounting boundary다. quota 차단은 이 모듈의 현재 책임이 아니며, job/artifact/summary 저장 성공 후 best-effort로 호출되어 실패해도 회의 결과 생성을 실패시키지 않는다.
 - `updateInovaMeeting`는 mutation accepted만이 아니라 수정된 `meeting` payload도 계속 돌려준다. hosted-only service harness와 response envelope 회귀 점검에서 이 계약을 유지한다.
 - 회의록 보정은 `termReplacements` 저장과 `preview/apply section edit` 두 경로로만 확장한다. 추가 맥락 기반 전체 재생성 경로는 다시 도입하지 않는다.
+- 단, 최초 생성이 `degraded`로 끝난 owner 결과는 저장된 전사만 다시 사용하는 `retry_notes` command로 복구할 수 있다. retry는 새 전사나 사용자 맥락 기반 전체 재생성을 만들지 않고, command/job/artifact에 성공·실패 상태와 구조화된 `notesFailure`를 남긴다.
 - 회의록 자동 생성은 `skip`만이 아니라 `full`과 `compact` 두 출력 프로필을 가질 수 있다. 짧은 테스트성/저신호 전사는 `compact`로 정리하되, 정식 회의처럼 서사를 부풀리지 않는다.
 - 회의록 자동 생성은 항목 수를 채우기 위해 결정/리스크/미결정 사항을 만들지 않는다. 각 배열은 근거가 없으면 0개가 정상이며, 근거가 많을 때만 상한까지 분리한다.
 - 회의록 자동 생성의 `decisions`는 전사에 확정, 합의, 승인, 하기로 했다 같은 명시적 결정 근거가 있을 때만 채운다. 검토, 재확인, 제안, 테스트 가능성은 decision으로 승격하지 않고 actionItems/openQuestions/risksOrDependencies에 둔다.

@@ -112,7 +112,7 @@ feature `AGENTS.md`에는 per-session runtime 변경 기록을 누적하지 않�
 - `processQueuedInovaMeetingJob`: `1GiB`, `120s`, `concurrency 1`, `maxInstances 80`
 - `processQueuedInovaMeetingJobPart`: `2GiB`, `180s`, `cpu 1`, `concurrency 2`, `maxInstances 200`
 - `finalizeChunkedInovaMeetingJob`: `1GiB`, `180s`, `concurrency 1`, `maxInstances 80`
-- `processQueuedInovaMeetingCommand`: `512MiB`, `120s`, `concurrency 1`, `maxInstances 20`
+- `processQueuedInovaMeetingCommand`: `512MiB`, `300s`, `concurrency 1`, `maxInstances 20`
 - `processQueuedInovaMeetingDeletion`: `512MiB`, `120s`, `concurrency 1`, `maxInstances 5`
 - `sweepQueuedInovaMeetingDeletions`: `256MiB`, `60s`, `concurrency 1`, `maxInstances 1`
 

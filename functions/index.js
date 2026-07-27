@@ -211,7 +211,7 @@ exports.processQueuedInovaMeetingCommand = onDocumentWritten(
     maxInstances: 20,
     memory: "512MiB",
     region: REGION,
-    timeoutSeconds: 120,
+    timeoutSeconds: 300,
   }),
   meetingHandlers.processQueuedMeetingCommandWrite
 );

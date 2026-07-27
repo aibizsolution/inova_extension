@@ -164,8 +164,9 @@
 3. `용어 치환`을 연다.
    - 치환 추가, 변경 취소, 전체 비우기, `용어 치환 적용하기` 버튼 상태가 맞아야 한다.
    - 저장 후 같은 회의 룸의 회의 정리에 적용되어야 한다.
-4. 회의 정리 섹션에서 `직접 수정`, `AI 수정`, `삭제`가 분리되어 보여야 한다.
-5. `AI 수정`은 `AI 미리보기 -> 적용` 순서여야 하고, preview 없는 apply는 막혀야 한다.
+4. 전사는 완료됐지만 `notesStatus: degraded`인 owner 결과에서는 `회의 정리 다시 만들기`가 보이고, 실행 후 처리 중 중복 클릭이 막히며 최종 성공 또는 구조화된 실패 이유가 Firestore job/artifact에 반영되는지 확인한다. 정상 회의 정리, `skipped`, readonly 결과에는 버튼이 보이면 실패다.
+5. 회의 정리 섹션에서 `직접 수정`, `AI 수정`, `삭제`가 분리되어 보여야 한다.
+6. `AI 수정`은 `AI 미리보기 -> 적용` 순서여야 하고, preview 없는 apply는 막혀야 한다.
    - 회의록 요약/수정 모델 기본값이 바뀐 PR에서는 기존 완료 record에서 AI 미리보기 1회를 실행해 응답 품질, timeout/degraded 표면, preview 적용 흐름을 함께 확인한다.
    - 회의록 생성 모델 또는 요청 파라미터가 바뀐 PR에서는 최신 completed job의 `notesStatus`가 `succeeded`인지 확인하고, `notesDegradedReason`에 모델 파라미터 오류가 남지 않는지 Firestore에서 함께 확인한다.
    - 자동 회의록 prompt 품질 가드가 바뀐 PR에서는 기존 완료 record의 전사 1건으로 재생성 비교를 수행한다. 검토, 재확인, 제안, 테스트 가능성이 `decisions`로 승격되지 않고 `actionItems`, `openQuestions`, `risksOrDependencies` 중 맞는 곳에 남는지 확인한다. 같은 사안이 핵심 요약이나 개요에서 하기로 했다, 추진하기로 했다 같은 확정 표현으로 보이지 않는지도 함께 확인한다. 모델이 약한 결정을 반환해도 Functions normalizer가 `decisions`에서 제거하는지 `verify:meeting-notes-generation`으로 확인한다.
@@ -174,12 +175,12 @@
    - sourceTrace/follow-up coverage 튜닝에서는 실제 completed record 재생성 리포트에서 full 회의록 sourceTrace 6개가 주요 summary/discussion/action/open/risk 근거를 가리키는지, 권장했다/필수다 같은 평가형 표현이 중립 문장으로 낮아졌는지 함께 본다.
    - actionItems coverage 튜닝에서는 기존 기능 재확인, API 규격 협의, 데이터 조사, 자료 작성 요청, 보고처럼 전사에 나온 실제 후속 행동이 담당자/기한이 비어도 actionItems로 남는지 리포트와 화면에서 확인한다.
    - OpenRouter provider 경로를 바꾼 PR에서는 AI 미리보기 1회가 OpenRouter 모델로 먼저 완료되는지 보고, 실패 시 `degraded` 또는 explicit error가 남는지 확인한다.
-6. `직접 수정`은 미리보기 없이 해당 섹션만 저장해야 한다.
+7. `직접 수정`은 미리보기 없이 해당 섹션만 저장해야 한다.
    - 긴 업무 회의록 보정 PR에서는 `논의 흐름` 10개, `추가 결정 필요 사항` 7개, `리스크 및 제약` 6개, `후속 실행 항목` 8개 수준의 긴 섹션을 저장해도 화면과 Firestore notes에서 잘리지 않는지 확인한다. 현재 안전 상한은 discussionFlow 12개, keyPoints 6개, decisions 8개, actionItems 12개, openQuestions 12개, risksOrDependencies 10개다.
    - `회의 개요` 직접 수정에서는 `[일시]`, `[참여자]`, `[목적]`, `[개요]`의 대괄호를 지우고 `일시`, `참여자`, `목적`, `개요` 제목 줄만 남겨도 각 필드가 저장되어야 한다. 표식 없이 본문만 입력한 경우에는 입력 전체가 `overview` 본문으로 저장되어야 한다.
-7. `메모` 탭에서 기록 메모 저장이 completed record에만 가능해야 한다.
-8. read-only 또는 공유 링크 모드라면 저장/삭제/이동/용어 치환 같은 mutation 버튼이 숨겨지거나 비활성화되어야 한다.
-9. pending upload queue가 degraded면 warning notice와 hosted console trace가 함께 남아야 한다.
+8. `메모` 탭에서 기록 메모 저장이 completed record에만 가능해야 한다.
+9. read-only 또는 공유 링크 모드라면 저장/삭제/이동/용어 치환 같은 mutation 버튼이 숨겨지거나 비활성화되어야 한다.
+10. pending upload queue가 degraded면 warning notice와 hosted console trace가 함께 남아야 한다.
 
 ## P2 Destructive/Deep
 

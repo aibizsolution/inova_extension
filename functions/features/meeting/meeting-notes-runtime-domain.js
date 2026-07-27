@@ -3,15 +3,17 @@ function createMeetingNotesRuntimeDomain(deps) {
     createEmptyMeetingNotes,
     hasMeetingNotes,
     normalizeMeetingNotes,
+    normalizeMeetingNotesFailure,
     normalizeMeetingNotesStatus,
     normalizeText,
     notesSchemaVersion,
   } = deps;
 
-  function createEmptyMeetingNotesBundle(statusInput, degradedReasonInput) {
+  function createEmptyMeetingNotesBundle(statusInput, degradedReasonInput, failureInput) {
     return {
       notes: createEmptyMeetingNotes(),
       notesDegradedReason: normalizeText(degradedReasonInput),
+      notesFailure: normalizeMeetingNotesFailure(failureInput),
       notesGeneratedAt: "",
       notesStatus: normalizeMeetingNotesStatus(statusInput) || "skipped",
       notesSchemaVersion,
@@ -26,6 +28,7 @@ function createMeetingNotesRuntimeDomain(deps) {
     return {
       notes,
       notesDegradedReason: "",
+      notesFailure: {},
       notesGeneratedAt: new Date().toISOString(),
       notesStatus: "succeeded",
       notesSchemaVersion,

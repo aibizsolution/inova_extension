@@ -152,6 +152,61 @@ async function verifyManualOverviewEditPayload() {
   assert.equal(postedBody.sectionData.overview, "표식 없이 통째로 바꾼 회의 개요");
 }
 
+async function verifyMeetingNotesRetryPayload() {
+  const runtime = loadHostedMeetingRuntime();
+  const ns = runtime.__INOVA_HOSTED_MEETING__;
+  let postedBody = null;
+  ns.shared.postJson = async (_globalObject, _url, body) => {
+    postedBody = body;
+    return {
+      accepted: true,
+      requestId: body.clientRequestId,
+    };
+  };
+  const state = {
+    auth: {},
+    busy: { queue: Object.create(null) },
+    currentArtifact: { notes: {} },
+    currentJob: {
+      jobId: "job-retry-1",
+      meetingNotes: {},
+      notesStatus: "degraded",
+      status: "succeeded",
+    },
+    meeting: {},
+    pendingMutations: Object.create(null),
+    pendingUploads: [],
+    records: [{
+      jobId: "job-retry-1",
+      meetingId: "meeting-retry-1",
+      status: "succeeded",
+    }],
+    selectedRecordId: "job:job-retry-1",
+    session: {
+      meetingId: "meeting-retry-1",
+      meetingSessionToken: "session-token",
+    },
+  };
+  const controller = ns.workspaceMutations.createController({
+    constants: {
+      CONFIG: {
+        updateMeetingResultUrl: "/update-result",
+      },
+    },
+    helpers: {
+      applyRender: () => {},
+      setNotice: () => {},
+    },
+    state,
+  });
+
+  assert.equal(await controller.retryMeetingNotes(), true);
+  assert(postedBody, "Meeting notes retry should post a mutation request");
+  assert.equal(postedBody.action, "retry_notes");
+  assert.equal(postedBody.jobId, "job-retry-1");
+  assert.equal(postedBody.meetingId, "meeting-retry-1");
+}
+
 function verifyLowQualityTranscriptDisplay() {
   const runtime = loadHostedMeetingRuntime();
   const ns = runtime.__INOVA_HOSTED_MEETING__;
@@ -243,6 +298,7 @@ async function main() {
   const segmentQualityBadge = document.getElementById("segmentQualityBadge");
   const toggleLowQualitySegmentsButton = document.getElementById("toggleLowQualitySegmentsButton");
   const copyMeetingNotesButton = document.getElementById("copyMeetingNotesButton");
+  const retryMeetingNotesButton = document.getElementById("retryMeetingNotesButton");
   const moveRecordButton = document.getElementById("moveRecordButton");
   const downloadRecordButton = document.getElementById("downloadRecordButton");
   const recordMoveConfirm = document.getElementById("recordMoveConfirm");
@@ -256,6 +312,7 @@ async function main() {
   assert(segmentQualityBadge, "Hosted workspace should render the low-quality transcript hidden-count badge");
   assert(toggleLowQualitySegmentsButton, "Hosted workspace should render the low-quality transcript visibility toggle");
   assert(copyMeetingNotesButton, "Hosted workspace should render the meeting notes copy action");
+  assert(retryMeetingNotesButton, "Hosted workspace should render the meeting notes retry action");
   assert(moveRecordButton, "Hosted workspace should render the move record action in the detail action row");
   assert(downloadRecordButton, "Hosted workspace should render the local source download action in the detail action row");
   assert.equal(
@@ -365,6 +422,7 @@ async function main() {
   assert.equal(document.querySelector("#reviewTabActions #moveRecordButton"), null, "Move record action should not live in the shared review action row");
 
   await verifyManualOverviewEditPayload();
+  await verifyMeetingNotesRetryPayload();
   verifyLowQualityTranscriptDisplay();
   console.log("[verify-meeting-hosted-ui] Hosted meeting UI contract passed");
 }

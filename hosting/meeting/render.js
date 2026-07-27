@@ -814,6 +814,12 @@
     const hasTranscriptValue = Boolean(normalizeText(detailView?.transcriptText));
     const hasSegmentsValue = Array.isArray(detailView?.segments) && detailView.segments.length > 0;
     const degradedReason = normalizeText(detailView?.notesMeta?.degradedReason);
+    if (degradedReason) {
+      return {
+        text: degradedReason,
+        tone: "warning",
+      };
+    }
     if (isCompleted && (hasTranscriptValue || hasSegmentsValue)) {
       return {
         text: "이 기록은 회의 정리가 없는 기록입니다. 원문 탭에서 전사를 확인할 수 있습니다.",
@@ -979,6 +985,12 @@
       completionTone = "highlight";
     } else if (workspaceMutation?.type === "applySectionEdit" && workspaceMutation.status === "failed") {
       completionNotice = workspaceMutation.error || "섹션 수정을 완료하지 못했어요.";
+      completionTone = "error";
+    } else if (workspaceMutation?.type === "retryNotes" && ["queued", "processing"].includes(workspaceMutation.status)) {
+      completionNotice = "저장된 원문으로 회의 정리를 다시 만들고 있습니다.";
+      completionTone = "highlight";
+    } else if (workspaceMutation?.type === "retryNotes" && workspaceMutation.status === "failed") {
+      completionNotice = workspaceMutation.error || "회의 정리를 다시 만들지 못했어요.";
       completionTone = "error";
     } else if (!hasNotesValue && !hasTranscriptValue && !hasSegmentsValue) {
       completionNotice = notesMeta.degradedReason || "녹음이 너무 짧거나 인식된 발화가 부족해 표시할 내용이 없습니다.";
@@ -1202,6 +1214,7 @@
     const selectedRecordMutationBusy = state.busy.deleteRecord
       || state.busy.applySectionEdit
       || state.busy.previewSectionEdit
+      || state.busy.retryNotes
       || state.busy.saveRecordMemo
       || state.busy.saveRecordTitle;
     const readOnly = Boolean(state.auth?.readOnly);
@@ -1317,6 +1330,17 @@
     refs.reviewTabActions.hidden = !isCompletedRecord;
     refs.copyMeetingNotesButton.hidden = !isCompletedRecord || activeReviewTab !== "notes";
     refs.copyMeetingNotesButton.disabled = !hasNotesValue;
+    const canRetryMeetingNotes = Boolean(
+      !readOnly
+      && isCompletedRecord
+      && activeReviewTab === "notes"
+      && !hasNotesValue
+      && hasSegmentContent
+      && normalizeText(detailView.notesMeta?.status) === "degraded"
+    );
+    refs.retryMeetingNotesButton.hidden = !canRetryMeetingNotes;
+    refs.retryMeetingNotesButton.disabled = !canRetryMeetingNotes || selectedRecordMutationBusy;
+    refs.retryMeetingNotesButton.textContent = state.busy.retryNotes ? "다시 만드는 중" : "회의 정리 다시 만들기";
     const summaryFlow = buildStatusFlow(detailView, {
       generatedAt: detailView.notesMeta?.generatedAt ? formatDateTime(detailView.notesMeta.generatedAt, "") : "",
       isHydratingDetail: Boolean(detailView.isHydratingDetail),

@@ -5,6 +5,7 @@ function createMeetingStateDomain(deps) {
     limits,
     normalizeMeetingContext,
     normalizeMeetingNotes,
+    normalizeMeetingNotesFailure,
     normalizeMeetingNotesInputSnapshot,
     normalizeMeetingNotesStatus,
     normalizeMeetingSource,
@@ -89,6 +90,7 @@ function createMeetingStateDomain(deps) {
       meetingId: normalizeText(job.meetingId || job.meeting?.meetingId),
       meetingNotes: normalizeMeetingNotes(job.meetingNotes),
       notesDegradedReason: normalizeText(job.notesDegradedReason),
+      notesFailure: normalizeMeetingNotesFailure(job.notesFailure),
       notesGeneratedAt: normalizeText(job.notesGeneratedAt),
       notesInputSnapshot: normalizeMeetingNotesInputSnapshot(job.notesInputSnapshot, {
         sharedMemo: normalizedContext.sharedMemoSnapshot,
@@ -142,6 +144,7 @@ function createMeetingStateDomain(deps) {
       kind: normalizeText(artifact.kind),
       meetingId: normalizeText(artifact.meetingId),
       notesDegradedReason: normalizeText(artifact.notesDegradedReason),
+      notesFailure: normalizeMeetingNotesFailure(artifact.notesFailure),
       notes: normalizeMeetingNotes(artifact.notes),
       notesGeneratedAt: normalizeText(artifact.notesGeneratedAt),
       notesInputSnapshot: normalizeMeetingNotesInputSnapshot(artifact.notesInputSnapshot, {
@@ -218,6 +221,7 @@ function createMeetingStateDomain(deps) {
       error: normalizeText(item.error),
       meetingId: normalizeText(item.meetingId),
       notesDegradedReason: normalizeText(item.notesDegradedReason),
+      notesFailure: normalizeMeetingNotesFailure(item.notesFailure),
       notesGeneratedAt: normalizeText(item.notesGeneratedAt),
       notesInputSnapshot: normalizeMeetingNotesInputSnapshot(item.notesInputSnapshot, {
         sharedMemo: sharedMemoSnapshot,
@@ -253,6 +257,7 @@ function createMeetingStateDomain(deps) {
       jobId: job.jobId,
       meetingId: job.meetingId,
       notesDegradedReason: normalizeText(artifact?.notesDegradedReason || job.notesDegradedReason),
+      notesFailure: normalizeMeetingNotesFailure(artifact?.notesFailure?.code ? artifact.notesFailure : job.notesFailure),
       notesGeneratedAt: normalizeText(artifact?.notesGeneratedAt || job.notesGeneratedAt),
       notesInputSnapshot: normalizeMeetingNotesInputSnapshot(
         artifact?.notesInputSnapshot || job.notesInputSnapshot,
