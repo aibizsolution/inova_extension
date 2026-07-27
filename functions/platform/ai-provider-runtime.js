@@ -7,7 +7,7 @@ const DEFAULT_GEMINI_OPENAI_BASE_URL = "https://generativelanguage.googleapis.co
 const DEFAULT_GEMINI_TRANSCRIBE_MODEL = "gemini-3.5-flash";
 const DEFAULT_GEMINI_TRANSCRIBE_THINKING_LEVEL = "minimal";
 const DEFAULT_GEMINI_TRANSCRIBE_MAX_OUTPUT_TOKENS = 16384;
-const DEFAULT_GEMINI_MEETING_SUMMARY_MODEL = "gemini-3.1-pro-preview";
+const DEFAULT_GEMINI_MEETING_SUMMARY_MODEL = "gemini-3.6-flash";
 
 function createAiProviderRuntime(deps) {
   const {
