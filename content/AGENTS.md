@@ -34,7 +34,7 @@
 - 현재 `1.0.0` hosted panel UI 변경은 먼저 `hosting/extension-v2/panel/*`에서 해결할 수 있는지 확인하고, `content/panel.js`와 `content/hosted-panel-bridge.js`는 iframe host/bridge 계약 자체가 바뀔 때만 수정한다.
 - `content/route-sync.js`와 `content/panel.js`는 실제 버그나 새 요구가 생기기 전까지 다음 기본 리팩토링 대상으로 잡지 않는다.
 - 앞으로 panel shell 안에서 새 controller를 더 만드는 기준은 `독립 lifecycle`, `독립 테스트/교체 가치`, `다른 표면 재사용`, `현재 경계로 반복 버그 수정이 어려운 경우`로 제한한다.
-- 다른 feature로 읽기 범위를 넓히기 전에는 짧게 왜 확장이 필요한지 설명한다.
+- feature-local 근거로 해결되지 않으면 필요한 인접 feature만 read-only로 확인한다. 실제 구현 범위가 다른 feature까지 넓어지고 사용자 선택에 따라 결과가 달라질 때만 이유와 영향을 설명한 뒤 확인한다.
 - content에서는 파일 길이보다 `독립 DOM`, `스타일`, `이벤트 흐름`, `상태`, `lifecycle` 경계를 먼저 본다.
 - 항상 같이 로드되고 함께 수정되는 render/helper/controller 조각은 line count만으로 새 파일로 나누지 않는다.
 - 별도 파일이나 별도 진입점은 재사용, lazy loading, 독립 controller 상태, 교체 가능한 UI surface가 있을 때 우선 검토한다.

@@ -20,7 +20,7 @@ const stagingDir = fs.mkdtempSync(path.join(os.tmpdir(), "inova-release-package-
 
 try {
   for (const item of runtimeItems) {
-    fs.cpSync(path.join(root, item), path.join(stagingDir, item), { force: true, recursive: true });
+    copyPathSync(path.join(root, item), path.join(stagingDir, item));
   }
 
   const missingPaths = findMissingPaths(stagingDir, collectRequiredReleasePackagePaths(manifest));
@@ -191,6 +191,20 @@ function verifyHostedReleaseArtifacts() {
     }
     process.exit(1);
   }
+}
+
+function copyPathSync(sourcePath, destinationPath) {
+  const stat = fs.statSync(sourcePath);
+  if (stat.isDirectory()) {
+    fs.mkdirSync(destinationPath, { recursive: true });
+    for (const entry of fs.readdirSync(sourcePath, { withFileTypes: true })) {
+      copyPathSync(path.join(sourcePath, entry.name), path.join(destinationPath, entry.name));
+    }
+    return;
+  }
+
+  fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
+  fs.copyFileSync(sourcePath, destinationPath);
 }
 
 function verifyLegacyLatestCompatibilityAlias({ errors, historyReleases, latestRelease }) {

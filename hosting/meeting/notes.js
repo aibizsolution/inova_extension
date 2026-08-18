@@ -5,12 +5,12 @@
     normalizeTextBlock,
   } = ns.shared;
 
-  const MAX_DISCUSSION_FLOW_COUNT = 4;
-  const MAX_DISCUSSION_KEY_POINTS = 4;
-  const MAX_DECISION_COUNT = 5;
-  const MAX_ACTION_COUNT = 5;
-  const MAX_OPEN_QUESTION_COUNT = 3;
-  const MAX_RISK_COUNT = 3;
+  const MAX_DISCUSSION_FLOW_COUNT = 12;
+  const MAX_DISCUSSION_KEY_POINTS = 6;
+  const MAX_DECISION_COUNT = 8;
+  const MAX_ACTION_COUNT = 12;
+  const MAX_OPEN_QUESTION_COUNT = 12;
+  const MAX_RISK_COUNT = 10;
   const MAX_SOURCE_TRACE_COUNT = 6;
 
   function normalizeNoteTextValue(value) {

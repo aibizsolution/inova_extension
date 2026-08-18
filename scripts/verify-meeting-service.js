@@ -20,6 +20,7 @@ const {
 } = require("../test-support/verify-meeting-service-support");
 const { verifyMeetingCleanupFailureGuards } = require("../test-support/verify-meeting-cleanup-support");
 const { verifyMoveMeetingResultFlow } = require("../test-support/verify-meeting-record-move-support");
+const { verifyMeetingResultUpdateAndNotesRetryFlow } = require("../test-support/verify-meeting-notes-retry-support");
 const {
   assertUsageCommitted,
   assertUsageEvent,
@@ -327,22 +328,13 @@ async function main() {
   assert.equal(termReplacementArtifact.notes.meetingMeta.title, "치환된 회의 제목");
   assert.equal(termReplacementArtifact.notes.decisions[0].text, "치환된 결정");
 
-  const updatedResult = await invokeHandler(handlers.updateInovaMeetingResult, {
-    body: {
-      jobId,
-      meetingId: "meeting-planning-1",
-      owner,
-      sharedMemo: "회의 후속 조치와 디자인 시안 리뷰 일정까지 포함합니다.",
-      title: "3월 30일 회의록",
-    },
-    method: "POST",
+  await verifyMeetingResultUpdateAndNotesRetryFlow({
+    handlers,
+    jobId,
+    meetingId: "meeting-planning-1",
+    owner,
+    state,
   });
-  assert.equal(updatedResult.statusCode, 200);
-  assert.equal(updatedResult.jsonBody.data.accepted, true);
-  const patchedJob = getDoc(state, JOB_COLLECTION, jobId);
-  assert.equal(patchedJob.title, "3월 30일 회의록");
-  assert.equal(patchedJob.context.sharedMemoSnapshot, "회의 후속 조치와 디자인 시안 리뷰 일정까지 포함합니다.");
-  assert.equal(typeof patchedJob.notesContextItems, "undefined");
 
   const summaryRequestsBeforePreview = state.openaiSummaryRequests.length;
   const previewedSection = await invokeHandler(handlers.previewInovaMeetingResultSectionEdit, {

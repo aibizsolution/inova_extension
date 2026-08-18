@@ -1757,13 +1757,25 @@ select:disabled {
   background: var(--surface);
 }
 
+.segment-item--low-quality {
+  background: #f8fafc;
+}
+
 .segment-item__head {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 12px;
   margin-bottom: 8px;
   color: var(--muted);
   font-size: 12px;
+}
+
+.segment-item__meta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .segment-item__index {

@@ -394,6 +394,7 @@ npm.cmd run check:feature-usage -- --days 1 --limit 20
    - 길이를 끝내 확인하지 못하면 사용자 오류가 남아야 한다.
    - 2시간 초과 또는 원본 크기 제한 초과 차단은 실제 긴 파일을 기다리지 않고, fixture나 metadata stub이 있을 때만 확인한다.
 8. chunk 준비/업로드 진행 표시는 작은 샘플로 자연스럽게 보일 때만 확인한다. 큰 원본이나 긴 원본을 새로 만들어 시간을 쓰지 않는다.
+   - chunk 정책 변경 PR에서는 hosted 기본값이 OpenRouter-safe 기준인 10분 target, 14MB target, 1.5초 overlap인지 source policy 검증으로 확인한다.
 9. 원격 처리 성공 후 completed record 검증은 기존 완료 record를 우선 사용하고, 새 녹음의 전사 완료까지 오래 기다리지 않는다.
 10. completed record에서 `원본 다운로드`가 가능해야 한다. Bridge에서 blob anchor 다운로드가 `download` 이벤트로 잡히지 않을 수 있으므로, 이 경우 버튼 click handler, 성공 토스트, 로컬 pending blob 존재를 함께 보고 실패 여부를 판단한다.
 
@@ -480,6 +481,7 @@ __INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20, entrie
 2. 입력창 바깥 우측 상단 `프롬프트 검토` 버튼이 composer에 anchor되는지 확인한다.
 3. 검토를 실행한다.
    - 프롬프트 검토 모델 기본값이 바뀐 PR에서는 실제 검토 1회를 실행해 응답 품질, JSON 파싱 오류 없음, timeout/degraded 표면을 함께 확인한다.
+   - AI provider 우선순위 변경 PR에서는 `INOVA_EXTENSION_AI_PROVIDER_CONFIG` JSON secret에 `openrouter.apiKey`가 포함되어 Functions에 mount된 상태에서 실제 검토 1회를 실행한다. 회의 전사와 회의록 생성은 `gemini.apiKey`도 같은 JSON 안에서만 관리한다. 전사는 Gemini Files API, 회의록 생성/섹션 AI 수정은 Gemini OpenAI-compatible chat completion이 먼저 호출되어야 한다. Gemini 빈 전사/truncation/timeout 또는 JSON shape 실패는 성공으로 저장하지 않고 OpenRouter fallback, explicit error, 또는 degraded 표면으로 보여야 한다.
 4. 결과 헤더 우측에 `n/100` 점수 칩과 `?` 도움말이 보여야 한다.
 5. 결과는 `바로 고칠 점 -> 다듬은 프롬프트 -> 기준 항목 평가` 순서로 열려야 한다.
 6. 다듬은 프롬프트가 문장 단위 줄바꿈으로 읽히는지 확인한다.
@@ -519,6 +521,7 @@ __INOVA_HOSTED_MEETING_DEBUG__.printPendingSyncEvidence({ queueLimit: 20, entrie
 - `versionRefreshPending` 중 최신 섹션이 숨겨져 릴리스 누락을 놓칠 수 있다.
 - 로컬 캐시가 stale 상태를 가리면 실제 최신성 검증을 놓친다.
 - `hosting/*`만 바뀐 경우와 확장 번들 변경이 있는 경우의 배포 안내가 달라야 한다.
+- 릴리스 ZIP staging/검증 스크립트만 바뀌고 화면 bundle, release metadata 내용, 다운로드 URL 계약이 바뀌지 않았으면 새 Chrome 버튼 테스트를 추가하지 않는다. 이 경우 `node scripts/verify-release-package.js`와 `npm.cmd run verify` 통과를 릴리스 산출물 정합성 증거로 보고, 실제 Chrome 릴리스 탭 P0는 metadata나 화면 변경이 있을 때 실행한다.
 
 ## 전체 회귀 순서
 

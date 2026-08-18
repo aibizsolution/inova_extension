@@ -47,7 +47,7 @@
 - `meeting-common-domain.js`는 `meeting-service.js`, `meeting-launch-service.js`, `meeting-workspace-auth-service.js`가 함께 쓰는 shared normalization boundary다.
 - ownership assert와 제목 동기화 helper는 service-local workflow에 가까우므로 `meeting-service.js` 안에 남긴다.
 - `meeting-creation-domain.js`, `meeting-processing-domain.js`, `meeting-summary-sync-domain.js`, `meeting-deletion-domain.js`, `meeting-notes-source-domain.js`처럼 설명 가능한 workflow/data boundary만 독립 모듈로 유지한다.
-- `meeting-processing-runtime-domain.js`는 OpenAI 전사 호출, retry/error 분류, chunk 병렬 처리, transcript merge/dedupe를 묶는 runtime boundary다. `meeting-processing-domain.js`는 queue/finalizer workflow를 유지하고 runtime 세부 정책은 이 모듈에 위임한다.
+- `meeting-processing-runtime-domain.js`는 AI provider 전사 호출(Gemini Files API 우선, OpenRouter/OpenAI fallback), retry/error 분류, chunk 병렬 처리, transcript merge/dedupe를 묶는 runtime boundary다. `meeting-processing-domain.js`는 queue/finalizer workflow를 유지하고 runtime 세부 정책은 이 모듈에 위임한다.
 - `meeting-runtime-artifact-domain.js`는 temp source 업로드/정리, chunk transcript 저장/로드, runtime artifact cleanup을 묶는 storage lifecycle boundary다. `meeting-creation-domain.js`, `meeting-processing-domain.js`, `meeting-deletion-domain.js`가 같은 runtime artifact 규칙을 공유할 때 이 모듈을 우선 본다.
 - `meeting-owned-query-domain.js`는 owner-scoped meeting/job 조회를 묶는 Firestore query boundary다. `meeting-notes-edit-domain.js`, meeting hub list, delete request handler가 같은 owner filter와 emulator fallback 규칙을 공유할 때 이 모듈을 우선 본다.
 - `meeting-deletion-domain.js`는 queue/sweep뿐 아니라 soft delete 시작 단계도 포함한 deletion workflow boundary다. 회의 결과/회의 삭제 handler는 tombstone patch를 직접 만들기보다 이 모듈에 위임한다.
@@ -57,11 +57,24 @@
 - `meeting-usage-accounting-domain.js`는 성공 처리된 회의 녹음 사용량 원장과 aggregate 갱신을 묶는 accounting boundary다. quota 차단은 이 모듈의 현재 책임이 아니며, job/artifact/summary 저장 성공 후 best-effort로 호출되어 실패해도 회의 결과 생성을 실패시키지 않는다.
 - `updateInovaMeeting`는 mutation accepted만이 아니라 수정된 `meeting` payload도 계속 돌려준다. hosted-only service harness와 response envelope 회귀 점검에서 이 계약을 유지한다.
 - 회의록 보정은 `termReplacements` 저장과 `preview/apply section edit` 두 경로로만 확장한다. 추가 맥락 기반 전체 재생성 경로는 다시 도입하지 않는다.
+- 단, 최초 생성이 `degraded`로 끝난 owner 결과는 저장된 전사만 다시 사용하는 `retry_notes` command로 복구할 수 있다. retry는 새 전사나 사용자 맥락 기반 전체 재생성을 만들지 않고, command/job/artifact에 성공·실패 상태와 구조화된 `notesFailure`를 남긴다.
 - 회의록 자동 생성은 `skip`만이 아니라 `full`과 `compact` 두 출력 프로필을 가질 수 있다. 짧은 테스트성/저신호 전사는 `compact`로 정리하되, 정식 회의처럼 서사를 부풀리지 않는다.
 - 회의록 자동 생성은 항목 수를 채우기 위해 결정/리스크/미결정 사항을 만들지 않는다. 각 배열은 근거가 없으면 0개가 정상이며, 근거가 많을 때만 상한까지 분리한다.
+- 회의록 자동 생성의 `decisions`는 전사에 확정, 합의, 승인, 하기로 했다 같은 명시적 결정 근거가 있을 때만 채운다. 검토, 재확인, 제안, 테스트 가능성은 decision으로 승격하지 않고 actionItems/openQuestions/risksOrDependencies에 둔다.
+- 기존 기능 재확인, API 규격 협의, 데이터 조사, 자료 작성 요청, 보고처럼 실제 후속 행동이 전사에 나오면 담당자/기한이 비어도 `actionItems`에 남긴다. 단순한 추가 검토 필요 같은 일반론은 action item으로 만들지 않는다.
+- decision 근거가 약한 사안은 `summary`, `overview`, `discussionFlow`에서도 하기로 했다, 추진하기로 했다 같은 확정 표현으로 쓰지 않는다. 논의했다, 검토했다, 확인 필요로 남았다처럼 근거 수준에 맞춰 쓴다.
+- 권장했다, 필수다, 반드시 해야 한다처럼 회의록 작성자가 평가·자문하는 듯한 표현은 피하고, 전사 근거 수준에 맞춰 대안으로 제시했다, 필요성이 언급됐다, 검토 대상으로 남았다처럼 중립화한다.
+- notes normalizer는 모델이 약한 결정을 반환해도 테스트, 검토, 재확인, 제안, 협의, 가능성 같은 항목을 `decisions`에서 제거한다. 확정, 승인, 합의, 최종 결정처럼 강한 근거가 있는 결정만 보존한다.
+- Gemini 회의록 튜닝은 `run-gemini-meeting-notes-tuning-eval.js` 리포트로 같은 evaluator version의 이전 평균 점수보다 개선된 경우만 성공으로 센다. v2 평가는 weak decision/prose뿐 아니라 weak consensus 표현, 어색한 deterministic 완화 문장, sourceTrace/follow-up coverage 부족도 함께 본다.
+- full 회의록에서 서로 다른 근거가 충분하면 `sourceTrace`는 summary, 주요 discussionFlow, actionItems/openQuestions/risksOrDependencies 근거를 합쳐 6개를 채운다. 근거 부족 때만 6개보다 적게 둔다.
+- 하기로/진행하기로/담기로/포함하기로 같은 약한 확정형 prose는 normalizer에서 논의/방안 표현으로 낮추되, 결과 문장이 `테스트를 우선 진행 방안`처럼 어색하면 다음 튜닝 대상으로 본다.
+- 테스트하기로, 해보기로, 지원하기로처럼 실행 확정과 검토/지원 논의가 섞일 수 있는 표현도 normalizer에서 테스트/시도/지원 방안이 논의된 것으로 낮춘다.
 - `discussionFlow`는 단순 주제 목록이 아니라 회의 진행 흐름을 보존한다. 같은 안건이 뒤에서 다시 등장해 새 결정, 조건, 반론, 리스크를 만들면 같은 heading이어도 별도 항목으로 남긴다.
-- OpenAI 전사 source part target은 OpenAI 25MB 업로드 제한보다 낮은 24MB를 기준으로 유지한다. `gpt-4o-transcribe` 단일 오디오 제한 1400초보다 낮은 23분 안전선을 넘으면 파일이 작아도 chunked로 전환한다.
-- hosted chunked source는 12kHz mono WAV, 14분 chunk, 1.5초 overlap으로 올라온다는 전제를 둔다. Functions는 각 part가 24MB target 아래인지 검증하고, part 자체를 다시 재분할하지 않는다.
+- full 회의록과 직접 수정 저장은 긴 업무 회의록을 보존할 수 있어야 한다. 현재 상한은 discussionFlow 12개, keyPoints 6개, decisions 8개, actionItems 12개, openQuestions 12개, risksOrDependencies 10개이며, 이 값은 목표 개수가 아니라 truncation 방지용 안전 상한이다.
+- Functions 전사 source part 검증 상한은 OpenAI 25MB 업로드 제한보다 낮은 24MB를 기준으로 유지한다. `gpt-4o-transcribe` 단일 오디오 제한 1400초보다 낮은 23분 안전선을 넘으면 파일이 작아도 chunked로 전환한다.
+- hosted chunked source는 OpenRouter 전사 502를 줄이되 전사 품질을 과하게 해치지 않기 위해 12kHz mono WAV, 10분 chunk, 1.5초 overlap으로 올라온다는 전제를 둔다. Functions는 각 part가 24MB 검증 상한 아래인지 확인하고, part 자체를 다시 재분할하지 않는다.
+- Gemini 전사 primary는 Gemini 전용 STT endpoint가 아니라 Files API 업로드 후 `generateContent` 오디오 입력으로 처리한다. `gemini-3.5-flash`는 전사에서 `thinkingLevel: "minimal"`과 `maxOutputTokens: 16384`를 기본으로 써야 긴 회의 chunk에서 빈 응답/지연/truncation을 줄일 수 있으며, 빈 전사는 성공으로 저장하지 않는다. 업로드한 Gemini file은 성공/실패와 관계없이 best-effort 삭제한다.
+- 회의록 생성과 섹션 AI 수정은 `gemini-3.7-flash`를 Gemini OpenAI-compatible chat completion으로 먼저 쓰고, 실패 시 OpenRouter/OpenAI fallback을 탄다. JSON 회의록 shape가 깨지면 성공처럼 저장하지 않고 기존 notes degraded/error 경계로 드러낸다.
 - 전사 결과가 같은 문장을 비정상적으로 반복하면 성공 저장하지 않는다. `meeting-processing-runtime-domain.js`는 반복 전사를 한 번 재시도하고, 재시도 후에도 반복이면 명시적 실패로 드러낸다.
 
 ## 관련 데이터 경계

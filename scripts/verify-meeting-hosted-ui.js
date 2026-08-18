@@ -3,6 +3,7 @@
 const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
+const vm = require("vm");
 const { JSDOM } = require("jsdom");
 
 const root = path.resolve(__dirname, "..");
@@ -10,16 +11,246 @@ const hostedMeetingHtmlPath = path.join(root, "hosting", "meeting", "index.html"
 const hostedMeetingCssPath = path.join(root, "hosting", "meeting", "index.css");
 const hostedDesignSystemCssPath = path.join(root, "hosting", "shared", "design-system.css");
 const hostedMeetingRenderPath = path.join(root, "hosting", "meeting", "render.js");
+const hostedMeetingRenderStatePath = path.join(root, "hosting", "meeting", "render-state.js");
+const hostedMeetingRealtimePath = path.join(root, "hosting", "meeting", "workspace-realtime.js");
 const hostedMeetingMutationsPath = path.join(root, "hosting", "meeting", "workspace-mutations.js");
+const hostedMeetingNotesPath = path.join(root, "hosting", "meeting", "notes.js");
 const hostedMeetingDebugPath = path.join(root, "hosting", "meeting", "workspace-debug.js");
 const hostedMeetingPendingUploadsPath = path.join(root, "hosting", "meeting", "workspace-pending-uploads.js");
 
-function main() {
+function createEmptySectionEditState() {
+  return {
+    baseRevisionToken: "",
+    instruction: "",
+    jobId: "",
+    mode: "ai",
+    open: false,
+    previewSectionData: null,
+    previewSectionKey: "",
+    recordId: "",
+    sectionKey: "",
+    statusText: "",
+    statusTone: "",
+  };
+}
+
+function loadHostedMeetingRuntime() {
+  const context = {
+    console,
+    crypto: {
+      randomUUID: () => "verify-random-id",
+    },
+    document: {},
+    location: { origin: "https://browser-extension-v2.web.app" },
+  };
+  context.globalThis = context;
+  context.window = context;
+  context.__INOVA_HOSTED_MEETING__ = {
+    storage: {
+      comparePendingUploads: () => 0,
+    },
+  };
+  for (const filePath of [
+    path.join(root, "hosting", "meeting", "shared.js"),
+    hostedMeetingNotesPath,
+    hostedMeetingRenderStatePath,
+    hostedMeetingRenderPath,
+    hostedMeetingMutationsPath,
+  ]) {
+    vm.runInNewContext(fs.readFileSync(filePath, "utf8"), context, { filename: filePath });
+  }
+  return context;
+}
+
+async function verifyManualOverviewEditPayload() {
+  const runtime = loadHostedMeetingRuntime();
+  const ns = runtime.__INOVA_HOSTED_MEETING__;
+  const originalNotes = ns.notes.normalizeMeetingNotes({
+    meetingMeta: {
+      datetime: "2026-07-06 10:00",
+      participants: ["홍길동", "김코덱스"],
+      purpose: "기존 회의 목적",
+      title: "기존 제목",
+    },
+    overview: "기존 회의 개요",
+    summary: "기존 핵심 요약",
+  });
+  let postedBody = null;
+  ns.shared.postJson = async (_globalObject, _url, body) => {
+    postedBody = body;
+    return {
+      accepted: true,
+      notes: ns.notes.normalizeMeetingNotes({
+        ...originalNotes,
+        ...body.sectionData,
+      }),
+      requestId: body.clientRequestId,
+      sectionKey: body.sectionKey,
+      title: "기존 제목",
+    };
+  };
+
+  const state = {
+    auth: {},
+    busy: { queue: Object.create(null) },
+    currentArtifact: { notes: originalNotes },
+    currentJob: {
+      jobId: "job-1",
+      meetingNotes: originalNotes,
+      status: "succeeded",
+      title: "기존 제목",
+    },
+    meeting: { title: "기존 회의", termReplacements: [] },
+    meetingTitleDraft: "기존 회의",
+    pendingMutations: Object.create(null),
+    pendingUploads: [],
+    records: [{
+      jobId: "job-1",
+      meetingId: "meeting-1",
+      resultTitle: "기존 제목",
+      status: "succeeded",
+      updatedAt: "2026-07-06T00:00:00.000Z",
+    }],
+    reviewTab: "notes",
+    sectionEdit: createEmptySectionEditState(),
+    selectedRecordId: "job:job-1",
+    session: { meetingId: "meeting-1", meetingSessionToken: "session-token" },
+    termReplacementState: { draftFrom: "", draftTo: "", items: [], open: false, saved: [] },
+  };
+  const notices = [];
+  const controller = ns.workspaceMutations.createController({
+    constants: {
+      CONFIG: {
+        applyMeetingResultSectionEditUrl: "/apply-section",
+      },
+    },
+    helpers: {
+      applyRender: () => {},
+      cloneTermReplacements: (items) => JSON.parse(JSON.stringify(Array.isArray(items) ? items : [])),
+      createEmptySectionEditState,
+      setNotice: (message, tone) => notices.push({ message, tone }),
+    },
+    state,
+  });
+
+  assert.equal(controller.openSectionEdit("overview", "manual"), true);
+  controller.updateSectionEditInstruction("일시\n2026-07-06 11:00\n\n참여자\n홍길동\n\n목적\n새 회의 목적\n\n개요\n대괄호를 지운 새 회의 개요");
+  assert.equal(await controller.applySectionEdit(), true);
+  assert(postedBody, "Manual overview save should post a section edit payload");
+  assert.equal(postedBody.sectionKey, "overview");
+  assert.equal(postedBody.editMode, "manual");
+  assert.equal(postedBody.sectionData.meetingMeta.datetime, "2026-07-06 11:00");
+  assert.deepEqual(postedBody.sectionData.meetingMeta.participants, ["홍길동"]);
+  assert.equal(postedBody.sectionData.meetingMeta.purpose, "새 회의 목적");
+  assert.equal(postedBody.sectionData.overview, "대괄호를 지운 새 회의 개요");
+
+  postedBody = null;
+  assert.equal(controller.openSectionEdit("overview", "manual"), true);
+  controller.updateSectionEditInstruction("표식 없이 통째로 바꾼 회의 개요");
+  assert.equal(await controller.applySectionEdit(), true);
+  assert(postedBody, "Plain manual overview save should post a section edit payload");
+  assert.equal(postedBody.sectionData.meetingMeta.purpose, "새 회의 목적");
+  assert.equal(postedBody.sectionData.overview, "표식 없이 통째로 바꾼 회의 개요");
+}
+
+async function verifyMeetingNotesRetryPayload() {
+  const runtime = loadHostedMeetingRuntime();
+  const ns = runtime.__INOVA_HOSTED_MEETING__;
+  let postedBody = null;
+  ns.shared.postJson = async (_globalObject, _url, body) => {
+    postedBody = body;
+    return {
+      accepted: true,
+      requestId: body.clientRequestId,
+    };
+  };
+  const state = {
+    auth: {},
+    busy: { queue: Object.create(null) },
+    currentArtifact: { notes: {} },
+    currentJob: {
+      jobId: "job-retry-1",
+      meetingNotes: {},
+      notesStatus: "degraded",
+      status: "succeeded",
+    },
+    meeting: {},
+    pendingMutations: Object.create(null),
+    pendingUploads: [],
+    records: [{
+      jobId: "job-retry-1",
+      meetingId: "meeting-retry-1",
+      status: "succeeded",
+    }],
+    selectedRecordId: "job:job-retry-1",
+    session: {
+      meetingId: "meeting-retry-1",
+      meetingSessionToken: "session-token",
+    },
+  };
+  const controller = ns.workspaceMutations.createController({
+    constants: {
+      CONFIG: {
+        updateMeetingResultUrl: "/update-result",
+      },
+    },
+    helpers: {
+      applyRender: () => {},
+      setNotice: () => {},
+    },
+    state,
+  });
+
+  assert.equal(await controller.retryMeetingNotes(), true);
+  assert(postedBody, "Meeting notes retry should post a mutation request");
+  assert.equal(postedBody.action, "retry_notes");
+  assert.equal(postedBody.jobId, "job-retry-1");
+  assert.equal(postedBody.meetingId, "meeting-retry-1");
+}
+
+function verifyLowQualityTranscriptDisplay() {
+  const runtime = loadHostedMeetingRuntime();
+  const ns = runtime.__INOVA_HOSTED_MEETING__;
+  const pureNoise = Array.from({ length: 80 }, () => "네").join(" ");
+  const pureLaughNoise = "하".repeat(80);
+  const meaningfulWithTail = `저희는 제품 생성보다는 생성 쪽에 관심이 있습니다. ${Array.from({ length: 50 }, () => "네").join(" ")}`;
+  const meaningfulWithLaughTail = `저희는 제품 생성보다는 생성 쪽에 관심이 있습니다. ${"하".repeat(50)}`;
+  const pureResult = ns.render.classifyTranscriptQuality(pureNoise);
+  const pureLaughResult = ns.render.classifyTranscriptQuality(pureLaughNoise);
+  const mixedResult = ns.render.classifyTranscriptQuality(meaningfulWithTail);
+  const mixedLaughResult = ns.render.classifyTranscriptQuality(meaningfulWithLaughTail);
+
+  assert.equal(pureResult.isLowQuality, true, "Pure repeated filler transcript should be classified as low quality");
+  assert.equal(pureLaughResult.isLowQuality, true, "Pure repeated laugh transcript should be classified as low quality");
+  assert.equal(mixedResult.isLowQuality, false, "Meaningful transcript with a noisy tail should stay visible by default");
+  assert.equal(mixedLaughResult.isLowQuality, false, "Meaningful transcript with a laugh tail should stay visible by default");
+
+  const display = ns.render.buildSegmentDisplayItems([
+    { startMs: 0, endMs: 5000, text: pureNoise },
+    { startMs: 5000, endMs: 10000, text: meaningfulWithTail },
+    { startMs: 10000, endMs: 15000, text: pureLaughNoise },
+  ]);
+  assert.equal(display.totalCount, 3, "Segment display model should keep the original segment total");
+  assert.equal(display.hiddenCount, 2, "Segment display model should hide pure low-quality repetitions by default");
+  assert.equal(display.visibleItems.length, 1, "Segment display model should keep meaningful segments visible");
+
+  const expanded = ns.render.buildSegmentDisplayItems([
+    { startMs: 0, endMs: 5000, text: pureNoise },
+    { startMs: 5000, endMs: 10000, text: meaningfulWithTail },
+    { startMs: 10000, endMs: 15000, text: pureLaughNoise },
+  ], { showLowQualitySegments: true });
+  assert.equal(expanded.hiddenCount, 0, "Expanded segment display should not hide low-quality segments");
+  assert.equal(expanded.visibleItems.length, 3, "Expanded segment display should show all segments");
+}
+
+async function main() {
   const html = fs.readFileSync(hostedMeetingHtmlPath, "utf8");
   const css = fs.readFileSync(hostedMeetingCssPath, "utf8");
   const designSystemCss = fs.readFileSync(hostedDesignSystemCssPath, "utf8");
   const renderJs = fs.readFileSync(hostedMeetingRenderPath, "utf8");
+  const realtimeJs = fs.readFileSync(hostedMeetingRealtimePath, "utf8");
   const mutationsJs = fs.readFileSync(hostedMeetingMutationsPath, "utf8");
+  const notesJs = fs.readFileSync(hostedMeetingNotesPath, "utf8");
   const debugJs = fs.readFileSync(hostedMeetingDebugPath, "utf8");
   const pendingUploadsJs = fs.readFileSync(hostedMeetingPendingUploadsPath, "utf8");
   const dom = new JSDOM(html);
@@ -66,7 +297,10 @@ function main() {
 
   const reviewTabActions = document.getElementById("reviewTabActions");
   const copySegmentsButton = document.getElementById("copySegmentsButton");
+  const segmentQualityBadge = document.getElementById("segmentQualityBadge");
+  const toggleLowQualitySegmentsButton = document.getElementById("toggleLowQualitySegmentsButton");
   const copyMeetingNotesButton = document.getElementById("copyMeetingNotesButton");
+  const retryMeetingNotesButton = document.getElementById("retryMeetingNotesButton");
   const moveRecordButton = document.getElementById("moveRecordButton");
   const downloadRecordButton = document.getElementById("downloadRecordButton");
   const recordMoveConfirm = document.getElementById("recordMoveConfirm");
@@ -77,7 +311,14 @@ function main() {
   assert(reviewTabActions, "Hosted workspace should render the shared review action row");
   assert.equal(document.getElementById("reviewSegmentsToolbar"), null, "Separate segments toolbar should be removed");
   assert(copySegmentsButton, "Hosted workspace should render the transcript copy action");
+  assert(segmentQualityBadge, "Hosted workspace should render the low-quality transcript hidden-count badge");
+  assert(toggleLowQualitySegmentsButton, "Hosted workspace should render the low-quality transcript visibility toggle");
   assert(copyMeetingNotesButton, "Hosted workspace should render the meeting notes copy action");
+  assert(retryMeetingNotesButton, "Hosted workspace should render the meeting notes retry action");
+  assert(
+    realtimeJs.includes("selectionChanged || forceRefresh || pendingMutationJustCompleted"),
+    "Completed meeting mutations should refresh same-id artifacts without a page reload"
+  );
   assert(moveRecordButton, "Hosted workspace should render the move record action in the detail action row");
   assert(downloadRecordButton, "Hosted workspace should render the local source download action in the detail action row");
   assert.equal(
@@ -92,6 +333,10 @@ function main() {
   assert(
     reviewTabActions.contains(copySegmentsButton) && reviewTabActions.contains(copyMeetingNotesButton),
     "Copy actions should share the review action row"
+  );
+  assert(
+    reviewTabActions.contains(segmentQualityBadge) && reviewTabActions.contains(toggleLowQualitySegmentsButton),
+    "Low-quality transcript controls should stay in the shared review action row"
   );
   assert(
     reviewTabActions.contains(toggleTermReplacementButton),
@@ -163,6 +408,18 @@ function main() {
     "Manual overview editing should expose and save editable participant metadata"
   );
   assert(
+    mutationsJs.includes("const marker = `(?:\\\\[${label}\\\\]|${label})`;")
+      && mutationsJs.includes("normalizeTextBlock(text)"),
+    "Manual overview editing should save both bracketless overview blocks and plain overview text"
+  );
+  assert(
+    notesJs.includes("const MAX_DISCUSSION_FLOW_COUNT = 12")
+      && notesJs.includes("const MAX_ACTION_COUNT = 12")
+      && notesJs.includes("const MAX_OPEN_QUESTION_COUNT = 12")
+      && notesJs.includes("const MAX_RISK_COUNT = 10"),
+    "Hosted notes normalizer should preserve long manual meeting-note sections"
+  );
+  assert(
     mutationsJs.includes("moveRecordLocalCopyToMeeting")
       && pendingUploadsJs.includes("movePendingUploadToMeeting")
       && pendingUploadsJs.includes("workspace.pending-upload.move-meeting"),
@@ -170,7 +427,13 @@ function main() {
   );
   assert.equal(document.querySelector("#reviewTabActions #moveRecordButton"), null, "Move record action should not live in the shared review action row");
 
+  await verifyManualOverviewEditPayload();
+  await verifyMeetingNotesRetryPayload();
+  verifyLowQualityTranscriptDisplay();
   console.log("[verify-meeting-hosted-ui] Hosted meeting UI contract passed");
 }
 
-main();
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

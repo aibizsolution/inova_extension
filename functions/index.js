@@ -31,20 +31,20 @@ const {
   verifyInovaIdentity,
 } = require("./platform/runtime");
 
-const INOVA_EXTENSION_OPENAI_API_KEY_SECRET = defineSecret("INOVA_EXTENSION_OPENAI_API_KEY");
+const INOVA_EXTENSION_AI_PROVIDER_CONFIG_SECRET = defineSecret("INOVA_EXTENSION_AI_PROVIDER_CONFIG");
 
-function withOpenAISecret(options = {}) {
+function withAIProviderSecret(options = {}) {
   const existingSecrets = Array.isArray(options.secrets) ? options.secrets : [];
   return {
     ...options,
-    secrets: existingSecrets.includes(INOVA_EXTENSION_OPENAI_API_KEY_SECRET)
+    secrets: existingSecrets.includes(INOVA_EXTENSION_AI_PROVIDER_CONFIG_SECRET)
       ? existingSecrets
-      : [...existingSecrets, INOVA_EXTENSION_OPENAI_API_KEY_SECRET],
+      : [...existingSecrets, INOVA_EXTENSION_AI_PROVIDER_CONFIG_SECRET],
   };
 }
 
-function onOpenAIRequest(options, handler) {
-  return onRequest(withOpenAISecret(options), handler);
+function onAIProviderRequest(options, handler) {
+  return onRequest(withAIProviderSecret(options), handler);
 }
 
 const sharedHttpDeps = {
@@ -72,7 +72,7 @@ const storeHandlers = registerStoreHandlers({
 const promptReviewHandlers = registerPromptReviewHandlers({
   ...sharedHttpDeps,
   admin,
-  onRequest: onOpenAIRequest,
+  onRequest: onAIProviderRequest,
 });
 
 const meetingLaunchHandlers = registerMeetingLaunchHandlers({
@@ -92,7 +92,7 @@ const meetingHandlers = registerMeetingHandlers({
   admin,
   authorizeMeetingRequest: meetingWorkspaceAuthHandlers.authorizeMeetingRequest,
   bucket,
-  onOpenAIRequest,
+  onOpenAIRequest: onAIProviderRequest,
 });
 
 const featureUsageHandlers = registerFeatureUsageHandlers({
@@ -171,7 +171,7 @@ exports.syncInovaPromptLibraryV2 = promptLibraryV2Handlers.syncInovaPromptLibrar
 
 exports.createInovaMeetingJob = meetingHandlers.createInovaMeetingJob;
 exports.processQueuedInovaMeetingJob = onDocumentWritten(
-  withOpenAISecret({
+  withAIProviderSecret({
     concurrency: 1,
     document: "integration_inova_meeting_jobs/{jobId}",
     maxInstances: 80,
@@ -182,7 +182,7 @@ exports.processQueuedInovaMeetingJob = onDocumentWritten(
   meetingHandlers.processQueuedMeetingJobWrite
 );
 exports.processQueuedInovaMeetingJobPart = onDocumentWritten(
-  withOpenAISecret({
+  withAIProviderSecret({
     document: "integration_inova_meeting_job_parts/{partId}",
     concurrency: 2,
     cpu: 1,
@@ -194,7 +194,7 @@ exports.processQueuedInovaMeetingJobPart = onDocumentWritten(
   meetingHandlers.processQueuedMeetingJobPartWrite
 );
 exports.finalizeChunkedInovaMeetingJob = onDocumentWritten(
-  withOpenAISecret({
+  withAIProviderSecret({
     concurrency: 1,
     document: "integration_inova_meeting_job_finalizers/{jobId}",
     maxInstances: 80,
@@ -205,13 +205,13 @@ exports.finalizeChunkedInovaMeetingJob = onDocumentWritten(
   meetingHandlers.finalizeChunkedMeetingJobWrite
 );
 exports.processQueuedInovaMeetingCommand = onDocumentWritten(
-  withOpenAISecret({
+  withAIProviderSecret({
     concurrency: 1,
     document: "integration_inova_meeting_commands/{commandId}",
     maxInstances: 20,
     memory: "512MiB",
     region: REGION,
-    timeoutSeconds: 120,
+    timeoutSeconds: 300,
   }),
   meetingHandlers.processQueuedMeetingCommandWrite
 );

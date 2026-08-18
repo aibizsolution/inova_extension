@@ -57,7 +57,7 @@ if (releaseErrors.length) {
 }
 
 for (const item of runtimeItems) {
-  fs.cpSync(path.join(root, item), path.join(stagingDir, item), { force: true, recursive: true });
+  copyPathSync(path.join(root, item), path.join(stagingDir, item));
 }
 assertReleasePackageIntegrity(stagingDir, manifestJson);
 fs.mkdirSync(releasesDir, { recursive: true });
@@ -192,6 +192,20 @@ function assertReleasePackageIntegrity(stagingDirectory, manifest) {
     "release package staging 결과에 manifest 런타임 파일이 빠졌어요.",
     ...missingPaths.map((missingPath) => `- ${missingPath}`),
   ].join("\n"));
+}
+
+function copyPathSync(sourcePath, destinationPath) {
+  const stat = fs.statSync(sourcePath);
+  if (stat.isDirectory()) {
+    fs.mkdirSync(destinationPath, { recursive: true });
+    for (const entry of fs.readdirSync(sourcePath, { withFileTypes: true })) {
+      copyPathSync(path.join(sourcePath, entry.name), path.join(destinationPath, entry.name));
+    }
+    return;
+  }
+
+  fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
+  fs.copyFileSync(sourcePath, destinationPath);
 }
 
 function compressDirectory(sourceDir, destinationPath) {

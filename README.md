@@ -12,7 +12,7 @@
 
 ## 문서 맵
 
-기본 작업 시작 시에는 아래 운영 문서만 우선 읽습니다.
+아래는 작업별 운영 문서 지도입니다. 시작할 때 모두 읽지 말고, `docs/feature-routing.md`에서 고른 primary feature와 직접 관련된 문서만 엽니다.
 
 - [AGENTS.md](AGENTS.md): 전역 작업 규칙, 검증 기본값, 세션 분리 기준
 - [docs/feature-routing.md](docs/feature-routing.md): primary feature 선택, 시작 파일, 범위 확장 규칙
@@ -64,7 +64,8 @@
 
 ## 빠른 시작
 
-1. `npm install`을 실행합니다.
+1. 루트 의존성과 Functions 의존성을 각각 설치합니다.
+   - PowerShell에서는 `npm.cmd install` 후 `npm.cmd install --prefix functions`를 사용합니다.
 2. 필요하면 `npm run hooks:install`로 Git 훅을 연결합니다.
 3. Chrome의 `압축해제된 확장 프로그램 로드`로 이 폴더를 등록합니다.
 4. `https://inova.incross.com/`을 열고 팝업에서 `상용 호스팅` 또는 `로컬 호스팅`을 고릅니다.
@@ -105,7 +106,7 @@ npm run deploy:all
 - Storage Rules는 broad deploy 스크립트를 두지 않습니다. Storage를 운영 배포해야 하면 먼저 전용 bucket target을 `.firebaserc`에 적용하고 `storage:<target>` 배포 스크립트를 별도로 추가합니다.
 - 같은 project의 Stellaize Team 경계(`stellaize-team`, `stellaize-team-api`, `stellaize-team` Firestore database, `browser-extension-main-stellaize-team` bucket, `APIFY_TOKEN`)는 이 저장소의 배포/에뮬레이터 target에 포함하지 않습니다.
 - `firebase deploy`, `firebase deploy --only functions`, `firebase deploy --only hosting`, `firebase deploy --only firestore`, `firebase deploy --only storage`처럼 프로젝트 전체나 서비스 전체를 잡는 명령은 금지합니다.
-- 상용 Functions의 OpenAI 키는 일반 `.env`나 공용 `OPENAI_API_KEY`가 아니라 i-Nova 전용 Firebase Functions Secret Manager secret `INOVA_EXTENSION_OPENAI_API_KEY`로 관리합니다. 로컬 에뮬레이터는 ignored `functions/.secret.local`을 사용합니다.
+- 상용 Functions의 기본 AI provider는 OpenRouter first이지만, 회의 전사와 회의록 생성은 Gemini를 primary로 씁니다. 회의 전사는 Gemini Files API, 회의록 생성/섹션 AI 수정은 Gemini OpenAI-compatible chat completion을 쓰고, OpenRouter/OpenAI는 fallback으로 둡니다. Secret Manager에는 provider별 개별 키를 늘리지 않고 저장소 전용 JSON secret `INOVA_EXTENSION_AI_PROVIDER_CONFIG` 하나만 둡니다. 공용 `OPENAI_API_KEY` secret이나 `.env`에 i-Nova/OpenRouter/Gemini 키를 넣어 배포하지 않고, 로컬 에뮬레이터는 ignored `functions/.secret.local`을 사용합니다.
 - 회의 임시 오디오 bucket은 기본적으로 `FIREBASE_CONFIG.storageBucket`을 사용합니다. `STORAGE_BUCKET_URL`은 앱용 Storage bucket을 명시해야 할 때만 쓰고, `gcf-v2-*` Cloud Functions 내부 bucket을 넣지 않습니다.
 - 실제 사용자용 확장 릴리스를 함께 갱신할 때만 `release:deploy` 또는 `release:deploy:all`을 사용합니다.
 - `releases/release-notes.json`에는 패널에 보여줄 사용자용 릴리스만 남기고, build는 그 목록만 `latest.json`, `history.json`, `latest.zip`에 반영합니다.

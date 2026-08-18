@@ -60,15 +60,29 @@
 - 녹음/불러오기 원본 blob은 원격 전사 성공 후에도 completed record에 연결된 로컬 pending entry로 보관한다. 서버 임시 source는 삭제될 수 있으므로, 사용자가 기록/회의를 삭제하기 전에는 `원본 다운로드` 버튼이 남아야 한다.
 - 서버 임시 source는 Firebase Storage default bucket의 `tmp/` prefix에만 둔다. 클라이언트는 Storage를 직접 읽고 쓰지 않고, Functions가 처리 후 삭제하며 bucket lifecycle이 잔존 임시 object를 정리한다.
 - 오디오 import 길이는 메타데이터를 먼저 읽고, 실패하면 실제 decode로 다시 계산한다. 두 경로가 모두 실패할 때만 사용자 오류를 유지한다.
-- OpenAI 전사용 source mode는 `gpt-4o-transcribe`의 실제 제한을 따른다. OpenAI 25MB 업로드 제한보다 낮은 24MB target을 넘거나, 모델 단일 오디오 제한 1400초보다 낮은 23분 안전선을 넘으면 chunked로 전환한다.
-- chunked source는 12kHz mono WAV, 14분 target, 1.5초 overlap을 기본으로 쓴다. 14분 target은 24MB target 아래에 머무르면서 26분대 회의가 3개가 아니라 2개 part로 나뉘는 최소선에 가깝게 잡은 값이다. 실제 경계는 target 주변 45초 안에서 500ms low-energy 구간을 찾아 조정한다.
+- Hosted 전사 source mode는 OpenRouter first 운영을 기준으로 한다. 14MB target을 넘거나, `gpt-4o-transcribe` 단일 오디오 제한 1400초보다 낮은 23분 안전선을 넘으면 chunked로 전환한다. Functions의 수용 상한은 구버전/호환 입력을 위해 OpenAI 25MB 업로드 제한보다 낮은 24MB로 유지한다.
+- chunked source는 12kHz mono WAV, 10분 target, 1.5초 overlap을 기본으로 쓴다. OpenRouter 공식 STT 문서는 very large audio가 upstream 60초 timeout에 걸릴 수 있어 smaller segment를 권장하지만 정확한 MB 상한은 제시하지 않는다. 현재 값은 운영 실패 오디오로 10.5분/14.42MB까지 성공하고 11분/15.11MB부터 502가 재현된 결과를 기준으로 한다. 실제 경계는 target 주변 30초 안에서 500ms low-energy 구간을 찾아 조정한다.
+- 회의 전사 provider 순서는 Functions 책임이다. hosted/content는 현재 OpenRouter-safe이면서 Gemini 검증을 통과한 10분 chunk를 만들고, Functions는 같은 JSON secret의 Gemini Files API 전사를 먼저 사용한다. Gemini 빈 전사, truncation, timeout은 성공 처리하지 않고 OpenRouter fallback으로 넘긴다.
+- 전사된 텍스트를 회의록으로 만드는 품질 우선 경로도 Functions 책임이다. 회의록 생성/섹션 AI 수정은 Gemini Pro급 meeting summary model을 먼저 사용하고, JSON shape 실패나 provider 오류는 OpenRouter/OpenAI fallback 또는 degraded 상태로 드러나야 한다.
+- 자동 회의록의 결정 항목은 전사에 명시적인 확정/합의/승인/하기로 했다가 있을 때만 보여야 한다. 단순 검토, 재확인, 제안, 테스트 가능성은 decision이 아니라 후속 작업, 미결정 질문, 리스크로 보여야 한다.
+- 기존 기능 재확인, API 규격 협의, 데이터 조사, 자료 작성 요청, 보고처럼 실제 후속 행동이 전사에 나오면 담당자/기한이 비어도 후속 작업으로 보여야 한다.
+- decision 근거가 약한 사안은 핵심 요약이나 개요에서도 하기로 했다, 추진하기로 했다 같은 확정 표현으로 보이면 안 된다. 논의, 검토, 확인 필요처럼 근거 수준에 맞는 표현을 쓴다.
+- 권장했다, 필수다, 반드시 해야 한다처럼 회의록 작성자가 평가·자문하는 듯한 표현은 피하고, 대안 제시나 검토 필요처럼 회의에서 확인된 수준으로 낮춘다.
+- 모델이 약한 결정을 반환해도 Functions notes normalizer가 테스트, 검토, 재확인, 제안, 협의, 가능성 항목을 `decisions`에서 제거한다.
+- Gemini 회의록 튜닝에서는 하기로/진행하기로/담기로/포함하기로 같은 약한 확정형 표현이 핵심 요약/개요에 남지 않는지 평가 리포트로 확인한다. v2 평가는 weak consensus 표현, 어색한 완화 문장, sourceTrace/follow-up coverage 부족도 함께 본다.
+- full 회의록에서 서로 다른 근거가 충분하면 sourceTrace는 6개를 채우고, 부족하면 평가 리포트에서 다음 튜닝 후보로 본다.
+- 테스트하기로, 해보기로, 지원하기로 같은 표현은 사용자가 보는 회의록에서 실행 확정처럼 보이지 않도록 테스트/시도/지원 방안 논의로 낮춘다.
 - hosted 작업실은 녹음 중이거나 실제 업로드가 진행 중일 때만 브라우저 기본 이탈 경고를 유지하고, 원격 처리만 남은 상태는 과하게 막지 않는다.
 - 회의 제목은 UI에서 회의를 구분하는 편집용 라벨이다. 최초 회의 정리 생성 prompt에는 제목이 아니라 전사와 공용 메모만 사용한다.
 - hosted 작업실의 회의록 보정은 전체 재생성이 아니라 `회의별 용어 치환`과 `섹션 단위 preview/apply`로 제한한다.
+- 최초 생성이 `notesStatus: degraded`로 끝났고 전사가 남아 있는 owner 결과만 `회의 정리 다시 만들기`를 허용한다. 이 경로는 사용자 맥락을 더해 전체 회의록을 재작성하는 기능이 아니라, 저장된 전사로 실패한 최초 생성을 복구하는 1건의 비동기 retry다.
+- 회의 정리 실패는 `notesDegradedReason`만 남기지 않고 `notesFailure.code/model/finishReason/attemptCount/failedAt/stage`를 job과 artifact에 함께 저장한다. 원문 모델 응답은 저장하지 않는다.
 - hosted 작업실의 섹션 수정은 transcript-grounded fact checker가 아니라 사용자 요청 우선 rewrite 도구다. 전사는 참고 자료로만 쓰고, 설명 보강이나 형식 변환도 전사 부족을 이유로 먼저 거절하지 않는다.
 - hosted 작업실의 섹션 헤더는 `직접 수정`, `AI 수정`, `삭제`를 분리한다. 직접 수정/삭제는 `editMode: "manual"`로 선택 섹션만 저장하거나 비우고, AI 수정만 미리보기 토큰을 요구한다.
+- full 회의록과 직접 수정 저장은 긴 업무 회의록을 보존할 수 있어야 한다. 현재 상한은 discussionFlow 12개, keyPoints 6개, decisions 8개, actionItems 12개, openQuestions 12개, risksOrDependencies 10개이며, 이 값은 목표 개수가 아니라 truncation 방지용 안전 상한이다.
 - hosted notes는 `핵심 요약(summary)`과 `회의 개요(overview)`를 분리해서 다룬다. 두 필드는 각각 수정할 수 있고, 한쪽 섹션 수정이 다른 쪽 카드를 함께 덮어쓰지 않아야 한다.
 - completed record의 notes action은 탭 우측 공용 action row에서만 노출한다. `회의 정리 복사`, `원문 복사`, `용어 치환`은 이 row를 공유하고, 미완료 기록에는 이 action row를 기본 노출하지 않는다.
+- completed record의 `원문` 탭은 순수 filler 반복이나 반복 웃음에 가까운 저품질 원문을 기본 숨김 처리하고, 같은 action row에서 숨긴 개수와 `숨긴 원문 보기` 토글을 제공한다. 실제 문장과 반복 꼬리가 섞인 원문은 기본 숨김 대상이 아니며, 원문 데이터 자체를 삭제하거나 DB mutation으로 처리하지 않는다.
 - completed remote record는 기록 상세 카드 상단 action row에서만 `기록 이동`을 노출한다. 이동 성공 후에는 현재 회의 룸에 그대로 남고, 옮긴 기록은 현재 룸 목록에서 사라진 뒤 기존 선택 fallback 규칙으로 다음 기록을 고른다.
 - 기록 이동은 서버 record뿐 아니라 브라우저에 보관한 원본 local copy도 target 회의 룸으로 함께 재배정해야 한다. source 회의 룸에 원본 보관 entry가 남아 이동한 기록처럼 다시 보이면 안 된다.
 - `용어 치환` 토글은 별도 라벨/설명 블록 대신 버튼 안의 `?` tooltip으로 meeting-wide 적용 범위를 설명한다.

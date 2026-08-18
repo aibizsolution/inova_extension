@@ -75,15 +75,27 @@ function createMeetingNotesGenerationDomain(deps) {
         notes: applyMeetingTermReplacements(notesBundle.notes, termReplacements),
       };
     } catch (error) {
+      const failure = error?.notesFailure && typeof error.notesFailure === "object"
+        ? error.notesFailure
+        : {
+            attemptCount: 1,
+            code: "provider_error",
+            failedAt: new Date().toISOString(),
+            finishReason: "",
+            model: getMeetingSummaryModel(),
+            stage: "generation",
+          };
       logEvent("meeting.notes.skipped", {
         error: normalizeText(error?.message),
+        failure,
         jobId,
         meetingId: meeting.meetingId,
         providerUserKey: owner.providerUserKey,
       });
       return createEmptyMeetingNotesBundle(
         "degraded",
-        normalizeText(error?.message) || "회의록 자동 정리에 실패했어요."
+        normalizeText(error?.message) || "회의록 자동 정리에 실패했어요.",
+        failure
       );
     }
   }
@@ -135,11 +147,7 @@ function createMeetingNotesGenerationDomain(deps) {
       model: getMeetingSummaryModel(),
       response_format: { type: "json_object" },
     });
-    const content = normalizeCompletionContent(completion?.choices?.[0]?.message?.content);
-    if (!content) {
-      return createEmptyMeetingNotesBundle("skipped");
-    }
-    return createMeetingNotesBundleFromNotes(parseMeetingNotesJson(content), context);
+    return createMeetingNotesBundleFromCompletion(completion, context);
   }
 
   async function generateCompactMeetingNotesBundle(transcript, meeting, context) {
@@ -161,13 +169,10 @@ function createMeetingNotesGenerationDomain(deps) {
       model: getMeetingSummaryModel(),
       response_format: { type: "json_object" },
     });
-    const content = normalizeCompletionContent(completion?.choices?.[0]?.message?.content);
-    if (!content) {
-      return createEmptyMeetingNotesBundle("skipped");
-    }
-    return createMeetingNotesBundleFromNotes(
-      normalizeCompactMeetingNotes(parseMeetingNotesJson(content), transcript),
-      context
+    return createMeetingNotesBundleFromCompletion(
+      completion,
+      context,
+      (notes) => normalizeCompactMeetingNotes(notes, transcript)
     );
   }
 
@@ -191,11 +196,37 @@ function createMeetingNotesGenerationDomain(deps) {
       model: getMeetingSummaryModel(),
       response_format: { type: "json_object" },
     });
+    return createMeetingNotesBundleFromCompletion(completion, context);
+  }
+
+  function createMeetingNotesBundleFromCompletion(completion, context, normalizeNotesInput) {
     const content = normalizeCompletionContent(completion?.choices?.[0]?.message?.content);
+    const failureBase = {
+      attemptCount: 1,
+      failedAt: new Date().toISOString(),
+      finishReason: normalizeText(completion?.choices?.[0]?.finish_reason),
+      model: normalizeText(completion?.model) || getMeetingSummaryModel(),
+      stage: "generation",
+    };
     if (!content) {
-      return createEmptyMeetingNotesBundle("skipped");
+      const error = new Error("회의 정리 모델 응답이 비어 있어요.");
+      error.notesFailure = { ...failureBase, code: "empty_response" };
+      throw error;
     }
-    return createMeetingNotesBundleFromNotes(parseMeetingNotesJson(content), context);
+    try {
+      return createMeetingNotesBundleFromNotes(
+        typeof normalizeNotesInput === "function"
+          ? normalizeNotesInput(parseMeetingNotesJson(content))
+          : parseMeetingNotesJson(content),
+        context
+      );
+    } catch (error) {
+      error.notesFailure = {
+        ...failureBase,
+        code: "empty_or_invalid_notes",
+      };
+      throw error;
+    }
   }
 
   async function summarizeMeetingNotesSection(transcript, meeting, context, transcriptPrompt, sectionIndex, totalSections) {
@@ -369,11 +400,13 @@ function createMeetingNotesGenerationDomain(deps) {
       "전사와 메모가 충돌하면 단정하지 말고 openQuestions 또는 risksOrDependencies에 남긴다.",
       "전문가 자문, 전략 평가, 타당성 판단처럼 들리는 표현은 피하고 회의에서 실제 언급된 내용만 중립적으로 정리한다.",
       "전사에 없는 결론, 추천, 당위, 우선순위 판단을 새로 만들지 않는다.",
+      "권장했다/필수다/반드시 해야 한다 같은 평가형 표현보다, 회의에서 나온 수준에 맞춰 대안으로 제시했다, 필요성이 언급됐다, 검토 대상으로 남았다처럼 쓴다.",
       "항목 수를 맞추기 위해 내용을 만들지 않는다. 각 배열은 0개일 수 있고, 근거가 없으면 빈 배열로 둔다.",
       "근거가 1개면 1개만 작성하고, 실제로 서로 다른 항목이 많을 때만 상한까지 분리한다.",
       "문장은 단순히 '논의되었다'를 반복하지 말고, 왜 이 논의가 나왔는지, 어떤 쟁점이 있었는지, 그래서 무엇이 정리되었는지가 짧게 이어지도록 쓴다.",
       "회의록을 읽는 사람이 배경 없이도 흐름을 이해할 수 있게, 배경 -> 핵심 쟁점 -> 결론 또는 미결정 -> 다음 단계 순서를 의식해 정리한다.",
       "actionItems에는 전사나 메모에 실제로 나온 행동만 적고, 담당자나 기한이 없으면 임의로 만들지 않는다.",
+      "단, 담당자나 기한이 없어도 기존 기능 재확인, API 규격 협의, 데이터 조사, 자료 작성 요청, 보고처럼 실제 후속 행동이 명시되었으면 actionItems에 남기고 assignee/dueDate는 빈 문자열로 둔다.",
       "actionItems는 누가 무엇을 할지 비교적 분명한 항목만 포함하고, 단순한 추가 검토 필요·논의 필요 같은 일반론은 openQuestions 또는 risksOrDependencies로 돌린다.",
       "overview와 discussionFlow는 단순 항목 나열이 아니라 회의 맥락이 드러나는 짧은 서술형 회의록처럼 정리하되, 잘 되었다/옳다/필수다 같은 평가형 문장은 피한다.",
       "결과는 상용 회의록 SaaS처럼 사람이 바로 읽는 문서 톤으로 쓰되, 회의에서 실제 언급된 내용만 근거로 사용한다.",
@@ -386,10 +419,19 @@ function createMeetingNotesGenerationDomain(deps) {
       "discussionFlow는 단순 토픽 목록이 아니라 실제 논의 흐름을 보존한다.",
       "회의가 안건 A -> B -> 다시 A처럼 진행되면, 다시 나온 A가 새 결정, 조건, 반론, 리스크를 만들었을 때 별도 discussionFlow 항목으로 남긴다.",
       "같은 주제라는 이유만으로 서로 다른 결정, 서로 다른 미결정 사항, 서로 다른 리스크를 하나로 합치지 않는다.",
-      "다음 숫자는 목표 개수가 아니라 안전 상한이다: discussionFlow 최대 4개, decisions 최대 5개, actionItems 최대 5개, openQuestions 최대 3개, risksOrDependencies 최대 3개. 상한보다 적거나 0개여도 정상이다.",
+      "다음 숫자는 목표 개수가 아니라 안전 상한이다: discussionFlow 최대 12개, decisions 최대 8개, actionItems 최대 12개, openQuestions 최대 12개, risksOrDependencies 최대 10개. 상한보다 적거나 0개여도 정상이다.",
+      "단, 실제로 서로 다른 근거가 충분한 full 회의록이면 sourceTrace는 summary, 주요 discussionFlow, actionItems/openQuestions/risksOrDependencies 근거를 합쳐 정확히 6개 작성한다. 근거가 부족할 때만 6개보다 적게 쓰고, 네 개에서 멈추지 않는다.",
       "decisions는 회의에서 확정된 선택, 승인, 합의만 포함한다. 제안, 가능성, 우려, 검토 필요는 decisions에 넣지 않는다.",
+      "decisions는 전사에 '확정', '합의', '승인', '하기로 했다'처럼 명시적인 확정 표현이 있을 때만 작성한다.",
+      "단순히 테스트를 해볼 수 있다, 검토한다, 필요하다, 재확인한다, 제안했다는 수준이면 decisions가 아니라 actionItems, openQuestions, risksOrDependencies 중 맞는 곳에 둔다.",
+      "summary와 overview에서도 명시 근거 없이 '합의함', '확정함', '결정함', '필수', '권장'처럼 회의 결론을 강하게 보이게 하는 표현을 쓰지 않는다.",
+      "decisions에 넣을 근거가 약한 사안은 summary, overview, discussionFlow에서도 '하기로 했다', '추진하기로 했다', '진행하기로 했다', '의견을 모았다'가 아니라 '논의했다', '검토했다', '확인 필요로 남았다'처럼 근거 수준에 맞춰 쓴다.",
+      "금지 예: '웹 API를 테스트해 보기로 했다'. 이런 표현은 '웹 API 테스트 방안이 논의됐다' 또는 actionItems로만 쓴다.",
+      "confidence, status, severity 값은 한국어로 쓴다. 예: confidence는 높음/중간/낮음, status는 요청됨/진행 예정/미정, severity는 높음/중간/낮음.",
       "openQuestions는 실제로 미결정된 승인, 의사결정, 외부 확인, 의존성 문제만 포함하고, 없으면 빈 배열로 둔다.",
       "risksOrDependencies는 실행을 막거나 지연시킬 수 있는 현실적 제약, 선행조건, 외부 의존성만 포함한다. 단순한 보완 제안은 넣지 않는다.",
+      "구체적인 후속 행동과 미결정 질문/리스크가 함께 있으면 하나를 다른 하나로 대체하지 말고, 서로 다른 의미일 때 actionItems와 openQuestions 또는 risksOrDependencies에 각각 남긴다.",
+      "전사에 API 반환 규격, 일정, 장비 수급, 외부 파트너, 데이터 준비처럼 아직 확인해야 할 후속 쟁점이나 실행 제약이 나오면 openQuestions 또는 risksOrDependencies에 빠뜨리지 않는다.",
       "반드시 JSON만 반환한다.",
       "스키마는 summary, meetingMeta, overview, discussionFlow, decisions, actionItems, openQuestions, risksOrDependencies, sourceTrace 이다.",
       "meetingMeta는 {title, datetime, participants, purpose} 형식이다.",
@@ -403,6 +445,7 @@ function createMeetingNotesGenerationDomain(deps) {
       "meetingMeta.participants는 전사와 메모에서 확인 가능한 참여자만 적고, 확실하지 않으면 비워 둔다.",
       "sourceTrace[]는 {itemType, itemRef, evidence} 형식이다.",
       "sourceTrace[] itemType은 transcript, sharedMemo 중 근거에 맞게 적는다.",
+      "sourceTrace[] itemRef는 summary, overview, discussionFlow[0], actionItems[0]처럼 어떤 회의록 항목의 근거인지 식별 가능하게 적는다.",
     ].join(" ");
   }
 
@@ -444,7 +487,7 @@ function createMeetingNotesGenerationDomain(deps) {
       "항목 수를 맞추기 위해 내용을 만들지 않는다. 각 배열은 0개일 수 있고, 근거가 없으면 빈 배열로 둔다.",
       "특히 overview와 discussionFlow[].narrative는 전체 흐름이 이해되게 다시 써야 한다. 무엇이 배경이었고, 어떤 쟁점이 오갔고, 무엇이 정리되었는지가 보이게 만든다.",
       "서로 다른 구간에서 같은 안건이 다시 등장해 새 결정, 조건, 반론, 리스크가 추가되면 하나로 뭉개지 말고 별도 discussionFlow 항목으로 남긴다.",
-      "최종 결과의 상한은 목표 개수가 아니라 안전 상한이다: discussionFlow 최대 4개, decisions 최대 5개, actionItems 최대 5개, openQuestions 최대 3개, risksOrDependencies 최대 3개다.",
+      "최종 결과의 상한은 목표 개수가 아니라 안전 상한이다: discussionFlow 최대 12개, decisions 최대 8개, actionItems 최대 12개, openQuestions 최대 12개, risksOrDependencies 최대 10개다.",
       "후속 실행 항목에는 실제 행동만 남기고, 단순한 검토 필요나 논의 필요 문구는 openQuestions 또는 risksOrDependencies로 정리한다.",
       `전사 발췌:\n${buildMeetingNotesTranscriptPrompt(transcript, { strategy: "balanced" })}`,
       partialSummaries

@@ -128,6 +128,12 @@
 7. 완료된 기존 record 1건을 선택한다.
 8. `상태`, `회의 정리`, `메모`, `원문` 탭 전환이 정상인지 본다.
 9. 완료 record에서만 `회의 정리 복사`, `원문 복사`, `용어 치환` action row가 보여야 한다.
+10. `원문` 탭에서 순수 filler 반복에 가까운 저품질 원문은 기본으로 숨겨져야 한다.
+   - action row에 `저품질 원문 N개 숨김`과 `숨긴 원문 보기`가 보여야 한다.
+   - `숨긴 원문 보기`를 누르면 숨긴 원문이 다시 보이고, 해당 카드에는 `저품질 반복` 배지가 붙어야 한다.
+   - `네 네 네...`뿐 아니라 `하하하...`, `ㅋㅋㅋ...`, `ㅎㅎㅎ...`처럼 붙어 있는 반복 웃음도 숨김 후보여야 한다.
+   - 실제 문장 뒤에 짧은 반복 꼬리만 붙은 mixed 원문은 기본 숨김 대상이 아니어야 한다.
+   - 숨김 상태에서 `원문 복사`는 화면에 보이는 원문 기준으로 동작해야 한다.
 
 ## Recording/Import P1
 
@@ -145,7 +151,10 @@
    - 길이를 끝내 확인하지 못하면 사용자 오류가 남아야 한다.
    - 2시간 초과 또는 원본 크기 제한 초과 차단은 실제 긴 파일을 기다리지 않고, fixture나 metadata stub이 있을 때만 확인한다.
 8. chunk 준비/업로드 진행 표시는 작은 샘플로 자연스럽게 보일 때만 확인한다. 큰 원본이나 긴 원본을 새로 만들어 시간을 쓰지 않는다.
+   - chunk 정책 변경 PR에서는 hosted 기본값이 OpenRouter-safe 기준인 10분 target, 14MB target, 1.5초 overlap인지 source policy 검증으로 확인한다. 실제 긴 파일을 기다리는 대신 fixture/stub 또는 기존 운영 evidence로 part 수와 part size 상한을 확인한다.
 9. 원격 처리 성공 후 completed record 검증은 기존 완료 record를 우선 사용하고, 새 녹음의 전사 완료까지 오래 기다리지 않는다.
+   - AI provider 우선순위나 모델 변경 PR에서는 `INOVA_EXTENSION_AI_PROVIDER_CONFIG` JSON secret에 `openrouter.apiKey`가 포함되어 Functions에 mount된 상태에서 짧은 샘플 import 또는 기존 완료 record 기반 재처리를 확인한다. 회의 전사와 회의록 생성은 `gemini.apiKey`도 같은 JSON 안에서만 관리한다. 전사는 Gemini Files API, 회의록 생성/섹션 AI 수정은 `gemini-3.7-flash` Gemini OpenAI-compatible chat completion이 먼저 호출되어야 한다. Gemini 빈 전사/truncation/timeout 또는 JSON shape 실패는 성공으로 저장하지 않고 OpenRouter fallback, explicit error, 또는 degraded 상태로 드러나야 한다.
+   - 실패 후 재시도 또는 운영 복구로 completed가 된 record는 Firestore job의 `status`와 `notesStatus`가 성공 상태이고, 이전 실패의 `error`와 `retry.lastError`가 completed 화면에 남지 않아야 한다.
 10. completed record에서 `원본 다운로드`가 가능해야 한다. Bridge에서 blob anchor 다운로드가 `download` 이벤트로 잡히지 않을 수 있으므로, 이 경우 버튼 click handler, 성공 토스트, 로컬 pending blob 존재를 함께 보고 실패 여부를 판단한다.
 
 ## Notes/Edit/Recovery P1
@@ -155,14 +164,23 @@
 3. `용어 치환`을 연다.
    - 치환 추가, 변경 취소, 전체 비우기, `용어 치환 적용하기` 버튼 상태가 맞아야 한다.
    - 저장 후 같은 회의 룸의 회의 정리에 적용되어야 한다.
-4. 회의 정리 섹션에서 `직접 수정`, `AI 수정`, `삭제`가 분리되어 보여야 한다.
-5. `AI 수정`은 `AI 미리보기 -> 적용` 순서여야 하고, preview 없는 apply는 막혀야 한다.
+4. 전사는 완료됐지만 `notesStatus: degraded`인 owner 결과에서는 `회의 정리 다시 만들기`가 보이고, 실행 후 처리 중 중복 클릭이 막히며 최종 성공 또는 구조화된 실패 이유가 Firestore job/artifact와 열린 화면에 새로고침 없이 반영되는지 확인한다. 정상 회의 정리, `skipped`, readonly 결과에는 버튼이 보이면 실패다.
+5. 회의 정리 섹션에서 `직접 수정`, `AI 수정`, `삭제`가 분리되어 보여야 한다.
+6. `AI 수정`은 `AI 미리보기 -> 적용` 순서여야 하고, preview 없는 apply는 막혀야 한다.
    - 회의록 요약/수정 모델 기본값이 바뀐 PR에서는 기존 완료 record에서 AI 미리보기 1회를 실행해 응답 품질, timeout/degraded 표면, preview 적용 흐름을 함께 확인한다.
    - 회의록 생성 모델 또는 요청 파라미터가 바뀐 PR에서는 최신 completed job의 `notesStatus`가 `succeeded`인지 확인하고, `notesDegradedReason`에 모델 파라미터 오류가 남지 않는지 Firestore에서 함께 확인한다.
-6. `직접 수정`은 미리보기 없이 해당 섹션만 저장해야 한다.
-7. `메모` 탭에서 기록 메모 저장이 completed record에만 가능해야 한다.
-8. read-only 또는 공유 링크 모드라면 저장/삭제/이동/용어 치환 같은 mutation 버튼이 숨겨지거나 비활성화되어야 한다.
-9. pending upload queue가 degraded면 warning notice와 hosted console trace가 함께 남아야 한다.
+   - 자동 회의록 prompt 품질 가드가 바뀐 PR에서는 기존 완료 record의 전사 1건으로 재생성 비교를 수행한다. 검토, 재확인, 제안, 테스트 가능성이 `decisions`로 승격되지 않고 `actionItems`, `openQuestions`, `risksOrDependencies` 중 맞는 곳에 남는지 확인한다. 같은 사안이 핵심 요약이나 개요에서 하기로 했다, 추진하기로 했다 같은 확정 표현으로 보이지 않는지도 함께 확인한다. 모델이 약한 결정을 반환해도 Functions normalizer가 `decisions`에서 제거하는지 `verify:meeting-notes-generation`으로 확인한다.
+   - Gemini 회의록 튜닝 PR에서는 `npm.cmd run eval:gemini-meeting-notes` 리포트의 평균 점수가 같은 evaluator version의 이전 성공/기준 리포트보다 올라간 경우만 성공으로 본다. 리포트에는 최소 1개 이상의 기존 completed record 재생성 결과와 weak commitment prose, weak consensus prose, awkward softened prose, sourceTrace/follow-up coverage 패널티가 남아 있는지 포함되어야 한다.
+   - 튜닝 리포트에서 테스트하기로, 해보기로, 지원하기로 같은 문장이 남아 weak commitment prose 패널티를 만들거나, 테스트를 우선 진행 방안 같은 어색한 완화 문장이 남으면 다음 튜닝은 해당 표현이 자연스러운 논의/검토 문장으로 낮아지는지 확인한다.
+   - sourceTrace/follow-up coverage 튜닝에서는 실제 completed record 재생성 리포트에서 full 회의록 sourceTrace 6개가 주요 summary/discussion/action/open/risk 근거를 가리키는지, 권장했다/필수다 같은 평가형 표현이 중립 문장으로 낮아졌는지 함께 본다.
+   - actionItems coverage 튜닝에서는 기존 기능 재확인, API 규격 협의, 데이터 조사, 자료 작성 요청, 보고처럼 전사에 나온 실제 후속 행동이 담당자/기한이 비어도 actionItems로 남는지 리포트와 화면에서 확인한다.
+   - OpenRouter provider 경로를 바꾼 PR에서는 AI 미리보기 1회가 OpenRouter 모델로 먼저 완료되는지 보고, 실패 시 `degraded` 또는 explicit error가 남는지 확인한다.
+7. `직접 수정`은 미리보기 없이 해당 섹션만 저장해야 한다.
+   - 긴 업무 회의록 보정 PR에서는 `논의 흐름` 10개, `추가 결정 필요 사항` 7개, `리스크 및 제약` 6개, `후속 실행 항목` 8개 수준의 긴 섹션을 저장해도 화면과 Firestore notes에서 잘리지 않는지 확인한다. 현재 안전 상한은 discussionFlow 12개, keyPoints 6개, decisions 8개, actionItems 12개, openQuestions 12개, risksOrDependencies 10개다.
+   - `회의 개요` 직접 수정에서는 `[일시]`, `[참여자]`, `[목적]`, `[개요]`의 대괄호를 지우고 `일시`, `참여자`, `목적`, `개요` 제목 줄만 남겨도 각 필드가 저장되어야 한다. 표식 없이 본문만 입력한 경우에는 입력 전체가 `overview` 본문으로 저장되어야 한다.
+8. `메모` 탭에서 기록 메모 저장이 completed record에만 가능해야 한다.
+9. read-only 또는 공유 링크 모드라면 저장/삭제/이동/용어 치환 같은 mutation 버튼이 숨겨지거나 비활성화되어야 한다.
+10. pending upload queue가 degraded면 warning notice와 hosted console trace가 함께 남아야 한다.
 
 ## P2 Destructive/Deep
 

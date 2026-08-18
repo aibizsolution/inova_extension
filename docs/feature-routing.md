@@ -9,14 +9,14 @@
 - 위 fast path에서는 feature map 전체를 다시 읽지 않는다. 실행 실패나 스크립트 선택 ambiguity가 생겼을 때만 해당 feature로 라우팅한다.
 - 사용자가 `로컬 에뮬레이터`만 요청하면 기본 명령은 `npm.cmd run emulator:meeting-local`이다. `hosting only`나 빠른 hosted smoke를 명시했을 때만 `npm.cmd run emulator:hosting`을 고른다.
 - `README.md`는 상위 개요만 유지하고, feature-local 세부 규칙과 변경 기록은 각 feature `AGENTS.md`나 전용 docs를 우선한다.
-- cue가 두 feature 이상에 걸리면 저장소 전체 탐색 대신 짧게 `이 기능이 맞나요?`를 확인한다.
+- cue가 두 feature 이상에 걸리면 현재 근거로 가장 좁은 primary feature를 고른다. 선택에 따라 구현이나 결과가 실질적으로 달라지고 저장소 문맥으로 안전하게 판단할 수 없을 때만 사용자에게 확인한다.
 - 읽기 순서는 `feature-local -> feature-owned shared -> platform/shell -> 인접 feature`다.
 - `1.0.0+` v2 lane에서는 먼저 `hosting/extension-v2/panel/*`에서 해당 탭의 UI/state/action ownership이 이미 hosted로 넘어갔는지 확인한다.
 - 브라우저 확장이라서만 가능한 책임이 아니면, 기본 수정 위치는 extension보다 hosted 쪽으로 본다.
 - `popup`, `background/service-worker.js`, `content/main.js`, `content/panel.js`, `content/hosted-panel-bridge.js`, `hosting/extension/panel/*`, `functions/index.js`, `manifest.json`, `shared/*`는 platform/shell이다.
 - prompt 계열의 active v2 extension shell은 `content/panel-v2-prompt-controller.js`가 맡는다. retired legacy prompt hub 구현은 backup reference로 유지하지 않는다.
 - 여러 실험실 feature의 사용량 계측은 `feature-usage` 공통 feature로 본다. 새 action을 추가할 때는 확장 ZIP 배포를 반복하지 않도록 기존 `metrics.feature-usage.commit` capability와 hosted tracker를 재사용한다.
-- 두 번째 primary feature를 읽어야 하거나 `content + functions + hosting` 3축을 함께 수정해야 하면 먼저 커밋 또는 다음 세션 분리를 제안한다.
+- 두 번째 primary feature까지 실제 구현 범위가 넓어지거나 `content + functions + hosting` 3축을 함께 수정해야 하면 변경을 검증 가능한 커밋 경계로 나눈다. 사용자 선택이 필요한 범위 확장일 때만 다음 세션 분리를 확인한다.
 - 이유: 내부 ZIP 배포 환경에서는 세 축이 서로 다른 시점에 섞여 적용될 수 있어 mixed-version 검증 매트릭스와 rollback 범위가 급격히 커진다.
 
 ## Feature Map

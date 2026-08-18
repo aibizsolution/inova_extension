@@ -17,8 +17,8 @@
 - meeting source audio와 chunk transcript의 원격 Storage 접근은 Functions Admin SDK가 맡는다. 브라우저/hosted client가 Firebase Storage SDK로 bucket을 직접 read/write하는 흐름을 추가하지 않는다.
 - imported audio duration은 메타데이터 -> decode fallback 순서로 계산하고, 최종 길이 계산까지 실패했을 때만 사용자 오류를 유지한다.
 - 녹음/불러오기 원본 blob은 원격 처리 성공 후에도 completed record의 pending entry에 로컬 보관한다. 원격 source storage는 처리 후 삭제될 수 있으므로, 사용자가 명시적으로 기록/회의를 삭제하기 전까지 `원본 다운로드`가 가능해야 한다.
-- OpenAI 전사용 source mode는 OpenAI 파일 업로드 제한보다 낮은 24MB target을 초과하거나 `gpt-4o-transcribe` 단일 오디오 제한 1400초보다 낮은 23분 안전선을 넘으면 chunked로 전환한다.
-- chunked source는 12kHz mono WAV, 14분 target, 1.5초 overlap을 기본으로 쓴다. 실제 경계는 14분 지점 주변 45초 안에서 500ms 단위 low-energy 구간을 찾아 조정하되, part WAV는 24MB target 아래에 머물러야 한다.
+- Hosted source mode는 OpenRouter 전사 안정성을 우선해 14MB target을 초과하거나 `gpt-4o-transcribe` 단일 오디오 제한 1400초보다 낮은 23분 안전선을 넘으면 chunked로 전환한다. Functions 쪽 검증 상한은 구버전/호환 입력을 위해 OpenAI 25MB 제한보다 낮은 24MB로 유지한다.
+- chunked source는 12kHz mono WAV, 10분 target, 1.5초 overlap을 기본으로 쓴다. OpenRouter 공식 STT 문서는 very large audio가 upstream 60초 timeout에 걸릴 수 있어 smaller segment를 권장하지만 정확한 MB 상한은 제시하지 않는다. 현재 값은 20MB 안팎 WAV가 502로 실패하고, 같은 실제 오디오에서 10.5분/14.42MB까지 성공, 11분/15.11MB부터 502가 재현된 결과를 기준으로 한다. 실제 경계는 10분 지점 주변 30초 안에서 500ms 단위 low-energy 구간을 찾아 조정하되, part WAV는 14MB target 아래에 머물러야 한다.
 - hosted 작업실은 녹음 중이거나 실제 업로드가 진행 중일 때만 브라우저 기본 `beforeunload` 경고를 유지한다.
 
 ## recovery / sync 경계
@@ -38,9 +38,12 @@
 - hosted boot에서는 회의 룸과 기록 목록을 먼저 그리고, 선택된 기록 상세 artifact는 비차단으로 뒤늦게 채운다.
 - 회의 룸 header 상단 우측은 destructive action 영역이 아니라 짧은 toast notice 슬롯으로 쓴다. `회의 룸 삭제`는 제목 저장 row에 둔다.
 - completed record의 review tab action row가 `회의 정리 복사`, `원문 복사`, `용어 치환`을 함께 소유한다. `원문` 탭 전용 별도 toolbar는 다시 만들지 않는다.
+- 원문 탭은 순수 filler 반복이나 반복 웃음에 가까운 저품질 원문을 기본 숨김 처리하고, 같은 review tab action row에서 숨긴 개수와 `숨긴 원문 보기` 토글을 제공한다. 원문 데이터 삭제나 DB mutation으로 처리하지 않는다.
 - `용어 치환` 설명은 버튼 안쪽 `?` tooltip으로만 노출한다. 별도 heading/body 도움말 블록을 notes 상단에 다시 두지 않는다.
 - 섹션 수정 dialog는 preview card와 버튼 상태로만 안내하고, 별도 inline status strip은 두지 않는다.
 - 회의 정리 섹션 헤더의 작업은 `직접 수정`, `AI 수정`, `삭제`를 분리한다. AI 수정은 preview/apply dialog를 쓰고, 직접 수정과 삭제는 manual mutation으로 해당 섹션만 저장하거나 비운다.
+- full 회의록과 직접 수정 저장은 긴 업무 회의록을 보존할 수 있어야 한다. 현재 상한은 discussionFlow 12개, keyPoints 6개, decisions 8개, actionItems 12개, openQuestions 12개, risksOrDependencies 10개이며, 이 값은 목표 개수가 아니라 truncation 방지용 안전 상한이다.
+- 완료 결과에 전사가 있고 `notesStatus: degraded`일 때만 owner에게 `회의 정리 다시 만들기`를 노출한다. 실행은 저장된 전사를 쓰는 비동기 `retry_notes` command이며, 처리 중에는 중복 실행을 막고 완료 snapshot에서 동일 artifact도 다시 읽어 새로고침 없이 결과를 반영한다. readonly·skipped·disabled 결과에는 노출하지 않는다.
 
 ## 디버그 / 증거 수집
 - hosted 작업실은 화면 안에 debug panel/FAB를 렌더하지 않는다. `?debug=1`이면 확장 패널 로그처럼 DevTools 콘솔에 `[inova:meeting #n]`, `[inova:functions #n]`, `[inova:firestore #n]` trace를 출력한다.

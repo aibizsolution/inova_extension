@@ -554,7 +554,7 @@
           && !pendingMutationJustCompleted;
         await refreshSelectedRemoteDetail(entry, {
           expectedSelectionId: normalizeText(entry.id),
-          forceArtifactRead: Boolean(selectionChanged || forceRefresh),
+          forceArtifactRead: Boolean(selectionChanged || forceRefresh || pendingMutationJustCompleted),
           requestVersion,
           skipJobRead,
           reason: requestedReason || (selectionChanged ? "selection" : forceRefresh ? "force-refresh" : "hydrate"),

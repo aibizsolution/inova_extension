@@ -1,5 +1,6 @@
 const { FieldValue } = require("firebase-admin/firestore");
 const OpenAI = require("openai");
+const { createAiProviderRuntime } = require("../../platform/ai-provider-runtime");
 
 const DEFAULT_MODEL = "gpt-5.5";
 const MAX_PROMPT_LENGTH = 12000;
@@ -51,7 +52,14 @@ function registerPromptReviewHandlers(deps) {
     sendError,
     verifyInovaIdentity,
   } = deps;
-  let client = null;
+  const aiProviderRuntime = createAiProviderRuntime({
+    OpenAI,
+    createHttpError,
+    logEvent,
+    normalizeText,
+    openaiFactory: deps.openaiFactory,
+  });
+  const client = aiProviderRuntime.createClient();
 
   const reviewInovaPrompt = onRequest({ cors: CORS_ORIGINS, region: REGION, timeoutSeconds: 60 }, async (request, response) => {
     try {
@@ -107,17 +115,7 @@ function registerPromptReviewHandlers(deps) {
   }
 
   function getClient() {
-    if (client) return client;
-    const apiKey = getInovaOpenAIApiKey();
-    if (!apiKey) {
-      throw createHttpError(412, "INOVA_EXTENSION_OPENAI_API_KEY가 설정되지 않았어요.");
-    }
-    client = new OpenAI({ apiKey });
     return client;
-  }
-
-  function getInovaOpenAIApiKey() {
-    return normalizeText(process.env.INOVA_EXTENSION_OPENAI_API_KEY);
   }
 
   function getModel() {

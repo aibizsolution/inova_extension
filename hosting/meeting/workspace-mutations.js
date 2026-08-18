@@ -119,6 +119,8 @@ const SECTION_LABELS = Object.freeze({
             return "moveRecord";
           case "previewSectionEdit":
             return "previewSectionEdit";
+          case "retryNotes":
+            return "retryNotes";
           case "saveMeetingMemo":
             return "saveMeetingMemo";
           case "saveMeetingTermReplacements":
@@ -151,6 +153,7 @@ const SECTION_LABELS = Object.freeze({
           moveRecord: false,
           previewSectionEdit: false,
           queue: state.busy.queue || Object.create(null),
+          retryNotes: false,
           saveMeetingMemo: false,
           saveMeetingTermReplacements: false,
           saveMeetingTitle: false,
@@ -544,7 +547,9 @@ const SECTION_LABELS = Object.freeze({
       function readManualOverviewBlock(textInput, label) {
         const text = normalizeTextareaDraft(textInput);
         const labels = "일시|참여자|목적|개요";
-        const match = text.match(new RegExp(`\\[${label}\\]([\\s\\S]*?)(?=\\n{0,2}\\[(?:${labels})\\]|$)`));
+        const marker = `(?:\\[${label}\\]|${label})`;
+        const nextMarker = `(?:\\[(?:${labels})\\]|(?:${labels}))`;
+        const match = text.match(new RegExp(`(?:^|\\n)\\s*${marker}\\s*(?:\\n|$)([\\s\\S]*?)(?=\\n\\s*${nextMarker}\\s*(?:\\n|$)|$)`));
         return match ? normalizeTextareaDraft(match[1]) : null;
       }
 
@@ -1470,6 +1475,44 @@ const SECTION_LABELS = Object.freeze({
         }
       }
 
+      async function retryMeetingNotes() {
+        const entry = findHistoryEntry(state, state.selectedRecordId);
+        if (!entry?.remote?.jobId) {
+          setNotice("다시 만들 회의 정리 기록을 찾지 못했어요.", "warning");
+          applyRender();
+          return false;
+        }
+        const requestId = generateClientRequestId("notes-retry");
+        registerPendingMutation({
+          jobId: entry.remote.jobId,
+          recordId: entry.id,
+          requestId,
+          successMessage: "회의 정리를 다시 만들었습니다.",
+          type: "retryNotes",
+        });
+        applyRender();
+        try {
+          const payload = await postJson(globalObject, CONFIG.updateMeetingResultUrl, {
+            action: "retry_notes",
+            clientRequestId: requestId,
+            jobId: entry.remote.jobId,
+            meetingId: state.session.meetingId,
+          }, state.session.meetingSessionToken);
+          assertAcceptedMutationResponse(payload, requestId, "회의 정리 재시도");
+          return true;
+        } catch (error) {
+          await finalizePendingMutation(
+            requestId,
+            "failed",
+            error instanceof Error ? error.message : "회의 정리 재시도를 시작하지 못했어요."
+          );
+          return false;
+        } finally {
+          syncWorkspaceMutationBusyState();
+          applyRender();
+        }
+      }
+
       async function saveCurrentRecordTitle() {
         return saveRecordTitleForEntry(state.selectedRecordId, refs.recordTitleInput.value);
       }
@@ -1817,6 +1860,7 @@ const SECTION_LABELS = Object.freeze({
           || state.busy.deleteRecord
           || state.busy.moveRecord
           || state.busy.previewSectionEdit
+          || state.busy.retryNotes
           || state.busy.saveRecordMemo
           || state.busy.saveRecordTitle
         );
@@ -1921,6 +1965,7 @@ const SECTION_LABELS = Object.freeze({
         resetSectionEditPreview,
         resetTermReplacements,
         resolvePendingMutationsFromSnapshots,
+        retryMeetingNotes,
         saveCurrentRecordTitle,
         saveMeetingTermReplacements,
         saveMeetingTitle,

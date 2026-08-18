@@ -41,6 +41,7 @@ function createMeetingMutationDomain(deps) {
 
   function normalizeMeetingResultMutationRequest(input) {
     return {
+      action: normalizeText(input?.action).toLowerCase() === "retry_notes" ? "retry_notes" : "",
       clientRequestId: normalizeText(input?.clientRequestId),
       jobId: normalizeText(input?.jobId),
       meetingId: normalizeText(input?.meetingId),
