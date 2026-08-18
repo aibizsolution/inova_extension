@@ -169,6 +169,7 @@ function createMeetingNotesDocumentDomain(deps) {
       .replace(/([^.!?\n。！？…]*?)(?:을|를)?\s*해보기로\s*(?:했다|했습니다|하였다|하였습니다)/g, "$1 시도 방안이 논의됐다")
       .replace(/([^.!?\n。！？…]*?)\s*진행하기로\s*방향이\s*정리(?:되었다|되었습니다|됐다|됐습니다)/g, "$1 진행 방안이 정리됐다")
       .replace(/([^.!?\n。！？…]*?)\s*진행하기로\s*(?:합의|확정)(?:했다|했습니다|하였다|하였습니다|함)/g, "$1 진행하는 방안이 정리됐다")
+      .replace(/([^.!?\n。！？…]*?)\s*진행하기로\s*(?:협의|정리)(?:했다|했습니다|하였다|하였습니다|함)/g, "$1 진행 방안이 논의됐다")
       .replace(/([^.!?\n。！？…]*?)\s*진행하기로\s*논의(?:했다|했습니다|하였다|하였습니다|되었다|되었습니다|됐다|됐습니다)/g, "$1 진행 방안이 논의됐다")
       .replace(/([^.!?\n。！？…]*?)\s*진행하기로\s*함/g, "$1 진행 방안이 논의됨")
       .replace(/([^.!?\n。！？…]*?)(?:을|를)\s*진행하기로\s*(?:했다|했습니다|하였다|하였습니다)/g, "$1 진행 방안이 논의됐다")
@@ -216,6 +217,9 @@ function createMeetingNotesDocumentDomain(deps) {
   function isWeakMeetingDecisionText(text) {
     const normalizedText = normalizeText(text);
     if (!normalizedText) {
+      return true;
+    }
+    if (/(추가|추후)\s*(논의|검토|협의|결정)/.test(normalizedText)) {
       return true;
     }
     if (/(확정|승인|합의|최종\s*결정|결론\s*내)/.test(normalizedText)) {

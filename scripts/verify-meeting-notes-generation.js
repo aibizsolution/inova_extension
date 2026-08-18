@@ -145,6 +145,7 @@ function verifyWeakDecisionNormalization() {
     decisions: [
       { confidence: "높음", text: "문서 분류 및 인식 기능 검증을 위해 웹 API를 우선 테스트하기로 했다." },
       { confidence: "높음", text: "신규 빌더 어드민 구축 여부는 기존 기능 확인 후 재검토한다." },
+      { confidence: "높음", text: "기존 요금제는 병행 운영하고 이후 전면 전환 여부를 추가 논의하기로 합의했다." },
       { confidence: "높음", text: "이번 릴리스 범위는 회의 전사 안정화로 확정했다." },
     ],
   });
@@ -205,11 +206,11 @@ function verifyWeakDecisionProseSoftening() {
     "meeting notes overview should soften test/try prose"
   );
   const sentenceShape = notesDomain.normalizeMeetingNotes({
-    overview: "웹 API 테스트를 우선 진행하기로 방향이 정리되었습니다. 구축 여부를 내부적으로 재확인하기로 했으며, API를 우선 테스트하기로 했으며, 업스테이지가 지원하기로 했으며, 자료 조사를 즉시 진행하기로 함. 필수적인 장비 수급도 언급됐다.",
+    overview: "웹 API 테스트를 우선 진행하기로 방향이 정리되었습니다. 구축 여부를 내부적으로 재확인하기로 했으며, API를 우선 테스트하기로 했으며, 업스테이지가 지원하기로 했으며, 자료 조사를 즉시 진행하기로 함. 후속 테스트를 진행하기로 협의했다. 다음 회의를 진행하기로 정리했다. 필수적인 장비 수급도 언급됐다.",
   });
   assert.equal(
     sentenceShape.overview,
-    "웹 API 테스트를 우선 진행하는 방안이 정리됐다. 구축 여부를 내부적으로 재확인할 필요가 남았으며, API를 우선 테스트하는 방안이 논의됐으며, 업스테이지의 지원 방안이 논의됐으며, 자료 조사를 즉시 진행하는 방안이 논의됨. 필요한 장비 수급도 언급됐다.",
+    "웹 API 테스트를 우선 진행하는 방안이 정리됐다. 구축 여부를 내부적으로 재확인할 필요가 남았으며, API를 우선 테스트하는 방안이 논의됐으며, 업스테이지의 지원 방안이 논의됐으며, 자료 조사를 즉시 진행하는 방안이 논의됨. 후속 테스트를 진행하는 방안이 논의됐다. 다음 회의를 진행하는 방안이 논의됐다. 필요한 장비 수급도 언급됐다.",
     "meeting notes overview should soften direction/recheck/required prose"
   );
   const recommendationTone = notesDomain.normalizeMeetingNotes({

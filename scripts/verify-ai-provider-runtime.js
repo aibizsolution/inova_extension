@@ -151,7 +151,7 @@ async function verifyGeminiPreferredForMeetingSummaryWhenConfigured() {
     process.env.INOVA_EXTENSION_AI_PROVIDER_CONFIG = JSON.stringify({
       gemini: {
         apiKey: "fixture-gemini-key",
-        meetingSummaryModel: "gemini-3.6-flash",
+        meetingSummaryModel: "gemini-3.7-flash",
       },
       openrouter: {
         apiKey: "fixture-openrouter-key",
@@ -178,7 +178,7 @@ async function verifyGeminiPreferredForMeetingSummaryWhenConfigured() {
     assert.equal(events.length, 0);
     assert.equal(calls.length, 1);
     assert.equal(calls[0].baseURL, "https://generativelanguage.googleapis.com/v1beta/openai");
-    assert.equal(calls[0].request.model, "gemini-3.6-flash");
+    assert.equal(calls[0].request.model, "gemini-3.7-flash");
     assert.equal(calls[0].request.response_format.type, "json_object");
   } finally {
     restoreEnv("INOVA_EXTENSION_AI_PROVIDER_CONFIG", previousConfig);
@@ -195,7 +195,7 @@ async function verifyOpenRouterMeetingSummaryFallbackAfterGeminiFailure() {
     process.env.INOVA_EXTENSION_AI_PROVIDER_CONFIG = JSON.stringify({
       gemini: {
         apiKey: "fixture-gemini-key",
-        meetingSummaryModel: "gemini-3.6-flash",
+        meetingSummaryModel: "gemini-3.7-flash",
       },
       openrouter: {
         apiKey: "fixture-openrouter-key",
